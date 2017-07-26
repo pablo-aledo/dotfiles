@@ -1,0 +1,446 @@
+# \begin{}...\end{}
+snippet begin
+	\begin{${1:env}}
+		${2}
+	\end{$1}
+# Tabular
+snippet tab
+	\begin{${1:tabular}}{${2:c}}
+	${3}
+	\end{$1}
+# Align(ed)
+snippet ali
+	\begin{align${1:ed}}
+		${2}
+	\end{align$1}
+# Gather(ed)
+snippet gat
+	\begin{gather${1:ed}}
+		${2}
+	\end{gather$1}
+# Equation
+snippet eq
+	\begin{equation}
+		${1}
+	\end{equation}
+# Eqnarray
+snippet eqnarray
+	\begin{eqnarray}
+		y &=& x^4 + 4      \nonumber \\
+		&=& (x^2+2)^2 -4x^2 \nonumber \\
+		&\le&(x^2+2)^2
+	\end{eqnarray}
+# Unnumbered Equation
+snippet \
+	\\[
+		${1}
+	\\]
+# Enumerate
+snippet enum
+	\begin{enumerate}
+		\item ${1}
+		\item ${2}
+		\item ${3}
+	\end{enumerate}
+snippet enumerate
+	\begin{enumerate}
+		\item ${1}
+		\item ${2}
+		\item ${3}
+	\end{enumerate}
+# Itemize
+snippet item
+	\begin{itemize}
+		\item ${1}
+		\item ${2}
+		\item ${3}
+	\end{itemize}
+snippet itemize
+	\begin{itemize}
+		\item ${1}
+		\item ${2}
+		\item ${3}
+	\end{itemize}
+# Description
+snippet desc
+	\begin{description}
+		\item[${1}] ${2}
+	\end{description}
+# Matrix
+snippet mat
+	\begin{${1:p/b/v/V/B/small}matrix}
+		${2}
+	\end{$1matrix}
+# Cases
+snippet cas
+	\begin{cases}
+		${1:equation}, &\text{ if }${2:case}\\
+		${3}
+	\end{cases}
+# Split
+snippet spl
+	\begin{split}
+		${1}
+	\end{split}
+# Part
+snippet part
+	\part{${1:part name}} % (fold)
+	\label{prt:${2:$1}}
+	${3}
+	% part $2 (end)
+# Chapter
+snippet cha
+	\chapter{${1:chapter name}} % (fold)
+	\label{cha:${2:$1}}
+	${3}
+	% chapter $2 (end)
+snippet chapter
+	\chapter{${1:chapter name}} % (fold)
+	\label{cha:${2:$1}}
+	${3}
+	% chapter $2 (end)
+# Section
+snippet sec
+	\section{${1:section name}} % (fold)
+	\label{sec:${2:$1}}
+	${3}
+	% section $2 (end)
+snippet section
+	\section{${1:section name}} % (fold)
+	\label{sec:${2:$1}}
+	${3}
+	% section $2 (end)
+# Sub Section
+snippet sub
+	\subsection{${1:subsection name}} % (fold)
+	\label{sub:${2:$1}}
+	${3}
+	% subsection $2 (end)
+snippet subsection
+	\subsection{${1:subsection name}} % (fold)
+	\label{sub:${2:$1}}
+	${3}
+	% subsection $2 (end)
+# Sub Sub Section
+snippet subs
+	\subsubsection{${1:subsubsection name}} % (fold)
+	\label{ssub:${2:$1}}
+	${3}
+	% subsubsection $2 (end)
+snippet subsubsection
+	\subsubsection{${1:subsubsection name}} % (fold)
+	\label{ssub:${2:$1}}
+	${3}
+	% subsubsection $2 (end)
+# Paragraph
+snippet par
+	\paragraph{${1:paragraph name}} % (fold)
+	\label{par:${2:$1}}
+	${3}
+	% paragraph $2 (end)
+snippet paragraph
+	\paragraph{${1:paragraph name}} % (fold)
+	\label{par:${2:$1}}
+	${3}
+	% paragraph $2 (end)
+# Sub Paragraph
+snippet subp
+	\subparagraph{${1:subparagraph name}} % (fold)
+	\label{subp:${2:$1}}
+	${3}
+	% subparagraph $2 (end)
+snippet subparagraph
+	\subparagraph{${1:subparagraph name}} % (fold)
+	\label{subp:${2:$1}}
+	${3}
+	% subparagraph $2 (end)
+snippet itd
+	\item[${1:description}] ${2:item}
+snippet figure
+	\begin{figure}[!t]
+	\centering
+	\includegraphics[width=${1:0.75}\textwidth]{media/${2:img.png}}
+	\caption{${3}}
+	\label{${4}}
+	\end{figure}${5}
+snippet table
+	${1:Table}~\ref{${2:tab:}}${3}
+snippet listing
+	${1:Listing}~\ref{${2:list}}${3}
+snippet page
+	${1:page}~\pageref{${2}}${3}
+
+snippet frametitle
+	\frame{
+		\frametitle{${1}}
+		${2}
+	}
+snippet frame
+	\frame{
+		${1}
+	}
+snippet block
+	\begin{block}{${1:header}}
+		${2}
+	\end{block}
+snippet minibl
+	\begin{minipage}{\textwidth}\begin{block}{}
+		${1}
+	\end{block}\end{minipage}
+snippet blit
+	\begin{block}{${1:header}}\begin{itemize}
+		\item ${2:item}
+		\item ${3:item}
+		\item ${4:item}
+	\end{itemize}\end{block}
+snippet miniblit
+	\begin{minipage}{\textwidth}\begin{block}{}\begin{itemize}
+		\item ${1}
+		\item ${2}
+		\item ${3}
+	\end{itemize}\end{block}\end{minipage}
+snippet matrix
+	\left[\begin{array}{ccc}1&0&0\\0&1&0\\0&0&1\end{array}\right]
+snippet lstset
+	\definecolor{commentcolor}{rgb}{0,0.6,0}
+	\definecolor{typecolor}{rgb}{0,0.4,0.8}
+	\definecolor{keywordcolor}{rgb}{0.6,0,0.6}
+	\definecolor{numbercolor}{gray}{.25}
+	\definecolor{rulecolor}{gray}{.8}
+	\definecolor{backgroundcolor}{gray}{0.95}
+	\definecolor{stringcolor}{rgb}{2,112,10}
+	\definecolor{opercolor}{rgb}{0.6,0.6,0}
+
+	\lstset {
+	aboveskip=5pt,
+	backgroundcolor=\color{backgroundcolor},            % Choose the background color; you must add \usepackage{color} or \usepackage{xcolor}
+	basicstyle=\small\ttfamily,                         % Basic font setting
+	belowskip=5pt,
+	breakatwhitespace=false,                            % Sets if automatic breaks should only happen at whitespace
+	breaklines=true,                                    % Sets automatic line breaking
+	captionpos=b,                                       % Sets the caption-position to bottom
+	commentstyle=\color{commentcolor},                  
+	deletekeywords={...},                               % If you want to delete keywords from the given language
+	emph={int,char,double,float,unsigned,void,bool},    % Keywords to emphasize
+	emphstyle=\bfseries\color{typecolor},               % Emphasis style
+	escapechar=\&,
+	escapeinside={(*@}{@*)},                            % If you want to add LaTeX within your code
+	extendedchars=true,                                 % Lets you use non-ASCII characters; for 8-bits encodings only, does not work with UTF-8
+	firstnumber=1,                                      % First line number
+	frame=lrbt,	                                    % Adds a frame around the code
+	framerule=1pt,
+	framesep=0pt,
+	framexbottommargin=5pt,
+	framexleftmargin=5pt,
+	framextopmargin=5pt,
+	keepspaces=true,                                    % Keeps spaces in text, useful for keeping indentation of code (possibly needs columns=flexible)
+	keywordstyle=\bfseries\color{keywordcolor},         % Keyword style
+	language=C++,                                       % The language of the code
+	numberfirstline = true,                             % Number first line
+	numbersep=5pt,                                      % How far the line-numbers are from the code
+	numbers=none,                                       % Where to put the line-numbers; possible values are (none, left, right)
+	numberstyle=\tiny\color{numbercolor},               % The style that is used for the line-numbers
+	otherkeywords={*,...},                              % If you want to add more keywords to the set
+	rulecolor=\color{rulecolor},                        % If not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+	rulesep=.4pt,
+	rulesepcolor=\color{rulecolor},
+	showspaces=false,                                   % Show spaces everywhere adding particular underscores; it overrides 'showstringspaces'
+	showstringspaces=false,                             % Underline spaces within strings only
+	showtabs=false,                                     % Show tabs within strings adding particular underscores
+	stepnumber=5,                                       % The step between two line-numbers. If it's 1, each line will be numbered
+	stringstyle=\ttfamily\color{stringcolor},           % Style for strings
+	tabsize=2,	                                    % Sets default tabsize to 2 spaces
+	title=\lstname,                                     % Show the filename of files included with \lstinputlisting; also try caption instead of title
+	classoffset=1,                                      % Starting new class
+	otherkeywords={>,<,.,;,-,!,=,~},                    % More keywords
+	morekeywords={>,<,.,;,-,!,=,~},                     % More keywords
+	keywordstyle=\bfseries\color{opercolor},            % Style
+	classoffset=0,                                      % Ending new class
+	}
+snippet lstlanguage
+	\lstdefinelanguage{AssemblerARM9}{
+	basicstyle={\fontsize{5}{6}\selectfont\sffamily},
+	commentstyle={\color{gris}\it},
+	morekeywords={push,pop,word,ldr,str,ldreq,add,sub,b,bl,bx,bxeq,bne,mov,cmp,movgt,ble,cmple,stmdb,ldmdb,ldm,mvn,ldrep,subeq,beq,subgt,addle,ldmia,andeq,bgt},
+	keywordstyle={\color{yellow}\textbf},
+	sensitive=false,
+	backgroundcolor=\color{black!10!white},
+	rulecolor=\color{black!50!white},
+	fillcolor=\color{black!20!white},
+	texcl=true,
+	xleftmargin=0.1cm,
+	flexiblecolumns=true,
+	morecomment=[s][\it\color{gris}]{/*}{*/},
+	showstringspaces=true,
+	escapechar=\%
+	}
+snippet textpos
+	\usepackage[absolute,overlay]{textpos}
+	\begin{textblock}{${1:width}}(${2:column},${3:row})
+		${4:text}
+	\end{textblock}
+snippet blat
+	\begin{textblock}{${1:width.0-15}}(${2:column.0.5-16},${3:row.2-14})\begin{block}{${4:title}}
+		${5:text}
+	\end{block}\end{textblock}
+snippet imgcrop absolute
+	\usepackage{graphicx}
+	\includegraphics[trim={${1:left} ${2:lower} ${3:right} ${4:upper}},clip]{${5:image}}
+snippet imgcrop relative
+	\usepackage[export]{adjustbox}
+	\adjincludegraphics[trim={${1:left} ${2:lower} {${3:right}\width} ${4:upper}},clip]{${5:image}}
+snippet beamer
+	\documentclass[xcolor=dvipsnames]{beamer}
+	\usetheme{Boadilla}
+	\usepackage[english]{babel}
+	\usepackage[utf8]{inputenc}
+	\usepackage{times}
+	\usepackage{hyperref}
+	\hypersetup{pdfpagemode=FullScreen}
+	\usepackage[T1]{fontenc}
+	\usepackage{contour}
+	\usepackage[overlay,absolute]{textpos} 
+
+	\usecolortheme[RGB={150,150,200}]{structure}
+
+	%\pgfdeclaremask{logo3-mk}{media/logo3-mk}
+	%\pgfdeclareimage[mask=logo3-mk, height=1cm]{logo3}{media/logo3}
+	%\logo{\pgfuseimage{logo3}}
+
+	\pgfdeclaremask{cabecera-mk}{media/cabecera-mk}
+	\pgfdeclareimage[mask=cabecera-mk, width=1.0\paperwidth]{oxygen-header}{media/cabecera}
+	\setbeamertemplate{headline}
+	{
+	\pgfuseimage{oxygen-header}\vskip-1.2cm%
+	\ \vskip1pt\par \insertnavigation{\paperwidth}\vskip2pt%
+	}
+	\setbeamertemplate{frametitle}{\contour{black}{\hskip0cm\usefont{OT1}{ptm}{b}{it}\insertframetitle}}
+
+	\begin{document}
+	\title{${1:title}}
+	%\subtitle{}
+	\author{Pablo González de Aledo}
+	%\date{}
+	%\frame{\titlepage}
+	%\frame{\tableofcontents}
+
+	\section[]{}\subsection[]{}
+	\frame{
+		\frametitle{}
+		\begin{textblock}{}(,)
+		\begin{block}{}\begin{itemize}
+		        \item 
+		\end{itemize}\end{block}\end{textblock}	
+	}
+snippet outline
+	\usepackage[outline]{contour}
+	\contour{${1:color}}{${2:text}}
+snippet tikz
+	\documentclass{article}
+	\usepackage{tikz}
+	\usetikzlibrary{shapes,arrows,fit,decorations.pathreplacing,shadows.blur}
+	\tikzset{>=latex}
+
+	\makeatletter
+	\pgfdeclareshape{document}{
+	\inheritsavedanchors[from=rectangle] % this is nearly a rectangle
+	\inheritanchorborder[from=rectangle]
+	\inheritanchor[from=rectangle]{center}
+	\inheritanchor[from=rectangle]{north}
+	\inheritanchor[from=rectangle]{south}
+	\inheritanchor[from=rectangle]{west}
+	\inheritanchor[from=rectangle]{east}
+	% ... and possibly more
+	\backgroundpath{
+	% store lower left in xa/ya and upper right in xb/yb
+	\southwest \pgf@xa=\pgf@x \pgf@ya=\pgf@y
+	\northeast \pgf@xb=\pgf@x \pgf@yb=\pgf@y
+	% compute corner of "flipped page"
+	\pgf@xc=\pgf@xb \advance\pgf@xc by-7.5pt % this should be a parameter
+	\pgf@yc=\pgf@yb \advance\pgf@yc by-7.5pt
+	% construct main path
+	\pgfpathmoveto{\pgfpoint{\pgf@xa}{\pgf@ya}}
+	\pgfpathlineto{\pgfpoint{\pgf@xa}{\pgf@yb}}
+	\pgfpathlineto{\pgfpoint{\pgf@xc}{\pgf@yb}}
+	\pgfpathlineto{\pgfpoint{\pgf@xb}{\pgf@yc}}
+	\pgfpathlineto{\pgfpoint{\pgf@xb}{\pgf@ya}}
+	\pgfpathclose
+	% add little corner
+	\pgfpathmoveto{\pgfpoint{\pgf@xc}{\pgf@yb}}
+	\pgfpathlineto{\pgfpoint{\pgf@xc}{\pgf@yc}}
+	\pgfpathlineto{\pgfpoint{\pgf@xb}{\pgf@yc}}
+	\pgfpathlineto{\pgfpoint{\pgf@xc}{\pgf@yc}}
+	}
+	}
+	\makeatother
+
+	\begin{document}
+
+	\tikzstyle{block}    = [draw, thick, blur shadow={shadow blur steps=5}, fill=black!5, rectangle, rounded corners]
+	\tikzstyle{box}      = [draw, rectangle, rounded corners, dashed]
+	\tikzstyle{gradient} = [draw, blue,top color=blue!20, bottom color=blue!5!white,rectangle, rounded corners]
+	\tikzstyle{cyl}      = [draw, cylinder, shape border rotate=90, aspect=0.2, fill=orange!10, draw=orange!80]
+
+	\resizebox{10cm}{!}{
+	\begin{tikzpicture}[auto, node distance=6em, minimum height=2em, minimum width=6em]
+
+	    \node [block,align=center,anchor=center]                   (center)    {Center};
+	    \node [left of=center, block, inner sep=1em] (west)      {West};
+	    \node (north) at (90:5em)    {North};
+	    \node [right of=center, gradient, outer sep=.5em]            (east)      {East};
+	    \node [above of=east, node distance=5em, text width=1.5cm] (northeast) {North-East};
+	    \node [above of=west, node distance=5em, text width=1.5cm] (northwest) {North-West};
+	    \node [box, fit=(center) (west)]             (box1)      {};
+	    \node[
+	      below of=center,
+	      shape=document,
+	      double copy shadow={
+		shadow xshift=-0.5ex,
+		shadow yshift=-0.5ex
+	      },
+	      draw,
+	      fill=white,
+	      scale=0.8
+	      ] (south) {South};
+
+	    \coordinate [above of=northwest,node distance=0em, yshift=4em] (loop1);
+	    \coordinate [above of=northeast,node distance=0em, yshift=4em] (loop2);
+
+	    \draw [->, rounded corners=.2em] (northwest) -- (loop1) -- (loop2) -- (northeast);
+	    \draw [->, rounded corners] (south) -| (east);
+	    \draw [->] (center.north)+(0em,0.5em) -- ++(0em,2em) -- ++(45:1em);
+	    \draw [->, bend right] (west) to (south);
+	    \draw [decorate,decoration={brace,amplitude=5pt}] (box1.south east) -- (box1.south west) node [midway] {Go west};
+	    \draw (north) .. controls +(right:5em) and +(-90:3em) .. (west);
+	    \draw[transform canvas={xshift=1em}] (north.north west) -- (north.south west);
+	\end{tikzpicture}
+	}
+
+	\end{document}
+snippet pgftransform
+	\begin{pgflowlevelscope}{\pgftransformscale{0.5}\pgftransformshift{\pgfpoint{-30em}{0em}}}
+	\end{pgflowlevelscope}
+snippet scope
+	\begin{scope}[transform canvas={xshift=${1}em,yshift=${2}em}]
+		${3}
+	\end{scope}
+
+snippet baseline
+	\renewcommand{\baselinestretch}{0.8}
+
+snippet 2col
+	\begin{minipage}[t]{0.45\textwidth}
+
+	\end{minipage}\phantom{----}\begin{minipage}[t]{0.45\textwidth}
+
+	\end{minipage}
+
+snippet 2collst
+	\begin{minipage}[t]{0.45\textwidth}\begin{lstlisting}
+
+	\end{lstlisting}\end{minipage}\phantom{----}\begin{minipage}[t]{0.45\textwidth}\begin{lstlisting}
+
+	\end{lstlisting}\end{minipage}
+
+snippet animate
+	\animategraphics[${1:loop,controls,width=\linewidth,autoplay}]{${2:frames per second}}{${3:name without extension}}{${4:first frame}}{${5:last frame}}${6}

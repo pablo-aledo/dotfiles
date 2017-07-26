@@ -1,0 +1,14 @@
+" GUI
+set guioptions-=m                                                       " Menu
+set guioptions-=T                                                       " Header
+set guioptions-=r                                                       " Scroll Right
+set guioptions-=L                                                       " Scroll Left
+set guioptions-=b                                                       " Scroll Bottom
+":set guifont=Monospace\ 10                                             " Font to use
+:set guifont=Sauce\ Code\ Powerline\ 10                                 " Font to use
+":set guifont=*                                                         " Chose font manually 
+colorscheme desert                                                      " Colors of syntax highlight
+
+" if has("gui_running")
+"   set lines=999 columns=999                                             " Maximize window
+" endif

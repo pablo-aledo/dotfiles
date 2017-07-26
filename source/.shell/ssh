@@ -1,0 +1,8 @@
+exchange_keys(){
+	ssh-keygen -t rsa
+	[ $# -eq 1 ] && cat ~/.ssh/id_rsa.pub | ssh $1    'cat >> ~/.ssh/authorized_keys'
+	[ $# -eq 2 ] && cat ~/.ssh/id_rsa.pub | ssh $1@$2 'cat >> ~/.ssh/authorized_keys'
+	[ $# -eq 3 ] && cat ~/.ssh/id_rsa.pub | ssh $1@$2 -p $3 'cat >> ~/.ssh/authorized_keys'
+	ssh-add
+}
+

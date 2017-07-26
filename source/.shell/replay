@@ -1,0 +1,54 @@
+replay(){
+	nc -l 3333
+	[ $# -eq 1 ] && delay=0.025
+	[ $# -eq 2 ] && delay=$2
+	sleep 1
+	cat $1 | sed 's/^###.*/###/g' | sed ':a;N;$!ba;s/\n###\n//g' > /tmp/record
+	echo '<ENDSEQ>----' >> /tmp/record
+	off=0
+	while true
+	do 
+		sleep $delay
+		keyseq=`dd if=/tmp/record bs=1 count=10 skip=$off 2>/dev/null`
+		key=`dd if=/tmp/record bs=1 count=1 skip=$off 2>/dev/null`
+		echo `echo $keyseq | tr '\n' ' '` $key `echo $key | xxd | cut -d' ' -f2`
+		if [ "`echo $keyseq | head -n1 | egrep '^<'`" ]
+		then
+			[ "`echo $keyseq | head -n1 | egrep '^<Tab>'`" ]           && xdotool key Tab              && off=$(( $off + 5 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<LCtrl>a'`" ]        && xdotool key Control_L+a      && off=$(( $off + 8 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<LCtrl>t'`" ]        && xdotool key Control_L+t      && off=$(( $off + 8 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<LCtrl>w'`" ]        && xdotool key Control_L+w      && off=$(( $off + 8 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<LCtrl>v'`" ]        && xdotool key Control_L+v      && off=$(( $off + 8 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<LCtrl>o'`" ]        && xdotool key Control_L+o      && off=$(( $off + 8 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<LCtrl>z'`" ]        && xdotool key Control_L+z      && off=$(( $off + 8 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<F1>'`" ]            && xdotool key F1               && off=$(( $off + 4 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<F2>'`" ]            && xdotool key F2               && off=$(( $off + 4 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<F3>'`" ]            && xdotool key F3               && off=$(( $off + 4 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<F4>'`" ]            && xdotool key F4               && off=$(( $off + 4 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<F5>'`" ]            && xdotool key F5               && off=$(( $off + 4 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<F6>'`" ]            && xdotool key F6               && off=$(( $off + 4 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<F7>'`" ]            && xdotool key F7               && off=$(( $off + 4 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<F8>'`" ]            && xdotool key F8               && off=$(( $off + 4 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<F9>'`" ]            && xdotool key F9               && off=$(( $off + 4 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<Esc>'`" ]           && xdotool key Escape           && off=$(( $off + 5 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<BckSp>'`" ]         && xdotool key Delete           && off=$(( $off + 7 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<LShft>'`" ]                                         && off=$(( $off + 7 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<RShft>$%'`" ]       && xdotool key Shift+4 Shift+5  && off=$(( $off + 9 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<RShft>'`" ]                                         && off=$(( $off + 7 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<Up>'`" ]            && xdotool key Up               && off=$(( $off + 4 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<Down>'`" ]          && xdotool key Down             && off=$(( $off + 6 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<Left>'`" ]          && xdotool key Left             && off=$(( $off + 6 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<Right>'`" ]         && xdotool key Right            && off=$(( $off + 7 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<STOP>'`" ]          && nc -l 3333 && sleep 1        && off=$(( $off + 6 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<NOTIFY>'`" ]        && notify-send "-"              && off=$(( $off + 8 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<PAUSE>'`" ]         && sleep 1                      && off=$(( $off + 7 )) && continue
+			[ "`echo $keyseq | head -n1 | egrep '^<ENDSEQ>'`" ]        && break
+		fi
+		[ $key = '-' ]                                             && xdotool key minus          && off=$(( $off + 1 )) && continue
+		[ `echo $key | xxd | cut -d' ' -f2 ` = "0a" ]              && xdotool key Return         && off=$(( $off + 1 )) && continue
+		[ `echo $key | xxd | cut -d' ' -f2 ` = "200a" ]            && xdotool key space          && off=$(( $off + 1 )) && continue
+		xdotool type $key
+		off=$(( $off + 1 ))
+	done
+}
+

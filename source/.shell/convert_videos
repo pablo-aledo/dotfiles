@@ -1,0 +1,250 @@
+identify(){
+	mplayer -frames 0 -vo null -ao null -identify $1
+}
+
+lengthdir(){
+	find $* -type f -print0 | xargs -0  mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
+}
+
+convert_1(){
+	OPTS="-ofps 25 -of lavf -lavfopts format=mp4 -af lavcresample=44100 -vf-add harddup -vf-add scale=480:-11 -oac lavc -ovc lavc -lavcopts aglobal=1:vglobal=1:acodec=libfaac:abitrate=128:vcodec=mpeg4:vbitrate=384:keyint=25"
+	mencoder `echo $OPTS` -o "$1.mp4" "$1"
+}
+
+convert_2(){
+	OPTS="-noskip -of lavf -lavfopts format=mp4 -af lavcresample=44100 -vf-add harddup -vf-add scale=480:-11 -oac lavc -ovc lavc -lavcopts aglobal=1:vglobal=1:acodec=libfaac:abitrate=128:vcodec=mpeg4:vbitrate=384:keyint=25"
+	mencoder `echo $OPTS` -o "$1.mp4" "$1"
+}
+
+convert_3(){
+	OPTS="-noskip -ofps 25 -of lavf -lavfopts format=mp4 -af lavcresample=44100 -vf-add harddup -vf-add scale=480:-11 -oac lavc -ovc lavc -lavcopts aglobal=1:vglobal=1:acodec=libfaac:abitrate=128:vcodec=mpeg4:vbitrate=384:keyint=25"
+	mencoder `echo $OPTS` -o "$1.mp4" "$1"
+}
+
+convert_4(){
+	OPTS="-ovc xvid -oac mp3lame -xvidencopts bitrate=-700000"
+	mencoder `echo $OPTS` -o "$1.mp4" "$1"
+}
+
+convert_5(){
+	OPTS="-f mp4 -vcodec libxvid -maxrate 1000 -qmin 3 -qmax 5 -bufsize 4096 -g 300 -acodec aac -strict experimental -mbd 2 -s 320x240 -ab 128 -b 400"
+	ffmpeg `echo $OPTS` -i "$1" "$1.mp4"
+
+}
+
+convert_6(){
+	OPTS="input -acodec aac -ab 128kb -vcodec mpeg4 -b 1200kb -mbd 2 -flags +4mv+trell -aic 2 -cmp 2 -subcmp 2 -s 320x180 -title X"
+	ffmpeg `echo $OPTS` -i "$1" "$1.mp4"
+}
+
+convert_7(){
+	OPTS="-f mp4 -acodec libfaac -ar 44100 -ab 128 -vcodec mpeg4 -maxrate 2000 -b 1500 -qmin 3 -qmax 5 -bufsize 4096 -g 300 -s 320x240 -r 30000/1001"
+	ffmpeg `echo $OPTS` -i "$1" "$1".mp4
+}
+
+convert_8(){
+	OPTS="-f mp4 -vcodec xvid -maxrate 1000 -qmin 3 -qmax 5 -bufsize 4096 -g 300 -acodec aac -mbd 2 -s 320x180 -padtop 30 -padbottom 30 -ab 128 -b 400"
+	ffmpeg `echo $OPTS` -i "$1" "$1".mp4
+}
+
+convert_9(){
+	# To list all possible internal preset and tunes:
+	# ffmpeg -f lavfi -i nullsrc -c:v libx264 -preset help -f mp4 -
+
+	OPTS="-c:v libx264 -preset slow -crf 22 -c:a copy"
+	ffmpeg `echo $OPTS` -i "$1" "$1".mp4
+}
+
+convert_10(){
+	OPTS="-vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3"
+	ffmpeg `echo $OPTS` -i "$1" "$1".mp4
+}
+
+convert_ppt(){
+	OPTS="-of lavf -oac lavc -ovc lavc -lavcopts vcodec=wmv1:vbitrate=1500:acodec=wmav1"
+	mencoder `echo $OPTS` -o "$1.avi" "$1"
+}
+
+convert_plusaudio(){
+	ffmpeg -i $1 -i $2 -vcodec copy -acodec copy $1$2.avi
+}
+
+convert_toimgs(){
+        mkdir $1_tmp;
+        ffmpeg -i $1 -r 25 -f image2 $1_tmp/%05d.png
+}
+
+convert_fromimgs(){
+        mencoder mf://$1/*.png -mf w=1440:h=896:fps=25:type=png -ovc lavc -lavcopts vcodec=mjpeg -oac copy -o $1.avi
+}
+
+convert_fromimgs_2(){
+        ffmpeg -i $1/%05d.png -vcodec copy $1.avi
+}
+
+convert_join_safe(){
+
+        mkdir join_video1; ffmpeg -i $1 -r 25 -f image2 join_video1/%05d.png
+        mkdir join_video2; ffmpeg -i $2 -r 25 -f image2 join_video2/%05d.png
+
+	ffmpeg -i $1 -q:a 0 -map a join_audio1.wav
+	ffmpeg -i $2 -q:a 0 -map a join_audio2.wav
+
+	#opts="concat:"`ls join_audio_*.wav | paste -s -d'|'`
+	#ffmpeg -i $opts -c copy join_audio.wav
+	ffmpeg -i "concat:join_audio1.wav|join_audio2.wav" -c copy join_audio.wav
+
+	echo "Waiting ..."
+	read < /dev/tty
+
+	mkdir join_video
+	m=`ls join_video1/*.png | wc -l`; n=`ls join_video2/*.png | wc -l`;
+	for a in `seq 1 $m`; do ln -s $PWD/join_video1/`printf %05d $a`.png $PWD/join_video/`printf %05d $a`.png; done
+	for a in `seq 1 $n`; do ln -s $PWD/join_video2/`printf %05d $a`.png $PWD/join_video/`printf %05d $(( $m + $a ))`.png; done
+
+
+	ffmpeg -i join_audio.wav join_audio.mp3
+
+	ffmpeg -i join_video/%05d.png -i join_audio.mp3 -vcodec copy -acodec copy $3
+}
+
+convert_join_safe_2(){
+
+	m=0
+	for a in $*
+	do
+		mkdir join_video_`printf %02d $m`
+		ffmpeg -i $a -r 25 -f image2 join_video_`printf %02d $m`/%05d.png
+		m=$(( $m + 1 ))
+	done
+
+	m=0
+	for a in $*
+	do
+		ffmpeg -i $a -q:a 0 -map a join_audio_`printf %02d $m`.wav
+		m=$(( $m + 1 ))
+	done
+
+	sox join_audio_*.wav join_audio.wav
+
+	m=0
+	mkdir join_video 
+	for f in `seq 0 $(( $(find join_video_* -type d | wc -l) -1 ))`
+	do
+		n=`ls join_video_$(printf %02d $f)/*.png | wc -l`;
+		for a in `seq 1 $n`
+		do
+			ln -s $PWD/join_video_`printf %02d $f`/`printf %05d $a`.png $PWD/join_video/`printf %07d $m`.png;
+			m=$(( $m + 1 ))
+		done
+	done
+
+	ffmpeg -i join_audio.wav join_audio.mp3
+
+	OPTS="-vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3"
+	ffmpeg -i join_video/%07d.png -i join_audio.mp3 `echo $OPTS` join.mp4
+}
+
+
+
+convert_recursive(){
+
+	limit_head=999999 && limit_tail=999999 && just_one=1 && just_two=0
+
+	[ "$1" = "test" ] && echo 'testing ...' && limit_head=1 && limit_tail=1
+	[ "$1" = "nth" ]  && echo 'nth ...' && limit_head=$2 && limit_tail=1
+	[ "$1" = "just_one" ]  && echo 'just conversion 1' && just_one=1
+	[ "$1" = "just_two" ]  && echo 'just conversion 2' && just_one=0 && just_two=1
+
+	convert_dir=/media/DATA/convert
+	converted_dir=/media/DATA/converted 
+
+	convert_opts_1="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
+	convert_opts_2="-vf 'scale=720:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
+	convert_opts_3="-vcodec libx264 -c:v libx264 -preset slow -crf 23 -c:a copy"
+
+	[ -e /usr/bin/ffmpeg ] || pkg install ffmpeg
+	[ -e /usr/bin/rar ]    || pkg install rar
+
+	rm -fr /tmp/convert_report
+
+	cd $convert_dir
+	find -name '*.rar' | while read line
+	do
+		cd "`dirname $line`"
+		yes n | rar x "`basename $line`"
+		rm -fr "`basename $line`"
+		cd -
+	done
+	
+	cd $convert_dir
+	find $PWD -type d | while read line
+	do
+		mkdir -p "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`"
+	done
+	
+	cd $convert_dir
+	find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | while read line
+	do 
+		echo "\e[31m ===== $line =====\e[0m"
+
+		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
+
+		[ $just_one -eq 0 ] && [ $just_two -eq 0 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_1` /tmp/file1.mp4 "</dev/null"  > /tmp/script1
+		[ $just_one -eq 0 ] && [ $just_two -eq 0 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_2` /tmp/file2.mp4 "</dev/null" >> /tmp/script1
+		[ $just_one -eq 0 ] && [ $just_two -eq 0 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_3` /tmp/file3.mp4 "</dev/null" >> /tmp/script1
+
+		[ $just_one -eq 1 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_1` /tmp/file1.mp4 "</dev/null"  > /tmp/script1
+		[ $just_two -eq 1 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_2` /tmp/file2.mp4 "</dev/null" >> /tmp/script1
+
+		rm -fr /tmp/file{1,2,3}.mp4
+		source /tmp/script1
+
+		find /tmp/ -name 'file*.mp4' -size 0 -delete 2>/dev/null
+
+		echo /bin/cp "`ls -S /tmp/file1.mp4 /tmp/file2.mp4 /tmp/file3.mp4 | tail -n1`" \""`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"\" > /tmp/script2
+		source /tmp/script2
+
+		file1="$line"
+		base1=`basename "$line"`
+		size1=`ls -lh /tmp/file1.mp4 | cut -d' ' -f5`
+		size2=`ls -lh /tmp/file2.mp4 | cut -d' ' -f5`
+		size3=`ls -lh /tmp/file3.mp4 | cut -d' ' -f5`
+		filemin="`ls -S /tmp/file1.mp4 /tmp/file2.mp4 /tmp/file3.mp4 | tail -n1`"
+		printf '%100s %8s %8s %8s %s\n' $base1 $size1 $size2 $size3 $filemin | tee -a /tmp/convert_report
+	done
+
+	cd $convert_dir
+	find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | while read line
+	do 
+		file1="$line"
+		base1=`basename "$line"`
+		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
+		size1=`ls -lh "$file1" | cut -d' ' -f5`
+		size2=`ls -lh "$file2" | cut -d' ' -f5`
+		printf '%100s \e[31m %s \e[32m %s \e[0m\n' $base1 $size1 $size2 | tee -a /tmp/convert_report
+	done
+
+	cd $convert_dir
+	find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | while read line
+	do 
+		file1="$line"
+		base1=`basename "$line"`
+		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
+		[ -e "$file2" ] || echo "Fail converting $file1" | tee -a /tmp/convert_report
+	done
+
+	cd $convert_dir
+	find $PWD -type f | head -n $limit_head | tail -n $limit_tail | while read line
+	do 
+		file1="$line"
+		base1="`basename "$line"`"
+		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
+		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo cp \"$file1\" \"$file2\" | tee -a /tmp/convert_report
+	done
+
+	( [ "$1" = "nth"  ] || [ "" = "test" ] ) && pcmanfm "$(dirname "$(find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g  )")"
+
+}
+
+

@@ -1,0 +1,158 @@
+DESCARGAS_NAS=/media/DATA/NAS/Descargas
+DESCARGAS_LOCAL=/media/DATA/Descargas
+EBOOKS=/media/DATA/ebooks
+ALEJANDRIA=/media/DATA/NAS/Alejandria
+
+avhome(){
+name=$EBOOKS/ebooks-`date +%y%m%d-%H%M`
+mkdir -p $name
+cd $name
+for a in `seq 1 100`
+do
+	wget http://avxhome.se/ebooks/pages/$a
+	echo "-------$a-------" >> list.list
+	cat $a | grep '<h1>' | sed 's/.*">\([^<]*\).*/\1/g' >> list.list
+done
+}
+
+
+avhome_cut(){
+	if [ $# -eq 2 ]
+	then
+		last_a=`basename $1`
+		last_b=`basename $2`
+	else
+		last_a=`ls $EBOOKS | sort -g | tail -n2 | head -n1`
+		last_b=`ls $EBOOKS | sort -g | tail -n1 | head -n1`
+	fi
+	last_line=`cat $EBOOKS/$last_a/list.list | head -n2 | tail -n1`
+	last_line=`cat $EBOOKS/$last_a/1 | grep '<h1>' | sed 's/.*">\([^<]*\).*/\1/g' | head -n1`
+	rm -f $EBOOKS/$last_b/list_cut.list
+	cat $EBOOKS/$last_b/list.list | while read line
+	do
+		echo $line >> $EBOOKS/$last_b/list_cut.list
+		[ $line = $last_line ] && break
+	done
+}
+
+avhome_create_list(){
+rm $DESCARGAS_LOCAL/list.list
+ls $DESCARGAS_NAS | while read line;
+do
+    echo $line "%" $line >> $DESCARGAS_LOCAL/list.list
+done
+}
+
+avhome_isbns(){
+rm  $DESCARGAS_LOCAL/list2.list
+cat $DESCARGAS_LOCAL/list.list | while read line;
+do
+    file=`echo $line | cut -d"%" -f1 | sed 's/^ //g'`
+    keyw=`echo $line | cut -d"%" -f2 | sed 's/^ //g'`
+    url="http://www.amazon.com/s/ref=nb_sb_noss/185-8854576-4677633?url=search-alias%3Daps&field-keywords=$keyw"
+    \rm /tmp/index; wget $url -O /tmp/index
+    title=`cat /tmp/index | grep 'atfResults' | head -n1 | awk 'BEGIN{FS="\""}{print $58}'`
+    echo $file "%" $title >> $DESCARGAS_LOCAL/list2.list
+done
+}
+
+avhome_mv(){
+cat $DESCARGAS_LOCAL/list{2,3}.list | while read line;
+do
+    file=`echo $line | cut -d"%" -f1 | sed 's/^ //g' | sed 's/ $//g'`
+    folder=`echo $line | cut -d"%" -f2 | sed 's/^ //g'`
+    folder2=$ALEJANDRIA/$folder/
+    echo mkdir -p $folder2
+    echo mv \"$DESCARGAS_NAS/$file\" \"$folder2\"
+done
+}
+
+avhome_uncompress(){
+rm $DESCARGAS_LOCAL/list.list
+ls $DESCARGAS_NAS/*.rar | while read line;
+do
+    mkdir /tmp/unrar/; cd /tmp/unrar && rm -rf *
+    rar x "$line"
+    files="`ls | xargs echo`"
+    echo $line "%" $files >> $DESCARGAS_LOCAL/list.list
+done
+
+ls $DESCARGAS_NAS/*.zip | while read line;
+do
+    mkdir /tmp/unrar/; cd /tmp/unrar && rm -rf *
+    unzip "$line"
+    files="`ls | xargs echo`"
+    echo $line "%" $files >> $DESCARGAS_LOCAL/list.list
+done
+}
+
+avhome_links(){
+    rm links.list
+    n=0;
+    cat list.list | grep -v '\-\-\-' | while read title
+    do
+        n=$(($n+1));
+        line=`echo "$title" | sed 's/ /+/g' | sed 's/^\(.*\)$/http:\/\/avaxsearch.net\/avaxhome_search?q=\1\&commit=Go/g'`
+
+        wget "$line" -O page
+        linkline=`cat page | grep links -A3 | grep href | head -n1`
+        [[ $linkline == "" ]] && echo $title % $line >> links.list && continue
+
+        link=`echo $linkline | cut -d'"' -f2`
+        [[ $link == "" ]] && echo $title % $linkline >> links.list && continue
+
+        wget $link -O page
+        finallink=`cat page | grep -o -E 'href="([^"#]+)"' | cut -d'"' -f2 | sort | uniq | egrep "ul.to|uploaded.to|uploaded.net|keep2share.cc|k2s.cc"`
+        [[ $finallink == "" ]] && echo $title % $link >> links.list && continue
+
+        echo $n : $finallink >> links.list
+    done
+}
+
+
+avhome_google(){
+	cat links.list | sed -e 's/[0-9]* : //g' -e 's/.* % //g' | xargs google-chrome
+}
+
+book(){
+	mkdir -p /media/DATA/NAS/Alejandria/$2
+	mv $1 /media/DATA/NAS/Alejandria/$2
+}
+
+avhdaily(){
+	mkdir -p /home/ubuntu/ebooks
+	while true
+	do 
+		export EBOOKS=/home/ubuntu/ebooks
+		if [ `date +%H%M` = 1400 ]
+		then
+			avhome
+			avhome_cut
+			sleep $((60*5))
+		fi
+		sleep 10
+	done
+}
+
+avhome_remaining(){
+   for a in `cat list`; do [ -e $DESCARGAS_LOCAL/`basename $a` ] || echo $a ; done
+}
+
+avhome_dlscript(){
+	cd $EBOOKS
+	rm -fr /tmp/finallist
+	for a in *
+	do
+		cd $a
+		[ -e script ] || download list_cut.list | sed 's/^download/echo/g' | grep echo > /tmp/script; source /tmp/script >> /tmp/finallist
+	       	cd ..
+	done
+
+
+	for a in *
+	do 
+		cd $a
+		[ -e script ] || download list_cut.list | sed 's/^download/echo/g' | grep echo > /tmp/script; source /tmp/script > script
+	       	cd ..
+       	done
+}

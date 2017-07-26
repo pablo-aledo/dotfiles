@@ -1,0 +1,6 @@
+#source $(dirname $(readlink -f $0))/pkg
+
+pcat(){
+	[ -e /usr/bin/pygmentize ] || pkg install python-pygments >/dev/null 2>/dev/null 
+	pygmentize -f terminal256 -O style=native -g $*
+}

@@ -1,0 +1,12 @@
+#cd ~/.dotfiles
+#wget https://github.com/powerline/fonts/archive/master.zip -O fonts-master.zip
+#unzip fonts-master.zip 
+#cd fonts-master
+#./install.sh
+#fc-cache -f -v
+
+which gconftool >/dev/null || return
+
+gconftool -t string -s "/apps/gnome-terminal/profiles/Default/font" "Sauce Code Powerline Medium 10"
+gconftool -t bool -s "/apps/gnome-terminal/profiles/Default/use_system_font" "false"
+

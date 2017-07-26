@@ -1,0 +1,31 @@
+rssfeedreaderlinks(){
+#/data/data/com.news.rssfeedreader/databases/rssfeedreader.db
+#.tables
+#pragma table_info(entries);
+echo 'select link from entries where favorite=1;' | sqlite3 rssfeedreader.db
+}
+
+rssfeedreader(){
+
+google-chrome &
+n=0
+count=`echo 'select link from entries where favorite=1;' | sqlite3 rssfeedreader.db | wc -l`
+echo 'select link from entries where favorite=1;' | sqlite3 rssfeedreader.db | while read line
+do
+	google-chrome "$line"
+	[ $(( $n % 10 )) -eq 0 ] && read < /dev/tty
+	n=$(( $n + 1 ))
+	echo $n/$count
+done
+echo 'update entries set favorite=0;' | sqlite3 rssfeedreader.db
+
+}
+
+rssfeedreader2(){
+
+	rssfeedreaderlinks > /tmp/rsslinks
+	openlinks /tmp/rsslinks
+	echo 'update entries set favorite=0;' | sqlite3 rssfeedreader.db
+
+}
+

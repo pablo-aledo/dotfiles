@@ -1,0 +1,36 @@
+# gvfs-info -a metadata:: <path>
+
+emblem_tick(){
+	gvfs-set-attribute $1 -t stringv metadata::emblems cs-xlet-installed
+}
+
+emblem_update(){
+	gvfs-set-attribute $1 -t stringv metadata::emblems cs-xlet-update
+}
+
+emblem_warn(){
+	gvfs-set-attribute $1 -t stringv metadata::emblems emblem-important
+}
+
+emblem_clean(){
+	gvfs-set-attribute $1 -t unset metadata::emblems
+}
+
+tortoise(){
+
+	find | while read line
+	do
+		emblem_clean $line
+	done
+
+	git status -s | grep '^??' | sed 's/^?? //g' | while read line
+	do
+		emblem_warn "$line"
+	done
+
+	git status -s | grep '^ M ' | sed 's/^ M //g' | while read line
+	do
+		emblem_update "$line"
+	done
+
+}

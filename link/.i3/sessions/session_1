@@ -1,0 +1,22 @@
+# Session to code with two screens. Google + gvim and two terminals
+workspace 1
+exec google-chrome
+--
+workspace 2
+exec gnome-terminal --working-directory=/media/disk/release/
+exec gnome-terminal --working-directory=/media/disk/release/
+--
+layout stacked
+focus parent
+exec gvim
+--
+layout tabbed
+--
+workspace 3
+exec google-chrome
+--
+exec gnome-terminal
+--
+move scratchpad
+workspace 1
+workspace 2

@@ -1,0 +1,57 @@
+#!/bin/zsh
+
+showimg(){
+	pkg install w3m-img >/dev/null 2>/dev/null
+	clear
+	W3MIMGDISPLAY="/usr/lib/w3m/w3mimgdisplay"
+	FILENAME=$1
+	FONTH=20 # Size of one terminal row
+	FONTW=10 # Size of one terminal column
+	COLUMNS=`tput cols`
+	LINES=`tput lines`
+	width=`echo -e "5;$FILENAME" | $W3MIMGDISPLAY | cut -d" " -f1`
+	height=`echo -e "5;$FILENAME" | $W3MIMGDISPLAY | cut -d" " -f2`
+	max_width=$(($FONTW * $(($COLUMNS - 2))))
+	max_height=$(($FONTH * $(($LINES - 2)))) # substract one line for prompt
+	[ $width -gt $max_width ] && height=$(( $height * $max_width / $width)) && width=$(( $max_width - 40 ))
+	[ $height -gt $max_height ] && width=$(($width * $max_height / $height)) && height=$max_height 
+	w3m_command="0;1;0;0;$width;$height;;;;;$FILENAME\n4;\n3;"
+	tput cup $(($height/$FONTH)) 0
+	echo -e $w3m_command|$W3MIMGDISPLAY
+}
+
+showimg_refresh(){
+	setterm -cursor off
+	while true
+	do
+		showimg $1
+		sleep 1
+	done
+}
+
+showimg_refresh_2(){
+	setterm -cursor off
+	showimg $1
+	while true
+	do
+		md51=`md5sum $1`
+		sleep 1
+		md52=`md5sum $1`
+		[ $md51 != $md52 ] && showimg $1
+		sleep 1
+	done
+}
+
+showimg_remote(){
+
+	setterm -cursor off
+	while true
+	do
+		rsync -vai --delete "$1" /tmp/img >/dev/null 2>/dev/null 
+		showimg /tmp/img
+		sleep 1
+	done
+
+}
+
+

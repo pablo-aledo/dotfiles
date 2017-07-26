@@ -1,0 +1,25 @@
+autoconnect(){
+
+echo "auto wlan0"                                              | sudo tee    /etc/network/interfaces
+echo "iface lo inet loopback"                                  | sudo tee -a /etc/network/interfaces
+echo "iface eth0 inet dhcp"                                    | sudo tee -a /etc/network/interfaces
+echo "allow-hotplug wlan0"                                     | sudo tee -a /etc/network/interfaces
+echo "iface wlan0 inet static"                                 | sudo tee -a /etc/network/interfaces
+echo "address 192.168.1.155"                                   | sudo tee -a /etc/network/interfaces
+echo "netmask 255.255.255.0"                                   | sudo tee -a /etc/network/interfaces
+echo "gateway 192.168.1.1"                                     | sudo tee -a /etc/network/interfaces
+echo "wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf"        | sudo tee -a /etc/network/interfaces
+echo "iface default inet dhcp"                                 | sudo tee -a /etc/network/interfaces
+
+echo "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev" | sudo tee /etc/wpa_supplicant/wpa_supplicant.conf
+echo "update_config=1"                                         | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf
+echo "network={"                                               | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf
+echo "    ssid=\"$1\""                                         | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf
+echo "    psk=\"$2\""                                          | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf
+echo "    proto=RSN # (or WPA)"                                | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf
+echo "    key_mgmt=WPA-PSK"                                    | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf
+echo "    pairwise=CCMP # (or TKIP)"                           | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf
+echo "    auth_alg=OPEN"                                       | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf
+echo "}"                                                       | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf
+
+}

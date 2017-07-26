@@ -1,0 +1,71 @@
+summarize_rec(){
+	filename="$1"
+	destination="$2"
+
+	case $filename in
+		(*.rar)
+			rm -fr /tmp/summarize
+			mkdir -p /tmp/summarize
+			cd /tmp/summarize
+			rar x "$filename" >/dev/null 2>/dev/null
+			find $PWD | while read line
+			do
+				summarize_rec "$line" "$destination" 
+			done
+			[ $PWD = $OLDPWD ] || cd $OLDPWD
+			;;
+		(*.zip)
+			rm -fr /tmp/summarize
+			mkdir -p /tmp/summarize
+			cd /tmp/summarize
+			unzip "$filename" >/dev/null 2>/dev/null
+			find $PWD | while read line
+			do
+				summarize_rec "$line" "$destination" 
+			done
+			[ $PWD = $OLDPWD ] || cd $OLDPWD
+			;;
+		(*.pdf)
+			pdftotext -f 1 -l 5 "$filename" - >> "$destination"
+			;;
+		(*.epub)
+			epub2txt "$filename" | head -n 100 >> "$destination"
+			;;
+		(*.txt)
+			cat "$filename" | head -n 100 >> "$destination"
+			;;
+		(*)
+			echo "$filename" >> "$destination"
+	esac
+}
+
+
+summarize(){
+	filename=$1
+	destination=$2
+
+	[ -e "$destination" ] && return
+	[ ${filename[1]} = '/' ] || filename="$PWD"/"$filename"
+	[ "$destination" = "" ] && destination=/tmp/summary
+
+	rm -fr "$destination"
+
+	[ -d "$filename" ] &&  ( ls "$filename" | while read line; do ( summarize_rec "$filename"/"$line" "$destination" ); done )
+	[ -f "$filename" ] &&  summarize_rec "$filename" "$destination"
+
+	[ "$destination" = "/tmp/summary" ] && cat /tmp/summary
+}
+
+collect(){
+	summarize "/media/mint/2TB2/homes/admin/Alejandria/$1" /tmp/topic
+	cd /media/DATA/Descargas/ 
+	rm -fr /tmp/fileprobs
+	ls | while read line
+	do
+		summarize "$line"
+		prob=$(( `cat /tmp/summary /tmp/topic | gzip | wc -c` - `cat /tmp/topic | gzip | wc -c`))
+		printf '%d %s\n' $prob "$line" >> /tmp/fileprobs
+	done
+	sort -g /tmp/filesizes | head
+}
+

@@ -1,0 +1,15 @@
+SWAP_FOLDER=/media/DATA/swap
+SWAP_SIZE=5G
+
+swap(){
+	if [ ! -e $SWAP_FOLDER/swap.img ]
+	then
+		sudo mkdir $SWAP_FOLDER
+		#sudo fallocate -l $SWAP_SIZE $SWAP_FOLDER/swap.img
+		sudo dd if=/dev/zero of=$SWAP_FOLDER/swap.img bs=$SWAP_SIZE count=1
+		sudo chmod 600 $SWAP_FOLDER/swap.img
+		sudo mkswap $SWAP_FOLDER/swap.img
+	fi
+	sudo swapon $SWAP_FOLDER/swap.img
+	cat /proc/swaps
+}

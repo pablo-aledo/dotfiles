@@ -1,0 +1,20 @@
+uranger(){
+	urxvt -e ranger
+}
+
+ranger_extract_compress(){
+	mkdir extract
+	cd extract
+	tar -xzf ../$1
+	ranger
+	tar -czf ../$1 *
+	cd ..
+	\rm -rf extract
+}
+
+CLASSIFY_DEST=/media/mint/2TB2/homes/admin/Alejandria
+
+classify(){
+	[ ! $PWD = $CLASSIFY_DEST ] && echo "Incorrect destination" && return
+	sudo mkdir -p $2 && sudo mv -i $1 $2
+}

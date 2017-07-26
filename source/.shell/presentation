@@ -1,0 +1,85 @@
+bars(){
+
+	[ -e output ] && [ "`cat output | grep produceSubstances`" ] || echo -e '\e[31mproduceSubstances \e[32mrunDiffusionStep \e[33mrunDecayStep \e[34mcellMovementAndDuplication \e[35mrunDiffusionClusterStep \e[36mgetEnergy \e[37mgetCriterion\e[0m \e[31mextra\e[0m' > output
+
+	name=`cat $1                       | grep 'NAME                            ' | cut -d"=" -f2 | awk '{print $1}'`
+	produceSubstances=`cat $1          | grep 'produceSubstances_TIME          ' | cut -d"=" -f2 | awk '{print $1}'`
+	runDiffusionStep=`cat $1           | grep 'runDiffusionStep_TIME           ' | cut -d"=" -f2 | awk '{print $1}'`
+	runDecayStep=`cat $1               | grep 'runDecayStep_TIME               ' | cut -d"=" -f2 | awk '{print $1}'`
+	cellMovementAndDuplication=`cat $1 | grep 'cellMovementAndDuplication_TIME ' | cut -d"=" -f2 | awk '{print $1}'`
+	runDiffusionClusterStep=`cat $1    | grep 'runDiffusionClusterStep_TIME    ' | cut -d"=" -f2 | awk '{print $1}'`
+	getEnergy=`cat $1                  | grep 'getEnergy_TIME                  ' | cut -d"=" -f2 | awk '{print $1}'`
+	getCriterion=`cat $1               | grep 'getCriterion_TIME               ' | cut -d"=" -f2 | awk '{print $1}'`
+	extra=`cat $1                      | grep 'extra_TIME                      ' | cut -d"=" -f2 | awk '{print $1}'`
+	total=`cat $1                      | grep 'TOTAL_COMPUTE_TIME              ' | cut -d"=" -f2 | awk '{m=int($1/60) ; s=int($1-m*60); d=int(($1-m*60-s)*100);  printf "%d:%02d:%02d", m, s, d  }'`
+	totalsec=`cat $1                   | grep 'TOTAL_COMPUTE_TIME              ' | cut -d"=" -f2 | awk '{print $1}'`
+
+
+	zoom=1
+	[ `printf '%f' $totalsec | cut -d'.' -f1` -lt 20 ] && zoom=5
+	[ `printf '%f' $totalsec | cut -d'.' -f1` -lt 10 ] && zoom=10
+	[ `printf '%f' $totalsec | cut -d'.' -f1` -lt  5 ] && zoom=20
+	[ `printf '%f' $totalsec | cut -d'.' -f1` -lt  2 ] && zoom=40
+
+	[ "`cat $1 | grep 'FINAL_CRITERION                     = 1'`" ] && echo -n '\e[32m✔\e[0m' >> output
+	[ "`cat $1 | grep 'FINAL_CRITERION                     = 1'`" ] || echo -n '\e[31m✘\e[0m' >> output
+
+	printf '%20s: ' $name >> output
+	python3 -c "print('\033[31m' '#' * int($produceSubstances*$zoom), end='')" >> output
+	python3 -c "print('\033[32m' '#' * int($runDiffusionStep*$zoom), end='')" >> output
+	python3 -c "print('\033[33m' '#' * int($runDecayStep*$zoom), end='')" >> output
+	python3 -c "print('\033[34m' '#' * int($cellMovementAndDuplication*$zoom), end='')" >> output
+	python3 -c "print('\033[35m' '#' * int($runDiffusionClusterStep*$zoom), end='')" >> output
+	python3 -c "print('\033[36m' '#' * int($getEnergy*$zoom), end='')" >> output
+	python3 -c "print('\033[37m' '#' * int($getCriterion*$zoom), end='')" >> output
+	python3 -c "print('\033[31m' '#' * int($extra*$zoom), end='')" >> output
+	python3 -c "print(' \033[37m' '$total', end='')" >> output
+	[ $zoom -ne 1 ] && echo -ne "\e[0m (x$zoom)\e[0m" >> output
+	echo >> output
+
+}
+
+all_bars(){
+	rm -fr output
+	for a in run_clust.e*
+	do 
+		bars $a
+	done
+}
+
+show_bars(){
+
+	clear
+	setterm -cursor off
+	while true
+	do 
+		aws_get 'run_clust.e*' >/dev/null 2>/dev/null
+		if [ "`find -name 'run_clust.e*'`" ]
+		then
+			all_bars
+			clear
+			if [ `cat output | wc -l` -ge `tput lines` ]
+			then
+				head -n1 output
+				tail -n$(( `tput lines` - 2 )) output
+			else
+				cat output
+			fi
+		fi
+	       	sleep 1
+       	done
+}
+
+show_opt(){
+	clear
+	while true
+	do 
+		aws_get 'cell_clustering.optrpt' >/dev/null 2>/dev/null
+		if [ "`find -name 'cell_clustering.optrpt'`" ]
+		then
+			vim cell_clustering.optrpt
+		fi
+       	done
+}
+
+

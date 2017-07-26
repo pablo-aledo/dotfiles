@@ -1,0 +1,52 @@
+#source $(dirname $(readlink -f $0))/autoinstall
+
+katcr_list(){
+	search=""
+	for a in $*
+	do
+		search=$search" "$a
+	done
+	
+	search=`echo $search | sed -e 's/^ //g' -e 's/ /%20/g'`
+
+	echo $search > /tmp/katcr
+
+	link1="https://kickass.cd/search.php?q="$search
+
+	n=1
+	wget -q $link1 -O - | grep cellMainLink | \
+		sed -e 's/^.*.cellMainLink.>//g' \
+		    -e 's/<\/a>//g' \
+		    -e 's/<strong class="red">//g' \
+		    -e 's/<\/strong>//g' \
+		    | while read line
+	do 
+		echo $n : $line
+		n=$(($n + 1))
+	done
+
+}
+
+katcr_dlaux(){
+	search=$1
+	search=`echo $search | sed 's/ /%20/g'`
+
+	link1="https://kickass.cd/search.php?q="$search
+
+	link2=`wget -q $link1 -O - | grep cellMainLink | head -n$2 | tail -n1 | cut -d'"' -f2`
+	link2="https://kickass.cd"$link2
+
+	link3=`wget -q $link2 -O - | grep "magnet:" | head -n1 | cut -d'"' -f6`
+
+	tmux new -d -s ${search}_${2} "aria2c '"$link3"'"
+}
+
+katcr_dl(){
+	pkg install aria2c
+	pkg install tmux
+	search="`cat /tmp/katcr`"
+	for a in $*
+	do 
+		katcr_dlaux $search $a
+	done
+}

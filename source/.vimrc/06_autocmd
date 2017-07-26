@@ -1,0 +1,30 @@
+autocmd BufWinEnter salida* exec ':AnsiEsc'
+autocmd BufWinEnter log* exec ':AnsiEsc'
+autocmd BufWinEnter output* exec ':AnsiEsc'
+autocmd BufWinEnter output* exec ':set nowrap'
+autocmd BufWinEnter main.txt setlocal autoread
+
+" Saves and loads the folds created in the document
+
+"autocmd BufWinEnter * exec 'set viewdir=' . expand("%:p:h") . '/.view'
+"autocmd BufWinEnter * exec 'set viewdir=/media/disk/.view'
+autocmd BufWinEnter * exec 'set viewdir=/media/DATA/.view'
+"autocmd BufWinEnter * exec 'set viewdir=~/.view'
+
+" saves and loads the undo tree
+autocmd BufWinEnter * exec 'set undodir=/media/DATA/.undo'
+autocmd BufWinEnter * exec 'set undofile'
+
+au BufWinLeave * silent! mkview
+au BufWinEnter * silent! loadview
+
+autocmd BufWinEnter log.log exec ':set wrap!'
+autocmd BufWinEnter log.log exec 'cd ..'
+
+autocmd BufWinEnter *.scala exec 'set filetype=scala'
+autocmd BufWinEnter *.scala exec 'set tabstop=4'
+autocmd BufWinEnter *.scala exec 'set shiftwidth=4'
+autocmd BufWinEnter *.scala exec 'set expandtab'
+
+autocmd BufWinEnter *.c exec 'set nospell'
+autocmd BufWinEnter *.cpp exec 'set nospell'

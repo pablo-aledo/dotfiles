@@ -1,0 +1,58 @@
+dupes(){
+	n=$1
+	shift
+	array=("${@}")
+
+	[ "`echo $array | grep $folder_2`" ] || start=2
+	[ "`echo $array | grep $folder_2`" ] && start=1
+
+	for a in `seq $start $n`
+	do 
+		[ "`echo ${array[$a]} | grep ^$rm_from`" ] && echo sudo rm -f "`escape2 "${array[$a]}"`"
+	done
+}
+
+escape2(){
+	echo $1 | sed -e 's/^/"/g' -e 's/$/"/g' -e 's/\$/\\$/g'
+}
+
+mkmv(){
+	mkdir -p "`dirname "$2"`" 2>/dev/null
+	/bin/mv "$1"  "`dirname "$2"`"/
+}
+
+mkcp(){
+	mkdir -p "`dirname "$2"`" 2>/dev/null
+	/bin/cp "$1"  "`dirname "$2"`"/
+}
+
+mergehdd_rmdupes(){
+	# Parameters
+	rm_from=$1
+	folder_2=$2
+
+	# Remove used files
+	rm -rf /tmp/dupes
+
+	# Generate dupes file
+	sudo fdupes -r $rm_from $folder_2 > /tmp/dupes
+
+	# Remove duplicates
+	file=`head -n1 /tmp/dupes`
+	n=1
+
+	cat /tmp/dupes | while read file
+	do
+		if [ "$file" != "" ]
+		then
+			array[$n]="$file"
+			n=$(($n + 1))
+		else
+			dupes $(($n-1)) "${array[@]}" | tee -a /tmp/rmdupes
+
+			n=1
+			array=()
+		fi
+	done
+}
+

@@ -1,0 +1,2 @@
+set laststatus=2                          " Configure airline
+let g:airline_powerline_fonts=1           " Configure airline

@@ -1,0 +1,6 @@
+#source $(dirname $(readlink -f $0))/pkg
+
+caffeine(){
+	pkg install xdotool
+	watch -n 60 xdotool key Alt
+}

@@ -1,0 +1,172 @@
+" Maps de teclas
+map <F3> :set hlsearch!<CR>
+imap <F3> <ESC>:set hlsearch!<CR>a
+map <F4> :set wrap!<CR>
+imap jj <ESC>
+" Different versions of save and make
+map :W :w
+map <C-s> :wall<CR>
+imap <C-s> <ESC>:wall<CR>a
+map <C-s><C-s> :wall<CR>:silent make!<CR>
+map <C-s><C-c> <C-w><right><C-w><up>:cw<cr>:wall<CR>:make clean<CR><CR>:make<CR><CR>
+map <C-s><C-a> <C-w><right><C-w><up>:cw<cr>:wall<CR>:make<CR><CR>:make run<CR><CR>
+imap <C-s><C-s> <ESC>:wall<CR>:make<CR><CR>
+imap <C-s><C-a> <esc>:wall<CR>:make<CR><CR>:make run<CR><CR>
+" Start writing at the end of the line
+map <C-z> A
+imap <C-z> <ESC>A
+imap AA <ESC>A
+" Movement down
+imap <C-j> <DOWN>
+" Movement right
+imap <C-l> <RIGHT>
+" Movement left
+imap HH <left>
+" Movement down
+imap JJ <down>
+" Movement up
+imap KK <ESC><up>i
+" Movement right
+imap LL <right>
+" Go to the end of the file
+imap GG <ESC>GA
+" To substitute LL
+imap LK L<left><right>L
+" erase backwards
+imap <C-BS> <RIGHT><BS>
+" Insert blank line after actual one
+map <C-CR> A<CR><ESC>"_x"_x<up>
+" Insert blank line after actual one and edit it
+map <C-l> A<CR><ESC>"_x"_x<up>
+" Line numbers
+map <F10> :set number!<CR>
+" Exit edit mode and start searching 
+imap <C-c><C-c> <home><esc>/
+" Search
+map <C-c><C-c> <home>/
+" Search
+map <space><space> <home>/
+" change mode
+map <space> :
+" Autocorrect last spell error
+imap zz <esc>[sz=1<CR><C-o>a
+" Autocorrect last spell error
+map zz z=1<CR><CR>]s
+" Next spelling error
+map zx zg
+noremap zg zg]s
+" Toggle header and imlementation file
+map <C-h> :A<CR>
+map <C-A-h> :let a="<C-R>=expand("<cword>")<CR>"<CR>:w<CR>:A<CR>:execute "/\\<" . a . "\\>"<CR>ggn
+map <C-A-i> [I
+map <C-A-I> [i
+map <C-n> :cn<CR>
+map <C-N> :cN<CR>
+" Remove adjacent empty lines around the cursor
+map 1s vipd<UP>A<CR><ESC>"_x"_x
+" Private prototype
+map ,pr yy:w<cr>:A<cr>/private\\|protected<cr>p>>:s/{/;/g<cr>e<right><right>dede:w<cr>:A<cr>
+" Public prototype
+map ,pu yy:w<cr>:A<cr>/public<cr>p>>:s/{/;/g<cr>e<right><right>dede:w<cr>:A<cr>
+" Implementation
+map ,i  yy/class<cr>e<right><right>:let a="<C-R>=expand("<cword>")<CR>"<cr>:w<cr>:A<cr>GA<cr><cr><esc>p<<e<right><right>i<C-r>=a<cr>::<esc>:s/;/{/g<cr>A<cr><cr><cr><cr>}<up><up><tab>
+" Delete Surrounding
+map Sd %x''x
+" find in common files
+map <C-f> :cw<cr>:grep -i '' *.h *.cpp *.php *.c *.tex<left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left>
+" Find in all files
+map <C-f><C-f> :cw<cr>:grep -i '' *<left><left><left>
+" Find and paste
+map <C-S-b> :r! cat `find -type f` \| grep 
+" Copy previous line
+inoremap <C-y> <esc>:AutoComplPopDisable<cr>a<C-y><esc>:AutoComplPopEnable<cr>a
+" To avoid mistakes
+inoremap <C-u> <C-y>
+" Nerdtree
+map <C-n> :make clean<cr><cr>:NERDTreeToggle<cr><C-w><right>
+" Tagbar
+map <C-t> :TagbarToggle<cr><C-w><left>
+" Align
+map <A-a> :Align
+map zb $zf%
+map zbb V<down>$%zf
+map zv zfip
+" New line over
+map <C-S-cr> O<esc>cc<esc>
+map <C-S-l> O<esc>cc<esc>
+" Quick scroll
+map <A-j> 2<down>2<down><down>
+map <A-k> 2<up>2<up><up>
+map <A-h> 5<left>
+map <A-l> 5<right>
+"vmap J 2<down>2<down><down>
+"vmap K 2<up>2<up><up>
+"vmap H 5<left>
+"vmap L 5<right>
+" Surround word
+"map Sw viwS
+"map SW viWS
+" Save protected file
+map <C-A-s> :w !sudo tee %<CR>
+" Itemize and enumerate
+"map ,it {<down><C-v>}<up>I<tab>\item <esc>{i\begin{itemize}<esc>}i\end{itemize}<esc>
+"map ,en {<down><C-v>}<up>I<tab>\item <esc>{i\begin{enumerate}<esc>}i\end{enumerate}<esc>
+" Open with inkscape
+map ,in :! inkscape media/<C-R>=expand("<cword>")<cr>.svg
+" Convert to pdf
+map ,In :! inkscape --export-pdf media/<C-R>=expand("<cword>")<cr>.pdf media/<C-R>=expand("<cword>")<cr>.svg
+" Toggle comments on paragraph
+map cx vip,ci
+" Toggle comments on line
+map cv ,ci
+" Change expression inside square brackets
+map ciu ci]
+" Change expression inside curly brackets
+map cii ci}
+" Change expression inside parenthesis
+map cio ci)
+imap <C-f> <esc>b:let a="<C-R>=expand("<cword>")<CR>"<CR><up>$:execute "/" . a <CR>Nv$y<down>"_diwp$
+" Duplicate line and increment number
+map <C-A-a> yyp<c-a>
+" Fix trailing spaces
+map tr :%s/\s\+$//
+" spelling spanish
+map :sq :setlocal spell spelllang=es
+" spelling english
+map :sw :setlocal spell spelllang=en
+" Open console
+map <C-A-c> :! gnome-terminal&<cr><cr>
+" Open nautilus
+map <C-A-n> :! pcmanfm .&<cr><cr>
+" Execute a macro
+map <F2> @q
+" duplicate and comment
+map ,dc vipy<up><c-cr>pcx<down><down>
+" git status
+nmap <leader>gs :Gstatus<CR><C-w>20+
+" ANSI Esc for color surrounding selection
+map <C-c> S·s\e[31m <esc>xhhhmqf·s \e[0m<esc>x'q
+" Open in gedit
+map <F7> :%! gedit /dev/stdin<CR>u<CR>
+" copy in clipboard
+map <S-F7> :! xclip -sel clip<CR>u
+" paste from clipboard
+map <C-F7> "+gp
+" Shell filetype
+map ,sh :set filetype=sh<CR>:set nospell<CR>
+" Double quit for vimdiff
+map QQ :q<cr>:q<cr>
+map QQ! :q!<cr>:q!<cr>
+" Paste and yank
+vmap py pgvy
+" Disable indentation
+:nnoremap <F8> :setl noai nocin nosi inde=<CR>
+:nnoremap 88 :setl noai nocin nosi inde=<CR>
+" Set filetype
+map ft :set ft=
+" Load symbols for weird keyboards
+map SY :so ~/.vim/symbols<cr>
+" Remove all folds
+map ZD ggVGzdggVGzdggVGzdggVGzd
+" toggle gundo
+nnoremap <leader>u :GundoToggle<CR>

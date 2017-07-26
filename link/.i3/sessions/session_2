@@ -1,0 +1,19 @@
+# Session for remote coding in a small laptop. Gvim + a local and a remote terminal
+exec gvim
+--
+--
+split v
+exec terminator
+--
+--
+--
+split h
+exec terminator
+--
+exec terminator
+--
+move scratchpad
+layout tabbed
+resize shrink height 
+resize shrink height 
+resize shrink height 

@@ -1,0 +1,16 @@
+<user-mapping>
+	<authorize username="admin" password="%pword%" >
+		<connection name="vnc">
+			<protocol>vnc</protocol>
+			<param name="hostname">localhost</param>
+			<param name="port">5901</param>
+			<param name="password">%pword%</param>
+		</connection>
+		<connection name="ssh">
+			<protocol>ssh</protocol>
+			<param name="hostname">localhost</param>
+			<param name="port">22</param>
+			<param name="password">%pword%</param>
+		</connection>
+	</authorize>
+</user-mapping>

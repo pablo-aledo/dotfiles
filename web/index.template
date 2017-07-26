@@ -1,0 +1,29 @@
+<?php
+if($_SERVER["REQUEST_METHOD"] == "POST"){
+	if($_POST["function"] == "%function%"){
+		exec("( . %script% && %function% " .
+			$_POST["param1"] . " " .
+			$_POST["param2"] . " " .
+			$_POST["param3"] . " " .
+			") > /tmp/log_" . rand(0,1000) . " 2>&1 &"
+		);
+	}
+}
+?>
+
+<html>
+<head>
+	<meta charset=utf-8>
+	<title></title>
+	<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+	<form method="post">
+		param1: <br> <input type="text" name="param1"><br>
+		param2: <br> <input type="text" name="param2"><br>
+		param3: <br> <input type="text" name="param3"><br>
+		             <input type="hidden" name="function" value="%function%"><br>
+		<input type="submit">
+	</form>
+</body>
+</html>

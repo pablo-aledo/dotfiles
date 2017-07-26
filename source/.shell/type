@@ -1,0 +1,52 @@
+type(){
+	cat $1 | while read line
+	do 
+		if [ "$line" = "===" ]
+		then
+			sleep 5
+			read
+			echo "GO!!"
+			sleep 5
+		else
+			echo $line | xdotool type --clearmodifiers --file -
+			#lenline=`echo $line | wc -c`
+			#for a in `seq 0 $(($lenline - 1))`
+			#do 
+				#char=`echo $line | dd count=1 bs=1 skip=$a 2>/dev/null`
+				#key=`echo $char | sed \
+					#-e "s/\\$$/dollar/" \
+					#-e "s/ /space/" \
+					#-e "s/=/equal/" \
+					#-e "s/*/asterisk/" \
+					#-e "s/|/bar/" \
+					#-e "s/\//slash/" \
+					#-e "s/{/braceleft/" \
+					#-e "s/}/braceright/" \
+					#-e "s/\[/bracketleft/" \
+					#-e "s/\]/bracketright/" \
+					#-e "s/!/exclam/" \
+					#-e "s/\"/quotedbl/" \
+					#-e "s/%/percent/" \
+					#-e "s/&/ampersand/" \
+					#-e "s/(/parenleft/" \
+					#-e "s/)/parenright/" \
+					#-e "s/+/plus/" \
+					#-e "s/,/comma/" \
+					#-e "s/-/minus/" \
+					#-e "s/_/underscore/" \
+					#-e "s/\./period/" \
+					#-e "s/:/colon/" \
+					#-e "s/;/semicolon/" \
+					#-e "s/</less/" \
+					#-e "s/>/greater/" \
+					#-e "s/?/question/" \
+					#-e "s/@/at/" \
+					#-e "s/^$/Return/"
+				#`
+				#echo $char $key
+				#xdotool key $key
+				#sleep 0.01
+			#done
+		fi
+	done
+}

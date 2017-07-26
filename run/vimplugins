@@ -1,0 +1,6 @@
+mkdir -p ~/.vim
+cd ~/.vim
+for a in $OLDPWD/../vimplugins/*.zip
+do
+	unzip -o $a >/dev/null 2>/dev/null
+done

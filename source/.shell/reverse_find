@@ -1,0 +1,10 @@
+rvf(){            
+	a=""
+	for n in `seq 1 10`
+	do
+		a="../"$a
+		find $a -name $1
+		[ $? -eq 0 ] && return
+	done
+}
+

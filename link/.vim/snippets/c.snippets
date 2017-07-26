@@ -1,0 +1,1446 @@
+# main()
+snippet main
+	int main(int argc, const char *argv[])
+	{
+		${1}
+		return 0;
+	}
+# #include <...>
+snippet inc
+	#include <${1:stdio}.h>${2}
+snippet include
+	#include <${1:stdio}.h>${2}
+# #include "..."
+snippet Inc
+	#include "${1:`Filename("$1.h")`}"${2}
+snippet Include
+	#include "${1:`Filename("$1.h")`}"${2}
+# #ifndef ... #define ... #endif
+snippet Def
+	#ifndef $1
+	#define ${1:SYMBOL} ${2:value}
+	#endif${3}
+snippet def
+	#define 
+snippet ifdef
+	#ifdef ${1:FOO}
+		${2:#define }
+	#endif
+snippet #if
+	#if ${1:FOO}
+		${2}
+	#endif
+# Header Include-Guard
+# (the randomizer code is taken directly from TextMate; it could probably be
+# cleaner, I don't know how to do it in vim script)
+snippet once
+	#ifndef ${1:`toupper('_'.Filename('', 'UNTITLED').'_H_')`}
+	#define $1
+
+	${2}
+
+	#endif /* end of include guard: $1 */
+snippet ifndef
+	#ifndef ${1:`toupper('_'.Filename('', 'UNTITLED').'_H_')`}
+	#define $1
+
+	${2}
+
+	#endif /* end of include guard: $1 */
+# If Condition
+snippet if
+	if (${1:/* condition */}) {
+		${2:/* code */}
+	}
+snippet el
+	else {
+		${1}
+	}
+snippet else
+	else {
+		${1}
+	}
+# Tertiary conditional
+snippet t
+	${1:/* condition */} ? ${2:a} : ${3:b}
+# Do While Loop
+snippet do
+	do {
+		${2:/* code */}
+	} while (${1:/* condition */});
+# While Loop
+snippet wh
+	while (${1:/* condition */}) {
+		${2:/* code */}
+	}
+snippet while
+	while (${1:/* condition */}) {
+		${2:/* code */}
+	}
+# For Loop
+snippet for
+	for (${1:i} = ${2:0}; $1 ${3:< count}; $1${4:++}) {
+		${5:/* code */}
+	}
+# Custom For Loop
+snippet forr
+	for ( ${1:unsigned int} ${2:i} = ${3:0}; $2 ${4:< 10}; $2${5:++}) {
+		${6:/* code */}
+	}
+# Function
+snippet fun
+	${1:void} ${2:function_name}(${3})
+	{
+		${4:/* code */}
+	}
+# Function Declaration
+snippet fund
+	${1:void} ${2:function_name}(${3});${4}
+# Typedef
+snippet td
+	typedef ${1:int} ${2:MyCustomType};${3}
+# Struct
+snippet st
+	struct ${1:`Filename('$1_t', 'name')`} {
+		${2:/* data */}
+	}${3: /* optional variable list */};${4}
+# Typedef struct
+snippet tds
+	typedef struct ${2:_$1 }{
+		${3:/* data */}
+	} ${1:`Filename('$1_t', 'name')`};
+# Typdef enum
+snippet tde
+	typedef enum {
+		${1:/* data */}
+	} ${2:foo};
+# printf
+# unfortunately version this isn't as nice as TextMates's, given the lack of a
+# dynamic `...`
+snippet pr
+	printf("${1:%s}\n"${2});${3}
+snippet printf
+	printf("${1:%s}\n"${2});${3}
+# fprintf (again, this isn't as nice as TextMate's version, but it works)
+snippet fpr
+	fprintf(${1:stderr}, "${2:%s}\n"${3});${4}
+snippet fprintf
+	fprintf(${1:stderr}, "${2:%s}\n"${3});${4}
+snippet spr
+	sprintf(${1:string}, "${2:%s}"${3});${4}
+snippet sprintf
+	sprintf(${1:string}, "${2:%s}"${3});${4}
+snippet .
+	[${1}]${2}
+snippet un
+	unsigned
+snippet prc
+	printf("\e[${1:31}m ${2:%s} \e[0m\n"${3});${4}
+snippet prcol
+	printf("\e[${1:31}m ${2:%s} \e[0m\n"${3});${4}
+snippet prcolor
+	printf("\e[${1:31}m ${2:%s} \e[0m\n"${3});${4}
+snippet tpt
+	${1:uchar}* ${2:temp_ptr} = &(($1*)(${3:imagen_inicial}->imageData + $3->widthStep*${4:y}))[${5:x}];${6}
+snippet tptr
+	${1:uchar}* ${2:temp_ptr} = &(($1*)(${3:imagen_inicial}->imageData + $3->widthStep*${4:y}))[${5:x}];${6}
+snippet tptc
+	${1:uchar}* ${2:temp_ptr} = &(($1*)(${3:imagen_inicial}->imageData + $3->widthStep*${4:y}))[${5:x}*3];${6}
+snippet tptrc
+	${1:uchar}* ${2:temp_ptr} = &(($1*)(${3:imagen_inicial}->imageData + $3->widthStep*${4:y}))[${5:x}*3];${6}
+snippet socket tcpclient
+	int sockfd; 
+	struct sockaddr_in servaddr,cliaddr; 
+	static char buffer[BUFFER_SIZE];
+	sockfd=socket(AF_INET,SOCK_STREAM,0); 
+
+	bzero(&servaddr,sizeof(servaddr)); 
+	servaddr.sin_family = AF_INET; 
+	servaddr.sin_addr.s_addr=inet_addr("${1:127.0.0.1}"); 
+	servaddr.sin_port=htons(${2:80}); 
+
+	connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)); 
+
+	strcpy(buffer, "hola");
+
+	send(sockfd,buffer, BUFFER_SIZE,0);
+
+	int offset = 0;
+	int nBytes;
+	while( ( nBytes = recv(sockfd,buffer+offset, BUFFER_SIZE-offset,0) ) ){
+		offset += nBytes;
+	}
+
+
+
+	close(sockfd);
+snippet socket tcpserver
+	int listenfd,connfd; 
+	
+	struct sockaddr_in servaddr,cliaddr; 
+	socklen_t clilen; 
+	static char buffer[BUFFER_SIZE];
+
+	listenfd=socket(AF_INET,SOCK_STREAM,0); 
+
+	bzero(&servaddr,sizeof(servaddr)); 
+	servaddr.sin_family = AF_INET; 
+	servaddr.sin_addr.s_addr=htonl(INADDR_ANY); 
+	servaddr.sin_port=htons(${1:80}); 
+
+	int aux = 1; setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &aux, sizeof(aux));
+
+	bind(listenfd,(struct sockaddr *)&servaddr,sizeof(servaddr)); 
+
+	listen(listenfd,1024); 
+
+	while(1){
+		clilen=sizeof(cliaddr);
+		connfd = accept(listenfd,(struct sockaddr *)&cliaddr,&clilen);
+
+		if ( fork() ) {
+
+			close(connfd);
+
+		} else {
+
+			close (listenfd);
+			
+			int nBytes = 0;
+			int offset = 0;
+			while( ( nBytes = recv(connfd,buffer+offset, BUFFER_SIZE,0) ) ){
+				offset += nBytes;
+			}
+
+			send(connfd,buffer,BUFFER_SIZE,0);
+			
+			close(connfd);
+			
+			exit(0);
+		}
+		
+	}
+
+
+snippet socket tcpserversingle
+	int listenfd,connfd; 
+	
+	struct sockaddr_in servaddr,cliaddr; 
+	socklen_t clilen; 
+	static char buffer[BUFFER_SIZE];
+
+	listenfd=socket(AF_INET,SOCK_STREAM,0); 
+
+	bzero(&servaddr,sizeof(servaddr)); 
+	servaddr.sin_family = AF_INET; 
+	servaddr.sin_addr.s_addr=htonl(INADDR_ANY); 
+	servaddr.sin_port=htons(${1:80}); 
+
+	int aux = 1; setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &aux, sizeof(aux));
+
+	bind(listenfd,(struct sockaddr *)&servaddr,sizeof(servaddr)); 
+
+	listen(listenfd,1024); 
+
+	while(1){
+		clilen=sizeof(cliaddr);
+		connfd = accept(listenfd,(struct sockaddr *)&cliaddr,&clilen);
+
+		close (listenfd);
+		
+		int nBytes = 0;
+		int offset = 0;
+		while( ( nBytes = recv(connfd,buffer+offset, BUFFER_SIZE,0) ) ){
+			offset += nBytes;
+		}
+
+		send(connfd,buffer,BUFFER_SIZE,0);
+		
+		close(connfd);
+	}
+
+
+snippet socket udpclient
+	static char buffer[BUFFER_SIZE];
+	socklen_t addr_len; 
+	unsigned int server_s;
+	struct sockaddr_in server_addr;
+
+	server_s = socket(AF_INET, SOCK_DGRAM, 0);
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_addr.s_addr = inet_addr("${1:127.0.0.1}");
+	server_addr.sin_port = htons(${2:80});
+
+	strcpy(buffer,"hola");
+
+	while(1){
+		sendto(server_s, buffer,BUFFER_SIZE , 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
+
+		addr_len = sizeof(server_addr);
+
+		recvfrom(server_s, buffer, BUFFER_SIZE, 0,(struct sockaddr *)&server_addr, &addr_len);
+	}
+
+	close(server_s);
+snippet socket udpserver
+	static char buffer[BUFFER_SIZE];
+	struct sockaddr_in server_addr;
+	struct sockaddr_in client_addr;
+	socklen_t addr_len;
+	unsigned int server_s;
+
+	server_s = socket(AF_INET, SOCK_DGRAM, 0);
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(${1:8080});
+	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	bind(server_s, (struct sockaddr *)&server_addr, sizeof(server_addr));
+
+	addr_len = sizeof(client_addr);
+
+	while(1){
+		recvfrom(server_s,buffer, BUFFER_SIZE, 0,(struct sockaddr *)&client_addr, &addr_len);
+		buffer[0] = buffer[1];
+		sendto(server_s,buffer, BUFFER_SIZE, 0,(struct sockaddr *)&client_addr, sizeof(client_addr));
+	}
+
+	close(server_s);
+snippet file2mem
+	FILE *file = fopen("${1:file}", "rb");
+	fseek(file, 0, SEEK_END);
+	unsigned long fileLen=ftell(file);
+	fseek(file, 0, SEEK_SET);
+	fread(buffer, fileLen, 1, file);
+	fclose(file);
+snippet mem2file
+	FILE *file = fopen( "${1:file.txt}", "wb");
+	fwrite(buffer,BUFFER_SIZE, 1, file);
+	fclose(file);
+snippet socket include
+	#include <arpa/inet.h>
+	#include <netdb.h>
+	#include <netinet/in.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <string.h>
+	#include <sys/socket.h>
+	#include <unistd.h>
+snippet tokenize
+	vector<string> tokenize(const string& str,const string& delimiters) {
+		vector<string> tokens;
+	    	
+		// skip delimiters at beginning.
+	    	string::size_type lastPos = str.find_first_not_of(delimiters, 0);
+	    	
+		// find first "non-delimiter".
+	    	string::size_type pos = str.find_first_of(delimiters, lastPos);
+
+	    	while (string::npos != pos || string::npos != lastPos)
+	    	{
+			// found a token, add it to the vector.
+			tokens.push_back(str.substr(lastPos, pos - lastPos));
+		
+			// skip delimiters.  Note the "not_of"
+			lastPos = str.find_first_not_of(delimiters, pos);
+		
+			// find next "non-delimiter"
+			pos = str.find_first_of(delimiters, lastPos);
+	    	}
+
+		return tokens;
+	}
+
+snippet itos
+	string itos(int i){
+		stringstream i_ss;
+		i_ss << i;
+		return i_ss.str();
+	}
+
+snippet stoi
+	int stoi(string str){
+		int ret;
+		sscanf(str.c_str(), "%d", &ret);
+		return ret;
+	}
+
+snippet myreplace
+	void myReplace(std::string& str, const std::string& oldStr, const std::string& newStr) {
+		size_t pos = 0;
+		while((pos = str.find(oldStr, pos)) != std::string::npos){
+			str.replace(pos, oldStr.length(), newStr);
+			pos += newStr.length();
+		}
+	}
+
+snippet search
+	int a[ 10 ] = { 10, 2, 17, 5, 16, 8, 13, 11, 20, 7 };
+	vector<int> v( a, a + 10 );
+
+	// use binary_search to locate 13 in v
+	if ( std::binary_search( v.begin(), v.end(), 13 ) )
+		cout << "13 was found in v" << endl;
+	else
+		cout << "13 was not found in v" << endl;
+
+snippet sort
+	int coll[] = { 5, 6, 2, 4, 1, 3 };
+	sort (coll, coll+6);
+
+snippet constraint
+	#define constraint(x,l1,l2) ( ((x)<(l1))?(l1):((x)>(l2))?(l2):(x) )
+snippet min
+	#define min(a,b) (((a)<(b))?(a):(b))
+snippet max
+	#define max(a,b) (((a)>(b))?(a):(b))
+snippet gauss
+	#define gauss(A,var,med,x) ( (A)*exp(-pow((x)-(med),2)/(var)) )
+snippet deg2rad
+	#define deg2rad 3.141592654/180
+snippet rad2deg
+	#define rad2deg 180/3.141592654
+snippet r3
+	#define map(x, x1, x2, y1, y2) ( ((float)(x)-(float)(x1))*(((float)(y2)-(float)(y1))/((float)(x2)-(float)(x1)))+(float)(y1) )
+snippet customsort
+	#include <algorithm>
+	#include <string>
+	#include <cctype>
+	 
+	// compare character case-insensitive
+	bool icompare_char(char c1, char c2){
+		return std::toupper(c1) < std::toupper(c2);
+	}
+	 
+	// return true if s1 comes before s2
+	bool compare(std::string const& s1, std::string const& s2){
+		if (s1.length() > s2.length())
+			return true;
+		if (s1.length() < s2.length())
+			return false;
+		return std::lexicographical_compare(s1.begin(), s1.end(),
+			s2.begin(), s2.end(),
+			icompare_char);
+	}
+	 
+	int main(){
+		std::string strings[8] = {"Here", "are", "some", "sample", "strings", "to", "be", "sorted"};
+		std::sort(strings, strings+8, compare);
+		return 0;
+	}
+snippet pthread
+	#include <pthread.h>
+	#include <stdio.h>
+	#define NUM_THREADS     5
+
+	void *PrintHello(void *threadid){
+		long tid;
+		tid = (long)threadid;
+		printf("Hello World! It's me, thread #%ld!\n", tid);
+		pthread_exit(NULL);
+	}
+
+	int main (int argc, char *argv[]){
+		pthread_t threads[NUM_THREADS];
+		int rc;
+		long t;
+		for(t=0; t<NUM_THREADS; t++){
+			printf("In main: creating thread %ld\n", t);
+			rc = pthread_create(&threads[t], NULL, PrintHello, (void *)t);
+			if (rc){
+				printf("ERROR; return code from pthread_create() is %d\n", rc);
+				exit(-1);
+			}
+		}
+		pthread_exit(NULL);
+	}
+snippet pthread_join
+	#include <pthread.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <math.h>
+	#define NUM_THREADS	4
+
+	void *BusyWork(void *t){
+		int i;
+		long tid;
+		double result=0.0;
+		tid = (long)t;
+		printf("Thread %ld starting...\n",tid);
+		for (i=0; i<1000000; i++){
+			result = result + sin(i) * tan(i);
+		}
+		printf("Thread %ld done. Result = %e\n",tid, result);
+		pthread_exit((void*) t);
+	}
+
+	int main (int argc, char *argv[]){
+		pthread_t thread[NUM_THREADS];
+		pthread_attr_t attr;
+		int rc;
+		long t;
+		void *status;
+
+		/* Initialize and set thread detached attribute */
+		pthread_attr_init(&attr);
+		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+		for(t=0; t<NUM_THREADS; t++) {
+			printf("Main: creating thread %ld\n", t);
+			rc = pthread_create(&thread[t], &attr, BusyWork, (void *)t); 
+			if (rc) {
+				printf("ERROR; return code from pthread_create() is %d\n", rc);
+				exit(-1);
+			}
+		}
+
+		/* Free attribute and wait for the other threads */
+		pthread_attr_destroy(&attr);
+		for(t=0; t<NUM_THREADS; t++) {
+			rc = pthread_join(thread[t], &status);
+			if (rc) {
+				printf("ERROR; return code from pthread_join() is %d\n", rc);
+				exit(-1);
+			}
+			printf("Main: completed join with thread %ld having a status of %ld\n",t,(long)status);
+		}
+
+		printf("Main: program completed. Exiting.\n");
+		pthread_exit(NULL);
+	}
+
+snippet timediff
+	struct timespec ping_time;
+	struct timespec pong_time;
+
+	clock_gettime(CLOCK_MONOTONIC, &ping_time);
+	/* ... code ...*/
+	clock_gettime(CLOCK_MONOTONIC, &pong_time);
+
+	float spent_time = 0;
+	spent_time += pong_time.tv_sec - ping_time.tv_sec;
+	spent_time *= 1e9;
+	spent_time += pong_time.tv_nsec - ping_time.tv_nsec;
+	spent_time /= 1e9;
+
+snippet mapit
+	for( map<${1:int},${2:int}>::iterator ${3:it} = ${4:variable}.begin(); $3 != $4.end(); $3++ ){
+		${5:/*code*/}
+	}
+
+snippet vectit
+	for( vector<${1:int}>::iterator ${2:it} = ${3:variable}.begin(); $2 != $3.end(); $2++ ){
+		${4:/*code*/}
+	}
+
+snippet setit
+	for( set<${1:int}>::iterator ${2:it} = ${3:variable}.begin(); $2 != $3.end(); $2++ ){
+		${4:/*code*/}
+	}
+
+snippet cvRectangle
+	cvRectangle( ${1:image}, ${2:pt1}, ${3:pt2}, CV_RGB(${4:0,255,0}) );
+
+snippet cvCircle
+	cvCircle( ${1:image}, ${2:center}, ${3:radius}, CV_RGB(${4:0,255,0}) );
+
+snippet cvLine
+	cvLine( ${1:image}, ${2:pt1}, ${3:pt2}, CV_RGB(${4:0,255,0}) );
+
+snippet cmd
+	FILE *fp;
+	stringstream command;
+	char ret[SIZE_STR];
+
+	command << "${1:ls}";
+
+	fp = popen(command.str().c_str(), "r");
+
+	while (fgets(ret,SIZE_STR, fp) != NULL)
+		ret_vector.push_back(ret);
+
+	pclose(fp);
+
+snippet 2dpipe
+	#include <sys/wait.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <unistd.h>
+	#include <string.h>
+	#include <stdio.h>
+
+	#define STDIN 0
+	#define STDOUT 1
+
+	int main(int argc, char *argv[]) {
+
+		int rpipes[2];
+		int wpipes[2];
+		pipe(rpipes);
+		pipe(wpipes);
+
+		int pid = fork();
+		if(pid == 0){
+			close(wpipes[1]);
+			close(rpipes[0]);
+			dup2(wpipes[0], STDIN);
+			dup2(rpipes[1], STDOUT);
+			close(wpipes[0]);
+			close(rpipes[1]);
+
+			execl("/bin/z3", "z3","-smt2", "/dev/stdin", (char *)0);
+		} else {
+			close(wpipes[0]);
+			close(rpipes[1]);
+
+			//write to stdin
+			char lineout[100];
+			strcpy(lineout, "(set-logic AUFNIRA)"      ); write(wpipes[1], lineout, strlen(lineout));
+			strcpy(lineout, "(declare-fun x () Real)"  ); write(wpipes[1], lineout, strlen(lineout));
+			strcpy(lineout, "(declare-fun y () Real)"  ); write(wpipes[1], lineout, strlen(lineout));
+			strcpy(lineout, "(assert (= (/ x y) 9))"   ); write(wpipes[1], lineout, strlen(lineout));
+			strcpy(lineout, "(assert (> x 0))"         ); write(wpipes[1], lineout, strlen(lineout));
+			strcpy(lineout, "(assert (> y 0))"         ); write(wpipes[1], lineout, strlen(lineout));
+			strcpy(lineout, "(check-sat)"              ); write(wpipes[1], lineout, strlen(lineout));
+			strcpy(lineout, "(get-value (x y))"        ); write(wpipes[1], lineout, strlen(lineout));
+
+
+			close(wpipes[1]);
+
+			//read from stdout
+
+			while(true){
+				char linein[100];
+				int i = 0;
+				int r;
+				while(true){
+					char c[1];
+					r = read(rpipes[0], c, 1);
+					if(!r){ linein[i] = 0; break; }
+					if(*c != '\n'){ linein[i] = *c; i++;
+					} else { linein[i] = 0; break; }
+				}
+				if(!r) break;
+				printf("%s\n",linein);
+			}
+		}
+	}
+
+snippet ls
+	DIR             *dip;
+	struct dirent   *dit;
+
+	dip = opendir( ${1:path.c_str()} );
+
+	while ((dit = readdir(dip)) != NULL) {
+		if( dit->d_name[0] == '.' )
+			continue;
+		if( !strcmp(dit->d_name, "Thumbs.db") )
+			continue;
+
+		${2:files.push_back( dit->d_name );}
+	}
+
+	closedir(dip);
+
+snippet pthread_create
+	pthread_t thread;
+	pthread_create(&thread, NULL/*attr*/, ${1:function}, NULL/*args*/);${2}
+
+snippet filebyline
+	FILE *file = fopen ( "${1:filename}", "r" );
+	char line [ 128 ]; /* or other suitable maximum line size */
+
+	while ( fgets ( line, sizeof(line), file ) != NULL ){
+		line[strlen(line)-1] = 0;
+		fputs ( line, stdout );
+	}
+	fclose ( file );
+
+snippet gpu cl
+	// Compile with: g++ -g -c hellocl.cpp -I /home/mint/NVIDIA_GPU_Computing_SDK/OpenCL/common/inc/
+	// Link with   : g++ -g -lOpenCL hellocl.o
+
+	#include <stdio.h>
+	#include <string.h>
+	#include <CL/cl.h>
+
+	const char rot13_cl[] = "				\
+	__kernel void rot13					\
+	    (   __global    const   char*    in			\
+	    ,   __global            char*    out		\
+	    )							\
+	{							\
+	    const uint index = get_global_id(0);		\
+								\
+	    char c=in[index];					\
+	    if (c<'A' || c>'z' || (c>'Z' && c<'a')) {		\
+		out[index] = in[index];				\
+	    } else {						\
+		if (c>'m' || (c>'M' && c<'a')) {		\
+		    out[index] = in[index]-13;			\
+		} else {					\
+		    out[index] = in[index]+13;			\
+		}						\
+	    }							\
+	}							\
+	";
+
+	int main() {
+		char buf[]="Hello, World!";
+		size_t srcsize, worksize=strlen(buf);
+
+		cl_int error;
+		cl_platform_id platform;
+		cl_device_id device;
+		cl_uint platforms, devices;
+
+		// Fetch the Platform and Device IDs; we only want one.
+		error=clGetPlatformIDs(1, &platform, &platforms);
+		error=clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 1, &device, &devices);
+		cl_context_properties properties[]={
+			CL_CONTEXT_PLATFORM, (cl_context_properties)platform,
+			0
+		};
+		// Note that nVidia's OpenCL requires the platform property
+		cl_context context=clCreateContext(properties, 1, &device, NULL, NULL, &error);
+		cl_command_queue cq = clCreateCommandQueue(context, device, 0, &error);
+
+		puts(buf);	// Just to demonstrate the plaintext is destroyed
+
+		const char *src=rot13_cl;
+		srcsize=strlen(rot13_cl);
+
+		const char *srcptr[]={src};
+		// Submit the source code of the rot13 kernel to OpenCL
+		cl_program prog=clCreateProgramWithSource(context, 1, srcptr, &srcsize, &error);
+		// and compile it (after this we could extract the compiled version)
+		error=clBuildProgram(prog, 0, NULL, "", NULL, NULL);
+
+		// Allocate memory for the kernel to work with
+		cl_mem mem1, mem2;
+		mem1=clCreateBuffer(context, CL_MEM_READ_ONLY, worksize, NULL, &error);
+		mem2=clCreateBuffer(context, CL_MEM_WRITE_ONLY, worksize, NULL, &error);
+
+		// get a handle and map parameters for the kernel
+		cl_kernel k_rot13=clCreateKernel(prog, "rot13", &error);
+		clSetKernelArg(k_rot13, 0, sizeof(mem1), &mem1);
+		clSetKernelArg(k_rot13, 1, sizeof(mem2), &mem2);
+
+		// Target buffer just so we show we got the data from OpenCL
+		char buf2[sizeof buf];
+		buf2[0]='?';
+		buf2[worksize]=0;
+
+		// Send input data to OpenCL (async, don't alter the buffer!)
+		error=clEnqueueWriteBuffer(cq, mem1, CL_FALSE, 0, worksize, buf, 0, NULL, NULL);
+		// Perform the operation
+		error=clEnqueueNDRangeKernel(cq, k_rot13, 1, NULL, &worksize, &worksize, 0, NULL, NULL);
+		// Read the result back into buf2
+		error=clEnqueueReadBuffer(cq, mem2, CL_FALSE, 0, worksize, buf2, 0, NULL, NULL);
+		// Await completion of all the above
+		error=clFinish(cq);
+
+		// Finally, output out happy message.
+		puts(buf2);
+	}
+
+
+snippet gpu cuda
+	// Compile and link with: nvcc <file>.cu
+	//  Kernel definition, see also section 4.2.3 of Nvidia Cuda Programming Guide 
+	__global__  void vecAdd(float* A, float* B, float* C) { 
+		// threadIdx.x is a built-in variable  provided by CUDA at runtime 
+		int i = threadIdx.x; 
+		A[i]=0; 
+		B[i]=i; 
+		C[i] = A[i] + B[i]; 
+	} 
+
+	#include  <stdio.h> 
+	#define  SIZE 10 
+	int  main(){ 
+
+		int N=SIZE; 
+		float A[SIZE], B[SIZE], C[SIZE]; 
+		float *devPtrA; 
+		float *devPtrB; 
+		float *devPtrC; 
+		int memsize= SIZE * sizeof(float); 
+
+		cudaMalloc((void**)&devPtrA, memsize); 
+		cudaMalloc((void**)&devPtrB, memsize); 
+		cudaMalloc((void**)&devPtrC, memsize); 
+		cudaMemcpy(devPtrA, A, memsize,  cudaMemcpyHostToDevice); 
+		cudaMemcpy(devPtrB, B, memsize,  cudaMemcpyHostToDevice); 
+		// __global__ functions are called:  Func<<< Dg, Db, Ns  >>>(parameter); 
+		vecAdd<<<1, N>>>(devPtrA,  devPtrB, devPtrC); 
+		cudaMemcpy(C, devPtrC, memsize,  cudaMemcpyDeviceToHost); 
+
+		for (int i=0; i<SIZE; i++) 
+			printf("C[%d]=%f\n",i,C[i]); 
+
+		cudaFree(devPtrA); 
+		cudaFree(devPtrA); 
+		cudaFree(devPtrA); 
+	} 
+
+
+snippet gpu cuda2
+	// Compile and link with: nvcc <file>.cu
+	#include <stdio.h>
+
+	#define N 7
+	 
+	__global__ 
+	void add_arrays(char *a, int *b) 
+	{
+		a[threadIdx.x] += b[threadIdx.x];
+	}
+	 
+	int main()
+	{
+		// Setup the arrays
+		char a[N] = "Hello ";
+		int b[N] = {15, 10, 6, 0, -11, 1,0};
+	  
+		char *ad;
+		int *bd;
+		const int csize = N*sizeof(char);
+		const int isize = N*sizeof(int);
+	 
+		// print the contents of a[]
+		printf("%s", a);
+	 
+		// Allocate and Transfer memory to the device
+		cudaMalloc( (void**)&ad, csize ); 
+		cudaMalloc( (void**)&bd, isize ); 
+	
+		cudaMemcpy( ad, a, csize, cudaMemcpyHostToDevice ); 
+		cudaMemcpy( bd, b, isize, cudaMemcpyHostToDevice ); 
+	
+		// Perform the array addition
+		dim3 dimBlock( N  );  
+		dim3 dimGrid ( 1  );
+		add_arrays<<<dimGrid, dimBlock>>>(ad, bd);
+	
+		// Copy the Contents from the GPU
+		cudaMemcpy( a, ad, csize, cudaMemcpyDeviceToHost ); 
+		cudaFree( ad );
+	
+		// Display the results
+		printf("%s\n", a);
+		return EXIT_SUCCESS;
+	}
+
+snippet gpu cuda3
+	// Compile and link with: nvcc <file>.cu
+	#include <stdio.h>
+
+	#define N 7
+
+	// Compile and link with: nvcc <file>.cu
+	#include <stdio.h>
+
+	#define N 7
+	 
+	typedef struct tipo{
+		int n;
+		int m[5];
+	} tipo;
+
+	__global__ 
+	void add_arrays(tipo* a, tipo* b) 
+	{
+		a[threadIdx.x].n -= b[threadIdx.x].n;
+		for ( unsigned int i = 0; i < 5; i++) {
+			a[threadIdx.x].m[i] -= b[threadIdx.x].m[i];
+		}
+	}
+	 
+	int main()
+	{
+		// Setup the arrays
+		tipo a[N];
+		tipo b[N];
+
+		for ( unsigned int i = 0; i < N; i++) {
+			a[i].n = i;
+			b[i].n = i;
+			for ( unsigned int k = 0; k < 5; k++) {
+				a[i].m[k] = 1;
+				b[i].m[k] = 1;
+			}
+		}
+	  
+		tipo* ad;
+		tipo* bd;
+		const int csize = N*sizeof(tipo);
+		const int isize = N*sizeof(tipo);
+	 
+		// Allocate and Transfer memory to the device
+		cudaMalloc( (void**)&ad, csize ); 
+		cudaMalloc( (void**)&bd, isize ); 
+
+		cudaMemcpy( ad, a, csize, cudaMemcpyHostToDevice ); 
+		cudaMemcpy( bd, b, isize, cudaMemcpyHostToDevice ); 
+
+		// Perform the array subtraction
+		dim3 dimBlock( N  );  
+		dim3 dimGrid ( 1  );
+		add_arrays<<<dimGrid, dimBlock>>>(ad, bd);
+
+		// Copy the Contents from the GPU
+		cudaMemcpy( a, ad, csize, cudaMemcpyDeviceToHost ); 
+		cudaFree( ad );
+
+		// Display the results
+		for ( unsigned int i = 0; i < N; i++) {
+			printf("%d,", a[i].n);
+		}
+
+		for ( unsigned int i = 0; i < 5; i++) {
+			printf("%d,", a[0].m[i]);
+		}
+
+		return EXIT_SUCCESS;
+	}
+
+snippet gpu cudaHello
+	#include <stdio.h>
+
+	__device__ const char *STR = "HELLO WORLD!";
+	const char STR_LENGTH = 12;
+	
+	__global__ void hello()
+	{
+		printf("%c\n", STR[threadIdx.x % STR_LENGTH]);
+	}
+	
+	int main(void)
+	{
+		int num_threads = STR_LENGTH;
+		int num_blocks = 1;
+		hello<<<num_blocks,num_threads>>>();
+		cudaDeviceSynchronize();
+	
+		return 0;
+	}
+
+snippet gpu cudaVector
+	#include <stdio.h>
+	
+	__global__ void vector_add(int *a, int *b, int *c)
+	{
+	    /* insert code to calculate the index properly using blockIdx.x, blockDim.x, threadIdx.x */
+		int index = blockIdx.x * blockDim.x + threadIdx.x;
+		c[index] = a[index] + b[index];
+	}
+	
+	/* experiment with N */
+	/* how large can it be? */
+	#define N (2048*2048)
+	#define THREADS_PER_BLOCK 512
+	
+	int main()
+	{
+	    int *a, *b, *c;
+		int *d_a, *d_b, *d_c;
+		int size = N * sizeof( int );
+	
+		/* allocate space for device copies of a, b, c */
+	
+		cudaMalloc( (void **) &d_a, size );
+		cudaMalloc( (void **) &d_b, size );
+		cudaMalloc( (void **) &d_c, size );
+	
+		/* allocate space for host copies of a, b, c and setup input values */
+	
+		a = (int *)malloc( size );
+		b = (int *)malloc( size );
+		c = (int *)malloc( size );
+	
+		for( int i = 0; i < N; i++ )
+		{
+			a[i] = b[i] = i;
+			c[i] = 0;
+		}
+	
+		/* copy inputs to device */
+		/* fix the parameters needed to copy data to the device */
+		cudaMemcpy( d_a, a, size, cudaMemcpyHostToDevice );
+		cudaMemcpy( d_b, b, size, cudaMemcpyHostToDevice );
+	
+		/* launch the kernel on the GPU */
+		/* insert the launch parameters to launch the kernel properly using blocks and threads */ 
+		add<<< (N + (THREADS_PER_BLOCK-1)) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >>>( d_a, d_b, d_c );
+	
+		/* copy result back to host */
+		/* fix the parameters needed to copy data back to the host */
+		cudaMemcpy( c, d_c, size, cudaMemcpyDeviceToHost );
+	
+	
+		printf( "c[0] = %d\n",0,c[0] );
+		printf( "c[%d] = %d\n",N-1, c[N-1] );
+	
+		/* clean up */
+	
+		free(a);
+		free(b);
+		free(c);
+		cudaFree( d_a );
+		cudaFree( d_b );
+		cudaFree( d_c );
+		
+		return 0;
+	} /* end main */
+
+snippet gpu cudaStencil
+	#include <stdio.h>
+	
+	#define RADIUS        3
+	#define BLOCK_SIZE    256
+	#define NUM_ELEMENTS  (4096*2)
+	
+	// CUDA API error checking macro
+	#define cudaCheck(error) \
+	  if (error != cudaSuccess) { \
+	    printf("Fatal error: %s at %s:%d\n", \
+	      cudaGetErrorString(error), \
+	      __FILE__, __LINE__); \
+	    exit(1); \
+	  }
+	
+	__global__ void stencil_1d(int *in, int *out) 
+	{
+	    __shared__ int temp[BLOCK_SIZE + 2 * RADIUS];
+	    int gindex = threadIdx.x + (blockIdx.x * blockDim.x) + RADIUS;
+	    int lindex = threadIdx.x + RADIUS;
+	
+	    // Read input elements into shared memory
+	    temp[lindex] = in[gindex];
+	    if (threadIdx.x < RADIUS) 
+	    {
+	        temp[lindex - RADIUS] = in[gindex - RADIUS];
+	        temp[lindex + BLOCK_SIZE] = in[gindex + BLOCK_SIZE];
+	    }
+	
+	    // Make sure all threads get to this point before proceeding!
+	    __syncthreads();
+	
+	    // Apply the stencil
+	    int result = 0;
+	    for (int offset = -RADIUS ; offset <= RADIUS ; offset++)
+	        result += temp[lindex + offset];
+	
+	    // Store the result
+	    out[gindex-RADIUS] = result;
+	}
+	
+	int main()
+	{
+	  unsigned int i;
+	  int h_in[NUM_ELEMENTS + 2 * RADIUS], h_out[NUM_ELEMENTS];
+	  int *d_in, *d_out;
+	
+	  // Initialize host data
+	  for( i = 0; i < (NUM_ELEMENTS + 2*RADIUS); ++i )
+	    h_in[i] = 1; // With a value of 1 and RADIUS of 3, all output values should be 7
+	
+	  // Allocate space on the device
+	  cudaCheck( cudaMalloc( &d_in, (NUM_ELEMENTS + 2*RADIUS) * sizeof(int)) );
+	  cudaCheck( cudaMalloc( &d_out, NUM_ELEMENTS * sizeof(int)) );
+	
+	  // Copy input data to device
+	  cudaCheck( cudaMemcpy( d_in, h_in, (NUM_ELEMENTS + 2*RADIUS) * sizeof(int), cudaMemcpyHostToDevice) );
+	
+	  stencil_1d<<< (NUM_ELEMENTS + BLOCK_SIZE - 1)/BLOCK_SIZE, BLOCK_SIZE >>> (d_in, d_out);
+	
+	  cudaCheck( cudaMemcpy( h_out, d_out, NUM_ELEMENTS * sizeof(int), cudaMemcpyDeviceToHost) );
+	
+	  // Verify every out value is 7
+	  for( i = 0; i < NUM_ELEMENTS; ++i )
+	    if (h_out[i] != 7)
+	    {
+	      printf("Element h_out[%d] == %d != 7\n", i, h_out[i]);
+	      break;
+	    }
+	
+	  if (i == NUM_ELEMENTS)
+	    printf("SUCCESS!\n");
+	
+	  // Free out memory
+	  cudaFree(d_in);
+	  cudaFree(d_out);
+	
+	  return 0;
+	}
+
+snippet ppm
+	FILE* file = fopen("prb.ppm", "wb");
+	fprintf(file, "P6 2 2 255 ");
+	fwrite("\x00\x00\x00\xFF\x00\x00\x00\xFF\x00\x00\x00\xFF",12,1,file);
+	fclose(file);
+
+snippet llvm pass
+	using namespace llvm;
+
+	namespace {
+		struct Hello : public ${1:Module}Pass	{
+			static char ID; // Pass identification, replacement for typeid
+			Hello() : $1Pass(ID) {}
+			virtual bool runOn$1($1 &${2:M}) {
+
+				${3:M.dump();}
+
+				return false;
+			}
+		};
+	}
+
+	char Hello::ID = 0;
+	static RegisterPass<Hello> X("hello", "Hello World Pass");
+
+snippet llvm iterator
+	for (${1:Function}::iterator i = F.begin(), e = F.end(); i != e; ++i){
+		errs() << "Basic block (name=" << i->getName() << ") has " << i->size() << " instructions.\n";
+
+		for (BasicBlock::iterator j = i->begin(), e = i->end(); j != e; ++j)
+			errs() << *j << "\n";
+	}
+
+
+snippet llvm fndecl
+
+	Constant *${1:fnname}_fn = M.getOrInsertFunction("$1", 
+			Type::getInt32Ty( M.getContext() ),
+			Type::getInt32Ty( M.getContext() ),
+			(Type *)0
+			);
+
+snippet llvm fncall
+	Constant* constante = ConstantInt::get( Type::getInt32Ty( M.getContext() ), 10 );
+
+	std::vector<Value*> Args;
+	Args.push_back( constante );
+	CallInst::Create(InitFn, Args, "", M.begin()->begin()->begin() );
+
+snippet llvm fnbody
+
+
+
+	BasicBlock* block = BasicBlock::Create( M.getContext(), "entry", ${1:fnname}_fn );
+	IRBuilder<> builder(block);
+
+	Value* x = ConstantInt::get( Type::getInt32Ty( M.getContext() ), 10 );
+	Value* tmp = builder.CreateBinOp(Instruction::Mul, x, x, "tmp");
+
+	builder.CreateRet(tmp);
+
+snippet llvm typeinstr
+	if(isa<${1:AllocaInst}>(${2:instr}))${3}
+
+snippet llvm globalcounter
+	Type *ATy = ArrayType::get(Type::getInt32Ty(M.getContext()), ${2:NumElements});
+	GlobalVariable *${1:name} = new GlobalVariable(M, ATy, false,
+		GlobalValue::InternalLinkage, Constant::getNullValue(ATy), "$1");${3}
+
+snippet llvm incrcounter
+	std::vector<Constant*> Indices(2);
+	Indices[0] = Constant::getNullValue(Type::getInt32Ty(M.getContext()));
+	Indices[1] = ConstantInt::get(Type::getInt32Ty(M.getContext()),1);
+
+	Constant *ElementPtr = ConstantExpr::getGetElementPtr( ${1:name}, Indices);
+
+	BasicBlock::iterator InsertPos = M.begin()->begin()->begin();
+
+	// Load, increment and store the value back.
+	Value *OldVal = new LoadInst(ElementPtr, "OldFuncCounter", InsertPos);
+	Value *NewVal = BinaryOperator::Create(Instruction::Add, OldVal,
+			         ConstantInt::get(Type::getInt32Ty(M.getContext()), 1),
+			                 "NewFuncCounter", InsertPos);
+	new StoreInst(NewVal, ElementPtr, InsertPos);
+
+
+
+
+snippet llvm fn2
+
+	#include "llvm/Module.h"
+	#include "llvm/Function.h"
+	#include "llvm/PassManager.h"
+	#include "llvm/CallingConv.h"
+	#include "llvm/Analysis/Verifier.h"
+	#include "llvm/Assembly/PrintModulePass.h"
+	#include "llvm/Support/IRBuilder.h"
+	#include "llvm/Support/raw_ostream.h"
+
+	using namespace llvm;
+
+	Module* makeLLVMModule();
+
+	int main(int argc, char**argv) {
+		Module* Mod = makeLLVMModule();
+
+		verifyModule(*Mod, PrintMessageAction);
+
+		PassManager PM;
+		PM.add(createPrintModulePass(&outs()));
+		PM.run(*Mod);
+
+		delete Mod;
+		return 0;
+	}
+
+	Module* makeLLVMModule() {
+		// Module Construction
+		Module* mod = new Module("test", getGlobalContext());
+
+		Constant* c = mod->getOrInsertFunction("mul_add",
+		/*ret type*/                           IntegerType::get(32),
+		/*args*/                               IntegerType::get(32),
+		IntegerType::get(32),
+		IntegerType::get(32),
+		/*varargs terminated with null*/       NULL);
+
+		Function* mul_add = cast<Function>(c);
+		mul_add->setCallingConv(CallingConv::C);
+
+		Function::arg_iterator args = mul_add->arg_begin();
+		Value* x = args++;
+		x->setName("x");
+		Value* y = args++;
+		y->setName("y");
+		Value* z = args++;
+		z->setName("z");
+
+
+		BasicBlock* block = BasicBlock::Create(getGlobalContext(), "entry", mul_add);
+		IRBuilder<> builder(block);
+
+		Value* tmp = builder.CreateBinOp(Instruction::Mul,
+		x, y, "tmp");
+		Value* tmp2 = builder.CreateBinOp(Instruction::Add,
+		tmp, z, "tmp2");
+
+		builder.CreateRet(tmp2);
+
+		return mod;
+	}
+
+
+
+snippet llvm fn3
+
+	#include "llvm/Module.h"
+	#include "llvm/Function.h"
+	#include "llvm/PassManager.h"
+	#include "llvm/Analysis/Verifier.h"
+	#include "llvm/Assembly/PrintModulePass.h"
+	#include "llvm/Support/IRBuilder.h"
+	#include "llvm/Support/raw_ostream.h"
+
+	using namespace llvm;
+
+	Module* makeLLVMModule();
+
+	int main(int argc, char**argv) {
+		Module* Mod = makeLLVMModule();
+
+		verifyModule(*Mod, PrintMessageAction);
+
+		PassManager PM;
+		PM.add(createPrintModulePass(&outs()));
+		PM.run(*Mod);
+
+		delete Mod;  
+		return 0;
+	}
+
+	Module* makeLLVMModule() {
+		Module* mod = new Module("tut2");
+
+		Constant* c = mod->getOrInsertFunction(
+			"gcd",
+			IntegerType::get(32),
+			IntegerType::get(32),
+			IntegerType::get(32),
+			NULL
+		);
+
+		Function* gcd = cast<Function>(c);
+
+		Function::arg_iterator args = gcd->arg_begin();
+		Value* x = args++;
+		x->setName("x");
+		Value* y = args++;
+		y->setName("y");
+
+		BasicBlock* entry = BasicBlock::Create(getGlobalContext(), ("entry", gcd);
+		BasicBlock* ret = BasicBlock::Create(getGlobalContext(), ("return", gcd);
+		BasicBlock* cond_false = BasicBlock::Create(getGlobalContext(), ("cond_false", gcd);
+		BasicBlock* cond_true = BasicBlock::Create(getGlobalContext(), ("cond_true", gcd);
+		BasicBlock* cond_false_2 = BasicBlock::Create(getGlobalContext(), ("cond_false", gcd);
+
+		IRBuilder<> builder(entry);
+		Value* xEqualsY = builder.CreateICmpEQ(x, y, "tmp");
+		builder.CreateCondBr(xEqualsY, ret, cond_false);
+
+		builder.SetInsertPoint(ret);
+		builder.CreateRet(x);
+
+		builder.SetInsertPoint(cond_false);
+		Value* xLessThanY = builder.CreateICmpULT(x, y, "tmp");
+		builder.CreateCondBr(xLessThanY, cond_true, cond_false_2);
+
+		builder.SetInsertPoint(cond_true);
+		Value* yMinusX = builder.CreateSub(y, x, "tmp");
+		std::vector<Value*> args1;
+		args1.push_back(x);
+		args1.push_back(yMinusX);
+		Value* recur_1 = builder.CreateCall(gcd, args1.begin(), args1.end(), "tmp");
+		builder.CreateRet(recur_1);
+
+		builder.SetInsertPoint(cond_false_2);
+		Value* xMinusY = builder.CreateSub(x, y, "tmp");
+		std::vector<Value*> args2;
+		args2.push_back(xMinusY);
+		args2.push_back(y);
+		Value* recur_2 = builder.CreateCall(gcd, args2.begin(), args2.end(), "tmp");
+		builder.CreateRet(recur_2);
+
+		return mod;
+
+	}
+
+
+snippet llvm iterators
+	#define mod_iterator(mod, fn) for( Module::iterator     fn = mod.begin(),  function_end    = mod.end();  fn != function_end;    ++fn ) 
+	#define fun_iterator(fun, bb) for( Function::iterator   bb = fun->begin(), block_end       = fun->end(); bb != block_end;       ++bb )
+	#define blk_iterator(blk, in) for( BasicBlock::iterator in = blk->begin(), instruction_end = blk->end(); in != instruction_end; ++in )
+
+
+snippet df3
+	#define MAX(a,b) ((a>b)?a:b)
+	#define MIN(a,b) ((a<b)?a:b)
+	
+	void save_volume(float*** volume, int n, char* filename){
+		int nx = n;
+		int ny = n;
+		int nz = n;
+		int i,j,k;
+		float v,themin=1e32,themax=-1e32;
+	
+		for (i=0;i<nx;i++) {
+			for (j=0;j<ny;j++) {
+				for (k=0;k<nz;k++) {
+					themax = MAX(themax,volume[i][j][k]);
+					themin = MIN(themin,volume[i][j][k]);
+				}
+			}
+		}
+	
+		if (themin >= themax) { /* There is no variation */
+			 themax = themin + 1;
+			 themin -= 1;
+		}
+	
+		FILE* fptr = fopen(filename,"w");
+		fputc(nx >> 8,fptr);
+		fputc(nx & 0xff,fptr);
+		fputc(ny >> 8,fptr);
+		fputc(ny & 0xff,fptr);
+		fputc(nz >> 8,fptr);
+		fputc(nz & 0xff,fptr);
+		for (k=0;k<nz;k++) {
+			for (j=0;j<ny;j++) {
+				for (i=0;i<nx;i++) {
+					v = 255 * (volume[i][j][k]-themin)/(themax-themin);
+					fputc((int)v,fptr);
+				}
+			}
+		}
+		fclose(fptr);
+	}
+
+	========================
+
+	#declare TWOPI = 6.283185307179586476925287;
+	#declare NX = 160;
+	#declare NY = 160;
+	#declare NZ = 160;
+	#declare DD = <NX,NY,NZ>;
+	#declare VP = <175,175,175>;
+	
+	global_settings { 
+		ambient_light <1,1,1> 
+		assumed_gamma 1
+	}
+	
+	camera {
+		perspective orthographic
+		location VP
+		up y
+		right x
+		angle 60
+		sky <0,0,-1>
+		look_at <0,0,0>
+	}
+	
+	light_source {
+		VP + <0,0,NZ/2>
+		color rgb <1,1,1>
+		media_interaction on
+		media_attenuation on
+		shadowless
+	}
+	
+	#declare theinterior = interior {
+		media {
+			intervals 100
+			ratio 0.5
+			samples 2,2
+			method 2
+			emission <1,1,1> / 100
+			absorption <1,1,1> / 1000
+			scattering { 1, <0,0,0> }
+			confidence 0.999
+			variance 1/1000
+			density {
+				density_file df3 "example.df3" 
+				interpolate 1
+				color_map {
+					[0.00 rgb <0,0,0>]
+					[0.33 rgb <0 0 1>]
+					[0.66 rgb <0,1,0>]
+					[1.00 rgb <1,0,0>]
+				}
+			}
+		}
+	}
+	
+	box {
+		<0,0,0>, <1,1,1>
+		pigment { rgbf 1 }
+		interior { theinterior }
+		hollow
+		translate <-0.5,-0.5,-0.5>
+		scale DD
+		rotate <0,0,360*clock>
+	}
+
+	========================
+
+	Antialias=Off
+	Antialias_Threshold=0.1
+	Antialias_Depth=2
+	
+	Input_File_Name=volume2.pov
+	
+	+W600 +H600 ;
+	
+	Initial_Frame=1
+	Final_Frame=100
+	Initial_Clock=0.25
+	Final_Clock=1.25
+	
+	Cyclic_Animation=on
+	Pause_when_Done=off

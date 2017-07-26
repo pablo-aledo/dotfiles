@@ -1,0 +1,23 @@
+default_rate "5"
+default_show "30"
+default_maxitems "50"
+
+#Add some feeds
+add "http://hackaday.com/feed" "Hackaday"
+add "http://makezine.com/feed" "Makezing"
+add "https://feeds.feedburner.com/Blendernation" "Blendernation"
+add "http://muylinux.com/feed" "MuyLinux"
+add "https://jeremykun.com/feed" "Math Programming"
+add "http://blog.regehr.org/feed" "Embedded in Academia"
+add "http://www.embedds.com/feed" "Embedds"
+add "http://www.3dtotal.com/rss" "3D Total"
+add "http://dangerousprototypes.com/blog/rss" "DangerousPrototypes"
+
+#Change rate for Slashdot
+rate "30" "Slashdot"
+
+#These aren't defaults, but examples
+browser "/usr/bin/elinks %u"
+
+#Text browsers should enable this
+browser_wait "1"

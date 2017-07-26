@@ -1,0 +1,16 @@
+inkscape_pdf(){
+	inkscape --export-pdf=`echo $1 | sed 's/\..*$//g'`.pdf $1
+}
+
+inkscape_png_width(){
+	[ $# -eq 1 ] && fname=$1 && width=2000
+	[ $# -eq 2 ] && fname=$1 && width=$2
+	inkscape --export-width=$width --export-png=`echo $fname | sed 's/\..*$//g'`.png $fname
+}
+
+inkscape_png_scale(){
+	[ $# -eq 1 ] && fname=$1 && dpi=90
+	[ $# -eq 2 ] && fname=$1 && dpi=$2
+	inkscape --export-dpi=$dpi --export-png=`echo $fname | sed 's/\..*$//g'`.png $fname
+}
+

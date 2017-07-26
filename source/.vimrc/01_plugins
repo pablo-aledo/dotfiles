@@ -1,0 +1,17 @@
+" Plugins
+filetype plugin on
+"set cindent
+filetype plugin indent on
+"autocmd BufEnter *.cpp,*.c ccadd gcc -Wall %:p
+"map <F8> :ccadd g++ -c -Wall %:p<CR>
+"map <C-F8> :ccrem<CR>
+"set nrformats=aplha,octal,hex
+
+
+" Para C/C++
+:syntax enable
+":set previewheight=3
+"map <F6> :run macros/gdb_mappings.vim<CR>:call gdb("file ./")<left><left>
+"map <C-F6> :call gdb("r ")<left><left>
+"map <A-F6> :call gdb("")<left><left>
+":set asm=0

@@ -1,0 +1,145 @@
+BACKUP_SERVER=10.1.14.1
+BACKUP_USER=admin
+BACKUP_DEST=/volume1/homes/admin
+BACKUP_TIME_MACHINE=/home/time_machine
+BACKUP_SRC=/media/DATA
+BACKUP_MOUNT_DIR=/home/
+[ -e /media/DATA/NAS ] && BACKUP_MOUNT_MOUNTPOINT=/media/DATA/NAS
+[ -e ~/NAS ] && BACKUP_MOUNT_MOUNTPOINT=~/NAS
+
+#source $(dirname $(readlink -f $0))/autoinstall
+
+simplify_md5s(){
+	rm -fr /tmp/md5s
+	cat $FILE_FILES | while read line
+	do
+		cat $FILE_MD5S | egrep '^[0-9a-f]{32}  '"$line"'$' | tail -n1 >> /tmp/md5s
+	done
+
+	mv /tmp/md5s $FILE_MD5S
+
+}
+
+backup_md5s(){
+	sudo find "$1" -type f -newer $FILE_MD5S -exec md5sum {} >> $FILE_MD5S \;
+	sudo find "$1" -type f > $FILE_FILES \;
+}
+
+backup_exchange_keys(){
+
+	# Do this on the server
+	# mkdir -p ~/.ssh
+	# touch ~/.ssh/authorized_keys
+	# chmod 755 ~
+	# chmod 700 ~/.ssh
+	# chmod 644 ~/.ssh/authorized_keys
+	# debug with /usr/bin/sshd -d -p23
+
+	ssh-keygen -t rsa
+	cat ~/.ssh/id_rsa.pub | ssh $BACKUP_USER@$BACKUP_SERVER 'cat >> ~/.ssh/authorized_keys'
+	ssh-add
+}
+
+rm_empty_folders(){
+	for a in `seq 1 10`
+	do
+		find $1 -mindepth 1 -type d -empty -delete
+	done
+}
+
+backup_c(){
+	[ -d "$BACKUP_SRC/$1/" ] || return
+	echo -e "\e[34m backup_c $1 \e[0m"
+	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+	rsync -vai "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+}
+
+backup_ermtc(){
+	[ -d "$BACKUP_SRC/$1/" ] || return
+	echo -e "\e[34m backup_ermtc $1 \e[0m"
+	cd "$BACKUP_SRC/$1/"
+	ls -d */ | while read line
+	do 
+		echo -e "\e[34m backup_ermtc directory $line \e[0m"
+		echo "mkdir -p \"$BACKUP_DEST/$1/$line\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+		rsync -vai --delete "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/$line"
+	done
+}
+
+backup_ermtm(){
+	[ -d "$BACKUP_SRC/$1/" ] || return
+	echo -e "\e[34m backup_ermtm $1 \e[0m"
+	cd "$BACKUP_SRC/$1/"
+	ls -d */ | while read line
+	do 
+		echo -e "\e[34m backup_ermtm directory $line \e[0m"
+		echo "mkdir -p \"$BACKUP_DEST/$1/$line\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+		rsync -vai --delete --remove-source-files "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/$line"
+		rm_empty_folders "$BACKUP_SRC/$1/$line"
+	done
+}
+
+backup_m(){
+	[ -d "$BACKUP_SRC/$1/" ] || return
+	echo -e "\e[34m backup_m $1 \e[0m"
+	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+	rsync -vai --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+	rm_empty_folders "$BACKUP_SRC/$1/"
+}
+
+backup_rmtc(){
+	[ -d "$BACKUP_SRC/$1/" ] || return
+	echo -e "\e[34m backup_rmtc $1 \e[0m"
+	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+	rsync -vai --delete "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+}
+
+backup_rmtm(){
+	[ -d "$BACKUP_SRC/$1/" ] || return
+	echo -e "\e[34m backup_rmtm $1 \e[0m"
+	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+	rsync -vai --delete --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+	rm_empty_folders "$BACKUP_SRC/$1/"
+}
+
+backup_tm(){
+	[ -d "$BACKUP_SRC/$1/" ] || return
+	echo -e "\e[34m backup_tm $1 \e[0m"
+	echo "mkdir -p \"$BACKUP_TIME_MACHINE/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+	duplicity --no-encryption "$BACKUP_SRC/$1/" "scp://$BACKUP_USER@$BACKUP_SERVER/$BACKUP_TIME_MACHINE/$1/"
+}
+
+backup_tm2(){
+	[ -d "$BACKUP_SRC/$1/" ] || return
+	echo -e "\e[34m backup_tm $1 \e[0m"
+	mkdir -p "/tmp/time_machine"
+	sshfs $BACKUP_USER@$BACKUP_SERVER:$BACKUP_TIME_MACHINE /tmp/time_machine
+	mkdir -p "/tmp/time_machine/$1"
+	duplicity --no-encryption "$BACKUP_SRC/$1/" "file:///tmp/time_machine/$1/"
+	sudo umount /tmp/time_machine
+	rmdir /tmp/time_machine
+}
+
+get_from_backup(){
+	[ -e "$BACKUP_SRC/$1/" ] && return
+	mkdir -p "$BACKUP_SRC/$1/"
+	rsync -vai "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/" "$BACKUP_SRC/$1/"
+}
+
+mount_nas(){
+	sshfs $BACKUP_USER@$BACKUP_SERVER:$BACKUP_MOUNT_DIR $BACKUP_MOUNT_MOUNTPOINT
+}
+
+umount_nas(){
+	sudo umount $BACKUP_MOUNT_MOUNTPOINT
+}
+
+backup(){
+	backup_ermtc   Work
+	backup_m       Descargas
+	backup_m       Personal
+	backup_c       uned
+	backup_m       Videos
+	backup_tm2     Work/forest
+}
+

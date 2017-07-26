@@ -1,0 +1,52 @@
+color(){
+     cat | sed -e 's/\(^.*:[0-9]\+:.*warning.*$\)/\\\\e[33m\\\\e[1m\1\\\\e[0m/g' \
+               -e 's/\(^.*:[0-9]\+:.*no matching function for call[^(]*\)(\(.*\).$/\1\\\\e[31m\\\\e[4m(\2\\\\e[0m/g' \
+               -e 's/\(^.*:[0-9]\+:.*error.*$\)/\\\\e[31m\\\\e[1m\1\\\\e[0m/g' \
+               -e 's/\(^.*:[0-9]\+:.*note.*$\)/\\\\e[34m\\\\e[1m\1\\\\e[0m/g' \
+               -e 's/\(^.*:[0-9]\+:.*note[^(]*\)(\(.*\)$/\1\\\\e[32m\\\\e[1m(\2\\\\e[0m/g' \
+               -e 's/\(^.*:[a-z]\+:.*$\)/\\\\e[34m\1\\\\e[0m/g'  \
+	       -e 's/^gcc /\\\\e[36mgcc \\\\e[0m/g' \
+	       -e 's/^opt /\\\\e[36mopt \\\\e[0m/g' \
+               -e 's/^llvm-dis /\\\\e[36mllvm-dis \\\\e[0m/g' \
+	       -e 's/^llvm-gcc /\\\\e[36mllvm-gcc \\\\e[0m/g' \
+	       -e 's/^llvm-g++ /\\\\e[36mllvm-gcc \\\\e[0m/g' \
+	       -e 's/^g++ /\\\\e[36mg++ \\\\e[0m/g' \
+	       -e 's/^scope-g++ /\\\\e[36mscope-g++ \\\\e[0m/g' \
+	       -e 's/^ar /\\\\e[36mar \\\\e[0m/g' \
+	       -e 's/^ranlib /\\\\e[36mranlib \\\\e[0m/g' \
+	       -e 's/^cd /\\\\e[36mcd \\\\e[0m/g' \
+	       -e 's/^sudo /\\\\e[36msudo \\\\e[0m/g' \
+	       -e 's/^cp /\\\\e[36mcp \\\\e[0m/g' \
+	       -e 's/^make /\\\\e[36mmake \\\\e[0m/g' \
+	       -e 's/^rm /\\\\e[36mrm \\\\e[0m/g' \
+               -e 's/Entering directory/\\\\e[31m\\\\e[4mEntering directory\\\\e[0m/g' \
+               -e 's/\(-I[^ ]*\+\)/\\\\e[35m\1\\\\e[0m/g' \
+               -e 's/\(-L[^ ]*\+\)/\\\\e[35m\1\\\\e[0m/g' \
+               -e 's/\([ ][^ ]*\?\.o \+\)/\\\\e[35m\1\\\\e[0m/g' \
+               -e 's/\([ ][^ ]*\?\.cpp \+\)/\\\\e[32m\1\\\\e[0m/g' \
+               -e 's/\([ ][^ ]*\?\.c \+\)/\\\\e[32m\1\\\\e[0m/g' \
+                    	       #-e 's/\(:([0-9]+?):\)/red/' \
+     	       #-e 's/\(^([a-z.[:punct:][:digit:]]+?):\)/magenta,bold/' \
+}
+
+mkcolor(){
+   if [[ $* == "" ]]
+   then
+      make 2>&1 | while read line
+      do
+         echo "$line" | color | sed s/\`/\'/g | xargs echo -e
+      done
+   else
+      for a in $*
+      do
+         make $1 2>&1 | while read line
+         do
+            echo "$line" | color | sed s/\`/\'/g | xargs echo -e
+         done
+         shift
+      done
+   fi
+}
+
+#alias make=mkcolor
+

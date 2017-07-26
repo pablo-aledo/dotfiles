@@ -1,0 +1,17 @@
+pword(){
+	PWORD=''
+	[ -e ~/.pword ]                      && PWORD=`cat ~/.pword`
+	[ -e  /media/DATA/.pword ]           && PWORD=`cat /media/DATA/.pword`
+	[ -e  /media/DATA/Personal/.pword ]  && PWORD=`cat /media/DATA/Personal/.pword`
+	[ -e  /media/mint/Pablo/.pword ]     && PWORD=`cat /media/mint/Pablo/.pword`
+
+	if [ $PWORD ]
+	then
+	else
+		echo -n 'Password: ' > /dev/stderr
+		read PWORD
+	fi
+
+	echo $PWORD
+}
+

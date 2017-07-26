@@ -1,0 +1,19 @@
+"function! SetEyes()
+"let eyes = input('')
+"normal mm
+"execute(':14')
+"normal 7|
+"execute ':normal ' . 'xxi' . eyes . 'jj'
+"normal 'm
+"endfunction
+"map ff :call SetEyes()<cr>
+
+"function! SetEyesM()
+"let eyes = "♪♪"
+"normal mm
+"execute(':14')
+"normal 7|
+"execute ':normal ' . 'xxi' . eyes . 'jj'
+"normal 'm
+"endfunction
+"map fm :call SetEyesM()<cr>

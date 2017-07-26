@@ -1,0 +1,5 @@
+[ -e /usr/share/sounds/LinuxMint/stereo/dialog-question.wav ] || return
+
+beep(){
+	aplay /usr/share/sounds/LinuxMint/stereo/dialog-question.wav
+}

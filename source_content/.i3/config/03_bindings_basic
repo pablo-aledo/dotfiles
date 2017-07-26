@@ -1,0 +1,5 @@
+# start a terminal
+bindsym $mod+Return exec i3-sensible-terminal
+bindsym Mod1+Return exec i3-sensible-terminal
+bindsym $mod+Shift+Return exec --no-startup-id pcmanfm
+# bindsym $win+e exec pcmanfm

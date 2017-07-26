@@ -1,0 +1,458 @@
+#source $(dirname $(readlink -f $0))/autoinstall
+
+# ssh parameters "-XC -c aes128-ctr" for faster and less secure connections
+
+[ -e ~/aws ]                     && AWS_FOLDER=~/aws
+[ -e /media/DATA/aws ]           && AWS_FOLDER=/media/DATA/aws
+[ -e /media/DATA/Personal/aws ]  && AWS_FOLDER=/media/DATA/Personal/aws
+[ -e /media/mint/Pablo/aws ]     && AWS_FOLDER=/media/mint/Pablo/aws
+
+aws_config(){
+	if [ -e /tmp/aws_config ]
+	then
+		if [ $# -eq 1 ]
+		then
+			user=`cat /tmp/aws_config | grep $1 | cut -d":" -f2`
+			ip=`cat /tmp/aws_config | grep $1 | cut -d":" -f3`
+			port=`cat /tmp/aws_config | grep $1 | cut -d":" -f4`
+			sed -i "s/AWS_USER=.*/AWS_USER=$user/g" /tmp/aws_config
+			sed -i "s/AWS_SERVER=.*/AWS_SERVER=$ip/g" /tmp/aws_config
+			sed -i "s/AWS_PORT=.*/AWS_PORT=$port/g" /tmp/aws_config
+			aws_config
+		else
+			export AWS_LOCAL_FOLDER=`cat  /tmp/aws_config | grep  AWS_LOCAL_FOLDER  | cut -d"=" -f2`
+			export AWS_REMOTE_FOLDER=`cat /tmp/aws_config | grep  AWS_REMOTE_FOLDER | cut -d"=" -f2`
+			export AWS_PEM=`cat           /tmp/aws_config | grep  AWS_PEM           | cut -d"=" -f2`
+			export AWS_USER=`cat          /tmp/aws_config | grep  AWS_USER          | cut -d"=" -f2`
+			export AWS_PORT=`cat          /tmp/aws_config | grep  AWS_PORT          | cut -d"=" -f2`
+			export AWS_SERVER=`cat        /tmp/aws_config | grep  AWS_SERVER        | cut -d"=" -f2`
+			[ "$AWS_PEM" != "" ] && chmod 400 $AWS_PEM
+		fi
+	else
+		[ $DEFAULT_KP ] && [ -e $DEFAULT_KP ] && install -m 400 $DEFAULT_KP /tmp/default_kp.pem
+		echo "AWS_LOCAL_FOLDER=/home/`whoami`/amazon"   >  /tmp/aws_config
+		echo "AWS_REMOTE_FOLDER=/home/ubuntu"           >> /tmp/aws_config
+		echo "AWS_PEM=/tmp/default_kp.pem"              >> /tmp/aws_config
+		echo "AWS_USER=ubuntu"                          >> /tmp/aws_config
+		echo "AWS_PORT=22"                              >> /tmp/aws_config
+		echo "AWS_SERVER=pabloaledo.ddns.net"           >> /tmp/aws_config
+		source /tmp/aws_config
+	fi
+
+}
+
+
+aws_config_win(){
+	if [ -e /tmp/aws_config ]
+	then
+		export AWS_SERVER=`cat        /tmp/aws_config | grep  AWS_SERVER        | cut -d"=" -f2`
+		export AWS_USER=`cat          /tmp/aws_config | grep  AWS_USER          | cut -d"=" -f2`
+		export AWS_PW=`cat            /tmp/aws_config | grep  AWS_PW            | cut -d"=" -f2`
+		export AWS_LOCAL_FOLDER=`cat  /tmp/aws_config | grep  AWS_LOCAL_FOLDER  | cut -d"=" -f2`
+	else
+		echo 'AWS_SERVER='             >  /tmp/aws_config
+		echo 'AWS_USER=Administrator'  >> /tmp/aws_config
+		echo 'AWS_PW='                 >> /tmp/aws_config
+		echo 'AWS_LOCAL_FOLDER='       >> /tmp/aws_config
+	fi
+
+}
+
+
+aws_push(){
+	aws_config
+	[ -d "$AWS_LOCAL_FOLDER/$1" ] || return
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	echo "mkdir -p \"$AWS_REMOTE_FOLDER/$1\"" | ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER 2>/dev/null
+	rsync -vai --progress --delete -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_LOCAL_FOLDER/$1/" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1/"
+}
+
+aws_pull(){
+	aws_config
+	[ -d "$AWS_LOCAL_FOLDER/$1" ] || mkdir -p "$AWS_LOCAL_FOLDER/$1"
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	rsync -vai --progress --delete -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1/" "$AWS_LOCAL_FOLDER/$1/"
+}
+
+aws_ssh(){
+	if [ $# -eq 0 ]
+	then
+		aws_config
+		pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+		ssh `echo $pemflag` $AWS_USER@$AWS_SERVER -p $AWS_PORT
+	else
+		command=$1
+		command_full=""
+		for a in $*
+		do
+			command_full=$command_full" "$a
+		done
+		aws_config
+		pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+		remote_folder=`pwd | sed "s/$(escape $AWS_LOCAL_FOLDER)/$(escape $AWS_REMOTE_FOLDER)/g"`
+		ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "cd $remote_folder; zsh -c \"source ~/.shell; source ~/.paths; $command_full\""
+	fi
+}
+
+aws_mosh(){
+	aws_config
+	if [ "$AWS_PEM" != "" ]
+	then
+		mosh --ssh="ssh -i $AWS_PEM -p $AWS_PORT" $AWS_USER@$AWS_SERVER 
+	else
+		mosh --ssh="ssh -p $AWS_PORT" $AWS_USER@$AWS_SERVER 
+	fi
+}
+
+aws_cmd(){
+	command=$1
+	command_full=""
+	for a in $*
+	do
+		command_full=$command_full" "$a
+	done
+	aws_config
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "cd $AWS_REMOTE_FOLDER; zsh -c \"source ~/.shell; source ~/.paths; $command_full\""
+}
+
+aws_send(){
+	aws_config
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	[ $# -eq 2 ] || rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/"
+	[ $# -eq 2 ] && rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$2/"
+}
+
+aws_send_append(){
+	aws_config
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	rsync --append -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/"
+}
+
+aws_get(){
+	aws_config
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	[ ${1[1]} = '/' ] || rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1" .
+	[ ${1[1]} = '/' ] && rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$1" .
+}
+
+aws_get_append(){
+	aws_config
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	[ ${1[1]} = '/' ] || rsync --append -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1" .
+	[ ${1[1]} = '/' ] && rsync --append -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$1" .
+}
+
+aws_mount(){
+	aws_config
+	mkdir -p $AWS_LOCAL_FOLDER
+	[ "$AWS_PEM" = "" ] && sshfs -p $AWS_PORT $AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER $AWS_LOCAL_FOLDER
+	[ "$AWS_PEM" = "" ] || sshfs -o "IdentityFile=$AWS_PEM" -p $AWS_PORT $AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER $AWS_LOCAL_FOLDER
+}
+
+aws_reverse_mount(){
+
+	aws_config
+	[ $# -eq 0 ] && [ $AWS_REMOTE_FOLDER = "/home/ubuntu" ] && return
+	aws_cmd "pkg install sshfs"
+	[ $# -eq 1 ] && AWS_LOCAL_FOLDER="$1" && AWS_REMOTE_FOLDER="$1"
+	aws_cmd "sudo mkdir -p $AWS_REMOTE_FOLDER; sudo chmod 777 $AWS_REMOTE_FOLDER"
+	[ $# -eq 1 ] && AWS_LOCAL_FOLDER="$1" && AWS_REMOTE_FOLDER="$1"
+	aws_cmd "sshfs -p 2222 mint@localhost:$AWS_LOCAL_FOLDER $AWS_REMOTE_FOLDER"
+
+}
+
+aws_exchange_keys(){
+	aws_config
+
+	echo -e "\e[34m - Generate ssh public keys \e[0m"
+	[ -e ~/.ssh/id_rsa ] || ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''
+	aws_cmd "[ -e ~/.ssh/id_rsa ] || ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''"
+
+	echo -e "\e[34m - Send ssh public key \e[0m"
+	cat ~/.ssh/id_rsa.pub | ssh -i $AWS_PEM -p $AWS_PORT $AWS_USER@$AWS_SERVER 'cat >> ~/.ssh/authorized_keys'
+
+	echo -e "\e[34m - Receive ssh public key \e[0m"
+	ssh -i $AWS_PEM -p $AWS_PORT $AWS_USER@$AWS_SERVER 'cat ~/.ssh/id_rsa.pub' >> ~/.ssh/authorized_keys
+
+}
+
+aws_umount(){
+	aws_config
+	sudo umount $AWS_LOCAL_FOLDER
+}
+
+aws_redirect(){
+	aws_config
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	[ $# -eq 1 ] && ssh -p $AWS_PORT `echo $pemflag` -N -L $1:127.0.0.1:$1 $AWS_USER@$AWS_SERVER
+	[ $# -eq 2 ] && ssh -p $AWS_PORT `echo $pemflag` -N -L $2:127.0.0.1:$1 $AWS_USER@$AWS_SERVER
+}
+
+aws_bridge_server(){
+	aws_config 
+	[ $# -eq 1 ] && id=$1
+	[ $# -eq 0 ] && id=2222
+	while true
+	do
+		[ "$(ping -c 1 google.com)" ] || sudo service network-manager restart
+		sudo rm -rf /root/.ssh/known_hosts
+		pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+		sudo ssh -p $AWS_PORT -nNT -R "$id":localhost:22 $AWS_USER@$AWS_SERVER `echo $pemflag` -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no
+		#sudo ssh -nNT -R "$id":localhost:22 $AWS_USER@$AWS_SERVER -i $AWS_PEM
+		#sudo autossh -M 20000 -f -N $AWS_USER -R "$id":localhost:22 -C
+		sleep 60
+	done
+}
+
+aws_bridge_server_check(){
+	# check that ssh is running
+ 	[ "`ps aux | grep sshd | grep -v grep`" ] || echo -e '\e[31m SSH is not running \e[0m'
+	# check that I have a Password 
+	[ "`sudo cat /etc/shadow | grep $(whoami)`" ] || echo -e '\e[31m I dont have a password to access \e[0m'
+	# check that aws_bridge is correctly configured
+	[ `md5sum /tmp/aws_config | cut -d" " -f1` = "9b00f510d914359856e9ebad3605aa67" ] || echo -e '\e[31m aws_bridge is not correctly configured \e[0m'
+	[ `md5sum /tmp/default_kp.pem | cut -d" " -f1` = "4101a1d6f8ac3f31ff503e5a2cab5e7f" ] || echo -e '\e[31m aws_bridge is not correctly configured \e[0m'
+	# check that I'm not using vpn
+	[ -z "`ifconfig | grep tun0`" ] || echo -e '\e[31m You are using a VPN session \e[0m'
+	aws_bridge_server $*
+}
+
+aws_bridge_and_redirect(){
+	aws_config 
+	sudo rm -rf /root/.ssh/known_hosts
+
+	[ $# -gt 2 ] && id=$3
+	[ $# -gt 2 ] || id=2222
+
+	tmux new -d -s bridge "sudo ssh -o StrictHostKeyChecking=no -p $AWS_PORT -nNT -L 2223:localhost:$id $AWS_USER@$AWS_SERVER -i $AWS_PEM"
+	sleep 5
+	[ $# -eq 1 ] && tmux new -d -s redirect "ssh -p 2223 -N -L $1:127.0.0.1:$1 mint@localhost"
+	[ $# -eq 2 ] && tmux new -d -s redirect "ssh -p 2223 -N -L $2:127.0.0.1:$1 mint@localhost"
+	tmux
+}
+
+aws_redirect2(){
+	[ $# -eq 1 ] && ssh -p 2223 -N -L $1:127.0.0.1:$1 mint@localhost
+	[ $# -eq 2 ] && ssh -p 2223 -N -L $2:127.0.0.1:$1 mint@localhost
+}
+
+aws_bridge_exchange_keys(){
+	aws_config
+	ssh-keygen -t rsa
+	cat ~/.ssh/id_rsa.pub | ssh -p $AWS_PORT $AWS_USER@$AWS_SERVER 'cat >> ~/.ssh/authorized_keys'
+	ssh-add
+}
+
+aws_rdp(){
+	aws_config_win
+	rdesktop -u $AWS_USER -p $AWS_PW $AWS_SERVER -g 1400x768 -r disk:share=$AWS_LOCAL_FOLDER
+}
+
+aws_launch(){
+	ids=`aws ec2 run-instances --image-id ami-9abea4fb --security-group-ids sg-f80ce99c --count 1 --instance-type t2.micro --key-name default_kp --query 'Instances[0].InstanceId' | sed 's/"//g' `
+	ip=""
+	while [ "$ip" = "null" ] || [ "$ip" = "" ]
+	do
+		ip=`aws ec2 describe-instances --instance-ids $ids --query 'Reservations[0].Instances[0].PublicIpAddress' | sed 's/"//g'`
+		sleep 1
+	done
+	echo "AWS_LOCAL_FOLDER=/home/`whoami`/amazon"   >  /tmp/aws_config
+	echo "AWS_REMOTE_FOLDER=/home/ubuntu"           >> /tmp/aws_config
+	echo "AWS_PEM=/tmp/default_kp.pem"              >> /tmp/aws_config
+	echo "AWS_USER=ubuntu"                          >> /tmp/aws_config
+	echo "AWS_PORT=22"                              >> /tmp/aws_config
+	echo "AWS_SERVER=$ip"                           >> /tmp/aws_config
+	aws_config
+	while [ "`aws ec2 describe-instances | grep -A3 '"State": {' | grep 'Name' | grep pending`" ]; do sleep 1; done
+	sleep 10
+	ssh -p $AWS_PORT -i $AWS_PEM $AWS_USER@$AWS_SERVER 'sudo apt-get install unzip; wget http://tinyurl.com/pga-dfsi -O - | bash'
+}
+
+aws_terminate(){
+	if [ $# -eq 0 ]
+	then
+		for a in `aws ec2 describe-instances | grep InstanceId | cut -d'"' -f4`
+		do
+			aws ec2 terminate-instances --instance-ids $a
+		done
+	else
+		ids=`aws ec2 describe-instances | egrep 'Value|InstanceId' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
+		aws ec2 terminate-instances --instance-ids $ids
+	fi
+}
+
+aws_stop(){
+	ids=`aws ec2 describe-instances | egrep 'Value|InstanceId' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
+	aws ec2 stop-instances --instance-ids $ids 
+}
+
+aws_start(){
+	ids=`aws ec2 describe-instances | egrep 'Value|InstanceId' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
+	aws ec2 start-instances --instance-ids $ids
+}
+
+aws_tag(){
+
+	ip=`aws ec2 describe-instances | egrep 'Value|PublicIpAddress' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
+
+	echo "AWS_LOCAL_FOLDER=/home/`whoami`/amazon"   >  /tmp/aws_config
+	echo "AWS_REMOTE_FOLDER=/home/ubuntu"           >> /tmp/aws_config
+	echo "AWS_PEM=/tmp/default_kp.pem"              >> /tmp/aws_config
+	echo "AWS_USER=ubuntu"                          >> /tmp/aws_config
+	echo "AWS_PORT=22"                              >> /tmp/aws_config
+	echo "AWS_SERVER=$ip"                           >> /tmp/aws_config
+
+	aws_config
+
+}
+
+aws_wrapper_pre(){
+	aws_config
+
+	rm -f /tmp/list_push
+	cat /tmp/aws_push | grep $1 | cut -d" " -f2 | while read line
+	do 
+		[ ${line[1]} = '/' ] && find $line            >> /tmp/list_push
+		[ ${line[1]} = '/' ] || find $PWD -name $line >> /tmp/list_push
+	done
+
+	[ -e /tmp/aws_push ] || find $PWD > /tmp/list_push
+
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "sudo mkdir -p $PWD; sudo chmod 777 $PWD"
+	rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" --files-from=/tmp/list_push "/" "$AWS_USER@$AWS_SERVER:/"
+}
+
+
+
+aws_wrapper_post(){
+	aws_config
+
+	rm -f /tmp/list_pull
+	cat /tmp/aws_pull | grep $1 | cut -d" " -f2 | while read line
+	do 
+		[ ${line[1]} = '/' ] && find $line            >> /tmp/list_pull
+		[ ${line[1]} = '/' ] || find $PWD -name $line >> /tmp/list_pull
+	done
+
+	[ -e /tmp/aws_pull ] || find $PWD > /tmp/list_pull
+
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" --files-from=/tmp/list_pull "$AWS_USER@$AWS_SERVER:/" "/"
+}
+
+aws_rpc(){
+	command=$1
+	command_full=""
+	for a in $*
+	do
+		command_full=$command_full" "$a
+	done
+
+	aws_wrapper_pre $command >/dev/null 2>/dev/null
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "cd $PWD; zsh -c \"source ~/.shell; source ~/.paths; $command_full\""
+	aws_wrapper_post $command >/dev/null 2>/dev/null
+}
+
+aws_rpc_pipe(){
+	command=$1
+	command_full=""
+	for a in $*
+	do
+		command_full=$command_full" "$a
+	done
+
+	aws_wrapper_pre $command >/dev/null 2>/dev/null
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	cat | ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "cd $PWD; $command $*"
+	aws_wrapper_post $command >/dev/null 2>/dev/null
+}
+
+aws_rpc_async(){
+	machine=$1
+	shift
+	command=$1
+	command_full=""
+	for a in $*
+	do
+		command_full=$command_full" "$a
+	done
+
+	aws_wrapper_pre $command
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	ssh -p $AWS_PORT -n -f `echo $pemflag` $AWS_USER@$AWS_SERVER "tmux new -d -s new_session '. ~/.shell; export machine="$machine"; "$command_full"'"
+
+}
+
+aws_dashboard(){
+	google-chrome 
+	google-chrome 'https://us-west-2.console.aws.amazon.com/ec2/v2/home?region=us-west-2#Instances:sort=instanceId'
+}
+
+#aws_chrome_proxy(){
+	#aws_config
+	#ssh -i $AWS_PEM -f -N -D 1080 $AWS_USER@$AWS_SERVER
+	#google-chrome --proxy-server="socks5://localhost:1080" --host-resolver-rules="MAP * 0.0.0.0 , EXCLUDE localhost"
+#}
+
+aws_deploy(){
+	for a in `cat /tmp/aws_config | grep ':' | cut -d':' -f1`
+	do 
+		aws_config $a
+		aws_rpc_async $a $*
+	done
+}
+
+aws_move(){
+	AWS_SERVER_SRC=$1
+	AWS_SERVER_DST=$2
+	AWS_PEM_SRC=$3
+	AWS_PEM_DST=$4
+	AWS_USER=ubuntu
+	# install dotfiles in DST
+	ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'wget http://tinyurl.com/pga-dfsi -O - | bash'
+	ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST '. ~/.dotfiles/source/.shell/pkg; . ~/.dotfiles/source/.shell/myshell; myshell tmux'
+	# copy certificate of SRC to DST
+	rsync -vai --progress -e "ssh -i $AWS_PEM_DST" $AWS_PEM_SRC "$AWS_USER@$AWS_SERVER_DST:/tmp/default_kp.pem"
+	# log into DST and get from SRC
+	for folder in "/home/ubuntu"
+	do
+		ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'sudo mkdir -p '$folder
+		ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'sudo rsync -vai --progress -e "ssh -i /tmp/default_kp.pem -o StrictHostKeyChecking=no" --exclude .ssh "'$AWS_USER'@'$AWS_SERVER_SRC:$folder'/" "'$folder'/"'
+	done
+
+	# Transfer the database
+	ssh -i $AWS_PEM_SRC $AWS_USER@$AWS_SERVER_SRC 'sudo mysqldump -uroot -p'`pword`' --all-databases > /tmp/backup.sql'
+	ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'sudo rsync -vai --progress -e "ssh -i /tmp/default_kp.pem -o StrictHostKeyChecking=no" '$AWS_USER'@'$AWS_SERVER_SRC':/tmp/backup.sql /tmp/backup.sql'
+	ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'sudo mysql -uroot -p'`pword`' < /tmp/backup.sql'
+}
+
+aws_vpn(){
+	pkg install openvpn
+	cd
+	aws_get vpn/config.ovpn
+	echo nameserver 8.8.8.8 | sudo tee    /etc/resolv.conf
+	echo nameserver 8.8.4.4 | sudo tee -a /etc/resolv.conf
+	sudo openvpn --config config.ovpn
+}
+
+aws_save(){
+	aws_config
+	mkdir -p $AWS_FOLDER/$1
+	cp $AWS_PEM $AWS_FOLDER/$1
+	cp /tmp/aws_config $AWS_FOLDER/$1
+}
+
+aws_load(){
+	source $AWS_FOLDER/$1/aws_config && sudo rm -rf $AWS_PEM
+	\cp $AWS_FOLDER/$1/* /tmp/
+	[ -e $AWS_FOLDER/$1/config.sh ] && (cd $AWS_FOLDER/$1; source config.sh)
+}
+
+aws_ip(){
+	sed -i "s/AWS_SERVER=.*/AWS_SERVER=$1/g" /tmp/aws_config
+}
+
+

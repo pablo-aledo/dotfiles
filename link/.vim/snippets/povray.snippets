@@ -1,0 +1,2636 @@
+snippet Basic_scene
+	// Persistence of Vision Ray Tracer Scene Description File
+	// File: ?.pov
+	// Vers: 3.5
+	// Desc: Basic Scene Example
+	// Date: mm/dd/yy
+	// Auth: ?
+	//
+	
+	#version 3.5;
+	
+	#include "colors.inc"
+	
+	global_settings {
+	  assumed_gamma 1.0
+	}
+	
+	// ----------------------------------------
+	
+	camera {
+	  location  <0.0, 0.5, -4.0>
+	  direction 1.5*z
+	  right     x*image_width/image_height
+	  look_at   <0.0, 0.0,  0.0>
+	}
+	
+	sky_sphere {
+	  pigment {
+	    gradient y
+	    color_map {
+	      [0.0 rgb <0.6,0.7,1.0>]
+	      [0.7 rgb <0.0,0.1,0.8>]
+	    }
+	  }
+	}
+	
+	light_source {
+	  <0, 0, 0>            // light's position (translated below)
+	  color rgb <1, 1, 1>  // light's color
+	  translate <-30, 30, -30>
+	}
+	
+	// ----------------------------------------
+	
+	plane {
+	  y, -1
+	  pigment { color rgb <0.7,0.5,0.3> }
+	}
+	
+	sphere {
+	  0.0, 1
+	  texture {
+	    pigment {
+	      radial
+	      frequency 8
+	      color_map {
+	        [0.00 color rgb <1.0,0.4,0.2> ]
+	        [0.33 color rgb <0.2,0.4,1.0> ]
+	        [0.66 color rgb <0.4,1.0,0.2> ]
+	        [1.00 color rgb <1.0,0.4,0.2> ]
+	      }
+	    }
+	    finish{
+	      specular 0.6
+	    }
+	  }
+	}
+	
+snippet Orthographic_scene
+	// Persistence of Vision Ray Tracer Scene Description File
+	// File: ?.pov
+	// Vers: 3.5
+	// Desc: Orthographic Scene Example
+	//       useful for generating image_maps, heightfields, etc.
+	// Date: mm/dd/yy
+	// Auth: ?
+	//
+	
+	#version 3.5;
+	
+	global_settings {
+	  assumed_gamma 1.0
+	}
+	
+	// ----------------------------------------
+	
+	camera {
+	  orthographic
+	  location <0,0,1>     // position & direction of view
+	  look_at  <0,0,0>
+	  right 1*x            // horizontal size of view  \___ to be rendered at square size
+	  up 1*y               // vertical size of view    /
+	}
+	
+	// ----------------------------------------
+	
+	box {                  // this box fits exactly in view
+	  <-0.5, -0.5, 0>, <0.5, 0.5, 0>
+	  texture {
+	    pigment {
+	      agate
+	      color_map {
+	        [0.0 color rgb 0.0 ]
+	        [1.0 color rgb 1.0 ]
+	      }
+	    }
+	    finish {
+	      ambient 1.0
+	      diffuse 0.0
+	    }
+	  }
+	}
+	
+snippet Radiosity_scene
+	// Persistence of Vision Ray Tracer Scene Description File
+	// File: ?.pov
+	// Vers: 3.5
+	// Desc: Radiosity Scene Template
+	// Date: mm/dd/yy
+	// Auth: ?
+	//
+	
+	#version 3.5;
+	
+	#declare Radiosity=on;
+	
+	global_settings {
+	  assumed_gamma 1.0
+	  //max_trace_level 25
+	  #if (Radiosity)
+	    radiosity {
+	      pretrace_start 0.08           // start pretrace at this size
+	      pretrace_end   0.04           // end pretrace at this size
+	      count 35                      // higher -> higher quality (1..1600) [35]
+	      nearest_count 5               // higher -> higher quality (1..10) [5]
+	      error_bound 1.8               // higher -> smoother, less accurate [1.8]
+	      recursion_limit 3             // how much interreflections are calculated (1..5+) [3]
+	      low_error_factor .5           // reduce error_bound during last pretrace step
+	      gray_threshold 0.0            // increase for weakening colors (0..1) [0]
+	      minimum_reuse 0.015           // reuse of old radiosity samples [0.015]
+	      brightness 1                  // brightness of radiosity effects (0..1) [1]
+	
+	      adc_bailout 0.01/2
+	      //normal on                   // take surface normals into account [off]
+	      //media on                    // take media into account [off]
+	      //save_file "file_name"       // save radiosity data
+	      //load_file "file_name"       // load saved radiosity data
+	      //always_sample off           // turn sampling in final trace off [on]
+	      //max_sample 1.0              // maximum brightness of samples
+	    }
+	  #end
+	}
+	
+	#default {
+	  texture {
+	    pigment {rgb 1}
+	    #if (Radiosity)
+	      finish {
+	        ambient 0.0
+	        diffuse 0.6
+	        specular 0.3
+	      }
+	    #else
+	      finish {
+	        ambient 0.1
+	        diffuse 0.6
+	        specular 0.3
+	      }
+	    #end
+	  }
+	}
+	
+	// ----------------------------------------
+	
+	camera {
+	  right x*image_width/image_height
+	  location  <0,1.5,-4>
+	  look_at   <0,1,0>
+	}
+	
+	light_source {
+	  <500,500,-500>       // light's position
+	  color rgb <1, 1, 1>  // light's color
+	}
+	
+	sky_sphere {
+	  pigment {
+	    gradient y
+	    color_map {
+	      [0.0 rgb <0.6,0.7,1.0>]
+	      [0.7 rgb <0.0,0.1,0.8>]
+	    }
+	  }
+	}
+	
+	// ----------------------------------------
+	
+	plane {
+	  y, 0
+	  texture {
+	    pigment {
+	      checker
+	      color rgb <1.0, 0.8, 0.6>
+	      color rgb <1.0, 0.0, 0.0>
+	      scale 0.5
+	    }
+	  }
+	}
+	
+	sphere {
+	  <0,1,0>, 1
+	}
+	
+snippet Photons_scene
+	// Persistence of Vision Ray Tracer Scene Description File
+	// File: ?.pov
+	// Vers: 3.5
+	// Desc: Photon Scene Template
+	// Date: mm/dd/yy
+	// Auth: ?
+	//
+	
+	#version 3.5;
+	
+	#declare Photons=on;
+	
+	global_settings {
+	  assumed_gamma 1.0
+	  max_trace_level 5
+	  #if (Photons)          // global photon block
+	    photons {
+	      spacing 0.02                 // specify the density of photons
+	      //count 100000               // alternatively use a total number of photons
+	
+	      //gather min, max            // amount of photons gathered during render [20, 100]
+	      //media max_steps [,factor]  // media photons
+	      //jitter 1.0                 // jitter phor photon rays
+	      //max_trace_level 5          // optional separate max_trace_level
+	      //adc_bailout 1/255          // see global adc_bailout
+	      //save_file "filename"       // save photons to file
+	      //load_file "filename"       // load photons from file
+	      //autostop 0                 // photon autostop option
+	      //radius 10                  // manually specified search radius
+	      // (---Adaptive Search Radius---)
+	      //steps 1
+	      //expand_thresholds 0.2, 40
+	    }
+	
+	  #end
+	}
+	
+	// ----------------------------------------
+	
+	camera {
+	  right x*image_width/image_height
+	  location  <0,1.6,-5>
+	  look_at   <0,0.75,0>
+	}
+	
+	light_source {
+	  <500,500,150>       // light's position
+	  color rgb 1.3       // light's color
+	  photons {           // photon block for a light source
+	    refraction on
+	    reflection on
+	  }
+	}
+	
+	sky_sphere {
+	  pigment {
+	    gradient y
+	    color_map {
+	      [0.0 rgb <0.6,0.7,1.0>]
+	      [0.7 rgb <0.0,0.1,0.8>]
+	    }
+	  }
+	}
+	
+	// ----------------------------------------
+	
+	plane {
+	  y, 0
+	  texture {
+	    pigment { color rgb <1.0, 0.8, 0.6> }
+	  }
+	}
+	
+	
+	#declare M_Glass=    // Glass material
+	material {
+	  texture {
+	    pigment {rgbt 1}
+	    finish {
+	      ambient 0.0
+	      diffuse 0.05
+	      specular 0.6
+	      roughness 0.005
+	      reflection {
+	        0.1, 1.0
+	        fresnel on
+	      }
+	      conserve_energy
+	    }
+	  }
+	  interior {
+	    ior 1.5
+	    fade_power 1001
+	    fade_distance 0.9
+	    fade_color <0.5,0.8,0.6>
+	  }
+	}
+	
+	
+	sphere {
+	  <0,1,0>, 1
+	  translate <1.0,0,-1.3>
+	  material { M_Glass }
+	
+	  photons {  // photon block for an object
+	    target 1.0
+	    refraction on
+	    reflection on
+	  }
+	}
+	
+	cylinder {
+	  <0,0.01,0>, <0,2.5,0>, 1
+	  translate <-1.2,0,0.8>
+	  material { M_Glass }
+	
+	  photons {  // photon block for an object
+	    target 1.0
+	    refraction on
+	    reflection on
+	  }
+	}
+snippet Checkered_floor
+	// Persistence of Vision Ray Tracer Scene Description File
+	// File: ?.pov
+	// Vers: 3.5
+	// Desc: Checkered Floor Example
+	// Date: mm/dd/yy
+	// Auth: ?
+	//
+	
+	#version 3.5;
+	
+	#include "colors.inc"
+	
+	global_settings {
+	  assumed_gamma 1.0
+	  max_trace_level 5
+	}
+	
+	// ----------------------------------------
+	
+	camera {
+	  location  <0.0, 0.5, -4.0>
+	  direction 1.5*z
+	  right     x*image_width/image_height
+	  look_at   <0.0, 0.0,  0.0>
+	}
+	
+	sky_sphere {
+	  pigment {
+	    gradient y
+	    color_map {
+	      [0.0 rgb <0.6,0.7,1.0>]
+	      [0.7 rgb <0.0,0.1,0.8>]
+	    }
+	  }
+	}
+	
+	light_source {
+	  <0, 0, 0>            // light's position (translated below)
+	  color rgb <1, 1, 1>  // light's color
+	  translate <-30, 30, -30>
+	}
+	
+	// ----------------------------------------
+	
+	plane {               // checkered floor
+	  y, -1
+	  texture
+	  {
+	    pigment {
+	      checker
+	      color rgb 1
+	      color blue 1
+	      scale 0.5
+	    }
+	    finish{
+	      diffuse 0.8
+	      ambient 0.1
+	    }
+	  }
+	}
+	
+	sphere {              // reflective sphere
+	  0.0, 1
+	  texture {
+	    pigment {
+	      color rgb <0.8,0.8,1.0>
+	    }
+	    finish{
+	      diffuse 0.3
+	      ambient 0.0
+	      specular 0.6
+	      reflection {
+	        0.8
+	        metallic
+	      }
+	      conserve_energy
+	    }
+	  }
+	}
+	
+snippet Image_Map
+	// Persistence of Vision Ray Tracer Scene Description File
+	// File: ?.pov
+	// Vers: 3.5
+	// Desc: Image Map Example
+	// Date: mm/dd/yy
+	// Auth: ?
+	//
+	
+	#version 3.5;
+	
+	#include "colors.inc"
+	
+	global_settings {
+	  assumed_gamma 1.0
+	}
+	
+	// ----------------------------------------
+	
+	camera {
+	  location  <0.0, 0.0, -4.0>
+	  direction 2*z
+	  right     x*image_width/image_height
+	  look_at   <0.0, 0.0,  0.0>
+	}
+	
+	sky_sphere {
+	  pigment {
+	    gradient y
+	    color_map {
+	      [0.0 color blue 0.6]
+	      [1.0 color rgb 1]
+	    }
+	  }
+	}
+	
+	light_source {
+	  <0, 0, 0>            // light's position (translated below)
+	  color rgb <1, 1, 1>  // light's color
+	  translate <-30, 30, -30>
+	}
+	
+	// ----------------------------------------
+	
+	plane {
+	  y, -1
+	  texture {
+	    pigment { checker color rgb 1 color blue 1 scale 0.5 }
+	    finish { reflection 0.2 }
+	  }
+	}
+	
+	plane {
+	  z, -1
+	  texture {
+	    pigment {
+	      image_map {
+	        png "test.png"
+	        interpolate 2 // smooth it
+	        once   // don't tile image, just one copy
+	        filter 0 0.8  // make 1st color mostly transparent
+	        filter 1 0.8  // make 2nd color mostly transparent
+	      }
+	      // transform it to unit-size (-1 to +1)
+	      translate -0.5*(x+y) // center on the origin
+	      scale 2              // make it unit-sized
+	    }
+	    finish { ambient 0.3 }
+	  }
+	}
+	
+snippet Text_Fonts
+	// Persistence of Vision Ray Tracer Scene Description File
+	// File: ?.pov
+	// Vers: 3.5
+	// Desc: Basic TTF font Example
+	// Date: mm/dd/yy
+	// Auth: ?
+	//
+	
+	#version 3.5;
+	
+	global_settings {
+	  assumed_gamma 1.0
+	}
+	
+	// ----------------------------------------
+	
+	camera {
+	  location  <0.0, 2.0, -6.0>
+	  direction 1.5*z
+	  right     4/3*x
+	  look_at   <0.0, 0.0,  0.0>
+	}
+	
+	sky_sphere {
+	  pigment {
+	    gradient y
+	    color_map {
+	      [0.0 color blue 0.6]
+	      [1.0 color rgb 1]
+	    }
+	  }
+	}
+	
+	light_source {
+	  <0, 0, 0>            // light's position (translated below)
+	  color rgb <1, 1, 1>  // light's color
+	  translate <-30, 30, -30>
+	}
+	
+	// ----------------------------------------
+	
+	#declare Text_Tex = texture {
+	  pigment { granite scale 0.5 }
+	  finish { specular 0.7 }
+	}
+	
+	text {
+	  ttf "crystal.ttf", "Hello",
+	  2, // depth
+	  0  // spacing
+	  texture { Text_Tex }
+	  rotate <0, -20, 0>
+	  translate <-1, 0, -3>
+	}
+	
+	text {
+	  ttf "crystal.ttf", "Virtual World!",
+	  1, // depth
+	  0  // spacing
+	  scale <1, 2, 1> // stretch it taller
+	  texture { Text_Tex }
+	  rotate <0, -30, 0>
+	  translate <-3, 0, 3>
+	}
+	
+	
+	plane { y, 0 pigment { color rgb <0.7,0.5,0.3> } }
+	
+snippet Scene_File_Header
+	// Persistence of Vision Ray Tracer Scene Description File
+	// File: .pov
+	// Vers: 3.5
+	// Desc:
+	// Date:
+	// Auth:
+	
+snippet Standard_includes
+	// ==== Standard POV-Ray Includes ====
+	#include "colors.inc"	  // Standard Color definitions
+	#include "textures.inc"	  // Standard Texture definitions
+	#include "functions.inc"  // internal functions usable in user defined functionssnippet ./10 - Headers/30 - Additional includes.txt
+	// ==== Additional Includes ====
+	// Don't have all of the following included at once, it'll cost memory and time
+	// to parse!
+	// --- general include files ---
+	#include "arrays.inc"     // macros for manipulating arrays
+	#include "chars.inc"      // A complete library of character objects, by Ken Maeno
+	#include "consts.inc"     // Various constants and alias definitions
+	#include "debug.inc"      // contains various macros for debugging scene files
+	#include "logo.inc"       // The official POV-Ray Logo in various forms
+	#include "math.inc"       // general math functions and macros
+	#include "rad_def.inc"    // Some common radiosity settings
+	#include "rand.inc"       // macros for generating random numbers
+	#include "shapes.inc"     // macros for generating various shapes
+	#include "shapes2.inc"    // some not built in basic shapes
+	#include "shapesq.inc"    // Pre-defined quartic shapes
+	#include "skies.inc"      // Ready defined sky spheres
+	#include "stars.inc"      // Some star fields
+	#include "strings.inc"    // macros for generating and manipulating text strings
+	#include "sunpos.inc"     // macro for sun position on a given date, time, and location on earth
+	#include "transforms.inc" // transformation macros 
+	
+	// --- textures ---
+	#include "finish.inc"     // Some basic finishes
+	#include "glass.inc"      // Glass textures/interiors
+	#include "golds.inc"      // Gold textures
+	#include "metals.inc"     // Metallic pigments, finishes, and textures
+	#include "stones.inc"     // Binding include-file for STONES1 and STONES2
+	#include "stones1.inc"    // Great stone-textures created by Mike Miller
+	#include "stones2.inc"    // More, done by Dan Farmer and Paul Novak
+	#include "woodmaps.inc"   // Basic wooden colormaps
+	#include "woods.inc"      // Great wooden textures created by Dan Farmer and Paul Novaksnippet ./20 - Include files/'arrays.inc'.txt
+	// array manipulation macros
+	// 
+	#include "arrays.inc"
+snippet colors
+	// Standard pre-defined colors
+	//
+	#include "colors.inc"
+snippet consts
+	// various numerical constants
+	// 
+	#include "consts.inc"
+snippet finish
+	// some standard finishes
+	#include "finish.inc"
+	
+	  finish {
+	    Dull               // large, soft highlight
+	    //Shiny            // small, tight highlight
+	
+	    //Phong_Dull       // less "realistic" but sometimes useful phong highlight
+	    //Phong_Shiny      // same in "shiny"
+	
+	    //Glossy           // very tight highlights and some reflection
+	    //Phong_Glossy     // phong version of the same
+	
+	    //Luminous         // totally ambient not influenced by light sources (for example sky)
+	    //Mirror           // perfect mirror without highlights
+	  }
+snippet functions
+	// internal functions usable in user defined functions
+	// for example for isosurfaces and function pattern
+	#include "functions.inc"
+snippet glass
+	// various glass finishes, colors and interiors
+	//
+	#include "glass.inc"
+snippet math
+	// general math functions and macros
+	// 
+	#include "math.inc"
+snippet metals
+	// several different gold colors, finishes and textures
+	#include "golds.inc"
+	
+	// various metal colors, finishes and textures
+	// brass, copper, chrome, silver
+	#include "metals.inc"
+snippet rand
+	// random number generation macros
+	// 
+	#include "rand.inc"
+snippet shapes2
+	// some not built in basic shapes
+	//
+	#include "shapes2.inc"
+	
+	object {
+	  Tetrahedron         // CSG-able tetrahedron shape
+	  //Octahedron        // CSG-able octahedron shape
+	  //Dodecahedron      // CSG-able dodecahedron shape
+	  //Icosahedron       // CSG-able icosahedron shape
+	  //Hexagon           // Hexagon extending along x-axis
+	  //Rhomboid          // 4-Sided Diamond
+	  //Pyramid           // non-CSG four-sided pyramid
+	  //Pyramid2          // CSG-able four-sided pyramid
+	  //Square_X          // square from <-1, -1> to <1, 1> in y-z-plane
+	  //Square_Y          // square from <-1, -1> to <1, 1> in x-z-plane
+	  //Square_Z          // square from <-1, -1> to <1, 1> in x-y-plane
+	}
+snippet shapes
+	// macros for generating various shapes
+	// 
+	#include "shapes.inc"
+snippet skies
+	// some predefined skies
+	// 
+	#include "skies.inc"
+snippet stones
+	// a lot of stone textures
+	// T_Stone1 - T_Stone44
+	#include "stones.inc"
+	
+snippet strings
+	// macros for generating and manipulating text strings
+	// 
+	#include "strings.inc"
+snippet transforms
+	// various geometric transformation macros
+	// 
+	#include "transforms.inc"
+snippet woods
+	// various (mostly layered) wood textures
+	// T_Wood1 - T_Wood35
+	#include "woods.inc"
+snippet background
+	// set a color of the background (sky)
+	background { color rgb <0.1, 0.3, 0.8> }
+snippet global_settings
+	// place all settings of globally influenced features here
+	global_settings {
+	// [GLOBAL ITEM(S)]
+	}
+	
+snippet adc_bailout
+	// used in global_settings, sets cutoff point of ray computation (1/255 default)
+	  adc_bailout 0.0039
+snippet ambient_light
+	// used in global_settings, sets an overall brightness/ambient light level in the scene
+	  ambient_light color rgb <1,1,1>
+snippet assumed_gamma
+	// used in global_settings, sets image gamma in relation to display gamma
+	  assumed_gamma 1.0
+snippet charset
+	// used in global_settings, specify the assumed character set of all text strings
+	  charset ascii       // standard ascii (only 0 to 127 are valid)
+	  //charset utf8      // unicode
+	  //charset sys       // system specific charset
+	
+snippet hf_gray_16
+	// used in global_settings, sets image output to use grayscale only (TGA, PNG)
+	  hf_gray_16 // [on/off]
+snippet irid_wavelength
+	// used in global_settings, sets the color shifts for iridescence (irid {})
+	  irid_wavelength <0.25, 0.18, 0.14>
+snippet max_intersections
+	// used in global_settings, sets the maximum ray tracing intersection depth (1 or more) [64]
+	 max_intersections 64
+snippet max_trace_level
+	// used in global_settings, sets the maximum ray tracing bounce depth (1 or more) [5]
+	  max_trace_level 5
+snippet noise_generator
+	// used in global_settings, sets the type of noise computation
+	// there are 3 available noise generators
+	// they can be used for single pigments, etc. too by adding
+	// noise_generator x to the definition
+	  //noise_generator 1 // old 3.1g plateaud noise
+	  //noise_generator 2 // fixed version of 3.1 noise
+	  noise_generator 3   // New 3.5 perlin noise
+snippet number_of_waves
+	// used in global_settings, sets how many instances of waves/ripples to use
+	  number_of_waves 10
+snippet Bounds_extents
+	// Bounds extents functions
+	// give the extent of the object's bounding box
+	#declare Obj = sphere { 0, 1 }
+	#declare Min = min_extent (Obj);
+	#declare Max = max_extent (Obj);
+snippet Built-in_Ids
+	// These identifiers are built in to POV-Ray, ready to use
+	//  #declare pi = 3.1415926535897932384626
+	//  #declare true = 1
+	//  #declare yes = 1
+	//  #declare on = 1
+	//  #declare false = 0
+	//  #declare no = 0
+	//  #declare off = 0
+	//  #declare u = <1,0>
+	//  #declare v = <0,1>
+	//  #declare x = <1,0,0>
+	//  #declare y = <0,1,0>
+	//  #declare z = <0,0,1>
+	//  #declare t = <0,0,0,1>
+	
+	// Other built in identifiers with no fixed values are
+	/*
+	clock           // current clock value in animations (0..1)
+	clock_delta     // clock step between frames
+	version         // version (default 3.5, can be changed with #version)
+	initial_clock   // start clock value (+KIn.n)
+	final_clock     // end clock value (+KFn.n)
+	initial_frame   // start frame number (+KFIn.n)
+	final_frame     // end frame number (+KFFn.n)
+	frame_number    // current frame number
+	clock_on        // 1(true) if animation
+	image_width     // width of current render
+	image_height    // height of current render
+	*/
+snippet Conditional_Expression
+	// The conditional expression returns a value depending
+	// on whether an expression is true or false.
+	// In this case: if X is larger than Y, A is returned, otherwise B
+	
+	#declare Value=((X>Y)?A:B);
+	
+	
+snippet Float_Functions
+	// Various float functions
+	/*
+	// (---general---)
+	#declare X=div(A,B);            // A/B (integer)
+	#declare X=mod(A,B);            // A modulo B
+	#declare X=sqrt(A);             // square root of A
+	#declare X=exp(A);              // e^A
+	#declare X=log(A);              // Natural logarithm of A
+	#declare X=pow(A,B);            // A^B
+	#declare X=max(A,B,C, ...);     // Maximum of A, B, C, ...
+	#declare X=min(A,B,C, ...);     // Minimum of A, B, C, ...
+	#declare X=int(A);              // truncate A to integer part
+	#declare X=abs(A);              // Absolute value of A
+	#declare X=ceil(A);             // ceiling of A (smallest larger integer)
+	#declare X=floor(A);            // floor of A (largest smaller integer)
+	#declare X=defined(A);          // true if A is a defined identifier
+	// (---trigonometric---)
+	#declare X=cos(A);              // cosine of A
+	#declare X=cosh(A);             // hyperbolic cosine of A
+	#declare X=sin(A);              // sine of A
+	#declare X=sinh(A);             // hyperbolic sine of A
+	#declare X=tan(A);              // tangent of A
+	#declare X=tanh(A);             // hyperbolic tangent of A
+	#declare X=acos(A);             // arc-cosine of A
+	#declare X=acosh(A);            // hyperbolic Arc-cosine of A
+	#declare X=asin(A);             // arc-sine of A
+	#declare X=asinh(A);            // hyperbolic Arc-sines of A
+	#declare X=atan(A);             // arc-tangent of A
+	#declare X=atanh(A);            // hyperbolic Arc-tangent of A
+	#declare X=atan2(A,B);          // arc-tangent of (A/B)
+	#declare X=degrees(A);          // convert radians to degrees
+	#declare X=radians(A);          // convert degrees to radians
+	// (---arrays---)
+	#declare X=dimensions(A);       // Number of dimensions of Array A
+	#declare X=dimension_size(A,B); // Size of Array A in dimension B
+	*/
+snippet inside
+	// inside function tests if a certain point  
+	// is inside a specified object
+	
+	#declare Obj = sphere { 0, 1 }
+	#declare Point = <0.6, 0.5, 0.6>;
+	
+	// if point is inside the object:
+	#if ( inside(Obj, Point) )
+	 //...
+	#end
+snippet Logical_Operators
+	// As logical operators there are '&' and '|' standing for
+	// logical AND and OR.
+	// They return arithmetic value 0 for false or 1 for true.
+	// Note that A and B are not handled bitwise but logical.
+	
+	#if (A & B)
+	  ... // do this only if both A and B are true
+	#end
+	
+	#if (A | B)
+	  ... // do this if either A or B is true
+	#end
+	
+snippet Math_Operators
+	//  ( ) ! * / + -
+	#declare MyResult = -2*B + (A*A - 4)
+snippet random
+	// the rand() function creates a reproducible sequence 
+	// of pseudo-random numbers between 0.0 and 1.0
+	
+	#declare R1 = seed(0);      // initialize random number streams
+	#declare R2 = seed(12345);
+	
+	// place sphere with random radius at random position
+	// use different random number streams for position and radius
+	sphere { <rand(R1), rand(R1), rand(R1)>, rand(R2) }
+snippet Relational_Operators
+	// Relationals must be within parentheses
+	// Return arithmetic value 0 for false or 1 for true
+	//   <  <=  =  !=  >=  >
+	
+	#declare BallColor = pigment { red (clock > 0.5) } // black or red
+snippet Strings
+	/* various string operations
+	asc(S1)          // Convert 1st character of S1 to ASCII value
+	chr(A)           // Convert extended ASCII value A to a 1 character string
+	concat(S1,S2)    // combine S1 and S2 into one long string
+	file_exists(S1)  // Search current and include directories for existence of file S1 (0 or 1)
+	str(A,L,P)       // Convert float A to string, at least L characters long,
+	                 // with P digits after the decimal point (if P is -1, make max)
+	strcmp(S1,S2)    // compare S1 to S2, return -1, 0, or +1 if S2 is <, =, > than S1
+	strlen(S1)       // Returns # of characters in string S1
+	strlwr(S1)       // Lower case of S1
+	substr(S1,P,L)   // Sub-string from S1, start at position P for length L
+	strupr(S1)       // Upper case of S1
+	val(S1)          // Convert string S1 to float
+	file_exists(S1)  // returns 1 if file S1 is found in library path
+	*/
+	/*
+	// some special control characters that can be used within strings
+	  "\a" Bell or alarm, 0x07
+	  "\b" Backspace, 0x08
+	  "\f" Form feed, 0x0C
+	  "\n" New line (line feed) 0x0A
+	  "\r" Carriage return 0x0D
+	  "\t" Horizontal tab 0x09
+	  "\v" Vertical tab 0x0B
+	  "\0" Null 0x00
+	  "\\" Backslash 0x5C
+	  "\'" Single quote 0x27
+	*/
+snippet trace
+	// trace function tests for intersection with a specified object
+	
+	#declare Obj = sphere { 0, 1 }
+	#declare Norm = <0, 0, 0>;
+	#declare Start = <0.5, 0.5, 1>;
+	#declare Pos = trace (
+	                  Obj,             // object to test
+	                  Start,           // starting point
+	                  -z,              // direction
+	                  Norm );          // normal
+	
+	// if intersection is found, normal differs from 0
+	#if (Norm.x != 0 | Norm.y != 0 | Norm.z != 0)
+	 //...
+	#end
+snippet Vector_components
+	// extract each component of a vector:
+	
+	// for 3D vectors:
+	// #if (MyVector.x > 5) ...
+	// #if (MyVector.y > 5) ...
+	// #if (MyVector.z > 5) ...
+	
+	// in addition for 4D vectors:
+	// #if (MyVector.t > 5) ...
+	
+	// for 2D (UV) vectors:
+	// #if (MyVector.u > 5) ...
+	// #if (MyVector.v > 5) ...
+snippet Vector_Functions
+	// vector functions
+	/*
+	#declare X=vaxis_rotate(A,B,F); // rotate A about B by F
+	#declare X=vcross(A,B);         // cross product of A and B
+	#declare X=vdot(A,B);           // dot product of A and B
+	#declare X=vrotate(A,B);        // rotate A about origin by B
+	#declare X=vnormalize(A);       // normalize vector A
+	#declare X=vturbulence(Lambda,Omega,Octaves, A);
+	                                // X+A gives a turbulated version of A
+	*/
+snippet declare
+	// note that #declare of float, vector and color require semicolon at the end
+	#declare MyColor = color rgb<0.7, 0.5, 0.3>;
+snippet default
+	// sets the default texture that objects get when they have no texture specified
+	#default {
+	  texture { pigment {color red 1} finish{ambient 0.2} }
+	}
+snippet ifdef_example
+	  #ifdef (SphereFlake_Shape)
+	    // This section is  parsed if SphereFlake_Shape is declared
+	  #else
+	    // This section is  parsed if SphereFlake_Shape is NOT declared
+	    #declare SphereFlake_Shape = sphere {0,1} // make a default shape
+	  #end // End of conditional part
+snippet ifdef
+	#ifdef (ident)
+	  // true stuff happens here
+	#else
+	  // false stuff happens here
+	#end
+snippet if_example
+	  #if (High_Quality)
+	    // This section is parsed if High_Quality is true
+	  #end // End of conditional part
+	// or you can use the else clause too
+	  #if (clock > 2)
+	    // This section is parsed if clock is > 2
+	  #else
+	    // This section is parsed if clock is <= 2
+	  #end // End of conditional part
+snippet if
+	#if (expr)
+	  // true stuff happens here
+	#else
+	  // false stuff happens here
+	#end
+snippet local
+	// similar to #declare, but limited to the current scene file/macro
+	// note that #local of float, vector and color require semicolon at the end
+	#local MyColor = color rgb<0.7, 0.5, 0.3>;
+snippet macro
+	// macros can have parameters and are useful for 'programming' scenes
+	#macro Spheres(A, B, C)
+	  sphere { A, C }
+	  sphere { B, C }
+	#end
+	
+	// this macro can be called for example with
+	union { Spheres(x, 2*x, 0.5) }
+snippet messages
+	// display user defined messages in the Povray output
+	  #debug      "During scene parsing, general info message"
+	  #warning    "During scene parsing"
+	
+snippet switch_example
+	// Let's make some constant names
+	#declare CS_Medium = 1;
+	#declare CS_Hard = 3;
+	#declare CS_Easy = 5;
+	
+	// Let the user choose the method to use
+	#declare Complexity_Switch = CS_Medium; // or CS_Easy or CS_Hard
+	
+	// Do something dependent on the user's choice
+	#switch (Complexity_Switch)
+	
+	  #case (CS_Easy)
+	    // This statement is done if Complexity_Switch is CS_Easy
+	    #declare MyShape = box { -<1, 1, 1>, <1, 1, 1> }
+	  #break // End of this case section
+	
+	  #range (CS_Medium, CS_Hard)
+	    // This statement is done if Complexity_Switch is CS_Medium
+	    // or CS_Hard or anything in between
+	    #declare MyShape = torus { 1, 0.5 }
+	  #break // End of this range section
+	
+	  #else
+	    // This statement is done if none of the above match
+	    #declare MyShape = sphere { <0, 0, 0>, 1 }
+	
+	#end // End of switch statement
+snippet switch
+	#switch (expr)
+	  #case (expr)
+	  #break
+	  #range (expr,expr)
+	  #break
+	  #else
+	#end
+snippet undef
+	// identifiers can be destroyed with
+	#undef MyColor
+snippet version
+	#declare Temp_Vers = version    // Save original value of #version
+	#version 3.0;                   // Change to 3.0 mode
+	// Version 3.0 stuff goes here ...
+	#version Temp_Vers              // Restore original #version value
+snippet while
+	// Create 10 balls along X axis, from 0 to 9
+	#declare BallCount = 0;
+	#while (BallCount < 10)
+	  sphere {
+	    <BallCount,0,0>,  // NOTE: <0,0,0>, <1,0,0>, <2,0,0>, etc.
+	    0.5
+	  }
+	  #declare BallCount = BallCount+1;   // increment our counter
+	#end
+snippet clock
+	  // spin the torus around the X axis, as "clock" goes from 0 to 1
+	  // the torus will rotate one complete 360 degree revolution.
+	  // Note that the texture is put on BEFORE we rotate so it rotates too.
+	  torus { 1,0.2 pigment {color red 1} rotate clock*x*360}
+snippet additional_animation_variables
+	// additional animation variables
+	#declare X=clock_delta;       // clock step between frames
+	#declare X=initial_clock;     // clock value of first rendered frame (+KIn.n)
+	#declare X=final_clock;       // clock value of last rendered frame (+KFn.n)
+	#declare X=initial_frame;     // initial frame number (+KFIn).
+	#declare X=final_frame;       // final frame number (+KFIn).
+	#declare X=clock_on;          // true if scene is rendered as an animation
+	
+snippet rgb
+	// rgb - Red Green Blue color shortcut
+	color rgb <0.2, 0.3, 0.4>
+snippet rgbf
+	// rgbf - Red Green Blue Filter color shortcut
+	color rgbf <0.2, 0.3, 0.4, 0.9>
+snippet rgbt
+	// rgbt - Red Green Blue Transmit color shortcut
+	color rgbt <0.2, 0.3, 0.4, 0.9>
+snippet rgbft
+	// rgbft - Red Green Blue Filter Transmit color shortcut
+	// NOTE: filter + transmit should always equal 1.0
+	color rgbft <0.5, 0.5, 0.5, 0.4, 0.6>
+snippet red
+	color red 1
+snippet green
+	color green 1
+snippet blue
+	color blue 1
+snippet filter
+	color red 1 filter 1
+snippet transmit
+	color green 1 transmit 1
+snippet color_components
+	// extract each component of a color:
+	// #if (MyColor.red < 0.5) ...
+	// #if (MyColor.green < 0.5) ...
+	// #if (MyColor.blue < 0.5) ...
+	// #if (MyColor.filter < 0.5) ...
+	// #if (MyColor.transmit < 0.5) ...
+snippet Fog_definition
+	// set global atmospheric fog effect in the scene.
+	// at the fog distance, there will be 63% visibility
+	fog {
+	  fog_type 1               // 1=constant, 2=ground_fog
+	  distance 10
+	  color Gray               // can also have 'filter' and 'transmit'
+	  // (---turbulence---)
+	  //turbulence <0.5, 0.5, 1.0>
+	  //turb_depth 0.5
+	  //omega 0.5
+	  //lambda 2.0
+	  //octaves 6
+	  // (---ground fog---)
+	  //fog_offset 0.5         // height of constant fog
+	  //fog_alt 0.5            // at fog_offset+fog_alt: density=25%
+	}
+snippet Ambient_fog
+	fog {
+	  fog_type 1
+	  distance 100
+	  color SkyBlue
+	}
+snippet Ground_fog
+	fog {
+	  fog_type   2
+	  distance   10
+	  color      rgb 0.6 // gray
+	  fog_offset 0.1
+	  fog_alt    0.2
+	  turbulence 0.8
+	}
+snippet Atmospheric_media
+	// atmospheric media can be generated by adding a media statement
+	// to the scene not attached to any specific object
+	
+	media {    // atmospheric media sample
+	  intervals 10
+	  scattering { 1, rgb 0.03 }
+	  samples 1, 10
+	  confidence 0.9999
+	  variance 1/1000
+	  ratio 0.9
+	}
+snippet sky_sphere
+	// Create an infinite sphere around scene and allow any pigment on it
+	sky_sphere {
+	  pigment {
+	    gradient y
+	    color_map { [0.0 color rgb <0.7,0.7,1.0>] [1.0 color blue 0.5] }
+	  }
+	}
+snippet rainbow
+	// create a rainbow arc
+	rainbow {                      
+	  angle 30         // degrees
+	  width 6          // degrees
+	  distance 1000
+	  direction <0,-0.5,1>    
+	  jitter 0.01
+	  arc_angle 180    // degrees
+	  falloff_angle 60 // degrees
+	  // up <UP>
+	  color_map {
+	    [0.000 color rgbf <1.0, 0.5, 1.0, 1.0> ]
+	    [0.100 color rgbf <1.0, 0.5, 1.0, 0.8> ]
+	    [0.214 color rgbf <0.5, 0.5, 1.0, 0.8> ]
+	    [0.328 color rgbf <0.2, 0.2, 1.0, 0.8> ]
+	    [0.442 color rgbf <0.2, 1.0, 1.0, 0.8> ]
+	    [0.556 color rgbf <0.2, 1.0, 0.2, 0.8> ]
+	    [0.670 color rgbf <1.0, 1.0, 0.2, 0.8> ]
+	    [0.784 color rgbf <1.0, 0.5, 0.2, 0.8> ]
+	    [0.900 color rgbf <1.0, 0.2, 0.2, 0.8> ]
+	  }
+	}
+snippet Global_photons
+	// adding a photon{} block to global_settings activates photon mapping.
+	// photons also need to be adjusted for light sources and objects.
+	global_settings {
+	  photons {
+	    spacing 0.01                 // specify the density of photons
+	    //count 100000               // alternatively use a total number of photons
+	
+	    //gather min, max            // amount of photons gathered during render [20, 100]
+	    //media max_steps [,factor]  // media photons
+	    //jitter 1.0                 // jitter phor photon rays
+	    //max_trace_level 5          // optional separate max_trace_level
+	    //adc_bailout 1/255          // see global adc_bailout
+	    //save_file "filename"       // save photons to file
+	    //load_file "filename"       // load photons from file
+	    //autostop 0                 // photon autostop option
+	    //radius 10                  // manually specified search radius
+	    // (---Adaptive Search Radius---)
+	    //steps 1
+	    //expand_thresholds 0.2, 40
+	  }
+	}
+snippet Light_source_photons
+	// photon block for a light source
+	  photons {
+	    refraction on
+	    reflection on
+	    //area_light
+	  }
+snippet Object_photons
+	// photon block for an object
+	  photons{
+	    target 1.0          // spacing multiplier for photons hitting the object
+	    refraction on
+	    reflection on
+	    //collect off       // ignore photons
+	    //pass_through      // do not influence photons
+	  }
+snippet radiosity
+	// radiosity (global illumination) settings
+	global_settings {
+	  radiosity {
+	    pretrace_start 0.08           // start pretrace at this size
+	    pretrace_end   0.04           // end pretrace at this size
+	    count 35                      // higher -> higher quality (1..1600) [35]
+	    nearest_count 5               // higher -> higher quality (1..10) [5]
+	    error_bound 1.8               // higher -> smoother, less accurate [1.8]
+	    recursion_limit 3             // how much interreflections are calculated (1..5+) [3]
+	    low_error_factor .5           // reduce error_bound during last pretrace step
+	    gray_threshold 0.0            // increase for weakening colors (0..1) [0]
+	    minimum_reuse 0.015           // reuse of old radiosity samples [0.015]
+	    brightness 1                  // brightness of radiosity effects (0..1) [1]
+	
+	    adc_bailout 0.01/2
+	    //normal on                   // take surface normals into account [off]
+	    //media on                    // take media into account [off]
+	    //save_file "file_name"       // save radiosity data
+	    //load_file "file_name"       // load saved radiosity data
+	    //always_sample off           // turn sampling in final trace off [on]
+	    //max_sample 1.0              // maximum brightness of samples
+	  }
+	}
+snippet A_typical_camera
+	// perspective (default) camera
+	camera {
+	  location  <0.0, 2.0, -5.0>
+	  look_at   <0.0, 0.0,  0.0>
+	  right     x*image_width/image_height
+	}
+snippet Camera_definition
+	// set viewer's position in the scene
+	camera {
+	// (---camera types---)
+	//  perspective (default) | orthographic | fisheye |
+	//  ultra_wide_angle | omnimax | panoramic | cylinder 1 | spherical
+	
+	  location  <0.0, 1.0, -6.0>   // position of camera <X,Y,Z>
+	  direction 2.0*z              // which way are we looking <X,Y,Z> & zoom
+	//  sky       y                // for tilting the camera
+	  up        y                  // which way is +up <X,Y,Z> (aspect ratio with x)
+	  right x*image_width/image_height
+	                               // which way is +right <X,Y,Z> (aspect ratio with y)
+	  look_at   <0.0, 0.0,  0.0>   // point center of view at this point <X,Y,Z>
+	
+	//  angle 67                   // overrides "direction" with specific angle
+	//  normal { ripples 0.2 }     // perturb the camera lens with a pattern
+	
+	// (---focal blur extras---)
+	// aperture 0.2                // [0...N] larger is narrower depth of field (blurrier)
+	// blur_samples 4              // number of rays per pixel for sampling
+	// focal_point <0,0,0>         // point that is in focus <X,Y,Z>
+	// confidence 0.9              // [0...1] when to move on while sampling (smaller is less accurate)
+	// variance 1/128              // [0...1] how precise to calculate (smaller is more accurate)
+	
+	// (---spherical camera---)
+	// angle 360                   // horizontal field of view (in degrees and...)
+	//       180                   // vertical field of view (...are aspect ratios)
+	}
+	
+	
+	
+snippet cylinder_camera
+	// cylinder lens for axis distorted field of view
+	// 1 is vertical cylinder, fixed viewpoint
+	// 2 is horizontal cylinder, fixed viewpoint
+	// 3 is vertical cylinder, viewpoint moves along the cylinder's axis
+	// 4 is horizontal cylinder, viewpoint moves along the cylinder's axis
+	camera {
+	  cylinder 1            // types 1, 2 ,3, 4
+	  location <0,0,-1>     // position
+	  right x*5             // horizontal aspect or field of view
+	  up y*2                // vertical aspect or field of view
+	  look_at  <0,0,0>      // view
+	}
+snippet fisheye_camera
+	// fisheye lens for wide round field of view (up to 360 degrees)
+	camera {
+	  fisheye
+	  location <0,0,-1>     // position
+	  look_at  <0,0,0>      // view
+	  angle 180             // field
+	}
+snippet focal_blur_camera
+	// focal blur camera
+	camera {
+	  location  <0.0, 2.0, -5.0>
+	  look_at   <0.0, 0.0,  0.0>
+	  right     x*image_width/image_height
+	  aperture 1.0           // [0...N] larger is narrower depth of field (blurrier)
+	  blur_samples 10        // number of rays per pixel for sampling
+	  focal_point <0,1,2>    // point that is in focus <X,Y,Z>
+	  confidence 0.95           // [0...<1] when to move on while sampling (smaller is less accurate)
+	  variance 1/200            // [0...1] how precise to calculate (smaller is more accurate)
+	}
+snippet normal_perturbed_camera
+	// normal perturbed camera
+	camera {
+	  location  <0.0, 2.0, -5.0>
+	  look_at   <0.0, 0.0,  0.0>
+	  right     x*image_width/image_height
+	  normal {
+	   wrinkles 0.2 scale 0.3
+	  }
+	}
+snippet omnimax_camera
+	// omnimax lens for 180 degree equirectangular field of view (angle unused)
+	camera {
+	  omnimax
+	  location <0,0,-1>                    // position
+	  look_at  <0,0,0>                     // view
+	  right    x*image_width/image_height  // aspect
+	}
+snippet orthographic_camera
+	// orthographic projection using parallel camera rays
+	// Could be used to render a planar image map, for example
+	camera {
+	  orthographic
+	  location <0,0,-1>    // position & direction of view
+	  look_at  <0,0,0>
+	  right 1*x            // horizontal size of view
+	  up 1*y               // vertical size of view
+	}
+	/*
+	box {                  // this box fits exactly in view
+	  <-0.5, -0.5, 0>, <0.5, 0.5, 0>
+	  texture { pigment { rgb <1, 0, 1> } }
+	}*/
+	
+snippet panoramic_camera
+	// panoramic lens for wide field of view with less distortion
+	camera {
+	  panoramic
+	  location <0, 0, -1>                  // position
+	  look_at  <0, 0,  0>                  // view
+	  right    x*image_width/image_height  // aspect
+	  angle    120                         // field (greater than 180 degrees possible)
+	}
+snippet perspective_camera
+	// perspective (default, not required) camera
+	camera {
+	  perspective
+	  location  <0, 0, -1>
+	  look_at   <0, 0,  0>
+	  right     x*image_width/image_height  // aspect
+	  // direction z                        // direction and zoom
+	  // angle 67                           // field (overides direction zoom)
+	}
+snippet sky_camera
+	// sky (tilt) camera
+	camera {
+	  location  <0.0, 2.0, -5.0>
+	  sky       <1.0, 0.5,  0.0>        // direction of the camera "sky"
+	  look_at   <0.0, 0.0,  0.0>
+	  right     x*image_width/image_height
+	}
+snippet spherical_camera
+	// spherical lens for sphere field of view (mappable to a sphere)
+	camera {
+	  spherical
+	  location <0,0,0>      // position
+	  look_at  <0,0,1>      // view
+	  angle 360             // horizontal degrees
+	        180             // vertical degrees
+	}
+snippet ultra_wide_angle_camera
+	// ultra_wide_angle lens for wide, rectangular field of view
+	camera {
+	  ultra_wide_angle
+	  location <0, 1, -5>               // position
+	  look_at  <0, 0, 0>                // view
+	  right x*image_width/image_height  // aspect
+	  angle 90                          // field
+	}
+snippet area_light
+	// An area light (creates soft shadows)
+	// WARNING: This special light can significantly slow down rendering times!
+	light_source {
+	  0*x                 // light's position (translated below)
+	  color rgb 1.0       // light's color
+	  area_light
+	  <8, 0, 0> <0, 0, 8> // lights spread out across this distance (x * z)
+	  4, 4                // total number of lights in grid (4x*4z = 16 lights)
+	  adaptive 0          // 0,1,2,3...
+	  jitter              // adds random softening of light
+	  circular            // make the shape of the light circular
+	  orient              // orient light
+	  translate <40, 80, -40>   // <x y z> position of light
+	}
+snippet cylindrical_light
+	// create a point "spotlight" (cylindrical directed) light source
+	light_source {
+	  0*x                     // light's position (translated below)
+	  color rgb <1,1,1>       // light's color
+	  spotlight               // this kind of light source
+	  cylinder                // this variation
+	  translate <40, 80, -40> // <x y z> position of light
+	  point_at <0, 0, 0>      // direction of spotlight
+	  radius 5                // hotspot (inner, in degrees)
+	  tightness 50            // tightness of falloff (1...100) lower is softer, higher is tighter
+	  falloff 8               // intensity falloff radius (outer, in degrees)
+	}
+snippet Light_definition
+	// general light definition
+	light_source {
+	  <10, 10, 10>      // position of the light source
+	  color rgb 1.0     // color of the light
+	  // spotlight
+	  // cylinder
+	  // parallel
+	  // area_light <AXIS1>, <AXIS2>, SIZE1, SIZE2
+	  // (---for spotlight/cylinder---)
+	  // radius FLOAT
+	  // falloff FLOAT
+	  // tightness FLOAT
+	  // point_at <VECTOR>   // for spotlight/cylinder/parallel
+	  // (---for area_light---)
+	  // adaptive FLOAT
+	  // jitter FLOAT
+	  // circular
+	  // orient
+	  // (---other modifiers---)
+	  // looks_like { OBJECT }
+	  // fade_distance FLOAT
+	  // fade_power FLOAT
+	  // media_attenuation BOOL
+	  // media_interaction BOOL
+	  // shadowless
+	}
+	
+	
+snippet light_fading
+	// light_source { ...
+	  // put this inside a light_source to add light fading
+	  fade_distance 10
+	  fade_power 2
+snippet light_group
+	// a light group makes certain light sources only
+	// influencing certain objects
+	light_group {
+	  light_source {          // light sourc(es) of this group
+	    <100, 100, 100>
+	    color rgb y
+	  }
+	  sphere {                // objects illuminated by those light sources
+	    <0, -1, 0>,0.5
+	    pigment { color White }
+	  }
+	  //global_lights         // add this to make all global lights
+	                          // also illuminating this light group
+	}
+snippet looks_like
+	// light_source { ...
+	  // put this inside a light_source to give it a visible appearance
+	  looks_like { sphere { 0*x, 5 pigment { Yellow } } }
+snippet parallel
+	// light_source { ...
+	  // put this inside a light_source to make it parallel
+	  parallel
+	  point_at <1, 0, 0>
+	
+snippet point_light
+	// create a regular point light source
+	light_source {
+	  0*x                  // light's position (translated below)
+	  color rgb <1,1,1>    // light's color
+	  translate <-20, 40, -20>
+	}
+snippet projected_through
+	// light_source { ...
+	  // put this inside a light_source to give the light beam
+	  // the shape of the object
+	  projected_through { object { ... } }
+snippet spotlight
+	// create a point "spotlight" (conical directed) light source
+	light_source {
+	  0*x                     // light's position (translated below)
+	  color rgb <1,1,1>       // light's color
+	  spotlight               // this kind of light source
+	  translate <40, 80, -40> // <x y z> position of light
+	  point_at <0, 0, 0>      // direction of spotlight
+	  radius 5                // hotspot (inner, in degrees)
+	  tightness 50            // tightness of falloff (1...100) lower is softer, higher is tighter
+	  falloff 8               // intensity falloff radius (outer, in degrees)
+	}
+snippet bicubic_patch
+	// 3D curved FINITE (no CSG) surface created from a mesh of triangles
+	bicubic_patch {
+	  type 1 // patch_type (0..1)
+	  // 0 = Bezier patch, just store the triangular vertices
+	  // 1 = Bezier patch, store all plane equations defined by
+	  //       the triangulation of the patch into sub patches
+	  //       (faster, uses more memory)
+	   flatness 0.1 // flatness value
+	  //       flatness_value = 0.0 to 1.0, with higher values
+	  //        giving flatter, less smooth results
+	  u_steps 3 // # of triangles to subdivide (1-5)
+	  v_steps 3 // # of triangles to subdivide (1-5)
+	  <0, 0, 2> <1, 0, 0> <2, 0, 0> <3, 0, -2>
+	  <0, 1, 0> <1, 1, 0> <2, 1, 0> <3, 1,  0>
+	  <0, 2, 0> <1, 2, 0> <2, 2, 0> <3, 2,  0>
+	  <0, 3, 2> <1, 3, 0> <2, 3, 0> <3, 3, -2>
+	}
+snippet blob
+	// create a smooth blobby shape
+	#declare RadiusVal   = 1.0; // (0 < RadiusVal) outer sphere of influence on other components
+	#declare StrengthVal = 1.0; // (+ or -) strength of component's radiating density
+	
+	blob {
+	  // threshold (0.0 < threshold <= StrengthVal) surface falloff threshold #
+	  threshold 0.6
+	  sphere { < 0.75,   0,    0>, RadiusVal, StrengthVal }
+	  sphere { <-0.375,  0.65, 0>, RadiusVal, StrengthVal }
+	  sphere { <-0.375, -0.65, 0>, RadiusVal, StrengthVal }
+	  cylinder { -z, +z, RadiusVal, StrengthVal }
+	  // [sturm]
+	  scale 2
+	}
+snippet box
+	// create a box that extends between the 2 specified points
+	box {
+	  <-1, -1, -1>  // one corner position <X1 Y1 Z1>
+	  < 1,  1,  1>  // other corner position <X2 Y2 Z2>
+	}
+snippet cone
+	// clipped conical shape
+	// cone { <END1>, RADIUS1, <END2>, RADIUS2 [open] }
+	// Where <END1> and <END2> are vectors defining the x,y,z
+	// coordinates of the center of each end of the cone
+	// and RADIUS1 and RADIUS2 are float values for the radii
+	// of those ends.  open, if present, cone is hollow, else capped
+	cone {
+	  1*y,  0.0,
+	  -1*y, 1.0
+	  // open
+	}
+snippet cubic
+	// create a 3rd order infinite polynomial surface
+	cubic {
+	  <
+	// x^3,      x^2y,     x^2z,     x^2,
+	   1,        0,        0,        0,
+	// xy^2,     xyz,      xy,       xz^2,
+	   0,        1,        0,        0,
+	// xz,       x,        y^3,      y^2z,
+	   0,        0,        1,        0,
+	// y^2,      yz^2,     yz,       y,
+	   0,        0,        0,        1,
+	// z^3,      z^2,      z,        C
+	   0,        0,        0,        1
+	  >
+	 // sturm // optional, slower but reduces speckles
+	}
+	
+snippet cylinder
+	// Capped Cylinder, closed [or open ended]
+	// cylinder { <END1>, <END2>, RADIUS [open] }
+	//  END1 = coord of one end of cylinder
+	//  END2 = coord of other end
+	// RADIUS = size of cylinder
+	// open = if present, cylinder is hollow, else capped
+	cylinder {
+	  0*x,  3*x,  1
+	  // open
+	}
+snippet disc
+	// flat circular FINITE (no CSG) shape, center hole cutout is optional
+	disc {
+	  <0, 1, 0>  // center position
+	  z,         // normal vector
+	  1.0,       // outer radius
+	  0.2        // optional hole radius
+	}
+snippet fractal1
+	// create a 3-D slice of a 4-D julia fractal object
+	julia_fractal {
+	  <-0.083,0.0,-0.83,-0.025>
+	  quaternion // hypercomplex
+	  cube // TYPE: sqr | cube | exp | reciprocal | sin | asin | sinh | asinh | cos | acos |
+	       //       cosh | acosh | tan | atan | tanh | atanh | log | pwr( X_Val, Y_Val )
+	  max_iteration 8
+	  precision 20
+	  // slice <0,0,0,1>,0
+	 }
+snippet height_field+imagemap
+	// uses image color index as height, extends along X-Z axes
+	// from <0 0 0> to <1 1 1>
+	height_field {
+	  png "plasma3.png"
+	  texture {
+	    pigment {
+	      image_map { png "plasma3.png" map_type 0 interpolate 2 once }
+	      rotate x*90 // lay X-Y image map down onto X-Z height field plane
+	    }
+	  }
+	}
+snippet height_field
+	// uses image color index as height, extends along X-Z axes
+	// from <0 0 0> to <1 1 1>
+	height_field {
+	  png               // the file type to read (tga/pot/pgm/ppm/png/sys)
+	  "plasma3.png"     // the file name to read
+	//  [smooth]        // smooth surface normal
+	//  [water_level N] // truncate/clip below N (0.0 ... 1.0)
+	//  texture {...}
+	//  translate VECTOR | rotate VECTOR | scale VECTOR
+	}
+snippet isosurface
+	// create a isosurface object - the equipotential surface
+	// of a 3D math function f(x, y, z)
+	#declare fn_X = function(x,y,z) { x*x + y*y - 1 }  // cylinder function
+	isosurface {
+	  function { x*x + y*y - 1 }          // function (can also contain declared functions
+	  //function { fn_X(x, y, z) }        // alternative declared function
+	  contained_by { box { -1.2, 1.2 } }  // container shape
+	  //threshold 0.0                     // optional threshold value for isosurface [0.0]
+	  accuracy 0.001                      // accuracy of calculation [0.001]
+	  max_gradient 4                      // maximum gradient the function can have [1.1]
+	  //evaluate 5, 1.2, 0.95             // evaluate the maximum gradient
+	  //max_trace 1                       // maybe increase for use in CSG [1]
+	  //all_intersections                 // alternative to 'max_trace'
+	  //open                              // remove visible container surface
+	}
+snippet lathe
+	// rotate a 2-D outline of points around the Y axis to create a 3-D shape
+	lathe {
+	  linear_spline // linear_spline | quadratic_spline | cubic_spline
+	  5, // number of points
+	  <2, 0>, <3, 0>, <3, 5>, <2, 5>, <2, 0> // the list of <u,v> points
+	}
+snippet mesh2
+	// new more compact mesh FINITE (no CSG) shape
+	mesh2 {
+	  vertex_vectors {
+	    number_of_vertices,
+	    <vertex1>, <vertex2>, ...
+	  }
+	  normal_vectors {
+	    number_of_normals,
+	    <normal1>, <normal2>, ...
+	  }
+	  uv_vectors {
+	    number_of_uv_vectors,
+	    <uv_vect1>, <uv_vect2>, ...
+	  }
+	  texture_list {
+	    number_of_textures,
+	    texture { Texture1 },
+	    texture { Texture2 }, ...
+	  }
+	  face_indices {
+	    number_of_faces,
+	    <index_a, index_b, index_c> [,texture_index [, texture_index, texture_index]],
+	    <index_d, index_e, index_f> [,texture_index [, texture_index, texture_index]],
+	    ...
+	  }
+	  normal_indices {
+	    number_of_faces,
+	    <index_a, index_b, index_c>,
+	    <index_d, index_e, index_f>,
+	    ...
+	  }
+	  uv_indices {
+	    number_of_faces,
+	    <index_a, index_b, index_c>,
+	    <index_d, index_e, index_f>,
+	    ...
+	  }
+	  [object modifiers]
+	}
+snippet mesh
+	// triangle or smooth-triangle mesh FINITE (no CSG) shape
+	// NOTE: Each triangle can be independently textured,
+	//       remaining triangles get texture at bottom
+	//       For the individual triangles you have to use declared textures
+	
+	#declare T1=texture { pigment { color rgb x } } 
+	#declare T2=texture { pigment { color rgb y } } 
+	#declare T3=texture { pigment { color rgb z } } 
+	
+	mesh { // box example here 
+	  /* top side */
+	  triangle { <-2,  2, -2>, < 2,  2, -2>, < 2,  2,  2> }
+	  triangle { <-2,  2, -2>, <-2,  2,  2>, < 2,  2,  2> texture { T1 } }
+	  /* bottom side */
+	  triangle { <-2, -2, -2>, < 2, -2, -2>, < 2, -2,  2> }
+	  triangle { <-2, -2, -2>, <-2, -2,  2>, < 2, -2,  2> }
+	  /* left side */
+	  triangle { <-2, -2, -2>, <-2, -2,  2>, <-2,  2,  2> }
+	  triangle { <-2, -2, -2>, <-2,  2, -2>, <-2,  2,  2> }
+	  /* right side */
+	  triangle { < 2, -2, -2>, < 2, -2,  2>, < 2,  2,  2> texture { T2 } }
+	  triangle { < 2, -2, -2>, < 2,  2, -2>, < 2,  2,  2> texture { T2 } }
+	  /* front side */
+	  triangle { <-2, -2, -2>, < 2, -2, -2>, <-2,  2, -2> texture { T3 } }
+	  triangle { <-2,  2, -2>, < 2,  2, -2>, < 2, -2, -2> texture { T3 } }
+	  /* back side */
+	  triangle { <-2, -2,  2>, < 2, -2,  2>, <-2,  2,  2> }
+	  triangle { <-2,  2,  2>, < 2,  2,  2>, < 2, -2,  2> }
+	  texture
+	  { // remaining triangles get this texture
+	    pigment { color rgb<0.9, 0.9, 0.9> }
+	    finish { ambient 0.2 diffuse 0.7 }
+	  }
+	}
+snippet object
+	// general purpose enclosing wrapper for a predefined shape
+	#declare MyShape = box {-1,1}    // declare the shape
+	object { MyShape }               // create an actual object with that shape
+	object { MyShape translate 3*x}  // create another object with that shape
+snippet parametric
+	// parametric object
+	// not yet worked out
+	parametric {
+	  function { u*v*sin (15*v) },            // x-axis
+	  function { v },                         // y-axis
+	  function { u*v*cos (15*v) }             // z-axis
+	  <0,0>, <1,1>
+	  // contained_by { sphere { 0,1 } } // texturing problem, use box instead to see!
+	  contained_by { box { <-1,-1,-1>, <1,1,1> } }
+	  // max_gradient 2
+	  accuracy 0.005        // 0.001 default, lower slower but better
+	  precompute 15 x,y,z   // precompute [x,y,z] normally gives faster rendering (<=20)
+	
+	  rotate 180*x
+	}
+	
+snippet plane
+	// An infinite planar surface
+	// plane {<A, B, C>, D } where: A*x + B*y + C*z = D
+	plane {
+	  y, // <X Y Z> unit surface normal, vector points "away from surface"
+	  -1.0 // distance from the origin in the direction of the surface normal
+	  hollow on // has an inside pigment?
+	}
+snippet polygon
+	// arbitrary X,Y FINITE (no CSG) shape
+	// A complex example for a polygon is the letter "P":
+	polygon {
+	  12, // number of points
+	  <0, 0>, <0, 6>, <4, 6>, <4, 3>, <1, 3>, <1, 0>, <0, 0>, // list of <u,v> points
+	  <1, 4>, <1, 5>, <3, 5>, <3, 4>, <1, 4>
+	}
+snippet polynomial
+	// create an Nth order infinite polynomial surface
+	// poly { N <a,b,c...> [sturm] }
+	// N = order of poly, M terms where M = (N+1)*(N+2)*(N+3)/6
+	poly {
+	  5, // order of polynomial (2...7)
+	  <
+	// x^5,        x^4y,       x^4z,       x^4,
+	   0,          0,          0,          0,
+	// x^3y^2,     x^3yz,      x^3y,       x^3z^2,
+	   0,          0,          0,          0,
+	// x^3z,       x^3,        x^2y^3,     x^2y^2z,
+	   0,          0,          0,          0,
+	// x^2y^2,     x^2yz^2,    x^2yz,      x^2y,
+	   0,          0,          0,          0,
+	// x^2z^3,     x^2z^2,     x^2z,       x^2,
+	   0,          0,          0,          0,
+	// xy^4,       xy^3z,      xy^3,       xy^2z^2,
+	   0,          0,          0,          0,
+	// xy^2z,      xy^2,       xyz^3,      xyz^2,
+	   0,          0,          0,          0,
+	// xyz,        xy,         xz^4,       xz^3,
+	   0,          0,          0,          0,
+	// xz^2,       xz,         x,          y^5,
+	   0,          0,          0,          0,
+	// y^4z,       y^4,        y^3z^2,     y^3z,
+	   0,          0,          0,          0,
+	// y^3,        y^2z^3,     y^2z^2,     y^2z,
+	   0,          0,          0,          0,
+	// y^2,        yz^4,       yz^3,       yz^2,
+	   0,          0,          0,          0,
+	// yz,         y,          z^5,        z^4,
+	   0,          0,          0,          0,
+	// z^3,        z^2,        z,          C           
+	   0,          0,          0,          0
+	  >
+	  sturm // optional, slower but reduces speckles
+	}
+snippet prism
+	// extrude a closed 2-D shape along an axis
+	prism {                                
+	  linear_sweep  // or conic_sweep for tapering to a point
+	  linear_spline // linear_spline | quadratic_spline | cubic_spline | bezier_spline 
+	  -0.5,         // height 1
+	   0.5,         // height 2
+	  10,           // number of points
+	  // (--- the <u,v> points ---)
+	  < 0.2, -1.0>, < 0.2,  0.2>, < 1.0, -0.2>, < 1.0,  0.2>, < 0.2,  1.0>, 
+	  <-0.2,  1.0>, <-1.0,  0.2>, <-1.0, -0.2>, <-0.2,  0.2>, <-0.2, -1.0>
+	  // , <0.2,   0.2> // match 2nd point, if quadratic_spline add this
+	  // , <0.2,  -1.0> // match 1st point, if cubic_spline add this as well as the other
+	  // [open]
+	  // [sturm]
+	}
+snippet quadric
+	// create a quadratic (2nd order) infinite polynomial surface
+	quadric {
+	  <0, 1, 1> //  A x^2  + B y^2  + C z^2  +
+	  <1, 0, 0> //  D xy   + E xz   + F yz   +
+	  <0, 3, 0> //  G x    + H y    + I z    +
+	  2         //  J
+	}
+snippet quartic
+	// create a 4th order infinite polynomial surface
+	quartic {
+	<
+	// x^4,        x^3y,       x^3z,       x^3,        x^2y^2,
+	   0,          0,          0,          0,          0,
+	// x^2yz,      x^2y,       x^2z^2,     x^2z,       x^2,
+	   0,          0,          0,          0,          0,
+	// xy^3,       xy^2z,      xy^2,       xyz^2,      xyz,
+	   0,          0,          0,          0,          0,
+	// xy,         xz^3,       xz^2,       xz,         x,
+	   0,          0,          0,          0,          0,
+	// y^4,        y^3z,       y^3,        y^2z^2,     y^2z,
+	   0,          0,          0,          0,          0,
+	// y^2,        yz^3,       yz^2,       yz,         y,
+	   0,          0,          0,          0,          0,
+	// z^4,        z^3,        z^2,        z,          C           
+	   0,          0,          0,          0,          0
+	>
+	  sturm // optional, slower but reduces speckles
+	}
+snippet smooth_triangle
+	// rounded-surface FINITE (no CSG) triangle shape
+	smooth_triangle {
+	  <  0,  30, 0> <0,  0.7071, -0.7071>  // <Vertex1>  <SurfaceNormal1>
+	  < 40, -20, 0> <0, -0.8664, -0.5>     // <Vertex2>  <SurfaceNormal2>
+	  <  0,   0, 0> <0, -0.5,    -0.8664>  // <Vertex3>  <SurfaceNormal3>
+	}
+snippet sphere_sweep
+	// create a curved tube object translating a sphere along a certain path
+	sphere_sweep {
+	  linear_spline                 // linear curve
+	  //cubic_spline                // alternative spline curves
+	  //b_spline
+	  4,                            // number of specified sphere positions
+	  <-5, -5, 0>, 1                // position, radius
+	  <-5, 5, 0>, 1                 // ...
+	  < 5, -5, 0>, 1
+	  < 5, 5, 0>, 1
+	  //tolerance 0.001             // optional
+	}
+	
+snippet sphere
+	// create a sphere shape
+	sphere {
+	  <0, 1, 0> // center of sphere <X Y Z>
+	  0.5       // radius of sphere
+	  // scale <1,2,1> // <= Note: Spheres can become ellipses by uneven scaling
+	}
+snippet superellipsoid
+	// create a superquadric ellipsoid shape
+	// As the exponents approach 1.0, the edges get rounder
+	superellipsoid {
+	  <0.5,  // east-west exponent (0.0 ... 1.0)
+	  1.0>   // north-south exponent (0.0 ... 1.0)
+	}
+snippet surface_of_revolution
+	// create a Surface of Revolution shape (like lathe, but faster)
+	sor {
+	    7, // # of points
+	    <0.000000, 0.000000> // list of <u,v> points
+	    <0.118143, 0.000000>
+	    <0.620253, 0.540084>
+	    <0.210970, 0.827004>
+	    <0.194093, 0.962025>
+	    <0.286920, 1.000000>
+	    <0.468354, 1.033755>
+	    // [open]
+	}
+snippet text
+	// create a TrueType text shape
+	text {
+	  ttf             // font type (only TrueType format for now)
+	  "crystal.ttf",  // Microsoft Windows-format TrueType font file name
+	  "POV-Ray",      // the string to create
+	  2,              // the extrusion depth
+	  0               // inter-character spacing
+	}
+snippet torus
+	// torus {MAJOR, MINOR} // (in the X-Z plane)
+	// MAJOR = float value giving the major radius
+	// MINOR = float specifying the minor radius
+	// The major radius extends from the center of the hole
+	// to the mid-line of the rim while the minor radius
+	// is the radius of the cross-section of the rim.
+	torus {
+	  0.8,
+	  0.2
+	}
+snippet triangle
+	// triangular FINITE (no CSG) shape (vertices are endpoints)
+	triangle {
+	  <-1,  0, -1>,  // <Vertex1>
+	  < 1,  0, -1>,  // <Vertex2>
+	  < 0,  0,  1>   // <Vertex3>
+	}
+snippet quick_box
+	box { <-1, -1, -1>, <1, 1, 1> }
+snippet quick_cone
+	cone { <0, 1, 0>, 0.0, <0, -1, 0>, 1.0 }
+snippet quick_cylinder
+	cylinder { <0, 0, 0>, <3, 0, 0>, 1 }
+snippet quick_disc
+	disc { <0, 0, 0>, z, 1.0, 0.2 }
+snippet quick_plane
+	plane { y, -1.0 }
+snippet quick_sphere
+	sphere { <0, 1, 0>, 0.5 }
+snippet quick_superellipsoid
+	superellipsoid { <0.5, 1.0> }
+snippet quick_torus
+	torus { 0.8, 0.2 }
+snippet bounded_by
+	// set an outer proposed boundary for parent object(s)
+	// allows the ray-tracer to do a quick check on the Bounding Shape,
+	// and if outside, it skips checking this object, which can speed
+	// up overall rendering of complex shapes.  Note that this
+	// is not a 100% guaranteed clipping shape... use the
+	// clipped_by statement for that.
+	bounded_by { box { -(x+y+z) +(x+y+z) }
+snippet clipped_by
+	// set clipping shape for parent object.
+	// (parent shape will not extend beyond ClipShape bounds)
+	clipped_by { sphere { 0*x, 1.0 } }
+snippet double_illuminate
+	// illuminate also the shadow side of a surface
+	  double_illuminate
+snippet hollow
+	// allow atmosphere inside shape
+	  hollow
+snippet no_image
+	// show reflections, but not the object directly
+	  no_image
+snippet no_reflection
+	// show no reflections of the object
+	  no_reflection
+	
+snippet no_shadow
+	// give object no shadow
+	  no_shadow
+snippet open
+	// some objects (cylinder, cone, prism, etc.) can have their ends open
+	  open
+snippet sturm
+	// use slower but more accurate root solver.
+	// can be applied to:
+	//    -blob
+	//    -cubic
+	//    -lathe (only with quadratic splines)
+	//    -poly
+	//    -prism (only with cubic splines)
+	//    -quartic
+	//    -sor
+	  sturm
+snippet cutaway_textures
+	// cutaway_textures can be useful for texturing differences
+	difference {
+	  sphere {
+	    0, 1
+	    texture { pigment { color Red } }
+	  }
+	  box { 0, 1 }
+	  // the visible parts of this object will get the texture of the sphere
+	  cutaway_textures
+	}
+snippet difference
+	// CSG difference, subtract intersections of shapes 2...N from Shape1
+	difference {
+	  Shape1 {...} // Start with this shape
+	  Shape2 {...} // This will be "cut out" of Shape1
+	  ShapeN {...} // This will be "cut out" of Shape1
+	}
+snippet intersection
+	// CSG intersection, the common space where all the shapes meet
+	intersection {
+	  Shape1 {...}
+	  Shape2 {...}
+	  ShapeN {...}
+	}
+snippet inverse
+	// flip an object's inside and outside for intersect/difference
+	intersection {
+	  Shape1 {... inverse }
+	  Shape2 {...}
+	}
+snippet merge
+	// CSG merge, merge all of shapes 1...N
+	// like 'union', but melted together so no overlap seam lines inside
+	merge {
+	  Shape1 {...}
+	  Shape2 {...}
+	  ShapeN {...}
+	}
+snippet union
+	// CSG union, add all of shapes 1...N
+	union {
+	  Shape1 {...}
+	  Shape2 {...}
+	  ShapeN {...}
+	}
+snippet interior
+	// describes inside of a shape (similar to texture, but for inside, not surface)
+	  interior {
+	    ior 1.31              // index of refraction
+	    dispersion            // needs a color_map in the light source
+	    dispersion_samples 7  // accuracy of calculation (2..100) [7]
+	    caustics 1.0          // faked caustics (0..1)
+	    fade_power 1001       // values larger than 1000 give realistic exponential attenuation
+	    fade_distance 3       // distance where light reaches half intensity
+	    fade_color <0, .3, 0> // color for fading
+	    media {..media items..}
+	  }
+snippet material
+	// material {} is a wrapper for interior and texture
+	// you can declare it like texture and interior too
+	// Note that it has nothing to do with material_map
+	material {
+	  texture {
+	    pigment { color rgbt <0.5, 0.5, 0.7, 0.5> }
+	    finish { diffuse 0.2 specular 0.6 }
+	  }
+	  interior {
+	    ior 1.5
+	  }
+	}
+snippet media
+	// general media statement
+	// put in interior or in scene file for atmospheric media
+	media {
+	  // (---general values---)
+	  intervals 10           // number of intervals used for sampling [10]
+	  samples 1,1            // minimum and maximum number of samples taken per interval [1,1]
+	  confidence 0.9         // statistic parameter higher->better quality [0.9]
+	  variance 1.0/128       // statistic parameter lower->better quality [1.0/128]
+	  ratio 0.9              // distribution between lit and unlit areas [0.9]
+	  // (---media types---)
+	  absorption rgb<0,1,0>  // absorbing media, block light of specified color
+	  //emission rgb<0,1,0>  // emitting media, emit light of specified color
+	  /*
+	  scattering {           // scattering media
+	    1,                   // scattering type 1=isotropic; 2=Mie haze; 3=Mie murky
+	                         // 4=Rayleigh; 5=Henyey-Greenstein
+	    rgb<0,1,0>           // color
+	    //eccentricity 0.25  // eccentricity for type 5 [0.0]
+	    //extinction 1.0     // for balancing amount of absorption [1.0]
+	  }*/
+	  // (---method---)
+	  //method 1             // old Povray 3.1 method
+	  //method 2             // new method with even distribution
+	  method 3               // adaptive sampling
+	  //aa_threshold 0.1     // accuracy threshold for method 3 [0.1]
+	  //aa_level 4           // maximum recursion depth for method 3 [4]
+	  //jitter 0.5           // randomness for method 2&3
+	  // (---density---)
+	  /*
+	  density {
+	    spherical            // any pattern
+	    color_map {...}      // color_map
+	    //density_map {...}  // or alternatively density_map
+	  }*/
+	
+	  // translate etc.
+	}
+	
+snippet color_map
+	// texture pigment {} attribute
+	// create a smooth color gradation map
+	color_map {
+	  //  [ END_VAL color red R green G blue B filter F transmit T]
+	  [ 0.1  color red 0.0 green 0.0 blue 0.0]
+	  [ 0.3  color red 0.8 green 0.4 blue 0.2]
+	  [ 0.5  color red 0.0 green 0.0 blue 0.0]
+	  [ 0.7  color red 0.0 green 0.0 blue 0.8 filter 0.5]
+	  [ 1.0  color red 0.8 green 0.8 blue 0.8 filter 1.0]
+	  // (---alternative form---)
+	  //[ 1.0  color rgbf <0.8, 0.8, 0.8, 1.0> ]
+	} // color_map
+snippet color
+	// texture pigment attribute
+	// RGB values can range from 0.0 (dark) to 1.0 (saturated)
+	  color red 0.5 green 0.5 blue 0.5 // filter 0.8
+	// (---alternative form---)
+	  //color rgb <0.5, 0.5, 0.5>
+	  //color rgbf <0.5, 0.5, 0.5, 0.8>
+snippet finish_properties
+	// control an object's surface finish
+	  finish {
+	    ambient 0.1          // ambient surface reflection color [0.1]
+	    // (---diffuse lighting---)
+	    diffuse 0.6          // amount [0.6]
+	    brilliance 1.0       // tightness of diffuse illumination [1.0]
+	    // (---phong highlight---)
+	    //phong 0.5          // amount [0.0]
+	    //phong_size 40      // (1.0..250+) (dull->highly polished) [40]
+	    // (---specular highlight---)
+	    //specular 0.5       // amount [0.0]
+	    //roughness 0.05     // (~1.0..0.0005) (dull->highly polished) [0.05]
+	    // (---phong and specular---)
+	    //metallic [Amount]  // give highlight color of surface
+	    // (---reflection---)
+	    /*
+	    reflection {
+	      //0.0                      // minimal reflection value (for variable reflection)
+	      1.0                        // reflection amount (maximum for variable reflection)
+	      //fresnel on               // realistic variable reflection
+	      //falloff 1.0              // falloff exponent for variable reflection
+	      //exponent 1.0             // influence surface reflection characteristic
+	      //metallic 1.0             // tint reflection in surface color
+	    }*/
+	    //conserve_energy            // more realistic
+	    // (---others---)
+	    //crand 0.2                  // randomly speckle the surface [0.0]
+	    /*
+	    irid {               // Iridescence (Newton's thin film interference)
+	      0.25               // intensity
+	      //thickness 0.0    // film's thickness [0.0]
+	      //turbulence 0.3   // film's thickness turbulence
+	    }*/
+	  } // finish
+	
+snippet function_image_type
+	// use this for example in a heightfield or an image_map
+	  function
+	  50, 50 {            // resolution of generated image
+	    pattern {         // user defined function
+	      agate            
+	    }
+	  }
+	
+snippet interior_texture
+	// with interior_texture you can give the interior surface
+	// of an object a different texture
+	object {
+	  sphere { 0, 1 }
+	  texture { pigment { color Red } }
+	  interior_texture { pigment { color Blue } }
+	}
+snippet normal_component
+	// texture component
+	  normal {
+	    bumps 0.5         // any pattern optionally followed by an intensity value [0.5]
+	    //bump_size 2.0   // optional
+	    //accuracy 0.02   // changes the scale for normal calculation [0.02]
+	    //scale 0.3       // any transformations
+	  }
+snippet pigment_component
+	// texture component
+	  pigment {
+	    color rgb <0.7,0.5,0.3>     // solid color pigment
+	    /*
+	    agate                       // patterned pigment
+	    color_map {
+	      [0.0 color Green ]
+	      [1.0 color Blue ]
+	    } */
+	  }
+snippet quick_color_attribute
+	// texture pigment attribute
+	quick_color green 1 // low-quality quick-render color
+snippet texture_example
+	texture {
+	  pigment {          // (---surface color---)
+	    marble           // some pattern
+	    color_map {      // color map
+	      [0.1 color red 1]
+	      [0.5 color rgbf 1]
+	    }
+	    turbulence 0.5   // some turbulence
+	    scale <1,3,1>    // transformations
+	  }
+	  normal {           // (---surface bumpiness---)
+	    marble 0.3       // some pattern (and intensity)
+	    turbulence 0.5   // some turbulence
+	    scale <1,3,1>    // transformations
+	  }
+	  finish {           // (---surface finish---)
+	    ambient 0.2
+	    specular 0.6     // shiny
+	  }
+	}
+snippet Texture_Maps/bump_map_normal
+	// texture normal {} attribute
+	// create a texture that has a bumpiness corresponding to color index
+	// image maps into X-Y plane from <0,0,0> to <1,1,0>
+	bump_map { // uses image color or index as bumpiness
+	  png "plasma3.png" // the file to read (iff/tga/gif/png/jpeg/tiff/sys)
+	  map_type 0        // 0=planar, 1=spherical, 2=cylindrical, 5=torus
+	  interpolate 2     // 0=none, 1=linear, 2=bilinear, 4=normalized distance
+	  // once           // for no repetitive tiling
+	  // [use_color | use_index]
+	  bump_size 0.5     // 0...3
+	} // bump_map
+snippet Texture_Maps/image_map_pigment
+	// texture pigment {} attribute
+	// create a texture that lays an image's colors onto a surface
+	// image maps into X-Y plane from <0,0,0> to <1,1,0>
+	image_map {
+	  png "plasma3.png" // the file to read (iff/tga/gif/png/jpeg/tiff/sys)
+	  map_type 0        // 0=planar, 1=spherical, 2=cylindrical, 5=torus
+	  interpolate 2     // 0=none, 1=linear, 2=bilinear, 4=normalized distance
+	  // once           // for no repetitive tiling
+	  // [filter N V]   // N=all or color index # (0...N), V= value (0.0...1.0)
+	  // [transmit N V] // N=all or color index # (0...N), V= value (0.0...1.0)
+	  // [use_color | use_index]
+	} // image_map
+snippet Texture_Maps/material_map_texture
+	// texture attribute
+	// create a texture that maps different textures onto different color indexes
+	// image maps into X-Y plane from <0,0,0> to <1,1,0>
+	material_map {
+	  png "plasma3.png" // the file to read (iff/tga/gif/png/jpeg/tiff/sys)
+	  map_type 0        // 0=planar, 1=spherical, 2=cylindrical, 5=torus
+	  interpolate 2     // 0=none, 1=linear, 2=bilinear, 4=normalized distance
+	  // once           // for no repetitive tiling
+	  texture { pigment {wood} }     // texture for color index # 0
+	  texture { pigment {granite} }  // texture for color index # 1
+	  texture { pigment {agate} }    // texture for color index # 2
+	  // etc...
+	} // material_map
+snippet Texture_Maps/tiles_texture
+	// texture component
+	// create a tiled texture, alternates between 2 full textures
+	tiles {
+	  texture {   // full texture of tile #1
+	    pigment { agate scale 0.3 }
+	    finish { ambient 0.2 }
+	  }
+	  tile2
+	  texture {   // full texture of tile #2
+	    pigment { granite }
+	    finish { specular 0.3 reflection 0.2 }
+	  }
+	}
+snippet triangle_texture_interpolation
+	// interpolate the triangle's texture between 3
+	// specified textures for the 3 vertices
+	mesh {
+	  triangle {
+	    <-1,  0, -1>, < 1,  0, -1>, < 0,  0,  1>    // vertices
+	    texture_list {
+	      Texture_01           // 3 previously declared textures
+	      Texture_02
+	      Texture_03
+	    }
+	  }
+	}
+snippet uv_mapping
+	// sample for uv_mapping with a bicubic patch
+	// uv_mapping can also be used for:
+	// - mesh, mesh2
+	// - lathe
+	// - sor
+	// - sphere
+	// - box
+	bicubic_patch {
+	  type 0
+	  flatness 0.01
+	  u_steps 4
+	  v_steps 4
+	  <0, 0, 2>, <1, 0, 0>, <2, 0, 0>, <3, 0, -2>,
+	  <0, 1  0>, <1, 1, 0>, <2, 1, 0>, <3, 1,  0>,
+	  <0, 2, 0>, <1, 2, 0>, <2, 2, 0>, <3, 2,  0>,
+	  <0, 3, 2>, <1, 3, 0>, <2, 3, 0>, <3, 3, -2>
+	
+	  uv_mapping
+	
+	  texture {
+	    pigment {
+	      checker
+	      color Red
+	      color Blue
+	      scale 0.1
+	    }
+	    finish { specular 0.5 }
+	  }
+	}
+snippet agate
+	// pattern for use in texture/pigment/normal/density
+	  agate            // use an agate-like texture
+	  //agate 0.5      // for use with normal{} (0...1 or more)
+	  agate_turb 0.3   // can alter turbulence [1.0]
+snippet average
+	// average pattern averaging several pigments
+	// can also be used for texture_map, density_map, or normal_map
+	  pigment {
+	    average
+	    pigment_map {
+	      [1.0  Pigment_1]     // weighting 1.0
+	      [0.5  Pigment_2]     // weighting 0.5
+	    }
+	  }
+snippet boxed
+	// pattern for use in texture/pigment/normal/density
+	// originally designed for use with media density
+	  boxed     // box shaped gradient around origin
+snippet bozo
+	// pattern for use in texture/pigment/normal/density
+	  bozo              // very smooth, random noise function
+	  //bozo 0.5        // for use with normal{} (0...1 or more)
+	  //turbulence 0.3  // turbulence often useful
+snippet brick
+	// solid pattern for use in texture/pigment/normal(/density)
+	  // brick pattern generates a brick wall like structure
+	  brick      
+	  color Gray,          // color of mortar
+	  color Red            // color of brick
+	  brick_size <2,1,1>   // size of brick    (optional)
+	  mortar     0.2       // width of mortar  (optional)
+snippet bumps
+	// pattern for use in texture/pigment/normal/density
+	// bumps is identical to bozo when used in pigment/density
+	// especially suited for normal {}
+	  bumps 0.5    // bumpy surface (0...1 or more)
+	  //bumps      // for use with pigment{}
+snippet cells
+	// pattern for use in texture/pigment/normal/density
+	  cells            // random value cube cells
+	  //cells 0.5      // for use with normal{} (0...1 or more)
+snippet checker
+	// solid pattern for use in texture/pigment/normal(/density)
+	// cube checker pattern, alternates color1 and color2
+	  checker
+	    color rgb <1, 1, 1>,
+	    color rgb <0, 1, 0>
+snippet crackle
+	// pattern for use in texture/pigment/normal/density
+	   crackle          // crackled pattern
+	   //crackle 0.5    // for use with normal{} (0...1 or more)
+	   // (---additional parameters---)
+	   //form <-1,1,0>
+	   //metric 2
+	   //offset 0.0
+	   //solid
+snippet cylindrical
+	// pattern for use in texture/pigment/normal/density
+	// originally designed for use with media density
+	  cylindrical   // cylinder shaped gradient along the Y-axis
+snippet density_file
+	// pattern for use in texture/pigment/normal/density
+	  density_file df3 "spiral.df3"         // 3D raster file (df3) pattern
+	  //density_file df3 "spiral.df3", 0.5  // for use with normal{} (0...1 or more)
+	  //interpolate 1                       // optional interpolation
+snippet dents
+	// pattern for use in texture/pigment/normal/density
+	// especially suited for normal {}
+	  dents 0.6    // dented surface (0...1 or more)
+	  //dents      // for use with pigment{}
+snippet facets
+	// pattern for use in normal {}
+	// not usable in pigments
+	  facets          // generates facets on the surface
+	  coords 1.0      // for flat surfaces
+	  //size 1.0      // for curved surfaces
+	
+snippet fractal2
+	// pattern for use in texture/pigment/normal/density
+	// various types of fractals
+	  // (---mandelbrot---)
+	  mandel 50               // number of iterations
+	         //2,             // optional exponent (2..4) [2]
+	  // (---julia---)
+	  julia <0.5,0.8>,        // complex number (2d vector)
+	        50                // number of iterations
+	        //2,              // optional exponent (2..4) [2]
+	  // (---magnet mandel---)
+	  magnet 1                // type (1 or 2)
+	   mandel 50              // number of iterations
+	  // (---magnet julia---)
+	  magnet 1                // type (1 or 2)
+	   julia <0.5,0.8>,       // complex number (2d vector)
+	         50               // number of iterations
+	
+	  //exterior 1, 1         // optional: special handling of exterior
+	  //interior 0, 1         // optional: special handling of interior
+	
+snippet function
+	// pattern for use in texture/pigment/normal/density
+	// function pattern using a user defined function
+	  #declare fn_X = function(x,y,z) { z + x*x + y*y }  // parabolid function
+	  function { fn_X(x, y, z) }
+	  //function { fn_X(x, y, z) } 0.5  // for use with normal{} (0...1 or more)
+	
+snippet gradient
+	// pattern for use in texture/pigment/normal/density
+	  gradient y         // specify gradient direction vector
+	  //gradient y, 0.5  // for use with normal{} (0...1 or more)
+snippet granite
+	// pattern for use in texture/pigment/normal/density
+	  granite        // create a granite-like texture
+	  //granite 0.5  // for use with normal{} (0...1 or more)
+snippet hexagon
+	// solid pattern for use in texture/pigment/normal(/density)
+	// create a hexagonal pattern texture with 3 colors
+	// hexagons are in the X-Z plane, extending infinitely in Y plane
+	  hexagon
+	    color blue 1,
+	    color red 1,
+	    color green 1
+snippet image_pattern
+	// pattern for use in texture/pigment/normal/density
+	// takes the color of an image file to calculate the pattern value
+	  image_pattern {
+	    png "plasma3.png"   // image file to read (iff/tga/gif/png/jpeg/tiff/sys)
+	    //use_color         // use pixel color gray scale (default)
+	    //use_alpha         // use alpha value
+	    //use_index         // use palette index
+	  }
+	
+snippet leopard
+	// pattern for use in texture/pigment/normal/density
+	  leopard        // create a leopard spotted texture
+	  //leopard 0.5  // for use with normal{} (0...1 or more)
+snippet marble
+	// pattern for use in texture/pigment/normal/density
+	// similar to gradient, gives a nice marble with turbulence
+	  marble           // create a marble-like texture
+	  //marble 0.5     // for use with normal{} (0...1 or more)
+	  //turbulence 1.0 // should have some!
+	
+snippet object_solid
+	// solid pattern for use in texture/pigment/normal(/density)
+	  object {        // create a solid pattern based on an object shape
+	    sphere { <0,0,0>, 1 }
+	    color rgb <1,0,0>,      // outside object
+	    color rgb <0,0,1>       // inside object
+	  }
+	
+snippet onion
+	// pattern for use in texture/pigment/normal/density
+	  onion          // create an onion-like concentric circle texture
+	  //onion 0.5    // for use with normal{} (0...1 or more)
+snippet pigment_pattern
+	// pattern for use in texture/pigment/normal/density
+	// takes the color of an pigment to calculate the pattern value
+	   pigment_pattern {
+	     checker White, Black   // can use any pigment here
+	   }
+snippet planar
+	// pattern for use in texture/pigment/normal/density
+	// originally designed for use with media density
+	  planar         // similar to gradient y, but only +/- 1 unit around origin
+snippet quilted
+	// pattern for use in texture/pigment/normal/density
+	// creates a pattern like a quilt
+	  quilted 0.4 // amount
+	  control0 -1 // lower curvature (-1...1)
+	  control1 1  // upper curvature (-1...1)
+snippet radial
+	// pattern for use in texture/pigment/normal/density
+	// radially projected color_map in X-Z
+	  radial
+	  //radial 0.5     // for use with normal{} (0...1 or more)
+	  //frequency 4.0  // increases # of color "spokes"
+snippet ripples
+	// pattern for use in texture/pigment/normal/density
+	// especially suited for normal {}
+	  ripples 0.5    // make surface ripply (0...1 or more)
+	  //ripples      // for use with pigment{}
+	
+	
+snippet slope
+	// pattern for use in texture/pigment
+	// this pattern can only be used when applied to an object
+	// value is influenced by the slope of the object
+	  slope
+	    y,              // direction vector for slope
+	    //y,            // optional: dependency from altitude
+	    //<0.5,1.0>,    // optional: range of slope values
+	    //<0.75,1.0>    // optional: range of altitude values
+	
+snippet spherical
+	// pattern for use in texture/pigment/normal/density
+	// originally designed for use with media density
+	  spherical     // spherical gradient around origin
+snippet spiral1
+	// pattern for use in texture/pigment/normal/density
+	  spiral1 5,         // spiral that winds around the y-axis
+	  //spiral1 5, 0.5   // for use with normal{} (0...1 or more)
+snippet spiral2
+	// pattern for use in texture/pigment/normal/density
+	  spiral2 5,         // double spiral that winds around the y-axis
+	  //spiral2 5, 0.5   // for use with normal{} (0...1 or more)
+snippet spotted
+	// pattern for use in texture/pigment/normal/density
+	// spotted is identical to bozo
+	  spotted        // create a spotted texture
+	  //spotted 0.5  // for use with normal{} (0...1 or more)
+snippet waves
+	// pattern for use in texture/pigment/normal/density
+	// especially suited for normal {}
+	  waves 0.5   // create a wavy surface (0...1 or more)
+	  //waves     // for use with pigment{}
+snippet wood
+	// pattern for use in texture/pigment/normal/density
+	// create a concentric cylindrical wood-like texture,
+	// grain along Z axis
+	  wood
+	  //wood 0.5         // for use with normal{} (0...1 or more)
+	  //turbulence 0.1   // should have some!
+snippet wrinkles
+	// pattern for use in texture/pigment/normal/density
+	// especially suited for normal {}
+	  wrinkles 0.5   // create a wrinkly surface (0...1 or more)
+	  //wrinkles      // for use with pigment{}
+snippet waveform_attribute
+	// you can specify a waveform if patterns are used with blend maps.
+	// Especially useful for normals
+	// Note most patterns have default waveform ramp_wave
+	  ramp_wave         // linear raising from 0 to 1 and returning abrupt return
+	  //triangle_wave   // linear upwards and downwards
+	  //sine_wave       // sine waveform
+	  //scallop_wave    // absolute value of sine wave
+	  //cubic_wave      // cubic curve from 0.0 to 1.0
+	  //poly_wave 0.5   // exponential function
+snippet frequency_attribute
+	// pigment/normal/density attribute
+	// oscillation frequency of radial, ripples, waves, etc
+	  frequency 2.0
+snippet phase_attribute
+	// pigment/normal/density attribute
+	// change the phase of ripples, etc.
+	// Animation note:  As phase DECREASES, ripples move OUTWARD.
+	  phase 0.5
+snippet turbulence_attribute
+	// pattern modifier
+	// Takes a float or vector for selective turbulence in different directions
+	  turbulence <0, 1, 0.5> // how much to 'stir up' the texture (0...1 or more)
+	  // (---additional parameters influencing style of turbulence---)
+	  lambda 2.0      // (1.0...5.0) (smooth...random) [2.0]
+	  omega 0.5       // (0.0...2.0) (crinkly...fuzzy) [0.5]
+	  octaves 6       // number of "folds" in turbulence (1...10) [6]
+snippet turbulence_warp
+	// pattern modifier
+	  // (---turbulence warp---)
+	  // turbulates similar to 'turbulence'
+	  warp {
+	    turbulence 0.4*x     // amount of turbulence
+	    //octaves 2          // optional turbulence modifiers
+	  }
+snippet black_hole_warp
+	// pattern modifier
+	  // (---black_hole warp---)
+	  // local deformation of the pattern
+	  warp {
+	    black_hole <0.5, 0.5, 0>, 0.25   // position and radius
+	    //strength 3                     // strength of deformation
+	    //inverse                        // invert effect
+	    //repeat <1.5, 1, 0>             // repeat black hole
+	    //turbulence <0.1, 0.4, 0>       // turbulate repeat position
+	  }
+snippet repeat_warp
+	// pattern modifier
+	  // (---repeat warp---)
+	  // repeats a section of the pattern
+	  warp {
+	    repeat x*2           // repeat direction
+	    //flip y             // flip when repeating
+	    //offset z*0.25      // translate when repeating
+	  }
+snippet mapping_warps
+	// pattern modifier
+	  // (---cylindrical warp---)
+	  warp {
+	    cylindrical
+	    orientation z    // mapping orientation
+	    //dist_exp 0.0   // optional [0.0]
+	  }
+	  // (---spherical warp---)
+	  warp {
+	    spherical
+	    orientation z    // mapping orientation
+	    //dist_exp 0.0   // optional [0.0]
+	  }
+	  // (---toroidal warp---)
+	  warp {
+	    toroidal
+	    orientation z    // mapping orientation
+	    //dist_exp 0.0   // optional [0.0]
+	    major_radius 1   // major radius of torus
+	  }
+	
+snippet noise_generator2
+	// there are 3 available noise generators
+	// you can select one by adding this as a pattern modifier
+	  //noise_generator 1 // old 3.1g plateaud noise
+	  //noise_generator 2 // fixed version of 3.1 noise
+	  noise_generator 3   // New 3.5 perlin noise
+	
+snippet matrix
+	// Matrix is an object transformation that does rotation about the Y axis,
+	// shear along the Y axis, and translation along the Y axis
+	matrix
+	<
+	  0.886, 0.5, 0.5,       // the first 3 lines form a rotation matrix
+	  0,     1,   0,         // since it is not orthogonal, shearing occurs
+	  0.5,   0,  -0.886,
+	  0,     1.5, 0          // the last 3 values contain the translation
+	>
+snippet rotate
+	// rotate shape or texture around <0 0 0>, relative to current orientation
+	// example: rotate 30*x
+	rotate <45, 45, 0> // <dX, dY, dZ> (in degrees)
+snippet scale
+	// "resize" an object or texture relative to its current size
+	// example: scale 2.0
+	scale <1.0,  2.0,  1.0> // <dX, dY, dZ>
+snippet transform
+	// object/texture/etc. transformation
+	// do a predeclared translate/rotate/scale combo
+	// e.g.:
+	#declare Leaf_Orientation =
+	transform {
+	  scale 4.0
+	  rotate 30*z
+	  translate 2*y
+	}
+	
+	transform {
+	  Leaf_Orientation    // transform an object
+	  //scale 0.5
+	  //rotate 45*x
+	  //transform {...}   // optional further transforms
+	}
+snippet translate
+	// Move object or texture relative to current position
+	// example: translate -5.0*z
+	translate <2.0, 4.0, -1.0>  // <dX, dY, dZ>

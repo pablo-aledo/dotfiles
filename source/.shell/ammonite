@@ -1,0 +1,21 @@
+ammonite_sbt_console(){
+
+  # ~/.sbt/0.13/global.sbt
+
+
+  echo 'libraryDependencies += "com.lihaoyi" % "ammonite-repl" % "0.5.7" % "test" cross CrossVersion.full' > ~/.sbt/0.13/global.sbt
+  #echo 'initialCommands in (Test, console) := """ammonite.repl.Main.run("")"""' >> ~/.sbt/0.13/global.sbt
+
+  ini_cmd=`cat build.sbt| grep initialCommands | grep -v '//' | cut -d'"' -f2 | xargs echo -n`
+  echo 'initialCommands in (Test, console) := """ammonite.repl.Main.run("'$ini_cmd'");"""' >> ~/.sbt/0.13/global.sbt
+
+
+  #if [ "`cat build.sbt | grep ammonite`" ]
+  #then
+  #else
+    #echo 'libraryDependencies += "com.lihaoyi" % "ammonite-repl" % "0.5.7" % "test" cross CrossVersion.full' >> build.sbt
+    #echo 'initialCommands in (Test, console) := """ammonite.repl.Main.run("")"""' >> build.sbt
+  #fi
+
+  sbt $(basename $PWD)/test:console
+}

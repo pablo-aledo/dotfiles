@@ -1,0 +1,17 @@
+# The right button toggles floating
+# bindsym button3 floating toggle
+# bindsym $mod+button3 floating toggle
+
+# The side buttons move the window around
+# bindsym button9 move left
+# bindsym button8 move right
+
+# The middle button and a modifer over any part of the window kills the window
+# bindsym --whole-window $mod+button2 kill
+
+# The middle button over a titlebar kills the window
+# bindsym --release button2 kill
+
+# Use Mouse+$mod to drag floating windows to their wanted position
+floating_modifier $mod
+

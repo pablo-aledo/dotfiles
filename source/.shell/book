@@ -1,0 +1,13 @@
+book4x4(){
+
+    # pdfjam --trim '1.5cm 2cm 1.5cm 1.5cm' --clip true --papersize '{3cm,5cm}' --scale 1.2 --no-landscape 1848000162_1849967024.pdf
+    # pdfnup --nup 2x2 $1-pdfjam.pdf
+
+    pdfjam --trim '2cm 0cm 2cm 0cm' --clip true $1.pdf
+    pdfcrop $1-pdfjam.pdf
+    pdfnup --nup 2x2 $1-pdfjam-crop.pdf
+    pdfcrop $1-pdfjam-crop-nup.pdf
+
+    rm -rf $1-pdfjam.pdf $1-pdfjam-crop.pdf $1-pdfjam-crop-nup.pdf
+
+}

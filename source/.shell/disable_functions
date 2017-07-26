@@ -1,0 +1,10 @@
+disable_functions(){
+	echo ': 0000000000:0;source ~/.dotfiles/source/.shell/' >> ~/.zsh_history
+	mv ~/.shell ~/.shell.bak
+	echo 'enable_functions(){'         > ~/.shell
+	echo '	mv ~/.shell.bak ~/.shell' >> ~/.shell
+	echo '	zsh'                      >> ~/.shell
+	echo '}'                          >> ~/.shell
+	zsh
+}
+

@@ -1,0 +1,5 @@
+redefine(){
+	which $* > /tmp/redefine
+	vim /tmp/redefine
+	source /tmp/redefine
+}

@@ -1,0 +1,5 @@
+Z(){
+[ -e ~/.z.sh ]        || pkg install z   2>&1 >/dev/null
+[ -e ~/.fzf/bin/fzf ] || pkg install fzf 2>&1 >/dev/null
+cd `z -l | awk '{print $2}' | fzf`
+}

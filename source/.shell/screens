@@ -1,0 +1,26 @@
+screens(){
+(
+	echo -n 'xrandr '
+	sum=0
+	xrandr -q | grep connected -A1 | awk '{print $1}' | grep -v '^--' | paste - - | while read line
+	do 
+		name=`echo $line | awk '{print $1}'`
+		x=`echo $line | awk '{print $2}' | cut -dx -f1`
+		y=`echo $line | awk '{print $2}' | cut -dx -f2`
+		echo -n "--output $name --mode ${x}x${y} --pos ${sum}x0 --rotate normal "
+		sum=$(($sum + $x))
+	done
+) | bash
+}
+
+panning(){
+	monitor=`xrandr -q | grep 'connected primary' | cut -d" " -f1`
+	if [ "`echo $1 | grep ':'`" ]
+	then
+		x=`echo $1 | cut -d':' -f1`
+		y=`echo $1 | cut -d':' -f2`
+		xrandr --output $monitor --panning $(($2 * $x / $y ))x$(( $2 ))
+	else
+		xrandr --output $monitor --panning ${1}x${2}
+	fi
+}

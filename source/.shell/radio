@@ -1,0 +1,3 @@
+radio(){
+	[ $1 = "azulfm" ] && mplayer http://srv0490.lcinternet.com:9709/stream
+}

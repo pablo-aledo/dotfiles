@@ -1,0 +1,20 @@
+escape(){
+
+	echo $1 | sed -e 's/\//\\\//g' -e 's/\$/\\$/g'
+
+}
+
+escape2(){
+	echo $1 | sed -e 's/^/"/g' -e 's/$/"/g' -e 's/\$/\\$/g'
+}
+
+rm_same(){
+	regex_reemp=s/$(escape "$1")/$(escape "$2")/
+	find "$1" -type f | while read line
+	do
+		file1="$line"
+		file2=`echo "$file1" | sed $regex_reemp`
+		[ -e "$file2" ] && [ `md5sum "$file1" | cut -d" " -f1` = `md5sum "$file2" | cut -d" " -f1` ] && echo rm "`escape2 "$file2"`"
+	done
+}
+

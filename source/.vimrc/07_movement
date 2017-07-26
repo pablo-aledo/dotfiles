@@ -1,0 +1,21 @@
+" resize vertical panes
+map > <C-w>>
+map < <C-w><
+" Window resize
+map <A-left> <C-w>5<
+map <A-right> <C-w>5>
+map <A-up> <C-w>+
+map <A-down> <C-w>-
+" Vertical split and open document
+map <Bar> :vsplit<cr><C-w><right><C-g>
+" Maximize and minimize panes
+nnoremap <C-W>M <C-W>\| <C-W>_
+nnoremap <C-W>m <C-W>=
+" Easier split navigations
+nnoremap <C-J> <C-W><C-J>
+nnoremap <C-K> <C-W><C-K>
+nnoremap <C-L> <C-W><C-L>
+nnoremap <C-H> <C-W><C-H>
+" move vertically by visual line
+
+

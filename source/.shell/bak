@@ -1,0 +1,29 @@
+bak(){
+	name="$1"
+	[ -e "$name" ] || shift
+	tar -cvzf "$name".backup.`date +%y%m%d-%H%M%S`.tgz $*
+}
+
+mergebak(){
+	last=`ls $* | sort | tail -n1`
+
+	mkdir /tmp/$last
+	cd /tmp/$last
+	tar -xzf $OLDPWD/$last
+	cd -
+
+	for a in $*
+	do 
+		[ $a = $last ] && break
+		mkdir /tmp/$a
+		cd /tmp/$a
+		tar -xzf $OLDPWD/$a
+		meld /tmp/$a /tmp/$last
+		cd -
+	done
+
+	cd /tmp/$last
+	tar -czf $OLDPWD/${last%.*}.backup.`date +%y%m%d-%H%M%S`.tgz *
+	cd -
+}
+

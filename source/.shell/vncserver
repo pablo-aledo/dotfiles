@@ -1,0 +1,13 @@
+#source $(dirname $(readlink -f $0))/pkg
+
+vncserver(){
+	IP=`ifconfig | egrep 'wlan0|eth0' -A1 | grep inet | head -n1 | awk 'BEGIN{FS="[: ]"}{print $13}'`
+	zenity --info --text $IP &
+	pkg install x11vnc
+	while true
+	do 
+		x11vnc
+		sleep 1
+	done
+
+}

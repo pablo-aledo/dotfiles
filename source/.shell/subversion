@@ -1,0 +1,28 @@
+checkout(){
+  svn checkout file:///media/disk/repository/release/trunk release
+}
+
+release(){
+  svn checkout -r$1 file:///media/disk/repository/release/trunk release-$1
+}
+
+meldcommit(){
+   export EDITOR="gvim -f"
+   meld . &
+   svn commit
+}
+
+svn_vimdiff(){
+
+echo '/usr/bin/vimdiff ${6} ${7}' > ~/.diffwrap
+chmod +x ~/.diffwrap
+
+#mkdir -p ~/.subversion
+#echo '[helpers]'                    > ~/.subversion/config
+#echo "diff-cmd = $HOME/.diffwrap"  >> ~/.subversion/config
+svn diff --diff-cmd=$HOME/.diffwrap
+}
+
+git_vimdiff(){
+git difftool --tool=vimdiff --no-prompt
+}

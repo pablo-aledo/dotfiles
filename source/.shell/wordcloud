@@ -1,0 +1,19 @@
+#source $(dirname $(readlink -f $0))/showimg
+#source $(dirname $(readlink -f $0))/pkg
+
+wordcloud(){
+	filename=$1
+	extension="${filename##*.}"
+	filename="${filename%.*}"
+
+	pkg install poppler-utils >/dev/null 2>/dev/null
+	pkg install wordcloud     >/dev/null 2>/dev/null
+	pkg install w3m-img       >/dev/null 2>/dev/null
+
+
+	[ $extension = "pdf" ] && pdftotext -f 1 -l 100 $filename.$extension /tmp/text 
+	[ $extension = "txt" ] && mv $filename.$extension /tmp/text 
+
+	cat /tmp/text | wordcloud_cli.py > /tmp/image.png
+	showimg /tmp/image.png
+}

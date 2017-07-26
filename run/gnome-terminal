@@ -1,0 +1,9 @@
+which gconftool >/dev/null || return
+
+gconftool -t bool   -s /apps/gnome-terminal/profiles/Default/use_theme_colors false
+gconftool -t bool   -s /apps/gnome-terminal/profiles/Default/default_show_menubar false
+gconftool -t string -s /apps/gnome-terminal/profiles/Default/foreground_color "#839496"
+gconftool -t string -s /apps/gnome-terminal/profiles/Default/background_color "#002b36"
+gconftool -t bool   -s /apps/gnome-terminal/profiles/Default/scrollback_unlimited true
+gconftool -t bool   -s /apps/gnome-terminal/profiles/Default/use_custom_command true
+gconftool -t string -s /apps/gnome-terminal/profiles/Default/custom_command zsh

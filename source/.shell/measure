@@ -1,0 +1,17 @@
+
+measure(){
+
+	make >/dev/null 2>/dev/null
+	make run | tee /tmp/output
+	title="title"
+	time=10
+	
+	string=""
+	for a in `seq 0 $(( $time / 1 ))`
+	do
+		string=$string"#"
+	done
+	
+	printf '%15s | %s %d\n' $title $string $time >> /tmp/times
+
+}

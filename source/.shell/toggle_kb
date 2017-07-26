@@ -1,0 +1,8 @@
+
+toggle_kb(){
+
+	actual=`setxkbmap -print | grep 'symbols' | cut -d"+" -f 2`
+	[ $actual = "es" ] && setxkbmap us
+	[ $actual = "us" ] && setxkbmap es
+
+}

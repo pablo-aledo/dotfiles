@@ -1,0 +1,2 @@
+" Para CTags
+map <C-F12> :!ctags -R --c++-kinds=+pl --fields=+iaS --extra=+q .<CR><CR>

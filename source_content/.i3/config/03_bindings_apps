@@ -1,0 +1,23 @@
+#gvim
+bindsym $mod+g exec gvim
+#bindsym $mod+Mod1+r exec --no-startup-id "i3session restore"
+bindsym Ctrl+Mod1+l exec --no-startup-id "i3lock -c000000"
+
+bindsym $mod+F1  exec gnome-calculator
+bindsym $mod+F3  exec google-chrome
+bindsym $mod+F4  exec gvim
+bindsym $mod+F5  exec "zsh -c 'source ~/.dotfiles/source/.shell/readsomething; readsomething'"
+bindsym $mod+F6  exec pcmanfm
+bindsym $mod+F7  exec inkscape
+bindsym $mod+F8  exec wps
+bindsym $mod+F9  exec thunderbird
+bindsym $mod+F10 exec skype
+bindsym $mod+F11 exec virtualbox
+bindsym $mod+F12 exec jdownloader2
+
+bindsym $mod+Shift+F3  exec google-chrome --incognito
+
+bindsym Ctrl+Shift+j  exec --no-startup-id "sleep 0.1 && xdotool key Ctrl+Shift+Home"
+bindsym Ctrl+Shift+k  exec --no-startup-id "sleep 0.1 && seq 0 $(($(tput lines) - 5)) | sed 's/^.*$/xdotool key Ctrl+Shift+Down/' | bash"
+
+bindsym Ctrl+space exec "zsh -c 'source ~/.dotfiles/source/.shell/toggle_kb; toggle_kb'"

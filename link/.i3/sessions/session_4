@@ -1,0 +1,6 @@
+# Session to modify my dotfiles :P
+exec gnome-terminal --working-directory=/media/DATA/Work/dotfiles/disk/release
+exec gnome-terminal --working-directory=/media/DATA/Work/dotfiles/disk/release -x gvim +:NERDTree
+exec gnome-terminal --working-directory=/media/DATA/Work/dotfiles/data/repository/Mint_17/
+--
+layout tabbed

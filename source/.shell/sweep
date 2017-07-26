@@ -1,0 +1,71 @@
+sweep(){
+	command=$1
+	file=$2
+	variable=$3
+	ini_step_end=$4
+	[ $# -gt 4 ] && format=$5
+	[ $# -gt 4 ] || format="%04d"
+	[ $# -gt 5 ] && extension=".$6"
+	[ $# -gt 5 ] || extension=""
+
+	prefix=`date +%s`
+	mkdir /tmp/$prefix
+
+	for a in `seq $(echo $ini_step_end) | xargs printf "$format\n"`
+	do
+		cmd=`echo $command | sed -e "s/$variable/$a/g" -e "s/%file%/\/tmp\/$prefix\/file-$a$extension/g"`
+		cat $file | sed "s/$variable/$a/g" > /tmp/$prefix/file-$a$extension
+		echo "===== $cmd /tmp/$prefix/file-$a$extension"
+	done
+
+	sleep 5;
+
+	for a in `seq $(echo $ini_step_end) | xargs printf "$format\n"`
+	do
+		cmd=`echo $command | sed -e "s/$variable/$a/g" -e "s/%file%/\/tmp\/$prefix\/file-$a$extension/g"`
+		echo "\e[31m ===== \e[0m $cmd /tmp/$prefix/file-$a$extension"
+		zsh -c "source ~/.shell ~/.paths; $cmd /tmp/$prefix/file-$a$extension"
+	done
+}
+
+sweep2(){
+	command=$1
+	file=$2
+	variable=$3
+	ini_step_end=$4
+	[ $# -gt 4 ] && format=$5
+	[ $# -gt 4 ] || format="%04d"
+	[ $# -gt 5 ] && extension=".$6"
+	[ $# -gt 5 ] || extension=""
+	[ $# -gt 6 ] && subst1=$7
+	[ $# -gt 6 ] || subst1="%%%"
+	[ $# -gt 7 ] && substitutions="$8"
+	[ $# -gt 7 ] || substitutions="%%%"
+
+	prefix=`date +%s`
+	mkdir /tmp/$prefix
+
+	for subst in $(echo $substitutions)
+	do
+		for a in `seq $(echo $ini_step_end) | xargs printf "$format\n"`
+		do
+			cmd=`echo $command | sed -e "s/$variable/$a/g" -e "s/$subst1/$subst/g" -e "s/%file%/\/tmp\/$prefix\/file-$subst-$a$extension/g"`
+			cat $file | sed -e "s/$variable/$a/g" -e "s/$subst1/$subst/g" > /tmp/$prefix/file-$subst-$a$extension
+			echo "===== $cmd /tmp/$prefix/file-$subst-$a$extension"
+		done
+	done
+
+	sleep 5;
+
+	for subst in $(echo $substitutions)
+	do
+		for a in `seq $(echo $ini_step_end) | xargs printf "$format\n"`
+		do
+			cmd=`echo $command | sed -e "s/$variable/$a/g" -e "s/%file%/\/tmp\/$prefix\/file-$subst-$a$extension/g"`
+			echo "\e[31m ===== \e[0m $cmd /tmp/$prefix/file-$subst-$a$extension"
+			zsh -c "source ~/.shell ~/.paths; $cmd /tmp/$prefix/file-$subst-$a$extension"
+		done
+	done
+}
+
+

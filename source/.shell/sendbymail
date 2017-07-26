@@ -1,0 +1,6 @@
+#source $(dirname $(readlink -f $0))/pkg
+	
+sendbymail(){
+pkg install mutt
+echo "File attached: $1" | /usr/bin/mutt -a $1 -s "File" -- pablo.aledo@gmail.com
+}

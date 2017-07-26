@@ -1,0 +1,6 @@
+source ../source/.shell/pkg 
+# ping -c 1 8.8.8.8 && pkg update
+
+pkg install zsh
+pkg install git
+pkg install setup_personal

@@ -1,0 +1,55 @@
+full_netmon(){
+	pkg install nload
+	pkg install iftop
+	pkg install iptraf
+	pkg install nethogs
+	pkg install bmon
+	pkg install slurm
+	pkg install tcptrack
+	pkg install bwm-ng
+	pkg install cbm
+	pkg install speedometer
+	pkg install pktstat
+	pkg install netdiag
+	pkg install dstat
+	pkg install collectl
+	pkg install jnettop
+
+	tmux new -d -s nload       'sudo nload'
+	tmux new -d -s iftop       'sudo iftop -n'
+	tmux new -d -s iptraf      'sudo iptraf'
+	tmux new -d -s nethogs     'sudo nethogs'
+	tmux new -d -s bmon        'sudo bmon'
+	tmux new -d -s slurm       'sudo slurm -s -i eth0'
+	tmux new -d -s tcptrack    'sudo tcptrack'
+	tmux new -d -s bwm-ng      'sudo bwm-ng -o curses2'
+	tmux new -d -s cbm         'sudo cbm'
+	tmux new -d -s speedometer 'sudo speedometer -r eth0 -t eth0'
+	tmux new -d -s pktstat     'sudo pktstat -i eth0 -nt'
+	tmux new -d -s netwatch    'sudo netwatch -e eth0 -nt'
+	tmux new -d -s trafshow    'sudo trafshow -i eth0 tcp'
+	tmux new -d -s netload     'sudo netload eth0'
+	tmux new -d -s dstat       'sudo dstat -nt'
+	tmux new -d -s collectl    'sudo collectl -sn -oT -i0.5'
+	tmux new -d -s jnettop     'sudo jnettop'
+}
+
+full_netmon_end(){
+	sudo killall -9 nload
+	sudo killall -9 iftop
+	sudo killall -9 iptraf
+	sudo killall -9 nethogs
+	sudo killall -9 bmon
+	sudo killall -9 slurm
+	sudo killall -9 tcptrack
+	sudo killall -9 bwm-ng
+	sudo killall -9 cbm
+	sudo killall -9 speedometer
+	sudo killall -9 pktstat
+	sudo killall -9 netwatch
+	sudo killall -9 trafshow
+	sudo killall -9 netload
+	sudo killall -9 dstat
+	sudo killall -9 collectl
+	sudo killall -9 jnettop
+}

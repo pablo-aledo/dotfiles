@@ -1,0 +1,100 @@
+COOKIES_FOLDER=~/cookies
+#source $(dirname $(readlink -f $0))/links
+
+dldir(){
+	[ -e /media/DATA/Descargas ] && echo /media/DATA/Descargas && return
+	[ "`mount | grep /media/removable/`" ] && mount | grep /media/removable | cut -d" " -f3 | head -n1 && return
+	[ "`mount | grep /media/mint/`" ] && mount | grep /media/mint | cut -d" " -f3 | head -n1 && return
+	[ -e ~/Downloads ] && echo /home/`whoami`/Downloads && return
+	[ -e /mnt/sdcard/Download ] && echo /mnt/sdcard/Download && return
+	[ -e /sdcard/Download ] && echo /sdcard/Download && return
+	echo /tmp/
+}
+
+download(){
+
+	[ $PWD = `dldir` ] || cd `dldir`
+
+	if [ "`echo $1 | grep youtube`" ] 
+	then
+		youtube-dl -t $1
+	fi
+
+	if [ "`echo $1 | grep youtu.be`" ] 
+	then
+		youtube-dl -t $1
+	fi
+
+	if [ "`echo $1 | grep vimeo`" ] 
+	then
+		youtube-dl -t $1
+	fi
+
+	if [ "`echo $1 | grep streamcloud`" ] 
+	then
+		wget $1 -O /tmp/streamcloud
+		op=download1
+		id=`cat /tmp/streamcloud | grep "Watch video now" -C 15 | grep 'name="id"' | cut -d'"' -f6`
+		fname=`cat /tmp/streamcloud | grep "Watch video now" -C 15 | grep 'name="fname"' | cut -d'"' -f6`
+		sleep 15
+		curl --data "op=$op&id=$id&fname=$fname" $1 -o /tmp/streamcloud2 
+		finalurl=`cat /tmp/streamcloud2 | grep video | cut -d'"' -f2`
+		wget -c $finalurl -O $fname
+	fi
+
+	if [ "`echo $1 | grep torrent`" ] 
+	then
+		wget $1 -O /tmp/torrent.torrent
+		aria2c /tmp/torrent.torrent
+	fi
+
+	if [ "`echo $1 | grep nitroflare`" ] 
+	then
+		wget -x --load-cookies $COOKIES_FOLDER/nitroflare.cookie $1 -O /tmp/nitroflare
+		url=`cat /tmp/nitroflare | grep 'Click here to download' | cut -d'"' -f4`
+		wget -c $url
+	fi
+
+	if [ "`echo $1 | grep icerbox`" ] 
+	then
+		[ -e `basename $1` ] && return
+		google-chrome $1 &
+		sleep 5
+		xdotool key Left
+		xdotool type $PWD
+		xdotool type /
+		xdotool key Return
+		sleep 1
+	fi
+
+	if [ "`echo $1 | grep avxhome`" ] 
+	then
+		rm -fr /tmp/avxhome /tmp/avxhome2
+		wget $1 -O /tmp/avxhome
+		[ "`cat /tmp/avxhome | grep icerbox | grep 'a href' | cut -d'"' -f2`" ] || echo "$1 No icerbox links" >> ~/dl_log
+		for a in `cat /tmp/avxhome | grep icerbox | grep 'a href' | cut -d'"' -f2`
+		do 
+			curl -i -s https://avxhome.se$a > /tmp/avxhome2
+			[ "`cat /tmp/avxhome2 | grep icerbox | cut -d' ' -f2`" ] || echo "$1 $a No icerbox redirect" >> ~/dl_log
+			download `cat /tmp/avxhome2 | grep icerbox | cut -d' ' -f2`
+		done
+		cd -
+	fi
+
+	if [ "`echo $1 | grep 'list.*\.list'`" ] 
+	then
+		cd -
+		cat $1 | while read line
+		do 
+			[ "`echo $line | egrep '^-----' `" ] && linenum=`echo $line | cut -d'-' -f8`
+			[ "`echo $line | egrep '^-----' `" ] || echo "download avxhome.se/\`cat $linenum | grep \"$line\" | head -n1 | cut -d'\"' -f2\`" | sed -e 's/\[/\\[/g' -e 's/\]/\\]/g'
+		done
+	fi
+
+}
+
+streamcloud_quick(){
+	fname=`cat /tmp/streamcloud | grep "Watch video now" -C 15 | grep 'name="fname"' | cut -d'"' -f6`
+	finalurl=`cat /tmp/streamcloud2 | grep video | cut -d'"' -f2`
+	wget -c $finalurl -O $fname
+}

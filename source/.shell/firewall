@@ -1,0 +1,106 @@
+log_all_ports(){
+	sudo iptables -A INPUT -p tcp -m state --state new -j LOG --log-prefix "New connection: "
+	# sudo tcdump -i eth0 -c 3000000 -np host client.example.com > tcp.log
+	# sudo tcdump -i eth0 -np host client.example.com > tcp.log
+	# sudo tcpdump -nnq src host <campus-external-ip> and not port ssh
+}
+
+list_all_ports(){
+	cat /var/log/syslog | grep 'New connection: ' | cut -d' ' -f23 | sort | uniq
+}
+
+#source $(dirname $(readlink -f $0))/pkg
+#source $(dirname $(readlink -f $0))/easypasswd
+
+reverse_ssh(){
+	echo -e "\e[34m - Install openssh and tmux \e[0m"
+	pkg install openssh-server
+	pkg install tmux
+
+	echo -e "\e[34m - Configure \e[0m"
+	#easypasswd
+	myshell tmux
+
+	echo -e "\e[34m - Start ssh server \e[0m"
+	sudo /etc/init.d/ssh restart
+	sudo mkdir /var/run/sshd
+	sudo chmod 0755 /var/run/sshd
+	sudo /usr/sbin/sshd
+
+	echo -e "\e[34m - Generate ssh public key \e[0m"
+	rm -f ~/.ssh/id_rsa.pub
+	ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''
+
+	echo -e "\e[34m - Set IP address \e[0m"
+	[ $# -eq 0 ] && ip=pabloaledo.ddns.net
+	[ $# -eq 1 ] && ip=$1
+
+	echo -e "\e[34m - Performing checks \e[0m"
+	# check that ssh is running
+ 	[ "`ps aux | grep sshd | grep -v grep`" ] || echo -e '\e[31m SSH is not running \e[0m'
+	# check that I'm not using vpn
+	[ -z "`ifconfig | grep tun0`" ] || echo -e '\e[31m You are using a VPN session \e[0m'
+
+	while true
+	do 
+		echo -e "\e[34m - Send ssh public key \e[0m"
+		cat ~/.ssh/id_rsa.pub | nc $ip 2223
+		echo -e "\e[34m - Receive ssh public key \e[0m"
+		nc $ip 2224 >> ~/.ssh/authorized_keys
+		echo -e "\e[34m - Open ssh tunnel \e[0m"
+		#ssh -N -o "StrictHostKeyChecking no" -nNT -R 2222:localhost:22 ubuntu@$ip
+		 ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no -nNT -R 2222:localhost:22 ubuntu@$ip
+		echo -e "\e[34m - Wait \e[0m"
+		sleep 10
+	done
+}
+
+reverse_ssh_limited(){
+
+	echo -e "\e[34m - Generate ssh public key \e[0m"
+	[ -e ~/.ssh/id_rsa ] || ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''
+
+	echo -e "\e[34m - Set IP address \e[0m"
+	[ $# -eq 0 ] && ip=pabloaledo.ddns.net && port=2222
+	[ $# -eq 1 ] && ip=$1 && port=2222
+	[ $# -eq 2 ] && ip=$1 && port=$2
+
+	echo -e "\e[34m - run reverse_ssh_server in the server \e[0m"
+	sleep 10
+
+	echo -e "\e[34m - Send ssh public key \e[0m"
+	cat ~/.ssh/id_rsa.pub | nc $ip 2223
+	sleep 10
+	echo -e "\e[34m - Receive ssh public key (might have to press ^d)\e[0m"
+	nc $ip 2224 >> ~/.ssh/authorized_keys
+
+	while true
+	do 
+		echo -e "\e[34m - Open ssh tunnel \e[0m"
+		ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no -nNT -R ${port}:localhost:22 ubuntu@$ip
+		echo -e "\e[34m - Wait \e[0m"
+		sleep 10
+	done
+}
+
+reverse_ssh_server(){
+
+	echo -e "\e[34m - Generate ssh public key \e[0m"
+	[ -e ~/.ssh/id_rsa ] || ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''
+
+	echo -e "\e[34m - Receive ssh public key \e[0m"
+	nc -l 2223 >> ~/.ssh/authorized_keys
+
+	echo -e "\e[34m - Send ssh public key \e[0m"
+	cat ~/.ssh/id_rsa.pub | nc -l 2224
+
+	echo -e "\e[34m - Run ssh <user>@localhost -p <port> \e[0m"
+	user=`cat .ssh/authorized_keys | tail -n1 | cut -d " " -f3 | cut -d"@" -f1`
+	port=2222
+	ssh ${user}@localhost -p $port
+}
+
+google-chrome-socks(){
+	google-chrome --proxy-server="socks5://localhost:3128" --host-resolver-rules="MAP * 0.0.0.0 , EXCLUDE localhost"
+}
+

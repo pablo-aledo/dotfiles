@@ -1,0 +1,6 @@
+#source $(dirname $(readlink -f $0))/pkg
+
+iodine_client(){
+	pkg install iodine
+	sudo iodine -f -P `pword` iodine.iodine-pga.cu.cc i.iodine-pga.cu.cc
+}

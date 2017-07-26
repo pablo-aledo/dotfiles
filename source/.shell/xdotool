@@ -1,0 +1,48 @@
+mouseover(){
+	count=$1
+	shift
+	
+	if [ -e $1 ]
+	then
+		threshold=10000
+	else
+		threshold=$1
+		shift
+	fi
+
+	n=0
+	for a in $*
+	do
+		png2pat "$a" > /tmp/pat$n.pat
+		n=$(( n + 1 ))
+	done
+
+	n=0
+	while true
+	do
+		scrot /tmp/screen.png
+
+		found=0
+		m=0
+		for a in $*
+		do
+			visgrep -t $threshold /tmp/screen.png /tmp/pat$m.pat > /tmp/coordinates
+			[ "`cat /tmp/coordinates`" ] && found=1 && img=$a && break
+			m=$(( m + 1 ))
+		done
+
+		sleep 1
+		n=$(( n + 1 ))
+		[ $n -eq $count ] && break
+		[ $found -eq 1 ]  && break
+	done
+
+	[ "`cat /tmp/coordinates`" ] || return 1
+	xfind=`cat /tmp/coordinates | head -n1 | cut -d',' -f1`
+	yfind=`cat /tmp/coordinates | head -n1 | cut -d',' -f2 | cut -d' ' -f1`
+	ximg=`file "$img" | cut -d',' -f2 | cut -d' ' -f2`
+	yimg=`file "$img" | cut -d',' -f2 | cut -d' ' -f4`
+	xdotool mousemove $((xfind + ximg / 2)) $((yfind + yimg / 2))
+	return 0
+}
+

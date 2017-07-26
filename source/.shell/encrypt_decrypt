@@ -1,0 +1,20 @@
+encrypt(){
+	if [ $# -eq 1 ]
+	then
+		openssl aes-256-cbc -salt -in $1 -out $1.enc
+	else
+		tar -czf encrypt.tar.gz $*
+		openssl aes-256-cbc -salt -in encrypt.tar.gz -out $(echo $1 | cut -d"." -f1 | cut -d"/" -f1).tgzenc
+	fi
+}
+
+decrypt(){
+	if [ "`echo $1 | egrep '.tgzenc$'`" ]
+	then
+		openssl aes-256-cbc -d -in $1 -out encrypt.tar.gz
+		tar -xzf encrypt.tar.gz
+	else
+		openssl aes-256-cbc -d -in $1 -out $(echo $1 | sed 's/\.enc$//g')
+	fi
+	
+}

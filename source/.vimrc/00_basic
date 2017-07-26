@@ -1,0 +1,21 @@
+set nocp                                                                " Get rid of Vi compatibility
+:helptags ~/.vim                                                        " Location of the help files
+set backspace=2                                                         " make backspace work like most other apps
+autocm BufEnter * if expand('%:p') !~ '://' | :lchdir %:p:h | endif     " Move to the directory when opening a file
+set scrolloff=5                                                         " start scrolling when we are 5 lines away from margins
+set ignorecase                                                          " Do not consider case in search and replace
+set smartcase                                                           " ... except if you use some capital letters 
+set incsearch                                                           " Find the next match as we type the search
+set hlsearch                                                            " highlight searches
+nnoremap ' `
+nnoremap ` '
+let mapleader = ","                                                     " Key for customized keyboard shortcurts
+set history=1000                                                        " steps stored in history
+set ruler                                                               " information in the right/bottom of the screen
+set spellsuggest=best,10                                                " spell correcting behavior
+set spell                                                               " activate spell correction
+set wrap linebreak textwidth=0                                          " do not wrap text
+set splitright                                                          " Open new files at right
+set splitbelow                                                          " Open new files below
+set path+=**                                                            " search down into subfolders (:find)
+set wildmenu                                                            " display all matching files when we tab complete

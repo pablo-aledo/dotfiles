@@ -1,0 +1,5 @@
+# Please see http://i3wm.org/docs/userguide.html for a complete reference!
+# Mod4 = Super key
+# Mod1 = Alt key
+
+set $mod Mod4

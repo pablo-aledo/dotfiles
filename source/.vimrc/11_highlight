@@ -1,0 +1,2 @@
+"hi Green guibg=#33ff33
+"syntax region Green start=/·/ end=/·/

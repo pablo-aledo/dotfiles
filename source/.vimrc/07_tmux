@@ -1,0 +1,8 @@
+"map <C-d><C-d> :wall<cr>:! tmux send-keys -t.2 "make ; make run" C-m<cr><cr>
+
+vmap <C-p><C-p> <Plug>SendSelectionToTmux
+nmap <C-p><C-p> V<Plug>SendSelectionToTmux<cr>
+nmap <C-p>r <Plug>SetTmuxVars
+"nmap <C-c><C-c> <Plug>NormalModeSendToTmux
+nmap <C-d><C-d> :wall<cr>:Tmux<CR>:Tmux make<CR>
+nmap <F5> :wall<cr>:Tmux<CR>:Tmux make<CR>

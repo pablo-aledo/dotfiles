@@ -1,0 +1,7 @@
+binpath(){
+	sudo updatedb
+	for a in `locate bin | grep '\/bin$'`
+	do
+		export PATH=$a:$PATH
+	done
+}

@@ -1,0 +1,11 @@
+# Toggle between hide state and show state
+# bindsym $mod+m bar hidden_state toggle
+
+# Toggle between dock mode and hide mode
+# bindsym $mod+n bar mode toggle
+
+# Set the bar instance with id 'bar-1' to switch to hide mode
+# bindsym $mod+b bar mode hide bar-1
+
+# Set the bar instance with id 'bar-1' to always stay hidden
+bindsym $mod+Shift+b bar mode invisible bar-1

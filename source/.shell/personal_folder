@@ -1,0 +1,91 @@
+key_folder=/media/mint/Pablo
+
+pf_create(){
+	[ `ls /media/DATA/$1/` ] && return
+	mkdir -p /media/DATA/$1/
+	dd if=/dev/zero of=/media/DATA/$1/img.img bs=1G count=$2
+	sudo cryptsetup luksFormat /media/DATA/$1/img.img
+	sudo cryptsetup luksOpen /media/DATA/$1/img.img $1
+	sudo mkfs.ext3 /dev/mapper/$1
+	sudo mount /dev/mapper/$1 /media/DATA/$1/
+	sudo rm -rf /media/DATA/$1/*
+	sudo chmod 777 /media/DATA/$1/.
+}
+
+pf_file(){
+	if [ -e $key_folder/keyfile ]
+	then
+		sudo cryptsetup luksAddKey /media/DATA/$1/img.img $key_folder/keyfile
+	else 
+		if [ -d $key_folder ]
+		then
+			sudo dd if=/dev/urandom of=$key_folder/keyfile bs=1024 count=4
+			sudo chmod 0400 $key_folder/keyfile
+			sudo cryptsetup luksAddKey /media/DATA/$1/img.img $key_folder/keyfile
+		else 
+			echo "Folder $key_folder not accessible"
+		fi
+	fi
+}
+
+pf_mount(){
+	[ $# -eq 0 ] && pf_mount Descargas
+	[ $# -eq 0 ] && pf_mount Personal
+	[ $# -eq 0 ] && pf_mount Chrome
+	[ $# -eq 0 ] && return
+
+	[ -e $key_folder/keyfile ] && keyarg="-d $key_folder/keyfile"
+	[ -e $key_folder/keyfile ] || keyarg=""
+
+	                              destination=/media/DATA/$1/             && origin=/media/DATA/$1/img.img
+	[ "$1" = "Home"   ]        && destination=$HOME/                      && origin=/media/DATA/Home/img.img
+	[ "$1" = "Chrome" ]        && destination=$HOME/.config/google-chrome && origin=/media/DATA/Chrome/img.img
+	[ "$1" = "Dotfiles" ]      && destination=$HOME/Dotfiles              && origin=$HOME/.dotfiles/Personal/img.img
+
+	mkdir -p $destination
+
+	sudo cryptsetup luksOpen `echo $keyarg` $origin $1 < /dev/tty
+	sudo mount /dev/mapper/$1 $destination
+	[ -e $destination/init.sh ] && source $desination/init.sh
+}
+
+pf_umount(){
+	[ $# -eq 0 ] && pf_umount Descargas
+	[ $# -eq 0 ] && pf_umount Personal
+	[ $# -eq 0 ] && pf_umount Chrome
+	[ $# -eq 0 ] && return
+	sudo umount /dev/mapper/$1
+	sudo cryptsetup luksClose /dev/mapper/$1
+}
+
+pf_insert(){
+	sudo cryptsetup luksOpen /media/DATA/$1/img.img $1
+	sudo mount /dev/mapper/$1 /mnt/
+
+	find /media/DATA/$1 -maxdepth 1 -mindepth 1 -not -name img.img -print0 | xargs -0 mv -t /mnt/
+
+	sudo umount /dev/mapper/$1
+	sudo cryptsetup luksClose /dev/mapper/$1
+}
+
+pf_replace_home(){
+	sudo cryptsetup luksOpen /media/DATA/Home/img.img Home
+	sudo mount /dev/mapper/Home /mnt/
+
+	rsync -vai --delete ~/ /mnt/
+
+	sudo umount /dev/mapper/Home
+	sudo cryptsetup luksClose /dev/mapper/Home
+}
+
+two_factor_server(){
+	sudo apt-get install libpam-google-authenticator
+	(echo y; echo y; echo y; echo n; echo y) | google-authenticator
+	echo 'auth required pam_google_authenticator.so' | sudo tee -a /etc/pam.d/sshd 
+	sudo sed -i 's/@include common-auth/#@include common-auth/g' /etc/pam.d/sshd
+	echo 'AuthenticationMethods publickey,keyboard-interactive' | sudo tee -a /etc/ssh/sshd_config
+	sudo sed -i 's/ChallengeResponseAuthentication no/ChallengeResponseAuthentication yes/g' /etc/ssh/sshd_config
+	easypasswd
+	sudo service ssh restart
+}
+

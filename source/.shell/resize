@@ -1,0 +1,21 @@
+resize(){
+        case $1 in
+		to_width)                convert "$3" -resize $2x-1 "resized_$3" ;;
+		ignore_aspect_ratio)     convert "$3" -resize $2\!  "resized_$3" ;;
+		only_shrink_larger)      convert "$3" -resize $2\>  "resized_$3" ;;
+		only_enlarge_smaller)    convert "$3" -resize $2\<  "resized_$3" ;;
+		fill_area)               convert "$3" -resize $2^   "resized_$3" ;;
+		percentage_resize)       convert "$3" -resize $2%   "resized_$3" ;;
+		pixel_count_limit)       convert "$3" -resize $2@   "resized_$3" ;;
+	esac
+
+}
+
+resize_all(){
+	ls | while read line
+	do
+		resize $* "$line"
+	done
+
+}
+

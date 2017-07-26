@@ -1,0 +1,12 @@
+[ -e /media/DATA/pdfs ] && PDF_FOLDER=/media/DATA/pdfs
+[ -e ~/pdfs ] && PDF_FOLDER=~/pdfs
+
+readsomething(){
+	i3-msg 'workspace 6'
+	i3-msg 'focus parent, focus parent, focus parent, move container to workspace 10'
+
+	n=`find $PDF_FOLDER -name '*.pdf' | wc -l`
+	m=$((`date +%s` % $n + 1))
+	file="`find $PDF_FOLDER -name '*.pdf' | head -n $m | tail -n1`"
+	i3-msg "exec evince $file"
+}

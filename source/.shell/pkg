@@ -1,0 +1,134 @@
+INSTALLERS_FOLDER=$(dirname $(readlink -f $0))/../../pkg
+[ -e /media/DATA/Work/dotfiles/data/repository ] && REPOSITORY_FOLDER=/media/DATA/Work/dotfiles/data/repository/
+[ -e ~/repository ] && REPOSITORY_FOLDER=~/repository/
+
+distr(){
+	[ -e /usr/local/bin/babun ] && echo babun && return
+	[ -e /etc/openwrt_version ] && echo -n openwrt_ && cat /etc/openwrt_version | sed 's/\.//g' && return
+	[ -e /usr/bin/arch ] && [ `arch` = "armv7l" ] && architecture="_armv7l"
+	head -n1 /etc/issue | sed \
+		-e "s/Ubuntu 14\.04 LTS \\\\n \\\\l/Ubuntu_14_04/g" \
+		-e "s/Ubuntu 14\.04\.2 LTS \\\\n \\\\l/Ubuntu_14_04/g" \
+		-e "s/Ubuntu 14\.04\.3 LTS \\\\n \\\\l/Ubuntu_14_04$architecture/g" \
+		-e "s/Ubuntu 14\.04\.4 LTS \\\\n \\\\l/Ubuntu_14_04$architecture/g" \
+		-e "s/Ubuntu 16\.04\.1 LTS \\\\n \\\\l/Ubuntu_16_04$architecture/g" \
+		-e "s/Linux Mint 17 Qiana \\\\n \\\\l/Mint_17/g" \
+		-e "s/Debian GNU\/Linux 8 \\\\n \\\\l/Debian_8/g" \
+		-e "s/Kali GNU\/Linux Rolling \\\\n \\\\l/Kali_rolling/g"
+}
+
+apt_download(){
+	sudo apt-get clean
+	#sudo apt-get install --download-only $list
+	sudo apt-get install $*
+	mkdir $REPOSITORY_FOLDER/`distr`/$1
+	cp /var/cache/apt/archives/*.deb $REPOSITORY_FOLDER/`distr`/$1/
+	echo 'sudo dpkg -i *.deb' > $REPOSITORY_FOLDER/`distr`/$1/install.sh
+}
+
+pkg(){
+
+cmd=$1
+shift
+list=$*
+
+[ $cmd = "install" ] && [ $# -gt 1 ] && for a in $*; do pkg install $1; shift; done
+
+ping -c1 8.8.8.8 2>/dev/null >/dev/null || \
+	[ $cmd = "install" ] && \
+	[ -e "$REPOSITORY_FOLDER/`distr`/$1/install.sh" ] && \
+		( cd "$REPOSITORY_FOLDER/`distr`/$1/" && bash install.sh ) && return;
+
+if [ $cmd = "install" ] && [ -e $INSTALLERS_FOLDER/`distr`/$1/install.sh ]
+then
+	( cd $INSTALLERS_FOLDER/`distr`/$1/; bash install.sh )
+	return;
+fi
+
+if [ $cmd = "install" ] && [ -e ~/.dotfiles/pkg/`distr`/$1/install.sh ]
+then
+	( cd ~/.dotfiles/pkg/`distr`/$1/; bash install.sh )
+	return;
+fi
+
+[ $cmd = "install" ] && which snap     2>/dev/null >/dev/null && sudo snap install $list
+[ $cmd = "install" ] && which apt-get  2>/dev/null >/dev/null && sudo apt-get install -y --force-yes $list
+[ $cmd = "install" ] && which pacman   2>/dev/null >/dev/null && sudo pacman -S --noconfirm $list
+[ $cmd = "install" ] && which emerge   2>/dev/null >/dev/null && sudo emerge $list
+[ $cmd = "install" ] && which yum      2>/dev/null >/dev/null && sudo yum -y install $list
+[ $cmd = "install" ] && which zypper   2>/dev/null >/dev/null && sudo zypper --non-interactive install $list
+[ $cmd = "install" ] && which urpmi    2>/dev/null >/dev/null && sudo urpmi --auto $list
+[ $cmd = "install" ] && which tce-load 2>/dev/null >/dev/null && tce-load -wi $list
+[ $cmd = "install" ] && which pact     2>/dev/null >/dev/null && pact install $list
+[ $cmd = "install" ] && which apt-cyg  2>/dev/null >/dev/null && apt-cyg install $list
+[ $cmd = "install" ] && which cyg-apt  2>/dev/null >/dev/null && cyg-apt install $list
+[ $cmd = "install" ] && which brew     2>/dev/null >/dev/null && brew install $list
+[ $cmd = "install" ] && which eopkg    2>/dev/null >/dev/null && sudo eopkg install -y $list
+[ $cmd = "install" ] && which slax     2>/dev/null >/dev/null && slax download $list && slax activate *$list.sb
+[ $cmd = "install" ] && which opkg     2>/dev/null >/dev/null && opkg install $list
+[ $cmd = "install" ] && which usm      2>/dev/null >/dev/null && usm -g $list
+[ $cmd = "install" ] && which apk      2>/dev/null >/dev/null && apk add $list
+
+[ $cmd = "remove" ] && which apt-get   2>/dev/null >/dev/null && sudo apt-get remove -y $list
+[ $cmd = "remove" ] && which pacman    2>/dev/null >/dev/null && sudo pacman -Rs --noconfirm $list
+[ $cmd = "remove" ] && which emerge    2>/dev/null >/dev/null && sudo emerge --depclean $list
+[ $cmd = "remove" ] && which yum       2>/dev/null >/dev/null && sudo yum --depclean $list
+[ $cmd = "remove" ] && which zypper    2>/dev/null >/dev/null && sudo zypper remove $list
+[ $cmd = "remove" ] && which urpme     2>/dev/null >/dev/null && sudo urpme $list
+[ $cmd = "remove" ] && which pact      2>/dev/null >/dev/null && pact remove $list
+[ $cmd = "remove" ] && which apt-cyg   2>/dev/null >/dev/null && apt-cyg remove $list
+[ $cmd = "remove" ] && which cyg-apt   2>/dev/null >/dev/null && cyg-apt remove $list
+[ $cmd = "remove" ] && which brew      2>/dev/null >/dev/null && brew remove --force $list
+[ $cmd = "remove" ] && which eopkg     2>/dev/null >/dev/null && sudo eopkg remove $list
+[ $cmd = "remove" ] && which slax      2>/dev/null >/dev/null && slax deactivate $list
+[ $cmd = "remove" ] && which opkg      2>/dev/null >/dev/null && opkg remove $list
+[ $cmd = "remove" ] && which apk       2>/dev/null >/dev/null && apk del $list
+
+[ $cmd = "search" ] && which apt-get   2>/dev/null >/dev/null && apt-cache search $list
+[ $cmd = "search" ] && which pacman    2>/dev/null >/dev/null && pacman -Ss $list
+[ $cmd = "search" ] && which emerge    2>/dev/null >/dev/null && emerge -S $list
+[ $cmd = "search" ] && which yum       2>/dev/null >/dev/null && yum -S $list
+[ $cmd = "search" ] && which zypper    2>/dev/null >/dev/null && zypper search $list
+[ $cmd = "search" ] && which urpmq     2>/dev/null >/dev/null && urpmq $list
+[ $cmd = "search" ] && which tce-ab    2>/dev/null >/dev/null && tce-ab
+[ $cmd = "search" ] && which pact      2>/dev/null >/dev/null && pact find $list
+[ $cmd = "search" ] && which apt-cyg   2>/dev/null >/dev/null && apt-cyg show $list
+[ $cmd = "search" ] && which cyg-apt   2>/dev/null >/dev/null && cyg-apt search $list
+[ $cmd = "search" ] && which brew      2>/dev/null >/dev/null && brew search $list
+[ $cmd = "search" ] && which eopkg     2>/dev/null >/dev/null && eopkg search $list
+[ $cmd = "search" ] && which slax      2>/dev/null >/dev/null && slax search $list
+[ $cmd = "search" ] && which opkg      2>/dev/null >/dev/null && opkg list | grep $list | cut -d" " -f1
+[ $cmd = "search" ] && which usm       2>/dev/null >/dev/null && usm -s $list
+[ $cmd = "search" ] && which apk       2>/dev/null >/dev/null && apk search $list
+
+[ $cmd = "download" ] && which apt-get 2>/dev/null >/dev/null && apt_download $list
+[ $cmd = "download" ] && which pacman  2>/dev/null >/dev/null && sudo pacman -Sw $list
+[ $cmd = "download" ] && which emerge  2>/dev/null >/dev/null && sudo emerge --fetchonly $list
+[ $cmd = "download" ] && which yum     2>/dev/null >/dev/null && sudo yumdownloader $list
+[ $cmd = "download" ] && which apt-cyg 2>/dev/null >/dev/null && apt-cyg download $list
+[ $cmd = "download" ] && which cyg-apt 2>/dev/null >/dev/null && cyg-apt download $list
+[ $cmd = "download" ] && which slax    2>/dev/null >/dev/null && slax download $list
+[ $cmd = "download" ] && which usm     2>/dev/null >/dev/null && usm -g $list
+
+[ $cmd = "update" ] && which apt-get   2>/dev/null >/dev/null && sudo apt-get update
+[ $cmd = "update" ] && which pacman    2>/dev/null >/dev/null && sudo pacman -Syy
+[ $cmd = "update" ] && which emerge    2>/dev/null >/dev/null && sudo layman -f
+[ $cmd = "update" ] && which yum       2>/dev/null >/dev/null && sudo yum check-update
+[ $cmd = "update" ] && which zypper    2>/dev/null >/dev/null && sudo zypper refresh
+[ $cmd = "update" ] && which urpmi     2>/dev/null >/dev/null && sudo urpmi.update -a
+[ $cmd = "update" ] && which pact      2>/dev/null >/dev/null && pact update
+[ $cmd = "update" ] && which apt-cyg   2>/dev/null >/dev/null && apt-cyg update
+[ $cmd = "update" ] && which brew      2>/dev/null >/dev/null && brew update
+[ $cmd = "update" ] && which eopkg     2>/dev/null >/dev/null && sudo eopkg update-repo
+[ $cmd = "update" ] && which opkg      2>/dev/null >/dev/null && opkg update
+[ $cmd = "update" ] && which usm       2>/dev/null >/dev/null && usm -u all
+[ $cmd = "update" ] && which apk       2>/dev/null >/dev/null && apk update
+
+[ $cmd = "clean" ] && which apt-get    2>/dev/null >/dev/null && sudo apt-get clean
+[ $cmd = "clean" ] && which pacman     2>/dev/null >/dev/null && sudo pacman -Sc
+[ $cmd = "clean" ] && which yum        2>/dev/null >/dev/null && sudo yum clean
+[ $cmd = "clean" ] && which brew       2>/dev/null >/dev/null && brew cleanup -s
+[ $cmd = "clean" ] && which eopkg      2>/dev/null >/dev/null && sudo eopkg delete-cache
+
+}
+

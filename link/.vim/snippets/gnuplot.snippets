@@ -1,0 +1,19 @@
+snippet 3dcells
+	set view 55,40
+	#set autoscale
+	set border 4095 front linetype 0 linewidth 1.000
+	set xyplane 0
+	set datafile separator ","
+	set xrange [0:1]
+	set yrange [0:1]
+	set zrange [0:1]
+	splot 'positions/cells_%n%_1.csv' with points pt 7 fc rgb "black"  lt -1 ps 0.5, \
+	      'positions/cells_%n%_1.csv' with points pt 7 fc rgb "blue"   lt -1 ps 0.25, \
+	      'positions/cells_%n%_2.csv' with points pt 7 fc rgb "black"  lt -1 ps 0.5, \
+	      'positions/cells_%n%_2.csv' with points pt 7 fc rgb "orange" lt -1 ps 0.25
+	set xtics axis
+	set format ""
+	unset key
+	set term pngcairo mono enhanced
+	set out 'output/cells_%n%.png'
+	replot

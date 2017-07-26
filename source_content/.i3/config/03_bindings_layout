@@ -1,0 +1,40 @@
+# change container layout (stacked, tabbed, toggle split)
+bindsym $mod+s layout stacking
+bindsym $mod+w layout tabbed
+bindsym $mod+e layout toggle split
+# bindsym $mod+x layout toggle all
+bindsym $mod+t floating toggle
+bindsym $mod+f fullscreen
+bindsym Ctrl+Mod1+f fullscreen
+
+# toggle tiling / floating
+# bindsym $mod+Shift+space floating toggle
+# bindsym $mod+space floating toggle
+
+# change focus between tiling / floating windows
+# bindsym $mod+space focus mode_toggle
+# bindsym $mod+d focus mode_toggle
+
+# focus the parent container
+bindsym $mod+a focus parent
+bindsym $mod+Shift+a focus child
+
+# split in horizontal orientation
+# bindsym $mod+h split h
+bindsym $mod+b split v
+
+# split in vertical orientation
+# bindsym $mod+v split v
+bindsym $mod+v split h
+
+# kill focused window
+# bindsym $mod+Shift+q kill
+bindsym $mod+x kill
+bindsym $mod+Shift+x exec --no-startup-id "sleep 0.5 && xkill"
+
+# Move floating container to the center
+# of all outputs
+bindsym $mod+c move absolute position center
+
+#bindsym $mod+comma split v; layout stacking ; focus right; move left
+#bindsym $mod+period split v; layout stacking ; focus left; move right

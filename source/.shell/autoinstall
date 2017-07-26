@@ -1,0 +1,431 @@
+FOLDER=$(dirname $(readlink -f $0))
+#source $FOLDER/pkg
+MYSELF=$(readlink -f $0)
+
+echo '%name%(){'                                                                         > /tmp/template
+echo '   [ "`unset -f %name%; which %name% | grep found`" = "" ] || pkg install %name%' >> /tmp/template
+echo '   [ "`unset -f %name%; which %name% | grep found`" = "" ] || return'             >> /tmp/template
+echo '   `unset -f %name%; which %name%` $*;'                                           >> /tmp/template
+echo '}'                                                                                >> /tmp/template
+echo ''                                                                                 >> /tmp/template
+
+for a in meld gvim google-chrome espeak fbreader g++ inkscape skype mksquashfs svn virtualbox vlc w3m wine youtube-dl x11vnc gimp terminator arandr baobab fdupes git jdownloader2 lame mplayer mencoder paman pdftk rar sqlite sqlite3 convert tmux detox ffmpeg dot pdflatex sshfs duplicity ranger terminology wps ncdu pcmanfm htop x2goclient pdfjam pdfcrop pdfnup aria2c cmake pithos aws pip scala sbt ammonite hg qalculate curl vagrant mendeleydesktop canto wkhtmltopdf pandoc icdiff latexrun fzf z
+do
+	grep $a'()' $MYSELF >/dev/null && continue
+	cat /tmp/template | sed s/%name%/$a/g >> $MYSELF
+done
+
+meld(){
+   [ "`unset -f meld; which meld | grep found`" = "" ] || pkg install meld
+   [ "`unset -f meld; which meld | grep found`" = "" ] || return
+   `unset -f meld; which meld` $*;
+}
+
+gvim(){
+   [ "`unset -f gvim; which gvim | grep found`" = "" ] || pkg install gvim
+   [ "`unset -f gvim; which gvim | grep found`" = "" ] || return
+   `unset -f gvim; which gvim` $*;
+}
+
+google-chrome(){
+   [ "`unset -f google-chrome; which google-chrome | grep found`" = "" ] || pkg install google-chrome
+   [ "`unset -f google-chrome; which google-chrome | grep found`" = "" ] || return
+   `unset -f google-chrome; which google-chrome` $*;
+}
+
+espeak(){
+   [ "`unset -f espeak; which espeak | grep found`" = "" ] || pkg install espeak
+   [ "`unset -f espeak; which espeak | grep found`" = "" ] || return
+   `unset -f espeak; which espeak` $*;
+}
+
+fbreader(){
+   [ "`unset -f fbreader; which fbreader | grep found`" = "" ] || pkg install fbreader
+   [ "`unset -f fbreader; which fbreader | grep found`" = "" ] || return
+   `unset -f fbreader; which fbreader` $*;
+}
+
+g++(){
+   [ "`unset -f g++; which g++ | grep found`" = "" ] || pkg install g++
+   [ "`unset -f g++; which g++ | grep found`" = "" ] || return
+   `unset -f g++; which g++` $*;
+}
+
+inkscape(){
+   [ "`unset -f inkscape; which inkscape | grep found`" = "" ] || pkg install inkscape
+   [ "`unset -f inkscape; which inkscape | grep found`" = "" ] || return
+   `unset -f inkscape; which inkscape` $*;
+}
+
+skype(){
+   [ "`unset -f skype; which skype | grep found`" = "" ] || pkg install skype
+   [ "`unset -f skype; which skype | grep found`" = "" ] || return
+   `unset -f skype; which skype` $*;
+}
+
+mksquashfs(){
+   [ "`unset -f mksquashfs; which mksquashfs | grep found`" = "" ] || pkg install mksquashfs
+   [ "`unset -f mksquashfs; which mksquashfs | grep found`" = "" ] || return
+   `unset -f mksquashfs; which mksquashfs` $*;
+}
+
+svn(){
+   [ "`unset -f svn; which svn | grep found`" = "" ] || pkg install svn
+   [ "`unset -f svn; which svn | grep found`" = "" ] || return
+   `unset -f svn; which svn` $*;
+}
+
+virtualbox(){
+   [ "`unset -f virtualbox; which virtualbox | grep found`" = "" ] || pkg install virtualbox
+   [ "`unset -f virtualbox; which virtualbox | grep found`" = "" ] || return
+   `unset -f virtualbox; which virtualbox` $*;
+}
+
+vlc(){
+   [ "`unset -f vlc; which vlc | grep found`" = "" ] || pkg install vlc
+   [ "`unset -f vlc; which vlc | grep found`" = "" ] || return
+   `unset -f vlc; which vlc` $*;
+}
+
+w3m(){
+   [ "`unset -f w3m; which w3m | grep found`" = "" ] || pkg install w3m
+   [ "`unset -f w3m; which w3m | grep found`" = "" ] || return
+   `unset -f w3m; which w3m` $*;
+}
+
+wine(){
+   [ "`unset -f wine; which wine | grep found`" = "" ] || pkg install wine
+   [ "`unset -f wine; which wine | grep found`" = "" ] || return
+   `unset -f wine; which wine` $*;
+}
+
+youtube-dl(){
+   [ "`unset -f youtube-dl; which youtube-dl | grep found`" = "" ] || pkg install youtube-dl
+   [ "`unset -f youtube-dl; which youtube-dl | grep found`" = "" ] || return
+   `unset -f youtube-dl; which youtube-dl` $*;
+}
+
+x11vnc(){
+   [ "`unset -f x11vnc; which x11vnc | grep found`" = "" ] || pkg install x11vnc
+   [ "`unset -f x11vnc; which x11vnc | grep found`" = "" ] || return
+   `unset -f x11vnc; which x11vnc` $*;
+}
+
+gimp(){
+   [ "`unset -f gimp; which gimp | grep found`" = "" ] || pkg install gimp
+   [ "`unset -f gimp; which gimp | grep found`" = "" ] || return
+   `unset -f gimp; which gimp` $*;
+}
+
+terminator(){
+   [ "`unset -f terminator; which terminator | grep found`" = "" ] || pkg install terminator
+   [ "`unset -f terminator; which terminator | grep found`" = "" ] || return
+   `unset -f terminator; which terminator` $*;
+}
+
+arandr(){
+   [ "`unset -f arandr; which arandr | grep found`" = "" ] || pkg install arandr
+   [ "`unset -f arandr; which arandr | grep found`" = "" ] || return
+   `unset -f arandr; which arandr` $*;
+}
+
+baobab(){
+   [ "`unset -f baobab; which baobab | grep found`" = "" ] || pkg install baobab
+   [ "`unset -f baobab; which baobab | grep found`" = "" ] || return
+   `unset -f baobab; which baobab` $*;
+}
+
+fdupes(){
+   [ "`unset -f fdupes; which fdupes | grep found`" = "" ] || pkg install fdupes
+   [ "`unset -f fdupes; which fdupes | grep found`" = "" ] || return
+   `unset -f fdupes; which fdupes` $*;
+}
+
+git(){
+   [ "`unset -f git; which git | grep found`" = "" ] || pkg install git
+   [ "`unset -f git; which git | grep found`" = "" ] || return
+   `unset -f git; which git` $*;
+}
+
+jdownloader2(){
+   [ "`unset -f jdownloader2; which jdownloader2 | grep found`" = "" ] || pkg install jdownloader2
+   [ "`unset -f jdownloader2; which jdownloader2 | grep found`" = "" ] || return
+   `unset -f jdownloader2; which jdownloader2` $*;
+}
+
+lame(){
+   [ "`unset -f lame; which lame | grep found`" = "" ] || pkg install lame
+   [ "`unset -f lame; which lame | grep found`" = "" ] || return
+   `unset -f lame; which lame` $*;
+}
+
+mencoder(){
+   [ "`unset -f mencoder; which mencoder | grep found`" = "" ] || pkg install mencoder
+   [ "`unset -f mencoder; which mencoder | grep found`" = "" ] || return
+   `unset -f mencoder; which mencoder` $*;
+}
+
+paman(){
+   [ "`unset -f paman; which paman | grep found`" = "" ] || pkg install paman
+   [ "`unset -f paman; which paman | grep found`" = "" ] || return
+   `unset -f paman; which paman` $*;
+}
+
+pdftk(){
+   [ "`unset -f pdftk; which pdftk | grep found`" = "" ] || pkg install pdftk
+   [ "`unset -f pdftk; which pdftk | grep found`" = "" ] || return
+   `unset -f pdftk; which pdftk` $*;
+}
+
+rar(){
+   [ "`unset -f rar; which rar | grep found`" = "" ] || pkg install rar
+   [ "`unset -f rar; which rar | grep found`" = "" ] || return
+   `unset -f rar; which rar` $*;
+}
+
+sqlite(){
+   [ "`unset -f sqlite; which sqlite | grep found`" = "" ] || pkg install sqlite
+   [ "`unset -f sqlite; which sqlite | grep found`" = "" ] || return
+   `unset -f sqlite; which sqlite` $*;
+}
+
+convert(){
+   [ "`unset -f convert; which convert | grep found`" = "" ] || pkg install convert
+   [ "`unset -f convert; which convert | grep found`" = "" ] || return
+   `unset -f convert; which convert` $*;
+}
+
+tmux(){
+   [ "`unset -f tmux; which tmux | grep found`" = "" ] || pkg install tmux
+   [ "`unset -f tmux; which tmux | grep found`" = "" ] || return
+   `unset -f tmux; which tmux` $*;
+}
+
+detox(){
+   [ "`unset -f detox; which detox | grep found`" = "" ] || pkg install detox
+   [ "`unset -f detox; which detox | grep found`" = "" ] || return
+   `unset -f detox; which detox` $*;
+}
+
+mplayer(){
+   [ "`unset -f mplayer; which mplayer | grep found`" = "" ] || pkg install mplayer
+   [ "`unset -f mplayer; which mplayer | grep found`" = "" ] || return
+   `unset -f mplayer; which mplayer` $*;
+}
+
+ffmpeg(){
+   [ "`unset -f ffmpeg; which ffmpeg | grep found`" = "" ] || pkg install ffmpeg
+   [ "`unset -f ffmpeg; which ffmpeg | grep found`" = "" ] || return
+   `unset -f ffmpeg; which ffmpeg` $*;
+}
+
+dot(){
+   [ "`unset -f dot; which dot | grep found`" = "" ] || pkg install dot
+   [ "`unset -f dot; which dot | grep found`" = "" ] || return
+   `unset -f dot; which dot` $*;
+}
+
+pdflatex(){
+   [ "`unset -f pdflatex; which pdflatex | grep found`" = "" ] || pkg install pdflatex
+   [ "`unset -f pdflatex; which pdflatex | grep found`" = "" ] || return
+   `unset -f pdflatex; which pdflatex` $*;
+}
+
+sshfs(){
+   [ "`unset -f sshfs; which sshfs | grep found`" = "" ] || pkg install sshfs
+   [ "`unset -f sshfs; which sshfs | grep found`" = "" ] || return
+   `unset -f sshfs; which sshfs` $*;
+}
+
+sqlite3(){
+   [ "`unset -f sqlite3; which sqlite3 | grep found`" = "" ] || pkg install sqlite3
+   [ "`unset -f sqlite3; which sqlite3 | grep found`" = "" ] || return
+   `unset -f sqlite3; which sqlite3` $*;
+}
+
+duplicity(){
+   [ "`unset -f duplicity; which duplicity | grep found`" = "" ] || pkg install duplicity
+   [ "`unset -f duplicity; which duplicity | grep found`" = "" ] || return
+   `unset -f duplicity; which duplicity` $*;
+}
+
+ranger(){
+   [ "`unset -f ranger; which ranger | grep found`" = "" ] || pkg install ranger
+   [ "`unset -f ranger; which ranger | grep found`" = "" ] || return
+   `unset -f ranger; which ranger` $*;
+}
+
+terminology(){
+   [ "`unset -f terminology; which terminology | grep found`" = "" ] || pkg install terminology
+   [ "`unset -f terminology; which terminology | grep found`" = "" ] || return
+   `unset -f terminology; which terminology` $*;
+}
+
+wps(){
+   [ "`unset -f wps; which wps | grep found`" = "" ] || pkg install wps
+   [ "`unset -f wps; which wps | grep found`" = "" ] || return
+   `unset -f wps; which wps` $*;
+}
+
+ncdu(){
+   [ "`unset -f ncdu; which ncdu | grep found`" = "" ] || pkg install ncdu
+   [ "`unset -f ncdu; which ncdu | grep found`" = "" ] || return
+   `unset -f ncdu; which ncdu` $*;
+}
+
+pcmanfm(){
+   [ "`unset -f pcmanfm; which pcmanfm | grep found`" = "" ] || pkg install pcmanfm
+   [ "`unset -f pcmanfm; which pcmanfm | grep found`" = "" ] || return
+   `unset -f pcmanfm; which pcmanfm` $*;
+}
+
+htop(){
+   [ "`unset -f htop; which htop | grep found`" = "" ] || pkg install htop
+   [ "`unset -f htop; which htop | grep found`" = "" ] || return
+   `unset -f htop; which htop` $*;
+}
+
+x2goclient(){
+   [ "`unset -f x2goclient; which x2goclient | grep found`" = "" ] || pkg install x2goclient
+   [ "`unset -f x2goclient; which x2goclient | grep found`" = "" ] || return
+   `unset -f x2goclient; which x2goclient` $*;
+}
+
+pdfjam(){
+   [ "`unset -f pdfjam; which pdfjam | grep found`" = "" ] || pkg install pdfjam
+   [ "`unset -f pdfjam; which pdfjam | grep found`" = "" ] || return
+   `unset -f pdfjam; which pdfjam` $*;
+}
+
+pdfcrop(){
+   [ "`unset -f pdfcrop; which pdfcrop | grep found`" = "" ] || pkg install pdfcrop
+   [ "`unset -f pdfcrop; which pdfcrop | grep found`" = "" ] || return
+   `unset -f pdfcrop; which pdfcrop` $*;
+}
+
+pdfnup(){
+   [ "`unset -f pdfnup; which pdfnup | grep found`" = "" ] || pkg install pdfnup
+   [ "`unset -f pdfnup; which pdfnup | grep found`" = "" ] || return
+   `unset -f pdfnup; which pdfnup` $*;
+}
+
+aria2c(){
+   [ "`unset -f aria2c; which aria2c | grep found`" = "" ] || pkg install aria2c
+   [ "`unset -f aria2c; which aria2c | grep found`" = "" ] || return
+   `unset -f aria2c; which aria2c` $*;
+}
+
+cmake(){
+   [ "`unset -f cmake; which cmake | grep found`" = "" ] || pkg install cmake
+   [ "`unset -f cmake; which cmake | grep found`" = "" ] || return
+   `unset -f cmake; which cmake` $*;
+}
+
+pithos(){
+   [ "`unset -f pithos; which pithos | grep found`" = "" ] || pkg install pithos
+   [ "`unset -f pithos; which pithos | grep found`" = "" ] || return
+   `unset -f pithos; which pithos` $*;
+}
+
+aws(){
+   [ "`unset -f aws; which aws | grep found`" = "" ] || pkg install aws
+   [ "`unset -f aws; which aws | grep found`" = "" ] || return
+   `unset -f aws; which aws` $*;
+}
+
+pip(){
+   [ "`unset -f pip; which pip | grep found`" = "" ] || pkg install pip
+   [ "`unset -f pip; which pip | grep found`" = "" ] || return
+   `unset -f pip; which pip` $*;
+}
+
+scala(){
+   [ "`unset -f scala; which scala | grep found`" = "" ] || pkg install scala
+   [ "`unset -f scala; which scala | grep found`" = "" ] || return
+   `unset -f scala; which scala` $*;
+}
+
+sbt(){
+   [ "`unset -f sbt; which sbt | grep found`" = "" ] || pkg install sbt
+   [ "`unset -f sbt; which sbt | grep found`" = "" ] || return
+   `unset -f sbt; which sbt` $*;
+}
+
+ammonite(){
+   [ "`unset -f ammonite; which ammonite | grep found`" = "" ] || pkg install ammonite
+   [ "`unset -f ammonite; which ammonite | grep found`" = "" ] || return
+   `unset -f ammonite; which ammonite` $*;
+}
+
+hg(){
+   [ "`unset -f hg; which hg | grep found`" = "" ] || pkg install hg
+   [ "`unset -f hg; which hg | grep found`" = "" ] || return
+   `unset -f hg; which hg` $*;
+}
+
+qalculate(){
+   [ "`unset -f qalculate; which qalculate | grep found`" = "" ] || pkg install qalculate
+   [ "`unset -f qalculate; which qalculate | grep found`" = "" ] || return
+   `unset -f qalculate; which qalculate` $*;
+}
+
+curl(){
+   [ "`unset -f curl; which curl | grep found`" = "" ] || pkg install curl
+   [ "`unset -f curl; which curl | grep found`" = "" ] || return
+   `unset -f curl; which curl` $*;
+}
+
+vagrant(){
+   [ "`unset -f vagrant; which vagrant | grep found`" = "" ] || pkg install vagrant
+   [ "`unset -f vagrant; which vagrant | grep found`" = "" ] || return
+   `unset -f vagrant; which vagrant` $*;
+}
+
+mendeleydesktop(){
+   [ "`unset -f mendeleydesktop; which mendeleydesktop | grep found`" = "" ] || pkg install mendeleydesktop
+   [ "`unset -f mendeleydesktop; which mendeleydesktop | grep found`" = "" ] || return
+   `unset -f mendeleydesktop; which mendeleydesktop` $*;
+}
+
+canto(){
+   [ "`unset -f canto; which canto | grep found`" = "" ] || pkg install canto
+   [ "`unset -f canto; which canto | grep found`" = "" ] || return
+   `unset -f canto; which canto` $*;
+}
+
+wkhtmltopdf(){
+   [ "`unset -f wkhtmltopdf; which wkhtmltopdf | grep found`" = "" ] || pkg install wkhtmltopdf
+   [ "`unset -f wkhtmltopdf; which wkhtmltopdf | grep found`" = "" ] || return
+   `unset -f wkhtmltopdf; which wkhtmltopdf` $*;
+}
+
+pandoc(){
+   [ "`unset -f pandoc; which pandoc | grep found`" = "" ] || pkg install pandoc
+   [ "`unset -f pandoc; which pandoc | grep found`" = "" ] || return
+   `unset -f pandoc; which pandoc` $*;
+}
+
+icdiff(){
+   [ "`unset -f icdiff; which icdiff | grep found`" = "" ] || pkg install icdiff
+   [ "`unset -f icdiff; which icdiff | grep found`" = "" ] || return
+   `unset -f icdiff; which icdiff` $*;
+}
+
+latexrun(){
+   [ "`unset -f latexrun; which latexrun | grep found`" = "" ] || pkg install latexrun
+   [ "`unset -f latexrun; which latexrun | grep found`" = "" ] || return
+   `unset -f latexrun; which latexrun` $*;
+}
+
+fzf(){
+   [ "`unset -f fzf; which fzf | grep found`" = "" ] || pkg install fzf
+   [ "`unset -f fzf; which fzf | grep found`" = "" ] || return
+   `unset -f fzf; which fzf` $*;
+}
+
+z(){
+   [ "`unset -f z; which z | grep found`" = "" ] || pkg install z
+   [ "`unset -f z; which z | grep found`" = "" ] || return
+   `unset -f z; which z` $*;
+}
+

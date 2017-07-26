@@ -1,0 +1,8 @@
+geo_ip(){
+	#line=`wget --post-data="query=$1" https://www.iplocation.net/ -O - | grep Region -A4  | head -n5 | tail -n1` 2>/dev/null
+	#region=`echo $line | cut -d">" -f2 | cut -d"<" -f1`
+	  #city=`echo $line | cut -d">" -f4 | cut -d"<" -f1`
+	#print $region "," $city
+	line=`wget "http://www.infosniper.net/index.php?ip_address=$1" -O - | grep openInfoWindow` 2>/dev/null
+	echo $line | cut -d">" -f3 | cut -d"<" -f1
+}

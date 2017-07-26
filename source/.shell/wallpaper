@@ -1,0 +1,11 @@
+pod_wallpaper(){
+	cd /tmp
+	wget http://photography.nationalgeographic.com/photography/photo-of-the-day/ -O pod
+	photo=http:`cat pod | grep images | grep 'width="990"' | grep 'height="742"' | cut -d'"' -f2`
+	wget $photo 
+	#feh --bg-center   `basename $photo`
+	feh --bg-fill     `basename $photo`
+	#feh --bg-scale    `basename $photo`
+	#feh --bg-seamless `basename $photo`
+	#feh --bg-tile     `basename $photo`
+}

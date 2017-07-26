@@ -1,0 +1,34 @@
+# sound control
+# https://faq.i3wm.org/question/125/how-to-change-the-systems-volume/?answer=249#post-id-249
+bindsym XF86AudioRaiseVolume exec amixer -q set Master 5%+ -q
+bindsym XF86AudioLowerVolume exec amixer -q set Master 5%- -q
+bindsym XF86AudioMute exec amixer -q set Master toggle
+
+#brightness
+bindcode 233 exec sudo /data/git/alex/scripts/brightctl up
+bindcode 232 exec sudo /data/git/alex/scripts/brightctl down
+
+# https://github.com/redhat69/dotfiles/blob/master/.i3/config
+# toggle pause cmus music player
+bindsym XF86AudioPlay exec cmus-remote -u
+bindsym XF86HomePage exec google-chrome http://youtube.com
+bindsym XF86Mail exec google-chrome https://mail.google.com
+
+# Notebook-specific hotkeys
+# bindcode 214 exec --no-startup-id /home/michael/toggle_beamer.sh
+
+# Simulate ctrl+v upon pressing $mod+x
+# bindsym --release $mod+x exec --no-startup-id xdotool key --clearmodifiers ctrl+v
+
+# Take a screenshot upon pressing $mod+x (select an area)
+# bindsym --release $mod+x exec --no-startup-id import /tmp/latest-screenshot.png
+
+# i3lock
+# bindsym $win+l exec i3lock -t -e -i /home/alex/mug.png -c 000000
+
+mode "pass-through" {
+	bindsym Ctrl+Mod1+t mode "default"
+}
+bindsym Ctrl+Mod1+t mode "pass-through"
+
+

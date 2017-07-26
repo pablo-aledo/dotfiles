@@ -1,0 +1,39 @@
+pdf_explode_png(){
+	mkdir "`basename $1 .pdf`"
+	cd "`basename $1 .pdf`"
+	convert -density 300 "../$1" page-%04d.png
+}
+
+pdf_explode_pdf(){
+	mkdir "`basename $1 .pdf`"
+	cd "`basename $1 .pdf`"
+	pdftk "../$1" burst output page-%04d.pdf
+}
+
+pdf_explode_svg(){
+	mkdir "`basename $1 .pdf`"
+	cd "`basename $1 .pdf`"
+	pdftk "../$1" burst output page-%04d.pdf
+	for a in *.pdf
+	do
+		pdf2svg $a "`echo $a | sed s/.pdf$/.svg/g`"
+		rm -fr $a
+	done
+}
+
+pdf_implode_pdf(){
+	pdftk `ls *.pdf | sort -g` cat output "`basename $PWD`".pdf
+}
+
+pdf_implode_png(){
+	convert `ls *.png | sort -g` "`basename $PWD`".pdf
+}
+
+pdf_implode_svg(){
+	for a in *.svg
+	do
+		inkscape --export-pdf=`basename $a .svg`.pdf $a
+	done
+	pdftk `ls *.pdf | sort -g` cat output "`basename $PWD`".pdf
+	rm -fr page-*.pdf
+}

@@ -1,0 +1,8 @@
+which dpkg-reconfigure >/dev/null || return
+
+sudo rm /etc/timezone 
+#echo 'Europe/Madrid'    | sudo tee /etc/timezone
+echo 'Europe/London'    | sudo tee /etc/timezone
+#echo 'Australia/Sydney'    | sudo tee /etc/timezone
+sudo dpkg-reconfigure -f noninteractive tzdata
+

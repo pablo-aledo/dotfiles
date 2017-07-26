@@ -1,0 +1,179 @@
+
+forest_test_local(){
+
+	# Requirements of benchexec
+	sudo mount -t cgroup none /sys/fs/cgroup
+	sudo chmod o+wt '/sys/fs/cgroup/'
+
+	# date
+	folder=/var/www/html/svcomp/`date +%y%m%d-%H%M`
+
+	# Update Forest
+	cd ~/svcomp
+	rm -rf forest
+	tar -xzf ~/forest.tar.gz
+
+	# Update wrapper script
+	/bin/cp ~/svcomp/forest/forest.py ~/.local/lib/python3.4/site-packages/benchexec/tools/forest.py
+
+	# Update benchmarks
+	cd ~/svcomp/sv-benchmarks
+	git pull
+
+	# Adapt file to system
+	cd ~/svcomp/forest
+	sed -i "s/cpuCores=\"8\"/cpuCores=\"`nproc`\"/g" forest.xml
+	sed -i "s/memlimit=\"15 GB\"/memlimit=\"`cat /proc/meminfo| grep MemTotal | awk '{print $2 " " $3}'`\"/g" forest.xml
+
+	# Execute
+	~/.local/bin/benchexec forest.xml
+	for a in results/*.xml.bz2
+	do 
+		~/.local/bin/table-generator $a
+	done
+
+	# update to web
+	sudo mkdir -p $folder
+	sudo mv results/*.html $folder
+	sudo rm -rf /var/www/html/svcomp/index.html
+	sudo cp ~/svcomp/forest/message $folder
+}
+
+
+forest_test_local_distrib(){
+
+	# Requirements of benchexec
+	sudo mount -t cgroup none /sys/fs/cgroup
+	sudo chmod o+wt '/sys/fs/cgroup/'
+
+	# date
+	folder=/var/www/html/svcomp/`date +%y%m%d-%H%M`
+
+	# Update Forest
+	cd ~/svcomp
+	rm -rf forest
+	tar -xzf ~/forest.tar.gz
+
+	# Update wrapper script
+	/bin/cp ~/svcomp/forest/forest.py ~/.local/lib/python3.4/site-packages/benchexec/tools/forest.py
+
+	# Update benchmarks
+	cd ~/svcomp/sv-benchmarks
+	git pull
+
+	# Adapt file to system
+	cd ~/svcomp/forest
+	sed -i "s/cpuCores=\"8\"/cpuCores=\"`nproc`\"/g" forest.xml
+	sed -i "s/memlimit=\"15 GB\"/memlimit=\"`cat /proc/meminfo| grep MemTotal | awk '{print $2 " " $3}'`\"/g" forest.xml
+
+	# Filter tasks
+	echo forest.xml | grep -v tasks | grep -v '</benchmark>' > forest.xml.aux
+	echo forest.xml | grep tasks | grep $1 >> forest.xml.aux
+	echo '</benchmark>' >> forest.xml.aux
+	mv forest.xml.aux forest.xml
+
+	# Execute
+	~/.local/bin/benchexec forest.xml
+	for a in results/*.xml.bz2
+	do 
+		~/.local/bin/table-generator $a
+	done
+
+	# update to web
+	sudo mkdir -p $folder
+	sudo mv results/*.html $folder
+	sudo rm -rf /var/www/html/svcomp/index.html
+	sudo cp ~/svcomp/forest/message $folder
+}
+
+
+skink_test_local(){
+
+	# Requirements of benchexec
+	sudo mount -t cgroup none /sys/fs/cgroup
+	sudo chmod o+wt '/sys/fs/cgroup/'
+
+	# date
+	folder=/var/www/html/svcomp/`date +%y%m%d-%H%M`
+
+	# Update skink
+	cd ~/svcomp
+	sudo rm -rf skink
+	tar -xzf ~/skink.tar.gz
+
+	# Update wrapper script
+	/bin/cp ~/svcomp/skink/skink.py ~/.local/lib/python3.5/site-packages/benchexec/tools/skink.py
+
+	# Update benchmarks
+	cd ~/svcomp/sv-benchmarks
+	git pull
+
+	# Adapt file to system
+	cd ~/svcomp/skink
+	sed -i "s/cpuCores=\"1\"/cpuCores=\"`nproc`\"/g" skink.xml
+	sed -i "s/memlimit=\"500 MB\"/memlimit=\"`cat /proc/meminfo| grep MemTotal | awk '{print $2 " " $3}'`\"/g" skink.xml
+	sed -i "s/memlimit=\"15000\"/memlimit=\"`cat /proc/meminfo| grep MemTotal | awk '{print $2 " " $3}'`\"/g" skink.xml
+
+	# Execute
+	sudo ~/.local/bin/benchexec skink.xml
+	for a in results/*.xml.bz2
+	do 
+		sudo ~/.local/bin/table-generator $a
+	done
+
+	# update to web
+	sudo mkdir -p $folder
+	sudo mv results/*.html $folder
+	sudo rm -rf /var/www/html/svcomp/index.html
+	sudo cp ~/svcomp/skink/message $folder
+}
+
+export SVCOMP_CONFIG_FILE=/media/disk/svcomp/config
+
+forest_test_remote(){
+
+	# configure
+	source $SVCOMP_CONFIG_FILE
+
+	# upload forest
+	rsync -vai -e "ssh -i $SVCOMP_PEM" "$SVCOMP_LOCAL_FOLDER/forest.tar.gz" "$SVCOMP_USER@$SVCOMP_SERVER:$SVCOMP_REMOTE_FOLDER/forest.tar.gz"
+
+	# exec command
+	# ssh -n -f -i $SVCOMP_PEM $SVCOMP_USER@$SVCOMP_SERVER "nohup sh -c '. ~/.dotfiles/source/.shell/svcomp; forest_test_local' >/dev/null 2>&1 &"
+	ssh -n -f -i $SVCOMP_PEM $SVCOMP_USER@$SVCOMP_SERVER "tmux new -d -s benchexec_forest '. ~/.dotfiles/source/.shell/svcomp; forest_test_local'"
+
+	sleep 5 && ssh -i $SVCOMP_PEM $SVCOMP_USER@$SVCOMP_SERVER "ps aux | grep benchexec"
+
+}
+
+forest_test_distrib(){
+	# configure
+	source $SVCOMP_CONFIG_FILE
+
+	# upload forest 
+	for i in `seq 1 ${#svcomp_task[@]}`
+	do
+		rsync -vai -e "ssh -i $SVCOMP_PEM" "$SVCOMP_LOCAL_FOLDER/forest.tar.gz" "$SVCOMP_USER@$svcomp_ip[$i]:$SVCOMP_REMOTE_FOLDER/forest.tar.gz"
+	done
+
+	# exec command
+	for i in `seq 1 ${#svcomp_task[@]}`
+	do
+		ssh -n -f -i $SVCOMP_PEM $SVCOMP_USER@$svcomp_ip[$i] "tmux new -d -s benchexec_forest '. ~/.dotfiles/source/.shell/svcomp; forest_test_local_distrib $svcomp_task[$i]'"
+	done
+}
+
+forest_make_package(){
+	source $SVCOMP_CONFIG_FILE
+	cd $SVCOMP_LOCAL_FOLDER
+	tar -xzf forest.tar.gz
+
+	\cp /media/disk/release/bin/forest          forest/bin/forest
+	\cp /media/disk/release/lib/forest.a        forest/lib/forest.a
+	\cp /llvm-2.9/Release+Asserts/lib/Forest*   forest/tools/llvm-2.9/Release+Asserts/lib/
+
+	rm -rf forest.tar.gz
+	tar -czf forest.tar.gz forest/*
+	rm -rf forest
+}
+

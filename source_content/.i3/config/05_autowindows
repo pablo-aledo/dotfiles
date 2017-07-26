@@ -1,0 +1,37 @@
+# auto enable floating mode
+# class is usually 1st letter Capitalize and everything else lowercase
+# use 'xprop' or 'xwininfo' to get window information
+# for_window [class="(?i)dolphin"] floating enable
+for_window [class="Nautilus" instance="file_progress"] floating enable
+for_window [class="Nautilus" instance="file_progress"] border normal
+for_window [class="Gcalctool"] floating enable
+for_window [class="(?i)gnome-calculator"] floating enable
+for_window [window_role="pop-up"] floating enable
+for_window [title="^win.*$"] floating enable
+
+# disable borders for some applications
+for_window [class="^Google-chrome$"] border none
+for_window [class="^Firefox$"] border none
+for_window [class="^Thunderbird$"] border none
+for_window [class="Nautilus"] border none
+for_window [class="Gvim"] border none
+for_window [class="^Google-chrome$"] border none
+
+# Make all urxvts use a 1-pixel border:
+for_window [class="urxvt"] border pixel 1
+
+# assign program to specific workspace
+# assign [class="Vim"] 10: programming
+
+# Same thing, but more precise (exact match instead of substring)
+# assign [class="^URxvt$"] 2
+# Same thing, but with a beautiful arrow :)
+# assign [class="^URxvt$"] → 2
+# Assignment to a named workspace
+# assign [class="^URxvt$"] → work
+# Start urxvt -name irssi
+# assign [class="^URxvt$" instance="^irssi$"] → 3
+
+
+for_window [class="Meld"] floating enable, move position 1980 px 10 px
+

@@ -1,0 +1,14 @@
+# autostart apps
+# http://i3wm.org/docs/userguide.html#_automatically_starting_applications_on_i3_startup
+# exec xcompmgr
+# exec ~/.scripts/feh-wallpaper-changer.sh
+# exec parcellite
+# exec i3-msg 'workspace 9: web; exec chromium; workspace back_and_forth'
+# exec i3-msg 'workspace 9: web; exec chromium'
+exec --no-startup-id "sleep 5 && feh --bg-scale /media/DATA/Work/dotfiles/data/repository/Mint_17/setup_personal/wallpaper/14569390665_67773730f4_k.jpg"
+exec --no-startup-id "sleep 5 && feh --bg-scale ~/.dotfiles/wallpaper/wallpaper.jpg"
+exec --no-startup-id "sleep 5 && feh --bg-scale ~/wallpaper.jpg"
+exec --no-startup-id "sleep 5 && setxkbmap es"
+exec --no-startup-id "gnome-settings-daemon"
+exec --no-startup-id "nm-applet"
+exec --no-startup-id "sleep 5 && xmodmap ~/.Xmodmap"

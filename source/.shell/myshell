@@ -1,0 +1,11 @@
+#source $(dirname $(readlink -f $0))/pkg
+
+expand(){
+	echo $1 | sed 's/\//\\\//g'
+}
+
+myshell(){
+	[ "`whereis $1 | cut -d" " -f2 | grep :`" = "" ] || return
+	[ $1 = "tmux" ] && pkg install tmux
+	sudo sed -i "s/\($(whoami):[^:]*:[^:]*:[^:]*:[^:]*:[^:]*\):.*/\1:$(expand $(whereis $1 | cut -d' ' -f2))/g" /etc/passwd
+}

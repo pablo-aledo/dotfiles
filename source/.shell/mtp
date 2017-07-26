@@ -1,0 +1,15 @@
+#source $(dirname $(readlink -f $0))/pkg
+MTP_MOUNT_POINT=/media/DATA/phone
+
+mtp_mount(){
+	pkg install jmtpfs
+	mkdir -p $MTP_MOUNT_POINT
+	jmtpfs $MTP_MOUNT_POINT
+	cd $MTP_MOUNT_POINT
+}
+
+mtp_umount(){
+	fusermount -u $MTP_MOUNT_POINT
+}
+
+

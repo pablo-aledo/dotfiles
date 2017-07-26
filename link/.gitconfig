@@ -1,0 +1,9 @@
+[user]
+	email = pablo.aledo@gmail.com
+	name = Pablo
+[credential]
+	helper = cache --timeout=432000
+[diff]
+	tool = meld
+[push]
+	default = simple

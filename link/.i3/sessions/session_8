@@ -1,0 +1,21 @@
+# Session for writing latex papers. Gvim + evince + terminal
+split h
+exec gvim /media/disk/project/
+--
+exec evince
+--
+focus parent
+split v
+exec gnome-terminal --working-directory=/media/disk/project/
+--
+resize shrink height 
+resize shrink height 
+resize shrink height 
+resize shrink height 
+--
+focus parent
+split h
+exec google-chrome
+--
+layout tabbed
+focus right

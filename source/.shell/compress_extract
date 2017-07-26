@@ -1,0 +1,32 @@
+extract(){
+ if [ -z "$1" ]; then
+    # display usage if no parameters given
+    echo "Usage: extract <path/file_name>.<zip|rar|bz2|gz|tar|tbz2|tgz|Z|7z|xz|ex|tar.bz2|tar.gz|tar.xz>"
+ else
+    if [ -f $1 ] ; then
+	NAME=${1%.*}
+	mkdir ${NAME}_aux && cd ${NAME}_aux
+        case $1 in
+          *.tar.bz2)   tar xvjf $OLDPWD/$1    ;;
+          *.tar.gz)    tar xvzf $OLDPWD/$1    ;;
+          *.tar.xz)    tar xvJf $OLDPWD/$1    ;;
+          *.lzma)      unlzma $OLDPWD/$1      ;;
+          *.bz2)       bunzip2 $OLDPWD/$1     ;;
+          *.rar)       unrar x -ad $OLDPWD/$1 ;;
+          *.gz)        gunzip $OLDPWD/$1      ;;
+          *.tar)       tar xvf $OLDPWD/$1     ;;
+          *.tbz2)      tar xvjf $OLDPWD/$1    ;;
+          *.tgz)       tar xvzf $OLDPWD/$1    ;;
+          *.zip)       unzip $OLDPWD/$1       ;;
+          *.Z)         uncompress $OLDPWD/$1  ;;
+          *.7z)        7z x $OLDPWD/$1        ;;
+          *.xz)        unxz $OLDPWD/$1        ;;
+          *.exe)       cabextract $OLDPWD/$1  ;;
+          *)           echo "extract: '$1' - unknown archive method" ;;
+        esac
+	[ `ls | wc -l` -eq 1 ] && mv * $OLDPWD && cd $OLDPWD && rmdir ${NAME}_aux
+    else
+        echo "$1 - file does not exist"
+    fi
+ fi
+}

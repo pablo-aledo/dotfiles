@@ -1,0 +1,4 @@
+showdot(){
+	dot -Tpng "$1" > /tmp/dot.png
+	eog /tmp/dot.png
+}

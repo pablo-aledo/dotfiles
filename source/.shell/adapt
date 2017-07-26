@@ -1,0 +1,191 @@
+adapt_chromebook(){
+	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
+	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
+	sed -i '/Mod1+F2/d' ~/.i3/config
+	sed -i '/Mod1+Tab/d' ~/.i3/config
+	sed -i '/Mod1+Shift+Tab/d' ~/.i3/config
+	sed -i 's/\$mod+F4  exec gvim/\$mod+F4  exec x2goclient/g' ~/.i3/config
+	sed -i 's/\$mod+Shift+F4.*/\$mod+Shift+F4  exec \/usr\/NX\/bin\/nxplayer/g' ~/.i3/config
+	sed -i 's/google-chrome/chromium-browser/g' ~/.i3/config
+	sed -i 's/XF86AudioMute/F8/g' ~/.i3/config
+	sed -i 's/XF86AudioLowerVolume/F9/g' ~/.i3/config
+	sed -i 's/XF86AudioRaiseVolume/F10/g' ~/.i3/config
+	sed -i 's/bindsym Mod1+Return exec/# bindsym Mod1+Return exec/g' ~/.i3/config
+
+	sudo mkdir -p /media/DATA
+
+ 	sudo ln -s /usr/bin/terminator /usr/bin/gnome-terminal
+ 	sudo ln -s /usr/bin/pcmanfm /usr/bin/nautilus
+ 	sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
+
+	xmodmap -pke > ~/.Xmodmap
+	sed -i 's/191 = XF86Tools/191 = Delete/g' ~/.Xmodmap
+	xmodmap ~/.Xmodmap
+
+	sudo localectl set-locale LANG=en_US.UTF-8
+
+	echo 'gtk-theme-name="NOX"'                               >  ~/.gtkrc-2.0
+	echo 'gtk-icon-theme-name="elementary"'                   >> ~/.gtkrc-2.0
+	echo 'gtk-font-name="monofur 12"'                         >> ~/.gtkrc-2.0
+	echo 'gtk-cursor-theme-name="DMZ-White"'                  >> ~/.gtkrc-2.0
+	echo 'gtk-cursor-theme-size=0'                            >> ~/.gtkrc-2.0
+	echo 'gtk-toolbar-style=GTK_TOOLBAR_BOTH'                 >> ~/.gtkrc-2.0
+	echo 'gtk-toolbar-icon-size=GTK_ICON_SIZE_LARGE_TOOLBAR'  >> ~/.gtkrc-2.0
+	echo 'gtk-button-images=1'                                >> ~/.gtkrc-2.0
+	echo 'gtk-menu-images=1'                                  >> ~/.gtkrc-2.0
+	echo 'gtk-enable-event-sounds=1'                          >> ~/.gtkrc-2.0
+	echo 'gtk-enable-input-feedback-sounds=1'                 >> ~/.gtkrc-2.0
+	echo 'gtk-xft-antialias=1'                                >> ~/.gtkrc-2.0
+	echo 'gtk-xft-hinting=1'                                  >> ~/.gtkrc-2.0
+	echo 'gtk-xft-hintstyle="hintfull"'                       >> ~/.gtkrc-2.0
+
+	i3-msg reload
+}
+
+adapt_awsserver(){
+	sed  -i 's/<C-F3>/<F3><F3>/g' ~/.dotfiles/source/.vimrc/12_search
+	sed  -i 's/set spell/set nospell/g' ~/.dotfiles/source/.vimrc/00_basic
+ 	sudo ln -s /usr/bin/vim /usr/bin/gvim
+ 	echo '/usr/bin/google-chrome --alsa-output-device=plughw:2,3 $*' | sudo tee /usr/bin/google-chrome-nosound
+	sudo chmod +x /usr/bin/google-chrome-nosound
+}
+
+adapt_typewriter_keyboard(){
+	setxkbmap es
+	xmodmap -pke > ~/.Xmodmap
+	# xev | grep keycode
+	sed -i 's/keycode  12 =.*/keycode  12 = 3 numbersign 3 numbersign periodcentered sterling periodcentered/g' ~/.Xmodmap
+	sed -i 's/keycode  20 =.*/keycode  20 = minus equal minus equal/g' ~/.Xmodmap
+	sed -i 's/keycode  21 =.*/keycode  21 = grave asciitilde grave asciitilde/g' ~/.Xmodmap
+	sed -i 's/keycode  34 =.*/keycode  34 = at grave at grave/g' ~/.Xmodmap
+	sed -i 's/keycode  35 =.*/keycode  35 = braceleft bracketleft braceleft bracketleft/g' ~/.Xmodmap
+	sed -i 's/keycode  47 =.*/keycode  47 = plus semicolon plus semicolon/g' ~/.Xmodmap
+	sed -i 's/keycode  48 =.*/keycode  48 = asterisk colon asterisk colon/g' ~/.Xmodmap
+	sed -i 's/keycode  49 =.*/keycode  49 = Escape NoSymbol Escape/g' ~/.Xmodmap
+	sed -i 's/keycode  51 =.*/keycode  51 = braceright bracketright braceright bracketright/g' ~/.Xmodmap
+	sed -i 's/keycode  59 =.*/keycode  59 = comma less comma less/g' ~/.Xmodmap
+	sed -i 's/keycode  60 =.*/keycode  60 = period greater period greater/g' ~/.Xmodmap
+	sed -i 's/keycode  61 =.*/keycode  61 = slash question slash question/g' ~/.Xmodmap
+	sed -i 's/keycode  97 =.*/keycode  97 = backslash bar backslash bar/g' ~/.Xmodmap
+	sed -i 's/keycode 100 =.*/keycode 100 = Alt_R Meta_R Alt_R Meta_R/g' ~/.Xmodmap
+	sed -i 's/keycode 101 =.*/keycode 101 = Control_R NoSymbol Control_R/g' ~/.Xmodmap
+	sed -i 's/keycode 132 =.*/keycode 132 = bar backslash bar backslash/g' ~/.Xmodmap
+	xmodmap ~/.Xmodmap
+}
+
+adapt_openwrt(){
+	sed -i 's/REPOSITORY_FOLDER.*/REPOSITORY_FOLDER=\/dotfiles_master\/repository/g' /dotfiles_master/source/.shell/pkg
+}
+
+adapt_nofont(){
+	echo t 2 >> ~/.shell
+	sed -i 's///g' ~/.tmux.conf
+	sed -i 's///g' ~/.tmux.conf
+	sed -i 's///g' ~/.tmux.conf
+	sed -i 's///g' ~/.tmux.conf
+	find ~/.vim/ -name '*tmuxline*' -type f -delete
+}
+
+adapt_fastssh(){
+	grep 'ssh -XC -c aes128-ctr' ~/.dotfiles/source/.shell/aws && return
+	sed -i 's/ssh /ssh -XC -c aes128-ctr /g' ~/.dotfiles/source/.shell/aws
+	source ~/.dotfiles/source/.shell/aws
+}
+
+adapt_gnuroot(){
+	sed -i 's/clas=\\\$(zenity --entry)/read clas/g' ~/.config/ranger/rc.conf
+}
+
+adapt_presentation(){
+	[ "`cat ~/.i3/config | grep 'bindsym F1 '`" ] || echo 'bindsym F1 exec zsh -c "echo | nc localhost 3333"' >> ~/.i3/config
+	i3-msg reload
+
+	aws_ssh(){
+		aws_config
+		pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+		ssh `echo $pemflag` $AWS_USER@$AWS_SERVER -p $AWS_PORT $*
+	}
+
+	mk(){
+		[ $# -eq 0 ] && (
+			cd ~/cell_clustering/
+			aws_send cell_clustering.cpp    2>/dev/null >/dev/null;
+			aws_send Makefile               2>/dev/null >/dev/null;
+			aws_ssh 'source ~/.bash_profile; cd /home/u2401/cell_clustering; make'
+		)
+
+		[ $# -eq 1 ] && [ $1 = "run" ] && (
+			aws_ssh 'cd /home/u2401/cell_clustering ; qsub wrapper_script'
+			# aws_ssh 'while [ "`qstat`" ]; do sleep 1; done' >/dev/null 2>/dev/null
+			# aws_get 'run_clust.e*'          2>/dev/null >/dev/null
+			# bars `ls run_clust.e* | sort -g | tail -n1`
+			# all_bars
+		)
+		[ $# -eq 1 ] && [ $1 = "clean" ] && (
+			aws_ssh 'cd /home/u2401/cell_clustering ; make clean'
+			/usr/bin/make clean
+		)
+	}
+	alias make='mk'
+	alias qsub='aws_ssh qsub'
+	alias qstat='aws_ssh qstat'
+	echo 'qsub null' > /tmp/aws_pull
+
+	cat ~/.vimrc | head -n 15 > /tmp/vimrc
+	\mv /tmp/vimrc ~/.vimrc
+	echo 'function! SetTitle()' >> ~/.vimrc
+	echo 'let title = input("name: ")' >> ~/.vimrc
+	echo 'normal mm' >> ~/.vimrc
+	#echo 'execute(":1")' >> ~/.vimrc
+	#echo "execute ':normal ' . 'cc// ' . title" >> ~/.vimrc
+	echo "execute ':%s/fprintf(stderr, \".*\"); \/\/ title/' . 'fprintf(stderr, \"NAME                                = ' . title . '\\\\\\\\n\"); \/\/ title/g'" >> ~/.vimrc
+	echo "normal 'm" >> ~/.vimrc
+	echo "execute ':w'" >> ~/.vimrc
+	echo "execute ':w! /tmp/' . title" >> ~/.vimrc
+	echo 'endfunction' >> ~/.vimrc
+	echo 'map <F2> :call SetTitle()<cr>' >> ~/.vimrc
+	echo 'map <F3> :Tmux make; make run<cr>' >> ~/.vimrc
+	echo 'map <F5> :Tmux make; make run<cr>:<cr>' >> ~/.vimrc
+	echo ':set nospell' >> ~/.vimrc
+
+	sed -i 's/nnoremap j gj//g' ~/.dotfiles/source/.vimrc/07_movement
+	sed -i 's/nnoremap k gk//g' ~/.dotfiles/source/.vimrc/07_movement
+}
+
+adapt_pablo(){
+
+	pkg remove baobab
+	pkg remove banshee
+	pkg remove brasero
+	pkg remove 'libreoffice*'
+	pkg remove 'pidgin'
+	pkg remove 'tomboy'
+	pkg remove 'thunderbird*'
+	pkg remove 'firefox*'
+	pkg remove 'gimp*'
+	pkg remove 'gir1.2*'
+	pkg remove 'gparted'
+	pkg remove 'gile*'
+
+	pkg install i3wm
+	pkg install pcmanfm
+	pkg install xclip
+	pkg install google-chrome
+	pkg install gvim
+	pkg install xdotool
+	pkg install scrot
+	pkg install dunst
+	pkg install tmux
+	pkg install gnome-terminal
+	pkg install evince
+	pkg install vlc
+	pkg install eog
+	pkg install rar
+	pkg install ranger
+	pkg install ncdu
+	pkg install z
+	pkg install fzf
+
+	pf_mount Chrome
+}
+

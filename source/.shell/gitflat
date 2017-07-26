@@ -1,0 +1,13 @@
+gitflat(){
+
+mkdir ../gitflat/
+n='000'
+for a in `git log | egrep '^commit' | cut -d" " -f2 | tac`
+do
+	git checkout $a
+	mkdir ../gitflat/$n
+	cp -r * ../gitflat/$n/
+	n=`printf '%03d' $(($n+1))`
+done
+
+}

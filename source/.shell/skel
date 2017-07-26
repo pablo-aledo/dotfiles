@@ -1,0 +1,303 @@
+#echo -e '\e[31m vbox-image \e[0m crea una imagen de virtualbox \e[32m vbox-image \e[0m'
+vbox-image(){
+	rm /media/disk/image/imagen.vdi 
+	VBoxManage convertfromraw /media/disk/image/imagen.img /media/disk/image/imagen.vdi
+}
+
+#echo -e '\e[31m uncompress_cpio \e[0m Descomprime un gpio-gz \e[32m uncompress_cpio initrd.gz \e[0m'
+uncompress_cpio(){
+	mkdir initial_rd
+	cd initial_rd
+	cat ../$1 | gunzip | sudo cpio -i
+}
+
+#echo -e '\e[31m compress_cpio \e[0m Comprime un gpio-gz \e[32m compress_cpio initrd.gz \e[0m'
+compress_cpio(){
+	find | cpio -H newc -o | gzip > ../$1
+}
+
+#echo -e '\e[31m uncompress_lz \e[0m Descomprime un gpio-lz \e[32m uncompress_lz initrd.lz \e[0m'
+uncompress_lz(){
+	mkdir initial_rd
+	cd initial_rd
+	lzma -dc -S .lz ../$1 | cpio -imvd --no-absolute-filenames
+
+}
+
+#echo -e '\e[31m compress_lz \e[0m Comprime un gpio-lz \e[32m compress_lz initrd.lz \e[0m'
+compress_lz(){
+	find . | cpio --quiet --dereference -o -H newc | lzma -7 > ../$1
+}
+
+#echo -e '\e[31m burn_syslinux \e[0m Graba el arranque en el USB \e[32m burn_syslinux /dev/sdd \e[0m'
+burn_syslinux(){
+	sudo syslinux $11
+	cat /usr/lib/syslinux/mbr.bin | sudo tee $1
+}
+
+#echo -e '\e[31m mount_image \e[0m Monta la primera partición de la imagen \e[32m mount_image \e[0m'
+mount_image(){
+	start=`fdisk -lu /media/disk/image/imagen.img | grep img1 | awk '{print $3}'`
+	sudo mount -o loop,offset=$(($start*512)) /media/disk/image/imagen.img /mnt/
+}
+
+#echo -e '\e[31m umount_image \e[0m Desmonta la primera partición de la imagen \e[32m umount_image \e[0m'
+umount_image(){
+	sudo umount /media/disk/image/imagen.img
+}
+
+#echo -e '\e[31m adapt_initfs \e[0m Cambia el initfs a una carpeta \e[32m adapt_initfs lxde \e[0m'
+adapt_initfs(){
+	grep -Rin casper * | awk 'BEGIN{FS=":"}{print $1}' | xargs -i sed -i "s/casper/$1/g" {}
+	find . -name '*casper*' | sed "s/\(.*\)casper\(.*\)/mv \1casper\2 \1$1\2/g" | bash
+	grep -Rin '\.disk' * | awk 'BEGIN{FS=":"}{print $1}' | xargs -i sed -i "s/\.disk/$1\/\.disk/g" {}
+}
+
+#echo -e '\e[31m test_qemu \e[0m Prueba la imagen en qemu \e[32m test_qemu \e[0m'
+test_qemu(){
+	sudo qemu /media/disk/image/imagen.img
+}
+
+#echo -e '\e[31m util-linux-v \e[0m Versión instalada de util-linux \e[32m util-linux-v \e[0m'
+util-linux-v(){
+	dpkg -s util-linux
+}
+
+#echo -e '\e[31m util-linux \e[0m Abre la página de util-linux \e[32m util-linux \e[0m'
+util-linux(){
+	firefox ftp://ftp.kernel.org/pub/linux/utils/util-linux/
+}
+
+#echo -e '\e[31m changes-mount \e[0m Muestra los cambios que hay que hacer en el mount \e[32m changes-mount \e[0m'
+changes-mount(){
+	echo 'if( argc >= 3 && !strcmp(argv[2], "vfat") )'
+	echo '	sprintf(argv[4], "rw,fmask=0000,uid=999,gid=999,utf8=1");'
+
+	echo 'if( argc >= 3 && !strcmp(argv[2], "ntfs") )'
+	echo '	sprintf(argv[4], "rw,fmask=0000,uid=999,gid=999,utf8=1");'
+}
+
+#echo -e '\e[31m cp_syslinux \e[0m Copia los archivos de syslinux en el directorio actual \e[32m cp_syslinux \e[0m'
+cp_syslinux(){
+	cp /media/disk/syslinux/* .
+}
+
+#echo -e '\e[31m clean_root \e[0m limpia un sistema de ficheros \e[32m clean_root \e[0m'
+clean_root(){
+	sudo rm -rf cdrom
+	sudo rm -rf office
+	sudo rm -rf vbox
+	sudo rm -rf rofs
+	sudo rm -rf tmp/*
+	
+	sudo rm -rf home/ubuntu/Documents
+	sudo rm -rf home/ubuntu/Downloads
+	sudo rm -rf home/ubuntu/Music
+	sudo rm -rf home/ubuntu/Pictures
+	sudo rm -rf home/ubuntu/Public
+	sudo rm -rf home/ubuntu/Templates
+	sudo rm -rf home/ubuntu/Videos
+	sudo rm -rf home/ubuntu/VirtualBox\ VMs
+	sudo rm -rf home/ubuntu/.cache
+	sudo rm -rf home/ubuntu/.dbus
+	sudo rm -rf home/ubuntu/.gconf
+	sudo rm -rf home/ubuntu/.gnome2
+	sudo rm -rf home/ubuntu/.linuxmint
+	sudo rm -rf home/ubuntu/.pki
+	sudo rm -rf home/ubuntu/.pulse
+	sudo rm -rf home/ubuntu/.wine
+	sudo rm -rf home/ubuntu/.bash_history
+	sudo rm -rf home/ubuntu/.dmrc
+	sudo rm -rf home/ubuntu/.gtk-bookmarks
+	sudo rm -rf home/ubuntu/.ICEauthority
+	sudo rm -rf home/ubuntu/.pulse-cookie
+	sudo rm -rf home/ubuntu/.xsession-errors
+
+	sudo rm -rf .Trash-*
+	sudo rm -rf var/cache/apt/archives/*.deb
+	sudo rm -rf var/log
+}
+
+clean_distr(){
+	pkg remove 'gnome*'
+	pkg remove baobab
+	pkg remove banshee
+	pkg remove brasero
+	pkg remove 'cinnamon*'
+	#pkg remove 'fonts-*'
+	pkg remove 'libreoffice*'
+	pkg remove 'pidgin'
+	pkg remove 'tomboy'
+	pkg remove 'thunderbird*'
+	pkg remove 'firefox*'
+	pkg remove 'gimp*'
+	pkg remove 'gir1.2*'
+	pkg remove 'gparted'
+	pkg remove 'gile*'
+	pkg remove 'samba*'
+
+	sudo rm -fr /usr/share/icons/oxygen
+	sudo rm -fr /usr/share/backgrounds
+	sudo rm -fr /usr/share/doc
+	sudo rm -fr /usr/lib/i386-linux-gnu
+	sudo rm -fr /usr/lib/x86_64-linux-gnu/dri
+	sudo rm -fr /usr/share/linuxmint
+	ls /usr/share/icons | grep -v 'Mint-X' | grep -v default | sed 's/^/sudo rm -fr \/usr\/share\/icons\//g'  | bash
+	ls /usr/lib/x86_64-linux-gnu/ | grep -i 'webkit' | sed 's/^/sudo rm -fr \/usr\/lib\/x86_64-linux-gnu\//g' | bash
+	ls /usr/share/locale | egrep -v '^en$' | egrep -v '^es$' | sed 's/^/sudo rm -fr \/usr\/share\/locale\//g' | bash
+
+	pkg install setup_personal
+
+	[ -e /usr/bin/i3             ] || pkg install i3wm
+	[ -e /usr/bin/pcmanfm        ] || pkg install pcmanfm
+	[ -e /usr/bin/xclip          ] || pkg install xclip
+	[ -e /usr/bin/google-chrome  ] || pkg install google-chrome
+	[ -e /usr/bin/gvim           ] || pkg install gvim
+	[ -e /usr/bin/xdotool        ] || pkg install xdotool
+	[ -e /usr/bin/xdotool        ] || pkg install xdotool
+	[ -e /usr/bin/scrot          ] || pkg install scrot
+	[ -e /usr/bin/dunst          ] || pkg install dunst
+	[ -e /usr/bin/tmux           ] || pkg install tmux
+	[ -e /usr/bin/gnome-terminal ] || pkg install gnome-terminal
+	[ -e /usr/bin/evince         ] || pkg install evince
+	[ -e /usr/bin/vlc            ] || pkg install vlc
+	[ -e /usr/bin/eog            ] || pkg install eog
+	[ -e /usr/bin/rar            ] || pkg install rar
+	[ -e /usr/bin/ranger         ] || pkg install ranger
+	[ -e /usr/bin/ncdu           ] || pkg install ncdu
+	[ -e ~/.z                    ] || pkg install z
+	[ -e ~/.fzf/bin/fzf          ] || pkg install fzf
+
+	sudo rm -fr /tmp/google-chrome-stable_current_amd64.deb
+
+	sudo apt-get clean
+}
+
+list_installed(){
+	dpkg --get-selections
+
+	#dpkg-query -W --showformat='${Installed-Size;10}\t${Package}\n' | sort -k1,1n
+	#dpkg-query --show --showformat='${Package;-50}\t${Installed-Size}\n' | sort -k 2 -n
+	#dpkg-query --show --showformat='${Package;-50}\t${Installed-Size} ${Status}\n' | sort -k 2 -n | grep -v deinstall
+
+	#sudo apt-get install wajig
+	#wajig large
+
+	#sudo apt-get install debian-goodies
+	#dpigs
+
+}
+
+#echo -e '\e[31m chrbind \e[0m hace el bind y chroot en /mnt \e[32m chrbind \e[0m'
+chrbind(){
+	sudo mount -o bind /proc /mnt/proc
+	sudo mount -o bind /dev /mnt/dev
+	sudo mount -o bind /dev/pts /mnt/dev/pts
+	sudo mount -o bind /sys /mnt/sys
+	mkdir -p /mnt/disk/install
+	sudo cp -r /media/disk/install/* /mnt/disk/install/
+	sudo chroot /mnt /bin/bash
+	sudo umount /mnt/proc
+	sudo umount /mnt/dev
+	sudo umount /mnt/dev/pts
+	sudo umount /mnt/sys
+}
+
+#echo -e '\e[31m chrbindcp \e[0m hace el bind y chroot en /mnt. copia el install de Work/argumento_1 \e[32m chrbindcp project \e[0m'
+chrbindcp(){
+	sudo mount -o bind /proc /mnt/proc
+	sudo mount -o bind /dev /mnt/dev
+	sudo mount -o bind /dev/pts /mnt/dev/pts
+	sudo mount -o bind /sys /mnt/sys
+	sudo mkdir -p /mnt/media/disk/install
+	sudo cp -r /media/DATA/Work/$1/disk/install/* /mnt/media/disk/install/
+	sudo cp -r /media/DATA/Work/$1/disk/instalar /mnt/media/disk/
+	sudo chroot /mnt /media/disk/instalar
+	sudo rm -rf /mnt/media
+	for a in `seq 1 10`
+	do
+		sudo umount /mnt/proc
+		sudo umount /mnt/dev
+		sudo umount /mnt/dev/pts
+		sudo umount /mnt/sys
+	done
+}
+
+#echo -e '\e[31m msqfs \e[0m monta un sistema de ficheros squashfs en /mnt \e[32m msqfs filesystem.squashfs \e[0m'
+msqfs(){
+	img=$1
+	mountdir=/mnt
+	tmpfs=/tmp/rwfs
+
+	sudo mount -o loop $img $mountdir
+	sudo mkdir -p $tmpfs
+	sudo mount -t aufs -o dirs=$tmpfs=rw:$mountdir=ro unionfs $mountdir
+
+	cd /mnt
+	sudo chmod 777 .
+}
+
+#echo -e '\e[31m sqfs_from_work \e[0m Genera un sqfs a partir de la instalación de arg1 \e[32m sqfs_from_work project \e[0m'
+sqfs_from_work_incremental(){
+	msqfs /media/DATA/Work/skel_lubuntu/final/filesystem.squashfs 
+	chrbindcp $1
+	cd /mnt/
+	clean_root
+	mkdir /media/DATA/Work/$1/data/
+	sudo rm /media/DATA/Work/$1/data/filesystem_incremental.squashfs
+	sudo mksquashfs /tmp/rwfs/ /media/DATA/Work/$1/data/filesystem_incremental.squashfs
+}
+
+chrbindcp_2(){
+	sudo mount -o bind /proc /mnt2/proc
+	sudo mount -o bind /dev /mnt2/dev
+	sudo mount -o bind /dev/pts /mnt2/dev/pts
+	sudo mount -o bind /sys /mnt2/sys
+	sudo mkdir -p /mnt2/media/disk/install
+	sudo cp -r /media/DATA/Work/$1/disk/install/* /mnt2/media/disk/install/
+	sudo cp -r /media/DATA/Work/$1/disk/instalar /mnt2/media/disk/
+	sudo chroot /mnt2 /media/disk/instalar
+	sudo rm -rf /mnt2/media
+	for a in `seq 1 10`
+	do
+		sudo umount /mnt2/proc
+		sudo umount /mnt2/dev
+		sudo umount /mnt2/dev/pts
+		sudo umount /mnt2/sys
+	done
+}
+
+sqfs_from_work_pre_reboot(){
+	sudo mount -o loop /media/DATA/Work/skel_lubuntu/final/filesystem.squashfs /mnt/
+	sudo ln -s /media/mint14-rw/mnt2/ /mnt2
+	sudo cp -a /mnt/* /mnt2/
+	chrbindcp_2 $1
+}
+
+sqfs_from_work_post_reboot(){
+	sudo ln -s /media/mint14-rw/mnt2/ /mnt2
+	cd /mnt2/
+	clean_root_2
+	mkdir /media/DATA/Work/$1/data/
+	sudo rm /media/DATA/Work/$1/data/filesystem_complete.squashfs
+	sudo mksquashfs /mnt2/      /media/DATA/Work/$1/data/filesystem_complete.squashfs
+}
+
+sqfs_from_work(){
+	msqfs /media/DATA/Work/skel_lubuntu/final/filesystem.squashfs 
+	chrbindcp $1
+
+	sudo ln -s /media/mint14-rw/mnt2/ /mnt2
+	sudo ln -s /media/mint14-rw/mnt3/ /mnt3
+	sudo mount -o loop /media/DATA/Work/skel_lubuntu/final/filesystem.squashfs /mnt2/
+	sudo cp -a /mnt2/* /mnt3/
+	sudo cp -a /tmp/rwfs/* /mnt3/
+
+	cd /mnt3/
+	clean_root_2
+
+	mkdir /media/DATA/Work/$1/data/
+	sudo rm /media/DATA/Work/$1/data/filesystem_complete.squashfs
+	sudo mksquashfs /mnt3/ /media/DATA/Work/$1/data/filesystem_complete.squashfs
+}
+

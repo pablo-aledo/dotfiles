@@ -1,0 +1,21 @@
+#source $(dirname $(readlink -f $0))/pkg
+
+vpn(){
+	sudo apt-get install -y network-manager-openvpn network-manager-openvpn-gnome network-manager-pptp network-manager-pptp-gnome network-manager-vpnc network-manager-vpnc-gnome network-manager-openconnect network-manager-openconnect-gnome
+	sudo service network-manager restart                  
+}
+
+vpn_send(){
+	IP=`wget http://ipinfo.io/ip -qO -`
+	echo "Configuration file to use in OpenVPN clients to connect to $IP." | /usr/bin/mutt -a ~/vpn/config.ovpn -s "OpenVPN" -- $1
+}
+
+vpn_amazon(){
+	pkg install openvpn
+	while true
+	do
+		(sleep 5; echo 'nameserver 8.8.8.8' | sudo tee    /etc/resolv.conf) &
+		(sleep 6; echo 'nameserver 8.8.4.4' | sudo tee -a /etc/resolv.conf) &
+		sudo openvpn --config ~/config.ovpn
+	done
+}

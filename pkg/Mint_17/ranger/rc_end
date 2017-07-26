@@ -1,0 +1,1 @@
+map C shell zsh -c "clas=\$(zenity --entry); echo for a in \"%S\" \\; do echo classify \\\0x22\'\\\0x22\\\$a\\\0x22\'\\\0x22 \$clas \\; done \>\> ~/classify > /tmp/classify; zsh /tmp/classify"

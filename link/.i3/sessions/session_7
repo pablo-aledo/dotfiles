@@ -1,0 +1,8 @@
+workspace 1
+exec google-chrome
+--
+workspace 2
+exec gnome-terminal --working-directory=/media/disk/release/
+exec gvim
+--
+layout tabbed

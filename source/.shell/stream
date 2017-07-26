@@ -1,0 +1,134 @@
+STREAM_PORT=4444
+
+stream1(){
+	ffmpeg -r 25 -i "$1" -c:v libx265 -preset ultrafast -x265-params crf=23 -strict experimental -f mpegts udp://127.0.0.1:$STREAM_PORT
+}
+
+stream2(){
+	ffmpeg -i "$1" -vcodec libx264 -tune zerolatency -b 900k -f mpegts udp://127.0.0.1:$STREAM_PORT
+}
+
+stream3(){
+	ffmpeg -i "$1" \
+	-vcodec libx264 -preset ultrafast -tune zerolatency -r 10 -async 1 -acodec libmp3lame -ab 24k -ar 22050 -bsf:v h264_mp4toannexb \
+	-maxrate 750k -bufsize 3000k -f mpegts udp://127.0.0.1:$STREAM_PORT
+}
+
+stream4(){
+	ffmpeg -i "$1" -s 1920x1200 -framerate 15 -c:v libx264 -preset fast -pix_fmt yuv420p -s 1280x800 -threads 0 -f mpegts udp://127.0.0.1:$STREAM_PORT
+}
+
+stream5(){
+	ffmpeg -i "$1" -f pulse -ac 2 -i default -c:v libx264 -preset fast -pix_fmt yuv420p -s 1280x800 -c:a aac -b:a 160k -ar 44100 -threads 0 -strict -2 -f mpegts udp://127.0.0.1:$STREAM_PORT
+}
+
+stream6(){
+	ffmpeg -i "$1" -c:v libx264 -preset ultrafast -tune zerolatency -b:v 800k -c:a libvo_aacenc -b:a 128k -f mpegts udp://127.0.0.1:$STREAM_PORT
+}
+
+stream7(){
+	cvlc "$1" -vvv stream:///dev/stdin --sout "#rtp{sdp=rtsp://:$STREAM_PORT/}" :demux=h264
+}
+
+stream8(){
+	cvlc "$1" --sout "#standard{access=http,mux=ts,dst=0.0.0.0:$STREAM_PORT}"
+}
+
+stream9(){
+	ffmpeg -i "$1" -v 0 -b:v 300k -maxrate 300k -bufsize 256k -flags -global_header -map 0:v:0 -ac 2 -f mpegts -c:v libx264 -preset superfast -c:a aac -b:a 96k -strict -2 -threads 0 -copyts udp://127.0.0.1:$STREAM_PORT
+}
+
+stream10(){
+ffmpeg -f x11grab -video_size 1680x1050 -framerate 30 -i :0.0 -f v4l2 -video_size 320x240 -framerate 30 -i /dev/video0 -f alsa -ac 2 -i hw:0,0 -filter_complex "[0:v]scale=1024:-1,setpts=PTS-STARTPTS[bg];[1:v]scale=120:-1,setpts=PTS-STARTPTS[fg];[bg][fg]overlay=W-w-10:10,format=yuv420p[out]" -map "[out]" -map 2:a -vcodec libx264 -preset veryfast -maxrate 3000k -bufsize 4000k -c:a aac -b:a 160k -ar 44100 -f flv rtmp://live.twitch.tv/app/stream_key
+}
+
+stream11(){
+ffmpeg -f x11grab -video_size 1680x1050 -framerate 30 -i :0.0 -f v4l2 -video_size 320x240 -framerate 30 -i /dev/video0 -f alsa -ac 2 -i hw:0,0 -i logo.png -filter_complex "[0:v]scale=1024:-1,setpts=PTS-STARTPTS[bg];[1:v]scale=120:-1,setpts=PTS-STARTPTS[fg];[bg][fg]overlay=W-w-10:10[bg2];[bg2][3:v]overlay=W-w-10:H-h-10,format=yuv420p[out]" -map "[out]" -map 2:a -vcodec libx264 -preset veryfast -maxrate 3000k -bufsize 4000k -c:a aac -b:a 160k -ar 44100 -b:a 128k -f flv rtmp://live.twitch.tv/app/stream_key
+}
+
+udp_to_tcp(){
+	socat tcp4-listen:$1,reuseaddr,fork UDP:nameserver:$1
+}
+
+tcp_to_udp(){
+	socat -T15 udp4-recvfrom:$1,reuseaddr,fork tcp:localhost:$1
+}
+
+streamscreen1(){
+	ffmpeg -f x11grab -s 1280x720 -framerate 30 -i :0.0 -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv444p -x264opts crf=20:vbv-maxrate=3000:vbv-bufsize=100:intra-refresh=1:slice-max-size=1500:keyint=30:ref=1 -f mpegts - | nc -l -p $STREAM_PORT
+}
+
+streamscreen2(){
+	ffmpeg -f x11grab -s 1280x720 -framerate 30 -i :0.0 -c:v mpeg2video -q:v 20 -pix_fmt yuv420p -g 1 -threads 2 -f mpegts - | nc -l -p $STREAM_PORT
+}
+
+streamscreen3(){
+	ffmpeg -f x11grab -show_region 1 -s 1024x768 -r 25 -i :0.0+10,10 -vcodec libx264 -preset ultrafast -tune zerolatency -f rtp rtp://$1:$STREAM_PORT
+}
+
+streamscreen4(){
+	cvlc screen:// :screen-fps=12 :screen-caching=100 --sout "#transcode{vcodec=h264,venc=x264{keyint=12,scenecut=80,profile=faster,intra-refresh,tune=zerolatency,bframes=0,nocabac},fps=12,scale=0.75,vb=512}:std{access=http,mux=ts,dst=/stream.mp4}"
+}
+
+streamscreen5(){
+	cvlc screen:// :screen-fps=12 :screen-caching=100 --sout "#transcode{vcodec=h264,venc=x264{keyint=12,scenecut=80,profile=veryslow,intra-refresh,tune=zerolatency,bframes=0},fps=12,scale=1,vb=320}:std{access=http,mux=ts,dst=/stream.mp4}"
+}
+
+streamscreen6(){
+	ffmpeg -f x11grab -s 1280x720 -framerate 30 -i :0.0 -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv444p -x264opts crf=20:vbv-maxrate=3000:vbv-bufsize=100:intra-refresh=1:slice-max-size=1500:keyint=30:ref=1 -vf scale=320:240 -f mpegts - | nc -l -p $STREAM_PORT
+}
+
+stream_recv(){
+	aws_config
+	nc $AWS_SERVER $STREAM_PORT | mplayer -benchmark -
+}
+
+stream_recv2(){
+	gst-launch-1.0 -v udpsrc port=$STREAM_PORT caps="application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264" ! rtph264depay ! h264parse ! omxh264dec ! videoconvert ! autovideosink sync=false
+}
+
+stream_recv3(){
+	aws_config
+	omxplayer http://$AWS_SERVER:$STREAM_PORT/stream.mp4
+}
+
+recordscreen1(){
+	ffmpeg -video_size 1024x768 -framerate 25 -f x11grab -i :0.0+100,200 output.mp4
+}
+recordscreen2(){
+	ffmpeg -video_size 1024x768 -framerate 25 -f x11grab -i :0.0+100,200 -f alsa -ac 2 -i hw:0 output.mkv
+
+}
+recordscreen3(){
+	ffmpeg -video_size 1024x768 -framerate 25 -f x11grab -i :0.0+100,200 -f pulse -ac 2 -i default output.mkv
+}
+
+recordscreen4(){
+	ffmpeg -f dshow -i video="screen-capture-recorder" output.flv
+}
+recordscreen5(){
+	ffmpeg -f dshow -i video="UScreenCapture":audio="Microphone" output.flv
+}
+
+recordscreen6(){
+	ffmpeg -f dshow -i video="UScreenCapture" -f dshow -i audio="Microphone" output.flv
+
+}
+
+recordscreen7(){
+	ffmpeg -framerate 25 -video_size 1024x768 -f x11grab -i :0.0+100,200 -f alsa -ac 2 -i pulse -vcodec libx264 -crf 0 -preset ultrafast -acodec pcm_s16le output.mkv
+	ffmpeg -i output.mkv -acodec libmp3lame -vcodec libx264 final.mkv
+}
+
+recordscreen8(){
+	ffmpeg -f dshow -i video="screen-capture-recorder":audio="Microphone" -vcodec libx264 -crf 0 -preset ultrafast -acodec pcm_s16le output.mkv
+	ffmpeg -i output.flv -acodec libmp3lame -vcodec libx264 final.mkv
+}
+recordscreen8(){
+	ffmpeg -video_size 1920x1080 -framerate 30 -f x11grab -i :0.0 -c:v libx264 -qp 0 -preset ultrafast capture.mkv
+}
+
+stream_audio(){
+	ffmpeg -re -f pulse -i default -ac 2 -preset veryfast -tune zerolatency -f mpegts - | nc -l -p $STREAM_PORT
+}
+

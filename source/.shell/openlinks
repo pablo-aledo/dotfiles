@@ -1,0 +1,16 @@
+openlinks(){
+
+google-chrome &
+n=0
+count=`cat $1 | wc -l`
+cat $1 | while read line
+do
+	google-chrome "$line"
+	[ $(( $n % 10 )) -eq 0 ] && read < /dev/tty
+	n=$(( $n + 1 ))
+	echo $n/$count
+done
+
+}
+
+

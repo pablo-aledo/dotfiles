@@ -1,0 +1,4 @@
+backup_gmail(){
+	pkg install uw-mailutils
+	mailutil transfer {imap.gmail.com/ssl/user=pablo.aledo@gmail.com} Gmail/
+}

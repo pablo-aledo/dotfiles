@@ -1,0 +1,7 @@
+# Session for working with the NAS
+exec gnome-terminal -x zsh -c "source ~/.zshrc && mount_nas"
+exec gnome-terminal -x zsh -c "source ~/.zshrc && ranger  $BACKUP_MOUNT_MOUNTPOINT"
+exec gnome-terminal -x zsh -c "source ~/.zshrc && pcmanfm $BACKUP_MOUNT_MOUNTPOINT"
+exec gnome-terminal -x zsh -c "source ~/.zshrc && google-chrome $BACKUP_SERVER"
+--
+layout tabbed

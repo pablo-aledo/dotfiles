@@ -1,0 +1,22 @@
+ports(){
+	sudo lsof -i
+	sudo netstat -lptu
+	sudo netstat -tulpn
+}
+
+cpport(){
+	sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport $2 -j REDIRECT --to-port $1
+	sudo iptables -t nat -A OUTPUT     -o lo   -p tcp --dport $2 -j REDIRECT --to-port $1
+}
+
+cpport_delete(){
+	for a in `seq 1 10`
+	do
+		sudo iptables -t nat -D OUTPUT 1
+		sudo iptables -t nat -D PREROUTING 1
+	done
+}
+
+cpport_2(){
+	socat TCP-LISTEN:$2,fork TCP:127.0.0.1:$1
+}

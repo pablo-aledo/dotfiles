@@ -1,0 +1,96 @@
+---
+feeds:
+  3dtotal:
+    disp: 3DTotal
+    dormant: 0
+    failure: 0
+    failures: 0
+    feed: http://www.3dtotal.com/rss
+    flag: 0
+    force: 0
+    last: 1482779947
+    title: '3DTotal.com News - 2d and 3d artists home page'
+    ttl: 7200
+  blendernation:
+    disp: Blendernation
+    dormant: 0
+    failure: 0
+    failures: 0
+    feed: https://feeds.feedburner.com/Blendernation
+    flag: 0
+    force: 0
+    last: 1482779670
+    title: BlenderNation
+    ttl: 3600
+  dangerousprot:
+    disp: DangerousProt
+    dormant: 0
+    failure: 0
+    failures: 0
+    feed: http://dangerousprototypes.com/blog/feed/
+    flag: 0
+    force: 0
+    last: 1482779999
+    origttl: 0
+    title: Dangerous Prototypes
+    ttl: 3600
+  embeddedinac:
+    disp: EmbeddedInAc
+    dormant: 0
+    failure: 0
+    feed: http://blog.regehr.org/feed
+    flag: 0
+    force: 0
+    last: 1482780003
+    title: ~
+    ttl: ~
+  hackaday:
+    disp: hackaday
+    dormant: 0
+    failure: 0
+    failures: 0
+    feed: http://hackaday.com/feed/
+    flag: 0
+    force: 0
+    last: 1482779450
+    title: Hackaday
+    ttl: 3600
+  makezine:
+    disp: Makezine
+    dormant: 0
+    failure: 0
+    failures: 0
+    feed: http://makezine.com/feed/
+    flag: 0
+    force: 0
+    last: 1482779524
+    title: 'Make: DIY Projects and Ideas for Makers'
+    ttl: 3600
+  math_programming:
+    disp: Math Programming
+    dormant: 0
+    failure: 0
+    failures: 0
+    feed: https://jeremykun.com/feed/
+    flag: 0
+    force: 0
+    last: 1482779873
+    title: Math ∩ Programming
+    ttl: 3600
+  muylinux:
+    disp: MuyLinux
+    dormant: 0
+    failure: 0
+    feed: http://google.dodo.com.au/search.html?q=muylinux.com
+    flag: 0
+    force: 0
+    last: 1482780001
+    origfeed: http://muylinux.com/feed
+    title: ~
+    ttl: ~
+fr: r1
+gsp: 1
+keys: {}
+pw: 10
+sls: 1
+to: 30

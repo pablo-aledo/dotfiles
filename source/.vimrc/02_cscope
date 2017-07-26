@@ -1,0 +1,8 @@
+" Para CScope
+map <F12>               :!cscope -R -b<CR>:cs add cscope.out<CR><CR>
+map <C-space>           :cs find s <C-R>=expand("<cword>")<CR><CR>
+map <C-space><C-space>  :cs find t <C-R>=expand("<cword>")<CR><CR>
+map <C-space>c          :cs find d <C-R>=expand("<cword>")<CR><CR>
+map <C-space><C-c>      :cs find c <C-R>=expand("<cword>")<CR><CR>
+map <C-space><space>    [I
+map <C-space><C-i>      [I
