@@ -158,7 +158,7 @@ aws_reverse_mount(){
 	[ $# -eq 1 ] && AWS_LOCAL_FOLDER="$1" && AWS_REMOTE_FOLDER="$1"
 	aws_cmd "sudo mkdir -p $AWS_REMOTE_FOLDER; sudo chmod 777 $AWS_REMOTE_FOLDER"
 	[ $# -eq 1 ] && AWS_LOCAL_FOLDER="$1" && AWS_REMOTE_FOLDER="$1"
-	aws_cmd "sshfs -p 2222 mint@localhost:$AWS_LOCAL_FOLDER $AWS_REMOTE_FOLDER"
+	aws_cmd "sshfs -p 2222 mint@localhost:$AWS_LOCAL_FOLDER $AWS_REMOTE_FOLDER -o StrictHostKeyChecking=no"
 
 }
 
