@@ -1,0 +1,3 @@
+whatinstalled(){
+	which "$@" | xargs -r readlink -f | xargs -r dpkg -S
+}
