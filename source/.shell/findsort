@@ -1,0 +1,3 @@
+findsort(){
+	find "$1" -printf "%C@ %p\n" | sort
+}
