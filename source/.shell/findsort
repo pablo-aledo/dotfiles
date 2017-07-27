@@ -1,3 +1,4 @@
 findsort(){
-	find "$1" -printf "%C@ %p\n" | sort
+	[ $# -eq 1 ] && find "$1" -printf "%C@ %p\n" | sort
+	[ $# -eq 1 ] || find -printf "%C@ %p\n" | sort
 }
