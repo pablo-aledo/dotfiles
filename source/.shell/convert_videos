@@ -182,11 +182,14 @@ convert_recursive(){
 	do
 		mkdir -p "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`"
 	done
-	
+
 	cd $convert_dir
+	total=`find $PWD -name '*.mp4' | wc -l`
+	actual=1;
 	find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | while read line
 	do 
-		echo "\e[31m ===== $line =====\e[0m"
+		echo "\e[31m ===== ($actual / $total) $line =====\e[0m"
+		actual=$(( $actual + 1 ))
 
 		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
 
