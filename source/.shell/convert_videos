@@ -234,7 +234,7 @@ convert_recursive(){
 		file1="$line"
 		base1=`basename "$line"`
 		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
-		[ -e "$file2" ] || echo "Fail converting $file1" | tee -a /tmp/convert_report
+		[ -e "$file2" ] || echo "\e[31m Fail converting $file1 \e[0m" | tee -a /tmp/convert_report
 	done
 
 	cd $convert_dir
@@ -245,6 +245,15 @@ convert_recursive(){
 		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
 		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo cp \"$file1\" \"$file2\" | tee -a /tmp/convert_report
 		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || cp "$file1" "$file2"
+	done
+
+	cd $convert_dir
+	find $PWD -type f | head -n $limit_head | tail -n $limit_tail | while read line
+	do 
+		file1="$line"
+		base1="`basename "$line"`"
+		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
+		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo "\e[31m Missing file $file2 \e[0m" | tee -a /tmp/convert_report
 	done
 
 	( [ "$1" = "nth"  ] || [ "" = "test" ] ) && pcmanfm "$(dirname "$(find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g  )")"
