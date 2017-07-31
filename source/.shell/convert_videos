@@ -128,7 +128,7 @@ convert_join_safe_2(){
 	sox join_audio_*.wav join_audio.wav
 
 	m=0
-	mkdir join_video 
+	mkdir join_video
 	for f in `seq 0 $(( $(find join_video_* -type d | wc -l) -1 ))`
 	do
 		n=`ls join_video_$(printf %02d $f)/*.png | wc -l`;
@@ -157,7 +157,7 @@ convert_recursive(){
 	[ "$1" = "just_two" ]  && echo 'just conversion 2' && just_one=0 && just_two=1
 
 	convert_dir=/media/DATA/convert
-	converted_dir=/media/DATA/converted 
+	converted_dir=/media/DATA/converted
 
 	convert_opts_1="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
 	convert_opts_2="-vf 'scale=720:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
@@ -176,7 +176,7 @@ convert_recursive(){
 		rm -fr "`basename $line`"
 		cd -
 	done
-	
+
 	cd $convert_dir
 	find $PWD -type d | while read line
 	do
@@ -187,7 +187,7 @@ convert_recursive(){
 	total=`find $PWD -name '*.mp4' | wc -l`
 	actual=1;
 	find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | while read line
-	do 
+	do
 		echo "\e[31m ===== ($actual / $total) $line =====\e[0m"
 		actual=$(( $actual + 1 ))
 
@@ -219,7 +219,7 @@ convert_recursive(){
 
 	cd $convert_dir
 	find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | while read line
-	do 
+	do
 		file1="$line"
 		base1=`basename "$line"`
 		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
@@ -230,7 +230,7 @@ convert_recursive(){
 
 	cd $convert_dir
 	find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | while read line
-	do 
+	do
 		file1="$line"
 		base1=`basename "$line"`
 		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
@@ -239,7 +239,7 @@ convert_recursive(){
 
 	cd $convert_dir
 	find $PWD -type f | head -n $limit_head | tail -n $limit_tail | while read line
-	do 
+	do
 		file1="$line"
 		base1="`basename "$line"`"
 		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
@@ -249,7 +249,7 @@ convert_recursive(){
 
 	cd $convert_dir
 	find $PWD -type f | head -n $limit_head | tail -n $limit_tail | while read line
-	do 
+	do
 		file1="$line"
 		base1="`basename "$line"`"
 		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
@@ -258,6 +258,40 @@ convert_recursive(){
 
 	( [ "$1" = "nth"  ] || [ "" = "test" ] ) && pcmanfm "$(dirname "$(find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g  )")"
 
+}
+
+mv_converted(){
+	converted_dir=/media/DATA/converted
+	[ $# -eq 1 ] && destination="$1"
+	[ $# -eq 1 ] || destination=/media/mint/1TB/Videos
+
+	[ -d "$converted_dir" ] || return
+	[ -d "$destination" ]   || return
+
+	cd "$converted_dir"
+	ls -d */ | while read line
+	do
+		echo -e "\e[34m mv_converted $line \e[0m"
+		mkdir -p "$destination/$line"
+		rsync -vai --delete --remove-source-files "$converted_dir/$line" "$destination/$line"
+		rm_empty_folders "$converted_dir/$line"
+	done
+	rm_empty_folders "$converted_dir"
+}
+
+cp_convert(){
+	source=/media/mint/1TB/Videos
+	convert_dir=/media/DATA/convert
+
+	[ -d "$source" ]      || return
+	[ -d "$convert_dir" ] || return
+
+	for a in $*
+	do
+		echo -e "\e[34m cp_convert $a \e[0m"
+		mkdir -p "$convert_dir/$a"
+		rsync -vai "$source/$a" "$convert_dir/$a"
+	done
 }
 
 
