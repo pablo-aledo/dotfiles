@@ -24,16 +24,29 @@ llvm_cfg(){
 	fi
 }
 
+#llvm_bc(){
+	#filetype=`file $1`
+	#if [ "`echo $filetype | grep 'C source'`" ]
+	#then
+		#llvm-gcc -c --emit-llvm $2 $1 -o /tmp/file.bc
+		#llvm-dis /tmp/file.bc -o /tmp/file.ll
+		#gvim /tmp/file.ll
+	#fi
 
-llvm_bc(){
-	filetype=`file $1`
+	#if [ "`echo $filetype | grep 'LLVM IR'`" ]
+	#then
+		#llvm-dis $1 -o /tmp/file.ll
+		#gvim /tmp/file.ll
+	#fi
+#}
+
+llvm_bc () {
+	filetype=`file $1` 
 	if [ "`echo $filetype | grep 'C source'`" ]
 	then
-		llvm-gcc -c --emit-llvm $2 $1 -o /tmp/file.bc
-		llvm-dis /tmp/file.bc -o /tmp/file.ll
-		gvim /tmp/file.ll
+		clang -S -emit-llvm $1 -o /tmp/file.bc
+		gvim /tmp/file.bc
 	fi
-
 	if [ "`echo $filetype | grep 'LLVM IR'`" ]
 	then
 		llvm-dis $1 -o /tmp/file.ll
