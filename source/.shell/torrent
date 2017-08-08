@@ -43,6 +43,7 @@ katcr_dlaux(){
 
 katcr_dl(){
 	pkg install aria2c
+	pkg install aria2
 	pkg install tmux
 	search="`cat /tmp/katcr`"
 	for a in $*
