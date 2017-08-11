@@ -71,7 +71,7 @@ convert_plusaudio(){
 
 convert_toimgs(){
         mkdir $1_tmp;
-        ffmpeg -i $1 -r 25 -f image2 $1_tmp/%05d.png
+        ffmpeg -i $1 -r 25 -f image2 $1_tmp/%07d.png
 }
 
 convert_fromimgs(){
@@ -79,13 +79,13 @@ convert_fromimgs(){
 }
 
 convert_fromimgs_2(){
-        ffmpeg -i $1/%05d.png -vcodec copy $1.avi
+        ffmpeg -i $1/%07d.png -vcodec copy $1.avi
 }
 
 convert_join_safe(){
 
-        mkdir join_video1; ffmpeg -i $1 -r 25 -f image2 join_video1/%05d.png
-        mkdir join_video2; ffmpeg -i $2 -r 25 -f image2 join_video2/%05d.png
+        mkdir join_video1; ffmpeg -i $1 -r 25 -f image2 join_video1/%07d.png
+        mkdir join_video2; ffmpeg -i $2 -r 25 -f image2 join_video2/%07d.png
 
 	ffmpeg -i $1 -q:a 0 -map a join_audio1.wav
 	ffmpeg -i $2 -q:a 0 -map a join_audio2.wav
@@ -99,13 +99,13 @@ convert_join_safe(){
 
 	mkdir join_video
 	m=`ls join_video1/*.png | wc -l`; n=`ls join_video2/*.png | wc -l`;
-	for a in `seq 1 $m`; do ln -s $PWD/join_video1/`printf %05d $a`.png $PWD/join_video/`printf %05d $a`.png; done
-	for a in `seq 1 $n`; do ln -s $PWD/join_video2/`printf %05d $a`.png $PWD/join_video/`printf %05d $(( $m + $a ))`.png; done
+	for a in `seq 1 $m`; do ln -s $PWD/join_video1/`printf %07d $a`.png $PWD/join_video/`printf %07d $a`.png; done
+	for a in `seq 1 $n`; do ln -s $PWD/join_video2/`printf %07d $a`.png $PWD/join_video/`printf %07d $(( $m + $a ))`.png; done
 
 
 	ffmpeg -i join_audio.wav join_audio.mp3
 
-	ffmpeg -i join_video/%05d.png -i join_audio.mp3 -vcodec copy -acodec copy $3
+	ffmpeg -i join_video/%07d.png -i join_audio.mp3 -vcodec copy -acodec copy $3
 }
 
 convert_join_safe_2(){
@@ -114,7 +114,7 @@ convert_join_safe_2(){
 	for a in $*
 	do
 		mkdir join_video_`printf %02d $m`
-		ffmpeg -i $a -r 25 -f image2 join_video_`printf %02d $m`/%05d.png
+		ffmpeg -i $a -r 25 -f image2 join_video_`printf %02d $m`/%07d.png
 		m=$(( $m + 1 ))
 	done
 
@@ -134,7 +134,7 @@ convert_join_safe_2(){
 		n=`find join_video_$(printf %02d $f)/ -name '*.png' | wc -l`;
 		for a in `seq 1 $n`
 		do
-			ln -s $PWD/join_video_`printf %02d $f`/`printf %05d $a`.png $PWD/join_video/`printf %07d $m`.png;
+			ln -s $PWD/join_video_`printf %02d $f`/`printf %07d $a`.png $PWD/join_video/`printf %07d $m`.png;
 			m=$(( $m + 1 ))
 		done
 	done
