@@ -131,7 +131,7 @@ convert_join_safe_2(){
 	mkdir join_video
 	for f in `seq 0 $(( $(find join_video_* -type d | wc -l) -1 ))`
 	do
-		n=`ls join_video_$(printf %02d $f)/*.png | wc -l`;
+		n=`find join_video_$(printf %02d $f)/ -name '*.png' | wc -l`;
 		for a in `seq 1 $n`
 		do
 			ln -s $PWD/join_video_`printf %02d $f`/`printf %05d $a`.png $PWD/join_video/`printf %07d $m`.png;
