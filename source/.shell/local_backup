@@ -68,7 +68,7 @@ local_backup_m(){
 	#[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
 	#echo -e "\e[34m backup_tm $1 \e[0m"
 	#mkdir -p "$LOCAL_BACKUP_TIME_MACHINE/$1"
-	#duplicity --no-encryption "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_TIME_MACHINE/$1/"
+	#duplicity --no-encryption "$LOCAL_BACKUP_SRC/$1/" "file://$LOCAL_BACKUP_TIME_MACHINE/$1/"
 #}
 
 local_backup(){
