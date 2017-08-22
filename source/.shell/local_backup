@@ -1,0 +1,80 @@
+LOCAL_BACKUP_DEST=/media/removable/2TB2/homes/admin
+LOCAL_BACKUP_TIME_MACHINE=/media/removable/2TB2/homes/admin/time_machine
+LOCAL_BACKUP_SRC=/home/pablo
+
+rm_empty_folders(){
+	for a in `seq 1 10`
+	do
+		find $1 -mindepth 1 -type d -empty -delete
+	done
+}
+
+local_backup_c(){
+	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	echo -e "\e[34m backup_c $1 \e[0m"
+	mkdir -p "$LOCAL_BACKUP_DEST/$1"
+	rsync -vai "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
+}
+
+#local_backup_ermtc(){
+	#[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	#echo -e "\e[34m backup_ermtc $1 \e[0m"
+	#cd "$LOCAL_BACKUP_SRC/$1/"
+	#ls -d */ | while read line
+	#do 
+		#echo -e "\e[34m backup_ermtc directory $line \e[0m"
+		#mkdir -p "$LOCAL_BACKUP_DEST/$1/$line"
+		#rsync -vai --delete "$LOCAL_BACKUP_SRC/$1/$line" "$LOCAL_BACKUP_DEST/$1/$line"
+	#done
+#}
+
+#local_backup_ermtm(){
+	#[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	#echo -e "\e[34m backup_ermtm $1 \e[0m"
+	#cd "$LOCAL_BACKUP_SRC/$1/"
+	#ls -d */ | while read line
+	#do 
+		#echo -e "\e[34m backup_ermtm directory $line \e[0m"
+		#mkdir -p "$LOCAL_BACKUP_DEST/$1/$line"
+		#rsync -vai --delete --remove-source-files "$LOCAL_BACKUP_SRC/$1/$line" "$LOCAL_BACKUP_DEST/$1/$line"
+		#rm_empty_folders "$LOCAL_BACKUP_SRC/$1/$line"
+	#done
+#}
+
+local_backup_m(){
+	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	echo -e "\e[34m backup_m $1 \e[0m"
+	mkdir -p "$LOCAL_BACKUP_DEST/$1"
+	rsync -vai --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
+	rm_empty_folders "$LOCAL_BACKUP_SRC/$1/"
+}
+
+#local_backup_rmtc(){
+	#[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	#echo -e "\e[34m backup_rmtc $1 \e[0m"
+	#mkdir -p "$LOCAL_BACKUP_DEST/$1"
+	#rsync -vai --delete "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
+#}
+
+#local_backup_rmtm(){
+	#[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	#echo -e "\e[34m backup_rmtm $1 \e[0m"
+	#mkdir -p "$LOCAL_BACKUP_DEST/$1"
+	#rsync -vai --delete --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
+	#rm_empty_folders "$LOCAL_BACKUP_SRC/$1/"
+#}
+
+#local_backup_tm(){
+	#[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	#echo -e "\e[34m backup_tm $1 \e[0m"
+	#mkdir -p "$LOCAL_BACKUP_TIME_MACHINE/$1"
+	#duplicity --no-encryption "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_TIME_MACHINE/$1/"
+#}
+
+local_backup(){
+	local_backup_m       Descargas
+	local_backup_m       Personal
+	local_backup_c       uned
+	local_backup_m       Videos
+}
+
