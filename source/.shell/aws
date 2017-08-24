@@ -170,10 +170,12 @@ aws_exchange_keys(){
 	aws_cmd "[ -e ~/.ssh/id_rsa ] || ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''"
 
 	echo -e "\e[34m - Send ssh public key \e[0m"
-	cat ~/.ssh/id_rsa.pub | ssh -i $AWS_PEM -p $AWS_PORT $AWS_USER@$AWS_SERVER 'cat >> ~/.ssh/authorized_keys'
+	[ "$AWS_PEM" = "" ] || cat ~/.ssh/id_rsa.pub | ssh -i $AWS_PEM -p $AWS_PORT $AWS_USER@$AWS_SERVER 'cat >> ~/.ssh/authorized_keys'
+	[ "$AWS_PEM" = "" ] && cat ~/.ssh/id_rsa.pub | ssh -p $AWS_PORT $AWS_USER@$AWS_SERVER 'cat >> ~/.ssh/authorized_keys'
 
 	echo -e "\e[34m - Receive ssh public key \e[0m"
-	ssh -i $AWS_PEM -p $AWS_PORT $AWS_USER@$AWS_SERVER 'cat ~/.ssh/id_rsa.pub' >> ~/.ssh/authorized_keys
+	[ "$AWS_PEM" = "" ] || ssh -i $AWS_PEM -p $AWS_PORT $AWS_USER@$AWS_SERVER 'cat ~/.ssh/id_rsa.pub' >> ~/.ssh/authorized_keys
+	[ "$AWS_PEM" = "" ] || ssh -p $AWS_PORT $AWS_USER@$AWS_SERVER 'cat ~/.ssh/id_rsa.pub' >> ~/.ssh/authorized_keys
 
 }
 
