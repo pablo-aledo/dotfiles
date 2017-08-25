@@ -1,0 +1,87 @@
+bok(){
+name=/home/pablo/ebooks-`date +%y%m%d-%H%M`
+mkdir $name
+cd $name
+
+wget http://b-ok.org/Arts-%26-Photography-Drawing-cat4 -O draw
+echo "===== draw =====" >> list.list
+cat draw | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Arts-%26-Photography-Painting-cat9 -O paint
+echo "===== paint =====" >> list.list
+cat paint | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Business-%26-Investing-Job-Hunting-%26-Careers-cat37 -O job
+echo "===== job =====" >> list.list
+cat job | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Computers-%26-Internet-Computer-Science-cat78 -O computer_science
+echo "===== computer_science =====" >> list.list
+cat computer_science | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Computers-%26-Internet-Digital-Music-cat80 -O music
+echo "===== music =====" >> list.list
+cat music | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Computers-%26-Internet-Digital-Photography-%26-Video-cat81 -O digital_photography
+echo "===== digital_photography =====" >> list.list
+cat digital_photography | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Computers-%26-Internet-Graphic-Design-cat83 -O graphics_design
+echo "===== graphics_design =====" >> list.list
+cat graphics_design | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Computers-%26-Internet-Hardware-cat84 -O hardware
+echo "===== hardware =====" >> list.list
+cat hardware | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Computers-%26-Internet-Operating-Systems-cat88 -O operating_systems
+echo "===== operating_systems =====" >> list.list
+cat operating_systems | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Computers-%26-Internet-Programming-cat89 -O programming
+echo "===== programming =====" >> list.list
+cat programming | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Computers-%26-Internet-Security-%26-Encryption-cat91 -O security
+echo "===== security =====" >> list.list
+cat security | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Computers-%26-Internet-Software-cat92 -O software
+echo "===== software =====" >> list.list
+cat software | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Computers-%26-Internet-Web-Development-cat93 -O web
+echo "===== web =====" >> list.list
+cat web | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Science-Mathematics-cat360 -O math
+echo "===== math =====" >> list.list
+cat math | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Science-Physics-cat363 -O physics
+echo "===== physics =====" >> list.list
+cat physics | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+
+wget http://b-ok.org/Science-Technology-cat365 -O technology
+echo "===== technology =====" >> list.list
+cat technology | grep 'class="tdn"' | cut -d'>' -f3 | cut -d'<' -f1 >> list.list
+
+}
+
+
