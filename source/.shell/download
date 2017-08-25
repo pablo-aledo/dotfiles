@@ -91,6 +91,16 @@ download(){
 		done
 	fi
 
+	if [ "`echo $1 | grep 'list.*\.bok'`" ] 
+	then
+		cd -
+		cat $1 | while read line
+		do 
+			[ "`echo $line | egrep '^-----' `" ] && topic=`echo $line | cut -d'-' -f8`
+			[ "`echo $line | egrep '^-----' `" ] || echo "download b-ok.org/\`cat $topic | grep \"$line\" | head -n1 | cut -d'\"' -f2\`" | sed -e 's/\[/\\[/g' -e 's/\]/\\]/g'
+		done
+	fi
+
 }
 
 streamcloud_quick(){
