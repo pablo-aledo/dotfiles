@@ -4,7 +4,7 @@ TASKLOG_FILE=/media/DATA/tasklog/tasklog
 [ -f ~/tasklog ]           && TASKLOG_FILE=~/tasklog
 
 tasklog(){
-	[ -e $TASKLOG_FILE ] && mkdir -p `dirname $TASKLOG_FILE` && date +%s > $TASKLOG_FILE
+	[ -e $TASKLOG_FILE ] || ( mkdir -p `dirname $TASKLOG_FILE` && date +%s > $TASKLOG_FILE )
 
 	[ "$1" = "" ] && task=`zenity --entry`
 	[ "$1" = "" ] || task="$*"
