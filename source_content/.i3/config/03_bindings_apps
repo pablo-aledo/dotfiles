@@ -7,7 +7,7 @@ bindsym $mod+F1  exec gnome-calculator
 bindsym $mod+F3  exec google-chrome
 bindsym $mod+F4  exec gvim
 bindsym $mod+F5  exec "zsh -c 'source ~/.dotfiles/source/.shell/readsomething; readsomething'"
-bindsym $mod+F6  exec pcmanfm
+bindsym $mod+F6  exec "zsh -c 'source ~/.dotfiles/source/.shell/tasklog; tasklog'"
 bindsym $mod+F7  exec inkscape
 bindsym $mod+F8  exec wps
 bindsym $mod+F9  exec thunderbird
