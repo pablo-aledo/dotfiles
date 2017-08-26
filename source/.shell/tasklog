@@ -4,18 +4,20 @@ TASKLOG_FILE=/media/DATA/tasklog/tasklog
 [ -f ~/tasklog ]           && TASKLOG_FILE=~/tasklog
 
 tasklog(){
-	[ -e $TASKLOG_FILE ] || ( mkdir -p `dirname $TASKLOG_FILE` && date +%s > $TASKLOG_FILE )
 
 	[ "$1" = "" ] && task=`zenity --entry`
 	[ "$1" = "" ] || task="$*"
 
-	time_start=`tail -n1 $TASKLOG_FILE`
+	[ -e $TASKLOG_FILE ] || ( mkdir -p `dirname $TASKLOG_FILE` && echo `date +%s` $task > $TASKLOG_FILE)
+
+	old_task=`tail -n1 $TASKLOG_FILE | sed 's/^[^ ]* //g'`
+	time_start=`tail -n1 $TASKLOG_FILE | cut -d' ' -f1`
 	time_end=`date +%s`
 	duration=`printf %5d $(( $time_end - $time_start ))`
 
 	sed -i '$ d' $TASKLOG_FILE
 
-	echo "$time_start $time_end $duration $task" >> $TASKLOG_FILE
-	echo "$time_end" >> $TASKLOG_FILE
+	echo "$time_start $time_end $duration $old_task" >> $TASKLOG_FILE
+	echo "$time_end $task" >> $TASKLOG_FILE
 }
 
