@@ -5,8 +5,8 @@ TASKLOG_FILE=/media/DATA/tasklog/tasklog
 
 tasklog(){
 
-	[ "$1" = "" ] && task=`zenity --entry`
-	[ "$1" = "" ] || task="$*"
+	[ $# -eq 0 ] && task=`zenity --entry`
+	[ $# -eq 0 ] || task="$*"
 
 	[ -e $TASKLOG_FILE ] || ( mkdir -p `dirname $TASKLOG_FILE` && echo `date +%s` $task > $TASKLOG_FILE)
 
@@ -19,5 +19,9 @@ tasklog(){
 
 	echo "$time_start $time_end $duration $old_task" >> $TASKLOG_FILE
 	echo "$time_end $task" >> $TASKLOG_FILE
+}
+
+taskvim(){
+	vim $TASKLOG_FILE
 }
 
