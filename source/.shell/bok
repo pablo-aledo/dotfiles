@@ -1,6 +1,8 @@
+EBOOKS=/media/DATA/ebooks
+
 bok(){
-name=/home/pablo/ebooks-`date +%y%m%d-%H%M`
-mkdir $name
+name=$EBOOKS/ebooks-`date +%y%m%d-%H%M`
+mkdir -p $name
 cd $name
 
 wget http://b-ok.org/Arts-%26-Photography-Drawing-cat4 -O draw
