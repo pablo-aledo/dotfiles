@@ -34,12 +34,12 @@ tasklog_at(){
 	old_task=`tail -n1 $TASKLOG_FILE | sed 's/^[^ ]* //g'`
 	time_oldtask=`tail -n1 $TASKLOG_FILE | cut -d' ' -f1`
 	time_start=`date -d "$at" +%s`
-	time_end=`date -d "$at + $for" +%s`
+	time_end=$(( `date -d "$at" +%s` + `date -d "UTC 1970-01-01 + $for" +%s` ))
 	duration=`printf %5d $(( $time_end - $time_start ))`
 
 	sed -i '$ d' $TASKLOG_FILE
 
-	echo "`date -d @$time_start +%m%d%H%M` `date -d @$time_end +%m%d%H%M` $duration $old_task" >> $TASKLOG_FILE
+	echo "`date -d @$time_start +%m%d%H%M` `date -d @$time_end +%m%d%H%M` $duration $task" >> $TASKLOG_FILE
 	echo "$time_oldtask $old_task" >> $TASKLOG_FILE
 }
 
