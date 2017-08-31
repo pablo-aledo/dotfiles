@@ -1,6 +1,6 @@
-LOCAL_BACKUP_DEST=/media/removable/2TB2/homes/admin
-LOCAL_BACKUP_TIME_MACHINE=/media/removable/2TB2/homes/admin/time_machine
-LOCAL_BACKUP_SRC=/home/pablo
+LOCAL_BACKUP_DEST=/media/mint/2TB2/homes/admin
+LOCAL_BACKUP_TIME_MACHINE=/media/mint/2TB2/homes/admin/time_machine
+LOCAL_BACKUP_SRC=/media/DATA
 
 rm_empty_folders(){
 	for a in `seq 1 10`
