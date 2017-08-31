@@ -54,3 +54,7 @@ tasklog_vim(){
 	vim $TASKLOG_FILE
 }
 
+tasklog_cat(){
+	cat $TASKLOG_FILE
+}
+
