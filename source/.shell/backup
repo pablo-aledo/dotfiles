@@ -120,15 +120,25 @@ backup_tm2(){
 	rmdir /tmp/time_machine
 }
 
-get_from_backup(){
-	[ -e "$BACKUP_SRC/$1/" ] && return
-	mkdir -p "$BACKUP_SRC/$1/"
-	rsync -vai "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/" "$BACKUP_SRC/$1/"
-}
-
-mount_nas(){
-	sshfs $BACKUP_USER@$BACKUP_SERVER:$BACKUP_MOUNT_DIR $BACKUP_MOUNT_MOUNTPOINT
-}
+#backup_tm3(){
+#	[ -d "$BACKUP_SRC/$1/" ] || return
+#	echo -e "\e[34m backup_tm $1 \e[0m"
+#
+#	date=`date +%y%m%d-%H%M%S`
+#
+#	#ssh $BACKUP_USER@$BACKUP_SERVER \
+#	#"mkdir -p $BACKUP_TIME_MACHINE/$1/back-$date \
+#	#&& ln -s $BACKUP_TIME_MACHINE/$1/back-$date $BACKUP_TIME_MACHINE/$1/current"
+#
+#	rsync -azP \
+#		--delete \
+#		--link-dest=../current \
+#		$BACKUP_SRC/$1/ $BACKUP_USER@$BACKUP_SERVER:$BACKUP_TIME_MACHINE/$1/incomplete_back-$date \
+#		&& ssh $BACKUP_USER@$BACKUP_SERVER \
+#		"mv $BACKUP_TIME_MACHINE/incomplete_back-$date $BACKUP_TIME_MACHINE/back-$date \
+#		&& rm -f $BACKUP_TIME_MACHINE/current \
+#		&& ln -s $BACKUP_TIME_MACHINE/$1/back-$date $BACKUP_TIME_MACHINE/$1/current"
+#}
 
 umount_nas(){
 	sudo umount $BACKUP_MOUNT_MOUNTPOINT
