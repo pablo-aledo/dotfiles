@@ -126,18 +126,24 @@ backup_tm2(){
 #
 #	date=`date +%y%m%d-%H%M%S`
 #
-#	#ssh $BACKUP_USER@$BACKUP_SERVER \
-#	#"mkdir -p $BACKUP_TIME_MACHINE/$1/back-$date \
-#	#&& ln -s $BACKUP_TIME_MACHINE/$1/back-$date $BACKUP_TIME_MACHINE/$1/current"
-#
-#	rsync -azP \
-#		--delete \
-#		--link-dest=../current \
-#		$BACKUP_SRC/$1/ $BACKUP_USER@$BACKUP_SERVER:$BACKUP_TIME_MACHINE/$1/incomplete_back-$date \
-#		&& ssh $BACKUP_USER@$BACKUP_SERVER \
-#		"mv $BACKUP_TIME_MACHINE/incomplete_back-$date $BACKUP_TIME_MACHINE/back-$date \
-#		&& rm -f $BACKUP_TIME_MACHINE/current \
-#		&& ln -s $BACKUP_TIME_MACHINE/$1/back-$date $BACKUP_TIME_MACHINE/$1/current"
+#       if [ `ssh $BACKUP_USER@BACKUP_SERVER "ls $BACKUP_TIME_MACHINE/$1/ 2>/dev/null | wc -l"` -eq 0 ]
+#       then
+#		rsync -azP \
+#			--delete \
+#			$BACKUP_SRC/$1/ $BACKUP_USER@$BACKUP_SERVER:$BACKUP_TIME_MACHINE/$1/incomplete_back-$date \
+#			&& ssh $BACKUP_USER@$BACKUP_SERVER \
+#			"mv $BACKUP_TIME_MACHINE/incomplete_back-$date $BACKUP_TIME_MACHINE/back-$date \
+#			&& ln -s $BACKUP_TIME_MACHINE/$1/back-$date $BACKUP_TIME_MACHINE/$1/current"
+#       else
+#		rsync -azP \
+#			--delete \
+#			--link-dest=../current \
+#			$BACKUP_SRC/$1/ $BACKUP_USER@$BACKUP_SERVER:$BACKUP_TIME_MACHINE/$1/incomplete_back-$date \
+#			&& ssh $BACKUP_USER@$BACKUP_SERVER \
+#			"mv $BACKUP_TIME_MACHINE/incomplete_back-$date $BACKUP_TIME_MACHINE/back-$date \
+#			&& rm -f $BACKUP_TIME_MACHINE/current \
+#			&& ln -s $BACKUP_TIME_MACHINE/$1/back-$date $BACKUP_TIME_MACHINE/$1/current"
+#	fi
 #}
 
 umount_nas(){
