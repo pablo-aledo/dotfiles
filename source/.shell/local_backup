@@ -71,6 +71,35 @@ local_backup_m(){
 	#duplicity --no-encryption "$LOCAL_BACKUP_SRC/$1/" "file://$LOCAL_BACKUP_TIME_MACHINE/$1/"
 #}
 
+
+local_backup_tm3(){
+	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	echo -e "\e[34m backup_tm $1 \e[0m"
+
+	date=`date +%y%m%d-%H%M%S`
+
+       if [ `ls $LOCAL_BACKUP_TIME_MACHINE/$1/ 2>/dev/null | wc -l` -eq 0 ]
+       then
+		mkdir -p $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date
+		rsync -azP \
+			--delete \
+			$LOCAL_BACKUP_SRC/$1/ $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date/ \
+			&& mv $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date $LOCAL_BACKUP_TIME_MACHINE/$1/back-$date \
+			&& ln -s $LOCAL_BACKUP_TIME_MACHINE/$1/back-$date $LOCAL_BACKUP_TIME_MACHINE/$1/current
+       else
+		mkdir -p $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date
+		rsync -azP \
+			--delete \
+			--link-dest=../current \
+			$LOCAL_BACKUP_SRC/$1/ $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date/ \
+			&& mv $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date $LOCAL_BACKUP_TIME_MACHINE/$1/back-$date \
+			&& rm -f $LOCAL_BACKUP_TIME_MACHINE/$1/current \
+			&& ln -s $LOCAL_BACKUP_TIME_MACHINE/$1/back-$date $LOCAL_BACKUP_TIME_MACHINE/$1/current
+	fi
+}
+
+
+
 local_backup(){
 	local_backup_m       Descargas
 	local_backup_m       Personal
