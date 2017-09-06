@@ -11,6 +11,7 @@ rm_empty_folders(){
 
 local_backup_c(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_c $1 \e[0m"
 	mkdir -p "$LOCAL_BACKUP_DEST/$1"
 	rsync -vai "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
@@ -18,6 +19,7 @@ local_backup_c(){
 
 local_backup_ermtc(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_ermtc $1 \e[0m"
 	cd "$LOCAL_BACKUP_SRC/$1/"
 	ls -d */ | while read line
@@ -30,6 +32,7 @@ local_backup_ermtc(){
 
 local_backup_ermtm(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_ermtm $1 \e[0m"
 	cd "$LOCAL_BACKUP_SRC/$1/"
 	ls -d */ | while read line
@@ -43,6 +46,7 @@ local_backup_ermtm(){
 
 local_backup_m(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_m $1 \e[0m"
 	mkdir -p "$LOCAL_BACKUP_DEST/$1"
 	rsync -vai --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
@@ -51,6 +55,7 @@ local_backup_m(){
 
 local_backup_rmtc(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_rmtc $1 \e[0m"
 	mkdir -p "$LOCAL_BACKUP_DEST/$1"
 	rsync -vai --delete "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
@@ -58,6 +63,7 @@ local_backup_rmtc(){
 
 local_backup_rmtm(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_rmtm $1 \e[0m"
 	mkdir -p "$LOCAL_BACKUP_DEST/$1"
 	rsync -vai --delete --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
@@ -66,6 +72,7 @@ local_backup_rmtm(){
 
 #local_backup_tm(){
 	#[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	#[ $# -eq 1 ] || return
 	#echo -e "\e[34m backup_tm $1 \e[0m"
 	#mkdir -p "$LOCAL_BACKUP_TIME_MACHINE/$1"
 	#duplicity --no-encryption "$LOCAL_BACKUP_SRC/$1/" "file://$LOCAL_BACKUP_TIME_MACHINE/$1/"
@@ -74,6 +81,7 @@ local_backup_rmtm(){
 
 local_backup_tm3(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_tm $1 \e[0m"
 
 	date=`date +%y%m%d-%H%M%S`
