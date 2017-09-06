@@ -21,8 +21,10 @@ simplify_md5s(){
 }
 
 backup_md5s(){
-	sudo find "$1" -type f -newer $FILE_MD5S -exec md5sum {} >> $FILE_MD5S \;
-	sudo find "$1" -type f > $FILE_FILES \;
+	[ -e $FILE_MD5S ] && sudo find "$1" -type f -newer $FILE_MD5S -exec md5sum {} >> $FILE_MD5S \;
+	[ -e $FILE_MD5S ] || sudo find "$1" -type f -exec md5sum {} >> $FILE_MD5S \;
+
+	sudo find "$1" -type f > $FILE_FILES
 }
 
 backup_exchange_keys(){
