@@ -4,6 +4,7 @@ BACKUP_DEST=/volume1/homes/admin
 BACKUP_TIME_MACHINE=/home/time_machine
 BACKUP_SRC=/media/DATA
 BACKUP_MOUNT_DIR=/home/
+# BACKUP_BAK_DIR=/BACKUP_TIME_MACHINE=/home/rsync_bak
 [ -e /media/DATA/NAS ] && BACKUP_MOUNT_MOUNTPOINT=/media/DATA/NAS
 [ -e ~/NAS ] && BACKUP_MOUNT_MOUNTPOINT=~/NAS
 
@@ -53,20 +54,28 @@ backup_c(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_c $1 \e[0m"
+
+	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
+	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
+
 	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+	rsync -vai `echo $back_arg` "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
 }
 
 backup_ermtc(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_ermtc $1 \e[0m"
+
+	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
+	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
+
 	cd "$BACKUP_SRC/$1/"
 	ls -d */ | while read line
 	do 
 		echo -e "\e[34m backup_ermtc directory $line \e[0m"
 		echo "mkdir -p \"$BACKUP_DEST/$1/$line\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-		rsync -vai --delete "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/$line"
+		rsync -vai `echo $back_arg` --delete "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/$line"
 	done
 }
 
@@ -74,12 +83,16 @@ backup_ermtm(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_ermtm $1 \e[0m"
+
+	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
+	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
+
 	cd "$BACKUP_SRC/$1/"
 	ls -d */ | while read line
 	do 
 		echo -e "\e[34m backup_ermtm directory $line \e[0m"
 		echo "mkdir -p \"$BACKUP_DEST/$1/$line\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-		rsync -vai --delete --remove-source-files "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/$line"
+		rsync -vai `echo $back_arg` --delete --remove-source-files "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/$line"
 		rm_empty_folders "$BACKUP_SRC/$1/$line"
 	done
 }
@@ -88,8 +101,12 @@ backup_m(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_m $1 \e[0m"
+
+	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
+	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
+
 	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+	rsync -vai `echo $back_arg` --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
 	rm_empty_folders "$BACKUP_SRC/$1/"
 }
 
@@ -97,16 +114,24 @@ backup_rmtc(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_rmtc $1 \e[0m"
+
+	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
+	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
+
 	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai --delete "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+	rsync -vai `echo $back_arg` --delete "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
 }
 
 backup_rmtm(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_rmtm $1 \e[0m"
+
+	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
+	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
+
 	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai --delete --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+	rsync -vai `echo $back_arg` --delete --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
 	rm_empty_folders "$BACKUP_SRC/$1/"
 }
 
