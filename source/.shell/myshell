@@ -12,7 +12,7 @@ myshell(){
 	if [ $1 = "tmux_a" ]
 	then
 		pkg install tmux
-		( echo '#!/bin/bash'; echo 'tmux a #' ) | sudo tee /usr/bin/tmux_a
+		( echo '#!/bin/bash'; echo '[ `tmux a #` ] || tmux' ) | sudo tee /usr/bin/tmux_a
 	       	sudo chmod +x /usr/bin/tmux_a
 		sudo sed -i "s/\($(whoami):[^:]*:[^:]*:[^:]*:[^:]*:[^:]*\):.*/\1:\"\/usr\/bin\/tmux a #\"/g" /etc/passwd
 	fi
