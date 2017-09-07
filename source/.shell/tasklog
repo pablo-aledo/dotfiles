@@ -66,6 +66,14 @@ tasklog_timediff(){
 	echo $(( $s2 - $s1 ))
 }
 
+tasklog_timediff_hm(){
+	t1=$1
+	t2=$2
+	s1=$( date -d"`echo $t1 | sed 's/\(..\)\(..\)\(..\)\(..\)/\1\/\2 \3:\4/g'`" +%s )
+	s2=$( date -d"`echo $t2 | sed 's/\(..\)\(..\)\(..\)\(..\)/\1\/\2 \3:\4/g'`" +%s )
+	echo $(( $s2 - $s1 )) | awk '{h=int($1/60/60) ; m=int($1-h*60*60)/60;  printf "%02d:%02d", h, m }'
+}
+
 tasklog_fill_lines(){
 	tasklog_cat | head -n -1 | while read line
 	do
