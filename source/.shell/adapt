@@ -189,6 +189,9 @@ adapt_pablo(){
 	pkg install ncdu
 	pkg install z
 	pkg install fzf
+	pkg install fdupes
+	pkg install ncdu
+	pkg install rsync
 
 	pf_mount Chrome
 
