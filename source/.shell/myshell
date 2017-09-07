@@ -5,7 +5,19 @@ expand(){
 }
 
 myshell(){
+
+	[ $1 = "tmux" ]   && pkg install tmux
+	[ $1 = "tmux_a" ] && pkg install tmux
+
+	if [ $1 = "tmux_a" ]
+	then
+		pkg install tmux
+		( echo '#!/bin/bash'; echo 'tmux a #' ) | sudo tee /usr/bin/tmux_a
+	       	sudo chmod +x /usr/bin/tmux_a
+		sudo sed -i "s/\($(whoami):[^:]*:[^:]*:[^:]*:[^:]*:[^:]*\):.*/\1:\"\/usr\/bin\/tmux a #\"/g" /etc/passwd
+	fi
+
 	[ "`whereis $1 | cut -d" " -f2 | grep :`" = "" ] || return
-	[ $1 = "tmux" ] && pkg install tmux
 	sudo sed -i "s/\($(whoami):[^:]*:[^:]*:[^:]*:[^:]*:[^:]*\):.*/\1:$(expand $(whereis $1 | cut -d' ' -f2))/g" /etc/passwd
+
 }
