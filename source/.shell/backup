@@ -4,7 +4,7 @@ BACKUP_DEST=/volume1/homes/admin
 BACKUP_TIME_MACHINE=/home/time_machine
 BACKUP_SRC=/media/DATA
 BACKUP_MOUNT_DIR=/home/
-# BACKUP_BAK_DIR=/BACKUP_TIME_MACHINE=/home/rsync_bak
+# BACKUP_BAK_DIR=/home/rsync_bak
 [ -e /media/DATA/NAS ] && BACKUP_MOUNT_MOUNTPOINT=/media/DATA/NAS
 [ -e ~/NAS ] && BACKUP_MOUNT_MOUNTPOINT=~/NAS
 
