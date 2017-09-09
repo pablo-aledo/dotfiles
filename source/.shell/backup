@@ -52,6 +52,7 @@ rm_empty_folders(){
 
 backup_c(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
+	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_c $1 \e[0m"
 
@@ -64,6 +65,7 @@ backup_c(){
 
 backup_ermtc(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
+	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_ermtc $1 \e[0m"
 
@@ -81,6 +83,7 @@ backup_ermtc(){
 
 backup_ermtm(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
+	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_ermtm $1 \e[0m"
 
@@ -99,6 +102,7 @@ backup_ermtm(){
 
 backup_m(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
+	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_m $1 \e[0m"
 
@@ -112,6 +116,7 @@ backup_m(){
 
 backup_rmtc(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
+	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_rmtc $1 \e[0m"
 
@@ -124,6 +129,7 @@ backup_rmtc(){
 
 backup_rmtm(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
+	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_rmtm $1 \e[0m"
 
@@ -137,6 +143,7 @@ backup_rmtm(){
 
 backup_tm(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
+	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_TIME_MACHINE 2>/dev/null | wc -l"` -eq 0 ] && return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_tm $1 \e[0m"
 	echo "mkdir -p \"$BACKUP_TIME_MACHINE/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
@@ -145,6 +152,7 @@ backup_tm(){
 
 backup_tm2(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
+	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_TIME_MACHINE 2>/dev/null | wc -l"` -eq 0 ] && return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_tm $1 \e[0m"
 	mkdir -p "/tmp/time_machine"
@@ -157,6 +165,7 @@ backup_tm2(){
 
 backup_tm3(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
+	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_TIME_MACHINE 2>/dev/null | wc -l"` -eq 0 ] && return
 	[ $# -eq 1 ] || return
 	echo -e "\e[34m backup_tm $1 \e[0m"
 
