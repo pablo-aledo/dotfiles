@@ -41,6 +41,10 @@ summarize_rec(){
 
 
 summarize(){
+	# Usage:
+	# ls | egrep 'zip$|pdf$|epub$|rar$' | grep -v '...' | while read line; do echo "===== $line =====" ; summarize "$line" "/media/DATA/summaries/$line.txt"; done
+
+
 	filename=$1
 	destination=$2
 
