@@ -192,8 +192,11 @@ adapt_pablo(){
 	pkg install fdupes
 	pkg install ncdu
 	pkg install rsync
+	pkg install numlockx
 
 	pf_mount Chrome
+
+	numlockx
 
 	#sysctl -w vm.min_free_kbytes=65536 # RAM/cores * 0.06 + extra
 	#sysctl -w vm.swappiness=5
