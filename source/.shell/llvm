@@ -2,7 +2,7 @@ llvm_cfg(){
 	filetype=`file $1`
 	if [ "`echo $filetype | grep 'C source'`" ]
 	then
-		llvm-gcc -c --emit-llvm $2 $1 -o /tmp/file.bc
+		clang -S -emit-llvm $2 $1 -o /tmp/file.bc
 		opt -dot-cfg /tmp/file.bc
 		for a in cfg.*.dot
 		do 
