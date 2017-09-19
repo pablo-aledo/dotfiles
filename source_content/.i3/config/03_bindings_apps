@@ -17,7 +17,9 @@ bindsym $mod+F12 exec jdownloader2
 
 bindsym $mod+Shift+F3  exec google-chrome --incognito
 
-bindsym Ctrl+Shift+j  exec --no-startup-id "sleep 0.1 && xdotool key Ctrl+Shift+Home"
-bindsym Ctrl+Shift+k  exec --no-startup-id "sleep 0.1 && seq 0 $(($(tput lines) - 5)) | sed 's/^.*$/xdotool key Ctrl+Shift+Down/' | bash"
+bindsym Ctrl+Shift+h  exec --no-startup-id "sleep 0.1 && xdotool key Ctrl+Shift+Home"
+bindsym Ctrl+Shift+j  exec --no-startup-id "sleep 0.1 && xdotool key Ctrl+Shift+Up"
+bindsym Ctrl+Shift+k  exec --no-startup-id "sleep 0.1 && xdotool key Ctrl+Shift+Down"
+bindsym Ctrl+Shift+l  exec --no-startup-id "sleep 0.1 && xdotool key Ctrl+Shift+End"
 
 bindsym Ctrl+space exec "zsh -c 'source ~/.dotfiles/source/.shell/toggle_kb; toggle_kb'"
