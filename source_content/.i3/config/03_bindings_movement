@@ -80,3 +80,5 @@ mode "move" {
     bindsym $mod+r mode "resize"
 }
 
+# go to the top of the terminal
+bindsym Ctrl+Shift+j exec xdotool key ctrl+shift+Home
