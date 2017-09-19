@@ -166,6 +166,8 @@ vmap py pgvy
 map ft :set ft=
 " Load symbols for weird keyboards
 map SY :so ~/.vim/symbols<cr>
+set nomore
+inoremap <expr>  <C-K>   BDG_GetDigraph()
 " Remove all folds
 map ZD ggVGzdggVGzdggVGzdggVGzd
 " toggle gundo
