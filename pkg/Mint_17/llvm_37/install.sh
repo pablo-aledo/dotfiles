@@ -1,19 +1,17 @@
-#!/usr/bin/env bash
+sudo apt-get install -y subversion cmake g++ python2.7
 
-sudo apt-get install -y subversion cmake g++
+path /usr/bin 
+sudo ln -s /usr/bin/python2.7 /usr/bin/python
 
-sudo mkdir -p /llvm-3.7
-sudo chmod -R 777 /llvm-3.7
+mksrcdir /usr/share/llvm-3.7
+mksrcdir /usr/src/llvm-3.7
+cd /usr/src/llvm-3.7
 
-svn co http://llvm.org/svn/llvm-project/llvm/trunk /llvm-3.7
-svn co http://llvm.org/svn/llvm-project/cfe/trunk /llvm-3.7/tools/clang
-svn co http://llvm.org/svn/llvm-project/clang-tools-extra/trunk /llvm-3.7/tools/clang/tools/extra
-svn co http://llvm.org/svn/llvm-project/compiler-rt/trunk /llvm-3.7/projects/compiler-rt
+svn co http://llvm.org/svn/llvm-project/llvm/tags/RELEASE_371/final /usr/src/llvm-3.7
+svn co http://llvm.org/svn/llvm-project/cfe/tags/RELEASE_371/final /usr/src/llvm-3.7/tools/clang
 
-cd /llvm-3.7
-mkdir build
-cd build
-cmake ..
-make
+mkd build
+../configure --prefix=/usr/share/llvm-3.7
+make -j `nproc`
 sudo make install
 
