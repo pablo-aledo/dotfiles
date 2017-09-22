@@ -5,7 +5,7 @@ bindsym Ctrl+Mod1+l exec --no-startup-id "i3lock -c000000"
 
 bindsym $mod+F1  exec gnome-calculator
 bindsym $mod+F3  exec google-chrome
-bindsym $mod+F5  exec "zsh -c 'source ~/.dotfiles/source/.shell/animated_wallpaper; animated_wallpaper'"
+bindsym $mod+F4  exec "zsh -c 'source ~/.dotfiles/source/.shell/animated_wallpaper; animated_wallpaper'"
 bindsym $mod+F5  exec "zsh -c 'source ~/.dotfiles/source/.shell/readsomething; readsomething'"
 bindsym $mod+F6  exec "zsh -c 'source ~/.dotfiles/source/.shell/tasklog; tasklog'"
 bindsym $mod+F7  exec inkscape
