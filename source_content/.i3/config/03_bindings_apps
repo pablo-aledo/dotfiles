@@ -5,7 +5,7 @@ bindsym Ctrl+Mod1+l exec --no-startup-id "i3lock -c000000"
 
 bindsym $mod+F1  exec gnome-calculator
 bindsym $mod+F3  exec google-chrome
-bindsym $mod+F4  exec "zsh -c 'source ~/.dotfiles/source/.shell/animated_wallpaper; animated_wallpaper'"
+bindsym $mod+F4  exec "zsh -c 'source ~/.dotfiles/source/.shell/animated_wallpaper; variety_wallpaper'"
 bindsym $mod+F5  exec "zsh -c 'source ~/.dotfiles/source/.shell/readsomething; readsomething'"
 bindsym $mod+F6  exec "zsh -c 'source ~/.dotfiles/source/.shell/tasklog; tasklog'"
 bindsym $mod+F7  exec inkscape
@@ -16,6 +16,7 @@ bindsym $mod+F11 exec virtualbox
 bindsym $mod+F12 exec jdownloader2
 
 bindsym $mod+Shift+F3  exec google-chrome --incognito
+bindsym $mod+Shift+F4  exec "zsh -c 'source ~/.dotfiles/source/.shell/animated_wallpaper; animated_wallpaper'"
 
 #bindsym Ctrl+Shift+h  exec --no-startup-id "sleep 0.1 && xdotool key Ctrl+Shift+Home"
 bindsym Ctrl+Shift+j  exec --no-startup-id "sleep 0.1 && xdotool key Ctrl+Shift+Home"
