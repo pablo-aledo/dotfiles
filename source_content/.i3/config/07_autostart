@@ -8,6 +8,10 @@
 exec --no-startup-id "sleep 5 && feh --bg-scale /media/DATA/Work/dotfiles/data/repository/Mint_17/setup_personal/wallpaper/14569390665_67773730f4_k.jpg"
 exec --no-startup-id "sleep 5 && feh --bg-scale ~/.dotfiles/wallpaper/wallpaper.jpg"
 exec --no-startup-id "sleep 5 && feh --bg-scale ~/wallpaper.jpg"
+
+# exec mplayer -rootwin -loop 0 -ao null /dir/video.mp4
+# exec mpv --wid=0 /dir/video.mp4
+
 exec --no-startup-id "sleep 5 && setxkbmap es"
 exec --no-startup-id "gnome-settings-daemon"
 exec --no-startup-id "nm-applet"
