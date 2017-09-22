@@ -1,0 +1,9 @@
+table Icon
+  Caption: Home
+  ToolTip.Caption: My home
+  Icon: /usr/share/icons/gnome/48x48/places/user-home.png
+  X: 49
+  Y: 29
+  Command[0]: pcmanfm ~
+end
+
