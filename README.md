@@ -32,7 +32,7 @@ Can be un-installed by
 source uninstall.sh
 ```
 
-Some things that might find intriguing:
+Some things that you might find intriguing:
 
 * [Some useful shell functions](source/.shell/)
 * [A generic installer over various distributions](source/.shell/pkg)
