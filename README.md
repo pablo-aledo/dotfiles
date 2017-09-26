@@ -10,3 +10,33 @@
 > The Tao of Programming flows far away and returns on the wind of morning.
 
 -- Geoffrey James, The Tao of Programming
+
+...
+
+These are my "dotfiles". Can be directly installed by the following command
+
+```
+wget tinyurl.com/pga-dfsi -O - | bash
+zsh
+```
+
+Or cloning the repository and 
+
+```
+source install.sh
+```
+
+Can be un-installed by
+
+```
+source uninstall.sh
+```
+
+Some things that might find intriguing:
+
+[Some useful shell functions](source/.shell/)
+[A generic installer over various distributions](source/.shell/pkg)
+[A lazy way of installing commands when they are required](source/.shell/autoinstall)
+[Installation scripts for some common tools](source/pkg)
+[Some useful functions to work with aws](source/.shell/aws)
+
