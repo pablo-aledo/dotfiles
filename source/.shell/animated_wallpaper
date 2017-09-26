@@ -1,12 +1,14 @@
 source $(dirname $(readlink -f $0))/pkg
 
 animated_wallpaper(){
-  pkg install mplayer
+  [ -e /usr/bin/mplayer ] || pkg install mplayer
+  killall variety
   echo mplayer -rootwin -loop 0 -ao null `ls /media/DATA/animated_wallpapers/*.mp4 | sed -e 's/^/"/g' -e 's/$/"/g' | shuf | paste -s -d' '` | zsh
 # echo mpv --wid=0                       `ls /media/DATA/animated_wallpapers/*.mp4 | sed -e 's/^/"/g' -e 's/$/"/g' | shuf | paste -s -d' '` | zsh
 }
 
 variety_wallpaper(){
-	pkg install variety 
+	[ -e /usr/bin/variety ] || pkg install variety 
+	killall mplayer
 	variety
 }
