@@ -37,6 +37,6 @@ Some things that you might find intriguing:
 * [Some useful shell functions](source/.shell/)
 * [A generic installer over various distributions](source/.shell/pkg)
 * [A lazy way of installing commands when they are required](source/.shell/autoinstall)
-* [Installation scripts for some common tools](source/pkg)
+* [Installation scripts for some common tools](pkg)
 * [Some useful functions to work with aws](source/.shell/aws)
 
