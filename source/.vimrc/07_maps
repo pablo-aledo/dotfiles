@@ -125,6 +125,8 @@ map ciu ci]
 map cii ci}
 " Change expression inside parenthesis
 map cio ci)
+" Change expression inside quotes
+map cip ci"
 imap <C-f> <esc>b:let a="<C-R>=expand("<cword>")<CR>"<CR><up>$:execute "/" . a <CR>Nv$y<down>"_diwp$
 " Duplicate line and increment number
 map <C-A-a> yyp<c-a>
