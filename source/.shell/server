@@ -199,6 +199,12 @@ server(){
 		pkg install shellinabox
 	fi
 
+	if [ $1 = "gotty" ]
+	then
+		pkg install gotty
+		gotty -w tmux
+	fi
+
 	if [ $1 = "pydio" ]
 	then
 		pkg install pydio
