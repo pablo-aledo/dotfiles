@@ -1,9 +1,12 @@
 pword(){
 	PWORD=''
-	[ -e ~/.pword ]                      && PWORD=`cat ~/.pword`
-	[ -e  /media/DATA/.pword ]           && PWORD=`cat /media/DATA/.pword`
-	[ -e  /media/DATA/Personal/.pword ]  && PWORD=`cat /media/DATA/Personal/.pword`
-	[ -e  /media/mint/Pablo/.pword ]     && PWORD=`cat /media/mint/Pablo/.pword`
+	[ -e ~/.pword ]                      && PWORD_FILE=~/.pword
+	[ -e  /media/DATA/.pword ]           && PWORD_FILE=/media/DATA/.pword
+	[ -e  /media/DATA/Personal/.pword ]  && PWORD_FILE=/media/DATA/Personal/.pword
+	[ -e  /media/mint/Pablo/.pword ]     && PWORD_FILE=/media/mint/Pablo/.pword
+
+	[ $# -eq 0 ] && PWORD=`cat $PWORD_FILE | head -n1`
+	[ $# -eq 1 ] && PWORD=`cat $PWORD_FILE | grep $1 | cut -d':' -f2`
 
 	if [ $PWORD ]
 	then
