@@ -3,3 +3,24 @@ rm(){
 	[ $2 = "-f" ]  && dir=~/.Trash/`date +%s` && mkdir -p $dir && shift && shift && /bin/mv $* $dir && return
 	/bin/rm -i $*
 }
+
+dd(){
+	command="sudo dd"
+	for a in $*
+	do 
+		if [ `echo $a | egrep 'of=\/dev\/'` ]
+		then
+			name=`echo $a | sed 's/of=\/dev\///g'`
+			if [ ! "`udevadm info --query=all --name=$name | grep ID_BUS | grep '=usb'`" ]
+			then
+				echo "of is not of type USB"
+				return
+			fi
+		fi
+
+		command="$command $a"
+	done
+
+	echo $command | bash
+}
+
