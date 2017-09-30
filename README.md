@@ -39,4 +39,5 @@ Some things that you might find intriguing:
 * [A lazy way of installing commands when they are required](source/.shell/autoinstall)
 * [Installation scripts for some common tools](pkg)
 * [Some useful functions to work with aws](source/.shell/aws)
+* [A safe version of rm and dd (you should have this :-P)](source/.shell/rmsafe)
 
