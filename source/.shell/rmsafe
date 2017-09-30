@@ -16,6 +16,12 @@ dd(){
 				echo "of is not of type USB"
 				return
 			fi
+
+			if [ -e /usr/bin/sg_vpd ] && [ "`sudo sg_vpd --page=bdc /dev/$name | grep 'Nominal rotation rate'`" ]
+			then
+				echo "of is a hard drive"
+				return
+			fi
 		fi
 
 		command="$command $a"
