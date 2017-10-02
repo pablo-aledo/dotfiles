@@ -17,8 +17,8 @@ nnoremap <C-W>m <C-W>=
 "nnoremap <C-L> <C-W><C-L>
 "nnoremap <C-H> <C-W><C-H>
 " move vertically by visual line
-
-
+nnoremap k gk
+nnoremap j gj
 " dragvisuals plugin
 vmap  <expr>  <LEFT>   DVB_Drag('left')
 vmap  <expr>  <RIGHT>  DVB_Drag('right')
