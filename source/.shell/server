@@ -260,6 +260,15 @@ server(){
 			n=$((n+1))
 		done
 	fi
+
+	if [ $1 = novnc ]
+	then
+		pkg install novnc
+		tmux -d -s novnc "cd ~/noVNC; ./utils/launch.sh --vnc localhost:5900"
+		tmux -d -s vnc   "x11vnc"
+	fi
+
+
 }
 
 

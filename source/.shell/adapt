@@ -115,18 +115,18 @@ adapt_presentation(){
 			cd ~/cell_clustering/
 			aws_send cell_clustering.cpp    2>/dev/null >/dev/null;
 			aws_send Makefile               2>/dev/null >/dev/null;
-			aws_ssh 'source ~/.bash_profile; cd /home/u2401/cell_clustering; make'
+			aws_ssh 'source ~/.bash_profile; cd /home/u4702/cell_clustering; make'
 		)
 
 		[ $# -eq 1 ] && [ $1 = "run" ] && (
-			aws_ssh 'cd /home/u2401/cell_clustering ; qsub wrapper_script'
+			aws_ssh 'cd /home/u4702/cell_clustering ; qsub wrapper_script'
 			# aws_ssh 'while [ "`qstat`" ]; do sleep 1; done' >/dev/null 2>/dev/null
 			# aws_get 'run_clust.e*'          2>/dev/null >/dev/null
 			# bars `ls run_clust.e* | sort -g | tail -n1`
 			# all_bars
 		)
 		[ $# -eq 1 ] && [ $1 = "clean" ] && (
-			aws_ssh 'cd /home/u2401/cell_clustering ; make clean'
+			aws_ssh 'cd /home/u4702/cell_clustering ; make clean'
 			/usr/bin/make clean
 		)
 	}
