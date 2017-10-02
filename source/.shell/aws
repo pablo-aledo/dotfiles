@@ -247,6 +247,16 @@ aws_redirect3(){
 	[ $# -eq 2 ] && sudo ssh -p $AWS_PORT -nNT -R ${2}:localhost:${1} $AWS_USER@$AWS_SERVER `echo $pemflag`
 }
 
+aws_redirect4(){
+	aws_config 
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	tmux new -d -s redirect "zsh -c \"source ~/.shell; aws_redirect3 $1 $2\""
+	tmux1="source ~/.shell; cpport_2 $2 $3"
+	tmux2="zsh -c $tmux1"
+	tmux3="tmux new -d -s redirect $tmux2"
+	aws_cmd $tmux3
+}
+
 aws_bridge_exchange_keys(){
 	aws_config
 	ssh-keygen -t rsa
