@@ -268,6 +268,12 @@ server(){
 		tmux new -d -s vnc   "x11vnc"
 	fi
 
+	if [ $1 = novnc2 ]
+	then
+		pkg install novnc2
+		tmux new -d -s novnc "cd ~/noVNC; ./utils/launch.sh --vnc localhost:5900"
+	fi
+
 
 }
 
