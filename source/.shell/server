@@ -271,6 +271,7 @@ server(){
 	if [ $1 = novnc2 ]
 	then
 		pkg install novnc2
+		vnc4server -kill :1
 		tmux new -d -s novnc "cd ~/noVNC; ./utils/launch.sh --vnc localhost:5901"
 		tmux new -d -s vnc   "vnc4server"
 	fi
