@@ -219,3 +219,17 @@ adapt_pablo(){
 
 }
 
+adapt_nas(){
+	pkg install fdupes
+	pkg install ranger
+	pkg install ncdu
+	pkg install w3m
+	pkg install rsync
+	pkg install vim
+	pkg install tmux
+	pkg install rar
+	pkg install unrar
+	pkg install poppler-utils
+	pkg install epub2txt
+	pkg install ffmpeg
+}
