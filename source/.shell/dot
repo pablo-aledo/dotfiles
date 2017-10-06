@@ -1,4 +1,5 @@
 showdot(){
-	dot -Tpng "$1" > /tmp/dot.png
-	eog /tmp/dot.png
+	d=`date +%s`
+	dot -Tpng "$1" > /tmp/dot-$d.png
+	eog /tmp/dot-$d.png &
 }
