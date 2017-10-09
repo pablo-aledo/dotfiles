@@ -17,6 +17,7 @@ bindsym $mod+F12 exec jdownloader2
 
 bindsym $mod+Shift+F3  exec google-chrome --incognito
 bindsym $mod+Shift+F4  exec "zsh -c 'source ~/.dotfiles/source/.shell/animated_wallpaper; animated_wallpaper'"
+bindsym $mod+Shift+F6  exec "zsh -c 'source ~/.dotfiles/source/.shell/tasklog; pomodoro'"
 
 #bindsym Ctrl+Shift+h  exec --no-startup-id "sleep 0.1 && xdotool key Ctrl+Shift+Home"
 bindsym Ctrl+Shift+j  exec --no-startup-id "sleep 0.1 && xdotool key Ctrl+Shift+Home"

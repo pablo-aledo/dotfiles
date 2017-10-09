@@ -1,7 +1,6 @@
 bindsym $mod+Shift+F1  exec cat ~/.i3/sessions/session_1 | egrep -v '^#' | sed -e 's/^/i3-msg "/g' -e 's/$/"/g' -e 's/i3-msg "-*"/sleep 1/g' | bash
 bindsym $mod+Shift+F2  exec cat ~/.i3/sessions/session_2 | egrep -v '^#' | sed -e 's/^/i3-msg "/g' -e 's/$/"/g' -e 's/i3-msg "-*"/sleep 1/g' | bash
 bindsym $mod+Shift+F5  exec cat ~/.i3/sessions/session_5 | egrep -v '^#' | sed -e 's/^/i3-msg "/g' -e 's/$/"/g' -e 's/i3-msg "-*"/sleep 1/g' | bash
-bindsym $mod+Shift+F6  exec cat ~/.i3/sessions/session_6 | egrep -v '^#' | sed -e 's/^/i3-msg "/g' -e 's/$/"/g' -e 's/i3-msg "-*"/sleep 1/g' | bash
 bindsym $mod+Shift+F7  exec cat ~/.i3/sessions/session_7 | egrep -v '^#' | sed -e 's/^/i3-msg "/g' -e 's/$/"/g' -e 's/i3-msg "-*"/sleep 1/g' | bash
 bindsym $mod+Shift+F8  exec cat ~/.i3/sessions/session_8 | egrep -v '^#' | sed -e 's/^/i3-msg "/g' -e 's/$/"/g' -e 's/i3-msg "-*"/sleep 1/g' | bash
 bindsym $mod+Shift+F9  exec cat ~/.i3/sessions/session_9 | egrep -v '^#' | sed -e 's/^/i3-msg "/g' -e 's/$/"/g' -e 's/i3-msg "-*"/sleep 1/g' | bash

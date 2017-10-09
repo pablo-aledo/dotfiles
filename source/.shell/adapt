@@ -196,6 +196,7 @@ adapt_pablo(){
 	pkg install gnome-calculator
 	pkg install sg3-utils
 	pkg install libwebkitgtk-3.0-0
+	pkg install at
 
 	sudo apt-get install -y network-manager-openvpn network-manager-openvpn-gnome network-manager-pptp network-manager-pptp-gnome network-manager-vpnc network-manager-vpnc-gnome network-manager-openconnect network-manager-openconnect-gnome
 

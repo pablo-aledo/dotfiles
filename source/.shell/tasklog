@@ -2,6 +2,7 @@ TASKLOG_FILE=/media/DATA/tasklog/tasklog
 [ -f /media/DATA/tasklog ] && TASKLOG_FILE=/media/DATA/tasklog
 [ -d /media/DATA/tasklog ] && TASKLOG_FILE=/media/DATA/tasklog/tasklog
 [ -f ~/tasklog ]           && TASKLOG_FILE=~/tasklog
+[ -d /media/DATA/tasklog ] && TODO_FILE=/media/DATA/tasklog/todo
 
 tasklog(){
 
@@ -86,4 +87,18 @@ tasklog_fill_lines(){
 		[ "`echo $sec | egrep '^[0-9]*$'`" = "" ] && printf '%s %s %7d %s\n' $ini $end $sub $tsk
 	done
 }
+
+pick_todo(){
+ans=$(echo zenity  --list  --text \"Task to do\" --radiolist  --column \"Pick\" --column \"Task\" `cat $TODO_FILE | sed -e 's/^/FALSE "/g' -e 's/$/" /g' | paste -d' ' -s` | bash );
+echo $ans
+}
+
+pomodoro(){
+
+	tasklog_at 'now' '30 minutes' "`pick_todo`"
+	echo 'DISPLAY=:0.0 zenity --info --text "Pomodoro 1"' | at 'now + 25 minutes'
+	echo 'DISPLAY=:0.0 zenity --info --text "Pomodoro 2"' | at 'now + 30 minutes'
+
+}
+
 
