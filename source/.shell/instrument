@@ -4,7 +4,7 @@ instrument(){
 	prog=`unset -f $1 2>/dev/null; which $1`
 	sudo mv $prog $prog.old
 	echo '#!/bin/bash' | sudo tee $prog
-	echo "(echo \"cd \$PWD; echo $prog \$*\") >> $INSTRUMENTATION_FILE" | sudo tee -a $prog
+	echo "(echo \"cd \$PWD; $prog \$*\") >> $INSTRUMENTATION_FILE" | sudo tee -a $prog
 	echo "$prog.old \$*" | sudo tee -a $prog
 	sudo chmod +x $prog
 }
