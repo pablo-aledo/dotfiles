@@ -202,7 +202,11 @@ server(){
 	if [ $1 = "gotty" ]
 	then
 		pkg install gotty
-		gotty -w tmux
+		( echo '#!/bin/bash'; echo '[ `tmux a #` ] || tmux' ) | sudo tee /usr/bin/tmux_a
+	       	sudo chmod +x /usr/bin/tmux_a
+		echo 'gotty -w tmux_a' > ~/gotty.sh
+		chmod +x ~/gotty.sh 
+		nohup ~/gotty.sh &
 	fi
 
 	if [ $1 = "pydio" ]
