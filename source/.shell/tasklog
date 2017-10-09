@@ -93,6 +93,10 @@ ans=$(echo zenity  --list  --text \"Task to do\" --radiolist  --column \"Pick\" 
 echo $ans
 }
 
+todo_vim(){
+	vim $TODO_FILE
+}
+
 pomodoro(){
 
 	tasklog_at 'now' '30 minutes' "`pick_todo`"
