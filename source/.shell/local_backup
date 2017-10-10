@@ -116,9 +116,9 @@ local_backup_rmtm(){
 #local_backup_tm(){
 	#[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
 	#[ -d "$LOCAL_BACKUP_TIME_MACHINE" ] || return
-	[ $# -eq 0 ] && return
-	[ $# -eq 1 ] && dest=$LOCAL_BACKUP_TIME_MACHINE/$1
-	[ $# -eq 2 ] && dest=$LOCAL_BACKUP_TIME_MACHINE/$2
+	#[ $# -eq 0 ] && return
+	#[ $# -eq 1 ] && dest=$LOCAL_BACKUP_TIME_MACHINE/$1
+	#[ $# -eq 2 ] && dest=$LOCAL_BACKUP_TIME_MACHINE/$2
 	#echo -e "\e[34m backup_tm $1 \e[0m"
 	#mkdir -p "$dest"
 	#duplicity --no-encryption "$LOCAL_BACKUP_SRC/$1/" "file://$dest/"
