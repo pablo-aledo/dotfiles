@@ -98,10 +98,14 @@ todo_vim(){
 }
 
 pomodoro(){
+	[ $# -eq 0 ] && t1=25 && t2=30
+	[ $# -eq 1 ] && t1=$1 && t2=$(( $t1 + 5 ))
+	[ $# -eq 2 ] && t1=$1 && t2=$2
+
 	todo=`pick_todo`
-	[ "$todo" = "" ] || tasklog_at 'now' '30 minutes' "$todo"
-	[ "$todo" = "" ] || echo 'DISPLAY=:0.0 zenity --info --text "Pomodoro 1"' | at 'now + 25 minutes'
-	[ "$todo" = "" ] || echo 'DISPLAY=:0.0 zenity --info --text "Pomodoro 2"' | at 'now + 30 minutes'
+	[ "$todo" = "" ] || tasklog_at 'now' "$t2 minutes" "$todo"
+	[ "$todo" = "" ] || echo 'DISPLAY=:0.0 zenity --info --text "Pomodoro 1"' | at "now + $t1 minutes"
+	[ "$todo" = "" ] || echo 'DISPLAY=:0.0 zenity --info --text "Pomodoro 2"' | at "now + $t2 minutes"
 
 }
 
