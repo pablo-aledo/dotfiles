@@ -3,8 +3,13 @@ FOLDER=$(dirname $(readlink -f $0))
 MYSELF=$(readlink -f $0)
 
 wh(){
-	unset -f $1 2>/dev/null
-	which $1
+	if [ "`cat $MYSELF | grep 'for a in ' | grep $1 `" ]
+	then
+		unset -f $1 2>/dev/null
+		which $1
+	else
+		which $1
+	fi
 }
 
 alias which=wh
