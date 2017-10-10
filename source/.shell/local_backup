@@ -162,6 +162,6 @@ local_backup(){
 	local_backup_m       Personal
 	local_backup_c       uned
 	local_backup_m       Videos
-	local_backup_c       Work Work_Imperial
+	local_backup_rmtc    Work Work_Imperial
 }
 
