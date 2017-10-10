@@ -132,8 +132,8 @@ aws_send_append(){
 aws_get(){
 	aws_config
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
-	[ ${1[1]} = '/' ] || rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:\"$AWS_REMOTE_FOLDER/$1\"" .
-	[ ${1[1]} = '/' ] && rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:\"$1\"" .
+	[ ${1[1]} = '/' ] || rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1" .
+	[ ${1[1]} = '/' ] && rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$1" .
 }
 
 aws_get_append(){
