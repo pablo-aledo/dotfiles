@@ -2,6 +2,13 @@ FOLDER=$(dirname $(readlink -f $0))
 #source $FOLDER/pkg
 MYSELF=$(readlink -f $0)
 
+wh(){
+	unset -f $1 2>/dev/null
+	which $1
+}
+
+alias which=wh
+
 echo '%name%(){'                                                                         > /tmp/template
 echo '   [ "`unset -f %name%; which %name% | grep found`" = "" ] || pkg install %name%' >> /tmp/template
 echo '   [ "`unset -f %name%; which %name% | grep found`" = "" ] || return'             >> /tmp/template
