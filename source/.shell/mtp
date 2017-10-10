@@ -17,6 +17,7 @@ mtp_umount(){
 	[ $# -eq 0 ] || mount_point=$MTP_MOUNT_POINT/$1
 
 	fusermount -u $mount_point
+	rmdir $mount_point
 }
 
 
