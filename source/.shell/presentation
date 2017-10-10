@@ -13,6 +13,7 @@ bars(){
 	extra=`cat $1                      | grep 'extra_TIME                      ' | cut -d"=" -f2 | awk '{print $1}'`
 	total=`cat $1                      | grep 'TOTAL_COMPUTE_TIME              ' | cut -d"=" -f2 | awk '{m=int($1/60) ; s=int($1-m*60); d=int(($1-m*60-s)*100);  printf "%d:%02d:%02d", m, s, d  }'`
 	totalsec=`cat $1                   | grep 'TOTAL_COMPUTE_TIME              ' | cut -d"=" -f2 | awk '{print $1}'`
+	energy=`cat $1                     | grep 'FINAL_ENERGY                    ' | cut -d"=" -f2 | awk '{print $1}'`
 
 
 	zoom=1
@@ -23,6 +24,7 @@ bars(){
 
 	[ "`cat $1 | grep 'FINAL_CRITERION                     = 1'`" ] && echo -n '\e[32m✔\e[0m' >> output
 	[ "`cat $1 | grep 'FINAL_CRITERION                     = 1'`" ] || echo -n '\e[31m✘\e[0m' >> output
+	printf ' %f ' $energy >> output
 
 	printf '%20s: ' $name >> output
 	python3 -c "print('\033[31m' '#' * int($produceSubstances*$zoom), end='')" >> output
