@@ -13,20 +13,24 @@ rm_empty_folders(){
 local_backup_c(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
 	[ -d "$LOCAL_BACKUP_DEST" ] || return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
 	echo -e "\e[34m backup_c $1 \e[0m"
 
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] && back_arg=""
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$LOCAL_BACKUP_BAK_DIR"
 
-	mkdir -p "$LOCAL_BACKUP_DEST/$1"
-	rsync -vai `echo $back_arg` "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
+	mkdir -p "$dest"
+	rsync -vai `echo $back_arg` "$LOCAL_BACKUP_SRC/$1/" "$dest/"
 }
 
 local_backup_ermtc(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
 	[ -d "$LOCAL_BACKUP_DEST" ] || return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
 	echo -e "\e[34m backup_ermtc $1 \e[0m"
 
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] && back_arg=""
@@ -36,15 +40,17 @@ local_backup_ermtc(){
 	ls -d */ | while read line
 	do 
 		echo -e "\e[34m backup_ermtc directory $line \e[0m"
-		mkdir -p "$LOCAL_BACKUP_DEST/$1/$line"
-		rsync -vai `echo $back_arg` --delete "$LOCAL_BACKUP_SRC/$1/$line" "$LOCAL_BACKUP_DEST/$1/$line"
+		mkdir -p "$dest/$line"
+		rsync -vai `echo $back_arg` --delete "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
 	done
 }
 
 local_backup_ermtm(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
 	[ -d "$LOCAL_BACKUP_DEST" ] || return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
 	echo -e "\e[34m backup_ermtm $1 \e[0m"
 
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] && back_arg=""
@@ -54,8 +60,8 @@ local_backup_ermtm(){
 	ls -d */ | while read line
 	do 
 		echo -e "\e[34m backup_ermtm directory $line \e[0m"
-		mkdir -p "$LOCAL_BACKUP_DEST/$1/$line"
-		rsync -vai `echo $back_arg` --delete --remove-source-files "$LOCAL_BACKUP_SRC/$1/$line" "$LOCAL_BACKUP_DEST/$1/$line"
+		mkdir -p "$dest/$line"
+		rsync -vai `echo $back_arg` --delete --remove-source-files "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
 		rm_empty_folders "$LOCAL_BACKUP_SRC/$1/$line"
 	done
 }
@@ -63,79 +69,89 @@ local_backup_ermtm(){
 local_backup_m(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
 	[ -d "$LOCAL_BACKUP_DEST" ] || return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
 	echo -e "\e[34m backup_m $1 \e[0m"
 
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] && back_arg=""
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$LOCAL_BACKUP_BAK_DIR"
 
-	mkdir -p "$LOCAL_BACKUP_DEST/$1"
-	rsync -vai `echo $back_arg` --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
+	mkdir -p "$dest"
+	rsync -vai `echo $back_arg` --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$dest/"
 	rm_empty_folders "$LOCAL_BACKUP_SRC/$1/"
 }
 
 local_backup_rmtc(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
 	[ -d "$LOCAL_BACKUP_DEST" ] || return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
 	echo -e "\e[34m backup_rmtc $1 \e[0m"
 
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] && back_arg=""
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$LOCAL_BACKUP_BAK_DIR"
 
-	mkdir -p "$LOCAL_BACKUP_DEST/$1"
-	rsync -vai `echo $back_arg` --delete "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
+	mkdir -p "$dest"
+	rsync -vai `echo $back_arg` --delete "$LOCAL_BACKUP_SRC/$1/" "$dest/"
 }
 
 local_backup_rmtm(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
 	[ -d "$LOCAL_BACKUP_DEST" ] || return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
 	echo -e "\e[34m backup_rmtm $1 \e[0m"
 
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] && back_arg=""
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$LOCAL_BACKUP_BAK_DIR"
 
-	mkdir -p "$LOCAL_BACKUP_DEST/$1"
-	rsync -vai `echo $back_arg` --delete --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$LOCAL_BACKUP_DEST/$1/"
+	mkdir -p "$dest"
+	rsync -vai `echo $back_arg` --delete --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$dest/"
 	rm_empty_folders "$LOCAL_BACKUP_SRC/$1/"
 }
 
 #local_backup_tm(){
 	#[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
 	#[ -d "$LOCAL_BACKUP_TIME_MACHINE" ] || return
-	#[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$LOCAL_BACKUP_TIME_MACHINE/$1
+	[ $# -eq 2 ] && dest=$LOCAL_BACKUP_TIME_MACHINE/$2
 	#echo -e "\e[34m backup_tm $1 \e[0m"
-	#mkdir -p "$LOCAL_BACKUP_TIME_MACHINE/$1"
-	#duplicity --no-encryption "$LOCAL_BACKUP_SRC/$1/" "file://$LOCAL_BACKUP_TIME_MACHINE/$1/"
+	#mkdir -p "$dest"
+	#duplicity --no-encryption "$LOCAL_BACKUP_SRC/$1/" "file://$dest/"
 #}
 
 
 local_backup_tm3(){
 	[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
 	[ -d "$LOCAL_BACKUP_TIME_MACHINE" ] || return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$LOCAL_BACKUP_TIME_MACHINE/$1
+	[ $# -eq 2 ] && dest=$LOCAL_BACKUP_TIME_MACHINE/$2
 	echo -e "\e[34m backup_tm $1 \e[0m"
 
 	date=`date +%y%m%d-%H%M%S`
 
-       if [ `ls $LOCAL_BACKUP_TIME_MACHINE/$1/ 2>/dev/null | wc -l` -eq 0 ]
+       if [ `ls $dest/ 2>/dev/null | wc -l` -eq 0 ]
        then
-		mkdir -p $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date
+		mkdir -p $dest/incomplete_back-$date
 		rsync -azP \
 			--delete \
-			$LOCAL_BACKUP_SRC/$1/ $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date/ \
-			&& mv $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date $LOCAL_BACKUP_TIME_MACHINE/$1/back-$date \
-			&& ln -s $LOCAL_BACKUP_TIME_MACHINE/$1/back-$date $LOCAL_BACKUP_TIME_MACHINE/$1/current
+			$LOCAL_BACKUP_SRC/$1/ $dest/incomplete_back-$date/ \
+			&& mv $dest/incomplete_back-$date $dest/back-$date \
+			&& ln -s $dest/back-$date $dest/current
        else
-		mkdir -p $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date
+		mkdir -p $dest/incomplete_back-$date
 		rsync -azP \
 			--delete \
 			--link-dest=../current \
-			$LOCAL_BACKUP_SRC/$1/ $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date/ \
-			&& mv $LOCAL_BACKUP_TIME_MACHINE/$1/incomplete_back-$date $LOCAL_BACKUP_TIME_MACHINE/$1/back-$date \
-			&& rm -f $LOCAL_BACKUP_TIME_MACHINE/$1/current \
-			&& ln -s $LOCAL_BACKUP_TIME_MACHINE/$1/back-$date $LOCAL_BACKUP_TIME_MACHINE/$1/current
+			$LOCAL_BACKUP_SRC/$1/ $dest/incomplete_back-$date/ \
+			&& mv $dest/incomplete_back-$date $dest/back-$date \
+			&& rm -f $dest/current \
+			&& ln -s $dest/back-$date $dest/current
 	fi
 }
 

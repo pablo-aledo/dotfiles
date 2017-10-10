@@ -53,20 +53,24 @@ rm_empty_folders(){
 backup_c(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$BACKUP_DEST/$2
 	echo -e "\e[34m backup_c $1 \e[0m"
 
 	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
 	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
 
-	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai `echo $back_arg` "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+	echo "mkdir -p \"$dest\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+	rsync -vai `echo $back_arg` "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
 }
 
 backup_ermtc(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$BACKUP_DEST/$2
 	echo -e "\e[34m backup_ermtc $1 \e[0m"
 
 	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
@@ -76,15 +80,17 @@ backup_ermtc(){
 	ls -d */ | while read line
 	do 
 		echo -e "\e[34m backup_ermtc directory $line \e[0m"
-		echo "mkdir -p \"$BACKUP_DEST/$1/$line\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-		rsync -vai `echo $back_arg` --delete "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/$line"
+		echo "mkdir -p \"$dest/$line\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+		rsync -vai `echo $back_arg` --delete "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$dest/$line"
 	done
 }
 
 backup_ermtm(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$BACKUP_DEST/$2
 	echo -e "\e[34m backup_ermtm $1 \e[0m"
 
 	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
@@ -94,8 +100,8 @@ backup_ermtm(){
 	ls -d */ | while read line
 	do 
 		echo -e "\e[34m backup_ermtm directory $line \e[0m"
-		echo "mkdir -p \"$BACKUP_DEST/$1/$line\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-		rsync -vai `echo $back_arg` --delete --remove-source-files "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/$line"
+		echo "mkdir -p \"$dest/$line\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+		rsync -vai `echo $back_arg` --delete --remove-source-files "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$dest/$line"
 		rm_empty_folders "$BACKUP_SRC/$1/$line"
 	done
 }
@@ -103,62 +109,72 @@ backup_ermtm(){
 backup_m(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$BACKUP_DEST/$2
 	echo -e "\e[34m backup_m $1 \e[0m"
 
 	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
 	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
 
-	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai `echo $back_arg` --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+	echo "mkdir -p \"$dest\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+	rsync -vai `echo $back_arg` --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
 	rm_empty_folders "$BACKUP_SRC/$1/"
 }
 
 backup_rmtc(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$BACKUP_DEST/$2
 	echo -e "\e[34m backup_rmtc $1 \e[0m"
 
 	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
 	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
 
-	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai `echo $back_arg` --delete "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+	echo "mkdir -p \"$dest\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+	rsync -vai `echo $back_arg` --delete "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
 }
 
 backup_rmtm(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$BACKUP_DEST/$1
+	[ $# -eq 2 ] && dest=$BACKUP_DEST/$2
 	echo -e "\e[34m backup_rmtm $1 \e[0m"
 
 	[ "$BACKUP_BAK_DIR" = "" ] && back_arg=""
 	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
 
-	echo "mkdir -p \"$BACKUP_DEST/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai `echo $back_arg` --delete --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST/$1/"
+	echo "mkdir -p \"$dest\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
+	rsync -vai `echo $back_arg` --delete --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
 	rm_empty_folders "$BACKUP_SRC/$1/"
 }
 
 backup_tm(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_TIME_MACHINE 2>/dev/null | wc -l"` -eq 0 ] && return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$BACKUP_TIME_MACHINE/$1
+	[ $# -eq 2 ] && dest=$BACKUP_TIME_MACHINE/$2
 	echo -e "\e[34m backup_tm $1 \e[0m"
 	echo "mkdir -p \"$BACKUP_TIME_MACHINE/$1\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	duplicity --no-encryption "$BACKUP_SRC/$1/" "scp://$BACKUP_USER@$BACKUP_SERVER/$BACKUP_TIME_MACHINE/$1/"
+	duplicity --no-encryption "$BACKUP_SRC/$1/" "scp://$BACKUP_USER@$BACKUP_SERVER/$dest/"
 }
 
 backup_tm2(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_TIME_MACHINE 2>/dev/null | wc -l"` -eq 0 ] && return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=/tmp/time_machine/$1
+	[ $# -eq 2 ] && dest=/tmp/time_machine/$2
 	echo -e "\e[34m backup_tm $1 \e[0m"
 	mkdir -p "/tmp/time_machine"
 	sshfs $BACKUP_USER@$BACKUP_SERVER:$BACKUP_TIME_MACHINE /tmp/time_machine
 	mkdir -p "/tmp/time_machine/$1"
-	duplicity --no-encryption "$BACKUP_SRC/$1/" "file:///tmp/time_machine/$1/"
+	duplicity --no-encryption "$BACKUP_SRC/$1/" "file://$dest/"
 	sudo umount /tmp/time_machine
 	rmdir /tmp/time_machine
 }
@@ -166,30 +182,32 @@ backup_tm2(){
 backup_tm3(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_TIME_MACHINE 2>/dev/null | wc -l"` -eq 0 ] && return
-	[ $# -eq 1 ] || return
+	[ $# -eq 0 ] && return
+	[ $# -eq 1 ] && dest=$BACKUP_TIME_MACHINE/$1
+	[ $# -eq 2 ] && dest=$BACKUP_TIME_MACHINE/$2
 	echo -e "\e[34m backup_tm $1 \e[0m"
 
 	date=`date +%y%m%d-%H%M%S`
 
-       if [ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_TIME_MACHINE/$1/ 2>/dev/null | wc -l"` -eq 0 ]
+       if [ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $dest/ 2>/dev/null | wc -l"` -eq 0 ]
        then
-		ssh $BACKUP_USER@$BACKUP_SERVER "mkdir -p $BACKUP_TIME_MACHINE/$1/incomplete_back-$date"
+		ssh $BACKUP_USER@$BACKUP_SERVER "mkdir -p $dest/incomplete_back-$date"
 		rsync -azP \
 			--delete \
-			$BACKUP_SRC/$1/ $BACKUP_USER@$BACKUP_SERVER:$BACKUP_TIME_MACHINE/$1/incomplete_back-$date/ \
+			$BACKUP_SRC/$1/ $BACKUP_USER@$BACKUP_SERVER:$dest/incomplete_back-$date/ \
 			&& ssh $BACKUP_USER@$BACKUP_SERVER \
-			"mv $BACKUP_TIME_MACHINE/$1/incomplete_back-$date $BACKUP_TIME_MACHINE/$1/back-$date \
-			&& ln -s $BACKUP_TIME_MACHINE/$1/back-$date $BACKUP_TIME_MACHINE/$1/current"
+			"mv $dest/incomplete_back-$date $dest/back-$date \
+			&& ln -s $dest/back-$date $dest/current"
        else
-		ssh $BACKUP_USER@$BACKUP_SERVER "mkdir -p $BACKUP_TIME_MACHINE/$1/incomplete_back-$date"
+		ssh $BACKUP_USER@$BACKUP_SERVER "mkdir -p $dest/incomplete_back-$date"
 		rsync -azP \
 			--delete \
 			--link-dest=../current \
-			$BACKUP_SRC/$1/ $BACKUP_USER@$BACKUP_SERVER:$BACKUP_TIME_MACHINE/$1/incomplete_back-$date/ \
+			$BACKUP_SRC/$1/ $BACKUP_USER@$BACKUP_SERVER:$dest/incomplete_back-$date/ \
 			&& ssh $BACKUP_USER@$BACKUP_SERVER \
-			"mv $BACKUP_TIME_MACHINE/$1/incomplete_back-$date $BACKUP_TIME_MACHINE/$1/back-$date \
-			&& rm -f $BACKUP_TIME_MACHINE/$1/current \
-			&& ln -s $BACKUP_TIME_MACHINE/$1/back-$date $BACKUP_TIME_MACHINE/$1/current"
+			"mv $dest/incomplete_back-$date $dest/back-$date \
+			&& rm -f $dest/current \
+			&& ln -s $dest/back-$date $dest/current"
 	fi
 }
 
