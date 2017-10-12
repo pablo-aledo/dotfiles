@@ -2,6 +2,8 @@ FOLDER=$(dirname $(readlink -f $0))
 #source $FOLDER/pkg
 MYSELF=$(readlink -f $0)
 
+unalias which 2>/dev/null
+
 wh(){
 	if [ "`cat $MYSELF | grep 'for a in ' | grep $1 `" ]
 	then
