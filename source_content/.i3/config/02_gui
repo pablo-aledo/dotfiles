@@ -10,4 +10,4 @@ font -misc-fixed-medium-r-normal--13-120-75-75-C-70-iso10646-1
 # floating_maximum_size -1 x -1
 
 # Default border
-new_window pixel 3
+new_window normal 3
