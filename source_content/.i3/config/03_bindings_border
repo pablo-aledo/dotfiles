@@ -2,3 +2,4 @@
 # bindsym $mod+y border 1pixel
 # bindsym $mod+u border none
 bindsym $mod+o border toggle
+bindsym $mod+Shift+o border pixel 3
