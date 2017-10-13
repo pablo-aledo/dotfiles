@@ -8,6 +8,9 @@ internetuc(){
 	done
 	
 	echo -e "\e[31m $mymac $myip \e[0m"
+	#sudo ifconfig eht0 down
+	#sudo ifconfig eth0 hw ether $mymac
+	#sudo ifconfig eht0 up
 	
 	sudo stop network-manager
 	sudo ifconfig eth0 $myip
@@ -30,6 +33,10 @@ internetmq(){
 	done
 	
 	echo -e "\e[31m $mymac $myip \e[0m"
+	#sudo ifconfig eht0 down
+	#sudo ifconfig eth0 hw ether $mymac
+	#sudo ifconfig eht0 up
+
 	
 	sudo stop network-manager
 	sudo ifconfig eth0 $myip
