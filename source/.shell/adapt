@@ -207,6 +207,7 @@ adapt_pablo(){
 	pkg install at
 	pkg install meld
 	pkg install variety
+	pkg install sshfs
 
 	sudo apt-get install -y network-manager-openvpn network-manager-openvpn-gnome network-manager-pptp network-manager-pptp-gnome network-manager-vpnc network-manager-vpnc-gnome network-manager-openconnect network-manager-openconnect-gnome
 
@@ -246,4 +247,5 @@ adapt_nas(){
 	pkg install poppler-utils
 	pkg install epub2txt
 	pkg install ffmpeg
+	pkg install cryptsetup
 }
