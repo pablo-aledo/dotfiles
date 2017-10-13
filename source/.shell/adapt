@@ -97,6 +97,13 @@ adapt_fastssh(){
 }
 
 adapt_gnuroot(){
+	sudo apt-get install vim
+	sudo apt-get install git
+	sudo apt-get install ranger
+	sudo apt-get install tmux
+	sudo apt-get install youtube-dl
+	sudo apt-get install rsync
+	sudo apt-get install zsh
 	sed -i 's/clas=\\\$(zenity --entry)/read clas/g' ~/.config/ranger/rc.conf
 }
 
@@ -171,6 +178,7 @@ adapt_pablo(){
 	pkg remove 'gparted'
 	pkg remove 'gile*'
 
+	pkg install git
 	pkg install i3wm
 	pkg install pcmanfm
 	pkg install xclip
