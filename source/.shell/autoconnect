@@ -3,12 +3,13 @@ autoconnect(){
 echo "auto wlan0"                                              | sudo tee    /etc/network/interfaces
 echo "iface lo inet loopback"                                  | sudo tee -a /etc/network/interfaces
 echo "iface eth0 inet dhcp"                                    | sudo tee -a /etc/network/interfaces
-echo "allow-hotplug wlan0"                                     | sudo tee -a /etc/network/interfaces
+echo "  allow-hotplug wlan0"                                   | sudo tee -a /etc/network/interfaces
 echo "iface wlan0 inet static"                                 | sudo tee -a /etc/network/interfaces
-echo "address 192.168.1.155"                                   | sudo tee -a /etc/network/interfaces
-echo "netmask 255.255.255.0"                                   | sudo tee -a /etc/network/interfaces
-echo "gateway 192.168.1.1"                                     | sudo tee -a /etc/network/interfaces
-echo "wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf"        | sudo tee -a /etc/network/interfaces
+echo "  address 192.168.1.155"                                 | sudo tee -a /etc/network/interfaces
+echo "  netmask 255.255.255.0"                                 | sudo tee -a /etc/network/interfaces
+echo "  gateway 192.168.1.1"                                   | sudo tee -a /etc/network/interfaces
+echo "  hwaddress ether 00:11:22:33:44:55"                     | sudo tee -a /etc/network/interfaces
+echo "  wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf"      | sudo tee -a /etc/network/interfaces
 echo "iface default inet dhcp"                                 | sudo tee -a /etc/network/interfaces
 
 echo "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev" | sudo tee /etc/wpa_supplicant/wpa_supplicant.conf
