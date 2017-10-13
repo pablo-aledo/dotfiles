@@ -211,6 +211,10 @@ backup_tm3(){
 	fi
 }
 
+mount_nas(){
+sshfs $BACKUP_USER@$BACKUP_SERVER:$BACKUP_DEST $BACKUP_MOUNT_MOUNTPOINT
+}
+
 umount_nas(){
 	sudo umount $BACKUP_MOUNT_MOUNTPOINT
 }
