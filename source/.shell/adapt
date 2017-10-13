@@ -227,7 +227,10 @@ adapt_pablo(){
 	#sudo sysctl -w vm.min_free_kbytes=$(( $min_free_kbytes * 2 ))
 	sudo sysctl -w vm.min_free_kbytes=135168
 	sudo sysctl -w vm.swappiness=5
-
+	swap 1
+	swap 2
+	swap 3
+	swap 4
 }
 
 adapt_nas(){
