@@ -105,6 +105,7 @@ adapt_gnuroot(){
 	sudo apt-get install rsync
 	sudo apt-get install zsh
 	sed -i 's/clas=\\\$(zenity --entry)/read clas/g' ~/.config/ranger/rc.conf
+	ls ~/dotfiles/source/.vimrc/ | sed -e 's/^/source ~\/dotfiles\/source\/.vimrc\//g' > ~/vimrc
 }
 
 adapt_presentation(){
