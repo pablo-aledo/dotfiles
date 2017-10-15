@@ -1,0 +1,60 @@
+escape(){
+
+	echo $1 | sed -e 's/\//\\\//g' -e 's/\$/\\$/g'
+
+}
+
+escape2(){
+	echo $1 | sed -e 's/^/"/g' -e 's/$/"/g' -e 's/\$/\\$/g'
+}
+
+cpfill(){
+  cpfill_size=8G
+  cpfill_dest=/media/mint/Pablo
+  cpfill_list=/media/mint/Pablo/cpfill
+  
+  if [ $# -eq 1 ]
+  then
+	  if [ `basename "$1"` = "cpfill" ]
+          then
+  		cpfill_dest=`dirname $1`
+  		cpfill_size=`df | grep "$cpfill_dest" | awk '{print $4}'`
+  		cpfill_list=$1
+	  else
+  		cpfill_dest=$1
+  		cpfill_size=`df | grep "$cpfill_dest" | awk '{print $4}'`
+  		cpfill_list=$1/cpfill
+	  fi
+  fi
+  
+  if [ $# -eq 2 ]
+  then
+  	cpfill_dest=$1
+  	cpfill_size=$2
+	cpfill_list=$1/cpfill
+  fi
+  
+  if [ $# -eq 3 ]
+  then
+  	cpfill_dest=$1
+  	cpfill_size=$2
+  	cpfill_list=$3
+  fi
+  
+  cpfill_size=$(( `echo $cpfill_size | sed -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g'` ))
+  
+  size=0
+  
+  cat $cpfill_list | while read line
+  do
+  	[ -d $line ] && size=$(( $size + `du -s $line | awk '{print $1}'` ))
+  	[ -f $line ] && size=$(( $size + `ls -l $line | awk '{print $4}'` ))
+
+	echo $size $line
+  
+  	[ $size -lt $cpfill_size ] && rsync -vai "$line" "$cpfill_dest/" && success=1
+  	[ $size -lt $cpfill_size ] || return
+  
+  	[ $success -eq 1 ] && sed -i "/`escape $line`/d" $cpfill_list
+  done
+}
