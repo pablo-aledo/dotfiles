@@ -47,14 +47,15 @@ cpfill(){
   
   cat $cpfill_list | while read line
   do
-  	[ -d $line ] && size=$(( $size + `du -s $line | awk '{print $1}'` ))
-  	[ -f $line ] && size=$(( $size + `ls -l $line | awk '{print $4}'` ))
+  	[ -d $line ] && size_incr=`du -s $line | awk '{print $1}'`
+  	[ -f $line ] && size_incr=`ls -l $line | awk '{print $4}'`
 
-	echo $size $line
+	echo -e '\e[31m' $size $size_incr $cpfill_size $line '\e[0m'
+
+	[ $(( $size + $size_incr )) -lt $cpfill_size ] && sudo rsync -vai "$line" "$cpfill_dest/" && sed -i "/`escape $line`/d" $cpfill_list
+	[ $(( $size + $size_incr )) -lt $cpfill_size ] || continue
+
+	size=$(( $size + $size_incr ))
   
-  	[ $size -lt $cpfill_size ] && rsync -vai "$line" "$cpfill_dest/" && success=1
-  	[ $size -lt $cpfill_size ] || return
-  
-  	[ $success -eq 1 ] && sed -i "/`escape $line`/d" $cpfill_list
   done
 }
