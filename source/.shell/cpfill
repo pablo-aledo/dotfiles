@@ -10,8 +10,8 @@ escape2(){
 
 cpfill(){
   cpfill_dest=/media/mint/Pablo
-  cpfill_list=$cpfill_dest/cpfill
   cpfill_size=`df | grep "$cpfill_dest" | awk '{print $4}'`
+  cpfill_list=$cpfill_dest/cpfill
   
   if [ $# -eq 1 ]
   then
