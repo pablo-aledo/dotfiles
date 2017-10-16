@@ -29,16 +29,16 @@ cpfill(){
   
   if [ $# -eq 2 ]
   then
-  	cpfill_dest=$1
-  	cpfill_size=$2
-	cpfill_list=$1/cpfill
+	cpfill_list=$1
+  	cpfill_dest=$2
+  	cpfill_size=`df | grep "$cpfill_dest" | awk '{print $4}'`
   fi
   
   if [ $# -eq 3 ]
   then
-  	cpfill_dest=$1
-  	cpfill_size=$2
-  	cpfill_list=$3
+  	cpfill_list=$1
+  	cpfill_dest=$2
+  	cpfill_size=$3
   fi
   
   cpfill_size=$(( `echo $cpfill_size | sed -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g'` ))
