@@ -10,7 +10,7 @@ escape2(){
 
 cpfill(){
   cpfill_dest=/media/mint/Pablo
-  cpfill_size=`df | grep "$cpfill_dest" | awk '{print $4}'`
+  cpfill_size=`df -B1 | grep "$cpfill_dest" | awk '{print $4}'`
   cpfill_list=$cpfill_dest/cpfill
   
   if [ $# -eq 1 ]
@@ -18,11 +18,11 @@ cpfill(){
 	  if [ `basename "$1"` = "cpfill" ]
           then
   		cpfill_dest=`dirname $1`
-  		cpfill_size=`df | grep "$cpfill_dest" | awk '{print $4}'`
+  		cpfill_size=`df -B1 | grep "$cpfill_dest" | awk '{print $4}'`
   		cpfill_list=$1
 	  else
   		cpfill_dest=$1
-  		cpfill_size=`df | grep "$cpfill_dest" | awk '{print $4}'`
+  		cpfill_size=`df -B1 | grep "$cpfill_dest" | awk '{print $4}'`
   		cpfill_list=$1/cpfill
 	  fi
   fi
@@ -31,7 +31,7 @@ cpfill(){
   then
 	cpfill_list=$1
   	cpfill_dest=$2
-  	cpfill_size=`df | grep "$cpfill_dest" | awk '{print $4}'`
+  	cpfill_size=`df -B1 | grep "$cpfill_dest" | awk '{print $4}'`
   fi
   
   if [ $# -eq 3 ]
