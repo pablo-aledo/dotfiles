@@ -44,6 +44,28 @@ tasklog_at(){
 	echo "$time_oldtask $old_task" >> $TASKLOG_FILE
 }
 
+tasklog_ft(){
+
+	at=$1 ; shift
+	to=$1 ; shift
+
+	[ $# -eq 0 ] && task=`zenity --entry`
+	[ $# -eq 0 ] || task="$*"
+
+	[ -e $TASKLOG_FILE ] || ( mkdir -p `dirname $TASKLOG_FILE` && echo `date +%s` $task > $TASKLOG_FILE)
+
+	old_task=`tail -n1 $TASKLOG_FILE | sed 's/^[^ ]* //g'`
+	time_oldtask=`tail -n1 $TASKLOG_FILE | cut -d' ' -f1`
+	time_start=`date -d "$at" +%s`
+	time_end=`date -d "$to" +%s`
+	duration=`printf %7d $(( $time_end - $time_start ))`
+
+	sed -i '$ d' $TASKLOG_FILE
+
+	echo "`date -d @$time_start +%m%d%H%M` `date -d @$time_end +%m%d%H%M` $duration $task" >> $TASKLOG_FILE
+	echo "$time_oldtask $old_task" >> $TASKLOG_FILE
+}
+
 tasklog_reset(){
 
 	time_end=`date +%s`
