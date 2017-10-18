@@ -16,10 +16,9 @@ tasklog(){
 	time_end=`date +%s`
 	duration=`printf %7d $(( $time_end - $time_start ))`
 
-	sed -i '$ d' $TASKLOG_FILE
-
-	echo "`date -d @$time_start +%m%d%H%M` `date -d @$time_end +%m%d%H%M` $duration $old_task" >> $TASKLOG_FILE
-	echo "$time_end $task" >> $TASKLOG_FILE
+	[ "$task" = "" ] || sed -i '$ d' $TASKLOG_FILE
+	[ "$task" = "" ] || echo "`date -d @$time_start +%m%d%H%M` `date -d @$time_end +%m%d%H%M` $duration $old_task" >> $TASKLOG_FILE
+	[ "$task" = "" ] || echo "$time_end $task" >> $TASKLOG_FILE
 }
 
 tasklog_at(){
