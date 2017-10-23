@@ -13,8 +13,8 @@ map <C-s><C-a> <C-w><right><C-w><up>:cw<cr>:wall<CR>:make<CR><CR>:make run<CR><C
 imap <C-s><C-s> <ESC>:wall<CR>:make<CR><CR>
 imap <C-s><C-a> <esc>:wall<CR>:make<CR><CR>:make run<CR><CR>
 " Start writing at the end of the line
-map <C-a> A
-imap <C-a> <ESC>A
+map <C-z> A
+imap <C-z> <ESC>A
 imap AA <ESC>A
 " Movement down
 imap <C-j> <DOWN>
