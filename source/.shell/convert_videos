@@ -172,7 +172,7 @@ convert_recursive(){
 	find -name '*.rar' | while read line
 	do
 		cd "`dirname $line`"
-		yes n | rar x "`basename $line`"
+		yes n | unrar x "`basename $line`"
 		rm -fr "`basename $line`"
 		cd -
 	done
