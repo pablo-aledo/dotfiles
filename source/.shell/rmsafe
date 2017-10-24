@@ -30,3 +30,26 @@ dd(){
 	echo $command | bash
 }
 
+mkfs.ext4(){
+
+	for a in $*
+	do 
+		if [ `echo $a | egrep '\/dev\/'` ]
+		then
+			name=`echo $a | sed 's/\/dev\///g'`
+			if [ ! "`udevadm info --query=all --name=$name | grep ID_BUS | grep '=usb'`" ]
+			then
+				echo "target is not of type USB"
+				return
+			fi
+
+			if [ -e /usr/bin/sg_vpd ] && [ "`sudo sg_vpd --page=bdc /dev/$name | grep 'Nominal rotation rate'`" ]
+			then
+				echo "target is a hard drive"
+				return
+			fi
+		fi
+	done
+
+	sudo mkfs.ext4 $*
+}
