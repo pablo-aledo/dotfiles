@@ -1,0 +1,13 @@
+alarm(){
+	[ $# -eq 1 ] && echo 'DISPLAY=:0.0 zenity --info --text "Alarm"' | at "$1"
+	[ $# -eq 2 ] && echo "DISPLAY=:0.0 zenity --info --text \"$2\""  | at "$1"
+}
+
+
+count_down(){
+	[ $# -eq 1 ] && echo 'DISPLAY=:0.0 zenity --info --text "Alarm"' | at "now + $1"
+	[ $# -eq 2 ] && echo "DISPLAY=:0.0 zenity --info --text \"$2\""  | at "now + $1"
+}
+
+
+
