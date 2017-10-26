@@ -183,10 +183,12 @@ convert_recursive(){
 		mkdir -p "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`"
 	done
 
+	findcmd="find \$PWD -name '*.mp4' -or -name '*.flv' -or -name '*.mov' -or -name '*.avi' -or -name '*.wmv'"
+
 	cd $convert_dir
-	total=`find $PWD -name '*.mp4' | wc -l`
+	total=`echo $findcmd | bash | wc -l`
 	actual=1;
-	find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | while read line
+	echo $findcmd | bash | head -n $limit_head | tail -n $limit_tail | while read line
 	do
 		echo "\e[31m ===== ($actual / $total) $line =====\e[0m"
 		actual=$(( $actual + 1 ))
@@ -218,7 +220,7 @@ convert_recursive(){
 	done
 
 	cd $convert_dir
-	find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | while read line
+	echo $findcmd | bash | head -n $limit_head | tail -n $limit_tail | while read line
 	do
 		file1="$line"
 		base1=`basename "$line"`
@@ -229,7 +231,7 @@ convert_recursive(){
 	done
 
 	cd $convert_dir
-	find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | while read line
+	echo $findcmd | bash | head -n $limit_head | tail -n $limit_tail | while read line
 	do
 		file1="$line"
 		base1=`basename "$line"`
