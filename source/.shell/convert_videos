@@ -166,7 +166,7 @@ convert_recursive(){
 	convert_opts_3="-vcodec libx264 -c:v libx264 -preset slow -crf 23 -c:a copy"
 
 	[ -e /usr/bin/ffmpeg ] || pkg install ffmpeg
-	[ -e /usr/bin/rar ]    || pkg install rar
+	[ -e /usr/bin/unrar ]    || pkg install unrar
 
 	rm -fr /tmp/convert_report
 
@@ -273,8 +273,9 @@ convert_recursive_parallel(){
 
 	convert_opts="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
 
-	[ -e /usr/bin/ffmpeg ] || pkg install ffmpeg
-	[ -e /usr/bin/rar ]    || pkg install rar
+	[ -e /usr/bin/ffmpeg ]   || pkg install ffmpeg
+	[ -e /usr/bin/unrar ]      || pkg install unrar
+	[ -e /usr/bin/parallel ] || pkg install parallel
 
 	rm -fr /tmp/convert_report
 
