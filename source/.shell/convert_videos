@@ -303,7 +303,8 @@ convert_recursive_parallel(){
 		echo ffmpeg -i \"$line\" `echo $convert_opts` \"`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4\" "</dev/null"  >> /tmp/script
 	done
 
-	cat /tmp/script | parallel -j`nproc` bash -c
+	[ `nproc` -gt 2 ] && ( cat /tmp/script | parallel -j$((`nproc` - 2)) bash -c )
+	[ `nproc` -gt 2 ] || ( source /tmp/script )
 
 	cd $convert_dir
 	echo $findcmd | bash | while read line
