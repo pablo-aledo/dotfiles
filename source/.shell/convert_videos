@@ -306,6 +306,8 @@ convert_recursive_parallel(){
 	[ `nproc` -gt 2 ] && ( cat /tmp/script | parallel -j$((`nproc` - 2)) bash -c )
 	[ `nproc` -gt 2 ] || ( source /tmp/script )
 
+	find $converted_dir -type f -empty -delete
+
 	cd $convert_dir
 	echo $findcmd | bash | while read line
 	do
