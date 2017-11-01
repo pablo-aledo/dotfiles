@@ -17,5 +17,12 @@ CLASSIFY_DEST=/media/mint/2TB2/homes/admin/Alejandria
 classify(){
 	[ ! $PWD = $CLASSIFY_DEST ] && echo "Incorrect destination" && return
 	echo "$1 ---> $2"
-	sudo mkdir -p $2 && sudo mv -i $1 $2
+	# sudo mkdir -p $2 && sudo mv -i $1 $2
+	sudo mkdir -p $2
+	if [ -e "$2/`basename "$1"`" ] && [ `md5sum "$1" | awk '{print $1}'` != `md5sum "$2/$(basename "$1")" | awk '{print $1}'` ]
+	then
+		sudo /bin/mv -i $1 $2
+	else
+		sudo /bin/mv $1 $2
+	fi
 }
