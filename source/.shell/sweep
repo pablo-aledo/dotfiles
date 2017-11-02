@@ -68,4 +68,36 @@ sweep2(){
 	done
 }
 
+sweep3(){
+	command=$1
+	file=$2
+	v1=$3
+	vs1=$4
+	v2=$5
+	vs2=$6
 
+	prefix=`date +%s`
+	mkdir /tmp/$prefix
+
+	for a in $(echo $vs2)
+	do
+		for b in $(echo $vs1)
+		do
+			cmd=`echo $command | sed -e "s/$v1/$a/g" -e "s/$v2/$b/g" -e "s/%file%/\/tmp\/$prefix\/file-$a-$b/g"`
+			cat $file | sed -e "s/$v1/$a/g" -e "s/$v2/$b/g" > /tmp/$prefix/file-$a-$b
+			echo "===== $cmd /tmp/$prefix/file-$a-$b"
+		done
+	done
+
+	sleep 5;
+
+	for a in $(echo $vs2)
+	do
+		for b in $(echo $vs1)
+		do
+			cmd=`echo $command | sed -e "s/$v1/$a/g" -e "s/$v2/$b/g" -e "s/%file%/\/tmp\/$prefix\/file-$a-$b/g"`
+			echo "\e[31m ===== \e[0m $cmd /tmp/$prefix/file-$a-$b"
+			zsh -c "source ~/.shell ~/.paths; $cmd /tmp/$prefix/file-$a-$b"
+		done
+	done
+}
