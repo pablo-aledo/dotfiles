@@ -79,9 +79,9 @@ sweep3(){
 	prefix=`date +%s`
 	mkdir /tmp/$prefix
 
-	for a in $(echo $vs2)
+	for a in $(echo $vs1)
 	do
-		for b in $(echo $vs1)
+		for b in $(echo $vs2)
 		do
 			cmd=`echo $command | sed -e "s/$v1/$a/g" -e "s/$v2/$b/g" -e "s/%file%/\/tmp\/$prefix\/file-$a-$b/g"`
 			cat $file | sed -e "s/$v1/$a/g" -e "s/$v2/$b/g" > /tmp/$prefix/file-$a-$b
@@ -91,9 +91,9 @@ sweep3(){
 
 	sleep 5;
 
-	for a in $(echo $vs2)
+	for a in $(echo $vs1)
 	do
-		for b in $(echo $vs1)
+		for b in $(echo $vs2)
 		do
 			cmd=`echo $command | sed -e "s/$v1/$a/g" -e "s/$v2/$b/g" -e "s/%file%/\/tmp\/$prefix\/file-$a-$b/g"`
 			echo "\e[31m ===== \e[0m $cmd /tmp/$prefix/file-$a-$b"
