@@ -3,4 +3,4 @@ do
 	wget https://raw.githubusercontent.com/pablo-aledo/dotfiles/master/source/.vimrc/$a -O - >> /tmp/vimrc_pga ;
 done
 
-echo "alias vim='vim +\":so /tmp/vimrc_pga\"'"
+alias vim='vim +":so /tmp/vimrc_pga"'

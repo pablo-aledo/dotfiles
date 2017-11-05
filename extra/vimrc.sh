@@ -9,4 +9,4 @@ do
 	echo source $src >> $dst
 done
 
- echo "alias vim='vim +\":so ~/vimrc\"'"
+alias vim='vim +":so ~/vimrc"'
