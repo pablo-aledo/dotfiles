@@ -1,3 +1,4 @@
+sudo apt-get install gcc libgd-dev
 cd
 wget https://downloads.sourceforge.net/project/gnuplot/gnuplot/5.2.0/gnuplot-5.2.0.tar.gz
 tar -xvzf gnuplot-5.2.0.tar.gz
