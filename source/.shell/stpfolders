@@ -1,10 +1,10 @@
 stpfolders(){
 	find -maxdepth 1 -type d | grep -v '^\.$' | while read line
 	do
-		count=`find "$line" -type d | wc -l`
+		count=`find "$line" -maxdepth 1 -type d | wc -l`
 		dir="$line"
 		subdir="$line/`ls "$line"`"
-		[ $count -eq 2 ] && echo mv \"$subdir/\"* \"$dir\" "&&" rmdir \"$subdir\"
+		[ $count -eq 2 ] && echo mv \"$subdir/\"\* \"$dir\" "&&" rmdir \"$subdir\"
 	done
 
 }
