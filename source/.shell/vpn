@@ -20,3 +20,7 @@ vpn_amazon(){
 		sudo openvpn --config ~/config.ovpn
 	done
 }
+
+nm_log(){
+	grep -i networkmanager /var/log/syslog
+}
