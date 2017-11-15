@@ -8,6 +8,21 @@ escape2(){
 	echo $1 | sed -e 's/^/"/g' -e 's/$/"/g' -e 's/\$/\\$/g'
 }
 
+comment_first(){
+	cat $1 | while read line
+	do
+		if [ "`echo "$line" | egrep '^#'`" ] 
+		then
+			echo $line
+		else
+			echo \#$line
+			break
+		fi
+	done > /tmp/list
+	cat $1 | egrep -v '^#' >> /tmp/list
+	\mv /tmp/list "$1"
+}
+
 cpfill(){
   cpfill_dest=/media/mint/Pablo
   cpfill_size=`df -B1 | grep "$cpfill_dest" | awk '{print $4}'`
@@ -44,16 +59,17 @@ cpfill(){
   cpfill_size=$(( `echo $cpfill_size | sed -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g'` ))
   
   size=0
+  factor=$((1024*1024*1024))
   
   cat $cpfill_list | while read line
   do
   	[ -d "$line" ] && size_incr=`du -B1 -s "$line" | awk '{print $1}'`
   	[ -f "$line" ] && size_incr=`ls -l     "$line" | awk '{print $5}'`
 
-	printf '\e[31m %10d %10d %10d %s \e[0m \n' $size $size_incr $cpfill_size $line
+	printf '\e[31m %10d %10d %10d %s \e[0m \n' $(($size/$factor)) $(($cpfill_size/$factor)) $line
 
-	[ $(( $size + $size_incr )) -lt $cpfill_size ] && sudo rsync -vai "$line" "$cpfill_dest/" && sed -i "/`escape $line`/d" $cpfill_list
-	[ $(( $size + $size_incr )) -lt $cpfill_size ] || continue
+	[ $(( $size + $size_incr )) -lt $cpfill_size ] && sudo rsync -vi "$line" "$cpfill_dest/" && comment_first $cpfill_list
+	[ $(( $size + $size_incr )) -lt $cpfill_size ] || break
 
 	size=$(( $size + $size_incr ))
   
