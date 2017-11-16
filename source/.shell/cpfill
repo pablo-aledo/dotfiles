@@ -19,7 +19,7 @@ comment_first(){
 			break
 		fi
 	done > /tmp/list
-	cat $1 | egrep -v '^#' >> /tmp/list
+	cat $1 | egrep -v '^#' | sed '1 d' >> /tmp/list
 	\mv /tmp/list "$1"
 }
 
@@ -59,16 +59,16 @@ cpfill(){
   cpfill_size=$(( `echo $cpfill_size | sed -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g'` ))
   
   size=0
-  factor=$((1024*1024*1024))
+  factor=$(( 1024 * 1024 * 1024 ))
   
   cat $cpfill_list | egrep -v '^#' | egrep -v '^$' | while read line
   do
   	[ -d "$line" ] && size_incr=`du -B1 -s "$line" | awk '{print $1}'`
   	[ -f "$line" ] && size_incr=`ls -l     "$line" | awk '{print $5}'`
 
-	printf '\e[31m %10d %10d %10d %s \e[0m \n' $(($size/$factor)) $(($cpfill_size/$factor)) $line
+	printf '\e[31m %10d %10d %s \e[0m \n' $(( $size / $factor )) $(( $cpfill_size / $factor )) $line
 
-	[ $(( $size + $size_incr )) -lt $cpfill_size ] && sudo rsync -vi "$line" "$cpfill_dest/" && comment_first $cpfill_list
+	[ $(( $size + $size_incr )) -lt $cpfill_size ] && sudo rsync -vri "$line/" "$cpfill_dest/" && comment_first $cpfill_list
 	[ $(( $size + $size_incr )) -lt $cpfill_size ] || break
 
 	size=$(( $size + $size_incr ))
