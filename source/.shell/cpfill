@@ -68,7 +68,7 @@ cpfill(){
 
 	printf '\e[31m %10d %10d %s \e[0m \n' $(( $size / $factor )) $(( $cpfill_size / $factor )) $line
 
-	[ $(( $size + $size_incr )) -lt $cpfill_size ] && sudo rsync -vri "$line/" "$cpfill_dest/" && comment_first $cpfill_list
+	[ $(( $size + $size_incr )) -lt $cpfill_size ] && sudo rsync -vri "$line" "$cpfill_dest/" && comment_first $cpfill_list
 	[ $(( $size + $size_incr )) -lt $cpfill_size ] || break
 
 	size=$(( $size + $size_incr ))
