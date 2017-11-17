@@ -383,4 +383,10 @@ cp_convert(){
 	done
 }
 
-
+convert_candidates(){
+	source=/media/mint/1TB/Videos
+	cat list | while read line
+	do
+		[ "`find "$source/$line" -name '*converted*'`" ] || echo $line
+	done
+}
