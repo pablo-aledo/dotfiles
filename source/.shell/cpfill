@@ -64,7 +64,7 @@ cpfill(){
   cat $cpfill_list | while read line
   do
 	[ "`echo $line | egrep '^#'`" ] && continue
-	[ "`echo $line | egrep '^$'`" ] && comment_first $cpfill_list && continue
+	[ "$line" = "" ] && comment_first $cpfill_list && continue
 
   	[ -d "$line" ] && size_incr=`du -B1 -s "$line" | awk '{print $1}'`
   	[ -f "$line" ] && size_incr=`ls -l     "$line" | awk '{print $5}'`
