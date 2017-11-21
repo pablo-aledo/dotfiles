@@ -61,14 +61,18 @@ cpfill(){
   size=0
   factor=$(( 1024 * 1024 * 1024 ))
   
-  cat $cpfill_list | egrep -v '^#' | egrep -v '^$' | while read line
+  cat $cpfill_list | while read line
   do
+	[ "`echo $line | egrep '^#'`" ] && continue
+	[ "`echo $line | egrep '^$'`" ] && comment_first $cpfill_list && continue
+
   	[ -d "$line" ] && size_incr=`du -B1 -s "$line" | awk '{print $1}'`
   	[ -f "$line" ] && size_incr=`ls -l     "$line" | awk '{print $5}'`
 
 	printf '\e[31m %10d %10d %s \e[0m \n' $(( $size / $factor )) $(( $cpfill_size / $factor )) $line
 
-	[ $(( $size + $size_incr )) -lt $cpfill_size ] && sudo rsync -vri "$line" "$cpfill_dest/" && comment_first $cpfill_list
+ 	[ $(( $size + $size_incr )) -lt $cpfill_size ] && comment_first $cpfill_list
+	[ $(( $size + $size_incr )) -lt $cpfill_size ] && sudo rsync -vri "$line" "$cpfill_dest/"
 	[ $(( $size + $size_incr )) -lt $cpfill_size ] || break
 
 	size=$(( $size + $size_incr ))
