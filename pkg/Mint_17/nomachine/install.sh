@@ -1,10 +1,10 @@
-source ~/.dotfiles/source/.shell/links
+#source ~/.dotfiles/source/.shell/links
 
 cd /tmp/
 
 for a in `seq 1 15`; do wget "https://www.nomachine.com/download/download&id=$a" ; done
-file=`grep -Rin 'amd64' download\&id=* | cut -d ":" -f1 | head -n1`
-dl=`links $file | grep amd64.deb`
+
+dl=`cat download\&id=* | grep 'amd64' | grep /download/ | grep -v Client | grep -v client | head -n1 | cut -d"'" -f2`
 
 wget $dl
 
