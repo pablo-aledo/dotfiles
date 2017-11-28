@@ -249,3 +249,172 @@ adapt_nas(){
 	pkg install ffmpeg
 	pkg install cryptsetup
 }
+
+adapt_simplbuntu(){
+
+	pkg remove 'firefox*'
+
+	pkg install google-chrome
+	pkg install evince
+	pkg install vlc
+	pkg install eog
+	pkg install rar
+	pkg install gnome-calculator
+	pkg install variety
+	pkg install calibre
+	pkg install skype
+	pkg install wps
+	pkg install virtualbox
+	pkg install ice
+	pkg install teamviewer
+	pkg install mypaint
+	pkg install simple-scan
+	pkg install cairo-dock
+	pkg install google-earth-stable
+	pkg install cheese
+
+	echo '[Desktop Entry]'              >  ~/Desktop/google-chrome.desktop
+	echo 'Type=Application'             >> ~/Desktop/google-chrome.desktop
+	echo 'Exec=google-chrome'           >> ~/Desktop/google-chrome.desktop
+	echo 'Name=Internet'                >> ~/Desktop/google-chrome.desktop
+	echo 'Icon=google-chrome'           >> ~/Desktop/google-chrome.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/vlc.desktop
+	echo 'Type=Application'             >> ~/Desktop/vlc.desktop
+	echo 'Exec=vlc'                     >> ~/Desktop/vlc.desktop
+	echo 'Name=Videos'                  >> ~/Desktop/vlc.desktop
+	echo 'Icon=vlc'                     >> ~/Desktop/vlc.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/gedit.desktop
+	echo 'Type=Application'             >> ~/Desktop/gedit.desktop
+	echo 'Exec=gedit'                   >> ~/Desktop/gedit.desktop
+	echo 'Name=Editor'                  >> ~/Desktop/gedit.desktop
+	echo 'Icon=kedit'                   >> ~/Desktop/gedit.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/word.desktop
+	echo 'Type=Application'             >> ~/Desktop/word.desktop
+	echo 'Exec=word'                    >> ~/Desktop/word.desktop
+	echo 'Name=Word'                    >> ~/Desktop/word.desktop
+	echo 'Icon=libreoffice-writer'      >> ~/Desktop/word.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/excel.desktop
+	echo 'Type=Application'             >> ~/Desktop/excel.desktop
+	echo 'Exec=excel'                   >> ~/Desktop/excel.desktop
+	echo 'Name=Excel'                   >> ~/Desktop/excel.desktop
+	echo 'Icon=libreoffice-calc'        >> ~/Desktop/excel.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/powerpnt.desktop
+	echo 'Type=Application'             >> ~/Desktop/powerpnt.desktop
+	echo 'Exec=powerpnt'                >> ~/Desktop/powerpnt.desktop
+	echo 'Name=PowerPoint'              >> ~/Desktop/powerpnt.desktop
+	echo 'Icon=libreoffice-impress'     >> ~/Desktop/powerpnt.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/lxterm.desktop
+	echo 'Type=Application'             >> ~/Desktop/lxterm.desktop
+	echo 'Exec=lxterminal'              >> ~/Desktop/lxterm.desktop
+	echo 'Name=Terminal'                >> ~/Desktop/lxterm.desktop
+	echo 'Icon=lxterminal'              >> ~/Desktop/lxterm.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/pcman.desktop
+	echo 'Type=Application'             >> ~/Desktop/pcman.desktop
+	echo 'Exec=pcmanfm'                 >> ~/Desktop/pcman.desktop
+	echo 'Name=Ficheros'                >> ~/Desktop/pcman.desktop
+	echo 'Icon=system-file-manager'     >> ~/Desktop/pcman.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/virtualbox.desktop
+	echo 'Type=Application'             >> ~/Desktop/virtualbox.desktop
+	echo 'Exec=virtualbox'              >> ~/Desktop/virtualbox.desktop
+	echo 'Name=Virtualbox'              >> ~/Desktop/virtualbox.desktop
+	echo 'Icon=virtualbox'              >> ~/Desktop/virtualbox.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/evince.desktop
+	echo 'Type=Application'             >> ~/Desktop/evince.desktop
+	echo 'Exec=evince'                  >> ~/Desktop/evince.desktop
+	echo 'Name=PDF'                     >> ~/Desktop/evince.desktop
+	echo 'Icon=acroread'                >> ~/Desktop/evince.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/fileroller.desktop
+	echo 'Type=Application'             >> ~/Desktop/fileroller.desktop
+	echo 'Exec=file-roller'             >> ~/Desktop/fileroller.desktop
+	echo 'Name=Zip'                     >> ~/Desktop/fileroller.desktop
+	echo 'Icon=file-roller'             >> ~/Desktop/fileroller.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/galculator.desktop
+	echo 'Type=Application'             >> ~/Desktop/galculator.desktop
+	echo 'Exec=galculator'              >> ~/Desktop/galculator.desktop
+	echo 'Name=Calculadora'             >> ~/Desktop/galculator.desktop
+	echo 'Icon=galculator'              >> ~/Desktop/galculator.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/software.desktop
+	echo 'Type=Application'             >> ~/Desktop/software.desktop
+	echo 'Exec=lubuntu-software-center' >> ~/Desktop/software.desktop
+	echo 'Name=Instalar'                >> ~/Desktop/software.desktop
+	echo 'Icon=package-manager-icon'    >> ~/Desktop/software.desktop
+	
+	echo '[Desktop Entry]'              >  ~/Desktop/skype.desktop
+	echo 'Type=Application'             >> ~/Desktop/skype.desktop
+	echo 'Exec=skype'                   >> ~/Desktop/skype.desktop
+	echo 'Name=Skype'                   >> ~/Desktop/skype.desktop
+	echo 'Icon=system-users'            >> ~/Desktop/skype.desktop
+
+	echo '[Desktop Entry]'              >  ~/Desktop/ayuda.desktop
+	echo 'Type=Application'             >> ~/Desktop/ayuda.desktop
+	echo 'Exec=teamviewer'              >> ~/Desktop/ayuda.desktop
+	echo 'Name=Ayuda'                   >> ~/Desktop/ayuda.desktop
+	echo 'Icon=gtk-help'                >> ~/Desktop/ayuda.desktop
+
+	echo '[Desktop Entry]'              >  ~/Desktop/mypaint.desktop
+	echo 'Type=Application'             >> ~/Desktop/mypaint.desktop
+	echo 'Exec=mypaint'                 >> ~/Desktop/mypaint.desktop
+	echo 'Name=MyPaint'                 >> ~/Desktop/mypaint.desktop
+	echo 'Icon=mypaint'                 >> ~/Desktop/mypaint.desktop
+
+	echo '[Desktop Entry]'              >  ~/Desktop/scanner.desktop
+	echo 'Type=Application'             >> ~/Desktop/scanner.desktop
+	echo 'Exec=Scanner'                 >> ~/Desktop/scanner.desktop
+	echo 'Name=SimpleScan'              >> ~/Desktop/scanner.desktop
+	echo 'Icon=usermount'               >> ~/Desktop/scanner.desktop
+
+	echo '[Desktop Entry]'              >  ~/Desktop/dock.desktop
+	echo 'Type=Application'             >> ~/Desktop/dock.desktop
+	echo 'Exec=cairo-dock'              >> ~/Desktop/dock.desktop
+	echo 'Name=Dock'                    >> ~/Desktop/dock.desktop
+	echo 'Icon=cairo-dock'              >> ~/Desktop/dock.desktop
+
+	echo '[Desktop Entry]'              >  ~/Desktop/earth.desktop
+	echo 'Type=Application'             >> ~/Desktop/earth.desktop
+	echo 'Exec=google-earth'            >> ~/Desktop/earth.desktop
+	echo 'Name=Earth'                   >> ~/Desktop/earth.desktop
+	echo 'Icon=google-earth'            >> ~/Desktop/earth.desktop
+
+	echo '[Desktop Entry]'              >  ~/Desktop/camera.desktop
+	echo 'Type=Application'             >> ~/Desktop/camera.desktop
+	echo 'Exec=cheese'                  >> ~/Desktop/camera.desktop
+	echo 'Name=Camara'                  >> ~/Desktop/camera.desktop
+	echo 'Icon=cheese'                  >> ~/Desktop/camera.desktop
+
+	echo '[Desktop Entry]'                                               >  ~/Desktop/spotify.desktop
+	echo 'Type=Application'                                              >> ~/Desktop/spotify.desktop
+	echo 'Exec=google-chrome --app=https://spotify.com/'                 >> ~/Desktop/spotify.desktop
+	echo 'Name=Spotify'                                                  >> ~/Desktop/spotify.desktop
+	echo 'Icon=spotify'                                                  >> ~/Desktop/spotify.desktop
+
+	echo '[Desktop Entry]'                                               >  ~/Desktop/gmail.desktop
+	echo 'Type=Application'                                              >> ~/Desktop/gmail.desktop
+	echo 'Exec=google-chrome --app=https://gmail.com/'                   >> ~/Desktop/gmail.desktop
+	echo 'Name=Gmail'                                                    >> ~/Desktop/gmail.desktop
+	echo 'Icon=gmail'                                                    >> ~/Desktop/gmail.desktop
+
+	echo '[Desktop Entry]'                                               >  ~/Desktop/whatsapp.desktop
+	echo 'Type=Application'                                              >> ~/Desktop/whatsapp.desktop
+	echo 'Exec=google-chrome --app=https://web.whatsapp.com/'            >> ~/Desktop/whatsapp.desktop
+	echo 'Name=Whatsapp'                                                 >> ~/Desktop/whatsapp.desktop
+	echo 'Icon=goa-account'                                              >> ~/Desktop/whatsapp.desktop
+
+	echo '[Desktop Entry]'                                               >  ~/Desktop/skypeweb.desktop
+	echo 'Type=Application'                                              >> ~/Desktop/skypeweb.desktop
+	echo 'Exec=google-chrome --app=https://web.skype.com/'               >> ~/Desktop/skypeweb.desktop
+	echo 'Name=Skype(Web)'                                               >> ~/Desktop/skypeweb.desktop
+	echo 'Icon=skype'                                                    >> ~/Desktop/skypeweb.desktop
+	
+}
