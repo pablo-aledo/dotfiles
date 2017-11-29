@@ -33,6 +33,11 @@ apt_download(){
 	echo 'sudo dpkg -i *.deb' > $REPOSITORY_FOLDER/`distr`/$1/install.sh
 }
 
+envpkg(){
+	[ "$( basename "`which $1`" )" = "$1" ] && return 0
+	[ "$( basename "`which $1`" )" = "$1" ] || return 1
+}
+
 pkg(){
 
 cmd=$1
@@ -58,84 +63,84 @@ then
 	return;
 fi
 
-[ $cmd = "install" ] && which snap     2>/dev/null >/dev/null && sudo snap install $list
-[ $cmd = "install" ] && which apt-get  2>/dev/null >/dev/null && sudo apt-get install -y --force-yes $list
-[ $cmd = "install" ] && which pacman   2>/dev/null >/dev/null && sudo pacman -S --noconfirm $list
-[ $cmd = "install" ] && which emerge   2>/dev/null >/dev/null && sudo emerge $list
-[ $cmd = "install" ] && which yum      2>/dev/null >/dev/null && sudo yum -y install $list
-[ $cmd = "install" ] && which zypper   2>/dev/null >/dev/null && sudo zypper --non-interactive install $list
-[ $cmd = "install" ] && which urpmi    2>/dev/null >/dev/null && sudo urpmi --auto $list
-[ $cmd = "install" ] && which tce-load 2>/dev/null >/dev/null && tce-load -wi $list
-[ $cmd = "install" ] && which pact     2>/dev/null >/dev/null && pact install $list
-[ $cmd = "install" ] && which apt-cyg  2>/dev/null >/dev/null && apt-cyg install $list
-[ $cmd = "install" ] && which cyg-apt  2>/dev/null >/dev/null && cyg-apt install $list
-[ $cmd = "install" ] && which brew     2>/dev/null >/dev/null && brew install $list
-[ $cmd = "install" ] && which eopkg    2>/dev/null >/dev/null && sudo eopkg install -y $list
-[ $cmd = "install" ] && which slax     2>/dev/null >/dev/null && slax download $list && slax activate *$list.sb
-[ $cmd = "install" ] && which opkg     2>/dev/null >/dev/null && opkg install $list
-[ $cmd = "install" ] && which usm      2>/dev/null >/dev/null && usm -g $list
-[ $cmd = "install" ] && which apk      2>/dev/null >/dev/null && apk add $list
+if ( [ $cmd = "install" ]  && `envpkg snap`    ) then sudo snap install $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg apt-get` ) then sudo apt-get install -y --force-yes $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg pacman`  ) then sudo pacman -S --noconfirm $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg emerge`  ) then sudo emerge $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg yum`     ) then sudo yum -y install $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg zypper`  ) then sudo zypper --non-interactive install $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg urpmi`   ) then sudo urpmi --auto $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg tce-load`) then tce-load -wi $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg pact`    ) then pact install $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg apt-cyg` ) then apt-cyg install $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg cyg-apt` ) then cyg-apt install $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg brew`    ) then brew install $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg eopkg`   ) then sudo eopkg install -y $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg slax`    ) then slax download $list && slax activate *$list.sb; return; fi
+if ( [ $cmd = "install" ]  && `envpkg opkg`    ) then opkg install $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg usm`     ) then usm -g $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg apk`     ) then apk add $list; return; fi
 
-[ $cmd = "remove" ] && which apt-get   2>/dev/null >/dev/null && sudo apt-get remove -y $list
-[ $cmd = "remove" ] && which pacman    2>/dev/null >/dev/null && sudo pacman -Rs --noconfirm $list
-[ $cmd = "remove" ] && which emerge    2>/dev/null >/dev/null && sudo emerge --depclean $list
-[ $cmd = "remove" ] && which yum       2>/dev/null >/dev/null && sudo yum --depclean $list
-[ $cmd = "remove" ] && which zypper    2>/dev/null >/dev/null && sudo zypper remove $list
-[ $cmd = "remove" ] && which urpme     2>/dev/null >/dev/null && sudo urpme $list
-[ $cmd = "remove" ] && which pact      2>/dev/null >/dev/null && pact remove $list
-[ $cmd = "remove" ] && which apt-cyg   2>/dev/null >/dev/null && apt-cyg remove $list
-[ $cmd = "remove" ] && which cyg-apt   2>/dev/null >/dev/null && cyg-apt remove $list
-[ $cmd = "remove" ] && which brew      2>/dev/null >/dev/null && brew remove --force $list
-[ $cmd = "remove" ] && which eopkg     2>/dev/null >/dev/null && sudo eopkg remove $list
-[ $cmd = "remove" ] && which slax      2>/dev/null >/dev/null && slax deactivate $list
-[ $cmd = "remove" ] && which opkg      2>/dev/null >/dev/null && opkg remove $list
-[ $cmd = "remove" ] && which apk       2>/dev/null >/dev/null && apk del $list
+if ( [ $cmd = "remove" ]   && `envpkg apt-get` ) then sudo apt-get remove -y $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg pacman`  ) then sudo pacman -Rs --noconfirm $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg emerge`  ) then sudo emerge --depclean $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg yum`     ) then sudo yum --depclean $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg zypper`  ) then sudo zypper remove $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg urpme`   ) then sudo urpme $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg pact`    ) then pact remove $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg apt-cyg` ) then apt-cyg remove $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg cyg-apt` ) then cyg-apt remove $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg brew`    ) then brew remove --force $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg eopkg`   ) then sudo eopkg remove $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg slax`    ) then slax deactivate $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg opkg`    ) then opkg remove $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg apk`     ) then apk del $list; return; fi
 
-[ $cmd = "search" ] && which apt-get   2>/dev/null >/dev/null && apt-cache search $list
-[ $cmd = "search" ] && which pacman    2>/dev/null >/dev/null && pacman -Ss $list
-[ $cmd = "search" ] && which emerge    2>/dev/null >/dev/null && emerge -S $list
-[ $cmd = "search" ] && which yum       2>/dev/null >/dev/null && yum -S $list
-[ $cmd = "search" ] && which zypper    2>/dev/null >/dev/null && zypper search $list
-[ $cmd = "search" ] && which urpmq     2>/dev/null >/dev/null && urpmq $list
-[ $cmd = "search" ] && which tce-ab    2>/dev/null >/dev/null && tce-ab
-[ $cmd = "search" ] && which pact      2>/dev/null >/dev/null && pact find $list
-[ $cmd = "search" ] && which apt-cyg   2>/dev/null >/dev/null && apt-cyg show $list
-[ $cmd = "search" ] && which cyg-apt   2>/dev/null >/dev/null && cyg-apt search $list
-[ $cmd = "search" ] && which brew      2>/dev/null >/dev/null && brew search $list
-[ $cmd = "search" ] && which eopkg     2>/dev/null >/dev/null && eopkg search $list
-[ $cmd = "search" ] && which slax      2>/dev/null >/dev/null && slax search $list
-[ $cmd = "search" ] && which opkg      2>/dev/null >/dev/null && opkg list | grep $list | cut -d" " -f1
-[ $cmd = "search" ] && which usm       2>/dev/null >/dev/null && usm -s $list
-[ $cmd = "search" ] && which apk       2>/dev/null >/dev/null && apk search $list
+if ( [ $cmd = "search" ]   && `envpkg apt-get` ) then apt-cache search $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg pacman`  ) then pacman -Ss $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg emerge`  ) then emerge -S $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg yum`     ) then yum -S $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg zypper`  ) then zypper search $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg urpmq`   ) then urpmq $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg tce-ab`  ) then tce-ab; return; fi
+if ( [ $cmd = "search" ]   && `envpkg pact`    ) then pact find $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg apt-cyg` ) then apt-cyg show $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg cyg-apt` ) then cyg-apt search $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg brew`    ) then brew search $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg eopkg`   ) then eopkg search $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg slax`    ) then slax search $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg opkg`    ) then opkg list | grep $list | cut -d" " -f1; return; fi
+if ( [ $cmd = "search" ]   && `envpkg usm`     ) then usm -s $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg apk`     ) then apk search $list; return; fi
 
-[ $cmd = "download" ] && which apt-get 2>/dev/null >/dev/null && apt_download $list
-[ $cmd = "download" ] && which pacman  2>/dev/null >/dev/null && sudo pacman -Sw $list
-[ $cmd = "download" ] && which emerge  2>/dev/null >/dev/null && sudo emerge --fetchonly $list
-[ $cmd = "download" ] && which yum     2>/dev/null >/dev/null && sudo yumdownloader $list
-[ $cmd = "download" ] && which apt-cyg 2>/dev/null >/dev/null && apt-cyg download $list
-[ $cmd = "download" ] && which cyg-apt 2>/dev/null >/dev/null && cyg-apt download $list
-[ $cmd = "download" ] && which slax    2>/dev/null >/dev/null && slax download $list
-[ $cmd = "download" ] && which usm     2>/dev/null >/dev/null && usm -g $list
+if ( [ $cmd = "download" ] && `envpkg apt-get` ) then apt_download $list; return; fi
+if ( [ $cmd = "download" ] && `envpkg pacman`  ) then sudo pacman -Sw $list; return; fi
+if ( [ $cmd = "download" ] && `envpkg emerge`  ) then sudo emerge --fetchonly $list; return; fi
+if ( [ $cmd = "download" ] && `envpkg yum`     ) then sudo yumdownloader $list; return; fi
+if ( [ $cmd = "download" ] && `envpkg apt-cyg` ) then apt-cyg download $list; return; fi
+if ( [ $cmd = "download" ] && `envpkg cyg-apt` ) then cyg-apt download $list; return; fi
+if ( [ $cmd = "download" ] && `envpkg slax`    ) then slax download $list; return; fi
+if ( [ $cmd = "download" ] && `envpkg usm`     ) then usm -g $list; return; fi
 
-[ $cmd = "update" ] && which apt-get   2>/dev/null >/dev/null && sudo apt-get update
-[ $cmd = "update" ] && which pacman    2>/dev/null >/dev/null && sudo pacman -Syy
-[ $cmd = "update" ] && which emerge    2>/dev/null >/dev/null && sudo layman -f
-[ $cmd = "update" ] && which yum       2>/dev/null >/dev/null && sudo yum check-update
-[ $cmd = "update" ] && which zypper    2>/dev/null >/dev/null && sudo zypper refresh
-[ $cmd = "update" ] && which urpmi     2>/dev/null >/dev/null && sudo urpmi.update -a
-[ $cmd = "update" ] && which pact      2>/dev/null >/dev/null && pact update
-[ $cmd = "update" ] && which apt-cyg   2>/dev/null >/dev/null && apt-cyg update
-[ $cmd = "update" ] && which brew      2>/dev/null >/dev/null && brew update
-[ $cmd = "update" ] && which eopkg     2>/dev/null >/dev/null && sudo eopkg update-repo
-[ $cmd = "update" ] && which opkg      2>/dev/null >/dev/null && opkg update
-[ $cmd = "update" ] && which usm       2>/dev/null >/dev/null && usm -u all
-[ $cmd = "update" ] && which apk       2>/dev/null >/dev/null && apk update
+if ( [ $cmd = "update" ]   && `envpkg apt-get` ) then sudo apt-get update; return; fi
+if ( [ $cmd = "update" ]   && `envpkg pacman`  ) then sudo pacman -Syy; return; fi
+if ( [ $cmd = "update" ]   && `envpkg emerge`  ) then sudo layman -f; return; fi
+if ( [ $cmd = "update" ]   && `envpkg yum`     ) then sudo yum check-update; return; fi
+if ( [ $cmd = "update" ]   && `envpkg zypper`  ) then sudo zypper refresh; return; fi
+if ( [ $cmd = "update" ]   && `envpkg urpmi`   ) then sudo urpmi.update -a; return; fi
+if ( [ $cmd = "update" ]   && `envpkg pact`    ) then pact update; return; fi
+if ( [ $cmd = "update" ]   && `envpkg apt-cyg` ) then apt-cyg update; return; fi
+if ( [ $cmd = "update" ]   && `envpkg brew`    ) then brew update; return; fi
+if ( [ $cmd = "update" ]   && `envpkg eopkg`   ) then sudo eopkg update-repo; return; fi
+if ( [ $cmd = "update" ]   && `envpkg opkg`    ) then opkg update; return; fi
+if ( [ $cmd = "update" ]   && `envpkg usm`     ) then usm -u all; return; fi
+if ( [ $cmd = "update" ]   && `envpkg apk`     ) then apk update; return; fi
 
-[ $cmd = "clean" ] && which apt-get    2>/dev/null >/dev/null && sudo apt-get clean
-[ $cmd = "clean" ] && which pacman     2>/dev/null >/dev/null && sudo pacman -Sc
-[ $cmd = "clean" ] && which yum        2>/dev/null >/dev/null && sudo yum clean
-[ $cmd = "clean" ] && which brew       2>/dev/null >/dev/null && brew cleanup -s
-[ $cmd = "clean" ] && which eopkg      2>/dev/null >/dev/null && sudo eopkg delete-cache
+if ( [ $cmd = "clean" ]    && `envpkg apt-get` ) then sudo apt-get clean; return; fi
+if ( [ $cmd = "clean" ]    && `envpkg pacman`  ) then sudo pacman -Sc; return; fi
+if ( [ $cmd = "clean" ]    && `envpkg yum`     ) then sudo yum clean; return; fi
+if ( [ $cmd = "clean" ]    && `envpkg brew`    ) then brew cleanup -s; return; fi
+if ( [ $cmd = "clean" ]    && `envpkg eopkg`   ) then sudo eopkg delete-cache; return; fi
 
 }
 
