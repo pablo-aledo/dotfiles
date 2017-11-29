@@ -317,7 +317,7 @@ adapt_simplbuntu(){
 	
 	echo '[Desktop Entry]'              >  ~/Desktop/pcman.desktop
 	echo 'Type=Application'             >> ~/Desktop/pcman.desktop
-	echo 'Exec=pcmanfm'                 >> ~/Desktop/pcman.desktop
+	echo 'Exec=nautilus'                >> ~/Desktop/pcman.desktop
 	echo 'Name=Ficheros'                >> ~/Desktop/pcman.desktop
 	echo 'Icon=system-file-manager'     >> ~/Desktop/pcman.desktop
 	
@@ -345,13 +345,13 @@ adapt_simplbuntu(){
 	pkg install gnome-calculator
 	echo '[Desktop Entry]'              >  ~/Desktop/galculator.desktop
 	echo 'Type=Application'             >> ~/Desktop/galculator.desktop
-	echo 'Exec=galculator'              >> ~/Desktop/galculator.desktop
+	echo 'Exec=gnome-calculator'        >> ~/Desktop/galculator.desktop
 	echo 'Name=Calculadora'             >> ~/Desktop/galculator.desktop
-	echo 'Icon=galculator'              >> ~/Desktop/galculator.desktop
+	echo 'Icon=gnome-calculator'        >> ~/Desktop/galculator.desktop
 	
 	echo '[Desktop Entry]'              >  ~/Desktop/software.desktop
 	echo 'Type=Application'             >> ~/Desktop/software.desktop
-	echo 'Exec=lubuntu-software-center' >> ~/Desktop/software.desktop
+	echo 'Exec=ubuntu-software-center'  >> ~/Desktop/software.desktop
 	echo 'Name=Instalar'                >> ~/Desktop/software.desktop
 	echo 'Icon=package-manager-icon'    >> ~/Desktop/software.desktop
 	
@@ -379,8 +379,8 @@ adapt_simplbuntu(){
 	pkg install simple-scan
 	echo '[Desktop Entry]'              >  ~/Desktop/scanner.desktop
 	echo 'Type=Application'             >> ~/Desktop/scanner.desktop
-	echo 'Exec=Scanner'                 >> ~/Desktop/scanner.desktop
-	echo 'Name=SimpleScan'              >> ~/Desktop/scanner.desktop
+	echo 'Exec=simple-scanner'          >> ~/Desktop/scanner.desktop
+	echo 'Name=Scanner'                 >> ~/Desktop/scanner.desktop
 	echo 'Icon=usermount'               >> ~/Desktop/scanner.desktop
 
 	pkg install cairo-dock
@@ -418,6 +418,13 @@ adapt_simplbuntu(){
 	echo 'Name=Ebooks'                  >> ~/Desktop/calibre.desktop
 	echo 'Icon=audiobook'               >> ~/Desktop/calibre.desktop
 
+	pkg install gnome-calendar
+	echo '[Desktop Entry]'              >  ~/Desktop/gnome-calendar.desktop
+	echo 'Type=Application'             >> ~/Desktop/gnome-calendar.desktop
+	echo 'Exec=gnome-calendar'          >> ~/Desktop/gnome-calendar.desktop
+	echo 'Name=Calendario'              >> ~/Desktop/gnome-calendar.desktop
+	echo 'Icon=evolution-calendar'      >> ~/Desktop/gnome-calendar.desktop
+
 	pkg install ice
 	echo '[Desktop Entry]'                                               >  ~/Desktop/spotify.desktop
 	echo 'Type=Application'                                              >> ~/Desktop/spotify.desktop
@@ -445,14 +452,16 @@ adapt_simplbuntu(){
 
 	echo '[Desktop Entry]'                                               >  ~/Desktop/wikipedia.desktop
 	echo 'Type=Application'                                              >> ~/Desktop/wikipedia.desktop
-	echo 'Exec=google-chrome --app=https://wikipedia.com/'               >> ~/Desktop/wikipedia.desktop
+	echo 'Exec=google-chrome --app=http://wikipedia.com/'                >> ~/Desktop/wikipedia.desktop
 	echo 'Name=Wikipedia'                                                >> ~/Desktop/wikipedia.desktop
 	echo 'Icon=wikipedia'                                                >> ~/Desktop/wikipedia.desktop
 
 	echo '[Desktop Entry]'                                               >  ~/Desktop/calendar.desktop
 	echo 'Type=Application'                                              >> ~/Desktop/calendar.desktop
 	echo 'Exec=google-chrome --app=https://calendar.google.com/'         >> ~/Desktop/calendar.desktop
-	echo 'Name=Calendario'                                               >> ~/Desktop/calendar.desktop
+	echo 'Name=Calendario(Web)'                                          >> ~/Desktop/calendar.desktop
 	echo 'Icon=evolution-calendar'                                       >> ~/Desktop/calendar.desktop
+
+	chmod +x ~/Desktop/*.desktop
 	
 }
