@@ -374,6 +374,8 @@ snippet tikz
 	}
 	\makeatother
 
+	\newcommand\compute[1]{\pgfmathsetmacro\result{#1}}
+
 	\begin{document}
 
 	\tikzstyle{block}    = [draw, thick, blur shadow={shadow blur steps=5}, fill=black!5, rectangle, rounded corners]
@@ -402,6 +404,9 @@ snippet tikz
 	      fill=white,
 	      scale=0.8
 	      ] (south) {South};
+
+	    \compute{tan(10*2)}
+	    \node at (3em,8em) {\result};
 
 	    \coordinate [above of=northwest,node distance=0em, yshift=4em] (loop1);
 	    \coordinate [above of=northeast,node distance=0em, yshift=4em] (loop2);
