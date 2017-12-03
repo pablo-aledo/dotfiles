@@ -254,6 +254,14 @@ adapt_simplbuntu(){
 
 	pkg remove 'firefox*'
 
+	pkg install numix
+ 	pkg install unity-tweak-tool
+	echo '[Desktop Entry]'              >  ~/Desktop/appearance.desktop
+	echo 'Type=Application'             >> ~/Desktop/appearance.desktop
+	echo 'Exec=unity-tweak-tool'        >> ~/Desktop/appearance.desktop
+	echo 'Name=Apariencia'              >> ~/Desktop/appearance.desktop
+	echo 'Icon=appearance'              >> ~/Desktop/appearance.desktop
+
 	pkg install transmission
 	echo '[Desktop Entry]'              >  ~/Desktop/transmission.desktop
 	echo 'Type=Application'             >> ~/Desktop/transmission.desktop
