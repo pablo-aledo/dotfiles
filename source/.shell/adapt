@@ -306,7 +306,7 @@ adapt_simplbuntu(){
 	
 	echo '[Desktop Entry]'              >  ~/Desktop/excel.desktop
 	echo 'Type=Application'             >> ~/Desktop/excel.desktop
-	echo 'Exec=wpe'                     >> ~/Desktop/excel.desktop
+	echo 'Exec=et'                      >> ~/Desktop/excel.desktop
 	echo 'Name=Excel'                   >> ~/Desktop/excel.desktop
 	echo 'Icon=libreoffice-calc'        >> ~/Desktop/excel.desktop
 	
