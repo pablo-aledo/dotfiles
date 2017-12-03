@@ -256,11 +256,11 @@ adapt_simplbuntu(){
 
 	pkg install numix
  	pkg install unity-tweak-tool
-	echo '[Desktop Entry]'              >  ~/Desktop/appearance.desktop
-	echo 'Type=Application'             >> ~/Desktop/appearance.desktop
-	echo 'Exec=unity-tweak-tool'        >> ~/Desktop/appearance.desktop
-	echo 'Name=Apariencia'              >> ~/Desktop/appearance.desktop
-	echo 'Icon=appearance'              >> ~/Desktop/appearance.desktop
+	echo '[Desktop Entry]'                    >  ~/Desktop/appearance.desktop
+	echo 'Type=Application'                   >> ~/Desktop/appearance.desktop
+	echo 'Exec=unity-tweak-tool'              >> ~/Desktop/appearance.desktop
+	echo 'Name=Apariencia'                    >> ~/Desktop/appearance.desktop
+	echo 'Icon=preferences-desktop-wallpaper' >> ~/Desktop/appearance.desktop
 
 	pkg install transmission
 	echo '[Desktop Entry]'              >  ~/Desktop/transmission.desktop
@@ -359,7 +359,7 @@ adapt_simplbuntu(){
 	
 	echo '[Desktop Entry]'              >  ~/Desktop/software.desktop
 	echo 'Type=Application'             >> ~/Desktop/software.desktop
-	echo 'Exec=ubuntu-software-center'  >> ~/Desktop/software.desktop
+	echo 'Exec=ubuntusoftware'          >> ~/Desktop/software.desktop
 	echo 'Name=Instalar'                >> ~/Desktop/software.desktop
 	echo 'Icon=package-manager-icon'    >> ~/Desktop/software.desktop
 	
@@ -450,7 +450,7 @@ adapt_simplbuntu(){
 	echo 'Type=Application'                                              >> ~/Desktop/whatsapp.desktop
 	echo 'Exec=google-chrome --app=https://web.whatsapp.com/'            >> ~/Desktop/whatsapp.desktop
 	echo 'Name=Whatsapp'                                                 >> ~/Desktop/whatsapp.desktop
-	echo 'Icon=goa-account'                                              >> ~/Desktop/whatsapp.desktop
+	echo 'Icon=whatsapp'                                                 >> ~/Desktop/whatsapp.desktop
 
 	echo '[Desktop Entry]'                                               >  ~/Desktop/skypeweb.desktop
 	echo 'Type=Application'                                              >> ~/Desktop/skypeweb.desktop
