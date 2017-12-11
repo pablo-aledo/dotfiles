@@ -208,6 +208,7 @@ adapt_pablo(){
 	pkg install meld
 	pkg install variety
 	pkg install sshfs
+	pkg install numix
 
 	sudo apt-get install -y network-manager-openvpn network-manager-openvpn-gnome network-manager-pptp network-manager-pptp-gnome network-manager-vpnc network-manager-vpnc-gnome network-manager-openconnect network-manager-openconnect-gnome
 
