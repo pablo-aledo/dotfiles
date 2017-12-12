@@ -24,4 +24,8 @@ set imap_pass = ''
 set smtp_pass = ''
 EOF
 
+[ -e ~/Dotfiles/mutt/muttrc ]      && \cp ~/Dotfiles/mutt/muttrc ~/.mutt/muttrc
+[ -e /media/DATA/Personal/muttrc ] && \cp /media/DATA/Personal/muttrc ~/.mutt/muttrc
+[ -e $REPOSITORY_FOLDER/mutt/`distr`/mutt/muttrc ] && \cp $REPOSITORY_FOLDER/mutt/`distr`/mutt/muttrc ~/.mutt/muttrc
+
 echo "https://security.google.com/settings/security/apppasswords"
