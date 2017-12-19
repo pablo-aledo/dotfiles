@@ -1469,14 +1469,15 @@ snippet et
 
 snippet gtest fixture
 	struct ${1:name}Test : testing::Test {
+		$1* ${2:variable} = new $1;
 		$1Test() {
-			$1* ${2:variable} = new $1;
+			$2 = new $1;
 		}
 
 		virtual ~$1Test(){
 			delete $2;
 		}
-	}
+	};
 
 	TEST_F( $1Test, ${3:name} ){
 		EXPECT_EQ(${4:expected}, $2->${5:field});
@@ -1487,11 +1488,11 @@ snippet gtest multiple_fixture
 
 	};
 
-	struct ${2:name}Test : ${3:test}Test, testing::withParamInterface<$1>{
+	struct ${2:name}Test : ${3:test}Test, testing::WithParamInterface<$1_state>{
 		$2Test() {
 			${4:variable}->${5:field} = GetParam().${6:field_in_state};
 		}
-	}
+	};
 
 	TEST_P($2Test, ${7:Name}){
 		auto ${8:name} = GetParam();
