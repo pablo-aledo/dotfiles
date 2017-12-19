@@ -270,10 +270,10 @@ adapt_simplbuntu(){
 	echo 'Name=BitTorrent'              >> ~/Desktop/transmission.desktop
 	echo 'Icon=transmission'            >> ~/Desktop/transmission.desktop
 
-	pkg install eog
+	pkg install gthumb
 	echo '[Desktop Entry]'              >  ~/Desktop/fotos.desktop
 	echo 'Type=Application'             >> ~/Desktop/fotos.desktop
-	echo 'Exec=eog'                     >> ~/Desktop/fotos.desktop
+	echo 'Exec=gthumb'                  >> ~/Desktop/fotos.desktop
 	echo 'Name=Fotos'                   >> ~/Desktop/fotos.desktop
 	echo 'Icon=eog'                     >> ~/Desktop/fotos.desktop
 
