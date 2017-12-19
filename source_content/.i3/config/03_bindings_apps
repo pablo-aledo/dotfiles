@@ -26,3 +26,4 @@ bindsym Ctrl+Shift+j  exec --no-startup-id "sleep 0.1 && xdotool key Ctrl+Shift+
 
 bindsym Ctrl+space exec "zsh -c 'source ~/.dotfiles/source/.shell/toggle_kb; toggle_kb'"
 bindsym $mod+grave exec pcmanfm
+bindsym $mod+masculine exec pcmanfm
