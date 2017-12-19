@@ -1455,7 +1455,7 @@ snippet gtest init
 
 snippet gtest test 
 	TEST(${1:CATEGORY}, ${2:NAME}) {
-		${3}
+		$3
 	}
 
 snippet gtest equal
@@ -1469,17 +1469,17 @@ snippet et
 
 snippet gtest fixture
 	struct ${1:name}Test : testing::Test {
-		${1}Test() {
-			${1}* ${2:variable} = new ${1};
+		$1Test() {
+			$1* ${2:variable} = new $1;
 		}
 
-		virtual ~${1}Test(){
-			delete ${2};
+		virtual ~$1Test(){
+			delete $2;
 		}
 	}
 
-	TEST_F( ${1}Test, ${3:name} ){
-		EXPECT_EQ(${4:expected}, ${2}->${5:field});
+	TEST_F( $1Test, ${3:name} ){
+		EXPECT_EQ(${4:expected}, $2->${5:field});
 	}
 
 snippet gtest multiple_fixture
@@ -1487,21 +1487,21 @@ snippet gtest multiple_fixture
 
 	};
 
-	struct ${2:name}Test : ${3:test}Test, testing::withParamInterface<${1}>{
-		${2}Test() {
+	struct ${2:name}Test : ${3:test}Test, testing::withParamInterface<$1>{
+		$2Test() {
 			${4:variable}->${5:field} = GetParam().${6:field_in_state};
 		}
 	}
 
-	TEST_P(${2}Test, ${7:Name}){
+	TEST_P($2Test, ${7:Name}){
 		auto ${8:name} = GetParam();
-		auto ${9:res} = ${4}->${10:method}(${8}.${11:field_in_state});
-		EXPECT_EQ(${8}.${12:field_in_state}, ${4}->${13:field_in_class});
+		auto ${9:res} = $4->${10:method}($8.${11:field_in_state});
+		EXPECT_EQ($8.${12:field_in_state}, $4->${13:field_in_class});
 	}
 
-	INSTANTIATE_TEST_CASE_P(Default, ${2}Test, 
+	INSTANTIATE_TEST_CASE_P(Default, $2Test, 
 		testing::Values(
-			${1}_state{},
-			${1}_state{}
+			$1_state{},
+			$1_state{}
 		)
 	);
