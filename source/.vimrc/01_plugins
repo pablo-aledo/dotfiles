@@ -15,3 +15,7 @@ filetype plugin indent on
 "map <C-F6> :call gdb("r ")<left><left>
 "map <A-F6> :call gdb("")<left><left>
 ":set asm=0
+
+" Para syntastic
+let g:syntastic_cpp_compiler = 'g++'
+let g:syntastic_cpp_compiler_options = ' -std=c++11 -stdlib=libc++'
