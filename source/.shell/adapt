@@ -249,6 +249,7 @@ adapt_nas(){
 	pkg install epub2txt
 	pkg install ffmpeg
 	pkg install cryptsetup
+	pkg install gotty
 }
 
 adapt_simplbuntu(){
