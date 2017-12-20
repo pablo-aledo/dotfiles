@@ -137,6 +137,8 @@ clean_distr(){
 	pkg remove 'samba*'
 
 	sudo rm -fr /usr/share/icons/oxygen
+	sudo rm -fr /usr/share/icons/Mint-X
+	sudo rm -fr /usr/share/icons/Humanity
 	sudo rm -fr /usr/share/backgrounds
 	sudo rm -fr /usr/share/doc
 	sudo rm -fr /usr/lib/i386-linux-gnu
