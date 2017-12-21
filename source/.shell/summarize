@@ -3,7 +3,7 @@ summarize_rec(){
 	destination="$2"
 
 	case $filename in
-		(*.rar)
+		(*.rar|*.RAR)
 			rm -fr /tmp/summarize
 			mkdir -p /tmp/summarize
 			cd /tmp/summarize
@@ -14,7 +14,7 @@ summarize_rec(){
 			done
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
-		(*.zip)
+		(*.zip|*.ZIP)
 			rm -fr /tmp/summarize
 			mkdir -p /tmp/summarize
 			cd /tmp/summarize
@@ -25,16 +25,16 @@ summarize_rec(){
 			done
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
-		(*.pdf)
+		(*.pdf|*.PDF)
 			pdftotext -f 1 -l 5 "$filename" - >> "$destination"
 			;;
-		(*.epub)
+		(*.epub|*.EPUB)
 			epub2txt "$filename" | head -n 100 >> "$destination"
 			;;
-		(*.mobi)
+		(*.mobi|*.MOBI)
 			ebook-convert "$filename" "$destination"
 			;;
-		(*.txt)
+		(*.txt|*.TXT)
 			cat "$filename" | head -n 100 >> "$destination"
 			;;
 		(*)
