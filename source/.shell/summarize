@@ -31,6 +31,9 @@ summarize_rec(){
 		(*.epub)
 			epub2txt "$filename" | head -n 100 >> "$destination"
 			;;
+		(*.mobi)
+			ebook-convert "$filename" "$destination"
+			;;
 		(*.txt)
 			cat "$filename" | head -n 100 >> "$destination"
 			;;
