@@ -373,8 +373,10 @@ mv_converted(){
 			echo -e "\e[34m mv_converted $line \e[0m"
 			mkdir -p "$destination/$line"
 			( cd $destination/$line; permissions )
-			rsync -vai --delete --remove-source-files "$converted_dir/$line" "$destination/$line"
-			rm_empty_folders "$converted_dir/$line"
+			[ $line[1] = '/' ] || rsync -vai --delete --remove-source-files "$converted_dir/$line/" "$destination/$line/"
+			[ $line[1] = '/' ] && rsync -vai --delete --remove-source-files "$line/" "$destination/`basename $line`/"
+			[ $line[1] = '/' ] || rm_empty_folders "$converted_dir/$line"
+			[ $line[1] = '/' ] && rm_empty_folders "$line"
 		done
 	fi
 	rm_empty_folders "$converted_dir"
