@@ -29,3 +29,6 @@ rssfeedreader2(){
 
 }
 
+# adb backup com.news.rssfeedreader
+# ( printf "\x1f\x8b\x08\x00\x00\x00\x00\x00" ; tail -c +25 backup.ab ) |  tar xfvz -
+# adb restore mybackup.ab
