@@ -280,6 +280,27 @@ server(){
 		tmux new -d -s vnc   "vnc4server"
 	fi
 
+	if [ $1 = rssmail ]
+	then
+		pkg install rsstail mutt
+
+		rssfeeds=`cat .canto/conf.py | grep add | cut -d'"' -f2 | sed -e 's/^/-u "/g' -e 's/$/"/g' | paste -d' ' -s`
+		echo rsstail $rssfeeds -i10 -zP -ld | bash | while read line
+		do 
+
+			process=0
+
+			case $line in 
+				(Title:*)       title=`echo $line       | sed 's/Title://g'`;;
+				(Link:*)        link=`echo $line        | sed 's/Link://g'`;;
+				(Description:*) description=`echo $line | sed 's/Description://g'`; process=1;;
+			esac
+
+			[ $process -eq 1 ] && echo $title $link $description
+			[ $process -eq 1 ] && (echo $link; echo $description) | mutt -e "set content_type=text/html" -s "$title" -- pablo.aledo.rss@gmail.com
+
+		done
+	fi
 
 }
 
