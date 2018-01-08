@@ -1,4 +1,4 @@
-sudo cp apache2.conf /etc/apache2.conf
+sudo cp apache2.conf /etc/apache2/apache2.conf
 cd /var/www/html/
 wget https://github.com/AdamWhitcroft/Apaxy/archive/master.zip
 unzip master.zip
