@@ -297,7 +297,12 @@ server(){
 			esac
 
 			[ $process -eq 1 ] && echo $title $link $description
-			[ $process -eq 1 ] && (echo $link; echo $description) | mutt -e "set content_type=text/html" -s "$title" -- pablo.aledo.rss@gmail.com
+
+			if [ $process -eq 1 ]
+			then
+				(echo $link; echo $description) | mutt -e "set content_type=text/html" -s "$title" -- pablo.aledo.rss@gmail.com
+				sleep 1
+			fi
 
 		done
 	fi
