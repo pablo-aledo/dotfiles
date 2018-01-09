@@ -146,6 +146,16 @@ convert_join_safe_2(){
 }
 
 
+convert_normalize(){
+	mkdir normalize_video
+	ffmpeg -i "$1" -r 25 -f image2 normalize_video/%07d.png
+	ffmpeg -i "$1" -q:a 0 -map a normalize_audio.wav
+	ffmpeg -i normalize_audio.wav normalize_audio.mp3
+
+	OPTS="-vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3"
+	ffmpeg -i normalize_video/%07d.png -i normalize_audio.mp3 `echo $OPTS` "$1.normalized.mp4"
+	rm -fr normalize_*
+}
 
 convert_recursive(){
 
