@@ -294,7 +294,7 @@ server(){
 			if [ "$(echo $line | egrep '^Title:')" != "" ] && [ "$previous" = "link" ]
 			then
 				echo "\e[31m $title \e[0m $link "
-				(echo $link; echo $description) | mutt -e "set content_type=text/html" -s "$title" -- pablo.aledo.rss@gmail.com
+				(echo $link) | mutt -e "set content_type=text/html" -s "$title" -- pablo.aledo.rss@gmail.com
 				sleep 1
 			fi
 
