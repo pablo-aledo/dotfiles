@@ -289,18 +289,24 @@ server(){
 		echo rsstail $rssfeeds -i10 -zP -ld | bash | while read line
 		do 
 
-			process=0
+			previous=$current
+
+			if [ "$(echo $line | egrep '^Title:')" != "" ] && [ "$previous" = "link" ]
+			then
+				echo "\e[31m $title \e[0m $link "
+				(echo $link; echo $description) | mutt -e "set content_type=text/html" -s "$title" -- pablo.aledo.rss@gmail.com
+				sleep 1
+			fi
 
 			case $line in 
-				(Title:*)       title=`echo $line       | sed 's/Title://g'`;;
-				(Link:*)        link=`echo $line        | sed 's/Link://g'`;;
-				(Description:*) description=`echo $line | sed 's/Description://g'`; process=1;;
+				(Title:*)       title=`echo $line       | sed 's/Title://g'`; current="title";;
+				(Link:*)        link=`echo $line        | sed 's/Link://g'`; current="link";;
+				(Description:*) description=`echo $line | sed 's/Description://g'`; current="description";;
 			esac
 
-			[ $process -eq 1 ] && echo $title $link $description
-
-			if [ $process -eq 1 ]
+			if [ "$current" = "description" ] && [ "$previous" = "link" ]
 			then
+				echo "\e[31m $title \e[0m $link "
 				(echo $link; echo $description) | mutt -e "set content_type=text/html" -s "$title" -- pablo.aledo.rss@gmail.com
 				sleep 1
 			fi
