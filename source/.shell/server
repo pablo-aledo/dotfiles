@@ -282,7 +282,8 @@ server(){
 
 	if [ $1 = rssmail ]
 	then
-		pkg install rsstail mutt
+		pkg install rsstail
+		[ -e /usr/bin/mutt ] || pkg install mutt
 
 		rssfeeds=`cat .canto/conf.py | egrep '^add' | cut -d'"' -f2 | sed -e 's/^/-u "/g' -e 's/$/"/g' | paste -d' ' -s`
 		echo rsstail $rssfeeds -i10 -zP -ld | bash | while read line
