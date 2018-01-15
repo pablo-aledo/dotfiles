@@ -166,6 +166,8 @@ vmap py pgvy
 :nnoremap 88 :setl noai nocin nosi inde=<CR>
 " Set filetype
 map ft :set ft=
+" spell
+map sp :set spell!
 " Load symbols for weird keyboards
 map SY :so ~/.vim/symbols<cr>
 set nomore
