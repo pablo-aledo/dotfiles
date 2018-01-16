@@ -375,6 +375,7 @@ snippet tikz
 	\makeatother
 
 	\newcommand\compute[1]{\pgfmathsetmacro\result{#1}}
+	\definecolor{BgGray}{RGB}{234,234,242}
 
 	\begin{document}
 
@@ -417,6 +418,7 @@ snippet tikz
 	    \draw [->, bend right] (west) to (south);
 	    \draw [decorate,decoration={brace,amplitude=5pt}] (box1.south east) -- (box1.south west) node [midway] {Go west};
 	    \draw (north) .. controls +(right:5em) and +(-90:3em) .. (west);
+	    \draw[fill=none, draw=BgGray] (0em,0em) rectangle ++(1em,1em);
 	    \draw[transform canvas={xshift=1em}] (north.north west) -- (north.south west);
 	\end{tikzpicture}
 	}
