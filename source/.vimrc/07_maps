@@ -156,6 +156,8 @@ map <S-F7> :! xclip -sel clip<CR>u
 map <C-F7> "+gp
 " Shell filetype
 map ,sh :set filetype=sh<CR>:set nospell<CR>
+" spell
+map ,sp :set spell!<cr>
 " Double quit for vimdiff
 map QQ :q<cr>:q<cr>
 map QQ! :q!<cr>:q!<cr>
@@ -166,8 +168,6 @@ vmap py pgvy
 :nnoremap 88 :setl noai nocin nosi inde=<CR>
 " Set filetype
 map ft :set ft=
-" spell
-map sp :set spell!<cr>
 " Load symbols for weird keyboards
 map SY :so ~/.vim/symbols<cr>
 set nomore
