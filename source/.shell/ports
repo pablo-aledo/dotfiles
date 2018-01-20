@@ -19,5 +19,6 @@ cpport_delete(){
 
 cpport_2(){
 	pkg install socat
-	socat TCP-LISTEN:$2,fork TCP:127.0.0.1:$1
+	[ $2 -lt 1024 ] && sudo socat TCP-LISTEN:$2,fork TCP:127.0.0.1:$1
+	[ $2 -lt 1024 ] || socat TCP-LISTEN:$2,fork TCP:127.0.0.1:$1
 }
