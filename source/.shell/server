@@ -280,6 +280,11 @@ server(){
 		tmux new -d -s vnc   "vnc4server"
 	fi
 
+	if [ $1 = oneye ]
+	then
+		pkg install oneye
+	fi
+
 	if [ $1 = rssmail ]
 	then
 		pkg install rsstail
