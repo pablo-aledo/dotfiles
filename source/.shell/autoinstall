@@ -8,9 +8,9 @@ wh(){
 	if [ "`cat $MYSELF | grep 'for a in ' | grep $1 `" ]
 	then
 		unset -f $1 2>/dev/null
-		which $1
+		which $*
 	else
-		which $1
+		which $*
 	fi
 }
 
