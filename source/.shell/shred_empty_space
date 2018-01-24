@@ -1,5 +1,5 @@
 shred_empty_space(){
 	pkg install secure-delete
-	[ $# -eq 0 ] && sudo sfill /
-	[ $# -eq 1 ] && sudo sfill $1
+	[ $# -eq 0 ] && sudo sfill -v /
+	[ $# -eq 1 ] && sudo sfill -v $1
 }
