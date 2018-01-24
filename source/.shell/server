@@ -295,7 +295,7 @@ server(){
 		echo rsstail $rssfeeds -i10 -zP -ld | bash | while read line
 		do 
 			[ "$(echo $line | egrep '^Title:')" != "" ] && grep "^$line\$" ~/rsstitles >/dev/null && continue_until_title=1 && continue
-			[ "$(echo $line | egrep '^Title:')" != "" ] && [ $continue_until_title -eq 1 ] && continue_until_title=0
+			[ "$(echo $line | egrep '^Title:')" != "" ] && continue_until_title=0
 			[ $continue_until_title -eq 1 ] && continue
 			
 			previous=$current
