@@ -291,9 +291,13 @@ server(){
 		[ -e /usr/bin/mutt ] || pkg install mutt
 
 		rssfeeds=`cat .canto/conf.py | egrep '^add' | cut -d'"' -f2 | sed -e 's/^/-u "/g' -e 's/$/"/g' | paste -d' ' -s`
+		continue_until_title=0
 		echo rsstail $rssfeeds -i10 -zP -ld | bash | while read line
 		do 
-
+			[ "$(echo $line | egrep '^Title:')" != "" ] && grep "^$line\$" ~/rsstitles >/dev/null && continue_until_title=1 && continue
+			[ "$(echo $line | egrep '^Title:')" != "" ] && [ $continue_until_title -eq 1 ] && continue_until_title=0
+			[ $continue_until_title -eq 1 ] && continue
+			
 			previous=$current
 
 			if [ "$(echo $line | egrep '^Title:')" != "" ] && [ "$previous" = "link" ]
@@ -315,6 +319,8 @@ server(){
 				(echo $link; echo $description) | mutt -e "set content_type=text/html" -s "$title" -- pablo.aledo.rss@gmail.com
 				sleep 1
 			fi
+
+			[ "$(echo $line | egrep '^Title:')" != "" ] && echo $line >> ~/rsstitles
 
 		done
 	fi
