@@ -6,6 +6,7 @@
 [ -e /media/DATA/aws ]           && AWS_FOLDER=/media/DATA/aws
 [ -e /media/DATA/Personal/aws ]  && AWS_FOLDER=/media/DATA/Personal/aws
 [ -e /media/mint/Pablo/aws ]     && AWS_FOLDER=/media/mint/Pablo/aws
+[ -e ~/Dotfiles/aws ]            && AWS_FOLDER=~/Dotfiles/aws
 
 aws_config(){
 	if [ -e /tmp/aws_config ]
