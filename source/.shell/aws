@@ -490,4 +490,7 @@ aws_ip(){
 	sed -i "s/AWS_SERVER=.*/AWS_SERVER=$1/g" /tmp/aws_config
 }
 
+pem_from_id_rsa(){
+	ssh-keygen -e -m pem -f id_rsa > file.pem
+}
 
