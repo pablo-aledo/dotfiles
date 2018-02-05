@@ -9,3 +9,7 @@ pod_wallpaper(){
 	#feh --bg-seamless `basename $photo`
 	#feh --bg-tile     `basename $photo`
 }
+
+wallpaper(){
+	feh --bg-fill ~/.dotfiles/wallpaper/wallpaper.jpg
+}
