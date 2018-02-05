@@ -124,6 +124,13 @@ aws_send(){
 	[ $# -eq 2 ] && rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$2/"
 }
 
+aws_send_mv(){
+	aws_config
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	[ $# -eq 2 ] || rsync -vai --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/"
+	[ $# -eq 2 ] && rsync -vai --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$2/"
+}
+
 aws_send_append(){
 	aws_config
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
@@ -135,6 +142,13 @@ aws_get(){
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
 	[ ${1[1]} = '/' ] || rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1" .
 	[ ${1[1]} = '/' ] && rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$1" .
+}
+
+aws_get_mv(){
+	aws_config
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	[ ${1[1]} = '/' ] || rsync -vai --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1" .
+	[ ${1[1]} = '/' ] && rsync -vai --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$1" .
 }
 
 aws_get_append(){
