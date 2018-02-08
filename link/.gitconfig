@@ -7,3 +7,5 @@
 	tool = meld
 [push]
 	default = simple
+[core]
+	trustctime = false
