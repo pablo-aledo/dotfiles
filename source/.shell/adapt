@@ -488,7 +488,7 @@ adapt_shortcuts(){
 
 	for a in $1/*
 	do 
-		echo "bindsym $a exec zsh -c \"source $srcdir/$a\"" >> ~/.i3/config
+  		echo "bindsym $(basename $a) exec \"zsh -c 'source $srcdir/$a'\"" >> ~/.i3/config
 	done
 	i3-msg reload
 }
