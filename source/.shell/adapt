@@ -480,3 +480,16 @@ adapt_simplbuntu(){
 	chmod +x ~/Desktop/*.desktop
 	
 }
+
+adapt_shortcuts(){
+	[ $# -eq 1 ] || return
+	[ $1 = "." ] && srcdir=$PWD
+	[ $1 = "." ] || srcdir=$1
+
+	for a in $1/*
+	do 
+		echo "bindsym $a exec zsh -c \"source $srcdir/$a\"" >> ~/.i3/config
+	done
+	i3-msg reload
+}
+
