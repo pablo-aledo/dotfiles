@@ -4,7 +4,7 @@ mouseover(){
 	
 	if [ -e $1 ]
 	then
-		threshold=10000
+		threshold=100000
 	else
 		threshold=$1
 		shift
