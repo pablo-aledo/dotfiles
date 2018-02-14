@@ -59,8 +59,7 @@ pf_umount(){
 	then
 		sudo umount /dev/mapper/Dotfiles
 		sudo cryptsetup luksClose /dev/mapper/Dotfiles
-		cd ~/.dotfiles
-		git checkout Personal/img.img
+		( cd ~/.dotfiles && git checkout Personal/img.img )
 		return
 	fi
 
