@@ -54,6 +54,16 @@ pf_umount(){
 	[ $# -eq 0 ] && pf_umount Personal
 	[ $# -eq 0 ] && pf_umount Chrome
 	[ $# -eq 0 ] && return
+
+	if [ "$1" = "Dotfiles." ]
+	then
+		sudo umount /dev/mapper/Dotfiles
+		sudo cryptsetup luksClose /dev/mapper/Dotfiles
+		cd ~/.dotfiles
+		git checkout Personal/img.img
+		return
+	fi
+
 	sudo umount /dev/mapper/$1
 	sudo cryptsetup luksClose /dev/mapper/$1
 }
