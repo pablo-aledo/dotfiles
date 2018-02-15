@@ -160,7 +160,7 @@ map ,sh :set filetype=sh<CR>:set nospell<CR>
 map ,sp :set spell!<cr>
 " Double quit for vimdiff
 map QQ :q<cr>:q<cr>
-map QQ! :q!<cr>:q!<cr>
+map QQ! :w /tmp/vim_bak<cr>:q<cr>:w /tmp/vim_bak_2<cr>:q<cr>
 " Paste and yank
 vmap py pgvy
 " Disable indentation
