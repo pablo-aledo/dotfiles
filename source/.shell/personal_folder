@@ -60,11 +60,13 @@ pf_umount(){
 		sudo umount /dev/mapper/Dotfiles
 		sudo cryptsetup luksClose /dev/mapper/Dotfiles
 		( cd ~/.dotfiles && git checkout Personal/img.img )
+		rmdir ~/Dotfiles
 		return
 	fi
 
 	sudo umount /dev/mapper/$1
 	sudo cryptsetup luksClose /dev/mapper/$1
+	rmdir ~/Dotfiles
 }
 
 pf_insert(){
