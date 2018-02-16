@@ -13,7 +13,13 @@ let mapleader = ","                                                     " Key fo
 set history=1000                                                        " steps stored in history
 set ruler                                                               " information in the right/bottom of the screen
 set spellsuggest=best,10                                                " spell correcting behavior
-set spell                                                               " activate spell correction
+
+
+if has("gui_running")
+	set spell                                                       " enable spell correction
+else
+	set nospell                                                     " disable spell correction
+fi
 set wrap linebreak textwidth=0                                          " do not wrap text
 set splitright                                                          " Open new files at right
 set splitbelow                                                          " Open new files below
