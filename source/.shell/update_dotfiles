@@ -109,5 +109,5 @@ update_dotfiles(){
 
 	source $HOME/.shell
 
-	i3-msg reload
+	[ -e /usr/bin/i3-msg ] && i3-msg reload
 }
