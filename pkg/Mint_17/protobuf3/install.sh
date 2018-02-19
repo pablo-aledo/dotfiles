@@ -1,3 +1,4 @@
+sudo apt-get install -y autoconf libtool
 mksrcdir /usr/src/protobuf
 cd /usr/src/protobuf
 git clone https://github.com/google/protobuf.git .
