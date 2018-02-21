@@ -493,3 +493,8 @@ adapt_shortcuts(){
 	i3-msg reload
 }
 
+adapt_esc(){
+  	echo "bindsym masculine exec \"xdotool key Escape\"" >> ~/.i3/config
+	i3-msg reload
+}
+
