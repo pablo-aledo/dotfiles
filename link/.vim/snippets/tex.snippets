@@ -454,3 +454,28 @@ snippet includegraphics
 
 snippet animate
 	\animategraphics[${1:loop,controls,width=\linewidth,autoplay}]{${2:frames per second}}{${3:name without extension}}{${4:first frame}}{${5:last frame}}${6}
+
+snippet movie9_mp4
+	\includemedia[
+	  width=0.6\linewidth,height=0.6\linewidth,
+	  activate=pageopen,
+	  passcontext,
+	  transparent,
+	  addresource=penguinschasingbutterfly.mp4,
+	  flashvars={
+	    source=penguinschasingbutterfly.mp4
+	  }
+	]{\includegraphics[width=0.6\linewidth]{penguins}}{VPlayer.swf}
+
+snippet movie9_youtube
+	\includemedia[
+	  width=0.6\linewidth,height=0.3375\linewidth,
+	  activate=pageopen,
+	  flashvars={
+	    modestbranding=1 % no YT logo in control bar
+	    &autohide=1 % controlbar autohide
+	    &showinfo=0 % no title and other info before start
+	    &rel=0 % no related videos after end
+	  }
+	]{\includegraphics[width=0.6\linewidth]{048}}{https://www.youtube.com/v/g8Ejj0T0yG4?rel=0}
+
