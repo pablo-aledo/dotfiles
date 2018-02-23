@@ -494,7 +494,7 @@ adapt_shortcuts(){
 }
 
 adapt_esc(){
-  	echo "bindsym masculine exec \"xdotool key Escape\"" >> ~/.i3/config
+  	echo "bindsym masculine exec --no-startup-id \"sleep 0.1 && xdotool key Escape\"" >> ~/.i3/config
 	i3-msg reload
 }
 
