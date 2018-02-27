@@ -1,3 +1,8 @@
+[ -d /media/DATA/convert   ] && convert_dir=/media/DATA/convert
+[ -d /media/DATA/converted ] && converted_dir=/media/DATA/converted
+[ -d ~/convert   ]           && convert_dir=~/convert
+[ -d ~/converted ]           && converted_dir=~/converted
+
 identify(){
 	mplayer -frames 0 -vo null -ao null -identify $1
 }
@@ -168,9 +173,6 @@ convert_recursive(){
 	[ "$1" = "just_two" ]  && echo 'just conversion 2' && just_one=0 && just_two=1
 	[ "$1" = "nounrar"  ]  && unrar=0
 
-	convert_dir=/media/DATA/convert
-	converted_dir=/media/DATA/converted
-
 	convert_opts_1="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
 	convert_opts_2="-vf 'scale=1280:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
 	convert_opts_3="-vcodec libx264 -c:v libx264 -preset slow -crf 23 -c:a copy"
@@ -279,8 +281,6 @@ convert_recursive(){
 
 convert_recursive(){
 
-	convert_dir=/media/DATA/convert
-	converted_dir=/media/DATA/converted
 	convert_opts="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
 
 	[ -e "$convert_dir" ]   || return
@@ -366,8 +366,6 @@ convert_recursive(){
 }
 
 convert_recursive_parallel(){
-	convert_dir=/media/DATA/convert
-	converted_dir=/media/DATA/converted
 
 	convert_opts="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
 
@@ -447,7 +445,6 @@ convert_recursive_parallel(){
 }
 
 mv_converted(){
-	converted_dir=/media/DATA/converted
 	destination=/media/mint/1TB/Videos
 
 	[ -d "$converted_dir" ] || return
@@ -482,7 +479,6 @@ mv_converted(){
 
 cp_convert(){
 	source=/media/mint/1TB/Videos
-	convert_dir=/media/DATA/convert
 
 	[ -d "$source" ]      || return
 	[ -d "$convert_dir" ] || return
