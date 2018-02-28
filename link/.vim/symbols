@@ -30,7 +30,8 @@
 :imap s55 `'<esc>xi
 :imap s66 ^
 :imap s77 \
-:imap s000 .
+:imap s99 .
+:map  ,sy :vsplit ~/.dotfiles/link/.vim/symbols<cr>
 
 :imap HH <left>
 :imap JJ <down>
@@ -49,5 +50,5 @@ map XX "add:@"<cr>
 ":imap oo ó
 ":imap uu ú
 
-map SU :iunmap s01<cr>:iunmap s02<cr>:iunmap s1<cr>:iunmap s12<cr>:iunmap s13<cr>:iunmap s14<cr>:iunmap s15<cr>:iunmap s16<cr>:iunmap s17<cr>:iunmap s2<cr>:iunmap s23<cr>:iunmap s24<cr>:iunmap s3<cr>:iunmap s4<cr>:iunmap s5<cr>:iunmap s6<cr>:iunmap s7<cr>:iunmap s8<cr>:iunmap s89<cr>:iunmap s80<cr>:iunmap s9<cr>:iunmap s00<cr>:iunmap s11<cr>:iunmap s22<cr>:iunmap s33<cr>:iunmap s44<cr>:iunmap s55<cr>:iunmap s66<cr>:iunmap s77<cr>:iunmap s000<cr>:iunmap HH<cr>:iunmap JJ<cr>:iunmap KK<cr>:iunmap LL<cr>:unmap J<cr>:unmap K<cr>:unmap H<cr>:unmap L<cr>
+map SU :iunmap s01<cr>:iunmap s02<cr>:iunmap s1<cr>:iunmap s12<cr>:iunmap s13<cr>:iunmap s14<cr>:iunmap s15<cr>:iunmap s16<cr>:iunmap s17<cr>:iunmap s2<cr>:iunmap s23<cr>:iunmap s24<cr>:iunmap s3<cr>:iunmap s4<cr>:iunmap s5<cr>:iunmap s6<cr>:iunmap s7<cr>:iunmap s8<cr>:iunmap s89<cr>:iunmap s80<cr>:iunmap s9<cr>:iunmap s00<cr>:iunmap s11<cr>:iunmap s22<cr>:iunmap s33<cr>:iunmap s44<cr>:iunmap s55<cr>:iunmap s66<cr>:iunmap s77<cr>:iunmap s99<cr>:iunmap HH<cr>:iunmap JJ<cr>:iunmap KK<cr>:iunmap LL<cr>:unmap J<cr>:unmap K<cr>:unmap H<cr>:unmap L<cr>:unmap s00<cr>:unmap ,sy<cr>
 
