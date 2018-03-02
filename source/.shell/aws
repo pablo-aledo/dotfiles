@@ -197,6 +197,7 @@ aws_exchange_keys(){
 aws_umount(){
 	aws_config
 	sudo umount $AWS_LOCAL_FOLDER
+	rmdir $AWS_LOCAL_FOLDER
 }
 
 aws_redirect(){
