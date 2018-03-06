@@ -42,6 +42,7 @@ mouseover(){
 	yfind=`cat /tmp/coordinates | head -n1 | cut -d',' -f2 | cut -d' ' -f1`
 	ximg=`file "$img" | cut -d',' -f2 | cut -d' ' -f2`
 	yimg=`file "$img" | cut -d',' -f2 | cut -d' ' -f4`
+	echo $((xfind + ximg / 2)) $((yfind + yimg / 2)) > /tmp/mousepos
 	xdotool mousemove $((xfind + ximg / 2)) $((yfind + yimg / 2))
 	return 0
 }
