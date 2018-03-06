@@ -502,5 +502,6 @@ adapt_babun(){
 	export H=/c/Users/$USER
 	alias acroread="/c/Program\ Files\ \(x86\)/Adobe/Acrobat\ Reader\ DC/Reader/AcroRd32"
 	alias meld='/c/Program\ Files\ \(x86\)/Meld/Meld.exe'
+	alias ranger=~/ranger/ranger.py
 }
 
