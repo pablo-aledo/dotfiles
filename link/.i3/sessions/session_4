@@ -1,6 +1,9 @@
-# Session to modify my dotfiles :P
-exec gnome-terminal --working-directory=/media/DATA/Work/dotfiles/disk/release
-exec gnome-terminal --working-directory=/media/DATA/Work/dotfiles/disk/release -x gvim +:NERDTree
-exec gnome-terminal --working-directory=/media/DATA/Work/dotfiles/data/repository/Mint_17/
+# Session for a remote server over vnc
+workspace 1
+exec google-chrome
 --
-layout tabbed
+workspace 2
+exec pcmanfm
+--
+workspace 3
+exec terminator
