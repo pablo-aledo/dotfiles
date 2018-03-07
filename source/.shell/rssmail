@@ -1,0 +1,27 @@
+RSSMAIL=~/rssmail
+
+rssmail() {
+	name=$RSSMAIL/rss-`date +%y%m%d-%H%M` 
+	mkdir -p $name
+	cp ~/rsstitles $name/list
+}
+
+rssmail_cut () {
+	if [ $# -eq 2 ]
+	then
+		last_a=`basename $1` 
+		last_b=`basename $2` 
+	else
+		last_a=`ls $RSSMAIL | sort -g | tail -n2 | head -n1` 
+		last_b=`ls $RSSMAIL | sort -g | tail -n1 | head -n1` 
+	fi
+	last_line=`cat $RSSMAIL/$last_a/list | tail -n1` 
+	rm -i -f $RSSMAIL/$last_b/list_cut
+
+	common=1
+	cat $RSSMAIL/$last_b/list | while read line
+	do
+		[ $line = $last_line ] && common=0
+		[ $common -eq 0 ] && echo $line >> $RSSMAIL/$last_b/list_cut
+	done
+}
