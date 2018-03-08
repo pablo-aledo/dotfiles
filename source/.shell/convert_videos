@@ -322,7 +322,7 @@ convert_recursive(){
 
 	done
 
-	find "$converted_dir" -name 'file*.mp4' -size 0 -delete 2>/dev/null
+	find "$converted_dir" -name '*.mp4' -size 0 -delete 2>/dev/null
 
 	cd $convert_dir
 	echo $findcmd | bash | while read line
