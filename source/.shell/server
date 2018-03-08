@@ -287,43 +287,8 @@ server(){
 
 	if [ $1 = rssmail ]
 	then
-		pkg install rsstail
-		[ -e /usr/bin/mutt ] || pkg install mutt
-
-		rssfeeds=`cat .canto/conf.py | egrep '^add' | cut -d'"' -f2 | sed -e 's/^/-u "/g' -e 's/$/"/g' | paste -d' ' -s`
-		continue_until_title=0
-		echo rsstail $rssfeeds -i10 -zP -ld | bash | while read line
-		do 
-			line_escaped=`echo $line | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g'`
-			[ "$(echo $line | egrep '^Title:')" != "" ] && grep "^$line_escaped\$" ~/rsstitles >/dev/null && continue_until_title=1 && continue
-			[ "$(echo $line | egrep '^Title:')" != "" ] && continue_until_title=0
-			[ $continue_until_title -eq 1 ] && continue
-			
-			previous=$current
-
-			if [ "$(echo $line | egrep '^Title:')" != "" ] && [ "$previous" = "link" ]
-			then
-				echo "\e[31m $title \e[0m $link "
-				(echo $link) | mutt -s "$title" -- pablo.aledo.rss@gmail.com
-				sleep 1
-			fi
-
-			case $line in 
-				(Title:*)       title=`echo $line       | sed 's/Title://g'`; current="title";;
-				(Link:*)        link=`echo $line        | sed 's/Link://g'`; current="link";;
-				(Description:*) description=`echo $line | sed 's/Description://g'`; current="description";;
-			esac
-
-			if [ "$current" = "description" ] && [ "$previous" = "link" ]
-			then
-				echo "\e[31m $title \e[0m $link "
-				(echo $link; echo $description) | mutt -e "set content_type=text/html" -s "$title" -- pablo.aledo.rss@gmail.com
-				sleep 1
-			fi
-
-			[ "$(echo $line | egrep '^Title:')" != "" ] && echo $line >> ~/rsstitles
-
-		done
+		source ~/.dotfiles/source/.shell/rssmail
+		rssmail_server
 	fi
 
 }
