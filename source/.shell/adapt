@@ -238,6 +238,9 @@ adapt_pablo(){
 	swap 2
 	swap 3
 	swap 4
+
+	unsetopt correctall
+	unsetopt sharehistory
 }
 
 adapt_nas(){
