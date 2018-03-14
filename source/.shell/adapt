@@ -480,6 +480,12 @@ adapt_simplbuntu(){
 	echo 'Name=Calendario(Web)'                                          >> ~/Desktop/calendar.desktop
 	echo 'Icon=evolution-calendar'                                       >> ~/Desktop/calendar.desktop
 
+	echo '[Desktop Entry]'                                               >  ~/Desktop/keep.desktop
+	echo 'Type=Application'                                              >> ~/Desktop/keep.desktop
+	echo 'Exec=google-chrome --app=https://keep.google.com/'             >> ~/Desktop/keep.desktop
+	echo 'Name=Notas(Web)'                                               >> ~/Desktop/keep.desktop
+	echo 'Icon=notes'                                                    >> ~/Desktop/keep.desktop
+
 	chmod +x ~/Desktop/*.desktop
 	
 }
