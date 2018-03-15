@@ -301,6 +301,9 @@ convert_recursive(){
 	done
 
 	cd $convert_dir
+	stpfolders | bash
+
+	cd $convert_dir
 	find $PWD -type d | while read line
 	do
 		mkdir -p "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`"
@@ -383,6 +386,9 @@ convert_recursive_parallel(){
 		rm -fr "`basename $line`"
 		cd -
 	done
+
+	cd $convert_dir
+	stpfolders | bash
 
 	cd $convert_dir
 	find $PWD -type d | while read line
