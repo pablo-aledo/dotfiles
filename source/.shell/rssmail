@@ -36,7 +36,7 @@ rssmail_cut () {
 		last_b=`ls $RSSMAIL | sort -g | tail -n1 | head -n1`
 	fi
 
-	comm -13 <(sort $last_a/list) <(sort $last_b/list) > $RSSMAIL/$last_b/list_cut
+	comm -13 <(sort $RSSMAIL/$last_a/list) <(sort $RSSMAIL/$last_b/list) > $RSSMAIL/$last_b/list_cut
 }
 
 rssmail_server(){
