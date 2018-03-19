@@ -26,6 +26,19 @@ rssmail_cut () {
 	done
 }
 
+rssmail_cut () {
+	if [ $# -eq 2 ]
+	then
+		last_a=`basename $1`
+		last_b=`basename $2`
+	else
+		last_a=`ls $RSSMAIL | sort -g | tail -n2 | head -n1`
+		last_b=`ls $RSSMAIL | sort -g | tail -n1 | head -n1`
+	fi
+
+	comm -13 <(sort $last_a/list) <(sort $last_b/list) > $RSSMAIL/$last_b/list_cut
+}
+
 rssmail_server(){
 	pkg install rsstail
 	[ -e /usr/bin/mutt ] || pkg install mutt
