@@ -44,7 +44,7 @@ rssmail_server(){
 		if [ "$(echo $line | egrep '^Title:')" != "" ] && [ "$previous" = "link" ]
 		then
 			echo "\e[31m $title \e[0m $link "
-			(echo $link) | mutt -s "$title" -- pablo.aledo.rss@gmail.com
+			(echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % 2 )) -s "$title" -- pablo.aledo.rss@gmail.com
 			sleep 1
 		fi
 
@@ -57,7 +57,7 @@ rssmail_server(){
 		if [ "$current" = "description" ] && [ "$previous" = "link" ]
 		then
 			echo "\e[31m $title \e[0m $link "
-			(echo $link; echo $description) | mutt -e "set content_type=text/html" -s "$title" -- pablo.aledo.rss@gmail.com
+			(echo $link; echo $description) | mutt -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % 2 )) -s "$title" -- pablo.aledo.rss@gmail.com
 			sleep 1
 		fi
 
