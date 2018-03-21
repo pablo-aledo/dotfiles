@@ -23,4 +23,4 @@ alias  zsh_pga='HOME=%PWD% zsh'
 alias  vim_pga='HOME=%PWD% vim'
 EOF
 
-sed -i s/%PWD%/$PWD/g alias
+sed -i s@%PWD%@$PWD@g alias
