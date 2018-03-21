@@ -17,4 +17,4 @@ bash .pkg
 
 echo tttt >> .zshrc
 
-HOME=$PWD zsh
+HOME=$PWD zsh -c tmux
