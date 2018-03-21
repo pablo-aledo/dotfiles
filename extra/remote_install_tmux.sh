@@ -15,4 +15,6 @@ echo 'touch ~/.paths'      >> .pkg
 
 bash .pkg
 
+echo tttt >> .zshrc
+
 HOME=$PWD zsh
