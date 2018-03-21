@@ -15,4 +15,4 @@ echo 'touch ~/.paths'      >> .pkg
 
 bash .pkg
 
-HOME=$PWD tmux
+HOME=$PWD zsh
