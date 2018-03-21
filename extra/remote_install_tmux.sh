@@ -1,8 +1,9 @@
 # wget https://raw.githubusercontent.com/pablo-aledo/dotfiles/master/remote_install.sh -O - | bash
 
 cd ~
-mkdir .dotfiles_pga
-cd    .dotfiles_pga
+rm -rf .dotfiles_pga
+mkdir  .dotfiles_pga
+cd     .dotfiles_pga
 
 wget https://raw.githubusercontent.com/pablo-aledo/dotfiles/master/source/.shell/pkg -O .pkg
 
@@ -14,5 +15,4 @@ echo 'touch ~/.paths'      >> .pkg
 
 bash .pkg
 
-export HOME=$PWD
-tmux
+HOME=$PWD tmux
