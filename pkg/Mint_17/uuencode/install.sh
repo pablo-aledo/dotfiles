@@ -1,1 +1,1 @@
-sudo apt-get install shautils
+sudo apt-get install sharutils
