@@ -17,6 +17,10 @@ bash .pkg
 
 echo tttt >> .zshrc
 
-alias tmux_pga='HOME=$PWD zsh -c tmux'
+cat << EOF >> alias
+alias tmux_pga='HOME=%PWD% tmux'
+alias  zsh_pga='HOME=%PWD% zsh'
+alias  vim_pga='HOME=%PWD% vim'
+EOF
 
-HOME=$PWD zsh -c tmux
+sed -i s/%PWD%/$PWD/g alias
