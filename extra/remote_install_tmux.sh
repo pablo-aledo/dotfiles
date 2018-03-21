@@ -24,3 +24,4 @@ alias  vim_pga='HOME=%PWD% vim'
 EOF
 
 sed -i s@%PWD%@$PWD@g alias
+cat alias
