@@ -10,7 +10,7 @@ restore(){
 	src=$(echo $1 | sed "s/`escape $HOME`/`escape $HOME`\/.dotfiles_bak/g")
 	dst=$1
 	mkdir -p $(dirname $dst)
-	cp -f $src $dst
+	\cp -f $src $dst
 	[ -e $src ] || rm -f $dst 2>/dev/null
 }
 
