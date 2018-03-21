@@ -17,4 +17,6 @@ bash .pkg
 
 echo tttt >> .zshrc
 
+alias tmux_pga='HOME=$PWD zsh -c tmux'
+
 HOME=$PWD zsh -c tmux
