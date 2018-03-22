@@ -1,0 +1,10 @@
+to_clip(){
+	tar -cz $* | uuencode - > /tmp/fileclip
+
+	cat /tmp/fileclip
+	cat /tmp/fileclip | xclip -sel clip -i
+}
+
+from_clip(){
+	xclip -sel clip -o | uudecode | tar -xvz 
+}
