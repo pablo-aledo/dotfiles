@@ -6,5 +6,6 @@ to_clip(){
 }
 
 from_clip(){
-	xclip -sel clip -o | uudecode | tar -xvz 
+	[ $# -eq 0 ] && xclip -sel clip -o | uudecode | tar -xvz 
+	[ $# -eq 0 ] || cat $1 | uudecode | tar -xvz 
 }
