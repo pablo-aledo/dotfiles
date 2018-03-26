@@ -23,6 +23,14 @@ link(){
 	ln -sf $src $dst
 }
 
+link_if_new(){
+	src=$1
+	dst=$(echo $1 | sed "s/`escape $ROOT`\/link/`escape $HOME`/g")
+	[ -e $dst ] && return
+	echo -e "\e[34m linking file ... \e[0m" `basename $1`
+	mkdir -p $(dirname $dst)
+	ln -sf $src $dst
+}
 
 copy(){
 	echo -e "\e[34m copying file ... \e[0m" `basename $1`
@@ -70,6 +78,12 @@ for a in `find $ROOT/link -type f 2>/dev/null`
 do
 	backup $(echo $a | sed "s/`escape $ROOT`\/link/`escape $HOME`/g")
 	link $a
+done
+
+# link_new files
+for a in `find $ROOT/link_if_new -type f 2>/dev/null`
+do
+	link_if_new $a
 done
 
 # copy files
