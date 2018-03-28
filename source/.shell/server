@@ -285,7 +285,7 @@ server(){
 		pkg install novnc3
 		vnc4server -kill :1
 		tmux new -d -s novnc "cd ~/noVNC; ./utils/launch.sh --vnc localhost:5901"
-		tmux new -d -s vnc   "/usr/bin/vncserver"
+		tmux new -d -s vnc   "/usr/bin/vncserver; read"
 	fi
 
 	if [ $1 = oneye ]
