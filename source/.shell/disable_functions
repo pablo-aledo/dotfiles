@@ -8,3 +8,36 @@ disable_functions(){
 	zsh
 }
 
+disable_medium(){
+	disable_functions
+	echo 'source ~/.dotfiles/source/.shell/adapt'             >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/aws'               >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/bak'               >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/clean'             >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/disable_functions' >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/encrypt_decrypt'   >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/exit'              >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/extensions'        >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/fileclip'          >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/findsort'          >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/mkcolor'           >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/mkd'               >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/mv_if_not_exists'  >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/myip'              >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/path'              >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/pcat'              >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/pkg'               >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/ports'             >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/ranger'            >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/redefine'          >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/reverse_find'      >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/rmsafe'            >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/sendbymail'        >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/ssh'               >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/ssh_redirect'      >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/stpfolders'        >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/sweep'             >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/tasklog'           >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/update_dotfiles'   >> ~/.shell
+	echo 'source ~/.dotfiles/source/.shell/z'                 >> ~/.shell
+}
