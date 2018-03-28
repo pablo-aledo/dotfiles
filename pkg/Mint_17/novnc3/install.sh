@@ -10,4 +10,4 @@ sudo cp -r tigervnc-1.8.0.x86_64/usr/* /usr/
 
 cd
 git clone https://github.com/novnc/noVNC.git
-
+touch noVNC/index.html
