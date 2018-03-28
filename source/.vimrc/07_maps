@@ -176,3 +176,6 @@ inoremap <expr>  <C-K>   BDG_GetDigraph()
 map ZD ggVGzdggVGzdggVGzdggVGzd
 " toggle gundo
 nnoremap <leader>u :GundoToggle<CR>
+" Next and Previous
+:map > :wn<cr>
+:map < :wN<cr>
