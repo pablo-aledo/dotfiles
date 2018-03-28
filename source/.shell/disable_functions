@@ -5,7 +5,6 @@ disable_functions(){
 	echo '	mv ~/.shell.bak ~/.shell' >> ~/.shell
 	echo '	zsh'                      >> ~/.shell
 	echo '}'                          >> ~/.shell
-	zsh
 }
 
 disable_medium(){
