@@ -1,0 +1,3 @@
+session(){
+cat ~/.i3/sessions/session_$1 | egrep -v '^#' | sed -e 's/^/i3-msg "/g' -e 's/$/"/g' -e 's/i3-msg "-*"/sleep 1/g' | bash
+}
