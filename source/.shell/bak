@@ -12,6 +12,7 @@ bak(){
 
 mergebak(){
 	last=`ls $* | sort | tail -n1`
+	lastname=`ls $* | sort | tail -n1 | sed 's/\.backup\..*//g'`
 
 	mkdir /tmp/$last
 	cd /tmp/$last
@@ -29,7 +30,7 @@ mergebak(){
 	done
 
 	cd /tmp/$last
-	tar -czf $OLDPWD/${last%.*}.backup.`date +%y%m%d-%H%M%S`.tgz *
+	tar -czf $OLDPWD/${lastname%.*}.backup.`date +%y%m%d-%H%M%S`.tgz *
 	cd -
 }
 
