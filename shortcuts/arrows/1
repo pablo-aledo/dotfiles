@@ -1,0 +1,4 @@
+export DISPLAY=:1
+
+echo "xdotool mousemove 0 0" > /tmp/coord
+xdotool mousemove 0 0

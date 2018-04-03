@@ -1,0 +1,4 @@
+export DISPLAY=:1
+
+xdotool mousemove 850 110
+xdotool click 1

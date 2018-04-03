@@ -1,0 +1,6 @@
+export DISPLAY=:1
+
+x=$(( $(cat /tmp/coord | cut -d' ' -f3) - 10 ))
+y=$(( $(cat /tmp/coord | cut -d' ' -f4) -  0 ))
+echo "xdotool mousemove $x $y" > /tmp/coord
+xdotool mousemove $x $y

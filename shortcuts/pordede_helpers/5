@@ -1,0 +1,9 @@
+export DISPLAY=:1
+xdotool mousemove 0 0
+source ~/.dotfiles/source/.shell/xdotool
+
+if `mouseover 1 ~/.dotfiles/shortcuts/images/pordede_streamcloudes.png`
+then
+	xdotool click 1
+fi
+
