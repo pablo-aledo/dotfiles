@@ -1,7 +1,13 @@
-bak(){
+sbak(){
 	name="$1"
 	[ -e "$name" ] || shift
 	sudo tar -cvzf "$name".backup.`date +%y%m%d-%H%M%S`.tgz $*
+}
+
+bak(){
+	name="$1"
+	[ -e "$name" ] || shift
+	tar -cvzf "$name".backup.`date +%y%m%d-%H%M%S`.tgz $*
 }
 
 mergebak(){
