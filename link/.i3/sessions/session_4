@@ -2,6 +2,8 @@
 workspace 1
 exec google-chrome
 --
+--
+--
 workspace 2
 exec pcmanfm
 --
