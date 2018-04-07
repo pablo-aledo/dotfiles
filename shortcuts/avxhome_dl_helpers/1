@@ -4,8 +4,7 @@ adapt_chromebook
 
 xrandr --output VNC-0 --mode 1280x800
 sleep 1
-xdotool key Alt+1
-xdotool key Alt+d
+xdotool key Alt+w
 killall chrome chromium google-chrome google-chrome-stable
 sleep 1
 google-chrome mail.google.com &
