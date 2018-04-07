@@ -1,6 +1,4 @@
 export DISPLAY=:1
-xdotool mousemove 0 0
-source ~/.dotfiles/source/.shell/xdotool
 
 xdotool mousemove 558 540
 xdotool click 1
