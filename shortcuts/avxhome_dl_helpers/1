@@ -1,5 +1,5 @@
 export DISPLAY=:1
-source ~/.dotfiles/source/adapt
+source ~/.dotfiles/source/.shell/adapt
 adapt_chromebook
 
 xrandr --output VNC-0 --mode 1280x800
