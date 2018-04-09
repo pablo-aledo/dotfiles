@@ -1,0 +1,4 @@
+dockerlatex(){
+	[ -e /usr/bin/docker ] || pkg install docker
+	[ -e /usr/bin/docker ] && docker run --rm -it -v $(pwd):/source schickling/latex
+}
