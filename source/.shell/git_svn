@@ -2,6 +2,7 @@ git_svn(){
 
 	case $1 in
 		(clone)    shift && git svn clone -s $* ;;
+		# svn checkout <url>
 		(pull)     git svn rebase ;;
 		(add)      shift && git add $* ;;
 		(checkout) shift && git checkout -- $* ;;
