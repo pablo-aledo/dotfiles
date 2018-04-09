@@ -1,15 +1,16 @@
 git_svn(){
 
 	case $1 in
-		(clone)    shift && git svn clone -s $* ;;
+		(clone)     shift && git svn clone $* ;;
+		(clone_std) shift && git svn clone -s $* ;;
 		# svn checkout <url>
-		(pull)     git svn rebase ;;
-		(add)      shift && git add $* ;;
-		(checkout) shift && git checkout -- $* ;;
-		(commit)   git commit ;;
-		(reset)    git reset HEAD --hard ;;
-		(log)      git log ;;
-		(push)     git svn dcommit --rmdir ;;
+		(pull)      git svn rebase ;;
+		(add)       shift && git add $* ;;
+		(checkout)  shift && git checkout -- $* ;;
+		(commit)    git commit ;;
+		(reset)     git reset HEAD --hard ;;
+		(log)       git log ;;
+		(push)      git svn dcommit --rmdir ;;
 		# git stash and git stash pop
 		# git rebase -i
 		# git branch
