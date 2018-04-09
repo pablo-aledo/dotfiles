@@ -1,0 +1,74 @@
+docker_clean(){
+
+	###################################################################################
+        #       https://gist.github.com/bastman/5b57ddb3c11942094f8d0a97d461b430          #
+	###################################################################################
+
+	# delete volumes
+	# // see: https://github.com/chadoe/docker-cleanup-volumes
+	
+	docker volume rm $(docker volume ls -qf dangling=true)
+	docker volume ls -qf dangling=true | xargs -r docker volume rm
+	
+	# delete networks
+	
+	docker network ls  
+	docker network ls | grep "bridge"   
+	docker network rm $(docker network ls | grep "bridge" | awk '/ / { print $1 }')
+	
+	# remove docker images
+	# // see: http://stackoverflow.com/questions/32723111/how-to-remove-old-and-unused-docker-images
+	
+	docker images
+	docker rmi $(docker images --filter "dangling=true" -q --no-trunc)
+	
+	docker images | grep "none"
+	docker rmi $(docker images | grep "none" | awk '/ / { print $3 }')
+	
+	# remove docker containers
+	# // see: http://stackoverflow.com/questions/32723111/how-to-remove-old-and-unused-docker-images
+	
+	docker ps
+	docker ps -a
+	docker rm $(docker ps -qa --no-trunc --filter "status=exited")
+	
+	# Resize disk space for docker vm
+	# docker-machine create --driver virtualbox --virtualbox-disk-size "40000" default
+
+	###################################################################################
+	#               https://www.calazan.com/docker-cleanup-commands/                  #
+	###################################################################################
+
+	#Kill all running containers
+
+	docker kill $(docker ps -q)
+
+	#Delete all stopped containers (including data-only containers)
+
+	docker rm $(docker ps -a -q)
+
+	#Delete all 'untagged/dangling' (<none>) images
+
+	docker rmi $(docker images -q -f dangling=true)
+
+	#Delete ALL images
+
+	docker rmi $(docker images -q)
+
+	#It might also be useful to create bash aliases for these commands, for example:
+	# ~/.bash_aliases
+
+	# Kill all running containers.
+	alias dockerkillall='docker kill $(docker ps -q)'
+
+	# Delete all stopped containers.
+	alias dockercleanc='printf "\n>>> Deleting stopped containers\n\n" && docker rm $(docker ps -a -q)'
+
+	# Delete all untagged images.
+	alias dockercleani='printf "\n>>> Deleting untagged images\n\n" && docker rmi $(docker images -q -f dangling=true)'
+
+	# Delete all stopped containers and untagged images.
+	alias dockerclean='dockercleanc || true && dockercleani'
+
+
+}
