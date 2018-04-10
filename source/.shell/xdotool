@@ -3,6 +3,7 @@ mouseover(){
 	[ -e /usr/bin/xdotool ] || pkg install xdotool
 	[ -e /usr/bin/png2pat ] || pkg install xautomation
 	[ -e /usr/bin/scrot ]   || pkg install scrot
+	[ -e /usr/bin/xclip ]   || pkg install xclip
 
 	count=$1
 	shift
