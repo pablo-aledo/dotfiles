@@ -1,3 +1,5 @@
+DOCKER_REPO_PREFIX=jess
+
 docker_clean(){
 
 	###################################################################################
@@ -78,16 +80,26 @@ docker_latex(){
 	[ -e /usr/bin/docker ] && sudo docker run --rm -it -v $(pwd):/source schickling/latex $*
 }
 
-docker_prep(){
+del_stopped(){
+	local name=$1
+	local state
+	state=$(docker inspect --format "{{.State.Running}}" "$name" 2>/dev/null)
 
+	if [[ "$state" == "false" ]]; then
+		docker rm "$name"
+	fi
+}
+
+docker_prep(){
+xhost +
+del_stopped $1
 case $1 in
 (atom)
-	rm -rf /tmp/docker_jessfraz
-	mkdir /tmp/docker_jessfraz
-	cd /tmp/docker_jessfraz
+	rm -rf /tmp/docker_builder
+	mkdir /tmp/docker_builder
+	cd /tmp/docker_builder
 	wget https://raw.githubusercontent.com/jessfraz/dockerfiles/master/$1/Dockerfile
 	docker build -t $1 .
-	xhost +
 	cd -
 	;;
 esac
@@ -97,13 +109,13 @@ esac
 docker_run(){
 
 case $1 in
-(ab)                     docker run --rm -it ${DOCKER_REPO_PREFIX}/ab ;;
+(ab)                     shift; docker run --rm -it ${DOCKER_REPO_PREFIX}/ab $* ;;
 (ansible)                docker run --rm -it -v ${PWD}/hosts:/etc/ansible/hosts -v ${PWD}/ansible.cfg:/etc/ansible/ansible.cfg -v ${HOME}/.ssh:/root/.ssh:ro ansible all -m ping ;;
 (atom)                   docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY atom ;;
 (audacity)               docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -e QT_DEVICE_PIXEL_RATIO --device /dev/snd --group-add audio --name audacity ${DOCKER_REPO_PREFIX}/audacity ;;
-(aws)                    docker run -it --rm -v "${HOME}/.aws:/root/.aws" --log-driver none --name aws ${DOCKER_REPO_PREFIX}/awscli "$@" ;;
-(az)                     docker run -it --rm -v "${HOME}/.azure:/root/.azure" --log-driver none --name azure ${DOCKER_REPO_PREFIX}/azure-cli "$@" ;;
-(bees)                   docker run -it --rm -e NOTARY_TOKEN -v "${HOME}/.bees:/root/.bees" -v "${HOME}/.boto:/root/.boto" -v "${HOME}/.dev:/root/.ssh:ro" --log-driver none --name bees ${DOCKER_REPO_PREFIX}/beeswithmachineguns "$@" ;;
+(aws)                    shift; docker run -it --rm -v "${HOME}/.aws:/root/.aws" --log-driver none --name aws ${DOCKER_REPO_PREFIX}/awscli "$@" ;;
+(az)                     shift; docker run -it --rm -v "${HOME}/.azure:/root/.azure" --log-driver none --name azure ${DOCKER_REPO_PREFIX}/azure-cli "$@" ;;
+(bees)                   shift; docker run -it --rm -e NOTARY_TOKEN -v "${HOME}/.bees:/root/.bees" -v "${HOME}/.boto:/root/.boto" -v "${HOME}/.dev:/root/.ssh:ro" --log-driver none --name bees ${DOCKER_REPO_PREFIX}/beeswithmachineguns "$@" ;;
 (cadvisor)               docker run -d --restart always -v /:/rootfs:ro -v /var/run:/var/run:rw -v /sys:/sys:ro  -v /var/lib/docker/:/var/lib/docker:ro -p 1234:8080 --name cadvisor google/cadvisor
                          hostess add cadvisor "$(docker inspect --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' cadvisor)"
                          browser-exec "http://cadvisor:8080" ;;
@@ -123,6 +135,7 @@ case $1 in
                          fi
                          docker run -d --memory 3gb -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -v "${HOME}/Downloads:/root/Downloads" -v "${HOME}/Pictures:/root/Pictures" -v "${HOME}/Torrents:/root/Torrents" -v "${HOME}/.chrome:/data" -v /dev/shm:/dev/shm -v /etc/hosts:/etc/hosts --security-opt seccomp:/etc/docker/seccomp/chrome.json --device /dev/snd --device /dev/dri --device /dev/video0 --device /dev/usb --device /dev/bus/usb --group-add audio --group-add video --name chrome ${DOCKER_REPO_PREFIX}/chrome --user-data-dir=/data --proxy-server="$proxy" --host-resolver-rules="$map" "$args" ;;
 (consul)
+                         shift
                          state=$(docker inspect --format "{{.State.Running}}" consul 2>/dev/null)
                          if [[ "$state" == "true" ]] && [[ "$*" != "" ]]; then
                          	docker exec -it consul consul "$@"
@@ -131,50 +144,50 @@ case $1 in
                          docker run -d --restart always -v "${HOME}/.consul:/etc/consul.d" -v /var/run/docker.sock:/var/run/docker.sock --net host -e GOMAXPROCS=2 --name consul ${DOCKER_REPO_PREFIX}/consul agent -bootstrap-expect 1 -config-dir /etc/consul.d -data-dir /data -encrypt "$(docker run --rm ${DOCKER_REPO_PREFIX}/consul keygen)" -ui-dir /usr/src/consul -server -dc neverland -bind 0.0.0.0
                          hostess add consul "$(docker inspect --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' consul)"
                          browser-exec "http://consul:8500" ;;
-(dcos)                   docker run -it --rm -v "${HOME}/.dcos:/root/.dcos" -v "$(pwd):/root/apps" -w /root/apps ${DOCKER_REPO_PREFIX}/dcos-cli "$@" ;;
+(dcos)                   shift; docker run -it --rm -v "${HOME}/.dcos:/root/.dcos" -v "$(pwd):/root/apps" -w /root/apps ${DOCKER_REPO_PREFIX}/dcos-cli "$@" ;;
 (chromium)               docker run -it --net host --cpuset-cpus 0 --memory 512mb -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/Downloads:/home/chromium/Downloads -v $HOME/.config/chromium/:/data --security-opt seccomp=$HOME/chrome.json --device /dev/snd -v /dev/shm:/dev/shm --name chromium ${DOCKER_REPO_PREFIX}/chromium ;;
 (couchpotato)            docker run -d --restart always -p 5050:5050 -v /etc/localtime:/etc/localtime:ro -v /volumes/couchpotato:/data --link transmission:transmission --name couchpotato ${DOCKER_REPO_PREFIX}/couchpotato ;;
 (crio)                   docker run --rm -it --privileged --net host -v /var/lib/containers:/var/lib/containers -v /var/run:/var/run -v /dev:/dev -v /etc/cni:/etc/cni:ro -v /opt/cni:/opt/cni:ro r.j3ss.co/crio ;;
-(gcloud)                 docker run --rm -it -v "${HOME}/.gcloud:/root/.config/gcloud" -v "${HOME}/.ssh:/root/.ssh:ro" -v "$(which docker):/usr/bin/docker" -v /var/run/docker.sock:/var/run/docker.sock --name gcloud ${DOCKER_REPO_PREFIX}/gcloud "$@" ;;
+(gcloud)                 shift; docker run --rm -it -v "${HOME}/.gcloud:/root/.config/gcloud" -v "${HOME}/.ssh:/root/.ssh:ro" -v "$(which docker):/usr/bin/docker" -v /var/run/docker.sock:/var/run/docker.sock --name gcloud ${DOCKER_REPO_PREFIX}/gcloud "$@" ;;
 (doctor)                 docker run -it ${DOCKER_REPO_PREFIX}/doctor ;;
 (dunnet)                 docker run -it dunnet ;;
 (evince)                 docker run -it -v $HOME/documents/:/root/documents/ -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY evince ;;
 (fontforge)              docker run --rm -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $state/fontforge:/home/fontforge --name fontforge fghj/fontforge ;;
-(firefox)                docker run -d --memory 2gb --net host --cpuset-cpus 0 -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v "${HOME}/.firefox/cache:/root/.cache/mozilla" -v "${HOME}/.firefox/mozilla:/root/.mozilla" -v "${HOME}/Downloads:/root/Downloads" -v "${HOME}/Pictures:/root/Pictures" -v "${HOME}/Torrents:/root/Torrents" -e "DISPLAY=unix${DISPLAY}" -e GDK_SCALE -e GDK_DPI_SCALE --device /dev/snd --device /dev/dri --name firefox ${DOCKER_REPO_PREFIX}/firefox "$@" ;;
+(firefox)                shift; docker run -d --memory 2gb --net host --cpuset-cpus 0 -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v "${HOME}/.firefox/cache:/root/.cache/mozilla" -v "${HOME}/.firefox/mozilla:/root/.mozilla" -v "${HOME}/Downloads:/root/Downloads" -v "${HOME}/Pictures:/root/Pictures" -v "${HOME}/Torrents:/root/Torrents" -e "DISPLAY=unix${DISPLAY}" -e GDK_SCALE -e GDK_DPI_SCALE --device /dev/snd --device /dev/dri --name firefox ${DOCKER_REPO_PREFIX}/firefox "$@" ;;
 (gimp)                   docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/Pictures:/root/Pictures --name gimp ${DOCKER_REPO_PREFIX}/gimp ;;
 (gitserver)              docker run --rm -it -p 1234:22 -e DEBUG=true -e "PUBKEY=$(cat ~/.ssh/id_ed25519.pub)" --name gitserver ${DOCKER_REPO_PREFIX}/gitserver ;;
 (gitsome)                docker run --rm -it -v ${HOME}/.gitsomeconfig:/home/anon/.gitsomeconfig -v ${HOME}/.gitsomeconfigurl:/home/anon/.gitsomeconfigurl r.j3ss.co/gitsome ;;
 (hollywood)              docker run --rm -it --name hollywood ${DOCKER_REPO_PREFIX}/hollywood ;;
 (htop)                   docker run --rm -it --pid host --net none --name htop ${DOCKER_REPO_PREFIX}/htop ;;
-(http)                   docker run -t --rm -v /var/run/docker.sock:/var/run/docker.sock --log-driver none ${DOCKER_REPO_PREFIX}/httpie "$@" ;;
+(http)                   shift; docker run -t --rm -v /var/run/docker.sock:/var/run/docker.sock --log-driver none ${DOCKER_REPO_PREFIX}/httpie "$@" ;;
 (gixy)                   docker run --rm -it -v /etc/nginx:/etc/nginx r.j3ss.co/gixy /etc/nginx/nginx.conf ;;
 (glxgears)               docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/dri ${DOCKER_REPO_PREFIX}/glxgears ;;
 (gparted)                docker run -v /tmp/.X11-unix:/tmp/.X11-unix --device=/dev/sda:/dev/sda -e DISPLAY=unix$DISPLAY gparted ;;
 (guetzli)                docker run --rm -it -v ${PWD}:/tmp r.j3ss.co/guetzli:latest --verbose /tmp/example.jpg /tmp/example.compressed.jpg ;;
-(gcalcli)                docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v "${HOME}/.gcalcli/home:/home/gcalcli/home" -v "${HOME}/.gcalcli/work/oauth:/home/gcalcli/.gcalcli_oauth" -v "${HOME}/.gcalcli/work/gcalclirc:/home/gcalcli/.gcalclirc" --name gcalcli ${DOCKER_REPO_PREFIX}/gcalcli "$@" ;;
+(gcalcli)                shift; docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v "${HOME}/.gcalcli/home:/home/gcalcli/home" -v "${HOME}/.gcalcli/work/oauth:/home/gcalcli/.gcalcli_oauth" -v "${HOME}/.gcalcli/work/gcalclirc:/home/gcalcli/.gcalclirc" --name gcalcli ${DOCKER_REPO_PREFIX}/gcalcli "$@" ;;
 (htop)                   docker run --rm -it --pid host ${DOCKER_REPO_PREFIX}/htop ;;
 (imagemin)               docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v $HOME/Pictures:/root/Pictures --entrypoint bash ${DOCKER_REPO_PREFIX}/imagemin ;;
 (inkscape)               docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v /inkscape/:/workspace -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/inkscape ;;
 (john)                   file=$(realpath "$1")
-                         docker run --rm -it -v "${file}:/root/$(basename "${file}")" ${DOCKER_REPO_PREFIX}/john "$@" ;;
-(keepass2)               docker run -it -v /home/$USER/DB.kdbx:/root/DB.kdbx -v /tmp/.X11-unix:/tmp/.X11-unix -v /home/$USER/keepass2-plugins:/usr/lib/keepass2/Plugins -e DISPLAY=$DISPLAY keepass2 "$@" ;;
+                         shift; docker run --rm -it -v "${file}:/root/$(basename "${file}")" ${DOCKER_REPO_PREFIX}/john "$@" ;;
+(keepass2)               shift; docker run -it -v /home/$USER/DB.kdbx:/root/DB.kdbx -v /tmp/.X11-unix:/tmp/.X11-unix -v /home/$USER/keepass2-plugins:/usr/lib/keepass2/Plugins -e DISPLAY=$DISPLAY keepass2 "$@" ;;
 (keepassxc)              docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -v /etc/machine-id:/etc/machine-id:ro -v /usr/share/X11/xkb:/usr/share/X11/xkb/:ro -v $HOME/.config/keepassxc:/root/.config/keepassxc -e DISPLAY=unix$DISPLAY keepassxc ;;
 (kernel_builder)         docker run --rm -it -v /usr/src:/usr/src --cpu-shares=512 --name kernel-builder ${DOCKER_REPO_PREFIX}/kernel-builder ;;
 (kvm)                    docker run -d --privileged -v /var/run/libvirt:/var/run/libvirt --name kvm ${DOCKER_REPO_PREFIX}/kvm ;;
 (libreoffice)            docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/slides:/root/slides -e GDK_SCALE -e GDK_DPI_SCALE --name libreoffice ${DOCKER_REPO_PREFIX}/libreoffice ;;
-(lpass)                  docker run --rm -it -v "${HOME}/.lpass:/root/.lpass" --name lpass ${DOCKER_REPO_PREFIX}/lpass "$@" ;;
-(lynx)                   docker run --rm -it --name lynx ${DOCKER_REPO_PREFIX}/lynx "$@" ;;
+(lpass)                  shift; docker run --rm -it -v "${HOME}/.lpass:/root/.lpass" --name lpass ${DOCKER_REPO_PREFIX}/lpass "$@" ;;
+(lynx)                   shift; docker run --rm -it --name lynx ${DOCKER_REPO_PREFIX}/lynx "$@" ;;
 (lilyterm)               docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/lilyterm ;;
 (lynx)                   docker run --rm -it --name lynx ${DOCKER_REPO_PREFIX}/lynx github.com/jessfraz ;;
 (mailman)                docker run -d -p 1234:80 -p 25:25 ${DOCKER_REPO_PREFIX}/mailman ;;
-(masscan)                docker run -it --rm --log-driver none --net host --cap-add NET_ADMIN --name masscan ${DOCKER_REPO_PREFIX}/masscan "$@" ;;
+(masscan)                shift; docker run -it --rm --log-driver none --net host --cap-add NET_ADMIN --name masscan ${DOCKER_REPO_PREFIX}/masscan "$@" ;;
 (mop)                    docker run -it --rm -v ~/.moprc:/root/.moprc --name mop r.j3ss.co/mop ;;
 (mpd)                    docker run -d --device /dev/snd -v /etc/localtime:/etc/localtime:ro -v $HOME/.mpd:/var/lib/mpd -p 6600:6600 --name mpd ${DOCKER_REPO_PREFIX}/mpd ;;
 (mutt)                   docker run -it -v /etc/localtime:/etc/localtime:ro -e GMAIL -e GMAIL_NAME -e GMAIL_PASS -e GMAIL_FROM -v $HOME/.gnupg:/home/user/.gnupg --name mutt ${DOCKER_REPO_PREFIX}/mutt ;;
 (ncmpc)                  docker run --rm -it -v /etc/localtime:/etc/localtime:ro --link mpd:mpd ${DOCKER_REPO_PREFIX}/ncmpc ;;
 (neoman)                 docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/bus/usb --device /dev/usb --name neoman ${DOCKER_REPO_PREFIX}/neoman ;;
 (nes)                    docker run --rm -d --device /dev/snd -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/dri ${DOCKER_REPO_PREFIX}/nes /games/zelda.rom ;;
-(netcat)                 docker run --rm -it --net host ${DOCKER_REPO_PREFIX}/netcat "$@" ;;
+(netcat)                 shift; docker run --rm -it --net host ${DOCKER_REPO_PREFIX}/netcat "$@" ;;
 (nginx)                  docker run -d --restart always -v "${HOME}/.nginx:/etc/nginx" --net host --name nginx nginx
 	                 sudo hostess add jess 127.0.0.1 ;;
 (notify-osd)             docker run -d -v /etc/machine-id:/etc/machine-id:ro -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v /var/run/dbus:/var/run/dbus -v /var/run/user/$(id -u):/var/run/user/$(id -u) $(env | cut -d= -f1 | awk '{print "-e", $1}') -e DISPLAY=unix$DISPLAY -e DBUS_SESSION_BUS_ADDRESS="unix:path=/var/run/user/1000/bus" -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro -u $(whoami) -w "$HOME" -v $HOME/.Xauthority:$HOME/.Xauthority --name notify-osd ${DOCKER_REPO_PREFIX}/notify-osd ;;
@@ -206,15 +219,15 @@ case $1 in
 (shorewall)              docker run --rm -it --net host --cap-add NET_ADMIN --privileged ${DOCKER_REPO_PREFIX}/shorewall ;;
 (sickbeard)              docker run -d --restart always -p 8081:8081 -v /etc/localtime:/etc/localtime:ro -v /volumes/sickbeard:/data --link transmission:transmission --name sickbeard ${DOCKER_REPO_PREFIX}/sickbeard ;;
 (skype)                  docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Skype:/home/skype/.Skype -e DISPLAY=unix$DISPLAY --link pulseaudio:pulseaudio -e PULSE_SERVER=pulseaudio --device /dev/video0 --name skype ${DOCKER_REPO_PREFIX}/skype ;;
-(slack)                  docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd --device /dev/dri --device /dev/video0 --group-add audio --group-add video -v "${HOME}/.slack:/root/.config/Slack" --ipc="host" --name slack ${DOCKER_REPO_PREFIX}/slack "$@" ;;
+(slack)                  shift; docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd --device /dev/dri --device /dev/video0 --group-add audio --group-add video -v "${HOME}/.slack:/root/.config/Slack" --ipc="host" --name slack ${DOCKER_REPO_PREFIX}/slack "$@" ;;
 (slapd)                  docker run -v /data/ldap:/var/lib/ldap -e LDAP_DOMAIN=authy.auth.co -e LDAP_ORGANISATION="E Corp" -e LDAP_ROOTPASS=fsociety -d ${DOCKER_REPO_PREFIX}/slapd ;;
 (steam)                  docker run -d -v /etc/localtime:/etc/localtime:ro -v /etc/machine-id:/etc/machine-id:ro -v /var/run/dbus:/var/run/dbus -v /tmp/.X11-unix:/tmp/.X11-unix -v "${HOME}/.steam:/home/steam" -e "DISPLAY=unix${DISPLAY}" --link pulseaudio:pulseaudio -e PULSE_SERVER=pulseaudio --device /dev/dri --name steam ${DOCKER_REPO_PREFIX}/steam ;;
 (spotify)                docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd -v $HOME/.spotify/config:/home/spotify/.config/spotify -v $HOME/.spotify/cache:/home/spotify/spotify --name spotify ${DOCKER_REPO_PREFIX}/spotify ;;
 (spotify-wine)           docker run --rm -it -v /etc/localtime:/etc/localtime:ro --cpuset-cpus 0 -v /tmp/.X11-unix:/tmp/.X11-unix  -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd --name spotify-wine ${DOCKER_REPO_PREFIX}/spotify-wine bash ;;
 (sublime-text)           docker run -d -it -w $HOME/Documents -v $HOME/.config/sublime-text-3:$HOME/.config/sublime-text-3 -v $HOME/Documents:$HOME/Documents -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.local/share/recently-used.xbel:$HOME/.local/share/recently-used.xbel -e DISPLAY=$DISPLAY -e NEWUSER=$USER -e LANG=en_US.UTF-8 sublime-text:3 ;;
-(t)                      docker run -t --rm -v "${HOME}/.trc:/root/.trc" --log-driver none ${DOCKER_REPO_PREFIX}/t "$@" ;;
-(tarsnap)                docker run --rm -it -v "${HOME}/.tarsnaprc:/root/.tarsnaprc" -v "${HOME}/.tarsnap:/root/.tarsnap" -v "$HOME:/root/workdir" ${DOCKER_REPO_PREFIX}/tarsnap "$@" ;;
-(telnet)                 docker run -it --rm --log-driver none ${DOCKER_REPO_PREFIX}/telnet "$@" ;;
+(t)                      shift; docker run -t --rm -v "${HOME}/.trc:/root/.trc" --log-driver none ${DOCKER_REPO_PREFIX}/t "$@" ;;
+(tarsnap)                shift; docker run --rm -it -v "${HOME}/.tarsnaprc:/root/.tarsnaprc" -v "${HOME}/.tarsnap:/root/.tarsnap" -v "$HOME:/root/workdir" ${DOCKER_REPO_PREFIX}/tarsnap "$@" ;;
+(telnet)                 shift; docker run -it --rm --log-driver none ${DOCKER_REPO_PREFIX}/telnet "$@" ;;
 (termboy)                docker run -it --device /dev/snd termboy ;;
 (tetris)                 docker run -it tetris ;;
 (texlive)                docker run -it -w '/mnt' -v `pwd`:/mnt texlive /bin/bash -c './compile.sh' ;;
@@ -226,10 +239,10 @@ case $1 in
                          browser-exec "https://check.torproject.org/" ;;
 (torbrowser)             docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -e GDK_SCALE -e GDK_DPI_SCALE --device /dev/snd --name torbrowser ${DOCKER_REPO_PREFIX}/tor-browser ;;
 (tormessenger)           docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -e GDK_SCALE -e GDK_DPI_SCALE --device /dev/snd --name tormessenger ${DOCKER_REPO_PREFIX}/tor-messenger ;;
-(traceroute)             docker run --rm -it --net host ${DOCKER_REPO_PREFIX}/traceroute "$@" ;;
+(traceroute)             shift; docker run --rm -it --net host ${DOCKER_REPO_PREFIX}/traceroute "$@" ;;
 (transmission)           docker run -d --name transmission -v /home/jessie/Torrents:/transmission/download -p 9091:9091 -p 51413:51413 -p 51413:51413/udp ${DOCKER_REPO_PREFIX}/transmission ;;
 (transmission-ui)        docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v /home/jessie/Torrents:/Torrents -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/transmission-ui ;;
-(travis)                 docker run -it --rm -v "${HOME}/.travis:/root/.travis" -v "$(pwd):/usr/src/repo:ro" --workdir /usr/src/repo --log-driver none ${DOCKER_REPO_PREFIX}/travis "$@" ;;
+(travis)                 shift; docker run -it --rm -v "${HOME}/.travis:/root/.travis" -v "$(pwd):/usr/src/repo:ro" --workdir /usr/src/repo --log-driver none ${DOCKER_REPO_PREFIX}/travis "$@" ;;
 (virtualbox)             docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --privileged --name virtualbox ${DOCKER_REPO_PREFIX}/virtualbox ;;
 (vlc)                    docker run -d -v /etc/localtime:/etc/localtime:ro --device /dev/snd --device /dev/dri -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name vlc ${DOCKER_REPO_PREFIX}/vlc ;;
 (visualstudio)           docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix  -e "DISPLAY=unix${DISPLAY}" --device /dev/dri --name visualstudio ${DOCKER_REPO_PREFIX}/vscode ;;
@@ -238,7 +251,7 @@ case $1 in
 (wee-slack)              docker run -it -v /etc/localtime:/etc/localtime:ro wee-slack ;;
 (wireguard)              docker run --rm -it --name wireguard --privileged -v /lib/modules:/lib/modules:ro -v /usr/src:/usr/src:ro r.j3ss.co/wireguard ;;
 (wireshark)              docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name wireshark ${DOCKER_REPO_PREFIX}/wireshark ;;
-(wrk)                    docker run -it --rm --log-driver none --name wrk ${DOCKER_REPO_PREFIX}/wrk "$@" ;;
+(wrk)                    shift; docker run -it --rm --log-driver none --name wrk ${DOCKER_REPO_PREFIX}/wrk "$@" ;;
 (ykman)                  docker run --rm -it --device /dev/bus/usb --device /dev/us--name ykpersonalize ${DOCKER_REPO_PREFIX}/ykpersonalize ;;
 (ykpersonalize)          docker run --rm -it --device /dev/bus/usb --device /dev/us--name ykpersonalize ${DOCKER_REPO_PREFIX}/ykpersonalize ;;
 (yubico-piv-tool)        docker run --rm -it --device /dev/bus/usb --device /dev/us--name yubico-piv-tool ${DOCKER_REPO_PREFIX}/yubico-piv-tool ;;
