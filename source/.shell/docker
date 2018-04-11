@@ -102,6 +102,14 @@ case $1 in
 	docker build -t $1 .
 	cd -
 	;;
+(cathode)
+	rm -rf /tmp/docker_builder
+	mkdir /tmp/docker_builder
+	cd /tmp/docker_builder
+	wget https://raw.githubusercontent.com/jessfraz/dockerfiles/master/$1/Dockerfile
+	docker build -t $1 .
+	cd -
+	;;
 esac
 
 }
@@ -119,6 +127,7 @@ case $1 in
 (cadvisor)               docker run -d --restart always -v /:/rootfs:ro -v /var/run:/var/run:rw -v /sys:/sys:ro  -v /var/lib/docker/:/var/lib/docker:ro -p 1234:8080 --name cadvisor google/cadvisor
                          hostess add cadvisor "$(docker inspect --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' cadvisor)"
                          browser-exec "http://cadvisor:8080" ;;
+(cathode)                docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name cathode ${DOCKER_REPO_PREFIX}/1995 ;;
 (cheese)                 docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -v "${HOME}/Pictures:/root/Pictures" --device /dev/video0 --device /dev/snd --device /dev/dri --name cheese ${DOCKER_REPO_PREFIX}/cheese ;;
 (bcc_tools)              docker run --rm -it --privileged -v /lib/modules:/lib/modules:ro -v /usr/src:/usr/src:ro -v /etc/localtime:/etc/localtime:ro r.j3ss.co/bcc-tools ;;
 (chrome)
