@@ -137,19 +137,18 @@ case $1 in
                          local map
                          local args=$*
                          if [[ "$1" == "tor" ]]; then
-                         	relies_on torproxy
-                         
-                         	map="MAP * ~NOTFOUND , EXCLUDE torproxy"
-                         	proxy="socks5://torproxy:9050"
-                         	args="https://check.torproject.org/api/ip ${*:2}"
+                             relies_on torproxy
+                             map="MAP * ~NOTFOUND , EXCLUDE torproxy"
+                             proxy="socks5://torproxy:9050"
+                             args="https://check.torproject.org/api/ip ${*:2}"
                          fi
                          docker run -d --memory 3gb -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -v "${HOME}/Downloads:/root/Downloads" -v "${HOME}/Pictures:/root/Pictures" -v "${HOME}/Torrents:/root/Torrents" -v "${HOME}/.chrome:/data" -v /dev/shm:/dev/shm -v /etc/hosts:/etc/hosts --security-opt seccomp:/etc/docker/seccomp/chrome.json --device /dev/snd --device /dev/dri --device /dev/video0 --device /dev/usb --device /dev/bus/usb --group-add audio --group-add video --name chrome ${DOCKER_REPO_PREFIX}/chrome --user-data-dir=/data --proxy-server="$proxy" --host-resolver-rules="$map" "$args" ;;
 (consul)
                          shift
                          state=$(docker inspect --format "{{.State.Running}}" consul 2>/dev/null)
                          if [[ "$state" == "true" ]] && [[ "$*" != "" ]]; then
-                         	docker exec -it consul consul "$@"
-                         	return 0
+                             docker exec -it consul consul "$@"
+                             return 0
                          fi
                          docker run -d --restart always -v "${HOME}/.consul:/etc/consul.d" -v /var/run/docker.sock:/var/run/docker.sock --net host -e GOMAXPROCS=2 --name consul ${DOCKER_REPO_PREFIX}/consul agent -bootstrap-expect 1 -config-dir /etc/consul.d -data-dir /data -encrypt "$(docker run --rm ${DOCKER_REPO_PREFIX}/consul keygen)" -ui-dir /usr/src/consul -server -dc neverland -bind 0.0.0.0
                          hostess add consul "$(docker inspect --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' consul)"
@@ -201,7 +200,7 @@ case $1 in
 (nes)                    docker run --rm -d --device /dev/snd -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/dri ${DOCKER_REPO_PREFIX}/nes /games/zelda.rom ;;
 (netcat)                 shift; docker run --rm -it --net host ${DOCKER_REPO_PREFIX}/netcat "$@" ;;
 (nginx)                  docker run -d --restart always -v "${HOME}/.nginx:/etc/nginx" --net host --name nginx nginx
-	                 sudo hostess add jess 127.0.0.1 ;;
+                         sudo hostess add jess 127.0.0.1 ;;
 (notify-osd)             docker run -d -v /etc/machine-id:/etc/machine-id:ro -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v /var/run/dbus:/var/run/dbus -v /var/run/user/$(id -u):/var/run/user/$(id -u) $(env | cut -d= -f1 | awk '{print "-e", $1}') -e DISPLAY=unix$DISPLAY -e DBUS_SESSION_BUS_ADDRESS="unix:path=/var/run/user/1000/bus" -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro -u $(whoami) -w "$HOME" -v $HOME/.Xauthority:$HOME/.Xauthority --name notify-osd ${DOCKER_REPO_PREFIX}/notify-osd ;;
 (notify_send)            local args=${*:2}
                          docker exec -i notify_osd notify-send "$1" "${args}" ;;
@@ -242,7 +241,9 @@ case $1 in
 (t)                      shift; docker run -t --rm -v "${HOME}/.trc:/root/.trc" --log-driver none ${DOCKER_REPO_PREFIX}/t "$@" ;;
 (tarsnap)                shift; docker run --rm -it -v "${HOME}/.tarsnaprc:/root/.tarsnaprc" -v "${HOME}/.tarsnap:/root/.tarsnap" -v "$HOME:/root/workdir" ${DOCKER_REPO_PREFIX}/tarsnap "$@" ;;
 (telnet)                 shift; docker run -it --rm --log-driver none ${DOCKER_REPO_PREFIX}/telnet "$@" ;;
-(termboy)                docker run -it --device /dev/snd termboy ;;
+(termboy)                shift
+                         local game=$1
+                         docker run --rm -it --device /dev/snd --name termboy ${DOCKER_REPO_PREFIX}/nes "/games/${game}.rom" ;;
 (tetris)                 docker run -it tetris ;;
 (texlive)                docker run -it -w '/mnt' -v `pwd`:/mnt texlive /bin/bash -c './compile.sh' ;;
 (tor-proxy)              docker run -d --restart always -v /etc/localtime:/etc/localtime:ro -p 9050:9050 --name torproxy ${DOCKER_REPO_PREFIX}/tor-proxy ;;
