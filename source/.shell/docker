@@ -1,4 +1,5 @@
 DOCKER_REPO_PREFIX=jess
+alias docker='sudo docker'
 
 docker_clean(){
 
@@ -94,7 +95,12 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(atom|evince)
+(sublime-text-3|metasploit)
+	cd ~/.dotfiles/pkg/Docker/$1
+	docker build -t $1 .
+	cd -
+	;;
+(atom|evince|tetris)
 	rm -rf /tmp/docker_builder
 	mkdir /tmp/docker_builder
 	cd /tmp/docker_builder
@@ -191,6 +197,7 @@ case $1 in
 (lilyterm)               docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/lilyterm ;;
 (lynx)                   docker run --rm -it --name lynx ${DOCKER_REPO_PREFIX}/lynx github.com/jessfraz ;;
 (mailman)                docker run -d -p 1234:80 -p 25:25 ${DOCKER_REPO_PREFIX}/mailman ;;
+(metasploit)             docker run --rm -it metasploit ;;
 (masscan)                shift; docker run -it --rm --log-driver none --net host --cap-add NET_ADMIN --name masscan ${DOCKER_REPO_PREFIX}/masscan "$@" ;;
 (mop)                    docker run -it --rm -v ~/.moprc:/root/.moprc --name mop r.j3ss.co/mop ;;
 (mpd)                    docker run -d --device /dev/snd -v /etc/localtime:/etc/localtime:ro -v $HOME/.mpd:/var/lib/mpd -p 6600:6600 --name mpd ${DOCKER_REPO_PREFIX}/mpd ;;
@@ -237,7 +244,7 @@ case $1 in
 (steam)                  docker run -d -v /etc/localtime:/etc/localtime:ro -v /etc/machine-id:/etc/machine-id:ro -v /var/run/dbus:/var/run/dbus -v /tmp/.X11-unix:/tmp/.X11-unix -v "${HOME}/.steam:/home/steam" -e "DISPLAY=unix${DISPLAY}" --link pulseaudio:pulseaudio -e PULSE_SERVER=pulseaudio --device /dev/dri --name steam ${DOCKER_REPO_PREFIX}/steam ;;
 (spotify)                docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd -v $HOME/.spotify/config:/home/spotify/.config/spotify -v $HOME/.spotify/cache:/home/spotify/spotify --name spotify ${DOCKER_REPO_PREFIX}/spotify ;;
 (spotify-wine)           docker run --rm -it -v /etc/localtime:/etc/localtime:ro --cpuset-cpus 0 -v /tmp/.X11-unix:/tmp/.X11-unix  -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd --name spotify-wine ${DOCKER_REPO_PREFIX}/spotify-wine bash ;;
-(sublime-text)           docker run -d -it -w $HOME/Documents -v $HOME/.config/sublime-text-3:$HOME/.config/sublime-text-3 -v $HOME/Documents:$HOME/Documents -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.local/share/recently-used.xbel:$HOME/.local/share/recently-used.xbel -e DISPLAY=$DISPLAY -e NEWUSER=$USER -e LANG=en_US.UTF-8 sublime-text:3 ;;
+(sublime-text-3)         docker run -d -it -w $HOME/Documents -v $HOME/.config/sublime-text-3:$HOME/.config/sublime-text-3 -v $HOME/Documents:$HOME/Documents -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.local/share/recently-used.xbel:$HOME/.local/share/recently-used.xbel -e DISPLAY=$DISPLAY -e NEWUSER=$USER -e LANG=en_US.UTF-8 sublime-text-3 ;;
 (t)                      shift; docker run -t --rm -v "${HOME}/.trc:/root/.trc" --log-driver none ${DOCKER_REPO_PREFIX}/t "$@" ;;
 (tarsnap)                shift; docker run --rm -it -v "${HOME}/.tarsnaprc:/root/.tarsnaprc" -v "${HOME}/.tarsnap:/root/.tarsnap" -v "$HOME:/root/workdir" ${DOCKER_REPO_PREFIX}/tarsnap "$@" ;;
 (telnet)                 shift; docker run -it --rm --log-driver none ${DOCKER_REPO_PREFIX}/telnet "$@" ;;
@@ -246,6 +253,7 @@ case $1 in
                          docker run --rm -it --device /dev/snd --name termboy ${DOCKER_REPO_PREFIX}/nes "/games/${game}.rom" ;;
 (tetris)                 docker run -it tetris ;;
 (texlive)                docker run -it -w '/mnt' -v `pwd`:/mnt texlive /bin/bash -c './compile.sh' ;;
+(latex)                  shift; docker run --rm -it -v $(pwd):/source schickling/latex $* ;;
 (tor-proxy)              docker run -d --restart always -v /etc/localtime:/etc/localtime:ro -p 9050:9050 --name torproxy ${DOCKER_REPO_PREFIX}/tor-proxy ;;
 (tor-relay)              docker run -d --restart always -v /etc/localtime:/etc/localtime:ro -p 9001:9001 --name tor-relay ${DOCKER_REPO_PREFIX}/tor-relay -f /etc/tor/torrc.bridge ;;
 (tor-router)             docker run -d --restart always -v /etc/localtime:/etc/localtime:ro -p 9040:22340 -p 5353:22353 --name tor-router ${DOCKER_REPO_PREFIX}/tor-router ;;
