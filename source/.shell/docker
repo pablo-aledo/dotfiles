@@ -94,7 +94,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(atom)
+(atom|evince)
 	rm -rf /tmp/docker_builder
 	mkdir /tmp/docker_builder
 	cd /tmp/docker_builder
