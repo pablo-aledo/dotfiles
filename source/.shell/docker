@@ -128,7 +128,7 @@ case $1 in
 (cadvisor)               docker run -d --restart always -v /:/rootfs:ro -v /var/run:/var/run:rw -v /sys:/sys:ro  -v /var/lib/docker/:/var/lib/docker:ro -p 1234:8080 --name cadvisor google/cadvisor
                          hostess add cadvisor "$(docker inspect --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' cadvisor)"
                          browser-exec "http://cadvisor:8080" ;;
-(cathode)                docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name cathode ${DOCKER_REPO_PREFIX}/1995 ;;
+(cathode)                docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name cathode cathode ;;
 (cheese)                 docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -v "${HOME}/Pictures:/root/Pictures" --device /dev/video0 --device /dev/snd --device /dev/dri --name cheese ${DOCKER_REPO_PREFIX}/cheese ;;
 (bcc_tools)              docker run --rm -it --privileged -v /lib/modules:/lib/modules:ro -v /usr/src:/usr/src:ro -v /etc/localtime:/etc/localtime:ro r.j3ss.co/bcc-tools ;;
 (chrome)
@@ -172,7 +172,7 @@ case $1 in
 (http)                   shift; docker run -t --rm -v /var/run/docker.sock:/var/run/docker.sock --log-driver none ${DOCKER_REPO_PREFIX}/httpie "$@" ;;
 (gixy)                   docker run --rm -it -v /etc/nginx:/etc/nginx r.j3ss.co/gixy /etc/nginx/nginx.conf ;;
 (glxgears)               docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/dri ${DOCKER_REPO_PREFIX}/glxgears ;;
-(gparted)                docker run -v /tmp/.X11-unix:/tmp/.X11-unix --device=/dev/sda:/dev/sda -e DISPLAY=unix$DISPLAY gparted ;;
+(gparted)                docker run -v /tmp/.X11-unix:/tmp/.X11-unix --device=/dev/sda:/dev/sda -e DISPLAY=unix$DISPLAY jess/gparted ;;
 (guetzli)                docker run --rm -it -v ${PWD}:/tmp r.j3ss.co/guetzli:latest --verbose /tmp/example.jpg /tmp/example.compressed.jpg ;;
 (gcalcli)                shift; docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v "${HOME}/.gcalcli/home:/home/gcalcli/home" -v "${HOME}/.gcalcli/work/oauth:/home/gcalcli/.gcalcli_oauth" -v "${HOME}/.gcalcli/work/gcalclirc:/home/gcalcli/.gcalclirc" --name gcalcli ${DOCKER_REPO_PREFIX}/gcalcli "$@" ;;
 (htop)                   docker run --rm -it --pid host ${DOCKER_REPO_PREFIX}/htop ;;
