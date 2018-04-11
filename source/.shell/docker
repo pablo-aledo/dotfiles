@@ -118,6 +118,7 @@ docker_run(){
 
 case $1 in
 (ab)                     shift; docker run --rm -it ${DOCKER_REPO_PREFIX}/ab $* ;;
+(afterthedeadline)       shift; docker run --rm -it afterthedeadline $* ;;
 (ansible)                docker run --rm -it -v ${PWD}/hosts:/etc/ansible/hosts -v ${PWD}/ansible.cfg:/etc/ansible/ansible.cfg -v ${HOME}/.ssh:/root/.ssh:ro ansible all -m ping ;;
 (atom)                   docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY atom ;;
 (audacity)               docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -e QT_DEVICE_PIXEL_RATIO --device /dev/snd --group-add audio --name audacity ${DOCKER_REPO_PREFIX}/audacity ;;
@@ -166,6 +167,7 @@ case $1 in
 (gimp)                   docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/Pictures:/root/Pictures --name gimp ${DOCKER_REPO_PREFIX}/gimp ;;
 (gitserver)              docker run --rm -it -p 1234:22 -e DEBUG=true -e "PUBKEY=$(cat ~/.ssh/id_ed25519.pub)" --name gitserver ${DOCKER_REPO_PREFIX}/gitserver ;;
 (gitsome)                docker run --rm -it -v ${HOME}/.gitsomeconfig:/home/anon/.gitsomeconfig -v ${HOME}/.gitsomeconfigurl:/home/anon/.gitsomeconfigurl r.j3ss.co/gitsome ;;
+(gnuplot)                docker run --rm -it r.j3ss.co/gnuplot ;;
 (hollywood)              docker run --rm -it --name hollywood ${DOCKER_REPO_PREFIX}/hollywood ;;
 (htop)                   docker run --rm -it --pid host --net none --name htop ${DOCKER_REPO_PREFIX}/htop ;;
 (http)                   shift; docker run -t --rm -v /var/run/docker.sock:/var/run/docker.sock --log-driver none ${DOCKER_REPO_PREFIX}/httpie "$@" ;;
@@ -177,8 +179,9 @@ case $1 in
 (htop)                   docker run --rm -it --pid host ${DOCKER_REPO_PREFIX}/htop ;;
 (imagemin)               docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v $HOME/Pictures:/root/Pictures --entrypoint bash ${DOCKER_REPO_PREFIX}/imagemin ;;
 (inkscape)               docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v /inkscape/:/workspace -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/inkscape ;;
-(john)                   file=$(realpath "$1")
-                         shift; docker run --rm -it -v "${file}:/root/$(basename "${file}")" ${DOCKER_REPO_PREFIX}/john "$@" ;;
+(john)                   shift
+                         file=$(realpath "$1")
+                         docker run --rm -it -v "${file}:/root/$(basename "${file}")" ${DOCKER_REPO_PREFIX}/john "$@" ;;
 (keepass2)               shift; docker run -it -v /home/$USER/DB.kdbx:/root/DB.kdbx -v /tmp/.X11-unix:/tmp/.X11-unix -v /home/$USER/keepass2-plugins:/usr/lib/keepass2/Plugins -e DISPLAY=$DISPLAY keepass2 "$@" ;;
 (keepassxc)              docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -v /etc/machine-id:/etc/machine-id:ro -v /usr/share/X11/xkb:/usr/share/X11/xkb/:ro -v $HOME/.config/keepassxc:/root/.config/keepassxc -e DISPLAY=unix$DISPLAY keepassxc ;;
 (kernel_builder)         docker run --rm -it -v /usr/src:/usr/src --cpu-shares=512 --name kernel-builder ${DOCKER_REPO_PREFIX}/kernel-builder ;;
@@ -206,7 +209,8 @@ case $1 in
 (plex-home-theater)      docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd --device /dev/dri:/dev/dri ${DOCKER_REPO_PREFIX}/plex-home-theater ;;
 (plexpy)                 docker run  -d --name=PlexPy -v <path to local plexpy data>:/data -p 8181:8181 r.j3ss.co/plexpy ;;
 
-(pandoc)                 local file=${*: -1}
+(pandoc)                 shift
+                         local file=${*: -1}
                          local lfile
                          lfile=$(readlink -m "$(pwd)/${file}")
                          local rfile
@@ -227,7 +231,8 @@ case $1 in
 (scudcloud)              docker run --rm -it -v /etc/machine-id:/etc/machine-id:ro -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd -v /var/run/dbus:/var/run/dbus -v $HOME/.scudcloud:/home/user/.config/scudcloud --name scudcloud ${DOCKER_REPO_PREFIX}/scudcloud ;;
 (shorewall)              docker run --rm -it --net host --cap-add NET_ADMIN --privileged ${DOCKER_REPO_PREFIX}/shorewall ;;
 (sickbeard)              docker run -d --restart always -p 8081:8081 -v /etc/localtime:/etc/localtime:ro -v /volumes/sickbeard:/data --link transmission:transmission --name sickbeard ${DOCKER_REPO_PREFIX}/sickbeard ;;
-(skype)                  docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Skype:/home/skype/.Skype -e DISPLAY=unix$DISPLAY --link pulseaudio:pulseaudio -e PULSE_SERVER=pulseaudio --device /dev/video0 --name skype ${DOCKER_REPO_PREFIX}/skype ;;
+(skype)                  docker_app pulseaudio 
+                         docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Skype:/home/skype/.Skype -e DISPLAY=unix$DISPLAY --link pulseaudio:pulseaudio -e PULSE_SERVER=pulseaudio --device /dev/video0 --name skype ${DOCKER_REPO_PREFIX}/skype ;;
 (slack)                  shift; docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd --device /dev/dri --device /dev/video0 --group-add audio --group-add video -v "${HOME}/.slack:/root/.config/Slack" --ipc="host" --name slack ${DOCKER_REPO_PREFIX}/slack "$@" ;;
 (slapd)                  docker run -v /data/ldap:/var/lib/ldap -e LDAP_DOMAIN=authy.auth.co -e LDAP_ORGANISATION="E Corp" -e LDAP_ROOTPASS=fsociety -d ${DOCKER_REPO_PREFIX}/slapd ;;
 (steam)                  docker run -d -v /etc/localtime:/etc/localtime:ro -v /etc/machine-id:/etc/machine-id:ro -v /var/run/dbus:/var/run/dbus -v /tmp/.X11-unix:/tmp/.X11-unix -v "${HOME}/.steam:/home/steam" -e "DISPLAY=unix${DISPLAY}" --link pulseaudio:pulseaudio -e PULSE_SERVER=pulseaudio --device /dev/dri --name steam ${DOCKER_REPO_PREFIX}/steam ;;
