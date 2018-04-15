@@ -1,8 +1,5 @@
 export DISPLAY=:1
 
-#xdotool mousemove 860 260
-#sleep 1
-#xdotool click 1
 xdotool key Ctrl+f
 xdotool type ' enlace'
 xdotool key Escape

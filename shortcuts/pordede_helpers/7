@@ -3,7 +3,9 @@ export DISPLAY=:1
 xdotool key Ctrl+l; sleep 1
 xdotool key Ctrl+c; sleep 1
 xdotool key Alt+b;  sleep 1
-xdotool key Alt+Return; sleep 5
+xdotool key Alt+Return; sleep 3
+xdotool type 'tmux'; sleep 1
+xdotool key Return; sleep 1
 xdotool type 'download '; sleep 1
 xdotool key Ctrl+Shift+v
 xdotool key Return
