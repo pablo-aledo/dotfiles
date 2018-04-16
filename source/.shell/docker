@@ -173,6 +173,7 @@ case $1 in
 (gimp)                   docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/Pictures:/root/Pictures --name gimp ${DOCKER_REPO_PREFIX}/gimp ;;
 (gitserver)              docker run --rm -it -p 1234:22 -e DEBUG=true -e "PUBKEY=$(cat ~/.ssh/id_ed25519.pub)" --name gitserver ${DOCKER_REPO_PREFIX}/gitserver ;;
 (gitsome)                docker run --rm -it -v ${HOME}/.gitsomeconfig:/home/anon/.gitsomeconfig -v ${HOME}/.gitsomeconfigurl:/home/anon/.gitsomeconfigurl r.j3ss.co/gitsome ;;
+(gvim)                   docker run -ti --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix verybada/gvim ;;
 (gnuplot)                docker run --rm -it r.j3ss.co/gnuplot ;;
 (hollywood)              docker run --rm -it --name hollywood ${DOCKER_REPO_PREFIX}/hollywood ;;
 (htop)                   docker run --rm -it --pid host --net none --name htop ${DOCKER_REPO_PREFIX}/htop ;;
@@ -271,6 +272,7 @@ case $1 in
 (virtualbox)             docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --privileged --name virtualbox ${DOCKER_REPO_PREFIX}/virtualbox ;;
 (vlc)                    docker run -d -v /etc/localtime:/etc/localtime:ro --device /dev/snd --device /dev/dri -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name vlc ${DOCKER_REPO_PREFIX}/vlc ;;
 (visualstudio)           docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix  -e "DISPLAY=unix${DISPLAY}" --device /dev/dri --name visualstudio ${DOCKER_REPO_PREFIX}/vscode ;;
+(vim4cpp)                docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v $(pwd):/home/workspace -w /home/workspace -e DISPLAY=unix$DISPLAY --name vim4cpp boyuw/vim4cpp ;;
 (vscode)                 docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME:/home/user -e DISPLAY=unix$DISPLAY --device /dev/dri --name vscode ${DOCKER_REPO_PREFIX}/vscode ;;
 (watchman)               docker run -d -v /etc/localtime:/etc/localtime:ro -v "${HOME}/Downloads:/root/Downloads" --name watchman ${DOCKER_REPO_PREFIX}/watchman --foreground ;;
 (wee-slack)              docker run -it -v /etc/localtime:/etc/localtime:ro wee-slack ;;
