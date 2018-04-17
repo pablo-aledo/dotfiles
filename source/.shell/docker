@@ -73,6 +73,7 @@ docker_clean(){
 	# Delete all stopped containers and untagged images.
 	alias dockerclean='dockercleanc || true && dockercleani'
 
+	[ -e /usr/bin/kubectl ] && sudo kubectl delete pods,services --all
 
 }
 
