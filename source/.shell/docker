@@ -96,20 +96,12 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(sublime-text-3|metasploit|browser)
+(sublime-text-3|metasploit|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
 	;;
-(atom|evince|tetris)
-	rm -rf /tmp/docker_builder
-	mkdir /tmp/docker_builder
-	cd /tmp/docker_builder
-	wget https://raw.githubusercontent.com/jessfraz/dockerfiles/master/$1/Dockerfile
-	docker build -t $1 .
-	cd -
-	;;
-(cathode)
+(atom|evince|tetris|cathode)
 	rm -rf /tmp/docker_builder
 	mkdir /tmp/docker_builder
 	cd /tmp/docker_builder
