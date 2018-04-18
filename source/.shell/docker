@@ -119,6 +119,7 @@ case $1 in
 (ab)                     shift; docker run --rm -it ${DOCKER_REPO_PREFIX}/ab $* ;;
 (afterthedeadline)       shift; docker run --rm -it afterthedeadline $* ;;
 (ansible)                docker run --rm -it -v ${PWD}/hosts:/etc/ansible/hosts -v ${PWD}/ansible.cfg:/etc/ansible/ansible.cfg -v ${HOME}/.ssh:/root/.ssh:ro ansible all -m ping ;;
+(angr)                   sudo docker run -v $PWD:/workdir -w /workdir -it angr/angr ;;
 (atom)                   docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY atom ;;
 (audacity)               docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -e QT_DEVICE_PIXEL_RATIO --device /dev/snd --group-add audio --name audacity ${DOCKER_REPO_PREFIX}/audacity ;;
 (aws)                    shift; docker run -it --rm -v "${HOME}/.aws:/root/.aws" --log-driver none --name aws ${DOCKER_REPO_PREFIX}/awscli "$@" ;;
