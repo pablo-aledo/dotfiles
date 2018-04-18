@@ -1,3 +1,4 @@
+
 DOCKER_REPO_PREFIX=jess
 alias docker='sudo docker'
 
@@ -96,7 +97,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(sublime-text-3|metasploit|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind)
+(sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -200,7 +201,6 @@ case $1 in
 (lilyterm)               docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/lilyterm ;;
 (lynx)                   docker run --rm -it --name lynx ${DOCKER_REPO_PREFIX}/lynx github.com/jessfraz ;;
 (mailman)                docker run -d -p 1234:80 -p 25:25 ${DOCKER_REPO_PREFIX}/mailman ;;
-(metasploit)             docker run --rm -it metasploit ;;
 (masscan)                shift; docker run -it --rm --log-driver none --net host --cap-add NET_ADMIN --name masscan ${DOCKER_REPO_PREFIX}/masscan "$@" ;;
 (mop)                    docker run -it --rm -v ~/.moprc:/root/.moprc --name mop r.j3ss.co/mop ;;
 (mpd)                    docker run -d --device /dev/snd -v /etc/localtime:/etc/localtime:ro -v $HOME/.mpd:/var/lib/mpd -p 6600:6600 --name mpd ${DOCKER_REPO_PREFIX}/mpd ;;
@@ -285,6 +285,42 @@ case $1 in
 (ykpersonalize)          docker run --rm -it --device /dev/bus/usb --device /dev/us--name ykpersonalize ${DOCKER_REPO_PREFIX}/ykpersonalize ;;
 (yubico-piv-tool)        docker run --rm -it --device /dev/bus/usb --device /dev/us--name yubico-piv-tool ${DOCKER_REPO_PREFIX}/yubico-piv-tool ;;
 (znc)                    docker run --restart always -d --name znc -p 6697:6697 -v /volumes/znc:/home/user/.znc ${DOCKER_REPO_PREFIX}/znc ;;
+(radare)                 mkdir ~/workdir
+                         chmod a+xwr ~/workdir
+                         docker run --rm -it -v ~/workdir:/home/nonroot/workdir remnux/radare2 bash ;;
+(metasploit)             docker run --rm -it -p 443:443 -v ~/.msf4:/root/.msf4 -v /tmp/msf:/tmp/data remnux/metasploit ;;
+(remnux)                 mkdir ~/workdir
+                         chmod a+xwr ~/workdir
+                         docker run --rm -it -v ~/workdir:/home/thug/logs remnux/thug bash ;;
+(cyberchef)              sudo docker run -d -p 8080:80 remnux/cyberchef
+                         google-chrome http://localhost:8080 ;;
+(jsdetox)                sudo docker run --rm -p 3000:3000 remnux/jsdetox
+                         google-chrome http://localhost:3000 ;;
+(pescanner)              mkdir ~/workdir
+                         chmod a+xwr ~/workdir
+                         sudo docker run --rm -it -v ~/workdir:/home/nonroot/workdir remnux/pescanner bash ;;
+(mastiff)                mkdir ~/workdir
+                         chmod a+xwr ~/workdir
+                         sudo docker run --rm -it -v ~/workdir:/home/nonroot/workdir remnux/mastiff ;;
+(crits)                  mkdir ~/workdir
+                         chmod a+xwr ~/workdir
+                         sudo docker run --rm -it -v ~/workdir:/home/nonroot/workdir -p 8443:8443 remnux/crits 
+                         google-chrome http://localhost:8443 ;;
+(viper)                  mkdir ~/workdir
+                         chmod a+xwr ~/workdir
+                         sudo docker run --rm -p 9090:9090 -v ~/workdir:/home/nonroot/workdir remnux/viper ;;
+(maltrieve)              mkdir ~/workdir
+                         chmod a+xwr ~/workdir
+                         sudo docker run --rm -it -v ~/workdir:/archive remnux/maltrieve bash ;;
+(volatility)             mkdir ~/workdir
+                         chmod a+xwr ~/workdir
+                         sudo docker run --rm -it -v ~/workdir:/home/nonroot/memdumps remnux/volatility bash ;;
+(rekall)                 mkdir ~/workdir
+                         chmod a+xwr ~/workdir
+                         sudo docker run --rm -it -p 8000:8000 -v ~/workdir:/home/nonroot/files remnux/rekall ;;
+(v8)                     mkdir ~/workdir
+                         chmod a+xwr ~/workdir
+                         sudo docker run --rm -it -v ~/workdir:/home/nonroot/files remnux/v8 bash ;;
 esac
 
 }
