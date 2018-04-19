@@ -9,14 +9,14 @@ RUN        apk add --no-cache -q \
                #build-essential \
                clang \
                cmake \
-               c-ares-dev \
                cunit-dev \
+               curl \
                dejagnu \
                flex \
                g++ \
                git \
                #g++-multilib \
-	       jansson-dev \
+               jansson-dev \
                jemalloc-dev \
                make \
                libtool           \ 
@@ -30,7 +30,9 @@ RUN        apk add --no-cache -q \
                protobuf-dev \
                protobuf-c-dev \
                subversion \
+               wget \
                # useful libs
+               c-ares-dev \
                #freeglut3-dev \
                #libboost-all-dev \
                boost-dev \
@@ -42,15 +44,15 @@ RUN        apk add --no-cache -q \
                #libgmp3-dev \
                #libgtk1.2-dev \
                #libgtk2.0-dev \
-	       gtk+2.0-dev \
+               gtk+2.0-dev \
                #libjpeg8-dev \
-	       jpeg-dev \
+               jpeg-dev \
                #libmysql++-dev \
-	       libev-dev \
-	       libevent-dev \
-	       mariadb-dev \
+               libev-dev \
+               libevent-dev \
+               mariadb-dev \
                #libncurses5-dev \
-	       ncurses-dev \
+               ncurses-dev \
                #libreadline5-dev \
                readline-dev \
                #libsdl1.2-dev \
@@ -66,13 +68,13 @@ RUN        apk add --no-cache -q \
                libressl-dev \
                libxi-dev \
                libxml2-dev \
-	       libxmu-dev \
+               libxmu-dev \
                #libxmuu-dev \
                python-dev \
                #vflib3-dev \
                #xorg-dev \
                #zlib1g-dev \
-	       zlib-dev \
+               zlib-dev \
                # specific libs
                # ===== aircrack
                libpcap-dev \
@@ -80,7 +82,7 @@ RUN        apk add --no-cache -q \
                #libavcodec52 \
                #libavcodec-extra-52 \
                #libavcodec-extra-53 \
-	       #libmp4v2-0 \
+               #libmp4v2-0 \
                #libxvidcore-dev \
                xvidcore-dev \
                # ===== vision
@@ -90,10 +92,10 @@ RUN        apk add --no-cache -q \
                #libcairo2-dev \
                cairo-dev \
                #libqt4-dev \
-	       poppler-qt4-dev \
+               poppler-qt4-dev \
                #libvtk5-qt4-dev \
                #libwxgtk2.8-dev \
-	       wxgtk2.8-dev \
+               wxgtk2.8-dev \
                # ===== Scientific comp
                #libgsl0-dev \
                gsl-dev \
@@ -103,7 +105,7 @@ RUN        apk add --no-cache -q \
                #libglm-dev \
                glm-dev \
                #libosmesa6-dev \
-	       mesa-dev
+               mesa-dev
                #libvtk5-dev \
                #libvtkedge-dev
 
