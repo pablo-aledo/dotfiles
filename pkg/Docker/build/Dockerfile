@@ -3,20 +3,28 @@ FROM       alpine
 RUN        apk add --no-cache -q \
                # tools
                autoconf \
+               automake \
                bison \
+               binutils \
                #build-essential \
                clang \
                cmake \
+               c-ares-dev \
+               cunit-dev \
                dejagnu \
                flex \
                g++ \
                git \
                #g++-multilib \
+	       jansson-dev \
+               jemalloc-dev \
                make \
+               libtool           \ 
                llvm \
                m4 \
                #pkg-config \
                pkgconf \
+               python \
                #protobuf-compiler \
                protobuf \
                protobuf-dev \
@@ -38,6 +46,8 @@ RUN        apk add --no-cache -q \
                #libjpeg8-dev \
 	       jpeg-dev \
                #libmysql++-dev \
+	       libev-dev \
+	       libevent-dev \
 	       mariadb-dev \
                #libncurses5-dev \
 	       ncurses-dev \
