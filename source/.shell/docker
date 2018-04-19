@@ -223,6 +223,7 @@ case $1 in
 (notify_send)            local args=${*:2}
                          docker exec -i notify_osd notify-send "$1" "${args}" ;;
 (pivman)                 docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/bus/usb --device /dev/usb --name pivman ${DOCKER_REPO_PREFIX}/pivman ;;
+(povray)                 docker run -i -t --rm -v $PWD:/src --name povray bradleybossard/docker-povray ;;
 (plex-home-theater)      docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd --device /dev/dri:/dev/dri ${DOCKER_REPO_PREFIX}/plex-home-theater ;;
 (plexpy)                 docker run -d --name=PlexPy -v <path to local plexpy data>:/data -p 8181:8181 r.j3ss.co/plexpy ;;
 
