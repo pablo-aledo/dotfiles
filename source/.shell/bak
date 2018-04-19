@@ -1,3 +1,6 @@
+[ -e ~/backup ] && BAK_FOLDER=~/backup
+[ -e /media/DATA/backup ] && BAK_FOLDER=/media/DATA/backup
+
 sbak(){
 	name="$1"
 	[ -e "$name" ] || shift
@@ -6,6 +9,7 @@ sbak(){
 
 bak(){
 	name="$1"
+	[ $name = "default" ] && name=$BAK_FOLDER/$(basename $2)
 	[ -e "$name" ] || shift
 	tar -cvzf "$name".backup.`date +%y%m%d-%H%M%S`.tgz $*
 }
