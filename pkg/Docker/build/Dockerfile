@@ -15,6 +15,8 @@ RUN        apk add --no-cache -q \
                make \
                llvm \
                m4 \
+               #pkg-config \
+               pkgconf \
                #protobuf-compiler \
                protobuf \
                protobuf-dev \
