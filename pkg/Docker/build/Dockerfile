@@ -95,34 +95,7 @@ RUN        apk add --no-cache -q \
                #libvtk5-dev \
                #libvtkedge-dev
 
-ENTRYPOINT     if [ -e runme.sh ]; \
-               then \
-                  chmod +x runme.sh; \
-                  ./runme.sh; \
-	       else if [ -e CMakeLists.txt ]; \
-	       then \
-		   mkdir build; \
-		   cd build; \
-		   cmake ..; \
-		   make; \
-		   make install; \
-	       else if [ -e configure ]; \
-	       then \
-		   ./configure; \
-		   make; \
-		   make install; \
-	       else if [ -e Makefile ]; \
-	       then \
-		   make; \
-	       else if [ -e Makefile.am ]; \
-	       then \
-		   autoreconf -i; \
-		   automake; \
-		   autoconf; \
-		   ./configure; \
-		   make; \
-		   make install; \
-               else \
-                   echo "Unknown structure"; \
-               fi
+COPY       build.sh /usr/local/bin
+RUN        chmod +x /usr/local/bin/build.sh
 
+ENTRYPOINT     build.sh
