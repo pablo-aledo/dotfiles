@@ -6,6 +6,7 @@
 #	-e DISPLAY=$DISPLAY \
 #	evince
 #
+# root@container# dbus-uuidgen > /etc/machine-id
 
 FROM alpine:latest
 LABEL maintainer "Christian Koep <christiankoep@gmail.com>"
@@ -13,6 +14,6 @@ LABEL maintainer "Christian Koep <christiankoep@gmail.com>"
 RUN apk --no-cache add \
 	--repository https://dl-3.alpinelinux.org/alpine/edge/community \
 	evince \
+	mesa-gl \
 	ttf-opensans
 
-CMD ["/usr/bin/evince"]
