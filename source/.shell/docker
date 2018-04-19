@@ -97,7 +97,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -125,6 +125,7 @@ docker_run(){
 case $1 in
 (ab)                     shift; docker run --rm -it ${DOCKER_REPO_PREFIX}/ab $* ;;
 (afterthedeadline)       shift; docker run --rm -it afterthedeadline $* ;;
+(ammonite)               docker run --rm -it -v $PWD:/workdir -w /workdir ammonite ;;
 (ansible)                docker run --rm -it -v ${PWD}/hosts:/etc/ansible/hosts -v ${PWD}/ansible.cfg:/etc/ansible/ansible.cfg -v ${HOME}/.ssh:/root/.ssh:ro ansible all -m ping ;;
 (angr)                   sudo docker run -v $PWD:/workdir -w /workdir -it angr/angr ;;
 (atom)                   docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY atom ;;
