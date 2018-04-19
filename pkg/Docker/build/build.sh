@@ -8,12 +8,12 @@ then
     cd build
     cmake ..
     make
-    make install
+    #make install
 elif [ -e configure ]
 then
     ./configure
     make
-    make install
+    #make install
 elif [ -e Makefile ]
 then
     make
@@ -24,7 +24,7 @@ then
     autoconf
     ./configure
     make
-    make install
+    #make install
 else
      echo "Unknown structure"
 fi
