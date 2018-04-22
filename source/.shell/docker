@@ -100,7 +100,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -291,7 +291,7 @@ case $1 in
 (transmission-ui)        docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v /home/jessie/Torrents:/Torrents -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/transmission-ui ;;
 (travis)                 shift; docker run -it --rm -v "${HOME}/.travis:/root/.travis" -v "$(pwd):/usr/src/repo:ro" --workdir /usr/src/repo --log-driver none ${DOCKER_REPO_PREFIX}/travis "$@" ;;
 (ubuntu)                 docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu ;;
-(ubuntu-pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu-pga ;;
+(ubuntu_pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu_pga ;;
 (alpine)                 docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY alpine ;;
 (virtualbox)             docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --privileged --name virtualbox ${DOCKER_REPO_PREFIX}/virtualbox ;;
 (valgrind)               shift; docker run -v $PWD:/workdir -w /workdir -it valgrind $* ;;
