@@ -312,6 +312,7 @@ case $1 in
 (vim4cpp)                docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v $(pwd):/home/workspace -w /home/workspace -e DISPLAY=unix$DISPLAY --name vim4cpp boyuw/vim4cpp ;;
 (vscode)                 docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME:/home/user -e DISPLAY=unix$DISPLAY --device /dev/dri --name vscode ${DOCKER_REPO_PREFIX}/vscode ;;
 (watchman)               docker run -d -v /etc/localtime:/etc/localtime:ro -v "${HOME}/Downloads:/root/Downloads" --name watchman ${DOCKER_REPO_PREFIX}/watchman --foreground ;;
+(wps)                    shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY wps $* ;;
 (wee-slack)              docker run -it -v /etc/localtime:/etc/localtime:ro wee-slack ;;
 (wireguard)              docker run --rm -it --name wireguard --privileged -v /lib/modules:/lib/modules:ro -v /usr/src:/usr/src:ro r.j3ss.co/wireguard ;;
 (wireshark)              docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v $PWD:/workdir -w /workdir -e DISPLAY=unix$DISPLAY --name wireshark ${DOCKER_REPO_PREFIX}/wireshark ;;
