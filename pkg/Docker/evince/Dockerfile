@@ -15,5 +15,6 @@ RUN apk --no-cache add \
 	--repository https://dl-3.alpinelinux.org/alpine/edge/community \
 	evince \
 	mesa-gl \
+	dbus \
 	ttf-opensans
 
