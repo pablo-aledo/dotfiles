@@ -243,6 +243,7 @@ case $1 in
 (owncloud)               docker run -d -p 8000:80 -v $PWD/owncloud:/var/www/html owncloud:8.1 ;;
                          # --link my-mysql:mysql, and then use mysql as the database host on setup.
                          # docker exec -u www-data some-owncloud php occ status
+(nextcloud)              docker run -d -p 8080:80 nextcloud ;;
 (pivman)                 docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/bus/usb --device /dev/usb --name pivman ${DOCKER_REPO_PREFIX}/pivman ;;
 (povray)                 docker run -i -t --rm -v $PWD:/src --name povray bradleybossard/docker-povray ;;
 (plex-home-theater)      docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd --device /dev/dri:/dev/dri ${DOCKER_REPO_PREFIX}/plex-home-theater ;;
