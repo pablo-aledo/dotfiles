@@ -5,8 +5,6 @@
 #	-v /tmp/.X11-unix:/tmp/.X11-unix \
 #	-e DISPLAY=$DISPLAY \
 #	evince
-#
-# root@container# dbus-uuidgen > /etc/machine-id
 
 FROM alpine:latest
 LABEL maintainer "Christian Koep <christiankoep@gmail.com>"

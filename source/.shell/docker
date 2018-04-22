@@ -177,7 +177,7 @@ case $1 in
 (doctor)                 docker run -it ${DOCKER_REPO_PREFIX}/doctor ;;
 (doxygen)                docker run -v $PWD:/workdir -w /workdir -it doxygen ;;
 (dunnet)                 docker run -it dunnet ;;
-(evince)                 docker run -it -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY evince $* ;;
+(evince)                 docker run -it -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -v /etc/machine-id:/etc/machine-id -e DISPLAY=$DISPLAY evince $* ;;
 (fontforge)              docker run --rm -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $state/fontforge:/home/fontforge --name fontforge fghj/fontforge ;;
 (firefox)                shift; docker run -d --memory 2gb --net host --cpuset-cpus 0 -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v "${HOME}/.firefox/cache:/root/.cache/mozilla" -v "${HOME}/.firefox/mozilla:/root/.mozilla" -v "${HOME}/Downloads:/root/Downloads" -v "${HOME}/Pictures:/root/Pictures" -v "${HOME}/Torrents:/root/Torrents" -e "DISPLAY=unix${DISPLAY}" -e GDK_SCALE -e GDK_DPI_SCALE --device /dev/snd --device /dev/dri --name firefox ${DOCKER_REPO_PREFIX}/firefox "$@" ;;
 (gimp)                   docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/Pictures:/root/Pictures --name gimp ${DOCKER_REPO_PREFIX}/gimp ;;
