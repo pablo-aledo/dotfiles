@@ -177,7 +177,8 @@ case $1 in
 (doctor)                 docker run -it ${DOCKER_REPO_PREFIX}/doctor ;;
 (doxygen)                docker run -v $PWD:/workdir -w /workdir -it doxygen ;;
 (dunnet)                 docker run -it dunnet ;;
-(emby)                   docker run -d \
+(emby)                   [ -e ~/Dotfiles/emby ] && cp -r ~/Dotfiles/emby .
+                         docker run -d \
                              --volume $PWD/emby:/config \
                              --volume $PWD:/mnt/share1 \
                              --publish 8096:8096 \
