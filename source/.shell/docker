@@ -275,6 +275,7 @@ case $1 in
 (sickbeard)              docker run -d --restart always -p 8081:8081 -v /etc/localtime:/etc/localtime:ro -v /volumes/sickbeard:/data --link transmission:transmission --name sickbeard ${DOCKER_REPO_PREFIX}/sickbeard ;;
 (skype)                  docker_app pulseaudio 
                          docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Skype:/home/skype/.Skype -e DISPLAY=unix$DISPLAY --link pulseaudio:pulseaudio -e PULSE_SERVER=pulseaudio --device /dev/video0 --name skype ${DOCKER_REPO_PREFIX}/skype ;;
+(simplehttpserver)       docker run -v $PWD:/var/www:ro -p 8080:8080 trinitronx/python-simplehttpserver ;;
 (simplehttp2server)      docker run --rm --name simplehttp2server -p 5000:5000 -v $PWD:/workdir -w /workdir simplehttp2server ;;
 (slack)                  shift; docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd --device /dev/dri --device /dev/video0 --group-add audio --group-add video -v "${HOME}/.slack:/root/.config/Slack" --ipc="host" --name slack ${DOCKER_REPO_PREFIX}/slack "$@" ;;
 (slapd)                  docker run -v /data/ldap:/var/lib/ldap -e LDAP_DOMAIN=authy.auth.co -e LDAP_ORGANISATION="E Corp" -e LDAP_ROOTPASS=fsociety -d ${DOCKER_REPO_PREFIX}/slapd ;;
