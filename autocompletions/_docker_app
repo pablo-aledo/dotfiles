@@ -1,13 +1,12 @@
 #compdef docker_app
 
 local -a images
-images=( $( which docker_run | egrep ' *(\([^) ]*\)).*' | grep -v pwd | grep -v '\-m' | sed 's/[^(]*(\([^)]*\)).*/\1/g' ) )
+images=( $( which docker_run | egrep ' *(\([^) ]*\)).*' | grep -v pwd | grep -v '\-m' | sed 's/[^(]*(\([^)]*\)).*/\1/g' | egrep '[a-z_-]*' ) )
 
 cur=${words[CURRENT]}
 prev=${words[CURRENT-1]}
 cmd=${words[2]}
 
-#echo cur:$cur prev:$prev cmd:$cmd >> ~/hola
-[ "$prev" = "docker_app" ] && _describe 'command' $images
+[ "$prev" = "docker_app" ] && _describe 'command' images
 [ "$prev" = "docker_app" ] || _files
 
