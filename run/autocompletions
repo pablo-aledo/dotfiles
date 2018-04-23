@@ -1,0 +1,4 @@
+[ -e ~/.paths ] && cat ~/.paths | grep compinit >/dev/null && return
+echo 'fpath=(~/.dotfiles/autocompletions/ $fpath)' >> ~/.paths
+echo 'autoload -U compinit'                        >> ~/.paths
+echo 'compinit'                                    >> ~/.paths
