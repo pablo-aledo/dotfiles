@@ -178,6 +178,7 @@ case $1 in
 (doxygen)                docker run -v $PWD:/workdir -w /workdir -it doxygen ;;
 (dunnet)                 docker run -it dunnet ;;
 (emby)                   [ -e ~/Dotfiles/emby ] && cp -r ~/Dotfiles/emby .
+                         [ -e ~/emby ] && cp -r ~/emby .
                          docker run -d \
                              --volume $PWD/emby:/config \
                              --volume $PWD:/mnt/share1 \
