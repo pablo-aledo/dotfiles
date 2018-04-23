@@ -1,0 +1,30 @@
+# cat bash_completion_forest | sed "s@%forest_main_file%@"${PWD}"/../front-end/forest.cpp@" | sudo tee /etc/bash_completion.d/forest
+# echo 'autoload -U +X compinit && compinit' >> ~/.zshrc
+# echo 'autoload -U +X bashcompinit && bashcompinit' >> ~/.zshrc
+# echo 'source /etc/bash_completion.d/forest' >> ~/.zshrc
+
+_forest() 
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    forest_main_file=%forest_main_file%
+
+    opts=`cat $forest_main_file | grep 'int main' -A 200 | grep 'cmd_option_bool' | cut -d'"' -f2 | sed 's/^/-/g'`
+    solvrs=`cat $forest_main_file | grep solver | grep options | cut -d'"' -f4`
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+
+    if [[ ${prev} == -solver ]] ; then
+        COMPREPLY=( $(compgen -W "${solvrs}" -- ${cur}) )
+        return 0
+    fi
+
+}
+
+complete -F _forest forest
