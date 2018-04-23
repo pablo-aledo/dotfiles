@@ -1,6 +1,6 @@
 #compdef docker_app
 local -a subcmds
 subcmds=( $( which docker_run | egrep ' *(\([^) ]*\)).*' | grep -v pwd | grep -v '\-m' | sed 's/[^(]*(\([^)]*\)).*/\1/g' ) )
-_describe 'command' subcmds
+_alternative "image:image:( $subcmds )" "files:filename:_files"
 
 
