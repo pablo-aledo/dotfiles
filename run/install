@@ -1,4 +1,4 @@
-source ../source/.shell/pkg 
+# source ../source/.shell/pkg 
 # ping -c 1 8.8.8.8 && pkg update
 
 # pkg install zsh
