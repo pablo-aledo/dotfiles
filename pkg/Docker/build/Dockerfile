@@ -51,7 +51,7 @@ RUN        apk add --no-cache -q \
                #libmysql++-dev \
                libev-dev \
                libevent-dev \
-               mariadb-dev \
+               #mariadb-dev \
                #libncurses5-dev \
                ncurses-dev \
                #libreadline5-dev \
@@ -94,7 +94,7 @@ RUN        apk add --no-cache -q \
                #libcairo2-dev \
                cairo-dev \
                #libqt4-dev \
-               poppler-qt4-dev \
+               #poppler-qt4-dev \
                #libvtk5-qt4-dev \
                #libwxgtk2.8-dev \
                wxgtk2.8-dev \
