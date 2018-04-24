@@ -133,7 +133,7 @@ RUN            git clone -b v1.8.x -q  https://github.com/grpc/grpc /usr/src/grp
                mv /usr/local/lib/libgrpc++_reflection.so.5 /usr/local/lib/libgrpc++_reflection.so.1          && \
                rm -rf /usr/src/grpc
 
-RUN            cd /usr/src/
+RUN            cd /usr/src/                                                                                  && \
                curl -L https://github.com/google/protobuf/releases/download/v3.5.1/protobuf-cpp-3.5.1.tar.gz    \
                | tar -xz                                                                                     && \
                cd /usr/src/protobuf-3.5.1                                                                    && \
