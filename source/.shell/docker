@@ -372,6 +372,7 @@ case $1 in
 (rust)                   docker run --rm -it -v $(pwd):/source schickling/rust ;;
 (swagger-ui)             docker run -d -p 8080:80 -e API_URL=http://localhost:4000/swagger schickling/swagger-ui ;;
 (openvpn)                shift; docker-compose run vpn $* ;;
+(youtube-dl)             shift; docker run -it --rm -v "$(pwd):/src" -w /src jbergknoff/youtube-dl -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]' $* ;;
 esac
 
 }
