@@ -112,10 +112,11 @@ RUN        apk add --no-cache -q \
 
 RUN            mkdir /usr/src
 
-RUN            curl -L https://github.com/google/fruit/archive/v3.1.1.tar.gz | tar -xz && \
-               cd fruit-3.1.1                                                          && \
+RUN            cd /usr/src                                                             && \
+               curl -L https://github.com/google/fruit/archive/v3.1.1.tar.gz | tar -xz && \
+               cd /usr/src/fruit-3.1.1                                                 && \
                cmake -DCMAKE_BUILD_TYPE=Release -DFRUIT_USES_BOOST=False . && make -j  && \
-               cd .. && rm -rf fruit-3.1.1
+               rm -rf /usr/src/fruit-3.1.1
 
 RUN            git clone -q https://github.com/google/googletest.git /usr/src/googletest                     && \
                cd /usr/src/googletest                                                                        && \
@@ -124,14 +125,12 @@ RUN            git clone -q https://github.com/google/googletest.git /usr/src/go
                make install                                                                                  && \
                rm -rf /usr/src/googletest
 
-RUN            git clone -b v1.8.x -q  https://github.com/grpc/grpc /usr/src/grpc                            && \
-               cd /usr/src/grpc                                                                              && \
-               git submodule update --init                                                                   && \
-               make                                                                                          && \
-               make install                                                                                  && \
-               mv /usr/local/lib/libgrpc++.so.5 /usr/local/lib/libgrpc++.so.1                                && \
-               mv /usr/local/lib/libgrpc++_reflection.so.5 /usr/local/lib/libgrpc++_reflection.so.1          && \
-               rm -rf /usr/src/grpc
+RUN            git clone  https://github.com/grpc/grpc /usr/src/grpc                                         && \
+	       cd /usr/src/grpc                                                                              && \
+	       git submodule update --init                                                                   && \
+	       make                                                                                          && \
+	       make install                                                                                  && \
+	       rm -rf /usr/src/grpc
 
 RUN            cd /usr/src/                                                                                  && \
                curl -L https://github.com/google/protobuf/releases/download/v3.5.1/protobuf-cpp-3.5.1.tar.gz    \
