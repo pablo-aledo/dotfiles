@@ -144,6 +144,14 @@ RUN            cd /usr/src/                                                     
                make install                                                                                  && \
                rm -rf /usr/src/protobuf-3.5.1
 
+RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear    && \
+               cd /usr/src/bear                                                && \
+               mkd build                                                       && \
+               cmake ..                                                        && \
+               make all                                                        && \
+               make install
+
+
 COPY       build.sh /usr/local/bin
 RUN        chmod +x /usr/local/bin/build.sh
 
