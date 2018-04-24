@@ -117,6 +117,7 @@ RUN            cd /usr/src                                                      
                curl -L https://github.com/google/fruit/archive/v3.1.1.tar.gz | tar -xz && \
                cd /usr/src/fruit-3.1.1                                                 && \
                cmake -DCMAKE_BUILD_TYPE=Release -DFRUIT_USES_BOOST=False . && make -j  && \
+               make install                                                            && \
                rm -rf /usr/src/fruit-3.1.1
 
 RUN            git clone -q https://github.com/google/googletest.git /usr/src/googletest                     && \
