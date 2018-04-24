@@ -100,7 +100,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|etherpad|chrome_no_sandbox|wps)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|etherpad|chrome_no_sandbox|wps|clion)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -170,6 +170,7 @@ case $1 in
                          google-chrome "http://consul:8500" ;;
 (dcos)                   shift; docker run -it --rm -v "${HOME}/.dcos:/root/.dcos" -v "$(pwd):/root/apps" -w /root/apps ${DOCKER_REPO_PREFIX}/dcos-cli "$@" ;;
 (chromium)               docker run -it --net host --cpuset-cpus 0 --memory 512mb -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/Downloads:/home/chromium/Downloads -v $HOME/.config/chromium/:/data --security-opt seccomp=$HOME/chrome.json --device /dev/snd -v /dev/shm:/dev/shm --name chromium ${DOCKER_REPO_PREFIX}/chromium ;;
+(clion)                  docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $PWD:/workdir -w /workdir --device /dev/snd clion ;;
 (couchpotato)            docker run -d --restart always -p 5050:5050 -v /etc/localtime:/etc/localtime:ro -v /volumes/couchpotato:/data --link transmission:transmission --name couchpotato ${DOCKER_REPO_PREFIX}/couchpotato ;;
 (cppcheck)               shift; docker run -v $PWD:/workdir -w /workdir -it cppcheck $* ;;
 (crio)                   docker run --rm -it --privileged --net host -v /var/lib/containers:/var/lib/containers -v /var/run:/var/run -v /dev:/dev -v /etc/cni:/etc/cni:ro -v /opt/cni:/opt/cni:ro r.j3ss.co/crio ;;
