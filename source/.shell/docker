@@ -312,7 +312,8 @@ case $1 in
 (ubuntu_pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu_pga ;;
 (alpine_pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY alpine_pga ;;
 (alpine)                 docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY alpine ;;
-(virtualbox)             docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --privileged --name virtualbox ${DOCKER_REPO_PREFIX}/virtualbox ;;
+(virtualbox)             sudo modprobe vboxdrv
+                         docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --privileged --name virtualbox ${DOCKER_REPO_PREFIX}/virtualbox ;;
 (valgrind)               shift; docker run -v $PWD:/workdir -w /workdir -it valgrind $* ;;
 (vlc)                    docker run -d -v /etc/localtime:/etc/localtime:ro --device /dev/snd --device /dev/dri -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name vlc ${DOCKER_REPO_PREFIX}/vlc ;;
 (visualstudio)           docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" --device /dev/dri --name visualstudio ${DOCKER_REPO_PREFIX}/vscode ;;
