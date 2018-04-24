@@ -66,7 +66,8 @@ RUN        apk add --no-cache -q \
                sdl2_image-dev \
                sdl2_mixer-dev \
                #libssl-dev \
-               libressl-dev \
+               #libressl-dev \
+               openssl-dev \
                libxi-dev \
                libxml2-dev \
                libxmu-dev \
@@ -126,11 +127,11 @@ RUN            git clone -q https://github.com/google/googletest.git /usr/src/go
                rm -rf /usr/src/googletest
 
 RUN            git clone  https://github.com/grpc/grpc /usr/src/grpc                                         && \
-	       cd /usr/src/grpc                                                                              && \
-	       git submodule update --init                                                                   && \
-	       make                                                                                          && \
-	       make install                                                                                  && \
-	       rm -rf /usr/src/grpc
+               cd /usr/src/grpc                                                                              && \
+               git submodule update --init                                                                   && \
+               make                                                                                          && \
+               make install                                                                                  && \
+               rm -rf /usr/src/grpc
 
 RUN            cd /usr/src/                                                                                  && \
                curl -L https://github.com/google/protobuf/releases/download/v3.5.1/protobuf-cpp-3.5.1.tar.gz    \
