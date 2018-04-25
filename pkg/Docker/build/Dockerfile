@@ -27,9 +27,9 @@ RUN        apk add --no-cache -q \
                pkgconf \
                python \
                #protobuf-compiler \
-               protobuf \
-               protobuf-dev \
-               protobuf-c-dev \
+               #protobuf \
+               #protobuf-dev \
+               #protobuf-c-dev \
                subversion \
                wget \
                # useful libs
@@ -127,22 +127,25 @@ RUN            git clone -q https://github.com/google/googletest.git /usr/src/go
                make install                                                                                  && \
                rm -rf /usr/src/googletest
 
-RUN            git clone  https://github.com/grpc/grpc /usr/src/grpc                                         && \
+RUN            git clone -b v1.8.x -q https://github.com/grpc/grpc /usr/src/grpc                             && \
                cd /usr/src/grpc                                                                              && \
                git submodule update --init                                                                   && \
                make                                                                                          && \
                make install                                                                                  && \
+               mv /usr/local/lib/libgrpc++.so.5 /usr/local/lib/libgrpc++.so.1                                && \
+               mv /usr/local/lib/libgrpc++_reflection.so.5 /usr/local/lib/libgrpc++_reflection.so.1          && \
                rm -rf /usr/src/grpc
 
-RUN            cd /usr/src/                                                                                  && \
-               curl -L https://github.com/google/protobuf/releases/download/v3.5.1/protobuf-cpp-3.5.1.tar.gz    \
-               | tar -xz                                                                                     && \
-               cd /usr/src/protobuf-3.5.1                                                                    && \
+#RUN           cd /usr/src/                                                                                  && \
+#              curl -L https://github.com/google/protobuf/releases/download/v3.5.1/protobuf-cpp-3.5.1.tar.gz    \
+#              | tar -xz                                                                                     && \
+RUN            git clone https://github.com/google/protobuf.git /usr/src/protobuf                            && \
+               cd /usr/src/protobuf                                                                          && \
                ./autogen.sh                                                                                  && \
                ./configure --disable-shared                                                                  && \
                make                                                                                          && \
                make install                                                                                  && \
-               rm -rf /usr/src/protobuf-3.5.1
+               rm -rf /usr/src/protobuf
 
 RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear    && \
                cd /usr/src/bear                                                && \
