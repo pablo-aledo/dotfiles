@@ -1,3 +1,5 @@
+#!/bin/bash
+
 if [ $# -eq 0 ]
 then
 	if [ -e runme.sh ]
@@ -31,5 +33,5 @@ then
 	     echo "Unknown structure"
 	fi
 else
-	sh -c "$*"
+	$*
 fi

@@ -156,4 +156,4 @@ RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear    &
 COPY       build.sh /usr/local/bin
 RUN        chmod +x /usr/local/bin/build.sh
 
-ENTRYPOINT     build.sh
+ENTRYPOINT     ["build.sh"]
