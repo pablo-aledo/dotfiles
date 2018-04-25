@@ -295,6 +295,7 @@ case $1 in
 (spotify)                docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd -v $HOME/.spotify/config:/home/spotify/.config/spotify -v $HOME/.spotify/cache:/home/spotify/spotify --name spotify ${DOCKER_REPO_PREFIX}/spotify ;;
 (spotify-wine)           docker run --rm -it -v /etc/localtime:/etc/localtime:ro --cpuset-cpus 0 -v /tmp/.X11-unix:/tmp/.X11-unix  -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd --name spotify-wine ${DOCKER_REPO_PREFIX}/spotify-wine bash ;;
 (sublime-text-3)         docker run -d -it -w $HOME/Documents -v $HOME/.config/sublime-text-3:$HOME/.config/sublime-text-3 -v $HOME/Documents:$HOME/Documents -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.local/share/recently-used.xbel:$HOME/.local/share/recently-used.xbel -e DISPLAY=$DISPLAY -e NEWUSER=$USER -e LANG=en_US.UTF-8 sublime-text-3 ;;
+(subsonic)               docker run -d -it -p 4040:4040 -v $PWD:/workdir -w /workdir emauve/subsonic:6.0 ;;
 (t)                      shift; docker run -t --rm -v "${HOME}/.trc:/root/.trc" --log-driver none ${DOCKER_REPO_PREFIX}/t "$@" ;;
 (tarsnap)                shift; docker run --rm -it -v "${HOME}/.tarsnaprc:/root/.tarsnaprc" -v "${HOME}/.tarsnap:/root/.tarsnap" -v "$HOME:/root/workdir" ${DOCKER_REPO_PREFIX}/tarsnap "$@" ;;
 (telnet)                 shift; docker run -it --rm --log-driver none ${DOCKER_REPO_PREFIX}/telnet "$@" ;;
