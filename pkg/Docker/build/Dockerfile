@@ -146,10 +146,11 @@ RUN            cd /usr/src/                                                     
 
 RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear    && \
                cd /usr/src/bear                                                && \
-               mkd build                                                       && \
+               mkdir build && cd build                                         && \
                cmake ..                                                        && \
                make all                                                        && \
-               make install
+               make install                                                    && \
+               rm -rf /usr/src/bear
 
 
 COPY       build.sh /usr/local/bin
