@@ -261,7 +261,7 @@ case $1 in
                          mkdir -p data/{plex,Movies,Music,Photos}
                          sed -i -e "s/%u%/$(id -u)/g" -e "s/%g%/$(id -g)/g" docker-compose.yml
                          docker-compose up -d
-                         google-chrome http://localhost:32400/web
+                         google-chrome http://localhost:32400/web ;;
 (pandoc)                 shift
                          local file=${*: -1}
                          local lfile
