@@ -195,6 +195,7 @@ case $1 in
 (evince)                 docker run -it -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -v /etc/machine-id:/etc/machine-id -e DISPLAY=$DISPLAY evince $* ;;
 (etherpad)               docker run -d -p 9001:9001 etherpad ;;
 (fontforge)              docker run --rm -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $state/fontforge:/home/fontforge --name fontforge fghj/fontforge ;;
+(ffmpag)                 shift; docker run --rm -u $(id -u):$(id -g) -v $PWD:/data vimagick/ffmpeg $* ;;
 (firefox)                shift; docker run -d --memory 2gb --net host --cpuset-cpus 0 -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v "${HOME}/.firefox/cache:/root/.cache/mozilla" -v "${HOME}/.firefox/mozilla:/root/.mozilla" -v "${HOME}/Downloads:/root/Downloads" -v "${HOME}/Pictures:/root/Pictures" -v "${HOME}/Torrents:/root/Torrents" -e "DISPLAY=unix${DISPLAY}" -e GDK_SCALE -e GDK_DPI_SCALE --device /dev/snd --device /dev/dri --name firefox ${DOCKER_REPO_PREFIX}/firefox "$@" ;;
 (gimp)                   docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/Pictures:/root/Pictures --name gimp ${DOCKER_REPO_PREFIX}/gimp ;;
 (gitserver)              docker run --rm -it -p 1234:22 -e DEBUG=true -e "PUBKEY=$(cat ~/.ssh/id_ed25519.pub)" --name gitserver ${DOCKER_REPO_PREFIX}/gitserver ;;
@@ -291,6 +292,7 @@ case $1 in
 (t)                      shift; docker run -t --rm -v "${HOME}/.trc:/root/.trc" --log-driver none ${DOCKER_REPO_PREFIX}/t "$@" ;;
 (tarsnap)                shift; docker run --rm -it -v "${HOME}/.tarsnaprc:/root/.tarsnaprc" -v "${HOME}/.tarsnap:/root/.tarsnap" -v "$HOME:/root/workdir" ${DOCKER_REPO_PREFIX}/tarsnap "$@" ;;
 (telnet)                 shift; docker run -it --rm --log-driver none ${DOCKER_REPO_PREFIX}/telnet "$@" ;;
+(tesseract)              shift; docker run --rm -v `pwd`:/work -w /work vimagick/tesseract $* ;;
 (termboy)                shift
                          local game=$1
                          docker run --rm -it --device /dev/snd --name termboy ${DOCKER_REPO_PREFIX}/nes "/games/${game}.rom" ;;
