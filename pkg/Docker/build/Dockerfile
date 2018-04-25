@@ -30,6 +30,7 @@ RUN        apk add --no-cache -q \
                #protobuf \
                #protobuf-dev \
                #protobuf-c-dev \
+	       strace \
                subversion \
                wget \
                # useful libs
