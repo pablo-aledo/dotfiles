@@ -256,7 +256,12 @@ case $1 in
 (povray)                 docker run -i -t --rm -v $PWD:/src --name povray bradleybossard/docker-povray ;;
 (plex-home-theater)      docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd --device /dev/dri:/dev/dri ${DOCKER_REPO_PREFIX}/plex-home-theater ;;
 (plexpy)                 docker run -d --name=PlexPy -v <path to local plexpy data>:/data -p 8181:8181 r.j3ss.co/plexpy ;;
-
+(plex)                   cp -r ~/.dotfiles/pkg/Docker/plex .
+                         cd plex
+                         mkdir -p data/{plex,Movies,Music,Photos}
+                         sed -i -e "s/%u%/$(id -u)/g" -e "s/%g%/$(id -g)/g" docker-compose.yml
+                         docker-compose up -d
+                         google-chrome http://localhost:32400/web
 (pandoc)                 shift
                          local file=${*: -1}
                          local lfile
