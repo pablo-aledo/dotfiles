@@ -171,6 +171,7 @@ case $1 in
 (dcos)                   shift; docker run -it --rm -v "${HOME}/.dcos:/root/.dcos" -v "$(pwd):/root/apps" -w /root/apps ${DOCKER_REPO_PREFIX}/dcos-cli "$@" ;;
 (chromium)               docker run -it --net host --cpuset-cpus 0 --memory 512mb -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/Downloads:/home/chromium/Downloads -v $HOME/.config/chromium/:/data --security-opt seccomp=$HOME/chrome.json --device /dev/snd -v /dev/shm:/dev/shm --name chromium ${DOCKER_REPO_PREFIX}/chromium ;;
 (clion)                  docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $PWD:/workdir -w /workdir --device /dev/snd clion ;;
+(codiad)                 docker run --rm -p 8080:80 -e CODIAD_UID=$UID -e CODIAD_GID=$GID -v $PWD/code:/code -v /etc/localtime:/etc/localtime:ro -v /var/run/docker.sock:/var/run/docker.sock:ro wernight/codiad ;;
 (couchpotato)            docker run -d --restart always -p 5050:5050 -v /etc/localtime:/etc/localtime:ro -v /volumes/couchpotato:/data --link transmission:transmission --name couchpotato ${DOCKER_REPO_PREFIX}/couchpotato ;;
 (cppcheck)               shift; docker run -v $PWD:/workdir -w /workdir -it cppcheck $* ;;
 (crio)                   docker run --rm -it --privileged --net host -v /var/lib/containers:/var/lib/containers -v /var/run:/var/run -v /dev:/dev -v /etc/cni:/etc/cni:ro -v /opt/cni:/opt/cni:ro r.j3ss.co/crio ;;
