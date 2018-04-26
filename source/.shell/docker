@@ -124,6 +124,7 @@ case $1 in
         git clone https://github.com/ageitgey/face_recognition.git
 	cd face_recognition
 	docker build -t face_recognition .
+	cd -
 	;;
 esac
 
