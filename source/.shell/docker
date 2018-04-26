@@ -119,6 +119,12 @@ case $1 in
 	docker build -t $1 .
 	cd -
 	;;
+(face_recognition)
+        cd /tmp/
+        git clone https://github.com/ageitgey/face_recognition.git
+	cd face_recognition
+	docker build -t face_recognition .
+	;;
 esac
 
 }
@@ -140,7 +146,7 @@ case $1 in
 (build)                  shift; docker run -u $(id -u) -v $PWD:/workdir -w /workdir -it build $* ;;
 (burp)                   docker run -v /tmp/.X11-unix/:/tmp/.X11-unix -e DISPLAY=$DISPLAY -p 8080:8080 -it raesene/burp-free ;;
 (cadvisor)               docker run -d --restart always -v /:/rootfs:ro -v /var/run:/var/run:rw -v /sys:/sys:ro -v /var/lib/docker/:/var/lib/docker:ro -p 1234:8080 --name cadvisor google/cadvisor
-			 echo $(docker inspect --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' cadvisor) cadvisor | sudo tee -a /etc/hosts
+                         echo $(docker inspect --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' cadvisor) cadvisor | sudo tee -a /etc/hosts
                          google-chrome "http://cadvisor:8080" ;;
 (cathode)                docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name cathode cathode ;;
 (cheese)                 docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -v "${HOME}/Pictures:/root/Pictures" --device /dev/video0 --device /dev/snd --device /dev/dri --name cheese ${DOCKER_REPO_PREFIX}/cheese ;;
@@ -195,6 +201,7 @@ case $1 in
                              emby/embyserver:latest ;;
 (evince)                 docker run -it -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -v /etc/machine-id:/etc/machine-id -e DISPLAY=$DISPLAY evince $* ;;
 (etherpad)               docker run -d -p 9001:9001 etherpad ;;
+(face_recognition)       docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY face_recognition $* ;;
 (fontforge)              docker run --rm -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $state/fontforge:/home/fontforge --name fontforge fghj/fontforge ;;
 (ffmpag)                 shift; docker run --rm -u $(id -u):$(id -g) -v $PWD:/data vimagick/ffmpeg $* ;;
 (firefox)                shift; docker run -d --memory 2gb --net host --cpuset-cpus 0 -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v "${HOME}/.firefox/cache:/root/.cache/mozilla" -v "${HOME}/.firefox/mozilla:/root/.mozilla" -v "${HOME}/Downloads:/root/Downloads" -v "${HOME}/Pictures:/root/Pictures" -v "${HOME}/Torrents:/root/Torrents" -e "DISPLAY=unix${DISPLAY}" -e GDK_SCALE -e GDK_DPI_SCALE --device /dev/snd --device /dev/dri --name firefox ${DOCKER_REPO_PREFIX}/firefox "$@" ;;
@@ -226,7 +233,7 @@ case $1 in
 (kvm)                    docker run -d --privileged -v /var/run/libvirt:/var/run/libvirt --name kvm ${DOCKER_REPO_PREFIX}/kvm ;;
 (lamp)                   docker run --rm -p 8080:80 -e LOG_STDOUT=true -e LOG_STDERR=true -e LOG_LEVEL=debug -v $PWD:/var/www/html fauria/lamp ;;
 (lamp_mysql)             docker run -d --link my-mysql-container:mysql -p 8080:80 -v $PWD/html:/var/www/html -v $PWD/logs:/var/log/httpd --name my-lamp-container fauria/lamp
-	                 docker run -it mysql ;;
+                         docker run -it mysql ;;
 (libreoffice)            docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/slides:/root/slides -e GDK_SCALE -e GDK_DPI_SCALE --name libreoffice ${DOCKER_REPO_PREFIX}/libreoffice ;;
 (lpass)                  shift; docker run --rm -it -v "${HOME}/.lpass:/root/.lpass" --name lpass ${DOCKER_REPO_PREFIX}/lpass "$@" ;;
 (lynx)                   shift; docker run --rm -it --name lynx ${DOCKER_REPO_PREFIX}/lynx "$@" ;;
