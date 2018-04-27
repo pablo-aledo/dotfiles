@@ -118,6 +118,9 @@ RUN        apk add --no-cache -q \
 
 RUN            mkdir /usr/src
 
+RUN            ln -s /usr/lib/libgrpc++.so /usr/lib/libgrpc++.so.1                        && \
+               ln -s /usr/lib/libgrpc++_reflection.so /usr/lib/libgrpc++_reflection.so.1
+
 RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear               && \
                cd /usr/src/bear                                                           && \
                mkdir build && cd build                                                    && \
