@@ -30,10 +30,8 @@ RUN        apk add --no-cache -q \
                #pkg-config \
                pkgconf \
                python \
-               #protobuf-compiler \
-               #protobuf \
-               #protobuf-dev \
-               #protobuf-c-dev \
+	       protobuf-dev \
+	       grpc-dev \
                strace \
                subversion \
                wget \
@@ -91,9 +89,11 @@ RUN        apk add --no-cache -q \
                #libavcodec-extra-53 \
                #libmp4v2-0 \
                #libxvidcore-dev \
+               ffpmeg-dev \
                xvidcore-dev \
                # ===== vision
                #opencv-2 \
+	       opencv-dev \
                #libcv2.1 \
                # ===== guis
                #libcairo2-dev \
@@ -117,35 +117,6 @@ RUN        apk add --no-cache -q \
                #libvtkedge-dev
 
 RUN            mkdir /usr/src
-
-RUN            cd /usr/src                                                                && \
-               curl -L https://github.com/google/fruit/archive/v3.1.1.tar.gz | tar -xz    && \
-               cd /usr/src/fruit-3.1.1                                                    && \
-               cmake -DCMAKE_BUILD_TYPE=Release -DFRUIT_USES_BOOST=False . && make -j     && \
-               make install                                                               && \
-               rm -rf /usr/src/fruit-3.1.1
-
-RUN            git clone -q https://github.com/google/googletest.git /usr/src/googletest  && \
-               cd /usr/src/googletest                                                     && \
-               cmake .                                                                    && \
-               make                                                                       && \
-               make install                                                               && \
-               rm -rf /usr/src/googletest
-
-RUN            git clone https://github.com/google/protobuf.git /usr/src/protobuf         && \
-               cd /usr/src/protobuf                                                       && \
-               ./autogen.sh                                                               && \
-               ./configure                                                                && \
-               make                                                                       && \
-               make install                                                               && \
-               rm -rf /usr/src/protobuf
-
-RUN            git clone https://github.com/grpc/grpc.git /usr/src/grpc                   && \
-               cd /usr/src/grpc                                                           && \
-               git submodule update --init                                                && \
-               make                                                                       && \
-               make install                                                               && \
-               rm -rf /usr/src/grpc
 
 RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear               && \
                cd /usr/src/bear                                                           && \
