@@ -1,9 +1,9 @@
 #!/bin/bash
 
-[ -e .git ] && git submodule update --init
-
 if [ $# -eq 0 ]
 then
+	[ -e .git ] && git submodule update --init
+
 	if [ -e runme.sh ]
 	then
 	    chmod +x runme.sh
