@@ -30,7 +30,7 @@ RUN        apk add --no-cache -q \
                #protobuf \
                #protobuf-dev \
                #protobuf-c-dev \
-	       strace \
+               strace \
                subversion \
                wget \
                # useful libs
@@ -114,46 +114,41 @@ RUN        apk add --no-cache -q \
 
 RUN            mkdir /usr/src
 
-RUN            cd /usr/src                                                             && \
-               curl -L https://github.com/google/fruit/archive/v3.1.1.tar.gz | tar -xz && \
-               cd /usr/src/fruit-3.1.1                                                 && \
-               cmake -DCMAKE_BUILD_TYPE=Release -DFRUIT_USES_BOOST=False . && make -j  && \
-               make install                                                            && \
+RUN            cd /usr/src                                                                && \
+               curl -L https://github.com/google/fruit/archive/v3.1.1.tar.gz | tar -xz    && \
+               cd /usr/src/fruit-3.1.1                                                    && \
+               cmake -DCMAKE_BUILD_TYPE=Release -DFRUIT_USES_BOOST=False . && make -j     && \
+               make install                                                               && \
                rm -rf /usr/src/fruit-3.1.1
 
-RUN            git clone -q https://github.com/google/googletest.git /usr/src/googletest                     && \
-               cd /usr/src/googletest                                                                        && \
-               cmake .                                                                                       && \
-               make                                                                                          && \
-               make install                                                                                  && \
+RUN            git clone -q https://github.com/google/googletest.git /usr/src/googletest  && \
+               cd /usr/src/googletest                                                     && \
+               cmake .                                                                    && \
+               make                                                                       && \
+               make install                                                               && \
                rm -rf /usr/src/googletest
 
-RUN            git clone -b v1.8.x -q https://github.com/grpc/grpc /usr/src/grpc                             && \
-               cd /usr/src/grpc                                                                              && \
-               git submodule update --init                                                                   && \
-               make                                                                                          && \
-               make install                                                                                  && \
-               mv /usr/local/lib/libgrpc++.so.5 /usr/local/lib/libgrpc++.so.1                                && \
-               mv /usr/local/lib/libgrpc++_reflection.so.5 /usr/local/lib/libgrpc++_reflection.so.1          && \
-               rm -rf /usr/src/grpc
-
-#RUN           cd /usr/src/                                                                                  && \
-#              curl -L https://github.com/google/protobuf/releases/download/v3.5.1/protobuf-cpp-3.5.1.tar.gz    \
-#              | tar -xz                                                                                     && \
-RUN            git clone https://github.com/google/protobuf.git /usr/src/protobuf                            && \
-               cd /usr/src/protobuf                                                                          && \
-               ./autogen.sh                                                                                  && \
-               ./configure --disable-shared                                                                  && \
-               make                                                                                          && \
-               make install                                                                                  && \
+RUN            git clone https://github.com/google/protobuf.git /usr/src/protobuf         && \
+               cd /usr/src/protobuf                                                       && \
+               ./autogen.sh                                                               && \
+               ./configure                                                                && \
+               make                                                                       && \
+               make install                                                               && \
                rm -rf /usr/src/protobuf
 
-RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear    && \
-               cd /usr/src/bear                                                && \
-               mkdir build && cd build                                         && \
-               cmake ..                                                        && \
-               make all                                                        && \
-               make install                                                    && \
+RUN            git clone https://github.com/grpc/grpc.git /usr/src/grpc                   && \
+               cd /usr/src/grpc                                                           && \
+               git submodule update --init                                                && \
+               make                                                                       && \
+               make install                                                               && \
+               rm -rf /usr/src/grpc
+
+RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear               && \
+               cd /usr/src/bear                                                           && \
+               mkdir build && cd build                                                    && \
+               cmake ..                                                                   && \
+               make all                                                                   && \
+               make install                                                               && \
                rm -rf /usr/src/bear
 
 
