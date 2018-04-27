@@ -1,5 +1,7 @@
 #!/bin/bash
 
+[ -e .git ] && git submodule update --init
+
 if [ $# -eq 0 ]
 then
 	if [ -e runme.sh ]
