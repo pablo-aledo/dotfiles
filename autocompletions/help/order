@@ -1,0 +1,8 @@
+_matcher_complete() {
+  integer i=1
+  (git ls-files 2>/dev/null || find .) | /usr/local/bin/matcher --limit 20 ${words[CURRENT]} | while read line; do
+    compadd -U -2 -V $i -- "$line"
+    i=$((i+1))
+  done
+  compstate[insert]=menu
+}
