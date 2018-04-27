@@ -245,6 +245,7 @@ adapt_pablo(){
 }
 
 adapt_nas(){
+	pkg install smartmontools
 	pkg install fdupes
 	pkg install ranger
 	pkg install ncdu
