@@ -6,3 +6,5 @@ _matcher_complete() {
   done
   compstate[insert]=menu
 }
+
+#man zshcompwid
