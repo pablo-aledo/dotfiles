@@ -89,7 +89,7 @@ RUN        apk add --no-cache -q \
                #libavcodec-extra-53 \
                #libmp4v2-0 \
                #libxvidcore-dev \
-               ffpmeg-dev \
+               ffmpeg-dev \
                xvidcore-dev \
                # ===== vision
                #opencv-2 \
