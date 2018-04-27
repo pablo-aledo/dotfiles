@@ -7,4 +7,12 @@ _matcher_complete() {
   compstate[insert]=menu
 }
 
-#man zshcompwid
+# man zshcompwid
+# man zshcompsys
+# _describe -V
+# The options placed in the array name take account of the group-name style, so
+# matches are placed in a separate group where necessary. The group normally has
+# its elements sorted (by passing the option -J to compadd), but if an option
+# starting with '-V', '-J', '-1', or '-2' is passed to _description, that option
+# will be included in the array. Hence it is possible for the completion group to
+# be unsorted by giving the option '-V', '-1V', or '-2V'.
