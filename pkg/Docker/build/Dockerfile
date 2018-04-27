@@ -1,5 +1,9 @@
 FROM       alpine
 
+COPY repositories /etc/apk
+
+RUN        apk update
+
 RUN        apk add --no-cache -q \
                # tools
                autoconf \
@@ -151,8 +155,8 @@ RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear     
                make install                                                               && \
                rm -rf /usr/src/bear
 
-
 COPY       build.sh /usr/local/bin
 RUN        chmod +x /usr/local/bin/build.sh
 
 ENTRYPOINT     ["build.sh"]
+
