@@ -128,6 +128,10 @@ RUN            mkdir /usr/src
 RUN            ln -s /usr/lib/libgrpc++.so /usr/lib/libgrpc++.so.1                        && \
                ln -s /usr/lib/libgrpc++_reflection.so /usr/lib/libgrpc++_reflection.so.1
 
+RUN            curl -sSL https://github.com/uber/prototool/releases/download/v0.1.0/prototool-$(uname -s)-$(uname -m) \
+                   -o /usr/local/bin/prototool && \
+                   chmod +x /usr/local/bin/prototool
+
 RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear               && \
                cd /usr/src/bear                                                           && \
                mkdir build && cd build                                                    && \
