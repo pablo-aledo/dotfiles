@@ -70,6 +70,7 @@ RUN        apk add --no-cache -q \
                sdl2-dev \
                sdl2_image-dev \
                sdl2_mixer-dev \
+               sfml-dev \
                #libssl-dev \
                #libressl-dev \
                openssl-dev \
