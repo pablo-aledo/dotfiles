@@ -35,6 +35,7 @@ RUN        apk add --no-cache -q \
                strace \
                subversion \
                wget \
+               yasm \
                # useful libs
                c-ares-dev \
                #freeglut3-dev \
@@ -54,6 +55,7 @@ RUN        apk add --no-cache -q \
                #libmysql++-dev \
                libev-dev \
                libevent-dev \
+               libxcursor-dev \
                #mariadb-dev \
                #libncurses5-dev \
                ncurses-dev \
@@ -72,6 +74,7 @@ RUN        apk add --no-cache -q \
                #libressl-dev \
                openssl-dev \
                libxi-dev \
+               libxrandr-dev \
                libxml2-dev \
                libxmu-dev \
                #libxmuu-dev \
@@ -91,6 +94,8 @@ RUN        apk add --no-cache -q \
                #libxvidcore-dev \
                ffmpeg-dev \
                xvidcore-dev \
+               x264-dev \
+               libxinerama-dev \
                # ===== vision
                #opencv-2 \
 	       opencv-dev \
@@ -111,6 +116,8 @@ RUN        apk add --no-cache -q \
                glfw-dev \
                #libglm-dev \
                glm-dev \
+               glew-dev \
+               glfw-dev \
                #libosmesa6-dev \
                mesa-dev
                #libvtk5-dev \
