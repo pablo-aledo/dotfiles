@@ -3,3 +3,7 @@ links(){
 	sed -n 's/.*href=\o47\([^\o47]*\).*/\1/p' $1
 	grep -Po '(?<=href=")[^"]*' $1
 }
+
+wget_full(){
+	wget -kcmrnp $1
+}
