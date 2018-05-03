@@ -3,7 +3,7 @@ clean(){
 	name=.Trash/`date +%y%m%d-%H%M%S`/
 	mkdir -p $name
 
-	for a in '*.a' '*.annot' 'a.out' '*.aux' '*.bak' '*.bbl' '*.bc' '*.bcf' 'bin/*' '.depend' '.deps' '*.log' 'main.aux' 'main.bbl' 'main.blg' 'main.log' 'main.pdf' '*.nav' '*.nlo' 'nohup.out' '*.obj' '*.out' '*.pdfsync' '*.pyc' '*.pyg' 'salida' '*.sav' '*.so' '*.swp' '*.synctex' '*.synctex.gz' 'tags' '*.tdo' '*.toc' '*.snm' 'build/*' '__pycache__'
+	for a in '*.a' '*.annot' 'a.out' '*.aux' '*.bak' '*.bbl' '*.bc' '*.bcf' 'bin/*' '.depend' '.deps' '*.log' 'main.aux' 'main.bbl' 'main.blg' 'main.log' 'main.pdf' '*.nav' '*.nlo' 'nohup.out' '*.obj' '*.out' '*.pdfsync' '*.pyc' '*.pyg' 'salida' '*.sav' '*.so' '*.swp' '*.synctex' '*.synctex.gz' 'tags' '*.tdo' '*.toc' '*.snm' 'build/*' '__pycache__' '*_pb2.py' '*_pb2_grpc.py'
 	do
 		echo mv $a $name | bash >/dev/null 2>/dev/null
 	done
