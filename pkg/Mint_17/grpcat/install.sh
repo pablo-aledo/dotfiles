@@ -1,4 +1,4 @@
-pkg install python3-pip
+sudo apt-get install -y python3-pip
 sudo pip3 install grpcio-tools
 sudo pip3 install protobuf
 
