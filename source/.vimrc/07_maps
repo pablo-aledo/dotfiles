@@ -177,5 +177,5 @@ map ZD ggVGzdggVGzdggVGzdggVGzd
 " toggle gundo
 nnoremap <leader>u :GundoToggle<CR>
 " Next and Previous
-:map > :wn<cr>
-:map < :wN<cr>
+:map > :n<cr>
+:map < :N<cr>
