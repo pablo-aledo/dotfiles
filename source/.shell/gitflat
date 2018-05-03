@@ -11,3 +11,5 @@ do
 done
 
 }
+
+alias gitconfig='HOME=~/.dotfiles/link_if_new'
