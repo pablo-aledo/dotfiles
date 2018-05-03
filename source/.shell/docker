@@ -187,6 +187,7 @@ case $1 in
 (gnumeric)               shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY gnumeric $* ;;
 (chrome_no_sandbox)      shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v /home/pablo_aledo/.config/google-chrome/:/root/.config/google-chrome chrome_no_sandbox google-chrome --no-sandbox $* ;;
 (dl-docker)              docker run -it -p 8888:8888 -p 6006:6006 -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY floydhub/dl-docker:cpu bash ;;
+(deepo)                  nvidia-docker run --ipc=host --rm -it -v $PWD:/workdir -w /workdir -u $(id -u) -p 8888:8888 ufoym/deepo:all-py36-jupyter jupyter notebook --no-browser --ip=0.0.0.0 --allow-root --NotebookApp.token= --notebook-dir='/root' ;;
 (doctor)                 docker run -it ${DOCKER_REPO_PREFIX}/doctor ;;
 (dolphin)                docker run -it --net host --memory 2gb -e DISPLAY=unix$DISPLAY -v /media/storage0/ROM/dolphinconfigs:/root/.config/dolphin-emu -v /media/storage0/ROM/:/roms -v /dev/shm:/dev/shm -v /etc/machine-id:/etc/machine-id -v /run/user/$(id -u)/pulse:/run/user/$(id -u)/pulse -v /var/lib/dbus:/var/lib/dbus -v ~/.pulse:/root/.pulse --device /dev/input/event22 --device /dev/dri:/dev/dri --name dolphin-run dolphin ;;
 (doxygen)                docker run -v $PWD:/workdir -w /workdir -it doxygen ;;
