@@ -1,6 +1,6 @@
 " resize vertical panes
-map > <C-w>>
-map < <C-w><
+" map > <C-w>>
+" map < <C-w><
 " Window resize
 map <A-left> <C-w>5<
 map <A-right> <C-w>5>
