@@ -6,6 +6,7 @@ RUN        apk update
 
 RUN        apk add --no-cache -q \
                # tools
+               alpine-sdk \
                autoconf \
                automake \
                bash \
