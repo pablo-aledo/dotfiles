@@ -7,6 +7,10 @@
 # Ctrl + Alt + ->
 # Login as root
 # chromeos-setdevpasswd
+# Run this from the console with the root user
+# Ctrl+Alt+t, shell opens a terminal
+# starti3
+# Ctrl+Alt+Shift+(->|<-) changes between sessions
 
 [ -e /usr/bin/wget ] && wget https://goo.gl/fd3zc -O ~/crouton
 [ -e /usr/bin/curl ] && curl https://goo.gl/fd3zc -o ~/crouton
