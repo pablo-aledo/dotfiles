@@ -14,9 +14,9 @@ adapt_chromebook(){
 
 	sudo mkdir -p /media/DATA
 
- 	sudo ln -s /usr/bin/terminator /usr/bin/gnome-terminal
- 	sudo ln -s /usr/bin/pcmanfm /usr/bin/nautilus
- 	sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
+	sudo ln -s /usr/bin/terminator /usr/bin/gnome-terminal
+	sudo ln -s /usr/bin/pcmanfm /usr/bin/nautilus
+	sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
 
 	xmodmap -pke > ~/.Xmodmap
 	sed -i 's/191 = XF86Tools/191 = Delete/g' ~/.Xmodmap
@@ -46,11 +46,42 @@ adapt_chromebook(){
 	i3-msg reload
 }
 
+adapt_novnc(){
+	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
+	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
+	sed -i '/Mod1+F2/d' ~/.i3/config
+	sed -i '/Mod1+Tab/d' ~/.i3/config
+	sed -i '/Mod1+Shift+Tab/d' ~/.i3/config
+
+	sudo ln -s /usr/bin/terminator /usr/bin/gnome-terminal
+	sudo ln -s /usr/bin/pcmanfm /usr/bin/nautilus
+	sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
+
+	sudo localectl set-locale LANG=en_US.UTF-8
+
+	echo 'gtk-theme-name="Numix"'                               >  ~/.gtkrc-2.0
+	echo 'gtk-icon-theme-name="Numix"'                          >> ~/.gtkrc-2.0
+	echo 'gtk-font-name="monofur 12"'                           >> ~/.gtkrc-2.0
+	echo 'gtk-cursor-theme-name="DMZ-White"'                    >> ~/.gtkrc-2.0
+	echo 'gtk-cursor-theme-size=0'                              >> ~/.gtkrc-2.0
+	echo 'gtk-toolbar-style=GTK_TOOLBAR_BOTH'                   >> ~/.gtkrc-2.0
+	echo 'gtk-toolbar-icon-size=GTK_ICON_SIZE_LARGE_TOOLBAR'    >> ~/.gtkrc-2.0
+	echo 'gtk-button-images=1'                                  >> ~/.gtkrc-2.0
+	echo 'gtk-menu-images=1'                                    >> ~/.gtkrc-2.0
+	echo 'gtk-enable-event-sounds=1'                            >> ~/.gtkrc-2.0
+	echo 'gtk-enable-input-feedback-sounds=1'                   >> ~/.gtkrc-2.0
+	echo 'gtk-xft-antialias=1'                                  >> ~/.gtkrc-2.0
+	echo 'gtk-xft-hinting=1'                                    >> ~/.gtkrc-2.0
+	echo 'gtk-xft-hintstyle="hintfull"'                         >> ~/.gtkrc-2.0
+
+	i3-msg reload
+}
+
 adapt_awsserver(){
 	sed  -i 's/<C-F3>/<F3><F3>/g' ~/.dotfiles/source/.vimrc/12_search
 	sed  -i 's/set spell/set nospell/g' ~/.dotfiles/source/.vimrc/00_basic
- 	sudo ln -s /usr/bin/vim /usr/bin/gvim
- 	echo '/usr/bin/google-chrome --alsa-output-device=plughw:2,3 $*' | sudo tee /usr/bin/google-chrome-nosound
+	sudo ln -s /usr/bin/vim /usr/bin/gvim
+	echo '/usr/bin/google-chrome --alsa-output-device=plughw:2,3 $*' | sudo tee /usr/bin/google-chrome-nosound
 	sudo chmod +x /usr/bin/google-chrome-nosound
 }
 
@@ -267,7 +298,7 @@ adapt_simplbuntu(){
 	pkg remove 'firefox*'
 
 	pkg install numix
- 	pkg install unity-tweak-tool
+	pkg install unity-tweak-tool
 	echo '[Desktop Entry]'                    >  ~/Desktop/appearance.desktop
 	echo 'Type=Application'                   >> ~/Desktop/appearance.desktop
 	echo 'Exec=unity-tweak-tool'              >> ~/Desktop/appearance.desktop
@@ -294,87 +325,87 @@ adapt_simplbuntu(){
 	echo 'Exec=google-chrome'           >> ~/Desktop/google-chrome.desktop
 	echo 'Name=Internet'                >> ~/Desktop/google-chrome.desktop
 	echo 'Icon=google-chrome'           >> ~/Desktop/google-chrome.desktop
-	
+
 	pkg install vlc
 	echo '[Desktop Entry]'              >  ~/Desktop/vlc.desktop
 	echo 'Type=Application'             >> ~/Desktop/vlc.desktop
 	echo 'Exec=vlc'                     >> ~/Desktop/vlc.desktop
 	echo 'Name=Videos'                  >> ~/Desktop/vlc.desktop
 	echo 'Icon=vlc'                     >> ~/Desktop/vlc.desktop
-	
+
 	pkg install gedit
 	echo '[Desktop Entry]'              >  ~/Desktop/gedit.desktop
 	echo 'Type=Application'             >> ~/Desktop/gedit.desktop
 	echo 'Exec=gedit'                   >> ~/Desktop/gedit.desktop
 	echo 'Name=Editor'                  >> ~/Desktop/gedit.desktop
 	echo 'Icon=kedit'                   >> ~/Desktop/gedit.desktop
-	
+
 	pkg install wps
 	echo '[Desktop Entry]'              >  ~/Desktop/word.desktop
 	echo 'Type=Application'             >> ~/Desktop/word.desktop
 	echo 'Exec=wps'                     >> ~/Desktop/word.desktop
 	echo 'Name=Word'                    >> ~/Desktop/word.desktop
 	echo 'Icon=libreoffice-writer'      >> ~/Desktop/word.desktop
-	
+
 	echo '[Desktop Entry]'              >  ~/Desktop/excel.desktop
 	echo 'Type=Application'             >> ~/Desktop/excel.desktop
 	echo 'Exec=et'                      >> ~/Desktop/excel.desktop
 	echo 'Name=Excel'                   >> ~/Desktop/excel.desktop
 	echo 'Icon=libreoffice-calc'        >> ~/Desktop/excel.desktop
-	
+
 	echo '[Desktop Entry]'              >  ~/Desktop/powerpnt.desktop
 	echo 'Type=Application'             >> ~/Desktop/powerpnt.desktop
 	echo 'Exec=wpp'                     >> ~/Desktop/powerpnt.desktop
 	echo 'Name=PowerPoint'              >> ~/Desktop/powerpnt.desktop
 	echo 'Icon=libreoffice-impress'     >> ~/Desktop/powerpnt.desktop
-	
+
 	pkg install terminator
 	echo '[Desktop Entry]'              >  ~/Desktop/lxterm.desktop
 	echo 'Type=Application'             >> ~/Desktop/lxterm.desktop
 	echo 'Exec=terminator'              >> ~/Desktop/lxterm.desktop
 	echo 'Name=Terminal'                >> ~/Desktop/lxterm.desktop
 	echo 'Icon=lxterminal'              >> ~/Desktop/lxterm.desktop
-	
+
 	echo '[Desktop Entry]'              >  ~/Desktop/pcman.desktop
 	echo 'Type=Application'             >> ~/Desktop/pcman.desktop
 	echo 'Exec=nautilus'                >> ~/Desktop/pcman.desktop
 	echo 'Name=Ficheros'                >> ~/Desktop/pcman.desktop
 	echo 'Icon=system-file-manager'     >> ~/Desktop/pcman.desktop
-	
+
 	pkg install virtualbox
 	echo '[Desktop Entry]'              >  ~/Desktop/virtualbox.desktop
 	echo 'Type=Application'             >> ~/Desktop/virtualbox.desktop
 	echo 'Exec=virtualbox'              >> ~/Desktop/virtualbox.desktop
 	echo 'Name=Virtualbox'              >> ~/Desktop/virtualbox.desktop
 	echo 'Icon=virtualbox'              >> ~/Desktop/virtualbox.desktop
-	
+
 	pkg install evince
 	echo '[Desktop Entry]'              >  ~/Desktop/evince.desktop
 	echo 'Type=Application'             >> ~/Desktop/evince.desktop
 	echo 'Exec=evince'                  >> ~/Desktop/evince.desktop
 	echo 'Name=PDF'                     >> ~/Desktop/evince.desktop
 	echo 'Icon=acroread'                >> ~/Desktop/evince.desktop
-	
+
 	pkg install rar
 	echo '[Desktop Entry]'              >  ~/Desktop/fileroller.desktop
 	echo 'Type=Application'             >> ~/Desktop/fileroller.desktop
 	echo 'Exec=file-roller'             >> ~/Desktop/fileroller.desktop
 	echo 'Name=Zip'                     >> ~/Desktop/fileroller.desktop
 	echo 'Icon=file-roller'             >> ~/Desktop/fileroller.desktop
-	
+
 	pkg install gnome-calculator
 	echo '[Desktop Entry]'              >  ~/Desktop/galculator.desktop
 	echo 'Type=Application'             >> ~/Desktop/galculator.desktop
 	echo 'Exec=gnome-calculator'        >> ~/Desktop/galculator.desktop
 	echo 'Name=Calculadora'             >> ~/Desktop/galculator.desktop
 	echo 'Icon=gnome-calculator'        >> ~/Desktop/galculator.desktop
-	
+
 	echo '[Desktop Entry]'              >  ~/Desktop/software.desktop
 	echo 'Type=Application'             >> ~/Desktop/software.desktop
 	echo 'Exec=ubuntusoftware'          >> ~/Desktop/software.desktop
 	echo 'Name=Instalar'                >> ~/Desktop/software.desktop
 	echo 'Icon=package-manager-icon'    >> ~/Desktop/software.desktop
-	
+
 	pkg install skype
 	echo '[Desktop Entry]'              >  ~/Desktop/skype.desktop
 	echo 'Type=Application'             >> ~/Desktop/skype.desktop
@@ -489,7 +520,7 @@ adapt_simplbuntu(){
 	echo 'Icon=notes'                                                    >> ~/Desktop/keep.desktop
 
 	chmod +x ~/Desktop/*.desktop
-	
+
 }
 
 adapt_shortcuts(){
@@ -497,8 +528,8 @@ adapt_shortcuts(){
 	srcdir=$( find ~/.dotfiles/shortcuts/ -maxdepth 1 -type d | grep $1 )
 
 	for a in $srcdir/*
-	do 
-  		echo "bindsym $(basename $a) exec \"sleep 0.1 && zsh -c 'source $a'\"" >> ~/.i3/config
+	do
+		echo "bindsym $(basename $a) exec \"sleep 0.1 && zsh -c 'source $a'\"" >> ~/.i3/config
 	done
 	i3-msg reload
 }
@@ -506,7 +537,7 @@ adapt_shortcuts(){
 alias shc='adapt_shortcuts'
 
 adapt_esc(){
-  	echo "bindsym masculine exec --no-startup-id \"sleep 0.1 && xdotool key Escape\"" >> ~/.i3/config
+	echo "bindsym masculine exec --no-startup-id \"sleep 0.1 && xdotool key Escape\"" >> ~/.i3/config
 	i3-msg reload
 }
 
