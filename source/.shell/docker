@@ -1,6 +1,3 @@
-
-
-
 DOCKER_REPO_PREFIX=jess
 alias docker='sudo docker'
 
@@ -103,7 +100,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -186,6 +183,7 @@ case $1 in
 (crio)                   docker run --rm -it --privileged --net host -v /var/lib/containers:/var/lib/containers -v /var/run:/var/run -v /dev:/dev -v /etc/cni:/etc/cni:ro -v /opt/cni:/opt/cni:ro r.j3ss.co/crio ;;
 (gcloud)                 shift; docker run --rm -it -v "${HOME}/.gcloud:/root/.config/gcloud" -v "${HOME}/.ssh:/root/.ssh:ro" -v "$(which docker):/usr/bin/docker" -v /var/run/docker.sock:/var/run/docker.sock --name gcloud ${DOCKER_REPO_PREFIX}/gcloud "$@" ;;
 (gnumeric)               shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY gnumeric $* ;;
+(gthumb)                 shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY gthumb $* ;;
 (chrome_no_sandbox)      shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v /home/pablo_aledo/.config/google-chrome/:/root/.config/google-chrome chrome_no_sandbox google-chrome --no-sandbox $* ;;
 (dl-docker)              docker run -it -p 8888:8888 -p 6006:6006 -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY floydhub/dl-docker:cpu bash ;;
 (deepo)                  docker run --ipc=host --rm -it -v $PWD:/root -w /root -p 8888:8888 ufoym/deepo:all-py36-jupyter jupyter notebook --no-browser --ip=0.0.0.0 --allow-root --NotebookApp.token= --notebook-dir='/root' ;;
