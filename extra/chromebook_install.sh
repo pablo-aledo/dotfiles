@@ -1,6 +1,16 @@
 #!/bin/bash
 
-wget https://goo.gl/fd3zc -O ~/crouton
+# Enable developer mode (will erase all your data)
+# Esc+Refresh+Poweroff
+# Disable SO Verification (Space)
+# Ctrl-d to boot with disabled SO Verification
+# Ctrl + Alt + ->
+# Login as root
+# chromeos-setdevpasswd
+
+[ -e /usr/bin/wget ] && wget https://goo.gl/fd3zc -O ~/crouton
+[ -e /usr/bin/curl ] && curl https://goo.gl/fd3zc -o ~/crouton
+
 chmod +x ~/crouton
 sudo sh ~/crouton -r trusty -t x11
 
@@ -9,7 +19,7 @@ echo 'pablo   ALL=(ALL) NOPASSWD:ALL' | sudo tee /mnt/stateful_partition/crouton
 echo 'chronos ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/95_cros_base
 
 cat << EOF > /mnt/stateful_partition/crouton/chroots/trusty/home/pablo/.remote_install_chrome
-sudo apt-get install unzip
+sudo apt-get install -y unzip
 
 cd ~
 wget https://github.com/pablo-aledo/dotfiles/archive/master.zip -O .dotfiles.zip
