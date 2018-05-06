@@ -17,8 +17,11 @@ fi
 
 if [ `xclip -sel clip -o | grep github` ]
 then
-	xdotool mousemove 1050 620
-	xdotool click 1
+	xdotool key Ctrl+f
+	xdotool type 'clone or download'
+	xdotool key Return
+	xdotool key Escape
+	xdotool key Return
 	xdotool key Ctrl+f
 	xdotool type 'download zip'
 	xdotool key Return
