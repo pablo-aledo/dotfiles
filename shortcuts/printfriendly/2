@@ -9,4 +9,4 @@ sleep 5
 xdotool key Ctrl+l
 xdotool key Ctrl+c
 [ `xclip -sel clip -o | grep reddit` ] && xdotool mousemove 140 290 && xdotool click 1
-
+xdotool key Return
