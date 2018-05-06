@@ -1,12 +1,6 @@
 export DISPLAY=:1
 
 xdotool key Ctrl+f
-sleep 1
 xdotool type "http"
 xdotool key Escape
-xdotool key Return
-sleep 5
-xdotool key Ctrl+l
-xdotool key Ctrl+c
-[ `xclip -sel clip -o | grep reddit` ] && xdotool mousemove 140 290 && xdotool click 1
 xdotool key Return

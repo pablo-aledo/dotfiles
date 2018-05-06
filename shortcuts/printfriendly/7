@@ -1,0 +1,18 @@
+export DISPLAY=:1
+
+xdotool key Ctrl+l
+xdotool key Ctrl+c
+xdotool key Escape
+xdotool key Return
+[ `xclip -sel clip -o | grep reddit` ] && xdotool mousemove 140 290 && xdotool click 1
+[ `xclip -sel clip -o | grep github` ] && (
+	xdotool mousemove 1050 620
+	xdotool click 1
+	xdotool key Ctrl+f
+	xdotool type 'download zip'
+	xdotool key Return
+	xdotool key Escape
+	xdotool key Return
+	sleep 1
+	xdotool key Return
+)
