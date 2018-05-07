@@ -1,0 +1,3052 @@
+snippet sequence 00
+	@startuml
+	Alice -> Bob: Authentication Request
+	Bob --> Alice: Authentication Response
+
+	Alice -> Bob: Another authentication Request
+	Alice <-- Bob: another authentication Response
+	@enduml
+
+snippet sequence 01
+	@startuml
+	actor Foo1
+	boundary Foo2
+	control Foo3
+	entity Foo4
+	database Foo5
+	collections Foo6
+	Foo1 -> Foo2 : To boundary
+	Foo1 -> Foo3 : To control
+	Foo1 -> Foo4 : To entity
+	Foo1 -> Foo5 : To database
+	Foo1 -> Foo6 : To collections
+
+	@enduml
+
+snippet sequence 02
+	@startuml
+	actor Bob #red
+	' The only difference between actor
+	'and participant is the drawing
+	participant Alice
+	participant "I have a really\nlong name" as L #99FF99
+	/' You can also declare:
+	   participant L as "I have a really\nlong name"  #99FF99
+	  '/
+
+	Alice->Bob: Authentication Request
+	Bob->Alice: Authentication Response
+	Bob->L: Log transaction
+	@enduml
+
+snippet sequence 03
+	@startuml
+	participant Last order 30
+	participant Middle order 20
+	participant First order 10
+	@enduml
+
+snippet sequence 04
+	@startuml
+	Alice -> "Bob()" : Hello
+	"Bob()" -> "This is very\nlong" as Long
+	' You can also declare:
+	' "Bob()" -> Long as "This is very\nlong"
+	Long --> "Bob()" : ok
+	@enduml
+
+snippet sequence 05
+	@startuml
+	Alice->Alice: This is a signal to self.\nIt also demonstrates\nmultiline \ntext
+	@enduml
+
+snippet sequence 06
+	@startuml
+	Bob ->x Alice
+	Bob -> Alice
+	Bob ->> Alice
+	Bob -\ Alice
+	Bob \\- Alice
+	Bob //-- Alice
+
+	Bob ->o Alice
+	Bob o\\-- Alice
+
+	Bob <-> Alice
+	Bob <->o Alice
+	@enduml
+
+snippet sequence 07
+	@startuml
+	Bob -[#red]> Alice : hello
+	Alice -[#0000FF]->Bob : ok
+	@enduml
+
+snippet sequence 08
+	@startuml
+	autonumber
+	Bob -> Alice : Authentication Request
+	Bob <- Alice : Authentication Response
+	@enduml
+
+snippet sequence 09
+	@startuml
+	autonumber
+	Bob -> Alice : Authentication Request
+	Bob <- Alice : Authentication Response
+
+	autonumber 15
+	Bob -> Alice : Another authentication Request
+	Bob <- Alice : Another authentication Response
+
+	autonumber 40 10
+	Bob -> Alice : Yet another authentication Request
+	Bob <- Alice : Yet another authentication Response
+
+	@enduml
+
+snippet sequence 10
+	@startuml
+	autonumber "<b>[000]"
+	Bob -> Alice : Authentication Request
+	Bob <- Alice : Authentication Response
+
+	autonumber 15 "<b>(<u>##</u>)"
+	Bob -> Alice : Another authentication Request
+	Bob <- Alice : Another authentication Response
+
+	autonumber 40 10 "<font color=red><b>Message 0  "
+	Bob -> Alice : Yet another authentication Request
+	Bob <- Alice : Yet another authentication Response
+
+	@enduml
+
+snippet sequence 11
+	@startuml
+	autonumber 10 10 "<b>[000]"
+	Bob -> Alice : Authentication Request
+	Bob <- Alice : Authentication Response
+
+	autonumber stop
+	Bob -> Alice : dummy
+
+	autonumber resume "<font color=red><b>Message 0  "
+	Bob -> Alice : Yet another authentication Request
+	Bob <- Alice : Yet another authentication Response
+
+	autonumber stop
+	Bob -> Alice : dummy
+
+	autonumber resume 1 "<font color=blue><b>Message 0  "
+	Bob -> Alice : Yet another authentication Request
+	Bob <- Alice : Yet another authentication Response
+	@enduml
+
+snippet sequence 12
+	@startuml
+
+	Alice -> Bob : message 1
+	Alice -> Bob : message 2
+
+	newpage
+
+	Alice -> Bob : message 3
+	Alice -> Bob : message 4
+
+	newpage A title for the\nlast page
+
+	Alice -> Bob : message 5
+	Alice -> Bob : message 6
+	@enduml
+
+snippet sequence 13
+	@startuml
+	Alice -> Bob: Authentication Request
+
+	alt successful case
+
+		Bob -> Alice: Authentication Accepted
+
+	else some kind of failure
+
+		Bob -> Alice: Authentication Failure
+		group My own label
+			Alice -> Log : Log attack start
+		    loop 1000 times
+		        Alice -> Bob: DNS Attack
+		    end
+			Alice -> Log : Log attack end
+		end
+
+	else Another type of failure
+
+	   Bob -> Alice: Please repeat
+
+	end
+	@enduml
+
+snippet sequence 14
+	@startuml
+	Alice->Bob : hello
+	note left: this is a first note
+
+	Bob->Alice : ok
+	note right: this is another note
+
+	Bob->Bob : I am thinking
+	note left
+		a note
+		can also be defined
+		on several lines
+	end note
+	@enduml
+
+snippet sequence 15
+	@startuml
+	participant Alice
+	participant Bob
+	note left of Alice #aqua
+		This is displayed
+		left of Alice.
+	end note
+
+	note right of Alice: This is displayed right of Alice.
+
+	note over Alice: This is displayed over Alice.
+
+	note over Alice, Bob #FFAAAA: This is displayed\n over Bob and Alice.
+
+	note over Bob, Alice
+		This is yet another
+		example of
+		a long note.
+	end note
+	@enduml
+
+snippet sequence 16
+	@startuml
+	caller -> server : conReq
+	hnote over caller : idle
+	caller <- server : conConf
+	rnote over server
+	 "r" as rectangle
+	 "h" as hexagon
+	endrnote
+	@enduml
+
+snippet sequence 17
+	@startuml
+	participant Alice
+	participant "The **Famous** Bob" as Bob
+
+	Alice -> Bob : hello --there--
+	... Some ~~long delay~~ ...
+	Bob -> Alice : ok
+	note left
+	  This is **bold**
+	  This is //italics//
+	  This is ""monospaced""
+	  This is --stroked--
+	  This is __underlined__
+	  This is ~~waved~~
+	end note
+
+	Alice -> Bob : A //well formatted// message
+	note right of Alice
+	 This is <back:cadetblue><size:18>displayed</size></back>
+	 __left of__ Alice.
+	end note
+	note left of Bob
+	 <u:red>This</u> is <color #118888>displayed</color>
+	 **<color purple>left of</color> <s:red>Alice</strike> Bob**.
+	end note
+	note over Alice, Bob
+	 <w:#FF33FF>This is hosted</w> by <img sourceforge.jpg>
+	end note
+	@enduml
+
+snippet sequence 18
+	@startuml
+
+	== Initialization ==
+
+	Alice -> Bob: Authentication Request
+	Bob --> Alice: Authentication Response
+
+	== Repetition ==
+
+	Alice -> Bob: Another authentication Request
+	Alice <-- Bob: another authentication Response
+
+	@enduml
+
+snippet sequence 19
+	@startuml
+	participant Alice
+	actor Bob
+
+	ref over Alice, Bob : init
+
+	Alice -> Bob : hello
+
+	ref over Bob
+	  This can be on
+	  several lines
+	end ref
+	@enduml
+
+snippet sequence 20
+	@startuml
+
+	Alice -> Bob: Authentication Request
+	...
+	Bob --> Alice: Authentication Response
+	...5 minutes latter...
+	Bob --> Alice: Bye !
+
+	@enduml
+
+snippet sequence 21
+	@startuml
+
+	Alice -> Bob: message 1
+	Bob --> Alice: ok
+	|||
+	Alice -> Bob: message 2
+	Bob --> Alice: ok
+	||45||
+	Alice -> Bob: message 3
+	Bob --> Alice: ok
+
+	@enduml
+
+snippet sequence 22
+	@startuml
+	participant User
+
+	User -> A: DoWork
+	activate A
+
+	A -> B: << createRequest >>
+	activate B
+
+	B -> C: DoWork
+	activate C
+	C --> B: WorkDone
+	destroy C
+
+	B --> A: RequestCreated
+	deactivate B
+
+	A -> User: Done
+	deactivate A
+
+	@enduml
+
+snippet sequence 23
+	@startuml
+	participant User
+
+	User -> A: DoWork
+	activate A #FFBBBB
+
+	A -> A: Internal call
+	activate A #DarkSalmon
+
+	A -> B: << createRequest >>
+	activate B
+
+	B --> A: RequestCreated
+	deactivate B
+	deactivate A
+	A -> User: Done
+	deactivate A
+
+	@enduml
+
+snippet sequence 24
+	@startuml
+	Bob -> Alice : hello
+
+	create Other
+	Alice -> Other : new
+
+	create control String
+	Alice -> String
+	note right : You can also put notes!
+
+	Alice --> Bob : ok
+
+	@enduml
+
+snippet sequence 25
+	@startuml
+	[-> A: DoWork
+
+	activate A
+
+	A -> A: Internal call
+	activate A
+
+	A ->] : << createRequest >>
+
+	A<--] : RequestCreated
+	deactivate A
+	[<- A: Done
+	deactivate A
+	@enduml
+
+snippet sequence 26
+	@startuml
+	[-> Bob
+	[o-> Bob
+	[o->o Bob
+	[x-> Bob
+
+	[<- Bob
+	[x<- Bob
+
+	Bob ->]
+	Bob ->o]
+	Bob o->o]
+	Bob ->x]
+
+	Bob <-]
+	Bob x<-]
+	@enduml
+
+snippet sequence 27
+	@startuml
+
+	participant "Famous Bob" as Bob << Generated >>
+	participant Alice << (C,#ADD1B2) Testable >>
+
+	Bob->Alice: First message
+
+	@enduml
+
+snippet sequence 28
+	@startuml
+
+	skinparam guillemet false
+	participant "Famous Bob" as Bob << Generated >>
+	participant Alice << (C,#ADD1B2) Testable >>
+
+	Bob->Alice: First message
+
+	@enduml
+
+snippet sequence 29
+	@startuml
+
+	participant Bob << (C,#ADD1B2) >>
+	participant Alice << (C,#ADD1B2) >>
+
+	Bob->Alice: First message
+
+	@enduml
+
+snippet sequence 30
+	@startuml
+
+	title __Simple__ **communication** example
+
+	Alice -> Bob: Authentication Request
+	Bob -> Alice: Authentication Response
+
+	@enduml
+
+snippet sequence 31
+	@startuml
+
+	title __Simple__ communication example\non several lines
+
+	Alice -> Bob: Authentication Request
+	Bob -> Alice: Authentication Response
+
+	@enduml
+
+snippet sequence 32
+	@startuml
+
+	title
+	 <u>Simple</u> communication example
+	 on <i>several</i> lines and using <font color=red>html</font>
+	 This is hosted by <img:sourceforge.jpg>
+	end title
+
+	Alice -> Bob: Authentication Request
+	Bob -> Alice: Authentication Response
+
+	@enduml
+
+snippet sequence 33
+	@startuml
+
+	box "Internal Service" #LightBlue
+		participant Bob
+		participant Alice
+	end box
+	participant Other
+
+	Bob -> Alice : hello
+	Alice -> Other : hello
+
+	@enduml
+
+snippet sequence 34
+	@startuml
+
+	hide footbox
+	title Footer removed
+
+	Alice -> Bob: Authentication Request
+	Bob --> Alice: Authentication Response
+
+	@enduml
+
+snippet sequence 35
+	@startuml
+	skinparam sequenceArrowThickness 2
+	skinparam roundcorner 20
+	skinparam maxmessagesize 60
+	skinparam sequenceParticipant underline
+
+	actor User
+	participant "First Class" as A
+	participant "Second Class" as B
+	participant "Last Class" as C
+
+	User -> A: DoWork
+	activate A
+
+	A -> B: Create Request
+	activate B
+
+	B -> C: DoWork
+	activate C
+	C --> B: WorkDone
+	destroy C
+
+	B --> A: Request Created
+	deactivate B
+
+	A --> User: Done
+	deactivate A
+
+	@enduml
+
+snippet sequence 36
+	@startuml
+	skinparam backgroundColor #EEEBDC
+	skinparam handwritten true
+
+	skinparam sequence {
+		ArrowColor DeepSkyBlue
+		ActorBorderColor DeepSkyBlue
+		LifeLineBorderColor blue
+		LifeLineBackgroundColor #A9DCDF
+
+		ParticipantBorderColor DeepSkyBlue
+		ParticipantBackgroundColor DodgerBlue
+		ParticipantFontName Impact
+		ParticipantFontSize 17
+		ParticipantFontColor #A9DCDF
+
+		ActorBackgroundColor aqua
+		ActorFontColor DeepSkyBlue
+		ActorFontSize 17
+		ActorFontName Aapex
+	}
+
+	actor User
+	participant "First Class" as A
+	participant "Second Class" as B
+	participant "Last Class" as C
+
+	User -> A: DoWork
+	activate A
+
+	A -> B: Create Request
+	activate B
+
+	B -> C: DoWork
+	activate C
+	C --> B: WorkDone
+	destroy C
+
+	B --> A: Request Created
+	deactivate B
+
+	A --> User: Done
+	deactivate A
+
+	@enduml
+
+snippet sequence 37
+	@startuml
+	skinparam ParticipantPadding 20
+	skinparam BoxPadding 10
+
+	box "Foo1"
+	participant Alice1
+	participant Alice2
+	end box
+	box "Foo2"
+	participant Bob1
+	participant Bob2
+	end box
+	Alice1 -> Bob1 : hello
+	Alice1 -> Out : out
+	@enduml
+
+snippet usecase 00
+	@startuml
+
+	(First usecase)
+	(Another usecase) as (UC2)
+	usecase UC3
+	usecase (Last\nusecase) as UC4
+
+	@enduml
+
+snippet usecase 01
+	@startuml
+
+	:First Actor:
+	:Another\nactor: as Men2
+	actor Men3
+	actor :Last actor: as Men4
+
+	@enduml
+
+snippet usecase 02
+	@startuml
+
+	usecase UC1 as "You can use
+	several lines to define your usecase.
+	You can also use separators.
+	--
+	Several separators are possible.
+	==
+	And you can add titles:
+	..Conclusion..
+	This allows large description."
+
+	@enduml
+
+snippet usecase 03
+	@startuml
+
+	User -> (Start)
+	User --> (Use the application) : A small label
+
+	:Main Admin: ---> (Use the application) : This is\nyet another\nlabel
+
+	@enduml
+
+snippet usecase 04
+	@startuml
+	:Main Admin: as Admin
+	(Use the application) as (Use)
+
+	User <|-- Admin
+	(Start) <|-- (Use)
+
+	@enduml
+
+snippet usecase 05
+	@startuml
+	:Main Admin: as Admin
+	(Use the application) as (Use)
+
+	User -> (Start)
+	User --> (Use)
+
+	Admin ---> (Use)
+
+	note right of Admin : This is an example.
+
+	note right of (Use)
+	  A note can also
+	  be on several lines
+	end note
+
+	note "This note is connected\nto several objects." as N2
+	(Start) .. N2
+	N2 .. (Use)
+	@enduml
+
+snippet usecase 06
+	@startuml
+	User << Human >>
+	:Main Database: as MySql << Application >>
+	(Start) << One Shot >>
+	(Use the application) as (Use) << Main >>
+
+	User -> (Start)
+	User --> (Use)
+
+	MySql --> (Use)
+
+	@enduml
+
+snippet usecase 07
+	@startuml
+	:user: --> (Use case 1)
+	:user: -> (Use case 2)
+	@enduml
+
+snippet usecase 08
+	@startuml
+	(Use case 1) <.. :user:
+	(Use case 2) <- :user:
+	@enduml
+
+snippet usecase 09
+	@startuml
+	:user: -left-> (dummyLeft)
+	:user: -right-> (dummyRight)
+	:user: -up-> (dummyUp)
+	:user: -down-> (dummyDown)
+	@enduml
+
+snippet usecase 10
+	@startuml
+	:actor1: --> (Usecase1)
+	newpage
+	:actor2: --> (Usecase2)
+	@enduml
+
+snippet usecase 11
+	@startuml
+	'default
+	top to bottom direction
+	user1 --> (Usecase 1)
+	user2 --> (Usecase 2)
+
+	@enduml
+
+snippet usecase 12
+	@startuml
+
+	left to right direction
+	user1 --> (Usecase 1)
+	user2 --> (Usecase 2)
+
+	@enduml
+
+snippet usecase 13
+	@startuml
+	skinparam handwritten true
+
+	skinparam usecase {
+		BackgroundColor DarkSeaGreen
+		BorderColor DarkSlateGray
+
+		BackgroundColor<< Main >> YellowGreen
+		BorderColor<< Main >> YellowGreen
+
+		ArrowColor Olive
+		ActorBorderColor black
+		ActorFontName Courier
+
+		ActorBackgroundColor<< Human >> Gold
+	}
+
+	User << Human >>
+	:Main Database: as MySql << Application >>
+	(Start) << One Shot >>
+	(Use the application) as (Use) << Main >>
+
+	User -> (Start)
+	User --> (Use)
+
+	MySql --> (Use)
+
+	@enduml
+
+snippet usecase 14
+	@startuml
+	left to right direction
+	skinparam packageStyle rectangle
+	actor customer
+	actor clerk
+	rectangle checkout {
+	  customer -- (checkout)
+	  (checkout) .> (payment) : include
+	  (help) .> (checkout) : extends
+	  (checkout) -- clerk
+	}
+	@enduml
+
+snippet class 00
+	@startuml
+	Class01 <|-- Class02
+	Class03 *-- Class04
+	Class05 o-- Class06
+	Class07 .. Class08
+	Class09 -- Class10
+	@enduml
+
+snippet class 01
+	@startuml
+	Class11 <|.. Class12
+	Class13 --> Class14
+	Class15 ..> Class16
+	Class17 ..|> Class18
+	Class19 <--* Class20
+	@enduml
+
+snippet class 02
+	@startuml
+	Class21 #-- Class22
+	Class23 x-- Class24
+	Class25 }-- Class26
+	Class27 +-- Class28
+	Class29 ^-- Class30
+	@enduml
+
+snippet class 03
+	@startuml
+
+	Class01 "1" *-- "many" Class02 : contains
+
+	Class03 o-- Class04 : aggregation
+
+	Class05 --> "1" Class06
+
+	@enduml
+
+snippet class 04
+	@startuml
+	class Car
+
+	Driver - Car : drives >
+	Car *- Wheel : have 4 >
+	Car -- Person : < owns
+
+	@enduml
+
+snippet class 05
+	@startuml
+	Object <|-- ArrayList
+
+	Object : equals()
+	ArrayList : Object[] elementData
+	ArrayList : size()
+
+	@enduml
+
+snippet class 06
+	@startuml
+	class Dummy {
+	  String data
+	  void methods()
+	}
+
+	class Flight {
+	   flightNumber : Integer
+	   departureTime : Date
+	}
+	@enduml
+
+snippet class 07
+	@startuml
+	class Dummy {
+	  {field} A field (despite parentheses)
+	  {method} Some method
+	}
+
+	@enduml
+
+snippet class 08
+	@startuml
+
+	class Dummy {
+	 -field1
+	 #field2
+	 ~method1()
+	 +method2()
+	}
+
+	@enduml
+
+snippet class 09
+	@startuml
+	skinparam classAttributeIconSize 0
+	class Dummy {
+	 -field1
+	 #field2
+	 ~method1()
+	 +method2()
+	}
+
+	@enduml
+
+snippet class 10
+	@startuml
+	class Dummy {
+	  {static} String id
+	  {abstract} void methods()
+	}
+	@enduml
+
+snippet class 11
+	@startuml
+	class Foo1 {
+	  You can use
+	  several lines
+	  ..
+	  as you want
+	  and group
+	  ==
+	  things together.
+	  __
+	  You can have as many groups
+	  as you want
+	  --
+	  End of class
+	}
+
+	class User {
+	  .. Simple Getter ..
+	  + getName()
+	  + getAddress()
+	  .. Some setter ..
+	  + setName()
+	  __ private data __
+	  int age
+	  -- encrypted --
+	  String password
+	}
+
+	@enduml
+
+snippet class 12
+	@startuml
+	class Object << general >>
+	Object <|--- ArrayList
+
+	note top of Object : In java, every class\nextends this one.
+
+	note "This is a floating note" as N1
+	note "This note is connected\nto several objects." as N2
+	Object .. N2
+	N2 .. ArrayList
+
+	class Foo
+	note left: On last defined class
+
+	@enduml
+
+snippet class 13
+	@startuml
+
+	class Foo
+	note left: On last defined class
+
+	note top of Object
+	  In java, <size:18>every</size> <u>class</u>
+	  <b>extends</b>
+	  <i>this</i> one.
+	end note
+
+	note as N1
+	  This note is <u>also</u>
+	  <b><color:royalBlue>on several</color>
+	  <s>words</s> lines
+	  And this is hosted by <img:sourceforge.jpg>
+	end note
+
+	@enduml
+
+snippet class 14
+	@startuml
+
+	class Dummy
+	Dummy --> Foo : A link
+	note on link #red: note that is red
+
+	Dummy --> Foo2 : Another link
+	note right on link #blue
+		this is my note on right link
+		and in blue
+	end note
+
+	@enduml
+
+snippet class 15
+	@startuml
+
+	abstract class AbstractList
+	abstract AbstractCollection
+	interface List
+	interface Collection
+
+	List <|-- AbstractList
+	Collection <|-- AbstractCollection
+
+	Collection <|- List
+	AbstractCollection <|- AbstractList
+	AbstractList <|-- ArrayList
+
+	class ArrayList {
+	  Object[] elementData
+	  size()
+	}
+
+	enum TimeUnit {
+	  DAYS
+	  HOURS
+	  MINUTES
+	}
+
+	annotation SuppressWarnings
+
+	@enduml
+
+snippet class 16
+	@startuml
+	class "This is my class" as class1
+	class class2 as "It works this way too"
+
+	class2 *-- "foo/dummy" : use
+	@enduml
+
+snippet class 17
+	@startuml
+
+	class Dummy1 {
+	  +myMethods()
+	}
+
+	class Dummy2 {
+	  +hiddenMethod()
+	}
+
+	class Dummy3 <<Serializable>> {
+		String name
+	}
+
+	hide members
+	hide <<Serializable>> circle
+	show Dummy1 methods
+	show <<Serializable>> fields
+
+	@enduml
+
+snippet class 18
+	@startuml
+
+	class Foo1
+	class Foo2
+
+	Foo2 *-- Foo1
+
+	hide Foo2
+
+	@enduml
+
+snippet class 19
+	@startuml
+
+	class Foo<? extends Element> {
+	  int size()
+	}
+	Foo *- Element
+
+	@enduml
+
+snippet class 20
+	@startuml
+
+	class System << (S,#FF7700) Singleton >>
+	class Date << (D,orchid) >>
+	@enduml
+
+snippet class 21
+	@startuml
+
+	package "Classic Collections" #DDDDDD {
+	  Object <|-- ArrayList
+	}
+
+	package net.sourceforge.plantuml {
+	  Object <|-- Demo1
+	  Demo1 *- Demo2
+	}
+
+	@enduml
+
+snippet class 22
+	@startuml
+	scale 750 width
+	package foo1 <<Node>> {
+	  class Class1
+	}
+
+	package foo2 <<Rectangle>> {
+	  class Class2
+	}
+
+	package foo3 <<Folder>> {
+	  class Class3
+	}
+
+	package foo4 <<Frame>> {
+	  class Class4
+	}
+
+	package foo5 <<Cloud>> {
+	  class Class5
+	}
+
+	package foo6 <<Database>> {
+	  class Class6
+	}
+
+	@enduml
+
+snippet class 23
+	@startuml
+
+	skinparam packageStyle rectangle
+
+	package foo1.foo2 {
+	}
+
+	package foo1.foo2.foo3 {
+	  class Object
+	}
+
+	foo1.foo2 +-- foo1.foo2.foo3
+
+	@enduml
+
+snippet class 24
+	@startuml
+
+	class BaseClass
+
+	namespace net.dummy #DDDDDD {
+	    .BaseClass <|-- Person
+	    Meeting o-- Person
+
+	    .BaseClass <|- Meeting
+	}
+
+	namespace net.foo {
+	  net.dummy.Person  <|- Person
+	  .BaseClass <|-- Person
+
+	  net.dummy.Meeting o-- Person
+	}
+
+	BaseClass <|-- net.unused.Person
+
+	@enduml
+
+snippet class 25
+	@startuml
+
+	set namespaceSeparator ::
+	class X1::X2::foo {
+	  some info
+	}
+
+	@enduml
+
+snippet class 26
+	@startuml
+
+	set namespaceSeparator none
+	class X1.X2.foo {
+	  some info
+	}
+
+	@enduml
+
+snippet class 27
+	@startuml
+	class foo
+	bar ()- foo
+	@enduml
+
+snippet class 28
+	@startuml
+	Room o- Student
+	Room *-- Chair
+	@enduml
+
+snippet class 29
+	@startuml
+	Student -o Room
+	Chair --* Room
+	@enduml
+
+snippet class 30
+	@startuml
+	foo -left-> dummyLeft
+	foo -right-> dummyRight
+	foo -up-> dummyUp
+	foo -down-> dummyDown
+	@enduml
+
+snippet class 31
+	@startuml
+	class Student {
+	  Name
+	}
+	Student "0..*" - "1..*" Course
+	(Student, Course) .. Enrollment
+
+	class Enrollment {
+	  drop()
+	  cancel()
+	}
+	@enduml
+
+snippet class 32
+	@startuml
+	class Student {
+	  Name
+	}
+	Student "0..*" -- "1..*" Course
+	(Student, Course) . Enrollment
+
+	class Enrollment {
+	  drop()
+	  cancel()
+	}
+	@enduml
+
+snippet class 33
+	@startuml
+
+	skinparam class {
+		BackgroundColor PaleGreen
+		ArrowColor SeaGreen
+		BorderColor SpringGreen
+	}
+	skinparam stereotypeCBackgroundColor YellowGreen
+
+	Class01 "1" *-- "many" Class02 : contains
+
+	Class03 o-- Class04 : aggregation
+
+	@enduml
+
+snippet class 34
+	@startuml
+
+	skinparam class {
+		BackgroundColor PaleGreen
+		ArrowColor SeaGreen
+		BorderColor SpringGreen
+		BackgroundColor<<Foo>> Wheat
+		BorderColor<<Foo>> Tomato
+	}
+	skinparam stereotypeCBackgroundColor YellowGreen
+	skinparam stereotypeCBackgroundColor<< Foo >> DimGray
+
+	Class01 <<Foo>>
+	Class03 <<Foo>>
+	Class01 "1" *-- "many" Class02 : contains
+
+	Class03 o-- Class04 : aggregation
+
+	@enduml
+
+snippet class 35
+	@startuml
+
+	skinparam backgroundcolor AntiqueWhite/Gold
+	skinparam classBackgroundColor Wheat|CornflowerBlue
+
+	class Foo #red-green
+	note left of Foo #blue\9932CC
+	  this is my
+	  note on this class
+	end note
+
+	package example #GreenYellow/LightGoldenRodYellow {
+	  class Dummy
+	}
+
+	@enduml
+
+snippet class 36
+	@startuml
+
+	class Bar1
+	class Bar2
+	together {
+	  class Together1
+	  class Together2
+	  class Together3
+	}
+	Together1 - Together2
+	Together2 - Together3
+	Together2 -[hidden]--> Bar1
+	Bar1 -[hidden]> Bar2
+
+
+	@enduml
+
+snippet class 37
+	@startuml
+	' Split into 4 pages
+	page 2x2
+	skinparam pageMargin 10
+	skinparam pageExternalColor gray
+	skinparam pageBorderColor black
+
+	class BaseClass
+
+	namespace net.dummy #DDDDDD {
+	    .BaseClass <|-- Person
+	    Meeting o-- Person
+
+	    .BaseClass <|- Meeting
+
+	}
+
+	namespace net.foo {
+	  net.dummy.Person  <|- Person
+	  .BaseClass <|-- Person
+
+	  net.dummy.Meeting o-- Person
+	}
+
+	BaseClass <|-- net.unused.Person
+	@enduml
+
+snippet activity 00
+	@startuml
+	:Hello world;
+	:This is defined on
+	several **lines**;
+	@enduml
+
+snippet activity 01
+	@startuml
+	start
+	:Hello world;
+	:This is defined on
+	several **lines**;
+	stop
+	@enduml
+
+snippet activity 02
+	@startuml
+	start
+	:Hello world;
+	:This is defined on
+	several **lines**;
+	end
+	@enduml
+
+snippet activity 03
+	@startuml
+	
+	start
+	
+	if (Graphviz installed?) then (yes)
+	  :process all\ndiagrams;
+	else (no)
+	  :process only
+	  __sequence__ and __activity__ diagrams;
+	endif
+	
+	stop
+	
+	@enduml
+
+snippet activity 04
+	@startuml
+	start
+	if (condition A) then (yes)
+	  :Text 1;
+	elseif (condition B) then (yes)
+	  :Text 2;
+	  stop
+	elseif (condition C) then (yes)
+	  :Text 3;
+	elseif (condition D) then (yes)
+	  :Text 4;
+	else (nothing)
+	  :Text else;
+	endif
+	stop
+	@enduml
+
+snippet activity 05
+	@startuml
+	
+	start
+	
+	repeat
+	  :read data;
+	  :generate diagrams;
+	repeat while (more data?)
+	
+	stop
+	
+	@enduml
+
+snippet activity 06
+	@startuml
+	
+	start
+	
+	while (data available?)
+	  :read data;
+	  :generate diagrams;
+	endwhile
+	
+	stop
+	
+	@enduml
+
+snippet activity 07
+	@startuml
+	while (check filesize ?) is (not empty)
+	  :read file;
+	endwhile (empty)
+	:close file;
+	@enduml
+
+snippet activity 08
+	@startuml
+	
+	start
+	
+	if (multiprocessor?) then (yes)
+	  fork
+		:Treatment 1;
+	  fork again
+		:Treatment 2;
+	  end fork
+	else (monoproc)
+	  :Treatment 1;
+	  :Treatment 2;
+	endif
+	
+	@enduml
+
+snippet activity 09
+	@startuml
+	
+	start
+	:foo1;
+	floating note left: This is a note
+	:foo2;
+	note right
+	  This note is on several
+	  //lines// and can
+	  contain <b>HTML</b>
+	  ====
+	  * Calling the method ""foo()"" is prohibited
+	end note
+	stop
+	
+	@enduml
+
+snippet activity 10
+	@startuml
+	
+	start
+	:starting progress;
+	#HotPink:reading configuration files
+	These files should be edited at this point!;
+	#AAAAAA:ending of the process;
+	
+	@enduml
+
+snippet activity 11
+	@startuml
+	:foo1;
+	-> You can put text on arrows;
+	if (test) then
+	  -[#blue]->
+	  :foo2;
+	  -[#green,dashed]-> The text can
+	  also be on several lines
+	  and **very** long...;
+	  :foo3;
+	else
+	  -[#black,dotted]->
+	  :foo4;
+	endif
+	-[#gray,bold]->
+	:foo5;
+	@enduml
+
+snippet activity 12
+	@startuml
+	start
+	:Some activity;
+	(A)
+	detach
+	(A)
+	:Other activity;
+	@enduml
+
+snippet activity 13
+	@startuml
+	start
+	partition Initialization {
+		:read config file;
+		:init internal variable;
+	}
+	partition Running {
+		:wait for user interaction;
+		:print information;
+	}
+	
+	stop
+	@enduml
+
+snippet activity 14
+	@startuml
+	|Swimlane1|
+	start
+	:foo1;
+	|#AntiqueWhite|Swimlane2|
+	:foo2;
+	:foo3;
+	|Swimlane1|
+	:foo4;
+	|Swimlane2|
+	:foo5;
+	stop
+	@enduml
+
+snippet activity 15
+	@startuml
+	 :start;
+	 fork
+	   :foo1;
+	   :foo2;
+	 fork again
+	   :foo3;
+	   detach
+	 endfork
+	 if (foo4) then
+	   :foo5;
+	   detach
+	 endif
+	 :foo6;
+	 detach
+	 :foo7;
+	 stop
+	@enduml
+
+snippet activity 16
+	@startuml
+	:Ready;
+	:next(o)|
+	:Receiving;
+	split
+	 :nak(i)<
+	 :ack(o)>
+	split again
+	 :ack(i)<
+	 :next(o)
+	 on several lines|
+	 :i := i + 1]
+	 :ack(o)>
+	split again
+	 :err(i)<
+	 :nak(o)>
+	split again
+	 :foo/
+	split again
+	 :i > 5}
+	stop
+	end split
+	:finish;
+	@enduml
+
+snippet activity 17
+	@startuml
+	
+	start
+	:ClickServlet.handleRequest();
+	:new page;
+	if (Page.onSecurityCheck) then (true)
+	  :Page.onInit();
+	  if (isForward?) then (no)
+		:Process controls;
+		if (continue processing?) then (no)
+		  stop
+		endif
+		
+		if (isPost?) then (yes)
+		  :Page.onPost();
+		else (no)
+		  :Page.onGet();
+		endif
+		:Page.onRender();
+	  endif
+	else (false)
+	endif
+	
+	if (do redirect?) then (yes)
+	  :redirect process;
+	else
+	  if (do forward?) then (yes)
+		:Forward request;
+	  else (no)
+		:Render page template;
+	  endif
+	endif
+	
+	stop
+	
+	@enduml
+
+snippet component 00
+	@startuml
+	
+	[First component]
+	[Another component] as Comp2  
+	component Comp3
+	component [Last\ncomponent] as Comp4
+	
+	@enduml
+
+snippet component 01
+	@startuml
+	
+	() "First Interface"
+	() "Another interface" as Interf2
+	interface Interf3
+	interface "Last\ninterface" as Interf4
+	
+	@enduml
+
+snippet component 02
+	@startuml
+	
+	DataAccess - [First Component] 
+	[First Component] ..> HTTP : use
+	
+	@enduml
+
+snippet component 03
+	@startuml
+	
+	interface "Data Access" as DA
+	
+	DA - [First Component] 
+	[First Component] ..> HTTP : use
+	
+	note left of HTTP : Web Service only
+	
+	note right of [First Component]
+	  A note can also
+	  be on several lines
+	end note
+	
+	@enduml
+
+snippet component 04
+	@startuml
+	
+	package "Some Group" {
+	  HTTP - [First Component]
+	  [Another Component]
+	}
+	 
+	node "Other Groups" {
+	  FTP - [Second Component]
+	  [First Component] --> FTP
+	} 
+	
+	cloud {
+	  [Example 1]
+	}
+	
+	
+	database "MySql" {
+	  folder "This is my folder" {
+		[Folder 3]
+	  }
+	  frame "Foo" {
+		[Frame 4]
+	  }
+	}
+	
+	
+	[Another Component] --> [Example 1]
+	[Example 1] --> [Folder 3]
+	[Folder 3] --> [Frame 4]
+	
+	@enduml
+
+snippet component 05
+	@startuml
+	[Component] --> Interface1
+	[Component] -> Interface2
+	@enduml
+
+snippet component 06
+	@startuml
+	Interface1 <-- [Component]
+	Interface2 <- [Component]
+	@enduml
+
+snippet component 07
+	@startuml
+	[Component] -left-> left 
+	[Component] -right-> right 
+	[Component] -up-> up
+	[Component] -down-> down
+	@enduml
+
+snippet component 08
+	@startuml
+	skinparam componentStyle uml2
+	
+	interface "Data Access" as DA
+	
+	DA - [First Component] 
+	[First Component] ..> HTTP : use
+	
+	@enduml
+
+snippet component 09
+	@startuml
+	component comp1 [
+	This component
+	has a long comment
+	on several lines
+	]
+	@enduml
+
+snippet component 10
+	@startuml
+	component  [Web Server] #Yellow
+	@enduml
+
+snippet component 11
+	@startuml
+	sprite $businessProcess [16x16/16] {
+	FFFFFFFFFFFFFFFF
+	FFFFFFFFFFFFFFFF
+	FFFFFFFFFFFFFFFF
+	FFFFFFFFFFFFFFFF
+	FFFFFFFFFF0FFFFF
+	FFFFFFFFFF00FFFF
+	FF00000000000FFF
+	FF000000000000FF
+	FF00000000000FFF
+	FFFFFFFFFF00FFFF
+	FFFFFFFFFF0FFFFF
+	FFFFFFFFFFFFFFFF
+	FFFFFFFFFFFFFFFF
+	FFFFFFFFFFFFFFFF
+	FFFFFFFFFFFFFFFF
+	FFFFFFFFFFFFFFFF
+	}
+	
+	
+	rectangle " End to End\nbusiness process" <<$businessProcess>> {
+	 rectangle "inner process 1" <<$businessProcess>> as src
+	 rectangle "inner process 2" <<$businessProcess>> as tgt
+	 src -> tgt
+	}
+	@enduml
+
+snippet component 12
+	@startuml
+	
+	skinparam interface {
+	  backgroundColor RosyBrown
+	  borderColor orange
+	}
+	
+	skinparam component {
+	  FontSize 13
+	  BackgroundColor<<Apache>> Red
+	  BorderColor<<Apache>> #FF6655
+	  FontName Courier
+	  BorderColor black
+	  BackgroundColor gold
+	  ArrowFontName Impact
+	  ArrowColor #FF6655
+	  ArrowFontColor #777777
+	}
+	
+	() "Data Access" as DA
+	
+	DA - [First Component] 
+	[First Component] ..> () HTTP : use
+	HTTP - [Web Server] << Apache >>
+	
+	@enduml
+
+snippet component 13
+	@startuml
+	[AA] <<static lib>>
+	[BB] <<shared lib>>
+	[CC] <<static lib>>
+	
+	node node1
+	node node2 <<shared node>>
+	database Production
+	
+	skinparam component {
+		backgroundColor<<static lib>> DarkKhaki
+		backgroundColor<<shared lib>> Green
+	}
+	
+	skinparam node {
+		borderColor Green
+		backgroundColor Yellow
+		backgroundColor<<shared node>> Magenta
+	}
+	skinparam databaseBackgroundColor Aqua
+	
+	@enduml
+
+snippet state 00
+	@startuml
+	
+	[*] --> State1
+	State1 --> [*]
+	State1 : this is a string
+	State1 : this is another string
+	
+	State1 -> State2
+	State2 --> [*]
+	
+	@enduml
+
+snippet state 01
+	@startuml
+	scale 350 width
+	[*] --> NotShooting
+	
+	state NotShooting {
+	  [*] --> Idle
+	  Idle --> Configuring : EvConfig
+	  Configuring --> Idle : EvConfig
+	}
+	
+	state Configuring {
+	  [*] --> NewValueSelection
+	  NewValueSelection --> NewValuePreview : EvNewValue
+	  NewValuePreview --> NewValueSelection : EvNewValueRejected
+	  NewValuePreview --> NewValueSelection : EvNewValueSaved
+	  
+	  state NewValuePreview {
+		 State1 -> State2
+	  }
+	  
+	}
+	@enduml
+
+snippet state 02
+	@startuml
+	scale 600 width
+	
+	[*] -> State1
+	State1 --> State2 : Succeeded
+	State1 --> [*] : Aborted
+	State2 --> State3 : Succeeded
+	State2 --> [*] : Aborted
+	state State3 {
+	  state "Accumulate Enough Data\nLong State Name" as long1
+	  long1 : Just a test
+	  [*] --> long1
+	  long1 --> long1 : New Data
+	  long1 --> ProcessData : Enough Data
+	}
+	State3 --> State3 : Failed
+	State3 --> [*] : Succeeded / Save Result
+	State3 --> [*] : Aborted
+	 
+	@enduml
+
+snippet state 03
+	@startuml
+	[*] --> Active
+	
+	state Active {
+	  [*] -> NumLockOff
+	  NumLockOff --> NumLockOn : EvNumLockPressed
+	  NumLockOn --> NumLockOff : EvNumLockPressed
+	  --
+	  [*] -> CapsLockOff
+	  CapsLockOff --> CapsLockOn : EvCapsLockPressed
+	  CapsLockOn --> CapsLockOff : EvCapsLockPressed
+	  --
+	  [*] -> ScrollLockOff
+	  ScrollLockOff --> ScrollLockOn : EvCapsLockPressed
+	  ScrollLockOn --> ScrollLockOff : EvCapsLockPressed
+	}
+	
+	@enduml
+
+snippet state 04
+	@startuml
+	
+	[*] -up-> First
+	First -right-> Second
+	Second --> Third
+	Third -left-> Last
+	
+	@enduml
+
+snippet state 05
+	@startuml
+	
+	[*] --> Active
+	Active --> Inactive
+	
+	note left of Active : this is a short\nnote
+	
+	note right of Inactive
+	  A note can also
+	  be defined on
+	  several lines
+	end note
+	
+	@enduml
+
+snippet state 06
+	@startuml
+	
+	state foo
+	note "This is a floating note" as N1
+	
+	@enduml
+
+snippet state 07
+	@startuml
+	
+	[*] --> NotShooting
+	
+	state "Not Shooting State" as NotShooting {
+	  state "Idle mode" as Idle
+	  state "Configuring mode" as Configuring
+	  [*] --> Idle
+	  Idle --> Configuring : EvConfig
+	  Configuring --> Idle : EvConfig
+	}
+	
+	note right of NotShooting : This is a note on a composite state
+	
+	@enduml
+
+snippet state 08
+	@startuml
+	skinparam backgroundColor LightYellow
+	skinparam state {
+	  StartColor MediumBlue
+	  EndColor Red
+	  BackgroundColor Peru
+	  BackgroundColor<<Warning>> Olive
+	  BorderColor Gray
+	  FontName Impact
+	}
+	
+	[*] --> NotShooting
+	
+	state "Not Shooting State" as NotShooting {
+	  state "Idle mode" as Idle <<Warning>>
+	  state "Configuring mode" as Configuring
+	  [*] --> Idle
+	  Idle --> Configuring : EvConfig
+	  Configuring --> Idle : EvConfig
+	}
+	
+	NotShooting --> [*]
+	@enduml
+
+snippet object 09
+	@startuml
+	object firstObject
+	object "My Second Object" as o2
+	@enduml
+
+snippet object 10
+	@startuml
+	object Object01
+	object Object02
+	object Object03
+	object Object04
+	object Object05
+	object Object06
+	object Object07
+	object Object08
+	
+	Object01 <|-- Object02
+	Object03 *-- Object04
+	Object05 o-- "4" Object06
+	Object07 .. Object08 : some labels
+	@enduml
+
+snippet object 11
+	@startuml
+	
+	object user
+	
+	user : name = "Dummy"
+	user : id = 123
+	
+	@enduml
+
+snippet object 12
+	@startuml
+	
+	object user {
+	  name = "Dummy"
+	  id = 123
+	}
+	
+	@enduml
+
+snippet deployment 00
+	@startuml
+	actor actor
+	agent agent
+	artifact artifact
+	boundary boundary
+	card card
+	cloud cloud
+	component component
+	control control
+	database database
+	entity entity
+	file file
+	folder folder
+	frame frame
+	interface  interface
+	node node
+	package package
+	queue queue
+	stack stack
+	rectangle rectangle
+	storage storage
+	usecase usecase
+	@enduml
+
+snippet deployment 01
+	@startuml
+	folder folder [
+	This is an <b>folder
+	----
+	You can use separator
+	====
+	of different kind
+	....
+	and style
+	]
+	
+	node node [
+	This is a <b>node
+	----
+	You can use separator
+	====
+	of different kind
+	....
+	and style
+	]
+	
+	database database [
+	This is a <b>database
+	----
+	You can use separator
+	====
+	of different kind
+	....
+	and style
+	]
+	
+	usecase usecase [
+	This is a <b>usecase
+	----
+	You can use separator
+	====
+	of different kind
+	....
+	and style
+	]
+	
+	@enduml
+
+snippet deployment 02
+	@startuml
+	
+	node node1
+	node node2
+	node node3
+	node node4
+	node node5
+	node1 -- node2
+	node1 .. node3
+	node1 ~~ node4
+	node1 == node5
+	
+	@enduml
+
+snippet deployment 03
+	@startuml
+	
+	artifact artifact1
+	artifact artifact2
+	artifact artifact3
+	artifact artifact4
+	artifact artifact5
+	artifact artifact6
+	artifact artifact7
+	artifact artifact8
+	artifact artifact9
+	artifact artifact10
+	artifact1 --> artifact2
+	artifact1 --* artifact3
+	artifact1 --o artifact4
+	artifact1 --+ artifact5
+	artifact1 --# artifact6
+	artifact1 -->> artifact7
+	artifact1 --0 artifact8
+	artifact1 --^ artifact9
+	artifact1 --(0 artifact10
+	
+	@enduml
+
+snippet deployment 04
+	@startuml
+	
+	cloud cloud1
+	cloud cloud2
+	cloud cloud3
+	cloud cloud4
+	cloud cloud5
+	cloud1 -0- cloud2
+	cloud1 -0)- cloud3
+	cloud1 -(0- cloud4
+	cloud1 -(0)- cloud5
+	
+	@enduml
+
+snippet deployment 05
+	@startuml
+	artifact Foo1 {
+	  folder Foo2
+	}
+	
+	folder Foo3 {
+	  artifact Foo4
+	}
+	
+	frame Foo5 {
+	  database Foo6
+	}
+	
+	@enduml
+
+snippet deployment 06
+	@startuml
+	node Foo1 {
+	 cloud Foo2 
+	}
+	
+	cloud Foo3 {
+	  frame Foo4
+	}
+	
+	database Foo5  {
+	  storage Foo6
+	}
+	
+	storage Foo7 {
+	  storage Foo8
+	}
+	@enduml
+
+snippet deployment 07
+	@startuml
+	skinparam rectangle {
+		roundCorner<<Concept>> 25
+	}
+	
+	rectangle "Concept Model" <<Concept>> {
+		rectangle "Example 1" <<Concept>> as ex1
+		rectangle "Another rectangle"
+	}
+	@enduml
+
+snippet timing 00
+	@startuml
+	robust "Web Browser" as WB
+	concise "Web User" as WU
+	
+	@0
+	WU is Idle
+	WB is Idle
+	
+	@100
+	WU is Waiting
+	WB is Processing
+	
+	@300
+	WB is Waiting
+	@enduml
+
+snippet timing 01
+	@startuml
+	robust "Web Browser" as WB
+	concise "Web User" as WU
+	
+	@0
+	WU is Idle
+	WB is Idle
+	
+	@100
+	WU -> WB : URL
+	WU is Waiting
+	WB is Processing
+	
+	@300
+	WB is Waiting
+	
+	@enduml
+
+snippet timing 02
+	@startuml
+	robust "DNS Resolver" as DNS
+	robust "Web Browser" as WB
+	concise "Web User" as WU
+	
+	@0
+	WU is Idle
+	WB is Idle
+	DNS is Idle
+	
+	@+100
+	WU -> WB : URL
+	WU is Waiting
+	WB is Processing
+	
+	@+200
+	WB is Waiting
+	WB -> DNS@+50 : Resolve URL
+	
+	@+100
+	DNS is Processing
+	
+	@+300
+	DNS is Idle
+	@enduml
+
+snippet timing 03
+	@startuml
+	robust "Web Browser" as WB
+	concise "Web User" as WU
+	
+	@WB
+	0 is idle
+	+200 is Proc.
+	+100 is Waiting
+	
+	@WU
+	0 is Waiting
+	+500 is ok
+	@enduml
+
+snippet timing 04
+	@startuml
+	concise "Web User" as WU
+	scale 100 as 50 pixels
+	
+	@WU
+	0 is Waiting
+	+500 is ok
+	@enduml
+
+snippet timing 05
+	@startuml
+	robust "Web Browser" as WB
+	concise "Web User" as WU
+	
+	WB is Initializing
+	WU is Absent
+	
+	@WB
+	0 is idle
+	+200 is Processing
+	+100 is Waiting
+	
+	@WU
+	0 is Waiting
+	+500 is ok
+	@enduml
+
+snippet timing 06
+	@startuml
+	robust "Web Browser" as WB
+	concise "Web User" as WU
+	
+	WB is Initializing
+	WU is Absent
+	
+	@WB
+	0 is idle
+	+200 is Processing
+	+100 is Waiting
+	WB@0 <-> @50 : {50 ms lag}
+	
+	@WU
+	0 is Waiting
+	+500 is ok
+	@200 <-> @+150 : {150 ms}
+	@enduml
+
+snippet timing 07
+	@startuml
+	Title this is my title
+	header: some header
+	footer: some footer
+	legend
+	Some legend
+	end legend
+	caption some caption
+	
+	robust "Web Browser" as WB
+	concise "Web User" as WU
+	
+	@0
+	WU is Idle
+	WB is Idle
+	
+	@100
+	WU is Waiting
+	WB is Processing
+	
+	@300
+	WB is Waiting
+	@enduml
+
+snippet salt 00
+	@startuml
+	salt
+	{
+	  Just plain text
+	  [This is my button]
+	  ()  Unchecked radio
+	  (X) Checked radio
+	  []  Unchecked box
+	  [X] Checked box
+	  "Enter text here   "
+	  ^This is a droplist^
+	}
+	@enduml
+
+snippet salt 01
+	@startsalt
+	{
+	  Login    | "MyName   "
+	  Password | "****     "
+	  [Cancel] | [  OK   ]
+	}
+	@endsalt
+
+snippet salt 02
+	@startsalt
+	{+
+	  Login    | "MyName   "
+	  Password | "****     "
+	  [Cancel] | [  OK   ]
+	}
+	@endsalt
+
+snippet salt 03
+	@startsalt
+	{
+	  Text1
+	  ..
+	  "Some field"
+	  ==
+	  Note on usage
+	  ~~
+	  Another text
+	  --
+	  [Ok]
+	}
+	@endsalt
+
+snippet salt 04
+	@startsalt
+	{
+	{T
+	 + World
+	 ++ America
+	 +++ Canada
+	 +++ USA
+	 ++++ New York
+	 ++++ Boston
+	 +++ Mexico
+	 ++ Europe
+	 +++ Italy
+	 +++ Germany
+	 ++++ Berlin
+	 ++ Africa
+	}
+	}
+	@endsalt
+
+snippet salt 05
+	@startsalt
+	{
+	Name         | "                 "
+	Modifiers:   | { (X) public | () default | () private | () protected
+	                [] abstract | [] final   | [] static }
+	Superclass:  | { "java.lang.Object " | [Browse...] }
+	}
+	@endsalt
+
+snippet salt 06
+	@startsalt
+	{+
+	{/ <b>General | Fullscreen | Behavior | Saving }
+	{
+		{ Open image in: | ^Smart Mode^ }
+		[X] Smooth images when zoomed
+		[X] Confirm image deletion
+		[ ] Show hidden images
+	}
+	[Close]
+	}
+	@endsalt
+
+snippet salt 07
+	@startsalt
+	{+
+	{/ <b>General
+	Fullscreen
+	Behavior
+	Saving } |
+	{
+		{ Open image in: | ^Smart Mode^ }
+		[X] Smooth images when zoomed
+		[X] Confirm image deletion
+		[ ] Show hidden images 
+		[Close]
+	}
+	}
+	@endsalt
+
+snippet salt 08
+	@startsalt
+	{+
+	{* File | Edit | Source | Refactor }
+	{/ General | Fullscreen | Behavior | Saving }
+	{
+		{ Open image in: | ^Smart Mode^ }
+		[X] Smooth images when zoomed
+		[X] Confirm image deletion
+		[ ] Show hidden images 
+	}
+	[Close]
+	}
+	@endsalt
+
+snippet salt 09
+	@startsalt
+	{+
+	{* File | Edit | Source | Refactor 
+	 Refactor | New | Open File | - | Close | Close All }
+	{/ General | Fullscreen | Behavior | Saving }
+	{
+		{ Open image in: | ^Smart Mode^ }
+		[X] Smooth images when zoomed
+		[X] Confirm image deletion
+		[ ] Show hidden images 
+	}
+	[Close]
+	}
+	@endsalt
+
+snippet salt 10
+	@startsalt
+	{#
+	. | Column 2 | Column 3
+	Row header 1 | value 1 | value 2
+	Row header 2 | A long cell | *
+	}
+	@endsalt
+
+snippet salt 11
+	@startsalt
+	{
+	  Login<&person> | "MyName   "
+	  Password<&key> | "****     "
+	  [Cancel <&circle-x>] | [OK <&account-login>]
+	}
+	@endsalt
+
+snippet salt 12
+	@startuml
+	listopeniconic
+	@enduml
+
+snippet archimate 00
+	@startuml
+	archimate #Technology "VPN Server" as vpnServerA <<technology-device>>
+	
+	rectangle GO #lightgreen
+	rectangle STOP #red
+	rectangle WAIT #orange
+	@enduml
+
+snippet archimate 01
+	@startuml
+	!define Junction_Or circle #black
+	!define Junction_And circle #whitesmoke
+	
+	Junction_And JunctionAnd
+	Junction_Or JunctionOr
+	
+	archimate #Technology "VPN Server" as vpnServerA <<technology-device>>
+	
+	rectangle GO #lightgreen
+	rectangle STOP #red
+	rectangle WAIT #orange
+	GO -up-> JunctionOr
+	STOP -up-> JunctionOr
+	STOP -down-> JunctionAnd
+	WAIT -down-> JunctionAnd
+	@enduml
+
+snippet archimate 02
+	@startuml
+	
+	sprite $bProcess jar:archimate/business-process
+	sprite $aService jar:archimate/application-service
+	sprite $aComponent jar:archimate/application-component
+	
+	archimate #Business "Handle claim"  as HC <<business-process>>
+	archimate #Business "Capture Information"  as CI <<business-process>>
+	archimate #Business "Notify\nAdditional Stakeholders" as NAS <<business-process>>
+	archimate #Business "Validate" as V <<business-process>>
+	archimate #Business "Investigate" as I <<business-process>>
+	archimate #Business "Pay" as P <<business-process>>
+	
+	HC *-down- CI
+	HC *-down- NAS
+	HC *-down- V
+	HC *-down- I
+	HC *-down- P
+	
+	CI -right->> NAS
+	NAS -right->> V
+	V -right->> I
+	I -right->> P
+	
+	archimate #APPLICATION "Scanning" as scanning <<application-service>>
+	archimate #APPLICATION "Customer admnistration" as customerAdministration <<application-service>>
+	archimate #APPLICATION "Claims admnistration" as claimsAdministration <<application-service>>
+	archimate #APPLICATION Printing  <<application-service>>
+	archimate #APPLICATION Payment  <<application-service>>
+	
+	scanning -up-> CI
+	customerAdministration  -up-> CI
+	claimsAdministration -up-> NAS
+	claimsAdministration -up-> V
+	claimsAdministration -up-> I
+	Payment -up-> P
+	
+	Printing -up-> V
+	Printing -up-> P
+	
+	archimate #APPLICATION "Document\nManagement\nSystem" as DMS <<application-component>>
+	archimate #APPLICATION "General\nCRM\nSystem" as CRM <<application-component>>
+	archimate #APPLICATION "Home & Away\nPolicy\nAdministration" as HAPA <<application-component>>
+	archimate #APPLICATION "Home & Away\nFinancial\nAdministration" as HFPA <<application-component>>
+	
+	DMS .up.|> scanning
+	DMS .up.|> Printing
+	CRM .up.|> customerAdministration
+	HAPA .up.|> claimsAdministration
+	HFPA .up.|> Payment
+	
+	legend left
+	Example from the "Archisurance case study" (OpenGroup).
+	See 
+	==
+	<$bProcess> :business process
+	==
+	<$aService> : application service
+	==
+	<$aComponent> : appplication component
+	endlegend
+	
+	@enduml
+
+snippet archimate 03
+	@startuml
+	rectangle "Capture Information"  as CI <<$archimate/business-process>> #yellow
+	@enduml
+
+snippet sdl 00
+	@startuml
+	:Hello world;
+	:This is defined on
+	several **lines**;
+	@enduml
+
+snippet sdl 01
+	@startuml
+	start
+	:Hello world;
+	:This is defined on
+	several **lines**;
+	stop
+	@enduml
+
+snippet sdl 02
+	@startuml
+	start
+	:Hello world;
+	:This is defined on
+	several **lines**;
+	end
+	@enduml
+
+snippet sdl 03
+	@startuml
+	
+	start
+	
+	if (Graphviz installed?) then (yes)
+	  :process all\ndiagrams;
+	else (no)
+	  :process only
+	  __sequence__ and __activity__ diagrams;
+	endif
+	
+	stop
+	
+	@enduml
+
+snippet sdl 04
+	@startuml
+	start
+	if (condition A) then (yes)
+	  :Text 1;
+	elseif (condition B) then (yes)
+	  :Text 2;
+	  stop
+	elseif (condition C) then (yes)
+	  :Text 3;
+	elseif (condition D) then (yes)
+	  :Text 4;
+	else (nothing)
+	  :Text else;
+	endif
+	stop
+	@enduml
+
+snippet sdl 05
+	@startuml
+	
+	start
+	
+	repeat
+	  :read data;
+	  :generate diagrams;
+	repeat while (more data?)
+	
+	stop
+	
+	@enduml
+
+snippet sdl 06
+	@startuml
+	
+	start
+	
+	while (data available?)
+	  :read data;
+	  :generate diagrams;
+	endwhile
+	
+	stop
+	
+	@enduml
+
+snippet sdl 07
+	@startuml
+	while (check filesize ?) is (not empty)
+	  :read file;
+	endwhile (empty)
+	:close file;
+	@enduml
+
+snippet sdl 08
+	@startuml
+	
+	start
+	
+	if (multiprocessor?) then (yes)
+	  fork
+		:Treatment 1;
+	  fork again
+		:Treatment 2;
+	  end fork
+	else (monoproc)
+	  :Treatment 1;
+	  :Treatment 2;
+	endif
+	
+	@enduml
+
+snippet sdl 09
+	@startuml
+	
+	start
+	:foo1;
+	floating note left: This is a note
+	:foo2;
+	note right
+	  This note is on several
+	  //lines// and can
+	  contain <b>HTML</b>
+	  ====
+	  * Calling the method ""foo()"" is prohibited
+	end note
+	stop
+	
+	@enduml
+
+snippet sdl 10
+	@startuml
+	
+	start
+	:starting progress;
+	#HotPink:reading configuration files
+	These files should be edited at this point!;
+	#AAAAAA:ending of the process;
+	
+	@enduml
+
+snippet sdl 11
+	@startuml
+	:foo1;
+	-> You can put text on arrows;
+	if (test) then
+	  -[#blue]->
+	  :foo2;
+	  -[#green,dashed]-> The text can
+	  also be on several lines
+	  and **very** long...;
+	  :foo3;
+	else
+	  -[#black,dotted]->
+	  :foo4;
+	endif
+	-[#gray,bold]->
+	:foo5;
+	@enduml
+
+snippet sdl 12
+	@startuml
+	start
+	:Some activity;
+	(A)
+	detach
+	(A)
+	:Other activity;
+	@enduml
+
+snippet sdl 13
+	@startuml
+	start
+	partition Initialization {
+		:read config file;
+		:init internal variable;
+	}
+	partition Running {
+		:wait for user interaction;
+		:print information;
+	}
+	
+	stop
+	@enduml
+
+snippet sdl 14
+	@startuml
+	|Swimlane1|
+	start
+	:foo1;
+	|#AntiqueWhite|Swimlane2|
+	:foo2;
+	:foo3;
+	|Swimlane1|
+	:foo4;
+	|Swimlane2|
+	:foo5;
+	stop
+	@enduml
+
+snippet sdl 15
+	@startuml
+	 :start;
+	 fork
+	   :foo1;
+	   :foo2;
+	 fork again
+	   :foo3;
+	   detach
+	 endfork
+	 if (foo4) then
+	   :foo5;
+	   detach
+	 endif
+	 :foo6;
+	 detach
+	 :foo7;
+	 stop
+	@enduml
+
+snippet sdl 16
+	@startuml
+	:Ready;
+	:next(o)|
+	:Receiving;
+	split
+	 :nak(i)<
+	 :ack(o)>
+	split again
+	 :ack(i)<
+	 :next(o)
+	 on several lines|
+	 :i := i + 1]
+	 :ack(o)>
+	split again
+	 :err(i)<
+	 :nak(o)>
+	split again
+	 :foo/
+	split again
+	 :i > 5}
+	stop
+	end split
+	:finish;
+	@enduml
+
+snippet sdl 17
+	@startuml
+	
+	start
+	:ClickServlet.handleRequest();
+	:new page;
+	if (Page.onSecurityCheck) then (true)
+	  :Page.onInit();
+	  if (isForward?) then (no)
+		:Process controls;
+		if (continue processing?) then (no)
+		  stop
+		endif
+		
+		if (isPost?) then (yes)
+		  :Page.onPost();
+		else (no)
+		  :Page.onGet();
+		endif
+		:Page.onRender();
+	  endif
+	else (false)
+	endif
+	
+	if (do redirect?) then (yes)
+	  :redirect process;
+	else
+	  if (do forward?) then (yes)
+		:Forward request;
+	  else (no)
+		:Render page template;
+	  endif
+	endif
+	
+	stop
+	
+	@enduml
+
+snippet ditaa 00
+	@startditaa
+	+--------+   +-------+    +-------+
+	|        +---+ ditaa +--> |       |
+	|  Text  |   +-------+    |diagram|
+	|Document|   |!magic!|    |       |
+	|     {d}|   |       |    |       |
+	+---+----+   +-------+    +-------+
+		:                         ^
+		|       Lots of work      |
+		+-------------------------+
+	@endditaa
+
+snippet ditaa 01
+	@startuml
+	ditaa(--no-shadows, scale=0.8)
+	/--------\   +-------+
+	|cAAA    +---+Version|
+	|  Data  |   |   V3  |
+	|  Base  |   |cRED{d}|
+	|     {s}|   +-------+
+	\---+----/
+	@enduml
+
+snippet ditaa 02
+	@startdot
+	digraph foo {
+	  node [style=rounded]
+	  node1 [shape=box]
+	  node2 [fillcolor=yellow, style="rounded,filled", shape=diamond]
+	  node3 [shape=record, label="{ a | b | c }"]
+	
+	  node1 -> node2 -> node3
+	}
+	@enddot
+
+snippet gantt 00
+	@startgantt
+	[Prototype design] lasts 15 days
+	[Test prototype] lasts 10 days
+	@endgantt
+
+snippet gantt 01
+	@startgantt
+	[Prototype design] lasts 15 days
+	[Test prototype] lasts 10 days
+	[Test prototype] starts at [Prototype design]'s end
+	@endgantt
+
+snippet gantt 02
+	@startgantt
+	[Prototype design] lasts 10 days
+	[Code prototype] lasts 10 days
+	[Write tests] lasts 5 days
+	[Code prototype] starts at [Prototype design]'s end
+	[Write tests] starts at [Code prototype]'s start
+	@endgantt
+
+snippet gantt 03
+	@startgantt
+	[Prototype design] as [D] lasts 15 days
+	[Test prototype] as [T] lasts 10 days
+	[T] starts at [D]'s end
+	@endgantt
+
+snippet gantt 04
+	@startgantt
+	[Prototype design] lasts 13 days
+	[Test prototype] lasts 4 days
+	[Test prototype] starts at [Prototype design]'s end
+	[Prototype design] is colored in Fuchsia/FireBrick 
+	[Test prototype] is colored in GreenYellow/Green 
+	@endgantt
+
+snippet gantt 05
+	@startgantt
+	[Test prototype] lasts 10 days
+	[Prototype completed] happens at [Test prototype]'s end
+	[Setup assembly line] lasts 12 days
+	[Setup assembly line] starts at [Test prototype]'s end
+	@endgantt
+
+snippet gantt 06
+	@startgantt
+	Project starts the 20th of september 2017
+	[Prototype design] as [TASK1] lasts 13 days
+	[TASK1] is colored in Lavender/LightBlue
+	@endgantt
+
+snippet gantt 07
+	@startgantt
+	project starts the 2018/04/09
+	saturday are closed
+	sunday are closed
+	2018/05/01 is closed
+	2018/04/17 to 2018/04/19 is closed
+	[Prototype design] lasts 14 days
+	[Test prototype] lasts 4 days
+	[Test prototype] starts at [Prototype design]'s end
+	[Prototype design] is colored in Fuchsia/FireBrick 
+	[Test prototype] is colored in GreenYellow/Green 
+	@endgantt
+
+snippet gantt 08
+	@startgantt
+	[Prototype design] lasts 14 days
+	then [Test prototype] lasts 4 days
+	then [Deploy prototype] lasts 6 days
+	@endgantt
+
+snippet gantt 09
+	@startgantt
+	[Prototype design] lasts 14 days
+	[Build prototype] lasts 4 days
+	[Prepare test] lasts 6 days
+	[Prototype design] -> [Build prototype]
+	[Prototype design] -> [Prepare test]
+	@endgantt
+
+snippet gantt 10
+	@startgantt
+	[Task1] lasts 10 days
+	then [Task2] lasts 4 days
+	-- Phase Two --
+	then [Task3] lasts 5 days
+	then [Task4] lasts 6 days
+	@endgantt
+
+snippet gantt 11
+	@startgantt
+	[Task1] on {Alice} lasts 10 days
+	[Task2] on {Bob} lasts 2 days at 50% 
+	then [Task3] on {Alice} lasts 1 days at 25%
+	@endgantt
+
+snippet gantt 12
+	@startgantt
+	[Prototype design] lasts 13 days and is colored in Lavender/LightBlue
+	[Test prototype] lasts 9 days and is colored in Coral/Green and starts 3 days after [Prototype design]'s end
+	[Write tests] lasts 5 days and ends at [Prototype design]'s end
+	[Hire tests writers] lasts 6 days and ends at [Write tests]'s start
+	[Init and write tests report] is colored in Coral/Green
+	[Init and write tests report] starts 1 day before [Test prototype]'s start and ends at [Test prototype]'s end
+	@endgantt
+
+snippet math 00
+	@startuml
+	:<math>int_0^1f(x)dx</math>;
+	:<math>x^2+y_1+z_12^34</math>;
+	note right
+	Try also
+	<math>d/dxf(x)=lim_(h->0)(f(x+h)-f(x))/h</math>
+	<latex>P(y|\mathbf{x}) \mbox{ or } f(\mathbf{x})+\epsilon</latex>
+	end note
+	@enduml
+
+snippet math 01
+	@startuml
+	Bob -> Alice : Can you solve: <math>ax^2+bx+c=0</math>
+	Alice --> Bob: <math>x = (-b+-sqrt(b^2-4ac))/(2a)</math>
+	@enduml
+
+snippet math 02
+	@startmath
+	f(t)=(a_0)/2 + sum_(n=1)^ooa_ncos((npit)/L)+sum_(n=1)^oo b_n\ sin((npit)/L)
+	@endmath
+
+snippet math 03
+	@startlatex
+	\sum_{i=0}^{n-1} (a_i + b_i^2)
+	@endlatex
+
