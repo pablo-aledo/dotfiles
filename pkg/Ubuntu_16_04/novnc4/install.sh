@@ -1,7 +1,7 @@
 sudo apt-get install -y x11-xkb-utils i3-wm feh suckless-tools i3status pcmanfm
 
 mkdir ~/.vnc 
-cp passwd ~/.vnc/
+[ -e ~/.vnc/passwd ] || cp passwd ~/.vnc/
 cp xstartup ~/.vnc/
 chmod +x ~/.vnc/xstartup
 
