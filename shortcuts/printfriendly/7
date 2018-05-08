@@ -13,6 +13,12 @@ then
 		xdotool mousemove_relative 200 0
 		xdotool click 1
 	fi
+
+	if `mouseover 1 100 ~/.dotfiles/shortcuts/images/reddit_upvote_2.png`
+	then
+		xdotool mousemove_relative 200 0
+		xdotool click 1
+	fi
 fi
 
 if [ `xclip -sel clip -o | grep github` ]
