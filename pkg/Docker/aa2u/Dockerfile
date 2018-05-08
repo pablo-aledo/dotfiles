@@ -12,6 +12,5 @@ RUN    cd /tmp && \
        cabal update && \
        cabal install
 
-
-
+ENTRYPOINT ["/root/.cabal/bin/aa2u"]
 
