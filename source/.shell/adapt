@@ -52,6 +52,7 @@ adapt_novnc(){
 	sed -i '/Mod1+F2/d' ~/.i3/config
 	sed -i '/Mod1+Tab/d' ~/.i3/config
 	sed -i '/Mod1+Shift+Tab/d' ~/.i3/config
+	sed -i 's/bindsym Mod1+Return exec/# bindsym Mod1+Return exec/g' ~/.i3/config
 
 	sudo ln -s /usr/bin/terminator /usr/bin/gnome-terminal
 	sudo ln -s /usr/bin/pcmanfm /usr/bin/nautilus
