@@ -1,0 +1,4 @@
+If using CMake, add -DCMAKE_EXPORT_COMPILE_COMMANDS=ON when configuring (or add set( CMAKE_EXPORT_COMPILE_COMMANDS ON ) to CMakeLists.txt) and copy or symlink the generated database to the root of your project.
+If using Ninja, check out the compdb tool (-t compdb) in its docs.
+If using GNU make, check out Bear.
+For other build systems, check out .ycm_extra_conf.py below.
