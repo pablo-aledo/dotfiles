@@ -34,6 +34,7 @@ RUN        apk add --no-cache -q \
 	       protobuf-dev \
 	       grpc-dev \
                strace \
+               tmux \
                subversion \
                wget \
                yasm \
