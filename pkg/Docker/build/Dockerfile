@@ -134,6 +134,15 @@ RUN            curl -sSL https://github.com/uber/prototool/releases/download/v0.
                    -o /usr/local/bin/prototool && \
                    chmod +x /usr/local/bin/prototool
 
+RUN            git clone https://github.com/oktal/pistache.git /usr/src/pistache && \
+               cd /usr/src/pistache && \
+               git submodule update --init && \
+               mkdir build && \
+               cd build && \
+               cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release .. && \
+               make && \
+               make install
+
 RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear               && \
                cd /usr/src/bear                                                           && \
                mkdir build && cd build                                                    && \
