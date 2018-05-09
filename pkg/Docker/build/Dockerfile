@@ -159,8 +159,7 @@ RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear     
                mkdir build && cd build                                                    && \
                cmake ..                                                                   && \
                make all                                                                   && \
-               make install                                                               && \
-               rm -rf /usr/src/bear
+               make install
 
 COPY       build.sh /usr/local/bin
 RUN        chmod +x /usr/local/bin/build.sh
