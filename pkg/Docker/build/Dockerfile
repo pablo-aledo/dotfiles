@@ -17,6 +17,7 @@ RUN        apk add --no-cache -q \
                cmake \
                cunit-dev \
                curl \
+               curl-dev \
                dejagnu \
                flex \
                findutils \
@@ -79,7 +80,7 @@ RUN        apk add --no-cache -q \
                sfml-dev \
                #libssl-dev \
                #libressl-dev \
-               openssl-dev \
+               #openssl-dev \
                libxi-dev \
                libxrandr-dev \
                libxml2-dev \
@@ -145,6 +146,12 @@ RUN            git clone https://github.com/oktal/pistache.git /usr/src/pistache
                cd build && \
                cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release .. && \
                make && \
+               make install
+
+RUN            git clone https://github.com/mrtazz/restclient-cpp.git /usr/src/restclient-cpp && \
+               cd /usr/src/restclient-cpp && \
+               ./autogen.sh && \
+               ./configure && \
                make install
 
 RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear               && \
