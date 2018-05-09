@@ -158,5 +158,9 @@ RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear     
 COPY       build.sh /usr/local/bin
 RUN        chmod +x /usr/local/bin/build.sh
 
+RUN        echo 'rmdir /root && ln -s /home/* /root' >> /bin/pga && \
+           echo 'zsh' >> /bin/pga && \
+           chmod +x /bin/pga 
+
 ENTRYPOINT     ["build.sh"]
 
