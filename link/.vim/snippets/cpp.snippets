@@ -83,16 +83,16 @@ snippet grpc client
 	#include <memory>
 	#include <string>
 	#include <grpcpp/grpcpp.h>
-	#include "helloworld.grpc.pb.h"
+	#include "${1:grpc}.grpc.pb.h"
 	
 	using grpc::Channel;
 	using grpc::ClientContext;
 	using grpc::Status;
-	using helloworld::HelloRequest;
-	using helloworld::HelloReply;
-	using helloworld::Greeter;
+	using $1::${4:Request};
+	using $1::${5:Reply};
+	using $1::${2:Service};
 	
-	class GreeterClient {
+	class $2Client {
 
 	    // GRPC Client
 	    // +---------+   +------+
@@ -104,25 +104,25 @@ snippet grpc client
 	    //      +---------------+
 
 	 public:
-	  GreeterClient(std::shared_ptr<Channel> channel)
-	      : stub_(Greeter::NewStub(channel)) {}
+	  $2Client(std::shared_ptr<Channel> channel)
+	      : stub_($2::NewStub(channel)) {}
 	
 	  // Assembles the client's payload, sends it and presents the response back
 	  // from the server.
-	  std::string SayHello(const std::string& user) {
+	  std::string ${3:procedure}(const std::string& user) {
 	    // Data we are sending to the server.
-	    HelloRequest request;
+	    $4 request;
 	    request.set_name(user);
 	
 	    // Container for the data we expect from the server.
-	    HelloReply reply;
+	    $5 reply;
 	
 	    // Context for the client. It could be used to convey extra information to
 	    // the server and/or tweak certain RPC behaviors.
 	    ClientContext context;
 	
 	    // The actual RPC.
-	    Status status = stub_->SayHello(&context, request, &reply);
+	    Status status = stub_->$3(&context, request, &reply);
 	
 	    // Act upon its status.
 	    if (status.ok()) {
@@ -135,7 +135,7 @@ snippet grpc client
 	  }
 	
 	 private:
-	  std::unique_ptr<Greeter::Stub> stub_;
+	  std::unique_ptr<$2::Stub> stub_;
 	};
 	
 	int main(int argc, char** argv) {
@@ -143,11 +143,11 @@ snippet grpc client
 	  // are created. This channel models a connection to an endpoint (in this case,
 	  // localhost at port 50051). We indicate that the channel isn't authenticated
 	  // (use of InsecureChannelCredentials()).
-	  GreeterClient greeter(grpc::CreateChannel(
+	  $2Client greeter(grpc::CreateChannel(
 	      "localhost:50051", grpc::InsecureChannelCredentials()));
 	  std::string user("world");
-	  std::string reply = greeter.SayHello(user);
-	  std::cout << "Greeter received: " << reply << std::endl;
+	  std::string reply = greeter.$3(user);
+	  std::cout << "$2 received: " << reply << std::endl;
 	
 	  return 0;
 	}
@@ -158,20 +158,20 @@ snippet grpc server
 	#include <memory>
 	#include <string>
 	#include <grpcpp/grpcpp.h>
-	#include "helloworld.grpc.pb.h"
+	#include "${1:proto}.grpc.pb.h"
 	
 	using grpc::Server;
 	using grpc::ServerBuilder;
 	using grpc::ServerContext;
 	using grpc::Status;
-	using helloworld::HelloRequest;
-	using helloworld::HelloReply;
-	using helloworld::Greeter;
+	using $1::${4:Request};
+	using $1::${5:Reply};
+	using $1::${2:Service};
 	
 	// Logic and data behind the server's behavior.
-	class GreeterServiceImpl final : public Greeter::Service {
-	  Status SayHello(ServerContext* context, const HelloRequest* request,
-	                  HelloReply* reply) override {
+	class GreeterServiceImpl final : public $2::Service {
+	  Status ${3:procedure}(ServerContext* context, const $4* request,
+	                  $5* reply) override {
 	    std::string prefix("Hello ");
 	    reply->set_message(prefix + request->name());
 	    return Status::OK;
@@ -218,31 +218,31 @@ snippet grpc server
 	}
 
 snippet grpc proto
-	// protoc -I ../protos --grpc_out=. --plugin=protoc-gen-grpc=$(which grpc_cpp_plugin) ../protos/helloworld.proto
-	// protoc -I ../protos --cpp_out=. ../protos/helloworld.proto
+	// protoc -I ../protos --grpc_out=. --plugin=protoc-gen-grpc=$(which grpc_cpp_plugin) ../protos/${1:proto}.proto
+	// protoc -I ../protos --cpp_out=. ../protos/$1.proto
 
 	syntax = "proto4";
 	
 	option java_multiple_files = true;
-	option java_package = "io.grpc.examples.helloworld";
+	option java_package = "io.grpc.examples.$1";
 	option java_outer_classname = "HelloWorldProto";
 	option objc_class_prefix = "HLW";
 	
-	package helloworld;
+	package $1;
 	
 	// The greeting service definition.
-	service Greeter {
+	service  ${2:Service}{
 	  // Sends a greeting
-	  rpc SayHello (HelloRequest) returns (HelloReply) {}
+	  rpc ${3:procedure}(${4:Request}) returns (${5:Reply}) {}
 	}
 	
 	// The request message containing the user's name.
-	message HelloRequest {
+	message $4{
 	  string name = 1;
 	}
 	
 	// The response message containing the greetings
-	message HelloReply {
+	message $5{
 	  string message = 1;
 	}
 
