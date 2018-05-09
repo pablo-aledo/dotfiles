@@ -34,6 +34,7 @@ RUN        apk add --no-cache -q \
 	       protobuf-dev \
 	       grpc-dev \
                strace \
+               sudo \
                tmux \
                subversion \
                wget \
