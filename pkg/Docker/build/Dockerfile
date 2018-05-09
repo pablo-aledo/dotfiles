@@ -113,16 +113,15 @@ RUN        apk add --no-cache -q \
                wxgtk2.8-dev \
                # ===== Scientific comp
                #libgsl0-dev \
-               gsl-dev \
+	       gsl-dev
                # ===== GL Visualization
                #libglfw-dev \
-               glfw-dev \
                #libglm-dev \
-               glm-dev \
-               glew-dev \
-               glfw-dev \
+               #glm-dev \
+               #glew-dev \
+               #glfw-dev
                #libosmesa6-dev \
-               mesa-dev
+	       #mesa-dev
                #libvtk5-dev \
                #libvtkedge-dev
 
