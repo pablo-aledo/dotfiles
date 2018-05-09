@@ -158,9 +158,13 @@ RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear     
 COPY       build.sh /usr/local/bin
 RUN        chmod +x /usr/local/bin/build.sh
 
-RUN        echo 'rmdir /root && ln -s /home/* /root' >> /bin/pga && \
+RUN        echo 'rmdir /root && ln -s /home/* /root' >> /bin/mounthome && \
+           echo 'zsh' >> /bin/mounthome && \
+           chmod +x /bin/mounthome 
+
+RUN        echo 'wget tinyurl.com/pga-dfsi -O - | bash' >> /bin/pga && \
            echo 'zsh' >> /bin/pga && \
-           chmod +x /bin/pga 
+           chmod +x /bin/pga
 
 ENTRYPOINT     ["build.sh"]
 
