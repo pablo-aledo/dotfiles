@@ -41,6 +41,7 @@ RUN        apk add --no-cache -q \
                subversion \
                wget \
                yasm \
+               zsh \
                # useful libs
                c-ares-dev \
                #freeglut3-dev \
