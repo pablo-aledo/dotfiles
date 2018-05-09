@@ -19,13 +19,15 @@ RUN        apk add --no-cache -q \
                curl \
                dejagnu \
                flex \
+               findutils \
                g++ \
                git \
+               grep \
                #g++-multilib \
                jansson-dev \
                jemalloc-dev \
                make \
-               libtool           \
+               libtool \
                llvm \
                m4 \
                #pkg-config \
@@ -154,14 +156,6 @@ RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear     
 
 COPY       build.sh /usr/local/bin
 RUN        chmod +x /usr/local/bin/build.sh
-
-RUN        export uid=1000 gid=1000 && \
-           mkdir -p /workdir && \
-           echo "developer:x:${uid}:${gid}:Developer,,,:/workdir:/bin/bash" >> /etc/passwd && \
-           echo "developer:x:${uid}:" >> /etc/group && \
-           echo "developer ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/developer && \
-           chmod 0440 /etc/sudoers.d/developer && \
-           chown ${uid}:${gid} -R /workdir
 
 ENTRYPOINT     ["build.sh"]
 
