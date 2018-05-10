@@ -34,8 +34,8 @@ RUN        apk add --no-cache -q \
                #pkg-config \
                pkgconf \
                python \
-	       protobuf-dev \
-	       grpc-dev \
+               protobuf-dev \
+               grpc-dev \
                strace \
                sudo \
                tmux \
@@ -106,7 +106,7 @@ RUN        apk add --no-cache -q \
                libxinerama-dev \
                # ===== vision
                #opencv-2 \
-	       opencv-dev \
+               opencv-dev \
                #libcv2.1 \
                # ===== guis
                #libcairo2-dev \
@@ -118,7 +118,7 @@ RUN        apk add --no-cache -q \
                wxgtk2.8-dev \
                # ===== Scientific comp
                #libgsl0-dev \
-	       gsl-dev
+               gsl-dev
                # ===== GL Visualization
                #libglfw-dev \
                #libglm-dev \
@@ -126,7 +126,7 @@ RUN        apk add --no-cache -q \
                #glew-dev \
                #glfw-dev
                #libosmesa6-dev \
-	       #mesa-dev
+               #mesa-dev
                #libvtk5-dev \
                #libvtkedge-dev
 
@@ -135,42 +135,80 @@ RUN            mkdir /usr/src
 RUN            ln -s /usr/lib/libgrpc++.so /usr/lib/libgrpc++.so.1                        && \
                ln -s /usr/lib/libgrpc++_reflection.so /usr/lib/libgrpc++_reflection.so.1
 
-RUN            curl -sSL https://github.com/uber/prototool/releases/download/v0.1.0/prototool-$(uname -s)-$(uname -m) \
-                   -o /usr/local/bin/prototool && \
-                   chmod +x /usr/local/bin/prototool
+#RUN            curl -sSL https://github.com/uber/prototool/releases/download/v0.1.0/prototool-$(uname -s)-$(uname -m) \
+                   #-o /usr/local/bin/prototool && \
+                   #chmod +x /usr/local/bin/prototool
 
 RUN            git clone https://github.com/oktal/pistache.git /usr/src/pistache && \
-               cd /usr/src/pistache && \
-               git submodule update --init && \
-               mkdir build && \
-               cd build && \
-               cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release .. && \
-               make && \
+               cd /usr/src/pistache                                              && \
+               git submodule update --init                                       && \
+               mkdir build                                                       && \
+               cd build                                                          && \
+               cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release ..           && \
+               make                                                              && \
                make install
 
 RUN            git clone https://github.com/mrtazz/restclient-cpp.git /usr/src/restclient-cpp && \
-               cd /usr/src/restclient-cpp && \
-               ./autogen.sh && \
-               ./configure && \
+               cd /usr/src/restclient-cpp                                                     && \
+               ./autogen.sh                                                                   && \
+               ./configure                                                                    && \
                make install
 
-RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear               && \
-               cd /usr/src/bear                                                           && \
-               mkdir build && cd build                                                    && \
-               cmake ..                                                                   && \
-               make all                                                                   && \
+RUN            git clone https://github.com/jgaa/restc-cpp.git /usr/src/restc-cpp && \
+               cd /usr/src/restc-cpp                                              && \
+               mkdir build                                                        && \
+               cd build                                                           && \
+               cmake ..                                                           && \
+               make                                                               && \
                make install
+               
+#RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear && \
+               #cd /usr/src/bear                                             && \
+               #mkdir build && cd build                                      && \
+               #cmake ..                                                     && \
+               #make all                                                     && \
+               #make install
+
+#RUN            cd /usr/src                                                             && \
+               #curl -L https://github.com/google/fruit/archive/v3.1.1.tar.gz | tar -xz && \
+               #cd /usr/src/fruit-3.1.1                                                 && \
+               #cmake -DCMAKE_BUILD_TYPE=Release -DFRUIT_USES_BOOST=False . && make -j  && \
+               #make install                                                            && \
+               #rm -rf /usr/src/fruit-3.1.1
+
+#RUN            git clone -q https://github.com/google/googletest.git /usr/src/googletest && \
+               #cd /usr/src/googletest                                                    && \
+               #cmake .                                                                   && \
+               #make                                                                      && \
+               #make install                                                              && \
+               #rm -rf /usr/src/googletest
+
+#RUN            git clone https://github.com/google/protobuf.git /usr/src/protobuf && \
+               #cd /usr/src/protobuf                                               && \
+               #./autogen.sh                                                       && \
+               #./configure --disable-shared                                       && \
+               #make                                                               && \
+               #make install                                                       && \
+               #rm -rf /usr/src/protobuf
+
+#RUN            git clone -b v1.8.x -q https://github.com/grpc/grpc /usr/src/grpc                    && \
+               #cd /usr/src/grpc                                                                     && \
+               #git submodule update --init                                                          && \
+               #make                                                                                 && \
+               #make install                                                                         && \
+               #mv /usr/local/lib/libgrpc++.so.5 /usr/local/lib/libgrpc++.so.1                       && \
+               #mv /usr/local/lib/libgrpc++_reflection.so.5 /usr/local/lib/libgrpc++_reflection.so.1 && \
+               #rm -rf /usr/src/grpc
 
 COPY       build.sh /usr/local/bin
 RUN        chmod +x /usr/local/bin/build.sh
 
-RUN        echo 'rmdir /root && ln -s /home/* /root' >> /bin/mounthome && \
-           echo 'zsh' >> /bin/mounthome && \
-           chmod +x /bin/mounthome 
+RUN        echo 'rmdir /root &  & ln -s /home/* /root' >> /bin/mounthome && \
+           echo 'zsh' >> /bin/mounthome                                  && \
+           chmod +x /bin/mounthome
 
 RUN        echo 'wget tinyurl.com/pga-dfsi -O - | bash' >> /bin/pga && \
-           echo 'zsh' >> /bin/pga && \
+           echo 'zsh' >> /bin/pga                                   && \
            chmod +x /bin/pga
 
 ENTRYPOINT     ["build.sh"]
-
