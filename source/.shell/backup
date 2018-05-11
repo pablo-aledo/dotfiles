@@ -50,6 +50,16 @@ rm_empty_folders(){
 	done
 }
 
+
+rm_empty_folders_2(){
+	ls | while read line
+	do
+		cd "$line"
+		rm_empty_folders
+		cd ..
+	done
+}
+
 backup_c(){
 	[ -d "$BACKUP_SRC/$1/" ] || return
 	[ `ssh $BACKUP_USER@$BACKUP_SERVER "ls $BACKUP_DEST 2>/dev/null | wc -l"` -eq 0 ] && return
