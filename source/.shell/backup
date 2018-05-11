@@ -52,11 +52,12 @@ rm_empty_folders(){
 
 
 rm_empty_folders_2(){
-	ls | while read line
+	initial_dir=$PWD
+	ls -d */ | while read line
 	do
 		cd "$line"
 		rm_empty_folders
-		cd ..
+		cd "$initial_dir"
 	done
 }
 
