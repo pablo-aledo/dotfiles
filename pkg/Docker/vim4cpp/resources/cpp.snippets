@@ -1,0 +1,226 @@
+#================================= 
+# keys: INC, inc
+#================================= 
+
+# #include "..."
+snippet INC 
+#include "${1:TODO}"${2}
+endsnippet
+
+# #include <...>
+snippet inc
+#include <${1:TODO}>${2}
+endsnippet
+
+#================================= 
+# keys: if, ei, el, re, do, wh, sw
+#================================= 
+
+# if 
+snippet if 
+if (${1:/* condition */}) {
+    ${2:TODO}
+}
+endsnippet 
+
+# else if 
+snippet ei
+else if (${1:/* condition */}) {
+    ${2:TODO}
+}
+endsnippet 
+
+# else 
+snippet el 
+else { 
+    ${1:TODO}
+}
+endsnippet 
+
+# return 
+snippet re 
+return ${1:/* condition */};
+endsnippet 
+
+# Do While Loop 
+snippet do
+do {
+    ${1:/* condition */}
+} while (${2:TODO});
+endsnippet 
+
+# While Loop 
+snippet wh 
+while (${1:/* condition */}) {
+    ${2:TODO}
+}
+endsnippet 
+
+# switch 
+snippet sw 
+switch (${1:/* condition */}) { 
+    case ${2:c}:
+        break; 
+
+    default:
+        break; 
+}
+endsnippet
+
+#================================= 
+# keys: for, cfor, For, F, CF, FOR
+#================================= 
+
+# for - through iterator
+snippet for 
+for (auto ${2:it} = ${1:c}.begin(); ${3:$2} != $1.end(); ${4:++it}) {
+    ${5:TODO}
+}
+endsnippet 
+
+# cfor - through const iterator
+snippet cfor 
+for (auto ${2:it} = ${1:c}.cbegin(); ${3:$2} != $1.cend(); ${4:++it}) { 
+    ${5:TODO}
+}
+endsnippet 
+
+# For - through index
+snippet For 
+for (decltype($1.size()) ${2:i} = 0; $2 != ${1}.size(); ${3:++}$2) { 
+    ${4:TODO}
+}
+endsnippet 
+
+# F - range based
+snippet F 
+for (auto& e : ${1:c}) {
+    ${2:TODO}
+}
+endsnippet 
+
+# CF -range based, const reference
+snippet CF 
+for (const auto& e : ${1:c}) {
+    ${2:TODO}
+}
+endsnippet 
+
+# FOR - For Loop
+snippet FOR 
+for (unsigned ${2:i} = 0; $2 < ${1:count}; ${3:++}$2) { 
+    ${4:TODO}
+}
+endsnippet 
+
+#================================= 
+# keys: try, ca, th
+#================================= 
+
+# try-catch 
+snippet try 
+try {
+    ${3:TODO} 
+}
+catch (${1:/* condition */}) {
+    ${2:TODO}
+}
+endsnippet 
+
+# catch
+snippet ca 
+catch (${1:/* condition */}) {
+    ${2:TODO}
+}
+endsnippet 
+
+# throw
+snippet th 
+throw ${1:/* condition */}; 
+endsnippet 
+
+#================================= 
+# keys: vec, lst, set, map
+#================================= 
+
+# std::vector 
+snippet vec 
+std::vector<${1:char}> v${2}; 
+endsnippet 
+
+# std::list 
+snippet lst 
+std::list<${1:char}> l${2}; 
+endsnippet 
+
+# std::set 
+snippet set 
+std::set<${1:key}> s${2}; 
+endsnippet 
+
+# std::map 
+snippet map 
+std::map<${1:key}, ${2:value}> m${3}; 
+endsnippet 
+
+#================================= 
+# keys: cl
+#================================= 
+
+# Class 
+snippet cl 
+class ${1:`Filename('$1_t', 'name')`} 
+{ 
+public: 
+    $1 (); 
+    virtual ~$1 (); 
+
+private: 
+}; 
+endsnippet 
+
+#================================= 
+# keys: b, st, br, se, q, ar
+#================================= 
+
+# bracket 
+snippet b "bracket" i 
+(${1})${2} 
+endsnippet 
+
+# square bracket, set to 'st' not 'sb' to avoid conflicting with 'b'
+snippet st "square bracket" i 
+[${1}]${2} 
+endsnippet 
+
+# brace 
+snippet br "brace" i 
+{ 
+    ${1} 
+}${2} 
+endsnippet 
+
+# single quote, set to 'se' not 'sq' to avoid conflicting with 'q'
+snippet se "single quote" I
+'${1}'${2}
+endsnippet
+
+# quote
+snippet q "quote" I
+"${1}"${2}
+endsnippet
+
+# arrow 
+snippet ar "arrow" i 
+->${1} 
+endsnippet 
+
+# dot 
+# snippet d "dot" i 
+# .${1} 
+# endsnippet 
+
+# scope 
+# snippet s "scope" i 
+# ::${1} 
+# endsnippet

@@ -1,0 +1,273 @@
+let mapleader=";"   " map <Leader> key
+
+filetype on         " enable file type detection
+filetype plugin on  " enable loading the plugin files for specific file types
+
+nmap LB 0  " line beginning
+nmap LE $  " and line end
+
+vnoremap <Leader>y "+y         " copy selected text to system clipboard
+nmap <Leader>p "+p             " paste from system clipboard
+nmap <Leader>q :q<CR>          " quit files
+nmap <Leader>w :w<CR>          " write to files
+nmap <Leader>WQ :wa<CR>:q<CR>  " write to all files and quit
+nmap <Leader>Q :qa!<CR>        " quit all files without writing
+nnoremap nw <C-W><C-W>         " next window
+nnoremap <Leader>lw <C-W>l     " move to right window
+nnoremap <Leader>hw <C-W>h     " move to left window
+nnoremap <Leader>kw <C-W>k     " move up one window
+nnoremap <Leader>jw <C-W>j     " move down one window
+nmap <Leader>M %               " bounce between parentheses, quotes, etc
+
+" auto-reload .vimrc file whenever it changes
+augroup reload_vimrc " {
+    autocmd!
+    autocmd BufWritePost $MYVIMRC source $MYVIMRC
+augroup END " }
+
+set incsearch     " incremental search
+set ignorecase    " case insensitive search
+set nocompatible  " not compatible mode
+set wildmenu      " command line completion
+
+set encoding=utf-8
+
+" vundle environment settings
+filetype off
+set rtp+=~/.vim/bundle/Vundle.vim
+" plugin list must be between vundle#begin() and vundle#end()
+call vundle#begin()
+Plugin 'VundleVim/Vundle.vim'
+Plugin 'altercation/vim-colors-solarized'
+Plugin 'tomasr/molokai'
+Plugin 'vim-scripts/phd'
+Plugin 'Lokaltog/vim-powerline'
+Plugin 'octol/vim-cpp-enhanced-highlight'
+Plugin 'nathanaelkane/vim-indent-guides'
+Plugin 'derekwyatt/vim-fswitch'
+Plugin 'kshenoy/vim-signature'
+Plugin 'vim-scripts/BOOKMARKS--Mark-and-Highlight-Full-Lines'
+Plugin 'majutsushi/tagbar'
+Plugin 'vim-scripts/indexer.tar.gz'
+Plugin 'vim-scripts/DfrankUtil'
+Plugin 'vim-scripts/vimprj'
+Plugin 'dyng/ctrlsf.vim'
+Plugin 'terryma/vim-multiple-cursors'
+Plugin 'scrooloose/nerdcommenter'
+Plugin 'vim-scripts/DrawIt'
+Plugin 'SirVer/ultisnips'
+Plugin 'Valloric/YouCompleteMe'
+Plugin 'derekwyatt/vim-protodef'
+Plugin 'scrooloose/nerdtree'
+Plugin 'fholgado/minibufexpl.vim'
+Plugin 'gcmt/wildfire.vim'
+Plugin 'sjl/gundo.vim'
+Plugin 'Lokaltog/vim-easymotion'
+Plugin 'suan/vim-instant-markdown'
+Plugin 'nickhutchinson/vim-cmake-syntax'
+" Plugin 'lilydjwg/fcitx.vim'
+" end of plugin list
+call vundle#end()
+filetype plugin indent on
+
+set background=dark
+colorscheme solarized
+
+set gcr=a:block-blinkon0  " switch cursor blinking off
+set guioptions-=l         " remove scroll bar
+set guioptions-=L
+set guioptions-=r
+set guioptions-=R
+set guioptions-=m         " remove menu bar
+set guioptions-=T         " remove tool bar
+
+" define a function to call external wmctrl command to toggle fullscreen
+fun! ToggleFullscreen()
+    call system("wmctrl -ir " . v:windowid . " -b toggle,fullscreen")
+endf
+
+map <silent> <F11> :call ToggleFullscreen()<CR>  " toggle fullscreen
+autocmd VimEnter * call ToggleFullscreen()       " activate full screen on startup
+
+set laststatus=2  " always show status bar
+set ruler         " display ruler
+set number        " display line numbers
+set cursorline    " highlight current line
+set cursorcolumn  " highlight current column
+set hlsearch      " highlight search matches
+
+set guifont=YaHei\ Consolas\ Hybrid\ 12        " set gvim display font
+set nowrap                                     " no wrapping on long lines
+let g:Powerline_colorscheme='solarized256'     " set color scheme for vim-powerline
+
+syntax enable  " switch on syntax highlighting
+syntax on      " allow overriding default highlighting
+
+filetype indent on  " enable loading the indent file for specific file types
+set expandtab       " Expand TABs to spaces
+set tabstop=4       " The width of a TAB is set to 4. Still it is a \t.
+                    " It is just that Vim will interpret it to be having
+                    " a width of 4.
+set shiftwidth=4    " Indents will have a width of 4
+set softtabstop=4   " Sets the number of columns for a TAB
+
+let g:indent_guides_enable_on_vim_startup=1        " enable vim-indent-guides plugin on startup
+let g:indent_guides_start_level=2                  " start showing indent guides from the second level 
+let g:indent_guides_guide_size=1                   " size of the indent guide
+:nmap <silent> <Leader>i <Plug>IndentGuidesToggle  " toggle indent guides
+
+"set foldmethod=indent  " fold by indent level
+set foldmethod=syntax   " fold by syntax highlighting
+set nofoldenable        " have folds open by default
+
+nmap <silent> <Leader>sw :FSHere<cr>  " switch between *.cpp and *.h files
+
+let g:SignatureMap = {
+        \ 'Leader'             :  "m",
+        \ 'PlaceNextMark'      :  "m,",
+        \ 'ToggleMarkAtLine'   :  "m.",
+        \ 'PurgeMarksAtLine'   :  "m-",
+        \ 'DeleteMark'         :  "dm",
+        \ 'PurgeMarks'         :  "mda",
+        \ 'PurgeMarkers'       :  "m<BS>",
+        \ 'GotoNextLineAlpha'  :  "']",
+        \ 'GotoPrevLineAlpha'  :  "'[",
+        \ 'GotoNextSpotAlpha'  :  "`]",
+        \ 'GotoPrevSpotAlpha'  :  "`[",
+        \ 'GotoNextLineByPos'  :  "]'",
+        \ 'GotoPrevLineByPos'  :  "['",
+        \ 'GotoNextSpotByPos'  :  "mn",
+        \ 'GotoPrevSpotByPos'  :  "mp",
+        \ 'GotoNextMarker'     :  "[+",
+        \ 'GotoPrevMarker'     :  "[-",
+        \ 'GotoNextMarkerAny'  :  "]=",
+        \ 'GotoPrevMarkerAny'  :  "[=",
+        \ 'ListLocalMarks'     :  "ms",
+        \ 'ListLocalMarkers'   :  "m?"
+        \ }
+
+let tagbar_left=1                       " open Tagbar window on the left
+nnoremap <Leader>ilt :TagbarToggle<CR>  " toggle Tagbar window - ilt: identifier list by tag
+let tagbar_width=32                     " width of the Tagbar window in characters
+let g:tagbar_compact=1                  " omit short help at the top of the window
+                                        " and the blank lines in between top-level scopes
+
+" default configuration for C++ as used in Tagbar
+let g:tagbar_type_cpp = {
+    \ 'kinds' : [
+         \ 'c:classes:0:1',
+         \ 'd:macros:0:1',
+         \ 'e:enumerators:0:0', 
+         \ 'f:functions:0:1',
+         \ 'g:enumeration:0:1',
+         \ 'l:local:0:1',
+         \ 'm:members:0:1',
+         \ 'n:namespaces:0:1',
+         \ 'p:functions_prototypes:0:1',
+         \ 's:structs:0:1',
+         \ 't:typedefs:0:1',
+         \ 'u:unions:0:1',
+         \ 'v:global:0:1',
+         \ 'x:external:0:1'
+     \ ],
+     \ 'sro'        : '::',
+     \ 'kind2scope' : {
+         \ 'g' : 'enum',
+         \ 'n' : 'namespace',
+         \ 'c' : 'class',
+         \ 's' : 'struct',
+         \ 'u' : 'union'
+     \ },
+     \ 'scope2kind' : {
+         \ 'enum'      : 'g',
+         \ 'namespace' : 'n',
+         \ 'class'     : 'c',
+         \ 'struct'    : 's',
+         \ 'union'     : 'u'
+     \ }
+\ }
+
+nmap <Leader>tn :tnext<CR>      " go to the next matching tag
+nmap <Leader>tp :tprevious<CR>  " go to the previous matching tag
+
+" configuration for vim-indexer plugin
+" by default is: --c++-kinds=+p+l --fields=+iaS --extra=+q
+" --fields=+iaS does not work well with YouCompleteMe, change to --fields=+iaSl
+let g:indexer_ctagsCommandLineOptions="--c++-kinds=+p+l+x+c+d+e+f+g+m+n+s+t+u+v --fields=+iaSl --extra=+q"
+
+nnoremap <leader>jc :YcmCompleter GoToDeclaration<CR>
+" work only for #include or opened files
+nnoremap <leader>jd :YcmCompleter GoToDefinition<CR>
+
+" use ctrlsf.vim plugin to search selected text in project
+" <Leader>sp: search project
+nnoremap <Leader>sp :CtrlSF<CR>
+
+" vim-multiple-cursors default mapping
+" uncomment and change to other values
+" let g:multi_cursor_next_key='<C-n>'
+" let g:multi_cursor_prev_key='<C-p>'
+" let g:multi_cursor_skip_key='<C-x>'
+" let g:multi_cursor_quit_key='<Esc>'
+
+" define the directories for looking for snippets
+" path of customized snippet cpp.snippets is ~/.vim/bundle/ultisnips/mysnippets/cpp.snippets
+let g:UltiSnipsSnippetDirectories=["mysnippets"]
+" chang tab key binding of UltiSnips to avoid conflicting with YCM
+let g:UltiSnipsExpandTrigger="<leader><tab>"
+let g:UltiSnipsJumpForwardTrigger="<leader><tab>"
+let g:UltiSnipsJumpBackwardTrigger="<leader><s-tab>"
+
+" YCM config
+highlight Pmenu ctermfg=2 ctermbg=3 guifg=#005f87 guibg=#EEE8D5     " popup menu
+highlight PmenuSel ctermfg=2 ctermbg=3 guifg=#AFD700 guibg=#106900  " selected item in popup menu
+let g:ycm_complete_in_comments=1                                    " show completion menu even when typing inside comments
+let g:ycm_confirm_extra_conf=0                                      " ask only once per .ycm_extra_conf.py file if it is safe to be loaded
+let g:ycm_collect_identifiers_from_tags_files=1                     " also collect identifiers from tags files
+set tags+=~/.vim/tags/stdcpp.tags                                   " C++ Standard Library tags
+let OmniCpp_DefaultNamespaces = ["std", "_GLIBCXX_STD"]             " list of default namespaces
+inoremap <leader>; <C-x><C-o>                                       " call OmniCppComplete completion
+set completeopt-=preview                                            " do not use a separate preview window 
+let g:ycm_min_num_of_chars_for_completion=1                         " number of characters the user needs to type before triggering completion suggestions
+let g:ycm_cache_omnifunc=0                                          " query omnicompletion engine on every keypress without using cache
+let g:ycm_seed_identifiers_with_syntax=1                            " seed identifier database with the keywords of programming language
+
+" the location and/or name of the {pullproto.pl} script
+let g:protodefprotogetter='~/.vim/bundle/vim-protodef/pullproto.pl'
+" order of the functions in implementation file will be the same as in header file
+let g:disable_protodef_sorting=1
+
+nmap <Leader>fl :NERDTreeToggle<CR>  " use NERDTree to view project files: file list
+let NERDTreeWinSize=32               " set NERDTree window width
+let NERDTreeWinPos="right"           " set NERDTree window position
+let NERDTreeShowHidden=1             " show hidden files
+let NERDTreeMinimalUI=1              " hide the Bookmarks label
+let NERDTreeAutoDeleteBuffer=1       " automatically delete the buffer after deleting or renaming a file
+
+map <Leader>bl :MBEToggle<CR>  " toggle MiniBufExplorer window: buffer list
+map <C-Tab> :MBEbn<CR>         " switch buffer
+map <C-S-Tab> :MBEbp<CR>
+
+" set what is restored in a vim editing session
+set sessionoptions="blank,buffers,globals,localoptions,tabpages,sesdir,folds,help,options,resize,winpos,winsize"
+set undodir=~/.undo_history/                                     " save undo history
+set undofile
+map <Leader>ss :mksession! my.vim<cr> :wviminfo! my.viminfo<cr>  " save session
+map <Leader>rs :source my.vim<cr> :rviminfo my.viminfo<cr>       " restore session
+
+" make
+nmap <Leader>m :wa<CR>:!rm -rf build<CR>:!cmake -H. -Bbuild<CR>:!cmake --build build -- -j4<CR>
+" make & run
+nmap <Leader>g :wa<CR>:!rm -rf build<CR>:!cmake -H. -Bbuild<CR>:!cmake --build build -- -j4<CR>:!./build/bin/main<CR>
+ "nmap <Leader>g :!rm -rf main:wa<CR>:make<CR><CR>:cw<CR>:!./main<CR>
+
+" map <SPACE> <Plug>(wildfire-fuel)      " select the next closest text object, default: <Enter>
+" vmap <C-SPACE> <Plug>(wildfire-water)  " select the previous closest text object, default: <BS>
+
+let g:wildfire_objects = ["i'", 'i"', "i)", "i]", "i}", "i>", "ip", "it"]
+
+nnoremap <Leader>ud :GundoToggle<CR>  " toggle gundo tree
+
+let g:ycm_python_binary_path='/usr/bin/python'  " Python semantic completion by YouCompleteMe
+let g:ycm_global_ycm_extra_conf = '/root/.vim/.ycm_extra_conf.py'
+
