@@ -50,7 +50,7 @@ rm_empty_folders(){
 	done
 }
 
-rm_empty_folders_3(){
+rm_empty_folders_2(){
 	for a in `seq 1 10`
 	do
 		find $1 -mindepth 2 -type d -empty -delete
