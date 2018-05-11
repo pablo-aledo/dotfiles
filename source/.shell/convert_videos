@@ -294,6 +294,7 @@ convert_recursive(){
 	cd $convert_dir
 	find -name '*.part*.rar' | while read line
 	do
+		cd $convert_dir
 		cd "`dirname $line`"
 		[ $(ls | wc -l) -eq $(ls | sed 's/.*part\(.*\)\.rar/\1/g' | sort -g | tail -n1) ] || (echo ERROR && read)
 		[ $(ll | cut -d' ' -f5 | sort | uniq | wc -l) -eq 3 ] || (echo ERROR && read)
@@ -302,10 +303,10 @@ convert_recursive(){
 	cd $convert_dir
 	find -name '*.rar' | while read line
 	do
+		cd $convert_dir
 		cd "`dirname $line`"
 		yes n | unrar x "`basename $line`"
 		rm -fr "`basename $line`"
-		cd -
 	done
 
 	cd $convert_dir
