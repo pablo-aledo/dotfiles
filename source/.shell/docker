@@ -100,7 +100,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldap)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -397,6 +397,7 @@ case $1 in
 (nodejs)                 docker run --rm -it -v $(pwd):/source schickling/nodejs ;;
 (octave)                 docker run --rm -it -v $(pwd):/source schickling/octave ;;
 (opencv2)                docker run --rm -it -v $(pwd):/source schickling/opencv ;;
+(openldap)               sudo docker run -it --rm -u $(id -u) -v $PWD:/workdir -w /workdir openldap ;;
 (rust)                   docker run --rm -it -v $(pwd):/source schickling/rust ;;
 (swagger-ui)             docker run -d -p 8080:80 -e API_URL=http://localhost:4000/swagger schickling/swagger-ui ;;
 (openvpn)                shift; docker-compose run vpn $* ;;

@@ -1,0 +1,45 @@
+#schemas#
+
+pidfile	./slapd.pid
+argsfile	./slapd.args
+
+access to * by * read
+
+#Anonymous Bind requests not allowed
+disallow bind_anon 
+
+#######################################################################
+# BDB database definitions
+#######################################################################
+
+moduleload back_bdb.so
+database	bdb
+suffix          "dc=operator,dc=com"
+rootdn          "cn=manager,dc=operator,dc=com"
+
+rootpw manager
+
+lastmod off
+                                                                                
+#default value of working threads (can be increased up to 512)
+threads 16
+
+
+# The database directory MUST exist prior to running slapd AND 
+# should only be accessible by the slapd and slap tools.
+# Mode 700 recommended.
+directory	./database
+
+# Indices to maintain
+index	objectClass	eq,pres
+
+
+# Do not use extra CPU cicles to generate logs by means of syslog
+loglevel 0
+
+# cache memory 1.000.000 registers, 100MB per indexes file
+#cachesize 1000000
+#dbcachesize 100000000
+
+# Do not synchronize backend database
+#dbcacheNoWsync
