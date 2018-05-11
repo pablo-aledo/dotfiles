@@ -48,7 +48,7 @@ populate_default_data ()
 
 ip=0.0.0.0
 port=9123
-trace_level=1
+trace_level=255
 dbPath=/workdir/database
 server_log_file=/workdir/server.log
 client_log_file=/workdir/client.log
