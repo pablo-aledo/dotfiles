@@ -100,7 +100,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldap)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -293,6 +293,7 @@ case $1 in
 (pulseaudio)             docker run -d -v /etc/localtime:/etc/localtime:ro --device /dev/snd --name pulseaudio -p 4713:4713 -v /var/run/dbus:/var/run/dbus -v /etc/machine-id:/etc/machine-id ${DOCKER_REPO_PREFIX}/pulseaudio ;;
 (pydio)                  docker run -v /etc/localtime:/etc/localtime:ro -v $PWD/pydio/config:/config -v $PWD/pydio/data:/data -e PGID=$(id -g) -e PUID=$(id -u) -e TZ=$(cat /etc/timezone) -p 443:443 linuxserver/pydio ;;
 (rainbowstream)          docker run -it --rm -v /etc/localtime:/etc/localtime:ro -v $HOME/.rainbow_oauth:/root/.rainbow_oauth -v $HOME/.rainbow_config.json:/root/.rainbow_config.json --name rainbowstream ${DOCKER_REPO_PREFIX}/rainbowstream ;;
+(re_lab)                 docker run -it -v $(pwd)/share_ro:/share_ro:ro -v $(pwd)/share_rw:/share_rw re_lab ;;
 (remmina)                docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/.remmina:/root/.remmina --name remmina ${DOCKER_REPO_PREFIX}/remmina ;;
 (ricochet)               docker run -d --restart always -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name ricochet ${DOCKER_REPO_PREFIX}/ricochet ;;
 (rstudio)                docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/rscripts:/root/rscripts --device /dev/dri --name rstudio ${DOCKER_REPO_PREFIX}/rsudio ;;
