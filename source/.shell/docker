@@ -217,6 +217,7 @@ case $1 in
 (gitsome)                docker run --rm -it -v ${HOME}/.gitsomeconfig:/home/anon/.gitsomeconfig -v ${HOME}/.gitsomeconfigurl:/home/anon/.gitsomeconfigurl r.j3ss.co/gitsome ;;
 (gvim)                   docker run -ti --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix verybada/gvim ;;
 (gnuplot)                docker run --rm -it r.j3ss.co/gnuplot ;;
+(hacker-tools)           docker run -it -d --net=host --privileged --name little-boy veerendrav2/hacker-tools ;;
 (hollywood)              docker run --rm -it --name hollywood ${DOCKER_REPO_PREFIX}/hollywood ;;
 (htop)                   docker run --rm -it --pid host --net none --name htop ${DOCKER_REPO_PREFIX}/htop ;;
 (http)                   shift; docker run -t --rm -v /var/run/docker.sock:/var/run/docker.sock --log-driver none ${DOCKER_REPO_PREFIX}/httpie "$@" ;;
