@@ -100,7 +100,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -263,6 +263,7 @@ case $1 in
 (notify-osd)             docker run -d -v /etc/machine-id:/etc/machine-id:ro -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v /var/run/dbus:/var/run/dbus -v /var/run/user/$(id -u):/var/run/user/$(id -u) $(env | cut -d= -f1 | awk '{print "-e", $1}') -e DISPLAY=unix$DISPLAY -e DBUS_SESSION_BUS_ADDRESS="unix:path=/var/run/user/1000/bus" -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro -u $(whoami) -w "$HOME" -v $HOME/.Xauthority:$HOME/.Xauthority --name notify-osd ${DOCKER_REPO_PREFIX}/notify-osd ;;
 (notify_send)            local args=${*:2}
                          docker exec -i notify_osd notify-send "$1" "${args}" ;;
+(openshot)               docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY openshot ;;
 (owncloud)               docker run -d -p 8000:80 -v $PWD/owncloud:/var/www/html owncloud:8.1 ;;
                          # --link my-mysql:mysql, and then use mysql as the database host on setup.
                          # docker exec -u www-data some-owncloud php occ status
