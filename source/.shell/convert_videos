@@ -280,8 +280,8 @@ convert_recursive(){
 }
 
 convert_recursive(){
-
-	convert_opts="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
+	width=640
+	convert_opts="-vf 'scale=${width}:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
 
 	[ -e "$convert_dir" ]   || return
 	[ -e "$converted_dir" ] || return
