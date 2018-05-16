@@ -4,8 +4,8 @@ arl_list(){
 [ $# -gt 0 ] || topic=Python
 [ $# -gt 1 ] && limit=$2
 [ $# -gt 1 ] || limit=9999
-[ $# -gt 2 ] && maxsize="99G"
-[ $# -gt 2 ] || maxsize=$3
+[ $# -gt 2 ] && maxsize=$3
+[ $# -gt 2 ] || maxsize="999G"
 
 maxsize=`echo $maxsize | sed -e 's/K/*1024/g' -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g' | bc`
 
@@ -21,8 +21,9 @@ do
 	link="$a/archive/master.zip"
 	echo "\e[31m ===== $link ===== \e[0m"
 	name=`echo $a | cut -d'/' -f5`
-	[ -e ${topic}/${name} ] && continue
+	[ -e ${topic}/${name}.zip ] && continue
 	wget ${link} -O ${topic}/${name}.zip
+echo $maxsize
 	[ `stat -c %s ${topic}/${name}.zip` -gt $maxsize ] && rm -fr ${topic}/${name}.zip
 done
 }
