@@ -1,0 +1,18 @@
+arl_list(){
+topic=$1
+rm -fr ~/arl /tmp/dlscript
+mkdir -p ~/arl/$topic
+cd ~/arl
+wget https://github.com/kaxap/arl/archive/master.zip -O /tmp/master.zip
+unzip /tmp/master.zip
+list=`ls arl-master | grep -i $topic`
+echo $list
+cat arl-master/$list | grep 'https://github.com' | cut -d'(' -f2 | cut -d')' -f1 | sort | uniq > /tmp/dllist
+for a in `cat /tmp/dllist`
+do 
+	link="$a/archive/master.zip"
+	name=`echo $a | cut -d'/' -f5`
+	echo wget ${link} -O ${topic}/${name}.zip >> /tmp/dlscript
+done
+cat /tmp/dlscript
+}
