@@ -23,7 +23,6 @@ do
 	name=`echo $a | cut -d'/' -f5`
 	[ -e ${topic}/${name}.zip ] && continue
 	wget ${link} -O ${topic}/${name}.zip
-echo $maxsize
 	[ `stat -c %s ${topic}/${name}.zip` -gt $maxsize ] && rm -fr ${topic}/${name}.zip
 done
 }
