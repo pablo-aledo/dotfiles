@@ -19,9 +19,10 @@ cat arl-master/$list | grep 'https://github.com' | cut -d'(' -f2 | cut -d')' -f1
 for a in `cat /tmp/dllist`
 do 
 	link="$a/archive/master.zip"
+	echo "\e[31m ===== $link ===== \e[0m"
 	name=`echo $a | cut -d'/' -f5`
 	[ -e ${topic}/${name} ] && continue
-	wget ${link} -O ${topic}/${name}.zip || break
+	wget ${link} -O ${topic}/${name}.zip
 	[ `stat -c %s ${topic}/${name}.zip` -gt $maxsize ] && rm -fr ${topic}/${name}.zip
 done
 }
