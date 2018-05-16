@@ -1,18 +1,28 @@
 arl_list(){
-topic=$1
-rm -fr ~/arl /tmp/dlscript
+
+[ $# -gt 0 ] && topic=$1
+[ $# -gt 0 ] || topic=Python
+[ $# -gt 1 ] && limit=$2
+[ $# -gt 1 ] || limit=9999
+[ $# -gt 2 ] && maxsize="99G"
+[ $# -gt 2 ] || maxsize=$3
+
+maxsize=`echo $maxsize | sed -e 's/K/*1024/g' -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g' | bc`
+
+rm -fr ~/arl
 mkdir -p ~/arl/$topic
 cd ~/arl
 wget https://github.com/kaxap/arl/archive/master.zip -O /tmp/master.zip
 unzip /tmp/master.zip
 list=`ls arl-master | grep -i $topic`
 echo $list
-cat arl-master/$list | grep 'https://github.com' | cut -d'(' -f2 | cut -d')' -f1 | sort | uniq > /tmp/dllist
+cat arl-master/$list | grep 'https://github.com' | cut -d'(' -f2 | cut -d')' -f1 | head -n $limit | sort | uniq > /tmp/dllist
 for a in `cat /tmp/dllist`
 do 
 	link="$a/archive/master.zip"
 	name=`echo $a | cut -d'/' -f5`
-	echo wget ${link} -O ${topic}/${name}.zip >> /tmp/dlscript
+	[ -e ${topic}/${name} ] && continue
+	wget ${link} -O ${topic}/${name}.zip || break
+	[ `stat -c %s ${topic}/${name}.zip` -gt $maxsize ] && rm -fr ${topic}/${name}.zip
 done
-cat /tmp/dlscript
 }
