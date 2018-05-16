@@ -15,7 +15,7 @@ wget https://github.com/kaxap/arl/archive/master.zip -O /tmp/master.zip
 [ -e arl-master ] || unzip /tmp/master.zip
 list=`ls arl-master | grep -i $topic`
 echo $list
-cat arl-master/$list | grep 'https://github.com' | cut -d'(' -f2 | cut -d')' -f1 | head -n $limit | sort | uniq > /tmp/dllist
+cat arl-master/$list | grep 'https://github.com' | cut -d'(' -f2 | cut -d')' -f1 | head -n $limit > /tmp/dllist
 for a in `cat /tmp/dllist`
 do 
 	link="$a/archive/master.zip"
