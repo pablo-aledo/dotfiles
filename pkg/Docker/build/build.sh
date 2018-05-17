@@ -13,7 +13,7 @@ then
 	    mkdir build
 	    cd build
 	    cmake ..
-	    make
+	    VERBOSE=1 make
 	    #make install
 	elif [ -e configure ]
 	then
