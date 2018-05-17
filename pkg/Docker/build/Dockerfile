@@ -202,7 +202,7 @@ RUN            git clone https://github.com/jgaa/restc-cpp.git /usr/src/restc-cp
 
 RUN        git clone https://github.com/google/benchmark.git /usr/src/benchmark && \
            cd /usr/src/benchmark                                                && \
-           mkdir build                                                          && \
+           mkdir build && cd build                                              && \
            cmake .. -DCMAKE_BUILD_TYPE=RELEASE                                  && \
            make -j4                                                             && \
            make install
