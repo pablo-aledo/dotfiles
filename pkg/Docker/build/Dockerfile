@@ -200,6 +200,13 @@ RUN            git clone https://github.com/jgaa/restc-cpp.git /usr/src/restc-cp
                #mv /usr/local/lib/libgrpc++_reflection.so.5 /usr/local/lib/libgrpc++_reflection.so.1 && \
                #rm -rf /usr/src/grpc
 
+RUN        git clone https://github.com/google/benchmark.git /usr/src/benchmark && \
+           cd /usr/src/benchmark                                                && \
+           mkdir build                                                          && \
+           cmake .. -DCMAKE_BUILD_TYPE=RELEASE                                  && \
+           make -j4                                                             && \
+           make install
+
 COPY       build.sh /usr/local/bin
 RUN        chmod +x /usr/local/bin/build.sh
 
