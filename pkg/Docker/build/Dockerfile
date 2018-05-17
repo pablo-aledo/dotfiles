@@ -176,12 +176,12 @@ RUN            git clone https://github.com/jgaa/restc-cpp.git /usr/src/restc-cp
                #make install                                                            && \
                #rm -rf /usr/src/fruit-3.1.1
 
-#RUN            git clone -q https://github.com/google/googletest.git /usr/src/googletest && \
-               #cd /usr/src/googletest                                                    && \
-               #cmake .                                                                   && \
-               #make                                                                      && \
-               #make install                                                              && \
-               #rm -rf /usr/src/googletest
+RUN            git clone -q https://github.com/google/googletest.git /usr/src/googletest && \
+	       cd /usr/src/googletest                                                    && \
+	       cmake .                                                                   && \
+	       make                                                                      && \
+	       make install                                                              && \
+	       rm -rf /usr/src/googletest
 
 #RUN            git clone https://github.com/google/protobuf.git /usr/src/protobuf && \
                #cd /usr/src/protobuf                                               && \
