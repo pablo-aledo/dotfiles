@@ -231,7 +231,7 @@ case $1 in
 (gcov)                   docker run -v $PWD:/workdir -w /workdir -it gcov ;;
 (htop)                   docker run --rm -it --pid host ${DOCKER_REPO_PREFIX}/htop ;;
 (imagemin)               docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v $HOME/Pictures:/root/Pictures --entrypoint bash ${DOCKER_REPO_PREFIX}/imagemin ;;
-(inkscape)               docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v /inkscape/:/workspace -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/inkscape ;;
+(inkscape)               shift; docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v $PWD:/workdir -w /workdir -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/inkscape $* ;;
 (john)                   shift
                          file=$(realpath "$1")
                          docker run --rm -it -v "${file}:/root/$(basename "${file}")" ${DOCKER_REPO_PREFIX}/john "$@" ;;
