@@ -22,10 +22,11 @@ do
 	n=$(( $n + 1 ))
 	link="$a/archive/master.zip"
 	echo "\e[31m ===== $a ===== \e[0m"
-	name=`printf %03d $n`_`echo $a | cut -d'/' -f5` 
-	[ -e ${topic}/${name}.zip ] && continue
-	wget ${link} -O ${topic}/${name}.zip
-	[ `stat -c %s ${topic}/${name}.zip` -gt $maxsize ] && rm -fr ${topic}/${name}.zip
+	name=`printf %03d $n`_`echo $a | cut -d'/' -f5`.zip
+	echo "\e[32m ${topic}/${name} \e[0m"
+	[ -e ${topic}/${name} ] && continue
+	wget ${link} -O ${topic}/${name}
+	[ `stat -c %s ${topic}/${name}` -gt $maxsize ] && rm -fr ${topic}/${name}
 done
 }
 
@@ -51,9 +52,10 @@ do
 	n=$(( $n + 1 ))
 	link="$a/archive/master.zip"
 	echo "\e[31m ===== $a ===== \e[0m"
-	name=`printf %03d $n`_`echo $a | cut -d'/' -f5` 
-	[ -e ${topic}/${name}.zip ] && continue
-	wget ${link} -O ${topic}/${name}.zip
-	[ `stat -c %s ${topic}/${name}.zip` -gt $maxsize ] && rm -fr ${topic}/${name}.zip
+	name=`printf %03d $n`_`echo $a | cut -d'/' -f5`.zip
+	echo "\e[32m ${topic}/${name} \e[0m"
+	[ -e ${topic}/${name} ] && continue
+	wget ${link} -O ${topic}/${name}
+	[ `stat -c %s ${topic}/${name}` -gt $maxsize ] && rm -fr ${topic}/${name}
 done
 }
