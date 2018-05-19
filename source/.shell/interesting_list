@@ -44,7 +44,7 @@ mkdir -p ~/arl/$topic
 cd ~/arl
 [ -e arl-master.zip ] || wget https://github.com/kaxap/arl/archive/master.zip -O arl-master.zip
 [ -e arl-master ] || unzip arl-master.zip
-cat arl-master/*.md | grep $topic | grep 'https://github.com' | cut -d'(' -f2 | cut -d')' -f1 | head -n $limit > /tmp/dllist
+cat arl-master/*.md | grep -i $topic | grep 'https://github.com' | cut -d'(' -f2 | cut -d')' -f1 | head -n $limit > /tmp/dllist
 n=0
 for a in `cat /tmp/dllist`
 do 
