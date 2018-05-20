@@ -300,7 +300,7 @@ convert_recursive(){
 		cd "`dirname $line`"
 		[ $(ls | wc -l) -eq $(ls | sed 's/.*part\(.*\)\.rar/\1/g' | sort -g | tail -n1) ] || \
 			(echo "missing file in the rar sequence for $PWD" > /tmp/error)
-		[ $(ll | cut -d' ' -f5 | sort | uniq | wc -l) -eq 3 ] || \
+		[ $(ll | awk '{print $5}' | sort | uniq | wc -l) -eq 3 ] || \
 			(echo "incorrect sizes in the rar sequence for $PWD" > /tmp/error)
 	done
 	[ -e /tmp/error ] && return
