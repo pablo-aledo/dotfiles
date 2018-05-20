@@ -280,7 +280,8 @@ convert_recursive(){
 }
 
 convert_recursive(){
-	width=640
+	[ $# -eq 0 ] && width=640
+	[ $# -eq 1 ] && width=$1
 	convert_opts="-vf 'scale=${width}:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
 
 	[ -e "$convert_dir" ]   || return
@@ -292,13 +293,17 @@ convert_recursive(){
 	rm -fr /tmp/convert_report
 
 	cd $convert_dir
+	rm -fr /tmp/error
 	find -name '*.part*.rar' | while read line
 	do
 		cd $convert_dir
 		cd "`dirname $line`"
-		[ $(ls | wc -l) -eq $(ls | sed 's/.*part\(.*\)\.rar/\1/g' | sort -g | tail -n1) ] || (echo ERROR && read)
-		[ $(ll | cut -d' ' -f5 | sort | uniq | wc -l) -eq 3 ] || (echo ERROR && read)
+		[ $(ls | wc -l) -eq $(ls | sed 's/.*part\(.*\)\.rar/\1/g' | sort -g | tail -n1) ] || \
+			(echo "missing file in the rar sequence for $PWD" > /tmp/error)
+		[ $(ll | cut -d' ' -f5 | sort | uniq | wc -l) -eq 3 ] || \
+			(echo "incorrect sizes in the rar sequence for $PWD" > /tmp/error)
 	done
+	[ -e /tmp/error ] && return
 
 	cd $convert_dir
 	find -name '*.rar' | while read line
