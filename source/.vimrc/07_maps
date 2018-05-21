@@ -161,6 +161,7 @@ map ,sp :set spell!<cr>
 " Double quit for vimdiff
 map QQ :q<cr>:q<cr>
 map QQ! :sav! /tmp/vim_bak<cr>:q<cr>:sav! /tmp/vim_bak_2<cr>:q<cr>
+map ZZ :wqa<cr>
 " Paste and yank
 vmap py pgvy
 " Disable indentation
