@@ -1447,10 +1447,16 @@ snippet df3
 
 snippet gtest init 
 	#include <gtest/gtest.h>
+	#include <gmock/gmock.h>
 	
 	int main(int argc, char *argv[]) {
 		testing::InitGoogleTest(&argc, argv);
+		testing::InitGoogleMock(&argc, argv);
 		return RUN_ALL_TESTS();
+	}
+
+	TEST(ThisIsATest){
+		EXPECT_EQ(4, 2 + 2);
 	}
 
 snippet gtest test 
@@ -1461,8 +1467,32 @@ snippet gtest test
 snippet gtest equal
 	EXPECT_EQ(${1:expected}, ${2:result});
 
+snippet gtest less_than
+	EXPECT_LT(${1:expected}, ${2:result});
+
+snippet gtest greater_than
+	EXPECT_GT(${1:expected}, ${2:result});
+
+snippet gtest streq
+	EXPECT_STREQ(${1:expected}, ${2:result});
+
+snippet gtest strne
+	EXPECT_STRNE(${1:expected}, ${2:result});
+
+snippet gtest strcaseeq
+	EXPECT_STRCASEEQ(${1:expected}, ${2:result});
+
+snippet gtest strcasene
+	EXPECT_STRCASENE(${1:expected}, ${2:result});
+
+snippet gtest predicate
+	EXPECT_PRED${1:number_of_arguments}(${2:predicate}, ${3:argument_1});
+
 snippet eeq
 	EXPECT_EQ(${1:expected}, ${2:result});
+
+snippet eeqm
+	EXPECT_EQ(${1:expected}, ${2:result}) << "${3:message}";
 
 snippet et
 	EXPECT_TRUE(${1:result});
