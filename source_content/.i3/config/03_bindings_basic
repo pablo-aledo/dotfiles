@@ -2,5 +2,4 @@
 bindsym $mod+Return exec i3-sensible-terminal
 bindsym Mod1+Return exec i3-sensible-terminal
 bindsym $mod+Shift+Return exec --no-startup-id pcmanfm
-bindsym $mod+Ctrl+Return exec --no-startup-id google-chrome
 # bindsym $win+e exec pcmanfm

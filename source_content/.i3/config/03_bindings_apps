@@ -1,5 +1,6 @@
 #gvim
 bindsym $mod+g exec gvim
+bindsym $mod+b exec google-chrome
 #bindsym $mod+Mod1+r exec --no-startup-id "i3session restore"
 bindsym Ctrl+Mod1+l exec --no-startup-id "i3lock -c000000"
 
