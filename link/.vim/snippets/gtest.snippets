@@ -1,0 +1,363 @@
+snippet init
+	#include <gtest/gtest.h>
+	#include <gmock/gmock.h>
+	#include <gmock/gmock-matchers.h>
+	#include <gmock/gmock-generated-matchers.h>
+
+	using namespace testing;
+
+	int main(int argc, char *argv[]) {
+		testing::InitGoogleTest(&argc, argv);
+		testing::InitGoogleMock(&argc, argv);
+		return RUN_ALL_TESTS();
+	}
+
+	TEST(ThisIsATest){
+		EXPECT_EQ(4, 2 + 2);
+	}
+
+snippet test
+	TEST(${1:CATEGORY}, ${2:NAME}) {
+		$3
+	}
+
+snippet equal
+	EXPECT_EQ(${1:expected}, ${2:result});
+
+snippet less_than
+	EXPECT_LT(${1:expected}, ${2:result});
+
+snippet greater_than
+	EXPECT_GT(${1:expected}, ${2:result});
+
+snippet streq
+	EXPECT_STREQ(${1:expected}, ${2:result});
+
+snippet strne
+	EXPECT_STRNE(${1:expected}, ${2:result});
+
+snippet strcaseeq
+	EXPECT_STRCASEEQ(${1:expected}, ${2:result});
+
+snippet strcasene
+	EXPECT_STRCASENE(${1:expected}, ${2:result});
+
+snippet predicate
+	EXPECT_PRED${1:number_of_arguments}(${2:predicate}, ${3:argument_1});
+
+snippet eeq
+	EXPECT_EQ(${1:expected}, ${2:result});
+
+snippet eeqm
+	EXPECT_EQ(${1:expected}, ${2:result}) << "${3:message}";
+
+snippet et
+	EXPECT_TRUE(${1:result});
+
+snippet expect_that
+	EXPECT_THAT(${1:var}, ${2:matcher});
+
+snippet fixture
+	struct ${1:name}Test : testing::Test {
+		$1* ${2:variable} = new $1;
+		$1Test() {
+			$2 = new $1;
+		}
+
+		virtual ~$1Test(){
+			delete $2;
+		}
+	};
+
+	TEST_F( $1Test, ${3:name} ){
+		EXPECT_EQ(${4:expected}, $2->${5:field});
+	}
+
+snippet multiple_fixture
+	struct ${1:name}_state {
+
+	};
+
+	struct ${2:name}Test : ${3:test}Test, testing::WithParamInterface<$1_state>{
+		$2Test() {
+			${4:variable}->${5:field} = GetParam().${6:field_in_state};
+		}
+	};
+
+	TEST_P($2Test, ${7:Name}){
+		auto ${8:name} = GetParam();
+		auto ${9:res} = $4->${10:method}($8.${11:field_in_state});
+		EXPECT_EQ($8.${12:field_in_state}, $4->${13:field_in_class});
+	}
+
+	INSTANTIATE_TEST_CASE_P(Default, $2Test,
+		testing::Values(
+			$1_state{},
+			$1_state{}
+		)
+	);
+
+snippet case
+	TEST_CASE("${1:description}"){
+		${2:...}
+	}
+
+snippet section
+	SECTION("${1:description}"){
+		${2:...}
+	}
+
+snippet mock
+	class Fake${1:Class} : public $1 {
+	public:
+		MOCK_METHOD${2:num_args}(${3:procedure}, ${4:return_type}(${5:type_arg_1}&, ${6:type_arg_2}&))
+	}
+
+snippet mock_template
+	template<typename T>
+	class Fake${1:Class} : public $1<T> {
+	public:
+		MOCK_METHOD${2:num_args}_T(${3:procedure}, ${4:return_type}(${5:type_arg_1}&, ${6:type_arg_2}&))
+	}
+
+snippet method
+	MOCK_METHOD${1:num_args}(${2:procedure}, ${3:return_type}(${4:type_arg_1}&, ${5:type_arg_2}&))
+
+snippet default_value
+	DefaultValue<T>::Set(value);
+	DefaultValue<T>::SetFactory(&makeT);
+	DefaultValue<T>::Clear();
+
+snippet on_call
+	ON_CALL(${1:mock_object}, ${2:method}(${3:_})).WillByDefault(Return(${4:value}));
+
+snippet matcher any
+	${1:_}
+
+snippet matcher type
+	A<${1:type}>()
+
+snippet matcher typedeq
+	TypedEq<${1:type}>(${2:value})
+
+snippet matcher matcher
+	Matcher<${1:type}>(${2:Gt}(${3:value}))
+
+snippet matcher eq
+	Eq(${1:arg})
+
+snippet matcher ne
+	Ne(${1:arg})
+
+snippet matcher gt
+	Gt(${1:arg})
+
+snippet matcher lt
+	Lt(${1:arg})
+
+snippet matcher null
+	IsNull(${1:arg})
+
+snippet matcher notnull
+	NotNull(${1:arg})
+
+snippet matcher ref
+	Ref(${1:arg})
+
+snippet matcher string_containsregex
+	ContainsRegex(${1:regex})
+
+snippet matcher string_endswith
+	EndsWith(${1:suffix})
+
+snippet matcher string_hassubstr
+	HasSubStr(${1:string})
+
+snippet matcher string_matchesregex
+	MatchesRegex(${1:regex})
+
+snippet matcher startswith
+	StartsWith(${1:prefix})
+
+snippet matcher string_caseeq
+	StrCaseEq(${1:prefix})
+
+snippet matcher string_casene
+	StrCaseNe(${1:prefix})
+
+snippet matcher string_eq
+	StrEq(${1:prefix})
+
+snippet matcher string_ne
+	StrNe(${1:prefix})
+
+snippet matcher all
+	AllOf(${1:m1}, ${2:m2}, ${3:...})
+
+snippet matcher any
+	AnyOf(${1:m1}, ${2:m2}, ${3:...})
+
+snippet matcher not
+	Not(${1:m})
+
+snippet matcher container_eq
+	ContainerEq(${1:value})
+
+snippet matcher container_isempty
+	IsEmpty()
+
+snippet matcher container_sizeis
+	SizeIs(${1:size})
+
+snippet matcher container_contains
+	Contains(${1:value})
+
+snippet matcher container_each
+	Each(${1:matcher})
+
+snippet matcher container_elementsare
+	ElementsAre(${1:e1}, ${2:e2}, ${3:e3}, ${4:...})
+
+snippet matcher container_elementsarearray
+	ElementsAreArray(${1:{}})
+
+snippet matcher container_pointwise
+	PointWise(${1:m}, ${2:container})
+
+snippet matcher container_unorderedelementsare
+	PointWise(${1:...})
+
+snippet matcher container_whensorted
+	WhenSorted(${1:m})
+
+snippet matcher container_whensortedby
+	WhenSortedBy(${1:comparator}, ${2:m})
+
+snippet matcher doubleeq
+	DoubleEq(${1:value})
+
+snippet matcher floateq
+	FloatEq(${1:value})
+
+snippet matcher doublenear
+	DoubleNear(${1:value})
+
+snippet matcher floatnear
+	FloatNear(${1:value})
+
+snippet matcher pointee
+	Pointee(${1:value})
+
+snippet matcher field
+	Field(&${1:class::field}, ${2:m})
+
+snippet matcher property
+	Property(&${1:class::property}, ${2:m})
+
+snippet matcher key
+	Key(&${1:v/m})
+
+snippet expect_call_repeatedly
+	EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_})).WillRepeatedly(Return(${4:value}));
+
+snippet expect_call_once
+	EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_})).WillOnce(Return(${4:value}));
+
+snippet expect_call_full
+	EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_}))
+		.With(${4:multi_argument_matcher})
+		.Times(AtLeast(${5:cardinality}))
+		.InSequence(${6:sequence})
+		.After(${7:expectations})
+		.WillOnce(${8:action})
+		.WillRepeatedly(${9:action})
+		.RetireOnSaturation();
+
+snippet multi_argument_matcher Args
+	Args<${1:1}, ${2:2}>(${3:Eq()})
+
+snippet multi_argument_matcher AllArgs
+	AllArgs(${1:Eq()})
+
+snippet expect_call_after
+	EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_})).After(${4:previous_method});
+
+snippet expect_call_after_set
+	ExpectationSet ${1:previous_methods};
+	for( int i = 0; i < ${2:element_count}, i++ ){
+		$1 += EXPECT_CALL(${3:...});
+	}
+	EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_})).After($1);
+
+snippet expect_call_insequence
+	{
+		InSequence sequence;
+		EXPECT_CALL(...);
+		EXPECT_CALL(...);
+		EXPECT_CALL(...);
+	}
+
+snippet expect_call_insequence_2
+	{
+		Sequence s1, s2;
+		EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_})).InSequence(s1, s2);
+		EXPECT_CALL($1, $2).InSequence(s1);
+		EXPECT_CALL($1, $2).InSequence(s2);
+	}
+
+snippet do return
+	Return(${1:value})
+
+snippet do return_ref
+	ReturnRef(${1:value})
+
+snippet do return_pointer
+	SetArgPointee<${1:element}>(${2:value})
+
+snippet do actions
+	DoAll(SetArgPointee<${1:element}>(${2:value}), Return(${3:value}))
+
+snippet do throw
+	Throw(${1:exception})
+
+snippet do invoke
+	InvokeWithoutArgs(${1:OtherMethod});
+
+snippet do invoke_ignoreresult
+	InvokeWithoutArgs(IgnoreResult(${1:OtherMethod}));
+
+snippet do invoke_withargs
+	WithArgs<${1:arg_1}, ${2:arg_2}>(${3:OtherMethod});
+
+snippet action
+	ACTION(${1:Sum}){${2:return arg0 + arg1}}
+
+snippet action_p
+	ACTION_P(${1:Plus}, n){${2:return arg0 + n}}
+
+snippet action_pk
+	ACTION_PK(${1:Plus}, p1, ..., pk){${2:...}}
+
+snippet times_atleast
+	.Times(AtLeast(${1:cardinality}))
+
+snippet times_atmost
+	.Times(AtMost(${1:cardinality}))
+
+snippet times_between
+	.Times(Between(${1:low_bound}, ${2:up_bound}));
+
+snippet times_any
+	.Times(AnyNumber());
+
+snippet times_exactly
+	.Times(Exactly(${1:cardinality}))
+
+snippet stop_warnings
+	// Ignore all uninteresting calls
+	NiceMock<Fake${1:Class}> nice_fake;
+
+snippet fake_warnings
+	// Ignore all uninteresting calls
+	StrictMock<Fake${1:Class}> strict_fake;
+
