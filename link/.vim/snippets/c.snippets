@@ -21,7 +21,7 @@ snippet Def
 	#define ${1:SYMBOL} ${2:value}
 	#endif${3}
 snippet def
-	#define 
+	#define
 snippet ifdef
 	#ifdef ${1:FOO}
 		${2:#define }
@@ -149,17 +149,17 @@ snippet tptc
 snippet tptrc
 	${1:uchar}* ${2:temp_ptr} = &(($1*)(${3:imagen_inicial}->imageData + $3->widthStep*${4:y}))[${5:x}*3];${6}
 snippet socket tcpclient
-	int sockfd; 
-	struct sockaddr_in servaddr,cliaddr; 
+	int sockfd;
+	struct sockaddr_in servaddr,cliaddr;
 	static char buffer[BUFFER_SIZE];
-	sockfd=socket(AF_INET,SOCK_STREAM,0); 
+	sockfd=socket(AF_INET,SOCK_STREAM,0);
 
-	bzero(&servaddr,sizeof(servaddr)); 
-	servaddr.sin_family = AF_INET; 
-	servaddr.sin_addr.s_addr=inet_addr("${1:127.0.0.1}"); 
-	servaddr.sin_port=htons(${2:80}); 
+	bzero(&servaddr,sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr=inet_addr("${1:127.0.0.1}");
+	servaddr.sin_port=htons(${2:80});
 
-	connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)); 
+	connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
 	strcpy(buffer, "hola");
 
@@ -175,24 +175,24 @@ snippet socket tcpclient
 
 	close(sockfd);
 snippet socket tcpserver
-	int listenfd,connfd; 
-	
-	struct sockaddr_in servaddr,cliaddr; 
-	socklen_t clilen; 
+	int listenfd,connfd;
+
+	struct sockaddr_in servaddr,cliaddr;
+	socklen_t clilen;
 	static char buffer[BUFFER_SIZE];
 
-	listenfd=socket(AF_INET,SOCK_STREAM,0); 
+	listenfd=socket(AF_INET,SOCK_STREAM,0);
 
-	bzero(&servaddr,sizeof(servaddr)); 
-	servaddr.sin_family = AF_INET; 
-	servaddr.sin_addr.s_addr=htonl(INADDR_ANY); 
-	servaddr.sin_port=htons(${1:80}); 
+	bzero(&servaddr,sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr=htonl(INADDR_ANY);
+	servaddr.sin_port=htons(${1:80});
 
 	int aux = 1; setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &aux, sizeof(aux));
 
-	bind(listenfd,(struct sockaddr *)&servaddr,sizeof(servaddr)); 
+	bind(listenfd,(struct sockaddr *)&servaddr,sizeof(servaddr));
 
-	listen(listenfd,1024); 
+	listen(listenfd,1024);
 
 	while(1){
 		clilen=sizeof(cliaddr);
@@ -205,7 +205,7 @@ snippet socket tcpserver
 		} else {
 
 			close (listenfd);
-			
+
 			int nBytes = 0;
 			int offset = 0;
 			while( ( nBytes = recv(connfd,buffer+offset, BUFFER_SIZE,0) ) ){
@@ -213,41 +213,41 @@ snippet socket tcpserver
 			}
 
 			send(connfd,buffer,BUFFER_SIZE,0);
-			
+
 			close(connfd);
-			
+
 			exit(0);
 		}
-		
+
 	}
 
 
 snippet socket tcpserversingle
-	int listenfd,connfd; 
-	
-	struct sockaddr_in servaddr,cliaddr; 
-	socklen_t clilen; 
+	int listenfd,connfd;
+
+	struct sockaddr_in servaddr,cliaddr;
+	socklen_t clilen;
 	static char buffer[BUFFER_SIZE];
 
-	listenfd=socket(AF_INET,SOCK_STREAM,0); 
+	listenfd=socket(AF_INET,SOCK_STREAM,0);
 
-	bzero(&servaddr,sizeof(servaddr)); 
-	servaddr.sin_family = AF_INET; 
-	servaddr.sin_addr.s_addr=htonl(INADDR_ANY); 
-	servaddr.sin_port=htons(${1:80}); 
+	bzero(&servaddr,sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr=htonl(INADDR_ANY);
+	servaddr.sin_port=htons(${1:80});
 
 	int aux = 1; setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &aux, sizeof(aux));
 
-	bind(listenfd,(struct sockaddr *)&servaddr,sizeof(servaddr)); 
+	bind(listenfd,(struct sockaddr *)&servaddr,sizeof(servaddr));
 
-	listen(listenfd,1024); 
+	listen(listenfd,1024);
 
 	while(1){
 		clilen=sizeof(cliaddr);
 		connfd = accept(listenfd,(struct sockaddr *)&cliaddr,&clilen);
 
 		close (listenfd);
-		
+
 		int nBytes = 0;
 		int offset = 0;
 		while( ( nBytes = recv(connfd,buffer+offset, BUFFER_SIZE,0) ) ){
@@ -255,14 +255,14 @@ snippet socket tcpserversingle
 		}
 
 		send(connfd,buffer,BUFFER_SIZE,0);
-		
+
 		close(connfd);
 	}
 
 
 snippet socket udpclient
 	static char buffer[BUFFER_SIZE];
-	socklen_t addr_len; 
+	socklen_t addr_len;
 	unsigned int server_s;
 	struct sockaddr_in server_addr;
 
@@ -327,10 +327,10 @@ snippet socket include
 snippet tokenize
 	vector<string> tokenize(const string& str,const string& delimiters) {
 		vector<string> tokens;
-	    	
+
 		// skip delimiters at beginning.
 	    	string::size_type lastPos = str.find_first_not_of(delimiters, 0);
-	    	
+
 		// find first "non-delimiter".
 	    	string::size_type pos = str.find_first_of(delimiters, lastPos);
 
@@ -338,10 +338,10 @@ snippet tokenize
 	    	{
 			// found a token, add it to the vector.
 			tokens.push_back(str.substr(lastPos, pos - lastPos));
-		
+
 			// skip delimiters.  Note the "not_of"
 			lastPos = str.find_first_not_of(delimiters, pos);
-		
+
 			// find next "non-delimiter"
 			pos = str.find_first_of(delimiters, lastPos);
 	    	}
@@ -404,12 +404,12 @@ snippet customsort
 	#include <algorithm>
 	#include <string>
 	#include <cctype>
-	 
+
 	// compare character case-insensitive
 	bool icompare_char(char c1, char c2){
 		return std::toupper(c1) < std::toupper(c2);
 	}
-	 
+
 	// return true if s1 comes before s2
 	bool compare(std::string const& s1, std::string const& s2){
 		if (s1.length() > s2.length())
@@ -420,7 +420,7 @@ snippet customsort
 			s2.begin(), s2.end(),
 			icompare_char);
 	}
-	 
+
 	int main(){
 		std::string strings[8] = {"Here", "are", "some", "sample", "strings", "to", "be", "sorted"};
 		std::sort(strings, strings+8, compare);
@@ -485,7 +485,7 @@ snippet pthread_join
 
 		for(t=0; t<NUM_THREADS; t++) {
 			printf("Main: creating thread %ld\n", t);
-			rc = pthread_create(&thread[t], &attr, BusyWork, (void *)t); 
+			rc = pthread_create(&thread[t], &attr, BusyWork, (void *)t);
 			if (rc) {
 				printf("ERROR; return code from pthread_create() is %d\n", rc);
 				exit(-1);
@@ -746,42 +746,42 @@ snippet gpu cl
 
 snippet gpu cuda
 	// Compile and link with: nvcc <file>.cu
-	//  Kernel definition, see also section 4.2.3 of Nvidia Cuda Programming Guide 
-	__global__  void vecAdd(float* A, float* B, float* C) { 
-		// threadIdx.x is a built-in variable  provided by CUDA at runtime 
-		int i = threadIdx.x; 
-		A[i]=0; 
-		B[i]=i; 
-		C[i] = A[i] + B[i]; 
-	} 
+	//  Kernel definition, see also section 4.2.3 of Nvidia Cuda Programming Guide
+	__global__  void vecAdd(float* A, float* B, float* C) {
+		// threadIdx.x is a built-in variable  provided by CUDA at runtime
+		int i = threadIdx.x;
+		A[i]=0;
+		B[i]=i;
+		C[i] = A[i] + B[i];
+	}
 
-	#include  <stdio.h> 
-	#define  SIZE 10 
-	int  main(){ 
+	#include  <stdio.h>
+	#define  SIZE 10
+	int  main(){
 
-		int N=SIZE; 
-		float A[SIZE], B[SIZE], C[SIZE]; 
-		float *devPtrA; 
-		float *devPtrB; 
-		float *devPtrC; 
-		int memsize= SIZE * sizeof(float); 
+		int N=SIZE;
+		float A[SIZE], B[SIZE], C[SIZE];
+		float *devPtrA;
+		float *devPtrB;
+		float *devPtrC;
+		int memsize= SIZE * sizeof(float);
 
-		cudaMalloc((void**)&devPtrA, memsize); 
-		cudaMalloc((void**)&devPtrB, memsize); 
-		cudaMalloc((void**)&devPtrC, memsize); 
-		cudaMemcpy(devPtrA, A, memsize,  cudaMemcpyHostToDevice); 
-		cudaMemcpy(devPtrB, B, memsize,  cudaMemcpyHostToDevice); 
-		// __global__ functions are called:  Func<<< Dg, Db, Ns  >>>(parameter); 
-		vecAdd<<<1, N>>>(devPtrA,  devPtrB, devPtrC); 
-		cudaMemcpy(C, devPtrC, memsize,  cudaMemcpyDeviceToHost); 
+		cudaMalloc((void**)&devPtrA, memsize);
+		cudaMalloc((void**)&devPtrB, memsize);
+		cudaMalloc((void**)&devPtrC, memsize);
+		cudaMemcpy(devPtrA, A, memsize,  cudaMemcpyHostToDevice);
+		cudaMemcpy(devPtrB, B, memsize,  cudaMemcpyHostToDevice);
+		// __global__ functions are called:  Func<<< Dg, Db, Ns  >>>(parameter);
+		vecAdd<<<1, N>>>(devPtrA,  devPtrB, devPtrC);
+		cudaMemcpy(C, devPtrC, memsize,  cudaMemcpyDeviceToHost);
 
-		for (int i=0; i<SIZE; i++) 
-			printf("C[%d]=%f\n",i,C[i]); 
+		for (int i=0; i<SIZE; i++)
+			printf("C[%d]=%f\n",i,C[i]);
 
-		cudaFree(devPtrA); 
-		cudaFree(devPtrA); 
-		cudaFree(devPtrA); 
-	} 
+		cudaFree(devPtrA);
+		cudaFree(devPtrA);
+		cudaFree(devPtrA);
+	}
 
 
 snippet gpu cuda2
@@ -789,43 +789,43 @@ snippet gpu cuda2
 	#include <stdio.h>
 
 	#define N 7
-	 
-	__global__ 
-	void add_arrays(char *a, int *b) 
+
+	__global__
+	void add_arrays(char *a, int *b)
 	{
 		a[threadIdx.x] += b[threadIdx.x];
 	}
-	 
+
 	int main()
 	{
 		// Setup the arrays
 		char a[N] = "Hello ";
 		int b[N] = {15, 10, 6, 0, -11, 1,0};
-	  
+
 		char *ad;
 		int *bd;
 		const int csize = N*sizeof(char);
 		const int isize = N*sizeof(int);
-	 
+
 		// print the contents of a[]
 		printf("%s", a);
-	 
+
 		// Allocate and Transfer memory to the device
-		cudaMalloc( (void**)&ad, csize ); 
-		cudaMalloc( (void**)&bd, isize ); 
-	
-		cudaMemcpy( ad, a, csize, cudaMemcpyHostToDevice ); 
-		cudaMemcpy( bd, b, isize, cudaMemcpyHostToDevice ); 
-	
+		cudaMalloc( (void**)&ad, csize );
+		cudaMalloc( (void**)&bd, isize );
+
+		cudaMemcpy( ad, a, csize, cudaMemcpyHostToDevice );
+		cudaMemcpy( bd, b, isize, cudaMemcpyHostToDevice );
+
 		// Perform the array addition
-		dim3 dimBlock( N  );  
+		dim3 dimBlock( N  );
 		dim3 dimGrid ( 1  );
 		add_arrays<<<dimGrid, dimBlock>>>(ad, bd);
-	
+
 		// Copy the Contents from the GPU
-		cudaMemcpy( a, ad, csize, cudaMemcpyDeviceToHost ); 
+		cudaMemcpy( a, ad, csize, cudaMemcpyDeviceToHost );
 		cudaFree( ad );
-	
+
 		// Display the results
 		printf("%s\n", a);
 		return EXIT_SUCCESS;
@@ -841,21 +841,21 @@ snippet gpu cuda3
 	#include <stdio.h>
 
 	#define N 7
-	 
+
 	typedef struct tipo{
 		int n;
 		int m[5];
 	} tipo;
 
-	__global__ 
-	void add_arrays(tipo* a, tipo* b) 
+	__global__
+	void add_arrays(tipo* a, tipo* b)
 	{
 		a[threadIdx.x].n -= b[threadIdx.x].n;
 		for ( unsigned int i = 0; i < 5; i++) {
 			a[threadIdx.x].m[i] -= b[threadIdx.x].m[i];
 		}
 	}
-	 
+
 	int main()
 	{
 		// Setup the arrays
@@ -870,26 +870,26 @@ snippet gpu cuda3
 				b[i].m[k] = 1;
 			}
 		}
-	  
+
 		tipo* ad;
 		tipo* bd;
 		const int csize = N*sizeof(tipo);
 		const int isize = N*sizeof(tipo);
-	 
-		// Allocate and Transfer memory to the device
-		cudaMalloc( (void**)&ad, csize ); 
-		cudaMalloc( (void**)&bd, isize ); 
 
-		cudaMemcpy( ad, a, csize, cudaMemcpyHostToDevice ); 
-		cudaMemcpy( bd, b, isize, cudaMemcpyHostToDevice ); 
+		// Allocate and Transfer memory to the device
+		cudaMalloc( (void**)&ad, csize );
+		cudaMalloc( (void**)&bd, isize );
+
+		cudaMemcpy( ad, a, csize, cudaMemcpyHostToDevice );
+		cudaMemcpy( bd, b, isize, cudaMemcpyHostToDevice );
 
 		// Perform the array subtraction
-		dim3 dimBlock( N  );  
+		dim3 dimBlock( N  );
 		dim3 dimGrid ( 1  );
 		add_arrays<<<dimGrid, dimBlock>>>(ad, bd);
 
 		// Copy the Contents from the GPU
-		cudaMemcpy( a, ad, csize, cudaMemcpyDeviceToHost ); 
+		cudaMemcpy( a, ad, csize, cudaMemcpyDeviceToHost );
 		cudaFree( ad );
 
 		// Display the results
@@ -909,97 +909,97 @@ snippet gpu cudaHello
 
 	__device__ const char *STR = "HELLO WORLD!";
 	const char STR_LENGTH = 12;
-	
+
 	__global__ void hello()
 	{
 		printf("%c\n", STR[threadIdx.x % STR_LENGTH]);
 	}
-	
+
 	int main(void)
 	{
 		int num_threads = STR_LENGTH;
 		int num_blocks = 1;
 		hello<<<num_blocks,num_threads>>>();
 		cudaDeviceSynchronize();
-	
+
 		return 0;
 	}
 
 snippet gpu cudaVector
 	#include <stdio.h>
-	
+
 	__global__ void vector_add(int *a, int *b, int *c)
 	{
 	    /* insert code to calculate the index properly using blockIdx.x, blockDim.x, threadIdx.x */
 		int index = blockIdx.x * blockDim.x + threadIdx.x;
 		c[index] = a[index] + b[index];
 	}
-	
+
 	/* experiment with N */
 	/* how large can it be? */
 	#define N (2048*2048)
 	#define THREADS_PER_BLOCK 512
-	
+
 	int main()
 	{
 	    int *a, *b, *c;
 		int *d_a, *d_b, *d_c;
 		int size = N * sizeof( int );
-	
+
 		/* allocate space for device copies of a, b, c */
-	
+
 		cudaMalloc( (void **) &d_a, size );
 		cudaMalloc( (void **) &d_b, size );
 		cudaMalloc( (void **) &d_c, size );
-	
+
 		/* allocate space for host copies of a, b, c and setup input values */
-	
+
 		a = (int *)malloc( size );
 		b = (int *)malloc( size );
 		c = (int *)malloc( size );
-	
+
 		for( int i = 0; i < N; i++ )
 		{
 			a[i] = b[i] = i;
 			c[i] = 0;
 		}
-	
+
 		/* copy inputs to device */
 		/* fix the parameters needed to copy data to the device */
 		cudaMemcpy( d_a, a, size, cudaMemcpyHostToDevice );
 		cudaMemcpy( d_b, b, size, cudaMemcpyHostToDevice );
-	
+
 		/* launch the kernel on the GPU */
-		/* insert the launch parameters to launch the kernel properly using blocks and threads */ 
+		/* insert the launch parameters to launch the kernel properly using blocks and threads */
 		add<<< (N + (THREADS_PER_BLOCK-1)) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >>>( d_a, d_b, d_c );
-	
+
 		/* copy result back to host */
 		/* fix the parameters needed to copy data back to the host */
 		cudaMemcpy( c, d_c, size, cudaMemcpyDeviceToHost );
-	
-	
+
+
 		printf( "c[0] = %d\n",0,c[0] );
 		printf( "c[%d] = %d\n",N-1, c[N-1] );
-	
+
 		/* clean up */
-	
+
 		free(a);
 		free(b);
 		free(c);
 		cudaFree( d_a );
 		cudaFree( d_b );
 		cudaFree( d_c );
-		
+
 		return 0;
 	} /* end main */
 
 snippet gpu cudaStencil
 	#include <stdio.h>
-	
+
 	#define RADIUS        3
 	#define BLOCK_SIZE    256
 	#define NUM_ELEMENTS  (4096*2)
-	
+
 	// CUDA API error checking macro
 	#define cudaCheck(error) \
 	  if (error != cudaSuccess) { \
@@ -1008,54 +1008,54 @@ snippet gpu cudaStencil
 	      __FILE__, __LINE__); \
 	    exit(1); \
 	  }
-	
-	__global__ void stencil_1d(int *in, int *out) 
+
+	__global__ void stencil_1d(int *in, int *out)
 	{
 	    __shared__ int temp[BLOCK_SIZE + 2 * RADIUS];
 	    int gindex = threadIdx.x + (blockIdx.x * blockDim.x) + RADIUS;
 	    int lindex = threadIdx.x + RADIUS;
-	
+
 	    // Read input elements into shared memory
 	    temp[lindex] = in[gindex];
-	    if (threadIdx.x < RADIUS) 
+	    if (threadIdx.x < RADIUS)
 	    {
 	        temp[lindex - RADIUS] = in[gindex - RADIUS];
 	        temp[lindex + BLOCK_SIZE] = in[gindex + BLOCK_SIZE];
 	    }
-	
+
 	    // Make sure all threads get to this point before proceeding!
 	    __syncthreads();
-	
+
 	    // Apply the stencil
 	    int result = 0;
 	    for (int offset = -RADIUS ; offset <= RADIUS ; offset++)
 	        result += temp[lindex + offset];
-	
+
 	    // Store the result
 	    out[gindex-RADIUS] = result;
 	}
-	
+
 	int main()
 	{
 	  unsigned int i;
 	  int h_in[NUM_ELEMENTS + 2 * RADIUS], h_out[NUM_ELEMENTS];
 	  int *d_in, *d_out;
-	
+
 	  // Initialize host data
 	  for( i = 0; i < (NUM_ELEMENTS + 2*RADIUS); ++i )
 	    h_in[i] = 1; // With a value of 1 and RADIUS of 3, all output values should be 7
-	
+
 	  // Allocate space on the device
 	  cudaCheck( cudaMalloc( &d_in, (NUM_ELEMENTS + 2*RADIUS) * sizeof(int)) );
 	  cudaCheck( cudaMalloc( &d_out, NUM_ELEMENTS * sizeof(int)) );
-	
+
 	  // Copy input data to device
 	  cudaCheck( cudaMemcpy( d_in, h_in, (NUM_ELEMENTS + 2*RADIUS) * sizeof(int), cudaMemcpyHostToDevice) );
-	
+
 	  stencil_1d<<< (NUM_ELEMENTS + BLOCK_SIZE - 1)/BLOCK_SIZE, BLOCK_SIZE >>> (d_in, d_out);
-	
+
 	  cudaCheck( cudaMemcpy( h_out, d_out, NUM_ELEMENTS * sizeof(int), cudaMemcpyDeviceToHost) );
-	
+
 	  // Verify every out value is 7
 	  for( i = 0; i < NUM_ELEMENTS; ++i )
 	    if (h_out[i] != 7)
@@ -1063,14 +1063,14 @@ snippet gpu cudaStencil
 	      printf("Element h_out[%d] == %d != 7\n", i, h_out[i]);
 	      break;
 	    }
-	
+
 	  if (i == NUM_ELEMENTS)
 	    printf("SUCCESS!\n");
-	
+
 	  // Free out memory
 	  cudaFree(d_in);
 	  cudaFree(d_out);
-	
+
 	  return 0;
 	}
 
@@ -1110,7 +1110,7 @@ snippet llvm iterator
 
 snippet llvm fndecl
 
-	Constant *${1:fnname}_fn = M.getOrInsertFunction("$1", 
+	Constant *${1:fnname}_fn = M.getOrInsertFunction("$1",
 			Type::getInt32Ty( M.getContext() ),
 			Type::getInt32Ty( M.getContext() ),
 			(Type *)0
@@ -1251,7 +1251,7 @@ snippet llvm fn3
 		PM.add(createPrintModulePass(&outs()));
 		PM.run(*Mod);
 
-		delete Mod;  
+		delete Mod;
 		return 0;
 	}
 
@@ -1313,7 +1313,7 @@ snippet llvm fn3
 
 
 snippet llvm iterators
-	#define mod_iterator(mod, fn) for( Module::iterator     fn = mod.begin(),  function_end    = mod.end();  fn != function_end;    ++fn ) 
+	#define mod_iterator(mod, fn) for( Module::iterator     fn = mod.begin(),  function_end    = mod.end();  fn != function_end;    ++fn )
 	#define fun_iterator(fun, bb) for( Function::iterator   bb = fun->begin(), block_end       = fun->end(); bb != block_end;       ++bb )
 	#define blk_iterator(blk, in) for( BasicBlock::iterator in = blk->begin(), instruction_end = blk->end(); in != instruction_end; ++in )
 
@@ -1321,14 +1321,14 @@ snippet llvm iterators
 snippet df3
 	#define MAX(a,b) ((a>b)?a:b)
 	#define MIN(a,b) ((a<b)?a:b)
-	
+
 	void save_volume(float*** volume, int n, char* filename){
 		int nx = n;
 		int ny = n;
 		int nz = n;
 		int i,j,k;
 		float v,themin=1e32,themax=-1e32;
-	
+
 		for (i=0;i<nx;i++) {
 			for (j=0;j<ny;j++) {
 				for (k=0;k<nz;k++) {
@@ -1337,12 +1337,12 @@ snippet df3
 				}
 			}
 		}
-	
+
 		if (themin >= themax) { /* There is no variation */
 			 themax = themin + 1;
 			 themin -= 1;
 		}
-	
+
 		FILE* fptr = fopen(filename,"w");
 		fputc(nx >> 8,fptr);
 		fputc(nx & 0xff,fptr);
@@ -1369,12 +1369,12 @@ snippet df3
 	#declare NZ = 160;
 	#declare DD = <NX,NY,NZ>;
 	#declare VP = <175,175,175>;
-	
-	global_settings { 
-		ambient_light <1,1,1> 
+
+	global_settings {
+		ambient_light <1,1,1>
 		assumed_gamma 1
 	}
-	
+
 	camera {
 		perspective orthographic
 		location VP
@@ -1384,7 +1384,7 @@ snippet df3
 		sky <0,0,-1>
 		look_at <0,0,0>
 	}
-	
+
 	light_source {
 		VP + <0,0,NZ/2>
 		color rgb <1,1,1>
@@ -1392,7 +1392,7 @@ snippet df3
 		media_attenuation on
 		shadowless
 	}
-	
+
 	#declare theinterior = interior {
 		media {
 			intervals 100
@@ -1405,7 +1405,7 @@ snippet df3
 			confidence 0.999
 			variance 1/1000
 			density {
-				density_file df3 "example.df3" 
+				density_file df3 "example.df3"
 				interpolate 1
 				color_map {
 					[0.00 rgb <0,0,0>]
@@ -1416,7 +1416,7 @@ snippet df3
 			}
 		}
 	}
-	
+
 	box {
 		<0,0,0>, <1,1,1>
 		pigment { rgbf 1 }
@@ -1432,23 +1432,25 @@ snippet df3
 	Antialias=Off
 	Antialias_Threshold=0.1
 	Antialias_Depth=2
-	
+
 	Input_File_Name=volume2.pov
-	
+
 	+W600 +H600 ;
-	
+
 	Initial_Frame=1
 	Final_Frame=100
 	Initial_Clock=0.25
 	Final_Clock=1.25
-	
+
 	Cyclic_Animation=on
 	Pause_when_Done=off
 
-snippet gtest init 
+snippet gtest init
 	#include <gtest/gtest.h>
 	#include <gmock/gmock.h>
-	
+
+	using namespace testing;j<F15>
+
 	int main(int argc, char *argv[]) {
 		testing::InitGoogleTest(&argc, argv);
 		testing::InitGoogleMock(&argc, argv);
@@ -1459,7 +1461,7 @@ snippet gtest init
 		EXPECT_EQ(4, 2 + 2);
 	}
 
-snippet gtest test 
+snippet gtest test
 	TEST(${1:CATEGORY}, ${2:NAME}) {
 		$3
 	}
@@ -1530,9 +1532,132 @@ snippet gtest multiple_fixture
 		EXPECT_EQ($8.${12:field_in_state}, $4->${13:field_in_class});
 	}
 
-	INSTANTIATE_TEST_CASE_P(Default, $2Test, 
+	INSTANTIATE_TEST_CASE_P(Default, $2Test,
 		testing::Values(
 			$1_state{},
 			$1_state{}
 		)
 	);
+
+snippet gmock mock
+	class Fake${1:Class} : public $1 {
+	public:
+		MOCK_METHOD${2:num_args}(${3:procedure}, ${4:return_type}(${5:type_arg_1}&, ${6:type_arg_2}&))
+	}
+
+snippet gmock mock_template
+	template<typename T>
+	class Fake${1:Class} : public $1<T> {
+	public:
+		MOCK_METHOD${2:num_args}_T(${3:procedure}, ${4:return_type}(${5:type_arg_1}&, ${6:type_arg_2}&))
+	}
+
+snippet gmock method
+	MOCK_METHOD${1:num_args}(${2:procedure}, ${3:return_type}(${4:type_arg_1}&, ${5:type_arg_2}&))
+
+snippet gmock default_value
+	DefaultValue<T>::Set(value);
+	DefaultValue<T>::SetFactory(&makeT);
+	DefaultValue<T>::Clear();
+
+snippet gmock on_call
+	ON_CALL(${1:mock_object}, ${2:method}(${3:_})).WillByDefault(Return(${4:value}));
+
+snippet gmock expect_call_repeatedly
+	EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_})).WillRepeatedly(Return(${4:value}));
+
+snippet gmock expect_call_once
+	EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_})).WillOnce(Return(${4:value}));
+
+snippet gmock expect_call_times
+	EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_}))
+		.With(${4:multi_argument_matchers})
+		.Times(AtLeast(${5:cardinality}))
+		.InSequence(${6:sequence})
+		.After(${7:expectations})
+		.WillOnce(${8:action})
+		.WillRepeatedly(${9:action})
+		.RetireOnSaturation();
+
+snippet gmock expect_call_after
+	EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_})).After(${4:previous_method});
+
+snippet gmock expect_call_after_set
+	ExpectationSet ${1:previous_methods};
+	for( int i = 0; i < ${2:element_count}, i++ ){
+		$1 += EXPECT_CALL(${3:...});
+	}
+	EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_})).After($1);
+
+snippet gmock expect_call_insequence
+	{
+		InSequence sequence;
+		EXPECT_CALL(...);
+		EXPECT_CALL(...);
+		EXPECT_CALL(...);
+	}
+
+snippet gmock expect_call_insequence_2
+	{
+		Sequence s1, s2;
+		EXPECT_CALL(${1:mock_object}, ${2:method}(${3:_})).InSequence(s1, s2);
+		EXPECT_CALL($1, $2).InSequence(s1);
+		EXPECT_CALL($1, $2).InSequence(s2);
+	}
+
+snippet gmock do_return
+	Return(${1:value})
+
+snippet gmock do_return_ref
+	ReturnRef(${1:value})
+
+snippet gmock do_return_pointer
+	SetArgPointee<${1:element}>(${2:value})
+
+snippet gmock do_actions
+	DoAll(SetArgPointee<${1:element}>(${2:value}), Return(${3:value}))
+
+snippet gmock do_throw
+	Throw(${1:exception})
+
+snippet gmock do_invoke
+	InvokeWithoutArgs(${1:OtherMethod});
+
+snippet gmock do_invoke_ignoreresult
+	InvokeWithoutArgs(IgnoreResult(${1:OtherMethod}));
+
+snippet gmock do_invoke_withargs
+	WithArgs<${1:arg_1}, ${2:arg_2}>(${3:OtherMethod});
+
+snippet gmock action
+	ACTION(${1:Sum}){${2:return arg0 + arg1}}
+
+snippet gmock action_p
+	ACTION_P(${1:Plus}, n){${2:return arg0 + n}}
+
+snippet gmock action_pk
+	ACTION_PK(${1:Plus}, p1, ..., pk){${2:...}}
+
+snippet gmock times_atleast
+		.Times(AtLeast(${1:cardinality}))
+
+snippet gmock times_atmost
+		.Times(AtMost(${1:cardinality}))
+
+snippet gmock times_between
+		.Times(Between(${1:low_bound}, ${2:up_bound}));
+
+snippet gmock times_any
+		.Times(AnyNumber());
+
+snippet gmock times_exactly
+		.Times(Exactly(${1:cardinality}))
+
+snippet gmock stop_warnings
+	// Ignore all uninteresting calls
+	NiceMock<Fake${1:Class}> nice_fake;
+
+snippet gmock fake_warnings
+	// Ignore all uninteresting calls
+	StrictMock<Fake${1:Class}> strict_fake;
+
