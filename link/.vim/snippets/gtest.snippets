@@ -108,10 +108,10 @@ snippet section
 	}
 
 snippet mock
-	class Fake${1:Class} : public $1 {
+	class ${1:Class}Mock : public $1 {
 	public:
 		MOCK_METHOD${2:num_args}(${3:procedure}, ${4:return_type}(${5:type_arg_1}&, ${6:type_arg_2}&))
-	}
+	};
 
 snippet mock_template
 	template<typename T>
