@@ -318,6 +318,20 @@ convert_recursive(){
 	stpfolders | bash
 
 	cd $convert_dir
+	find -iname '*  *' -type d | while read line
+	do
+		name1=$line
+		name2=$(echo $line | sed -e 's/  / /g' -e 's/  / /g' -e 's/  / /g')
+		echo mv "'"$name1"'" "'"$name2"'" 
+	done | bash
+	find -iname '*  *' -type f | while read line
+	do
+		name1=$line
+		name2=$(echo $line | sed -e 's/  / /g' -e 's/  / /g' -e 's/  / /g')
+		echo mv "'"$name1"'" "'"$name2"'" 
+	done | bash
+
+	cd $convert_dir
 	find $PWD -type d | while read line
 	do
 		mkdir -p "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`"
