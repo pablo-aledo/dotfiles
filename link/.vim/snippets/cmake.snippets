@@ -68,6 +68,12 @@ snippet foreach
 snippet add_subdirectory
 	add_subdirectory( ${1:subdirectory} )
 
+snippet add_subdirectory_out_source
+	add_subdirectory(
+		${CMAKE_CURRENT_SOURCE_DIR}/../${1:subdirectory}
+		${CMAKE_CURRENT_BINARY_DIR}/$1
+	)
+
 snippet include_directories
 	include_directories( ${1:../somelib/} )
 
