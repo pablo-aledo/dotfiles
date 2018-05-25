@@ -55,7 +55,7 @@ snippet set_gui
 	set ( ${1:var} ${2:value} CACHE ${3:BOOL|STRING|PATH|FILEPATH} ${4:message} )
 
 snippet message
-	message( " ${1:Please do this ...} ${2:${var_name}} " )
+	message( " ${1:Please do this ...} ${${2:var_name}} " )
 
 snippet error
 	message( FATAL_ERROR "An error occured!" )
@@ -103,7 +103,6 @@ snippet find_package
 
 snippet find_path
 	find_path( ${1:variable} ${2:grpc/grpc.h} )
-
 
 snippet find_program
 	find_program( ${1:variable} NAMES ${2:name} )
@@ -216,7 +215,6 @@ snippet filename_components
 snippet append
 	list(APPEND ${ ${1:var} } ${2:add} )
 
-
 snippet custom_command
 	add_custom_command(
 	    OUTPUT "${1:output}" "${2:output}"
@@ -228,4 +226,7 @@ snippet custom_command
 
 snippet properties
 	set_source_files_properties(${${SRCS}} ${${HDRS}} PROPERTIES GENERATED TRUE)
+
+snippet export_compile_commands
+	set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
