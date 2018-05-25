@@ -1,0 +1,231 @@
+snippet init
+	cmake_minimum_required(VERSION 2.9)
+
+	project(${1:HelloWorld})
+
+	add_executable( ${1:Hello} ${2:src/main.cpp} ${3:src/foo.cpp} )
+
+snippet add_compile_options
+	ADD_COMPILE_OPTIONS(-std=c++11)
+
+snippet env
+	$ENV{ ${1:HOME} }
+
+snippet exec
+	execute_process( ${1:cmd} ${2:var_to_hold_result} )
+
+snippet configure_file
+	configure_file()
+
+snippet add_dependencies
+	add_dependencies( ${1:target} ${2:target_dependency} )
+
+snippet install
+	install(TARGETS ${1:target}
+		EXPORT  DESTINATION ${2:export_path} 
+		RUNTIME DESTINATION ${3:runtime_path} 
+		LIBRARY DESTINATION ${4:library_path} 
+		ARCHIVE DESTINATION ${5:archive_path} 
+		PUBLIC_HEADER DESTINATION ${6:header_path} 
+	)
+
+snippet target_compile_options
+	target_compile_options( ${1:target} -Wall -Wextra -Wpedantic -Werror)
+
+snippet silence_error
+	target_compile_options( ${1:target} $<$<CXX_COMPILER_ID:GNU>:-Wno-psabi>)
+
+snippet os
+	IF(APPLE)
+
+	ENDIF( )
+
+	IF(WIN32)
+
+	ENDIF( )
+
+	IF(UNIX)
+
+	ENDIF( )
+
+snippet set
+	set ( ${1:var} ${2:value} )
+
+snippet set_gui
+	set ( ${1:var} ${2:value} CACHE ${3:BOOL|STRING|PATH|FILEPATH} ${4:message} )
+
+snippet message
+	message( " ${1:Please do this ...} ${2:${var_name}} " )
+
+snippet error
+	message( FATAL_ERROR "An error occured!" )
+
+snippet foreach
+	FOREACH( ${1:val} ${ ${2:list} } )
+		${3:...}
+	ENDFOREACH($1)
+
+snippet add_subdirectory
+	add_subdirectory( ${1:subdirectory} )
+
+snippet include_directories
+	include_directories( ${1:../somelib/} )
+
+snippet include
+	include( ${1:extra_cmake_file} )
+
+snippet link_directories
+	link_directories( ${1:../somelib/} )
+
+snippet add_executable
+	add_executable( ${1:Hello} ${2:src/main.cpp} ${3:src/foo.cpp} )
+
+snippet add_library
+	add_library( ${1:library} ${2:STATIC|SHARED|MODULE} ${3:file.cpp} )
+
+snippet target_link_libraries
+	target_link_libraries( ${1:executable} ${2:library} )
+
+snippet glob
+	file(GLOB ${1:variable}
+		${2:"src/*.cpp"}
+		${3:"src/*.hpp"}
+	)
+
+snippet find_file
+	find_file( ${1:var} ${2:name} )
+
+snippet find_library
+	find_library( ${1:var} ${2:name} )
+
+snippet find_package
+	find_package( ${1:package} ${2:version} ${3:REQUIRED} )
+
+snippet find_path
+	find_path( ${1:variable} ${2:grpc/grpc.h} )
+
+
+snippet find_program
+	find_program( ${1:variable} NAMES ${2:name} )
+
+snippet copy
+	file(COPY ${1:file.txt} DESTINATION ${2:folder} )
+
+snippet mkdir
+	FILE(MAKE_DIRECTORY ${ ${1:directory} })
+
+snippet if
+	IF(${variable})
+		...
+	ELSE(${variable})
+		...
+	ENDIF(${variable})
+
+snippet function
+	function( ${1:name} ${2:args} )
+	  ${3:...}
+	endfunction( $1 )
+
+snippet return
+	return()
+
+snippet argc
+	${ARGC}
+
+snippet argv
+	${ARGV<n>}
+
+snippet cppversion
+	set(CMAKE_CXX_STANDARD 14)
+	set(CMAKE_CXX_REQUIRED ON)
+	set(CMAKE_CXX_EXTENSIONS OFF)
+
+snippet add_definitions
+	add_definitions(-DFOO \"XXX\")
+	add_definitions(-DBAR)
+
+snippet testing
+	enable_testing()
+
+snippet add_test
+	add_test( ${1:BinaryNameTest} ${2:BinaryName} ${3:input_args} )
+
+snippet set_tests_properties
+	set_tests_properties(
+		${1:BinaryNameTest}
+		PROPERTIES
+		${2:PASS_REGULAR_EXPRESSION}
+		${3:"expected output"}
+	)
+
+snippet checkfunction
+	include(CheckFunctionExists.cmake)
+	check_function_exists(log HAVE_LOG)
+
+snippet cmake_module_path
+	set(
+		CMAKE_MODULE_PATH
+		${CMAKE_MODULE_PATH}
+		"${CMAKE_SOURCE_DIR}/cmake/Modules/"
+	)
+
+snippet append_module_path
+	LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+
+snippet var cmake_c_flags
+	${CMAKE_C_FLAGS}
+
+snippet var cmake_cxx_flags
+	${CMAKE_CXX_FLAGS}
+
+snippet var cmake_build_type
+	${CMAKE_BUILD_TYPE}
+
+snippet var cmake_source_dir
+	${CMAKE_SOURCE_DIR}
+
+snippet var cmake_binary_dir
+	${CMAKE_BINARY_DIR}
+
+snippet var cmake_current_list_file
+	${CMAKE_CURRENT_LIST_FILE}
+
+snippet var cmake_include_path
+	${CMAKE_INCLUDE_PATH}
+
+snippet var cmake_install_prefix
+	${CMAKE_INSTALL_PREFIX}
+
+snippet var cmake_cxx_compiler
+	${CMAKE_CXX_COMPILER}
+
+snippet var cmake_lang_flags
+	${CMAKE_LANG_FLAGS}
+
+snippet var cmake_link_library_flags
+	${CMAKE_LINK_LIBRARY_FLAGS}
+
+snippet var cmake_current_source_dir
+	${CMAKE_CURRENT_SOURCE_DIR}
+
+snippet filename_components
+	get_filename_component(ABS_FIL ${FIL} ABSOLUTE)
+	get_filename_component(ABS_PATH ${ABS_FIL} PATH)
+	get_filename_component(FIL_WE ${FIL} NAME_WE)
+
+snippet append
+	list(APPEND ${ ${1:var} } ${2:add} )
+
+
+snippet custom_command
+	add_custom_command(
+	    OUTPUT "${1:output}" "${2:output}"
+	    COMMAND ${3:command}
+	    ARGS ${4:args}
+	    DEPENDS ${5:depends}
+	    COMMENT "${6:comment}"
+	VERBATIM )
+
+snippet properties
+	set_source_files_properties(${${SRCS}} ${${HDRS}} PROPERTIES GENERATED TRUE)
+
