@@ -48,7 +48,7 @@ convert_7(){
 
 convert_8(){
 	OPTS="-f mp4 -vcodec xvid -maxrate 1000 -qmin 3 -qmax 5 -bufsize 4096 -g 300 -acodec aac -mbd 2 -s 320x180 -padtop 30 -padbottom 30 -ab 128 -b 400"
-	ffmpeg `echo $OPTS` -i "$1" "$1.converted.mp4""
+	ffmpeg `echo $OPTS` -i "$1" "$1.converted.mp4"
 }
 
 convert_9(){
