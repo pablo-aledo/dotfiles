@@ -5,8 +5,15 @@ xdotool key Ctrl+l
 xdotool key Ctrl+c
 xdotool key Escape
 xdotool key Return
-sleep 3
-if [ `xclip -sel clip -o | grep reddit` ]
+sleep 5
+
+if [ `xclip -sel clip -o | grep reddit | grep 'Python'` ]
+then
+	if `mouseover 1 100 ~/.dotfiles/shortcuts/images/reddit_link.png`
+	then
+		xdotool click 1
+	fi
+elif [ `xclip -sel clip -o | grep reddit` ]
 then
 	if `mouseover 1 100 ~/.dotfiles/shortcuts/images/reddit_upvote.png`
 	then
@@ -19,9 +26,7 @@ then
 		xdotool mousemove_relative 200 0
 		xdotool click 1
 	fi
-fi
-
-if [ `xclip -sel clip -o | grep github` ]
+elif [ `xclip -sel clip -o | grep github` ]
 then
 	xdotool key Ctrl+f
 	xdotool type 'clone or download'
