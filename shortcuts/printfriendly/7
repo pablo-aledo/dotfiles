@@ -7,14 +7,13 @@ xdotool key Escape
 xdotool key Return
 sleep 5
 
-if [ `xclip -sel clip -o | grep reddit | grep 'Python'` ]
+if [ `xclip -sel clip -o | grep reddit` ]
 then
-	if `mouseover 1 100 ~/.dotfiles/shortcuts/images/reddit_link.png`
+	if `mouseover 1 10000 ~/.dotfiles/shortcuts/images/reddit_link.png`
 	then
 		xdotool click 1
 	fi
-elif [ `xclip -sel clip -o | grep reddit` ]
-then
+
 	if `mouseover 1 100 ~/.dotfiles/shortcuts/images/reddit_upvote.png`
 	then
 		xdotool mousemove_relative 200 0
