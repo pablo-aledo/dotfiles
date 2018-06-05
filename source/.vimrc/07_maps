@@ -132,7 +132,7 @@ imap <C-f> <esc>b:let a="<C-R>=expand("<cword>")<CR>"<CR><up>$:execute "/" . a <
 map <C-A-a> yyp<c-a>
 " Fix trailing spaces
 map tr :%s/\s\+$//
-map F  :%s/\s\+$//<cr>:%s/\t/  /g<cr>
+map F  :%s/\s\+$//e<cr>:%s/\t/  /ge<cr>
 " spelling spanish
 map :sq :setlocal spell spelllang=es
 " spelling english
