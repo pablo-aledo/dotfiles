@@ -19,3 +19,13 @@ do
 done
 
 cd -
+
+ROOT=$HOME/.dotfiles
+
+for a in `find $PWD/../../../link/.vim -type f 2>/dev/null`
+do
+	src=$a
+	dst=$(echo $a | sed "s@$PWD/../../../link/@$HOME/@g")
+	mkdir -p $(dirname $dst)
+	ln -sf $src $dst
+done
