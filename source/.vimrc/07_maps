@@ -2,7 +2,7 @@
 map <F3> :set hlsearch!<CR>
 imap <F3> <ESC>:set hlsearch!<CR>a
 map <F4> :set wrap!<CR>
-imap jj <ESC>
+imap jj <ESC><ESC><ESC><ESC><ESC>
 " Different versions of save and make
 map :W :w
 map <C-s> :wall<CR>
