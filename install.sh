@@ -26,7 +26,7 @@ link(){
 link_if_new(){
 	src=$1
 	dst=$(echo $1 | sed "s/`escape $ROOT`\/link_if_new/`escape $HOME`/g")
-	echo -e "\e[34m Checking file ... $dst \e[0m"
+	echo -e "\e[34m Checking file ... \e[0m $dst"
 	[ -e $dst ] && return
 	echo -e "\e[34m linking file ... \e[0m" `basename $1`
 	mkdir -p $(dirname $dst)
