@@ -10,8 +10,8 @@ do
 	echo source $a >> ~/.vimrc
 done
 
-vim +PluginInstall
-#vim +PluginInstall +qall
+#vim +PluginInstall
+vim +PluginInstall +qall
 
 mkdir -p ~/.vim
 cd ~/.vim
