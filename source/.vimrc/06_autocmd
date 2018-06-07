@@ -28,5 +28,7 @@ autocmd BufWinEnter *.scala exec 'set expandtab'
 
 autocmd BufWinEnter *.c exec 'set nospell'
 autocmd BufWinEnter *.cpp exec 'set nospell'
+autocmd BufWinEnter *.cpp exec 'set filetype=cpp'
+autocmd BufWinEnter *.hpp exec 'set filetype=cpp'
 
 "autocmd BufWritePre * %s/\s\+$//e
