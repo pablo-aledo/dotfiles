@@ -1,5 +1,5 @@
 set nocp                                                                " Get rid of Vi compatibility
-:helptags ~/.vim                                                        " Location of the help files
+":helptags ~/.vim                                                       " Location of the help files
 set backspace=2                                                         " make backspace work like most other apps
 autocm BufEnter * if expand('%:p') !~ '://' | :lchdir %:p:h | endif     " Move to the directory when opening a file
 set scrolloff=5                                                         " start scrolling when we are 5 lines away from margins
