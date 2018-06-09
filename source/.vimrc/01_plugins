@@ -23,6 +23,12 @@ let g:syntastic_cpp_compiler_options = ' -std=c++11'
 " Para youcompleteme
 let g:ycm_confirm_extra_conf=0
 
+" Para vim-indent-guides
+let g:indent_guides_enable_on_vim_startup = 1
+set ts=4 sw=4 et
+let g:indent_guides_start_level = 2
+let g:indent_guides_guide_size = 1
+
 " Para vim-latex
 " REQUIRED. This makes vim invoke Latex-Suite when you open a tex file.
 filetype plugin on
