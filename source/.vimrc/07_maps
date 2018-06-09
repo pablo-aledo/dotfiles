@@ -29,7 +29,7 @@ imap KK <ESC><up>i
 " Movement right
 imap LL <right>
 " Go to the end of the file
-imap GG <ESC>GA
+"imap GG <ESC>GA
 " To substitute LL
 imap LK L<left><right>L
 " erase backwards
@@ -37,13 +37,13 @@ imap <C-BS> <RIGHT><BS>
 " Insert blank line after actual one
 map <C-CR> A<CR><ESC>"_x"_x<up>
 " Insert blank line after actual one and edit it
-map <C-l> A<CR><ESC>"_x"_x<up>
+"map <C-l> A<CR><ESC>"_x"_x<up>
 " Line numbers
 map <F10> :set number!<CR>
 " Exit edit mode and start searching 
-imap <C-c><C-c> <home><esc>/
+"imap <C-c><C-c> <home><esc>/
 " Search
-map <C-c><C-c> <home>/
+"map <C-c><C-c> <home>/
 " Search
 map <space><space> <home>/
 " change mode
@@ -92,8 +92,8 @@ map zb $zf%
 map zbb V<down>$%zf
 map zv zfip
 " New line over
-map <C-S-cr> O<esc>cc<esc>
-map <C-S-l> O<esc>cc<esc>
+"map <C-S-cr> O<esc>cc<esc>
+"map <C-S-l> O<esc>cc<esc>
 " Quick scroll
 map <A-j> 2j2jj
 map <A-k> 2k2kk
@@ -145,11 +145,11 @@ map <C-A-n> :! pcmanfm .&<cr><cr>
 " Execute a macro
 map <F2> @q
 " duplicate and comment
-map ,dc vipy<up><c-cr>pcx<down><down>
+"map ,dc vipy<up><c-cr>pcx<down><down>
 " git status
 nmap <leader>gs :Gstatus<CR><C-w>20+
 " ANSI Esc for color surrounding selection
-map <C-c> S·s\e[31m <esc>xhhhmqf·s \e[0m<esc>x'q
+"map <C-c> S·s\e[31m <esc>xhhhmqf·s \e[0m<esc>x'q
 " Open in gedit
 map <F7> :%! gedit /dev/stdin<CR>u<CR>
 " copy in clipboard
