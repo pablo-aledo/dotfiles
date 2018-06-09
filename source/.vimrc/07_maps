@@ -83,7 +83,8 @@ inoremap <C-y> <esc>:AutoComplPopDisable<cr>a<C-y><esc>:AutoComplPopEnable<cr>a
 " To avoid mistakes
 inoremap <C-u> <C-y>
 " Nerdtree
-map <C-n> :make clean<cr><cr>:NERDTreeToggle<cr><C-w><right>
+"map <C-n> :make clean<cr><cr>:NERDTreeToggle<cr><C-w><right>
+map <C-n> :NERDTreeToggle<cr>
 " Tagbar
 map <C-t> :TagbarToggle<cr><C-w><left>
 " Align
