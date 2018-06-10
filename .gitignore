@@ -1,2 +1,5 @@
 *.swp
 *~
+tags
+tags.lock
+tags.temp
