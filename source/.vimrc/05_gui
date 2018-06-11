@@ -5,7 +5,7 @@ set guioptions-=r                                                       " Scroll
 set guioptions-=L                                                       " Scroll Left
 set guioptions-=b                                                       " Scroll Bottom
 ":set guifont=Monospace\ 10                                             " Font to use
-:set guifont=SauceCodePro NF Medium 10
+:set guifont=SauceCodePro\ NF\ Medium\ 10
 ":set guifont=*                                                         " Chose font manually 
 colorscheme desert                                                      " Colors of syntax highlight
 
