@@ -1,2 +1,24 @@
 "hi Green guibg=#33ff33
 "syntax region Green start=/·/ end=/·/
+
+":highlight ExtraWhitespace ctermbg=red guibg=red
+" The following alternative may be less obtrusive.
+":highlight ExtraWhitespace ctermbg=darkgreen guibg=lightgreen
+" Try the following if your GUI uses a dark background.
+:highlight ExtraWhitespace ctermbg=red guibg=red
+:autocmd ColorScheme * highlight ExtraWhitespace ctermbg=red guibg=red
+
+" Show trailing whitespace:
+:match ExtraWhitespace /\s\+$/
+
+" Show trailing whitespace and spaces before a tab:
+" :match ExtraWhitespace /\s\+$\| \+\ze\t/
+
+" Show tabs that are not at the start of a line:
+" :match ExtraWhitespace /[^\t]\zs\t\+/
+
+" Show spaces used for indenting (so you use only tabs for indenting).
+" :match ExtraWhitespace /^\t*\zs \+/
+
+" Switch off :match highlighting.
+" :match
