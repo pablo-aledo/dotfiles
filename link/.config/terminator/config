@@ -1,44 +1,44 @@
 [global_config]
-  use_custom_url_handler = True
   custom_url_handler = google-chrome
   enabled_plugins = LaunchpadCodeURLHandler, APTURLHandler, LaunchpadBugURLHandler
+  use_custom_url_handler = True
 [keybindings]
-  toggle_zoom = <Primary><Alt>z
-  switch_to_tab_10 = None
+  close_term = <Primary><Alt>w
   split_horiz = <Primary><Alt>b
+  split_vert = <Primary><Alt>v
+  switch_to_tab_1 = <Alt>1
+  switch_to_tab_10 = None
+  switch_to_tab_2 = <Alt>2
+  switch_to_tab_3 = <Alt>3
+  switch_to_tab_4 = <Alt>4
   switch_to_tab_5 = <Alt>5
   switch_to_tab_6 = <Alt>6
   switch_to_tab_7 = <Alt>7
-  switch_to_tab_4 = <Alt>4
-  close_term = <Primary><Alt>w
-  switch_to_tab_2 = <Alt>2
-  switch_to_tab_3 = <Alt>3
-  switch_to_tab_1 = <Alt>1
-  split_vert = <Primary><Alt>v
-  switch_to_tab_9 = <Alt>9
   switch_to_tab_8 = <Alt>8
+  switch_to_tab_9 = <Alt>9
   toggle_scrollbar = <Primary><Alt>s
-[profiles]
-  [[default]]
-    scrollbar_position = hidden
-    palette = "#000000:#cc0000:#4e9a06:#c4a000:#3465a4:#75507b:#06989a:#d3d7cf:#555753:#ef2929:#8ae234:#fce94f:#729fcf:#ad7fa8:#34e2e2:#eeeeec"
-    background_image = None
-    background_darkness = 0.95
-    background_type = transparent
-    use_system_font = False
-    foreground_color = "#839496"
-    use_custom_command = True
-    show_titlebar = False
-    custom_command = zsh
-    font = Sauce Code Powerline Medium 10
-    background_color = "#002b36"
-    scrollback_infinite = True
+  toggle_zoom = <Primary><Alt>z
 [layouts]
   [[default]]
     [[[child1]]]
-      type = Terminal
       parent = window0
+      type = Terminal
     [[[window0]]]
-      type = Window
       parent = ""
+      type = Window
 [plugins]
+[profiles]
+  [[default]]
+    background_color = "#002b36"
+    background_darkness = 0.95
+    background_image = None
+    background_type = transparent
+    custom_command = zsh
+    font = SauceCodePro NF Medium 10
+    foreground_color = "#839496"
+    palette = "#000000:#cc0000:#4e9a06:#c4a000:#3465a4:#75507b:#06989a:#d3d7cf:#555753:#ef2929:#8ae234:#fce94f:#729fcf:#ad7fa8:#34e2e2:#eeeeec"
+    scrollback_infinite = True
+    scrollbar_position = hidden
+    show_titlebar = False
+    use_custom_command = True
+    use_system_font = False
