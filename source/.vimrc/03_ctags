@@ -1,4 +1,9 @@
 " Para CTags
 map <C-F12> :cd /media/disk/release<cr>:!ctags -R --c++-kinds=+pl --fields=+iaS --extra=+q .<CR><CR>
 map <C-space>d  <C-]>
-map <C-space>p  :CtrlPTag<cr>
+map <C-space>g  :CtrlPTag<cr>
+map <C-space>s  :ts<cr>
+map <C-space>s  g]
+map <C-space>n  :tn<cr>
+map <C-space>p  :tp<cr>
+map <C-space>P  <C-w>}
