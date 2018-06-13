@@ -1,2 +1,2 @@
 " Para CTags
-map <C-F12> :cd /media/disk/release:!ctags -R --c++-kinds=+pl --fields=+iaS --extra=+q .<CR><CR>
+map <C-F12> :cd /media/disk/release<cr>:!ctags -R --c++-kinds=+pl --fields=+iaS --extra=+q .<CR><CR>
