@@ -2,6 +2,10 @@ set nocp                                                                " Get ri
 ":helptags ~/.vim                                                       " Location of the help files
 set backspace=2                                                         " make backspace work like most other apps
 autocm BufEnter * if expand('%:p') !~ '://' | :lchdir %:p:h | endif     " Move to the directory when opening a file
+" Disable autocd
+map ,ad :autocm! BufEnter<cr>
+" Enable autocd
+map ,ae :autocm BufEnter * :lchdir %:p:h<cr>
 set scrolloff=5                                                         " start scrolling when we are 5 lines away from margins
 set ignorecase                                                          " Do not consider case in search and replace
 set smartcase                                                           " ... except if you use some capital letters 

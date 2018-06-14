@@ -1,5 +1,5 @@
 " Para CScope
-map <F12>               :cd /media/disk/release<cr>:!cscope -R -b<CR>:cs add cscope.out<CR><CR>
+map <C-F12>             :cd /media/disk/release<cr>:!cscope -R -b<CR>:cs add cscope.out<CR><CR>
 map <C-space>           :cd /media/disk/release<cr>:cs find s <C-R>=expand("<cword>")<CR><CR>
 map <C-space><C-space>  :cd /media/disk/release<cr>:cs find t <C-R>=expand("<cword>")<CR><CR>
 map <C-space>c          :cd /media/disk/release<cr>:cs find d <C-R>=expand("<cword>")<CR><CR>
