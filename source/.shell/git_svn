@@ -9,6 +9,7 @@ git_svn(){
 		(checkout)  shift && git checkout -- $* ;;
 		(commit)    git commit ;;
 		(reset)     git reset HEAD --hard ;;
+		(reset_origin) git reset origin/HEAD --hard ;;
 		(log)       git log ;;
 		(push)      git svn dcommit --rmdir ;;
 		# git stash and git stash pop
