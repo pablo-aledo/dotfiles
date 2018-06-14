@@ -4,7 +4,7 @@ map <F12> :cd /media/disk/release<cr>:!ctags -R .<CR><CR>
 map <C-space>d  <C-]>
 map <C-space>g  :CtrlPTag<cr>
 map <C-space>s  :ts<cr>
-map <C-space>s  g]
+map <C-space>S  g]
 map <C-space>n  :tn<cr>
 map <C-space>p  :tp<cr>
 map <C-space>P  <C-w>}
