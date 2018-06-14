@@ -17,6 +17,7 @@ let mapleader = ","                                                     " Key fo
 set history=1000                                                        " steps stored in history
 set ruler                                                               " information in the right/bottom of the screen
 set spellsuggest=best,10                                                " spell correcting behavior
+set hidden
 
 "set term=builtin_ansi                                                  " fix arrow key navigation in remote terminals
 set term=xterm                                                          " fix arrow key navigation in remote terminals, fix F2
