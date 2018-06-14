@@ -411,6 +411,14 @@ case $1 in
 (swagger-ui)             docker run -d -p 8080:80 -e API_URL=http://localhost:4000/swagger schickling/swagger-ui ;;
 (openvpn)                shift; docker-compose run vpn $* ;;
 (youtube-dl)             shift; docker run -it --rm -v "$(pwd):/src" -w /src jbergknoff/youtube-dl -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]' $* ;;
+(neural-style-docker)    nvidia-docker run --rm -v $PWD:/images albarji/neural-style --content somecontent.png --style somestyle.png ;;
+(neural-style)           docker run -v $PWD/prism/01:/out -i -t ffederoff/neural-style th neural-style.lua -gpu -1 -style-image style.jpg -content_image source.jpg ;;
+(docker-neural-style)    git clone https://github.com/jcjohnson/neural-style.git ;
+                         cd neural-style ;
+                         bash models/download-models.sh ;
+                         docker-run -i -v $PWD/neural-style:/neural-style -t rectalogic/neural-style:latest -gpu -1 -style-image examples/inputs/starry-night.jpg -content_image examples/inputs/hoovertowernight.jpg ;;
+(neural-style-k)         docker-run -it -v $PWD:/workdir -w /workdir kchentw/neural-style th neural-style.lua -gpu -1 -style_image style.jpg -content_image content.jpg ;;
+(neural-style-h)         docker run -it -v $PWD:/root/input-images/ heschoon/neural-style th neural-style.lua -gpu -1 -style_image ../input-images/style.jpg -content_image ../input-images/content.jpg -image_size 256 ;;
 esac
 
 }
