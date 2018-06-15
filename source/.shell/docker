@@ -100,7 +100,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style|docker-neural-style)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -412,13 +412,13 @@ case $1 in
 (openvpn)                shift; docker-compose run vpn $* ;;
 (youtube-dl)             shift; docker run -it --rm -v "$(pwd):/src" -w /src jbergknoff/youtube-dl -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]' $* ;;
 (neural-style-docker)    nvidia-docker run --rm -v $PWD:/images albarji/neural-style --content somecontent.png --style somestyle.png ;;
-(neural-style)           docker run -v $PWD/prism/01:/out -i -t neural-style th neural-style.lua -gpu -1 -style-image style.jpg -content_image source.jpg ;;
+(neural-style)           docker run -v $PWD:/out -w /out -i -t neural-style th /root/neural-style/neural_style.lua -gpu -1 -style_image /out/style.jpg -content_image /out/content.jpg ;;
 (docker-neural-style)    git clone https://github.com/jcjohnson/neural-style.git ;
                          cd neural-style ;
                          bash models/download_models.sh ;
-                         docker run -i -v $PWD/neural-style:/neural-style -t docker-neural-style:latest -gpu -1 -style-image examples/inputs/starry-night.jpg -content_image examples/inputs/hoovertowernight.jpg ;;
-(neural-style-k)         docker run -it -v $PWD:/workdir -w /workdir kchentw/neural-style th neural-style.lua -gpu -1 -style_image style.jpg -content_image content.jpg ;;
-(neural-style-h)         docker run -it -v $PWD:/root/input-images/ heschoon/neural-style th neural-style.lua -gpu -1 -style_image ../input-images/style.jpg -content_image ../input-images/content.jpg -image_size 256 ;;
+                         docker run -i -v $PWD:/neural-style -t docker-neural-style -gpu -1 -style-image examples/inputs/starry-night.jpg -content_image examples/inputs/hoovertowernight.jpg ;;
+(neural-style-k)         docker run -it -v $PWD:/workdir -w /workdir kchentw/neural-style /root/torch/install/bin/th /root/neural-style/neural_style.lua -gpu -1 -style_image style.jpg -content_image content.jpg ;;
+(neural-style-h)         docker run -it -v $PWD:/root/input-images/ heschoon/neural-style th neural_style.lua -gpu -1 -style_image ../input-images/style.jpg -content_image ../input-images/content.jpg -image_size 256 ;;
 esac
 
 }
