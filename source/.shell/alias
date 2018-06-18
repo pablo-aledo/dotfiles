@@ -1,1 +1,1 @@
-alias tail='stdbuf -i0 -o0 -e0 \tail'
+alias Tail='stdbuf -i0 -o0 -e0 \tail'
