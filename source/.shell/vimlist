@@ -3,6 +3,10 @@ vimlist(){
     [ $# -eq 0 ] && cd /media/disk/release
     [ $# -eq 1 ] && cd $1
 
-    find -type f | grep -v '^\.\/\.' | grep -v cscope | grep -v tags | sed "s|^|:e $PWD/|g" > /tmp/vimlist
+    find -type f | grep -v '^\.\/\.' | \
+        xargs file | awk -F: '/ASCII text/ {print $1}' | \
+        grep -v cscope | grep -v tags | grep -v '\/build\/' | \
+        grep -v '\.out' | grep -v '\.o' | grep -v '\.a' | grep -v '\.log' | \
+        sed "s|^|:e $PWD/|g" > /tmp/vimlist
 
 }
