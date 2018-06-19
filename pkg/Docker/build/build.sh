@@ -12,7 +12,7 @@ then
 	then
 	    mkdir build
 	    cd build
-	    cmake ..
+	    cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
 	    VERBOSE=1 make
 	    #make install
 	elif [ -e configure ]
