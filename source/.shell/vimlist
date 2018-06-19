@@ -6,7 +6,7 @@ vimlist(){
 
     find -type f | grep -v '^\.\/\.' | \
         grep -v cscope | grep -v tags | grep -v '\/build\/' | grep -v '\.git' | grep -v '\.release' | grep -v '\.debug' | \
-        grep -v '\.out' | grep -v '\.o' | grep -v '\.a' | grep -v '\.log' | grep -v '\.pb\.' | \
+        grep -v '\.out' | grep -v '\.o' | grep -v '\.a' | grep -v '\.log' | grep -v '\.pb\.' | grep -v '\.Trash' | \
         xargs file | awk -F: '/ASCII text/ {print $1}' | \
         sed "s|^|:e $PWD/|g" > /tmp/vimlist
 
