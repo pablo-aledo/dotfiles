@@ -1,3 +1,3 @@
-[ -e /usr/bin/kubectl ] || return
+[ -e /usr/local/bin/kubectl ] || return
 source <(kubectl completion zsh)
 
