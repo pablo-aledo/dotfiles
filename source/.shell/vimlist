@@ -3,6 +3,6 @@ vimlist(){
     [ $# -eq 0 ] && cd /media/disk/release
     [ $# -eq 1 ] && cd $1
 
-    find -type f | grep -v '^\.\/\.' | sed "s|^|:e $PWD|g" > /tmp/vimlist
+    find -type f | grep -v '^\.\/\.' | sed "s|^|:e $PWD/|g" > /tmp/vimlist
 
 }
