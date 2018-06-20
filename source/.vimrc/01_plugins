@@ -60,5 +60,5 @@ map ,cf :ClangFormat<cr>
 map FF :ClangFormat<cr>
 
 " LustyExplorer
-map ,lG ,lg<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>
+map LG ,lg<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>
 
