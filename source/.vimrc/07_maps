@@ -60,8 +60,9 @@ map <C-h> :A<CR>
 map <C-A-h> :let a="<C-R>=expand("<cword>")<CR>"<CR>:w<CR>:A<CR>:execute "/\\<" . a . "\\>"<CR>ggn
 map <C-A-i> [I
 map <C-A-I> [i
-map <C-n> :cn<CR>
-map <C-N> :cN<CR>
+" previous and next errors
+" map <C-n> :cn<CR>
+" map <C-N> :cN<CR>
 " Remove adjacent empty lines around the cursor
 map 1s vipd<UP>A<CR><ESC>"_x"_x
 " Private prototype
@@ -89,9 +90,9 @@ map <C-n> :NERDTreeToggle<cr>
 map <C-t> :TagbarToggle<cr><C-w><left>
 " Align
 map <A-a> :Align
-map zb $zf%
-map zbb V<down>$%zf
-map zv zfip
+"map zb $zf%
+"map zbb V<down>$%zf
+"map zv zfip
 " New line over
 "map <C-S-cr> O<esc>cc<esc>
 "map <C-S-l> O<esc>cc<esc>
