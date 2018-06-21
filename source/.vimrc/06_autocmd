@@ -21,14 +21,16 @@ au BufWinEnter * silent! loadview
 autocmd BufWinEnter log.log exec ':set wrap!'
 autocmd BufWinEnter log.log exec 'cd ..'
 
-autocmd BufWinEnter *.scala exec 'set filetype=scala'
-autocmd BufWinEnter *.scala exec 'set tabstop=4'
-autocmd BufWinEnter *.scala exec 'set shiftwidth=4'
-autocmd BufWinEnter *.scala exec 'set expandtab'
+"autocmd BufWinEnter *.scala exec 'set filetype=scala'
+"autocmd BufWinEnter *.scala exec 'set tabstop=4'
+"autocmd BufWinEnter *.scala exec 'set shiftwidth=4'
+"autocmd BufWinEnter *.scala exec 'set expandtab'
 
 autocmd BufWinEnter *.c exec 'set nospell'
 autocmd BufWinEnter *.cpp exec 'set nospell'
 autocmd BufWinEnter *.cpp exec 'set filetype=cpp'
 autocmd BufWinEnter *.hpp exec 'set filetype=cpp'
+
+map ,au :autocmd BufWinEnter * exec ''<left>
 
 "autocmd BufWritePre * %s/\s\+$//e
