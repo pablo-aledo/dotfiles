@@ -29,16 +29,22 @@ then
 	fi
 elif [ `xclip -sel clip -o | grep github` ]
 then
+	xdotool key Return
+	sleep 5
 	xdotool key Ctrl+f
 	xdotool type 'clone or download'
 	xdotool key Return
-	xdotool key Escape
+    sleep 1
+    xdotool mousemove 1150 100
+    xdotool click 1
 	xdotool key Return
     sleep 1
 	xdotool key Ctrl+f
 	xdotool type 'download zip'
 	xdotool key Return
-	xdotool key Escape
+    sleep 1
+    xdotool mousemove 1150 100
+    xdotool click 1
 	xdotool key Return
 	sleep 1
 	xdotool key Return
