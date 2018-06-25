@@ -63,3 +63,6 @@ map FF :ClangFormat<cr>
 " LustyExplorer
 map LG ,lg<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>
 
+" CtrlSF
+nmap     ,cf <Plug>CtrlSFPrompt
+vmap     ,cf <Plug>CtrlSFVwordPath
