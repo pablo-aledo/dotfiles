@@ -207,6 +207,11 @@ RUN        git clone https://github.com/google/benchmark.git /usr/src/benchmark 
            make -j4                                                             && \
            make install
 
+RUN        git clone https://github.com/chinaran/color-compile.git /usr/src/color_compile && \
+           cd /usr/src/color-compile                                                      && \
+           make                                                                           && \
+           sudo make install
+
 COPY       build.sh /usr/local/bin
 RUN        chmod +x /usr/local/bin/build.sh
 
