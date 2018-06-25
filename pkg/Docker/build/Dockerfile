@@ -4,7 +4,7 @@ COPY repositories /etc/apk
 
 RUN        apk update
 
-RUN        apk add --no-cache -q \
+RUN        apk add --no-cache \
                # tools
                alpine-sdk \
                autoconf \
@@ -207,7 +207,7 @@ RUN        git clone https://github.com/google/benchmark.git /usr/src/benchmark 
            make -j4                                                             && \
            make install
 
-RUN        git clone https://github.com/chinaran/color-compile.git /usr/src/color_compile && \
+RUN        git clone https://github.com/chinaran/color-compile.git /usr/src/color-compile && \
            cd /usr/src/color-compile                                                      && \
            make                                                                           && \
            sudo make install
