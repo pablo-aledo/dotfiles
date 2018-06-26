@@ -62,7 +62,7 @@ map FF :ClangFormat<cr>
 
 " LustyExplorer
 map LG ,lg<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>
-map LW :normal ,lg <cr><C-w><C-c>:normal ,lg<C-R>=expand("<cword>")<cr><cr>
+map LW mq:normal ,lg <cr><C-w><C-c>'q:normal ,lg<C-R>=expand("<cword>")<cr><cr>
 
 " CtrlSF
 nmap     ,cf <Plug>CtrlSFPrompt
