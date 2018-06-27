@@ -133,7 +133,7 @@ imap <C-f> <esc>b:let a="<C-R>=expand("<cword>")<CR>"<CR><up>$:execute "/" . a <
 " Duplicate line and increment number
 map <C-A-a> yyp<c-a>
 " Fix trailing spaces
-map tr :%s/\s\+$//
+map ,tr :%s/\s\+$//
 map F  :%s/\s\+$//e<cr>:%s/\t/  /ge<cr>
 map FS :%s/\s\+$//e<cr>:%s/\t/  /ge<cr>:w<CR>
 " spelling spanish
