@@ -158,6 +158,10 @@ map <F7> :%! gedit /dev/stdin<CR>u<CR>
 map <S-F7> :! xclip -sel clip<CR>u
 " paste from clipboard
 map <C-F7> "+gp
+" more clipboard management
+set clipboard=unnamedplus
+vnoremap <leader>y "+y
+nnoremap <leader>p "+p
 " Shell filetype
 map ,sh :set filetype=sh<CR>:set nospell<CR>
 " spell
