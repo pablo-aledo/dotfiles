@@ -120,6 +120,7 @@ aws_cmd(){
 aws_send(){
 	aws_config
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	[ $# -gt 2 ] && return
 	[ $# -eq 2 ] || rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/"
 	[ $# -eq 2 ] && rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$2/"
 }
@@ -127,6 +128,7 @@ aws_send(){
 aws_send_mv(){
 	aws_config
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	[ $# -gt 2 ] && return
 	[ $# -eq 2 ] || rsync -vai --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/"
 	[ $# -eq 2 ] && rsync -vai --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$2/"
 }
