@@ -1,3 +1,4 @@
 alias Tail='stdbuf -i0 -o0 -e0 \tail'
 alias autorun='find | entr'
 alias pod='kubectl get pods | grep -v Terminating | cut -d" " -f1 | grep'
+alias lh='ls -lh'
