@@ -1,0 +1,3 @@
+vimsed() {
+vim -u NONE -c "exec \"%norm $1\"" -es '+%print|q!' "${2:-/dev/stdin}"
+}
