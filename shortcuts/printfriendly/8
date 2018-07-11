@@ -4,6 +4,7 @@ xdotool mousemove 0 0
 xdotool key Ctrl+f
 xdotool type "http"
 xdotool key Escape
+sleep 1
 xdotool key Menu
 sleep 1
 
@@ -18,6 +19,6 @@ sleep 1
 xdotool key Ctrl+v
 xdotool mousemove 100 300
 xdotool click 1
-sleep 5
+sleep 3
 
 xdotool key Ctrl+Tab
