@@ -1,0 +1,81 @@
+snippet header1
+    = Header1 =
+snippet header2
+    == Header2 ==
+snippet header3
+    === Header3 ===
+snippet code
+    `${1:code}`${2}
+snippet super
+    ${1:super}^${2:script}^${3}
+snippet sub
+    sub,,script,,
+snippet bold
+    *${1:bold}*${2}
+snippet italic
+    _${1:italic}_${2}
+snippet strikeout
+    ~~${1:strikeout}~~${2}
+snippet link
+    [[${1:link}]]${2}
+snippet link_description
+    [[${1:link}|${2:description}]]${3}
+snippet list
+    * bullet list item 1
+        - bullet list item 2
+        - bullet list item 3
+            * bullet list item 4
+            * bullet list item 5
+snippet numbered_list
+    1. numbered list item 1
+    2. numbered list item 2
+        a) numbered list item 3
+        b) numbered list item 4
+snippet file
+    [[file:${1:file}]]${2}
+snippet transclude
+    {{file:${1:file}}}${2}
+snippet table
+    | Year | Temperature (low) | Temperature (high) |
+    |------|-------------------|--------------------|
+    | 1900 | -10               | 25                 |
+snippet tablespan
+    | a  | b  | c | d |
+    | \/ | e  | > | f |
+    | \/ | \/ | > | g |
+    | h  | >  | > | > |
+snippet noformat
+    {{{
+        ${1:text}
+    }}}${2}
+
+snippet math inline
+    $${1:math}$${2}
+snippet math block
+    {{$
+        ${1:math}
+    }}${2}
+
+snippet blockquote
+        ${1:text}
+
+snippet comment
+    %% ${1:comment}
+
+snippet line
+    ----
+
+snippet tag
+    :${1:tag}:
+
+snippet todo
+    = Toggle with C-Space =
+      * [X] Toggle list item on/off.
+        * [X] Simple toggling between [ ] and [X].
+        * [X] All list's subitems should be toggled on/off appropriately.
+        * [X] Toggle child subitems only if current line is list item
+        * [X] Parent list item should be toggled depending on it's child items.
+      * [X] Make numbered list items toggleable too
+      * [X] Add highlighting to list item boxes
+      * [X] Add [ ] to the next list item created with o, O and <CR>.
+
