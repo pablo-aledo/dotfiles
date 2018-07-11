@@ -1,0 +1,20 @@
+export DISPLAY=:1
+
+xdotool mousemove 283 350
+xdotool click 3
+sleep 1
+
+xdotool key Up Up Return
+xdotool key Ctrl+Tab
+sleep 1
+
+xdotool mousemove 380 200
+xdotool click 1
+sleep 1
+
+xdotool key Ctrl+v
+xdotool mousemove 880 290
+xdotool click 1
+sleep 1
+
+xdotool key Ctrl+Tab
