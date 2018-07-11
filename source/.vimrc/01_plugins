@@ -68,3 +68,6 @@ map LW mq:normal ,lg <cr><C-w><C-c>'q:normal ,lg<C-R>=expand("<cword>")<cr><cr>
 nmap     ,cf <Plug>CtrlSFPrompt
 vmap     ,cf <Plug>CtrlSFVwordPath
 map      ,cf viw<Plug>CtrlSFVwordPath
+
+" open snippets side-by-side
+map ,sn :vsplit ~/.vim/snippets/<C-R>=&ft<cr>.snippets<cr>
