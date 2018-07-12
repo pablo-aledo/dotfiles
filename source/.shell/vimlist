@@ -3,6 +3,7 @@ vimlist(){
 
     command="e"
     goend=0
+    edt=""
     [ $# -eq 0 ] && cd /media/disk/release
     [ $# -gt 0 ] && cd $1
     [ $# -gt 1 ] && [ "$2" = "delete" ] && find -name '*.swp' -delete
