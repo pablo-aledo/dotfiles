@@ -28,6 +28,10 @@ backup_md5s(){
 	sudo find "$1" -type f > $FILE_FILES
 }
 
+backup_sizes(){
+    sudo ncdu $1 -o $FOLDER_SIZES/$(basename $1).ncdu
+}
+
 backup_exchange_keys(){
 
 	# Do this on the server
