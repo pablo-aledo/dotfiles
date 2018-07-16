@@ -1,6 +1,7 @@
 BACKUP_SERVER=10.1.14.1
 BACKUP_USER=admin
 BACKUP_DEST=/volume1/homes/admin
+BACKUP_METADATA=/volume1/homes/admin/metadata
 BACKUP_TIME_MACHINE=/home/time_machine
 BACKUP_SRC=/media/DATA
 BACKUP_MOUNT_DIR=/home/
@@ -12,24 +13,24 @@ BACKUP_MOUNT_DIR=/home/
 
 simplify_md5s(){
 	rm -fr /tmp/md5s
-	cat $FILE_FILES | while read line
+	cat $BACKUP_METADATA/${1}_files | while read line
 	do
-		cat $FILE_MD5S | egrep '^[0-9a-f]{32}  '"$line"'$' | tail -n1 >> /tmp/md5s
+		cat $BACKUP_METADATA/${1}_md5s | egrep '^[0-9a-f]{32}  '"$line"'$' | tail -n1 >> /tmp/md5s
 	done
 
-	mv /tmp/md5s $FILE_MD5S
+	mv /tmp/md5s $BACKUP_METADATA/${1}_md5s
 
 }
 
 backup_md5s(){
-	[ -e $FILE_MD5S ] && sudo find "$1" -type f -newer $FILE_MD5S -exec md5sum {} >> $FILE_MD5S \;
-	[ -e $FILE_MD5S ] || sudo find "$1" -type f -exec md5sum {} >> $FILE_MD5S \;
+	[ -e $BACKUP_METADATA/${1}_md5s ] && sudo find "$BACKUP_SRC/$1" -type f -newer $BACKUP_METADATA/${1}_md5s -exec md5sum {} >> $BACKUP_METADATA/${1}_md5s \;
+	[ -e $BACKUP_METADATA/${1}_md5s ] || sudo find "$BACKUP_SRC/$1" -type f -exec md5sum {} > $BACKUP_METADATA/${1}_md5s \;
 
-	sudo find "$1" -type f > $FILE_FILES
+	sudo find "$BACKUP_SRC/$1" -type f > $BACKUP_METADATA/${1}_files
 }
 
 backup_sizes(){
-    sudo ncdu $1 -o $FOLDER_SIZES/$(basename $1).ncdu
+	sudo ncdu "$BACKUP_SRC/$1" -o $BACKUP_METADATA/${1}_sizes
 }
 
 backup_exchange_keys(){
