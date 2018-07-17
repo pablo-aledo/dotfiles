@@ -23,10 +23,14 @@ simplify_md5s(){
 }
 
 backup_md5s(){
-	[ -e $BACKUP_METADATA/${1}_md5s ] && sudo find "$BACKUP_SRC/$1" -type f -newer $BACKUP_METADATA/${1}_md5s -exec md5sum {} >> $BACKUP_METADATA/${1}_md5s \;
-	[ -e $BACKUP_METADATA/${1}_md5s ] || sudo find "$BACKUP_SRC/$1" -type f -exec md5sum {} > $BACKUP_METADATA/${1}_md5s \;
-
 	sudo find "$BACKUP_SRC/$1" -type f > $BACKUP_METADATA/${1}_files
+
+	sudo find "$BACKUP_SRC/$1" -type f -newer $BACKUP_METADATA/${1}_md5s -exec sudo md5sum {} >> $BACKUP_METADATA/${1}_md5s \;
+
+    comm -13 <(cat $BACKUP_METADATA/${1}_md5s | sed 's/^[0-9a-f]{32}  //g' | sort) <(cat $BACKUP_METADATA/${1}_files | sort) | while read line
+    do
+        sudo md5sum "$line" >> $BACKUP_METADATA/${1}_md5s
+    done
 }
 
 backup_sizes(){
