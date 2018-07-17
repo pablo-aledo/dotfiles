@@ -72,3 +72,6 @@ map      ,cf viw<Plug>CtrlSFVwordPath
 
 " open snippets side-by-side
 map ,sn :vsplit ~/.vim/snippets/<C-R>=&ft<cr>.snippets<cr>
+
+" Draw box
+vmap ++ +-gv+\|
