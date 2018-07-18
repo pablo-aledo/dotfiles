@@ -1,8 +1,21 @@
-checkout(){
+svn_create(){
+    cd /media/disk
+    svnadmin create /media/disk/repository
+
+    mkdir release
+    mkdir release/branches
+    mkdir release/tags
+    mkdir release/trunk
+    svn import release file:///media/disk/repository/release -m "First Import"
+    rm -rf release/
+    svn checkout file:///media/disk/repository/release/trunk release
+}
+
+svn_checkout(){
   svn checkout file:///media/disk/repository/release/trunk release
 }
 
-release(){
+svn_release(){
   svn checkout -r$1 file:///media/disk/repository/release/trunk release-$1
 }
 
