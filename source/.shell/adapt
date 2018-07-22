@@ -86,6 +86,45 @@ adapt_awsserver(){
 	sudo chmod +x /usr/bin/google-chrome-nosound
 }
 
+adapt_awsserver(){
+    myshell zsh
+
+    pkg intall tmux
+    pkg install novnc4
+    pkg install terminator
+    pkg install pcmanfm
+    pkg install google-chrome
+    pkg install murrine-themes
+    pkg install elementary-icon-theme
+    pkg install vim-gnome
+    pkg install ranger
+    pkg install mutt
+    pkg install xdotool
+    pkg install scrot
+    pkg install xautomation
+    pkg install xclip
+    pkg install ncdu
+    pkg install ffmpeg
+
+	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
+	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
+	sed -i '/Mod1+F2/d' ~/.i3/config
+	sed -i '/Mod1+Tab/d' ~/.i3/config
+	sed -i '/Mod1+Shift+Tab/d' ~/.i3/config
+	sed -i 's/bindsym Mod1+Return exec/# bindsym Mod1+Return exec/g' ~/.i3/config
+
+	sudo ln -s /usr/bin/terminator /usr/bin/gnome-terminal
+	sudo ln -s /usr/bin/pcmanfm /usr/bin/nautilus
+	sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
+
+	sudo localectl set-locale LANG=en_US.UTF-8
+
+	i3-msg reload
+
+	sudo sysctl -w vm.min_free_kbytes=135168
+	sudo sysctl -w vm.swappiness=5
+}
+
 adapt_typewriter_keyboard(){
 	setxkbmap es
 	xmodmap -pke > ~/.Xmodmap
