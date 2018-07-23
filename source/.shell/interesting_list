@@ -1,4 +1,4 @@
-arl_list(){
+github_arl(){
 
 [ $# -gt 0 ] && topic=$1
 [ $# -gt 0 ] || topic=Python
@@ -9,8 +9,8 @@ arl_list(){
 
 maxsize=`echo $maxsize | sed -e 's/K/*1024/g' -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g' | bc`
 
-mkdir -p ~/arl/$topic
-cd ~/arl
+mkdir -p ~/github_arl/$topic
+cd ~/github_arl
 [ -e arl-master.zip ] || wget https://github.com/kaxap/arl/archive/master.zip -O arl-master.zip
 [ -e arl-master ] || unzip arl-master.zip
 list=`ls arl-master | grep -i $topic`
@@ -41,8 +41,8 @@ arl_list_2(){
 
 maxsize=`echo $maxsize | sed -e 's/K/*1024/g' -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g' | bc`
 
-mkdir -p ~/arl/$topic
-cd ~/arl
+mkdir -p ~/github_arl/$topic
+cd ~/github_arl
 [ -e arl-master.zip ] || wget https://github.com/kaxap/arl/archive/master.zip -O arl-master.zip
 [ -e arl-master ] || unzip arl-master.zip
 cat arl-master/*.md | grep -i $topic | grep 'https://github.com' | cut -d'(' -f2 | cut -d')' -f1 | head -n $limit > /tmp/dllist
@@ -72,8 +72,8 @@ github_topic(){
 	maxsize="999G"
 maxsize=`echo $maxsize | sed -e 's/K/*1024/g' -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g' | bc`
 
-mkdir -p ~/github/$topic
-cd ~/github/
+mkdir -p ~/github_topic/$topic
+cd ~/github_topic/
 wget https://github.com/topics/$topic -O $topic/list
 
 n=0
@@ -103,8 +103,8 @@ github_collection(){
 	maxsize="999G"
 maxsize=`echo $maxsize | sed -e 's/K/*1024/g' -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g' | bc`
 
-mkdir -p ~/github/$topic
-cd ~/github/
+mkdir -p ~/github_collections/$topic
+cd ~/github_collections/
 wget https://github.com/collections/$topic -O $topic/list
 
 n=0
