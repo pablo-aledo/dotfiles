@@ -89,7 +89,7 @@ adapt_awsserver(){
 adapt_awsserver(){
     myshell zsh
 
-    pkg intall tmux
+    pkg install tmux
     pkg install novnc4
     pkg install terminator
     pkg install pcmanfm
@@ -105,6 +105,8 @@ adapt_awsserver(){
     pkg install xclip
     pkg install ncdu
     pkg install ffmpeg
+    pkg install youtube-dl
+    pkg install docker
 
 	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
 	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
