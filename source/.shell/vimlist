@@ -24,7 +24,10 @@ vimlist(){
 
     [ "$goend" = "1" ] && sed -i 's/$/ | \$/g' /tmp/vimlist
 
-    [ "$edt" != "" ] && $edt "+so /tmp/vimlist"
+    [ "$edt" = vim ] && vim "+so /tmp/vimlist"
+    [ "$edt" = gvim ] && gvim "+so /tmp/vimlist"
+    [ "$edt" = less ] && less /tmp/vimlist
+    [ "$edt" = cat ] && cat /tmp/vimlist
 
     cd $oldpwd
 }
