@@ -24,7 +24,16 @@ do
 done
 
 xdotool key Return
+xdotool key Return
+sleep 1
+xdotool mousemove 1080 330
+xdotool click 1
+xdotool click 1
 sleep 5
 
-xdotool mousemove 150 300
+xdotool key Ctrl+f
+xdotool type 'Details'
+sleep 1
+xdotool mousemove 1150 100
 xdotool click 1
+xdotool key Return
