@@ -4,17 +4,19 @@ vimlist(){
     command="e"
     goend=0
     edt=""
+    exclude=""
     maxsize=10M
     [ $# -eq 0 ] && cd /media/disk/release
     [ $# -gt 0 ] && cd $1
     [ $# -gt 1 ] && [ "$2" = "delete" ] && find -name '*.swp' -delete
     [ $# -gt 2 ] && command=$3
     [ $# -gt 3 ] && edt=$4
-    [ $# -gt 4 ] && maxsize=$5
+    [ $# -gt 4 ] && exclude=$5
+    [ $# -gt 5 ] && maxsize=$6
 
     [ $command = "rg" ] && command=r && goend=1
 
-    find -type f -size -${maxsize} | grep -v '^\.\/\.' | \
+    find -type f -size -${maxsize} | egrep -v "$exclude" | grep -v '^\.\/\.' | \
         grep -v cscope | grep -v tags | grep -v '\/build\/' | grep -v '\.git' | grep -v '\.release' | grep -v '\.debug' | \
         grep -v '\.out' | grep -v '\.o' | grep -v '\.a' | grep -v '\.log' | grep -v '\.pb\.' | grep -v '\.Trash' | \
         xargs file | awk -F: '/ASCII text/ {print $1}' | \
