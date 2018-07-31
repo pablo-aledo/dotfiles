@@ -1,0 +1,7 @@
+export DISPLAY=:1
+
+xdotool key Ctrl+f
+sleep 1
+xdotool type "Download from icerbox"
+xdotool key Escape
+xdotool key Return

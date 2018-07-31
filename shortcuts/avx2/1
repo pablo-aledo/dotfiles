@@ -1,0 +1,21 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/adapt
+adapt_chromebook
+
+xrandr --output VNC-0 --mode 1280x800
+sleep 1
+xdotool key Alt+w
+killall chrome chromium google-chrome google-chrome-stable
+sleep 1
+google-chrome --profile-directory=Default mail.google.com &
+sleep 20
+xdotool mousemove 290 110
+xdotool click 1
+
+echo 'is: starred 127.0.0.1 ebooks' | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Return
+
+sleep 5
+xdotool mousemove 290 200
+xdotool click 1
