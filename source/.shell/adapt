@@ -588,7 +588,7 @@ adapt_babun(){
 	alias acroread="/c/Program\ Files\ \(x86\)/Adobe/Acrobat\ Reader\ DC/Reader/AcroRd32"
 	alias meld='/c/Program\ Files\ \(x86\)/Meld/Meld.exe'
 	alias ranger=~/ranger/ranger.py
-	alias caffeine='/c/Users/quality/Downloads/programas/caffeine/caffeine.exe'
+	alias caffeine="/c/Users/$USER/Downloads/programas/caffeine/caffeine.exe"
     compaudit | xargs chmod g-w
     cp ~/.dotfiles/copy/.fonts/Powerline.ttf /c/Windows/Fonts/
 }
