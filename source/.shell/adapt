@@ -589,5 +589,6 @@ adapt_babun(){
 	alias meld='/c/Program\ Files\ \(x86\)/Meld/Meld.exe'
 	alias ranger=~/ranger/ranger.py
 	alias caffeine='/c/Users/quality/Downloads/programas/caffeine/caffeine.exe'
+    compaudit | xargs chmod g-w
 }
 
