@@ -590,5 +590,6 @@ adapt_babun(){
 	alias ranger=~/ranger/ranger.py
 	alias caffeine='/c/Users/quality/Downloads/programas/caffeine/caffeine.exe'
     compaudit | xargs chmod g-w
+    cp ~/.dotfiles/copy/.fonts/Powerline.ttf /c/Windows/Fonts/
 }
 
