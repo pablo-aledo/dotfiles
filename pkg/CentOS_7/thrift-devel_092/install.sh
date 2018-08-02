@@ -5,7 +5,8 @@ pkg install flex
 pkg install openssl-devel
 pkg install libevent-devel
 pkg install python-devel
-pkg install lua5.2-devel
+pkg install lua-devel
+pkg install lua-static
 
 sudo ln -s /usr/lib64/liblua.so /usr/lib64/liblua5.2.so
 
@@ -18,8 +19,4 @@ cd thrift-0.9.2
 ./configure
 make
 sudo make install
-
-
-
-
 
