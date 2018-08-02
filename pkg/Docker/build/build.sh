@@ -15,6 +15,11 @@ then
 	    cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
 	    VERBOSE=1 make
 	    #make install
+	elif [ -e *.pro ]
+	then
+	    qmake-qt5
+	    make
+	    #make install
 	elif [ -e configure ]
 	then
 	    ./configure
