@@ -76,3 +76,6 @@ map ,sn :vsplit ~/.vim/snippets/<C-R>=&ft<cr>.snippets<cr>
 " Draw box
 vmap ++ +-gv+\|
 map  ,ve :set virtualedit+=all<cr>
+
+" vimwiki
+map ,vw :! ln -s ~/Dotfiles/vimwiki ~/vimwiki<cr>
