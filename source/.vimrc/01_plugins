@@ -78,4 +78,4 @@ vmap ++ +-gv+\|
 map  ,ve :set virtualedit+=all<cr>
 
 " vimwiki
-map ,vw :! ln -s ~/Dotfiles/vimwiki ~/vimwiki<cr>
+map ,vw :! zsh -c "source ~/.vim/togglevimwiki"<cr><cr>

@@ -1,0 +1,5 @@
+[ -L ~/vimwiki ] && \rm ~/vimwiki
+[ -e ~/Dotfiles/vimwiki  ] && ! [ -e ~/vimwiki ] && ln -s ~/Dotfiles/vimwiki  ~/vimwiki && return
+[ -e /media/DATA/vimwiki ] && ! [ -e ~/vimwiki ] && ln -s /media/DATA/vimwiki ~/vimwiki && return
+[ -e ~/Dotfiles/vimwiki  ] &&   [ -e ~/vimwiki ] && mv ~/vimwiki ~/vimwiki_bak && ln -s ~/Dotfiles/vimwiki ~/vimwiki && return
+[ -e ~/vimwiki_bak  ]      && ! [ -e ~/vimwiki ] && mv ~/vimwiki_bak ~/vimwiki && return
