@@ -223,9 +223,10 @@ convert_recursive(){
 	echo $findcmd | bash | head -n $limit_head | tail -n $limit_tail | while read line
 	do
 		echo "\e[31m ===== ($actual / $total) $line =====\e[0m"
-		actual=$(( $actual + 1 ))
 
 		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
+
+		actual=$(( $actual + 1 ))
 
 		[ $just_one -eq 0 ] && [ $just_two -eq 0 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_1` /tmp/file1.mp4 "</dev/null"  > /tmp/script1
 		[ $just_one -eq 0 ] && [ $just_two -eq 0 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_2` /tmp/file2.mp4 "</dev/null" >> /tmp/script1
@@ -367,9 +368,10 @@ convert_recursive(){
 	echo $findcmd | bash | sort | while read line
 	do
 		echo "\e[31m ===== ($actual / $total) $line =====\e[0m"
-		actual=$(( $actual + 1 ))
 
 		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
+
+		actual=$(( $actual + 1 ))
 
 		echo ffmpeg -i \"$line\" `echo $convert_opts` \"`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4\" "</dev/null" | bash
 
