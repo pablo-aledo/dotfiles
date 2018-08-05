@@ -292,7 +292,7 @@ convert_recursive(){
 	done
 
 	cd $converted_dir
-	find $PWD -type f -size -100k | while read line
+	find $PWD -type f -size -100k -iname '*.converted.mp4' | while read line
 	do
 		echo "\e[31m Small converted file $line \e[0m" | tee -a /tmp/convert_report
 	done
@@ -425,7 +425,7 @@ convert_recursive(){
 	done
 
 	cd $converted_dir
-	find $PWD -type f -size -100k | while read line
+	find $PWD -type f -size -100k -iname '*.converted.mp4' | while read line
 	do
 		echo "\e[31m Small converted file $line \e[0m" | tee -a /tmp/convert_report
 	done
