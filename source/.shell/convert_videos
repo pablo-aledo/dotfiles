@@ -304,7 +304,7 @@ convert_recursive(){
 convert_recursive(){
 	[ $# -eq 0 ] && width=640
 	[ $# -eq 1 ] && width=$1
-	convert_opts="-vf 'scale=${width}:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy -loglevel 0 -hide_banner -nostats"
+	convert_opts="-vf 'scale=${width}:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy -loglevel 0 -hide_banner" # -loglevel 0 -hide_banner -nostats
 
 	[ -e "$convert_dir" ]   || return
 	[ -e "$converted_dir" ] || return
