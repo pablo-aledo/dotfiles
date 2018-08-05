@@ -13,7 +13,7 @@ sleep 1
 xdotool type 'avxhm.se'
 xdotool key Return
 sleep 5
-xdotool mousemove 250 330
+xdotool mousemove 440 150
 xdotool click 1
 xdotool key Ctrl+v
 
