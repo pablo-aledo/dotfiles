@@ -238,7 +238,7 @@ convert_recursive(){
 		rm -fr /tmp/file{1,2,3}.mp4
 		source /tmp/script1
 
-		find /tmp/ -name 'file*.mp4' -size 0 -delete 2>/dev/null
+		find /tmp/ -name 'file*.mp4' -size -100k -delete 2>/dev/null
 
 		echo /bin/cp "`ls -S /tmp/file1.mp4 /tmp/file2.mp4 /tmp/file3.mp4 | tail -n1`" \""`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"\" > /tmp/script2
 		source /tmp/script2
@@ -383,7 +383,7 @@ convert_recursive(){
 
 	done
 
-	find "$converted_dir" -name '*.mp4' -size 0 -delete 2>/dev/null
+	find "$converted_dir" -name '*.mp4' -size -100k -delete 2>/dev/null
 
 	cd $convert_dir
 	echo $findcmd | bash | while read line
