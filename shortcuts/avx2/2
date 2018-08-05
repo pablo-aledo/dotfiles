@@ -26,7 +26,7 @@ done
 xdotool key Return
 xdotool key Return
 sleep 1
-xdotool mousemove 1080 330
+xdotool mousemove 1150 150
 xdotool click 1
 xdotool click 1
 sleep 5
