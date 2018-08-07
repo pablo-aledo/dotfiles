@@ -1,0 +1,8 @@
+ide:
+  build: .
+  environment:
+    - C9_WORKSPACE=/data/workspace
+  volumes:
+    - /path/your/data/:/data/workspace:z
+  ports:
+    - 8080:8080

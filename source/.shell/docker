@@ -100,7 +100,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style|cloud9)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -176,6 +176,8 @@ case $1 in
                          fi
                          docker run -d --memory 3gb -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -v "${HOME}/Downloads:/root/Downloads" -v "${HOME}/Pictures:/root/Pictures" -v "${HOME}/Torrents:/root/Torrents" -v "${HOME}/.chrome:/data" -v /dev/shm:/dev/shm -v /etc/hosts:/etc/hosts --security-opt seccomp:/etc/docker/seccomp/chrome.json --device /dev/snd --device /dev/dri --device /dev/video0 --device /dev/usb --device /dev/bus/usb --group-add audio --group-add video --name chrome ${DOCKER_REPO_PREFIX}/chrome --user-data-dir=/data --proxy-server="$proxy" --host-resolver-rules="$map" "$args" ;;
 (clang)                  shift; docker run -v $PWD:/workdir -w /workdir -it -u $(id -u) clang $* ;;
+(cloud9)                 docker run -d -p 8080:80 -v $PWD:/workspace cloud9;;
+(c9)                     docker run -it -d -p 8080:8080 -v $PWD:/cloud9/workspace/ eeacms/cloud9;;
 (consul)
                          shift
                          state=$(docker inspect --format "{{.State.Running}}" consul 2>/dev/null)
