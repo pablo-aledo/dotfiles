@@ -7,7 +7,7 @@ shell mkfifo /tmp/colorPipe_step
 
 define hook-list
 echo \n
-shell cat /tmp/colorPipe_list | highlight --syntax=cpp -A &
+shell cat /tmp/colorPipe_list | highlight --syntax=cpp -O ansi &
 set logging redirect on
 set logging on /tmp/colorPipe_list
 end
@@ -20,7 +20,7 @@ end
 
 define hook-step
 echo \n
-shell cat /tmp/colorPipe_step | highlight --syntax=cpp -A &
+shell cat /tmp/colorPipe_step | highlight --syntax=cpp -O ansi &
 set logging redirect on
 set logging on /tmp/colorPipe_step
 end
@@ -33,7 +33,7 @@ end
 
 define hook-next
 echo \n
-shell cat /tmp/colorPipe_next | highlight --syntax=cpp -A &
+shell cat /tmp/colorPipe_next | highlight --syntax=cpp -O ansi &
 set logging redirect on
 set logging on /tmp/colorPipe_next
 end
