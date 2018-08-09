@@ -1,42 +1,60 @@
 dockerizer_get_all_files(){
-    rm -rf /tmp/dockerizer_all_files
+    rm -fr /tmp/dockerizer_all_files
     cde $*
     cd cde-package/cde-root/
     find -type f | sed 's/^\.//g' > /tmp/dockerizer_all_files
 }
 
 dockerizer_get_copy_files(){
-    rm -rf /tmp/dockerizer_cpfiles
+    rm -fr /tmp/dockerizer_cpfiles
     cat /tmp/dockerizer_all_files | while read line
     do
         rpm -qf "$line" >> /tmp/dockerizer_cpfiles
     done
 
     cat /tmp/dockerizer_cpfiles | grep 'is not owned by any package' | sed -e 's/^file //g' -e 's/ is not owned by any package//g' > /tmp/dockerizer_cpfiles2
-    mv /tmp/dockerizer_cpfiles2 /tmp/dockerizer_cpfiles
+    \mv /tmp/dockerizer_cpfiles2 /tmp/dockerizer_cpfiles
+}
+
+dockerizer_get_organized_files(){
+    rm -fr /tmp/dockerizer_organized_files*
+    cat /tmp/dockerizer_cpfiles | while read line
+    do
+        [ $( echo $line | egrep '\.so$' ) ]  && echo $line /usr/lib64/$(basename "$line") >> /tmp/dockerizer_organized_files1 && continue
+        [ $( echo $line | egrep '\.so\.' ) ] && echo $line /usr/lib64/$(basename "$line") >> /tmp/dockerizer_organized_files2 && continue
+        echo $line $line >> /tmp/dockerizer_organized_files3
+    done
+
+    cat /tmp/dockerizer_organized_files* > /tmp/dockerizer_organized_files
 }
 
 dockerizer_get_packages(){
-    rm -rf /tmp/dockerizer_packages
+    rm -fr /tmp/dockerizer_packages
     cat /tmp/dockerizer_all_files | while read line
     do
         rpm -qf "$line" >> /tmp/dockerizer_packages
     done
 
     cat /tmp/dockerizer_packages | grep -v 'is not owned by any package' | sort | uniq > /tmp/dockerizer_packages_2
-    mv /tmp/dockerizer_packages_2 /tmp/dockerizer_packages
+    \mv /tmp/dockerizer_packages_2 /tmp/dockerizer_packages
+}
+
+dockerizer_get_required_packages(){
+    rm -fr /tmp/dockerizer_required_packages
+    comm -23 /tmp/dockerizer_packages /tmp/dockerized_list > /tmp/dockerizer_required_packages
 }
 
 dockerizer_get_env(){
-    rm -rf /tmp/dockerizer_env
+    rm -fr /tmp/dockerizer_env
     printenv > /tmp/dockerizer_env
 }
 
 dockerizer(){
     dockerizer_get_all_files $*
     dockerizer_get_packages
+    dockerizer_get_required_packages
     dockerizer_get_copy_files
+    dockerizer_get_organized_files
     dockerizer_get_env
 }
-
 
