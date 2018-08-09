@@ -3,6 +3,7 @@ dockerizer_get_all_files(){
     cde $*
     cd cde-package/cde-root/
     find -type f | sed 's/^\.//g' > /tmp/dockerizer_all_files
+    cd -
 }
 
 dockerizer_get_copy_files(){
