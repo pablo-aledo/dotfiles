@@ -23,7 +23,7 @@ mkmv(){
 
 mkcp(){
 	mkdir -p "`dirname "$2"`" 2>/dev/null
-	/bin/cp "$1"  "`dirname "$2"`"/
+	/bin/cp "$1"  "`dirname "$2"`"/"`basename "$2"`"
 }
 
 mergehdd_rmdupes(){
