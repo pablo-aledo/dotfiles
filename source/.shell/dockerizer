@@ -45,6 +45,21 @@ dockerizer_get_required_packages(){
     comm -23 /tmp/dockerizer_packages /tmp/dockerized_list > /tmp/dockerizer_required_packages
 }
 
+dockerizer_get_seed_packages(){
+    rm -rf /tmp/dependencies*
+    cp /tmp/dockerizer_packages /tmp/dependencies_0
+    for a in $(seq 0 10)
+    do
+        for b in $( cat /tmp/dependencies_${a} )
+        do
+            rpm -qR $b >> /tmp/dependencies_$(( $a + 1 ))
+        done
+    done
+    rm -rf /tmp/dependencies_0
+
+    comm -23 <( cat /tmp/dockerizer_packages | sort ) <( cat /tmp/dependencies_* | sort | uniq ) > /tmp/dockerizer_packages_seed
+}
+
 dockerizer_get_env(){
     rm -fr /tmp/dockerizer_env
     printenv > /tmp/dockerizer_env
@@ -54,6 +69,7 @@ dockerizer(){
     dockerizer_get_all_files $*
     dockerizer_get_packages
     dockerizer_get_required_packages
+    dockerizer_get_seed_packages
     dockerizer_get_copy_files
     dockerizer_get_organized_files
     dockerizer_get_env
