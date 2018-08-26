@@ -38,8 +38,8 @@ summarize_rec(){
 			cat "$filename" | head -n 100 >> "$destination"
 			;;
 		(*)
-			file "$filename" | grep 'ASCII text' && cat "$filename" >> "$destination"
-			file "$filename" | grep 'ASCII text' || echo "$filename" >> "$destination"
+			file "$filename" | grep 'ASCII text' >/dev/null && cat "$filename" >> "$destination"
+			file "$filename" | grep 'ASCII text' >/dev/null || echo "$filename" >> "$destination"
 	esac
 }
 
