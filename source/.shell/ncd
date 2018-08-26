@@ -1,9 +1,10 @@
-ncd(){
+gzip_distance(){
+    rm -fr /tmp/s1 /tmp/s2
     summarize "$1" /tmp/s1
     summarize "$2" /tmp/s2
     s1=$( cat /tmp/s1 | gzip -f | wc -c )
     s2=$( cat /tmp/s2 | gzip -f | wc -c )
     s12=$( cat /tmp/s1 /tmp/s2 | gzip | wc -c )
 
-   python -c "print float($s12 - min($s1, $s2))/float(max($s1,$s2))" 
+   python -c "print float($s12 - min($s1, $s2))/float(max($s1,$s2))"
 }
