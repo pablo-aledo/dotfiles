@@ -7,7 +7,7 @@ summarize_rec(){
 			rm -fr /tmp/summarize
 			mkdir -p /tmp/summarize
 			cd /tmp/summarize
-			rar x "$filename" >/dev/null 2>/dev/null
+			unrar x "$filename" >/dev/null 2>/dev/null
 			find $PWD | while read line
 			do
 				summarize_rec "$line" "$destination" 
@@ -38,7 +38,8 @@ summarize_rec(){
 			cat "$filename" | head -n 100 >> "$destination"
 			;;
 		(*)
-			echo "$filename" >> "$destination"
+			file "$filename" | grep 'ASCII text' && cat "$filename" >> "$destination"
+			file "$filename" | grep 'ASCII text' || echo "$filename" >> "$destination"
 	esac
 }
 
