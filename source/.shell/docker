@@ -161,6 +161,7 @@ case $1 in
                          echo $(docker inspect --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' cadvisor) cadvisor | sudo tee -a /etc/hosts
                          google-chrome "http://cadvisor:8080" ;;
 (cathode)                docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name cathode cathode ;;
+(centos7)                docker run --privileged -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY centos:7 ;;
 (cheese)                 docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -v "${HOME}/Pictures:/root/Pictures" --device /dev/video0 --device /dev/snd --device /dev/dri --name cheese ${DOCKER_REPO_PREFIX}/cheese ;;
 (bcc_tools)              docker run --rm -it --privileged -v /lib/modules:/lib/modules:ro -v /usr/src:/usr/src:ro -v /etc/localtime:/etc/localtime:ro r.j3ss.co/bcc-tools ;;
 (chrome)
