@@ -358,6 +358,9 @@ case $1 in
 (transmission-ui)        docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v /home/jessie/Torrents:/Torrents -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/transmission-ui ;;
 (travis)                 shift; docker run -it --rm -v "${HOME}/.travis:/root/.travis" -v "$(pwd):/usr/src/repo:ro" --workdir /usr/src/repo --log-driver none ${DOCKER_REPO_PREFIX}/travis "$@" ;;
 (ubuntu)                 docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu ;;
+(ulfm)                   docker pull abouteiller/mpi-ft-ulfm
+                         alias make='docker run -v $PWD:$PWD:V -w $PWD abouteiller/mpi-ft-ulfm make'
+                         alias mpirun='docker run -v $(pwd):$(pwd):V -w $(pwd) abouteiller/mpi-ft-ulfm mpirun --oversubscribe -mca btl tcp,self' ;;
 (ubuntu_pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu_pga ;;
 (alpine_pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY alpine_pga ;;
 (alpine_pga_testing)     docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY alpine_pga_testing ;;
