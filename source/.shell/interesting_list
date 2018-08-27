@@ -18,7 +18,7 @@ echo $list
 cat arl-master/$list | grep 'https://github.com' | cut -d'(' -f2 | cut -d')' -f1 | head -n $limit > /tmp/dllist
 n=0
 for a in `cat /tmp/dllist`
-do 
+do
 	n=$(( $n + 1 ))
 	link="$a/archive/master.zip"
 	echo "\e[31m ===== $a ===== \e[0m"
@@ -48,7 +48,7 @@ cd ~/github_arl
 cat arl-master/*.md | grep -i $topic | grep 'https://github.com' | cut -d'(' -f2 | cut -d')' -f1 | head -n $limit > /tmp/dllist
 n=0
 for a in `cat /tmp/dllist`
-do 
+do
 	n=$(( $n + 1 ))
 	link="$a/archive/master.zip"
 	echo "\e[31m ===== $a ===== \e[0m"
@@ -62,14 +62,11 @@ done
 
 github_topic(){
 [ $# -gt 0 ] && topic=$1
-[ $# -gt 0 ] ||
-	topic=security
+[ $# -gt 0 ] || topic=security
 [ $# -gt 1 ] && limit=$2
-[ $# -gt 1 ] ||
-	limit=9999
+[ $# -gt 1 ] || limit=9999
 [ $# -gt 2 ] && maxsize=$3
-[ $# -gt 2 ] ||
-	maxsize="999G"
+[ $# -gt 2 ] || maxsize="999G"
 maxsize=`echo $maxsize | sed -e 's/K/*1024/g' -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g' | bc`
 
 mkdir -p ~/github_topic/$topic
@@ -78,7 +75,7 @@ wget https://github.com/topics/$topic -O $topic/list
 
 n=0
 for a in `cat $topic/list | grep text-normal -B1 | grep href | cut -d'"' -f2 | sed -e s@^.@https://github.com/@g | head -n $limit`
-do 
+do
 	n=$(( $n + 1 ))
 	link="$a/archive/master.zip"
 	echo "\e[31m ===== $a ===== \e[0m"
@@ -93,14 +90,11 @@ done
 
 github_collection(){
 [ $# -gt 0 ] && topic=$1
-[ $# -gt 0 ] ||
-	topic=security
+[ $# -gt 0 ] || topic=security
 [ $# -gt 1 ] && limit=$2
-[ $# -gt 1 ] ||
-	limit=9999
+[ $# -gt 1 ] || limit=9999
 [ $# -gt 2 ] && maxsize=$3
-[ $# -gt 2 ] ||
-	maxsize="999G"
+[ $# -gt 2 ] || maxsize="999G"
 maxsize=`echo $maxsize | sed -e 's/K/*1024/g' -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g' | bc`
 
 mkdir -p ~/github_collections/$topic
@@ -109,7 +103,35 @@ wget https://github.com/collections/$topic -O $topic/list
 
 n=0
 for a in `cat $topic/list | grep text-normal -B2 | grep href | cut -d'"' -f2 | sed -e s@^.@https://github.com/@g | head -n $limit`
-do 
+do
+	n=$(( $n + 1 ))
+	link="$a/archive/master.zip"
+	echo "\e[31m ===== $a ===== \e[0m"
+	name=`printf %03d $n`_`echo $a | cut -d'/' -f5`.zip
+	echo "\e[32m ${topic}/${name} \e[0m"
+	[ -e ${topic}/${name} ] && continue
+	wget ${link} -O ${topic}/${name}
+	[ `stat -c %s ${topic}/${name}` -gt $maxsize ] && rm -fr ${topic}/${name}
+done
+
+}
+
+github_search(){
+[ $# -gt 0 ] && topic=$1
+[ $# -gt 0 ] || topic=security
+[ $# -gt 1 ] && limit=$2
+[ $# -gt 1 ] || limit=9999
+[ $# -gt 2 ] && maxsize=$3
+[ $# -gt 2 ] || maxsize="999G"
+maxsize=`echo $maxsize | sed -e 's/K/*1024/g' -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g' | bc`
+
+mkdir -p ~/github_search/$topic
+cd ~/github_search/
+wget "https://github.com/search?q=$topic" -O $topic/list
+
+n=0
+for a in `cat $topic/list | grep muted-link -B2 | grep href | cut -d'"' -f4 | sed -e s@^.@https://github.com/@g | head -n $limit`
+do
 	n=$(( $n + 1 ))
 	link="$a/archive/master.zip"
 	echo "\e[31m ===== $a ===== \e[0m"
