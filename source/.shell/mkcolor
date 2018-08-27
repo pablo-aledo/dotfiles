@@ -19,6 +19,8 @@ color(){
 	       -e 's/^cd /\\\\e[36mcd \\\\e[0m/g' \
 	       -e 's/^sudo /\\\\e[36msudo \\\\e[0m/g' \
 	       -e 's/^cp /\\\\e[36mcp \\\\e[0m/g' \
+	       -e 's/^mv /\\\\e[36mmv \\\\e[0m/g' \
+	       -e 's/^ln /\\\\e[36mln \\\\e[0m/g' \
 	       -e 's/^make /\\\\e[36mmake \\\\e[0m/g' \
 	       -e 's/^rm /\\\\e[36mrm \\\\e[0m/g' \
                -e 's/Entering directory/\\\\e[31m\\\\e[4mEntering directory\\\\e[0m/g' \
