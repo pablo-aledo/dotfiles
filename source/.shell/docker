@@ -181,8 +181,9 @@ case $1 in
 (c9)                     docker run -it -d -p 8080:8080 -v $PWD:/cloud9/workspace/ eeacms/cloud9;;
 (complearn)              docker run -it -v $PWD:/workspace/ -w /workspace complearn bash;;
 (complearn_ncd)          docker run -it -v $PWD:/workspace/ -w /workspace complearn ncd file1 file2 ;;
-(complearn_binarytree)   docker run -it -v $PWD:/workspace/ -w /workspace complearn ncd -b -t file1 file2
-                         docker run -it -v $PWD:/workspace/ -w /workspace complearn maketree distmatrix.clb ;;
+(complearn_binarytree)   docker run -it -v $PWD:/workspace/ -w /workspace complearn ncd -b -d directory directory
+                         docker run -it -v $PWD:/workspace/ -w /workspace complearn maketree distmatrix.clb
+                         neato -Tpng treefile.dot > treefile.png ;;
 (consul)
                          shift
                          state=$(docker inspect --format "{{.State.Running}}" consul 2>/dev/null)
