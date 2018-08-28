@@ -34,6 +34,8 @@ pf_mount(){
 	[ $# -eq 0 ] && pf_mount Chrome
 	[ $# -eq 0 ] && return
 
+    pkg install cryptsetup
+
 	[ -e $key_folder/keyfile ] && keyarg="-d $key_folder/keyfile"
 	[ -e $key_folder/keyfile ] || keyarg=""
 
