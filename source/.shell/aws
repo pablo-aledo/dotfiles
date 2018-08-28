@@ -436,11 +436,22 @@ aws_dashboard(){
 #}
 
 aws_deploy(){
-	for a in `cat /tmp/aws_config | grep ':' | cut -d':' -f1`
-	do 
-		aws_config $a
-		aws_rpc_async $a $*
-	done
+    if [ $1 = "exec" ]
+    then
+        shift
+    	for a in `cat /tmp/aws_config | grep ':' | cut -d':' -f1`
+    	do
+    		aws_config $a
+    		aws_rpc_async $a $*
+    	done
+    else if [ $1 = "send" ]
+        shift
+    	for a in `cat /tmp/aws_config | grep ':' | cut -d':' -f1`
+    	do
+    		aws_config $a
+    		aws_send $*
+    	done
+    fi
 }
 
 aws_move(){
