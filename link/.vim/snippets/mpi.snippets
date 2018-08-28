@@ -1,0 +1,1282 @@
+snippet hello_world
+	#include <mpi.h>
+	#include <stdio.h>
+
+	int main(int argc, char** argv) {
+		MPI_Init(NULL, NULL);
+
+		int world_size;
+		MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+		int world_rank;
+		MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+		char processor_name[MPI_MAX_PROCESSOR_NAME];
+		int name_len;
+		MPI_Get_processor_name(processor_name, &name_len);
+
+		printf("Hello world from processor %s, rank %d out of %d processors\n",
+			processor_name, world_rank, world_size);
+
+		MPI_Finalize();
+	}
+
+snippet makefile
+	EXECS=mpi_hello_world
+	MPICC?=/usr/lib64/openmpi/bin/mpicc
+
+	all: ${EXECS}
+
+	mpi_hello_world: mpi_hello_world.c
+		${MPICC} -o mpi_hello_world mpi_hello_world.c
+
+	clean:
+		rm -f ${EXECS}
+
+	run:
+		mpirun -n 2 --hostfile host_file ./mpi_hello_world
+
+snippet check_status
+	#include <mpi.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <time.h>
+
+	int main(int argc, char** argv) {
+	  MPI_Init(NULL, NULL);
+
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+	  if (world_size != 2) {
+	    fprintf(stderr, "Must use two processes for this example\n");
+	    MPI_Abort(MPI_COMM_WORLD, 1);
+	  }
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+	  const int MAX_NUMBERS = 100;
+	  int numbers[MAX_NUMBERS];
+	  int number_amount;
+	  if (world_rank == 0) {
+	    // Pick a random amount of integers to send to process one
+	    srand(time(NULL));
+	    number_amount = (rand() / (float)RAND_MAX) * MAX_NUMBERS;
+	    // Send the amount of integers to process one
+	    MPI_Send(numbers, number_amount, MPI_INT, 1, 0, MPI_COMM_WORLD);
+	    printf("0 sent %d numbers to 1\n", number_amount);
+	  } else if (world_rank == 1) {
+	    MPI_Status status;
+	    // Receive at most MAX_NUMBERS from process zero
+	    MPI_Recv(numbers, MAX_NUMBERS, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+	    // After receiving the message, check the status to determine how many
+	    // numbers were actually received
+	    MPI_Get_count(&status, MPI_INT, &number_amount);
+	    // Print off the amount of numbers, and also print additional information
+	    // in the status object
+	    printf("1 received %d numbers from 0. Message source = %d, tag = %d\n",
+	           number_amount, status.MPI_SOURCE, status.MPI_TAG);
+	  }
+	  MPI_Barrier(MPI_COMM_WORLD);
+	  MPI_Finalize();
+	}
+snippet probe
+	#include <mpi.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <time.h>
+
+	int main(int argc, char** argv) {
+	  MPI_Init(NULL, NULL);
+
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+	  if (world_size != 2) {
+	    fprintf(stderr, "Must use two processes for this example\n");
+	    MPI_Abort(MPI_COMM_WORLD, 1);
+	  }
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+	  int number_amount;
+	  if (world_rank == 0) {
+	    const int MAX_NUMBERS = 100;
+	    int numbers[MAX_NUMBERS];
+	    // Pick a random amont of integers to send to process one
+	    srand(time(NULL));
+	    number_amount = (rand() / (float)RAND_MAX) * MAX_NUMBERS;
+	    // Send the amount of integers to process one
+	    MPI_Send(numbers, number_amount, MPI_INT, 1, 0, MPI_COMM_WORLD);
+	    printf("0 sent %d numbers to 1\n", number_amount);
+	  } else if (world_rank == 1) {
+	    MPI_Status status;
+	    // Probe for an incoming message from process zero
+	    MPI_Probe(0, 0, MPI_COMM_WORLD, &status);
+	    // When probe returns, the status object has the size and other
+	    // attributes of the incoming message. Get the size of the message.
+	    MPI_Get_count(&status, MPI_INT, &number_amount);
+	    // Allocate a buffer just big enough to hold the incoming numbers
+	    int* number_buf = (int*)malloc(sizeof(int) * number_amount);
+	    // Now receive the message with the allocated buffer
+	    MPI_Recv(number_buf, number_amount, MPI_INT, 0, 0, MPI_COMM_WORLD,
+	             MPI_STATUS_IGNORE);
+	    printf("1 dynamically received %d numbers from 0.\n",
+	           number_amount);
+	    free(number_buf);
+	  }
+	  MPI_Finalize();
+	}
+snippet groups
+	#include <stdlib.h>
+	#include <stdio.h>
+	#include <mpi.h>
+
+	int main(int argc, char **argv) {
+	  MPI_Init(NULL, NULL);
+
+	  // Get the rank and size in the original communicator
+	  int world_rank, world_size;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	  // Get the group of processes in MPI_COMM_WORLD
+	  MPI_Group world_group;
+	  MPI_Comm_group(MPI_COMM_WORLD, &world_group);
+
+	  int n = 7;
+	  const int ranks[7] = {1, 2, 3, 5, 7, 11, 13};
+
+	  // Construct a group containing all of the prime ranks in world_group
+	  MPI_Group prime_group;
+	  MPI_Group_incl(world_group, 7, ranks, &prime_group);
+
+	  // Create a new communicator based on the group
+	  MPI_Comm prime_comm;
+	  MPI_Comm_create_group(MPI_COMM_WORLD, prime_group, 0, &prime_comm);
+
+	  int prime_rank = -1, prime_size = -1;
+	  // If this rank isn't in the new communicator, it will be MPI_COMM_NULL
+	  // Using MPI_COMM_NULL for MPI_Comm_rank or MPI_Comm_size is erroneous
+	  if (MPI_COMM_NULL != prime_comm) {
+	    MPI_Comm_rank(prime_comm, &prime_rank);
+	    MPI_Comm_size(prime_comm, &prime_size);
+	  }
+
+	  printf("WORLD RANK/SIZE: %d/%d --- PRIME RANK/SIZE: %d/%d\n",
+	    world_rank, world_size, prime_rank, prime_size);
+
+	  MPI_Group_free(&world_group);
+	  MPI_Group_free(&prime_group);
+
+	  if (MPI_COMM_NULL != prime_comm) {
+	    MPI_Comm_free(&prime_comm);
+	  }
+
+	  MPI_Finalize();
+	}
+snippet split
+	#include <stdlib.h>
+	#include <stdio.h>
+	#include <mpi.h>
+
+	int main(int argc, char **argv) {
+	  MPI_Init(NULL, NULL);
+
+	  // Get the rank and size in the original communicator
+	  int world_rank, world_size;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	  int color = world_rank / 4; // Determine color based on row
+
+	  // Split the communicator based on the color and use the original rank for ordering
+	  MPI_Comm row_comm;
+	  MPI_Comm_split(MPI_COMM_WORLD, color, world_rank, &row_comm);
+
+	  int row_rank, row_size;
+	  MPI_Comm_rank(row_comm, &row_rank);
+	  MPI_Comm_size(row_comm, &row_size);
+
+	  printf("WORLD RANK/SIZE: %d/%d --- ROW RANK/SIZE: %d/%d\n",
+	    world_rank, world_size, row_rank, row_size);
+
+	  MPI_Comm_free(&row_comm);
+
+	  MPI_Finalize();
+	}
+snippet bin
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <string.h>
+	#include <mpi.h>
+
+	// Creates an array of random numbers for binning. Note that the numbers are
+	// between [0, 1)
+	float *create_random_numbers(int numbers_per_proc) {
+	  float *random_numbers = (float *)malloc(sizeof(float) * numbers_per_proc);
+	  int i;
+	  for (i = 0; i < numbers_per_proc; i++) {
+	    int r = rand();
+	    // Make sure that the random number is never exactly one.
+	    if (r == RAND_MAX) {
+	      r--;
+	    }
+	    random_numbers[i] = rand() / (float)(RAND_MAX);
+	  }
+	  return random_numbers;
+	}
+
+	// Given a number, determine which process owns it. Since numbers are from [0, 1),
+	// simply multiple the number by the size of the MPI world to figure out which
+	// process owns it
+	int which_process_owns_this_number(float rand_num, int world_size) {
+	  return (int)(rand_num * world_size);
+	}
+
+	// Gets the starting value for a process's bin
+	float get_bin_start(int world_rank, int world_size) {
+	  return (float)world_rank / world_size;
+	}
+
+	// Gets the ending value for a process's bin
+	float get_bin_end(int world_rank, int world_size) {
+	  return get_bin_start(world_rank + 1, world_size);
+	}
+
+	// This function returns the amount of numbers that will be sent to each
+	// process given the array of random numbers.
+	int *get_send_amounts_per_proc(float *rand_nums, int numbers_per_proc,
+	                               int world_size) {
+	  int *send_amounts_per_proc = (int *)malloc(sizeof(int) * world_size);
+	  // Initialize the amount of numbers per process to zero
+	  memset(send_amounts_per_proc, 0, sizeof(int) * world_size);
+
+	  // For each random number, determine which process owns it and increment
+	  // the amount of numbers for that process.
+	  int i;
+	  for (i = 0; i < numbers_per_proc; i++) {
+	    int owning_rank = which_process_owns_this_number(rand_nums[i], world_size);
+	    send_amounts_per_proc[owning_rank]++;
+	  }
+
+	  return send_amounts_per_proc;
+	}
+
+	// Given how many numbers each process is sending to the other processes, find
+	// out how many numbers you are receiving from each process. This function
+	// returns an array of counts indexed on the rank of the process from which it
+	// will receive the numbers.
+	int *get_recv_amounts_per_proc(int *send_amounts_per_proc, int world_size) {
+	  int *recv_amounts_per_proc = (int *)malloc(sizeof(int) * world_size);
+
+	  // Perform an Alltoall for the send counts. This will send the send counts
+	  // from each process and place them in the recv_amounts_per_proc array of
+	  // the receiving processes to let them know how many numbers they will
+	  // receive when binning occurs.
+	  MPI_Alltoall(send_amounts_per_proc, 1, MPI_INT, recv_amounts_per_proc, 1,
+	               MPI_INT, MPI_COMM_WORLD);
+	  return recv_amounts_per_proc;
+	}
+
+	// Given an array (of size "size") of counts, return the prefix sum of the
+	// counts.
+	int *prefix_sum(int *counts, int size) {
+	  int *prefix_sum_result = (int *)malloc(sizeof(int) * size);
+	  prefix_sum_result[0] = 0;
+	  int i;
+	  for (i = 1; i < size; i++) {
+	    prefix_sum_result[i] = prefix_sum_result[i - 1] + counts[i - 1];
+	  }
+	  return prefix_sum_result;
+	}
+
+	// Returns the sum of an array
+	int sum(int *arr, int size) {
+	  int sum_result = 0;
+	  int i;
+	  for (i = 0; i < size; i++) {
+	    sum_result += arr[i];
+	  }
+	  return sum_result;
+	}
+
+	// Used for sorting floating point numbers
+	int compare_float(const void *a, const void *b) {
+	  if (*(float *)a < *(float *)b) {
+	    return -1;
+	  } else if (*(float *)a > *(float *)b) {
+	    return 1;
+	  } else {
+	    return 0;
+	  }
+	}
+
+	// Verifies that the binned numbers belong to the process.
+	void verify_bin_nums(float *binned_nums, int num_count, int world_rank,
+	                     int world_size) {
+	  int i;
+	  float bin_start = get_bin_start(world_rank, world_size);
+	  float bin_end = get_bin_end(world_rank, world_size);
+	  for (i = 0; i < num_count; i++) {
+	    if (binned_nums[i] >= bin_end || binned_nums[i] < bin_start) {
+	      fprintf(stderr, "Error: Binned number %f exceeds bin range [%f - %f) for process %d\n",
+	              binned_nums[i], bin_start, bin_end, world_rank);
+	    }
+	  }
+	}
+
+	int main(int argc, char** argv) {
+	  if (argc != 2) {
+	    fprintf(stderr, "Usage: bin numbers_per_proc\n");
+	    exit(1);
+	  }
+
+	  // Get the amount of random numbers to create per process
+	  int numbers_per_proc = atoi(argv[1]);
+
+	  MPI_Init(NULL, NULL);
+
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	  // Seed the random number generator to get different results each time
+	  srand(time(NULL) * world_rank);
+
+	  // Create the random numbers on this process. Note that all numbers
+	  // will be between 0 and 1
+	  float *rand_nums = create_random_numbers(numbers_per_proc);
+
+	  // Given the array of random numbers, determine how many will be sent
+	  // to each process (based on the which process owns the number).
+	  // The return value from this function is an array of counts
+	  // for each rank in the communicator.
+	  // The count represents how many numbers each process will receive
+	  // when they are binned from this process.
+	  int *send_amounts_per_proc = get_send_amounts_per_proc(rand_nums,
+	                                                         numbers_per_proc,
+	                                                         world_size);
+
+	  // Determine how many numbers you will receive from each process. This
+	  // information is needed to set up the binning call.
+	  int *recv_amounts_per_proc = get_recv_amounts_per_proc(send_amounts_per_proc,
+	                                                         world_size);
+
+	  // Do a prefix sum for the send/recv amounts to get the send/recv offsets for
+	  // the MPI_Alltoallv call (the binning call).
+	  int *send_offsets_per_proc = prefix_sum(send_amounts_per_proc, world_size);
+	  int *recv_offsets_per_proc = prefix_sum(recv_amounts_per_proc, world_size);
+
+	  // Allocate an array to hold the binned numbers for this process based on the total
+	  // amount of numbers this process will receive from others.
+	  int total_recv_amount = sum(recv_amounts_per_proc, world_size);
+	  float *binned_nums = (float *)malloc(sizeof(float) * total_recv_amount);
+
+	  // The final step before binning - arrange all of the random numbers so that they
+	  // are ordered by bin. For simplicity, we are simply going to sort the random
+	  // numbers, however, this could be optimized since the numbers don't need to be
+	  // fully sorted.
+	  qsort(rand_nums, numbers_per_proc, sizeof(float), &compare_float);
+
+	  // Perform the binning step with MPI_Alltoallv. This will send all of the numbers in
+	  // the rand_nums array to their proper bin. Each process will only contain numbers
+	  // belonging to its bin after this step. For example, if there are 4 processes, process
+	  // 0 will contain numbers in the [0, .25) range.
+	  MPI_Alltoallv(rand_nums, send_amounts_per_proc, send_offsets_per_proc, MPI_FLOAT,
+	                binned_nums, recv_amounts_per_proc, recv_offsets_per_proc, MPI_FLOAT,
+	                MPI_COMM_WORLD);
+
+	  // Print results
+	  printf("Process %d received %d numbers in bin [%f - %f)\n", world_rank, total_recv_amount,
+	         get_bin_start(world_rank, world_size), get_bin_end(world_rank, world_size));
+
+	  // Check that the bin numbers are correct
+	  verify_bin_nums(binned_nums, total_recv_amount, world_rank, world_size);
+
+	  MPI_Barrier(MPI_COMM_WORLD);
+	  MPI_Finalize();
+
+	  // Clean up
+	  free(rand_nums);
+	  free(send_amounts_per_proc);
+	  free(recv_amounts_per_proc);
+	  free(send_offsets_per_proc);
+	  free(recv_offsets_per_proc);
+	  free(binned_nums);
+	}
+snippet compare_bcast
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <mpi.h>
+	#include <assert.h>
+
+	void my_bcast(void* data, int count, MPI_Datatype datatype, int root,
+	              MPI_Comm communicator) {
+	  int world_rank;
+	  MPI_Comm_rank(communicator, &world_rank);
+	  int world_size;
+	  MPI_Comm_size(communicator, &world_size);
+
+	  if (world_rank == root) {
+	    // If we are the root process, send our data to everyone
+	    int i;
+	    for (i = 0; i < world_size; i++) {
+	      if (i != world_rank) {
+	        MPI_Send(data, count, datatype, i, 0, communicator);
+	      }
+	    }
+	  } else {
+	    // If we are a receiver process, receive the data from the root
+	    MPI_Recv(data, count, datatype, root, 0, communicator, MPI_STATUS_IGNORE);
+	  }
+	}
+
+	int main(int argc, char** argv) {
+	  if (argc != 3) {
+	    fprintf(stderr, "Usage: compare_bcast num_elements num_trials\n");
+	    exit(1);
+	  }
+
+	  int num_elements = atoi(argv[1]);
+	  int num_trials = atoi(argv[2]);
+
+	  MPI_Init(NULL, NULL);
+
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+	  double total_my_bcast_time = 0.0;
+	  double total_mpi_bcast_time = 0.0;
+	  int i;
+	  int* data = (int*)malloc(sizeof(int) * num_elements);
+	  assert(data != NULL);
+
+	  for (i = 0; i < num_trials; i++) {
+	    // Time my_bcast
+	    // Synchronize before starting timing
+	    MPI_Barrier(MPI_COMM_WORLD);
+	    total_my_bcast_time -= MPI_Wtime();
+	    my_bcast(data, num_elements, MPI_INT, 0, MPI_COMM_WORLD);
+	    // Synchronize again before obtaining final time
+	    MPI_Barrier(MPI_COMM_WORLD);
+	    total_my_bcast_time += MPI_Wtime();
+
+	    // Time MPI_Bcast
+	    MPI_Barrier(MPI_COMM_WORLD);
+	    total_mpi_bcast_time -= MPI_Wtime();
+	    MPI_Bcast(data, num_elements, MPI_INT, 0, MPI_COMM_WORLD);
+	    MPI_Barrier(MPI_COMM_WORLD);
+	    total_mpi_bcast_time += MPI_Wtime();
+	  }
+
+	  // Print off timing information
+	  if (world_rank == 0) {
+	    printf("Data size = %d, Trials = %d\n", num_elements * (int)sizeof(int),
+	           num_trials);
+	    printf("Avg my_bcast time = %lf\n", total_my_bcast_time / num_trials);
+	    printf("Avg MPI_Bcast time = %lf\n", total_mpi_bcast_time / num_trials);
+	  }
+
+	  free(data);
+	  MPI_Finalize();
+	}
+snippet my_bcast
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <mpi.h>
+
+	void my_bcast(void* data, int count, MPI_Datatype datatype, int root,
+	              MPI_Comm communicator) {
+	  int world_rank;
+	  MPI_Comm_rank(communicator, &world_rank);
+	  int world_size;
+	  MPI_Comm_size(communicator, &world_size);
+
+	  if (world_rank == root) {
+	    // If we are the root process, send our data to everyone
+	    int i;
+	    for (i = 0; i < world_size; i++) {
+	      if (i != world_rank) {
+	        MPI_Send(data, count, datatype, i, 0, communicator);
+	      }
+	    }
+	  } else {
+	    // If we are a receiver process, receive the data from the root
+	    MPI_Recv(data, count, datatype, root, 0, communicator, MPI_STATUS_IGNORE);
+	  }
+	}
+
+	int main(int argc, char** argv) {
+	  MPI_Init(NULL, NULL);
+
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+	  int data;
+	  if (world_rank == 0) {
+	    data = 100;
+	    printf("Process 0 broadcasting data %d\n", data);
+	    my_bcast(&data, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	  } else {
+	    my_bcast(&data, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	    printf("Process %d received data %d from root process\n", world_rank, data);
+	  }
+
+	  MPI_Finalize();
+	}
+snippet reduce_avg
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <mpi.h>
+	#include <assert.h>
+	#include <time.h>
+
+	// Creates an array of random numbers. Each number has a value from 0 - 1
+	float *create_rand_nums(int num_elements) {
+	  float *rand_nums = (float *)malloc(sizeof(float) * num_elements);
+	  assert(rand_nums != NULL);
+	  int i;
+	  for (i = 0; i < num_elements; i++) {
+	    rand_nums[i] = (rand() / (float)RAND_MAX);
+	  }
+	  return rand_nums;
+	}
+
+	int main(int argc, char** argv) {
+	  if (argc != 2) {
+	    fprintf(stderr, "Usage: avg num_elements_per_proc\n");
+	    exit(1);
+	  }
+
+	  int num_elements_per_proc = atoi(argv[1]);
+
+	  MPI_Init(NULL, NULL);
+
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	  // Create a random array of elements on all processes.
+	  srand(time(NULL)*world_rank);   // Seed the random number generator to get different results each time for each processor
+	  float *rand_nums = NULL;
+	  rand_nums = create_rand_nums(num_elements_per_proc);
+
+	  // Sum the numbers locally
+	  float local_sum = 0;
+	  int i;
+	  for (i = 0; i < num_elements_per_proc; i++) {
+	    local_sum += rand_nums[i];
+	  }
+
+	  // Print the random numbers on each process
+	  printf("Local sum for process %d - %f, avg = %f\n",
+	         world_rank, local_sum, local_sum / num_elements_per_proc);
+
+	  // Reduce all of the local sums into the global sum
+	  float global_sum;
+	  MPI_Reduce(&local_sum, &global_sum, 1, MPI_FLOAT, MPI_SUM, 0,
+	             MPI_COMM_WORLD);
+
+	  // Print the result
+	  if (world_rank == 0) {
+	    printf("Total sum = %f, avg = %f\n", global_sum,
+	           global_sum / (world_size * num_elements_per_proc));
+	  }
+
+	  // Clean up
+	  free(rand_nums);
+
+	  MPI_Barrier(MPI_COMM_WORLD);
+	  MPI_Finalize();
+	}
+snippet reduce_stddev
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <mpi.h>
+	#include <math.h>
+	#include <assert.h>
+
+	// Creates an array of random numbers. Each number has a value from 0 - 1
+	float *create_rand_nums(int num_elements) {
+	  float *rand_nums = (float *)malloc(sizeof(float) * num_elements);
+	  assert(rand_nums != NULL);
+	  int i;
+	  for (i = 0; i < num_elements; i++) {
+	    rand_nums[i] = (rand() / (float)RAND_MAX);
+	  }
+	  return rand_nums;
+	}
+
+	int main(int argc, char** argv) {
+	  if (argc != 2) {
+	    fprintf(stderr, "Usage: avg num_elements_per_proc\n");
+	    exit(1);
+	  }
+
+	  int num_elements_per_proc = atoi(argv[1]);
+
+	  MPI_Init(NULL, NULL);
+
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	  // Create a random array of elements on all processes.
+	  srand(time(NULL)*world_rank); // Seed the random number generator of processes uniquely
+	  float *rand_nums = NULL;
+	  rand_nums = create_rand_nums(num_elements_per_proc);
+
+	  // Sum the numbers locally
+	  float local_sum = 0;
+	  int i;
+	  for (i = 0; i < num_elements_per_proc; i++) {
+	    local_sum += rand_nums[i];
+	  }
+
+	  // Reduce all of the local sums into the global sum in order to
+	  // calculate the mean
+	  float global_sum;
+	  MPI_Allreduce(&local_sum, &global_sum, 1, MPI_FLOAT, MPI_SUM,
+	                MPI_COMM_WORLD);
+	  float mean = global_sum / (num_elements_per_proc * world_size);
+
+	  // Compute the local sum of the squared differences from the mean
+	  float local_sq_diff = 0;
+	  for (i = 0; i < num_elements_per_proc; i++) {
+	    local_sq_diff += (rand_nums[i] - mean) * (rand_nums[i] - mean);
+	  }
+
+	  // Reduce the global sum of the squared differences to the root process
+	  // and print off the answer
+	  float global_sq_diff;
+	  MPI_Reduce(&local_sq_diff, &global_sq_diff, 1, MPI_FLOAT, MPI_SUM, 0,
+	             MPI_COMM_WORLD);
+
+	  // The standard deviation is the square root of the mean of the squared
+	  // differences.
+	  if (world_rank == 0) {
+	    float stddev = sqrt(global_sq_diff /
+	                        (num_elements_per_proc * world_size));
+	    printf("Mean - %f, Standard deviation = %f\n", mean, stddev);
+	  }
+
+	  // Clean up
+	  free(rand_nums);
+
+	  MPI_Barrier(MPI_COMM_WORLD);
+	  MPI_Finalize();
+	}
+snippet all_avg
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <time.h>
+	#include <mpi.h>
+	#include <assert.h>
+
+	// Creates an array of random numbers. Each number has a value from 0 - 1
+	float *create_rand_nums(int num_elements) {
+	  float *rand_nums = (float *)malloc(sizeof(float) * num_elements);
+	  assert(rand_nums != NULL);
+	  int i;
+	  for (i = 0; i < num_elements; i++) {
+	    rand_nums[i] = (rand() / (float)RAND_MAX);
+	  }
+	  return rand_nums;
+	}
+
+	// Computes the average of an array of numbers
+	float compute_avg(float *array, int num_elements) {
+	  float sum = 0.f;
+	  int i;
+	  for (i = 0; i < num_elements; i++) {
+	    sum += array[i];
+	  }
+	  return sum / num_elements;
+	}
+
+	int main(int argc, char** argv) {
+	  if (argc != 2) {
+	    fprintf(stderr, "Usage: avg num_elements_per_proc\n");
+	    exit(1);
+	  }
+
+	  int num_elements_per_proc = atoi(argv[1]);
+	  // Seed the random number generator to get different results each time
+	  srand(time(NULL));
+
+	  MPI_Init(NULL, NULL);
+
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	  // Create a random array of elements on the root process. Its total
+	  // size will be the number of elements per process times the number
+	  // of processes
+	  float *rand_nums = NULL;
+	  if (world_rank == 0) {
+	    rand_nums = create_rand_nums(num_elements_per_proc * world_size);
+	  }
+
+	  // For each process, create a buffer that will hold a subset of the entire
+	  // array
+	  float *sub_rand_nums = (float *)malloc(sizeof(float) * num_elements_per_proc);
+	  assert(sub_rand_nums != NULL);
+
+	  // Scatter the random numbers from the root process to all processes in
+	  // the MPI world
+	  MPI_Scatter(rand_nums, num_elements_per_proc, MPI_FLOAT, sub_rand_nums,
+	              num_elements_per_proc, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+	  // Compute the average of your subset
+	  float sub_avg = compute_avg(sub_rand_nums, num_elements_per_proc);
+
+	  // Gather all partial averages down to all the processes
+	  float *sub_avgs = (float *)malloc(sizeof(float) * world_size);
+	  assert(sub_avgs != NULL);
+	  MPI_Allgather(&sub_avg, 1, MPI_FLOAT, sub_avgs, 1, MPI_FLOAT, MPI_COMM_WORLD);
+
+	  // Now that we have all of the partial averages, compute the
+	  // total average of all numbers. Since we are assuming each process computed
+	  // an average across an equal amount of elements, this computation will
+	  // produce the correct answer.
+	  float avg = compute_avg(sub_avgs, world_size);
+	  printf("Avg of all elements from proc %d is %f\n", world_rank, avg);
+
+	  // Clean up
+	  if (world_rank == 0) {
+	    free(rand_nums);
+	  }
+	  free(sub_avgs);
+	  free(sub_rand_nums);
+
+	  MPI_Barrier(MPI_COMM_WORLD);
+	  MPI_Finalize();
+	}
+snippet avg
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <time.h>
+	#include <mpi.h>
+	#include <assert.h>
+
+	// Creates an array of random numbers. Each number has a value from 0 - 1
+	float *create_rand_nums(int num_elements) {
+	  float *rand_nums = (float *)malloc(sizeof(float) * num_elements);
+	  assert(rand_nums != NULL);
+	  int i;
+	  for (i = 0; i < num_elements; i++) {
+	    rand_nums[i] = (rand() / (float)RAND_MAX);
+	  }
+	  return rand_nums;
+	}
+
+	// Computes the average of an array of numbers
+	float compute_avg(float *array, int num_elements) {
+	  float sum = 0.f;
+	  int i;
+	  for (i = 0; i < num_elements; i++) {
+	    sum += array[i];
+	  }
+	  return sum / num_elements;
+	}
+
+	int main(int argc, char** argv) {
+	  if (argc != 2) {
+	    fprintf(stderr, "Usage: avg num_elements_per_proc\n");
+	    exit(1);
+	  }
+
+	  int num_elements_per_proc = atoi(argv[1]);
+	  // Seed the random number generator to get different results each time
+	  srand(time(NULL));
+
+	  MPI_Init(NULL, NULL);
+
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	  // Create a random array of elements on the root process. Its total
+	  // size will be the number of elements per process times the number
+	  // of processes
+	  float *rand_nums = NULL;
+	  if (world_rank == 0) {
+	    rand_nums = create_rand_nums(num_elements_per_proc * world_size);
+	  }
+
+	  // For each process, create a buffer that will hold a subset of the entire
+	  // array
+	  float *sub_rand_nums = (float *)malloc(sizeof(float) * num_elements_per_proc);
+	  assert(sub_rand_nums != NULL);
+
+	  // Scatter the random numbers from the root process to all processes in
+	  // the MPI world
+	  MPI_Scatter(rand_nums, num_elements_per_proc, MPI_FLOAT, sub_rand_nums,
+	              num_elements_per_proc, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+	  // Compute the average of your subset
+	  float sub_avg = compute_avg(sub_rand_nums, num_elements_per_proc);
+
+	  // Gather all partial averages down to the root process
+	  float *sub_avgs = NULL;
+	  if (world_rank == 0) {
+	    sub_avgs = (float *)malloc(sizeof(float) * world_size);
+	    assert(sub_avgs != NULL);
+	  }
+	  MPI_Gather(&sub_avg, 1, MPI_FLOAT, sub_avgs, 1, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+	  // Now that we have all of the partial averages on the root, compute the
+	  // total average of all numbers. Since we are assuming each process computed
+	  // an average across an equal amount of elements, this computation will
+	  // produce the correct answer.
+	  if (world_rank == 0) {
+	    float avg = compute_avg(sub_avgs, world_size);
+	    printf("Avg of all elements is %f\n", avg);
+	    // Compute the average across the original data for comparison
+	    float original_data_avg =
+	      compute_avg(rand_nums, num_elements_per_proc * world_size);
+	    printf("Avg computed across original data is %f\n", original_data_avg);
+	  }
+
+	  // Clean up
+	  if (world_rank == 0) {
+	    free(rand_nums);
+	    free(sub_avgs);
+	  }
+	  free(sub_rand_nums);
+
+	  MPI_Barrier(MPI_COMM_WORLD);
+	  MPI_Finalize();
+	}
+snippet ping_pong
+	#include <mpi.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+
+	int main(int argc, char** argv) {
+	  const int PING_PONG_LIMIT = 10;
+
+	  // Initialize the MPI environment
+	  MPI_Init(NULL, NULL);
+	  // Find out rank, size
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	  // We are assuming at least 2 processes for this task
+	  if (world_size != 2) {
+	    fprintf(stderr, "World size must be two for %s\n", argv[0]);
+	    MPI_Abort(MPI_COMM_WORLD, 1);
+	  }
+
+	  int ping_pong_count = 0;
+	  int partner_rank = (world_rank + 1) % 2;
+	  while (ping_pong_count < PING_PONG_LIMIT) {
+	    if (world_rank == ping_pong_count % 2) {
+	      // Increment the ping pong count before you send it
+	      ping_pong_count++;
+	      MPI_Send(&ping_pong_count, 1, MPI_INT, partner_rank, 0, MPI_COMM_WORLD);
+	      printf("%d sent and incremented ping_pong_count %d to %d\n",
+	             world_rank, ping_pong_count, partner_rank);
+	    } else {
+	      MPI_Recv(&ping_pong_count, 1, MPI_INT, partner_rank, 0, MPI_COMM_WORLD,
+	               MPI_STATUS_IGNORE);
+	      printf("%d received ping_pong_count %d from %d\n",
+	             world_rank, ping_pong_count, partner_rank);
+	    }
+	  }
+	  MPI_Finalize();
+	}
+snippet ring
+	#include <mpi.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+
+	int main(int argc, char** argv) {
+	  // Initialize the MPI environment
+	  MPI_Init(NULL, NULL);
+	  // Find out rank, size
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	  int token;
+	  // Receive from the lower process and send to the higher process. Take care
+	  // of the special case when you are the first process to prevent deadlock.
+	  if (world_rank != 0) {
+	    MPI_Recv(&token, 1, MPI_INT, world_rank - 1, 0, MPI_COMM_WORLD,
+	             MPI_STATUS_IGNORE);
+	    printf("Process %d received token %d from process %d\n", world_rank, token,
+	           world_rank - 1);
+	  } else {
+	    // Set the token's value if you are process 0
+	    token = -1;
+	  }
+	  MPI_Send(&token, 1, MPI_INT, (world_rank + 1) % world_size, 0,
+	           MPI_COMM_WORLD);
+	  // Now process 0 can receive from the last process. This makes sure that at
+	  // least one MPI_Send is initialized before all MPI_Recvs (again, to prevent
+	  // deadlock)
+	  if (world_rank == 0) {
+	    MPI_Recv(&token, 1, MPI_INT, world_size - 1, 0, MPI_COMM_WORLD,
+	             MPI_STATUS_IGNORE);
+	    printf("Process %d received token %d from process %d\n", world_rank, token,
+	           world_size - 1);
+	  }
+	  MPI_Finalize();
+	}
+snippet send_recv
+	#include <mpi.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+
+	int main(int argc, char** argv) {
+	  // Initialize the MPI environment
+	  MPI_Init(NULL, NULL);
+	  // Find out rank, size
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	  // We are assuming at least 2 processes for this task
+	  if (world_size < 2) {
+	    fprintf(stderr, "World size must be greater than 1 for %s\n", argv[0]);
+	    MPI_Abort(MPI_COMM_WORLD, 1);
+	  }
+
+	  int number;
+	  if (world_rank == 0) {
+	    // If we are rank 0, set the number to -1 and send it to process 1
+	    number = -1;
+	    MPI_Send(&number, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
+	  } else if (world_rank == 1) {
+	    MPI_Recv(&number, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	    printf("Process 1 received number %d from process 0\n", number);
+	  }
+	  MPI_Finalize();
+	}
+snippet random_rank
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <mpi.h>
+	#include "tmpi_rank.h"
+	#include <time.h>
+
+	int main(int argc, char** argv) {
+	  MPI_Init(NULL, NULL);
+
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	  // Seed the random number generator to get different results each time
+	  srand(time(NULL) * world_rank);
+
+	  float rand_num = rand() / (float)RAND_MAX;
+	  int rank;
+	  TMPI_Rank(&rand_num, &rank, MPI_FLOAT, MPI_COMM_WORLD);
+	  printf("Rank for %f on process %d - %d\n", rand_num, world_rank, rank);
+
+	  MPI_Barrier(MPI_COMM_WORLD);
+	  MPI_Finalize();
+	}
+snippet tmpi_rank
+	#include <stdlib.h>
+	#include <mpi.h>
+	#include <string.h>
+
+	// Holds the communicator rank of a process along with the corresponding number.
+	// This struct is used for sorting the values and keeping the owning process information
+	// intact.
+	typedef struct {
+	  int comm_rank;
+	  union {
+	    float f;
+	    int i;
+	  } number;
+	} CommRankNumber;
+
+	// Gathers numbers for TMPI_Rank to process zero. Allocates enough space given the MPI datatype and
+	// returns a void * buffer to process 0. It returns NULL to all other processes.
+	void *gather_numbers_to_root(void *number, MPI_Datatype datatype, MPI_Comm comm) {
+	  int comm_rank, comm_size;
+	  MPI_Comm_rank(comm, &comm_rank);
+	  MPI_Comm_size(comm, &comm_size);
+
+	  // Allocate an array on the root process of a size depending on the MPI datatype being used.
+	  int datatype_size;
+	  MPI_Type_size(datatype, &datatype_size);
+	  void *gathered_numbers;
+	  if (comm_rank == 0) {
+	    gathered_numbers = malloc(datatype_size * comm_size);
+	  }
+
+	  // Gather all of the numbers on the root process
+	  MPI_Gather(number, 1, datatype, gathered_numbers, 1, datatype, 0, comm);
+
+	  return gathered_numbers;
+	}
+
+	// A comparison function for sorting float CommRankNumber values
+	int compare_float_comm_rank_number(const void *a, const void *b) {
+	  CommRankNumber *comm_rank_number_a = (CommRankNumber *)a;
+	  CommRankNumber *comm_rank_number_b = (CommRankNumber *)b;
+	  if (comm_rank_number_a->number.f < comm_rank_number_b->number.f) {
+	    return -1;
+	  } else if (comm_rank_number_a->number.f > comm_rank_number_b->number.f) {
+	    return 1;
+	  } else {
+	    return 0;
+	  }
+	}
+
+	// A comparison function for sorting int CommRankNumber values
+	int compare_int_comm_rank_number(const void *a, const void *b) {
+	  CommRankNumber *comm_rank_number_a = (CommRankNumber *)a;
+	  CommRankNumber *comm_rank_number_b = (CommRankNumber *)b;
+	  if (comm_rank_number_a->number.i < comm_rank_number_b->number.i) {
+	    return -1;
+	  } else if (comm_rank_number_a->number.i > comm_rank_number_b->number.i) {
+	    return 1;
+	  } else {
+	    return 0;
+	  }
+	}
+
+	// This function sorts the gathered numbers on the root process and returns an array of
+	// ordered by the process's rank in its communicator. Note - this function is only
+	// executed on the root process.
+	int *get_ranks(void *gathered_numbers, int gathered_number_count, MPI_Datatype datatype) {
+	  int datatype_size;
+	  MPI_Type_size(datatype, &datatype_size);
+
+	  // Convert the gathered number array to an array of CommRankNumbers. This allows us to
+	  // sort the numbers and also keep the information of the processes that own the numbers
+	  // intact.
+	  CommRankNumber *comm_rank_numbers = malloc(gathered_number_count * sizeof(CommRankNumber));
+	  int i;
+	  for (i = 0; i < gathered_number_count; i++) {
+	    comm_rank_numbers[i].comm_rank = i;
+	    memcpy(&(comm_rank_numbers[i].number), gathered_numbers + (i * datatype_size), datatype_size);
+	  }
+
+	  // Sort the comm rank numbers based on the datatype
+	  if (datatype == MPI_FLOAT) {
+	    qsort(comm_rank_numbers, gathered_number_count, sizeof(CommRankNumber), &compare_float_comm_rank_number);
+	  } else {
+	    qsort(comm_rank_numbers, gathered_number_count, sizeof(CommRankNumber), &compare_int_comm_rank_number);
+	  }
+
+	  // Now that the comm_rank_numbers are sorted, create an array of rank values for each process. The ith
+	  // element of this array contains the rank value for the number sent by process i.
+	  int *ranks = (int *)malloc(sizeof(int) * gathered_number_count);
+	  for (i = 0; i < gathered_number_count; i++) {
+	    ranks[comm_rank_numbers[i].comm_rank] = i;
+	  }
+
+	  // Clean up and return the rank array
+	  free(comm_rank_numbers);
+	  return ranks;
+	}
+
+	// Gets the rank of the recv_data, which is of type datatype. The rank is returned
+	// in send_data and is of type datatype.
+	int TMPI_Rank(void *send_data, void *recv_data, MPI_Datatype datatype, MPI_Comm comm) {
+	  // Check base cases first - Only support MPI_INT and MPI_FLOAT for this function.
+	  if (datatype != MPI_INT && datatype != MPI_FLOAT) {
+	    return MPI_ERR_TYPE;
+	  }
+
+	  int comm_size, comm_rank;
+	  MPI_Comm_size(comm, &comm_size);
+	  MPI_Comm_rank(comm, &comm_rank);
+
+	  // To calculate the rank, we must gather the numbers to one process, sort the numbers, and then
+	  // scatter the resulting rank values. Start by gathering the numbers on process 0 of comm.
+	  void *gathered_numbers = gather_numbers_to_root(send_data, datatype, comm);
+
+	  // Get the ranks of each process
+	  int *ranks = NULL;
+	  if (comm_rank == 0) {
+	    ranks = get_ranks(gathered_numbers, comm_size, datatype);
+	  }
+
+	  // Scatter the rank results
+	  MPI_Scatter(ranks, 1, MPI_INT, recv_data, 1, MPI_INT, 0, comm);
+
+	  // Do clean up
+	  if (comm_rank == 0) {
+	    free(gathered_numbers);
+	    free(ranks);
+	  }
+	}
+snippet random_walk
+	#include <iostream>
+	#include <vector>
+	#include <cstdlib>
+	#include <time.h>
+	#include <mpi.h>
+
+	using namespace std;
+
+	typedef struct {
+	  int location;
+	  int num_steps_left_in_walk;
+	} Walker;
+
+	void decompose_domain(int domain_size, int world_rank,
+	                      int world_size, int* subdomain_start,
+	                      int* subdomain_size) {
+	  if (world_size > domain_size) {
+	    // Don't worry about this special case. Assume the domain size
+	    // is greater than the world size.
+	    MPI_Abort(MPI_COMM_WORLD, 1);
+	  }
+	  *subdomain_start = domain_size / world_size * world_rank;
+	  *subdomain_size = domain_size / world_size;
+	  if (world_rank == world_size - 1) {
+	    // Give remainder to last process
+	    *subdomain_size += domain_size % world_size;
+	  }
+	}
+
+	void initialize_walkers(int num_walkers_per_proc, int max_walk_size,
+	                        int subdomain_start,
+	                        vector<Walker>* incoming_walkers) {
+	  Walker walker;
+	  for (int i = 0; i < num_walkers_per_proc; i++) {
+	    // Initialize walkers at the start of the subdomain
+	    walker.location = subdomain_start;
+	    walker.num_steps_left_in_walk =
+	      (rand() / (float)RAND_MAX) * max_walk_size;
+	    incoming_walkers->push_back(walker);
+	  }
+	}
+
+	void walk(Walker* walker, int subdomain_start, int subdomain_size,
+	          int domain_size, vector<Walker>* outgoing_walkers) {
+	  while (walker->num_steps_left_in_walk > 0) {
+	    if (walker->location == subdomain_start + subdomain_size) {
+	      // Take care of the case when the walker is at the end
+	      // of the domain by wrapping it around to the beginning
+	      if (walker->location == domain_size) {
+	        walker->location = 0;
+	      }
+	      outgoing_walkers->push_back(*walker);
+	      break;
+	    } else {
+	      walker->num_steps_left_in_walk--;
+	      walker->location++;
+	    }
+	  }
+	}
+
+	void send_outgoing_walkers(vector<Walker>* outgoing_walkers,
+	                           int world_rank, int world_size) {
+	  // Send the data as an array of MPI_BYTEs to the next process.
+	  // The last process sends to process zero.
+	  MPI_Send((void*)outgoing_walkers->data(),
+	           outgoing_walkers->size() * sizeof(Walker), MPI_BYTE,
+	           (world_rank + 1) % world_size, 0, MPI_COMM_WORLD);
+	  // Clear the outgoing walkers list
+	  outgoing_walkers->clear();
+	}
+
+	void receive_incoming_walkers(vector<Walker>* incoming_walkers,
+	                              int world_rank, int world_size) {
+	  // Probe for new incoming walkers
+	  MPI_Status status;
+	  // Receive from the process before you. If you are process zero,
+	  // receive from the last process
+	  int incoming_rank =
+	    (world_rank == 0) ? world_size - 1 : world_rank - 1;
+	  MPI_Probe(incoming_rank, 0, MPI_COMM_WORLD, &status);
+	  // Resize your incoming walker buffer based on how much data is
+	  // being received
+	  int incoming_walkers_size;
+	  MPI_Get_count(&status, MPI_BYTE, &incoming_walkers_size);
+	  incoming_walkers->resize(incoming_walkers_size / sizeof(Walker));
+	  MPI_Recv((void*)incoming_walkers->data(), incoming_walkers_size,
+	           MPI_BYTE, incoming_rank, 0, MPI_COMM_WORLD,
+	           MPI_STATUS_IGNORE);
+	}
+
+	int main(int argc, char** argv) {
+	  int domain_size;
+	  int max_walk_size;
+	  int num_walkers_per_proc;
+
+	  if (argc < 4) {
+	    cerr << "Usage: random_walk domain_size max_walk_size "
+	         << "num_walkers_per_proc" << endl;
+	    exit(1);
+	  }
+	  domain_size = atoi(argv[1]);
+	  max_walk_size = atoi(argv[2]);
+	  num_walkers_per_proc = atoi(argv[3]);
+
+	  MPI_Init(NULL, NULL);
+	  int world_size;
+	  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+	  int world_rank;
+	  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+	  srand(time(NULL) * world_rank);
+	  int subdomain_start, subdomain_size;
+	  vector<Walker> incoming_walkers, outgoing_walkers;
+
+	  // Find your part of the domain
+	  decompose_domain(domain_size, world_rank, world_size,
+	                   &subdomain_start, &subdomain_size);
+	  // Initialize walkers in your subdomain
+	  initialize_walkers(num_walkers_per_proc, max_walk_size, subdomain_start,
+	                     &incoming_walkers);
+
+	  cout << "Process " << world_rank << " initiated " << num_walkers_per_proc
+	       << " walkers in subdomain " << subdomain_start << " - "
+	       << subdomain_start + subdomain_size - 1 << endl;
+
+	  // Determine the maximum amount of sends and receives needed to
+	  // complete all walkers
+	  int maximum_sends_recvs = max_walk_size / (domain_size / world_size) + 1;
+	  for (int m = 0; m < maximum_sends_recvs; m++) {
+	    // Process all incoming walkers
+	    for (int i = 0; i < incoming_walkers.size(); i++) {
+	       walk(&incoming_walkers[i], subdomain_start, subdomain_size,
+	            domain_size, &outgoing_walkers);
+	    }
+	    cout << "Process " << world_rank << " sending " << outgoing_walkers.size()
+	         << " outgoing walkers to process " << (world_rank + 1) % world_size
+	         << endl;
+	    if (world_rank % 2 == 0) {
+	      // Send all outgoing walkers to the next process.
+	      send_outgoing_walkers(&outgoing_walkers, world_rank,
+	                            world_size);
+	      // Receive all the new incoming walkers
+	      receive_incoming_walkers(&incoming_walkers, world_rank,
+	                               world_size);
+	    } else {
+	      // Receive all the new incoming walkers
+	      receive_incoming_walkers(&incoming_walkers, world_rank,
+	                               world_size);
+	      // Send all outgoing walkers to the next process.
+	      send_outgoing_walkers(&outgoing_walkers, world_rank,
+	                            world_size);
+	    }
+	    cout << "Process " << world_rank << " received " << incoming_walkers.size()
+	         << " incoming walkers" << endl;
+	  }
+	  cout << "Process " << world_rank << " done" << endl;
+	  MPI_Finalize();
+	  return 0;
+	}
+
