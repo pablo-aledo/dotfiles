@@ -184,6 +184,9 @@ case $1 in
 (complearn_binarytree)   docker run -it -v $PWD:/workspace/ -w /workspace complearn ncd -b -d directory directory
                          docker run -it -v $PWD:/workspace/ -w /workspace complearn maketree distmatrix.clb
                          neato -Tpng treefile.dot > treefile.png ;;
+(complearn_google)       ncd -b -g -t examples/colors-nums.txt examples/colors-nums.txt
+                         docker run -it -v $PWD:/workspace/ -w /workspace complearn maketree distmatrix.clb
+                         neato -Tpng treefile.dot > treefile.png ;;
 (consul)
                          shift
                          state=$(docker inspect --format "{{.State.Running}}" consul 2>/dev/null)
