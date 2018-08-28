@@ -8,3 +8,4 @@ cd ulfm2
 #        --without-ft to disable it
 make all
 sudo make install
+echo "alias umpirun='mpirun --oversubscribe -mca btl tcp,self'"
