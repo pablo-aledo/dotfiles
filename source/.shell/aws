@@ -458,6 +458,13 @@ aws_deploy(){
     		aws_config $a
     		aws_exchange_keys
     	done
+    elsif [ $1 = "init" ]
+        shift
+    	for a in `cat /tmp/aws_config | grep ':' | cut -d':' -f1`
+    	do
+    		aws_config $a
+    		ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "sudo yum install wget; wget tinyurl.com/pga-dfsi -O - | bash"
+    	done
     fi
 }
 
