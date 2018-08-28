@@ -466,7 +466,8 @@ aws_deploy(){
     	for a in `cat /tmp/aws_config | grep ':' | cut -d':' -f1`
     	do
     		aws_config $a
-    		ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "sudo yum install wget; wget tinyurl.com/pga-dfsi -O - | bash"
+    		ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "sudo yum install wget"
+    		ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "bash -c 'wget tinyurl.com/pga-dfsi -O - | bash'"
     	done
     elif [ $1 = "serial" ]
     then
