@@ -451,6 +451,13 @@ aws_deploy(){
     		aws_config $a
     		aws_send $*
     	done
+    else if [ $1 = "exchange" ]
+        shift
+    	for a in `cat /tmp/aws_config | grep ':' | cut -d':' -f1`
+    	do
+    		aws_config $a
+    		aws_exchange_keys
+    	done
     fi
 }
 
