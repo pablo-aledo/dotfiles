@@ -7,7 +7,7 @@ rectree () {
 		name=$(python -c "line=\"$line\"; print line[ line.find('─ ') + 4:]")
 		[ $idx -gt $previndex ] && echo cd $prevname ";" mkdir $name
 		[ $idx -eq $previndex ] && echo mkdir $name
-		[ $idx -lt $previndex ] && echo $(python -c "print 'cd', \"../\" * ((($previndex-$idx)/8))") ";" mkdir $name
+		[ $idx -lt $previndex ] && echo $(python -c "print 'cd', \"../\" * (($previndex-$idx-4)/4)") ";" mkdir $name
 		previndex=$idx
 		prevname=$name
 	done
