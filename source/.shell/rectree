@@ -1,0 +1,14 @@
+rectree () {
+	previndex=-1
+	prevname="."
+	tree | head -n -2 | tail -n +2 | while read line
+	do
+		idx=$(python -c "line=\"$line\"; print max(line.find('├'), line.find('└'))")
+		name=$(python -c "line=\"$line\"; print line[ line.find('─ ') + 4:]")
+		[ $idx -gt $previndex ] && echo cd $prevname ";" mkdir $name
+		[ $idx -eq $previndex ] && echo mkdir $name
+		[ $idx -lt $previndex ] && echo $(python -c "print 'cd', \"../\" * ((($previndex-$idx)/8))") ";" mkdir $name
+		previndex=$idx
+		prevname=$name
+	done
+}
