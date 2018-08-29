@@ -9,11 +9,20 @@ gzip_distance(){
    python -c "print float($s12 - min($s1, $s2))/float(max($s1,$s2))"
 }
 
-softhash(){
-    for file in ~/softhash_base/*
-    do
-        d=$(gzip_distance $1 $file)
-        python -c "print \"0123456789\"[int((1.0-$d)*9)]"
-    done | paste -d" " -s | sed 's/ //g'
-}
+softhash () {
 
+for file in ~/softhash_base/*
+do
+d=$(gzip_distance $1 $file)
+echo $d,
+done | paste -d"  " -s | sed -e 's/^/[/g' -e 's/,$/]/g' | read distances
+
+python -c "
+distances=$distances;
+normalized=[ i/max(distances) for i in distances ]
+chars=\"0123456789\"
+hash=[ chars[int((1-i)*len(chars))] for i in normalized ]
+print ''.join(hash)
+"
+
+}
