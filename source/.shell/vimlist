@@ -4,7 +4,7 @@ vimlist(){
     command="e"
     goend=0
     edt=""
-    exclude=""
+    exclude="$."
     maxsize=10M
     [ $# -eq 0 ] && cd /media/disk/release
     [ $# -gt 0 ] && cd $1
