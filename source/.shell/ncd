@@ -9,6 +9,18 @@ gzip_distance(){
    python -c "print float($s12 - min($s1, $s2))/float(max($s1,$s2))"
 }
 
+mindist(){
+	for file in ~/softhash_base/*
+	do
+		d=$(gzip_distance $1 $file) 
+		echo \"$(basename "$file")\" ":" $d ","
+	done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
+	python -c "
+distances=$distances;
+print min(distances)
+"
+}
+
 softhash () {
 	for file in ~/softhash_base/*
 	do
