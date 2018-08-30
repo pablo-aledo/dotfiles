@@ -21,6 +21,19 @@ print min(distances, key=distances.get)
 "
 }
 
+sortdist(){
+	for file in ~/softhash_base/*
+	do
+		d=$(gzip_distance $1 $file) 
+		echo \"$(basename "$file")\" ":" $d ","
+	done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
+	python -c "
+distances=$distances;
+for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
+  print '%s: %s' % (key, value)
+"
+}
+
 softhash () {
 	for file in ~/softhash_base/*
 	do
