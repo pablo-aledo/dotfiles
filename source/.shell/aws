@@ -438,6 +438,7 @@ aws_dashboard(){
 aws_deploy(){
     if [ $1 = "exec" ]
     then
+        [ $PWD = $HOME ] && return
         shift
     	for a in `cat /tmp/aws_config | grep ':' | cut -d':' -f1`
     	do
