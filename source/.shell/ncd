@@ -17,7 +17,7 @@ mindist(){
 	done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
 	python -c "
 distances=$distances;
-print min(distances)
+print min(distances, key=distances.get)
 "
 }
 
