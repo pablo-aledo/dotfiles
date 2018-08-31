@@ -241,6 +241,5 @@ backup(){
 	backup_m       Personal
 	backup_c       uned
 	backup_m       Videos
-	backup_tm2     Work/forest
 }
 
