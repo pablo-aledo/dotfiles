@@ -23,6 +23,9 @@ vimlist(){
         sed "s|^|:$command $PWD/|g" > /tmp/vimlist
 
     [ "$goend" = "1" ] && sed -i 's/$/ | \$/g' /tmp/vimlist
+    [ "$command" = "n" ] && sed -i 's/^:n //g' /tmp/vimlist
+    [ "$command" = "n" ] && ( echo ":n "; cat /tmp/vimlist ) | paste -d" " -s > /tmp/vimlist2
+    [ "$command" = "n" ] && /bin/mv /tmp/vimlist2 /tmp/vimlist
 
     [ "$edt" = vim ] && vim "+so /tmp/vimlist"
     [ "$edt" = gvim ] && gvim "+so /tmp/vimlist"
