@@ -1,4 +1,6 @@
 export DISPLAY=:1
+xdotool mousemove 0 0
+source ~/.dotfiles/source/.shell/xdotool
 
 xdotool mousemove 280 220
 xdotool click 1
@@ -13,6 +15,7 @@ sleep 1
 xdotool type 'avxhm.se'
 xdotool key Return
 sleep 5
+mouseover 20 100 ~/.dotfiles/shortcuts/images/avx_lens.png || return
 xdotool mousemove 440 150
 xdotool click 1
 xdotool key Ctrl+v
@@ -30,6 +33,8 @@ xdotool mousemove 1150 150
 xdotool click 1
 xdotool click 1
 sleep 5
+
+mouseover 20 100 ~/.dotfiles/shortcuts/images/avx_search.png || return
 
 xdotool key Ctrl+f
 xdotool type 'Details'
