@@ -3,5 +3,5 @@ sudo apt-add-repository 'deb https://apt.dockerproject.org/repo ubuntu-xenial ma
 sudo apt-get update
 apt-cache policy docker-engine
 sudo apt-get install -y docker-engine
-sudo systemctl status docker
+sudo systemctl start docker
 sudo usermod -aG docker $(whoami)
