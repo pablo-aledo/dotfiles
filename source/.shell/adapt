@@ -133,6 +133,33 @@ adapt_awsserver(){
     source ~/.shell
 }
 
+adapt_shc_theme(){
+
+	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
+	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
+	sed -i '/Mod1+F2/d' ~/.i3/config
+	sed -i '/Mod1+Tab/d' ~/.i3/config
+	sed -i '/Mod1+Shift+Tab/d' ~/.i3/config
+	sed -i 's/bindsym Mod1+Return exec/# bindsym Mod1+Return exec/g' ~/.i3/config
+
+	echo 'gtk-theme-name="NOX"'                               >  ~/.gtkrc-2.0
+	echo 'gtk-icon-theme-name="elementary"'                   >> ~/.gtkrc-2.0
+	echo 'gtk-font-name="monofur 12"'                         >> ~/.gtkrc-2.0
+	echo 'gtk-cursor-theme-name="DMZ-White"'                  >> ~/.gtkrc-2.0
+	echo 'gtk-cursor-theme-size=0'                            >> ~/.gtkrc-2.0
+	echo 'gtk-toolbar-style=GTK_TOOLBAR_BOTH'                 >> ~/.gtkrc-2.0
+	echo 'gtk-toolbar-icon-size=GTK_ICON_SIZE_LARGE_TOOLBAR'  >> ~/.gtkrc-2.0
+	echo 'gtk-button-images=1'                                >> ~/.gtkrc-2.0
+	echo 'gtk-menu-images=1'                                  >> ~/.gtkrc-2.0
+	echo 'gtk-enable-event-sounds=1'                          >> ~/.gtkrc-2.0
+	echo 'gtk-enable-input-feedback-sounds=1'                 >> ~/.gtkrc-2.0
+	echo 'gtk-xft-antialias=1'                                >> ~/.gtkrc-2.0
+	echo 'gtk-xft-hinting=1'                                  >> ~/.gtkrc-2.0
+	echo 'gtk-xft-hintstyle="hintfull"'                       >> ~/.gtkrc-2.0
+
+	i3-msg reload
+}
+
 adapt_typewriter_keyboard(){
 	setxkbmap es
 	xmodmap -pke > ~/.Xmodmap

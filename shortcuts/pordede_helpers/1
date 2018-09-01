@@ -1,6 +1,6 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/adapt
-adapt_awsserver
+adapt_shc_theme
 
 xrandr --output VNC-0 --mode 1280x800
 sleep 1
