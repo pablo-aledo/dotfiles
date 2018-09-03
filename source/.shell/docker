@@ -369,6 +369,13 @@ case $1 in
 (ulfm)                   docker pull abouteiller/mpi-ft-ulfm
                          alias make='docker run -v $PWD:$PWD:V -w $PWD abouteiller/mpi-ft-ulfm make'
                          alias mpirun='docker run -v $(pwd):$(pwd):V -w $(pwd) abouteiller/mpi-ft-ulfm mpirun --oversubscribe -mca btl tcp,self' ;;
+(ulfm2)                  DOCKER=bnicolae/veloc-tutorial
+                         docker pull $DOCKER
+                         alias make='docker run -v $PWD:$PWD:Z -w $PWD '$DOCKER' make'
+                         alias mpirun='docker run -v $(pwd):$(pwd):Z -w $(pwd) '$DOCKER' mpirun --oversubscribe -mca btl tcp,self'
+                         alias mpiexec='docker run -v $(pwd):$(pwd):Z -w $(pwd) '$DOCKER' mpiexec --oversubscribe -mca btl tcp,self'
+                         alias mpicc='docker run -v $(pwd):$(pwd):Z -w $(pwd) '$DOCKER' mpicc'
+                         alias mpif90='docker run -v $(pwd):$(pwd):Z -w $(pwd) '$DOCKER' mpif90' ;;
 (ubuntu_pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu_pga ;;
 (alpine_pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY alpine_pga ;;
 (alpine_pga_testing)     docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY alpine_pga_testing ;;
