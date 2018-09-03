@@ -1,2 +1,2 @@
-pkg install docker
+sudo yum install -y docker
 sudo systemctl start docker
