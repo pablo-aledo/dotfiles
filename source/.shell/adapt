@@ -126,7 +126,7 @@ adapt_awsserver(){
 	sudo sysctl -w vm.min_free_kbytes=135168
 	sudo sysctl -w vm.swappiness=5
 
-    echo 'wallpaper' >> ~/.shell
+    echo 'wallpaper >/dev/null 2>/dev/null' >> ~/.shell
 
     echo 'export LOCAL_BACKUP_SRC=$HOME' >> ~/.shell
     echo 'export LOCAL_BACKUP_DEST=/media/removable/2TB2/homes/admin' >> ~/.shell
