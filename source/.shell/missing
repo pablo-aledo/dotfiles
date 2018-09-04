@@ -3,6 +3,6 @@ missing(){
     dst=$1
     filename=$(basename $dst)
     src=$( locate $filename | egrep "$filename\$" | tail -n1 )
-    locate $filename | egrep "$filename\$"
+    locate $filename | egrep "$filename\$" | sed 's/^/# /g'
     echo ln -s $src $dst
 }
