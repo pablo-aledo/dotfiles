@@ -213,6 +213,11 @@ RUN        git clone https://github.com/chinaran/color-compile.git /usr/src/colo
            make                                                                           && \
            sudo make install
 
+RUN        ( echo '#!/bin/zsh'; \
+           wget http://raw.githubusercontent.com/pablo-aledo/dotfiles/master/source/.shell/mkcolor -O -; \
+           echo 'mkcolor $*' ) | sudo tee /bin/mkcolor && \
+           sudo chmod +x /bin/mkcolor
+
 COPY       build.sh /usr/local/bin
 RUN        chmod +x /usr/local/bin/build.sh
 
