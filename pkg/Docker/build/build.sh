@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# ccache
+export PATH=/usr/lib/ccache/bin:$PATH
+export CCACHE_DIR=$(find /home/ -type d -name .ccache)
+ccache -F 0
+ccache -M 0
+ccache -s
+
 if [ $# -eq 0 ]
 then
 	[ -e .git ] && git submodule update --init

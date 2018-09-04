@@ -14,6 +14,7 @@ RUN        apk add --no-cache \
                binutils \
                #build-essential \
                clang \
+               ccache \
                cmake \
                cunit-dev \
                curl \
