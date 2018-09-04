@@ -1,0 +1,8 @@
+missing(){
+    sudo updatedb
+    dst=$1
+    filename=$(basename $dst)
+    src=$( locate $filename | egrep "$filename\$" | tail -n1 )
+    locate $filename | egrep "$filename\$"
+    echo ln -s $src $dst
+}
