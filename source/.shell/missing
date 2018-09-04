@@ -4,6 +4,6 @@ missing(){
     filename=$(basename $dst)
     src=$( locate $filename | egrep "$filename\$" | tail -n1 )
     locate $filename | egrep "$filename\$" | sed 's/^/# /g'
-    echo mkdir -p $( dirname $dst )
-    echo ln -s $src $dst
+    echo mkdir -p $(readlink -f $( dirname $dst ))
+    echo ln -s $(readlink -f $src) $(readlink -f $dst)
 }
