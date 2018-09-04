@@ -35,8 +35,8 @@ RUN        apk add --no-cache \
                #pkg-config \
                pkgconf \
                python \
-               protobuf-dev \
-               grpc-dev \
+               #protobuf-dev \
+               #grpc-dev \
                strace \
                sudo \
                tmux \
@@ -140,29 +140,29 @@ RUN            ln -s /usr/lib/libgrpc++.so /usr/lib/libgrpc++.so.1              
                    #-o /usr/local/bin/prototool && \
                    #chmod +x /usr/local/bin/prototool
 
-RUN            git clone https://github.com/oktal/pistache.git /usr/src/pistache && \
-               cd /usr/src/pistache                                              && \
-               git submodule update --init                                       && \
-               mkdir build                                                       && \
-               cd build                                                          && \
-               cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release ..           && \
-               make                                                              && \
-               make install
+#RUN            git clone https://github.com/oktal/pistache.git /usr/src/pistache && \
+               #cd /usr/src/pistache                                              && \
+               #git submodule update --init                                       && \
+               #mkdir build                                                       && \
+               #cd build                                                          && \
+               #cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release ..           && \
+               #make                                                              && \
+               #make install
 
-RUN            git clone https://github.com/mrtazz/restclient-cpp.git /usr/src/restclient-cpp && \
-               cd /usr/src/restclient-cpp                                                     && \
-               ./autogen.sh                                                                   && \
-               ./configure                                                                    && \
-               make install
+#RUN            git clone https://github.com/mrtazz/restclient-cpp.git /usr/src/restclient-cpp && \
+               #cd /usr/src/restclient-cpp                                                     && \
+               #./autogen.sh                                                                   && \
+               #./configure                                                                    && \
+               #make install
 
-RUN            git clone https://github.com/jgaa/restc-cpp.git /usr/src/restc-cpp && \
-               cd /usr/src/restc-cpp                                              && \
-               mkdir build                                                        && \
-               cd build                                                           && \
-               cmake ..                                                           && \
-               make                                                               && \
-               make install
-               
+#RUN            git clone https://github.com/jgaa/restc-cpp.git /usr/src/restc-cpp && \
+               #cd /usr/src/restc-cpp                                              && \
+               #mkdir build                                                        && \
+               #cd build                                                           && \
+               #cmake ..                                                           && \
+               #make                                                               && \
+               #make install
+
 #RUN            git clone https://github.com/rizsotto/Bear.git /usr/src/bear && \
                #cd /usr/src/bear                                             && \
                #mkdir build && cd build                                      && \
@@ -177,12 +177,12 @@ RUN            git clone https://github.com/jgaa/restc-cpp.git /usr/src/restc-cp
                #make install                                                            && \
                #rm -rf /usr/src/fruit-3.1.1
 
-RUN            git clone -q https://github.com/google/googletest.git /usr/src/googletest && \
-	       cd /usr/src/googletest                                                    && \
-	       cmake .                                                                   && \
-	       make                                                                      && \
-	       make install                                                              && \
-	       rm -rf /usr/src/googletest
+#RUN            git clone -q https://github.com/google/googletest.git /usr/src/googletest && \
+		   #cd /usr/src/googletest                                                    && \
+		   #cmake .                                                                   && \
+		   #make                                                                      && \
+		   #make install                                                              && \
+		   #rm -rf /usr/src/googletest
 
 #RUN            git clone https://github.com/google/protobuf.git /usr/src/protobuf && \
                #cd /usr/src/protobuf                                               && \
@@ -201,12 +201,12 @@ RUN            git clone -q https://github.com/google/googletest.git /usr/src/go
                #mv /usr/local/lib/libgrpc++_reflection.so.5 /usr/local/lib/libgrpc++_reflection.so.1 && \
                #rm -rf /usr/src/grpc
 
-RUN        git clone https://github.com/google/benchmark.git /usr/src/benchmark && \
-           cd /usr/src/benchmark                                                && \
-           mkdir build && cd build                                              && \
-           cmake .. -DCMAKE_BUILD_TYPE=RELEASE                                  && \
-           make -j4                                                             && \
-           make install
+#RUN        git clone https://github.com/google/benchmark.git /usr/src/benchmark && \
+           #cd /usr/src/benchmark                                                && \
+           #mkdir build && cd build                                              && \
+           #cmake .. -DCMAKE_BUILD_TYPE=RELEASE                                  && \
+           #make -j4                                                             && \
+           #make install
 
 RUN        git clone https://github.com/chinaran/color-compile.git /usr/src/color-compile && \
            cd /usr/src/color-compile                                                      && \
