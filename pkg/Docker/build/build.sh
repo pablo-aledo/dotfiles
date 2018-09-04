@@ -3,6 +3,7 @@
 # ccache
 export PATH=/usr/lib/ccache/bin:$PATH
 export CCACHE_DIR=$(find /home/ -type d -name .ccache)
+export CCACHE_LOGFILE=/workdir/cache.debug
 ccache -F 0
 ccache -M 0
 ccache -s
