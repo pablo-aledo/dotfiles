@@ -7,4 +7,5 @@ alias dfh='df -h'
 alias kgp='kubectl get pods | grep -v Terminating'
 alias wkgp='watch -n1 "kubectl get pods | grep -v Terminating"'
 alias make='make -j$(nproc)'
+alias mdp='TERM=xterm-256color /usr/bin/mdp'
 f(){ echo find -iname "'*$1*'" | bash }
