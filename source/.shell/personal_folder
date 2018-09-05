@@ -34,7 +34,7 @@ pf_mount(){
 	[ $# -eq 0 ] && pf_mount Chrome
 	[ $# -eq 0 ] && return
 
-    [ "$(basename $(which cryptsetup) 2>/dev/null)" = "cryptsetup" ] && pkg install cryptsetup
+    [ "$(basename $(which cryptsetup) 2>/dev/null)" = "cryptsetup" ] || pkg install cryptsetup
 
 	[ -e $key_folder/keyfile ] && keyarg="-d $key_folder/keyfile"
 	[ -e $key_folder/keyfile ] || keyarg=""
