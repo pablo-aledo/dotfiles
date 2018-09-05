@@ -48,16 +48,21 @@ dockerizer_get_required_packages(){
 dockerizer_get_seed_packages(){
     rm -rf /tmp/dependencies*
     cp /tmp/dockerizer_packages /tmp/dependencies_0
-    for a in $(seq 0 10)
+    repoquery --requires --resolve $(cat /tmp/dependencies_0 | sort | uniq) > /tmp/dependencies_1
+    for a in $(seq 1 10)
     do
-        for b in $( cat /tmp/dependencies_${a} )
-        do
-            rpm -qR $b >> /tmp/dependencies_$(( $a + 1 ))
-        done
+        repoquery --requires --resolve $(comm -23 \
+            <(cat /tmp/dependencies_$a | sort | uniq) \
+            <(seq 0 $(( $a - 1 )) | sed 's|^|/tmp/dependencies_|g' | xargs cat | sort | uniq) \
+        ) | sort | uniq >> /tmp/dependencies_$(( $a + 1 ))
+        echo $a
     done
     rm -rf /tmp/dependencies_0
 
-    comm -23 <( cat /tmp/dockerizer_packages | sort ) <( cat /tmp/dependencies_* | sort | uniq ) > /tmp/dockerizer_packages_seed
+    comm -23 \
+        <( cat /tmp/dockerizer_packages | sort | uniq ) \
+        <( cat /tmp/dependencies_* | sort | uniq | sed 's/-0:/-/g' ) \
+        > /tmp/dockerizer_packages_seed
 }
 
 dockerizer_get_env(){
