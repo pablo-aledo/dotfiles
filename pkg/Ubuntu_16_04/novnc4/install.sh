@@ -12,6 +12,8 @@ sudo cp -r tigervnc-1.8.0.x86_64/usr/* /usr/
 
 sudo mkdir /usr/share/noVNC; sudo chmod 777 /usr/share/noVNC/; cd /usr/share/noVNC
 git clone https://github.com/novnc/noVNC.git /usr/share/noVNC
+#git clone https://github.com/vishvananda/novnc.git /usr/share/noVNC
+#git clone https://github.com/openstack/deb-novnc.git /usr/share/noVNC
 touch /usr/share/noVNC/index.html
 
 cd; sudo rm -fr /usr/share/tigervnc
