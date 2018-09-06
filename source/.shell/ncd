@@ -77,6 +77,31 @@ print ''.join(hash)
 "
 }
 
+softhash_pca_2 () {
+	for file in ~/softhash_base/*
+	do
+		d=$(gzip_distance $1 $file)
+		echo $d,
+	done | paste -d"  " -s | sed -e 's/^/[/g' -e 's/,$/]/g' | read distances
+	python -c "
+import numpy as np
+distances=$distances;
+normalized=distances
+normalized=[ i-min(normalized) for i in normalized ]
+normalized=[ i/max(normalized) for i in normalized ]
+pca=np.loadtxt('/tmp/pca')
+eigenv=np.loadtxt('/tmp/eigenv')
+normalized=[ i - 0.5 for i in normalized ]
+normalized=np.matmul(normalized, pca)
+normalized=np.multiply( normalized, eigenv )
+normalized=[ i * 100.0 for i in normalized ]
+normalized=[ i + 0.5 for i in normalized ]
+normalized=[ max(min(i,1.0),0.0) for i in normalized ]
+
+print normalized
+"
+}
+
 softhash_fit(){
     rm -fr /tmp/softhashes
     for file in ~/softhash_base/*
@@ -95,3 +120,21 @@ np.savetxt('/tmp/pca',pca.components_)
 "
 }
 
+softhash_fit_2(){
+    rm -fr /tmp/softhashes
+    for file in ~/softhash_base/*
+    do
+        softhash $file
+        cat /tmp/softhash >> /tmp/softhashes
+    done
+    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/softhashes
+	python -c "
+import numpy as np
+from sklearn.decomposition import PCA
+X=np.loadtxt('/tmp/softhashes')
+pca=PCA()
+pca.fit(X)
+np.savetxt('/tmp/pca',pca.components_)
+np.savetxt('/tmp/eigenv',pca.explained_variance_ratio_)
+"
+}
