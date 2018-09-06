@@ -445,6 +445,28 @@ case $1 in
 (swagger-ui)             docker run -d -p 8080:80 -e API_URL=http://localhost:4000/swagger schickling/swagger-ui ;;
 (openvpn)                shift; docker-compose run vpn $* ;;
 (youtube-dl)             shift; docker run -it --rm -v "$(pwd):/src" -w /src jbergknoff/youtube-dl -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]' $* ;;
+(centos-xfce-vnc)        shift; docker run -d -p 5901:5901 -p 6901:6901 consol/centos-xfce-vnc
+                         google-chrome 'http://localhost:6901/?password=vncpassword'
+                         #docker run -d -p 5901:5901 -p 6901:6901 --user $(id -u):$(id -g) consol/centos-xfce-vnc
+                         #docker run -it -p 5901:5901 -p 6901:6901 consol/centos-xfce-vnc bash
+                         ;;
+(ubuntu-xfce-vnc)        shift; docker run -d -p 5901:5901 -p 6901:6901 consol/ubuntu-xfce-vnc
+                         google-chrome 'http://localhost:6901/?password=vncpassword'
+                         ;;
+(centos-icewm-vnc)       shift; docker run -d -p 5901:5901 -p 6901:6901 consol/centos-icewm-vnc
+                         google-chrome 'http://localhost:6901/?password=vncpassword'
+                         ;;
+
+(ubuntu-icewm-vnc)       shift; docker run -d -p 5901:5901 -p 6901:6901 consol/ubuntu-icewm-vnc
+                         google-chrome 'http://localhost:6901/?password=vncpassword'
+                         ;;
+(ubuntu-lxde-vnc)        shift; docker run -d -p 6080:6080 -p 5900:5900 dorowu/ubuntu-desktop-lxde-vnc
+                         #docker run -d -p 6080:6080 -p 5900:5900 -e VNC_PASSWORD=mypassword dorowu/ubuntu-desktop-lxde-vnc
+                         #docker run -d -p 6080:6080 -p 5900:5900 -e RESOLUTION=1920x1080 dorowu/ubuntu-desktop-lxde-vnc
+                         #docker run -it --rm -p 6080:80 --device /dev/snd -e ALSADEV=hw:2,0 dorowu/ubuntu-desktop-lxde-vnc
+                         #google-chrome 'http://127.0.0.1:6080/#/?video'
+                         google-chrome 'http://localhost:6080/vnc.html?autoconnect=1&autoscale=0&quality=3'
+                         ;;
 (neural-style)           docker run -v $PWD:/out -w /out -i -t neural-style th /root/neural-style/neural_style.lua -gpu -1 -style_image style.jpg -content_image content.jpg ;;
 # (docker-neural-style)    git clone https://github.com/jcjohnson/neural-style.git ;
 #                          cd neural-style ;
