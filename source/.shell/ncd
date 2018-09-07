@@ -69,7 +69,7 @@ pca=np.loadtxt('/tmp/pca')
 eigenv=np.loadtxt('/tmp/eigenv')
 normalized=[ i - 0.5 for i in normalized ]
 normalized=np.matmul(pca, normalized)
-normalized=np.divide( normalized, eigenv )
+normalized=np.divide( normalized, np.sqrt(eigenv) )
 with open('/tmp/softhash', 'w') as file:
     print >> file, normalized
 normalized=[ i + 0.5 for i in normalized ]
