@@ -53,30 +53,6 @@ print ''.join(hash)
 "
 }
 
-softhash_pca () {
-	for file in ~/softhash_base/*
-	do
-		d=$(gzip_distance $1 $file) 
-		echo $d,
-	done | paste -d"  " -s | sed -e 's/^/[/g' -e 's/,$/]/g' | read distances
-	python -c "
-import numpy as np
-distances=$distances;
-normalized=distances
-normalized=[ i-min(normalized) for i in normalized ]
-normalized=[ i/max(normalized) for i in normalized ]
-pca=np.loadtxt('/tmp/pca')
-normalized=[ i - 0.5 for i in normalized ]
-normalized=np.matmul(pca, normalized)
-normalized=[ i + 0.5 for i in normalized ]
-normalized=[ i-min(normalized) for i in normalized ]
-normalized=[ i/max(normalized) for i in normalized ]
-chars=\"0123456789\"
-hash=[ chars[int((i)*(len(chars)-1))] for i in normalized ]
-print ''.join(hash)
-"
-}
-
 softhash_pca() {
 	for file in ~/softhash_base/*
 	do
@@ -90,10 +66,10 @@ normalized=distances
 normalized=[ i-min(normalized) for i in normalized ]
 normalized=[ i/max(normalized) for i in normalized ]
 pca=np.loadtxt('/tmp/pca')
-#eigenv=np.loadtxt('/tmp/eigenv')
+eigenv=np.loadtxt('/tmp/eigenv')
 normalized=[ i - 0.5 for i in normalized ]
 normalized=np.matmul(pca, normalized)
-#normalized=np.divide( normalized, eigenv )
+normalized=np.divide( normalized, eigenv )
 with open('/tmp/softhash', 'w') as file:
     print >> file, normalized
 normalized=[ i + 0.5 for i in normalized ]
@@ -122,24 +98,6 @@ X=np.loadtxt('/tmp/softhashes')
 pca=PCA()
 pca.fit(X)
 np.savetxt('/tmp/pca',pca.components_)
-"
-}
-
-softhash_fit(){
-    rm -fr /tmp/softhashes
-    for file in ~/softhash_base/*
-    do
-        softhash $file
-        cat /tmp/softhash >> /tmp/softhashes
-    done
-    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/softhashes
-	python -c "
-import numpy as np
-from sklearn.decomposition import PCA
-X=np.loadtxt('/tmp/softhashes')
-pca=PCA()
-pca.fit(X)
-np.savetxt('/tmp/pca',pca.components_)
-#np.savetxt('/tmp/eigenv',pca.explained_variance_ratio_)
+np.savetxt('/tmp/eigenv',pca.explained_variance_)
 "
 }
