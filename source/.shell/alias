@@ -8,6 +8,6 @@ alias kgp='kubectl get pods | grep -v Terminating'
 alias wkgp='watch -n1 "kubectl get pods | grep -v Terminating"'
 alias make='make -j$(nproc)'
 alias mdp='TERM=xterm-256color /usr/bin/mdp'
-docker_wd(){ echo '-v $PWD:/workdir -w /workdir' }
-docker_gr(){ echo '-v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY' }
+alias docker_wd='docker run -it -v $PWD:/workdir -w /workdir'
+alias docker_gr='docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY'
 f(){ echo find -iname "'*$1*'" | bash }
