@@ -67,7 +67,7 @@ normalized=[ i-min(normalized) for i in normalized ]
 normalized=[ i/max(normalized) for i in normalized ]
 pca=np.loadtxt('/tmp/pca')
 normalized=[ i - 0.5 for i in normalized ]
-normalized=np.matmul(normalized, pca)
+normalized=np.matmul(pca, normalized)
 normalized=[ i + 0.5 for i in normalized ]
 normalized=[ i-min(normalized) for i in normalized ]
 normalized=[ i/max(normalized) for i in normalized ]
@@ -92,7 +92,7 @@ normalized=[ i/max(normalized) for i in normalized ]
 pca=np.loadtxt('/tmp/pca')
 #eigenv=np.loadtxt('/tmp/eigenv')
 normalized=[ i - 0.5 for i in normalized ]
-normalized=np.matmul(normalized, pca)
+normalized=np.matmul(pca, normalized)
 #normalized=np.divide( normalized, eigenv )
 with open('/tmp/softhash', 'w') as file:
     print >> file, normalized
