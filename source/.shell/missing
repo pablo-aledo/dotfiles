@@ -4,6 +4,6 @@ missing(){
     filename=$(basename $dst)
     src=$( locate $filename | egrep "$filename\$" | tail -n1 )
     locate $filename | egrep "$filename\$" | sed 's/^/# /g'
-    echo $( [ -e $(dirname $dst) ] && echo "# " ) mkdir -p $(readlink -f $( dirname $dst ) | sed "s|$HOME|~|g")
-    echo ln -s $(readlink -f $src | sed "s|$HOME|~|g") $(readlink -f $dst | sed "s|$HOME|~|g")
+    echo $( [ -e $(dirname $dst) ] && echo "# " ) sudo mkdir -p $(readlink -f $( dirname $dst ) | sed "s|$HOME|~|g")
+    echo sudo ln -s $(readlink -f $src | sed "s|$HOME|~|g") $(readlink -f $dst | sed "s|$HOME|~|g")
 }
