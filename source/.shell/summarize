@@ -188,7 +188,7 @@ summarize.fit(){
     pca.fit
 
     rm -fr $summarize_dir/hashes; mkdir -p $summarize_dir/hashes
-    [ -e $summarize_dir/documents_to_hash ] || ln -s $summarize_dir/documents $summarize_dir/documents_to_hash
+    [ -e $summarize_dir/documents_to_hash ] || cp -r $summarize_dir/documents $summarize_dir/documents_to_hash
     ls $summarize_dir/documents_to_hash/* | while read line
     do
         summarize.hash "$line" > $summarize_dir/hashes/$(basename "$line")
