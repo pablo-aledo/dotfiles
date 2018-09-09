@@ -21,7 +21,7 @@ keywords.txt2vec(){
 
     for a in $(cat $summarize_dir/features/keywords)
     do
-        value=$(cat /tmp/keywords | grep $a | awk '{print $1}')
+        value=$(cat /tmp/keywords | grep $a | head -n1 | awk '{print $1}')
         [ "$value" = "" ] && value=0
         echo $value
     done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g'
@@ -155,7 +155,7 @@ summarize.hash2key(){
 	python -c "
 import numpy as np
 normalized=$1
-normalized=[ i + 0.5 for i in normalized ]
+normalized=[ i*3.0 + 0.5 for i in normalized ]
 normalized=[ max(min(i,1.0),0.0) for i in normalized ]
 chars=\"0123456789\"
 hash=[ chars[int((i)*(len(chars)-1))] for i in normalized ]
