@@ -1,8 +1,8 @@
-method=keywords
+summarize_method=keywords
 summarize_dir=$HOME/summarize
 
 ncd.get_features(){
-    cp -r $summarize_dir/txts $summarize_dir/features
+    cp -r $summarize_dir/txts/* $summarize_dir/features
 }
 
 ncd.txt2vec() {
@@ -109,6 +109,7 @@ import numpy as np
 summarize_dir='$summarize_dir'
 pca=np.loadtxt(summarize_dir+'/pca/pca')
 eigenv=np.loadtxt(summarize_dir+'/pca/eigenv')
+eigenv=[ i + 0.00001 for i in eigenv ]
 average=np.loadtxt(summarize_dir+'/pca/average')
 normalized=$1;
 normalized=np.subtract(normalized, average)
@@ -145,7 +146,7 @@ summarize.hash(){
     rm -fr /tmp/txt
     summarize.doc2txt $1 /tmp/txt
 
-    vector=$($method.txt2vec /tmp/txt)
+    vector=$($summarize_method.txt2vec /tmp/txt)
 
     pca.transform $vector
 
@@ -175,19 +176,19 @@ summarize.fit(){
     done
 
     rm -fr $summarize_dir/features; mkdir -p $summarize_dir/features
-    $method.get_features
+    $summarize_method.get_features
 
     rm -fr $summarize_dir/vectors; mkdir -p $summarize_dir/vectors
     ls $summarize_dir/txts/* | while read line
     do
-        $method.txt2vec "$line" > $summarize_dir/vectors/$(basename "$line")
+        $summarize_method.txt2vec "$line" > $summarize_dir/vectors/$(basename "$line")
     done
 
     rm -fr $summarize_dir/pca; mkdir -p $summarize_dir/pca
     pca.fit
 
     rm -fr $summarize_dir/hashes; mkdir -p $summarize_dir/hashes
-    ls $summarize_dir/txts/* | while read line
+    ls $summarize_dir/documents_to_hash/* | while read line
     do
         summarize.hash "$line" > $summarize_dir/hashes/$(basename "$line")
     done
@@ -253,6 +254,6 @@ for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
 }
 
 summarize.knn(){
-    summarize.sortdist $1 | head -n $2 | sed 's/\..*//g' | sort | uniq -c | sort -g | head -n1 | sed 's/^ *[^ ]* //g'
+    summarize.sortdist $1 | head -n $2 | sed 's/\..*//g' | sort | uniq -c | sort -g | tail -n1 | sed 's/^ *[^ ]* //g'
 }
 
