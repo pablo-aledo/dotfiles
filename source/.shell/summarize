@@ -141,7 +141,6 @@ summarize.doc2txt(){
 	[ "$destination" = "/tmp/summary" ] && cat /tmp/summary
 }
 
-
 summarize.hash(){
     rm -fr /tmp/txt
     summarize.doc2txt $1 /tmp/txt
