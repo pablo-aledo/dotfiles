@@ -13,6 +13,7 @@ ncd.txt2vec() {
 }
 
 keywords.get_features(){
+    [ -e $summarize_dir/features/keywords ] && return
     cat $summarize_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $summarize_dir/features/keywords
 }
 
@@ -175,7 +176,7 @@ summarize.fit(){
         summarize.doc2txt "$line" $summarize_dir/txts/$(basename "$line")
     done
 
-    rm -fr $summarize_dir/features; mkdir -p $summarize_dir/features
+    [ $summarize_method != keywords ] && ( rm -fr $summarize_dir/features; mkdir -p $summarize_dir/features )
     $summarize_method.get_features
 
     rm -fr $summarize_dir/vectors; mkdir -p $summarize_dir/vectors
