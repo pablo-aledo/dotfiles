@@ -1,3 +1,32 @@
+method=keywords
+summarize_dir=$HOME/summarize
+
+ncd.get_features(){
+    cp -r $summarize_dir/txts $summarize_dir/features
+}
+
+ncd.txt2vec() {
+	for file in $summarize_dir/features/*
+	do
+		gzip_distance $1 $file
+	done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g'
+}
+
+keywords.get_features(){
+    cat $summarize_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $summarize_dir/features/keywords
+}
+
+keywords.txt2vec(){
+    cat $1 | sed 's/ /\n/g' | sort | uniq -c > /tmp/keywords
+
+    for a in $(cat $summarize_dir/features/keywords)
+    do
+        value=$(cat /tmp/keywords | grep $a | awk '{print $1}')
+        [ "$value" = "" ] && value=0
+        echo $value
+    done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g'
+}
+
 summarize_rec(){
 	filename="$1"
 	destination="$2"
@@ -43,12 +72,60 @@ summarize_rec(){
 	esac
 }
 
+gzip_distance(){
+    rm -fr /tmp/s1 /tmp/s2
+    summarize.doc2txt "$1" /tmp/s1
+    summarize.doc2txt "$2" /tmp/s2
+    s1=$( cat /tmp/s1 | gzip -f | wc -c )
+    s2=$( cat /tmp/s2 | gzip -f | wc -c )
+    s12=$( cat /tmp/s1 /tmp/s2 | gzip | wc -c )
 
-summarize(){
-	# Usage:
-	# ls | egrep 'zip$|pdf$|epub$|rar$' | grep -v '...' | while read line; do echo "===== $line =====" ; summarize "$line" "/media/DATA/summaries/$line.txt"; done
+   python -c "print float($s12 - min($s1, $s2))/float(max($s1,$s2))"
+}
 
+pca.fit(){
+    rm -fr /tmp/softhashes
+    for file in $summarize_dir/vectors/*
+    do
+        cat $file >> /tmp/softhashes
+    done
+    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/softhashes
+	python -c "
+import numpy as np
+from sklearn.decomposition import PCA
+summarize_dir='$summarize_dir'
+X=np.loadtxt('/tmp/softhashes')
+pca=PCA()
+pca.fit(X)
+np.savetxt(summarize_dir + '/pca/average',np.mean(X,0))
+np.savetxt(summarize_dir + '/pca/pca',pca.components_)
+np.savetxt(summarize_dir + '/pca/eigenv',pca.explained_variance_)
+"
+}
 
+pca.transform() {
+	python -c "
+import numpy as np
+summarize_dir='$summarize_dir'
+pca=np.loadtxt(summarize_dir+'/pca/pca')
+eigenv=np.loadtxt(summarize_dir+'/pca/eigenv')
+average=np.loadtxt(summarize_dir+'/pca/average')
+normalized=$1;
+normalized=np.subtract(normalized, average)
+normalized=np.matmul(pca, normalized)
+normalized=np.divide( normalized, np.sqrt(eigenv) )
+print normalized
+" | sed \
+    -e 's/  / /g' \
+    -e 's/  / /g' \
+    -e 's/  / /g' \
+    -e 's/  / /g' \
+    -e 's/  / /g' \
+    -e 's/  / /g' \
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
+}
+
+summarize.doc2txt(){
 	filename=$1
 	destination=$2
 
@@ -64,16 +141,119 @@ summarize(){
 	[ "$destination" = "/tmp/summary" ] && cat /tmp/summary
 }
 
-collect(){
-	summarize "/media/mint/2TB2/homes/admin/Alejandria/$1" /tmp/topic
-	cd /media/DATA/Descargas/ 
-	rm -fr /tmp/fileprobs
-	ls | while read line
+
+summarize.hash(){
+    rm -fr /tmp/txt
+    summarize.doc2txt $1 /tmp/txt
+
+    vector=$($method.txt2vec /tmp/txt)
+
+    pca.transform $vector
+
+}
+
+summarize.hash2key(){
+	python -c "
+import numpy as np
+normalized=$1
+normalized=[ i + 0.5 for i in normalized ]
+normalized=[ max(min(i,1.0),0.0) for i in normalized ]
+chars=\"0123456789\"
+hash=[ chars[int((i)*(len(chars)-1))] for i in normalized ]
+print ''.join(hash)
+"
+}
+
+summarize.key(){
+    summarize.hash2key "$(summarize.hash $1)"
+}
+
+summarize.fit(){
+    rm -fr $summarize_dir/txts; mkdir -p $summarize_dir/txts
+    ls $summarize_dir/documents/* | while read line
+    do
+        summarize.doc2txt "$line" $summarize_dir/txts/$(basename "$line")
+    done
+
+    rm -fr $summarize_dir/features; mkdir -p $summarize_dir/features
+    $method.get_features
+
+    rm -fr $summarize_dir/vectors; mkdir -p $summarize_dir/vectors
+    ls $summarize_dir/txts/* | while read line
+    do
+        $method.txt2vec "$line" > $summarize_dir/vectors/$(basename "$line")
+    done
+
+    rm -fr $summarize_dir/pca; mkdir -p $summarize_dir/pca
+    pca.fit
+
+    rm -fr $summarize_dir/hashes; mkdir -p $summarize_dir/hashes
+    ls $summarize_dir/txts/* | while read line
+    do
+        summarize.hash "$line" > $summarize_dir/hashes/$(basename "$line")
+    done
+}
+
+summarize.compare(){
+
+    rm -fr /tmp/t1
+    rm -fr /tmp/t2
+
+    summarize.doc2txt $1 /tmp/t1
+    summarize.doc2txt $2 /tmp/t2
+
+    h1=$(summarize.hash /tmp/t1)
+    h2=$(summarize.hash /tmp/t2)
+
+    python -c "
+import numpy as np
+import math
+h1=$h1
+h2=$h2
+print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
+"
+
+}
+
+summarize.distance(){
+    python -c "
+import numpy as np
+import math
+h1=$1
+h2=$2
+print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
+"
+
+}
+
+summarize.closest(){
+    h1=$(summarize.hash $1)
+	for file in $summarize_dir/hashes/*
 	do
-		summarize "$line"
-		prob=$(( `cat /tmp/summary /tmp/topic | gzip | wc -c` - `cat /tmp/topic | gzip | wc -c`))
-		printf '%d %s\n' $prob "$line" >> /tmp/fileprobs
-	done
-	sort -g /tmp/filesizes | head
+        d=$(summarize.distance "$h1" "$(cat $file)")
+		echo \"$(basename "$file")\" ":" $d ","
+	done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
+	python -c "
+distances=$distances;
+print min(distances, key=distances.get)
+"
+}
+
+summarize.sortdist(){
+    h1=$(summarize.hash $1)
+	for file in $summarize_dir/hashes/*
+	do
+        d=$(summarize.distance "$h1" "$(cat $file)")
+		echo \"$(basename "$file")\" ":" $d ","
+	done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
+	python -c "
+distances=$distances;
+for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
+  print '%s' % (key)
+"
+}
+
+summarize.knn(){
+    summarize.sortdist $1 | head -n $2 | sed 's/\..*//g' | sort | uniq -c | sort -g | head -n1 | sed 's/^ *[^ ]* //g'
 }
 
