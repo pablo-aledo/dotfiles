@@ -105,6 +105,45 @@ np.savetxt(summarize_dir + '/pca/eigenv',pca.explained_variance_)
 "
 }
 
+pca_and_rank.fit(){
+    rm -fr /tmp/softhashes
+    for file in $summarize_dir/vectors/*
+    do
+        cat $file >> /tmp/softhashes
+    done
+    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/softhashes
+	python -c "
+import numpy as np
+import math
+from sklearn.decomposition import PCA
+summarize_dir='$summarize_dir'
+X=np.loadtxt('/tmp/softhashes')
+pca=PCA()
+pca.fit(X)
+np.savetxt(summarize_dir + '/pca/average',np.mean(X,0))
+np.savetxt(summarize_dir + '/pca/pca',pca.components_)
+np.savetxt(summarize_dir + '/pca/eigenv',pca.explained_variance_)
+
+Y = pca.transform(X)
+
+def dotproduct(v1, v2):
+  return sum((a*b) for a, b in zip(v1, v2))
+
+def length(v):
+  return math.sqrt(dotproduct(v, v))
+
+def angle(v1, v2):
+  return math.acos(dotproduct(v1, v2) / (length(v1) * length(v2)))
+
+with open(summarize_dir + '/pca/ranked', 'w') as file:
+    for y_axis in np.identity(pca.components_.shape[0]):
+        y = min(Y, key=lambda v: angle(y_axis, v))
+        x_appr = pca.inverse_transform(y)
+        x = min(X, key=lambda x: np.linalg.norm(x - x_appr))
+        print >> file, x
+"
+}
+
 pca.transform() {
 	python -c "
 import numpy as np
@@ -187,7 +226,7 @@ summarize.fit(){
     done
 
     rm -fr $summarize_dir/pca; mkdir -p $summarize_dir/pca
-    pca.fit
+    pca_and_rank.fit
 
     rm -fr $summarize_dir/hashes; mkdir -p $summarize_dir/hashes
     [ -e $summarize_dir/documents_to_hash ] || cp -r $summarize_dir/documents $summarize_dir/documents_to_hash
