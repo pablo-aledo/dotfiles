@@ -229,18 +229,18 @@ print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 
 }
 
-summarize.closest(){
-    h1=$(summarize.hash $1)
-	for file in $summarize_dir/hashes/*
-	do
-        d=$(summarize.distance "$h1" "$(cat $file)")
-		echo \"$(basename "$file")\" ":" $d ","
-	done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
-	python -c "
-distances=$distances;
-print min(distances, key=distances.get)
-"
-}
+#summarize.closest(){
+    #h1=$(summarize.hash $1)
+	#for file in $summarize_dir/hashes/*
+	#do
+        #d=$(summarize.distance "$h1" "$(cat $file)")
+		#echo \"$(basename "$file")\" ":" $d ","
+	#done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
+	#python -c "
+#distances=$distances;
+#print min(distances, key=distances.get)
+#"
+#}
 
 summarize.sortdist(){
     h1=$(summarize.hash $1)
@@ -254,6 +254,10 @@ distances=$distances;
 for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
   print '%s' % (key)
 "
+}
+
+summarize.closest(){
+    summarize.sortdist $1 | head -n1
 }
 
 summarize.knn(){
