@@ -14,10 +14,16 @@ run mkdir ~/.vnc && \
     echo 'i3 >/tmp/log 2>/tmp/log'   >> ~/.vnc/xstartup && \
     chmod +x ~/.vnc/xstartup
 
+run mkdir ~/.i3 && \
+    echo 'exec "while true; do DISPLAY=:1 <exec> <args>; sleep 1; done"' > ~/.i3/config
+
 run mkdir /usr/share/noVNC && \
     cd /usr/share/noVNC && \
     git clone https://github.com/novnc/noVNC.git /usr/share/noVNC && \
     cp /usr/share/noVNC/vnc.html /usr/share/noVNC/index.html
+
+run mkdir -p /usr/share/noVNC/utils/websockify && \
+    git clone https://github.com/novnc/websockify.git /usr/share/noVNC/utils/websockify
 
 entrypoint ["sh", "-c", "tmux new -d -s novnc 'cd /usr/share/noVNC; ./utils/launch.sh --listen 8080 --vnc localhost:5901'; tmux new -d -s vnc '/usr/bin/vncserver; read'; sh"]
 
