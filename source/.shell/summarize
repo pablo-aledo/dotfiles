@@ -144,6 +144,79 @@ with open(summarize_dir + '/pca/ranked', 'w') as file:
 "
 }
 
+classifier.fit(){
+
+    rm -fr /tmp/classifier.*
+    ls $summarize_dir/hashes/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/  / /g' -e 's/  //g' -e 's/  //g' -e 's/  //g'> $summarize_dir/classifier/map
+    for file in $summarize_dir/hashes/*
+    do
+        cat $file >> /tmp/classifier.x
+        y=$(basename $file | sed 's/\..*//g')
+        id=$(cat $summarize_dir/classifier/map | grep " $y$" | awk '{print $1}')
+        echo $id >> /tmp/classifier.y
+    done
+
+    x=$(cat /tmp/classifier.x | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+    y=$(cat /tmp/classifier.y | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+
+	python -c "
+import numpy as np
+from sklearn import linear_model
+from sklearn.externals import joblib
+X = np.array($x)
+Y = np.array($y)
+summarize_dir='$summarize_dir'
+clf = linear_model.SGDClassifier()
+clf.fit(X, Y)
+joblib.dump(clf, summarize_dir + '/classifier/classifier.pkl')
+"
+}
+
+regression.fit(){
+    rm -fr /tmp/regression.*
+    for file in $summarize_dir/hashes/*
+    do
+        cat $file >> /tmp/regression.x
+        cat $summarize_dir/r_output/$(basename $file) >> /tmp/regression.y
+    done
+
+    x=$(cat /tmp/regression.x | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+    y=$(cat /tmp/regression.y | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+
+	python -c "
+import numpy as np
+from sklearn import linear_model
+from sklearn.externals import joblib
+X = np.array($x)
+Y = np.array($y)
+summarize_dir='$summarize_dir'
+reg = linear_model.LinearRegression()
+reg.fit (X, Y)
+joblib.dump(reg, summarize_dir + '/regression/regression.pkl')
+"
+}
+
+cluster.fit(){
+    rm -fr /tmp/clusters
+    for file in $summarize_dir/hashes/*
+    do
+        cat $file >> /tmp/clusters
+    done
+
+    x=$(cat /tmp/clusters | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+
+python -c "
+from sklearn.cluster import KMeans
+from sklearn.externals import joblib
+import numpy as np
+X = np.array($x)
+summarize_dir='$summarize_dir'
+kmeans = KMeans(n_clusters=2, random_state=0)
+kmeans.fit(X)
+joblib.dump(kmeans, summarize_dir + '/cluster/cluster.pkl')
+"
+}
+
 pca.transform() {
 	python -c "
 import numpy as np
@@ -234,6 +307,59 @@ summarize.fit(){
     do
         summarize.hash "$line" > $summarize_dir/hashes/$(basename "$line")
     done
+
+    rm -fr $summarize_dir/classifier; mkdir -p $summarize_dir/classifier
+    classifier.fit
+
+    rm -fr $summarize_dir/regression; mkdir -p $summarize_dir/regression
+    [ -e $summarize_dir/r_output ] && regression.fit
+
+    rm -fr $summarize_dir/cluster; mkdir -p $summarize_dir/cluster
+    cluster.fit
+}
+
+classifier.transform(){
+x=$(summarize.hash $1)
+
+y=$(python -c "
+x=[$x]
+summarize_dir='$summarize_dir'
+import numpy as np
+from sklearn import linear_model
+from sklearn.externals import joblib
+clf=joblib.load(summarize_dir + '/classifier/classifier.pkl')
+print( clf.predict(x)[0] )
+")
+
+cat $summarize_dir/classifier/map | grep "^ $y " | awk '{print $2}'
+}
+
+cluster.transform(){
+x=$(summarize.hash $1)
+
+python -c "
+x=[$x]
+summarize_dir='$summarize_dir'
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.externals import joblib
+kmeans=joblib.load(summarize_dir + '/cluster/cluster.pkl')
+print( kmeans.predict(x)[0] )
+"
+}
+
+regression.transform(){
+x=$(summarize.hash $1)
+
+python -c "
+x=[$x]
+summarize_dir='$summarize_dir'
+import numpy as np
+from sklearn import linear_model
+from sklearn.externals import joblib
+reg=joblib.load(summarize_dir + '/regression/regression.pkl')
+print(reg.predict(x)[0])
+"
 }
 
 summarize.compare(){
