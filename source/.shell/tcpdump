@@ -1,0 +1,145 @@
+tcp_dump(){
+#basic communication
+#Just see what’s going on, by looking at all interfaces.
+[ $1 = "any" ] && sudo tcpdump -i any
+
+#specific interface
+#Basic view of what’s happening on a particular interface.
+[ $1 = "eth0" ] && sudo tcpdump -i eth0
+
+#raw output view
+#Verbose output, with no resolution of hostnames or port numbers, absolute sequence numbers, and human-readable timestamps.
+[ $1 = "raw" ] && sudo tcpdump -ttttnnvvS
+
+#find traffic by ip
+#One of the most common queries, this will show you traffic from 1.2.3.4, whether it’s the source or the destination.
+[ $1 = "ip" ] && sudo tcpdump host $2
+
+#seeing more of the packet with hex output
+#Hex output is useful when you want to see the content of the packets in question, and it’s often best used when you’re isolating a few candidates for closer scrutiny.
+[ $1 = "hex" ] && sudo tcpdump -nnvXSs 0 -c1 icmp
+
+#filtering by source and destination
+#It’s quite easy to isolate traffic based on either source or destination using src and dst.
+[ $1 = "src" ] && sudo tcpdump src $2
+[ $1 = "dst" ] && sudo tcpdump dst $2
+
+#finding packets by network
+#To find packets going to or from a particular network, use the net option. You can combine this with the src or dst options as well.
+[ $1 = "net" ] && sudo tcpdump net $2/24
+
+#show traffic related to a specific port
+#You can find specific port traffic by using the port option followed by the port number.
+[ $1 = "port" ] && sudo tcpdump port $2
+[ $1 = "src_port" ] && sudo tcpdump src port $2
+
+#show traffic of one protocol
+#If you’re looking for one particular kind of traffic, you can use tcp, udp, icmp, and many others as well.
+[ $1 = "icmp" ] && sudo tcpdump icmp
+
+#show only ip6 traffic
+#You can also find all IP6 traffic using the protocol option.
+[ $1 = "ipv6" ] && sudo tcpdump ip6
+
+#find traffic using port ranges
+#You can also use a range of ports to find traffic.
+[ $1 = "portrange" ] && sudo tcpdump portrange $2-$3
+
+#find traffic based on packet size
+#If you’re looking for packets of a particular size you can use these options. You can use less, greater, or their associated symbols that you would expect from mathematics.
+[ $1 = "size_less" ] && sudo tcpdump less $2
+[ $1 = "size_greater" ] && sudo tcpdump greater $2
+[ $1 = "size" ] && sudo tcpdump $2 $3
+
+#reading / writing captures to a file
+#It’s often useful to save packet captures into a file for analysis in the future. These files are known as PCAP (PEE-cap) files, and they can be processed by hundreds of different applications, including network analyzers, intrusion detection systems, and of course by tcpdump itself. Here we’re writing to a file called capture_file using the -w switch.
+[ $1 = "to_file" ] && sudo tcpdump port 80 -w $2
+
+#You can read PCAP files by using the -r switch. Note that you can use all the regular commands within tcpdump while reading in a file; you’re only limited by the fact that you can’t capture and process what doesn’t exist in the file already.
+[ $1 = "read" ] && sudo tcpdump -r $2
+
+#from specific ip and destined for a specific port
+#Let’s find all traffic from 10.5.2.3 going to any host on port 3389.
+[ $1 = "and_src_port" ] && sudo tcpdump -nnvvS src $2 and dst port $3
+
+#from one network to another
+#Let’s look for all traffic coming from 192.168.x.x and going to the 10.x or 172.16.x.x networks, and we’re showing hex output with no hostname resolution and one level of extra verbosity.
+[ $1 = "from_net_to_net" ] && sudo tcpdump -nvX src net $2/16 and dst net $3/16
+
+#non icmp traffic going to a specific ip
+#This will show us all traffic going to 192.168.0.2 that is not ICMP.
+[ $1 = "to_ip" ] && sudo tcpdump dst $2 and src net and not icmp
+
+#traffic from a host that isn’t on a specific port
+#This will show us all traffic from a host that isn’t SSH traffic (assuming default port usage).
+[ $1 = "not_port" ] && sudo tcpdump -vv src mars and not dst port $2
+
+##Isolate TCP RST flags.
+##The filters below find these various packets because tcp[13] looks at offset 13 in the tcp header, the number represents the location within the byte, and the !=0 means that the flag in question is set to 1, i.e. it’s on.
+#sudo tcpdump 'tcp[13] & 4!=0'
+#sudo tcpdump 'tcp[tcpflags] == tcp-rst'
+
+##Isolate TCP SYN flags.
+#sudo tcpdump 'tcp[13] & 2!=0'
+#sudo tcpdump 'tcp[tcpflags] == tcp-syn'
+
+##Isolate packets that have both the SYN and ACK flags set.
+#sudo tcpdump 'tcp[13]=18'
+
+##Only the PSH, RST, SYN, and FIN flags are displayed in tcpdump‘s flag field output. URGs and ACKs are displayed, but they are shown elsewhere in the output rather than in the flags field.
+##Isolate TCP URG flags.
+#sudo tcpdump 'tcp[13] & 32!=0'
+#sudo tcpdump 'tcp[tcpflags] == tcp-urg'
+
+##Isolate TCP ACK flags.
+#sudo tcpdump 'tcp[13] & 16!=0'
+#sudo tcpdump 'tcp[tcpflags] == tcp-ack'
+
+##Isolate TCP PSH flags.
+#sudo tcpdump 'tcp[13] & 8!=0'
+#sudo tcpdump 'tcp[tcpflags] == tcp-psh'
+
+##Isolate TCP FIN flags.
+#sudo tcpdump 'tcp[13] & 1!=0'
+#sudo tcpdump 'tcp[tcpflags] == tcp-fin'
+
+##both syn and rst set
+#sudo tcpdump 'tcp[13] = 6'
+
+#find http user agents
+#The -l switch lets you see the traffic as you’re capturing it, and helps when sending to commands like grep.
+[ $1 = "user_agent" ] && sudo tcpdump -vvAls0 | grep 'User-Agent:'
+
+#cleartext get requests
+[ $1 = "get" ] && sudo tcpdump -vvAls0 | grep 'GET'
+
+#find http host headers
+[ $1 = "host" ] && sudo tcpdump -vvAls0 | grep 'Host:'
+
+#find http cookies
+[ $1 = "cookie" ] && sudo tcpdump -vvAls0 | grep 'Set-Cookie|Host:|Cookie:'
+
+#find ssh connections
+#This one works regardless of what port the connection comes in on, because it’s getting the banner response.
+[ $1 = "ssh" ] && sudo tcpdump 'tcp[(tcp[12]>>2):4] = 0x5353482D'
+
+#find dns traffic
+[ $1 = "dns" ] && sudo tcpdump -vvAs0 port 53
+
+#find ftp traffic
+[ $1 = "ftp" ] && sudo tcpdump -vvAs0 port ftp or ftp-data
+
+#find ntp traffic
+[ $1 = "ntp" ] && sudo tcpdump -vvAs0 port 123
+
+#find cleartext passwords
+[ $1 = "passwords" ] && sudo tcpdump port http or port ftp or port smtp or port imap or port pop3 or port telnet -lA | egrep -i -B5 'pass=|pwd=|log=|login=|user=|username=|pw=|passw=|passwd=|password=|pass:|user:|username:|password:|login:|pass |user '
+}
+
+wireshark_file(){
+    wireshark -k -i $1
+}
+
+wireshark_pipe(){
+    nc -l $1 | wireshark -k -i -
+}
