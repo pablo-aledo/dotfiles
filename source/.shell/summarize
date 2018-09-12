@@ -146,8 +146,8 @@ with open(summarize_dir + '/pca/ranked', 'w') as file:
 
 classifier.fit(){
 
-    rm -fr /tmp/classifier.*
-    ls $summarize_dir/hashes/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/  / /g' -e 's/  //g' -e 's/  //g' -e 's/  //g'> $summarize_dir/classifier/map
+    rm -fr /tmp/classifier.x /tmp/classifier.y
+    ls $summarize_dir/hashes/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $summarize_dir/classifier/map
     for file in $summarize_dir/hashes/*
     do
         cat $file >> /tmp/classifier.x
@@ -173,7 +173,7 @@ joblib.dump(clf, summarize_dir + '/classifier/classifier.pkl')
 }
 
 regression.fit(){
-    rm -fr /tmp/regression.*
+    rm -fr /tmp/regression.x /tmp/regression.y
     for file in $summarize_dir/hashes/*
     do
         cat $file >> /tmp/regression.x
@@ -198,7 +198,7 @@ joblib.dump(reg, summarize_dir + '/regression/regression.pkl')
 
 cluster.fit(){
     n_clusters=3
-    seq 0 $n_clusters | nl -v0 | sed 's/\t/ /g' | sed -e 's/  / /g' -e 's/  //g' -e 's/  //g' -e 's/  //g' > $summarize_dir/cluster/map
+    seq 0 $n_clusters | nl -v0 | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $summarize_dir/cluster/map
     rm -fr /tmp/clusters
     for file in $summarize_dir/hashes/*
     do
@@ -213,7 +213,7 @@ from sklearn.externals import joblib
 import numpy as np
 X = np.array($x)
 summarize_dir='$summarize_dir'
-n_clusters='$n_clusters'
+n_clusters=$n_clusters
 kmeans = KMeans(n_clusters=n_clusters, random_state=0)
 kmeans.fit(X)
 joblib.dump(kmeans, summarize_dir + '/cluster/cluster.pkl')
@@ -234,12 +234,7 @@ normalized=np.matmul(pca, normalized)
 normalized=np.divide( normalized, np.sqrt(eigenv) )
 print normalized
 " | sed \
-    -e 's/  / /g' \
-    -e 's/  / /g' \
-    -e 's/  / /g' \
-    -e 's/  / /g' \
-    -e 's/  / /g' \
-    -e 's/  / /g' \
+    -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
 }
 
@@ -369,8 +364,7 @@ print(reg.predict(x)[0])
 
 summarize.compare(){
 
-    rm -fr /tmp/t1
-    rm -fr /tmp/t2
+    rm -fr /tmp/t1 /tmp/t2
 
     summarize.doc2txt $1 /tmp/t1
     summarize.doc2txt $2 /tmp/t2
