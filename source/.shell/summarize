@@ -24,7 +24,7 @@ keywords.txt2vec(){
 
     for a in $(cat $summarize_dir/features/keywords)
     do
-         value=$( cat /tmp/keywords | grep $a | awk '{sum += $1} END {print sum}' )
+         value=$( cat /tmp/keywords | egrep $a | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && value=0
          echo $value
     done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g'
