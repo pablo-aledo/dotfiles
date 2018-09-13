@@ -188,3 +188,6 @@ nnoremap <leader>u :GundoToggle<CR>
 " Next and Previous
 :map > :n<cr>
 :map < :N<cr>
+" Spanish keyboard does not have ~
+:map ª ~
+:imap ª ~
