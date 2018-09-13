@@ -172,6 +172,35 @@ joblib.dump(clf, summarize_dir + '/classifier/classifier.pkl')
 "
 }
 
+classifier.evaluate(){
+
+    rm -fr /tmp/classifier.y_true /tmp/classifier.y_pred
+    ls $summarize_dir/classifier_test/* | while read line
+    do
+        classifier.transform "$line" >> /tmp/classifier.y_pred
+        echo $(basename "$line") | sed 's/\..*//g' >> /tmp/classifier.y_true
+    done
+
+    y_pred=$(cat /tmp/classifier.y_pred | sed -e 's/^/"/g' -e 's/$/"/g' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+    y_true=$(cat /tmp/classifier.y_true | sed -e 's/^/"/g' -e 's/$/"/g' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+
+	python -c "
+from sklearn import metrics
+
+y_pred=$y_pred
+y_true=$y_true
+
+score = metrics.accuracy_score(y_true, y_pred)
+print('accuracy:   %0.3f' % score)
+
+print('classification report:')
+print(metrics.classification_report(y_true, y_pred))
+
+print('confusion matrix:')
+print(metrics.confusion_matrix(y_true, y_pred))
+"
+}
+
 regression.fit(){
     rm -fr /tmp/regression.x /tmp/regression.y
     for file in $summarize_dir/hashes/*
@@ -308,6 +337,7 @@ summarize.fit(){
 
     rm -fr $summarize_dir/classifier; mkdir -p $summarize_dir/classifier
     classifier.fit
+    [ -e $summarize_dir/classifier_test ] && classifier.evaluate
 
     rm -fr $summarize_dir/regression; mkdir -p $summarize_dir/regression
     [ -e $summarize_dir/r_output ] && regression.fit
