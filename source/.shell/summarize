@@ -1,4 +1,5 @@
 summarize_method=keywords
+summarize_evaluate_vects="true"
 summarize_dir=$HOME/summarize
 
 ncd.get_features(){
@@ -173,6 +174,14 @@ joblib.dump(clf, summarize_dir + '/classifier/classifier.pkl')
 "
 }
 
+vect2s(){
+    read vect
+    summarize.hash2key "$( python -c "
+vect=$vect
+print([ (i/float(max(vect)) - 0.5)/3.0 for i in vect ])
+")" | sed -e 's/0/ /g' -e 's/^/[/g' -e 's/$/]/g'
+}
+
 classifier.evaluate(){
 
     rm -fr /tmp/classifier.y_true /tmp/classifier.y_pred
@@ -201,22 +210,25 @@ print('confusion matrix:')
 print(metrics.confusion_matrix(y_true, y_pred))
 "
 
-#rm -fr /tmp/vects
-#find $summarize_dir/txts/ -type f | while read line
-#do
-    #echo -n $line " " >> /tmp/vects
-    #$summarize_method.txt2vec "$line" >> /tmp/vects
-#done
-#echo "=====" >> /tmp/vects
-#find $summarize_dir/classifier_test/ -type f | while read line
-#do
-    #y_true=$(basename $line | sed 's/\..*//g')
-    #y_pred=$(classifier.transform $line)
-    #[ "$y_true" != "$y_pred" ] && echo -n '*** ' >> /tmp/vects
-    #echo -n T:$y_true P:$y_pred " " >> /tmp/vects
-    #echo -n $line " " >> /tmp/vects
-    #$summarize_method.txt2vec "$line" >> /tmp/vects
-#done
+if [ $summarize_evaluate_vects = "true" ]
+then
+    rm -fr /tmp/vects
+    find $summarize_dir/txts/ -type f | while read line
+    do
+        echo -n $line " " >> /tmp/vects
+        $summarize_method.txt2vec "$line" | vect2s >> /tmp/vects
+    done
+    echo "=====" >> /tmp/vects
+    find $summarize_dir/classifier_test/ -type f | while read line
+    do
+        y_true=$(basename $line | sed 's/\..*//g')
+        y_pred=$(classifier.transform $line)
+        [ "$y_true" != "$y_pred" ] && echo -n '*** ' >> /tmp/vects
+        echo -n T:$y_true P:$y_pred " " >> /tmp/vects
+        echo -n $line " " >> /tmp/vects
+        $summarize_method.txt2vec "$line" | vect2s >> /tmp/vects
+    done
+fi
 
 
 }
