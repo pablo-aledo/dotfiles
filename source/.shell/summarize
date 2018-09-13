@@ -179,7 +179,7 @@ vect2s(){
     summarize.hash2key "$( python -c "
 vect=$vect
 print([ (i/float(max(vect)) - 0.5)/3.0 for i in vect ])
-")" | sed -e 's/0/ /g' -e 's/^/[/g' -e 's/$/]/g'
+")" | sed -e 's/0/./g' -e 's/^/[/g' -e 's/$/]/g'
 }
 
 classifier.evaluate(){
