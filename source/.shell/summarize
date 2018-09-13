@@ -15,7 +15,8 @@ ncd.txt2vec() {
 keywords.get_features(){
     [ -e $summarize_dir/features/keywords ] && return
     mkdir -p $summarize_dir/features
-    cat $summarize_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $summarize_dir/features/keywords
+    [ -e ~/Dotfiles/keywords/keywords ] && cp ~/Dotfiles/keywords/keywords $summarize_dir/features/keywords
+    [ -e ~/Dotfiles/keywords/keywords ] || cat $summarize_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $summarize_dir/features/keywords
 }
 
 keywords.txt2vec(){
