@@ -52,7 +52,7 @@ getwords(){
 }
 
 keywords.txt2vec(){
-    normalize="false"
+    normalize="true"
     getwords $1
 
     total=$( cat /tmp/keywords | awk '{sum += $1} END {print sum}' )
