@@ -127,7 +127,8 @@ y=$y
 idf=$idf
 idf=[ i+0.00001 for i in idf ]
 print( np.divide(y, idf) )
-" | sed -e 's/  /, /g' -e 's/\[,/\[/g' | paste -s
+" | sed -e 's/ \+/ /g' -e 's/ /, /g' -e 's/\[,/\[/g' | paste -s
+
 }
 
 summarize_rec(){
