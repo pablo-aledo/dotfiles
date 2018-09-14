@@ -1,6 +1,7 @@
 summarize_method=keywords
 summarize_evaluate_vects="true"
 summarize_dir=$HOME/summarize
+keywords_normalize="true"
 
 ncd.get_features(){
     cp -r $summarize_dir/txts/* $summarize_dir/features
@@ -52,7 +53,6 @@ getwords(){
 }
 
 keywords.txt2vec(){
-    normalize="true"
     getwords $1
 
     total=$( cat /tmp/keywords | awk '{sum += $1} END {print sum}' )
@@ -63,8 +63,8 @@ keywords.txt2vec(){
          [ $a[0,1] = '^' ] || regex=$a
          value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && value=0
-         [ $normalize = "true" ] && echo "print($value/$total.)" | python
-         [ $normalize = "true" ] || echo $value
+         [ $keywords_normalize = "true" ] && echo "print($value/$total.)" | python
+         [ $keywords_normalize = "true" ] || echo $value
     done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g'
 }
 
