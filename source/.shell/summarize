@@ -21,6 +21,29 @@ keywords.get_features(){
     [ -e ~/Dotfiles/keywords/keywords ] || cat $summarize_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $summarize_dir/features/keywords
 }
 
+tfidf.get_features(){
+    mkdir -p $summarize_dir/features
+
+    if ! [ -e $summarize_dir/features/keywords ]
+    then
+        [ -e ~/Dotfiles/keywords/keywords ] && cp ~/Dotfiles/keywords/keywords $summarize_dir/features/keywords
+        [ -e ~/Dotfiles/keywords/keywords ] || cat $summarize_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $summarize_dir/features/keywords
+    fi
+
+    cat $summarize_dir/txts/* > /tmp/all_docs
+    getwords /tmp/all_docs
+
+    for a in $(cat $summarize_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    do
+         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
+         [ $a[0,1] = '^' ] || regex=$a
+         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
+         [ "$value" = "" ] && value=0
+         echo $value
+    done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g' > $summarize_dir/features/idf
+
+}
+
 getwords(){
     cat $1 | sed \
         -e 's/ /\n/g'  \
@@ -79,6 +102,32 @@ keywords.doc2vec_debug(){
          value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
          [ "$value" != "" ] && echo $a $value
     done
+}
+
+tfidf.txt2vec(){
+    getwords $1
+
+    total=$( cat /tmp/keywords | awk '{sum += $1} END {print sum}' )
+
+    y=$(for a in $(cat $summarize_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    do
+         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
+         [ $a[0,1] = '^' ] || regex=$a
+         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
+         [ "$value" = "" ] && value=0
+         [ $keywords_normalize = "true" ] && echo "print($value/$total.)" | python
+         [ $keywords_normalize = "true" ] || echo $value
+     done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g')
+
+    idf=$(cat $summarize_dir/features/idf)
+
+python -c "
+import numpy as np
+y=$y
+idf=$idf
+idf=[ i+0.00001 for i in idf ]
+print( np.divide(y, idf) )
+" | sed -e 's/  /, /g' -e 's/\[,/\[/g' | paste -s
 }
 
 summarize_rec(){
