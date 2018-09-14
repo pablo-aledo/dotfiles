@@ -25,7 +25,7 @@ keywords.txt2vec(){
     cat $1 | sed 's/ /\n/g' | sort | uniq -c > /tmp/keywords
     total=$( cat /tmp/keywords | awk '{sum += $1} END {print sum}' )
 
-    for a in $(cat $summarize_dir/features/keywords)
+    for a in $(cat $summarize_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
          value=$( cat /tmp/keywords | egrep $a | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && value=0
