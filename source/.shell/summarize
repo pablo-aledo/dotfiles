@@ -178,7 +178,7 @@ vect2s(){
     read vect
     summarize.hash2key "$( python -c "
 vect=$vect
-print([ (i/float(max(vect)) - 0.5)/3.0 for i in vect ])
+print([ (i/float(max(vect)+0.00001) - 0.5)/3.0 for i in vect ])
 ")" | sed -e 's/0/./g' -e 's/^/[/g' -e 's/$/]/g'
 }
 
