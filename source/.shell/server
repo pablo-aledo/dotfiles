@@ -309,6 +309,12 @@ server(){
 		while true; do rssmail_server; done
 	fi
 
+	if [ $1 = avxmail ]
+	then
+		source ~/.dotfiles/source/.shell/avaxhome
+		while true; do avhome_mail_server; sleep 10; done
+	fi
+
 }
 
 

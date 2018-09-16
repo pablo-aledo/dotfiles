@@ -175,20 +175,16 @@ avhome_get_new_titles(){
 }
 
 avhome_mail_server(){
-    while true
-    do
-        for topic in programming_development graphics_drawing_design engeneering_technology hardware science_books security_info software
-        do
-            avhome_get_new_titles $topic | while read line
-            do
-                title=$(echo $line | cut -d'|' -f2)
-                link=http://avxhome.se$(echo $line | cut -d'|' -f1)
-                echo "\e[31m $title \e[0m: $link"
-                (echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
-            done
-        done
-        sleep 10
-    done
+   for topic in programming_development graphics_drawing_design engeneering_technology hardware science_books security_info software
+   do
+       avhome_get_new_titles $topic | while read line
+       do
+           title=$(echo $line | cut -d'|' -f2)
+           link=http://avxhome.se$(echo $line | cut -d'|' -f1)
+           echo "\e[31m $title \e[0m: $link"
+           (echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
+       done
+   done
 }
 
 
