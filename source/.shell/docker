@@ -493,6 +493,14 @@ case $1 in
 (speech-to-text)         docker run -it -v $PWD:/workdir buriburisuri/speech-to-text-wavenet ;;
 (kaldi)                  docker run -it -v $PWD:/workdir kaldi ;;
 (kaldi-gstreamer-server) docker run -it -v $PWD:/workdir kaldi-gstreamer-server ;;
+(kaldi-pop-up)           docker run -it --name kaldi_pua --volume $PWD/audio_in/:/audio_in/ hipstas/kaldi-pop-up-archive:v1 ;;
+(maus)                   docker run -v `pwd`:/export  stevecassidy/maus \
+                         /home/maus/maus OUT=/export/test.TextGrid \
+                         OUTFORMAT=TextGrid \
+                         SIGNAL=/export/test/1_1119_2_22_001-ch6-speaker16.wav \
+                         BPF=/export/test/1_1119_2_22_001.bpf \
+                         LANGUAGE=aus
+                         ;;
 (swagger-ui)             docker run -d -p 8080:80 -e API_URL=http://localhost:4000/swagger schickling/swagger-ui ;;
 (openvpn)                shift; docker-compose run vpn $* ;;
 (youtube-dl)             shift; docker run -it --rm -v "$(pwd):/src" -w /src jbergknoff/youtube-dl -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]' $* ;;
