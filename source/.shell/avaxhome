@@ -159,18 +159,36 @@ avhome_dlscript(){
 avhome_get_titles(){
     mkdir -p ~/avxhome
     cd ~/avxhome
-    wget https://avxhm.se/ebooks/$1 -O dl
+    wget -q https://avxhm.se/ebooks/$1 -O dl
     #cat dl | grep title-link | cut -d'>' -f3 | cut -d'<' -f1 > $1
-    cat dl | grep title-link | head -n1 | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' > $1
+    cat dl | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' > $1
 }
 
 avhome_get_new_titles(){
     mkdir -p ~/avxhome
     cd ~/avxhome
-    wget https://avxhm.se/ebooks/$1 -O dl
+    wget -q https://avxhm.se/ebooks/$1 -O dl
     #cat dl | grep title-link | cut -d'>' -f3 | cut -d'<' -f1 > ${1}_new
-    cat dl | grep title-link | head -n1 | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' > ${1}_new
+    cat dl | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' > ${1}_new
     comm -13 <(cat $1 | sort) <(cat ${1}_new | sort)
     \mv ${1}_new $1
 }
+
+avhome_mail_server(){
+    while true
+    do
+        for topic in programming_development graphics_drawing_design engeneering_technology hardware science_books security_info software
+        do
+            avhome_get_new_titles $topic | while read line
+            do
+                title=$(echo $line | cut -d'|' -f2)
+                link=http://avxhome.se$(echo $line | cut -d'|' -f1)
+                echo "\e[31m $title \e[0m: $link"
+                (echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
+            done
+        done
+        sleep 10
+    done
+}
+
 
