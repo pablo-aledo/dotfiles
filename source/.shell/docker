@@ -135,6 +135,26 @@ case $1 in
     sudo docker cp antlr:antlr .
     docker rm antlr
     ;;
+(go-tensorflow)
+	git clone https://github.com/tinrab/go-tensorflow-image-recognition.git /tmp/go-tensorflow/
+	cd /tmp/go-tensorflow
+    docker-compose -f docker-compose.yaml up -d --build
+    cd -
+	;;
+(tensorflow-inception)
+    mkdir /tmp/model-data
+    curl -o '/tmp/model-data/inception-v3-2016-03-01.tar.gz' 'http://download.tensorflow.org/models/image/imagenet/inception-v3-2016-03-01.tar.gz'
+    cd /tmp/model-data
+    tar xzf inception-v3-2016-03-01.tar.gz
+    curl -sSL https://raw.githubusercontent.com/bitnami/bitnami-docker-tensorflow-inception/master/docker-compose.yml > docker-compose.yml
+    docker-compose up -d
+    cd -
+    ;;
+(neuraltalk2-web)
+    cd /tmp
+    wget --no-check-certificate http://cs.stanford.edu/people/karpathy/neuraltalk2/checkpoint_v1_cpu.zip
+    unzip checkpoint_v1_cpu.zip
+    ;;
 esac
 }
 
@@ -241,6 +261,12 @@ case $1 in
 (gitlab)                 docker run -it -v $PWD/gitlab/config:/etc/gitlab -v $PWD/gitlab/logs:/var/log/gitlab -v $PWD/gitlab/data:/var/opt/gitlab -p 443:443 -p 2222:22 gitlab/gitlab-ce ;;
 (gitserver)              docker run --rm -it -p 1234:22 -e DEBUG=true -e "PUBKEY=$(cat ~/.ssh/id_ed25519.pub)" --name gitserver ${DOCKER_REPO_PREFIX}/gitserver ;;
 (gitsome)                docker run --rm -it -v ${HOME}/.gitsomeconfig:/home/anon/.gitsomeconfig -v ${HOME}/.gitsomeconfigurl:/home/anon/.gitsomeconfigurl r.j3ss.co/gitsome ;;
+(go-tensorflow)          shift; curl localhost:8080/recognize -F "image=@./$1" ;;
+(image-caption)          docker run -it -p 5000:5000 codait/max-image-caption-generator; google-chrome localhost:5000 ;;
+(inception-test-tika)    docker run -it -p 8764:8764 uscdatascience/inception-rest-tika ;;
+(im2txt-rest-tika)       docker run -it -p 8764:8764 uscdatascience/im2txt-rest-tika ;;
+(inception-video-rest)   docker run -it -p 8764:8764 uscdatascience/inception-video-rest-tika ;;
+(neuraltalk2-web)        docker run -e "modelPath=/mounted/model/model_id1-501-1448236541.t7_cpu.t7" -p 5000:5000 -v /tmp/model_id1-501-1448236541.t7_cpu.t7:/mounted/model/model_id1-501-1448236541.t7_cpu.t7 jacopofar/neuraltalk2-web:latest ;;
 (gvim)                   docker run -ti --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix verybada/gvim ;;
 (gnuplot)                docker run --rm -it r.j3ss.co/gnuplot ;;
 (hacker-tools)           docker run -it -d --net=host --privileged --name little-boy veerendrav2/hacker-tools ;;
