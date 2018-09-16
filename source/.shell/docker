@@ -100,7 +100,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style|cloud9|complearn)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -443,6 +443,11 @@ case $1 in
 (rust)                   docker run --rm -it -v $(pwd):/source schickling/rust ;;
 (sonar_server)           docker run -d -p 9000:9000 -d --name sonar_server sonar_server ;;
 (sonar_scanner)          docker run -e SONAR_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' sonar_server) -e PROJECT_NAME=$(basename $PWD) -v $PWD:/workdir -w /workdir sonar_scanner ;;
+(speech-recognition)     docker run -it -v /dev/snd:/dev/snd --privileged binkybong/speech-recognition /bin/bash ;;
+(djtones-sprecognition)  docker run -it -v $PWD:/mnt/data djtones/speech-recognition ;;
+(speech-to-text)         docker run -it -v $PWD:/workdir buriburisuri/speech-to-text-wavenet ;;
+(kaldi)                  docker run -it -v $PWD:/workdir kaldi ;;
+(kaldi-gstreamer-server) docker run -it -v $PWD:/workdir kaldi-gstreamer-server ;;
 (swagger-ui)             docker run -d -p 8080:80 -e API_URL=http://localhost:4000/swagger schickling/swagger-ui ;;
 (openvpn)                shift; docker-compose run vpn $* ;;
 (youtube-dl)             shift; docker run -it --rm -v "$(pwd):/src" -w /src jbergknoff/youtube-dl -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]' $* ;;
