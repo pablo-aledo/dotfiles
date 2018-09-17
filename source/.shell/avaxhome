@@ -175,6 +175,9 @@ avhome_get_new_titles(){
 }
 
 avhome_mail_server(){
+    mkdir -p ~/avxhome
+    cd ~/avxhome
+
    for topic in programming_development graphics_drawing_design engeneering_technology hardware science_books security_info software
    do
        echo '' > to_send
