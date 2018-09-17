@@ -29,3 +29,6 @@ sudo /usr/bin/helm init
 
 # config
 echo 'source <(kubectl completion zsh)' >> ~/.shell
+
+#kubectl create secret docker-registry my-reg --docker-server=registry.gitlab.com --docker-username=<your-name> --docker-password=<your-pword> --docker-email=<your-email>
+#kubectl patch serviceaccount default -p '{"imagePullSecrets": [{"name": "my-reg"}]}'
