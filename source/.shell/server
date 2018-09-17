@@ -312,7 +312,7 @@ server(){
 	if [ $1 = avxmail ]
 	then
 		source ~/.dotfiles/source/.shell/avaxhome
-		while true; do avhome_mail_server; sleep 10; done
+		while true; do avhome_mail_server; sleep 60; done
 	fi
 
 }
