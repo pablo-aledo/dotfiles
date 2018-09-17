@@ -178,9 +178,10 @@ avhome_mail_server(){
     mkdir -p ~/avxhome
     cd ~/avxhome
 
+   rm -fr to_send
+
    for topic in programming_development graphics_drawing_design engeneering_technology hardware science_books security_info software
    do
-       rm -rf to_send
        avhome_get_new_titles $topic | while read line
        do
            echo $line >> to_send
