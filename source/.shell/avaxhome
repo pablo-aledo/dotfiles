@@ -197,13 +197,16 @@ avhome_mail_server(){
       done
    fi
 
-   comm -13 <(cat old | sort) <(cat new | sort) | while read line
-   do
-          title=$(echo $line | cut -d'|' -f2)
-          link=http://avxhome.se$(echo $line | cut -d'|' -f1)
-          echo "\e[31m $title \e[0m: $link"
-          (echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
-   done
+   if [ -e new ]
+   then
+       comm -13 <(cat old | sort) <(cat new | sort) | while read line
+       do
+              title=$(echo $line | cut -d'|' -f2)
+              link=http://avxhome.se$(echo $line | cut -d'|' -f1)
+              echo "\e[31m $title \e[0m: $link"
+              (echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
+       done
+   fi
 
    [ -e new ] && \mv new old
 
