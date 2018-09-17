@@ -26,3 +26,6 @@ sudo cp linux-amd64/helm /usr/bin
 sudo systemctl start docker
 sudo /usr/local/bin/minikube start --vm-driver=none
 sudo /usr/bin/helm init
+
+# config
+echo 'source <(kubectl completion zsh)' >> ~/.shell
