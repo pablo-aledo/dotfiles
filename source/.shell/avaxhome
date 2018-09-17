@@ -205,7 +205,7 @@ avhome_mail_server(){
           (echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
    done
 
-   \mv new old
+   [ -e new ] && \mv new old
 
 }
 
