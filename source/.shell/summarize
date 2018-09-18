@@ -1,7 +1,7 @@
 summarize_method=keywords
 summarize_evaluate_vects="true"
 summarize_dir=$HOME/summarize
-keywords_normalize="true"
+keywords_normalize="false"
 
 ncd.get_features(){
     cp -r $summarize_dir/txts/* $summarize_dir/features
@@ -207,7 +207,7 @@ np.savetxt(summarize_dir + '/pca/eigenv',pca.explained_variance_)
 "
 }
 
-pca_and_rank.fit(){
+pca_pickle.fit(){
     rm -fr /tmp/softhashes
     for file in $summarize_dir/vectors/*
     do
@@ -216,33 +216,13 @@ pca_and_rank.fit(){
     sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/softhashes
 	python -c "
 import numpy as np
-import math
 from sklearn.decomposition import PCA
+from sklearn.externals import joblib
 summarize_dir='$summarize_dir'
 X=np.loadtxt('/tmp/softhashes')
 pca=PCA()
 pca.fit(X)
-np.savetxt(summarize_dir + '/pca/average',np.mean(X,0))
-np.savetxt(summarize_dir + '/pca/pca',pca.components_)
-np.savetxt(summarize_dir + '/pca/eigenv',pca.explained_variance_)
-
-Y = pca.transform(X)
-
-def dotproduct(v1, v2):
-  return sum((a*b) for a, b in zip(v1, v2))
-
-def length(v):
-  return math.sqrt(dotproduct(v, v))
-
-def angle(v1, v2):
-  return math.acos(dotproduct(v1, v2) / (length(v1) * length(v2)))
-
-with open(summarize_dir + '/pca/ranked', 'w') as file:
-    for y_axis in np.identity(pca.components_.shape[0]):
-        y = min(Y, key=lambda v: angle(y_axis, v))
-        x_appr = pca.inverse_transform(y)
-        x = min(X, key=lambda x: np.linalg.norm(x - x_appr))
-        print >> file, x
+joblib.dump(pca, summarize_dir + '/pca/pca.pkl')
 "
 }
 
@@ -399,6 +379,19 @@ print normalized
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
 }
 
+pca_pickle.transform() {
+	python -c "
+import numpy as np
+from sklearn.externals import joblib
+summarize_dir='$summarize_dir'
+pca=joblib.load(summarize_dir + '/pca/pca.pkl')
+x=[$1];
+print pca.transform(x)[0]
+" | sed \
+    -e 's/ \+/ /g' \
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
+}
+
 summarize.doc2txt(){
 	filename=$1
 	destination=$2
@@ -421,7 +414,7 @@ summarize.hash(){
 
     vector=$($summarize_method.txt2vec /tmp/txt)
 
-    pca.transform $vector
+    pca_pickle.transform $vector
 
 }
 
@@ -462,7 +455,7 @@ summarize.fit(){
 
     rm -fr $summarize_dir/pca; mkdir -p $summarize_dir/pca
     echo "\e[34m pca \e[0m "
-    pca_and_rank.fit
+    pca_pickle.fit
 
     rm -fr $summarize_dir/hashes; mkdir -p $summarize_dir/hashes
     [ -e $summarize_dir/documents_to_hash ] || cp -r $summarize_dir/documents $summarize_dir/documents_to_hash
