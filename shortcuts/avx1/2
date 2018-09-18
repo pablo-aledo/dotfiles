@@ -1,4 +1,4 @@
 export DISPLAY=:1
 
-xdotool mousemove 283 365
+xdotool mousemove 283 355
 xdotool click 1
