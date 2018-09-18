@@ -598,3 +598,20 @@ summarize.knn(){
     summarize.sortdist $1 | head -n $2 | sed 's/\..*//g' | sort | uniq -c | sort -g | tail -n1 | sed 's/^ *[^ ]* //g'
 }
 
+keywords_filter () {
+	cat $1 | while read line
+	do
+		found=0
+		echo $line > /tmp/line
+		getwords /tmp/line
+		for a in $(cat ~/summarize/features/keywords | grep -v '^#' | grep -v '^$')
+		do
+			[ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
+			[ $a[0,1] = '^' ] || regex=$a
+			value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
+			[ "$value" != "" ] && found=1  && break
+		done
+		[ $found -eq 1 ] && echo $line
+	done
+}
+
