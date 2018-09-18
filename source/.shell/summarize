@@ -445,36 +445,44 @@ summarize.fit(){
     rm -fr $summarize_dir/txts; mkdir -p $summarize_dir/txts
     ls $summarize_dir/documents/* | while read line
     do
+        echo "\e[34m doc2txt \e[0m " $line
         summarize.doc2txt "$line" $summarize_dir/txts/$(basename "$line")
     done
 
     [ $summarize_method != keywords ] && ( rm -fr $summarize_dir/features; mkdir -p $summarize_dir/features )
+    echo "\e[34m get_features \e[0m "
     $summarize_method.get_features
 
     rm -fr $summarize_dir/vectors; mkdir -p $summarize_dir/vectors
     ls $summarize_dir/txts/* | while read line
     do
+        echo "\e[34m txt2vec \e[0m " $line
         $summarize_method.txt2vec "$line" > $summarize_dir/vectors/$(basename "$line")
     done
 
     rm -fr $summarize_dir/pca; mkdir -p $summarize_dir/pca
+    echo "\e[34m pca \e[0m "
     pca_and_rank.fit
 
     rm -fr $summarize_dir/hashes; mkdir -p $summarize_dir/hashes
     [ -e $summarize_dir/documents_to_hash ] || cp -r $summarize_dir/documents $summarize_dir/documents_to_hash
     ls $summarize_dir/documents_to_hash/* | while read line
     do
+        echo "\e[34m hash \e[0m " $line
         summarize.hash "$line" > $summarize_dir/hashes/$(basename "$line")
     done
 
     rm -fr $summarize_dir/classifier; mkdir -p $summarize_dir/classifier
+    echo "\e[34m classifier \e[0m "
     classifier.fit
     [ -e $summarize_dir/classifier_test ] && classifier.evaluate
 
     rm -fr $summarize_dir/regression; mkdir -p $summarize_dir/regression
+    echo "\e[34m regression \e[0m "
     [ -e $summarize_dir/r_output ] && regression.fit
 
     rm -fr $summarize_dir/cluster; mkdir -p $summarize_dir/cluster
+    echo "\e[34m cluster \e[0m "
     cluster.fit
 }
 
