@@ -1,49 +1,49 @@
-summarize_method=keywords
-summarize_evaluate_vects="true"
-summarize_dir=$HOME/summarize
+learning_method=keywords
+learning_evaluate_vects="true"
+learning_dir=$HOME/learning
 keywords_normalize="false"
 summarize_page_limit=99999
 summarize_line_limit=99999
 pca_method=pca_scaler
 
 ncd.get_features(){
-    cp -r $summarize_dir/txts/* $summarize_dir/features
+    cp -r $learning_dir/txts/* $learning_dir/features
 }
 
 ncd.txt2vec() {
-	for file in $summarize_dir/features/*
+	for file in $learning_dir/features/*
 	do
 		gzip_distance $1 $file
 	done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g'
 }
 
 keywords.get_features(){
-    [ -e $summarize_dir/features/keywords ] && return
-    mkdir -p $summarize_dir/features
-    [ -e ~/Dotfiles/keywords/keywords ] && cp ~/Dotfiles/keywords/keywords $summarize_dir/features/keywords
-    [ -e ~/Dotfiles/keywords/keywords ] || cat $summarize_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $summarize_dir/features/keywords
+    [ -e $learning_dir/features/keywords ] && return
+    mkdir -p $learning_dir/features
+    [ -e ~/Dotfiles/keywords/keywords ] && cp ~/Dotfiles/keywords/keywords $learning_dir/features/keywords
+    [ -e ~/Dotfiles/keywords/keywords ] || cat $learning_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $learning_dir/features/keywords
 }
 
 tfidf.get_features(){
-    mkdir -p $summarize_dir/features
+    mkdir -p $learning_dir/features
 
-    if ! [ -e $summarize_dir/features/keywords ]
+    if ! [ -e $learning_dir/features/keywords ]
     then
-        [ -e ~/Dotfiles/keywords/keywords ] && cp ~/Dotfiles/keywords/keywords $summarize_dir/features/keywords
-        [ -e ~/Dotfiles/keywords/keywords ] || cat $summarize_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $summarize_dir/features/keywords
+        [ -e ~/Dotfiles/keywords/keywords ] && cp ~/Dotfiles/keywords/keywords $learning_dir/features/keywords
+        [ -e ~/Dotfiles/keywords/keywords ] || cat $learning_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $learning_dir/features/keywords
     fi
 
-    cat $summarize_dir/txts/* > /tmp/all_docs
+    cat $learning_dir/txts/* > /tmp/all_docs
     getwords /tmp/all_docs
 
-    for a in $(cat $summarize_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
          value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && value=0
          echo $value
-    done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g' > $summarize_dir/features/idf
+    done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g' > $learning_dir/features/idf
 
 }
 
@@ -84,7 +84,7 @@ keywords.txt2vec(){
 
     total=$( cat /tmp/keywords | awk '{sum += $1} END {print sum}' )
 
-    for a in $(cat $summarize_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
@@ -96,10 +96,10 @@ keywords.txt2vec(){
 }
 
 keywords.doc2vec_debug(){
-    summarize.doc2txt $1 > /tmp/txt
+    learning.doc2txt $1 > /tmp/txt
     getwords /tmp/txt
 
-    for a in $(cat $summarize_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
@@ -113,7 +113,7 @@ tfidf.txt2vec(){
 
     total=$( cat /tmp/keywords | awk '{sum += $1} END {print sum}' )
 
-    y=$(for a in $(cat $summarize_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    y=$(for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
@@ -123,7 +123,7 @@ tfidf.txt2vec(){
          [ $keywords_normalize = "true" ] || echo $value
      done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g')
 
-    idf=$(cat $summarize_dir/features/idf)
+    idf=$(cat $learning_dir/features/idf)
 
 python -c "
 import numpy as np
@@ -136,30 +136,30 @@ print( np.divide(y, idf) )
 
 }
 
-summarize_rec(){
+learning_rec(){
 	filename="$1"
 	destination="$2"
 
 	case $filename in
 		(*.rar|*.RAR)
-			rm -fr /tmp/summarize
-			mkdir -p /tmp/summarize
-			cd /tmp/summarize
+			rm -fr /tmp/learning
+			mkdir -p /tmp/learning
+			cd /tmp/learning
 			unrar x "$filename" >/dev/null 2>/dev/null
 			find $PWD | while read line
 			do
-				summarize_rec "$line" "$destination" 
+				learning_rec "$line" "$destination" 
 			done
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
 		(*.zip|*.ZIP)
-			rm -fr /tmp/summarize
-			mkdir -p /tmp/summarize
-			cd /tmp/summarize
+			rm -fr /tmp/learning
+			mkdir -p /tmp/learning
+			cd /tmp/learning
 			unzip "$filename" >/dev/null 2>/dev/null
 			find $PWD | while read line
 			do
-				summarize_rec "$line" "$destination" 
+				learning_rec "$line" "$destination" 
 			done
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
@@ -184,8 +184,8 @@ summarize_rec(){
 
 gzip_distance(){
     rm -fr /tmp/s1 /tmp/s2
-    summarize.doc2txt "$1" /tmp/s1
-    summarize.doc2txt "$2" /tmp/s2
+    learning.doc2txt "$1" /tmp/s1
+    learning.doc2txt "$2" /tmp/s2
     s1=$( cat /tmp/s1 | gzip -f | wc -c )
     s2=$( cat /tmp/s2 | gzip -f | wc -c )
     s12=$( cat /tmp/s1 /tmp/s2 | gzip | wc -c )
@@ -195,7 +195,7 @@ gzip_distance(){
 
 pca.fit(){
     rm -fr /tmp/softhashes
-    for file in $summarize_dir/vectors/*
+    for file in $learning_dir/vectors/*
     do
         cat $file >> /tmp/softhashes
     done
@@ -203,19 +203,19 @@ pca.fit(){
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
-summarize_dir='$summarize_dir'
+learning_dir='$learning_dir'
 X=np.loadtxt('/tmp/softhashes')
 pca=PCA()
 pca.fit(X)
-np.savetxt(summarize_dir + '/pca/average',np.mean(X,0))
-np.savetxt(summarize_dir + '/pca/pca',pca.components_)
-np.savetxt(summarize_dir + '/pca/eigenv',pca.explained_variance_)
+np.savetxt(learning_dir + '/pca/average',np.mean(X,0))
+np.savetxt(learning_dir + '/pca/pca',pca.components_)
+np.savetxt(learning_dir + '/pca/eigenv',pca.explained_variance_)
 "
 }
 
 pca_pickle.fit(){
     rm -fr /tmp/softhashes
-    for file in $summarize_dir/vectors/*
+    for file in $learning_dir/vectors/*
     do
         cat $file >> /tmp/softhashes
     done
@@ -224,17 +224,17 @@ pca_pickle.fit(){
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.externals import joblib
-summarize_dir='$summarize_dir'
+learning_dir='$learning_dir'
 X=np.loadtxt('/tmp/softhashes')
 pca=PCA()
 pca.fit(X)
-joblib.dump(pca, summarize_dir + '/pca/pca.pkl')
+joblib.dump(pca, learning_dir + '/pca/pca.pkl')
 "
 }
 
 pca_scaler.fit(){
     rm -fr /tmp/softhashes
-    for file in $summarize_dir/vectors/*
+    for file in $learning_dir/vectors/*
     do
         cat $file >> /tmp/softhashes
     done
@@ -245,28 +245,28 @@ import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.externals import joblib
 from sklearn.preprocessing import StandardScaler
-summarize_dir='$summarize_dir'
+learning_dir='$learning_dir'
 X=$x
 scaler = StandardScaler()
 scaler.fit(X)
 X=scaler.transform(X)
 pca=PCA()
 pca.fit(X)
-joblib.dump(pca, summarize_dir + '/pca/pca.pkl')
-joblib.dump(scaler, summarize_dir + '/pca/scaler.pkl')
+joblib.dump(pca, learning_dir + '/pca/pca.pkl')
+joblib.dump(scaler, learning_dir + '/pca/scaler.pkl')
 "
 }
 
 lda.fit(){
 
     rm -fr /tmp/lda.x /tmp/lda.y
-    ls $summarize_dir/vectors/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $summarize_dir/pca/map
+    ls $learning_dir/vectors/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/pca/map
 
-    for file in $summarize_dir/vectors/*
+    for file in $learning_dir/vectors/*
     do
         cat $file >> /tmp/lda.x
         y=$(basename $file | sed 's/\..*//g')
-        id=$(cat $summarize_dir/pca/map | grep " $y$" | awk '{print $1}')
+        id=$(cat $learning_dir/pca/map | grep " $y$" | awk '{print $1}')
         echo $id >> /tmp/lda.y
     done
 
@@ -280,22 +280,22 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.externals import joblib
 X = np.array($x)
 Y = np.array($y)
-summarize_dir='$summarize_dir'
+learning_dir='$learning_dir'
 clf = LinearDiscriminantAnalysis()
 clf.fit(X, Y)
-joblib.dump(clf, summarize_dir + '/pca/lda.pkl')
+joblib.dump(clf, learning_dir + '/pca/lda.pkl')
 "
 }
 
 classifier.fit(){
 
     rm -fr /tmp/classifier.x /tmp/classifier.y
-    ls $summarize_dir/hashes/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $summarize_dir/classifier/map
-    for file in $summarize_dir/hashes/*
+    ls $learning_dir/vectors_reduced/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/classifier/map
+    for file in $learning_dir/vectors_reduced/*
     do
         cat $file >> /tmp/classifier.x
         y=$(basename $file | sed 's/\..*//g')
-        id=$(cat $summarize_dir/classifier/map | grep " $y$" | awk '{print $1}')
+        id=$(cat $learning_dir/classifier/map | grep " $y$" | awk '{print $1}')
         echo $id >> /tmp/classifier.y
     done
 
@@ -308,16 +308,16 @@ from sklearn import linear_model
 from sklearn.externals import joblib
 X = np.array($x)
 Y = np.array($y)
-summarize_dir='$summarize_dir'
+learning_dir='$learning_dir'
 clf = linear_model.SGDClassifier()
 clf.fit(X, Y)
-joblib.dump(clf, summarize_dir + '/classifier/classifier.pkl')
+joblib.dump(clf, learning_dir + '/classifier/classifier.pkl')
 "
 }
 
 vect2s(){
     read vect
-    summarize.hash2key "$( python -c "
+    learning.hash2key "$( python -c "
 vect=$vect
 print([ (i/float(max(vect)+0.00001) - 0.5)/3.0 for i in vect ])
 ")" | sed -e 's/0/./g' -e 's/^/[/g' -e 's/$/]/g'
@@ -326,7 +326,7 @@ print([ (i/float(max(vect)+0.00001) - 0.5)/3.0 for i in vect ])
 classifier.evaluate(){
 
     rm -fr /tmp/classifier.y_true /tmp/classifier.y_pred
-    ls $summarize_dir/classifier_test/* | while read line
+    ls $learning_dir/classifier_test/* | while read line
     do
         classifier.transform "$line" >> /tmp/classifier.y_pred
         echo $(basename "$line") | sed 's/\..*//g' >> /tmp/classifier.y_true
@@ -351,23 +351,23 @@ print('confusion matrix:')
 print(metrics.confusion_matrix(y_true, y_pred))
 "
 
-if [ $summarize_evaluate_vects = "true" ]
+if [ $learning_evaluate_vects = "true" ]
 then
     rm -fr /tmp/vects
-    find $summarize_dir/txts/ -type f | while read line
+    find $learning_dir/txts/ -type f | while read line
     do
         echo -n $line " " >> /tmp/vects
-        $summarize_method.txt2vec "$line" | vect2s >> /tmp/vects
+        $learning_method.txt2vec "$line" | vect2s >> /tmp/vects
     done
     echo "=====" >> /tmp/vects
-    find $summarize_dir/classifier_test/ -type f | while read line
+    find $learning_dir/classifier_test/ -type f | while read line
     do
         y_true=$(basename $line | sed 's/\..*//g')
         y_pred=$(classifier.transform $line)
         [ "$y_true" != "$y_pred" ] && echo -n '*** ' >> /tmp/vects
         echo -n T:$y_true P:$y_pred " " >> /tmp/vects
         echo -n $line " " >> /tmp/vects
-        $summarize_method.txt2vec "$line" | vect2s >> /tmp/vects
+        $learning_method.txt2vec "$line" | vect2s >> /tmp/vects
     done
 fi
 
@@ -376,10 +376,10 @@ fi
 
 regression.fit(){
     rm -fr /tmp/regression.x /tmp/regression.y
-    for file in $summarize_dir/hashes/*
+    for file in $learning_dir/vectors_reduced/*
     do
         cat $file >> /tmp/regression.x
-        cat $summarize_dir/r_output/$(basename $file) >> /tmp/regression.y
+        cat $learning_dir/regression_fit/$(basename $file) >> /tmp/regression.y
     done
 
     x=$(cat /tmp/regression.x | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
@@ -391,18 +391,18 @@ from sklearn import linear_model
 from sklearn.externals import joblib
 X = np.array($x)
 Y = np.array($y)
-summarize_dir='$summarize_dir'
+learning_dir='$learning_dir'
 reg = linear_model.LinearRegression()
 reg.fit (X, Y)
-joblib.dump(reg, summarize_dir + '/regression/regression.pkl')
+joblib.dump(reg, learning_dir + '/regression/regression.pkl')
 "
 }
 
 cluster.fit(){
     n_clusters=3
-    seq 0 $n_clusters | nl -v0 | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $summarize_dir/cluster/map
+    seq 0 $n_clusters | nl -v0 | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/cluster/map
     rm -fr /tmp/clusters
-    for file in $summarize_dir/hashes/*
+    for file in $learning_dir/vectors_reduced/*
     do
         cat $file >> /tmp/clusters
     done
@@ -414,22 +414,22 @@ from sklearn.cluster import KMeans
 from sklearn.externals import joblib
 import numpy as np
 X = np.array($x)
-summarize_dir='$summarize_dir'
+learning_dir='$learning_dir'
 n_clusters=$n_clusters
 kmeans = KMeans(n_clusters=n_clusters, random_state=0)
 kmeans.fit(X)
-joblib.dump(kmeans, summarize_dir + '/cluster/cluster.pkl')
+joblib.dump(kmeans, learning_dir + '/cluster/cluster.pkl')
 "
 }
 
 pca.transform() {
 	python -c "
 import numpy as np
-summarize_dir='$summarize_dir'
-pca=np.loadtxt(summarize_dir+'/pca/pca')
-eigenv=np.loadtxt(summarize_dir+'/pca/eigenv')
+learning_dir='$learning_dir'
+pca=np.loadtxt(learning_dir+'/pca/pca')
+eigenv=np.loadtxt(learning_dir+'/pca/eigenv')
 eigenv=[ i + 0.00001 for i in eigenv ]
-average=np.loadtxt(summarize_dir+'/pca/average')
+average=np.loadtxt(learning_dir+'/pca/average')
 normalized=$1;
 normalized=np.subtract(normalized, average)
 normalized=np.matmul(pca, normalized)
@@ -445,8 +445,8 @@ pca_pickle.transform() {
 import numpy as np
 np.set_printoptions(threshold=np.nan)
 from sklearn.externals import joblib
-summarize_dir='$summarize_dir'
-pca=joblib.load(summarize_dir + '/pca/pca.pkl')
+learning_dir='$learning_dir'
+pca=joblib.load(learning_dir + '/pca/pca.pkl')
 x=[$1];
 print pca.transform(x)[0]
 " | sed \
@@ -461,9 +461,9 @@ np.set_printoptions(threshold=np.nan)
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.externals import joblib
-summarize_dir='$summarize_dir'
-pca=joblib.load(summarize_dir + '/pca/pca.pkl')
-scaler=joblib.load(summarize_dir + '/pca/scaler.pkl')
+learning_dir='$learning_dir'
+pca=joblib.load(learning_dir + '/pca/pca.pkl')
+scaler=joblib.load(learning_dir + '/pca/scaler.pkl')
 x=[$1]
 x=scaler.transform(x)
 print pca.transform(x)[0]
@@ -478,8 +478,8 @@ import numpy as np
 np.set_printoptions(threshold=np.nan)
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.externals import joblib
-summarize_dir='$summarize_dir'
-clf=joblib.load(summarize_dir + '/pca/lda.pkl')
+learning_dir='$learning_dir'
+clf=joblib.load(learning_dir + '/pca/lda.pkl')
 x=[$1];
 print clf.transform(x)[0]
 " | sed \
@@ -487,7 +487,7 @@ print clf.transform(x)[0]
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
 }
 
-summarize.doc2txt(){
+learning.doc2txt(){
 	filename=$1
 	destination=$2
 
@@ -497,23 +497,23 @@ summarize.doc2txt(){
 
 	rm -fr "$destination"
 
-	[ -d "$filename" ] &&  ( ls "$filename" | while read line; do ( summarize_rec "$filename"/"$line" "$destination" ); done )
-	[ -f "$filename" ] &&  summarize_rec "$filename" "$destination"
+	[ -d "$filename" ] &&  ( ls "$filename" | while read line; do ( learning_rec "$filename"/"$line" "$destination" ); done )
+	[ -f "$filename" ] &&  learning_rec "$filename" "$destination"
 
 	[ "$destination" = "/tmp/summary" ] && cat /tmp/summary
 }
 
-summarize.hash(){
+learning.hash(){
     rm -fr /tmp/txt
-    summarize.doc2txt $1 /tmp/txt
+    learning.doc2txt $1 /tmp/txt
 
-    vector=$($summarize_method.txt2vec /tmp/txt)
+    vector=$($learning_method.txt2vec /tmp/txt)
 
     $pca_method.transform $vector
 
 }
 
-summarize.hash2key(){
+learning.hash2key(){
 	python -c "
 import numpy as np
 normalized=$1
@@ -525,111 +525,111 @@ print ''.join(hash)
 "
 }
 
-summarize.key(){
-    summarize.hash2key "$(summarize.hash $1)"
+learning.key(){
+    learning.hash2key "$(learning.hash $1)"
 }
 
-summarize.fit(){
-    rm -fr $summarize_dir/txts; mkdir -p $summarize_dir/txts
-    ls $summarize_dir/documents/* | while read line
+learning.fit(){
+    rm -fr $learning_dir/txts; mkdir -p $learning_dir/txts
+    ls $learning_dir/documents/* | while read line
     do
         echo "\e[34m doc2txt \e[0m " $line
-        summarize.doc2txt "$line" $summarize_dir/txts/$(basename "$line")
+        learning.doc2txt "$line" $learning_dir/txts/$(basename "$line")
     done
 
-    [ $summarize_method != keywords ] && ( rm -fr $summarize_dir/features; mkdir -p $summarize_dir/features )
+    [ $learning_method != keywords ] && ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
     echo "\e[34m get_features \e[0m "
-    $summarize_method.get_features
+    $learning_method.get_features
 
-    rm -fr $summarize_dir/vectors; mkdir -p $summarize_dir/vectors
-    ls $summarize_dir/txts/* | while read line
+    rm -fr $learning_dir/vectors; mkdir -p $learning_dir/vectors
+    ls $learning_dir/txts/* | while read line
     do
         echo "\e[34m txt2vec \e[0m " $line
-        $summarize_method.txt2vec "$line" > $summarize_dir/vectors/$(basename "$line")
+        $learning_method.txt2vec "$line" > $learning_dir/vectors/$(basename "$line")
     done
 
-    rm -fr $summarize_dir/pca; mkdir -p $summarize_dir/pca
+    rm -fr $learning_dir/pca; mkdir -p $learning_dir/pca
     echo "\e[34m pca \e[0m "
     $pca_method.fit
 
-    rm -fr $summarize_dir/hashes; mkdir -p $summarize_dir/hashes
-    [ -e $summarize_dir/documents_to_hash ] || cp -r $summarize_dir/documents $summarize_dir/documents_to_hash
-    ls $summarize_dir/documents_to_hash/* | while read line
+    rm -fr $learning_dir/vectors_reduced; mkdir -p $learning_dir/vectors_reduced
+    [ -e $learning_dir/classifier_train ] || cp -r $learning_dir/documents $learning_dir/classifier_train
+    ls $learning_dir/classifier_train/* | while read line
     do
         echo "\e[34m hash \e[0m " $line
-        summarize.hash "$line" > $summarize_dir/hashes/$(basename "$line")
+        learning.hash "$line" > $learning_dir/vectors_reduced/$(basename "$line")
     done
 
-    rm -fr $summarize_dir/classifier; mkdir -p $summarize_dir/classifier
+    rm -fr $learning_dir/classifier; mkdir -p $learning_dir/classifier
     echo "\e[34m classifier \e[0m "
     classifier.fit
-    [ -e $summarize_dir/classifier_test ] && classifier.evaluate
+    [ -e $learning_dir/classifier_test ] && classifier.evaluate
 
-    rm -fr $summarize_dir/regression; mkdir -p $summarize_dir/regression
+    rm -fr $learning_dir/regression; mkdir -p $learning_dir/regression
     echo "\e[34m regression \e[0m "
-    [ -e $summarize_dir/r_output ] && regression.fit
+    [ -e $learning_dir/regression_fit ] && regression.fit
 
-    rm -fr $summarize_dir/cluster; mkdir -p $summarize_dir/cluster
+    rm -fr $learning_dir/cluster; mkdir -p $learning_dir/cluster
     echo "\e[34m cluster \e[0m "
     cluster.fit
 }
 
 classifier.transform(){
-x=$(summarize.hash $1)
+x=$(learning.hash $1)
 
 y=$(python -c "
 x=[$x]
-summarize_dir='$summarize_dir'
+learning_dir='$learning_dir'
 import numpy as np
 from sklearn import linear_model
 from sklearn.externals import joblib
-clf=joblib.load(summarize_dir + '/classifier/classifier.pkl')
+clf=joblib.load(learning_dir + '/classifier/classifier.pkl')
 print( clf.predict(x)[0] )
 ")
 
-cat $summarize_dir/classifier/map | grep "^ $y " | awk '{print $2}'
+cat $learning_dir/classifier/map | grep "^ $y " | awk '{print $2}'
 }
 
 cluster.transform(){
-x=$(summarize.hash $1)
+x=$(learning.hash $1)
 
 y=$(python -c "
 x=[$x]
-summarize_dir='$summarize_dir'
+learning_dir='$learning_dir'
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.externals import joblib
-kmeans=joblib.load(summarize_dir + '/cluster/cluster.pkl')
+kmeans=joblib.load(learning_dir + '/cluster/cluster.pkl')
 print( kmeans.predict(x)[0] )
 ")
 
-cat $summarize_dir/cluster/map | grep "^ $y " | awk '{print $2}'
+cat $learning_dir/cluster/map | grep "^ $y " | awk '{print $2}'
 }
 
 regression.transform(){
-x=$(summarize.hash $1)
+x=$(learning.hash $1)
 
 python -c "
 x=[$x]
-summarize_dir='$summarize_dir'
+learning_dir='$learning_dir'
 import numpy as np
 np.set_printoptions(threshold=np.nan)
 from sklearn import linear_model
 from sklearn.externals import joblib
-reg=joblib.load(summarize_dir + '/regression/regression.pkl')
+reg=joblib.load(learning_dir + '/regression/regression.pkl')
 print(reg.predict(x)[0])
 "
 }
 
-summarize.compare(){
+learning.compare(){
 
     rm -fr /tmp/t1 /tmp/t2
 
-    summarize.doc2txt $1 /tmp/t1
-    summarize.doc2txt $2 /tmp/t2
+    learning.doc2txt $1 /tmp/t1
+    learning.doc2txt $2 /tmp/t2
 
-    h1=$(summarize.hash /tmp/t1)
-    h2=$(summarize.hash /tmp/t2)
+    h1=$(learning.hash /tmp/t1)
+    h2=$(learning.hash /tmp/t2)
 
     python -c "
 import numpy as np
@@ -641,7 +641,7 @@ print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 
 }
 
-summarize.distance(){
+learning.distance(){
     python -c "
 import numpy as np
 import math
@@ -652,11 +652,11 @@ print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 
 }
 
-#summarize.closest(){
-    #h1=$(summarize.hash $1)
-	#for file in $summarize_dir/hashes/*
+#learning.closest(){
+    #h1=$(learning.hash $1)
+	#for file in $learning_dir/vectors_reduced/*
 	#do
-        #d=$(summarize.distance "$h1" "$(cat $file)")
+        #d=$(learning.distance "$h1" "$(cat $file)")
 		#echo \"$(basename "$file")\" ":" $d ","
 	#done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
 	#python -c "
@@ -665,11 +665,11 @@ print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 #"
 #}
 
-summarize.sortdist(){
-    h1=$(summarize.hash $1)
-	for file in $summarize_dir/hashes/*
+learning.sortdist(){
+    h1=$(learning.hash $1)
+	for file in $learning_dir/vectors_reduced/*
 	do
-        d=$(summarize.distance "$h1" "$(cat $file)")
+        d=$(learning.distance "$h1" "$(cat $file)")
 		echo \"$(basename "$file")\" ":" $d ","
 	done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
 	python -c "
@@ -679,12 +679,12 @@ for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
 "
 }
 
-summarize.closest(){
-    summarize.sortdist $1 | head -n1
+learning.closest(){
+    learning.sortdist $1 | head -n1
 }
 
-summarize.knn(){
-    summarize.sortdist $1 | head -n $2 | sed 's/\..*//g' | sort | uniq -c | sort -g | tail -n1 | sed 's/^ *[^ ]* //g'
+learning.knn(){
+    learning.sortdist $1 | head -n $2 | sed 's/\..*//g' | sort | uniq -c | sort -g | tail -n1 | sed 's/^ *[^ ]* //g'
 }
 
 keywords_filter () {
@@ -693,7 +693,7 @@ keywords_filter () {
 		found=0
 		echo $line > /tmp/line
 		getwords /tmp/line
-		for a in $(cat ~/summarize/features/keywords | grep -v '^#' | grep -v '^$')
+		for a in $(cat ~/learning/features/keywords | grep -v '^#' | grep -v '^$')
 		do
 			[ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
 			[ $a[0,1] = '^' ] || regex=$a
