@@ -136,7 +136,7 @@ print( np.divide(y, idf) )
 
 }
 
-learning_rec(){
+doc2txt_rec(){
 	filename="$1"
 	destination="$2"
 
@@ -148,7 +148,7 @@ learning_rec(){
 			unrar x "$filename" >/dev/null 2>/dev/null
 			find $PWD | while read line
 			do
-				learning_rec "$line" "$destination" 
+				doc2txt_rec "$line" "$destination" 
 			done
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
@@ -159,7 +159,7 @@ learning_rec(){
 			unzip "$filename" >/dev/null 2>/dev/null
 			find $PWD | while read line
 			do
-				learning_rec "$line" "$destination" 
+				doc2txt_rec "$line" "$destination" 
 			done
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
@@ -497,8 +497,8 @@ learning.doc2txt(){
 
 	rm -fr "$destination"
 
-	[ -d "$filename" ] &&  ( ls "$filename" | while read line; do ( learning_rec "$filename"/"$line" "$destination" ); done )
-	[ -f "$filename" ] &&  learning_rec "$filename" "$destination"
+	[ -d "$filename" ] &&  ( ls "$filename" | while read line; do ( doc2txt_rec "$filename"/"$line" "$destination" ); done )
+	[ -f "$filename" ] &&  doc2txt_rec "$filename" "$destination"
 
 	[ "$destination" = "/tmp/summary" ] && cat /tmp/summary
 }
