@@ -167,7 +167,8 @@ summarize_rec(){
 			epub2txt "$filename" | head -n $summarize_line_limit >> "$destination"
 			;;
 		(*.mobi|*.MOBI)
-			ebook-convert "$filename" "$destination"
+			ebook-convert "$filename" /tmp/mobi.txt
+			cat /tmp/mobi.txt >> "$destination"
 			;;
 		(*.txt|*.TXT)
 			cat "$filename" | head -n $summarize_line_limit >> "$destination"
