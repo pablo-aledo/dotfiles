@@ -4,7 +4,7 @@ summarize_dir=$HOME/summarize
 keywords_normalize="false"
 summarize_page_limit=99999
 summarize_line_limit=99999
-pca_method=lda
+pca_method=pca_scaler
 
 ncd.get_features(){
     cp -r $summarize_dir/txts/* $summarize_dir/features
@@ -231,6 +231,31 @@ joblib.dump(pca, summarize_dir + '/pca/pca.pkl')
 "
 }
 
+pca_scaler.fit(){
+    rm -fr /tmp/softhashes
+    for file in $summarize_dir/vectors/*
+    do
+        cat $file >> /tmp/softhashes
+    done
+    x=$( cat /tmp/softhashes | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+
+	python -c "
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.externals import joblib
+from sklearn.preprocessing import StandardScaler
+summarize_dir='$summarize_dir'
+X=$x
+scaler = StandardScaler()
+scaler.fit(X)
+X=scaler.transform(X)
+pca=PCA()
+pca.fit(X)
+joblib.dump(pca, summarize_dir + '/pca/pca.pkl')
+joblib.dump(scaler, summarize_dir + '/pca/scaler.pkl')
+"
+}
+
 lda.fit(){
 
     rm -fr /tmp/lda.x /tmp/lda.y
@@ -424,6 +449,23 @@ print pca.transform(x)[0]
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
+}
+
+pca_scaler.transform() {
+	python -c "
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.externals import joblib
+summarize_dir='$summarize_dir'
+pca=joblib.load(summarize_dir + '/pca/pca.pkl')
+scaler=joblib.load(summarize_dir + '/pca/scaler.pkl')
+x=[$1]
+x=scaler.transform(x)
+print pca.transform(x)[0]
+" | sed \
+    -e 's/ \+/ /g' \
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -s
 }
 
 lda.transform() {
