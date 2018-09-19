@@ -127,6 +127,7 @@ tfidf.txt2vec(){
 
 python -c "
 import numpy as np
+np.set_printoptions(threshold=np.nan)
 y=$y
 idf=$idf
 idf=[ i+0.00001 for i in idf ]
@@ -274,6 +275,7 @@ lda.fit(){
 
 	python -c "
 import numpy as np
+np.set_printoptions(threshold=np.nan)
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.externals import joblib
 X = np.array($x)
@@ -441,6 +443,7 @@ print normalized
 pca_pickle.transform() {
 	python -c "
 import numpy as np
+np.set_printoptions(threshold=np.nan)
 from sklearn.externals import joblib
 summarize_dir='$summarize_dir'
 pca=joblib.load(summarize_dir + '/pca/pca.pkl')
@@ -454,6 +457,7 @@ print pca.transform(x)[0]
 pca_scaler.transform() {
 	python -c "
 import numpy as np
+np.set_printoptions(threshold=np.nan)
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.externals import joblib
@@ -471,6 +475,7 @@ print pca.transform(x)[0]
 lda.transform() {
 	python -c "
 import numpy as np
+np.set_printoptions(threshold=np.nan)
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.externals import joblib
 summarize_dir='$summarize_dir'
@@ -608,6 +613,7 @@ python -c "
 x=[$x]
 summarize_dir='$summarize_dir'
 import numpy as np
+np.set_printoptions(threshold=np.nan)
 from sklearn import linear_model
 from sklearn.externals import joblib
 reg=joblib.load(summarize_dir + '/regression/regression.pkl')
