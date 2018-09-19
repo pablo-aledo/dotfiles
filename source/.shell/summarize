@@ -4,6 +4,7 @@ summarize_dir=$HOME/summarize
 keywords_normalize="false"
 summarize_page_limit=99999
 summarize_line_limit=99999
+pca_method=lda
 
 ncd.get_features(){
     cp -r $summarize_dir/txts/* $summarize_dir/features
@@ -230,6 +231,35 @@ joblib.dump(pca, summarize_dir + '/pca/pca.pkl')
 "
 }
 
+lda.fit(){
+
+    rm -fr /tmp/lda.x /tmp/lda.y
+    ls $summarize_dir/vectors/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $summarize_dir/pca/map
+
+    for file in $summarize_dir/vectors/*
+    do
+        cat $file >> /tmp/lda.x
+        y=$(basename $file | sed 's/\..*//g')
+        id=$(cat $summarize_dir/pca/map | grep " $y$" | awk '{print $1}')
+        echo $id >> /tmp/lda.y
+    done
+
+    x=$(cat /tmp/lda.x | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+    y=$(cat /tmp/lda.y | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+
+	python -c "
+import numpy as np
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.externals import joblib
+X = np.array($x)
+Y = np.array($y)
+summarize_dir='$summarize_dir'
+clf = LinearDiscriminantAnalysis()
+clf.fit(X, Y)
+joblib.dump(clf, summarize_dir + '/pca/lda.pkl')
+"
+}
+
 classifier.fit(){
 
     rm -fr /tmp/classifier.x /tmp/classifier.y
@@ -396,6 +426,20 @@ print pca.transform(x)[0]
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
 }
 
+lda.transform() {
+	python -c "
+import numpy as np
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.externals import joblib
+summarize_dir='$summarize_dir'
+clf=joblib.load(summarize_dir + '/pca/lda.pkl')
+x=[$1];
+print clf.transform(x)[0]
+" | sed \
+    -e 's/ \+/ /g' \
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
+}
+
 summarize.doc2txt(){
 	filename=$1
 	destination=$2
@@ -418,7 +462,7 @@ summarize.hash(){
 
     vector=$($summarize_method.txt2vec /tmp/txt)
 
-    pca_pickle.transform $vector
+    $pca_method.transform $vector
 
 }
 
@@ -459,7 +503,7 @@ summarize.fit(){
 
     rm -fr $summarize_dir/pca; mkdir -p $summarize_dir/pca
     echo "\e[34m pca \e[0m "
-    pca_pickle.fit
+    $pca_method.fit
 
     rm -fr $summarize_dir/hashes; mkdir -p $summarize_dir/hashes
     [ -e $summarize_dir/documents_to_hash ] || cp -r $summarize_dir/documents $summarize_dir/documents_to_hash
