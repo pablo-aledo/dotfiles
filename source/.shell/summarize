@@ -82,17 +82,29 @@ getwords(){
 keywords.txt2vec(){
     getwords $1
 
-    total=$( cat /tmp/keywords | awk '{sum += $1} END {print sum}' )
-
-    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    vect=$(for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
          value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && value=0
-         [ $keywords_normalize = "true" ] && echo "print($value/$total.)" | python
-         [ $keywords_normalize = "true" ] || echo $value
-    done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g'
+         echo $value
+         sum_kw=$(( $sum_kw + $value ))
+         echo $sum_kw > /tmp/sum_kw
+    done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g')
+
+    [ $keywords_normalize = "full" ] && total=$( cat /tmp/keywords | awk '{sum += $1} END {print sum}' )
+    [ $keywords_normalize = "keys" ] && total=$(cat /tmp/sum_kw)
+    [ $keywords_normalize = "false" ] && total=1
+
+    python -c "
+import numpy as np
+np.set_printoptions(threshold=np.nan)
+vect=$vect
+total=$total
+print(np.divide(vect, float(total+0.00001)))
+" | sed -e 's/ \+/ /g' -e 's/ /, /g' | paste -s -d' '
+
 }
 
 keywords.doc2vec_debug(){
