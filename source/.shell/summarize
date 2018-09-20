@@ -171,7 +171,7 @@ doc2txt_rec(){
 			;;
 		(*.mobi|*.MOBI)
 			ebook-convert "$filename" /tmp/mobi.txt
-			cat /tmp/mobi.txt >> "$destination"
+			cat /tmp/mobi.txt | head -n $summarize_line_limit >> "$destination"
 			;;
 		(*.txt|*.TXT)
 			cat "$filename" | head -n $summarize_line_limit >> "$destination"
