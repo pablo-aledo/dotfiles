@@ -103,7 +103,7 @@ np.set_printoptions(threshold=np.nan)
 vect=$vect
 total=$total
 print(np.divide(vect, float(total+0.00001)))
-" | sed -e 's/ \+/ /g' -e 's/ /, /g' | paste -s -d' '
+" | sed -e 's/ \+/ /g' -e 's/ /, /g' -e 's/\[,/\[/g' -e 's/, \]/\]/g' | paste -s -d' '
 
 }
 
@@ -499,7 +499,7 @@ normalized=np.divide( normalized, np.sqrt(eigenv) )
 print normalized
 " | sed \
     -e 's/ \+/ /g' \
-    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -d' ' -s
 }
 
 pca_pickle.transform() {
