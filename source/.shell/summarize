@@ -314,7 +314,7 @@ joblib.dump(clf, learning_dir + '/pca/lda.pkl')
 
 pca.rank(){
 
-    doc_2_vect=$(for file in $learning_dir/vectors_reduced/*
+    doc_2_vect=$(for file in $learning_dir/vectors/*
     do
         echo "'"$(basename $file)"'":$(cat $file),
     done | paste -s -d' ' | sed -e 's/^/{/g' -e 's/$/}/g' -e 's/,}/}/g')
