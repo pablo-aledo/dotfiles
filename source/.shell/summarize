@@ -322,7 +322,7 @@ pca.rank(){
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
-n_components=2
+n_components=3
 doc_2_vect=$doc_2_vect
 doc_2_rank={k:99999 for k in doc_2_vect}
 pca=PCA(n_components=n_components)
@@ -332,8 +332,7 @@ original_pca.fit(doc_2_vect.values())
 def cost(a,b):
     return np.sum( np.absolute( np.subtract(a.components_, b.components_) ) )
 
-for round in range(1,len(doc_2_vect)-1):
-    print round
+for round in range(1,len(doc_2_vect)-(n_components-1)):
     doc_2_cost={k:99999 for k in doc_2_vect}
     for item in doc_2_vect.keys():
         if(doc_2_rank[item] < round):
@@ -345,6 +344,8 @@ for round in range(1,len(doc_2_vect)-1):
         doc_2_rank[item] = 99999
     min_doc=min(doc_2_cost, key=doc_2_cost.get)
     doc_2_rank[min_doc] = round
+
+#print doc_2_rank
 
 for a in sorted(doc_2_rank, key=doc_2_rank.get):
     print a
