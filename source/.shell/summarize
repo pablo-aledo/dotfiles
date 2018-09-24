@@ -4,7 +4,7 @@ learning_dir=$HOME/learning
 keywords_normalize="false"
 summarize_page_limit=99999
 summarize_line_limit=99999
-pca_method=pca_scaler
+pca_method=pca
 
 ncd.get_features(){
     cp -r $learning_dir/txts/* $learning_dir/features
@@ -309,6 +309,42 @@ learning_dir='$learning_dir'
 clf = LinearDiscriminantAnalysis()
 clf.fit(X, Y)
 joblib.dump(clf, learning_dir + '/pca/lda.pkl')
+"
+}
+
+pca.rank(){
+
+    doc_2_vect=$(for file in $learning_dir/vectors_reduced/*
+    do
+        echo "'"$(basename $file)"'":$(cat $file),
+    done | paste -s -d' ' | sed -e 's/^/{/g' -e 's/$/}/g' -e 's/,}/}/g')
+
+	python -c "
+import numpy as np
+from sklearn.decomposition import PCA
+doc_2_vect=$doc_2_vect
+doc_2_rank={k:99999 for k in doc_2_vect}
+pca=PCA()
+original_pca=PCA()
+original_pca.fit(doc_2_vect.values())
+
+def cost(a,b):
+    return np.sum( np.absolute( np.subtract(a.components_, b.components_) ) )
+
+for round in range(1,len(doc_2_vect)-1):
+    print round
+    doc_2_cost={k:99999 for k in doc_2_vect}
+    for item in doc_2_vect.keys():
+        if(doc_2_rank[item] < round):
+            continue
+        doc_2_rank[item] = round
+        selection=[ v for (k,v) in doc_2_vect.items() if doc_2_rank[k] > round ]
+        pca.fit(selection)
+        doc_2_cost[item] = cost(pca, original_pca)
+        doc_2_rank[item] = 99999
+    min_doc=min(doc_2_cost, key=doc_2_cost.get)
+    doc_2_rank[min_doc] = round
+print doc_2_rank
 "
 }
 
