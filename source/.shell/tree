@@ -1,0 +1,45 @@
+TREE_DST=$HOME/root
+TREE_SRC=Alejandria
+
+lnk_hierarchy(){
+    args=$(echo $* | awk '{$NF=""; print}')
+    name=$(echo $* | awk '{print $NF}')
+
+
+    dst_paths=$TREE_DST
+    current_path=$TREE_DST
+    for a in $( echo $args | sed 's/ /\n/g' )
+    do
+        current_path=$current_path/$a
+        dst_paths="$dst_paths $current_path"
+    done
+
+    for a in $( echo $dst_paths | sed 's/ /\n/g' )
+    do
+        if [ ! "$(ls $a 2>/dev/null)" ]
+        then
+            echo $a does not exist
+            mkdir $a
+            continue
+        fi
+
+        if [ -L $a ]
+        then
+            echo $a is link
+            src=$(readlink $a)
+            rm -f $a
+            mkdir $a
+            ln -s $src $a/$(basename $a)
+            continue
+        fi
+
+        if [ -d $a ]
+        then
+            echo $a is folder
+            continue
+        fi
+    done
+
+    ln -s $TREE_SRC/$name $current_path
+
+}
