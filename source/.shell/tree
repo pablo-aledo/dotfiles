@@ -18,14 +18,14 @@ lnk_hierarchy(){
     do
         if [ ! "$(ls $a 2>/dev/null)" ]
         then
-            echo $a does not exist
+            #echo $a does not exist
             mkdir $a
             continue
         fi
 
         if [ -L $a ]
         then
-            echo $a is link
+            #echo $a is link
             src=$(readlink $a)
             rm -f $a
             mkdir $a
@@ -35,7 +35,7 @@ lnk_hierarchy(){
 
         if [ -d $a ]
         then
-            echo $a is folder
+            #echo $a is folder
             continue
         fi
     done
