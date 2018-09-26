@@ -43,3 +43,7 @@ lnk_hierarchy(){
     ln -s $TREE_SRC/$name $current_path
 
 }
+
+lnk_hierarchy_missing(){
+    comm -13 <(find -L $TREE_DST | while read line; do echo $(basename $line); done | sort | uniq) <(ls $TREE_SRC | sort | uniq)
+}
