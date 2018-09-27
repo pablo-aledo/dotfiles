@@ -1,6 +1,8 @@
 learning_method=keywords
 learning_evaluate_vects="true"
 learning_dir=$HOME/learning
+learning_src=/media/removable/2TB2/homes/admin/Alejandria
+learning_docs_per_class=5
 keywords_normalize="false"
 summarize_page_limit=99999
 summarize_line_limit=99999
@@ -596,6 +598,9 @@ learning.key(){
 }
 
 learning.fit(){
+
+    [ -e $learning_dir/topics ] && [ -e $learning_src ] && learning.get_documents
+
     rm -fr $learning_dir/txts; mkdir -p $learning_dir/txts
     ls $learning_dir/documents/* | while read line
     do
@@ -770,3 +775,51 @@ keywords_filter () {
 	done
 }
 
+learning.get_documents(){
+
+    inipwd=$PWD
+    for topic in $(cat $learning_dir/topics)
+    do
+        echo "\e[34m ===== $topic ===== \e[0m"
+
+        if [ $(ls $learning_dir/documents/$topic\.* | wc -l) -ge $learning_docs_per_class ]
+        then
+            echo "\e[34m enough documents \e[0m $topic"
+            continue
+        fi
+
+        if [ ! -e $learning_src/$topic ]
+        then
+            echo "\e[31m topic not found \e[0m $topic"
+            continue
+        fi
+
+        cd "$learning_src/$topic"
+        ls | sort -R | head -n $learning_docs_per_class | while read file
+        do
+            crctitle=$(echo "$file" | md5sum | cut -d' ' -f1)
+            echo "\e[34m doc2txt \e[0m $file $topic.$crctitle"
+            learning.doc2txt "$file" "$learning_dir/documents/$topic.$crctitle"
+        done
+        cd $inipwd
+    done
+
+    find $learning_dir/documents/ -type f | while read line
+    do
+        if [ "$( file $line | grep text )" = "" ]
+        then
+            echo "\e[31m $line is not text \e[0m"
+            rm -rf $line
+            continue
+        fi
+
+        if [ "$( du -bc $line | head -n1 | awk '{print $1}' )" -lt 1000 ]
+        then
+            echo "\e[31m $line is very small \e[0m"
+            rm -rf $line
+            continue
+        fi
+
+
+    done
+}
