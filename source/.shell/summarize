@@ -794,6 +794,11 @@ learning.get_documents(){
             continue
         fi
 
+        if [ $(ls $learning_src/$topic | wc -l) -lt $learning_docs_per_class ]
+        then
+            echo "\e[33m not enough documents \e[0m $topic"
+        fi
+
         cd "$learning_src/$topic"
         find -maxdepth 1 -type f | sort -R | head -n $learning_docs_per_class | while read file
         do
