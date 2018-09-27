@@ -782,7 +782,7 @@ learning.get_documents(){
     do
         echo "\e[34m ===== $topic ===== \e[0m"
 
-        if [ $(ls $learning_dir/documents/$topic\.* | wc -l) -ge $learning_docs_per_class ]
+        if [ $(ls $learning_dir/documents/ | egrep '^$topic\..*' | wc -l) -ge $learning_docs_per_class ]
         then
             echo "\e[34m enough documents \e[0m $topic"
             continue
@@ -795,7 +795,7 @@ learning.get_documents(){
         fi
 
         cd "$learning_src/$topic"
-        ls | sort -R | head -n $learning_docs_per_class | while read file
+        find -maxdepth 1 -type f | sort -R | head -n $learning_docs_per_class | while read file
         do
             crctitle=$(echo "$file" | md5sum | cut -d' ' -f1)
             echo "\e[34m doc2txt \e[0m $file $topic.$crctitle"
