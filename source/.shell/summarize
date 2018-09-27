@@ -783,7 +783,7 @@ learning.get_documents(){
     do
         echo "\e[34m ===== $topic ===== \e[0m"
 
-        if [ $(ls $learning_dir/documents/ | egrep '^$topic\..*' | wc -l) -ge $learning_docs_per_class ]
+        if [ $(ls $learning_dir/documents/ | egrep "^$topic\..*" | wc -l) -ge $learning_docs_per_class ]
         then
             echo "\e[34m enough documents \e[0m $topic"
             continue
