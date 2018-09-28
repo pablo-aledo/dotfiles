@@ -463,19 +463,16 @@ regression.fit(){
     rm -fr /tmp/regression.x /tmp/regression.y
     for file in $learning_dir/vectors_reduced/*
     do
-        cat $file >> /tmp/regression.x
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/regression.x
         cat $learning_dir/regression_fit/$(basename $file) >> /tmp/regression.y
     done
-
-    x=$(cat /tmp/regression.x | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
-    y=$(cat /tmp/regression.y | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
 
 	python -c "
 import numpy as np
 from sklearn import linear_model
 from sklearn.externals import joblib
-X = np.array($x)
-Y = np.array($y)
+X = np.loadtxt('/tmp/regression.x')
+Y = np.loadtxt('/tmp/regression.y')
 learning_dir='$learning_dir'
 reg = linear_model.LinearRegression()
 reg.fit (X, Y)
@@ -489,16 +486,14 @@ cluster.fit(){
     rm -fr /tmp/clusters
     for file in $learning_dir/vectors_reduced/*
     do
-        cat $file >> /tmp/clusters
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/clusters
     done
-
-    x=$(cat /tmp/clusters | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
 
 python -c "
 from sklearn.cluster import KMeans
 from sklearn.externals import joblib
 import numpy as np
-X = np.array($x)
+X = np.loadtxt('/tmp/clusters.x')
 learning_dir='$learning_dir'
 n_clusters=$n_clusters
 kmeans = KMeans(n_clusters=n_clusters, random_state=0)
