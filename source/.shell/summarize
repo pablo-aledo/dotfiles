@@ -221,17 +221,17 @@ gzip_distance(){
 }
 
 pca.fit(){
-    rm -fr /tmp/softhashes
+    rm -fr /tmp/reduced_vectors
     for file in $learning_dir/vectors/*
     do
-        cat $file >> /tmp/softhashes
+        cat $file >> /tmp/reduced_vectors
     done
-    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/softhashes
+    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/reduced_vectors
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
 learning_dir='$learning_dir'
-X=np.loadtxt('/tmp/softhashes')
+X=np.loadtxt('/tmp/reduced_vectors')
 pca=PCA()
 pca.fit(X)
 np.savetxt(learning_dir + '/pca/average',np.mean(X,0))
@@ -241,17 +241,17 @@ np.savetxt(learning_dir + '/pca/eigenv',pca.explained_variance_)
 }
 
 pca100.fit(){
-    rm -fr /tmp/softhashes
+    rm -fr /tmp/reduced_vectors
     for file in $learning_dir/vectors/*
     do
-        cat $file >> /tmp/softhashes
+        cat $file >> /tmp/reduced_vectors
     done
-    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/softhashes
+    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/reduced_vectors
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
 learning_dir='$learning_dir'
-X=np.loadtxt('/tmp/softhashes')
+X=np.loadtxt('/tmp/reduced_vectors')
 pca=PCA(n_components=100)
 pca.fit(X)
 np.savetxt(learning_dir + '/pca/average',np.mean(X,0))
@@ -261,18 +261,18 @@ np.savetxt(learning_dir + '/pca/eigenv',pca.explained_variance_)
 }
 
 pca_pickle.fit(){
-    rm -fr /tmp/softhashes
+    rm -fr /tmp/reduced_vectors
     for file in $learning_dir/vectors/*
     do
-        cat $file >> /tmp/softhashes
+        cat $file >> /tmp/reduced_vectors
     done
-    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/softhashes
+    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/reduced_vectors
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.externals import joblib
 learning_dir='$learning_dir'
-X=np.loadtxt('/tmp/softhashes')
+X=np.loadtxt('/tmp/reduced_vectors')
 pca=PCA()
 pca.fit(X)
 joblib.dump(pca, learning_dir + '/pca/pca.pkl')
@@ -280,12 +280,12 @@ joblib.dump(pca, learning_dir + '/pca/pca.pkl')
 }
 
 pca_scaler.fit(){
-    rm -fr /tmp/softhashes
+    rm -fr /tmp/reduced_vectors
     for file in $learning_dir/vectors/*
     do
-        cat $file >> /tmp/softhashes
+        cat $file >> /tmp/reduced_vectors
     done
-    x=$( cat /tmp/softhashes | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+    x=$( cat /tmp/reduced_vectors | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
 
 	python -c "
 import numpy as np
@@ -404,7 +404,7 @@ joblib.dump(clf, learning_dir + '/classifier/classifier.pkl')
 
 vect2s(){
     read vect
-    learning.hash2key "$( python -c "
+    learning.rvect2key "$( python -c "
 vect=$vect
 print([ (i/float(max(vect)+0.00001) - 0.5)/3.0 for i in vect ])
 ")" | sed -e 's/0/./g' -e 's/^/[/g' -e 's/$/]/g'
@@ -609,7 +609,7 @@ learning.doc2txt(){
 	[ "$destination" = "/tmp/summary" ] && cat /tmp/summary
 }
 
-learning.hash(){
+learning.doc2rvect(){
     rm -fr /tmp/txt
     learning.doc2txt $1 /tmp/txt
 
@@ -619,20 +619,20 @@ learning.hash(){
 
 }
 
-learning.hash2key(){
+learning.rvect2key(){
 	python -c "
 import numpy as np
 normalized=$1
 normalized=[ i*3.0 + 0.5 for i in normalized ]
 normalized=[ max(min(i,1.0),0.0) for i in normalized ]
 chars=\"0123456789\"
-hash=[ chars[int((i)*(len(chars)-1))] for i in normalized ]
-print ''.join(hash)
+rvect=[ chars[int((i)*(len(chars)-1))] for i in normalized ]
+print ''.join(rvect)
 "
 }
 
 learning.key(){
-    learning.hash2key "$(learning.hash $1)"
+    learning.rvect2key "$(learning.reduce_vector $1)"
 }
 
 learning.fit(){
@@ -664,12 +664,13 @@ learning.fit(){
     echo "\e[34m pca \e[0m "
     $pca_method.fit
 
-    rm -fr $learning_dir/vectors_reduced; mkdir -p $learning_dir/vectors_reduced
+    #rm -fr $learning_dir/vectors_reduced; mkdir -p $learning_dir/vectors_reduced
     [ -e $learning_dir/classifier_train ] || cp -r $learning_dir/documents $learning_dir/classifier_train
     ls $learning_dir/classifier_train/* | while read line
     do
-        echo "\e[34m hash \e[0m " $line
-        learning.hash "$line" > $learning_dir/vectors_reduced/$(basename "$line")
+        echo "\e[34m reduce \e[0m " $line
+        [ -e $learning_dir/vectors_reduced/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
+        learning.doc2rvect "$line" > $learning_dir/vectors_reduced/$(basename "$line")
     done
 
     rm -fr $learning_dir/classifier; mkdir -p $learning_dir/classifier
@@ -687,7 +688,7 @@ learning.fit(){
 }
 
 classifier.transform(){
-x=$(learning.hash $1)
+x=$(learning.doc2rvect $1)
 
 y=$(python -c "
 x=[$x]
@@ -703,7 +704,7 @@ cat $learning_dir/classifier/map | grep "^ $y " | awk '{print $2}'
 }
 
 cluster.transform(){
-x=$(learning.hash $1)
+x=$(learning.doc2rvect $1)
 
 y=$(python -c "
 x=[$x]
@@ -719,7 +720,7 @@ cat $learning_dir/cluster/map | grep "^ $y " | awk '{print $2}'
 }
 
 regression.transform(){
-x=$(learning.hash $1)
+x=$(learning.doc2rvect $1)
 
 python -c "
 x=[$x]
@@ -740,8 +741,8 @@ learning.compare(){
     learning.doc2txt $1 /tmp/t1
     learning.doc2txt $2 /tmp/t2
 
-    h1=$(learning.hash /tmp/t1)
-    h2=$(learning.hash /tmp/t2)
+    h1=$(learning.doc2rvect /tmp/t1)
+    h2=$(learning.doc2rvect /tmp/t2)
 
     python -c "
 import numpy as np
@@ -765,7 +766,7 @@ print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 }
 
 #learning.closest(){
-    #h1=$(learning.hash $1)
+    #h1=$(learning.doc2rvect $1)
 	#for file in $learning_dir/vectors_reduced/*
 	#do
         #d=$(learning.distance "$h1" "$(cat $file)")
@@ -778,7 +779,7 @@ print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 #}
 
 learning.sortdist(){
-    h1=$(learning.hash $1)
+    h1=$(learning.doc2rvect $1)
 	for file in $learning_dir/vectors_reduced/*
 	do
         d=$(learning.distance "$h1" "$(cat $file)")
