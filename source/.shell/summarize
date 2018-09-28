@@ -283,9 +283,8 @@ pca_scaler.fit(){
     rm -fr /tmp/reduced_vectors
     for file in $learning_dir/vectors/*
     do
-        cat $file >> /tmp/reduced_vectors
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/reduced_vectors
     done
-    x=$( cat /tmp/reduced_vectors | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
 
 	python -c "
 import numpy as np
@@ -293,7 +292,7 @@ from sklearn.decomposition import PCA
 from sklearn.externals import joblib
 from sklearn.preprocessing import StandardScaler
 learning_dir='$learning_dir'
-X=$x
+X=np.loadtxt('/tmp/reduced_vectors')
 scaler = StandardScaler()
 scaler.fit(X)
 X=scaler.transform(X)
@@ -311,22 +310,19 @@ lda.fit(){
 
     for file in $learning_dir/vectors/*
     do
-        cat $file >> /tmp/lda.x
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/lda.x
         y=$(basename $file | sed 's/\..*//g')
         id=$(cat $learning_dir/pca/map | grep " $y$" | awk '{print $1}')
         echo $id >> /tmp/lda.y
     done
-
-    x=$(cat /tmp/lda.x | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
-    y=$(cat /tmp/lda.y | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
 
 	python -c "
 import numpy as np
 np.set_printoptions(threshold=np.nan)
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.externals import joblib
-X = np.array($x)
-Y = np.array($y)
+X = np.loadtxt('/tmp/lda.x')
+Y = np.loadtxt('/tmp/lda.y')
 learning_dir='$learning_dir'
 clf = LinearDiscriminantAnalysis()
 clf.fit(X, Y)
