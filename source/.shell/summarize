@@ -240,6 +240,26 @@ np.savetxt(learning_dir + '/pca/eigenv',pca.explained_variance_)
 "
 }
 
+pca100.fit(){
+    rm -fr /tmp/softhashes
+    for file in $learning_dir/vectors/*
+    do
+        cat $file >> /tmp/softhashes
+    done
+    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/softhashes
+	python -c "
+import numpy as np
+from sklearn.decomposition import PCA
+learning_dir='$learning_dir'
+X=np.loadtxt('/tmp/softhashes')
+pca=PCA(n_components=100)
+pca.fit(X)
+np.savetxt(learning_dir + '/pca/average',np.mean(X,0))
+np.savetxt(learning_dir + '/pca/pca',pca.components_)
+np.savetxt(learning_dir + '/pca/eigenv',pca.explained_variance_)
+"
+}
+
 pca_pickle.fit(){
     rm -fr /tmp/softhashes
     for file in $learning_dir/vectors/*
@@ -491,6 +511,24 @@ joblib.dump(kmeans, learning_dir + '/cluster/cluster.pkl')
 }
 
 pca.transform() {
+	python -c "
+import numpy as np
+learning_dir='$learning_dir'
+pca=np.loadtxt(learning_dir+'/pca/pca')
+eigenv=np.loadtxt(learning_dir+'/pca/eigenv')
+eigenv=[ i + 0.00001 for i in eigenv ]
+average=np.loadtxt(learning_dir+'/pca/average')
+normalized=$1;
+normalized=np.subtract(normalized, average)
+normalized=np.matmul(pca, normalized)
+normalized=np.divide( normalized, np.sqrt(eigenv) )
+print normalized
+" | sed \
+    -e 's/ \+/ /g' \
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -d' ' -s
+}
+
+pca100.transform() {
 	python -c "
 import numpy as np
 learning_dir='$learning_dir'
