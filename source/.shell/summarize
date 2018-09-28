@@ -640,10 +640,11 @@ learning.fit(){
     [ -e $learning_dir/documents ] || mkdir -p $learning_dir/documents
     [ -e $learning_dir/topics ] && [ -e $learning_src ] && learning.get_documents
 
-    rm -fr $learning_dir/txts; mkdir -p $learning_dir/txts
+    #rm -fr $learning_dir/txts; mkdir -p $learning_dir/txts
     ls $learning_dir/documents/* | while read line
     do
         echo "\e[34m doc2txt \e[0m " $line
+        [ -e $learning_dir/txts/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
         learning.doc2txt "$line" $learning_dir/txts/$(basename "$line")
     done
 
