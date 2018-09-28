@@ -380,21 +380,18 @@ classifier.fit(){
     ls $learning_dir/vectors_reduced/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/classifier/map
     for file in $learning_dir/vectors_reduced/*
     do
-        cat $file >> /tmp/classifier.x
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/classifier.x
         y=$(basename $file | sed 's/\..*//g')
         id=$(cat $learning_dir/classifier/map | grep " $y$" | awk '{print $1}')
         echo $id >> /tmp/classifier.y
     done
 
-    x=$(cat /tmp/classifier.x | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
-    y=$(cat /tmp/classifier.y | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
-
 	python -c "
 import numpy as np
 from sklearn import linear_model
 from sklearn.externals import joblib
-X = np.array($x)
-Y = np.array($y)
+X = np.loadtxt('/tmp/classifier.x')
+Y = np.loadtxt('/tmp/classifier.y')
 learning_dir='$learning_dir'
 clf = linear_model.SGDClassifier()
 clf.fit(X, Y)
