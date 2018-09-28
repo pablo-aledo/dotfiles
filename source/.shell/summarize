@@ -1,4 +1,8 @@
-learning_method=keywords
+vectorizer_method=keywords
+pca_method=pca100
+classifier_method=linear_classifier
+regression_method=linear_regression
+clustering_method=kmeans_clustering
 learning_evaluate_vects="true"
 learning_dir=$HOME/learning
 learning_src=/media/removable/2TB2/homes/admin/Alejandria
@@ -6,7 +10,6 @@ learning_docs_per_class=5
 keywords_normalize="false"
 summarize_page_limit=99999
 summarize_line_limit=99999
-pca_method=pca100
 
 ncd.get_features(){
     cp -r $learning_dir/txts/* $learning_dir/features
@@ -382,7 +385,7 @@ for a in sorted(doc_2_rank, key=doc_2_rank.get):
 "
 }
 
-classifier.fit(){
+linear_classifier.fit(){
 
     rm -fr /tmp/classifier.x /tmp/classifier.y
     ls $learning_dir/vectors_reduced/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/classifier/map
@@ -415,12 +418,12 @@ print([ (i/float(max(vect)+0.00001) - 0.5)/3.0 for i in vect ])
 ")" | sed -e 's/0/./g' -e 's/^/[/g' -e 's/$/]/g'
 }
 
-classifier.evaluate(){
+linear_classifier.evaluate(){
 
     rm -fr /tmp/classifier.y_true /tmp/classifier.y_pred
     ls $learning_dir/classifier_test/* | while read line
     do
-        classifier.transform "$line" >> /tmp/classifier.y_pred
+        $classifier_method.transform "$line" >> /tmp/classifier.y_pred
         echo $(basename "$line") | sed 's/\..*//g' >> /tmp/classifier.y_true
     done
 
@@ -450,24 +453,24 @@ then
     find $learning_dir/classifier_train/ -type f | while read line
     do
         echo -n $line " " >> /tmp/vects
-        $learning_method.txt2vec "$line" | vect2s >> /tmp/vects
+        $vectorizer_method.txt2vec "$line" | vect2s >> /tmp/vects
     done
     echo "=====" >> /tmp/vects
     find $learning_dir/classifier_test/ -type f | while read line
     do
         y_true=$(basename $line | sed 's/\..*//g')
-        y_pred=$(classifier.transform $line)
+        y_pred=$($classifier_method.transform $line)
         [ "$y_true" != "$y_pred" ] && echo -n '*** ' >> /tmp/vects
         echo -n T:$y_true P:$y_pred " " >> /tmp/vects
         echo -n $line " " >> /tmp/vects
-        $learning_method.txt2vec "$line" | vect2s >> /tmp/vects
+        $vectorizer_method.txt2vec "$line" | vect2s >> /tmp/vects
     done
 fi
 
 
 }
 
-regression.fit(){
+linear_regression.fit(){
     rm -fr /tmp/regression.x /tmp/regression.y
     for file in $learning_dir/vectors_reduced/*
     do
@@ -488,7 +491,7 @@ joblib.dump(reg, learning_dir + '/regression/regression.pkl')
 "
 }
 
-cluster.fit(){
+kmeans_clustering.fit(){
     n_clusters=3
     seq 0 $n_clusters | nl -v0 | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/cluster/map
     rm -fr /tmp/clusters
@@ -613,7 +616,7 @@ learning.doc2rvect(){
     rm -fr /tmp/txt
     learning.doc2txt $1 /tmp/txt
 
-    vector=$($learning_method.txt2vec /tmp/txt)
+    vector=$($vectorizer_method.txt2vec /tmp/txt)
 
     $pca_method.transform $vector
 
@@ -648,16 +651,16 @@ learning.fit(){
         learning.doc2txt "$line" $learning_dir/txts/$(basename "$line")
     done
 
-    [ $learning_method != keywords ] && ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
+    [ $vectorizer_method != keywords ] && ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
     echo "\e[34m get_features \e[0m "
-    $learning_method.get_features
+    $vectorizer_method.get_features
 
     #rm -fr $learning_dir/vectors; mkdir -p $learning_dir/vectors
     ls $learning_dir/txts/* | while read line
     do
         echo "\e[34m txt2vec \e[0m " $line
         [ -e $learning_dir/vectors/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
-        $learning_method.txt2vec "$line" > $learning_dir/vectors/$(basename "$line")
+        $vectorizer_method.txt2vec "$line" > $learning_dir/vectors/$(basename "$line")
     done
 
     rm -fr $learning_dir/pca; mkdir -p $learning_dir/pca
@@ -675,19 +678,19 @@ learning.fit(){
 
     rm -fr $learning_dir/classifier; mkdir -p $learning_dir/classifier
     echo "\e[34m classifier \e[0m "
-    classifier.fit
-    [ -e $learning_dir/classifier_test ] && classifier.evaluate
+    $classifier_method.fit
+    [ -e $learning_dir/classifier_test ] && $classifier_method.evaluate
 
     rm -fr $learning_dir/regression; mkdir -p $learning_dir/regression
     echo "\e[34m regression \e[0m "
-    [ -e $learning_dir/regression_fit ] && regression.fit
+    [ -e $learning_dir/regression_fit ] && $regression_method.fit
 
     rm -fr $learning_dir/cluster; mkdir -p $learning_dir/cluster
     echo "\e[34m cluster \e[0m "
-    cluster.fit
+    $clustering_method.fit
 }
 
-classifier.transform(){
+linear_classifier.transform(){
 x=$(learning.doc2rvect $1)
 
 y=$(python -c "
@@ -703,7 +706,7 @@ print( clf.predict(x)[0] )
 cat $learning_dir/classifier/map | grep "^ $y " | awk '{print $2}'
 }
 
-cluster.transform(){
+kmeans_clustering.transform(){
 x=$(learning.doc2rvect $1)
 
 y=$(python -c "
@@ -719,7 +722,7 @@ print( kmeans.predict(x)[0] )
 cat $learning_dir/cluster/map | grep "^ $y " | awk '{print $2}'
 }
 
-regression.transform(){
+linear_regression.transform(){
 x=$(learning.doc2rvect $1)
 
 python -c "
