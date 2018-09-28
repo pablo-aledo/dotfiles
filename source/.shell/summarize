@@ -620,7 +620,7 @@ print ''.join(rvect)
 }
 
 learning.key(){
-    learning.rvect2key "$(learning.reduce_vector $1)"
+    learning.rvect2key "$(learning.doc2rvect $1)"
 }
 
 learning.fit(){
