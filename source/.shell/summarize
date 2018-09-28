@@ -782,6 +782,7 @@ learning.get_documents(){
 
     cp /tmp/topics /tmp/topics_to_get
     [ -e $learning_dir/skip ] && comm -13 <(cat $learning_dir/skip | sort | uniq) <(cat $learning_dir/topics | sort | uniq) > /tmp/topics_to_get
+    [ $# -gt 0 ] && echo $* | sed 's/ /\n/g' > /tmp/topics_to_get
 
     for topic in $( cat /tmp/topics_to_get )
     do
