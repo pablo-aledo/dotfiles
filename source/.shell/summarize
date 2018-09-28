@@ -6,7 +6,7 @@ learning_docs_per_class=5
 keywords_normalize="false"
 summarize_page_limit=99999
 summarize_line_limit=99999
-pca_method=pca
+pca_method=pca100
 
 ncd.get_features(){
     cp -r $learning_dir/txts/* $learning_dir/features
