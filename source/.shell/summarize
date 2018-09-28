@@ -332,16 +332,28 @@ joblib.dump(clf, learning_dir + '/pca/lda.pkl')
 
 pca.rank(){
 
-    doc_2_vect=$(for file in $learning_dir/vectors/*
+    #doc_2_vect=$(for file in $learning_dir/vectors/*
+    #do
+        #echo "'"$(basename $file)"'":$(cat $file),
+    #done | paste -s -d' ' | sed -e 's/^/{/g' -e 's/$/}/g' -e 's/,}/}/g')
+    rm -rf /tmp/names /tmp/vectors
+    for file in $learning_dir/vectors/*
     do
-        echo "'"$(basename $file)"'":$(cat $file),
-    done | paste -s -d' ' | sed -e 's/^/{/g' -e 's/$/}/g' -e 's/,}/}/g')
+        echo $(basename $file) >> /tmp/names
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/vectors
+    done
 
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
 n_components=3
-doc_2_vect=$doc_2_vect
+
+with open('/tmp/names') as f:
+    names = f.read.splitlines()
+with open('/tmp/vectors') as f:
+    vectors = f.read.splitlines()
+doc_2_vect={ names[i]:np.fromstring(vectors[i], dtype=float, sep=' ') for i in range(0,len(names)-1) }
+
 doc_2_rank={k:99999 for k in doc_2_vect}
 pca=PCA(n_components=n_components)
 original_pca=PCA(n_components=n_components)
