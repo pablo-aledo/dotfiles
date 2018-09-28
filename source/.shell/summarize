@@ -700,7 +700,7 @@ import numpy as np
 from sklearn import linear_model
 from sklearn.externals import joblib
 clf=joblib.load(learning_dir + '/classifier/classifier.pkl')
-print( clf.predict(x)[0] )
+print( int(clf.predict(x)[0]) )
 ")
 
 cat $learning_dir/classifier/map | grep "^ $y " | awk '{print $2}'
