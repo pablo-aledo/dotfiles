@@ -651,7 +651,7 @@ learning.fit(){
     echo "\e[34m get_features \e[0m "
     $learning_method.get_features
 
-    rm -fr $learning_dir/vectors; mkdir -p $learning_dir/vectors
+    #rm -fr $learning_dir/vectors; mkdir -p $learning_dir/vectors
     ls $learning_dir/txts/* | while read line
     do
         echo "\e[34m txt2vec \e[0m " $line
