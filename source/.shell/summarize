@@ -655,6 +655,7 @@ learning.fit(){
     ls $learning_dir/txts/* | while read line
     do
         echo "\e[34m txt2vec \e[0m " $line
+        [ -e $learning_dir/vectors/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
         $learning_method.txt2vec "$line" > $learning_dir/vectors/$(basename "$line")
     done
 
