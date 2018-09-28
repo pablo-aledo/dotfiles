@@ -646,8 +646,8 @@ learning.fit(){
     #rm -fr $learning_dir/txts; mkdir -p $learning_dir/txts
     ls $learning_dir/documents/* | while read line
     do
-        echo "\e[34m doc2txt \e[0m " $line
         [ -e $learning_dir/txts/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
+        echo "\e[34m doc2txt \e[0m " $line
         learning.doc2txt "$line" $learning_dir/txts/$(basename "$line")
     done
 
@@ -658,8 +658,8 @@ learning.fit(){
     #rm -fr $learning_dir/vectors; mkdir -p $learning_dir/vectors
     ls $learning_dir/txts/* | while read line
     do
-        echo "\e[34m txt2vec \e[0m " $line
         [ -e $learning_dir/vectors/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
+        echo "\e[34m txt2vec \e[0m " $line
         $vectorizer_method.txt2vec "$line" > $learning_dir/vectors/$(basename "$line")
     done
 
@@ -671,8 +671,8 @@ learning.fit(){
     [ -e $learning_dir/classifier_train ] || cp -r $learning_dir/documents $learning_dir/classifier_train
     ls $learning_dir/classifier_train/* | while read line
     do
-        echo "\e[34m reduce \e[0m " $line
         [ -e $learning_dir/vectors_reduced/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
+        echo "\e[34m reduce \e[0m " $line
         learning.doc2rvect "$line" > $learning_dir/vectors_reduced/$(basename "$line")
     done
 
