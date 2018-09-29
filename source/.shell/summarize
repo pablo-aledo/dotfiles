@@ -54,7 +54,7 @@ tfidf.get_features(){
 
 getwords(){
     #cat $1 | sed \
-    head -n20 $1 | tr '[A-Z]' '[a-z]' | sed \
+    strings $1 | head -n20 | tr '[A-Z]' '[a-z]' | sed \
         -e 's/ /\n/g'  \
         -e 's/\./\n/g' \
         -e 's/\t/\n/g' \
