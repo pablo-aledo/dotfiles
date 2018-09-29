@@ -878,6 +878,12 @@ learning.get_documents(){
             continue
         fi
 
+        if [ "$( keywords.doc2vec_debug $line )" = "" ]
+        then
+            echo "\e[31m $line does not contain any keyword \e[0m"
+            rm -rf $line
+            continue
+        fi
 
     done
 }
