@@ -617,7 +617,7 @@ learning.doc2txt(){
 }
 
 learning.doc2rvect(){
-    if [ -e $learning_dir/vectors/$(basename $1) ]
+    if [ -e "$learning_dir/vectors/$(basename $1)" ]
     then
         vector=$(cat $learning_dir/vectors/$(basename $1))
         $pca_method.transform $vector
