@@ -617,13 +617,16 @@ learning.doc2txt(){
 }
 
 learning.doc2rvect(){
-    rm -fr /tmp/txt
-    learning.doc2txt $1 /tmp/txt
-
-    vector=$($vectorizer_method.txt2vec /tmp/txt)
-
-    $pca_method.transform $vector
-
+    if [ -e $learning_dir/vectors/$(basename $1) ]
+    then
+        vector=$(cat $learning_dir/vectors/$(basename $1))
+        $pca_method.transform $vector
+    else
+        rm -fr /tmp/txt
+        learning.doc2txt $1 /tmp/txt
+        vector=$($vectorizer_method.txt2vec /tmp/txt)
+        $pca_method.transform $vector
+    fi
 }
 
 learning.rvect2key(){
