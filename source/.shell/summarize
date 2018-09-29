@@ -57,6 +57,9 @@ getwords(){
         -e 's/ /\n/g'  \
         -e 's/\./\n/g' \
         -e 's/\t/\n/g' \
+        -e 's/\f/\n/g' \
+        -e 's/\v/\n/g' \
+        -e 's/\r/\n/g' \
         -e 's/-/\n/g'  \
         -e 's/\//\n/g' \
         -e 's/\\/\n/g' \
@@ -80,7 +83,7 @@ getwords(){
         -e 's/@/\n/g'  \
         -e 's/:/\n/g'  \
         -e 's/~/\n/g'  \
-        | sort | uniq -c > /tmp/keywords
+        | sort | uniq -c | egrep -v '^ *[0-9]* $' > /tmp/keywords
         # -e 's/\+/\n/g' \
 }
 
