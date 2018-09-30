@@ -199,20 +199,20 @@ doc2txt_rec(){
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
 		(*.pdf|*.PDF)
-			pdftotext -f 1 -l $summarize_page_limit "$filename" - | strings -n0 >> "$destination"
+			pdftotext -f 1 -l $summarize_page_limit "$filename" - | strings -n1 >> "$destination"
 			;;
 		(*.epub|*.EPUB)
-			epub2txt "$filename" | head -n $summarize_line_limit | strings -n0 >> "$destination"
+			epub2txt "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
 			;;
 		(*.mobi|*.MOBI)
 			ebook-convert "$filename" /tmp/mobi.txt
-			cat /tmp/mobi.txt | head -n $summarize_line_limit | strings -n0 >> "$destination"
+			cat /tmp/mobi.txt | head -n $summarize_line_limit | strings -n1 >> "$destination"
 			;;
 		(*.txt|*.TXT)
-			cat "$filename" | head -n $summarize_line_limit | strings -n0 >> "$destination"
+			cat "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
 			;;
 		(*)
-			file "$filename" | grep 'text' >/dev/null && cat "$filename" | head -n $summarize_line_limit | strings -n0 >> "$destination"
+			file "$filename" | grep 'text' >/dev/null && cat "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
 			file "$filename" | grep 'text' >/dev/null || echo "$filename" >> "$destination"
 	esac
 }
