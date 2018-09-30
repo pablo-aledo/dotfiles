@@ -1,5 +1,5 @@
 vectorizer_method=keywords
-pca_method=pca100
+pca_method=pca
 classifier_method=linear_classifier
 regression_method=linear_regression
 clustering_method=kmeans_clustering
@@ -10,6 +10,7 @@ learning_docs_per_class=5
 keywords_normalize="false"
 summarize_page_limit=99999
 summarize_line_limit=99999
+generate_topic_documents=true
 
 ncd.get_features(){
     cp -r $learning_dir/txts/* $learning_dir/features
@@ -841,11 +842,11 @@ learning.get_documents(){
 
     inipwd=$PWD
 
-    cp /tmp/topics /tmp/topics_to_get
-    [ -e $learning_dir/skip ] && comm -13 <(cat $learning_dir/skip | sort | uniq) <(cat $learning_dir/topics | sort | uniq) > /tmp/topics_to_get
+    cat $learning_dir/topics/topics | awk '{print $NF}' > /tmp/topics_to_get
+    [ -e $learning_dir/topics/skip ] && comm -13 <(cat $learning_dir/topics/skip | sort | uniq) <(cat $learning_dir/topics/topics | awk '{print $NF}' | sort | uniq) > /tmp/topics_to_get
     [ $# -gt 0 ] && echo $* | sed 's/ /\n/g' > /tmp/topics_to_get
 
-    for topic in $( cat /tmp/topics_to_get )
+    cat /tmp/topics_to_get | while read topic
     do
         echo "\e[34m ===== $topic ===== \e[0m"
 
@@ -873,6 +874,12 @@ learning.get_documents(){
             echo "\e[34m doc2txt \e[0m $file $topic.$crctitle"
             learning.doc2txt "$file" "$learning_dir/documents/$topic.$crctitle"
         done
+
+        if [ $generate_topic_documents = "true" ]
+        then
+            echo $topic | sed 's/_/ /g' > "$learning_dir/documents/$topic.topic"
+        fi
+
         cd $inipwd
     done
 
