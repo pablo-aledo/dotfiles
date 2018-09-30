@@ -661,7 +661,8 @@ learning.fit(){
     [ -e $learning_dir/documents ] || mkdir -p $learning_dir/documents
     [ -e $learning_dir/topics ] && [ -e $learning_src ] && learning.get_documents
 
-    #rm -fr $learning_dir/txts; mkdir -p $learning_dir/txts
+    #rm -fr $learning_dir/txts;
+    mkdir -p $learning_dir/txts
     ls $learning_dir/documents/* | while read line
     do
         [ -e $learning_dir/txts/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
@@ -673,7 +674,8 @@ learning.fit(){
     echo "\e[34m get_features \e[0m "
     $vectorizer_method.get_features
 
-    #rm -fr $learning_dir/vectors; mkdir -p $learning_dir/vectors
+    #rm -fr $learning_dir/vectors;
+    mkdir -p $learning_dir/vectors
     ls $learning_dir/txts/* | while read line
     do
         [ -e $learning_dir/vectors/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
@@ -685,7 +687,8 @@ learning.fit(){
     echo "\e[34m pca \e[0m "
     $pca_method.fit
 
-    #rm -fr $learning_dir/vectors_reduced; mkdir -p $learning_dir/vectors_reduced
+    #rm -fr $learning_dir/vectors_reduced;
+    mkdir -p $learning_dir/vectors_reduced
     [ -e $learning_dir/classifier_train ] || cp -r $learning_dir/documents $learning_dir/classifier_train
     ls $learning_dir/classifier_train/* | while read line
     do
