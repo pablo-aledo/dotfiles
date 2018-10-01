@@ -228,6 +228,9 @@ gzip_distance(){
    python -c "print float($s12 - min($s1, $s2))/float(max($s1,$s2))"
 }
 
+identity.fit(){
+}
+
 pca.fit(){
     rm -fr /tmp/reduced_vectors
     for file in $learning_dir/vectors/*
@@ -544,6 +547,10 @@ print normalized
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -d' ' -s
+}
+
+identity.transform(){
+    echo $1
 }
 
 pca100.transform() {
