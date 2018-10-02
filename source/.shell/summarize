@@ -847,11 +847,12 @@ filter_classifier.transform(){
         echo $(( $nkeys*100/$nwords )) $line
     done | sort -g > /tmp/lines_sorted
 
-    line=$(tail -n1 /tmp/lines_sorted)
+    #line=$(tail -n1 /tmp/lines_sorted)
+    line=$(cat /tmp/lines_sorted | awk '$1>30' | sed 's/^ *[0-9]* //g' | paste -s)
 
     echo $line > /tmp/line
 
-    linear_classifier.transform /tmp/line
+    jaccard_classifier.transform /tmp/line
 }
 
 kmeans_clustering.transform(){
