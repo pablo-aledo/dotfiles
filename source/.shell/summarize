@@ -228,6 +228,23 @@ gzip_distance(){
    python -c "print float($s12 - min($s1, $s2))/float(max($s1,$s2))"
 }
 
+jaccard_distance(){
+    rm -fr /tmp/s1 /tmp/s2
+    learning.doc2txt "$1" /tmp/s1
+    learning.doc2txt "$2" /tmp/s2
+
+    getwords /tmp/s1
+    cat /tmp/keywords | sed 's/^ *[0-9]* //g' | sort | uniq > /tmp/k1
+
+    getwords /tmp/s2
+    cat /tmp/keywords | sed 's/^ *[0-9]* //g' | sort | uniq > /tmp/k2
+
+    si=$( comm -12 /tmp/k1 /tmp/k2 | wc -l )
+    su=$( cat      /tmp/k1 /tmp/k2 | sort | uniq | wc -l )
+
+    python -c "print 1.0-float($si)/float($su+0.00001)"
+}
+
 identity.fit(){
 }
 
