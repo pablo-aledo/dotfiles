@@ -30,32 +30,10 @@ keywords.get_features(){
     [ -e ~/Dotfiles/keywords/keywords ] || cat $learning_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $learning_dir/features/keywords
 }
 
-tfidf.get_features(){
-    mkdir -p $learning_dir/features
-
-    if ! [ -e $learning_dir/features/keywords ]
-    then
-        [ -e ~/Dotfiles/keywords/keywords ] && cp ~/Dotfiles/keywords/keywords $learning_dir/features/keywords
-        [ -e ~/Dotfiles/keywords/keywords ] || cat $learning_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $learning_dir/features/keywords
-    fi
-
-    cat $learning_dir/txts/* > /tmp/all_docs
-    getwords /tmp/all_docs
-
-    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$') # TODO make a method
-    do
-         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
-         [ $a[0,1] = '^' ] || regex=$a
-         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
-         [ "$value" = "" ] && value=0
-         echo $value
-    done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g' > $learning_dir/features/idf
-
-}
-
 getwords(){
     #cat $1 | sed \
-    cat $1 | head -n20 | tr '[A-Z]' '[a-z]' | sed \ # TODO Use variables limit # TODO use variables to decide capitalization
+    # TODO Use variables limit # TODO use variables to decide capitalization
+    cat | head -n20 | tr '[A-Z]' '[a-z]' | sed \
         -e 's/ /\n/g'  \
         -e 's/\./\n/g' \
         -e 's/\t/\n/g' \
@@ -85,28 +63,29 @@ getwords(){
         -e 's/@/\n/g'  \
         -e 's/:/\n/g'  \
         -e 's/~/\n/g'  \
-        | sort | uniq -c | egrep -v '^ *[0-9]* $' > /tmp/keywords
+        | sort | uniq -c | egrep -v '^ *[0-9]* $'
         # -e 's/\+/\n/g' \
 }
 
-# TODO implement get_keywords
-
-keywords.txt2vec(){
-    getwords $1
-
-    vect=$(for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$') # TODO use a method
+getkeywords(){
+    cat > /tmp/keywords
+    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
          value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && value=0
-         echo $value
-         sum_kw=$(( $sum_kw + $value ))
-         echo $sum_kw > /tmp/sum_kw
-    done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g')
+         echo $value $a
+    done
+}
 
-    [ $keywords_normalize = "full" ] && total=$( cat /tmp/keywords | awk '{sum += $1} END {print sum}' )
-    [ $keywords_normalize = "keys" ] && total=$(cat /tmp/sum_kw)
+keywords.txt2vec(){
+
+    cat $1 | getwords | getkeywords > /tmp/kwords
+
+    vect=$(cat /tmp/kwords | awk '{print $1}' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g')
+    [ $keywords_normalize = "full" ] && total=$( cat $1 | wc -w )
+    [ $keywords_normalize = "keys" ] && total=$(cat /tmp/kwords | awk '{sum += $1} END {print sum}' )
     [ $keywords_normalize = "false" ] && total=1
 
     python -c "
@@ -143,34 +122,6 @@ keywords.doc2vec_debug_sorted(){
          value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
          [ "$value" != "" ] && echo $value $a
     done  | sort -g | tac
-}
-
-tfidf.txt2vec(){
-    getwords $1
-
-    total=$( cat /tmp/keywords | awk '{sum += $1} END {print sum}' )
-
-    y=$(for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$') # TODO use method
-    do
-         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
-         [ $a[0,1] = '^' ] || regex=$a
-         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
-         [ "$value" = "" ] && value=0
-         [ $keywords_normalize = "true" ] && echo "print($value/$total.)" | python
-         [ $keywords_normalize = "true" ] || echo $value
-     done | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g')
-
-    idf=$(cat $learning_dir/features/idf)
-
-python -c "
-import numpy as np
-np.set_printoptions(threshold=np.nan)
-y=$y
-idf=$idf
-idf=[ i+0.00001 for i in idf ]
-print( np.divide(y, idf) )
-" | sed -e 's/ \+/ /g' -e 's/ /, /g' -e 's/\[,/\[/g' | paste -s
-
 }
 
 doc2txt_rec(){
@@ -830,21 +781,8 @@ filter_classifier.transform(){
 
     head -n10 /tmp/filter | while read line # TODO use variable
     do
-        echo $line > /tmp/line
-        getwords /tmp/line
-
-        sum_kw=0
-        for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$') # TODO use method
-        do
-             [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
-             [ $a[0,1] = '^' ] || regex=$a
-             value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
-             [ "$value" = "" ] && value=0
-             sum_kw=$(( $sum_kw + $value ))
-             echo $sum_kw > /tmp/sum_kw
-        done
-
-        nkeys=$(cat /tmp/sum_kw)
+        echo $line | getwords | getkeywords > /tmp/kwords
+        nkeys=$(cat /tmp/kwords | awk '{sum += $1} END {print sum}' )
         nwords=$(echo $line | wc -w)
         echo $(( $nkeys*100/$nwords )) $line
     done | sort -g > /tmp/lines_sorted
