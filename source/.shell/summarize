@@ -42,7 +42,7 @@ tfidf.get_features(){
     cat $learning_dir/txts/* > /tmp/all_docs
     getwords /tmp/all_docs
 
-    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$') # TODO make a method
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
@@ -55,7 +55,7 @@ tfidf.get_features(){
 
 getwords(){
     #cat $1 | sed \
-    cat $1 | head -n20 | tr '[A-Z]' '[a-z]' | sed \
+    cat $1 | head -n20 | tr '[A-Z]' '[a-z]' | sed \ # TODO Use variables limit # TODO use variables to decide capitalization
         -e 's/ /\n/g'  \
         -e 's/\./\n/g' \
         -e 's/\t/\n/g' \
@@ -89,10 +89,12 @@ getwords(){
         # -e 's/\+/\n/g' \
 }
 
+# TODO implement get_keywords
+
 keywords.txt2vec(){
     getwords $1
 
-    vect=$(for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    vect=$(for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$') # TODO use a method
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
@@ -148,7 +150,7 @@ tfidf.txt2vec(){
 
     total=$( cat /tmp/keywords | awk '{sum += $1} END {print sum}' )
 
-    y=$(for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    y=$(for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$') # TODO use method
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
@@ -199,11 +201,11 @@ doc2txt_rec(){
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
 		(*.pdf|*.PDF)
-			pdftotext -f 1 -l $summarize_page_limit "$filename" - | strings -n1 >> "$destination"
+			pdftotext -f 1 -l $summarize_page_limit "$filename" - | strings -n1 >> "$destination" # TODO: Also limit lines
 			;;
 		(*.epub|*.EPUB)
 			epub2txt "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
-			;;
+			;; # TODO Add more formats
 		(*.mobi|*.MOBI)
 			ebook-convert "$filename" /tmp/mobi.txt
 			cat /tmp/mobi.txt | head -n $summarize_line_limit | strings -n1 >> "$destination"
@@ -234,10 +236,10 @@ jaccard_distance(){
     learning.doc2txt "$2" /tmp/s2
 
     getwords /tmp/s1
-    cat /tmp/keywords | sed 's/^ *[0-9]* //g' | sort | uniq > /tmp/k1
+    cat /tmp/keywords | sed 's/^ *[0-9]* //g' | sort | uniq > /tmp/k1 # TODO remove sed?
 
     getwords /tmp/s2
-    cat /tmp/keywords | sed 's/^ *[0-9]* //g' | sort | uniq > /tmp/k2
+    cat /tmp/keywords | sed 's/^ *[0-9]* //g' | sort | uniq > /tmp/k2 # TODO remove sed?
 
     si=$( comm -12 /tmp/k1 /tmp/k2 | wc -l )
     su=$( cat      /tmp/k1 /tmp/k2 | sort | uniq | wc -l )
@@ -245,7 +247,7 @@ jaccard_distance(){
     python -c "print 1.0-float($si)/float($su+0.00001)"
 }
 
-jaccardk_distance(){
+jaccardk_distance(){ # TODO implement with vectors
     rm -fr /tmp/s1 /tmp/s2
     learning.doc2txt "$1" /tmp/s1
     learning.doc2txt "$2" /tmp/s2
@@ -274,7 +276,7 @@ jaccardk_distance(){
     python -c "print 1.0-float($si)/float($su+0.00001)"
 }
 
-jaccard_classifier.transform(){
+jaccard_classifier.transform(){ # TODO implement with vectors # TODO implement with closest
     rm -fr /tmp/s1
     learning.doc2txt "$1" /tmp/s1
 
@@ -303,7 +305,7 @@ print min(distances, key=distances.get)
 "
 }
 
-jaccard_classifier.fit(){
+jaccard_classifier.fit(){ # TODO implement with vectors
     ls $learning_dir/txts/* | while read line
     do
         getwords $line
@@ -326,7 +328,7 @@ pca.fit(){
     do
         cat $file >> /tmp/reduced_vectors
     done
-    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/reduced_vectors
+    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/reduced_vectors # TODO when writing
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
@@ -346,7 +348,7 @@ pca100.fit(){
     do
         cat $file >> /tmp/reduced_vectors
     done
-    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/reduced_vectors
+    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/reduced_vectors # TODO when writing
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
@@ -366,7 +368,7 @@ pca_pickle.fit(){
     do
         cat $file >> /tmp/reduced_vectors
     done
-    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/reduced_vectors
+    sed -i -e 's/\[//g' -e 's/\]//g' -e 's/,//g' /tmp/reduced_vectors # TODO when writing
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
@@ -511,7 +513,7 @@ vect2s(){
     read vect
     learning.rvect2key "$( python -c "
 vect=$vect
-print([ (i/float(max(vect)+0.00001) - 0.5)/3.0 for i in vect ])
+print([ (i/float(max(vect)+0.00001) - 0.5)/3.0 for i in vect ]) # TODO use scale
 ")" | sed -e 's/0/./g' -e 's/^/[/g' -e 's/$/]/g'
 }
 
@@ -524,14 +526,14 @@ linear_classifier.evaluate(){
         echo $(basename "$line") | sed 's/\..*//g' >> /tmp/classifier.y_true
     done
 
-    y_pred=$(cat /tmp/classifier.y_pred | sed -e 's/^/"/g' -e 's/$/"/g' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
-    y_true=$(cat /tmp/classifier.y_true | sed -e 's/^/"/g' -e 's/$/"/g' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g')
+    y_pred=$(cat /tmp/classifier.y_pred | sed -e 's/^/"/g' -e 's/$/"/g' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g') # TODO use file
+    y_true=$(cat /tmp/classifier.y_true | sed -e 's/^/"/g' -e 's/$/"/g' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g') # TODO use file
 
 	python -c "
 from sklearn import metrics
 
-y_pred=$y_pred
-y_true=$y_true
+y_pred=$y_pred # TODO use file
+y_true=$y_true # TODO use file
 
 score = metrics.accuracy_score(y_true, y_pred)
 print('accuracy:   %0.3f' % score)
@@ -740,7 +742,7 @@ learning.rvect2key(){
 	python -c "
 import numpy as np
 normalized=$1
-normalized=[ i*3.0 + 0.5 for i in normalized ]
+normalized=[ i*3.0 + 0.5 for i in normalized ] # TODO use scale
 normalized=[ max(min(i,1.0),0.0) for i in normalized ]
 chars=\"0123456789\"
 rvect=[ chars[int((i)*(len(chars)-1))] for i in normalized ]
@@ -826,13 +828,13 @@ cat $learning_dir/classifier/map | grep "^ $y " | awk '{print $2}'
 filter_classifier.transform(){
     learning.doc2txt $1 > /tmp/filter
 
-    head -n10 /tmp/filter | while read line
+    head -n10 /tmp/filter | while read line # TODO use variable
     do
         echo $line > /tmp/line
         getwords /tmp/line
 
         sum_kw=0
-        for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
+        for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$') # TODO use method
         do
              [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
              [ $a[0,1] = '^' ] || regex=$a
@@ -886,7 +888,7 @@ print(reg.predict(x)[0])
 "
 }
 
-learning.compare(){
+learning.compare(){ # TODO parameterize distance
 
     rm -fr /tmp/t1 /tmp/t2
 
@@ -906,7 +908,7 @@ print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 
 }
 
-learning.distance(){
+learning.distance(){ # TODO parameterize distance
     python -c "
 import numpy as np
 import math
@@ -930,7 +932,7 @@ print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 #"
 #}
 
-learning.sortdist(){
+learning.sortdist(){ # TODO parameterize distance # TODO use files
     h1=$(learning.doc2rvect $1)
 	for file in $learning_dir/vectors_reduced/*
 	do
@@ -958,7 +960,7 @@ keywords_filter () {
 		found=0
 		echo $line > /tmp/line
 		getwords /tmp/line
-		for a in $(cat ~/learning/features/keywords | grep -v '^#' | grep -v '^$')
+		for a in $(cat ~/learning/features/keywords | grep -v '^#' | grep -v '^$') # TODO use method?
 		do
 			[ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
 			[ $a[0,1] = '^' ] || regex=$a
