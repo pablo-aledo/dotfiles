@@ -245,6 +245,35 @@ jaccard_distance(){
     python -c "print 1.0-float($si)/float($su+0.00001)"
 }
 
+jaccardk_distance(){
+    rm -fr /tmp/s1 /tmp/s2
+    learning.doc2txt "$1" /tmp/s1
+    learning.doc2txt "$2" /tmp/s2
+
+    getwords /tmp/s1
+    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    do
+         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
+         [ $a[0,1] = '^' ] || regex=$a
+         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
+         [ "$value" != "" ] && echo $a
+     done > /tmp/k1
+
+    getwords /tmp/s2
+    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    do
+         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
+         [ $a[0,1] = '^' ] || regex=$a
+         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
+         [ "$value" != "" ] && echo $a
+     done > /tmp/k2
+
+    si=$( comm -12 <(cat /tmp/k1 | sort) <(cat /tmp/k2 | sort) | wc -l )
+    su=$( cat /tmp/k1 /tmp/k2 | sort | uniq | wc -l )
+
+    python -c "print 1.0-float($si)/float($su+0.00001)"
+}
+
 identity.fit(){
 }
 
