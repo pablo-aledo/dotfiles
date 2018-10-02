@@ -35,8 +35,8 @@ aws_config(){
 		echo "AWS_REMOTE_FOLDER=/home/ubuntu"           >> /tmp/aws_config
 		echo "AWS_PEM=/tmp/default_kp.pem"              >> /tmp/aws_config
 		echo "AWS_USER=ubuntu"                          >> /tmp/aws_config
-		echo "AWS_PORT=22"                              >> /tmp/aws_config
 		echo "AWS_SERVER=pabloaledo.ddns.net"           >> /tmp/aws_config
+		echo "AWS_PORT=22"                              >> /tmp/aws_config
 		source /tmp/aws_config
 	fi
 
