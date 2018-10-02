@@ -274,6 +274,49 @@ jaccardk_distance(){
     python -c "print 1.0-float($si)/float($su+0.00001)"
 }
 
+jaccard_classifier.transform(){
+    rm -fr /tmp/s1
+    learning.doc2txt "$1" /tmp/s1
+
+    getwords /tmp/s1
+    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    do
+         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
+         [ $a[0,1] = '^' ] || regex=$a
+         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
+         [ "$value" != "" ] && echo $a
+     done > /tmp/k1
+
+    distances=$(ls $learning_dir/classifier/* | while read line
+    do
+        cat $line > /tmp/k2
+        si=$( comm -12 <(cat /tmp/k1 | sort) <(cat /tmp/k2 | sort) | wc -l )
+        su=$( cat /tmp/k1 /tmp/k2 | sort | uniq | wc -l )
+
+        echo -n "'"$(basename $line)"':"
+        python -c "print 1.0-float($si)/float($su+0.00001)"
+    done | paste -s -d',' | sed -e 's/^/{/g' -e 's/$/}/g')
+
+    python -c "
+distances=$distances;
+print min(distances, key=distances.get)
+"
+}
+
+jaccard_classifier.fit(){
+    ls $learning_dir/txts/* | while read line
+    do
+        getwords $line
+        for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
+        do
+             [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
+             [ $a[0,1] = '^' ] || regex=$a
+             value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
+             [ "$value" != "" ] && echo $a
+        done > $learning_dir/classifier/$(basename $line)
+    done
+}
+
 identity.fit(){
 }
 
