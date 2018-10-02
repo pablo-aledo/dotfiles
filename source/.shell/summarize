@@ -81,6 +81,19 @@ getkeywords(){
     done
 }
 
+haskeyword(){
+    cat > /tmp/keywords
+    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
+    do
+         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
+         [ $a[0,1] = '^' ] || regex=$a
+         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
+         [ "$value" = "" ] && continue
+         echo true && return
+    done
+    echo false
+}
+
 keywords.txt2vec(){
 
     cat $1 | getwords | getkeywords > /tmp/kwords
@@ -188,11 +201,8 @@ jaccard_distance(){
     learning.doc2txt "$1" /tmp/s1
     learning.doc2txt "$2" /tmp/s2
 
-    getwords /tmp/s1
-    cat /tmp/keywords | sed 's/^ *[0-9]* //g' | sort | uniq > /tmp/k1 # TODO remove sed?
-
-    getwords /tmp/s2
-    cat /tmp/keywords | sed 's/^ *[0-9]* //g' | sort | uniq > /tmp/k2 # TODO remove sed?
+    cat /tmp/s1 | getwords | sort | uniq > /tmp/k1
+    cat /tmp/s2 | getwords | sort | uniq > /tmp/k2
 
     si=$( comm -12 /tmp/k1 /tmp/k2 | wc -l )
     su=$( cat      /tmp/k1 /tmp/k2 | sort | uniq | wc -l )
@@ -892,19 +902,10 @@ learning.knn(){
 }
 
 keywords_filter () {
-	cat $1 | while read line
+	cat | while read line
 	do
-		found=0
-		echo $line > /tmp/line
-		getwords /tmp/line
-		for a in $(cat ~/learning/features/keywords | grep -v '^#' | grep -v '^$') # TODO use method?
-		do
-			[ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
-			[ $a[0,1] = '^' ] || regex=$a
-			value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
-			[ "$value" != "" ] && found=1  && break
-		done
-		[ $found -eq 1 ] && echo $line
+        haskeyword=$( echo $line | getwords | haskeyword )
+		[ $has_keyword = "true" ] && echo $line
 	done
 }
 
@@ -969,8 +970,7 @@ learning.get_documents(){
             continue
         fi
 
-        cat $line > /tmp/detkw
-        if [ "$( keywords_filter /tmp/detkw )" = "" ]
+        if [ "$( cat $line | keywords_filter )" = "" ]
         then
             echo "\e[31m $line does not contain any keyword \e[0m"
             rm -rf $line
