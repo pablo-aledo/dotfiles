@@ -212,7 +212,7 @@ jaccard_distance(){
 }
 
 jaccard_classifier.transform(){
-    learning.closest $1
+    learning.knn $1 1
 }
 
 jaccard_classifier.fit(){
@@ -413,11 +413,12 @@ print([ (i/float(max(vect)+0.00001) - 0.5)/$learning_scale for i in vect ])
 ")" | sed -e 's/0/./g' -e 's/^/[/g' -e 's/$/]/g'
 }
 
-linear_classifier.evaluate(){
+classifier.evaluate(){
 
     rm -fr /tmp/classifier.y_true /tmp/classifier.y_pred
     ls $learning_dir/classifier_test/* | while read line
     do
+        echo "\e[34m transform \e[0m" $line
         $classifier_method.transform "$line" >> /tmp/classifier.y_pred
         echo $(basename "$line") | sed 's/\..*//g' >> /tmp/classifier.y_true
     done
@@ -470,8 +471,6 @@ then
         fi
     done
 fi
-
-
 }
 
 linear_regression.fit(){
@@ -693,7 +692,7 @@ learning.fit(){
     rm -fr $learning_dir/classifier; mkdir -p $learning_dir/classifier
     echo "\e[34m classifier \e[0m "
     $classifier_method.fit
-    [ -e $learning_dir/classifier_test ] && $classifier_method.evaluate
+    [ -e $learning_dir/classifier_test ] && classifier.evaluate
 
     rm -fr $learning_dir/regression; mkdir -p $learning_dir/regression
     echo "\e[34m regression \e[0m "
