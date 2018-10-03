@@ -13,6 +13,7 @@ summarize_line_limit=99999
 generate_topic_documents=true
 keywords_lowercase=true
 learning_scale=3.0
+learning_distance=jaccard
 
 ncd.get_features(){
     cp -r $learning_dir/txts/* $learning_dir/features
@@ -206,35 +207,6 @@ jaccard_distance(){
 
     si=$( comm -12 /tmp/k1 /tmp/k2 | wc -l )
     su=$( cat      /tmp/k1 /tmp/k2 | sort | uniq | wc -l )
-
-    python -c "print 1.0-float($si)/float($su+0.00001)"
-}
-
-jaccardk_distance(){ # TODO implement with vectors
-    rm -fr /tmp/s1 /tmp/s2
-    learning.doc2txt "$1" /tmp/s1
-    learning.doc2txt "$2" /tmp/s2
-
-    getwords /tmp/s1
-    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
-    do
-         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
-         [ $a[0,1] = '^' ] || regex=$a
-         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
-         [ "$value" != "" ] && echo $a
-     done > /tmp/k1
-
-    getwords /tmp/s2
-    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
-    do
-         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
-         [ $a[0,1] = '^' ] || regex=$a
-         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
-         [ "$value" != "" ] && echo $a
-     done > /tmp/k2
-
-    si=$( comm -12 <(cat /tmp/k1 | sort) <(cat /tmp/k2 | sort) | wc -l )
-    su=$( cat /tmp/k1 /tmp/k2 | sort | uniq | wc -l )
 
     python -c "print 1.0-float($si)/float($su+0.00001)"
 }
@@ -835,51 +807,22 @@ print(reg.predict(x)[0])
 "
 }
 
-learning.compare(){ # TODO parameterize distance
-
-    rm -fr /tmp/t1 /tmp/t2
-
-    learning.doc2txt $1 /tmp/t1
-    learning.doc2txt $2 /tmp/t2
-
-    h1=$(learning.doc2rvect /tmp/t1)
-    h2=$(learning.doc2rvect /tmp/t2)
-
-    python -c "
-import numpy as np
-import math
-h1=$h1
-h2=$h2
-print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
-"
-
-}
-
-learning.distance(){ # TODO parameterize distance
+learning.distance(){
     python -c "
 import numpy as np
 import math
 h1=$1
 h2=$2
-print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
+if( $learning_distance = 'jaccard' ):
+    h1_set = Set( [ i for i in range(0, len(h1)-1) if h1[i] != 0 ) ]
+    h2_set = Set( [ i for i in range(0, len(h2)-1) if h2[i] != 0 ) ]
+    print 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ))
+if( $learning_distance = 'euclidean' ):
+    print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 "
-
 }
 
-#learning.closest(){
-    #h1=$(learning.doc2rvect $1)
-	#for file in $learning_dir/vectors_reduced/*
-	#do
-        #d=$(learning.distance "$h1" "$(cat $file)")
-		#echo \"$(basename "$file")\" ":" $d ","
-	#done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
-	#python -c "
-#distances=$distances;
-#print min(distances, key=distances.get)
-#"
-#}
-
-learning.sortdist(){ # TODO parameterize distance # TODO use files
+learning.sortdist(){ # TODO use files
     h1=$(learning.doc2rvect $1)
 	for file in $learning_dir/vectors_reduced/*
 	do
