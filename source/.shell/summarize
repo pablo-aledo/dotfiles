@@ -1,6 +1,6 @@
 vectorizer_method=keywords
-pca_method=pca
-classifier_method=linear_classifier
+pca_method=identity
+classifier_method=jaccard_classifier
 regression_method=linear_regression
 clustering_method=kmeans_clustering
 learning_evaluate_vects="true"
@@ -8,8 +8,8 @@ learning_dir=$HOME/learning
 learning_src=/media/removable/2TB2/homes/admin/Alejandria
 learning_docs_per_class=5
 keywords_normalize="false"
-summarize_page_limit=99999
-summarize_line_limit=99999
+summarize_page_limit=3
+summarize_line_limit=10
 generate_topic_documents=true
 keywords_lowercase=true
 learning_scale=3.0
@@ -172,7 +172,7 @@ doc2txt_rec(){
 			;;
 		(*.epub|*.EPUB)
 			epub2txt "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
-			;; # TODO Add more formats
+			;;
 		(*.mobi|*.MOBI)
 			ebook-convert "$filename" /tmp/mobi.txt
 			cat /tmp/mobi.txt | head -n $summarize_line_limit | strings -n1 >> "$destination"
@@ -211,47 +211,11 @@ jaccard_distance(){
     python -c "print 1.0-float($si)/float($su+0.00001)"
 }
 
-jaccard_classifier.transform(){ # TODO implement with vectors # TODO implement with closest
-    rm -fr /tmp/s1
-    learning.doc2txt "$1" /tmp/s1
-
-    getwords /tmp/s1
-    for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
-    do
-         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
-         [ $a[0,1] = '^' ] || regex=$a
-         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
-         [ "$value" != "" ] && echo $a
-     done > /tmp/k1
-
-    distances=$(ls $learning_dir/classifier/* | while read line
-    do
-        cat $line > /tmp/k2
-        si=$( comm -12 <(cat /tmp/k1 | sort) <(cat /tmp/k2 | sort) | wc -l )
-        su=$( cat /tmp/k1 /tmp/k2 | sort | uniq | wc -l )
-
-        echo -n "'"$(basename $line)"':"
-        python -c "print 1.0-float($si)/float($su+0.00001)"
-    done | paste -s -d',' | sed -e 's/^/{/g' -e 's/$/}/g')
-
-    python -c "
-distances=$distances;
-print min(distances, key=distances.get)
-"
+jaccard_classifier.transform(){
+    learning.closest $1
 }
 
-jaccard_classifier.fit(){ # TODO implement with vectors
-    ls $learning_dir/txts/* | while read line
-    do
-        getwords $line
-        for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
-        do
-             [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
-             [ $a[0,1] = '^' ] || regex=$a
-             value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
-             [ "$value" != "" ] && echo $a
-        done > $learning_dir/classifier/$(basename $line)
-    done
+jaccard_classifier.fit(){
 }
 
 identity.fit(){
