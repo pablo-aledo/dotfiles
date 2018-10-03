@@ -775,13 +775,14 @@ learning.distance(){
     python -c "
 import numpy as np
 import math
+from sets import Set
 h1=$1
 h2=$2
-if( $learning_distance = 'jaccard' ):
-    h1_set = Set( [ i for i in range(0, len(h1)-1) if h1[i] != 0 ) ]
-    h2_set = Set( [ i for i in range(0, len(h2)-1) if h2[i] != 0 ) ]
+if( '$learning_distance' == 'jaccard' ):
+    h1_set = Set( [ i for i in range(0, len(h1)-1) if h1[i] != 0 ] )
+    h2_set = Set( [ i for i in range(0, len(h2)-1) if h2[i] != 0 ] )
     print 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ))
-if( $learning_distance = 'euclidean' ):
+if( '$learning_distance' == 'euclidean' ):
     print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 "
 }
@@ -794,9 +795,13 @@ learning.sortdist(){ # TODO use files
 		echo \"$(basename "$file")\" ":" $d ","
 	done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
 	python -c "
+import sys, errno
 distances=$distances;
-for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
-  print '%s' % (key)
+try:
+    for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
+        print '%s' % (key)
+except IOError as e:
+        pass
 "
 }
 
