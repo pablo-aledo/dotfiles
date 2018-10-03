@@ -347,9 +347,9 @@ from sklearn.decomposition import PCA
 n_components=3
 
 with open('/tmp/names') as f:
-    names = f.read.splitlines()
+    names = [ line.rstrip('\n') for line in f ]
 with open('/tmp/vectors') as f:
-    vectors = f.read.splitlines()
+    vectors = [ line.rstrip('\n') for line in f ]
 doc_2_vect={ names[i]:np.fromstring(vectors[i], dtype=float, sep=' ') for i in range(0,len(names)-1) }
 
 doc_2_rank={k:99999 for k in doc_2_vect}
@@ -422,14 +422,13 @@ linear_classifier.evaluate(){
         echo $(basename "$line") | sed 's/\..*//g' >> /tmp/classifier.y_true
     done
 
-    y_pred=$(cat /tmp/classifier.y_pred | sed -e 's/^/"/g' -e 's/$/"/g' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g') # TODO use file
-    y_true=$(cat /tmp/classifier.y_true | sed -e 's/^/"/g' -e 's/$/"/g' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g') # TODO use file
-
 	python -c "
 from sklearn import metrics
 
-y_pred=$y_pred # TODO use file
-y_true=$y_true # TODO use file
+with open('/tmp/classifier.y_pred') as f:
+    y_pred = [ line.rstrip('\n') for line in f ]
+with open('/tmp/classifier.y_true') as f:
+    y_true = [ line.rstrip('\n') for line in f ]
 
 score = metrics.accuracy_score(y_true, y_pred)
 print('accuracy:   %0.3f' % score)
@@ -787,16 +786,24 @@ if( '$learning_distance' == 'euclidean' ):
 "
 }
 
-learning.sortdist(){ # TODO use files
+learning.sortdist(){
+    rm -fr /tmp/names /tmp/distances
     h1=$(learning.doc2rvect $1)
 	for file in $learning_dir/vectors_reduced/*
 	do
         d=$(learning.distance "$h1" "$(cat $file)")
-		echo \"$(basename "$file")\" ":" $d ","
-	done | paste -d"  " -s | sed -e 's/^/{/g' -e 's/,$/}/g' | read distances
+		echo $(basename "$file") >> /tmp/names
+        echo $d >> /tmp/distances
+	done
 	python -c "
 import sys, errno
-distances=$distances;
+
+with open('/tmp/names') as f:
+    names = [ line.rstrip('\n') for line in f ]
+with open('/tmp/distances') as f:
+    ds = [ line.rstrip('\n') for line in f ]
+distances={ names[i]:float(ds[i]) for i in range(0,len(names)-1) }
+
 try:
     for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
         print '%s' % (key)
