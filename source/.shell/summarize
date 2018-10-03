@@ -418,9 +418,11 @@ classifier.evaluate(){
     rm -fr /tmp/classifier.y_true /tmp/classifier.y_pred
     ls $learning_dir/classifier_test/* | while read line
     do
-        echo "\e[34m transform \e[0m" $line
-        $classifier_method.transform "$line" >> /tmp/classifier.y_pred
+        y_pred=$($classifier_method.transform "$line")
+        name=$(basename "$line")
+        echo $y_pred >> /tmp/classifier.y_pred
         echo $(basename "$line") | sed 's/\..*//g' >> /tmp/classifier.y_true
+        echo "\e[34m transform \e[0m" $name $y_pred
     done
 
 	python -c "
