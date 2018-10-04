@@ -82,6 +82,34 @@ getkeywords(){
     done
 }
 
+getkeywords(){
+    cat > /tmp/keywords
+
+    python -c "
+import re
+
+with open('/tmp/keywords') as f:
+    lines = [ line.rstrip('\n') for line in f ]
+with open('/home/pablo_aledo_rss/learning/features/keywords') as f:
+    keywords = [ line.rstrip('\n') for line in f ]
+    keywords = [ keyword for keyword in keywords if keyword != '' ]
+
+for keyword in keywords:
+    value = 0
+
+    if(keyword[0] == '^'):
+        regex='^ *[0-9]* .*' + keyword[1:]
+    else:
+        regex='^ *[0-9]* .*' + keyword
+
+    for line in lines:
+        if(re.match(regex,line)):
+            value += int( [x for x in line.split(' ') if x != ''][0] )
+
+    print( repr(value) + ' ' + keyword )
+"
+}
+
 haskeyword(){
     cat > /tmp/keywords
     for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
