@@ -879,6 +879,7 @@ distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)-1) 
 try:
     for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
         print '%s' % (key)
+    sys.stdout.flush()
 except IOError as e:
         pass
 "
