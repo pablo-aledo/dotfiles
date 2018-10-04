@@ -70,13 +70,13 @@ getwords(){
         # -e 's/\+/\n/g' \
 }
 
-getkeywords(){
+getkeywords_(){
     cat > /tmp/keywords
     for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
-         [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
-         [ $a[0,1] = '^' ] || regex=$a
-         value=$( cat /tmp/keywords | egrep '^ *[0-9]* .*'$regex | awk '{sum += $1} END {print sum}' )
+         [ $a[0,1] = '^' ] && regex='^ *[0-9]* '$(echo $a | sed 's/^.//g' )
+         [ $a[0,1] = '^' ] || regex='^ *[0-9]* .*'$a
+         value=$( cat /tmp/keywords | egrep $regex | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && value=0
          echo $value $a
     done
@@ -98,7 +98,7 @@ for keyword in keywords:
     value = 0
 
     if(keyword[0] == '^'):
-        regex='^ *[0-9]* .*' + keyword[1:]
+        regex='^ *[0-9]* ' + keyword[1:]
     else:
         regex='^ *[0-9]* .*' + keyword
 
