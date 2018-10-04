@@ -445,6 +445,8 @@ print([ (i/float(max(vect)+0.00001) - 0.5)/$learning_scale for i in vect ])
 classifier.evaluate(){
 
     rm -fr /tmp/classifier.y_true /tmp/classifier.y_pred
+
+    mkdir -p $learning_dir/classifier_test_results
     ls $learning_dir/classifier_test/* | while read line
     do
         y_pred=$($classifier_method.transform "$line")
@@ -452,6 +454,7 @@ classifier.evaluate(){
         echo $y_pred >> /tmp/classifier.y_pred
         echo $(basename "$line") | sed 's/\..*//g' >> /tmp/classifier.y_true
         echo "\e[34m transform \e[0m" $name $y_pred
+        echo $y_pred > $learning_dir/classifier_test_results/$name
     done
 
 	python -c "
@@ -490,7 +493,8 @@ then
     find $learning_dir/classifier_test/ -type f | while read line
     do
         y_true=$(basename $line | sed 's/\..*//g')
-        y_pred=$($classifier_method.transform $line)
+        [ -e $learning_dir/classifier_test_results/$(basename $line) ] && y_pred=$(cat $learning_dir/classifier_test_results/$(basename $line))
+        [ -e $learning_dir/classifier_test_results/$(basename $line) ] || y_pred=$($classifier_method.transform $line)
         [ "$y_true" != "$y_pred" ] && echo -n '*** ' >> /tmp/vects
         echo -n T:$y_true P:$y_pred " " >> /tmp/vects
         echo -n $line " " >> /tmp/vects
