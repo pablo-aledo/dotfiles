@@ -88,7 +88,7 @@ haskeyword(){
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
-         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
+         value=$( cat /tmp/keywords | egrep '^ *[0-9]* .*'$regex | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && continue
          echo true && return
     done
