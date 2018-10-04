@@ -825,7 +825,7 @@ keywords_filter () {
 	cat | while read line
 	do
         haskeyword=$( echo $line | getwords | haskeyword )
-		[ $has_keyword = "true" ] && echo $line
+		[ "$has_keyword" = "true" ] && echo $line
 	done
 }
 
@@ -837,42 +837,42 @@ learning.get_documents(){
     [ -e $learning_dir/topics/skip ] && comm -13 <(cat $learning_dir/topics/skip | sort | uniq) <(cat $learning_dir/topics/topics | awk '{print $NF}' | sort | uniq) > /tmp/topics_to_get
     [ $# -gt 0 ] && echo $* | sed 's/ /\n/g' > /tmp/topics_to_get
 
-    cat /tmp/topics_to_get | while read topic
+    cat /tmp/topics_to_get | while read line
     do
-        echo "\e[34m ===== $topic ===== \e[0m"
+        echo "\e[34m ===== $line ===== \e[0m"
 
-        if [ $(ls $learning_dir/documents/ | egrep "^$topic\..*" | wc -l) -ge $learning_docs_per_class ]
+        if [ $(ls $learning_dir/documents/ | egrep "^$line\..*" | wc -l) -ge $learning_docs_per_class ]
         then
-            echo "\e[34m enough documents \e[0m $topic"
+            echo "\e[34m enough documents \e[0m $line"
             continue
         fi
 
-        if [ ! -e $learning_src/$topic ]
+        if [ ! -e $learning_src/$line ]
         then
-            echo "\e[31m topic not found \e[0m $topic"
+            echo "\e[31m topic not found \e[0m $line"
             continue
         fi
 
-        if [ $(find $learning_src/$topic -maxdepth 1 -type f | wc -l) -lt $learning_docs_per_class ]
+        if [ $(find $learning_src/$line -maxdepth 1 -type f | wc -l) -lt $learning_docs_per_class ]
         then
-            echo "\e[33m not enough documents \e[0m $topic"
+            echo "\e[33m not enough documents \e[0m $line"
         fi
 
-        cd "$learning_src/$topic"
+        cd "$learning_src/$line"
         find -maxdepth 1 -type f | sort -R | head -n $learning_docs_per_class | while read file
         do
             crctitle=$(echo "$file" | md5sum | cut -d' ' -f1)
-            echo "\e[34m doc2txt \e[0m $file $topic.$crctitle"
-            learning.doc2txt "$file" "$learning_dir/documents/$topic.$crctitle"
+            echo "\e[34m doc2txt \e[0m $file $line.$crctitle"
+            learning.doc2txt "$file" "$learning_dir/documents/$line.$crctitle"
         done
 
         if [ $generate_topic_documents = "true" ]
         then
-            echo $topic | sed 's/_/ /g' > "$learning_dir/documents/$topic.topic"
+            echo $line | sed 's/_/ /g' > "$learning_dir/documents/$line.topic"
         fi
-
-        cd $inipwd
     done
+
+    cd $inipwd
 
     find $learning_dir/documents/ -type f | while read line
     do
@@ -890,12 +890,11 @@ learning.get_documents(){
             continue
         fi
 
-        if [ "$( cat $line | keywords_filter )" = "" ]
+        if [ "$( cat $line | getwords | haskeyword )" = "false" ]
         then
             echo "\e[31m $line does not contain any keyword \e[0m"
             rm -rf $line
             continue
         fi
-
     done
 }
