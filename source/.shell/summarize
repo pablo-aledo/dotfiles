@@ -144,7 +144,7 @@ print(np.divide(vect, float(total+0.00001)))
 
 keywords.doc2vec_debug(){
     learning.doc2txt $1 > /tmp/txt
-    cat /tmp/txt | getwords
+    cat /tmp/txt | getwords > /tmp/keywords
 
     for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
