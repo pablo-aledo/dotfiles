@@ -216,6 +216,7 @@ jaccard_classifier.transform(){
 }
 
 jaccard_classifier.fit(){
+    rm -rf /tmp/sortvectors /tmp/sortnames
 }
 
 identity.fit(){
