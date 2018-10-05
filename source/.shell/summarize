@@ -409,7 +409,7 @@ with open('/tmp/names') as f:
     names = [ line.rstrip('\n') for line in f ]
 with open('/tmp/vectors') as f:
     vectors = [ line.rstrip('\n') for line in f ]
-doc_2_vect={ names[i]:np.fromstring(vectors[i], dtype=float, sep=' ') for i in range(0,len(names)-1) }
+doc_2_vect={ names[i]:np.fromstring(vectors[i], dtype=float, sep=' ') for i in range(0,len(names)) }
 
 doc_2_rank={k:99999 for k in doc_2_vect}
 pca=PCA(n_components=n_components)
@@ -844,8 +844,8 @@ from sets import Set
 h1=$1
 h2=$2
 if( '$learning_distance' == 'jaccard' ):
-    h1_set = Set( [ i for i in range(0, len(h1)-1) if h1[i] != 0 ] )
-    h2_set = Set( [ i for i in range(0, len(h2)-1) if h2[i] != 0 ] )
+    h1_set = Set( [ i for i in range(0, len(h1)) if h1[i] != 0 ] )
+    h2_set = Set( [ i for i in range(0, len(h2)) if h2[i] != 0 ] )
     print 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ))
 if( '$learning_distance' == 'euclidean' ):
     print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
@@ -868,7 +868,7 @@ with open('/tmp/names') as f:
     names = [ line.rstrip('\n') for line in f ]
 with open('/tmp/distances') as f:
     ds = [ line.rstrip('\n') for line in f ]
-distances={ names[i]:float(ds[i]) for i in range(0,len(names)-1) }
+distances={ names[i]:float(ds[i]) for i in range(0,len(names)) }
 
 try:
     for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
@@ -904,13 +904,13 @@ with open('/tmp/sortvectors') as f:
 
 def distance(h1,h2):
     if( '$learning_distance' == 'jaccard' ):
-        h1_set = Set( [ i for i in range(0, len(h1)-1) if h1[i] != 0 ] )
-        h2_set = Set( [ i for i in range(0, len(h2)-1) if h2[i] != 0 ] )
+        h1_set = Set( [ i for i in range(0, len(h1)) if h1[i] != 0 ] )
+        h2_set = Set( [ i for i in range(0, len(h2)) if h2[i] != 0 ] )
         return 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
     if( '$learning_distance' == 'euclidean' ):
         return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 
-distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)-1) }
+distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)) }
 
 try:
     for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
