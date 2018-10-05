@@ -110,7 +110,7 @@ for keyword in keywords:
 "
 }
 
-haskeyword(){
+haskeyword_(){
     cat > /tmp/keywords
     for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
@@ -121,6 +121,34 @@ haskeyword(){
          echo true && return
     done
     echo false
+}
+
+haskeyword(){
+    cat > /tmp/keywords
+
+    python -c "
+import re
+
+with open('/tmp/keywords') as f:
+    lines = [ line.rstrip('\n') for line in f ]
+with open('/home/pablo_aledo_rss/learning/features/keywords') as f:
+    keywords = [ line.rstrip('\n') for line in f ]
+    keywords = [ keyword for keyword in keywords if keyword != '' ]
+
+for keyword in keywords:
+
+    if(keyword[0] == '^'):
+        regex='^ *[0-9]* ' + keyword[1:]
+    else:
+        regex='^ *[0-9]* .*' + keyword
+
+    for line in lines:
+        if(re.match(regex,line)):
+            print('true')
+            exit()
+
+    print('false')
+"
 }
 
 keywords.txt2vec(){
