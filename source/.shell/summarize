@@ -182,6 +182,7 @@ doc2txt_rec(){
 			do
 				doc2txt_rec "$line" "$destination" 
 			done
+			sed -i 's|/tmp/learning||g' "$destination"
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
 		(*.zip|*.ZIP)
@@ -193,6 +194,7 @@ doc2txt_rec(){
 			do
 				doc2txt_rec "$line" "$destination" 
 			done
+			sed -i 's|/tmp/learning||g' "$destination"
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
 		(*.pdf|*.PDF)
