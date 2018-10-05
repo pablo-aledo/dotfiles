@@ -716,7 +716,7 @@ learning.key(){
 learning.fit(){
 
     [ -e $learning_dir/documents ] || mkdir -p $learning_dir/documents
-    [ -e $learning_dir/topics ] && [ -e $learning_src ] && learning.get_documents
+    [ -e $learning_dir/topics ] && learning.get_documents
 
     #rm -fr $learning_dir/txts;
     mkdir -p $learning_dir/txts
@@ -757,6 +757,7 @@ learning.fit(){
     rm -fr $learning_dir/classifier; mkdir -p $learning_dir/classifier
     echo "\e[34m classifier \e[0m "
     $classifier_method.fit
+    cp -r $learning_dir/classifier_train $learning_dir/classifier_test
     [ -e $learning_dir/classifier_test ] && classifier.evaluate
 
     rm -fr $learning_dir/regression; mkdir -p $learning_dir/regression
@@ -947,30 +948,33 @@ learning.get_documents(){
     do
         echo "\e[34m ===== $line ===== \e[0m"
 
-        if [ $(ls $learning_dir/documents/ | egrep "^$line\..*" | wc -l) -ge $learning_docs_per_class ]
+        if [ -e $learning_src ]
         then
-            echo "\e[34m enough documents \e[0m $line"
-            continue
-        fi
+            if [ $(ls $learning_dir/documents/ | egrep "^$line\..*" | wc -l) -ge $learning_docs_per_class ]
+            then
+                echo "\e[34m enough documents \e[0m $line"
+                continue
+            fi
 
-        if [ ! -e $learning_src/$line ]
-        then
-            echo "\e[31m topic not found \e[0m $line"
-            continue
-        fi
+            if [ ! -e $learning_src/$line ]
+            then
+                echo "\e[31m topic not found \e[0m $line"
+                continue
+            fi
 
-        if [ $(find $learning_src/$line -maxdepth 1 -type f | wc -l) -lt $learning_docs_per_class ]
-        then
-            echo "\e[33m not enough documents \e[0m $line"
-        fi
+            if [ $(find $learning_src/$line -maxdepth 1 -type f | wc -l) -lt $learning_docs_per_class ]
+            then
+                echo "\e[33m not enough documents \e[0m $line"
+            fi
 
-        cd "$learning_src/$line"
-        find -maxdepth 1 -type f | sort -R | head -n $learning_docs_per_class | while read file
-        do
-            crctitle=$(echo "$file" | md5sum | cut -d' ' -f1)
-            echo "\e[34m doc2txt \e[0m $file $line.$crctitle"
-            learning.doc2txt "$file" "$learning_dir/documents/$line.$crctitle"
-        done
+            cd "$learning_src/$line"
+            find -maxdepth 1 -type f | sort -R | head -n $learning_docs_per_class | while read file
+            do
+                crctitle=$(echo "$file" | md5sum | cut -d' ' -f1)
+                echo "\e[34m doc2txt \e[0m $file $line.$crctitle"
+                learning.doc2txt "$file" "$learning_dir/documents/$line.$crctitle"
+            done
+        fi
 
         if [ $generate_topic_documents = "true" ]
         then
@@ -982,19 +986,20 @@ learning.get_documents(){
 
     find $learning_dir/documents/ -type f | while read line
     do
-        if [ "$( file $line | grep text )" = "" ]
-        then
-            echo "\e[31m $line is not text \e[0m"
-            rm -rf $line
-            continue
-        fi
 
-        if [ "$( du -bc $line | head -n1 | awk '{print $1}' )" -lt 1000 ]
-        then
-            echo "\e[31m $line is very small \e[0m"
-            rm -rf $line
-            continue
-        fi
+        #if [ "$( file $line | grep text )" = "" ]
+        #then
+            #echo "\e[31m $line is not text \e[0m"
+            #rm -rf $line
+            #continue
+        #fi
+
+        #if [ "$( du -bc $line | head -n1 | awk '{print $1}' )" -lt 1000 ]
+        #then
+            #echo "\e[31m $line is very small \e[0m"
+            #rm -rf $line
+            #continue
+        #fi
 
         if [ "$( cat $line | getwords | haskeyword )" = "false" ]
         then
@@ -1002,5 +1007,6 @@ learning.get_documents(){
             rm -rf $line
             continue
         fi
+
     done
 }
