@@ -518,6 +518,7 @@ then
         else
             $vectorizer_method.txt2vec "$line" | vect2s >> /tmp/vects
         fi
+        echo "\e[34m vector \e[0m " $(basename $line)
     done
     echo "=====" >> /tmp/vects
     find $learning_dir/classifier_test/ -type f | while read line
