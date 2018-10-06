@@ -483,7 +483,7 @@ classifier.evaluate(){
         name=$(basename "$line")
         echo $y_pred >> /tmp/classifier.y_pred
         echo $(basename "$line") | sed 's/\..*//g' >> /tmp/classifier.y_true
-        echo "\e[34m transform \e[0m" $name $y_pred
+        echo "\e[34m transform \e[0m $name \e[31m $y_pred \e[0m"
         echo $y_pred > $learning_dir/classifier_test_results/$name
     done
 
@@ -526,7 +526,7 @@ then
         y_true=$(basename $line | sed 's/\..*//g')
         [ -e $learning_dir/classifier_test_results/$(basename $line) ] && y_pred=$(cat $learning_dir/classifier_test_results/$(basename $line))
         [ -e $learning_dir/classifier_test_results/$(basename $line) ] || y_pred=$($classifier_method.transform $line)
-        echo "\e[34m vector \e[0m " $(basename $line) $y_true $y_pred
+        echo "\e[34m vector \e[0m $(basename $line) \e[32m $y_true \e[0m \e[31m $y_pred \e[0m"
         [ "$y_true" != "$y_pred" ] && echo -n '*** ' >> /tmp/vects
         echo -n T:$y_true P:$y_pred " " >> /tmp/vects
         echo -n $line " " >> /tmp/vects
