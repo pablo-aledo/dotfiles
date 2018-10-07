@@ -984,6 +984,11 @@ learning.get_documents(){
         fi
     done
 
+    if [ $generate_topic_documents = "true" ]
+    then
+        echo '' > "$learning_dir/documents/unknown.topic"
+    fi
+
     cd $inipwd
 
     find $learning_dir/documents/ -type f | while read line
