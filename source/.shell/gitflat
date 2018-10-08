@@ -13,3 +13,9 @@ done
 }
 
 alias gitconfig='HOME=~/.dotfiles/link_if_new'
+
+gitsquash(){
+    echo "change all to squash except the first one (pick)"
+    read
+    git rebase -i origin/master
+}

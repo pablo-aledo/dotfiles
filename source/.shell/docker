@@ -371,6 +371,7 @@ case $1 in
 (rainbowstream)          docker run -it --rm -v /etc/localtime:/etc/localtime:ro -v $HOME/.rainbow_oauth:/root/.rainbow_oauth -v $HOME/.rainbow_config.json:/root/.rainbow_config.json --name rainbowstream ${DOCKER_REPO_PREFIX}/rainbowstream ;;
 (rancher)                docker run -d --restart=unless-stopped -p 80:80 -p 443:443 rancher/rancher:latest ;;
 (re_lab)                 docker run -it -v $(pwd)/share_ro:/share_ro:ro -v $(pwd)/share_rw:/share_rw re_lab ;;
+(redis)                  docker run --name redis -e ALLOW_EMPTY_PASSWORD=yes bitnami/redis:latest ;;
 (remmina)                docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/.remmina:/root/.remmina --name remmina ${DOCKER_REPO_PREFIX}/remmina ;;
 (ricochet)               docker run -d --restart always -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name ricochet ${DOCKER_REPO_PREFIX}/ricochet ;;
 (rstudio)                docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/rscripts:/root/rscripts --device /dev/dri --name rstudio ${DOCKER_REPO_PREFIX}/rsudio ;;
