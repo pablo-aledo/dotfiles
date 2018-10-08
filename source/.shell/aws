@@ -35,8 +35,8 @@ aws_config(){
 		echo "AWS_REMOTE_FOLDER=/home/ubuntu"           >> /tmp/aws_config
 		echo "AWS_PEM=/tmp/default_kp.pem"              >> /tmp/aws_config
 		echo "AWS_USER=ubuntu"                          >> /tmp/aws_config
-		echo "AWS_PORT=22"                              >> /tmp/aws_config
 		echo "AWS_SERVER=pabloaledo.ddns.net"           >> /tmp/aws_config
+		echo "AWS_PORT=22"                              >> /tmp/aws_config
 		source /tmp/aws_config
 	fi
 
@@ -299,8 +299,8 @@ aws_launch(){
 	echo "AWS_REMOTE_FOLDER=/home/ubuntu"           >> /tmp/aws_config
 	echo "AWS_PEM=/tmp/default_kp.pem"              >> /tmp/aws_config
 	echo "AWS_USER=ubuntu"                          >> /tmp/aws_config
-	echo "AWS_PORT=22"                              >> /tmp/aws_config
 	echo "AWS_SERVER=$ip"                           >> /tmp/aws_config
+	echo "AWS_PORT=22"                              >> /tmp/aws_config
 	aws_config
 	while [ "`aws ec2 describe-instances | grep -A3 '"State": {' | grep 'Name' | grep pending`" ]; do sleep 1; done
 	sleep 10
@@ -338,8 +338,8 @@ aws_tag(){
 	echo "AWS_REMOTE_FOLDER=/home/ubuntu"           >> /tmp/aws_config
 	echo "AWS_PEM=/tmp/default_kp.pem"              >> /tmp/aws_config
 	echo "AWS_USER=ubuntu"                          >> /tmp/aws_config
-	echo "AWS_PORT=22"                              >> /tmp/aws_config
 	echo "AWS_SERVER=$ip"                           >> /tmp/aws_config
+	echo "AWS_PORT=22"                              >> /tmp/aws_config
 
 	aws_config
 

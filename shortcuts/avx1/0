@@ -1,3 +1,0 @@
-head -n -$( ls ~/.dotfiles/shortcuts/avx1/ | wc -l ) ~/.i3/config > /tmp/config
-mv /tmp/config ~/.i3/config
-i3-msg reload

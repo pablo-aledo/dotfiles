@@ -1,0 +1,8 @@
+export DISPLAY=:1
+
+#xdotool mousemove 383 400
+#xdotool click 1
+xdotool key Ctrl+f
+xdotool type "http"
+xdotool key Escape
+xdotool key Return

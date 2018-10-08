@@ -204,6 +204,9 @@ avhome_mail_server(){
               title=$(echo $line | cut -d'|' -f2)
               link=http://avxhm.se$(echo $line | cut -d'|' -f1)
               echo "\e[31m $title \e[0m: $link"
+              title_escaped=`echo $title | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g' -e 's/\*/\\\*/g'`
+              grep "^$title_escaped\$" ~/avxtitles >/dev/null && continue
+              echo $title >> ~/avxtitles
               (echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
        done
    fi
