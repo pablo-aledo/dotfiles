@@ -366,6 +366,7 @@ case $1 in
 (pulseaudio)             docker run -d -v /etc/localtime:/etc/localtime:ro --device /dev/snd --name pulseaudio -p 4713:4713 -v /var/run/dbus:/var/run/dbus -v /etc/machine-id:/etc/machine-id ${DOCKER_REPO_PREFIX}/pulseaudio ;;
 (pwnbox)                 docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --security-opt seccomp:unconfined superkojiman/pwnbox ;;
 (pycharm)                docker run --rm -e DISPLAY=${DISPLAY} -v /tmp/.X11-unix:/tmp/.X11-unix -v ~/.PyCharm:/home/developer/.PyCharm -v ~/.PyCharm.java:/home/developer/.java -v ~/.PyCharm.py2:/usr/local/lib/python2.7 -v ~/.PyCharm.py3:/usr/local/lib/python3.4 -v ~/Project:/home/developer/Project -v $PWD:/workdir -w /workdir --name pycharm-$(head -c 4 /dev/urandom | xxd -p)-$(date +'%Y%m%d-%H%M%S') rycus86/pycharm:latest ;; 
+(pycharm-ce)             docker run -it -v /tmp/.X11-unix/:/tmp/.X11-unix/ -e DISPLAY=$DISPLAY --rm kongkoro/pycharm ;;
 (pydio)                  docker run -v /etc/localtime:/etc/localtime:ro -v $PWD/pydio/config:/config -v $PWD/pydio/data:/data -e PGID=$(id -g) -e PUID=$(id -u) -e TZ=$(cat /etc/timezone) -p 443:443 linuxserver/pydio ;;
 (rainbowstream)          docker run -it --rm -v /etc/localtime:/etc/localtime:ro -v $HOME/.rainbow_oauth:/root/.rainbow_oauth -v $HOME/.rainbow_config.json:/root/.rainbow_config.json --name rainbowstream ${DOCKER_REPO_PREFIX}/rainbowstream ;;
 (rancher)                docker run -d --restart=unless-stopped -p 80:80 -p 443:443 rancher/rancher:latest ;;
