@@ -971,12 +971,13 @@ learning.get_documents(){
                 echo "\e[33m not enough documents \e[0m $line"
             fi
 
+            topic=$line
             cd "$learning_src/$line"
             find -maxdepth 1 -type f | sort -R | head -n $learning_docs_per_class | while read file
             do
                 crctitle=$(echo "$file" | md5sum | cut -d' ' -f1)
-                echo "\e[34m doc2txt \e[0m $file $line.$crctitle"
-                learning.doc2txt "$file" "$learning_dir/documents/$line.$crctitle"
+                echo "\e[34m doc2txt \e[0m $file $topic.$crctitle"
+                learning.doc2txt "$file" "$learning_dir/documents/$topic.$crctitle"
             done
         fi
 
