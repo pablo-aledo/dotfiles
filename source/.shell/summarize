@@ -944,6 +944,8 @@ learning.get_documents(){
 
     inipwd=$PWD
 
+    mkdir -p $learning_dir/map_documents
+
     cat $learning_dir/topics/topics | awk '{print $NF}' > /tmp/topics_to_get
     [ -e $learning_dir/topics/skip ] && comm -13 <(cat $learning_dir/topics/skip | sort | uniq) <(cat $learning_dir/topics/topics | awk '{print $NF}' | sort | uniq) > /tmp/topics_to_get
     [ $# -gt 0 ] && echo $* | sed 's/ /\n/g' > /tmp/topics_to_get
@@ -978,6 +980,7 @@ learning.get_documents(){
                 crctitle=$(echo "$file" | md5sum | cut -d' ' -f1)
                 echo "\e[34m doc2txt \e[0m $file $topic.$crctitle"
                 learning.doc2txt "$file" "$learning_dir/documents/$topic.$crctitle"
+                echo "$topic.crctitle" "$file" >> $learning_dir/map_documents/map
             done
         fi
 
