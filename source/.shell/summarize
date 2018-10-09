@@ -940,6 +940,12 @@ keywords_filter () {
 	done
 }
 
+learning.mapmv(){
+    src_topic=$(echo $1 | sed 's/\..*//g')
+    src_filename=$(cat $learning_dir/map_documents/map | grep $1 | awk '{$1=""; print}' | sed 's/^...//g' )
+    echo mv \"$learning_src/$src_topic/$src_filename\" $learning_src/$2/
+}
+
 learning.get_documents(){
 
     inipwd=$PWD
@@ -980,7 +986,7 @@ learning.get_documents(){
                 crctitle=$(echo "$file" | md5sum | cut -d' ' -f1)
                 echo "\e[34m doc2txt \e[0m $file $topic.$crctitle"
                 learning.doc2txt "$file" "$learning_dir/documents/$topic.$crctitle"
-                echo "$topic.crctitle" "$file" >> $learning_dir/map_documents/map
+                echo "$topic.$crctitle" "$file" >> $learning_dir/map_documents/map
             done
         fi
 
