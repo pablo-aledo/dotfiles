@@ -315,6 +315,10 @@ server(){
 		while true; do avhome_mail_server; sleep 60; done
 	fi
 
+	if [ $1 = nfs ]
+	then
+        pkg install nfs
+	fi
 }
 
 aws_servers(){
