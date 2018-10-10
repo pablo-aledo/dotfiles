@@ -1,6 +1,6 @@
 vectorizer_method=keywords
 pca_method=identity
-classifier_method=jaccard_classifier
+classifier_method=knn_classifier
 regression_method=linear_regression
 clustering_method=kmeans_clustering
 learning_evaluate_vects="true"
@@ -269,11 +269,11 @@ jaccard_distance(){
     python -c "print 1.0-float($si)/float($su+0.00001)"
 }
 
-jaccard_classifier.transform(){
+knn_classifier.transform(){
     learning.knn $1 1
 }
 
-jaccard_classifier.fit(){
+knn_classifier.fit(){
     rm -rf /tmp/sortvectors /tmp/sortnames
 }
 
@@ -805,7 +805,7 @@ filter_classifier.transform(){
 
     echo $line > /tmp/line
 
-    jaccard_classifier.transform /tmp/line
+    knn_classifier.transform /tmp/line
 }
 
 kmeans_clustering.transform(){
