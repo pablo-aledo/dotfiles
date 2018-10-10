@@ -722,14 +722,15 @@ learning.fit(){
     [ -e $learning_dir/documents ] || mkdir -p $learning_dir/documents
     [ -e $learning_dir/topics ] && learning.get_documents
 
-    #rm -fr $learning_dir/txts;
-    mkdir -p $learning_dir/txts
-    ls $learning_dir/documents/* | while read line
-    do
-        [ -e $learning_dir/txts/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
-        echo "\e[34m doc2txt \e[0m " $line
-        learning.doc2txt "$line" $learning_dir/txts/$(basename "$line")
-    done
+    ##rm -fr $learning_dir/txts;
+    #mkdir -p $learning_dir/txts
+    #ls $learning_dir/documents/* | while read line
+    #do
+    #    [ -e $learning_dir/txts/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
+    #    echo "\e[34m doc2txt \e[0m " $line
+    #    learning.doc2txt "$line" $learning_dir/txts/$(basename "$line")
+    #done
+    cp -r $learning_dir/documents $learning_dir/txts
 
     [ $vectorizer_method != keywords ] && ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
     echo "\e[34m get_features \e[0m "
