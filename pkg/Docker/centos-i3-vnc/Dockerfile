@@ -15,7 +15,8 @@ run mkdir ~/.vnc && \
     chmod +x ~/.vnc/xstartup
 
 run mkdir ~/.i3 && \
-    echo 'exec "while true; do DISPLAY=:1 <exec> <args>; sleep 1; done"' > ~/.i3/config
+    echo '# i3 config file (v4)' >  ~/.i3/config && \
+    echo 'set $mod Mod1'         >> ~/.i3/config
 
 run mkdir /usr/share/noVNC && \
     cd /usr/share/noVNC && \
@@ -25,7 +26,9 @@ run mkdir /usr/share/noVNC && \
 run mkdir -p /usr/share/noVNC/utils/websockify && \
     git clone https://github.com/novnc/websockify.git /usr/share/noVNC/utils/websockify
 
-entrypoint ["sh", "-c", "tmux new -d -s novnc 'cd /usr/share/noVNC; ./utils/launch.sh --listen 8080 --vnc localhost:5901'; tmux new -d -s vnc '/usr/bin/vncserver; read'; sh"]
+run dbus-uuidgen > /etc/machine-id
+
+entrypoint ["sh", "-c", "tmux new -d -s novnc 'cd /usr/share/noVNC; ./utils/launch.sh --listen 8080 --vnc localhost:5901'; tmux new -d -s vnc '/usr/bin/vncserver; read'; tmux new -d -s gui 'while true; do DISPLAY=:1 <exec> <args>; sleep 1; done'; sh"]
 
 expose 8080:8080
 expose 5901:5901
