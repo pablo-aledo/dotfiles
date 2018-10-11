@@ -944,7 +944,36 @@ keywords_filter () {
 learning.mapmv(){
     src_topic=$(echo $1 | sed 's/\..*//g')
     src_filename=$(cat $learning_dir/map_documents/map | grep $1 | awk '{$1=""; print}' | sed 's/^...//g' )
-    echo mv \"$learning_src/$src_topic/$src_filename\" $learning_src/$2/
+    src_crc=$(echo $1 | sed 's/^[^\.]*\.//g')
+    dst_topic=$2
+    dst_crc=$src_crc
+
+    # learning_src
+    echo mv \"$learning_src/$src_topic/$src_filename\" $learning_src/$dst_topic/
+
+    # documents
+    echo mv \"$learning_dir/documents/$src_topic.$src_crc\" $learning_dir/documents/$dst_topic.$dst_crc
+}
+
+learning.join_topics(){
+    topic_src=$1
+    topic_dst=$2
+
+    #learning_src
+    echo join $learning_src/$topic_src $learning_src/$topic_dst
+
+    #documents
+    ls $learning_dir/documents/ | egrep "^$topic_src\." | grep -v '.topic' | while read src_filename
+    do
+        dst_filename=$( echo $src_filename | sed "s/^$topic_src\./$topic_dst\./g" )
+        echo mv $learning_dir/documents/$src_filename $learning_dir/documents/$dst_filename
+        echo "cat $learning_dir/map_documents/map | sed 's/$src_filename/$dst_filename/g' > /tmp/map && mv /tmp/map $learning_dir/map_documents/map"
+    done
+    echo rm -rf $learning_dir/documents/$topic_src.topic
+
+    #topics
+    echo "cat $learning_src/topics/topics | sed 's/ $topic_src\$/ $topic_dst\$/g' | sort | uniq > /tmp/topics && mv /tmp/topics $learning_dir/topics/topics"
+
 }
 
 learning.get_documents(){
