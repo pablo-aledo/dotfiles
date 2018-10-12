@@ -949,7 +949,7 @@ learning.mapmv(){
     dst_crc=$src_crc
 
     # learning_src
-    echo mv \"$learning_src/$src_topic/$src_filename\" $learning_src/$dst_topic/
+    [ "$src_filename" != "" ] && echo mv \"$learning_src/$src_topic/$src_filename\" $learning_src/$dst_topic/
 
     # documents
     echo mv \"$learning_dir/documents/$src_topic.$src_crc\" $learning_dir/documents/$dst_topic.$dst_crc
