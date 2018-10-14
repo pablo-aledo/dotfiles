@@ -179,6 +179,7 @@ keywords.doc2vec_debug(){
             echo "===== $a ====="
             keywords.doc2vec_debug $a
         done
+        return
     fi
 
     learning.doc2txt $1 > /tmp/txt
