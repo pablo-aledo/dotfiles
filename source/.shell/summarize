@@ -171,6 +171,16 @@ print(np.divide(vect, float(total+0.00001)))
 }
 
 keywords.doc2vec_debug(){
+
+    if [ $# -gt 1 ]
+    then
+        for a in $*
+        do
+            echo "===== $a ====="
+            keywords.doc2vec_debug $a
+        done
+    fi
+
     learning.doc2txt $1 > /tmp/txt
     cat /tmp/txt | getwords > /tmp/keywords
 
