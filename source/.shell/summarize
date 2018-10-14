@@ -1,6 +1,6 @@
 vectorizer_method=keywords
 pca_method=identity
-classifier_method=knn_classifier
+classifier_method=knn_metadata
 regression_method=linear_regression
 clustering_method=kmeans_clustering
 learning_evaluate_vects="true"
@@ -285,6 +285,15 @@ knn_classifier.transform(){
 }
 
 knn_classifier.fit(){
+    rm -rf /tmp/sortvectors /tmp/sortnames
+}
+
+knn_metadata.transform(){
+    [ -e "~/metadata/$(basename $1)/title" ] && learning.knn "~/metadata/$(basename $1)/title" 1
+    [ -e "~/metadata/$(basename $1)/title" ] || learning.knn $1 1
+}
+
+knn_metadata.fit(){
     rm -rf /tmp/sortvectors /tmp/sortnames
 }
 
