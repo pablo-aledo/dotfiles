@@ -1106,6 +1106,8 @@ learning.get_queue(){
         learning.doc2txt "$line" "$HOME/summaries/$line.txt"
     done
 
+    cd $HOME/summaries
+
 }
 
 learning.classify_queue(){
@@ -1121,11 +1123,14 @@ learning.classify_queue(){
         cat "$line"          >> ~/summaries_classified/$line
         echo "\e[34m $line \e[0m \e[33m $classification \e[0m"
     done
+
+    cd $HOME/summaries_classified
 }
 
 learning.classify_mv(){
 
     cd ~/summaries_classified/
+    rm -fr /tmp/script
     ls | while read line
     do
         file=$(echo $line | sed 's/\.txt$//g')
@@ -1136,7 +1141,7 @@ learning.classify_mv(){
         if [ $true_tag = $pred_tag ]
         then
             echo "\e[34m $file \e[0m \e[32m $true_tag \e[0m"
-            echo mv "$learning_queue/$file" "$learning_src/$true_tag/"
+            echo "mv \"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a /tmp/script
         fi
 
 
@@ -1144,8 +1149,8 @@ learning.classify_mv(){
         then
             echo "\e[34m $file \e[0m \e[31m $pred_tag \e[0m \e[32m $true_tag \e[0m"
             crctitle=$(basename "$file" | md5sum | cut -d' ' -f1)
-            echo mv "$learning_queue/$file" "$learning_src/$true_tag/"
-            echo mv /tmp/file $learning_dir/documents/$true_tag.$crctitle
+            echo mv "\"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a /tmp/script
+            echo "cat \"$line\" | tail -n+3 > $learning_dir/documents/$true_tag.$crctitle" | tee -a /tmp/script
         fi
 
     done
