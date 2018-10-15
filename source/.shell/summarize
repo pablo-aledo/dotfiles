@@ -6,6 +6,7 @@ clustering_method=kmeans_clustering
 learning_evaluate_vects="true"
 learning_dir=$HOME/learning
 learning_src=/media/removable/2TB2/homes/admin/Alejandria
+learning_queue=/media/removable/2TB2/homes/admin/Descargas
 learning_docs_per_class=5
 keywords_normalize="false"
 summarize_page_limit=3
@@ -290,6 +291,7 @@ knn_classifier.fit(){
 
 knn_metadata.transform(){
     [ -e $HOME"/metadata/$(basename $1)/title" ] && learning.knn $HOME"/metadata/$(basename $1)/title" 1
+    [ -e $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && learning.knn $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" 1
     [ -e $HOME"/metadata/$(basename $1)/title" ] || learning.knn $1 1
 }
 
@@ -1090,3 +1092,62 @@ learning.restart(){
     cp ~/skip       $learning_dir/topics
     cp ~/keywords   $learning_dir/features
 }
+
+learning.get_queue(){
+
+    mkdir -p $HOME/summaries
+
+    [ $# -eq 0 ] && limit=10
+    [ $# -eq 1 ] && limit=$1
+
+    cd $learning_queue
+    ls *.pdf | head -n $limit | while read line
+    do
+        learning.doc2txt "$line" "$HOME/summaries/$line.txt"
+    done
+
+}
+
+learning.classify_queue(){
+
+    mkdir -p ~/summaries_classified/
+
+    cd ~/summaries/
+    ls | while read line
+    do
+        classification=$( $classifier_method.transform "$line" )
+        echo $classification >  ~/summaries_classified/$line
+        echo "====="         >> ~/summaries_classified/$line
+        cat "$line"          >> ~/summaries_classified/$line
+        echo "\e[34m $line \e[0m \e[33m $classification \e[0m"
+    done
+}
+
+learning.classify_mv(){
+
+    cd ~/summaries_classified/
+    ls | while read line
+    do
+        file=$(echo $line | sed 's/\.txt$//g')
+        true_tag=$(cat "$line" | head -n1)
+        cat "$line" | tail -n+3 > /tmp/file
+        pred_tag=$($classifier_method.transform /tmp/file)
+
+        if [ $true_tag = $pred_tag ]
+        then
+            echo "\e[34m $file \e[0m \e[32m $true_tag \e[0m"
+            echo mv "$learning_queue/$file" "$learning_src/$true_tag/"
+        fi
+
+
+        if [ ! $true_tag = $pred_tag ]
+        then
+            echo "\e[34m $file \e[0m \e[31m $pred_tag \e[0m \e[32m $true_tag \e[0m"
+            crctitle=$(basename "$file" | md5sum | cut -d' ' -f1)
+            echo mv "$learning_queue/$file" "$learning_src/$true_tag/"
+            echo mv /tmp/file $learning_dir/documents/$true_tag.$crctitle
+        fi
+
+    done
+}
+
