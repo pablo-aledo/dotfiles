@@ -289,8 +289,8 @@ knn_classifier.fit(){
 }
 
 knn_metadata.transform(){
-    [ -e "~/metadata/$(basename $1)/title" ] && learning.knn "~/metadata/$(basename $1)/title" 1
-    [ -e "~/metadata/$(basename $1)/title" ] || learning.knn $1 1
+    [ -e $HOME"/metadata/$(basename $1)/title" ] && learning.knn $HOME"/metadata/$(basename $1)/title" 1
+    [ -e $HOME"/metadata/$(basename $1)/title" ] || learning.knn $1 1
 }
 
 knn_metadata.fit(){

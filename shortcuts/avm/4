@@ -10,10 +10,10 @@ xclip -sel clip -o > /tmp/file
 mkdir -p $HOME"/metadata/$(cat /tmp/file)"
 echo "$(cat /tmp/title)" > $HOME"/metadata/$(cat /tmp/file)/title"
 
-#xdotool mousemove 558 540
-#xdotool click 1
-#sleep 1
-#xdotool key Return
+xdotool mousemove 558 540
+xdotool click 1
+sleep 1
+xdotool key Return
 
 
 
