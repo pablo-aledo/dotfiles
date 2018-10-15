@@ -1,9 +1,9 @@
-RSSMAIL=~/rssmail
+RSSMAIL=~/servers/rssmail
 
 rssmail() {
 	name=$RSSMAIL/rss-`date +%y%m%d-%H%M`
 	mkdir -p $name
-	cp ~/rsstitles $name/list
+	cp ~/servers/rsstitles $name/list
 }
 
 rssmail_cut () {
@@ -49,8 +49,8 @@ rssmail_server(){
 	echo rsstail $rssfeeds -i10 -zP -ld | bash | while read line
 	do
 		line_escaped=`echo $line | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g' -e 's/\*/\\\*/g'`
-		[ "$(echo $line | egrep '^Title:')" != "" ] && echo $line >> ~/rsstitles2
-		[ "$(echo $line | egrep '^Title:')" != "" ] && grep "^$line_escaped\$" ~/rsstitles >/dev/null && continue_until_title=1 && continue
+		[ "$(echo $line | egrep '^Title:')" != "" ] && echo $line >> ~/servers/rsstitles2
+		[ "$(echo $line | egrep '^Title:')" != "" ] && grep "^$line_escaped\$" ~/servers/rsstitles >/dev/null && continue_until_title=1 && continue
 		[ "$(echo $line | egrep '^Title:')" != "" ] && continue_until_title=0
 		[ $continue_until_title -eq 1 ] && continue
 
@@ -76,7 +76,7 @@ rssmail_server(){
 			sleep 1
 		fi
 
-		[ "$(echo $line | egrep '^Title:')" != "" ] && echo $line >> ~/rsstitles
+		[ "$(echo $line | egrep '^Title:')" != "" ] && echo $line >> ~/servers/rsstitles
 
 	done
 }
