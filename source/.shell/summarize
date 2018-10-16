@@ -290,9 +290,9 @@ knn_classifier.fit(){
 }
 
 knn_metadata.transform(){
-    [ -e $HOME"/metadata/$(basename $1)/title" ] && learning.knn $HOME"/metadata/$(basename $1)/title" 1
-    [ -e $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && learning.knn $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" 1
-    [ -e $HOME"/metadata/$(basename $1)/title" ] || learning.knn $1 1
+    [ -e $HOME"/metadata/$(basename $1)/title" ] && learning.knn $HOME"/metadata/$(basename $1)/title" 1 && return
+    [ -e $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && learning.knn $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" 1 && return
+    [ -e $HOME"/metadata/$(basename $1)/title" ] || learning.knn $1 1 && return
 }
 
 knn_metadata.fit(){
