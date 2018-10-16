@@ -10,7 +10,7 @@ ccache -s
 
 if [ $# -eq 0 ]
 then
-	[ -e .git ] && git submodule update --init
+	[ -e .git ] && git submodule update --init --recursive
 
 	if [ -e runme.sh ]
 	then
