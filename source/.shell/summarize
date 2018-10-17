@@ -1103,6 +1103,7 @@ learning.get_queue(){
     cd $learning_queue
     ls *.pdf | head -n $limit | while read line
     do
+        echo "\e[34m doc2txt \e[0m $line"
         learning.doc2txt "$line" "$HOME/summaries/$line.txt"
     done
 
@@ -1120,7 +1121,10 @@ learning.classify_queue(){
         classification=$( $classifier_method.transform "$line" )
         echo $classification >  ~/summaries_classified/$line
 
-        cat "$HOME/metadata/$line/"* >> ~/summaries_classified/$line
+        if [ -e "$HOME/metadata/$(echo $line | sed 's/\.txt$//g')/" ]
+        then
+            cat "$HOME/metadata/$(echo $line | sed 's/\.txt$//g')/"* >> ~/summaries_classified/$line
+        fi
 
         echo "====="         >> ~/summaries_classified/$line
         cat "$line"          >> ~/summaries_classified/$line
