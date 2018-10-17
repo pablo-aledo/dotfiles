@@ -1119,6 +1119,9 @@ learning.classify_queue(){
     do
         classification=$( $classifier_method.transform "$line" )
         echo $classification >  ~/summaries_classified/$line
+
+        cat "$HOME/metadata/$line/"* >> ~/summaries_classified/$line
+
         echo "====="         >> ~/summaries_classified/$line
         cat "$line"          >> ~/summaries_classified/$line
         echo "\e[34m $line \e[0m \e[33m $classification \e[0m"
@@ -1135,8 +1138,11 @@ learning.classify_mv(){
     do
         file=$(echo $line | sed 's/\.txt$//g')
         true_tag=$(cat "$line" | head -n1)
-        cat "$line" | tail -n+3 > /tmp/file
-        pred_tag=$($classifier_method.transform /tmp/file)
+
+        rm -fr /tmp/part00 /tmp/part01
+        csplit "$line" -s -f /tmp/part /=====/
+
+        pred_tag=$($classifier_method.transform /tmp/part01)
 
         if [ $true_tag = $pred_tag ]
         then
