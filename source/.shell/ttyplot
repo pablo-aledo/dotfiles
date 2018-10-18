@@ -1,0 +1,64 @@
+ttyplot_vmstat(){
+    vmstat -n 1 | gawk '{ print 100-int($(NF-2)); fflush(); }' | ttyplot 
+}
+
+ttyplot_cpu(){
+    sar 1 | gawk '{ print 100-int($NF); fflush(); }' | ttyplot -s 100 -t "cpu usage" -u "%"
+}
+
+ttyplot_memory(){
+    sar -r 1 | gawk '{ print $5; fflush(); }' | ttyplot -s 100 -t "memory used %" -u "%" 
+}
+
+ttyplot_ping(){
+    ping 8.8.8.8 | gawk '{ gsub(/time=/,"",$(NF-1)); print $(NF-1); fflush(); }' | ttyplot -t "ping to 8.8.8.8" -u ms
+}
+
+ttyplot_throughput(){
+    sar  -n DEV 1 | gawk '{ if($6 ~ /rxkB/) { print iin/1000; print out/1000; iin=0; out=0; fflush(); } iin=iin+$6; out=out+$7; }' | ttyplot -2 -u "MB/s"
+}
+
+ttyplot_snmp(){
+    ttg -i 10 -u Mb 10.23.73.254 public 9 | gawk 'BEGIN { getline; } { print $5,$8; fflush(); }' | ttyplot -2 -u Mb/s
+}
+
+ttyplot_snmp(){
+    snmpdelta -v 2c -c public -Cp 10 10.23.73.254 1.3.6.1.2.1.2.2.1.10.9  1.3.6.1.2.1.2.2.1.16.9 | gawk '{ print $NF/1000/1000/10; fflush(); }' | ttyplot -t "ifindex 9 throughput" -u Mb/s
+}
+
+ttyplot_disk_throughpu(){
+    iostat -xmy 1 | gawk '/^nvme0n1/ { print $4,$5; fflush(); }' | ttyplot -2 -t "nvme0n1 throughput" -u MB/s
+}
+
+ttyplot_temperature(){
+    { while true; do gawk '{ printf("%.1f\n", $1/1000); fflush(); }' /sys/class/thermal/thermal_zone0/temp; sleep 1; done } | ttyplot -t "cpu temp" -u C
+}
+
+ttyplot_fan(){
+    { while true; do sensors | gawk '/^fan1:/ { print $2; fflush(); }'; sleep 1; done } | ttyplot -t "fan speed" -u RPM
+}
+
+ttyplot_wifi(){
+    { while true; do iwconfig 2>/dev/null| gawk '/Signal level=/ { gsub(/level=-/,"", $(NF-1)); print $(NF-1); fflush(); }'; sleep 1; done } | ttyplot -t "wifi signal" -u "-dBm" -s 90
+}
+
+ttyplot_prometheus(){
+    { while true; do curl -s  http://10.4.7.180:9100/metrics | gawk '/^node_load1 / { print $2; fflush(); }'; sleep 1; done } | ttyplot
+}
+
+ttyplot_bitcoin(){
+    { while true; do curl -sL https://coinbase.com/api/v1/prices/historical | head -1 | cut -d, -f2 ; sleep 600; done } | ttyplot -t "bitcoin price" -u usd
+}
+
+ttyplot_stock(){
+    { while true; do curl -s https://api.iextrading.com/1.0/stock/googl/price | gawk '{ print $1; fflush(); }'; sleep 600; done } | ttyplot -t "google stock price" -u usd
+}
+
+ttyplot_snmpget(){
+    { while true; do snmpget  -v 2c -c public  10.23.73.254  1.3.6.1.2.1.2.2.1.10.9 1.3.6.1.2.1.2.2.1.16.9 | gawk '{ print $NF/1000/1000; fflush(); }'; sleep 10; done } | ttyplot -2 -r -u "MB/s"
+}
+
+ttyplot_prometheus(){
+    { while true; do curl -s http://10.11.0.173:9100/metrics | gawk '/^node_disk_.+_bytes_total{device="sda"}/ { printf("%f\n", $2/1024/1024); fflush(); }'; sleep 1; done } | ttyplot -r -2 -u MB/s -t "10.11.0.173 sda writes"
+}
+
