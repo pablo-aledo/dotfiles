@@ -1,6 +1,6 @@
 vectorizer_method=keywords
 pca_method=identity
-classifier_method=knn_metadata
+classifier_method=knn_metadata_filter
 regression_method=linear_regression
 clustering_method=kmeans_clustering
 learning_evaluate_vects="true"
@@ -816,7 +816,11 @@ print( int(clf.predict(x)[0]) )
 cat $learning_dir/classifier/map | grep "^ $y " | awk '{print $2}'
 }
 
-filter_classifier.transform(){
+knn_metadata_filter.fit(){
+    rm -rf /tmp/sortvectors /tmp/sortnames
+}
+
+knn_metadata_filter.transform(){
     learning.doc2txt $1 > /tmp/filter
 
     head -n$summarize_line_limit /tmp/filter | while read line
@@ -832,7 +836,7 @@ filter_classifier.transform(){
 
     echo $line > /tmp/line
 
-    knn_classifier.transform /tmp/line
+    knn_metadata.transform /tmp/line
 }
 
 kmeans_clustering.transform(){
