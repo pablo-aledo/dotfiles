@@ -1097,7 +1097,7 @@ learning.restart(){
     cp ~/keywords   $learning_dir/features
 }
 
-learning.get_queue(){
+learning.queue_get(){
 
     mkdir -p $HOME/summaries
 
@@ -1115,7 +1115,7 @@ learning.get_queue(){
 
 }
 
-learning.classify_queue(){
+learning.queue_classify(){
 
     mkdir -p ~/summaries_classified/
 
@@ -1138,7 +1138,7 @@ learning.classify_queue(){
     cd $HOME/summaries_classified
 }
 
-learning.classify_mv(){
+learning.queue_mv(){
 
     cd ~/summaries_classified/
     rm -fr /tmp/script
