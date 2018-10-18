@@ -547,5 +547,14 @@ docker_app(){
 
 docker_pull_send(){
     docker pull $3
-    docker save $3 | ssh $1@$2 "docker load"
+    docker save $3 | ssh $1@$2 "sudo docker load"
+}
+
+docker_build_send(){
+    docker build -t $3 .
+    docker save $3 | ssh $1@$2 "sudo docker load"
+}
+
+docker_send(){
+    docker save $3 | ssh $1@$2 "sudo docker load"
 }
