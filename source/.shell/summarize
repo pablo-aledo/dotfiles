@@ -247,6 +247,10 @@ doc2txt_rec(){
 			ebook-convert "$filename" /tmp/mobi.txt
 			cat /tmp/mobi.txt | head -n $summarize_line_limit | strings -n1 >> "$destination"
 			;;
+		(*.html|*.htm)
+			#html2text "$filename" | head -n $summarize_line_limit >> "$destination"
+			w3m -dump "$filename" | head -n $summarize_line_limit >> "$destination"
+			;;
 		(*.txt|*.TXT)
 			cat "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
 			;;
