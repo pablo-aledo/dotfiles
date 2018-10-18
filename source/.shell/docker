@@ -545,3 +545,7 @@ docker_app(){
 	docker_run  $*
 }
 
+docker_pull_send(){
+    docker pull $3
+    docker save $3 | ssh $1@$2 "docker load"
+}
