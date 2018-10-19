@@ -1219,3 +1219,26 @@ metadata.isbn(){
     [ "$(echo $line2 | egrep '^[^0-9]*[0-9]{9}X[^0-9]*$')" ]    && fill_isbn10l_metadata "$line2"
     [ "$(echo $line2 | egrep '^[^0-9]*978[0-9]{10}[^0-9]*$')" ] && fill_isbn13_metadata  "$line2"
 }
+
+metadata.isbn2title(){
+    if [ $# -eq 0 ]
+    then
+        cd ~/metadata
+        ls | while read line
+        do
+            if [ -e "$line/isbn" ] && [ ! -e "$line/title" ]
+            then
+                metadata.isbn2title "$line"
+            fi
+        done
+        return
+    fi
+
+    filename=$1
+    isbn=$(cat "$HOME/metadata/$filename/isbn")
+    title=$(wget "http://libgen.io/search.php?req=$isbn&lg_topic=libgen&open=0&view=simple&res=25&phrase=1&column=def" -q -O - | grep 'td width=500' | cut -d'>' -f3 | cut -d'<' -f1 | head -n1)
+
+    echo "$filename \e[34m $title \e[0m"
+
+    #echo "$title" > "$HOME/metadata/$filename/title"
+}
