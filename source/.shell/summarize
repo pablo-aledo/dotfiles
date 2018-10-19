@@ -1,6 +1,6 @@
 vectorizer_method=keywords
 pca_method=identity
-classifier_method=knn_metadata_filter
+classifier_method=knn_metadata
 regression_method=linear_regression
 clustering_method=kmeans_clustering
 learning_evaluate_vects="true"
