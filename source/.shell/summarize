@@ -1242,3 +1242,26 @@ metadata.isbn2title(){
 
     #echo "$title" > "$HOME/metadata/$filename/title"
 }
+
+metadata.isbn2topics(){
+    if [ $# -eq 0 ]
+    then
+        cd ~/metadata
+        ls | while read line
+        do
+            if [ -e "$line/isbn" ] && [ ! -e "$line/topics" ]
+            then
+                metadata.isbn2topics "$line"
+            fi
+        done
+        return
+    fi
+
+    filename=$1
+    isbn=$(cat "$HOME/metadata/$filename/isbn")
+    topics=$(wget -q -U "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)" https://isbn.nu/0071742557 -O - | grep sisbn | cut -d'>' -f3 | cut -d'<' -f1)
+
+    echo "$filename \e[34m $(echo $topics | paste -s -d',') \e[0m"
+
+    #echo "$topics" > "$HOME/metadata/$filename/title"
+}
