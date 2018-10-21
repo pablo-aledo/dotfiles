@@ -2,9 +2,6 @@ export DISPLAY=:1
 
 xdotool key Ctrl+f
 sleep 1
-xdotool type ".part"
-echo 1 | xclip -sel clip -i
-xdotool key Ctrl+v
-xdotool type ".rar"
+xdotool type "part"
 xdotool key Escape
 xdotool key Ctrl+Return
