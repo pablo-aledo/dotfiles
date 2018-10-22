@@ -313,6 +313,7 @@ case $1 in
 (lamp)                   docker run --rm -p 8080:80 -e LOG_STDOUT=true -e LOG_STDERR=true -e LOG_LEVEL=debug -v $PWD:/var/www/html fauria/lamp ;;
 (lamp_mysql)             docker run -d --link my-mysql-container:mysql -p 8080:80 -v $PWD/html:/var/www/html -v $PWD/logs:/var/log/httpd --name my-lamp-container fauria/lamp
                          docker run -it mysql ;;
+(languagecrunch)         docker run -it -p 8080:8080 artpar/languagecrunch ;;
 (libreoffice)            docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/slides:/root/slides -e GDK_SCALE -e GDK_DPI_SCALE --name libreoffice ${DOCKER_REPO_PREFIX}/libreoffice ;;
 (lpass)                  shift; docker run --rm -it -v "${HOME}/.lpass:/root/.lpass" --name lpass ${DOCKER_REPO_PREFIX}/lpass "$@" ;;
 (lynx)                   shift; docker run --rm -it --name lynx ${DOCKER_REPO_PREFIX}/lynx "$@" ;;
