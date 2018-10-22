@@ -240,6 +240,9 @@ doc2txt_rec(){
 		(*.pdf|*.PDF)
 			pdftotext -f 1 -l $summarize_page_limit "$filename" - | head -n $summarize_line_limit | strings -n1 >> "$destination"
 			;;
+		(*.djvu|*.djVu)
+			djvutxt "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
+			;;
 		(*.epub|*.EPUB)
 			epub2txt "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
 			;;
