@@ -238,6 +238,7 @@ case $1 in
                          google-chrome "http://consul:8500" ;;
 (coursera-aml-nlp)       docker run -it -p 8080:8080 --name coursera-aml-nlp -v $PWD:/root/coursera akashin/coursera-aml-nlp ;;
 (corenlp)                docker run -it -p 9000:9000 motiz88/corenlp ;;
+(spacyapi)               docker run -p "127.0.0.1:8080:80" jgontrum/spacyapi:en_v2 ;;
 (dcos)                   shift; docker run -it --rm -v "${HOME}/.dcos:/root/.dcos" -v "$(pwd):/root/apps" -w /root/apps ${DOCKER_REPO_PREFIX}/dcos-cli "$@" ;;
 (docker-antlr)           shift; docker-antlr $* ;;
 (antlr)                  shift; docker run --rm -v $PWD:/workdir -w /workdir --user $(id -u):$(id -g) leodido/antlr $* ;;

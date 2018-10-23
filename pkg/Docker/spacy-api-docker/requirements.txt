@@ -1,0 +1,4 @@
+spacy
+falcon
+pytest
+requests
