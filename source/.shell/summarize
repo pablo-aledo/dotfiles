@@ -750,7 +750,7 @@ normalized=[ i-min(normalized) for i in normalized ]
 normalized=[ i/(max(normalized)+0.00001) for i in normalized ]
 normalized=[ max(min(i,1.0),0.0) for i in normalized ]
 chars=\"0123456789\"
-rvect=[ chars[int((i)*(len(chars)-1))] for i in normalized ]
+rvect=[ chars[int((i)*(len(chars)))] for i in normalized ]
 print ''.join(rvect)
 "
 }
