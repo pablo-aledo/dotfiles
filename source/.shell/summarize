@@ -742,6 +742,19 @@ print ''.join(rvect)
 "
 }
 
+learning.rvect2key_2(){
+	python -c "
+import numpy as np
+normalized=$1
+normalized=[ i-min(normalized) for i in normalized ]
+normalized=[ i/(max(normalized)+0.00001) for i in normalized ]
+normalized=[ max(min(i,1.0),0.0) for i in normalized ]
+chars=\"0123456789\"
+rvect=[ chars[int((i)*(len(chars)-1))] for i in normalized ]
+print ''.join(rvect)
+"
+}
+
 learning.key(){
     learning.rvect2key "$(learning.doc2rvect $1)"
 }
