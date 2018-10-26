@@ -289,7 +289,7 @@ jaccard_distance(){
 }
 
 closest_classifier.transform(){
-    learning.knn $1 1
+    closest_classifier.sortdist $1 | head -n 1 | sed 's/\..*//g'
 }
 
 closest_classifier.fit(){
@@ -883,33 +883,7 @@ if( '$learning_distance' == 'euclidean' ):
 "
 }
 
-learning.sortdist(){
-    rm -fr /tmp/names /tmp/distances
-    h1=$(learning.doc2rvect $1)
-	for file in $learning_dir/vectors_reduced/*
-	do
-        d=$(learning.distance "$h1" "$(cat $file)")
-		echo $(basename "$file") >> /tmp/names
-        echo $d >> /tmp/distances
-	done
-	python -c "
-import sys, errno
-
-with open('/tmp/names') as f:
-    names = [ line.rstrip('\n') for line in f ]
-with open('/tmp/distances') as f:
-    ds = [ line.rstrip('\n') for line in f ]
-distances={ names[i]:float(ds[i]) for i in range(0,len(names)) }
-
-try:
-    for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
-        print '%s' % (key)
-except IOError as e:
-        pass
-"
-}
-
-learning.sortdist(){
+closest_classifier.sortdist(){
     h1=$(learning.doc2rvect $1)
 
     python -c "
@@ -943,14 +917,6 @@ try:
 except IOError as e:
         pass
 "
-}
-
-learning.closest(){
-    learning.sortdist $1 | head -n1
-}
-
-learning.knn(){
-    learning.sortdist $1 | head -n $2 | sed 's/\..*//g' | sort | uniq -c | sort -g | tail -n1 | sed 's/^ *[^ ]* //g'
 }
 
 keywords_filter () {
