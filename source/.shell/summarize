@@ -1184,7 +1184,7 @@ learning.queue_mv(){
             echo "\e[34m $file \e[0m \e[31m $pred_tag \e[0m \e[32m $true_tag \e[0m"
             crctitle=$(basename "$file" | md5sum | cut -d' ' -f1)
             echo mv "\"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a /tmp/script
-            echo "cat \"$line\" | tail -n+3 > $learning_dir/documents/$true_tag.$crctitle" | tee -a /tmp/script
+            echo "cat \"$line\" > $learning_dir/documents/$true_tag.$crctitle" | tee -a /tmp/script
         fi
 
     done
