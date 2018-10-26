@@ -293,7 +293,11 @@ knn_classifier.transform(){
 }
 
 knn_classifier.fit(){
-    rm -rf /tmp/sortvectors /tmp/sortnames
+        for file in $learning_dir/vectors_reduced/*
+        do
+            cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $learning_dir/classifier/sortvectors
+            echo $(basename "$file") >> $learning_dir/classifier/sortnames
+        done
 }
 
 knn_metadata.transform(){
@@ -303,7 +307,11 @@ knn_metadata.transform(){
 }
 
 knn_metadata.fit(){
-    rm -rf /tmp/sortvectors /tmp/sortnames
+        for file in $learning_dir/vectors_reduced/*
+        do
+            cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $learning_dir/classifier/sortvectors
+            echo $(basename "$file") >> $learning_dir/classifier/sortnames
+        done
 }
 
 identity.fit(){
@@ -832,28 +840,28 @@ print( int(clf.predict(x)[0]) )
 cat $learning_dir/classifier/map | grep "^ $y " | awk '{print $2}'
 }
 
-knn_metadata_filter.fit(){
-    rm -rf /tmp/sortvectors /tmp/sortnames
-}
+#knn_metadata_filter.fit(){
+    #rm -rf /tmp/sortvectors /tmp/sortnames
+#}
 
-knn_metadata_filter.transform(){
-    learning.doc2txt $1 > /tmp/filter
+#knn_metadata_filter.transform(){
+    #learning.doc2txt $1 > /tmp/filter
 
-    head -n$summarize_line_limit /tmp/filter | while read line
-    do
-        echo $line | getwords | getkeywords > /tmp/kwords
-        nkeys=$(cat /tmp/kwords | awk '{sum += $1} END {print sum}' )
-        nwords=$(echo $line | wc -w)
-        echo $(( $nkeys*100/$nwords )) $line
-    done | sort -g > /tmp/lines_sorted
+    #head -n$summarize_line_limit /tmp/filter | while read line
+    #do
+        #echo $line | getwords | getkeywords > /tmp/kwords
+        #nkeys=$(cat /tmp/kwords | awk '{sum += $1} END {print sum}' )
+        #nwords=$(echo $line | wc -w)
+        #echo $(( $nkeys*100/$nwords )) $line
+    #done | sort -g > /tmp/lines_sorted
 
-    #line=$(tail -n1 /tmp/lines_sorted)
-    line=$(cat /tmp/lines_sorted | awk '$1>30' | sed 's/^ *[0-9]* //g' | paste -s)
+    ##line=$(tail -n1 /tmp/lines_sorted)
+    #line=$(cat /tmp/lines_sorted | awk '$1>30' | sed 's/^ *[0-9]* //g' | paste -s)
 
-    echo $line > /tmp/line
+    #echo $line > /tmp/line
 
-    knn_metadata.transform /tmp/line
-}
+    #knn_metadata.transform /tmp/line
+#}
 
 kmeans_clustering.transform(){
 x=$(learning.doc2rvect $1)
@@ -931,24 +939,17 @@ except IOError as e:
 learning.sortdist(){
     h1=$(learning.doc2rvect $1)
 
-    if [ ! -e /tmp/sortvectors ]
-    then
-        for file in $learning_dir/vectors_reduced/*
-        do
-            cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/sortvectors
-            echo $(basename "$file") >> /tmp/sortnames
-        done
-    fi
-
     python -c "
 import sys, errno
 import numpy as np
 import math
 from sets import Set
 
-with open('/tmp/sortnames') as f:
+learning_dir='$learning_dir'
+
+with open(learning_dir + '/classifier/sortnames') as f:
     names = [ line.rstrip('\n') for line in f ]
-with open('/tmp/sortvectors') as f:
+with open(learning_dir + '/classifier/sortvectors') as f:
     vectors = [ line.rstrip('\n') for line in f ]
     vectors = [ np.fromstring(vector, dtype=float, sep=' ') for vector in vectors ]
 
