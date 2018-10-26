@@ -301,9 +301,9 @@ closest_classifier.fit(){
 }
 
 closest_metadata.transform(){
-    [ -e $HOME"/metadata/$(basename $1)/title" ] && closest_classifier $HOME"/metadata/$(basename $1)/title" && return
-    [ -e $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && closest_classifier $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" && return
-    [ -e $HOME"/metadata/$(basename $1)/title" ] || closest_classifier "$1" && return
+    [ -e $HOME"/metadata/$(basename $1)/title" ] && closest_classifier.transform $HOME"/metadata/$(basename $1)/title" && return
+    [ -e $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && closest_classifier.transform $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" && return
+    [ -e $HOME"/metadata/$(basename $1)/title" ] || closest_classifier.transform "$1" && return
 }
 
 closest_metadata.fit(){
