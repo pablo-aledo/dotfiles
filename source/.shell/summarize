@@ -1,6 +1,6 @@
 vectorizer_method=keywords
 pca_method=identity
-classifier_method=knn_metadata
+classifier_method=closest_metadata
 regression_method=linear_regression
 clustering_method=kmeans_clustering
 learning_evaluate_vects="true"
@@ -288,11 +288,11 @@ jaccard_distance(){
     python -c "print 1.0-float($si)/float($su+0.00001)"
 }
 
-knn_classifier.transform(){
+closest_classifier.transform(){
     learning.knn $1 1
 }
 
-knn_classifier.fit(){
+closest_classifier.fit(){
         for file in $learning_dir/vectors_reduced/*
         do
             cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $learning_dir/classifier/sortvectors
@@ -300,18 +300,14 @@ knn_classifier.fit(){
         done
 }
 
-knn_metadata.transform(){
-    [ -e $HOME"/metadata/$(basename $1)/title" ] && learning.knn $HOME"/metadata/$(basename $1)/title" 1 && return
-    [ -e $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && learning.knn $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" 1 && return
-    [ -e $HOME"/metadata/$(basename $1)/title" ] || learning.knn $1 1 && return
+closest_metadata.transform(){
+    [ -e $HOME"/metadata/$(basename $1)/title" ] && closest_classifier $HOME"/metadata/$(basename $1)/title" && return
+    [ -e $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && closest_classifier $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" && return
+    [ -e $HOME"/metadata/$(basename $1)/title" ] || closest_classifier "$1" && return
 }
 
-knn_metadata.fit(){
-        for file in $learning_dir/vectors_reduced/*
-        do
-            cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $learning_dir/classifier/sortvectors
-            echo $(basename "$file") >> $learning_dir/classifier/sortnames
-        done
+closest_metadata.fit(){
+    closest_classifier.fit
 }
 
 identity.fit(){
@@ -839,29 +835,6 @@ print( int(clf.predict(x)[0]) )
 
 cat $learning_dir/classifier/map | grep "^ $y " | awk '{print $2}'
 }
-
-#knn_metadata_filter.fit(){
-    #rm -rf /tmp/sortvectors /tmp/sortnames
-#}
-
-#knn_metadata_filter.transform(){
-    #learning.doc2txt $1 > /tmp/filter
-
-    #head -n$summarize_line_limit /tmp/filter | while read line
-    #do
-        #echo $line | getwords | getkeywords > /tmp/kwords
-        #nkeys=$(cat /tmp/kwords | awk '{sum += $1} END {print sum}' )
-        #nwords=$(echo $line | wc -w)
-        #echo $(( $nkeys*100/$nwords )) $line
-    #done | sort -g > /tmp/lines_sorted
-
-    ##line=$(tail -n1 /tmp/lines_sorted)
-    #line=$(cat /tmp/lines_sorted | awk '$1>30' | sed 's/^ *[0-9]* //g' | paste -s)
-
-    #echo $line > /tmp/line
-
-    #knn_metadata.transform /tmp/line
-#}
 
 kmeans_clustering.transform(){
 x=$(learning.doc2rvect $1)
