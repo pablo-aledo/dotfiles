@@ -310,6 +310,21 @@ closest_metadata.fit(){
     closest_classifier.fit
 }
 
+closest_filter.transform(){
+    learning.doc2txt $1 > /tmp/filter
+    head -n$summarize_line_limit /tmp/filter | while read line
+    do
+        echo $line | getwords | getkeywords > /tmp/kwords
+        nkeys=$(cat /tmp/kwords | awk '{sum += $1} END {print sum}' )
+        nwords=$(echo $line | wc -w)
+        echo $(( $nkeys*100/$nwords )) $line
+    done | sort -g > /tmp/lines_sorted
+    #line=$(tail -n1 /tmp/lines_sorted)
+    line=$(cat /tmp/lines_sorted | awk '$1>70' | sed 's/^ *[0-9]* //g' | paste -s)
+    echo $line > /tmp/line
+    closest_classifier.transform /tmp/line
+}
+
 identity.fit(){
 }
 
