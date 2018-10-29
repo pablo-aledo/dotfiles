@@ -1208,7 +1208,8 @@ metadata.isbn2title(){
 
     filename=$1
     isbn=$(cat "$HOME/metadata/$filename/isbn")
-    title=$(wget "http://libgen.io/search.php?req=$isbn&lg_topic=libgen&open=0&view=simple&res=25&phrase=1&column=def" -q -O - | grep 'td width=500' | cut -d'>' -f3 | cut -d'<' -f1 | head -n1)
+    #title=$(wget "http://libgen.io/search.php?req=$isbn&lg_topic=libgen&open=0&view=simple&res=25&phrase=1&column=def" -q -O - | grep 'td width=500' | cut -d'>' -f3 | cut -d'<' -f1 | head -n1)
+    title=$(wget -q -U "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)" https://isbn.nu/$isbn -O - | grep big_title | cut -d'>' -f2 | cut -d'<' -f1)
 
     echo "$filename \e[34m $title \e[0m"
 
@@ -1231,7 +1232,7 @@ metadata.isbn2topics(){
 
     filename=$1
     isbn=$(cat "$HOME/metadata/$filename/isbn")
-    topics=$(wget -q -U "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)" https://isbn.nu/0071742557 -O - | grep sisbn | cut -d'>' -f3 | cut -d'<' -f1)
+    topics=$(wget -q -U "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)" https://isbn.nu/$isbn -O - | grep sisbn | cut -d'>' -f3 | cut -d'<' -f1)
 
     esc=$(printf '\033')
     echo "$filename \e[34m $(echo $topics | paste -s -d'@' | sed "s/@/${esc}[0m,${esc}[34m/g") \e[0m"
