@@ -1122,10 +1122,13 @@ learning.queue_mv(){
         file=$(echo $line | sed 's/\.txt$//g')
         true_tag=$(cat "$line" | head -n1)
 
+        [ "$true_tag" = "" ] && continue
+
         rm -fr /tmp/part00 /tmp/part01
         csplit "$line" -s -f /tmp/part /=====/
+        mv /tmp/part01 "/tmp/$line"
 
-        pred_tag=$($classifier_method.transform /tmp/part01)
+        pred_tag=$($classifier_method.transform "/tmp/$line")
 
         if [ $true_tag = $pred_tag ]
         then
