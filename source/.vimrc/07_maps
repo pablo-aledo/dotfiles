@@ -191,3 +191,5 @@ nnoremap <leader>u :GundoToggle<CR>
 " Spanish keyboard does not have ~
 :map ª ~
 :imap ª ~
+" show buffer number
+:map <leader>bn :echo bufnr('%')<cr>
