@@ -192,4 +192,4 @@ nnoremap <leader>u :GundoToggle<CR>
 :map ª ~
 :imap ª ~
 " show buffer number
-:map <leader>bn :echo bufnr('%')<cr>
+:map <leader>bn :echo bufnr('%') . '/' . len(filter(range(1, bufnr('$')), 'buflisted(v:val)'))<cr>
