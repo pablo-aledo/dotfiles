@@ -1102,7 +1102,10 @@ learning.queue_classify(){
 
         if [ -e "$HOME/metadata/$(echo $line | sed 's/\.txt$//g')/" ]
         then
-            cat "$HOME/metadata/$(echo $line | sed 's/\.txt$//g')/"* >> ~/summaries_classified/$line
+            ls "$HOME/metadata/$(echo $line | sed 's/\.txt$//g')/"* | while read metadata
+            do
+                echo $(basename "$metadata") : $(cat "$HOME/metadata/$(echo $line | sed 's/\.txt$//g')/$metadata") >> ~/summaries_classified/$line
+            done
         fi
 
         echo "====="         >> ~/summaries_classified/$line
