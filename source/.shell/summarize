@@ -1136,9 +1136,9 @@ learning.queue_mv(){
         if [ $true_tag = $pred_tag ]
         then
             echo "\e[34m $file \e[0m \e[32m $true_tag \e[0m"
+            [ -e "$learning_src/$true_tag" ] || echo "mkdir -p \"$learning_src/$true_tag/\"" | tee -a /tmp/script
             echo "mv \"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a /tmp/script
         fi
-
 
         if [ ! $true_tag = $pred_tag ]
         then
