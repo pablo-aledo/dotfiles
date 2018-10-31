@@ -1133,6 +1133,13 @@ learning.queue_mv(){
 
         pred_tag=$($classifier_method.transform "/tmp/$line")
 
+
+        if [ -e $learning_src/topics/topics ]
+        then
+            correct=$(cat $learning_src/topics/topics | awk '{print $NF}' | egrep -i "^$true_tag$" )
+            [ $? = 0 ] && true_tag=$correct
+        fi
+
         if [ $true_tag = $pred_tag ]
         then
             echo "\e[34m $file \e[0m \e[32m $true_tag \e[0m"
