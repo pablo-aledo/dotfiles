@@ -1074,7 +1074,7 @@ learning.restart(){
 
 learning.restart(){
     cd $learning_dir
-    ls | grep -v documents | grep -v features | grep -v topics | xargs rm -rf
+    ls | egrep -v '^documents$' | egrep -v '^features$' | egrep -v '^topics$' | xargs rm -rf
 }
 
 learning.queue_get(){
