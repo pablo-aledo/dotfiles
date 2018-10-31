@@ -1072,6 +1072,11 @@ learning.restart(){
     cp ~/keywords   $learning_dir/features
 }
 
+learning.restart(){
+    cd $learning_dir
+    ls | grep -v documents | grep -v features | grep -v topics | xargs rm -rf
+}
+
 learning.queue_get(){
 
     mkdir -p $HOME/summaries
