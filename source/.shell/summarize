@@ -1057,7 +1057,7 @@ learning.get_documents(){
 
     if [ $generate_topic_documents = "true" ]
     then
-        echo '' > "$learning_dir/documents/unknown.topic"
+        echo '' > "$learning_dir/documents/00_unknown.topic"
     fi
 
 }
