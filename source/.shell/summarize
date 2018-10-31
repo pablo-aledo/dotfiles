@@ -781,7 +781,7 @@ learning.key(){
 learning.fit(){
 
     [ -e $learning_dir/documents ] || mkdir -p $learning_dir/documents
-    [ -e $learning_dir/topics ] && learning.get_documents
+    #[ -e $learning_dir/topics ] && learning.get_documents
 
     #rm -fr $learning_dir/txts;
     mkdir -p $learning_dir/txts
