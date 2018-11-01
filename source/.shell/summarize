@@ -1134,25 +1134,27 @@ learning.queue_mv(){
 
         rm -fr /tmp/part00 /tmp/part01
         csplit "$line" -s -f /tmp/part /=====/
+
+        rm -fr "/tmp/$line"
         mv /tmp/part01 "/tmp/$line"
-
         pred_tag=$($classifier_method.transform "/tmp/$line")
+        rm -fr "/tmp/$line"
 
 
-        if [ -e $learning_src/topics/topics ]
+        if [ -e $learning_dir/topics/topics ]
         then
-            correct=$(cat $learning_src/topics/topics | awk '{print $NF}' | egrep -i "^$true_tag$" )
+            correct=$(cat $learning_dir/topics/topics | awk '{print $NF}' | head -n1 | egrep -i "^$true_tag$" )
             [ $? = 0 ] && true_tag=$correct
         fi
 
-        if [ $true_tag = $pred_tag ]
+        if [ "$true_tag" = "$pred_tag" ]
         then
             echo "\e[34m $file \e[0m \e[32m $true_tag \e[0m"
             [ -e "$learning_src/$true_tag" ] || echo "mkdir -p \"$learning_src/$true_tag/\"" | tee -a /tmp/script
             echo "mv \"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a /tmp/script
         fi
 
-        if [ ! $true_tag = $pred_tag ]
+        if [ ! "$true_tag" = "$pred_tag" ]
         then
             echo "\e[34m $file \e[0m \e[31m $pred_tag \e[0m \e[32m $true_tag \e[0m"
             crctitle=$(basename "$file" | md5sum | cut -d' ' -f1)
