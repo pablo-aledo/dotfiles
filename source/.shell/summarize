@@ -1073,8 +1073,7 @@ learning.restart(){
 }
 
 learning.restart(){
-    cd $learning_dir
-    ls | egrep -v '^documents$' | egrep -v '^features$' | egrep -v '^topics$' | xargs rm -rf
+    cd $learning_dir && ls | egrep -v '^documents$' | egrep -v '^features$' | egrep -v '^topics$' | xargs rm -rf
 }
 
 learning.queue_get(){
