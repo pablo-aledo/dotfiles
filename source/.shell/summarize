@@ -1214,6 +1214,28 @@ metadata.isbn(){
     [ "$(echo $line2 | egrep '^[^0-9]*978[0-9]{10}[^0-9]*$')" ] && fill_isbn13_metadata  "$line2"
 }
 
+metadata.filename(){
+
+    if [ $# -eq 0 ]
+    then
+        cd ~/summaries
+        ls | while read line
+        do
+            metadata.filename "$line"
+        done
+        return
+    fi
+
+    line="$1"
+    file=$(echo "$line" | sed 's/\.txt$//g')
+    name=$(basename "$file")
+
+    echo "$file \e[34m $name \e[0m"
+
+    mkdir -p "$HOME/metadata/$file"
+    echo "$name" > "$HOME/metadata/$file/filename"
+}
+
 metadata.isbn2title(){
     if [ $# -eq 0 ]
     then
