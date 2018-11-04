@@ -1,9 +1,9 @@
 extensions(){
-find -type f | while read line
+find -maxdepth 1 -type f | while read line
 do
 	filename=$(basename "$line")
 	extension="${filename##*.}"
-	
+
 	echo $extension
-done | sort | uniq -c | sort -g
+done | sort | uniq -c | sort -g | tac
 }
