@@ -213,6 +213,9 @@ doc2txt_rec(){
 	destination="$2"
 
 	case $filename in
+		(*/title|title)
+			cat "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
+			;;
 		(*.rar|*.RAR)
 			rm -fr /tmp/learning
 			mkdir -p /tmp/learning
