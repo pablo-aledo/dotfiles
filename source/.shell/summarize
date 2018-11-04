@@ -1228,7 +1228,7 @@ metadata.filename(){
 
     line="$1"
     file=$(echo "$line" | sed 's/\.txt$//g')
-    name=$(basename "$file")
+    name=$(basename "$file" | sed 's/\.[^.]*$//')
 
     echo "$file \e[34m $name \e[0m"
 
