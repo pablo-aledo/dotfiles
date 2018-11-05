@@ -2,7 +2,7 @@ export DISPLAY=:1
 source ~/.dotfiles/source/.shell/adapt
 adapt_shc_theme
 
-mkdir -p ~/metadata
+mkdir -p ~/learning/metadata
 xrandr --output VNC-0 --mode 1280x800
 sleep 1
 xdotool key Alt+w
