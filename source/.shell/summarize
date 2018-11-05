@@ -1113,7 +1113,7 @@ learning.queue_classify(){
         then
             ls "$learning_dir/metadata/$(echo $line | sed 's/\.txt$//g')/"* | while read metadata
             do
-                echo $(basename "$metadata") : $(cat "$learning_dir/metadata/$(basename "$line" | sed 's/\.txt$//g')/$(basename "$metadata")") >> ~/summaries_classified/$line
+                echo $(basename "$metadata") : $(cat "$learning_dir/metadata/$(basename "$line" | sed 's/\.txt$//g')/$(basename "$metadata")") >> $learning_dir/summaries_classified/$line
             done
         fi
 
