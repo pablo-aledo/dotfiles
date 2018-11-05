@@ -306,9 +306,9 @@ closest_classifier.fit(){
 }
 
 closest_metadata.transform(){
-    [ -e $HOME"/metadata/$(basename $1)/title" ] && closest_classifier.transform $HOME"/metadata/$(basename $1)/title" && return
-    [ -e $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && closest_classifier.transform $HOME"/metadata/$(basename $1 | sed 's/\.txt$//g')/title" && return
-    [ -e $HOME"/metadata/$(basename $1)/title" ] || closest_classifier.transform "$1" && return
+    [ -e "$learning_dir/metadata/$(basename $1)/title" ] && closest_classifier.transform "$learning_dir/metadata/$(basename $1)/title" && return
+    [ -e "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && closest_classifier.transform "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title" && return
+    [ -e "$learning_dir/metadata/$(basename $1)/title" ] || closest_classifier.transform "$1" && return
 }
 
 closest_metadata.fit(){
@@ -1078,12 +1078,12 @@ learning.restart(){
 }
 
 learning.restart(){
-    cd $learning_dir && ls | egrep -v '^documents$' | egrep -v '^features$' | egrep -v '^topics$' | xargs rm -rf
+    cd $learning_dir && ls | egrep -v '^documents$' | egrep -v '^features$' | egrep -v '^topics$' | egrep -v 'summaries' | egrep -v '^metadata$' | xargs rm -rf
 }
 
 learning.queue_get(){
 
-    mkdir -p $HOME/summaries
+    mkdir -p $learning_dir/summaries
 
     [ $# -eq 0 ] && limit=10
     [ $# -eq 1 ] && limit=$1
@@ -1092,42 +1092,42 @@ learning.queue_get(){
     ls *.pdf | head -n $limit | while read line
     do
         echo "\e[34m doc2txt \e[0m $line"
-        learning.doc2txt "$line" "$HOME/summaries/$line.txt"
+        learning.doc2txt "$line" "$learning_dir/summaries/$line.txt"
     done
 
-    cd $HOME/summaries
+    cd $learning_dir/summaries
 
 }
 
 learning.queue_classify(){
 
-    mkdir -p ~/summaries_classified/
+    mkdir -p $learning_dir/summaries_classified/
 
-    cd ~/summaries/
+    cd $learning_dir/summaries/
     ls | while read line
     do
         classification=$( $classifier_method.transform "$line" )
-        echo $classification >  ~/summaries_classified/$line
+        echo $classification >  $learning_dir/summaries_classified/$line
 
-        if [ -e "$HOME/metadata/$(echo $line | sed 's/\.txt$//g')/" ]
+        if [ -e "$learning_dir/metadata/$(echo $line | sed 's/\.txt$//g')/" ]
         then
-            ls "$HOME/metadata/$(echo $line | sed 's/\.txt$//g')/"* | while read metadata
+            ls "$learning_dir/metadata/$(echo $line | sed 's/\.txt$//g')/"* | while read metadata
             do
-                echo $(basename "$metadata") : $(cat "$HOME/metadata/$(basename "$line" | sed 's/\.txt$//g')/$(basename "$metadata")") >> ~/summaries_classified/$line
+                echo $(basename "$metadata") : $(cat "$learning_dir/metadata/$(basename "$line" | sed 's/\.txt$//g')/$(basename "$metadata")") >> ~/summaries_classified/$line
             done
         fi
 
-        echo "====="         >> ~/summaries_classified/$line
-        cat "$line"          >> ~/summaries_classified/$line
+        echo "====="         >> $learning_dir/summaries_classified/$line
+        cat "$line"          >> $learning_dir/summaries_classified/$line
         echo "\e[34m $line \e[0m \e[33m $classification \e[0m"
     done
 
-    cd $HOME/summaries_classified
+    cd $learning_dir/summaries_classified
 }
 
 learning.queue_mv(){
 
-    cd ~/summaries_classified/
+    cd $learning_dir/summaries_classified/
     rm -fr /tmp/script
     ls | while read line
     do
@@ -1164,7 +1164,7 @@ learning.queue_mv(){
             crctitle=$(basename "$file" | md5sum | cut -d' ' -f1)
             [ -e "$learning_src/$true_tag" ] || echo "mkdir -p \"$learning_src/$true_tag/\"" | tee -a /tmp/script
             echo "mv \"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a /tmp/script
-            echo "cat \"$HOME/summaries_classified/$line\" > $learning_dir/documents/$true_tag.$crctitle" | tee -a /tmp/script
+            echo "cat \"$learning_dir/summaries_classified/$line\" > $learning_dir/documents/$true_tag.$crctitle" | tee -a /tmp/script
         fi
 
     done
@@ -1178,8 +1178,8 @@ fill_isbn10n_metadata(){
     filename2=$(basename "$filename" .txt)
     isbn=$(echo "$filename" | sed 's/[^0-9]*\([0-9]\{10\}\)[^0-9]*/\1/g')
     echo "$filename \e[34m $isbn \e[0m"
-    mkdir -p "$HOME/metadata/$filename2"
-    echo $isbn > "$HOME/metadata/$filename2/isbn"
+    mkdir -p "$learning_dir/metadata/$filename2"
+    echo $isbn > "$learning_dir/metadata/$filename2/isbn"
 }
 
 fill_isbn10l_metadata(){
@@ -1187,8 +1187,8 @@ fill_isbn10l_metadata(){
     filename2=$(basename "$filename" .txt)
     isbn=$(echo "$filename" | sed 's/[^0-9]*\([0-9]\{9\}X\)[^0-9]*/\1/g')
     echo "$filename \e[34m $isbn \e[0m"
-    mkdir -p "$HOME/metadata/$filename2"
-    echo $isbn > "$HOME/metadata/$filename2/isbn"
+    mkdir -p "$learning_dir/metadata/$filename2"
+    echo $isbn > "$learning_dir/metadata/$filename2/isbn"
 }
 
 fill_isbn13_metadata(){
@@ -1196,15 +1196,15 @@ fill_isbn13_metadata(){
     filename2=$(basename "$filename" .txt)
     isbn=$(echo "$filename" | sed 's/^[^0-9]*\(978[0-9]\{10\}\)[^0-9]*$/\1/g')
     echo "$filename \e[34m $isbn \e[0m"
-    mkdir -p "$HOME/metadata/$filename2"
-    echo $isbn > "$HOME/metadata/$filename2/isbn"
+    mkdir -p "$learning_dir/metadata/$filename2"
+    echo $isbn > "$learning_dir/metadata/$filename2/isbn"
 }
 
 metadata.isbn(){
 
     if [ $# -eq 0 ]
     then
-        cd ~/summaries
+        cd $learning_dir/summaries
         ls | while read line
         do
             metadata.isbn $line
@@ -1223,7 +1223,7 @@ metadata.filename(){
 
     if [ $# -eq 0 ]
     then
-        cd ~/summaries
+        cd $learning_dir/summaries
         ls | while read line
         do
             metadata.filename "$line"
@@ -1237,14 +1237,14 @@ metadata.filename(){
 
     echo "$file \e[34m $name \e[0m"
 
-    mkdir -p "$HOME/metadata/$file"
-    echo "$name" > "$HOME/metadata/$file/filename"
+    mkdir -p "$learning_dir/metadata/$file"
+    echo "$name" > "$learning_dir/metadata/$file/filename"
 }
 
 metadata.isbn2title(){
     if [ $# -eq 0 ]
     then
-        cd ~/metadata
+        cd $learning_dir/metadata
         ls | while read line
         do
             if [ -e "$line/isbn" ] && [ ! -e "$line/title" ]
@@ -1256,19 +1256,19 @@ metadata.isbn2title(){
     fi
 
     filename=$1
-    isbn=$(cat "$HOME/metadata/$filename/isbn")
+    isbn=$(cat "$learning_dir/metadata/$filename/isbn")
     #title=$(wget "http://libgen.io/search.php?req=$isbn&lg_topic=libgen&open=0&view=simple&res=25&phrase=1&column=def" -q -O - | grep 'td width=500' | cut -d'>' -f3 | cut -d'<' -f1 | head -n1)
     title=$(wget -q -U "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)" https://isbn.nu/$isbn -O - | grep big_title | cut -d'>' -f2 | cut -d'<' -f1)
 
     echo "$filename \e[34m $title \e[0m"
 
-    echo "$title" > "$HOME/metadata/$filename/title"
+    echo "$title" > "$learning_dir/metadata/$filename/title"
 }
 
 metadata.isbn2topics(){
     if [ $# -eq 0 ]
     then
-        cd ~/metadata
+        cd $learning_dir/metadata
         ls | while read line
         do
             if [ -e "$line/isbn" ] && [ ! -e "$line/topics" ]
@@ -1280,11 +1280,11 @@ metadata.isbn2topics(){
     fi
 
     filename=$1
-    isbn=$(cat "$HOME/metadata/$filename/isbn")
+    isbn=$(cat "$learning_dir/metadata/$filename/isbn")
     topics=$(wget -q -U "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)" https://isbn.nu/$isbn -O - | grep sisbn | cut -d'>' -f3 | cut -d'<' -f1)
 
     esc=$(printf '\033')
     echo "$filename \e[34m $(echo $topics | paste -s -d'@' | sed "s/@/${esc}[0m,${esc}[34m/g") \e[0m"
 
-    echo "$topics" > "$HOME/metadata/$filename/title"
+    echo "$topics" > "$learning_dir/metadata/$filename/title"
 }
