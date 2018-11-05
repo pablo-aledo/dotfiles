@@ -38,6 +38,8 @@ getwords(){
     [ $keywords_lowercase = "true" ] && lowercmd="tr '[A-Z]' '[a-z]'"
     [ $keywords_lowercase = "true" ] || lowercmd="cat"
     cat | head -n$summarize_line_limit | $(echo $lowercmd) | sed \
+        -e 's/\<c\+\+\>/cpp/g'  \
+        -e 's/\<c#\>/csharp/g'  \
         -e 's/ /\n/g'  \
         -e 's/\./\n/g' \
         -e 's/\t/\n/g' \
@@ -47,6 +49,7 @@ getwords(){
         -e 's/-/\n/g'  \
         -e 's/\//\n/g' \
         -e 's/\\/\n/g' \
+        -e 's/\+/\n/g' \
         -e 's/,/\n/g'  \
         -e 's/;/\n/g'  \
         -e 's/\*/\n/g' \
@@ -68,7 +71,6 @@ getwords(){
         -e 's/:/\n/g'  \
         -e 's/~/\n/g'  \
         | sort | uniq -c | egrep -v '^ *[0-9]* $'
-        # -e 's/\+/\n/g' \
 }
 
 getkeywords_(){
