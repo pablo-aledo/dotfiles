@@ -1,0 +1,138 @@
+snippet Chart.yaml
+	apiVersion: v1
+	appVersion: "0.1.0"
+	description: A Helm chart for ${1:project}
+	name: ${2:name}
+	version: ${3:major}.${4:minor}.${5:patch}
+snippet questions.yml
+	categories:
+	- ${1:category}
+	questions:
+	- variable: ${2:variable}
+	  group: ${3:group}
+	  type: ${4:type}
+	  default: ${5:default}
+	  description: "${6:description}"
+	  label: ${7:label}
+	  required: true
+snippet values.yaml
+	replicaCount: 1
+
+	image:
+	  repository: registry.gitlab.com/${1:user}/${2:repository}/${3:image}
+	  tag: ${4:tag}
+	  pullPolicy: IfNotPresent
+
+	ingress:
+	  enabled: false
+	  path: /
+	  hosts:
+	    - chart-example.local
+	  tls: []
+
+	resources: {}
+
+	nodeSelector: {}
+
+	tolerations: []
+
+	affinity: {}
+
+snippet pod.yaml
+	apiVersion: v1
+	kind: Pod
+	metadata:
+	  name: {{ .Chart.Name }}-pod
+	  labels:
+	    app.kubernetes.io/managed-by: {{ .Release.Service }}
+	    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+	    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+	spec:
+	  restartPolicy: {{ .Values.restartPolicy }}
+	  volumes:
+	      - name: {{ .Chart.Name }}-config-volume
+	        configMap:
+	            name: {{ .Chart.Name }}-config
+	  containers:
+	  - name: {{ .Chart.Name }}
+	    image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+	    imagePullPolicy: {{ .Values.image.pullPolicy }}
+	    volumeMounts:
+	        - name: {{ .Chart.Name }}-config-volume
+	          mountPath: /configuration
+snippet configmap.yaml
+	apiVersion: v1
+	kind: ConfigMap
+	metadata:
+	  name: {{ .Chart.Name }}-config
+	  labels:
+	      name: ${1:name}
+	data:
+	  ${2:filename}: |-
+		${3:content}
+snippet deployment.yaml
+	apiVersion: apps/v1beta2
+	kind: Deployment
+	metadata:
+	  name: {{ .Chart.Name }}-deployment
+	  labels:
+	    app: {{ .Chart.Name }}
+	    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "-" }}
+	    release: {{ .Release.Name }}
+	    heritage: {{ .Release.Service }}
+	spec:
+	  replicas: {{ .Values.replicaCount }}
+	  selector:
+	    matchLabels:
+	      app: {{ .Chart.Name }}
+	      release: {{ .Release.Name }}
+	  template:
+	    metadata:
+	      labels:
+	        app: {{ .Chart.Name }}
+	        release: {{ .Release.Name }}
+	    spec:
+	      volumes:
+	          - name: {{ .Chart.Name }}-config-volume
+	            configMap:
+	                name: {{ .Chart.Name }}-config
+	      containers:
+	        - name: {{ .Chart.Name }}
+	          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+	          imagePullPolicy: {{ .Values.image.pullPolicy }}
+	          volumeMounts:
+	              - name: {{ .Chart.Name }}-config-volume
+	                mountPath: /configuration
+	          resources:
+	{{ toYaml .Values.resources | indent 12 }}
+	    {{- with .Values.nodeSelector }}
+	      nodeSelector:
+	{{ toYaml . | indent 8 }}
+	    {{- end }}
+	    {{- with .Values.affinity }}
+	      affinity:
+	{{ toYaml . | indent 8 }}
+	    {{- end }}
+	    {{- with .Values.tolerations }}
+	      tolerations:
+	{{ toYaml . | indent 8 }}
+	    {{- end }}
+snippet service.yaml
+	apiVersion: v1
+	kind: Service
+	metadata:
+	  name: {{ .Chart.Name }}-service
+	  labels:
+	    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+	    release: {{ .Release.Name }}
+	    heritage: {{ .Release.Service }}
+	spec:
+	  type: NodePort
+	  ports:
+	    - port: ${1:port}
+	      targetPort: ${1}
+	      protocol: TCP
+	      name: ${2:name}
+	  selector:
+	    app: {{ .Chart.Name }}
+	    release: {{ .Release.Name }}
