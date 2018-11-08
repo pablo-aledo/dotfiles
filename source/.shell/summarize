@@ -517,6 +517,31 @@ joblib.dump(clf, learning_dir + '/classifier/classifier.pkl')
 "
 }
 
+logistic_classifier.fit(){
+
+    rm -fr /tmp/classifier.x /tmp/classifier.y
+    ls $learning_dir/vectors_reduced/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/classifier/map
+    for file in $learning_dir/vectors_reduced/*
+    do
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/classifier.x
+        y=$(basename $file | sed 's/\..*//g')
+        id=$(cat $learning_dir/classifier/map | grep " $y$" | awk '{print $1}')
+        echo $id >> /tmp/classifier.y
+    done
+
+	python -c "
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.externals import joblib
+X = np.loadtxt('/tmp/classifier.x')
+Y = np.loadtxt('/tmp/classifier.y')
+learning_dir='$learning_dir'
+clf = LogisticRegression()
+clf.fit(X, Y)
+joblib.dump(clf, learning_dir + '/classifier/classifier.pkl')
+"
+}
+
 vect2s(){
     read vect
     learning.rvect2key "$( python -c "
@@ -854,6 +879,27 @@ print( int(clf.predict(x)[0]) )
 ")
 
 cat $learning_dir/classifier/map | grep "^ $y " | awk '{print $2}'
+}
+
+logistic_classifier.doc2ps(){
+x=$(learning.doc2rvect $1)
+
+python -c "
+x=[$x]
+learning_dir='$learning_dir'
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.externals import joblib
+clf=joblib.load(learning_dir + '/classifier/classifier.pkl')
+print (' '.join( map( str, clf.predict_proba(x)[0] )))
+"
+}
+
+ensemble.txt2vec(){
+    for a in logistic_classifier
+    do
+        $a.doc2ps "$1"
+    done | paste -d' ' -s | sed -e 's/ /,/g' -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g'
 }
 
 kmeans_clustering.transform(){
