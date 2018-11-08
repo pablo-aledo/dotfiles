@@ -1,0 +1,30 @@
+editdistance(){
+    awk '
+    function min(x, y) {
+      return x < y ? x : y
+    }
+    function max(x, y) {
+      return x > y ? x : y
+    }
+    function lev(s,t) {
+      m = length(s)
+      n = length(t)
+
+      for(i=0;i<=m;i++) d[i,0] = i
+      for(j=0;j<=n;j++) d[0,j] = j
+
+      for(i=1;i<=m;i++) {
+        for(j=1;j<=n;j++) {
+          c = substr(s,i,1) != substr(t,j,1)
+          d[i,j] = min(d[i-1,j]+1,min(d[i,j-1]+1,d[i-1,j-1]+c))
+        }
+      }
+
+      return d[m,n]
+    }
+
+    BEGIN {
+      print 100 * lev(ARGV[1], ARGV[2]) / max(length(ARGV[1]), length(ARGV[2]))
+      exit
+    }' "$1" "$2"
+}
