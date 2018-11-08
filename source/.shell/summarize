@@ -173,6 +173,19 @@ print(np.divide(vect, float(total+0.00001)))
 
 }
 
+keywords_multiscale.txt2vec(){
+
+    vect1=$(cat $1 | head -n 1     | getwords | getkeywords | awk '{print $1}')
+    vect2=$(cat $1 | head -n 10    | getwords | getkeywords | awk '{print $1}')
+    vect3=$(cat $1 | head -n 10000 | getwords | getkeywords | awk '{print $1}')
+
+    echo $vect1 $vect2 $vect3 | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g'
+}
+
+keywords_multiscale.get_features(){
+    keywords.get_features
+}
+
 keywords.doc2vec_debug(){
 
     if [ $# -gt 1 ]
@@ -823,7 +836,7 @@ learning.fit(){
     done
     #cp -r $learning_dir/documents $learning_dir/txts
 
-    [ $vectorizer_method != keywords ] && ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
+    [ $( echo vectorizer_method | grep keywords ) ] || ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
     echo "\e[34m get_features \e[0m "
     $vectorizer_method.get_features
 
