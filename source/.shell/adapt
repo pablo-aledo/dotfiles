@@ -135,6 +135,10 @@ adapt_awsserver(){
     echo 'export LOCAL_BACKUP_TIME_MACHINE=/media/removable/2TB2/homes/admin/time_machine' >> ~/.shell
     echo 'export LOCAL_BACKUP_BAK_DIR=/media/removable/2TB2/homes/admin/rsync_bak' >> ~/.shell
     source ~/.shell
+
+    mutt -F ~/.mutt/muttrc_0
+    mutt -F ~/.mutt/muttrc_1
+    mutt -F ~/.mutt/muttrc_2
 }
 
 adapt_shc_theme(){
