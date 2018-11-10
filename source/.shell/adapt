@@ -109,6 +109,7 @@ adapt_awsserver(){
     pkg install docker
 	pkg install rsstail
 	pkg install mutt
+	pkg install google-chrome
 
 	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
 	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
