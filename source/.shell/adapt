@@ -111,6 +111,9 @@ adapt_awsserver(){
 	pkg install mutt
 	pkg install google-chrome
 	pkg install sshfs
+    pkg install binutils
+    pkg install python-numpy
+    pkg install python-sklearn
 
 	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
 	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config

@@ -93,7 +93,7 @@ import re
 
 with open('/tmp/keywords') as f:
     lines = [ line.rstrip('\n') for line in f ]
-with open('/home/pablo_aledo_rss/learning/features/keywords') as f:
+with open('$learning_dir' + '/features/keywords') as f:
     keywords = [ line.rstrip('\n') for line in f ]
     keywords = [ keyword for keyword in keywords if keyword != '' ]
 
@@ -134,7 +134,7 @@ import re
 
 with open('/tmp/keywords') as f:
     lines = [ line.rstrip('\n') for line in f ]
-with open('/home/pablo_aledo_rss/learning/features/keywords') as f:
+with open('$learning_dir' + '/features/keywords') as f:
     keywords = [ line.rstrip('\n') for line in f ]
     keywords = [ keyword for keyword in keywords if keyword != '' ]
 
