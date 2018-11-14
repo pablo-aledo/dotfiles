@@ -294,7 +294,8 @@ server(){
 		pkg install novnc4
 		vnc4server -kill :1
 		sudo rm -rf /tmp/.X11-unix /tmp/.X*-lock
-		tmux new -d -s novnc "cd /usr/share/noVNC; sudo ./utils/launch.sh --listen 80 --vnc localhost:5901"
+		[ $# = 1 ] && tmux new -d -s novnc "cd /usr/share/noVNC; sudo ./utils/launch.sh --listen 80 --vnc localhost:5901"
+		[ $# = 2 ] && tmux new -d -s novnc "cd /usr/share/noVNC; sudo ./utils/launch.sh --listen $2 --vnc localhost:5901"
 		tmux new -d -s vnc   "/usr/bin/vncserver; read"
 	fi
 
