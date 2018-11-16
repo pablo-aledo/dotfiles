@@ -14,9 +14,10 @@ run mkdir ~/.vnc && \
     echo 'i3 >/tmp/log 2>/tmp/log'   >> ~/.vnc/xstartup && \
     chmod +x ~/.vnc/xstartup
 
-run mkdir ~/.i3 && \
-    echo '# i3 config file (v4)' >  ~/.i3/config && \
-    echo 'set $mod Mod1'         >> ~/.i3/config
+run mkdir -p ~/.config/i3/ && \
+    echo '# i3 config file (v4)' >  ~/.config/i3/config && \
+    echo 'set $mod Mod1'         >> ~/.config/i3/config && \
+    echo 'bindsym $mod x kill'   >> ~/.config/i3/config
 
 run mkdir /usr/share/noVNC && \
     cd /usr/share/noVNC && \
@@ -28,7 +29,7 @@ run mkdir -p /usr/share/noVNC/utils/websockify && \
 
 run dbus-uuidgen > /etc/machine-id
 
-entrypoint ["sh", "-c", "tmux new -d -s novnc 'cd /usr/share/noVNC; ./utils/launch.sh --listen 8080 --vnc localhost:5901'; tmux new -d -s vnc '/usr/bin/vncserver; read'; tmux new -d -s gui 'while true; do DISPLAY=:1 <exec> <args>; sleep 1; done'; sh"]
+entrypoint ["sh", "-c", "tmux new -d -s novnc 'cd /usr/share/noVNC; ./utils/launch.sh --listen 8080 --vnc localhost:5901'; tmux new -d -s vnc '/usr/bin/vncserver; read'; tmux new -d -s gui 'while true; do DISPLAY=:1 xterm; sleep 1; done'; sh"]
 
 expose 8080:8080
 expose 5901:5901

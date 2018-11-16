@@ -100,7 +100,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic|centos-i3-vnc)
 	cd ~/.dotfiles/pkg/Docker/$1
 	docker build -t $1 .
 	cd -
@@ -516,6 +516,7 @@ case $1 in
                          #docker run -d -p 5901:5901 -p 6901:6901 --user $(id -u):$(id -g) consol/centos-xfce-vnc
                          #docker run -it -p 5901:5901 -p 6901:6901 consol/centos-xfce-vnc bash
                          ;;
+(centos-i3-vnc)          docker run -it -p 5901:5901 -p 8080:8080 centos-i3-vnc ;;
 (ubuntu-xfce-vnc)        shift; docker run -d -p 5901:5901 -p 6901:6901 consol/ubuntu-xfce-vnc
                          google-chrome 'http://localhost:6901/?password=vncpassword'
                          ;;
