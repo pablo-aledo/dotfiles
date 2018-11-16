@@ -1,0 +1,7 @@
+#compdef wh
+
+local -a functions
+functions=( $( cat ~/.dotfiles/source/.shell/* | egrep '^[a-z_]*\(\){$' | sed 's/^\([a-z_]*\)(){$/\1/g' ) )
+
+_describe 'command' functions
+
