@@ -1,0 +1,7 @@
+#compdef theme
+
+local -a themes
+themes=( $( ls ~/.oh-my-zsh/themes/ | sed 's/\.zsh-theme//g' ) )
+
+_describe 'command' themes
+
