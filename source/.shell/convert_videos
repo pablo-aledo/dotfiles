@@ -434,25 +434,57 @@ convert_recursive(){
 
 convert_recursive_parallel(){
 
-	convert_opts="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
+	[ $# -eq 0 ] && width=640
+	[ $# -eq 1 ] && width=$1
+	convert_opts="-vf 'scale=${width}:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy -loglevel warning" # -loglevel {quiet, panic, fatal, error, warning, info, verbose, debug, trace} -hide_banner -nostats
+
+	[ -e "$convert_dir" ]   || return
+	[ -e "$converted_dir" ] || return
 
 	[ -e /usr/bin/ffmpeg ]   || pkg install ffmpeg
-	[ -e /usr/bin/unrar ]      || pkg install unrar
+	[ -e /usr/bin/unrar ]    || pkg install unrar
 	[ -e /usr/bin/parallel ] || pkg install parallel
 
 	rm -fr /tmp/convert_report
 
 	cd $convert_dir
+	rm -fr /tmp/error
+	find -name '*.part*.rar' | while read line
+	do
+		cd $convert_dir
+		cd "`dirname $line`"
+		[ $(ls | wc -l) -eq $(ls | sed 's/.*part\(.*\)\.rar/\1/g' | sort -g | tail -n1) ] || \
+			(echo "missing file in the rar sequence for $PWD" > /tmp/error)
+		[ $(ll | awk '{print $5}' | sort | uniq | wc -l) -eq 3 ] || \
+			(echo "incorrect sizes in the rar sequence for $PWD" > /tmp/error)
+	done
+	[ -e /tmp/error ] && return
+
+	cd $convert_dir
 	find -name '*.rar' | while read line
 	do
+		cd $convert_dir
 		cd "`dirname $line`"
 		yes n | unrar x "`basename $line`"
 		rm -fr "`basename $line`"
-		cd -
 	done
 
 	cd $convert_dir
 	stpfolders | bash
+
+	cd $convert_dir
+	find -iname '*  *' -type d | while read line
+	do
+		name1=$line
+		name2=$(echo $line | sed -e 's/  / /g' -e 's/  / /g' -e 's/  / /g')
+		echo mv "'"$name1"'" "'"$name2"'" 
+	done | bash
+	find -iname '*  *' -type f | while read line
+	do
+		name1=$line
+		name2=$(echo $line | sed -e 's/  / /g' -e 's/  / /g' -e 's/  / /g')
+		echo mv "'"$name1"'" "'"$name2"'" 
+	done | bash
 
 	cd $convert_dir
 	find $PWD -type d | while read line
@@ -472,7 +504,7 @@ convert_recursive_parallel(){
 	[ `nproc` -gt 2 ] && ( cat /tmp/script | parallel -j$((`nproc` - 2)) bash -c )
 	[ `nproc` -gt 2 ] || ( source /tmp/script )
 
-	find $converted_dir -type f -empty -delete
+	find "$converted_dir" -name '*.mp4' -size -100k -delete 2>/dev/null
 
 	cd $convert_dir
 	echo $findcmd | bash | while read line
