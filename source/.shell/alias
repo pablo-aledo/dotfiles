@@ -15,5 +15,6 @@ alias docker_wd='docker run -it -v $PWD:/workdir -w /workdir'
 alias docker_gr='docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY'
 alias detach='disown $(jobs -l | awk "{print \$6}")'
 alias attach='reptyr'
+alias watch='watch '
 f(){ echo find -iname "'*$1*'" | bash }
 hd(){ helm delete --purge $(hn $1) }
