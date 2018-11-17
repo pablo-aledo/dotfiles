@@ -170,150 +170,13 @@ convert_normalize(){
 	rm -fr normalize_*
 }
 
-convert_recursive(){
 
-	limit_head=999999 && limit_tail=999999 && just_one=1 && just_two=0 && unrar=1
-
-	[ "$1" = "test" ] && echo 'testing ...' && limit_head=1 && limit_tail=1
-	[ "$1" = "nth" ]  && echo 'nth ...' && limit_head=$2 && limit_tail=1
-	[ "$1" = "just_one" ]  && echo 'just conversion 1' && just_one=1
-	[ "$1" = "just_two" ]  && echo 'just conversion 2' && just_one=0 && just_two=1
-	[ "$1" = "just_two" ]  && echo 'just conversion 2' && just_one=0 && just_two=1
-	[ "$1" = "nounrar"  ]  && unrar=0
-
-	convert_opts_1="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
-	convert_opts_2="-vf 'scale=1280:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
-	convert_opts_3="-vcodec libx264 -c:v libx264 -preset slow -crf 23 -c:a copy"
-
-	[ -e /usr/bin/ffmpeg ] || pkg install ffmpeg
-	[ -e /usr/bin/unrar ]    || pkg install unrar
-
-	rm -fr /tmp/convert_report
-
-	if [ $unrar -eq 1 ]
-	then
-		cd $convert_dir
-		find -name '*.rar' | while read line
-		do
-			cd "`dirname $line`"
-			yes n | unrar x "`basename $line`"
-			rm -fr "`basename $line`"
-			cd -
-		done
-	fi
-
-	cd $convert_dir
-	find $PWD -type d | while read line
-	do
-		mkdir -p "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`"
-	done
-
-	findcmd="find \$PWD -iname '*.mp4' -or -iname '*.m4v' -or -iname '*.flv' -or -iname '*.mov' -or -iname '*.avi' -or -iname '*.wmv' -or -iname '*.mkv' -or -iname '*.vob'"
-
-	cd $convert_dir
-
-    total=0
-	echo $findcmd | bash | sort | while read line
-	do
-		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
-        total=$(( $total + 1 ))
-    done
-
-	actual=1;
-	echo $findcmd | bash | head -n $limit_head | tail -n $limit_tail | while read line
-	do
-		echo "\e[31m ===== ($actual / $total) $line =====\e[0m"
-
-		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
-
-		actual=$(( $actual + 1 ))
-
-		[ $just_one -eq 0 ] && [ $just_two -eq 0 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_1` /tmp/file1.mp4 "</dev/null"  > /tmp/script1
-		[ $just_one -eq 0 ] && [ $just_two -eq 0 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_2` /tmp/file2.mp4 "</dev/null" >> /tmp/script1
-		[ $just_one -eq 0 ] && [ $just_two -eq 0 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_3` /tmp/file3.mp4 "</dev/null" >> /tmp/script1
-
-		[ $just_one -eq 1 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_1` /tmp/file1.mp4 "</dev/null"  > /tmp/script1
-		[ $just_two -eq 1 ] && echo ffmpeg -i \"$line\" `echo $convert_opts_2` /tmp/file2.mp4 "</dev/null" >> /tmp/script1
-
-		rm -fr /tmp/file{1,2,3}.mp4
-		source /tmp/script1
-
-		find /tmp/ -name 'file*.mp4' -size -100k -delete 2>/dev/null
-
-		echo /bin/cp "`ls -S /tmp/file1.mp4 /tmp/file2.mp4 /tmp/file3.mp4 | tail -n1`" \""`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"\" > /tmp/script2
-		source /tmp/script2
-
-		file1="$line"
-		base1=`basename "$line"`
-		size1=`ls -lh /tmp/file1.mp4 | cut -d' ' -f5`
-		size2=`ls -lh /tmp/file2.mp4 | cut -d' ' -f5`
-		size3=`ls -lh /tmp/file3.mp4 | cut -d' ' -f5`
-		filemin="`ls -S /tmp/file1.mp4 /tmp/file2.mp4 /tmp/file3.mp4 | tail -n1`"
-		printf '%100s %8s %8s %8s %s\n' $base1 $size1 $size2 $size3 $filemin | tee -a /tmp/convert_report
-	done
-
-	cd $convert_dir
-	echo $findcmd | bash | head -n $limit_head | tail -n $limit_tail | while read line
-	do
-		file1="$line"
-		base1=`basename "$line"`
-		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
-		size1=`ls -lh "$file1" | cut -d' ' -f5`
-		size2=`ls -lh "$file2" | cut -d' ' -f5`
-		printf '%100s \e[31m %s \e[32m %s \e[0m\n' $base1 $size1 $size2 | tee -a /tmp/convert_report
-	done
-
-	cd $convert_dir
-	echo $findcmd | bash | head -n $limit_head | tail -n $limit_tail | while read line
-	do
-		file1="$line"
-		base1=`basename "$line"`
-		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
-		[ -e "$file2" ] || echo "\e[31m Fail converting $file1 \e[0m" | tee -a /tmp/convert_report
-	done
-
-	cd $convert_dir
-	find $PWD -type f | head -n $limit_head | tail -n $limit_tail | while read line
-	do
-		file1="$line"
-		base1="`basename "$line"`"
-		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
-		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo cp \"$file1\" \"$file2\" | tee -a /tmp/convert_report
-		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || cp "$file1" "$file2"
-	done
-
-	cd $convert_dir
-	find $PWD -type f | head -n $limit_head | tail -n $limit_tail | while read line
-	do
-		file1="$line"
-		base1="`basename "$line"`"
-		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
-		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo "\e[31m Missing file $file2 \e[0m" | tee -a /tmp/convert_report
-	done
-
-	cd $converted_dir
-	find $PWD -type f -size -100k -iname '*.converted.mp4' | while read line
-	do
-		echo "\e[31m Small converted file $line \e[0m" | tee -a /tmp/convert_report
-	done
-
-	( [ "$1" = "nth"  ] || [ "" = "test" ] ) && pcmanfm "$(dirname "$(find $PWD -name '*.mp4' | head -n $limit_head | tail -n $limit_tail | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g  )")"
-
-}
-
-convert_recursive(){
-	[ $# -eq 0 ] && width=640
-	[ $# -eq 1 ] && width=$1
-	convert_opts="-vf 'scale=${width}:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy -loglevel warning" # -loglevel {quiet, panic, fatal, error, warning, info, verbose, debug, trace} -hide_banner -nostats
-
-	[ -e "$convert_dir" ]   || return
-	[ -e "$converted_dir" ] || return
-
+convert_install(){
 	[ -e /usr/bin/ffmpeg ]   || pkg install ffmpeg
 	[ -e /usr/bin/unrar ]    || pkg install unrar
+}
 
-	rm -fr /tmp/convert_report
-
+convert_checkrar(){
 	cd $convert_dir
 	rm -fr /tmp/error
 	find -name '*.part*.rar' | while read line
@@ -326,7 +189,10 @@ convert_recursive(){
 			(echo "incorrect sizes in the rar sequence for $PWD" > /tmp/error)
 	done
 	[ -e /tmp/error ] && return
+}
 
+
+convert_unrar(){
 	cd $convert_dir
 	find -name '*.rar' | while read line
 	do
@@ -335,10 +201,9 @@ convert_recursive(){
 		yes n | unrar x "`basename $line`"
 		rm -fr "`basename $line`"
 	done
+}
 
-	cd $convert_dir
-	stpfolders | bash
-
+convert_2spaces(){
 	cd $convert_dir
 	find -iname '*  *' -type d | while read line
 	do
@@ -352,12 +217,102 @@ convert_recursive(){
 		name2=$(echo $line | sed -e 's/  / /g' -e 's/  / /g' -e 's/  / /g')
 		echo mv "'"$name1"'" "'"$name2"'" 
 	done | bash
+}
 
+convert_mkfolders(){
 	cd $convert_dir
 	find $PWD -type d | while read line
 	do
 		mkdir -p "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`"
 	done
+}
+
+convert_reportsizes(){
+	cd $convert_dir
+	echo $findcmd | bash | while read line
+	do
+		file1="$line"
+		base1=`basename "$line"`
+		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
+		size1=`ls -lh "$file1" | cut -d' ' -f5`
+		size2=`ls -lh "$file2" | cut -d' ' -f5`
+		printf '%100s \e[31m %s \e[32m %s \e[0m\n' $base1 $size1 $size2 | tee -a /tmp/convert_report
+	done
+}
+
+convert_failconverting(){
+	cd $convert_dir
+	echo $findcmd | bash | while read line
+	do
+		file1="$line"
+		base1=`basename "$line"`
+		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
+		[ -e "$file2" ] || echo "\e[31m Fail converting $file1 \e[0m" | tee -a /tmp/convert_report
+	done
+}
+
+convert_cp(){
+	cd $convert_dir
+	find $PWD -type f | while read line
+	do
+		file1="$line"
+		base1="`basename "$line"`"
+		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
+		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo cp \"$file1\" \"$file2\" | tee -a /tmp/convert_report
+		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || cp "$file1" "$file2"
+	done
+}
+
+convert_missing(){
+	cd $convert_dir
+	find $PWD -type f | while read line
+	do
+		file1="$line"
+		base1="`basename "$line"`"
+		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
+		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo "\e[31m Missing file $file2 \e[0m" | tee -a /tmp/convert_report
+	done
+}
+
+convert_small(){
+	cd $converted_dir
+	find $PWD -type f -size -100k -iname '*.converted.mp4' | while read line
+	do
+		echo "\e[31m Small converted file $line \e[0m" | tee -a /tmp/convert_report
+	done
+
+}
+
+empty_folders(){
+	cd $convert_dir
+	stpfolders | bash
+}
+
+convert_rmsmall(){
+	find "$converted_dir" -name '*.mp4' -size -100k -delete 2>/dev/null
+}
+
+convert_recursive(){
+	[ $# -eq 0 ] && width=640
+	[ $# -eq 1 ] && width=$1
+	convert_opts="-vf 'scale=${width}:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy -loglevel warning" # -loglevel {quiet, panic, fatal, error, warning, info, verbose, debug, trace} -hide_banner -nostats
+
+	[ -e "$convert_dir" ]   || return
+	[ -e "$converted_dir" ] || return
+
+	rm -fr /tmp/convert_report
+
+    convert_install
+
+    convert_checkrar
+
+    convert_unrar
+
+    empty_folders
+
+    convert_2spaces
+
+    convert_mkfolders
 
 	findcmd="find \$PWD -iname '*.mp4' -or -iname '*.m4v' -or -iname '*.flv' -or -iname '*.mov' -or -iname '*.avi' -or -iname '*.wmv' -or -iname '*.mkv' -or -iname '*.vob'"
 
@@ -383,52 +338,17 @@ convert_recursive(){
 
 	done
 
-	find "$converted_dir" -name '*.mp4' -size -100k -delete 2>/dev/null
+    convert_rmsmall
 
-	cd $convert_dir
-	echo $findcmd | bash | while read line
-	do
-		file1="$line"
-		base1=`basename "$line"`
-		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
-		size1=`ls -lh "$file1" | cut -d' ' -f5`
-		size2=`ls -lh "$file2" | cut -d' ' -f5`
-		printf '%100s \e[31m %s \e[32m %s \e[0m\n' $base1 $size1 $size2 | tee -a /tmp/convert_report
-	done
+    convert_reportsizes
 
-	cd $convert_dir
-	echo $findcmd | bash | while read line
-	do
-		file1="$line"
-		base1=`basename "$line"`
-		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
-		[ -e "$file2" ] || echo "\e[31m Fail converting $file1 \e[0m" | tee -a /tmp/convert_report
-	done
+    convert_failconverting
 
-	cd $convert_dir
-	find $PWD -type f | while read line
-	do
-		file1="$line"
-		base1="`basename "$line"`"
-		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
-		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo cp \"$file1\" \"$file2\" | tee -a /tmp/convert_report
-		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || cp "$file1" "$file2"
-	done
+    convert_cp
 
-	cd $convert_dir
-	find $PWD -type f | while read line
-	do
-		file1="$line"
-		base1="`basename "$line"`"
-		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
-		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo "\e[31m Missing file $file2 \e[0m" | tee -a /tmp/convert_report
-	done
+    convert_missing
 
-	cd $converted_dir
-	find $PWD -type f -size -100k -iname '*.converted.mp4' | while read line
-	do
-		echo "\e[31m Small converted file $line \e[0m" | tee -a /tmp/convert_report
-	done
+    convert_small
 
 }
 
@@ -441,56 +361,20 @@ convert_recursive_parallel(){
 	[ -e "$convert_dir" ]   || return
 	[ -e "$converted_dir" ] || return
 
-	[ -e /usr/bin/ffmpeg ]   || pkg install ffmpeg
-	[ -e /usr/bin/unrar ]    || pkg install unrar
-	[ -e /usr/bin/parallel ] || pkg install parallel
-
 	rm -fr /tmp/convert_report
 
-	cd $convert_dir
-	rm -fr /tmp/error
-	find -name '*.part*.rar' | while read line
-	do
-		cd $convert_dir
-		cd "`dirname $line`"
-		[ $(ls | wc -l) -eq $(ls | sed 's/.*part\(.*\)\.rar/\1/g' | sort -g | tail -n1) ] || \
-			(echo "missing file in the rar sequence for $PWD" > /tmp/error)
-		[ $(ll | awk '{print $5}' | sort | uniq | wc -l) -eq 3 ] || \
-			(echo "incorrect sizes in the rar sequence for $PWD" > /tmp/error)
-	done
-	[ -e /tmp/error ] && return
+    convert_install
+	[ -e /usr/bin/parallel ] || pkg install parallel
 
-	cd $convert_dir
-	find -name '*.rar' | while read line
-	do
-		cd $convert_dir
-		cd "`dirname $line`"
-		yes n | unrar x "`basename $line`"
-		rm -fr "`basename $line`"
-	done
+    convert_checkrar
 
-	cd $convert_dir
-	stpfolders | bash
+    convert_unrar
 
-	cd $convert_dir
-	find -iname '*  *' -type d | while read line
-	do
-		name1=$line
-		name2=$(echo $line | sed -e 's/  / /g' -e 's/  / /g' -e 's/  / /g')
-		echo mv "'"$name1"'" "'"$name2"'" 
-	done | bash
-	find -iname '*  *' -type f | while read line
-	do
-		name1=$line
-		name2=$(echo $line | sed -e 's/  / /g' -e 's/  / /g' -e 's/  / /g')
-		echo mv "'"$name1"'" "'"$name2"'" 
-	done | bash
+    empty_folders
 
-	cd $convert_dir
-	find $PWD -type d | while read line
-	do
-		mkdir -p "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`"
-	done
+    convert_2spaces
+
+    convert_mkfolders
 
 	findcmd="find \$PWD -iname '*.mp4' -or -iname '*.m4v' -or -iname '*.flv' -or -iname '*.mov' -or -iname '*.avi' -or -iname '*.wmv' -or -iname '*.mkv' -or -iname '*.vob'"
 
@@ -504,46 +388,17 @@ convert_recursive_parallel(){
 	[ `nproc` -gt 2 ] && ( cat /tmp/script | parallel -j$((`nproc` - 2)) bash -c )
 	[ `nproc` -gt 2 ] || ( source /tmp/script )
 
-	find "$converted_dir" -name '*.mp4' -size -100k -delete 2>/dev/null
+    convert_rmsmall
 
-	cd $convert_dir
-	echo $findcmd | bash | while read line
-	do
-		file1="$line"
-		base1=`basename "$line"`
-		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
-		size1=`ls -lh "$file1" | cut -d' ' -f5`
-		size2=`ls -lh "$file2" | cut -d' ' -f5`
-		printf '%100s \e[31m %s \e[32m %s \e[0m\n' $base1 $size1 $size2 | tee -a /tmp/convert_report
-	done
+    convert_reportsizes
 
-	cd $convert_dir
-	echo $findcmd | bash | while read line
-	do
-		file1="$line"
-		base1=`basename "$line"`
-		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
-		[ -e "$file2" ] || echo "\e[31m Fail converting $file1 \e[0m" | tee -a /tmp/convert_report
-	done
+    convert_failconverting
 
-	cd $convert_dir
-	find $PWD -type f | while read line
-	do
-		file1="$line"
-		base1="`basename "$line"`"
-		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
-		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo cp \"$file1\" \"$file2\" | tee -a /tmp/convert_report
-		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || cp "$file1" "$file2"
-	done
+    convert_cp
 
-	cd $convert_dir
-	find $PWD -type f | while read line
-	do
-		file1="$line"
-		base1="`basename "$line"`"
-		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
-		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo "\e[31m Missing file $file2 \e[0m" | tee -a /tmp/convert_report
-	done
+    convert_missing
+
+    convert_small
 }
 
 mv_converted(){
