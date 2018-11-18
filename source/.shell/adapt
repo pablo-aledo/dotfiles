@@ -639,3 +639,18 @@ adapt_babun(){
     cp ~/.dotfiles/copy/.fonts/Powerline.ttf /c/Windows/Fonts/
 }
 
+adapt_swappiness(){
+	sudo sysctl -w vm.min_free_kbytes=135168
+	sudo sysctl -w vm.swappiness=5
+	#sysctl -w vm.min_free_kbytes=65536 # RAM/cores * 0.06 + extra
+	#sysctl -w vm.swappiness=5
+
+	#echo vm.swappiness=5 | sudo tee -a /etc/sysctl.conf
+	#echo vm.min_free_kbytes=65536 | sudo tee -a /etc/sysctl.conf
+
+	#min_fr_kb=`cat /proc/sys/vm/min_free_kbytes`
+	#echo $(( $min_fr_kb * 2 )) | sudo tee /proc/sys/vm/min_free_kbytes
+
+	#min_free_kbytes=`sysctl vm.min_free_kbytes | cut -d' ' -f3`
+	#sudo sysctl -w vm.min_free_kbytes=$(( $min_free_kbytes * 2 ))
+}
