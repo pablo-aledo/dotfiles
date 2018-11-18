@@ -35,9 +35,13 @@ keywords.get_features(){
 }
 
 getwords(){
+
+    limitcmd="cat"
+    [ $# -eq 1 ] && [ $1 = "-nl" ] && limitcmd="head -n$summarize_line_limit"
+
     [ $keywords_lowercase = "true" ] && lowercmd="tr '[A-Z]' '[a-z]'"
     [ $keywords_lowercase = "true" ] || lowercmd="cat"
-    cat | head -n$summarize_line_limit | $(echo $lowercmd) | sed \
+    cat | $(echo $limitcmd) | $(echo $lowercmd) | sed \
         -e 's/c++/cpp/g'  \
         -e 's/c#/csharp/g'  \
         -e 's/ /\n/g'  \
@@ -1353,5 +1357,5 @@ metadata.isbn2topics(){
 }
 
 keywords.new_kwords(){
-cat /tmp/vects | egrep '\*\*\*' | awk '{print $4}' | xargs cat | getwords | awk '{print $2}' | sort | uniq | keywords.filter -v
+cat /tmp/vects | egrep '\*\*\*' | awk '{print $4}' | xargs cat | getwords -nl | awk '{print $2}' | sort | uniq | keywords.filter -v
 }
