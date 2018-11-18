@@ -38,7 +38,7 @@ getwords(){
 
     [ $keywords_lowercase = "true" ] && lowercmd="tr '[A-Z]' '[a-z]'"
     [ $keywords_lowercase = "true" ] || lowercmd="cat"
-    cat | $(echo $lowercmd) | sed \
+    cat | strings -n1 | $(echo $lowercmd) | sed \
         -e 's/c++/cpp/g'  \
         -e 's/c#/csharp/g'  \
         -e 's/ /\n/g'  \
