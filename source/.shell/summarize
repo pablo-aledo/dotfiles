@@ -998,7 +998,7 @@ except IOError as e:
 "
 }
 
-keywords_filter () {
+keywords.filter () {
 	cat | while read line
 	do
         haskeyword=$( echo $line | getwords | haskeyword )
