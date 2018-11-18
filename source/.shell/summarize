@@ -1009,7 +1009,7 @@ keywords.filter () {
 
 	cat | while read line
 	do
-        haskeyword=$( echo $line | getwords | haskeyword )
+        haskeyword=$( echo $line | getwords -nl | haskeyword )
 		[ "$haskeyword" = $condition ] && echo $line
 	done
 }
