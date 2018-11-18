@@ -999,10 +999,14 @@ except IOError as e:
 }
 
 keywords.filter () {
+
+    [ $# -eq 0 ] && condition="true"
+    [ $# -eq 1 ] && [ $1 = "-v" ] && condition="false" && shift
+
 	cat | while read line
 	do
         haskeyword=$( echo $line | getwords | haskeyword )
-		[ "$has_keyword" = "true" ] && echo $line
+		[ "$has_keyword" = $condition ] && echo $line
 	done
 }
 
