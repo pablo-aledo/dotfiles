@@ -1351,3 +1351,7 @@ metadata.isbn2topics(){
 
     echo "$topics" > "$learning_dir/metadata/$filename/title"
 }
+
+keywords.new_kwords(){
+cat /tmp/vects | egrep '\*\*\*' | awk '{print $4}' | xargs cat | getwords | awk '{print $2}' | sort | uniq | keywords.filter -v
+}
