@@ -1360,3 +1360,12 @@ metadata.isbn2topics(){
 keywords.new_kwords(){
 cat /tmp/vects | egrep '\*\*\*' | awk '{print $4}' | xargs cat | getwords | awk '{print $2}' | sort | uniq | keywords.filter -v
 }
+
+train_loop(){
+for a in $(cat /tmp/vects | grep '\*\*\*' | awk '{print $4}' )
+do
+    echo "===== $a ====="
+    keywords.doc2vec_debug $a
+    closest_classifier.sortdist $a | head -n1 | sed "s|^|$learning_dir/documents/|g"
+done
+}
