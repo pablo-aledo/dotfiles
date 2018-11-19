@@ -211,6 +211,22 @@ keywords.doc2vec_debug(){
     done
 }
 
+keywords.doc2vec_debug(){
+
+    if [ $# -gt 1 ]
+    then
+        for a in $*
+        do
+            echo "===== $a ====="
+            keywords.doc2vec_debug $a
+        done
+        return
+    fi
+
+    cat $1 | getwords | getkeywords | grep -v '^0'
+
+}
+
 doc2txt_rec(){
 	filename="$1"
 	destination="$2"
