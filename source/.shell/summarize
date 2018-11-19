@@ -617,7 +617,7 @@ then
         else
             $vectorizer_method.txt2vec "$line" | vect2s >> /tmp/vects
         fi
-        echo "\e[34m vector \e[0m " $(basename $line)
+        # echo "\e[34m vector \e[0m " $(basename $line)
     done
 fi
 }
