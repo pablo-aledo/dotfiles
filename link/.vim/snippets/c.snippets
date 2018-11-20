@@ -1445,3 +1445,63 @@ snippet df3
 	Cyclic_Animation=on
 	Pause_when_Done=off
 
+snippet instrumentation
+    #include <stdio.h>
+    #include <time.h>
+
+    static FILE *fp_trace;
+
+    void __attribute__ ((constructor)) trace_begin (void) {
+        fp_trace = fopen("trace.out", "w");
+    }
+
+    void __attribute__ ((destructor)) trace_end (void) {
+        if(fp_trace != NULL) {
+            fclose(fp_trace);
+        }
+    }
+
+    void __cyg_profile_func_enter (void *func,  void *caller) {
+        if(fp_trace != NULL) {
+            fprintf(fp_trace, "e %p %p %lu\n", func, caller, time(NULL) );
+        }
+    }
+
+    void __cyg_profile_func_exit (void *func, void *caller) {
+        if(fp_trace != NULL) {
+            fprintf(fp_trace, "x %p %p %lu\n", func, caller, time(NULL));
+        }
+    }
+
+    gcc -finstrument-functions -g -c -o main.o main.c
+    gcc -c -o trace.o trace.c
+    gcc main.o trace.o -o main
+    ./readtracelog.sh main trace.out
+
+    #!/bin/sh
+    if test ! -f "$1"
+    then
+        echo "Error: executable $1 does not exist."
+        exit 1
+    fi
+    if test ! -f "$2"
+    then
+        echo "Error: trace log $2 does not exist."
+        exit 1
+    fi
+    EXECUTABLE="$1"
+    TRACELOG="$2"
+    while read LINETYPE FADDR CADDR CTIME; do
+        FNAME="$(addr2line -f -e ${EXECUTABLE} ${FADDR}|head -1)"
+        CDATE="$(date -Iseconds -d @${CTIME})"
+        if test "${LINETYPE}" = "e"
+        then
+            CNAME="$(addr2line -f -e ${EXECUTABLE} ${CADDR}|head -1)"
+            CLINE="$(addr2line -s -e ${EXECUTABLE} ${CADDR})"
+            echo "Enter ${FNAME} at ${CDATE}, called from ${CNAME} (${CLINE})"
+        fi
+        if test "${LINETYPE}" = "x"
+        then
+            echo "Exit  ${FNAME} at ${CDATE}"
+        fi
+    done < "${TRACELOG}"
