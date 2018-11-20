@@ -8,7 +8,7 @@ sleep 1
 xdotool key Ctrl+c
 xclip -sel clip -o > /tmp/file
 mkdir -p "$HOME/learning/metadata/$(cat /tmp/file)"
-echo "$(cat /tmp/title)" > "$HOME/learning/metadata/$(cat /tmp/file)/title"
+echo "$(cat /tmp/title | egrep -v '\.[a-zA-z0-9]{3}$' )" > "$HOME/learning/metadata/$(cat /tmp/file)/title"
 
 xdotool mousemove 558 540
 xdotool click 1
