@@ -1364,7 +1364,7 @@ cat /tmp/vects | egrep '\*\*\*' | awk '{print $4}' | xargs cat | getwords | awk 
 learning.loop(){
 for a in $(cat /tmp/vects | grep '\*\*\*' | awk '{print $4}' )
 do
-    echo "===== $a ====="
+    echo "===== $(echo $a | sed 's|/classifier_test/|/documents/|g' ) ====="
     closest=$(closest_classifier.sortdist $a | head -n1 | sed "s|^|$learning_dir/documents/|g")
     echo $closest
     cat $a | getwords | awk '{print $2}' | keywords.filter -v
