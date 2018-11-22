@@ -23,7 +23,10 @@ then
 	then
 	    mkdir build
 	    cd build
-	    cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
+        export CMAKE_CXX_FLAGS="-Wall -rdynamic -finstrument-functions -fprofile-arcs -ftest-coverage -g"
+        export LDFLAGS="-lgcov"
+        export CMAKE_EXPORT_COMPILE_COMMANDS=ON
+        cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_CXX_FLAGS="$CMAKE_CXX_FLAGS" -E env LDFLAGS="$LDFLAGS" ..
 	    VERBOSE=1 make
 	    #make install
 	elif [ -e *.pro ]
