@@ -281,6 +281,7 @@ case $1 in
 (fontforge)              docker run --rm -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $state/fontforge:/home/fontforge --name fontforge fghj/fontforge ;;
 (ffmpag)                 shift; docker run --rm -u $(id -u):$(id -g) -v $PWD:/data vimagick/ffmpeg $* ;;
 (firefox)                shift; docker run -d --memory 2gb --net host --cpuset-cpus 0 -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v "${HOME}/.firefox/cache:/root/.cache/mozilla" -v "${HOME}/.firefox/mozilla:/root/.mozilla" -v "${HOME}/Downloads:/root/Downloads" -v "${HOME}/Pictures:/root/Pictures" -v "${HOME}/Torrents:/root/Torrents" -e "DISPLAY=unix${DISPLAY}" -e GDK_SCALE -e GDK_DPI_SCALE --device /dev/snd --device /dev/dri --name firefox ${DOCKER_REPO_PREFIX}/firefox "$@" ;;
+(funbox)                 shift; docker run --rm -it wernight/funbox $* ;;
 (gimp)                   shift; docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $PWD:/workdir -w /workdir--name gimp ${DOCKER_REPO_PREFIX}/gimp $* ;;
 (gmic)                   docker run -it -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $PWD:/workdir -w /workdir gmic ;;
 (gitlab)                 docker run -it -v $PWD/gitlab/config:/etc/gitlab -v $PWD/gitlab/logs:/var/log/gitlab -v $PWD/gitlab/data:/var/opt/gitlab -p 443:443 -p 2222:22 gitlab/gitlab-ce ;;
