@@ -194,6 +194,7 @@ case $1 in
 (browser)                shift; docker run -ti --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix browser firefox $* ;;
 (browsh)                 shift; docker run -ti --rm browsh/browsh $* ;;
 (build)                  shift; docker run -v $PWD:/workdir -w /workdir -v $HOME:$HOME -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY build $* ;;
+(centos7_gobuild)        shift; docker run -v $PWD:/root/go -w /root/go -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY centos7_gobuild $* ;;
 (build_uid)              shift; docker run -v $PWD:/workdir -w /workdir -v $HOME:$HOME -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -u $(id -u) build $* ;;
 (burp)                   docker run -v /tmp/.X11-unix/:/tmp/.X11-unix -e DISPLAY=$DISPLAY -p 8080:8080 -it raesene/burp-free ;;
 (cadvisor)               docker run -d --restart always -v /:/rootfs:ro -v /var/run:/var/run:rw -v /sys:/sys:ro -v /var/lib/docker/:/var/lib/docker:ro -p 1234:8080 --name cadvisor google/cadvisor
