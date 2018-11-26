@@ -8,7 +8,7 @@ then
 	then
 	    chmod +x runme.sh
 	    ./runme.sh
-    elif [ "$(find -iname compile.sh 2>/dev/null)" ]
+    elif [ "$(find -iname compile_project.sh 2>/dev/null)" ]
     then
         source "$(find -iname compile.sh)"
 	elif [ -e CMakeLists.txt ]
