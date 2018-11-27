@@ -228,3 +228,265 @@ snippet iftest
 	if ${1:variable} := ${2:object}.${3:method}; $1 != ${4:value} {
 		t.Errorf("Expected value of $4, but it was %d instead", $1)
 	}
+
+snippet doer
+	package doer
+
+	type Doer interface {
+		DoSomething(int, string) error
+	}
+
+snippet user
+	package user
+
+	import "github.com/sgreben/testing-with-gomock/doer"
+
+	type User struct {
+	    Doer doer.Doer
+	}
+
+	func (u *User) Use() error {
+	    return u.Doer.DoSomething(123, "Hello GoMock")
+	}
+
+snippet Makefile
+	# .
+	# ├── doer
+	# │   └── doer.go
+	# ├── mocks
+	# │   └── mock_doer.go
+	# └── user
+	#     ├── user.go
+	#     └── user_test.go
+
+	all:
+		mkdir mocks
+		mockgen -destination=mocks/mock_doer.go -package=mocks github.com/sgreben/testing-with-gmock/doer Doer
+
+snippet controller
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	mockDoer := mocks.NewMockDoer(mockCtrl)
+
+snippet user_test
+	package user_test
+
+	import (
+	  "github.com/sgreben/testing-with-gomock/mocks"
+	  "github.com/sgreben/testing-with-gomock/user"
+	)
+
+	func TestUse(t *testing.T) {
+	    mockCtrl := gomock.NewController(t)
+	    defer mockCtrl.Finish()
+
+	    mockDoer := mocks.NewMockDoer(mockCtrl)
+	    testUser := &user.User{Doer:mockDoer}
+
+	    // Expect Do to be called once with 123 and "Hello GoMock" as parameters, and return nil from the mocked call.
+	    mockDoer.EXPECT().DoSomething(123, "Hello GoMock").Return(nil).Times(1)
+
+	    testUser.Use()
+	}
+
+	func TestUseReturnsErrorFromDo(t *testing.T) {
+	    mockCtrl := gomock.NewController(t)
+	    defer mockCtrl.Finish()
+
+	    dummyError := errors.New("dummy error")
+	    mockDoer := mocks.NewMockDoer(mockCtrl)
+	    testUser := &user.User{Doer:mockDoer}
+
+	    // Expect Do to be called once with 123 and "Hello GoMock" as parameters, and return dummyError from the mocked call.
+	    mockDoer.EXPECT().DoSomething(gomock.Any(), "Hello GoMock").Return(dummyError).Times(1)
+
+	    err := testUser.Use()
+
+	    if err != dummyError {
+	        t.Fail()
+	    }
+	}
+
+snippet gogenerate
+	package doer
+	//go:generate mockgen -destination=../mocks/mock_doer.go -package=mocks github.com/sgreben/testing-with-gomock/doer Doer
+	// run with go generate ./...
+
+snippet any
+	gomock.Any()
+
+snippet meq
+	gomock.Eq()
+
+snippet mnil
+	gomock.Nil()
+
+snippet mnot
+	gomock.Not(${1:m})
+
+snippet order
+	callFirst := mockDoer.EXPECT().DoSomething(1, "first this")
+	callA := mockDoer.EXPECT().DoSomething(2, "then this").After(callFirst)
+	callB := mockDoer.EXPECT().DoSomething(2, "or this").After(callFirst)
+
+snippet inorder
+	gomock.InOrder(
+	    mockDoer.EXPECT().DoSomething(1, "first this"),
+	    mockDoer.EXPECT().DoSomething(2, "then this"),
+	    mockDoer.EXPECT().DoSomething(3, "then this"),
+	    mockDoer.EXPECT().DoSomething(4, "finally this"),
+	)
+
+snippet do
+	mockDoer.EXPECT().
+	    DoSomething(gomock.Any(), gomock.Any()).
+	    Return(nil).
+	    Do(func(x int, y string) {
+	        fmt.Println("Called with x =",x,"and y =", y)
+	    })
+
+	mockDoer.EXPECT().
+	    DoSomething(gomock.Any(), gomock.Any()).
+	    Return(nil).
+	    Do(func(x int, y string) {
+	        if x > len(y) {
+	            t.Fail()
+	        }
+	    })
+
+snippet file
+	func TestReader(t *testing.T) {
+		vectors := []struct {
+			file    string    // Test input file
+			headers []*Header // Expected output headers
+			chksums []string  // MD5 checksum of files, leave as nil if not checked
+			err     error     // Expected error to occur
+		}{{
+			file: "testdata/gnu.tar",
+			headers: []*Header{{
+				Name:     "small.txt",
+				Mode:     0640,
+				Uid:      73025,
+				Gid:      5000,
+				Size:     5,
+				ModTime:  time.Unix(1244428340, 0),
+				Typeflag: '0',
+				Uname:    "dsymonds",
+				Gname:    "eng",
+				Format:   FormatGNU,
+			}, {
+				Name:     "small2.txt",
+				Mode:     0640,
+				Uid:      73025,
+				Gid:      5000,
+				Size:     11,
+				ModTime:  time.Unix(1244436044, 0),
+				Typeflag: '0',
+				Uname:    "dsymonds",
+				Gname:    "eng",
+				Format:   FormatGNU,
+			}},
+			chksums: []string{
+				"e38b27eaccb4391bdec553a7f3ae6b2f",
+				"c65bd2e50a56a2138bf1716f2fd56fe9",
+			},
+	  },
+	  // more test cases
+
+snippet httptest
+	package main_test
+
+	import (
+		"fmt"
+		"io"
+		"io/ioutil"
+		"net/http"
+		"net/http/httptest"
+		"testing"
+	)
+
+	func TestHttp(t *testing.T) {
+	  //
+		handler := func(w http.ResponseWriter, r *http.Request) {
+	    // here we write our expected response, in this case, we return a
+	    // JSON string which is typical when dealing with REST APIs
+			io.WriteString(w, "{ \"status\": \"expected service response\"}")
+		}
+
+		req := httptest.NewRequest("GET", "https://tutorialedge.net", nil)
+		w := httptest.NewRecorder()
+		handler(w, req)
+
+		resp := w.Result()
+		body, _ := ioutil.ReadAll(resp.Body)
+	haha
+		fmt.Println(resp.StatusCode)
+		fmt.Println(resp.Header.Get("Content-Type"))
+		fmt.Println(string(body))
+	}
+
+snippet integration
+	// +build integration
+	// go test -tags=integration
+
+snippet interface
+	import "github.com/mediocregopher/radix.v2/redis"
+	type storager interface {
+	    Cmd(string, ...interface{}) *redis.Resp
+	}
+	type Handler struct {
+	    db storager
+	}
+	func (h *Handler) Ping() (string, error) {
+	    res := h.db.Cmd("INCR", "ping:count")
+	    if res.Err != nil {
+	        return "", res.Err
+	    }
+	    return "pong", nil
+	}
+
+snippet test_interface
+	// mockery -name storager -inpkg .
+	import (
+	    "errors"
+	    "testing"
+	    "github.com/mediocregopher/radix.v2/redis"
+	    "github.com/stretchr/testify/assert"
+	)
+	func TestPing(t *testing.T) {
+	    sampleErr := errors.New("sample error")
+	    tests := map[string]struct {
+	        storageErr error
+	        response   string
+	        err        error
+	    }{
+	        "successful": {
+	            storageErr: nil,
+	            response:   "pong",
+	            err:        nil,
+	        },
+	        "with db error": {
+	            storageErr: sampleErr,
+	            response:   "",
+	            err:        sampleErr,
+	        },
+	    }
+	    for name, test := range tests {
+	        t.Logf("Running test case: %s", name)
+	        storage := &mockStorager{}
+	        storage.
+	            On("Cmd", "INCR", []interface{}{"ping:count"}).
+	            Return(&redis.Resp{
+	                Err: test.storageErr,
+	            }).
+	            Once()
+	        h := &Handler{
+	            db: storage,
+	        }
+	        response, err := h.Ping()
+	        assert.Equal(t, test.err, err)
+	        assert.Equal(t, test.response, response)
+	        storage.AssertExpectations(t)
+	    }
+	}
