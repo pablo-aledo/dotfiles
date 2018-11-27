@@ -1,0 +1,230 @@
+snippet error
+	t.Error("${1:Expected} ${2:value}, got ", ${3:v})
+
+snippet log
+	t.Log("${1:message}")
+
+snippet test
+	// save as *_test.go
+	// test with "go test -v -cover -coverprofile=c.out"
+	// get coverage with "go tool cover -html=c.out -o coverage.html"
+
+	import "testing"
+
+	func Test${1:Function}(t *testing.T){
+		${2:code}
+	}
+
+snippet skip
+	t.Skip("${1:message}")
+
+snippet main
+	func TestMain(m *testing.T){
+		${1:os.Exit(m.Run())}
+	}
+
+snippet TestSuite
+	package math
+
+	import "testing"
+
+	type testpair struct {
+	  values []float64
+	  average float64
+	}
+
+	var tests = []testpair{
+	  { []float64{1,2}, 1.5 },
+	  { []float64{1,1,1,1,1,1}, 1 },
+	  { []float64{-1,1}, 0 },
+	}
+
+	func TestAverage(t *testing.T) {
+	  for _, pair := range tests {
+	    v := Average(pair.values)
+	    if v != pair.average {
+	      t.Error(
+	        "For", pair.values,
+	        "expected", pair.average,
+	        "got", v,
+	      )
+	    }
+	  }
+	}
+
+snippet TestSuite2
+	package main
+
+	import "testing"
+
+	func TestSum(t *testing.T) {
+		tables := []struct {
+			x int
+			y int
+			n int
+		}{
+			{1, 1, 2},
+			{1, 2, 3},
+			{2, 2, 4},
+			{5, 2, 7},
+		}
+
+		for _, table := range tables {
+			total := Sum(table.x, table.y)
+			if total != table.n {
+				t.Errorf("Sum of (%d+%d) was incorrect, got: %d, want: %d.", table.x, table.y, total, table.n)
+			}
+		}
+	}
+
+snippet TestSuite3
+	import (
+	  "fmt"
+	  "testing"
+	)
+
+	func TestSum(t *testing.T) {
+	  t.Run("[1,2,3,4,5]", testSumFunc([]int{1, 2, 3, 4, 5}, 15))
+	  t.Run("[1,2,3,4,-5]", testSumFunc([]int{1, 2, 3, 4, -5}, 5))
+	}
+
+	func testSumFunc(numbers []int, expected int) func(*testing.T) {
+	  return func(t *testing.T) {
+	    actual := Sum(numbers)
+	    if actual != expected {
+	      t.Error(fmt.Sprintf("Expected the sum of %v to be %d but instead got %d!", numbers, expected, actual))
+	    }
+	  }
+	}
+
+snippet testify
+	package yours
+
+	import (
+	  "testing"
+	  "github.com/stretchr/testify/assert"
+	)
+
+snippet eq
+	  assert.Equal(t, ${1:variable}, ${2:value}, "they should be equal")
+
+snippet neq
+	  assert.NotEqual(t, ${1:variable}, ${2:value}, "they should not be equal")
+
+snippet nil
+	  assert.Nil(t, ${1:object})
+
+snippet nnil
+	  if assert.NotNil(t, ${1:object}) {
+	    // now we know that object isn't nil, we are safe to make
+	    // further assertions without causing any errors
+	    assert.Equal(t, "${2:Message}", $1.${3:value})
+	  }
+
+snippet mock
+	package yours
+
+	import (
+	  "testing"
+	  "github.com/stretchr/testify/mock"
+	)
+
+	/*
+	  Test objects
+	*/
+
+	// MyMockedObject is a mocked object that implements an interface
+	// that describes an object that the code I am testing relies on.
+	type MyMockedObject struct{
+	  mock.Mock
+	}
+
+	// DoSomething is a method on MyMockedObject that implements some interface
+	// and just records the activity, and returns what the Mock object tells it to.
+	//
+	// In the real object, this method would do something useful, but since this
+	// is a mocked object - we're just going to stub it out.
+	//
+	// NOTE: This method is not being tested here, code that uses this object is.
+	func (m *MyMockedObject) DoSomething(number int) (bool, error) {
+	  args := m.Called(number)
+	  return args.Bool(0), args.Error(1)
+	}
+
+	/*
+	  Actual test functions
+	*/
+
+	// TestSomething is an example of how to use our test object to
+	// make assertions about some target code we are testing.
+	func TestSomething(t *testing.T) {
+	  // create an instance of our test object
+	  testObj := new(MyMockedObject)
+
+	  // setup expectations
+	  testObj.On("DoSomething", 123).Return(true, nil)
+
+	  // call the code we are testing
+	  targetFuncThatDoesSomethingWithObj(testObj)
+
+	  // assert that the expectations were met
+	  testObj.AssertExpectations(t)
+	}
+
+	// TestSomethingElse is a second example of how to use our test object to
+	// make assertions about some target code we are testing.
+	// This time using a placeholder. Placeholders might be used when the
+	// data being passed in is normally dynamically generated and cannot be
+	// predicted beforehand (eg. containing hashes that are time sensitive)
+	func TestSomethingElse(t *testing.T) {
+	  // create an instance of our test object
+	  testObj := new(MyMockedObject)
+
+	  // setup expectations with a placeholder in the argument list
+	  testObj.On("DoSomething", mock.Anything).Return(true, nil)
+
+	  // call the code we are testing
+	  targetFuncThatDoesSomethingWithObj(testObj)
+
+	  // assert that the expectations were met
+	  testObj.AssertExpectations(t)
+	}
+
+snippet suite
+	// Basic imports
+	import (
+	    "testing"
+	    "github.com/stretchr/testify/assert"
+	    "github.com/stretchr/testify/suite"
+	)
+
+	// Define the suite, and absorb the built-in basic suite
+	// functionality from testify - including a T() method which
+	// returns the current testing context
+	type ExampleTestSuite struct {
+	    suite.Suite
+	    VariableThatShouldStartAtFive int
+	}
+
+	// Make sure that VariableThatShouldStartAtFive is set to five
+	// before each test
+	func (suite *ExampleTestSuite) SetupTest() {
+	    suite.VariableThatShouldStartAtFive = 5
+	}
+
+	// All methods that begin with "Test" are run as tests within a
+	// suite.
+	func (suite *ExampleTestSuite) TestExample() {
+	    assert.Equal(suite.T(), 5, suite.VariableThatShouldStartAtFive)
+	}
+
+	// In order for 'go test' to run this suite, we need to create
+	// a normal test function and pass our suite to suite.Run
+	func TestExampleTestSuite(t *testing.T) {
+	    suite.Run(t, new(ExampleTestSuite))
+	}
+
+snippet iftest
+	if ${1:variable} := ${2:object}.${3:method}; $1 != ${4:value} {
+		t.Errorf("Expected value of $4, but it was %d instead", $1)
+	}
