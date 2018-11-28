@@ -10,7 +10,7 @@ then
 	    ./runme.sh
     elif [ "$(find -iname compile_project.sh 2>/dev/null)" ]
     then
-        source "$(find -iname compile.sh)"
+        source "$(find -iname compile_project.sh)"
 	elif [ -e CMakeLists.txt ]
 	then
 	    mkdir build
