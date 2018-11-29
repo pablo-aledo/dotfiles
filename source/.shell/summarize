@@ -188,7 +188,7 @@ dic = dict(pairs)
 
 for i in range(0,1000):
     print dic.get(i) or 0
-" | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/\]/g'
+" | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/\]/g' -e 's/,/, /g'
 }
 
 window.get_features(){}
