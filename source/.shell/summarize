@@ -191,6 +191,8 @@ for i in range(0,1000):
 " | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/\]/g'
 }
 
+window.get_features(){}
+
 keywords_multiscale.txt2vec(){
 
     vect1=$(cat $1 | head -n 1     | getwords | getkeywords | awk '{print $1}')
