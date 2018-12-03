@@ -159,7 +159,7 @@ for a in $(cat list | awk 'BEGIN{FS="[/.]"}{print "https://github.com/" $3 "/" $
 do
 	link="$a/archive/master.zip"
 	echo "\e[31m ===== $a ===== \e[0m"
-	name=`echo $a | cut -d'/' -f5`.zip
+	name=`echo $a | cut -d'/' -f4`_`echo $a | cut -d'/' -f5`.zip
 	echo "\e[32m ${name} \e[0m"
 	[ -e ${name} ] && continue
 	wget ${link} -O ${name}
