@@ -292,8 +292,8 @@ server(){
 	if [ $1 = novnc4 ]
 	then
 		[ -e /usr/share/noVNC/ ] || pkg install novnc4
-		vnc4server -kill :1
-		sudo rm -rf /tmp/.X11-unix /tmp/.X*-lock
+		/usr/bin/vncserver -kill :1
+		sudo rm -fr /tmp/.X11-unix /tmp/.X*-lock
 		[ $# = 1 ] && tmux new -d -s novnc "cd /usr/share/noVNC; sudo ./utils/launch.sh --listen 80 --vnc localhost:5901"
 		[ $# = 2 ] && tmux new -d -s novnc "cd /usr/share/noVNC; sudo ./utils/launch.sh --listen $2 --vnc localhost:5901"
 		tmux new -d -s vnc   "/usr/bin/vncserver; read"
