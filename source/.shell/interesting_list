@@ -143,3 +143,27 @@ do
 done
 
 }
+
+dotfiles_repos(){
+[ $# -gt 1 ] && limit=$2
+[ $# -gt 1 ] || limit=9999
+[ $# -gt 2 ] && maxsize=$3
+[ $# -gt 2 ] || maxsize="999G"
+maxsize=`echo $maxsize | sed -e 's/K/*1024/g' -e 's/M/*1024*1024/g' -e 's/G/*1024*1024*1024/g' | bc`
+
+mkdir -p ~/dotfiles_repos/
+cd ~/dotfiles_repos/
+grep -Rin 'github.com' ~/.dotfiles/* | grep -v '^Binary' | sed 's|.*\([^ ]*github.com[^ )]*\).*|\1|g' | sort | uniq > list
+
+for a in $(cat list | awk 'BEGIN{FS="[/.]"}{print "https://github.com/" $3 "/" $4}' | sort | uniq | head -n $limit)
+do
+	link="$a/archive/master.zip"
+	echo "\e[31m ===== $a ===== \e[0m"
+	name=`echo $a | cut -d'/' -f5`.zip
+	echo "\e[32m ${name} \e[0m"
+	[ -e ${name} ] && continue
+	wget ${link} -O ${name}
+	[ `stat -c %s ${name}` -gt $maxsize ] && rm -fr ${name}
+done
+
+}
