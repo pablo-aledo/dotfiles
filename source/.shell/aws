@@ -453,6 +453,22 @@ aws_deploy(){
     		aws_config $a
     		aws_send $*
     	done
+    elif [ $1 = "send_list" ]
+    then
+        shift
+    	for a in `cat /tmp/aws_config | grep ':' | cut -d':' -f1`
+    	do
+    		tmux new -d -s "send_$a" "aws_deploy send_list_b $a $1"
+    	done
+    elif [ $1 = "send_list_b" ]
+    then
+        shift
+        user=`cat /tmp/aws_config | grep $1 | cut -d":" -f2`
+          ip=`cat /tmp/aws_config | grep $1 | cut -d":" -f3`
+    	cat list | egrep "^$1 " | sed "s|^$1 ||g" | while read line
+    	do
+            rsync -vai --progress "$line" "$user@$ip:$2/"
+    	done
     elif [ $1 = "exchange" ]
     then
         shift
