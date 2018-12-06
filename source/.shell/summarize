@@ -341,6 +341,46 @@ closest_classifier.fit(){
         done
 }
 
+naive_bayes.transform(){
+x=$(learning.doc2rvect $1)
+
+y=$(python -c "
+x=[$x]
+learning_dir='$learning_dir'
+import numpy as np
+from sklearn.naive_bayes import GaussianNB
+from sklearn.externals import joblib
+gnb=joblib.load(learning_dir + '/classifier/classifier.pkl')
+print( int(gnb.predict(x)[0]) )
+")
+
+cat $learning_dir/classifier/map | grep "^ $y " | awk '{print $2}'
+}
+
+naive_bayes.fit(){
+    rm -fr /tmp/classifier.x /tmp/classifier.y
+    ls $learning_dir/vectors_reduced/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/classifier/map
+    for file in $learning_dir/vectors_reduced/*
+    do
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/classifier.x
+        y=$(basename $file | sed 's/\..*//g')
+        id=$(cat $learning_dir/classifier/map | grep " $y$" | awk '{print $1}')
+        echo $id >> /tmp/classifier.y
+    done
+
+	python -c "
+import numpy as np
+from sklearn.naive_bayes import GaussianNB
+from sklearn.externals import joblib
+X = np.loadtxt('/tmp/classifier.x')
+Y = np.loadtxt('/tmp/classifier.y')
+learning_dir='$learning_dir'
+gnb = GaussianNB()
+gnb.fit(X, Y)
+joblib.dump(gnb, learning_dir + '/classifier/classifier.pkl')
+"
+}
+
 closest_metadata.transform(){
     [ -e "$learning_dir/metadata/$(basename $1)/title" ] && closest_classifier.transform "$learning_dir/metadata/$(basename $1)/title" && return
     [ -e "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && closest_classifier.transform "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title" && return
