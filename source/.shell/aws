@@ -454,13 +454,21 @@ aws_deploy(){
     		aws_send $*
     	done
     elif [ $1 = "send_list" ]
+        shift
+    	cat list | while read line
+    	do
+            aws_config $(echo $line | awk '{print $1}')
+            aws_send   "$(echo $line | sed 's|^[^ ]* ||g')" "$2"
+    	done
+    then
+    elif [ $1 = "send_list_parallel" ]
     then
         shift
     	for a in `cat /tmp/aws_config | grep ':' | cut -d':' -f1`
     	do
-    		tmux new -d -s "send_$a" "aws_deploy send_list_b $a $1"
+    		tmux new -d -s "send_$a" "aws_deploy send_list_parallel_b $a $1"
     	done
-    elif [ $1 = "send_list_b" ]
+    elif [ $1 = "send_list_parallel_b" ]
     then
         shift
         user=`cat /tmp/aws_config | grep $1 | cut -d":" -f2`
