@@ -5,6 +5,7 @@ regression_method=linear_regression
 clustering_method=kmeans_clustering
 learning_evaluate_vects="true"
 learning_dir=$HOME/learning
+tmp=$learning_dir/tmp
 learning_src=/media/removable/2TB2/homes/admin/Alejandria
 learning_queue=/media/removable/2TB2/homes/admin/Descargas
 learning_docs_per_class=5
@@ -75,24 +76,24 @@ getwords(){
 }
 
 getkeywords_(){
-    cat > /tmp/keywords
+    cat > $tmp/keywords
     for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
          [ $a[0,1] = '^' ] && regex='^ *[0-9]* '$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex='^ *[0-9]* .*'$a
-         value=$( cat /tmp/keywords | egrep $regex | awk '{sum += $1} END {print sum}' )
+         value=$( cat $tmp/keywords | egrep $regex | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && value=0
          echo $value $a
     done
 }
 
 getkeywords(){
-    cat > /tmp/keywords
+    cat > $tmp/keywords
 
     python -c "
 import re
 
-with open('/tmp/keywords') as f:
+with open('$tmp/keywords') as f:
     lines = [ line.rstrip('\n') for line in f ]
 with open('$learning_dir' + '/features/keywords') as f:
     keywords = [ line.rstrip('\n') for line in f ]
@@ -115,12 +116,12 @@ for keyword in keywords:
 }
 
 haskeyword_(){
-    cat > /tmp/keywords
+    cat > $tmp/keywords
     for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
-         value=$( cat /tmp/keywords | egrep '^ *[0-9]* .*'$regex | awk '{sum += $1} END {print sum}' )
+         value=$( cat $tmp/keywords | egrep '^ *[0-9]* .*'$regex | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && continue
          echo true && return
     done
@@ -128,12 +129,12 @@ haskeyword_(){
 }
 
 haskeyword(){
-    cat > /tmp/keywords
+    cat > $tmp/keywords
 
     python -c "
 import re
 
-with open('/tmp/keywords') as f:
+with open('$tmp/keywords') as f:
     lines = [ line.rstrip('\n') for line in f ]
 with open('$learning_dir' + '/features/keywords') as f:
     keywords = [ line.rstrip('\n') for line in f ]
@@ -157,11 +158,11 @@ print('false')
 
 keywords.txt2vec(){
 
-    cat $1 | getwords | getkeywords > /tmp/kwords
+    cat $1 | getwords | getkeywords > $tmp/kwords
 
-    vect=$(cat /tmp/kwords | awk '{print $1}' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g')
+    vect=$(cat $tmp/kwords | awk '{print $1}' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g')
     [ $keywords_normalize = "full" ] && total=$( cat $1 | wc -w )
-    [ $keywords_normalize = "keys" ] && total=$(cat /tmp/kwords | awk '{sum += $1} END {print sum}' )
+    [ $keywords_normalize = "keys" ] && total=$(cat $tmp/kwords | awk '{sum += $1} END {print sum}' )
     [ $keywords_normalize = "false" ] && total=1
 
     python -c "
@@ -178,10 +179,10 @@ window.txt2vec(){
     cat $1 | sed -e 's/ /./g' -e 's/\(.\)/\1\n/g' | awk '{a[NR]=$1} NR>2{print a[NR-2]a[NR-1]a[NR]}' | while read line
     do
         echo $line | md5sum | sed 's/^\(.....\).*/\1/g' | tr '[a-z]' '[A-Z]' | sed -e 's/^/ibase=16;/g' | bc | sed -e 's/$/%1000/g' | bc
-    done | sort | uniq -c | sed -e 's/^ *\([0-9]*\) *\([0-9]*\)/(\2,\1)/g' > /tmp/words
+    done | sort | uniq -c | sed -e 's/^ *\([0-9]*\) *\([0-9]*\)/(\2,\1)/g' > $tmp/words
 
 	python -c "
-with open('/tmp/words') as f:
+with open('$tmp/words') as f:
     pairs = [ eval(line) for line in f ]
 
 dic = dict(pairs)
@@ -218,14 +219,14 @@ keywords.doc2vec_debug(){
         return
     fi
 
-    learning.doc2txt $1 > /tmp/txt
-    cat /tmp/txt | getwords > /tmp/keywords
+    learning.doc2txt $1 > $tmp/txt
+    cat $tmp/txt | getwords > $tmp/keywords
 
     for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
-         value=$( cat /tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
+         value=$( cat $tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
          [ "$value" != "" ] && echo $a $value
     done
 }
@@ -255,27 +256,27 @@ doc2txt_rec(){
 			cat "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
 			;;
 		(*.rar|*.RAR)
-			rm -fr /tmp/learning
-			mkdir -p /tmp/learning
-			cd /tmp/learning
+			rm -fr $tmp/learning
+			mkdir -p $tmp/learning
+			cd $tmp/learning
 			unrar x "$filename" >/dev/null 2>/dev/null
 			find $PWD | while read line
 			do
 				doc2txt_rec "$line" "$destination" 
 			done
-			sed -i 's|/tmp/learning||g' "$destination"
+			sed -i "s|$tmp/learning||g" "$destination"
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
 		(*.zip|*.ZIP)
-			rm -fr /tmp/learning
-			mkdir -p /tmp/learning
-			cd /tmp/learning
+			rm -fr $tmp/learning
+			mkdir -p $tmp/learning
+			cd $tmp/learning
 			unzip "$filename" >/dev/null 2>/dev/null
 			find $PWD | while read line
 			do
 				doc2txt_rec "$line" "$destination" 
 			done
-			sed -i 's|/tmp/learning||g' "$destination"
+			sed -i "s|$tmp/learning||g" "$destination"
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
 		(*.pdf|*.PDF)
@@ -288,8 +289,8 @@ doc2txt_rec(){
 			epub2txt "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
 			;;
 		(*.mobi|*.MOBI)
-			ebook-convert "$filename" /tmp/mobi.txt
-			cat /tmp/mobi.txt | head -n $summarize_line_limit | strings -n1 >> "$destination"
+			ebook-convert "$filename" $tmp/mobi.txt
+			cat $tmp/mobi.txt | head -n $summarize_line_limit | strings -n1 >> "$destination"
 			;;
 		(*.html|*.htm)
 			#html2text "$filename" | head -n $summarize_line_limit >> "$destination"
@@ -305,26 +306,26 @@ doc2txt_rec(){
 }
 
 gzip_distance(){
-    rm -fr /tmp/s1 /tmp/s2
-    learning.doc2txt "$1" /tmp/s1
-    learning.doc2txt "$2" /tmp/s2
-    s1=$( cat /tmp/s1 | gzip -f | wc -c )
-    s2=$( cat /tmp/s2 | gzip -f | wc -c )
-    s12=$( cat /tmp/s1 /tmp/s2 | gzip | wc -c )
+    rm -fr $tmp/s1 $tmp/s2
+    learning.doc2txt "$1" $tmp/s1
+    learning.doc2txt "$2" $tmp/s2
+    s1=$( cat $tmp/s1 | gzip -f | wc -c )
+    s2=$( cat $tmp/s2 | gzip -f | wc -c )
+    s12=$( cat $tmp/s1 $tmp/s2 | gzip | wc -c )
 
    python -c "print float($s12 - min($s1, $s2))/float(max($s1,$s2))"
 }
 
 jaccard_distance(){
-    rm -fr /tmp/s1 /tmp/s2
-    learning.doc2txt "$1" /tmp/s1
-    learning.doc2txt "$2" /tmp/s2
+    rm -fr $tmp/s1 $tmp/s2
+    learning.doc2txt "$1" $tmp/s1
+    learning.doc2txt "$2" $tmp/s2
 
-    cat /tmp/s1 | getwords | sort | uniq > /tmp/k1
-    cat /tmp/s2 | getwords | sort | uniq > /tmp/k2
+    cat $tmp/s1 | getwords | sort | uniq > $tmp/k1
+    cat $tmp/s2 | getwords | sort | uniq > $tmp/k2
 
-    si=$( comm -12 /tmp/k1 /tmp/k2 | wc -l )
-    su=$( cat      /tmp/k1 /tmp/k2 | sort | uniq | wc -l )
+    si=$( comm -12 $tmp/k1 $tmp/k2 | wc -l )
+    su=$( cat      $tmp/k1 $tmp/k2 | sort | uniq | wc -l )
 
     python -c "print 1.0-float($si)/float($su+0.00001)"
 }
@@ -358,22 +359,22 @@ cat $learning_dir/classifier/map | grep "^ $y " | awk '{print $2}'
 }
 
 naive_bayes.fit(){
-    rm -fr /tmp/classifier.x /tmp/classifier.y
+    rm -fr $tmp/classifier.x $tmp/classifier.y
     ls $learning_dir/vectors_reduced/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/classifier/map
     for file in $learning_dir/vectors_reduced/*
     do
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/classifier.x
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/classifier.x
         y=$(basename $file | sed 's/\..*//g')
         id=$(cat $learning_dir/classifier/map | grep " $y$" | awk '{print $1}')
-        echo $id >> /tmp/classifier.y
+        echo $id >> $tmp/classifier.y
     done
 
 	python -c "
 import numpy as np
 from sklearn.naive_bayes import GaussianNB
 from sklearn.externals import joblib
-X = np.loadtxt('/tmp/classifier.x')
-Y = np.loadtxt('/tmp/classifier.y')
+X = np.loadtxt('$tmp/classifier.x')
+Y = np.loadtxt('$tmp/classifier.y')
 learning_dir='$learning_dir'
 gnb = GaussianNB()
 gnb.fit(X, Y)
@@ -392,34 +393,34 @@ closest_metadata.fit(){
 }
 
 closest_filter.transform(){
-    learning.doc2txt $1 > /tmp/filter
-    head -n$summarize_line_limit /tmp/filter | while read line
+    learning.doc2txt $1 > $tmp/filter
+    head -n$summarize_line_limit $tmp/filter | while read line
     do
-        echo $line | getwords | getkeywords > /tmp/kwords
-        nkeys=$(cat /tmp/kwords | awk '{sum += $1} END {print sum}' )
+        echo $line | getwords | getkeywords > $tmp/kwords
+        nkeys=$(cat $tmp/kwords | awk '{sum += $1} END {print sum}' )
         nwords=$(echo $line | wc -w)
         echo $(( $nkeys*100/$nwords )) $line
-    done | sort -g > /tmp/lines_sorted
-    #line=$(tail -n1 /tmp/lines_sorted)
-    line=$(cat /tmp/lines_sorted | awk '$1>70' | sed 's/^ *[0-9]* //g' | paste -s)
-    echo $line > /tmp/line
-    closest_classifier.transform /tmp/line
+    done | sort -g > $tmp/lines_sorted
+    #line=$(tail -n1 $tmp/lines_sorted)
+    line=$(cat $tmp/lines_sorted | awk '$1>70' | sed 's/^ *[0-9]* //g' | paste -s)
+    echo $line > $tmp/line
+    closest_classifier.transform $tmp/line
 }
 
 identity.fit(){
 }
 
 pca.fit(){
-    rm -fr /tmp/reduced_vectors
+    rm -fr $tmp/reduced_vectors
     for file in $learning_dir/vectors/*
     do
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' >> /tmp/reduced_vectors
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' >> $tmp/reduced_vectors
     done
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
 learning_dir='$learning_dir'
-X=np.loadtxt('/tmp/reduced_vectors')
+X=np.loadtxt('$tmp/reduced_vectors')
 pca=PCA()
 pca.fit(X)
 np.savetxt(learning_dir + '/pca/average',np.mean(X,0))
@@ -429,16 +430,16 @@ np.savetxt(learning_dir + '/pca/eigenv',pca.explained_variance_)
 }
 
 pca100.fit(){
-    rm -fr /tmp/reduced_vectors
+    rm -fr $tmp/reduced_vectors
     for file in $learning_dir/vectors/*
     do
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' >> /tmp/reduced_vectors
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' >> $tmp/reduced_vectors
     done
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
 learning_dir='$learning_dir'
-X=np.loadtxt('/tmp/reduced_vectors')
+X=np.loadtxt('$tmp/reduced_vectors')
 pca=PCA(n_components=100)
 pca.fit(X)
 np.savetxt(learning_dir + '/pca/average',np.mean(X,0))
@@ -448,17 +449,17 @@ np.savetxt(learning_dir + '/pca/eigenv',pca.explained_variance_)
 }
 
 pca_pickle.fit(){
-    rm -fr /tmp/reduced_vectors
+    rm -fr $tmp/reduced_vectors
     for file in $learning_dir/vectors/*
     do
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' >> /tmp/reduced_vectors
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' >> $tmp/reduced_vectors
     done
 	python -c "
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.externals import joblib
 learning_dir='$learning_dir'
-X=np.loadtxt('/tmp/reduced_vectors')
+X=np.loadtxt('$tmp/reduced_vectors')
 pca=PCA()
 pca.fit(X)
 joblib.dump(pca, learning_dir + '/pca/pca.pkl')
@@ -466,10 +467,10 @@ joblib.dump(pca, learning_dir + '/pca/pca.pkl')
 }
 
 pca_scaler.fit(){
-    rm -fr /tmp/reduced_vectors
+    rm -fr $tmp/reduced_vectors
     for file in $learning_dir/vectors/*
     do
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/reduced_vectors
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/reduced_vectors
     done
 
 	python -c "
@@ -478,7 +479,7 @@ from sklearn.decomposition import PCA
 from sklearn.externals import joblib
 from sklearn.preprocessing import StandardScaler
 learning_dir='$learning_dir'
-X=np.loadtxt('/tmp/reduced_vectors')
+X=np.loadtxt('$tmp/reduced_vectors')
 scaler = StandardScaler()
 scaler.fit(X)
 X=scaler.transform(X)
@@ -491,15 +492,15 @@ joblib.dump(scaler, learning_dir + '/pca/scaler.pkl')
 
 lda.fit(){
 
-    rm -fr /tmp/lda.x /tmp/lda.y
+    rm -fr $tmp/lda.x $tmp/lda.y
     ls $learning_dir/vectors/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/pca/map
 
     for file in $learning_dir/vectors/*
     do
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/lda.x
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/lda.x
         y=$(basename $file | sed 's/\..*//g')
         id=$(cat $learning_dir/pca/map | grep " $y$" | awk '{print $1}')
-        echo $id >> /tmp/lda.y
+        echo $id >> $tmp/lda.y
     done
 
 	python -c "
@@ -507,8 +508,8 @@ import numpy as np
 np.set_printoptions(threshold=np.nan)
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.externals import joblib
-X = np.loadtxt('/tmp/lda.x')
-Y = np.loadtxt('/tmp/lda.y')
+X = np.loadtxt('$tmp/lda.x')
+Y = np.loadtxt('$tmp/lda.y')
 learning_dir='$learning_dir'
 clf = LinearDiscriminantAnalysis()
 clf.fit(X, Y)
@@ -522,11 +523,11 @@ pca.rank(){
     #do
         #echo "'"$(basename $file)"'":$(cat $file),
     #done | paste -s -d' ' | sed -e 's/^/{/g' -e 's/$/}/g' -e 's/,}/}/g')
-    rm -rf /tmp/names /tmp/vectors
+    rm -rf $tmp/names $tmp/vectors
     for file in $learning_dir/vectors/*
     do
-        echo $(basename $file) >> /tmp/names
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/vectors
+        echo $(basename $file) >> $tmp/names
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/vectors
     done
 
 	python -c "
@@ -534,9 +535,9 @@ import numpy as np
 from sklearn.decomposition import PCA
 n_components=3
 
-with open('/tmp/names') as f:
+with open('$tmp/names') as f:
     names = [ line.rstrip('\n') for line in f ]
-with open('/tmp/vectors') as f:
+with open('$tmp/vectors') as f:
     vectors = [ line.rstrip('\n') for line in f ]
 doc_2_vect={ names[i]:np.fromstring(vectors[i], dtype=float, sep=' ') for i in range(0,len(names)) }
 
@@ -570,22 +571,22 @@ for a in sorted(doc_2_rank, key=doc_2_rank.get):
 
 linear_classifier.fit(){
 
-    rm -fr /tmp/classifier.x /tmp/classifier.y
+    rm -fr $tmp/classifier.x $tmp/classifier.y
     ls $learning_dir/vectors_reduced/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/classifier/map
     for file in $learning_dir/vectors_reduced/*
     do
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/classifier.x
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/classifier.x
         y=$(basename $file | sed 's/\..*//g')
         id=$(cat $learning_dir/classifier/map | grep " $y$" | awk '{print $1}')
-        echo $id >> /tmp/classifier.y
+        echo $id >> $tmp/classifier.y
     done
 
 	python -c "
 import numpy as np
 from sklearn import linear_model
 from sklearn.externals import joblib
-X = np.loadtxt('/tmp/classifier.x')
-Y = np.loadtxt('/tmp/classifier.y')
+X = np.loadtxt('$tmp/classifier.x')
+Y = np.loadtxt('$tmp/classifier.y')
 learning_dir='$learning_dir'
 clf = linear_model.SGDClassifier()
 clf.fit(X, Y)
@@ -595,22 +596,22 @@ joblib.dump(clf, learning_dir + '/classifier/classifier.pkl')
 
 logistic_classifier.fit(){
 
-    rm -fr /tmp/classifier.x /tmp/classifier.y
+    rm -fr $tmp/classifier.x $tmp/classifier.y
     ls $learning_dir/vectors_reduced/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/classifier/map
     for file in $learning_dir/vectors_reduced/*
     do
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/classifier.x
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/classifier.x
         y=$(basename $file | sed 's/\..*//g')
         id=$(cat $learning_dir/classifier/map | grep " $y$" | awk '{print $1}')
-        echo $id >> /tmp/classifier.y
+        echo $id >> $tmp/classifier.y
     done
 
 	python -c "
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.externals import joblib
-X = np.loadtxt('/tmp/classifier.x')
-Y = np.loadtxt('/tmp/classifier.y')
+X = np.loadtxt('$tmp/classifier.x')
+Y = np.loadtxt('$tmp/classifier.y')
 learning_dir='$learning_dir'
 clf = LogisticRegression()
 clf.fit(X, Y)
@@ -628,15 +629,15 @@ print([ (i/float(max(vect)+0.00001) - 0.5)/$learning_scale for i in vect ])
 
 classifier.evaluate(){
 
-    rm -fr /tmp/classifier.y_true /tmp/classifier.y_pred
+    rm -fr $tmp/classifier.y_true $tmp/classifier.y_pred
 
     mkdir -p $learning_dir/classifier_test_results
     ls $learning_dir/classifier_test/* | while read line
     do
         y_pred=$($classifier_method.transform "$line")
         name=$(basename "$line")
-        echo $y_pred >> /tmp/classifier.y_pred
-        echo $(basename "$line") | sed 's/\..*//g' >> /tmp/classifier.y_true
+        echo $y_pred >> $tmp/classifier.y_pred
+        echo $(basename "$line") | sed 's/\..*//g' >> $tmp/classifier.y_true
         [ "$(basename $line | sed 's/\..*//g')"  = "$y_pred" ] && echo "\e[34m transform \e[0m $name \e[33m $y_pred \e[0m"
         [ "$(basename $line | sed 's/\..*//g')" != "$y_pred" ] && echo "\e[34m transform \e[0m $name \e[31m $y_pred \e[0m"
         echo $y_pred > $learning_dir/classifier_test_results/$name
@@ -645,9 +646,9 @@ classifier.evaluate(){
 	python -c "
 from sklearn import metrics
 
-with open('/tmp/classifier.y_pred') as f:
+with open('$tmp/classifier.y_pred') as f:
     y_pred = [ line.rstrip('\n') for line in f ]
-with open('/tmp/classifier.y_true') as f:
+with open('$tmp/classifier.y_true') as f:
     y_true = [ line.rstrip('\n') for line in f ]
 
 score = metrics.accuracy_score(y_true, y_pred)
@@ -663,19 +664,19 @@ print(metrics.confusion_matrix(y_true, y_pred))
 if [ $learning_evaluate_vects = "true" ]
 then
     echo "\e[34m vectors \e[0m "
-    rm -fr /tmp/vects
+    rm -fr $tmp/vects
     find $learning_dir/classifier_train/ -type f | sort | while read line
     do
-        echo -n $line " " >> /tmp/vects
+        echo -n $line " " >> $tmp/vects
         if [ -e "$learning_dir/vectors/$(basename $line)" ]
         then
-            cat "$learning_dir/vectors/$(basename $line)" | vect2s >> /tmp/vects
+            cat "$learning_dir/vectors/$(basename $line)" | vect2s >> $tmp/vects
         else
-            $vectorizer_method.txt2vec "$line" | vect2s >> /tmp/vects
+            $vectorizer_method.txt2vec "$line" | vect2s >> $tmp/vects
         fi
         echo "\e[34m vector \e[0m " $(basename $line)
     done
-    echo "=====" >> /tmp/vects
+    echo "=====" >> $tmp/vects
     find $learning_dir/classifier_test/ -type f | sort | while read line
     do
         y_true=$(basename $line | sed 's/\..*//g')
@@ -683,14 +684,14 @@ then
         [ -e $learning_dir/classifier_test_results/$(basename $line) ] || y_pred=$($classifier_method.transform $line)
         [ "$y_true"  = "$y_pred" ] && echo "\e[34m vector \e[0m $(basename $line) \e[32m $y_true \e[0m \e[33m $y_pred \e[0m"
         [ "$y_true" != "$y_pred" ] && echo "\e[34m vector \e[0m $(basename $line) \e[32m $y_true \e[0m \e[31m $y_pred \e[0m"
-        [ "$y_true" != "$y_pred" ] && echo -n '*** ' >> /tmp/vects
-        echo -n T:$y_true P:$y_pred " " >> /tmp/vects
-        echo -n $line " " >> /tmp/vects
+        [ "$y_true" != "$y_pred" ] && echo -n '*** ' >> $tmp/vects
+        echo -n T:$y_true P:$y_pred " " >> $tmp/vects
+        echo -n $line " " >> $tmp/vects
         if [ -e "$learning_dir/vectors/$(basename $line)" ]
         then
-            cat "$learning_dir/vectors/$(basename $line)" | vect2s >> /tmp/vects
+            cat "$learning_dir/vectors/$(basename $line)" | vect2s >> $tmp/vects
         else
-            $vectorizer_method.txt2vec "$line" | vect2s >> /tmp/vects
+            $vectorizer_method.txt2vec "$line" | vect2s >> $tmp/vects
         fi
         # echo "\e[34m vector \e[0m " $(basename $line)
     done
@@ -698,19 +699,19 @@ fi
 }
 
 linear_regression.fit(){
-    rm -fr /tmp/regression.x /tmp/regression.y
+    rm -fr $tmp/regression.x $tmp/regression.y
     for file in $learning_dir/vectors_reduced/*
     do
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/regression.x
-        cat $learning_dir/regression_fit/$(basename $file) >> /tmp/regression.y
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/regression.x
+        cat $learning_dir/regression_fit/$(basename $file) >> $tmp/regression.y
     done
 
 	python -c "
 import numpy as np
 from sklearn import linear_model
 from sklearn.externals import joblib
-X = np.loadtxt('/tmp/regression.x')
-Y = np.loadtxt('/tmp/regression.y')
+X = np.loadtxt('$tmp/regression.x')
+Y = np.loadtxt('$tmp/regression.y')
 learning_dir='$learning_dir'
 reg = linear_model.LinearRegression()
 reg.fit (X, Y)
@@ -721,17 +722,17 @@ joblib.dump(reg, learning_dir + '/regression/regression.pkl')
 kmeans_clustering.fit(){
     n_clusters=3
     seq 0 $n_clusters | nl -v0 | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/cluster/map
-    rm -fr /tmp/clusters
+    rm -fr $tmp/clusters
     for file in $learning_dir/vectors_reduced/*
     do
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> /tmp/clusters
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/clusters
     done
 
 python -c "
 from sklearn.cluster import KMeans
 from sklearn.externals import joblib
 import numpy as np
-X = np.loadtxt('/tmp/clusters.x')
+X = np.loadtxt('$tmp/clusters.x')
 learning_dir='$learning_dir'
 n_clusters=$n_clusters
 kmeans = KMeans(n_clusters=n_clusters, random_state=0)
@@ -833,14 +834,14 @@ learning.doc2txt(){
 
 	[ -e "$destination" ] && return
 	[ ${filename[1]} = '/' ] || filename="$PWD"/"$filename"
-	[ "$destination" = "" ] && destination=/tmp/summary
+	[ "$destination" = "" ] && destination=$tmp/summary
 
 	rm -fr "$destination"
 
 	[ -d "$filename" ] &&  ( ls "$filename" | while read line; do ( doc2txt_rec "$filename"/"$line" "$destination" ); done )
 	[ -f "$filename" ] &&  doc2txt_rec "$filename" "$destination"
 
-	[ "$destination" = "/tmp/summary" ] && cat /tmp/summary
+	[ "$destination" = "$tmp/summary" ] && cat $tmp/summary
 }
 
 learning.doc2rvect(){
@@ -849,9 +850,9 @@ learning.doc2rvect(){
         vector=$(cat $learning_dir/vectors/$(basename $1))
         $pca_method.transform $vector
     else
-        rm -fr /tmp/txt
-        learning.doc2txt $1 /tmp/txt
-        vector=$($vectorizer_method.txt2vec /tmp/txt)
+        rm -fr $tmp/txt
+        learning.doc2txt $1 $tmp/txt
+        vector=$($vectorizer_method.txt2vec $tmp/txt)
         $pca_method.transform $vector
     fi
 }
@@ -1100,12 +1101,12 @@ learning.join_topics(){
     do
         dst_filename=$( echo $src_filename | sed "s/^$topic_src\./$topic_dst\./g" )
         echo mv $learning_dir/documents/$src_filename $learning_dir/documents/$dst_filename
-        echo "cat $learning_dir/map_documents/map | sed 's/$src_filename/$dst_filename/g' > /tmp/map && mv /tmp/map $learning_dir/map_documents/map"
+        echo "cat $learning_dir/map_documents/map | sed 's/$src_filename/$dst_filename/g' > $tmp/map && mv $tmp/map $learning_dir/map_documents/map"
     done
     echo rm -rf $learning_dir/documents/$topic_src.topic
 
     #topics
-    echo "cat $learning_dir/topics/topics | sed 's/ $topic_src\$/ $topic_dst/g' | sort | uniq > /tmp/topics && mv /tmp/topics $learning_dir/topics/topics"
+    echo "cat $learning_dir/topics/topics | sed 's/ $topic_src\$/ $topic_dst/g' | sort | uniq > $tmp/topics && mv $tmp/topics $learning_dir/topics/topics"
 
 }
 
@@ -1115,11 +1116,11 @@ learning.get_documents(){
 
     mkdir -p $learning_dir/map_documents
 
-    cat $learning_dir/topics/topics | awk '{print $NF}' > /tmp/topics_to_get
-    [ -e $learning_dir/topics/skip ] && comm -13 <(cat $learning_dir/topics/skip | sort | uniq) <(cat $learning_dir/topics/topics | awk '{print $NF}' | sort | uniq) > /tmp/topics_to_get
-    [ $# -gt 0 ] && echo $* | sed 's/ /\n/g' > /tmp/topics_to_get
+    cat $learning_dir/topics/topics | awk '{print $NF}' > $tmp/topics_to_get
+    [ -e $learning_dir/topics/skip ] && comm -13 <(cat $learning_dir/topics/skip | sort | uniq) <(cat $learning_dir/topics/topics | awk '{print $NF}' | sort | uniq) > $tmp/topics_to_get
+    [ $# -gt 0 ] && echo $* | sed 's/ /\n/g' > $tmp/topics_to_get
 
-    cat /tmp/topics_to_get | while read line
+    cat $tmp/topics_to_get | while read line
     do
         echo "\e[34m ===== $line ===== \e[0m"
 
@@ -1206,6 +1207,7 @@ learning.restart(){
 
 learning.restart(){
     cd $learning_dir && ls | egrep -v '^documents$' | egrep -v '^features$' | egrep -v '^topics$' | egrep -v 'summaries' | egrep -v '^metadata$' | xargs rm -rf
+    mkdir -p $tmp
 }
 
 learning.queue_get(){
@@ -1255,7 +1257,7 @@ learning.queue_classify(){
 learning.queue_mv(){
 
     cd $learning_dir/summaries_classified/
-    rm -fr /tmp/script
+    rm -fr $tmp/script
     ls | while read line
     do
         file=$(echo $line | sed 's/\.txt$//g')
@@ -1263,13 +1265,13 @@ learning.queue_mv(){
 
         [ "$true_tag" = "" ] && continue
 
-        rm -fr /tmp/part00 /tmp/part01
-        csplit "$line" -s -f /tmp/part /=====/
+        rm -fr $tmp/part00 $tmp/part01
+        csplit "$line" -s -f $tmp/part /=====/
 
-        rm -fr "/tmp/$line"
-        mv /tmp/part01 "/tmp/$line"
-        pred_tag=$($classifier_method.transform "/tmp/$line")
-        rm -fr "/tmp/$line"
+        rm -fr "$tmp/$line"
+        mv $tmp/part01 "$tmp/$line"
+        pred_tag=$($classifier_method.transform "$tmp/$line")
+        rm -fr "$tmp/$line"
 
 
         if [ -e $learning_dir/topics/topics ]
@@ -1281,17 +1283,17 @@ learning.queue_mv(){
         if [ "$true_tag" = "$pred_tag" ]
         then
             echo "\e[34m $file \e[0m \e[32m $true_tag \e[0m"
-            [ -e "$learning_src/$true_tag" ] || echo "mkdir -p \"$learning_src/$true_tag/\"" | tee -a /tmp/script
-            echo "mv \"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a /tmp/script
+            [ -e "$learning_src/$true_tag" ] || echo "mkdir -p \"$learning_src/$true_tag/\"" | tee -a $tmp/script
+            echo "mv \"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a $tmp/script
         fi
 
         if [ ! "$true_tag" = "$pred_tag" ]
         then
             echo "\e[34m $file \e[0m \e[31m $pred_tag \e[0m \e[32m $true_tag \e[0m"
             crctitle=$(basename "$file" | md5sum | cut -d' ' -f1)
-            [ -e "$learning_src/$true_tag" ] || echo "mkdir -p \"$learning_src/$true_tag/\"" | tee -a /tmp/script
-            echo "mv \"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a /tmp/script
-            echo "cat \"$learning_dir/summaries_classified/$line\" > $learning_dir/documents/$true_tag.$crctitle" | tee -a /tmp/script
+            [ -e "$learning_src/$true_tag" ] || echo "mkdir -p \"$learning_src/$true_tag/\"" | tee -a $tmp/script
+            echo "mv \"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a $tmp/script
+            echo "cat \"$learning_dir/summaries_classified/$line\" > $learning_dir/documents/$true_tag.$crctitle" | tee -a $tmp/script
         fi
 
     done
@@ -1417,11 +1419,11 @@ metadata.isbn2topics(){
 }
 
 keywords.new_kwords(){
-cat /tmp/vects | egrep '\*\*\*' | awk '{print $4}' | xargs cat | getwords | awk '{print $2}' | sort | uniq | keywords.filter -v
+cat $tmp/vects | egrep '\*\*\*' | awk '{print $4}' | xargs cat | getwords | awk '{print $2}' | sort | uniq | keywords.filter -v
 }
 
 learning.loop(){
-for a in $(cat /tmp/vects | grep '\*\*\*' | awk '{print $4}' )
+for a in $(cat $tmp/vects | grep '\*\*\*' | awk '{print $4}' )
 do
     echo "===== $(echo $a | sed 's|/classifier_test/|/documents/|g' ) ====="
     closest=$(closest_classifier.sortdist $a | head -n1 | sed "s|^|$learning_dir/documents/|g")
