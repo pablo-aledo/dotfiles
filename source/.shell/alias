@@ -19,3 +19,4 @@ alias watch='watch '
 f(){ echo find -iname "'*$1*'" | bash }
 hd(){ helm delete --purge $(hn $1) }
 kshell(){ sudo kubectl exec -it $1 -- /bin/bash}
+alias wdfh='watch -n1 df -h'
