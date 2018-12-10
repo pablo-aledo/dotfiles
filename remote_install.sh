@@ -12,7 +12,7 @@ echo 'pkg install sudo'  >> .pkg # requires superuser
 echo 'pkg install grep'  >> .pkg # requires superuser
 echo 'git clone https://github.com/pablo-aledo/dotfiles.git .dotfiles' >> .pkg
 echo 'cd .dotfiles'      >> .pkg
-echo 'bash ./install.sh' >> .pkg
+echo 'source ./install.sh' >> .pkg
 echo 'touch ~/.paths'      >> .pkg
 
-bash .pkg
+source .pkg
