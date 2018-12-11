@@ -1,0 +1,3183 @@
+snippet arrays
+	// In Go, an _array_ is a numbered sequence of elements of a
+	// specific length.
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	
+	    // Here we create an array `a` that will hold exactly
+	    // 5 `int`s. The type of elements and length are both
+	    // part of the array's type. By default an array is
+	    // zero-valued, which for `int`s means `0`s.
+	    var a [5]int
+	    fmt.Println("emp:", a)
+	
+	    // We can set a value at an index using the
+	    // `array[index] = value` syntax, and get a value with
+	    // `array[index]`.
+	    a[4] = 100
+	    fmt.Println("set:", a)
+	    fmt.Println("get:", a[4])
+	
+	    // The builtin `len` returns the length of an array.
+	    fmt.Println("len:", len(a))
+	
+	    // Use this syntax to declare and initialize an array
+	    // in one line.
+	    b := [5]int{1, 2, 3, 4, 5}
+	    fmt.Println("dcl:", b)
+	
+	    // Array types are one-dimensional, but you can
+	    // compose types to build multi-dimensional data
+	    // structures.
+	    var twoD [2][3]int
+	    for i := 0; i < 2; i++ {
+	        for j := 0; j < 3; j++ {
+	            twoD[i][j] = i + j
+	        }
+	    }
+	    fmt.Println("2d: ", twoD)
+	}
+snippet atomic_counters
+	// The primary mechanism for managing state in Go is
+	// communication over channels. We saw this for example
+	// with [worker pools](worker-pools). There are a few other
+	// options for managing state though. Here we'll
+	// look at using the `sync/atomic` package for _atomic
+	// counters_ accessed by multiple goroutines.
+	
+	package main
+	
+	import "fmt"
+	import "time"
+	import "sync/atomic"
+	
+	func main() {
+	
+	    // We'll use an unsigned integer to represent our
+	    // (always-positive) counter.
+	    var ops uint64
+	
+	    // To simulate concurrent updates, we'll start 50
+	    // goroutines that each increment the counter about
+	    // once a millisecond.
+	    for i := 0; i < 50; i++ {
+	        go func() {
+	            for {
+	                // To atomically increment the counter we
+	                // use `AddUint64`, giving it the memory
+	                // address of our `ops` counter with the
+	                // `&` syntax.
+	                atomic.AddUint64(&ops, 1)
+	
+	                // Wait a bit between increments.
+	                time.Sleep(time.Millisecond)
+	            }
+	        }()
+	    }
+	
+	    // Wait a second to allow some ops to accumulate.
+	    time.Sleep(time.Second)
+	
+	    // In order to safely use the counter while it's still
+	    // being updated by other goroutines, we extract a
+	    // copy of the current value into `opsFinal` via
+	    // `LoadUint64`. As above we need to give this
+	    // function the memory address `&ops` from which to
+	    // fetch the value.
+	    opsFinal := atomic.LoadUint64(&ops)
+	    fmt.Println("ops:", opsFinal)
+	}
+snippet base64_encoding
+	// Go provides built-in support for [base64
+	// encoding/decoding](http://en.wikipedia.org/wiki/Base64).
+	
+	package main
+	
+	// This syntax imports the `encoding/base64` package with
+	// the `b64` name instead of the default `base64`. It'll
+	// save us some space below.
+	import b64 "encoding/base64"
+	import "fmt"
+	
+	func main() {
+	
+	    // Here's the `string` we'll encode/decode.
+	    data := "abc123!?$*&()'-=@~"
+	
+	    // Go supports both standard and URL-compatible
+	    // base64. Here's how to encode using the standard
+	    // encoder. The encoder requires a `[]byte` so we
+	    // cast our `string` to that type.
+	    sEnc := b64.StdEncoding.EncodeToString([]byte(data))
+	    fmt.Println(sEnc)
+	
+	    // Decoding may return an error, which you can check
+	    // if you don't already know the input to be
+	    // well-formed.
+	    sDec, _ := b64.StdEncoding.DecodeString(sEnc)
+	    fmt.Println(string(sDec))
+	    fmt.Println()
+	
+	    // This encodes/decodes using a URL-compatible base64
+	    // format.
+	    uEnc := b64.URLEncoding.EncodeToString([]byte(data))
+	    fmt.Println(uEnc)
+	    uDec, _ := b64.URLEncoding.DecodeString(uEnc)
+	    fmt.Println(string(uDec))
+	}
+snippet channel_buffering
+	// By default channels are _unbuffered_, meaning that they
+	// will only accept sends (`chan <-`) if there is a
+	// corresponding receive (`<- chan`) ready to receive the
+	// sent value. _Buffered channels_ accept a limited
+	// number of  values without a corresponding receiver for
+	// those values.
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	
+	    // Here we `make` a channel of strings buffering up to
+	    // 2 values.
+	    messages := make(chan string, 2)
+	
+	    // Because this channel is buffered, we can send these
+	    // values into the channel without a corresponding
+	    // concurrent receive.
+	    messages <- "buffered"
+	    messages <- "channel"
+	
+	    // Later we can receive these two values as usual.
+	    fmt.Println(<-messages)
+	    fmt.Println(<-messages)
+	}
+snippet channel_directions
+	// When using channels as function parameters, you can
+	// specify if a channel is meant to only send or receive
+	// values. This specificity increases the type-safety of
+	// the program.
+	
+	package main
+	
+	import "fmt"
+	
+	// This `ping` function only accepts a channel for sending
+	// values. It would be a compile-time error to try to
+	// receive on this channel.
+	func ping(pings chan<- string, msg string) {
+	    pings <- msg
+	}
+	
+	// The `pong` function accepts one channel for receives
+	// (`pings`) and a second for sends (`pongs`).
+	func pong(pings <-chan string, pongs chan<- string) {
+	    msg := <-pings
+	    pongs <- msg
+	}
+	
+	func main() {
+	    pings := make(chan string, 1)
+	    pongs := make(chan string, 1)
+	    ping(pings, "passed message")
+	    pong(pings, pongs)
+	    fmt.Println(<-pongs)
+	}
+snippet channels
+	// _Channels_ are the pipes that connect concurrent
+	// goroutines. You can send values into channels from one
+	// goroutine and receive those values into another
+	// goroutine.
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	
+	    // Create a new channel with `make(chan val-type)`.
+	    // Channels are typed by the values they convey.
+	    messages := make(chan string)
+	
+	    // _Send_ a value into a channel using the `channel <-`
+	    // syntax. Here we send `"ping"`  to the `messages`
+	    // channel we made above, from a new goroutine.
+	    go func() { messages <- "ping" }()
+	
+	    // The `<-channel` syntax _receives_ a value from the
+	    // channel. Here we'll receive the `"ping"` message
+	    // we sent above and print it out.
+	    msg := <-messages
+	    fmt.Println(msg)
+	}
+snippet channel_synchronization
+	// We can use channels to synchronize execution
+	// across goroutines. Here's an example of using a
+	// blocking receive to wait for a goroutine to finish.
+	
+	package main
+	
+	import "fmt"
+	import "time"
+	
+	// This is the function we'll run in a goroutine. The
+	// `done` channel will be used to notify another
+	// goroutine that this function's work is done.
+	func worker(done chan bool) {
+	    fmt.Print("working...")
+	    time.Sleep(time.Second)
+	    fmt.Println("done")
+	
+	    // Send a value to notify that we're done.
+	    done <- true
+	}
+	
+	func main() {
+	
+	    // Start a worker goroutine, giving it the channel to
+	    // notify on.
+	    done := make(chan bool, 1)
+	    go worker(done)
+	
+	    // Block until we receive a notification from the
+	    // worker on the channel.
+	    <-done
+	}
+snippet closing_channels
+	// _Closing_ a channel indicates that no more values
+	// will be sent on it. This can be useful to communicate
+	// completion to the channel's receivers.
+	
+	package main
+	
+	import "fmt"
+	
+	// In this example we'll use a `jobs` channel to
+	// communicate work to be done from the `main()` goroutine
+	// to a worker goroutine. When we have no more jobs for
+	// the worker we'll `close` the `jobs` channel.
+	func main() {
+	    jobs := make(chan int, 5)
+	    done := make(chan bool)
+	
+	    // Here's the worker goroutine. It repeatedly receives
+	    // from `jobs` with `j, more := <-jobs`. In this
+	    // special 2-value form of receive, the `more` value
+	    // will be `false` if `jobs` has been `close`d and all
+	    // values in the channel have already been received.
+	    // We use this to notify on `done` when we've worked
+	    // all our jobs.
+	    go func() {
+	        for {
+	            j, more := <-jobs
+	            if more {
+	                fmt.Println("received job", j)
+	            } else {
+	                fmt.Println("received all jobs")
+	                done <- true
+	                return
+	            }
+	        }
+	    }()
+	
+	    // This sends 3 jobs to the worker over the `jobs`
+	    // channel, then closes it.
+	    for j := 1; j <= 3; j++ {
+	        jobs <- j
+	        fmt.Println("sent job", j)
+	    }
+	    close(jobs)
+	    fmt.Println("sent all jobs")
+	
+	    // We await the worker using the
+	    // [synchronization](channel-synchronization) approach
+	    // we saw earlier.
+	    <-done
+	}
+snippet closures
+	// Go supports [_anonymous functions_](http://en.wikipedia.org/wiki/Anonymous_function),
+	// which can form <a href="http://en.wikipedia.org/wiki/Closure_(computer_science)"><em>closures</em></a>.
+	// Anonymous functions are useful when you want to define
+	// a function inline without having to name it.
+	
+	package main
+	
+	import "fmt"
+	
+	// This function `intSeq` returns another function, which
+	// we define anonymously in the body of `intSeq`. The
+	// returned function _closes over_ the variable `i` to
+	// form a closure.
+	func intSeq() func() int {
+	    i := 0
+	    return func() int {
+	        i++
+	        return i
+	    }
+	}
+	
+	func main() {
+	
+	    // We call `intSeq`, assigning the result (a function)
+	    // to `nextInt`. This function value captures its
+	    // own `i` value, which will be updated each time
+	    // we call `nextInt`.
+	    nextInt := intSeq()
+	
+	    // See the effect of the closure by calling `nextInt`
+	    // a few times.
+	    fmt.Println(nextInt())
+	    fmt.Println(nextInt())
+	    fmt.Println(nextInt())
+	
+	    // To confirm that the state is unique to that
+	    // particular function, create and test a new one.
+	    newInts := intSeq()
+	    fmt.Println(newInts())
+	}
+snippet collection_functions
+	// We often need our programs to perform operations on
+	// collections of data, like selecting all items that
+	// satisfy a given predicate or mapping all items to a new
+	// collection with a custom function.
+	
+	// In some languages it's idiomatic to use [generic](http://en.wikipedia.org/wiki/Generic_programming)
+	// data structures and algorithms. Go does not support
+	// generics; in Go it's common to provide collection
+	// functions if and when they are specifically needed for
+	// your program and data types.
+	
+	// Here are some example collection functions for slices
+	// of `strings`. You can use these examples to build your
+	// own functions. Note that in some cases it may be
+	// clearest to just inline the collection-manipulating
+	// code directly, instead of creating and calling a
+	// helper function.
+	
+	package main
+	
+	import "strings"
+	import "fmt"
+	
+	// Index returns the first index of the target string `t`, or
+	// -1 if no match is found.
+	func Index(vs []string, t string) int {
+	    for i, v := range vs {
+	        if v == t {
+	            return i
+	        }
+	    }
+	    return -1
+	}
+	
+	// Include returns `true` if the target string t is in the
+	// slice.
+	func Include(vs []string, t string) bool {
+	    return Index(vs, t) >= 0
+	}
+	
+	// Any returns `true` if one of the strings in the slice
+	// satisfies the predicate `f`.
+	func Any(vs []string, f func(string) bool) bool {
+	    for _, v := range vs {
+	        if f(v) {
+	            return true
+	        }
+	    }
+	    return false
+	}
+	
+	// All returns `true` if all of the strings in the slice
+	// satisfy the predicate `f`.
+	func All(vs []string, f func(string) bool) bool {
+	    for _, v := range vs {
+	        if !f(v) {
+	            return false
+	        }
+	    }
+	    return true
+	}
+	
+	// Filter returns a new slice containing all strings in the
+	// slice that satisfy the predicate `f`.
+	func Filter(vs []string, f func(string) bool) []string {
+	    vsf := make([]string, 0)
+	    for _, v := range vs {
+	        if f(v) {
+	            vsf = append(vsf, v)
+	        }
+	    }
+	    return vsf
+	}
+	
+	// Map returns a new slice containing the results of applying
+	// the function `f` to each string in the original slice.
+	func Map(vs []string, f func(string) string) []string {
+	    vsm := make([]string, len(vs))
+	    for i, v := range vs {
+	        vsm[i] = f(v)
+	    }
+	    return vsm
+	}
+	
+	func main() {
+	
+	    // Here we try out our various collection functions.
+	    var strs = []string{"peach", "apple", "pear", "plum"}
+	
+	    fmt.Println(Index(strs, "pear"))
+	
+	    fmt.Println(Include(strs, "grape"))
+	
+	    fmt.Println(Any(strs, func(v string) bool {
+	        return strings.HasPrefix(v, "p")
+	    }))
+	
+	    fmt.Println(All(strs, func(v string) bool {
+	        return strings.HasPrefix(v, "p")
+	    }))
+	
+	    fmt.Println(Filter(strs, func(v string) bool {
+	        return strings.Contains(v, "e")
+	    }))
+	
+	    // The above examples all used anonymous functions,
+	    // but you can also use named functions of the correct
+	    // type.
+	    fmt.Println(Map(strs, strings.ToUpper))
+	
+	}
+snippet command_line_arguments
+	// [_Command-line arguments_](http://en.wikipedia.org/wiki/Command-line_interface#Arguments)
+	// are a common way to parameterize execution of programs.
+	// For example, `go run hello.go` uses `run` and
+	// `hello.go` arguments to the `go` program.
+	
+	package main
+	
+	import "os"
+	import "fmt"
+	
+	func main() {
+	
+	    // `os.Args` provides access to raw command-line
+	    // arguments. Note that the first value in this slice
+	    // is the path to the program, and `os.Args[1:]`
+	    // holds the arguments to the program.
+	    argsWithProg := os.Args
+	    argsWithoutProg := os.Args[1:]
+	
+	    // You can get individual args with normal indexing.
+	    arg := os.Args[3]
+	
+	    fmt.Println(argsWithProg)
+	    fmt.Println(argsWithoutProg)
+	    fmt.Println(arg)
+	}
+snippet command_line_flags
+	// [_Command-line flags_](http://en.wikipedia.org/wiki/Command-line_interface#Command-line_option)
+	// are a common way to specify options for command-line
+	// programs. For example, in `wc -l` the `-l` is a
+	// command-line flag.
+	
+	package main
+	
+	// Go provides a `flag` package supporting basic
+	// command-line flag parsing. We'll use this package to
+	// implement our example command-line program.
+	import "flag"
+	import "fmt"
+	
+	func main() {
+	
+	    // Basic flag declarations are available for string,
+	    // integer, and boolean options. Here we declare a
+	    // string flag `word` with a default value `"foo"`
+	    // and a short description. This `flag.String` function
+	    // returns a string pointer (not a string value);
+	    // we'll see how to use this pointer below.
+	    wordPtr := flag.String("word", "foo", "a string")
+	
+	    // This declares `numb` and `fork` flags, using a
+	    // similar approach to the `word` flag.
+	    numbPtr := flag.Int("numb", 42, "an int")
+	    boolPtr := flag.Bool("fork", false, "a bool")
+	
+	    // It's also possible to declare an option that uses an
+	    // existing var declared elsewhere in the program.
+	    // Note that we need to pass in a pointer to the flag
+	    // declaration function.
+	    var svar string
+	    flag.StringVar(&svar, "svar", "bar", "a string var")
+	
+	    // Once all flags are declared, call `flag.Parse()`
+	    // to execute the command-line parsing.
+	    flag.Parse()
+	
+	    // Here we'll just dump out the parsed options and
+	    // any trailing positional arguments. Note that we
+	    // need to dereference the pointers with e.g. `*wordPtr`
+	    // to get the actual option values.
+	    fmt.Println("word:", *wordPtr)
+	    fmt.Println("numb:", *numbPtr)
+	    fmt.Println("fork:", *boolPtr)
+	    fmt.Println("svar:", svar)
+	    fmt.Println("tail:", flag.Args())
+	}
+snippet constants
+	// Go supports _constants_ of character, string, boolean,
+	// and numeric values.
+	
+	package main
+	
+	import "fmt"
+	import "math"
+	
+	// `const` declares a constant value.
+	const s string = "constant"
+	
+	func main() {
+	    fmt.Println(s)
+	
+	    // A `const` statement can appear anywhere a `var`
+	    // statement can.
+	    const n = 500000000
+	
+	    // Constant expressions perform arithmetic with
+	    // arbitrary precision.
+	    const d = 3e20 / n
+	    fmt.Println(d)
+	
+	    // A numeric constant has no type until it's given
+	    // one, such as by an explicit cast.
+	    fmt.Println(int64(d))
+	
+	    // A number can be given a type by using it in a
+	    // context that requires one, such as a variable
+	    // assignment or function call. For example, here
+	    // `math.Sin` expects a `float64`.
+	    fmt.Println(math.Sin(n))
+	}
+snippet defer
+	// _Defer_ is used to ensure that a function call is
+	// performed later in a program's execution, usually for
+	// purposes of cleanup. `defer` is often used where e.g.
+	// `ensure` and `finally` would be used in other languages.
+	
+	package main
+	
+	import "fmt"
+	import "os"
+	
+	// Suppose we wanted to create a file, write to it,
+	// and then close when we're done. Here's how we could
+	// do that with `defer`.
+	func main() {
+	
+	    // Immediately after getting a file object with
+	    // `createFile`, we defer the closing of that file
+	    // with `closeFile`. This will be executed at the end
+	    // of the enclosing function (`main`), after
+	    // `writeFile` has finished.
+	    f := createFile("/tmp/defer.txt")
+	    defer closeFile(f)
+	    writeFile(f)
+	}
+	
+	func createFile(p string) *os.File {
+	    fmt.Println("creating")
+	    f, err := os.Create(p)
+	    if err != nil {
+	        panic(err)
+	    }
+	    return f
+	}
+	
+	func writeFile(f *os.File) {
+	    fmt.Println("writing")
+	    fmt.Fprintln(f, "data")
+	
+	}
+	
+	func closeFile(f *os.File) {
+	    fmt.Println("closing")
+	    f.Close()
+	}
+snippet environment_variables
+	// [Environment variables](http://en.wikipedia.org/wiki/Environment_variable)
+	// are a universal mechanism for [conveying configuration
+	// information to Unix programs](http://www.12factor.net/config).
+	// Let's look at how to set, get, and list environment variables.
+	
+	package main
+	
+	import "os"
+	import "strings"
+	import "fmt"
+	
+	func main() {
+	
+	    // To set a key/value pair, use `os.Setenv`. To get a
+	    // value for a key, use `os.Getenv`. This will return
+	    // an empty string if the key isn't present in the
+	    // environment.
+	    os.Setenv("FOO", "1")
+	    fmt.Println("FOO:", os.Getenv("FOO"))
+	    fmt.Println("BAR:", os.Getenv("BAR"))
+	
+	    // Use `os.Environ` to list all key/value pairs in the
+	    // environment. This returns a slice of strings in the
+	    // form `KEY=value`. You can `strings.Split` them to
+	    // get the key and value. Here we print all the keys.
+	    fmt.Println()
+	    for _, e := range os.Environ() {
+	        pair := strings.Split(e, "=")
+	        fmt.Println(pair[0])
+	    }
+	}
+snippet epoch
+	// A common requirement in programs is getting the number
+	// of seconds, milliseconds, or nanoseconds since the
+	// [Unix epoch](http://en.wikipedia.org/wiki/Unix_time).
+	// Here's how to do it in Go.
+	
+	package main
+	
+	import "fmt"
+	import "time"
+	
+	func main() {
+	
+	    // Use `time.Now` with `Unix` or `UnixNano` to get
+	    // elapsed time since the Unix epoch in seconds or
+	    // nanoseconds, respectively.
+	    now := time.Now()
+	    secs := now.Unix()
+	    nanos := now.UnixNano()
+	    fmt.Println(now)
+	
+	    // Note that there is no `UnixMillis`, so to get the
+	    // milliseconds since epoch you'll need to manually
+	    // divide from nanoseconds.
+	    millis := nanos / 1000000
+	    fmt.Println(secs)
+	    fmt.Println(millis)
+	    fmt.Println(nanos)
+	
+	    // You can also convert integer seconds or nanoseconds
+	    // since the epoch into the corresponding `time`.
+	    fmt.Println(time.Unix(secs, 0))
+	    fmt.Println(time.Unix(0, nanos))
+	}
+snippet errors
+	// In Go it's idiomatic to communicate errors via an
+	// explicit, separate return value. This contrasts with
+	// the exceptions used in languages like Java and Ruby and
+	// the overloaded single result / error value sometimes
+	// used in C. Go's approach makes it easy to see which
+	// functions return errors and to handle them using the
+	// same language constructs employed for any other,
+	// non-error tasks.
+	
+	package main
+	
+	import "errors"
+	import "fmt"
+	
+	// By convention, errors are the last return value and
+	// have type `error`, a built-in interface.
+	func f1(arg int) (int, error) {
+	    if arg == 42 {
+	
+	        // `errors.New` constructs a basic `error` value
+	        // with the given error message.
+	        return -1, errors.New("can't work with 42")
+	
+	    }
+	
+	    // A `nil` value in the error position indicates that
+	    // there was no error.
+	    return arg + 3, nil
+	}
+	
+	// It's possible to use custom types as `error`s by
+	// implementing the `Error()` method on them. Here's a
+	// variant on the example above that uses a custom type
+	// to explicitly represent an argument error.
+	type argError struct {
+	    arg  int
+	    prob string
+	}
+	
+	func (e *argError) Error() string {
+	    return fmt.Sprintf("%d - %s", e.arg, e.prob)
+	}
+	
+	func f2(arg int) (int, error) {
+	    if arg == 42 {
+	
+	        // In this case we use `&argError` syntax to build
+	        // a new struct, supplying values for the two
+	        // fields `arg` and `prob`.
+	        return -1, &argError{arg, "can't work with it"}
+	    }
+	    return arg + 3, nil
+	}
+	
+	func main() {
+	
+	    // The two loops below test out each of our
+	    // error-returning functions. Note that the use of an
+	    // inline error check on the `if` line is a common
+	    // idiom in Go code.
+	    for _, i := range []int{7, 42} {
+	        if r, e := f1(i); e != nil {
+	            fmt.Println("f1 failed:", e)
+	        } else {
+	            fmt.Println("f1 worked:", r)
+	        }
+	    }
+	    for _, i := range []int{7, 42} {
+	        if r, e := f2(i); e != nil {
+	            fmt.Println("f2 failed:", e)
+	        } else {
+	            fmt.Println("f2 worked:", r)
+	        }
+	    }
+	
+	    // If you want to programmatically use the data in
+	    // a custom error, you'll need to get the error as an
+	    // instance of the custom error type via type
+	    // assertion.
+	    _, e := f2(42)
+	    if ae, ok := e.(*argError); ok {
+	        fmt.Println(ae.arg)
+	        fmt.Println(ae.prob)
+	    }
+	}
+snippet execing_processes
+	// In the previous example we looked at
+	// [spawning external processes](spawning-processes). We
+	// do this when we need an external process accessible to
+	// a running Go process. Sometimes we just want to
+	// completely replace the current Go process with another
+	// (perhaps non-Go) one. To do this we'll use Go's
+	// implementation of the classic
+	// <a href="http://en.wikipedia.org/wiki/Exec_(operating_system)"><code>exec</code></a>
+	// function.
+	
+	package main
+	
+	import "syscall"
+	import "os"
+	import "os/exec"
+	
+	func main() {
+	
+	    // For our example we'll exec `ls`. Go requires an
+	    // absolute path to the binary we want to execute, so
+	    // we'll use `exec.LookPath` to find it (probably
+	    // `/bin/ls`).
+	    binary, lookErr := exec.LookPath("ls")
+	    if lookErr != nil {
+	        panic(lookErr)
+	    }
+	
+	    // `Exec` requires arguments in slice form (as
+	    // apposed to one big string). We'll give `ls` a few
+	    // common arguments. Note that the first argument should
+	    // be the program name.
+	    args := []string{"ls", "-a", "-l", "-h"}
+	
+	    // `Exec` also needs a set of [environment variables](environment-variables)
+	    // to use. Here we just provide our current
+	    // environment.
+	    env := os.Environ()
+	
+	    // Here's the actual `syscall.Exec` call. If this call is
+	    // successful, the execution of our process will end
+	    // here and be replaced by the `/bin/ls -a -l -h`
+	    // process. If there is an error we'll get a return
+	    // value.
+	    execErr := syscall.Exec(binary, args, env)
+	    if execErr != nil {
+	        panic(execErr)
+	    }
+	}
+snippet exit
+	// Use `os.Exit` to immediately exit with a given
+	// status.
+	
+	package main
+	
+	import "fmt"
+	import "os"
+	
+	func main() {
+	
+	    // `defer`s will _not_ be run when using `os.Exit`, so
+	    // this `fmt.Println` will never be called.
+	    defer fmt.Println("!")
+	
+	    // Exit with status 3.
+	    os.Exit(3)
+	}
+	
+	// Note that unlike e.g. C, Go does not use an integer
+	// return value from `main` to indicate exit status. If
+	// you'd like to exit with a non-zero status you should
+	// use `os.Exit`.
+snippet for
+	// `for` is Go's only looping construct. Here are
+	// three basic types of `for` loops.
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	
+	    // The most basic type, with a single condition.
+	    i := 1
+	    for i <= 3 {
+	        fmt.Println(i)
+	        i = i + 1
+	    }
+	
+	    // A classic initial/condition/after `for` loop.
+	    for j := 7; j <= 9; j++ {
+	        fmt.Println(j)
+	    }
+	
+	    // `for` without a condition will loop repeatedly
+	    // until you `break` out of the loop or `return` from
+	    // the enclosing function.
+	    for {
+	        fmt.Println("loop")
+	        break
+	    }
+	
+	    // You can also `continue` to the next iteration of
+	    // the loop.
+	    for n := 0; n <= 5; n++ {
+	        if n%2 == 0 {
+	            continue
+	        }
+	        fmt.Println(n)
+	    }
+	}
+snippet functions
+	// _Functions_ are central in Go. We'll learn about
+	// functions with a few different examples.
+	
+	package main
+	
+	import "fmt"
+	
+	// Here's a function that takes two `int`s and returns
+	// their sum as an `int`.
+	func plus(a int, b int) int {
+	
+	    // Go requires explicit returns, i.e. it won't
+	    // automatically return the value of the last
+	    // expression.
+	    return a + b
+	}
+	
+	// When you have multiple consecutive parameters of
+	// the same type, you may omit the type name for the
+	// like-typed parameters up to the final parameter that
+	// declares the type.
+	func plusPlus(a, b, c int) int {
+	    return a + b + c
+	}
+	
+	func main() {
+	
+	    // Call a function just as you'd expect, with
+	    // `name(args)`.
+	    res := plus(1, 2)
+	    fmt.Println("1+2 =", res)
+	
+	    res = plusPlus(1, 2, 3)
+	    fmt.Println("1+2+3 =", res)
+	}
+snippet goroutines
+	// A _goroutine_ is a lightweight thread of execution.
+	
+	package main
+	
+	import "fmt"
+	
+	func f(from string) {
+	    for i := 0; i < 3; i++ {
+	        fmt.Println(from, ":", i)
+	    }
+	}
+	
+	func main() {
+	
+	    // Suppose we have a function call `f(s)`. Here's how
+	    // we'd call that in the usual way, running it
+	    // synchronously.
+	    f("direct")
+	
+	    // To invoke this function in a goroutine, use
+	    // `go f(s)`. This new goroutine will execute
+	    // concurrently with the calling one.
+	    go f("goroutine")
+	
+	    // You can also start a goroutine for an anonymous
+	    // function call.
+	    go func(msg string) {
+	        fmt.Println(msg)
+	    }("going")
+	
+	    // Our two function calls are running asynchronously in
+	    // separate goroutines now, so execution falls through
+	    // to here. This `Scanln` requires we press a key
+	    // before the program exits.
+	    fmt.Scanln()
+	    fmt.Println("done")
+	}
+snippet hello_world
+	// Our first program will print the classic "hello world"
+	// message. Here's the full source code.
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	    fmt.Println("hello world")
+	}
+snippet if_else
+	// Branching with `if` and `else` in Go is
+	// straight-forward.
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	
+	    // Here's a basic example.
+	    if 7%2 == 0 {
+	        fmt.Println("7 is even")
+	    } else {
+	        fmt.Println("7 is odd")
+	    }
+	
+	    // You can have an `if` statement without an else.
+	    if 8%4 == 0 {
+	        fmt.Println("8 is divisible by 4")
+	    }
+	
+	    // A statement can precede conditionals; any variables
+	    // declared in this statement are available in all
+	    // branches.
+	    if num := 9; num < 0 {
+	        fmt.Println(num, "is negative")
+	    } else if num < 10 {
+	        fmt.Println(num, "has 1 digit")
+	    } else {
+	        fmt.Println(num, "has multiple digits")
+	    }
+	}
+	
+	// Note that you don't need parentheses around conditions
+	// in Go, but that the braces are required.
+snippet interfaces
+	// _Interfaces_ are named collections of method
+	// signatures.
+	
+	package main
+	
+	import "fmt"
+	import "math"
+	
+	// Here's a basic interface for geometric shapes.
+	type geometry interface {
+	    area() float64
+	    perim() float64
+	}
+	
+	// For our example we'll implement this interface on
+	// `rect` and `circle` types.
+	type rect struct {
+	    width, height float64
+	}
+	type circle struct {
+	    radius float64
+	}
+	
+	// To implement an interface in Go, we just need to
+	// implement all the methods in the interface. Here we
+	// implement `geometry` on `rect`s.
+	func (r rect) area() float64 {
+	    return r.width * r.height
+	}
+	func (r rect) perim() float64 {
+	    return 2*r.width + 2*r.height
+	}
+	
+	// The implementation for `circle`s.
+	func (c circle) area() float64 {
+	    return math.Pi * c.radius * c.radius
+	}
+	func (c circle) perim() float64 {
+	    return 2 * math.Pi * c.radius
+	}
+	
+	// If a variable has an interface type, then we can call
+	// methods that are in the named interface. Here's a
+	// generic `measure` function taking advantage of this
+	// to work on any `geometry`.
+	func measure(g geometry) {
+	    fmt.Println(g)
+	    fmt.Println(g.area())
+	    fmt.Println(g.perim())
+	}
+	
+	func main() {
+	    r := rect{width: 3, height: 4}
+	    c := circle{radius: 5}
+	
+	    // The `circle` and `rect` struct types both
+	    // implement the `geometry` interface so we can use
+	    // instances of
+	    // these structs as arguments to `measure`.
+	    measure(r)
+	    measure(c)
+	}
+snippet json
+	// Go offers built-in support for JSON encoding and
+	// decoding, including to and from built-in and custom
+	// data types.
+	
+	package main
+	
+	import "encoding/json"
+	import "fmt"
+	import "os"
+	
+	// We'll use these two structs to demonstrate encoding and
+	// decoding of custom types below.
+	type response1 struct {
+	    Page   int
+	    Fruits []string
+	}
+	type response2 struct {
+	    Page   int      `json:"page"`
+	    Fruits []string `json:"fruits"`
+	}
+	
+	func main() {
+	
+	    // First we'll look at encoding basic data types to
+	    // JSON strings. Here are some examples for atomic
+	    // values.
+	    bolB, _ := json.Marshal(true)
+	    fmt.Println(string(bolB))
+	
+	    intB, _ := json.Marshal(1)
+	    fmt.Println(string(intB))
+	
+	    fltB, _ := json.Marshal(2.34)
+	    fmt.Println(string(fltB))
+	
+	    strB, _ := json.Marshal("gopher")
+	    fmt.Println(string(strB))
+	
+	    // And here are some for slices and maps, which encode
+	    // to JSON arrays and objects as you'd expect.
+	    slcD := []string{"apple", "peach", "pear"}
+	    slcB, _ := json.Marshal(slcD)
+	    fmt.Println(string(slcB))
+	
+	    mapD := map[string]int{"apple": 5, "lettuce": 7}
+	    mapB, _ := json.Marshal(mapD)
+	    fmt.Println(string(mapB))
+	
+	    // The JSON package can automatically encode your
+	    // custom data types. It will only include exported
+	    // fields in the encoded output and will by default
+	    // use those names as the JSON keys.
+	    res1D := &response1{
+	        Page:   1,
+	        Fruits: []string{"apple", "peach", "pear"}}
+	    res1B, _ := json.Marshal(res1D)
+	    fmt.Println(string(res1B))
+	
+	    // You can use tags on struct field declarations
+	    // to customize the encoded JSON key names. Check the
+	    // definition of `response2` above to see an example
+	    // of such tags.
+	    res2D := &response2{
+	        Page:   1,
+	        Fruits: []string{"apple", "peach", "pear"}}
+	    res2B, _ := json.Marshal(res2D)
+	    fmt.Println(string(res2B))
+	
+	    // Now let's look at decoding JSON data into Go
+	    // values. Here's an example for a generic data
+	    // structure.
+	    byt := []byte(`{"num":6.13,"strs":["a","b"]}`)
+	
+	    // We need to provide a variable where the JSON
+	    // package can put the decoded data. This
+	    // `map[string]interface{}` will hold a map of strings
+	    // to arbitrary data types.
+	    var dat map[string]interface{}
+	
+	    // Here's the actual decoding, and a check for
+	    // associated errors.
+	    if err := json.Unmarshal(byt, &dat); err != nil {
+	        panic(err)
+	    }
+	    fmt.Println(dat)
+	
+	    // In order to use the values in the decoded map,
+	    // we'll need to cast them to their appropriate type.
+	    // For example here we cast the value in `num` to
+	    // the expected `float64` type.
+	    num := dat["num"].(float64)
+	    fmt.Println(num)
+	
+	    // Accessing nested data requires a series of
+	    // casts.
+	    strs := dat["strs"].([]interface{})
+	    str1 := strs[0].(string)
+	    fmt.Println(str1)
+	
+	    // We can also decode JSON into custom data types.
+	    // This has the advantages of adding additional
+	    // type-safety to our programs and eliminating the
+	    // need for type assertions when accessing the decoded
+	    // data.
+	    str := `{"page": 1, "fruits": ["apple", "peach"]}`
+	    res := response2{}
+	    json.Unmarshal([]byte(str), &res)
+	    fmt.Println(res)
+	    fmt.Println(res.Fruits[0])
+	
+	    // In the examples above we always used bytes and
+	    // strings as intermediates between the data and
+	    // JSON representation on standard out. We can also
+	    // stream JSON encodings directly to `os.Writer`s like
+	    // `os.Stdout` or even HTTP response bodies.
+	    enc := json.NewEncoder(os.Stdout)
+	    d := map[string]int{"apple": 5, "lettuce": 7}
+	    enc.Encode(d)
+	}
+snippet line_filters
+	// A _line filter_ is a common type of program that reads
+	// input on stdin, processes it, and then prints some
+	// derived result to stdout. `grep` and `sed` are common
+	// line filters.
+	
+	// Here's an example line filter in Go that writes a
+	// capitalized version of all input text. You can use this
+	// pattern to write your own Go line filters.
+	package main
+	
+	import (
+	    "bufio"
+	    "fmt"
+	    "os"
+	    "strings"
+	)
+	
+	func main() {
+	
+	    // Wrapping the unbuffered `os.Stdin` with a buffered
+	    // scanner gives us a convenient `Scan` method that
+	    // advances the scanner to the next token; which is
+	    // the next line in the default scanner.
+	    scanner := bufio.NewScanner(os.Stdin)
+	
+	    for scanner.Scan() {
+	        // `Text` returns the current token, here the next line,
+	        // from the input.
+	        ucl := strings.ToUpper(scanner.Text())
+	
+	        // Write out the uppercased line.
+	        fmt.Println(ucl)
+	    }
+	
+	    // Check for errors during `Scan`. End of file is
+	    // expected and not reported by `Scan` as an error.
+	    if err := scanner.Err(); err != nil {
+	        fmt.Fprintln(os.Stderr, "error:", err)
+	        os.Exit(1)
+	    }
+	}
+snippet maps
+	// _Maps_ are Go's built-in [associative data type](http://en.wikipedia.org/wiki/Associative_array)
+	// (sometimes called _hashes_ or _dicts_ in other languages).
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	
+	    // To create an empty map, use the builtin `make`:
+	    // `make(map[key-type]val-type)`.
+	    m := make(map[string]int)
+	
+	    // Set key/value pairs using typical `name[key] = val`
+	    // syntax.
+	    m["k1"] = 7
+	    m["k2"] = 13
+	
+	    // Printing a map with e.g. `fmt.Println` will show all of
+	    // its key/value pairs.
+	    fmt.Println("map:", m)
+	
+	    // Get a value for a key with `name[key]`.
+	    v1 := m["k1"]
+	    fmt.Println("v1: ", v1)
+	
+	    // The builtin `len` returns the number of key/value
+	    // pairs when called on a map.
+	    fmt.Println("len:", len(m))
+	
+	    // The builtin `delete` removes key/value pairs from
+	    // a map.
+	    delete(m, "k2")
+	    fmt.Println("map:", m)
+	
+	    // The optional second return value when getting a
+	    // value from a map indicates if the key was present
+	    // in the map. This can be used to disambiguate
+	    // between missing keys and keys with zero values
+	    // like `0` or `""`. Here we didn't need the value
+	    // itself, so we ignored it with the _blank identifier_
+	    // `_`.
+	    _, prs := m["k2"]
+	    fmt.Println("prs:", prs)
+	
+	    // You can also declare and initialize a new map in
+	    // the same line with this syntax.
+	    n := map[string]int{"foo": 1, "bar": 2}
+	    fmt.Println("map:", n)
+	}
+snippet methods
+	// Go supports _methods_ defined on struct types.
+	
+	package main
+	
+	import "fmt"
+	
+	type rect struct {
+	    width, height int
+	}
+	
+	// This `area` method has a _receiver type_ of `*rect`.
+	func (r *rect) area() int {
+	    return r.width * r.height
+	}
+	
+	// Methods can be defined for either pointer or value
+	// receiver types. Here's an example of a value receiver.
+	func (r rect) perim() int {
+	    return 2*r.width + 2*r.height
+	}
+	
+	func main() {
+	    r := rect{width: 10, height: 5}
+	
+	    // Here we call the 2 methods defined for our struct.
+	    fmt.Println("area: ", r.area())
+	    fmt.Println("perim:", r.perim())
+	
+	    // Go automatically handles conversion between values
+	    // and pointers for method calls. You may want to use
+	    // a pointer receiver type to avoid copying on method
+	    // calls or to allow the method to mutate the
+	    // receiving struct.
+	    rp := &r
+	    fmt.Println("area: ", rp.area())
+	    fmt.Println("perim:", rp.perim())
+	}
+snippet multiple_return_values
+	// Go has built-in support for _multiple return values_.
+	// This feature is used often in idiomatic Go, for example
+	// to return both result and error values from a function.
+	
+	package main
+	
+	import "fmt"
+	
+	// The `(int, int)` in this function signature shows that
+	// the function returns 2 `int`s.
+	func vals() (int, int) {
+	    return 3, 7
+	}
+	
+	func main() {
+	
+	    // Here we use the 2 different return values from the
+	    // call with _multiple assignment_.
+	    a, b := vals()
+	    fmt.Println(a)
+	    fmt.Println(b)
+	
+	    // If you only want a subset of the returned values,
+	    // use the blank identifier `_`.
+	    _, c := vals()
+	    fmt.Println(c)
+	}
+snippet mutexes
+	// In the previous example we saw how to manage simple
+	// counter state using [atomic operations](atomic-counters).
+	// For more complex state we can use a <em>[mutex](http://en.wikipedia.org/wiki/Mutual_exclusion)</em>
+	// to safely access data across multiple goroutines.
+	
+	package main
+	
+	import (
+	    "fmt"
+	    "math/rand"
+	    "sync"
+	    "sync/atomic"
+	    "time"
+	)
+	
+	func main() {
+	
+	    // For our example the `state` will be a map.
+	    var state = make(map[int]int)
+	
+	    // This `mutex` will synchronize access to `state`.
+	    var mutex = &sync.Mutex{}
+	
+	    // We'll keep track of how many read and write
+	    // operations we do.
+	    var readOps uint64
+	    var writeOps uint64
+	
+	    // Here we start 100 goroutines to execute repeated
+	    // reads against the state, once per millisecond in
+	    // each goroutine.
+	    for r := 0; r < 100; r++ {
+	        go func() {
+	            total := 0
+	            for {
+	
+	                // For each read we pick a key to access,
+	                // `Lock()` the `mutex` to ensure
+	                // exclusive access to the `state`, read
+	                // the value at the chosen key,
+	                // `Unlock()` the mutex, and increment
+	                // the `readOps` count.
+	                key := rand.Intn(5)
+	                mutex.Lock()
+	                total += state[key]
+	                mutex.Unlock()
+	                atomic.AddUint64(&readOps, 1)
+	
+	                // Wait a bit between reads.
+	                time.Sleep(time.Millisecond)
+	            }
+	        }()
+	    }
+	
+	    // We'll also start 10 goroutines to simulate writes,
+	    // using the same pattern we did for reads.
+	    for w := 0; w < 10; w++ {
+	        go func() {
+	            for {
+	                key := rand.Intn(5)
+	                val := rand.Intn(100)
+	                mutex.Lock()
+	                state[key] = val
+	                mutex.Unlock()
+	                atomic.AddUint64(&writeOps, 1)
+	                time.Sleep(time.Millisecond)
+	            }
+	        }()
+	    }
+	
+	    // Let the 10 goroutines work on the `state` and
+	    // `mutex` for a second.
+	    time.Sleep(time.Second)
+	
+	    // Take and report final operation counts.
+	    readOpsFinal := atomic.LoadUint64(&readOps)
+	    fmt.Println("readOps:", readOpsFinal)
+	    writeOpsFinal := atomic.LoadUint64(&writeOps)
+	    fmt.Println("writeOps:", writeOpsFinal)
+	
+	    // With a final lock of `state`, show how it ended up.
+	    mutex.Lock()
+	    fmt.Println("state:", state)
+	    mutex.Unlock()
+	}
+snippet non_blocking_channel_operations
+	// Basic sends and receives on channels are blocking.
+	// However, we can use `select` with a `default` clause to
+	// implement _non-blocking_ sends, receives, and even
+	// non-blocking multi-way `select`s.
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	    messages := make(chan string)
+	    signals := make(chan bool)
+	
+	    // Here's a non-blocking receive. If a value is
+	    // available on `messages` then `select` will take
+	    // the `<-messages` `case` with that value. If not
+	    // it will immediately take the `default` case.
+	    select {
+	    case msg := <-messages:
+	        fmt.Println("received message", msg)
+	    default:
+	        fmt.Println("no message received")
+	    }
+	
+	    // A non-blocking send works similarly. Here `msg`
+	    // cannot be sent to the `messages` channel, because
+	    // the channel has no buffer and there is no receiver.
+	    // Therefore the `default` case is selected.
+	    msg := "hi"
+	    select {
+	    case messages <- msg:
+	        fmt.Println("sent message", msg)
+	    default:
+	        fmt.Println("no message sent")
+	    }
+	
+	    // We can use multiple `case`s above the `default`
+	    // clause to implement a multi-way non-blocking
+	    // select. Here we attempt non-blocking receives
+	    // on both `messages` and `signals`.
+	    select {
+	    case msg := <-messages:
+	        fmt.Println("received message", msg)
+	    case sig := <-signals:
+	        fmt.Println("received signal", sig)
+	    default:
+	        fmt.Println("no activity")
+	    }
+	}
+snippet number_parsing
+	// Parsing numbers from strings is a basic but common task
+	// in many programs; here's how to do it in Go.
+	
+	package main
+	
+	// The built-in package `strconv` provides the number
+	// parsing.
+	import "strconv"
+	import "fmt"
+	
+	func main() {
+	
+	    // With `ParseFloat`, this `64` tells how many bits of
+	    // precision to parse.
+	    f, _ := strconv.ParseFloat("1.234", 64)
+	    fmt.Println(f)
+	
+	    // For `ParseInt`, the `0` means infer the base from
+	    // the string. `64` requires that the result fit in 64
+	    // bits.
+	    i, _ := strconv.ParseInt("123", 0, 64)
+	    fmt.Println(i)
+	
+	    // `ParseInt` will recognize hex-formatted numbers.
+	    d, _ := strconv.ParseInt("0x1c8", 0, 64)
+	    fmt.Println(d)
+	
+	    // A `ParseUint` is also available.
+	    u, _ := strconv.ParseUint("789", 0, 64)
+	    fmt.Println(u)
+	
+	    // `Atoi` is a convenience function for basic base-10
+	    // `int` parsing.
+	    k, _ := strconv.Atoi("135")
+	    fmt.Println(k)
+	
+	    // Parse functions return an error on bad input.
+	    _, e := strconv.Atoi("wat")
+	    fmt.Println(e)
+	}
+snippet panic
+	// A `panic` typically means something went unexpectedly
+	// wrong. Mostly we use it to fail fast on errors that
+	// shouldn't occur during normal operation, or that we
+	// aren't prepared to handle gracefully.
+	
+	package main
+	
+	import "os"
+	
+	func main() {
+	
+	    // We'll use panic throughout this site to check for
+	    // unexpected errors. This is the only program on the
+	    // site designed to panic.
+	    panic("a problem")
+	
+	    // A common use of panic is to abort if a function
+	    // returns an error value that we don't know how to
+	    // (or want to) handle. Here's an example of
+	    // `panic`king if we get an unexpected error when creating a new file.
+	    _, err := os.Create("/tmp/file")
+	    if err != nil {
+	        panic(err)
+	    }
+	}
+snippet pointers
+	// Go supports <em><a href="http://en.wikipedia.org/wiki/Pointer_(computer_programming)">pointers</a></em>,
+	// allowing you to pass references to values and records
+	// within your program.
+	
+	package main
+	
+	import "fmt"
+	
+	// We'll show how pointers work in contrast to values with
+	// 2 functions: `zeroval` and `zeroptr`. `zeroval` has an
+	// `int` parameter, so arguments will be passed to it by
+	// value. `zeroval` will get a copy of `ival` distinct
+	// from the one in the calling function.
+	func zeroval(ival int) {
+	    ival = 0
+	}
+	
+	// `zeroptr` in contrast has an `*int` parameter, meaning
+	// that it takes an `int` pointer. The `*iptr` code in the
+	// function body then _dereferences_ the pointer from its
+	// memory address to the current value at that address.
+	// Assigning a value to a dereferenced pointer changes the
+	// value at the referenced address.
+	func zeroptr(iptr *int) {
+	    *iptr = 0
+	}
+	
+	func main() {
+	    i := 1
+	    fmt.Println("initial:", i)
+	
+	    zeroval(i)
+	    fmt.Println("zeroval:", i)
+	
+	    // The `&i` syntax gives the memory address of `i`,
+	    // i.e. a pointer to `i`.
+	    zeroptr(&i)
+	    fmt.Println("zeroptr:", i)
+	
+	    // Pointers can be printed too.
+	    fmt.Println("pointer:", &i)
+	}
+snippet random_numbers
+	// Go's `math/rand` package provides
+	// [pseudorandom number](http://en.wikipedia.org/wiki/Pseudorandom_number_generator)
+	// generation.
+	
+	package main
+	
+	import "time"
+	import "fmt"
+	import "math/rand"
+	
+	func main() {
+	
+	    // For example, `rand.Intn` returns a random `int` n,
+	    // `0 <= n < 100`.
+	    fmt.Print(rand.Intn(100), ",")
+	    fmt.Print(rand.Intn(100))
+	    fmt.Println()
+	
+	    // `rand.Float64` returns a `float64` `f`,
+	    // `0.0 <= f < 1.0`.
+	    fmt.Println(rand.Float64())
+	
+	    // This can be used to generate random floats in
+	    // other ranges, for example `5.0 <= f' < 10.0`.
+	    fmt.Print((rand.Float64()*5)+5, ",")
+	    fmt.Print((rand.Float64() * 5) + 5)
+	    fmt.Println()
+	
+	    // The default number generator is deterministic, so it'll
+	    // produce the same sequence of numbers each time by default.
+	    // To produce varying sequences, give it a seed that changes.
+	    // Note that this is not safe to use for random numbers you
+	    // intend to be secret, use `crypto/rand` for those.
+	    s1 := rand.NewSource(time.Now().UnixNano())
+	    r1 := rand.New(s1)
+	
+	    // Call the resulting `rand.Rand` just like the
+	    // functions on the `rand` package.
+	    fmt.Print(r1.Intn(100), ",")
+	    fmt.Print(r1.Intn(100))
+	    fmt.Println()
+	
+	    // If you seed a source with the same number, it
+	    // produces the same sequence of random numbers.
+	    s2 := rand.NewSource(42)
+	    r2 := rand.New(s2)
+	    fmt.Print(r2.Intn(100), ",")
+	    fmt.Print(r2.Intn(100))
+	    fmt.Println()
+	    s3 := rand.NewSource(42)
+	    r3 := rand.New(s3)
+	    fmt.Print(r3.Intn(100), ",")
+	    fmt.Print(r3.Intn(100))
+	}
+snippet range
+	// _range_ iterates over elements in a variety of data
+	// structures. Let's see how to use `range` with some
+	// of the data structures we've already learned.
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	
+	    // Here we use `range` to sum the numbers in a slice.
+	    // Arrays work like this too.
+	    nums := []int{2, 3, 4}
+	    sum := 0
+	    for _, num := range nums {
+	        sum += num
+	    }
+	    fmt.Println("sum:", sum)
+	
+	    // `range` on arrays and slices provides both the
+	    // index and value for each entry. Above we didn't
+	    // need the index, so we ignored it with the
+	    // blank identifier `_`. Sometimes we actually want
+	    // the indexes though.
+	    for i, num := range nums {
+	        if num == 3 {
+	            fmt.Println("index:", i)
+	        }
+	    }
+	
+	    // `range` on map iterates over key/value pairs.
+	    kvs := map[string]string{"a": "apple", "b": "banana"}
+	    for k, v := range kvs {
+	        fmt.Printf("%s -> %s\n", k, v)
+	    }
+	
+	    // `range` can also iterate over just the keys of a map.
+	    for k := range kvs {
+	        fmt.Println("key:", k)
+	    }
+	
+	    // `range` on strings iterates over Unicode code
+	    // points. The first value is the starting byte index
+	    // of the `rune` and the second the `rune` itself.
+	    for i, c := range "go" {
+	        fmt.Println(i, c)
+	    }
+	}
+snippet range_over_channels
+	// In a [previous](range) example we saw how `for` and
+	// `range` provide iteration over basic data structures.
+	// We can also use this syntax to iterate over
+	// values received from a channel.
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	
+	    // We'll iterate over 2 values in the `queue` channel.
+	    queue := make(chan string, 2)
+	    queue <- "one"
+	    queue <- "two"
+	    close(queue)
+	
+	    // This `range` iterates over each element as it's
+	    // received from `queue`. Because we `close`d the
+	    // channel above, the iteration terminates after
+	    // receiving the 2 elements.
+	    for elem := range queue {
+	        fmt.Println(elem)
+	    }
+	}
+snippet rate_limiting
+	// <em>[Rate limiting](http://en.wikipedia.org/wiki/Rate_limiting)</em>
+	// is an important mechanism for controlling resource
+	// utilization and maintaining quality of service. Go
+	// elegantly supports rate limiting with goroutines,
+	// channels, and [tickers](tickers).
+	
+	package main
+	
+	import "time"
+	import "fmt"
+	
+	func main() {
+	
+	    // First we'll look at basic rate limiting. Suppose
+	    // we want to limit our handling of incoming requests.
+	    // We'll serve these requests off a channel of the
+	    // same name.
+	    requests := make(chan int, 5)
+	    for i := 1; i <= 5; i++ {
+	        requests <- i
+	    }
+	    close(requests)
+	
+	    // This `limiter` channel will receive a value
+	    // every 200 milliseconds. This is the regulator in
+	    // our rate limiting scheme.
+	    limiter := time.Tick(200 * time.Millisecond)
+	
+	    // By blocking on a receive from the `limiter` channel
+	    // before serving each request, we limit ourselves to
+	    // 1 request every 200 milliseconds.
+	    for req := range requests {
+	        <-limiter
+	        fmt.Println("request", req, time.Now())
+	    }
+	
+	    // We may want to allow short bursts of requests in
+	    // our rate limiting scheme while preserving the
+	    // overall rate limit. We can accomplish this by
+	    // buffering our limiter channel. This `burstyLimiter`
+	    // channel will allow bursts of up to 3 events.
+	    burstyLimiter := make(chan time.Time, 3)
+	
+	    // Fill up the channel to represent allowed bursting.
+	    for i := 0; i < 3; i++ {
+	        burstyLimiter <- time.Now()
+	    }
+	
+	    // Every 200 milliseconds we'll try to add a new
+	    // value to `burstyLimiter`, up to its limit of 3.
+	    go func() {
+	        for t := range time.Tick(200 * time.Millisecond) {
+	            burstyLimiter <- t
+	        }
+	    }()
+	
+	    // Now simulate 5 more incoming requests. The first
+	    // 3 of these will benefit from the burst capability
+	    // of `burstyLimiter`.
+	    burstyRequests := make(chan int, 5)
+	    for i := 1; i <= 5; i++ {
+	        burstyRequests <- i
+	    }
+	    close(burstyRequests)
+	    for req := range burstyRequests {
+	        <-burstyLimiter
+	        fmt.Println("request", req, time.Now())
+	    }
+	}
+snippet reading_files
+	// Reading and writing files are basic tasks needed for
+	// many Go programs. First we'll look at some examples of
+	// reading files.
+	
+	package main
+	
+	import (
+	    "bufio"
+	    "fmt"
+	    "io"
+	    "io/ioutil"
+	    "os"
+	)
+	
+	// Reading files requires checking most calls for errors.
+	// This helper will streamline our error checks below.
+	func check(e error) {
+	    if e != nil {
+	        panic(e)
+	    }
+	}
+	
+	func main() {
+	
+	    // Perhaps the most basic file reading task is
+	    // slurping a file's entire contents into memory.
+	    dat, err := ioutil.ReadFile("/tmp/dat")
+	    check(err)
+	    fmt.Print(string(dat))
+	
+	    // You'll often want more control over how and what
+	    // parts of a file are read. For these tasks, start
+	    // by `Open`ing a file to obtain an `os.File` value.
+	    f, err := os.Open("/tmp/dat")
+	    check(err)
+	
+	    // Read some bytes from the beginning of the file.
+	    // Allow up to 5 to be read but also note how many
+	    // actually were read.
+	    b1 := make([]byte, 5)
+	    n1, err := f.Read(b1)
+	    check(err)
+	    fmt.Printf("%d bytes: %s\n", n1, string(b1))
+	
+	    // You can also `Seek` to a known location in the file
+	    // and `Read` from there.
+	    o2, err := f.Seek(6, 0)
+	    check(err)
+	    b2 := make([]byte, 2)
+	    n2, err := f.Read(b2)
+	    check(err)
+	    fmt.Printf("%d bytes @ %d: %s\n", n2, o2, string(b2))
+	
+	    // The `io` package provides some functions that may
+	    // be helpful for file reading. For example, reads
+	    // like the ones above can be more robustly
+	    // implemented with `ReadAtLeast`.
+	    o3, err := f.Seek(6, 0)
+	    check(err)
+	    b3 := make([]byte, 2)
+	    n3, err := io.ReadAtLeast(f, b3, 2)
+	    check(err)
+	    fmt.Printf("%d bytes @ %d: %s\n", n3, o3, string(b3))
+	
+	    // There is no built-in rewind, but `Seek(0, 0)`
+	    // accomplishes this.
+	    _, err = f.Seek(0, 0)
+	    check(err)
+	
+	    // The `bufio` package implements a buffered
+	    // reader that may be useful both for its efficiency
+	    // with many small reads and because of the additional
+	    // reading methods it provides.
+	    r4 := bufio.NewReader(f)
+	    b4, err := r4.Peek(5)
+	    check(err)
+	    fmt.Printf("5 bytes: %s\n", string(b4))
+	
+	    // Close the file when you're done (usually this would
+	    // be scheduled immediately after `Open`ing with
+	    // `defer`).
+	    f.Close()
+	
+	}
+snippet recursion
+	// Go supports
+	// <a href="http://en.wikipedia.org/wiki/Recursion_(computer_science)"><em>recursive functions</em></a>.
+	// Here's a classic factorial example.
+	
+	package main
+	
+	import "fmt"
+	
+	// This `fact` function calls itself until it reaches the
+	// base case of `fact(0)`.
+	func fact(n int) int {
+	    if n == 0 {
+	        return 1
+	    }
+	    return n * fact(n-1)
+	}
+	
+	func main() {
+	    fmt.Println(fact(7))
+	}
+snippet regular_expressions
+	// Go offers built-in support for [regular expressions](http://en.wikipedia.org/wiki/Regular_expression).
+	// Here are some examples of  common regexp-related tasks
+	// in Go.
+	
+	package main
+	
+	import "bytes"
+	import "fmt"
+	import "regexp"
+	
+	func main() {
+	
+	    // This tests whether a pattern matches a string.
+	    match, _ := regexp.MatchString("p([a-z]+)ch", "peach")
+	    fmt.Println(match)
+	
+	    // Above we used a string pattern directly, but for
+	    // other regexp tasks you'll need to `Compile` an
+	    // optimized `Regexp` struct.
+	    r, _ := regexp.Compile("p([a-z]+)ch")
+	
+	    // Many methods are available on these structs. Here's
+	    // a match test like we saw earlier.
+	    fmt.Println(r.MatchString("peach"))
+	
+	    // This finds the match for the regexp.
+	    fmt.Println(r.FindString("peach punch"))
+	
+	    // This also finds the first match but returns the
+	    // start and end indexes for the match instead of the
+	    // matching text.
+	    fmt.Println(r.FindStringIndex("peach punch"))
+	
+	    // The `Submatch` variants include information about
+	    // both the whole-pattern matches and the submatches
+	    // within those matches. For example this will return
+	    // information for both `p([a-z]+)ch` and `([a-z]+)`.
+	    fmt.Println(r.FindStringSubmatch("peach punch"))
+	
+	    // Similarly this will return information about the
+	    // indexes of matches and submatches.
+	    fmt.Println(r.FindStringSubmatchIndex("peach punch"))
+	
+	    // The `All` variants of these functions apply to all
+	    // matches in the input, not just the first. For
+	    // example to find all matches for a regexp.
+	    fmt.Println(r.FindAllString("peach punch pinch", -1))
+	
+	    // These `All` variants are available for the other
+	    // functions we saw above as well.
+	    fmt.Println(r.FindAllStringSubmatchIndex(
+	        "peach punch pinch", -1))
+	
+	    // Providing a non-negative integer as the second
+	    // argument to these functions will limit the number
+	    // of matches.
+	    fmt.Println(r.FindAllString("peach punch pinch", 2))
+	
+	    // Our examples above had string arguments and used
+	    // names like `MatchString`. We can also provide
+	    // `[]byte` arguments and drop `String` from the
+	    // function name.
+	    fmt.Println(r.Match([]byte("peach")))
+	
+	    // When creating constants with regular expressions
+	    // you can use the `MustCompile` variation of
+	    // `Compile`. A plain `Compile` won't work for
+	    // constants because it has 2 return values.
+	    r = regexp.MustCompile("p([a-z]+)ch")
+	    fmt.Println(r)
+	
+	    // The `regexp` package can also be used to replace
+	    // subsets of strings with other values.
+	    fmt.Println(r.ReplaceAllString("a peach", "<fruit>"))
+	
+	    // The `Func` variant allows you to transform matched
+	    // text with a given function.
+	    in := []byte("a peach")
+	    out := r.ReplaceAllFunc(in, bytes.ToUpper)
+	    fmt.Println(string(out))
+	}
+snippet select
+	// Go's _select_ lets you wait on multiple channel
+	// operations. Combining goroutines and channels with
+	// select is a powerful feature of Go.
+	
+	package main
+	
+	import "time"
+	import "fmt"
+	
+	func main() {
+	
+	    // For our example we'll select across two channels.
+	    c1 := make(chan string)
+	    c2 := make(chan string)
+	
+	    // Each channel will receive a value after some amount
+	    // of time, to simulate e.g. blocking RPC operations
+	    // executing in concurrent goroutines.
+	    go func() {
+	        time.Sleep(1 * time.Second)
+	        c1 <- "one"
+	    }()
+	    go func() {
+	        time.Sleep(2 * time.Second)
+	        c2 <- "two"
+	    }()
+	
+	    // We'll use `select` to await both of these values
+	    // simultaneously, printing each one as it arrives.
+	    for i := 0; i < 2; i++ {
+	        select {
+	        case msg1 := <-c1:
+	            fmt.Println("received", msg1)
+	        case msg2 := <-c2:
+	            fmt.Println("received", msg2)
+	        }
+	    }
+	}
+snippet sha1_hashes
+	// [_SHA1 hashes_](http://en.wikipedia.org/wiki/SHA-1) are
+	// frequently used to compute short identities for binary
+	// or text blobs. For example, the [git revision control
+	// system](http://git-scm.com/) uses SHA1s extensively to
+	// identify versioned files and directories. Here's how to
+	// compute SHA1 hashes in Go.
+	
+	package main
+	
+	// Go implements several hash functions in various
+	// `crypto/*` packages.
+	import "crypto/sha1"
+	import "fmt"
+	
+	func main() {
+	    s := "sha1 this string"
+	
+	    // The pattern for generating a hash is `sha1.New()`,
+	    // `sha1.Write(bytes)`, then `sha1.Sum([]byte{})`.
+	    // Here we start with a new hash.
+	    h := sha1.New()
+	
+	    // `Write` expects bytes. If you have a string `s`,
+	    // use `[]byte(s)` to coerce it to bytes.
+	    h.Write([]byte(s))
+	
+	    // This gets the finalized hash result as a byte
+	    // slice. The argument to `Sum` can be used to append
+	    // to an existing byte slice: it usually isn't needed.
+	    bs := h.Sum(nil)
+	
+	    // SHA1 values are often printed in hex, for example
+	    // in git commits. Use the `%x` format verb to convert
+	    // a hash results to a hex string.
+	    fmt.Println(s)
+	    fmt.Printf("%x\n", bs)
+	}
+snippet signals
+	// Sometimes we'd like our Go programs to intelligently
+	// handle [Unix signals](http://en.wikipedia.org/wiki/Unix_signal).
+	// For example, we might want a server to gracefully
+	// shutdown when it receives a `SIGTERM`, or a command-line
+	// tool to stop processing input if it receives a `SIGINT`.
+	// Here's how to handle signals in Go with channels.
+	
+	package main
+	
+	import "fmt"
+	import "os"
+	import "os/signal"
+	import "syscall"
+	
+	func main() {
+	
+	    // Go signal notification works by sending `os.Signal`
+	    // values on a channel. We'll create a channel to
+	    // receive these notifications (we'll also make one to
+	    // notify us when the program can exit).
+	    sigs := make(chan os.Signal, 1)
+	    done := make(chan bool, 1)
+	
+	    // `signal.Notify` registers the given channel to
+	    // receive notifications of the specified signals.
+	    signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	
+	    // This goroutine executes a blocking receive for
+	    // signals. When it gets one it'll print it out
+	    // and then notify the program that it can finish.
+	    go func() {
+	        sig := <-sigs
+	        fmt.Println()
+	        fmt.Println(sig)
+	        done <- true
+	    }()
+	
+	    // The program will wait here until it gets the
+	    // expected signal (as indicated by the goroutine
+	    // above sending a value on `done`) and then exit.
+	    fmt.Println("awaiting signal")
+	    <-done
+	    fmt.Println("exiting")
+	}
+snippet slices
+	// _Slices_ are a key data type in Go, giving a more
+	// powerful interface to sequences than arrays.
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	
+	    // Unlike arrays, slices are typed only by the
+	    // elements they contain (not the number of elements).
+	    // To create an empty slice with non-zero length, use
+	    // the builtin `make`. Here we make a slice of
+	    // `string`s of length `3` (initially zero-valued).
+	    s := make([]string, 3)
+	    fmt.Println("emp:", s)
+	
+	    // We can set and get just like with arrays.
+	    s[0] = "a"
+	    s[1] = "b"
+	    s[2] = "c"
+	    fmt.Println("set:", s)
+	    fmt.Println("get:", s[2])
+	
+	    // `len` returns the length of the slice as expected.
+	    fmt.Println("len:", len(s))
+	
+	    // In addition to these basic operations, slices
+	    // support several more that make them richer than
+	    // arrays. One is the builtin `append`, which
+	    // returns a slice containing one or more new values.
+	    // Note that we need to accept a return value from
+	    // `append` as we may get a new slice value.
+	    s = append(s, "d")
+	    s = append(s, "e", "f")
+	    fmt.Println("apd:", s)
+	
+	    // Slices can also be `copy`'d. Here we create an
+	    // empty slice `c` of the same length as `s` and copy
+	    // into `c` from `s`.
+	    c := make([]string, len(s))
+	    copy(c, s)
+	    fmt.Println("cpy:", c)
+	
+	    // Slices support a "slice" operator with the syntax
+	    // `slice[low:high]`. For example, this gets a slice
+	    // of the elements `s[2]`, `s[3]`, and `s[4]`.
+	    l := s[2:5]
+	    fmt.Println("sl1:", l)
+	
+	    // This slices up to (but excluding) `s[5]`.
+	    l = s[:5]
+	    fmt.Println("sl2:", l)
+	
+	    // And this slices up from (and including) `s[2]`.
+	    l = s[2:]
+	    fmt.Println("sl3:", l)
+	
+	    // We can declare and initialize a variable for slice
+	    // in a single line as well.
+	    t := []string{"g", "h", "i"}
+	    fmt.Println("dcl:", t)
+	
+	    // Slices can be composed into multi-dimensional data
+	    // structures. The length of the inner slices can
+	    // vary, unlike with multi-dimensional arrays.
+	    twoD := make([][]int, 3)
+	    for i := 0; i < 3; i++ {
+	        innerLen := i + 1
+	        twoD[i] = make([]int, innerLen)
+	        for j := 0; j < innerLen; j++ {
+	            twoD[i][j] = i + j
+	        }
+	    }
+	    fmt.Println("2d: ", twoD)
+	}
+snippet sorting
+	// Go's `sort` package implements sorting for builtins
+	// and user-defined types. We'll look at sorting for
+	// builtins first.
+	
+	package main
+	
+	import "fmt"
+	import "sort"
+	
+	func main() {
+	
+	    // Sort methods are specific to the builtin type;
+	    // here's an example for strings. Note that sorting is
+	    // in-place, so it changes the given slice and doesn't
+	    // return a new one.
+	    strs := []string{"c", "a", "b"}
+	    sort.Strings(strs)
+	    fmt.Println("Strings:", strs)
+	
+	    // An example of sorting `int`s.
+	    ints := []int{7, 2, 4}
+	    sort.Ints(ints)
+	    fmt.Println("Ints:   ", ints)
+	
+	    // We can also use `sort` to check if a slice is
+	    // already in sorted order.
+	    s := sort.IntsAreSorted(ints)
+	    fmt.Println("Sorted: ", s)
+	}
+snippet sorting_by_functions
+	// Sometimes we'll want to sort a collection by something
+	// other than its natural order. For example, suppose we
+	// wanted to sort strings by their length instead of
+	// alphabetically. Here's an example of custom sorts
+	// in Go.
+	
+	package main
+	
+	import "sort"
+	import "fmt"
+	
+	// In order to sort by a custom function in Go, we need a
+	// corresponding type. Here we've created a `byLength`
+	// type that is just an alias for the builtin `[]string`
+	// type.
+	type byLength []string
+	
+	// We implement `sort.Interface` - `Len`, `Less`, and
+	// `Swap` - on our type so we can use the `sort` package's
+	// generic `Sort` function. `Len` and `Swap`
+	// will usually be similar across types and `Less` will
+	// hold the actual custom sorting logic. In our case we
+	// want to sort in order of increasing string length, so
+	// we use `len(s[i])` and `len(s[j])` here.
+	func (s byLength) Len() int {
+	    return len(s)
+	}
+	func (s byLength) Swap(i, j int) {
+	    s[i], s[j] = s[j], s[i]
+	}
+	func (s byLength) Less(i, j int) bool {
+	    return len(s[i]) < len(s[j])
+	}
+	
+	// With all of this in place, we can now implement our
+	// custom sort by casting the original `fruits` slice to
+	// `byLength`, and then use `sort.Sort` on that typed
+	// slice.
+	func main() {
+	    fruits := []string{"peach", "banana", "kiwi"}
+	    sort.Sort(byLength(fruits))
+	    fmt.Println(fruits)
+	}
+snippet spawning_processes
+	// Sometimes our Go programs need to spawn other, non-Go
+	// processes. For example, the syntax highlighting on this
+	// site is [implemented](https://github.com/mmcgrana/gobyexample/blob/master/tools/generate.go)
+	// by spawning a [`pygmentize`](http://pygments.org/)
+	// process from a Go program. Let's look at a few examples
+	// of spawning processes from Go.
+	
+	package main
+	
+	import "fmt"
+	import "io/ioutil"
+	import "os/exec"
+	
+	func main() {
+	
+	    // We'll start with a simple command that takes no
+	    // arguments or input and just prints something to
+	    // stdout. The `exec.Command` helper creates an object
+	    // to represent this external process.
+	    dateCmd := exec.Command("date")
+	
+	    // `.Output` is another helper that handles the common
+	    // case of running a command, waiting for it to finish,
+	    // and collecting its output. If there were no errors,
+	    // `dateOut` will hold bytes with the date info.
+	    dateOut, err := dateCmd.Output()
+	    if err != nil {
+	        panic(err)
+	    }
+	    fmt.Println("> date")
+	    fmt.Println(string(dateOut))
+	
+	    // Next we'll look at a slightly more involved case
+	    // where we pipe data to the external process on its
+	    // `stdin` and collect the results from its `stdout`.
+	    grepCmd := exec.Command("grep", "hello")
+	
+	    // Here we explicitly grab input/output pipes, start
+	    // the process, write some input to it, read the
+	    // resulting output, and finally wait for the process
+	    // to exit.
+	    grepIn, _ := grepCmd.StdinPipe()
+	    grepOut, _ := grepCmd.StdoutPipe()
+	    grepCmd.Start()
+	    grepIn.Write([]byte("hello grep\ngoodbye grep"))
+	    grepIn.Close()
+	    grepBytes, _ := ioutil.ReadAll(grepOut)
+	    grepCmd.Wait()
+	
+	    // We ommited error checks in the above example, but
+	    // you could use the usual `if err != nil` pattern for
+	    // all of them. We also only collect the `StdoutPipe`
+	    // results, but you could collect the `StderrPipe` in
+	    // exactly the same way.
+	    fmt.Println("> grep hello")
+	    fmt.Println(string(grepBytes))
+	
+	    // Note that when spawning commands we need to
+	    // provide an explicitly delineated command and
+	    // argument array, vs. being able to just pass in one
+	    // command-line string. If you want to spawn a full
+	    // command with a string, you can use `bash`'s `-c`
+	    // option:
+	    lsCmd := exec.Command("bash", "-c", "ls -a -l -h")
+	    lsOut, err := lsCmd.Output()
+	    if err != nil {
+	        panic(err)
+	    }
+	    fmt.Println("> ls -a -l -h")
+	    fmt.Println(string(lsOut))
+	}
+snippet stateful_goroutines
+	// In the previous example we used explicit locking with
+	// [mutexes](mutexes) to synchronize access to shared state
+	// across multiple goroutines. Another option is to use the
+	// built-in synchronization features of  goroutines and
+	// channels to achieve the same result. This channel-based
+	// approach aligns with Go's ideas of sharing memory by
+	// communicating and having each piece of data owned
+	// by exactly 1 goroutine.
+	
+	package main
+	
+	import (
+	    "fmt"
+	    "math/rand"
+	    "sync/atomic"
+	    "time"
+	)
+	
+	// In this example our state will be owned by a single
+	// goroutine. This will guarantee that the data is never
+	// corrupted with concurrent access. In order to read or
+	// write that state, other goroutines will send messages
+	// to the owning goroutine and receive corresponding
+	// replies. These `readOp` and `writeOp` `struct`s
+	// encapsulate those requests and a way for the owning
+	// goroutine to respond.
+	type readOp struct {
+	    key  int
+	    resp chan int
+	}
+	type writeOp struct {
+	    key  int
+	    val  int
+	    resp chan bool
+	}
+	
+	func main() {
+	
+	    // As before we'll count how many operations we perform.
+	    var readOps uint64
+	    var writeOps uint64
+	
+	    // The `reads` and `writes` channels will be used by
+	    // other goroutines to issue read and write requests,
+	    // respectively.
+	    reads := make(chan *readOp)
+	    writes := make(chan *writeOp)
+	
+	    // Here is the goroutine that owns the `state`, which
+	    // is a map as in the previous example but now private
+	    // to the stateful goroutine. This goroutine repeatedly
+	    // selects on the `reads` and `writes` channels,
+	    // responding to requests as they arrive. A response
+	    // is executed by first performing the requested
+	    // operation and then sending a value on the response
+	    // channel `resp` to indicate success (and the desired
+	    // value in the case of `reads`).
+	    go func() {
+	        var state = make(map[int]int)
+	        for {
+	            select {
+	            case read := <-reads:
+	                read.resp <- state[read.key]
+	            case write := <-writes:
+	                state[write.key] = write.val
+	                write.resp <- true
+	            }
+	        }
+	    }()
+	
+	    // This starts 100 goroutines to issue reads to the
+	    // state-owning goroutine via the `reads` channel.
+	    // Each read requires constructing a `readOp`, sending
+	    // it over the `reads` channel, and the receiving the
+	    // result over the provided `resp` channel.
+	    for r := 0; r < 100; r++ {
+	        go func() {
+	            for {
+	                read := &readOp{
+	                    key:  rand.Intn(5),
+	                    resp: make(chan int)}
+	                reads <- read
+	                <-read.resp
+	                atomic.AddUint64(&readOps, 1)
+	                time.Sleep(time.Millisecond)
+	            }
+	        }()
+	    }
+	
+	    // We start 10 writes as well, using a similar
+	    // approach.
+	    for w := 0; w < 10; w++ {
+	        go func() {
+	            for {
+	                write := &writeOp{
+	                    key:  rand.Intn(5),
+	                    val:  rand.Intn(100),
+	                    resp: make(chan bool)}
+	                writes <- write
+	                <-write.resp
+	                atomic.AddUint64(&writeOps, 1)
+	                time.Sleep(time.Millisecond)
+	            }
+	        }()
+	    }
+	
+	    // Let the goroutines work for a second.
+	    time.Sleep(time.Second)
+	
+	    // Finally, capture and report the op counts.
+	    readOpsFinal := atomic.LoadUint64(&readOps)
+	    fmt.Println("readOps:", readOpsFinal)
+	    writeOpsFinal := atomic.LoadUint64(&writeOps)
+	    fmt.Println("writeOps:", writeOpsFinal)
+	}
+snippet string_formatting
+	// Go offers excellent support for string formatting in
+	// the `printf` tradition. Here are some examples of
+	// common string formatting tasks.
+	
+	package main
+	
+	import "fmt"
+	import "os"
+	
+	type point struct {
+	    x, y int
+	}
+	
+	func main() {
+	
+	    // Go offers several printing "verbs" designed to
+	    // format general Go values. For example, this prints
+	    // an instance of our `point` struct.
+	    p := point{1, 2}
+	    fmt.Printf("%v\n", p)
+	
+	    // If the value is a struct, the `%+v` variant will
+	    // include the struct's field names.
+	    fmt.Printf("%+v\n", p)
+	
+	    // The `%#v` variant prints a Go syntax representation
+	    // of the value, i.e. the source code snippet that
+	    // would produce that value.
+	    fmt.Printf("%#v\n", p)
+	
+	    // To print the type of a value, use `%T`.
+	    fmt.Printf("%T\n", p)
+	
+	    // Formatting booleans is straight-forward.
+	    fmt.Printf("%t\n", true)
+	
+	    // There are many options for formatting integers.
+	    // Use `%d` for standard, base-10 formatting.
+	    fmt.Printf("%d\n", 123)
+	
+	    // This prints a binary representation.
+	    fmt.Printf("%b\n", 14)
+	
+	    // This prints the character corresponding to the
+	    // given integer.
+	    fmt.Printf("%c\n", 33)
+	
+	    // `%x` provides hex encoding.
+	    fmt.Printf("%x\n", 456)
+	
+	    // There are also several formatting options for
+	    // floats. For basic decimal formatting use `%f`.
+	    fmt.Printf("%f\n", 78.9)
+	
+	    // `%e` and `%E` format the float in (slightly
+	    // different versions of) scientific notation.
+	    fmt.Printf("%e\n", 123400000.0)
+	    fmt.Printf("%E\n", 123400000.0)
+	
+	    // For basic string printing use `%s`.
+	    fmt.Printf("%s\n", "\"string\"")
+	
+	    // To double-quote strings as in Go source, use `%q`.
+	    fmt.Printf("%q\n", "\"string\"")
+	
+	    // As with integers seen earlier, `%x` renders
+	    // the string in base-16, with two output characters
+	    // per byte of input.
+	    fmt.Printf("%x\n", "hex this")
+	
+	    // To print a representation of a pointer, use `%p`.
+	    fmt.Printf("%p\n", &p)
+	
+	    // When formatting numbers you will often want to
+	    // control the width and precision of the resulting
+	    // figure. To specify the width of an integer, use a
+	    // number after the `%` in the verb. By default the
+	    // result will be right-justified and padded with
+	    // spaces.
+	    fmt.Printf("|%6d|%6d|\n", 12, 345)
+	
+	    // You can also specify the width of printed floats,
+	    // though usually you'll also want to restrict the
+	    // decimal precision at the same time with the
+	    // width.precision syntax.
+	    fmt.Printf("|%6.2f|%6.2f|\n", 1.2, 3.45)
+	
+	    // To left-justify, use the `-` flag.
+	    fmt.Printf("|%-6.2f|%-6.2f|\n", 1.2, 3.45)
+	
+	    // You may also want to control width when formatting
+	    // strings, especially to ensure that they align in
+	    // table-like output. For basic right-justified width.
+	    fmt.Printf("|%6s|%6s|\n", "foo", "b")
+	
+	    // To left-justify use the `-` flag as with numbers.
+	    fmt.Printf("|%-6s|%-6s|\n", "foo", "b")
+	
+	    // So far we've seen `Printf`, which prints the
+	    // formatted string to `os.Stdout`. `Sprintf` formats
+	    // and returns a string without printing it anywhere.
+	    s := fmt.Sprintf("a %s", "string")
+	    fmt.Println(s)
+	
+	    // You can format+print to `io.Writers` other than
+	    // `os.Stdout` using `Fprintf`.
+	    fmt.Fprintf(os.Stderr, "an %s\n", "error")
+	}
+snippet string_functions
+	// The standard library's `strings` package provides many
+	// useful string-related functions. Here are some examples
+	// to give you a sense of the package.
+	
+	package main
+	
+	import s "strings"
+	import "fmt"
+	
+	// We alias `fmt.Println` to a shorter name as we'll use
+	// it a lot below.
+	var p = fmt.Println
+	
+	func main() {
+	
+	    // Here's a sample of the functions available in
+	    // `strings`. Since these are functions from the
+	    // package, not methods on the string object itself,
+	    // we need pass the string in question as the first
+	    // argument to the function. You can find more
+	    // functions in the [`strings`](http://golang.org/pkg/strings/)
+	    // package docs.
+	    p("Contains:  ", s.Contains("test", "es"))
+	    p("Count:     ", s.Count("test", "t"))
+	    p("HasPrefix: ", s.HasPrefix("test", "te"))
+	    p("HasSuffix: ", s.HasSuffix("test", "st"))
+	    p("Index:     ", s.Index("test", "e"))
+	    p("Join:      ", s.Join([]string{"a", "b"}, "-"))
+	    p("Repeat:    ", s.Repeat("a", 5))
+	    p("Replace:   ", s.Replace("foo", "o", "0", -1))
+	    p("Replace:   ", s.Replace("foo", "o", "0", 1))
+	    p("Split:     ", s.Split("a-b-c-d-e", "-"))
+	    p("ToLower:   ", s.ToLower("TEST"))
+	    p("ToUpper:   ", s.ToUpper("test"))
+	    p()
+	
+	    // Not part of `strings`, but worth mentioning here, are
+	    // the mechanisms for getting the length of a string in
+	    // bytes and getting a byte by index.
+	    p("Len: ", len("hello"))
+	    p("Char:", "hello"[1])
+	}
+	
+	// Note that `len` and indexing above work at the byte level.
+	// Go uses UTF-8 encoded strings, so this is often useful
+	// as-is. If you're working with potentially multi-byte
+	// characters you'll want to use encoding-aware operations.
+	// See [strings, bytes, runes and characters in Go](https://blog.golang.org/strings)
+	// for more information.
+snippet structs
+	// Go's _structs_ are typed collections of fields.
+	// They're useful for grouping data together to form
+	// records.
+	
+	package main
+	
+	import "fmt"
+	
+	// This `person` struct type has `name` and `age` fields.
+	type person struct {
+	    name string
+	    age  int
+	}
+	
+	func main() {
+	
+	    // This syntax creates a new struct.
+	    fmt.Println(person{"Bob", 20})
+	
+	    // You can name the fields when initializing a struct.
+	    fmt.Println(person{name: "Alice", age: 30})
+	
+	    // Omitted fields will be zero-valued.
+	    fmt.Println(person{name: "Fred"})
+	
+	    // An `&` prefix yields a pointer to the struct.
+	    fmt.Println(&person{name: "Ann", age: 40})
+	
+	    // Access struct fields with a dot.
+	    s := person{name: "Sean", age: 50}
+	    fmt.Println(s.name)
+	
+	    // You can also use dots with struct pointers - the
+	    // pointers are automatically dereferenced.
+	    sp := &s
+	    fmt.Println(sp.age)
+	
+	    // Structs are mutable.
+	    sp.age = 51
+	    fmt.Println(sp.age)
+	}
+snippet switch
+	// _Switch statements_ express conditionals across many
+	// branches.
+	
+	package main
+	
+	import "fmt"
+	import "time"
+	
+	func main() {
+	
+	    // Here's a basic `switch`.
+	    i := 2
+	    fmt.Print("Write ", i, " as ")
+	    switch i {
+	    case 1:
+	        fmt.Println("one")
+	    case 2:
+	        fmt.Println("two")
+	    case 3:
+	        fmt.Println("three")
+	    }
+	
+	    // You can use commas to separate multiple expressions
+	    // in the same `case` statement. We use the optional
+	    // `default` case in this example as well.
+	    switch time.Now().Weekday() {
+	    case time.Saturday, time.Sunday:
+	        fmt.Println("It's the weekend")
+	    default:
+	        fmt.Println("It's a weekday")
+	    }
+	
+	    // `switch` without an expression is an alternate way
+	    // to express if/else logic. Here we also show how the
+	    // `case` expressions can be non-constants.
+	    t := time.Now()
+	    switch {
+	    case t.Hour() < 12:
+	        fmt.Println("It's before noon")
+	    default:
+	        fmt.Println("It's after noon")
+	    }
+	
+	    // A type `switch` compares types instead of values.  You
+	    // can use this to discover the type of an interface
+	    // value.  In this example, the variable `t` will have the
+	    // type corresponding to its clause.
+	    whatAmI := func(i interface{}) {
+	        switch t := i.(type) {
+	        case bool:
+	            fmt.Println("I'm a bool")
+	        case int:
+	            fmt.Println("I'm an int")
+	        default:
+	            fmt.Printf("Don't know type %T\n", t)
+	        }
+	    }
+	    whatAmI(true)
+	    whatAmI(1)
+	    whatAmI("hey")
+	}
+snippet tickers
+	// [Timers](timers) are for when you want to do
+	// something once in the future - _tickers_ are for when
+	// you want to do something repeatedly at regular
+	// intervals. Here's an example of a ticker that ticks
+	// periodically until we stop it.
+	
+	package main
+	
+	import "time"
+	import "fmt"
+	
+	func main() {
+	
+	    // Tickers use a similar mechanism to timers: a
+	    // channel that is sent values. Here we'll use the
+	    // `range` builtin on the channel to iterate over
+	    // the values as they arrive every 500ms.
+	    ticker := time.NewTicker(500 * time.Millisecond)
+	    go func() {
+	        for t := range ticker.C {
+	            fmt.Println("Tick at", t)
+	        }
+	    }()
+	
+	    // Tickers can be stopped like timers. Once a ticker
+	    // is stopped it won't receive any more values on its
+	    // channel. We'll stop ours after 1600ms.
+	    time.Sleep(1600 * time.Millisecond)
+	    ticker.Stop()
+	    fmt.Println("Ticker stopped")
+	}
+snippet time
+	// Go offers extensive support for times and durations;
+	// here are some examples.
+	
+	package main
+	
+	import "fmt"
+	import "time"
+	
+	func main() {
+	    p := fmt.Println
+	
+	    // We'll start by getting the current time.
+	    now := time.Now()
+	    p(now)
+	
+	    // You can build a `time` struct by providing the
+	    // year, month, day, etc. Times are always associated
+	    // with a `Location`, i.e. time zone.
+	    then := time.Date(
+	        2009, 11, 17, 20, 34, 58, 651387237, time.UTC)
+	    p(then)
+	
+	    // You can extract the various components of the time
+	    // value as expected.
+	    p(then.Year())
+	    p(then.Month())
+	    p(then.Day())
+	    p(then.Hour())
+	    p(then.Minute())
+	    p(then.Second())
+	    p(then.Nanosecond())
+	    p(then.Location())
+	
+	    // The Monday-Sunday `Weekday` is also available.
+	    p(then.Weekday())
+	
+	    // These methods compare two times, testing if the
+	    // first occurs before, after, or at the same time
+	    // as the second, respectively.
+	    p(then.Before(now))
+	    p(then.After(now))
+	    p(then.Equal(now))
+	
+	    // The `Sub` methods returns a `Duration` representing
+	    // the interval between two times.
+	    diff := now.Sub(then)
+	    p(diff)
+	
+	    // We can compute the length of the duration in
+	    // various units.
+	    p(diff.Hours())
+	    p(diff.Minutes())
+	    p(diff.Seconds())
+	    p(diff.Nanoseconds())
+	
+	    // You can use `Add` to advance a time by a given
+	    // duration, or with a `-` to move backwards by a
+	    // duration.
+	    p(then.Add(diff))
+	    p(then.Add(-diff))
+	}
+snippet time_formatting_parsing
+	// Go supports time formatting and parsing via
+	// pattern-based layouts.
+	
+	package main
+	
+	import "fmt"
+	import "time"
+	
+	func main() {
+	    p := fmt.Println
+	
+	    // Here's a basic example of formatting a time
+	    // according to RFC3339, using the corresponding layout
+	    // constant.
+	    t := time.Now()
+	    p(t.Format(time.RFC3339))
+	
+	    // Time parsing uses the same layout values as `Format`.
+	    t1, e := time.Parse(
+	        time.RFC3339,
+	        "2012-11-01T22:08:41+00:00")
+	    p(t1)
+	
+	    // `Format` and `Parse` use example-based layouts. Usually
+	    // you'll use a constant from `time` for these layouts, but
+	    // you can also supply custom layouts. Layouts must use the
+	    // reference time `Mon Jan 2 15:04:05 MST 2006` to show the
+	    // pattern with which to format/parse a given time/string.
+	    // The example time must be exactly as shown: the year 2006,
+	    // 15 for the hour, Monday for the day of the week, etc.
+	    p(t.Format("3:04PM"))
+	    p(t.Format("Mon Jan _2 15:04:05 2006"))
+	    p(t.Format("2006-01-02T15:04:05.999999-07:00"))
+	    form := "3 04 PM"
+	    t2, e := time.Parse(form, "8 41 PM")
+	    p(t2)
+	
+	    // For purely numeric representations you can also
+	    // use standard string formatting with the extracted
+	    // components of the time value.
+	    fmt.Printf("%d-%02d-%02dT%02d:%02d:%02d-00:00\n",
+	        t.Year(), t.Month(), t.Day(),
+	        t.Hour(), t.Minute(), t.Second())
+	
+	    // `Parse` will return an error on malformed input
+	    // explaining the parsing problem.
+	    ansic := "Mon Jan _2 15:04:05 2006"
+	    _, e = time.Parse(ansic, "8:41PM")
+	    p(e)
+	}
+snippet timeouts
+	// _Timeouts_ are important for programs that connect to
+	// external resources or that otherwise need to bound
+	// execution time. Implementing timeouts in Go is easy and
+	// elegant thanks to channels and `select`.
+	
+	package main
+	
+	import "time"
+	import "fmt"
+	
+	func main() {
+	
+	    // For our example, suppose we're executing an external
+	    // call that returns its result on a channel `c1`
+	    // after 2s.
+	    c1 := make(chan string, 1)
+	    go func() {
+	        time.Sleep(2 * time.Second)
+	        c1 <- "result 1"
+	    }()
+	
+	    // Here's the `select` implementing a timeout.
+	    // `res := <-c1` awaits the result and `<-Time.After`
+	    // awaits a value to be sent after the timeout of
+	    // 1s. Since `select` proceeds with the first
+	    // receive that's ready, we'll take the timeout case
+	    // if the operation takes more than the allowed 1s.
+	    select {
+	    case res := <-c1:
+	        fmt.Println(res)
+	    case <-time.After(1 * time.Second):
+	        fmt.Println("timeout 1")
+	    }
+	
+	    // If we allow a longer timeout of 3s, then the receive
+	    // from `c2` will succeed and we'll print the result.
+	    c2 := make(chan string, 1)
+	    go func() {
+	        time.Sleep(2 * time.Second)
+	        c2 <- "result 2"
+	    }()
+	    select {
+	    case res := <-c2:
+	        fmt.Println(res)
+	    case <-time.After(3 * time.Second):
+	        fmt.Println("timeout 2")
+	    }
+	}
+snippet timers
+	// We often want to execute Go code at some point in the
+	// future, or repeatedly at some interval. Go's built-in
+	// _timer_ and _ticker_ features make both of these tasks
+	// easy. We'll look first at timers and then
+	// at [tickers](tickers).
+	
+	package main
+	
+	import "time"
+	import "fmt"
+	
+	func main() {
+	
+	    // Timers represent a single event in the future. You
+	    // tell the timer how long you want to wait, and it
+	    // provides a channel that will be notified at that
+	    // time. This timer will wait 2 seconds.
+	    timer1 := time.NewTimer(2 * time.Second)
+	
+	    // The `<-timer1.C` blocks on the timer's channel `C`
+	    // until it sends a value indicating that the timer
+	    // expired.
+	    <-timer1.C
+	    fmt.Println("Timer 1 expired")
+	
+	    // If you just wanted to wait, you could have used
+	    // `time.Sleep`. One reason a timer may be useful is
+	    // that you can cancel the timer before it expires.
+	    // Here's an example of that.
+	    timer2 := time.NewTimer(time.Second)
+	    go func() {
+	        <-timer2.C
+	        fmt.Println("Timer 2 expired")
+	    }()
+	    stop2 := timer2.Stop()
+	    if stop2 {
+	        fmt.Println("Timer 2 stopped")
+	    }
+	}
+snippet url_parsing
+	// URLs provide a [uniform way to locate resources](https://adam.herokuapp.com/past/2010/3/30/urls_are_the_uniform_way_to_locate_resources/).
+	// Here's how to parse URLs in Go.
+	
+	package main
+	
+	import "fmt"
+	import "net"
+	import "net/url"
+	
+	func main() {
+	
+	    // We'll parse this example URL, which includes a
+	    // scheme, authentication info, host, port, path,
+	    // query params, and query fragment.
+	    s := "postgres://user:pass@host.com:5432/path?k=v#f"
+	
+	    // Parse the URL and ensure there are no errors.
+	    u, err := url.Parse(s)
+	    if err != nil {
+	        panic(err)
+	    }
+	
+	    // Accessing the scheme is straightforward.
+	    fmt.Println(u.Scheme)
+	
+	    // `User` contains all authentication info; call
+	    // `Username` and `Password` on this for individual
+	    // values.
+	    fmt.Println(u.User)
+	    fmt.Println(u.User.Username())
+	    p, _ := u.User.Password()
+	    fmt.Println(p)
+	
+	    // The `Host` contains both the hostname and the port,
+	    // if present. Use `SplitHostPort` to extract them.
+	    fmt.Println(u.Host)
+	    host, port, _ := net.SplitHostPort(u.Host)
+	    fmt.Println(host)
+	    fmt.Println(port)
+	
+	    // Here we extract the `path` and the fragment after
+	    // the `#`.
+	    fmt.Println(u.Path)
+	    fmt.Println(u.Fragment)
+	
+	    // To get query params in a string of `k=v` format,
+	    // use `RawQuery`. You can also parse query params
+	    // into a map. The parsed query param maps are from
+	    // strings to slices of strings, so index into `[0]`
+	    // if you only want the first value.
+	    fmt.Println(u.RawQuery)
+	    m, _ := url.ParseQuery(u.RawQuery)
+	    fmt.Println(m)
+	    fmt.Println(m["k"][0])
+	}
+snippet values
+	// Go has various value types including strings,
+	// integers, floats, booleans, etc. Here are a few
+	// basic examples.
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	
+	    // Strings, which can be added together with `+`.
+	    fmt.Println("go" + "lang")
+	
+	    // Integers and floats.
+	    fmt.Println("1+1 =", 1+1)
+	    fmt.Println("7.0/3.0 =", 7.0/3.0)
+	
+	    // Booleans, with boolean operators as you'd expect.
+	    fmt.Println(true && false)
+	    fmt.Println(true || false)
+	    fmt.Println(!true)
+	}
+snippet variables
+	// In Go, _variables_ are explicitly declared and used by
+	// the compiler to e.g. check type-correctness of function
+	// calls.
+	
+	package main
+	
+	import "fmt"
+	
+	func main() {
+	
+	    // `var` declares 1 or more variables.
+	    var a = "initial"
+	    fmt.Println(a)
+	
+	    // You can declare multiple variables at once.
+	    var b, c int = 1, 2
+	    fmt.Println(b, c)
+	
+	    // Go will infer the type of initialized variables.
+	    var d = true
+	    fmt.Println(d)
+	
+	    // Variables declared without a corresponding
+	    // initialization are _zero-valued_. For example, the
+	    // zero value for an `int` is `0`.
+	    var e int
+	    fmt.Println(e)
+	
+	    // The `:=` syntax is shorthand for declaring and
+	    // initializing a variable, e.g. for
+	    // `var f string = "short"` in this case.
+	    f := "short"
+	    fmt.Println(f)
+	}
+snippet variadic_functions
+	// [_Variadic functions_](http://en.wikipedia.org/wiki/Variadic_function)
+	// can be called with any number of trailing arguments.
+	// For example, `fmt.Println` is a common variadic
+	// function.
+	
+	package main
+	
+	import "fmt"
+	
+	// Here's a function that will take an arbitrary number
+	// of `int`s as arguments.
+	func sum(nums ...int) {
+	    fmt.Print(nums, " ")
+	    total := 0
+	    for _, num := range nums {
+	        total += num
+	    }
+	    fmt.Println(total)
+	}
+	
+	func main() {
+	
+	    // Variadic functions can be called in the usual way
+	    // with individual arguments.
+	    sum(1, 2)
+	    sum(1, 2, 3)
+	
+	    // If you already have multiple args in a slice,
+	    // apply them to a variadic function using
+	    // `func(slice...)` like this.
+	    nums := []int{1, 2, 3, 4}
+	    sum(nums...)
+	}
+snippet worker_pools
+	// In this example we'll look at how to implement
+	// a _worker pool_ using goroutines and channels.
+	
+	package main
+	
+	import "fmt"
+	import "time"
+	
+	// Here's the worker, of which we'll run several
+	// concurrent instances. These workers will receive
+	// work on the `jobs` channel and send the corresponding
+	// results on `results`. We'll sleep a second per job to
+	// simulate an expensive task.
+	func worker(id int, jobs <-chan int, results chan<- int) {
+	    for j := range jobs {
+	        fmt.Println("worker", id, "started  job", j)
+	        time.Sleep(time.Second)
+	        fmt.Println("worker", id, "finished job", j)
+	        results <- j * 2
+	    }
+	}
+	
+	func main() {
+	
+	    // In order to use our pool of workers we need to send
+	    // them work and collect their results. We make 2
+	    // channels for this.
+	    jobs := make(chan int, 100)
+	    results := make(chan int, 100)
+	
+	    // This starts up 3 workers, initially blocked
+	    // because there are no jobs yet.
+	    for w := 1; w <= 3; w++ {
+	        go worker(w, jobs, results)
+	    }
+	
+	    // Here we send 5 `jobs` and then `close` that
+	    // channel to indicate that's all the work we have.
+	    for j := 1; j <= 5; j++ {
+	        jobs <- j
+	    }
+	    close(jobs)
+	
+	    // Finally we collect all the results of the work.
+	    for a := 1; a <= 5; a++ {
+	        <-results
+	    }
+	}
+snippet writing_files
+	// Writing files in Go follows similar patterns to the
+	// ones we saw earlier for reading.
+	
+	package main
+	
+	import (
+	    "bufio"
+	    "fmt"
+	    "io/ioutil"
+	    "os"
+	)
+	
+	func check(e error) {
+	    if e != nil {
+	        panic(e)
+	    }
+	}
+	
+	func main() {
+	
+	    // To start, here's how to dump a string (or just
+	    // bytes) into a file.
+	    d1 := []byte("hello\ngo\n")
+	    err := ioutil.WriteFile("/tmp/dat1", d1, 0644)
+	    check(err)
+	
+	    // For more granular writes, open a file for writing.
+	    f, err := os.Create("/tmp/dat2")
+	    check(err)
+	
+	    // It's idiomatic to defer a `Close` immediately
+	    // after opening a file.
+	    defer f.Close()
+	
+	    // You can `Write` byte slices as you'd expect.
+	    d2 := []byte{115, 111, 109, 101, 10}
+	    n2, err := f.Write(d2)
+	    check(err)
+	    fmt.Printf("wrote %d bytes\n", n2)
+	
+	    // A `WriteString` is also available.
+	    n3, err := f.WriteString("writes\n")
+	    fmt.Printf("wrote %d bytes\n", n3)
+	
+	    // Issue a `Sync` to flush writes to stable storage.
+	    f.Sync()
+	
+	    // `bufio` provides buffered writers in addition
+	    // to the buffered readers we saw earlier.
+	    w := bufio.NewWriter(f)
+	    n4, err := w.WriteString("buffered\n")
+	    fmt.Printf("wrote %d bytes\n", n4)
+	
+	    // Use `Flush` to ensure all buffered operations have
+	    // been applied to the underlying writer.
+	    w.Flush()
+	
+	}
