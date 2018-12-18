@@ -102,6 +102,6 @@ zstyle ':completion:*' special-dirs true
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh" 
 
-[ -e ~/.paths ] && source ~/.paths
 [ -e ~/.shell ] && source ~/.shell
+[ -e ~/.paths ] && source ~/.paths
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
