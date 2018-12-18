@@ -34,3 +34,5 @@ autocmd BufWinEnter *.hpp exec 'set filetype=cpp'
 map ,au :autocmd BufWinEnter * exec ''<left>
 
 "autocmd BufWritePre * %s/\s\+$//e
+
+"au filetype go inoremap <buffer> ..<C-x><C-o>
