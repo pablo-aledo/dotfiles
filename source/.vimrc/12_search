@@ -1,3 +1,16 @@
 " we can also use :%g!/<list_separated by \|>/d
 " :s/\\\\/\\/g
 map <F3><F3> /robot\\|vision\\|fpga\\|codesign\\|comput\\|digital\\|blender\\|radio\\|hack\\|crypto\\|thesis\\|research\\|brain\\|power\\|antenna\\|embedded\\|software\\|image\\|signal\\|processing\\|neural\\|compiler\\|matlab\\|hardware\\|math\\|intelligence\\|\\<ai\\>\\|html\\|arduino\\|visualization\\|machine\\|learning\\|wood\\|c++\\|programming\\|phd\\|algorithm\\|linux\\|verilog\\|vhdl\\|circuit\\|speech\\|voice\\|recognition\\|medical\\|draw\\|music\\|sound\\|formal\\|verification\\|testing\\|scala\\|functional\\|nlp\\|data\\|mining\\|watercolor\\|electronics\\|gpu\\|performance\\|hpc\\|simulat\\|malware\\|android\\|hadoop\\|logic\\|theory\\|drone\\|optimization\\|render\\|python\\|raspberry\\|origami\\|reverse\\|engineering/
+
+" Search in all currently opened buffers
+function! ClearQuickfixList()
+  call setqflist([])
+endfunction
+
+function! Vimgrepall(pattern)
+  call ClearQuickfixList()
+  exe 'bufdo vimgrepadd ' . a:pattern . ' %'
+  cnext
+endfunction
+
+command! -nargs=1 grepall call Vimgrepall(<f-args>)
