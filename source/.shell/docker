@@ -440,7 +440,7 @@ case $1 in
                          alias mpicc='docker run -v $(pwd):$(pwd):Z -w $(pwd) '$DOCKER' mpicc'
                          alias mpif90='docker run -v $(pwd):$(pwd):Z -w $(pwd) '$DOCKER' mpif90' ;;
 (ubuntu_pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu_pga ;;
-(ubuntu_dev)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu_pga_dev ;;
+(ubuntu_pga_dev)         docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu_pga_dev ;;
 (alpine_pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY alpine_pga ;;
 (alpine_pga_testing)     docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY alpine_pga_testing ;;
 (alpine)                 docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY alpine ;;
