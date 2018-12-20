@@ -13,4 +13,4 @@ function! Vimgrepall(pattern)
   cnext
 endfunction
 
-command! -nargs=1 grepall call Vimgrepall(<f-args>)
+command! -nargs=1 Bgrep call Vimgrepall(<f-args>)
