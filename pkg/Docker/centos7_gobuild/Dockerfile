@@ -37,7 +37,7 @@ run go get github.com/golang/mock/gomock && \
     go get -u github.com/golang/protobuf/proto && \
     go get -u github.com/golang/protobuf/protoc-gen-go && \
     mv ~/go/bin/mockgen /bin && \
-    mv ~/go/bin/protoc-gen-go /bin && \
+    mv ~/go/bin/protoc-gen-go /bin
 
 COPY       build.sh /bin
 RUN        chmod +x /bin/build.sh
