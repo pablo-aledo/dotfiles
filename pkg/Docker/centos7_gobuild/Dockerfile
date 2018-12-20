@@ -29,7 +29,6 @@ run mkdir -p /usr/src/protobuf && cd /usr/src/protobuf && \
     ./autogen.sh && \
     ./configure && \
     make && \
-    make check && \
     make install && \
     ldconfig && \
     go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
