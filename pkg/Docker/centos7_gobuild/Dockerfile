@@ -35,7 +35,9 @@ run mkdir -p /usr/src/protobuf && cd /usr/src/protobuf && \
 run go get github.com/golang/mock/gomock && \
     go get github.com/golang/mock/mockgen && \
     go get -u github.com/golang/protobuf/proto && \
-    go get -u github.com/golang/protobuf/protoc-gen-go
+    go get -u github.com/golang/protobuf/protoc-gen-go && \
+    mv ~/go/bin/mockgen /bin && \
+    mv ~/go/bin/protoc-gen-go /bin && \
 
 COPY       build.sh /bin
 RUN        chmod +x /bin/build.sh
