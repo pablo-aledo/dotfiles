@@ -7,6 +7,8 @@ run yum install -y \
     git \
     curl \
     gcc \
+    gcc-c++ \
+    make \
     wget
 
 run wget https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz -O - | tar -zxv -C /usr/local/ && \
