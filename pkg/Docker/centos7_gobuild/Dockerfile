@@ -30,11 +30,12 @@ run mkdir -p /usr/src/protobuf && cd /usr/src/protobuf && \
     ./configure && \
     make && \
     make install && \
-    ldconfig && \
-    go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
+    ldconfig
 
 run go get github.com/golang/mock/gomock && \
-    go get github.com/golang/mock/mockgen
+    go get github.com/golang/mock/mockgen && \
+    go get -u github.com/golang/protobuf/proto && \
+    go get -u github.com/golang/protobuf/protoc-gen-go
 
 COPY       build.sh /bin
 RUN        chmod +x /bin/build.sh
