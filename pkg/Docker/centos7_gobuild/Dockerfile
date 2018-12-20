@@ -18,7 +18,7 @@ run wget https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz -O - |
     echo 'export PATH=$GOPATH/bin:$PATH' >> ~/.bashrc
 
 env GOPATH=/root/go
-env PATH=/usr/local/go/bin:/root/go/bin:/usr/bin
+env PATH=/usr/local/go/bin:/root/go/bin:/usr/bin:/usr/sbin
 run mkdir -p /root/go/bin
 
 run curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
