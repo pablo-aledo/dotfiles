@@ -1,6 +1,8 @@
 from centos:7
 
 run yum install -y \
+    autoconf \
+    libtool \
     bash \
     git \
     curl \
@@ -19,6 +21,19 @@ run mkdir -p /root/go/bin
 
 run curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 run cp /root/go/bin/dep /bin/
+
+run mkdir -p /usr/src/protobuf && cd /usr/src/protobuf && \
+    git clone https://github.com/google/protobuf.git . && \
+    ./autogen.sh && \
+    ./configure && \
+    make && \
+    make check && \
+    make install && \
+    ldconfig && \
+    go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
+
+run go get github.com/golang/mock/gomock && \
+    go get github.com/golang/mock/mockgen
 
 COPY       build.sh /bin
 RUN        chmod +x /bin/build.sh
