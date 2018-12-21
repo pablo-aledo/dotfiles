@@ -11,7 +11,7 @@ run yum install -y \
     make \
     wget
 
-run wget https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz -O - | tar -zxv -C /usr/local/ && \
+run wget https://storage.googleapis.com/golang/go1.10.5.linux-amd64.tar.gz -O - | tar -zxv -C /usr/local/ && \
     mkdir ~/go && \
     echo 'export GOPATH=~/go' >> ~/bashrc && \
     echo 'export PATH=/usr/local/go/bin:$PATH' >> ~/.bashrc && \
