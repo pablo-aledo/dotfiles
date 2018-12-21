@@ -178,7 +178,7 @@ print(np.divide(vect, float(total+0.00001)))
 }
 
 windowkeywords.get_features(){
-    cat $learning_dir/documents/* | tokenize | countwords | awk '{print $2}' | keywords.filter > $learning_dir/features/full_keywords
+    cat $learning_dir/documents/* | tokenize | sort | uniq | keywords.filter > $learning_dir/features/full_keywords
 }
 
 windowkeywords.txt2vec(){
