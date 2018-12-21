@@ -35,8 +35,7 @@ keywords.get_features(){
     [ -e ~/Dotfiles/keywords/keywords ] || cat $learning_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $learning_dir/features/keywords
 }
 
-getwords(){
-
+tokenize(){
     [ $keywords_lowercase = "true" ] && lowercmd="tr '[A-Z]' '[a-z]'"
     [ $keywords_lowercase = "true" ] || lowercmd="cat"
     cat | strings -n1 | $(echo $lowercmd) | sed \
@@ -71,8 +70,11 @@ getwords(){
         -e 's/!/\n/g'  \
         -e 's/@/\n/g'  \
         -e 's/:/\n/g'  \
-        -e 's/~/\n/g'  \
-        | sort | uniq -c | egrep -v '^ *[0-9]* $'
+        -e 's/~/\n/g'
+}
+
+countwords(){
+    cat | sort | uniq -c | egrep -v '^ *[0-9]* $'
 }
 
 getkeywords_(){
@@ -158,7 +160,7 @@ print('false')
 
 keywords.txt2vec(){
 
-    cat $1 | getwords | getkeywords > $tmp/kwords
+    cat $1 | tokenize | countwords | getkeywords > $tmp/kwords
 
     vect=$(cat $tmp/kwords | awk '{print $1}' | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g')
     [ $keywords_normalize = "full" ] && total=$( cat $1 | wc -w )
@@ -196,9 +198,9 @@ window.get_features(){}
 
 keywords_multiscale.txt2vec(){
 
-    vect1=$(cat $1 | head -n 1     | getwords | getkeywords | awk '{print $1}')
-    vect2=$(cat $1 | head -n 10    | getwords | getkeywords | awk '{print $1}')
-    vect3=$(cat $1 | head -n 10000 | getwords | getkeywords | awk '{print $1}')
+    vect1=$(cat $1 | head -n 1     | tokenize | countwords | getkeywords | awk '{print $1}')
+    vect2=$(cat $1 | head -n 10    | tokenize | countwords | getkeywords | awk '{print $1}')
+    vect3=$(cat $1 | head -n 10000 | tokenize | countwords | getkeywords | awk '{print $1}')
 
     echo $vect1 $vect2 $vect3 | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/]/g' -e 's/,/, /g'
 }
@@ -220,7 +222,7 @@ keywords.doc2vec_debug(){
     fi
 
     learning.doc2txt $1 > $tmp/txt
-    cat $tmp/txt | getwords > $tmp/keywords
+    cat $tmp/txt | tokenize | countwords > $tmp/keywords
 
     for a in $(cat $learning_dir/features/keywords | grep -v '^#' | grep -v '^$')
     do
@@ -243,7 +245,7 @@ keywords.doc2vec_debug(){
         return
     fi
 
-    cat $1 | getwords | getkeywords | grep -v '^0'
+    cat $1 | tokenize | countwords | getkeywords | grep -v '^0'
 
 }
 
@@ -321,8 +323,8 @@ jaccard_distance(){
     learning.doc2txt "$1" $tmp/s1
     learning.doc2txt "$2" $tmp/s2
 
-    cat $tmp/s1 | getwords | sort | uniq > $tmp/k1
-    cat $tmp/s2 | getwords | sort | uniq > $tmp/k2
+    cat $tmp/s1 | tokenize | countwords | sort | uniq > $tmp/k1
+    cat $tmp/s2 | tokenize | countwords | sort | uniq > $tmp/k2
 
     si=$( comm -12 $tmp/k1 $tmp/k2 | wc -l )
     su=$( cat      $tmp/k1 $tmp/k2 | sort | uniq | wc -l )
@@ -396,7 +398,7 @@ closest_filter.transform(){
     learning.doc2txt $1 > $tmp/filter
     head -n$summarize_line_limit $tmp/filter | while read line
     do
-        echo $line | getwords | getkeywords > $tmp/kwords
+        echo $line | tokenize | countwords | getkeywords > $tmp/kwords
         nkeys=$(cat $tmp/kwords | awk '{sum += $1} END {print sum}' )
         nwords=$(echo $line | wc -w)
         echo $(( $nkeys*100/$nwords )) $line
@@ -1070,7 +1072,7 @@ keywords.filter () {
 
 	cat | while read line
 	do
-        haskeyword=$( echo $line | getwords | haskeyword )
+        haskeyword=$( echo $line | tokenize | countwords | haskeyword )
 		[ "$haskeyword" = $condition ] && echo $line
 	done
 }
@@ -1179,7 +1181,7 @@ learning.get_documents(){
             #continue
         #fi
 
-        if [ "$( cat $line | getwords | haskeyword )" = "false" ]
+        if [ "$( cat $line | tokenize | countwords | haskeyword )" = "false" ]
         then
             echo "\e[31m $line does not contain any keyword \e[0m"
             rm -rf $line
@@ -1419,7 +1421,7 @@ metadata.isbn2topics(){
 }
 
 keywords.new_kwords(){
-cat $tmp/vects | egrep '\*\*\*' | awk '{print $4}' | xargs cat | getwords | awk '{print $2}' | sort | uniq | keywords.filter -v
+cat $tmp/vects | egrep '\*\*\*' | awk '{print $4}' | xargs cat | tokenize | countwords | awk '{print $2}' | sort | uniq | keywords.filter -v
 }
 
 learning.loop(){
@@ -1428,7 +1430,7 @@ do
     echo "===== $(echo $a | sed 's|/classifier_test/|/documents/|g' ) ====="
     closest=$(closest_classifier.sortdist $a | head -n1 | sed "s|^|$learning_dir/documents/|g")
     echo $closest
-    cat $a | getwords | awk '{print $2}' | keywords.filter -v
-    cat $closest | getwords | awk '{print $2}' | keywords.filter -v
+    cat $a | tokenize | countwords | awk '{print $2}' | keywords.filter -v
+    cat $closest | tokenize | countwords | awk '{print $2}' | keywords.filter -v
 done
 }
