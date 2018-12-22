@@ -190,6 +190,22 @@ windowkeywords.txt2vec(){
         comm -12 <(cat $learning_dir/features/full_keywords | sort | uniq | egrep -v '^$') <(echo $line | tokenize | sort | uniq | egrep -v '^$') | paste -d' ' -s
     done | grep -v '^$' > $tmp/intersection
 
+    mkdir -p $learning_dir/trmemo
+    cat $tmp/intersection | while read line
+    do
+        md5line=$(echo $line | md5sum | awk '{print $1}')
+        if [ -e $learning_dir/trmemo/$md5line ]
+        then
+            cat $learning_dir/trmemo/$md5line
+        else
+            echo $line | sed 's/ /\n/g' > $tmp/line
+            newline=$(keywords.txt2vec_debug $tmp/line | awk '{print $2}' | paste -d' ' -s)
+            echo $newline > $learning_dir/trmemo/$md5line
+            echo $newline
+        fi
+    done > $tmp/intersection2
+    \mv $tmp/intersection2 $tmp/intersection
+
     cat $tmp/intersection | while read line
     do
         echo $line | md5sum | sed 's/^\(.....\).*/\1/g' | tr '[a-z]' '[A-Z]' | sed -e 's/^/ibase=16;/g' | bc | sed -e 's/$/%1000/g' | bc
