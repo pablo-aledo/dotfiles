@@ -199,7 +199,7 @@ windowkeywords.txt2vec(){
             cat $learning_dir/trmemo/$md5line
         else
             echo $line | sed 's/ /\n/g' > $tmp/line
-            newline=$(keywords.txt2vec_debug $tmp/line | awk '{print $2}' | paste -d' ' -s)
+            newline=$( cat $tmp/line | tokenize | countwords | getkeywords | grep -v '^0' | awk '{print $2}' | paste -d' ' -s )
             echo $newline > $learning_dir/trmemo/$md5line
             echo $newline
         fi
