@@ -487,8 +487,10 @@ import numpy as np
 learning_dir='$learning_dir'
 X=np.loadtxt('$tmp/vectors')
 sumvect=sum(X)
-indices=[ i for i in range(0, len(sumvect)) if sumvect[i] > 0 ]
-np.savetxt(learning_dir + '/pca/indices',indices)
+#indices=[ i for i in range(0, len(sumvect)) if sumvect[i] > 0 ]
+dictionary=dict( { (k,v) for (k,v) in zip(range(0, len(X)), X) if v > 0} )
+std=sorted(dictionary, key=dictionary.get, reverse=True)
+np.savetxt(learning_dir + '/pca/indices',std)
 "
 }
 
