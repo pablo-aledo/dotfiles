@@ -476,6 +476,22 @@ np.savetxt(learning_dir + '/pca/eigenv',pca.explained_variance_)
 "
 }
 
+index.fit(){
+    rm -fr $tmp/vectors
+    for file in $learning_dir/vectors/*
+    do
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' >> $tmp/vectors
+    done
+	python -c "
+import numpy as np
+learning_dir='$learning_dir'
+X=np.loadtxt('$tmp/vectors')
+sumvect=sum(X)
+indices=[ i for i in range(0, len(sumvect)) if sumvect[i] > 0 ]
+np.savetxt(learning_dir + '/pca/indices',indices)
+"
+}
+
 pca100.fit(){
     rm -fr $tmp/reduced_vectors
     for file in $learning_dir/vectors/*
@@ -800,6 +816,19 @@ normalized=$1;
 normalized=np.subtract(normalized, average)
 normalized=np.matmul(pca, normalized)
 normalized=np.divide( normalized, np.sqrt(eigenv) )
+print normalized
+" | sed \
+    -e 's/ \+/ /g' \
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -d' ' -s
+}
+
+index.transform() {
+	python -c "
+import numpy as np
+learning_dir='$learning_dir'
+indices=np.loadtxt(learning_dir+'/pca/indices')
+X=$1;
+normalized=[ X[i] for i in indices ]
 print normalized
 " | sed \
     -e 's/ \+/ /g' \
