@@ -1,0 +1,14 @@
+export DISPLAY=:1
+
+nr=$(cat /tmp/weeknr)
+echo $(( $nr + 1 )) > /tmp/weeknr
+
+xdotool key Ctrl+f
+
+echo "week $(cat /tmp/weeknr)" | xclip -sel clip -i
+sleep 1
+xdotool key Ctrl+v
+xdotool key Return
+
+xdotool key Escape
+xdotool key Return

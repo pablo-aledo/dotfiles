@@ -1,0 +1,5 @@
+export DISPLAY=:1
+
+xdotool key Ctrl+Return
+sleep 1
+xdotool key Ctrl+Tab

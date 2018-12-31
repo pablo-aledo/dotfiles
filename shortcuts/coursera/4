@@ -1,0 +1,35 @@
+export DISPLAY=:1
+
+xdotool mousemove 350 230
+xdotool click 1
+xdotool click 1
+xdotool click 1
+xdotool key Ctrl+c
+sleep 1
+xclip -sel clip -o > /tmp/title
+sleep 1
+
+#xdotool mousemove 558 640
+#xdotool click 1
+#sleep 1
+xdotool key Tab
+xdotool key Tab
+xdotool key Tab
+xdotool key Tab
+xdotool key Return
+
+#xdotool mousemove 558 680
+#sleep 1
+#xdotool click 1
+#sleep 1
+xdotool key Tab
+xdotool key Return
+sleep 1
+
+xdotool key Ctrl+s
+sleep 1
+echo $(printf %03d $(cat /tmp/filenr))_$(cat /tmp/title) | xclip -sel clip -i
+sleep 1
+xdotool key Ctrl+v
+xdotool key Return
+

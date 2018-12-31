@@ -1,0 +1,8 @@
+export DISPLAY=:1
+
+xdotool key ctrl+w
+xdotool key ctrl+g
+xdotool key Escape
+
+nr=$(cat /tmp/filenr)
+echo $(( $nr + 1 )) > /tmp/filenr
