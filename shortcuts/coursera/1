@@ -7,7 +7,7 @@ sleep 1
 xdotool key Alt+w
 killall chrome chromium google-chrome google-chrome-stable
 sleep 1
-google-chrome --profile-directory=Default https://www.coursera.org/learn/language-processing/home/week/1 &
+google-chrome --profile-directory=Default "$(xclip -sel clip -o)" &
 
 echo 0 > /tmp/filenr
 echo 1 > /tmp/weeknr
