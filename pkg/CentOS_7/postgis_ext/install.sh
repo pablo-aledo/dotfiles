@@ -1,7 +1,7 @@
-yum install epel-release
-yum install https://download1.rpmfusion.org/free/el/rpmfusion-free-release-7.noarch.rpm
-yum update
-yum install -y rh-postgresql10-postgresql-devel gcc make wget libxml2-devel geos-devel gdal-devel
+sudo yum install -y epel-release
+sudo yum install -y https://download1.rpmfusion.org/free/el/rpmfusion-free-release-7.noarch.rpm
+sudo yum update -y
+sudo yum install -y rh-postgresql10-postgresql-devel gcc make wget libxml2-devel geos-devel gdal-devel
 
 cd
 mkdir proj4
@@ -12,7 +12,7 @@ cd proj-4.9.1
 ./configure
 make
 make check
-make install
+sudo make install
 
 
 cd
@@ -21,4 +21,4 @@ tar -xvzf postgis-2.4.5.tar.gz
 cd postgis-2.4.5
 ./configure
 make
-make install
+sudo make install
