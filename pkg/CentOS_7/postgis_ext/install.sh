@@ -22,3 +22,5 @@ cd postgis-2.4.5
 ./configure
 make
 sudo make install
+
+# sudo ln -s /usr/local/lib/libproj.so.9 /usr/lib64/libproj.so.9
