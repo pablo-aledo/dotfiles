@@ -43,7 +43,7 @@ slice_project(){
     # link files
     mkdir -p link
 
-    for a in .oh-my-zsh .tmux.conf .zshrc
+    for a in .tmux.conf
     do
         \cp -rf $HOME/.dotfiles/link/$a link
         echo "rm -f \$HOME/$a && ln -s \$mydir/link/$a $HOME/$a" >> main.sh
