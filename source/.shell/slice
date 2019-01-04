@@ -1,0 +1,64 @@
+slice_project(){
+    rm -rf dotfiles
+    mkd dotfiles
+    echo 'mydir=$(dirname $(readlink -f $0))' >> main.sh
+    echo 'cd $mydir' >> main.sh
+
+    # shell scripts
+    mkdir -p source/
+    for a in alias autoinstall aws clean docker dockerizer k8s mkcolor mkd path pkg ports redefine rmsafe server
+    do
+        \cp -rf $HOME/.dotfiles/source/.shell/$a source/
+        echo "source source/$a" >> main.sh
+    done
+
+    # adapt
+    sed -i 's|INSTALLERS_FOLDER=.*|INSTALLERS_FOLDER=$(dirname $(readlink -f $0))/../pkg|g' source/pkg
+
+    # pkg
+    mkdir -p pkg/Docker
+    mkdir -p pkg/Ubuntu_16_04
+    mkdir -p pkg/CentOS_7
+
+    for a in centos7_ccache centos7_gobuild
+    do
+        \cp -rf $HOME/.dotfiles/pkg/Docker/$a pkg/Docker/
+    done
+
+    for a in atom ccache clion codechecker disque goland gtest kubectl ranger redis visual_studio
+    do
+        \cp -rf $HOME/.dotfiles/pkg/Mint_17/$a pkg/Ubuntu_16_04/
+    done
+
+    for a in docker docker_ce docker-compose golang golang19 gomock mockgen
+    do
+        \cp -rf $HOME/.dotfiles/pkg/Ubuntu_16_04/$a pkg/Ubuntu_16_04/
+    done
+
+    for a in bison boost-devel docker docker_ce helm kubectl minikube openmpi-devel postgis_ext postgresql ranger timescaledb_ext
+    do
+        \cp -rf $HOME/.dotfiles/pkg/CentOS_7/$a pkg/CentOS_7/
+    done
+
+    # link files
+    mkdir -p link
+
+    for a in .oh-my-zsh .tmux.conf .zshrc
+    do
+        \cp -rf $HOME/.dotfiles/link/$a link
+        echo "rm -f \$HOME/$a && ln -s \$mydir/link/$a $HOME/$a" >> main.sh
+    done
+
+    # autocompletions
+    mkdir -p autocompletions
+
+    for a in _docker_app _theme _wh
+    do
+        \cp -rf $HOME/.dotfiles/autocompletions/$a autocompletions
+    done
+
+    echo 'fpath=($mydir/autocompletions/ $fpath)' >> main.sh
+    echo 'autoload -U compinit'                   >> main.sh
+    echo 'compinit'                               >> main.sh
+
+}
