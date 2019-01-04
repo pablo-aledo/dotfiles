@@ -352,6 +352,25 @@ convert_recursive(){
 
 }
 
+convert_recursive_decompress(){
+
+	[ -e "$convert_dir" ]   || return
+	[ -e "$converted_dir" ] || return
+
+    convert_install
+
+    convert_checkrar
+
+    convert_unrar
+
+    empty_folders
+
+    convert_2spaces
+
+    convert_mkfolders
+
+}
+
 convert_recursive_parallel(){
 
 	[ $# -eq 0 ] && width=640
