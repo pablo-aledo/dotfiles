@@ -222,6 +222,37 @@ for i in range(0,1000):
 " | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/\]/g' -e 's/,/, /g'
 }
 
+windowwords.txt2vec(){
+
+    cat $1 | tokenize | awk '{a[NR]=$1} NR>5{print a[NR-5]" "a[NR-4]" "a[NR-3]" "a[NR-2]" "a[NR-1]" "a[NR]}' | while read line
+    do
+python -c "
+line='$line'
+linesp=line.split(' ')
+for a in range(1, pow(2,len(linesp))):
+    binrep=bin(a)[2:]
+    sel1 = range(len(linesp)-len(binrep), len(linesp))
+    sel2 = [ sel1[i] for i in range(0, len(binrep)) if binrep[i] == '1' ]
+    words=[linesp[i] for i in sel2]
+    print(' '.join(words))
+"
+    done | while read line
+    do
+        echo $line | md5sum | sed 's/^\(.....\).*/\1/g' | tr '[a-z]' '[A-Z]' | sed -e 's/^/ibase=16;/g' | bc | sed -e 's/$/%1000/g' | bc
+    done | sort | uniq -c | sed -e 's/^ *\([0-9]*\) *\([0-9]*\)/(\2,\1)/g' > $tmp/words
+
+    python -c "
+with open('$tmp/words') as f:
+    pairs = [ eval(line) for line in f ]
+
+dic = dict(pairs)
+
+for i in range(0,1000):
+    print dic.get(i) or 0
+" | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/\]/g' -e 's/,/, /g'
+
+}
+
 winshingles.txt2vec(){
     cat $1 | tokenize | while read line
     do
