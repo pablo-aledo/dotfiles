@@ -43,6 +43,8 @@ slice_project(){
     cat xx* > source/autoinstall
     source source/autoinstall
 
+    rm -rf xx*
+
     # pkg
     mkdir -p pkg/Docker
     mkdir -p pkg/Ubuntu_16_04
