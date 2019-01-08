@@ -84,9 +84,12 @@ slice_project(){
         \cp -rf $HOME/.dotfiles/autocompletions/$a autocompletions
     done
 
-
-    echo 'git clone https://github.com/robbyrussell/oh-my-zsh $(dirname $(readlink -f $0))/.oh-my-zsh' >> main.sh
-    echo 'HOME=$(dirname $(readlink -f $0)) zsh'                                                       >> main.sh
+    echo 'mydir=$(dirname $(readlink -f $0))' >> main.sh
+    echo 'source $mydir/source/pkg' >> main.sh
+    echo 'pkg install zsh' >> main.sh
+    echo 'pkg install git' >> main.sh
+    echo '[ -e $mydir/.oh-my-zsh ] || git clone https://github.com/robbyrussell/oh-my-zsh $mydir/.oh-my-zsh' >> main.sh
+    echo 'HOME=$mydir zsh'                                                       >> main.sh
 
     echo 'export ZSH=$HOME/.oh-my-zsh'                       >> .zshrc
     echo 'export ZSH_THEME=afowler'                          >> .zshrc
@@ -95,8 +98,6 @@ slice_project(){
     echo 'autoload -U compinit'                              >> .zshrc
     echo 'compinit'                                          >> .zshrc
     echo 'for a in $HOME/source/*; do source $a; done'       >> .zshrc
-
-
 }
 
 
