@@ -29,7 +29,7 @@ function! WatsonF()
 let line = getline(".")
 let linenr = line(".")
 let filename = expand('%:p')
-let fill = system("echo '" . filename . ".'")
+let fill = system("sed 's/$/end/g'" , line)
 call setline('.', fill)
 endfunction
 map ,wf :call WatsonF()<cr>
