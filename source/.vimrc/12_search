@@ -17,8 +17,9 @@ command! -nargs=1 Bgrep call Vimgrepall(<f-args>)
 
 function! WatsonQ()
 let line = getline(".")
+let linenr = line(".")
 let filename = expand('%:p')
-let cmd = "'echo hola:1:message'"
+let cmd = "'echo " . filename . ":" . linenr . ":hola'"
 exec(":cgetexpr system(" . cmd . ")")
 exec("cw")
 endfunction
@@ -26,6 +27,7 @@ map ,wq :call WatsonQ()<cr>
 
 function! WatsonF()
 let line = getline(".")
+let linenr = line(".")
 let filename = expand('%:p')
 let fill = system("echo '" . filename . ".'")
 call setline('.', fill)
