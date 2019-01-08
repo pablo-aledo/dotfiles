@@ -1561,3 +1561,38 @@ do
     cat $closest | tokenize | countwords | awk '{print $2}' | keywords.filter -v
 done
 }
+
+learning.index(){
+
+    mkdir $learning_dir/txts $learning_dir/map
+    find $PWD -type f | while read file
+    do
+        linenr=1
+        cat $file | while read line
+        do
+            key=$(echo $file:$linenr | md5sum | awk '{print $1}')
+            echo $line > $learning_dir/txts/$key
+            echo $file:$linenr > $learning_dir/map/$key
+            linenr=$(( $linenr + 1 ))
+        done
+    done
+
+    [ $( echo $vectorizer_method | grep keywords ) ] || ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
+    echo "\e[34m get_features \e[0m "
+    $vectorizer_method.get_features
+
+    #rm -fr $learning_dir/vectors;
+    mkdir -p $learning_dir/vectors
+    ls $learning_dir/txts/* | sort | while read line
+    do
+        [ -e $learning_dir/vectors/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
+        echo "\e[34m txt2vec \e[0m " $line
+        $vectorizer_method.txt2vec "$line" > $learning_dir/vectors/$(basename "$line")
+    done
+
+    #rm -fr $learning_dir/vectors_reduced;
+    cp -r $learning_dir/vectors $learning_dir/vectors_reduced
+
+    mkdir -p $learning_dir/classifier
+    closest_classifier.fit
+}

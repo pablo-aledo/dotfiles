@@ -1,0 +1,15 @@
+#! env zsh
+
+source ~/.dotfiles/source/.shell/summarize
+
+read line
+echo $line > /tmp/document
+
+closest_classifier.sortdist /tmp/document | head -n10 | while read line
+do
+    key=$(echo $line | cut -d '.' -f1)
+    file=$(cat $learning_dir/map/$key | cut -d':' -f1)
+    line=$(cat $learning_dir/map/$key | cut -d':' -f2)
+    content=$(cat $file | head -n $line | tail -n1)
+    echo $file:$line:$content
+done
