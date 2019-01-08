@@ -1,15 +1,13 @@
 slice_project(){
-    rm -rf dotfiles
-    mkd dotfiles
-    echo 'mydir=$(dirname $(readlink -f $0))' >> main.sh
-    echo 'cd $mydir' >> main.sh
+
+    [ -e home ] && rm -rf home
+    mkd home
 
     # shell scripts
     mkdir -p source/
     for a in alias autoinstall aws clean docker dockerizer k8s mkcolor mkd path pkg ports redefine rmsafe server
     do
         \cp -rf $HOME/.dotfiles/source/.shell/$a source/
-        echo "source source/$a" >> main.sh
     done
 
     # adapt
@@ -40,25 +38,33 @@ slice_project(){
         \cp -rf $HOME/.dotfiles/pkg/CentOS_7/$a pkg/CentOS_7/
     done
 
-    # link files
-    mkdir -p link
-
+    # dotfiles
     for a in .tmux.conf
     do
-        \cp -rf $HOME/.dotfiles/link/$a link
-        echo "rm -f \$HOME/$a && ln -s \$mydir/link/$a $HOME/$a" >> main.sh
+        \cp -rf $HOME/.dotfiles/link/$a .
     done
 
     # autocompletions
     mkdir -p autocompletions
 
-    for a in _docker_app _theme _wh
+    for a in _docker_app _wh
     do
         \cp -rf $HOME/.dotfiles/autocompletions/$a autocompletions
     done
 
-    echo 'fpath=($mydir/autocompletions/ $fpath)' >> main.sh
-    echo 'autoload -U compinit'                   >> main.sh
-    echo 'compinit'                               >> main.sh
+
+    echo 'git clone https://github.com/robbyrussell/oh-my-zsh $(dirname $(readlink -f $0))/.oh-my-zsh' >> main.sh
+    echo 'HOME=$(dirname $(readlink -f $0)) zsh'                                                       >> main.sh
+
+    echo 'export ZSH=$HOME/.oh-my-zsh'                       >> .zshrc
+    echo 'export ZSH_THEME=afowler'                          >> .zshrc
+    echo 'source $ZSH/oh-my-zsh.sh'                          >> .zshrc
+    echo 'fpath=($HOME/autocompletions/ $fpath)'             >> .zshrc
+    echo 'autoload -U compinit'                              >> .zshrc
+    echo 'compinit'                                          >> .zshrc
+    echo 'for a in $HOME/source/*; do source $a; done'       >> .zshrc
+
 
 }
+
+
