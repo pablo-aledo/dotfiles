@@ -10,9 +10,10 @@ slice_project(){
         \cp -rf $HOME/.dotfiles/source/.shell/$a source/
     done
 
-    # adapt
+    # adapt pkg
     sed -i 's|INSTALLERS_FOLDER=.*|INSTALLERS_FOLDER=$(dirname $(readlink -f $0))/../pkg|g' source/pkg
 
+    # adapt docker
     touch xx00; rm -rf xx*
     csplit -s source/docker '/docker_.*(){$/' '{*}'
     csplit -s xx03 '/del_stopped(){$/' '{*}' -f xx03
@@ -32,6 +33,15 @@ slice_project(){
     rm -rf xx0500  xx0501
 
     cat xx* > source/docker
+
+    # adapt autoinstall
+    touch xx00; rm -rf xx*
+    csplit -s source/autoinstall '/meld(){$/' '{*}'
+    sed -i 's/meld gvim.*/meld gvim g++ mksquashfs svn virtualbox x11vnc terminator fdupes sqlite sqlite3 tmux sshfs ranger ncdu htop cmake pip curl wget icdiff ag tree vim tig jq yq bat/g' xx00
+
+    rm -rf xx01
+    cat xx* > source/autoinstall
+    source source/autoinstall
 
     # pkg
     mkdir -p pkg/Docker
