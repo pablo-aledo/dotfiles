@@ -34,4 +34,5 @@ for_window [window_role="pop-up"] floating enable
 
 
 for_window [class="Meld"] floating enable, move position 1980 px 10 px
+for_window [class="mpv"] floating enable
 
