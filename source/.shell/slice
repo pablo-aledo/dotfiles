@@ -13,6 +13,26 @@ slice_project(){
     # adapt
     sed -i 's|INSTALLERS_FOLDER=.*|INSTALLERS_FOLDER=$(dirname $(readlink -f $0))/../pkg|g' source/pkg
 
+    touch xx00; rm -rf xx*
+    csplit -s source/docker '/docker_.*(){$/' '{*}'
+    csplit -s xx03 '/del_stopped(){$/' '{*}' -f xx03
+    csplit -s xx04 '/;;/' '{*}' -f xx04
+    csplit --suppress-matched -s xx0400 '/ammonite/' '{*}' -f xx0400
+    cat xx040000 > xx04
+    echo '(centos7_gobuild)' >> xx04
+    cat xx040001 >> xx04
+    cat xx0411 >> xx04
+    csplit -s xx05 '/aa2u/' '{*}' -f xx05
+    cat xx0500 > xx05
+    cat source/docker | grep '(centos7_gobuild)' | grep 'docker' >> xx05
+    printf 'esac\n}\n\n' >> xx05
+
+    rm -rf xx03 xx0300 xx0301
+    rm -rf xx0400  xx040000  xx040001  xx0401  xx0402  xx0403  xx0404  xx0405  xx0406  xx0407  xx0408  xx0409  xx0410 xx0411
+    rm -rf xx0500  xx0501
+
+    cat xx* > source/docker
+
     # pkg
     mkdir -p pkg/Docker
     mkdir -p pkg/Ubuntu_16_04
