@@ -1567,6 +1567,7 @@ learning.index_document(){
     linesnr=$(cat $file | wc -l)
     for linenr in $(seq 1 $linesnr)
     do
+        [ "$(cat $file | tail -n+$linenr | head -n 1 | sed -e 's/ //g' -e 's/\t//g')" = "" ] && continue
         lines=$(cat $file | tail -n+$linenr | head -n 5 | paste -d' ' -s)
         key=$(echo $file:$linenr | md5sum | awk '{print $1}')
         echo $lines > $learning_dir/txts/$key
