@@ -1562,19 +1562,34 @@ do
 done
 }
 
+learning.index_document(){
+    file=$1
+    linenr=1
+    cat $file | while read line
+    do
+        key=$(echo $file:$linenr | md5sum | awk '{print $1}')
+        echo $line > $learning_dir/txts/$key
+        echo $file:$linenr > $learning_dir/map/$key
+        linenr=$(( $linenr + 1 ))
+    done
+}
+
 learning.index(){
 
-    mkdir $learning_dir/txts $learning_dir/map
-    find $PWD -type f | while read file
+    find -type f | while read file
     do
-        linenr=1
-        cat $file | while read line
-        do
-            key=$(echo $file:$linenr | md5sum | awk '{print $1}')
-            echo $line > $learning_dir/txts/$key
-            echo $file:$linenr > $learning_dir/map/$key
-            linenr=$(( $linenr + 1 ))
-        done
+        src=$file
+        dst=$(echo $file | sed "s|^\.|$learning_dir/documents|g")
+        [ -e $dst ] && continue
+        dir=$(dirname $dst)
+        mkdir -p $dir
+        doc2txt_rec "$src" "$dst"
+    done
+
+    mkdir $learning_dir/txts $learning_dir/map
+    find $learning_dir/documents -type f | while read file
+    do
+        learning_index_document $file
     done
 
     [ $( echo $vectorizer_method | grep keywords ) ] || ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
