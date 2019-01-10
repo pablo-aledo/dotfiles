@@ -1586,10 +1586,10 @@ learning.index(){
         doc2txt_rec "$src" "$dst"
     done
 
-    mkdir $learning_dir/txts $learning_dir/map
+    mkdir -p $learning_dir/txts $learning_dir/map
     find $learning_dir/documents -type f | while read file
     do
-        learning_index_document $file
+        learning.index_document $file
     done
 
     [ $( echo $vectorizer_method | grep keywords ) ] || ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
