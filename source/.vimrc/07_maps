@@ -76,7 +76,7 @@ map Sd %x''x
 " find in common files
 map <C-f> :cw<cr>:grep -i '' *.h *.cpp *.php *.c *.tex<left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left>
 " Find in all files
-map <C-f><C-f> :cw<cr>:grep -i '' *<left><left><left>
+map <C-f><C-f> :cw<cr>:grep -Ri '' *<left><left><left>
 " Find and paste
 map <C-S-b> :r! cat `find -type f` \| grep 
 " Copy previous line
