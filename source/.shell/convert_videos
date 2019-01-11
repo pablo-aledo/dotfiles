@@ -292,6 +292,10 @@ convert_rmsmall(){
 	find "$converted_dir" -name '*.mp4' -size -100k -delete 2>/dev/null
 }
 
+cp_report(){
+    cp /tmp/convert_report $convert_dir
+}
+
 convert_recursive(){
 	[ $# -eq 0 ] && width=640
 	[ $# -eq 1 ] && width=$1
@@ -349,6 +353,8 @@ convert_recursive(){
     convert_missing
 
     convert_small
+
+    cp_report
 
 }
 
@@ -418,6 +424,8 @@ convert_recursive_parallel(){
     convert_missing
 
     convert_small
+
+    cp_report
 }
 
 mv_converted(){
