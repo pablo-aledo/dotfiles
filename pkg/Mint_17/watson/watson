@@ -11,34 +11,36 @@ closest_classifier.sortdist /tmp/document | head -n10 | while read line
 do
     key=$(echo $line | cut -d '.' -f1)
     file=$(cat $learning_dir/map/$key | cut -d':' -f1)
-    line=$(cat $learning_dir/map/$key | cut -d':' -f2)
-    content=$(cat $file | tail -n+$line | head -n5 | paste -d' ' -s)
-    echo $file:$line:$content >> /tmp/watson_qf
+    linenr=$(cat $learning_dir/map/$key | cut -d':' -f2)
+    content=$(cat $file | tail -n+$linenr | head -n5 | paste -d' ' -s)
+    echo $file:$linenr:$content >> /tmp/watson_qf
 done
 
-line=$(cat /tmp/watson_qf | cut -d':' -f1,2 | sort -g | head -n1)
+line=$(cat /tmp/watson_qf | sort -g | head -n1)
 last_file=$(echo $line | cut -d':' -f1)
-last_line=$(echo $line | cut -d':' -f2)
+last_linenr=$(echo $line | cut -d':' -f2)
+  content=$(echo $line | awk '{FS=":"}{$1=""; $2=""; print}')
 
-echo $last_file:$last_line
+echo $last_file:$last_linenr:$content
 
-cat /tmp/watson_qf | cut -d':' -f1,2 | sort -g | while read line
+cat /tmp/watson_qf | sort -g | while read line
 do
     file=$(echo $line | cut -d':' -f1)
-    line=$(echo $line | cut -d':' -f2)
+    linenr=$(echo $line | cut -d':' -f2)
+    content=$(echo $line | awk '{FS=":"}{$1=""; $2=""; print}')
 
     if [ "$file" != "$last_file" ]
     then
-        echo $file:$line
+        echo $file:$linenr:$content
         last_file=$file
-        last_line=$line
+        last_line=$linenr
     fi
 
-    if [ "$file" = "$last_file" ] && [ $(($line - $last_line)) -gt 5 ]
+    if [ "$file" = "$last_file" ] && [ $(($linenr - $last_linenr)) -gt 5 ]
     then
-        echo $file:$line
+        echo $file:$linenr:$content
         last_file=$file
-        last_line=$line
+        last_linenr=$linenr
     fi
 done
 
