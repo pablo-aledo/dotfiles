@@ -12,6 +12,33 @@ do
     key=$(echo $line | cut -d '.' -f1)
     file=$(cat $learning_dir/map/$key | cut -d':' -f1)
     line=$(cat $learning_dir/map/$key | cut -d':' -f2)
-    content=$(cat $file | head -n $line | tail -n1)
-    echo $file:$line:$content | tee -a /tmp/watson_qf
+    content=$(cat $file | tail -n+$line | head -n5 | paste -d' ' -s)
+    echo $file:$line:$content >> /tmp/watson_qf
 done
+
+line=$(cat /tmp/watson_qf | cut -d':' -f1,2 | sort -g | head -n1)
+last_file=$(echo $line | cut -d':' -f1)
+last_line=$(echo $line | cut -d':' -f2)
+
+echo $last_file:$last_line
+
+cat /tmp/watson_qf | cut -d':' -f1,2 | sort -g | while read line
+do
+    file=$(echo $line | cut -d':' -f1)
+    line=$(echo $line | cut -d':' -f2)
+
+    if [ "$file" != "$last_file" ]
+    then
+        echo $file:$line
+        last_file=$file
+        last_line=$line
+    fi
+
+    if [ "$file" = "$last_file" ] && [ $(($line - $last_line)) -gt 5 ]
+    then
+        echo $file:$line
+        last_file=$file
+        last_line=$line
+    fi
+done
+
