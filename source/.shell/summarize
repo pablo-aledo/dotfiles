@@ -1192,6 +1192,65 @@ except IOError as e:
 "
 }
 
+cluster_closest.fit(){
+    rm -fr $learning_dir/classifier/{0..2}
+    for a in $learning_dir/txts/*
+    do
+        cluster=$(kmeans_clustering.transform $a)
+        mkdir -p $learning_dir/classifier/$cluster
+        cat $learning_dir/vectors_reduced/$(basename $a) >> $learning_dir/classifier/$cluster/sortvectors
+        echo $(basename $a) >> $learning_dir/classifier/$cluster/sortnames
+        echo -n .
+    done
+}
+
+cluster_closest.sortdist(){
+    h1=$(learning.doc2rvect $1)
+
+cluster=$(python -c "
+x=[$h1]
+learning_dir='$learning_dir'
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.externals import joblib
+kmeans=joblib.load(learning_dir + '/cluster/cluster.pkl')
+print( kmeans.predict(x)[0] )
+")
+
+    python -c "
+import sys, errno
+import numpy as np
+import math
+from sets import Set
+
+learning_dir='$learning_dir'
+
+with open(learning_dir + '/classifier/"$cluster"/sortnames') as f:
+    names = [ line.rstrip('\n') for line in f ]
+with open(learning_dir + '/classifier/"$cluster"/sortvectors') as f:
+    vectors = [ line.rstrip('\n') for line in f ]
+    vectors = [ np.fromstring(vector, dtype=float, sep=' ') for vector in vectors ]
+
+def distance(h1,h2):
+    if( '$learning_distance' == 'jaccard' ):
+        h1_set = Set( [ i for i in range(0, len(h1)) if h1[i] != 0 ] )
+        h2_set = Set( [ i for i in range(0, len(h2)) if h2[i] != 0 ] )
+        return 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
+    if( '$learning_distance' == 'euclidean' ):
+        return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
+
+distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)) }
+
+try:
+    for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
+        print '%s' % (key)
+    sys.stdout.flush()
+except IOError as e:
+        pass
+"
+}
+
+
 keywords.filter () {
 
     [ $# -eq 0 ] && condition="true"
