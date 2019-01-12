@@ -293,7 +293,7 @@ convert_rmsmall(){
 }
 
 cp_report(){
-    cp /tmp/convert_report $convert_dir
+    \cp /tmp/convert_report $convert_dir
 }
 
 convert_recursive(){
