@@ -841,7 +841,7 @@ kmeans_clustering.fit(){
     rm -fr $tmp/clusters
     for file in $learning_dir/vectors_reduced/*
     do
-        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/clusters
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/clusters.x
     done
 
 python -c "
