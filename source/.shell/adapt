@@ -656,3 +656,9 @@ adapt_swappiness(){
 	#min_free_kbytes=`sysctl vm.min_free_kbytes | cut -d' ' -f3`
 	#sudo sysctl -w vm.min_free_kbytes=$(( $min_free_kbytes * 2 ))
 }
+
+adapt_alt(){
+	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
+	i3-msg reload
+}
+
