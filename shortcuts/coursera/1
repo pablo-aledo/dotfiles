@@ -2,12 +2,13 @@ export DISPLAY=:1
 source ~/.dotfiles/source/.shell/adapt
 adapt_shc_theme
 
+web="$(xclip -sel clip -o)"
 xrandr --output VNC-0 --mode 1280x800
 sleep 1
 xdotool key Alt+w
 killall chrome chromium google-chrome google-chrome-stable
 sleep 1
-google-chrome --profile-directory=Default "$(xclip -sel clip -o)" &
+google-chrome --profile-directory=Default "$web" &
 
 echo 0 > /tmp/filenr
 echo 1 > /tmp/weeknr
