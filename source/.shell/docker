@@ -550,6 +550,7 @@ case $1 in
                          #docker run -d -p 6080:6080 -p 5900:5900 -e RESOLUTION=1920x1080 dorowu/ubuntu-desktop-lxde-vnc
                          #docker run -it --rm -p 6080:80 --device /dev/snd -e ALSADEV=hw:2,0 dorowu/ubuntu-desktop-lxde-vnc
                          #google-chrome 'http://127.0.0.1:6080/#/?video'
+                         #google-chrome 'http://127.0.0.1:6080/vnc.html?resize=remote'
                          google-chrome 'http://localhost:6080/vnc.html?autoconnect=1&autoscale=0&quality=3'
                          ;;
 (neural-style)           docker run -v $PWD:/out -w /out -i -t neural-style th /root/neural-style/neural_style.lua -gpu -1 -style_image style.jpg -content_image content.jpg ;;
