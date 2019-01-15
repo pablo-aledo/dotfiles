@@ -100,7 +100,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|ubuntu_pga_dev|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic|centos-i3-vnc|centos7_gobuild)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|ubuntu_pga_dev|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic|centos-i3-vnc|centos7_gobuild|centos7_ccache)
     [ "$docker_export_proxy" = "true" ] || cd ~/.dotfiles/pkg/Docker/$1
     [ "$docker_export_proxy" = "true" ] && rm -fr /tmp/docker
 	[ "$docker_export_proxy" = "true" ] && cp -r ~/.dotfiles/pkg/Docker/$1 /tmp/docker
@@ -258,7 +258,7 @@ case $1 in
 (couchpotato)            docker run -d --restart always -p 5050:5050 -v /etc/localtime:/etc/localtime:ro -v /volumes/couchpotato:/data --link transmission:transmission --name couchpotato ${DOCKER_REPO_PREFIX}/couchpotato ;;
 (cppcheck)               shift; docker run -v $PWD:/workdir -w /workdir -it cppcheck $* ;;
 (crio)                   docker run --rm -it --privileged --net host -v /var/lib/containers:/var/lib/containers -v /var/run:/var/run -v /dev:/dev -v /etc/cni:/etc/cni:ro -v /opt/cni:/opt/cni:ro r.j3ss.co/crio ;;
-(centos7-ccache)         docker run -it -v $HOME/.ccache:/root/.ccache -v $PWD:/root/Proyectos -w /root/Proyectos centos7_ccache /bin/bash ;;
+(centos7_ccache)         docker run -it -v $HOME/.ccache:/root/.ccache -v $PWD:/root/Proyectos -w /root/Proyectos centos7_ccache /bin/bash ;;
 (gcloud)                 shift; docker run --rm -it -v "${HOME}/.gcloud:/root/.config/gcloud" -v "${HOME}/.ssh:/root/.ssh:ro" -v "$(which docker):/usr/bin/docker" -v /var/run/docker.sock:/var/run/docker.sock --name gcloud ${DOCKER_REPO_PREFIX}/gcloud "$@" ;;
 (gnumeric)               shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY gnumeric $* ;;
 (gthumb)                 shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY gthumb $* ;;
