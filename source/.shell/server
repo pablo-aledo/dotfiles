@@ -328,3 +328,14 @@ aws_servers(){
 	tmux new -d -s avxmail "source ~/.shell; server avxmail"
 }
 
+rsswatch(){
+    while true
+    do
+        mem=$(ps aux | grep rsstail | grep -v grep | awk '{print $4}' | sed 's/\.[0-9]//g')
+        echo "Rsstail memory $mem"
+        [ $mem -gt 30 ] && echo "\e[31m kill rsstail \e[0m"
+        [ $mem -gt 30 ] && killall rsstail
+        sleep 10
+    done
+}
+
