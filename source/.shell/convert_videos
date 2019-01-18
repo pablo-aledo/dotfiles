@@ -429,7 +429,7 @@ convert_recursive_parallel(){
 }
 
 mv_converted(){
-	destination=/media/mint/1TB/Videos
+	destination=/media/removable/2TB2/homes/admin/Videos
 
 	[ -d "$converted_dir" ] || return
 	[ -d "$destination" ]   || return
@@ -462,7 +462,7 @@ mv_converted(){
 }
 
 cp_convert(){
-	source=/media/mint/1TB/Videos
+	source=/media/removable/2TB2/homes/admin/Videos
 
 	[ -d "$source" ]      || return
 	[ -d "$convert_dir" ] || return
