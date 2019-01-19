@@ -1,0 +1,15 @@
+export DISPLAY=:1
+
+xdotool key ctrl+w
+xdotool key ctrl+f
+sleep 1
+xdotool type "You are watching this now"
+xdotool key Escape
+
+sleep 1
+xdotool key Tab
+sleep 1
+xdotool key Return
+
+nr=$(cat /tmp/filenr)
+echo $(( $nr + 1 )) > /tmp/filenr

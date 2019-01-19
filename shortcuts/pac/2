@@ -1,0 +1,5 @@
+export DISPLAY=:1
+
+xdotool key Ctrl+f
+xdotool type "video"
+xdotool key Escape
