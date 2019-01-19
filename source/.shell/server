@@ -320,33 +320,35 @@ server(){
 	then
         pkg install nfs
 	fi
+
+	if [ $1 = rsswatch ]
+    then
+        while true
+        do
+            mem=$(ps aux | grep rsstail | grep -v grep | awk '{print $4}' | sed 's/\.[0-9]//g')
+            echo "Rsstail memory $mem"
+            [ $mem -gt 30 ] && echo "\e[31m kill rsstail \e[0m"
+            [ $mem -gt 30 ] && killall rsstail
+            sleep 10
+        done
+    fi
+
+    if [ $1 = nightlybak ]
+    then
+    	while true
+    	do
+    		if [ `date +%H%M` = 0005 ]
+    		then
+                local_backup
+    			sleep $((60*5))
+    		fi
+    		sleep 10
+    	done
+    fi
 }
 
 aws_servers(){
     server novnc4
 	tmux new -d -s rssmail "source ~/.shell; server rssmail"
 	tmux new -d -s avxmail "source ~/.shell; server avxmail"
-}
-
-rsswatch(){
-    while true
-    do
-        mem=$(ps aux | grep rsstail | grep -v grep | awk '{print $4}' | sed 's/\.[0-9]//g')
-        echo "Rsstail memory $mem"
-        [ $mem -gt 30 ] && echo "\e[31m kill rsstail \e[0m"
-        [ $mem -gt 30 ] && killall rsstail
-        sleep 10
-    done
-}
-
-nightlybak(){
-	while true
-	do
-		if [ `date +%H%M` = 0005 ]
-		then
-            local_backup
-			sleep $((60*5))
-		fi
-		sleep 10
-	done
 }
