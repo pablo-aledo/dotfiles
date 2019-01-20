@@ -2,6 +2,7 @@ vectorizer_method=keywords
 pca_method=identity
 classifier_method=closest_metadata
 regression_method=linear_regression
+indexer_method=sliding_indexer
 clustering_method=kmeans_clustering
 learning_evaluate_vects="true"
 learning_dir=$HOME/learning
@@ -1621,7 +1622,7 @@ do
 done
 }
 
-learning.index_document(){
+sliding_indexer(){
     file=$1
     linesnr=$(cat $file | wc -l)
     for linenr in $(seq 1 $linesnr)
@@ -1654,7 +1655,7 @@ learning.index(){
     mkdir -p $learning_dir/txts $learning_dir/map
     find $learning_dir/documents -type f | while read file
     do
-        learning.index_document $file
+        $indexer_method $file
     done
 
     [ $( echo $vectorizer_method | grep keywords ) ] || ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
