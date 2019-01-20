@@ -15,6 +15,17 @@ endfunction
 
 command! -nargs=1 Bgrep call Vimgrepall(<f-args>)
 
+function! WatsonQL()
+exec("w")
+let line = getline(".")
+let linenr = line(".")
+let filename = expand('%:p')
+let result = system("watson" , filename . ':' . linenr)
+let cmd = 'cat /tmp/watson_qf'
+exec(":cgetexpr system('" . cmd . "')")
+exec("cw")
+endfunction
+
 function! WatsonQ()
 let line = getline(".")
 let linenr = line(".")
