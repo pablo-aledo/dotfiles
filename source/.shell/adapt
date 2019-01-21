@@ -115,6 +115,7 @@ adapt_awsserver(){
     pkg install python-numpy
     pkg install python-sklearn
     pkg install unrar
+    pkg install detox
 
 	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
 	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
