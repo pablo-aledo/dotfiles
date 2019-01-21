@@ -16,18 +16,20 @@ do
     echo $file:$linenr:$content >> /tmp/watson_qf
 done
 
-line=$(cat /tmp/watson_qf | sort -g | head -n1)
+line=$(cat /tmp/watson_qf | head -n1)
 last_file=$(echo $line | cut -d':' -f1)
 last_linenr=$(echo $line | cut -d':' -f2)
-  content=$(echo $line | awk '{FS=":"}{$1=""; $2=""; print}')
+  #content=$(echo $line | awk '{FS=":"}{$1=""; $2=""; print}')
+    content=$(echo $line | sed 's/^[^:]*:[^:]*://g')
 
 echo $last_file:$last_linenr:$content
 
-cat /tmp/watson_qf | sort -g | while read line
+cat /tmp/watson_qf | while read line
 do
     file=$(echo $line | cut -d':' -f1)
     linenr=$(echo $line | cut -d':' -f2)
-    content=$(echo $line | awk '{FS=":"}{$1=""; $2=""; print}')
+    #content=$(echo $line | awk '{FS=":"}{$1=""; $2=""; print}')
+    content=$(echo $line | sed 's/^[^:]*:[^:]*://g')
 
     if [ "$file" != "$last_file" ]
     then
