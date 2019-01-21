@@ -292,6 +292,21 @@ convert_rmsmall(){
 	find "$converted_dir" -name '*.mp4' -size -100k -delete 2>/dev/null
 }
 
+convert_rmbigger(){
+	cd $convert_dir
+	find $PWD -type f | while read line
+	do
+		file1="$line"
+		base1="`basename "$line"`"
+		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
+		[ -e "$file2" ] || continue
+		size1=$(ls -l "$file1" | awk '{print $5}' )
+		size2=$(ls -l "$file2" | awk '{print $5}' )
+		[ $size2 -gt $size1 ] && echo "\e[31m Converted file is bigger than original $file2 \e[0m" | tee -a /tmp/convert_report
+		[ $size2 -gt $size1 ] && rm -fr $file2
+	done
+}
+
 cp_report(){
     \cp /tmp/convert_report $convert_dir
 }
@@ -343,6 +358,8 @@ convert_recursive(){
 	done
 
     convert_rmsmall
+
+    convert_rmbigger
 
     convert_reportsizes
 
@@ -414,6 +431,8 @@ convert_recursive_parallel(){
 	[ `nproc` -gt 2 ] || ( source /tmp/script )
 
     convert_rmsmall
+
+    convert_rmbigger
 
     convert_reportsizes
 
