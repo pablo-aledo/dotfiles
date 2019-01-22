@@ -201,3 +201,5 @@ nmap ,cf :let @*=expand("%:p")<cr>
 map ,e :e %:p:h<cr>
 " For browser consoles that block Ctrl-w
 map <C-e> <C-w>
+" Search selection
+vnoremap // y/<C-R>"<CR>
