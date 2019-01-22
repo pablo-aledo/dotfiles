@@ -1,0 +1,11 @@
+#compdef docker_app
+
+local -a servers
+servers=( $( which server | grep 'if' | grep '\$1' | sed 's/.*\"\(.*\)\".*/\1/g' ) )
+
+cur=${words[CURRENT]}
+prev=${words[CURRENT-1]}
+cmd=${words[2]}
+
+[ "$prev" = "server" ] && _describe 'command' servers
+

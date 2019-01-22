@@ -265,14 +265,14 @@ server(){
 		done
 	fi
 
-	if [ $1 = novnc ]
+	if [ $1 = "novnc" ]
 	then
 		pkg install novnc
 		tmux new -d -s novnc "cd ~/noVNC; ./utils/launch.sh --vnc localhost:5900"
 		tmux new -d -s vnc   "x11vnc"
 	fi
 
-	if [ $1 = novnc2 ]
+	if [ $1 = "novnc2" ]
 	then
 		pkg install novnc2
 		vnc4server -kill :1
@@ -280,7 +280,7 @@ server(){
 		tmux new -d -s vnc   "vnc4server"
 	fi
 
-	if [ $1 = novnc3 ]
+	if [ $1 = "novnc3" ]
 	then
 		pkg install novnc3
 		vnc4server -kill :1
@@ -289,7 +289,7 @@ server(){
 		tmux new -d -s vnc   "/usr/bin/vncserver; read"
 	fi
 
-	if [ $1 = novnc4 ]
+	if [ $1 = "novnc4" ]
 	then
 		[ -e /usr/share/noVNC/ ] || pkg install novnc4
 		/usr/bin/vncserver -kill :1
@@ -299,29 +299,29 @@ server(){
 		tmux new -d -s vnc   "/usr/bin/vncserver; read"
 	fi
 
-	if [ $1 = oneye ]
+	if [ $1 = "oneye" ]
 	then
 		pkg install oneye
 	fi
 
-	if [ $1 = rssmail ]
+	if [ $1 = "rssmail" ]
 	then
 		source ~/.dotfiles/source/.shell/rssmail
 		while true; do rssmail_server; done
 	fi
 
-	if [ $1 = avxmail ]
+	if [ $1 = "avxmail" ]
 	then
 		source ~/.dotfiles/source/.shell/avaxhome
 		while true; do avhome_mail_server; sleep 60; done
 	fi
 
-	if [ $1 = nfs ]
+	if [ $1 = "nfs" ]
 	then
         pkg install nfs
 	fi
 
-	if [ $1 = rsswatch ]
+	if [ $1 = "rsswatch" ]
     then
         while true
         do
@@ -333,7 +333,7 @@ server(){
         done
     fi
 
-    if [ $1 = nightlybak ]
+    if [ $1 = "nightlybak" ]
     then
     	while true
     	do
