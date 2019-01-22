@@ -498,7 +498,7 @@ cp_convert(){
 convert_candidates(){
 	source=/media/mint/1TB/Videos
     (cd $source; du --max-depth=1 | sort -g | tac | tail -n+2 | awk '{$1=""; print}' | sed 's|^ ./||g' > /tmp/list)
-	cat list | while read line
+	cat /tmp/list | while read line
 	do
 		[ "`find "$source/$line" -name '*converted*'`" ] || echo $line
 	done
