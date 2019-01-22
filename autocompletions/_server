@@ -1,4 +1,4 @@
-#compdef docker_app
+#compdef server
 
 local -a servers
 servers=( $( which server | grep 'if' | grep '\$1' | sed 's/.*\"\(.*\)\".*/\1/g' ) )
