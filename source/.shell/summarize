@@ -299,6 +299,26 @@ for i in range(0,1000):
 
 window.get_features(){}
 
+windowpy.txt2vec(){
+    [ $window_lowercase = "true" ] && lowercmd="tr '[A-Z]' '[a-z]'"
+    [ $window_lowercase = "true" ] || lowercmd="cat"
+
+    line=$( cat $1 | $(echo $lowercmd) | paste -d' ' -s )
+python -c "
+import numpy as np
+np.set_printoptions(threshold=np.nan)
+out=np.zeros(1000)
+line='$line'
+sliding=[line[i:i+3] for i in xrange(len(line)-2)]
+for b in sliding:
+    hash=(ord(b[0])*255*255+ord(b[1])*255+ord(b[2]))%1000
+    out[hash] += 1
+print out
+" | sed 's/  /, /g' | paste -d' ' -s
+}
+
+windowpy.get_features(){}
+
 keywords_multiscale.txt2vec(){
 
     vect1=$(cat $1 | head -n 1     | tokenize | countwords | getkeywords | awk '{print $1}')
