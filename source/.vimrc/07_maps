@@ -78,7 +78,7 @@ map <C-f> :cw<cr>:grep -i '' *.h *.cpp *.php *.c *.tex<left><left><left><left><l
 " Find in all files
 map <C-f><C-f> :cw<cr>:grep -Ri '' *<left><left><left>
 " Find and paste
-map <C-S-b> :r! cat `find -type f` \| grep 
+"map <C-S-b> :r! cat `find -type f` \| grep 
 " Copy previous line
 inoremap <C-y> <esc>:AutoComplPopDisable<cr>a<C-y><esc>:AutoComplPopEnable<cr>a
 " To avoid mistakes
@@ -199,7 +199,8 @@ nnoremap <leader>u :GundoToggle<CR>
 nmap ,cf :let @*=expand("%:p")<cr>
 " open current folder, even when I do not have autochdir
 map ,e :e %:p:h<cr>
-" For browser consoles that block Ctrl-w
+" For browser consoles that block Ctrl-w anc Ctrl-v
 map <C-e> <C-w>
+map <C-b> <C-v>
 " Search selection
 vnoremap // y/<C-R>"<CR>
