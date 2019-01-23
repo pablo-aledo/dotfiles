@@ -959,6 +959,7 @@ print clf.transform(x)[0]
 }
 
 learning.configure(){
+    cat    $learning_dir/configure/configure
     source $learning_dir/configure/configure
 }
 
@@ -1628,6 +1629,7 @@ done
 
 sliding_indexer(){
     file=$1
+    echo "\e[34m $file \e[0m "
     linesnr=$(cat $file | wc -l)
     for linenr in $(seq 1 $linesnr)
     do
