@@ -1400,7 +1400,7 @@ learning.restart(){
 }
 
 learning.restart(){
-    cd $learning_dir && ls | egrep -v '^documents$' | egrep -v '^features$' | egrep -v '^topics$' | egrep -v 'summaries' | egrep -v '^metadata$' | xargs rm -rf
+    cd $learning_dir && ls | egrep -v '^documents$' | egrep -v '^features$' | egrep -v '^topics$' | egrep -v 'summaries' | egrep -v '^metadata$' | egrep -v '^configure$' | xargs rm -rf
     mkdir -p $tmp
 }
 
