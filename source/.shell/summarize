@@ -965,6 +965,7 @@ print clf.transform(x)[0]
 }
 
 learning.configure(){
+    [ $1 != "" ] && cd $1 && export learning_dir=$PWD
     cat    $learning_dir/configure/configure
     source $learning_dir/configure/configure
 }
@@ -1651,8 +1652,9 @@ sliding_indexer(){
 
 learning.index(){
 
-    if [ "$1" = "." ]
+    if [ "$1" != "" ]
     then
+        cd $1
         find -type f | while read file
         do
             src=$file
