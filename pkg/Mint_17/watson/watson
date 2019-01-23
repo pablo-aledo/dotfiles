@@ -3,7 +3,7 @@
 source ~/.dotfiles/source/.shell/summarize
 
 export learning_dir=$HOME/watson
-learning.configure
+learning.configure >/dev/null
 
 read line
 echo $line > /tmp/document
