@@ -958,6 +958,10 @@ print clf.transform(x)[0]
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
 }
 
+learning.configure(){
+    source $learning_dir/configure/configure
+}
+
 learning.doc2txt(){
 	filename=$1
 	destination=$2

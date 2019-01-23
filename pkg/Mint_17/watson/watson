@@ -2,6 +2,9 @@
 
 source ~/.dotfiles/source/.shell/summarize
 
+export learning_dir=$HOME/learning_watson
+learning.configure
+
 read line
 echo $line > /tmp/document
 
