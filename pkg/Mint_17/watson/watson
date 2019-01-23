@@ -2,7 +2,7 @@
 
 source ~/.dotfiles/source/.shell/summarize
 
-export learning_dir=$HOME/learning_watson
+export learning_dir=$HOME/watson
 learning.configure
 
 read line
