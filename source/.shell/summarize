@@ -1643,7 +1643,7 @@ sliding_indexer(){
 
 learning.index(){
 
-    if [ "$1" != "index" ]
+    if [ "$1" = "." ]
     then
         find -type f | while read file
         do
