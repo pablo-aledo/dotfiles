@@ -306,12 +306,14 @@ windowpy.txt2vec(){
     line=$( cat $1 | $(echo $lowercmd) | paste -d' ' -s )
 python -c "
 import numpy as np
+import hashlib
 np.set_printoptions(threshold=np.nan)
 out=np.zeros(1000)
 line='$line'
 sliding=[line[i:i+3] for i in xrange(len(line)-2)]
 for b in sliding:
-    hash=(ord(b[0])*255*255+ord(b[1])*255+ord(b[2]))%1000
+    #hash=(ord(b[0])*255*255+ord(b[1])*255+ord(b[2]))%1000
+    hash=int(hashlib.md5(b))%1000
     out[hash] += 1
 print out
 " | sed 's/  /, /g' | paste -d' ' -s
