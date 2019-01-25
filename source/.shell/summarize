@@ -1714,3 +1714,9 @@ learning.index(){
     mkdir -p $learning_dir/classifier
     closest_classifier.fit
 }
+
+learning.normalize_txt(){
+    cat $1 | paste -d' ' -s | sed 's/\. /.\n/g' > $tmp/document
+    mv /tmp/document $1
+}
+
