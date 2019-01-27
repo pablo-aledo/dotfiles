@@ -461,7 +461,7 @@ mv_converted(){
 		do
 			echo -e "\e[34m mv_converted $line \e[0m"
 			mkdir -p "$destination/$line"
-			( cd $destination/$line; permissions )
+			#( cd $destination/$line; permissions )
 			rsync -vai --delete --remove-source-files "$converted_dir/$line" "$destination/$line"
 			rm_empty_folders "$converted_dir/$line"
 		done
@@ -470,7 +470,7 @@ mv_converted(){
 		do
 			echo -e "\e[34m mv_converted $line \e[0m"
 			mkdir -p "$destination/$line"
-			( cd $destination/$line; permissions )
+			#( cd $destination/$line; permissions )
 			[ $line[1] = '/' ] || rsync -vai --delete --remove-source-files "$converted_dir/$line/" "$destination/$line/"
 			[ $line[1] = '/' ] && rsync -vai --delete --remove-source-files "$line/" "$destination/`basename $line`/"
 			[ $line[1] = '/' ] || rm_empty_folders "$converted_dir/$line"
@@ -488,7 +488,7 @@ cp_convert(){
 
 	for a in $*
 	do
-		( cd "$source/$a"; permissions )
+		#( cd "$source/$a"; permissions )
 		echo -e "\e[34m cp_convert $a \e[0m"
 		mkdir -p "$convert_dir/$a"
 		rsync -vai "$source/$a/" "$convert_dir/$a/"
