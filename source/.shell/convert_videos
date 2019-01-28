@@ -503,3 +503,19 @@ convert_candidates(){
 		[ "`find "$source/$line" -name '*converted*'`" ] || echo $line
 	done
 }
+
+convert_candidates(){
+	source=/media/removable/2TB2/homes/admin/Videos
+    (cd $source; du -BM --max-depth=1 | sort -g | tac | tail -n+2 > /tmp/list)
+    sumsize=0
+	cat /tmp/list | while read line
+	do
+        dir=$(echo $line | sed 's|^[^\/]*\/||g' )
+        size=$(echo $line | sed 's|^\([^M]*\)M.*|\1|g' )
+		if [ "`find "$source/$dir" -name '*converted*'`" = "" ]
+        then
+            sumsize=$(( $sumsize + $size ))
+            echo $sumsize $dir
+        fi
+	done
+}
