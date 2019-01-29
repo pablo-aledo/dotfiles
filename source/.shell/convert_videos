@@ -325,6 +325,8 @@ convert_recursive(){
 
     convert_checkrar
 
+    convert_2spaces
+
     convert_unrar
 
     empty_folders
@@ -384,6 +386,8 @@ convert_recursive_decompress(){
 
     convert_checkrar
 
+    convert_2spaces
+
     convert_unrar
 
     empty_folders
@@ -409,6 +413,8 @@ convert_recursive_parallel(){
 	[ -e /usr/bin/parallel ] || pkg install parallel
 
     convert_checkrar
+
+    convert_2spaces
 
     convert_unrar
 
