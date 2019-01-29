@@ -21,3 +21,4 @@ hd(){ helm delete --purge $(hn $1) }
 kshell(){ sudo kubectl exec -it $1 -- /bin/bash}
 alias wdfh='watch -n1 df -h'
 alias grunner='sudo DOCKER_IMAGE=golang:1.10 gitlab-runner exec docker go_test'
+alias docker-compose='sudo /usr/local/bin/docker-compose'
