@@ -1594,6 +1594,46 @@ metadata.filename(){
     echo "$name" > "$learning_dir/metadata/$file/filename"
 }
 
+metadata.keywords(){
+    if [ $# -eq 0 ]
+    then
+        cd $learning_dir/documents
+        ls | while read line
+        do
+            metadata.keywords "$line"
+        done
+        return
+    fi
+
+    file=$1
+
+    mkdir -p "$learning_dir/metadata/$file"
+    keywords=$(cat $file | tokenize | countwords | keywords.filter | sed 's/^[^ ] //g' | paste -d' ' -s)
+    echo "$file \e[34m $keywords \e[0m"
+    echo $keywords > "$learning_dir/metadata/$file/keywords"
+}
+
+metadata.keywords_idx(){
+    if [ $# -eq 0 ]
+    then
+        cd $learning_dir/documents
+        ls | while read line
+        do
+            metadata.keywords "$line"
+        done
+        return
+    fi
+
+    file=$1
+
+    mkdir -p "$learning_dir/metadata/$file"
+    words1=$(cat $file | tokenize | sort | uniq)
+    words2=$(cat $learning_dir/features/keywords_full | sort | uniq)
+    keywords=$(comm -12 <(echo $words1) <(echo $words2) | paste -d' ' -s)
+    echo "$file \e[34m $keywords \e[0m"
+    echo $keywords > "$learning_dir/metadata/$file/keywords"
+}
+
 metadata.isbn2title(){
     if [ $# -eq 0 ]
     then
