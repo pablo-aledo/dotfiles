@@ -400,7 +400,7 @@ convert_recursive_decompress(){
 
 convert_recursive_parallel(){
 
-	[ $# -eq 0 ] && width=640
+	[ $# -eq 0 ] && width=720
 	[ $# -eq 1 ] && width=$1
 	convert_opts="-vf 'scale=${width}:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy -loglevel warning" # -loglevel {quiet, panic, fatal, error, warning, info, verbose, debug, trace} -hide_banner -nostats
 
