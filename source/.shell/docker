@@ -589,3 +589,13 @@ docker_build_send(){
 docker_send(){
     docker save $3 | ssh $1@$2 "sudo docker load"
 }
+
+docker_authorize(){
+    echo '{'                                    | sudo tee    /etc/docker/daemon.json
+    echo '    "insecure-registries" : ["'$1'"]' | sudo tee -a /etc/docker/daemon.json
+    echo '}'                                    | sudo tee -a /etc/docker/daemon.json
+
+    sudo systemctl stop  docker
+    sudo systemctl start docker
+
+}
