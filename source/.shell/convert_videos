@@ -457,7 +457,7 @@ convert_recursive_parallel_handbrake(){
 
 	[ $# -eq 0 ] && width=720
 	[ $# -eq 1 ] && width=$1
-	convert_opts="--preset-import-file ~/config/presets.json -> Very Fast 1080p30"
+    convert_opts="--preset-import-file ~/config/presets.json --preset 'Very Fast 1080p30'"
 
 	[ -e "$convert_dir" ]   || return
 	[ -e "$converted_dir" ] || return
