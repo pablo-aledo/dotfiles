@@ -470,7 +470,7 @@ convert_recursive_parallel_handbrake(){
 	findcmd="find \$PWD -iname '*.mp4' -or -iname '*.m4v' -or -iname '*.flv' -or -iname '*.mov' -or -iname '*.avi' -or -iname '*.wmv' -or -iname '*.mkv' -or -iname '*.vob' -or -iname '*.webm'"
 
 	cd $convert_dir
-	rm -fr /tmp/script /tmp/script2
+	rm -fr /tmp/script /tmp/script2 /tmp/script3
 	echo $findcmd | bash | while read line
 	do
         echo HandBrakeCLI -i \"$line\" -o \"`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.hbrake.mp4\" `echo $convert_opts` "</dev/null"  >> /tmp/script
@@ -483,6 +483,8 @@ convert_recursive_parallel_handbrake(){
         file=$(echo $line | cut -d'"' -f4)
         [ -e $file ] || echo $line >> /tmp/script2
 	done
+
+    ps aux | grep HandBrake | grep bash > /tmp/script3
 
     vim /tmp/script
 
