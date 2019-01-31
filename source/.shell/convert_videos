@@ -478,7 +478,7 @@ convert_recursive_parallel_handbrake(){
 
 	cat /tmp/script | while read line
 	do
-        file=$(cat $line | cut -d'"' -f4)
+        file=$(echo $line | cut -d'"' -f4)
         [ -e $file ] || echo $line >> /tmp/script2
 	done
 
