@@ -475,6 +475,7 @@ convert_recursive_parallel_handbrake(){
         echo HandBrakeCLI -i \"$line\" -o \"`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.hbrake.mp4\" `echo $convert_opts` "</dev/null"  >> /tmp/script
 	done
 
+    vim /tmp/script
 
 	cat /tmp/script | while read line
 	do
