@@ -10,12 +10,12 @@ echo $line > /tmp/document
 
 [ -e /tmp/watson_qf ] && rm -fr /tmp/watson_qf
 
-closest_classifier.sortdist /tmp/document | head -n10 | while read line
+closest_classifier.sortdist /tmp/document | head -n100 | while read line
 do
     key=$(echo $line | cut -d '.' -f1)
     file=$(cat $learning_dir/map/$key | cut -d':' -f1)
     linenr=$(cat $learning_dir/map/$key | cut -d':' -f2)
-    content=$(cat $file | tail -n+$linenr | head -n5 | paste -d' ' -s)
+    content=$(cat $file | tail -n+$linenr | head -n1 | paste -d' ' -s)
     echo $file:$linenr:$content >> /tmp/watson_qf
 done
 
@@ -34,6 +34,7 @@ do
     #content=$(echo $line | awk '{FS=":"}{$1=""; $2=""; print}')
     content=$(echo $line | sed 's/^[^:]*:[^:]*://g')
 
+
     if [ "$file" != "$last_file" ]
     then
         echo $file:$linenr:$content
@@ -41,7 +42,7 @@ do
         last_line=$linenr
     fi
 
-    if [ "$file" = "$last_file" ] && [ $(($linenr - $last_linenr)) -gt 5 ]
+    if ( [ "$file" = "$last_file" ] && ( [ $(($linenr - $last_linenr)) -gt 5 ] || [ $(($last_linenr - $linenr)) -gt 5 ] ) )
     then
         echo $file:$linenr:$content
         last_file=$file
