@@ -1,6 +1,6 @@
-sudo add-apt-repository ppa:stebbins/handbrake-releases
-sudo apt-get update
-sudo apt-get install handbrake-gtk handbrake-cli
+sudo add-apt-repository -y ppa:stebbins/handbrake-releases
+sudo apt-get update -y
+sudo apt-get install -y handbrake-gtk handbrake-cli
 
 mkdir -p ~/config
 cp ./HandBrake.conf ~/config
