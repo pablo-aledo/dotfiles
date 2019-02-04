@@ -1,0 +1,14 @@
+escape(){
+    echo $1 | sed -e 's/\"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g'
+}
+
+hashnames(){
+    ls | while read line
+    do
+        src=$(escape "$line")
+        dst=$(echo $line | md5sum | awk '{print $1}')
+        echo mv -- \"$src\" \"$dst\" >> hash.sh
+        echo mv -- \"$dst\" \"$src\" >> unhash.sh
+    done
+
+}
