@@ -4,7 +4,7 @@ rvf(){
 	do
 		a="../"$a
 		find $a -name $1
-		[ $? -eq 0 ] && return
+        #[ $? -eq 0 ] && return
 	done
 }
 
