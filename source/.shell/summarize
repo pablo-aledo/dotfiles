@@ -1468,6 +1468,7 @@ keywords.highlight(){
     cat > $tmp/file
     keywords=$(cat $tmp/file | tokenize | sort | uniq | keywords.filter)
 
+    keywords=$(comm -23 <(echo $keywords) $learning_dir/features/stopwords)
 
     esc=$(printf '\033')
     echo $keywords | while read a
