@@ -1505,6 +1505,10 @@ learning.queue_classify(){
 learning.queue_mv(){
 
     cd $learning_dir/summaries_classified/
+
+    #esc=$(printf '\033')
+    #sed -i -e "s|${esc}[31m||g" -e "s|${esc}[0m||g" *
+
     rm -fr $tmp/script
     ls | while read line
     do
