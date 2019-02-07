@@ -106,6 +106,10 @@ with open('$tmp/keywords') as f:
 with open('$learning_dir' + '/features/keywords') as f:
     keywords = [ line.rstrip('\n') for line in f ]
     keywords = [ keyword for keyword in keywords if keyword != '' ]
+with open('/home/pablo_aledo_rss_2/learning' + '/features/stopwords') as f:
+    stopwords = [ line.rstrip('\n') for line in f ]
+
+lines = [ line for line in lines if not line in stopwords ]
 
 for keyword in keywords:
     value = 0
