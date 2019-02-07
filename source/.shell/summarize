@@ -1468,7 +1468,7 @@ keywords.highlight(){
     esc=$(printf '\033')
     echo $keywords | while read a
     do
-        sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|g" $tmp/file
+        sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|gI" $tmp/file
     done
     cat $tmp/file
 }
