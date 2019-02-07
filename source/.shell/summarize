@@ -141,7 +141,7 @@ haskeyword_(){
 }
 
 haskeyword(){
-    cat > $tmp/keywords
+    cat | sed 's/^ *[0-9]* //g' > $tmp/keywords
 
     python -c "
 import re
@@ -151,13 +151,18 @@ with open('$tmp/keywords') as f:
 with open('$learning_dir' + '/features/keywords') as f:
     keywords = [ line.rstrip('\n') for line in f ]
     keywords = [ keyword for keyword in keywords if keyword != '' ]
+with open('/home/pablo_aledo_rss_2/learning' + '/features/stopwords') as f:
+    stopwords = [ line.rstrip('\n') for line in f ]
+
+lines = [ line for line in lines if not line in stopwords ]
 
 for keyword in keywords:
+    regex=keyword
 
-    if(keyword[0] == '^'):
-        regex='^ *[0-9]* ' + keyword[1:]
-    else:
-        regex='^ *[0-9]* .*' + keyword
+    #if(keyword[0] == '^'):
+        #regex='^ *[0-9]* ' + keyword[1:]
+    #else:
+        #regex='^ *[0-9]* .*' + keyword
 
     for line in lines:
         if(re.match(regex,line)):
@@ -1467,8 +1472,6 @@ learning.queue_get(){
 keywords.highlight(){
     cat > $tmp/file
     keywords=$(cat $tmp/file | tokenize | sort | uniq | keywords.filter)
-
-    keywords=$(comm -23 <(echo $keywords) $learning_dir/features/stopwords)
 
     esc=$(printf '\033')
     echo $keywords | while read a
