@@ -175,7 +175,8 @@ keywords.txt2vec(){
 
     python -c "
 import numpy as np
-np.set_printoptions(threshold=np.nan)
+import sys
+np.set_printoptions(threshold=sys.maxsize)
 vect=$vect
 total=$total
 print(np.divide(vect, float(total+0.00001)))
@@ -309,7 +310,8 @@ windowpy.txt2vec(){
 python -c "
 import numpy as np
 import hashlib
-np.set_printoptions(threshold=np.nan)
+import sys
+np.set_printoptions(threshold=sys.maxsize)
 out=np.zeros(1000)
 line='$line'
 sliding=[line[i:i+3] for i in xrange(len(line)-2)]
@@ -652,7 +654,8 @@ lda.fit(){
 
 	python -c "
 import numpy as np
-np.set_printoptions(threshold=np.nan)
+import sys
+np.set_printoptions(threshold=sys.maxsize)
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.externals import joblib
 X = np.loadtxt('$tmp/lda.x')
@@ -944,7 +947,8 @@ print normalized
 pca_pickle.transform() {
 	python -c "
 import numpy as np
-np.set_printoptions(threshold=np.nan)
+import sys
+np.set_printoptions(threshold=sys.maxsize)
 from sklearn.externals import joblib
 learning_dir='$learning_dir'
 pca=joblib.load(learning_dir + '/pca/pca.pkl')
@@ -958,7 +962,8 @@ print pca.transform(x)[0]
 pca_scaler.transform() {
 	python -c "
 import numpy as np
-np.set_printoptions(threshold=np.nan)
+import sys
+np.set_printoptions(threshold=sys.maxsize)
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.externals import joblib
@@ -976,7 +981,8 @@ print pca.transform(x)[0]
 lda.transform() {
 	python -c "
 import numpy as np
-np.set_printoptions(threshold=np.nan)
+import sys
+np.set_printoptions(threshold=sys.maxsize)
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.externals import joblib
 learning_dir='$learning_dir'
@@ -1169,7 +1175,8 @@ python -c "
 x=[$x]
 learning_dir='$learning_dir'
 import numpy as np
-np.set_printoptions(threshold=np.nan)
+import sys
+np.set_printoptions(threshold=sys.maxsize)
 from sklearn import linear_model
 from sklearn.externals import joblib
 reg=joblib.load(learning_dir + '/regression/regression.pkl')
