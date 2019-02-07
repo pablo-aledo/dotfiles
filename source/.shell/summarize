@@ -1470,6 +1470,7 @@ keywords.highlight(){
     do
         sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|g" $tmp/file
     done
+    cat $tmp/file
 }
 
 learning.queue_classify(){
