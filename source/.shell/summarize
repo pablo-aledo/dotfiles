@@ -1489,12 +1489,12 @@ learning.queue_classify(){
         then
             ls "$learning_dir/metadata/$(echo $line | sed 's/\.txt$//g')/"* | while read metadata
             do
-                echo $(basename "$metadata") : $(cat "$learning_dir/metadata/$(basename "$line" | sed 's/\.txt$//g')/$(basename "$metadata")") | cmdhl >> $learning_dir/summaries_classified/$line
+                echo $(basename "$metadata") : $(cat "$learning_dir/metadata/$(basename "$line" | sed 's/\.txt$//g')/$(basename "$metadata")") | $cmdhl >> $learning_dir/summaries_classified/$line
             done
         fi
 
         echo "====="         >> $learning_dir/summaries_classified/$line
-        cat "$line" | cmdhl  >> $learning_dir/summaries_classified/$line
+        cat "$line" | $cmdhl >> $learning_dir/summaries_classified/$line
         echo "\e[34m $line \e[0m \e[33m $classification \e[0m"
     done
 
