@@ -19,7 +19,7 @@ window_lowercase=true
 learning_scale=3.0
 learning_distance=jaccard
 indexer_add_kw=true
-classify_highlight=true
+classify_highlight=diff
 
 ncd.get_features(){
     cp -r $learning_dir/txts/* $learning_dir/features
@@ -1481,9 +1481,34 @@ keywords.highlight(){
     cat $tmp/file
 }
 
+keywords.diffhighlight(){
+    cat > $tmp/file
+    closest=$(closest_classifier.sortdist $a | head -n1 | sed "s|^|$learning_dir/documents/|g")
+
+    comm -12 \
+        <(cat $tmp/file | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
+        <(cat $closest  | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
+    > /tmp/commonregex
+
+    cat /tmp/commonregex | while read line
+    do
+        cat $tmp/file | tokenize | sort | uniq | egrep $line
+    done > /tmp/keywords
+
+    esc=$(printf '\033')
+
+    cat /tmp/keywords | while read a
+    do
+        sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|gI" $tmp/file
+    done
+
+    cat $tmp/file
+}
+
 learning.queue_classify(){
 
     [ $classify_highlight = "true" ] && cmdhl=keywords.highlight
+    [ $classify_highlight = "diff" ] && cmdhl=keywords.diffhighlight
     [ $classify_highlight = "true" ] || cmdhl=cat
 
     mkdir -p $learning_dir/summaries_classified/
