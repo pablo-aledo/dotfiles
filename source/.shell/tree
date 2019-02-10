@@ -1,5 +1,5 @@
 TREE_DST=$HOME/root
-TREE_SRC=Alejandria
+TREE_SRC=$HOME/Alejandria
 
 lnk_hierarchy(){
     args=$(echo $* | awk '{$NF=""; print}')
@@ -46,4 +46,24 @@ lnk_hierarchy(){
 
 lnk_hierarchy_missing(){
     comm -13 <(find -L $TREE_DST | while read line; do echo $(basename $line); done | sort | uniq) <(ls $TREE_SRC | sort | uniq)
+}
+
+lnk_hierarchy_fill_scale(){
+    [ "$1" = "" ] && scale=10000
+    [ "$1" = "" ] || scale=$1
+    find $TREE_DST -type l | while read line
+    do
+        echo "\e[34m $line \e[0m"
+        rm -rf "$line"
+        mkdir  "$line"
+        find $(echo $line | sed "s|$TREE_DST|$TREE_SRC|g" ) -type f | while read file
+        do
+            echo "\e[33m     $file \e[0m"
+            size=$(ll $file | awk '{print $5}')
+            size=$(( $size / $scale ))
+            mkdir -p $(dirname $file | sed "s|$TREE_SRC|$TREE_DST|g")
+            [ -e "$(echo $file | sed "s|$TREE_SRC|$TREE_DST|g")" ] && continue
+            dd if=/dev/zero bs=1 count=$size of="$(echo $file | sed "s|$TREE_SRC|$TREE_DST|g")" 2>/dev/null
+        done
+    done
 }
