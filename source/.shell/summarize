@@ -786,6 +786,17 @@ print([ (i/float(max(vect)+0.00001) - 0.5)/$learning_scale for i in vect ])
 ")" | sed -e 's/0/./g' -e 's/^/[/g' -e 's/$/]/g'
 }
 
+learning.classify(){
+    if [ "$1" = "-" ]
+    then
+        cat > $tmp/stdin
+        $classifier_method.transform $tmp/stdin
+        return
+    fi
+
+    $classifier_method.transform "$1"
+}
+
 classifier.evaluate(){
 
     rm -fr $tmp/classifier.y_true $tmp/classifier.y_pred
