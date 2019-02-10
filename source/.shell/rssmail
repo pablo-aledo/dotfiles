@@ -42,6 +42,7 @@ rssmail_cut () {
 rssmail_server(){
 	[ -e /usr/bin/rsstail ] || pkg install rsstail
 	[ -e /usr/bin/mutt ] || pkg install mutt
+	mkdir -p $RSSMAIL
 
 	cd 
 	rssfeeds=`cat ~/.newsbeuter/urls | sed -e 's/^/-u "/g' -e 's/$/"/g' | paste -d' ' -s`
@@ -72,6 +73,7 @@ rssmail_server(){
 		if [ "$current" = "description" ] && [ "$previous" = "link" ]
 		then
 			echo "\e[31m $title \e[0m $link "
+			echo "$title -> $link" >> $RSSMAIL/map
 			(echo $link; echo $description) | mutt -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
 			sleep 1
 		fi
