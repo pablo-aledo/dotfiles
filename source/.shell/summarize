@@ -1520,10 +1520,10 @@ keywords.diffhighlight(){
     cat > $tmp/highlight
     closest=$(closest_classifier.sortdist $tmp/highlight | head -n1 | sed "s|^|$learning_dir/documents/|g")
 
-    comm -12 \
-        <(cat $tmp/highlight | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
-        <(cat $closest       | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
-    > $tmp/commonregex
+    cat $tmp/highlight | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr1
+    cat $closest       | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr2
+
+    comm -12 $tmp/kwr1 $tmp/kwr2 > $tmp/commonregex
 
     cat $tmp/commonregex | while read l
     do
