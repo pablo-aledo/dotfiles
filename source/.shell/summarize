@@ -1501,9 +1501,9 @@ keywords.diffhighlight(){
         <(cat $closest  | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
     > /tmp/commonregex
 
-    cat /tmp/commonregex | while read line
+    cat /tmp/commonregex | while read l
     do
-        cat $tmp/file | tokenize | sort | uniq | egrep $line
+        cat $tmp/file | tokenize | sort | uniq | egrep $l
     done > /tmp/keywords
 
     esc=$(printf '\033')
