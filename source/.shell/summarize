@@ -1518,9 +1518,9 @@ keywords.diffhighlight(){
 
 learning.queue_classify(){
 
-    [ $classify_highlight = "true" ] && cmdhl=keywords.highlight
-    [ $classify_highlight = "diff" ] && cmdhl=keywords.diffhighlight
-    [ $classify_highlight = "true" ] || cmdhl=cat
+    [ $classify_highlight = "true"  ] && cmdhl=keywords.highlight
+    [ $classify_highlight = "diff"  ] && cmdhl=keywords.diffhighlight
+    [ $classify_highlight = "false" ] && cmdhl=cat
 
     mkdir -p $learning_dir/summaries_classified/
 
