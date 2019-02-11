@@ -1470,7 +1470,7 @@ learning.queue_get(){
     [ $# -eq 1 ] && limit=$1
 
     cd $learning_queue
-    ls *.pdf | head -n $limit | while read line
+    ls -- *.pdf | head -n $limit | while read line
     do
         echo "\e[34m doc2txt \e[0m $line"
         learning.doc2txt "$line" "$learning_dir/summaries/$line.txt"
