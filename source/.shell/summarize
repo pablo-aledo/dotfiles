@@ -1523,16 +1523,16 @@ keywords.diffhighlight(){
     comm -12 \
         <(cat $tmp/highlight | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
         <(cat $closest       | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
-    > /tmp/commonregex
+    > $tmp/commonregex
 
-    cat /tmp/commonregex | while read l
+    cat $tmp/commonregex | while read l
     do
         cat $tmp/highlight | tokenize | sort | uniq | egrep $l
-    done > /tmp/keywords
+    done > $tmp/keywords
 
     esc=$(printf '\033')
 
-    cat /tmp/keywords | while read a
+    cat $tmp/keywords | while read a
     do
         sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|gI" $tmp/highlight
     done
@@ -1818,9 +1818,9 @@ do
     comm -12 \
         <(cat $a       | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
         <(cat $closest | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
-    > /tmp/commonregex
+    > $tmp/commonregex
 
-    cat /tmp/commonregex | while read line
+    cat $tmp/commonregex | while read line
     do
         cat $a $closest | tokenize | sort | uniq | egrep $line
     done | sed 's/^/- /g'
