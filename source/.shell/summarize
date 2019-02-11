@@ -1810,15 +1810,10 @@ do
     cat $a | tokenize | countwords | awk '{print $2}' | keywords.filter -v       | sed "s/^/+ /g"
     cat $closest | tokenize | countwords | awk '{print $2}' | keywords.filter -v | sed "s/^/+ /g"
 
-    #comm -12 \
-        #<(cat $a       | tokenize | countwords | awk '{print $2}' | sort | uniq | keywords.filter) \
-        #<(cat $closest | tokenize | countwords | awk '{print $2}' | sort | uniq | keywords.filter) \
-    #| sed 's/^/- /g'
+    cat $a       | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr1
+    cat $closest | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr2
 
-    comm -12 \
-        <(cat $a       | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
-        <(cat $closest | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
-    > $tmp/commonregex
+    comm -12 $tmp/kwr1 $tmp/kwr2 > $tmp/commonregex
 
     cat $tmp/commonregex | while read line
     do
