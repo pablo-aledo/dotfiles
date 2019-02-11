@@ -533,6 +533,12 @@ closest_metadata.transform(){
     [ -e "$learning_dir/metadata/$(basename $1)/title" ] || closest_classifier.transform "$1" && return
 }
 
+closest_metadata.sortdist(){
+    [ -e "$learning_dir/metadata/$(basename $1)/title" ] && closest_classifier.sortdist "$learning_dir/metadata/$(basename $1)/title" && return
+    [ -e "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && closest_classifier.sortdist "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title" && return
+    [ -e "$learning_dir/metadata/$(basename $1)/title" ] || closest_classifier.sortdist "$1" && return
+}
+
 closest_metadata.fit(){
     closest_classifier.fit
 }
@@ -1548,7 +1554,7 @@ learning.queue_classify(){
     ls | while read line
     do
         #classification=$( $classifier_method.transform "$line" )
-        closest=$(closest_classifier.sortdist "$line" | head -n1)
+        closest=$(closest_metadata.sortdist "$line" | head -n1)
         classification=$(echo $closest | sed 's/\..*//g')
         echo $classification > $learning_dir/summaries_classified/$line
         echo $closest | sed "s|^|closest : $learning_dir/documents/|g" >> $learning_dir/summaries_classified/$line
