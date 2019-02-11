@@ -199,6 +199,7 @@ windowkeywords.get_features(){
 
 windowkeywords.txt2vec(){
 
+    local line
     cat $1 | tokenize | awk '{a[NR]=$1} NR>5{print a[NR-5]" "a[NR-4]" "a[NR-3]" "a[NR-2]" "a[NR-1]" "a[NR]}' | while read line
     do
         comm -12 <(cat $learning_dir/features/full_keywords | sort | uniq | egrep -v '^$') <(echo $line | tokenize | sort | uniq | egrep -v '^$') | paste -d' ' -s
@@ -238,6 +239,7 @@ for i in range(0,1000):
 
 windowwords.txt2vec(){
 
+    local line
     cat $1 | tokenize | awk '{a[NR]=$1} NR>5{print a[NR-5]" "a[NR-4]" "a[NR-3]" "a[NR-2]" "a[NR-1]" "a[NR]}' | while read line
     do
 python -c "
@@ -268,6 +270,7 @@ for i in range(0,1000):
 }
 
 winshingles.txt2vec(){
+    local line
     cat $1 | tokenize | while read line
     do
         echo $line | md5sum | sed 's/^\(.....\).*/\1/g' | tr '[a-z]' '[A-Z]' | sed -e 's/^/ibase=16;/g' | bc | sed -e 's/$/%1000/g' | bc
@@ -288,7 +291,7 @@ for i in range(0,1000):
 }
 
 window.txt2vec(){
-
+    local line
 
     [ $window_lowercase = "true" ] && lowercmd="tr '[A-Z]' '[a-z]'"
     [ $window_lowercase = "true" ] || lowercmd="cat"
@@ -388,6 +391,8 @@ keywords.doc2vec_debug(){
 }
 
 doc2txt_rec(){
+    local line
+
 	filename="$1"
 	destination="$2"
 
@@ -533,6 +538,8 @@ closest_metadata.fit(){
 }
 
 closest_filter.transform(){
+    local line
+
     learning.doc2txt $1 > $tmp/filter
     head -n$summarize_line_limit $tmp/filter | while read line
     do
@@ -798,6 +805,7 @@ learning.classify(){
 }
 
 classifier.evaluate(){
+    local line
 
     rm -fr $tmp/classifier.y_true $tmp/classifier.y_pred
 
@@ -1021,6 +1029,7 @@ learning.configure(){
 }
 
 learning.doc2txt(){
+    local line
 	filename=$1
 	destination=$2
 
@@ -1079,6 +1088,7 @@ learning.key(){
 }
 
 learning.fit(){
+    local line
 
     [ -e $learning_dir/documents ] || mkdir -p $learning_dir/documents
     #[ -e $learning_dir/topics ] && learning.get_documents
@@ -1316,6 +1326,7 @@ except IOError as e:
 
 
 keywords.filter () {
+    local line
 
     [ $# -eq 0 ] && condition="true"
     [ $# -eq 1 ] && [ $1 = "-v" ] && condition="false" && shift
@@ -1342,6 +1353,7 @@ learning.mapmv(){
 }
 
 learning.join_topics(){
+    local src_filename
     topic_src=$1
     topic_dst=$2
 
@@ -1363,6 +1375,8 @@ learning.join_topics(){
 }
 
 learning.get_documents(){
+    local line
+    local file
 
     inipwd=$PWD
 
@@ -1463,6 +1477,7 @@ learning.restart(){
 }
 
 learning.queue_get(){
+    local line
 
     mkdir -p $learning_dir/summaries
 
@@ -1481,6 +1496,7 @@ learning.queue_get(){
 }
 
 keywords.highlight(){
+    local a
     cat > $tmp/file
     keywords=$(cat $tmp/file | tokenize | sort | uniq | keywords.filter)
 
@@ -1493,6 +1509,8 @@ keywords.highlight(){
 }
 
 keywords.diffhighlight(){
+    local l
+    local a
     cat > $tmp/file
     closest=$(closest_classifier.sortdist $a | head -n1 | sed "s|^|$learning_dir/documents/|g")
 
@@ -1517,6 +1535,8 @@ keywords.diffhighlight(){
 }
 
 learning.queue_classify(){
+    local line
+    local metadata
 
     [ $classify_highlight = "true"  ] && cmdhl=keywords.highlight
     [ $classify_highlight = "diff"  ] && cmdhl=keywords.diffhighlight
@@ -1550,6 +1570,7 @@ learning.queue_classify(){
 }
 
 learning.queue_mv(){
+    local line
 
     cd $learning_dir/summaries_classified/
 
@@ -1629,6 +1650,8 @@ fill_isbn13_metadata(){
 
 metadata.isbn(){
 
+    local line
+
     if [ $# -eq 0 ]
     then
         cd $learning_dir/summaries
@@ -1647,6 +1670,8 @@ metadata.isbn(){
 }
 
 metadata.filename(){
+
+    local line
 
     if [ $# -eq 0 ]
     then
@@ -1669,6 +1694,9 @@ metadata.filename(){
 }
 
 metadata.keywords(){
+
+    local line
+
     if [ $# -eq 0 ]
     then
         cd $learning_dir/documents
@@ -1688,6 +1716,9 @@ metadata.keywords(){
 }
 
 metadata.keywords_idx(){
+
+    local line
+
     if [ $# -eq 0 ]
     then
         cd $learning_dir/documents
@@ -1709,6 +1740,7 @@ metadata.keywords_idx(){
 }
 
 metadata.isbn2title(){
+    local line
     if [ $# -eq 0 ]
     then
         cd $learning_dir/metadata
@@ -1733,6 +1765,7 @@ metadata.isbn2title(){
 }
 
 metadata.isbn2topics(){
+    local line
     if [ $# -eq 0 ]
     then
         cd $learning_dir/metadata
@@ -1761,6 +1794,8 @@ cat $tmp/vects | egrep '\*\*\*' | awk '{print $4}' | xargs cat | tokenize | coun
 }
 
 learning.loop(){
+local line
+
 for a in $(cat $tmp/vects | grep '\*\*\*' | awk '{print $4}' )
 do
     echo "===== $(echo $a | sed 's|/classifier_test/|/documents/|g' ) ====="
@@ -1806,6 +1841,7 @@ sliding_indexer(){
 }
 
 learning.index(){
+    local file
 
     if [ "$1" != "" ]
     then
