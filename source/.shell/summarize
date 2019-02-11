@@ -1497,41 +1497,41 @@ learning.queue_get(){
 
 keywords.highlight(){
     local a
-    cat > $tmp/file
-    keywords=$(cat $tmp/file | tokenize | sort | uniq | keywords.filter)
+    cat > $tmp/highlight
+    keywords=$(cat $tmp/highlight | tokenize | sort | uniq | keywords.filter)
 
     esc=$(printf '\033')
     echo $keywords | while read a
     do
-        sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|gI" $tmp/file
+        sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|gI" $tmp/highlight
     done
-    cat $tmp/file
+    cat $tmp/highlight
 }
 
 keywords.diffhighlight(){
     local l
     local a
-    cat > $tmp/file
-    closest=$(closest_classifier.sortdist $a | head -n1 | sed "s|^|$learning_dir/documents/|g")
+    cat > $tmp/highlight
+    closest=$(closest_classifier.sortdist $tmp/highlight | head -n1 | sed "s|^|$learning_dir/documents/|g")
 
     comm -12 \
-        <(cat $tmp/file | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
-        <(cat $closest  | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
+        <(cat $tmp/highlight | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
+        <(cat $closest       | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}') \
     > /tmp/commonregex
 
     cat /tmp/commonregex | while read l
     do
-        cat $tmp/file | tokenize | sort | uniq | egrep $l
+        cat $tmp/highlight | tokenize | sort | uniq | egrep $l
     done > /tmp/keywords
 
     esc=$(printf '\033')
 
     cat /tmp/keywords | while read a
     do
-        sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|gI" $tmp/file
+        sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|gI" $tmp/highlight
     done
 
-    cat $tmp/file
+    cat $tmp/highlight
 }
 
 learning.queue_classify(){
