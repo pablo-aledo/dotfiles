@@ -170,6 +170,10 @@ convert_normalize(){
 	rm -fr normalize_*
 }
 
+convert_chmod(){
+    sudo chmod -R 777 $convert_dir
+    sudo chmod -R 777 $converted_dir
+}
 
 convert_install(){
 	[ -e /usr/bin/ffmpeg ]   || pkg install ffmpeg
@@ -321,6 +325,8 @@ convert_recursive(){
 
 	rm -fr /tmp/convert_report
 
+    convert_chmod
+
     convert_install
 
     convert_checkrar
@@ -382,6 +388,8 @@ convert_recursive_decompress(){
 	[ -e "$convert_dir" ]   || return
 	[ -e "$converted_dir" ] || return
 
+    convert_chmod
+
     convert_install
 
     convert_checkrar
@@ -411,6 +419,8 @@ convert_recursive_parallel(){
 
     convert_install
 	[ -e /usr/bin/parallel ] || pkg install parallel
+
+    convert_chmod
 
     convert_checkrar
 
@@ -459,6 +469,8 @@ convert_recursive_parallel_handbrake(){
 
 	[ -e "$convert_dir" ]   || return
 	[ -e "$converted_dir" ] || return
+
+    convert_chmod
 
     convert_install
 	[ -e /usr/bin/parallel ] || pkg install parallel
