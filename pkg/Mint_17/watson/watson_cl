@@ -1,0 +1,78 @@
+#! env zsh
+
+source ~/.dotfiles/source/.shell/summarize
+
+export learning_dir=$HOME/watson
+learning.configure >/dev/null
+
+read line
+echo $line > /tmp/document
+
+[ -e /tmp/watson_qf ] && rm -fr /tmp/watson_qf
+
+closest_classifier.doc2rvect /tmp/document > /tmp/vector_q
+
+closest_classifier.sortdist /tmp/document | head -n100 | while read line
+do
+    key=$(echo $line | cut -d '.' -f1)
+    file=$(cat $learning_dir/map/$key | cut -d':' -f1)
+    linenr=$(cat $learning_dir/map/$key | cut -d':' -f2)
+    content=$(cat $file | tail -n+$linenr | head -n1 | paste -d' ' -s)
+    echo $file:$linenr:$content >> /tmp/watson_qf
+done
+
+python -c "
+import numpy as np
+import collections
+from sklearn.cluster import KMeans
+from sklearn.externals import joblib
+import math
+from sets import Set
+
+learning_dir='$learning_dir'
+vector_q=$(cat /tmp/vector_q)
+kmeans=joblib.load(learning_dir + '/cluster/cluster.pkl')
+
+def distance(h1,h2):
+    if( '$learning_distance' == 'jaccard' ):
+        h1_set = Set( [ i for i in range(0, len(h1)) if h1[i] != 0 ] )
+        h2_set = Set( [ i for i in range(0, len(h2)) if h2[i] != 0 ] )
+        return 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
+    if( '$learning_distance' == 'euclidean' ):
+        return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
+
+def get_closest_in_cluster(cluster):
+    return sorted(cluster, key=lambda x: distance(vector_q, x['vect']))[0]
+
+def load_vect(filename):
+    with open(filename) as f:
+        lines = [ line.rstrip('\n') for line in f ]
+    return lines[0]
+
+with open('/tmp/watson_qf') as f:
+    lines = [ line.rstrip('\n') for line in f ]
+
+results = [{
+    'file': line.split(':')[0],
+    'linenr': line.split(':')[1],
+    'content': line.split(':')[2]
+} for line in lines ]
+
+for result in results:
+    result['vect'] = load_vect(learning_dir + '/vectors_reduced/' + result['file'])
+    result['vect'] = eval(result['vect'])
+
+for result in results:
+    result['cluster'] = kmeans.predict([result['vect']])[0]
+
+grouped=collections.defaultdict(list)
+for item in results:
+    grouped[item['cluster']].append(item)
+
+sorted_indexes=sorted(grouped, key=lambda x: len(grouped.get(x)), reverse=True)
+
+for index in sorted_indexes:
+    closest=get_closest_in_cluster(grouped[index])
+    print closest['file'] + ':' + closest['linenr'] + ':' + closest['content']
+"
+
