@@ -31,7 +31,7 @@ from sets import Set
 
 learning_dir='$learning_dir'
 vector_q=$(cat /tmp/vector_q)
-kmeans=joblib.load(learning_dir + '/cluster/cluster.pkl')
+kmeans = KMeans(n_clusters=10, random_state=0)
 
 def distance(h1,h2):
     if( '$learning_distance' == 'jaccard' ):
@@ -61,6 +61,8 @@ results = [{
 for result in results:
     result['vect'] = load_vect(learning_dir + '/vectors_reduced/' + result['file'])
     result['vect'] = eval(result['vect'])
+
+kmeans.fit(map(lambda x: x['vect'], results))
 
 for result in results:
     result['cluster'] = kmeans.predict([result['vect']])[0]
