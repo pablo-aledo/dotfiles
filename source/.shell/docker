@@ -599,3 +599,10 @@ docker_authorize(){
     sudo systemctl start docker
 
 }
+
+docker_prun(){
+    export  http_proxy=$(cat ~/.paths | grep  http_proxy | cut -d'=' -f2)
+    export https_proxy=$(cat ~/.paths | grep https_proxy | cut -d'=' -f2)
+    export no_proxy=$(echo 192.168.197.{1..255} | sed 's/ /,/g'),127.0.0.1,localhost
+    sudo docker run -e http_proxy=$http_proxy -e https_proxy=$https_proxy -e no_proxy=$no_proxy $*
+}
