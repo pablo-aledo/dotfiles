@@ -75,6 +75,16 @@ docker_clean(){
 
 	[ -e /usr/bin/kubectl ] && sudo kubectl delete pods,services --all
 
+    # https://gist.github.com/superseb/2cf186726807a012af59a027cb41270d
+
+    docker rm -f $(docker ps -qa)
+    docker volume rm $(docker volume ls -q)
+    cleanupdirs="/var/lib/etcd /etc/kubernetes /etc/cni /opt/cni /var/lib/cni /var/run/calico /opt/rke"
+    for dir in $cleanupdirs; do
+      echo "Removing $dir"
+      rm -rf $dir
+    done
+
 }
 
 docker_stop(){
