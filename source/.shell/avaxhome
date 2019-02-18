@@ -2,6 +2,7 @@ DESCARGAS_NAS=/media/DATA/NAS/Descargas
 DESCARGAS_LOCAL=/media/DATA/Descargas
 EBOOKS=/media/DATA/ebooks
 ALEJANDRIA=/media/DATA/NAS/Alejandria
+avxmail_ml=true
 
 avhome(){
 name=$EBOOKS/ebooks-`date +%y%m%d-%H%M`
@@ -208,6 +209,7 @@ avhome_mail_server(){
               grep "^$title_escaped\$" ~/servers/avxtitles >/dev/null && continue
               echo $title >> ~/servers/avxtitles
               echo "$title -> $link" >> ~/servers/avxhome/map
+              [ "$avxmail_ml" = "true" ] && [ $(echo $title | haskeyword) = "true" ] && $title="[>>>] $title"
               (echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
        done
    fi
