@@ -203,14 +203,15 @@ avhome_mail_server(){
        comm -13 <(cat old | sort) <(cat new | sort) | while read line
        do
               title=$(echo $line | cut -d'|' -f2)
-              [ "$avxmail_ml" = "true" ] && [ $(echo $title | haskeyword) = "true" ] && title="[>>>] $title"
+              title_ml=$title
+              [ "$avxmail_ml" = "true" ] && [ $(echo $title | haskeyword) = "true" ] && title_ml="[>>>] $title"
               link=http://avxhm.se$(echo $line | cut -d'|' -f1)
-              echo "\e[31m $title \e[0m: $link"
+              echo "\e[31m $title_ml \e[0m: $link"
               title_escaped=`echo $title | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g' -e 's/\*/\\\*/g'`
               grep "^$title_escaped\$" ~/servers/avxtitles >/dev/null && continue
               echo $title >> ~/servers/avxtitles
-              echo "$title -> $link" >> ~/servers/avxhome/map
-              (echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
+              echo "$title_ml -> $link" >> ~/servers/avxhome/map
+              (echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
        done
    fi
 
