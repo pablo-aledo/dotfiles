@@ -61,7 +61,7 @@ rssmail_server(){
 		if [ "$(echo $line | egrep '^Title:')" != "" ] && [ "$previous" = "link" ]
 		then
             title_ml=$title
-            [ "$rssmail_ml" = "true" ] && [ $(echo $title | haskeyword) = "true" ] && title_ml="[>>>] $title"
+            [ "$rssmail_ml" = "true" ] && [ $(echo $title | haskeyword) = "true" ] && title_ml="[kword] $title"
 			echo "\e[31m $title_ml \e[0m $link "
 			(echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
 			sleep 1
@@ -76,7 +76,7 @@ rssmail_server(){
 		if [ "$current" = "description" ] && [ "$previous" = "link" ]
 		then
             title_ml=$title
-            [ "$rssmail_ml" = "true" ] && [ $(echo $title_ml | haskeyword) = "true" ] && title_ml="[>>>] $title"
+            [ "$rssmail_ml" = "true" ] && [ $(echo $title_ml | haskeyword) = "true" ] && title_ml="[kword] $title"
 			echo "\e[31m $title_ml \e[0m $link "
 			echo "$title_ml -> $link" >> $RSSMAIL/map
 			(echo $link; echo $description) | mutt -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
