@@ -203,7 +203,7 @@ avhome_mail_server(){
        comm -13 <(cat old | sort) <(cat new | sort) | while read line
        do
               title=$(echo $line | cut -d'|' -f2)
-              [ "$avxmail_ml" = "true" ] && [ $(echo $title | haskeyword) = "true" ] && $title="[>>>] $title"
+              [ "$avxmail_ml" = "true" ] && [ $(echo $title | haskeyword) = "true" ] && title="[>>>] $title"
               link=http://avxhm.se$(echo $line | cut -d'|' -f1)
               echo "\e[31m $title \e[0m: $link"
               title_escaped=`echo $title | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g' -e 's/\*/\\\*/g'`
