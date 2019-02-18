@@ -178,7 +178,7 @@ avhome_get_new_titles(){
 avhome_mail_server(){
     mkdir -p ~/servers/avxhome
     cd ~/servers/avxhome
-    [ "$avxmail_ml" = "true" ] && learning.configure $HOME/servers/learning
+    [ "$avxmail_ml" = "true" ] && learning.configure $HOME/servers/learning >/dev/null
 
    rm -fr to_send
 
