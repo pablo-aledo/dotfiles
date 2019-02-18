@@ -41,10 +41,10 @@ rssmail_cut () {
 }
 
 rssmail_server(){
+    [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/learning >/dev/null
 	[ -e /usr/bin/rsstail ] || pkg install rsstail
 	[ -e /usr/bin/mutt ] || pkg install mutt
 	mkdir -p $RSSMAIL
-    [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/learning >/dev/null
 
 	cd 
 	rssfeeds=`cat ~/.newsbeuter/urls | sed -e 's/^/-u "/g' -e 's/$/"/g' | paste -d' ' -s`
