@@ -527,6 +527,23 @@ joblib.dump(gnb, learning_dir + '/classifier/classifier.pkl')
 "
 }
 
+double_keywords.fit(){}
+
+double_keywords.transform(){
+
+    line=$(cat $1)
+
+    \cp $learning_dir/features/negative $learning_dir/features/keywords
+    haskeyword=$( echo $line | tokenize | countwords | haskeyword )
+    [ $haskeyword = "true" ] && echo "false" && return
+
+    \cp $learning_dir/features/positive $learning_dir/features/keywords
+    haskeyword=$( echo $line | tokenize | countwords | haskeyword )
+    [ $haskeyword = "true" ] && echo "true" && return
+
+    echo "false"
+}
+
 closest_metadata.transform(){
     [ -e "$learning_dir/metadata/$(basename $1)/title" ] && closest_classifier.transform "$learning_dir/metadata/$(basename $1)/title" && return
     [ -e "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && closest_classifier.transform "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title" && return

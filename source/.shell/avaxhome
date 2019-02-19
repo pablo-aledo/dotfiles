@@ -205,7 +205,7 @@ avhome_mail_server(){
        do
               title=$(echo $line | cut -d'|' -f2)
               title_ml=$title
-              [ "$avxmail_ml" = "true" ] && [ $(echo $title | tokenize | countwords | haskeyword) = "true" ] && title_ml="[kword] $title"
+              [ "$avxmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
               link=http://avxhm.se$(echo $line | cut -d'|' -f1)
               echo "\e[31m $title_ml \e[0m: $link"
               title_escaped=`echo $title | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g' -e 's/\*/\\\*/g'`
