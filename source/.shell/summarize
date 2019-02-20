@@ -43,7 +43,11 @@ rules.transform(){
     cat | sed \
         -e 's/c++/cpp/g'  \
         -e 's/c#/csharp/g'  \
-        -e 's/?/ questionmark/'
+        -e 's/?/ questionmark/g' \
+        -e 's/machine learning/machine learning MachineLearning/gI' \
+        -e 's/big data/big data BigData/gI' \
+        -e 's/artificial intelligence/artificial ingelligence ArtificialIntelligence/gI' \
+        -e 's/programming languages/programming languages ProgrammingLanguages/gI'
 }
 
 tokenize(){
