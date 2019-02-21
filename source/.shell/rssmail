@@ -1,4 +1,4 @@
-RSSMAIL=~/servers/rssmail
+SSMAIL=~/servers/rssmail
 rssmail_ml=true
 
 rssmail() {
@@ -63,6 +63,7 @@ rssmail_server(){
 		then
             title_ml=$title
             source ~/.dotfiles/source/.shell/summarize
+            [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/learning >/dev/null
             [ "$rssmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
 			echo "\e[31m $title_ml \e[0m $link "
 			(echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
@@ -79,6 +80,7 @@ rssmail_server(){
 		then
             title_ml=$title
             source ~/.dotfiles/source/.shell/summarize
+            [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/learning >/dev/null
             [ "$rssmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
 			echo "\e[31m $title_ml \e[0m $link "
 			echo "$title_ml -> $link" >> $RSSMAIL/map
