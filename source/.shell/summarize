@@ -49,6 +49,7 @@ rules.transform(){
         -e 's/\(artificial intelligence\)/\1 ArtificialIntelligence/gI' \
         -e 's/\(programming language\(s\|\)\)/\1 ProgrammingLanguages/gI' \
         -e 's/\(neural network\(s\|\)\)/\1 NeuralNetworks/gI' \
+        -e 's/\[pdf\]/PdfFile/gI' \
         -e 's/\(data science\(s\|\)\)/\1 DataScience/gI'
 }
 
