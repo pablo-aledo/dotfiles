@@ -1564,7 +1564,9 @@ keywords.diffhighlight(){
 
     cat $tmp/keywords | while read a
     do
+        sed -i "s|_| UnderScore |g" $tmp/highlight
         sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|gI" $tmp/highlight
+        sed -i "s| UnderScore |_|g" $tmp/highlight
     done
 
     cat $tmp/highlight
