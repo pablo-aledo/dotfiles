@@ -28,3 +28,22 @@ command! -nargs=1 -complete=command Redir silent call Redir(<q-args>)
 " :au BufEnter * :call matchadd('CustomPink' '\<undefined\>')
 " :au BufEnter * :call matchadd('Keyword' '\<undefined\>')
 " :call matchadd('Comment', '\<undefined\>')
+
+:hi Black ctermbg=black
+:hi DarkBlue ctermbg=darkBlue
+:hi DarkGreen ctermbg=darkGreen
+:hi DarkCyan ctermbg=darkCyan
+:hi DarkRed ctermbg=darkRed
+:hi DarkMagenta ctermbg=darkMagenta
+:hi Brown ctermbg=brown
+:hi Gray ctermbg=gray
+:hi DarkGray ctermbg=darkGray
+:hi Blue ctermbg=blue
+:hi Green ctermbg=green
+:hi Cyan ctermbg=cyan
+:hi Red ctermbg=red
+:hi Magenta ctermbg=magenta
+:hi Yellow ctermbg=yellow
+:hi White ctermbg=white
+
+map ,m :call matchadd('Blue', '<C-R>=expand("<cword>")<cr>')
