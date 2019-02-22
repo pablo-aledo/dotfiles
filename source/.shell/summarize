@@ -1547,29 +1547,29 @@ keywords.highlight(){
 keywords.diffhighlight(){
     local l
     local a
-    cat > $tmp/highlight
-    closest=$(closest_classifier.sortdist $tmp/highlight | head -n1 | sed "s|^|$learning_dir/documents/|g")
+    cat > $tmp/highlight.txt
+    closest=$(closest_classifier.sortdist $tmp/highlight.txt | head -n1 | sed "s|^|$learning_dir/documents/|g")
 
-    cat $tmp/highlight | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr1
-    cat $closest       | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr2
+    cat $tmp/highlight.txt | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr1
+    cat $closest           | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr2
 
     comm -12 $tmp/kwr1 $tmp/kwr2 > $tmp/commonregex
 
     cat $tmp/commonregex | while read l
     do
-        cat $tmp/highlight | tokenize | sort | uniq | egrep $l
+        cat $tmp/highlight.txt | tokenize | sort | uniq | egrep $l
     done > $tmp/keywords
 
     esc=$(printf '\033')
 
     cat $tmp/keywords | while read a
     do
-        sed -i "s|_| UnderScore |g" $tmp/highlight
-        sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|gI" $tmp/highlight
-        sed -i "s| UnderScore |_|g" $tmp/highlight
+        sed -i "s|_| UnderScore |g" $tmp/highlight.txt
+        sed -i "s|\<$a\>|${esc}[31m$a${esc}[0m|gI" $tmp/highlight.txt
+        sed -i "s| UnderScore |_|g" $tmp/highlight.txt
     done
 
-    cat $tmp/highlight
+    cat $tmp/highlight.txt
 }
 
 learning.queue_classify(){
