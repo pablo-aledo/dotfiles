@@ -1342,6 +1342,37 @@ for a in std:
 "
 }
 
+closest_classifier.coverage(){
+    python -c "
+import numpy as np
+import random
+
+learning_dir='$learning_dir'
+
+with open(learning_dir + '/classifier/sortnames') as f:
+    names = [ line.rstrip('\n') for line in f ]
+with open(learning_dir + '/classifier/sortvectors') as f:
+    vectors = [ line.rstrip('\n') for line in f ]
+    vectors = [ np.fromstring(vector, dtype=float, sep=' ') for vector in vectors ]
+
+optimum={ 'names':[], 'cost': 0. }
+for i in range(0, 1000):
+    n=random.randint(1,len(names))
+    selections=np.random.permutation(np.concatenate( [np.zeros(len(names)-n), np.ones(n)] ))
+    vssel=[ vectors[i] for i in range(0,len(names)) if selections[i] == 1 ]
+    nssel=[ names[i] for i in range(0,len(names)) if selections[i] == 1 ]
+    covered=np.sum(vssel,axis=0)
+    ncovered=len(np.where( covered > 0 ))
+    if( float(ncovered)/float(n) > optimum['cost'] ):
+        optimum['names'] = nssel
+        optimum['cost'] = float(ncovered)/float(n)
+        print optimum
+
+for a in optimum['names']:
+    print a
+"
+}
+
 cluster_closest.fit(){
     rm -fr $learning_dir/classifier/{0..2}
     for a in $learning_dir/txts/*
