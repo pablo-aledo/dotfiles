@@ -345,6 +345,22 @@ server(){
     		sleep 10
     	done
     fi
+
+    if [ $1 = "convertcandidates" ]
+    then
+        while true
+        do
+            if [ `date +%H%M` = 0005 ]
+            then
+                convert_candidates | while read line
+                do
+                    cp_convert "$line"
+                done
+                sleep $((60*5))
+            fi
+            sleep 10
+        done
+    fi
 }
 
 aws_servers(){
