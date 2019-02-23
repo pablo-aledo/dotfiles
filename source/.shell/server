@@ -352,7 +352,8 @@ server(){
         do
             if [ `date +%H%M` = 0005 ]
             then
-                convert_candidates | while read line
+                echo "----- Launch -----"
+                convert_candidates | head | while read line
                 do
                     cp_convert "$line"
                 done
