@@ -353,7 +353,7 @@ server(){
             if [ `date +%H%M` = 0005 ]
             then
                 echo "----- Launch -----"
-                [ -e $convert_dir/disable ] && continue
+                [ -e $convert_dir/disable ] && sleep 10 && continue
                 convert_candidates | head | sed 's/^[0-9]* //g' | while read line
                 do
                     cp_convert "$line"
