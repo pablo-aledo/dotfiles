@@ -1,6 +1,6 @@
 export DISPLAY=:1
 
 xdotool key Ctrl+f
-xdotool type "http"
+xdotool type "[link]"
 xdotool key Escape
 xdotool key Return

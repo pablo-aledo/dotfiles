@@ -8,7 +8,11 @@ xdotool key Alt+w
 killall chrome chromium google-chrome google-chrome-stable
 sleep 1
 google-chrome --profile-directory=Default mail.google.com &
-sleep 20
-xdotool mousemove 290 110
+sleep 30
+xdotool mousemove 350 110
 xdotool click 1
-xdotool type 'is: starred '
+xdotool type 'is: starred label:pdf'
+xdotool key Return
+sleep 10
+xdotool mousemove 400 205
+xdotool click 1
