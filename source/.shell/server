@@ -350,6 +350,7 @@ server(){
     then
         while true
         do
+            cd
             if [ `date +%H%M` = 0005 ]
             then
                 echo "----- Launch -----"
