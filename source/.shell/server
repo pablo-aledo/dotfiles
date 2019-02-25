@@ -346,7 +346,7 @@ server(){
     	done
     fi
 
-    if [ $1 = "convertcandidates" ]
+    if [ $1 = "convert_candidates" ]
     then
         while true
         do
