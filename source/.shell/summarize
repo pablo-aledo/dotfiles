@@ -132,6 +132,11 @@ for keyword in keywords:
     else:
         regex='^ *[0-9]* .*' + keyword
 
+    if(keyword[-1] == '$'):
+        pass
+    else:
+        regex= keyword + '.*'
+
     for line in lines:
         if(re.match(regex,line)):
             value += int( [x for x in line.split(' ') if x != ''][0] )
@@ -172,10 +177,15 @@ lines = [ line for line in lines if not line in stopwords ]
 for keyword in keywords:
     regex=keyword
 
-    #if(keyword[0] == '^'):
-        #regex='^ *[0-9]* ' + keyword[1:]
-    #else:
-        #regex='^ *[0-9]* .*' + keyword
+    if(keyword[0] == '^'):
+        pass
+    else:
+        regex='.*' + keyword
+
+    if(keyword[-1] == '$'):
+        pass
+    else:
+        regex= keyword + '.*'
 
     for line in lines:
         if(re.match(regex,line)):
