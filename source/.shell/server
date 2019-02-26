@@ -362,6 +362,7 @@ server(){
                     cp_convert "$line"
                 done
                 convert_recursive 720
+                echo "----- Finish -----"
                 sleep $((60*5))
             fi
             sleep 10
