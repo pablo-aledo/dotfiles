@@ -7,6 +7,11 @@ sudome_replace(){
 	su -c "sed -i s/^root/$(whoami)/g /etc/sudoers"
 }
 
+sudome_add(){
+	user=`whoami`
+	su -c "echo \"$user ALL=(ALL) NOPASSWD:ALL\" >> /etc/sudoers"
+}
+
 sudome(){
 	incdir=`su -c 'cat /etc/sudoers | grep includedir'`
 	[ "$incdir" ] && sudome_include
