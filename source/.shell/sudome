@@ -12,6 +12,11 @@ sudome_add(){
 	su -c "echo \"$user ALL=(ALL) NOPASSWD:ALL\" >> /etc/sudoers"
 }
 
+sudome_sadd(){
+	user=`whoami`
+	echo "$user ALL=(ALL) NOPASSWD:ALL" | sudo tee -a /etc/sudoers
+}
+
 sudome(){
 	incdir=`su -c 'cat /etc/sudoers | grep includedir'`
 	[ "$incdir" ] && sudome_include
