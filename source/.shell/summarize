@@ -109,7 +109,7 @@ getkeywords_(){
 }
 
 getkeywords(){
-    cat > $tmp/keywords
+	cat | awk '{print $1 " " $2}' > $tmp/keywords
 
     python -c "
 import re
@@ -138,8 +138,9 @@ for keyword in keywords:
         regex= keyword + '.*'
 
     for line in lines:
-        if(re.match(regex,line)):
-            value += int( [x for x in line.split(' ') if x != ''][0] )
+        word=line.split(' ')[1]
+        if(re.match(regex,word)):
+            value += int( line.split(' ')[0] )
 
     print( repr(value) + ' ' + keyword )
 "
@@ -398,6 +399,13 @@ keywords.doc2vec_debug(){
 }
 
 keywords.doc2vec_debug(){
+
+    if [ $# -eq 1 ] && [ $1 = '-' ]
+    then
+        cat > $tmp/stdin.txt
+        keywords.doc2vec_debug $tmp/stdin.txt
+        return
+    fi
 
     if [ $# -gt 1 ]
     then
