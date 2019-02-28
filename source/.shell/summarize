@@ -132,12 +132,12 @@ for keyword in keywords:
     if(keyword[0] == '^'):
         pass
     else:
-        regex='.*' + keyword
+        regex='.*' + regex
 
     if(keyword[-1] == '$'):
         pass
     else:
-        regex= keyword + '.*'
+        regex= regex + '.*'
 
     for line in lines:
         word=line.split(' ')[1]
@@ -183,12 +183,12 @@ for keyword in keywords:
     if(keyword[0] == '^'):
         pass
     else:
-        regex='.*' + keyword
+        regex='.*' + regex
 
     if(keyword[-1] == '$'):
         pass
     else:
-        regex= keyword + '.*'
+        regex= regex + '.*'
 
     for line in lines:
         if(re.match(regex,line)):
