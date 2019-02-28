@@ -127,10 +127,12 @@ lines = [ line for line in lines if not line in stopwords ]
 for keyword in keywords:
     value = 0
 
+    regex = keyword
+
     if(keyword[0] == '^'):
-        regex='^ *[0-9]* ' + keyword[1:]
+        pass
     else:
-        regex='^ *[0-9]* .*' + keyword
+        regex='.*' + keyword
 
     if(keyword[-1] == '$'):
         pass
