@@ -51,6 +51,7 @@ rules.transform(){
         -e 's/\(neural.network\(s\|\)\)/\1 NeuralNetworks /gI' \
         -e 's/\(open.source\)/\1 OpenSource /gI' \
         -e 's/\(data.science\(s\|\)\)/\1 DataScience /gI' \
+        -e 's/\(hand\(.\|\)book\)/\1 HandBook /gI' \
         -e 's/\[pdf\]/PdfFile/gI'
 }
 
