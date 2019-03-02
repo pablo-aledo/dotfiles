@@ -440,6 +440,7 @@ convert_recursive_parallel(){
 	rm -fr /tmp/script;
 	echo $findcmd | bash | while read line
 	do
+		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
 		echo ffmpeg -i \"$line\" `echo $convert_opts` \"`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4\" "</dev/null"  >> /tmp/script
 	done
 
