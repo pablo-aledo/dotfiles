@@ -47,3 +47,14 @@ command! -nargs=1 -complete=command Redir silent call Redir(<q-args>)
 :hi White ctermbg=white
 
 map ,m :call matchadd('Blue', '<C-R>=expand("<cword>")<cr>')
+
+map ,m1 :let m1 = matchadd('Red', '<C-R>=expand("<cword>")<cr>')
+map ,m2 :let m2 = matchadd('Green', '<C-R>=expand("<cword>")<cr>')
+map ,m3 :let m3 = matchadd('Blue', '<C-R>=expand("<cword>")<cr>')
+map ,m4 :let m4 = matchadd('Yellow', '<C-R>=expand("<cword>")<cr>')
+map ,m5 :let m5 = matchadd('Magenta', '<C-R>=expand("<cword>")<cr>')
+map ,m6 :let m6 = matchadd('Cyan', '<C-R>=expand("<cword>")<cr>')
+map ,m7 :let m7 = matchadd('Gray', '<C-R>=expand("<cword>")<cr>')
+map ,m8 :let m8 = matchadd('DarkRed', '<C-R>=expand("<cword>")<cr>')
+map ,m9 :let m9 = matchadd('DarkGreen', '<C-R>=expand("<cword>")<cr>')
+map ,m0 :call matchdelete(m1)
