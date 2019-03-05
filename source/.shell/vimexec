@@ -1,0 +1,5 @@
+vimexec(){
+    cat $1 > /tmp/script
+    vim /tmp/script
+    source /tmp/script
+}
