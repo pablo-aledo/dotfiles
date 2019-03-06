@@ -379,7 +379,7 @@ server(){
     then
         while true
         do
-            for image in $images
+            for image in ${(z)images}
             do 
                 docker images -q > /tmp/images_pre
                 docker pull $registry/$user/$repo/$image:$tag
