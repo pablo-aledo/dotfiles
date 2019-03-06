@@ -374,24 +374,24 @@ server(){
 
         namespace=demo
         images=$(cat images | paste -d' ' -s)
-        http_proxy=""
-        https_proxy=""
 
         while true
         do
             for image in ${(z)images}
             do 
+                imgname=$(echo $image | sed 's|[^/]*/[^/]*/[^/]*/\([^:]*\):.*|\1|g')
+
                 docker images -q > /tmp/images_pre
                 docker pull $image
                 docker images -q > /tmp/images_post
                 if [ $(diff /tmp/images_pre /tmp/images_post) ]
                 then
-                    kubectl scale --replicas=0 deployment/${image}-deployment --namespace $namespace
+                    http_proxy="" https_proxy="" kubectl scale --replicas=0 deployment/${imgname}-deployment --namespace $namespace
                     sleep 1
-                    kubectl scale --replicas=1 deployment/${image}-deployment --namespace $namespace
+                    http_proxy="" https_proxy="" kubectl scale --replicas=1 deployment/${imgname}-deployment --namespace $namespace
                 fi
             done
-            sleep 10
+            sleep 1
         done
     fi
 }
