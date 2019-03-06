@@ -370,19 +370,19 @@ server(){
     fi
 
     if [ $1 = "kredeploy" ]
-    registry=registry.gitlab.com
-    tag=0.1.0
-    namespace=demo
-    user=user
-    repo=repo
-    images=$(cat images | paste -d' ' -s)
     then
+
+        namespace=demo
+        images=$(cat images | paste -d' ' -s)
+        http_proxy=""
+        https_proxy=""
+
         while true
         do
             for image in ${(z)images}
             do 
                 docker images -q > /tmp/images_pre
-                docker pull $registry/$user/$repo/$image:$tag
+                docker pull $image
                 docker images -q > /tmp/images_post
                 if [ $(diff /tmp/images_pre /tmp/images_post) ]
                 then
