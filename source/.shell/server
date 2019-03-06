@@ -368,6 +368,29 @@ server(){
             sleep 10
         done
     fi
+
+    if [ $1 = "kredeploy" ]
+    registry=registry.gitlab.com
+    tag=0.1.0
+    namespace=demo
+    then
+        while true
+        do
+            for image in images
+            do 
+                docker images > /tmp/images_pre
+                docker pull $registry/$image:$tag
+                docker images > /tmp/images_post
+                if [ $(diff /tmp/images_pre /tmp/images_post) ]
+                then
+                    kubectl scale --replicas=0 deployment/${image}-deployment --namespace $namespace
+                    sleep 1
+                    kubectl scale --replicas=1 deployment/${image}-deployment --namespace $namespace
+                fi
+            done
+            sleep 10
+        done
+    fi
 }
 
 aws_servers(){
