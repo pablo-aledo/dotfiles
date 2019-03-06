@@ -384,7 +384,7 @@ server(){
                 docker images -q > /tmp/images_pre
                 docker pull $image
                 docker images -q > /tmp/images_post
-                if [ $(diff /tmp/images_pre /tmp/images_post) ]
+                if [ "$(diff /tmp/images_pre /tmp/images_post)" != "" ]
                 then
                     http_proxy="" https_proxy="" kubectl scale --replicas=0 deployment/${imgname}-deployment --namespace $namespace
                     sleep 1
