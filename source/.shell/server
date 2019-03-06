@@ -373,14 +373,17 @@ server(){
     registry=registry.gitlab.com
     tag=0.1.0
     namespace=demo
+    user=user
+    repo=repo
+    images=$(cat images | paste -d' ' -s)
     then
         while true
         do
-            for image in images
+            for image in $images
             do 
-                docker images > /tmp/images_pre
-                docker pull $registry/$image:$tag
-                docker images > /tmp/images_post
+                docker images -q > /tmp/images_pre
+                docker pull $registry/$user/$repo/$image:$tag
+                docker images -q > /tmp/images_post
                 if [ $(diff /tmp/images_pre /tmp/images_post) ]
                 then
                     kubectl scale --replicas=0 deployment/${image}-deployment --namespace $namespace
