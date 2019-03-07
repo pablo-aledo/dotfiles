@@ -549,6 +549,7 @@ cp_convert(){
 	do
 		#( cd "$source/$a"; permissions )
 		echo -e "\e[34m cp_convert $a \e[0m"
+		[ -e "$convert_dir/$a" ] && continue
 		mkdir -p "$convert_dir/$a"
 		rsync -vai "$source/$a/" "$convert_dir/$a/"
 	done
