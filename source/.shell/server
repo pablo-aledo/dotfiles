@@ -373,10 +373,12 @@ server(){
     then
 
         namespace=demo
-        images=$(cat images | paste -d' ' -s)
 
         while true
         do
+
+            images=$(cat images | paste -d' ' -s)
+
             for image in ${(z)images}
             do 
                 imgname=$(echo $image | sed 's|[^/]*/[^/]*/[^/]*/\([^:]*\):.*|\1|g')
