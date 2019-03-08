@@ -357,7 +357,7 @@ server(){
 	            [ ! -e /media/removable/2TB2/homes/admin/Videos ] && sleep 10 && continue
 	            [ ! -e $convert_dir ] && sleep 10 && continue
                 [ -e $convert_dir/disable ] && sleep 10 && continue
-                convert_candidates | head | sed 's/^[0-9]* //g' | while read line
+                convert_candidates | tail -n+$( ( ls -d $convert_dir/*/; echo ) | wc -l ) | head -n1 | sed 's/^[0-9]* //g' | while read line
                 do
                     cp_convert "$line"
                 done
