@@ -16,6 +16,16 @@ mouseover(){
 		shift
 	fi
 
+	if [ -e $1 ]
+	then
+		key=""
+	else
+		key=$1
+		shift
+        delay=$1
+		shift
+	fi
+
 	n=0
 	for a in $*
 	do
@@ -26,6 +36,8 @@ mouseover(){
 	n=0
 	while true
 	do
+        [ ! "$key" = "" ] && xdotool key $key && sleep $delay
+
 		scrot /tmp/screen.png
 
 		found=0
