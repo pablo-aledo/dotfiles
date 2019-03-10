@@ -1,0 +1,12 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+if `mouseover 1 100 ~/.dotfiles/shortcuts/images/http.png`
+then
+	xdotool click 3
+    sleep 1
+    xdotool key Up
+    xdotool key Up
+    xdotool key Return
+    xclip -sel clip -o > /tmp/link
+fi
