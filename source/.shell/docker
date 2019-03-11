@@ -91,6 +91,10 @@ docker_stop(){
 	docker kill $(docker ps -q)
 }
 
+docker_attach(){
+    docker attach --sig-proxy=false $*
+}
+
 docker_latex(){
 	[ -e /usr/bin/docker ] || pkg install docker
 	[ -e /usr/bin/docker ] && sudo docker run --rm -it -v $(pwd):/source schickling/latex $*
