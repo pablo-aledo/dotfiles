@@ -82,7 +82,7 @@ docker_clean(){
     cleanupdirs="/var/lib/etcd /etc/kubernetes /etc/cni /opt/cni /var/lib/cni /var/run/calico /opt/rke"
     for dir in ${(z)cleanupdirs}; do
       echo "Removing $dir"
-      rm -rf $dir
+      sudo rm -rf $dir
     done
 
 }
