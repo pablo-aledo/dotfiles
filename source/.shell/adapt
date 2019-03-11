@@ -631,6 +631,7 @@ adapt_shortcuts(){
 	do
 		echo "bindsym $(basename $a) exec \"sleep 0.1 && zsh -c 'source $a'\"" >> ~/.i3/config
 	done
+    export DISPLAY=:1
 	i3-msg reload
 }
 
