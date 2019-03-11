@@ -7,7 +7,8 @@ do
 
     xdotool key 1 && sleep 1
     xdotool key 2 && sleep 10
-    xdotool key 3 && sleep 1 && while [ -e /tmp/lock ]; do sleep 1; done
+    xdotool key 3 && sleep 1
+    while [ -e /tmp/lock ]; do sleep 1; done; sleep 50
     xdotool key 5 && sleep 1
 
 done
