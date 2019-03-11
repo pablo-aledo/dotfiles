@@ -5,6 +5,6 @@ ls -lh ~/Descargas/ | awk '{$1=""; $2=""; $3=""; $4=""; $6=""; $7=""; $8="" ; pr
 comm -13 <(cat /tmp/before | sort) <(cat /tmp/after | sort) > /tmp/downloaded
 
 echo "Title: $(cat /tmp/title)" >> /tmp/link2file
-cat /tmp/downloaded >> /tmp/link2file
+cat /tmp/downloaded | grep -v 'avmpage.html' >> /tmp/link2file
 echo "" >> /tmp/link2file
 
