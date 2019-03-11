@@ -1,7 +1,7 @@
 export DISPLAY=:1
 
-cat /tmp/s2link | head -n11 | tail -n1 | read line
-#cat /tmp/s2link | while read line
+#cat /tmp/s2link | head -n11 | tail -n1 | read line
+cat /tmp/s2link | while read line
 do
     echo $line > /tmp/avl_line
 
