@@ -1,0 +1,5 @@
+export DISPLAY=:1
+
+killall google-chrome
+xrandr --output VNC-0 --mode 1280x800
+ls -lh ~/Descargas/ | awk '{$1=""; $2=""; $3=""; $4=""; $6=""; $7=""; $8="" ; print}' > /tmp/before

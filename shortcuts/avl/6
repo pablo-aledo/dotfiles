@@ -1,0 +1,14 @@
+export DISPLAY=:1
+
+cat /tmp/s2link | head -n11 | tail -n1 | read line
+#cat /tmp/s2link | while read line
+do
+    echo $line > /tmp/avl_line
+
+    xdotool key 1 && sleep 1
+    xdotool key 2 && sleep 10
+    xdotool key 3 && sleep 1
+    && while [ -e /tmp/lock ]; do sleep 1; done
+    xdotool key 5 && sleep 1
+
+done

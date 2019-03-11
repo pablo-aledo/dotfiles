@@ -1,0 +1,29 @@
+export DISPLAY=:1
+
+
+touch /tmp/lock
+
+xdotool key Ctrl+s
+sleep 1
+xdotool type avmpage
+xdotool key Return
+sleep 1
+xdotool key Return
+sleep 5
+
+cat ~/Descargas/avmpage.html | grep Download | grep icerbox | while read line
+do
+    link=$(echo $line | sed 's/.*a href="\([^"]*\)".*/\1/g' )
+    google-chrome $link >/dev/null 2>/dev/null &
+    sleep 5
+
+    xdotool key 4
+    sleep 5
+
+    xdotool key ctrl+w
+    sleep 5
+done
+
+xdotool key ctrl+w
+
+rm -rf /tmp/lock
