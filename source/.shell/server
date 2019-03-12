@@ -348,10 +348,12 @@ server(){
 
     if [ $1 = "convert_candidates" ]
     then
+        [ "$2" = "" ] && date_vconv=0005
+        [ "$2" = "" ] || date_vconv=$2
         while true
         do
             cd
-            if [ `date +%H%M` = 0005 ]
+            if [ `date +%H%M` = $date_vconv ]
             then
                 echo "----- Launch -----"
 	            [ ! -e /media/removable/2TB2/homes/admin/Videos ] && sleep 10 && continue
