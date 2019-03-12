@@ -4,7 +4,8 @@ xdotool mousemove 350 120
 xdotool click 1
 xdotool click 1
 xdotool click 1
-xdotool type "$(cat /tmp/title)"
+cat /tmp/title | xclip -sel clip -i
+xdotool key Ctrl+v
 #xdotool type ' avxhome.se'
 xdotool key Return
 
