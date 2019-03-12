@@ -12,3 +12,5 @@ do
     xdotool key 5 && sleep 1
 
 done
+
+xdotool key 0
