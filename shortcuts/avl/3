@@ -2,6 +2,7 @@ export DISPLAY=:1
 
 
 touch /tmp/lock
+touch ~/Descargas/avmpage.html
 
 xdotool key Ctrl+s
 sleep 1
