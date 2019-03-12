@@ -1,0 +1,10 @@
+export DISPLAY=:1
+
+xdotool mousemove 350 120
+xdotool click 1
+xdotool click 1
+xdotool click 1
+xdotool type "$(cat /tmp/title)"
+#xdotool type ' avxhome.se'
+xdotool key Return
+

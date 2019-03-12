@@ -1,0 +1,12 @@
+for a in /tmp/unstar_split/*
+do
+
+    title=$(cat $a | head -n1 | sed 's/Title: //g')
+
+    cat $a | tail -n+2 | while read line
+    do
+        file=$(echo $line | sed 's/^ *[^ ]* *//g')
+        mkdir -p "$learning_dir/metadata/$file"
+        echo $title > "$learning_dir/metadata/$file"
+    done
+done

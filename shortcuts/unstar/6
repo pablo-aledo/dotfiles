@@ -1,0 +1,23 @@
+export DISPLAY=:1
+
+xdotool key 1 && sleep 30
+
+rm -rf /tmp/unstar_split
+mkdir /tmp/unstar_split
+csplit -s /tmp/link2file '/^$/' '{*}' -f /tmp/unstar_split/ --suppress-matched
+
+#a=/tmp/unstar_split/01
+for a in /tmp/unstar_split/*
+do
+
+    title=$(cat $a | head -n1 | sed 's/Title: //g')
+
+    echo $title > /tmp/title
+
+    xdotool key 2 && sleep 5
+    xdotool key 3 && sleep 5
+    xdotool key 4 && sleep 5
+
+done
+
+xdotool key 7 && sleep 5
