@@ -7,6 +7,6 @@ do
     do
         file=$(echo $line | sed 's/^ *[^ ]* *//g')
         mkdir -p "$learning_dir/metadata/$file"
-        echo $title > "$learning_dir/metadata/$file"
+        echo $title > "$learning_dir/metadata/$file/title"
     done
 done
