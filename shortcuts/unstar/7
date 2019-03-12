@@ -1,3 +1,5 @@
+source ~/.dotfiles/source/.shell/summarize
+
 for a in /tmp/unstar_split/*
 do
 
