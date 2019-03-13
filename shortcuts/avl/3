@@ -21,13 +21,13 @@ do
     xdotool key 4
     sleep 5
 
+    while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
+    do
+        sleep 1
+    done
+
     xdotool key ctrl+w
     sleep 5
-done
-
-while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
-do
-    sleep 1
 done
 
 xdotool key ctrl+w
