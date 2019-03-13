@@ -7,7 +7,7 @@ xdotool key Ctrl+a
 xdotool key Ctrl+c
 sleep 1
 
-file=$(xclip -sel clip -o)
+file=$(xclip -sel clip -o | sed 's/([1-3])\././g')
 [ -e ~"/Descargas/$file" ] && xdotool mousemove 930 670 && xdotool click 1
 [ ! -e ~"/Descargas/$file" ] && xdotool key Return
 
