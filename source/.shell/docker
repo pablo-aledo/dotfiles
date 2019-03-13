@@ -364,8 +364,9 @@ case $1 in
 (neoman)                 docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/bus/usb --device /dev/usb --name neoman ${DOCKER_REPO_PREFIX}/neoman ;;
 (nes)                    docker run --rm -d --device /dev/snd -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/dri ${DOCKER_REPO_PREFIX}/nes /games/zelda.rom ;;
 (netcat)                 shift; docker run --rm -it --net host ${DOCKER_REPO_PREFIX}/netcat "$@" ;;
-(nginx)                  docker run -d --restart always -v "${HOME}/.nginx:/etc/nginx" --net host --name nginx nginx
+(nginx_jess)             docker run -d --restart always -v "${HOME}/.nginx:/etc/nginx" --net host --name nginx nginx
                          sudo hostess add jess 127.0.0.1 ;;
+(nginx)                  docker run -v $PWD:/usr/share/nginx/html:ro -v "${HOME}/.nginx:/etc/nginx" --net host nginx ;;
 (notify-osd)             docker run -d -v /etc/machine-id:/etc/machine-id:ro -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v /var/run/dbus:/var/run/dbus -v /var/run/user/$(id -u):/var/run/user/$(id -u) $(env | cut -d= -f1 | awk '{print "-e", $1}') -e DISPLAY=unix$DISPLAY -e DBUS_SESSION_BUS_ADDRESS="unix:path=/var/run/user/1000/bus" -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro -u $(whoami) -w "$HOME" -v $HOME/.Xauthority:$HOME/.Xauthority --name notify-osd ${DOCKER_REPO_PREFIX}/notify-osd ;;
 (notify_send)            local args=${*:2}
                          docker exec -i notify_osd notify-send "$1" "${args}" ;;
