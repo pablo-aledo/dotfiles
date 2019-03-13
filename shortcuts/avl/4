@@ -8,7 +8,7 @@ sleep 1
 xdotool key Ctrl+c
 file=$(xclip -sel clip -o)
 
-[ -e "~/Descargas/$file" ] && return
+[ -e ~"/Descargas/$file" ] && return
 
 xdotool mousemove 558 540
 xdotool click 1
