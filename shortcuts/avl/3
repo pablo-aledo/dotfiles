@@ -25,6 +25,11 @@ do
     sleep 5
 done
 
+while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
+do
+    sleep 1
+done
+
 xdotool key ctrl+w
 
 rm -rf /tmp/lock
