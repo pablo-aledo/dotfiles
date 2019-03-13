@@ -1,4 +1,5 @@
 export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
 
 xdotool mousemove 558 460
 xdotool click 1
@@ -15,9 +16,5 @@ xdotool click 1
 sleep 1
 xdotool key Return
 
-
-
-
-
-
+mouseover 1 100 ~/.dotfiles/shortcuts/images/cancel.png && xdotool click 1
 
