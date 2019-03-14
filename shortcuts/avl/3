@@ -12,7 +12,7 @@ sleep 1
 xdotool key Return
 sleep 5
 
-cat ~/Descargas/avmpage.html | grep Download | grep icerbox | while read line
+cat ~/Descargas/avmpage.html | grep href | grep icerbox | grep -v premium | while read line
 do
     link=$(echo $line | sed 's/.*a href="\([^"]*\)".*/\1/g' )
     google-chrome $link >/dev/null 2>/dev/null &
@@ -25,6 +25,17 @@ do
     do
         sleep 1
     done
+
+    count=0
+    if [ "$(cat /tmp/file | wc -l)" -eq 1 ]
+    then
+        while [ ! -e ~"/Descargas/$(cat /tmp/file)" ]
+        do
+            sleep 10
+            count=$( $count + 1 )
+            [ $count -eq 10 ] && break
+        done
+    fi
 
     xdotool key ctrl+w
     sleep 5
