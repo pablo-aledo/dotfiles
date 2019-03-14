@@ -1,4 +1,5 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
-mouseover 1 100 ~/.dotfiles/shortcuts/images/Recibidos.png && xdotool click 1 && sleep 1
+#mouseover 1 100 ~/.dotfiles/shortcuts/images/Recibidos.png && xdotool click 1 && sleep 1
+mouseover 1 100 ~/.dotfiles/shortcuts/images/star.png && xdotool mousemove_relative 200 0 && xdotool click 1 && sleep 1
