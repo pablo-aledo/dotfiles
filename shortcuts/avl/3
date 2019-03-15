@@ -37,6 +37,15 @@ do
         done
     fi
 
+    size1=0
+    size2=1
+    while [ "$size1" != "$size2" ]
+    do
+        size1=$(ls -l ~"/Descargas/$(cat /tmp/file)" | awk '{print $5}')
+        sleep 10
+        size2=$(ls -l ~"/Descargas/$(cat /tmp/file)" | awk '{print $5}')
+    done
+
     xdotool key ctrl+w
     sleep 5
 done
