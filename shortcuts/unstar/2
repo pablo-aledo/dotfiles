@@ -5,7 +5,8 @@ xdotool click 1
 xdotool click 1
 xdotool click 1
 cat /tmp/title | xclip -sel clip -i
+xdotool type 'subject: "'
 xdotool key Ctrl+v
-#xdotool type ' avxhome.se'
+xdotool type '"'
 xdotool key Return
 
