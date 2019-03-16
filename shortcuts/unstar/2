@@ -5,6 +5,7 @@ xdotool click 1
 xdotool click 1
 xdotool click 1
 cat /tmp/title | xclip -sel clip -i
+sleep 1
 xdotool type 'subject: "'
 xdotool key Ctrl+v
 xdotool type '"'
