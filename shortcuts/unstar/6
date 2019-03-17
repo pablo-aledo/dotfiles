@@ -4,7 +4,7 @@ xdotool key 1 && sleep 30
 
 rm -rf /tmp/unstar_split
 mkdir /tmp/unstar_split
-csplit -s /tmp/link2file '/^$/' '{*}' -f /tmp/unstar_split/ --suppress-matched
+csplit -s /tmp/s2files '/^$/' '{*}' -f /tmp/unstar_split/ --suppress-matched
 
 #a=/tmp/unstar_split/01
 for a in /tmp/unstar_split/*
