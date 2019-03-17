@@ -1,0 +1,18 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+xdotool key Alt+2
+sleep 1
+
+xdotool mousemove 350 120
+xdotool click 1
+xdotool click 1
+xdotool click 1
+cat /tmp/title | xclip -sel clip -i
+sleep 1
+xdotool type 'subject: "'
+xdotool key Ctrl+v
+xdotool type '"'
+xdotool key Return
+
+mouseover 5 100 ~/.dotfiles/shortcuts/images/star.png && xdotool mousemove_relative 200 0 && xdotool click 1

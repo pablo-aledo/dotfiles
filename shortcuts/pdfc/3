@@ -1,0 +1,7 @@
+rm -rf ~"/Descargas/$(cat /tmp/file)"
+
+xdotool key Alt+x
+sleep 1
+xdotool key Alt+x
+
+rm -rf /tmp/lock

@@ -1,0 +1,38 @@
+export DISPLAY=:1
+
+source ~/.dotfiles/source/.shell/adapt
+adapt_shc_theme
+
+xrandr --output VNC-0 --mode 1280x800
+sleep 1
+
+xdotool key Alt+2
+google-chrome --profile-directory=Default mail.google.com >/dev/null 2>/dev/null &
+sleep 5
+
+rm -rf /tmp/pdfc_split
+mkdir /tmp/pdfc_split
+csplit -s /tmp/s2files '/^$/' '{*}' -f /tmp/pdfc_split/ --suppress-matched
+
+#a=/tmp/pdfc_split/00
+for a in /tmp/pdfc_split/*
+do
+    cat $a | head -n1 | sed 's/^Title: //g' > /tmp/title
+    cat $a | tail -n1 | sed 's/^ *[^ ]* *//g' > /tmp/file
+
+    touch /tmp/lock
+    xdotool key 1
+    while [ -e /tmp/lock ]; do sleep 1; done; sleep 5
+
+done
+
+xdotool key 0
+
+
+
+
+
+
+
+
+
