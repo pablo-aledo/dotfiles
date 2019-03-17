@@ -19,6 +19,7 @@ for a in /tmp/pdfc_split/*
 do
     cat $a | head -n1 | sed 's/^Title: //g' > /tmp/title
     cat $a | tail -n1 | sed 's/^ *[^ ]* *//g' > /tmp/file
+    grep -F "$(cat /tmp/title)" /tmp/s2link | sed 's/^.* -> //g' > /tmp/link
 
     touch /tmp/lock
     xdotool key 1
