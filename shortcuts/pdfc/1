@@ -1,6 +1,8 @@
 export DISPLAY=:1
 
 xdotool key Alt+1
+sleep 1
+
 xdotool key Alt+e
 
 sleep 1
