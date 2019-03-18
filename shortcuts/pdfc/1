@@ -16,5 +16,7 @@ sleep 1
 echo "google-chrome --profile-directory=Default >/dev/null 2>/dev/null &" > /tmp/cmd
 i3-msg "workspace 1; exec $(cat /tmp/cmd)"
 
+sleep 1
+
 echo "google-chrome --profile-directory=Default \"$(cat /tmp/link)\" >/dev/null 2>/dev/null &" > /tmp/cmd
 i3-msg "workspace 1; exec $(cat /tmp/cmd)"
