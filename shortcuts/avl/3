@@ -16,7 +16,7 @@ cat ~/Descargas/avmpage.html | grep href | grep icerbox | grep -v premium | whil
 do
     link=$(echo $line | sed 's/.*a href="\([^"]*\)".*/\1/g' )
     google-chrome $link >/dev/null 2>/dev/null &
-    sleep 5
+    sleep 7
 
     xdotool key 4
     sleep 5
