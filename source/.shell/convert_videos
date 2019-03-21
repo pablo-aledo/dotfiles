@@ -319,6 +319,7 @@ convert_recursive(){
 	[ $# -eq 0 ] && width=640
 	[ $# -eq 1 ] && width=$1
 	convert_opts="-vf 'scale=${width}:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy -loglevel warning" # -loglevel {quiet, panic, fatal, error, warning, info, verbose, debug, trace} -hide_banner -nostats
+    original_opts=$convert_opts
 
 	[ -e "$convert_dir" ]   || return
 	[ -e "$converted_dir" ] || return
@@ -361,7 +362,13 @@ convert_recursive(){
 
 		actual=$(( $actual + 1 ))
 
+        foldername=$( echo $line | sed -e "s|$convert_dir/||g" -e "s|/.*||g"  )
+        [ -e ~"/learning/metadata/$foldername/resolution" ] && resolution=$(cat ~"/learning/metadata/$foldername/resolution" )
+        [ -e ~"/learning/metadata/$foldername/resolution" ] && convert_opts=$( echo $convert_opts | sed "s/scale=[^:]*:/scale=$resolution:/g" )
+
 		echo ffmpeg -i \"$line\" `echo $convert_opts` \"`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4\" "</dev/null" | bash
+
+        convert_opts=$original_opts
 
 	done
 
