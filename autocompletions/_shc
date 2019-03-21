@@ -1,0 +1,7 @@
+#compdef shc
+
+local -a shortcuts
+shortcuts=( $( cd ~/.dotfiles/shortcuts/; ls ) )
+
+_describe 'command' shortcuts
+
