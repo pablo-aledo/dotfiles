@@ -1,4 +1,4 @@
-#compdef shc
+#compdef adapt_shortcuts
 
 local -a shortcuts
 shortcuts=( $( cd ~/.dotfiles/shortcuts/; ls ) )
