@@ -45,6 +45,7 @@ rules.transform(){
         -e 's/c#/csharp/g'  \
         -e 's/?/ questionmark/g' \
         -e 's/\(machine.learning\)/\1 MachineLearning /gI' \
+        -e 's/\(black.hat\)/\1 BlackHat /gI' \
         -e 's/\(big.data\)/\1 BigData /gI' \
         -e 's/\(artificial.intelligence\)/\1 ArtificialIntelligence /gI' \
         -e 's/\(programming.language\(s\|\)\)/\1 ProgrammingLanguages /gI' \
