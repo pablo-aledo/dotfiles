@@ -355,10 +355,10 @@ server(){
                 cat pgdump_list | while read line
                 do
                     name=$(echo $line | cut -d'/' -f4)
-                    docker_run pg_dump_10 --format=c $line > /tmp/$name
+                    docker_run pg_dump_10 --format=c $line -f $name
                 done
 
-                list=$(cat pgdump_list | cut -d'/' -f4 | sed 's|^|/tmp/|g' | paste -d' ' -s)
+                list=$(cat pgdump_list | cut -d'/' -f4 | paste -d' ' -s)
                 tar -cvzf pgdump-`date +%y%m%d-%H%M%S`.tgz ${(z)list}
 
     			sleep $((60*5))
