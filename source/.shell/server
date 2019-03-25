@@ -348,12 +348,15 @@ server(){
 
     if [ $1 = "pgdump" ]
     then
+        [ "$2" = "" ] && date_pgdump=0005
+        [ "$2" = "" ] || date_pgdump=$2
     	while true
     	do
-    		if [ `date +%H%M` = 0005 ]
+    		if [ `date +%H%M` = $date_pgdump ]
     		then
                 cat pgdump_list | while read line
                 do
+                    echo $line
                     name=$(echo $line | cut -d'/' -f4)
                     docker_run pg_dump_10 --format=c $line > /tmp/$name
                 done
