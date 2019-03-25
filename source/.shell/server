@@ -359,7 +359,7 @@ server(){
                 done
 
                 list=$(cat pgdump_list | cut -d'/' -f4 | sed 's|^|/tmp/|g' | paste -d' ' -s)
-                tar -cvzf pgdump-`date +%y%m%d-%H%M%S`.gz ${(z)list}
+                tar -cvzf pgdump-`date +%y%m%d-%H%M%S`.tgz ${(z)list}
 
     			sleep $((60*5))
     		fi
