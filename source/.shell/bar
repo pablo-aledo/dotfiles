@@ -4,7 +4,7 @@ bar(){
 
     cat | while read line
     do
-        python3 -c "print(' [' + '#'*$line + ' '*($max-$line) + ']' + '($line/$max)' + '\r', end='')"
+        python3 -c "print( ['◐', '◓', '◑', '◒'][$line%4] + ' [' + '#'*$line + ' '*($max-$line) + ']' + '($line/$max)' + '\r', end='')"
     done
     setterm -cursor on
 
