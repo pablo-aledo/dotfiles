@@ -355,7 +355,7 @@ server(){
                 cat pgdump_list | while read line
                 do
                     name=$(echo $line | cut -d'/' -f4)
-                    docker_run pg_dump_10 $line > /tmp/$name
+                    docker_run pg_dump_10 --format=c $line > /tmp/$name
                 done
 
                 list=$(cat pgdump_list | cut -d'/' -f4 | sed 's|^|/tmp/|g' | paste -d' ' -s)
