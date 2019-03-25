@@ -1,0 +1,9 @@
+bar(){
+    max=$1
+
+    cat | while read line
+    do
+        python3 -c "print(' [' + '#'*$line + ' '*($max-$line) + ']' + '($line/$max)' + '\r', end='')"
+    done
+
+}
