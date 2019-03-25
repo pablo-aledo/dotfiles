@@ -346,6 +346,27 @@ server(){
     	done
     fi
 
+    if [ $1 = "pgdump" ]
+    then
+    	while true
+    	do
+    		if [ `date +%H%M` = 0005 ]
+    		then
+                cat pgdump_list | while read line
+                do
+                    name=$(echo $line | cut -d'/' -f4)
+                    docker_run pg_dump_10 $line > /tmp/$name
+                done
+
+                list=$(cat pgdump_list | cut -d'/' -f4 | sed 's|^|/tmp/|g' | paste -d' ' -s)
+                tar -cvzf pgdump-`date +%y%m%d-%H%M%S`.gz ${(z)list}
+
+    			sleep $((60*5))
+    		fi
+    		sleep 10
+    	done
+    fi
+
     if [ $1 = "convert_candidates" ]
     then
         [ "$2" = "" ] && date_vconv=0005
