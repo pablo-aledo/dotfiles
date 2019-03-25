@@ -9,3 +9,17 @@ bar(){
     setterm -cursor on
 
 }
+
+bar(){
+    setterm -cursor off
+    max=$1
+
+    cat | while read line
+    do
+        perc=$(( $line*100/$max ))
+
+        python3 -c "print( ['◐', '◓', '◑', '◒'][$line%4] + ' [' + '#'*$perc + ' '*(100-$perc) + ']' + '($line/$max)' + '\r', end='')"
+    done
+    setterm -cursor on
+
+}
