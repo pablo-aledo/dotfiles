@@ -12,7 +12,7 @@ google-chrome --profile-directory=Default mail.google.com &
 sleep 30
 xdotool mousemove 350 110
 xdotool click 1
-xdotool type 'label: pdf'
+xdotool type "$(cat /tmp/query)"
 xdotool key Return
 sleep 10
 xdotool mousemove 400 205
