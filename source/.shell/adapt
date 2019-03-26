@@ -624,15 +624,17 @@ adapt_simplbuntu(){
 }
 
 adapt_shortcuts(){
-	[ $# -eq 1 ] || return
 	srcdir=$( find ~/.dotfiles/shortcuts/ -maxdepth 1 -type d | grep $1 )
 
-	for a in $srcdir/*
+	find $srcdir -type f | grep -v init.sh | while read a
 	do
 		echo "bindsym $(basename $a) exec \"sleep 0.1 && zsh -c 'source $a'\"" >> ~/.i3/config
 	done
     export DISPLAY=:1
 	i3-msg reload
+
+    shift
+    source $srcdir/init.sh $*
 }
 
 alias shc='adapt_shortcuts'
