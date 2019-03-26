@@ -634,7 +634,7 @@ adapt_shortcuts(){
 	i3-msg reload
 
     shift
-    source $srcdir/init.sh $*
+    [ -e $srcdir/init.sh ] && source $srcdir/init.sh $*
 }
 
 alias shc='adapt_shortcuts'
