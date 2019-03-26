@@ -344,6 +344,7 @@ case $1 in
 (keepassxc)              docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -v /etc/machine-id:/etc/machine-id:ro -v /usr/share/X11/xkb:/usr/share/X11/xkb/:ro -v $HOME/.config/keepassxc:/root/.config/keepassxc -e DISPLAY=unix$DISPLAY keepassxc ;;
 (kernel_builder)         docker run --rm -it -v /usr/src:/usr/src --cpu-shares=512 --name kernel-builder ${DOCKER_REPO_PREFIX}/kernel-builder ;;
 (kvm)                    docker run -d --privileged -v /var/run/libvirt:/var/run/libvirt --name kvm ${DOCKER_REPO_PREFIX}/kvm ;;
+(lam)                    docker run -p 8080:80 -it -d ldapaccountmanager/lam:stable ;;
 (lamp)                   docker run --rm -p 8080:80 -e LOG_STDOUT=true -e LOG_STDERR=true -e LOG_LEVEL=debug -v $PWD:/var/www/html fauria/lamp ;;
 (lamp_mysql)             docker run -d --link my-mysql-container:mysql -p 8080:80 -v $PWD/html:/var/www/html -v $PWD/logs:/var/log/httpd --name my-lamp-container fauria/lamp
                          docker run -it mysql ;;
