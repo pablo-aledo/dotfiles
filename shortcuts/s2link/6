@@ -1,5 +1,7 @@
 export DISPLAY=:1
 
+xdotool key 1 && sleep 30
+
 for a in $(seq 1 200)
 do
     xdotool key 2 && sleep 1
