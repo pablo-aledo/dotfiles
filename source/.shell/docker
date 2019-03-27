@@ -539,7 +539,7 @@ case $1 in
 (o_openldap)             docker run -p 389:389 -p 636:636 --name my-openldap-container --detach osixia/openldap:1.2.4 ;;
 (o_openldap_search)      docker exec my-openldap-container ldapsearch -x -H ldap://localhost -b dc=example,dc=org -D "cn=admin,dc=example,dc=org" -w admin ;;
 (o_openldap_add)         docker exec my-openldap-container ldapadd    -x -H ldap://localhost                      -D "cn=admin,dc=example,dc=org" -w admin -f /container/service/slapd/assets/test/new-user.ldif ;;
-(o_openldap_add_2)       shift; docker exec -v $PWD:/workdir -w /workdir my-openldap-container ldapadd -x -H ldap://localhost -D "cn=admin,dc=example,dc=org" -w admin -f $1 ;;
+(o_openldap_add_in)      docker exec my-openldap-container ldapadd    -x -H ldap://localhost                      -D "cn=admin,dc=example,dc=org" -w admin ;;
 (o_openldap_config)      docker run --env LDAP_ORGANISATION="My Company" --env LDAP_DOMAIN="my-company.com" --env LDAP_ADMIN_PASSWORD="JonSn0w" --detach osixia/openldap:1.2.4 ;;
 (o_openldap_populate_f)  docker run --volume ./bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/50-bootstrap.ldif osixia/openldap:1.2.4 --copy-service ;;
 (o_openldap_populate_d)  docker run --volume ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom osixia/openldap:1.2.4 --copy-service ;;
