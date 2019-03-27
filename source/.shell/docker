@@ -536,6 +536,12 @@ case $1 in
 (octave)                 docker run --rm -it -v $(pwd):/source schickling/octave ;;
 (opencv2)                docker run --rm -it -v $(pwd):/source schickling/opencv ;;
 (openldap)               sudo docker run -it --rm -u $(id -u) -v $PWD:/workdir -w /workdir openldap ;;
+(o_openldap)             docker run -p 389:389 -p 636:636 --name my-openldap-container --detach osixia/openldap:1.2.4 ;;
+(o_openldap_search)      docker exec my-openldap-container ldapsearch -x -H ldap://localhost -b dc=example,dc=org -D "cn=admin,dc=example,dc=org" -w admin ;;
+(o_openldap_config)      docker run --env LDAP_ORGANISATION="My Company" --env LDAP_DOMAIN="my-company.com" --env LDAP_ADMIN_PASSWORD="JonSn0w" --detach osixia/openldap:1.2.4 ;;
+(o_openldap_populate_f)  docker run --volume ./bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/50-bootstrap.ldif osixia/openldap:1.2.4 --copy-service ;;
+(o_openldap_populate_d)  docker run --volume ./ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom osixia/openldap:1.2.4 --copy-service ;;
+(o_openldap_populate_e)  docker run --volume /data/slapd/database:/var/lib/ldap --volume /data/slapd/config:/etc/ldap/slapd.d --detach osixia/openldap:1.2.4 ;;
 (rust)                   docker run --rm -it -v $(pwd):/source schickling/rust ;;
 (sonar_server)           docker run -d -p 9000:9000 -d --name sonar_server sonar_server ;;
 (sonar_scanner)          docker run -e SONAR_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' sonar_server) -e PROJECT_NAME=$(basename $PWD) -v $PWD:/workdir -w /workdir sonar_scanner ;;
