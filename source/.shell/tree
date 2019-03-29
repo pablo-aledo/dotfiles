@@ -44,6 +44,18 @@ lnk_hierarchy(){
 
 }
 
+lnk_map(){
+    cat $1 | while read line
+    do
+        title=$(echo $line | sed 's/\(.*\) -> \(.*\)/\1/g' )
+        class=$(echo $line | sed 's/\(.*\) -> \(.*\)/\2/g' )
+
+        echo mkdir -p $class
+        echo ln -s \"\$SRC/$title\" $class/
+        echo
+    done
+}
+
 lnk_hierarchy_missing(){
     comm -13 <(find -L $TREE_DST | while read line; do echo $(basename $line); done | sort | uniq) <(ls $TREE_SRC | sort | uniq)
 }
