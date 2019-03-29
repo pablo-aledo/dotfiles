@@ -4,4 +4,11 @@ title=$( cat /tmp/avl_line | sed 's/\(.*\) -> \(.*\)/\1/g' )
 link=$( cat /tmp/avl_line | sed 's/\(.*\) -> \(.*\)/\2/g' )
 echo $title > /tmp/title
 
-google-chrome $link >/dev/null 2>/dev/null &
+google-chrome "$link" >/dev/null 2>/dev/null &
+
+sleep 5
+echo "$link" | xclip -sel clip -i
+xdotool key Ctrl+l
+xdotool key Ctrl+v
+xdotool key Return
+sleep 1
