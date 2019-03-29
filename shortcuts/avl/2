@@ -6,9 +6,9 @@ echo $title > /tmp/title
 
 google-chrome "$link" >/dev/null 2>/dev/null &
 
-sleep 5
-echo "$link" | xclip -sel clip -i
-xdotool key Ctrl+l
-xdotool key Ctrl+v
-xdotool key Return
-sleep 1
+#sleep 5
+#echo "$link" | xclip -sel clip -i
+#xdotool key Ctrl+l
+#xdotool key Ctrl+v
+#xdotool key Return
+#sleep 1
