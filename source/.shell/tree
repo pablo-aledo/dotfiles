@@ -50,8 +50,8 @@ lnk_map(){
         title=$(echo $line | sed 's/\(.*\) -> \(.*\)/\1/g' )
         class=$(echo $line | sed 's/\(.*\) -> \(.*\)/\2/g' )
 
-        echo mkdir -p $class
-        echo ln -s \"\$SRC/$title\" $class/
+        echo mkdir -p \"$class\"
+        echo ln -s \"\$SRC/$title\" \"$class/\"
         echo
     done
 }
