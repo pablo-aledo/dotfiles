@@ -27,7 +27,7 @@ bar(){
         python3 -c "
 import datetime
 rate=float($line)/($datenow - $start + 0.001)
-rem_secs=int( ($max-$line)/rate )
+rem_secs=int( ($max-$line)/(rate + 0.001) )
 print( ['◐', '◓', '◑', '◒'][$line%4] + ' [' + '#'*$perc + ' '*(100-$perc) + ']' + '($line/$max)' + '  ' + str(datetime.timedelta(seconds=rem_secs)) + '\r', end='')
 "
     done
