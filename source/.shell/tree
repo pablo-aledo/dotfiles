@@ -79,3 +79,19 @@ lnk_hierarchy_fill_scale(){
         done
     done
 }
+
+lnk_hierarchy_fill_scale_2(){
+    [ "$1" = "" ] && scale=10000
+    [ "$1" = "" ] || scale=$1
+    find $TREE_DST -type l | while read line
+    do
+        echo "\e[34m $line \e[0m"
+        target=$(ll $line | sed 's/.* -> //g')
+        size=$(ll $target  | awk '{print $5}')
+        size=$(( $size / $scale ))
+
+        [ -L $line ] && rm -f "$line"
+        [ -e $line ] && continue
+        dd if=/dev/zero bs=1 count=$size of="$line" 2>/dev/null
+    done
+}
