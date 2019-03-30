@@ -11,6 +11,9 @@ bar(){
 }
 
 bar(){
+
+    [ -e /tmp/start ] || date +%s > /tmp/start
+
     setterm -cursor off
     max=$1
 
@@ -18,7 +21,15 @@ bar(){
     do
         perc=$(( $line*100/$max ))
 
-        python3 -c "print( ['◐', '◓', '◑', '◒'][$line%4] + ' [' + '#'*$perc + ' '*(100-$perc) + ']' + '($line/$max)' + '\r', end='')"
+        start=$(cat /tmp/start)
+        datenow=$(date +%s)
+
+        python3 -c "
+import datetime
+rate=float($line)/($datenow - $start)
+rem_secs=int( ($max-$line)/rate )
+print( ['◐', '◓', '◑', '◒'][$line%4] + ' [' + '#'*$perc + ' '*(100-$perc) + ']' + '($line/$max)' + '  ' + str(datetime.timedelta(seconds=rem_secs)) + '\r', end='')
+"
     done
     setterm -cursor on
 
