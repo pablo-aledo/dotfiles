@@ -114,7 +114,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|ubuntu_pga_dev|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic|centos-i3-vnc|centos7_gobuild|centos7_ccache|pg_dump|pg_dump_10)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|ubuntu_pga_dev|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic|centos-i3-vnc|centos7_gobuild|centos7_ccache|pg_dump|pg_dump_10|pg_restore)
     [ "$docker_export_proxy" = "true" ] || cd ~/.dotfiles/pkg/Docker/$1
     [ "$docker_export_proxy" = "true" ] && rm -fr /tmp/docker
 	[ "$docker_export_proxy" = "true" ] && cp -r ~/.dotfiles/pkg/Docker/$1 /tmp/docker
@@ -409,6 +409,7 @@ case $1 in
 (pg_dump)                shift; docker run -it pg_dump pg_dump $* ;;
 (pg_dump_10)             shift; docker run -v $PWD:/workdir -w /workdir pg_dump_10 pg_dump $* ;;
 (pg_restore_10)          shift; docker run -v $PWD:/workdir -w /workdir pg_dump_10 pg_restore $* ;;
+(pg_restore)             docker run -it pg_restore ;;
 (rainbowstream)          docker run -it --rm -v /etc/localtime:/etc/localtime:ro -v $HOME/.rainbow_oauth:/root/.rainbow_oauth -v $HOME/.rainbow_config.json:/root/.rainbow_config.json --name rainbowstream ${DOCKER_REPO_PREFIX}/rainbowstream ;;
 (rancher)                docker run -d --restart=unless-stopped -p 80:80 -p 443:443 rancher/rancher:latest ;;
 (re_lab)                 docker run -it -v $(pwd)/share_ro:/share_ro:ro -v $(pwd)/share_rw:/share_rw re_lab ;;
