@@ -209,12 +209,16 @@ EOF
     fi
 
     # start OpenLDAP
-    log-helper info "Start OpenLDAP..."
+
+    [ -e /etc/config ] && config_par="-f /etc/config"
+    [ -e /etc/config ] || config_par=""
+
+    log-helper info "Start OpenLDAP... $config_par"
 
     if log-helper level ge debug; then
-      slapd -h "ldap://$HOSTNAME $PREVIOUS_HOSTNAME_PARAM ldap://localhost ldapi:///" -u openldap -g openldap -d $LDAP_LOG_LEVEL 2>&1 &
+      slapd -h "ldap://$HOSTNAME $PREVIOUS_HOSTNAME_PARAM ldap://localhost ldapi:///" -u openldap -g openldap -d $LDAP_LOG_LEVEL $(echo $config_par) 2>&1 &
     else
-      slapd -h "ldap://$HOSTNAME $PREVIOUS_HOSTNAME_PARAM ldap://localhost ldapi:///" -u openldap -g openldap
+      slapd -h "ldap://$HOSTNAME $PREVIOUS_HOSTNAME_PARAM ldap://localhost ldapi:///" -u openldap -g openldap $(echo $config_par)
     fi
 
 
