@@ -1,10 +1,10 @@
 export DISPLAY=:1
 
-ls -lh ~/Descargas/ | awk '{$1=""; $2=""; $3=""; $4=""; $6=""; $7=""; $8="" ; print}' > /tmp/after
+#ls -lh ~/Descargas/ | awk '{$1=""; $2=""; $3=""; $4=""; $6=""; $7=""; $8="" ; print}' > /tmp/after
+ls -lh ~/Descargas/ | sed 's/^[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([^ ]*\) *[^ ]* *[^ ]* *[^ ]* *\(.*\)/\1 \2/g' > /tmp/after
 
 comm -13 <(cat /tmp/before | sort) <(cat /tmp/after | sort) > /tmp/downloaded
 
 echo "Title: $(cat /tmp/title)" >> /tmp/s2files
 sort /tmp/downloaded | grep -v 'avmpage.html' | grep -v 'avmpage_files' >> /tmp/s2files
 echo "" >> /tmp/s2files
-
