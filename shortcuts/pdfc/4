@@ -4,13 +4,13 @@ echo "Title: $(cat /tmp/title)" >> /tmp/s2files2
 ls -lh ~"/Descargas/$(cat /tmp/file)" | sed "s|$HOME/Descargas/||g" | awk '{$1=""; $2=""; $3=""; $4=""; $6=""; $7=""; $8="" ; print}' >> /tmp/s2files2
 echo >> /tmp/s2files2
 
-rm -rf ~"/Descargas/$(cat /tmp/file)"
-
 xdotool key Alt+1
 sleep 1
 
 xdotool key Alt+x
 sleep 1
 xdotool key Alt+x
+
+rm -rf ~"/Descargas/$(cat /tmp/file)"
 
 rm -rf /tmp/lock
