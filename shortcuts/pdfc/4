@@ -12,6 +12,6 @@ xdotool key Alt+x
 sleep 1
 xdotool key Alt+x
 
-rm -rf ~"/Descargas/$(cat /tmp/file)"
+rm -f ~"/Descargas/$(cat /tmp/file)"
 
 rm -rf /tmp/lock
