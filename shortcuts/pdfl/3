@@ -15,23 +15,24 @@ xdotool mousemove 0 0
 
 if `mouseover 1 10000 ~/.dotfiles/shortcuts/images/print_download.png`
 then
-    print ok
+    echo ok
 else
     rm -rf /tmp/lock
     return
 fi
 
-xdotool mousemove 430 240
-xdotool click 1
-sleep 5
-xdotool key Ctrl+a
-xdotool key Ctrl+c
-sleep 1
+#xdotool mousemove 430 240
+#xdotool click 1
+#sleep 5
+#xdotool key Ctrl+a
+#xdotool key Ctrl+c
+#sleep 1
 
 file=$(xclip -sel clip -o | sed 's/ ([1-3])\././g')
 echo $file > /tmp/file
-[ -e ~"/Descargas/$file" ] && xdotool mousemove 930 670 && xdotool click 1
-[ ! -e ~"/Descargas/$file" ] && xdotool key Return
+#[ -e ~"/Descargas/$file" ] && xdotool mousemove 930 670 && xdotool click 1
+#[ ! -e ~"/Descargas/$file" ] && xdotool key Return
+xdotool key Return
 
 
 rm -rf /tmp/lock
