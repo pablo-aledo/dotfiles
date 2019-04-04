@@ -1,5 +1,5 @@
-xdotool key Alt+1
-sleep 1
+#xdotool key Alt+1
+#sleep 1
 
 xdotool key Alt+x
 sleep 1

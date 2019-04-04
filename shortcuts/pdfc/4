@@ -5,8 +5,8 @@ echo "Title: $(cat /tmp/title)" >> /tmp/s2files2
 ls -lh ~"/Descargas/$(cat /tmp/file)" | sed "s|$HOME/Descargas/||g" | sed 's/^[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([^ ]*\) *[^ ]* *[^ ]* *[^ ]* *\(.*\)/\1 \2/g' >> /tmp/s2files2
 echo >> /tmp/s2files2
 
-xdotool key Alt+1
-sleep 1
+#xdotool key Alt+1
+#sleep 1
 
 xdotool key Alt+x
 sleep 1
