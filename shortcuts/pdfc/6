@@ -23,7 +23,7 @@ do
 
     touch /tmp/lock
     xdotool key 1
-    while [ -e /tmp/lock ]; do sleep 1; done; sleep 5
+    sleep 1 && while [ -e /tmp/lock ]; do sleep 1; done; # sleep 5
 
 done
 
