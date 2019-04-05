@@ -1,4 +1,10 @@
 export DISPLAY=:1
 
-xdotool type s
-sleep 1
+[ "$(cat /tmp/tag)" = "star" ] && xdotool type s
+[ "$(cat /tmp/tag)" = "star" ] && sleep 1
+
+[ "$(cat /tmp/tag)" != "star" ] && xdotool type l
+[ "$(cat /tmp/tag)" != "star" ] && sleep 1
+[ "$(cat /tmp/tag)" != "star" ] && xdotool type $(cat /tmp/tag)
+[ "$(cat /tmp/tag)" != "star" ] && sleep 1
+[ "$(cat /tmp/tag)" != "star" ] && xdotool key Return
