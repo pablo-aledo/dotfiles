@@ -675,3 +675,6 @@ adapt_alt(){
 	i3-msg reload
 }
 
+shcs(){
+  ps aux G short | awk '{print $2}' | xargs kill
+}
