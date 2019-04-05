@@ -21,9 +21,9 @@ else
     return
 fi
 
-#xdotool mousemove 430 240
-#xdotool click 1
-#sleep 5
+xdotool mousemove 430 240
+xdotool click 1
+sleep 5
 #xdotool key Ctrl+a
 #xdotool key Ctrl+c
 #sleep 1
