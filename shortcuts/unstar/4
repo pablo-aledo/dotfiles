@@ -1,5 +1,7 @@
 export DISPLAY=:1
 
+[ -e /tmp/skip ] && return
+
 [ "$(cat /tmp/tag)" = "star" ] && xdotool type s
 [ "$(cat /tmp/tag)" = "star" ] && sleep 1
 
