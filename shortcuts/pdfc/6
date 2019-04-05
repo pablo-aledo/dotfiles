@@ -6,9 +6,9 @@ adapt_shc_theme
 xrandr --output VNC-0 --mode 1280x800
 sleep 1
 
-xdotool key Alt+2
-google-chrome --profile-directory=Default mail.google.com >/dev/null 2>/dev/null &
-sleep 5
+#xdotool key Alt+2
+#google-chrome --profile-directory=Default mail.google.com >/dev/null 2>/dev/null &
+#sleep 5
 
 rm -rf /tmp/pdfc_split
 mkdir /tmp/pdfc_split
