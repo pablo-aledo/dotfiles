@@ -369,10 +369,27 @@ case $1 in
 (nginx_jess)             docker run -d --restart always -v "${HOME}/.nginx:/etc/nginx" --net host --name nginx nginx
                          sudo hostess add jess 127.0.0.1 ;;
 (nginx)                  docker run -v $PWD:/usr/share/nginx/html:ro -v "${HOME}/.nginx:/etc/nginx" --net host nginx ;;
+(nginx-echo-headers)     docker run -it --rm --name backend brndnmtthws/nginx-echo-headers ;;
+(nginx-oauth2)           docker run -it --rm -p 8080:80 -v $(pwd)/default.conf:/etc/nginx/conf.d/default.conf --link oauth-proxy --link backend nginx ;;
 (notify-osd)             docker run -d -v /etc/machine-id:/etc/machine-id:ro -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v /var/run/dbus:/var/run/dbus -v /var/run/user/$(id -u):/var/run/user/$(id -u) $(env | cut -d= -f1 | awk '{print "-e", $1}') -e DISPLAY=unix$DISPLAY -e DBUS_SESSION_BUS_ADDRESS="unix:path=/var/run/user/1000/bus" -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro -u $(whoami) -w "$HOME" -v $HOME/.Xauthority:$HOME/.Xauthority --name notify-osd ${DOCKER_REPO_PREFIX}/notify-osd ;;
 (notify_send)            local args=${*:2}
                          docker exec -i notify_osd notify-send "$1" "${args}" ;;
 (openshot)               docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY openshot ;;
+(oauth2_proxy)           docker run -it --rm --name oauth-proxy a5huynh/oauth2_proxy \
+                             --cookie-secure=false \
+                             --upstream="http://upstream:80" \
+                             --http-address="0.0.0.0:4180" \
+                             --provider gitlab \
+                             --scope read_user \
+                             --login-url="https://gitlab.yourcompany.com/oauth/authorize" \
+                             --redeem-url="https://gitlab.yourcompany.com/oauth/token" \
+                             --validate-url="https://gitlab.yourcompany.com/api/v4/user" \
+                             --redirect-url="http://localhost:8080/oauth2/callback" \
+                             --email-domain="*" \
+                             --cookie-secret=5emaI8pW6kNr4ICj4TmTSg \
+                             --client-id=4f40001533f4a1da5361b476bb93cc0f0f5218b0f7e306e5810a16ef4810f713 \
+                             --client-secret=0a69708d09b905f19858263c32c3e7eef366c892eb99e5a3c854fb4fa9b4d6f8 \
+                             --set-xauthrequest ;;
 (owncloud)               docker run -d -p 8000:80 -v $PWD/owncloud:/var/www/html owncloud:8.1 ;;
                          # --link my-mysql:mysql, and then use mysql as the database host on setup.
                          # docker exec -u www-data some-owncloud php occ status
