@@ -4,4 +4,9 @@ rargroup(){
         basen="$(basename $line .part1.rar)"
         echo "mkdir \"$basen\" && mv \"$basen.\"* \"$basen\""
     done
+    ls *.part01.rar | while read line
+    do
+        basen="$(basename $line .part01.rar)"
+        echo "mkdir \"$basen\" && mv \"$basen.\"* \"$basen\""
+    done
 }
