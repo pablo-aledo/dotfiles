@@ -1,0 +1,18 @@
+#compdef pkg
+
+source ~/.dotfiles/source/.shell/pkg
+distr=$(distr)
+
+local -a verbs
+verbs=( "install" "remove" "search" )
+
+local -a packages
+packages=( $( cd ~/.dotfiles/pkg/$distr; ls )  )
+
+cur=${words[CURRENT]}
+prev=${words[CURRENT-1]}
+cmd=${words[2]}
+
+[ "$prev" = "pkg" ] && _describe 'command' verbs
+[ "$prev" = "pkg" ] || _describe 'command' packages
+
