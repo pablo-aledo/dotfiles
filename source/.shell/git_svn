@@ -19,3 +19,14 @@ git_svn(){
 
 }
 
+git_migrate(){
+
+old=$1
+new=$2
+
+git clone --bare $old old
+cd old
+git remote add new $new
+git push --all new
+git push --tags new
+}
