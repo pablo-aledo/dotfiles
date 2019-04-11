@@ -1,3 +1,5 @@
 cd
 git clone https://github.com/robbyrussell/oh-my-zsh .oh-my-zsh
 git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
+sudo rm -rf /usr/share/zsh/5.0.2/functions/_pkg5
+sudo rm -rf ~/.zcompdump*
