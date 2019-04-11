@@ -45,7 +45,7 @@ do
     done
 
     xdotool key ctrl+w
-    sleep 50
+    sleep 5
 done
 
 xdotool key ctrl+w
