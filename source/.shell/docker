@@ -568,6 +568,15 @@ case $1 in
 (rust)                   docker run --rm -it -v $(pwd):/source schickling/rust ;;
 (sonar_server)           docker run -d -p 9000:9000 -d --name sonar_server sonar_server ;;
 (sonar_scanner)          docker run -e SONAR_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' sonar_server) -e PROJECT_NAME=$(basename $PWD) -v $PWD:/workdir -w /workdir sonar_scanner ;;
+(sonarr)                 docker run \
+                           -e PUID=1000 \
+                           -e PGID=1000 \
+                           -e TZ=Europe/London \
+                           -p 8989:8989 \
+                           -v ~/sonarr/data:/config \
+                           -v ~/sonarr/tvseries:/tv \
+                           -v ~/sonarr/downloadclient-downloads:/downloads \
+                           linuxserver/sonarr ;;
 (speech-recognition)     docker run -it -v /dev/snd:/dev/snd --privileged binkybong/speech-recognition /bin/bash ;;
 (djtones-sprecognition)  docker run -it -v $PWD:/mnt/data djtones/speech-recognition ;;
 (speech-to-text)         docker run -it -v $PWD:/workdir buriburisuri/speech-to-text-wavenet ;;
