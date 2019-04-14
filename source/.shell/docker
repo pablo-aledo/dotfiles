@@ -577,6 +577,15 @@ case $1 in
                            -v ~/sonarr/tvseries:/tv \
                            -v ~/sonarr/downloadclient-downloads:/downloads \
                            linuxserver/sonarr ;;
+(radarr)                 docker run \
+                           -e PUID=1000 \
+                           -e PGID=1000 \
+                           -e TZ=Europe/London \
+                           -p 7878:7878 \
+                           -v ~/sonarr/data:/config \
+                           -v ~/sonarr/tvseries:/tv \
+                           -v ~/sonarr/downloadclient-downloads:/downloads \
+                           linuxserver/radarr ;;
 (speech-recognition)     docker run -it -v /dev/snd:/dev/snd --privileged binkybong/speech-recognition /bin/bash ;;
 (djtones-sprecognition)  docker run -it -v $PWD:/mnt/data djtones/speech-recognition ;;
 (speech-to-text)         docker run -it -v $PWD:/workdir buriburisuri/speech-to-text-wavenet ;;
