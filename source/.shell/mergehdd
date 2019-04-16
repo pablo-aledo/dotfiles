@@ -35,7 +35,8 @@ mergehdd_rmdupes(){
 	rm -rf /tmp/dupes
 
 	# Generate dupes file
-	sudo fdupes -r $rm_from $folder_2 > /tmp/dupes
+	# sudo fdupes -r $rm_from $folder_2 > /tmp/dupes
+	fdupes -r $rm_from $folder_2 > /tmp/dupes
 
 	# Remove duplicates
 	file=`head -n1 /tmp/dupes`
