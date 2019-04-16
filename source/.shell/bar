@@ -24,9 +24,12 @@ bar(){
         start=$(cat /tmp/start)
         datenow=$(date +%s)
 
+        [ -e /tmp/linestart ] && linestart=$(cat /tmp/linestart)
+        [ -e /tmp/linestart ] || linestart=0
+
         python3 -c "
 import datetime
-rate=float($line)/($datenow - $start + 0.001)
+rate=float($line-$linestart)/($datenow - $start + 0.001)
 rem_secs=int( ($max-$line)/(rate + 0.001) )
 print( ['◐', '◓', '◑', '◒'][$line%4] + ' [' + '#'*$perc + ' '*(100-$perc) + ']' + '($line/$max)' + '  ' + str(datetime.timedelta(seconds=rem_secs)) + '\r', end='')
 "
