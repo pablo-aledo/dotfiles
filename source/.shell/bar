@@ -12,7 +12,7 @@ bar(){
 
 bar(){
 
-    [ -e /tmp/start ] || date +%s > /tmp/start
+    [ -e /tmp/start_time ] || date +%s > /tmp/start_time
 
     setterm -cursor off
     max=$1
@@ -21,15 +21,15 @@ bar(){
     do
         perc=$(( $line*100/$max ))
 
-        start=$(cat /tmp/start)
+        start_time=$(cat /tmp/start_time)
         datenow=$(date +%s)
 
-        [ -e /tmp/linestart ] && linestart=$(cat /tmp/linestart)
-        [ -e /tmp/linestart ] || linestart=0
+        [ -e /tmp/start_line ] && start_line=$(cat /tmp/start_line)
+        [ -e /tmp/start_line ] || start_line=0
 
         python3 -c "
 import datetime
-rate=float($line-$linestart)/($datenow - $start + 0.001)
+rate=float($line-$start_line)/($datenow - $start_time + 0.001)
 rem_secs=int( ($max-$line)/(rate + 0.001) )
 print( ['◐', '◓', '◑', '◒'][$line%4] + \
     ' [' + '#'*$perc + ' '*(100-$perc) + ']' + '($line/$max [' + str($perc) + '%' + ']) ' + str(datetime.timedelta(seconds=rem_secs)) + '\r', end='')
