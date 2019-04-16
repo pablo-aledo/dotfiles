@@ -339,7 +339,9 @@ server(){
     	do
     		if [ `date +%H%M` = 0005 ]
     		then
+                echo "===== Start ====="
                 local_backup
+                echo "===== End ====="
     			sleep $((60*5))
     		fi
     		sleep 10
