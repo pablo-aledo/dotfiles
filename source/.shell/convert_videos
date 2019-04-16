@@ -13,7 +13,7 @@ lengthdir(){
 
 convert_1(){
 	OPTS="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
-	ffmpeg `echo $OPTS` -i "$1" "$1.converted.mp4"
+	ffmpeg -i "$1" `echo $OPTS` "$1.converted.mp4"
 }
 
 convert_2(){
@@ -33,22 +33,22 @@ convert_4(){
 
 convert_5(){
 	OPTS="-f mp4 -vcodec libxvid -maxrate 1000 -qmin 3 -qmax 5 -bufsize 4096 -g 300 -acodec aac -strict experimental -mbd 2 -s 320x240 -ab 128 -b 400"
-	ffmpeg `echo $OPTS` -i "$1" "$1.converted.mp4"
+	ffmpeg -i "$1" `echo $OPTS` "$1.converted.mp4"
 }
 
 convert_6(){
 	OPTS="input -acodec aac -ab 128kb -vcodec mpeg4 -b 1200kb -mbd 2 -flags +4mv+trell -aic 2 -cmp 2 -subcmp 2 -s 320x180 -title X"
-	ffmpeg `echo $OPTS` -i "$1" "$1.converted.mp4"
+	ffmpeg -i "$1" `echo $OPTS` "$1.converted.mp4"
 }
 
 convert_7(){
 	OPTS="-f mp4 -acodec libfaac -ar 44100 -ab 128 -vcodec mpeg4 -maxrate 2000 -b 1500 -qmin 3 -qmax 5 -bufsize 4096 -g 300 -s 320x240 -r 30000/1001"
-	ffmpeg `echo $OPTS` -i "$1" "$1.converted.mp4"
+	ffmpeg -i "$1" `echo $OPTS` "$1.converted.mp4"
 }
 
 convert_8(){
 	OPTS="-f mp4 -vcodec xvid -maxrate 1000 -qmin 3 -qmax 5 -bufsize 4096 -g 300 -acodec aac -mbd 2 -s 320x180 -padtop 30 -padbottom 30 -ab 128 -b 400"
-	ffmpeg `echo $OPTS` -i "$1" "$1.converted.mp4"
+	ffmpeg -i "$1" `echo $OPTS` "$1.converted.mp4"
 }
 
 convert_9(){
@@ -56,12 +56,12 @@ convert_9(){
 	# ffmpeg -f lavfi -i nullsrc -c:v libx264 -preset help -f mp4 -
 
 	OPTS="-c:v libx264 -preset slow -crf 22 -c:a copy"
-	ffmpeg `echo $OPTS` -i "$1" "$1.converted.mp4"
+	ffmpeg -i "$1" `echo $OPTS` "$1.converted.mp4"
 }
 
 convert_10(){
 	OPTS="-vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3"
-	ffmpeg `echo $OPTS` -i "$1" "$1.converted.mp4"
+	ffmpeg -i "$1" `echo $OPTS` "$1.converted.mp4"
 }
 
 convert_11(){
