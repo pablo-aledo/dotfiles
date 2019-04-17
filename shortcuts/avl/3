@@ -31,7 +31,7 @@ do
         do
             sleep 10
             count=$(( $count + 1 ))
-            [ $count -eq 10 ] && break
+            [ $count -eq 20 ] && break
         done
     fi
 
