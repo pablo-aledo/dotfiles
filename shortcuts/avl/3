@@ -5,7 +5,7 @@ touch /tmp/lock
 rm -rf ~/Descargas/avmpage.html
 
 xdotool key Ctrl+s
-sleep 1
+sleep 5
 xdotool type avmpage
 xdotool key Return
 sleep 5
