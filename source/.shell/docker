@@ -337,7 +337,7 @@ case $1 in
 (htop)                   docker run --rm -it --pid host ${DOCKER_REPO_PREFIX}/htop ;;
 (imagemin)               docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v $HOME/Pictures:/root/Pictures --entrypoint bash ${DOCKER_REPO_PREFIX}/imagemin ;;
 (inkscape)               shift; docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v $PWD:/workdir -w /workdir -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/inkscape $* ;;
-(jenkins)                docker run -p 8080:8080 -p 50000:50000 -v jenkins_home:/var/jenkins_home jenkins/jenkins:lts ;;
+(jenkins)                docker run -p 8080:8080 -p 50000:50000 -v $PWD:/var/jenkins_home jenkins/jenkins:lts ;;
 (john)                   shift
                          file=$(realpath "$1")
                          docker run --rm -it -v "${file}:/root/$(basename "${file}")" ${DOCKER_REPO_PREFIX}/john "$@" ;;
