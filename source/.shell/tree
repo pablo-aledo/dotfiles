@@ -48,7 +48,7 @@ lnk_map(){
     cat $1 | while read line
     do
         title=$(echo $line | sed 's/\(.*\) -> \(.*\)/\1/g' )
-        class=$(echo $line | sed 's/\(.*\) -> \(.*\)/\2/g' )
+        class=$(echo $line | sed 's/\(.*\) -> \(.*\)/\2/g' | sed 's/ /\//g' )
 
         echo mkdir -p \"$class\"
         echo ln -s \"\$SRC/$title\" \"$class/\"
