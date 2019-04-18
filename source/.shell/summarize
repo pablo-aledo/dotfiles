@@ -2035,3 +2035,9 @@ learning.normalize_txt(){
     \mv $tmp/document $1
 }
 
+classify_folders(){
+    ls $1 | while read line
+    do
+        echo "$line -> $(cat $learning_dir/topics/topics | grep " $(echo $line | learning.classify -)\$")"
+    done
+}
