@@ -2038,6 +2038,8 @@ learning.normalize_txt(){
 classify_folders(){
     ls $1 | while read line
     do
-        echo "$line -> $(cat $learning_dir/topics/topics | grep " $(echo $line | learning.classify -)\$")"
+        classification=$(echo $line | learning.classify -)
+        hierarchy=$(cat $learning_dir/topics/topics | grep " $classification\$")
+        echo "$line -> $classification -> $hierarchy"
     done
 }
