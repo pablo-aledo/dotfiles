@@ -131,14 +131,13 @@ lnk_hierarchy_fill_scale_3(){
         if [ -f "$target" ]
         then
             echo "\e[34m $line \e[0m"
-            target=$(ll $line | sed 's/.* -> //g')
+            target=$(ll "$line "| sed 's/.* -> //g')
             size=$(ll $target  | awk '{print $5}')
             [ "$size" = "" ] && size=0
             size=$(( $size / $scale ))
 
-            [ -L $line ] && rm -f "$line"
-            [ -e $line ] && continue
-            dd if=/dev/zero bs=1 count=$size > "$line" 2>/dev/null
+            [ -L "$line" ] && rm -f "$line"
+            [ -e "$line" ] || dd if=/dev/zero bs=1 count=$size > "$line" 2>/dev/null
         fi
     done
 }
