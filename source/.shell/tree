@@ -97,3 +97,48 @@ lnk_hierarchy_fill_scale_2(){
         dd if=/dev/zero bs=1 count=$size of="$line" 2>/dev/null
     done
 }
+
+lnk_hierarchy_fill_scale_3(){
+    [ "$1" = "" ] && scale=10000
+    [ "$1" = "" ] || scale=$1
+    find -type l | while read line
+    do
+        echo "\e[34m $line \e[0m"
+        target=$(ll $line | sed 's/.* -> //g')
+
+        if [ -d "$target" ]
+        then
+            rm -f "$line"
+            mkdir -p "$line"
+
+            ( cd $target; find -type d | grep -v '^\.$' ) | while read dirname
+            do
+                ( cd "$line"; mkdir -p "$dirname" )
+            done
+
+            ( cd $target; find -type f ) | while read filename
+            do
+                echo "\e[33m     $filename \e[0m"
+                size=$(ll $target/$filename | awk '{print $5}')
+                [ "$size" = "" ] && size=0
+                size=$(( $size / $scale ))
+
+                ( cd "$line"; dd if=/dev/zero bs=1 count=$size > "$filename" 2>/dev/null )
+
+            done
+        fi
+
+        if [ -f "$target" ]
+        then
+            echo "\e[34m $line \e[0m"
+            target=$(ll $line | sed 's/.* -> //g')
+            size=$(ll $target  | awk '{print $5}')
+            [ "$size" = "" ] && size=0
+            size=$(( $size / $scale ))
+
+            [ -L $line ] && rm -f "$line"
+            [ -e $line ] && continue
+            dd if=/dev/zero bs=1 count=$size > "$line" 2>/dev/null
+        fi
+    done
+}
