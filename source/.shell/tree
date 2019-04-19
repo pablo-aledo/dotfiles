@@ -123,7 +123,7 @@ lnk_hierarchy_fill_scale_3(){
                 [ "$size" = "" ] && size=0
                 size=$(( $size / $scale ))
 
-                ( cd "$line"; dd if=/dev/zero bs=1 count=$size > "$filename" 2>/dev/null )
+                ( cd "$line"; [ -e "$filename" ] || dd if=/dev/zero bs=1 count=$size > "$filename" 2>/dev/null )
 
             done
         fi
