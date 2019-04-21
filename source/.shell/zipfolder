@@ -9,7 +9,7 @@ zipfolder(){
     converted=false; [ "`find -iname '*converted*'`" != ""  ] && converted=true
     rarfiles=false; [ "`find -iname '*.part*.rar' -maxdepth 1`" != ""  ] && rarfiles=true
 
-    [ $rarfiles = true ] && return
+    [ $rarfiles = true ] && cd $oldpwd && return
 
     name=$(basename "$1")
     name="$name.zipfolder"
