@@ -6,7 +6,7 @@ zipfolder(){
     oldpwd=$PWD
     cd "$1" || return
 
-    converted=false; [ "`find -iname '*converted*'`" = ""  ] && converted=true
+    converted=false; [ "`find -iname '*converted*'`" != ""  ] && converted=true
 
     name=$(basename "$1")
     name="$name.zipfolder"
