@@ -436,15 +436,27 @@ aws_servers(){
 
 night(){
 
+    # do a backup
     local_backup
 
+    # train learning
     learning.restart
     learning.fit
 
+    # index files by size
     ncdu /media/removable/2TB2/homes/admin/ -o ~/ncdu
 
+    # get list of candidate vides to convert
     convert_candidates > ~/convert_candidates
 
+    # find duplicate files to remove
     mergehdd_rmdupes /media/removable/2TB2/homes/admin/OLD /media/removable/2TB2/homes/admin/Work > ~/rmold
 
+    # classify videos and mirror directory structure to find candidates to remove
+    mkd /media/DATA/videos_mirror
+    classify_folders /media/removable/2TB2/homes/admin/Videos > ~/videos_cl
+    cat ~/videos_cl | sed 's/\(.*\) -> \(.*\) -> \(.*\)/\1 -> \3/g' > /tmp/videos_cl
+    (echo SRC=/media/removable/2TB2/homes/admin/Videos; echo; lnk_map /tmp/videos_cl) > /tmp/script
+    source /tmp/script
+    lnk_hierarchy_fill_scale_3
 }
