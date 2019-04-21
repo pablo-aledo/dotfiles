@@ -7,6 +7,9 @@ zipfolder(){
     cd "$1" || return
 
     converted=false; [ "`find -iname '*converted*'`" != ""  ] && converted=true
+    rarfiles=false; [ "`find -iname '*.part*.rar'`" != ""  ] && rarfiles=true
+
+    [ $rarfiles = true ] && return
 
     name=$(basename "$1")
     name="$name.zipfolder"
