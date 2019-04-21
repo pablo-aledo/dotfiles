@@ -1,0 +1,29 @@
+zipfolder(){
+
+    [ $# -eq 1 ] || return
+
+    datezip=`date +%y%m%d-%H%M%S`
+    oldpwd=$PWD
+    cd "$1" || return
+
+    converted=false; [ "`find -iname '*converted*'`" = ""  ] && converted=true
+
+    name=$(basename "$1")
+    name="$name.zipfolder"
+    [ $converted = true ] && name="$name.converted"
+    name="$name.$datezip"
+
+    zip -r "$name.zip" * -x '*zipfolder*'
+
+    success=$?
+
+    [ $success -eq 0 ] && find -not -iname '*zipfolder*' -delete
+    [ $success -eq 0 ] && find -not -iname '*zipfolder*' > "$name.list"
+    [ $success -eq 0 ] || rm -fr "$name.zip"
+
+    cd $oldpwd
+}
+
+
+
+
