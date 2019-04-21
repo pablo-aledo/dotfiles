@@ -7,7 +7,7 @@ zipfolder(){
     cd "$1" || return
 
     converted=false; [ "`find -iname '*converted*'`" != ""  ] && converted=true
-    rarfiles=false; [ "`find -iname '*.part*.rar' -maxdepth 1`" != ""  ] && rarfiles=true
+    rarfiles=false; [ "`find -maxdepth 1 -iname '*.part*.rar'`" != ""  ] && rarfiles=true
 
     [ $rarfiles = true ] && cd $oldpwd && return
 
@@ -20,8 +20,9 @@ zipfolder(){
 
     success=$?
 
-    [ $success -eq 0 ] && find -not -iname '*zipfolder*' -delete
     [ $success -eq 0 ] && find -not -iname '*zipfolder*' > "$name.list"
+    [ $success -eq 0 ] && find -type f -not -iname '*zipfolder*' -delete
+    [ $success -eq 0 ] && rm_empty_folders
     [ $success -eq 0 ] || rm -fr "$name.zip"
 
     cd $oldpwd
