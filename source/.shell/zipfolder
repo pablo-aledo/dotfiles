@@ -7,7 +7,7 @@ zipfolder(){
     cd "$1" || return
 
     converted=false; [ "`find -iname '*converted*'`" != ""  ] && converted=true
-    rarfiles=false; [ "`find -iname '*.part*.rar'`" != ""  ] && rarfiles=true
+    rarfiles=false; [ "`find -iname '*.part*.rar' -maxdepth 1`" != ""  ] && rarfiles=true
 
     [ $rarfiles = true ] && return
 
