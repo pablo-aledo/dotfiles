@@ -2039,7 +2039,7 @@ classify_folders(){
     ls $1 | while read line
     do
         classification=$(echo $line | learning.classify -)
-        hierarchy=$(cat $learning_dir/topics/topics | grep " $classification\$")
+        hierarchy=$(cat $learning_dir/topics/topics | grep "\<$classification\$")
         echo "$line -> $classification -> $hierarchy"
     done
 }
