@@ -18,7 +18,8 @@ zipfolder(){
     [ $converted = true ] && name="$name.converted"
     name="$name.$datezip"
 
-    zip -r "$name.zip" * -x '*zipfolder*'
+    #zip -r "$name.zip" * -x '*zipfolder*'
+    tar --exclude='*zipfolder*' -cvzf "$name.tgz" *
 
     success=$?
 
