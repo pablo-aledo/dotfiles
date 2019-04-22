@@ -12,6 +12,7 @@ then
     then
         (source "$(find -iname compile_project.sh)")
         (source "$(find -iname test_project.sh)")
+        (source "$(find -iname vet_project.sh)")
     elif [ -e CMakeLists.txt ]
     then
         mkdir build
