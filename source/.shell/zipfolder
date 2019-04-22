@@ -28,7 +28,7 @@ zipfolder(){
     [ $success -eq 0 ] && find -not -iname '*zipfolder*' > "$name.list"
     [ $success -eq 0 ] && find -type f -not -iname '*zipfolder*' -delete
     [ $success -eq 0 ] && rm_empty_folders
-    [ $success -eq 0 ] || rm -fr "$name.zip"
+    [ $success -eq 0 ] || rm -fr "$name.zip" "$name.tgz"
 
     cd $oldpwd
 }
