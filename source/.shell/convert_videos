@@ -469,6 +469,8 @@ convert_recursive_parallel(){
     convert_small
 
     cp_report
+
+    sync
 }
 
 convert_recursive_parallel_handbrake(){
