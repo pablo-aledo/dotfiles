@@ -1,17 +1,19 @@
 zipfolder(){
 
+    folder="$1"
+
     [ $# -eq 1 ] || return
 
     datezip=`date +%y%m%d-%H%M%S`
     oldpwd=$PWD
-    cd "$1" || return
+    cd "$folder" || return
 
     converted=false; [ "`find -iname '*converted*'`" != ""  ] && converted=true
     rarfiles=false; [ "`find -maxdepth 1 -iname '*.part*.rar'`" != ""  ] && rarfiles=true
 
     [ $rarfiles = true ] && cd $oldpwd && return
 
-    name=$(basename "$1")
+    name=$(basename "$folder")
     name="$name.zipfolder"
     [ $converted = true ] && name="$name.converted"
     name="$name.$datezip"
@@ -27,7 +29,4 @@ zipfolder(){
 
     cd $oldpwd
 }
-
-
-
 
