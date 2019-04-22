@@ -8,7 +8,7 @@ zipfolder(){
     oldpwd=$PWD
     cd "$folder" || return
 
-    [ "$(ls | grep -v zipfolder)" = "" ] && return
+    [ "$(ls | grep -v zipfolder)" = "" ] && cd $oldpwd && return
 
     converted=false; [ "`find -iname '*converted*'`" != ""  ] && converted=true
     rarfiles=false; [ "`find -maxdepth 1 -iname '*.part*.rar'`" != ""  ] && rarfiles=true
