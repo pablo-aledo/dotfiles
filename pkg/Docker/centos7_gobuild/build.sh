@@ -10,9 +10,13 @@ then
         ./runme.sh
     elif [ "$(find -iname compile_project.sh 2>/dev/null)" != "" ]
     then
+        echo "===== Compile ====="
         (source "$(find -iname compile_project.sh)")
+        echo "===== Test ====="
         (source "$(find -iname test_project.sh)")
+        echo "===== Check ====="
         (source "$(find -iname vet_project.sh)")
+        echo "===== Finish ====="
     elif [ -e CMakeLists.txt ]
     then
         mkdir build
