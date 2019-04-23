@@ -459,5 +459,8 @@ night(){
     (echo SRC=/media/removable/2TB2/homes/admin/Videos; echo; lnk_map /tmp/videos_cl) > /tmp/script
     source /tmp/script
     lnk_hierarchy_fill_scale_3
+
+    # download
+    DISPLAY=:1 xdotool key 6
 }
 
