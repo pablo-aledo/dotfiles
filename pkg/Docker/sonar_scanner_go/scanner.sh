@@ -14,6 +14,17 @@ do
   fi
 done
 
+find . -name '*.report' | while read file
+do
+  if echo $file | egrep "coverage" > /dev/null; then
+   cov_reports="$cov_reports,$file"
+  elif echo $file | egrep "test" > /dev/null; then
+   test_reports="$test_reports,$file"
+  elif echo $file | egrep "vet" > /dev/null; then
+   vet_reports="$vet_reports,$file"
+  fi
+done
+
 /usr/share/sonar-scanner-3.0.3.778-linux/bin/sonar-scanner \
   -D sonar.host.url=http://${SONAR_IP}:9000 \
   -D sonar.projectKey=${PROJECT_NAME} \
@@ -30,4 +41,7 @@ done
   -D sonar.golint.reportPath=./.golint.xml \
   -D sonar.coverage.reportPath=./.gocov.xml \
   -D sonar.test.reportPath=./.gotest.xml \
+  -D sonar.go.coverage.reportPaths=${cov_reports} \
+  -D sonar.go.tests.reportPaths=${test_reports} \
+  -D sonar.go.govet.reportPaths=${vet_reports} \
   -X
