@@ -46,6 +46,8 @@ barcmd(){
     skip=false
     [ $# -eq 3 ] && [ $3 = "skip" ] && skip=true
 
+    setterm -cursor on
+    sleep 1
 
     if [ $skip = false ]
     then
@@ -55,7 +57,7 @@ barcmd(){
 
     while true
     do
-        zsh -c "$cmd" | bar $limit
+        zsh -c "$cmd"
         sleep 1
-    done
+    done | bar $limit
 }
