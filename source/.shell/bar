@@ -32,7 +32,7 @@ import datetime
 rate=float($line-$start_line)/($datenow - $start_time + 0.001)
 rem_secs=int( ($max-$line)/(rate + 0.001) )
 print( ['◐', '◓', '◑', '◒'][$line%4] + \
-    ' [' + '#'*$perc + ' '*(100-$perc) + ']' + '($line/$max [' + str($perc) + '%' + ']) ' + str(datetime.timedelta(seconds=rem_secs)) + '\r', end='')
+    ' [' + '#'*$perc + ' '*(100-$perc) + ']' + '($line/$max [' + str($perc) + '%' + ']) ' + str(datetime.timedelta(seconds=rem_secs)) + ' '*10 + '\r', end='')
 "
     done
     setterm -cursor on
