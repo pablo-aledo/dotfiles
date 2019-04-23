@@ -7,7 +7,7 @@ for a in \
 do
     echo "===== Testing $a ====="
     cd $a
-    go test -v -cover -coverprofile=coverage.report -json > test.report
+    go test -v -cover -coverprofile=coverage.report -json | tee test.report
     go tool cover -html=coverage.report -o coverage.html
 done
 
