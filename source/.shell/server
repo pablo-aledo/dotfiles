@@ -399,6 +399,24 @@ server(){
         done
     fi
 
+    if [ $1 = "night" ]
+    then
+        [ "$2" = "" ] && date_night=0005
+        [ "$2" = "" ] || date_night=$2
+    	while true
+    	do
+    		if [ `date +%H%M` = $date_night ]
+    		then
+                echo "===== Start ====="
+                night
+                echo "===== End ====="
+
+    			sleep $((60*5))
+    		fi
+    		sleep 10
+    	done
+    fi
+
     if [ $1 = "kredeploy" ]
     then
 
