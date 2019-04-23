@@ -51,13 +51,13 @@ barcmd(){
 
     if [ $skip = false ]
     then
-        zsh -c "$cmd" > /tmp/start_line
+        zsh -c "$cmd" > /tmp/start_line 2>/dev/null
         date +%s > /tmp/start_time
     fi
 
     while true
     do
-        zsh -c "$cmd"
+        zsh -c "$cmd" 2>/dev/null
         sleep 1
     done | bar $limit
 }
