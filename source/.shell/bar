@@ -38,3 +38,24 @@ print( ['◐', '◓', '◑', '◒'][$line%4] + \
     setterm -cursor on
 
 }
+
+barcmd(){
+    cmd=$1
+    limit=$2
+
+    skip=false
+    [ $# -eq 3 ] && [ $3 = "skip" ] && skip=true
+
+
+    if [ $skip = false ]
+    then
+        zsh -c "$cmd" > /tmp/start_line
+        date +%s > /tmp/start_time
+    fi
+
+    while true
+    do
+        zsh -c "$cmd" | bar $limit
+        sleep 1
+    done
+}
