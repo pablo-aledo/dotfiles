@@ -59,9 +59,17 @@ rules.transform(){
         -e 's/\[pdf\]/PdfFile/gI'
 }
 
+camelcase(){
+    a=$(cat)
+    b=$(echo $a | sed 's/\([a-z]\)\([A-Z]\)/\1 \2/g' | tr '[A-Z]' '[a-z]')
+    c=$(echo $a | tr '[A-Z]' '[a-z]')
+    echo $c $b
+}
+
 tokenize(){
     [ $keywords_lowercase = "true" ] && lowercmd="tr '[A-Z]' '[a-z]'"
-    [ $keywords_lowercase = "true" ] || lowercmd="cat"
+    [ $keywords_lowercase = "false" ] && lowercmd="cat"
+    [ $keywords_lowercase = "camelcase" ] && lowercmd="camelcase"
     cat | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" | sed \
         -e 's/á/a/g' \
         -e 's/é/e/g' \
