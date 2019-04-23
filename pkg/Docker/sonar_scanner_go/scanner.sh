@@ -25,6 +25,12 @@ do
   fi
 done
 
+echo "\e[34m tests: $tests\e[0m"
+echo "\e[34m sources: $sources\e[0m"
+echo "\e[34m cov_reports: $cov_reports\e[0m"
+echo "\e[34m test_reports: $test_reports\e[0m"
+echo "\e[34m vet_reports: $vet_reports\e[0m"
+
 /usr/share/sonar-scanner-3.0.3.778-linux/bin/sonar-scanner \
   -D sonar.host.url=http://${SONAR_IP}:9000 \
   -D sonar.projectKey=${PROJECT_NAME} \
@@ -33,11 +39,6 @@ done
   -D sonar.sources=$sources \
   -D sonar.tests=$tests \
   -D sonar.exclusions=**/*.pb.go,**/vendor/**,**/testdata/* \
-  -D sonar.cxx.cppcheck.reportPath=./.cppcheck.xml \
-  -D sonar.cxx.valgrind.reportPath=./.valgrind.*.xml \
-  -D sonar.cxx.xunit.reportPath=./.gtest.*.xml \
-  -D sonar.cxx.coverage.reportPath=./.gcov.xml \
-  -D sonar.cxx.jsonCompilationDatabase=/workdir/compile_commands.json \
   -D sonar.golint.reportPath=./.golint.xml \
   -D sonar.coverage.reportPath=./.gocov.xml \
   -D sonar.test.reportPath=./.gotest.xml \
