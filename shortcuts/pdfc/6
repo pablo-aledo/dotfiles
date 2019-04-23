@@ -1,3 +1,5 @@
+source ~/.dotfiles/source/.shell/bak
+
 export DISPLAY=:1
 
 source ~/.dotfiles/source/.shell/adapt
@@ -29,11 +31,4 @@ done
 
 xdotool key 0
 
-
-
-
-
-
-
-
-
+cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2

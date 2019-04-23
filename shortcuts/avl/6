@@ -1,3 +1,5 @@
+source ~/.dotfiles/source/.shell/bak
+
 export DISPLAY=:1
 
 #cat /tmp/s2link | head -n11 | tail -n1 | read line
@@ -14,3 +16,5 @@ do
 done
 
 xdotool key 0
+
+cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2
