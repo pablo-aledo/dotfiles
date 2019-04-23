@@ -5,17 +5,24 @@ until curl -s -X GET http://${SONAR_IP}:9000/api/system/status | grep UP;
   sleep 5
 done
 
-find . -name '*.go' | while read file
+find src -name '*.go' | grep -v vendor > /tmp/files
+while read file
 do
+  echo $file
   if echo $file | egrep "test" > /dev/null; then
     tests="$tests,$file"
   else
     sources="$sources,$file"
   fi
-done
 
-find . -name '*.report' | while read file
+  echo "tests=\"$tests\""     | sed 's/^,//g' >> /tmp/env
+  echo "sources=\"$sources\"" | sed 's/^,//g' >> /tmp/env
+done < /tmp/files
+
+find src -name '*.report' > /tmp/files
+while read file
 do
+  echo $file
   if echo $file | egrep "coverage" > /dev/null; then
    cov_reports="$cov_reports,$file"
   elif echo $file | egrep "test" > /dev/null; then
@@ -23,7 +30,11 @@ do
   elif echo $file | egrep "vet" > /dev/null; then
    vet_reports="$vet_reports,$file"
   fi
-done
+
+  echo "cov_reports=\"$cov_reports\""   | sed 's/^,//g' >> /tmp/env
+  echo "test_reports=\"$test_reports\"" | sed 's/^,//g' >> /tmp/env
+  echo "vet_reports=\"$vet_reports\""   | sed 's/^,//g' >> /tmp/env
+done < /tmp/files
 
 echo "===== tests: $tests"
 echo "===== sources: $sources"
