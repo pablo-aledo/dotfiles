@@ -14,9 +14,6 @@ do
   else
     sources="$sources,$file"
   fi
-
-  echo "tests=\"$tests\""     | sed 's/^,//g' >> /tmp/env
-  echo "sources=\"$sources\"" | sed 's/^,//g' >> /tmp/env
 done < /tmp/files
 
 find src -name '*.report' > /tmp/files
@@ -30,11 +27,13 @@ do
   elif echo $file | egrep "vet" > /dev/null; then
    vet_reports="$vet_reports,$file"
   fi
-
-  echo "cov_reports=\"$cov_reports\""   | sed 's/^,//g' >> /tmp/env
-  echo "test_reports=\"$test_reports\"" | sed 's/^,//g' >> /tmp/env
-  echo "vet_reports=\"$vet_reports\""   | sed 's/^,//g' >> /tmp/env
 done < /tmp/files
+
+tests="$(echo $tests | sed 's|^,||g')"
+sources="$(echo $sources | sed 's|^,||g')"
+cov_reports="$(echo $cov_reports  | sed 's|^,||g')"
+test_reports="$(echo $test_reports | sed 's|^,||g')"
+vet_reports="$(echo $vet_reports | sed 's|^,||g')"
 
 echo "===== tests: $tests"
 echo "===== sources: $sources"
