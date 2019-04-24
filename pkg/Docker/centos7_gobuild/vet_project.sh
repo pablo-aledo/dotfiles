@@ -5,6 +5,6 @@ find -name '*.go' | grep -v '/vendor/' | xargs dirname | sort | uniq > /tmp/fold
 
 while read line
 do
-    go vet "$line" | tee -a vet.report
+    go vet "$line" 2>&1 | tee -a vet.report
 done < /tmp/folders
 
