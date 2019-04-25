@@ -361,6 +361,7 @@ server(){
                     echo $line
                     name=$(echo $line | cut -d'/' -f4)
                     docker_run pg_dump_10 --format=c $line > /tmp/$name
+                    # restore with docker_run pg_restore_10 -d $line $name
                 done
 
                 list=$(cat pgdump_list | cut -d'/' -f4 | sed 's|^|/tmp/|g' | paste -d' ' -s)
