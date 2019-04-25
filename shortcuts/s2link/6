@@ -10,6 +10,8 @@ do
     sleep 1
 done
 
+sleep 10
+
 for a in $(seq 1 $(cat /tmp/count))
 do
     xdotool key 2 && sleep 1
