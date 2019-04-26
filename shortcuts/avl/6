@@ -1,4 +1,5 @@
 source ~/.dotfiles/source/.shell/bak
+source ~/.dotfiles/source/.shell/xdotool
 
 export DISPLAY=:1
 
