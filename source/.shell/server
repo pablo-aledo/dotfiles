@@ -405,6 +405,9 @@ server(){
     then
         [ "$2" = "" ] && date_night=0005
         [ "$2" = "" ] || date_night=$2
+
+        which night
+
     	while true
     	do
     		if [ `date +%H%M` = $date_night ]
