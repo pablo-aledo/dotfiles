@@ -1,6 +1,6 @@
 source ~/.dotfiles/source/.shell/bak
 
-cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2
+( cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2 )
 
 comm -13 <(cat /tmp/s2files | grep Title | sed 's/Title: //g' | while read line; do cat /tmp/s2link | grep -F $line ; done | sort | uniq) <(cat /tmp/s2link | sort | uniq) > /tmp/first
 comm -13 <(cat /tmp/first | sort) <( cat /tmp/s2link | sort ) > /tmp/second
