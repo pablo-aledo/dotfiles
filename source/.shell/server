@@ -476,12 +476,7 @@ night(){
     mergehdd_rmdupes /media/removable/2TB2/homes/admin/OLD /media/removable/2TB2/homes/admin/Work > ~/rmold
 
     # classify videos and mirror directory structure to find candidates to remove
-    mkd /media/DATA/videos_mirror
-    classify_folders /media/removable/2TB2/homes/admin/Videos | tee ~/videos_cl
-    cat ~/videos_cl | grep -v '\-> $' | sed 's/\(.*\) -> \(.*\) -> \(.*\)/\1 -> \3/g' > /tmp/videos_cl
-    (echo SRC=/media/removable/2TB2/homes/admin/Videos; echo; lnk_map /tmp/videos_cl) > /tmp/script
-    source /tmp/script
-    lnk_hierarchy_fill_scale_3
+    classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror
 
     # download
     DISPLAY=:1 xdotool key 6
