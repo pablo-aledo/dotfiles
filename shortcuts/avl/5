@@ -1,5 +1,3 @@
-export DISPLAY=:1
-
 #ls -lh ~/Descargas/ | awk '{$1=""; $2=""; $3=""; $4=""; $6=""; $7=""; $8="" ; print}' > /tmp/after
 ls -lh ~/Descargas/ | sed 's/^[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([^ ]*\) *[^ ]* *[^ ]* *[^ ]* *\(.*\)/\1 \2/g' > /tmp/after
 
