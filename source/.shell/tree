@@ -116,12 +116,14 @@ lnk_hierarchy_fill_scale_3(){
                 ( cd "$line"; mkdir -p "$dirname" )
             done
 
+            n=0
             ( cd $target; find -type f ) | while read filename
             do
                 echo "\e[33m     $filename \e[0m"
                 size=$(ll $target/$filename | awk '{print $5}')
                 [ "$size" = "" ] && size=0
-                size=$(( $size / $scale ))
+                size=$(( $size / $scale + $n % 2 ))
+                n=$(( $n + 1 ))
 
                 ( cd "$line"; [ -e "$filename" ] || dd if=/dev/zero bs=1 count=$size > "$filename" 2>/dev/null )
 
