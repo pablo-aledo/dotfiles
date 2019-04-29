@@ -676,5 +676,13 @@ adapt_alt(){
 }
 
 shcs(){
-  ps aux G short | awk '{print $2}' | xargs kill
+  ps aux | grep short | awk '{print $2}' | xargs kill
 }
+
+shcw(){
+    while [ "`ps aux | grep short | grep -v grep`" != "" ]
+    do
+        sleep 1
+    done
+}
+
