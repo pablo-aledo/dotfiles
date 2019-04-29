@@ -192,7 +192,6 @@ convert_checkrar(){
 		[ $(ll | awk '{print $5}' | sort | uniq | wc -l) -eq 3 ] || \
 			(echo "incorrect sizes in the rar sequence for $PWD" > /tmp/error)
 	done
-	[ -e /tmp/error ] && return
 }
 
 
@@ -331,6 +330,7 @@ convert_recursive(){
     convert_install
 
     convert_checkrar
+	[ -e /tmp/error ] && cat /tmp/error && return
 
     convert_2spaces
 
@@ -400,6 +400,7 @@ convert_recursive_decompress(){
     convert_install
 
     convert_checkrar
+	[ -e /tmp/error ] && cat /tmp/error && return
 
     convert_2spaces
 
@@ -430,6 +431,7 @@ convert_recursive_parallel(){
     convert_chmod
 
     convert_checkrar
+	[ -e /tmp/error ] && cat /tmp/error && return
 
     convert_2spaces
 
