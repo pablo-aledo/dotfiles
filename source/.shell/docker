@@ -291,6 +291,7 @@ case $1 in
 (dolphin)                docker run -it --net host --memory 2gb -e DISPLAY=unix$DISPLAY -v /media/storage0/ROM/dolphinconfigs:/root/.config/dolphin-emu -v /media/storage0/ROM/:/roms -v /dev/shm:/dev/shm -v /etc/machine-id:/etc/machine-id -v /run/user/$(id -u)/pulse:/run/user/$(id -u)/pulse -v /var/lib/dbus:/var/lib/dbus -v ~/.pulse:/root/.pulse --device /dev/input/event22 --device /dev/dri:/dev/dri --name dolphin-run dolphin ;;
 (doxygen)                docker run -v $PWD:/workdir -w /workdir -it doxygen ;;
 (dunnet)                 docker run -it dunnet ;;
+(elasticsearch)          docker run --net host -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" docker.elastic.co/elasticsearch/elasticsearch:7.0.0 ;;
 (emby)                   [ -e ~/Dotfiles/emby ] && cp -r ~/Dotfiles/emby .
                          [ -e ~/emby ] && cp -r ~/emby .
                          docker run -d \
@@ -452,6 +453,7 @@ case $1 in
 (slapd)                  docker run -v /data/ldap:/var/lib/ldap -e LDAP_DOMAIN=authy.auth.co -e LDAP_ORGANISATION="E Corp" -e LDAP_ROOTPASS=fsociety -d ${DOCKER_REPO_PREFIX}/slapd ;;
 (steam)                  docker run -d -v /etc/localtime:/etc/localtime:ro -v /etc/machine-id:/etc/machine-id:ro -v /var/run/dbus:/var/run/dbus -v /tmp/.X11-unix:/tmp/.X11-unix -v "${HOME}/.steam:/home/steam" -e "DISPLAY=unix${DISPLAY}" --link pulseaudio:pulseaudio -e PULSE_SERVER=pulseaudio --device /dev/dri --name steam ${DOCKER_REPO_PREFIX}/steam ;;
 (spidy)                  docker run --rm -it -v $PWD:/data spidy ;;
+(splunk)                 docker run -p 8000:8000 -e "SPLUNK_START_ARGS=--accept-license" -e "SPLUNK_PASSWORD=splunksplunk" splunk/splunk:latest ;;
 (spotify)                docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd -v $HOME/.spotify/config:/home/spotify/.config/spotify -v $HOME/.spotify/cache:/home/spotify/spotify --name spotify ${DOCKER_REPO_PREFIX}/spotify ;;
 (staruml)                shift; docker run -it --rm -v "$(pwd)":/starUML -w /starUML -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -v /etc/shadow:/etc/shadow:ro -v /etc/sudoers.d:/etc/sudoers.d:ro -v /tmp/.X11-unix:/tmp/.X11-unix:rw --name staruml -e DISPLAY=unix$DISPLAY jamesmstone/staruml "$@" ;;
 (spotify-wine)           docker run --rm -it -v /etc/localtime:/etc/localtime:ro --cpuset-cpus 0 -v /tmp/.X11-unix:/tmp/.X11-unix  -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd --name spotify-wine ${DOCKER_REPO_PREFIX}/spotify-wine bash ;;
@@ -583,6 +585,7 @@ case $1 in
                            -v ~/sonarr/tvseries:/tv \
                            -v ~/sonarr/downloadclient-downloads:/downloads \
                            linuxserver/sonarr ;;
+(syslog)                 docker run -it -p 514:514/udp -p 601:601 --name syslog-ng balabit/syslog-ng:latest -edv ;;
 (radarr)                 docker run \
                            -e PUID=1000 \
                            -e PGID=1000 \
