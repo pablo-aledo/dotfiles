@@ -406,6 +406,7 @@ server(){
         [ "$2" = "" ] && date_night=0005
         [ "$2" = "" ] || date_night=$2
 
+        echo $date_night
         which night
 
     	while true
