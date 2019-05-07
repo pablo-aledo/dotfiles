@@ -485,5 +485,6 @@ night(){
     sleep 1 && shcw
     shc pdfl
     DISPLAY=:1 xdotool key 6
+    sleep 1 && shcw
 }
 
