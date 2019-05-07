@@ -329,7 +329,7 @@ server(){
             echo "Rsstail memory $mem"
             [ $mem -gt 30 ] && echo "\e[31m kill rsstail \e[0m"
             [ $mem -gt 30 ] && killall rsstail
-            [ `date +%M` = 00 ] && killall rsstail && sleep 90
+            [ `date +%M` = 00 ] && [ $(( `date +%H` % 4 )) -eq 0 ] && killall rsstail && sleep 90
             sleep 10
         done
     fi
