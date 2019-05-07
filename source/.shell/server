@@ -480,6 +480,10 @@ night(){
     classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror
 
     # download
+    shc s2link 50 "label: pdf" 20
+    DISPLAY=:1 xdotool key 6
+    sleep 1 && shcw
+    shc pdfl
     DISPLAY=:1 xdotool key 6
 }
 
