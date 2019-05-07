@@ -477,6 +477,7 @@ night(){
     mergehdd_rmdupes /media/removable/2TB2/homes/admin/OLD /media/removable/2TB2/homes/admin/Work > ~/rmold
 
     # classify videos and mirror directory structure to find candidates to remove
+    rm -fr /media/DATA/videos_mirror
     classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror
 
     # download
