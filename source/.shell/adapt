@@ -624,6 +624,7 @@ adapt_simplbuntu(){
 }
 
 adapt_shortcuts(){
+    [ $# -eq 0 ] && i3-msg reload && return
 	srcdir=$( find ~/.dotfiles/shortcuts/ -maxdepth 1 -type d | grep $1 )
 
 	find $srcdir -type f | grep -v init.sh | while read a
