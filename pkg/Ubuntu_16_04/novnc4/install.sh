@@ -1,4 +1,4 @@
-sudo apt-get install -y x11-xkb-utils i3-wm feh suckless-tools i3status pcmanfm
+sudo apt-get install -y x11-xkb-utils i3-wm feh suckless-tools i3status pcmanfm xauth
 
 mkdir ~/.vnc
 [ -e ~/.vnc/passwd ] || cp passwd ~/.vnc/
