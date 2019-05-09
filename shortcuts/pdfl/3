@@ -6,6 +6,8 @@ touch /tmp/lock
 sleep 5
 
 mouseover 10 10000 ~/.dotfiles/shortcuts/images/print_pdf.png
+sleep 3
+mouseover 10 10000 ~/.dotfiles/shortcuts/images/print_pdf.png
 xdotool click 1
 
 mouseover 10 10000 ~/.dotfiles/shortcuts/images/print_download.png
