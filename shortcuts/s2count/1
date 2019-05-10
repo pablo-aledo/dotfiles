@@ -1,0 +1,24 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/adapt
+adapt_shc_theme
+
+mkdir -p ~/learning/metadata
+xrandr --output VNC-0 --mode 1280x800
+sleep 1
+xdotool key Alt+w
+killall chrome chromium google-chrome google-chrome-stable
+sleep 1
+google-chrome --profile-directory=Default mail.google.com &
+sleep 15
+xdotool mousemove 350 110
+xdotool click 1
+xdotool type "$(cat /tmp/query)"
+xdotool key Return
+sleep 10
+
+xdotool key Ctrl+s
+sleep 5
+xdotool key Return
+sleep 5
+
+cat ~/Descargas/*.html | grep '</span></span> de <span class="ts">' | sed 's|.*</span></span> de <span class="ts">\([0-9]*\)</span>.*|\1|g' > /tmp/mcount

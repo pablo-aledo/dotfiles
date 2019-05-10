@@ -1,3 +1,5 @@
+[ $# -eq 0 ] && [ -e /tmp/scount ] && count=$(cat /tmp/scount)
+
 [ $# -ge 1 ] && count=$1
 [ $# -ge 1 ] || count=100
 
