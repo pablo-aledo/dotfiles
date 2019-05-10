@@ -484,9 +484,15 @@ night(){
     ( cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2 )
     rm -rf /tmp/s2link /tmp/s2files /tmp/s2files2
     DISPLAY=:1 xdotool key 0 ; sleep 1
+
+    shc s2count "label: pdf"
+    DISPLAY=:1 xdotool key 1
+    sleep 1 && shcw
+
     shc s2link 50 "label: pdf" 20
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
+
     shc pdfl
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
