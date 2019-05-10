@@ -1,4 +1,5 @@
 [ $# -eq 0 ] && [ -e /tmp/scount ] && count=$(cat /tmp/scount)
+[ $# -eq 0 ] && [ -e /tmp/query  ] && query=$(cat /tmp/query)
 
 [ $# -ge 1 ] && count=$1
 [ $# -ge 1 ] || count=100
