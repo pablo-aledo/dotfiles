@@ -16,11 +16,11 @@ xdotool type "$(cat /tmp/query)"
 xdotool key Return
 sleep 10
 
-rm -rf ~"/Descargas/Resultados de la búsqueda"*.html
-
+rm -rf ~/Descargas/scount.html
 xdotool key Ctrl+s
 sleep 5
+xdotool type scount
 xdotool key Return
 sleep 5
 
-cat ~/Descargas/*.html | grep '</span></span> de <span class="ts">' | sed 's|.*</span></span> de <span class="ts">\([0-9]*\)</span>.*|\1|g' > /tmp/scount
+cat ~/Descargas/scount.html | grep '</span></span> de <span class="ts">' | sed 's|.*</span></span> de <span class="ts">\([0-9]*\)</span>.*|\1|g' > /tmp/scount
