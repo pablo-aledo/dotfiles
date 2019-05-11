@@ -12,6 +12,9 @@ bar(){
 
 bar(){
 
+    [ `cat /tmp/width` -gt 100 ] && wide=true
+    [ `cat /tmp/width` -gt 100 ] || wide=false
+
     [ -e /tmp/start_time ] || date +%s > /tmp/start_time
 
     setterm -cursor off
@@ -27,6 +30,7 @@ bar(){
         [ -e /tmp/start_line ] && start_line=$(cat /tmp/start_line)
         [ -e /tmp/start_line ] || start_line=0
 
+        [ $wide = true ] && \
         python3 -c "
 import datetime
 rate=float($line-$start_line)/($datenow - $start_time + 0.001)
@@ -34,6 +38,16 @@ rem_secs=int( ($max-$line)/(rate + 0.001) )
 print( ['◐', '◓', '◑', '◒'][$line%4] + \
     ' [' + '#'*$perc + ' '*(100-$perc) + ']' + '($line/$max [' + str($perc) + '%' + ']) ' + str(datetime.timedelta(seconds=rem_secs)) + ' '*10 + '\r', end='')
 "
+
+        [ $wide = false ] && \
+        python3 -c "
+import datetime
+rate=float($line-$start_line)/($datenow - $start_time + 0.001)
+rem_secs=int( ($max-$line)/(rate + 0.001) )
+print( ['◐', '◓', '◑', '◒'][$line%4] + \
+    '($line/$max [' + str($perc) + '%' + ']) ' + str(datetime.timedelta(seconds=rem_secs)) + ' '*10 + '\r', end='')
+"
+
     done
     setterm -cursor on
 
@@ -42,6 +56,8 @@ print( ['◐', '◓', '◑', '◒'][$line%4] + \
 barcmd(){
     cmd=$1
     limit=$2
+
+    stty size | cut -d' ' -f2 > /tmp/width
 
     skip=false
     [ $# -eq 3 ] && [ $3 = "skip" ] && skip=true
