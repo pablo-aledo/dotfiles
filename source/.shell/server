@@ -488,6 +488,7 @@ night(){
     shc s2count "label: pdf"
     DISPLAY=:1 xdotool key 1
     sleep 1 && shcw
+    DISPLAY=:1 xdotool key 0
 
     shc s2link 50 "label: pdf" 20
     DISPLAY=:1 xdotool key 6
