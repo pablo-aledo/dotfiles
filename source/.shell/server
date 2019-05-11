@@ -458,6 +458,39 @@ aws_servers(){
 	tmux new -d -s avxmail "source ~/.shell; server avxmail"
 }
 
+night_pdf(){
+    ( cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2 )
+    rm -rf /tmp/s2link /tmp/s2files /tmp/s2files2
+    DISPLAY=:1 xdotool key 0 ; sleep 1
+
+    shc s2link 50 "label: pdf" 20
+    DISPLAY=:1 xdotool key 6
+    sleep 1 && shcw
+
+    shc pdfl
+    DISPLAY=:1 xdotool key 6
+    sleep 1 && shcw
+}
+
+night_avh(){
+    ( cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2 )
+    rm -rf /tmp/s2link /tmp/s2files /tmp/s2files2
+    DISPLAY=:1 xdotool key 0 ; sleep 1
+
+    shc s2count
+    DISPLAY=:1 xdotool key 1
+    sleep 1 && shcw
+    DISPLAY=:1 xdotool key 0
+
+    shc s2link
+    DISPLAY=:1 xdotool key 6
+    sleep 1 && shcw
+
+    shc avl
+    DISPLAY=:1 xdotool key 6
+    sleep 1 && shcw
+}
+
 night(){
 
     # do a backup
@@ -481,21 +514,7 @@ night(){
     classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror
 
     # download
-    ( cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2 )
-    rm -rf /tmp/s2link /tmp/s2files /tmp/s2files2
-    DISPLAY=:1 xdotool key 0 ; sleep 1
-
-    shc s2count "label: pdf"
-    DISPLAY=:1 xdotool key 1
-    sleep 1 && shcw
-    DISPLAY=:1 xdotool key 0
-
-    shc s2link 50 "label: pdf" 20
-    DISPLAY=:1 xdotool key 6
-    sleep 1 && shcw
-
-    shc pdfl
-    DISPLAY=:1 xdotool key 6
-    sleep 1 && shcw
+    night_pdf
+    night_avh
 }
 
