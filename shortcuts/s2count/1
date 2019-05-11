@@ -16,6 +16,8 @@ xdotool type "$(cat /tmp/query)"
 xdotool key Return
 sleep 10
 
+rm -rf ~"/Descargas/Resultados de la búsqueda"*.html
+
 xdotool key Ctrl+s
 sleep 5
 xdotool key Return
