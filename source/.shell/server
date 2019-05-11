@@ -478,18 +478,18 @@ night_avh(){
     ( cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2 )
     rm -rf /tmp/s2link /tmp/s2files /tmp/s2files2
     DISPLAY=:1 xdotool key 0
-    sleep 10 && tail ~/.i3/config && sleep 10
+    sleep 10
 
     shc s2count
     DISPLAY=:1 xdotool key 1
     sleep 1 && shcw
     DISPLAY=:1 xdotool key 0
-    sleep 10 && tail ~/.i3/config && sleep 10
+    sleep 10
 
     shc s2link
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
-    sleep 10 && tail ~/.i3/config && sleep 10
+    sleep 10
 
     shc avl
     DISPLAY=:1 xdotool key 6
