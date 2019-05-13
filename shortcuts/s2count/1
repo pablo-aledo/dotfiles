@@ -9,7 +9,7 @@ xdotool key Alt+w
 killall chrome chromium google-chrome google-chrome-stable
 sleep 1
 google-chrome --profile-directory=Default mail.google.com &
-sleep 15
+sleep 30
 xdotool mousemove 350 110
 xdotool click 1
 xdotool type "$(cat /tmp/query)"
