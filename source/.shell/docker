@@ -3,7 +3,7 @@ alias docker='sudo docker'
 
 docker_clean(){
 
-    docker system prune
+    docker system prune --force
     docker system prune --all --force --volumes
 
 	###################################################################################
