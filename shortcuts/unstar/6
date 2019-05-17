@@ -20,7 +20,7 @@ do
 done
 
 #a=/tmp/unstar_split/01
-for a in /tmp/unstar_split/*
+for a in $(find /tmp/unstar_split/ -type f | sort -g)
 do
 
     title=$(cat $a | head -n1 | sed 's/Title: //g')
