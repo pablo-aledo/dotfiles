@@ -6,6 +6,12 @@ rm -rf /tmp/unstar_split
 mkdir /tmp/unstar_split
 csplit -s /tmp/s2files '/^$/' '{*}' -f /tmp/unstar_split/ --suppress-matched
 
+
+for a in /tmp/unstar_split/*
+do
+    [ $(cat $a | wc -l) -eq 1 ] && rm -f $a
+done
+
 #a=/tmp/unstar_split/01
 for a in /tmp/unstar_split/*
 do
