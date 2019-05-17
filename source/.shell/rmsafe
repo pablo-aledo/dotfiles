@@ -1,7 +1,7 @@
 rm(){
 	[ $2 = "-rf" ] && dir=~/.Trash/`date +%s` && mkdir -p $dir && shift && shift && /bin/mv $* $dir && return
 	[ $2 = "-f" ]  && dir=~/.Trash/`date +%s` && mkdir -p $dir && shift && shift && /bin/mv $* $dir && return
-	/bin/rm -i $*
+	/bin/rm --one-file-system -i $*
 }
 
 dd(){
