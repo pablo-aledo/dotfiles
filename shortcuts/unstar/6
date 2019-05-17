@@ -12,6 +12,13 @@ do
     [ $(cat $a | wc -l) -eq 1 ] && rm -f $a
 done
 
+for a in $( grep -Rin 'part.*\.rar' /tmp/unstar_split | cut -d':' -f1 | sort | uniq )
+do
+    [ $(cat $a | egrep 'part.*\.rar' | cut -d' ' -f1 | sort | uniq | wc -l) -eq 2 ] || rm -rf $a
+    last=$(cat $a | grep 'part.*\.rar' | awk '{$1=""; print}' | sort -g | tail -n1 | sed 's/.*part\([0-9]*\)\.rar/\1/g' | sed 's/^0*//g')
+    [ $(cat $a | egrep 'part.*\.rar' | wc -l) -eq $last ] || rm -rf $a
+done
+
 #a=/tmp/unstar_split/01
 for a in /tmp/unstar_split/*
 do
@@ -29,3 +36,8 @@ done
 xdotool key 7 && sleep 5
 
 xdotool key 0
+ 6467  cat 04 | sort -f
+ 6468  cat 04 | sort -g
+ 6469  cd
+ 6470  cd .dotfiles/shortcuts/unstar
+ 6471  ls
