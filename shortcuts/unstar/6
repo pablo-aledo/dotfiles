@@ -36,8 +36,3 @@ done
 xdotool key 7 && sleep 5
 
 xdotool key 0
- 6467  cat 04 | sort -f
- 6468  cat 04 | sort -g
- 6469  cd
- 6470  cd .dotfiles/shortcuts/unstar
- 6471  ls
