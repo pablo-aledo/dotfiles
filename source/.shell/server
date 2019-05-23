@@ -476,6 +476,24 @@ server(){
     fi
 }
 
+
+pgrestore(){
+
+      tar -xvzf $1
+
+      cd tmp
+
+      cat ../pgdump_list | while read line
+      do
+          echo $line
+          url=$line
+          name=$(echo $line | cut -d'/' -f4)
+          docker_run pg_restore_10 -d $url $name
+      done
+
+      cd ..
+}
+
 kmail_log(){
 
     podname=$1
