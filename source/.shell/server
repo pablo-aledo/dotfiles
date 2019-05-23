@@ -434,7 +434,7 @@ server(){
             images=$(cat images | paste -d' ' -s)
 
             for image in ${(z)images}
-            do 
+            do
                 imgname=$(echo $image | sed 's|[^/]*/[^/]*/[^/]*/\([^:]*\):.*|\1|g')
 
                 docker images -q > /tmp/images_pre
@@ -450,6 +450,42 @@ server(){
             sleep 1
         done
     fi
+    if [ $1 = "kmail" ]
+    then
+        namespace=demo
+
+        mkdir restarts
+
+        while true
+        do
+            pods=$(cat pods | paste -d' ' -s)
+
+            for pod in ${(z)pods}
+            do
+                podname=$( http_proxy="" https_proxy="" kubectl get pods --namespace $namespace | grep $pod | awk '{print $1}')
+                restarts=$(http_proxy="" https_proxy="" kubectl get pods --namespace $namespace | grep $pod | awk '{print $4}')
+                prev_restarts=$(cat restarts/$podname)
+                echo $restarts > restarts/$podname
+
+                [ $restarts != $prev_restarts ] && kmail_log $podname
+            done
+
+            sleep 10
+
+        done
+    fi
+}
+
+kmail_log(){
+
+    podname=$1
+    namespace=demo
+
+    cat mails | while read mail
+    do
+        http_proxy="" https_proxy="" kubectl logs $podname --tail=100 --namespace $namespace | /usr/bin/mutt -s "Pod $podname has crashed" -- $mail
+    done
+
 }
 
 aws_servers(){
