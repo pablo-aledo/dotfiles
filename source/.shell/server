@@ -506,7 +506,7 @@ kmail_log(){
 
     cat mails | while read mail
     do
-        http_proxy="" https_proxy="" kubectl logs $podname --tail=100 --namespace $namespace | /usr/bin/mutt -s "Pod $podname has crashed" -- $mail
+        http_proxy="" https_proxy="" kubectl logs -p $podname --tail=100 --namespace $namespace | /usr/bin/mutt -s "Pod $podname has crashed" -- $mail
     done
 
 }
