@@ -2,7 +2,7 @@ export DISPLAY=:1
 
 xdotool key Ctrl+s
 echo $(printf %03d $(cat /tmp/filenr))_ | xclip -sel clip -i
-sleep 1
+sleep 2
 xdotool key Left
 xdotool key Ctrl+v
 xdotool key Return
