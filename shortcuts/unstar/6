@@ -19,6 +19,8 @@ do
     [ $(cat $a | egrep 'part.*\.rar' | wc -l) -eq $last ] || rm -rf $a
 done
 
+find /tmp/unstar_split -empty -delete
+
 #a=/tmp/unstar_split/01
 for a in $(find /tmp/unstar_split/ -type f | sort -g)
 do
