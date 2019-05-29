@@ -496,6 +496,23 @@ pgrestore(){
       cd ..
 }
 
+pgrestore_2(){
+
+      tar -xvzf $1
+
+      cd tmp
+
+      ls | while read line
+      do
+          echo $line
+          name=$(echo $line | cut -d'/' -f4)
+          url=postgres://postgres:postgres@localhost:1234/$name
+          docker_run pg_restore_10 -d $url $name
+      done
+
+      cd ..
+}
+
 kmail_log(){
 
     echo "\e[33m mail triggered for pod $1 \e[0m"
