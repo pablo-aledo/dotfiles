@@ -498,12 +498,13 @@ kmail_log(){
     first_time=false
     [ -e restarts/${1}_date ] || first_time=true
 
-    date_last_time=$(cat restarts/${1}_date)
     date_current=$(date +%s)
     echo $date_current > restarts/${1}_date
 
-    [ $(( $date_current - $date_last_time )) -lt $(( 1 * 60 * 60 )) ] && return
     [ $first_time = true ] && return
+
+    date_last_time=$(cat restarts/${1}_date)
+    [ $(( $date_current - $date_last_time )) -lt $(( 1 * 60 * 60 )) ] && return
 
     podname=$1
     namespace=demo
