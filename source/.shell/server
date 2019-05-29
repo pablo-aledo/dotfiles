@@ -467,6 +467,8 @@ server(){
                 [ -e restarts/$podname ] && prev_restarts=$(cat restarts/$podname)
                 echo $restarts > restarts/$podname
 
+                echo "checking $podname"
+
                 [ $restarts != $prev_restarts ] && kmail_log $podname
             done
 
@@ -495,6 +497,9 @@ pgrestore(){
 }
 
 kmail_log(){
+
+    echo "mail triggered for pod $1"
+
     first_time=false
     [ -e restarts/${1}_date ] || first_time=true
 
