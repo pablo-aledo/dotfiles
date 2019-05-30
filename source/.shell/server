@@ -479,7 +479,7 @@ server(){
 
                         date_current=$(date +%s)
 
-                        if [ -e restarts/${pod_date ]
+                        if [ -e restarts/${pod}_date ]
                         then
                             date_last_time=$(cat restarts/${pod}_date)
 
