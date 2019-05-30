@@ -492,9 +492,16 @@ server(){
                             sleep 10
 
                             kmail_log $podname
+
                         else
 
                             echo $date_current > restarts/${pod}_date
+
+                            echo "\e[31m mail sent for pod $pod \e[0m"
+
+                            sleep 10
+
+                            kmail_log $podname
 
                         fi
 
