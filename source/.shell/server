@@ -462,6 +462,7 @@ server(){
 
             for pod in ${(z)pods}
             do
+
                 podname=$pod
                 echo "\e[34m checking $podname \e[0m"
 
@@ -474,18 +475,27 @@ server(){
                     if [ $restarts != $prev_restarts ]
                     then
 
-                        echo "\e[33m mail triggered for pod $1 \e[0m"
+                        echo "\e[33m mail triggered for pod $pod \e[0m"
 
                         date_current=$(date +%s)
-                        date_last_time=$(cat restarts/${pod}_date)
 
-                        [ $(( $date_current - $date_last_time )) -lt $(( 1 * 60 * 60 )) ] && continue
+                        if [ -e restarts/${pod_date ]
+                        then
+                            date_last_time=$(cat restarts/${pod}_date)
 
-                        echo $date_current > restarts/${pod}_date
+                            [ $(( $date_current - $date_last_time )) -lt $(( 1 * 60 * 60 )) ] && continue
 
-                        echo "\e[31m mail sent for pod $1 \e[0m"
+                            echo $date_current > restarts/${pod}_date
 
-                        kmail_log $podname
+                            echo "\e[31m mail sent for pod $1 \e[0m"
+
+                            kmail_log $podname
+                        else
+
+                            echo $date_current > restarts/${pod}_date
+
+                        fi
+
                     fi
                 else
                     restarts=$(http_proxy="" https_proxy="" kubectl get pods --namespace $namespace | grep $pod | awk '{print $4}')
