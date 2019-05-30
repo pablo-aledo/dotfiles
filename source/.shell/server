@@ -458,7 +458,7 @@ server(){
 
         while true
         do
-            pods=$(k get pods --namespace $namespace | paste -d' ' -s)
+            pods=$(k get pods --namespace $namespace | tail -n +2 | awk '{print $1}' | paste -d' ' -s)
 
             for pod in ${(z)pods}
             do
