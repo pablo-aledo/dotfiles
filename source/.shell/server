@@ -561,13 +561,14 @@ kmail_log(){
 
     for a in $(seq 1 100)
     do
-        [ "$(kubectl logs -p $podname --tail=100 --namespace $namespace | grep 'Unable to retrieve container logs for docker')" = "" ] && continue
+        kubectl logs -p $podname --tail=100 --namespace $namespace > /tmp/kmail_log
+        [ "$(cat /tmp/kmail_log | grep 'Unable to retrieve container logs for docker')" = "" ] && continue
         sleep 1
     done
 
     cat mails | while read mail
     do
-        http_proxy="" https_proxy="" kubectl logs -p $podname --tail=100 --namespace $namespace | /usr/bin/mutt -s "Pod $podname has crashed" -- $mail
+        cat /tmp/kmail_log | /usr/bin/mutt -s "Pod $podname has crashed" -- $mail
     done
 }
 
