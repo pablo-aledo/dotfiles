@@ -568,7 +568,9 @@ kmail_log(){
 
     cat mails | while read mail
     do
-        cat /tmp/kmail_log | /usr/bin/mutt -s "Pod $podname has crashed" -- $mail
+        address=$(echo $mail | awk '{print $1}' )
+        regex=$(echo $mail | awk '{print $2}' )
+        [ "$(echo $podname | egrep $regex)" != "" ] && echo "\e[31m Sending logs to $mail \e[0m" && cat /tmp/kmail_log | /usr/bin/mutt -s "Pod $podname has crashed" -- $mail
     done
 }
 
