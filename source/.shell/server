@@ -442,6 +442,12 @@ server(){
                 docker images -q > /tmp/images_post
                 if [ "$(diff /tmp/images_pre /tmp/images_post)" != "" ]
                 then
+
+                    kubectl cluster-info dump | grep hostIP | sed 's/.*"hostIP": "\(.*\)".*/\1/g' | sort | uniq | while read nodeip
+                    do
+                        docker_send $USER $nodeip $image
+                    done
+
                     http_proxy="" https_proxy="" kubectl scale --replicas=0 deployment/${imgname}-deployment --namespace $namespace
                     sleep 1
                     http_proxy="" https_proxy="" kubectl scale --replicas=1 deployment/${imgname}-deployment --namespace $namespace
