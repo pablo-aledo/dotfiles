@@ -1,0 +1,16 @@
+export DISPLAY=:1
+
+sleep 3 && xdotool mousemove 20 250
+sleep 3 && xdotool click 1
+sleep 3 && xdotool mousemove 20 300
+sleep 3 && xdotool click 1
+
+sleep 3 && xdotool key Left
+sleep 3 && xdotool type '../'
+echo $(printf %03d $(cat /tmp/filenr))_$(cat /tmp/name) | xclip -sel clip -i
+sleep 3 && xdotool key Ctrl+v
+sleep 3 && xdotool type '/'
+sleep 3 && xdotool key Return
+
+sleep 3 && xdotool mousemove 1100 700
+sleep 3 && xdotool click 1

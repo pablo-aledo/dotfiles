@@ -1,0 +1,17 @@
+export DISPLAY=:1
+
+cat /tmp/sbl | while read line
+do
+    address=$( echo $line | sed 's|\(.*\) -> \(.*\) -> \(.*\)|\1|g'  )
+       name=$( echo $line | sed 's|\(.*\) -> \(.*\) -> \(.*\)|\2|g'  )
+      count=$( echo $line | sed 's|\(.*\) -> \(.*\) -> \(.*\)|\3|g'  )
+
+    echo $address > /tmp/address
+    echo $name > /tmp/name
+    echo $count > /tmp/count
+
+    xdotool key 1
+    xdotool key 2
+
+done
+
