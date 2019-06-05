@@ -10,10 +10,10 @@ do
     sleep 3 && xdotool mousemove 20 300
     sleep 3 && xdotool click 1
 
-    mkdir -p "/home/pablo/$(cat /tmp/name)"
+    mkdir -p "/media/removable/1TB/$(cat /tmp/name)"
 
     sleep 3 && xdotool key Left
-    echo /home/pablo/$(cat /tmp/name)/$(printf %03d $(cat /tmp/filenr))_ | xclip -sel clip -i
+    echo /media/removable/1TB/$(cat /tmp/name)/$(printf %03d $(cat /tmp/filenr))_ | xclip -sel clip -i
     sleep 3 && xdotool key Ctrl+v
     sleep 3 && xdotool key Return
 
