@@ -21,6 +21,4 @@ do
     sleep 3 && xdotool click 1 && sleep 10
 done
 
-xdotool key Alt+x
-
 rm -fr /tmp/lock

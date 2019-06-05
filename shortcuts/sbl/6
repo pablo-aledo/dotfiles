@@ -1,5 +1,6 @@
 export DISPLAY=:1
 
+n=0
 cat /tmp/sbl | while read line
 do
     address=$( echo $line | sed 's|\(.*\) -> \(.*\) -> \(.*\)|\1|g'  )
@@ -14,5 +15,11 @@ do
     xdotool key 2 && sleep 60
     while [ -e /tmp/lock ]; do sleep 1; done
 
+    n=$(( $n + 1 ))
+    if [ $(( $n % 5 )) -eq 0 ]
+    then
+        touch /tmp/lock
+        while [ -e /tmp/lock ]; do sleep 1; done
+    fi
 done
 
