@@ -10,8 +10,9 @@ do
     echo $name > /tmp/name
     echo $count > /tmp/count
 
-    xdotool key 1
-    xdotool key 2
+    xdotool key 1 && sleep 5
+    xdotool key 2 && sleep 60
+    while [ -e /tmp/lock ]; do sleep 1; done
 
 done
 
