@@ -16,10 +16,10 @@ do
     while [ -e /tmp/lock ]; do sleep 1; done
 
     n=$(( $n + 1 ))
-    if [ $(( $n % 5 )) -eq 0 ]
+    if [ $(( $n % 10 )) -eq 0 ]
     then
         touch /tmp/lock
-        while [ -e /tmp/lock ]; do sleep 1; done
+        while [ -e /tmp/lock ]; do sleep 1; xdotool key Alt; done
     fi
 done
 
