@@ -17,6 +17,8 @@ do
     sleep 3 && xdotool key Ctrl+v
     sleep 3 && xdotool key Return
 
+    sleep 60
+
     sleep 3 && xdotool mousemove 1100 700
     sleep 3 && xdotool click 1 && sleep 10
 done
