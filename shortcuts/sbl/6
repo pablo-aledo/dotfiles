@@ -15,11 +15,13 @@ do
     xdotool key 2 && sleep 60
     while [ -e /tmp/lock ]; do sleep 1; done
 
-    n=$(( $n + 1 ))
-    if [ $(( $n % 10 )) -eq 0 ]
-    then
-        touch /tmp/lock
-        while [ -e /tmp/lock ]; do sleep 1; xdotool key Alt; done
-    fi
+    xdotool key Alt+x
+    #n=$(( $n + 1 ))
+    #if [ $(( $n % 10 )) -eq 0 ]
+    #then
+        #touch /tmp/lock
+        #while [ -e /tmp/lock ]; do sleep 1; xdotool key Alt; done
+    #fi
+
 done
 
