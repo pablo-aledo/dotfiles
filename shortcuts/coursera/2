@@ -3,3 +3,9 @@ export DISPLAY=:1
 xdotool key Ctrl+f
 xdotool type "video"
 xdotool key Escape
+
+#sleep 1
+
+#xdotool key Ctrl+f
+#xdotool type "Start"
+#xdotool key Escape

@@ -4,5 +4,9 @@ xdotool key ctrl+w
 xdotool key ctrl+g
 xdotool key Escape
 
+xdotool mousemove 1260 750
+sleep 1
+xdotool click 1
+
 nr=$(cat /tmp/filenr)
 echo $(( $nr + 1 )) > /tmp/filenr

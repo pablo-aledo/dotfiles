@@ -12,16 +12,16 @@ sleep 1
 #xdotool mousemove 558 640
 #xdotool click 1
 #sleep 1
-xdotool key Tab
-xdotool key Tab
-xdotool key Tab
-xdotool key Tab
-xdotool key Return
+#xdotool key Tab
+#xdotool key Tab
+#xdotool key Tab
+#xdotool key Tab
+#xdotool key Return
 
-#xdotool mousemove 558 680
-#sleep 1
-#xdotool click 1
-#sleep 1
+xdotool mousemove 350 730
+sleep 1
+xdotool click 1
+sleep 1
 xdotool key Tab
 xdotool key Return
 sleep 1
