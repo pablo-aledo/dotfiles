@@ -1777,6 +1777,21 @@ learning.queue_mv(){
     done
 }
 
+learning.queue_loop(){
+
+    [ $# -eq 0 ] && queue_n=100
+    [ $# -eq 1 ] && queue_n=$1
+
+    [ -e $learning_dir/summaries ] && rm -rf $learning_dir/summaries
+    [ -e $learning_dir/summaries_classified ] && rm -rf $learning_dir/summaries_classified
+
+    learning.queue_get $queue_n
+    learning.queue_classify
+    vim *
+    learning.queue_mv
+    source $tmp/script
+}
+
 # add \ to {}
 # add match with \(\)
 
