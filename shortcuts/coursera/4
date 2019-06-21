@@ -1,4 +1,5 @@
 export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
 
 xdotool mousemove 350 230
 xdotool click 1
@@ -18,7 +19,13 @@ sleep 1
 #xdotool key Tab
 #xdotool key Return
 
-xdotool mousemove 350 730
+xdotool mousemove 50 330
+xdotool click 1
+xdotool key Down
+xdotool key Down
+mouseover 10 10000 ~/.dotfiles/shortcuts/images/coursera_dl.png
+#xdotool mousemove 350 730
+
 sleep 1
 xdotool click 1
 sleep 1
