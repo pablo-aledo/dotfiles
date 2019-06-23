@@ -11,6 +11,17 @@ lengthdir(){
 	find $* -type f -print0 | xargs -0  mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
 }
 
+cutvideo(){
+	m1=`echo $2 | cut -d':' -f1`
+	s1=`echo $2 | cut -d':' -f2`
+	m2=`echo $3 | cut -d':' -f1`
+	s2=`echo $3 | cut -d':' -f2`
+	t1=$(($m1*60+$s1))
+	t2=$(($m2*60+$s2))
+	d=$(($t2-$t1))
+	ffmpeg -ss $t1 -t $d -i $1 $1.cut.mp4
+}
+
 convert_1(){
 	OPTS="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
 	echo ffmpeg -i \"$1\" $OPTS \"$1.converted.mp4\" | bash
