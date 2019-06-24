@@ -22,6 +22,26 @@ cutvideo(){
 	ffmpeg -ss $t1 -t $d -i $1 $1.cut.mp4
 }
 
+cutvideo(){
+	m1=`echo $2 | cut -d':' -f1`
+	s1=`echo $2 | cut -d':' -f2`
+	m2=`echo $3 | cut -d':' -f1`
+	s2=`echo $3 | cut -d':' -f2`
+	t1=$(($m1*60+$s1))
+	t2=$(($m2*60+$s2))
+	d=$(($t2-$t1))
+
+    n=1
+    name=${4}
+    while [ -e $name ]
+    do
+        n=$(( $n + 1 ))
+        name=${4}_${n}
+    done
+
+	ffmpeg -ss $t1 -t $d -i $1 $name
+}
+
 convert_1(){
 	OPTS="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
 	echo ffmpeg -i \"$1\" $OPTS \"$1.converted.mp4\" | bash
