@@ -1787,7 +1787,7 @@ learning.queue_loop(){
 
     learning.queue_get $queue_n
     learning.queue_classify
-    vim *
+    vim * '+:AnsiEsc' '+:au BufEnter * :AnsiEsc'
     learning.queue_mv
     source $tmp/script
 }
