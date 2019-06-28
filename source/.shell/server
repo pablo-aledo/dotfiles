@@ -522,6 +522,32 @@ server(){
 
         done
     fi
+
+    if [ $1 = "rates" ]
+        while true
+        do
+            if [ `date +%M` = 00 ]
+            then
+                echo "===== Start ====="
+
+                previous_n_avh=$(cat ~/servers/rate/n_avh)
+                previous_n_rss=$(cat ~/servers/rate/n_rss)
+                actual_n_avh=$(cat ~/servers/avxtitles | wc -l )
+                actual_n_rss=$(cat ~/servers/rsstitles | wc -l )
+                echo $actual_n_avh > ~/servers/rate/n_avh
+                echo $actual_n_rss > ~/servers/rate/n_rss
+
+                [ $(( $actual_n_avh - previous_n_avh )) -lt 100 ] && echo "\e[31m Low rate on avh \e[0m" && notify_rates
+                [ $(( $actual_n_rss - previous_n_rss )) -lt 100 ] && echo "\e[31m Low rate on rss \e[0m" && notify_rates
+
+                echo "===== End ====="
+
+                sleep $((60*5))
+            fi
+            sleep 10
+        done
+    then
+    fi
 }
 
 
@@ -580,10 +606,15 @@ kmail_log(){
     done
 }
 
+notify_rates(){
+    echo "Low notification rates on server" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW NOTIFICATION RATES ON SERVER" -- pablo.aledo@gmail.com
+}
+
 aws_servers(){
     server novnc4
 	tmux new -d -s rssmail "source ~/.shell; server rssmail"
 	tmux new -d -s avxmail "source ~/.shell; server avxmail"
+	tmux new -d -s rates   "source ~/.shell; server rates"
 }
 
 night_pdf(){
