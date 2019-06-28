@@ -541,8 +541,8 @@ server(){
                 echo "diff_avh = $diff_avh"
                 echo "diff_rss = $diff_rss"
 
-                [ $diff_avh -lt 100 ] && echo "\e[31m Low rate on avh \e[0m" && notify_rates
-                [ $diff_rss -lt 100 ] && echo "\e[31m Low rate on rss \e[0m" && notify_rates
+                [ $diff_avh -lt 1 ] && echo "\e[31m Low rate on avh \e[0m" && notify_rates
+                [ $diff_rss -lt 1 ] && echo "\e[31m Low rate on rss \e[0m" && notify_rates
 
                 sleep $((60*5))
             fi
