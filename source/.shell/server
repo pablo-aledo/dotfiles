@@ -524,6 +524,7 @@ server(){
     fi
 
     if [ $1 = "rates" ]
+    then
         while true
         do
             if [ `date +%M` = 00 ] && [ $(( `date +%H` % 2 )) -eq 0 ]
@@ -548,7 +549,6 @@ server(){
             fi
             sleep 10
         done
-    then
     fi
 }
 
