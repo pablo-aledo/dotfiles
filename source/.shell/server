@@ -527,7 +527,7 @@ server(){
     then
         while true
         do
-            if [ `date +%M` = 00 ] && [ $(( `date +%H` % 2 )) -eq 0 ]
+            if [ `date +%M` = 00 ] && [ $(( `date +%H` % 3 )) -eq 0 ]
             then
                 previous_n_avh=$(cat ~/servers/rate/n_avh)
                 previous_n_rss=$(cat ~/servers/rate/n_rss)
