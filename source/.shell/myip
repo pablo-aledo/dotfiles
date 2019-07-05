@@ -1,5 +1,5 @@
 myip(){
-	internal_eth=`ifconfig | grep eth0 -A1 | tail -n1 | cut -d: -f2 | cut -d" " -f1`
+	internal_eth=`ifconfig | egrep '(eth0|ens.)' -A1 | tail -n1 | cut -d: -f2 | cut -d" " -f1`
 	internal_wlan=`ifconfig | grep wlan0 -A1 | tail -n1 | cut -d: -f2 | cut -d" " -f1`
 	internal_tun=`ifconfig | grep tun0 -A1 | tail -n1 | cut -d: -f2 | cut -d" " -f1`
 	external=`wget http://ipinfo.io/ip -qO -`
