@@ -1,5 +1,6 @@
 vimexec(){
     cat $1 > /tmp/script
     vim /tmp/script
+    reset
     source /tmp/script
 }
