@@ -19,9 +19,12 @@ do
     xdotool key 4
     sleep 5
 
+    count=0
     while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
     do
-        sleep 1
+        sleep 10
+        count=$(( $count + 1 ))
+        [ $count -eq 20 ] && break
     done
 
     count=0
