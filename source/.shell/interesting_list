@@ -74,7 +74,7 @@ cd ~/github_topic/
 wget https://github.com/topics/$topic -O $topic/list
 
 n=0
-for a in `cat $topic/list | grep text-normal -B1 | grep href | cut -d'"' -f2 | sed -e s@^.@https://github.com/@g | head -n $limit`
+for a in `cat $topic/list | grep 'class="f3"' -A2 | grep href | cut -d'"' -f2 | sed -e s@^.@https://github.com/@g | head -n $limit`
 do
 	n=$(( $n + 1 ))
 	link="$a/archive/master.zip"
