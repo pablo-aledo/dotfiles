@@ -2001,7 +2001,7 @@ sliding_indexer(){
         echo -n .
         [ "$(cat $file | tail -n+$linenr | head -n 1 | sed -e 's/ //g' -e 's/\t//g')" = "" ] && continue
         lines=$(cat $file | tail -n+$linenr | head -n 1 | paste -d' ' -s)
-        [ $indexer_add_kw = "true" ] && [ -e $learning_dir/metadata/$(basename "$file")/keywords ] && lines="$(cat $learning_dir/metadata/$(basename "$file")/keywords) $lines"
+        [ $indexer_add_kw = "true" ] && [ -e "$learning_dir/metadata/$(basename "$file")/keywords" ] && lines="$(cat "$learning_dir/metadata/$(basename "$file")/keywords") $lines"
         key="$keybase:$linenr"
         echo $lines > $learning_dir/txts/$key
         echo $file:$linenr > $learning_dir/map/$key
