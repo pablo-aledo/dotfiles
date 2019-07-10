@@ -2022,6 +2022,7 @@ learning.index(){
             [ -e $dst ] && continue
             dir=$(dirname $dst)
             mkdir -p $dir
+            echo "\e[34m doc2txt \e[0m $src -> $dst"
             doc2txt_rec "$src" "$dst"
         done
     fi
@@ -2029,6 +2030,7 @@ learning.index(){
     mkdir -p $learning_dir/txts $learning_dir/map
     find $learning_dir/documents -type f | while read file
     do
+        echo "\e[34m index \e[0m $file"
         $indexer_method $file
     done
 
