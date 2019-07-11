@@ -416,7 +416,7 @@ print out
 windowpy.get_features(){}
 
 bog_and_win.txt2vec(){
-    ( bagofwords.txt2vec $1; windowpy.txt2vec $1 ) | paste -d' ' -s | sed -e 's/\.//g' -e 's/\]\[/,/g'
+    ( bagofwords.txt2vec $1; windowpy.txt2vec $1 ) | paste -d' ' -s | sed -e 's/\.//g' -e 's/\] \[/,/g'
 }
 
 bog_and_win.get_features(){}
