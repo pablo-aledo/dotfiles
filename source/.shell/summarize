@@ -1338,6 +1338,10 @@ if( '$learning_distance' == 'euclidean' ):
 "
 }
 
+learning.txtdistance(){
+    learning.distance "$(learning.doc2rvect $1)" "$(learning.doc2rvect $2)"
+}
+
 closest_classifier.sortdist(){
     h1=$(learning.doc2rvect $1)
 
