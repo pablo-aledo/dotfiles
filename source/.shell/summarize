@@ -415,6 +415,12 @@ print out
 
 windowpy.get_features(){}
 
+bog_and_win.txt2vec(){
+    ( bagofwords.txt2vec $1; windowpy.txt2vec $1 ) | paste -d' ' -s | sed -e 's/\.//g' -e 's/\]\[/,/g'
+}
+
+bog_and_win.get_features(){}
+
 keywords_multiscale.txt2vec(){
 
     vect1=$(cat $1 | head -n 1     | tokenize | countwords | getkeywords | awk '{print $1}')
