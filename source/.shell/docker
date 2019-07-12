@@ -443,6 +443,8 @@ case $1 in
 (re_lab)                 docker run -it -v $(pwd)/share_ro:/share_ro:ro -v $(pwd)/share_rw:/share_rw re_lab ;;
 (redis)                  docker run -e ALLOW_EMPTY_PASSWORD=yes -p 6379:6379 bitnami/redis:latest ;;
 (disque)                 docker run -p 7711:7711 efrecon/disque:1.0-rc1 ;;
+(recoll)                 docker run -p 8080:8080 -v $HOME:/root ~/.dotfiles/pkg/Docker/recoll/recoll.conf:/root/.recoll/recoll.conf dsheyp/docker-recoll-webui
+                         docker exec $(docker ps | grep recoll | awk '{print $1}' ) recollindex ;;
 (remmina)                docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/.remmina:/root/.remmina --name remmina ${DOCKER_REPO_PREFIX}/remmina ;;
 (ricochet)               docker run -d --restart always -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name ricochet ${DOCKER_REPO_PREFIX}/ricochet ;;
 (rstudio)                docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/rscripts:/root/rscripts --device /dev/dri --name rstudio ${DOCKER_REPO_PREFIX}/rsudio ;;
