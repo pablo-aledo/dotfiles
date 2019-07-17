@@ -1806,6 +1806,12 @@ learning.queue_mv(){
             echo "cat \"$learning_dir/summaries_classified/$line\" > $learning_dir/documents/$true_tag.$crctitle" | tee -a $tmp/script
         fi
 
+        if [ -e $learning_dir/metadata/$file/ ]
+        then
+            echo "echo $true_tag > $learning_dir/metadata/$file/classification" | tee -a $tmp/script
+            echo "cat \"$learning_dir/summaries_classified/$line\" > $learning_dir/metadata/$file/summary" | tee -a $tmp/script
+        fi
+
     done
 }
 
