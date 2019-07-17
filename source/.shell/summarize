@@ -1808,8 +1808,8 @@ learning.queue_mv(){
 
         if [ -e $learning_dir/metadata/$file/ ]
         then
-            echo "echo $true_tag > $learning_dir/metadata/$file/classification" | tee -a $tmp/script
-            echo "cat \"$learning_dir/summaries_classified/$line\" > $learning_dir/metadata/$file/summary" | tee -a $tmp/script
+            echo "echo $true_tag > \"$learning_dir/metadata/$file/classification\"" | tee -a $tmp/script
+            echo "cat \"$learning_dir/summaries_classified/$line\" > \"$learning_dir/metadata/$file/summary\"" | tee -a $tmp/script
         fi
 
     done
