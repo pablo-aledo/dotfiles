@@ -1,15 +1,15 @@
 pword(){
 	PWORD=''
+	PWORD_FILE=''
 	[ -e ~/.pword ]                      && PWORD_FILE=~/.pword
 	[ -e  /media/DATA/.pword ]           && PWORD_FILE=/media/DATA/.pword
 	[ -e  /media/DATA/Personal/.pword ]  && PWORD_FILE=/media/DATA/Personal/.pword
 	[ -e  /media/mint/Pablo/.pword ]     && PWORD_FILE=/media/mint/Pablo/.pword
 
-	[ $# -eq 0 ] && [ $PWORD_FILE != "" ] && PWORD=`cat $PWORD_FILE | head -n1`
-	[ $# -eq 1 ] && [ $PWORD_FILE != "" ] && PWORD=`cat $PWORD_FILE | grep $1 | cut -d':' -f2`
-
-	if [ $PWORD ]
+	if [ $PWORD_FILE != "" ]
 	then
+	    [ $# -eq 0 ] && PWORD=`cat $PWORD_FILE | head -n1`
+	    [ $# -eq 1 ] && PWORD=`cat $PWORD_FILE | grep $1 | cut -d':' -f2`
 	else
 		echo -n 'Password: ' > /dev/stderr
 		read PWORD
