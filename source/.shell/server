@@ -627,6 +627,7 @@ aws_servers(){
 	tmux new -d -s rssmail "source ~/.shell; server rssmail"
 	tmux new -d -s avxmail "source ~/.shell; server avxmail"
 	tmux new -d -s rates   "source ~/.shell; server rates"
+	[ -e /media/DATA/html ] && tmux new -d -s gopro "source ~/.shell; cd /media/DATA/html; docker_app lamp"
 }
 
 night_pdf(){
