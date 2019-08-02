@@ -117,7 +117,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|ubuntu_pga_dev|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|sonar_scanner_go|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic|centos-i3-vnc|centos7_gobuild|centos7_ccache|pg_dump|pg_dump_10|pg_restore)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|ubuntu_pga_dev|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|sonar_scanner_go|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic|centos-i3-vnc|centos7_gobuild|centos7_ccache|pg_dump|pg_dump_10|pg_restore|openpose-cpu)
     [ "$docker_export_proxy" = "true" ] || cd ~/.dotfiles/pkg/Docker/$1
     [ "$docker_export_proxy" = "true" ] && rm -fr /tmp/docker
 	[ "$docker_export_proxy" = "true" ] && cp -r ~/.dotfiles/pkg/Docker/$1 /tmp/docker
@@ -386,6 +386,7 @@ case $1 in
 (notify_send)            local args=${*:2}
                          docker exec -i notify_osd notify-send "$1" "${args}" ;;
 (openshot)               docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY openshot ;;
+(openpose-cpu)           docker run -v`pwd`:/data -it openpose-cpu -display 0 -video /data/${2} -write_video /data/${2}.openpose.mp4 ;;
 (oauth2_proxy)           docker run -it --rm --name oauth-proxy a5huynh/oauth2_proxy \
                              --cookie-secure=false \
                              --upstream="http://upstream:80" \
