@@ -634,4 +634,27 @@ video_overlay(){
          $3
 }
 
+video_transition(){
+in_video1=$1
+in_video2=$2
+out_video=$3
 
+width=$(  ffprobe -v error -show_entries stream=width    -of default=noprint_wrappers=1:nokey=1 $in_video1 )
+height=$( ffprobe -v error -show_entries stream=height   -of default=noprint_wrappers=1:nokey=1 $in_video1 )
+secs1=$(  ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $in_video1 | cut -d. -f1)
+secs2=$(  ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $in_video2 | cut -d. -f1)
+secsfade=1
+
+echo $in_video1 $in_video2 $out_video $width $height $secs1 $secs2 $secsfade
+
+echo ffmpeg -i $in_video1 -i $in_video2 \
+-filter_complex \
+"color=black:${width}x${height}:d=$(( $secs1 + $secs2 - $secsfade ))[base]; \
+ [0:v]setpts=PTS-STARTPTS[v0]; \
+ [1:v]format=yuva420p,fade=in:st=0:d=${secsfade}:alpha=1, \
+      setpts=PTS-STARTPTS+((${secs1}-${secsfade})/TB)[v1]; \
+ [base][v0]overlay[tmp]; \
+ [tmp][v1]overlay,format=yuv420p[fv]; \
+ [0:a][1:a]acrossfade=d=${secsfade}[fa]" \
+ -map "[fv]" -map "[fa]" $out_video
+}
