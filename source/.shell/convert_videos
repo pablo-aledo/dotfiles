@@ -688,22 +688,21 @@ echo ffmpeg -strict -2 -i $in_video1 -i $in_video2 -f lavfi -i color=black:${wid
   -vcodec libx264 -map "@[outv]@" $out_video | sed 's|@|"|g'
 
 
-echo ffmpeg -i $in_video1 -i $in_video2 -an \
+echo ffmpeg -strict -2 -i $in_video1 -i $in_video2 -an \
 -filter_complex \
-    "@[0:v]trim=start=0:end=$((${secs1}-${secsfade})),setpts=PTS-STARTPTS[firstclip];
-    [1:v]trim=start=1,setpts=PTS-STARTPTS[secondclip];
-    [0:v]trim=start=$((${secs1}-${secsfade})):end=${secs1},setpts=PTS-STARTPTS[fadeoutsrc];
-    [1:v]trim=start=0:end=${secsfade},setpts=PTS-STARTPTS[fadeinsrc];
-    [fadeinsrc]format=pix_fmts=yuva420p,
-                fade=t=in:st=0:d=${secsfade}:alpha=1[fadein];
-    [fadeoutsrc]format=pix_fmts=yuva420p,
-                fade=t=out:st=0:d=${secsfade}:alpha=1[fadeout];
-    [fadein]fifo[fadeinfifo];
-    [fadeout]fifo[fadeoutfifo];
-    [fadeoutfifo][fadeinfifo]overlay[crossfade];
-    [firstclip][crossfade][secondclip]concat=n=3[output];
-    [0:a][1:a] acrossfade=d=${secsfade} [audio]
-    @" \
+    "@[0:v]trim=start=0:end=$((${secs1}-${secsfade})),setpts=PTS-STARTPTS[firstclip]; \
+    [1:v]trim=start=1,setpts=PTS-STARTPTS[secondclip]; \
+    [0:v]trim=start=$((${secs1}-${secsfade})):end=${secs1},setpts=PTS-STARTPTS[fadeoutsrc]; \
+    [1:v]trim=start=0:end=${secsfade},setpts=PTS-STARTPTS[fadeinsrc]; \
+    [fadeinsrc]format=pix_fmts=yuva420p, \
+                fade=t=in:st=0:d=${secsfade}:alpha=1[fadein]; \
+    [fadeoutsrc]format=pix_fmts=yuva420p, \
+                fade=t=out:st=0:d=${secsfade}:alpha=1[fadeout]; \
+    [fadein]fifo[fadeinfifo]; \
+    [fadeout]fifo[fadeoutfifo]; \
+    [fadeoutfifo][fadeinfifo]overlay[crossfade]; \
+    [firstclip][crossfade][secondclip]concat=n=3[output]; \
+    [0:a][1:a] acrossfade=d=${secsfade} [audio]@" \
     -map "@[output]@" -map "@[audio]@" $out_video | sed 's|@|"|g'
 
 }
