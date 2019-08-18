@@ -69,7 +69,7 @@ cutvideo_logo(){
      width=$(file /tmp/landmark.png | cut -d' ' -f5 | sed 's/,//g')
     height=$(file /tmp/landmark.png | cut -d' ' -f7 | sed 's/,//g')
        row=$(( $row - $height ))
-    column=$(( $row - $width / 2 ))
+    column=$(( $column - $width / 2 ))
 
 
     video_overlay \
