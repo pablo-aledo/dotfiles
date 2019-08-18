@@ -51,6 +51,9 @@ cutvideo_logo(){
 	t2=$(($m2*60+$s2))
 	d=$(($t2-$t1+1))
 
+    [ -e $HOME/Dotfiles/ressources/icons/landmark.png ]  && mv $HOME/Dotfiles/ressources/icons/landmark.png  /tmp/landmark.png
+    [ -e $HOME/Dotfiles/ressources/videos/endvideo.mp4 ] && mv $HOME/Dotfiles/ressources/videos/endvideo.mp4 /tmp/endvideo.mp4
+
     n=1
     name=${4}.mp4
     while [ -e $name ]
@@ -59,9 +62,22 @@ cutvideo_logo(){
         name=${4}_${n}.mp4
     done
 
-	ffmpeg -ss $t1 -t $d -i $1 -strict -2 /tmp/${name}.mp4
+	ffmpeg -ss $t1 -t $d -i $1 -strict -2 /tmp/video.mp4
 
-    ffmpeg-concat -t crosswarp -d 500 -o $name /tmp/${name}.mp4 /tmp/logo.mp4
+       row=$(cat /tmp/coordinates | cut -d',' -f1)
+    column=$(cat /tmp/coordinates | cut -d',' -f2)
+
+    video_overlay \
+        /tmp/video.mp4 \
+        /tmp/landmark.png \
+        /tmp/overlay.mp4 \
+        $row \
+        $column
+
+    #ffmpeg-concat -t crosswarp -d 500 -o $name /tmp/${name}.mp4 /tmp/logo.mp4
+    video_transition /tmp/overlay.mp4 /tmp/endvideo.mp4 ${name}
+
+    rm -rf /tmp/video.mp4 /tmp/overlay.mp4
 }
 
 convert_1(){
@@ -667,28 +683,27 @@ secs1=$(  ffprobe -v error -show_entries format=duration -of default=noprint_wra
 secs2=$(  ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $in_video2 | cut -d. -f1)
 secsfade=1
 
-echo $in_video1 $in_video2 $out_video $width $height $secs1 $secs2 $secsfade
+# echo $in_video1 $in_video2 $out_video $width $height $secs1 $secs2 $secsfade
+#
+# echo ffmpeg -strict -2 -i $in_video1 -i $in_video2 \
+# -filter_complex \
+# "@color=black:${width}x${height}:d=$(( $secs1 + $secs2 - $secsfade ))[base]; \
+#  [0:v]setpts=PTS-STARTPTS[v0]; \
+#  [1:v]format=yuva420p,fade=in:st=0:d=${secsfade}:alpha=1,setpts=PTS-STARTPTS+$((${secs1}-${secsfade}))/TB[v1]; \
+#  [base][v0]overlay[tmp]; \
+#  [tmp][v1]overlay,format=yuv420p[fv]; \
+#  [0:a][1:a]acrossfade=d=${secsfade}[fa]@" \
+#  -map "@[fv]@" -map "@[fa]@" $out_video | sed 's|@|"|g'
+#
+# echo ffmpeg -strict -2 -i $in_video1 -i $in_video2 -f lavfi -i color=black:${width}x${height} -filter_complex \
+# "@[0:v]format=pix_fmts=yuva420p,fade=t=out:st=$secs1:d=1:alpha=1,setpts=PTS-STARTPTS[va0];\
+#   [1:v]format=pix_fmts=yuva420p,fade=t=in:st=0:d=1:alpha=1,setpts=PTS-STARTPTS+${secs1}/TB[va1];\
+#   [2:v]scale=${width}x${height},trim=duration=$(($secs1+$secs2-$secsfade))[over];\
+#   [over][va0]overlay[over1];\
+#   [over1][va1]overlay=format=yuv420[outv]@" \
+#   -vcodec libx264 -map "@[outv]@" $out_video | sed 's|@|"|g'
 
-echo ffmpeg -strict -2 -i $in_video1 -i $in_video2 \
--filter_complex \
-"@color=black:${width}x${height}:d=$(( $secs1 + $secs2 - $secsfade ))[base]; \
- [0:v]setpts=PTS-STARTPTS[v0]; \
- [1:v]format=yuva420p,fade=in:st=0:d=${secsfade}:alpha=1,setpts=PTS-STARTPTS+$((${secs1}-${secsfade}))/TB[v1]; \
- [base][v0]overlay[tmp]; \
- [tmp][v1]overlay,format=yuv420p[fv]; \
- [0:a][1:a]acrossfade=d=${secsfade}[fa]@" \
- -map "@[fv]@" -map "@[fa]@" $out_video | sed 's|@|"|g'
-
-echo ffmpeg -strict -2 -i $in_video1 -i $in_video2 -f lavfi -i color=black:${width}x${height} -filter_complex \
-"@[0:v]format=pix_fmts=yuva420p,fade=t=out:st=$secs1:d=1:alpha=1,setpts=PTS-STARTPTS[va0];\
-  [1:v]format=pix_fmts=yuva420p,fade=t=in:st=0:d=1:alpha=1,setpts=PTS-STARTPTS+${secs1}/TB[va1];\
-  [2:v]scale=${width}x${height},trim=duration=$(($secs1+$secs2-$secsfade))[over];\
-  [over][va0]overlay[over1];\
-  [over1][va1]overlay=format=yuv420[outv]@" \
-  -vcodec libx264 -map "@[outv]@" $out_video | sed 's|@|"|g'
-
-
-echo ffmpeg -strict -2 -i $in_video1 -i $in_video2 -an \
+echo ffmpeg -i $in_video1 -i $in_video2 -an \
 -filter_complex \
     "@[0:v]trim=start=0:end=$((${secs1}-${secsfade})),setpts=PTS-STARTPTS[firstclip]; \
     [1:v]trim=start=1,setpts=PTS-STARTPTS[secondclip]; \
@@ -703,6 +718,5 @@ echo ffmpeg -strict -2 -i $in_video1 -i $in_video2 -an \
     [fadeoutfifo][fadeinfifo]overlay[crossfade]; \
     [firstclip][crossfade][secondclip]concat=n=3[output]; \
     [0:a][1:a] acrossfade=d=${secsfade} [audio]@" \
-    -map "@[output]@" -map "@[audio]@" $out_video | sed 's|@|"|g'
-
+    -map "@[output]@" -map "@[audio]@" -strict -2 $out_video | sed 's|@|"|g' | bash
 }
