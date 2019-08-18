@@ -53,6 +53,9 @@ cutvideo_logo(){
 
     [ -e $HOME/Dotfiles/ressources/icons/landmark.png ]  && \cp $HOME/Dotfiles/ressources/icons/landmark.png  /tmp/landmark.png
     [ -e $HOME/Dotfiles/ressources/videos/endvideo.mp4 ] && \cp $HOME/Dotfiles/ressources/videos/endvideo.mp4 /tmp/endvideo.mp4
+    [ -e /tmp/video.mp4 ] && rm -rf /tmp/video.mp4
+    [ -e /tmp/overlay.mp4 ] && rm -rf /tmp/overlay.mp4
+    [ -e /tmp/final.mp4 ] && rm -rf /tmp/final.mp4
 
     n=1
     name=${4}.mp4
@@ -80,9 +83,9 @@ cutvideo_logo(){
         $column
 
     #ffmpeg-concat -t crosswarp -d 500 -o $name /tmp/${name}.mp4 /tmp/logo.mp4
-    video_transition /tmp/overlay.mp4 /tmp/endvideo.mp4 ${name}
+    video_transition /tmp/overlay.mp4 /tmp/endvideo.mp4 /tmp/final.mp4
 
-    rm -rf /tmp/video.mp4 /tmp/overlay.mp4
+    mv /tmp/final.mp4 ${name}
 }
 
 convert_1(){
