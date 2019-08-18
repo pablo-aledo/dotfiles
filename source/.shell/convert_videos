@@ -51,8 +51,8 @@ cutvideo_logo(){
 	t2=$(($m2*60+$s2))
 	d=$(($t2-$t1+1))
 
-    [ -e $HOME/Dotfiles/ressources/icons/landmark.png ]  && cp $HOME/Dotfiles/ressources/icons/landmark.png  /tmp/landmark.png
-    [ -e $HOME/Dotfiles/ressources/videos/endvideo.mp4 ] && cp $HOME/Dotfiles/ressources/videos/endvideo.mp4 /tmp/endvideo.mp4
+    [ -e $HOME/Dotfiles/ressources/icons/landmark.png ]  && \cp $HOME/Dotfiles/ressources/icons/landmark.png  /tmp/landmark.png
+    [ -e $HOME/Dotfiles/ressources/videos/endvideo.mp4 ] && \cp $HOME/Dotfiles/ressources/videos/endvideo.mp4 /tmp/endvideo.mp4
 
     n=1
     name=${4}.mp4
@@ -66,6 +66,11 @@ cutvideo_logo(){
 
        row=$(cat /tmp/coordinates | cut -d',' -f1)
     column=$(cat /tmp/coordinates | cut -d',' -f2)
+     width=$(file /tmp/landmark.png | cut -d' ' -f5 | sed 's/,//g')
+    height=$(file /tmp/landmark.png | cut -d' ' -f7 | sed 's/,//g')
+       row=$(( $row - $height ))
+    column=$(( $row - $width / 2 ))
+
 
     video_overlay \
         /tmp/video.mp4 \
