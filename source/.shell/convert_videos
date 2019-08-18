@@ -51,8 +51,8 @@ cutvideo_logo(){
 	t2=$(($m2*60+$s2))
 	d=$(($t2-$t1+1))
 
-    [ -e $HOME/Dotfiles/ressources/icons/landmark.png ]  && mv $HOME/Dotfiles/ressources/icons/landmark.png  /tmp/landmark.png
-    [ -e $HOME/Dotfiles/ressources/videos/endvideo.mp4 ] && mv $HOME/Dotfiles/ressources/videos/endvideo.mp4 /tmp/endvideo.mp4
+    [ -e $HOME/Dotfiles/ressources/icons/landmark.png ]  && cp $HOME/Dotfiles/ressources/icons/landmark.png  /tmp/landmark.png
+    [ -e $HOME/Dotfiles/ressources/videos/endvideo.mp4 ] && cp $HOME/Dotfiles/ressources/videos/endvideo.mp4 /tmp/endvideo.mp4
 
     n=1
     name=${4}.mp4
