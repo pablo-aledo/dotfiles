@@ -667,7 +667,7 @@ video_overlay(){
     row=$4
     column=$5
     ffmpeg -i $in_video -i $in_image \
-         -filter_complex "[0:v][1:v] overlay=$row:$column:enable='between(t,0,20)'" \
+         -filter_complex "[0:v][1:v] overlay=${row}:${column}:enable='between(t,0,20)'" \
          -pix_fmt yuv420p -c:a copy \
          $3
 }
