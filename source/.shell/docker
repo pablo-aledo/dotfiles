@@ -477,6 +477,7 @@ case $1 in
                          docker run --rm -it --device /dev/snd --name termboy ${DOCKER_REPO_PREFIX}/nes "/games/${game}.rom" ;;
 (tetris)                 docker run -it tetris ;;
 (texlive)                docker run -it -w '/mnt' -v `pwd`:/mnt texlive /bin/bash -c './compile.sh' ;;
+(theia)                  docker run -it -p 3000:3000 -v "$(pwd):/home/project:cached" theiaide/theia:next ;;
 (latex)                  shift; docker run --rm -it -v $(pwd):/source schickling/latex $* ;;
 (tor-proxy)              docker run -d --restart always -v /etc/localtime:/etc/localtime:ro -p 9050:9050 --name torproxy ${DOCKER_REPO_PREFIX}/tor-proxy ;;
 (tor-relay)              docker run -d --restart always -v /etc/localtime:/etc/localtime:ro -p 9001:9001 --name tor-relay ${DOCKER_REPO_PREFIX}/tor-relay -f /etc/tor/torrc.bridge ;;
