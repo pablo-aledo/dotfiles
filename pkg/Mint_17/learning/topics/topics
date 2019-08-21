@@ -980,6 +980,7 @@ science math Polynomial_Optimization
 science math probability
 science math proofs
 science math puzzles
+science math puzzles rubik
 science math quaternions
 science math regression
 science math Scientific_Mathematics
@@ -1029,9 +1030,9 @@ science multimedia png
 science multimedia postscript
 science multimedia svg
 science multimedia video
-science multimedia video Video_Compression
 science multimedia video Embedded_Video
 science multimedia video V4L
+science multimedia video Video_Compression
 science multimedia video video_encoding
 science multimedia video video_processing
 science nanotechnology
@@ -1075,7 +1076,6 @@ science physics sound
 science physics string_theory
 science physics time
 science physics waves
-science math puzzles rubik
 science pyro
 science radio
 science radio antenna
