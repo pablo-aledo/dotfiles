@@ -351,6 +351,18 @@ case $1 in
 (john)                   shift
                          file=$(realpath "$1")
                          docker run --rm -it -v "${file}:/root/$(basename "${file}")" ${DOCKER_REPO_PREFIX}/john "$@" ;;
+(kafka_server)           internal_eth0=$(myip | grep internal_eth | cut -d':' -f2)
+                         topic=ktopic
+                         docker run -d --name zookeeper -p 2181:2181 jplock/zookeeper
+                         docker run -d --name kafka -p 7203:7203 -p 9092:9092 -e KAFKA_ADVERTISED_HOST_NAME=$internal_eth0 -e ZOOKEEPER_IP=$internal_eth0 ches/kafka
+                         docker run --rm ches/kafka kafka-topics.sh --create --topic $topic --replication-factor 1 --partitions 1 --zookeeper $internal_etho0:2181
+                         docker run --rm ches/kafka kafka-topics.sh --list --zookeeper $internal_eth0:2181 ;;
+(kafka_producer)         internal_eth0=$(myip | grep internal_eth | cut -d':' -f2)
+                         topic=ktopic
+                         docker run --rm --interactive ches/kafka kafka-console-producer.sh --topic $topic --broker-list $internal_eth0:9092 ;;
+(kafka_consumer)         internal_eth0=$(myip | grep internal_eth | cut -d':' -f2)
+                         topic=ktopic
+                         docker run --rm ches/kafka kafka-console-consumer.sh --topic $topic --from-beginning --zookeeper $internal_eth0:2181 ;;
 (klee)                   docker run -v $PWD:/workdir -w /workdir -ti --name=my_first_klee_container --ulimit='stack=-1:-1' klee/klee ;;
 (keepass2)               shift; docker run -it -v /home/$USER/DB.kdbx:/root/DB.kdbx -v /tmp/.X11-unix:/tmp/.X11-unix -v /home/$USER/keepass2-plugins:/usr/lib/keepass2/Plugins -e DISPLAY=$DISPLAY keepass2 "$@" ;;
 (keepassxc)              docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -v /etc/machine-id:/etc/machine-id:ro -v /usr/share/X11/xkb:/usr/share/X11/xkb/:ro -v $HOME/.config/keepassxc:/root/.config/keepassxc -e DISPLAY=unix$DISPLAY keepassxc ;;
