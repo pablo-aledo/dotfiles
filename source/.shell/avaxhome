@@ -6,7 +6,7 @@ avxmail_ml=true
 
 AVH_PROXY_IP=
 AVH_PROXY_USER=$USER
-AVH_PROXY_PEM=$HOME/Dotfiles/aws/target/id_rsa
+AVH_PROXY_PEM=/tmp/avh_proxy_pem
 
 avhome(){
 name=$EBOOKS/ebooks-`date +%y%m%d-%H%M`
