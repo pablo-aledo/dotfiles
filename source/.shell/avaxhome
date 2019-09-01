@@ -1,12 +1,13 @@
+AVH_PROXY_IP=
+AVH_PROXY_USER=$USER
+AVH_PROXY_PEM=/tmp/avh_proxy_pem
+[ -e /tmp/avh_proxy ] && source /tmp/avh_proxy
+
 DESCARGAS_NAS=/media/DATA/NAS/Descargas
 DESCARGAS_LOCAL=/media/DATA/Descargas
 EBOOKS=/media/DATA/ebooks
 ALEJANDRIA=/media/DATA/NAS/Alejandria
 avxmail_ml=true
-
-AVH_PROXY_IP=
-AVH_PROXY_USER=$USER
-AVH_PROXY_PEM=/tmp/avh_proxy_pem
 
 avhome(){
 name=$EBOOKS/ebooks-`date +%y%m%d-%H%M`
