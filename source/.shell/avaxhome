@@ -174,7 +174,7 @@ avhome_get_new_titles(){
     mkdir -p ~/servers/avxhome
     cd ~/servers/avxhome
 
-    if [ "AVH_PROXY_IP" != "" ]
+    if [ "$AVH_PROXY_IP" != "" ]
     then
         ssh -i $AVH_PROXY_PEM $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q https://avxhm.se/ebooks/$1 -O -" > dl
     else
