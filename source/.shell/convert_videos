@@ -71,16 +71,21 @@ cutvideo_logo(){
     column=$(cat /tmp/coordinates | cut -d',' -f2)
      width=$(file /tmp/landmark.png | cut -d' ' -f5 | sed 's/,//g')
     height=$(file /tmp/landmark.png | cut -d' ' -f7 | sed 's/,//g')
-       row=$(( $row - $height ))
+       row=$(( $row - $height / 2 ))
     column=$(( $column - $width / 2 ))
 
 
-    video_overlay \
-        /tmp/video.mp4 \
-        /tmp/landmark.png \
-        /tmp/overlay.mp4 \
-        $row \
-        $column
+    if [ "$(cat $name | grep -i catch)" = "" ]
+    then
+        video_overlay \
+            /tmp/video.mp4 \
+            /tmp/landmark.png \
+            /tmp/overlay.mp4 \
+            $row \
+            $column
+    else
+        cp /tmp/video.mp4 /tmp/overlay.mp4
+    fi
 
     #ffmpeg-concat -t crosswarp -d 500 -o $name /tmp/${name}.mp4 /tmp/logo.mp4
     video_transition /tmp/overlay.mp4 /tmp/endvideo.mp4 /tmp/final.mp4
