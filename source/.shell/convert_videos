@@ -75,7 +75,7 @@ cutvideo_logo(){
     column=$(( $column - $width / 2 ))
 
 
-    if [ "$(cat $name | grep -i catch)" = "" ]
+    if [ "$(echo $name | grep -i catch)" = "" ]
     then
         video_overlay \
             /tmp/video.mp4 \
