@@ -81,6 +81,6 @@ sync_partial_contents(){
     cat /tmp/aux | sort | uniq > /tmp/not_sync
 
     cat /tmp/in_b_not_a /tmp/to_rm > /tmp/aux
-    cat /tmp/aux | sort | uniq > /tmp/to_rm
+    cat /tmp/aux | sort | uniq | egrep -v '^$' > /tmp/to_rm
 }
 
