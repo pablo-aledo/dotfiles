@@ -57,3 +57,30 @@ mergehdd_rmdupes(){
 	done
 }
 
+sync_partial_contents(){
+
+    if [ $# -eq 3 ]
+    then
+        ls $1 | sort | uniq > /tmp/not_sync
+        echo > /tmp/to_rm
+    fi
+
+    ls $1 | sort | uniq > /tmp/contents_1
+    ls $2 | sort | uniq > /tmp/contents_2
+
+    comm -12 /tmp/contents_1 /tmp/contents_2 > /tmp/intersection
+    comm -23 /tmp/contents_1 /tmp/contents_2 > /tmp/in_a_not_b
+    comm -13 /tmp/contents_1 /tmp/contents_2 > /tmp/in_b_not_a
+
+    cat /tmp/intersection | while read line
+    do
+        rsync -vai --delete "$1/$line" "$2/$line"
+    done
+
+    comm -23 /tmp/not_sync /tmp/contents_2 > /tmp/aux
+    cat /tmp/aux | sort | uniq > /tmp/not_sync
+
+    cat /tmp/in_b_not_a /tmp/to_rm > /tmp/aux
+    cat /tmp/aux | sort | uniq > /tmp/to_rm
+}
+
