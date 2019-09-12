@@ -12,6 +12,7 @@ distr(){
 	[ -e /usr/local/bin/babun ] && echo babun && return
 	[ -e /etc/centos-release ] && cat /etc/centos-release | sed 's/ Linux release \(.\).*/_\1/g' && return
 	[ -e /etc/openwrt_version ] && echo -n openwrt_ && cat /etc/openwrt_version | sed 's/\.//g' && return
+    [ -e /etc/os-release ] && [ "$(cat /etc/os-release | grep 'Red Hat')" != "" ] && cat /etc/os-release | grep PRETTY_NAME | sed 's/.*Red Hat Enterprise Linux[^0-9]*\([0-9]*\).*/RedHat\1/g' && return
 	[ -e /usr/bin/arch ] && [ `arch` = "armv7l" ] && architecture="_armv7l"
 	head -n1 /etc/issue | sed \
 		-e "s/Ubuntu 14\.04 LTS \\\\n \\\\l/Ubuntu_14_04/g" \
