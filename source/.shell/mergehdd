@@ -87,7 +87,7 @@ sync_partial_contents(){
 cp_if_space(){
     src="$1"
     dst="$2"
-    space=$(df -B1 $3 | awk '{print $2}' | tail -n1)
+    space=$(df -B1 $3 | awk '{print $4}' | tail -n1)
     size=$(du -B1 -s "$1" | awk '{print $1}')
     margin=$(( 1 * 1024 * 1024 * 1024 ))
 
