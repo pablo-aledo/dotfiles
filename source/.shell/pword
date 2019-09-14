@@ -6,7 +6,7 @@ pword(){
 	[ -e  /media/DATA/Personal/.pword ]  && PWORD_FILE=/media/DATA/Personal/.pword
 	[ -e  /media/mint/Pablo/.pword ]     && PWORD_FILE=/media/mint/Pablo/.pword
 
-	if [ $PWORD_FILE != "" ]
+	if [ "$PWORD_FILE" != "" ]
 	then
 	    [ $# -eq 0 ] && PWORD=`cat $PWORD_FILE | head -n1`
 	    [ $# -eq 1 ] && PWORD=`cat $PWORD_FILE | grep $1 | cut -d':' -f2`
