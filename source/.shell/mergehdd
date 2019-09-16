@@ -59,10 +59,12 @@ mergehdd_rmdupes(){
 
 sync_partial_contents(){
 
+    name=$(basename $1)
+
     if [ $# -eq 3 ]
     then
-        ls $1 | sort | uniq > /tmp/not_sync
-        echo > /tmp/to_rm
+        ls $1 | sort | uniq > /tmp/not_sync_${name}
+        echo > /tmp/to_rm_${name}
     fi
 
     ls $1 | sort | uniq > /tmp/contents_1
@@ -77,11 +79,11 @@ sync_partial_contents(){
         rsync -vai --delete "$1/$line" "$2/$line"
     done
 
-    comm -23 /tmp/not_sync /tmp/contents_2 > /tmp/aux
-    cat /tmp/aux | sort | uniq > /tmp/not_sync
+    comm -23 /tmp/not_sync_${name} /tmp/contents_2 > /tmp/aux
+    cat /tmp/aux | sort | uniq > /tmp/not_sync_${name}
 
-    cat /tmp/in_b_not_a /tmp/to_rm > /tmp/aux
-    cat /tmp/aux | sort | uniq | egrep -v '^$' > /tmp/to_rm
+    cat /tmp/in_b_not_a /tmp/to_rm_${name} > /tmp/aux
+    cat /tmp/aux | sort | uniq | egrep -v '^$' > /tmp/to_rm_${name}
 }
 
 cp_if_space(){
