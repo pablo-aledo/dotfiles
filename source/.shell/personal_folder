@@ -85,7 +85,7 @@ pf_replace_home(){
 	sudo cryptsetup luksOpen /media/DATA/Home/img.img Home
 	sudo mount /dev/mapper/Home /mnt/
 
-	rsync -vai --delete ~/ /mnt/
+	rsync -vaXi --delete ~/ /mnt/
 
 	sudo umount /dev/mapper/Home
 	sudo cryptsetup luksClose /dev/mapper/Home

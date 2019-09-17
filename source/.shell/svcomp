@@ -136,7 +136,7 @@ forest_test_remote(){
 	source $SVCOMP_CONFIG_FILE
 
 	# upload forest
-	rsync -vai -e "ssh -i $SVCOMP_PEM" "$SVCOMP_LOCAL_FOLDER/forest.tar.gz" "$SVCOMP_USER@$SVCOMP_SERVER:$SVCOMP_REMOTE_FOLDER/forest.tar.gz"
+	rsync -vaXi -e "ssh -i $SVCOMP_PEM" "$SVCOMP_LOCAL_FOLDER/forest.tar.gz" "$SVCOMP_USER@$SVCOMP_SERVER:$SVCOMP_REMOTE_FOLDER/forest.tar.gz"
 
 	# exec command
 	# ssh -n -f -i $SVCOMP_PEM $SVCOMP_USER@$SVCOMP_SERVER "nohup sh -c '. ~/.dotfiles/source/.shell/svcomp; forest_test_local' >/dev/null 2>&1 &"
@@ -153,7 +153,7 @@ forest_test_distrib(){
 	# upload forest 
 	for i in `seq 1 ${#svcomp_task[@]}`
 	do
-		rsync -vai -e "ssh -i $SVCOMP_PEM" "$SVCOMP_LOCAL_FOLDER/forest.tar.gz" "$SVCOMP_USER@$svcomp_ip[$i]:$SVCOMP_REMOTE_FOLDER/forest.tar.gz"
+		rsync -vaXi -e "ssh -i $SVCOMP_PEM" "$SVCOMP_LOCAL_FOLDER/forest.tar.gz" "$SVCOMP_USER@$svcomp_ip[$i]:$SVCOMP_REMOTE_FOLDER/forest.tar.gz"
 	done
 
 	# exec command

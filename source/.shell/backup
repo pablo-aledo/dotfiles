@@ -78,7 +78,7 @@ backup_c(){
 	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
 
 	echo "mkdir -p \"$dest\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai `echo $back_arg` "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
+	rsync -vaXi `echo $back_arg` "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
 }
 
 backup_ermtc(){
@@ -97,7 +97,7 @@ backup_ermtc(){
 	do 
 		echo -e "\e[34m backup_ermtc directory $line \e[0m"
 		echo "mkdir -p \"$dest/$line\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-		rsync -vai `echo $back_arg` --delete "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$dest/$line"
+		rsync -vaXi `echo $back_arg` --delete "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$dest/$line"
 	done
 }
 
@@ -117,7 +117,7 @@ backup_ermtm(){
 	do 
 		echo -e "\e[34m backup_ermtm directory $line \e[0m"
 		echo "mkdir -p \"$dest/$line\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-		rsync -vai `echo $back_arg` --delete --remove-source-files "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$dest/$line"
+		rsync -vaXi `echo $back_arg` --delete --remove-source-files "$BACKUP_SRC/$1/$line" "$BACKUP_USER@$BACKUP_SERVER:$dest/$line"
 		rm_empty_folders "$BACKUP_SRC/$1/$line"
 	done
 }
@@ -134,7 +134,7 @@ backup_m(){
 	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
 
 	echo "mkdir -p \"$dest\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai `echo $back_arg` --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
+	rsync -vaXi `echo $back_arg` --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
 	rm_empty_folders "$BACKUP_SRC/$1/"
 }
 
@@ -150,7 +150,7 @@ backup_rmtc(){
 	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
 
 	echo "mkdir -p \"$dest\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai `echo $back_arg` --delete "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
+	rsync -vaXi `echo $back_arg` --delete "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
 }
 
 backup_rmtm(){
@@ -165,7 +165,7 @@ backup_rmtm(){
 	[ "$BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$BACKUP_BAK_DIR"
 
 	echo "mkdir -p \"$dest\"" | ssh $BACKUP_USER@$BACKUP_SERVER 2>/dev/null
-	rsync -vai `echo $back_arg` --delete --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
+	rsync -vaXi `echo $back_arg` --delete --remove-source-files "$BACKUP_SRC/$1/" "$BACKUP_USER@$BACKUP_SERVER:$dest/"
 	rm_empty_folders "$BACKUP_SRC/$1/"
 }
 

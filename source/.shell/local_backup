@@ -22,7 +22,7 @@ local_backup_c(){
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$LOCAL_BACKUP_BAK_DIR"
 
 	mkdir -p "$dest"
-	rsync -vai `echo $back_arg` "$LOCAL_BACKUP_SRC/$1/" "$dest/"
+	rsync -vaXi `echo $back_arg` "$LOCAL_BACKUP_SRC/$1/" "$dest/"
 }
 
 local_backup_ermtc(){
@@ -41,7 +41,7 @@ local_backup_ermtc(){
 	do 
 		echo -e "\e[34m backup_ermtc directory $line \e[0m"
 		mkdir -p "$dest/$line"
-		rsync -vai `echo $back_arg` --delete "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
+		rsync -vaXi `echo $back_arg` --delete "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
 	done
 }
 
@@ -61,7 +61,7 @@ local_backup_ermtm(){
 	do 
 		echo -e "\e[34m backup_ermtm directory $line \e[0m"
 		mkdir -p "$dest/$line"
-		rsync -vai `echo $back_arg` --delete --remove-source-files "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
+		rsync -vaXi `echo $back_arg` --delete --remove-source-files "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
 		rm_empty_folders "$LOCAL_BACKUP_SRC/$1/$line"
 	done
 }
@@ -78,7 +78,7 @@ local_backup_m(){
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$LOCAL_BACKUP_BAK_DIR"
 
 	mkdir -p "$dest"
-	rsync -vai `echo $back_arg` --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$dest/"
+	rsync -vaXi `echo $back_arg` --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$dest/"
 	rm_empty_folders "$LOCAL_BACKUP_SRC/$1/"
 }
 
@@ -94,7 +94,7 @@ local_backup_rmtc(){
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$LOCAL_BACKUP_BAK_DIR"
 
 	mkdir -p "$dest"
-	rsync -vai `echo $back_arg` --delete "$LOCAL_BACKUP_SRC/$1/" "$dest/"
+	rsync -vaXi `echo $back_arg` --delete "$LOCAL_BACKUP_SRC/$1/" "$dest/"
 }
 
 local_backup_rmtm(){
@@ -109,7 +109,7 @@ local_backup_rmtm(){
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$LOCAL_BACKUP_BAK_DIR"
 
 	mkdir -p "$dest"
-	rsync -vai `echo $back_arg` --delete --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$dest/"
+	rsync -vaXi `echo $back_arg` --delete --remove-source-files "$LOCAL_BACKUP_SRC/$1/" "$dest/"
 	rm_empty_folders "$LOCAL_BACKUP_SRC/$1/"
 }
 

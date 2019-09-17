@@ -1,0 +1,7 @@
+bak_ext_attrs(){
+    getfattr -Rd . > ext_attrs_bak
+}
+
+restore_ext_attrs(){
+    setfattr --restore=ext_attrs_bak
+}

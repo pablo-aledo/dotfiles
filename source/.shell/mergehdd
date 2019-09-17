@@ -76,7 +76,7 @@ sync_partial_contents(){
 
     cat /tmp/intersection | while read line
     do
-        rsync -vai --delete "$1/$line" "$2/$line"
+        rsync -vaXi --delete "$1/$line" "$2/$line"
     done
 
     comm -23 /tmp/not_sync_${name} /tmp/contents_2 > /tmp/aux

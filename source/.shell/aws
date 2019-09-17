@@ -65,14 +65,14 @@ aws_push(){
 	[ -d "$AWS_LOCAL_FOLDER/$1" ] || return
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
 	echo "mkdir -p \"$AWS_REMOTE_FOLDER/$1\"" | ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER 2>/dev/null
-	rsync -vai --progress --delete -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_LOCAL_FOLDER/$1/" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1/"
+	rsync -vaXi --progress --delete -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_LOCAL_FOLDER/$1/" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1/"
 }
 
 aws_pull(){
 	aws_config
 	[ -d "$AWS_LOCAL_FOLDER/$1" ] || mkdir -p "$AWS_LOCAL_FOLDER/$1"
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
-	rsync -vai --progress --delete -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1/" "$AWS_LOCAL_FOLDER/$1/"
+	rsync -vaXi --progress --delete -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1/" "$AWS_LOCAL_FOLDER/$1/"
 }
 
 aws_ssh(){
@@ -121,16 +121,16 @@ aws_send(){
 	aws_config
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
 	[ $# -gt 2 ] && return
-	[ $# -eq 2 ] || rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/"
-	[ $# -eq 2 ] && rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$2/"
+	[ $# -eq 2 ] || rsync -vaXi --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/"
+	[ $# -eq 2 ] && rsync -vaXi --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$2/"
 }
 
 aws_send_mv(){
 	aws_config
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
 	[ $# -gt 2 ] && return
-	[ $# -eq 2 ] || rsync -vai --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/"
-	[ $# -eq 2 ] && rsync -vai --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$2/"
+	[ $# -eq 2 ] || rsync -vaXi --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/"
+	[ $# -eq 2 ] && rsync -vaXi --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$1" "$AWS_USER@$AWS_SERVER:$2/"
 }
 
 aws_send_append(){
@@ -142,22 +142,22 @@ aws_send_append(){
 aws_get(){
 	aws_config
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
-	[ ${1[1]} = '/' ] || rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1" .
-	[ ${1[1]} = '/' ] && rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$1" .
+	[ ${1[1]} = '/' ] || rsync -vaXi --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1" .
+	[ ${1[1]} = '/' ] && rsync -vaXi --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$1" .
 }
 
 aws_get_mv(){
 	aws_config
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
-	[ ${1[1]} = '/' ] || rsync -vai --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1" .
-	[ ${1[1]} = '/' ] && rsync -vai --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$1" .
+	[ ${1[1]} = '/' ] || rsync -vaXi --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1" .
+	[ ${1[1]} = '/' ] && rsync -vaXi --progress --remove-source-files -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$1" .
 }
 
 aws_get_append(){
 	aws_config
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
-	[ ${1[1]} = '/' ] || rsync --append -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1" .
-	[ ${1[1]} = '/' ] && rsync --append -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$1" .
+	[ ${1[1]} = '/' ] || rsync --append -vaXi --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER/$1" .
+	[ ${1[1]} = '/' ] && rsync --append -vaXi --progress -e "ssh `echo $pemflag` -p $AWS_PORT" "$AWS_USER@$AWS_SERVER:$1" .
 }
 
 aws_mount(){
@@ -366,7 +366,7 @@ aws_wrapper_pre(){
 
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
 	ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "sudo mkdir -p $PWD; sudo chmod 777 $PWD"
-	rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" --files-from=/tmp/list_push "/" "$AWS_USER@$AWS_SERVER:/"
+	rsync -vaXi --progress -e "ssh `echo $pemflag` -p $AWS_PORT" --files-from=/tmp/list_push "/" "$AWS_USER@$AWS_SERVER:/"
 }
 
 
@@ -384,7 +384,7 @@ aws_wrapper_post(){
 	[ -e /tmp/aws_pull ] || find $PWD > /tmp/list_pull
 
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
-	rsync -vai --progress -e "ssh `echo $pemflag` -p $AWS_PORT" --files-from=/tmp/list_pull "$AWS_USER@$AWS_SERVER:/" "/"
+	rsync -vaXi --progress -e "ssh `echo $pemflag` -p $AWS_PORT" --files-from=/tmp/list_pull "$AWS_USER@$AWS_SERVER:/" "/"
 }
 
 aws_rpc(){
@@ -482,7 +482,7 @@ aws_deploy(){
           ip=`cat /tmp/aws_config | grep $1 | cut -d":" -f3`
     	cat list | egrep "^$1 " | sed "s|^$1 ||g" | while read line
     	do
-            rsync -vai --progress "$line" "$user@$ip:$2/"
+            rsync -vaXi --progress "$line" "$user@$ip:$2/"
     	done
     elif [ $1 = "exchange" ]
     then
@@ -522,17 +522,17 @@ aws_move(){
 	ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'wget http://tinyurl.com/pga-dfsi -O - | bash'
 	ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST '. ~/.dotfiles/source/.shell/pkg; . ~/.dotfiles/source/.shell/myshell; myshell tmux'
 	# copy certificate of SRC to DST
-	rsync -vai --progress -e "ssh -i $AWS_PEM_DST" $AWS_PEM_SRC "$AWS_USER@$AWS_SERVER_DST:/tmp/default_kp.pem"
+	rsync -vaXi --progress -e "ssh -i $AWS_PEM_DST" $AWS_PEM_SRC "$AWS_USER@$AWS_SERVER_DST:/tmp/default_kp.pem"
 	# log into DST and get from SRC
 	for folder in "/home/ubuntu"
 	do
 		ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'sudo mkdir -p '$folder
-		ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'sudo rsync -vai --progress -e "ssh -i /tmp/default_kp.pem -o StrictHostKeyChecking=no" --exclude .ssh "'$AWS_USER'@'$AWS_SERVER_SRC:$folder'/" "'$folder'/"'
+		ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'sudo rsync -vaXi --progress -e "ssh -i /tmp/default_kp.pem -o StrictHostKeyChecking=no" --exclude .ssh "'$AWS_USER'@'$AWS_SERVER_SRC:$folder'/" "'$folder'/"'
 	done
 
 	# Transfer the database
 	ssh -i $AWS_PEM_SRC $AWS_USER@$AWS_SERVER_SRC 'sudo mysqldump -uroot -p'`pword`' --all-databases > /tmp/backup.sql'
-	ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'sudo rsync -vai --progress -e "ssh -i /tmp/default_kp.pem -o StrictHostKeyChecking=no" '$AWS_USER'@'$AWS_SERVER_SRC':/tmp/backup.sql /tmp/backup.sql'
+	ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'sudo rsync -vaXi --progress -e "ssh -i /tmp/default_kp.pem -o StrictHostKeyChecking=no" '$AWS_USER'@'$AWS_SERVER_SRC':/tmp/backup.sql /tmp/backup.sql'
 	ssh -i $AWS_PEM_DST $AWS_USER@$AWS_SERVER_DST 'sudo mysql -uroot -p'`pword`' < /tmp/backup.sql'
 }
 

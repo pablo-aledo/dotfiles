@@ -47,7 +47,7 @@ showimg_remote(){
 	setterm -cursor off
 	while true
 	do
-		rsync -vai --delete "$1" /tmp/img >/dev/null 2>/dev/null 
+		rsync -vaXi --delete "$1" /tmp/img >/dev/null 2>/dev/null 
 		showimg /tmp/img
 		sleep 1
 	done
