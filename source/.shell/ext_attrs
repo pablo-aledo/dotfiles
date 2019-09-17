@@ -1,7 +1,7 @@
 bak_ext_attrs(){
-    getfattr -Rd . > ext_attrs_bak
+    getfattr -Rd . > "$(basename $PWD)".backup_attrs.`date +%y%m%d-%H%M%S`.tgz $*
 }
 
 restore_ext_attrs(){
-    setfattr --restore=ext_attrs_bak
+    setfattr --restore=$1
 }
