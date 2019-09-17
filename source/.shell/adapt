@@ -117,6 +117,7 @@ adapt_awsserver(){
     pkg install unrar
     pkg install detox
     pkg install pdftotext
+    pkg install attr
     pkg install fzf z
 
 	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
