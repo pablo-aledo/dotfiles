@@ -393,7 +393,7 @@ server(){
         while true
         do
             cd
-            if [ `date +%H%M` = $date_vconv ]
+            if [ $date_vconv = "loop" ] || [ `date +%H%M` = $date_vconv ]
             then
                 echo "----- Launch -----"
 	            [ ! -e /media/removable/2TB2/homes/admin/Videos ] && sleep 10 && continue
