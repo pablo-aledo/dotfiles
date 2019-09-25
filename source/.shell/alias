@@ -18,6 +18,7 @@ alias attach='reptyr'
 alias watch='watch '
 f(){ echo find -iname "'*$1*'" | bash }
 F(){ grep -Rin "$1" }
+FF(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' }
 hd(){ helm delete --purge $(hn $1) }
 kshell(){ sudo kubectl exec -it $1 -- /bin/bash}
 alias wdfh='watch -n1 df -h'
