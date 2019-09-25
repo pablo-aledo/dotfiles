@@ -17,6 +17,7 @@ alias detach='disown $(jobs -l | awk "{print \$6}")'
 alias attach='reptyr'
 alias watch='watch '
 f(){ echo find -iname "'*$1*'" | bash }
+F(){ grep -Rin "$1" }
 hd(){ helm delete --purge $(hn $1) }
 kshell(){ sudo kubectl exec -it $1 -- /bin/bash}
 alias wdfh='watch -n1 df -h'
