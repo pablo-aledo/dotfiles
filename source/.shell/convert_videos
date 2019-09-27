@@ -733,3 +733,13 @@ echo ffmpeg -i $in_video1 -i $in_video2 -an \
     [0:a][1:a] acrossfade=d=${secsfade} [audio]@" \
     -map "@[output]@" -map "@[audio]@" -strict -2 $out_video | sed 's|@|"|g' | bash
 }
+
+video_speed(){
+    # To slow down your video, you have to use a multiplier greater than 1
+    ffmpeg -i "$1" -filter:v "setpts=$2*PTS" $(basename "$1" .mp4).$2.mp4
+}
+
+video_speed_2(){
+    ffmpeg -i "$1" -filter:v "minterpolate='mi_mode=mci:mc_mode=aobmc:vsbmc=1:fps=120'" $(basename "$1" .mp4).$2.mp4
+}
+
