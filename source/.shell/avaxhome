@@ -1,7 +1,11 @@
-AVH_PROXY_IP=
-AVH_PROXY_USER=$USER
-AVH_PROXY_PEM=/tmp/avh_proxy_pem
 [ -e /tmp/avh_proxy ] && source /tmp/avh_proxy
+
+# Contents of /tmp/avh_proxy:
+# AVH_PROXY_IP=
+# AVH_PROXY_USER=$USER
+# AVH_PROXY_PEM=/tmp/avh_proxy_pem
+
+# Test:
 # ssh -i $AVH_PROXY_PEM $AVH_PROXY_USER@$AVH_PROXY_IP
 # ssh -i $AVH_PROXY_PEM $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q https://avxhm.se/ebooks/hardware -O -"
 
