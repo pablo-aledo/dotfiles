@@ -390,6 +390,8 @@ server(){
         [ "$2" = "" ] || date_vconv=$2
         [ "$3" = "" ] && limit=5
         [ "$3" = "" ] || limit=$3
+
+        [ -e /tmp/convert_candidates ] && rm -fr /tmp/convert_candidates
         while true
         do
             cd
@@ -398,7 +400,13 @@ server(){
                 echo "----- Launch -----"
 	            [ ! -e /media/removable/2TB2/homes/admin/Videos ] && sleep 10 && continue
 	            [ ! -e $convert_dir ] && sleep 10 && continue
-                [ -e $convert_dir/disable ] && sleep 10 && continue
+
+                if [ -e $convert_dir/disable ]
+                then
+                    [ -e /tmp/convert_candidates ] && rm -fr /tmp/convert_candidates
+                    sleep 10
+                    continue
+                fi
 
                 [ -e /tmp/convert_candidates ] || convert_candidates > /tmp/convert_candidates
                 cat /tmp/convert_candidates | tail -n+$( ( ls -d $convert_dir/*/; echo ) | wc -l ) | head -n$limit | sed 's/^[0-9]* //g' | grep -v '  ' | while read line
