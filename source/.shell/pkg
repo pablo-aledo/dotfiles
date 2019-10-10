@@ -21,6 +21,7 @@ distr(){
 		-e "s/Ubuntu 14\.04\.4 LTS \\\\n \\\\l/Ubuntu_14_04$architecture/g" \
 		-e "s/Ubuntu 14\.04\.5 LTS \\\\n \\\\l/Ubuntu_14_04$architecture/g" \
 		-e "s/Ubuntu 16\.04\.. LTS \\\\n \\\\l/Ubuntu_16_04$architecture/g" \
+		-e "s/Ubuntu 18\.04\.. LTS \\\\n \\\\l/Ubuntu_18_04/g" \
 		-e "s/Linux Mint 17 Qiana \\\\n \\\\l/Mint_17/g" \
 		-e "s/Debian GNU\/Linux 8 \\\\n \\\\l/Debian_8/g" \
 		-e "s/Kali GNU\/Linux Rolling \\\\n \\\\l/Kali_rolling/g"
