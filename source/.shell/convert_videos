@@ -74,8 +74,11 @@ cutvideo_logo(){
        row=$(( $row - $height / 2 ))
     column=$(( $column - $width / 2 ))
 
+    overlay=true
+    [ "$(echo $name | grep -i catch)" != "" ] && overlay=false
+    [ ! -e /tmp/coordinates ]                 && overlay=false
 
-    if [ "$(echo $name | grep -i catch)" = "" ]
+    if [ $overlay = true ]
     then
         video_overlay \
             /tmp/video.mp4 \
