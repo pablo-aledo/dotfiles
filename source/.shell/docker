@@ -721,3 +721,24 @@ docker_prun(){
     export no_proxy=$(echo 192.168.197.{1..255} | sed 's/ /,/g'),127.0.0.1,localhost
     sudo docker run -e http_proxy=$http_proxy -e https_proxy=$https_proxy -e no_proxy=$no_proxy $*
 }
+
+docker_save_images(){
+    docker save $(docker images | tail -n+2 | awk '{print $1}' | paste -d' ' -s) | gzip > images.gz
+}
+
+docker_load_images(){
+    zcat images.gz | docker load
+}
+
+docker_load_registry(){
+    docker images > /tmp/pre
+    zcat images.gz | docker load
+    docker images > /tmp/post
+
+    comm -13 /tmp/pre /tmp/post | while read line
+    do
+        image=$( echo $line | awk '{print $1}' )
+        docker tag $image localhost:5000/$image
+        docker push localhost:5000/$image
+    done
+}
