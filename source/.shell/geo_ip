@@ -5,5 +5,5 @@ geo_ip(){
 	#print $region "," $city
 	#line=`wget "http://www.infosniper.net/index.php?ip_address=$1" -O - | grep openInfoWindow` 2>/dev/null
 	#echo $line | cut -d">" -f3 | cut -d"<" -f1
-    wget -q -O - cli.fyi/$1 | grep country.: | cut -d'"' -f4"
+    wget -q -O - cli.fyi/$1 | grep country.: | cut -d'"' -f4
 }
