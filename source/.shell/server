@@ -408,6 +408,7 @@ server(){
                     continue
                 fi
 
+                [ -e /tmp/convert_candidates ] || echo "Creating list"
                 [ -e /tmp/convert_candidates ] || convert_candidates > /tmp/convert_candidates
                 cat /tmp/convert_candidates | grep -v '  ' | tail -n+$( ( ls -d $convert_dir/*/; echo ) | wc -l ) | head -n$limit | sed 's/^[0-9]* //g' | while read line
                 do
