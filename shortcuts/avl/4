@@ -10,5 +10,6 @@ sleep 1
 file=$(xclip -sel clip -o | sed 's/ ([1-3])\././g')
 echo $file > /tmp/file
 [ -e ~"/Descargas/$file" ] && xdotool mousemove 930 670 && xdotool click 1
+[ -e ~"/Descargas/$file" ] && echo $file >> /tmp/already_downloaded
 [ ! -e ~"/Descargas/$file" ] && xdotool key Return
 
