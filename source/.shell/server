@@ -688,8 +688,9 @@ night(){
     learning.restart
     learning.fit
 
-    # index files by size
+    # index files
     ncdu /media/removable/2TB2/homes/admin/ -o ~/ncdu
+    find /media/removable/2TB2/homes/admin/ > ~/files
 
     # get list of candidate vides to convert
     convert_candidates > ~/convert_candidates
