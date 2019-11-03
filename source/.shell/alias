@@ -26,4 +26,5 @@ alias wdfh='watch -n1 df -h'
 alias grunner='sudo DOCKER_IMAGE=golang:1.10 gitlab-runner exec docker go_test'
 alias docker-compose='sudo /usr/local/bin/docker-compose'
 alias pvim='/usr/bin/vim +":set nopaste|:set ignorecase smartcase|:imap jj <ESC>|:map <Space><Space> /|:map <Space> :" '
+alias Xargs='xargs -d"\n"'
 jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
