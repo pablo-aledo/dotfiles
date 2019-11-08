@@ -1,6 +1,6 @@
 alias Tail='stdbuf -i0 -o0 -e0 \tail'
 alias autorun='find | entr'
-alias pod='sudo kubectl get pods | grep -v Terminating | cut -d" " -f1 | grep'
+alias pod='sudo kubectl get pods | tail -n+2 | grep -v Terminating | cut -d" " -f1 | grep'
 alias hn='sudo helm list | grep -v NAME | awk "{print \$1}" | grep'
 alias lh='ls -lh'
 alias k='sudo kubectl'
