@@ -93,6 +93,13 @@ cp_if_space(){
     size=$(du -B1 -s "$1" | awk '{print $1}')
     margin=$(( 1 * 1024 * 1024 * 1024 ))
 
-    [ $(( $space - $size )) -gt $margin ] && cp -r "$src" "$dst"
+    if [ $(( $space - $size )) -gt $margin ]
+    then
+        cp -r "$src" "$dst"
+        echo "$src" >> /tmp/copied
+    else
+        echo "$src" >> /tmp/not_copied
+    fi
+
 }
 
