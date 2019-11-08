@@ -28,3 +28,4 @@ alias docker-compose='sudo /usr/local/bin/docker-compose'
 alias pvim='/usr/bin/vim +":set nopaste|:set ignorecase smartcase|:imap jj <ESC>|:map <Space><Space> /|:map <Space> :" '
 alias Xargs='xargs -d"\n"'
 jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
+alias akslogin='az aks get-credentials --resource-group $1 --name $2 --admin';
