@@ -1,14 +1,8 @@
 alias Tail='stdbuf -i0 -o0 -e0 \tail'
 alias autorun='find | entr'
-alias pod='sudo kubectl get pods | tail -n+2 | grep -v Terminating | cut -d" " -f1 | grep'
-alias hn='sudo helm list | grep -v NAME | awk "{print \$1}" | grep'
 alias lh='ls -lh'
-alias k='sudo kubectl'
 alias minikube='sudo /usr/local/bin/minikube'
 alias dfh='df -h'
-alias kgp='sudo kubectl get pods | grep -v Terminating'
-alias wkgp='watch -n1 "sudo kubectl get pods | grep -v Terminating"'
-alias helm='sudo helm'
 alias make='make -j$(nproc)'
 alias mdp='TERM=xterm-256color /usr/bin/mdp'
 alias docker_wd='docker run -it -v $PWD:/workdir -w /workdir'
@@ -20,12 +14,22 @@ f(){ echo find -iname "'*$1*'" | bash }
 F(){ grep -Rin "$1" }
 FF(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' }
 FV(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' | xargs vim ; reset }
-hd(){ helm delete --purge $(hn $1) }
-kshell(){ sudo kubectl exec -it $1 -- /bin/bash}
 alias wdfh='watch -n1 df -h'
 alias grunner='sudo DOCKER_IMAGE=golang:1.10 gitlab-runner exec docker go_test'
 alias docker-compose='sudo /usr/local/bin/docker-compose'
-alias pvim='/usr/bin/vim +":set nopaste|:set ignorecase smartcase|:imap jj <ESC>|:map <Space><Space> /|:map <Space> :" '
 alias Xargs='xargs -d"\n"'
 jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
+
+alias k='sudo kubectl'
+alias pod='sudo kubectl get pods | tail -n+2 | grep -v Terminating | cut -d" " -f1 | grep'
+alias kgp='sudo kubectl get pods | grep -v Terminating'
+alias wkgp='watch -n1 "sudo kubectl get pods | grep -v Terminating"'
+alias kshell='sudo kubectl exec -it $1 -- /bin/bash'
+
+alias hn='sudo helm list | grep -v NAME | awk "{print \$1}" | grep'
+alias helm='sudo helm'
+alias hd='helm delete --purge $(hn $1)'
+
 alias akslogin='az aks get-credentials --resource-group $1 --name $2 --admin';
+
+alias pvim='/usr/bin/vim +":set nopaste|:set ignorecase smartcase|:imap jj <ESC>|:map <Space><Space> /|:map <Space> :" '
