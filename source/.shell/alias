@@ -10,10 +10,10 @@ alias docker_gr='docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix
 alias detach='disown $(jobs -l | awk "{print \$6}")'
 alias attach='reptyr'
 alias watch='watch '
-f(){ echo find -iname "'*$1*'" | bash }
-F(){ grep -Rin "$1" }
-FF(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' }
-FV(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' | xargs vim ; reset }
+f(){ echo find -iname "'*$1*'" | bash ; }
+F(){ grep -Rin "$1" ; }
+FF(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' ; }
+FV(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' | xargs vim ; reset ; }
 alias wdfh='watch -n1 df -h'
 alias grunner='sudo DOCKER_IMAGE=golang:1.10 gitlab-runner exec docker go_test'
 alias docker-compose='sudo /usr/local/bin/docker-compose'
@@ -23,13 +23,13 @@ jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
 alias k='sudo kubectl'
 alias pod='k get pods | tail -n+2 | grep -v Terminating | cut -d" " -f1 | grep'
 alias kgp='k get pods | grep -v Terminating'
-alias kshell='k exec -it $1 -- /bin/bash'
+kshell(){ k exec -it $1 /bin/bash ; }
 alias kpbash='k exec -it $(kubectl get pods -o custom-columns=NAME:.metadata.name | tail -n+2) bash'
 alias wkgp='watch -n1 "sudo kubectl get pods | grep -v Terminating"'
 
-alias hn='sudo helm list | grep -v NAME | awk "{print \$1}" | grep'
 alias helm='sudo helm'
-alias hd='helm delete --purge $(hn $1)'
+alias hn='helm list | grep -v NAME | awk "{print \$1}" | grep'
+hd(){ helm delete --purge $(hn $1); }
 
 alias akslogin='az aks get-credentials --resource-group $1 --name $2 --admin';
 
