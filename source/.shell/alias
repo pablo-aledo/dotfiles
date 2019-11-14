@@ -24,6 +24,7 @@ alias k='sudo kubectl'
 alias pod='k get pods | tail -n+2 | grep -v Terminating | cut -d" " -f1 | grep'
 alias kgp='k get pods | grep -v Terminating'
 alias kshell='k exec -it $1 -- /bin/bash'
+alias kpbash='k exec -it $(kubectl get pods -o custom-columns=NAME:.metadata.name | tail -n+2) bash'
 alias wkgp='watch -n1 "sudo kubectl get pods | grep -v Terminating"'
 
 alias hn='sudo helm list | grep -v NAME | awk "{print \$1}" | grep'
