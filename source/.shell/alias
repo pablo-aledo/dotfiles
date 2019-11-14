@@ -17,7 +17,7 @@ FV(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' | xar
 alias wdfh='watch -n1 df -h'
 alias grunner='sudo DOCKER_IMAGE=golang:1.10 gitlab-runner exec docker go_test'
 alias docker-compose='sudo /usr/local/bin/docker-compose'
-alias Xargs='xargs -d"\n"'
+alias Xargs='xargs -d"\n" -n1'
 jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
 
 alias k='sudo kubectl'
