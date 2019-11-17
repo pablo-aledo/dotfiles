@@ -69,7 +69,7 @@ sync_partial_contents(){
         ls $1 | sort | uniq > /tmp/not_sync_${name}
         echo > /tmp/to_rm_${name}
         echo > /tmp/duplicated_${name}
-        echo > /tmp/contents_${name}
+        echo > /tmp/copied_${name}
     fi
 
     ls $1 | sort | uniq > /tmp/contents_1
@@ -79,9 +79,9 @@ sync_partial_contents(){
     comm -23 /tmp/contents_1 /tmp/contents_2 > /tmp/in_a_not_b
     comm -13 /tmp/contents_1 /tmp/contents_2 > /tmp/in_b_not_a
 
-    comm -12 /tmp/contents_${name} /tmp/contents_2 >> /tmp/duplicated_${name}
-    cat /tmp/contents_2 /tmp/contents_${name} > /tmp/aux
-    cat /tmp/aux | sort | uniq > /tmp/contents_${name}
+    comm -12 /tmp/copied_${name} /tmp/contents_2 >> /tmp/duplicated_${name}
+    cat /tmp/contents_2 /tmp/copied_${name} > /tmp/aux
+    cat /tmp/aux | sort | uniq > /tmp/copied_${name}
 
     cat /tmp/intersection | while read line
     do
