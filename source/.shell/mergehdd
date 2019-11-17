@@ -59,9 +59,12 @@ mergehdd_rmdupes(){
 
 sync_partial_contents(){
 
+	[ -e "$1" ] || return
+	[ -e "$2" ] || return
+
     name=$(basename $1)
 
-    if [ $# -eq 3 ]
+    if [ ! -e /tmp/not_sync_${name} ]
     then
         ls $1 | sort | uniq > /tmp/not_sync_${name}
         echo > /tmp/to_rm_${name}
