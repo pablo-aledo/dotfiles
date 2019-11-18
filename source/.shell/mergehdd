@@ -66,12 +66,12 @@ sync_partial_contents(){
 
     echo "\e[34m ===== $name =====\e[0m"
 
-    if [ ! -e /tmp/not_sync_${name} ]
+    if [ ! -e /tmp/spc_not_sync_${name} ]
     then
-        ls $1 | sort | uniq > /tmp/not_sync_${name}
-        echo > /tmp/to_rm_${name}
-        echo > /tmp/duplicated_${name}
-        echo > /tmp/copied_${name}
+        ls $1 | sort | uniq > /tmp/spc_not_sync_${name}
+        echo > /tmp/spc_to_rm_${name}
+        echo > /tmp/spc_duplicated_${name}
+        echo > /tmp/spc_copied_${name}
     fi
 
     ls $1 | sort | uniq > /tmp/contents_1
@@ -81,27 +81,28 @@ sync_partial_contents(){
     comm -23 /tmp/contents_1 /tmp/contents_2 > /tmp/in_a_not_b
     comm -13 /tmp/contents_1 /tmp/contents_2 > /tmp/in_b_not_a
 
-    comm -12 /tmp/copied_${name} /tmp/contents_2 >> /tmp/duplicated_${name}
-    cat /tmp/contents_2 /tmp/copied_${name} > /tmp/aux
-    cat /tmp/aux | sort | uniq > /tmp/copied_${name}
+    comm -12 /tmp/spc_copied_${name} /tmp/contents_2 >> /tmp/spc_duplicated_${name}
+    sed -i '/^$/d' /tmp/spc_duplicated_${name}
+    cat /tmp/contents_2 /tmp/spc_copied_${name} > /tmp/aux
+    cat /tmp/aux | sort | uniq > /tmp/spc_copied_${name}
 
     cat /tmp/intersection | while read line
     do
         rsync -vaXi --delete "$1/$line" "$2/$line"
     done
 
-    comm -23 /tmp/not_sync_${name} /tmp/contents_2 > /tmp/aux
-    cat /tmp/aux | sort | uniq > /tmp/not_sync_${name}
+    comm -23 /tmp/spc_not_sync_${name} /tmp/contents_2 > /tmp/aux
+    cat /tmp/aux | sort | uniq > /tmp/spc_not_sync_${name}
 
-    cat /tmp/in_b_not_a /tmp/to_rm_${name} > /tmp/aux
-    cat /tmp/aux | sort | uniq | egrep -v '^$' > /tmp/to_rm_${name}
+    cat /tmp/in_b_not_a /tmp/spc_to_rm_${name} > /tmp/aux
+    cat /tmp/aux | sort | uniq | egrep -v '^$' > /tmp/spc_to_rm_${name}
 
     echo "\e[34m ===== duplicated =====\e[0m"
-    cat /tmp/duplicated_${name}
+    cat /tmp/spc_duplicated_${name}
     echo "\e[34m ===== to_rm =====\e[0m"
-    cat /tmp/to_rm_${name}
+    cat /tmp/spc_to_rm_${name}
     echo "\e[34m ===== not_sync =====\e[0m"
-    cat /tmp/not_sync_${name}
+    cat /tmp/spc_not_sync_${name}
 }
 
 cp_if_space(){
