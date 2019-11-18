@@ -21,7 +21,7 @@ alias Xargs='xargs -d"\n" -n1'
 jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
 
 alias k='sudo kubectl'
-alias pod='k get pods | tail -n+2 | grep -v Terminating | cut -d" " -f1 | grep'
+pod(){ k get pods | grep -v Terminating | cut -d" " -f1 | grep $1 | tail -n1}
 alias kgp='k get pods | grep -v Terminating'
 kshell(){ k exec -it $1 /bin/bash ; }
 alias wkgp='watch -n1 "sudo kubectl get pods | grep -v Terminating"'
