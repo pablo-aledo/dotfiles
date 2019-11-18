@@ -64,6 +64,8 @@ sync_partial_contents(){
 
     name=$(basename $1)
 
+    echo "\e[34m ===== $name =====\e[0m"
+
     if [ ! -e /tmp/not_sync_${name} ]
     then
         ls $1 | sort | uniq > /tmp/not_sync_${name}
@@ -93,6 +95,13 @@ sync_partial_contents(){
 
     cat /tmp/in_b_not_a /tmp/to_rm_${name} > /tmp/aux
     cat /tmp/aux | sort | uniq | egrep -v '^$' > /tmp/to_rm_${name}
+
+    echo "\e[34m ===== duplicated =====\e[0m"
+    cat /tmp/duplicated_${name}
+    echo "\e[34m ===== to_rm =====\e[0m"
+    cat /tmp/to_rm_${name}
+    echo "\e[34m ===== not_sync =====\e[0m"
+    cat /tmp/not_sync_${name}
 }
 
 cp_if_space(){
