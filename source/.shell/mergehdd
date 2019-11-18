@@ -59,12 +59,12 @@ mergehdd_rmdupes(){
 
 sync_partial_contents(){
 
-	[ -e "$1" ] || return
-	[ -e "$2" ] || return
-
     name=$(basename $1)
 
     echo "\e[34m ===== $name =====\e[0m"
+
+	[ -e "$1" ] || return
+	[ -e "$2" ] || return
 
     if [ ! -e /tmp/spc_not_sync_${name} ]
     then
