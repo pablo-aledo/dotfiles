@@ -20,6 +20,11 @@ do
     [ $(cat $a | egrep 'part.*\.rar' | wc -l) -eq $last ] || rm -rf $a
 done
 
+for a in $( grep -Rin 'crdownload' /tmp/unstar_split | cut -d':' -f1 | sort | uniq )
+do
+    rm -rf $a
+done
+
 find /tmp/unstar_split -empty -delete
 
 #a=/tmp/unstar_split/01
