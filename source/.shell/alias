@@ -22,7 +22,7 @@ jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
 
 alias k='sudo kubectl'
 pod(){ k get pods | grep -v Terminating | cut -d" " -f1 | grep $1 | tail -n1; }
-pods(){ k get pods | grep -v Terminating | cut -d" " -f1 | grep $1 ; }
+pods(){ k get pods | grep -v Terminating | cut -d" " -f1 | grep $1; }
 deployment(){ k get deployments | cut -d" " -f1 | grep $1 | tail -n1; }
 alias kgp='k get pods | grep -v Terminating'
 kshell(){ k exec -it $1 /bin/bash ; }
