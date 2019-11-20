@@ -432,6 +432,7 @@ case $1 in
                          # docker exec -u www-data some-owncloud php occ status
 (nextcloud)              docker run -d -p 8080:80 nextcloud ;;
 (pivman)                 docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/bus/usb --device /dev/usb --name pivman ${DOCKER_REPO_PREFIX}/pivman ;;
+(poli)                   docker run -d -p 6688:6688 --name poli zhonglu/poli:0.10.1 ;;
 (povray)                 docker run -i -t --rm -v $PWD:/src --name povray bradleybossard/docker-povray ;;
 (plantuml)               shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY plantuml $* ;;
 (plex-home-theater)      docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd --device /dev/dri:/dev/dri ${DOCKER_REPO_PREFIX}/plex-home-theater ;;
