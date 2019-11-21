@@ -9,15 +9,13 @@ art 2d photoshop
 art 2d pixlr
 art 3d 3d
 art 3d 3d_basic
-art 3d 3d_blender
 art 3d 3d_characters
-art 3d 3d_effects
 art 3d 3d_face
 art 3d 3d_fire
 art 3d 3d_generic
 art 3d 3d_light
 art 3d 3d_maya
-art 3d 3D_Modeling
+art 3d 3d_modeling
 art 3d 3d_mudbox
 art 3d 3d_poser
 art 3d 3d_reconstruction
@@ -28,6 +26,7 @@ art 3d 3D_Vue
 art 3d 3d_xsi
 art 3d blender
 art 3d blender_bge
+art 3d effects
 art 3d gmax
 art 3d lightwave
 art 3d maya
@@ -70,7 +69,7 @@ art fonts
 art Fuentes
 art graphic_design
 art graphics
-art Graphics_Design
+art graphics_design
 art hagakure
 art home
 art house
@@ -88,7 +87,7 @@ art nudos
 art origami
 art paint
 art photo
-art photography cameras
+art photography camera
 art photography digital_cameras
 art photography Fotografía
 art photography HDRI
@@ -96,6 +95,7 @@ art Presentaciones
 art Presentaciones PowerPoint
 art render 3d_npr
 art rendering npr
+art render vray
 art samurai
 art Sketches
 art Steampunk
@@ -108,18 +108,18 @@ art wood birdhouses
 art write
 art writing
 art zen
-Business
-comic comics
+comic comic
 comic Mafalda
 comic marvel
 comic phdcomics
 comic randall_munroe
 comic xkcd
 english
+english english
 english ielts
-english Ingles
 english TOEFL
 Entrepeneurship
+Entrepeneurship Business
 Entrepeneurship exponential_organizations
 Entrepeneurship innovation
 Entrepeneurship lean_manufacturing
@@ -128,6 +128,7 @@ Entrepeneurship six_sigma
 Entrepeneurship startup
 Etica
 magic
+marketing
 mv_to_videos
 nature
 nature Auroras
@@ -140,13 +141,13 @@ psicology adolescence
 psicology body_language
 psicology children
 psicology dalai_lama
-psicology Dreams
+psicology dreams
 psicology emotional_engineering
 psicology emotional_inteligence
 psicology gandhi
 psicology happiness
 psicology happy
-psicology hipnosis
+psicology hypnosis
 psicology Inteligencia
 psicology iq
 psicology job
@@ -189,6 +190,7 @@ science automation Home_Automation
 science automation Home_Hacks
 science automation Smart_Home
 science autonomous_driving
+science autonomous_driving self_driving_car
 science big_data
 science big_data data_analysis
 science big_data Data_Clustering
@@ -216,7 +218,7 @@ science blockchain
 science blockchain bitcoin
 science boundary_scan
 science brain
-science Brain_Computer
+science brain_computer
 science cad
 science cad autocad
 science cad autodesk_inventor
@@ -261,7 +263,7 @@ science communication speech
 science communication speech speech_coding
 science communication speech speech_processing
 science communication tcpip
-science communication Telecommunications
+science communication telecommunications
 science communication tor
 science communication turbo_codes
 science communication Voice_Compression
@@ -276,17 +278,18 @@ science computer_architecture architecture
 science computer_architecture arm
 science computer_architecture mips
 science computer_graphics
+science computer_graphics 3d_graphics
 science computer_graphics augmented_reality
 science computer_graphics glsl
+science computer_graphics graphics_engine
 science computer_graphics Graphics_Gems
+science computer_graphics graphics_pipeline
 science computer_graphics HLSL
-science computer_graphics OGRE
 science computer_graphics ogre3d
 science computer_graphics opengl
 science computer_graphics Real_Time_Rendering
 science computer_graphics shaders
 science computer_graphics Spline
-science computer_graphics Torque_3D
 science computer_graphics virtual_reality
 science computer_graphics Voxel
 science computer_graphics vulkan
@@ -318,13 +321,14 @@ science computer_science computer_optimization
 science computer_science computer_systems
 science computer_science cyber_physical
 science computer_science databases
-science computer_science databases mongodb
+science computer_science databases mongo
 science computer_science databases redis
 science computer_science databases sql
 science computer_science databases sqlite
+science computer_science databases sql sql_performance
 science computer_science decision_procedures
 science computer_science Distributed_Programming
-science computer_science Dynamic_Programming
+science computer_science dynamic_programming
 science computer_science formal
 science computer_science formal_methods
 science computer_science FSM
@@ -395,6 +399,7 @@ science data_analysis visualization ggplot
 science data_analysis visualization gnuplot
 science data_analysis visualization graphics_interactive
 science data_analysis visualization OpenSceneGraph
+science data_analysis visualization powerbi
 science data_analysis visualization vtk
 science data_mining
 science data_science
@@ -423,14 +428,18 @@ science development devops
 science development documentation doxygen
 science development documentation tldp
 science development electronics PIC
+science development electronics PLC
 science development games
-science development games 3D_Game_Engine
 science development games cpp_sdl
+science development games cryengine
 science development games Game_Audio
 science development games game_engine
+science development games Game_Engine
 science development games Game_Physics
 science development games Games_Flash
+science development games godot
 science development games Irrlicht
+science development games Torque_3D
 science development games UDK
 science development games unity
 science development games unreal
@@ -445,9 +454,9 @@ science development languages asm
 science development languages aspectj
 science development languages assembly
 science development languages basic
-science development languages C
+science development languages c
 science development languages clojure
-science development languages CoffeeScript
+science development languages coffeescript
 science development languages cpp
 science development languages c_sharp
 science development languages cuda
@@ -463,6 +472,7 @@ science development languages java
 science development languages javascript
 science development languages js
 science development languages julia
+science development languages kotlin
 science development languages labview
 science development languages lisp
 science development languages lua
@@ -485,6 +495,7 @@ science development languages sage
 science development languages scala
 science development languages scilab
 science development languages shell
+science development languages swift
 science development languages uml
 science development languages VBScript
 science development languages visual_programming
@@ -540,7 +551,6 @@ science development tao_of_programming
 science development techniques agile
 science development techniques cicd
 science development techniques clean_code
-science development techniques clean_coding
 science development techniques code_review
 science development techniques codesign
 science development techniques computer_performance
@@ -564,7 +574,7 @@ science development techniques gnu
 science development techniques GPGPU
 science development techniques gpu
 science development techniques gpu GPUGems
-science development techniques gpu gpu_pro
+science development techniques gpu gpupro
 science development techniques hpc
 science development techniques hpc mpi
 science development techniques hpc openmp
@@ -574,6 +584,7 @@ science development techniques lint
 science development techniques many_core
 science development techniques microservices kibana
 science development techniques microservices kubernetes
+science development techniques microservices OpenShift
 science development techniques multicore
 science development techniques multiprocessor
 science development techniques multithread
@@ -662,14 +673,15 @@ science development unix
 science development ux
 science development ux cli
 science development visual_computing
-science Digital_Art
+science digital_art
 science dinosaurs
 science draw Engineering_Drawing
+science electrical_engineering
 science electricity electric_distribution
 science electricity grid
 science electricity tesla_coil
-science electromagnetics Electromagnetic_Simulation
-science electromagnetics electromagnetism
+science electromagnetism Electromagnetic_Simulation
+science electromagnetism electromagnetism
 science Electromechanical
 science electronics
 science electronics altium
@@ -693,7 +705,6 @@ science electronics parallax
 science electronics pcb
 science electronics phase_locked_loops
 science electronics power
-science electronics pspice
 science electronics semiconductors
 science electronics sensors
 science electronics spice
@@ -713,27 +724,34 @@ science experiments
 science google
 science hack
 science hack Backtrack
+science hack blue_team
 science hack bug
 science hack burp_suite
 science hack Computer_Security
 science hack Computer_Viruses
 science hack cracking
+science hack ctf
+science hack cve
+science hack cwe
 science hack cybersecurity
+science hack deep_web
 science hack defcon
 science hack exploit
 science hack exploitation buffer_overflow
 science hack firewalls
 science hack Firmware
 science hack forensics
-science hack fuzz
+science hack fuzzing
+science hack hack_android
 science hack hack_binary
 science hack hack_ceh
 science hack Hack_Electronics
 science hack hackers_delight
 science hack hack_exfiltration
+science hack hack_exploit
 science hack hack_firmware
-science hack hack_fuzzing
 science hack hack_heap
+science hack hacking
 science hack hacking_consoles
 science hack hacking_linux
 science hack hacking_web
@@ -744,13 +762,15 @@ science hack hack_network
 science hack hack_pentest
 science hack hack_poc
 science hack hack_rootkit
+science hack hack_security
 science hack hack_side_channel
 science hack hack_social_engineering
 science hack hack_sql
 science hack hack_vulnerabilities
 science hack hack_web
+science hack hack_wifi
 science hack hack_xss
-science hack hardware_hack
+science hack hardware_hacking
 science hack Hardware_Security
 science hack ids
 science hack kali
@@ -763,8 +783,10 @@ science hack mitm Libpcap
 science hack Netcat
 science hack nmap
 science hack phrack
+science hack post-exploitation
 science hack red_team
 science hack reverse_engineering
+science hack reverse_engineering decompilation
 science hack reverse_engineering ida
 science hack reverse_engineering radare
 science hack Rtfm
@@ -791,7 +813,7 @@ science hardware consoles
 science hardware cpu
 science hardware design digital
 science hardware design digital_design
-science hardware design Digital_Electronics
+science hardware design digital_electronics
 science hardware design soc
 science hardware design SpecC
 science hardware design systemc
@@ -839,7 +861,6 @@ science hardware usb
 science hardware vliw
 science holography
 science how_things_work
-science how_things_work Way_Things_Work
 science image_processing hyperspectral
 science ingeniería
 science inventions
@@ -865,8 +886,10 @@ science machine_learning ensemble_learning
 science machine_learning face_recognition
 science machine_learning gan
 science machine_learning kernel-classifiers
+science machine_learning learning_unsupervised
 science machine_learning neural
 science machine_learning neural_networks
+science machine_learning neural_networks convolutional_neural_networks
 science machine_learning neural_style
 science machine_learning nlp
 science machine_learning Pattern_Classification
@@ -899,7 +922,7 @@ science make
 science make evil_genius
 science make Geek
 science make hackerspace
-science make Injection_Molding
+science make injection_molding
 science make Instructables
 science make makezine
 science make Mold_Casting
@@ -967,7 +990,7 @@ science math Numerical
 science math numerical_methods
 science math ODE
 science math optimization
-science math optimization Combinatorial_Optimization
+science math optimization combinatorial_optimization
 science math optimization constrained_optimization
 science math optimization convex_optimization
 science math optimization metaheuristics
@@ -989,11 +1012,11 @@ science math statistics
 science math statistics bayes
 science math Street-Fighting-Mathematics
 science math study_math
-science math wavelet
+science math wavelets
 science mechanical
 science mechanical mechatronics
 science mechanical mems
-science mechanical Microelectromechanical
+science mechanical microelectromechanical
 science mechanical motors
 science mechanical Servos
 science medicine
@@ -1008,7 +1031,7 @@ science medicine toxicology
 science meteorology
 science microelectronics
 science microelectronics asic
-science microelectronics Chip_Design
+science microelectronics chip_design
 science microservices
 science modelling
 science modelling Probabilistic_Graphical_Models
@@ -1032,7 +1055,7 @@ science multimedia svg
 science multimedia video
 science multimedia video Embedded_Video
 science multimedia video V4L
-science multimedia video Video_Compression
+science multimedia video video_compression
 science multimedia video video_encoding
 science multimedia video video_processing
 science nanotechnology
@@ -1040,7 +1063,7 @@ science network OMNeT
 science network redes
 science networks
 science network software_defined_networks
-science nlp chatbots
+science nlp chatbot
 science nobel
 science occam_razor
 science patents
@@ -1050,8 +1073,8 @@ science physics
 science physics diy_optics
 science physics einstein
 science physics electricity
-science physics Electromagnetics
-science physics electromagnetics electromagnetic_floater
+science physics electromagnetism
+science physics electromagnetism electromagnetic_floater
 science physics Fluid_Dynamics
 science physics future
 science physics gravedad
@@ -1068,7 +1091,7 @@ science physics physics_of_the_impossible
 science physics physics_quantum
 science physics physics_simulation
 science physics quantum
-science physics Quantum_Mechanics
+science physics Quantum_mechanics
 science physics Real-Time-Physics
 science physics relativity
 science physics solid_state_physics
@@ -1093,7 +1116,7 @@ science radio wireless
 science radio Wireless_Sensor_Networks
 science radio XBEE
 science reasoning
-science Research
+science research
 science research latex
 science research PhD_grind
 science research phil_guo
@@ -1115,7 +1138,7 @@ science robotics robotics_unmanned
 science robotics Roomba
 science robotics ros
 science robotics ROV
-science robotics Sebastian_Thrun
+science robotics sebastian_thrun
 science robotics Underactuated
 science robotics unmanned
 science Señales
@@ -1128,6 +1151,7 @@ science technology
 science universe mars
 science Weather
 science web_development
+science web_development ajax
 science web_development angular
 science web_development AngularJS
 science web_development bootstrap
@@ -1135,7 +1159,7 @@ science web_development canvas
 science web_development CSS3
 science web_development django
 science web_development drupal
-science web_development Flash
+science web_development flash
 science web_development frontend
 science web_development Groovy
 science web_development html
