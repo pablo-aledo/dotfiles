@@ -380,6 +380,9 @@ case $1 in
 (keepassxc)              docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -v /etc/machine-id:/etc/machine-id:ro -v /usr/share/X11/xkb:/usr/share/X11/xkb/:ro -v $HOME/.config/keepassxc:/root/.config/keepassxc -e DISPLAY=unix$DISPLAY keepassxc ;;
 (kernel_builder)         docker run --rm -it -v /usr/src:/usr/src --cpu-shares=512 --name kernel-builder ${DOCKER_REPO_PREFIX}/kernel-builder ;;
 (kubebox)                docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox ;;
+                         # kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
+                         # oc new-app -f https://raw.github.com/astefanutti/kubebox/master/openshift.yaml
+                         # kubectl run kubebox -it --rm --env="TERM=xterm" --image=astefanutti/kubebox --restart=Never
 (kvm)                    docker run -d --privileged -v /var/run/libvirt:/var/run/libvirt --name kvm ${DOCKER_REPO_PREFIX}/kvm ;;
 (lam)                    docker run -p 8080:80 -it -d ldapaccountmanager/lam:stable ;;
 (lamp)                   docker run --rm -p 8000:80 -e LOG_STDOUT=true -e LOG_STDERR=true -e LOG_LEVEL=debug -v $PWD:/var/www/html fauria/lamp ;;
