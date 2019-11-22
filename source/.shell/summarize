@@ -1,6 +1,6 @@
 vectorizer_method=keywords
 pca_method=identity
-classifier_method=closest_metadata
+classifier_method=closest_metadata_regex
 regression_method=linear_regression
 indexer_method=sliding_indexer
 clustering_method=kmeans_clustering
@@ -648,6 +648,52 @@ closest_metadata.sortdist(){
 }
 
 closest_metadata.fit(){
+    closest_classifier.fit
+}
+
+regex_classifier.transform(){
+
+    cat $1 | tokenize | countwords | awk '{print $2}' > $tmp/regex_tokens
+
+    python -c "
+import re
+
+with open('$learning_dir/features/regex') as f:
+    keywords = [ line.rstrip('\n').split(' ') for line in f ]
+
+with open('$tmp/regex_tokens') as f:
+    words = [ line.rstrip('\n') for line in f ]
+
+for keyword in keywords:
+
+    regex = keyword[0]
+    topic = keyword[1]
+
+    if(keyword[0] == '^'):
+        pass
+    else:
+        regex='.*' + regex
+    if(keyword[-1] == '$'):
+        pass
+    else:
+        regex= regex + '.*'
+
+    for word in words:
+        if(re.match(regex,word)):
+            print topic
+            exit
+"
+}
+
+closest_metadata_regex.transform(){
+    regclass=""
+    [ -e "$learning_dir/metadata/$(basename $1)/title" ] && regclass=$(regex_classifier.transform "$learning_dir/metadata/$(basename $1)/title")
+    [ -e "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && regclass=$(regex_classifier.transform "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title")
+    [ "$regclass" != "" ] && echo $regclass && return
+    closest_classifier.transform $1
+}
+
+closest_metadata_regex.fit(){
     closest_classifier.fit
 }
 
