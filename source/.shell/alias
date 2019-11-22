@@ -20,6 +20,10 @@ alias docker-compose='sudo /usr/local/bin/docker-compose'
 alias Xargs='xargs -d"\n" -n1'
 jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
 
+alias avl='shc avl; xdotool key 6; sleep 1; shcw'
+alias unstar='shc unstar; xdotool key 6; sleep 1; shcw'
+alias avhbar='barcmd "cat /tmp/s2files | grep Title | wc -l" $(cat /tmp/count)'
+
 alias k='sudo kubectl'
 pod(){ k get pods | grep -v Terminating | grep $1 | cut -d" " -f1 | tail -n1; }
 pods(){ k get pods | tail -n+2 | grep -v Terminating | grep $1 | cut -d" " -f1; }
@@ -35,3 +39,4 @@ hd(){ helm delete --purge $(hn $1); }
 alias akslogin='az aks get-credentials --resource-group $1 --name $2 --admin';
 
 alias pvim='/usr/bin/vim +":set nopaste|:set ignorecase smartcase|:imap jj <ESC>|:map <Space><Space> /|:map <Space> :" '
+
