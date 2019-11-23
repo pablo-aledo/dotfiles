@@ -1,6 +1,8 @@
 alias Tail='stdbuf -i0 -o0 -e0 \tail'
 alias autorun='find | entr'
 alias lh='ls -lh'
+alias lt='ls -lht'
+alias ltr='ls -lhtr'
 alias minikube='sudo /usr/local/bin/minikube'
 alias dfh='df -h'
 alias make='make -j$(nproc)'
