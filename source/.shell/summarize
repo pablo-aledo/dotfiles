@@ -690,7 +690,7 @@ closest_metadata_regex.transform(){
     [ -e "$learning_dir/metadata/$(basename $1)/title" ] && regclass=$(regex_classifier.transform "$learning_dir/metadata/$(basename $1)/title")
     [ -e "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title" ] && regclass=$(regex_classifier.transform "$learning_dir/metadata/$(basename $1 | sed 's/\.txt$//g')/title")
     [ "$regclass" != "" ] && echo $regclass && return
-    closest_classifier.transform $1
+    closest_metadata.transform $1
 }
 
 closest_metadata_regex.fit(){
