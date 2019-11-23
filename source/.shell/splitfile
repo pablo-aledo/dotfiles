@@ -1,14 +1,16 @@
 splitfile(){
-    file=$1
+    filesrc=$1
     part=$2
     parts=$3
+    [ $# -gt 3 ] && filedst=$4
+    [ $# -gt 3 ] || filedst=/dev/stdout
 
-    \mv $file /tmp/splitfile
+    \cp $filesrc /tmp/splitfile
 
     i=0
     cat /tmp/splitfile | while read line
     do
         [ $(( $i % $parts )) -eq $part ] && echo $line
         i=$(( $i + 1 ))
-    done > $file
+    done > $filedst
 }
