@@ -1,0 +1,14 @@
+splitfile(){
+    file=$1
+    part=$2
+    parts=$3
+
+    \mv $file /tmp/splitfile
+
+    i=0
+    cat /tmp/splitfile | while read line
+    do
+        [ $(( $i % $parts )) -eq $part ] && echo $line
+        i=$(( $i + 1 ))
+    done > $file
+}
