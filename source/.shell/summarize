@@ -1386,11 +1386,12 @@ if( '$learning_distance' == 'jaccard' ):
     h1_set = Set( [ i for i in range(0, len(h1)) if h1[i] != 0 ] )
     h2_set = Set( [ i for i in range(0, len(h2)) if h2[i] != 0 ] )
     print 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
-    # print scipy.spatial.distance.jaccard(h1_set, h2_set)
 if( '$learning_distance' == 'euclidean' ):
     print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 if( '$learning_distance' == 'cosine' ):
     print scipy.spatial.distance.cosine(h1,h2)
+if( '$learning_distance' == 'scipy_jaccard' ):
+    print scipy.spatial.distance.jaccard(h1, h2)
 "
 }
 
@@ -1425,6 +1426,8 @@ def distance(h1,h2):
         return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
     if( '$learning_distance' == 'cosine' ):
         return scipy.spatial.distance.cosine(h1,h2)
+    if( '$learning_distance' == 'scipy_jaccard' ):
+        return scipy.spatial.distance.jaccard(h1, h2)
 
 distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)) }
 
@@ -1463,6 +1466,8 @@ def distance(h1,h2):
         return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
     if( '$learning_distance' == 'cosine' ):
         return scipy.spatial.distance.cosine(h1,h2)
+    if( '$learning_distance' == 'scipy_jaccard' ):
+        return scipy.spatial.distance.jaccard(h1, h2)
 
 mydict = {}
 for i in range(0, len(names)):
@@ -1560,6 +1565,8 @@ def distance(h1,h2):
         return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
     if( '$learning_distance' == 'cosine' ):
         return scipy.spatial.distance.cosine(h1,h2)
+    if( '$learning_distance' == 'scipy_jaccard' ):
+        return scipy.spatial.distance.jaccard(h1, h2)
 
 distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)) }
 
