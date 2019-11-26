@@ -1796,9 +1796,9 @@ learning.queue_classify(){
     cd $learning_dir/summaries/
     ls | while read line
     do
-        #classification=$( $classifier_method.transform "$line" )
         closest=$(closest_metadata.sortdist "$line" | head -n1)
-        classification=$(echo $closest | sed 's/\..*//g')
+        #classification=$(echo $closest | sed 's/\..*//g')
+        classification=$( $classifier_method.transform "$line" )
         echo $classification > $learning_dir/summaries_classified/$line
         echo $closest | sed "s|^|closest : $learning_dir/documents/|g" >> $learning_dir/summaries_classified/$line
 
