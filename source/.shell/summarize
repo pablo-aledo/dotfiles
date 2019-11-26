@@ -1378,6 +1378,7 @@ learning.distance(){
     python -c "
 import numpy as np
 import math
+import scipy.spatial
 from sets import Set
 h1=$1
 h2=$2
@@ -1387,6 +1388,8 @@ if( '$learning_distance' == 'jaccard' ):
     print 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ))
 if( '$learning_distance' == 'euclidean' ):
     print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
+if( '$learning_distance' == 'cosine' ):
+    print scipy.spatial.distance.cosine(h1,h2)
 "
 }
 
@@ -1401,6 +1404,7 @@ closest_classifier.sortdist(){
 import sys, errno
 import numpy as np
 import math
+import scipy.spatial
 from sets import Set
 
 learning_dir='$learning_dir'
@@ -1418,6 +1422,8 @@ def distance(h1,h2):
         return 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
     if( '$learning_distance' == 'euclidean' ):
         return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
+    if( '$learning_distance' == 'cosine' ):
+        return scipy.spatial.distance.cosine(h1,h2)
 
 distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)) }
 
@@ -1436,6 +1442,7 @@ closest_classifier.pairsdist(){
 import sys, errno
 import numpy as np
 import math
+import scipy.spatial
 from sets import Set
 
 learning_dir='$learning_dir'
@@ -1453,6 +1460,8 @@ def distance(h1,h2):
         return 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
     if( '$learning_distance' == 'euclidean' ):
         return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
+    if( '$learning_distance' == 'cosine' ):
+        return scipy.spatial.distance.cosine(h1,h2)
 
 mydict = {}
 for i in range(0, len(names)):
@@ -1530,6 +1539,7 @@ print( kmeans.predict(x)[0] )
 import sys, errno
 import numpy as np
 import math
+import scipy.spatial
 from sets import Set
 
 learning_dir='$learning_dir'
@@ -1547,6 +1557,8 @@ def distance(h1,h2):
         return 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
     if( '$learning_distance' == 'euclidean' ):
         return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
+    if( '$learning_distance' == 'cosine' ):
+        return scipy.spatial.distance.cosine(h1,h2)
 
 distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)) }
 
