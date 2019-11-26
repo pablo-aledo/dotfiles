@@ -1385,7 +1385,7 @@ h2=$2
 if( '$learning_distance' == 'jaccard' ):
     h1_set = Set( [ i for i in range(0, len(h1)) if h1[i] != 0 ] )
     h2_set = Set( [ i for i in range(0, len(h2)) if h2[i] != 0 ] )
-    print 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ))
+    print scipy.spatial.distance.jaccard(h1_set, h2_set)
 if( '$learning_distance' == 'euclidean' ):
     print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
 if( '$learning_distance' == 'cosine' ):
@@ -1419,7 +1419,7 @@ def distance(h1,h2):
     if( '$learning_distance' == 'jaccard' ):
         h1_set = Set( [ i for i in range(0, len(h1)) if h1[i] != 0 ] )
         h2_set = Set( [ i for i in range(0, len(h2)) if h2[i] != 0 ] )
-        return 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
+        return scipy.spatial.distance.jaccard(h1_set, h2_set)
     if( '$learning_distance' == 'euclidean' ):
         return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
     if( '$learning_distance' == 'cosine' ):
@@ -1457,7 +1457,7 @@ def distance(h1,h2):
     if( '$learning_distance' == 'jaccard' ):
         h1_set = Set( [ i for i in range(0, len(h1)) if h1[i] != 0 ] )
         h2_set = Set( [ i for i in range(0, len(h2)) if h2[i] != 0 ] )
-        return 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
+        return scipy.spatial.distance.jaccard(h1_set, h2_set)
     if( '$learning_distance' == 'euclidean' ):
         return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
     if( '$learning_distance' == 'cosine' ):
@@ -1554,7 +1554,7 @@ def distance(h1,h2):
     if( '$learning_distance' == 'jaccard' ):
         h1_set = Set( [ i for i in range(0, len(h1)) if h1[i] != 0 ] )
         h2_set = Set( [ i for i in range(0, len(h2)) if h2[i] != 0 ] )
-        return 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
+        return scipy.spatial.distance.jaccard(h1_set, h2_set)
     if( '$learning_distance' == 'euclidean' ):
         return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
     if( '$learning_distance' == 'cosine' ):
