@@ -219,6 +219,23 @@ server(){
 		/tmp/gotty.sh
 	fi
 
+    if [ $1 = "gotty3" ]
+    then
+
+        [ $# -gt 1 ] || port=8081
+        [ $# -gt 1 ] && port=$2
+
+        [ $port -lt 1024 ] && sudocmd=sudo
+        [ $port -lt 1024 ] || sudocmd=
+
+        pkg install gotty
+        ( echo '#!/bin/bash'; echo '[ `tmux a #` ] || tmux' ) | sudo tee /usr/bin/tmux_a
+        sudo chmod +x /usr/bin/tmux_a
+        echo "$sudocmd gotty -p $port -c gotty:$(pword gotty) -w tmux_a" > /tmp/gotty.sh
+        chmod +x /tmp/gotty.sh
+        /tmp/gotty.sh
+    fi
+
 	if [ $1 = "pydio" ]
 	then
 		pkg install pydio
