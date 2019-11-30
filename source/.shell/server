@@ -569,8 +569,8 @@ server(){
             then
                 previous_n_avh=$(cat ~/servers/rate/n_avh)
                 previous_n_rss=$(cat ~/servers/rate/n_rss)
-                actual_n_avh=$(cat ~/servers/avxtitles | wc -l )
-                actual_n_rss=$(cat ~/servers/rsstitles | wc -l )
+                actual_n_avh=$(cat ~/servers/avxhome/avxtitles | wc -l )
+                actual_n_rss=$(cat ~/servers/rssmail/rsstitles | wc -l )
                 echo $actual_n_avh > ~/servers/rate/n_avh
                 echo $actual_n_rss > ~/servers/rate/n_rss
 
