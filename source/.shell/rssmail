@@ -1,5 +1,6 @@
 RSSMAIL=~/servers/rssmail
 rssmail_ml=true
+outbox=~/servers/outbox
 
 rssmail() {
 	name=$RSSMAIL/rss-`date +%y%m%d-%H%M`
@@ -66,6 +67,7 @@ rssmail_server(){
             [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/avxhome/learning >/dev/null
             [ "$rssmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
 			echo "\e[31m $title_ml \e[0m $link "
+            [ "$outbox" != "" ] && echo $link > $outbox/$(date +%y%m%d-%H%M%S)_$title_ml
 			(echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
 			sleep 1
 		fi
@@ -84,6 +86,7 @@ rssmail_server(){
             [ "$rssmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
 			echo "\e[31m $title_ml \e[0m $link "
 			echo "$title_ml -> $link" >> $RSSMAIL/map
+            [ "$outbox" != "" ] && (echo $link; echo $description) > $outbox/$(date +%y%m%d-%H%M%S)_$title_ml
 			(echo $link; echo $description) | mutt -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
 			sleep 1
 		fi

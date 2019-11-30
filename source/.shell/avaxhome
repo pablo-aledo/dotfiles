@@ -1,4 +1,5 @@
 [ -e /tmp/avh_proxy ] && source /tmp/avh_proxy
+outbox=~/servers/outbox
 
 # Contents of /tmp/avh_proxy:
 # AVH_PROXY_IP=
@@ -232,6 +233,7 @@ avhome_mail_server(){
               grep "^$title_escaped\$" ~/servers/avxhome/avxtitles >/dev/null && continue
               echo $title >> ~/servers/avxhome/avxtitles
               echo "$title_ml -> $link" >> ~/servers/avxhome/map
+              [ "$outbox" != "" ] && echo $link > $outbox/$(date +%y%m%d-%H%M%S)_$title_ml
               (echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
        done
    fi
