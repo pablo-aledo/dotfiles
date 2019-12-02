@@ -86,7 +86,7 @@ rssmail_server(){
             [ "$rssmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
 			echo "\e[31m $title_ml \e[0m $link "
 			echo "$title_ml -> $link" >> $RSSMAIL/map
-            [ "$outbox" != "" ] && (echo $link; echo $description) > $outbox/$(date +%y%m%d-%H%M%S)_$title_ml
+            [ "$outbox" != "" ] && (echo $link; echo $description | html2text) > $outbox/$(date +%y%m%d-%H%M%S)_$title_ml
 			(echo $link; echo $description) | mutt -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
 			sleep 1
 		fi

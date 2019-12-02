@@ -108,6 +108,7 @@ adapt_awsserver(){
     pkg install youtube-dl
     pkg install docker
 	pkg install rsstail
+	pkg install html2text
 	pkg install mutt
 	pkg install google-chrome
 	pkg install sshfs
