@@ -1,0 +1,27 @@
+export DISPLAY=:1
+
+xdotool key 1 && sleep 30
+
+cat ~/servers/outbox/.metadata.json \
+    | egrep -v '^\{$|^\}$|^  \}, $|^  \}$' \
+    | sed 's/^  \"[0-9]\{6\}-[0-9]\{6\}_//g' \
+    | sed 's/\": {$//g' \
+    | sed 's/^    \"label\": \"//g' | sed 's/"$//g' \
+    | awk '{key=$0; getline; print key " -> " $0;}' > /tmp/s2labels
+
+cat /tmp/s2lables | while read line
+do
+
+    title=$(cat $line | sed 's/ -> .*$//g')
+    label=$(cat $line | sed 's/^.* -> //g')
+
+    echo $title > /tmp/title
+    echo $label > /tmp/labels
+
+    xdotool key 2 && sleep 5
+    xdotool key 3 && sleep 5
+    xdotool key 4 && sleep 5
+
+done
+
+xdotool key 0

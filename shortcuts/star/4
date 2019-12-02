@@ -1,0 +1,16 @@
+export DISPLAY=:1
+
+[ -e /tmp/skip ] && return
+
+
+xdotool type s
+sleep 1
+
+for a in $(cat /tmp/labels)
+do
+    xdotool type l
+    sleep 1
+    xdotool type $a
+    sleep 1
+    xdotool key Return
+done
