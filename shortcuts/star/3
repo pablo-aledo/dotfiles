@@ -9,5 +9,6 @@ then
     xdotool click 1
     sleep 1
 else
+    cat /tmp/title >> /tmp/star_not_found
     touch /tmp/skip
 fi
