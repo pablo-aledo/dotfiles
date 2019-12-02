@@ -1,0 +1,11 @@
+export DISPLAY=:1
+
+xdotool mousemove 280 175
+xdotool click 1
+sleep 1
+
+xdotool mousemove 880 230
+xdotool click 1
+sleep 1
+
+xdotool key I
