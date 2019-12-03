@@ -724,3 +724,20 @@ night(){
     night_avh
 }
 
+loop_avh(){
+    ranger ~/servers/outbox
+    rm -rf ~/servers/outbox/*
+
+    shc mkread
+    DISPLAY=:1 xdotool key 6
+    sleep 1 && shcw
+    sleep 10
+
+    shc star
+    DISPLAY=:1 xdotool key 6
+    sleep 1 && shcw
+
+    rm -rf ~/servers/outbox/.metadata.json
+
+    cat /tmp/star_not_found
+}
