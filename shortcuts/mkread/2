@@ -9,3 +9,7 @@ xdotool click 1
 sleep 1
 
 xdotool key I
+sleep 1
+
+xdotool mousemove 820 480
+xdotool click 1
