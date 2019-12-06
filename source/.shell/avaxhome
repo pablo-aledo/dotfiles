@@ -174,7 +174,7 @@ avhome_get_titles(){
     cd ~/servers/avxhome
     wget -q https://avxhm.se/ebooks/$1 -O dl
     #cat dl | grep title-link | cut -d'>' -f3 | cut -d'<' -f1 > $1
-    cat dl | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' > $1
+    cat dl | sed 's/title-link/\ntitle-link/g' | grep title-link | sed 's/title-link\"//g' | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' > $1
 }
 
 avhome_get_new_titles(){
@@ -189,7 +189,7 @@ avhome_get_new_titles(){
     fi
 
     #cat dl | grep title-link | cut -d'>' -f3 | cut -d'<' -f1 > ${1}_new
-    cat dl | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' > ${1}_new
+    cat dl | sed 's/title-link/\ntitle-link/g' | grep title-link | sed 's/title-link\"//g' | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' > ${1}_new
     comm -13 <(cat $1 | sort) <(cat ${1}_new | sort)
     \mv ${1}_new $1
 }
