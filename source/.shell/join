@@ -1,6 +1,6 @@
 join(){
-    (cd "$1"; permissions)
-    (cd "$2"; permissions)
+    #(cd "$1" && permissions)
+    #(cd "$2" && permissions)
 	mv "$1"/* "$2"/;
 	rmdir "$1"
 }
