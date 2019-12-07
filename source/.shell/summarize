@@ -1620,7 +1620,7 @@ learning.join_topics(){
     do
         dst_filename=$( echo $src_filename | sed "s/^$topic_src\./$topic_dst\./g" )
         echo mv $learning_dir/documents/$src_filename $learning_dir/documents/$dst_filename
-        echo "cat $learning_dir/map_documents/map | sed 's/$src_filename/$dst_filename/g' > $tmp/map && mv $tmp/map $learning_dir/map_documents/map"
+        [ -e $learning_dir/map_documents ] && echo "cat $learning_dir/map_documents/map | sed 's/$src_filename/$dst_filename/g' > $tmp/map && mv $tmp/map $learning_dir/map_documents/map"
     done
     echo rm -rf $learning_dir/documents/$topic_src.topic
 
