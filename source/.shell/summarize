@@ -2191,7 +2191,7 @@ list_all_topics(){
 }
 
 learning.leven_topics(){
-    list_all_topics | levenshteim.pl > topics_scr
+    list_all_topics | levenshtein.pl > topics_scr
 }
 
 
