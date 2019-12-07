@@ -2186,7 +2186,9 @@ classify_and_mirror(){
 
 list_all_topics(){
     ls $learning_src
+    echo '====='
     cat $learning_dir/topics/topics | awk '{print $NF}'
+    echo '====='
     ls $learning_dir/documents | cut -d. -f1
 }
 
