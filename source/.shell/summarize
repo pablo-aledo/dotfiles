@@ -2183,3 +2183,15 @@ classify_and_mirror(){
     source /tmp/script
     lnk_hierarchy_fill_scale_3
 }
+
+list_all_topics(){
+    ls $learning_src
+    cat $learning_dir/topics/topics | awk '{print $NF}'
+    ls $learning_dir/documents | cut -d. -f1
+}
+
+learning.leven_topics(){
+    list_all_topics | levenshteim.pl > topics_scr
+}
+
+
