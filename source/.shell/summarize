@@ -481,6 +481,25 @@ keywords.doc2vec_debug(){
 
 }
 
+txtsimp(){
+    cat | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" | sed \
+        -e 's/á/a/g' \
+        -e 's/é/e/g' \
+        -e 's/í/i/g' \
+        -e 's/ó/o/g' \
+        -e 's/ú/u/g' \
+        -e 's/à/a/g' \
+        -e 's/è/e/g' \
+        -e 's/ì/i/g' \
+        -e 's/ò/o/g' \
+        -e 's/ù/u/g' \
+        -e 's/ä/a/g' \
+        -e 's/ë/e/g' \
+        -e 's/ï/i/g' \
+        -e 's/ö/o/g' \
+        -e 's/ü/u/g'
+}
+
 doc2txt_rec(){
     local line
 
@@ -489,7 +508,7 @@ doc2txt_rec(){
 
 	case $filename in
 		(*/title|title)
-			cat "$filename" | head -n $summarize_line_limit | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" | strings -n1 >> "$destination"
+			cat "$filename" | head -n $summarize_line_limit | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" | txtsimp | strings -n1 >> "$destination"
 			;;
 		(*.rar|*.RAR)
 			rm -fr $tmp/learning
@@ -516,27 +535,27 @@ doc2txt_rec(){
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
 		(*.pdf|*.PDF)
-			pdftotext -f 1 -l $summarize_page_limit "$filename" - | head -n $summarize_line_limit | strings -n1 >> "$destination"
+			pdftotext -f 1 -l $summarize_page_limit "$filename" - | head -n $summarize_line_limit | txtsimp | strings -n1 >> "$destination"
 			;;
 		(*.djvu|*.djVu)
-			djvutxt "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
+			djvutxt "$filename" | head -n $summarize_line_limit | txtsimp | strings -n1 >> "$destination"
 			;;
 		(*.epub|*.EPUB)
-			epub2txt "$filename" | head -n $summarize_line_limit | strings -n1 >> "$destination"
+			epub2txt "$filename" | head -n $summarize_line_limit | txtsimp | strings -n1 >> "$destination"
 			;;
 		(*.mobi|*.MOBI)
 			ebook-convert "$filename" $tmp/mobi.txt
-			cat $tmp/mobi.txt | head -n $summarize_line_limit | strings -n1 >> "$destination"
+			cat $tmp/mobi.txt | head -n $summarize_line_limit | txtsimp | strings -n1 >> "$destination"
 			;;
 		(*.html|*.htm)
 			#html2text "$filename" | head -n $summarize_line_limit >> "$destination"
 			w3m -dump "$filename" | head -n $summarize_line_limit >> "$destination"
 			;;
 		(*.txt|*.TXT)
-			cat "$filename" | head -n $summarize_line_limit | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" | strings -n1 >> "$destination"
+			cat "$filename" | head -n $summarize_line_limit | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" | txtsimp | strings -n1 >> "$destination"
 			;;
 		(*)
-			file "$filename" | grep 'text' >/dev/null && cat "$filename" | head -n $summarize_line_limit | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" | strings -n1 >> "$destination"
+			file "$filename" | grep 'text' >/dev/null && cat "$filename" | head -n $summarize_line_limit | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" | txtsimp | strings -n1 >> "$destination"
 			file "$filename" | grep 'text' >/dev/null || echo "$filename" >> "$destination"
 	esac
 }
