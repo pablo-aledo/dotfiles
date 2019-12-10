@@ -12,7 +12,23 @@ do
     xdotool key 2 && sleep 10
     xdotool key 3 && sleep 1
     while [ -e /tmp/lock ]; do sleep 1; done; sleep 5
-    mouseover 1 100 ~/.dotfiles/shortcuts/images/continue.png && sleep 600
+
+    # mouseover 1 100 ~/.dotfiles/shortcuts/images/continue.png && sleep 600
+
+    while true
+    do
+        xdotool key ctrl+w
+        sleep 1
+        if $( mouseover 1 100 ~/.dotfiles/shortcuts/images/continue.png )
+        then
+            xdotool mousemove_relative 120 0
+            xdotool click 1
+            sleep 10
+        else
+            break
+        fi
+    done
+
     xdotool key 5 && sleep 1
 
 done
