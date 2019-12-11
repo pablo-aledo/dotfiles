@@ -18,6 +18,7 @@ do
     while true
     do
         xdotool key ctrl+w
+        xdotool mousemove 200 200
         sleep 1
         if $( mouseover 1 100 ~/.dotfiles/shortcuts/images/continue.png )
         then
