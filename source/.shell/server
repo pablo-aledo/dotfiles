@@ -725,6 +725,8 @@ night(){
 }
 
 loop_avh(){
+    rm -rf ~/servers/outbox/.metadata.json /tmp/star_not_found
+
     ranger ~/servers/outbox
     rm -rf ~/servers/outbox/*
 
