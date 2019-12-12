@@ -729,10 +729,10 @@ loop_avh(){
     cd ~/servers
     bak outbox
 
-    rm -rf ~/servers/outbox/.metadata.json /tmp/star_not_found
+    \rm -rf ~/servers/outbox/.metadata.json /tmp/star_not_found
 
     ranger ~/servers/outbox
-    rm -rf ~/servers/outbox/*
+    \rm -rf ~/servers/outbox/*
 
     vim ~/servers/outbox/.metadata.json
 
@@ -745,7 +745,7 @@ loop_avh(){
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
 
-    rm -rf ~/servers/outbox/.metadata.json
+    \rm -rf ~/servers/outbox/.metadata.json
 
     cat /tmp/star_not_found
 }

@@ -8,6 +8,7 @@ xdotool key 2 && sleep 5
 while true
 do
     mouseover 1 100 ~/.dotfiles/shortcuts/images/gmail_cargando.png || break
+    sleep 10
 done
 
 xdotool key 0
