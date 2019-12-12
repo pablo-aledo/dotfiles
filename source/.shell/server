@@ -730,6 +730,8 @@ loop_avh(){
     ranger ~/servers/outbox
     rm -rf ~/servers/outbox/*
 
+    vim ~/servers/outbox/.metadata.json
+
     shc mkread
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
