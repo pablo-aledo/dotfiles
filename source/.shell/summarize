@@ -1490,17 +1490,18 @@ def distance(h1,h2):
 
 mydict = {}
 for i in range(0, len(names)):
-    for j in range(i, len(names)):
+    for j in range(i+1, len(names)):
         dist = distance(vectors[i],vectors[j])
         mydict[frozenset({names[i], names[j]})] = dist
 
 std=sorted(mydict,key=mydict.get)
 
 for a in std:
-    name1, name2 = a
-    print name1
-    print name2
-    print
+    if len(a) == 2:
+        name1, name2 = a
+        print name1
+        print name2
+        print
 "
 }
 
