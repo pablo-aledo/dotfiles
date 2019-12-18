@@ -376,6 +376,18 @@ server(){
     	done
     fi
 
+    if [ $1 = "index" ]
+    then
+    	while true
+    	do
+            cd
+            ncdu /media/removable/2TB2/homes/admin/ -o ~/ncdu
+            find /media/removable/2TB2/homes/admin/ > ~/files
+            bak ncdu files
+    		sleep 10
+    	done
+    fi
+
     if [ $1 = "pgdump" ]
     then
         [ "$2" = "" ] && date_pgdump=0005
