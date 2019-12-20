@@ -509,6 +509,7 @@ case $1 in
 (termboy)                shift
                          local game=$1
                          docker run --rm -it --device /dev/snd --name termboy ${DOCKER_REPO_PREFIX}/nes "/games/${game}.rom" ;;
+(termshark)              docker run -it --privileged --net host lukaszlach/termshark ;;
 (tetris)                 docker run -it tetris ;;
 (texlive)                docker run -it -w '/mnt' -v `pwd`:/mnt texlive /bin/bash -c './compile.sh' ;;
 (theia)                  docker run -it -p 3000:3000 -v "$(pwd):/home/project:cached" theiaide/theia:next ;;
