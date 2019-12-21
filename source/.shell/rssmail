@@ -81,7 +81,7 @@ rssmail_server(){
 		if [ "$current" = "description" ] && [ "$previous" = "link" ]
 		then
             title_ml=$title
-            source ~/.dotfiles/source/.shell/summarize
+            source ~/.dotfiles/source/.shell/learning
             [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/avxhome/learning >/dev/null
             [ "$rssmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
 			echo "\e[31m $title_ml \e[0m $link "
