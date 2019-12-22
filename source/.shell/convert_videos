@@ -154,6 +154,11 @@ convert_11(){
 	mencoder `echo $OPTS` -o "$1.converted.mp4" "$1"
 }
 
+convert_12(){
+	OPTS="-movflags faststart -vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
+	echo ffmpeg -i \"$1\" $OPTS \"$1.converted.mp4\" | bash
+}
+
 convert_ppt(){
 	OPTS="-of lavf -oac lavc -ovc lavc -lavcopts vcodec=wmv1:vbitrate=1500:acodec=wmav1"
 	mencoder `echo $OPTS` -o "$1.converted.avi" "$1"
