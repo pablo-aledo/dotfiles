@@ -53,6 +53,13 @@ server(){
 		pkg install lamp
 	fi
 
+	if [ $1 = "lamp2" ]
+	then
+        [ $# -gt 1 ] || port=8000
+        [ $# -gt 1 ] && port=$2
+        docker run --rm -p $port:80 -e LOG_STDOUT=true -e LOG_STDERR=true -e LOG_LEVEL=debug -v $PWD:/var/www/html fauria/lamp ;;
+	fi
+
 	if [ $1 = "ftp" ]
 	then
 		pkg install ftpd	
