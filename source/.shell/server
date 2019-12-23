@@ -768,5 +768,6 @@ loop_avh(){
     bak metadata outbox/.metadata.json
     /bin/rm -rf ~/servers/outbox/.metadata.json
 
+    echo "====="
     cat /tmp/star_not_found
 }
