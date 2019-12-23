@@ -764,6 +764,8 @@ loop_avh(){
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
 
+    cd ~/servers
+    bak metadata outbox/.metadata.json
     /bin/rm -rf ~/servers/outbox/.metadata.json
 
     cat /tmp/star_not_found
