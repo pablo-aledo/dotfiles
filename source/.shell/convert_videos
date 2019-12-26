@@ -155,7 +155,7 @@ convert_11(){
 }
 
 convert_12(){
-	OPTS="-movflags faststart -vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
+	OPTS="-movflags faststart -vf 'scale=720:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset fast -crf 25 -acodec aac -strict experimental -mbd 2 -ab 128 -b 400"
 	echo ffmpeg -i \"$1\" $OPTS \"$1.converted.mp4\" | bash
 }
 
