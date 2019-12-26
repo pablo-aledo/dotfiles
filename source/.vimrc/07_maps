@@ -49,9 +49,9 @@ map <space><space> <home>/
 " change mode
 map <space> :
 " Autocorrect last spell error
-imap zz <esc>[sz=1<CR><C-o>a
+imap xz <esc>[sz=1<CR><C-o>a
 " Autocorrect last spell error
-map zz z=1<CR><CR>]s
+map xz z=1<CR><CR>]s
 " Next spelling error
 map zx zg
 noremap zg zg]s
