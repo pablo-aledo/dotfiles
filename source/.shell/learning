@@ -2181,8 +2181,10 @@ learning.index(){
 }
 
 learning.normalize_txt(){
-    [ $# -gt 1 ] || dst=/dev/stdout
+    [ $# -gt 1 ] || dst=$1
     [ $# -gt 1 ] && dst=$2
+
+    [ "$dst" = "-" ] && dst=/dev/stdout
 
     cat $1 | paste -d' ' -s | sed -e 's/[0-9]\. //g' -e 's/\. /.\n/g' > $tmp/document
     cat $tmp/document > $dst
