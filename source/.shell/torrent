@@ -41,6 +41,43 @@ katcr_dlaux(){
 	tmux new -d -s ${search}_${2} "aria2c '"$link3"'"
 }
 
+katcr_list(){
+	search=""
+	for a in $*
+	do
+		search=$search" "$a
+	done
+
+	search=$(echo $search | sed -e 's/^ //g' -e 's/ /%20/g')
+
+	echo $search > /tmp/katcr
+
+	link1="https://katcr.co/katsearch/page/1/"$search
+
+	n=1
+	wget -q -U "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)" $link1 -O - \
+        | grep 'torrents_table__torrent_title' -A2 | paste - -  | sed 's|^.*<b>||g' | grep -v ' </b>' \
+        | while read line
+	do
+		echo $n : $line
+		n=$(($n + 1))
+	done
+}
+
+katcr_dlaux(){
+	search=$1
+	search=`echo $search | sed 's/ /%20/g'`
+
+	link1="https://katcr.co/katsearch/page/1/"$search
+
+	link2=$(wget -q -U "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)" $link1 -O - | grep 'torrents_table__torrent_title' | head -n$2 | tail -n1 | cut -d'"' -f4)
+	link2="https://katcr.co"$link2
+
+	link3=$(wget -q -U "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)" $link2 -O - | grep "magnet:" | head -n1 | cut -d'"' -f4)
+
+	tmux new -d -s ${search}_${2} "aria2c '"$link3"'"
+}
+
 katcr_dl(){
 	pkg install aria2c
 	pkg install aria2
