@@ -468,7 +468,7 @@ server(){
 
     	while true
     	do
-    		if [ `date +%H%M` = $date_night ]
+    		if [ `date +%H%M` = $date_night ] || [ $date_night = "loop" ]
     		then
                 echo "===== Start ====="
                 night
