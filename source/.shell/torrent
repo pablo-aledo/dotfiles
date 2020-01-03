@@ -88,3 +88,11 @@ katcr_dl(){
 		katcr_dlaux $search $a
 	done
 }
+
+tmkill(){
+tmux ls | grep $1 | cut -d':' -f1 | while read line
+do
+    tmux kill-session -t $line
+done
+}
+
