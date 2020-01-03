@@ -1348,11 +1348,11 @@ _, Y_ini = nbrs.kneighbors(X_ini)
 
 for i in range(0, len(X_ini)):
     X = [ X_ini[j] for j in range(0, len(X_ini)) if j != i ]
-    Y = [ Y_ini[j] for j in range(0, len(Y_ini)) if j != i ]
+    Y_ref = [ Y_ini[j] for j in range(0, len(Y_ini)) if j != i ]
     nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(X)
     _, Y = nbrs.kneighbors(X)
 
-    diff = sum( map( lambda x: x != 0, np.subtract(Y, Y_ini) ) )
+    diff = sum( map( lambda x: x != 0, np.subtract(Y, Y_ref) ) )
 
     print map[i], diff
 "
