@@ -1324,6 +1324,40 @@ learning.fit(){
     $clustering_method.fit
 }
 
+learning.rank_vectors(){
+    rm -fr $tmp/classifier.x
+    n=0
+    for file in $learning_dir/vectors_reduced/*
+    do
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/classifier.x
+        echo "$n, $file" >> $tmp/map
+        n=$(( $n + 1 ))
+    done
+
+	python -c "
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+X_ini = np.loadtxt('$tmp/classifier.x')
+
+with open('$tmp/map') as f:
+    pairs = [ eval(line) for line in f ]
+map = dict(pairs)
+
+nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(X_ini)
+_, Y_ini = nbrs.kneighbors(X_ini)
+
+for i in range(0, len(X_ini)):
+    X = [ X_ini[j] for j in range(0, len(X_ini)) if j != i ]
+    Y = [ Y_ini[j] for j in range(0, len(Y_ini)) if j != i ]
+    nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(X)
+    _, Y = nbrs.kneighbors(X)
+
+    diff = sum( map( lambda x: x != 0, np.subtract(Y, Y_ini) ) )
+
+    print map[i], diff
+"
+}
+
 linear_classifier.transform(){
 x=$(learning.doc2rvect $1)
 
