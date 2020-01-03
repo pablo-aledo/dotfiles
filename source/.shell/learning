@@ -1352,7 +1352,7 @@ with open('$tmp/map_documents') as f:
     pairs = [ eval(line) for line in f ]
 map_documents = dict(pairs)
 
-nbrs = KNeighborsClassifier(n_neighbors=1.fit(X_ini,Y_ini)
+nbrs = KNeighborsClassifier(n_neighbors=1).fit(X_ini,Y_ini)
 _, Y_ini = nbrs.predict(X_ini)
 
 for i in range(0, len(X_ini)):
