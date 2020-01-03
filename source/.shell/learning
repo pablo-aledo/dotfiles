@@ -1325,35 +1325,45 @@ learning.fit(){
 }
 
 learning.rank_vectors(){
-    rm -fr $tmp/classifier.x
+    rm -fr $tmp/classifier.x $tmp/classifier.y
     n=0
+
+    ls $learning_dir/vectors_reduced/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/classifier/map
+
     for file in $learning_dir/vectors_reduced/*
     do
         cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/classifier.x
-        echo "$n, $file" >> $tmp/map
+
+        y=$(basename $file | sed 's/\..*//g')
+        id=$(cat $learning_dir/classifier/map | grep " $y$" | awk '{print $1}')
+        echo $id >> $tmp/classifier.y
+
+        echo "$n, $file" >> $tmp/map_documents
         n=$(( $n + 1 ))
     done
 
 	python -c "
 import numpy as np
-from sklearn.neighbors import NearestNeighbors
+from sklearn.neighbors import KNeighborsClassifier
 X_ini = np.loadtxt('$tmp/classifier.x')
+Y_ini = np.loadtxt('$tmp/classifier.y')
 
-with open('$tmp/map') as f:
+with open('$tmp/map_documents') as f:
     pairs = [ eval(line) for line in f ]
-map = dict(pairs)
+map_documents = dict(pairs)
 
-nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(X_ini)
-_, Y_ini = nbrs.kneighbors(X_ini)
+nbrs = KNeighborsClassifier(n_neighbors=1.fit(X_ini,Y_ini)
+_, Y_ini = nbrs.predict(X_ini)
 
 for i in range(0, len(X_ini)):
     X_red = [ X_ini[j] for j in range(0, len(X_ini)) if j != i ]
-    nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(X_red)
-    _, Y = nbrs.kneighbors(X_ini)
+    Y_red = [ Y_ini[j] for j in range(0, len(Y_ini)) if j != i ]
+    nbrs = KNeighborsClassifier(n_neighbors=1).fit(X_red,Y_red)
+    _, Y = nbrs.predict(X_ini)
 
     diff = sum( map( lambda x: x != 0, np.subtract(Y, Y_ini) ) )
 
-    print map[i], diff
+    print map_documents[i], diff
 "
 }
 
