@@ -112,8 +112,8 @@ convert_3(){
 }
 
 convert_4(){
-	OPTS="-ovc xvid -oac mp3lame -xvidencopts bitrate=-700000"
-	mencoder `echo $OPTS` -o "$1.converted.mp4" "$1"
+    OPTS="--preset-import-file ~/config/presets.json --preset 'Very Fast 1080p30'"
+    echo HandBrakeCLI -i \"$1\" -o \"$1.converted.mp4\" `echo $OPTS` | bash
 }
 
 convert_5(){
@@ -161,6 +161,11 @@ convert_12(){
 
 convert_13(){
 	OPTS="-noskip -of lavf -lavfopts format=mp4 -af lavcresample=44100 -vf-add harddup -vf-add scale=480:-11 -oac lavc -ovc lavc -lavcopts aglobal=1:vglobal=1:acodec=libfaac:abitrate=128:vcodec=mpeg4:vbitrate=384:keyint=25"
+	mencoder `echo $OPTS` -o "$1.converted.mp4" "$1"
+}
+
+convert_14(){
+	OPTS="-ovc xvid -oac mp3lame -xvidencopts bitrate=-700000"
 	mencoder `echo $OPTS` -o "$1.converted.mp4" "$1"
 }
 
