@@ -102,8 +102,8 @@ convert_1(){
 }
 
 convert_2(){
-	OPTS="-noskip -of lavf -lavfopts format=mp4 -af lavcresample=44100 -vf-add harddup -vf-add scale=480:-11 -oac lavc -ovc lavc -lavcopts aglobal=1:vglobal=1:acodec=libfaac:abitrate=128:vcodec=mpeg4:vbitrate=384:keyint=25"
-	mencoder `echo $OPTS` -o "$1.converted.mp4" "$1"
+	OPTS="-codec copy"
+	echo ffmpeg -i \"$1\" $OPTS \"$1.converted.mp4\" | bash
 }
 
 convert_3(){
@@ -157,6 +157,11 @@ convert_11(){
 convert_12(){
 	OPTS="-movflags faststart -vf 'scale=720:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset fast -crf 25 -acodec aac -strict experimental -mbd 2 -ab 128 -b 400"
 	echo ffmpeg -i \"$1\" $OPTS \"$1.converted.mp4\" | bash
+}
+
+convert_13(){
+	OPTS="-noskip -of lavf -lavfopts format=mp4 -af lavcresample=44100 -vf-add harddup -vf-add scale=480:-11 -oac lavc -ovc lavc -lavcopts aglobal=1:vglobal=1:acodec=libfaac:abitrate=128:vcodec=mpeg4:vbitrate=384:keyint=25"
+	mencoder `echo $OPTS` -o "$1.converted.mp4" "$1"
 }
 
 convert_ppt(){
