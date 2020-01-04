@@ -188,8 +188,8 @@ map ZD ggVGzdggVGzdggVGzdggVGzd
 " toggle gundo
 nnoremap <leader>u :GundoToggle<CR>
 " Next and Previous
-:map > :n<cr>
-:map < :N<cr>
+:map > :wn<cr>
+:map < :wN<cr>
 " Spanish keyboard does not have ~
 :map ª ~
 :imap ª ~
