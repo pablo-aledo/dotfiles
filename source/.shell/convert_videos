@@ -117,7 +117,7 @@ convert_4(){
 }
 
 convert_5(){
-	OPTS="-f mp4 -vcodec libxvid -maxrate 1000 -qmin 3 -qmax 5 -bufsize 4096 -g 300 -acodec aac -strict experimental -mbd 2 -s 320x240 -ab 128 -b 400"
+	OPTS="-vf '-vcodec copy -acodec aac -ab 128kb"
 	echo ffmpeg -i \"$1\" $OPTS \"$1.converted.mp4\" | bash
 }
 
@@ -167,6 +167,11 @@ convert_13(){
 convert_14(){
 	OPTS="-ovc xvid -oac mp3lame -xvidencopts bitrate=-700000"
 	mencoder `echo $OPTS` -o "$1.converted.mp4" "$1"
+}
+
+convert_15(){
+	OPTS="-f mp4 -vcodec libxvid -maxrate 1000 -qmin 3 -qmax 5 -bufsize 4096 -g 300 -acodec aac -strict experimental -mbd 2 -s 320x240 -ab 128 -b 400"
+	echo ffmpeg -i \"$1\" $OPTS \"$1.converted.mp4\" | bash
 }
 
 convert_ppt(){
