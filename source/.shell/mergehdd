@@ -112,11 +112,14 @@ cp_if_space(){
     size=$(du -B1 -s "$1" | awk '{print $1}')
     margin=$(( 1 * 1024 * 1024 * 1024 ))
 
+
     if [ $(( $space - $size )) -gt $margin ]
     then
+        echo "\e[32m cp_ok \"$src\" \"$dst\" \e[0m"
         cp -r "$src" "$dst"
         echo "$src" >> /tmp/copied
     else
+        echo "\e[31m cp_nok \"$src\" \"$dst\" \e[0m"
         echo "$src" >> /tmp/not_copied
     fi
 
@@ -131,9 +134,11 @@ mv_if_space(){
 
     if [ $(( $space - $size )) -gt $margin ]
     then
+        echo "\e[32m mv_ok \"$src\" \"$dst\" \e[0m"
         mv "$src" "$dst"
         echo "$src" >> /tmp/moved
     else
+        echo "\e[31m mv_nok \"$src\" \"$dst\" \e[0m"
         echo "$src" >> /tmp/not_moved
     fi
 
