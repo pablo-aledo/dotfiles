@@ -387,6 +387,7 @@ server(){
     then
     	while true
     	do
+            date
             cd
             ncdu /media/removable/2TB2/homes/admin/ -o ~/ncdu
             find /media/removable/2TB2/homes/admin/ > ~/files
