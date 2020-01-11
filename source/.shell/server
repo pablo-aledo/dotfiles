@@ -611,6 +611,17 @@ server(){
             sleep 10
         done
     fi
+
+    if [ $1 = "space" ]
+    then
+        while true
+        do
+            space=$( dfh | grep 'sda1 ' | awk '{print $5}' | sed 's/%//g' )
+            echo "space $space %"
+            [ $space -gt 95 ] && echo "\e[31m Low space \e[0m" && notify_space
+            sleep 10
+        done
+    fi
 }
 
 
@@ -671,6 +682,10 @@ kmail_log(){
 
 notify_rates(){
     echo "Low notification rates on server" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW NOTIFICATION RATES ON SERVER" -- pablo.aledo@gmail.com
+}
+
+notify_space(){
+    echo "Low space on server" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW SPACE ON SERVER" -- pablo.aledo@gmail.com
 }
 
 aws_servers(){
