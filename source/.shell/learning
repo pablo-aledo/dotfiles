@@ -2265,4 +2265,17 @@ learning.leven_topics(){
     list_all_topics | sort | uniq | levenshtein.pl > topics_scr
 }
 
+list_extract_files(){
+
+file=$1
+folder=$2
+
+n=$( $( echo $folder | sed 's|/|\n|g' ) + 1 )
+
+cat $file | grep "$folder/" | cut -d'/' -f$n | sort | uniq | while read linea
+do
+   cat $file | grep -F "$folder/$linea/" | sed "s|$folder/[^/]*/||g" > documents/$linea
+done
+
+}
 
