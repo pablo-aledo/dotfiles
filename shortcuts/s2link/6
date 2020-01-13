@@ -2,7 +2,7 @@ source ~/.dotfiles/source/.shell/bak
 
 export DISPLAY=:1
 
-xdotool key 1 && sleep 30
+xdotool key 1 && sleep 40
 
 for a in `seq 1 $(cat /tmp/skip)`
 do
