@@ -2270,7 +2270,7 @@ list_extract_files(){
 file=$1
 folder=$2
 
-n=$( $( echo $folder | sed 's|/|\n|g' ) + 1 )
+n=$( echo $folder/ | sed 's|/|\n|g' | wc -l )
 
 cat $file | grep "$folder/" | cut -d'/' -f$n | sort | uniq | while read linea
 do
