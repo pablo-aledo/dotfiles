@@ -9,7 +9,7 @@ echo $link > /tmp/link
 google-chrome printfriendly.com >/dev/null 2>/dev/null &
 
 skip=0
-for j in $(seq 1 10)
+for j in $(seq 1 100)
 do
     for a in ~/.dotfiles/shortcuts/images/print_preview*.png
     do
