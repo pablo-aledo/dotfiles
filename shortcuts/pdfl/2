@@ -8,7 +8,7 @@ echo $link > /tmp/link
 
 google-chrome printfriendly.com >/dev/null 2>/dev/null &
 
-mouseover 50 10000 ~/.dotfiles/shortcuts/images/print_preview.png
+mouseover 50 40000 ~/.dotfiles/shortcuts/images/print_preview.png
 
 xdotool mousemove 100 380
 xdotool click 1
