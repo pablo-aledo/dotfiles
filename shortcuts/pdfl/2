@@ -8,7 +8,16 @@ echo $link > /tmp/link
 
 google-chrome printfriendly.com >/dev/null 2>/dev/null &
 
-mouseover 50 40000 ~/.dotfiles/shortcuts/images/print_preview.png
+skip=0
+for j in $(seq 1 10)
+do
+    for a in ~/.dotfiles/shortcuts/images/print_preview*.png
+    do
+        mouseover 1 40000 $a && skip=1;
+        [ $skip -eq 1 ] && break
+    done
+    [ $skip -eq 1 ] && break
+done
 
 xdotool mousemove 100 380
 xdotool click 1
