@@ -702,7 +702,7 @@ night_pdf(){
     DISPLAY=:1 xdotool key 0
     sleep 10
 
-    shc s2link 50 "label: pdf" 20
+    shc s2link 100 "label: pdf is: starred" 20
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
     sleep 10
