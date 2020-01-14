@@ -143,3 +143,37 @@ lnk_hierarchy_fill_scale_3(){
         fi
     done
 }
+
+lnk_hierarchy_fill_scale_4(){
+    find -type l | while read line
+    do
+        echo "\e[34m $line \e[0m"
+        target=$(ll $line | sed 's/.* -> //g')
+
+        if [ -d "$target" ]
+        then
+            rm -f "$line"
+            mkdir -p "$line"
+
+            ( cd $target; find -type d | grep -v '^\.$' ) | while read dirname
+            do
+                ( cd "$line"; mkdir -p "$dirname" )
+            done
+
+            ( cd $target; find -type f ) | while read filename
+            do
+                echo "\e[33m     $filename \e[0m"
+                ( cd "$line"; [ -e "$filename" ] || ln -s "$target/$filename" "$filename" )
+            done
+        fi
+
+        if [ -f "$target" ]
+        then
+            echo "\e[34m $line \e[0m"
+            target=$(ll "$line "| sed 's/.* -> //g')
+
+            [ -L "$line" ] && rm -f "$line"
+            [ -e "$line" ] || ln -s "$target" "$line"
+        fi
+    done
+}
