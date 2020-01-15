@@ -1,0 +1,1 @@
+ find /tmp/lock -mmin +5 -delete
