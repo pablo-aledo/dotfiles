@@ -2279,3 +2279,6 @@ done
 
 }
 
+learning.text(){
+    summarize_line_limit=999999 summarize_page_limit=999999 learning.doc2txt $1 | learning.normalize_txt -
+}
