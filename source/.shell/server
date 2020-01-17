@@ -600,6 +600,7 @@ server(){
                 diff_avh=$(( $actual_n_avh - previous_n_avh ))
                 diff_rss=$(( $actual_n_rss - previous_n_rss ))
 
+                date
                 echo "diff_avh = $diff_avh"
                 echo "diff_rss = $diff_rss"
 
