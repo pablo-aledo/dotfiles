@@ -1,1 +1,6 @@
- find /tmp/lock -mmin +5 -delete
+while true
+do
+    find /tmp/lock -mmin +5 -delete
+    sleep 10
+    [ "$(ps aux | grep shortcuts | grep '6$')" = "" ] && break
+done
