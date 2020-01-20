@@ -222,10 +222,10 @@ avhome_mail_server(){
        do
               title=$(echo $line | cut -d'|' -f2)
               title_ml=$title
-              title_outbox=$(echo $title | sed -e 's|/||g')
               source ~/.dotfiles/source/.shell/learning
               [ "$avxmail_ml" = "true" ] && learning.configure $HOME/servers/rssmail/learning >/dev/null
               [ "$avxmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
+              title_outbox=$(echo $title_ml | sed -e 's|/||g')
               link=http://avxhm.se$(echo $line | cut -d'|' -f1)
               echo "\e[31m $title_ml \e[0m: $link"
               title_escaped=`echo $title | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g' -e 's/\*/\\\*/g'`
