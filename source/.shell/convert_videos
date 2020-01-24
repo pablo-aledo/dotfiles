@@ -461,6 +461,10 @@ convert_recursive(){
 	actual=1;
 	echo $findcmd | bash | sort | while read line
 	do
+
+        [ -e $convert_dir/pause ] && echo "\e[31m ===== pause =====\e[0m"
+        while [ -e $convert_dir/pause ]; do sleep 10; done
+
 		echo "\e[31m ===== ( $actual / $total ) $line =====\e[0m"
 
 		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
