@@ -1,0 +1,11 @@
+wait_cpu(){
+  pkg install sysstat
+  [ $# -gt 0 ] || target=50
+  [ $# -gt 0 ] && target=$1
+
+  awk -v target="$target" '
+    $13 ~ /^[0-9.]+$/ {
+      current = 100 - $13
+      if(current <= target) { exit(0); }
+    }' < <(mpstat 1)
+}
