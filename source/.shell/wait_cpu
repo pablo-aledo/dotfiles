@@ -9,3 +9,20 @@ wait_cpu(){
       if(current <= target) { exit(0); }
     }' < <(mpstat 1)
 }
+
+wait_cpu_2(){
+    [ $# -gt 0 ] || threshold=50
+    [ $# -gt 0 ] && threshold=$1
+    while true ; do
+        # Get the current CPU usage
+        usage=$(top -n1 | awk 'NR==3{print $2}' | tr ',' '.')
+
+        # Compared the current usage against the threshold
+        result=$(bc -l <<< "$usage <= $threshold")
+        [ $result == "1" ] && break
+
+        # Feel free to sleep less than a second. (with GNU sleep)
+        sleep 1
+    done
+    return 0
+}
