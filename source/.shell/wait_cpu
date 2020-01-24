@@ -19,7 +19,7 @@ wait_cpu_2(){
 
         # Compared the current usage against the threshold
         result=$(bc -l <<< "$usage <= $threshold")
-        [ $result == "1" ] && break
+        [ $result = "1" ] && break
 
         # Feel free to sleep less than a second. (with GNU sleep)
         sleep 1
