@@ -89,7 +89,7 @@ sync_partial_contents(){
     rm -fr /tmp/spc_sync_${name}
     cat /tmp/intersection | while read line
     do
-        echo rsync -vaXi --delete \"$1/$line\" \"$2/$line\" >> /tmp/spc_sync_${name}
+        echo rsync -vaXi --delete \"$1/$line\" \"$2/$line\" "#|| rm -fr" \"$2/$line\" >> /tmp/spc_sync_${name}
     done
 
     comm -23 /tmp/spc_not_sync_${name} /tmp/contents_2 > /tmp/aux
