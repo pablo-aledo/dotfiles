@@ -15,7 +15,7 @@ pword(){
 		read PWORD
 	fi
 
-	if [ "$PWORD = "" ]
+	if [ "$PWORD" = "" ]
 	then
 		echo -n 'Password: ' > /dev/stderr
 		read PWORD
