@@ -484,6 +484,24 @@ server(){
     	done
     fi
 
+    if [ $1 = "pauseinterval" ]
+    then
+        shift
+        [ $# -gt 0 ] || date_start=0900
+        [ $# -gt 0 ] && date_start=$1
+        [ $# -gt 1 ] || date_stop=1300
+        [ $# -gt 1 ] && date_stop=$2
+
+        echo $date_start $date_stop
+
+        while true
+        do
+            [ `date +%H%M` = $date_start ] && rm -fr /tmp/pause
+            [ `date +%H%M` = $date_stop ]  && touch /tmp/pause
+            sleep 50
+        done
+    fi
+
     if [ $1 = "kredeploy" ]
     then
 

@@ -463,7 +463,7 @@ convert_recursive(){
 	do
 
         [ -e $convert_dir/pause ] && echo "\e[31m ===== pause =====\e[0m"
-        while [ -e $convert_dir/pause ]; do sleep 10; done
+        while [ -e $convert_dir/pause ] || [ -e /tmp/pause ] ; do sleep 10; done
 
 		echo "\e[31m ===== ( $actual / $total ) $line =====\e[0m"
 
