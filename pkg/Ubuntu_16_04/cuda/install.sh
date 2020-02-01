@@ -3,7 +3,7 @@
 # sudo reboot
 # uname -r
 cd
-sudo apt-get update
+sudo apt-get update -y
 sudo apt-get install -y build-essential
 sudo apt-get install -y linux-image-extra-virtual
 sudo apt-get install -y linux-headers-`uname -r`

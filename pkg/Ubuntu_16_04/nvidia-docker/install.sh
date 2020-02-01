@@ -1,5 +1,5 @@
 sudo add-apt-repository ppa:graphics-drivers/ppa -y
-sudo apt-get update
+sudo apt-get update -y
 sudo apt-get install -y nvidia-375 nvidia-settings nvidia-modprobe
 
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
@@ -9,7 +9,7 @@ sudo add-apt-repository \
  "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
  $(lsb_release -cs) \
  stable"
-sudo apt-get update
+sudo apt-get update -y
 sudo apt-get install -y docker-ce
 
 wget -P /tmp https://github.com/NVIDIA/nvidia-docker/releases/download/v1.0.1/nvidia-docker_1.0.1-1_amd64.deb

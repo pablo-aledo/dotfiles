@@ -83,7 +83,7 @@ git clone https://github.com/NVIDIA/DIGITS.git $DIGITS_HOME
 sudo pip install -r $DIGITS_HOME/requirements.txt
 
 #sudo pip install -e $DIGITS_ROOT
-#sudo apt-get install python-opencv
+#sudo apt-get install -y python-opencv
 
 # Install tensorflow
 
