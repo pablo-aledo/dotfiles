@@ -496,8 +496,8 @@ server(){
 
         while true
         do
-            [ `date +%H%M` = $date_start ] && rm -fr /tmp/pause
-            [ `date +%H%M` = $date_stop ]  && touch /tmp/pause
+            [ `date +%H%M` = $date_start ] && touch /tmp/pause
+            [ `date +%H%M` = $date_stop  ] && rm -fr /tmp/pause
             sleep 10
         done
     fi
