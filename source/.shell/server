@@ -498,7 +498,7 @@ server(){
         do
             [ `date +%H%M` = $date_start ] && rm -fr /tmp/pause
             [ `date +%H%M` = $date_stop ]  && touch /tmp/pause
-            sleep 50
+            sleep 10
         done
     fi
 
