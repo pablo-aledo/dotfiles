@@ -1325,7 +1325,7 @@ learning.fit(){
 }
 
 learning.rank_vectors(){
-    rm -fr $tmp/classifier.x $tmp/classifier.y
+    rm -fr $tmp/classifier.x $tmp/classifier.y $tmp/map_documents
     n=0
 
     ls $learning_dir/vectors_reduced/ | sed 's/\..*//g' | sort | uniq | nl - | sed 's/\t/ /g' | sed -e 's/ \+/ /g' > $learning_dir/classifier/map
