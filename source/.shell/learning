@@ -1338,7 +1338,7 @@ learning.rank_vectors(){
         id=$(cat $learning_dir/classifier/map | grep " $y$" | awk '{print $1}')
         echo $id >> $tmp/classifier.y
 
-        echo "$n, $file" >> $tmp/map_documents
+        echo "$n, \"$file\"" >> $tmp/map_documents
         n=$(( $n + 1 ))
     done
 
