@@ -1353,13 +1353,13 @@ with open('$tmp/map_documents') as f:
 map_documents = dict(pairs)
 
 nbrs = KNeighborsClassifier(n_neighbors=1).fit(X_ini,Y_ini)
-_, Y_ini = nbrs.predict(X_ini)
+Y_ini = nbrs.predict(X_ini)
 
 for i in range(0, len(X_ini)):
     X_red = [ X_ini[j] for j in range(0, len(X_ini)) if j != i ]
     Y_red = [ Y_ini[j] for j in range(0, len(Y_ini)) if j != i ]
     nbrs = KNeighborsClassifier(n_neighbors=1).fit(X_red,Y_red)
-    _, Y = nbrs.predict(X_ini)
+    Y = nbrs.predict(X_ini)
 
     diff = sum( map( lambda x: x != 0, np.subtract(Y, Y_ini) ) )
 
