@@ -217,6 +217,7 @@ case $1 in
 (ammonite)               docker run --rm -it -v $PWD:/workdir -w /workdir ammonite ;;
 (ansible)                docker run --rm -it -v ${PWD}/hosts:/etc/ansible/hosts -v ${PWD}/ansible.cfg:/etc/ansible/ansible.cfg -v ${HOME}/.ssh:/root/.ssh:ro ansible all -m ping ;;
 (angr)                   sudo docker run -v $PWD:/workdir -w /workdir -it angr/angr ;;
+(aquiladb)               docker run -d -i -p 50051:50051 -v $PWD/aquiladb:/data -v $HOME/.dotfiles/pkg/Docker/aquiladb/DB_config.yml:/AquilaDB/src/DB_config.yml -t ammaorg/aquiladb ;;
 (atom)                   docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY atom ;;
 (audacity)               docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -e QT_DEVICE_PIXEL_RATIO --device /dev/snd --group-add audio --name audacity ${DOCKER_REPO_PREFIX}/audacity ;;
 (audio2text)             shift; ( docker run --rm -i audio2text | tar xf - ) < $1 ;;
