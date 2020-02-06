@@ -323,6 +323,7 @@ case $1 in
                              emby/embyserver:latest ;;
 (evince)                 docker run -it -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -v /etc/machine-id:/etc/machine-id -e DISPLAY=$DISPLAY evince $* ;;
 (etherpad)               docker run -d -p 9001:9001 etherpad ;;
+(euclidesdb)             docker run -p 50000:50000 -v ~/database:/database -it euclidesdb/euclidesdb ;;
 (face_recognition)       shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --entrypoint bash face_recognition $* ;;
 (facedetect)             shift; docker run --rm -v `pwd`:/work -w /work vimagick/facedetect $* ;;
 (fontforge)              docker run --rm -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $state/fontforge:/home/fontforge --name fontforge fghj/fontforge ;;
