@@ -10,7 +10,7 @@ xdotool type avmpage
 xdotool key Return
 sleep 5
 
-cat ~/Descargas/avmpage.html | sed 's/a href/\na href/g' | grep href | grep -i icerbox | grep -v premium | while read line
+cat ~/Descargas/avmpage.html | sed 's/a.*href/\na href/g' | grep href | grep -i icerbox | grep -v premium | while read line
 do
     link=$(echo $line | sed 's/.*a href="\([^"]*\)".*/\1/g' )
     google-chrome $link >/dev/null 2>/dev/null &
