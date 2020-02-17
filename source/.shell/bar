@@ -19,6 +19,7 @@ bar(){
 
     setterm -cursor off
     max=$1
+    scale=10
     it=0
 
     cat | while read line
@@ -39,7 +40,7 @@ import datetime
 rate=float($line-$start_line)/($datenow - $start_time + 0.001)
 rem_secs=int( ($max-$line)/(rate + 0.001) )
 print( ['◐', '◓', '◑', '◒'][$it%4] + \
-    ' [' + '#'*$perc + ' '*(100-$perc) + ']' + '($line/$max [' + str($perc) + '%' + ']) ' + str(datetime.timedelta(seconds=rem_secs)) + ' '*10 + '\r', end='')
+    ' [' + '#'*int($perc/$scale) + ' '*int((100-1-$perc)/$scale) + ']' + '($line/$max [' + str($perc) + '%' + ']) ' + str(datetime.timedelta(seconds=rem_secs)) + ' '*10 + '\r', end='')
 "
 
         [ $wide = false ] && \
