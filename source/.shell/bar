@@ -25,7 +25,7 @@ bar(){
     cat | while read line
     do
         perc=$(( $line*100/$max ))
-        [ $line != $oldline ] && it=$(( $it + 1 ))
+        [ "$line" != "$oldline" ] && it=$(( $it + 1 ))
         oldline=$line
 
         start_time=$(cat /tmp/start_time)
