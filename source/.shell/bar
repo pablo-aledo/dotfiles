@@ -19,10 +19,13 @@ bar(){
 
     setterm -cursor off
     max=$1
+    it=0
 
     cat | while read line
     do
         perc=$(( $line*100/$max ))
+        [ $line != $oldline ] && it=$(( $it + 1 ))
+        oldline=$line
 
         start_time=$(cat /tmp/start_time)
         datenow=$(date +%s)
@@ -35,7 +38,7 @@ bar(){
 import datetime
 rate=float($line-$start_line)/($datenow - $start_time + 0.001)
 rem_secs=int( ($max-$line)/(rate + 0.001) )
-print( ['◐', '◓', '◑', '◒'][$line%4] + \
+print( ['◐', '◓', '◑', '◒'][$it%4] + \
     ' [' + '#'*$perc + ' '*(100-$perc) + ']' + '($line/$max [' + str($perc) + '%' + ']) ' + str(datetime.timedelta(seconds=rem_secs)) + ' '*10 + '\r', end='')
 "
 
