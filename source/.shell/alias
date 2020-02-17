@@ -43,5 +43,5 @@ alias akslogin='az aks get-credentials --resource-group $1 --name $2 --admin';
 alias pvim='/usr/bin/vim +":set nopaste|:set ignorecase smartcase|:imap jj <ESC>|:map <Space><Space> /|:map <Space> :" '
 
 descbar(){
-barcmd 'ls -l Descargas | grep -F "$(tmux ca -pt .1 | grep -v "^$" | tail -n1 | sed "s/^[^ ]* //g")" -B1000 | tail -n+2 | awk "{s+=\$5} END {print s}"' $(ls -l Descargas | tail -n+2 | awk "{s+=\$5} END {print s}"')
+barcmd 'ls -l Descargas | grep -F "$(tmux ca -pt .1 | grep -v "^$" | tail -n1 | sed "s/^[^ ]* //g")" -B1000 | tail -n+2 | awk "{s+=\$5} END {print s}"' $(ls -l Descargas | tail -n+2 | awk "{s+=\$5} END {print s}")
 }
