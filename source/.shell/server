@@ -641,6 +641,29 @@ server(){
             sleep 10
         done
     fi
+
+
+    if [ $1 = "send" ]
+    then
+        shift
+        cd
+        while true
+        do
+            ip=$( cat /tmp/aws_config | grep AWS_SERVER | cut -d'=' -f2 )
+            if ping -c1 -w1 $ip >/dev/null 2>/dev/null
+            then
+                echo "\e[34m Sending \e[0m"
+                for a in $*
+                do
+                    aws_send $a
+                done
+            else
+                echo "\e[31m Not Sending \e[0m"
+            fi
+            sleep 10
+        done
+    fi
+
 }
 
 
@@ -708,11 +731,12 @@ notify_space(){
 }
 
 aws_servers(){
-    server novnc4
+    #server novnc4
 	tmux new -d -s rssmail "source ~/.shell; server rssmail"
 	tmux new -d -s avxmail "source ~/.shell; server avxmail"
 	tmux new -d -s rates   "source ~/.shell; server rates"
-	[ -e /media/DATA/html ] && tmux new -d -s gopro "source ~/.shell; cd /media/DATA/html; docker_app lamp"
+	tmux new -d -s send    "source ~/.shell; server send servers"
+	#[ -e /media/DATA/html ] && tmux new -d -s gopro "source ~/.shell; cd /media/DATA/html; docker_app lamp"
 }
 
 night_pdf(){
