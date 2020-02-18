@@ -89,8 +89,6 @@ adapt_awsserver(){
 adapt_awsserver(){
     myshell zsh
 
-    export DEBIAN_FRONTEND=noninteractive
-
     pkg install tmux
     pkg install novnc4
     pkg install terminator
