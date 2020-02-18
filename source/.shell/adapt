@@ -89,6 +89,8 @@ adapt_awsserver(){
 adapt_awsserver(){
     myshell zsh
 
+    export DEBIAN_FRONTEND=noninteractive
+
     pkg install tmux
     pkg install novnc4
     pkg install terminator
@@ -109,7 +111,6 @@ adapt_awsserver(){
     pkg install docker
 	pkg install rsstail
 	pkg install html2text
-	pkg install mutt
 	pkg install google-chrome
 	pkg install sshfs
     pkg install binutils

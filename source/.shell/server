@@ -738,6 +738,7 @@ aws_servers(){
 	tmux new -d -s send     "source ~/.shell; server send servers"
 	tmux new -d -s rsswatch "source ~/.shell; server rsswatch"
 	tmux new -d -s space    "source ~/.shell; server space"
+    # tmux join-pane -t :rssmail.1 -s rsswatch
 	#[ -e /media/DATA/html ] && tmux new -d -s gopro "source ~/.shell; cd /media/DATA/html; docker_app lamp"
 }
 
