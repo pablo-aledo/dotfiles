@@ -1,4 +1,4 @@
-LOCAL_BACKUP_DEST=/media/mint/2TB2/homes/admin
+LOCAL_BACKUP_DEST=/media/removable/2TB2/homes/admin
 LOCAL_BACKUP_TIME_MACHINE=/media/mint/2TB2/homes/admin/time_machine
 LOCAL_BACKUP_SRC=$HOME
 LOCAL_BACKUP_BAK_DIR=/media/mint/2TB2/homes/admin/rsync_bak
