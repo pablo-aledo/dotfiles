@@ -4,4 +4,4 @@ touch /tmp/lock
 
 [ -e /tmp/avl_forward ] && local_backup_m Descargas
 
-rm /tmp/lock
+rm -f /tmp/lock
