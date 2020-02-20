@@ -649,6 +649,7 @@ server(){
         cd
         while true
         do
+            aws_load send
             ip=$( cat /tmp/aws_config | grep AWS_SERVER | cut -d'=' -f2 )
             if ping -c1 -w1 $ip >/dev/null 2>/dev/null
             then
