@@ -554,6 +554,7 @@ aws_save(){
 
 aws_load(){
 
+	[ -e ~/aws ]           && AWS_FOLDER=~/aws
 	[ -e ~/Dotfiles/aws ]  && AWS_FOLDER=~/Dotfiles/aws
 
 	source $AWS_FOLDER/$1/aws_config && sudo rm -rf $AWS_PEM
