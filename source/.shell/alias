@@ -48,7 +48,7 @@ barcmd 'ls -l Descargas | grep -F "$(tmux ca -pt .1 | grep -v "^$" | tail -n1 | 
 }
 
 ncdubar(){
-barcmd 'tmux ca -pt .1 | grep files | awk "{print \$(NF-1)}"' $(cat files | wc -l)
+barcmd 'tmux ca -pt .1 | grep files | awk "{print \$(NF-1)}"' $(cat tmp/files | wc -l)
 }
 
 filesbar(){
