@@ -1273,6 +1273,7 @@ learning.fit(){
     #[ -e $learning_dir/topics ] && learning.get_documents
 
     #rm -fr $learning_dir/txts;
+    echo "\e[34m doc2txt \e[0m "
     mkdir -p $learning_dir/txts
     ls $learning_dir/documents/* | sort | while read line
     do
@@ -1308,6 +1309,63 @@ learning.fit(){
         echo "\e[34m reduce \e[0m " $line
         learning.doc2rvect "$line" > $learning_dir/vectors_reduced/$(basename "$line")
     done
+
+    rm -fr $learning_dir/classifier; mkdir -p $learning_dir/classifier
+    echo "\e[34m classifier \e[0m "
+    $classifier_method.fit
+    cp -r $learning_dir/classifier_train $learning_dir/classifier_test
+    [ -e $learning_dir/classifier_test ] && classifier.evaluate
+
+    rm -fr $learning_dir/regression; mkdir -p $learning_dir/regression
+    echo "\e[34m regression \e[0m "
+    [ -e $learning_dir/regression_fit ] && $regression_method.fit
+
+    rm -fr $learning_dir/cluster; mkdir -p $learning_dir/cluster
+    echo "\e[34m cluster \e[0m "
+    $clustering_method.fit
+}
+
+learning.fit_parallel(){
+    local line
+
+    [ -e $learning_dir/documents ] || mkdir -p $learning_dir/documents
+
+    echo "\e[34m doc2txt \e[0m "
+    mkdir -p $learning_dir/txts
+    rm -f $learning_dir/tmp/script
+    ls $learning_dir/documents/* | sort | while read line
+    do
+        [ -e $learning_dir/txts/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
+        echo \"source ~/.shell\; tmp=$learning_dir/tmp/$RANDOM\; mkdir \$tmp\; learning.doc2txt $learning_dir/txts/$line $learning_dir/txts/$(basename $line)\"
+    done
+    cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
+
+    [ $( echo $vectorizer_method | grep keywords ) ] || ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
+    echo "\e[34m get_features \e[0m "
+    $vectorizer_method.get_features
+
+    mkdir -p $learning_dir/vectors
+    ls $learning_dir/txts/* | sort | while read line
+    rm -f $learning_dir/tmp/script
+    do
+        [ -e $learning_dir/vectors/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
+        echo \"source ~/.shell\; tmp=$learning_dir/tmp/$RANDOM\; mkdir \$tmp\; $vectorizer_method.txt2vec $learning_dir/txts/$line \> $learning_dir/vectors/$(basename $line)\"
+    done
+    cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
+
+    rm -fr $learning_dir/pca; mkdir -p $learning_dir/pca
+    echo "\e[34m pca \e[0m "
+    $pca_method.fit
+
+    mkdir -p $learning_dir/vectors_reduced
+    [ -e $learning_dir/classifier_train ] || cp -r $learning_dir/documents $learning_dir/classifier_train
+    rm -f $learning_dir/tmp/script
+    ls $learning_dir/classifier_train/* | sort | while read line
+    do
+        [ -e $learning_dir/vectors_reduced/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
+        echo \"source ~/.shell\; tmp=$learning_dir/tmp/$RANDOM\; mkdir \$tmp\; learning.doc2rvect $learning_dir/classifier_train/$line \> $learning_dir/vectors_reduced/$(basename $line)\"
+    done
+    cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
 
     rm -fr $learning_dir/classifier; mkdir -p $learning_dir/classifier
     echo "\e[34m classifier \e[0m "
