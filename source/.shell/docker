@@ -691,6 +691,13 @@ case $1 in
                          #google-chrome 'http://127.0.0.1:6080/vnc.html?resize=remote'
                          google-chrome 'http://localhost:6080/vnc.html?autoconnect=1&autoscale=0&quality=3'
                          ;;
+(upsource)               docker run -it --name upsource-server-instance \
+                           -v upsource/data:/opt/upsource/data \
+                           -v upsource/conf:/opt/upsource/conf \
+                           -v upsource/logs:/opt/upsource/logs \
+                           -v upsource/backup:/opt/upsource/backups \
+                           -p 8080:8080 \
+                           jetbrains/upsource:2019.1.1623 ;;
 (neural-style)           docker run -v $PWD:/out -w /out -i -t neural-style th /root/neural-style/neural_style.lua -gpu -1 -style_image style.jpg -content_image content.jpg ;;
 # (docker-neural-style)    git clone https://github.com/jcjohnson/neural-style.git ;
 #                          cd neural-style ;
