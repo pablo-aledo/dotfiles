@@ -205,6 +205,13 @@ case $1 in
     cp ~/.dotfiles/pkg/Docker/spark/Dockerfile kubernetes/dockerfiles/spark/
     ./bin/docker-image-tool.sh build
     ;;
+(upsource)
+    mkdir -p $HOME/upsource/data
+    mkdir -p $HOME/upsource/conf
+    mkdir -p $HOME/upsource/logs
+    mkdir -p $HOME/upsource/backups
+    chmod -R 777 $HOME/upsource
+    ;;
 esac
 }
 
@@ -691,13 +698,12 @@ case $1 in
                          #google-chrome 'http://127.0.0.1:6080/vnc.html?resize=remote'
                          google-chrome 'http://localhost:6080/vnc.html?autoconnect=1&autoscale=0&quality=3'
                          ;;
-(upsource)               mkdir upsource; cd upsource
-                         docker run -it \
-                           -v data:/opt/upsource/data \
-                           -v conf:/opt/upsource/conf \
-                           -v logs:/opt/upsource/logs \
-                           -v backups:/opt/upsource/backup \
-                           -p 8080:8080 \
+(upsource)               docker run -it \
+                           -v $HOME/upsource/data:/opt/upsource/data \
+                           -v $HOME/upsource/conf:/opt/upsource/conf \
+                           -v $HOME/upsource/logs:/opt/upsource/logs \
+                           -v $HOME/upsource/backups:/opt/upsource/backup \
+                           -p 80:8080 \
                            jetbrains/upsource:2019.1.1623 ;;
 (neural-style)           docker run -v $PWD:/out -w /out -i -t neural-style th /root/neural-style/neural_style.lua -gpu -1 -style_image style.jpg -content_image content.jpg ;;
 # (docker-neural-style)    git clone https://github.com/jcjohnson/neural-style.git ;
