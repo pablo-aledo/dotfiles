@@ -1416,7 +1416,7 @@ learning.fit_parallel(){
     ls $learning_dir/documents/* | sort | while read line
     do
         [ -e $learning_dir/txts/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
-        echo \"source ~/.shell\; tmp=$learning_dir/tmp/$RANDOM\; mkdir \$tmp\; learning.doc2txt $learning_dir/txts/$line $learning_dir/txts/$(basename $line)\"
+        echo source ~/.shell\; tmp=$learning_dir/tmp/$RANDOM\; mkdir \$tmp\; learning.doc2txt $line $learning_dir/txts/$(basename $line) >> $learning_dir/tmp/script
     done
     cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
 
@@ -1429,7 +1429,7 @@ learning.fit_parallel(){
     rm -f $learning_dir/tmp/script
     do
         [ -e $learning_dir/vectors/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
-        echo \"source ~/.shell\; tmp=$learning_dir/tmp/$RANDOM\; mkdir \$tmp\; $vectorizer_method.txt2vec $learning_dir/txts/$line \> $learning_dir/vectors/$(basename $line)\"
+        echo source ~/.shell\; tmp=$learning_dir/tmp/$RANDOM\; mkdir \$tmp\; $vectorizer_method.txt2vec $line \> $learning_dir/vectors/$(basename $line) >> $learning_dir/tmp/script
     done
     cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
 
@@ -1443,7 +1443,7 @@ learning.fit_parallel(){
     ls $learning_dir/classifier_train/* | sort | while read line
     do
         [ -e $learning_dir/vectors_reduced/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
-        echo \"source ~/.shell\; tmp=$learning_dir/tmp/$RANDOM\; mkdir \$tmp\; learning.doc2rvect $learning_dir/classifier_train/$line \> $learning_dir/vectors_reduced/$(basename $line)\"
+        echo source ~/.shell\; tmp=$learning_dir/tmp/$RANDOM\; mkdir \$tmp\; learning.doc2rvect $line \> $learning_dir/vectors_reduced/$(basename $line) >> $learning_dir/tmp/script
     done
     cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
 
