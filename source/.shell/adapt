@@ -152,6 +152,52 @@ adapt_awsserver(){
     mutt -F ~/.mutt/muttrc_2
 }
 
+adapt_awsminiserver(){
+    myshell zsh
+
+    pkg install tmux
+    pkg install ranger
+    pkg install mutt
+    pkg install ncdu
+    pkg install docker
+	pkg install rsstail
+	pkg install html2text
+	pkg install sshfs
+    pkg install binutils
+    pkg install python-numpy
+    pkg install python-sklearn
+    pkg install unrar
+    pkg install detox
+    pkg install pdftotext
+    pkg install fzf z
+
+	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
+	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
+	sed -i '/Mod1+F2/d' ~/.i3/config
+	sed -i '/Mod1+Tab/d' ~/.i3/config
+	sed -i '/Mod1+Shift+Tab/d' ~/.i3/config
+	sed -i 's/bindsym Mod1+Return exec/# bindsym Mod1+Return exec/g' ~/.i3/config
+
+	sudo localectl set-locale LANG=en_US.UTF-8
+
+	sudo sysctl -w vm.min_free_kbytes=135168
+	sudo sysctl -w vm.swappiness=5
+
+
+    sed -i 's/set-option -g history-limit .*/set-option -g history-limit 99/g' ~/.tmux.conf
+    echo 'adapt_swappiness >/dev/null 2>/dev/null' >> ~/.shell
+
+    echo 'export LOCAL_BACKUP_SRC=$HOME' >> ~/.shell
+    echo 'export LOCAL_BACKUP_DEST=/media/removable/2TB2/homes/admin' >> ~/.shell
+    echo 'export LOCAL_BACKUP_TIME_MACHINE=/media/removable/2TB2/homes/admin/time_machine' >> ~/.shell
+    echo 'export LOCAL_BACKUP_BAK_DIR=/media/removable/2TB2/homes/admin/rsync_bak' >> ~/.shell
+    source ~/.shell
+
+    mutt -F ~/.mutt/muttrc_0
+    mutt -F ~/.mutt/muttrc_1
+    mutt -F ~/.mutt/muttrc_2
+}
+
 adapt_shc_theme(){
 
 	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
