@@ -824,7 +824,7 @@ loop_avh(){
     shc mkread
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
-    sleep 10
+    sleep 30
 
     shc star
     DISPLAY=:1 xdotool key 6
