@@ -1116,12 +1116,7 @@ then
     find $learning_dir/classifier_train/ -type f | sort | while read line
     do
         echo -n $line " " >> $tmp/vects
-        if [ -e "$learning_dir/vectors/$(basename $line)" ]
-        then
-            cat "$learning_dir/vectors/$(basename $line)" | vect2s >> $tmp/vects
-        else
-            $vectorizer_method.txt2vec "$line" | vect2s >> $tmp/vects
-        fi
+        cat "$learning_dir/vectors/$(basename $line)" | vect2s >> $tmp/vects
         echo "\e[34m vector \e[0m " $(basename $line)
     done
     echo "=====" >> $tmp/vects
@@ -1135,12 +1130,7 @@ then
         [ "$y_true" != "$y_pred" ] && echo -n '*** ' >> $tmp/vects
         echo -n T:$y_true P:$y_pred " " >> $tmp/vects
         echo -n $line " " >> $tmp/vects
-        if [ -e "$learning_dir/vectors/$(basename $line)" ]
-        then
-            cat "$learning_dir/vectors/$(basename $line)" | vect2s >> $tmp/vects
-        else
-            $vectorizer_method.txt2vec "$line" | vect2s >> $tmp/vects
-        fi
+        cat "$learning_dir/vectors/$(basename $line)" | vect2s >> $tmp/vects
         # echo "\e[34m vector \e[0m " $(basename $line)
     done
 fi
@@ -1452,7 +1442,7 @@ learning.fit_parallel(){
         [ -e $learning_dir/vectors/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
         echo source ~/.shell\; learning.tmpdir\; $vectorizer_method.txt2vec $line \> $learning_dir/vectors/$(basename $line)\; rm -fr \$tmp >> $learning_dir/tmp/script
     done
-    cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
+    [ -e $learning_dir/tmp/script ] && cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
 
     rm -fr $learning_dir/pca; mkdir -p $learning_dir/pca
     echo "\e[34m pca \e[0m "
