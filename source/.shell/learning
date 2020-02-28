@@ -1105,6 +1105,14 @@ if [ $learning_evaluate_vects = "true" ]
 then
     echo "\e[34m vectors \e[0m "
     rm -fr $tmp/vects
+
+
+    find $learning_dir/classifier_train/ -type f | sort | while read line
+    do
+        echo source ~/.shell\; learning.tmpdir\; $vectorizer_method.txt2vec $line \> $learning_dir/vectors/$(basename $line)\; rm -fr \$tmp >> $learning_dir/tmp/script
+    done
+    cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
+
     find $learning_dir/classifier_train/ -type f | sort | while read line
     do
         echo -n $line " " >> $tmp/vects
