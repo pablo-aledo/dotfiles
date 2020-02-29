@@ -1,0 +1,8 @@
+xdotool key Ctrl+p
+
+sleep 10
+
+xdotool key Return
+sleep 1
+xdotool key Return
+
