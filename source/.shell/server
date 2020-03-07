@@ -340,7 +340,8 @@ server(){
         [ $# -eq 3 ] && ip=$2 && ports=3389 && portd=$3
         [ $# -eq 4 ] && ip=$2 && ports=$3 && portd=$4
 		[ -e /usr/share/noVNC/ ] || pkg install novnc4
-		tmux new -d -s novnc "cd /usr/share/noVNC; sudo ./utils/launch.sh --listen $ports --vnc $ip:$portd"
+		cd /usr/share/noVNC
+        sudo ./utils/launch.sh --listen $ports --vnc $ip:$portd
 	fi
 
 	if [ $1 = "oneye" ]
