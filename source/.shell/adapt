@@ -262,7 +262,7 @@ adapt_nofont(){
 }
 
 adapt_afowler(){
-	echo theme afowler >> ~/.shell
+	echo theme afowler >> ~/.zshrc
 	sed -i 's///g' ~/.tmux.conf
 	sed -i 's///g' ~/.tmux.conf
 	sed -i 's///g' ~/.tmux.conf
