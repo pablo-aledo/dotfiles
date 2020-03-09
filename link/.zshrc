@@ -105,4 +105,3 @@ zstyle ':completion:*' special-dirs true
 [ -e ~/.shell ] && source ~/.shell
 [ -e ~/.paths ] && source ~/.paths
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-theme afowler
