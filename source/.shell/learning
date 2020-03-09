@@ -1088,7 +1088,7 @@ from sklearn import metrics
 
 with open('$learning_dir/tmp/classifier.y_pred') as f:
     y_pred = [ line.rstrip('\n') for line in f ]
-with open('$learning_dir/classifier.y_true') as f:
+with open('$learning_dir/tmp/classifier.y_true') as f:
     y_true = [ line.rstrip('\n') for line in f ]
 
 score = metrics.accuracy_score(y_true, y_pred)
