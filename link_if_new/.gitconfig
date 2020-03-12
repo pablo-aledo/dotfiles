@@ -16,3 +16,5 @@
     interactive = auto
     ui = true
     pager = true
+[commit]
+    template = ~/.git_commit_template.txt
