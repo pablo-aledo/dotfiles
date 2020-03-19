@@ -271,7 +271,6 @@ adapt_afowler(){
 }
 
 adapt_tmuxbar(){
-	echo theme afowler >> ~/.zshrc
 	sed -i 's///g' ~/.tmux.conf
 	sed -i 's///g' ~/.tmux.conf
 	sed -i 's///g' ~/.tmux.conf
