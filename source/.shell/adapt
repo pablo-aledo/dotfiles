@@ -270,6 +270,15 @@ adapt_afowler(){
 	find ~/.vim/ -name '*tmuxline*' -type f -delete
 }
 
+adapt_tmuxbar(){
+	echo theme afowler >> ~/.zshrc
+	sed -i 's///g' ~/.tmux.conf
+	sed -i 's///g' ~/.tmux.conf
+	sed -i 's///g' ~/.tmux.conf
+	sed -i 's///g' ~/.tmux.conf
+	find ~/.vim/ -name '*tmuxline*' -type f -delete
+}
+
 adapt_fastssh(){
 	grep 'ssh -XC -c aes128-ctr' ~/.dotfiles/source/.shell/aws && return
 	sed -i 's/ssh /ssh -XC -c aes128-ctr /g' ~/.dotfiles/source/.shell/aws
