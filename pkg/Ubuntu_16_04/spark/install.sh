@@ -25,12 +25,12 @@ sudo chown -R sparkuser /app/spark/tmp
 sudo chmod -R 755 /app/spark/tmp
 
 cd /tmp
-wget http://ftp.cixug.es/apache/spark/spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz
-tar -xvzf spark-2.4.4-bin-hadoop2.7.tgz
+wget http://ftp.cixug.es/apache/spark/spark-2.4.5/spark-2.4.5-bin-hadoop2.7.tgz
+tar -xvzf spark-2.4.5-bin-hadoop2.7.tgz
 wget https://downloads.lightbend.com/scala/2.12.6/scala-2.12.6.tgz
 tar -xvzf scala-2.12.6.tgz
 
-sudo mv /tmp/spark-2.4.4-bin-hadoop2.7/* /usr/local/spark
+sudo mv /tmp/spark-2.4.5-bin-hadoop2.7/* /usr/local/spark
 sudo mv /tmp/scala-2.12.6/* /usr/local/scala
 
 echo 'export SCALA_HOME=/usr/local/scala' >> ~/.paths
