@@ -1,12 +1,12 @@
 # Run application locally on 8 cores
-./bin/spark-submit \
+spark-submit \
   --class org.apache.spark.examples.SparkPi \
   --master "local[8]" \
   /usr/local/spark/examples/jars/spark-examples_2.11-2.4.5.jar \
   100
 
 # Run on a Spark standalone cluster in client deploy mode
-./bin/spark-submit \
+spark-submit \
   --class org.apache.spark.examples.SparkPi \
   --master spark://207.184.161.138:7077 \
   --executor-memory 20G \
@@ -15,7 +15,7 @@
   1000
 
 # Run on a Spark standalone cluster in cluster deploy mode with supervise
-./bin/spark-submit \
+spark-submit \
   --class org.apache.spark.examples.SparkPi \
   --master spark://207.184.161.138:7077 \
   --deploy-mode cluster \
@@ -27,7 +27,7 @@
 
 # Run on a YARN cluster
 export HADOOP_CONF_DIR=XXX
-./bin/spark-submit \
+spark-submit \
   --class org.apache.spark.examples.SparkPi \
   --master yarn \
   --deploy-mode cluster \  # can be client for client mode
@@ -37,13 +37,13 @@ export HADOOP_CONF_DIR=XXX
   1000
 
 # Run a Python application on a Spark standalone cluster
-./bin/spark-submit \
+spark-submit \
   --master spark://207.184.161.138:7077 \
   examples/src/main/python/pi.py \
   1000
 
 # Run on a Mesos cluster in cluster deploy mode with supervise
-./bin/spark-submit \
+spark-submit \
   --class org.apache.spark.examples.SparkPi \
   --master mesos://207.184.161.138:7077 \
   --deploy-mode cluster \
@@ -54,7 +54,7 @@ export HADOOP_CONF_DIR=XXX
   1000
 
 # Run on a Kubernetes cluster in cluster deploy mode
-./bin/spark-submit \
+spark-submit \
   --class org.apache.spark.examples.SparkPi \
   --master k8s://xx.yy.zz.ww:443 \
   --deploy-mode cluster \
