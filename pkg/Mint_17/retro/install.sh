@@ -2,6 +2,7 @@ sudo apt-get install -y visualboyadvance visualboyadvance-gtk
 sudo apt-get install -y dosbox
 sudo apt-get install -y dosemu
 sudo apt-get install -y desmume
+sudo apt-get install -y mupen64plus
 
 # ppsspp
 sudo add-apt-repository ppa:ppsspp/stable
