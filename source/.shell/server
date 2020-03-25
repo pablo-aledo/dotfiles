@@ -495,7 +495,7 @@ server(){
                 [ -e /tmp/convert_flowcontrol ] && convert_flowcontrol stop convert
 
                 echo "----- Finish -----"
-                sleep $((60*5))
+                [ ! -e /tmp/convert_controlflow ] && sleep $((60*5))
             fi
             sleep 10
         done
