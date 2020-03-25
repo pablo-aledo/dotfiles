@@ -896,6 +896,7 @@ loop_avh(){
 }
 
 convert_flowcontrol(){
+    echo " ===== $(date) $* ====="
 
     if [ $1 == "start" ] && [ $2 == "convert" ]
     then
