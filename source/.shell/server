@@ -452,6 +452,10 @@ server(){
     if [ $1 = "convert_candidates_overlap" ]
     then
 
+        [ -e /media/removable/2TB2/homes/admin/Videos ] || return
+        [ -e $convert_dir ] || return
+        [ -e $converted_dir ] || return
+
         echo "Creating list"
         convert_candidates > /tmp/convert_candidates
 
@@ -459,8 +463,6 @@ server(){
         do
             cd
             echo "----- Launch -----"
-	        [ ! -e /media/removable/2TB2/homes/admin/Videos ] && sleep 10 && continue
-	        [ ! -e $convert_dir ] && sleep 10 && continue
             [ -e $convert_dir/disable ] && sleep 10 && continue
 
             convert_flowcontrol start convert
