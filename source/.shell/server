@@ -435,21 +435,41 @@ server(){
     if [ $1 = "copy_candidates" ]
     then
 
-        touch /tmp/convert_flowcontrol
-
         while [ ! -e /tmp/convert_candidates ]
         do
             sleep 1
         done
 
-        while [ -e /tmp/convert_flowcontrol ]
+        while [ ! -e $convert_dir/disable ]
         do
             convert_flowcontrol start copy
-            cat /tmp/convert_candidates | grep -v '  ' | tail -n+$( ( ls -d $convert_dir/*/; echo ) | wc -l ) | head -n1 | sed 's/^[0-9]* //g' | while read line
-            do
-                cp_convert "$line"
-            done
+            cat /tmp/convert_candidates | grep -v '  ' | tail -n+$( ( ls -d $convert_dir/*/; echo ) | wc -l ) | head -n1 | sed 's/^[0-9]* //g' | read line
+            cp_convert "$line"
             convert_flowcontrol stop copy
+        done
+    fi
+
+    if [ $1 = "convert_candidates_overlap" ]
+    then
+
+        echo "Creating list"
+        convert_candidates > /tmp/convert_candidates
+
+        while true
+        do
+            cd
+            echo "----- Launch -----"
+	        [ ! -e /media/removable/2TB2/homes/admin/Videos ] && sleep 10 && continue
+	        [ ! -e $convert_dir ] && sleep 10 && continue
+            [ -e $convert_dir/disable ] && sleep 10 && continue
+
+            convert_flowcontrol start convert
+
+            convert_recursive 720
+
+            convert_flowcontrol stop convert
+
+            echo "----- Finish -----"
         done
     fi
 
@@ -480,22 +500,15 @@ server(){
                 [ -e /tmp/convert_candidates ] || echo "Creating list"
                 [ -e /tmp/convert_candidates ] || convert_candidates > /tmp/convert_candidates
 
-                if [ ! -e /tmp/convert_flowcontrol ]
-                then
-                    cat /tmp/convert_candidates | grep -v '  ' | tail -n+$( ( ls -d $convert_dir/*/; echo ) | wc -l ) | head -n$limit | sed 's/^[0-9]* //g' | while read line
-                    do
-                        cp_convert "$line"
-                    done
-                fi
-
-                [ -e /tmp/convert_flowcontrol ] && convert_flowcontrol start convert
+                cat /tmp/convert_candidates | grep -v '  ' | tail -n+$( ( ls -d $convert_dir/*/; echo ) | wc -l ) | head -n$limit | sed 's/^[0-9]* //g' | while read line
+                do
+                    cp_convert "$line"
+                done
 
                 convert_recursive 720
 
-                [ -e /tmp/convert_flowcontrol ] && convert_flowcontrol stop convert
-
                 echo "----- Finish -----"
-                [ ! -e /tmp/convert_controlflow ] && sleep $((60*5))
+                sleep $((60*5))
             fi
             sleep 10
         done
@@ -904,7 +917,7 @@ convert_flowcontrol(){
     if [ $1 == "stop" ] && [ $2 == "copy" ]
     then
         rm -fr /tmp/flowcontrol_copy
-        sleep 5
+        sleep $(( 60 * 5 ))
     fi
 }
 
