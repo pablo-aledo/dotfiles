@@ -432,6 +432,27 @@ server(){
     	done
     fi
 
+    if [ $1 = "copy_candidates" ]
+    then
+
+        touch /tmp/convert_flowcontrol
+
+        while [ ! -e /tmp/convert_candidates ]
+        do
+            sleep 1
+        done
+
+        while [ -e /tmp/convert_flowcontrol ]
+        do
+            convert_flowcontrol start copy
+            cat /tmp/convert_candidates | grep -v '  ' | tail -n+$( ( ls -d $convert_dir/*/; echo ) | wc -l ) | head -n1 | sed 's/^[0-9]* //g' | while read line
+            do
+                cp_convert "$line"
+            done
+            convert_flowcontrol stop copy
+        done
+    fi
+
     if [ $1 = "convert_candidates" ]
     then
         [ "$2" = "" ] && date_vconv=0005
@@ -458,11 +479,21 @@ server(){
 
                 [ -e /tmp/convert_candidates ] || echo "Creating list"
                 [ -e /tmp/convert_candidates ] || convert_candidates > /tmp/convert_candidates
-                cat /tmp/convert_candidates | grep -v '  ' | tail -n+$( ( ls -d $convert_dir/*/; echo ) | wc -l ) | head -n$limit | sed 's/^[0-9]* //g' | while read line
-                do
-                    cp_convert "$line"
-                done
+
+                if [ ! -e /tmp/convert_flowcontrol ]
+                then
+                    cat /tmp/convert_candidates | grep -v '  ' | tail -n+$( ( ls -d $convert_dir/*/; echo ) | wc -l ) | head -n$limit | sed 's/^[0-9]* //g' | while read line
+                    do
+                        cp_convert "$line"
+                    done
+                fi
+
+                [ -e /tmp/convert_flowcontrol ] && convert_flowcontrol start convert
+
                 convert_recursive 720
+
+                [ -e /tmp/convert_flowcontrol ] && convert_flowcontrol stop convert
+
                 echo "----- Finish -----"
                 sleep $((60*5))
             fi
@@ -848,3 +879,32 @@ loop_avh(){
     echo "====="
     cat /tmp/star_not_found
 }
+
+convert_flowcontrol(){
+
+    if [ $1 == "start" ] && [ $2 == "convert" ]
+    then
+        while [ -e "/tmp/flowcontrol_copy" ]
+        do
+            sleep 1
+        done
+        touch /tmp/flowcontrol_convert
+    fi
+
+    if [ $1 == "start" ] && [ $2 == "copy" ]
+    then
+        touch /tmp/flowcontrol_copy
+    fi
+
+    if [ $1 == "stop" ] && [ $2 == "convert" ]
+    then
+        rm -fr /tmp/flowcontrol_convert
+    fi
+
+    if [ $1 == "stop" ] && [ $2 == "copy" ]
+    then
+        rm -fr /tmp/flowcontrol_copy
+        sleep 5
+    fi
+}
+
