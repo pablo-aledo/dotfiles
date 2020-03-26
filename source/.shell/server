@@ -435,7 +435,7 @@ server(){
     if [ $1 = "copy_candidates" ]
     then
 
-        while [ ! -e /tmp/convert_candidates ]
+        while [ $(cat /tmp/convert_candidates 2>/dev/null | wc -l) = 0 ]
         do
             sleep 1
         done
