@@ -434,6 +434,7 @@ server(){
 
     if [ $1 = "copy_candidates" ]
     then
+        [ -e /tmp/flowcontrol_copy ] && rm -fr /tmp/flowcontrol_copy
 
         while [ $(cat /tmp/convert_candidates 2>/dev/null | wc -l) = 0 ]
         do
@@ -455,6 +456,8 @@ server(){
         [ -e /media/removable/2TB2/homes/admin/Videos ] || return
         [ -e $convert_dir ] || return
         [ -e $converted_dir ] || return
+
+        [ -e /tmp/flowcontrol_convert ] && rm -fr /tmp/flowcontrol_convert
 
         echo "Creating list"
         convert_candidates > /tmp/convert_candidates
@@ -925,6 +928,7 @@ convert_flowcontrol(){
             sleep 1
         done
         rm -fr /tmp/flowcontrol_copy
+        sleep 10
     fi
 }
 
