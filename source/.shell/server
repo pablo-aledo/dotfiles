@@ -919,6 +919,10 @@ convert_flowcontrol(){
 
     if [ $1 == "stop" ] && [ $2 == "copy" ]
     then
+        while [ -e "/tmp/flowcontrol_convert" ]
+        do
+            sleep 1
+        done
         rm -fr /tmp/flowcontrol_copy
         sleep $(( 60 * 5 ))
     fi
