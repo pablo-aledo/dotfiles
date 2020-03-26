@@ -910,6 +910,7 @@ convert_flowcontrol(){
     if [ $1 == "start" ] && [ $2 == "copy" ]
     then
         touch /tmp/flowcontrol_copy
+        sleep $(( 60 * 1 ))
     fi
 
     if [ $1 == "stop" ] && [ $2 == "convert" ]
@@ -924,7 +925,6 @@ convert_flowcontrol(){
             sleep 1
         done
         rm -fr /tmp/flowcontrol_copy
-        sleep $(( 60 * 5 ))
     fi
 }
 
