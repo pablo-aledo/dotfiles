@@ -467,7 +467,6 @@ server(){
         while true
         do
             cd
-            echo "----- Launch -----"
             [ -e $convert_dir/disable ] && sleep 10 && continue
 
             convert_flowcontrol start convert
@@ -475,8 +474,6 @@ server(){
             convert_recursive 720
 
             convert_flowcontrol stop convert
-
-            echo "----- Finish -----"
         done
     fi
 
