@@ -435,6 +435,7 @@ server(){
     if [ $1 = "copy_candidates" ]
     then
         [ -e /tmp/flowcontrol_copy ] && rm -fr /tmp/flowcontrol_copy
+        [ -e /tmp/flowcontrol_convert ] && rm -fr /tmp/flowcontrol_convert
 
         while [ $(cat /tmp/convert_candidates 2>/dev/null | wc -l) = 0 ]
         do
@@ -457,6 +458,7 @@ server(){
         [ -e $convert_dir ] || return
         [ -e $converted_dir ] || return
 
+        [ -e /tmp/flowcontrol_copy ] && rm -fr /tmp/flowcontrol_copy
         [ -e /tmp/flowcontrol_convert ] && rm -fr /tmp/flowcontrol_convert
 
         echo "Creating list"
