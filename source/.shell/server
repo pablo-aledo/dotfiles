@@ -896,9 +896,9 @@ loop_avh(){
 }
 
 convert_flowcontrol(){
-    echo " ===== $(date) $* ====="
+    echo " ===== $(date) $1 $2 ====="
 
-    if [ $1 == "start" ] && [ $2 == "convert" ]
+    if [ "$1" = "start" ] && [ "$2" = "convert" ]
     then
         while [ -e "/tmp/flowcontrol_copy" ]
         do
@@ -907,18 +907,18 @@ convert_flowcontrol(){
         touch /tmp/flowcontrol_convert
     fi
 
-    if [ $1 == "start" ] && [ $2 == "copy" ]
+    if [ "$1" = "start" ] && [ "$2" = "copy" ]
     then
         touch /tmp/flowcontrol_copy
         sleep $(( 60 * 1 ))
     fi
 
-    if [ $1 == "stop" ] && [ $2 == "convert" ]
+    if [ "$1" = "stop" ] && [ "$2" = "convert" ]
     then
         rm -fr /tmp/flowcontrol_convert
     fi
 
-    if [ $1 == "stop" ] && [ $2 == "copy" ]
+    if [ "$1" = "stop" ] && [ "$2" = "copy" ]
     then
         while [ -e "/tmp/flowcontrol_convert" ]
         do
