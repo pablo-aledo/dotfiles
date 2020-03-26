@@ -921,6 +921,7 @@ convert_flowcontrol(){
     if [ "$1" = "stop" ] && [ "$2" = "convert" ]
     then
         rm -fr /tmp/flowcontrol_convert
+        sleep 10
     fi
 
     if [ "$1" = "stop" ] && [ "$2" = "copy" ]
