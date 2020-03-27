@@ -1825,6 +1825,9 @@ learning.join_topics(){
     topic_src=$1
     topic_dst=$2
 
+    # notes
+    echo '# unalias mv'
+
     #learning_src
     echo join $learning_src/$topic_src $learning_src/$topic_dst
 
