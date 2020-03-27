@@ -1838,7 +1838,7 @@ learning.join_topics(){
     echo rm -rf $learning_dir/documents/$topic_src.topic
 
     #topics
-    echo "cat $learning_dir/topics/topics | sed 's/ $topic_src\$/ $topic_dst/g' | sort | uniq > $tmp/topics && mv $tmp/topics $learning_dir/topics/topics"
+    echo "cat $learning_dir/topics/topics | sed 's/ $topic_src\$/ $topic_dst/g' | sort | uniq > $tmp/topics && \mv $tmp/topics $learning_dir/topics/topics"
 
 }
 
