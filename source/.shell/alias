@@ -28,9 +28,9 @@ alias unstar='shc unstar; xdotool key 6; sleep 1; shcw'
 alias avhbar='barcmd "cat /tmp/s2files | grep Title | wc -l" $(cat /tmp/count)'
 
 alias k='sudo kubectl'
-pod(){ k get pods | grep -v Terminating | grep $1 | cut -d" " -f1 | tail -n1; }
-pods(){ k get pods | tail -n+2 | grep -v Terminating | grep $1 | cut -d" " -f1; }
-deployment(){ k get deployments | cut -d" " -f1 | grep $1 | tail -n1; }
+pod(){ k get pods | grep -v Terminating | grep -i $1 | cut -d" " -f1 | tail -n1; }
+pods(){ k get pods | tail -n+2 | grep -v Terminating | grep -i $1 | cut -d" " -f1; }
+deployment(){ k get deployments | cut -d" " -f1 | grep -i $1 | tail -n1; }
 alias kgp='k get pods | grep -v Terminating'
 kshell(){ k exec -it $1 /bin/bash ; }
 alias wkgp='watch -n1 "sudo kubectl get pods | grep -v Terminating"'
