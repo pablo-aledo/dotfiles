@@ -1,3 +1,4 @@
+sudo apt-get -y install make
 cd /tmp
 wget https://github.com/kevinboone/epub2txt2/archive/master.zip
 unzip master.zip
