@@ -184,7 +184,7 @@ avhome_get_new_titles(){
 
     if [ "$AVH_PROXY_IP" != "" ]
     then
-        ssh -i $AVH_PROXY_PEM $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q https://avxhm.se/ebooks/$1 -O -" > dl
+        ssh -i $AVH_PROXY_PEM -o StrictHostKeyChecking=no $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q https://avxhm.se/ebooks/$1 -O -" > dl
     else
         wget -q https://avxhm.se/ebooks/$1 -O dl
     fi
