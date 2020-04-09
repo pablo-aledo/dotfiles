@@ -2050,6 +2050,7 @@ learning.queue_mv(){
     #sed -i -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" *
 
     rm -fr $tmp/script
+    echo "# unalias mv" > $tmp/script
     ls | while read line
     do
         file=$(echo $line | sed 's/\.txt$//g')
