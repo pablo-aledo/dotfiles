@@ -180,6 +180,8 @@ avhome_get_new_titles(){
     mkdir -p ~/servers/avxhome
     cd ~/servers/avxhome
 
+    [ -e /tmp/avh_proxy ] && source /tmp/avh_proxy
+
     if [ "$AVH_PROXY_IP" != "" ]
     then
         ssh -i $AVH_PROXY_PEM $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q https://avxhm.se/ebooks/$1 -O -" > dl
