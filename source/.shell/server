@@ -791,15 +791,15 @@ notify_space(){
 }
 
 aws_servers(){
-    #server novnc4
 	tmux new -d -s rssmail  "source ~/.shell; server rssmail"
 	tmux new -d -s avxmail  "source ~/.shell; server avxmail"
 	tmux new -d -s rates    "source ~/.shell; server rates"
-	tmux new -d -s send     "source ~/.shell; server send servers"
 	tmux new -d -s rsswatch "source ~/.shell; server rsswatch"
 	tmux new -d -s space    "source ~/.shell; server space"
     # tmux join-pane -t :rssmail.1 -s rsswatch
 	#[ -e /media/DATA/html ] && tmux new -d -s gopro "source ~/.shell; cd /media/DATA/html; docker_app lamp"
+	#tmux new -d -s send     "source ~/.shell; server send servers"
+    #server novnc4
 }
 
 night_pdf(){
