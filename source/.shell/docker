@@ -217,6 +217,9 @@ case $1 in
     sudo modprobe binder_linux
     docker run -td --name aind --privileged -p 5900:5900 -v /lib/modules:/lib/modules:ro aind/aind
     ;;
+(docker-android)
+    docker run --privileged -d -p 6080:6080 -p 5554:5554 -p 5555:5555 -e DEVICE="Samsung Galaxy S6" --name android-container budtmo/docker-android-x86-8.1
+    ;;
 esac
 }
 
