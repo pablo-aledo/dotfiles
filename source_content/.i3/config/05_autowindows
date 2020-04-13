@@ -6,6 +6,7 @@ for_window [class="Nautilus" instance="file_progress"] floating enable
 for_window [class="Nautilus" instance="file_progress"] border normal
 for_window [class="Gcalctool"] floating enable
 for_window [class="(?i)gnome-calculator"] floating enable
+for_window [title="Chrome RDP.*$"] floating enable, move absolute position center
 for_window [window_role="pop-up"] floating enable
 #for_window [title="^win.*$"] floating enable
 
