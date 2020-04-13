@@ -212,6 +212,11 @@ case $1 in
     mkdir -p $HOME/upsource/backups
     chmod -R 777 $HOME/upsource
     ;;
+(aind)
+    sudo modprobe ashmem_linux
+    sudo modprobe binder_linux
+    docker run -td --name aind --privileged -p 5900:5900 -v /lib/modules:/lib/modules:ro aind/aind
+    ;;
 esac
 }
 
