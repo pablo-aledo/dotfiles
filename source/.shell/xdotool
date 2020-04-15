@@ -65,3 +65,9 @@ mouseover(){
 	return 0
 }
 
+scrop(){
+    scrot -o $1.png
+    xdotool key Alt+5
+    docker_app gthumb $1.png
+    xdotool key Alt+4
+}
