@@ -1,4 +1,4 @@
-google-chrome cloud.google.com >/dev/null 2>/dev/null &; sleep 10
+google-chrome --profile-directory=cloud cloud.google.com >/dev/null 2>/dev/null &; sleep 10
 xdotool mousemove 1150 130; xdotool click 1; sleep 10
 xdotool mousemove 700 580; xdotool click 1; sleep 10
 
