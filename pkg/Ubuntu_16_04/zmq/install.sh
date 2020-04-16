@@ -1,7 +1,10 @@
+# examples
 cd
 git clone --depth=1 https://github.com/imatix/zguide.git
 
-sudo apt-get install -y libzmq-dev
+# C/C++
+sudo apt-get install -y pkg-config libzmq-dev libzmq3-dev
 
+# Python
 sudo apt-get install -y python-pip
 pip install zmq
