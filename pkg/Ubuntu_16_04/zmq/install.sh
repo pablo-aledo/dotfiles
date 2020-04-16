@@ -11,3 +11,7 @@ sudo apt-get install -y libczmq-dev uuid-dev
 # Python
 sudo apt-get install -y python-pip
 pip install zmq
+
+# go
+#go get gopkg.in/zeromq/goczmq.v4
+#go get github.com/pebbe/zmq4
