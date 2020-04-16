@@ -52,17 +52,17 @@ list=$*
 ping -c1 8.8.8.8 2>/dev/null >/dev/null || \
 	[ $cmd = "install" ] && \
 	[ -e "$REPOSITORY_FOLDER/`distr`/$1/install.sh" ] && \
-		( cd "$REPOSITORY_FOLDER/`distr`/$1/" && bash install.sh ) && return;
+		( cd "$REPOSITORY_FOLDER/`distr`/$1/" && source install.sh ) && return;
 
 if [ $cmd = "install" ] && [ -e "$INSTALLERS_FOLDER/`distr`/$1/install.sh" ]
 then
-	( cd $INSTALLERS_FOLDER/`distr`/$1/; bash install.sh )
+	( cd $INSTALLERS_FOLDER/`distr`/$1/; source install.sh )
 	return;
 fi
 
 if [ $cmd = "install" ] && [ -e "~/.dotfiles/pkg/`distr`/$1/install.sh" ]
 then
-	( cd ~/.dotfiles/pkg/`distr`/$1/; bash install.sh )
+	( cd ~/.dotfiles/pkg/`distr`/$1/; source install.sh )
 	return;
 fi
 
