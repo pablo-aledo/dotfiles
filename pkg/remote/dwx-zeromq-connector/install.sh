@@ -1,4 +1,4 @@
-mkd /tmp/dwx-zeromq-connector
+mkd ~/dwx-zeromq-connector
 wget https://github.com/darwinex/dwx-zeromq-connector/archive/master.zip
 unzip master.zip
 unzip dwx-zeromq-connector-master/dependencies/mql-zmq-master.zip
