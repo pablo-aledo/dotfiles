@@ -6,7 +6,7 @@ mkd c
 appid=1DAFD9A7C67DC84FE37EAA1FC1E5CF75
 
 mkdir -p Users/$USER/AppData/Roaming/MetaQuotes/Terminal/$appid/MQL4/Experts
-cp -r ../dwx-zeromq-connector-master/v2.0.2/mql4/DWX_ZeroMQ_Server_v2.0.2_RC1.mq4 Users/$USER/AppData/Roaming/MetaQuotes/Terminal/$appid/MQL4/Experts
+cp -r ../dwx-zeromq-connector-master/v2.0.1/mql4/DWX_ZeroMQ_Server_v2.0.1_RC8.mq4 Users/$USER/AppData/Roaming/MetaQuotes/Terminal/$appid/MQL4/Experts
 
 mkdir -p Users/$USER/AppData/Roaming/MetaQuotes/Terminal/$appid/MQL4/Include
 cp -r ../mql-zmq-master/Include/* Users/$USER/AppData/Roaming/MetaQuotes/Terminal/$appid/MQL4/Include
@@ -19,5 +19,7 @@ cp -r ../mql-zmq-master/Scripts/* Users/$USER/AppData/Roaming/MetaQuotes/Termina
 
 zip -r mql-zmq-master.zip *
 
-mkdir .htaccess
+touch .htaccess
 sudo docker run -d --rm -p 80:80 -v $PWD:/var/www/html fauria/lamp
+echo "Download and extract to C:"; read
+sudo docker ps | grep fauria.lamp | awk '{print $1}' | xargs sudo docker kill
