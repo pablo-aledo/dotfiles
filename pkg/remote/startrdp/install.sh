@@ -3,7 +3,8 @@ xrandr --output VNC-0 --mode 1280x800
 
 google-chrome --profile-directory=cloud cloud.google.com >/dev/null 2>/dev/null &; sleep 10
 xdotool mousemove 1150 130; xdotool click 1; sleep 10
-xdotool mousemove 700 580; xdotool click 1; sleep 10
+mouseover 10 10000 computeengine.png && xdotool click 1; sleep 1
+
 
 mouseover 10 10000 rdpoff.png; sleep 1
 xdotool mousemove_relative 70 0; sleep 1
@@ -12,6 +13,8 @@ xdotool mousemove_relative 0 30; sleep 1
 xdotool click 1; sleep 1
 xdotool mousemove 970 510; sleep 1
 xdotool click 1; sleep 1
+
+mouseover 100 10000 rdpon.png; sleep 10
 
 ok=false
 while [ $ok = false ]
