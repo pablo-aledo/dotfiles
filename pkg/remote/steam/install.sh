@@ -15,22 +15,21 @@ xdotool key Return; sleep 5
 
 mouseover 10 10000 steambar.png && xdotool click 1;
 
-xdotool key Tab
-xdotool key Return
+xdotool key Tab; sleep 1
+xdotool key Return; sleep 1
 
-xdotool type $steam_user
-xdotool key Tab
-xdotool type $steam_pw
-xdotool key Tab
-xdotool key space
-xdotool key Tab
-xdotool key Return
+xdotool type $steam_user; sleep 1
+xdotool key Tab; sleep 1
+xdotool type $steam_pw; sleep 1
+xdotool key Tab; sleep 1
+xdotool key space; sleep 1
+xdotool key Tab; sleep 1
+xdotool key Return; sleep 1
 
 echo "email code: "; read code
-xdotool key Return
 xdotool type $code
-xdotool key Return
-xdotool key Return
+xdotool key Return; sleep 1
+xdotool key Return; sleep 1
 
 xdotool key Ctrl+w
 
