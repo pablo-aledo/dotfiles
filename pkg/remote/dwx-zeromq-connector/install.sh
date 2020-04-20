@@ -23,3 +23,5 @@ touch .htaccess
 sudo docker run -d --rm -p 80:80 -v $PWD:/var/www/html fauria/lamp
 echo "Download and extract to C:"; read
 sudo docker ps | grep fauria.lamp | awk '{print $1}' | xargs sudo docker kill
+
+echo 'export PYTHONPATH=$HOME/dwx-zeromq-connector/dwx-zeromq-connector-master/v2.0.1/python:$PYTHONPATH' >> ~/.paths
