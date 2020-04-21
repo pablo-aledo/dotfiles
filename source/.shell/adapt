@@ -681,8 +681,10 @@ adapt_simplbuntu(){
 }
 
 adapt_shortcuts(){
+
     [ $# -eq 0 ] && [ "$(tmux ls | grep vnc)" = "" ] && server novnc4 3389 && sleep 5
-    [ $# -eq 0 ] && export DISPLAY=:1 && i3-msg reload && return
+    [ $# -eq 0 ] && export DISPLAY=:1 && i3-msg reload && randr --output VNC-0 --mode 1280x800 && return
+
 	srcdir=$( find ~/.dotfiles/shortcuts/ -maxdepth 1 -type d | grep "/$1\$" )
 
 	find $srcdir -type f | grep -v init.sh | while read a
