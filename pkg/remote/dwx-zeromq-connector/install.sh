@@ -25,3 +25,4 @@ echo "Download and extract to C:"; read
 sudo docker ps | grep fauria.lamp | awk '{print $1}' | xargs sudo docker kill
 
 echo 'export PYTHONPATH=$HOME/dwx-zeromq-connector/dwx-zeromq-connector-master/v2.0.1/python:$PYTHONPATH' >> ~/.paths
+echo 'export PYTHONPATH=/home/pga_cloud_4/dwx-zeromq-connector/dwx-zeromq-connector-master/v2.0.1/python/api/:$PYTHONPATH' >> ~/.paths
