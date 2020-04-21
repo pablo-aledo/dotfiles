@@ -1,2 +1,2 @@
 curl -s "https://get.sdkman.io" | bash
-source "~/.sdkman/bin/sdkman-init.sh"
+source ~/.sdkman/bin/sdkman-init.sh
