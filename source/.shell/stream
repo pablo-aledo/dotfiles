@@ -78,6 +78,22 @@ streamscreen6(){
 	ffmpeg -f x11grab -s 1280x720 -framerate 30 -i :0.0 -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv444p -x264opts crf=20:vbv-maxrate=3000:vbv-bufsize=100:intra-refresh=1:slice-max-size=1500:keyint=30:ref=1 -vf scale=320:240 -f mpegts - | nc -l -p $STREAM_PORT
 }
 
+streamscreen7(){
+ffmpeg -loglevel debug -f x11grab -s 1920x1080 -framerate 60 -i :0.0 -thread_queue_size 1024 -f alsa -ac 2 -ar 44100 -i hw:Loopback,1,0 -c:v h264_nvenc -preset:v llhq -rc:v vbr_minqp -qmin:v 19 -f mpegts - | nc -l -p $STREAM_PORT
+}
+
+streamscreen8(){
+ffmpeg -loglevel debug -f x11grab -s 1920x1080 -framerate 60 -i :0.0 -c:v h264_nvenc -preset:v llhq -rc:v vbr_minqp -qmin:v 19 -f mpegts - | nc -l -p $STREAM_PORT
+}
+
+streamscreen9(){
+ffmpeg -loglevel debug -f x11grab -s 1920x1080 -framerate 60 -i :0.0 -thread_queue_size 1024 -f alsa -ac 2 -ar 44100 -i hw:Loopback,1,0 -vaapi_device /dev/dri/renderD129 -vf 'format=nv12,hwupload,scale_vaapi=w=1920:h=1080' -c:v h264_vaapi -qp:v 19 -bf 4 -threads 4 -aspect 16:9 -f mpegts - | nc -l -p $STREAM_PORT
+}
+
+streamscreen10(){
+ffmpeg -loglevel debug -thread_queue_size 512 -f x11grab -s 1920x1080 -framerate 60 -i :0.0 -vaapi_device /dev/dri/renderD129 -vf 'format=nv12,hwupload,scale_vaapi=w=1920:h=1080' -c:v h264_vaapi -qp:v 19 -bf 4 -threads 4 -aspect 16:9 -f mpegts - | nc -l -p $STREAM_PORT
+}
+
 stream_recv(){
 	aws_config
 	nc $AWS_SERVER $STREAM_PORT | mplayer -benchmark -
@@ -90,6 +106,10 @@ stream_recv2(){
 stream_recv3(){
 	aws_config
 	omxplayer http://$AWS_SERVER:$STREAM_PORT/stream.mp4
+}
+
+stream_recv4(){
+    nc $AWS_SERVER $STREAM_PORT | mplayer -benchmark -framedrop -
 }
 
 recordscreen1(){
