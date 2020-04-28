@@ -7,7 +7,7 @@ mouseover(){
 	[ -e /usr/bin/scrot ]   || pkg install scrot
 	[ -e /usr/bin/xclip ]   || pkg install xclip
 
-    [ "$mouseover_debug" = "true" ] && echo xdotool $*
+    [ "$mouseover_debug" = "true" ] && echo mouseover $*
 
 	count=$1
 	shift
