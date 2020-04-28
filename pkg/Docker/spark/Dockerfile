@@ -53,4 +53,6 @@ ENV SPARK_HOME /opt/spark
 
 WORKDIR /opt/spark/work-dir
 
+RUN chmod g+rwx -R /opt/spark
+
 ENTRYPOINT [ "/opt/entrypoint.sh" ]
