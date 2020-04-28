@@ -14,7 +14,7 @@ xdotool click 1; sleep 1
 xdotool mousemove 970 510; sleep 1
 xdotool click 1; sleep 1
 
-mouseover 20 10000 rdpon.png; sleep 20
+mouseover 20 10000 rdpon.png; sleep 30
 
 ok=false
 while [ $ok = false ]
