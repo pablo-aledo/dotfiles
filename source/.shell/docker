@@ -199,11 +199,11 @@ case $1 in
     ;;
 (spark)
     cd /tmp
-    wget http://ftp.cixug.es/apache/spark/spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz
-    tar -xvzf spark-2.4.4-bin-hadoop2.7.tgz
-    cd /tmp/spark-2.4.4-bin-hadoop2.7/
+    wget http://ftp.cixug.es/apache/spark/spark-2.4.5/spark-2.4.5-bin-hadoop2.7.tgz
+    tar -xvzf spark-2.4.5-bin-hadoop2.7.tgz
+    cd /tmp/spark-2.4.5-bin-hadoop2.7/
     cp ~/.dotfiles/pkg/Docker/spark/Dockerfile kubernetes/dockerfiles/spark/
-    ./bin/docker-image-tool.sh build
+    sudo ./bin/docker-image-tool.sh build
     ;;
 (upsource)
     mkdir -p $HOME/upsource/data
