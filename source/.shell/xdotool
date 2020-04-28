@@ -1,3 +1,5 @@
+export mouseover_debug=false
+
 mouseover(){
 
 	[ -e /usr/bin/xdotool ] || pkg install xdotool
