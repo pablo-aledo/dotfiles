@@ -254,7 +254,7 @@ adapt_openwrt(){
 }
 
 adapt_nofont(){
-	echo t 2 >> ~/.shell
+	#echo t 2 >> ~/.shell
 	sed -i 's///g' ~/.tmux.conf
 	sed -i 's///g' ~/.tmux.conf
 	sed -i 's///g' ~/.tmux.conf
