@@ -697,7 +697,7 @@ server(){
         do
             space=$( dfh | grep 'sda1 ' | awk '{print $5}' | sed 's/%//g' )
             echo "space $space %"
-            [ $space -gt 80 ] && echo "\e[31m Low space \e[0m" && notify_space $space && sleep $(( 1 * 60 * 60 ))
+            [ $space -gt 80 ] && echo "\e[31m Low space \e[0m" && notify_space $space && notify_space_full
             sleep 10
         done
     fi
@@ -789,6 +789,19 @@ notify_rates(){
 
 notify_space(){
     echo "Low space on server: $1 %" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW SPACE ON SERVER" -- pablo.aledo@gmail.com
+}
+
+notify_space_full(){
+    while true
+    do
+        space=$( dfh | grep 'sda1 ' | awk '{print $5}' | sed 's/%//g' )
+        echo "space $space %"
+        [ $space -gt 97 ] && echo "\e[31m DISK IS FULL \e[0m"
+        [ $space -gt 97 ] && echo "Disk is full" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
+        [ $space -gt 97 ] && sleep $(( 1 * 60 * 60 ))
+        [ $space -lt 80 ] && return
+        sleep 10
+    done
 }
 
 aws_servers(){
