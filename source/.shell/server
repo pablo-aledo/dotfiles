@@ -788,7 +788,7 @@ notify_rates(){
 }
 
 notify_space(){
-    echo "Low space on server: $1" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW SPACE ON SERVER" -- pablo.aledo@gmail.com
+    echo "Low space on server: $1 %" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW SPACE ON SERVER" -- pablo.aledo@gmail.com
 }
 
 aws_servers(){
