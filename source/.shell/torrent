@@ -90,6 +90,16 @@ katcr_dl(){
 }
 
 tmkill(){
+
+if [ $# -gt 1 ]
+then
+    for a in $*
+    do
+        tmkill $a
+    done
+    return
+fi
+
 tmux ls | grep $1 | cut -d':' -f1 | while read line
 do
     tmux kill-session -t $line
