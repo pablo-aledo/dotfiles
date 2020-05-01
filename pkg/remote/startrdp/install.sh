@@ -9,6 +9,7 @@ mouseover 20 10000 console.png && xdotool click 1; sleep 1
 mouseover 20 10000 computeengine.png && xdotool mousemove 0 0 && sleep 1
 mouseover 20 10000 computeengine.png && xdotool click 1; sleep 1
 
+mouseover 20 10000 rdpoff.png && xdotool mousemove 0 0 && sleep 1
 mouseover 20 10000 rdpoff.png; sleep 1
 xdotool mousemove_relative 70 0; sleep 1
 xdotool click 1; sleep 1
