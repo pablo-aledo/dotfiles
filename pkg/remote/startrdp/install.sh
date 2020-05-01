@@ -2,7 +2,7 @@ export DISPLAY=:1
 xrandr --output VNC-0 --mode 1280x800
 
 google-chrome --profile-directory=cloud cloud.google.com >/dev/null 2>/dev/null &; sleep 10
-mouseover 20 10000 console.png && sleep 5
+mouseover 20 10000 console.png && xdotool mousemove 0 0 && sleep 5
 mouseover 20 10000 console.png && xdotool click 1; sleep 1
 mouseover 20 10000 computeengine.png && xdotool click 1; sleep 1
 
