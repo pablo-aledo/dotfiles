@@ -795,7 +795,7 @@ notify_space_full(){
     while true
     do
         space=$( dfh | grep 'sda1 ' | awk '{print $5}' | sed 's/%//g' )
-        echo "space $space %"
+        echo "space_full $space %"
         [ $space -gt 97 ] && echo "\e[31m DISK IS FULL \e[0m"
         [ $space -gt 97 ] && echo "Disk is full" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
         [ $space -gt 97 ] && sleep $(( 1 * 60 * 60 ))
