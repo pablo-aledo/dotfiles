@@ -12,7 +12,6 @@ alias docker_gr='docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix
 alias detach='disown $(jobs -l | awk "{print \$6}")'
 alias attach='reptyr'
 alias watch='watch '
-alias tailf='tail -f'
 f(){ echo find -iname "'*$1*'" | bash ; }
 F(){ grep -Rin "$1" ; }
 FF(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' ; }
@@ -54,4 +53,12 @@ barcmd 'tmux ca -pt .1 | grep files | awk "{print \$(NF-1)}" | tail -n1' $(cat t
 
 filesbar(){
 barcmd 'cat files | wc -l' $(cat tmp/files | wc -l)
+}
+
+tailf(){
+    while [ ! -e "$1" ]
+    do
+        sleep 1
+    done
+    tail -f "$1"
 }
