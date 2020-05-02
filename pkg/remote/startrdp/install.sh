@@ -53,3 +53,5 @@ mouseover 20 10000 continue.png && xdotool click 1
 mouseover 20 10000 cancel.png && xdotool click 1
 
 xdotool key Alt+f
+sleep 1
+xdotool key Alt
