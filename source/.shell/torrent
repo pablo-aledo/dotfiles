@@ -100,7 +100,7 @@ then
     return
 fi
 
-tmux ls | grep $1 | cut -d':' -f1 | while read line
+tmux ls | cut -d':' -f1 | grep $1 | while read line
 do
     tmux kill-session -t $line
 done
