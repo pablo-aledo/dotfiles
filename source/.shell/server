@@ -691,6 +691,18 @@ server(){
         done
     fi
 
+    if [ $1 = "sasl" ]
+    then
+        while true
+        do
+
+            [ "$( tmux ca -pt avxmail:1 | grep 'SASL authentication failed' )" != "" ] && \
+                echo "\e[31m SASL Authentication error \e[0m" && notify_sasl && sleep $(( 1 * 60 * 60 ))
+
+            sleep $((60*5))
+        done
+    fi
+
     if [ $1 = "space" ]
     then
         while true
@@ -791,6 +803,10 @@ notify_space(){
     echo "Low space on server: $1 %" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW SPACE ON SERVER" -- pablo.aledo@gmail.com
 }
 
+notify_sasl(){
+    echo "sasl authentication error" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "SASL AUTH ERROR" -- pablo.aledo@gmail.com
+}
+
 notify_space_full(){
     while true
     do
@@ -808,6 +824,7 @@ aws_servers(){
 	tmux new -d -s rssmail  "source ~/.shell; server rssmail"
 	tmux new -d -s avxmail  "source ~/.shell; server avxmail"
 	tmux new -d -s rates    "source ~/.shell; server rates"
+	tmux new -d -s sasl     "source ~/.shell; server sasl"
 	tmux new -d -s rsswatch "source ~/.shell; server rsswatch"
 	tmux new -d -s space    "source ~/.shell; server space"
     # tmux join-pane -t :rssmail.1 -s rsswatch
