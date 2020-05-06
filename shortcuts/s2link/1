@@ -15,5 +15,5 @@ xdotool click 1
 xdotool type "$(cat /tmp/query)"
 xdotool key Return
 sleep 10
-xdotool mousemove 400 205
+xdotool mousemove 400 265
 xdotool click 1
