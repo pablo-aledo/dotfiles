@@ -671,7 +671,7 @@ cp_convert(){
 		echo -e "\e[34m cp_convert $a \e[0m"
 		[ -e "$convert_dir/$a" ] && continue
 		mkdir -p "$convert_dir/$a"
-		rsync -vaXi "$source/$a/" "$convert_dir/$a/"
+		rsync -vaXis "$source/$a/" "$convert_dir/$a/"
 	done
 }
 
