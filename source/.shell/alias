@@ -60,7 +60,7 @@ tailf(){
     do
         sleep 1
     done
-    tail -f "$1"
+    tail -9999f "$1"
 }
 
 alias startrdp='shc; distr remote; export mouseover_debug=true; pkg install startrdp'
