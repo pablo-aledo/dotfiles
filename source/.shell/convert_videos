@@ -531,28 +531,34 @@ convert_decompress_rm(){
 
     ls -lh
 
+    error=false
+
     if [ "$(ls *.part1.rar)" != "" ]
     then
         unrar x *.part1.rar
-        [ $? != 0 ] && echo '\e[31m Error decompressing \e[0m' && read && return
+        [ $? != 0 ] && error=true
         ls *.part*.rar | Xargs rm
-        return
     fi
 
     if [ "$(ls *.part01.rar)" != "" ]
     then
         unrar x *.part01.rar
-        [ $? != 0 ] && echo '\e[31m Error decompressing \e[0m' && read && return
+        [ $? != 0 ] && error=true
         ls *.part*.rar | Xargs rm
-        return
     fi
 
     if [ "$(ls *.rar)" != "" ]
     then
         unrar x *.rar
-        [ $? != 0 ] && echo '\e[31m Error decompressing \e[0m' && read && return
+        [ $? != 0 ] && error=true
         ls *.rar | Xargs rm
-        return
+    fi
+
+    if [ $error = true ]
+    then
+        echo '\e[31m Error decompressing \e[0m' 
+        pwd >> /tmp/cdr_errors
+        read
     fi
 
 }
