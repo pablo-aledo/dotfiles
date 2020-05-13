@@ -525,7 +525,9 @@ convert_recursive_decompress(){
 
 convert_decompress_rm(){
 
-    cd "$convert_dir/$1"
+    echo "\e[34m ===== convert_decompress_rm $1 ===== \e[0m"
+
+    cd "$convert_dir/$1" || return
 
     if [ "$(ls *.part1.rar)" != "" ]
     then
