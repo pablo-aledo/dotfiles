@@ -537,21 +537,21 @@ convert_decompress_rm(){
     then
         unrar x *.part1.rar
         [ $? != 0 ] && error=true
-        ls *.part*.rar | Xargs rm
+        [ $error = false ] && ls *.part*.rar | Xargs rm
     fi
 
     if [ "$(ls *.part01.rar)" != "" ]
     then
         unrar x *.part01.rar
         [ $? != 0 ] && error=true
-        ls *.part*.rar | Xargs rm
+        [ $error = false ] && ls *.part*.rar | Xargs rm
     fi
 
     if [ "$(ls *.rar)" != "" ]
     then
         unrar x *.rar
         [ $? != 0 ] && error=true
-        ls *.rar | Xargs rm
+        [ $error = false ] && ls *.rar | Xargs rm
     fi
 
     if [ $error = true ]
