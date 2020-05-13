@@ -523,6 +523,36 @@ convert_recursive_decompress(){
 
 }
 
+convert_decompress_rm(){
+
+    cd "$convert_dir/$1"
+
+    if [ "$(ls *.part1.rar)" != "" ]
+    then
+        unrar x *.part1.rar
+        [ $? != 0 ] && echo '\e[31m Error decompressing \e[0m' && read && return
+        ls *.part*.rar | Xargs rm
+        return
+    fi
+
+    if [ "$(ls *.part01.rar)" != "" ]
+    then
+        unrar x *.part01.rar
+        [ $? != 0 ] && echo '\e[31m Error decompressing \e[0m' && read && return
+        ls *.part*.rar | Xargs rm
+        return
+    fi
+
+    if [ "$(ls *.rar)" != "" ]
+    then
+        unrar x *.rar
+        [ $? != 0 ] && echo '\e[31m Error decompressing \e[0m' && read && return
+        ls *.rar | Xargs rm
+        return
+    fi
+
+}
+
 convert_recursive_parallel(){
 
 	[ $# -eq 0 ] && width=720
