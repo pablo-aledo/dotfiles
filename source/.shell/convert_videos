@@ -694,6 +694,7 @@ mv_converted(){
 			[ $line[1] = '/' ] && rsync -vaXi --delete --remove-source-files "$line/" "$destination/`basename $line`/"
 			[ $line[1] = '/' ] || rm_empty_folders "$converted_dir/$line"
 			[ $line[1] = '/' ] && rm_empty_folders "$line"
+			[ -e $convert_dir/$line ] && rm -fr "$convert_dir/$line"
 		done
 	fi
 	rm_empty_folders "$converted_dir"
