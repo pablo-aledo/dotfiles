@@ -529,7 +529,7 @@ convert_decompress_rm(){
 
     cd "$convert_dir/$1" || return
 
-    ls
+    ls -lh
 
     if [ "$(ls *.part1.rar)" != "" ]
     then
