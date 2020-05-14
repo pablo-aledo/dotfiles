@@ -1,0 +1,15 @@
+export DISPLAY=:1
+killall chrome chromium google-chrome google-chrome-stable
+xrandr --output VNC-0 --mode 1280x800
+google-chrome --incognito cloud.google.com >/dev/null 2>/dev/null &
+
+xdotool mousemove 1210 120
+xdotool click 1
+
+cat /tmp/user | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Return
+cat /tmp/pword | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Return
+
