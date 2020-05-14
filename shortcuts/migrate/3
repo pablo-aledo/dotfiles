@@ -1,0 +1,26 @@
+xdotool mousemove 40 160
+xdotool click 1
+xdotool key End
+
+
+xdotool mousemove 170 460
+xdotool click 1
+
+cat /tmp/card | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Tab
+cat /tmp/card2 | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Tab
+cat /tmp/card3 | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Tab
+cat /tmp/card4 | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Tab
+
+xdotool mousemove 230 690
+xdotool click 1
+
+xdotool mousemove 850 540
+xdotool click 1

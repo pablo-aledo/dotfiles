@@ -1,0 +1,13 @@
+xdotool mousemove 1080 110
+xdotool click 1
+
+xdotool mousemove 360 740
+xdotool click 1
+
+xdotool mousemove 1210 520
+xdotool click 1
+
+xdotool key Ctrl+l
+
+echo ls | xclip -sel clip -i
+xdotool key Ctrl+v
