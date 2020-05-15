@@ -1,3 +1,5 @@
+source ~/.dotfiles/source/.shell/xdotool
+
 mouseover 10 1000 ~/.dotfiles/shortcuts/images/gshell.png
 xdotool click 1
 sleep 20
