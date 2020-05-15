@@ -743,6 +743,7 @@ shcs(){
 }
 
 shcw(){
+    sleep 1
     [ $# -eq 1 ] && regex=$1 || regex=""
     while [ "`ps aux | grep short | awk '{ for(i=1; i <= 10; i++) $(i)=""; print }' | grep "$regex" | grep -v grep`" != "" ]
     do
