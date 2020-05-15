@@ -6,16 +6,16 @@ xdotool key End
 xdotool mousemove 170 460
 xdotool click 1
 
-cat /tmp/card | xclip -sel clip -i
+echo $card | cut -d' ' -f1 | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Tab
-cat /tmp/card2 | xclip -sel clip -i
+echo $card | cut -d' ' -f2 | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Tab
-cat /tmp/card3 | xclip -sel clip -i
+echo $card | cut -d' ' -f3 | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Tab
-cat /tmp/card4 | xclip -sel clip -i
+echo $card | cut -d' ' -f4 | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Tab
 

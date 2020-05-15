@@ -1,0 +1,9 @@
+xdotool key Ctrl+l
+
+cat ~/Dotfiles/remote/create_vm_gcp | while read -r line
+do
+    echo $line | xclip -sel clip -i
+    xdotool key Ctrl+v
+    sleep 1
+done
+

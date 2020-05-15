@@ -1,5 +1,7 @@
+source ~/Dotfiles/remote/setenv
 xdotool mousemove 1160 120
 xdotool click 1
+sleep 30
 
 mouseover 10 100 ~/.dotfiles/shortcuts/images/checkbox.png
 xdotool click 1
@@ -13,7 +15,7 @@ xdotool click 1
 mouseover 10 100 ~/.dotfiles/shortcuts/images/crear.png
 xdotool click 1
 
-xdotool type $(cat /tmp/country)
+xdotool type $country
 
 mouseover 10 100 ~/.dotfiles/shortcuts/images/checkbox.png
 xdotool click 1
@@ -23,11 +25,11 @@ xdotool click 1
 
 xdotool key Tab
 xdotool type Particular
-cat /tmp/address | xclip -sel clip -i
+echo $address | cut -d',' -f1 | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Tab
 xdotool key Tab
-cat /tmp/city | xclip -sel clip -i
+echo $city | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Tab
 xdotool key Ctrl+v
