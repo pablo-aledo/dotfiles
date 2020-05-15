@@ -1,7 +1,4 @@
 source ~/Dotfiles/remote/setenv
-xdotool mousemove 1160 120
-xdotool click 1
-sleep 30
 
 mouseover 10 100 ~/.dotfiles/shortcuts/images/checkbox.png
 xdotool click 1
