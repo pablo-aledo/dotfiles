@@ -2,7 +2,6 @@ xdotool mousemove 40 160
 xdotool click 1
 xdotool key End
 
-
 xdotool mousemove 170 460
 xdotool click 1
 
