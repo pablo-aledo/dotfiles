@@ -11,3 +11,5 @@ then
 fi
 
 sed -i "s/gcloud_user=.*/gcloud_user=$gcloud_user/g" ~/Dotfiles/remote/setenv
+
+cd ~/.dotfiles/shortcuts/migrate/

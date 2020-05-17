@@ -1,17 +1,25 @@
-source ~/.dotfiles/source/.shell/xdotool
-
-mouseover 10 1000 ~/.dotfiles/shortcuts/images/gshell.png
+xdotool mousemove 40 160
 xdotool click 1
-sleep 20
+xdotool key End
 
-xdotool mousemove 360 740
+xdotool mousemove 170 460
 xdotool click 1
 
-xdotool mousemove 1210 520
-xdotool click 1
-sleep 20
-
-xdotool key Ctrl+l
-
-echo ls | xclip -sel clip -i
+echo $card | cut -d' ' -f1 | xclip -sel clip -i
 xdotool key Ctrl+v
+xdotool key Tab
+echo $card | cut -d' ' -f2 | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Tab
+echo $card | cut -d' ' -f3 | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Tab
+echo $card | cut -d' ' -f4 | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Tab
+
+xdotool mousemove 230 690
+xdotool click 1
+
+xdotool mousemove 850 540
+xdotool click 1

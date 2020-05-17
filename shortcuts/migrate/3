@@ -1,25 +1,32 @@
-xdotool mousemove 40 160
-xdotool click 1
-xdotool key End
+source ~/Dotfiles/remote/setenv
 
-xdotool mousemove 170 460
+xdotool mousemove 280 420
 xdotool click 1
+xdotool type $country
+xdotool key Return
 
-echo $card | cut -d' ' -f1 | xclip -sel clip -i
+# Terms of Service
+xdotool key Tab
+xdotool key space
+xdotool key Tab
+xdotool key Tab
+xdotool key Return
+sleep 10
+
+xdotool key Tab
+xdotool type $type
+echo $address | cut -d',' -f1 | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Tab
-echo $card | cut -d' ' -f2 | xclip -sel clip -i
+echo $address | cut -d',' -f2 | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Tab
-echo $card | cut -d' ' -f3 | xclip -sel clip -i
+echo $pcode | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Tab
-echo $card | cut -d' ' -f4 | xclip -sel clip -i
+echo $city | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Tab
-
-xdotool mousemove 230 690
-xdotool click 1
-
-xdotool mousemove 850 540
-xdotool click 1
+xdotool type $province
+xdotool key Tab
+xdotool key Tab

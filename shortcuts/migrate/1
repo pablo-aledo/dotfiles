@@ -18,7 +18,8 @@ xdotool key Ctrl+v
 xdotool key Return
 sleep 5
 
-rm /tmp/gcode
+rm -f /tmp/gcode
+echo '\e[34m Waiting for /tmp/gcode \e[0m'
 n=0
 while [ ! -e /tmp/gcode ]
 do
@@ -26,7 +27,8 @@ do
     n=$(( n + 1 ))
     [ $n -eq 60 ] && break
 done
-if[ -e /tmp/gcode ]
+echo '\e[34m Continue \e[0m'
+if [ -e /tmp/gcode ]
 then
     cat /tmp/gcode | xclip -sel clip -i
     xdotool key Ctrl+v
