@@ -16,7 +16,23 @@ sleep 5
 echo $gcloud_pw | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Return
-sleep 20
+sleep 5
+
+rm /tmp/gcode
+n=0
+while [ ! -e /tmp/gcode ]
+do
+    sleep 1
+    n=$(( n + 1 ))
+    [ $n -eq 60 ] && break
+done
+if[ -e /tmp/gcode ]
+then
+    cat /tmp/gcode | xclip -sel clip -i
+    xdotool key Ctrl+v
+    xdotool key Return
+    sleep 20
+fi
 
 xdotool mousemove 1160 120
 xdotool click 1
