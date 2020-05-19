@@ -512,17 +512,25 @@ aws_deploy(){
     fi
 }
 
+aws_migrate_incremental(){
+    cd
+
+    ls | while read line
+    do
+        aws_send "$line"
+    done
+
+    aws_send .config
+    aws_send .mutt
+    aws_send .zsh_history
+}
+
 aws_migrate(){
     aws_config
     ssh -p $aws_port `echo $pemflag` $aws_user@$aws_server "wget tinyurl.com/pga-dfsi -o - | bash"
     aws_cmd adapt_awsserver
     aws_cmd vncpasswd
-
-    cd
-    ls | while read line
-    do
-        aws_send "$line"
-    done
+    aws_migrate_incremental
 }
 
 aws_move(){
