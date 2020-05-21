@@ -527,7 +527,7 @@ aws_migrate_incremental(){
 
 aws_migrate(){
     aws_config
-    ssh -p $aws_port `echo $pemflag` $aws_user@$aws_server "wget tinyurl.com/pga-dfsi -o - | bash"
+    ssh -p $AWS_PORT `echo $pemflag` $aws_user@$aws_server "wget tinyurl.com/pga-dfsi -o - | bash"
     aws_cmd adapt_awsserver
     aws_cmd vncpasswd
     aws_migrate_incremental
