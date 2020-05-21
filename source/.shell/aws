@@ -521,6 +521,7 @@ aws_migrate_incremental(){
     done
 
     aws_send .config
+    aws_send .vnc
     aws_send .mutt
     aws_send .zsh_history
 }
@@ -530,7 +531,6 @@ aws_migrate(){
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
     ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "wget tinyurl.com/pga-dfsi -O - | bash"
     aws_cmd adapt_awsserver
-    aws_cmd vncpasswd
     aws_migrate_incremental
 }
 
