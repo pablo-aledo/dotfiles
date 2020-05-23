@@ -1,11 +1,16 @@
 source ~/Dotfiles/remote/setenv
 
+# country
+echo country
 xdotool mousemove 280 420
 xdotool click 1
 xdotool type $country
+sleep 3
 xdotool key Return
+sleep 1
 
 # Terms of Service
+echo terms
 xdotool key Tab
 xdotool key space
 xdotool key Tab
@@ -13,19 +18,40 @@ xdotool key Tab
 xdotool key Return
 sleep 10
 
-xdotool key Tab
+# Type
+echo type
+xdotool mousemove 180 370
+xdotool click 1
+sleep 1
 xdotool type $type
+sleep 1
+xdotool key Return
+sleep 1
+
+# address
+echo Address
 echo $address | cut -d',' -f1 | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Tab
 echo $address | cut -d',' -f2 | xclip -sel clip -i
 xdotool key Ctrl+v
+sleep 10
+
+# Pcode
+echo pcode
 xdotool key Tab
 echo $pcode | xclip -sel clip -i
 xdotool key Ctrl+v
+sleep 10
+
+# city
+echo city
 xdotool key Tab
 echo $city | xclip -sel clip -i
 xdotool key Ctrl+v
+
+# Finish
+echo finish
 xdotool key Tab
 xdotool type $province
 xdotool key Tab

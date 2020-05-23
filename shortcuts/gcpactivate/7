@@ -1,0 +1,8 @@
+source ~/.dotfiles/source/.shell/xdotool
+
+if `mouseover 10 100 ~/.dotfiles/shortcuts/images/unitedstates.png`
+then
+    sed -i 's/type=.*/type=i/g' ~/Dotfiles/remote/setenv
+    sed -i 's/country=.*/country=sp/g' ~/Dotfiles/remote/setenv
+fi
+
