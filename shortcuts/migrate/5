@@ -1,17 +1,7 @@
-source ~/.dotfiles/source/.shell/xdotool
+source ~/Dotfiles/remote/setenv
 
-mouseover 10 1000 ~/.dotfiles/shortcuts/images/gshell.png
-xdotool click 1
-sleep 20
+cp ~/Dotfiles/aws/target/* /tmp/
+sed -i "s|AWS_SERVER=.*|AWS_SERVER=$(echo $gcloud_user | sed 's/\./_/g')|g"                     /tmp/aws_config
+sed -i "s|AWS_REMOTE_FOLDER=.*|AWS_REMOTE_FOLDER=/home/$(echo $gcloud_user | sed 's/\./_/g')|g" /tmp/aws_config
+sed -i "s|AWS_SERVER=.*|AWS_SERVER=$(cat /tmp/migrate_ip)|g"                                    /tmp/aws_config
 
-xdotool mousemove 360 740
-xdotool click 1
-
-xdotool mousemove 1210 520
-xdotool click 1
-sleep 20
-
-xdotool key Ctrl+l
-
-echo ls | xclip -sel clip -i
-xdotool key Ctrl+v

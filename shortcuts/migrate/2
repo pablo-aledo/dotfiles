@@ -1,21 +1,17 @@
-source ~/Dotfiles/remote/setenv
+source ~/.dotfiles/source/.shell/xdotool
 
-# Agree checkbox
-mouseover 10 100 ~/.dotfiles/shortcuts/images/checkbox.png
-xdotool click 1
-sleep 1
-
-# Agree
-xdotool mousemove 820 640
-xdotool click 1
-sleep 10
-
-# Compute Engine
-xdotool mousemove 440 610
+mouseover 10 1000 ~/.dotfiles/shortcuts/images/gshell.png
 xdotool click 1
 sleep 20
 
-mouseover 10 10000 ~/.dotfiles/shortcuts/images/{crear,create}.png
+xdotool mousemove 360 740
 xdotool click 1
-sleep 25
 
+xdotool mousemove 1210 520
+xdotool click 1
+sleep 20
+
+xdotool key Ctrl+l
+
+echo ls | xclip -sel clip -i
+xdotool key Ctrl+v

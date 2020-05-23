@@ -1,0 +1,40 @@
+source ~/Dotfiles/remote/setenv
+export DISPLAY=:1
+killall chrome chromium google-chrome google-chrome-stable
+xrandr --output VNC-0 --mode 1280x800
+google-chrome --incognito cloud.google.com >/dev/null 2>/dev/null &
+sleep 20
+
+xdotool mousemove 1210 120
+xdotool click 1
+sleep 20
+
+echo $gcloud_user | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Return
+sleep 5
+echo $gcloud_pw | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Return
+sleep 5
+
+rm -f /tmp/gcode
+echo '\e[34m Waiting for /tmp/gcode \e[0m'
+n=0
+while [ ! -e /tmp/gcode ]
+do
+    sleep 1
+    n=$(( n + 1 ))
+    [ $n -eq 60 ] && break
+done
+echo '\e[34m Continue \e[0m'
+if [ -e /tmp/gcode ]
+then
+    cat /tmp/gcode | xclip -sel clip -i
+    xdotool key Ctrl+v
+    xdotool key Return
+    sleep 20
+fi
+
+xdotool mousemove 1160 120
+xdotool click 1

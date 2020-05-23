@@ -1,25 +1,12 @@
-xdotool mousemove 40 160
-xdotool click 1
-xdotool key End
-
-xdotool mousemove 170 460
-xdotool click 1
-
-echo $card | cut -d' ' -f1 | xclip -sel clip -i
+xdotool key Ctrl+l
+echo "gcloud compute instances list | tail -n+2 | awk '{print \$5}'" | xclip -sel clip -i
 xdotool key Ctrl+v
-xdotool key Tab
-echo $card | cut -d' ' -f2 | xclip -sel clip -i
-xdotool key Ctrl+v
-xdotool key Tab
-echo $card | cut -d' ' -f3 | xclip -sel clip -i
-xdotool key Ctrl+v
-xdotool key Tab
-echo $card | cut -d' ' -f4 | xclip -sel clip -i
-xdotool key Ctrl+v
-xdotool key Tab
 
-xdotool mousemove 230 690
-xdotool click 1
+sleep 10
 
-xdotool mousemove 850 540
+xdotool mousemove 60 200
 xdotool click 1
+xdotool click 1
+sleep 1
+
+xclip -sel clip -o > /tmp/migrate_ip
