@@ -145,3 +145,17 @@ mv_if_space(){
     fi
 
 }
+
+cp_dir_structure(){
+    ( cd $1; find -type f ) | while read relative_file_src
+    do
+        relative_dir_src=$(dirname "$relative_file_src")
+        file="$(basename $relative_file_src)"
+        relative_file_dst=$(cd $2; find -name "$file")
+        relative_dir_dst=$(dirname "$relative_file_dst")
+        [ "$relative_file_dst" != "" ] && \
+        [ "$relative_dir_src" != "$relative_dir_dst" ] && \
+            echo "mkdir -p \"$2/$relative_dir_src\"; mv \"$2/$relative_file_dst\" \"$2/$relative_dir_src\""
+    done
+}
+
