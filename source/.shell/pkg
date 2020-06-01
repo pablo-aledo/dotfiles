@@ -60,6 +60,12 @@ then
 	return;
 fi
 
+if [ $cmd = "install" ] && [ -e "~/Dotfiles/pkg/`distr`/$1/install.sh" ]
+then
+	( cd ~/Dotfiles/pkg/`distr`/$1/; source install.sh )
+	return;
+fi
+
 if [ $cmd = "install" ] && [ -e "~/.dotfiles/pkg/`distr`/$1/install.sh" ]
 then
 	( cd ~/.dotfiles/pkg/`distr`/$1/; source install.sh )
