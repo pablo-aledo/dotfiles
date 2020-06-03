@@ -184,7 +184,6 @@ avhome_get_new_titles(){
 
     if [ "$AVH_PROXY_IP" != "" ]
     then
-        ssh -i $AVH_PROXY_PEM -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "echo '===== Connected ====='"
         ssh -i $AVH_PROXY_PEM -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q https://avxhm.se/ebooks/$1 -O -" > dl
     else
         wget -q https://avxhm.se/ebooks/$1 -O dl
@@ -204,6 +203,12 @@ avhome_mail_server(){
 
    for topic in programming_development graphics_drawing_design engeneering_technology hardware science_books security_info software
    do
+
+       if [ "$AVH_PROXY_IP" != "" ]
+       then
+           ssh -i $AVH_PROXY_PEM -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "echo '===== Connected ====='"
+       fi
+
        avhome_get_new_titles $topic | while read line
        do
            echo $line >> to_send
