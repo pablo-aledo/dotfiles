@@ -336,7 +336,10 @@ convert_mkfolders(){
 }
 
 convert_reportsizes(){
-	cd $convert_dir
+	[ $# -eq 0 ] && folder="$convert_dir"
+	[ $# -eq 1 ] && folder="$convert_dir/$1"
+
+	cd $folder
 	echo $findcmd | bash | while read line
 	do
 		file1="$line"
@@ -349,7 +352,10 @@ convert_reportsizes(){
 }
 
 convert_failconverting(){
-	cd $convert_dir
+	[ $# -eq 0 ] && folder="$convert_dir"
+	[ $# -eq 1 ] && folder="$convert_dir/$1"
+
+	cd $folder
 	echo $findcmd | bash | while read line
 	do
 		file1="$line"
@@ -360,7 +366,10 @@ convert_failconverting(){
 }
 
 convert_cp(){
-	cd $convert_dir
+	[ $# -eq 0 ] && folder="$convert_dir"
+	[ $# -eq 1 ] && folder="$convert_dir/$1"
+
+	cd $folder
 	find $PWD -type f | while read line
 	do
 		file1="$line"
@@ -372,7 +381,10 @@ convert_cp(){
 }
 
 convert_missing(){
-	cd $convert_dir
+	[ $# -eq 0 ] && folder="$convert_dir"
+	[ $# -eq 1 ] && folder="$convert_dir/$1"
+
+	cd $folder
 	find $PWD -type f | while read line
 	do
 		file1="$line"
@@ -383,7 +395,10 @@ convert_missing(){
 }
 
 convert_small(){
-	cd $converted_dir
+	[ $# -eq 0 ] && folder="$converted_dir"
+	[ $# -eq 1 ] && folder="$converted_dir/$1"
+
+	cd $folder
 	find $PWD -type f -size -100k -iname '*.converted.mp4' | while read line
 	do
 		echo "\e[31m Small converted file $line \e[0m" | tee -a /tmp/convert_report
@@ -397,11 +412,16 @@ empty_folders(){
 }
 
 convert_rmsmall(){
-	find "$converted_dir" -name '*.mp4' -size -100k -delete 2>/dev/null
+	[ $# -eq 0 ] && folder="$converted_dir"
+	[ $# -eq 1 ] && folder="$converted_dir/$1"
+	find "$folder" -name '*.mp4' -size -100k -delete 2>/dev/null
 }
 
 convert_rmbigger(){
-	cd $convert_dir
+	[ $# -eq 0 ] && folder="$convert_dir"
+	[ $# -eq 1 ] && folder="$convert_dir/$1"
+
+	cd $folder
 	find $PWD -type f | while read line
 	do
 		file1="$line"
@@ -496,6 +516,19 @@ convert_recursive(){
     convert_small
 
     cp_report
+
+}
+
+convert_postconversion(){
+
+    convert_rmsmall "$1"
+    convert_rmbigger "$1"
+    convert_reportsizes "$1"
+    convert_failconverting "$1"
+    convert_cp "$1"
+    convert_missing "$1"
+    convert_small "$1"
+    cat /tmp/convert_report
 
 }
 
