@@ -1,6 +1,7 @@
+source ~/Dotfiles/remote/setenv
 xdotool key Ctrl+l
 
-clouduser=$(cat /tmp/user | sed 's/\./_/g')
+clouduser=$(echo $gcloud_user | sed 's/\./_/g')
 pubkey=$(cat ~/Dotfiles/aws/target/id_rsa.pub | sed "s/[^ ]*$/$clouduser/g" )
 metadata="$clouduser:$pubkey"
 
