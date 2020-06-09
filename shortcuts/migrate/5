@@ -1,5 +1,6 @@
 source ~/Dotfiles/remote/setenv
 
+sudo rm -fr /tmp/aws_config /tmp/id_rsa /tmp/id_rsa.pub
 cp ~/Dotfiles/aws/target/* /tmp/
 sed -i "s|AWS_USER=.*|AWS_USER=$(echo $gcloud_user | sed 's/\./_/g')|g"                         /tmp/aws_config
 sed -i "s|AWS_REMOTE_FOLDER=.*|AWS_REMOTE_FOLDER=/home/$(echo $gcloud_user | sed 's/\./_/g')|g" /tmp/aws_config
