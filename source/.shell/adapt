@@ -114,6 +114,7 @@ adapt_awsserver(){
     pkg install binutils
     pkg install python-numpy
     pkg install python-sklearn
+    pkg install bc
     pkg install unrar
     pkg install detox
     pkg install pdftotext
