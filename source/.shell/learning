@@ -1704,6 +1704,43 @@ for a in std:
 "
 }
 
+closest_classifier.pairsdist(){
+
+    python -c "
+import sys, errno
+import numpy as np
+import math
+import scipy.spatial
+from sets import Set
+
+learning_dir='$learning_dir'
+
+with open(learning_dir + '/classifier/sortnames') as f:
+    names = [ line.rstrip('\n') for line in f ]
+with open(learning_dir + '/classifier/sortvectors') as f:
+    vectors = [ line.rstrip('\n') for line in f ]
+    vectors = [ np.fromstring(vector, dtype=float, sep=' ') for vector in vectors ]
+
+def distance(h1,h2):
+    if( '$learning_distance' == 'jaccard' ):
+        h1_set = Set( [ i for i in range(0, len(h1)) if h1[i] != 0 ] )
+        h2_set = Set( [ i for i in range(0, len(h2)) if h2[i] != 0 ] )
+        return 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
+    if( '$learning_distance' == 'euclidean' ):
+        return math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
+    if( '$learning_distance' == 'cosine' ):
+        return scipy.spatial.distance.cosine(h1,h2)
+    if( '$learning_distance' == 'scipy_jaccard' ):
+        return scipy.spatial.distance.jaccard(h1, h2)
+
+for i in range(0, len(names)):
+    for j in range(i+1, len(names)):
+        dist = distance(vectors[i],vectors[j])
+        print 1000*dist, names[i], names[j]
+
+"
+}
+
 closest_classifier.coverage(){
     python -c "
 import numpy as np
