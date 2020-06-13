@@ -721,6 +721,7 @@ mv_converted(){
 		for line in $*
 		do
 			echo -e "\e[34m mv_converted $line \e[0m"
+            [ -e $converted_dir/$line ] || continue
 			mkdir -p "$destination/$line"
 			#( cd $destination/$line; permissions )
 			[ $line[1] = '/' ] || rsync -vaXi --delete --remove-source-files "$converted_dir/$line/" "$destination/$line/"
