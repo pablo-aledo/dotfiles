@@ -32,3 +32,4 @@ set splitright                                                          " Open n
 set splitbelow                                                          " Open new files below
 set path+=**                                                            " search down into subfolders (:find)
 set wildmenu                                                            " display all matching files when we tab complete
+map Y y$
