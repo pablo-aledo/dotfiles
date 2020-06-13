@@ -717,6 +717,7 @@ mv_converted(){
 			rsync -vaXi --delete --remove-source-files "$converted_dir/$line" "$destination/$line"
 			rm_empty_folders "$converted_dir/$line"
 		done
+        rm_empty_folders "$converted_dir"
 	else
 		for line in $*
 		do
@@ -729,9 +730,9 @@ mv_converted(){
 			[ $line[1] = '/' ] || rm_empty_folders "$converted_dir/$line"
 			[ $line[1] = '/' ] && rm_empty_folders "$line"
 			[ -e $convert_dir/$line ] && rm -fr "$convert_dir/$line"
+			rmdir "$converted_dir/$line"
 		done
 	fi
-	rm_empty_folders "$converted_dir"
 }
 
 cp_convert(){
