@@ -700,39 +700,36 @@ convert_recursive_parallel_handbrake(){
 }
 
 mv_converted(){
-	destination=/media/removable/2TB2/homes/admin/Videos
+    destination=/media/removable/2TB2/homes/admin/Videos
 
-	[ -d "$converted_dir" ] || return
-	[ -d "$destination" ]   || return
+    [ -d "$converted_dir" ] || return
+    [ -d "$destination" ]   || return
 
-	cd "$converted_dir"
+    cd "$converted_dir"
 
-	if [ $# -eq 0 ]
-	then
-		ls -d */ | while read line
-		do
-			echo -e "\e[34m mv_converted $line \e[0m"
-			mkdir -p "$destination/$line"
-			#( cd $destination/$line; permissions )
-			rsync -vaXi --delete --remove-source-files "$converted_dir/$line" "$destination/$line"
-			rm_empty_folders "$converted_dir/$line"
-		done
-        rm_empty_folders "$converted_dir"
-	else
-		for line in $*
-		do
-			echo -e "\e[34m mv_converted $line \e[0m"
+    if [ $# -eq 0 ]
+    then
+        ls -d */ | while read line
+        do
+            mkdir -p "$destination/$line"
+
+            mv_converted "$line"
+
+        done
+        return
+    else
+        for line in $*
+        do
+            echo -e "\e[34m mv_converted $line \e[0m"
             [ -e $converted_dir/$line ] || continue
-			mkdir -p "$destination/$line"
-			#( cd $destination/$line; permissions )
-			[ $line[1] = '/' ] || rsync -vaXi --delete --remove-source-files "$converted_dir/$line/" "$destination/$line/"
-			[ $line[1] = '/' ] && rsync -vaXi --delete --remove-source-files "$line/" "$destination/`basename $line`/"
-			[ $line[1] = '/' ] || rm_empty_folders "$converted_dir/$line"
-			[ $line[1] = '/' ] && rm_empty_folders "$line"
-			[ -e $convert_dir/$line ] && rm -fr "$convert_dir/$line"
-			rmdir "$converted_dir/$line"
-		done
-	fi
+            mkdir -p "$destination/$line"
+            #( cd $destination/$line; permissions )
+            rsync -vaXi --delete --remove-source-files "$converted_dir/$line/" "$destination/$line/"
+            rm_empty_folders "$converted_dir/$line"
+            [ -e $convert_dir/$line ] && rm -fr "$convert_dir/$line"
+            rmdir "$converted_dir/$line"
+        done
+    fi
 }
 
 cp_convert(){
