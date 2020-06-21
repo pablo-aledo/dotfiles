@@ -705,8 +705,8 @@ server(){
 
     if [ $1 = "space" ]
     then
-        [ $# -eq 0 ] && drive=sda1
-        [ $# -eq 1 ] && drive=$1
+        [ $# -eq 1 ] && drive=sda1
+        [ $# -eq 2 ] && drive=$1
         while true
         do
             space=$( dfh | grep "$drive " | awk '{print $5}' | sed 's/%//g' )
