@@ -1,5 +1,6 @@
 mouseover 10 10000 win.png && xdotool click 1
 mouseover 10 10000 powershell.png && xdotool click 1
+mouseover 10 10000 maximize.png && xdotool click 1
 sleep 10
 
 IP=$(myip | grep external | cut -d: -f2)
