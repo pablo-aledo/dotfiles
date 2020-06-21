@@ -7,7 +7,7 @@ IP=$(myip | grep external | cut -d: -f2)
 cat /tmp/files | while read line
 do
     FILENAME=$(basename $line)
-    xdotool type --delay 200 '(New-Object System.Net.WebClient).DownloadFile("https://'$IP'/'$FILENAME'","$ENV:UserProfile\Downloads\'$FILENAME'")'
+    xdotool type --delay 200 '(New-Object System.Net.WebClient).DownloadFile("http://'$IP'/'$FILENAME'","$ENV:UserProfile\Downloads\'$FILENAME'")'
     xdotool key Return
     sleep 10
 done
