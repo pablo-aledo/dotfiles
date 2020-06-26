@@ -6,3 +6,6 @@ pkg install maven default-jdk
 vim src/main/resources/application.conf
 mvn clean package
 mvn -e exec:java -Dexec.mainClass="AkkaTestProducer"
+
+cp ~/.dotfiles/pkg/Ubuntu_16_04/eventhubs_kafka/pom.xml pom.xml
+mvn clean compile assembly:single
