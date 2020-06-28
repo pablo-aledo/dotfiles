@@ -1518,7 +1518,7 @@ for i in range(0, len(X_ini)):
 
     diff = sum( map( lambda x: x != 0, np.subtract(Y, Y_ini) ) )
 
-    print map_documents[i], diff
+    print diff, map_documents[i]
 "
 }
 
