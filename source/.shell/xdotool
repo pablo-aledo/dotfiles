@@ -75,3 +75,10 @@ scrop(){
     docker_app gthumb $1.png
     xdotool key Alt+4
 }
+
+scrop2(){
+    scrot $1.png
+    xdotool key Alt+5
+    gthumb $1.png
+    xdotool key Alt+4
+}
