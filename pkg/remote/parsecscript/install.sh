@@ -9,3 +9,7 @@ xdotool type --delay 200 'New-Item -Path $ENV:UserProfile\Downloads\Parsec-Cloud
 xdotool type --delay 200 'Expand-Archive $ENV:UserProfile\Downloads\Parsec-Cloud-Preparation-Tool.Zip -DestinationPath $ENV:UserProfile\Downloads\Parsec-Cloud-Preparation-Tool'; xdotool key Return; sleep 10
 xdotool type --delay 200 'CD $ENV:UserProfile\Downloads\Parsec-Cloud-Preparation-Tool\Parsec-Cloud-Preparation-Tool-master\'; xdotool key Return; sleep 10
 xdotool type --delay 200 'Powershell.exe -File $ENV:UserProfile\Downloads\Parsec-Cloud-Preparation-Tool\Parsec-Cloud-Preparation-Tool-master\Loader.ps1'; xdotool key Return; sleep 10
+
+mouseover -1 10000 yes.png && xdotool click 1
+mouseover -1 10000 yn.png && xdotool key n; xdotool key Return
+mouseover -1 10000 yn.png && xdotool key n; xdotool key Return
