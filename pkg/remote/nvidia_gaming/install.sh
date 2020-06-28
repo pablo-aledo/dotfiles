@@ -31,6 +31,8 @@ done
 
 mouseover 20 1000 desplegar.png && xdotool click 1; sleep 1
 
+mouseover 20 1000 ok.png
+
 mouseover 20 10000 3bars.png && xdotool click 1; sleep 1
 mouseover 20 10000 computeengine.png && xdotool click 1; sleep 1
 
@@ -47,7 +49,7 @@ do
     xdotool mousemove 820 560; sleep 1
     xdotool click 1; sleep 1
     mouseover 20 10000 copy.png error.png; sleep 1
-    if `mouseover 1 10000 error.png`
+    if $(mouseover 1 10000 error.png)
     then
         ok=false
         xdotool mousemove 730 600; xdotool click 1; sleep 1
@@ -69,7 +71,9 @@ xdotool key Alt+f
 sleep 1
 xdotool key Alt
 
-for a in $(seq 1 10)
+mouseover 20 10000 no.png && xdotool click 1; sleep 1
+
+for a in $(seq 1 3)
 do
-mouseover 1 100000 closewin.png && xdotool click 1; sleep 1
+mouseover 1 1000 closewin1.png closewin2.png && xdotool click 1; sleep 1
 done
