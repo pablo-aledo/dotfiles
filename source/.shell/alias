@@ -65,3 +65,4 @@ tailf(){
 
 alias startrdp='shc; distr remote; export mouseover_debug=true; pkg install startrdp'
 alias dupl="sed \"s/^\(.*\)$/'\1' '\1'/g\""
+alias ddprogress='sudo killall -USR1 dd'
