@@ -99,10 +99,12 @@ sync_partial_contents(){
     cat /tmp/in_b_not_a /tmp/spc_to_rm_${name} > /tmp/aux
     cat /tmp/aux | sort | uniq | egrep -v '^$' > /tmp/spc_to_rm_${name}
 
-    echo "\e[34m ===== duplicated =====\e[0m"
-    cat /tmp/spc_duplicated_${name}
+    echo "\e[34m ===== to_sync =====\e[0m"
+    cat /tmp/spc_sync_${name}
     echo "\e[34m ===== to_rm =====\e[0m"
     cat /tmp/spc_to_rm_${name}
+    echo "\e[34m ===== duplicated =====\e[0m"
+    cat /tmp/spc_duplicated_${name}
     echo "\e[34m ===== not_sync =====\e[0m"
     cat /tmp/spc_not_sync_${name}
 }
