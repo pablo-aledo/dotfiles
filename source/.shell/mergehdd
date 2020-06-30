@@ -148,6 +148,25 @@ mv_if_space(){
 
 }
 
+rsync_if_space(){
+    src="$1"
+    dst="$2"
+    space=$(df -B1 $3 | awk '{print $4}' | tail -n1)
+    size=$(du -B1 -s "$1" | awk '{print $1}')
+    margin=$(( 1 * 1024 * 1024 * 1024 ))
+
+    if [ $(( $space - $size )) -gt $margin ]
+    then
+        echo "\e[32m rsync_ok \"$src\" \"$dst\" \e[0m"
+        rsync -vaXi --delete "$src" "$dst"
+        echo "$src" >> /tmp/rsynced
+    else
+        echo "\e[31m rsync_nok \"$src\" \"$dst\" \e[0m"
+        echo "$src" >> /tmp/not_rsynced
+    fi
+
+}
+
 cp_dir_structure(){
     ( cd $1; find -type f ) | while read relative_file_src
     do
