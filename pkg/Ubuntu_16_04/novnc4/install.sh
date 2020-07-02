@@ -16,6 +16,7 @@ git clone https://github.com/novnc/noVNC.git /usr/share/noVNC
 #git clone https://github.com/vishvananda/novnc.git /usr/share/noVNC
 #git clone https://github.com/openstack/deb-novnc.git /usr/share/noVNC
 touch /usr/share/noVNC/index.html
+rm -fr /usr/share/noVNC/{.git,.github,.gitignore,.gitmodules,docs,LICENSE.txt,README.md,tests,.travis.yml,VERSION}
 
 cd; sudo rm -fr /usr/share/tigervnc
 
