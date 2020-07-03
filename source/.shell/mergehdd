@@ -109,6 +109,13 @@ sync_partial_contents(){
     cat /tmp/spc_not_sync_${name}
 }
 
+spc_update(){
+    name=$(basename $1)
+    ls $2 | sort | uniq > /tmp/contents_2
+    comm -23 /tmp/spc_not_sync_${name} /tmp/contents_2 > /tmp/aux
+    cat /tmp/aux | sort | uniq > /tmp/spc_not_sync_${name}
+}
+
 cp_if_space(){
     src="$1"
     dst="$2"
