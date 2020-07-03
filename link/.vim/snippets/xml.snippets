@@ -61,3 +61,23 @@ snippet assembly
 	    </descriptorRefs>
 	  </configuration>
 	</plugin>
+
+snippet assembly2
+	<plugin>
+	    <artifactId>maven-assembly-plugin</artifactId>
+	        <configuration>
+	            <descriptorRefs>
+	                <descriptorRef>jar-with-dependencies</descriptorRef>
+	            </descriptorRefs>
+	            <appendAssemblyId>false</appendAssemblyId>
+	        </configuration>
+	    <executions>
+	        <execution>
+	            <id>make-assembly</id>
+	            <phase>package</phase>
+	            <goals>
+	                <goal>single</goal>
+	            </goals>
+	        </execution>
+	    </executions>
+	</plugin>
