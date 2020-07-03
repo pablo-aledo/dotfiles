@@ -140,18 +140,6 @@ spc_update(){
     cat /tmp/aux | sort | uniq > /tmp/spc_not_sync_${name}
 }
 
-spc_step(){
-    [ "$1" = "" ] && return;
-    [ "$2" = "" ] && return
-    [ -e "$1" ] || return
-    [ -e "$2" ] || return
-    sync_partial_contents "$1" "$2"
-    spc_intersection "$1" "$2"
-    spc_diff_a "$1" "$2"
-    spc_diff_b "$1" "$2"
-    spc_update "$1" "$2"
-}
-
 cp_if_space(){
     src="$1"
     dst="$2"
