@@ -86,11 +86,6 @@ sync_partial_contents(){
     cat /tmp/contents_2 /tmp/spc_copied_${name} > /tmp/aux
     cat /tmp/aux | sort | uniq > /tmp/spc_copied_${name}
 
-    #rm -fr /tmp/spc_sync_${name}
-    #cat /tmp/intersection | while read line
-    #do
-        #echo rsync -vaXi --delete \"$1/$line/\" \"$2/$line/\" "#|| rm -fr" \"$2/$line\" >> /tmp/spc_sync_${name}
-    #done
     cat /tmp/intersection > /tmp/spc_sync_${name}
 
     comm -23 /tmp/spc_not_sync_${name} /tmp/contents_2 > /tmp/aux
@@ -113,7 +108,7 @@ spc_intersection(){
     name=$(basename $1)
     cat /tmp/spc_sync_${name} | while read line
     do
-        rsync -vaXi --delete "$1/$line/" "$2/$line/" || rm -fr "$2/$line"
+        rsync -vaXi --delete "$1/$line" "$2/" || rm -fr "$2/$line"
     done
 }
 
@@ -129,7 +124,7 @@ spc_diff_b(){
     name=$(basename $1)
     cat /tmp/spc_not_sync_${name} | while read line
     do
-        rsync -vaXi --delete "$1/$line/" "$2/$line/" || rm -fr "$2/$line"
+        rsync -vaXi --delete "$1/$line" "$2/" || rm -fr "$2/$line"
     done
 }
 
