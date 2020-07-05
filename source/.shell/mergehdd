@@ -66,6 +66,9 @@ sync_partial_contents(){
 	[ -e "$1" ] || return
 	[ -e "$2" ] || return
 
+    echo $1 > /tmp/spc_1
+    echo $2 > /tmp/spc_2
+
     if [ ! -e /tmp/spc_not_sync_${name} ]
     then
         ls $1 | sort | uniq > /tmp/spc_not_sync_${name}
@@ -105,32 +108,40 @@ sync_partial_contents(){
 }
 
 spc_intersection(){
-    name=$(basename $1)
+    src="$(cat /tmp/spc_1)"
+    dst="$(cat /tmp/spc_2)"
+    name=$(basename $src)
     cat /tmp/spc_sync_${name} | while read line
     do
-        rsync -vaXi --delete "$1/$line" "$2/" || rm -fr "$2/$line"
+        rsync -vaXi --delete "$src/$line" "$dst/" || rm -fr "$dst/$line"
     done
 }
 
 spc_diff_a(){
-    name=$(basename $1)
+    src="$(cat /tmp/spc_1)"
+    dst="$(cat /tmp/spc_2)"
+    name=$(basename $src)
     cat /tmp/spc_to_rm_${name} /tmp/spc_duplicated_${name} | while read line
     do
-        rm -fr "$2/$line/"
+        rm -fr "$dst/$line/"
     done
 }
 
 spc_diff_b(){
-    name=$(basename $1)
+    src="$(cat /tmp/spc_1)"
+    dst="$(cat /tmp/spc_2)"
+    name=$(basename $src)
     cat /tmp/spc_not_sync_${name} | while read line
     do
-        rsync -vaXi --delete "$1/$line" "$2/" || rm -fr "$2/$line"
+        rsync -vaXi --delete "$src/$line" "$dst/" || rm -fr "$dst/$line"
     done
 }
 
 spc_update(){
-    name=$(basename $1)
-    ls $2 | sort | uniq > /tmp/contents_2
+    src="$(cat /tmp/spc_1)"
+    dst="$(cat /tmp/spc_2)"
+    name=$(basename $src)
+    ls $dst | sort | uniq > /tmp/contents_2
     comm -23 /tmp/spc_not_sync_${name} /tmp/contents_2 > /tmp/aux
     cat /tmp/aux | sort | uniq > /tmp/spc_not_sync_${name}
 }
