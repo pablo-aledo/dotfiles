@@ -213,8 +213,10 @@ cp_dir_structure(){
         relative_dir_dst=$(dirname "$relative_file_dst")
         if [ "$relative_file_dst" != "" ]
         then
-            [ "$relative_dir_src" != "$relative_dir_dst" ]
-            echo "mkdir -p \"$2/$relative_dir_src\"; mv \"$2/$relative_file_dst\" \"$2/$relative_dir_src\""
+            if [ "$relative_dir_src" != "$relative_dir_dst" ]
+            then
+                echo "mkdir -p \"$2/$relative_dir_src\"; mv \"$2/$relative_file_dst\" \"$2/$relative_dir_src\""
+            fi
         else
             echo "File not found $relative_file_dst"
         fi
