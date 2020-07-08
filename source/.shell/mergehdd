@@ -223,3 +223,23 @@ cp_dir_structure(){
     done
 }
 
+cp_dir_structure_2(){
+    ( cd $2; find -type f ) > list
+    ( cd $1; find -type f ) | while read relative_file_src
+    do
+        relative_dir_src=$(dirname "$relative_file_src")
+        file="$(basename $relative_file_src)"
+        relative_file_dst=$(cat list | grep -F "$file")
+        relative_dir_dst=$(dirname "$relative_file_dst")
+        if [ "$relative_file_dst" != "" ]
+        then
+            if [ "$relative_dir_src" != "$relative_dir_dst" ]
+            then
+                echo "mkdir -p \"$2/$relative_dir_src\"; mv \"$2/$relative_file_dst\" \"$2/$relative_dir_src\""
+            fi
+        else
+            echo "File not found $relative_file_dst"
+        fi
+    done
+}
+
