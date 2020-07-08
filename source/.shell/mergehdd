@@ -218,7 +218,7 @@ cp_dir_structure(){
                 echo "mkdir -p \"$2/$relative_dir_src\"; mv \"$2/$relative_file_dst\" \"$2/$relative_dir_src\""
             fi
         else
-            echo "File not found $relative_file_dst"
+            echo "File not found $file"
         fi
     done
 }
@@ -238,7 +238,7 @@ cp_dir_structure_2(){
                 echo "mkdir -p \"$2/$relative_dir_src\"; mv \"$2/$relative_file_dst\" \"$2/$relative_dir_src\""
             fi
         else
-            echo "File not found $relative_file_dst"
+            echo "File not found $file"
         fi
     done
 }
