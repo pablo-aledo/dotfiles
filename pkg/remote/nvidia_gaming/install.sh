@@ -75,6 +75,8 @@ xdotool key Alt
 
 mouseover -1 10000 no.png && xdotool click 1; sleep 1
 
+mouseover -1 1000 closewin1.png closewin2.png && xdotool click 1; sleep 1
+
 for a in $(seq 1 3)
 do
 mouseover 1 1000 closewin1.png closewin2.png && xdotool click 1; sleep 1
