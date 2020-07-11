@@ -249,4 +249,11 @@ avhome_mail_server(){
 
 }
 
+avhloop(){
+    server novnc4 4000
+    sleep 10
+    night_avh
+    unstar
+    tmkill "vnc"
+}
 
