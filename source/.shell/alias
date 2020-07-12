@@ -67,6 +67,25 @@ tailf(){
     tail -9999f "$1"
 }
 
+dupl2(){
+    cat | while read line;
+    do
+        echo -n "'"$line"'"
+        echo -n ' '
+        echo -n "'"$(echo $line | sed $1)"'"
+        echo
+    done
+}
+
+dupl3(){
+    cat | while read line;
+    do
+        line1=$(echo -n "'"$line"'")
+        line2=$(echo -n "'"$(echo $line | sed $1)"'")
+        [ "$line1" != "$line2" ] && echo "$line1 $line2"
+    done
+}
+
 alias startrdp='shc; distr remote; export mouseover_debug=true; pkg install startrdp'
 alias dupl="sed \"s/^\(.*\)$/'\1' '\1'/g\""
 alias ddprogress='sudo killall -USR1 dd'
