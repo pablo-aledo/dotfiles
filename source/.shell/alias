@@ -78,10 +78,16 @@ dupl2(){
 }
 
 dupl3(){
+    regex=""
+    for a in $*
+    do
+        regex="$regex -e $a"
+    done
+
     cat | while read line;
     do
         line1=$(echo -n "'"$line"'")
-        line2=$(echo -n "'"$(echo $line | sed $1)"'")
+        line2=$(echo -n "'"$(echo $line | sed ${(z)regex})"'")
         [ "$line1" != "$line2" ] && echo "$line1 $line2"
     done
 }
