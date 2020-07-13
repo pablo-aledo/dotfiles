@@ -67,8 +67,8 @@ cutvideo_logo(){
 
 	ffmpeg -ss $t1 -t $d -i $1 -strict -2 /tmp/video.mp4
 
-       row=$(cat /tmp/coordinates | cut -d',' -f1)
-    column=$(cat /tmp/coordinates | cut -d',' -f2)
+       row=$(cat /tmp/landmark_coordinates | cut -d',' -f1)
+    column=$(cat /tmp/landmark_coordinates | cut -d',' -f2)
      width=$(file /tmp/landmark.png | cut -d' ' -f5 | sed 's/,//g')
     height=$(file /tmp/landmark.png | cut -d' ' -f7 | sed 's/,//g')
        row=$(( $row - $height / 2 ))
@@ -76,7 +76,7 @@ cutvideo_logo(){
 
     overlay=true
     [ "$(echo $name | grep -i catch)" != "" ] && overlay=false
-    [ ! -e /tmp/coordinates ]                 && overlay=false
+    [ ! -e /tmp/landmark_coordinates ]        && overlay=false
 
     if [ $overlay = true ]
     then
