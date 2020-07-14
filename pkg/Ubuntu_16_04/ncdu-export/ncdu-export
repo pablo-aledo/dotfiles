@@ -1,0 +1,260 @@
+#!/usr/bin/python
+# coding: utf-8
+
+# Standalone ncdu export feature using only Python's 2.6 built-in 
+# features. JSON output is built incrementally and only partially using 
+# the standard json library -- uglier code but minimal RAM consumption.
+#
+# Copyright (C) 2015-2019 Marcin Szewczyk, marcin.szewczyk[at]wodny.org
+#
+# Contributors:
+#   Jose Riha (https://github.com/jose1711)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+from __future__ import print_function
+import sys
+import os
+import os.path
+import stat
+import time
+import json
+import codecs
+
+PROGNAME = "py-ncdu-export"
+__version__ = "0.7.4"
+PROGRESS_STEP = 1000
+
+FMT_NONE = 0
+FMT_NEWENTRY = 1 << 0
+FMT_LEFT_BRACE = 1 << 1
+FMT_RIGHT_BRACE = 1 << 2
+FMT_BOTH_BRACES = FMT_LEFT_BRACE | FMT_RIGHT_BRACE
+
+class WalkError:
+    val = False
+
+
+def get_info(path):
+    S_BLKSIZE = 512
+    name = os.path.basename(path) or "/"
+    try:
+        stat_result = os.lstat(path)
+    except OSError:
+        return dict((
+            ("name", name),
+            ("error", True),
+        ))
+    return dict((
+        ("name", name),
+        ("asize", stat_result.st_size),
+        ("dsize", stat_result.st_blocks * S_BLKSIZE),
+        ("ino", stat_result.st_ino),
+        ("mtime", stat_result.st_mtime),
+        ("dev", stat_result.st_dev),
+        ("mode", stat_result.st_mode),
+    ))
+
+
+def get_info_string(info, options, walk_error=False, excluded=False):
+    name = codecs.decode(info["name"], "utf-8", "replace")
+    name = json.dumps(name)
+    if info.get("error", False):
+        return """{{"name":{0},"read_error":true}}""".format(name)
+    else:
+        return """{{"name":{0},"asize":{1},"dsize":{2},"ino":{3}{4}{5}{6}{7}}}""".format(
+            name,
+            info["asize"],
+            info["dsize"],
+            info["ino"],
+            ",\"read_error\":true" if walk_error else "",
+            ",\"mtime\":{0:.0f}".format(info["mtime"]) if options["mtime"] else "",
+            ",\"excluded\":\"{0}\"".format(excluded) if excluded else "",
+            # notreg with conditions from the original ncdu 1.10
+            # !(d->flags & (FF_DIR|FF_FILE|FF_ERR|FF_EXL|FF_OTHFS)))
+            ",\"notreg\":true" if not any((excluded, stat.S_ISDIR(info["mode"]), stat.S_ISREG(info["mode"]))) else "",
+        )
+
+
+def get_path_dirs(path):
+    if not os.path.isabs(path):
+        raise Exception("absolute path required")
+    path_dirs = []
+    path, tail = os.path.split(path)
+    while tail != "":
+        path_dirs.append(tail)
+        path, tail = os.path.split(path)
+    path_dirs.append(tail)
+    path_dirs.reverse()
+    return path_dirs
+
+
+def main():
+    options = dict(
+        format=False,
+        mtime=False,
+        progressfd=None,
+        device=None,
+    )
+
+    argv = []
+    usage = False
+
+    for arg in sys.argv[1:]:
+        if arg.startswith("-"):
+            for i in arg:
+                if i == "f":
+                    options["format"] = True
+                if i == "m":
+                    options["mtime"] = True
+                if i == "p":
+                    stat_stdout = os.fstat(sys.stdout.fileno())
+                    stat_stderr = os.fstat(sys.stderr.fileno())
+                    if (
+                        os.isatty(sys.stderr.fileno()) or
+                        stat_stdout.st_dev != stat_stderr.st_dev or
+                        stat_stdout.st_ino != stat_stderr.st_ino
+                    ):
+                        # allow progress display if stderr is a TTY (if program
+                        # is run locally) or if it's an fd different than
+                        # stdout (usually FIFOs of remote SSH process or local
+                        # pipes); inspired by the pv tool's code
+                        options["progressfd"] = os.fdopen(sys.stderr.fileno(), "w")
+                if i == "x":
+                    options["device"] = True
+                if i == "h":
+                    usage = True
+        else:
+            argv.append(arg)
+
+    if len(argv) != 1:
+        usage = True
+
+    if usage:
+        exit(
+            "{0} [-fhmp] dirname"
+            "\nversion: {1}"
+            "\noptions:"
+            "\n\t-f  format"
+            "\n\t-h  this help"
+            "\n\t-m  include mtime"
+            "\n\t-p  show progress"
+            "\n\t-x  don't cross filesystem boundaries"
+            .format(sys.argv[0], __version__)
+        )
+
+    dirname = argv[0]
+
+    if options["device"]:
+        options["device"] = os.stat(dirname).st_dev
+
+    print(
+        """[1,0,{{"progname":"{0}","progver":"{1}","timestamp":{2}}}""".format(
+            PROGNAME,
+            __version__,
+            int(time.time())
+        ),
+        end=""
+    )
+
+    class PathLen:
+        base = None
+        curr = 0
+        prev = 0
+
+    path_len = PathLen()
+
+    def handle_dir(current, path_len, options, walk_error=False):
+        path_dirs = get_path_dirs(current)
+        path_len.curr = len(path_dirs)
+
+        lev_diff = path_len.curr - path_len.prev
+        if lev_diff == 0:
+            print("],")
+        elif lev_diff < 0:
+            print("]"*(-lev_diff+1)+",")
+        else:
+            print(",")
+
+        info = get_info(current)
+        indent = path_len.curr-path_len.base
+        print_entry(info, options, indent, FMT_LEFT_BRACE, walk_error=walk_error)
+        path_len.prev = path_len.curr
+
+    def handle_subdirs(subdirs, current, options, indent):
+        for subdir in subdirs:
+            info = get_info(os.path.join(current, subdir))
+            if stat.S_ISDIR(info["mode"]):
+                excluded = options["device"] and options["device"] != info["dev"] and "othfs"
+                if excluded:
+                    print_entry(info, options, indent, FMT_NEWENTRY | FMT_BOTH_BRACES, excluded=excluded)
+                    # don't yield the excluded directory
+                else:
+                    yield subdir
+            elif stat.S_ISLNK(info["mode"]):
+                # symlinks to directories are included only here
+                print_entry(info, options, indent, FMT_NEWENTRY)
+            else:
+                yield subdir
+
+    def print_entry(info, options, indent, format=FMT_NONE, walk_error=False, excluded=False):
+        print(
+            "{0}{1}{2}{3}{4}".format(
+                ",\n" if format & FMT_NEWENTRY else "",
+                "    "*indent if options["format"] else "",
+                "[" if format & FMT_LEFT_BRACE else "",
+                get_info_string(info, options, walk_error=walk_error, excluded=excluded),
+                "]" if format & FMT_RIGHT_BRACE else "",
+            ),
+            end=""
+        )
+
+    def walk_error_handler(error):
+        handle_dir(error.filename, path_len, options, walk_error=True)
+
+    def maybe_show_progress(scan_counter, options, end=""):
+        if options["progressfd"] is not None and (end or scan_counter % PROGRESS_STEP == 0):
+            print(
+                "\rScanned files: {0}".format(scan_counter),
+                file=options["progressfd"],
+                end=end
+            )
+            options["progressfd"].flush()
+
+    basedir = os.path.abspath(dirname)
+    dirgen = os.walk(basedir, onerror=walk_error_handler)
+    path_len.base = len(get_path_dirs(basedir))
+
+    scan_counter = 0
+    for current, subdirs, fnames in dirgen:
+        handle_dir(current, path_len, options)
+        scan_counter += 1
+        maybe_show_progress(scan_counter, options)
+        indent = path_len.curr-path_len.base
+        # os.walk with topdown = True (default)
+        # allows pruning using the subdirs list
+        subdirs[:] = handle_subdirs(subdirs, current, options, indent)
+        for fname in fnames:
+            info = get_info(os.path.join(current, fname))
+            print_entry(info, options, indent, FMT_NEWENTRY)
+            scan_counter += 1
+            maybe_show_progress(scan_counter, options)
+
+    lev_diff = len(get_path_dirs(basedir)) - path_len.prev - 1
+    print("]"*(-lev_diff+1))
+    maybe_show_progress(scan_counter, options, end="\n")
+
+
+if __name__ == "__main__":
+    main()
