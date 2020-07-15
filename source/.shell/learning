@@ -2452,7 +2452,7 @@ classify_and_mirror(){
     cat ~/videos_cl | grep -v '\-> $' | sed 's/\(.*\) -> \(.*\) -> \(.*\)/\1 -> \3/g' > /tmp/videos_cl
     (echo SRC=$1; echo; lnk_map /tmp/videos_cl) > /tmp/script
     source /tmp/script
-    lnk_hierarchy_fill_scale_3
+    lnk_hierarchy_final
 }
 
 list_all_topics(){
