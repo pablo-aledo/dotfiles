@@ -51,8 +51,12 @@ ncdubar(){
 barcmd 'tmux ca -pt .1 | grep files | awk "{print \$(NF-1)}" | tail -n1' $(cat tmp/files | wc -l) $*
 }
 
-dfbar(){
+dfdbar(){
     barcmd 'df /dev/sdb | tail -n1 | awk "{print \$4}"' $(df /dev/sdb | tail -n1 | awk "{print \$2}")
+}
+
+dfubar(){
+    barcmd 'df /dev/sdb | tail -n1 | awk "{print \$3}"' $(df /dev/sdb | tail -n1 | awk "{print \$2}")
 }
 
 filesbar(){
