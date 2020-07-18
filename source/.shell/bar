@@ -81,3 +81,32 @@ barcmd(){
         sleep 1
     done | bar $limit
 }
+
+avhbar(){
+    barcmd "cat /tmp/s2files | grep Title | wc -l" $(cat /tmp/count)
+}
+
+descbar(){
+    barcmd 'ls -l Descargas | grep -F "$(tmux ca -pt .1 | grep -v "^$" | tail -n1 | sed "s/^[^ ]* //g")" -B1000 | tail -n+2 | awk "{s+=\$5} END {print s}"' $(ls -l Descargas | tail -n+2 | awk "{s+=\$5} END {print s}") $*
+}
+
+ncdubar(){
+    barcmd 'tmux ca -pt .1 | grep files | awk "{print \$(NF-1)}" | tail -n1' $(cat tmp/files | wc -l) $*
+}
+
+dfdbar(){
+    barcmd 'df /dev/sdb | tail -n1 | awk "{print \$4}"' $(df /dev/sdb | tail -n1 | awk "{print \$2}")
+}
+
+dfubar(){
+    barcmd 'df /dev/sdb | tail -n1 | awk "{print \$3}"' $(df /dev/sdb | tail -n1 | awk "{print \$2}")
+}
+
+filesbar(){
+    barcmd 'cat files | wc -l' $(cat tmp/files | wc -l)
+}
+
+convertbar(){
+    barcmd 'find /media/data/converted -iname "*.mp4" | wc -l' $(find /media/data/convert -iname '*.mp4' -or -iname '*.m4v' -or -iname '*.flv' -or -iname '*.mov' -or -iname '*.avi' -or -iname '*.wmv' -or -iname '*.mkv' -or -iname '*.vob' | wc -l)
+}
+

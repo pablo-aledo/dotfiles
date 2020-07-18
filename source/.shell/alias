@@ -24,7 +24,6 @@ jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
 
 alias avl='shc avl; xdotool key 6; sleep 1; shcw'
 alias unstar='shc unstar; xdotool key 6; sleep 1; shcw'
-alias avhbar='barcmd "cat /tmp/s2files | grep Title | wc -l" $(cat /tmp/count)'
 
 alias k='sudo kubectl'
 pod(){ k get pods | grep -v Terminating | grep -v Evicted | grep -v Completed | grep -i $1 | cut -d" " -f1 | tail -n1; }
@@ -42,26 +41,6 @@ alias akslogin='az aks get-credentials --resource-group $1 --name $2 --admin';
 
 alias                pvim='/usr/bin/vim +":set nopaste|:set ignorecase smartcase|:imap jj <ESC>|:map <Space><Space> /|:map <Space> :|:map > :n<cr>|:map < :N<cr>" '
 alias uvim='HOME=/dev/null /usr/bin/vim +":set nopaste|:set ignorecase smartcase|:imap jj <ESC>|:map <Space><Space> /|:map <Space> :|:map > :n<cr>|:map < :N<cr>" '
-
-descbar(){
-barcmd 'ls -l Descargas | grep -F "$(tmux ca -pt .1 | grep -v "^$" | tail -n1 | sed "s/^[^ ]* //g")" -B1000 | tail -n+2 | awk "{s+=\$5} END {print s}"' $(ls -l Descargas | tail -n+2 | awk "{s+=\$5} END {print s}") $*
-}
-
-ncdubar(){
-barcmd 'tmux ca -pt .1 | grep files | awk "{print \$(NF-1)}" | tail -n1' $(cat tmp/files | wc -l) $*
-}
-
-dfdbar(){
-    barcmd 'df /dev/sdb | tail -n1 | awk "{print \$4}"' $(df /dev/sdb | tail -n1 | awk "{print \$2}")
-}
-
-dfubar(){
-    barcmd 'df /dev/sdb | tail -n1 | awk "{print \$3}"' $(df /dev/sdb | tail -n1 | awk "{print \$2}")
-}
-
-filesbar(){
-barcmd 'cat files | wc -l' $(cat tmp/files | wc -l)
-}
 
 tailf(){
     while [ ! -e "$1" ]
