@@ -519,7 +519,7 @@ convert_recursive(){
 
 }
 
-convert_postconversion(){
+convert_postconversion_ok(){
 
     convert_rmsmall "$1"
     convert_rmbigger "$1"
@@ -529,6 +529,13 @@ convert_postconversion(){
     convert_missing "$1"
     convert_small "$1"
     cat /tmp/convert_report
+
+}
+
+convert_postconversion_nok(){
+
+    mv "${convert_dir}/${1}" "${convert_dir}/${1}_noconvert"
+    rm -fr "${converted_dir}/${1}"
 
 }
 
