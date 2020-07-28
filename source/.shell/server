@@ -752,6 +752,12 @@ server(){
                 file=$(echo $line | sed 's/^[^ ]* \(.*\)/\1/g')
                 margin=$(( 100 * 1024 * 1024 * 1024 ))
 
+                if [ -e "$(basename $file)" ]
+                then
+                    echo "Existing $(basename $file)"
+                    break
+                fi
+
                 if [ $(( $space - $size )) -gt $margin ]
                 then
                     echo -n "copy $file ... "
