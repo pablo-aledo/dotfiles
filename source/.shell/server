@@ -754,8 +754,9 @@ server(){
 
                 if [ $(( $space - $size )) -gt $margin ]
                 then
-                    echo "copy $file"
+                    echo -n "copy $file ... "
                     cp -r "$file" .
+                    echo "Finished"
                     break
                 fi
                 sleep 60
