@@ -775,7 +775,7 @@ convert_candidates(){
 		if [ "`find "$source/$dir" -name '*converted*'`" = "" ]
         then
             sumsize=$(( $sumsize + $size ))
-            echo $sumsize $dir
+            echo $size $sumsize $dir
         fi
 	done
 }

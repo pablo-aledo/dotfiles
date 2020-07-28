@@ -739,6 +739,31 @@ server(){
         done
     fi
 
+    if [ $1 = "cpspace" ]
+    then
+        cat cp_space | while read line
+        do
+            while true
+            do
+
+                space=$(df -B1 /dev/sdb | awk '{print $4}' | tail -n1)
+                size=$(echo $line | sed 's/^\([^ ]*\) /\1/g')
+                size=$(( $size * 1024 * 1024 * 1024 ))
+                file=$(echo $line | sed 's/^[^ ]* \(.*\)/\1/g')
+                margin=$(( 100 * 1024 * 1024 * 1024 ))
+
+                if [ $(( $space - $size )) -gt $margin ]
+                then
+                    echo "copy $file"
+                    cp -r "$file" .
+                    break
+                fi
+                sleep 60
+
+            done
+        done
+    fi
+
 }
 
 
