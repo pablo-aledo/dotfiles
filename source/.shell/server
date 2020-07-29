@@ -743,6 +743,7 @@ server(){
     then
         cat cp_space | while read line
         do
+            echo $line
             while true
             do
 
