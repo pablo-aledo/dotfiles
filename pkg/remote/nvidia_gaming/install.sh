@@ -81,3 +81,5 @@ for a in $(seq 1 3)
 do
 mouseover 1 1000 closewin1.png closewin2.png && xdotool click 1; sleep 1
 done
+
+mouseover 20 10000 cancel.png && xdotool click 1

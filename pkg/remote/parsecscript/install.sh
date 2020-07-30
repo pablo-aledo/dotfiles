@@ -12,6 +12,7 @@ xdotool type --delay 200 'Powershell.exe -File $ENV:UserProfile\Downloads\Parsec
 
 mouseover -1 10000 yes.png && xdotool click 1
 mouseover -1 10000 yn.png && xdotool key n; xdotool key Return
+mouseover 20 10000 cancel.png && xdotool click 1
 mouseover -1 10000 tesla.png
 mouseover -1 10000 yn.png && xdotool key n; xdotool key Return
 mouseover -1 10000 enter.png && xdotool click 1 && xdotool key Return
