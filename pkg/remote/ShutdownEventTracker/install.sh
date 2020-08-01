@@ -6,7 +6,9 @@ mouseover -1 10000 yes.png && xdotool click 1; sleep 5
 
 xdotool key Ctrl+f; sleep 1
 xdotool type 'DirtyShutdown'; sleep 5;
-xdotool key Return; sleep 10
+xdotool key Return; sleep 1
+
+mouseover -1 10000 dirtyshutdown.png && xdotool click 1; sleep 5
 
 xdotool key Return; sleep 1;
 xdotool key 0; sleep 1;
