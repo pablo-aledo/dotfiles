@@ -741,7 +741,8 @@ server(){
 
     if [ $1 = "cpspace" ]
     then
-        postfix=$2
+        prefix=$2
+        postfix=$3
         cat cpspace | while read line
         do
             echo $line
@@ -757,15 +758,15 @@ server(){
 
                 if [ -e "$filename" ]
                 then
-                    echo "Existing $filename"
+                    echo "\e[33m Existing $filename \e[0m"
                     break
                 fi
 
                 if [ $(( $space - $size )) -gt $margin ]
                 then
-                    echo -n "copy $file ... "
-                    cp -r "$file" "$filename$postfix"
-                    echo "Finished"
+                    echo -n "\e[34m copy $file ... "
+                    cp -r "$prefix/$file" "$filename$postfix"
+                    echo "Finished \e[0m"
                     break
                 fi
                 sleep 60
