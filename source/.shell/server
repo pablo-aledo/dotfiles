@@ -764,7 +764,9 @@ server(){
 
                 if [ $(( $space - $size )) -gt $margin ]
                 then
-                    echo -n "\e[34m copy $file ... "
+                    sizeg=$(( $size / 1024 / 1024 / 1024 ))
+                    spaceg=$(( $space / 1024 / 1024 / 1024 ))
+                    echo -n "\e[34m $sizeg $spaceg copy $file ... "
                     cp -r "$prefix/$file" "$filename$postfix"
                     echo "Finished \e[0m"
                     break
