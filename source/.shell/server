@@ -750,9 +750,10 @@ server(){
             size=$(echo $line | sed 's/^\([^ ]*\) .*/\1/g')
             file=$(echo $line | sed 's/^[^ ]* \(.*\)/\1/g')
             filename="$(basename $file)"
+            dest="$filename$postfix"
             margin=100
 
-            if [ -e "$filename" ]
+            if [ -e "$dest" ]
             then
                 echo "\e[33m Existing $filename \e[0m"
                 continue
@@ -766,7 +767,7 @@ server(){
                 if [ $(( $space - $size )) -gt $margin ]
                 then
                     echo -n "\e[33m $size $space \e[0m copy $file ... "
-                    cp -r "$prefix/$file" "$filename$postfix"
+                    cp -r "$prefix/$file" "$dest"
                     echo "Finished \e[0m"
                     break
                 fi
