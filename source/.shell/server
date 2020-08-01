@@ -746,20 +746,22 @@ server(){
         cat cpspace | while read line
         do
             echo "\e[34m line \e[0m $line"
+
+            size=$(echo $line | sed 's/^\([^ ]*\) .*/\1/g')
+            file=$(echo $line | sed 's/^[^ ]* \(.*\)/\1/g')
+            filename="$(basename $file)"
+            margin=100
+
+            if [ -e "$filename" ]
+            then
+                echo "\e[33m Existing $filename \e[0m"
+                continue
+            fi
+
             while true
             do
 
                 space=$(df -B1G /dev/sdb | awk '{print $4}' | tail -n1)
-                size=$(echo $line | sed 's/^\([^ ]*\) .*/\1/g')
-                file=$(echo $line | sed 's/^[^ ]* \(.*\)/\1/g')
-                filename="$(basename $file)"
-                margin=100
-
-                if [ -e "$filename" ]
-                then
-                    echo "\e[33m Existing $filename \e[0m"
-                    break
-                fi
 
                 if [ $(( $space - $size )) -gt $margin ]
                 then
@@ -769,7 +771,6 @@ server(){
                     break
                 fi
                 sleep 10
-
             done
         done
     fi
