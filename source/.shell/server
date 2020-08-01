@@ -741,14 +741,15 @@ server(){
 
     if [ $1 = "cpspace" ]
     then
-        cat cp_space | while read line
+        postfix=$2
+        cat cpspace | while read line
         do
             echo $line
             while true
             do
 
                 space=$(df -B1 /dev/sdb | awk '{print $4}' | tail -n1)
-                size=$(echo $line | sed 's/^\([^ ]*\) /\1/g')
+                size=$(echo $line | sed 's/^\([^ ]*\) .*/\1/g')
                 size=$(( $size * 1024 * 1024 * 1024 ))
                 file=$(echo $line | sed 's/^[^ ]* \(.*\)/\1/g')
                 filename="$(basename $file)"
@@ -763,7 +764,7 @@ server(){
                 if [ $(( $space - $size )) -gt $margin ]
                 then
                     echo -n "copy $file ... "
-                    cp -r "$file" "$filename"
+                    cp -r "$file" "$filename$postfix"
                     echo "Finished"
                     break
                 fi
