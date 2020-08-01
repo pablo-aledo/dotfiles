@@ -759,6 +759,12 @@ server(){
                 continue
             fi
 
+            if [ -e "$filename" ]
+            then
+                echo "\e[33m Existing $filename \e[0m"
+                continue
+            fi
+
             while true
             do
 
