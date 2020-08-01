@@ -765,6 +765,12 @@ server(){
                 continue
             fi
 
+            if [ "$(ls | grep "$filename.*")" != "" ]
+            then
+                echo "\e[33m Existing $(ls | grep "$filename.*" | head -n1) \e[0m"
+                continue
+            fi
+
             while true
             do
 
