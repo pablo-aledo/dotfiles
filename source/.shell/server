@@ -778,7 +778,7 @@ server(){
 
                 if [ $(( $space - $size )) -gt $margin ]
                 then
-                    echo -n "\e[33m $size $space \e[34m copy $file ... "
+                    echo -n "\e[33m $size $space \e[34m copy $file ... \e[31m"
                     cp -r "$prefix/$file" "$dest"
                     echo "\e[32m Finished \e[0m"
                     break
