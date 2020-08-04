@@ -521,6 +521,8 @@ convert_recursive(){
 
 convert_postconversion_ok(){
 
+    echo "\e[34m convert_postconversion \e[32m OK \e[0m $1"
+
     convert_rmsmall "$1"
     convert_rmbigger "$1"
     convert_reportsizes "$1"
@@ -533,6 +535,8 @@ convert_postconversion_ok(){
 }
 
 convert_postconversion_nok(){
+
+    echo "\e[34m convert_postconversion \e[31m NOK \e[0m $1"
 
     mv "${convert_dir}/${1}" "${convert_dir}/${1}_noconvert"
     rm -fr "${converted_dir}/${1}"
