@@ -255,5 +255,6 @@ avhloop(){
     night_avh
     unstar
     tmkill "vnc"
+    find ~/Descargas/ -maxdepth 1 -empty -type f -delete
 }
 
