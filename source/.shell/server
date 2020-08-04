@@ -739,6 +739,22 @@ server(){
         done
     fi
 
+    if [ $1 = "trape" ]
+    then
+        cd ~/html
+        ( server lamp2 8000 2>&1 ) \
+        | while read line
+        do
+            echo $line \
+            | grep -i get \
+            | grep -i trape \
+            | grep -i mp4 \
+            | grep 'HTTP/1.1" 200' \
+            | awk 'BEGIN{}{print $1" "$4" "$7}'
+        done \
+        | sed -e 's/\[//g' -e 's|/trape/||g' -e 's/\.mp4//g'
+    fi
+
     if [ $1 = "cpspace" ]
     then
         prefix=$2
