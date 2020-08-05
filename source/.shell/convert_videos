@@ -888,5 +888,18 @@ convert_burn_srt(){
     video_out=$3
 
     ffmpeg -i $srt_in $srt_in.ass
-    ffmpeg -i $vide_in -vf ass=$srt_in.ass $video_out
+    ffmpeg -i $video_in -vf ass=$srt_in.ass $video_out
 }
+
+convert_burn_srt_2(){
+    video_in=$1
+    srt_in=$2
+    video_out=$3
+    FontSize=10
+
+    ffmpeg -i $srt_in $srt_in.ass
+    ffmpeg -i "$video_in" -vf subtitles="$srt_in":force_style='Fontsize="$FontSize"' "$video_out"
+}
+
+
+
