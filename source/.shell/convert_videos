@@ -875,3 +875,9 @@ video_speed_2(){
     ffmpeg -i "$1" -filter:v "minterpolate='mi_mode=mci:mc_mode=aobmc:vsbmc=1:fps=120'" $(basename "$1" .mp4).$2.mp4
 }
 
+convert_embed_srt(){
+    video_in=$1
+    srt_in=$2
+    video_out=$3
+    ffmpeg -i $video_in -f srt -i $srt_in -c:v copy -c:a copy -c:s mov_text $video_out
+}
