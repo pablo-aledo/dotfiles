@@ -881,3 +881,12 @@ convert_embed_srt(){
     video_out=$3
     ffmpeg -i $video_in -f srt -i $srt_in -c:v copy -c:a copy -c:s mov_text $video_out
 }
+
+convert_burn_srt(){
+    video_in=$1
+    srt_in=$2
+    video_out=$3
+
+    ffmpeg -i $srt_in $srt_in.ass
+    ffmpeg -i $vide_in -vf ass=$srt_in.ass $video_out
+}
