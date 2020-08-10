@@ -1,0 +1,12 @@
+checkrar(){
+    initdir=$PWD
+	find -name '*.part*.rar' | while read line
+	do
+		cd $init_dir
+		cd "`dirname $line`"
+		[ $(ls | wc -l) -eq $(ls | sed 's/.*part\(.*\)\.rar/\1/g' | sort -g | tail -n1) ] || \
+			(echo "missing file in the rar sequence for $PWD")
+		[ $(ll | awk '{print $5}' | sort | uniq | wc -l) -eq 3 ] || \
+			(echo "incorrect sizes in the rar sequence for $PWD")
+	done
+}
