@@ -1755,7 +1755,7 @@ with open(learning_dir + '/classifier/sortvectors') as f:
     vectors = [ line.rstrip('\n') for line in f ]
     vectors = [ np.fromstring(vector, dtype=float, sep=' ') for vector in vectors ]
 
-optimum={ 'names':[], 'cost': 0. }
+optimum={ 'names':[], 'cost': 0., 'ncovered': 0, 'n': 0 }
 for i in range(0, 1000):
     n=random.randint(1,len(names))
     selections=np.random.permutation(np.concatenate( [np.zeros(len(names)-n), np.ones(n)] ))
@@ -1766,6 +1766,8 @@ for i in range(0, 1000):
     if( float(ncovered)/float(n) > optimum['cost'] ):
         optimum['names'] = nssel
         optimum['cost'] = float(ncovered)/float(n)
+        optimum['ncovered'] = ncovered
+        optimum['n'] = n
         print optimum
 
 for a in optimum['names']:
