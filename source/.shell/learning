@@ -234,6 +234,19 @@ print('false')
 "
 }
 
+linegrep.txt2vec(){
+
+    ret=""
+    cat $1 > $tmp/file
+    cat $learning_dir/features/regex | while read -r regex
+    do
+        [ "$(cat $tmp/file | grep $regex)" != "" ] && ret="$ret 1"
+        [ "$(cat $tmp/file | grep $regex)"  = "" ] && ret="$ret 0"
+    done
+    echo $ret
+
+}
+
 keywords.txt2vec(){
 
     cat $1 | tokenize | countwords | getkeywords > $tmp/kwords
