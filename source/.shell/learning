@@ -67,6 +67,16 @@ camelcase(){
     echo $c $b
 }
 
+ldtox(){
+    cat | sed \
+        -e 's/ñ/6339c9128e7e2a655ca5967949fa16c1/g'
+}
+
+ltox(){
+    cat | sed \
+        -e 's/6339c9128e7e2a655ca5967949fa16c1/ñ/g'
+}
+
 tokenize(){
     [ $keywords_lowercase = "true" ] && lowercmd="tr '[A-Z]' '[a-z]'"
     [ $keywords_lowercase = "false" ] && lowercmd="cat"
