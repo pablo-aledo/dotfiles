@@ -248,7 +248,7 @@ print('false')
 "
 }
 
-linegrep.txt2vec(){
+linegrepkeywords.txt2vec(){
 
     ret=""
     cat $1 > $tmp/file
