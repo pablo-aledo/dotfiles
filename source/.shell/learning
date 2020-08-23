@@ -1789,7 +1789,7 @@ for i in range(0, 1000):
     vssel=[ vectors[i] for i in range(0,len(names)) if selections[i] == 1 ]
     nssel=[ names[i] for i in range(0,len(names)) if selections[i] == 1 ]
     covered=np.sum(vssel,axis=0)
-    ncovered=len(np.where( covered > 0 ))
+    ncovered=len(np.where( covered > 0 )[0])
     #if( float(ncovered)/float(n) > optimum['cost'] ):
     if( float(ncovered)/float(n) > optimum['cost'] and ncovered == len(vectors[0])):
         optimum['names'] = nssel
