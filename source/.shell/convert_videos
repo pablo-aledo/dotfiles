@@ -187,6 +187,10 @@ convert_plusaudio(){
 	ffmpeg -i $1 -i $2 -vcodec copy -acodec copy $1$2.avi
 }
 
+convert_plusaudio_2(){
+    ffmpeg -i $1 -i $2 -strict -2 -c:v copy -map 0:v:0 -map 1:a:0 videoaudio.mp4
+}
+
 convert_toimgs(){
         mkdir $1_tmp;
         ffmpeg -i $1 -r 25 -f image2 $1_tmp/%07d.png
