@@ -566,6 +566,18 @@ doc2txt_rec(){
 			sed -i "s|$tmp/learning||g" "$destination"
 			[ $PWD = $OLDPWD ] || cd $OLDPWD
 			;;
+		(*.7z)
+			rm -fr $tmp/learning
+			mkdir -p $tmp/learning
+			cd $tmp/learning
+			7z x "$filename" >/dev/null 2>/dev/null
+			find $PWD | while read line
+			do
+				doc2txt_rec "$line" "$destination" 
+			done
+			sed -i "s|$tmp/learning||g" "$destination"
+			[ $PWD = $OLDPWD ] || cd $OLDPWD
+			;;
 		(*.pdf|*.PDF)
 			pdftotext -f 1 -l $summarize_page_limit "$filename" - | head -n $summarize_line_limit | txtsimp | strings -n1 >> "$destination"
 			;;
