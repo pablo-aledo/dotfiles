@@ -910,6 +910,7 @@ video_add(){
     then
         mv videoout.mp4 in.mp4
         video_transition in.mp4 $1 videoout.mp4
+        rm -fr in.mp4
     else
         cp $1 videoout.mp4
     fi
