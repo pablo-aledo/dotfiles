@@ -905,5 +905,12 @@ convert_burn_srt_2(){
     ffmpeg -i "$video_in" -vf subtitles="$srt_in":force_style='Fontsize="$FontSize"' "$video_out"
 }
 
-
-
+video_add(){
+    if [ -e "videoout.mp4" ]
+    then
+        mv videoout.mp4 in.mp4
+        video_transition in.mp4 $1 videoout.mp4
+    else
+        cp $1 videoout.mp4
+    fi
+}
