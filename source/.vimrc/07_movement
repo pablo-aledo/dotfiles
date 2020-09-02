@@ -18,6 +18,8 @@ nnoremap <C-W>m <C-W>=
 "nnoremap <C-H> <C-W><C-H>
 " move vertically by visual line
 
+" move vertically in square selection mode
+vmap G 9999j
 
 " dragvisuals plugin
 "runtime bundle/dragvisuals/plugins/dragvisuals.vim
