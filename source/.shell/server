@@ -742,17 +742,28 @@ server(){
     if [ $1 = "trape" ]
     then
         cd ~/html
+        touch index.html
+
+        lastdateline=0
+        dateline=0
+
         ( server lamp2 8000 2>&1 ) \
         | while read line
         do
+            lastdateline=$dateline
+            dateline=$(date +%s)
+            [ $(( $dateline - $lastdateline )) -gt $(( 5 * 60 )) ] && \
+                [ "$(echo $line | grep -i get | grep -i trape | grep -i mp4)" != "" ] && \
+                echo
+
             echo $line \
             | grep -i get \
             | grep -i trape \
             | grep -i mp4 \
             | grep 'HTTP/1.1" 200' \
-            | awk 'BEGIN{}{print $1" "$4" "$7}'
-        done \
-        | sed -e 's/\[//g' -e 's|/trape/||g' -e 's/\.mp4//g'
+            | awk 'BEGIN{}{print $1" "$4" "$7}' \
+            | sed -e 's/\[//g' -e 's|/trape/||g' -e 's/\.mp4//g'
+        done
     fi
 
     if [ $1 = "cpspace" ]
