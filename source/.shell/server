@@ -750,11 +750,13 @@ server(){
         ( server lamp2 8000 2>&1 ) \
         | while read line
         do
-            lastdateline=$dateline
-            dateline=$(date +%s)
-            [ $(( $dateline - $lastdateline )) -gt $(( 5 * 60 )) ] && \
-                [ "$(echo $line | grep -i get | grep -i trape | grep -i mp4)" != "" ] && \
-                echo
+
+            if [ "$(echo $line | grep -i get | grep -i trape | grep -i mp4)" != "" ] && \
+            then
+                lastdateline=$dateline
+                dateline=$(date +%s)
+                [ $(( $dateline - $lastdateline )) -gt $(( 5 * 60 )) ] && echo
+            fi
 
             echo $line \
             | grep -i get \
