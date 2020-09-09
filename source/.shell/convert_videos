@@ -915,3 +915,30 @@ video_add(){
         cp $1 videoout.mp4
     fi
 }
+
+gaussian_curve(){
+
+mean=$1
+variance=$2
+amplitude=$3
+n=$( ls | wc -l )
+
+python -c "
+from scipy import signal
+
+n,mean,variance,amplitude = ($n, $mean, $variance, $amplitude)
+n,mean,variance,amplitude = (100, 50, 10, 0.5)
+
+gcurve = signal.gaussian(n, mean, variance)
+outval = 0.0
+inval = 0
+
+while inval < n:
+    outval = outval + ( 1.0 - amplitude * gcurve[a] )
+    print( str(inval) + ' ' + str(int(outval)) )
+    inval = inval + 1
+
+"
+
+
+}
