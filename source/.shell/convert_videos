@@ -942,3 +942,30 @@ while inval < n:
 
 
 }
+
+videos_overlay(){
+
+file1=$1
+file2=$2
+init1=$3
+init2=$4
+duration=$5
+output=$6
+
+rm -rf /tmp/1.cut.mp4 /tmp/2.cut.mp4 /tmp/3.mp4 $output
+
+ffmpeg -ss $init1 -t $duration -i $file1 -strict -2 /tmp/1.cut.mp4
+ffmpeg -ss $init2 -t $duration -i $file2 -strict -2 /tmp/2.cut.mp4
+
+ffmpeg \
+    -i /tmp/1.cut.mp4 -i /tmp/2.cut.mp4 \
+    -filter_complex " \
+        [0:v]setpts=PTS-STARTPTS, scale=1280x720[top]; \
+        [1:v]setpts=PTS-STARTPTS, scale=1280x720, \
+             format=yuva420p,colorchannelmixer=aa=0.5[bottom]; \
+        [top][bottom]overlay=shortest=1" \
+        -strict -2 /tmp/3.mp4
+
+ffmpeg -r 25 -i /tmp/3.mp4 -strict -2 $output
+
+}
