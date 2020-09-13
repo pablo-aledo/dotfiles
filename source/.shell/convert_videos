@@ -969,3 +969,9 @@ ffmpeg \
 ffmpeg -r 25 -i /tmp/3.mp4 -strict -2 $output
 
 }
+
+add_framenumber(){
+
+ffmpeg -i $1 -vf "drawtext=fontfile=Arial.ttf: text='%{frame_num}': start_number=1: x=(w-tw)/2: y=h-(2*lh): fontcolor=black: fontsize=20: box=1: boxcolor=white: boxborderw=5" -c:a copy $2
+
+}
