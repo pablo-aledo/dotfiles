@@ -113,6 +113,7 @@ spc_intersection(){
     name=$(basename $src)
     cat /tmp/spc_sync_${name} | while read line
     do
+        echo "\e[34m spc_intersection \e[0m $line"
         rsync -vaXi --delete "$src/$line" "$dst/" || rm -fr "$dst/$line"
     done
 }
@@ -123,6 +124,7 @@ spc_diff_a(){
     name=$(basename $src)
     cat /tmp/spc_to_rm_${name} /tmp/spc_duplicated_${name} | while read line
     do
+        echo "\e[34m spc_diff_a \e[0m $line"
         rm -fr "$dst/$line/"
     done
 }
@@ -133,6 +135,7 @@ spc_diff_b(){
     name=$(basename $src)
     cat /tmp/spc_not_sync_${name} | while read line
     do
+        echo "\e[34m spc_diff_b \e[0m $line"
         rsync -vaXi --delete "$src/$line" "$dst/" || rm -fr "$dst/$line"
     done
 }
