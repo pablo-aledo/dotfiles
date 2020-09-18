@@ -61,7 +61,7 @@ sync_partial_contents(){
 
     name=$(basename $1)
 
-    echo "\e[34m ===== $name =====\e[0m"
+    echo -e "\e[34m ===== $name =====\e[0m"
 
 	[ -e "$1" ] || return
 	[ -e "$2" ] || return
@@ -97,13 +97,13 @@ sync_partial_contents(){
     cat /tmp/in_b_not_a /tmp/spc_to_rm_${name} > /tmp/aux
     cat /tmp/aux | sort | uniq | egrep -v '^$' > /tmp/spc_to_rm_${name}
 
-    echo "\e[34m ===== to_sync =====\e[0m"
+    echo -e "\e[34m ===== to_sync =====\e[0m"
     cat /tmp/spc_sync_${name} | wc -l
-    echo "\e[34m ===== to_rm =====\e[0m"
+    echo -e "\e[34m ===== to_rm =====\e[0m"
     cat /tmp/spc_to_rm_${name} | wc -l
-    echo "\e[34m ===== duplicated =====\e[0m"
+    echo -e "\e[34m ===== duplicated =====\e[0m"
     cat /tmp/spc_duplicated_${name} | wc -l
-    echo "\e[34m ===== not_sync =====\e[0m"
+    echo -e "\e[34m ===== not_sync =====\e[0m"
     cat /tmp/spc_not_sync_${name} | wc -l
 }
 
@@ -113,7 +113,7 @@ spc_intersection(){
     name=$(basename $src)
     cat /tmp/spc_sync_${name} | while read line
     do
-        echo "\e[34m spc_intersection \e[0m $line"
+        echo -e "\e[34m spc_intersection \e[0m $line"
         rsync -vaXi --delete "$src/$line" "$dst/" || rm -fr "$dst/$line"
     done
 }
@@ -124,7 +124,7 @@ spc_diff_a(){
     name=$(basename $src)
     cat /tmp/spc_to_rm_${name} /tmp/spc_duplicated_${name} | while read line
     do
-        echo "\e[34m spc_diff_a \e[0m $line"
+        echo -e "\e[34m spc_diff_a \e[0m $line"
         rm -fr "$dst/$line/"
     done
 }
@@ -135,7 +135,7 @@ spc_diff_b(){
     name=$(basename $src)
     cat /tmp/spc_not_sync_${name} | while read line
     do
-        echo "\e[34m spc_diff_b \e[0m $line"
+        echo -e "\e[34m spc_diff_b \e[0m $line"
         rsync -vaXi --delete "$src/$line" "$dst/" || rm -fr "$dst/$line"
     done
 }
