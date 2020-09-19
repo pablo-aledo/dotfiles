@@ -750,6 +750,7 @@ server(){
         ( server lamp2 8000 2>&1 ) \
         | while read line
         do
+            echo $line >> logs.txt
 
             if [ "$(echo $line | grep -i get | grep -i mp4)" != "" ] && \
             then
