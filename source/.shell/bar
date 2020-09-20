@@ -85,7 +85,15 @@ barcmd(){
 rbarcmd(){
     cmd=$1
     skip=$2
-    val=$(echo $1 | bash)
+
+    if [ "$skip" = "skip" ]
+    then
+        val=$(echo $1 | bash)
+        echo $val > /tmp/rbar_start
+    else
+        val=$(cat /tmp/rbar_start)
+    fi
+
     echo "barcmd 'echo $val - \$($cmd) | bc' $val $skip" > /tmp/rbarcmd
     source /tmp/rbarcmd
 }
