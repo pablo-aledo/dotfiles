@@ -84,8 +84,9 @@ barcmd(){
 
 rbarcmd(){
     cmd=$1
+    skip=$2
     val=$(echo $1 | bash)
-    echo "barcmd 'echo $val - \$($cmd) | bc' $val" > /tmp/rbarcmd
+    echo "barcmd 'echo $val - \$($cmd) | bc' $val $skip" > /tmp/rbarcmd
     source /tmp/rbarcmd
 }
 
