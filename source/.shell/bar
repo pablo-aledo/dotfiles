@@ -82,6 +82,13 @@ barcmd(){
     done | bar $limit
 }
 
+rbarcmd(){
+    cmd=$1
+    val=$(echo $1 | bash)
+    echo "barcmd 'echo $val - \$($cmd) | bc' $val" > /tmp/rbarcmd
+    source /tmp/rbarcmd
+}
+
 avhbar(){
     barcmd "cat /tmp/s2files | grep Title | wc -l" $(cat /tmp/count)
 }
