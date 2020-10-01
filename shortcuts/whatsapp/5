@@ -1,9 +1,0 @@
-export DISPLAY=:1
-
-cat /tmp/whatsapp_file | while read line
-do
-    echo $line | xclip -sel clip -i
-    xdotool key Ctrl+v
-    xdotool key BackSpace
-    xdotool key Return
-done
