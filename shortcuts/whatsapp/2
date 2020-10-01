@@ -1,0 +1,7 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+mouseover -1 100 ~/.dotfiles/shortcuts/images/whats_search.png && xdotool click 1
+
+cat /tmp/whatsapp_contact | xclip -sel clip -i
+xdotool key Ctrl+v
