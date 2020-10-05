@@ -7,7 +7,7 @@ do
     mouseover -1 100 ~/.dotfiles/shortcuts/images/whats_clip.png && xdotool click 1
     mouseover -1 100 ~/.dotfiles/shortcuts/images/whats_photo.png && xdotool click 1
 
-    sleep 1
+    sleep 3
 
     echo $line | xclip -sel clip -i
     xdotool key Ctrl+v
