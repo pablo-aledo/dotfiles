@@ -1,2 +1,7 @@
 echo $1 > /tmp/whatsapp_contact
-echo $2 > /tmp/whatsapp_files
+shift
+
+for a in $*
+do
+    echo $a | sed "s|^|$PWD/|g"
+done > /tmp/whatsapp_files
