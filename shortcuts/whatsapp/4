@@ -1,3 +1,15 @@
 export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
 
-xdotool key Ctrl+w
+while true
+do
+    xdotool key Ctrl+w
+    sleep 1
+
+    if $(mouseover 10 100 ~/.dotfiles/shortcuts/images/close_cancel.png)
+    then
+        xdotool click 1
+    else
+        break
+    fi
+done
