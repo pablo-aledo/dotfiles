@@ -739,6 +739,7 @@ mv_converted(){
     destination=/media/removable/2TB2/homes/admin/Videos
 
     [ -d "$converted_dir" ] || return
+    [ -d "$destination" ]   || echo '\e[31m Destination does not exist \e[0m'
     [ -d "$destination" ]   || return
 
     cd "$converted_dir"
