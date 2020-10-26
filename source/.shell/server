@@ -753,7 +753,7 @@ server(){
         do
             echo $line >> logs.txt
 
-            if [ "$(echo $line | grep -i get | grep -i mp4)" != "" ] && \
+            if [ "$(echo $line | grep -i get | grep -i mp4)" != "" ]
             then
                 lastdateline=$dateline
                 dateline=$(date +%s)
@@ -761,6 +761,7 @@ server(){
             fi
 
             echo $line \
+            | grep -vi nolog \
             | grep -i get \
             | grep -i mp4 \
             | grep 'HTTP/1.1" 200' \
