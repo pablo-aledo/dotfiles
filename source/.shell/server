@@ -717,6 +717,19 @@ server(){
         done
     fi
 
+    if [ $1 = "space2" ]
+    then
+        [ $# -eq 1 ] && drive=sda1
+        [ $# -eq 2 ] && drive=$2
+        while true
+        do
+            space=$( dfh | grep "$drive " | awk '{print $4}' | sed 's/G//g' )
+            echo "space $space %"
+            [ $space -lt 60 ] && echo "\e[31m Low space \e[0m" && notify_space_2 $space && notify_space_full_2 $drive
+            sleep 10
+        done
+    fi
+
 
     if [ $1 = "send" ]
     then
@@ -885,6 +898,10 @@ notify_space(){
     echo "Low space on server: $1 %" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW SPACE ON SERVER" -- pablo.aledo@gmail.com
 }
 
+notify_space_2(){
+    echo "Low space on server: $1 G" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW SPACE ON SERVER" -- pablo.aledo@gmail.com
+}
+
 notify_sasl(){
     echo "sasl authentication error" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "SASL AUTH ERROR" -- pablo.aledo@gmail.com
 }
@@ -898,6 +915,19 @@ notify_space_full(){
         [ $space -gt 97 ] && echo "Disk is full" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
         [ $space -gt 97 ] && sleep $(( 1 * 60 * 60 ))
         [ $space -lt 80 ] && return
+        sleep 10
+    done
+}
+
+notify_space_full_2(){
+    while true
+    do
+        space=$( dfh | grep "$1 " | awk '{print $4}' | sed 's/G//g' )
+        echo "space_full $space %"
+        [ $space -lt 5 ] && echo "\e[31m DISK IS FULL \e[0m"
+        [ $space -lt 5 ] && echo "Disk is full" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
+        [ $space -lt 5 ] && sleep $(( 1 * 60 * 60 ))
+        [ $space -gt 60 ] && return
         sleep 10
     done
 }
