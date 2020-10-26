@@ -724,7 +724,7 @@ server(){
         while true
         do
             space=$( dfh | grep "$drive " | awk '{print $4}' | sed 's/G//g' )
-            echo "space $space %"
+            echo "space $space G"
             [ $space -lt 60 ] && echo "\e[31m Low space \e[0m" && notify_space_2 $space && notify_space_full_2 $drive
             sleep 10
         done
