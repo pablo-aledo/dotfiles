@@ -86,6 +86,7 @@ bindkey -M viins "^[[1;6D" insert-cycledleft
 
 zstyle ':completion:*' special-dirs true
 
+stty -ixon
 
 # Compilation flags
 # export ARCHFLAGS="-arch x86_64"
