@@ -540,9 +540,11 @@ convert_postconversion_ok(){
 
 convert_postconversion_nok(){
 
+    [ $# = 2 ] && reason="_"$2 || reason=""
+
     echo "\e[34m convert_postconversion \e[31m NOK \e[0m $1"
 
-    mv "${convert_dir}/${1}" "${convert_dir}/${1}_noconvert"
+    mv "${convert_dir}/${1}" "${convert_dir}/${1}_noconvert${reason}"
     rm -fr "${converted_dir}/${1}"
 
 }
