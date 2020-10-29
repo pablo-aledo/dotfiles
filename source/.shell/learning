@@ -42,7 +42,8 @@ keywords.get_features(){
 
 rules.transform(){
     cat | sed \
-        -e 's/c++/cpp/g'  \
+        -e 's/c++/cpp/g' \
+        -e 's/gpt.3/gpt3/g' \
         -e 's/c#/csharp/g'  \
         -e 's/?/ questionmark/g' \
         -e 's/\(machine.learning\)/\1 MachineLearning /gI' \
