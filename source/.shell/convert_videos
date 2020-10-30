@@ -991,6 +991,6 @@ ffmpeg -r 25 -i /tmp/frames.mp4 -strict -2 $1.frames.mp4
 
 cutvideo_awklength(){
 
-    cat | awk 'BEGIN{FS="[ : ]"; sum=0}{len = ($5*60+$6)-($3*60+$4); sum = sum+len; print $0 " # length: " len}END{print "# sum: " sum}'
+    cat | awk 'BEGIN{FS="[ : ]"; sum=0}{len = ($5*60+$6)-($3*60+$4); sum = sum+len; print $0 " # length: " len}END{print "# sum: " sum; printf("# sum: %02d:%02d:%02d\n",(len/60/60),(len/60%60),(len%60)) }'
 
 }
