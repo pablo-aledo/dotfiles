@@ -258,3 +258,15 @@ avhloop(){
     find ~/Descargas/ -maxdepth 1 -empty -type f -delete
 }
 
+avhsearch(){
+
+wget 'https://tavaz.xyz/generative-adversarial-networks/article_904124.asp?page=1' -q -O - | grep Details | grep avxhm.se | sed 's|href="\(https://avxhm.se/ebooks/[^"]*\)"|\n\1\n|g' | grep avxhm.se | while read link
+do
+
+	title=$( wget $link -q -O - | grep 'h1 class="title-link' | cut -d'>' -f2 | cut -d'<' -f1 )
+	echo "$title -> $link"
+done
+
+}
+
+
