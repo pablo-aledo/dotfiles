@@ -33,3 +33,5 @@ set splitbelow                                                          " Open n
 set path+=**                                                            " search down into subfolders (:find)
 set wildmenu                                                            " display all matching files when we tab complete
 map Y y$
+
+let g:go_version_warning = 0
