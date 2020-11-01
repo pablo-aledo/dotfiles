@@ -766,7 +766,7 @@ server(){
         do
             echo $line >> logs.txt
 
-            if [ "$(echo $line | grep -i get | grep -i mp4)" != "" ]
+            if [ "$(echo $line | grep -i get | grep -i mp4 | grep -vi nolog)" != "" ]
             then
                 lastdateline=$dateline
                 dateline=$(date +%s)
