@@ -220,6 +220,14 @@ case $1 in
 (docker-android)
     docker run --privileged -d -p 6080:6080 -p 5554:5554 -p 5555:5555 -e DEVICE="Samsung Galaxy S6" --name android-container budtmo/docker-android-x86-8.1
     ;;
+(resnet)
+	mkdir /tmp/model-data
+	cd /tmp/model-data
+	wget 'http://download.tensorflow.org/models/official/20181001_resnet/savedmodels/resnet_v2_fp32_savedmodel_NHWC_jpg.tar.gz'
+	tar xzf resnet_v2_fp32_savedmodel_NHWC_jpg.tar.gz --strip-components=2
+	curl -sSL https://raw.githubusercontent.com/bitnami/bitnami-docker-tensorflow-resnet/master/docker-compose.yml > docker-compose.yml
+	docker-compose up -d
+	;;
 esac
 }
 
@@ -496,6 +504,7 @@ case $1 in
 (disque)                 docker run -p 7711:7711 efrecon/disque:1.0-rc1 ;;
 (recoll)                 docker run -p 8080:8080 -v $HOME:/root ~/.dotfiles/pkg/Docker/recoll/recoll.conf:/root/.recoll/recoll.conf dsheyp/docker-recoll-webui
                          docker exec $(docker ps | grep recoll | awk '{print $1}' ) recollindex ;;
+(resnet)                 docker exec -it $(docker ps | grep tensorflow-resnet | awk '{print $1}') bash -c 'curl https://www.tensorflow.org/images/blogs/serving/cat.jpg -o /tmp/cat.jpg; resnet_client_cc --server_port=tensorflow-serving:8500 --image_file=/tmp/cat.jpg' ;;
 (registry)               docker run -d -p 5000:5000 --restart=always --name registry -v /opt/docker-registry:/var/lib/registry registry:2
                          echo '{"insecure-registries": ["registry.yourdomain.com:5000"]}' | sudo tee /etc/docker/daemon.json
                          sudo systemctl restart docker || sudo service docker restart ;;
