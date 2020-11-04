@@ -1,7 +1,10 @@
 export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
 
-xdotool key Ctrl+g
-xdotool key Escape
-
-nr=$(cat /tmp/filenr)
-echo $(( $nr + 1 )) > /tmp/filenr
+while true
+do
+    xdotool key 3; sleep 15
+    xdotool key 4; sleep 20
+    xdotool key 5; sleep 5
+    mouseover 3 50000 ~/.dotfiles/shortcuts/images/coursera_video_selected.png || break
+done
