@@ -2,3 +2,7 @@ findsort(){
 	[ $# -eq 1 ] && find "$1" -type f -printf "%C@ %p\n" | sort
 	[ $# -eq 1 ] || find      -type f -printf "%C@ %p\n" | sort
 }
+
+wfindsort(){
+	watch -n1 find -type f -printf "%C@ %p\n" | sort | tail
+}
