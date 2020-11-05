@@ -4,5 +4,5 @@ findsort(){
 }
 
 wfindsort(){
-	watch -n1 find -type f -printf "%C@ %p\n" | sort | tail
+	watch -n1 'find -type f -printf "%C@ %p\n" | sort | tail'
 }
