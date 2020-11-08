@@ -42,6 +42,26 @@ cutvideo(){
 	ffmpeg -ss $t1 -t $d -i $1 -strict -2 $name
 }
 
+cutvideo_25fps(){
+	m1=`echo $2 | cut -d':' -f1`
+	s1=`echo $2 | cut -d':' -f2`
+	m2=`echo $3 | cut -d':' -f1`
+	s2=`echo $3 | cut -d':' -f2`
+	t1=$(($m1*60+$s1))
+	t2=$(($m2*60+$s2))
+	d=$(($t2-$t1))
+
+    n=1
+    name=${4}.mp4
+    while [ -e $name ]
+    do
+        n=$(( $n + 1 ))
+        name=${4}_${n}.mp4
+    done
+
+	ffmpeg -ss $t1 -t $d -i $1 -r 25 -strict -2 $name
+}
+
 cutvideo_logo(){
 	m1=`echo $2 | cut -d':' -f1`
 	s1=`echo $2 | cut -d':' -f2`
