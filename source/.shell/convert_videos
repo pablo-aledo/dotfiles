@@ -1018,3 +1018,17 @@ cutvideo_awklength(){
 video_2x(){
   ffmpeg -i $1 -strict -2 -filter_complex "[0:v]setpts=0.5*PTS[v];[0:a]atempo=2.0[a]" -map "[v]" -map "[a]" $2
 }
+
+videos_2x2server(){
+
+    mkdir -p ~/html/courses/buffer
+    find ~/html/courses/ -type f | grep -v buffer | xargs -d"\n" -n1 -- rm -f
+    mv ~/html/courses/buffer/* ~/html/courses/
+
+    for a in *.mp4
+    do
+        echo video_2x '"'$a'"' ~'"'/html/courses/buffer/$a'"'
+    done | vimexec
+
+}
+
