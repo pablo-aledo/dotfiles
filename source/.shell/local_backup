@@ -158,6 +158,9 @@ local_backup_tm3(){
 
 
 local_backup(){
+
+    [ "$(ls $LOCAL_BACKUP_DEST | wc -l)" -eq 0 ] && echo -n "\e[31m LOCAL_BACKUP_DEST is empty \e[0m" && return
+
 	local_backup_m       Descargas
 	local_backup_m       Personal
 	local_backup_c       uned
