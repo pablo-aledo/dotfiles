@@ -1,5 +1,5 @@
 uranger(){
-	urxvt -e ranger
+	urxvt -e ranger $*
 }
 
 ranger_extract_compress(){
