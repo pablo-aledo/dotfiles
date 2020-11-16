@@ -26,12 +26,12 @@ alias avl='shc avl; xdotool key 6; sleep 1; shcw'
 alias unstar='shc unstar; xdotool key 6; sleep 1; shcw'
 
 alias k='sudo kubectl'
-pod(){ k get pods | grep -v Terminating | grep -v Evicted | grep -v Completed | grep -i $1 | cut -d" " -f1 | tail -n1; }
-pods(){ k get pods | tail -n+2 | grep -v Terminating | grep -i $1 | cut -d" " -f1; }
+pod(){ k get pods | grep -v Terminating | grep -v Evicted | grep -i $1 | cut -d" " -f1 | tail -n1; }
+pods(){ k get pods | tail -n+2 | grep -i $1 | cut -d" " -f1; }
 deployment(){ k get deployments | cut -d" " -f1 | grep -i $1 | tail -n1; }
 alias kgp='k get pods | grep -v Terminating'
 kshell(){ k exec -it $1 /bin/bash ; }
-alias wkgp='watch -n1 "sudo kubectl get pods | grep -v Terminating"'
+alias wp='watch -n1 "sudo kubectl get pods | grep -v Terminating"'
 
 alias helm='sudo helm'
 alias hn='helm list | grep -v NAME | awk "{print \$1}" | grep'
