@@ -205,6 +205,13 @@ case $1 in
     cp ~/.dotfiles/pkg/Docker/spark/Dockerfile kubernetes/dockerfiles/spark/
     sudo ./bin/docker-image-tool.sh build
     ;;
+(pyspark)
+    cd /tmp
+    wget https://apache.brunneis.com/spark/spark-3.0.1/spark-3.0.1-bin-hadoop2.7.tgz
+    tar -xvzf spark-3.0.1-bin-hadoop2.7.tgz
+    cd /tmp/spark-3.0.1-bin-hadoop2.7/
+    sudo ./bin/docker-image-tool.sh -p kubernetes/dockerfiles/spark/bindings/python/Dockerfile build
+    ;;
 (upsource)
     mkdir -p $HOME/upsource/data
     mkdir -p $HOME/upsource/conf
