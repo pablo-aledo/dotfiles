@@ -85,3 +85,12 @@ spark-submit \
   http://path/to/spark-examples_2.11-2.4.5.jar \
   1000
 
+./spark-submit \
+    --deploy-mode cluster
+    --master k8s://http://localhost: \
+    --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark \
+    --name spark \
+    --conf spark.executor.instances=5 \
+    --conf spark.kubernetes.driver.container.image=registry.... \
+    --conf spark.kubernetes.executor.container.image=registry... \
+    local:///opt/spark/examples/src/main/python/pi.py \
