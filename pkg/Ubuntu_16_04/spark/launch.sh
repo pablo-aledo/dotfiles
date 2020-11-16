@@ -66,7 +66,6 @@ spark-submit \
 # Run on a Kubernetes cluster in cluster deploy mode
 
 k create serviceaccount spark
-k policy add-role-to-user admin system:serviceaccount:project:spark
 k create clusterrolebinding spark-role --clusterrole=edit --serviceaccount=project:spark --namespace=project
 
 spark-submit \
@@ -85,12 +84,21 @@ spark-submit \
   http://path/to/spark-examples_2.11-2.4.5.jar \
   1000
 
+k create serviceaccount spark
+k create clusterrolebinding spark-role --clusterrole=edit --serviceaccount=default:spark --namespace=default
+
 ./spark-submit \
-    --deploy-mode cluster
-    --master k8s://http://localhost: \
+    --deploy-mode cluster \
+    --master k8s://https://localhost:8443 \
+    --name sparkpi \
     --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark \
-    --name spark \
+    --conf spark.kubernetes.authenticate.submission.oauthToken=$( sudo kubectl describe secret spark-token | grep token: | awk '{print $2}' ) \
     --conf spark.executor.instances=5 \
-    --conf spark.kubernetes.driver.container.image=registry.... \
-    --conf spark.kubernetes.executor.container.image=registry... \
+    --conf spark.kubernetes.driver.container.image=spark-py:latest \
+    --conf spark.kubernetes.executor.container.image=spark-py:latest \
+    --conf spark.kubernetes.container.image=spark-py:latest \
+    --conf spark.kubernetes.container.imagePullPolicy=IfNotPresent \
     local:///opt/spark/examples/src/main/python/pi.py \
+    1000
+
+
