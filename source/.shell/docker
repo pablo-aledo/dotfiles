@@ -430,6 +430,7 @@ case $1 in
 (mailman)                docker run -d -p 1234:80 -p 25:25 ${DOCKER_REPO_PREFIX}/mailman ;;
 (masscan)                shift; docker run -it --rm --log-driver none --net host --cap-add NET_ADMIN --name masscan ${DOCKER_REPO_PREFIX}/masscan "$@" ;;
 (mongodb)                docker run -it -p 27017:27017 bitnami/mongodb:latest ;;
+(mongoclient)            docker run -it --entrypoint mongo --network host bitnami/mongodb:latest ;;
 (mop)                    docker run -it --rm -v ~/.moprc:/root/.moprc --name mop r.j3ss.co/mop ;;
 (mpd)                    docker run -d --device /dev/snd -v /etc/localtime:/etc/localtime:ro -v $HOME/.mpd:/var/lib/mpd -p 6600:6600 --name mpd ${DOCKER_REPO_PREFIX}/mpd ;;
 (mpv)                    shift; docker run -it --rm -v /dev/dsp:/dev/dsp -v $PWD:/data -w /data -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged mpv $* ;;
