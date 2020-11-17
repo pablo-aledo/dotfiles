@@ -136,3 +136,126 @@ snippet service.yaml
 	  selector:
 	    app: {{ .Chart.Name }}
 	    release: {{ .Release.Name }}
+snippet dc.yaml
+	apiVersion: apps.openshift.io/v1
+	kind: DeploymentConfig
+	metadata:
+	  annotations:
+	  labels:
+	    app_name: ${1:name}
+	  name: $1
+	  namespace: ${2:namespace}
+	spec:
+	  replicas: 1
+	  selector:
+	    app_name: $1
+	    deploymentconfig: $1
+	  template:
+	    metadata:
+	      labels:
+	        app_name: $1
+	        deploymentconfig: $1
+	    spec:
+	      containers:
+	      - args:
+	        - -f
+	        - /dev/null
+	        command:
+	        - tail
+	        image: ${3:image}
+	        imagePullPolicy: Always
+	        name: $1
+	        resources:
+	          limits:
+	            cpu: "1"
+	            memory: 2Gi
+	          requests:
+	            cpu: "1"
+	            memory: 2Gi
+	        securityContext:
+	          capabilities: {}
+	          privileged: false
+	        volumeMounts:
+	        - mountPath: /opt/spark/shared-pvc
+	          name: shared-pvc
+	      dnsPolicy: ClusterFirst
+	      restartPolicy: Always
+	      schedulerName: default-scheduler
+	      securityContext:
+	        supplementalGroups:
+	        - 65534
+	      volumes:
+	      - name: shared-pvc
+	        persistentVolumeClaim:
+	          claimName: shared-pvc
+	  test: false
+	  triggers:
+	  - type: ConfigChange
+
+snippet pod
+	apiVersion: v1
+	kind: Pod
+	metadata:
+	  labels:
+	    app_name: ${1:name}
+	  name: $1
+	  namespace: ${2:namespace}
+	spec:
+	  containers:
+	  - image: ${3:image}
+	    imagePullPolicy: IfNotPresent
+	    name: $1
+	    ports:
+	    - containerPort: 27017
+	      protocol: TCP
+	    resources:
+	      limits:
+	        cpu: "1"
+	        memory: 40Gi
+	      requests:
+	        cpu: "1"
+	        memory: 40Gi
+	    volumeMounts:
+	    - mountPath: /bitnami
+	      name: data
+	  dnsPolicy: ClusterFirst
+	  securityContext:
+	    supplementalGroups:
+	    - 65534
+	  volumes:
+	  - name: data
+	    persistentVolumeClaim:
+	      claimName: mongo-pvc
+
+snippet pvc.yaml
+	apiVersion: v1
+	kind: PersistentVolumeClaim
+	metadata:
+	  name: ${1:name}-pvc
+	  namespace: sigma
+	spec:
+	  accessModes:
+	  - ReadWriteOnce
+	  resources:
+	    requests:
+	      storage: 1Ti
+	  storageClassName: managed-premium
+
+snippet svc.yaml
+	apiVersion: v1
+	kind: Service
+	metadata:
+	  labels:
+	    app_name: ${1:name}
+	  name: $1
+	  namespace: sigma
+	spec:
+	  ports:
+	  - name: 27017-tcp
+	    port: 27017
+	    protocol: TCP
+	    targetPort: 27017
+	  selector:
+	    app_name: $1
+	  type: NodePort
+
