@@ -232,7 +232,7 @@ snippet pvc.yaml
 	kind: PersistentVolumeClaim
 	metadata:
 	  name: ${1:name}-pvc
-	  namespace: sigma
+	  namespace: ${2:namespace}
 	spec:
 	  accessModes:
 	  - ReadWriteOnce
@@ -248,7 +248,7 @@ snippet svc.yaml
 	  labels:
 	    app_name: ${1:name}
 	  name: $1
-	  namespace: sigma
+	  namespace: ${2:namespace}
 	spec:
 	  ports:
 	  - name: 27017-tcp
