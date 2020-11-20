@@ -1021,8 +1021,11 @@ video_2x(){
 
 videos_2x2server(){
 
-    mkdir -p ~/html/courses/buffer
-    find ~/html/courses/ -type f | grep -v buffer | xargs -d"\n" -n1 -- rm -f
+    mkdir -p ~/html/courses/{buffer,previous}
+    find ~/html/courses/ -type f | grep -v '/buffer/' | grep -v '/previous/' | while read line
+    do
+        mv "$line" ~/html/courses/previous
+    done
     mv ~/html/courses/buffer/* ~/html/courses/
 
     for a in *.mp4
