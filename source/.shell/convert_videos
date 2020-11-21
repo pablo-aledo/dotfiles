@@ -1035,3 +1035,7 @@ videos_2x2server(){
 
 }
 
+waveimg(){
+    ffmpeg -i $1 -filter_complex "showwavespic=s=640x320" -frames:v 1 wave.png
+}
+
