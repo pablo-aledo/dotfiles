@@ -1022,7 +1022,7 @@ video_2x(){
 videos_2x2server(){
 
     mkdir -p ~/html/courses/{buffer,previous}
-    find ~/html/courses/ -type f | grep -v '/buffer/' | grep -v '/previous/' | while read line
+    find ~/html/courses/ -maxdepth 1 -type f | while read line
     do
         mv "$line" ~/html/courses/previous
     done
