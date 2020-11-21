@@ -1022,16 +1022,21 @@ video_2x(){
 videos_2x2server(){
 
     mkdir -p ~/html/courses/{buffer,previous}
-    find ~/html/courses/ -maxdepth 1 -type f | while read line
-    do
-        mv "$line" ~/html/courses/previous
-    done
-    mv ~/html/courses/buffer/* ~/html/courses/
+
+    if [ "$1" != "skip" ]
+    then
+        find ~/html/courses/ -maxdepth 1 -type f | while read line
+        do
+            mv "$line" ~/html/courses/previous
+        done
+        mv ~/html/courses/buffer/* ~/html/courses/
+    fi
 
     for a in *.mp4
     do
         echo video_2x '"'$a'"' ~'"'/html/courses/buffer/$a'"'
-    done | vimexec
+    done > /tmp/2xscript
+    source /tmp/2xscript
 
 }
 
