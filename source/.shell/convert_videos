@@ -1032,9 +1032,11 @@ videos_2x2server(){
         mv ~/html/courses/buffer/* ~/html/courses/
     fi
 
-    for a in *.mp4
+    [ -e /tmp/2xcount ] && n=$(cat /tmp/2xcount) || n=0
+    ls *.mp4 | sort -g | while read a
     do
-        echo video_2x '"'$a'"' ~'"'/html/courses/buffer/$a'"'
+        echo video_2x '"'$a'"' ~'"'/html/courses/buffer/$(printf '%03d' $n)_$a'"'
+        n=$(( $n + 1 )); echo $n > /tmp/2xcount
     done > /tmp/2xscript
     source /tmp/2xscript
 
