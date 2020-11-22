@@ -85,3 +85,6 @@ Watch(){
 echo watch '"'zsh -c "'"source /home/pga_cloud_10/.shell';' $*"'"'"' > /tmp/watchcmd
 source /tmp/watchcmd
 }
+
+alias cdn='cd "$(find .. -type d | sort -g | grep -A1 -F $(basename $PWD) | tail -n1)"'
+
