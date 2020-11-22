@@ -399,7 +399,7 @@ server(){
     then
     	while true
     	do
-            [ $(ls /media/removable/2TB2/homes/admin/ | wc -l) = 0 ] && sleep 10 && continue
+            [ $(ls /media/removable/2TB2/homes/admin/ | wc -l) = 0 ] && echo '\e[31m Empty directory \e[0m' && sleep 10 && continue
             date
             cd
             ncdu /media/removable/2TB2/homes/admin/ -o ~/ncdu
