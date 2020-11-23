@@ -4,3 +4,11 @@ vimexec(){
     reset
     source /tmp/script
 }
+
+vimexec(){
+    tmpname=$(mktemp)
+    cat $1 > $tmpname
+    vim $tmpname
+    reset
+    source $tmpname
+}
