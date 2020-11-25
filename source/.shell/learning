@@ -2527,3 +2527,91 @@ done
 learning.text(){
     summarize_line_limit=999999 summarize_page_limit=999999 learning.doc2txt $1 | learning.normalize_txt -
 }
+
+rnn.init_state(){
+    rm -fr $tmp/rnn_state
+    for n in $(seq 1 5)
+    do
+        python -c 'print("0 " * 5)' >> $tmp/rnn_state
+    done
+}
+
+rnn.fit(){
+    rm -fr $tmp/inputs $tmp/outputs $tmp/states
+    for file in $(find $learning_dir/documents -type f)
+    do
+        rnn.init_state
+        cat $file | while read line
+        do
+            cat $tmp/rnn_state | paste -d' ' -s | sed 's/ \+/ /g'>> $tmp/states
+            echo $line | rnn.transform - >/dev/null
+        done
+    done
+
+	python -c "
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.externals import joblib
+learning_dir='$learning_dir'
+X=np.loadtxt('$tmp/states')
+pca=PCA()
+pca.fit(X)
+joblib.dump(pca, learning_dir + '/rnn/pca.pkl')
+"
+
+    for file in $(find $learning_dir/documents -type f)
+    do
+        rnn.init_state
+
+        nlines=$(cat $file | wc -l)
+        for linenr in $(seq 1 $(( $nlines - 1 )) )
+        do
+            line=$( cat $file | sed -n -e "${linenr}p" )
+            nextline=$( cat $file | sed -n -e "$((${linenr} + 1))p" )
+            echo $line | rnn.transform - >> $tmp/inputs
+            echo $nextline | learning.doc2rvect - | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/outputs
+        done
+    done
+
+    python -c "
+import numpy as np
+from sklearn import linear_model
+from sklearn.externals import joblib
+X = np.loadtxt('$tmp/inputs')
+Y = np.loadtxt('$tmp/outputs')
+learning_dir='$learning_dir'
+reg = linear_model.LinearRegression()
+reg.fit (X, Y)
+joblib.dump(reg, learning_dir + '/rnn/regression.pkl')
+"
+}
+
+rnn.get_state(){
+    state=$(cat $tmp/rnn_state | paste -d' ' -s | sed -e 's/ \+/ /g' -e 's/^/\[/g' -e 's/$/\]/g' -e 's/ /, /g' -e 's/, \]/\]/g')
+
+#echo $state
+#return
+
+	python -c "
+import numpy as np
+import sys
+np.set_printoptions(threshold=sys.maxsize)
+from sklearn.externals import joblib
+learning_dir='$learning_dir'
+pca=joblib.load(learning_dir + '/rnn/pca.pkl')
+x=[$state];
+print pca.transform(x)[0]
+" | sed \
+    -e 's/ \+/ /g' \
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
+}
+
+rnn.transform(){
+    s=$(rnn.get_state         | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' -e 's/ \+/ /g' )
+    x=$(learning.doc2rvect $1 | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' -e 's/ \+/ /g' )
+
+    echo "$s $x" | paste -d' ' -s | sed 's/ \+/ /g'
+
+    ( cat $tmp/rnn_state | tail -n+2; echo $x ) > $tmp/rnn_state_2
+    mv -f $tmp/rnn_state_2 $tmp/rnn_state
+}
