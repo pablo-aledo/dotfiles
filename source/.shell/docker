@@ -235,6 +235,9 @@ case $1 in
 	curl -sSL https://raw.githubusercontent.com/bitnami/bitnami-docker-tensorflow-resnet/master/docker-compose.yml > docker-compose.yml
 	docker-compose up -d
 	;;
+(hound)
+    wget https://raw.githubusercontent.com/hound-search/hound/master/default-config.json -O config.json
+    ;;
 esac
 }
 
@@ -466,7 +469,9 @@ case $1 in
                              --client-id=4f40001533f4a1da5361b476bb93cc0f0f5218b0f7e306e5810a16ef4810f713 \
                              --client-secret=0a69708d09b905f19858263c32c3e7eef366c892eb99e5a3c854fb4fa9b4d6f8 \
                              --set-xauthrequest ;;
-(opengrok)               docker run -d -v .:/opengrok/src -p 8080:8080 opengrok/docker:latest ;;
+(opengrok)               docker run -d -v $PWD:/opengrok/src -p 8080:8080 opengrok/docker:latest ;;
+(hound)                  docker run -p 6080:6080 --name hound -v $(pwd):/data etsy/hound ;;
+(sourcegraph)            docker run --publish 7080:7080 --publish 127.0.0.1:3370:3370 --rm --volume ~/.sourcegraph/config:/etc/sourcegraph --volume ~/.sourcegraph/data:/var/opt/sourcegraph sourcegraph/server:3.22.0 ;;
 (owncloud)               docker run -d -p 8000:80 -v $PWD/owncloud:/var/www/html owncloud:8.1 ;;
                          # --link my-mysql:mysql, and then use mysql as the database host on setup.
                          # docker exec -u www-data some-owncloud php occ status
