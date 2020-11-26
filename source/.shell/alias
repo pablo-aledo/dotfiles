@@ -88,3 +88,14 @@ source /tmp/watchcmd
 
 alias cdn='cd "$(find .. -maxdepth 1 -type d | sort -g | grep -A1 -F "$(basename "$PWD")" | tail -n1)"'
 
+
+mgrep(){
+    echo -n strings -n1 $1 > /tmp/script
+    shift
+    for a in $*
+    do
+        echo -n " | grep -i $a" >> /tmp/script
+    done
+    source /tmp/script
+}
+
