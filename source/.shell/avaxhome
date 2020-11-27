@@ -273,7 +273,7 @@ done
     search=''
     for a in $*
     do
-        search="${search}%20${a}"
+        search="${search}%20$(echo $a | sed 's| |%20|g')"
     done
     search=$(echo $search | sed 's/^%20//g')
 
