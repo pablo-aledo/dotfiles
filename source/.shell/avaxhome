@@ -280,7 +280,7 @@ done
     (
     cd /tmp/
     wget -q "https://1lib.eu/s/$search" -O 1libsearch
-    csplit 1libsearch '/fit your search query/' '{*}'
+    csplit -s 1libsearch '/fit your search query/' '{*}'
     )
 
     cat /tmp/xx00 | sed 's|.*href="\([^"]*\)" style="text-decoration: underline;">\([^<]*\)*<.*|=== \2 -> \1|g' | grep '^===' | sed 's|=== \(.*\) -> \(.*\)|\1 -> http://1lib.eu\2|g'
