@@ -1,0 +1,24 @@
+export DISPLAY=:1
+
+xdotool mousemove 558 550
+xdotool click 1
+sleep 5
+xdotool key Ctrl+a
+xdotool key Ctrl+c
+sleep 1
+
+file=$(xclip -sel clip -o | sed 's/ ([1-3])\././g')
+echo $file > /tmp/file
+
+if [ "$file" != "" ] && [ -e ~"/Descargas/$file" ]
+then
+    xdotool mousemove 930 670 && xdotool click 1
+
+    echo "Title: $(cat /tmp/title)" >> /tmp/already_downloaded
+    ls -lh ~/Descargas/ | sed 's/^[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([^ ]*\) *[^ ]* *[^ ]* *[^ ]* *\(.*\)/\1 \2/g' | grep -F $file >> /tmp/already_downloaded
+    echo "" >> /tmp/already_downloaded
+
+else
+    xdotool key Return
+fi
+

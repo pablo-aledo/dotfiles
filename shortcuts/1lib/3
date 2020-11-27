@@ -1,0 +1,48 @@
+export DISPLAY=:1
+
+touch /tmp/lock
+
+xdotool key Ctrl+f
+sleep 1
+xdotool type Download
+sleep 1
+xdotool key Escape
+sleep 1
+xdotool key Return
+sleep 1
+
+xdotool key 4
+sleep 5
+
+count=0
+while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
+do
+    sleep 10
+    count=$(( $count + 1 ))
+    [ $count -eq 20 ] && break
+done
+
+count=0
+if [ "$(cat /tmp/file | wc -l)" -eq 1 ]
+then
+    while [ ! -e ~"/Descargas/$(cat /tmp/file)" ]
+    do
+        sleep 10
+        count=$(( $count + 1 ))
+        [ $count -eq 20 ] && break
+    done
+fi
+
+size1=0
+size2=1
+while [ "$size1" != "$size2" ]
+do
+    size1=$(ls -l ~"/Descargas/$(cat /tmp/file)" | awk '{print $5}')
+    sleep 10
+    size2=$(ls -l ~"/Descargas/$(cat /tmp/file)" | awk '{print $5}')
+done
+
+xdotool key ctrl+w
+sleep 5
+
+rm -rf /tmp/lock

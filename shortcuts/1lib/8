@@ -1,0 +1,21 @@
+source ~/.dotfiles/source/.shell/xdotool
+
+export DISPLAY=:1
+
+touch /tmp/lock
+
+while true
+do
+    xdotool key ctrl+w
+    xdotool mousemove 200 200
+    sleep 1
+    if $( mouseover 3 100000 ~/.dotfiles/shortcuts/images/continue.png )
+    then
+        xdotool click 1
+        sleep 10
+    else
+        break
+    fi
+done
+
+rm -rf /tmp/lock
