@@ -1,15 +1,30 @@
+source ~/.dotfiles/source/.shell/xdotool
 export DISPLAY=:1
 
 touch /tmp/lock
 
 xdotool key Ctrl+f
 sleep 1
-xdotool type Download
+xdotool type 'Download ('
+xdotool key Return
 sleep 1
 xdotool key Escape
 sleep 1
 xdotool key Return
-sleep 1
+sleep 5
+
+if $( mouseover 1 100000 ~/.dotfiles/shortcuts/images/zlib_wronghash.png )
+then
+    xdotool key Ctrl+f
+    sleep 1
+    xdotool type 'Download ('
+    xdotool key Return
+    sleep 1
+    xdotool key Escape
+    sleep 1
+    xdotool key Return
+    sleep 5
+fi
 
 xdotool key 4
 sleep 5

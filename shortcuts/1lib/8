@@ -9,7 +9,7 @@ do
     xdotool key ctrl+w
     xdotool mousemove 200 200
     sleep 1
-    if $( mouseover 3 100000 ~/.dotfiles/shortcuts/images/continue.png )
+    if $( mouseover 1 100000 ~/.dotfiles/shortcuts/images/continue.png )
     then
         xdotool click 1
         sleep 10

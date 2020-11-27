@@ -1,8 +1,5 @@
 export DISPLAY=:1
 
-xdotool mousemove 558 550
-xdotool click 1
-sleep 5
 xdotool key Ctrl+a
 xdotool key Ctrl+c
 sleep 1
