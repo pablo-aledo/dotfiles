@@ -13,8 +13,8 @@ sleep 1
 xdotool key Return
 sleep 5
 
-if $( mouseover 1 100000 ~/.dotfiles/shortcuts/images/zlib_wronghash.png )
-then
+#if $( mouseover 1 100000 ~/.dotfiles/shortcuts/images/zlib_wronghash.png )
+#then
     xdotool key Ctrl+f
     sleep 1
     xdotool type 'Download ('
@@ -24,7 +24,7 @@ then
     sleep 1
     xdotool key Return
     sleep 5
-fi
+#fi
 
 xdotool key 4
 sleep 5
