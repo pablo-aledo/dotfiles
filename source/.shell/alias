@@ -90,7 +90,8 @@ alias cdn='cd "$(find .. -maxdepth 1 -type d | sort -g | grep -A1 -F "$(basename
 
 
 mgrep(){
-    echo -n strings -n1 $1 > /tmp/script
+    [ $1 = '-' ] && file='' || file=$1
+    echo -n strings -n1 $file > /tmp/script
     shift
     for a in $*
     do
