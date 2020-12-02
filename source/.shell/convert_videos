@@ -21,6 +21,20 @@ lengthdir_2(){
 
 }
 
+lengthdir_3(){
+
+	find $* -type f | while read file
+    do
+        echo -n "cutvideo "
+        echo -n "$(echo $file | sed 's/ /./g') "
+        echo -n "00:00 "
+        echo -n "$(ffprobe "$file" 2>&1 | grep Duration | sed -e 's/^[^:]*: \([^\.]*\)\..*/\1/g' | sed 's/^...//g') "
+        echo -n "salida "
+        echo ""
+    done | cutvideo_awklength
+
+}
+
 cutvideo(){
 	m1=`echo $2 | cut -d':' -f1`
 	s1=`echo $2 | cut -d':' -f2`
