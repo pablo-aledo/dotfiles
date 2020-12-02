@@ -11,6 +11,16 @@ lengthdir(){
 	find $* -type f -print0 | xargs -0  mplayer -vo dummy -ao dummy -identify 2>/dev/null | perl -nle '/ID_LENGTH=([0-9\.]+)/ && ($t +=$1) && printf "%02d:%02d:%02d\n",$t/3600,$t/60%60,$t%60' | tail -n 1
 }
 
+lengthdir_2(){
+
+	find $* -type f | while read file
+    do
+        ffprobe "$file" 2>&1 | grep Duration
+    done | awk 'BEGIN{FS="[ ,]"}{print $4}' | sed 's/\..*//g'\
+    | awk 'BEGIN{FS=":"; sum=0; n=0}{len = ($2*60+$3); sum = sum+len; n = n+1; print $0 " # length: " len}END{printf("# sum: %02d:%02d:%02d (%d) n: %d\n",(sum/60/60),(sum/60%60),(sum%60),sum,n) }'
+
+}
+
 cutvideo(){
 	m1=`echo $2 | cut -d':' -f1`
 	s1=`echo $2 | cut -d':' -f2`
