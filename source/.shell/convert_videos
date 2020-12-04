@@ -1045,9 +1045,13 @@ video_2x(){
 
 videos_2x2server(){
 
-    mkdir -p ~/html/courses/{buffer,previous}
+    [ $# -eq 0 ] && skip=0 && name=""
+    [ $# -eq 1 ] && skip=1 && name=buffer
+    [ $# -eq 2 ] && skip=1 && name=$2
 
-    if [ "$1" != "skip" ]
+    mkdir -p ~/html/courses/{buffer,previous,$name}
+
+    if [ $skip -eq 0 ]
     then
         find ~/html/courses/ -maxdepth 1 -type f | while read line
         do
@@ -1059,7 +1063,7 @@ videos_2x2server(){
     [ -e /tmp/2xcount ] && n=$(cat /tmp/2xcount) || n=0
     ls *.mp4 | sort -g | while read a
     do
-        echo video_2x '"'$a'"' ~'"'/html/courses/buffer/$(printf '%03d' $n)_$a'"'
+        echo video_2x '"'$a'"' ~'"'/html/courses/$name/$(printf '%03d' $n)_$a'"'
         n=$(( $n + 1 )); echo $n > /tmp/2xcount
     done > /tmp/2xscript
     source /tmp/2xscript
