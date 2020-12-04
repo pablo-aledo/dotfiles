@@ -1070,3 +1070,6 @@ waveimg(){
     ffmpeg -i $1 -filter_complex "showwavespic=s=640x320" -frames:v 1 wave.png
 }
 
+convert_crop(){
+ffmpeg -i $1 -filter:v "crop=out_w:out_h:x:y" out.mp4 # width height x y
+}
