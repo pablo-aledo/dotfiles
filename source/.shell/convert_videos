@@ -1046,8 +1046,8 @@ video_2x(){
 videos_2x2server(){
 
     [ $# -eq 0 ] && skip=0 && name=""
-    [ $# -eq 1 && $1  = "skip" ] && skip=1 && name=buffer
-    [ $# -eq 1 && $1 != "skip" ] && skip=0 && name=$1
+    [ $# -eq 1 ] && [ "$1"  = "skip" ] && skip=1 && name=buffer
+    [ $# -eq 1 ] && [ "$1" != "skip" ] && skip=0 && name=$1
     [ $# -eq 2 ] && skip=1 && name=$2
 
     mkdir -p ~/html/courses/{buffer,previous,$name}
