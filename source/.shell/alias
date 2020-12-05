@@ -13,6 +13,7 @@ alias detach='disown $(jobs -l | awk "{print \$6}")'
 alias attach='reptyr'
 alias watch='watch '
 alias cdate='date +%y%m%d-%H%M%S'
+alias wcat='sed "s/^\(.\{$(tput cols)\}\).*/\1/g"'
 f(){ echo find -iname "'*$1*'" | bash ; }
 F(){ grep -Rin "$1" ; }
 FF(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' ; }
