@@ -286,4 +286,27 @@ done
     cat /tmp/xx00 | sed 's|.*href="\([^"]*\)" style="text-decoration: underline;">\([^<]*\)*<.*|=== \2 -> \1|g' | grep '^===' | sed 's|=== \(.*\) -> \(.*\)|\1 -> http://1lib.eu\2|g'
 }
 
+1libsearch_new(){
+    echo "===== $* ====="
+    1libsearch $* > /tmp/search_result
+    comm -23 <( cat /tmp/search_result | sed 's/ ->.*//g' | sort | uniq ) <(cat downloaded_titles | sort | uniq) | while read line
+    do
+        cat /tmp/search_result | grep -F "$line"
+    done
+}
 
+s2link_filter(){
+    file=s2link
+    nl ${file} > ${file}.copy1
+    cat ${file} | sed 's/ ->.*//g' | nl > ${file}.copy2
+    vim ${file}.copy2
+    cat ${file}.copy2 | while read line
+    do
+        [ "$(echo $line | grep '=====')" != "" ] && echo $line && continue
+        linenr=$(echo $line | sed 's/^ *\([0-9]*\).*/\1/g')
+        linecontent=$(echo $line | sed 's/^ *[0-9]*.//g')
+        cmd="mgrep downloaded_titles $(echo $linecontent | tokenize | paste -d' ' -s)"
+        echo $cmd > /tmp/cmd
+        [ "$(source /tmp/cmd)" = "" ] && cat ${file}.copy1 | grep -P "^ *${linenr}\t"
+    done | sed 's/^ *[0-9]*.//g'
+}
