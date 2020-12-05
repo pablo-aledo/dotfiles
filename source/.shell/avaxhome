@@ -308,7 +308,7 @@ s2link_filter(){
         cmd="mgrep downloaded_titles $(echo $linecontent | tokenize | paste -d' ' -s)"
         echo $cmd > /tmp/cmd
         [ "$(source /tmp/cmd)" = "" ] && cat ${file}.copy1 | grep -P "^ *${linenr}\t"
-    done | sed 's/^ *[0-9]*.//g'
+    done | sed 's/^ *[0-9]*.//g' > s2link_filtered
 }
 
 s2link_deduplicate(){
