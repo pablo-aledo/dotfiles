@@ -310,3 +310,31 @@ s2link_filter(){
         [ "$(source /tmp/cmd)" = "" ] && cat ${file}.copy1 | grep -P "^ *${linenr}\t"
     done | sed 's/^ *[0-9]*.//g'
 }
+
+s2link_deduplicate(){
+rm -fr indexes
+mkdir indexes
+cat s2link | while read line
+do
+
+    if [ "$(echo $line | grep '=====')" = "" ]
+    then
+        title=$(echo $line | sed 's/^\(.*\) -> \(.*\)$/\1/g')
+        link=$(echo $line | sed 's/^\(.*\) -> \(.*\)$/\2/g')
+        title_norm=$(echo $title \
+            | tr '[A-Z]' '[a-z]' \
+            | sed -e 's/á/a/g' -e 's/é/e/g' -e 's/í/i/g' -e 's/ó/o/g' -e 's/ú/u/g' \
+                -e 's/à/a/g' -e 's/è/e/g' -e 's/ì/i/g' -e 's/ò/o/g' -e 's/ù/u/g' \
+                -e 's/ä/a/g' -e 's/ë/e/g' -e 's/ï/i/g' -e 's/ö/o/g' -e 's/ü/u/g' \
+                -e 's/\///g' -e 's/\+//g' -e 's/,//g' -e 's/;//g' -e 's/\*//g' -e 's/>//g' -e 's/<//g' -e 's/_//g' -e 's/"//g' -e 's/%//g' \
+                -e 's/&//g' -e 's/(//g' -e 's/)//g' -e 's/\[//g' -e 's/\]//g' -e 's/{//g' -e 's/}//g' -e 's/=//g' -e 's/!//g' -e 's/@//g' \
+                -e 's/://g' -e "s/'//g" -e "s/?//g" -e "s/|//g" -e "s/\\$//g" -e "s/\`//g" -e "s/\^//g" -e 's/~//g' -e 's/\.//g' -e 's/  / /' \
+                -e 's/ $//g' )
+        md5title=$(echo $title_norm | md5sum | awk '{print $1}')
+        [ -e indexes/$md5title ] || echo "$title -> $link"
+        touch indexes/$md5title
+    else
+        echo $line
+    fi
+done | tee s2link_dedup
+}
