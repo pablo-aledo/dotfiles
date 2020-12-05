@@ -338,3 +338,28 @@ do
     fi
 done | tee s2link_dedup
 }
+
+zlib_metadata(){
+# cat linktopics_dedup | awk '/=====/{$1=""; $NF=""; zsearch=$0; next}{gsub(/ ->.*/,""); print $0 " ->" zsearch}' > title_2_zsearch
+# for categ in *; do cat $categ | sed "s/ -> .*/ -> $categ/g"; done > ../title_2_categ
+# cat /tmp/s2files | awk '/Title:/{$1=""; title=$0; next}/^$/{next}{gsub(/^[^ ]* /,""); print title $0 " -> " title}' > file_2_title
+# ls ../Descargas/ > files
+rm -fr metadata
+mkdir metadata
+
+cat files | while read line
+do
+    file="$line"
+    title=$(cat file_2_title | grep -F $file | sed 's/^.* -> //g')
+    search=$(cat title_2_zsearch | grep -F $title | sed 's/^.* -> //g')
+    categ=$(cat title_2_categ | grep -F $title | sed 's/^.* -> //g')
+
+    #echo ".$file. -> .$title. -> .$search. -> .$categ."
+    echo $file
+
+    mkdir "metadata/$file"
+    echo "$title" > "metadata/$file/title"
+    echo "$search" > "metadata/$file/zsearch"
+    echo "$categ" > "metadata/$file/zcateg"
+done
+}
