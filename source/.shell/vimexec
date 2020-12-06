@@ -7,8 +7,9 @@ vimexec(){
 
 vimexec(){
     tmpname=$(mktemp)
-    cat $1 > $tmpname
+    cat $1 | tee $tmpname
     vim $tmpname
     reset
+    echo source $tmpname
     source $tmpname
 }
