@@ -1088,11 +1088,10 @@ videos_concat_2(){
 
     inputs="concat:"
     for a in $*
-        inputs="$inputs:$a|"
     do
-    inputs=$(echo $inputs | sed 's/.$//g')
-
+        inputs="$inputs:$a|"
     done
+    inputs=$(echo $inputs | sed 's/.$//g')
 
     ffmpeg -i $inputs -c copy output.ts
 }
