@@ -365,13 +365,13 @@ convert_2spaces(){
 	do
 		name1=$line
 		name2=$(echo $line | sed -e 's/  / /g' -e 's/  / /g' -e 's/  / /g')
-		echo mv "'"$name1"'" "'"$name2"'" 
+		echo mv "'"$name1"'" "'"$name2"'"
 	done | bash
 	find -iname '*  *' -type f | while read line
 	do
 		name1=$line
 		name2=$(echo $line | sed -e 's/  / /g' -e 's/  / /g' -e 's/  / /g')
-		echo mv "'"$name1"'" "'"$name2"'" 
+		echo mv "'"$name1"'" "'"$name2"'"
 	done | bash
 }
 
@@ -650,7 +650,7 @@ convert_decompress_rm(){
 
     if [ $error = true ]
     then
-        echo '\e[31m Error decompressing \e[0m' 
+        echo '\e[31m Error decompressing \e[0m'
         pwd >> /tmp/cdr_errors
         read
     fi
@@ -1076,5 +1076,36 @@ waveimg(){
 }
 
 convert_crop(){
-ffmpeg -i $1 -filter:v "crop=out_w:out_h:x:y" out.mp4 # width height x y
+ffmpeg -i $1 -strict -2 -filter:v "crop=out_w:out_h:x:y" out.mp4 # width height x y
+}
+
+videos_concat(){
+    find $PWD -iname '*.mp4' | sed 's/^/file /g' > list.txt
+    ffmpeg -f concat -safe 0 -i list.txt -c copy output.mp4
+}
+
+videos_concat_2(){
+
+    inputs="concat:"
+    for a in $*
+        inputs="$inputs:$a|"
+    do
+    inputs=$(echo $inputs | sed 's/.$//g')
+
+    done
+
+    ffmpeg -i $inputs -c copy output.ts
+}
+
+videos_concat_3(){
+    mkfifo temp1 temp2
+    ffmpeg -y -i $1 -c copy -bsf:v h264_mp4toannexb -f mpegts temp1 2> /dev/null & \
+    ffmpeg -y -i $2 -c copy -bsf:v h264_mp4toannexb -f mpegts temp2 2> /dev/null & \
+    ffmpeg -f mpegts -i "concat:temp1|temp2" -c copy -bsf:a aac_adtstoasc output.mp4
+}
+
+videos_concat_4(){
+    ffmpeg -i $1 -i $2 -i $3 \
+    -filter_complex "[0:v:0][0:a:0][1:v:0][1:a:0][2:v:0][2:a:0]concat=n=3:v=1:a=1[outv][outa]" \
+    -map "[outv]" -map "[outa]" output.mp4
 }
