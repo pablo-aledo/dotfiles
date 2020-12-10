@@ -117,7 +117,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|ubuntu_pga_dev|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|sonar_scanner_go|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic|centos-i3-vnc|centos7_gobuild|centos7_ccache|pg_dump|pg_dump_10|pg_restore|openpose-cpu)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|ubuntu_pga_dev|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|sonar_scanner_go|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic|centos-i3-vnc|centos7_gobuild|centos7_ccache|pg_dump|pg_dump_10|pg_restore|openpose-cpu|ffmpeg_concat)
     [ "$docker_export_proxy" = "true" ] || cd ~/.dotfiles/pkg/Docker/$1
     [ "$docker_export_proxy" = "true" ] && rm -fr /tmp/docker
 	[ "$docker_export_proxy" = "true" ] && cp -r ~/.dotfiles/pkg/Docker/$1 /tmp/docker
@@ -360,7 +360,8 @@ case $1 in
 (face_recognition)       shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --entrypoint bash face_recognition $* ;;
 (facedetect)             shift; docker run --rm -v `pwd`:/work -w /work vimagick/facedetect $* ;;
 (fontforge)              docker run --rm -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $state/fontforge:/home/fontforge --name fontforge fghj/fontforge ;;
-(ffmpag)                 shift; docker run --rm -u $(id -u):$(id -g) -v $PWD:/data vimagick/ffmpeg $* ;;
+(ffmpeg)                 shift; docker run --rm -u $(id -u):$(id -g) -v $PWD:/data vimagick/ffmpeg $* ;;
+(ffmpeg_concat)          shift; docker run -it -v $PWD:/workdir ffmpeg_concat $* ;;
 (firefox)                shift; docker run -d --memory 2gb --net host --cpuset-cpus 0 -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v "${HOME}/.firefox/cache:/root/.cache/mozilla" -v "${HOME}/.firefox/mozilla:/root/.mozilla" -v "${HOME}/Downloads:/root/Downloads" -v "${HOME}/Pictures:/root/Pictures" -v "${HOME}/Torrents:/root/Torrents" -e "DISPLAY=unix${DISPLAY}" -e GDK_SCALE -e GDK_DPI_SCALE --device /dev/snd --device /dev/dri --name firefox ${DOCKER_REPO_PREFIX}/firefox "$@" ;;
 (funbox)                 shift; docker run --rm -it wernight/funbox $* ;;
 (gimp)                   shift; docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $PWD:/workdir -w /workdir--name gimp ${DOCKER_REPO_PREFIX}/gimp $* ;;
