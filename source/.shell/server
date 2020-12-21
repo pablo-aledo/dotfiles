@@ -712,7 +712,7 @@ server(){
         while true
         do
             space=$( dfh | grep "$drive " | awk '{print $5}' | sed 's/%//g' )
-            echo "space $space %"
+            echo "\e[32m space \e[0m $space %"
             [ $space -gt 80 ] && echo "\e[31m Low space \e[0m" && notify_space $space && notify_space_full $drive
             sleep 10
         done
@@ -725,7 +725,7 @@ server(){
         while true
         do
             space=$( df -BG | grep "$drive " | awk '{print $4}' | sed 's/G//g' )
-            echo "space $space G"
+            echo "\e[32m space \e[0m $space G"
             [ $space -lt 60 ] && echo "\e[31m Low space \e[0m" && notify_space_2 $space && notify_space_full_2 $drive
             sleep 10
         done
@@ -911,7 +911,7 @@ notify_space_full(){
     while true
     do
         space=$( dfh | grep "$1 " | awk '{print $5}' | sed 's/%//g' )
-        echo "space_full $space %"
+        echo "\e[33m space_full \e[0m $space %"
         [ $space -gt 97 ] && echo "\e[31m DISK IS FULL \e[0m"
         [ $space -gt 97 ] && echo "Disk is full" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
         [ $space -gt 97 ] && sleep $(( 1 * 60 * 60 ))
@@ -924,7 +924,7 @@ notify_space_full_2(){
     while true
     do
         space=$( df -BG | grep "$1 " | awk '{print $4}' | sed 's/G//g' )
-        echo "space_full $space G"
+        echo "\e[33m space_full \e[0m $space G"
         [ $space -lt 5 ] && echo "\e[31m DISK IS FULL \e[0m"
         [ $space -lt 5 ] && echo "Disk is full" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
         [ $space -lt 5 ] && sleep $(( 1 * 60 * 60 ))
