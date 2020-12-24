@@ -2615,3 +2615,26 @@ rnn.transform(){
     ( cat $tmp/rnn_state | tail -n+2; echo $x ) > $tmp/rnn_state_2
     mv -f $tmp/rnn_state_2 $tmp/rnn_state
 }
+
+learning.xy_file(){
+    file=$1
+    pre=$2
+    post=$3
+
+    nlines=$(cat $file | wc -l)
+
+    for nline in $(seq $(( $pre + 1 )) $(( $nlines - $post )) )
+    do
+        rm -fr $tmp/xs
+        cat $file | head -n $(( $nline + $post )) | tail -n $(( $pre + $post + 1 )) | while read linea
+        do
+            echo $linea | awk '{$NF=""; print}' | $vectorizer_method.txt2vec - >> $tmp/xs
+        done
+        cat $tmp/xs | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' -e 's/  / /g' | paste -d' ' -s > $tmp/x
+
+        cat $file | head -n $(( $nline )) | tail -n 1 | awk '{print $NF}' > $tmp/y
+
+        echo "[ $(cat $tmp/x) ] $(cat $tmp/y)"
+    done
+}
+
