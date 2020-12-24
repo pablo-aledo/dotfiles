@@ -1050,6 +1050,8 @@ videos_2x2server(){
     [ $# -eq 1 ] && [ "$1" != "skip" ] && skip=0 && name=$1
     [ $# -eq 2 ] && skip=1 && name=$2
 
+    aux_script=$(mktemp)
+
     mkdir -p ~/html/courses/{buffer,previous,$name}
 
     if [ $skip -eq 0 ]
@@ -1066,8 +1068,8 @@ videos_2x2server(){
     do
         echo video_2x '"'$a'"' ~'"'/html/courses/$name/$(printf '%03d' $n)_$a'"'
         n=$(( $n + 1 )); echo $n > /tmp/2xcount
-    done > /tmp/2xscript
-    source /tmp/2xscript
+    done > $aux_script
+    source $aux_script
 
 }
 
