@@ -142,6 +142,10 @@ case $1 in
     cp ~/.dotfiles/pkg/Docker/android_studio/run.sh .
     chmod +x ./run.sh
     sudo chmod 666 /var/run/docker.sock
+    HOST_DISPLAY=1 ./run.sh
+    cp -r studio-data/profile/AndroidStudio2.3 studio-data/profile/AndroidStudio3.5
+    mkdir studio-data/profile/AndroidStudio3.5/config
+    chmod -R 777 studio-data
     ;;
 (simplehttp2server)
 	git clone https://github.com/GoogleChromeLabs/simplehttp2server.git /tmp/$1/
