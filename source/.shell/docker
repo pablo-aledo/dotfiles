@@ -137,6 +137,12 @@ case $1 in
 	docker build -t $1 .
 	cd -
 	;;
+(android_studio)
+    mkd ~/android_studio/
+    cp ~/.dotfiles/pkg/Docker/android_studio/run.sh .
+    chmod +x ./run.sh
+    sudo chmod 666 /var/run/docker.sock
+    ;;
 (simplehttp2server)
 	git clone https://github.com/GoogleChromeLabs/simplehttp2server.git /tmp/$1/
 	cd /tmp/$1/
@@ -248,6 +254,9 @@ case $1 in
 (ab)                     shift; docker run --rm -it ${DOCKER_REPO_PREFIX}/ab $* ;;
 (afterthedeadline)       shift; docker run --rm -it afterthedeadline $* ;;
 (ammonite)               docker run --rm -it -v $PWD:/workdir -w /workdir ammonite ;;
+(android_studio)         cd ~/android_studio/
+                         HOST_DISPLAY=1 ./run.sh
+                         ;;
 (ansible)                docker run --rm -it -v ${PWD}/hosts:/etc/ansible/hosts -v ${PWD}/ansible.cfg:/etc/ansible/ansible.cfg -v ${HOME}/.ssh:/root/.ssh:ro ansible all -m ping ;;
 (angr)                   sudo docker run -v $PWD:/workdir -w /workdir -it angr/angr ;;
 (aquiladb)               docker run -d -i -p 50051:50051 -v $PWD/aquiladb:/data -v $HOME/.dotfiles/pkg/Docker/aquiladb/DB_config.yml:/AquilaDB/src/DB_config.yml -t ammaorg/aquiladb ;;
