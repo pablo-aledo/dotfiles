@@ -1128,3 +1128,8 @@ videos_concat_4(){
 midi2mp3(){
     timidity $1 -Ow -o - | ffmpeg -i - -acodec libmp3lame -ab 64k $2
 }
+
+midi2mp3_2(){
+    timidity $1 -Ow -o - | lame - $2
+}
+
