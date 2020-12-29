@@ -1124,3 +1124,7 @@ videos_concat_4(){
     -filter_complex "[0:v:0][0:a:0][1:v:0][1:a:0][2:v:0][2:a:0]concat=n=3:v=1:a=1[outv][outa]" \
     -map "[outv]" -map "[outa]" output.mp4
 }
+
+midi2mp3(){
+    timidity $1 -Ow -o - | ffmpeg -i - -acodec libmp3lame -ab 64k $2
+}
