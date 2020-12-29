@@ -1045,6 +1045,7 @@ video_2x(){
 
 videos_2x2server(){
 
+    sort=0; [ $1 = "sort" ] && sort=1 && shift
     [ $# -eq 0 ] && skip=0 && name=""
     [ $# -eq 1 ] && [ "$1"  = "skip" ] && skip=1 && name=buffer
     [ $# -eq 1 ] && [ "$1" != "skip" ] && skip=0 && name=$1
@@ -1063,13 +1064,26 @@ videos_2x2server(){
         mv ~/html/courses/$name/* ~/html/courses/
     fi
 
-    [ -e /tmp/2xcount ] && n=$(cat /tmp/2xcount) || n=0
-    ls *.mp4 | sort -g | while read a
-    do
-        echo video_2x '"'$a'"' ~'"'/html/courses/$name/$(printf '%03d' $n)_$a'"'
-        n=$(( $n + 1 )); echo $n > /tmp/2xcount
-    done > $aux_script
-    source $aux_script
+    if [ $sort = 0 ]
+    then
+        [ -e /tmp/2xcount ] && n=$(cat /tmp/2xcount) || n=0
+        ls *.mp4 | sort -g | while read a
+        do
+            echo video_2x '"'$a'"' ~'"'/html/courses/$name/$(printf '%03d' $n)_$a'"'
+            n=$(( $n + 1 )); echo $n > /tmp/2xcount
+        done > $aux_script
+        source $aux_script
+    else
+        [ -e /tmp/2xcount ] && n=$(cat /tmp/2xcount) || n=0
+        ls *.mp4 > /tmp/sort
+        vim /tmp/sort
+        cat /tmp/sort | while read a
+        do
+            echo video_2x '"'$a'"' ~'"'/html/courses/$name/$(printf '%03d' $n)_$a'"'
+            n=$(( $n + 1 )); echo $n > /tmp/2xcount
+        done > $aux_script
+        source $aux_script
+    fi
 
 }
 
