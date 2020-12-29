@@ -5,6 +5,16 @@ alias lt='ls -lht'
 alias ltr='ls -lhtr'
 alias minikube='sudo /usr/local/bin/minikube'
 alias dfh='df -h'
+
+dfhc(){
+    df -h | sed \
+        -e "s/ \([0-9]%\)/0\1/g" \
+        -e "s/\([0-8].%\)/$(echo '\e[32m')\1$(echo '\e[0m')/g" \
+        -e "s/\([8-9].%\)/$(echo '\e[33m')\1$(echo '\e[0m')/g" \
+        -e "s/\([9-9].%\)/$(echo '\e[31m')\1$(echo '\e[0m')/g" \
+        -e "s/0\([0-9]%\)/ \1/g"
+}
+
 alias make='make -j$(nproc)'
 alias mdp='TERM=xterm-256color /usr/bin/mdp'
 alias docker_wd='docker run -it -v $PWD:/workdir -w /workdir'
