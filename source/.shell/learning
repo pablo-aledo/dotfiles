@@ -2638,3 +2638,25 @@ learning.xy_file(){
     done
 }
 
+categorical_to_vect(){
+    file=$1
+    input=$2
+    declare -A values
+
+    echo $input | sed 's/,/\n/g' | while read keyval
+    do
+        [ "$(echo $keyval | grep =)"  = "" ] && key=$keyval && val=1
+        [ "$(echo $keyval | grep =)" != "" ] && key=$(echo $keyval | cut -d= -f1) && val=$(echo $keyval | cut -d= -f2)
+        pos=$(nl $file | grep -P "\t${key}$" | awk '{print $1}')
+        values[$pos]=$val
+    done
+
+    posmax=$(cat $file | wc -l)
+
+    for a in $(seq 1 $posmax)
+    do
+        [ "$values[$a]" = "" ] && echo -n "0," || echo -n "$values[$a],"
+    done | sed -e 's/.$//g'
+
+}
+
