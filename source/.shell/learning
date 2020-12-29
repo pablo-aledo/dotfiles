@@ -2660,3 +2660,17 @@ categorical_to_vect(){
 
 }
 
+vect_to_categorical(){
+    file=$1
+    input=$2
+
+    n=1
+    echo $input | sed 's/,/\n/g' | while read val
+    do
+        key=$(cat $file | head -n$n | tail -n1)
+        [ $val -eq 0 ] && echo -n ""
+        [ $val -ge 1 ] && echo -n "$key=$val,"
+        n=$(( $n + 1 ))
+    done | sed -e 's/=1,/,/g' -e 's/.$//g'
+
+}
