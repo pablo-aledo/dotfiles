@@ -114,8 +114,6 @@ mgrep(){
 }
 
 find_index(){
-
-mgrep files $* | cut -d/ -f8 | sort | uniq | while read line; do echo "$(mgrep files $* | grep -F "/$line/"" | wc -l) $line" ; done | sort -g
-
+mgrep files $* | cut -d/ -f8 | sort | uniq | while read line; do echo "$(mgrep files $* | grep -F "/$line/" | wc -l) $line" ; done | sort -g
 }
 
