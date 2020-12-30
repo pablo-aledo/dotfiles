@@ -95,7 +95,7 @@ alias startrdp='shc; distr remote; export mouseover_debug=true; pkg install star
 alias dupl="sed \"s/^\(.*\)$/'\1' '\1'/g\""
 alias ddprogress='sudo killall -USR1 dd'
 Watch(){
-echo watch '"'zsh -c "'"source /home/pga_cloud_10/.shell';' $*"'"'"' > /tmp/watchcmd
+echo watch '"'zsh -c "'"source ~/.shell';' $*"'"'"' > /tmp/watchcmd
 source /tmp/watchcmd
 }
 
