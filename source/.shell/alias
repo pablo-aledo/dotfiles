@@ -32,6 +32,7 @@ alias wdfh='watch -n1 df -h'
 alias grunner='sudo DOCKER_IMAGE=golang:1.10 gitlab-runner exec docker go_test'
 alias docker-compose='sudo /usr/local/bin/docker-compose'
 alias Xargs='xargs -d"\n" -n1'
+alias myhist='history | grep -v "^[0-9]*\*"'
 jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
 
 alias avl='shc avl; xdotool key 6; sleep 1; shcw'
