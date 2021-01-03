@@ -28,7 +28,7 @@ do
     xdotool click 1; sleep 1
     xdotool mousemove_relative 0 30; sleep 1
     xdotool click 1; sleep 1
-    xdotool mousemove 820 560; sleep 1
+    xdotool mousemove 860 560; sleep 1
     xdotool click 1; sleep 1
     mouseover 20 10000 copy.png error.png; sleep 1
     if `mouseover 1 10000 error.png`
