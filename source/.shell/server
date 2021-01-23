@@ -405,7 +405,7 @@ server(){
             ncdu /media/removable/2TB2/homes/admin/ -o ~/ncdu
             find /media/removable/2TB2/homes/admin/ > ~/files
             convert_candidates > ~/convert_candidates
-            bak ncdu files convert_candidates
+            bak ncdu files convert_candidates convert_sizes
     		sleep 10
     	done
     fi
