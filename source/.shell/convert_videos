@@ -1096,8 +1096,9 @@ ffmpeg -i $1 -strict -2 -filter:v "crop=out_w:out_h:x:y" out.mp4 # width height 
 }
 
 videos_concat(){
-    find $PWD -maxdepth 1 -iname '*.mp4' | sed 's/^/file /g' > /tmp/list.txt
-    ffmpeg -f concat -safe 0 -i /tmp/list.txt -c copy output.mp4
+    find $PWD -maxdepth 1 -iname '*.mp4' | sed -e "s/'/\\'/g" -e "s/^/file '/g" -e "s/$/'/g" > list.txt
+    ffmpeg -f concat -safe 0 -i list.txt -c copy output.mp4
+    rm -fr list.txt
 }
 
 videos_concat_2(){
