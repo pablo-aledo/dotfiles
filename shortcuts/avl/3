@@ -14,7 +14,7 @@ cat ~/Descargas/avmpage.html | sed 's/a.*href/\na href/g' | grep href | grep -i 
 do
     link=$(echo $line | sed 's/.*a href="\([^"]*\)".*/\1/g' )
     google-chrome $link >/dev/null 2>/dev/null &
-    sleep 7
+    sleep 10
 
     xdotool key 4
     sleep 5
