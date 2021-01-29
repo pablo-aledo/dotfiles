@@ -122,6 +122,10 @@ filesbar(){
     barcmd 'cat files | wc -l' $(cat tmp/files | wc -l)
 }
 
+vclassifybar(){
+    barcmd 'cat videos_cl | wc -l' $(cat tmp/videos_cl | wc -l)
+}
+
 convertbar(){
     barcmd 'find /media/DATA/converted -iname "*.mp4" | wc -l' $(find /media/DATA/convert -iname '*.mp4' -or -iname '*.m4v' -or -iname '*.flv' -or -iname '*.mov' -or -iname '*.avi' -or -iname '*.wmv' -or -iname '*.mkv' -or -iname '*.vob' | wc -l)
 }
