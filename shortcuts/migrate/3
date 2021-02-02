@@ -1,4 +1,5 @@
 source ~/Dotfiles/remote/setenv
+source ~/.dotfiles/source/.shell/xdotool
 xdotool key Ctrl+l
 
 clouduser=$(echo $gcloud_user | sed 's/\./_/g')
@@ -12,3 +13,5 @@ do
     sleep 1
 done
 
+mouseover 10 1000 ~/.dotfiles/shortcuts/images/gautorizar.png && xdotool click 1
+mouseover 10 1000 ~/.dotfiles/shortcuts/images/gyn.png && xdotool key y && xdotool key Return
