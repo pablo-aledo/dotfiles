@@ -100,7 +100,7 @@ echo watch '"'zsh -c "'"source ~/.shell';' $*"'"'"' > /tmp/watchcmd
 source /tmp/watchcmd
 }
 
-alias cdn='cd "$(find .. -maxdepth 1 -type d | sed "s|^...||g" | sort -g | grep -A1 -F "$(basename "$PWD")" | tail -n1 | sed "s|^|../|g")"'
+alias cdn='cd "$(find .. -maxdepth 1 -type d | sed "s|^...||g" | sort -g | grep -A1 -F -x "$(basename "$PWD")" | tail -n1 | sed "s|^|../|g")"'
 
 
 mgrep(){
