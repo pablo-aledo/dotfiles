@@ -21,3 +21,7 @@ rm -fr /usr/share/noVNC/{.git,.github,.gitignore,.gitmodules,docs,LICENSE.txt,RE
 
 mkdir /usr/share/noVNC/utils/websockify
 git clone https://github.com/novnc/websockify.git /usr/share/noVNC/utils/websockify
+
+# instance-3 :: noVNC/utils/websockify ‹master› » tmkill vnc; git reset --hard HEAD^; server novnc4; sleep 5; tmux ls G vnc
+# (many times)
+
