@@ -12,4 +12,5 @@ vimexec(){
     reset
     echo source $tmpname
     source $tmpname
+    echo source $tmpname
 }
