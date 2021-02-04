@@ -1050,6 +1050,7 @@ videos_2x2server(){
     [ $# -eq 1 ] && [ "$1"  = "skip" ] && skip=1 && name=buffer
     [ $# -eq 1 ] && [ "$1" != "skip" ] && skip=0 && name=$1
     [ $# -eq 2 ] && skip=1 && name=$2
+    [ -e ~/html/courses/$name ] || skip=1
 
     aux_script=$(mktemp)
 
