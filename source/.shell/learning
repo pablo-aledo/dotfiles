@@ -2487,6 +2487,15 @@ classify_folders(){
     done
 }
 
+classify_folders_incremental(){
+    comm -13 <(cat /tmp/classify_folders | sed 's|^\(.*\) -> \(.*\) -> \(.*\)$|\1|g' | sort) <(ls $1 | sort) | while read line
+    do
+        classification=$(echo $line | learning.classify -)
+        hierarchy=$(cat $learning_dir/topics/topics | grep "\<$classification\$" | head -n1)
+        echo "$line -> $classification -> $hierarchy"
+    done
+}
+
 classify_and_mirror(){
     [ $# -eq 2 ] || return
     mkdir "$2"
