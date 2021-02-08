@@ -105,11 +105,18 @@ alias cdn='cd "$(find .. -maxdepth 1 -type d | sed "s|^...||g" | sort -g | grep 
 
 mgrep(){
     [ $1 = '-' ] && file='' || file=$1
-    echo -n strings -n1 $file > /tmp/script
+    strings -n1 $file > /tmp/file
+    echo -n cat /tmp/file > /tmp/script
     shift
     for a in $*
     do
-        echo -n " | grep -i $a" >> /tmp/script
+        if [ "$a" = "+" ]
+        then
+            echo >> /tmp/script
+            echo -n cat /tmp/file >> /tmp/script
+        else
+            echo -n " | grep -i $a" >> /tmp/script
+        fi
     done
     source /tmp/script
 }
