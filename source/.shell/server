@@ -405,7 +405,16 @@ server(){
             ncdu /media/removable/2TB2/homes/admin/ -o ~/ncdu
             find /media/removable/2TB2/homes/admin/ > ~/files
             convert_candidates > ~/convert_candidates
-            classify_folders /media/removable/2TB2/homes/admin/Videos > ~/videos_cl
+
+            if [ -e ~/tmp/videos_cl ]
+            then
+                cp ~/tmp/videos_cl /tmp/classify_folders
+                classify_folders_incremental /media/removable/2TB2/homes/admin/Videos > /tmp/classify_aux
+                cat ~/tmp/videos_cl /tmp/classify_aux | sort > ~/videos_cl
+            else
+                classify_folders /media/removable/2TB2/homes/admin/Videos > ~/videos_cl
+            fi
+
             bak ncdu files convert_candidates convert_sizes videos_cl
     		sleep 10
     	done

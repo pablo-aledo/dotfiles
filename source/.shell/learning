@@ -2481,15 +2481,6 @@ learning.normalize_txt(){
 classify_folders(){
     ls $1 | while read line
     do
-
-        if [ -e ~/tmp/videos_cl ]
-        then
-            cp ~/tmp/videos_cl /tmp/classify_folders
-            classify_folders_incremental $1 > /tmp/classify_aux
-            cat ~/tmp/videos_cl /tmp/classify_aux | sort
-            return
-        fi
-
         classification=$(echo $line | learning.classify -)
         hierarchy=$(cat $learning_dir/topics/topics | grep "\<$classification\$" | head -n1)
         echo "$line -> $classification -> $hierarchy"
