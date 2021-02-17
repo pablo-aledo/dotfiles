@@ -773,6 +773,7 @@ server(){
 
     if [ $1 = "trape" ]
     then
+        mkdir -p ~/servers/trape/
         cd ~/html
         touch index.html
 
@@ -782,7 +783,7 @@ server(){
         ( server lamp2 8000 2>&1 ) \
         | while read line
         do
-            echo $line >> logs.txt
+            echo $line >> ~/servers/trape/logs.txt
 
             if [ "$(echo $line | grep -i get | grep -i mp4 | grep -vi nolog)" != "" ]
             then
