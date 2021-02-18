@@ -1,8 +1,13 @@
 export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+mouseover 3 10000 ~/.dotfiles/shortcuts/images/norobot.png && xdotool click 1
+sleep 5
 
 xdotool mousemove 558 550
 xdotool click 1
 sleep 5
+
 xdotool key Ctrl+a
 xdotool key Ctrl+c
 sleep 1
