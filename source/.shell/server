@@ -982,7 +982,7 @@ night_pdf(){
 
 night_avh(){
     ( cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2 )
-    rm -rf /tmp/s2link /tmp/s2files /tmp/s2files2
+    rm -rf /tmp/s2link /tmp/s2files /tmp/s2files2 /tmp/already_downloaded /tmp/star_not_found
     DISPLAY=:1 xdotool key 0
     sleep 10
 
@@ -1000,6 +1000,11 @@ night_avh(){
     shc avl
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
+
+    shc unstar
+    DISPLAY=:1 xdotool key 6
+    sleep 1 && shcw
+
 }
 
 night(){
