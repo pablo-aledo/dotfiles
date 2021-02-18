@@ -5,9 +5,11 @@ touch /tmp/lock4
 
 mouseover 3 10000 ~/.dotfiles/shortcuts/images/norobot.png && xdotool click 1
 
+rm -fr /tmp/pass
 while true
 do
     mouseover 1 1000 ~/.dotfiles/shortcuts/images/icerdl.png && break
+    [ -e /tmp/pass ] && break
     sleep 10
 done
 
