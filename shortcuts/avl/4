@@ -1,10 +1,17 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
-mouseover 3 10000 ~/.dotfiles/shortcuts/images/norobot.png && xdotool click 1
-sleep 10
+touch /tmp/lock4
 
-xdotool mousemove 558 550
+mouseover 3 10000 ~/.dotfiles/shortcuts/images/norobot.png && xdotool click 1
+
+while true
+do
+    mouseover 1 1000 ~/.dotfiles/shortcuts/images/icerdl.png && break
+    sleep 10
+done
+
+mouseover 1 1000 ~/.dotfiles/shortcuts/images/icerdl.png
 xdotool click 1
 sleep 5
 
@@ -27,3 +34,4 @@ else
     xdotool key Return
 fi
 
+rm -fr /tmp/lock4

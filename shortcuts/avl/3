@@ -17,7 +17,7 @@ do
     sleep 15
 
     xdotool key 4
-    sleep 5
+    sleep 1; while [ -e /tmp/lock4 ]; do sleep 1; done; sleep 5
 
     count=0
     while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
