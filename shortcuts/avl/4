@@ -9,6 +9,7 @@ touch /tmp/lock4dl
 while true
 do
     mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl{,2}.png && break
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/norobot.png && xdotool click 1
     [ -e /tmp/lock4dl ] || break
     sleep 10
 done
