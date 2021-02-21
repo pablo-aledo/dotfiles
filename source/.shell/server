@@ -694,8 +694,8 @@ server(){
                 echo $actual_n_avh > ~/servers/rate/n_avh
                 echo $actual_n_rss > ~/servers/rate/n_rss
 
-                diff_avh=$(( $actual_n_avh - previous_n_avh ))
-                diff_rss=$(( $actual_n_rss - previous_n_rss ))
+                diff_avh=$(( $actual_n_avh - $previous_n_avh ))
+                diff_rss=$(( $actual_n_rss - $previous_n_rss ))
 
                 date
                 echo "diff_avh = $diff_avh"
@@ -910,7 +910,16 @@ kmail_log(){
 }
 
 notify_rates(){
-    echo "Low notification rates on server" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW NOTIFICATION RATES ON SERVER" -- pablo.aledo@gmail.com
+    previous_n_avh=$(cat ~/servers/rate/n_avh)
+    previous_n_rss=$(cat ~/servers/rate/n_rss)
+    actual_n_avh=$(cat ~/servers/avxhome/avxtitles | wc -l )
+    actual_n_rss=$(cat ~/servers/rssmail/rsstitles | wc -l )
+
+    diff_avh=$(( $actual_n_avh - $previous_n_avh ))
+    diff_rss=$(( $actual_n_rss - $previous_n_rss ))
+    w3m_lines=$(w3m -dump avxhm.se | wc -l)
+
+    echo "Low notification rates on server $diff_avh $diff_rss $w3m_lines" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW NOTIFICATION RATES ON SERVER" -- pablo.aledo@gmail.com
 }
 
 notify_space(){
