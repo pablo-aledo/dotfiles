@@ -260,6 +260,6 @@ classify_size_and_rank(){
         size=$(cat sizes | head -n$a | tail -n1)
         stars=$(cat stars | head -n$a | tail -n1)
         echo $(( (5-$stars) * $size )) $name
-    done | sort -g
+    done | sort -g | tee size_and_rank
 }
 
