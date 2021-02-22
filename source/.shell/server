@@ -691,8 +691,6 @@ server(){
                 previous_n_rss=$(cat ~/servers/rate/n_rss)
                 actual_n_avh=$(cat ~/servers/avxhome/avxtitles | wc -l )
                 actual_n_rss=$(cat ~/servers/rssmail/rsstitles | wc -l )
-                echo $actual_n_avh > ~/servers/rate/n_avh
-                echo $actual_n_rss > ~/servers/rate/n_rss
 
                 diff_avh=$(( $actual_n_avh - $previous_n_avh ))
                 diff_rss=$(( $actual_n_rss - $previous_n_rss ))
@@ -703,6 +701,9 @@ server(){
 
                 [ $diff_avh -lt 1 ] && echo "\e[31m Low rate on avh \e[0m" && notify_rates
                 [ $diff_rss -lt 1 ] && echo "\e[31m Low rate on rss \e[0m" && notify_rates
+
+                echo $actual_n_avh > ~/servers/rate/n_avh
+                echo $actual_n_rss > ~/servers/rate/n_rss
 
                 sleep $((60*5))
             fi
