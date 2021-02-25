@@ -8,6 +8,11 @@ mouseover 3 10000 ~/.dotfiles/shortcuts/images/norobot.png && xdotool click 1
 touch /tmp/lock4dl
 while true
 do
+
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/robot.png && \
+        xdotool mousemove_relative -- -100 0 && \
+        xdotool click 1
+
     xdotool mousemove 0 0 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl{,2}.png && break
     [ -e /tmp/lock4dl ] || break
     sleep 10
