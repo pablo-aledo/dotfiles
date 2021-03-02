@@ -401,24 +401,24 @@ server(){
     	do
             [ $(ls /media/removable/2TB2/homes/admin/ | wc -l) = 0 ] && echo '\e[31m Empty directory \e[0m' && sleep 10 && continue
             date
-            cd
+            mkd ~/servers/index
             echo "\e[34m ncdu \e[0m"
-            ncdu /media/removable/2TB2/homes/admin/ -o ~/ncdu
+            ncdu /media/removable/2TB2/homes/admin/ -o ncdu
 
             echo "\e[34m files \e[0m"
-            find /media/removable/2TB2/homes/admin/ > ~/files
+            find /media/removable/2TB2/homes/admin/ > files
 
             echo "\e[34m convert_candidates \e[0m"
-            convert_candidates > ~/convert_candidates
+            convert_candidates > convert_candidates
 
             echo "\e[34m videos_cl \e[0m"
             if [ -e ~/tmp/videos_cl ]
             then
                 \cp ~/tmp/videos_cl /tmp/classify_folders
                 classify_folders_incremental /media/removable/2TB2/homes/admin/Videos > /tmp/classify_aux
-                cat ~/tmp/videos_cl /tmp/classify_aux | sort > ~/videos_cl
+                cat ~/tmp/videos_cl /tmp/classify_aux | sort > videos_cl
             else
-                classify_folders /media/removable/2TB2/homes/admin/Videos > ~/videos_cl
+                classify_folders /media/removable/2TB2/homes/admin/Videos > videos_cl
             fi
 
             echo "\e[34m bak \e[0m"
