@@ -107,7 +107,7 @@ descbar(){
 }
 
 ncdubar(){
-    barcmd 'tmux ca -pt .1 | grep files | awk "{print \$(NF-1)}" | tail -n1' $(cat tmp/files | wc -l) $*
+    barcmd 'tmux ca -pt .1 | grep files | awk "{print \$(NF-1)}" | tail -n1' $(cat ~/tmp/files | wc -l) $*
 }
 
 dfdbar(){
@@ -119,11 +119,11 @@ dfubar(){
 }
 
 filesbar(){
-    barcmd 'cat files | wc -l' $(cat tmp/files | wc -l)
+    barcmd 'cat ~/servers/index/files | wc -l' $(cat ~/tmp/files | wc -l)
 }
 
 vclassifybar(){
-    barcmd 'cat videos_cl | wc -l' $(cat tmp/videos_cl | wc -l)
+    barcmd 'cat ~/servers/index/videos_cl | wc -l' $(cat ~/tmp/videos_cl | wc -l)
 }
 
 convertbar(){
