@@ -2138,6 +2138,7 @@ learning.queue_mv(){
 
     rm -fr $tmp/script
     echo "# unalias mv" > $tmp/script
+    echo '# check $`"' >> $tmp/script
     ls | while read line
     do
         file=$(echo $line | sed 's/\.txt$//g')
