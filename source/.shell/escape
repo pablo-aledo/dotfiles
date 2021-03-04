@@ -1,0 +1,16 @@
+escape(){
+    echo $1 | sed -e 's/\"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g'
+}
+
+escape2(){
+	echo $1 | sed -e 's/^/"/g' -e 's/$/"/g' -e 's/\$/\\$/g'
+}
+
+escape3(){
+	echo $1 | sed -e 's/\//\\\//g' -e 's/\$/\\$/g'
+}
+
+escape4(){
+	echo $1 | sed -e "s/\//\\\\\//g"
+}
+

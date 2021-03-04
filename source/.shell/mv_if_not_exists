@@ -1,20 +1,10 @@
-escape(){
-
-	echo $1 | sed -e 's/\//\\\//g' -e 's/\$/\\$/g'
-
-}
-
-escape2(){
-	echo $1 | sed -e 's/^/"/g' -e 's/$/"/g' -e 's/\$/\\$/g'
-}
-
 mkmv(){
 	mkdir -p "`dirname "$2"`" 2>/dev/null
 	/bin/mv "$1"  "`dirname "$2"`"/
 }
 
 mv_if_not_exists(){
-	regex_reemp=s/$(escape "$1")/$(escape "$2")/
+	regex_reemp=s/$(escape3 "$1")/$(escape3 "$2")/
 	find "$1" -type f | while read line
 	do
 		file1="$line"

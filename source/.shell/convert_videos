@@ -379,7 +379,7 @@ convert_mkfolders(){
 	cd $convert_dir
 	find $PWD -type d | while read line
 	do
-		mkdir -p "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`"
+		mkdir -p "`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`"
 	done
 }
 
@@ -392,7 +392,7 @@ convert_reportsizes(){
 	do
 		file1="$line"
 		base1=`basename "$line"`
-		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
+		file2="`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.mp4"
 		size1=`ls -lh "$file1" | cut -d' ' -f5`
 		size2=`ls -lh "$file2" | cut -d' ' -f5`
 		printf '%100s \e[31m %s \e[32m %s \e[0m\n' $base1 $size1 $size2 | tee -a /tmp/convert_report
@@ -408,7 +408,7 @@ convert_failconverting(){
 	do
 		file1="$line"
 		base1=`basename "$line"`
-		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
+		file2="`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.mp4"
 		[ -e "$file2" ] || echo "\e[31m Fail converting $file1 \e[0m" | tee -a /tmp/convert_report
 	done
 }
@@ -422,7 +422,7 @@ convert_cp(){
 	do
 		file1="$line"
 		base1="`basename "$line"`"
-		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
+		file2="$(echo "$line" | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g)"
 		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo cp \"$file1\" \"$file2\" | tee -a /tmp/convert_report
 		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || cp "$file1" "$file2"
 	done
@@ -437,7 +437,7 @@ convert_missing(){
 	do
 		file1="$line"
 		base1="`basename "$line"`"
-		file2="$(echo "$line" | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g)"
+		file2="$(echo "$line" | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g)"
 		( [ -e "$file2.converted.mp4" ] || [ -e "$file2" ] ) || echo "\e[31m Missing file $file2 \e[0m" | tee -a /tmp/convert_report
 	done
 }
@@ -474,7 +474,7 @@ convert_rmbigger(){
 	do
 		file1="$line"
 		base1="`basename "$line"`"
-		file2="`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4"
+		file2="`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.mp4"
 		[ -e "$file2" ] || continue
 		size1=$(ls -l "$file1" | awk '{print $5}' )
 		size2=$(ls -l "$file2" | awk '{print $5}' )
@@ -522,7 +522,7 @@ convert_recursive(){
     total=0
 	echo $findcmd | bash | sort | while read line
 	do
-		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
+		[ -e "`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.mp4" ] && continue
         total=$(( $total + 1 ))
     done
 
@@ -535,7 +535,7 @@ convert_recursive(){
 
 		echo "\e[31m ===== ( $actual / $total ) $line =====\e[0m"
 
-		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
+		[ -e "`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.mp4" ] && continue
 
 		actual=$(( $actual + 1 ))
 
@@ -543,7 +543,7 @@ convert_recursive(){
         [ -e ~"/learning/metadata/$foldername/resolution" ] && resolution=$(cat ~"/learning/metadata/$foldername/resolution" )
         [ -e ~"/learning/metadata/$foldername/resolution" ] && convert_opts=$( echo $convert_opts | sed "s/scale=[^:]*:/scale=$resolution:/g" )
 
-		echo ffmpeg -i \"$line\" `echo $convert_opts` \"`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4\" "</dev/null" | bash
+		echo ffmpeg -i \"$line\" `echo $convert_opts` \"`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.mp4\" "</dev/null" | bash
 
         convert_opts=$original_opts
 
@@ -692,8 +692,8 @@ convert_recursive_parallel(){
 	rm -fr /tmp/convert_script;
 	echo $findcmd | bash | while read line
 	do
-		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
-		echo ffmpeg -i \"$line\" `echo $convert_opts` \"`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4\" "</dev/null"  >> /tmp/convert_script
+		[ -e "`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.mp4" ] && continue
+		echo ffmpeg -i \"$line\" `echo $convert_opts` \"`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.mp4\" "</dev/null"  >> /tmp/convert_script
 	done
 
 	[ `nproc` -gt 2 ] && ( cat /tmp/convert_script | parallel -j$((`nproc` - 2)) bash -c )
@@ -731,8 +731,8 @@ convert_recursive_parallel_core(){
 	rm -fr /tmp/convert_script;
 	echo $findcmd | bash | while read line
 	do
-		[ -e "`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4" ] && continue
-		echo ffmpeg -i \"$line\" `echo $convert_opts` \"`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.mp4\" "</dev/null"  >> /tmp/convert_script
+		[ -e "`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.mp4" ] && continue
+		echo ffmpeg -i \"$line\" `echo $convert_opts` \"`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.mp4\" "</dev/null"  >> /tmp/convert_script
 	done
 
 	[ `nproc` -gt 2 ] && ( cat /tmp/convert_script | parallel -j$((`nproc` - 2)) bash -c )
@@ -762,7 +762,7 @@ convert_recursive_parallel_handbrake(){
 	rm -fr /tmp/convert_script /tmp/convert_script2 /tmp/convert_script3
 	echo $findcmd | bash | while read line
 	do
-        echo HandBrakeCLI -i \"$line\" -o \"`echo $line | sed s/$(escape $convert_dir)/$(escape $converted_dir)/g`.converted.hbrake.mp4\" `echo $convert_opts` "</dev/null"  >> /tmp/convert_script
+        echo HandBrakeCLI -i \"$line\" -o \"`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.hbrake.mp4\" `echo $convert_opts` "</dev/null"  >> /tmp/convert_script
 	done
 
     vim /tmp/convert_script

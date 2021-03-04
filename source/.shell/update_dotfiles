@@ -1,12 +1,7 @@
-
-escape(){
-	echo $1 | sed -e "s/\//\\\\\//g"
-}
-
 link(){
 	echo -e "\e[34m linking file ... \e[0m" `basename $1`
 	src=$1
-	dst=$(echo $1 | sed "s/`escape $ROOT`\/link/`escape $HOME`/g")
+	dst=$(echo $1 | sed "s/`escape4 $ROOT`\/link/`escape4 $HOME`/g")
 	mkdir -p $(dirname $dst)
 	ln -sf $src $dst
 }
@@ -15,7 +10,7 @@ link(){
 copy(){
 	echo -e "\e[34m copying file ... \e[0m" `basename $1`
 	src=$1
-	dst=$(echo $1 | sed "s/`escape $ROOT`\/copy/`escape $HOME`/g")
+	dst=$(echo $1 | sed "s/`escape4 $ROOT`\/copy/`escape4 $HOME`/g")
 	mkdir -p $(dirname $dst)
 	/bin/cp $src $dst
 }
@@ -25,7 +20,7 @@ sourcefile(){
 	for a in $1/*
 	do
 		src=$a
-		dst=$(dirname $(echo $src | sed "s/`escape $ROOT`\/source/`escape $HOME`/g"))
+		dst=$(dirname $(echo $src | sed "s/`escape4 $ROOT`\/source/`escape4 $HOME`/g"))
 		[ "`grep "$src" "$dst" 2>/dev/null`" ] || echo source $src >> $dst
 	done
 }
@@ -35,7 +30,7 @@ sourcecontent(){
 	for a in $1/*
 	do
 		src=$a
-		dst=$(dirname $(echo $src | sed "s/`escape $ROOT`\/source_content/`escape $HOME`/g"))
+		dst=$(dirname $(echo $src | sed "s/`escape4 $ROOT`\/source_content/`escape4 $HOME`/g"))
 		mkdir -p $(dirname $dst)
 		cat $src >> $dst
 	done
@@ -103,7 +98,7 @@ update_dotfiles(){
 	# source content
 	for a in `find $ROOT/source_content -type f 2>/dev/null | egrep -v source_content$ | sort -g | xargs -l1 dirname | uniq`
 	do 
-		rm -f $(echo $a | sed "s/`escape $ROOT`\/source_content/`escape $HOME`/g")
+		rm -f $(echo $a | sed "s/`escape4 $ROOT`\/source_content/`escape4 $HOME`/g")
 		sourcecontent $a
 	done
 

@@ -12,10 +12,6 @@ dupes(){
 	done
 }
 
-escape2(){
-	echo $1 | sed -e 's/^/"/g' -e 's/$/"/g' -e 's/\$/\\$/g'
-}
-
 mkmv(){
 	mkdir -p "`dirname "$2"`" 2>/dev/null
 	/bin/mv "$1"  "`dirname "$2"`"/
