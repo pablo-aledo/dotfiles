@@ -28,7 +28,10 @@ f(){ echo find -iname "'*$1*'" | bash ; }
 F(){ grep -Rin "$1" ; }
 FF(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' ; }
 FV(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' | xargs vim "+/$1" ; reset ; }
-alias wdfh='watch -n1 df -h'
+wdfh(){
+    [ $# -eq 0 ] && watch -n1 "df -h"
+    [ $# -eq 1 ] && watch -n1 "df -h | grep $1"
+}
 alias grunner='sudo DOCKER_IMAGE=golang:1.10 gitlab-runner exec docker go_test'
 alias docker-compose='sudo /usr/local/bin/docker-compose'
 alias Xargs='xargs -d"\n" -n1'
