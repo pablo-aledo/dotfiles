@@ -377,7 +377,7 @@ convert_2spaces(){
 
 convert_mkfolders(){
 	cd $convert_dir
-	find $PWD -type d | while read line
+	find $PWD -type d | grep -v _noconvert | while read line
 	do
 		mkdir -p "`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`"
 	done
