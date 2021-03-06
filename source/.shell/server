@@ -838,6 +838,7 @@ server(){
             while true
             do
 
+                [ -e /tmp/pause ] && echo "\e[34m Pause \e[0m"
                 while [ -e /tmp/pause ]; do sleep 1; done
 
                 space=$(df -B1G /dev/sdb | awk '{print $4}' | tail -n1)
