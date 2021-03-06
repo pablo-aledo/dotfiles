@@ -838,6 +838,8 @@ server(){
             while true
             do
 
+                while [ -e /tmp/pause ]; do sleep 1; done
+
                 space=$(df -B1G /dev/sdb | awk '{print $4}' | tail -n1)
 
                 if [ $(( $space - $size )) -gt $margin ]
