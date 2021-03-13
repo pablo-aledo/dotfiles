@@ -538,6 +538,40 @@ server(){
         done
     fi
 
+    if [ $1 = "convert_candidates_while" ]
+    then
+        return
+        while true
+        do
+            cd $convert_dir
+
+            ls | grep _noconvert_round2 > /tmp/convert_list
+
+            if [ -e /tmp/cpspace_copying ]
+            then
+                comm -23 <(sort /tmp/convert_list) /tmp/cpspace_copying > /tmp/ccw_aux
+                \cp /tmp/ccw_aux /tmp/convert_list
+            fi
+
+            cat /tmp/convert_list | while read line
+            do
+                convert_decompress_rm "$line"
+            done
+
+            stpfolders | source /dev/stdin
+            stpfolders | source /dev/stdin
+            stpfolders | source /dev/stdin
+
+            ls | dupl3 's/_noconvert_round2//g' | sed 's/^/mv /g' | source /dev/stdin
+
+            convert_mkfolders
+
+            convert_recursive_parallel_core
+
+            sleep 10
+        done
+    fi
+
     if [ $1 = "night" ]
     then
         [ "$2" = "" ] && date_night=0005
@@ -846,7 +880,9 @@ server(){
                 if [ $(( $space - $size )) -gt $margin ]
                 then
                     echo -n "\e[33m $size $space \e[34m copy $file ... \e[31m"
+                    echo "$dest" > /tmp/cpspace_copying
                     cp -r "$prefix/$file" "$dest"
+                    rm -fr /tmp/cpspace_copying
                     echo "\e[32m Finished \e[0m"
                     break
                 fi
