@@ -553,16 +553,20 @@ server(){
                 \cp /tmp/ccw_aux /tmp/convert_list
             fi
 
+            (
             cat /tmp/convert_list | while read line
             do
                 convert_decompress_rm "$line"
             done
+            )
 
             stpfolders | source /dev/stdin
             stpfolders | source /dev/stdin
             stpfolders | source /dev/stdin
 
             ls | dupl3 's/_noconvert_round2//g' | sed 's/^/mv /g' | source /dev/stdin
+
+            convert_2spaces
 
             convert_mkfolders
 
