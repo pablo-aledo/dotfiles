@@ -564,7 +564,7 @@ server(){
             stpfolders | source /dev/stdin
             stpfolders | source /dev/stdin
 
-            ls | dupl3 's/_noconvert_round2//g' | sed 's/^/mv /g' | source /dev/stdin
+            cat /tmp/convert_list | dupl3 's/_noconvert_round2//g' | sed 's/^/mv /g' | source /dev/stdin
 
             convert_2spaces
 
