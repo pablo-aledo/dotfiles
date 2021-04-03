@@ -560,6 +560,7 @@ server(){
             done
             )
 
+            cd $convert_dir
             stpfolders | source /dev/stdin
             stpfolders | source /dev/stdin
             stpfolders | source /dev/stdin
