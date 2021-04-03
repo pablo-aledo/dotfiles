@@ -889,7 +889,7 @@ server(){
                     cp -r "$prefix/$file" "$dest"
                     rm -fr /tmp/cpspace_copying
                     echo "\e[32m Finished \e[0m"
-                    false && convert_decompress_rm "$file"
+                    false && convert_decompress_rm "$dest"
                     break
                 fi
                 sleep 10
