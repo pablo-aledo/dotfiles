@@ -136,6 +136,9 @@ map <C-A-a> yyp<c-a>
 map ,tr :%s/\s\+$//
 " wrap
 map ,wr :set wrap!<cr>
+" check
+map ,ch1 /".*".*".*".*".*
+map ,ch2 /'.*'.*'.*'.*'.*
 map F  :%s/\s\+$//e<cr>:%s/\t/  /ge<cr>
 map FS :%s/\s\+$//e<cr>:%s/\t/  /ge<cr>:w<CR>
 " spelling spanish
