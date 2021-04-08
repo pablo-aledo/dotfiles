@@ -571,7 +571,12 @@ convert_postconversion_ok(){
 
     echo "\e[34m convert_postconversion \e[32m OK \e[0m $1"
 
-    [ ! -d "$convert_dir/$1" ] && rm -fr "$converted_dir/$1" && return
+    if [ ! -d "$convert_dir/$1" ]
+    then
+        echo "\e[31m convert_directory does not exist \e[0m"
+        rm -fr "$converted_dir/$1"
+        return
+    fi
 
     convert_rmsmall "$1"
     convert_rmbigger "$1"
