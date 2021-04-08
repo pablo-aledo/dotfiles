@@ -571,6 +571,8 @@ convert_postconversion_ok(){
 
     echo "\e[34m convert_postconversion \e[32m OK \e[0m $1"
 
+    [ ! -d "$convert_dir/$1" ] && rm -fr "$converted_dir/$1" && return
+
     convert_rmsmall "$1"
     convert_rmbigger "$1"
     convert_reportsizes "$1"
