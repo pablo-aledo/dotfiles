@@ -98,6 +98,7 @@ dupl4(){
 alias startrdp='shc; distr remote; export mouseover_debug=true; pkg install startrdp'
 alias dupl="sed \"s/^\(.*\)$/'\1' '\1'/g\""
 alias ddprogress='sudo killall -USR1 dd'
+alias tma='tmux a'
 Watch(){
 echo watch '"'zsh -c "'"source ~/.shell';' $*"'"'"' > /tmp/watchcmd
 source /tmp/watchcmd
