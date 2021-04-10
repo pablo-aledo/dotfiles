@@ -545,16 +545,20 @@ server(){
         do
             cd $convert_dir
 
+            echo "\e[34m Check break \e[0m"
             [ -e /tmp/break ] && break
 
+            echo "\e[34m Make list \e[0m"
             ls | grep _noconvert_round2 > /tmp/convert_list
 
             if [ -e /tmp/cpspace_copying ]
             then
+                echo "\e[34m Refine list \e[0m"
                 comm -23 <(sort /tmp/convert_list) /tmp/cpspace_copying > /tmp/ccw_aux
                 \cp /tmp/ccw_aux /tmp/convert_list
             fi
 
+            echo "\e[34m Decompress \e[0m"
             (
             cat /tmp/convert_list | while read line
             do
@@ -562,17 +566,22 @@ server(){
             done
             )
 
+            echo "\e[34m Flat directories \e[0m"
             cd $convert_dir
             stpfolders | source /dev/stdin
             stpfolders | source /dev/stdin
             stpfolders | source /dev/stdin
 
+            echo "\e[34m Change names \e[0m"
             cat /tmp/convert_list | dupl3 's/_noconvert_round2//g' | sed 's/^/mv /g' | source /dev/stdin
 
+            echo "\e[34m 2spaces \e[0m"
             convert_2spaces
 
+            echo "\e[34m mkfolders \e[0m"
             convert_mkfolders
 
+            echo "\e[34m Convert \e[0m"
             convert_recursive_parallel_core
 
             sleep 10
