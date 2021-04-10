@@ -545,6 +545,8 @@ server(){
         do
             cd $convert_dir
 
+            [ -e /tmp/break ] && break
+
             ls | grep _noconvert_round2 > /tmp/convert_list
 
             if [ -e /tmp/cpspace_copying ]
