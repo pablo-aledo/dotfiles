@@ -592,8 +592,22 @@ server(){
     then
         [ "$2" = "" ] && date_night=0005
         [ "$2" = "" ] || date_night=$2
+        [ "$3" = "" ] && offset=$(( $(date +%H) - $2 ))
+        [ "$3" = "" ] || offset=0
 
-        echo $date_night
+        #date_night=2300
+        #offset=$(( $(date +%H) - 06 ))
+        hour=$( echo $date_night | sed 's/..$//g' )
+        min=$( echo $date_night | sed 's/^..//g' )
+        hour=$(( ( $hour - $offset ) % 24 ))
+        while [ $hour -lt 0 ]
+        do
+            hour=$(( $hour + 24 ))
+        done
+        hour=$( echo $hour | sed 's/^\(.\)$/0\1/g' )
+        date_target="$hour$min"
+        echo $date_night $date_target
+
         which night
 
     	while true
