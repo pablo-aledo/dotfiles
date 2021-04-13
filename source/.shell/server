@@ -600,10 +600,7 @@ server(){
         hour=$( echo $date_night | sed 's/..$//g' )
         min=$( echo $date_night | sed 's/^..//g' )
         hour=$(( ( $hour - $offset ) % 24 ))
-        while [ $hour -lt 0 ]
-        do
-            hour=$(( $hour + 24 ))
-        done
+        [ $hour -lt 0 ] && hour=$(( $hour + 24 ))
         hour=$( echo $hour | sed 's/^\(.\)$/0\1/g' )
         date_target="$hour$min"
         echo $date_night $date_target
