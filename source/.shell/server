@@ -592,7 +592,7 @@ server(){
     then
         [ "$2" = "" ] && date_night=0005
         [ "$2" = "" ] || date_night=$2
-        [ "$3" = "" ] && offset=$(( $(date +%H) - $2 ))
+        [ "$3" = "" ] && offset=$(( $(date +%H) - $3 ))
         [ "$3" = "" ] || offset=0
 
         #date_night=2300
