@@ -603,8 +603,8 @@ server(){
         [ $hour -lt 0 ] && hour=$(( $hour + 24 ))
         hour=$( echo $hour | sed 's/^\(.\)$/0\1/g' )
         date_target="$hour$min"
-        echo $date_night $date_target
 
+        echo "$date_night ($date_target)"
         which night
 
     	while true
@@ -615,7 +615,7 @@ server(){
                 night
                 echo "===== End ====="
 
-                echo $date_night
+                echo "$date_night ($date_target)"
                 which night
 
     			sleep $((60*5))
