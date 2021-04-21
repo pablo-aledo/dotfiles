@@ -19,6 +19,7 @@ mouseover -1 10000 start.png; sleep 1
 xdotool click 1; sleep 1
 
 mouseover -1 10000 rdpon.png; sleep 30
+xdotool mousemove 0 0 && sleep 1
 
 ok=false
 while [ $ok = false ]
