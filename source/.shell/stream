@@ -46,6 +46,14 @@ stream11(){
 ffmpeg -f x11grab -video_size 1680x1050 -framerate 30 -i :0.0 -f v4l2 -video_size 320x240 -framerate 30 -i /dev/video0 -f alsa -ac 2 -i hw:0,0 -i logo.png -filter_complex "[0:v]scale=1024:-1,setpts=PTS-STARTPTS[bg];[1:v]scale=120:-1,setpts=PTS-STARTPTS[fg];[bg][fg]overlay=W-w-10:10[bg2];[bg2][3:v]overlay=W-w-10:H-h-10,format=yuv420p[out]" -map "[out]" -map 2:a -vcodec libx264 -preset veryfast -maxrate 3000k -bufsize 4000k -c:a aac -b:a 160k -ar 44100 -b:a 128k -f flv rtmp://live.twitch.tv/app/stream_key
 }
 
+stream12(){
+ffmpeg -f v4l2 -input_format yuyv422 -s 640x480 -i /dev/video0 -c:v libx264 -profile:v baseline -trellis 0 -subq 1 -level 32 -preset superfast -tune zerolatency -me_method epzs -crf 30 -threads 0 -bufsize 1 -refs 4 -coder 0 -b_strategy 0 -bf 0 -sc_threshold 0 -x264-params vbv-maxrate=2000:slice-max-size=1500:keyint=30:min-keyint=10: -pix_fmt yuv420p -an -f mpegts udp://192.168.1.8:5001
+}
+
+stream12_recv(){
+ffplay -analyzeduration 1 -fflags -nobuffer -i udp://192.168.1.8:5001
+}
+
 udp_to_tcp(){
 	socat tcp4-listen:$1,reuseaddr,fork UDP:nameserver:$1
 }
