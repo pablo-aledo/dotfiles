@@ -919,6 +919,15 @@ server(){
         done
     fi
 
+    if [ $1 = "lock4dl" ]
+    then
+        while true
+        do
+            find /tmp/ -name lock4dl -mmin +5 -delete
+            sleep 10
+        done
+    fi
+
 }
 
 
