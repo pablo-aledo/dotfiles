@@ -691,7 +691,7 @@ adapt_shortcuts(){
 
 	srcdir=$( find ~/.dotfiles/shortcuts/ -maxdepth 1 -type d | grep "/$1\$" )
 
-	find $srcdir -type f | grep -v init.sh | while read a
+	find $srcdir -type f | grep -v init.sh | grep -v .png | while read a
 	do
 		echo "bindsym $(basename $a) exec \"sleep 0.1 && zsh -c 'source $a'\"" >> ~/.i3/config
 	done
