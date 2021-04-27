@@ -1,0 +1,16 @@
+appimage_run(){
+    name=$1
+    link1="https://appimage.github.io$( wget https://appimage.github.io/apps/ -qO - | grep "a href" | grep -i $name | grep style | cut -d\" -f2)"; echo $link1
+    link2="$(wget $link1 -qO - | grep button | grep green | cut -d\" -f2)"; echo $link2
+    link3="https://github.com/$(wget $link2 -qO - | grep releases | grep download | grep AppImage | grep nofollow | head -n1 | cut -d\" -f2)"; echo $link3
+    link4="https://github.com/$(wget $link2 -qO - | grep releases | grep download | grep AppImage | grep nofollow | grep x86_64 | head -n1 | cut -d\" -f2)"; echo $link4
+    [ "$link4" = "https://github.com/" ] && link5=$link3 || link5=$link4; echo $link4
+    file=$(basename $link5)
+
+    (
+    cd /tmp
+    [ -e $file ] || wget $link5
+    chmod +x $file
+    ./$file
+    )
+}
