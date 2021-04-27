@@ -133,6 +133,7 @@ adapt_awsserver(){
 	sudo ln -s /usr/bin/terminator /usr/bin/gnome-terminal
 	sudo ln -s /usr/bin/pcmanfm /usr/bin/nautilus
 	sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
+    [ -e ~/.config/terminator/config ] && rm -f ~/.config/terminator/config && ln -s ~/.dotfiles/link/.config/terminator/config ~/.config/terminator/config
 
 	sudo localectl set-locale LANG=en_US.UTF-8
 
