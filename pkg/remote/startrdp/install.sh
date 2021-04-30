@@ -48,6 +48,7 @@ xdotool click 1; sleep 1
 mouseover -1 10000 rdpon.png; sleep 1
 xdotool click 1; sleep 10
 
+mouseover -1 10000 ok.png && xdotool mousemove 0 0
 while true
 do
     mouseover 3 10000 ok.png && xdotool click 1
