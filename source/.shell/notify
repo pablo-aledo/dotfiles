@@ -1,0 +1,6 @@
+notify(){
+    [ $# -ge 1 ] && subject="$1" || subject="DONE"
+    [ $# -ge 2 ] && command="$2" || command="echo Finished"
+    [ $# -ge 3 ] && address="$3" || address="pablo.aledo@gmail.com"
+    echo $command | source /dev/stdin | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s $subject -- $address
+}
