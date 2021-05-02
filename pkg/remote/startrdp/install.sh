@@ -48,15 +48,8 @@ xdotool click 1; sleep 1
 mouseover -1 10000 rdpon.png; sleep 1
 xdotool click 1; sleep 10
 
-mouseover -1 10000 ok.png && xdotool mousemove 0 0
-while true
-do
-    mouseover 3 10000 ok.png && xdotool click 1
-    xdotool mousemove 600 350 && xdotool click 1
-    xdotool key Ctrl+v; sleep 1
-    mouseover 3 10000 ok.png && xdotool click 1
-    $( mouseover 3 10000 ok.png ) || break
-done
+mouseover -1 10000 ok.png && xdotool click 1
+mouseover -1 10000 password.png && xdotool mousemove_relative 100 0 && xdotool click 1 && sleep 1 && xdotool key Ctrl+v && xdotool key Return
 
 mouseover 20 10000 continue.png && xdotool click 1
 mouseover 20 10000 cancel.png && xdotool click 1
