@@ -7,7 +7,8 @@ cp xstartup ~/.vnc/
 chmod +x ~/.vnc/xstartup
 
 sudo mkdir /usr/share/tigervnc; sudo chmod 777 /usr/share/tigervnc/; cd /usr/share/tigervnc
-wget 'https://bintray.com/tigervnc/stable/download_file?file_path=tigervnc-1.8.0.x86_64.tar.gz' -O tigervnc-1.8.0.x86_64.tar.gz
+#wget 'https://bintray.com/tigervnc/stable/download_file?file_path=tigervnc-1.8.0.x86_64.tar.gz' -O tigervnc-1.8.0.x86_64.tar.gz
+wget 'https://downloads.sourceforge.net/project/tigervnc/stable/1.8.0/tigervnc-1.8.0.x86_64.tar.gz' -O tigervnc-1.8.0.x86_64.tar.gz
 tar -xzf tigervnc-1.8.0.x86_64.tar.gz
 sudo cp -r tigervnc-1.8.0.x86_64/usr/* /usr/
 cd; sudo rm -fr /usr/share/tigervnc
