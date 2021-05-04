@@ -53,6 +53,9 @@ mergehdd_rmdupes(){
 	done
 }
 
+# backup1: sync_partial_contents, spc_intersection, spc_diff_a
+# backup2: sync_partial_contents, spc_diff_b, spc_update
+
 sync_partial_contents(){
 
     name=$(basename $1)
