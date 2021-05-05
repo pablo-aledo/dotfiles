@@ -866,8 +866,12 @@ server(){
 
     if [ $1 = "cpspace" ]
     then
-        prefix=$2
-        postfix=$3
+        shift
+        [ $# -ge 1 ] && prefix=$1  || prefix=/media/removable/2TB2/homes/admin/Videos
+        [ $# -ge 2 ] && postfix=$2 || postfix=_noconvert_round2
+        [ $# -ge 3 ] && margin=$3  || margin=100
+        [ $# -ge 4 ] && device=$4  || device='convert$'
+
         cat cpspace | while read line
         do
             echo "\e[34m line \e[0m $line"
@@ -876,7 +880,6 @@ server(){
             file=$(echo $line | sed 's/^[^ ]* \(.*\)/\1/g')
             filename="$(basename $file)"
             dest="$filename$postfix"
-            margin=100
 
             if [ -e "$dest" ]
             then
@@ -902,7 +905,7 @@ server(){
                 [ -e /tmp/pause ] && echo "\e[34m Pause \e[0m"
                 while [ -e /tmp/pause ]; do sleep 1; done
 
-                space=$(df -B1G /dev/sdb | awk '{print $4}' | tail -n1)
+                space=$(df -B1G | grep $device | awk '{print $4}' | tail -n1)
 
                 if [ $(( $space - $size )) -gt $margin ]
                 then
