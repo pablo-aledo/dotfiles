@@ -1,0 +1,37 @@
+tmux_extract(){
+
+    [ $# -ge 1 ] && times=$1 || times=100
+    [ $# -ge 2 ] && tail=$2  || tail=2
+
+    tmux ca -pt .1
+    for a in $(seq 1 $times)
+    do
+        tmux send-keys -t .1 j
+        tmux ca -pt .1 | tail -n$tail | head -n1
+    done
+
+}
+
+tma(){
+    [ $# -eq 0 ] && tmux a
+    [ $# -eq 1 ] && tmux a -t $1
+}
+
+tmkill(){
+
+if [ $# -gt 1 ]
+then
+    for a in $*
+    do
+        tmkill $a
+    done
+    return
+fi
+
+tmux ls | cut -d':' -f1 | grep $1 | while read line
+do
+    tmux kill-session -t $line
+done
+}
+
+alias tmls="tmux ls"

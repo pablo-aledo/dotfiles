@@ -89,20 +89,3 @@ katcr_dl(){
 	done
 }
 
-tmkill(){
-
-if [ $# -gt 1 ]
-then
-    for a in $*
-    do
-        tmkill $a
-    done
-    return
-fi
-
-tmux ls | cut -d':' -f1 | grep $1 | while read line
-do
-    tmux kill-session -t $line
-done
-}
-
