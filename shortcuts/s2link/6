@@ -25,6 +25,14 @@ do
     xdotool key j && sleep 1
 done
 
+if [ -e /tmp/s2link_extra ]
+then
+    bak /tmp/s2link_extra
+    cat /tmp/s2link /tmp/s2link_extra > /tmp/s2link_aux
+    \mv /tmp/s2link_aux /tmp/s2link
+    rm -f /tmp/s2link_extra
+fi
+
 xdotool key 0
 
 cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2
