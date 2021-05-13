@@ -678,7 +678,7 @@ convert_decompress_rm(){
 
     error=false
 
-    if ( [ "$(ls *.part1.rar)" != "" ] || [ "$(ls *.part01.rar)" != "" ] ) && [ "$(ls *.rar)" != "" ]
+    if [ "$(ls *.part*.rar)" != "" ] && [ "$(ls *.rar | grep -v part)" != "" ]
     then
         error=true
     fi
