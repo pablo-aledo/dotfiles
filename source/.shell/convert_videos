@@ -678,7 +678,13 @@ convert_decompress_rm(){
 
     error=false
 
-    if [ "$(ls *.part1.rar)" != "" ]
+    if ( [ "$(ls *.part1.rar)" != "" ] || [ "$(ls *.part01.rar)" != "" ] ) && [ "$(ls *.rar)" != "" ]
+    then
+        error=true
+    fi
+
+
+    if [ $error = false ] && [ "$(ls *.part1.rar)" != "" ]
     then
     	find -name '*.rar' | while read line
     	do
@@ -688,7 +694,7 @@ convert_decompress_rm(){
         [ $error = false ] && ls *.part*.rar | Xargs rm
     fi
 
-    if [ "$(ls *.part01.rar)" != "" ]
+    if [ $error = false ] && [ "$(ls *.part01.rar)" != "" ]
     then
     	find -name '*.rar' | while read line
     	do
@@ -698,7 +704,7 @@ convert_decompress_rm(){
         [ $error = false ] && ls *.part*.rar | Xargs rm
     fi
 
-    if [ "$(ls *.rar)" != "" ]
+    if [ $error = false ] && [ "$(ls *.rar)" != "" ]
     then
         unrar x *.rar
         [ $? != 0 ] && error=true
