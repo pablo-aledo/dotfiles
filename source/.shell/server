@@ -1099,29 +1099,29 @@ night_avh(){
 night(){
 
     # do a backup
-    local_backup
+    false && local_backup
 
     # train learning
-    learning.restart
-    learning.fit
+    false && learning.restart
+    false && learning.fit
 
     # index files
-    ncdu /media/removable/2TB2/homes/admin/ -o ~/ncdu
-    find /media/removable/2TB2/homes/admin/ > ~/files
+    false && ncdu /media/removable/2TB2/homes/admin/ -o ~/ncdu
+    false && find /media/removable/2TB2/homes/admin/ > ~/files
 
     # get list of candidate vides to convert
-    convert_candidates > ~/convert_candidates
+    false && convert_candidates > ~/convert_candidates
 
     # find duplicate files to remove
-    mergehdd_rmdupes /media/removable/2TB2/homes/admin/OLD /media/removable/2TB2/homes/admin/Work > ~/rmold
+    false && mergehdd_rmdupes /media/removable/2TB2/homes/admin/OLD /media/removable/2TB2/homes/admin/Work > ~/rmold
 
     # classify videos and mirror directory structure to find candidates to remove
-    rm -fr /media/DATA/videos_mirror
-    classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror
+    false && rm -fr /media/DATA/videos_mirror
+    false && classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror
 
     # download
-    night_pdf
-    night_avh
+    false && night_pdf
+    true && avhloop 
 }
 
 loop_avh(){
