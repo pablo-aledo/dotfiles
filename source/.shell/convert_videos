@@ -671,7 +671,7 @@ convert_decompress_rm(){
     then
         echo '\e[31m Error decompressing \e[0m'
         pwd >> /tmp/cdr_errors
-        [ "echo $1 | grep _noconvert_decompress_error" = "" ] && mv "$convert_dir/$1" "$convert_dir/$1_noconvert_decompress_error"
+        [ "$(echo $1 | grep _noconvert_decompress_error)" = "" ] && mv "$convert_dir/$1" "$convert_dir/$1_noconvert_decompress_error"
         read
     fi
 
