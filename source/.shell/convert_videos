@@ -635,76 +635,32 @@ convert_decompress_rm(){
 
     error=false
 
-    if [ "$(ls *.part1.rar)" != "" ]
+    if [ "$(ls *.part*.rar)" != "" ] && [ "$(ls *.rar | grep -v part)" != "" ]
+    then
+        error=true
+    fi
+
+    if [ "$(ls *.part*.rar)" != "" ]
+    then
+        [ $(lh | egrep 'part.*\.rar' | cut -d' ' -f5 | sort | uniq | wc -l) -eq 2 ] || error=true
+    fi
+
+
+    if [ $error = false ] && [ "$(ls *.part1.rar)" != "" ]
     then
         unrar x *.part1.rar
         [ $? != 0 ] && error=true
         [ $error = false ] && ls *.part*.rar | Xargs rm
     fi
 
-    if [ "$(ls *.part01.rar)" != "" ]
-    then
-        unrar x *.part01.rar
-        [ $? != 0 ] && error=true
-        [ $error = false ] && ls *.part*.rar | Xargs rm
-    fi
-
-    if [ "$(ls *.rar)" != "" ]
-    then
-        unrar x *.rar
-        [ $? != 0 ] && error=true
-        [ $error = false ] && ls *.rar | Xargs rm
-    fi
-
-    if [ $error = true ]
-    then
-        echo '\e[31m Error decompressing \e[0m'
-        pwd >> /tmp/cdr_errors
-        mv "$convert_dir/$1" "$convert_dir/$1_noconvert_decompress_error"
-        read
-    fi
-
-}
-
-convert_decompress_rm(){
-
-    echo review && return
-
-    echo "\e[34m ===== convert_decompress_rm $1 ===== \e[0m"
-
-    cd "$convert_dir/$1" || return
-
-    ls -lh
-
-    error=false
-
-    if [ "$(ls *.part*.rar)" != "" ] && [ "$(ls *.rar | grep -v part)" != "" ]
-    then
-        error=true
-    fi
-
-
-    if [ $error = false ] && [ "$(ls *.part1.rar)" != "" ]
-    then
-    	find -name '*.rar' | while read line
-    	do
-    		yes n | unrar x "`basename $line`"
-            [ $? != 0 ] && error=true && break
-    	done
-        [ $error = false ] && ls *.part*.rar | Xargs rm
-    fi
-
     if [ $error = false ] && [ "$(ls *.part01.rar)" != "" ]
     then
-    	find -name '*.rar' | while read line
-    	do
-    		yes n | unrar x "`basename $line`"
-            [ $? != 0 ] && error=true && break
-    	done
-        [ $error = false ] && ls *.part*.rar | Xargs rm
+	        unrar x *.part01.rar
+            [ $? != 0 ] && error=true
+            [ $error = false ] && ls *.part*.rar | Xargs rm
     fi
 
-    if [ $error = false ] && [ "$(ls *.rar)" != "" ]
+    if [ $error = false ] && [ "$(ls *.rar | grep -v part)" != "" ]
     then
         unrar x *.rar
         [ $? != 0 ] && error=true
@@ -715,7 +671,7 @@ convert_decompress_rm(){
     then
         echo '\e[31m Error decompressing \e[0m'
         pwd >> /tmp/cdr_errors
-        mv "$convert_dir/$1" "$convert_dir/$1_noconvert_decompress_error"
+        [ "echo $1 | grep _noconvert_decompress_error" = "" ] && mv "$convert_dir/$1" "$convert_dir/$1_noconvert_decompress_error"
         read
     fi
 
