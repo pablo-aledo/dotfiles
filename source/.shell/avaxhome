@@ -250,10 +250,11 @@ avhome_mail_server(){
 }
 
 avhloop(){
+    shc stop
     server novnc4 3389
     sleep 10
     night_avh
-    tmkill "vnc"
+    shc stop
     find ~/Descargas/ -maxdepth 1 -empty -type f -delete
 }
 
