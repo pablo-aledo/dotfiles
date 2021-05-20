@@ -247,7 +247,7 @@ cp_dir_structure_2(){
 
 classify_size_and_rank(){
     cat ../convert_sizes | cut -d/ -f2 > names
-    cat ../convert_sizes | cut -dG -f1 > sizes
+    cat ../convert_sizes | cut -dM -f1 > sizes
     cat ../videos_cl | sed 's/^\(.*\) -> \(.*\) -> \(.*\)$/@\1@ -> \2/g' > videos_cl
     cat names | while read line; do grep -F "@$line@" videos_cl; done | awk '{print $NF}' > classification
     cat ../../learning/topics/stars | sed -e 's/^.* \([^ ]*\) -> \(.*\)$/@\1@ -> \2/g' -e 's/^\([^ ]*\) -> \(.*\)$/@\1@ -> \2/g' -e 's/@@/@/g' > cl_stars
