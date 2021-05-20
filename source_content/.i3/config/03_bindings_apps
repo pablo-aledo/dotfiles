@@ -15,7 +15,7 @@ bindsym $mod+F8  exec wps
 bindsym $mod+F9  exec thunderbird
 bindsym $mod+F10 exec skype
 bindsym $mod+F11 exec virtualbox
-bindsym $mod+F12 exec jdownloader2
+bindsym $mod+F12 exec obsidian
 
 bindsym $mod+Shift+F3  exec google-chrome --incognito
 bindsym $mod+Shift+F4  exec "zsh -c 'source ~/.dotfiles/source/.shell/animated_wallpaper; animated_wallpaper'"
