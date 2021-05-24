@@ -421,8 +421,13 @@ server(){
                 classify_folders /media/removable/2TB2/homes/admin/Videos > videos_cl
             fi
 
+            echo "\e[34m mirror \e[0m"
+            rm -fr /media/DATA/videos_mirror
+            classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror
+            ( cd /media/DATA/videos_mirror/; ncdu-export-symlink . ) > ncdu_mirror
+
             echo "\e[34m bak \e[0m"
-            bak ncdu files convert_candidates convert_sizes videos_cl
+            bak ncdu files convert_candidates convert_sizes videos_cl ncdu_mirror
     		sleep 10
     	done
     fi
