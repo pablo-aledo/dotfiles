@@ -143,6 +143,8 @@ adapt_awsserver(){
 	sudo sysctl -w vm.min_free_kbytes=135168
 	sudo sysctl -w vm.swappiness=5
 
+    sudo sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf
+
     echo 'wallpaper >/dev/null 2>/dev/null' >> ~/.shell
     echo 'adapt_swappiness >/dev/null 2>/dev/null' >> ~/.shell
 
