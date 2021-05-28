@@ -416,7 +416,7 @@ server(){
             then
                 \cp ~/tmp/videos_cl /tmp/classify_folders
                 classify_folders_incremental /media/removable/2TB2/homes/admin/Videos > /tmp/classify_aux
-                cat ~/tmp/videos_cl /tmp/classify_aux | sort > videos_cl
+                cat /tmp/classify_aux | sort > videos_cl
             else
                 classify_folders /media/removable/2TB2/homes/admin/Videos > videos_cl
             fi
@@ -424,7 +424,7 @@ server(){
             echo "\e[34m mirror \e[0m"
             rm -fr /media/DATA/videos_mirror
             \cp videos_cl /tmp/videos_clf
-            classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror
+            classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror > /dev/null
             ( cd /media/DATA/videos_mirror/; ncdu-export-symlink . ) > ncdu_mirror
 
             echo "\e[34m bak \e[0m"
