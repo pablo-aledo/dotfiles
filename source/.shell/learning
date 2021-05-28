@@ -2502,7 +2502,7 @@ classify_folders_incremental(){
 
 	comm -12 <(cat /tmp/classify_folders | sed 's|^\(.*\) -> \(.*\) -> \(.*\)$|\1|g' | sort) <(ls $1 | sort) | while read line
 	do
-		classification=$(cat /tmp/classify_folders | grep "^$line ->" | sed 's|^\(.*\) -> \(.*\) -> \(.*\)$|\2|g') 
+		classification=$(cat /tmp/classify_folders | grep "^$(escape5 "$line") ->" | sed 's|^\(.*\) -> \(.*\) -> \(.*\)$|\2|g') 
 		hierarchy=$(cat $learning_dir/topics/topics | grep "\<$classification\$" | head -n1) 
 		echo "$line -> $classification -> $hierarchy"
 	done
