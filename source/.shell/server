@@ -953,7 +953,9 @@ index_videos_mirror(){
       echo "\e[34m mirror \e[0m"
       rm -fr /media/DATA/videos_mirror
       \cp videos_cl /tmp/videos_clf
+      echo "\e[34m - classify \e[0m"
       classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror > /dev/null
+      echo "\e[34m - ncdu_mirror \e[0m"
       ( cd /media/DATA/videos_mirror/; ncdu-export-symlink . ) > ncdu_mirror
 }
 
