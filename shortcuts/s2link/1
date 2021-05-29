@@ -1,5 +1,6 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/adapt
+source ~/.dotfiles/source/.shell/xdotool
 adapt_shc_theme
 
 mkdir -p ~/learning/metadata
@@ -10,10 +11,9 @@ killall chrome chromium google-chrome google-chrome-stable
 sleep 1
 google-chrome --profile-directory=Default mail.google.com &
 sleep 25
-xdotool mousemove 350 120
-xdotool click 1
+mouseover -1 1000 ~/.dotfiles/shortcuts/images/gmail_lens.png && xdotool mousemove_relative 100 0 && xdotool click 1
 xdotool type "$(cat /tmp/query)"
 xdotool key Return
-sleep 10
+mouseover -1 1000 ~/.dotfiles/shortcuts/images/2stars.png
 xdotool mousemove 400 265
 xdotool click 1
