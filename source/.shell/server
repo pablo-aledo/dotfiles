@@ -397,6 +397,7 @@ server(){
 
     if [ $1 = "index" ]
     then
+        pkg install ncdu ncdu-export-symlink sshfs binutils python-numpy python-sklearn bc
     	while true
     	do
             [ $(ls /media/removable/2TB2/homes/admin/ | wc -l) = 0 ] && echo '\e[31m Empty directory \e[0m' && sleep 10 && continue
