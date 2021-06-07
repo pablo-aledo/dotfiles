@@ -36,6 +36,7 @@ then
 
     echo "Title: $(cat /tmp/title)" >> /tmp/already_downloaded
     ls -lh ~/Descargas/ | sed 's/^[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([^ ]*\) *[^ ]* *[^ ]* *[^ ]* *\(.*\)/\1 \2/g' | grep -F $file >> /tmp/already_downloaded
+    ls -lh ~/Descargas_aux/ | sed 's/^[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([^ ]*\) *[^ ]* *[^ ]* *[^ ]* *\(.*\)/\1 \2/g' | grep -F $file >> /tmp/already_downloaded
     echo "" >> /tmp/already_downloaded
 
 else
