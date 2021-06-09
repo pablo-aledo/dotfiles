@@ -966,12 +966,12 @@ index_videos_mirror(){
 
 index_size_rank(){
     [ -e ~/servers/index/size_and_rank ] && rm -fr ~/servers/index/size_and_rank
-    ( mkd ~/servers/index/size_and_rank; classify_size_and_rank )
+    ( mkd ~/servers/index/size_and_rank; classify_size_and_rank ) > size_and_ranks
 }
 
 index_bak(){
       echo "\e[34m bak \e[0m"
-      bak ncdu files convert_candidates convert_sizes videos_cl ncdu_mirror
+      bak ncdu files convert_candidates convert_sizes videos_cl ncdu_mirror size_and_ranks
 }
 
 pgrestore(){
