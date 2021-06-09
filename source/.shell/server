@@ -398,7 +398,7 @@ server(){
     if [ $1 = "index" ]
     then
         pkg install ncdu ncdu-export-symlink sshfs binutils python-numpy python-sklearn bc
-        ls ~/learning/classifier ~/learning/topics ~/learning/features ~/learning/tmp /media/DATA/videos_mirror /media/removable/2TB2/homes/admin
+        ls ~/learning/classifier ~/learning/topics ~/learning/features ~/learning/tmp /media/removable/2TB2/homes/admin
     	while true
     	do
             [ $(ls /media/removable/2TB2/homes/admin/ | wc -l) = 0 ] && echo '\e[31m Empty directory \e[0m' && sleep 10 && continue
@@ -410,6 +410,7 @@ server(){
             index_candidates
             index_videos_cl
             index_videos_mirror
+            index_size_rank
             index_bak
 
     		sleep 10
@@ -961,6 +962,11 @@ index_videos_mirror(){
       ( classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror > /dev/null )
       echo "\e[34m - ncdu_mirror \e[0m"
       ( cd /media/DATA/videos_mirror/; ncdu-export-symlink . ) > ncdu_mirror
+}
+
+index_size_rank(){
+    [ -e ~/servers/index/size_and_rank ] && rm -fr ~/servers/index/size_and_rank
+    ( mkd ~/servers/index/size_and_rank; classify_size_and_rank )
 }
 
 index_bak(){
