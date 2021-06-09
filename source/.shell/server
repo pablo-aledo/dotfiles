@@ -941,9 +941,9 @@ index_candidates(){
 
 index_videos_cl(){
       echo "\e[34m videos_cl \e[0m"
-      if [ -e ~/tmp/videos_cl ]
+      if [ -e ~/servers/index/videos_cl_prev ]
       then
-          \cp ~/tmp/videos_cl /tmp/classify_folders
+          \cp ~/servers/index/videos_cl_prev /tmp/classify_folders
           classify_folders_incremental /media/removable/2TB2/homes/admin/Videos > /tmp/classify_aux
           cat /tmp/classify_aux | sort > videos_cl
       else
