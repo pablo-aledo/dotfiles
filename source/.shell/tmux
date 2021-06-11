@@ -36,3 +36,4 @@ done
 }
 
 alias tmls="tmux ls"
+alias tmc="tmux ca -pt"
