@@ -250,7 +250,7 @@ classify_size_and_rank(){
     cat ../convert_sizes | cut -dM -f1 > sizes
     cat ../videos_cl | sed 's/^\(.*\) -> \(.*\) -> \(.*\)$/@\1@ -> \2/g' > videos_cl
     cat names | while read line; do grep -F "@$line@" videos_cl; done | awk '{print $NF}' > classification
-    cat ../../learning/topics/stars | sed -e 's/^.* \([^ ]*\) -> \(.*\)$/@\1@ -> \2/g' -e 's/^\([^ ]*\) -> \(.*\)$/@\1@ -> \2/g' -e 's/@@/@/g' > cl_stars
+    cat ~/learning/topics/stars | sed -e 's/^.* \([^ ]*\) -> \(.*\)$/@\1@ -> \2/g' -e 's/^\([^ ]*\) -> \(.*\)$/@\1@ -> \2/g' -e 's/@@/@/g' > cl_stars
     cat classification | while read line; do ( grep -F "@$line@" cl_stars || echo $line 5) | head -n1; done | awk '{print $NF}' > stars
 
     for a in $(seq 1 $(cat names | wc -l))

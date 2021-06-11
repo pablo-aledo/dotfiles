@@ -965,6 +965,7 @@ index_videos_mirror(){
 }
 
 index_size_rank(){
+    echo "\e[34m size_rank \e[0m"
     [ -e ~/servers/index/size_and_rank ] && rm -fr ~/servers/index/size_and_rank
     ( mkd ~/servers/index/size_and_rank; classify_size_and_rank ) > size_and_ranks
 }
