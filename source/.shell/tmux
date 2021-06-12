@@ -36,4 +36,8 @@ done
 }
 
 alias tmls="tmux ls"
-alias tmc="tmux ca -pt"
+#alias tmc="tmux ca -pt"
+
+tmc(){
+    tmux ca -pt $1 | grep -v '^$'
+}
