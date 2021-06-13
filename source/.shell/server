@@ -530,7 +530,6 @@ server(){
 
     if [ $1 = "convert_candidates_while" ]
     then
-        return
         while true
         do
             cd $convert_dir
@@ -862,7 +861,7 @@ server(){
         [ $# -ge 3 ] && margin=$3  || margin=100
         [ $# -ge 4 ] && device=$4  || device='convert$'
 
-        cat cpspace | while read line
+        cat cpspace | grep -v '^$' | grep -v '^#' | while read line
         do
             echo "\e[34m line \e[0m $line"
 
