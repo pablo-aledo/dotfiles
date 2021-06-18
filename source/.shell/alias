@@ -89,9 +89,9 @@ dupl3(){
 dupl4(){
     cat | while read line;
     do
-        line1=$(echo -n "'"$line"'")
-        line2=$(echo -n "'"$(echo $line | sed $1)"'")
-        [ "$line1" != "$line2" ] && [ ! -e "$line2" ] && echo "$line1 $line2"
+        line1="$line"
+        line2="$(echo $line | sed $1)"
+        [ "$line1" != "$line2" ] && [ ! -e "$line2" ] && echo "'"$line1"'" "'"$line2"'"
     done
 }
 
