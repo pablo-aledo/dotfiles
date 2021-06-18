@@ -13,13 +13,13 @@ dupes(){
 }
 
 mkmv(){
-	mkdir -p "`dirname "$2"`" 2>/dev/null
-	/bin/mv "$1"  "`dirname "$2"`"/
+	mkdir -p "$(dirname "$2")" 2>/dev/null
+	\mv "$1"  "$(dirname "$2")"/
 }
 
 mkcp(){
-	mkdir -p "`dirname "$2"`" 2>/dev/null
-	\cp "$1"  "`dirname "$2"`"/"`basename "$2"`"
+	mkdir -p "$(dirname "$2")" 2>/dev/null
+	\cp "$1"  "$(dirname "$2")"/"$(basename "$2")"
 }
 
 mergehdd_rmdupes(){
