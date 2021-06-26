@@ -402,6 +402,11 @@ case $1 in
 (gcalcli)                shift; docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v "${HOME}/.gcalcli/home:/home/gcalcli/home" -v "${HOME}/.gcalcli/work/oauth:/home/gcalcli/.gcalcli_oauth" -v "${HOME}/.gcalcli/work/gcalclirc:/home/gcalcli/.gcalclirc" --name gcalcli ${DOCKER_REPO_PREFIX}/gcalcli "$@" ;;
 (gcov)                   docker run -v $PWD:/workdir -w /workdir -it gcov ;;
 (htop)                   docker run --rm -it --pid host ${DOCKER_REPO_PREFIX}/htop ;;
+(igel)                   mkd ~/tmp/igel
+                         cp ~/.dotfiles/pkg/Docker/igel/examples/indian-diabetes-example/* ~/.dotfiles/pkg/Docker/igel/examples/data/indian-diabetes/* .
+                         docker run -it --rm -v $(pwd):/data nidhaloff/igel fit -yml neural-network.yaml -dp train-indians-diabetes.csv
+                         docker run -it --rm -v $(pwd):/data nidhaloff/igel evaluate -dp eval-indians-diabetes.csv
+                         docker run -it --rm -v $(pwd):/data nidhaloff/igel predict -dp test-indians-diabetes.csv ;;
 (imagemin)               docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v $HOME/Pictures:/root/Pictures --entrypoint bash ${DOCKER_REPO_PREFIX}/imagemin ;;
 (inkscape)               shift; docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v $PWD:/workdir -w /workdir -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/inkscape $* ;;
 (jenkins)                docker run -p 8080:8080 -p 50000:50000 -v $PWD:/var/jenkins_home jenkins/jenkins:lts ;;
