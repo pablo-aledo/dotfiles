@@ -411,6 +411,7 @@ server(){
             index_videos_cl
             index_videos_mirror
             index_size_rank
+            index_pairsdist
             index_bak
 
     		sleep 10
@@ -971,7 +972,52 @@ index_size_rank(){
 
 index_bak(){
       echo "\e[34m bak \e[0m"
-      bak ncdu files convert_candidates convert_sizes videos_cl ncdu_mirror size_and_ranks
+      bak ncdu files convert_candidates convert_sizes videos_cl ncdu_mirror size_and_ranks pairsdists
+}
+
+
+index_pairsdist(){
+    [ -e pairsdist ] && rm -rf pairsdist
+    mkdir -p pairsdist/configure
+    mkdir -p pairsdist/documents
+    cd pairsdist
+
+    cat <<EOF > configure/configure
+    vectorizer_method=bagofwords
+    learning_distance=euclidean
+    summarize_line_limit=999999
+    EOF
+
+    learning.configure .
+    learning.restart
+    rm -fr documents/*
+
+    cat ../files | grep "/media/removable/2TB2/homes/admin/Videos/" | cut -d'/' -f8 | sort | uniq | while read linea
+    do
+       cat ../files | grep -F "/media/removable/2TB2/homes/admin/Videos/$linea/" | sed "s|/media/removable/2TB2/homes/admin/Videos/[^/]*/||g" > documents/$linea
+    done
+
+    cd documents
+    hashnames
+    source hash.sh
+    mv hash.sh unhash.sh ../tmp
+    cd ..
+
+    learning.fit
+
+    closest_classifier.pairsdist | tee salida
+    cat salida | awk '$1 < 2000' | sort -g | tee salida2
+
+    cp salida2 salida3
+    cat salida2 | cut -d' ' -f 2,3 | sed 's/ /\n/g' | sort | uniq | while read hash
+    do
+        name=$(cat ../tmp/unhash | grep $hash | cut -d'"' -f4)
+        sed -i "s/$hash/$name/g" salida3
+    done
+
+    mv salida3 ../pairsdists
+
+    cd ..
 }
 
 pgrestore(){
