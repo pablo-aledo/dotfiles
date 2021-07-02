@@ -1335,6 +1335,7 @@ print clf.transform(x)[0]
 
 learning.configure(){
     [ "$1" != "" ] && cd $1 && export learning_dir=$PWD
+    tmp=$learning_dir/tmp
     cat    $learning_dir/configure/configure
     source $learning_dir/configure/configure
 }
