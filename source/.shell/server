@@ -982,11 +982,11 @@ index_pairsdist(){
     mkdir -p pairsdist/documents
     cd pairsdist
 
-    cat <<EOF > configure/configure
-    vectorizer_method=bagofwords
-    learning_distance=euclidean
-    summarize_line_limit=999999
-    EOF
+cat <<EOF > configure/configure
+vectorizer_method=bagofwords
+learning_distance=euclidean
+summarize_line_limit=999999
+EOF
 
     learning.configure .
     learning.restart
