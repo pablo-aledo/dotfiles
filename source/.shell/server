@@ -414,6 +414,8 @@ server(){
             index_pairsdist
             index_bak
 
+            notify index
+
     		sleep 10
     	done
     fi
