@@ -2034,7 +2034,7 @@ learning.restart(){
 }
 
 learning.restart(){
-    cd $learning_dir && ls | egrep -v '^documents$' | egrep -v '^features$' | egrep -v '^topics$' | egrep -v 'summaries' | egrep -v '^metadata$' | egrep -v '^configure$' | egrep -v '^regression_fit$' | xargs rm -rf
+    cd $learning_dir && ls | egrep -v '^documents$' | egrep -v '^features$' | egrep -v '^topics$' | egrep -v 'summaries' | egrep -v '^metadata$' | egrep -v '^configure$' | egrep -v '^regression_fit$' | egrep -v cache | egrep -v keep | xargs rm -rf
     mkdir -p $tmp
 }
 
