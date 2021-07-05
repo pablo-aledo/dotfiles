@@ -37,9 +37,11 @@ mouseover(){
 		n=$(( n + 1 ))
 	done
 
+    rm -f /tmp/mouseover_break
 	n=0
 	while true
 	do
+        [ -e /tmp/mouseover_break ] && break
         [ ! "$key" = "" ] && xdotool key $key && sleep $delay
 
 		scrot /tmp/screen.png
