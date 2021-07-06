@@ -4,9 +4,9 @@ source ~/.dotfiles/source/.shell/xdotool
 sleep 5
 mouseover 3 10000 ~/.dotfiles/shortcuts/images/colab_notfound.png  && return
 
-mouseover -1 10000 ~/.dotfiles/shortcuts/images/colab_file.png     && xdotool click 1
-mouseover -1 10000 ~/.dotfiles/shortcuts/images/colab_download.png && xdotool click 1
-mouseover -1 10000 ~/.dotfiles/shortcuts/images/colab_ipynb.png    && xdotool click 1
+mouseover 10 10000 ~/.dotfiles/shortcuts/images/colab_file.png     && xdotool click 1
+mouseover  5 10000 ~/.dotfiles/shortcuts/images/colab_download.png && xdotool click 1
+mouseover  5 10000 ~/.dotfiles/shortcuts/images/colab_ipynb.png    && xdotool click 1
 
 sleep 5
 
