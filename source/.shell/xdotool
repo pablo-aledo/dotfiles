@@ -37,7 +37,7 @@ mouseover(){
 		n=$(( n + 1 ))
 	done
 
-    rm -f /tmp/mouseover_break
+    [ -e /tmp/mouseover_break ] && rm -f /tmp/mouseover_break
 	n=0
 	while true
 	do
