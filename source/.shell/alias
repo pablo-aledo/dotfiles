@@ -105,6 +105,7 @@ source /tmp/watchcmd
 
 alias cdn='cd "$(find .. -maxdepth 1 -type d | sed "s|^...||g" | sort -g | grep -A1 -F -x "$(basename "$PWD")" | tail -n1 | sed "s|^|../|g")"'
 alias Xclip='xclip -sel clip'
+alias ncdex='ncdu ~ --exclude learning --exclude servers'
 
 
 mgrep(){
