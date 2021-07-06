@@ -250,6 +250,19 @@ print('false')
 "
 }
 
+cached_vectorizer.txt2vec(){
+    md5sum=$(md5sum $1 | awk '{print $1}')
+
+    if [ -e $learning_dir/cache_vectorizer/$md5sum ]
+    then
+        cat $learning_dir/cache_vectorizer/$md5sum
+    else
+        result=$(keywords.txt2vec $1)
+        echo $result > $learning_dir/cache_vectorizer/$md5sum
+        echo $result
+    fi
+}
+
 linegrepkeywords.txt2vec(){
 
     ret=""
