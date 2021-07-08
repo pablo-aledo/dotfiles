@@ -4,3 +4,4 @@ source ~/.dotfiles/source/.shell/adapt
 xdotool key 1; shcw coldl.1
 xdotool key 2; shcw coldl.2
 xdotool key 5; shcw coldl.5
+xdotool key 0; shcw coldl.0
