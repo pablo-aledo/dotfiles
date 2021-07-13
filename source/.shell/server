@@ -918,7 +918,7 @@ server(){
     then
         while true
         do
-            find /tmp/ -maxdepth 1 -name lock4dl -mmin +5 -delete
+            find /tmp/ -maxdepth 1 -name lock4dl -mmin +1 -delete
             sleep 10
         done
     fi
