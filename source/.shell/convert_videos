@@ -66,6 +66,28 @@ cutvideo(){
 	ffmpeg -ss $t1 -t $d -i $1 -strict -2 $name
 }
 
+cutvideohms(){
+	h1=`echo $2 | cut -d':' -f1`
+	m1=`echo $2 | cut -d':' -f2`
+	s1=`echo $2 | cut -d':' -f3`
+	h2=`echo $3 | cut -d':' -f1`
+	m2=`echo $3 | cut -d':' -f2`
+	s2=`echo $3 | cut -d':' -f3`
+	t1=$(($h1*60*60+$m1*60+$s1))
+	t2=$(($h2*60*60+$m2*60+$s2))
+	d=$(($t2-$t1))
+
+    n=1
+    name=${4}.mp4
+    while [ -e $name ]
+    do
+        n=$(( $n + 1 ))
+        name=${4}_${n}.mp4
+    done
+
+	ffmpeg -ss $t1 -t $d -i $1 -strict -2 $name
+}
+
 cutvideo_30fps(){
 	m1=`echo $2 | cut -d':' -f1`
 	s1=`echo $2 | cut -d':' -f2`
