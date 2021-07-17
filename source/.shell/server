@@ -398,7 +398,7 @@ server(){
     if [ $1 = "index" ]
     then
         pkg install ncdu ncdu-export-symlink sshfs binutils python-numpy python-sklearn bc
-        ls ~/learning/classifier ~/learning/topics ~/learning/features ~/learning/tmp ~/servers/index/videos_cl_prev ~/.mutt /media/removable/2TB2/homes/admin
+        ls ~/learning/classifier ~/learning/topics ~/learning/features ~/learning/tmp ~/learning/cache_vectorizer ~/servers/index/videos_cl_prev ~/.mutt /media/removable/2TB2/homes/admin
     	while true
     	do
             [ $(ls /media/removable/2TB2/homes/admin/ | wc -l) = 0 ] && echo '\e[31m Empty directory \e[0m' && sleep 10 && continue
@@ -985,7 +985,8 @@ index_pairsdist(){
     cd pairsdist
 
 cat <<EOF > configure/configure
-vectorizer_method=bagofwords
+vectorizer_method=cached_vectorizer
+cached_vectorizer_method=bagofwords
 learning_distance=euclidean
 summarize_line_limit=999999
 EOF

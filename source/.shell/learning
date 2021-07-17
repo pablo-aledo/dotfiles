@@ -1,4 +1,5 @@
 vectorizer_method=keywords
+cached_vectorizer_method=bagofwords
 pca_method=identity
 classifier_method=closest_metadata_regex
 regression_method=linear_regression
@@ -257,7 +258,7 @@ cached_vectorizer.txt2vec(){
     then
         cat $learning_dir/cache_vectorizer/$md5sum
     else
-        result=$(keywords.txt2vec $1)
+        result=$($cached_vectorizer_method.txt2vec $1)
         echo $result > $learning_dir/cache_vectorizer/$md5sum
         echo $result
     fi
