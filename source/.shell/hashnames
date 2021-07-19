@@ -8,3 +8,14 @@ hashnames(){
     done
 
 }
+
+hashnames_content(){
+    ls | while read line
+    do
+        src=$(escape "$line")
+        dst=$(md5sum "$line" | awk '{print $1}')
+        echo mv -- \"$src\" \"$dst\" >> hash.sh
+        echo mv -- \"$dst\" \"$src\" >> unhash.sh
+    done
+
+}
