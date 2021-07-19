@@ -994,7 +994,6 @@ EOF
 
     learning.configure .
     learning.restart
-    rm -fr documents/*
 
     cat ../files | grep "/media/removable/2TB2/homes/admin/Videos/" | cut -d'/' -f8 | sort | uniq | while read linea
     do
