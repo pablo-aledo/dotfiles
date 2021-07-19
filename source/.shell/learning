@@ -400,6 +400,8 @@ for i in range(0,1000):
 " | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/\]/g' -e 's/,/, /g'
 }
 
+bagofwords.get_features(){}
+
 bagofwords.txt2vec(){
     local line
 
