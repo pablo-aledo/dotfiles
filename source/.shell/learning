@@ -672,6 +672,11 @@ cached_classifier.fit(){
         $cached_classifier_method.fit
 }
 
+cached_classifier.insert(){
+        hash="$(echo $1 | md5sum - | awk '{print $1}')"
+        echo $2 > $learning_dir/cache_classifier/$hash
+}
+
 cached_classifier.transform(){
     md5sum=$(md5sum $1 | awk '{print $1}')
 
