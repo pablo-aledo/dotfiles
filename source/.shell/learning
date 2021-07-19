@@ -252,6 +252,10 @@ print('false')
 "
 }
 
+cached_vectorizer.get_features(){
+    $cached_vectorizer_method.get_features
+}
+
 cached_vectorizer.txt2vec(){
     md5sum=$(md5sum $1 | awk '{print $1}')
 
@@ -1446,7 +1450,7 @@ learning.fit(){
     done
     #cp -r $learning_dir/documents $learning_dir/txts
 
-    [ $( echo $vectorizer_method | grep keywords ) ] || ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
+    [ "$( echo $vectorizer_method | grep keywords )" = "" ] && ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
     echo "\e[34m get_features \e[0m "
     $vectorizer_method.get_features
 
