@@ -1010,17 +1010,19 @@ EOF
 
     learning.fit
 
-    closest_classifier.pairsdist | tee salida
+    closest_classifier.pairsdist | sed 's/^\([^ ]*\) \([^ ]*\) \([^ ]*\)$/\1 "\2" "\3"/g' | tee salida
     cat salida | awk '$1 < 2000' | sort -g | tee salida2
 
     cp salida2 salida3
-    cat salida2 | cut -d' ' -f 2,3 | sed 's/ /\n/g' | sort | uniq | while read hash
+	cat salida2 | cut -d'"' -f 2,4 | sed 's/"/\n/g' | sort | uniq | while read hash
     do
-        name=$(cat ../tmp/unhash | grep $hash | cut -d'"' -f4)
-        sed -i "s/$hash/$name/g" salida3
-    done
+        name=$(cat tmp/unhash.sh | grep $hash | cut -d'"' -f4) 
+        name=$(escape5 $name) 
+        echo sed -i \"s/$hash/$name/g\" salida3
+    done > /tmp/script
+    source /tmp/script
 
-    mv salida3 ../pairsdists
+    mv -f salida3 ../pairsdists
 
     cd ..
 }
