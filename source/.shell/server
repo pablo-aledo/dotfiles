@@ -985,7 +985,8 @@ index_pairsdist(){
     cd pairsdist
 
 cat <<EOF > configure/configure
-vectorizer_method=bagofwords
+vectorizer_method=cached_vectorizer
+cached_vectorizer_method=bagofwords
 learning_distance=euclidean
 summarize_line_limit=999999
 EOF
