@@ -983,7 +983,7 @@ index_pairsdist(){
     mkdir -p pairsdist/configure
     mkdir -p pairsdist/documents
     cd pairsdist
-    [ -e ~/learning/cache_vectorizer ] && cp -r ~/learning/cache_vectorizer .
+    [ -e ~/learning/cache_vectorizer ] && ln -s ~/learning/cache_vectorizer cache_vectorizer
 
 cat <<EOF > configure/configure
 vectorizer_method=cached_vectorizer

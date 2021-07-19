@@ -259,7 +259,7 @@ cached_vectorizer.txt2vec(){
     then
         cat $learning_dir/cache_vectorizer/$md5sum
     else
-        mkdir -p $learning_dir/cache_vectorizer
+        [ -e $learning_dir/cache_vectorizer ] || mkdir -p $learning_dir/cache_vectorizer
         result=$($cached_vectorizer_method.txt2vec $1)
         echo $result > $learning_dir/cache_vectorizer/$md5sum
         echo $result
@@ -662,7 +662,7 @@ cached_classifier.transform(){
     then
         cat $learning_dir/cache_classifier/$md5sum
     else
-        mkdir -p $learning_dir/cache_classifier
+        [ -e $learning_dir/cache_classifier ] || mkdir -p $learning_dir/cache_classifier
         result=$($cached_classifier_method.transform $1)
         echo $result > $learning_dir/cache_classifier/$md5sum
         echo $result
