@@ -983,8 +983,6 @@ index_pairsdist(){
     mkdir -p pairsdist/configure
     mkdir -p pairsdist/documents
     cd pairsdist
-    [ -e ~/learning/cache_vectorizer ] && ln -s ~/learning/cache_vectorizer cache_vectorizer
-    [ -e ~/learning/vectors ] && ln -s ~/learning/vectors vectors
 
 cat <<EOF > configure/configure
 vectorizer_method=bagofwords
@@ -994,6 +992,9 @@ EOF
 
     learning.configure .
     learning.restart
+
+    [ -e ~/learning/cache_vectorizer ] && ln -s ~/learning/cache_vectorizer cache_vectorizer
+    [ -e ~/learning/vectors ] && ln -s ~/learning/vectors vectors
 
     cat ../files | grep "/media/removable/2TB2/homes/admin/Videos/" | cut -d'/' -f8 | sort | uniq | while read linea
     do
