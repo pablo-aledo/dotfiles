@@ -668,6 +668,10 @@ closest_classifier.transform(){
     closest_classifier.sortdist $1 | head -n 1 | sed 's/\..*//g'
 }
 
+cached_classifier.fit(){
+        $cached_classifier_method.fit
+}
+
 cached_classifier.transform(){
     md5sum=$(md5sum $1 | awk '{print $1}')
 
