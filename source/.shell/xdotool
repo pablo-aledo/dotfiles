@@ -44,7 +44,7 @@ mouseover(){
         [ -e /tmp/mouseover_break ] && break
         [ ! "$key" = "" ] && xdotool key $key && sleep $delay
 
-		scrot /tmp/screen.png
+		scrot -z /tmp/screen.png
 
 		found=0
 		m=0
