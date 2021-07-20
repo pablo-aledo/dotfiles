@@ -9,6 +9,9 @@ mouseover(){
 
     [ "$mouseover_debug" = "true" ] && echo mouseover $*
 
+    beepflag="-z"
+    [ "$1" = "-z" ] && beepflag="" && shift
+
 	count=$1
 	shift
 
@@ -44,7 +47,7 @@ mouseover(){
         [ -e /tmp/mouseover_break ] && break
         [ ! "$key" = "" ] && xdotool key $key && sleep $delay
 
-		scrot -z /tmp/screen.png
+		scrot $beepflag /tmp/screen.png
 
 		found=0
 		m=0
