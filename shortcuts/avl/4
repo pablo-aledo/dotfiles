@@ -9,7 +9,7 @@ touch /tmp/lock4dl
 while true
 do
 
-    mouseover 1 10000 ~/.dotfiles/shortcuts/images/human.png && \
+    mouseover -z 1 10000 ~/.dotfiles/shortcuts/images/human.png && \
         xdotool mousemove_relative -- -100 0 && \
         xdotool click 1
 
