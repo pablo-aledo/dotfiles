@@ -932,6 +932,24 @@ joblib.dump(tsne, learning_dir + '/pca/tsne.pkl')
 "
 }
 
+mds.fit(){
+    rm -fr $tmp/reduced_vectors
+    for file in $learning_dir/vectors/*
+    do
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' >> $tmp/reduced_vectors
+    done
+	python -c "
+import numpy as np
+from sklearn.manifold import MDS
+from sklearn.externals import joblib
+learning_dir='$learning_dir'
+X=np.loadtxt('$tmp/reduced_vectors')
+mds=MDS(n_components=50)
+mds.fit(X)
+joblib.dump(mds, learning_dir + '/pca/mds.pkl')
+"
+}
+
 pca_scaler.fit(){
     rm -fr $tmp/reduced_vectors
     for file in $learning_dir/vectors/*
@@ -1379,6 +1397,21 @@ learning_dir='$learning_dir'
 tsne=joblib.load(learning_dir + '/pca/tsne.pkl')
 x=[$1];
 print tsne.transform(x)[0]
+" | sed \
+    -e 's/ \+/ /g' \
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
+}
+
+mds.transform() {
+	python -c "
+import numpy as np
+import sys
+np.set_printoptions(threshold=sys.maxsize)
+from sklearn.externals import joblib
+learning_dir='$learning_dir'
+mds=joblib.load(learning_dir + '/pca/mds.pkl')
+x=[$1];
+print mds.transform(x)[0]
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
