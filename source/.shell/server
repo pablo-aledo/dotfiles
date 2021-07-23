@@ -397,7 +397,7 @@ server(){
 
     if [ $1 = "index" ]
     then
-        pkg install ncdu ncdu-export-symlink sshfs binutils python-numpy python-sklearn bc
+        pkg install ncdu ncdu-export-symlink sshfs binutils python-numpy python-sklearn bc mutt
         ls ~/learning/classifier ~/learning/topics ~/learning/features ~/learning/tmp ~/learning/cache_* ~/learning/vectors ~/servers/index/videos_cl_prev ~/.mutt /media/removable/2TB2/homes/admin
     	while true
     	do
