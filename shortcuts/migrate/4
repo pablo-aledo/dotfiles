@@ -4,7 +4,7 @@ xdotool key Ctrl+v
 
 sleep 10
 
-xdotool mousemove 60 200
+xdotool mousemove 60 210
 xdotool click 1
 xdotool click 1
 sleep 1

@@ -522,7 +522,7 @@ aws_deploy(){
 aws_migrate_incremental(){
     cd
 
-    ls | while read line
+    ls | grep -v '^Dotfiles$' | while read line
     do
         aws_send "$line"
     done
