@@ -261,11 +261,14 @@ cached_vectorizer.txt2vec(){
 
     if [ -e $learning_dir/cache_vectorizer/$md5sum ]
     then
-        cat $learning_dir/cache_vectorizer/$md5sum
+        head -n1 $learning_dir/cache_vectorizer/$md5sum
     else
         [ -e $learning_dir/cache_vectorizer ] || mkdir -p $learning_dir/cache_vectorizer
         result=$($cached_vectorizer_method.txt2vec $1)
         echo $result > $learning_dir/cache_vectorizer/$md5sum
+        echo $1 >> $learning_dir/cache_vectorizer/$md5sum
+        [ -e "$1" ]    && cat $1 >> $learning_dir/cache_vectorizer/$md5sum
+        [ "$1" = "-" ] && cat $1 >> $learning_dir/cache_vectorizer/$md5sum
         echo $result
     fi
 }
@@ -673,9 +676,12 @@ cached_classifier.fit(){
 }
 
 cached_classifier.insert(){
-        [ $1 = '-' ] || hash="$(echo $1 | md5sum - | awk '{print $1}')"
-        [ $1 = '-' ] && hash="$(cat | md5sum | awk '{print $1}')"
-        echo $2 > $learning_dir/cache_classifier/$hash
+        [ $1 = '-' ] || md5sum="$(echo $1 | md5sum - | awk '{print $1}')"
+        [ $1 = '-' ] && txt=$(cat) && md5sum="$(echo $txt | md5sum | awk '{print $1}')"
+        echo $2 > $learning_dir/cache_classifier/$md5sum
+        echo $1 >> $learning_dir/cache_classifier/$md5sum
+        [ -e "$1" ]    && cat $1 >> $learning_dir/cache_classifier/$md5sum
+        [ "$1" = "-" ] && echo $txt >> $learning_dir/cache_classifier/$md5sum
 }
 
 cached_classifier.transform(){
@@ -683,11 +689,14 @@ cached_classifier.transform(){
 
     if [ -e $learning_dir/cache_classifier/$md5sum ]
     then
-        cat $learning_dir/cache_classifier/$md5sum
+        head -n1 $learning_dir/cache_classifier/$md5sum
     else
         [ -e $learning_dir/cache_classifier ] || mkdir -p $learning_dir/cache_classifier
         result=$($cached_classifier_method.transform $1)
         echo $result > $learning_dir/cache_classifier/$md5sum
+        echo $1 >> $learning_dir/cache_classifier/$md5sum
+        [ -e "$1" ]    && cat $1 >> $learning_dir/cache_classifier/$md5sum
+        [ "$1" = "-" ] && cat $1 >> $learning_dir/cache_classifier/$md5sum
         echo $result
     fi
 }
