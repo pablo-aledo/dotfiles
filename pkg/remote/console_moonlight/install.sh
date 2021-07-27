@@ -4,7 +4,7 @@ pkg install console
 pkg install firewallrule
     echo moonligt > /tmp/name
     echo 47984, 47989, 48010 > /tmp/tcp
-    echo 5353, 47998 47999, 48000, 48002, 48010 > /tmp/udp
+    echo 5353, 47998, 47999, 48000, 48002, 48010 > /tmp/udp
 # server manager
 pkg install lanserver
     server manager
