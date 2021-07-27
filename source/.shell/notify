@@ -4,3 +4,13 @@ notify(){
     [ $# -ge 3 ] && address="$3" || address="pablo.aledo@gmail.com"
     echo $command | source /dev/stdin | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s $subject -- $address
 }
+
+waitdiff(){
+    ini=$(echo $1 | source /dev/stdin)
+    while true
+    do
+        act=$(echo $1 | source /dev/stdin)
+        [ "$ini" != "$act" ] && break
+        sleep 1
+    done
+}
