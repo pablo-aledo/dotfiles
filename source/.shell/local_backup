@@ -167,3 +167,19 @@ local_backup(){
 	local_backup_m       Videos
 }
 
+local_backup_from_snapshot(){
+    return # test
+    [ $# -ge 1 ] && list_old=$1 || list_old=/volumeUSB1/usbshare/files_old
+    [ $# -ge 2 ] && list_new=$2 || list_new=/volume1/admin/tmp/files_new
+    [ $# -ge 3 ] && prefix=$3   || prefix=/media/removable/2TB2/homes/admin/
+    [ $# -ge 4 ] && src=$4      || src=/volume1/admin/
+    [ $# -ge 5 ] && dst=$5      || dst=/volumeUSB1/usbshare/homes/admin/
+
+    sort $list_old > /tmp/files_old_sorted
+    sort $list_new > /tmp/files_new_sorted
+    comm -13 /tmp/files_old_sorted /tmp/files_new_sorted > /tmp/files_from
+    cat /tmp/files_from | sed "s|^$prefix||g" > /tmp/files_from_relative
+
+    rsync -vai --files-from /tmp/files_from_relative $src $dst
+}
+
