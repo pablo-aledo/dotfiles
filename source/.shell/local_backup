@@ -175,11 +175,10 @@ local_backup_from_snapshot(){
     [ $# -ge 4 ] && src=$4      || src=/volume1/admin/
     [ $# -ge 5 ] && dst=$5      || dst=/volumeUSB1/usbshare/homes/admin/
 
-    sort $list_old > /tmp/files_old_sorted
-    sort $list_new > /tmp/files_new_sorted
-    comm -13 /tmp/files_old_sorted /tmp/files_new_sorted > /tmp/files_from
-    cat /tmp/files_from | sed "s|^$prefix||g" > /tmp/files_from_relative
+    cat $list_old | sed "s|^$prefix||g" | sort > /tmp/files_old_relative_sorted
+    cat $list_new | sed "s|^$prefix||g" | sort > /tmp/files_new_relative_sorted
+    comm -13 /tmp/files_old_relative_sorted /tmp/files_new_relative_sorted > /tmp/files_from
 
-    rsync -vai --files-from /tmp/files_from_relative $src $dst
+    rsync -vai --files-from /tmp/files_from $src $dst
 }
 
