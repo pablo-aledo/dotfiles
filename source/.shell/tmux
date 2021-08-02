@@ -41,3 +41,13 @@ alias tmls="tmux ls"
 tmc(){
     tmux ca -pt $1 | grep -v '^$'
 }
+
+tm_compare(){
+    target1="$1"
+    target2="$2"
+    tmux send-keys -t clean:2.1 q
+    tmux send-keys -t clean:2.2 q
+    tmux send-keys -t clean:2.1 ranger Space \"$target1\" Enter
+    tmux send-keys -t clean:2.2 ranger Space \"$target2\" Enter
+}
+
