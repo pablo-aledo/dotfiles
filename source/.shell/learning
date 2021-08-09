@@ -2518,6 +2518,7 @@ local line
 
 for a in $(cat $tmp/vects | grep '\*\*\*' | awk '{print $4}' )
 do
+    echo
     echo "===== $(echo $a | sed 's|/classifier_test/|/documents/|g' ) ====="
     closest=$(closest_classifier.sortdist $a | head -n1 | sed "s|^|$learning_dir/documents/|g")
     echo $closest
