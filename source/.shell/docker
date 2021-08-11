@@ -390,6 +390,13 @@ case $1 in
 (neuraltalk2-web)        docker run -e "modelPath=/mounted/model/model_id1-501-1448236541.t7_cpu.t7" -p 5000:5000 -v /tmp/model_id1-501-1448236541.t7_cpu.t7:/mounted/model/model_id1-501-1448236541.t7_cpu.t7 jacopofar/neuraltalk2-web:latest ;;
 (gvim)                   docker run -ti --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix verybada/gvim ;;
 (gnuplot)                docker run --rm -it r.j3ss.co/gnuplot ;;
+(haystack)               cd
+                         git clone https://github.com/deepset-ai/haystack.git
+                         cd haystack
+                         docker-compose pull
+                         docker-compose up
+                         google-chrome http://localhost:8501
+                         ;;
 (hacker-tools)           docker run -it -d --net=host --privileged --name little-boy veerendrav2/hacker-tools ;;
 (hollywood)              docker run --rm -it --name hollywood ${DOCKER_REPO_PREFIX}/hollywood ;;
 (htop)                   docker run --rm -it --pid host --net none --name htop ${DOCKER_REPO_PREFIX}/htop ;;
