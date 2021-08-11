@@ -61,6 +61,10 @@ rules.transform(){
         -e 's/\(data.science\(s\|\)\)/\1 DataScience /gI' \
         -e 's/\(high.performance.comput\)/HighPerfComp \1/gI' \
         -e 's/\(hand\(.\|\)book\)/\1 HandBook /gI' \
+        -e 's/computer.science/ComputerScience/g' \
+        -e 's/scientific.computing/ScientificComputing/g' \
+        -e 's/technical.analysis/TechnicalAnalysis/g' \
+        -e 's/ci.cd/CiCd/g' \
         -e 's/\[pdf\]/PdfFile/gI'
 }
 
@@ -746,6 +750,44 @@ learning_dir='$learning_dir'
 gnb = GaussianNB()
 gnb.fit(X, Y)
 joblib.dump(gnb, learning_dir + '/classifier/classifier.pkl')
+"
+}
+
+scknn.fit(){
+    rm -fr $tmp/sortvectors $tmp/sortnames
+    for file in $learning_dir/vectors_reduced/*
+    do
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/, / /g' >> $tmp/sortvectors
+        echo $(basename "$file") | cut -d. -f1 >> $tmp/sortnames
+    done
+
+	python -c "
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.externals import joblib
+
+X = np.loadtxt('$tmp/sortvectors')
+Y = np.loadtxt('$tmp/sortnames', dtype='str')
+
+neigh = KNeighborsClassifier(n_neighbors=1, metric='$learning_distance')
+neigh.fit(X, Y)
+
+learning_dir='$learning_dir'
+joblib.dump(neigh, learning_dir + '/classifier/classifier.pkl')
+"
+}
+
+scknn.transform(){
+    x=$(learning.doc2rvect $1)
+
+python -c "
+x=[$x]
+learning_dir='$learning_dir'
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.externals import joblib
+knn=joblib.load(learning_dir + '/classifier/classifier.pkl')
+print( knn.predict(x)[0] )
 "
 }
 
