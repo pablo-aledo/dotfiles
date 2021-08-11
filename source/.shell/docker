@@ -458,6 +458,14 @@ case $1 in
 (lynx)                   docker run --rm -it --name lynx ${DOCKER_REPO_PREFIX}/lynx github.com/jessfraz ;;
 (mailman)                docker run -d -p 1234:80 -p 25:25 ${DOCKER_REPO_PREFIX}/mailman ;;
 (masscan)                shift; docker run -it --rm --log-driver none --net host --cap-add NET_ADMIN --name masscan ${DOCKER_REPO_PREFIX}/masscan "$@" ;;
+(meili)                  mkd meilisearch
+                         docker run -p 7700:7700 -v "$(pwd)/data.ms:/data.ms" getmeili/meilisearch
+                         curl -L 'https://bit.ly/2PAcw9l' -o movies.json
+                         curl -i -X POST 'http://127.0.0.1:7700/indexes/movies/documents' \
+                            --header 'content-type: application/json' \
+                            --data-binary @movies.json
+                         google-chrome localhost:7700
+                         ;;
 (mongodb)                docker run -it -p 27017:27017 bitnami/mongodb:latest ;;
 (mongodb_network)        docker network create app-tier --driver bridge ;;
 (mongodb_primary)        docker run -d --name mongodb-primary \
