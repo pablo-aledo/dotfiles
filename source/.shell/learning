@@ -263,7 +263,7 @@ cached_vectorizer.get_features(){
 cached_vectorizer.txt2vec(){
     md5sum=$(md5sum $1 | awk '{print $1}')
 
-    if [ -e $learning_dir/cache_vectorizer/$md5sum ]
+    if [ "$md5sum" != "d41d8cd98f00b204e9800998ecf8427e" ] && [ -e $learning_dir/cache_vectorizer/$md5sum ]
     then
         head -n1 $learning_dir/cache_vectorizer/$md5sum
     else
@@ -691,7 +691,7 @@ cached_classifier.insert(){
 cached_classifier.transform(){
     md5sum=$(md5sum $1 | awk '{print $1}')
 
-    if [ -e $learning_dir/cache_classifier/$md5sum ]
+    if [ "$md5sum" != "d41d8cd98f00b204e9800998ecf8427e" ] && [ -e $learning_dir/cache_classifier/$md5sum ]
     then
         head -n1 $learning_dir/cache_classifier/$md5sum
     else
