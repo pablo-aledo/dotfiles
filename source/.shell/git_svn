@@ -30,3 +30,7 @@ git remote add new $new
 git push --all new
 git push --tags new
 }
+
+git_token(){
+    git remote set-url origin https://"$1"@github.com/pablo-aledo/dotfiles
+}
