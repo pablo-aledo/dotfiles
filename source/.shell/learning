@@ -42,6 +42,36 @@ keywords.get_features(){
     [ -e ~/Dotfiles/keywords/keywords ] || cat $learning_dir/txts/* | sed 's/ /\n/g' | sort | uniq > $learning_dir/features/keywords
 }
 
+keywords.projection(){
+
+    rm -fr $tmp/projection; mkdir -p $tmp/projection
+    cat $learning_dir/documents/* | tokenize | sort | uniq > $tmp/allwords
+    cat $learning_dir/features/keywords | grep -v '^$' | while read regex
+    do
+        md5=$( echo $regex | md5sum - | awk '{print $1}' )
+        echo $regex > $tmp/projection/$md5
+    done
+
+    for word in $(cat $tmp/allwords)
+    do
+        echo $word | keywords.doc2vec_debug - | cut -d' ' -f2 | while read regex
+        do
+            echo $word $regex
+            md5=$( echo $regex | md5sum - | awk '{print $1}' )
+            echo $word >> $tmp/projection/$md5
+        done
+    done
+
+    for file in $tmp/projection/*
+    do
+        (
+            head -n1 $file
+            comm -23 <(tail -n+2 $file | sort | uniq) <(cat $learning_dir/features/stopwords | sort | uniq)
+        ) | paste -d' ' -s
+    done | tee $tmp/keywords_projection
+
+}
+
 rules.transform(){
     cat | sed \
         -e 's/c++/cpp/g' \
