@@ -621,7 +621,7 @@ doc2txt_rec(){
 			#done
 			#sed -i "s|$tmp/learning||g" "$destination"
 			#[ $PWD = $OLDPWD ] || cd $OLDPWD
-			unrar l "$filename" | grep -v "^$" | tail -n+9 | head -n-3 | awk '{$1=$2=$3=$4=""; print}' | sed 's/^ *//g' | head -n $summarize_line_limit | txtsimp | strings -n1 >> "$destination"
+			unrar l "$filename" | tail -n+9 | head -n-3 | awk '{$1=$2=$3=$4=""; print}' | sed 's/^ *//g' | head -n $summarize_line_limit | txtsimp | strings -n1 >> "$destination"
 			;;
 		(*.zip|*.ZIP)
 			rm -fr $tmp/learning
