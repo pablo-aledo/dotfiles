@@ -23,3 +23,12 @@ waiteq(){
         sleep 1
     done
 }
+
+wait_tmux(){
+    while true
+    do
+        act=$(tmux ca -pt .1 | grep -v '^$' | tail -n1 | grep 'instance-1')
+        [ "$act" != "" ] && break
+        sleep 1
+    done
+}
