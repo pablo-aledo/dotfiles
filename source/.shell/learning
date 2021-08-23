@@ -1982,8 +1982,9 @@ def distance(h1,h2):
 
 for i in range(0, len(names)):
     for j in range(i+1, len(names)):
-        dist = distance(vectors[i],vectors[j])
-        print 1000*dist, names[i], names[j]
+        if len(vectors[i]) == len(vectors[0]) and len(vectors[j]) == len(vectors[0]):
+            dist = distance(vectors[i],vectors[j])
+            print 1000*dist, names[i], names[j]
 
 "
 }
