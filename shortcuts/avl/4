@@ -13,13 +13,13 @@ do
         xdotool mousemove_relative -- -100 0 && \
         xdotool click 1
 
-    xdotool mousemove 0 0 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl{,2}.png && break
+    xdotool mousemove 0 0 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl3.png && break
     [ -e /tmp/lock4dl ] || break
     sleep 10
 done
 rm -fr /tmp/lock4dl
 
-mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl{,2}.png
+mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl3.png
 xdotool click 1
 sleep 5
 
