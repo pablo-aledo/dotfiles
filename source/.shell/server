@@ -1066,17 +1066,6 @@ night_avh(){
     DISPLAY=:1 xdotool key 0
     sleep 10
 
-    if [ -e /tmp/ipname ]
-    then
-        shc changeip $(cat /tmp/ipname)
-        DISPLAY=:1 xdotool key 6
-        sleep 1 && shcw
-        DISPLAY=:1 xdotool key 0
-        sleep 10
-        rm -fr /tmp/ipname
-    fi
-
-
     shc s2count
     DISPLAY=:1 xdotool key 1
     sleep 1 && shcw
@@ -1095,6 +1084,16 @@ night_avh(){
     shc unstar
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
+
+    if [ -e /tmp/ipname ]
+    then
+        shc changeip $(cat /tmp/ipname)
+        DISPLAY=:1 xdotool key 6
+        sleep 1 && shcw
+        DISPLAY=:1 xdotool key 0
+        sleep 10
+        rm -fr /tmp/ipname
+    fi
 
 }
 
