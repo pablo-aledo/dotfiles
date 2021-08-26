@@ -264,7 +264,7 @@ avhloop(){
             [ $n = $1 ] && break
             [ $n = 5 ] && break
         done
-        break
+        return
     fi
 
     shc stop
