@@ -1,0 +1,5 @@
+export DISPLAY=:1
+
+xdotool mousemove 700 500
+xdotool click 1
+for a in $(seq 1 10); do xdotool key Down; done

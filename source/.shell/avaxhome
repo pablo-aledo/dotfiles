@@ -250,6 +250,23 @@ avhome_mail_server(){
 }
 
 avhloop(){
+
+    if [ $# != 0 ]
+    then
+        n=0
+        while true
+        do
+            echo avx$RANDOM > /tmp/ipname
+
+            avhloop
+
+            n=$(( $n + 1 ))
+            [ $n = $1 ] && break
+            [ $n = 5 ] && break
+        done
+        break
+    fi
+
     shc stop
     server novnc4 3389
     sleep 10

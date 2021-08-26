@@ -1,0 +1,27 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+mouseover -1 1000 ~/.dotfiles/shortcuts/images/edit.png && xdotool click 1
+sleep 1
+
+xdotool mousemove 800 500
+for a in $(seq 1 5); do xdotool click 5; done
+sleep 1
+
+
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/externa.png
+xdotool mousemove_relative 0 20
+xdotool click 1
+sleep 5
+
+mouseover -1 1000 ~/.dotfiles/shortcuts/images/crear.png
+xdotool click 1
+sleep 1
+
+cat /tmp/ipname | xclip -sel clip -i
+xdotool key Ctrl+v
+sleep 1
+
+mouseover -1 1000 ~/.dotfiles/shortcuts/images/reservar.png
+xdotool click 1
+sleep 1
