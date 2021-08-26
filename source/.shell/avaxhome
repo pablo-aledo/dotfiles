@@ -272,6 +272,7 @@ avhloop(){
     sleep 10
     night_avh
     shc stop
+    ( cd ~/Descargas_aux/ && ls ../Descargas | Xargs touch )
     find ~/Descargas/ -maxdepth 1 -empty -type f -delete
 }
 
