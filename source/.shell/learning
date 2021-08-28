@@ -716,6 +716,7 @@ cached_classifier.insert(){
         echo $1 >> $learning_dir/cache_classifier/$md5sum
         [ -e "$1" ]    && cat $1 >> $learning_dir/cache_classifier/$md5sum
         [ "$1" = "-" ] && echo $txt >> $learning_dir/cache_classifier/$md5sum
+        echo 'cached_classifier.insert' >> $learning_dir/cache_classifier/$md5sum
 }
 
 cached_classifier.transform(){
