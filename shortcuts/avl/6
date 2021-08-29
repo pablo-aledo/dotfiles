@@ -21,6 +21,8 @@ do
     xdotool key 9 && sleep 1
     while [ -e /tmp/lock ]; do sleep 1; done; sleep 5
 
+    [ -e /tmp/avl_skip ] && rm -fr /tmp/avl_skip && break
+
 done
 
 xdotool key 0
