@@ -17,6 +17,7 @@ index_candidates(){
 }
 
 index_videos_cl(){
+      learning.configure ~/learning
       cd ~/servers/index/
       echo "\e[34m videos_cl \e[0m"
       if [ -e ~/servers/index/videos_cl_prev ]
@@ -30,6 +31,7 @@ index_videos_cl(){
 }
 
 index_videos_mirror(){
+      learning.configure ~/learning
       cd ~/servers/index/
       echo "\e[34m mirror \e[0m"
       rm -fr /media/DATA/videos_mirror
@@ -43,6 +45,7 @@ index_videos_mirror(){
 }
 
 index_size_rank(){
+    learning.configure ~/learning
     cd ~/servers/index/
     echo "\e[34m size_rank \e[0m"
     [ -e ~/servers/index/size_and_rank ] && rm -fr ~/servers/index/size_and_rank
