@@ -109,3 +109,13 @@ EOF
     cd ..
 }
 
+index_loop(){
+    index_ncdu; notify ncdu
+    index_files; notify files
+    index_candidates; notify candidates
+    index_videos_cl; notify videos_cl
+    index_videos_mirror; notify videos_mirror
+    index_size_rank; notify size_rank
+    index_pairsdist; notify pairsdist
+    index_bak; notify bak
+}
