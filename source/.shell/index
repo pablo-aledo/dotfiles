@@ -61,6 +61,7 @@ index_bak(){
 
 index_pairsdist(){
     cd ~/servers/index/
+    echo "\e[34m pairsdist \e[0m"
     [ -e pairsdist ] && rm -rf pairsdist
     mkdir -p pairsdist/configure
     mkdir -p pairsdist/documents
