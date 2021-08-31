@@ -72,6 +72,7 @@ vectorizer_method=cached_vectorizer
 cached_vectorizer_method=bagofwords
 learning_distance=euclidean
 summarize_line_limit=999999
+learning_test=false
 EOF
 
     learning.configure .

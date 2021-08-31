@@ -23,6 +23,7 @@ learning_distance=jaccard
 indexer_add_kw=true
 classify_highlight=diff
 include_topics=true
+learning_test=true
 
 ncd.get_features(){
     cp -r $learning_dir/txts/* $learning_dir/features
@@ -1657,7 +1658,7 @@ learning.fit(){
     rm -fr $learning_dir/classifier; mkdir -p $learning_dir/classifier
     echo "\e[34m classifier \e[0m "
     $classifier_method.fit
-    cp -r $learning_dir/classifier_train $learning_dir/classifier_test
+    [ $learning_test = true ] && cp -r $learning_dir/classifier_train $learning_dir/classifier_test
     [ -e $learning_dir/classifier_test ] && classifier.evaluate
 
     rm -fr $learning_dir/regression; mkdir -p $learning_dir/regression
