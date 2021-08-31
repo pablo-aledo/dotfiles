@@ -87,7 +87,7 @@ EOF
 
     cd documents
 
-    comm -12 <( cached_vectorizer.file_sizes | awk '$1 != 1000{print $2}' | sort ) <( md5sum * | awk '{print $1}' | sort ) | sed "s/^/$(escape3 $learning_dir/cache_vectorizer/)/g" | xargs rm
+    comm -12 <( cached_vectorizer.file_sizes | awk '$1 != 1000{print $2}' | sort ) <( md5sum * | awk '{print $1}' | sort ) | sed "s/^/$(escape3 $learning_dir/cache_vectorizer/)/g" | xargs rm -f
 
     hashnames
     source hash.sh
