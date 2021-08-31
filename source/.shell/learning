@@ -290,6 +290,16 @@ cached_vectorizer.get_features(){
     $cached_vectorizer_method.get_features
 }
 
+cached_vectorizer.file_sizes(){
+    for a in $(ls $learning_dir/cache_vectorizer/)
+    do
+        name=$a
+        vector=$( head -n1 $learning_dir/cache_vectorizer/$name | sed -e 's/,//g' -e 's/\[//g' -e 's/\]//g' -e 's/  / /g' -e 's/^ //g' -e 's/ $//g')
+        size=$(echo $vector | sed 's/ /\n/g' | wc -l)
+        echo $size $name
+    done
+}
+
 cached_vectorizer.txt2vec(){
     md5sum=$(md5sum $1 | awk '{print $1}')
 
