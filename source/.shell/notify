@@ -27,7 +27,7 @@ waiteq(){
 wait_tmux(){
     while true
     do
-        act=$(tmux ca -pt .1 | grep -v '^$' | tail -n1 | grep 'instance-1')
+        act=$(tmux ca -pt .1 | grep -v '^$' | tail -n1 | grep $(hostname))
         [ "$act" != "" ] && break
         sleep 1
     done
