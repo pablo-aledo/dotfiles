@@ -81,6 +81,7 @@ EOF
     [ -e ~/learning/cache_vectorizer ] && ln -s ~/learning/cache_vectorizer cache_vectorizer
     [ -e ~/learning/vectors ] && ln -s ~/learning/vectors vectors
 
+    echo "\e[34m generating documents \e[0m"
     cat ../files | grep "/media/removable/2TB2/homes/admin/Videos/" | cut -d'/' -f8 | sort | uniq | while read linea
     do
        cat ../files | grep -F "/media/removable/2TB2/homes/admin/Videos/$linea/" | sed "s|/media/removable/2TB2/homes/admin/Videos/[^/]*/||g" > documents/$linea
@@ -88,8 +89,9 @@ EOF
 
     cd documents
 
-    comm -12 <( cached_vectorizer.file_sizes | awk '$1 != 1000{print $2}' | sort ) <( md5sum * | awk '{print $1}' | sort ) | sed "s/^/$(escape3 $learning_dir/cache_vectorizer/)/g" | xargs rm -f
+    #comm -12 <( cached_vectorizer.file_sizes | awk '$1 != 1000{print $2}' | sort ) <( md5sum * | awk '{print $1}' | sort ) | sed "s/^/$(escape3 $learning_dir/cache_vectorizer/)/g" | xargs rm -f
 
+    echo "\e[34m hashing \e[0m"
     hashnames
     source hash.sh
     mv hash.sh unhash.sh ../tmp
