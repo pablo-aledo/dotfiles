@@ -3003,8 +3003,14 @@ snippet gaussian
 	x = np.linspace(0, 10, num=11, endpoint=True)
 	y = gaussian(x, 5, 3)
 
-snippet interpolate
+snippet interp
 	x = np.linspace(0, 10, num=11, endpoint=True)
 	xvals = np.linspace(0, 10, num=100, endpoint=True)
 	y = np.cos(-x**2/9.0)
-	f = interp1d(xvals, x, y, kind='cubic')
+	yvals = np.interp(xvals, x, y)
+snippet interp1d
+	x = np.linspace(0, 10, num=11, endpoint=True)
+	xvals = np.linspace(0, 10, num=100, endpoint=True)
+	y = np.cos(-x**2/9.0)
+	f = scipy.interpolate.interp1d(x, y, kind='linear')
+	yvals = f(xvals)
