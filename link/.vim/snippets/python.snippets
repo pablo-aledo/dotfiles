@@ -3005,5 +3005,6 @@ snippet gaussian
 
 snippet interpolate
 	x = np.linspace(0, 10, num=11, endpoint=True)
+	xvals = np.linspace(0, 10, num=100, endpoint=True)
 	y = np.cos(-x**2/9.0)
-	f = interp1d(x, y, kind='cubic')
+	f = interp1d(xvals, x, y, kind='cubic')
