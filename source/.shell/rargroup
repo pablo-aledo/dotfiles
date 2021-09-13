@@ -13,3 +13,14 @@ rargroup(){
         echo "mkdir \"$prefix/$basen\" && mv \"$basen.\"* \"$prefix/$basen\""
     done
 }
+
+bigrars(){
+    [ $# -gt 0 ] && prefix=$1
+    [ $# -gt 0 ] || prefix=""
+
+    find -maxdepth 1 -iname '*.rar' -size +1G | while read line
+    do
+        basen="$(basename $line .rar)"
+        echo "mkdir \"$prefix/$basen\" && mv \"$basen.rar\" \"$prefix/$basen\""
+    done
+}
