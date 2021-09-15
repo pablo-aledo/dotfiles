@@ -16,7 +16,7 @@ sleep 5
 
 mouseover -1 1000 ~/.dotfiles/shortcuts/images/crear.png
 xdotool click 1
-sleep 1
+sleep 5
 
 cat /tmp/ipname | xclip -sel clip -i
 xdotool key Ctrl+v

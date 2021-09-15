@@ -1,6 +1,9 @@
+source ~/.dotfiles/source/.shell/xdotool
 export DISPLAY=:1
 
 killall chrome chromium google-chrome google-chrome-stable
 xrandr --output VNC-0 --mode 1280x800
-google-chrome --profile-directory=pga.cloud https://console.cloud.google.com/compute/instancesEdit/zones/europe-west2-c/instances/instance-1 &
+google-chrome --profile-directory=pga.cloud https://console.cloud.google.com/compute/instancesEdit/zones/europe-west2-c/instances/instance-1 >/dev/null 2>/dev/null &
 
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/greentick.png
+sleep 30
