@@ -927,16 +927,9 @@ server(){
     then
         while true
         do
-            if [ $(date +%S) -lt 10 ] && [ $(( $(date +%M) % 5 )) -eq 0 ]
+            if [ $(date +%S) -lt 10 ] && [ $(( $(date +%M) % 5 )) -eq 0 ] && [ $(date +%H) -gt 6 ] && [ $(date +%H) -lt 10 ]
             then
-                from="home"
-                to="work"
-                mkdir -p ~/servers/mapstime
-                shc mapstime "$from" "$to"; shcw
-                echo -n $(date +%y%m%d-%H%M%S)   >> ~/servers/mapstime/times
-                echo -n ' "'$from'"' '"'$to'" '  >> ~/servers/mapstime/times
-                echo -n "$(cat /tmp/time)"       >> ~/servers/mapstime/times
-                echo >> ~/servers/mapstime/times
+                mapstime
                 sleep 10
             fi
             sleep 1
@@ -944,6 +937,17 @@ server(){
     fi
 
 
+}
+
+mapstime(){
+    from="home"
+    to="work"
+    mkdir -p ~/servers/mapstime
+    shc mapstime "$from" "$to"; shcw
+    echo -n $(date +%y%m%d-%H%M%S)   >> ~/servers/mapstime/times
+    echo -n ' "'$from'"' '"'$to'" '  >> ~/servers/mapstime/times
+    echo -n "$(cat /tmp/time)"       >> ~/servers/mapstime/times
+    echo >> ~/servers/mapstime/times
 }
 
 pgrestore(){
