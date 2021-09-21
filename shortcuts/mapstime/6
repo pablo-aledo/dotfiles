@@ -1,8 +1,10 @@
+source ~/.dotfiles/source/.shell/adapt
+
 export DISPLAY=:1
 
-xdotool key 1; sleep 10
-xdotool key 2; sleep 10
-xdotool key 3; sleep 10
-xdotool key 4; sleep 10
-xdotool key 5; sleep 10
-xdotool key 0; sleep 10
+xdotool key 1 ; shcw mapstime.1
+xdotool key 2 ; shcw mapstime.2
+xdotool key 3 ; shcw mapstime.3
+xdotool key 4 ; shcw mapstime.4
+xdotool key 5 ; shcw mapstime.5
+xdotool key 0 ; shcw mapstime.5

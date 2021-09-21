@@ -3,7 +3,7 @@ export DISPLAY=:1
 [ -e ~/servers/mapstime ] && scrot ~/servers/mapstime/$(date +%y%m%d-%H%M%S).jpg
 
 xdotool mousemove 200 440 && xdotool click 1 && sleep 1
-xdotool mousemove  50 200 && xdotool click 1 && xdotool click 1 && xdotool click 1 && sleep 1
+xdotool mousemove  50 200 && xdotool click 1 && xdotool click 1 && xdotool click 1 && sleep 3
 xdotool key Ctrl+c
 
 xclip -sel clip -o > /tmp/time

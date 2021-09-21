@@ -3,4 +3,4 @@ source ~/.dotfiles/source/.shell/xdotool
 
 mouseover -1 10000 ~/.dotfiles/shortcuts/images/directions.png && xdotool click 1
 
-
+sleep 5

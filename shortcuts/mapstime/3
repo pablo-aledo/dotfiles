@@ -12,3 +12,4 @@ xdotool key Ctrl+v
 sleep 1
 
 xdotool key Return
+sleep 5
