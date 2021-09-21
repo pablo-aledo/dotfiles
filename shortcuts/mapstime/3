@@ -1,0 +1,14 @@
+export DISPLAY=:1
+
+cat /tmp/departure | xclip -sel clip -i
+xdotool key Ctrl+v
+sleep 1
+
+xdotool key Tab
+xdotool key Tab
+
+cat /tmp/arrival | xclip -sel clip -i
+xdotool key Ctrl+v
+sleep 1
+
+xdotool key Return

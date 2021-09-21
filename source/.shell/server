@@ -923,6 +923,27 @@ server(){
         done
     fi
 
+    if [ $1 = "mapstime" ]
+    then
+        while true
+        do
+            if [ $(date +%S) -lt 10 ] && [ $(( $(date +%M) % 5 )) -eq 0 ]
+            then
+                from="Calle Milan 20, Alcorcon, Madrid"
+                to="Ciudad Financiera BBVA, Las Tablas, Madrid"
+                mkdir -p ~/servers/mapstime
+                shc mapstime "$from" "$to"; shcw
+                echo -n $(date +%y%m%d-%H%M%S)   >> ~/servers/mapstime/times
+                echo -n ' "'$from'"' '"'$to'" '  >> ~/servers/mapstime/times
+                echo -n "$(cat /tmp/time)"       >> ~/servers/mapstime/times
+                echo >> ~/servers/mapstime/times
+                sleep 10
+            fi
+            sleep 1
+        done
+    fi
+
+
 }
 
 pgrestore(){

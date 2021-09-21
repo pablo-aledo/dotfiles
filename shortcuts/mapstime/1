@@ -1,0 +1,5 @@
+export DISPLAY=:1
+
+killall chrome chromium google-chrome google-chrome-stable
+xrandr --output VNC-0 --mode 1280x800
+google-chrome maps.google.com >/dev/null 2>/dev/null &

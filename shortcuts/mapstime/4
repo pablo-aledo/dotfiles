@@ -1,0 +1,8 @@
+export DISPLAY=:1
+
+xdotool mousemove 200 440 && xdotool click 1 && sleep 1
+xdotool mousemove  50 200 && xdotool click 1 && xdotool click 1 && xdotool click 1 && sleep 1
+xdotool key Ctrl+c
+
+xclip -sel clip -o > /tmp/time
+
