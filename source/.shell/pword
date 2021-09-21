@@ -12,13 +12,13 @@ pword(){
 	    [ $# -eq 1 ] && PWORD=`cat $PWORD_FILE | grep $1 | cut -d':' -f2`
 	else
 		echo -n 'Password: ' > /dev/stderr
-		read PWORD
+		read -s PWORD
 	fi
 
 	if [ "$PWORD" = "" ]
 	then
 		echo -n 'Password: ' > /dev/stderr
-		read PWORD
+		read -s PWORD
 	fi
 
 	echo $PWORD
