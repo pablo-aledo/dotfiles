@@ -930,7 +930,7 @@ server(){
         sleep 5
         while true
         do
-            if [ $(date +%S) -lt 10 ] && [ $(( $(date +%M) % 5 )) -eq 0 ] && [ $(date +%H) -gt 6 ] && [ $(date +%H) -lt 10 ]
+            if [ $(date +%S) -lt 10 ] && [ $(( $(date +%M) % 5 )) -eq 0 ] && [ $(date +%H) -ge 6 ] && [ $(date +%H) -lt 10 ]
             then
                 mapstime
                 sleep 10
