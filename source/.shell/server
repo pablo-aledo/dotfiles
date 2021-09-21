@@ -929,8 +929,8 @@ server(){
         do
             if [ $(date +%S) -lt 10 ] && [ $(( $(date +%M) % 5 )) -eq 0 ]
             then
-                from="Calle Milan 20, Alcorcon, Madrid"
-                to="Ciudad Financiera BBVA, Las Tablas, Madrid"
+                from="home"
+                to="work"
                 mkdir -p ~/servers/mapstime
                 shc mapstime "$from" "$to"; shcw
                 echo -n $(date +%y%m%d-%H%M%S)   >> ~/servers/mapstime/times
