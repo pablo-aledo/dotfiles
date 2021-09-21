@@ -925,6 +925,7 @@ server(){
 
     if [ $1 = "mapstime" ]
     then
+        which mapstime
         while true
         do
             if [ $(date +%S) -lt 10 ] && [ $(( $(date +%M) % 5 )) -eq 0 ] && [ $(date +%H) -gt 6 ] && [ $(date +%H) -lt 10 ]
