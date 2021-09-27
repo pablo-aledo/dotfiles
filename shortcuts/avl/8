@@ -2,8 +2,6 @@ source ~/.dotfiles/source/.shell/xdotool
 
 export DISPLAY=:1
 
-touch /tmp/lock
-
 while true
 do
     xdotool key ctrl+w
@@ -17,5 +15,3 @@ do
         break
     fi
 done
-
-rm -rf /tmp/lock

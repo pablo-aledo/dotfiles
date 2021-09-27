@@ -1,8 +1,6 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
-touch /tmp/lock4
-
 mouseover 3 10000 ~/.dotfiles/shortcuts/images/norobot2.png && xdotool click 1
 
 touch /tmp/lock4dl
@@ -42,5 +40,3 @@ then
 else
     xdotool key Return
 fi
-
-rm -fr /tmp/lock4

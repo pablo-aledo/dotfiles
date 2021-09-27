@@ -1,5 +1,6 @@
 source ~/.dotfiles/source/.shell/bak
 source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
 
 export DISPLAY=:1
 
@@ -10,16 +11,13 @@ do
 
     xdotool key 1 && sleep 1
     xdotool key 2 && sleep 10
-    xdotool key 3 && sleep 1
-    while [ -e /tmp/lock ]; do sleep 1; done; sleep 5
+    xdotool key 3 && sleep 1; shcw avl.3; sleep 5
 
-    xdotool key 8 && sleep 1
-    while [ -e /tmp/lock ]; do sleep 1; done; sleep 5
+    xdotool key 8 && sleep 1; shcw avl.8; sleep 5
 
     xdotool key 5 && sleep 1
 
-    xdotool key 9 && sleep 1
-    while [ -e /tmp/lock ]; do sleep 1; done; sleep 5
+    xdotool key 9 && sleep 1; shcw avl.9; sleep 5
 
     [ -e /tmp/avl_skip ] && rm -fr /tmp/avl_skip && break
 

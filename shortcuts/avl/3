@@ -1,7 +1,7 @@
+source ~/.dotfiles/source/.shell/adapt
+
 export DISPLAY=:1
 
-
-touch /tmp/lock
 rm -rf ~/Descargas/avmpage.html
 
 xdotool key Ctrl+s
@@ -17,8 +17,7 @@ do
     google-chrome $link >/dev/null 2>/dev/null &
     sleep 15
 
-    xdotool key 4
-    sleep 1; while [ -e /tmp/lock4 ]; do sleep 1; done; sleep 5
+    xdotool key 4; sleep 5; shcw avl.4; sleep 5
 
     count=0
     while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
@@ -53,5 +52,3 @@ do
 done
 
 xdotool key ctrl+w
-
-rm -rf /tmp/lock
