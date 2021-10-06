@@ -3003,6 +3003,13 @@ snippet gaussian
 	x = np.linspace(0, 10, num=11, endpoint=True)
 	y = gaussian(x, 5, 3)
 
+snippet sigmoids
+	def sigmoids(x, x1, x2, sig):
+		return 1/(1 + np.exp(-sig*(x - x1))) - 1/(1 + np.exp(-sig*(x - x2)))
+
+	x = np.linspace(0, 10, num=11, endpoint=True)
+	y = sigmoids(x, 3, 5, 1)
+
 snippet interp
 	x = np.linspace(0, 10, num=11, endpoint=True)
 	xvals = np.linspace(0, 10, num=100, endpoint=True)
