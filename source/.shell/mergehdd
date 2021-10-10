@@ -104,6 +104,7 @@ sync_partial_contents(){
     cat /tmp/spc_duplicated_${name} | wc -l
     echo -e "\e[34m ===== not_sync =====\e[0m"
     cat /tmp/spc_not_sync_${name} | wc -l
+    sleep 10
 }
 
 spc_intersection(){
