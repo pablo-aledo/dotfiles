@@ -41,6 +41,10 @@ jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
 
 alias avl='shc avl; xdotool key 6; sleep 1; shcw'
 alias unstar='shc unstar; xdotool key 6; sleep 1; shcw'
+changeip_loop(){
+    rm -f /tmp/changeip_pause; sleep 5; touch /tmp/changeip_pause
+    sleep $(( 2 * 60 )); sudo killall noip2; sudo noip2
+}
 
 alias k='sudo kubectl'
 pod(){ k get pods | grep -v Terminating | grep -v Evicted | grep -i $1 | cut -d" " -f1 | tail -n1; }
