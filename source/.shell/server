@@ -1094,27 +1094,33 @@ night_avh(){
     DISPLAY=:1 xdotool key 0
     sleep 10
 
+    echo '\e[34m start \e[0m'
+    echo '\e[34m s2count \e[0m'
     shc s2count
     DISPLAY=:1 xdotool key 1
     sleep 1 && shcw
     DISPLAY=:1 xdotool key 0
     sleep 10
 
+    echo '\e[34m s2link \e[0m'
     shc s2link
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
     sleep 10
 
+    echo '\e[34m avl \e[0m'
     shc avl
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
 
+    echo '\e[34m unstar \e[0m'
     shc unstar
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
 
     if [ -e /tmp/ipname ]
     then
+        echo '\e[34m changeip \e[0m'
         shc changeip $(cat /tmp/ipname)
         DISPLAY=:1 xdotool key 6
         sleep 1 && shcw
@@ -1122,7 +1128,7 @@ night_avh(){
         sleep 10
         rm -fr /tmp/ipname
     fi
-
+    echo '\e[34m end \e[0m'
 }
 
 night(){
