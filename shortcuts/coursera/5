@@ -1,8 +1,9 @@
 export DISPLAY=:1
 
-xdotool key ctrl+w
-xdotool key ctrl+g
-xdotool key Escape
+xdotool key ctrl+w; sleep 1
+xdotool key ctrl+w; sleep 1
+xdotool key ctrl+g; sleep 1
+xdotool key Escape; sleep 1
 
 xdotool mousemove 1260 750
 sleep 1

@@ -1,8 +1,8 @@
 export DISPLAY=:1
 
-xdotool key Ctrl+f
-xdotool type "video"
-xdotool key Escape
+xdotool key Ctrl+f; sleep 1
+xdotool type "video:"; sleep 1
+xdotool key Escape; sleep 1
 
 #sleep 1
 

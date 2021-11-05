@@ -19,12 +19,11 @@ sleep 1
 #xdotool key Tab
 #xdotool key Return
 
-xdotool mousemove 50 330
+xdotool mousemove 1100 330
 xdotool click 1
-xdotool key Down
-xdotool key Down
+for a in $(seq 1 5); do xdotool click 5; done
 sleep 1
-mouseover 10 50000 ~/.dotfiles/shortcuts/images/coursera_dl.png
+mouseover -1 50000 ~/.dotfiles/shortcuts/images/coursera_dl.png
 #xdotool mousemove 350 730
 
 sleep 1
