@@ -1,8 +1,9 @@
-rm(){
+Rm(){
 	[ $2 = "-rf" ] && dir=~/.Trash/`date +%s` && mkdir -p $dir && shift && shift && /bin/mv $* $dir && return
 	[ $2 = "-f" ]  && dir=~/.Trash/`date +%s` && mkdir -p $dir && shift && shift && /bin/mv $* $dir && return
 	/bin/rm --one-file-system -i $*
 }
+alias rm=Rm
 
 dd(){
 	command="sudo dd"
