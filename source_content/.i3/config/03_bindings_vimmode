@@ -1,0 +1,17 @@
+mode "vim" {
+        bindsym h exec xdotool key Left
+        bindsym j exec xdotool key Down
+        bindsym k exec xdotool key Up
+        bindsym l exec xdotool key Right
+
+        bindsym J exec xdotool key Page_Down
+        bindsym K exec xdotool key Page_Up
+
+        # back to normal: Enter or Escape
+        bindsym Return mode "default"
+        bindsym $mod+Return mode "default"
+        bindsym Escape mode "default"
+        bindsym $mod+i mode "default"
+}
+
+bindsym $mod+i mode "vim"
