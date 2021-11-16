@@ -42,7 +42,7 @@ jdebug="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000"
 alias avl='shc avl; xdotool key 6; sleep 1; shcw'
 alias unstar='shc unstar; xdotool key 6; sleep 1; shcw'
 changeip_loop(){
-    tmux ls
+    tmux ls | grep -v avxmail | grep -v night | grep -v vnc | grep -v rates | grep -v rssmail | grep -v space | grep -v trape
     rm -f /tmp/changeip_pause; sleep 5; touch /tmp/changeip_pause
     sleep $(( 2 * 60 )); sudo killall noip2; sudo noip2
 }
