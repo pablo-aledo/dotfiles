@@ -19,11 +19,16 @@ bar(){
 
     setterm -cursor off
     max=$1
+    maxcmd=$1
     scale=10
     it=0
 
+    [ "$(echo $max | grep '^[0-9]*$')" != "" ] && fixedmax=true || fixedmax=false
+
     cat | while read line
     do
+        [ $fixedmax = false ] && max=$(zsh -c "$maxcmd" 2>/dev/null)
+        [ "$(echo $max | grep '^[0-9]*$')" = "" ] && max=1
         perc=$(( $line*100/$max ))
         [ "$line" != "$oldline" ] && it=$(( $it + 1 ))
         oldline=$line
