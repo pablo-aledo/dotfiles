@@ -22,7 +22,7 @@ do
     count=0
     while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
     do
-        sleep 10
+        sleep 1
         count=$(( $count + 1 ))
         [ $count -eq 20 ] && break
     done
