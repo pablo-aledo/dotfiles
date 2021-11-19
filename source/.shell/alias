@@ -139,8 +139,8 @@ alias wl4dl='watch -tn1 "find /tmp/ -maxdepth 1 -name lock4dl -mmin +1"'
 alias wavline='watch -tn1 "cat /tmp/avl_line"'
 
 ws2files(){
-    watch -t -n1 'tail -n$(( $(stty size | cut -d" " -f1) - 5 )) /tmp/s2files'
+    watch -t -n1 'termsize=$(stty size | awk "{print \$1 - 1 , \$2 - 1}"); tail -n$(echo $termsize | cut -d" " -f1) /tmp/s2files | cut -c -$(echo $termsize | cut -d" " -f2)'
 }
 ws2link(){
-    watch -t -n1 'tail -n$(( $(stty size | cut -d" " -f1) - 5 )) /tmp/s2link'
+    watch -t -n1 'termsize=$(stty size | awk "{print \$1 - 1 , \$2 - 1}"); tail -n$(echo $termsize | cut -d" " -f1) /tmp/s2link | cut -c -$(echo $termsize | cut -d" " -f2)'
 }
