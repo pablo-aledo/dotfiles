@@ -137,3 +137,10 @@ mgrep files $* | cut -d/ -f8 | sort | uniq | while read line; do echo "$(mgrep f
 
 alias wl4dl='watch -tn1 "find /tmp/ -maxdepth 1 -name lock4dl -mmin +1"'
 alias wavline='watch -tn1 "cat /tmp/avl_line"'
+
+ws2files(){
+    watch -t -n1 'tail -n$(stty size | cut -d" " -f1) /tmp/s2files'
+}
+ws2link(){
+    watch -t -n1 'tail -n$(stty size | cut -d" " -f1) /tmp/s2link'
+}
