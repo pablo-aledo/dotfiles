@@ -41,4 +41,5 @@ Some things that you might find intriguing:
 * [Some useful functions to work with aws](source/.shell/aws)
 * [A safe version of rm and dd (you should have this :-P)](source/.shell/rmsafe)
 * [A collection of Dockerfiles](pkg/Docker) and [a way to automate their launch](source/.shell/docker)
+* [Some snippets for vim](link/.vim/snippets)
 
