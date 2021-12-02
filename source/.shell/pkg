@@ -24,7 +24,8 @@ distr(){
 		-e "s/Ubuntu 18\.04\.. LTS \\\\n \\\\l/Ubuntu_18_04/g" \
 		-e "s/Linux Mint 17 Qiana \\\\n \\\\l/Mint_17/g" \
 		-e "s/Debian GNU\/Linux 8 \\\\n \\\\l/Debian_8/g" \
-		-e "s/Kali GNU\/Linux Rolling \\\\n \\\\l/Kali_rolling/g"
+		-e "s/Kali GNU\/Linux Rolling \\\\n \\\\l/Kali_rolling/g" \
+		-e "s/Arch.*/Arch/g"
 }
 
 apt_download(){

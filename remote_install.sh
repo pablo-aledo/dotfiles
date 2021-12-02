@@ -3,6 +3,8 @@
 cd ~
 wget https://raw.githubusercontent.com/pablo-aledo/dotfiles/master/source/.shell/pkg -O .pkg
 
+echo '[ "$(distr)" = "Arch" ] && sudo pacman -S --noconfirm which' >> .pkg # requires superuser
+
 echo 'pkg update'        >> .pkg # requires superuser
 echo 'pkg install zsh'   >> .pkg # requires superuser
 echo 'pkg install git'   >> .pkg # requires superuser
