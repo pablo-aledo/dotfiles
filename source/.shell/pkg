@@ -28,6 +28,12 @@ distr(){
 		-e "s/Arch.*/Arch/g"
 }
 
+pre_install(){
+
+    [ "$(distr)" = "Arch" ] && sudo pacman -S --noconfirm which
+
+}
+
 apt_download(){
 	sudo apt-get clean
 	#sudo apt-get install --download-only $list
