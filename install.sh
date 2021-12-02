@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ROOT=$(dirname $(readlink -f $0))
+ROOT=$(dirname $(readlink -f -- $0))
 HOME=$(cd; pwd)
 
 backup(){

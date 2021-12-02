@@ -30,7 +30,11 @@ distr(){
 
 pre_install(){
 
-    [ "$(distr)" = "Arch" ] && sudo pacman -S --noconfirm which
+    if [ "$(distr)" = "Arch" ]
+    then
+        sudo pacman -S --noconfirm which
+        sudo pacman -S --noconfirm glibc
+    fi
 
 }
 
