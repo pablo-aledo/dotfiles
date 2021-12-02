@@ -86,7 +86,7 @@ then
 fi
 
 if ( [ $cmd = "install" ]  && `envpkg apt-get` ) then sudo apt-get install -y --force-yes $list; return; fi
-if ( [ $cmd = "install" ]  && `envpkg yay`     ) then yay -Ss $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg yay`     ) then yay -S $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg pacman`  ) then sudo pacman -S --noconfirm $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg emerge`  ) then sudo emerge $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg yum`     ) then sudo yum -y install $list; return; fi
