@@ -7,5 +7,5 @@ sudo pacman -S --noconfirm pacman
 cd /tmp
 git clone https://aur.archlinux.org/yay.git
 cd yay
-makepkg -si
+makepkg -si --noconfirm
 yay --save --nocleanmenu --nodiffmenu
