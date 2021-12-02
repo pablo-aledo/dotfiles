@@ -32,6 +32,8 @@ pre_install(){
 
     if [ "$(distr)" = "Arch" ]
     then
+        sudo pacman -Syy
+        sudo pacman -S --noconfirm archlinux-keyring
         sudo pacman -S --noconfirm which
         sudo pacman -S --noconfirm glibc
     fi
