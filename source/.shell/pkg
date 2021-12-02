@@ -162,6 +162,8 @@ if ( [ $cmd = "update" ]   && `envpkg opkg`    ) then opkg update; return; fi
 if ( [ $cmd = "update" ]   && `envpkg usm`     ) then usm -u all; return; fi
 if ( [ $cmd = "update" ]   && `envpkg apk`     ) then apk update; return; fi
 
+if ( [ $cmd = "Update" ]   && `envpkg pacman`  ) then sudo pacman -Syu; return; fi
+
 if ( [ $cmd = "clean" ]    && `envpkg apt-get` ) then sudo apt-get clean; return; fi
 if ( [ $cmd = "clean" ]    && `envpkg pacman`  ) then sudo pacman -Sc; return; fi
 if ( [ $cmd = "clean" ]    && `envpkg yum`     ) then sudo yum clean; return; fi
