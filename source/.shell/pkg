@@ -84,6 +84,7 @@ then
 fi
 
 if ( [ $cmd = "install" ]  && `envpkg apt-get` ) then sudo apt-get install -y --force-yes $list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg yay`     ) then yay -Ss $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg pacman`  ) then sudo pacman -S --noconfirm $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg emerge`  ) then sudo emerge $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg yum`     ) then sudo yum -y install $list; return; fi
@@ -102,6 +103,7 @@ if ( [ $cmd = "install" ]  && `envpkg apk`     ) then apk add $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg snap`    ) then sudo snap install $list; return; fi
 
 if ( [ $cmd = "remove" ]   && `envpkg apt-get` ) then sudo apt-get remove -y $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg yay`     ) then yay -Rs $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg pacman`  ) then sudo pacman -Rs --noconfirm $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg emerge`  ) then sudo emerge --depclean $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg yum`     ) then sudo yum --depclean $list; return; fi
@@ -117,6 +119,7 @@ if ( [ $cmd = "remove" ]   && `envpkg opkg`    ) then opkg remove $list; return;
 if ( [ $cmd = "remove" ]   && `envpkg apk`     ) then apk del $list; return; fi
 
 if ( [ $cmd = "search" ]   && `envpkg apt-get` ) then apt-cache search $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg yay`     ) then yay -Si $list; return; fi
 if ( [ $cmd = "search" ]   && `envpkg pacman`  ) then pacman -Ss $list; return; fi
 if ( [ $cmd = "search" ]   && `envpkg emerge`  ) then emerge -S $list; return; fi
 if ( [ $cmd = "search" ]   && `envpkg yum`     ) then yum search $list; return; fi
@@ -143,6 +146,7 @@ if ( [ $cmd = "download" ] && `envpkg slax`    ) then slax download $list; retur
 if ( [ $cmd = "download" ] && `envpkg usm`     ) then usm -g $list; return; fi
 
 if ( [ $cmd = "update" ]   && `envpkg apt-get` ) then sudo apt-get update; return; fi
+if ( [ $cmd = "update" ]   && `envpkg yay`     ) then yay -Sy; return; fi
 if ( [ $cmd = "update" ]   && `envpkg pacman`  ) then sudo pacman -Syy; return; fi
 if ( [ $cmd = "update" ]   && `envpkg emerge`  ) then sudo layman -f; return; fi
 if ( [ $cmd = "update" ]   && `envpkg yum`     ) then sudo yum check-update; return; fi
