@@ -1,4 +1,4 @@
-sudo pcmanfm -S --noconfirm libevent ncurses
+sudo pacman -S --noconfirm libevent ncurses gcc make
 
 VERSION=2.1
 sudo mkdir /usr/src/tmux; sudo chmod 777 /usr/src/tmux; cd /usr/src/tmux
