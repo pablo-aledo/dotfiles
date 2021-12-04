@@ -1,4 +1,4 @@
-sudo pacman -S --noconfirm i3-wm feh suckless-tools i3status pcmanfm xorg-xauth xorg-xkbcomp
+sudo pacman -S --noconfirm i3-wm feh i3status pcmanfm xorg-xauth xorg-xkbcomp
 
 mkdir ~/.vnc
 [ -e ~/.vnc/passwd ] || cp passwd ~/.vnc/
