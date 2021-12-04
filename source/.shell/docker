@@ -189,6 +189,12 @@ case $1 in
     wget --no-check-certificate http://cs.stanford.edu/people/karpathy/neuraltalk2/checkpoint_v1_cpu.zip
     unzip checkpoint_v1_cpu.zip
     ;;
+(neko)
+    cd /tmp
+    git clone https://github.com/m1k1o/neko.git
+    cd neko
+    docker-compose up
+    ;;
 (audio2text)
     git clone https://github.com/traceypooh/audio2text.git /tmp/audio2text
     cd /tmp/audio2text
