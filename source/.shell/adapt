@@ -174,7 +174,6 @@ adapt_archserver(){
     pkg install ffmpeg
     pkg install youtube-dl
     pkg install docker
-	pkg install rsstail
 	pkg install sshfs
     pkg install binutils
     pkg install bc
