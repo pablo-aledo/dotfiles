@@ -162,6 +162,10 @@ adapt_awsserver(){
 adapt_archserver(){
     myshell zsh
 
+    pkg Update
+
+    pkg install tmux
+    pkg install novnc4
     pkg install terminator
     pkg install pcmanfm
     pkg install ranger
@@ -181,7 +185,11 @@ adapt_archserver(){
     pkg install detox
     pkg install pdftotext
     pkg install attr
+    pkg install fzf z
     pkg install parallel
+
+    pkg install yay
+    pkg install google-chrome
 
 	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
 	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
