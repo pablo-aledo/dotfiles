@@ -1558,6 +1558,8 @@ learning.doc2txt(){
 	filename=$1
 	destination=$2
 
+    [ "$filename" = "-" ] && cat > $destination
+
 	[ -e "$destination" ] && return
 	[ ${filename[1]} = '/' ] || filename="$PWD"/"$filename"
 	[ "$destination" = "" ] && destination=$tmp/summary
@@ -1909,8 +1911,8 @@ def distance(h1,h2):
 distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)) }
 
 try:
-    for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
-        print '%s' % (key)
+    for key, value in sorted(distances.iteritems(), key=lambda kv: kv[1]):
+        print('%s' % (key))
     sys.stdout.flush()
 except IOError as e:
         pass
