@@ -1911,7 +1911,7 @@ def distance(h1,h2):
 distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)) }
 
 try:
-    for key, value in sorted(distances.iteritems(), key=lambda kv: kv[1]):
+    for key, value in sorted(distances.items(), key=lambda kv: kv[1]):
         print('%s' % (key))
     sys.stdout.flush()
 except IOError as e:
@@ -2094,7 +2094,7 @@ def distance(h1,h2):
 distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)) }
 
 try:
-    for key, value in sorted(distances.iteritems(), key=lambda (k,v): (v,k)):
+    for key, value in sorted(distances.items(), key=lambda kv: kv[1]):
         print '%s' % (key)
     sys.stdout.flush()
 except IOError as e:
