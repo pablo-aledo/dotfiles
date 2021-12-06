@@ -188,6 +188,11 @@ adapt_archserver(){
     pkg install fzf z
     pkg install parallel
 
+    pkg install binutils
+    pkg install python-pip
+    pip install numpy
+    pip install scipy
+
     pkg install yay
     pkg install google-chrome
 
