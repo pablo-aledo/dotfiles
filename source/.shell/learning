@@ -2066,7 +2066,10 @@ import sys, errno
 import numpy as np
 import math
 import scipy.spatial
-from sets import Set
+try:
+    from sets import Set
+except ImportError:
+    Set = set
 
 learning_dir='$learning_dir'
 
