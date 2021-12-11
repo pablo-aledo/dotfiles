@@ -162,9 +162,10 @@ adapt_awsserver(){
 adapt_archserver(){
     myshell zsh
 
+    pkg install docker
+
     pkg Update
 
-    pkg install docker
     pkg install vim
     pkg install tmux
     pkg install novnc4
@@ -188,6 +189,8 @@ adapt_archserver(){
     pkg install attr
     pkg install fzf z
     pkg install parallel
+    pkg install xorg-xrandr
+    pkg install net-tools
 
     pkg install binutils
     pkg install python-pip

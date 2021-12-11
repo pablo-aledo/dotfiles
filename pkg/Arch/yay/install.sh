@@ -4,6 +4,7 @@ sudo pacman -S --noconfirm make
 sudo pacman -S --noconfirm binutils
 sudo pacman -S --noconfirm gcc
 sudo pacman -S --noconfirm pacman
+#sudo pacman -S --noconfirm base-devel
 cd /tmp
 git clone https://aur.archlinux.org/yay.git
 cd yay
