@@ -6,7 +6,7 @@ for a in $(seq 1 3); do xdotool key Down; done
 mouseover -1 1000 ~/.dotfiles/shortcuts/images/listo.png && xdotool click 1
 sleep 1
 
-xdotool mousemove 900 500; xdotool click 1
-for a in $(seq 1 40); do xdotool key Down; done
+#xdotool mousemove 900 500; xdotool click 1
+#for a in $(seq 1 40); do xdotool key Down; done
 mouseover -1 1000 ~/.dotfiles/shortcuts/images/guardar.png && xdotool click 1
 sleep 20
