@@ -184,7 +184,7 @@ avhome_get_new_titles(){
     then
         ssh -i $AVH_PROXY_PEM -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q --no-check-certificate https://avxhm.se/ebooks/$1 -O -" > dl
     else
-        wget -q --no-check-certificate https://avxhm.se/ebooks/$1 -O dl
+        wget -q --no-check-certificate https://avxhm.se/ebooks/$1 -O dl 2>/dev/null
     fi
 
     cat dl | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|' > ${1}_new
