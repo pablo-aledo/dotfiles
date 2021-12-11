@@ -1858,7 +1858,10 @@ learning.distance(){
 import numpy as np
 import math
 import scipy.spatial
-from sets import Set
+try:
+    from sets import Set
+except ImportError:
+    Set = set
 h1=$1
 h2=$2
 if( '$learning_distance' == 'jaccard' ):
@@ -1886,7 +1889,10 @@ import sys, errno
 import numpy as np
 import math
 import scipy.spatial
-from sets import Set
+try:
+    from sets import Set
+except ImportError:
+    Set = set
 
 learning_dir='$learning_dir'
 
@@ -1926,7 +1932,10 @@ import sys, errno
 import numpy as np
 import math
 import scipy.spatial
-from sets import Set
+try:
+    from sets import Set
+except ImportError:
+    Set = set
 
 learning_dir='$learning_dir'
 
@@ -1973,7 +1982,10 @@ import sys, errno
 import numpy as np
 import math
 import scipy.spatial
-from sets import Set
+try:
+    from sets import Set
+except ImportError:
+    Set = set
 
 learning_dir='$learning_dir'
 
