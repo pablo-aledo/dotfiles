@@ -1,4 +1,4 @@
-for lang in c c++ rust go scala cuda opencl crystal nim javascript haskell java julia lua v
+for lang in c c++ rust go scala cuda opencl crystal nim javascript haskell java julia lua v python
 do
     mkdir $lang
     cd $lang
