@@ -12,7 +12,7 @@ cd ..
 
 mkdir html
 cd tasks
-ls | grep -v tasks | while read line
+ls | while read line
 do
     cp "$line" "../html/$line.html"
 done
