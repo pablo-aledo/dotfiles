@@ -144,3 +144,7 @@ ws2files(){
 ws2link(){
     watch -t -n1 'termsize=$(stty size | awk "{print \$1 - 1 , \$2 - 1}"); tail -n$(echo $termsize | cut -d" " -f1) /tmp/s2link | cut -c -$(echo $termsize | cut -d" " -f2)'
 }
+
+ytdlmp4(){
+    youtube-dl -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4' $*
+}
