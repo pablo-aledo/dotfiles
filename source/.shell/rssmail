@@ -48,7 +48,7 @@ rssmail_server(){
 	mkdir -p $RSSMAIL
 
 	cd 
-	rssfeeds=`cat ~/.newsbeuter/urls | sed -e 's/^/-u "/g' -e 's/$/"/g' | paste -d' ' -s`
+	rssfeeds=`cat ~/.newsbeuter/urls | grep -v '^#' | sed -e 's/^/-u "/g' -e 's/$/"/g' | paste -d' ' -s`
 	continue_until_title=0
 	echo rsstail $rssfeeds -i10 -zP -ld | bash | while read line
 	do
