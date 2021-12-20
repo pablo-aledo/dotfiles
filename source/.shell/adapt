@@ -86,7 +86,7 @@ adapt_awsserver(){
 	sudo chmod +x /usr/bin/google-chrome-nosound
 }
 
-adapt_awsserver(){
+adapt_ubuntuserver(){
     myshell zsh
 
     pkg install tmux
@@ -276,6 +276,21 @@ adapt_awsminiserver(){
     mutt -F ~/.mutt/muttrc_0
     mutt -F ~/.mutt/muttrc_1
     mutt -F ~/.mutt/muttrc_2
+}
+
+adapt_awsserver(){
+
+    if [ "$(distr)" = "Arch" ]
+    then
+        adapt_archserver
+        return
+    fi
+
+    if [ "$(distr)" = "Ubuntu_16_04" ]
+    then
+        adapt_ubuntuserver
+        return
+    fi
 }
 
 adapt_shc_theme(){
