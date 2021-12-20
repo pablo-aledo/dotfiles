@@ -199,6 +199,7 @@ adapt_archserver(){
 
     pkg install yay
     pkg install google-chrome
+    pkg install rsstail
 
 	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
 	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
