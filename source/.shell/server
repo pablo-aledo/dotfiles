@@ -778,11 +778,11 @@ server(){
 
     if [ $1 = "space" ]
     then
-        [ $# -eq 1 ] && drive=sda1
+        [ $# -eq 1 ] && drive='/$'
         [ $# -eq 2 ] && drive=$2
         while true
         do
-            space=$( dfh | grep "$drive " | awk '{print $5}' | sed 's/%//g' )
+            space=$( dfh | grep "$drive" | awk '{print $5}' | sed 's/%//g' )
             echo "\e[32m space \e[0m $space %"
             [ $space -gt 80 ] && echo "\e[31m Low space \e[0m" && notify_space $space && notify_space_full $drive
             sleep 10
@@ -791,11 +791,11 @@ server(){
 
     if [ $1 = "space2" ]
     then
-        [ $# -eq 1 ] && drive=sda1
+        [ $# -eq 1 ] && drive='/$'
         [ $# -eq 2 ] && drive=$2
         while true
         do
-            space=$( df -BG | grep "$drive " | awk '{print $4}' | sed 's/G//g' )
+            space=$( df -BG | grep "$drive" | awk '{print $4}' | sed 's/G//g' )
             echo "\e[32m space \e[0m $space G"
             [ $space -lt 60 ] && echo "\e[31m Low space \e[0m" && notify_space_2 $space && notify_space_full_2 $drive
             sleep 10
