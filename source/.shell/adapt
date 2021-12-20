@@ -167,6 +167,7 @@ adapt_archserver(){
     pkg Update
 
     pkg install vim
+    pkg install w3m
     pkg install tmux
     pkg install novnc4
     pkg install terminator
