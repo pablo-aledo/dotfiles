@@ -192,6 +192,8 @@ adapt_archserver(){
     pkg install parallel
     pkg install xorg-xrandr
     pkg install net-tools
+    pkg install xorg-xhost
+    pkg install rsync
 
     pkg install binutils
     pkg install python-pip
