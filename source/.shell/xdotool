@@ -82,6 +82,7 @@ scrop(){
 }
 
 scrop2(){
+    rm -fr $1.png
     scrot $1.png
     xdotool key Alt+5
     gthumb $1.png
