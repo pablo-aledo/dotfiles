@@ -47,6 +47,7 @@ mouseover(){
         [ -e /tmp/mouseover_break ] && rm -fr /tmp/mouseover_break && break
         [ ! "$key" = "" ] && xdotool key $key && sleep $delay
 
+        rm -fr /tmp/screen.png
 		scrot $beepflag /tmp/screen.png
 
 		found=0
@@ -74,12 +75,13 @@ mouseover(){
 	return 0
 }
 
-scrop(){
-    scrot -o $1.png
-    xdotool key Alt+5
-    docker_app gthumb $1.png
-    xdotool key Alt+4
-}
+#scrop(){
+    #rm -fr $1.png
+    #scrot -o $1.png
+    #xdotool key Alt+5
+    #docker_app gthumb $1.png
+    #xdotool key Alt+4
+#}
 
 scrop2(){
     rm -fr $1.png
