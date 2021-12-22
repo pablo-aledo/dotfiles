@@ -1,0 +1,45 @@
+MAILCMD=mutt
+MAIL_PROXY_IP=34.142.123.102
+MAIL_PROXY_USER=pga_cloud_23
+
+mutt_proxy(){
+    subst=$(echo $* | sed "s|/home/$USER|/home/$MAIL_PROXY_USER|g")
+    cat | ssh $MAIL_PROXY_USER@$MAIL_PROXY_IP "mutt $subst"
+}
+
+mutt_queue(){
+    [ -e ~/servers/mail_queue ] || mkdir -p ~/servers/mail_queue/{to_send,sent}
+    while [ $# -gt 0 ]
+    do
+        [ "$1" = "-F" ] && shift && shift && continue
+        [ "$1" = "-s" ] && subject=$2 && shift && shift && continue
+        [ "$(echo "$1" | grep '@')" != "" ] && to=$1 && shift && continue
+        shift
+    done
+    echo "to: $to"
+    echo "subject: $subject"
+
+    base_name=$(date +%s)
+    name=$base_name
+    n=0
+    while [ -e ~/servers/mail_queue/to_send/$name ]
+    do
+        name=$base_name_$n
+        n=$(( $n + 1 ))
+        echo $name
+    done
+
+    echo $to >> ~/servers/mail_queue/to_send/$name
+    echo $subject >> ~/servers/mail_queue/to_send/$name
+    cat >> ~/servers/mail_queue/to_send/$name
+}
+
+send_queued(){
+    comm -13 <( ls ~/servers/mail_queue/sent/ | sort ) <( ls ~/servers/mail_queue/to_send/ | sort ) | while read line
+    do
+             to=$(cat ~/servers/mail_queue/to_send/$line | head -n1)
+        subject=$(cat ~/servers/mail_queue/to_send/$line | head -n2 | tail -n1)
+        tail -n+3 ~/servers/mail_queue/sent/$line | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$subject" -- $to
+    done
+}
+
