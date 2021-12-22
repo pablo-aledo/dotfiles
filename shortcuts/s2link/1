@@ -9,7 +9,7 @@ sleep 1
 xdotool key Alt+w
 killall chrome chromium google-chrome google-chrome-stable
 sleep 1
-google-chrome --profile-directory=Default mail.google.com &
+google-chrome --profile-directory=Default mail.google.com 2>/dev/null >/dev/null &
 sleep 25
 mouseover -1 1000 ~/.dotfiles/shortcuts/images/gmail_lens.png && xdotool mousemove_relative 100 0 && xdotool click 1
 xdotool type "$(cat /tmp/query)"
