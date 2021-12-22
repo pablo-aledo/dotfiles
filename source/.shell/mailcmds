@@ -3,8 +3,14 @@ MAIL_PROXY_IP=34.142.123.102
 MAIL_PROXY_USER=pga_cloud_23
 
 mutt_proxy(){
-    subst=$(echo $* | sed "s|/home/$USER|/home/$MAIL_PROXY_USER|g")
-    cat | ssh $MAIL_PROXY_USER@$MAIL_PROXY_IP "mutt $subst"
+
+    args=""
+    for a in $*
+    do
+        arg=$(echo $a | sed "s|/home/$USER|/home/$MAIL_PROXY_USER|g")
+        args="$args \"$arg\""
+    done
+    cat | ssh $MAIL_PROXY_USER@$MAIL_PROXY_IP "mutt $args"
 }
 
 mutt_queue(){
