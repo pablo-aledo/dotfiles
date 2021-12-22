@@ -30,7 +30,7 @@ echo $file > /tmp/file
 
 if [ "$file" != "" ] && ( [ -e ~"/Descargas/$file" ] || [ -e ~"/Descargas_aux/$file" ] )
 then
-    xdotool mousemove 930 670 && xdotool click 1
+    xdotool mousemove 930 660 && xdotool click 1
 
     echo "Title: $(cat /tmp/title)" >> /tmp/already_downloaded
     ls -lh ~/Descargas/ | sed 's/^[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([^ ]*\) *[^ ]* *[^ ]* *[^ ]* *\(.*\)/\1 \2/g' | grep -F $file >> /tmp/already_downloaded
