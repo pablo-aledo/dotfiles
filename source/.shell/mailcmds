@@ -40,6 +40,7 @@ send_queued(){
              to=$(cat ~/servers/mail_queue/to_send/$line | head -n1)
         subject=$(cat ~/servers/mail_queue/to_send/$line | head -n2 | tail -n1)
         tail -n+3 ~/servers/mail_queue/sent/$line | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$subject" -- $to
+        [ $? -eq 0 ] && touch ~/servers/mail_queue/sent/$line
     done
 }
 
