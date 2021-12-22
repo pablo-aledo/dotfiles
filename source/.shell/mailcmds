@@ -1,6 +1,6 @@
 MAILCMD=mutt
-MAIL_PROXY_IP=34.142.123.102
-MAIL_PROXY_USER=pga_cloud_23
+MAIL_PROXY_IP=
+MAIL_PROXY_USER=
 
 mutt_proxy(){
 
@@ -43,8 +43,8 @@ mutt_queue(){
 send_queued(){
     comm -13 <( ls ~/servers/mail_queue/sent/ | sort ) <( ls ~/servers/mail_queue/to_send/ | sort ) | while read line
     do
-             to=$(cat ~/servers/mail_queue/to_send/$line | head -n1)
-        subject=$(cat ~/servers/mail_queue/to_send/$line | head -n2 | tail -n1)
+             to="$(cat ~/servers/mail_queue/to_send/$line | head -n1)"
+        subject="$(cat ~/servers/mail_queue/to_send/$line | head -n2 | tail -n1)"
         tail -n+3 ~/servers/mail_queue/sent/$line | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$subject" -- $to
         [ $? -eq 0 ] && touch ~/servers/mail_queue/sent/$line
     done
