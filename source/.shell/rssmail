@@ -69,7 +69,7 @@ rssmail_server(){
             title_outbox=$(echo $title_ml | sed -e 's|/||g')
 			echo "\e[31m $title_ml \e[0m $link "
             [ "$outbox" != "" ] && echo $link > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
-			(echo $link) | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
+			(echo $link) | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
 			sleep 1
 		fi
 
@@ -89,7 +89,7 @@ rssmail_server(){
 			echo "\e[31m $title_ml \e[0m $link "
 			echo "$title_ml -> $link" >> $RSSMAIL/map
             [ "$outbox" != "" ] && (echo $link; echo $description | w3m -T text/html -dump) > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
-			(echo $link; echo $description) | mutt -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
+			(echo $link; echo $description) | $MAILCMD -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
 			sleep 1
 		fi
 

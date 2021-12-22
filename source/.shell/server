@@ -1004,7 +1004,7 @@ kmail_log(){
     do
         address=$(echo $mail | awk '{print $1}' )
         regex=$(echo $mail | awk '{print $2}' )
-        [ "$(echo $podname | egrep $regex)" != "" ] && echo "\e[31m Sending logs to $mail \e[0m" && cat /tmp/kmail_log | /usr/bin/mutt -s "Pod $podname has crashed" -- $mail
+        [ "$(echo $podname | egrep $regex)" != "" ] && echo "\e[31m Sending logs to $mail \e[0m" && cat /tmp/kmail_log | $MAILCMD -s "Pod $podname has crashed" -- $mail
     done
 }
 
@@ -1018,19 +1018,19 @@ notify_rates(){
     diff_rss=$(( $actual_n_rss - $previous_n_rss ))
     w3m_lines=$(w3m -dump avxhm.se | wc -l)
 
-    echo "Low notification rates on server $diff_avh $diff_rss $w3m_lines" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW NOTIFICATION RATES ON SERVER" -- pablo.aledo@gmail.com
+    echo "Low notification rates on server $diff_avh $diff_rss $w3m_lines" | $MAILCMD -F ~/.mutt/muttrc_0 -s "LOW NOTIFICATION RATES ON SERVER" -- pablo.aledo@gmail.com
 }
 
 notify_space(){
-    echo "Low space on server: $1 %" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW SPACE ON SERVER" -- pablo.aledo@gmail.com
+    echo "Low space on server: $1 %" | $MAILCMD -F ~/.mutt/muttrc_0 -s "LOW SPACE ON SERVER" -- pablo.aledo@gmail.com
 }
 
 notify_space_2(){
-    echo "Low space on server: $1 G" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "LOW SPACE ON SERVER" -- pablo.aledo@gmail.com
+    echo "Low space on server: $1 G" | $MAILCMD -F ~/.mutt/muttrc_0 -s "LOW SPACE ON SERVER" -- pablo.aledo@gmail.com
 }
 
 notify_sasl(){
-    echo "sasl authentication error" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "SASL AUTH ERROR" -- pablo.aledo@gmail.com
+    echo "sasl authentication error" | $MAILCMD -F ~/.mutt/muttrc_0 -s "SASL AUTH ERROR" -- pablo.aledo@gmail.com
 }
 
 notify_space_full(){
@@ -1039,7 +1039,7 @@ notify_space_full(){
         space=$( dfh | grep "$1 " | awk '{print $5}' | sed 's/%//g' )
         echo "\e[33m space_full \e[0m $space %"
         [ $space -gt 97 ] && echo "\e[31m DISK IS FULL \e[0m"
-        [ $space -gt 97 ] && echo "Disk is full" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
+        [ $space -gt 97 ] && echo "Disk is full" | $MAILCMD -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
         [ $space -gt 97 ] && sleep $(( 1 * 60 * 60 ))
         [ $space -lt 80 ] && return
         sleep 10
@@ -1052,7 +1052,7 @@ notify_space_full_2(){
         space=$( df -BG | grep "$1 " | awk '{print $4}' | sed 's/G//g' )
         echo "\e[33m space_full \e[0m $space G"
         [ $space -lt 5 ] && echo "\e[31m DISK IS FULL \e[0m"
-        [ $space -lt 5 ] && echo "Disk is full" | /usr/bin/mutt -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
+        [ $space -lt 5 ] && echo "Disk is full" | $MAILCMD -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
         [ $space -lt 5 ] && sleep $(( 1 * 60 * 60 ))
         [ $space -gt 60 ] && return
         sleep 10
