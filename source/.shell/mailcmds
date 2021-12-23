@@ -40,12 +40,47 @@ mutt_queue(){
     cat >> ~/servers/mail_queue/to_send/$name
 }
 
+mutt_queue_2(){
+    [ -e ~/servers/mail_queue ] || mkdir -p ~/servers/mail_queue/{to_send,sent}
+
+    args=""
+    for a in $*
+    do
+        arg=$(echo $a | sed "s|/home/$USER|~|g")
+        arg="$(escape "$arg")"
+        [ "$(echo $arg | grep ' ')" != "" ] && args="$args \"$arg\""
+        [ "$(echo $arg | grep ' ')" != "" ] || args="$args $arg"
+    done
+
+    base_name=$(date +%s)
+    name=$base_name
+    n=0
+    while [ -e ~/servers/mail_queue/to_send/$name ]
+    do
+        name=$base_name_$n
+        n=$(( $n + 1 ))
+        echo $name
+    done
+
+    echo $args >> ~/servers/mail_queue/to_send/$name
+    cat >> ~/servers/mail_queue/to_send/$name
+}
+
 send_queued(){
     comm -13 <( ls ~/servers/mail_queue/sent/ | sort ) <( ls ~/servers/mail_queue/to_send/ | sort ) | while read line
     do
              to="$(cat ~/servers/mail_queue/to_send/$line | head -n1)"
         subject="$(cat ~/servers/mail_queue/to_send/$line | head -n2 | tail -n1)"
-        tail -n+3 ~/servers/mail_queue/sent/$line | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$subject" -- $to
+        tail -n+3 ~/servers/mail_queue/to_send/$line | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$subject" -- $to
+        [ $? -eq 0 ] && touch ~/servers/mail_queue/sent/$line
+    done
+}
+
+send_queued_2(){
+    comm -13 <( ls ~/servers/mail_queue/sent/ | sort ) <( ls ~/servers/mail_queue/to_send/ | sort ) | while read line
+    do
+        head -n1 ~/servers/mail_queue/to_send/$line | sed 's/^.*-s "\([^"]*\)".*/\1/g'
+        tail -n+2 ~/servers/mail_queue/to_send/$line | bash -c "mutt $(head -n1 ~/servers/mail_queue/to_send/$line)"
         [ $? -eq 0 ] && touch ~/servers/mail_queue/sent/$line
     done
 }
