@@ -32,9 +32,8 @@ mutt_queue(){
     n=0
     while [ -e ~/servers/mail_queue/to_send/$name ]
     do
-        name=$base_name_$n
+        name=${base_name}_${n}
         n=$(( $n + 1 ))
-        echo $name
     done
 
     echo $to >> ~/servers/mail_queue/to_send/$name
@@ -59,7 +58,7 @@ mutt_queue_2(){
     n=0
     while [ -e ~/servers/mail_queue/to_send/$name ]
     do
-        name=$base_name_$n
+        name=${base_name}_${n}
         n=$(( $n + 1 ))
         echo $name
     done
