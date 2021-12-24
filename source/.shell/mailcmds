@@ -1,6 +1,6 @@
 MAILCMD=mutt
-MAIL_PROXY_IP=
-MAIL_PROXY_USER=
+MAIL_PROXY_IP=localhost
+MAIL_PROXY_USER=$USER
 
 mutt_proxy(){
 
