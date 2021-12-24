@@ -25,7 +25,7 @@ mutt_queue(){
     for a in $*
     do
         arg=$(echo -- $a | sed -e "s|/home/$USER|~|g" -e 's/^-- //g')
-        arg="$(escape "$arg")"
+	    arg="$(echo -- $arg | sed -e 's/\"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g' -e 's/^-- //g')"
         [ "$(echo $arg | grep ' ')" != "" ] && args="$args \"$arg\""
         [ "$(echo $arg | grep ' ')" != "" ] || args="$args $arg"
     done
@@ -40,7 +40,7 @@ mutt_queue(){
         echo $name
     done
 
-    echo $args >> ~/servers/mail_queue/to_send/$name
+    echo "$args" >> ~/servers/mail_queue/to_send/$name
     cat >> ~/servers/mail_queue/to_send/$name
 }
 
