@@ -20,32 +20,6 @@ mutt_proxy(){
 
 mutt_queue(){
     [ -e ~/servers/mail_queue ] || mkdir -p ~/servers/mail_queue/{to_send,sent}
-    while [ $# -gt 0 ]
-    do
-        [ "$1" = "-F" ] && shift && shift && continue
-        [ "$1" = "-s" ] && subject=$2 && shift && shift && continue
-        [ "$(echo "$1" | grep '@')" != "" ] && to=$1 && shift && continue
-        shift
-    done
-    echo "to: $to"
-    echo "subject: $subject"
-
-    base_name=$(date +%s)
-    name=$base_name
-    n=0
-    while [ -e ~/servers/mail_queue/to_send/$name ]
-    do
-        name=${base_name}_${n}
-        n=$(( $n + 1 ))
-    done
-
-    echo $to >> ~/servers/mail_queue/to_send/$name
-    echo $subject >> ~/servers/mail_queue/to_send/$name
-    cat >> ~/servers/mail_queue/to_send/$name
-}
-
-mutt_queue_2(){
-    [ -e ~/servers/mail_queue ] || mkdir -p ~/servers/mail_queue/{to_send,sent}
 
     args=""
     for a in $*
@@ -70,18 +44,7 @@ mutt_queue_2(){
     cat >> ~/servers/mail_queue/to_send/$name
 }
 
-send_queued(){
-    comm -13 <( ls ~/servers/mail_queue/sent/ | sort ) <( ls ~/servers/mail_queue/to_send/ | sort ) | while read line
-    do
-             to="$(cat ~/servers/mail_queue/to_send/$line | head -n1)"
-        subject="$(cat ~/servers/mail_queue/to_send/$line | head -n2 | tail -n1)"
-        tail -n+3 ~/servers/mail_queue/to_send/$line | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$subject" -- $to
-        [ $? -eq 0 ] && touch ~/servers/mail_queue/sent/$line
-        [ "$SEND_QUEUE_WAIT" = "true" ] && sleep $(( $RANDOM % 5 ))
-    done
-}
-
-send_queued_2(){
+send_queue(){
     comm -13 <( ls ~/servers/mail_queue/sent/ | sort ) <( ls ~/servers/mail_queue/to_send/ | sort ) | while read line
     do
         head -n1 ~/servers/mail_queue/to_send/$line | sed 's/^.*-s "\([^"]*\)".*/\1/g'
@@ -91,4 +54,42 @@ send_queued_2(){
         [ "$SEND_QUEUE_WAIT" = "true" ] && sleep $(( $RANDOM % 5 ))
     done
 }
+
+# mutt_queue_2(){
+#     [ -e ~/servers/mail_queue ] || mkdir -p ~/servers/mail_queue/{to_send,sent}
+#     while [ $# -gt 0 ]
+#     do
+#         [ "$1" = "-F" ] && shift && shift && continue
+#         [ "$1" = "-s" ] && subject=$2 && shift && shift && continue
+#         [ "$(echo "$1" | grep '@')" != "" ] && to=$1 && shift && continue
+#         shift
+#     done
+#     echo "to: $to"
+#     echo "subject: $subject"
+#
+#     base_name=$(date +%s)
+#     name=$base_name
+#     n=0
+#     while [ -e ~/servers/mail_queue/to_send/$name ]
+#     do
+#         name=${base_name}_${n}
+#         n=$(( $n + 1 ))
+#     done
+#
+#     echo $to >> ~/servers/mail_queue/to_send/$name
+#     echo $subject >> ~/servers/mail_queue/to_send/$name
+#     cat >> ~/servers/mail_queue/to_send/$name
+# }
+
+# mail_queue_2(){
+#     comm -13 <( ls ~/servers/mail_queue/sent/ | sort ) <( ls ~/servers/mail_queue/to_send/ | sort ) | while read line
+#     do
+#              to="$(cat ~/servers/mail_queue/to_send/$line | head -n1)"
+#         subject="$(cat ~/servers/mail_queue/to_send/$line | head -n2 | tail -n1)"
+#         tail -n+3 ~/servers/mail_queue/to_send/$line | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$subject" -- $to
+#         [ $? -eq 0 ] && touch ~/servers/mail_queue/sent/$line
+#         [ "$SEND_QUEUE_WAIT" = "true" ] && sleep $(( $RANDOM % 5 ))
+#     done
+# }
+
 
