@@ -1,6 +1,6 @@
-MAILCMD=mutt_proxy
-MAIL_PROXY_IP=localhost
-MAIL_PROXY_USER=pga_Cloud_23
+MAILCMD=mutt
+MAIL_PROXY_IP=
+MAIL_PROXY_USER=
 
 mutt_proxy(){
 
