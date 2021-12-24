@@ -3,6 +3,7 @@ MAIL_PROXY_IP=localhost
 MAIL_PROXY_USER=$USER
 
 [ -e ~/.mailcmds_config ] && source ~/.mailcmds_config
+source ~/.dotfiles/source/.shell/escape
 
 mutt_proxy(){
 
