@@ -3,7 +3,6 @@ MAIL_PROXY_IP=localhost
 MAIL_PROXY_USER=$USER
 
 [ -e ~/.mailcmds_config ] && source ~/.mailcmds_config
-source ~/.dotfiles/source/.shell/escape
 
 mutt_proxy(){
 
@@ -11,7 +10,7 @@ mutt_proxy(){
     for a in $*
     do
         arg=$(echo $a | sed "s|/home/$USER|/home/$MAIL_PROXY_USER|g")
-        arg="$(escape "$arg")"
+	    arg="$(echo -- $arg | sed -e 's/\"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g' -e 's/^-- //g')"
         args="$args \"$arg\""
     done
     #cat | sed -e 's/\"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g' | ssh $MAIL_PROXY_USER@$MAIL_PROXY_IP "mutt $args"
