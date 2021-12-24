@@ -2,6 +2,8 @@ MAILCMD=mutt
 MAIL_PROXY_IP=localhost
 MAIL_PROXY_USER=$USER
 
+[ -e ~/.mailcmds_config ] && source ~/.mailcmds_config
+
 mutt_proxy(){
 
     args=""
@@ -74,6 +76,7 @@ send_queued(){
         subject="$(cat ~/servers/mail_queue/to_send/$line | head -n2 | tail -n1)"
         tail -n+3 ~/servers/mail_queue/to_send/$line | mutt -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$subject" -- $to
         [ $? -eq 0 ] && touch ~/servers/mail_queue/sent/$line
+        [ "$SEND_QUEUE_WAIT" = "true" ] && sleep $(( $RANDOM % 5 ))
     done
 }
 
@@ -81,8 +84,10 @@ send_queued_2(){
     comm -13 <( ls ~/servers/mail_queue/sent/ | sort ) <( ls ~/servers/mail_queue/to_send/ | sort ) | while read line
     do
         head -n1 ~/servers/mail_queue/to_send/$line | sed 's/^.*-s "\([^"]*\)".*/\1/g'
-        tail -n+2 ~/servers/mail_queue/to_send/$line | bash -c "mutt $(head -n1 ~/servers/mail_queue/to_send/$line)"
+        true  && tail -n+2 ~/servers/mail_queue/to_send/$line | bash -c "mutt $(head -n1 ~/servers/mail_queue/to_send/$line)"
+        false && tail -n+2 ~/servers/mail_queue/to_send/$line | bash -c "source ~/.dotfiles/source/.shell/mailcmds; mutt_proxy $(head -n1 ~/servers/mail_queue/to_send/$line)"
         [ $? -eq 0 ] && touch ~/servers/mail_queue/sent/$line
+        [ "$SEND_QUEUE_WAIT" = "true" ] && sleep $(( $RANDOM % 5 ))
     done
 }
 
