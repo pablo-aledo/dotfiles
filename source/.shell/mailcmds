@@ -11,7 +11,8 @@ mutt_proxy(){
         arg="$(escape "$arg")"
         args="$args \"$arg\""
     done
-    cat | sed -e 's/\"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g' | ssh $MAIL_PROXY_USER@$MAIL_PROXY_IP "mutt $args"
+    #cat | sed -e 's/\"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g' | ssh $MAIL_PROXY_USER@$MAIL_PROXY_IP "mutt $args"
+    cat | ssh $MAIL_PROXY_USER@$MAIL_PROXY_IP "mutt $args"
 }
 
 mutt_queue(){
