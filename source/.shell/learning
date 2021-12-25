@@ -391,7 +391,7 @@ with open('$tmp/words') as f:
 dic = dict(pairs)
 
 for i in range(0,1000):
-    print dic.get(i) or 0
+    print(dic.get(i) or 0)
 " | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/\]/g' -e 's/,/, /g'
 }
 
@@ -422,7 +422,7 @@ with open('$tmp/words') as f:
 dic = dict(pairs)
 
 for i in range(0,1000):
-    print dic.get(i) or 0
+    print(dic.get(i) or 0)
 " | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/\]/g' -e 's/,/, /g'
 
 }
@@ -444,7 +444,7 @@ with open('$tmp/words') as f:
 dic = dict(pairs)
 
 for i in range(0,1000):
-    print dic.get(i) or 0
+    print(dic.get(i) or 0)
 " | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/\]/g' -e 's/,/, /g'
 }
 
@@ -475,7 +475,7 @@ with open('$tmp/words') as f:
 dic = dict(pairs)
 
 for i in range(0,1000):
-    print dic.get(i) or 0
+    print(dic.get(i) or 0)
 " | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/\]/g' -e 's/,/, /g'
 }
 
@@ -497,7 +497,7 @@ with open('$tmp/words') as f:
 dic = dict(pairs)
 
 for i in range(0,1000):
-    print dic.get(i) or 0
+    print(dic.get(i) or 0)
 " | paste -d',' -s | sed -e 's/^/[/g' -e 's/$/\]/g' -e 's/,/, /g'
 }
 
@@ -520,7 +520,7 @@ for b in sliding:
     #hash=(ord(b[0])*255*255+ord(b[1])*255+ord(b[2]))%1000
     hash=int(hashlib.md5(b).hexdigest(),16)%1000
     out[hash] += 1
-print out
+print(out)
 " | sed 's/  /, /g' | paste -d' ' -s
 }
 
@@ -695,7 +695,7 @@ gzip_distance(){
     s2=$( cat $tmp/s2 | gzip -f | wc -c )
     s12=$( cat $tmp/s1 $tmp/s2 | gzip | wc -c )
 
-   python -c "print float($s12 - min($s1, $s2))/float(max($s1,$s2))"
+   python -c "print(float($s12 - min($s1, $s2))/float(max($s1,$s2)))"
 }
 
 jaccard_distance(){
@@ -709,7 +709,7 @@ jaccard_distance(){
     si=$( comm -12 $tmp/k1 $tmp/k2 | wc -l )
     su=$( cat      $tmp/k1 $tmp/k2 | sort | uniq | wc -l )
 
-    python -c "print 1.0-float($si)/float($su+0.00001)"
+    python -c "print(1.0-float($si)/float($su+0.00001))"
 }
 
 closest_classifier.transform(){
@@ -896,7 +896,7 @@ for keyword in keywords:
 
     for word in words:
         if(re.match(regex,word)):
-            print topic
+            print(topic)
             exit()
 "
 }
@@ -1141,10 +1141,10 @@ for round in range(1,len(doc_2_vect)-(n_components-1)):
     min_doc=min(doc_2_cost, key=doc_2_cost.get)
     doc_2_rank[min_doc] = round
 
-#print doc_2_rank
+#print(doc_2_rank)
 
 for a in sorted(doc_2_rank, key=doc_2_rank.get):
-    print a
+    print(a)
 "
 }
 
@@ -1425,7 +1425,7 @@ normalized=$1;
 normalized=np.subtract(normalized, average)
 normalized=np.matmul(pca, normalized)
 normalized=np.divide( normalized, np.sqrt(eigenv) )
-print normalized
+print(normalized)
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -d' ' -s
@@ -1438,7 +1438,7 @@ learning_dir='$learning_dir'
 indices=np.loadtxt(learning_dir+'/pca/indices')
 X=$1;
 normalized=[ X[i] for i in indices ]
-print normalized
+print(normalized)
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -d' ' -s
@@ -1460,7 +1460,7 @@ normalized=$1;
 normalized=np.subtract(normalized, average)
 normalized=np.matmul(pca, normalized)
 normalized=np.divide( normalized, np.sqrt(eigenv) )
-print normalized
+print(normalized)
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -d' ' -s
@@ -1475,7 +1475,7 @@ from sklearn.externals import joblib
 learning_dir='$learning_dir'
 pca=joblib.load(learning_dir + '/pca/pca.pkl')
 x=[$1];
-print pca.transform(x)[0]
+print(pca.transform(x)[0])
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
@@ -1490,7 +1490,7 @@ from sklearn.externals import joblib
 learning_dir='$learning_dir'
 tsne=joblib.load(learning_dir + '/pca/tsne.pkl')
 x=[$1];
-print tsne.transform(x)[0]
+print(tsne.transform(x)[0])
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
@@ -1505,7 +1505,7 @@ from sklearn.externals import joblib
 learning_dir='$learning_dir'
 mds=joblib.load(learning_dir + '/pca/mds.pkl')
 x=[$1];
-print mds.transform(x)[0]
+print(mds.transform(x)[0])
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
@@ -1524,7 +1524,7 @@ pca=joblib.load(learning_dir + '/pca/pca.pkl')
 scaler=joblib.load(learning_dir + '/pca/scaler.pkl')
 x=[$1]
 x=scaler.transform(x)
-print pca.transform(x)[0]
+print(pca.transform(x)[0])
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -s
@@ -1540,7 +1540,7 @@ from sklearn.externals import joblib
 learning_dir='$learning_dir'
 clf=joblib.load(learning_dir + '/pca/lda.pkl')
 x=[$1];
-print clf.transform(x)[0]
+print(clf.transform(x)[0])
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
@@ -1593,7 +1593,7 @@ normalized=[ i*$learning_scale + 0.5 for i in normalized ]
 normalized=[ max(min(i,1.0),0.0) for i in normalized ]
 chars=\"0123456789\"
 rvect=[ chars[int((i)*(len(chars)-1))] for i in normalized ]
-print ''.join(rvect)
+print(''.join(rvect))
 "
 }
 
@@ -1606,7 +1606,7 @@ normalized=[ i/(max(normalized)+0.00001) for i in normalized ]
 normalized=[ max(min(i,1.0),0.0) for i in normalized ]
 chars=\"0123456789\"
 rvect=[ chars[int((i)*(len(chars)))] for i in normalized ]
-print ''.join(rvect)
+print(''.join(rvect))
 "
 }
 
@@ -1780,7 +1780,7 @@ for i in range(0, len(X_ini)):
 
     diff = sum( map( lambda x: x != 0, np.subtract(Y, Y_ini) ) )
 
-    print diff, map_documents[i]
+    print(diff, map_documents[i])
 "
 }
 
@@ -1810,7 +1810,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.externals import joblib
 clf=joblib.load(learning_dir + '/classifier/classifier.pkl')
-print (' '.join( map( str, clf.predict_proba(x)[0] )))
+print(' '.join( map( str, clf.predict_proba(x)[0] )))
 "
 }
 
@@ -1867,13 +1867,13 @@ h2=$2
 if( '$learning_distance' == 'jaccard' ):
     h1_set = Set( [ i for i in range(0, len(h1)) if h1[i] != 0 ] )
     h2_set = Set( [ i for i in range(0, len(h2)) if h2[i] != 0 ] )
-    print 1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001)
+    print(1.0-float(len( h1_set & h2_set ))/float(len( h1_set | h2_set ) + 0.00001))
 if( '$learning_distance' == 'euclidean' ):
-    print math.sqrt(np.sum(np.square(np.subtract(h1, h2))))
+    print(math.sqrt(np.sum(np.square(np.subtract(h1, h2)))))
 if( '$learning_distance' == 'cosine' ):
-    print scipy.spatial.distance.cosine(h1,h2)
+    print(scipy.spatial.distance.cosine(h1,h2))
 if( '$learning_distance' == 'scipy_jaccard' ):
-    print scipy.spatial.distance.jaccard(h1, h2)
+    print(scipy.spatial.distance.jaccard(h1, h2))
 "
 }
 
@@ -1962,15 +1962,15 @@ for i in range(0, len(names)):
     for j in range(i+1, len(names)):
         dist = distance(vectors[i],vectors[j])
         mydict[frozenset({names[i], names[j]})] = dist
-        # print 1000*dist, names[i], names[j]
+        # print(1000*dist, names[i], names[j])
 
 std=sorted(mydict,key=mydict.get)
 
 for a in std:
     if len(a) == 2:
         name1, name2 = a
-        print name1
-        print name2
+        print(name1)
+        print(name2)
         print
 "
 }
@@ -2011,7 +2011,7 @@ for i in range(0, len(names)):
     for j in range(i+1, len(names)):
         if len(vectors[i]) == len(vectors[0]) and len(vectors[j]) == len(vectors[0]):
             dist = distance(vectors[i],vectors[j])
-            print 1000*dist, names[i], names[j]
+            print(1000*dist, names[i], names[j])
 
 "
 }
@@ -2041,10 +2041,10 @@ for i in range(0, 1000):
     if( float(ncovered)/float(n) > optimum['cost'] and ncovered == len(vectors[0])):
         optimum['names'] = nssel
         optimum['cost'] = float(ncovered)/float(n)
-        print optimum
+        print(optimum)
 
 for a in optimum['names']:
-    print a
+    print(a)
 "
 }
 
@@ -2107,7 +2107,7 @@ distances = { names[i]:distance(vectors[i],$h1) for i in range(0, len(names)) }
 
 try:
     for key, value in sorted(distances.items(), key=lambda kv: kv[1]):
-        print '%s' % (key)
+        print('%s' % (key))
     sys.stdout.flush()
 except IOError as e:
         pass
@@ -2855,7 +2855,7 @@ from sklearn.externals import joblib
 learning_dir='$learning_dir'
 pca=joblib.load(learning_dir + '/rnn/pca.pkl')
 x=[$state];
-print pca.transform(x)[0]
+print(pca.transform(x)[0])
 " | sed \
     -e 's/ \+/ /g' \
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g'
