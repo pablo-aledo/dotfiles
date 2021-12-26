@@ -1,4 +1,4 @@
-bars()(
+bars(){
 
 	[ -e output ] && [ "`cat output | grep produceSubstances`" ] || echo -e '\e[31mproduceSubstances \e[32mrunDiffusionStep \e[33mrunDecayStep \e[34mcellMovementAndDuplication \e[35mrunDiffusionClusterStep \e[36mgetEnergy \e[37mgetCriterion\e[0m \e[31mextra\e[0m' > output
 
@@ -39,22 +39,22 @@ bars()(
 	[ $zoom -ne 1 ] && echo -ne "\e[0m (x$zoom)\e[0m" >> output
 	echo >> output
 
-)
+}
 
-all_bars()(
+all_bars(){
 	rm -fr output
 	for a in run_clust.e*
-	do
+	do 
 		bars $a
 	done
-)
+}
 
-show_bars()(
+show_bars(){
 
 	clear
 	setterm -cursor off
 	while true
-	do
+	do 
 		aws_get 'run_clust.e*' >/dev/null 2>/dev/null
 		if [ "`find -name 'run_clust.e*'`" ]
 		then
@@ -70,16 +70,18 @@ show_bars()(
 		fi
 	       	sleep 1
        	done
-)
+}
 
-show_opt()(
+show_opt(){
 	clear
 	while true
-	do
+	do 
 		aws_get 'cell_clustering.optrpt' >/dev/null 2>/dev/null
 		if [ "`find -name 'cell_clustering.optrpt'`" ]
 		then
 			vim cell_clustering.optrpt
 		fi
        	done
-)
+}
+
+

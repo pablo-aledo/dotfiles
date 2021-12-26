@@ -1,29 +1,29 @@
-internetuc()(
+internetuc(){
 	MAC[1]='b4:b5:2f:c0:e7:97'; IP[1]='193.144.187.244';
-
+	
 	mymac=`ifconfig | grep eth0 | awk '{print $5}'`
 	for n in `seq 0 10`
 	do
 		[[ ${MAC[$n]} == $mymac ]] && myip=${IP[$n]}
 	done
-
+	
 	echo -e "\e[31m $mymac $myip \e[0m"
 	#sudo ifconfig eht0 down
 	#sudo ifconfig eth0 hw ether $mymac
 	#sudo ifconfig eht0 up
-
+	
 	sudo stop network-manager
 	sudo ifconfig eth0 $myip
 	sudo route add default gw 193.144.187.1
-
+	
 	echo nameserver 193.144.193.11 | sudo tee    /etc/resolv.conf
 	echo nameserver 193.144.193.22 | sudo tee -a /etc/resolv.conf
 	echo search teisa.unican.es    | sudo tee -a /etc/resolv.conf
-
+	
 	ping -c 4 www.google.com
-)
+}
 
-internetmq()(
+internetmq(){
 	MAC[1]='38:60:77:bd:f1:d7'; IP[1]='10.46.37.105';
 
 	mymac=`ifconfig | grep eth0 | awk '{print $5}'`
@@ -31,19 +31,19 @@ internetmq()(
 	do
 		[[ ${MAC[$n]} == $mymac ]] && myip=${IP[$n]}
 	done
-
+	
 	echo -e "\e[31m $mymac $myip \e[0m"
 	#sudo ifconfig eht0 down
 	#sudo ifconfig eth0 hw ether $mymac
 	#sudo ifconfig eht0 up
 
-
+	
 	sudo stop network-manager
 	sudo ifconfig eth0 $myip
 	sudo route add default gw 10.46.32.1
-
+	
 	echo nameserver 8.8.8.8        | sudo tee    /etc/resolv.conf
 	echo nameserver 8.8.4.4        | sudo tee -a /etc/resolv.conf
-
+	
 	ping -c 4 www.google.com
-)
+}

@@ -1,4 +1,4 @@
-llvm_cfg()(
+llvm_cfg(){
 	filetype=`file $1`
 	if [ "`echo $filetype | grep 'C source'`" ]
 	then
@@ -22,7 +22,7 @@ llvm_cfg()(
 			rm -f $a
 		done
 	fi
-)
+}
 
 #llvm_bc(){
 	#filetype=`file $1`
@@ -40,7 +40,7 @@ llvm_cfg()(
 	#fi
 #}
 
-llvm_bc () (
+llvm_bc () {
 	filetype=`file $1` 
 	if [ "`echo $filetype | grep 'C source'`" ]
 	then
@@ -52,5 +52,5 @@ llvm_bc () (
 		llvm-dis $1 -o /tmp/file.ll
 		gvim /tmp/file.ll
 	fi
-)
+}
 

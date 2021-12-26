@@ -1,4 +1,4 @@
-github_arl()(
+github_arl(){
 
 [ $# -gt 0 ] && topic=$1
 [ $# -gt 0 ] || topic=Python
@@ -28,9 +28,9 @@ do
 	wget ${link} -O ${topic}/${name}
 	[ `stat -c %s ${topic}/${name}` -gt $maxsize ] && rm -fr ${topic}/${name}
 done
-)
+}
 
-arl_list_2()(
+arl_list_2(){
 
 [ $# -gt 0 ] && topic=$1
 [ $# -gt 0 ] || topic=Python
@@ -58,9 +58,9 @@ do
 	wget ${link} -O ${topic}/${name}
 	[ `stat -c %s ${topic}/${name}` -gt $maxsize ] && rm -fr ${topic}/${name}
 done
-)
+}
 
-github_topic()(
+github_topic(){
 [ $# -gt 0 ] && topic=$1
 [ $# -gt 0 ] || topic=security
 [ $# -gt 1 ] && limit=$2
@@ -93,9 +93,9 @@ do
 	[ `stat -c %s ${topic}/${name}` -gt $maxsize ] && rm -fr ${topic}/${name}
 done
 
-)
+}
 
-github_collection()(
+github_collection(){
 [ $# -gt 0 ] && topic=$1
 [ $# -gt 0 ] || topic=security
 [ $# -gt 1 ] && limit=$2
@@ -121,9 +121,9 @@ do
 	[ `stat -c %s ${topic}/${name}` -gt $maxsize ] && rm -fr ${topic}/${name}
 done
 
-)
+}
 
-github_search()(
+github_search(){
 [ $# -gt 0 ] && topic=$1
 [ $# -gt 0 ] || topic=security
 [ $# -gt 1 ] && limit=$2
@@ -149,9 +149,9 @@ do
 	[ `stat -c %s ${topic}/${name}` -gt $maxsize ] && rm -fr ${topic}/${name}
 done
 
-)
+}
 
-dotfiles_repos()(
+dotfiles_repos(){
 [ $# -gt 1 ] && limit=$2
 [ $# -gt 1 ] || limit=9999
 [ $# -gt 2 ] && maxsize=$3
@@ -173,4 +173,4 @@ do
 	[ `stat -c %s ${name}` -gt $maxsize ] && rm -fr ${name}
 done
 
-)
+}

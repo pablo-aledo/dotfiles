@@ -1,7 +1,7 @@
 TREE_DST=$HOME/root
 TREE_SRC=$HOME/Alejandria
 
-lnk_hierarchy()(
+lnk_hierarchy(){
     args=$(echo $* | awk '{$NF=""; print}')
     name=$(echo $* | awk '{print $NF}')
 
@@ -42,9 +42,9 @@ lnk_hierarchy()(
 
     ln -s $TREE_SRC/$name $current_path
 
-)
+}
 
-lnk_map()(
+lnk_map(){
     cat $1 | while read line
     do
         title=$(echo $line | sed 's/\(.*\) -> \(.*\)/\1/g' )
@@ -54,13 +54,13 @@ lnk_map()(
         echo ln -s \"\$SRC/$title\" \"$class/\"
         echo
     done
-)
+}
 
-lnk_hierarchy_missing()(
+lnk_hierarchy_missing(){
     comm -13 <(find -L $TREE_DST | while read line; do echo $(basename $line); done | sort | uniq) <(ls $TREE_SRC | sort | uniq)
-)
+}
 
-lnk_hierarchy_fill_scale()(
+lnk_hierarchy_fill_scale(){
     [ "$1" = "" ] && scale=10000
     [ "$1" = "" ] || scale=$1
     find $TREE_DST -type l | while read line
@@ -79,9 +79,9 @@ lnk_hierarchy_fill_scale()(
             dd if=/dev/zero bs=1 count=$size of="$(echo $file | sed "s|$TREE_SRC|$TREE_DST|g")" 2>/dev/null
         done
     done
-)
+}
 
-lnk_hierarchy_fill_scale_2()(
+lnk_hierarchy_fill_scale_2(){
     [ "$1" = "" ] && scale=10000
     [ "$1" = "" ] || scale=$1
     find $TREE_DST -type l | while read line
@@ -96,9 +96,9 @@ lnk_hierarchy_fill_scale_2()(
         [ -e $line ] && continue
         dd if=/dev/zero bs=1 count=$size of="$line" 2>/dev/null
     done
-)
+}
 
-lnk_hierarchy_fill_scale_3()(
+lnk_hierarchy_fill_scale_3(){
     [ "$1" = "" ] && scale=10000
     [ "$1" = "" ] || scale=$1
     find -type l | while read line
@@ -142,9 +142,9 @@ lnk_hierarchy_fill_scale_3()(
             [ -e "$line" ] || dd if=/dev/zero bs=1 count=$size > "$line" 2>/dev/null
         fi
     done
-)
+}
 
-lnk_hierarchy_final()(
+lnk_hierarchy_final(){
     find -type l | while read line
     do
         echo "\e[34m $line \e[0m"
@@ -176,4 +176,4 @@ lnk_hierarchy_final()(
             [ -e "$line" ] || ln -s "$target" "$line"
         fi
     done
-)
+}

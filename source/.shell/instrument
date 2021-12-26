@@ -1,20 +1,20 @@
 INSTRUMENTATION_FILE=~/instrument
 
-instrument()(
+instrument(){
 	prog=`unset -f $1 2>/dev/null; which $1`
 	sudo mv $prog $prog.old
 	echo '#!/bin/bash' | sudo tee $prog
 	echo "(echo \"cd \$PWD; $prog \$*\") >> $INSTRUMENTATION_FILE" | sudo tee -a $prog
 	echo "echo $prog.old \$@ | bash" | sudo tee -a $prog
 	sudo chmod +x $prog
-)
+}
 
-uninstrument()(
+uninstrument(){
 	prog=`unset -f $1 2>/dev/null; which $1`
 	sudo mv $prog.old `echo $prog | sed 's/\.old//g'`
-)
+}
 
-instrument2 () (
+instrument2 () {
 	prog=`unset -f $1 2>/dev/null; which $1` 
 	sudo mv $prog $prog.old
 	echo '#!/bin/bash' | sudo tee $prog
@@ -22,4 +22,4 @@ instrument2 () (
 	echo "(echo \"cd \$PWD; $prog \$args\") >> $INSTRUMENTATION_FILE" | sudo tee -a $prog
 	echo "$prog.old \$args" | sudo tee -a $prog
 	sudo chmod +x $prog
-)
+}

@@ -1,4 +1,4 @@
-splitfile()(
+splitfile(){
     filesrc=$1
     part=$2
     parts=$3
@@ -13,4 +13,4 @@ splitfile()(
         [ $(( $i % $parts )) -eq $part ] && echo $line
         i=$(( $i + 1 ))
     done > $filedst
-)
+}

@@ -4,7 +4,7 @@ MAIL_PROXY_USER=$USER
 
 [ -e ~/.mailcmds_config ] && source ~/.mailcmds_config
 
-mutt_proxy()(
+mutt_proxy(){
 
     args=""
     for a in $*
@@ -15,9 +15,9 @@ mutt_proxy()(
     done
     #cat | sed -e 's/\"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g' | ssh $MAIL_PROXY_USER@$MAIL_PROXY_IP "mutt $args"
     cat | ssh $MAIL_PROXY_USER@$MAIL_PROXY_IP "mutt $args"
-)
+}
 
-mutt_queue()(
+mutt_queue(){
     [ -e ~/servers/mail_queue ] || mkdir -p ~/servers/mail_queue/{to_send,sent}
 
     args=""
@@ -41,9 +41,9 @@ mutt_queue()(
 
     echo "$args" >> ~/servers/mail_queue/to_send/$name
     cat >> ~/servers/mail_queue/to_send/$name
-)
+}
 
-send_queue()(
+send_queue(){
     comm -13 <( ls ~/servers/mail_queue/sent/ | sort ) <( ls ~/servers/mail_queue/to_send/ | sort ) | while read line
     do
         head -n1 ~/servers/mail_queue/to_send/$line | sed 's/^.*-s "\([^"]*\)".*/\1/g'
@@ -52,7 +52,7 @@ send_queue()(
         [ $? -eq 0 ] && touch ~/servers/mail_queue/sent/$line
         [ "$SEND_QUEUE_WAIT" = "true" ] && sleep $(( $RANDOM % 5 ))
     done
-)
+}
 
 # mutt_queue_2(){
 #     [ -e ~/servers/mail_queue ] || mkdir -p ~/servers/mail_queue/{to_send,sent}
@@ -90,3 +90,5 @@ send_queue()(
 #         [ "$SEND_QUEUE_WAIT" = "true" ] && sleep $(( $RANDOM % 5 ))
 #     done
 # }
+
+

@@ -16,13 +16,13 @@ pf_file(){
 	if [ -e $key_folder/keyfile ]
 	then
 		sudo cryptsetup luksAddKey /media/DATA/$1/img.img $key_folder/keyfile
-	else
+	else 
 		if [ -d $key_folder ]
 		then
 			sudo dd if=/dev/urandom of=$key_folder/keyfile bs=1024 count=4
 			sudo chmod 0400 $key_folder/keyfile
 			sudo cryptsetup luksAddKey /media/DATA/$1/img.img $key_folder/keyfile
-		else
+		else 
 			echo "Folder $key_folder not accessible"
 		fi
 	fi
@@ -94,7 +94,7 @@ pf_replace_home(){
 two_factor_server(){
 	sudo apt-get install libpam-google-authenticator
 	(echo y; echo y; echo y; echo n; echo y) | google-authenticator
-	echo 'auth required pam_google_authenticator.so' | sudo tee -a /etc/pam.d/sshd
+	echo 'auth required pam_google_authenticator.so' | sudo tee -a /etc/pam.d/sshd 
 	sudo sed -i 's/@include common-auth/#@include common-auth/g' /etc/pam.d/sshd
 	echo 'AuthenticationMethods publickey,keyboard-interactive' | sudo tee -a /etc/ssh/sshd_config
 	sudo sed -i 's/ChallengeResponseAuthentication no/ChallengeResponseAuthentication yes/g' /etc/ssh/sshd_config

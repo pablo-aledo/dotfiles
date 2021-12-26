@@ -1,5 +1,5 @@
 ttyplot_vmstat(){
-    vmstat -n 1 | gawk '{ print 100-int($(NF-2)); fflush(); }' | ttyplot
+    vmstat -n 1 | gawk '{ print 100-int($(NF-2)); fflush(); }' | ttyplot 
 }
 
 ttyplot_cpu(){
@@ -7,7 +7,7 @@ ttyplot_cpu(){
 }
 
 ttyplot_memory(){
-    sar -r 1 | gawk '{ print $5; fflush(); }' | ttyplot -s 100 -t "memory used %" -u "%"
+    sar -r 1 | gawk '{ print $5; fflush(); }' | ttyplot -s 100 -t "memory used %" -u "%" 
 }
 
 ttyplot_ping(){

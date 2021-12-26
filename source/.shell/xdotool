@@ -1,6 +1,6 @@
 export mouseover_debug=false
 
-mouseover()(
+mouseover(){
 
 	[ -e /usr/bin/xdotool ] || pkg install xdotool
 	[ -e /usr/bin/png2pat ] || pkg install xautomation
@@ -73,7 +73,7 @@ mouseover()(
 	echo $((xfind + ximg / 2)) $((yfind + yimg / 2)) > /tmp/mousepos
 	xdotool mousemove $((xfind + ximg / 2)) $((yfind + yimg / 2))
 	return 0
-)
+}
 
 #scrop(){
     #rm -fr $1.png
@@ -83,10 +83,10 @@ mouseover()(
     #xdotool key Alt+4
 #}
 
-scrop2()(
+scrop2(){
     rm -fr $1.png
     scrot $1.png
     xdotool key Alt+5
     gthumb $1.png
     xdotool key Alt+4
-)
+}

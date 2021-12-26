@@ -6,13 +6,13 @@ permissions(){
 		[ -f $1 ] && sudo chown $USER:$USER "$1" && sudo chmod 0644 "$1"
 	else
 		sudo find -type d | while read line
-		do
+		do 
 			sudo chown $USER:$USER "$line"
 			sudo chmod 0755 "$line"
 		done
 
 		sudo find -type f | while read line
-		do
+		do 
 			sudo chown $USER:$USER "$line"
 			sudo chmod 0644 "$line"
 		done

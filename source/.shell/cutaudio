@@ -1,4 +1,4 @@
-cutaudio()(
+cutaudio(){
 	m1=`echo $2 | cut -d':' -f1`
 	s1=`echo $2 | cut -d':' -f2`
 	m2=`echo $3 | cut -d':' -f1`
@@ -7,4 +7,4 @@ cutaudio()(
 	t2=$(($m2*60+$s2))
 	d=$(($t2-$t1))
 	ffmpeg -ss $t1 -t $d -i $1 $1.cut.mp3
-)
+}

@@ -16,4 +16,5 @@ decrypt(){
 	else
 		openssl aes-256-cbc -d -in $1 -out $(echo $1 | sed 's/\.enc$//g')
 	fi
+	
 }

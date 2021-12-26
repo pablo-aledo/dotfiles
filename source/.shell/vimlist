@@ -1,4 +1,4 @@
-vimlist()(
+vimlist(){
     oldpwd=$PWD
 
     command="e"
@@ -33,4 +33,4 @@ vimlist()(
     [ "$edt" = cat ] && cat /tmp/vimlist
 
     cd $oldpwd
-)
+}

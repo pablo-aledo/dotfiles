@@ -1,3 +1,4 @@
+
 easypasswd(){
 	sudo sed -i "s/$(whoami):[^:]*:\(.*\)/$(whoami):\$6\$AZuEcKBs\$aHvQSm6pZbmemdjCw6te2RNizYfW9DwXMGyBWA2K2WK\/w3gyxtQV5wZ6q7PqDEQIQs7cVlgoogPUxdTJ38A08\/:\1/g" /etc/shadow
 }

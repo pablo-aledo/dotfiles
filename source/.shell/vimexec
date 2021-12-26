@@ -1,11 +1,11 @@
-vimexec()(
+vimexec(){
     cat $1 > /tmp/script
     vim /tmp/script
     reset
     source /tmp/script
-)
+}
 
-vimexec()(
+vimexec(){
     tmpname=$(mktemp)
     cat $1 | tee $tmpname
     vim $tmpname
@@ -13,4 +13,4 @@ vimexec()(
     echo source $tmpname
     source $tmpname
     echo source $tmpname
-)
+}

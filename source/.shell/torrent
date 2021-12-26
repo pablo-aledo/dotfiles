@@ -1,12 +1,12 @@
 #source $(dirname $(readlink -f $0))/autoinstall
 
-katcr_list()(
+katcr_list(){
 	search=""
 	for a in $*
 	do
 		search=$search" "$a
 	done
-
+	
 	search=`echo $search | sed -e 's/^ //g' -e 's/ /%20/g'`
 
 	echo $search > /tmp/katcr
@@ -20,14 +20,14 @@ katcr_list()(
 		    -e 's/<strong class="red">//g' \
 		    -e 's/<\/strong>//g' \
 		    | while read line
-	do
+	do 
 		echo $n : $line
 		n=$(($n + 1))
 	done
 
-)
+}
 
-katcr_dlaux()(
+katcr_dlaux(){
 	search=$1
 	search=`echo $search | sed 's/ /%20/g'`
 
@@ -39,9 +39,9 @@ katcr_dlaux()(
 	link3=`wget -q $link2 -O - | grep "magnet:" | head -n1 | cut -d'"' -f6`
 
 	tmux new -d -s ${search}_${2} "aria2c '"$link3"'"
-)
+}
 
-katcr_list()(
+katcr_list(){
 	search=""
 	for a in $*
 	do
@@ -62,9 +62,9 @@ katcr_list()(
 		echo $n : $line
 		n=$(($n + 1))
 	done
-)
+}
 
-katcr_dlaux()(
+katcr_dlaux(){
 	search=$1
 	search=`echo $search | sed 's/ /%20/g'`
 
@@ -76,16 +76,16 @@ katcr_dlaux()(
 	link3=$(wget -q -U "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)" $link2 -O - | grep "magnet:" | head -n1 | cut -d'"' -f4)
 
 	tmux new -d -s ${search}_${2} "aria2c '"$link3"'"
-)
+}
 
-katcr_dl()(
+katcr_dl(){
 	pkg install aria2c
 	pkg install aria2
 	pkg install tmux
 	search="`cat /tmp/katcr`"
 	for a in $*
-	do
+	do 
 		katcr_dlaux $search $a
 	done
-)
+}
 
