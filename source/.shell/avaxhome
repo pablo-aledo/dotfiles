@@ -307,6 +307,7 @@ avhloop(){
     night_avh
     shc stop
     ( cd ~/Descargas_aux/ && ls ../Descargas | Xargs touch )
+    ( cd ~/Descargas_aux/ && cat /tmp/s2files | grep -v '^Title:' | grep -v '^$' | Xargs touch )
     find ~/Descargas/ -maxdepth 1 -empty -type f -delete
 }
 
