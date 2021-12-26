@@ -193,7 +193,8 @@ avhome_get_new_titles(){
 }
 
 avhome_get_titles_2(){
-    url='https://avxhm.se/ebooks/facet/Development/Drawing/Finance/Painting/Physics/Programming/SCIENCE/Science/science'
+    #url='https://avxhm.se/ebooks/facet/Development/Drawing/Finance/Painting/Physics/Programming/SCIENCE/Science/science'
+    url='https://avxhm.se/ebooks'
     mkdir -p ~/servers/avxhome
     cd ~/servers/avxhome
     wget -q --no-check-certificate $url -O dl
