@@ -1,4 +1,4 @@
-decimate(){
+decimate()(
 	cd $1
 	n=0
 	m=0
@@ -12,10 +12,9 @@ decimate(){
 		n=$((n+1))
 	done
 	cd ..
-}
+)
 
-
-decimate2() {
+decimate2() (
 	inidir=$1 
 	outdir=$2 
 	interval=$3 
@@ -37,9 +36,9 @@ decimate2() {
 		n=$((n+1)) 
 	done
 	cd ..
-}
+)
 
-supersample(){
+supersample()(
 	cd $1
 	m=0
 	for a in `ls | grep frame_.\.png; ls | grep frame_..\.png; ls | grep frame_...\.png; ls | grep frame_....\.png`
@@ -51,14 +50,12 @@ supersample(){
 		done
 	done
 	cd ..
-}
+)
 
-fillholes(){
+fillholes()(
 	for a in `seq 1 $(ls | tail -n1 | sed 's/\..*//g') | xargs printf '%05d\n'`
 	do
 		[ -e $a ] && pivot=$a
 		[ -e $a ] || cp $pivot $a
 	done
-}
-
-
+)

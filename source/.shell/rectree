@@ -1,4 +1,4 @@
-rectree () {
+rectree () (
 	previndex=-1
 	prevname="."
 	tree | head -n -2 | tail -n +2 | while read line
@@ -11,4 +11,4 @@ rectree () {
 		previndex=$idx
 		prevname=$name
 	done
-}
+)

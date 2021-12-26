@@ -1,4 +1,4 @@
-rvf(){            
+rvf()(
 	a=""
 	for n in `seq 1 10`
 	do
@@ -6,5 +6,5 @@ rvf(){
 		find $a -name $1
         #[ $? -eq 0 ] && return
 	done
-}
+)
 

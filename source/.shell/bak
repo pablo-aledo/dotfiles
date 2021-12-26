@@ -1,20 +1,20 @@
 [ -e ~/backup ] && BAK_FOLDER=~/backup
 [ -e /media/DATA/backup ] && BAK_FOLDER=/media/DATA/backup
 
-sbak(){
+sbak()(
 	name="$1"
 	[ -e "$name" ] || shift
 	sudo tar -cvzf "$name".backup.`date +%y%m%d-%H%M%S`.tgz $*
-}
+)
 
-bak(){
+bak()(
 	name="$1"
 	[ $name = "default" ] && name=$BAK_FOLDER/$(basename $2)
 	[ -e "$name" ] || shift
 	tar -cvzf "$name".backup.`date +%y%m%d-%H%M%S`.tgz $*
-}
+)
 
-mergebak(){
+mergebak()(
 	last=`ls $* | sort | tail -n1`
 	lastname=`ls $* | sort | tail -n1 | sed 's/\.backup\..*//g'`
 
@@ -36,5 +36,5 @@ mergebak(){
 	cd /tmp/$last
 	tar -czf $OLDPWD/${lastname%.*}.backup.`date +%y%m%d-%H%M%S`.tgz *
 	cd -
-}
+)
 

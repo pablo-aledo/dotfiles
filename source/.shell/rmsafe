@@ -5,7 +5,7 @@ Rm(){
 }
 alias rm=Rm
 
-dd(){
+dd()(
 	command="sudo dd"
 	for a in $*
 	do 
@@ -29,9 +29,9 @@ dd(){
 	done
 
 	echo $command | bash
-}
+)
 
-mkfs.ext4(){
+mkfs.ext4()(
 
 	for a in $*
 	do 
@@ -53,4 +53,4 @@ mkfs.ext4(){
 	done
 
 	sudo mkfs.ext4 $*
-}
+)

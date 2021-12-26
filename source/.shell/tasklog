@@ -4,7 +4,7 @@ TASKLOG_FILE=/media/DATA/tasklog/tasklog
 [ -f ~/tasklog ]           && TASKLOG_FILE=~/tasklog
 [ -d /media/DATA/tasklog ] && TODO_FILE=/media/DATA/tasklog/todo
 
-tasklog(){
+tasklog()(
 
 	[ $# -eq 0 ] && task=`zenity --entry`
 	[ $# -eq 0 ] || task="$*"
@@ -19,9 +19,9 @@ tasklog(){
 	[ "$task" = "" ] || sed -i '$ d' $TASKLOG_FILE
 	[ "$task" = "" ] || echo "`date -d @$time_start +%m%d.%H%M` `date -d @$time_end +%m%d.%H%M` $duration $old_task" >> $TASKLOG_FILE
 	[ "$task" = "" ] || echo "$time_end $task" >> $TASKLOG_FILE
-}
+)
 
-tasklog_at(){
+tasklog_at()(
 
 	at=$1 ; shift
 	for=$1; shift
@@ -41,9 +41,9 @@ tasklog_at(){
 
 	echo "`date -d @$time_start +%m%d.%H%M` `date -d @$time_end +%m%d.%H%M` $duration $task" >> $TASKLOG_FILE
 	echo "$time_oldtask $old_task" >> $TASKLOG_FILE
-}
+)
 
-tasklog_ft(){
+tasklog_ft()(
 
 	at=$1 ; shift
 	to=$1 ; shift
@@ -63,40 +63,40 @@ tasklog_ft(){
 
 	echo "`date -d @$time_start +%m%d.%H%M` `date -d @$time_end +%m%d.%H%M` $duration $task" >> $TASKLOG_FILE
 	echo "$time_oldtask $old_task" >> $TASKLOG_FILE
-}
+)
 
-tasklog_reset(){
+tasklog_reset()(
 
 	time_end=`date +%s`
 	sed -i '$ d' $TASKLOG_FILE
 	echo "$time_end $*" >> $TASKLOG_FILE
-}
+)
 
-tasklog_vim(){
+tasklog_vim()(
 	vim $TASKLOG_FILE
-}
+)
 
-tasklog_cat(){
+tasklog_cat()(
 	cat $TASKLOG_FILE
-}
+)
 
-tasklog_timediff(){
+tasklog_timediff()(
 	t1=$1
 	t2=$2
 	s1=$( date -d"`echo $t1 | sed 's/\(..\)\(..\).\(..\)\(..\)/\1\/\2 \3:\4/g'`" +%s )
 	s2=$( date -d"`echo $t2 | sed 's/\(..\)\(..\).\(..\)\(..\)/\1\/\2 \3:\4/g'`" +%s )
 	echo $(( $s2 - $s1 ))
-}
+)
 
-tasklog_timediff_hm(){
+tasklog_timediff_hm()(
 	t1=$1
 	t2=$2
 	s1=$( date -d"`echo $t1 | sed 's/\(..\)\(..\).\(..\)\(..\)/\1\/\2 \3:\4/g'`" +%s )
 	s2=$( date -d"`echo $t2 | sed 's/\(..\)\(..\).\(..\)\(..\)/\1\/\2 \3:\4/g'`" +%s )
 	echo $(( $s2 - $s1 )) | awk '{h=int($1/60/60) ; m=int($1-h*60*60)/60;  printf "%02d:%02d", h, m }'
-}
+)
 
-tasklog_fill_lines(){
+tasklog_fill_lines()(
 	tasklog_cat | head -n -1 | while read line
 	do
 		ini=`echo $line | awk '{printf $1}'`
@@ -107,18 +107,18 @@ tasklog_fill_lines(){
 
 		[ "`echo $sec | egrep '^[0-9]*$'`" = "" ] && printf '%s %s %7d %s\n' $ini $end $sub $tsk
 	done
-}
+)
 
-pick_todo(){
+pick_todo()(
 ans=$(echo zenity  --list  --text \"Task to do\" --radiolist  --column \"Pick\" --column \"Task\" `cat $TODO_FILE | sed -e 's/^/FALSE "/g' -e 's/$/" /g' | paste -d' ' -s` | bash );
 echo $ans
-}
+)
 
-todo_vim(){
+todo_vim()(
 	vim $TODO_FILE
-}
+)
 
-pomodoro(){
+pomodoro()(
 	[ $# -eq 0 ] && t1=25 && t2=30
 	[ $# -eq 1 ] && t1=$1 && t2=$(( $t1 + 5 ))
 	[ $# -eq 2 ] && t1=$1 && t2=$2
@@ -128,6 +128,4 @@ pomodoro(){
 	[ "$todo" = "" ] || echo 'DISPLAY=:0.0 zenity --info --text "Pomodoro 1"' | at "now + $t1 minutes"
 	[ "$todo" = "" ] || echo 'DISPLAY=:0.0 zenity --info --text "Pomodoro 2"' | at "now + $t2 minutes"
 
-}
-
-
+)

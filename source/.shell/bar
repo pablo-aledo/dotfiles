@@ -1,4 +1,4 @@
-bar(){
+bar()(
     setterm -cursor off
     max=$1
 
@@ -8,9 +8,9 @@ bar(){
     done
     setterm -cursor on
 
-}
+)
 
-bar(){
+bar()(
 
     [ `cat /tmp/width` -gt 100 ] && wide=true
     [ `cat /tmp/width` -gt 100 ] || wide=false
@@ -60,9 +60,9 @@ print( ['◐', '◓', '◑', '◒'][$line%4] + \
     done
     setterm -cursor on
 
-}
+)
 
-barcmd(){
+barcmd()(
     cmd=$1
     limit=$2
 
@@ -85,9 +85,9 @@ barcmd(){
         zsh -c "$cmd" 2>/dev/null
         sleep 1
     done | bar $limit
-}
+)
 
-rbarcmd(){
+rbarcmd()(
     cmd=$1
     skip=$2
 
@@ -101,11 +101,11 @@ rbarcmd(){
 
     echo "barcmd 'echo $val - \$($cmd) | bc' $val $skip" > /tmp/rbarcmd
     source /tmp/rbarcmd
-}
+)
 
-avhbar(){
+avhbar()(
     barcmd "cat /tmp/s2files | grep Title | wc -l" $(cat /tmp/count)
-}
+)
 
 descbar(){
     barcmd 'ls -l Descargas | grep -F "$(tmux ca -pt .1 | grep -v "^$" | tail -n1 | sed "s/^[^ ]* //g")" -B1000 | tail -n+2 | awk "{s+=\$5} END {print s}"' $(ls -l Descargas | tail -n+2 | awk "{s+=\$5} END {print s}") $*

@@ -1,6 +1,6 @@
 path(){
 	for a in `find $1 -type f -executable | xargs dirname | sort | uniq`
-	do 
+	do
 		[ $a[1] = "/" ] && export PATH=$a:$PATH
 		[ $a[1] = "/" ] || export PATH=$PWD/$a:$PATH
 	done
@@ -8,7 +8,7 @@ path(){
 
 ld_library_path(){
 	for a in `find $1 -name '*.so' | xargs dirname | sort | uniq`
-	do 
+	do
 		[ $a[1] = "/" ] && export LD_LIBRARY_PATH=$a:$LD_LIBRARY_PATH
 		[ $a[1] = "/" ] || export LD_LIBRARY_PATH=$PWD/$a:$LD_LIBRARY_PATH
 	done

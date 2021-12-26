@@ -1,4 +1,4 @@
-mount_sqfs_rw(){
+mount_sqfs_rw()(
 
 	img=$1
 	[ $# -eq 2 ] && mountdir=$2
@@ -15,10 +15,9 @@ mount_sqfs_rw(){
 
 	[ -e $mountdir/runme.sh ] && ( cd $mountdir; source runme.sh )
 
-}
+)
 
-
-umount_sqfs_rw(){
+umount_sqfs_rw()(
 
 	img=$1
 	[ $# -eq 2 ] && mountdir=$2
@@ -27,6 +26,4 @@ umount_sqfs_rw(){
 	sudo umount $mountdir
 	sudo umount $img
 
-}
-
-
+)

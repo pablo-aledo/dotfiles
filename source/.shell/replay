@@ -1,4 +1,4 @@
-replay(){
+replay()(
 	nc -l 3333
 	[ $# -eq 1 ] && delay=0.025
 	[ $# -eq 2 ] && delay=$2
@@ -50,5 +50,5 @@ replay(){
 		xdotool type $key
 		off=$(( $off + 1 ))
 	done
-}
+)
 

@@ -1,5 +1,5 @@
 rmhist(){
-	echo "" | sudo tee /var/log/auth.log 
+	echo "" | sudo tee /var/log/auth.log
 	echo "" | tee ~/.bash_history
 	echo "" | tee ~/.zsh_history
 	rm ~/.bash_history -rf

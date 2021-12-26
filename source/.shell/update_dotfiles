@@ -1,21 +1,20 @@
-link(){
+link()(
 	echo -e "\e[34m linking file ... \e[0m" `basename $1`
 	src=$1
 	dst=$(echo $1 | sed "s/`escape4 $ROOT`\/link/`escape4 $HOME`/g")
 	mkdir -p $(dirname $dst)
 	ln -sf $src $dst
-}
+)
 
-
-copy(){
+copy()(
 	echo -e "\e[34m copying file ... \e[0m" `basename $1`
 	src=$1
 	dst=$(echo $1 | sed "s/`escape4 $ROOT`\/copy/`escape4 $HOME`/g")
 	mkdir -p $(dirname $dst)
 	/bin/cp $src $dst
-}
+)
 
-sourcefile(){
+sourcefile()(
 	echo -e "\e[34m Adding as source file ... \e[0m" `basename $1`
 	for a in $1/*
 	do
@@ -23,9 +22,9 @@ sourcefile(){
 		dst=$(dirname $(echo $src | sed "s/`escape4 $ROOT`\/source/`escape4 $HOME`/g"))
 		[ "`grep "$src" "$dst" 2>/dev/null`" ] || echo source $src >> $dst
 	done
-}
+)
 
-sourcecontent(){
+sourcecontent()(
 	echo -e "\e[34m Adding content of file ... \e[0m" `basename $1`
 	for a in $1/*
 	do
@@ -34,70 +33,69 @@ sourcecontent(){
 		mkdir -p $(dirname $dst)
 		cat $src >> $dst
 	done
-}
+)
 
-run(){
+run()(
 	echo -e "\e[34m Sourcing file ... \e[0m" `basename $1`
 	cd $ROOT/run
 	source $1
-}
+)
 
-
-update_dotfiles(){
+update_dotfiles()(
 
 	# ~/.dotfiles exists but is not a repository
 	if [ -e ~/.dotfiles ] && [ ! -e ~/.dotfiles/.git ]
 	then
 		cd
-		rm -rf dotfiles-master .dotfiles .dotfiles.zip 
+		rm -rf dotfiles-master .dotfiles .dotfiles.zip
 		git clone https://github.com/pablo-aledo/dotfiles .dotfiles
 		cd ~/.dotfiles
-	fi 
+	fi
 
 	# ~/.dotfiles are in a local folder different than ~/.dotfiles
 	if [ ! -e ~/.dotfiles ] && [ -L ~/.zshrc ]
 	then
 		linkedto=`ls -l ~/.zshrc | cut -d" " -f11`
-		folder=`dirname $linkedto`/.. 
-		ln -s $folder ~/.dotfiles 
+		folder=`dirname $linkedto`/..
+		ln -s $folder ~/.dotfiles
 		cd ~/.dotfiles
 		git pull
-	fi 
+	fi
 
-	# ~/.dotfiles is a repository 
+	# ~/.dotfiles is a repository
 	if [ -e ~/.dotfiles ] && [ -e ~/.dotfiles/.git ]
 	then
 		cd ~/.dotfiles
 		git pull
-	fi 
+	fi
 
 
 
 	export ROOT=~/.dotfiles
 	export HOME=$(cd; pwd)
-	
-	
+
+
 	# link files
 	for a in `find $ROOT/link -type f 2>/dev/null`
 	do
 		link $a
 	done
-	
+
 	# copy files
 	for a in `find $ROOT/copy -type f 2>/dev/null`
 	do
 		copy $a
 	done
-	
+
 	# source files
 	for a in `find $ROOT/source -type d 2>/dev/null | egrep -v source$ | sort -g`
 	do
 		sourcefile $a
 	done
-	
+
 	# source content
 	for a in `find $ROOT/source_content -type f 2>/dev/null | egrep -v source_content$ | sort -g | xargs -l1 dirname | uniq`
-	do 
+	do
 		rm -f $(echo $a | sed "s/`escape4 $ROOT`\/source_content/`escape4 $HOME`/g")
 		sourcecontent $a
 	done
@@ -105,4 +103,4 @@ update_dotfiles(){
 	source $HOME/.shell
 
 	[ -e /usr/bin/i3-msg ] && i3-msg reload
-}
+)

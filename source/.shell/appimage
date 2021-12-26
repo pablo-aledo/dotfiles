@@ -1,4 +1,4 @@
-appimage_run(){
+appimage_run()(
     name=$1
     link1="https://appimage.github.io$( wget https://appimage.github.io/apps/ -qO - | grep "a href" | grep -i $name | grep style | cut -d\" -f2)"; echo $link1
     link2="$(wget $link1 -qO - | grep button | grep green | cut -d\" -f2)"; echo $link2
@@ -13,4 +13,4 @@ appimage_run(){
     chmod +x $file
     ./$file
     )
-}
+)
