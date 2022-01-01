@@ -13,28 +13,51 @@ BACKUP_MOUNT_DIR=/home/
 
 simplify_md5s(){
 	rm -fr /tmp/md5s
-	cat $BACKUP_METADATA/${1}_files | while read line
+	cat $BACKUP_METADATA/md5s/${1}_files | while read line
 	do
-		cat $BACKUP_METADATA/${1}_md5s | egrep '^[0-9a-f]{32}  '"$line"'$' | tail -n1 >> /tmp/md5s
+		cat $BACKUP_METADATA/md5s/${1}_md5s | egrep '^[0-9a-f]{32}  '"$line"'$' | tail -n1 >> /tmp/md5s
 	done
 
-	mv /tmp/md5s $BACKUP_METADATA/${1}_md5s
+	mv /tmp/md5s $BACKUP_METADATA/md5s/${1}_md5s
 
 }
 
 backup_md5s(){
-	sudo find "$BACKUP_SRC/$1" -type f > $BACKUP_METADATA/${1}_files
+    mkdir -p $BACKUP_METADATA/md5s
 
-	sudo find "$BACKUP_SRC/$1" -type f -newer $BACKUP_METADATA/${1}_md5s -exec sudo md5sum {} >> $BACKUP_METADATA/${1}_md5s \;
+	sudo find "$BACKUP_SRC/$1" -type f > $BACKUP_METADATA/md5s/${1}_files
 
-    comm -13 <(cat $BACKUP_METADATA/${1}_md5s | sed 's/^[0-9a-f]{32}  //g' | sort) <(cat $BACKUP_METADATA/${1}_files | sort) | while read line
+	sudo find "$BACKUP_SRC/$1" -type f -newer $BACKUP_METADATA/md5s/${1}_md5s -exec sudo md5sum {} >> $BACKUP_METADATA/md5s/${1}_md5s \;
+
+    comm -13 <(cat $BACKUP_METADATA/md5s/${1}_md5s | sed 's/^[0-9a-f]{32}  //g' | sort) <(cat $BACKUP_METADATA/md5s/${1}_files | sort) | while read line
     do
-        sudo md5sum "$line" >> $BACKUP_METADATA/${1}_md5s
+        sudo md5sum "$line" >> $BACKUP_METADATA/md5s/${1}_md5s
     done
 }
 
+backup_par2(){
+    mkdir -p $BACKUP_METADATA/par2/$1
+	sudo find "$BACKUP_SRC/$1" -type f -newer $BACKUP_METADATA/par2/${1}_par2 | while read line
+    do
+        directory=$(dirname "$line")
+        name=$(basename "$line")
+        hash=$(echo $line | md5sum | awk '{print $1}')
+
+        if [ -e $BACKUP_METADATA/par2/$1/${hash}.par2 ]
+        then
+            rm -fr $BACKUP_METADATA/par2/$1/${hash}.par2
+            rm -fr $BACKUP_METADATA/par2/$1/${hash}.vpar2
+        fi
+
+        par2create -q -n1 -r5 "$line"
+        mv $directory/$name.vol*.par2 $BACKUP_METADATA/par2/$1/$hash.vpar2
+        mv $directory/$name.par2      $BACKUP_METADATA/par2/$1/$hash.par2
+    done
+    touch $BACKUP_METADATA/par2/${1}_par2
+}
+
 backup_sizes(){
-	sudo ncdu "$BACKUP_SRC/$1" -o $BACKUP_METADATA/${1}_sizes
+	sudo ncdu "$BACKUP_SRC/$1" -o $BACKUP_METADATA/ncdu/${1}_sizes
 }
 
 backup_exchange_keys(){
