@@ -666,6 +666,7 @@ doc2txt_rec(){
 			;;
 		(*.epub|*.EPUB)
 			epub2txt "$filename" | head -n $summarize_line_limit | txtsimp | strings -n1 >> "$destination"
+            rm -fr /tmp/epub2txt*
 			;;
 		(*.mobi|*.MOBI)
 			ebook-convert "$filename" $tmp/mobi.txt
