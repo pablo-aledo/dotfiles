@@ -1,3 +1,8 @@
 source ~/.dotfiles/source/.shell/local_backup
 
-[ -e /tmp/avl_forward ] && local_backup_m Descargas
+if [ -e ~/Descargas_aux ]
+then
+    ( cd ~/Descargas_aux/; ls ../Descargas | xargs -d"\n" -n1 touch )
+fi
+
+local_backup_m Descargas

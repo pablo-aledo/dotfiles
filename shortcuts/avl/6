@@ -17,7 +17,10 @@ do
 
     xdotool key 5 && sleep 1
 
-    xdotool key 9 && sleep 1; shcw avl.9; sleep 5
+    if [ -e /tmp/avl_forward ]
+    then
+        xdotool key 9 && sleep 1; shcw avl.9; sleep 5
+    fi
 
     [ -e /tmp/avl_skip ] && rm -fr /tmp/avl_skip && break
 
