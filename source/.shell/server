@@ -795,7 +795,8 @@ server(){
     if [ $1 = "space2" ]
     then
         [ $# -eq 1 ] && drive='/$'
-        [ $# -eq 2 ] && drive=$2
+        [ $# -ge 2 ] && drive=$2
+        [ $# -ge 3 ] && export SPACE_THRESHOLD_1=$3
         while true
         do
             space=$( df -BG | grep "$drive" | awk '{print $4}' | sed 's/G//g' )
