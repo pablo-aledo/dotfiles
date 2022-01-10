@@ -32,7 +32,7 @@ do
     then
         while [ ! -e ~"/Descargas/$(cat /tmp/file)" ]
         do
-            sleep 10
+            sleep 1
             count=$(( $count + 1 ))
             [ $count -eq 20 ] && break
         done
@@ -49,6 +49,12 @@ do
 
     xdotool key ctrl+w
     sleep 5
+
+    if [ -e /tmp/avl_forward_each ]
+    then
+        xdotool key 9 && sleep 1; shcw avl.9; sleep 5
+    fi
+
 done
 
 xdotool key ctrl+w

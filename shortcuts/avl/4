@@ -41,8 +41,3 @@ else
     xdotool key Return
 fi
 
-
-if [ -e /tmp/avl_forward_each ]
-then
-    xdotool key 9 && sleep 1; shcw avl.9; sleep 5
-fi
