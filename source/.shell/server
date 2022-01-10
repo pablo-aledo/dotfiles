@@ -2,6 +2,9 @@
 #source $(dirname $(readlink -f $0))/easypasswd
 #source $(dirname $(readlink -f $0))/myshell
 
+SPACE_THRESHOLD_1=60
+SPACE_THRESHOLD_2=5
+
 server(){
 
 	if [ $1 = "vnc" ]
@@ -797,7 +800,7 @@ server(){
         do
             space=$( df -BG | grep "$drive" | awk '{print $4}' | sed 's/G//g' )
             echo "\e[32m space \e[0m $space G"
-            [ $space -lt 60 ] && echo "\e[31m Low space \e[0m" && notify_space_2 $space && notify_space_full_2 $drive
+            [ $space -lt $SPACE_THRESHOLD_1 ] && echo "\e[31m Low space \e[0m" && notify_space_2 $space && notify_space_full_2 $drive
             sleep 10
         done
     fi
@@ -1051,10 +1054,10 @@ notify_space_full_2(){
     do
         space=$( df -BG | grep "$1" | awk '{print $4}' | sed 's/G//g' )
         echo "\e[33m space_full \e[0m $space G"
-        [ $space -lt 5 ] && echo "\e[31m DISK IS FULL \e[0m"
-        [ $space -lt 5 ] && echo "Disk is full" | $MAILCMD -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
-        [ $space -lt 5 ] && sleep $(( 1 * 60 * 60 ))
-        [ $space -gt 60 ] && return
+        [ $space -lt $SPACE_THRESHOLD_2 ] && echo "\e[31m DISK IS FULL \e[0m"
+        [ $space -lt $SPACE_THRESHOLD_2 ] && echo "Disk is full" | $MAILCMD -F ~/.mutt/muttrc_0 -s "DISK IS FULL" -- pablo.aledo@gmail.com
+        [ $space -lt $SPACE_THRESHOLD_2 ] && sleep $(( 1 * 60 * 60 ))
+        [ $space -gt $SPACE_THRESHOLD_1 ] && return
         sleep 10
     done
 }
