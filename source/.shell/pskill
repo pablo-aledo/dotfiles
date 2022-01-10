@@ -1,4 +1,4 @@
 pskill(){
     [ "$1" = "" ] && return
-    ps aux | grep "$1" | awk '{print $2}' | xargs kill
+    ps aux | grep "$1" | grep -v grep | awk '{print $2}' | xargs kill
 }
