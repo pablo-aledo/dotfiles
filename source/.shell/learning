@@ -77,6 +77,7 @@ rules.transform(){
     cat | sed \
         -e 's/c++/cpp/g' \
         -e 's/gpt.3/gpt3/g' \
+        -e 's/power.bi/powerbi/g' \
         -e 's/time.series/TimeSeries/g' \
         -e 's/c#/csharp/g'  \
         -e 's/?/ questionmark/g' \
