@@ -77,27 +77,27 @@ rules.transform(){
     cat | sed \
         -e 's/c++/cpp/g' \
         -e 's/gpt.3/gpt3/g' \
-        -e 's/power.bi/powerbi/g' \
-        -e 's/time.series/TimeSeries/g' \
+        -e 's/power.\(bi\|BI\)/powerbi/g' \
+        -e 's/time.series/timeseries/g' \
         -e 's/c#/csharp/g'  \
         -e 's/?/ questionmark/g' \
-        -e 's/\(machine.learning\)/\1 MachineLearning /gI' \
-        -e 's/\(black.hat\)/\1 BlackHat /gI' \
-        -e 's/\(def.con\)/\1 DefCon /gI' \
-        -e 's/\(big.data\)/\1 BigData /gI' \
-        -e 's/\(artificial.intelligence\)/\1 ArtificialIntelligence /gI' \
-        -e 's/\(programming.language\(s\|\)\)/\1 ProgrammingLanguages /gI' \
-        -e 's/\(neural.network\(s\|\)\)/\1 NeuralNetworks /gI' \
-        -e 's/\(open.source\)/\1 OpenSource /gI' \
-        -e 's/\([m|M]ake:\)/\1 Makezine /gI' \
-        -e 's/\(data.science\(s\|\)\)/\1 DataScience /gI' \
-        -e 's/\(high.performance.comput\)/HighPerfComp \1/gI' \
-        -e 's/\(hand\(.\|\)book\)/\1 HandBook /gI' \
-        -e 's/computer.science/ComputerScience/g' \
-        -e 's/scientific.computing/ScientificComputing/g' \
-        -e 's/technical.analysis/TechnicalAnalysis/g' \
-        -e 's/ci.cd/CiCd/g' \
-        -e 's/\[pdf\]/PdfFile/gI'
+        -e 's/\(machine.learning\)/\1 machinelearning /gI' \
+        -e 's/\(black.hat\)/\1 blackhat /gI' \
+        -e 's/\(def.con\)/\1 defcon /gI' \
+        -e 's/\(big.data\)/\1 bigdata /gI' \
+        -e 's/\(artificial.intelligence\)/\1 artificialintelligence /gI' \
+        -e 's/\(programming.language\(s\|\)\)/\1 programminglanguages /gI' \
+        -e 's/\(neural.network\(s\|\)\)/\1 neuralnetworks /gI' \
+        -e 's/\(open.source\)/\1 opensource /gI' \
+        -e 's/\([m|M]ake:\)/\1 makezine /gI' \
+        -e 's/\(data.science\(s\|\)\)/\1 datascience /gI' \
+        -e 's/\(high.performance.comput\)/highperfcomp \1/gI' \
+        -e 's/\(hand\(.\|\)book\)/\1 handbook /gI' \
+        -e 's/computer.science/computerscience/g' \
+        -e 's/scientific.computing/scientificcomputing/g' \
+        -e 's/technical.analysis/technicalanalysis/g' \
+        -e 's/ci.cd/cicd/g' \
+        -e 's/\[pdf\]/pdffile/gI'
 }
 
 camelcase(){
