@@ -1160,6 +1160,8 @@ night(){
 
     # download
     false && night_pdf
+    false && touch /tmp/avl_forward
+    false && touch /tmp/avl_protect_space
     true && avhloop 
 }
 
