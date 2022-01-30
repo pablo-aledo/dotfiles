@@ -104,7 +104,7 @@ rbarcmd(){
 }
 
 avhbar(){
-    barcmd "cat /tmp/s2files | grep Title | wc -l" $(cat /tmp/count)
+    barcmd "cat /tmp/s2files | grep Title | wc -l" "cat /tmp/count"
 }
 
 descbar(){
