@@ -1159,10 +1159,12 @@ night(){
     false && classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror
 
     # download
+    false && touch /tmp/pause && sleep $(( 60 * 10 ))
     false && night_pdf
     false && touch /tmp/avl_forward
     false && touch /tmp/avl_protect_space
     true && avhloop 
+    false && rm -fr /tmp/pause
 }
 
 loop_avh(){
