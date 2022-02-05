@@ -17,7 +17,7 @@ do
 done
 rm -fr /tmp/lock4dl
 
-[ -e /tmp/avl_protect_space ] && [ $(df -h -BG | grep '/$' | awk '{print $4}' | sed 's/G//g') -lt 10 ] && touch /tmp/lockspace
+[ -e /tmp/avl_protect_space ] && [ $(df -h -BG | grep '/$' | awk '{print $4}' | sed 's/G//g') -lt 5 ] && touch /tmp/lockspace
 while true
 do
     [ -e /tmp/lockspace ] || break

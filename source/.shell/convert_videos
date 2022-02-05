@@ -1201,3 +1201,7 @@ midi2mp3_2(){
     timidity $1 -Ow -o - | lame - $2
 }
 
+convert_increment(){
+export convert_dir=$(   echo $convert_dir   | sed 's|^\([^{0-9}]*\)[0-9]*$|\1|g' )$(( $( echo $convert_dir   | sed 's|[^{0-9}]*\([0-9]*\)$|\1|g') + 1 ))
+export converted_dir=$( echo $converted_dir | sed 's|^\([^{0-9}]*\)[0-9]*$|\1|g' )$(( $( echo $converted_dir | sed 's|[^{0-9}]*\([0-9]*\)$|\1|g') + 1 ))
+}
