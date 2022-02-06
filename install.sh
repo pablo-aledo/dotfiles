@@ -110,4 +110,4 @@ do
 done
 
 # final message
-echo "\e[32m There's no place like \e[33m $(wget http://ipinfo.io/ip -qO -) \e[0m"
+echo -n "\e[32m There's no place like \e[33m $(wget http://ipinfo.io/ip -qO -) \e[0m"
