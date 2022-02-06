@@ -1202,6 +1202,6 @@ midi2mp3_2(){
 }
 
 convert_increment(){
-export convert_dir=$(   echo $convert_dir   | sed 's|^\([^{0-9}]*\)[0-9]*$|\1|g' )$(( $( echo $convert_dir   | sed 's|[^{0-9}]*\([0-9]*\)$|\1|g') + 1 ))
-export converted_dir=$( echo $converted_dir | sed 's|^\([^{0-9}]*\)[0-9]*$|\1|g' )$(( $( echo $converted_dir | sed 's|[^{0-9}]*\([0-9]*\)$|\1|g') + 1 ))
+export convert_dir=$(   dirname $convert_dir   )/convert$(( $( echo $convert_dir   | sed 's|^.*\(.\)$|\1|g') + 1 ))
+export converted_dir=$( dirname $converted_dir )/convert$(( $( echo $converted_dir | sed 's|^.*\(.\)$|\1|g') + 1 ))
 }
