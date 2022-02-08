@@ -1,5 +1,6 @@
 RSSMAIL=~/servers/rssmail
 rssmail_ml=true
+rssmail_webcontent=true
 outbox=~/servers/outbox
 
 rssmail() {
@@ -41,6 +42,24 @@ rssmail_cut () {
 	comm -13 <(sort $RSSMAIL/$last_a/list) <(sort $RSSMAIL/$last_b/list) > $RSSMAIL/$last_b/list_cut
 }
 
+webcontent(){
+
+link=$1
+
+
+case $link in
+
+(*news.ycombinator.com*)
+    rm /tmp/webcontent*
+    w3m -dump $link | sed 's/.*next \[.\]/=====/g' > /tmp/webcontent
+    csplit -s /tmp/webcontent -f /tmp/webcontent --suppress-matched '/=====/' '{*}'
+    cat /tmp/webcontent01
+    echo hola
+    ;;
+
+esac
+}
+
 rssmail_server(){
     [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/avxhome/learning >/dev/null
 	[ -e /usr/bin/rsstail ] || pkg install rsstail
@@ -67,10 +86,13 @@ rssmail_server(){
             [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/avxhome/learning >/dev/null
             [ "$rssmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
             title_outbox=$(echo $title_ml | sed -e 's|/||g')
-			echo "\e[31m $title_ml \e[0m $link "
-            [ "$outbox" != "" ] && echo $link > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
-			(echo $link) | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
-			sleep 1
+            echo "\e[31m $title_ml \e[0m $link "
+
+            (echo $link) > /tmp/rssmailcontent
+            [ "$outbox" != "" ] && cat /tmp/rssmailcontent > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
+            cat /tmp/rssmailcontent | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
+
+            sleep 1
 		fi
 
 		case $line in
@@ -88,9 +110,12 @@ rssmail_server(){
             title_outbox=$(echo $title_ml | sed -e 's|/||g')
 			echo "\e[31m $title_ml \e[0m $link "
 			echo "$title_ml -> $link" >> $RSSMAIL/map
-            [ "$outbox" != "" ] && (echo $link; echo $description | w3m -T text/html -dump) > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
-			(echo $link; echo $description) | $MAILCMD -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
-			sleep 1
+
+            ( echo $link; echo $description ) > /tmp/rssmailcontent
+            [ "$outbox" != "" ] && cat /tmp/rssmailcontent > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
+            cat /tmp/rssmailcontent | $MAILCMD -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
+
+            sleep 1
 		fi
 
 		[ "$(echo $line | egrep '^Title:')" != "" ] && echo $line >> ~/servers/rssmail/rsstitles
