@@ -1204,4 +1204,6 @@ midi2mp3_2(){
 convert_increment(){
 export convert_dir=$(   dirname $convert_dir   )/convert$(( $( echo $convert_dir   | grep -Eo '[0-9]+$') + 1 ))
 export converted_dir=$( dirname $converted_dir )/convert$(( $( echo $converted_dir | grep -Eo '[0-9]+$') + 1 ))
+echo $convert_dir
+echo $converted_dir
 }
