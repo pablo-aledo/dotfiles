@@ -50,11 +50,10 @@ link=$1
 case $link in
 
 (*news.ycombinator.com*)
-    rm /tmp/webcontent*
+    rm -fr /tmp/webcontent*
     w3m -dump $link | sed 's/.*next \[.\]/=====/g' > /tmp/webcontent
     csplit -s /tmp/webcontent -f /tmp/webcontent --suppress-matched '/=====/' '{*}'
-    cat /tmp/webcontent01
-    echo hola
+    [ -e /tmp/webcontent01 ] && cat /tmp/webcontent01
     ;;
 
 esac
