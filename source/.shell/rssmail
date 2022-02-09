@@ -149,6 +149,7 @@ rssmail_server(){
             [ $rssmail_webcontent = false ] && (echo $link)                         > /tmp/rssmailcontent
             [ $rssmail_webcontent = true  ] && (echo $link; echo; webcontent $link) > /tmp/rssmailcontent
 
+            # w3m -T text/html for plain text storage
             [ "$outbox" != "" ] && cat /tmp/rssmailcontent > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
 
             if [ $delay_webcontent = true -a $(send_or_delay /tmp/rssmailcontent) = "send" ]
