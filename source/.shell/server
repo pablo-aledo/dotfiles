@@ -945,10 +945,12 @@ server(){
 
     if [ $1 = "webcontent_delay" ]
     then
+        [ "$2" = "" ] && date_webcontent=1700
+        [ "$2" = "" ] || date_webcontent=$2
 
         while true
         do
-            if [ $(date +%H%M) = 0900 ] 
+            if [ $(date +%H%M) = $date_webcontent ] 
             then
                 echo "===== Start ====="
                 rss_send_delayed
