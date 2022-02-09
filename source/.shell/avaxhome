@@ -275,8 +275,8 @@ avhome_mail_server(){
               echo $title >> ~/servers/avxhome/avxtitles
               echo "$title_ml -> $link" >> ~/servers/avxhome/map
 
-              [ $avxmailcontent = false ] && (echo $link)                   > /tmp/avxmailcontent
-              [ $avxmailcontent = true ]  && (echo $link; webcontent $link) > /tmp/avxmailcontent
+              [ $avxmail_webcontent = false ] && (echo $link)                   > /tmp/avxmailcontent
+              [ $avxmail_webcontent = true ]  && (echo $link; webcontent $link) > /tmp/avxmailcontent
 
               [ "$outbox" != "" ] && cat /tmp/avxmailcontent > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
               cat /tmp/avxmailcontent | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
