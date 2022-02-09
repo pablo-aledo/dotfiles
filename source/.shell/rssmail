@@ -95,7 +95,7 @@ do
     send_with_webcontent "$line"
 done
 
-cp -f ~/servers/webcontent_delay/{to_send,sent}
+cat ~/servers/webcontent_delay/to_send > ~/servers/webcontent_delay/sent
 }
 
 rssmail_server(){
