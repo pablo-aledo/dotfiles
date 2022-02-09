@@ -65,6 +65,24 @@ case $link in
 esac
 }
 
+send_with_webcontent(){
+    file=$1
+    title=$(echo $file | sed 's/^..............//g')
+    send=false
+
+    if [ "$(cat $file | grep news.ycombinator.com)" != "" ]
+    then
+        link_for_webcontent=$(cat $file | grep 'a href' | cut -d'"' -f2)
+        link=$(cat $file | grep '^ https')
+        send=true
+    fi
+
+    if [ $send = true ]
+    then
+        (echo $link; webcontent $link_for_webcontent) # | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com ))
+    fi
+}
+
 rssmail_server(){
     [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/avxhome/learning >/dev/null
 	[ -e /usr/bin/rsstail ] || pkg install rsstail
