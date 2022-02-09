@@ -1,0 +1,11 @@
+#compdef tma
+
+local -a sessions
+sessions=( $( tmux ls | cut -d: -f1 ) )
+
+cur=${words[CURRENT]}
+prev=${words[CURRENT-1]}
+cmd=${words[2]}
+
+[ "$prev" = "tma" ] && _describe 'command' sessions
+
