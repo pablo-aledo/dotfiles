@@ -1,6 +1,7 @@
 RSSMAIL=~/servers/rssmail
 rssmail_ml=true
 rssmail_webcontent=true
+delay_webcontent=false
 outbox=~/servers/outbox
 
 rssmail() {
@@ -66,7 +67,15 @@ esac
 }
 
 send_or_delay(){
-    echo "send"
+    file=$1
+
+    if [ "$(cat $file | grep news.ycombinator.com)" != "" ]
+    then
+        echo delay
+        return
+    fi
+
+    echo send
 }
 
 send_with_webcontent(){
@@ -142,7 +151,7 @@ rssmail_server(){
 
             [ "$outbox" != "" ] && cat /tmp/rssmailcontent > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
 
-            if [ $(send_or_delay /tmp/rssmailcontent) = "send" ]
+            if [ $delay_webcontent = true -a $(send_or_delay /tmp/rssmailcontent) = "send" ]
             then
                 cat /tmp/rssmailcontent | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
             fi
@@ -171,7 +180,7 @@ rssmail_server(){
 
             [ "$outbox" != "" ] && cat /tmp/rssmailcontent > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
 
-            if [ $(send_or_delay /tmp/rssmailcontent) = "send" ]
+            if [ $delay_webcontent = true -a $(send_or_delay /tmp/rssmailcontent) = "send" ]
             then
                 cat /tmp/rssmailcontent | $MAILCMD -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
             fi
