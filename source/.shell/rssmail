@@ -84,7 +84,11 @@ send_with_webcontent(){
 
     if [ $send = true ]
     then
-        (echo $link; webcontent $link_for_webcontent) # | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com ))
+        echo "\e[34m $title \e[0m: $link $link_for_webcontent"
+        (
+            echo $link;
+            webcontent $link_for_webcontent
+        ) # | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com ))
     fi
 }
 
