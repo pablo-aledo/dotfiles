@@ -84,6 +84,20 @@ send_with_webcontent(){
     fi
 }
 
+rss_send_delayed(){
+ls ~/servers/outbox > to_send
+
+comm -13 ~/servers/send_delayed/sent ~/servers/send_delayed/to_send \
+    | sed 's|^|~/servers/outbox/|g' \
+    | grep "^$(date +%y%m%d --date 'now - 1 days')" \
+    | while read line
+do
+    send_with_webcontent "$line"
+done
+
+cp ~/servers/send_delayed/{to_send,sent}
+}
+
 rssmail_server(){
     [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/avxhome/learning >/dev/null
 	[ -e /usr/bin/rsstail ] || pkg install rsstail
@@ -150,3 +164,4 @@ rssmail_server(){
 
 	done
 }
+
