@@ -85,7 +85,7 @@ send_with_webcontent(){
 }
 
 rss_send_delayed(){
-ls ~/servers/outbox > to_send
+ls ~/servers/outbox > ~/servers/to_send
 
 comm -13 ~/servers/webcontent_delay/sent ~/servers/webcontent_delay/to_send \
     | sed 's|^|~/servers/outbox/|g' \
