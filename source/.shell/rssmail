@@ -67,7 +67,8 @@ esac
 
 send_with_webcontent(){
     file=$1
-    title=$(echo $file | sed 's/^..............//g')
+    filename=$(basename "$file")
+    title=$(echo $filename | sed 's/^..............//g')
     send=false
 
     if [ "$(cat $file | grep news.ycombinator.com)" != "" ]
