@@ -65,6 +65,10 @@ case $link in
 esac
 }
 
+send_or_delay(){
+    echo "send"
+}
+
 send_with_webcontent(){
     file=$1
     filename=$(basename "$file")
@@ -99,6 +103,7 @@ done
 cat ~/servers/webcontent_delay/to_send > ~/servers/webcontent_delay/sent
 }
 
+
 rssmail_server(){
     [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/avxhome/learning >/dev/null
 	[ -e /usr/bin/rsstail ] || pkg install rsstail
@@ -131,7 +136,11 @@ rssmail_server(){
             [ $rssmail_webcontent = true  ] && (echo $link; echo; webcontent $link) > /tmp/rssmailcontent
 
             [ "$outbox" != "" ] && cat /tmp/rssmailcontent > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
-            cat /tmp/rssmailcontent | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
+
+            if [ $(send_or_delay /tmp/rssmailcontent) = "send" ]
+            then
+                cat /tmp/rssmailcontent | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
+            fi
 
             sleep 1
 		fi
@@ -156,7 +165,11 @@ rssmail_server(){
             [ $rssmail_webcontent = true  ] && (echo $link; echo $description; webcontent $link) > /tmp/rssmailcontent
 
             [ "$outbox" != "" ] && cat /tmp/rssmailcontent > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
-            cat /tmp/rssmailcontent | $MAILCMD -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
+
+            if [ $(send_or_delay /tmp/rssmailcontent) = "send" ]
+            then
+                cat /tmp/rssmailcontent | $MAILCMD -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
+            fi
 
             sleep 1
 		fi
