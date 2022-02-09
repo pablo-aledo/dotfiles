@@ -119,7 +119,9 @@ do
     send_with_webcontent "$line"
 done
 
-cat ~/servers/webcontent_delay/to_send > ~/servers/webcontent_delay/sent
+cat ~/servers/webcontent_delay/to_send \
+    | grep "^$(date +%y%m%d --date 'now - 1 days')" \
+    >> ~/servers/webcontent_delay/sent
 }
 
 
