@@ -57,7 +57,7 @@ case $link in
     ;;
 (*avxhm.se*)
     rm -fr /tmp/webcontent*
-    w3m -dump $link | sed -e '^Close$/=====/g' -e '^Read more$' > /tmp/webcontent
+    w3m -dump $link | sed -e 's/^Close$/=====/g' -e 's/^Read more$/=====/g' > /tmp/webcontent
     csplit -s /tmp/webcontent -f /tmp/webcontent --suppress-matched '/=====/' '{*}'
     [ -e /tmp/webcontent01 ] && cat /tmp/webcontent01
     ;;
