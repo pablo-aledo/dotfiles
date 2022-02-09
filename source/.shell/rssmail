@@ -84,7 +84,8 @@ send_with_webcontent(){
 
     if [ $send = true ]
     then
-        echo "\e[34m $title \e[0m: $link $link_for_webcontent"
+        echo "\e[34m $title \e[0m: $filename"
+        echo $link $link_for_webcontent"
         (
             echo $link;
             webcontent $link_for_webcontent
