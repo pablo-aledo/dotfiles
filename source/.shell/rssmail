@@ -52,7 +52,7 @@ case $link in
 
 (*news.ycombinator.com*)
     rm -fr /tmp/webcontent*
-    w3m -dump $link | sed 's/.*next \[.\]/=====/g' > /tmp/webcontent
+    w3m -dump $link | sed -e 's/.*next \[.\]/=====/g' -e 's/^    reply$/=====/g' > /tmp/webcontent
     csplit -s /tmp/webcontent -f /tmp/webcontent --suppress-matched '/=====/' '{*}'
     [ -e /tmp/webcontent01 ] && cat /tmp/webcontent01
     ;;
