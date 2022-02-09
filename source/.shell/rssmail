@@ -105,8 +105,9 @@ send_with_webcontent(){
 rss_send_delayed(){
 ls ~/servers/outbox > ~/servers/to_send
 
-comm -13 ~/servers/webcontent_delay/sent ~/servers/webcontent_delay/to_send \
-    | grep "^$(date +%y%m%d --date 'now - 1 days')" \
+comm -13 ~/servers/webcontent_delay/sent <(
+    cat ~/servers/webcontent_delay/to_send \
+        | grep "^$(date +%y%m%d --date 'now - 1 days')" ) \
     | sed 's|^|~/servers/outbox/|g' \
     | while read line
 do
