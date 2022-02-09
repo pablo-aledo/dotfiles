@@ -7,5 +7,5 @@ cur=${words[CURRENT]}
 prev=${words[CURRENT-1]}
 cmd=${words[2]}
 
-[ "$prev" = "tma" ] && _describe 'command' sessions
+_describe 'command' sessions
 
