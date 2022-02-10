@@ -62,6 +62,7 @@ case $link in
         n=$(( $n + 1 ))
         sleep $(( $RANDOM % 120 ))
     done
+    echo
 
     csplit -s /tmp/webcontent -f /tmp/webcontent --suppress-matched '/=====/' '{*}'
     [ -e /tmp/webcontent01 ] && cat /tmp/webcontent01
