@@ -46,35 +46,33 @@ rssmail_cut () {
 webcontent(){
 
 link=$1
-
+tmpfolder=$(mktemp -d)
 
 case $link in
-
 (*news.ycombinator.com*)
-    rm -fr /tmp/webcontent*
-
     n=0
     while true
     do
         echo -n .
-        w3m -dump $link | sed -e 's/.*next \[.\]/=====/g' -e 's/^    reply$/=====/g' > /tmp/webcontent
-        [ $(cat /tmp/webcontent | wc -l) -gt 1 -o $n -gt 10 ] && break
+        w3m -dump $link | sed -e 's/.*next \[.\]/=====/g' -e 's/^    reply$/=====/g' > $tmpfolder/webcontent
+        [ $(cat $tmpfolder/webcontent | wc -l) -gt 1 -o $n -gt 10 ] && break
         n=$(( $n + 1 ))
         sleep $(( $RANDOM % 120 ))
     done
     echo
 
-    csplit -s /tmp/webcontent -f /tmp/webcontent --suppress-matched '/=====/' '{*}'
-    [ -e /tmp/webcontent01 ] && cat /tmp/webcontent01
+    csplit -s $tmpfolder/webcontent -f $tmpfolder/webcontent --suppress-matched '/=====/' '{*}'
+    [ -e $tmpfolder/webcontent01 ] && cat $tmpfolder/webcontent01
     ;;
 (*avxhm.se*)
-    rm -fr /tmp/webcontent*
-    w3m -dump $link | sed -e 's/^Close$/=====/g' -e 's/^Read more$/=====/g' -e 's/^.*icerbox.com.*$/=====/g' > /tmp/webcontent
-    csplit -s /tmp/webcontent -f /tmp/webcontent --suppress-matched '/=====/' '{*}'
-    [ -e /tmp/webcontent01 ] && cat /tmp/webcontent01
+    rm -fr $tmpfolder/webcontent*
+    w3m -dump $link | sed -e 's/^Close$/=====/g' -e 's/^Read more$/=====/g' -e 's/^.*icerbox.com.*$/=====/g' > $tmpfolder/webcontent
+    csplit -s $tmpfolder/webcontent -f $tmpfolder/webcontent --suppress-matched '/=====/' '{*}'
+    [ -e $tmpfolder/webcontent01 ] && cat $tmpfolder/webcontent01
     ;;
 
 esac
+# rm -fr $tmpfolder
 }
 
 send_or_delay(){
