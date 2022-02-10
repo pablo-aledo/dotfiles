@@ -103,7 +103,7 @@ send_with_webcontent(){
 }
 
 rss_send_delayed(){
-ls ~/servers/outbox > ~/servers/to_send
+ls ~/servers/outbox > ~/servers/webcontent_delay/to_send
 
 # comm -13 ~/servers/webcontent_delay/sent <(
 #     cat ~/servers/webcontent_delay/to_send \
