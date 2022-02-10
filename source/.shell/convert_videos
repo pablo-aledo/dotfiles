@@ -1207,3 +1207,12 @@ export converted_dir=$( dirname $converted_dir )/converted$(( $( echo $converted
 echo $convert_dir
 echo $converted_dir
 }
+
+convert_extract_commands(){
+    folder="$1"
+    echo "cd .."
+    echo 'mkdir "'$folder'"'
+    echo 'cd "'$folder'"'
+    echo 'unrar x ../../Videos/"'$folder'"/"$(ls ../../Videos/"'$folder'" | head -n1)"'
+    echo
+}
