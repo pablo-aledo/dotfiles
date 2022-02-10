@@ -52,7 +52,17 @@ case $link in
 
 (*news.ycombinator.com*)
     rm -fr /tmp/webcontent*
-    w3m -dump $link | sed -e 's/.*next \[.\]/=====/g' -e 's/^    reply$/=====/g' > /tmp/webcontent
+
+    n=0
+    while true
+    do
+        echo -n .
+        w3m -dump $link | sed -e 's/.*next \[.\]/=====/g' -e 's/^    reply$/=====/g' > /tmp/webcontent
+        [ $(cat /tmp/webcontent | wc -l) -gt 1 -o $n -gt 10 ] && break
+        n=$(( $n + 1 ))
+        sleep $(( $RANDOM % 120 ))
+    done
+
     csplit -s /tmp/webcontent -f /tmp/webcontent --suppress-matched '/=====/' '{*}'
     [ -e /tmp/webcontent01 ] && cat /tmp/webcontent01
     ;;
