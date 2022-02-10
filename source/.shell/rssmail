@@ -72,7 +72,7 @@ case $link in
     ;;
 
 esac
-# rm -fr $tmpfolder
+rm -fr $tmpfolder
 }
 
 send_or_delay(){
@@ -120,7 +120,7 @@ ls ~/servers/outbox > ~/servers/webcontent_delay/to_send
 #     | sed 's|^|~/servers/outbox/|g' \
 #     | while read line
 comm -13 <(sort ~/servers/webcontent_delay/sent) <(sort ~/servers/webcontent_delay/to_send) \
-    | grep "^$(date +%y%m%d --date 'now - 1 days')" \
+    | grep -v "^$(date +%y%m%d)" \ #| grep "^$(date +%y%m%d --date 'now - 1 days')" \
     | sed 's|^|~/servers/outbox/|g' \
     | while read line
 do
@@ -129,8 +129,8 @@ do
 done
 
 cat ~/servers/webcontent_delay/to_send \
-    | grep "^$(date +%y%m%d --date 'now - 1 days')" \
-    >> ~/servers/webcontent_delay/sent
+    | grep -v "^$(date +%y%m%d)" \ # | grep "^$(date +%y%m%d --date 'now - 1 days')" \
+    > ~/servers/webcontent_delay/sent
 }
 
 
