@@ -115,7 +115,7 @@ comm -13 ~/servers/webcontent_delay/sent ~/servers/webcontent_delay/to_send \
     | sed 's|^|~/servers/outbox/|g' \
     | while read line
 do
-    line=$(echo $line | sed "s|~|$HOME|g")
+    line=$(echo $line | sed "s|^~|$HOME|g")
     send_with_webcontent "$line"
 done
 
