@@ -44,10 +44,10 @@ rssmail_cut () {
 }
 
 webcontent(){
-
 link=$1
 tmpfolder=$(mktemp -d)
 
+echo '<pre>'
 case $link in
 (*news.ycombinator.com*)
     n=0
@@ -72,6 +72,8 @@ case $link in
     ;;
 
 esac
+echo '</pre>'
+
 rm -fr $tmpfolder
 }
 
@@ -103,7 +105,7 @@ send_with_webcontent(){
     (
         cat $file
         webcontent $link_for_webcontent
-    ) # | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com ))
+    ) # | $MAILCMD -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
 }
 
 rss_send_delayed(){
