@@ -91,13 +91,11 @@ send_with_webcontent(){
     file=$1
     filename=$(basename "$file")
     title=$(echo $filename | sed 's/^..............//g')
-    send=false
 
     if [ "$(cat $file | grep news.ycombinator.com)" != "" ]
     then
         link_for_webcontent=$(cat $file | grep 'a href' | cut -d'"' -f2)
         link=$(cat $file | grep '^ https')
-        send=true
     fi
 
     if [ $send = true ]
@@ -127,7 +125,7 @@ comm -13 <(sort ~/servers/webcontent_delay/sent) <(sort ~/servers/webcontent_del
     | while read line
 do
     line=$(echo $line | sed "s|^~|$HOME|g")
-    send_with_webcontent "$line"
+    [ $(send_or_delay "$line") = delay ] && send_with_webcontent "$line"
 done
 
 cat ~/servers/webcontent_delay/to_send \
