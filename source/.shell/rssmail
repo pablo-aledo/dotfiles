@@ -101,7 +101,7 @@ send_with_webcontent(){
     echo "\e[34m $title \e[0m: $filename"
     echo "\e[33m $link $link_for_webcontent\e[0m"
     (
-        cat $filename
+        cat $file
         webcontent $link_for_webcontent
     ) # | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com ))
 }
