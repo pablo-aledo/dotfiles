@@ -98,15 +98,12 @@ send_with_webcontent(){
         link=$(cat $file | grep '^ https')
     fi
 
-    if [ $send = true ]
-    then
-        echo "\e[34m $title \e[0m: $filename"
-        echo "\e[33m $link $link_for_webcontent\e[0m"
-        (
-            echo $link;
-            webcontent $link_for_webcontent
-        ) # | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com ))
-    fi
+    echo "\e[34m $title \e[0m: $filename"
+    echo "\e[33m $link $link_for_webcontent\e[0m"
+    (
+        echo $link;
+        webcontent $link_for_webcontent
+    ) # | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com ))
 }
 
 rss_send_delayed(){
