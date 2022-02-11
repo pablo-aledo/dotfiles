@@ -114,13 +114,15 @@ send_with_webcontent(){
 rss_send_delayed(){
 ls ~/servers/outbox > ~/servers/webcontent_delay/to_send
 
+#| grep "^$(date +%y%m%d --date 'now - 1 days')" \
+
 # comm -13 ~/servers/webcontent_delay/sent <(
 #     cat ~/servers/webcontent_delay/to_send \
 #         | grep "^$(date +%y%m%d --date 'now - 1 days')" ) \
 #     | sed 's|^|~/servers/outbox/|g' \
 #     | while read line
 comm -13 <(sort ~/servers/webcontent_delay/sent) <(sort ~/servers/webcontent_delay/to_send) \
-    | grep -v "^$(date +%y%m%d)" \ #| grep "^$(date +%y%m%d --date 'now - 1 days')" \
+    | grep -v "^$(date +%y%m%d)" \
     | sed 's|^|~/servers/outbox/|g' \
     | while read line
 do
@@ -129,7 +131,7 @@ do
 done
 
 cat ~/servers/webcontent_delay/to_send \
-    | grep -v "^$(date +%y%m%d)" \ # | grep "^$(date +%y%m%d --date 'now - 1 days')" \
+    | grep -v "^$(date +%y%m%d)" \
     > ~/servers/webcontent_delay/sent
 }
 
