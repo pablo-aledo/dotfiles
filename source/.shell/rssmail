@@ -47,19 +47,21 @@ webcontent(){
 link=$1
 tmpfolder=$(mktemp -d)
 
-echo '<pre>'
 case $link in
 (*news.ycombinator.com*)
     n=0
+    echo '<code><pre>'
     while true
     do
         echo -n .
-        w3m -dump $link | sed -e 's/.*next \[.\]/=====/g' -e 's/^    reply$/=====/g' > $tmpfolder/webcontent
+        w3m -cols 40 -dump $link | sed -e 's/.*next \[.\]/=====/g' -e 's/^    reply$/=====/g' \
+            | sed 's/^[ \*]*//g' \
+            > $tmpfolder/webcontent
         [ $(cat $tmpfolder/webcontent | wc -l) -gt 1 -o $n -gt 10 ] && break
         n=$(( $n + 1 ))
         sleep $(( $RANDOM % 120 ))
     done
-    echo
+    echo '</pre></code>'
 
     csplit -s $tmpfolder/webcontent -f $tmpfolder/webcontent --suppress-matched '/=====/' '{*}'
     [ -e $tmpfolder/webcontent01 ] && cat $tmpfolder/webcontent01
@@ -70,10 +72,7 @@ case $link in
     csplit -s $tmpfolder/webcontent -f $tmpfolder/webcontent --suppress-matched '/=====/' '{*}'
     [ -e $tmpfolder/webcontent01 ] && cat $tmpfolder/webcontent01
     ;;
-
 esac
-echo '</pre>'
-
 rm -fr $tmpfolder
 }
 
@@ -105,7 +104,7 @@ send_with_webcontent(){
     (
         cat $file
         webcontent $link_for_webcontent
-    ) # | $MAILCMD -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
+    )  | $MAILCMD -e "set content_type=text/html" -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title" -- pablo.aledo.rss@gmail.com
 }
 
 rss_send_delayed(){
