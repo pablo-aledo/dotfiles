@@ -54,7 +54,7 @@ case $link in
     while true
     do
         echo -n .
-        w3m -cols 40 -dump $link | sed -e 's/.*next \[.\]/=====/g' -e 's/^    reply$/=====/g' \
+        w3m -cols 60 -dump $link | sed -e 's/.*next \[.\]/=====/g' -e 's/^    reply$/=====/g' \
             | sed 's/^[ \*]*//g' \
             > $tmpfolder/webcontent
         [ $(cat $tmpfolder/webcontent | wc -l) -gt 1 -o $n -gt 10 ] && break
