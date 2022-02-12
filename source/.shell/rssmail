@@ -61,10 +61,10 @@ case $link in
         n=$(( $n + 1 ))
         sleep $(( $RANDOM % 120 ))
     done
-    echo '</pre></code>'
 
     csplit -s $tmpfolder/webcontent -f $tmpfolder/webcontent --suppress-matched '/=====/' '{*}'
     [ -e $tmpfolder/webcontent01 ] && cat $tmpfolder/webcontent01
+    echo '</pre></code>'
     ;;
 (*avxhm.se*)
     w3m -dump $link | sed -e 's/^Close$/=====/g' -e 's/^Read more$/=====/g' -e 's/^.*icerbox.com.*$/=====/g' > $tmpfolder/webcontent
