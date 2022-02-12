@@ -952,9 +952,9 @@ server(){
         do
             if [ $(date +%H%M) = $date_webcontent ] 
             then
-                echo "===== Start ====="
+                echo "===== Start $(cdate) ====="
                 rss_send_delayed
-                echo "===== End ====="
+                echo "===== End $(cdate) ====="
 
                 sleep $((60*5))
             fi
