@@ -123,11 +123,12 @@ comm -13 <(sort ~/servers/webcontent_delay/sent) <(sort ~/servers/webcontent_del
 do
     line=$(echo $line | sed "s|^~|$HOME|g")
     [ $(send_or_delay "$line") = delay ] && send_with_webcontent "$line"
+    basename "$line" >> ~/servers/webcontent_delay/sent
 done
 
-cat ~/servers/webcontent_delay/to_send \
-    | grep -v "^$(date +%y%m%d)" \
-    > ~/servers/webcontent_delay/sent
+#cat ~/servers/webcontent_delay/to_send \
+    #| grep -v "^$(date +%y%m%d)" \
+    #> ~/servers/webcontent_delay/sent
 }
 
 
