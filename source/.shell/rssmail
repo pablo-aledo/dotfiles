@@ -158,7 +158,7 @@ rssmail_server(){
             [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/avxhome/learning >/dev/null
             [ "$rssmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
             title_outbox=$(echo $title_ml | sed -e 's|/||g')
-            echo "\e[31m $title_ml \e[0m $link "
+            echo "\e[34m $title_ml \e[0m $link "
 
             [ $rssmail_webcontent = false ] && (echo $link)                         > /tmp/rssmailcontent
             [ $rssmail_webcontent = true  ] && (echo $link; echo; webcontent $link) > /tmp/rssmailcontent
@@ -169,6 +169,11 @@ rssmail_server(){
             if [ $delay_webcontent = true -a $(send_or_delay /tmp/rssmailcontent) = "send" ]
             then
                 cat /tmp/rssmailcontent | $MAILCMD -F ~/.mutt/muttrc_$(( $(date +%s) % $(ls ~/.mutt/muttrc_* | wc -l) )) -s "$title_ml" -- pablo.aledo.rss@gmail.com
+            fi
+
+            if [ $delay_webcontent = true -a $(send_or_delay /tmp/rssmailcontent) != "send" ]
+            then
+                echo '\e[31m ===== DELAY \e[0m'
             fi
 
             sleep 1

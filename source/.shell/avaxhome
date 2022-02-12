@@ -269,7 +269,7 @@ avhome_mail_server(){
               [ "$avxmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
               title_outbox=$(echo $title_ml | sed -e 's|/||g')
               link=http://avxhm.se$(echo $line | cut -d'|' -f1)
-              echo "\e[31m $title_ml \e[0m: $link"
+              echo "\e[34m $title_ml \e[0m: $link"
               title_escaped=`echo $title | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g' -e 's/\*/\\\*/g'`
               grep "^$title_escaped\$" ~/servers/avxhome/avxtitles >/dev/null && continue
               echo $title >> ~/servers/avxhome/avxtitles
