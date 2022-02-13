@@ -92,6 +92,8 @@ send_with_webcontent(){
     filename=$(basename "$file")
     title=$(echo $filename | sed 's/^..............//g')
 
+    link=""
+    link_for_webcontent=""
     if [ "$(cat $file | grep news.ycombinator.com)" != "" ]
     then
         link_for_webcontent=$(cat $file | grep 'a href' | cut -d'"' -f2)
