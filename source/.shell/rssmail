@@ -1,7 +1,7 @@
 RSSMAIL=~/servers/rssmail
 rssmail_ml=true
 rssmail_webcontent=true
-delay_webcontent=false
+delay_webcontent=true
 outbox=~/servers/outbox
 
 rssmail() {
