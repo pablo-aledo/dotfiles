@@ -162,8 +162,9 @@ rssmail_server(){
             title_outbox=$(echo $title_ml | sed -e 's|/||g')
             echo "\e[34m $title_ml \e[0m $link "
 
-            [ $rssmail_webcontent = false ] && (echo $link)                         > /tmp/rssmailcontent
-            [ $rssmail_webcontent = true  ] && (echo $link; echo; webcontent $link) > /tmp/rssmailcontent
+            [ $rssmail_webcontent = false ] && (echo $link) > /tmp/rssmailcontent
+            [ $rssmail_webcontent = true -a $(send_or_delay /tmp/rssmailcontent) = "send"  ] && (echo $link; echo; webcontent $link) > /tmp/rssmailcontent
+            [ $rssmail_webcontent = true -a $(send_or_delay /tmp/rssmailcontent) = "delay" ] && (echo $link;                       ) > /tmp/rssmailcontent
 
             # w3m -T text/html for plain text storage
             [ "$outbox" != "" ] && cat /tmp/rssmailcontent > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
@@ -194,8 +195,9 @@ rssmail_server(){
 			echo "\e[34m $title_ml \e[0m $link "
 			echo "$title_ml -> $link" >> $RSSMAIL/map
 
-            [ $rssmail_webcontent = false ] && (echo $link; echo $description)                   > /tmp/rssmailcontent
-            [ $rssmail_webcontent = true  ] && (echo $link; echo $description; webcontent $link) > /tmp/rssmailcontent
+            [ $rssmail_webcontent = false ] && (echo $link; echo $description) > /tmp/rssmailcontent
+            [ $rssmail_webcontent = true -a $(send_or_delay /tmp/rssmailcontent) = "send"  ] && (echo $link; echo $description; webcontent $link) > /tmp/rssmailcontent
+            [ $rssmail_webcontent = true -a $(send_or_delay /tmp/rssmailcontent) = "delay" ] && (echo $link; echo $description;                 ) > /tmp/rssmailcontent
 
             [ "$outbox" != "" ] && cat /tmp/rssmailcontent > $outbox/$(date +%y%m%d-%H%M%S)_$title_outbox
 
