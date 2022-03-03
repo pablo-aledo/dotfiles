@@ -1202,10 +1202,19 @@ midi2mp3_2(){
 }
 
 convert_increment(){
-export convert_dir=$(   dirname $convert_dir   )/convert$((   $( echo $convert_dir   | grep -Eo '[0-9]+$') + 1 ))
-export converted_dir=$( dirname $converted_dir )/converted$(( $( echo $converted_dir | grep -Eo '[0-9]+$') + 1 ))
-echo $convert_dir
-echo $converted_dir
+if [ $# -eq 1 ]
+then
+    export convert_dir=$(   dirname $convert_dir   )/convert$1
+    export converted_dir=$( dirname $converted_dir )/converted$1
+else
+    export convert_dir=$(   dirname $convert_dir   )/convert$((   $( echo $convert_dir   | grep -Eo '[0-9]+$') + 1 ))
+    export converted_dir=$( dirname $converted_dir )/converted$(( $( echo $converted_dir | grep -Eo '[0-9]+$') + 1 ))
+fi
+[ -e $convert_dir ] &&   convert_color='\e[32m'   || convert_color='\e[31m'
+[ -e $converted_dir ] && converted_color='\e[32m' || converted_color='\e[31m'
+echo "$convert_color $convert_dir \e[0m"
+echo "$converted_color $converted_dir \e[0m"
+[ -e $convert_dir ] && cd $convert_dir
 }
 
 convert_extract_commands(){
