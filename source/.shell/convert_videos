@@ -1222,6 +1222,6 @@ convert_extract_commands(){
     echo "cd .."
     echo 'mkdir "'$folder'"'
     echo 'cd "'$folder'"'
-    echo 'unrar x ../../Videos/"'$folder'"/"$(ls ../../Videos/"'$folder'" | head -n1)"'
+    echo 'unrar x ../../Videos/"'$folder'"/"$(ls ../../Videos/"'$folder'" | head -n1)" 2>&1 >> ../log.log'
     echo
 }
