@@ -1219,9 +1219,9 @@ echo "$converted_color $converted_dir \e[0m"
 
 convert_extract_commands(){
     folder="$1"
-    echo "cd .."
     echo 'mkdir "'$folder'"'
     echo 'cd "'$folder'"'
     echo 'unrar x ../../Videos/"'$folder'"/"$(ls ../../Videos/"'$folder'" | head -n1)" 2>&1 >> ../log.log'
+    echo "cd .."
     echo
 }
