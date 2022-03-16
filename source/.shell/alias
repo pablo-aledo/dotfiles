@@ -135,7 +135,7 @@ find_index(){
 mgrep files $* | cut -d/ -f8 | sort | uniq | while read line; do echo "$(mgrep files $* | grep -F "/$line/" | wc -l) $line" ; done | sort -g
 }
 
-alias wl4dl='watch -tn1 "find /tmp/ -maxdepth 1 -name lock4dl -mmin +1"'
+alias wl4dl='watch -tn1 "find /tmp/ -maxdepth 1 -name \"lock*\" -mmin +1"'
 alias wavline='watch -tn1 "cat /tmp/avl_line"'
 
 ws2files(){
