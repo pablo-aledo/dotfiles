@@ -20,6 +20,7 @@ Git(){
         (stash_save_all) \git add .; \git stash push -m "$1"; \git stash apply ;;
         (stash_save_staged) \git add -u; \git stash push -m "$1" ;;
         (remove_last_commit) \git reset --hard HEAD^ ;;
+        (unstage) \git reset $* ;;
 
         (*) \git $command $*;;
     esac
