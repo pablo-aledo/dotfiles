@@ -10,6 +10,7 @@ Git(){
         (branch_rewrite) \git rebase -i $(\git merge-base master $(\git rev-parse HEAD)) ;;
         (branch_to_patch) \git diff $(\git merge-base master $(\git rev-parse HEAD)) $(\git rev-parse HEAD);;
         (branch_create) \git branch $1; git checkout $1 ;;
+        (branch_rebase) \git checkout $1; \git rebase $2 ;;
 
         (push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
         (pull) \git pull --rebase ;;
