@@ -8,7 +8,7 @@ Git(){
         (log_follow) \git log --follow $* ;;
 
         (branch_rewrite) \git rebase -i $(\git merge-base master $(\git rev-parse HEAD)) ;;
-        (branch_to_patch) \git diff $(\git merge-base master $(\git rev-parse HEAD)) $(\git rev-parse HEAD);;
+        (branch_to_patch) \git diff $(\git merge-base master $(\git rev-parse HEAD)) $(\git rev-parse HEAD) > ../patch.patch ;;
         (branch_create) \git branch $1; git checkout $1 ;;
         (branch_rebase) \git checkout $1; \git rebase $2 ;;
 
