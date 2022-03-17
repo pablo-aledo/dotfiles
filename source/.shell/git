@@ -12,6 +12,7 @@ Git(){
         (branch_create) \git branch $1; git checkout $1 ;;
         (branch_rebase) \git checkout $1; \git rebase $2 ;;
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
+        (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
 
         (pull_rebase) \git pull --rebase ;;
 
