@@ -8,4 +8,7 @@ pkg install lcov
 # pkg install clang-format
 pkg install codespell
 pkg install conan
+
+# pkg install fmt
+# pkg install catch2
 pip install cmake-init
