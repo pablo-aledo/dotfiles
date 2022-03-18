@@ -4,7 +4,7 @@ Git(){
     shift
     case $command in
 
-        (log_graph) \git log --oneline --graph ;;
+        (log_graph) \git log --oneline --graph | head ;;
         (log_follow) \git log --follow $* ;;
 
         (branch_rewrite) \git rebase -i $(\git merge-base master $(\git rev-parse HEAD)) ;; # pick, squash, squash, squash...
