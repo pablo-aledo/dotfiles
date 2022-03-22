@@ -1225,3 +1225,16 @@ convert_extract_commands(){
     echo "cd .."
     echo
 }
+
+convert_mv_commands(){
+echo 'mv_converted(){'
+echo '    [ $# -eq 2 ] || return'
+echo '    [ -e /volume1/admin/Videos/"$2" ] || return'
+echo '    [ -e /volume1/admin/converted"$1"/"$2" ] || return'
+echo '    [ -e /volume1/admin/convert"$1"/"$2" ] || return'
+echo '    rm -fr /volume1/admin/Videos/"$2"'
+echo '    mv /volume1/admin/converted"$1"/"$2" /volume1/homes/admin/Videos/'
+echo '    rm -fr /volume1/admin/convert"$1"/"$2"'
+echo '}'
+}
+
