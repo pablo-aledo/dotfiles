@@ -10,6 +10,7 @@ Git(){
         (branch_rewrite) \git rebase -i $(\git merge-base master $(\git rev-parse HEAD)) ;; # pick, squash, squash, squash...
         (branch_to_patch) \git diff $(\git merge-base master $(\git rev-parse HEAD)) $(\git rev-parse HEAD) > ../patch.patch ;;
         (branch_to_file) \git log --cc $(\git merge-base master $(\git rev-parse HEAD))...HEAD > ../branch.patch ;;
+        (branch_to_file_2) \git format-patch --stdout $(\git merge-base master $(\git rev-parse HEAD)) > ../branch2.patch ;;
         (branch_create) \git branch $1; git checkout $1 ;;
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
