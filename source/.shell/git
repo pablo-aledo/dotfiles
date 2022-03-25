@@ -11,12 +11,12 @@ Git(){
         (branch_to_patch) \git diff $(\git merge-base master $(\git rev-parse HEAD)) $(\git rev-parse HEAD) > ../patch.patch ;;
         (branch_to_file) \git log --cc $(\git merge-base master $(\git rev-parse HEAD))...HEAD > ../branch.patch ;;
         (branch_to_file_2) \git format-patch --stdout $(\git merge-base master $(\git rev-parse HEAD)) > ../branch2.patch ;; # consume with git am
-        (branch_create) \git branch $1; git checkout $1 ;;
+        (branch_create) \git checkout -b $1 ;;
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
 
         (pull_rebase) \git pull --rebase ;;
-
+        (clone_recursive) \git clone --recurse-submodules $* ;;
         (clean) \git clean -df ;;
         (list_excluded) \git ls-files -i -c --exclude-from=.gitignore ;;
         (interactive_checkout) \git checkout -p . ;;
