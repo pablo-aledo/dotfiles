@@ -20,6 +20,7 @@ Git(){
         (clean) \git clean -df ;;
         (list_excluded) \git ls-files -i -c --exclude-from=.gitignore ;;
         (interactive_checkout) \git checkout -p . ;;
+        (interactive_add) \git add -p $* ;;
         (stash_save_all) \git add .; \git stash push -m "$1"; \git stash apply ;;
         (stash_save_staged) \git add -u; \git stash push -m "$1"; \git stash apply ;;
         (remove_last_commit) \git reset --hard HEAD^ ;;
