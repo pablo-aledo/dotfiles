@@ -155,3 +155,5 @@ incredibuild(){
     [ $# -gt 2 ] && title=$3 || title=Title
     BuildConsole ${project} /build /cfg="$cfg" /nologo /AvoidLocal=On /Title="$title" /beep
 }
+
+alias winpython='winpty python.exe'
