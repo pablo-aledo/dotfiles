@@ -184,6 +184,11 @@ case $1 in
     docker-compose up -d
     cd -
     ;;
+(named-entity-tagger)
+    git clone https://github.com/IBM/MAX-Named-Entity-Tagger.git
+    cd MAX-Named-Entity-Tagger
+    docker build -t max-named-entity-tagger .
+    ;;
 (neuraltalk2-web)
     cd /tmp
     wget --no-check-certificate http://cs.stanford.edu/people/karpathy/neuraltalk2/checkpoint_v1_cpu.zip
@@ -515,6 +520,11 @@ case $1 in
 (meld)                   shift; docker run -d -e DISPLAY=unix$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $(pwd):/workdir guywithnose/meld meld $* ;;
 (metabase)               docker run -d -p 3000:3000 --name metabase metabase/metabase ;;
 (mutt)                   docker run -it -v /etc/localtime:/etc/localtime:ro -e GMAIL -e GMAIL_NAME -e GMAIL_PASS -e GMAIL_FROM -v $HOME/.gnupg:/home/user/.gnupg --name mutt ${DOCKER_REPO_PREFIX}/mutt ;;
+(named-entity-tagger)    
+                         docker run -it -p 5000:5000 max-named-entity-tagger
+                         curl -X POST -H 'Content-Type: application/json' -d '{"text":"John lives in Brussels and works for the EU"}' 'http://localhost:5000/model/predict'
+                         firefox localhost:5000
+                         ;;
 (ncmpc)                  docker run --rm -it -v /etc/localtime:/etc/localtime:ro --link mpd:mpd ${DOCKER_REPO_PREFIX}/ncmpc ;;
 (neoman)                 docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/bus/usb --device /dev/usb --name neoman ${DOCKER_REPO_PREFIX}/neoman ;;
 (nes)                    docker run --rm -d --device /dev/snd -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/dri ${DOCKER_REPO_PREFIX}/nes /games/zelda.rom ;;
