@@ -164,6 +164,8 @@ fastbuild(){
 
     ROOTPWD=$PWD
 
+    [ -e fastbuild_pre.sh ] && source fastbuild_pre.sh
+
     msbuild='/c/Program Files (x86)/Microsoft Visual Studio/2019/Professional/MSBuild/Current/Bin/MSBuild.exe'
     for project in $subprojects
     do
@@ -174,5 +176,5 @@ fastbuild(){
         cd $ROOTPWD
     done
 
-    cd $ROOTPWD
+    [ -e fastbuild_post.sh ] && source fastbuild_post.sh
 }
