@@ -1,4 +1,4 @@
-sudo pacman -S --noconfirm pkgconf fakeroot binutils gcc make libffi
+sudo pacman -S --noconfirm pkgconf fakeroot binutils gcc make libffi automake autoconf
 
 cd /tmp
 git clone https://aur.archlinux.org/libnxml.git
