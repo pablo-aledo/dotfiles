@@ -158,23 +158,3 @@ incredibuild(){
 
 alias winpython='winpty python.exe'
 
-fastbuild(){
-    [ $# -gt 0 ] && subprojects=$1 || subprojects=$(ls -p | grep '/')
-    [ $# -gt 1 ] && destination=$2 || destination=$PWD/build
-
-    ROOTPWD=$PWD
-
-    [ -e fastbuild_pre.sh ] && source fastbuild_pre.sh
-
-    msbuild='/c/Program Files (x86)/Microsoft Visual Studio/2019/Professional/MSBuild/Current/Bin/MSBuild.exe'
-    for project in $subprojects
-    do
-        echo -e "\e[33m $project \e[0m"
-        cd $project
-        "$msbuild" INSTALL.vcxproj
-        cp -r Debug/* $destination
-        cd $ROOTPWD
-    done
-
-    [ -e fastbuild_post.sh ] && source fastbuild_post.sh
-}
