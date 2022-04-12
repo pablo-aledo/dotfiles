@@ -1,0 +1,4 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+mouseover 5 10000 ~/.dotfiles/shortcuts/images/steam-already.png && cat /tmp/link >> /tmp/links-already

@@ -1,0 +1,7 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+sleep 1
+mouseover 3 10000 ~/.dotfiles/shortcuts/images/steam-checkbox.png && xdotool click 1
+mouseover 3 10000 ~/.dotfiles/shortcuts/images/steam-continue.png && xdotool click 1
+sleep 1
