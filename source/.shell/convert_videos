@@ -740,7 +740,7 @@ convert_recursive_parallel(){
 
     convert_2spaces
 
-    convert_unrar
+    # convert_unrar
 
     empty_folders
 
