@@ -969,7 +969,7 @@ server(){
         while true
         do
             convert_increment
-            [ -e $convert_dir ] && { while [ ! -e $converted_dir ]; do sleep 1; done }
+            [ -e $convert_dir ] || { while [ ! -e $converted_dir ]; do sleep 1; done }
             [ -e $converted_dir ] && continue
             mkdir $converted_dir
             convert_recursive_parallel
