@@ -38,7 +38,7 @@ fastbuild_incremental(){
         cd "$( dirname "$line" )"
         while [ $PWD != $ROOTPWD ]
         do
-            [ -e INSTALL.vcxproj ] && echo $PWD >> $ROOTPWD/fastbuild_updated && break
+            [ -e INSTALL.vcxproj ] && echo $PWD >> $ROOTPWD/fbi_updated && break
             cd ..
         done
     done
