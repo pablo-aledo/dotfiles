@@ -4,7 +4,7 @@ fastbuild(){
 
     ROOTPWD=$PWD
 
-    #[ -e fastbuild_pre.sh ] && source fastbuild_pre.sh
+    [ -e fb_pre.sh ] && source fb_pre.sh
 
     msbuild='/c/Program Files (x86)/Microsoft Visual Studio/2019/Professional/MSBuild/Current/Bin/MSBuild.exe'
     for project in $subprojects
@@ -16,7 +16,7 @@ fastbuild(){
         cd $ROOTPWD
     done
 
-    #[ -e fastbuild_post.sh ] && source fastbuild_post.sh
+    [ -e fb_post.sh ] && source fb_post.sh
 }
 
 fastbuild_incremental(){
@@ -24,12 +24,16 @@ fastbuild_incremental(){
 
     ROOTPWD=$PWD
 
-    [ -e fastbuild_pre.sh ] && source fastbuild_pre.sh
+    [ -e fbi_pre.sh ] && source fbi_pre.sh
 
-    LAST=$(lt $destination | head -n1)
+    LAST=$(ls -t $destination | head -n1)
 
-    [ -e fastbuild_updated ] && rm -fr fastbuild_updated
-    find -newer $destination/$LAST . | while read line
+    [ -e fbi_paths ] && dirs=$(cat fbi_paths) || dirs=.
+    [ -e fbi_find ] && fbi_find="$(cat fbi_find)" || fbi_find=""
+
+    [ -e fbi_updated ] && rm -fr fbi_updated
+    echo find $dirs -newer $destination/$LAST -not -path './.vs/*' -type f "\\(" $fbi_find "\\)" \
+        | bash | while read line
     do
         cd "$( dirname "$line" )"
         while [ $PWD != $ROOTPWD ]
@@ -41,10 +45,10 @@ fastbuild_incremental(){
 
     cd $ROOTPWD
 
-    cat fastbuild_updated | while read line
+    cat fbi_updated | while read line
     do
         fastbuild "$line" $destination
     done
 
-    [ -e fastbuild_post.sh ] && source fastbuild_post.sh
+    [ -e fbi_post.sh ] && source fbi_post.sh
 }
