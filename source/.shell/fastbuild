@@ -46,7 +46,7 @@ fastbuild_incremental(){
 
     cd $ROOTPWD
 
-    cat fbi_updated | while read line
+    cat fbi_updated | sort | uniq | while read line
     do
         fastbuild "$line" $destination
     done
