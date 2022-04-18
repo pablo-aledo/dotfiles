@@ -46,6 +46,9 @@ fastbuild_incremental(){
 
     cd $ROOTPWD
 
+    echo -e "\e[34m$(cat fbi_updated | sort | uniq)\e[0m"
+    sleep 1
+
     cat fbi_updated | sort | uniq | while read line
     do
         fastbuild "$line" $destination
