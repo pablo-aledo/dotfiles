@@ -41,6 +41,7 @@ fastbuild_incremental(){
             [ -e INSTALL.vcxproj ] && echo $PWD >> $ROOTPWD/fbi_updated && break
             cd ..
         done
+        cd $ROOTPWD
     done
 
     cd $ROOTPWD
