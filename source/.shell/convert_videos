@@ -1228,10 +1228,11 @@ convert_extract_commands(){
 
 convert_mv_commands(){
 echo 'mv_converted(){'
-echo '    [ $# -eq 2 ] || return'
+echo '    [ $# -ne 2 -o "$1" = "" -o "$2" = "" ] && return'
 echo '    [ -e /volume1/admin/Videos/"$2" ] || return'
 echo '    [ -e /volume1/admin/converted"$1"/"$2" ] || return'
 echo '    [ -e /volume1/admin/convert"$1"/"$2" ] || return'
+echo '    echo $1 $2'
 echo '    rm -fr /volume1/admin/Videos/"$2"'
 echo '    mv /volume1/admin/converted"$1"/"$2" /volume1/admin/Videos/'
 echo '    rm -fr /volume1/admin/convert"$1"/"$2"'
