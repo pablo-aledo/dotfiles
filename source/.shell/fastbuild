@@ -69,7 +69,7 @@ do
 
     [ "$revision" = "master" ] && revision="\e[32m $revision \e[0m" || revision="\e[31m $revision \e[0m"
 
-	[ "$(git status -s | grep '^MM' )" != "" ] && {
+	[ "$(git status -s | grep '^ M' )" != "" ] && {
         echo -e "$line: $revision : \e[31m Modified \e[0m"
     } || {
         echo -e "$line: $revision : \e[32m OK \e[0m"
