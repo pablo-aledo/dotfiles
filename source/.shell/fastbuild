@@ -78,3 +78,10 @@ done
 cd $ROOTPWD
 
 }
+
+incredibuild(){
+    [ $# -gt 0 ] && project=$1 || project=project.sln
+    [ $# -gt 1 ] && cfg=$2 || cfg="Release|x64"
+    [ $# -gt 2 ] && title=$3 || title=Title
+    BuildConsole ${project} /build /cfg="$cfg" /nologo /AvoidLocal=On /Title="$title" /beep
+}

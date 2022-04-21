@@ -149,12 +149,5 @@ ytdlmp4(){
     youtube-dl -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4' $*
 }
 
-incredibuild(){
-    [ $# -gt 0 ] && project=$1 || project=project.sln
-    [ $# -gt 1 ] && cfg=$2 || cfg="Release|x64"
-    [ $# -gt 2 ] && title=$3 || title=Title
-    BuildConsole ${project} /build /cfg="$cfg" /nologo /AvoidLocal=On /Title="$title" /beep
-}
-
 alias winpython='winpty python.exe'
 
