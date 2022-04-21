@@ -499,6 +499,8 @@ convert_small(){
 empty_folders(){
 	cd $convert_dir
 	stpfolders | bash
+    stpfolders | bash
+    stpfolders | bash
 }
 
 convert_rmsmall(){
