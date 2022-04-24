@@ -151,3 +151,8 @@ ytdlmp4(){
 
 alias winpython='winpty python.exe'
 
+vimmarks(){
+    cat marks.txt \
+    | awk '{print ":e " $1; print ":normal gg"$2"jk"; print ":normal m"$3; print ""}' \
+    > /e/marks.so
+}
