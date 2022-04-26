@@ -12,7 +12,10 @@ fastbuild(){
         echo -e "\e[33m $project \e[0m"
         cd $project
         "$msbuild" INSTALL.vcxproj
-        cp -r Debug/* $destination
+        find -type d -iname Debug | while read line
+        do
+            cp -r "$line/Debug/"* $destination
+        done
         cd $ROOTPWD
     done
 
