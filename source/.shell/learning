@@ -2931,3 +2931,32 @@ vect_to_categorical(){
     done | sed -e 's/=1,/,/g' -e 's/.$//g'
 
 }
+
+learning.classify_folders_classify(){
+    return
+    classification_file="$1"
+    prefix="$2"
+    for element in *
+    do
+        element_escaped="$(escape "$element")"
+        classification=$(cat $classification_file | grep "^$element_escaped -> .*$" | sed 's/ -> /@/g' | cut -d@ -f2)
+        [ "$classification" = "" ] && classification="unclassified"
+        [ -e "$prefix/$classification" ] && continue
+        mv "$element" "$prefix/$classification/"
+    done
+}
+
+learning.classify_folders_flat(){
+    return
+    prefix="$1"
+    for classification in *
+    do
+        cd "$classification"
+        for element in *
+        do
+            [ -e "$prefix/$element" ] && continue
+            mv "$element" "$prefix/"
+        done
+        cd ..
+    done
+}
