@@ -2941,7 +2941,8 @@ learning.classify_folders_classify(){
         element_escaped="$(escape "$element")"
         classification=$(cat $classification_file | grep "^$element_escaped -> .*$" | sed 's/ -> /@/g' | cut -d@ -f2)
         [ "$classification" = "" ] && classification="unclassified"
-        [ -e "$prefix/$classification" ] && continue
+        [ -e "$prefix/$classification/$element" ] && continue
+        mkdir -p "$prefix/$classification"
         mv "$element" "$prefix/$classification/"
     done
 }
