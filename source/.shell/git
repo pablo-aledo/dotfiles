@@ -25,7 +25,7 @@ Git(){
         (stash_save_all) \git add .; \git stash push -m "$1"; \git stash apply ;;
         (stash_save_staged) \git add -u; \git stash push -m "$1"; \git stash apply ;;
         (remove_last_commit) \git reset --hard HEAD^ ;;
-        (unstage) \git reset $* ;;
+        (unstage) \git restore --staged $* ;;
         (status_uno) \git status -uno ;;
         (status_short) \git status -s ;;
         (cherrypick_no_commit) \git cherry-pick --no-commit $* ;;
