@@ -19,6 +19,8 @@ fastbuild(){
         cd $ROOTPWD
     done
 
+    # "$msbuild" //p:BuildProjectReferences=false INSTALL.vcxproj
+
     [ -e fb_post.sh ] && source fb_post.sh
 }
 
