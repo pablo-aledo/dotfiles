@@ -2976,7 +2976,7 @@ learning.classify_folders_flat(){
         do
             [ -e "$prefix/$element" ] && continue
 
-            if [ $command = "echo" ]
+            if [ $command = "mv" ]
             then
                 mv "$element" "$prefix/"
             fi
