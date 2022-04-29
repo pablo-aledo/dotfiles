@@ -2936,27 +2936,60 @@ learning.classify_folders_classify(){
     return
     classification_file="$1"
     prefix="$2"
+    command=$3
     for element in *
     do
         element_escaped="$(escape "$element")"
         classification=$(cat $classification_file | grep "^$element_escaped -> .*$" | sed 's/ -> /@/g' | cut -d@ -f2)
         [ "$classification" = "" ] && classification="unclassified"
         [ -e "$prefix/$classification/$element" ] && continue
-        mkdir -p "$prefix/$classification"
-        mv "$element" "$prefix/$classification/"
+        
+        if [ $command = "mv" ]
+        then
+            mkdir -p "$prefix/$classification"
+            mv "$element" "$prefix/$classification/"
+        fi
+
+        if [ $command = "ln" ]
+        then
+            mkdir -p "$prefix/$classification"
+            ln -s "$element" "$prefix/$classification/"
+        fi
+
+        if [ $command = "echo" ]
+        then
+            echo mkdir -p \"$prefix/$classification\"
+            echo mv \"$element\" \"$prefix/$classification/\"
+        fi
+
     done
 }
 
 learning.classify_folders_flat(){
     return
     prefix="$1"
+    command="$2"
     for classification in *
     do
         cd "$classification"
         for element in *
         do
             [ -e "$prefix/$element" ] && continue
-            mv "$element" "$prefix/"
+
+            if [ $command = "echo" ]
+            then
+                mv "$element" "$prefix/"
+            fi
+
+            if [ $command = "ln" ]
+            then
+                ln -s "$element" "$prefix/"
+            fi
+
+            if [ $command = "echo" ]
+            then
+                echo mv \"$element\" \"$prefix/\"
+            fi
         done
         cd ..
     done
