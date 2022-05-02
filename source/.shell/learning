@@ -2933,7 +2933,6 @@ vect_to_categorical(){
 }
 
 learning.classify_folders_classify(){
-    return
     classification_file="$1"
     prefix="$2"
     command=$3
@@ -2942,8 +2941,11 @@ learning.classify_folders_classify(){
         element_escaped="$(escape "$element")"
         classification=$(cat $classification_file | grep "^$element_escaped -> .*$" | sed 's/ -> /@/g' | cut -d@ -f2)
         [ "$classification" = "" ] && classification="unclassified"
+
+        echo "\e[34m $element \e[0m"
+        [ -e "$prefix/$classification/$element" ] && echo "\e[31m Existing $prefix/$classification/$element \e[0m"
         [ -e "$prefix/$classification/$element" ] && continue
-        
+
         if [ $command = "mv" ]
         then
             mkdir -p "$prefix/$classification"
@@ -2953,7 +2955,7 @@ learning.classify_folders_classify(){
         if [ $command = "ln" ]
         then
             mkdir -p "$prefix/$classification"
-            ln -s "$element" "$prefix/$classification/"
+            ln -s "$PWD/$element" "$prefix/$classification/"
         fi
 
         if [ $command = "echo" ]
@@ -2966,14 +2968,14 @@ learning.classify_folders_classify(){
 }
 
 learning.classify_folders_flat(){
-    return
     prefix="$1"
     command="$2"
     for classification in *
     do
-        cd "$classification"
-        for element in *
+        for element in $classification/*
         do
+            echo "\e[34m $element \e[0m"
+            [ -e "$prefix/$element" ] && echo "\e[31m Existing $prefix/$element"
             [ -e "$prefix/$element" ] && continue
 
             if [ $command = "mv" ]
@@ -2983,7 +2985,7 @@ learning.classify_folders_flat(){
 
             if [ $command = "ln" ]
             then
-                ln -s "$element" "$prefix/"
+                ln -s "$PWD/$element" "$prefix/"
             fi
 
             if [ $command = "echo" ]
@@ -2991,6 +2993,5 @@ learning.classify_folders_flat(){
                 echo mv \"$element\" \"$prefix/\"
             fi
         done
-        cd ..
     done
 }
