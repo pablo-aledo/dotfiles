@@ -31,6 +31,7 @@ Git(){
         (status_uno) \git status -uno ;;
         (status_short) \git status -s ;;
         (cherrypick_no_commit) \git cherry-pick --no-commit $* ;;
+        (diff_name_only) \git diff --name-only $* ;;
 
         (*) \git $command $*;;
     esac
