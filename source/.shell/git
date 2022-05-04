@@ -17,6 +17,7 @@ Git(){
         (branch_get_file) \git show $1:$2 > $2 ;;
 
         (pull_rebase) \git pull --rebase ;;
+        (push_force_lease) \git push --force-with-lease ;;
         (clone_recursive) \git clone --recurse-submodules $* ;;
         (clean) \git clean -df ;;
         (list_excluded) \git ls-files -i -c --exclude-from=.gitignore ;;
