@@ -79,7 +79,7 @@ do
 	[ "$(git status -s | grep '^ M' )" != "" ] && {
         echo -e "$line: $revision : \e[31m Modified \e[0m ($sha)"
     } || {
-        echo -e "$line: $revision : \e[32m OK \e[0m (sha)"
+        echo -e "$line: $revision : \e[32m OK \e[0m ($sha)"
     }
 done
 cd $ROOTPWD
