@@ -514,4 +514,4 @@ snippet pistache helloserver
 	    server.shutdown();
 	}
 snippet ofstream
-		{ std::ofstream logfile("${1:log.log}", std::ios::app); logfile << "b2" << std::endl; logfile.close(); }
+		{ std::ofstream logfile("${1:log.log}", std::ios::app); logfile << $2 << std::endl; logfile.close(); }
