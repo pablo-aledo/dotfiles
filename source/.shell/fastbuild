@@ -85,7 +85,7 @@ do
         aheadbehind=""
     } || {
         git fetch >/dev/null 2>/dev/null
-        aheadbehind=$( git rev-list --left-right --count master...$revision | sed 's|\t|/|g' )
+        aheadbehind=$( git rev-list --left-right --count origin/master...$revision | sed 's|\t|/|g' )
     }
 
     echo -e "$line: $revision_color : $status ($sha) $aheadbehind"
