@@ -63,7 +63,6 @@ fastbuild_incremental(){
 }
 
 subprojects_status(){
-
 ROOTPWD=$PWD
 ls -p | grep '/' | while read line
 do
@@ -72,18 +71,26 @@ do
     
     revision=$(git rev-parse --abbrev-ref HEAD)
 
-    [ "$revision" = "master" ] && revision="\e[32m $revision \e[0m" || revision="\e[31m $revision \e[0m"
+    [ "$revision" = "master" ] && revision_color="\e[32m $revision \e[0m" || revision_color="\e[31m $revision \e[0m"
 
     sha=$(git log --oneline | head -n1 | cut -d' ' -f1)
 
 	[ "$(git status -s | grep '^ M' )" != "" ] && {
-        echo -e "$line: $revision : \e[31m Modified \e[0m ($sha)"
+        status="\e[31m Modified \e[0m"
     } || {
-        echo -e "$line: $revision : \e[32m OK \e[0m ($sha)"
+        status="\e[32m OK \e[0m"
     }
+
+    [ "$revision" = "master" ] && {
+        aheadbehind=""
+    } || {
+        git fetch >/dev/null 2>/dev/null
+        aheadbehind=$( git rev-list --left-right --count master...$revision | sed 's|\t|/|g' )
+    }
+
+    echo -e "$line: $revision_color : $status ($sha) $aheadbehind"
 done
 cd $ROOTPWD
-
 }
 
 incredibuild(){
