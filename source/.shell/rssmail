@@ -145,7 +145,7 @@ rssmail_server(){
 	continue_until_title=0
 	echo rsstail $rssfeeds -i10 -zP -ld | bash | while read line
 	do
-		line_escaped=`echo $line | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g' -e 's/\*/\\\*/g' -e 's/ *$//g'`
+		line_escaped=`echo $line | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g' -e 's/\*/\\\*/g'`
 		[ "$(echo $line | egrep '^Title:')" != "" ] && echo $line >> ~/servers/rssmail/rsstitles2
 		[ "$(echo $line | egrep '^Title:')" != "" ] && grep "^$line_escaped\$" ~/servers/rssmail/rsstitles >/dev/null && continue_until_title=1 && continue
 		[ "$(echo $line | egrep '^Title:')" != "" ] && continue_until_title=0
@@ -159,7 +159,7 @@ rssmail_server(){
             source ~/.dotfiles/source/.shell/learning
             [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/avxhome/learning >/dev/null
             [ "$rssmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
-            title_outbox=$(echo $title_ml | sed -e 's|/||g')
+            title_outbox=$(echo $title_ml | sed -e 's|/||g' -e 's/ *$//g')
             echo "\e[34m $title_ml \e[0m $link "
 
             [ $rssmail_webcontent = false ] && (echo $link) > /tmp/rssmailcontent
@@ -191,7 +191,7 @@ rssmail_server(){
             source ~/.dotfiles/source/.shell/learning
             [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/avxhome/learning >/dev/null
             [ "$rssmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
-            title_outbox=$(echo $title_ml | sed -e 's|/||g')
+            title_outbox=$(echo $title_ml | sed -e 's|/||g' -e 's/ *$//g')
 			echo "\e[34m $title_ml \e[0m $link "
 			echo "$title_ml -> $link" >> $RSSMAIL/map
 
