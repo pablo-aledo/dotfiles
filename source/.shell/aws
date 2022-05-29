@@ -163,6 +163,7 @@ aws_get_append(){
 aws_mount(){
 	aws_config
 	mkdir -p $AWS_LOCAL_FOLDER
+    [ "$(ls $AWS_LOCAL_FOLDER | wc -l)" -gt 0 ] && echo "non-empty mountpoint" && return
 	[ "$AWS_PEM" = "" ] && sshfs -p $AWS_PORT $AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER $AWS_LOCAL_FOLDER
 	[ "$AWS_PEM" = "" ] || sshfs -o "IdentityFile=$AWS_PEM" -p $AWS_PORT $AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER $AWS_LOCAL_FOLDER
 }
@@ -170,6 +171,7 @@ aws_mount(){
 aws_mount_ro(){
 	aws_config
 	mkdir -p $AWS_LOCAL_FOLDER
+    [ "$(ls $AWS_LOCAL_FOLDER | wc -l)" -gt 0 ] && echo "non-empty mountpoint" && return
 	[ "$AWS_PEM" = "" ] && sshfs -o ro -p $AWS_PORT $AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER $AWS_LOCAL_FOLDER
 	[ "$AWS_PEM" = "" ] || sshfs -o ro -o "IdentityFile=$AWS_PEM" -p $AWS_PORT $AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER $AWS_LOCAL_FOLDER
 }
@@ -177,6 +179,7 @@ aws_mount_ro(){
 aws_mount_other(){
 	aws_config
 	mkdir -p $AWS_LOCAL_FOLDER
+    [ "$(ls $AWS_LOCAL_FOLDER | wc -l)" -gt 0 ] && echo "non-empty mountpoint" && return
 	[ "$AWS_PEM" = "" ] && sshfs -o allow_other -p $AWS_PORT $AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER $AWS_LOCAL_FOLDER
 	[ "$AWS_PEM" = "" ] || sshfs -o allow_other -o "IdentityFile=$AWS_PEM" -p $AWS_PORT $AWS_USER@$AWS_SERVER:$AWS_REMOTE_FOLDER $AWS_LOCAL_FOLDER
 }
