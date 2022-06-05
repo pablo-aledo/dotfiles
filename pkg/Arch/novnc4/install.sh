@@ -15,7 +15,7 @@ cd; sudo rm -fr /usr/share/tigervnc
 sudo mkdir /usr/share/noVNC; sudo chmod 777 /usr/share/noVNC/; cd /usr/share/noVNC
 git clone https://github.com/novnc/noVNC.git /usr/share/noVNC
 touch /usr/share/noVNC/index.html
-git checkout dd20b17d49a2394b586175f870e00b4b64c2817d
+sudo git checkout dd20b17d49a2394b586175f870e00b4b64c2817d
 rm -fr /usr/share/noVNC/{.git,.github,.gitignore,.gitmodules,docs,LICENSE.txt,README.md,tests,.travis.yml,VERSION}
 
 mkdir /usr/share/noVNC/utils/websockify
