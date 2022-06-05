@@ -40,6 +40,7 @@ pkg install net-tools
 pkg install xorg-xhost
 pkg install rsync
 pkg install poppler
+pkg install socat
 
 pkg install binutils
 pkg install python-pip
