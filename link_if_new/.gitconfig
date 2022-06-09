@@ -19,4 +19,4 @@
 [commit]
     template = ~/.git_commit_template.txt
 [rebase]
-        instructionFormat = (%an <%ae>) %s
+    instructionFormat = (%an <%ae>) %s
