@@ -1,4 +1,11 @@
 pskill(){
     [ "$1" = "" ] && return
+    [ $# -gt 1 ] && {
+        for a in $*
+        do
+            pskill "$a"
+        done
+        return
+    }
     ps aux | grep "$1" | grep -v grep | awk '{print $2}' | xargs kill
 }
