@@ -1,5 +1,5 @@
 redefine(){
-	which $* > /tmp/redefine
+	which $* | grep -v ' is a function' > /tmp/redefine
 	vim /tmp/redefine
 	source /tmp/redefine
 }
