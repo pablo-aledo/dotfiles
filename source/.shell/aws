@@ -608,3 +608,21 @@ aws_disable_check(){
     echo 'StrictHostKeyChecking no' >> ~/.ssh/config
 }
 
+gcp_arch_vm_command(){
+echo "gcloud beta compute instances create instance-arch2 \\"
+echo "    --metadata=\"ssh-keys=$metadata\" \\"
+echo "    --zone=europe-west2-c \\"
+echo "    --machine-type=n1-standard-1 \\"
+echo "    --subnet=default \\"
+echo "    --network-tier=PREMIUM \\"
+echo "    --maintenance-policy=MIGRATE \\"
+echo "    --image-project=arch-linux-gce \\"
+echo "    --image-family=arch \\"
+echo "    --boot-disk-size=200GB \\"
+echo "    --boot-disk-type=pd-standard \\"
+echo "    --boot-disk-device-name=instance-arch \\"
+echo "    --no-shielded-secure-boot \\"
+echo "    --shielded-vtpm \\"
+echo "    --shielded-integrity-monitoring \\"
+echo "    --reservation-affinity=any"
+}
