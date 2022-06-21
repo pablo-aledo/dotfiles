@@ -30,7 +30,7 @@ snippet tutorial
 
 snippet enum_to_int
 	const google::protobuf::EnumDescriptor* descriptor = ${1:Object}_descriptor();
-	int ret = descriptor->FindValueByNumber(${2})->number();
+	int ret = descriptor->FindValueByName(${2})->number();
 
 snippet int_to_enum
 	${1:Object} ret;
