@@ -76,6 +76,7 @@ aws_pull(){
 }
 
 aws_ssh(){
+    #SSH_AUTH_SOCK= ssh -v $AWS_USER@$AWS_SERVER
 	if [ $# -eq 0 ]
 	then
 		aws_config
