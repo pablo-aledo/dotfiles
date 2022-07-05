@@ -32,6 +32,12 @@ Can be un-installed by
 source uninstall.sh
 ```
 
+A temporary installation without interfering in your current setup can be installed by
+
+```
+wget tinyurl.com/pga-dfst -O - | bash
+```
+
 Some things that you might find intriguing:
 
 * [Some useful shell functions](source/.shell/)
