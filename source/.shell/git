@@ -16,6 +16,7 @@ Git(){
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
         (branch_get_file) \git show $1:$2 > $2 ;;
         (branch_base) \git log --oneline --graph | head -n20 | grep '*  ' | head -n1 | awk '{print $2}' ;;
+        (reset_to_remote) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
 
         (pull_rebase) \git pull --rebase ;;
         (push_force_lease) \git push --force-with-lease ;;
