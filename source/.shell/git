@@ -34,6 +34,7 @@ Git(){
         (cherrypick_no_commit) \git cherry-pick --no-commit $* ;;
         (diff_name_only) \git diff --name-only $* ;;
         (diff_step) \git diff ${1}^ ${1} ;;
+        (diff_staged) \git diff --staged ;;
         (undo_last_commit) git reset --soft HEAD^;;
         (revert_multiple) git revert --no-commit HEAD~3.. ;;
 
