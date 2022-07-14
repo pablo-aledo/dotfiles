@@ -38,7 +38,7 @@ Git(){
         (undo_last_commit) \git reset --soft HEAD^;;
         (revert_multiple) \git revert --no-commit HEAD~3.. ;;
         (diff_grep) \git diff --name-only -G"$1" ;;
-        (diff_with_filename) \git diff | awk '/^\+\+\+/{print; $1=""; name=$0}{print name": "$0}'
+        (diff_with_filename) \git diff $* | awk '/^\+\+\+/{print; $1=""; name=$0}{print name": "$0}'
 
         (*) \git $command $*;;
     esac
