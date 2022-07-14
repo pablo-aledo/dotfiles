@@ -43,7 +43,7 @@ snippet int_to_enum
 
 snippet enum_to_str
 	const google::protobuf::EnumDescriptor* descriptor = ${1:Object}_descriptor();
-	int ret = descriptor->FindValueByNumber(${2})->name();
+	std::string ret = descriptor->FindValueByNumber(${2})->name();
 
 snippet str_to_enum
 	${1:Object} ret;
