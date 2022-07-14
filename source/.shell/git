@@ -16,8 +16,8 @@ Git(){
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
         (branch_get_file) \git show $1:$2 > $2 ;;
         (branch_base) \git log --oneline --graph | head -n20 | grep '*  ' | head -n1 | awk '{print $2}' ;;
-        (reset_to_remote) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
 
+        (reset_to_remote) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
         (pull_rebase) \git pull --rebase ;;
         (push_force_lease) \git push --force-with-lease ;;
         (clone_recursive) \git clone --recurse-submodules $* ;;
@@ -37,6 +37,7 @@ Git(){
         (diff_staged) \git diff --staged ;;
         (undo_last_commit) git reset --soft HEAD^;;
         (revert_multiple) git revert --no-commit HEAD~3.. ;;
+        (diff_grep) git diff --name-only -G"$1" ;;
 
         (*) \git $command $*;;
     esac
