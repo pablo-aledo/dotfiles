@@ -4,8 +4,9 @@ Git(){
     shift
     case $command in
 
-        (log_graph) \git log --oneline --graph | head ;;
+        (log_graph) \git log --oneline --graph | grep '*  ' -B1000 -A3 ;;
         (log_follow) \git log --follow $* ;;
+        (log_branch) \git log --oneline --graph | while read line; do [[ "$line" =~ '*  ' ]]  && break; echo "$line"; done ;;
 
         (branch_rewrite) \git rebase -i $(\git merge-base master $(\git rev-parse HEAD)) ;; # pick, squash, squash, squash...
         (branch_to_patch) \git diff $(\git merge-base master $(\git rev-parse HEAD)) $(\git rev-parse HEAD) > ../patch.patch ;;
