@@ -39,6 +39,7 @@ Git(){
         (revert_multiple) \git revert --no-commit HEAD~3.. ;;
         (diff_grep) \git diff --name-only -G"$1" ;;
         (diff_with_filename) \git diff $* | awk '/^\+\+\+/{print; $1=""; name=$0}{print name": "$0}'
+        (log_oneline_format) \git log --pretty=format:"%h%x09%an%x09%ad%x09%s" ;;
 
         (*) \git $command $*;;
     esac
