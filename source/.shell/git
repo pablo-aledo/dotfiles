@@ -7,6 +7,13 @@ Git(){
         (log_graph) \git log --oneline --graph | grep '*  ' -B1000 -A3 ;;
         (log_follow) \git log --follow $* ;;
         (log_branch) \git log --oneline --graph | while read line; do [[ "$line" =~ '*  ' ]]  && break; echo "$line"; done ;;
+        (log_oneline_format) \git log --pretty=format:"%h%x09%an%x09%ad%x09%s" ;;
+
+        (diff_grep) \git diff --name-only -G"$1" ;;
+        (diff_with_filename) \git diff $* | awk '/^\+\+\+/{print; $1=""; name=$0}{print name": "$0}'
+        (diff_name_only) \git diff --name-only $* ;;
+        (diff_step) \git diff ${1}^ ${1} ;;
+        (diff_staged) \git diff --staged ;;
 
         (branch_rewrite) \git rebase -i $(\git merge-base master $(\git rev-parse HEAD)) ;; # pick, squash, squash, squash...
         (branch_to_patch) \git diff $(\git merge-base master $(\git rev-parse HEAD)) $(\git rev-parse HEAD) > ../patch.patch ;;
@@ -18,7 +25,9 @@ Git(){
         (branch_get_file) \git show $1:$2 > $2 ;;
         (branch_base) \git log --oneline --graph | head -n20 | grep '*  ' | head -n1 | awk '{print $2}' ;;
 
-        (reset_to_remote) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
+        (reset_branch) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
+        (reset_last_commit) \git reset --hard HEAD^ ;;
+
         (pull_rebase) \git pull --rebase ;;
         (push_force_lease) \git push --force-with-lease ;;
         (clone_recursive) \git clone --recurse-submodules $* ;;
@@ -28,19 +37,12 @@ Git(){
         (interactive_add) \git add -p $* ;;
         (stash_save_all) \git add .; \git stash push -m "$1"; \git stash apply ;;
         (stash_save_staged) \git add -u; \git stash push -m "$1"; \git stash apply ;;
-        (remove_last_commit) \git reset --hard HEAD^ ;;
         (unstage) \git restore --staged $* ;;
         (status_uno) \git status -uno ;;
         (status_short) \git status -s ;;
         (cherrypick_no_commit) \git cherry-pick --no-commit $* ;;
-        (diff_name_only) \git diff --name-only $* ;;
-        (diff_step) \git diff ${1}^ ${1} ;;
-        (diff_staged) \git diff --staged ;;
         (undo_last_commit) \git reset --soft HEAD^;;
         (revert_multiple) \git revert --no-commit HEAD~3.. ;;
-        (diff_grep) \git diff --name-only -G"$1" ;;
-        (diff_with_filename) \git diff $* | awk '/^\+\+\+/{print; $1=""; name=$0}{print name": "$0}'
-        (log_oneline_format) \git log --pretty=format:"%h%x09%an%x09%ad%x09%s" ;;
 
         (*) \git $command $*;;
     esac
