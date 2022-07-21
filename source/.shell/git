@@ -10,7 +10,7 @@ Git(){
         (log_oneline_format) \git log --pretty=format:"%h%x09%an%x09%ad%x09%s" ;;
 
         (diff_grep) \git diff --name-only -G"$1" ;;
-        (diff_with_filename) \git diff $* | awk '/^\+\+\+/{print; $1=""; name=$0}{print name": "$0}'
+        (diff_with_filename) \git diff $* | awk '/^\+\+\+/{print; $1=""; name=$0}{print name": "$0}' ;;
         (diff_name_only) \git diff --name-only $* ;;
         (diff_step) \git diff ${1}^ ${1} ;;
         (diff_staged) \git diff --staged ;;
