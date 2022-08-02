@@ -15,5 +15,4 @@ mouseover -1 1000 ~/.dotfiles/shortcuts/images/gmail_lens.png && xdotool mousemo
 xdotool type "$(cat /tmp/query)"
 xdotool key Return
 mouseover -1 1000 ~/.dotfiles/shortcuts/images/2stars.png
-xdotool mousemove 360 270
-xdotool click 1
+xdotool key Return
