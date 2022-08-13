@@ -2381,6 +2381,7 @@ learning.queue_mv(){
     do
         file=$(echo $line | sed 's/\.txt$//g')
         true_tag=$(cat "$line" | head -n1)
+        title=$(cat "$line" | grep 'title : ')
 
         [ "$true_tag" = "" ] && continue
 
@@ -2402,6 +2403,7 @@ learning.queue_mv(){
         if [ "$true_tag" = "$pred_tag" ]
         then
             echo "\e[34m $file \e[0m \e[32m $true_tag \e[0m"
+            echo "$title" | sed "s/title : / $(echo -n '\e[34m')title : $(echo -n '\e[0m')/g"
             [ -e "$learning_src/$true_tag" ] || echo "mkdir -p \"$learning_src/$true_tag/\"" | tee -a $tmp/script
             echo "mv \"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a $tmp/script
         fi
@@ -2409,6 +2411,7 @@ learning.queue_mv(){
         if [ ! "$true_tag" = "$pred_tag" ]
         then
             echo "\e[34m $file \e[0m \e[31m $pred_tag \e[0m \e[32m $true_tag \e[0m"
+            echo "$title" | sed "s/title : / $(echo -n '\e[34m')title : $(echo -n '\e[0m')/g"
             crctitle=$(basename "$file" | md5sum | cut -d' ' -f1)
             [ -e "$learning_src/$true_tag" ] || echo "mkdir -p \"$learning_src/$true_tag/\"" | tee -a $tmp/script
             echo "mv \"$learning_queue/$file\" \"$learning_src/$true_tag/\"" | tee -a $tmp/script
