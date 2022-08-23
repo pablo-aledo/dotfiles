@@ -2425,6 +2425,8 @@ learning.queue_mv(){
         fi
 
     done
+
+    sed -i -e 's/\$/\\$/g' -e 's/`/\\`/g' $tmp/script
 }
 
 learning.queue_loop(){
