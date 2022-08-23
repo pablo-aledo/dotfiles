@@ -1,7 +1,7 @@
 sudo yum install -y xorg-x11-xkb-utils i3 xorg-x11-xauth
 
 mkdir ~/.vnc
-[ -e ~/.vnc/passwd ] || cp passwd ~/.vnc/
+[ ! -e ~/.vnc/passwd ] && pword vnc | vncpasswd -f > ~/.vnc/passwd
 chmod 0600 ~/.vnc/passwd
 cp xstartup ~/.vnc/
 chmod +x ~/.vnc/xstartup

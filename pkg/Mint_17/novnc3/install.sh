@@ -1,5 +1,5 @@
 mkdir ~/.vnc 
-cp passwd ~/.vnc/
+[ ! -e ~/.vnc/passwd ] && pword vnc | vncpasswd -f > ~/.vnc/passwd
 cp xstartup ~/.vnc/
 chmod +x ~/.vnc/xstartup
 

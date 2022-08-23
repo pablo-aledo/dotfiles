@@ -1,7 +1,7 @@
 sudo pacman -S --noconfirm i3-wm feh i3status pcmanfm xorg-xauth xorg-xkbcomp
 
 mkdir ~/.vnc
-[ -e ~/.vnc/passwd ] || cp passwd ~/.vnc/
+[ ! -e ~/.vnc/passwd ] && pword vnc | vncpasswd -f > ~/.vnc/passwd
 chmod 0600 ~/.vnc/passwd
 cp xstartup ~/.vnc/
 chmod +x ~/.vnc/xstartup

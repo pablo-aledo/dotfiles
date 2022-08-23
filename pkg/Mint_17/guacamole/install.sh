@@ -4,7 +4,7 @@ sudo apt-get install -y libguac-client-ssh0 libguac-client-rdp0
 # gsettings set org.gnome.desktop.wm.keybindings  panel-main-menu []
 # gsettings set org.gnome.desktop.wm.keybindings  show-desktop []
 mkdir ~/.vnc 
-cp passwd ~/.vnc/
+[ ! -e ~/.vnc/passwd ] && pword vnc | vncpasswd -f > ~/.vnc/passwd
 cp xstartup ~/.vnc/
 sudo apt-get install -y vnc4server
 vncserver
