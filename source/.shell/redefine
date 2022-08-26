@@ -6,6 +6,7 @@ redefine(){
 
 redefine(){
     tmpname=$(mktemp)
+    echo $tmpname
 	which $* | grep -v ' is a function' > $tmpname
 	vim $tmpname
 	source $tmpname
