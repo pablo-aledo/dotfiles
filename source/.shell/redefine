@@ -3,3 +3,10 @@ redefine(){
 	vim /tmp/redefine
 	source /tmp/redefine
 }
+
+redefine(){
+    tmpname=$(mktemp)
+	which $* | grep -v ' is a function' > $tmpname
+	vim $tmpname
+	source $tmpname
+}
