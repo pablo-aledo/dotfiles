@@ -102,6 +102,58 @@ streamscreen10(){
 ffmpeg -loglevel debug -thread_queue_size 512 -f x11grab -s 1920x1080 -framerate 60 -i :0.0 -vaapi_device /dev/dri/renderD129 -vf 'format=nv12,hwupload,scale_vaapi=w=1920:h=1080' -c:v h264_vaapi -qp:v 19 -bf 4 -threads 4 -aspect 16:9 -f mpegts - | nc -l -p $STREAM_PORT
 }
 
+streamscreen11(){
+ffmpeg -loglevel debug \
+    -f x11grab -s 1920x1080 -framerate 60 -i :0.0 \
+    -thread_queue_size 1024 -f alsa -ac 2 -ar 44100 -i hw:Loopback,1,0 \
+    -c:v h264_nvenc -preset:v llhq \
+    -rc:v vbr_minqp -qmin:v 19 \
+    -f mpegts - | nc -l -p $STREAM_PORT
+}
+
+streamscreen12(){
+ffmpeg -loglevel debug \
+        -f x11grab -s 1920x1080 -framerate 60 -i :0.0 \
+        -c:v h264_nvenc -preset:v llhq \
+        -rc:v vbr_minqp -qmin:v 19 \
+        -f mpegts - | nc -l -p $STREAM_PORT
+}
+
+streamscreen13(){
+ffmpeg -loglevel debug \
+    -device /dev/dri/card0 -f kmsgrab -i - \
+    -thread_queue_size 1024 -f alsa -ac 2 -ar 44100 -i hw:Loopback,1,0 \
+    -c:v h264_nvenc -preset:v llhq \
+    -rc:v vbr_minqp -qmin:v 19 \
+    -f mpegts - | nc -l -p $STREAM_PORT
+}
+
+
+streamscreen14(){
+ffmpeg -loglevel debug \
+        -device /dev/dri/card0 -f kmsgrab -i - \
+        -c:v h264_nvenc -preset:v llhq \
+        -rc:v vbr_minqp -qmin:v 19 \
+        -f mpegts - | nc -l -p $STREAM_PORT
+}
+
+streamscreen15(){
+ffmpeg -loglevel debug \
+    -device /dev/dri/card0 -f kmsgrab -i - \
+    -thread_queue_size 1024 -f alsa -ac 2 -ar 44100 -i hw:Loopback,1,0 \
+    -vaapi_device /dev/dri/renderD128 -vf 'hwmap=derive_device=vaapi,scale_vaapi=w=1920:h=1080:format=nv12' \
+    -c:v h264_vaapi -qp:v 19 -bf 4 -threads 4 -aspect 16:9 \
+    -f mpegts - | nc -l -p $STREAM_PORT
+}
+
+streamscreen16(){
+ffmpeg -loglevel debug -thread_queue_size 512 \
+    -device /dev/dri/card0 -f kmsgrab -i - \
+    -vaapi_device /dev/dri/renderD128 -vf 'hwmap=derive_device=vaapi,scale_vaapi=w=1920:h=1080:format=nv12' \
+    -c:v h264_vaapi -qp:v 19 -bf 4 -threads 4 -aspect 16:9 \
+    -f mpegts - | nc -l -p $STREAM_PORT
+}
+
 stream_recv(){
 	aws_config
 	nc $AWS_SERVER $STREAM_PORT | mplayer -benchmark -
