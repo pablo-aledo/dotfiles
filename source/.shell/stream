@@ -113,10 +113,10 @@ ffmpeg -loglevel debug \
 
 streamscreen12(){
 ffmpeg -loglevel debug \
-        -f x11grab -s 1920x1080 -framerate 60 -i :0.0 \
-        -c:v h264_nvenc -preset:v llhq \
-        -rc:v vbr_minqp -qmin:v 19 \
-        -f mpegts - | nc -l -p $STREAM_PORT
+    -f x11grab -s 1920x1080 -framerate 60 -i :0.0 \
+    -c:v h264_nvenc -preset:v llhq \
+    -rc:v vbr_minqp -qmin:v 19 \
+    -f mpegts - | nc -l -p $STREAM_PORT
 }
 
 streamscreen13(){
@@ -131,10 +131,10 @@ ffmpeg -loglevel debug \
 
 streamscreen14(){
 ffmpeg -loglevel debug \
-        -device /dev/dri/card0 -f kmsgrab -i - \
-        -c:v h264_nvenc -preset:v llhq \
-        -rc:v vbr_minqp -qmin:v 19 \
-        -f mpegts - | nc -l -p $STREAM_PORT
+    -device /dev/dri/card0 -f kmsgrab -i - \
+    -c:v h264_nvenc -preset:v llhq \
+    -rc:v vbr_minqp -qmin:v 19 \
+    -f mpegts - | nc -l -p $STREAM_PORT
 }
 
 streamscreen15(){
