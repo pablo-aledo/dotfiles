@@ -722,5 +722,6 @@ sudo snap install notion-snap
 sudo snap install slack
 pkg install zoom
 
+sudo systemctl unmask sleep
 
 }
