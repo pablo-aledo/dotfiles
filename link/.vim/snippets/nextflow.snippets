@@ -1,0 +1,47 @@
+snippet tutorial
+	#!/usr/bin/env nextflow
+	# execute with nextflow run tutorial.nf
+	nextflow.enable.dsl=2
+
+	params.str = 'Hello world!'
+
+	process splitLetters {
+	  output:
+	    path 'chunk_*'
+
+	  """
+	  printf '${params.str}' | split -b 6 - chunk_
+	  """
+	}
+
+	process convertToUpper {
+	  input:
+	    file x
+	  output:
+	    stdout
+
+	  """
+	  cat $x | tr '[a-z]' '[A-Z]'
+	  """
+	}
+
+	workflow {
+	  splitLetters | flatten | convertToUpper | view { it.trim() }
+	}
+
+snippet resume
+	# substitute and execute with nextflow run tutorial.nf -resume
+	process convertToUpper {
+	    input:
+	    file x from letters
+
+	    output:
+	    stdout result
+
+	    """
+	    rev $x
+	    """
+	}
+
+snippet param
+	# nextflow run tutorial.nf --str 'Bonjour le monde'
