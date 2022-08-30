@@ -717,6 +717,7 @@ pkg install sshfs
 pkg install fzf z
 pkg install i3
 pkg install feh
+pkg install docfetcher
 
 sudo snap install notion-snap
 sudo snap install slack
