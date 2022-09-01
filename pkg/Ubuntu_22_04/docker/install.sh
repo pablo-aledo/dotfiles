@@ -6,3 +6,6 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docke
 
 sudo apt-get update
 sudo apt install docker-ce docker-ce-cli containerd.io -y
+
+sudo groupadd docker
+sudo usermod -aG docker $USER
