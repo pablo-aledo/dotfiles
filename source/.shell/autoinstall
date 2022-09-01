@@ -23,7 +23,7 @@ echo '   `unset -f %name%; which %name%` $*;'                                   
 echo '}'                                                                                >> /tmp/template
 echo ''                                                                                 >> /tmp/template
 
-for a in meld gvim google-chrome espeak fbreader g++ inkscape skype mksquashfs svn virtualbox vlc w3m wine youtube-dl x11vnc gimp terminator arandr baobab fdupes jdownloader2 lame mplayer mencoder paman pdftk rar sqlite sqlite3 convert tmux detox ffmpeg dot pdflatex sshfs duplicity ranger terminology wps ncdu pcmanfm htop x2goclient pdfjam pdfcrop pdfnup aria2c cmake pithos aws pip scala sbt ammonite hg qalculate curl vagrant mendeleydesktop canto wkhtmltopdf pandoc icdiff latexrun fzf z numlockx ag tree vim ninja adb lxappearance tig jq yq bat npm lazydocker diffuse aptitude lazygit pssh rclone duc navi ncdu-export-symlink sr obsidian
+for a in meld gvim google-chrome espeak fbreader g++ inkscape skype mksquashfs svn virtualbox vlc w3m wine youtube-dl x11vnc gimp terminator arandr baobab fdupes jdownloader2 lame mplayer mencoder paman pdftk rar sqlite sqlite3 convert tmux detox ffmpeg dot pdflatex sshfs duplicity ranger terminology wps ncdu pcmanfm htop x2goclient pdfjam pdfcrop pdfnup aria2c cmake pithos aws pip scala sbt ammonite hg qalculate curl vagrant mendeleydesktop canto wkhtmltopdf pandoc icdiff latexrun fzf z numlockx ag tree vim ninja adb lxappearance tig jq yq bat npm lazydocker diffuse aptitude lazygit pssh rclone duc navi ncdu-export-symlink sr obsidian gh
 do
 	grep $a'()' $MYSELF >/dev/null && continue
 	cat /tmp/template | sed s/%name%/$a/g >> $MYSELF
@@ -573,5 +573,11 @@ obsidian(){
    [ "`unset -f obsidian; which obsidian | grep found`" = "" ] || pkg install obsidian
    [ "`unset -f obsidian; which obsidian | grep found`" = "" ] || return
    `unset -f obsidian; which obsidian` $*;
+}
+
+gh(){
+   [ "`unset -f gh; which gh | grep found`" = "" ] || pkg install gh
+   [ "`unset -f gh; which gh | grep found`" = "" ] || return
+   `unset -f gh; which gh` $*;
 }
 
