@@ -290,486 +290,486 @@ snippet graphql
 	import { compose, graphql } from 'react-apollo'
 
 snippet expgql
-    export default compose(graphql($1, { name: $2 }))($3)
+	export default compose(graphql($1, { name: $2 }))($3)
 
 ## Console
 
 snippet clg
-    console.log(object)
+	console.log(object)
 
 snippet clo
-    console.log("object", object)
+	console.log("object", object)
 
 snippet ctm
-    console.time("timeId")
+	console.time("timeId")
 
 snippet cte
-    console.timeEnd("timeId")
+	console.timeEnd("timeId")
 
 snippet cas
-    console.assert(expression,object)
+	console.assert(expression,object)
 
 snippet ccl
-    console.clear()
+	console.clear()
 
 snippet cco
-    console.count(label)
+	console.count(label)
 
 snippet cdi
-    console.dir
+	console.dir
 
 snippet cer
-    console.error(object)
+	console.error(object)
 
 snippet cgr
-    console.group(label)
+	console.group(label)
 
 snippet cge
-    console.groupEnd()
+	console.groupEnd()
 
 snippet ctr
-    console.trace(object)
+	console.trace(object)
 
 snippet cwa
-    console.warn
+	console.warn
 
 snippet cin
-    console.info
+	console.info
 
 ## React Components
 
 snippet rcc
-    import React, { Component } from 'react'
+	import React, { Component } from 'react'
 
-    export default class FileName extends Component {
-      render() {
-        return <div>$2</div>
-      }
-    }
+	export default class FileName extends Component {
+	  render() {
+	    return <div>$2</div>
+	  }
+	}
 
 snippet rce
-    import React, { Component } from 'react'
+	import React, { Component } from 'react'
 
-    export class FileName extends Component {
-      render() {
-        return <div>$2</div>
-      }
-    }
+	export class FileName extends Component {
+	  render() {
+	    return <div>$2</div>
+	  }
+	}
 
-    export default $1
+	export default $1
 
 snippet rcep
-    import React, { Component } from 'react'
-    import PropTypes from 'prop-types'
+	import React, { Component } from 'react'
+	import PropTypes from 'prop-types'
 
-    export class FileName extends Component {
-      static propTypes = {}
+	export class FileName extends Component {
+	  static propTypes = {}
 
-      render() {
-        return <div>$2</div>
-      }
-    }
+	  render() {
+	    return <div>$2</div>
+	  }
+	}
 
-    export default $1
+	export default $1
 
 snippet rpc
-    import React, { PureComponent } from 'react'
+	import React, { PureComponent } from 'react'
 
-    export default class FileName extends PureComponent {
-      render() {
-        return <div>$2</div>
-      }
-    }
+	export default class FileName extends PureComponent {
+	  render() {
+	    return <div>$2</div>
+	  }
+	}
 
 snippet rpcp
-    import React, { PureComponent } from 'react'
-    import PropTypes from 'prop-types'
+	import React, { PureComponent } from 'react'
+	import PropTypes from 'prop-types'
 
-    export default class FileName extends PureComponent {
-      static propTypes = {}
+	export default class FileName extends PureComponent {
+	  static propTypes = {}
 
-      render() {
-        return <div>$2</div>
-      }
-    }
+	  render() {
+	    return <div>$2</div>
+	  }
+	}
 
 snippet rpce
-    import React, { PureComponent } from 'react'
-    import PropTypes from 'prop-types'
+	import React, { PureComponent } from 'react'
+	import PropTypes from 'prop-types'
 
-    export class FileName extends PureComponent {
-      static propTypes = {}
+	export class FileName extends PureComponent {
+	  static propTypes = {}
 
-      render() {
-        return <div>$2</div>
-      }
-    }
+	  render() {
+	    return <div>$2</div>
+	  }
+	}
 
-    export default FileName
+	export default FileName
 
 snippet rccp
-    import React, { Component } from 'react'
-    import PropTypes from 'prop-types'
+	import React, { Component } from 'react'
+	import PropTypes from 'prop-types'
 
-    export default class FileName extends Component {
-      static propTypes = {
-        $2: $3
-      }
+	export default class FileName extends Component {
+	  static propTypes = {
+	    $2: $3
+	  }
 
-      render() {
-        return <div>$4</div>
-      }
-    }
+	  render() {
+	    return <div>$4</div>
+	  }
+	}
 
 snippet rfcp
-    import React from 'react'
-    import PropTypes from 'prop-types'
+	import React from 'react'
+	import PropTypes from 'prop-types'
 
-    function $1(props) {
-      return <div>$0</div>
-    }
+	function $1(props) {
+	  return <div>$0</div>
+	}
 
-    $1.propTypes = {}
+	$1.propTypes = {}
 
-    export default $1
+	export default $1
 
 snippet rfc
-    import React from 'react'
+	import React from 'react'
 
-    export default function $1() {
-      return <div>$0</div>
-    }
+	export default function $1() {
+	  return <div>$0</div>
+	}
 
 snippet rfce
-    import React from 'react'
+	import React from 'react'
 
-    function $1() {
-      return <div>$0</div>
-    }
+	function $1() {
+	  return <div>$0</div>
+	}
 
-    export default $1
+	export default $1
 
 snippet rafcp
-    import React from 'react'
-    import PropTypes from 'prop-types'
+	import React from 'react'
+	import PropTypes from 'prop-types'
 
-    const $1 = props => {
-      return <div>$0</div>
-    }
+	const $1 = props => {
+	  return <div>$0</div>
+	}
 
-    $1.propTypes = {}
+	$1.propTypes = {}
 
-    export default $1
+	export default $1
 
 snippet rafc
-    import React from 'react'
+	import React from 'react'
 
-    const $1 = () => {
-      return <div>$0</div>
-    }
+	const $1 = () => {
+	  return <div>$0</div>
+	}
 
-    export default $1
+	export default $1
 
 snippet rafce
-    import React from 'react'
+	import React from 'react'
 
-    const $1 = () => {
-      return <div>$0</div>
-    }
+	const $1 = () => {
+	  return <div>$0</div>
+	}
 
-    export default $1
+	export default $1
 
 snippet rmc
-    import React, { memo } from 'react'
+	import React, { memo } from 'react'
 
-    export default memo(function $1() {
-      return <div>$0</div>
-    })
+	export default memo(function $1() {
+	  return <div>$0</div>
+	})
 
 snippet rmcp
-    import React, { memo } from 'react'
-    import PropTypes from 'prop-types'
+	import React, { memo } from 'react'
+	import PropTypes from 'prop-types'
 
-    const $1 = memo(function $1(props) {
-      return <div>$0</div>
-    })
+	const $1 = memo(function $1(props) {
+	  return <div>$0</div>
+	})
 
-    $1.propTypes = {}
+	$1.propTypes = {}
 
-    export default $1
+	export default $1
 
 snippet rcredux
-    import React, { Component } from 'react'
-    import { connect } from 'react-redux'
+	import React, { Component } from 'react'
+	import { connect } from 'react-redux'
 
-    export class FileName extends Component {
-      render() {
-        return <div>$4</div>
-      }
-    }
+	export class FileName extends Component {
+	  render() {
+	    return <div>$4</div>
+	  }
+	}
 
-    const mapStateToProps = state => ({})
+	const mapStateToProps = state => ({})
 
-    const mapDispatchToProps = {}
+	const mapDispatchToProps = {}
 
-    export default connect(
-      mapStateToProps,
-      mapDispatchToProps,
-    )(FileName)
+	export default connect(
+	  mapStateToProps,
+	  mapDispatchToProps,
+	)(FileName)
 
 snippet rcreduxp
-    import React, { Component } from 'react'
-    import PropTypes from 'prop-types'
-    import { connect } from 'react-redux'
+	import React, { Component } from 'react'
+	import PropTypes from 'prop-types'
+	import { connect } from 'react-redux'
 
-    export class FileName extends Component {
-      static propTypes = {
-        $2: $3
-      }
+	export class FileName extends Component {
+	  static propTypes = {
+	    $2: $3
+	  }
 
-      render() {
-        return <div>$4</div>
-      }
-    }
+	  render() {
+	    return <div>$4</div>
+	  }
+	}
 
-    const mapStateToProps = state => ({})
+	const mapStateToProps = state => ({})
 
-    const mapDispatchToProps = {}
+	const mapDispatchToProps = {}
 
-    export default connect(
-      mapStateToProps,
-      mapDispatchToProps
-    )(FileName)
+	export default connect(
+	  mapStateToProps,
+	  mapDispatchToProps
+	)(FileName)
 
 snippet reduxmap
-    const mapStateToProps = state => ({})
+	const mapStateToProps = state => ({})
 
-    const mapDispatchToProps = {}
+	const mapDispatchToProps = {}
 
 ## React Native Components
 
 snippet rnc
-    import React, { Component } from 'react'
-    import { Text, View } from 'react-native'
+	import React, { Component } from 'react'
+	import { Text, View } from 'react-native'
 
-    export default class FileName extends Component {
-      render() {
-        return (
-          <View>
-            <Text> $2 </Text>
-          </View>
-        )
-      }
-    }
+	export default class FileName extends Component {
+	  render() {
+	    return (
+	      <View>
+	        <Text> $2 </Text>
+	      </View>
+	    )
+	  }
+	}
 
 snippet rnf
-    import React from 'react'
-    import { View, Text } from 'react-native'
+	import React from 'react'
+	import { View, Text } from 'react-native'
 
-    const $1 = () => {
-      return (
-        <View>
-          <Text> $2 </Text>
-        </View>
-      )
-    }
+	const $1 = () => {
+	  return (
+	    <View>
+	      <Text> $2 </Text>
+	    </View>
+	  )
+	}
 
-    export default $1
+	export default $1
 
 snippet rncs
-    import React, { Component } from 'react'
-    import { Text, StyleSheet, View } from 'react-native'
+	import React, { Component } from 'react'
+	import { Text, StyleSheet, View } from 'react-native'
 
-    export default class FileName extends Component {
-      render() {
-        return (
-          <View>
-            <Text> $2 </Text>
-          </View>
-        )
-      }
-    }
+	export default class FileName extends Component {
+	  render() {
+	    return (
+	      <View>
+	        <Text> $2 </Text>
+	      </View>
+	    )
+	  }
+	}
 
-    const styles = StyleSheet.create({})
+	const styles = StyleSheet.create({})
 
 snippet rnce
-    import React, { Component } from 'react'
-    import { Text, View } from 'react-native'
+	import React, { Component } from 'react'
+	import { Text, View } from 'react-native'
 
-    export class FileName extends Component {
-      render() {
-        return (
-          <View>
-            <Text> $2 </Text>
-          </View>
-        )
-      }
-    }
+	export class FileName extends Component {
+	  render() {
+	    return (
+	      <View>
+	        <Text> $2 </Text>
+	      </View>
+	    )
+	  }
+	}
 
-    export default $1
+	export default $1
 
 snippet rncredux
-    import React, { Component } from 'react'
-    import { View, Text } from 'react-native'
-    import PropTypes from 'prop-types'
-    import { connect } from 'react-redux'
+	import React, { Component } from 'react'
+	import { View, Text } from 'react-native'
+	import PropTypes from 'prop-types'
+	import { connect } from 'react-redux'
 
-    export class FileName extends Component {
-      static propTypes = {
-        $2: $3
-      }
+	export class FileName extends Component {
+	  static propTypes = {
+	    $2: $3
+	  }
 
-      render() {
-        return (
-          <View>
-            <Text> $2 </Text>
-          </View>
-        )
-      }
-    }
+	  render() {
+	    return (
+	      <View>
+	        <Text> $2 </Text>
+	      </View>
+	    )
+	  }
+	}
 
-    const mapStateToProps = state => ({})
+	const mapStateToProps = state => ({})
 
-    const mapDispatchToProps = {}
+	const mapDispatchToProps = {}
 
-    export default connect(
-      mapStateToProps,
-      mapDispatchToProps
-    )(FileName)
+	export default connect(
+	  mapStateToProps,
+	  mapDispatchToProps
+	)(FileName)
 
 ## Others
 
 snippet cmmb
-    /**
-    |--------------------------------------------------
-    | $1
-    |--------------------------------------------------
-    */
+	/**
+	|--------------------------------------------------
+	| $1
+	|--------------------------------------------------
+	*/
 
 snippet desc
-    describe('$1', () => {
-      $2
-    })
+	describe('$1', () => {
+	  $2
+	})
 
 snippet test
-    test('should $1', () => {
-      $2
-    })
+	test('should $1', () => {
+	  $2
+	})
 
 snippet tit
-    it('should $1', () => {
-      $2
-    })
+	it('should $1', () => {
+	  $2
+	})
 
 snippet stest
-    import React from 'react'
-    import renderer from 'react-test-renderer'
+	import React from 'react'
+	import renderer from 'react-test-renderer'
 
-    import { ${1:ComponentName} } from '../${1:ComponentName}'
+	import { ${1:ComponentName} } from '../${1:ComponentName}'
 
-    describe('<${1:ComponentName} />', () => {
-      const defaultProps = {}
-      const wrapper = renderer.create(<${1:ComponentName} {...defaultProps} />)
+	describe('<${1:ComponentName} />', () => {
+	  const defaultProps = {}
+	  const wrapper = renderer.create(<${1:ComponentName} {...defaultProps} />)
 
-      test('render', () => {
-        expect(wrapper).toMatchSnapshot()
-      })
-    })
+	  test('render', () => {
+	    expect(wrapper).toMatchSnapshot()
+	  })
+	})
 
 snippet srtest
-    import React from 'react'
-    import renderer from 'react-test-renderer'
-    import { Provider } from 'react-redux'
+	import React from 'react'
+	import renderer from 'react-test-renderer'
+	import { Provider } from 'react-redux'
 
-    import store from 'src/store'
-    import { ${1:ComponentName} } from '../${1:ComponentName}'
+	import store from 'src/store'
+	import { ${1:ComponentName} } from '../${1:ComponentName}'
 
-    describe('<${1:ComponentName} />', () => {
-      const defaultProps = {}
-      const wrapper = renderer.create(
-        <Provider store={store}>
-          <${1:${TM_FILENAME_BASE}} {...defaultProps} />)
-        </Provider>,
-      )
+	describe('<${1:ComponentName} />', () => {
+	  const defaultProps = {}
+	  const wrapper = renderer.create(
+	    <Provider store={store}>
+	      <${1:${TM_FILENAME_BASE}} {...defaultProps} />)
+	    </Provider>,
+	  )
 
-      test('render', () => {
-        expect(wrapper).toMatchSnapshot()
-      })
-    })
+	  test('render', () => {
+	    expect(wrapper).toMatchSnapshot()
+	  })
+	})
 
 snippet sntest
-    import 'react-native'
-    import React from 'react'
-    import renderer from 'react-test-renderer'
+	import 'react-native'
+	import React from 'react'
+	import renderer from 'react-test-renderer'
 
-    import ${1:ComponentName} from '../${1:ComponentName}'
+	import ${1:ComponentName} from '../${1:ComponentName}'
 
-    describe('<${1:ComponentName} />', () => {
-      const defaultProps = {
+	describe('<${1:ComponentName} />', () => {
+	  const defaultProps = {
 
-      }
+	  }
 
-      const wrapper = renderer.create(<${1:ComponentName} {...defaultProps} />)
+	  const wrapper = renderer.create(<${1:ComponentName} {...defaultProps} />)
 
-      test('render', () => {
-        expect(wrapper).toMatchSnapshot()
-      })
-    })
+	  test('render', () => {
+	    expect(wrapper).toMatchSnapshot()
+	  })
+	})
 
 snippet snrtest
-    import 'react-native'
-    import React from 'react'
-    import renderer from 'react-test-renderer'
-    import { Provider } from 'react-redux'
+	import 'react-native'
+	import React from 'react'
+	import renderer from 'react-test-renderer'
+	import { Provider } from 'react-redux'
 
-    import store from 'src/store/configureStore'
-    import ${1:ComponentName} from '../${1:ComponentName}'
+	import store from 'src/store/configureStore'
+	import ${1:ComponentName} from '../${1:ComponentName}'
 
-    describe('<${1:ComponentName} />', () => {
-      const defaultProps = {}
-      const wrapper = renderer.create(
-        <Provider store={store}>
-          <${1:ComponentName} {...defaultProps} />
-        </Provider>,
-      )
+	describe('<${1:ComponentName} />', () => {
+	  const defaultProps = {}
+	  const wrapper = renderer.create(
+	    <Provider store={store}>
+	      <${1:ComponentName} {...defaultProps} />
+	    </Provider>,
+	  )
 
-      test('render', () => {
-        expect(wrapper).toMatchSnapshot()
-      })
-    })
+	  test('render', () => {
+	    expect(wrapper).toMatchSnapshot()
+	  })
+	})
 
 snippet hocredux
-    import React from 'react'
-    import PropTypes from 'prop-types'
-    import { connect } from 'react-redux'
+	import React from 'react'
+	import PropTypes from 'prop-types'
+	import { connect } from 'react-redux'
 
-    export const mapStateToProps = state => ({
+	export const mapStateToProps = state => ({
 
-    })
+	})
 
-    export const mapDispatchToProps = {
+	export const mapDispatchToProps = {
 
-    }
+	}
 
-    export const ${1:hocComponentName} = (WrappedComponent) => {
-      const hocComponent = ({ ...props }) => <WrappedComponent {...props} />
+	export const ${1:hocComponentName} = (WrappedComponent) => {
+	  const hocComponent = ({ ...props }) => <WrappedComponent {...props} />
 
-      hocComponent.propTypes = {
-      }
+	  hocComponent.propTypes = {
+	  }
 
-      return hocComponent
-    }
+	  return hocComponent
+	}
 
-    export default WrapperComponent => connect(mapStateToProps, mapDispatchToProps)(${1:hocComponentName}(WrapperComponent))
+	export default WrapperComponent => connect(mapStateToProps, mapDispatchToProps)(${1:hocComponentName}(WrapperComponent))
 
 snippet hoc
-    import React from 'react'
-    import PropTypes from 'prop-types'
+	import React from 'react'
+	import PropTypes from 'prop-types'
 
-    export default WrappedComponent => {
-      const hocComponent = ({ ...props }) => <WrappedComponent {...props} />
+	export default WrappedComponent => {
+	  const hocComponent = ({ ...props }) => <WrappedComponent {...props} />
 
-      hocComponent.propTypes = {}
+	  hocComponent.propTypes = {}
 
-      return hocComponent
-    }
+	  return hocComponent
+	}
