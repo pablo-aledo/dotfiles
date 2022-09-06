@@ -1228,6 +1228,17 @@ convert_extract_commands(){
     echo
 }
 
+convert_extract_commands(){
+echo 'convert_extract_commands(){'
+echo '  folder="$1"'
+echo '  echo "$folder"'
+echo '  mkdir "$folder"'
+echo '  cd "$folder"'
+echo '  unrar x ../../Videos/"$folder"/"$(ls ../../Videos/"$folder" | head -n1)" 2>&1 >> ../log.log'
+echo '  cd ..'
+echo '}'
+}
+
 convert_mv_commands(){
 echo 'mv_converted(){'
 echo '    [ $# -ne 2 -o "$1" = "" -o "$2" = "" ] && return'
