@@ -170,6 +170,38 @@ snippet fref
 snippet bnd
 	this.methodName = this.methodName.bind(this)
 
+## Hooks
+
+snippet usestate
+	const [${1:state}, ${2:setState}] = useState(${3:initialState});
+
+	$2(${4:newState});
+
+snippet counter
+	function Counter() {
+		const [count, setCount] = useState(0);
+
+		return (
+			<div>
+				<p>You clicked {count} times</p>
+				<button onClick={() => setCount(count + 1)}>
+				 Click me
+				</button>
+			</div>
+		);
+	}
+
+snippet list
+	const [list, setList] = useState([]);
+
+	const handleAddItem = addItem => {
+		setList([...list, addItem]);
+	};
+
+	const chk = list.map(item => (
+		<Checkbox key={item.id} data={item} />
+	));
+
 ## React Native
 
 snippet imrn
