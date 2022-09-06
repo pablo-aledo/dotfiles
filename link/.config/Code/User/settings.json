@@ -1,0 +1,39 @@
+{
+    "workbench.colorTheme": "Default Dark+",
+
+    "vim.ignorecase": "smartcase",
+    "vim.insertModeKeyBindings": [
+      {
+        "before": ["j", "j"],
+        "after": ["<Esc>"]
+      }
+    ],
+    "vim.normalModeKeyBindingsNonRecursive": [
+      {
+        "before": ["<space>"],
+        "after": [":"]
+      },
+      {
+        "before": ["<space>", "<space>"],
+        "after": ["/"]
+      },
+      {
+        "before": [">"],
+        "after": [":n<cr>"]
+      },
+      {
+        "before": ["<"],
+        "after": [":N<cr>"]
+      },
+      {
+        "before": ["<C-b>"],
+        "after": ["<C-v>"]
+      }
+    ],
+    "vim.leader": "<space>",
+    "vim.handleKeys": {
+      "<C-a>": false,
+      "<C-f>": false
+    }
+
+}
