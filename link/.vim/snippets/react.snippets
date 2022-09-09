@@ -205,6 +205,176 @@ snippet list
 snippet onchange
 	onChange={ (e) => {setState(e.target.value)}   }
 
+## Communication
+
+snippet p2c
+    import React, { Component } from 'react';
+    import { style, primaryColor, secondaryColor } from '../style';
+
+    function updateState(text){
+        this.setState({text})
+    }
+
+    //passing state from parent to child
+    class Child1 extends Component {
+        constructor(props) {
+            super(props)
+            this.state = {
+                text: "Initial State"
+            }
+            updateState = updateState.bind(this)
+        }
+        render() {
+            return (
+                <div>
+                    <div style={{ ...style.topLabel, color: primaryColor }}>I am Child</div>
+                    <div style={style.label}>{this.state.text}</div>
+                </div>
+            )
+        }
+    }
+
+    class Parent extends Component {
+        constructor(props) {
+            super(props)
+        }
+        updateChild(text) {
+            updateState(text)
+        }
+        render() {
+            return (
+                <div>
+                    <div style={{ ...style.topLabel, color: secondaryColor }}>I am Parent</div>
+                    <input style={style.textBox} type="text"
+                     placeholder="Write text" onChange={(e) => this.updateChild(e.target.value)} />
+                    <Child1 />
+                </div>
+            )
+        }
+    }
+
+    export default Parent;
+
+snippet c2p1
+    class Child extends Component {
+        render() {
+            return (
+                <div>
+                    <div style={{ ...style.topLabel, color: primaryColor }}>I am Child</div>
+                    <input style={style.textBox} type="text"
+                     placeholder="Write text" onChange={(e) => this.props.updateTextCB(e.target.value)} />
+                </div>
+            )
+        }
+    }
+
+    class Parent extends Component {
+        constructor(props) {
+            super(props)
+            this.state = {text: "Initial Text"}
+            this.updateText1 = this.updateText1
+        }
+        updateText1 = (text) => {this.setState({ text })}
+        render() {
+            return (
+                <div>
+                    <div>I am Parent</div>
+                    <div style={style.label}>{this.state.text}</div>
+                    <Child updateTextCB={this.updateText1} />
+                </div>
+            )
+        }
+    }
+
+snippet c2p2
+    class Child extends Component {
+        constructor(props) {
+            super(props)
+        }
+        render() {
+            return (
+                <div>
+                    <div>I am Child</div>
+                    <input style={style.textBox} type="text" placeholder="Write text"
+                     onChange={(e) => updateText2(e.target.value)} />
+                </div>
+            )
+        }
+    }
+
+    function updateText2(text) {
+        this.setState({ text })
+    }
+
+    class Parent extends Component {
+        constructor(props) {
+            super(props)
+            this.state = {
+                text: "Initial Text"
+            }
+            updateText2 = updateText2.bind(this)
+        }
+        updateText1 = (text) => {
+            this.setState({ text })
+        }
+
+        render() {
+            return (
+                <div>
+                    <div>I am Parent</div>
+                    <div style={style.label}>{this.state.text}</div>
+                    <Child />
+                 </div>
+            )
+        }
+    }
+
+snippet s2s
+    class Sibling1 extends Component {
+        render() {
+            return (
+                <div>
+                    <div style={{ ...style.topLabel, color: secondaryColor }}>I am Sibling 1</div>
+                    <input style={style.textBox} type="text"
+                     placeholder="Write text" onChange={(e) => updateText(e.target.value)} />
+                </div>
+            )
+        }
+    }
+
+    function updateText(text) {
+        this.setState({text})
+    }
+
+    class Sibling2 extends Component {
+        constructor(props) {
+            super(props)
+            this.state = {
+                text: "Initial State"
+            }
+            updateText = updateText.bind(this)
+        }
+        render() {
+            return (
+                <div>
+                    <div style={{ ...style.topLabel, color: primaryColor }}>I am Sibling 2</div>
+                    <div style={style.label}>{this.state.text}</div>
+                </div>
+            )
+        }
+    }
+
+    class Example3 extends Component {
+        render() {
+            return (
+                <div>
+                    <Sibling1 />
+                    <Sibling2 />
+                </div>
+            )
+        }
+    }
+
 ## React Native
 
 snippet imrn
