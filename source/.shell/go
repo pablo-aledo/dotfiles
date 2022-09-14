@@ -17,3 +17,8 @@ gotest(){
     go tool cover -html coverage.out -o coverage.html
     google-chrome coverage.html
 }
+
+gotest_instr(){
+    go test -coverprofile=coverage.out -c main.go main_test.go -o test-able-exe
+    ./test-able-exe -test.coverprofile=coverage.out -test.v -test.run=TestMain
+}
