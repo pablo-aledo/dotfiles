@@ -1,0 +1,19 @@
+goroot(){
+    spath='.'
+    while true
+    do
+        [ "$(ls $spath | grep 'go.mod')" != "" ] && break
+        spath=$spath/..
+    done
+    echo $spath
+}
+
+gopkgs(){
+    find $(goroot) -iname '*.go' | xargs dirname | sort -u
+}
+
+gotest(){
+    echo "go test -coverprofile=coverage.out -coverpkg $(gopkgs | paste -s -d,)" | source /dev/stdin
+    go tool cover -html coverage.out -o coverage.html
+    google-chrome coverage.html
+}
