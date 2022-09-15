@@ -94,7 +94,7 @@ sync_partial_contents(){
     cat /tmp/aux | sort | uniq > /tmp/spc_not_sync_${name}
 
     cat /tmp/in_b_not_a /tmp/spc_to_rm_${name} > /tmp/aux
-    cat /tmp/aux | sort | uniq | egrep -v '^$' > /tmp/spc_to_rm_${name}
+    cat /tmp/aux | sort | uniq | grep -E -v '^$' > /tmp/spc_to_rm_${name}
 
     echo -e "\e[34m ===== to_sync =====\e[0m"
     cat /tmp/spc_sync_${name} | wc -l

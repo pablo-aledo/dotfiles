@@ -21,8 +21,8 @@ dockerizer_get_organized_files(){
     rm -fr /tmp/dockerizer_organized_files*
     cat /tmp/dockerizer_cpfiles | while read line
     do
-        [ $( echo $line | egrep '\.so$' ) ]  && echo $line /usr/lib64/$(basename "$line") >> /tmp/dockerizer_organized_files1 && continue
-        [ $( echo $line | egrep '\.so\.' ) ] && echo $line /usr/lib64/$(basename "$line") >> /tmp/dockerizer_organized_files2 && continue
+        [ $( echo $line | grep -E '\.so$' ) ]  && echo $line /usr/lib64/$(basename "$line") >> /tmp/dockerizer_organized_files1 && continue
+        [ $( echo $line | grep -E '\.so\.' ) ] && echo $line /usr/lib64/$(basename "$line") >> /tmp/dockerizer_organized_files2 && continue
         echo $line $line >> /tmp/dockerizer_organized_files3
     done
 

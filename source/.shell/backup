@@ -15,7 +15,7 @@ simplify_md5s(){
 	rm -fr /tmp/md5s
 	cat $BACKUP_METADATA/md5s/${1}_files | while read line
 	do
-		cat $BACKUP_METADATA/md5s/${1}_md5s | egrep '^[0-9a-f]{32}  '"$line"'$' | tail -n1 >> /tmp/md5s
+		cat $BACKUP_METADATA/md5s/${1}_md5s | grep -E '^[0-9a-f]{32}  '"$line"'$' | tail -n1 >> /tmp/md5s
 	done
 
 	mv /tmp/md5s $BACKUP_METADATA/md5s/${1}_md5s

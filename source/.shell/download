@@ -86,8 +86,8 @@ download(){
 		cd -
 		cat $1 | while read line
 		do 
-			[ "`echo $line | egrep '^-----' `" ] && linenum=`echo $line | cut -d'-' -f8`
-			[ "`echo $line | egrep '^-----' `" ] || echo "download avxhome.se/\`cat $linenum | grep \"$line\" | head -n1 | cut -d'\"' -f2\`" | sed -e 's/\[/\\[/g' -e 's/\]/\\]/g'
+			[ "`echo $line | grep -E '^-----' `" ] && linenum=`echo $line | cut -d'-' -f8`
+			[ "`echo $line | grep -E '^-----' `" ] || echo "download avxhome.se/\`cat $linenum | grep \"$line\" | head -n1 | cut -d'\"' -f2\`" | sed -e 's/\[/\\[/g' -e 's/\]/\\]/g'
 		done
 	fi
 
@@ -96,8 +96,8 @@ download(){
 		cd -
 		cat $1 | while read line
 		do 
-			[ "`echo $line | egrep '^-----' `" ] && topic=`echo $line | cut -d'-' -f6`
-			[ "`echo $line | egrep '^-----' `" ] || echo "download b-ok.org/\`cat $topic | grep \"$line\" | head -n1 | cut -d'\"' -f2\`" | sed -e 's/\[/\\[/g' -e 's/\]/\\]/g'
+			[ "`echo $line | grep -E '^-----' `" ] && topic=`echo $line | cut -d'-' -f6`
+			[ "`echo $line | grep -E '^-----' `" ] || echo "download b-ok.org/\`cat $topic | grep \"$line\" | head -n1 | cut -d'\"' -f2\`" | sed -e 's/\[/\\[/g' -e 's/\]/\\]/g'
 		done
 	fi
 

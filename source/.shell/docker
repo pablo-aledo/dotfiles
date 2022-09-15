@@ -557,10 +557,10 @@ case $1 in
 (opengrok)               docker run -d -v $PWD:/opengrok/src -p 8080:8080 opengrok/docker:latest ;;
 (hound)                  docker run -p 6080:6080 --name hound -v $(pwd):/data etsy/hound ;;
 (sourcegraph)            docker run --publish 7080:7080 --publish 127.0.0.1:3370:3370 --rm --volume ~/.sourcegraph/config:/etc/sourcegraph --volume ~/.sourcegraph/data:/var/opt/sourcegraph sourcegraph/server:3.22.0 ;;
-(livegrep)               docker run -v $(pwd):/data livegrep/indexer /livegrep/bin/livegrep-github-reindex -repo livegrep/livegrep -http -dir /data
-                         docker network create livegrep
-                         docker run -d --rm -v $(pwd):/data --network livegrep --name livegrep-backend livegrep/base /livegrep/bin/codesearch -load_index /data/livegrep.idx -grpc 0.0.0.0:9999
-                         docker run -d --rm --network livegrep --publish 8910:8910 livegrep/base /livegrep/bin/livegrep -docroot /livegrep/web -listen=0.0.0.0:8910 --connect livegrep-backend:9999
+(livgrep -E)               docker run -v $(pwd):/data livgrep -E/indexer /livgrep -E/bin/livgrep -E-github-reindex -repo livgrep -E/livgrep -E -http -dir /data
+                         docker network create livgrep -E
+                         docker run -d --rm -v $(pwd):/data --network livgrep -E --name livgrep -E-backend livgrep -E/base /livgrep -E/bin/codesearch -load_index /data/livgrep -E.idx -grpc 0.0.0.0:9999
+                         docker run -d --rm --network livgrep -E --publish 8910:8910 livgrep -E/base /livgrep -E/bin/livgrep -E -docroot /livgrep -E/web -listen=0.0.0.0:8910 --connect livgrep -E-backend:9999
                          ;;
 (owncloud)               docker run -d -p 8000:80 -v $PWD/owncloud:/var/www/html owncloud:8.1 ;;
                          # --link my-mysql:mysql, and then use mysql as the database host on setup.

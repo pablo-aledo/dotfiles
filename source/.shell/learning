@@ -182,7 +182,7 @@ rmctrl(){
 }
 
 countwords(){
-    cat | sort | uniq -c | egrep -v '^ *[0-9]* $'
+    cat | sort | uniq -c | grep -E -v '^ *[0-9]* $'
 }
 
 getkeywords_(){
@@ -191,7 +191,7 @@ getkeywords_(){
     do
          [ $a[0,1] = '^' ] && regex='^ *[0-9]* '$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex='^ *[0-9]* .*'$a
-         value=$( cat $tmp/keywords | egrep $regex | awk '{sum += $1} END {print sum}' )
+         value=$( cat $tmp/keywords | grep -E $regex | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && value=0
          echo $value $a
     done
@@ -243,7 +243,7 @@ haskeyword_(){
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
-         value=$( cat $tmp/keywords | egrep '^ *[0-9]* .*'$regex | awk '{sum += $1} END {print sum}' )
+         value=$( cat $tmp/keywords | grep -E '^ *[0-9]* .*'$regex | awk '{sum += $1} END {print sum}' )
          [ "$value" = "" ] && continue
          echo true && return
     done
@@ -319,7 +319,7 @@ cached_vectorizer.txt2vec(){
     fi
 }
 
-linegrepkeywords.txt2vec(){
+lingrep -Ekeywords.txt2vec(){
 
     ret=""
     cat $1 > $tmp/file
@@ -361,7 +361,7 @@ windowkeywords.txt2vec(){
     local line
     cat $1 | tokenize | awk '{a[NR]=$1} NR>5{print a[NR-5]" "a[NR-4]" "a[NR-3]" "a[NR-2]" "a[NR-1]" "a[NR]}' | while read line
     do
-        comm -12 <(cat $learning_dir/features/full_keywords | sort | uniq | egrep -v '^$') <(echo $line | tokenize | sort | uniq | egrep -v '^$') | paste -d' ' -s
+        comm -12 <(cat $learning_dir/features/full_keywords | sort | uniq | grep -E -v '^$') <(echo $line | tokenize | sort | uniq | grep -E -v '^$') | paste -d' ' -s
     done | grep -v '^$' > $tmp/intersection
 
     mkdir -p $learning_dir/trmemo
@@ -565,7 +565,7 @@ keywords.doc2vec_debug(){
     do
          [ $a[0,1] = '^' ] && regex=$(echo $a | sed 's/^.//g' )
          [ $a[0,1] = '^' ] || regex=$a
-         value=$( cat $tmp/keywords | egrep '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
+         value=$( cat $tmp/keywords | grep -E '^ *[0-9]* '$regex | awk '{sum += $1} END {print sum}' )
          [ "$value" != "" ] && echo $a $value
     done
 }
@@ -2156,7 +2156,7 @@ learning.join_topics(){
     echo join $learning_src/$topic_src $learning_src/$topic_dst
 
     #documents
-    ls $learning_dir/documents/ | egrep "^$topic_src\." | grep -v '.topic' | while read src_filename
+    ls $learning_dir/documents/ | grep -E "^$topic_src\." | grep -v '.topic' | while read src_filename
     do
         dst_filename=$( echo $src_filename | sed "s/^$topic_src\./$topic_dst\./g" )
         echo mv $learning_dir/documents/$src_filename $learning_dir/documents/$dst_filename
@@ -2187,7 +2187,7 @@ learning.get_documents(){
 
         if [ -e $learning_src ]
         then
-            if [ $(ls $learning_dir/documents/ | egrep "^$line\..*" | wc -l) -ge $learning_docs_per_class ]
+            if [ $(ls $learning_dir/documents/ | grep -E "^$line\..*" | wc -l) -ge $learning_docs_per_class ]
             then
                 echo "\e[34m enough documents \e[0m $line"
                 continue
@@ -2267,7 +2267,7 @@ learning.restart(){
 }
 
 learning.restart(){
-    cd $learning_dir && ls | egrep -v '^documents$' | egrep -v '^features$' | egrep -v '^topics$' | egrep -v 'summaries' | egrep -v '^metadata$' | egrep -v '^configure$' | egrep -v '^regression_fit$' | egrep -v cache | egrep -v keep | xargs rm -rf
+    cd $learning_dir && ls | grep -E -v '^documents$' | grep -E -v '^features$' | grep -E -v '^topics$' | grep -E -v 'summaries' | grep -E -v '^metadata$' | grep -E -v '^configure$' | grep -E -v '^regression_fit$' | grep -E -v cache | grep -E -v keep | xargs rm -rf
     mkdir -p $tmp
 }
 
@@ -2280,7 +2280,7 @@ learning.queue_get(){
     [ $# -eq 1 ] && limit=$1
 
     cd $learning_queue
-    ls -- | egrep '(pdf$|xyz$)' | head -n $limit | while read line
+    ls -- | grep -E '(pdf$|xyz$)' | head -n $limit | while read line
     do
         echo "\e[34m doc2txt \e[0m $line"
         learning.doc2txt "$line" "$learning_dir/summaries/$line.txt"
@@ -2309,14 +2309,14 @@ keywords.diffhighlight(){
     cat > $tmp/highlight.txt
     closest=$(closest_classifier.sortdist $tmp/highlight.txt | head -n1 | sed "s|^|$learning_dir/documents/|g")
 
-    cat $tmp/highlight.txt | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr1
-    cat $closest           | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr2
+    cat $tmp/highlight.txt | tokenize | countwords | getkeywords | grep -E -v '^0' | awk '{print $2}' | sort > $tmp/kwr1
+    cat $closest           | tokenize | countwords | getkeywords | grep -E -v '^0' | awk '{print $2}' | sort > $tmp/kwr2
 
     comm -12 $tmp/kwr1 $tmp/kwr2 > $tmp/commonregex
 
     cat $tmp/commonregex | while read l
     do
-        cat $tmp/highlight.txt | tokenize | sort | uniq | egrep $l
+        cat $tmp/highlight.txt | tokenize | sort | uniq | grep -E $l
     done > $tmp/keywords
 
     esc=$(printf '\033')
@@ -2396,7 +2396,7 @@ learning.queue_mv(){
 
         if [ -e $learning_dir/topics/topics ]
         then
-            correct=$(cat $learning_dir/topics/topics | awk '{print $NF}' | head -n1 | egrep -i "^$true_tag$" )
+            correct=$(cat $learning_dir/topics/topics | awk '{print $NF}' | head -n1 | grep -E -i "^$true_tag$" )
             [ $? = 0 ] && true_tag=$correct
         fi
 
@@ -2494,9 +2494,9 @@ metadata.isbn(){
 
     line="$1"
     line2="$( echo $line | sed 's/-//g' )"
-    [ "$(echo $line2 | egrep '^[^0-9]*[0-9]{10}[^0-9]*$')" ]    && fill_isbn10n_metadata "$line2"
-    [ "$(echo $line2 | egrep '^[^0-9]*[0-9]{9}X[^0-9]*$')" ]    && fill_isbn10l_metadata "$line2"
-    [ "$(echo $line2 | egrep '^[^0-9]*978[0-9]{10}[^0-9]*$')" ] && fill_isbn13_metadata  "$line2"
+    [ "$(echo $line2 | grep -E '^[^0-9]*[0-9]{10}[^0-9]*$')" ]    && fill_isbn10n_metadata "$line2"
+    [ "$(echo $line2 | grep -E '^[^0-9]*[0-9]{9}X[^0-9]*$')" ]    && fill_isbn10l_metadata "$line2"
+    [ "$(echo $line2 | grep -E '^[^0-9]*978[0-9]{10}[^0-9]*$')" ] && fill_isbn13_metadata  "$line2"
 }
 
 metadata.filename(){
@@ -2620,7 +2620,7 @@ metadata.isbn2topics(){
 }
 
 keywords.new_kwords(){
-cat $tmp/vects | egrep '\*\*\*' | awk '{print $4}' | xargs cat | tokenize | countwords | awk '{print $2}' | sort | uniq | keywords.filter -v
+cat $tmp/vects | grep -E '\*\*\*' | awk '{print $4}' | xargs cat | tokenize | countwords | awk '{print $2}' | sort | uniq | keywords.filter -v
 }
 
 learning.loop(){
@@ -2636,14 +2636,14 @@ do
     cat $a | tokenize | countwords | awk '{print $2}' | keywords.filter -v       | sed "s/^/+ /g"
     cat $closest | tokenize | countwords | awk '{print $2}' | keywords.filter -v | sed "s/^/+ /g"
 
-    cat $a       | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr1
-    cat $closest | tokenize | countwords | getkeywords | egrep -v '^0' | awk '{print $2}' | sort > $tmp/kwr2
+    cat $a       | tokenize | countwords | getkeywords | grep -E -v '^0' | awk '{print $2}' | sort > $tmp/kwr1
+    cat $closest | tokenize | countwords | getkeywords | grep -E -v '^0' | awk '{print $2}' | sort > $tmp/kwr2
 
     comm -12 $tmp/kwr1 $tmp/kwr2 > $tmp/commonregex
 
     cat $tmp/commonregex | while read line
     do
-        cat $a $closest | tokenize | sort | uniq | egrep $line
+        cat $a $closest | tokenize | sort | uniq | grep -E $line
     done | sed 's/^/- /g'
 
 done

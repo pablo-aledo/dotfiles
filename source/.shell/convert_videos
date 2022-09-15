@@ -686,7 +686,7 @@ convert_decompress_rm(){
 
     if [ "$(ls *.part*.rar)" != "" ]
     then
-        [ $(lh | egrep 'part.*\.rar' | cut -d' ' -f5 | sort | uniq | wc -l) -eq 2 ] || error=true
+        [ $(lh | grep -E 'part.*\.rar' | cut -d' ' -f5 | sort | uniq | wc -l) -eq 2 ] || error=true
     fi
 
 

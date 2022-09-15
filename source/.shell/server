@@ -1040,7 +1040,7 @@ kmail_log(){
     do
         address=$(echo $mail | awk '{print $1}' )
         regex=$(echo $mail | awk '{print $2}' )
-        [ "$(echo $podname | egrep $regex)" != "" ] && echo "\e[31m Sending logs to $mail \e[0m" && cat /tmp/kmail_log | $MAILCMD -s "Pod $podname has crashed" -- $mail
+        [ "$(echo $podname | grep -E $regex)" != "" ] && echo "\e[31m Sending logs to $mail \e[0m" && cat /tmp/kmail_log | $MAILCMD -s "Pod $podname has crashed" -- $mail
     done
 }
 

@@ -9,7 +9,7 @@ encrypt(){
 }
 
 decrypt(){
-	if [ "`echo $1 | egrep '.tgzenc$'`" ]
+	if [ "`echo $1 | grep -E '.tgzenc$'`" ]
 	then
 		openssl aes-256-cbc -d -in $1 -out encrypt.tar.gz
 		tar -xzf encrypt.tar.gz

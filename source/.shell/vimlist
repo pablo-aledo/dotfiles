@@ -16,7 +16,7 @@ vimlist(){
 
     [ $command = "rg" ] && command=r && goend=1
 
-    find -type f -size -${maxsize} | egrep -v "$exclude" | grep -v '^\.\/\.' | \
+    find -type f -size -${maxsize} | grep -E -v "$exclude" | grep -v '^\.\/\.' | \
         grep -v cscope | grep -v tags | grep -v '\/build\/' | grep -v '\.git' | grep -v '\.release' | grep -v '\.debug' | \
         grep -v '\.out' | grep -v '\.o' | grep -v '\.a' | grep -v '\.log' | grep -v '\.pb\.' | grep -v '\.Trash' | \
         xargs file | awk -F: '/text/ {print $1}' | \

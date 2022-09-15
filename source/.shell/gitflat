@@ -2,7 +2,7 @@ gitflat(){
 
 mkdir ../gitflat/
 n='000'
-for a in `git log | egrep '^commit' | cut -d" " -f2 | tac`
+for a in `git log | grep -E '^commit' | cut -d" " -f2 | tac`
 do
 	git checkout $a
 	mkdir ../gitflat/$n

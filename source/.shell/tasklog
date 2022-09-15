@@ -105,7 +105,7 @@ tasklog_fill_lines(){
 		tsk=`echo $line | sed -re 's,\s+, ,g' | cut -d' ' -f3-`
 		sub=`tasklog_timediff $ini $end`
 
-		[ "`echo $sec | egrep '^[0-9]*$'`" = "" ] && printf '%s %s %7d %s\n' $ini $end $sub $tsk
+		[ "`echo $sec | grep -E '^[0-9]*$'`" = "" ] && printf '%s %s %7d %s\n' $ini $end $sub $tsk
 	done
 }
 

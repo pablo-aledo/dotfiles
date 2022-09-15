@@ -333,24 +333,24 @@ aws_terminate(){
 			aws ec2 terminate-instances --instance-ids $a
 		done
 	else
-		ids=`aws ec2 describe-instances | egrep 'Value|InstanceId' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
+		ids=`aws ec2 describe-instances | grep -E 'Value|InstanceId' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
 		aws ec2 terminate-instances --instance-ids $ids
 	fi
 }
 
 aws_stop(){
-	ids=`aws ec2 describe-instances | egrep 'Value|InstanceId' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
+	ids=`aws ec2 describe-instances | grep -E 'Value|InstanceId' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
 	aws ec2 stop-instances --instance-ids $ids 
 }
 
 aws_start(){
-	ids=`aws ec2 describe-instances | egrep 'Value|InstanceId' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
+	ids=`aws ec2 describe-instances | grep -E 'Value|InstanceId' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
 	aws ec2 start-instances --instance-ids $ids
 }
 
 aws_tag(){
 
-	ip=`aws ec2 describe-instances | egrep 'Value|PublicIpAddress' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
+	ip=`aws ec2 describe-instances | grep -E 'Value|PublicIpAddress' | grep "\"$1\"" -B1 | head -n1 | cut -d'"' -f4`
 
 	echo "AWS_LOCAL_FOLDER=/home/`whoami`/amazon"   >  /tmp/aws_config
 	echo "AWS_REMOTE_FOLDER=/home/ubuntu"           >> /tmp/aws_config
@@ -491,7 +491,7 @@ aws_deploy(){
         shift
         user=`cat /tmp/aws_config | grep $1 | cut -d":" -f2`
           ip=`cat /tmp/aws_config | grep $1 | cut -d":" -f3`
-    	cat list | egrep "^$1 " | sed "s|^$1 ||g" | while read line
+    	cat list | grep -E "^$1 " | sed "s|^$1 ||g" | while read line
     	do
             rsync -vaXi --progress "$line" "$user@$ip:$2/"
     	done

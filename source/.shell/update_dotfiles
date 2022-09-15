@@ -90,13 +90,13 @@ update_dotfiles(){
 	done
 	
 	# source files
-	for a in `find $ROOT/source -type d 2>/dev/null | egrep -v source$ | sort -g`
+	for a in `find $ROOT/source -type d 2>/dev/null | grep -E -v source$ | sort -g`
 	do
 		sourcefile $a
 	done
 	
 	# source content
-	for a in `find $ROOT/source_content -type f 2>/dev/null | egrep -v source_content$ | sort -g | xargs -l1 dirname | uniq`
+	for a in `find $ROOT/source_content -type f 2>/dev/null | grep -E -v source_content$ | sort -g | xargs -l1 dirname | uniq`
 	do 
 		rm -f $(echo $a | sed "s/`escape4 $ROOT`\/source_content/`escape4 $HOME`/g")
 		sourcecontent $a

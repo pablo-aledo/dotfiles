@@ -115,7 +115,7 @@ avhome_links(){
         [[ $link == "" ]] && echo $title % $linkline >> links.list && continue
 
         wget $link -O page
-        finallink=`cat page | grep -o -E 'href="([^"#]+)"' | cut -d'"' -f2 | sort | uniq | egrep "ul.to|uploaded.to|uploaded.net|keep2share.cc|k2s.cc"`
+        finallink=`cat page | grep -o -E 'href="([^"#]+)"' | cut -d'"' -f2 | sort | uniq | grep -E "ul.to|uploaded.to|uploaded.net|keep2share.cc|k2s.cc"`
         [[ $finallink == "" ]] && echo $title % $link >> links.list && continue
 
         echo $n : $finallink >> links.list
@@ -323,7 +323,7 @@ avlskip(){
 
 avhsearch(){
 
-wget 'https://tavaz.xyz/generative-adversarial-networks/article_904124.asp?page=1' -q -O - | grep Details | egrep 'avxhm\...' | sed 's|href="\(https://avxhm\.../ebooks/[^"]*\)"|\n\1\n|g' | egrep 'avxhm\...' | while read link
+wget 'https://tavaz.xyz/generative-adversarial-networks/article_904124.asp?page=1' -q -O - | grep Details | grep -E 'avxhm\...' | sed 's|href="\(https://avxhm\.../ebooks/[^"]*\)"|\n\1\n|g' | grep -E 'avxhm\...' | while read link
 do
 
 	title=$( wget $link -q -O - | grep 'h1 class="title-link' | cut -d'>' -f2 | cut -d'<' -f1 )

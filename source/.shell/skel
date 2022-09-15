@@ -146,7 +146,7 @@ clean_distr(){
 	sudo rm -fr /usr/share/linuxmint
 	ls /usr/share/icons | grep -v 'Mint-X' | grep -v default | sed 's/^/sudo rm -fr \/usr\/share\/icons\//g'  | bash
 	ls /usr/lib/x86_64-linux-gnu/ | grep -i 'webkit' | sed 's/^/sudo rm -fr \/usr\/lib\/x86_64-linux-gnu\//g' | bash
-	ls /usr/share/locale | egrep -v '^en$' | egrep -v '^es$' | sed 's/^/sudo rm -fr \/usr\/share\/locale\//g' | bash
+	ls /usr/share/locale | grep -E -v '^en$' | grep -E -v '^es$' | sed 's/^/sudo rm -fr \/usr\/share\/locale\//g' | bash
 
 	pkg install setup_personal
 
