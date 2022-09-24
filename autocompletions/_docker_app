@@ -1,7 +1,7 @@
 #compdef docker_app
 
 local -a images
-images=( $( which docker_run | egrep ' *(\([^) ]*\)).*' | grep -v pwd | grep -v '\-m' | sed 's/[^(]*(\([^)]*\)).*/\1/g' | egrep '[a-z_-]*' ) )
+images=( $( which docker_run | grep -E ' *(\([^) ]*\)).*' | grep -v pwd | grep -v '\-m' | sed 's/[^(]*(\([^)]*\)).*/\1/g' | grep -E '[a-z_-]*' ) )
 
 cur=${words[CURRENT]}
 prev=${words[CURRENT-1]}
