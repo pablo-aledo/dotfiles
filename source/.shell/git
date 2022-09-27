@@ -1,5 +1,4 @@
 Git(){
-    return
     command=$1
     shift
     case $command in
