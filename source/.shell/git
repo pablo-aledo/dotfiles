@@ -25,7 +25,7 @@ Git(){
         (branch_base) \git log --oneline --graph | head -n20 | grep '*  ' | head -n1 | awk '{print $2}' ;;
 
         (reset_branch) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
-        (reset_last_commit) \git reset --hard HEAD^ ;;
+        (reset_last_commit) \git reset HEAD^ ;;
 
         (pull_rebase) \git pull --rebase ;;
         (push_force_lease) \git push --force-with-lease ;;
