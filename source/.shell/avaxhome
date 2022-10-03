@@ -342,7 +342,7 @@ done
 
     (
     cd /tmp/
-    wget -q "https://1lib.eu/s/$search" -O 1libsearch
+    wget -q "https://b-ok.cc/s/$search" -O 1libsearch
     csplit -s 1libsearch '/fit your search query/' '{*}'
     )
 
