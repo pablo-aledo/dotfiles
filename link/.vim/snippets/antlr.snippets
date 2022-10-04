@@ -1,0 +1,55 @@
+snippet operations
+	grammar Expr;
+
+	root: expr EOF;
+
+	expr: expr MUL expr  # Mul
+	    | expr PLUS expr # Sum
+	    | expr SUB expr  # Sub
+	    | NUM            # Value
+	    ;
+
+	NUM: [0-9]+;
+	PLUS: '+';
+	SUB: '-';
+	MUL: '*';
+	WS: [ \n] -> skip;
+
+snippet operations_write
+	grammar Expr;
+
+	root: action+ EOF;
+
+	action: NAME ':=' expr
+	      | 'write' NAME
+	      ;
+
+	expr: <assoc=right> expr '^' expr
+	    | expr ('*'|'/') expr
+	    | expr ('+'|'-') expr
+	    | NUM
+	    ;
+
+	NUM: [0-9]+;
+	NAME: [a-z]+;
+	WS: [ \n]+ -> skip;
+
+snippet conditions
+	grammar Condition;
+
+	root: action+ EOF;
+
+	action: 'if' expr action ('else' action)? # Condition
+	    | 'print' expr                        # Print
+	    ;
+
+
+	expr: expr GT expr # Gt
+	    | expr LT expr # Lt
+	    | NUM          # Value
+	    ;
+
+	GT: '>';
+	LT: '<';
+	NUM: [0-9]+;
+	WS: [ \t\r\n]+ -> skip;

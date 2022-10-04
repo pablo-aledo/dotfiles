@@ -3021,3 +3021,122 @@ snippet interp1d
 	y = np.cos(-x**2/9.0)
 	f = scipy.interpolate.interp1d(x, y, kind='linear')
 	yvals = f(xvals)
+
+snippet antlr command
+	antlr4 -Dlanguage=Python3 -no-listener -visitor Expr.g
+
+snippet antlr test
+	from antlr4 import *
+	from ExprLexer import ExprLexer
+	from ExprParser import ExprParser
+	from EvalVisitor import EvalVisitor
+
+	input_stream = InputStream(input('? '))
+	input_stream = StdinStream()
+	input_stream = FileStream(sys.argv[1])
+	input_stream = FileStream(sys.argv[1], encoding='utf-8')
+
+	lexer = ExprLexer(input_stream)
+	token_stream = CommonTokenStream(lexer)
+	parser = ExprParser(token_stream)
+	tree = parser.root()
+
+	visitor = EvalVisitor()
+	visitor.visit(tree)
+
+
+snippet antlr operations_visitor
+	from ExprParser import ExprParser
+	from ExprVisitor import ExprVisitor
+
+	class EvalVisitor(ExprVisitor):
+
+	    def visitRoot(self,ctx):
+	        l = list(ctx.getChildren())
+	        print(self.visit(l[0]))
+
+	    def visitValue(self,ctx):
+	        l = list(ctx.getChildren())
+	        return int(l[0].getText())
+
+	    def visitMul(self,ctx):
+	        l = list(ctx.getChildren())
+	        return self.visit(l[0]) * self.visit(l[2])
+
+	    def visitSum(self,ctx):
+	        l = list(ctx.getChildren())
+	        return self.visit(l[0]) + self.visit(l[2])
+
+	    def visitSub(self,ctx):
+	        l = list(ctx.getChildren())
+	        return self.visit(l[0]) - self.visit(l[2])
+
+snippet antlr operations_write_visitor
+	from ExprParser import ExprParser
+	from ExprVisitor import ExprVisitor
+	import operator
+
+	ops = {'+' : operator.add, '-': operator.sub, '*' : operator.mul, '/' : operator.truediv, '^': operator.pow}
+
+	class Visitor(ExprVisitor):
+
+	    def __init__(self):
+	        self.myvars = {}
+
+	    def visitRoot(self,ctx):
+	        l = list(ctx.getChildren())
+	        for a in range(len(l)-1):
+	            print(self.visit(l[a]))
+
+	    def visitExpr(self,ctx):
+	        l = list(ctx.getChildren())
+	        if len(l) == 1: # NUM case
+	            return int(l[0].getText())
+	        else: # len(l) == 3
+	             return (ops[l[1].getText()](self.visit(l[0]),self.visit(l[2])))
+
+	    def visitAction(self,ctx):
+	        l = list(ctx.getChildren())
+	        if len(l) == 3: # ASSIGNMENT
+	            self.myvars[l[0].getText()] = self.visit(l[2])
+	            return 'assignment to ' + l[0].getText()
+
+	        else: # len(l) == 2  We have a PRINT
+	            if (l[0].getText() == 'write'):
+	                return str(self.myvars[l[1].getText()])
+	            else:
+	                return 'ERROR'
+
+snippet antlr conditions_visitor
+	from ConditionParser import ConditionParser
+	from ConditionVisitor import ConditionVisitor
+
+	class Visitor(ConditionVisitor):
+
+	    def visitRoot(self,ctx):
+	        for i in list(ctx.getChildren()):
+	            self.visit(i)
+
+	    def visitCondition(self,ctx):
+	        l = list(ctx.getChildren())
+	        if self.visit(l[1]) == 1:
+	            self.visit(ctx.action(0))
+	        elif len(l) > 3:
+	            if ctx.getChild(3).getText() == 'else':
+	                self.visit(ctx.action(1))
+
+	    def visitPrint(self,ctx):
+	        l = list(ctx.getChildren())
+	        print(self.visit(l[1]))
+
+	    def visitGt(self,ctx):
+	        l = list(ctx.getChildren())
+	        return int(self.visit(l[0]) > self.visit(l[2]))
+
+	    def visitLt(self,ctx):
+	        l = list(ctx.getChildren())
+	        return int(self.visit(l[0]) < self.visit(l[2]))
+
+	    def visitValue(self,ctx):
+	        return int(ctx.NUM().getText())
+
