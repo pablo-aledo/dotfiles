@@ -18,6 +18,13 @@ do
 
     xdotool key 5 && sleep 1
 
+    [ -e /tmp/zlib_protect_space ] && [ $(df -h -BG | grep '/$' | awk '{print $4}' | sed 's/G//g') -lt 5 ] && touch /tmp/lockspace
+    while true
+    do
+        [ -e /tmp/lockspace ] || break
+        sleep 10
+    done
+
 done
 
 xdotool key 0
