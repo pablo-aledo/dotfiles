@@ -1,0 +1,20 @@
+test_grammar_with(){
+    grammarfile=$(ls | grep '.g$' | head -n1)
+    vim '+set number' $1 $grammarfile
+    echo "====="
+    nl -ba $1
+    echo "====="
+    antlr4 -Dlanguage=Python3 -no-listener -visitor $grammarfile
+    cat $1 | python3 test.py
+}
+
+test_grammar_all(){
+    find tests | while read line
+    do
+        ( cat $line | python3 test.py 2>&1 ) > /tmp/output
+        [ "$(cat /tmp/output)" != 'None' ] && color='\e[31m'
+        [ "$(cat /tmp/output)"  = 'None' ] && color='\e[32m'
+        [ $color = '\e[31m' ] && expl="$(grep -F "$line" reason | cut -d: -f2)" || expl=""
+        echo "$color $line \e[0m $expl"
+    done
+}
