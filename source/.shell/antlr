@@ -9,6 +9,8 @@ test_grammar_with(){
 }
 
 test_grammar_all(){
+    grammarfile=$(ls | grep '.g$' | head -n1)
+    antlr4 -Dlanguage=Python3 -no-listener -visitor $grammarfile
     find tests | while read line
     do
         ( cat $line | python3 test.py 2>&1 ) > /tmp/output
