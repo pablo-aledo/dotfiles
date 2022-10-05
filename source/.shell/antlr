@@ -11,7 +11,7 @@ test_grammar_with(){
 test_grammar_all(){
     grammarfile=$(ls | grep '.g$' | head -n1)
     antlr4 -Dlanguage=Python3 -no-listener -visitor $grammarfile
-    find tests | while read line
+    find tests -type f | while read line
     do
         ( cat $line | python3 test.py 2>&1 ) > /tmp/output
         [ "$(cat /tmp/output)" != 'None' ] && color='\e[31m'
