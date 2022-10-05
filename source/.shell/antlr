@@ -11,11 +11,14 @@ test_grammar_with(){
 test_grammar_all(){
     grammarfile=$(ls | grep '.g$' | head -n1)
     antlr4 -Dlanguage=Python3 -no-listener -visitor $grammarfile
+    \mv oks prevoks
     find tests -type f | sort | while read line
     do
         ( cat $line | python3 test.py 2>&1 ) > /tmp/output
         [ "$(cat /tmp/output)" != 'None' ] && color='\e[31m'
         [ "$(cat /tmp/output)"  = 'None' ] && color='\e[32m'
+        [ $color = '\e[32m' ] && echo $line >> oks
+        [ $color = '\e[31m' ] && [ "$(cat prevoks | grep -F $line)" != "" ] && color='\e[41m'
         [ $color = '\e[31m' ] && expl="$(grep -F "$line" reason | cut -d: -f2)" || expl=""
         echo "$color $line \e[0m $expl"
     done
