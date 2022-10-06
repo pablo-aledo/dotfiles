@@ -40,7 +40,7 @@ test_visitor_all(){
     \mv oks prevoks
     find tests -type f | sort | while read line
     do
-        ( cat $line | grep -v '^/\*' | grep -v '^ \*' | grep -v '^ *//' | sed 's|//.*||g' | python3 test.py 2>&1 ) > /tmp/output
+        ( cat $line | python3 test.py 2>&1 ) > /tmp/output
         [   -e goldresults/$line ] && [ "$(md5sum /tmp/output | awk '{print $1}')" != "$(md5sum goldresults/$line | awk '{print $1}')" ] && color='\e[31m'
         [   -e goldresults/$line ] && [ "$(md5sum /tmp/output | awk '{print $1}')"  = "$(md5sum goldresults/$line | awk '{print $1}')" ] && color='\e[32m'
         [ ! -e goldresults/$line ] && color='\e[33m'
