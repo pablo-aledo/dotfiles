@@ -15,8 +15,8 @@ test_grammar_all(){
     find tests -type f | sort | while read line
     do
         ( cat $line | python3 test.py 2>&1 ) > /tmp/output
-        [ "$(cat /tmp/output)" != 'None' ] && color='\e[31m'
-        [ "$(cat /tmp/output)"  = 'None' ] && color='\e[32m'
+        [ "$(cat /tmp/output)" != '' ] && color='\e[31m'
+        [ "$(cat /tmp/output)"  = '' ] && color='\e[32m'
         [ $color = '\e[32m' ] && echo $line >> oks
         [ $color = '\e[31m' ] && [ "$(cat prevoks | grep -F $line)" != "" ] && color='\e[41m'
         [ $color = '\e[31m' ] && expl="$(grep -F "$line" reason | cut -d: -f2 | tail -n1)" || expl=""
