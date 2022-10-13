@@ -72,3 +72,30 @@ snippet get
 # Get Element
 snippet gett
 	getElementBy${1:Id}('${2}')${3}
+
+snippet antlr command
+	npm init
+	npm install antlr4@4.7.2
+	antlr4 -Dlanguage=JavaScript -no-listener -visitor Expr.g
+
+snippet antlr test
+	const antlr4 = require("antlr4/index")
+	const ExprLexer = require("./ExprLexer.js")
+	const ExprParser = require("./ExprParser.js")
+	const ExprVisitor = require("./ExprVisitor.js")
+
+	const input = "5 + 2"
+	const chars = new antlr4.InputStream(input);
+	const lexer = new ExprLexer.ExprLexer(chars);
+	const tokens = new antlr4.CommonTokenStream(lexer);
+	const parser = new ExprParser.ExprParser(tokens);
+	const tree = parser.root();
+
+	class Visitor extends ExprVisitor.ExprVisitor {
+		visitSum(ctx) {
+			console.log(ctx.getText())
+		};
+	}
+
+	const visitor = new Visitor();
+	visitor.visit(tree);
