@@ -927,7 +927,7 @@ server(){
         done
     fi
 
-    if [ $1 = "lock4space" ]
+    if [ $1 = "lockspace" ]
     then
         while true
         do
