@@ -927,6 +927,15 @@ server(){
         done
     fi
 
+    if [ $1 = "lock4space" ]
+    then
+        while true
+        do
+            [ -e /tmp/lockspace ] && { local_backup; rm -fr /tmp/lockspace }
+            sleep 10
+        done
+    fi
+
     if [ $1 = "mapstime" ]
     then
         which mapstime
