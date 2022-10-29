@@ -610,6 +610,8 @@ aws_disable_check(){
 }
 
 gcp_arch_vm_command(){
+user="pga_gcp_1"
+metadata="$user:$(cat ~/.ssh/id_rsa.pub | sed s/pablo-aledo@localhost/$user/g)"
 echo "gcloud beta compute instances create instance-arch2 \\"
 echo "    --metadata=\"ssh-keys=$metadata\" \\"
 echo "    --zone=europe-west2-c \\"
