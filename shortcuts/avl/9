@@ -5,5 +5,5 @@ then
     ( cd ~/Descargas_aux/; ls ../Descargas | xargs -d"\n" -n1 touch )
 fi
 
-find ~/Descargas -empty -delete
+find ~/Descargas -type f -empty -delete
 local_backup_m Descargas
