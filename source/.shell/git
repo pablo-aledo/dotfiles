@@ -42,6 +42,7 @@ Git(){
         (cherrypick_no_commit) \git cherry-pick --no-commit $* ;;
         (undo_last_commit) \git reset --soft HEAD^;;
         (revert_multiple) \git revert --no-commit HEAD~3.. ;;
+        (get_submodules) \git submodule update --init --recursive ;;
 
         (*) \git $command $*;;
     esac
