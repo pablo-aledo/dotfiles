@@ -116,7 +116,7 @@ spc_intersection(){
         echo -e "\e[34m spc_intersection \e[0m $line"
         rsync -vaXi --delete "$src/$line" "$dst/"; ok=$?
         [ $ok = 0 ] || { rm -fr "$dst/$line" }
-        [ $ok = 0 ] && { $LOCAL_BACKUP_CHECK && diff -r --brief "$src/$line" "$dst/$line" | sed 's/^/SYNC_ERROR /g' }
+        [ $ok = 0 ] && { $LOCAL_BACKUP_CHECK && $LOCAL_BACKUP_CHECK_CMD "$src/$line" "$dst/$line" | sed 's/^/SYNC_ERROR /g' }
     done
 }
 
@@ -140,7 +140,7 @@ spc_diff_b(){
         echo -e "\e[34m spc_diff_b \e[0m $line"
         rsync -vaXi --delete "$src/$line" "$dst/"; ok=$?
         [ $ok = 0 ] || { rm -fr "$dst/$line" }
-        [ $ok = 0 ] && { $LOCAL_BACKUP_CHECK && diff -r --brief "$src/$line" "$dst/$line" | sed 's/^/SYNC_ERROR /g' }
+        [ $ok = 0 ] && { $LOCAL_BACKUP_CHECK && $LOCAL_BACKUP_CHECK_CMD "$src/$line" "$dst/$line" | sed 's/^/SYNC_ERROR /g' }
     done
 }
 

@@ -3,6 +3,23 @@ LOCAL_BACKUP_TIME_MACHINE=/media/removable/2TB2/homes/admin/time_machine
 LOCAL_BACKUP_SRC=$HOME
 LOCAL_BACKUP_BAK_DIR=/media/removable/2TB2/homes/admin/rsync_bak
 LOCAL_BACKUP_CHECK=false
+LOCAL_BACKUP_CHECK_CMD=diffbr
+
+
+diffbr(){
+		diff -r --brief "$1" "$2"
+}
+
+qdiffbr(){
+    (cd "$1"; find -type f) | while read rel
+    do
+        abs1="$1/$rel"
+        abs2="$2/$rel"
+        md51=$(/bin/dd if="$abs1" bs=1M count=1 status=none | md5sum | awk '{print $1}')
+        md52=$(/bin/dd if="$abs2" bs=1M count=1 status=none | md5sum | awk '{print $1}')
+        [ "$md51" != "$md52" ] && echo "$rel are different"
+    done
+}
 
 rm_empty_folders(){
 	for a in `seq 1 10`
@@ -43,7 +60,7 @@ local_backup_ermtc(){
 		echo -e "\e[34m backup_ermtc directory $line \e[0m"
 		mkdir -p "$dest/$line"
 		rsync -vaXi `echo $back_arg` --delete  "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
-		$LOCAL_BACKUP_CHECK && diff -r --brief "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
+		$LOCAL_BACKUP_CHECK && $LOCAL_BACKUP_CHECK_CMD "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
 	done
 }
 
@@ -97,7 +114,7 @@ local_backup_rmtc(){
 
 	mkdir -p "$dest"
 	rsync -vaXi `echo $back_arg` --delete  "$LOCAL_BACKUP_SRC/$1/" "$dest/"
-	$LOCAL_BACKUP_CHECK && diff -r --brief "$LOCAL_BACKUP_SRC/$1/" "$dest/"
+	$LOCAL_BACKUP_CHECK && $LOCAL_BACKUP_CHECK_CMD "$LOCAL_BACKUP_SRC/$1/" "$dest/"
 }
 
 local_backup_rmtm(){
