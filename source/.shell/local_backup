@@ -2,6 +2,7 @@ LOCAL_BACKUP_DEST=/media/removable/2TB2/homes/admin
 LOCAL_BACKUP_TIME_MACHINE=/media/removable/2TB2/homes/admin/time_machine
 LOCAL_BACKUP_SRC=$HOME
 LOCAL_BACKUP_BAK_DIR=/media/removable/2TB2/homes/admin/rsync_bak
+LOCAL_BACKUP_CHECK=false
 
 rm_empty_folders(){
 	for a in `seq 1 10`
@@ -41,7 +42,8 @@ local_backup_ermtc(){
 	do 
 		echo -e "\e[34m backup_ermtc directory $line \e[0m"
 		mkdir -p "$dest/$line"
-		rsync -vaXi `echo $back_arg` --delete "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
+		rsync -vaXi `echo $back_arg` --delete  "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
+		$LOCAL_BACKUP_CHECK && diff -r --brief "$LOCAL_BACKUP_SRC/$1/$line" "$dest/$line"
 	done
 }
 
@@ -94,7 +96,8 @@ local_backup_rmtc(){
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$LOCAL_BACKUP_BAK_DIR"
 
 	mkdir -p "$dest"
-	rsync -vaXi `echo $back_arg` --delete "$LOCAL_BACKUP_SRC/$1/" "$dest/"
+	rsync -vaXi `echo $back_arg` --delete  "$LOCAL_BACKUP_SRC/$1/" "$dest/"
+	$LOCAL_BACKUP_CHECK && diff -r --brief "$LOCAL_BACKUP_SRC/$1/" "$dest/"
 }
 
 local_backup_rmtm(){
