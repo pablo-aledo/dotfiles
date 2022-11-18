@@ -12,8 +12,8 @@ diffbr(){
 
 qdiffbr(){
     echo -e "\e[34m qdiffbr \e[0m" "\"$1\" \"$2\""
-    n=0
-    target=$(cd "$1"; find -type f | wc -l)
+    local n=0
+    local target=$(cd "$1"; find -type f | wc -l)
     (cd "$1"; find -type f) | while read rel
     do
         abs1="$1/$rel"
@@ -24,6 +24,17 @@ qdiffbr(){
         n=$(( $n + 1 ))
         #[ $(( $n % 1000 )) = 0 ] && echo -n .
         [ $(( $n % 1000 )) = 0 ] && echo "[ $n / $target ]"
+    done
+}
+
+mqdiffbr(){
+    local n=0
+    local target=$(ls "$2" | wc -l)
+    ls "$2" | while read line
+    do
+        echo -n " [ $n / $target ] "
+        qdiffbr "$1/$line" "$2/$line"
+        n=$(( $n + 1 ))
     done
 }
 
