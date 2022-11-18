@@ -11,7 +11,7 @@ diffbr(){
 }
 
 qdiffbr(){
-    echo qdiffbr "\"$1\" \"$2\""
+    echo -e "\e[34m qdiffbr \e[0m" "\"$1\" \"$2\""
     n=0
     target=$(cd "$1"; find -type f | wc -l)
     (cd "$1"; find -type f) | while read rel
@@ -20,7 +20,7 @@ qdiffbr(){
         abs2="$2/$rel"
         md51=$(/bin/dd if="$abs1" bs=1M count=1 status=none | md5sum | awk '{print $1}')
         md52=$(/bin/dd if="$abs2" bs=1M count=1 status=none | md5sum | awk '{print $1}')
-        [ "$md51" != "$md52" ] && echo "SYNC_ERROR $rel are different"
+        [ "$md51" != "$md52" ] && echo -e "\e[31m SYNC_ERROR \e[0m $rel are different"
         #[ $(( $n % 1000 )) = 0 ] && echo -n .
         [ $(( $n % 1000 )) = 0 ] && echo "[ $n / $target ]"
         n=$(( $n + 1 ))
