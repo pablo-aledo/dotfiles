@@ -11,6 +11,7 @@ diffbr(){
 }
 
 qdiffbr(){
+    echo qdiffbr "\"$1\" \"$2\""
     n=0
     target=$(cd "$1"; find -type f | wc -l)
     (cd "$1"; find -type f) | while read rel
