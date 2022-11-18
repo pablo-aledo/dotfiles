@@ -7,17 +7,22 @@ LOCAL_BACKUP_CHECK_CMD=diffbr
 
 
 diffbr(){
-		diff -r --brief "$1" "$2"
+		diff -r --brief "$1" "$2" | sed 's/^/SYNC_ERROR /g'
 }
 
 qdiffbr(){
+    n=0
+    target=$(cd "$1"; find -type f | wc -l)
     (cd "$1"; find -type f) | while read rel
     do
         abs1="$1/$rel"
         abs2="$2/$rel"
         md51=$(/bin/dd if="$abs1" bs=1M count=1 status=none | md5sum | awk '{print $1}')
         md52=$(/bin/dd if="$abs2" bs=1M count=1 status=none | md5sum | awk '{print $1}')
-        [ "$md51" != "$md52" ] && echo "$rel are different"
+        [ "$md51" != "$md52" ] && echo "SYNC_ERROR $rel are different"
+        #[ $(( $n % 1000 )) = 0 ] && echo -n .
+        [ $(( $n % 1000 )) = 0 ] && echo "[ $n / $target ]"
+        n=$(( $n + 1 ))
     done
 }
 
