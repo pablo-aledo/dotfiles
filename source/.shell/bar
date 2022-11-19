@@ -139,6 +139,10 @@ convertbar(){
 barcmd 'grep -F "$(cat /tmp/1lib_line | sed "s/ ->.*//g")" /tmp/s2link -B999999 | wc -l' $( cat /tmp/s2link | wc -l )
 }
 
+qdiffbar(){
+    barcmd 'tmux ca -pt .1 | grep "^\[" | tail -n1 | cut -d" " -f2' $(tmux ca -pt .1 | grep "^\[" | tail -n1 | cut -d" " -f 4)
+}
+
 mqdiffbar(){
     barcmd 'tmux ca -pt .1 | grep qdiffbr | tail -n1 | cut -d" " -f3' $(tmux ca -pt .1 | grep qdiffbr | tail -n1 | cut -d" " -f 5)
 }
