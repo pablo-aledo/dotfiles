@@ -3,7 +3,8 @@ LOCAL_BACKUP_TIME_MACHINE=/media/removable/2TB2/homes/admin/time_machine
 LOCAL_BACKUP_SRC=$HOME
 LOCAL_BACKUP_BAK_DIR=/media/removable/2TB2/homes/admin/rsync_bak
 LOCAL_BACKUP_CHECK=false
-LOCAL_BACKUP_CHECK_CMD=diffbr
+LOCAL_BACKUP_CHECK_CMD=qdiffbr
+QDBRST=""
 
 
 diffbr(){
@@ -21,9 +22,24 @@ qdiffbr(){
         [ -e "$abs2" ] || continue
         md51=$(/bin/dd if="$abs1" bs=1M count=1 status=none | md5sum | awk '{print $1}')
         md52=$(/bin/dd if="$abs2" bs=1M count=1 status=none | md5sum | awk '{print $1}')
+        [ "$QDBRST" != "" ] && echo "$md51 $rel" >> "$QDBRST/qmd5s"
         [ "$md51" != "$md52" ] && echo -e "\e[31m SYNC_ERROR \e[0m $rel are different"
         n=$(( $n + 1 ))
         #[ $(( $n % 1000 )) = 0 ] && echo -n .
+        [ $(( $n % 1000 )) = 0 ] && echo "[ $n / $target ]"
+    done
+}
+
+qmd5s(){
+    echo -e "\e[34m qmd5s \e[0m" "\"$1\""
+    local n=0
+    local target=$(cd "$1"; find -type f | wc -l)
+    (cd "$1"; find -type f) | while read rel
+    do
+        abs1="$1/$rel"
+        md51=$(/bin/dd if="$abs1" bs=1M count=1 status=none | md5sum | awk '{print $1}')
+        echo "$md51 $rel" >> "$QDBRST/qmd5s"
+        n=$(( $n + 1 ))
         [ $(( $n % 1000 )) = 0 ] && echo "[ $n / $target ]"
     done
 }
