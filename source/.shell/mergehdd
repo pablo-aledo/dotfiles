@@ -53,7 +53,7 @@ mergehdd_rmdupes(){
 	done
 }
 
-# backup1: ( rm -fr /tmp/spc_* log @ disk1, copy myself to /tmp/, ls to /tmp/, sync_partial_contents, spc_intersection, spc_diff_a) 2>&1 | tee log
+# backup1: ( rm -fr /tmp/spc_* log qmd5s @ disk1, copy myself to /tmp/, ls to /tmp/, sync_partial_contents, spc_intersection, spc_diff_a) 2>&1 | tee log
 # backup2: ( copy myself to /tmp/, sync_partial_contents, spc_diff_b, spc_update ) 2>&1 | tee log
 
 sync_partial_contents(){
