@@ -22,7 +22,7 @@ qdiffbr(){
         [ -e "$abs2" ] || continue
         md51=$(/bin/dd if="$abs1" bs=1M count=1 status=none | md5sum | awk '{print $1}')
         md52=$(/bin/dd if="$abs2" bs=1M count=1 status=none | md5sum | awk '{print $1}')
-        [ "$QDBRST" != "" ] && echo "$md51 $rel" >> "$QDBRST/qmd5s"
+        [ "$QDBRST" != "" ] && echo "$md51 $abs1" >> "$QDBRST/qmd5s"
         [ "$md51" != "$md52" ] && echo -e "\e[31m SYNC_ERROR \e[0m $rel are different"
         n=$(( $n + 1 ))
         #[ $(( $n % 1000 )) = 0 ] && echo -n .
@@ -38,7 +38,7 @@ qmd5s(){
     do
         abs1="$1/$rel"
         md51=$(/bin/dd if="$abs1" bs=1M count=1 status=none | md5sum | awk '{print $1}')
-        echo "$md51 $rel" >> "$QDBRST/qmd5s"
+        echo "$md51 $abs1" >> "$QDBRST/qmd5s"
         n=$(( $n + 1 ))
         [ $(( $n % 1000 )) = 0 ] && echo "[ $n / $target ]"
     done
