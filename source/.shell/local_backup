@@ -44,6 +44,17 @@ qmd5s(){
     done
 }
 
+mqmd5s(){
+    local n=0
+    local target=$(ls "$1" | wc -l)
+    ls "$1" | while read line
+    do
+        echo -n " [ $n / $target ] "
+        qmd5s "$1/$line"
+        n=$(( $n + 1 ))
+    done
+}
+
 mqdiffbr(){
     local n=0
     local target=$(ls "$2" | wc -l)
