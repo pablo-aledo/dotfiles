@@ -16,7 +16,6 @@ decrypt(){
 	else
 		openssl aes-256-cbc -d -in $1 -out $(echo $1 | sed 's/\.enc$//g')
 	fi
-	
 }
 
 encfs_init(){
@@ -41,4 +40,16 @@ gocryptfs_mount(){
 
 gocrypt_umount(){
     fusermount -u $1
+}
+
+ecryptfs_init(){
+    modprobe ecryptfs
+}
+
+encryptfs_mount(){
+    mount -t ecryptfs $1 $2
+}
+
+encryptfs_umount(){
+    umount $1
 }
