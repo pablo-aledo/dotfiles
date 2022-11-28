@@ -114,7 +114,7 @@ spc_intersection(){
     cat /tmp/spc_sync_${name} | while read line
     do
         echo -e "\e[34m spc_intersection \e[0m $line"
-        rsync -vaXi --delete "$src/$line" "$dst/"; ok=$?
+        rsync -vaXi --delete "$src/$line" "$dst/"; ok=$? # --no-perms
         if [ $ok = 0 ]
         then
             if $LOCAL_BACKUP_CHECK
@@ -145,7 +145,7 @@ spc_diff_b(){
     cat /tmp/spc_not_sync_${name} | while read line
     do
         echo -e "\e[34m spc_diff_b \e[0m $line"
-        rsync -vaXi --delete "$src/$line" "$dst/"; ok=$?
+        rsync -vaXi --delete "$src/$line" "$dst/"; ok=$? # --no-perms
         if [ $ok = 0 ]
         then
             if $LOCAL_BACKUP_CHECK

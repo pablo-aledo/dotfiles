@@ -158,7 +158,7 @@ local_backup_rmtc(){
 	[ "$LOCAL_BACKUP_BAK_DIR" = "" ] || back_arg="--backup --backup-dir=$LOCAL_BACKUP_BAK_DIR"
 
 	mkdir -p "$dest"
-	rsync -vaXi `echo $back_arg` --delete  "$LOCAL_BACKUP_SRC/$1/" "$dest/"
+	rsync -vaXi `echo $back_arg` --delete  "$LOCAL_BACKUP_SRC/$1/" "$dest/" # --no-perms
 	$LOCAL_BACKUP_CHECK && $LOCAL_BACKUP_CHECK_CMD "$LOCAL_BACKUP_SRC/$1/" "$dest/"
 }
 
