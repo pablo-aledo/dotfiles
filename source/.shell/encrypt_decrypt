@@ -18,3 +18,27 @@ decrypt(){
 	fi
 	
 }
+
+encfs_init(){
+    encfs $1 $2
+}
+
+encfs_mount(){
+    encfs $1 $2
+}
+
+encfs_umount(){
+    fusermount -u $1
+}
+
+gocryptfs_init(){
+    gocryptfs -init $1
+}
+
+gocryptfs_mount(){
+    gocryptfs $1 $2
+}
+
+gocrypt_umount(){
+    fusermount -u $1
+}
