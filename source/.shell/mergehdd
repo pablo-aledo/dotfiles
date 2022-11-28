@@ -115,8 +115,15 @@ spc_intersection(){
     do
         echo -e "\e[34m spc_intersection \e[0m $line"
         rsync -vaXi --delete "$src/$line" "$dst/"; ok=$?
-        [ $ok = 0 ] || { rm -fr "$dst/$line" }
-        [ $ok = 0 ] && { $LOCAL_BACKUP_CHECK && $LOCAL_BACKUP_CHECK_CMD "$src/$line" "$dst/$line" }
+        if [ $ok = 0 ]
+        then
+            if $LOCAL_BACKUP_CHECK
+            then
+                $LOCAL_BACKUP_CHECK_CMD "$src/$line" "$dst/$line"
+            fi
+        else
+            rm -fr "$dst/$line"
+        fi
     done
 }
 
