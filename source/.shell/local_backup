@@ -227,7 +227,8 @@ transformer_imgvid(){
         (jpg) echo "\e[34m Transforming \e[0m $1"
               convert "$2/$1" -resize 1280\>  "$3/$1"
               ;;
-        (mp4) OPTS="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
+        (mp4) echo "\e[34m Transforming \e[0m $1"
+              OPTS="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
               ffmpeg -i \"$2/$1\" $OPTS \"$3/$1\"
               ;;
         (*)   echo "\e[31m Unknown extension \e[0m $1"
