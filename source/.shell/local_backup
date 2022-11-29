@@ -220,7 +220,49 @@ local_backup_tm3(){
 	fi
 }
 
+local_backup_transform(){
+	#[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+	#[ -d "$LOCAL_BACKUP_DEST" ] || return
+	#[ $# -eq 0 ] && return
+	#[ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
+	#[ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
 
+    src_abs="/home/pga_gcp_5/tmp/trtest/src/$1"
+    dst_abs="/home/pga_gcp_5/tmp/trtest/dst/$1"
+
+    # directories that are only in dst
+    comm -13 <(cd $src_abs; find -type d | sort) <(cd $dst_abs; find -type d | sort) | while read line
+    do
+        echo rm -fr "$dst_abs/$line"
+    done
+
+    # directories that are only in src
+    comm -23 <(cd $src_abs; find -type d | sort) <(cd $dst_abs; find -type d | sort) | while read line
+    do
+        echo mkdir -p "$dst_abs/$line"
+    done
+
+    # files that are only in src
+    comm -23 <(cd $src_abs; find -type f | sort) <(cd $dst_abs; find -type f | sort) | while read line
+    do
+        extension="${line##*.}"
+        case $extension in
+            (jpg) echo "\e[34m Transforming \e[0m $line"
+                  echo convert "$src_abs/$line" -resize 1280\>  "$dst_abs/$line"
+                  ;;
+            (mp4) OPTS="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
+	              echo ffmpeg -i \"$src_abs/$line\" $OPTS \"$dst_abs/$line\"
+                  ;;
+            (*)   echo "\e[31m Unknown extension \e[0m $line"
+        esac
+    done
+
+    # files that are only in dst
+    comm -13 <(cd $src_abs; find -type f | sort) <(cd $dst_abs; find -type f | sort) | while read line
+    do
+        echo rm "$dst_abs/$line"
+    done
+}
 
 local_backup(){
 
