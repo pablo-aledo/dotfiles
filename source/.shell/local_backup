@@ -4,6 +4,7 @@ LOCAL_BACKUP_SRC=$HOME
 LOCAL_BACKUP_BAK_DIR=/media/removable/2TB2/homes/admin/rsync_bak
 LOCAL_BACKUP_CHECK=false
 LOCAL_BACKUP_CHECK_CMD=qdiffbr
+LOCAL_BACKUP_TRANSFORMER=transformer_imgvid
 QDBRST=""
 
 
@@ -220,48 +221,99 @@ local_backup_tm3(){
 	fi
 }
 
-local_backup_transform(){
-	#[ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
-	#[ -d "$LOCAL_BACKUP_DEST" ] || return
-	#[ $# -eq 0 ] && return
-	#[ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
-	#[ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
+transformer_imgvid(){
+    extension="${line##*.}"
+    case $extension in
+        (jpg) echo "\e[34m Transforming \e[0m $1"
+              convert "$2/$1" -resize 1280\>  "$3/$1"
+              ;;
+        (mp4) OPTS="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
+              ffmpeg -i \"$2/$1\" $OPTS \"$3/$1\"
+              ;;
+        (*)   echo "\e[31m Unknown extension \e[0m $1"
+              cp "$2/$1" "$3/$1"
+    esac
+}
 
-    src_abs="/home/pga_gcp_5/tmp/trtest/src/$1"
-    dst_abs="/home/pga_gcp_5/tmp/trtest/dst/$1"
+local_backup_rmtt(){
+    [ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+    [ -d "$LOCAL_BACKUP_DEST" ] || return
+    [ $# -eq 0 ] && return
+    [ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
+    [ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
+
+    src_abs="$LOCAL_BACKUP_SRC/$1"
+    dst_abs="$dest"
 
     # directories that are only in dst
     comm -13 <(cd $src_abs; find -type d | sort) <(cd $dst_abs; find -type d | sort) | while read line
     do
-        echo rm -fr "$dst_abs/$line"
+        rm -fr "$dst_abs/$line"
     done
 
     # directories that are only in src
     comm -23 <(cd $src_abs; find -type d | sort) <(cd $dst_abs; find -type d | sort) | while read line
     do
-        echo mkdir -p "$dst_abs/$line"
+        mkdir -p "$dst_abs/$line"
+    done
+
+    # files that are in both
+    comm -12 <(cd $src_abs; find -type f | sort) <(cd $dst_abs; find -type f | sort) | while read line
+    do
+        qhash=$(stat "$src_abs/$line" | grep Modify: | sed -e 's/Modify: //' -e 's/ //g')
+        lhash=$(cat "$src_abs/qhashes" | grep -F "$line" | tail -n1 | awk '{print $1}')
+        [ "$qhash" != "$lhash" ] && rm -fr "$dst_abs/$line"
     done
 
     # files that are only in src
-    comm -23 <(cd $src_abs; find -type f | sort) <(cd $dst_abs; find -type f | sort) | while read line
+    comm -23 <(cd $src_abs; find -type f | sort) <(cd $dst_abs; find -type f | sort) | grep -v qhashes | while read line
     do
-        extension="${line##*.}"
-        case $extension in
-            (jpg) echo "\e[34m Transforming \e[0m $line"
-                  echo convert "$src_abs/$line" -resize 1280\>  "$dst_abs/$line"
-                  ;;
-            (mp4) OPTS="-vf 'scale=640:trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
-	              echo ffmpeg -i \"$src_abs/$line\" $OPTS \"$dst_abs/$line\"
-                  ;;
-            (*)   echo "\e[31m Unknown extension \e[0m $line"
-        esac
+        qhash=$(stat "$src_abs/$line" | grep Modify: | sed -e 's/Modify: //' -e 's/ //g')
+        echo "$qhash $line" >> "$src_abs/qhashes"
+
+        $LOCAL_BACKUP_TRANSFORMER "$line" "$src_abs" "$dst_abs"
     done
 
     # files that are only in dst
     comm -13 <(cd $src_abs; find -type f | sort) <(cd $dst_abs; find -type f | sort) | while read line
     do
-        echo rm "$dst_abs/$line"
+        rm -fr "$dst_abs/$line"
     done
+}
+
+local_backup_t(){
+    [ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
+    [ -d "$LOCAL_BACKUP_DEST" ] || return
+    [ $# -eq 0 ] && return
+    [ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
+    [ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
+
+    src_abs="$LOCAL_BACKUP_SRC/$1"
+    dst_abs="$dest"
+
+    # directories that are only in src
+    comm -23 <(cd $src_abs; find -type d | sort) <(cd $dst_abs; find -type d | sort) | while read line
+    do
+        mkdir -p "$dst_abs/$line"
+    done
+
+    # files that are in both
+    comm -12 <(cd $src_abs; find -type f | sort) <(cd $dst_abs; find -type f | sort) | while read line
+    do
+        qhash=$(stat "$src_abs/$line" | grep Modify: | sed -e 's/Modify: //' -e 's/ //g')
+        lhash=$(cat "$src_abs/qhashes" | grep -F "$line" | tail -n1 | awk '{print $1}')
+        [ "$qhash" != "$lhash" ] && rm -fr "$dst_abs/$line"
+    done
+
+    # files that are only in src
+    comm -23 <(cd $src_abs; find -type f | sort) <(cd $dst_abs; find -type f | sort) | grep -v qhashes | while read line
+    do
+        qhash=$(stat "$src_abs/$line" | grep Modify: | sed -e 's/Modify: //' -e 's/ //g')
+        echo "$qhash $line" >> "$src_abs/qhashes"
+
+        $LOCAL_BACKUP_TRANSFORMER "$line" "$src_abs" "$dst_abs"
+    done
+
 }
 
 local_backup(){
