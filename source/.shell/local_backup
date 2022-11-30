@@ -266,7 +266,6 @@ local_backup_rmtt(){
     [ $# -eq 0 ] && return
     [ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
     [ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
-    [ $# -eq 2 ] && [ "${2[1]}" = '/' ] && dest=$2
 
     src_abs="$LOCAL_BACKUP_SRC/$1"
     dst_abs="$dest"
@@ -319,6 +318,9 @@ local_backup_t(){
 
     src_abs="$LOCAL_BACKUP_SRC/$1"
     dst_abs="$dest"
+
+    [ $# -eq 2 ] && [ "${1[1]}" = '/' ] && src_abs=$1
+    [ $# -eq 2 ] && [ "${2[1]}" = '/' ] && dst_abs=$2
 
     # directories that are only in src
     comm -23 <(cd $src_abs; find -type d | sort) <(cd $dst_abs; find -type d | sort) | while read line
