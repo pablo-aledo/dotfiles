@@ -4,7 +4,7 @@ LOCAL_BACKUP_SRC=$HOME
 LOCAL_BACKUP_BAK_DIR=/media/removable/2TB2/homes/admin/rsync_bak
 LOCAL_BACKUP_CHECK=false
 LOCAL_BACKUP_CHECK_CMD=qdiffbr
-LOCAL_BACKUP_TRANSFORMER=transformer_imgvid
+LOCAL_BACKUP_TRANSFORMER=transformer_imgvid_aes
 QDBRST=""
 
 
@@ -224,10 +224,10 @@ local_backup_tm3(){
 transformer_imgvid(){
     extension="${line##*.}"
     case $extension in
-        (jpg) echo "\e[34m Transforming \e[0m $1"
+        (jpg|JPG) echo "\e[34m Transforming \e[0m $1"
               convert "$2/$1" -resize 1280\>  "$3/$1"
               ;;
-        (mp4) echo "\e[34m Transforming \e[0m $1"
+        (mp4|MP4) echo "\e[34m Transforming \e[0m $1"
               width=$(ffprobe "$2/$1" 2>&1 | grep 'Stream #0' | grep Video | awk '{print $12}' | cut -dx -f1)
               OPTS="-vf 'scale="$(( $width / 2 ))":trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
               echo ffmpeg -i \"$2/$1\" $OPTS \"$3/$1\" | bash
@@ -245,11 +245,11 @@ transformer_aes(){
 transformer_imgvid_aes(){
     extension="${line##*.}"
     case $extension in
-        (jpg) echo "\e[34m Transforming \e[0m $1"
+        (jpg|JPG) echo "\e[34m Transforming \e[0m $1"
               convert "$2/$1" -resize 1280\>  "/tmp/trfile"
               openssl enc -pbkdf2 -aes-256-cbc -salt -in "/tmp/trfile" -out "$3/$1" -k "$(pword local_transformer)"
               ;;
-        (mp4) echo "\e[34m Transforming \e[0m $1"
+        (mp4|MP4) echo "\e[34m Transforming \e[0m $1"
               width=$(ffprobe "$2/$1" 2>&1 | grep 'Stream #0' | grep Video | awk '{print $12}' | cut -dx -f1)
               OPTS="-vf 'scale="$(( $width / 2 ))":trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
               echo ffmpeg -i \"$2/$1\" $OPTS \"/tmp/trfile\" | bash
