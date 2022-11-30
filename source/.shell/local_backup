@@ -252,6 +252,7 @@ transformer_imgvid_aes(){
         (mp4|MP4) echo "\e[34m Transforming \e[0m $1"
               width=$(ffprobe "$2/$1" 2>&1 | grep 'Stream #0' | grep Video | awk '{print $12}' | cut -dx -f1)
               OPTS="-vf 'scale="$(( $width / 2 ))":trunc(ow/a/2)*2' -vcodec libx264 -pix_fmt yuv420p -profile:v baseline -level 3 -c:v libx264 -preset slow -crf 25 -c:a copy"
+              rm -fr /tmp/trfile.mp4
               echo ffmpeg -i \"$2/$1\" $OPTS \"/tmp/trfile.mp4\" | bash
               openssl enc -pbkdf2 -aes-256-cbc -salt -in "/tmp/trfile.mp4" -out "$3/$1" -k "$(pword local_transformer)"
               ;;
