@@ -261,8 +261,6 @@ transformer_imgvid_aes(){
 }
 
 local_backup_rmtt(){
-    [ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
-    [ -d "$LOCAL_BACKUP_DEST" ] || return
     [ $# -eq 0 ] && return
     [ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
     [ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
@@ -310,8 +308,6 @@ local_backup_rmtt(){
 }
 
 local_backup_t(){
-    [ -d "$LOCAL_BACKUP_SRC/$1/" ] || return
-    [ -d "$LOCAL_BACKUP_DEST" ] || return
     [ $# -eq 0 ] && return
     [ $# -eq 1 ] && dest=$LOCAL_BACKUP_DEST/$1
     [ $# -eq 2 ] && dest=$LOCAL_BACKUP_DEST/$2
