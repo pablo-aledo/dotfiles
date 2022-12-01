@@ -56,6 +56,15 @@ mqmd5s(){
     done
 }
 
+repqmd5s(){
+    sort qmd5s | uniq > qmd5s_sorted
+    cat qmd5s_sorted | cut -d' ' -f1 | sort | uniq -c | awk '$1 > 1 { print $2 }' | while read repmd5
+    do
+        /bin/sgrep $repmd5 qmd5s_sorted
+        echo
+    done
+}
+
 mqdiffbr(){
     local n=0
     local target=$(ls "$2" | wc -l)
