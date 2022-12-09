@@ -29,7 +29,7 @@ wait_tmux(){
     [ $# -eq 1 ] || target=".1"
     while true
     do
-        act=$(tmux ca -pt $target | grep -v '^$' | tail -n1 | grep $(hostname))
+        act=$(tmux ca -pt $target | grep -v '^$' | grep -v '^\[0\] 0:sh\*' | tail -n1 | grep $(hostname))
         [ "$act" != "" ] && break
         sleep 1
     done
