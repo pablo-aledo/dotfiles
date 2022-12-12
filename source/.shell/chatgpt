@@ -1,0 +1,56 @@
+chatgpt_query(){
+    echo "\e[34m Query \e[0m $1"
+    cat input/"$1" | grep -v '^$' | grep -v '^[ \t]*$' | while read line
+    do
+        tmux send-keys -t .1 "$line" "Enter"
+    done
+    tmux send-keys -t .1 Enter 
+}
+
+chatgpt_get(){
+    echo "\e[34m Get \e[0m $1"
+    (
+    tmux ca -pt .1 | tac | while read line
+    do
+        [ "$line" = "Chatbot:" ] && break || echo $line
+    done | tac | grep -v 'You:' | grep -v 'Setting cloudflare cookies' | grep -v '^$'
+    ) > output/"$1"
+}
+
+chatgpt_wait(){
+    while [ "$(tmux ca -pt .1 | grep -v '^$' | tail -n1)" != 'You:' ]
+    do
+        sleep 1
+    done
+}
+
+chatgpt_process_output(){
+    case "$1" in
+        (first) comm -13 <(cd ~/obsidian; ls | sed 's/\.md$//g' | sort) <(cd output; ls | sort) | while read line
+                do
+                    echo "\e[34m output_to_obsidian \e[0m $line"
+                    cat output/"$line" >> ~/obsidian/"$line".md
+                done;;
+    esac
+}
+
+obsidian_addlinks(){
+    (cd; bak obsidian >/dev/null 2>/dev/null)
+    cd ~/obsidian
+    ls | sed 's/\.md$//g' | while read file
+    do
+        sed -i "s/[^\[]$file\>/ \[\[$file\]\]/g" *
+    done
+    cd $OLDPWD
+}
+
+chatgpt_multiquery(){
+    chatgpt_query prompt
+    chatgpt_wait
+    comm -13 <(cd output; ls | sort) <(cd input; ls | sort) | grep -v prompt | while read queryfile
+    do
+        chatgpt_query "$queryfile"
+        chatgpt_wait
+        chatgpt_get   "$queryfile"
+    done
+}
