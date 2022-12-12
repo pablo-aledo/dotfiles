@@ -51,7 +51,7 @@ ctags_index(){
         ini=$(echo $line | sed 's/.*line:\([^ \t]*\)[ \t].*/\1/g')
         file=$(echo $line | awk '{print $2}')
         end=$(awk 'NR > first && /^}$/ { print NR; exit }' first=$ini $file)
-        echo $line "end:$end"
+        echo "${line}\tend:${end}"
     done
 }
 
