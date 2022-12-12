@@ -44,6 +44,17 @@ obsidian_addlinks(){
     cd $OLDPWD
 }
 
+ctags_index(){
+    ctags -R --fields=+zln
+    cat tags | grep -F $1 | while read line
+    do
+        ini=$(echo $line | sed 's/.*line:\([^ \t]*\)[ \t].*/\1/g')
+        file=$(echo $line | awk '{print $2}')
+        end=$(awk 'NR > first && /^}$/ { print NR; exit }' first=$ini $file)
+        echo $line "end:$end"
+    done
+}
+
 chatgpt_multiquery(){
     chatgpt_query prompt
     chatgpt_wait
