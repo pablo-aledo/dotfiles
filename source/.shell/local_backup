@@ -76,6 +76,28 @@ mqdiffbr(){
     done
 }
 
+qmd5s_diff(){
+    cat "$1" | awk '{$(NF+1)=$1; $1=""; print}' | sed 's/^.//g' | sort > qmd51_sort
+    cat "$2" | awk '{$(NF+1)=$1; $1=""; print}' | sed 's/^.//g' | sort > qmd52_sort
+
+    comm -13 <(cat qmd51_sort | awk '{$NF=""; print}') <(cat qmd52_sort | awk '{$NF=""; print}') | while read line
+    do
+        echo $line >> qmd5d_new
+    done
+
+    comm -23 <(cat qmd51_sort | awk '{$NF=""; print}') <(cat qmd52_sort | awk '{$NF=""; print}') | while read line
+    do
+        echo $line >> qmd5d_deleted
+    done
+
+    comm -12 <(cat qmd51_sort | awk '{$NF=""; print}') <(cat qmd52_sort | awk '{$NF=""; print}') | while read line
+    do
+        qmd51=$(/bin/sgrep "$line" qmd51_sort | awk '{print $NF}')
+        qmd52=$(/bin/sgrep "$line" qmd52_sort | awk '{print $NF}')
+        [ "$qmd51" != "$qmd52" ] && echo $line >> qmd5d_modified
+    done
+}
+
 rm_empty_folders(){
 	for a in `seq 1 10`
 	do
