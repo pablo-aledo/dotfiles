@@ -76,6 +76,28 @@ mqdiffbr(){
     done
 }
 
+qmd5s_hash(){
+    cat | while read line
+    do
+        kmd5=$(echo $line | awk '{print $1}')
+        vpath=$(echo $line | awk '{$1=""; print}' | sed 's/^.//g')
+        mpath=$(echo $vpath | md5sum - | awk '{print $1}')
+        echo $kmd5 $mpath
+        echo $mpath $vpath >> dictionary
+    done
+    cat dictionary | sort | uniq > dictionary_2
+    \mv dictionary_2 dictionary
+}
+
+qmd5s_unhash(){
+    cat | while read line
+    do
+        mpath=$line
+        vpath=$(/bin/sgrep $line dictionary | awk '{$1=""; print}' | sed 's/^.//g')
+        echo $vpath
+    done
+}
+
 qmd5s_diff(){
     cat "$1" | awk '{$(NF+1)=$1; $1=""; print}' | sed 's/^.//g' | sort > qmd51_sort
     cat "$2" | awk '{$(NF+1)=$1; $1=""; print}' | sed 's/^.//g' | sort > qmd52_sort
