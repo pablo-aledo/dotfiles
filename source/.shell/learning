@@ -2386,7 +2386,7 @@ learning.queue_mv(){
         [ "$true_tag" = "" ] && continue
 
         rm -fr $tmp/part00 $tmp/part01 $tmp/part02
-        csplit "$line" -s -f $tmp/part /=====/ '{*}'
+        csplit "$line" --suppress-matched -s -f $tmp/part /=====/ '{*}'
 
         rm -fr "$tmp/$line"
         mv $tmp/part01 "$tmp/$line"
