@@ -15,11 +15,25 @@ uninstrument(){
 }
 
 instrument2 () {
-	prog=`unset -f $1 2>/dev/null; which $1` 
+	prog=`unset -f $1 2>/dev/null; which $1`
 	sudo mv $prog $prog.old
 	echo '#!/bin/bash' | sudo tee $prog
 	echo 'args=`for a in $*; do echo \"${a}\"; done`' | sudo tee -a $prog
 	echo "(echo \"cd \$PWD; $prog \$args\") >> $INSTRUMENTATION_FILE" | sudo tee -a $prog
 	echo "$prog.old \$args" | sudo tee -a $prog
 	sudo chmod +x $prog
+}
+
+instrument3 () {
+    prog=`unset -f $1 2>/dev/null; which $1`
+    sudo mv $prog $prog.old
+    echo '#!/bin/bash' | sudo tee $prog
+    echo 'cmd="$0"' | sudo tee $prog
+    echo 'for a in "$@"' | sudo tee $prog
+    echo 'do' | sudo tee $prog
+    echo '    [ "$(echo $a | grep " ")" != "" ] && cmd="$cmd \"$a\"" || cmd="$cmd $a"' | sudo tee $prog
+    echo 'done' | sudo tee $prog
+    echo 'echo $cmd | tee -a' $INSTRUMENTATION_FILE | sudo tee $prog
+    echo "$prog.old \"$@\"" | sudo tee $prog
+    sudo chmod +x $prog
 }
