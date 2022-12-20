@@ -107,7 +107,7 @@ if ( [ $cmd = "install" ]  && `envpkg apk`     ) then apk add $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg snap`    ) then sudo snap install --classic $list; return; fi
 
 if ( [ $cmd = "Install" ]  && `envpkg pacman`  ) then sudo pacman -S --noconfirm $list; return; fi
-if ( [ $cmd = "Install" ]  && `envpkg snap`    ) then sudo snap install $list; return; fi
+if ( [ $cmd = "Install" ]  && `envpkg snap`    ) then sudo snap install --classic $list; return; fi
 
 if ( [ $cmd = "remove" ]   && `envpkg apt-get` ) then sudo apt-get remove -y $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg yay`     ) then yay -Rs $list; return; fi
