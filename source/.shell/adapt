@@ -721,8 +721,8 @@ pkg install docfetcher
 pkg install xorg
 pkg install nosuspend
 
-pkg install brave
-pkg install code
+sudo snap install brave
+sudo snap install code
 
 sudo snap install notion-snap
 sudo snap install slack
