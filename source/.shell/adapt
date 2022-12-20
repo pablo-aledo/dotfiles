@@ -700,23 +700,14 @@ sudo apt-get update
 
 pkg install tmux
 pkg install terminator
-pkg install pcmanfm
 pkg install google-chrome
-pkg install murrine-themes
-pkg install elementary-icon-theme
 pkg install vim-gnome
 pkg install ranger
-pkg install mutt
 pkg install xdotool
-pkg install scrot
-pkg install xautomation
-pkg install xclip
 pkg install ncdu
 pkg install docker
 pkg install sshfs
 pkg install fzf z
-pkg install i3
-pkg install feh
 pkg install docfetcher
 pkg install xorg
 pkg install nosuspend
