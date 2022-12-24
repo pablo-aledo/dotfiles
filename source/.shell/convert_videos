@@ -1252,3 +1252,12 @@ echo '    rm -fr /volume1/admin/convert"$1"/"$2"'
 echo '}'
 }
 
+convert_selection(){
+    cat $1 | while read line
+    do
+        foldername=$(echo $line | awk 'BEGIN{FS="/"}{print $8}')
+        filename=$(echo $line | awk 'BEGIN{FS="/"}{print $NF}')
+        relpath=$(echo $line | awk 'BEGIN{FS="/"; OFS="/"}{$1=""; $2=""; $3=""; $4=""; $5=""; $6=""; $7=""; $8=""; print}' | sed 's|^\/*||g')
+        echo "mkcp \"/media/removable/2TB2/homes/admin/Videos/$foldername/$relpath\" ~\"/html/selection/$foldername/$filename\" "
+    done
+}
