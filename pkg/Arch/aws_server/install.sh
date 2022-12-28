@@ -1,9 +1,9 @@
-# useradd pablo-aledo
-# passwd pablo-aledo
+# useradd pabloaledo
+# passwd pabloaledo
 # nano /etc/sudoers
-# mkdir /home/pablo-aledo
-# chown pablo-aledo /home/pablo-aledo/
-# su -l pablo-aledo
+# mkdir /home/pabloaledo
+# chown pabloaledo /home/pabloaledo/
+# su -l pabloaledo
 
 myshell zsh
 
