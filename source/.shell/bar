@@ -36,6 +36,8 @@ bar(){
         start_time=$(cat /tmp/start_time)
         datenow=$(date +%s)
 
+        [ $(( $datenow % 10 )) = 0 ] && clear
+
         [ -e /tmp/start_line ] && start_line=$(cat /tmp/start_line)
         [ -e /tmp/start_line ] || start_line=0
 
