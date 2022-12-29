@@ -85,7 +85,8 @@ EOF
     cat ../files | grep "/media/removable/2TB2/homes/admin/Videos/" | cut -d'/' -f8 | sort | uniq | while read linea
     do
         echo "\e[34m document \e[0m $linea"
-       cat ../files | grep -F "/media/removable/2TB2/homes/admin/Videos/$linea/" | sed "s|/media/removable/2TB2/homes/admin/Videos/[^/]*/||g" > documents/$linea
+        cat ../files | grep -F "/media/removable/2TB2/homes/admin/Videos/$linea/" | sed "s|/media/removable/2TB2/homes/admin/Videos/[^/]*/||g" > documents/$linea
+ 	# cat ../files | grep -F "/media/removable/2TB2/homes/admin/Videos/$linea/" | Xargs basename | while read vidname; do echo $vidname | tokenize | grep '^[a-z]*$' | grep -v '^$' | grep -v converted | paste -d' ' -s; done | sort > documents/$linea
     done
 
     cd documents
