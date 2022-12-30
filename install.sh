@@ -95,14 +95,14 @@ do
 done
 
 # source files
-for a in `find $ROOT/source -type d 2>/dev/null | egrep -v source$ | sort -g`
+for a in `find $ROOT/source -type d 2>/dev/null | grep -E -v source$ | sort -g`
 do
 	backup $(echo $a | sed "s/`escape $ROOT`\/source/`escape $HOME`/g")
 	sourcefile $a
 done
 
 # source content
-for a in `find $ROOT/source_content -type f 2>/dev/null | egrep -v source_content$ | sort -g | xargs -l1 dirname | uniq`
+for a in `find $ROOT/source_content -type f 2>/dev/null | grep -E -v source_content$ | sort -g | xargs -l1 dirname | uniq`
 do 
 	backup $(echo $a | sed "s/`escape $ROOT`\/source_content/`escape $HOME`/g")
 	rm -f $(echo $a | sed "s/`escape $ROOT`\/source_content/`escape $HOME`/g")
