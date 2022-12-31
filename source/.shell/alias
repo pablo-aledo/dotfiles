@@ -156,3 +156,9 @@ vimmarks(){
     | awk '{print ":e " $1; print ":normal gg"$2"jk"; print ":normal m"$3; print ""}' \
     > marks.so
 }
+
+Sgrep(){
+    export LC_ALL=C
+    [ -e ${2}_sorted ] || sort $2 -o ${2}_sorted
+    /bin/sgrep $1 ${2}_sorted
+}
