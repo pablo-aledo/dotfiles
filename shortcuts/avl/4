@@ -29,6 +29,8 @@ mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl.png
 xdotool click 1
 sleep 5
 
+xdotool key Alt+f
+
 xdotool key Ctrl+a
 xdotool key Ctrl+c
 sleep 1
