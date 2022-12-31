@@ -57,6 +57,7 @@ mqmd5s(){
 }
 
 repqmd5s(){
+    export LC_ALL=C
     sort qmd5s | uniq > qmd5s_sorted
     cat qmd5s_sorted | cut -d' ' -f1 | sort | uniq -c | awk '$1 > 1 { print $2 }' | while read repmd5
     do
@@ -77,6 +78,7 @@ mqdiffbr(){
 }
 
 qmd5s_hash(){
+    export LC_ALL=C
     cat | while read line
     do
         kmd5=$(echo $line | awk '{print $1}')
@@ -90,6 +92,7 @@ qmd5s_hash(){
 }
 
 qmd5s_unhash(){
+    export LC_ALL=C
     cat | while read line
     do
         mpath=$line
@@ -99,6 +102,7 @@ qmd5s_unhash(){
 }
 
 qmd5s_diff(){
+    export LC_ALL=C
     cat "$1" | awk '{$(NF+1)=$1; $1=""; print}' | sed 's/^.//g' | sort > qmd51_sort
     cat "$2" | awk '{$(NF+1)=$1; $1=""; print}' | sed 's/^.//g' | sort > qmd52_sort
 
