@@ -72,7 +72,7 @@ index_pairsdist(){
 cat <<EOF > configure/configure
 vectorizer_method=cached_vectorizer
 cached_vectorizer_method=bagofwords
-learning_distance=euclidean
+learning_distance=jaccard
 summarize_line_limit=999999
 learning_test=false
 EOF
@@ -104,7 +104,7 @@ EOF
     learning.fit
 
     closest_classifier.pairsdist | sed 's/^\([^ ]*\) \([^ ]*\) \([^ ]*\)$/\1 "\2" "\3"/g' | tee salida
-    cat salida | awk '$1 < 2000' | sort -g | tee salida2
+    cat salida | awk '$1 < 500' | sort -g | tee salida2
 
     cp salida2 salida3
 	cat salida2 | cut -d'"' -f 2,4 | sed 's/"/\n/g' | sort | uniq | while read hash
