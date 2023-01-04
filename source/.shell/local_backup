@@ -124,6 +124,21 @@ qmd5s_diff(){
     done
 }
 
+qmd5s_diff_summary(){
+    qmd5s_diff $2 $3
+    (
+    echo "path | deleted | new | modified"
+    cat $1 | while read qpath
+    do
+        bpath=$( basename $qpath )
+        del_n=$(cat qmd5_deleted  | grep "^$qpath" | wc -l)
+        new_n=$(cat qmd5_new      | grep "^$qpath" | wc -l)
+        mod_n=$(cat qmd5_modified | grep "^$qpath" | wc -l)
+        echo "$bpath | $del_n | $new_n | $mod_n"
+    done
+    ) | column -t -s'|'
+}
+
 rm_empty_folders(){
 	for a in `seq 1 10`
 	do
