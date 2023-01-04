@@ -145,9 +145,9 @@ qmd5s_diff_summary(){
     cat $1 | while read qpath
     do
         bpath=$( basename $qpath )
-        del_n=$(cat qmd5_deleted  | grep "^$qpath" | wc -l)
-        new_n=$(cat qmd5_new      | grep "^$qpath" | wc -l)
-        mod_n=$(cat qmd5_modified | grep "^$qpath" | wc -l)
+        del_n=$(cat qmd5d_deleted  | grep "^$qpath" | wc -l)
+        new_n=$(cat qmd5d_new      | grep "^$qpath" | wc -l)
+        mod_n=$(cat qmd5d_modified | grep "^$qpath" | wc -l)
         echo "$bpath | $del_n | $new_n | $mod_n"
     done
     ) | column -t -s'|'
