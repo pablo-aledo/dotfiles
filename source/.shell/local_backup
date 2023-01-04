@@ -71,11 +71,10 @@ mqmd5s(){
 }
 
 repqmd5s(){
-    export LC_ALL=C
-    sort qmd5s | uniq > qmd5s_sorted
+    LC_ALL=C sort qmd5s | uniq > qmd5s_sorted
     cat qmd5s_sorted | cut -d' ' -f1 | sort | uniq -c | awk '$1 > 1 { print $2 }' | while read repmd5
     do
-        /bin/sgrep $repmd5 qmd5s_sorted
+        LC_ALL=C /bin/sgrep $repmd5 qmd5s_sorted
         echo
     done
 }
@@ -92,7 +91,6 @@ mqdiffbr(){
 }
 
 qmd5s_hash(){
-    export LC_ALL=C
     cat | while read line
     do
         kmd5=$(echo $line | awk '{print $1}')
@@ -101,24 +99,22 @@ qmd5s_hash(){
         echo $kmd5 $mpath
         echo $mpath $vpath >> dictionary
     done
-    cat dictionary | sort | uniq > dictionary_2
+    cat dictionary | LC_ALL=C sort | uniq > dictionary_2
     \mv dictionary_2 dictionary
 }
 
 qmd5s_unhash(){
-    export LC_ALL=C
     cat | while read line
     do
         mpath=$line
-        vpath=$(/bin/sgrep $line dictionary | awk '{$1=""; print}' | sed 's/^.//g')
+        vpath=$(LC_ALL=C /bin/sgrep $line dictionary | awk '{$1=""; print}' | sed 's/^.//g')
         echo $vpath
     done
 }
 
 qmd5s_diff(){
-    export LC_ALL=C
-    cat "$1" | awk '{$(NF+1)=$1; $1=""; print}' | sed 's/^.//g' | sort > qmd51_sort
-    cat "$2" | awk '{$(NF+1)=$1; $1=""; print}' | sed 's/^.//g' | sort > qmd52_sort
+    cat "$1" | awk '{$(NF+1)=$1; $1=""; print}' | sed 's/^.//g' | LC_ALL=C sort > qmd51_sort
+    cat "$2" | awk '{$(NF+1)=$1; $1=""; print}' | sed 's/^.//g' | LC_ALL=C sort > qmd52_sort
 
     comm -13 <(cat qmd51_sort | awk '{$NF=""; print}') <(cat qmd52_sort | awk '{$NF=""; print}') | while read line
     do
@@ -132,8 +128,8 @@ qmd5s_diff(){
 
     comm -12 <(cat qmd51_sort | awk '{$NF=""; print}') <(cat qmd52_sort | awk '{$NF=""; print}') | while read line
     do
-        qmd51=$(/bin/sgrep "$line" qmd51_sort | awk '{print $NF}')
-        qmd52=$(/bin/sgrep "$line" qmd52_sort | awk '{print $NF}')
+        qmd51=$(LC_ALL=C /bin/sgrep "$line" qmd51_sort | awk '{print $NF}')
+        qmd52=$(LC_ALL=C /bin/sgrep "$line" qmd52_sort | awk '{print $NF}')
         [ "$qmd51" != "$qmd52" ] && echo $line >> qmd5d_modified
     done
 }

@@ -158,7 +158,6 @@ vimmarks(){
 }
 
 Sgrep(){
-    export LC_ALL=C
-    [ -e ${2}_sorted ] || sort $2 -o ${2}_sorted
-    /bin/sgrep $1 ${2}_sorted
+    [ -e ${2}_sorted ] || LC_ALL=C sort $2 -o ${2}_sorted
+    LC_ALL=C /bin/sgrep $1 ${2}_sorted
 }
