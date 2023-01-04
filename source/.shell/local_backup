@@ -31,6 +31,20 @@ qdiffbr(){
     done
 }
 
+qqmd5s(){
+    echo -e "\e[34m qmd5s \e[0m" "\"$1\""
+    local n=0
+    local target=$(cd "$1"; find -type f | wc -l)
+    (cd "$1"; find -type f) | while read rel
+    do
+        abs1="$1/$rel"
+        md51=$(stat "$abs1" | grep Modify: | sed -e 's/Modify: //' -e 's/ //g')
+        echo "$md51 $abs1" >> "$QDBRST/qmd5s"
+        n=$(( $n + 1 ))
+        [ $(( $n % 1000 )) = 0 ] && echo "[ $n / $target ]"
+    done
+}
+
 qmd5s(){
     echo -e "\e[34m qmd5s \e[0m" "\"$1\""
     local n=0
