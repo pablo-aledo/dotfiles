@@ -455,6 +455,23 @@ convert_failconverting(){
 	done
 }
 
+convert_lengths(){
+	[ $# -eq 0 ] && folder="$convert_dir"
+	[ $# -eq 1 ] && folder="$convert_dir/$1"
+
+	cd $folder
+	echo $findcmd | bash | while read line
+	do
+		file1="$line"
+		base1=`basename "$line"`
+		file2="`echo $line | sed s/$(escape4 $convert_dir)/$(escape4 $converted_dir)/g`.converted.mp4"
+        secs1=$(  ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $file1 | cut -d. -f1)
+        secs2=$(  ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $file2 | cut -d. -f1)
+        #echo $file1 $secs1 $file2 $secs2
+        [ "$secs1" != "$secs2" ] && echo "\e[31m Different lenght \e[0m $file1 \e[31m $secs1 $secs2 \e[0m" | tee -a /tmp/convert_report
+	done
+}
+
 convert_cp(){
 	[ $# -eq 0 ] && folder="$convert_dir"
 	[ $# -eq 1 ] && folder="$convert_dir/$1"
