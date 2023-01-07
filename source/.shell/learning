@@ -709,7 +709,7 @@ tlsh.distance(){
 }
 
 tlsh.closest(){
-    tlsh -c "$1" -r $learning_dir/documents -T 100 | head -n1
+    tlsh -c "$1" -r $learning_dir/documents -T 100 | awk '{print $NF" "$2}' | sort -g | head -n1 | awk '{print $2}' | xargs basename
 }
 
 tlsh.pairsdist(){
