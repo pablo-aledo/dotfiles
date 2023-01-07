@@ -704,6 +704,18 @@ gzip_distance(){
    python -c "print(float($s12 - min($s1, $s2))/float(max($s1,$s2)))"
 }
 
+tlsh.distance(){
+    tlsh -c "$1" -f "$2"
+}
+
+tlsh.closest(){
+    tlsh -c "$1" -r $learning_dir/documents -T 100 | head -n1
+}
+
+tlsh.pairsdist(){
+    tlsh -xref -r $learning_dir/documents -T 100
+}
+
 jaccard_distance(){
     rm -fr $tmp/s1 $tmp/s2
     learning.doc2txt "$1" $tmp/s1
@@ -1618,6 +1630,10 @@ print(''.join(rvect))
 
 learning.key(){
     learning.rvect2key "$(learning.doc2rvect $1)"
+}
+
+tlsh.key(){
+    tlsh -f "$1"
 }
 
 learning.fit(){
