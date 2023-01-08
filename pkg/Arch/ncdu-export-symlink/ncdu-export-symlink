@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 # coding: utf-8
 
 # Standalone ncdu export feature using only Python's 2.6 built-in 
