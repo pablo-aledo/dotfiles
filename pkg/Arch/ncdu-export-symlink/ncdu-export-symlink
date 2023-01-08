@@ -71,7 +71,9 @@ def get_info(path):
 
 
 def get_info_string(info, options, walk_error=False, excluded=False):
-    name = codecs.decode(info["name"], "utf-8", "replace")
+    # import pdb; pdb.set_trace()
+    # name = codecs.decode(info["name"], "utf-8", "replace")
+    name = codecs.decode(bytes(info["name"], "utf-8"), "utf-8", "replace")
     name = json.dumps(name)
     if info.get("error", False):
         return """{{"name":{0},"read_error":true}}""".format(name)
