@@ -101,10 +101,12 @@ EOF
     mv hash.sh unhash.sh ../tmp
     cd ..
 
-    learning.fit
+    #learning.fit
 
-    closest_classifier.pairsdist | sed 's/^\([^ ]*\) \([^ ]*\) \([^ ]*\)$/\1 "\2" "\3"/g' | tee salida
-    cat salida | awk '$1 < 500' | sort -g | tee salida2
+    #closest_classifier.pairsdist | sed 's/^\([^ ]*\) \([^ ]*\) \([^ ]*\)$/\1 "\2" "\3"/g' | tee salida
+    #cat salida | awk '$1 < 500' | sort -g | tee salida2
+    tlsh.pairsdist | sed 's/^\([^ ]*\) \([^ ]*\) \([^ ]*\)$/\1 "\2" "\3"/g' | tee salida2
+    cat salida | sort -g | tee salida2
 
     cp salida2 salida3
 	cat salida2 | cut -d'"' -f 2,4 | sed 's/"/\n/g' | sort | uniq | while read hash

@@ -713,7 +713,7 @@ tlsh.closest(){
 }
 
 tlsh.pairsdist(){
-    tlsh -xref -r $learning_dir/documents -T 100
+    tlsh -xref -r $learning_dir/documents -T 100 | awk '{print $3" "$1" "$2}'
 }
 
 jaccard_distance(){
