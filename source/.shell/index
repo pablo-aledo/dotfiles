@@ -105,7 +105,7 @@ EOF
 
     #closest_classifier.pairsdist | sed 's/^\([^ ]*\) \([^ ]*\) \([^ ]*\)$/\1 "\2" "\3"/g' | tee salida
     #cat salida | awk '$1 < 500' | sort -g | tee salida2
-    tlsh.pairsdist | sed 's/^\([^ ]*\) \([^ ]*\) \([^ ]*\)$/\1 "\2" "\3"/g' | tee salida2
+    tlsh.pairsdist 2>/dev/null | sed 's/^\([^ ]*\) \([^ ]*\) \([^ ]*\)$/\1 "\2" "\3"/g' | tee salida2
     cat salida | sort -g | tee salida2
 
     cp salida2 salida3

@@ -712,8 +712,11 @@ tlsh.closest(){
     tlsh -c "$1" -r $learning_dir/documents -T 100 | awk '{print $NF" "$2}' | sort -g | head -n1 | awk '{print $2}' | xargs basename
 }
 
-tlsh.pairsdist(){
-    tlsh -xref -r $learning_dir/documents -T 100 | awk '{print $3" "$1" "$2}'
+tlsh.pairsdist () {
+	tlsh -xref -r $learning_dir/documents -T 100 | awk '{print $3" "$1" "$2}' | while read dist file1 file2
+	do
+		echo "$dist $(basename $file1) $(basename $file2)"
+	done
 }
 
 jaccard_distance(){
