@@ -319,7 +319,7 @@ cached_vectorizer.txt2vec(){
     fi
 }
 
-lingrep -Ekeywords.txt2vec(){
+linegrepkeywords.txt2vec(){
 
     ret=""
     cat $1 > $tmp/file
