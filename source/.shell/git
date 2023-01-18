@@ -15,6 +15,7 @@ Git(){
         (diff_staged) \git diff --staged ;;
 
         (branch_rewrite) \git rebase -i $(\git merge-base master $(\git rev-parse HEAD)) ;; # pick, squash, squash, squash...
+        (branch_changed_files) \git diff --name-only $(\git merge-base master $(\git rev-parse HEAD)) $(\git rev-parse HEAD) ;;
         (branch_to_patch) \git diff $(\git merge-base master $(\git rev-parse HEAD)) $(\git rev-parse HEAD) ;;
         (branch_to_file) \git log --cc $(\git merge-base master $(\git rev-parse HEAD))...HEAD ;;
         (branch_to_file_2) \git format-patch --stdout $(\git merge-base master $(\git rev-parse HEAD)) ;; # consume with git am
