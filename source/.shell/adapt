@@ -711,6 +711,7 @@ pkg install fzf z
 pkg install docfetcher
 pkg install xorg
 pkg install nosuspend
+pkg install gnome-tweaks
 
 sudo snap install brave
 sudo snap install code
