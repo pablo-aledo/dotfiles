@@ -5,7 +5,7 @@ Git(){
 
         (log_graph) \git log --oneline --graph ;;
         (log_follow) \git log --follow $* ;;
-        (log_branch) \git log --oneline --graph | while read line; do [[ "$line" =~ '*  ' ]]  && break; echo "$line"; done ;;
+        (log_branch) \git log --oneline --graph | while read line; do [[ "$line" =~ '\*  ' ]]  && break; echo "$line"; done ;;
         (log_oneline_format) \git log --pretty=format:"%h%x09%an%x09%ad%x09%s" ;;
 
         (diff_grep) \git diff --name-only -G"$1" ;;
@@ -23,7 +23,7 @@ Git(){
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
         (branch_get_file) \git show $1:$2 > $2 ;;
-        (branch_base) \git log --oneline --graph | head -n1000 | grep '*  ' | head -n1 | awk '{print $2}' ;;
+        (branch_base) \git log --oneline --graph | head -n1000 | grep '\*  ' | head -n1 | awk '{print $2}' ;;
 
         (reset_branch) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
         (reset_last_commit) \git reset HEAD^ ;;
