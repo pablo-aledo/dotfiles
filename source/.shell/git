@@ -3,7 +3,7 @@ Git(){
     shift
     case $command in
 
-        (log_graph) \git log --oneline --graph | grep '*  ' -B1000 -A3 ;;
+        (log_graph) \git log --oneline --graph ;;
         (log_follow) \git log --follow $* ;;
         (log_branch) \git log --oneline --graph | while read line; do [[ "$line" =~ '*  ' ]]  && break; echo "$line"; done ;;
         (log_oneline_format) \git log --pretty=format:"%h%x09%an%x09%ad%x09%s" ;;
