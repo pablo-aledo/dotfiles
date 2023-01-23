@@ -90,3 +90,14 @@ scrop2(){
     gthumb $1.png
     xdotool key Alt+4
 }
+
+xclip_monitor () {
+	while true
+	do
+		clip_prev_content="$clip_content"
+		clip_content="$(Xclip -o)"
+		[ "$clip_content" != "$clip_prev_content" ] && echo "$clip_content"
+		sleep 1
+	done
+}
+
