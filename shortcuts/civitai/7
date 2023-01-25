@@ -18,7 +18,7 @@ imgs = [ a for a in driver.find_elements("tag name", "img") if a.rect['y']-y_ini
 # for i in imgs:
     # print(i.rect['y'] - y_ini)
 for i in imgs:
-    if( i.is_displayed() ):
+    if( i.is_displayed() and i.is_enabled() ):
         print( i.get_attribute("src") )
 EOF
 ) > /tmp/img
