@@ -16,12 +16,20 @@ snippet driver ie
 snippet driver chrome_path
 	driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver/")
 
+snippet attach
+	# google-chrome --remote-debugging-port=9222 --profile-directory=Default
+	from selenium import webdriver
+	from selenium.webdriver.chrome.options import Options
+	chrome_options = Options()
+	chrome_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+	driver = webdriver.Chrome(options=chrome_options)
+
 snippet options chrome
 	from selenium import webdriver
 	from selenium.webdriver.chrome.options import Options
 	chrome_options = Options()
 	chrome_options.add_argument("--disable-extensions")
-	driver = webdriver.Chrome(chrome_options=chrome_options)
+	driver = webdriver.Chrome(options=chrome_options)
 
 
 snippet options firefox
