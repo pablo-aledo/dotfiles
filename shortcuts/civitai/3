@@ -1,5 +1,6 @@
 export DISPLAY=:1
 
+(
 python /dev/stdin << EOF
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -18,4 +19,16 @@ for y in range(y_ini,y_ini + 5000,10):
 
     if len(carr) > 0:
         break
+
+y_ini = int(driver.execute_script("return window.pageYOffset;"))
+
+btns = [ a for a in driver.find_elements("class name", "mantine-Carousel-control") if a.rect['y']-y_ini > 290 and a.rect['y']-y_ini < 310 ]
+# btns = [ a for a in driver.find_elements("class name", "mantine-Carousel-control") ]
+
+
+# for b in btns:
+    # print(b.rect['y'] - y_ini)
+print(len(btns))
+
 EOF
+) > /tmp/nbtns
