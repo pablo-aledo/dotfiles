@@ -114,7 +114,13 @@ snippet scroll
 	driver.execute_script("return window.pageYOffset;");
 
 snippet is_displayed
-	${1:element}.is_displayed()
+	${1:element}.is_displayed()${2}
+
+snippet is_enabled
+	${1:element}.is_displayed()${2}
+
+snippet is_interactable
+	${1:element}.is_displayed() and ${1}.is_enabled()${2}
 
 snippet drag
 	element = driver.find_element("name", "source")
