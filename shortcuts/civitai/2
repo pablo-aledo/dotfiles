@@ -1,0 +1,22 @@
+export DISPLAY=:1
+
+python /dev/stdin << EOF
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from time import sleep
+
+chrome_options = Options()
+chrome_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+driver = webdriver.Chrome(options=chrome_options)
+
+driver.set_window_size(200, 750)
+
+driver.get("https://civitai.com/models/3627/protogen-v22-anime-official-release")
+
+# for a in range(0,100):
+#     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+#     sleep(0.5)
+
+driver.execute_script("window.scrollTo(0, 0)")
+
+EOF

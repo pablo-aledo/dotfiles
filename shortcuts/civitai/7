@@ -1,0 +1,24 @@
+export DISPLAY=:1
+
+(
+python /dev/stdin << EOF
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from time import sleep
+
+chrome_options = Options()
+chrome_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+driver = webdriver.Chrome(options=chrome_options)
+
+y_ini = int(driver.execute_script("return window.pageYOffset;"))
+
+# imgs = [ a for a in driver.find_elements("tag name", "img") ]
+imgs = [ a for a in driver.find_elements("tag name", "img") if a.rect['y']-y_ini > 80 and a.rect['y']-y_ini < 100 ]
+
+# for i in imgs:
+    # print(i.rect['y'] - y_ini)
+for i in imgs:
+    if( i.is_displayed() ):
+        print( i.get_attribute("src") )
+EOF
+) > /tmp/img

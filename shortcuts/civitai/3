@@ -1,0 +1,21 @@
+export DISPLAY=:1
+
+python /dev/stdin << EOF
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from time import sleep
+
+chrome_options = Options()
+chrome_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+driver = webdriver.Chrome(options=chrome_options)
+
+y_ini = int(driver.execute_script("return window.pageYOffset;")) + 20
+
+for y in range(y_ini,y_ini + 5000,10):
+    driver.execute_script("window.scrollTo(0, " + str(y) + ")")
+    sleep(0.01)
+    carr = [ a for a in driver.find_elements("class name", "mantine-Carousel-viewport") if a.rect['y'] > y+70 and a.rect['y'] < y+90]
+
+    if len(carr) > 0:
+        break
+EOF

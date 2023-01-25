@@ -1,0 +1,28 @@
+export DISPLAY=:1
+
+python /dev/stdin << EOF
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from time import sleep
+
+chrome_options = Options()
+chrome_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+driver = webdriver.Chrome(options=chrome_options)
+
+y_ini = int(driver.execute_script("return window.pageYOffset;"))
+
+btns = [ a for a in driver.find_elements("class name", "icon-tabler") if a.rect['y']-y_ini > 490 and a.rect['y']-y_ini < 510 ]
+# btns = [ a for a in driver.find_elements("class name", "icon-tabler-info-circle") ]
+
+
+
+# for b in btns:
+    # print(b.rect['y'] - y_ini)
+for b in btns:
+    if b.is_displayed() and b.is_enabled():
+        b.click()
+
+driver.execute_script("window.scrollTo(0, " + str(y_ini) + ")")
+
+EOF
+

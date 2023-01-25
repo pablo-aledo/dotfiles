@@ -1,0 +1,6 @@
+export DISPLAY=:1
+
+img="$(cat /tmp/img)"
+prompt="$(xclip -sel clip -o | paste -d'|' -s)"
+
+echo "$img|$prompt" >> /tmp/prompts

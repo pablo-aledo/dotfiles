@@ -1,0 +1,19 @@
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+export DISPLAY=:1
+
+for a in $(seq 1 10)
+do
+    xdotool key 3 && sleep 1; shcw civitai.3; sleep 1
+
+    for b in $(seq 1 2)
+    do
+        xdotool key 5 && sleep 1; shcw civitai.5; sleep 1
+        xdotool key 6 && sleep 1; shcw civitai.6; sleep 1
+        xdotool key 7 && sleep 1; shcw civitai.7; sleep 1
+        xdotool key 8 && sleep 1; shcw civitai.8; sleep 1
+        xdotool key 5 && sleep 1; shcw civitai.5; sleep 1
+        xdotool key 4 && sleep 1; shcw civitai.4; sleep 1
+    done
+done

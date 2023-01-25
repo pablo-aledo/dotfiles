@@ -1,0 +1,23 @@
+export DISPLAY=:1
+
+python /dev/stdin << EOF
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from time import sleep
+
+chrome_options = Options()
+chrome_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+driver = webdriver.Chrome(options=chrome_options)
+
+y_ini = int(driver.execute_script("return window.pageYOffset;"))
+
+btns = [ a for a in driver.find_elements("class name", "mantine-Carousel-control") if a.rect['y']-y_ini > 290 and a.rect['y']-y_ini < 310 ]
+# btns = [ a for a in driver.find_elements("class name", "mantine-Carousel-control") ]
+
+
+# for b in btns:
+    # print(b.rect['y'] - y_ini)
+if(len(btns) > 1):
+    btns[1].click()
+
+EOF
