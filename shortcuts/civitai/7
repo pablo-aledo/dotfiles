@@ -12,13 +12,16 @@ driver = webdriver.Chrome(options=chrome_options)
 
 y_ini = int(driver.execute_script("return window.pageYOffset;"))
 
-# imgs = [ a for a in driver.find_elements("tag name", "img") ]
+#imgs = [ a for a in driver.find_elements("tag name", "img") ]
 imgs = [ a for a in driver.find_elements("tag name", "img") if a.rect['y']-y_ini > 80 and a.rect['y']-y_ini < 100 ]
 
-# for i in imgs:
-    # print(i.rect['y'] - y_ini)
+#for i in imgs:
+     #print(i.rect['y'] - y_ini)
 for i in imgs:
-    if( i.is_displayed() and i.is_enabled() ):
+    if ( i.is_displayed() and i.is_enabled() and i.rect['x'] > 0 ) :
         print( i.get_attribute("src") )
+
 EOF
+
 ) > /tmp/img
+#)
