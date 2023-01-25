@@ -1,0 +1,183 @@
+snippet import
+	from selenium import webdriver
+
+snippet driver chrome
+	driver = webdriver.Chrome()
+
+snippet driver firefox
+	driver = webdriver.Firefox()
+
+snippet driver safari
+	driver = webdriver.Safari()
+
+snippet driver ie
+	driver = webdriver.Ie()
+
+snippet driver chrome_path
+	driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver/")
+
+snippet options chrome
+	from selenium import webdriver
+	from selenium.webdriver.chrome.options import Options
+	chrome_options = Options()
+	chrome_options.add_argument("--disable-extensions")
+	driver = webdriver.Chrome(chrome_options=chrome_options)
+
+
+snippet options firefox
+	from selenium import webdriver
+	from selenium.webdriver.firefox.options import Options
+	firefox_options = Options()
+	firefox_options.set_headless()
+	driver = webdriver.Firefox(options=firefox_options)
+
+snippet get
+	driver.get("${1:http://google.com}")${2}
+
+snippet find_element id
+	${1:element} = driver.find_element("id", "${2:id}")${3}
+
+snippet find_element class_name
+	${1:element} = driver.find_element("class name", "${2:class_name}")${3}
+
+snippet find_element name
+	${1:element} = driver.find_element("name", "${2:name}")${3}
+
+snippet find_element xpath
+	${1:element} = driver.find_element("xpath", "${2://input[@name='email']}")${3}
+
+snippet find_element tag_name
+	${1:element} = driver.find_element("tag name", "${2:input}")${3}
+
+snippet find_element link_text
+	${1:element} = driver.find_element("link text", "${2:link text}")${3}
+
+snippet find_element partial_link_text
+	${1:element} = driver.find_element("partial link text", "${2:partial link text}")${3}
+
+snippet find_elements id
+	${1:element} = driver.find_elements("id", "${2:id}")${3}
+
+snippet find_elements class_name
+	${1:element} = driver.find_elements("class name", "${2:class_name}")${3}
+
+snippet find_elements name
+	${1:element} = driver.find_elements("name", "${2:name}")${3}
+
+snippet find_elements xpath
+	${1:element} = driver.find_elements("xpath", "${2://input[@name='email']}")${3}
+
+snippet find_elements tag_name
+	${1:element} = driver.find_elements("tag name", "${2:input}")${3}
+
+snippet find_elements link_text
+	${1:element} = driver.find_elements("link text", "${2:link text}")${3}
+
+snippet find_elements partial_link_text
+	${1:element} = driver.find_elements("partial link text", "${2:partial link text}")${3}
+
+snippet get_attribute
+	${1:element}.get_attribute("${2:class}")${3}
+
+snippet rect
+	${1:element}.rect${2}
+
+snippet text
+	${1:element}.text${2}
+
+snippet innerHTML
+	${1:element}.get_attribute('innerHTML')${2}
+
+snippet refresh
+	driver.refresh()
+
+snippet write
+	${1:element}.send_keys("S{2:keys}")${3}
+
+snippet clear
+	${1:element}.clear()${2}
+
+snippet click
+	${1:element}.click()${2}
+
+snippet scroll
+	driver.execute_script("window.scrollTo(0, Y)")
+	driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+	driver.execute_script("return window.pageYOffset;");
+
+snippet is_displayed
+	${1:element}.is_displayed()
+
+snippet drag
+	element = driver.find_element("name", "source")
+	target = driver.find_element("name", "target")
+	from selenium.webdriver import ActionChains
+	action_chains = ActionChains(driver)
+	action_chains.drag_and_drop(element, target).perform()
+
+snippet select
+	from selenium.webdriver.support.ui import Select
+	select = Select(driver.find_element("id", 'city'))
+	select.select_by_index(index)
+	select.select_by_visible_text("text")
+	select.select_by_value(value)
+	select.deselect_all()
+
+snippet switch
+	driver.switch_to_window("${1:window_name}")${2}
+
+snippet windows_handles
+	for handle in driver.window_handles:
+		driver.switch_to_window(handle)
+
+snippet windows_current
+	handler = driver.current_window_handle
+
+snippet iframe
+	driver.switch_to_frame("frame_name")
+	driver.switch_to_frame("frame_name.0.child")
+	driver.switch_to_default_content()
+
+snippet alert
+	alert_obj = driver.switch_to.alert
+	msg = alert_obj.text()
+	print(msg)
+	alert_obj.accept()
+	alert_obj.dismiss()
+
+snippet source
+	page_source = driver.page_source
+
+snippet back
+	driver.back()
+
+snippet forward
+	driver.forward()
+
+snippet cookies
+	cookie = {'name' : 'user', 'value' : 'vinayak'}
+	driver.add_cookie(cookie)
+	driver.get_cookies()
+	driver.delete_cookie(cookie)
+	driver.delete_all_cookies()
+
+snippet set_size
+	driver.set_window_size(1200, 800)
+
+snippet wait
+	from selenium import webdriver
+	from selenium.webdriver.common.by import By
+	from selenium.webdriver.support.ui import WebDriverWait
+	from selenium.webdriver.support import expected_conditions as EC
+
+	driver = webdriver.Chrome()
+	driver.get("https://www.lambdatest.com/")
+	try:
+	    element = WebDriverWait(driver, 10).until(
+	        EC.presence_of_element_located((By.ID, "testing_form"))
+	    )
+	except:
+	    print("some error happen !!")
+
+snippet screenshot
+	driver.save_screenshot('${1:filename}.png')${2}
