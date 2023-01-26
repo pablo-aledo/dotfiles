@@ -3,10 +3,9 @@ source ~/.dotfiles/source/.shell/adapt
 
 export DISPLAY=:1
 
-for a in $(seq 1 1)
+for a in $(seq 1 100)
 do
     xdotool key 3 && sleep 1; shcw civitai.3; sleep 1
-    [ "$(cat /tmp/nbtns)" = 0 ] && break
 
     for b in $(seq 1 10)
     do
@@ -17,5 +16,7 @@ do
         xdotool key 8 && sleep 1; shcw civitai.8; sleep 1
         xdotool key 5 && sleep 1; shcw civitai.5; sleep 1
         xdotool key 4 && sleep 1; shcw civitai.4; sleep 1
+        [ "$(cat /tmp/nbtns)" = 0 ] && break
     done
+
 done
