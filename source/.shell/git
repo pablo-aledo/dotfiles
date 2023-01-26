@@ -14,16 +14,15 @@ Git(){
         (diff_step) \git diff ${1}^ ${1} ;;
         (diff_staged) \git diff --staged ;;
 
-        (branch_rewrite) \git rebase -i $(\git merge-base master $(\git rev-parse HEAD)) ;; # pick, squash, squash, squash...
-        (branch_changed_files) \git diff --name-only $(\git merge-base master $(\git rev-parse HEAD)) $(\git rev-parse HEAD) ;;
-        (branch_to_patch) \git diff $(\git merge-base master $(\git rev-parse HEAD)) $(\git rev-parse HEAD) ;;
-        (branch_to_file) \git log --cc $(\git merge-base master $(\git rev-parse HEAD))...HEAD ;;
-        (branch_to_file_2) \git format-patch --stdout $(\git merge-base master $(\git rev-parse HEAD)) ;; # consume with git am
+        (branch_rewrite) \git rebase -i $(git_branch_base) ;; # pick, squash, squash, squash...
+        (branch_diff_files) \git diff --name-only $(git_branch_base) $(\git rev-parse HEAD) ;;
+        (branch_to_patch) \git diff $(git_branch_base) $(\git rev-parse HEAD) ;;
+        (branch_to_file) \git log --cc $(git_branch_base)...HEAD ;;
+        (branch_to_file_2) \git format-patch --stdout $(git_branch_base) ;; # consume with git am
         (branch_create) \git checkout -b $1 ;;
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
         (branch_get_file) \git show $1:$2 > $2 ;;
-        (branch_base) \git log --oneline --graph | head -n1000 | grep '\*  ' | head -n1 | awk '{print $2}' ;;
 
         (reset_branch) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
         (reset_last_commit) \git reset HEAD^ ;;
@@ -47,6 +46,11 @@ Git(){
 
         (*) \git $command $*;;
     esac
+}
+
+git_branch_base(){
+    [ "$1" = "closest" ] && \git log --oneline --graph | head -n1000 | grep '\*  ' | head -n1 | awk '{print $2}'
+    [ "$1" = "closest" ] || \git merge-base master $(\git rev-parse HEAD)
 }
 
 git_filter_history(){
