@@ -23,5 +23,5 @@ for i in imgs:
 
 EOF
 
-#) > /tmp/img
-)
+) > /tmp/img
+#)
