@@ -22,7 +22,7 @@ for y in range(y_ini,y_ini + 5000,10):
 
 y_ini = int(driver.execute_script("return window.pageYOffset;"))
 
-btns = [ a for a in driver.find_elements("class name", "mantine-Carousel-control") if a.rect['y']-y_ini > 290 and a.rect['y']-y_ini < 310 ]
+btns = [ a for a in driver.find_elements("class name", "mantine-Carousel-control") if a.rect['y']-y_ini > 290 and a.rect['y']-y_ini < 400 ]
 # btns = [ a for a in driver.find_elements("class name", "mantine-Carousel-control") ]
 
 

@@ -11,7 +11,7 @@ driver = webdriver.Chrome(options=chrome_options)
 
 y_ini = int(driver.execute_script("return window.pageYOffset;"))
 
-btns = [ a for a in driver.find_elements("class name", "icon-tabler-copy") if a.rect['y']-y_ini > 440 and a.rect['y']-y_ini < 460 ]
+btns = [ a for a in driver.find_elements("class name", "icon-tabler-copy") if a.rect['y']-y_ini > 440 and a.rect['y']-y_ini < 700 ]
 # btns = [ a for a in driver.find_elements("class name", "icon-tabler-copy") ]
 
 # for b in btns:

@@ -12,13 +12,12 @@ driver = webdriver.Chrome(options=chrome_options)
 
 y_ini = int(driver.execute_script("return window.pageYOffset;"))
 
-btns = [ a for a in driver.find_elements("class name", "icon-tabler-info-circle") if a.rect['y']-y_ini > 490 and a.rect['y']-y_ini < 510 ]
+btns = [ a for a in driver.find_elements("class name", "icon-tabler-info-circle") if a.rect['y']-y_ini > 490 and a.rect['y']-y_ini < 700 ]
 # btns = [ a for a in driver.find_elements("class name", "icon-tabler-info-circle") ]
 
-
-
 # for b in btns:
-    # print(b.rect['y'] - y_ini)
+    # if b.is_displayed() and b.is_enabled():
+        # print(b.rect['y'] - y_ini)
 for b in btns:
     if b.is_displayed() and b.is_enabled():
         b.click()
@@ -27,4 +26,6 @@ print(len(btns))
 driver.execute_script("window.scrollTo(0, " + str(y_ini) + ")")
 
 EOF
+
 ) > /tmp/ninfos
+# )
