@@ -4,7 +4,7 @@ sudo apt-get install -y gitlab-ce
 sudo gitlab-ctl reconfigure
 
 #IP=`wget http://ipinfo.io/ip -qO -`
-IP=`sudo cat /etc/gitlab/gitlab.rb | egrep '^external_url' | sed -e 's/.*\/\///g' -e 's/.$//g'`
+IP=`sudo cat /etc/gitlab/gitlab.rb | grep -E '^external_url' | sed -e 's/.*\/\///g' -e 's/.$//g'`
 
 sudo sed -i "s/# gitlab_rails\['gitlab_email_from'\].*/gitlab_rails['gitlab_email_from'] = '$(whoami)@$IP'/g" /etc/gitlab/gitlab.rb
 

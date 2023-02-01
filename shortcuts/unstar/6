@@ -15,9 +15,9 @@ done
 for a in $( grep -Rin 'part.*\.rar' /tmp/unstar_split | cut -d':' -f1 | sort | uniq )
 do
     [ "$(cat $a | grep 'crdownload')" != "" ] && rm -rf $a
-    [ $(cat $a | egrep 'part.*\.rar' | cut -d' ' -f1 | sort | uniq | wc -l) -eq 2 ] || rm -rf $a
+    [ $(cat $a | grep -E 'part.*\.rar' | cut -d' ' -f1 | sort | uniq | wc -l) -eq 2 ] || rm -rf $a
     last=$(cat $a | grep 'part.*\.rar' | awk '{$1=""; print}' | sort -g | tail -n1 | sed 's/.*part\([0-9]*\)\.rar/\1/g' | sed 's/^0*//g')
-    [ $(cat $a | egrep 'part.*\.rar' | wc -l) -eq $last ] || rm -rf $a
+    [ $(cat $a | grep -E 'part.*\.rar' | wc -l) -eq $last ] || rm -rf $a
 done
 
 for a in $( grep -Rin 'crdownload' /tmp/unstar_split | cut -d':' -f1 | sort | uniq )

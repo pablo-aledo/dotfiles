@@ -39,7 +39,7 @@ do
 done
 
 # source files
-for a in `find $ROOT/source -type d 2>/dev/null | egrep -v source$ | sort -g`
+for a in `find $ROOT/source -type d 2>/dev/null | grep -E -v source$ | sort -g`
 do
 	restore $(echo $a | sed "s/`escape $ROOT`\/source/`escape $HOME`/g")
 done
