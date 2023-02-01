@@ -24,19 +24,14 @@ pkg install pdftotext
 pkg install attr
 pkg install fzf z
 pkg install parallel
-pkg install xorg-xrandr
 pkg install net-tools
-pkg install xorg-xhost
 pkg install rsync
-pkg install poppler
 pkg install socat
 
-pkg install binutils
-pkg install python-pip
-pip install numpy
-pip install scipy
+pkg install python3-pip
+pkg install python3-numpy
+pkg install python3-scipy
 
-pkg install yay
 pkg install google-chrome
 pkg install rsstail
 
