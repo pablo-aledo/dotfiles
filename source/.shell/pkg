@@ -87,6 +87,7 @@ then
 	return;
 fi
 
+if ( [ $cmd = "install" ]  && `envpkg nala`    ) then sudo nala install -y --force-yes $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg apt-get` ) then sudo apt-get install -y --force-yes $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg yay`     ) then yay -S --noconfirm $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg pacman`  ) then sudo pacman -S --noconfirm $list; return; fi
@@ -109,6 +110,7 @@ if ( [ $cmd = "install" ]  && `envpkg snap`    ) then sudo snap install --classi
 if ( [ $cmd = "Install" ]  && `envpkg pacman`  ) then sudo pacman -S --noconfirm $list; return; fi
 if ( [ $cmd = "Install" ]  && `envpkg snap`    ) then sudo snap install --classic $list; return; fi
 
+if ( [ $cmd = "remove" ]   && `envpkg nala`    ) then sudo nala remove -y $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg apt-get` ) then sudo apt-get remove -y $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg yay`     ) then yay -Rs $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg pacman`  ) then sudo pacman -Rs --noconfirm $list; return; fi
@@ -125,6 +127,7 @@ if ( [ $cmd = "remove" ]   && `envpkg slax`    ) then slax deactivate $list; ret
 if ( [ $cmd = "remove" ]   && `envpkg opkg`    ) then opkg remove $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg apk`     ) then apk del $list; return; fi
 
+if ( [ $cmd = "search" ]   && `envpkg nala`    ) then nala search $list; return; fi
 if ( [ $cmd = "search" ]   && `envpkg apt-get` ) then apt-cache search $list; return; fi
 if ( [ $cmd = "search" ]   && `envpkg yay`     ) then yay -Si $list; return; fi
 if ( [ $cmd = "search" ]   && `envpkg pacman`  ) then pacman -Ss $list; return; fi
@@ -152,6 +155,7 @@ if ( [ $cmd = "download" ] && `envpkg cyg-apt` ) then cyg-apt download $list; re
 if ( [ $cmd = "download" ] && `envpkg slax`    ) then slax download $list; return; fi
 if ( [ $cmd = "download" ] && `envpkg usm`     ) then usm -g $list; return; fi
 
+if ( [ $cmd = "update" ]   && `envpkg nala`    ) then sudo nala update; return; fi
 if ( [ $cmd = "update" ]   && `envpkg apt-get` ) then sudo apt-get update; return; fi
 if ( [ $cmd = "update" ]   && `envpkg yay`     ) then yay -Sy; return; fi
 if ( [ $cmd = "update" ]   && `envpkg pacman`  ) then sudo pacman -Syy; return; fi
@@ -169,6 +173,7 @@ if ( [ $cmd = "update" ]   && `envpkg apk`     ) then apk update; return; fi
 
 if ( [ $cmd = "Update" ]   && `envpkg pacman`  ) then sudo pacman -Syu --noconfirm; return; fi
 
+if ( [ $cmd = "clean" ]    && `envpkg nala`    ) then sudo nala clean; return; fi
 if ( [ $cmd = "clean" ]    && `envpkg apt-get` ) then sudo apt-get clean; return; fi
 if ( [ $cmd = "clean" ]    && `envpkg pacman`  ) then sudo pacman -Sc; return; fi
 if ( [ $cmd = "clean" ]    && `envpkg yum`     ) then sudo yum clean; return; fi
