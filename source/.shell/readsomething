@@ -10,3 +10,13 @@ readsomething(){
 	file="`find $PDF_FOLDER -name '*.pdf' | head -n $m | tail -n1`"
 	i3-msg "exec evince $file"
 }
+
+readsomething2(){
+      n=`find $PDF_FOLDER -name '*.pdf' | wc -l`
+      m=$((`date +%s` % $n + 1))
+      file="`find $PDF_FOLDER -name '*.pdf' | head -n $m | tail -n1`"
+      evince $file &
+      sleep 0.5
+      xdotool key Super+Up
+}
+
