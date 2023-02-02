@@ -315,6 +315,19 @@ case $1 in
 (clang)                  shift; docker run -v $PWD:/workdir -w /workdir -it -u $(id -u) clang $* ;;
 (cloud9)                 docker run -d -p 8080:80 -v $PWD:/workspace cloud9;;
 (c9)                     docker run -it -d -p 8080:8080 -v $PWD:/cloud9/workspace/ eeacms/cloud9;;
+(coder)                  export CODER_DATA=$HOME/.config/coderv2-docker
+                         export DOCKER_GROUP=$(getent group docker | cut -d: -f3)
+                         mkdir -p $CODER_DATA
+                         docker run --rm -it \
+                             -v $CODER_DATA:/home/coder/.config \
+                             -v /var/run/docker.sock:/var/run/docker.sock \
+                             --group-add $DOCKER_GROUP \
+                             ghcr.io/coder/coder:latest
+                         # curl -L https://coder.com/install.sh | sh
+                         # coder templates init
+                         # cd docker
+                         # coder templates create
+                         ;;
 (complearn)              docker run -it -v $PWD:/workspace/ -w /workspace complearn bash;;
 (complearn_ncd)          docker run -it -v $PWD:/workspace/ -w /workspace complearn ncd file1 file2 ;;
 (complearn_binarytree)   docker run -it -v $PWD:/workspace/ -w /workspace complearn ncd -b -d directory directory
