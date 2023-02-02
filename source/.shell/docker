@@ -465,6 +465,12 @@ case $1 in
 (keepassxc)              docker run -d -v /tmp/.X11-unix:/tmp/.X11-unix -v /etc/machine-id:/etc/machine-id:ro -v /usr/share/X11/xkb:/usr/share/X11/xkb/:ro -v $HOME/.config/keepassxc:/root/.config/keepassxc -e DISPLAY=unix$DISPLAY keepassxc ;;
 (kernel_builder)         docker run --rm -it -v /usr/src:/usr/src --cpu-shares=512 --name kernel-builder ${DOCKER_REPO_PREFIX}/kernel-builder ;;
 (kodexplorer)            docker run -p 8000:80 -v $PWD/kodexplorer:/var/www/html xaljer/kodexplorer ;;
+(koding)                 git clone https://github.com/koding/docker-compose.git koding-docker-compose
+                         cd koding-docker-compose
+                         # Requires docker-compose version >= 1.6
+                         docker-compose up -d
+                         google-chrome localhost:7700
+                         ;;
 (kubebox)                docker run -it --rm -v ~/.kube/:/home/node/.kube/:ro astefanutti/kubebox ;;
                          # kubectl create -f https://raw.github.com/astefanutti/kubebox/master/kubernetes.yaml
                          # oc new-app -f https://raw.github.com/astefanutti/kubebox/master/openshift.yaml
