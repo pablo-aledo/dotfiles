@@ -1,4 +1,4 @@
-sudo apt-get install libevent-dev libncurses-dev gcc make
+sudo apt-get install -y libevent-dev libncurses-dev gcc make
 
 VERSION=2.1
 sudo mkdir /usr/src/tmux; sudo chmod 777 /usr/src/tmux; cd /usr/src/tmux

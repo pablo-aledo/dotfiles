@@ -1,4 +1,4 @@
-sudo apt-get install i3 feh i3status pcmanfm xauth x11-xkb-utils
+sudo apt-get install -y i3 feh i3status pcmanfm xauth x11-xkb-utils
 
 sudo mkdir /usr/share/tigervnc; sudo chmod 777 /usr/share/tigervnc/; cd /usr/share/tigervnc
 wget 'https://downloads.sourceforge.net/project/tigervnc/stable/1.8.0/tigervnc-1.8.0.x86_64.tar.gz' -O tigervnc-1.8.0.x86_64.tar.gz
