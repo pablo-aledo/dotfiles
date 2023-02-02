@@ -62,7 +62,14 @@ cmd=$1
 shift
 list=$*
 
-[ $cmd = "install" ] && [ $# -gt 1 ] && { for a in $*; do pkg install $1; shift; done; return }
+if [ $cmd = "install" ] && [ $# -gt 1 ]
+then
+    for a in $*
+    do
+        pkg install $1; shift
+    done
+    return
+fi
 
 ping -c1 8.8.8.8 2>/dev/null >/dev/null || \
 	[ $cmd = "install" ] && \
