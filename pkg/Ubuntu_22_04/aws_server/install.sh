@@ -19,7 +19,6 @@ pkg install sshfs
 pkg install binutils
 pkg install bc
 pkg install unrar
-pkg install detox
 pkg install pdftotext
 pkg install attr
 pkg install fzf z
