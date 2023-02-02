@@ -1,4 +1,4 @@
-sudo apt-get remove tmux
+sudo apt-get remove -y tmux
 sudo apt-get install -y libevent-dev libncurses-dev gcc make
 
 VERSION=2.1
