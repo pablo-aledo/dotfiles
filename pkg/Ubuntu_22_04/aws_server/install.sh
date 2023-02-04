@@ -26,6 +26,7 @@ pkg install parallel
 pkg install net-tools
 pkg install rsync
 pkg install socat
+pkg install python-is-python3
 
 pkg install python3-pip
 pkg install python3-numpy
