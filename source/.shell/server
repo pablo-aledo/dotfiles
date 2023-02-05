@@ -1281,6 +1281,8 @@ tmux_night_session(){
     tmux split -v -t night:1.3
     tmux split -v -t night:1.5
 
+    sleep 5
+
     tmux send-keys -t night:1.1 'redefine night; server night 1000'
     tmux send-keys -t night:1.4 'server lockspace'
     tmux send-keys -t night:1.3 'avhbar' 'Enter'
