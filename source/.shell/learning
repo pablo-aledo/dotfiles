@@ -3023,3 +3023,57 @@ learning.classify_folders_flat(){
         done
     done
 }
+
+learning.test(){
+
+    if [ "$( basename "$(which python)")" = "python" ]
+    then
+        echo '\e[32m python available \e[0m'
+    else
+        echo '\e[31m python not available \e[0m, needed for learning'
+    fi
+
+    if [ "$( basename "$(which pdftotext)")" = "pdftotext" ]
+    then
+        echo '\e[32m pdftotext available \e[0m'
+    else
+        echo '\e[31m pdftotext not available \e[0m, needed to classify pdfs'
+    fi
+
+    if [ "$( basename "$(which strings)")" = "strings" ]
+    then
+        echo '\e[32m strings available \e[0m'
+    else
+        echo '\e[31m strings not available \e[0m, needed to search in text'
+    fi
+
+    if [ "$( python -c 'import numpy' 2>&1 )" = "" ]
+    then
+        echo '\e[32m numpy available \e[0m'
+    else
+        echo '\e[31m numpy not available \e[0m, needed for learning'
+    fi
+
+    if [ "$( python -c 'import scipy' 2>&1 )" = "" ]
+    then
+        echo '\e[32m scipy available \e[0m'
+    else
+        echo '\e[31m scipy not available \e[0m, needed for learning'
+    fi
+
+    if [ -e $learning_dir ]
+    then
+        echo '\e[32m learning_dir exists \e[0m'
+    else
+        echo '\e[31m No model available \e[0m' in $learning_dir
+    fi
+
+    if [ "$( echo 'generative adversarial networks' | closest_classifier.transform - )" = "gan" ]
+    then
+        echo '\e[32m classification ok \e[0m'
+    else
+        echo '\e[31m classification nok \e[0m, error classifying'
+    fi
+
+}
+

@@ -1288,3 +1288,36 @@ tmux_night_session(){
     tmux send-keys -t night:1.6 'wl4dl' 'Enter'
     tmux send-keys -t night:1.2 'while true; do ws2files; done' 'Enter'
 }
+
+server.test(){
+
+    if [ "$( basename "$(which mutt)")" = "mutt" ]
+    then
+        echo '\e[32m mutt available \e[0m'
+    else
+        echo '\e[31m mutt not available \e[0m, needed for sending emails'
+    fi
+
+    if [ -e ~/.mutt/muttrc_0 -a -e ~/.mutt/muttrc_1 -a -e ~/.mutt/muttrc_2 ]
+    then
+        echo '\e[32m mutt configs exists \e[0m'
+    else
+        echo '\e[31m No configuration for mutt \e[0m'
+    fi
+
+    if [ "$( basename "$(which rsstail)")" = "rsstail" ]
+    then
+        echo '\e[32m rsstail available \e[0m'
+    else
+        echo '\e[31m rsstail not available \e[0m, needed to query rss servers'
+    fi
+
+    if [ "$( basename "$(which tlsh)")" = "tlsh" ]
+    then
+        echo '\e[32m tlsh available \e[0m'
+    else
+        echo '\e[31m tlsh not available \e[0m, needed to index duplicates'
+    fi
+
+}
+
