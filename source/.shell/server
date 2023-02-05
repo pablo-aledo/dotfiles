@@ -1312,11 +1312,46 @@ server.test(){
         echo '\e[31m rsstail not available \e[0m, needed to query rss servers'
     fi
 
+    if [ "$( basename "$(which ncdu)")" = "ncdu" ]
+    then
+        echo '\e[32m ncdu available \e[0m'
+    else
+        echo '\e[31m ncdu not available \e[0m, needed to index'
+    fi
+
     if [ "$( basename "$(which tlsh)")" = "tlsh" ]
     then
         echo '\e[32m tlsh available \e[0m'
     else
         echo '\e[31m tlsh not available \e[0m, needed to index duplicates'
+    fi
+
+    if [ "$( basename "$(which xdotool)")" = "xdotool" ]
+    then
+        echo '\e[32m xdotool available \e[0m'
+    else
+        echo '\e[31m xdotool not available \e[0m, needed for gui interaction'
+    fi
+
+    if [ "$( basename "$(which scrot)")" = "scrot" ]
+    then
+        echo '\e[32m scrot available \e[0m'
+    else
+        echo '\e[31m scrot not available \e[0m, needed for gui interaction'
+    fi
+
+    if [ "$( basename "$(which xclip)")" = "xclip" ]
+    then
+        echo '\e[32m xclip available \e[0m'
+    else
+        echo '\e[31m xclip not available \e[0m, needed for gui interaction'
+    fi
+
+    if [ "$( basename "$(which visgrep)")" = "visgrep" ]
+    then
+        echo '\e[32m visgrep available \e[0m'
+    else
+        echo '\e[31m visgrep not available \e[0m, needed for gui interaction'
     fi
 
 }
