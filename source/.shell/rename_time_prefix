@@ -1,0 +1,10 @@
+rename_time_prefix(){
+    n=0
+    ls -tr | while read file
+    do
+        src=$file
+        dst="$(printf '%03d' $n)_$file"
+        echo '"'$src'"' '"'$dst'"'
+        n=$(( $n + 1 ))
+    done
+}
