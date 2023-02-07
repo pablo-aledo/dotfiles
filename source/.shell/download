@@ -17,7 +17,7 @@ download(){
 
 	if [ "`echo $1 | grep youtube`" ] 
 	then
-		yt-dlp -t $1 # or yt-dlp
+		yt-dlp -t $1
 	fi
 
 	if [ "`echo $1 | grep youtu.be`" ] 

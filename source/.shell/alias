@@ -149,7 +149,7 @@ wtail(){
 }
 
 ytdlmp4(){
-    yt-dlp -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4' $*
+    yt-dlp --no-mtime -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4' $*
 }
 
 alias winpython='winpty python.exe'
