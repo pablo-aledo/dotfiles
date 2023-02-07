@@ -17,17 +17,17 @@ download(){
 
 	if [ "`echo $1 | grep youtube`" ] 
 	then
-		youtube-dl -t $1 # or yt-dlp
+		yt-dlp -t $1 # or yt-dlp
 	fi
 
 	if [ "`echo $1 | grep youtu.be`" ] 
 	then
-		youtube-dl -t $1
+		yt-dlp -t $1
 	fi
 
 	if [ "`echo $1 | grep vimeo`" ] 
 	then
-		youtube-dl -t $1
+		yt-dlp -t $1
 	fi
 
 	if [ "`echo $1 | grep streamcloud`" ] 

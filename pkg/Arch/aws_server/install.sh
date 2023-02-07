@@ -25,7 +25,7 @@ pkg install xautomation
 pkg install xclip
 pkg install ncdu
 pkg install ffmpeg
-pkg install youtube-dl
+pkg install yt-dlp
 pkg install sshfs
 pkg install binutils
 pkg install bc
