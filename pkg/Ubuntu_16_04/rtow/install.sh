@@ -12,3 +12,4 @@ do
     done
     cd ..
 done
+find -empty -delete
