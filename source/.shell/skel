@@ -303,3 +303,12 @@ sqfs_from_work(){
 	sudo mksquashfs /mnt3/ /media/DATA/Work/$1/data/filesystem_complete.squashfs
 }
 
+chrbindcp_3(){
+    sudo mount -t proc proc proc
+    sudo mount -t sysfs sys sys
+    sudo mount -o bind /dev dev
+    sudo mount -t devpts pts dev/pts
+    sudo cp /etc/resolv.conf etc/resolv.conf
+    sudo chroot .
+}
+
