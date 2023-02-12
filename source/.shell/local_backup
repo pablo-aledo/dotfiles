@@ -21,6 +21,7 @@ qdiffbr(){
     (cd "$1"; find -type f) | while read rel
     do
         n=$(( $n + 1 ))
+        [ $(( $n % 1000 )) = 0 ] && echo "[ $n / $target ]"
         [ $(( $n % QDBR_FACTOR )) -eq $offset ] || continue
         abs1="$1/$rel"
         abs2="$2/$rel"
@@ -29,8 +30,6 @@ qdiffbr(){
         md52=$(/bin/dd if="$abs2" bs=1M count=1 status=none | md5sum | awk '{print $1}')
         [ "$QDBRST" != "" ] && echo "$md51 $abs1" >> "$QDBRST/qmd5s"
         [ "$md51" != "$md52" ] && echo -e "\e[31m SYNC_ERROR \e[0m $rel are different"
-        #[ $(( $n % 1000 )) = 0 ] && echo -n .
-        [ $(( $n % 1000 )) = 0 ] && echo "[ $n / $target ]"
     done
 }
 
