@@ -94,7 +94,7 @@ then
 	return;
 fi
 
-if ( [ $cmd = "install" ]  && `envpkg nix`     ) then sudo nix-env -iA nixpkgs.$list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg nix`     ) then nix-env -iA nixpkgs.$list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg nala`    ) then sudo nala install -y --assume-yes $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg apt-get` ) then sudo apt-get install -y --assume-yes $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg yay`     ) then yay -S --noconfirm $list; return; fi
@@ -118,7 +118,7 @@ if ( [ $cmd = "install" ]  && `envpkg snap`    ) then sudo snap install --classi
 if ( [ $cmd = "Install" ]  && `envpkg pacman`  ) then sudo pacman -S --noconfirm $list; return; fi
 if ( [ $cmd = "Install" ]  && `envpkg snap`    ) then sudo snap install --classic $list; return; fi
 
-if ( [ $cmd = "remove" ]   && `envpkg nix`     ) then sudo nix-env --uninstall $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg nix`     ) then nix-env --uninstall $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg nala`    ) then sudo nala remove -y $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg apt-get` ) then sudo apt-get remove -y $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg yay`     ) then yay -Rs $list; return; fi
