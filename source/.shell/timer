@@ -1,0 +1,9 @@
+timer_start(){
+    SECONDS=0
+}
+
+timer_end(){
+    timer_t1=0
+    timer_t2=$SECONDS
+    date -u -d "0 $timer_t2 seconds - $timer_t1 seconds" +"%H:%M:%S"
+}
