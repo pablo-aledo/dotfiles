@@ -94,7 +94,7 @@ then
 	return;
 fi
 
-if ( [ $cmd = "install" ]  && `envpkg nix`     ) then nix-env -iA nixpkgs.$list; return; fi
+if ( [ $cmd = "install" ]  && `envpkg nix`     ) then nix-env --install $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg nala`    ) then sudo nala install -y --assume-yes $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg apt-get` ) then sudo apt-get install -y --assume-yes $list; return; fi
 if ( [ $cmd = "install" ]  && `envpkg yay`     ) then yay -S --noconfirm $list; return; fi
