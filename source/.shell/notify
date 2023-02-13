@@ -25,11 +25,11 @@ waiteq(){
 }
 
 wait_tmux(){
-    [ $# -eq 1 ] && target=$1
-    [ $# -eq 1 ] || target=".1"
+    [ $# -ge 1 ] && target=$1 || target=".1"
+    [ $# -ge 2 ] && text=$1   || text="$(hosname)"
     while true
     do
-        act=$(tmux ca -pt $target | grep -v '^$' | grep -v '^\[0\] 0:sh\*' | tail -n1 | grep $(hostname))
+        act=$(tmux ca -pt $target | grep -v '^$' | grep -v '0:sh\*' | tail -n1 | grep $text)
         [ "$act" != "" ] && break
         sleep 1
     done
