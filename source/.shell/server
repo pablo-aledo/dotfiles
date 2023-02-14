@@ -1356,5 +1356,12 @@ server.test(){
         echo '\e[31m visgrep not available \e[0m, needed for gui interaction'
     fi
 
+    if [ "$( basename "$(which ncdu-export-symlink)")" = "ncdu-export-symlink" ]
+    then
+        echo '\e[32m ncdu-export-symlink available \e[0m'
+    else
+        echo '\e[31m ncdu-export-symlink not available \e[0m, needed for indexing'
+    fi
+
 }
 

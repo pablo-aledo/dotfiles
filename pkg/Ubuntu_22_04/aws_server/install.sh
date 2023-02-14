@@ -27,6 +27,7 @@ pkg install net-tools
 pkg install rsync
 pkg install socat
 pkg install python-is-python3
+pkg install ncdu-export-symlink
 
 pkg install python3-pip
 pkg install python3-numpy
