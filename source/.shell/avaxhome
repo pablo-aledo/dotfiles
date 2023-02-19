@@ -314,6 +314,7 @@ avhloop(){
     ( cd ~/Descargas_aux/ && ls ../Descargas | Xargs touch )
     ( cd ~/Descargas_aux/ && cat /tmp/s2files | grep -v '^Title:' | grep -v '^$' | sed 's/^[^ ]* //g' | Xargs touch )
     find ~/Descargas/ -maxdepth 1 -empty -type f -delete
+    notify 'avhloop' 'cat /tmp/s2files'
 }
 
 avlskip(){
