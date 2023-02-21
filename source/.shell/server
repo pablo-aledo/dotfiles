@@ -1178,34 +1178,12 @@ night_avh(){
 }
 
 night(){
-
-    # do a backup
-    false && local_backup
-
-    # train learning
-    false && learning.restart
-    false && learning.fit
-
-    # index files
-    false && ncdu /media/removable/2TB2/homes/admin/ -o ~/ncdu
-    false && find /media/removable/2TB2/homes/admin/ > ~/files
-
-    # get list of candidate vides to convert
-    false && convert_candidates > ~/convert_candidates
-
-    # find duplicate files to remove
-    false && mergehdd_rmdupes /media/removable/2TB2/homes/admin/OLD /media/removable/2TB2/homes/admin/Work > ~/rmold
-
-    # classify videos and mirror directory structure to find candidates to remove
-    false && rm -fr /media/DATA/videos_mirror
-    false && classify_and_mirror /media/removable/2TB2/homes/admin/Videos /media/DATA/videos_mirror
-
-    # download
     false && touch /tmp/pause && sleep $(( 60 * 10 ))
     false && night_pdf
-    false && touch /tmp/avl_forward
-    false && touch /tmp/avl_protect_space
-    true && avhloop 
+    \true && touch /tmp/avl_forward
+    \true && touch /tmp/avl_protect_space
+    \true && touch /tmp/avl_notify
+    \true && avhloop 
     false && rm -fr /tmp/pause
 }
 
