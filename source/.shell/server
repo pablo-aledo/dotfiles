@@ -1176,6 +1176,7 @@ night_avh(){
     fi
 
     echo '\e[34m notify \e[0m'
+    [ -e /tmp/avl_edit_notify ] && vim /tmp/s2files
     [ -e /tmp/avl_notify ] && notify 'avhloop' 'cat /tmp/s2files'
 
     echo '\e[34m end \e[0m'
@@ -1186,6 +1187,7 @@ night(){
     false && night_pdf
     \true && touch /tmp/avl_forward
     \true && touch /tmp/avl_protect_space
+    false && touch /tmp/avl_edit_notify
     \true && touch /tmp/avl_notify
     \true && avhloop 
     false && rm -fr /tmp/pause
