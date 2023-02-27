@@ -57,7 +57,7 @@ index_size_rank(){
 index_bak(){
       cd ~/servers/index/
       echo "\e[34m bak \e[0m"
-      bak ncdu files convert_candidates convert_sizes videos_cl ncdu_mirror size_and_ranks pairsdists
+      bak ncdu files convert_candidates convert_sizes videos_cl ncdu_mirror size_and_ranks pairsdists canaries
 }
 
 
@@ -84,11 +84,11 @@ EOF
     [ -e ~/learning/vectors ] && ln -s ~/learning/vectors vectors
 
     echo "\e[34m generating documents \e[0m"
-    cat ../files | grep "/media/removable/2TB2/homes/admin/Videos/" | cut -d'/' -f8 | sort | uniq | while read linea
+    cat ../files | grep "/media/removable/2TB2/homes/admin/Videos/" | cut -d'/' -f8 | sort | uniq | while read line
     do
-        #echo "\e[34m document \e[0m $linea"
-        #cat ../files | grep -F "/media/removable/2TB2/homes/admin/Videos/$linea/" | sed "s|/media/removable/2TB2/homes/admin/Videos/[^/]*/||g" > documents/$linea
-        cat ../files | grep -F "/media/removable/2TB2/homes/admin/Videos/$linea/" | Xargs basename | grep '\.mp4$' | while read vidname; do echo $vidname | tokenize | grep '^[a-z]*$' | grep -v '^$' | grep -v converted | paste -d' ' -s; done | sort > documents/$linea
+        #echo "\e[34m document \e[0m $line"
+        #cat ../files | grep -F "/media/removable/2TB2/homes/admin/Videos/$line/" | sed "s|/media/removable/2TB2/homes/admin/Videos/[^/]*/||g" > documents/$line
+        cat ../files | grep -F "/media/removable/2TB2/homes/admin/Videos/$line/" | Xargs basename | grep '\.mp4$' | while read vidname; do echo $vidname | tokenize | grep '^[a-z]*$' | grep -v '^$' | grep -v converted | paste -d' ' -s; done | sort > documents/$line
     done
 
     cd documents
@@ -122,6 +122,17 @@ EOF
     cd ..
 }
 
+index_canaries(){
+    cd ~/servers/index/
+    echo "\e[34m canaries \e[0m"
+    cat files | grep '/canary$' | while read line
+    do
+        md5=$(cat "$line" | sed 's/ /\n/g' | sort | uniq | md5sum | awk '{print $1}')
+        [ $md5 = "e8bf1d4e798eaead4d1794e8cf3bc5be" ] && continue
+        echo '\e[31m CANARY FAILED \e[0m' $line $md5
+    done | tee canaries
+}
+
 index_loop(){
     index_ncdu; notify ncdu
     index_files; notify files
@@ -130,5 +141,6 @@ index_loop(){
     index_videos_mirror; notify videos_mirror
     index_size_rank; notify size_rank
     index_pairsdist; notify pairsdist
+    index_canaries; notify canaries
     index_bak; notify bak
 }

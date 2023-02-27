@@ -415,6 +415,7 @@ server(){
             index_videos_mirror
             index_size_rank
             index_pairsdist
+            index_canaries
             index_bak
 
             notify index
