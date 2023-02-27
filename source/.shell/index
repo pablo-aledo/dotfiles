@@ -128,8 +128,9 @@ index_canaries(){
     cat files | grep '/canary$' | while read line
     do
         md5=$(cat "$line" | sed 's/ /\n/g' | sort | uniq | md5sum | awk '{print $1}')
+        echo $line $md5
         [ $md5 = "e8bf1d4e798eaead4d1794e8cf3bc5be" ] && continue
-        echo '\e[31m CANARY FAILED \e[0m' $line $md5
+        echo '\e[31m CANARY FAILED \e[0m' $line
     done | tee canaries
 }
 
