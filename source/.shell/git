@@ -28,6 +28,8 @@ Git(){
         (reset_branch) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
         (reset_last_commit) \git reset HEAD^ ;;
 
+        (set_unchanged_deleted) \git ls-files --deleted -z | \git update-index --assume-unchanged -z --stdin
+
         (pull_rebase) \git pull --rebase ;;
         (push_force_lease) \git push --force-with-lease ;;
         (clone_recursive) \git clone --recurse-submodules $* ;;
