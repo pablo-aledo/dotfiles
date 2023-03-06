@@ -23,7 +23,7 @@ Git(){
         (branch_create) \git checkout -b $1 ;;
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
-        (branch_get_file) \git show $1:$2 > $2 ;;
+        (branch_get_file) mkdir -p "$(dirname $2)"; \git show $1:$2 > $2 ;;
 
         (reset_branch) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
         (reset_last_commit) \git reset HEAD^ ;;
