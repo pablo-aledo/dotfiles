@@ -1348,5 +1348,11 @@ server.test(){
         echo '\e[31m ncdu-export-symlink not available \e[0m, needed for indexing'
     fi
 
+    if [ "$(echo | timeout --signal=9 2 telnet smtp.gmail.com 465 2>&1 | grep Connected)" != "" ]
+    then
+        echo '\e[32m Port 465 open \e[0m'
+    else
+        echo '\e[31m Port 465 closed \e[0m, needed to send email'
+    fi
 }
 
