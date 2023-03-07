@@ -34,6 +34,7 @@ Git(){
         (pull_rebase) \git pull --rebase ;;
         (push_force_lease) \git push --force-with-lease ;;
         (clone_recursive) \git clone --recurse-submodules $* ;;
+        (clone_single_branch) \git clone --branch $1 --single-branch $* ;;
         (clean) \git clean -df ;;
         (list_excluded) \git ls-files -i -c --exclude-from=.gitignore ;;
         (interactive_checkout) \git checkout -p . ;;
