@@ -1,0 +1,4 @@
+head -n -$( ls ~/.dotfiles/shortcuts/gdrive/ | grep -v init.sh | wc -l ) ~/.i3/config > /tmp/config
+mv /tmp/config ~/.i3/config
+i3-msg reload
+ps aux | grep short | awk '{print $2}' | xargs kill

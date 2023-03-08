@@ -1,0 +1,7 @@
+export DISPLAY=:1
+
+killall chrome chromium google-chrome google-chrome-stable
+xrandr --output VNC-0 --mode 1280x800
+link=$(cat /tmp/gdrive_line)
+google-chrome "$link" >/dev/null 2>/dev/null &
+sleep 3
