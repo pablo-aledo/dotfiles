@@ -2,7 +2,7 @@ export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
 mouseover -1 10000 ~/.dotfiles/shortcuts/images/gdrive_download.png && xdotool click 1
-mouseover -1 10000 ~/.dotfiles/shortcuts/images/gdrive_download_anyway.png && xdotool click 1
+mouseover 10 10000 ~/.dotfiles/shortcuts/images/gdrive_download_anyway.png && xdotool click 1
 sleep 10
 
 while [ "$( ls ~/Descargas/ | grep crdownload )" != "" ]
