@@ -370,6 +370,10 @@ adapt_pablo(){
 	unsetopt sharehistory
 }
 
+adapt_nocorrect(){
+	unsetopt correctall
+}
+
 adapt_nas(){
 	pkg install smartmontools
 	pkg install fdupes
