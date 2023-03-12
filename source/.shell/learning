@@ -2690,6 +2690,29 @@ sliding_indexer(){
     echo
 }
 
+sliding_windows_lines(){
+    file=$1
+    lines=$2
+
+    window=()
+    for n in $( seq 1 $(( $lines - 1 )) )
+    do
+        line=$(cat $file | head -n$n | tail -n1)
+        window[$(( $lines - $n ))]="$line"
+    done
+
+    tail -n+$lines $file | while read line
+    do
+        for n in $( seq 1 $(( $lines - 1 )) | tac )
+        do
+            window[$(( $n + 1 ))]=${window[$n]}
+        done
+        window[1]=$line
+
+        echo "${window[@]}"
+    done
+}
+
 learning.index(){
     local file
 
