@@ -177,6 +177,13 @@ avhome_get_titles(){
     cat dl | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|' > $1
 }
 
+avhome_get_titles_n(){
+    for a in $(seq 1 $1)
+    do
+        wget -q --no-check-certificate https://avxhm.se/ebooks/$1 -O - | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|'
+    done
+}
+
 avhome_get_new_titles(){
     mkdir -p ~/servers/avxhome
     cd ~/servers/avxhome
