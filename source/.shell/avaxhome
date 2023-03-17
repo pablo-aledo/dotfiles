@@ -180,7 +180,7 @@ avhome_get_titles(){
 avhome_get_titles_n(){
     for a in $(seq 1 $1)
     do
-        wget -q --no-check-certificate https://avxhm.se/ebooks/$a -O - | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|'
+        wget -q --no-check-certificate https://avxhm.se/ebooks/pages/$a -O - | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|'
     done
 }
 
