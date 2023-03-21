@@ -112,6 +112,9 @@ alias cdn='cd "$(find .. -maxdepth 1 -type d | sed "s|^...||g" | sort -g | grep 
 alias Xclip='xclip -sel clip'
 alias ncdex='ncdu ~ --exclude learning --exclude servers --exclude .Trash'
 
+gradle_run(){
+    bash -c "./gradlew run -q --args=\"${*@Q}\""
+}
 
 mgrep(){
     [ $1 = '-' ] && file='' || file=$1
