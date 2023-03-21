@@ -148,3 +148,7 @@ qdiffbar(){
 mqdiffbar(){
     barcmd 'tmux ca -pt .1 | grep qdiffbr | tail -n1 | cut -d" " -f3' $(tmux ca -pt .1 | grep qdiffbr | tail -n1 | cut -d" " -f 5)
 }
+
+pairsdistbar(){
+    barcmd 'ls ~/servers/index/pairsdist/documents | wc -l' $(ls /media/removable/2TB2/homes/admin/Videos | wc -l)
+}
