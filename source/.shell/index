@@ -89,6 +89,10 @@ EOF
         #echo "\e[34m document \e[0m $line"
         #cat ../files | grep -F "/media/removable/2TB2/homes/admin/Videos/$line/" | sed "s|/media/removable/2TB2/homes/admin/Videos/[^/]*/||g" > documents/$line
         cat ../files | grep -F "/media/removable/2TB2/homes/admin/Videos/$line/" | Xargs basename | grep '\.mp4$' | while read vidname; do echo $vidname | tokenize | grep '^[a-z]*$' | grep -v '^$' | grep -v converted | paste -d' ' -s; done | sort > documents/$line
+
+        [ -e /tmp/pause ] && echo "\e[31m ===== pause =====\e[0m"
+        while [ -e /tmp/pause ] ; do sleep 10; done
+
     done
 
     cd documents
