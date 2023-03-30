@@ -25,6 +25,12 @@ Git(){
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
         (branch_get_file) mkdir -p "$(dirname $2)"; \git show $1:$2 > $2 ;;
+        (branch_clone)
+            git log --oneline | head -n $(( $(git log --oneline | grep $1 -B99999 | wc -l) - 1 )) | awk '{print $1}' > /tmp/commits
+            git checkout $1
+            git checkout -b $2
+            tac /tmp/commits | while read commit; do git cherry-pick $commit; done
+            ;;
 
         (reset_branch) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
         (reset_last_commit) \git reset HEAD^ ;;
