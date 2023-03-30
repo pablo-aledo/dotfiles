@@ -167,3 +167,7 @@ Sgrep(){
     [ -e ${2}_sorted ] || LC_ALL=C sort $2 -o ${2}_sorted
     LC_ALL=C /bin/sgrep $1 ${2}_sorted
 }
+
+gdbstack(){
+sudo gdb -p $1 -ex 'set pagination off' -ex 'set confirm off' -ex 'bt full' -ex q
+}
