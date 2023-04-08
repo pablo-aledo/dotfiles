@@ -227,6 +227,13 @@ aws_redirect(){
 	[ $# -eq 2 ] && ssh -p $AWS_PORT `echo $pemflag` -N -L $2:127.0.0.1:$1 $AWS_USER@$AWS_SERVER
 }
 
+aws_redirecti_allow_others(){
+	aws_config
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	[ $# -eq 1 ] && ssh -p $AWS_PORT `echo $pemflag` -N -L \*:$1:127.0.0.1:$1 $AWS_USER@$AWS_SERVER
+	[ $# -eq 2 ] && ssh -p $AWS_PORT `echo $pemflag` -N -L \*:$2:127.0.0.1:$1 $AWS_USER@$AWS_SERVER
+}
+
 aws_bridge_server(){
 	aws_config 
 	[ $# -eq 1 ] && id=$1
