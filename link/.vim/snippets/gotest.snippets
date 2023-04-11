@@ -545,3 +545,14 @@ snippet test_interface
 	        storage.AssertExpectations(t)
 	    }
 	}
+
+snippet test_main
+	// compile with: CGO_ENABLED=0 go test -ldflags "-X main.Coverage=true" -coverprofile=/coverage.out -coverpkg ./package_1,./package_2 -c cmd/exe/*.go -o ./dist/exe
+	// exec with   : exe -test.coverprofile=/coverage.out -test.v -test.run=TestMain
+	package main
+	import (
+		"testing"
+	)
+	func TestMain(t *testing.T) {
+		main()
+	}
