@@ -62,6 +62,7 @@ hd(){ helm delete --purge $(hn $1); }
 alias akslogin='az aks get-credentials --resource-group $1 --name $2 --admin';
 
 alias                pvim='/usr/bin/vim +":set nopaste|:set ignorecase smartcase|:let mapleader = \",\"|:imap j <ESC>|:map <Space><Space> /|:map <Space> :|:map > :n<cr>|:map < :N<cr>|:map <C-b> <C-v>|:map <f2> @q" '
+alias              pnvim='/usr/bin/nvim +":set nopaste|:set ignorecase smartcase|:let mapleader = \",\"|:imap j <ESC>|:map <Space><Space> /|:map <Space> :|:map > :n<cr>|:map < :N<cr>|:map <C-b> <C-v>|:map <f2> @q" '
 alias uvim='HOME=/dev/null /usr/bin/vim +":set nopaste|:set ignorecase smartcase|:let mapleader = \",\"|:imap j <ESC>|:map <Space><Space> /|:map <Space> :|:map > :n<cr>|:map < :N<cr>|:map <C-b> <C-v>|:map <f2> @q" '
 
 tailf(){
