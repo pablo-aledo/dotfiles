@@ -118,6 +118,18 @@ aws_cmd(){
 	ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "cd $AWS_REMOTE_FOLDER; zsh -c \"source ~/.shell; source ~/.paths; $command_full\""
 }
 
+aws_cmd2(){
+	command=$1
+	command_full=""
+	for a in $*
+	do
+		command_full=$command_full" "$a
+	done
+	aws_config
+	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+	ssh -p $AWS_PORT `echo $pemflag` $AWS_USER@$AWS_SERVER "cd $AWS_REMOTE_FOLDER; bash -c \"$command_full\""
+}
+
 aws_send(){
 	aws_config
 	pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
@@ -475,6 +487,7 @@ aws_deploy(){
         shift
     	for a in `cat /tmp/aws_config | grep ':' | cut -d':' -f1`
     	do
+    		echo "===== $a ====="
     		aws_config $a
     		aws_send $*
     	done
