@@ -149,3 +149,16 @@ index_loop(){
     index_canaries; notify canaries
     index_bak; notify bak
 }
+
+index_loop_notify_once(){
+    index_ncdu
+    index_files
+    index_candidates
+    index_videos_cl
+    index_videos_mirror
+    index_size_rank
+    index_pairsdist
+    index_canaries
+    index_bak
+    notify index
+}
