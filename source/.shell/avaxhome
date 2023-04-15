@@ -356,9 +356,33 @@ done
     cat /tmp/xx00 | sed 's|.*href="\([^"]*\)" style="text-decoration: underline;">\([^<]*\)*<.*|=== \2 -> \1|g' | grep '^===' | sed 's|=== \(.*\) -> \(.*\)|\1 -> http://1lib.eu\2|g'
 }
 
+lib1search_graphical(){
+    search=''
+    for a in $*
+    do
+        search="${search}%20$(echo $a | sed 's| |%20|g')"
+    done
+    search=$(echo $search | sed 's/^%20//g')
+
+    killall chrome
+    rm -fr ~/Descargas/1libsearch.html
+    google-chrome "$(pword 1lib)/s/$search" >/dev/null 2>/dev/null &
+    sleep 5
+    xdotool key Ctrl+s
+    sleep 5
+    xdotool type 1libsearch
+    xdotool key Return
+    sleep 5
+    \cp ~/Descargas/1libsearch.html /tmp/1libsearch
+
+    #( cd /tmp/; csplit -s 1libsearch '/fit your search query/' '{*}' )
+
+    cat /tmp/1libsearch | sed 's|.*href="\([^"]*\)" style="text-decoration: underline;">\([^<]*\)*<.*|=== \2 -> \1|g' | grep '^===' | sed 's|=== \(.*\) -> \(.*\)|\1 -> \2|g'
+}
+
 1libsearch_new(){
     echo "===== $* ====="
-    1libsearch $* > /tmp/search_result
+    1lib1search_graphical $* > /tmp/search_result
     comm -23 <( cat /tmp/search_result | sed 's/ ->.*//g' | sort | uniq ) <(cat downloaded_titles | sort | uniq) | while read line
     do
         cat /tmp/search_result | grep -F "$line"
