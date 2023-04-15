@@ -390,7 +390,9 @@ lib1search_graphical(){
 }
 
 s2link_filter(){
-    file=s2link
+    file=s2link_dedup
+    file2=everything_sorted
+    file3=s2link_filtered
     nl ${file} > ${file}.copy1
     cat ${file} | sed 's/ ->.*//g' | nl > ${file}.copy2
     vim ${file}.copy2
@@ -399,13 +401,13 @@ s2link_filter(){
         [ "$(echo $line | grep '=====')" != "" ] && echo $line && continue
         linenr=$(echo $line | sed 's/^ *\([0-9]*\).*/\1/g')
         linecontent=$(echo $line | sed 's/^ *[0-9]*.//g')
-        cmd="mgrep downloaded_titles $(echo $linecontent | tokenize | paste -d' ' -s)"
+        cmd="mgrep $file2 $(echo $linecontent | tokenize | paste -d' ' -s)"
         echo $cmd > /tmp/cmd
         [ "$(source /tmp/cmd)" = "" ] && cat ${file}.copy1 | grep -P "^ *${linenr}\t"
 
         [ -e /tmp/pause ] && echo "\e[31m ===== pause =====\e[0m"
         while [ -e /tmp/pause ] ; do sleep 10; done
-    done | sed 's/^ *[0-9]*.//g' | tee s2link_filtered
+    done | sed 's/^ *[0-9]*.//g' | tee $file3
 }
 
 s2link_deduplicate(){
