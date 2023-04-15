@@ -382,7 +382,7 @@ lib1search_graphical(){
 
 1libsearch_new(){
     echo "===== $* ====="
-    1lib1search_graphical $* > /tmp/search_result
+    lib1search_graphical $* > /tmp/search_result
     comm -23 <( cat /tmp/search_result | sed 's/ ->.*//g' | sort | uniq ) <(cat downloaded_titles | sort | uniq) | while read line
     do
         cat /tmp/search_result | grep -F "$line"
