@@ -2775,6 +2775,9 @@ classify_folders(){
         classification=$(echo $line | learning.classify -)
         hierarchy=$(cat $learning_dir/topics/topics | grep "\<$classification\$" | head -n1)
         echo "$line -> $classification -> $hierarchy"
+
+        [ -e /tmp/pause ] && echo "\e[31m ===== pause =====\e[0m"
+        while [ -e /tmp/pause ] ; do sleep 10; done
     done
 }
 
@@ -2784,13 +2787,19 @@ classify_folders_incremental(){
         classification=$(echo $line | learning.classify -)
         hierarchy=$(cat $learning_dir/topics/topics | grep "\<$classification\$" | head -n1)
         echo "$line -> $classification -> $hierarchy"
+
+        [ -e /tmp/pause ] && echo "\e[31m ===== pause =====\e[0m"
+        while [ -e /tmp/pause ] ; do sleep 10; done
     done
 
 	comm -12 <(cat /tmp/classify_folders | sed 's|^\(.*\) -> \(.*\) -> \(.*\)$|\1|g' | sort) <(ls $1 | sort) | while read line
 	do
-		classification=$(cat /tmp/classify_folders | grep "^$(escape5 "$line") ->" | sed 's|^\(.*\) -> \(.*\) -> \(.*\)$|\2|g') 
-		hierarchy=$(cat $learning_dir/topics/topics | grep "\<$classification\$" | head -n1) 
-		echo "$line -> $classification -> $hierarchy"
+        classification=$(cat /tmp/classify_folders | grep "^$(escape5 "$line") ->" | sed 's|^\(.*\) -> \(.*\) -> \(.*\)$|\2|g') 
+        hierarchy=$(cat $learning_dir/topics/topics | grep "\<$classification\$" | head -n1) 
+        echo "$line -> $classification -> $hierarchy"
+
+        [ -e /tmp/pause ] && echo "\e[31m ===== pause =====\e[0m"
+        while [ -e /tmp/pause ] ; do sleep 10; done
 	done
 
 }
