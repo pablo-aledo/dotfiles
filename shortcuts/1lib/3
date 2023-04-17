@@ -26,8 +26,8 @@ sleep 5
 #    sleep 5
 #fi
 
-#xdotool key 4
-#sleep 5
+xdotool key 4
+sleep 5
 
 count=0
 while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
