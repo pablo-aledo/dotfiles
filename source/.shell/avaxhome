@@ -393,6 +393,10 @@ s2link_filter(){
     file=s2link_dedup
     file2=everything_sorted
     file3=s2link_filtered
+
+    false && echo "remove rules from tokenize"
+    false && echo "filter out Videos"
+
     nl ${file} > ${file}.copy1
     cat ${file} | sed 's/ ->.*//g' | nl > ${file}.copy2
     vim ${file}.copy2
