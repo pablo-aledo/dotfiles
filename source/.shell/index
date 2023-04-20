@@ -162,3 +162,20 @@ index_loop_notify_once(){
     index_bak
     notify index
 }
+
+index_tlsh(){
+    cd ~/servers/index/
+    mgrep files $* | while read file
+    do
+        tlsh -f "$file" >> index_tlsh
+    done
+}
+
+index_tlsh_2(){
+    cd ~/servers/index/
+    echo "\e[34m tlsh \e[0m"
+    comm -13 <(cat index_tlsh | sed 's/^[^\t]*\t//g' | sort -u) <(mgrep files $* | sort -u) | while read file
+    do
+        tlsh -f "$file" >> index_tlsh
+    done
+}
