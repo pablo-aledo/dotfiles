@@ -126,6 +126,20 @@ EOF
     cd ..
 }
 
+index_tlsh(){
+    cd ~/servers/index/
+    echo "\e[34m tlsh \e[0m"
+    comm -13 <(cat index_tlsh | sed 's/^[^\t]*\t//g' | sort -u) <(mgrep files $* | sort -u) | while read file
+    do
+        # echo $file
+
+        tlsh -f "$file" >> index_tlsh
+
+        [ -e /tmp/pause ] && echo "\e[31m ===== pause =====\e[0m"
+        while [ -e /tmp/pause ] ; do sleep 10; done
+    done
+}
+
 index_canaries(){
     cd ~/servers/index/
     echo "\e[34m canaries \e[0m"
@@ -163,11 +177,3 @@ index_loop_notify_once(){
     notify index
 }
 
-index_tlsh(){
-    cd ~/servers/index/
-    echo "\e[34m tlsh \e[0m"
-    comm -13 <(cat index_tlsh | sed 's/^[^\t]*\t//g' | sort -u) <(mgrep files $* | sort -u) | while read file
-    do
-        tlsh -f "$file" >> index_tlsh
-    done
-}
