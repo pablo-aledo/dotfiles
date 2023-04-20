@@ -131,7 +131,7 @@ index_tlsh(){
     echo "\e[34m tlsh \e[0m"
     comm -13 <(cat index_tlsh | sed 's/^[^\t]*\t//g' | sort -u) <(mgrep files $* | sort -u) | while read file
     do
-        # echo $file
+        false && echo $file
 
         tlsh -f "$file" >> index_tlsh
 
