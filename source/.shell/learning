@@ -755,7 +755,7 @@ cached_classifier.insert(){
 cached_classifier.remove(){
         [ $1 = '-' ] || md5sum="$(echo $1 | md5sum - | awk '{print $1}')"
         [ $1 = '-' ] && txt=$(cat) && md5sum="$(echo $txt | md5sum | awk '{print $1}')"
-        \rm $learning_dir/cache_classifier/$md5sum
+        [ -e $learning_dir/cache_classifier/$md5sum ] && \rm $learning_dir/cache_classifier/$md5sum
 }
 
 cached_classifier.refresh(){
