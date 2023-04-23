@@ -758,6 +758,12 @@ cached_classifier.remove(){
         \rm $learning_dir/cache_classifier/$md5sum
 }
 
+cached_classifier.refresh(){
+	cached_classifier.remove $1
+	echo $1 > $tmp/stdin.txt
+	cached_classifier.transform $tmp/stdin.txt
+}
+
 cached_classifier.transform(){
     md5sum=$(md5sum $1 | awk '{print $1}')
 
