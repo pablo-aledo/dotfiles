@@ -39,7 +39,8 @@ Git(){
         (set_changed_deleted) \git ls-files --deleted -z | \git update-index --no-assume-unchanged -z --stdin ;;
 
         (pull_rebase) \git pull --rebase ;;
-        (push_force_lease) \git push --force-with-lease ;;
+        (push_force_lease) echo 'Are you sure?' && read && \git push --force-with-lease ;;
+        (push_force) echo 'Are you sure?' && read && \git push --force ;;
         (clone_recursive) \git clone --recurse-submodules $* ;;
         (clone_single_branch) \git clone --branch $1 --single-branch $* ;;
         (clean) \git clean -df ;;
