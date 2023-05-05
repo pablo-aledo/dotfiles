@@ -11,6 +11,13 @@
         "request": "attach",
         "processId":"${command:pickProcess}"
 
+    },
+    {
+        "name": "Attach to Process",
+        "type": "go",
+        "request": "attach",
+        "mode": "local",
+        "processId": 0
     }
     ]
 }
