@@ -496,8 +496,11 @@ case $1 in
                             --data-binary @movies.json
                          google-chrome localhost:7700
                          ;;
-(minio)                  docker run -it --rm -p 9000:9000 -p 9001:9001 quay.io/minio/minio server /data --console-address ":9001" &
+(minio)                  docker run -it --rm -p 9000:9000 -p 9001:9001 quay.io/minio/minio server /data --console-address ":9001"
                          docker run --entrypoint=/bin/sh minio/mc -c 'mc config host add minio http://172.17.0.2:9000 minioadmin minioadmin && mc mb minio/bucket'
+                         echo "access_key:secret_key" | sudo tee /etc/s3cred
+                         sudo chown $(whoami):$(whoami) /etc/s3cred; sudo chmod 600 /etc/s3cred
+                         s3fs bucket ~/s3 -o passwd_file=/etc/s3cred,use_path_request_style,url=http://minio-server:9000
                          ;;
 (mongodb)                docker run -it -p 27017:27017 bitnami/mongodb:latest ;;
 (mongodb_network)        docker network create app-tier --driver bridge ;;
