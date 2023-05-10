@@ -1137,6 +1137,9 @@ night_pdf(){
 
 night_avh(){
     ( cd ~/Descargas/; bak report /tmp/s2link /tmp/s2files /tmp/s2files2 )
+
+    [ -e /tmp/avl_forward ] && [ "$(mount | grep synology)" = "" ] && echo '\e[31m NAS not mounted \e[0m' && read
+
     rm -rf /tmp/s2link /tmp/s2files /tmp/s2files2 /tmp/already_downloaded /tmp/star_not_found
     DISPLAY=:1 xdotool key 0
     sleep 10
@@ -1192,6 +1195,7 @@ night(){
     \true && touch /tmp/avl_notify
     \true && avhloop 
     false && rm -fr /tmp/pause
+    false && date
 }
 
 loop_avh(){
