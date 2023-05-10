@@ -376,6 +376,7 @@ case $1 in
 (dex)                    docker run --rm --name dex -p 5556:5556 -v /var/lib/dex:/var/lib/dex -v ~/.dex/dex.yaml:/etc/dex/dex.yaml quay.io/coreos/dex:v2.10.0 serve /etc/dex/dex.yaml ;;
 (doctor)                 docker run -it ${DOCKER_REPO_PREFIX}/doctor ;;
 (dockly)                 docker run -it -v /var/run/docker.sock:/var/run/docker.sock lirantal/dockly ;;
+(docker)                 docker run -v /var/run/docker.sock:/var/run/docker.sock -ti docker ;;
 (dolphin)                docker run -it --net host --memory 2gb -e DISPLAY=unix$DISPLAY -v /media/storage0/ROM/dolphinconfigs:/root/.config/dolphin-emu -v /media/storage0/ROM/:/roms -v /dev/shm:/dev/shm -v /etc/machine-id:/etc/machine-id -v /run/user/$(id -u)/pulse:/run/user/$(id -u)/pulse -v /var/lib/dbus:/var/lib/dbus -v ~/.pulse:/root/.pulse --device /dev/input/event22 --device /dev/dri:/dev/dri --name dolphin-run dolphin ;;
 (doxygen)                docker run -v $PWD:/workdir -w /workdir -it doxygen ;;
 (dunnet)                 docker run -it dunnet ;;
