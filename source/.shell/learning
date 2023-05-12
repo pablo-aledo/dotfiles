@@ -2910,9 +2910,24 @@ ctags_info(){
 }
 
 log2gr(){
-	cat $1 | log2fn > /tmp/fn_trace
-	cat /tmp/fn_trace | awk 'NR>1{print prev " -> " $0}{ prev=$0 }' > /tmp/trace_edges
-	comm -12 <(cat /tmp/trace_edges | sort -u) <(cat /tmp/calls | sort -u)
+	#cat $1 | log2fn > /tmp/fn_trace
+
+	stack=".main"
+	cat /tmp/fn_trace | while read input
+	do
+		stack_bak=$stack
+		error=false
+		while true
+		do
+			last=$(echo $stack | sed 's/\./\n/g' | tail -n1 )
+			stack=$(echo $stack | sed 's/\.[^\.]*$//g')
+			[ "$(cat /tmp/calls | grep "$last -> $input")" != "" ] && break
+			[ "$stack" = "" ] && { stack=$stack_bak; error=true; break }
+		done
+		[ $error = true ] && continue
+		stack="$stack.$last.$input"
+		echo $stack | sed 's/\./\n/g' | tail -n2 | paste -d'@' -s | sed 's/@/ -> /g'
+	done
 }
 
 rnn.init_state(){
