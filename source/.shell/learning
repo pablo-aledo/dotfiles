@@ -2910,6 +2910,12 @@ ctags_info(){
 	done > /tmp/calls
 }
 
+log2gr(){
+	cat $1 | log2fn > /tmp/fn_trace
+	cat /tmp/fn_trace | awk 'NR>1{print prev " -> " $0}{ prev=$0 }' > /tmp/trace_edges
+	comm -12 <(cat /tmp/trace_edges | sort -u) <(cat /tmp/calls | sort -u)
+}
+
 rnn.init_state(){
     rm -fr $tmp/rnn_state
     for n in $(seq 1 5)
