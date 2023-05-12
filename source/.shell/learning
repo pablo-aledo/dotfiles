@@ -2885,6 +2885,23 @@ ctags_index(){
     done
 }
 
+ctags_extract(){
+	cat tags | grep -F $1 | while read line
+ 	do
+		fname="$(echo $line | awk '{print $1}')"
+		file="$(echo $line | awk '{print $2}')"
+	   	start="$(echo $line | sed 's/.*line:\([0-9]*\).*/\1/g')"
+		end="$(echo $line | sed 's/.*end:\([0-9]*\).*/\1/g')"
+		echo $fname $file $start $end
+		cat $file | head -n $end | tail -n $(( $end - $start + 1 )) > functions/$fname
+   	done
+}
+
+ctags_info(){
+	F log\. G Msg | sed 's/^\([^:]*\):.*.Msg."\([^"]*\)".*/\2 -> \1/g' > log2fn
+	F '[a-zA-z]\+('
+}
+
 rnn.init_state(){
     rm -fr $tmp/rnn_state
     for n in $(seq 1 5)
