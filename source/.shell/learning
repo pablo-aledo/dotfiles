@@ -2902,8 +2902,7 @@ ctags_info(){
 	ls | sort -u > /tmp/list
 	ls | while read fname
 	do
-		comm -12 <(sed 1d $fname | keywords_lowercase=false tokenize | sort -u) <(cat /tmp/list) > /tmp/fcalls
-		cat /tmp/fcalls | while read call
+		comm -12 <(sed 1d $fname | keywords_lowercase=false tokenize | sort -u) <(cat /tmp/list) | while read call
 		do
 			echo "$fname -> $call"
 		done
