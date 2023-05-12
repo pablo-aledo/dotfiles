@@ -2898,8 +2898,17 @@ ctags_extract(){
 }
 
 ctags_info(){
-	F log\. G Msg | sed 's/^\([^:]*\):.*.Msg."\([^"]*\)".*/\2 -> \1/g' > log2fn
-	F '[a-zA-z]\+('
+	grep -Rin 'log\.' G Msg | sed 's/^\([^:]*\):.*.Msg."\([^"]*\)".*/\2 -> \1/g' > /tmp/log2fn
+
+	ls | sort -u > /tmp/list
+	ls | while read fname
+	do
+		comm -12 <(sed 1d $fname | keywords_lowercase=false tokenize | sort -u) <(cat /tmp/list) > /tmp/fcalls
+		cat /tmp/fcalls | while read call
+		do
+			echo "$fname -> $call"
+		done
+	done > /tmp/calls
 }
 
 rnn.init_state(){
