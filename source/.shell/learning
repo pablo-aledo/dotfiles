@@ -2914,7 +2914,7 @@ call_path(){
 	dst=$2
 	[ "$src" = "$dst" ] && return
 	dijkstra -dp $src <(echo 'digraph G {'; cat /tmp/calls; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
-	dist=$( cat /tmp/dists | grep $dst | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
+	dist=$( cat /tmp/dists | grep $dst | grep -v "prev=$dst" | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
 	[ "$dist" = "" ] && return
 
 	djpath=$dst; node=$dst
