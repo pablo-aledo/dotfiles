@@ -2912,11 +2912,12 @@ ctags_info(){
 log2gr(){
 	#cat $1 | log2fn > /tmp/fn_trace
 
-	rm -fr /tmp/lost_context
+	rm -fr /tmp/lost_context /tmp/ok_context
 	for seed in $*
 	do
 		stack=".$seed"
-		cat /tmp/fn_trace | sort -u | while read input
+		echo "$seed" >> /tmp/ok_context
+		cat /tmp/fn_trace | while read input
 		do
 			stack_bak=$stack
 			error=false
@@ -2928,10 +2929,11 @@ log2gr(){
 				[ "$stack" = "" ] && { stack=$stack_bak; error=true; echo $input >> /tmp/lost_context; break }
 			done
 			[ $error = true ] && continue
+    		echo $input >> /tmp/ok_context
 			stack="$stack.$last.$input"
 			echo $stack | sed 's/\./\n/g' | tail -n2 | paste -d'@' -s | sed 's/@/ -> /g'
 		done
-	done | sort -u | while read line
+	done | while read line
 	do
 		elem1="$(echo $line | sed 's/ -> /@/g' | cut -d@ -f1)"
 		elem2="$(echo $line | sed 's/ -> /@/g' | cut -d@ -f2)"
