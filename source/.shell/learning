@@ -2926,7 +2926,7 @@ call_path(){
 		djpath=$node.$djpath
 		[ "$node" = "$src" ] && break
 	done
-	[ "$dist" -lt 4 ] && echo $djpath | sed 's/\./ -> /g'
+	[ "$dist" -lt 10 ] && echo $djpath | sed 's/\./ -> /g'
 }
 
 log2gr(){
