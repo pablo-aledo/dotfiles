@@ -2953,7 +2953,7 @@ log2gr(){
 			stack="$stack.$(echo $cpath | sed 's/ -> /./g')"
 			echo $cpath
 		done
-	done
+	done | while read line; do echo $line | sed 's/ -> /\n/g' | awk 'NR>1{print prev " -> " $0}{ prev=$0 }'; done | sort -u
 }
 
 rnn.init_state(){
