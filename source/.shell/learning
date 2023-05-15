@@ -2909,6 +2909,14 @@ ctags_info(){
 	done > /tmp/calls
 }
 
+call_path(){
+	src=$1
+	dst=$2
+	dist=$(dijkstra -dp $src <(echo 'digraph G {'; cat /tmp/calls; echo '}') | grep $2 | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g')
+	[ "$dist" = "" ] && return
+	[ "$dist" -lt 3 ] && echo "$src -> $dst" && return
+}
+
 log2gr(){
 	#cat $1 | log2fn > /tmp/fn_trace
 
@@ -2925,13 +2933,13 @@ log2gr(){
 			do
 				last=$(echo $stack | sed 's/\./\n/g' | tail -n1 )
 				stack=$(echo $stack | sed 's/\.[^\.]*$//g')
-				[ "$(cat /tmp/calls | grep "$last -> $input")" != "" ] && break
+				[ "$(call_path $last $input)" != "" ] && { cpath="$(call_path $last $input)" ; break }
 				[ "$stack" = "" ] && { stack=$stack_bak; error=true; echo $input >> /tmp/lost_context; break }
 			done
 			[ $error = true ] && continue
     		echo $input >> /tmp/ok_context
-			stack="$stack.$last.$input"
-			echo $stack | sed 's/\./\n/g' | tail -n2 | paste -d'@' -s | sed 's/@/ -> /g'
+			stack="$stack.$(echo $cpath | sed 's/ -> /./g')"
+			echo $cpath
 		done
 	done | while read line
 	do
