@@ -2912,15 +2912,16 @@ ctags_info(){
 call_path(){
 	src=$1
 	dst=$2
+    #echo $src $dst > /tmp/dj.log
 	[ "$src" = "$dst" ] && return
 	dijkstra -dp $src <(echo 'digraph G {'; cat /tmp/calls; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
-	dist=$( cat /tmp/dists | grep $dst | grep -v "prev=$dst" | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
+	dist=$( cat /tmp/dists | grep "\<$dst\>" | grep -v "prev=\<$dst\>" | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
 	[ "$dist" = "" ] && return
 
 	djpath=$dst; node=$dst
 	while true
 	do
-		prev=$(cat /tmp/dists | grep $node | grep -v "prev=$node" | cut -d= -f3 | sed 's/.$//g')
+		prev=$(cat /tmp/dists | grep "\<$node\>" | grep -v "prev=\<$node\>" | cut -d= -f3 | sed 's/.$//g')
 		node=$prev
 		djpath=$node.$djpath
 		[ "$node" = "$src" ] && break
