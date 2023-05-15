@@ -2913,22 +2913,30 @@ log2gr(){
 	#cat $1 | log2fn > /tmp/fn_trace
 
 	rm -fr /tmp/lost_context
-	stack=".$1"
-	cat /tmp/fn_trace | sort -u | while read input
+	for seed in $*
 	do
-		stack_bak=$stack
-		error=false
-		while true
+		stack=".$seed"
+		cat /tmp/fn_trace | sort -u | while read input
 		do
-			last=$(echo $stack | sed 's/\./\n/g' | tail -n1 )
-			stack=$(echo $stack | sed 's/\.[^\.]*$//g')
-			[ "$(cat /tmp/calls | grep "$last -> $input")" != "" ] && break
-			[ "$stack" = "" ] && { stack=$stack_bak; error=true; echo $input >> /tmp/lost_context; break }
+			stack_bak=$stack
+			error=false
+			while true
+			do
+				last=$(echo $stack | sed 's/\./\n/g' | tail -n1 )
+				stack=$(echo $stack | sed 's/\.[^\.]*$//g')
+				[ "$(cat /tmp/calls | grep "$last -> $input")" != "" ] && break
+				[ "$stack" = "" ] && { stack=$stack_bak; error=true; echo $input >> /tmp/lost_context; break }
+			done
+			[ $error = true ] && continue
+			stack="$stack.$last.$input"
+			echo $stack | sed 's/\./\n/g' | tail -n2 | paste -d'@' -s | sed 's/@/ -> /g'
 		done
-		[ $error = true ] && continue
-		stack="$stack.$last.$input"
-		echo $stack | sed 's/\./\n/g' | tail -n2 | paste -d'@' -s | sed 's/@/ -> /g'
-	done | sort -u
+	done | sort -u | while read line
+	do
+		elem1="$(echo $line | sed 's/ -> /@/g' | cut -d@ -f1)"
+		elem2="$(echo $line | sed 's/ -> /@/g' | cut -d@ -f2)"
+		[ $elem1 != $elem2 ] && echo "$elem1 -> $elem2"
+	done
 }
 
 rnn.init_state(){
