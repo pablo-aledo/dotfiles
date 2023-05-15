@@ -2912,9 +2912,20 @@ ctags_info(){
 call_path(){
 	src=$1
 	dst=$2
-	dist=$(dijkstra -dp $src <(echo 'digraph G {'; cat /tmp/calls; echo '}') | grep $2 | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g')
+	[ "$src" = "$dst" ] && return
+	dijkstra -dp $src <(echo 'digraph G {'; cat /tmp/calls; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
+	dist=$( cat /tmp/dists | grep $dst | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
 	[ "$dist" = "" ] && return
-	[ "$dist" -lt 3 ] && echo "$src -> $dst" && return
+
+	djpath=$dst; node=$dst
+	while true
+	do
+		prev=$(cat /tmp/dists | grep $node | grep -v "prev=$node" | cut -d= -f3 | sed 's/.$//g')
+		node=$prev
+		djpath=$node.$djpath
+		[ "$node" = "$src" ] && break
+	done
+	[ "$dist" -lt 4 ] && echo $djpath | sed 's/\./ -> /g'
 }
 
 log2gr(){
@@ -2941,11 +2952,6 @@ log2gr(){
 			stack="$stack.$(echo $cpath | sed 's/ -> /./g')"
 			echo $cpath
 		done
-	done | while read line
-	do
-		elem1="$(echo $line | sed 's/ -> /@/g' | cut -d@ -f1)"
-		elem2="$(echo $line | sed 's/ -> /@/g' | cut -d@ -f2)"
-		[ $elem1 != $elem2 ] && echo "$elem1 -> $elem2"
 	done
 }
 
