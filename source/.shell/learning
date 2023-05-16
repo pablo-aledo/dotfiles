@@ -2937,7 +2937,7 @@ log2gr(){
 	do
 		stack=".$seed"
 		echo "$seed" >> /tmp/ok_context
-		cat /tmp/fn_trace | while read input
+		cat /tmp/fn_trace | uniq | while read input
 		do
 			stack_bak=$stack
 			error=false
