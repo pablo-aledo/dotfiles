@@ -1,3 +1,5 @@
+[ -e ~/log2gr ] && LOG2GR_DIR=~/log2gr
+
 ctags_index(){
     ctags -R --fields=+zln
     cat tags | grep -F $1 | while read line
@@ -40,7 +42,7 @@ call_path(){
 	dst=$2
     #echo $src $dst > /tmp/dj.log
 	[ "$src" = "$dst" ] && return
-	dijkstra -dp $src <(echo 'digraph G {'; cat /tmp/calls; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
+	dijkstra -dp $src <(echo 'digraph G {'; cat $LOG2GR/$project/calls; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
 	dist=$( cat /tmp/dists | grep "\<$dst\>" | grep -v "prev=\<$dst\>" | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
 	[ "$dist" = "" ] && return
 
@@ -56,7 +58,9 @@ call_path(){
 }
 
 log2gr(){
-	#cat $1 | log2fn > /tmp/fn_trace
+    project=$1; shift
+    source $LOG2GR_DIR/$project/log2fn
+	cat $1 | log2fn > /tmp/fn_trace; shift
 
 	rm -fr /tmp/lost_context /tmp/ok_context
 	for seed in $*
