@@ -62,11 +62,12 @@ log2gr(){
     source $LOG2GR_DIR/$project/log2fn
 	cat $1 | log2fn > /tmp/fn_trace; shift
 
+    seeds=()
     if [ $# -gt 0 ]
     then
-        seeds=$*
+        for a in $*; do seeds+=$a; done
     else
-        [ -e $LOG2GR_DIR/$project/seeds ] && seeds=$(cat $LOG2GR_DIR/$project/seeds)
+        cat $LOG2GR_DIR/$project/seeds | while read a; do seeds+=$a; done
     fi
 
 	rm -fr /tmp/lost_context /tmp/ok_context
