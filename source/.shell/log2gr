@@ -62,8 +62,15 @@ log2gr(){
     source $LOG2GR_DIR/$project/log2fn
 	cat $1 | log2fn > /tmp/fn_trace; shift
 
+    if [ $# -gt 0 ]
+    then
+        seeds=$*
+    else
+        [ -e $LOG2GR_DIR/$project/seeds ] && seeds=$(cat $LOG2GR_DIR/$project/seeds)
+    fi
+
 	rm -fr /tmp/lost_context /tmp/ok_context
-	for seed in $*
+	for seed in $seeds
 	do
 		stack=".$seed"
 		echo "$seed" >> /tmp/ok_context
