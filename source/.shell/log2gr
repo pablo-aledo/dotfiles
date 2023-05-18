@@ -51,10 +51,10 @@ call_path(){
 	do
 		prev=$(cat /tmp/dists | grep "\<$node\>" | grep -v "prev=\<$node\>" | cut -d= -f3 | sed 's/.$//g')
 		node=$prev
-		djpath=$node.$djpath
+		djpath=$node@$djpath
 		[ "$node" = "$src" ] && break
 	done
-	[ "$dist" -lt 10 ] && echo $djpath | sed 's/\./ -> /g'
+	[ "$dist" -lt 10 ] && echo $djpath | sed 's/@/ -> /g'
 }
 
 log2gr(){
@@ -73,7 +73,7 @@ log2gr(){
 	rm -fr /tmp/lost_context /tmp/ok_context
 	for seed in $seeds
 	do
-		stack=".$seed"
+		stack="@$seed"
 		echo "$seed" >> /tmp/ok_context
 		cat /tmp/fn_trace | uniq | while read input
 		do
@@ -81,14 +81,14 @@ log2gr(){
 			error=false
 			while true
 			do
-				last=$(echo $stack | sed 's/\./\n/g' | tail -n1 )
-				stack=$(echo $stack | sed 's/\.[^\.]*$//g')
+				last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
+				stack=$(echo $stack | sed 's/@[^@]*$//g')
 				[ "$(call_path $last $input)" != "" ] && { cpath="$(call_path $last $input)" ; break }
 				[ "$stack" = "" ] && { stack=$stack_bak; error=true; echo $input >> /tmp/lost_context; break }
 			done
 			[ $error = true ] && continue
     		echo $input >> /tmp/ok_context
-			stack="$stack.$(echo $cpath | sed 's/ -> /./g')"
+			stack="$stack@$(echo $cpath | sed 's/ -> /@/g')"
 			echo $cpath
 		done
 	done | while read line; do echo $line | sed 's/ -> /\n/g' | awk 'NR>1{print prev " -> " $0}{ prev=$0 }'; done | sort -u > $LOG2GR_DIR/$project/graph
