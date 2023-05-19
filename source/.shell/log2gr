@@ -44,7 +44,7 @@ call_path(){
 	dst=$2
     #echo $src $dst > /tmp/dj.log
 	[ "$src" = "$dst" ] && return
-	dijkstra -dp $src <(echo 'digraph G {'; cat $LOG2GR_DIR/$project/calls; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
+	dijkstra -dp $src <(echo 'digraph G {'; cat $LOG2GR_DIR/$project/calls | sed 's/\./DOT/g' ; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
 	dist=$( cat /tmp/dists | grep "\<$dst\>" | grep -v "prev=\<$dst\>" | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
 	[ "$dist" = "" ] && return
 
@@ -56,7 +56,7 @@ call_path(){
 		djpath=$node@$djpath
 		[ "$node" = "$src" ] && break
 	done
-	[ "$dist" -lt 10 ] && echo $djpath | sed 's/@/ -> /g'
+	[ "$dist" -lt 10 ] && echo $djpath | sed 's/@/ -> /g' | sed 's/DOT/./g'
 }
 
 log2gr(){
