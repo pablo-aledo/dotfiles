@@ -57,8 +57,8 @@ update_ctags(){
 }
 
 call_path(){
-	src=$1
-	dst=$2
+    src=$(echo $1 | sed 's/\./DOT/g')
+	dst=$(echo $2 | sed 's/\./DOT/g')
     #echo $src $dst > /tmp/dj.log
 	[ "$src" = "$dst" ] && return
 	dijkstra -dp $src <(echo 'digraph G {'; cat $LOG2GR_DIR/$project/calls | sed 's/\./DOT/g' ; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
