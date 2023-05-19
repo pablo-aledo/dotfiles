@@ -42,6 +42,8 @@ ctags_info(){
     cd ..
 
     cat tags | grep kind:f | sed -e 's/\t/@/g' -e 's/line://g' -e 's/end://g' | awk 'BEGIN{FS="@"}{print $1" "$2" "$5" "$7}' > /tmp/index
+
+    cat /tmp/index | awk '{print $1": { link: http://github.com/organization/project/blob/master/"$2"\\#L"$3" }" }'  > /tmp/links
 }
 
 update_ctags(){
