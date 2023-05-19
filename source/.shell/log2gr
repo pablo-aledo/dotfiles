@@ -69,7 +69,7 @@ log2gr(){
     then
         for a in $*; do seeds+=$a; done
     else
-        cat $LOG2GR_DIR/$project/seeds | while read a; do seeds+=$a; done
+        comm -12 <(sort -u $LOG2GR_DIR/$project/seeds) <(sort -u /tmp/fn_trace) | while read a; do seeds+=$a; done
     fi
 
 	rm -fr /tmp/lost_context /tmp/ok_context
