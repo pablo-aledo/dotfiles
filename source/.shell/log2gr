@@ -25,6 +25,9 @@ ctags_extract(){
 }
 
 ctags_info(){
+
+    cd functions
+
 	#grep -Rin 'log\.' G Msg | sed 's/^\([^:]*\):.*.Msg."\([^"]*\)".*/\2 -> \1/g' > /tmp/log2fn
 
 	ls | sort -u > /tmp/list
@@ -36,7 +39,21 @@ ctags_info(){
 		done
 	done > /tmp/calls
 
-    cat ../tags | grep kind:f | sed -e 's/\t/@/g' -e 's/line://g' -e 's/end://g' | awk 'BEGIN{FS="@"}{print $1" "$2" "$5" "$7}' > /tmp/index
+    cd ..
+
+    cat tags | grep kind:f | sed -e 's/\t/@/g' -e 's/line://g' -e 's/end://g' | awk 'BEGIN{FS="@"}{print $1" "$2" "$5" "$7}' > /tmp/index
+}
+
+update_ctags(){
+    ctags_index kind:f > tags2
+    \mv tags2 tags
+    rm -fr functions
+    mkdir functions
+    ctags_extract kind:f | vimexec
+    ctags_info
+    rm -fr functions tags
+    meld /tmp/index ~/log2gr/$1/ctags/index
+    meld /tmp/calls ~/log2gr/$1/calls
 }
 
 call_path(){
