@@ -35,6 +35,8 @@ ctags_info(){
 			echo "$fname -> $call"
 		done
 	done > /tmp/calls
+
+    cat tags | grep kind:f | sed -e 's/\t/@/g' -e 's/line://g' -e 's/end://g' | awk 'BEGIN{FS="@"}{print $1" "$2" "$5" "$7}' > /tmp/index
 }
 
 call_path(){
