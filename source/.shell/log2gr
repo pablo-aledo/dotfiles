@@ -102,3 +102,25 @@ log2gr(){
 
 }
 
+lgr_postprocess(){
+cat << EOF
+\cp graph{,.bak}
+touch prev_graph
+
+comm -12 <(sort -u graph) <(sort -u prev_graph) > /tmp/graph
+comm -23 <(sort -u graph) <(sort -u prev_graph) | sed 's/$/: {style: { stroke: green } }/g' >> /tmp/graph
+comm -13 <(sort -u graph) <(sort -u prev_graph) | sed 's/$/: {style: { stroke: red } }/g' >> /tmp/graph
+
+cat graph prev_graph | sed 's/ -> /\n/g' | sort | uniq | while read line
+do
+    cat tooltips | grep "^\$line:"
+done >> /tmp/graph
+
+cat graph prev_graph | sed 's/ -> /\n/g' | sort | uniq | while read line
+do
+    cat style | grep "^\$line:"
+done >> /tmp/graph
+
+\mv /tmp/graph graph
+EOF
+}
