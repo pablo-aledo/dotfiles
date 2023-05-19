@@ -93,6 +93,7 @@ log2gr(){
 	for seed in $seeds
 	do
 		stack="@$seed"
+		inseed=false
 		echo "$seed" >> /tmp/ok_context
 		cat /tmp/fn_trace | uniq | while read input
 		do
@@ -102,7 +103,8 @@ log2gr(){
 			do
 				last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
 				stack=$(echo $stack | sed 's/@[^@]*$//g')
-				[ "$(call_path $last $input)" != "" ] && { cpath="$(call_path $last $input)" ; break }
+				[ $input = $seed ] && inseed=true
+				[ "$(call_path $last $input)" != "" ] && [ $inseed = true ] && { cpath="$(call_path $last $input)" ; break }
 				[ "$stack" = "" ] && { stack=$stack_bak; error=true; echo $input >> /tmp/lost_context; break }
 			done
 			[ $error = true ] && continue
