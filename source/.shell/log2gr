@@ -25,7 +25,7 @@ ctags_extract(){
 }
 
 ctags_info(){
-	grep -Rin 'log\.' G Msg | sed 's/^\([^:]*\):.*.Msg."\([^"]*\)".*/\2 -> \1/g' > /tmp/log2fn
+	#grep -Rin 'log\.' G Msg | sed 's/^\([^:]*\):.*.Msg."\([^"]*\)".*/\2 -> \1/g' > /tmp/log2fn
 
 	ls | sort -u > /tmp/list
 	ls | while read fname
@@ -36,7 +36,7 @@ ctags_info(){
 		done
 	done > /tmp/calls
 
-    cat tags | grep kind:f | sed -e 's/\t/@/g' -e 's/line://g' -e 's/end://g' | awk 'BEGIN{FS="@"}{print $1" "$2" "$5" "$7}' > /tmp/index
+    cat ../tags | grep kind:f | sed -e 's/\t/@/g' -e 's/line://g' -e 's/end://g' | awk 'BEGIN{FS="@"}{print $1" "$2" "$5" "$7}' > /tmp/index
 }
 
 call_path(){
