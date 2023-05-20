@@ -1,0 +1,199 @@
+snippet Hello_world
+	hello -> world
+snippet Labels
+	x: I'm a Mac
+	y: And I'm a PC
+	x -> y: gazoontite
+snippet Declaring_a_shape
+	imAShape
+	im_a_shape
+	im a shape
+	i'm a shape
+	a-shape
+snippet Customize shape type
+	donut: { shape: circle }
+	database.shape: cylinder
+	you: {
+	  shape: person
+	}
+snippet Connections
+	dogs -> cats -> mice: chase
+	replica 1 <-> replica 2
+	a -> b: To err is human, to moo bovine {
+	  source-arrowhead: 1
+	  target-arrowhead: * {
+	    shape: diamond
+	  }
+	}
+snippet Containers
+	good chips: {
+	  doritos
+	  ruffles
+	}
+	bad chips.lays
+	bad chips.pringles
+
+	chocolate.chip.cookies
+snippet Markdown_text
+	explanation: |md
+	  # I can do headers
+
+	  - lists
+	  - lists
+
+	  And other normal markdown stuff
+	|
+snippet Latex
+	plankton -> formula: will steal
+	formula: {
+	  equation: |latex
+	    \\lim_{h \\rightarrow 0 } \\frac{f(x+h)-f(x)}{h}
+	  |
+	}
+snippet Code_blocks
+	explanation: |go
+	  awsSession := From(c.Request.Context())
+	  client := s3.New(awsSession)
+
+	  ctx, cancelFn := context.WithTimeout(c.Request.Context(), AWS_TIMEOUT)
+	  defer cancelFn()
+	|
+snippet Icons_and_Images
+	my network: {
+	  icon: https://icons.terrastruct.com/infra/019-network.svg
+	}
+	github: {
+	  shape: image
+	  icon: https://icons.terrastruct.com/dev/github.svg
+	}
+snippet SQL_Tables
+	costumes: {
+	  shape: sql_table
+	  id: int {constraint: primary_key}
+	  silliness: int
+	  monster: int
+	  last_updated: timestamp
+	}
+
+	monsters: {
+	  shape: sql_table
+	  id: int {constraint: primary_key}
+	  movie: string
+	  weight: int
+	  last_updated: timestamp
+	}
+
+	costumes.monster -> monsters.id
+snippet UML_Class
+	D2 Parser: {
+	  shape: class
+
+	  +reader: io.RuneReader
+	  # Default visibility is + so no need to specify.
+	  readerPos: d2ast.Position
+
+	  # Private field.
+	  -lookahead: "[]rune"
+
+	  # Escape the # to prevent being parsed as comment
+	  #lookaheadPos: d2ast.Position
+	  # Or just wrap in quotes
+	  "#peekn(n int)": (s string, eof bool)
+
+	  +peek(): (r rune, eof bool)
+	  rewind()
+	  commit()
+	}
+snippet Sequence_Diagrams
+	shape: sequence_diagram
+	alice -> bob: What does it mean\nto be well-adjusted?
+	bob -> alice: The ability to play bridge or\ngolf as if they were games.
+snippet Styling
+	x: {
+	  style: {
+	    stroke: "#53C0D8"
+	    stroke-width: 5
+	    shadow: true
+	  }
+	}
+
+	y: {
+	  style: {
+	    opacity: 0.6
+	    fill: red
+	    3d: true
+	    stroke: black
+	  }
+	}
+
+	x -> y: {
+	  style: {
+	    stroke: green
+	    opacity: 0.5
+	    stroke-width: 2
+	    stroke-dash: 5
+	  }
+	}
+snippet Layout_direction
+	direction: right
+	x -> y -> z: onwards!
+	Diagram title
+	title: Hello Friends {
+	  near: top-center
+	  shape: text
+	  style: {
+	    font-size: 29
+	    bold: true
+	    underline: true
+	  }
+	}
+	x -> y
+snippet Tooltips
+	x: { tooltip: Total abstinence is easier than perfect moderation }
+	y: { tooltip: I can't make my satellite dish PAYMENTS! }
+	x -> y
+snippet Links
+	x: I'm a Mac {
+	  link: https://apple.com
+	}
+	y: And I'm a PC {
+	  link: https://microsoft.com
+	}
+	x -> y: gazoontite
+snippet Root_styles
+	style: {
+	  fill: Beige
+	  stroke: DarkBlue
+	  stroke-width: 8
+	  double-border: true
+	  fill-pattern: lines
+	}
+
+	report: |md
+	  # Report card
+
+	  - Computer science: B
+	  - Diagram making: A+
+	|
+snippet Classes
+	classes: {
+	  shiny orb: {
+	    label: ""
+	    shape: circle
+	    width: 40
+	    style: {
+	      fill: yellow
+	      shadow: true
+	    }
+	  }
+	}
+
+	x.class: shiny orb
+	y.class: shiny orb
+	z.class: shiny orb
+snippet Grid_diagrams
+	grid-rows: 2
+	Executive
+	Legislative
+	Judicial
+	The American Government.width: 400
