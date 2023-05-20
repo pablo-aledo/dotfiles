@@ -157,3 +157,9 @@ done >> /tmp/graph
 sed -i 's/@/\\\\./g' graph
 EOF
 }
+
+log2gr_compare(){
+    log2gr $1 $2
+    \cp $LOG2GR_DIR/$1/{graph.bak,prev_graph}
+    log2gr $1 $3
+}
