@@ -158,6 +158,51 @@ sed -i 's/@/\\\\./g' graph
 EOF
 }
 
+lgr_postprocess(){
+cat << EOF
+sed -i 's/\./@/g' graph
+\cp graph{,.bak}
+touch prev_graph
+
+if [ "\$(cat prev_graph)" = "" ]
+then
+    \cp graph prev_graph
+fi
+
+comm -12 <(sort -u graph) <(sort -u prev_graph) > /tmp/graph
+comm -23 <(sort -u graph) <(sort -u prev_graph) | sed 's/$/: {style: { stroke: green } }/g' >> /tmp/graph
+comm -13 <(sort -u graph) <(sort -u prev_graph) | sed 's/$/: {style: { stroke: red } }/g' >> /tmp/graph
+
+cat graph prev_graph | sed 's/ -> /\n/g' | sort | uniq | while read line
+do
+    cat tooltips | sed 's/\./@/g' | grep "^\$line:"
+done >> /tmp/graph
+
+comm -23 <( cat graph | sed 's/ -> /\n/g' | sort | uniq ) <( cat prev_graph | sed 's/ -> /\n/g' | sort | uniq ) | while read line
+do
+    echo "\$line: { style: { fill: '#EAFFEA'; stroke: green }  }"
+done >> /tmp/graph
+
+comm -13 <( cat graph | sed 's/ -> /\n/g' | sort | uniq ) <( cat prev_graph | sed 's/ -> /\n/g' | sort | uniq ) | while read line
+do
+    echo "\$line: { style: { fill: '#FFEAEA'; stroke: red }  }"
+done >> /tmp/graph
+
+cat graph prev_graph | sed 's/ -> /\n/g' | sort | uniq | while read line
+do
+    cat links | sed 's/\./@/g' | grep "^\$line:"
+done >> /tmp/graph
+
+if [ "\$(cat prev_graph)" = "\$(cat graph)" ]
+then
+    rm -fr prev_graph
+fi
+
+\mv /tmp/graph graph
+sed -i 's/@/\\\\./g' graph
+EOF
+}
+
 log2gr_compare(){
     log2gr $1 $2
     \cp $LOG2GR_DIR/$1/{graph.bak,prev_graph}
