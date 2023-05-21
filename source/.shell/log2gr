@@ -99,30 +99,38 @@ log2gr(){
         comm -12 <(sort -u $LOG2GR_DIR/$project/seeds) <(sort -u /tmp/fn_trace) | while read a; do seeds+=$a; done
     fi
 
-	rm -fr /tmp/lost_context /tmp/ok_context
-	for seed in $seeds
-	do
-		stack="@$seed"
-		inseed=false
-		echo "$seed" >> /tmp/ok_context
-		cat /tmp/fn_trace | uniq | while read input
-		do
-			stack_bak=$stack
-			error=false
-			while true
-			do
-				last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
-				stack=$(echo $stack | sed 's/@[^@]*$//g')
-				[ $input = $seed ] && inseed=true
-				[ "$(call_path $last $input)" != "" ] && [ $inseed = true ] && { cpath="$(call_path $last $input)" ; break }
-				[ "$stack" = "" ] && { stack=$stack_bak; error=true; echo $input >> /tmp/lost_context; break }
-			done
-			[ $error = true ] && continue
-    		echo $input >> /tmp/ok_context
-			stack="$stack@$(echo $cpath | sed 's/ -> /@/g')"
-			echo $cpath
-		done
-	done | while read line; do echo $line | sed 's/ -> /\n/g' | awk 'NR>1{print prev " -> " $0}{ prev=$0 }'; done | sort -u > $LOG2GR_DIR/$project/graph
+    log2gr_md5=$( (cat /tmp/fn_trace; echo $project; echo $seeds; echo $call_path_max_dist) | md5sum | awk '{print $1}' )
+
+    if [ -e $LOG2GR_DIR/cache/$log2gr_md5 ]
+    then
+        cat $LOG2GR_DIR/cache/$log2gr_md5 > $LOG2GR_DIR/$project/graph
+    else
+	    rm -fr /tmp/lost_context /tmp/ok_context
+	    for seed in $seeds
+	    do
+	    	stack="@$seed"
+	    	inseed=false
+	    	echo "$seed" >> /tmp/ok_context
+	    	cat /tmp/fn_trace | uniq | while read input
+	    	do
+	    		stack_bak=$stack
+	    		error=false
+	    		while true
+	    		do
+	    			last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
+	    			stack=$(echo $stack | sed 's/@[^@]*$//g')
+	    			[ $input = $seed ] && inseed=true
+	    			[ "$(call_path $last $input)" != "" ] && [ $inseed = true ] && { cpath="$(call_path $last $input)" ; break }
+	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; echo $input >> /tmp/lost_context; break }
+	    		done
+	    		[ $error = true ] && continue
+        		echo $input >> /tmp/ok_context
+	    		stack="$stack@$(echo $cpath | sed 's/ -> /@/g')"
+	    		echo $cpath
+	    	done
+	    done | while read line; do echo $line | sed 's/ -> /\n/g' | awk 'NR>1{print prev " -> " $0}{ prev=$0 }'; done | sort -u > $LOG2GR_DIR/$project/graph
+        cp $LOG2GR_DIR/$project/graph $LOG2GR_DIR/cache/$log2gr_md5
+    fi
 
     if [ -e $LOG2GR_DIR/$project/postprocess ]
     then
