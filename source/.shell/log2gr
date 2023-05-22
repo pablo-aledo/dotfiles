@@ -46,7 +46,7 @@ ctags_info(){
     cat /tmp/index | awk '{print $1": { link: http://github.com/organization/project/blob/master/"$2"\\#L"$3" }" }'  > /tmp/links
 }
 
-update_ctags(){
+ctags_update(){
     ctags_index kind:f > tags2
     \mv tags2 tags
     rm -fr functions
@@ -56,6 +56,22 @@ update_ctags(){
     rm -fr functions tags
     meld /tmp/index ~/log2gr/$1/ctags/index
     meld /tmp/calls ~/log2gr/$1/calls
+}
+
+ctags_insert(){
+    function=$1
+    file=$(cat index | grep "^$function " | cut -d' ' -f2)
+    start=$(cat index | grep "^$function " | cut -d' ' -f3)
+    end=$(cat index | grep "^$function " | cut -d' ' -f4)
+    offset=$(( $( cat functions/$function | wc -l ) - ( $end - $start ) - 1 ))
+
+    cat $file | head -n$(( $start - 1 )) > /tmp/file
+    cat functions/$function >> /tmp/file
+    tail -n+$(( $end + 1 )) $file >> /tmp/file
+    \mv /tmp/file $file
+
+    cat index | awk -v file=$file -v offset=$offset '$2==file && $3 > start {print $1" "$2" "$3 + offset" "$4 + offset; next}{print}' > /tmp/file
+    \mv /tmp/file index
 }
 
 call_path(){
