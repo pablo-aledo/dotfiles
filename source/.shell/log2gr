@@ -99,7 +99,7 @@ log2gr(){
         comm -12 <(sort -u $LOG2GR_DIR/$project/seeds) <(sort -u /tmp/fn_trace) | while read a; do seeds+=$a; done
     fi
 
-    log2gr_md5=$( (cat /tmp/fn_trace; echo $project; echo $seeds; echo $call_path_max_dist) | md5sum | awk '{print $1}' )
+    log2gr_md5=$( (cat /tmp/fn_trace; cat $LOG2GR_DIR/$project/calls; echo $project; echo $seeds; echo $call_path_max_dist) | md5sum | awk '{print $1}' )
 
     if [ -e $LOG2GR_DIR/cache/$log2gr_md5 ]
     then
