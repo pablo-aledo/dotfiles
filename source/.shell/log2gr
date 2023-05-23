@@ -49,14 +49,14 @@ ctags_info(){
 }
 
 ctags_adapt(){
-    comm -23 <(sort -u /tmp/calls) <(sort -u $LOG2GR_DIR/$1/calls_rm) > /tmp/calls_2
+    comm -23 <(sort -u /tmp/calls) <(sort -u $LOG2GR_DIR/$1/calls_rm | sed 's/ #.*//g') > /tmp/calls_2
     cat $LOG2GR_DIR/$1/calls_add | sed 's/ #.*//g' >> /tmp/calls_2
     sort -u /tmp/calls_2 | sed 's/ #.*//g' > /tmp/calls
 
     cat /tmp/index | while read line
     do
         fn=$(echo $line | awk '{print $1}')
-        if [ "$(cat $LOG2GR_DIR/$1/index_rm | grep "^$fn$")" = "" ]
+        if [ "$(cat $LOG2GR_DIR/$1/index_rm | sed 's/ #.*//g' | grep "^$fn$")" = "" ]
         then
             echo $line
         fi
