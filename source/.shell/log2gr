@@ -32,11 +32,16 @@ ctags_info(){
 	ls | sort -u > /tmp/list
 	ls | while read fname
 	do
-		comm -12 <(sed 1d $fname | keywords_lowercase=false tokenize | sort -u) <(cat /tmp/list) | while read call
+        comm -12 <(sed 1d $fname | sed -e 's|//.*||g' -e 's|"[^"]*"||g' -e 's|os\.[a-zA-Z]*||g' | keywords_lowercase=false tokenize | sort -u) <(cat /tmp/list) | while read call
 		do
 			echo "$fname -> $call"
 		done
-	done > /tmp/calls
+	done | while read line
+    do
+        a="$(echo $line | sed 's| -> |@|g' | cut -d@ -f1)"
+        b="$(echo $line | sed 's| -> |@|g' | cut -d@ -f2)"
+        [ "$a" != "$b" ] && echo "$a -> $b"
+    done > /tmp/calls
 
     cd ..
 
