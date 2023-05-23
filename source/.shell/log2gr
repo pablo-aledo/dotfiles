@@ -25,7 +25,6 @@ ctags_extract(){
 }
 
 ctags_info(){
-
     cd functions
 
 	#grep -Rin 'log\.' G Msg | sed 's/^\([^:]*\):.*.Msg."\([^"]*\)".*/\2 -> \1/g' > /tmp/log2fn
@@ -42,20 +41,23 @@ ctags_info(){
     cd ..
 
     cat tags | grep kind:f | sed -e 's/\t/@/g' -e 's/line://g' -e 's/end://g' | awk 'BEGIN{FS="@"}{print $1" "$2" "$5" "$7}' > /tmp/index
+}
+
+ctags_adapt(){
+    comm -23 <(sort -u /tmp/calls) <(sort -u $LOG2GR_DIR/$1/calls_negative) > /tmp/calls_2
+    cat $LOG2GR_DIR/$1/calls_more >> /tmp/calls_2
+    sort -u /tmp/calls_2 > /tmp/calls
 
     cat /tmp/index | while read line
     do
         fn=$(echo $line | awk '{print $1}')
-        overwrite=$(cat $LOG2GR_DIR/$1/index_overwrite | awk -v fn=$fn '$1 == fn{print}')
-        original=$line
-        if [ "$overwrite" = "" ]
+        if [ "$(cat $LOG2GR_DIR/$1/index_rm | grep "^$fn$")" = "" ]
         then
-            echo $original
-        else
-            echo $overwrite
+            echo $line
         fi
     done > /tmp/index_2
-    \mv /tmp/index_2 /tmp/index
+    cat $LOG2GR_DIR/$1/index_add >> /tmp/index_2
+    sort -u /tmp/index_2 > /tmp/index
 
     cat /tmp/index | awk '{print $1": { link: http://github.com/organization/project/blob/master/"$2"\\#L"$3" }" }'  > /tmp/links
 }
@@ -66,7 +68,8 @@ ctags_update(){
     rm -fr functions
     mkdir functions
     ctags_extract kind:f | vimexec
-    ctags_info $1
+    ctags_info
+    ctags_adapt $1
     rm -fr functions tags
     meld /tmp/index ~/log2gr/$1/ctags/index
     meld /tmp/calls ~/log2gr/$1/calls
@@ -93,7 +96,7 @@ call_path(){
 	dst=$(echo $2 | sed 's/\./DOT/g')
     #echo $src $dst > /tmp/dj.log
 	[ "$src" = "$dst" ] && return
-    dijkstra -dp $src <(echo 'digraph G {'; (comm -23 <(sort -u $LOG2GR_DIR/$project/calls) <(sort -u $LOG2GR_DIR/$project/calls_negative); cat $LOG2GR_DIR/$project/calls_more) | sed 's/\./DOT/g' ; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
+    dijkstra -dp $src <(echo 'digraph G {'; cat $LOG2GR_DIR/$project/calls | sed 's/\./DOT/g' ; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
 	dist=$( cat /tmp/dists | grep "\<$dst\>" | grep -v "prev=\<$dst\>" | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
 	[ "$dist" = "" ] && return
 
@@ -129,7 +132,7 @@ log2gr(){
         comm -12 <(sort -u $LOG2GR_DIR/$project/seeds) <(sort -u /tmp/fn_trace) | while read a; do seeds+=$a; done
     fi
 
-    log2gr_md5=$( (cat /tmp/fn_trace; cat $LOG2GR_DIR/$project/calls; cat $LOG2GR_DIR/$project/calls_negative; cat $LOG2GR_DIR/$project/calls_more; echo $project; echo $seeds; echo $call_path_max_dist) | md5sum | awk '{print $1}' )
+    log2gr_md5=$( (cat /tmp/fn_trace; cat $LOG2GR_DIR/$project/calls; echo $project; echo $seeds; echo $call_path_max_dist) | md5sum | awk '{print $1}' )
 
     if [ -e $LOG2GR_DIR/cache/$log2gr_md5 ]
     then
