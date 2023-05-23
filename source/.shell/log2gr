@@ -43,6 +43,20 @@ ctags_info(){
 
     cat tags | grep kind:f | sed -e 's/\t/@/g' -e 's/line://g' -e 's/end://g' | awk 'BEGIN{FS="@"}{print $1" "$2" "$5" "$7}' > /tmp/index
 
+    cat /tmp/index | while read line
+    do
+        fn=$(echo $line | awk '{print $1}')
+        overwrite=$(cat $LOG2GR_DIR/$project/index_overwrite | awk -v fn=$fn '$1 == fn{print}')
+        original=$line
+        if [ $overwrite = "" ]
+        then
+            echo $original
+        else
+            echo $overwrite
+        fi
+    done > /tmp/index_2
+    \mv /tmp/index_2 /tmp/index
+
     cat /tmp/index | awk '{print $1": { link: http://github.com/organization/project/blob/master/"$2"\\#L"$3" }" }'  > /tmp/links
 }
 
