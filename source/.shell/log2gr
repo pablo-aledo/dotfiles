@@ -49,8 +49,8 @@ ctags_info(){
 }
 
 ctags_adapt(){
-    comm -23 <(sort -u /tmp/calls) <(sort -u $LOG2GR_DIR/$1/calls_negative) > /tmp/calls_2
-    cat $LOG2GR_DIR/$1/calls_more >> /tmp/calls_2
+    comm -23 <(sort -u /tmp/calls) <(sort -u $LOG2GR_DIR/$1/calls_rm) > /tmp/calls_2
+    cat $LOG2GR_DIR/$1/calls_add >> /tmp/calls_2
     sort -u /tmp/calls_2 > /tmp/calls
 
     cat /tmp/index | while read line
