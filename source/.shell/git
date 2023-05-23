@@ -42,7 +42,7 @@ Git(){
         (submodules_add) \git submodule add https://$1 $2 ;;
         (submodules_update) \git submodule update --remote --recursive ;;
         (submodules_remove) \git submodule deinit $1
-                            \git rm path/to/submodule
+                            \git rm $1
                             \rm -rf .git/modules/$1
                             ;;
 
