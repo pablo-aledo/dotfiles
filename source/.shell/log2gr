@@ -48,7 +48,7 @@ ctags_info(){
         fn=$(echo $line | awk '{print $1}')
         overwrite=$(cat $LOG2GR_DIR/$1/index_overwrite | awk -v fn=$fn '$1 == fn{print}')
         original=$line
-        if [ $overwrite = "" ]
+        if [ "$overwrite" = "" ]
         then
             echo $original
         else
