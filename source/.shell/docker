@@ -354,6 +354,7 @@ case $1 in
 (antlr)                  shift; docker run --rm -v $PWD:/workdir -w /workdir --user $(id -u):$(id -g) leodido/antlr $* ;;
 (antlr)                  shift; antlr $* ;;
 (dia)                    shift; docker run -d -v $PWD:/workdir -w /workdir -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix"${DISPLAY}" --name dia gruen/dia $* ;;
+(carbonyl)               docker run --rm -ti fathyb/carbonyl https://youtube.com ;;
 (che)                    docker run -ti -v /var/run/docker.sock:/var/run/docker.sock -v /local/path:/data eclipse/che:rc start ;;
 (chromium)               docker run -it --net host --cpuset-cpus 0 --memory 512mb -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/Downloads:/home/chromium/Downloads -v $HOME/.config/chromium/:/data --security-opt seccomp=$HOME/chrome.json --device /dev/snd -v /dev/shm:/dev/shm --name chromium ${DOCKER_REPO_PREFIX}/chromium ;;
 (clion)                  docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $PWD:/workdir -w /workdir --device /dev/snd clion ;;
