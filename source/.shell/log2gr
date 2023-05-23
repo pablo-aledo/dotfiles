@@ -50,8 +50,8 @@ ctags_info(){
 
 ctags_adapt(){
     comm -23 <(sort -u /tmp/calls) <(sort -u $LOG2GR_DIR/$1/calls_rm) > /tmp/calls_2
-    cat $LOG2GR_DIR/$1/calls_add >> /tmp/calls_2
-    sort -u /tmp/calls_2 > /tmp/calls
+    cat $LOG2GR_DIR/$1/calls_add | sed 's/ #.*//g' >> /tmp/calls_2
+    sort -u /tmp/calls_2 | sed 's/ #.*//g' > /tmp/calls
 
     cat /tmp/index | while read line
     do
@@ -61,8 +61,8 @@ ctags_adapt(){
             echo $line
         fi
     done > /tmp/index_2
-    cat $LOG2GR_DIR/$1/index_add >> /tmp/index_2
-    sort -u /tmp/index_2 > /tmp/index
+    cat $LOG2GR_DIR/$1/index_add | sed 's/ #.*//g' >> /tmp/index_2
+    sort -u /tmp/index_2 | sed 's/ #.*//g' > /tmp/index
 
     cat /tmp/index | awk '{print $1": { link: http://github.com/organization/project/blob/master/"$2"\\#L"$3" }" }'  > /tmp/links
 }
