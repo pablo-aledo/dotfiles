@@ -76,7 +76,7 @@ ctags_update(){
     ctags_info
     ctags_adapt $1
     rm -fr functions tags
-    meld /tmp/index ~/log2gr/$1/ctags/index
+    meld /tmp/index ~/log2gr/$1/index
     meld /tmp/calls ~/log2gr/$1/calls
 }
 
@@ -246,6 +246,20 @@ fi
 
 \mv /tmp/graph graph
 sed -i 's/@/\\\\./g' graph
+EOF
+}
+
+lgr_log2fn(){
+cat << EOF
+log2fn(){
+echo main
+cat | sed 's/caller/\ncaller/g' | grep caller | cut -d'"' -f3 | while read line
+do
+    file=\$(echo \$line | cut -d: -f1)
+    linenr=\$(echo \$line | cut -d: -f2)
+    cat index | grep \$file | awk -v line=\$linenr '\$3<line && \$4>line{print \$1}'
+done
+}
 EOF
 }
 
