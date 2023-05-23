@@ -79,7 +79,7 @@ call_path(){
 	dst=$(echo $2 | sed 's/\./DOT/g')
     #echo $src $dst > /tmp/dj.log
 	[ "$src" = "$dst" ] && return
-    dijkstra -dp $src <(echo 'digraph G {'; comm -23 <(sort -u $LOG2GR_DIR/$project/calls) <(sort -u $LOG2GR_DIR/$project/calls_negative) | sed 's/\./DOT/g' ; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
+    dijkstra -dp $src <(echo 'digraph G {'; (comm -23 <(sort -u $LOG2GR_DIR/$project/calls) <(sort -u $LOG2GR_DIR/$project/calls_negative); cat $LOG2GR_DIR/$project/calls_more) | sed 's/\./DOT/g' ; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
 	dist=$( cat /tmp/dists | grep "\<$dst\>" | grep -v "prev=\<$dst\>" | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
 	[ "$dist" = "" ] && return
 
@@ -115,7 +115,7 @@ log2gr(){
         comm -12 <(sort -u $LOG2GR_DIR/$project/seeds) <(sort -u /tmp/fn_trace) | while read a; do seeds+=$a; done
     fi
 
-    log2gr_md5=$( (cat /tmp/fn_trace; cat $LOG2GR_DIR/$project/calls; cat $LOG2GR_DIR/$project/calls_negative; echo $project; echo $seeds; echo $call_path_max_dist) | md5sum | awk '{print $1}' )
+    log2gr_md5=$( (cat /tmp/fn_trace; cat $LOG2GR_DIR/$project/calls; cat $LOG2GR_DIR/$project/calls_negative; cat $LOG2GR_DIR/$project/calls_more; echo $project; echo $seeds; echo $call_path_max_dist) | md5sum | awk '{print $1}' )
 
     if [ -e $LOG2GR_DIR/cache/$log2gr_md5 ]
     then
