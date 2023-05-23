@@ -46,7 +46,7 @@ ctags_info(){
     cat /tmp/index | while read line
     do
         fn=$(echo $line | awk '{print $1}')
-        overwrite=$(cat $LOG2GR_DIR/$project/index_overwrite | awk -v fn=$fn '$1 == fn{print}')
+        overwrite=$(cat $LOG2GR_DIR/$1/index_overwrite | awk -v fn=$fn '$1 == fn{print}')
         original=$line
         if [ $overwrite = "" ]
         then
@@ -66,7 +66,7 @@ ctags_update(){
     rm -fr functions
     mkdir functions
     ctags_extract kind:f | vimexec
-    ctags_info
+    ctags_info $1
     rm -fr functions tags
     meld /tmp/index ~/log2gr/$1/ctags/index
     meld /tmp/calls ~/log2gr/$1/calls
