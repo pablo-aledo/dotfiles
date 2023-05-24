@@ -179,6 +179,17 @@ log2gr(){
 
 }
 
+log2gr_add_seeds(){
+
+    while true
+    do
+        log2gr $1 $2
+        comm -23 <(sort -u /tmp/lost_context) <(sort -u /tmp/ok_context) > /tmp/seeds
+        [ "$(cat /tmp/seeds)" = "" ] && break
+        head -n1 /tmp/seeds >> $LOG2GR_DIR/$1/seeds
+    done
+}
+
 lgr_postprocess(){
 cat << EOF
 sed -i 's/\./@/g' graph
