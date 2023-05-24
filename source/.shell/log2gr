@@ -119,6 +119,8 @@ call_path(){
 log2gr(){
     project=$1; shift
 
+    rm -fr $LOG2GR_DIR/$project/prev_graph
+
     if [ -e $LOG2GR_DIR/$project/config ]
     then
         source $LOG2GR_DIR/$project/config
