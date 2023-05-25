@@ -267,7 +267,7 @@ log2fnlog(){
         linenr=\$(echo \$line | sed 's|.*"caller":"[^:]*:\\([0-9]*\\).*|\1|g')
         function=\$(cat index | grep \$file | awk -v line=\$linenr '\$3<line && \$4>line{print \$1}')
         echo \$function \$line
-    done | sed 's/"time":[0-9]*//g' > fnlog_\$1
+    done | sed -e 's/"time":[0-9]*//g' > fnlog_\$1
 }
 
 log2fnlog log
