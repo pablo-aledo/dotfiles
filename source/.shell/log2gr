@@ -260,10 +260,25 @@ do
     cat links | sed 's/\./@/g' | grep "^\$line:"
 done >> /tmp/graph
 
-if [ "\$(cat prev_graph)" = "\$(cat graph)" ]
-then
-    rm -fr prev_graph
-fi
+log2fnlog(){
+    cat \$1 | while read line
+    do
+        file=\$(echo \$line | sed 's|.*"caller":"\\([^:]*\\):.*|\1|g')
+        linenr=\$(echo \$line | sed 's|.*"caller":"[^:]*:\\([0-9]*\\).*|\1|g')
+        function=\$(cat index | grep \$file | awk -v line=\$linenr '\$3<line && \$4>line{print \$1}')
+        echo \$function \$line
+    done | sed 's/"time":[0-9]*//g' > fnlog_\$1
+}
+
+log2fnlog log
+log2fnlog prev_log
+
+cat graph.bak prev_graph | sed 's/ -> /\n/g' | sort | uniq | while read node
+do
+    md51=\$(cat      fnlog_log | grep "^\$node " | sort | uniq | md5sum | awk '{print \$1}')
+    md52=\$(cat fnlog_prev_log | grep "^\$node " | sort | uniq | md5sum | awk '{print \$1}')
+    [ \$md51 != \$md52 ] && echo "\$node : {style: {fill: '#FFFFEA'; stroke: yellow}}"
+done
 
 \mv /tmp/graph graph
 sed -i 's/@/\\\\./g' graph
