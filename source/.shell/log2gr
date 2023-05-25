@@ -119,6 +119,8 @@ call_path(){
 log2gr(){
     project=$1; shift
 
+    \cp $2 $LOG2GR_DIR/$project/log
+
     if [ -e $LOG2GR_DIR/$project/config ]
     then
         source $LOG2GR_DIR/$project/config
@@ -278,5 +280,6 @@ EOF
 log2gr_compare(){
     log2gr $1 $2
     \cp $LOG2GR_DIR/$1/{graph.bak,prev_graph}
+    \cp $LOG2GR_DIR/$1/{log,prev_log}
     log2gr $1 $3
 }
