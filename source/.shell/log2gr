@@ -273,7 +273,7 @@ log2fnlog(){
 log2fnlog log
 log2fnlog prev_log
 
-cat graph.bak prev_graph | sed 's/ -> /\n/g' | sort | uniq | while read node
+comm -12 <(cat graph.bak | sed 's/ -> /\n/g' | sort | uniq) <(cat prev_graph | sed 's/ -> /\n/' | sort | uniq ) | while read node
 do
     md51=\$(cat      fnlog_log | grep "^\$node " | sort | uniq | md5sum | awk '{print \$1}')
     md52=\$(cat fnlog_prev_log | grep "^\$node " | sort | uniq | md5sum | awk '{print \$1}')
