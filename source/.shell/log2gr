@@ -119,7 +119,7 @@ call_path(){
 log2gr(){
     project=$1; shift
 
-    \cp $2 $LOG2GR_DIR/$project/log
+    \cp $1 $LOG2GR_DIR/$project/log
 
     if [ -e $LOG2GR_DIR/$project/config ]
     then
