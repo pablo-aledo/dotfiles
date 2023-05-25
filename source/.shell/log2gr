@@ -278,7 +278,7 @@ do
     md51=\$(cat      fnlog_log | grep "^\$node " | sort | uniq | md5sum | awk '{print \$1}')
     md52=\$(cat fnlog_prev_log | grep "^\$node " | sort | uniq | md5sum | awk '{print \$1}')
     [ \$md51 != \$md52 ] && echo "\$node : {style: {fill: '#FFFFEA'; stroke: yellow}}"
-done
+done >> /tmp/graph
 
 \mv /tmp/graph graph
 sed -i 's/@/\\\\./g' graph
