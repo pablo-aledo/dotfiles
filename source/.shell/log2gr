@@ -179,8 +179,7 @@ log2gr(){
 
 }
 
-log2gr_add_seeds(){
-
+log2gr_seeds(){
     while true
     do
         log2gr $1 $2
@@ -188,6 +187,8 @@ log2gr_add_seeds(){
         [ "$(cat /tmp/seeds)" = "" ] && break
         comm -23 <(sort /tmp/seeds) <(sort $LOG2GR_DIR/$1/seeds) | head -n1 >> $LOG2GR_DIR/$1/seeds
     done
+    comm -23 <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f1 | sort -u) <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f2 | sort -u) > $LOG2GR_DIR/$1/seeds
+    log2gr $1 $2
 }
 
 lgr_postprocess(){
