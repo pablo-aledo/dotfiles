@@ -139,32 +139,37 @@ log2gr(){
         comm -12 <(sort -u $LOG2GR_DIR/$project/seeds) <(sort -u /tmp/fn_trace) | while read a; do seeds+=$a; done
     fi
 
-    log2gr_md5=$( (cat /tmp/fn_trace; cat $LOG2GR_DIR/$project/calls; echo $project; echo $seeds; echo $call_path_max_dist) | md5sum | awk '{print $1}' )
+    touch $LOG2GR_DIR/$project/short_seeds
+    log2gr_md5=$( (cat /tmp/fn_trace; cat $LOG2GR_DIR/$project/calls; echo $project; echo $seeds; cat $LOG2GR_DIR/$project/short_seeds; echo $call_path_max_dist) | md5sum | awk '{print $1}' )
 
     if [ -e $LOG2GR_DIR/cache/$log2gr_md5 ]
     then
         cat $LOG2GR_DIR/cache/$log2gr_md5 > $LOG2GR_DIR/$project/graph
     else
-	    rm -fr /tmp/lost_context /tmp/ok_context
+	    rm -fr /tmp/lost_context #/tmp/ok_context
 	    for seed in $seeds
 	    do
 	    	stack="@$seed"
 	    	inseed=false
-	    	echo "$seed" >> /tmp/ok_context
+            lock=false; prev_lock=false
+			#echo "$seed" >> /tmp/ok_context
 	    	cat /tmp/fn_trace | uniq | while read input
 	    	do
 	    		stack_bak=$stack
 	    		error=false
+                lock=true
 	    		while true
 	    		do
 	    			last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
 	    			stack=$(echo $stack | sed 's/@[^@]*$//g')
-	    			[ $input = $seed ] && inseed=true
-	    			[ "$(call_path $last $input)" != "" ] && [ $inseed = true ] && { cpath="$(call_path $last $input)" ; break }
-	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; echo $input >> /tmp/lost_context; break }
+                    cpath=$(call_path $last $input)
+	    			[ $input = $seed ] && inseed=true && lock=true
+	    			[ "$cpath" != "" ] && [ $inseed = true ] && { break }
+	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; lock=false; [ $prev_lock = true ] && echo $input >> /tmp/lost_context; break }
 	    		done
+                prev_lock=$lock
 	    		[ $error = true ] && continue
-        		echo $input >> /tmp/ok_context
+                #echo $input >> /tmp/ok_context
 	    		stack="$stack@$(echo $cpath | sed 's/ -> /@/g')"
 	    		echo $cpath
 	    	done
@@ -182,8 +187,9 @@ log2gr(){
 	    		do
 	    			last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
 	    			stack=$(echo $stack | sed 's/@[^@]*$//g')
+                    cpath=$(call_path $last $input)
 	    			[ $input = $seed ] && inseed=true
-	    			[ "$(call_path $last $input)" != "" ] && [ $inseed = true ] && { cpath="$(call_path $last $input)" ; break }
+	    			[ "$cpath" != "" ] && [ $inseed = true ] && { break }
 	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; break }
 	    		done
 	    		[ $error = true ] && continue
@@ -266,6 +272,19 @@ log2gr_seeds_6(){
     comm -12 <(sort /tmp/lost) <(sort /tmp/call_seeds) > $LOG2GR_DIR/$1/short_seeds
     log2gr $1 $2
     comm -23 <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f1 | sort -u) <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f2 | sort -u) > $LOG2GR_DIR/$1/short_seeds
+    log2gr $1 $2
+}
+
+log2gr_seeds(){
+    touch $LOG2GR_DIR/cache/empty
+    rm -fr $LOG2GR_DIR/cache/*
+    echo main > $LOG2GR_DIR/$1/seeds
+    rm -fr $LOG2GR_DIR/$1/short_seeds
+
+    log2gr $1 $2
+    cat /tmp/lost_context | sort -u > $LOG2GR_DIR/$project/short_seeds
+    log2gr $1 $2
+    comm -23 <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f1 | sort -u) <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f2 | sort -u) > ~/log2gr/$1/short_seeds
     log2gr $1 $2
 }
 
