@@ -169,6 +169,31 @@ log2gr(){
 	    		echo $cpath
 	    	done
 	    done | while read line; do echo $line | sed 's/ -> /\n/g' | awk 'NR>1{print prev " -> " $0}{ prev=$0 }'; done | sort -u > $LOG2GR_DIR/$project/graph
+
+	    cat $LOG2GR_DIR/$project/short_seeds | while read seed
+	    do
+	    	stack="@$seed"
+	    	inseed=false
+	    	cat /tmp/fn_trace | uniq | grep "^$seed\$" -A20 | while read input
+	    	do
+	    		stack_bak=$stack
+	    		error=false
+	    		while true
+	    		do
+	    			last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
+	    			stack=$(echo $stack | sed 's/@[^@]*$//g')
+	    			[ $input = $seed ] && inseed=true
+	    			[ "$(call_path $last $input)" != "" ] && [ $inseed = true ] && { cpath="$(call_path $last $input)" ; break }
+	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; break }
+	    		done
+	    		[ $error = true ] && continue
+	    		stack="$stack@$(echo $cpath | sed 's/ -> /@/g')"
+	    		echo $cpath
+	    	done
+	    done | while read line; do echo $line | sed 's/ -> /\n/g' | awk 'NR>1{print prev " -> " $0}{ prev=$0 }'; done | sort -u >> $LOG2GR_DIR/$project/graph
+
+        cat $LOG2GR_DIR/$project/graph | sort -u > /tmp/graph; \mv /tmp/graph $LOG2GR_DIR/$project/graph
+
         cp $LOG2GR_DIR/$project/graph $LOG2GR_DIR/cache/$log2gr_md5
     fi
 
@@ -230,6 +255,17 @@ log2gr_seeds_5(){
     comm -12 <(sort /tmp/lost) <(sort /tmp/call_seeds) >> $LOG2GR_DIR/$1/seeds
     log2gr $1 $2
     comm -23 <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f1 | sort -u) <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f2 | sort -u) > $LOG2GR_DIR/$1/seeds
+    log2gr $1 $2
+}
+
+log2gr_seeds_6(){
+    echo main > $LOG2GR_DIR/$1/seeds
+    log2gr $1 $2
+    comm -23 <(sort -u /tmp/lost_context) <(sort -u /tmp/ok_context) > /tmp/lost
+    comm -23 <(cat $LOG2GR_DIR/$1/calls | sed 's/ -> /@/g' | cut -d@ -f1 | sort -u) <(cat $LOG2GR_DIR/$1/calls | sed 's/ -> /@/g' | cut -d@ -f2 | sort -u) > /tmp/call_seeds
+    comm -12 <(sort /tmp/lost) <(sort /tmp/call_seeds) > $LOG2GR_DIR/$1/short_seeds
+    log2gr $1 $2
+    comm -23 <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f1 | sort -u) <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f2 | sort -u) > $LOG2GR_DIR/$1/short_seeds
     log2gr $1 $2
 }
 
