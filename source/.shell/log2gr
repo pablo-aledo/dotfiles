@@ -181,7 +181,7 @@ log2gr(){
 
 }
 
-log2gr_seeds(){
+log2gr_seeds_1(){
     while true
     do
         log2gr $1 $2
@@ -193,7 +193,7 @@ log2gr_seeds(){
     log2gr $1 $2
 }
 
-log2gr_seeds(){
+log2gr_seeds_2(){
     echo main > $LOG2GR_DIR/$1/seeds
     log2gr $1 $2
     comm -23 <(sort -u /tmp/lost_context) <(sort -u /tmp/ok_context) >> $LOG2GR_DIR/$1/seeds
@@ -202,7 +202,7 @@ log2gr_seeds(){
     log2gr $1 $2
 }
 
-log2gr_seeds(){
+log2gr_seeds_3(){
     echo main > $LOG2GR_DIR/$1/seeds
     log2gr $1 $2
     comm -23 <(sort -u /tmp/lost_context) <(sort -u /tmp/ok_context) >> $LOG2GR_DIR/$1/seeds
@@ -211,7 +211,7 @@ log2gr_seeds(){
     log2gr $1 $2
 }
 
-log2gr_seeds(){
+log2gr_seeds_4(){
     echo main > $LOG2GR_DIR/$1/seeds
     log2gr $1 $2
     comm -23 <(sort -u /tmp/lost_context) <(sort -u /tmp/ok_context) > /tmp/lost
@@ -220,6 +220,16 @@ log2gr_seeds(){
     log2gr $1 $2
     comm -23 <(sort -u /tmp/lost_context) <(sort -u /tmp/ok_context) >> $LOG2GR_DIR/$1/seeds
     log2gr $1 $2
+}
+
+log2gr_seeds_5(){
+    echo main > $LOG2GR_DIR/$1/seeds
+    log2gr $1 $2
+    comm -23 <(sort -u /tmp/lost_context) <(sort -u /tmp/ok_context) > /tmp/lost
+    comm -23 <(cat $LOG2GR_DIR/$1/calls | sed 's/ -> /@/g' | cut -d@ -f1 | sort -u) <(cat $LOG2GR_DIR/$1/calls | sed 's/ -> /@/g' | cut -d@ -f2 | sort -u) > /tmp/call_seeds
+    comm -12 <(sort /tmp/lost) <(sort /tmp/call_seeds) > $LOG2GR_DIR/$1/seeds
+    log2gr $1 $2
+    comm -23 <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f1 | sort -u) <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f2 | sort -u) > $LOG2GR_DIR/$1/seeds
 }
 
 lgr_postprocess(){
