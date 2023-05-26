@@ -202,6 +202,15 @@ log2gr_seeds(){
     log2gr $1 $2
 }
 
+log2gr_seeds(){
+    echo main > $LOG2GR_DIR/$1/seeds
+    log2gr $1 $2
+    comm -23 <(sort -u /tmp/lost_context) <(sort -u /tmp/ok_context) >> $LOG2GR_DIR/$1/seeds
+    comm -23 <(cat $LOG2GR_DIR/$1/calls | sed 's/ -> /@/g' | cut -d@ -f1 | sort -u) <(cat $LOG2GR_DIR/$1/calls | sed 's/ -> /@/g' | cut -d@ -f2 | sort -u) > /tmp/call_seeds
+    comm -12 <(sort $LOG2GR_DIR/$1/seeds) <(sort /tmp/call_seeds) > /tmp/seeds; \mv /tmp/seeds $LOG2GR_DIR/$1/seeds
+    log2gr $1 $2
+}
+
 lgr_postprocess(){
 cat << EOF
 sed -i 's/\./@/g' graph
