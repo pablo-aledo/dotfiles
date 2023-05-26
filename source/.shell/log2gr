@@ -282,7 +282,7 @@ log2gr_seeds(){
     rm -fr $LOG2GR_DIR/$1/short_seeds
 
     log2gr $1 $2
-    cat /tmp/lost_context | sort -u > $LOG2GR_DIR/$project/short_seeds
+    cat /tmp/lost_context | sort -u > $LOG2GR_DIR/$1/short_seeds
     log2gr $1 $2
     comm -23 <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f1 | sort -u) <(cat $LOG2GR_DIR/$1/graph.bak | sed 's/ -> /@/g' | cut -d@ -f2 | sort -u) > ~/log2gr/$1/short_seeds
     log2gr $1 $2
