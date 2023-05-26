@@ -131,17 +131,25 @@ log2gr(){
 
     source $LOG2GR_DIR/$project/log2fn
 	cat $1 | log2fn > /tmp/fn_trace; shift
+    touch $LOG2GR_DIR/$project/short_seeds
 
     seeds=()
+    short_seeds=()
+    seed_mode=long
     if [ $# -gt 0 ]
     then
-        for a in $*; do seeds+=$a; done
+        for a in $*
+        do
+            [ $a = "," ]          && seed_mode=short
+            [ $seed_mode = long ]  && seeds+=$a
+            [ $seed_mode = short ] && short_seeds+=$a
+        done
     else
         comm -12 <(sort -u $LOG2GR_DIR/$project/seeds) <(sort -u /tmp/fn_trace) | while read a; do seeds+=$a; done
+        cat $LOG2GR_DIR/$project/short_seeds | while read a; do short_seeds+=$a; done
     fi
 
-    touch $LOG2GR_DIR/$project/short_seeds
-    log2gr_md5=$( (cat /tmp/fn_trace; cat $LOG2GR_DIR/$project/calls; echo $project; echo $seeds; echo $short_seed_len; cat $LOG2GR_DIR/$project/short_seeds; echo $call_path_max_dist) | md5sum | awk '{print $1}' )
+    log2gr_md5=$( (cat /tmp/fn_trace; cat $LOG2GR_DIR/$project/calls; echo $project; echo $seeds; echo $short_seeds; echo $short_seed_len; echo $call_path_max_dist) | md5sum | awk '{print $1}' )
 
     if [ -e $LOG2GR_DIR/cache/$log2gr_md5 ]
     then
@@ -176,7 +184,7 @@ log2gr(){
 	    	done
 	    done | while read line; do echo $line | sed 's/ -> /\n/g' | awk 'NR>1{print prev " -> " $0}{ prev=$0 }'; done | sort -u > $LOG2GR_DIR/$project/graph
 
-	    cat $LOG2GR_DIR/$project/short_seeds | while read seed
+	    for seed in $short_seeds
 	    do
 	    	stack="@$seed"
 	    	inseed=false
