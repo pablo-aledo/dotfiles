@@ -155,13 +155,13 @@ log2gr(){
     then
         cat $LOG2GR_DIR/cache/$log2gr_md5 > $LOG2GR_DIR/$project/graph
     else
-	    rm -fr /tmp/lost_context #/tmp/ok_context
+	    rm -fr /tmp/lost_context /tmp/lost_context_all /tmp/ok_context
 	    for seed in $seeds
 	    do
 	    	stack="@$seed"
 	    	inseed=false
             lock=false; prev_lock=false
-			#echo "$seed" >> /tmp/ok_context
+			echo "$seed" >> /tmp/ok_context
 	    	cat /tmp/fn_trace | uniq | while read input
 	    	do
 	    		stack_bak=$stack
@@ -174,11 +174,11 @@ log2gr(){
                     cpath=$(call_path $last $input)
 	    			[ $input = $seed ] && inseed=true && lock=true
 	    			[ "$cpath" != "" ] && [ $inseed = true ] && { break }
-	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; lock=false; [ $prev_lock = true ] && echo $input >> /tmp/lost_context; break }
+	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; lock=false; echo $input >> /tmp/lost_context_all; [ $prev_lock = true ] && echo $input >> /tmp/lost_context; break }
 	    		done
                 prev_lock=$lock
 	    		[ $error = true ] && continue
-                #echo $input >> /tmp/ok_context
+                echo $input >> /tmp/ok_context
 	    		stack="$stack@$(echo $cpath | sed 's/ -> /@/g')"
 	    		echo $cpath
 	    	done
