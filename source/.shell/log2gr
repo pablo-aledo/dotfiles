@@ -126,6 +126,7 @@ log2gr(){
         source $LOG2GR_DIR/$project/config
     else
         call_path_max_dist=3
+        seed_stop_seed=true
         short_seed_len=20
         shortseed_stop_seed=true
         shortseed_stop_error=true
@@ -151,7 +152,7 @@ log2gr(){
         sort -u $LOG2GR_DIR/$project/short_seeds | while read a; do short_seeds+=$a; done
     fi
 
-    log2gr_md5=$( (cat /tmp/fn_trace; cat $LOG2GR_DIR/$project/calls; echo $project; echo $seeds; echo $short_seeds; echo $short_seed_len; echo $call_path_max_dist; echo $shortseed_stop_seed; echo $shortseed_stop_error) | md5sum | awk '{print $1}' )
+    log2gr_md5=$( (cat /tmp/fn_trace; cat $LOG2GR_DIR/$project/calls; echo $project; echo $seeds; echo $short_seeds; echo $short_seed_len; echo $call_path_max_dist; echo $shortseed_stop_seed; echo $seed_stop_seed; echo $shortseed_stop_error) | md5sum | awk '{print $1}' )
 
     if [ -e $LOG2GR_DIR/cache/$log2gr_md5 ]
     then
@@ -167,12 +168,15 @@ log2gr(){
 			echo "$seed" >> /tmp/ok_context
 	    	cat /tmp/fn_trace | uniq | while read input
 	    	do
+                inseed_p=$inseed
+                [ $input = $seed ] && [ $inseed = false ] && inseed_p=true && lock=true
+                [ $input = $seed ] && [ $inseed = true  ] && [ $seed_stop_seed = true ] && inseed_p=false
+                inseed=$inseed_p
+                [ $input = "EOF" ] && inseed=false
+                [ $inseed = false ] && continue
 	    		stack_bak=$stack
 	    		error=false
                 lock=true
-                [ $input = $seed ] && inseed=true && lock=true
-                [ $input = "EOF" ] && inseed=false
-                [ $inseed = false ] && continue
 	    		while true
 	    		do
 	    			last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
