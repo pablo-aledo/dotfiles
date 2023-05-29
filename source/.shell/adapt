@@ -719,6 +719,7 @@ pkg install gnome-tweaks
 
 sudo snap install brave
 sudo snap install code
+sudo snap install 1password
 
 sudo snap install notion-snap
 sudo snap install slack
