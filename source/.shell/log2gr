@@ -160,6 +160,7 @@ log2gr(){
 	    rm -fr /tmp/lost_context /tmp/lost_context_all /tmp/ok_context
 	    for seed in $seeds
 	    do
+            [ $(cat /tmp/fn_trace | grep "^$seed\$") = "" ] && continue
 	    	stack="@$seed"
 	    	inseed=false
             lock=false; prev_lock=false
@@ -188,6 +189,7 @@ log2gr(){
 
 	    for seed in $short_seeds
 	    do
+            [ $(cat /tmp/fn_trace | grep "^$seed\$") = "" ] && continue
 	    	stack="@$seed"
 	    	inseed=false
 	    	cat /tmp/fn_trace | uniq | grep "^$seed\$" -A $short_seed_len | while read input
