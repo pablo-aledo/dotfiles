@@ -170,12 +170,14 @@ log2gr(){
 	    		stack_bak=$stack
 	    		error=false
                 lock=true
+                [ $input = $seed ] && inseed=true && lock=true
+                [ $input = "EOF" ] && inseed=false
+                [ $inseed = false ] && continue
 	    		while true
 	    		do
 	    			last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
 	    			stack=$(echo $stack | sed 's/@[^@]*$//g')
                     cpath=$(call_path $last $input)
-	    			[ $input = $seed ] && inseed=true && lock=true
 	    			[ "$cpath" != "" ] && [ $inseed = true ] && { break }
 	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; lock=false; echo $input >> /tmp/lost_context_all; [ $prev_lock = true ] && echo $input >> /tmp/lost_context; break }
 	    		done
