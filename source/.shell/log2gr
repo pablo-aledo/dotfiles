@@ -92,7 +92,8 @@ ctags_insert(){
     tail -n+$(( $end + 1 )) $file >> /tmp/file
     \mv /tmp/file $file
 
-    cat index | awk -v file=$file -v offset=$offset '$2==file && $3 > start {print $1" "$2" "$3 + offset" "$4 + offset; next}{print}' > /tmp/file
+    cat index | awk -v file=$file -v offset=$offset -v start=$start '$2==file && $3 > start {print $1" "$2" "$3 + offset" "$4 + offset; next} $2==file && $3==start {print $1" "$2" "$3" "$4 + offset; next}{print}' > /tmp/file
+
     \mv /tmp/file index
 }
 
