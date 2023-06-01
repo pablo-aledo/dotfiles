@@ -160,7 +160,19 @@ log2gr(){
         cat $LOG2GR_DIR/cache/$log2gr_md5 > $LOG2GR_DIR/$project/graph
     else
 	    rm -fr /tmp/lost_context /tmp/lost_context_all /tmp/ok_context
-        nlines=$(cat /tmp/fn_trace | uniq | wc -l); lgr_progress=0; lgr_all=$(( ( $#seeds + $#short_seeds ) * $nlines ))
+
+        lgr_progress=0
+        (
+	    for seed in $seeds
+	    do
+	    	cat /tmp/fn_trace | uniq
+        done
+	    for seed in $short_seeds
+	    do
+	    	cat /tmp/fn_trace | uniq | grep "^$seed\$" -A $short_seed_len
+        done
+        ) | wc -l | read lgr_all
+
 	    for seed in $seeds
 	    do
             [ "$(cat /tmp/fn_trace | grep "^$seed\$")" = "" ] && continue
