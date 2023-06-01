@@ -160,6 +160,7 @@ log2gr(){
         cat $LOG2GR_DIR/cache/$log2gr_md5 > $LOG2GR_DIR/$project/graph
     else
 	    rm -fr /tmp/lost_context /tmp/lost_context_all /tmp/ok_context
+        nlines=$(cat /tmp/fn_trace | uniq | wc -l); lgr_progress=0; lgr_all=$(( ( $#seeds + $#short_seeds ) * $nlines ))
 	    for seed in $seeds
 	    do
             [ "$(cat /tmp/fn_trace | grep "^$seed\$")" = "" ] && continue
@@ -169,6 +170,7 @@ log2gr(){
 			echo "$seed" >> /tmp/ok_context
 	    	cat /tmp/fn_trace | uniq | while read input
 	    	do
+                lgr_progress=$(( $lgr_progress + 1 )); echo "$lgr_progress / $lgr_all" > /tmp/lgr_progress
                 inseed_p=$inseed
                 [ $input = $seed ] && [ $inseed = false ] && inseed_p=true && lock=true
                 [ $input = $seed ] && [ $inseed = true  ] && [ $seed_stop_seed = true ] && inseed_p=false
@@ -201,6 +203,7 @@ log2gr(){
 	    	inseed=false
 	    	cat /tmp/fn_trace | uniq | grep "^$seed\$" -A $short_seed_len | while read input
 	    	do
+                lgr_progress=$(( $lgr_progress + 1 )); echo "$lgr_progress / $lgr_all" > /tmp/lgr_progress
                 inseed_p=$inseed
                 [ $input = $seed ] && [ $inseed = false ] && inseed_p=true
                 [ $input = $seed ] && [ $inseed = true  ] && [ $shortseed_stop_seed = true ] && inseed_p=false
