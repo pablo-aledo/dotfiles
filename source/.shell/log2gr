@@ -132,6 +132,7 @@ log2gr(){
         shortseed_stop_seed=true
         shortseed_stop_error=true
     fi
+    echo "0 / 0" > /tmp/lgr_progress
 
     source $LOG2GR_DIR/$project/log2fn
 	cat $1 | log2fn > /tmp/fn_trace; shift
@@ -171,7 +172,7 @@ log2gr(){
 	    do
 	    	cat /tmp/fn_trace | uniq | grep "^$seed\$" -A $short_seed_len
         done
-        ) | wc -l | read lgr_all
+        ) | wc -l | read lgr_progress_target
 
 	    for seed in $seeds
 	    do
@@ -182,7 +183,7 @@ log2gr(){
 			echo "$seed" >> /tmp/ok_context
 	    	cat /tmp/fn_trace | uniq | while read input
 	    	do
-                lgr_progress=$(( $lgr_progress + 1 )); echo "$lgr_progress / $lgr_all" > /tmp/lgr_progress
+                lgr_progress=$(( $lgr_progress + 1 )); echo "$lgr_progress / $lgr_progress_target" > /tmp/lgr_progress
                 inseed_p=$inseed
                 [ $input = $seed ] && [ $inseed = false ] && inseed_p=true && lock=true
                 [ $input = $seed ] && [ $inseed = true  ] && [ $seed_stop_seed = true ] && inseed_p=false
@@ -215,7 +216,7 @@ log2gr(){
 	    	inseed=false
 	    	cat /tmp/fn_trace | uniq | grep "^$seed\$" -A $short_seed_len | while read input
 	    	do
-                lgr_progress=$(( $lgr_progress + 1 )); echo "$lgr_progress / $lgr_all" > /tmp/lgr_progress
+                lgr_progress=$(( $lgr_progress + 1 )); echo "$lgr_progress / $lgr_progress_target" > /tmp/lgr_progress
                 inseed_p=$inseed
                 [ $input = $seed ] && [ $inseed = false ] && inseed_p=true
                 [ $input = $seed ] && [ $inseed = true  ] && [ $shortseed_stop_seed = true ] && inseed_p=false
