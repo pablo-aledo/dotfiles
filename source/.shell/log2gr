@@ -132,7 +132,7 @@ log2gr(){
         shortseed_stop_seed=true
         shortseed_stop_error=true
     fi
-    echo "0 / 0" > /tmp/lgr_progress
+    echo "0 / 1" > /tmp/lgr_progress
 
     source $LOG2GR_DIR/$project/log2fn
 	cat $1 | log2fn > /tmp/fn_trace; shift
