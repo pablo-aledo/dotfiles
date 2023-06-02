@@ -152,3 +152,7 @@ mqdiffbar(){
 pairsdistbar(){
     barcmd 'ls ~/servers/index/pairsdist/documents | wc -l' $(ls /media/removable/2TB2/homes/admin/Videos | wc -l)
 }
+
+l2grbar(){
+    barcmd 'cat /tmp/lgr_progress | cut -d" " -f1' 'cat /tmp/lgr_progress | cut -d" " -f3'
+}
