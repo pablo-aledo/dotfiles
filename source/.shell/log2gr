@@ -103,7 +103,7 @@ call_path(){
     src=$(echo $1 | sed 's/\./DOT/g')
 	dst=$(echo $2 | sed 's/\./DOT/g')
     #echo $src $dst > /tmp/dj.log
-	[ "$src" = "$dst" ] && return
+	[ "$src" = "$dst" ] && cpath="" && return
     lgr_cp_cached=$lgr_cpath["$src $dst"]
     if [ "$lgr_cp_cached" = "" ]
     then
@@ -112,6 +112,7 @@ call_path(){
 	    if [ "$dist" = "" ]
         then
             lgr_cpath["$src $dst"]=empty
+            cpath=""
             return
         fi
 
@@ -127,12 +128,13 @@ call_path(){
         then
             ret=$( echo $djpath | sed 's/@/ -> /g' | sed 's/DOT/./g' )
             lgr_cpath["$src $dst"]=$ret
-            echo $ret
+            cpath=$ret
         else
             lgr_cpath["$src $dst"]=empty
+            cpath=""
         fi
     else
-        echo $lgr_cpath["$src $dst"] | sed 's/^empty$//g'
+        cpath=$(echo $lgr_cpath["$src $dst"] | sed 's/^empty$//g')
     fi
 }
 
@@ -217,7 +219,7 @@ log2gr(){
 	    		do
 	    			last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
 	    			stack=$(echo $stack | sed 's/@[^@]*$//g')
-                    call_path $last $input | read cpath
+                    call_path $last $input
 	    			[ "$cpath" != "" ] && [ $inseed = true ] && { break }
 	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; lock=false; echo $input >> /tmp/lost_context_all; [ $prev_lock = true ] && echo $input >> /tmp/lost_context; break }
 	    		done
@@ -248,7 +250,7 @@ log2gr(){
 	    		do
 	    			last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
 	    			stack=$(echo $stack | sed 's/@[^@]*$//g')
-                    call_path $last $input | read cpath
+                    call_path $last $input
 	    			[ "$cpath" != "" ] && { error=false; break }
 	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; break }
                     [ $error = true ] && [ $inseed = true ] && [ $shortseed_stop_error = true ] && inseed=false
