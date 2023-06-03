@@ -104,7 +104,8 @@ call_path(){
 	dst=$(echo $2 | sed 's/\./DOT/g')
     #echo $src $dst > /tmp/dj.log
 	[ "$src" = "$dst" ] && return
-    if [ "$lgr_cpath["$src $dst"]" = "" ]
+    lgr_cp_cached=$lgr_cpath["$src $dst"]
+    if [ "$lgr_cp_cached" = "" ]
     then
         dijkstra -dp $src <(echo 'digraph G {'; cat $LOG2GR_DIR/$project/calls | sed 's/\./DOT/g' ; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
 	    dist=$( cat /tmp/dists | grep "\<$dst\>" | grep -v "prev=\<$dst\>" | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
