@@ -248,7 +248,7 @@ log2gr(){
 	    		do
 	    			last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
 	    			stack=$(echo $stack | sed 's/@[^@]*$//g')
-                    cpath=$(call_path $last $input)
+                    call_path $last $input | read cpath
 	    			[ "$cpath" != "" ] && { error=false; break }
 	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; break }
                     [ $error = true ] && [ $inseed = true ] && [ $shortseed_stop_error = true ] && inseed=false
