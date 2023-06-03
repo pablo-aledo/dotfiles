@@ -217,7 +217,7 @@ log2gr(){
 	    		do
 	    			last=$(echo $stack | sed 's/@/\n/g' | tail -n1 )
 	    			stack=$(echo $stack | sed 's/@[^@]*$//g')
-                    cpath=$(call_path $last $input)
+                    call_path $last $input | read cpath
 	    			[ "$cpath" != "" ] && [ $inseed = true ] && { break }
 	    			[ "$stack" = "" ] && { stack=$stack_bak; error=true; lock=false; echo $input >> /tmp/lost_context_all; [ $prev_lock = true ] && echo $input >> /tmp/lost_context; break }
 	    		done
