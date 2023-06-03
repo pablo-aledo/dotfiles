@@ -97,24 +97,42 @@ ctags_insert(){
     \mv /tmp/file index
 }
 
+declare -A lgr_cpath
+
 call_path(){
     src=$(echo $1 | sed 's/\./DOT/g')
 	dst=$(echo $2 | sed 's/\./DOT/g')
     #echo $src $dst > /tmp/dj.log
 	[ "$src" = "$dst" ] && return
-    dijkstra -dp $src <(echo 'digraph G {'; cat $LOG2GR_DIR/$project/calls | sed 's/\./DOT/g' ; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
-	dist=$( cat /tmp/dists | grep "\<$dst\>" | grep -v "prev=\<$dst\>" | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
-	[ "$dist" = "" ] && return
+    if [ $lgr_cpath["$src $dst"] = "" ]
+    then
+        dijkstra -dp $src <(echo 'digraph G {'; cat $LOG2GR_DIR/$project/calls | sed 's/\./DOT/g' ; echo '}') | paste -d' ' -s  | sed 's/;/\n/g' | grep '\[' | grep -v digraph > /tmp/dists
+	    dist=$( cat /tmp/dists | grep "\<$dst\>" | grep -v "prev=\<$dst\>" | grep dist | sed 's/^[^=]*=\([0-9]*\)\.[0-9]*.*/\1/g' )
+	    if [ "$dist" = "" ]
+        then
+            lgr_cpath["$src $dst"]=empty
+            return
+        fi
 
-	djpath=$dst; node=$dst
-	while true
-	do
-		prev=$(cat /tmp/dists | grep "\<$node\>" | grep -v "prev=\<$node\>" | cut -d= -f3 | sed 's/.$//g')
-		node=$prev
-		djpath=$node@$djpath
-		[ "$node" = "$src" ] && break
-	done
-	[ "$dist" -lt $call_path_max_dist ] && echo $djpath | sed 's/@/ -> /g' | sed 's/DOT/./g'
+	    djpath=$dst; node=$dst
+	    while true
+	    do
+	    	prev=$(cat /tmp/dists | grep "\<$node\>" | grep -v "prev=\<$node\>" | cut -d= -f3 | sed 's/.$//g')
+	    	node=$prev
+	    	djpath=$node@$djpath
+	    	[ "$node" = "$src" ] && break
+	    done
+        if [ "$dist" -lt $call_path_max_dist ]
+        then
+            ret=$( echo $djpath | sed 's/@/ -> /g' | sed 's/DOT/./g' )
+            lgr_cpath["$src $dst"]=$ret
+            echo $ret
+        else
+            lgr_cpath["$src $dst"]=empty
+        fi
+    else
+        echo $lgr_cpath["$src $dst"] | sed 's/^empty$//g'
+    fi
 }
 
 log2gr(){
@@ -138,6 +156,7 @@ log2gr(){
 	cat $1 | log2fn > /tmp/fn_trace; shift
     touch $LOG2GR_DIR/$project/short_seeds
 
+    lgr_cpath=()
     seeds=()
     short_seeds=()
     seed_mode=long
