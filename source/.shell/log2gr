@@ -156,7 +156,7 @@ log2gr(){
 	cat $1 | log2fn > /tmp/fn_trace; shift
     touch $LOG2GR_DIR/$project/short_seeds
 
-    mkdir /tmp/lgr_cp_cache; rm -fr /tmp/lgr_cp_cache/*
+    mkdir -p /tmp/lgr_cp_cache/empty; rm -fr /tmp/lgr_cp_cache/*
     seeds=()
     short_seeds=()
     seed_mode=long
