@@ -432,6 +432,11 @@ do
     [ \$md51 != \$md52 ] && echo "\$node : {style: {fill: '#FFFFEA'; stroke: yellow}}"
 done >> /tmp/graph
 
+if [ "\$(cat prev_graph)" = "\$(cat graph.bak)" ]
+then
+    \rm prev_graph
+fi
+
 \mv /tmp/graph graph
 sed -i 's/@/\\\\./g' graph
 EOF
