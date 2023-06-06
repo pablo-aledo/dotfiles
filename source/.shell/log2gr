@@ -386,6 +386,7 @@ touch prev_graph
 if [ "\$(cat prev_graph)" = "" ]
 then
     \cp graph prev_graph
+    \cp log prev_log
 fi
 
 comm -12 <(sort -u graph) <(sort -u prev_graph) > /tmp/graph
@@ -435,6 +436,7 @@ done >> /tmp/graph
 if [ "\$(cat prev_graph)" = "\$(cat graph.bak)" ]
 then
     \rm prev_graph
+    \rm prev_log
 fi
 
 \mv /tmp/graph graph
@@ -461,4 +463,9 @@ log2gr_compare(){
     \cp $LOG2GR_DIR/$1/{graph.bak,prev_graph}
     \cp $LOG2GR_DIR/$1/{log,prev_log}
     log2gr $1 $3
+}
+
+log2gr_compare_logs(){
+    fn=$1
+    meld <(cat $LOG2GR_DIR/$project/fnlog_prev_log G "^$fn " | sort | uniq) <(cat $LOG2GR_DIR/$project/fnlog_log G "^$fn " | sort | uniq)
 }
