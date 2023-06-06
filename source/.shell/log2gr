@@ -138,7 +138,7 @@ call_path(){
 log2gr(){
     project=$1; shift
 
-    if [ "$(echo $1 | grep 'cache/[0-9a-f]\{32\}' )" ]
+    if [ "$(echo $1 | grep 'cache/[0-9a-f]\{32\}' )" != "" ]
     then
         cat $LOG2GR_DIR/$1 > $LOG2GR_DIR/$project/graph
         if [ -e $LOG2GR_DIR/$project/postprocess ]
@@ -147,6 +147,7 @@ log2gr(){
         else
 	        cat $LOG2GR_DIR/$project/graph
         fi
+        return
     fi
 
     \cp $1 $LOG2GR_DIR/$project/log
