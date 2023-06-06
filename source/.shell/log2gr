@@ -277,6 +277,7 @@ log2gr(){
         cat $LOG2GR_DIR/$project/graph | sort -u > /tmp/graph; \mv /tmp/graph $LOG2GR_DIR/$project/graph
 
         cp $LOG2GR_DIR/$project/graph $LOG2GR_DIR/cache/$log2gr_md5
+        cp $LOG2GR_DIR/$project/log $LOG2GR_DIR/cache/$log2gr_md5.log
     fi
 
     if [ -e $LOG2GR_DIR/$project/postprocess ]
