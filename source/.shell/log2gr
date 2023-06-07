@@ -139,7 +139,7 @@ log2gr(){
     if [ $2 = '-' ]
     then
         cat > /tmp/log2gr_stdin
-        $project=$1; shift
+        project=$1; shift
         log=$1; shift
         log2gr $project /tmp/log2gr_stdin $*
         return
