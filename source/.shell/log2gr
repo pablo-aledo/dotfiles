@@ -472,6 +472,28 @@ done
 EOF
 }
 
+lgr_log2fn(){
+cat << EOF
+log2fn(){
+cat > /tmp/log2fn
+md5=\$(cat /tmp/log2fn ~/log2gr/project/index | md5sum | awk '{print \$1}')
+if [ -e ~/log2gr/cache/\$md5 ]
+then
+    cat ~/log2gr/cache/\$md5
+else
+    echo main > ~/log2gr/cache/\$md5
+    cat /tmp/log2fn | sed 's/caller/\ncaller/g' | grep caller | cut -d'"' -f3 | while read line
+    do
+        file=\$(echo \$line | cut -d: -f1)
+        linenr=\$(echo \$line | cut -d: -f2)
+        cat ~/log2gr/project/index | grep \$file | awk -v line=\$linenr '\$3<line && \$4>line{print \$1}'
+    done >> ~/log2gr/cache/\$md5
+    cat ~/log2gr/cache/\$md5
+fi
+}
+EOF
+}
+
 log2gr_compare(){
     log2gr $1 $2
     \cp $LOG2GR_DIR/$1/{graph.bak,prev_graph}
