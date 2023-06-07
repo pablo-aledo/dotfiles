@@ -136,6 +136,15 @@ call_path(){
 }
 
 log2gr(){
+    if [ $2 = '-' ]
+    then
+        cat > /tmp/log2gr_stdin
+        $project=$1; shift
+        log=$1; shift
+        log2gr $project /tmp/log2gr_stdin $*
+        return
+    fi
+
     project=$1; shift
 
     if [ "$(echo $1 | grep 'cache/[0-9a-f]\{32\}' )" != "" ]
