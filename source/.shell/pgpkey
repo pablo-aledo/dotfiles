@@ -1,0 +1,5 @@
+pgpkey(){
+    gpg --full-generate-key
+    keyid=$(gpg --list-secret-keys --keyid-format=long  | grep '^sec' | cut -d/ -f2 | cut -d' ' -f1)
+    gpg --armor --export $keyid
+}
