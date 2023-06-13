@@ -1,6 +1,6 @@
 sudo apt update
 
-sudo apt-get install g++-12
+sudo apt-get install g++-12 gfortran-12
 
 sudo apt install -y build-essential ca-certificates coreutils curl environment-modules gfortran git gpg lsb-release python3 python3-distutils python3-venv unzip zip
 
