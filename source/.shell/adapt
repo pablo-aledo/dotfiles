@@ -692,6 +692,10 @@ shcw(){
     done
 }
 
+adapt_disable_highlight(){
+    export ZSH_HIGHLIGHT_MAXLENGTH=0
+}
+
 adapt_work(){
 
 myshell zsh
