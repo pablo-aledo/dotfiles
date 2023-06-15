@@ -956,7 +956,7 @@ convert_candidates_2(){
         done
     )
     sumsize=0
-    cat /tmp/convert_sizes | while read line
+    cat /tmp/convert_sizes | sort -g | tac | while read line
     do
         dir=$(echo $line | sed 's|^[^\/]*\/||g' )
         size=$(echo $line | sed 's|^\([^M]*\)M.*|\1|g' )
