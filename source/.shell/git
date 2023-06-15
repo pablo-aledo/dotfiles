@@ -15,6 +15,7 @@ Git(){
         (diff_step) \git diff ${1}^ ${1} ;;
         (difftool_step) \git difftool ${1}^ ${1} ;;
         (diff_staged) \git diff --staged ;;
+        (diff_vim) \git difftool --tool=vimdiff --no-prompt ;;
 
         (branch_rewrite) \git rebase -i $(git_branch_base) ;; # pick, squash, squash, squash...
         (branch_diff_files) \git diff --name-only $(git_branch_base) $(\git rev-parse HEAD) ;;
