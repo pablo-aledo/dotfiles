@@ -942,6 +942,34 @@ convert_candidates(){
     \mv /tmp/convert_sizes .
 }
 
+convert_candidates_2(){
+	source=/media/removable/2TB2/homes/admin/Videos
+    (
+        cd $source;
+        rm -fr /tmp/convert_sizes; touch /tmp/convert_sizes
+        ls -p | grep '/$' | while read line
+        do
+            line="$(echo $line | sed 's/.$//g')"
+            cd "$line"
+            echo "$(du -BM --max-depth=1 | tail -n1 | awk '{print $1}' )\t./$line" >> /tmp/convert_sizes
+            cd ..
+        done
+    )
+    sumsize=0
+    cat /tmp/convert_sizes | while read line
+    do
+        dir=$(echo $line | sed 's|^[^\/]*\/||g' )
+        size=$(echo $line | sed 's|^\([^M]*\)M.*|\1|g' )
+        size=$(( $size / 1000 ))
+        if [ "`find "$source/$dir" -name '*converted*'`" = "" ]
+        then
+            sumsize=$(( $sumsize + $size ))
+            echo $size $sumsize $dir
+        fi
+    done
+    \mv /tmp/convert_sizes .
+}
+
 video_overlay(){
     in_video=$1
     in_image=$2
