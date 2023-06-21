@@ -1,12 +1,12 @@
 [ $# -eq 0 ] && [ -e /tmp/scount ] && count=$(cat /tmp/scount)
 [ $# -eq 0 ] && [ -e /tmp/query  ] && query=$(cat /tmp/query)
 [ $# -eq 0 ] && [ ! -e /tmp/scount ] && count=100
-[ $# -eq 0 ] && [ ! -e /tmp/s2query ] && query="is: starred avxhm.se"
+[ $# -eq 0 ] && [ ! -e /tmp/s2query ] && query="is: starred xsava.xyz"
 [ $# -eq 0 ] && skip=0
 
 
 [ $# -eq 1 ] && count=$1
-[ $# -eq 1 ] && query="is: starred avxhm.se"
+[ $# -eq 1 ] && query="is: starred xsava.xyz"
 [ $# -eq 1 ] &&  skip=0
 
 [ $# -eq 2 ] && count=$1
