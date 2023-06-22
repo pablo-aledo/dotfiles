@@ -1,0 +1,15 @@
+conda_dependencies(){
+    cat ~/workspace/bioconda-recipes/recipes/$1/meta.yaml | awk 'BEGIN{req=0}/requirements:/{req=1}/test:/{req=0}{if(req)print}' | grep -v : | sort -u | while read line
+    do
+        line=$(echo $line | sed "s/'/@/g")
+        [ "$(echo $line | grep -- '- @.*')" != "" ] && line="$(echo $line | sed 's/- \([^ ]*\).*/\1/g' | sed 's/@//g')"
+        [ "$(echo $line | grep -- '- .*')" != "" ] && line="$(echo $line | sed 's/- \([^ ]*\).*/\1/g' | sed 's/@//g')"
+        echo "$1" "->" "$line"
+    done
+}
+
+conda_newdependencies(){
+    cat dependencies | sed 's/ -> /@/g' | cut -d '@' -f1 | sort -u > /tmp/dependencies_left
+    cat dependencies | sed 's/ -> /@/g' | cut -d '@' -f2 | sort -u > /tmp/dependencies_right
+    comm -13 /tmp/dependencies_left /tmp/dependencies_right
+}
