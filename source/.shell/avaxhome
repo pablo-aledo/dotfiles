@@ -9,7 +9,7 @@ avxmail_webcontent=true
 
 # Test:
 # ssh -i $AVH_PROXY_PEM $AVH_PROXY_USER@$AVH_PROXY_IP
-# ssh -i $AVH_PROXY_PEM $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q https://xsava.xyz/ebooks/hardware -O -"
+# ssh -i $AVH_PROXY_PEM $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q https://avxhm.se/ebooks/hardware -O -"
 
 DESCARGAS_NAS=/media/DATA/NAS/Descargas
 DESCARGAS_LOCAL=/media/DATA/Descargas
@@ -173,14 +173,14 @@ avhome_dlscript(){
 avhome_get_titles(){
     mkdir -p ~/servers/avxhome
     cd ~/servers/avxhome
-    wget -q --no-check-certificate https://xsava.xyz/ebooks/$1 -O dl
+    wget -q --no-check-certificate https://avxhm.se/ebooks/$1 -O dl
     cat dl | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|' > $1
 }
 
 avhome_get_titles_n(){
     for a in $(seq 1 $1)
     do
-        wget -q --no-check-certificate https://xsava.xyz/ebooks/pages/$a -O - | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|'
+        wget -q --no-check-certificate https://avxhm.se/ebooks/pages/$a -O - | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|'
     done
 }
 
@@ -190,9 +190,9 @@ avhome_get_new_titles(){
 
     if [ "$AVH_PROXY_IP" != "" ]
     then
-        ssh -i $AVH_PROXY_PEM -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q --no-check-certificate https://xsava.xyz/ebooks/$1 -O -" > dl
+        ssh -i $AVH_PROXY_PEM -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q --no-check-certificate https://avxhm.se/ebooks/$1 -O -" > dl
     else
-        wget -q --no-check-certificate https://xsava.xyz/ebooks/$1 -O dl 2>/dev/null
+        wget -q --no-check-certificate https://avxhm.se/ebooks/$1 -O dl 2>/dev/null
     fi
 
     cat dl | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|' > ${1}_new
@@ -201,8 +201,8 @@ avhome_get_new_titles(){
 }
 
 avhome_get_titles_2(){
-    #url='https://xsava.xyz/ebooks/facet/Development/Drawing/Finance/Painting/Physics/Programming/SCIENCE/Science/science'
-    url='https://xsava.xyz/ebooks'
+    #url='https://avxhm.se/ebooks/facet/Development/Drawing/Finance/Painting/Physics/Programming/SCIENCE/Science/science'
+    url='https://avxhm.se/ebooks'
     mkdir -p ~/servers/avxhome
     cd ~/servers/avxhome
     wget -q --no-check-certificate $url -O dl
@@ -213,7 +213,7 @@ avhome_get_new_titles_2(){
     mkdir -p ~/servers/avxhome
     cd ~/servers/avxhome
 
-    url='https://xsava.xyz/ebooks/facet/Development/Drawing/Finance/Painting/Physics/Programming/SCIENCE/Science/science'
+    url='https://avxhm.se/ebooks/facet/Development/Drawing/Finance/Painting/Physics/Programming/SCIENCE/Science/science'
 
     if [ "$AVH_PROXY_IP" != "" ]
     then
@@ -275,7 +275,7 @@ avhome_mail_server(){
               [ "$avxmail_ml" = "true" ] && learning.configure $HOME/servers/rssmail/learning >/dev/null
               [ "$avxmail_ml" = "true" ] && [ $(echo $title | learning.classify - ) = "true" ] && title_ml="[kword] $title"
               title_outbox=$(echo $title_ml | sed -e 's|/||g' -e 's/ *$//g')
-              link=http://xsava.xyz$(echo $line | cut -d'|' -f1)
+              link=http://avxhm.se$(echo $line | cut -d'|' -f1)
               echo "\e[34m $title_ml \e[0m: $link"
               title_escaped=`echo $title | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g' -e 's/\*/\\\*/g'`
               grep "^$title_escaped\$" ~/servers/avxhome/avxtitles >/dev/null && continue

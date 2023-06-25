@@ -1062,7 +1062,7 @@ notify_rates(){
 
     diff_avh=$(( $actual_n_avh - $previous_n_avh ))
     diff_rss=$(( $actual_n_rss - $previous_n_rss ))
-    w3m_lines=$(w3m -dump xsava.xyz | wc -l)
+    w3m_lines=$(w3m -dump avxhm.se | wc -l)
 
     echo "Low notification rates on server $diff_avh $diff_rss $w3m_lines" | $MAILCMD -F ~/.mutt/muttrc_0 -s "LOW NOTIFICATION RATES ON SERVER" -- pablo.aledo@gmail.com
 }

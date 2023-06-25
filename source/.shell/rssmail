@@ -66,7 +66,7 @@ case $link in
     [ -e $tmpfolder/webcontent01 ] && cat $tmpfolder/webcontent01
     echo '</pre></code>'
     ;;
-(*xsava.xyz*)
+(*avxhm.se*)
     w3m -dump $link | sed -e 's/^Close$/=====/g' -e 's/^Read more$/=====/g' -e 's/^.*icerbox.com.*$/=====/g' > $tmpfolder/webcontent
     csplit -s $tmpfolder/webcontent -f $tmpfolder/webcontent --suppress-matched '/=====/' '{*}'
     [ -e $tmpfolder/webcontent01 ] && cat $tmpfolder/webcontent01
