@@ -758,6 +758,7 @@ server(){
 
                 [ $diff_avh -lt 1 ] && echo "\e[31m Low rate on avh \e[0m" && notify_rates
                 [ $diff_rss -lt 1 ] && echo "\e[31m Low rate on rss \e[0m" && notify_rates
+                [ "$(rss_first_delayed_old)" != "" ] && echo "\e[31m Lagging \e[0m" && notify_lagging
 
                 echo $actual_n_avh > ~/servers/rate/n_avh
                 echo $actual_n_rss > ~/servers/rate/n_rss
@@ -1065,6 +1066,10 @@ notify_rates(){
     w3m_lines=$(w3m -dump avxhm.se | wc -l)
 
     echo "Low notification rates on server $diff_avh $diff_rss $w3m_lines" | $MAILCMD -F ~/.mutt/muttrc_0 -s "LOW NOTIFICATION RATES ON SERVER" -- pablo.aledo@gmail.com
+}
+
+notify_lagging(){
+    echo "send_delayed lagging" | $MAILCMD -F ~/.mutt/muttrc_0 -s "SEND_DELAYED LAGGING ON SERVER" -- pablo.aledo@gmail.com
 }
 
 notify_space(){

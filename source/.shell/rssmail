@@ -133,6 +133,19 @@ done
     #> ~/servers/webcontent_delay/sent
 }
 
+rss_first_delayed () {
+	comm -13 <(sort ~/servers/webcontent_delay/sent) <(ls --color=tty ~/servers/outbox | sort ) | sed 's|^|~/servers/outbox/|g' | while read line
+	do
+		line=$(echo $line | sed "s|^~|$HOME|g")
+		[ $(send_or_delay "$line") = delay ] && break
+	done
+    echo $line
+}
+
+rss_first_delayed_old () {
+    file="$(rss_first_delayed 2>/dev/null)"
+    [ "$(find "$file" -mtime +2)" != "" ] && echo 'lagging'
+}
 
 rssmail_server(){
     [ "$rssmail_ml" = "true" ] && learning.configure $HOME/servers/avxhome/learning >/dev/null
