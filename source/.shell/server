@@ -751,14 +751,16 @@ server(){
 
                 diff_avh=$(( $actual_n_avh - $previous_n_avh ))
                 diff_rss=$(( $actual_n_rss - $previous_n_rss ))
+                lagging="$(rss_first_delayed_old)"
 
                 date
                 echo "diff_avh = $diff_avh"
                 echo "diff_rss = $diff_rss"
+                echo "lagging  = $lagging"
 
                 [ $diff_avh -lt 1 ] && echo "\e[31m Low rate on avh \e[0m" && notify_rates
                 [ $diff_rss -lt 1 ] && echo "\e[31m Low rate on rss \e[0m" && notify_rates
-                [ "$(rss_first_delayed_old)" != "" ] && echo "\e[31m Lagging \e[0m" && notify_lagging
+                [ "$lagging" != "" ] && echo "\e[31m Lagging \e[0m" && notify_lagging
 
                 echo $actual_n_avh > ~/servers/rate/n_avh
                 echo $actual_n_rss > ~/servers/rate/n_rss
