@@ -1723,6 +1723,22 @@ learning.fit(){
     rm -fr $learning_dir/cluster; mkdir -p $learning_dir/cluster
     echo "\e[34m cluster \e[0m "
     $clustering_method.fit
+
+    echo "\e[34m graphs \e[0m "
+    graphs.write
+
+}
+
+graphs.write(){
+mkdir graphs
+cat << EOF > graphs/scatter.py
+import plotly.express as px
+import pandas
+df = pandas.read_table("scatter.txt", sep=' ')
+fig = px.scatter(x=df['x'], y=df['y'], color=df['color'], hover_name=df['name'])
+fig.show()
+fig.write_html("scatter.html")
+EOF
 }
 
 learning.tmpdir(){
