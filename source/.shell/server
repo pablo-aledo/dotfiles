@@ -1117,7 +1117,7 @@ aws_servers(){
 	tmux new -d -s avxmail   "source ~/.shell; server avxmail"
 	tmux new -d -s rates     "source ~/.shell; server rates"
 	tmux new -d -s rsswatch  "source ~/.shell; server rsswatch"
-	tmux new -d -s space     "source ~/.shell; server space2"
+	tmux new -d -s space     "source ~/.shell; server space2 '/$' 10"
 	tmux new -d -s wcsend    "source ~/.shell; server webcontent_delay"
     # tmux join-pane -t :rssmail.1 -s rsswatch
 	# tmux new -d -s sasl     "source ~/.shell; server sasl"
