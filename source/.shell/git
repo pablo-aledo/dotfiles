@@ -53,6 +53,7 @@ Git(){
         (clone_recursive) \git clone --recurse-submodules $* ;;
         (clone_single_branch) \git clone --branch $1 --single-branch $* ;;
         (clean) \git clean -df ;;
+        (init) \git init .; git add .; git commit -am "initial commit" ;;
         (list_excluded) \git ls-files -i -c --exclude-from=.gitignore ;;
         (interactive_checkout) \git checkout -p . ;;
         (interactive_add) \git add -p $* ;;
