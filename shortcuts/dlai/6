@@ -5,7 +5,9 @@ source ~/.dotfiles/source/.shell/adapt
 xdotool key 1 && sleep 1;
 xdotool key 2 && sleep 1;
 
-xdotool key 4 && sleep 1; shcw dlai.3; sleep 20
+sleep 20
+
+xdotool key 4 && sleep 1; shcw dlai.4;
 
 while true
 do
