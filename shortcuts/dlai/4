@@ -11,6 +11,5 @@ mouseover 1 10000 ~/.dotfiles/shortcuts/images/video3p.png && {
     echo $(printf %03d $(cat /tmp/filenr))_ | xclip -sel clip -i
     xdotool key Ctrl+v; sleep 1
     xdotool key Return; sleep 1
-    echo $(( $(cat /tmp/filenr) + 1 )) > /tmp/filenr
 }
 
