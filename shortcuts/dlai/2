@@ -2,6 +2,6 @@ export DISPLAY=:1
 
 link=$( cat /tmp/link )
 
-google-chrome "$link" >/dev/null 2>/dev/null &
+google-chrome --profile-directory=Default "$link" >/dev/null 2>/dev/null &
 sleep 10
 
