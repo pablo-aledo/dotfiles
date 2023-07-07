@@ -1,0 +1,16 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+mouseover 1 10000 ~/.dotfiles/shortcuts/images/video3p.png && {
+    xdotool click 1
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/dlvideo.png
+    xdotool click 1
+    sleep 3
+    xdotool key Alt+f
+    xdotool key Left
+    echo $(printf %03d $(cat /tmp/filenr))_ | xclip -sel clip -i
+    xdotool key Ctrl+v; sleep 1
+    xdotool key Return; sleep 1
+    echo $(( $(cat /tmp/filenr) + 1 )) > /tmp/filenr
+}
+

@@ -2,6 +2,10 @@ export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 source ~/.dotfiles/source/.shell/adapt
 
+xdotool key 1 && sleep 1;
+xdotool key 2 && sleep 1;
+
+xdotool key 4 && sleep 1; shcw dlai.3; sleep 20
 
 while true
 do
@@ -12,6 +16,7 @@ do
 
     xdotool click 1
     xdotool key 3 && sleep 1; shcw dlai.3; sleep 5
+    xdotool key 4 && sleep 1; shcw dlai.4; sleep 5
 
 done
 
