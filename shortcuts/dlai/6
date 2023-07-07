@@ -7,7 +7,7 @@ xdotool key 2 && sleep 1;
 
 sleep 20
 
-xdotool key 4 && sleep 1; shcw dlai.4;
+#xdotool key 4 && sleep 1; shcw dlai.4;
 xdotool key 5 && sleep 1; shcw dlai.5;
 echo $(( $(cat /tmp/filenr) + 1 )) > /tmp/filenr
 
@@ -19,8 +19,8 @@ do
     [ $has_next = false ] && break
 
     xdotool click 1
-    xdotool key 3 && sleep 1; shcw dlai.3; sleep 5
-    xdotool key 4 && sleep 1; shcw dlai.4; sleep 5
+    #xdotool key 3 && sleep 1; shcw dlai.3; sleep 5
+    #xdotool key 4 && sleep 1; shcw dlai.4; sleep 5
     xdotool key 5 && sleep 1; shcw dlai.5; sleep 5
 
     echo $(( $(cat /tmp/filenr) + 1 )) > /tmp/filenr

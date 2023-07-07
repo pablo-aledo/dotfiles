@@ -2,5 +2,5 @@ export DISPLAY=:1
 
 rm -rf ~/Descargas/*.crdownload
 killall chrome chromium google-chrome google-chrome-stable
-xrandr --output VNC-0 --mode 1280x720
+xrandr --output VNC-0 --mode 1280x800
 
