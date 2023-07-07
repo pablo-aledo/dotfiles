@@ -9,6 +9,7 @@ do
         xdotool key Return
         sleep 10
     }
+    xdotool mousemove 0 0
 done
 
 mouseover 10 10000 ~/.dotfiles/shortcuts/images/jupytermenu.png && {
