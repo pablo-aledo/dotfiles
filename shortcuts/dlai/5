@@ -1,11 +1,12 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
-mouseover 1 10000 ~/.dotfiles/shortcuts/images/transcript.png && {
-    xdotool click 1
-    xdotool key Ctrl+a
-    xdotool key Ctrl+c
-    xdotool click 1
+mouseover 1 100000 ~/.dotfiles/shortcuts/images/transcript.png && {
+    sleep 1
+    xdotool click 1; sleep 1
+    xdotool key Ctrl+a; sleep 1
+    xdotool key Ctrl+c; sleep 1
+    xdotool click 1; sleep 1
     xclip -sel clip -o - > ~/Descargas/$(printf %03d $(cat /tmp/filenr))_transcript
 }
 
