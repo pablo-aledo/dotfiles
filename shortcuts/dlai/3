@@ -1,0 +1,37 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+sleep 20; mouseover 1 10000 ~/.dotfiles/shortcuts/images/jupytermenu.png || {
+xdotool key Ctrl+l
+xdotool key Return
+sleep 20
+}
+
+mouseover $(( 60 * 1 )) 10000 ~/.dotfiles/shortcuts/images/jupytermenu.png && {
+    xdotool click 1
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/jupyterfile.png && xdotool click 1
+    mouseover 1 100000 ~/.dotfiles/shortcuts/images/downloadas.png && xdotool click 1; for n in $(seq 1 7); do xdotool key Down; done; xdotool mousemove 0 0
+    mouseover 1 50000 ~/.dotfiles/shortcuts/images/ipynb.png && xdotool click 1
+    sleep 10
+    xdotool key Alt+f
+    xdotool key Left
+    echo $(printf %03d $(cat /tmp/filenr))_ | xclip -sel clip -i
+    xdotool key Ctrl+v
+    xdotool key Return
+    xdotool key Ctrl+w
+}
+
+mouseover 1 10000 ~/.dotfiles/shortcuts/images/video3p.png
+&& {
+    xdotool click 1
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/dlvideo.png
+    xdotool click 1
+    sleep 3
+    xdotool key Alt+f
+    xdotool key Left
+    echo $(printf %03d $(cat /tmp/filenr))_ | xclip -sel clip -i
+    xdotool key Ctrl+v
+    xdotool key Return
+    echo $(( $(cat /tmp/filenr) + 1 )) > /tmp/filenr
+}
+

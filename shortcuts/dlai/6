@@ -1,0 +1,17 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+
+while true
+do
+    has_next=false
+    mouseover 3 10000 ~/.dotfiles/shortcuts/images/next.png && has_next=true
+
+    [ $has_next = false ] && break
+
+    xdotool click 1
+    xdotool key 3 && sleep 1; shcw dlai.3; sleep 5
+
+done
+
