@@ -5,7 +5,7 @@ sleep 10;
 for a in $(seq 1 5)
 do
     mouseover 1 10000 ~/.dotfiles/shortcuts/images/jupytermenu.png || {
-        xdotool key Ctrl+l
+        xdotool key Ctrl+l; sleep 1
         xdotool key Return
         sleep 10
     }
