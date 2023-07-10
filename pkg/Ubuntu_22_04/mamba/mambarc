@@ -1,0 +1,4 @@
+channels:
+  - defaults
+  - conda-forge
+always_yes: true
