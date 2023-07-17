@@ -95,5 +95,5 @@ fi
 
 git_mychanges(){
     [ "$(git status -s | wc -l)" != 0 ] && { git status; echo "commit?"; read }
-    Git log_oneline_format | head -n20 | grep Pablo | awk '{print $1}' | tac | nl | awk -v dirname=$(basename $PWD) '{print "Git diff_step "$2" >> ../"dirname"_"$1".patch"}'
+    Git log_oneline_format | head -n20 | grep -i pablo | awk '{print $1}' | tac | nl | awk -v dirname=$(basename $PWD) '{print "Git diff_step "$2" >> ../"dirname"_"$1".patch"}'
 }
