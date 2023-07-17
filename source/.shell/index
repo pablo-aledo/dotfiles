@@ -143,7 +143,7 @@ index_tlsh(){
 index_canaries(){
     cd ~/servers/index/
     echo "\e[34m canaries \e[0m"
-    cat files | grep '\/canary\(\.\|\)[a-z]*$' | while read line
+    cat files | grep '/canary\(\.\|\)[a-z]*$' | while read line
     do
         md5=$(cat "$line" | sed 's/ /\n/g' | sort | uniq | md5sum | awk '{print $1}')
         echo $line $md5
