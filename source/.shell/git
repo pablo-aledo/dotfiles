@@ -92,3 +92,7 @@ then
 fi
 ' --tag-name-filter cat -- --branches --tags
 }
+
+git_mychanges(){
+    Git log_oneline_format | head -n20 | grep Pablo | awk '{print $1}' | tac | nl | awk -v dirname=$(basename $PWD) '{print "Git diff_step "$2" >> ../"dirname"_"$1".patch"}'
+}
