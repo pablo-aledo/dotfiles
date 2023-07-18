@@ -25,7 +25,10 @@ alias watch='watch '
 alias cdate='date +%y%m%d-%H%M%S'
 alias wcat='sed "s/^\(.\{$(tput cols)\}\).*/\1/g"'
 f(){ echo find -iname "'*$1*'" | bash ; }
-F(){ grep -Rin "$1" ; }
+F(){
+    [ $# = 1 ] && grep -Rin "$1" ;
+    [ $# = 2 ] && grep -Rin "$1" $( find -iname "*.$2" );
+}
 FF(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' ; }
 FV(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' | xargs vim "+/$1" ; reset ; }
 wdfh(){
