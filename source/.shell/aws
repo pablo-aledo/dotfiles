@@ -268,8 +268,8 @@ aws_bridge_server_check(){
 	# check that I have a Password 
 	[ "`sudo cat /etc/shadow | grep $(whoami)`" ] || echo -e '\e[31m I dont have a password to access \e[0m'
 	# check that aws_bridge is correctly configured
-	[ `md5sum /tmp/aws_config | cut -d" " -f1` = "9b00f510d914359856e9ebad3605aa67" ] || echo -e '\e[31m aws_bridge is not correctly configured \e[0m'
-	[ `md5sum /tmp/default_kp.pem | cut -d" " -f1` = "4101a1d6f8ac3f31ff503e5a2cab5e7f" ] || echo -e '\e[31m aws_bridge is not correctly configured \e[0m'
+	[ `md5sum /tmp/aws_config | cut -d" " -f1` = `md5sum $AWS_FOLDER/server/aws_config | cut -d" " -f1` ] || echo -e '\e[31m aws_bridge is not correctly configured \e[0m'
+	[ `md5sum /tmp/default_kp.pem | cut -d" " -f1` = `md5sum $AWS_FOLDER/server/default_kp.pem | cut -d" " -f1` ] || echo -e '\e[31m aws_bridge is not correctly configured \e[0m'
 	# check that I'm not using vpn
 	[ -z "`ifconfig | grep tun0`" ] || echo -e '\e[31m You are using a VPN session \e[0m'
 	aws_bridge_server $*
