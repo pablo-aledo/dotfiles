@@ -29,8 +29,14 @@ F(){
     [ $# = 1 ] && grep -Rin "$1" ;
     [ $# = 2 ] && grep -Rin "$1" $( find -iname "*.$2" );
 }
-FF(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' ; }
-FV(){ grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' | xargs vim "+/$1" ; reset ; }
+FF(){
+    [ $# = 1 ] && grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' ;
+    [ $# = 2 ] && grep -Rin "$1" $( find -iname "*.$2" ) | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' ;
+}
+FV(){
+    [ $# = 1 ] && grep -Rin "$1" | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' | xargs vim "+/$1" ; reset ;
+    [ $# = 2 ] && grep -Rin "$1" $( find -iname "*.$2" ) | cut -d':' -f1 | sort | uniq | grep -v 'Binary file' | xargs vim "+/$1" ; reset ;
+}
 wdfh(){
     [ $# -eq 0 ] && watch -n1 "df -h"
     [ $# -eq 1 ] && watch -n1 "df -h | grep $1"
