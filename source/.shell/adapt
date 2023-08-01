@@ -730,3 +730,14 @@ sudo snap install slack
 pkg install zoom
 
 }
+
+adapt_mouse(){
+xbindkeys -d > ~/.xbindkeysrc
+cat << EOF >> ~/.xbindkeys
+"xdotool key j"
+    b:8
+"xdotool key k"
+    b:9
+EOF
+xbindkeys
+}
