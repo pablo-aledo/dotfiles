@@ -21,7 +21,7 @@ pylint-json2html==0.3.0
 # https://pypi.org/project/pytest-html-reporter/
 pytest-html-reporter==0.2.6
 
-poetry==1.1.6
+poetry==1.1.9
 black==21.5b2
 isort==5.8.0
 flake8==3.9.2
