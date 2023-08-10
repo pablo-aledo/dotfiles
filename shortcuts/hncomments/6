@@ -1,0 +1,33 @@
+source ~/.dotfiles/source/.shell/bak
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+export DISPLAY=:1
+
+xdotool key 1 && sleep 40
+
+for a in `seq 1 $(cat /tmp/skip)`
+do
+    xdotool key j
+    sleep 1
+done
+
+sleep 10
+
+for a in $(seq 1 $(cat /tmp/count))
+do
+    xdotool key 2 && sleep 1
+
+    [ -e "/tmp/link" ] && rm -rf /tmp/link
+    xdotool key 3 ; shcw hncomments.3
+
+    xdotool key 5 && sleep 1
+
+    xdotool key j && sleep 1
+done
+
+xdotool key 0
+
+cd ~/Descargas/;
+bak report /tmp/s2link /tmp/s2files /tmp/s2files2 /tmp/s2link_extra
+\rm -f /tmp/s2link_extra

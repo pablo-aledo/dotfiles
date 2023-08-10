@@ -1,0 +1,11 @@
+export DISPLAY=:1
+
+xdotool mousemove 380 250
+xdotool click 1
+xdotool click 1
+xdotool click 1
+sleep 1
+xdotool key Ctrl+c
+sleep 1
+
+xclip -sel clip -o > /tmp/title
