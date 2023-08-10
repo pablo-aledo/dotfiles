@@ -1,7 +1,7 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
-mouseover -1 25000 ~/.dotfiles/shortcuts/images/comments.png
+mouseover -1 25000 ~/.dotfiles/shortcuts/images/comments{,2}.png
 
 xdotool click 3
 sleep 1
