@@ -17,6 +17,14 @@ do
 done
 rm -fr /tmp/lock4dl
 
+if [ -e /tmp/avl_progress ]
+then
+    # dunst
+    downloaded=$(cat /tmp/s2files | grep Title | wc -l)
+    to_download=$(cat /tmp/count)
+    notify-send "$downloaded / $to_download"
+fi
+
 [ -e /tmp/avl_protect_space ] && [ $(df -h -BG | grep '/$' | awk '{print $4}' | sed 's/G//g') -lt 5 ] && touch /tmp/lockspace
 while true
 do
