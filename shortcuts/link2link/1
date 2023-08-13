@@ -2,3 +2,5 @@ export DISPLAY=:1
 
 killall chrome chromium google-chrome google-chrome-stable
 xrandr --output VNC-0 --mode 1280x800
+
+rm -fr /tmp/link2link /tmp/s2link2
