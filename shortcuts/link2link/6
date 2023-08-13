@@ -1,0 +1,23 @@
+source ~/.dotfiles/source/.shell/bak
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+export DISPLAY=:1
+
+xdotool key 1 && sleep 1
+
+tac /tmp/s2link | while read line
+do
+    echo $line > /tmp/link2link_line
+
+    xdotool key 2 && sleep 10
+    xdotool key 4 && sleep 1; shcw link2link.4; sleep 5
+    xdotool key Ctrl+w
+
+    echo "$(cat /tmp/link1) -> $(cat /tmp/link2)" >> /tmp/link2link
+    echo "$(cat /tmp/subject) -> $(cat /tmp/link2)" >> /tmp/s2link2
+
+done
+
+xdotool key 0
+

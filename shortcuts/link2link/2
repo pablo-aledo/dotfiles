@@ -1,0 +1,10 @@
+export DISPLAY=:1
+
+link1=$( cat /tmp/link2link_line | sed 's/\(.*\) -> \(.*\)/\2/g' )
+subject=$( cat /tmp/link2link_line | sed 's/\(.*\) -> \(.*\)/\1/g' )
+
+echo $subject > /tmp/subject
+
+google-chrome "$link1" >/dev/null 2>/dev/null &
+sleep 3
+

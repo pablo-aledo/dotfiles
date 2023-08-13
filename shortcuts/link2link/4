@@ -1,0 +1,29 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+while true
+do
+
+    # mouseover -z 1 10000 ~/.dotfiles/shortcuts/images/human.png && \
+    #     xdotool mousemove_relative -- -70 0 && \
+    #     xdotool click 1
+
+    xdotool mousemove 0 0 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl.png && break
+    sleep 5
+done
+
+if [ -e /tmp/avl_progress ]
+then
+    # dunst
+    downloaded=$(cat /tmp/link2link | wc -l)
+    to_download=$(cat /tmp/count)
+    notify-send "$downloaded / $to_download"
+fi
+
+xdotool key Ctrl+l
+xdotool key Ctrl+c
+sleep 1
+
+link2=$(xclip -sel clip -o)
+echo $link2 > /tmp/link2
+
