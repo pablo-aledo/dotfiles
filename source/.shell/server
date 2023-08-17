@@ -1196,11 +1196,13 @@ night_avh(){
 night(){
     false && touch /tmp/pause && sleep $(( 60 * 10 ))
     false && night_pdf
+    false && rm -fr /tmp/avl_link2link
+    false && rm -fr /tmp/avl_progress
     \true && touch /tmp/avl_forward
     \true && touch /tmp/avl_protect_space
     false && touch /tmp/avl_edit_notify
     \true && touch /tmp/avl_notify
-    \true && avhloop 
+    \true && avhloop
     false && rm -fr /tmp/pause
     false && date
 }
