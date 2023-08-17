@@ -11,7 +11,12 @@ do
 
     xdotool key 1 && sleep 1
     xdotool key 2 && sleep 10
-    xdotool key 3 && sleep 1; shcw avl.3; sleep 5
+    if [ -e /tmp/avl_link2link ]
+    then
+        xdotool key 4 && sleep 1; shcw avl.4; sleep 5
+    else
+        xdotool key 3 && sleep 1; shcw avl.3; sleep 5
+    fi
 
     xdotool key 8 && sleep 1; shcw avl.8; sleep 5
 
