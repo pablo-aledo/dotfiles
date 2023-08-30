@@ -23,6 +23,7 @@ Git(){
         (branch_to_file) \git log --cc $(git_branch_base)...HEAD ;;
         (branch_to_file_2) \git format-patch --stdout $(git_branch_base) ;; # consume with git am
         (branch_create) \git checkout -b $1 ;;
+        (branch_delete) \git branch -D $1 ;;
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
         (branch_get_file) mkdir -p "$(dirname $2)"; \git show $1:$2 > $2 ;;
@@ -53,6 +54,7 @@ Git(){
         (clone_recursive) \git clone --recurse-submodules $* ;;
         (clone_single_branch) \git clone --branch $1 --single-branch $* ;;
         (clean) \git clean -df ;;
+        (deep_clean) \git add .; \git commit -am "."; find -iname .gitignore -delete; \git clean -df; \git checkout .; \git reset HEAD^ ;;
         (init) \git init .; git add .; git commit -am "initial commit" ;;
         (list_excluded) \git ls-files -i -c --exclude-from=.gitignore ;;
         (interactive_checkout) \git checkout -p . ;;
