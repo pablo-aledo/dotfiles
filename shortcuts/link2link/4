@@ -1,6 +1,8 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
+rm -fr /tmp/link2
+
 while true
 do
 
