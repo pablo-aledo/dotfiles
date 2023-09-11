@@ -23,3 +23,7 @@ procdump_3(){
     done
 }
 
+procdump_4(){
+    sudo gdb --batch --pid $1 -ex "gcore process.dump"
+}
+
