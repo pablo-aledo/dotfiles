@@ -1291,6 +1291,14 @@ tmux_night_session(){
 
 server.test(){
 
+
+    if [ "$(md5sum /usr/share/noVNC/vnc.html /usr/share/noVNC/utils/websockify/websockify.py /usr/bin/vncserver | md5sum | awk '{print $1}')" = "84f4effc2e4f632c2230109aebd04f99" ]
+    then
+        echo '\e[32m NoVNC ok \e[0m'
+    else
+        echo '\e[31m NoVNC incorrectly installed \e[0m'
+    fi
+
     if [ "$( basename "$(which mutt)")" = "mutt" ]
     then
         echo '\e[32m mutt available \e[0m'
