@@ -14187,3 +14187,18 @@ snippet zerror.dem
 	pause -1 "Hit return to continue"
 	reset
 
+snippet gantt.dem
+	$data << EOD
+	0 0 1
+	1 1 2
+	2 2 5
+	3 1 2
+	3 4 5
+	EOD
+
+	unset key
+	set offsets 0.25,0.25,0.5-myBoxWidth/2.,0.5
+
+	myBoxWidth = 0.8
+
+	plot $data using (0.5*($2+$3)):($1):(0.5*($3-$2)):(0.5*myBoxWidth) with boxxy fill solid 0.5 border 2 lt 5 lw 2
