@@ -13,6 +13,27 @@ ctags_index(){
     done
 }
 
+ctags_index_groovy(){
+    ctags \
+        --langdef=groovy \
+        --langmap=groovy:.groovy \
+        --regex-groovy='/^[ \t]*[(private|public|protected) ( \t)]*def[ \t]+([A-Za-z0-9_]+)[ \t()=]*\{/\1/f,function,functions/' \
+        --regex-groovy='/^[ \t]*private def[ \t]+([A-Za-z0-9_]+)[ \t]*/\1/v,private,private variables/' \
+        --regex-groovy='/^[ \t]*public def[ \t]+([A-Za-z0-9_]+)[ \t]*/\1/u,public,public variables/' \
+        --regex-groovy='/^[ \t]*[abstract ( \t)]*[(private|public) ( \t)]*class[ \t]+([A-Za-z0-9_]+)[ \t]*/\1/c,class,classes/' \
+        --regex-groovy='/^[ \t]*[abstract ( \t)]*[(private|public) ( \t)]*enum[ \t]+([A-Za-z0-9_]+)[ \t]*/\1/c,class,classes/' \
+        -R --fields=+zln
+    cat tags | grep -F $1 | while read line
+    do
+        ini=$(echo $line | sed 's/.*line:\([^ \t]*\)[ \t].*/\1/g')
+        file=$(echo $line | awk '{print $2}')
+        end=$(awk 'NR > first && /^}$/ { print NR; exit }' first=$ini $file)
+        # end=$(awk -v first=$ini 'NR>=first && /{/              {c++}
+        #                          NR>=first && /}/ && c && !--c {print NR; exit}' $file)
+        echo "${line}\tend:${end}"
+    done
+}
+
 ctags_extract(){
 	cat tags | grep -F $1 | while read line
  	do
