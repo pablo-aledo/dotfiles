@@ -1,4 +1,4 @@
-sudo wget https://github.com/seqeralabs/wavelit/releases/download/v0.7.0/wavelit-0.7.0-linux-x86_64 -o /usr/bin/wavelit
+sudo wget https://github.com/seqeralabs/wavelit/releases/download/v0.7.0/wavelit-0.7.0-linux-x86_64 -O /usr/bin/wavelit
 sudo chmod +x /usr/bin/wavelit
 
 Wavelit(){
