@@ -63,6 +63,20 @@ then
     sleep 5
 fi
 
+xdotool key Home
+
+xdotool key Ctrl+f
+sleep 1
+xdotool type 'available for download'
+xdotool key Return
+sleep 1
+xdotool key Escape
+sleep 1
+if $( mouseover 1 10000 ~/.dotfiles/shortcuts/images/copyright.png )
+then
+    cat /tmp/1lib_line >> /tmp/copyright_zlib
+fi
+
 count=0
 while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
 do
