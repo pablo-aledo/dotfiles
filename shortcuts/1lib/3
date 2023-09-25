@@ -1,7 +1,19 @@
 source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
 export DISPLAY=:1
 
-touch /tmp/lock
+sleep 10
+
+
+if $( mouseover 1 10000 ~/.dotfiles/shortcuts/images/downloaded.png )
+then
+    #yfind=`cat /tmp/coordinates | head -n1 | cut -d',' -f2 | cut -d' ' -f1`
+    #if [ $yfind -lt 500 ]
+    #then
+        cat /tmp/1lib_line >> /tmp/already_downloaded_zlib
+        #return
+    #fi
+fi
 
 xdotool key Ctrl+f
 sleep 1
@@ -10,24 +22,46 @@ xdotool key Return
 sleep 1
 xdotool key Escape
 sleep 1
+xdotool key Down
+xdotool key Down
+xdotool key Down
+xdotool key Down
+sleep 1
+if $(mouseover 3 10000 ~/.dotfiles/shortcuts/images/1libdl.png)
+then
+    xdotool click 1
+    sleep 5
+    xdotool key 4; shcw 1lib.4
+    sleep 5
+fi
+
+xdotool key Home
+
+xdotool key Ctrl+f
+sleep 1
+xdotool type 'Read online'
 xdotool key Return
-sleep 5
-
-#if $( mouseover 1 100000 ~/.dotfiles/shortcuts/images/zlib_wronghash.png )
-#then
-#    xdotool key Ctrl+f
-#    sleep 1
-#    xdotool type 'Download ('
-#    xdotool key Return
-#    sleep 1
-#    xdotool key Escape
-#    sleep 1
-#    xdotool key Return
-#    sleep 5
-#fi
-
-xdotool key 4
-sleep 5
+sleep 1
+xdotool key Escape
+sleep 1
+xdotool key Down
+xdotool key Down
+xdotool key Down
+xdotool key Down
+sleep 1
+if $( mouseover 3 10000 ~/.dotfiles/shortcuts/images/readonline.png )
+then
+    xdotool mousemove_relative 90 0
+    xdotool click 1
+    sleep 1
+    xdotool key Down
+    xdotool key Down
+    sleep 1
+    xdotool key Return
+    sleep 1
+    xdotool key 4; shcw 1lib.4
+    sleep 5
+fi
 
 count=0
 while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
@@ -60,4 +94,3 @@ done
 xdotool key ctrl+w
 sleep 5
 
-rm -rf /tmp/lock
