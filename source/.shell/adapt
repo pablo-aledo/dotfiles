@@ -741,3 +741,7 @@ cat << EOF >> ~/.xbindkeys
 EOF
 xbindkeys
 }
+
+adapt_apt_server_noconfirm(){
+    sudo sed -i "s/#\$nrconf{restart} = 'i';/\$nrconf{restart} = 'a';/g" /etc/needrestart/needrestart.conf
+}
