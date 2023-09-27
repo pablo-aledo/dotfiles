@@ -1,0 +1,9 @@
+go build main.go
+
+./main
+wrk -d 30s 'http://localhost:8080'
+
+go tool pprof -raw -output=cpu.txt 'http://localhost:8080/debug/pprof/profile?seconds=20'
+go tool pprof -http=: 'http://localhost:8080/debug/pprof/profile?seconds=20'
+
+./stackcollapse-go.pl cpu.txt | ./flamegraph.pl > flame.svg
