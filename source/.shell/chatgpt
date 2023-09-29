@@ -54,3 +54,56 @@ chatgpt_multiquery(){
         chatgpt_get   "$queryfile"
     done
 }
+
+chatgpt_query () {
+	echo "\e[34m Query \e[0m $1"
+	cat input/"$1" | grep --color --color --color -v '^$' | grep --color --color --color -v '^[ \t]*$' | while read line
+	do
+		tmux send-keys -t .1 "$line"
+	done
+	tmux send-keys -t .1 "Enter"
+}
+
+chatgpt_wait () {
+	sleep 1
+	while [ "$(tmux ca -pt .1 | grep -v '^$' | tail -n1)" != 'You:' ]
+	do
+		sleep 1
+	done
+}
+
+chatgpt_get () {
+	echo "\e[34m Get \e[0m $1"
+	(
+		tmux ca -pt .1 | tac | while read line
+		do
+			[ "$(echo $line | grep '^AI:')" != "" ] && {
+				echo $line
+				break
+			} || echo $line
+		done | tac | grep --color --color --color --color -v 'You:'
+	) > output/"$1"
+}
+
+chatgpt_process_output(){
+	echo "\e[34m Process \e[0m $1"
+    mkdir -p output_postprocess
+    cat output/$1 \
+     | sed \
+        -e 's/^AI: //g' \
+        -e 's/¿Puedo ayudarte con algo más?//g' \
+        -e 's/¿Puedo ayudarte con alguna otra pregunta?//g' \
+        -e 's/¿Puedo ayudarte en algo más?//g' \
+        -e 's/¿Algo más en lo que pueda ayudarte?//g' \
+        -e 's/¿Hay algo más en lo que pueda ayudarte?//g' \
+        -e 's/^Gracias.*//g' \
+        -e 's/^Ok.$//g' \
+    | sed \
+        -e 'N;/^\n$/D;P;D;' \
+    | awk '
+        {print}
+    ' \
+    > output_postprocess/$1
+    echo '=====' >> output_postprocess/"$1"
+}
+
