@@ -160,3 +160,8 @@ lgrbar(){
 nougatbar(){
     barcmd 'tmux ca -pt .1 | grep % | tail -n1 | sed "s/^ *\([0-9]*\)%.*/\1/g"' 100 $*
 }
+
+chatgptbar(){
+    barcmd 'ls output | wc -l' $(ls input | wc -l)
+}
+
