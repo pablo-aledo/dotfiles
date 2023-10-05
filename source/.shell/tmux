@@ -51,3 +51,12 @@ tm_compare(){
     tmux send-keys -t clean:2.2 ranger Space \"$target2\" Enter
 }
 
+tm_sanitize_bash(){
+    tmux send-keys -t .1 'script /dev/null -c bash' 'Enter'
+    tmux send-keys -t .1 'C-z'
+    tmux send-keys -t .1 'stty raw -echo; fg' 'Enter'
+    tmux send-keys -t .1 'reset xterm' 'Enter'
+    tmux send-keys -t .1 'export TERM=xterm' 'Enter'
+    tmux send-keys -t .1 'stty size' 'Enter'
+    tmux send-keys -t .1 'stty rows 51 columns 189' 'Enter'
+}
