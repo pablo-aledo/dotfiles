@@ -62,6 +62,6 @@ tm_sanitize_bash(){
     tmux send-keys -t .1 'export TERM=xterm' 'Enter'
     tmux send-keys -t .1 'export SHELL=/bin/bash' 'Enter'
     tmux send-keys -t .1 'stty size' 'Enter'
-    tmux send-keys -t .1 'stty rows 20 columns 200' 'Enter'
+    tmux send-keys -t .1 'stty rows 20 columns ' $(stty size | cut -d" " -f2) 'Enter'
 }
 
