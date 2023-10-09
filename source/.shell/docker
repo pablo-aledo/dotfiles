@@ -1,6 +1,7 @@
 DOCKER_REPO_PREFIX=jess
 alias docker='sudo -E docker'
 alias dive="docker run -ti --rm  -v /var/run/docker.sock:/var/run/docker.sock wagoodman/dive"
+alias runlike="docker run --rm -v /var/run/docker.sock:/var/run/docker.sock assaflavie/runlike"
 
 docker_clean(){
 
