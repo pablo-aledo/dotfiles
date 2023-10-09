@@ -111,8 +111,10 @@ chatgpt_restart () {
 	tmux send-keys -t .1 '^c'
 	tmux send-keys -t .1 '^c'
 	tmux send-keys -t .2 '^c'
-	tmux send-keys -t .1 'Up'
-	tmux send-keys -t .2 'Up'
+	#tmux send-keys -t .1 'Up'
+	#tmux send-keys -t .2 'Up'
+	tmux send-keys -t .1 'chatgpt-cli'
+	tmux send-keys -t .2 'chatgpt_multiquery'
 	tmux send-keys -t .1 'Enter'
 	tmux send-keys -t .2 'Enter'
 }
