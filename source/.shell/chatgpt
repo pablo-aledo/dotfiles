@@ -59,7 +59,7 @@ chatgpt_query () {
 	echo "\e[34m Query \e[0m $1"
 	cat input/"$1" | grep --color --color --color -v '^$' | grep --color --color --color -v '^[ \t]*$' | while read line
 	do
-		tmux send-keys -t .1 "$line"
+		tmux send-keys -t .1 -- "$line"
 	done
 	tmux send-keys -t .1 "Enter"
 }
