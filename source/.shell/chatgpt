@@ -44,22 +44,31 @@ obsidian_addlinks(){
     cd $OLDPWD
 }
 
-chatgpt_multiquery(){
-    chatgpt_query prompt
-    chatgpt_wait
-    comm -13 <(cd output; ls | sort) <(cd input; ls | sort) | grep -v prompt | while read queryfile
-    do
+chatgpt_multiquery () {
+	chatgpt_query prompt
+	chatgpt_wait
+	comm -13 <(cd output; ls | sort) <(cd input; ls | sort) | grep -v prompt | while read queryfile
+	do
+        #echo >> count/"$queryfile"
         chatgpt_query "$queryfile"
         chatgpt_wait
-        chatgpt_get   "$queryfile"
-    done
+	    chatgpt_get "$queryfile"
+        #chatgpt_process_output "$queryfile"
+        #diff=$(( $(ls -l input/$queryfile | awk '{print $5}') - $(ls -l output/$queryfile | awk '{print $5}') ))
+        #if [ "$(echo $diff | sed 's/^-//g')" -gt 30 ]
+        #then
+            #[ $(cat count/"$queryfile" | wc -l) -lt 3 ] && rm -f output/$queryfile output_postprocess/$queryfile
+            #tmux send-keys -t .4 'chatgpt_restart' 'Enter'
+        #fi
+	done
 }
 
 chatgpt_query () {
 	echo "\e[34m Query \e[0m $1"
-	cat input/"$1" | grep --color --color --color -v '^$' | grep --color --color --color -v '^[ \t]*$' | while read line
+	cat input/"$1" | grep -v '^$' | grep -v '^[ \t]*$' | while read line
 	do
 		tmux send-keys -t .1 -- "$line"
+		# tmux send-keys -t .1 -- @
 	done
 	tmux send-keys -t .1 "Enter"
 }
@@ -81,7 +90,7 @@ chatgpt_get () {
 				echo $line
 				break
 			} || echo $line
-		done | tac | grep --color --color --color --color -v 'You:'
+		done | tac | grep -v 'You:'
 	) > output/"$1"
 }
 
@@ -104,17 +113,19 @@ chatgpt_process_output(){
         {print}
     ' \
     > output_postprocess/$1
-    echo '=====' >> output_postprocess/"$1"
+    echo '-----' >> output_postprocess/"$1"
 }
 
 chatgpt_restart () {
-	tmux send-keys -t .1 '^c'
-	tmux send-keys -t .1 '^c'
 	tmux send-keys -t .2 '^c'
+    #sleep .5
+	tmux send-keys -t .1 '^c'
+	tmux send-keys -t .1 '^c'
 	#tmux send-keys -t .1 'Up'
-	#tmux send-keys -t .2 'Up'
 	tmux send-keys -t .1 'chatgpt-cli'
-	tmux send-keys -t .2 'chatgpt_multiquery'
 	tmux send-keys -t .1 'Enter'
+    #sleep .5
+	#tmux send-keys -t .2 'Up'
+	tmux send-keys -t .2 'chatgpt_multiquery'
 	tmux send-keys -t .2 'Enter'
 }
