@@ -766,6 +766,8 @@ case $1 in
 (hugin)                  docker run --rm -it -v $(pwd):/source schickling/hugin ;;
 (jekyll)                 docker run --rm -it -p 4000:4000 -v $(pwd):/source schickling/jekyll ;;
 (nodejs)                 docker run --rm -it -v $(pwd):/source schickling/nodejs ;;
+(obs)                    distrobox create --image ghcr.io/ublue-os/obs-studio-portable:latest --name obs --pull
+                         distrobox enter --name obs -- /opt/obs-portable/obs-portable ;;
 (octave)                 docker run --rm -it -v $(pwd):/source schickling/octave ;;
 (opencv2)                docker run --rm -it -v $(pwd):/source schickling/opencv ;;
 (openldap)               sudo docker run -it --rm -u $(id -u) -v $PWD:/workdir -w /workdir openldap ;;
