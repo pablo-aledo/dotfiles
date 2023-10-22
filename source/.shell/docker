@@ -792,6 +792,7 @@ case $1 in
                            -v ~/sonarr/tvseries:/tv \
                            -v ~/sonarr/downloadclient-downloads:/downloads \
                            linuxserver/sonarr ;;
+(stitch)                 docker run --rm -v $PWD:/data openstitching/stitch:latest * ;;
 (syslog)                 docker run -it -p 514:514/udp -p 601:601 --name syslog-ng balabit/syslog-ng:latest -edv ;;
 (radarr)                 docker run \
                            -e PUID=1000 \
