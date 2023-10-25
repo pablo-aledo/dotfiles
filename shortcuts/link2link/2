@@ -9,3 +9,6 @@ echo $link1 > /tmp/link1
 google-chrome "$link1" >/dev/null 2>/dev/null &
 sleep 3
 
+xdotool key Ctrl+f
+xdotool type 'download from'
+xdotool key Escape
