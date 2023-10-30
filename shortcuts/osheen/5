@@ -1,5 +1,7 @@
 export DISPLAY=:1
 
+sleep 15
+
 xdotool key Ctrl+w
 
 ls -lh ~/Descargas/ | sed 's/^[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([^ ]*\) *[^ ]* *[^ ]* *[^ ]* *\(.*\)/\1 \2/g' > /tmp/after
