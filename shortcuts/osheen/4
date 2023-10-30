@@ -1,0 +1,32 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/gdrive_download.png
+
+xdotool click 1
+
+sleep 10
+
+xdotool key Alt+f
+
+xdotool key Ctrl+a
+xdotool key Ctrl+c
+sleep 1
+
+file=$(xclip -sel clip -o | sed 's/ ([1-3])\././g')
+echo $file > /tmp/file
+
+if [ "$file" != "" ] && ( [ -e ~"/Descargas/$file" ] || [ -e ~"/Descargas_aux/$file" ] )
+then
+    xdotool key Escape
+
+    echo "Title: $(cat /tmp/title)" >> /tmp/already_downloaded
+    ls -lh ~/Descargas/ | sed 's/^[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([^ ]*\) *[^ ]* *[^ ]* *[^ ]* *\(.*\)/\1 \2/g' | grep -F $file >> /tmp/already_downloaded
+    ls -lh ~/Descargas_aux/ | sed 's/^[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([^ ]*\) *[^ ]* *[^ ]* *[^ ]* *\(.*\)/\1 \2/g' | grep -F $file >> /tmp/already_downloaded
+    [ -e ~/learning/metadata/"$file"/date ] && cat ~/learning/metadata/"$file"/date >> /tmp/already_downloaded
+    echo "" >> /tmp/already_downloaded
+
+else
+    xdotool key Return
+fi
+

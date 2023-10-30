@@ -1,0 +1,19 @@
+source ~/.dotfiles/source/.shell/bak
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+export DISPLAY=:1
+
+cat /tmp/s2link | while read line
+do
+    echo $line > /tmp/osheen_line
+
+    xdotool key 1; sleep 1; shcw osheen.1
+    xdotool key 2; sleep 1; shcw osheen.2
+    xdotool key 3; sleep 1; shcw osheen.3
+    xdotool key 4; sleep 1; shcw osheen.4
+    xdotool key 5; sleep 1; shcw osheen.5
+
+done
+
+xdotool key 0

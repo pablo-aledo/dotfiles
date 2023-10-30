@@ -1,0 +1,15 @@
+source ~/.dotfiles/source/.shell/xdotool
+export DISPLAY=:1
+
+sleep 10
+
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/osheen_yt.png; xdotool click 1; sleep 1; xdotool key Ctrl+w
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/osheen_fb.png; xdotool click 1; sleep 1; xdotool key Ctrl+w
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/osheen_ig.png; xdotool click 1; sleep 1; xdotool key Ctrl+w
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/osheen_dc.png; xdotool click 1; sleep 1; xdotool key Ctrl+w
+
+xdotool key End
+
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/osheen_fl.png; xdotool click 1
+
+
