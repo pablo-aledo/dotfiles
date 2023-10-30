@@ -3,6 +3,14 @@ Git(){
     shift
     case $command in
 
+        (bisect_start) \git bisect start ;;
+        (bisect_good) \git bisect good $* ;;
+        (bisect_bad) \git bisect bad $* ;;
+        (bisect_reset) \git bisect reset ;;
+        (bisect_skip) \git bisect skip $* ;;
+        (bisect_run) \git bisect run $* ;;
+        (bisect_log) \git bisect log ;;
+
         (log_graph) \git log --oneline --graph ;;
         (log_oneline) \git log --oneline --graph | head -n $(stty size | awk '{print $1 - 5}');;
         (log_follow) \git log --follow $* ;;
