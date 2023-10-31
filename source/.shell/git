@@ -75,6 +75,11 @@ Git(){
         (cherrypick_no_commit) \git cherry-pick --no-commit $* ;;
         (undo_last_commit) \git reset --soft HEAD^;;
         (revert_multiple) \git revert --no-commit HEAD~3.. ;;
+        (backup) \git clone --mirror $1/$2.git $2.git
+                 cd $2.git
+                 \git bundle create ../$2.bundle --all
+                 cd ..
+                 ;;
         (*) \git $command $*;;
     esac
 }
