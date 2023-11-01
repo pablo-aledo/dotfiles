@@ -1,0 +1,7 @@
+hn_id2titles(){
+    comm -13 <(cat id2title | sed 's/ -> .*//g' | sort -u) <(cat $1 | sort -u) | while read line
+    do
+        echo "$line" "->" "$(wget $line -qO - | grep '<title>' | sed -e 's/^[^>]*>//g' -e 's/ | Hacker News.*//g')"
+        sleep 5
+    done | tee -a id2title
+}
