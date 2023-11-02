@@ -1,0 +1,11 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+rm -fr /tmp/checkstar_{enabled,disabled}
+mouseover 1 100 ~/.dotfiles/shortcuts/images/star_enabled_{1,2}.png && touch /tmp/checkstar_enabled
+mouseover 1 100 ~/.dotfiles/shortcuts/images/star_disabled_{1,2}.png && touch /tmp/checkstar_disabled
+
+[ ! -e /tmp/checkstar_enabled -a ! -e /tmp/checkstar_disabled ] && { echo "$(cat /tmp/title)" "->" "none" >> /tmp/checkstar; return }
+[ -e /tmp/checkstar_enabled -a -e /tmp/checkstar_disabled ] && { echo "$(cat /tmp/title)" "->" "both" >> /tmp/checkstar; return }
+[ -e /tmp/checkstar_enabled ] && { echo "$(cat /tmp/title)" "->" "enabled" >> /tmp/checkstar; return }
+[ -e /tmp/checkstar_disabled ] && { echo "$(cat /tmp/title)" "->" "disabled" >> /tmp/checkstar; return }
