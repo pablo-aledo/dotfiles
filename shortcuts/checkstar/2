@@ -1,4 +1,7 @@
 export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+mouseover -1 1000 ~/.dotfiles/shortcuts/images/gmail_lens.png
 
 xdotool type '/'
 cat /tmp/title | xclip -sel clip -i
@@ -8,4 +11,3 @@ xdotool type ' subject: "'
 xdotool key Ctrl+v
 xdotool type '"'
 xdotool key Return
-
