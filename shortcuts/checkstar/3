@@ -3,8 +3,8 @@ source ~/.dotfiles/source/.shell/xdotool
 
 xdotool mousemove 0 0
 rm -fr /tmp/checkstar_{enabled,disabled}
-mouseover 1 100 ~/.dotfiles/shortcuts/images/star_enabled_{1,2,3}.png && touch /tmp/checkstar_enabled
-mouseover 1 100 ~/.dotfiles/shortcuts/images/star_disabled_{1,2}.png && touch /tmp/checkstar_disabled
+mouseover 2 100 ~/.dotfiles/shortcuts/images/star_enabled_{1,2,3}.png && touch /tmp/checkstar_enabled
+mouseover 2 100 ~/.dotfiles/shortcuts/images/star_disabled_{1,2}.png && touch /tmp/checkstar_disabled
 
 [ ! -e /tmp/checkstar_enabled -a ! -e /tmp/checkstar_disabled ] && { echo "$(cat /tmp/title)" "->" "none" >> /tmp/checkstar; return }
 [ -e /tmp/checkstar_enabled -a -e /tmp/checkstar_disabled ] && { echo "$(cat /tmp/title)" "->" "both" >> /tmp/checkstar; return }
