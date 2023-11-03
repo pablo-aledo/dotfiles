@@ -5,3 +5,11 @@ hn_id2titles(){
         sleep 5
     done | grep -v ' -> $' | tee -a id2title
 }
+
+hn_sync(){
+    #rm -fr /tmp/{titles_processed,titles_not_label_select,titles_not_label_select_is_read,titles_not_label_select_not_is_read}
+    comm -12 <(sort -u /tmp/titles) <(sort -u /tmp/titles_label_select) > /tmp/titles_processed
+    comm -12 <(sort -u /tmp/titles) <(sort -u /tmp/titles_not_label_select) > /tmp/titles_not_label_select
+    comm -12 <(sort -u /tmp/titles_not_label_select) <(sort -u /tmp/titles_is_read) > /tmp/titles_not_label_select_is_read
+    comm -12 <(sort -u /tmp/titles_not_label_select) <(sort -u /tmp/titles_not_is_read) > /tmp/titles_not_label_select_not_is_read
+}
