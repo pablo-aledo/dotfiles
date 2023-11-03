@@ -9,7 +9,16 @@ do
 
     xdotool key 2; sleep 1; shcw checkstar.2
     xdotool key 3; sleep 1; shcw checkstar.3
-    xdotool key 4; sleep 1; shcw checkstar.4
+
+    if [ -e /tmp/checkstar_wait ]
+    then
+        touch /tmp/lock
+        while [ -e /tmp/lock ]
+        do
+            sleep 1
+        done
+    fi
+
 done
 
 xdotool key 0
