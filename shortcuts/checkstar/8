@@ -1,0 +1,8 @@
+export DISPLAY=:1
+
+xdotool key 7; sleep 10
+xdotool key Return; sleep 1
+xdotool key l; sleep 1
+xdotool type select
+xdotool key Return; sleep 1
+xdotool key U; sleep 1;
