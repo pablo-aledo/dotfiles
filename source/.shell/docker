@@ -566,6 +566,12 @@ case $1 in
 (notify-osd)             docker run -d -v /etc/machine-id:/etc/machine-id:ro -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v /var/run/dbus:/var/run/dbus -v /var/run/user/$(id -u):/var/run/user/$(id -u) $(env | cut -d= -f1 | awk '{print "-e", $1}') -e DISPLAY=unix$DISPLAY -e DBUS_SESSION_BUS_ADDRESS="unix:path=/var/run/user/1000/bus" -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro -u $(whoami) -w "$HOME" -v $HOME/.Xauthority:$HOME/.Xauthority --name notify-osd ${DOCKER_REPO_PREFIX}/notify-osd ;;
 (notify_send)            local args=${*:2}
                          docker exec -i notify_osd notify-send "$1" "${args}" ;;
+(ollama)                 docker run -d -v ollama:/root/.ollama -p 11434:11434 --name ollama ollama/ollama
+                         docker exec -it ollama ollama run llama2
+                         ;;
+(ollama-gpu)             docker run -d --gpus=all -v ollama:/root/.ollama -p 11434:11434 --name ollama ollama/ollama
+                         docker exec -it ollama ollama run llama2
+                         ;;
 (openshot)               docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY openshot ;;
 (openpose-cpu)           docker run -v`pwd`:/data -it openpose-cpu -display 0 -video /data/${2} -write_video /data/${2}.openpose.avi ;;
 (oauth2_proxy)           docker run -it --rm --name oauth-proxy a5huynh/oauth2_proxy \
