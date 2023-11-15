@@ -549,6 +549,9 @@ case $1 in
 (meld)                   shift; docker run -d -e DISPLAY=unix$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $(pwd):/workdir guywithnose/meld meld $* ;;
 (metabase)               docker run -d -p 3000:3000 --name metabase metabase/metabase ;;
 (mutt)                   docker run -it -v /etc/localtime:/etc/localtime:ro -e GMAIL -e GMAIL_NAME -e GMAIL_PASS -e GMAIL_FROM -v $HOME/.gnupg:/home/user/.gnupg --name mutt ${DOCKER_REPO_PREFIX}/mutt ;;
+(n8n)                    docker volume create n8n_data
+                         docker run -it --rm --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n docker.n8n.io/n8nio/n8n
+                         ;;
 (named-entity-tagger)    
                          docker run -it -p 5000:5000 max-named-entity-tagger
                          curl -X POST -H 'Content-Type: application/json' -d '{"text":"John lives in Brussels and works for the EU"}' 'http://localhost:5000/model/predict'
