@@ -298,6 +298,7 @@ case $1 in
 (cadvisor)               docker run -d --restart always -v /:/rootfs:ro -v /var/run:/var/run:rw -v /sys:/sys:ro -v /var/lib/docker/:/var/lib/docker:ro -p 1234:8080 --name cadvisor google/cadvisor
                          echo $(docker inspect --format '{{.NetworkSettings.Networks.bridge.IPAddress}}' cadvisor) cadvisor | sudo tee -a /etc/hosts
                          google-chrome "http://cadvisor:8080" ;;
+(casalioy)               docker run -it -p 8501:8501 --shm-size=16gb su77ungr/casalioy:stable /bin/bash ;;
 (cathode)                docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --name cathode cathode ;;
 (centos7)                docker run --privileged -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY centos:7 ;;
 (cheese)                 docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=unix${DISPLAY}" -v "${HOME}/Pictures:/root/Pictures" --device /dev/video0 --device /dev/snd --device /dev/dri --name cheese ${DOCKER_REPO_PREFIX}/cheese ;;
@@ -486,6 +487,11 @@ case $1 in
                          docker run -it mysql ;;
 (languagecrunch)         docker run -it -p 8080:8080 artpar/languagecrunch ;;
 (libreoffice)            docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/slides:/root/slides -e GDK_SCALE -e GDK_DPI_SCALE --name libreoffice ${DOCKER_REPO_PREFIX}/libreoffice ;;
+(llama-gpt)              cd
+                         git clone https://github.com/getumbrel/llama-gpt.git
+                         cd llama-gpt
+                         ./run.sh --model 7b
+                         ;;
 (lpass)                  shift; docker run --rm -it -v "${HOME}/.lpass:/root/.lpass" --name lpass ${DOCKER_REPO_PREFIX}/lpass "$@" ;;
 (lynx)                   shift; docker run --rm -it --name lynx ${DOCKER_REPO_PREFIX}/lynx "$@" ;;
 (lilyterm)               docker run -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/lilyterm ;;
@@ -656,6 +662,7 @@ case $1 in
 (rstudio)                docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $HOME/rscripts:/root/rscripts --device /dev/dri --name rstudio ${DOCKER_REPO_PREFIX}/rsudio ;;
 (s3cmd)                  docker run --rm -it -e AWS_ACCESS_KEY -e AWS_SECRET_KEY -v $(pwd):/root/s3cmd-workspac--name s3cmd ${DOCKER_REPO_PREFIX}/s3cmd ;;
 (scudcloud)              docker run --rm -it -v /etc/machine-id:/etc/machine-id:ro -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --device /dev/snd:/dev/snd -v /var/run/dbus:/var/run/dbus -v $HOME/.scudcloud:/home/user/.config/scudcloud --name scudcloud ${DOCKER_REPO_PREFIX}/scudcloud ;;
+(serge)                  docker run -d --name serge -v weights:/usr/src/app/weights -v datadb:/data/db/ -p 8008:8008 ghcr.io/serge-chat/serge:latest ;;
 (shorewall)              docker run --rm -it --net host --cap-add NET_ADMIN --privileged ${DOCKER_REPO_PREFIX}/shorewall ;;
 (sickbeard)              docker run -d --restart always -p 8081:8081 -v /etc/localtime:/etc/localtime:ro -v /volumes/sickbeard:/data --link transmission:transmission --name sickbeard ${DOCKER_REPO_PREFIX}/sickbeard ;;
 (skype)                  docker_app pulseaudio 
