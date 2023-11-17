@@ -687,6 +687,18 @@ doc2txt_rec(){
 		(*.ipynb)
 			ipython nbconvert --to markdown "$filename" --stdout | head -n $summarize_line_limit | txtsimp | strings -n1 >> "$destination"
 			;;
+        (*.zim)
+			rm -fr $tmp/learning
+			mkdir -p $tmp/learning
+			cd $tmp/learning
+            zimdump dump --dir=$PWD "$filename" >/dev/null 2>/dev/null
+			find $PWD | while read line
+			do
+				doc2txt_rec "$line" "$destination" 
+			done
+			sed -i "s|$tmp/learning||g" "$destination"
+			[ $PWD = $OLDPWD ] || cd $OLDPWD
+            ;;
 		(*)
 			file "$filename" | grep 'text' >/dev/null && cat "$filename" | head -n $summarize_line_limit | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" | txtsimp | strings -n1 >> "$destination"
 			file "$filename" | grep 'text' >/dev/null || echo "$filename" >> "$destination"
