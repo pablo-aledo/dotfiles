@@ -66,7 +66,7 @@ index_size_rank_hist(){
         do
             paste sizes stars names | awk -v st=$st -v sz=$sz -v iv=100 '( $1 > sz*iv && $1 < (sz+1)*iv ) && ( $2 == st ) {print}' | wc -l
         done
-    done | paste - - - - - -
+    done | paste - - - - -
     ) > size_rank_hist
 }
 
@@ -82,7 +82,7 @@ index_size_rank_hist_pending(){
         do
             comm -13 <(cat /tmp/reviewed | sort -u) <(paste sizes stars names | awk -v st=$st -v sz=$sz -v iv=100 '( $1 > sz*iv && $1 < (sz+1)*iv ) && ( $2 == st ) {$1=""; $2=""; print}' | sed 's/^..//g' | sort -u) | wc -l
         done
-    done | paste - - - - - -
+    done | paste - - - - -
     ) > size_rank_hist_pending
 }
 
