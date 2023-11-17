@@ -62,12 +62,28 @@ index_size_rank_hist(){
     cd size_and_rank
     for sz in $(seq 0 20)
     do
-        for st in $(seq 0 5)
+        for st in $(seq 1 5)
         do
             paste sizes stars names | awk -v st=$st -v sz=$sz -v iv=100 '( $1 > sz*iv && $1 < (sz+1)*iv ) && ( $2 == st ) {print}' | wc -l
         done
     done | paste - - - - - -
     ) > size_rank_hist
+}
+
+index_size_rank_hist_pending(){
+    echo "\e[34m size_rank_hist_pending \e[0m"
+    cd ~/servers/index
+
+    (
+    cd size_and_rank
+    for sz in $(seq 0 20)
+    do
+        for st in $(seq 1 5)
+        do
+            comm -13 <(cat /tmp/reviewed | sort -u) <(paste sizes stars names | awk -v st=$st -v sz=$sz -v iv=100 '( $1 > sz*iv && $1 < (sz+1)*iv ) && ( $2 == st ) {$1=""; $2=""; print}' | sed 's/^..//g' | sort -u) | wc -l
+        done
+    done | paste - - - - - -
+    ) > size_rank_hist_pending
 }
 
 index_bak(){
