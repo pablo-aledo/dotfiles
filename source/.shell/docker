@@ -737,6 +737,7 @@ case $1 in
 (ykpersonalize)          docker run --rm -it --device /dev/bus/usb --device /dev/us--name ykpersonalize ${DOCKER_REPO_PREFIX}/ykpersonalize ;;
 (yubico-piv-tool)        docker run --rm -it --device /dev/bus/usb --device /dev/us--name yubico-piv-tool ${DOCKER_REPO_PREFIX}/yubico-piv-tool ;;
 (znc)                    docker run --restart always -d --name znc -p 6697:6697 -v /volumes/znc:/home/user/.znc ${DOCKER_REPO_PREFIX}/znc ;;
+(zimit)                  docker run  -v /output:/output --shm-size=1gb ghcr.io/openzim/zimit zimit --url $1 --name myzimfile --workers 2 --waitUntil domcontentloaded ;;
 (radare)                 mkdir ~/workdir
                          chmod a+xwr ~/workdir
                          docker run --rm -it -v ~/workdir:/home/nonroot/workdir remnux/radare2 bash ;;
