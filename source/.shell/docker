@@ -715,6 +715,7 @@ case $1 in
                          alias mpiexec='docker run -v $(pwd):$(pwd):Z -w $(pwd) '$DOCKER' mpiexec --oversubscribe -mca btl tcp,self'
                          alias mpicc='docker run -v $(pwd):$(pwd):Z -w $(pwd) '$DOCKER' mpicc'
                          alias mpif90='docker run -v $(pwd):$(pwd):Z -w $(pwd) '$DOCKER' mpif90' ;;
+(url-to-epub)            docker run --user $UID  --volume /tmp:/data captn3m0/url-to-epub:latest --output /data/articulated-restraint.epub --cover-url https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1548962694l/43782466._SY475_.jpg  https://www.tor.com/2019/02/06/articulated-restraint-mary-robinette-kowal/ ;;
 (ubuntu_pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu_pga ;;
 (ubuntu_pga_dev)         docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu_pga_dev ;;
 (alpine_pga)             docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY alpine_pga ;;
