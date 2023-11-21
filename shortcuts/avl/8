@@ -4,7 +4,7 @@ export DISPLAY=:1
 
 while true
 do
-    xdotool key ctrl+w
+    [ ! -e /tmp/avl_noclose ] && xdotool key ctrl+w
     xdotool mousemove 200 200
     sleep 1
     if $( mouseover 3 100000 ~/.dotfiles/shortcuts/images/continue.png )
