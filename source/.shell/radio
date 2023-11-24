@@ -1,3 +1,8 @@
 radio(){
-	[ $1 = "azulfm" ] && mplayer http://srv0490.lcinternet.com:9709/stream
+    [ $1 = "azulfm" ] && mplayer http://srv0490.lcinternet.com:9709/stream
+    [ $1 = "somafm" ] && {  channel=groovesalad; quality=low;
+                            mpv $(curl -s -H 'Accept: application/json' https://somafm.com/channels.json | \
+                                jq -r ".channels | map(select(.id == \"${channel}\")) | .[]" | \
+                                jq -r ".playlists | map(select(.quality == \"${quality}\")) | limit(1;.[]) | .url")
+                         }
 }
