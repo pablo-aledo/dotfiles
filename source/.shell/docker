@@ -704,6 +704,7 @@ case $1 in
 (transmission)           docker run -d --name transmission -v /home/jessie/Torrents:/transmission/download -p 9091:9091 -p 51413:51413 -p 51413:51413/udp ${DOCKER_REPO_PREFIX}/transmission ;;
 (transmission-ui)        docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v /home/jessie/Torrents:/Torrents -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/transmission-ui ;;
 (travis)                 shift; docker run -it --rm -v "${HOME}/.travis:/root/.travis" -v "$(pwd):/usr/src/repo:ro" --workdir /usr/src/repo --log-driver none ${DOCKER_REPO_PREFIX}/travis "$@" ;;
+(typst)                  docker run -it -v $PWD:/workdir -w /workdir ghcr.io/typst/typst:latest ;;
 (ubuntu)                 docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY ubuntu ;;
 (ulfm)                   docker pull abouteiller/mpi-ft-ulfm
                          alias make='docker run -v $PWD:$PWD:V -w $PWD abouteiller/mpi-ft-ulfm make'
