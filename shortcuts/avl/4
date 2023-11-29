@@ -20,7 +20,7 @@ rm -fr /tmp/lock4dl
 if [ -e /tmp/avl_progress ]
 then
     # dunst
-    downloaded=$(cat /tmp/s2files | grep Title | wc -l)
+    downloaded=$(( $(cat /tmp/s2files | grep Title | wc -l) + 1 ))
     to_download=$(cat /tmp/count)
     notify-send "$downloaded / $to_download"
 fi
