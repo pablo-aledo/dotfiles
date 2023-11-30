@@ -25,11 +25,12 @@ Git(){
         (diff_staged) \git diff --staged ;;
         (diff_vim) \git difftool --tool=vimdiff --no-prompt ;;
 
-        (branch_rewrite) \git rebase -i $(git_branch_base) ;; # pick, squash, squash, squash...
-        (branch_diff_files) \git diff --name-only $(git_branch_base) $(\git rev-parse HEAD) ;;
-        (branch_to_patch) \git diff $(git_branch_base) $(\git rev-parse HEAD) ;;
-        (branch_to_file) \git log --cc $(git_branch_base)...HEAD ;;
-        (branch_to_file_2) \git format-patch --stdout $(git_branch_base) ;; # consume with git am
+        (branch_base) \git merge-base master $(\git rev-parse HEAD) ;;
+        (branch_rewrite) \git rebase -i $(Git branch_base) ;; # pick, squash, squash, squash...
+        (branch_diff_files) \git diff --name-only $(Git branch_base) $(\git rev-parse HEAD) ;;
+        (branch_to_patch) \git diff $(Git branch_base) $(\git rev-parse HEAD) ;;
+        (branch_to_file) \git log --cc $(Git branch_base)...HEAD ;;
+        (branch_to_file_2) \git format-patch --stdout $(Git branch_base) ;; # consume with git am
         (branch_create) \git checkout -b $1 ;;
         (branch_delete) \git branch -D $1 ;;
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
