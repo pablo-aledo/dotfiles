@@ -1,0 +1,17 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+xdotool mousemove 0 0
+mouseover -1 1000 ~/.dotfiles/shortcuts/images/gmail_lens.png && xdotool mousemove_relative 100 0
+xdotool click 1
+xdotool click 1
+xdotool click 1
+cat /tmp/title | xclip -sel clip -i
+sleep 1
+xdotool type 'NOT label: '
+xdotool type $(cat /tmp/tag)
+xdotool type ' subject: "'
+xdotool key Ctrl+v
+xdotool type '"'
+xdotool key Return
+

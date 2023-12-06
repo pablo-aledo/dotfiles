@@ -1,0 +1,12 @@
+export DISPLAY=:1
+
+[ -e /tmp/skip ] && return
+
+xdotool type l
+sleep 1
+xdotool type $(cat /tmp/tag)
+sleep 1
+xdotool key Return
+
+xdotool type U
+sleep 1
