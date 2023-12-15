@@ -3,6 +3,7 @@ do
     [ $lang = install.sh ] && continue
     [ $lang = README.md ] && continue
     [ $lang = master.zip ] && continue
+    [ $lang = smallpt.tar.gz ] && continue
     mkdir $lang
     cd $lang
     #googler "raytracer in one weekend $lang site: github.com" --json | grep '"url":' | cut -d'"' -f4 > urls
