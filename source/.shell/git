@@ -60,6 +60,8 @@ Git(){
                             \rm -rf .git/modules/$1
                             ;;
 
+        (step_forward)  \git checkout $(\git rev-list --topo-order HEAD..$1 | tail -1)
+        (step_backward) \git checkout HEAD^ ;;
         (pull_rebase) \git pull --rebase ;;
         (push_force_lease) echo 'Are you sure?' && read && \git push --force-with-lease ;;
         (push_force) echo 'Are you sure?' && read && \git push --force ;;
