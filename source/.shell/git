@@ -36,6 +36,7 @@ Git(){
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
         (branch_get_file) mkdir -p "$(dirname $2)"; \git show $1:$2 > $2 ;;
+        (branch_current) \git branch -a --contains HEAD | grep -v remotes | grep -v HEAD | sed 's/^ *//g' ;;
         (branch_add_remote) \git remote add $1 $2
                             \git fetch $1 $3
                             ;;
@@ -60,8 +61,8 @@ Git(){
                             \rm -rf .git/modules/$1
                             ;;
 
-        (step_forward)  \git checkout $(\git rev-list --topo-order HEAD..$1 | tail -1) ;;
-        (step_backward) \git checkout HEAD^ ;;
+        (step_fw) \git checkout $(\git rev-list --topo-order HEAD..$(Git branch_current) | tail -1) ;;
+        (step_bw) \git checkout HEAD^ ;;
         (pull_rebase) \git pull --rebase ;;
         (push_force_lease) echo 'Are you sure?' && read && \git push --force-with-lease ;;
         (push_force) echo 'Are you sure?' && read && \git push --force ;;
