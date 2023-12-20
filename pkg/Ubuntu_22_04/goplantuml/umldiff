@@ -1,0 +1,36 @@
+genuml(){
+	find -iname '*.go' | while read line
+	do
+		sed -i '/.*genuml_ignore/d' $line
+	done
+
+	goplantuml --recursive . > $1
+
+	cat $1 | awk '/.*class  <<.*/{omit = ! omit; next} omit && /.*}$/ { omit = ! omit; next} ! omit {print}' > /tmp/umldiff_2.plantuml
+	\mv /tmp/umldiff_2.plantuml $1
+
+	git checkout .
+}
+
+umldiff(){
+	git checkout master
+	genuml /tmp/umldiff_main.plantuml
+	git checkout $1
+	genuml /tmp/umldiff_branch.plantuml
+
+	cat /tmp/umldiff_main.plantuml | awk '/^namespace/{namespace=$2; next}/ *(interface|class)/{class=$2}{print namespace"/"class"/"$0}' | grep '[a-zA-Z0-9]*/[a-zA-Z0-9]*/ *[\+\-].*' > /tmp/umldiff_main.summary
+	cat /tmp/umldiff_branch.plantuml | awk '/^namespace/{namespace=$2; next}/ *(interface|class)/{class=$2}{print namespace"/"class"/"$0}' | grep '[a-zA-Z0-9]*/[a-zA-Z0-9]*/ *[\+\-].*' > /tmp/umldiff_branch.summary
+
+	comm -13 <(sort -u /tmp/umldiff_main.summary) <(sort -u /tmp/umldiff_branch.summary) | awk 'BEGIN{FS="[/]"}{print "class "$1"."$2" #Ivory {\n<b><color: green>"$3"</color></b>\n}"}' >  /tmp/uml_diffs
+	comm -23 <(sort -u /tmp/umldiff_main.summary) <(sort -u /tmp/umldiff_branch.summary) | awk 'BEGIN{FS="[/]"}{print "class "$1"."$2" #Ivory {\n<b><color: red>"$3"</color></b>\n}"}' >> /tmp/uml_diffs
+
+	cat /tmp/umldiff_branch.plantuml | sed '$ d' > /tmp/umldiff.plantuml
+	cat /tmp/uml_diffs >> /tmp/umldiff.plantuml
+	echo '@enduml' >> /tmp/umldiff.plantuml
+
+	(
+		cd /tmp/
+		docker_app plantuml -tsvg umldiff.plantuml
+		google-chrome umldiff.svg
+	)
+}
