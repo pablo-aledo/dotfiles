@@ -599,6 +599,7 @@ case $1 in
                              --client-secret=0a69708d09b905f19858263c32c3e7eef366c892eb99e5a3c854fb4fa9b4d6f8 \
                              --set-xauthrequest ;;
 (opengrok)               docker run -d -v $PWD:/opengrok/src -p 8080:8080 opengrok/docker:latest ;;
+(openplayground)         docker run --name openplayground -p 5432:5432 -d --volume openplayground:/web/config natorg/openplayground ;;
 (hound)                  docker run -p 6080:6080 --name hound -v $(pwd):/data etsy/hound ;;
 (sourcegraph)            docker run --publish 7080:7080 --publish 127.0.0.1:3370:3370 --rm --volume ~/.sourcegraph/config:/etc/sourcegraph --volume ~/.sourcegraph/data:/var/opt/sourcegraph sourcegraph/server:3.22.0 ;;
 (livgrep -E)               docker run -v $(pwd):/data livgrep -E/indexer /livgrep -E/bin/livgrep -E-github-reindex -repo livgrep -E/livgrep -E -http -dir /data
