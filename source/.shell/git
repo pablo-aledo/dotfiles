@@ -16,6 +16,7 @@ Git(){
         (log_follow) \git log --follow $* ;;
         (log_branch) \git log --oneline --graph | while read line; do [[ "$line" =~ '\*  ' ]]  && break; echo "$line"; done ;;
         (log_oneline_format) \git log --pretty=format:"%h%x09%an%x09%ad%x09%s" ;;
+        (log_oneline_since) \git log --author="Pablo" --since="2013-01-30" --format=oneline ;;
 
         (diff_grep) \git diff --name-only -G"$1" ;;
         (diff_with_filename) \git diff $* | awk '/^\+\+\+/{print; $1=""; name=$0}{print name": "$0}' ;;
