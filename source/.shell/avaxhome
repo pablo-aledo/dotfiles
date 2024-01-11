@@ -467,3 +467,8 @@ do
 done
 
 }
+
+avl_progress_dunst(){
+    touch /tmp/avl_progress; shc; dunst; rm -fr /tmp/avl_progress
+}
+
