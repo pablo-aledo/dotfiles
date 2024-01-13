@@ -85,6 +85,7 @@ Git(){
         (revert_multiple) \git revert --no-commit HEAD~3.. ;;
         (resign) \git rebase --exec 'git commit --amend --no-edit -S' $* ;;
         (message) \git log --format=%B -n 1 $* ;;
+        (daemon) \git daemon --reuseaddr --verbose --base-path=$PWD --export-all --enable=receive-pack -- $PWD/.git ;;
         (backup) \git clone --mirror $1/$2.git $2.git
                  cd $2.git
                  \git bundle create ../$2.bundle --all
