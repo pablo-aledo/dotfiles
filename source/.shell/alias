@@ -144,6 +144,15 @@ mgrep(){
     source /tmp/script
 }
 
+mgrep_cross(){
+    cat $1 | tr -cd '[:alnum:][:space:]' | sort -u > /tmp/mgrep1
+    cat $2 | tr -cd '[:alnum:][:space:]' | sort -u > /tmp/mgrep2
+    cat /tmp/mgrep1 | while read line
+    do
+        echo mgrep /tmp/mgrep2 $line
+    done | vimexec
+}
+
 amgrep(){
     [ $1 = '-' ] && file='' || file=$1
     strings -n1 $file > /tmp/file
