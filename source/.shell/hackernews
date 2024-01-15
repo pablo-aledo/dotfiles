@@ -6,6 +6,13 @@ hn_id2titles(){
     done | grep -v ' -> $' | tee -a id2title
 }
 
+catlastoutbox(){
+    (
+        cd ~/servers/outbox
+        ls | tail -n $1 | while read line; do grep -Rin . "$line" ""; done 2>/dev/null > /tmp/hnoutbox
+    )
+}
+
 # id
 #  |
 #  v       -> label select -> OK
