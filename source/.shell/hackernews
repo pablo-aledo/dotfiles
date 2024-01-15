@@ -14,7 +14,7 @@ catlastoutbox(){
 }
 
 hn_id2titles_outbox(){
-    cat $1 | while read line; do id="$(echo $line | cut -d'=' -f2)"; cat /tmp/hnoutbox | grep $id; done | tee -a id2title
+    cat $1 | while read line; do id="$(echo $line | cut -d'=' -f2)"; cat /tmp/hnoutbox | grep $id | tail -n1; done | tee -a id2title
 }
 
 # id
