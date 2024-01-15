@@ -75,7 +75,7 @@ Git(){
         (list_excluded) \git ls-files -i -c --exclude-from=.gitignore ;;
         (interactive_checkout) \git checkout -p . ;;
         (interactive_add) \git add -p $* ;;
-        (stash_save_all) \git add .; \git stash push -m "$1"; \git stash apply ;;
+        (stash_save_all) \git add .; \git stash push -m "$1"; \git stash apply; \git restore --staged . ;;
         (stash_save_staged) \git add -u; \git stash push -m "$1"; \git stash apply ;;
         (unstage) \git restore --staged $* ;;
         (status_uno) \git status -uno ;;
