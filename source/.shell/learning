@@ -121,6 +121,8 @@ tokenize(){
     [ $keywords_lowercase = "true" ] && lowercmd="tr '[A-Z]' '[a-z]'"
     [ $keywords_lowercase = "false" ] && lowercmd="cat"
     [ $keywords_lowercase = "camelcase" ] && lowercmd="camelcase"
+    [ $tokenize_rules = "true" ] && rulescmd="rules.transform"
+    [ $tokenize_rules = "false" ] && rulescmd="cat"
     cat | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" | sed \
         -e 's/á/a/g' \
         -e 's/é/e/g' \
@@ -138,7 +140,7 @@ tokenize(){
         -e 's/ö/o/g' \
         -e 's/ü/u/g' \
         | strings -n1 | $(echo $lowercmd) | \
-        rules.transform | sed \
+        $(echo $rulescmd) | sed \
         -e 's/ /\n/g'  \
         -e 's/\./\n/g' \
         -e 's/\t/\n/g' \
