@@ -13,9 +13,9 @@ tmux_extract(){
 }
 
 tma(){
-    [ $# -eq 0 ] && tmux a
-    [ $# -eq 1 ] && [ "$(tmux ls | cut -d: -f1 | grep $1)" != "" ] && tmux a -t $1
-    [ $# -eq 1 ] && [ "$(tmux ls | cut -d: -f1 | grep $1)"  = "" ] && tmux new -s $1
+    [ $# -eq 0 ] && { tmux a; return }
+    [ $# -eq 1 ] && [ "$(tmux ls | cut -d: -f1 | grep $1)" != "" ] && { tmux a -t $1; return }
+    [ $# -eq 1 ] && [ "$(tmux ls | cut -d: -f1 | grep $1)"  = "" ] && { tmux new -s $1; return }
 }
 
 tmkill(){
