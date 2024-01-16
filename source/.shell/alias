@@ -126,55 +126,6 @@ gradle_run(){
     bash -c "./gradlew run -q --args=\"${*@Q}\""
 }
 
-mgrep(){
-    [ $1 = '-' ] && file='' || file=$1
-    strings -n1 $file > /tmp/file
-    echo -n cat /tmp/file > /tmp/script
-    shift
-    for a in $*
-    do
-        if [ "$a" = "+" ]
-        then
-            echo >> /tmp/script
-            echo -n cat /tmp/file >> /tmp/script
-        else
-            echo -n " | grep -i $a" >> /tmp/script
-        fi
-    done
-    source /tmp/script
-}
-
-mgrep_cross(){
-    cat $1 | tr -cd '[:alnum:][:space:]' | sort -u > /tmp/mgrep1
-    cat $2 | tr -cd '[:alnum:][:space:]' | sort -u > /tmp/mgrep2
-    cat /tmp/mgrep1 | while read line
-    do
-        echo mgrep /tmp/mgrep2 $line
-    done | vimexec
-}
-
-amgrep(){
-    [ $1 = '-' ] && file='' || file=$1
-    strings -n1 $file > /tmp/file
-    echo -n cat /tmp/file > /tmp/script
-    shift
-    for a in $*
-    do
-        if [ "$a" = "+" ]
-        then
-            echo >> /tmp/script
-            echo -n cat /tmp/file >> /tmp/script
-        else
-            echo -n " | tre-agrep -1 -i $a" >> /tmp/script
-        fi
-    done
-    source /tmp/script
-}
-
-find_index(){
-mgrep files $* | cut -d/ -f8 | sort | uniq | while read line; do echo "$(mgrep files $* | grep -F "/$line/" | wc -l) $line" ; done | sort -g
-}
-
 alias wl4dl='watch -tn1 "find /tmp/ -maxdepth 1 -name \"lock*\" -mmin +1"'
 alias wavline='watch -tn1 "cat /tmp/avl_line"'
 
