@@ -5,8 +5,9 @@ if `mouseover 1 100 ~/.dotfiles/shortcuts/images/link.png`
 then
 	xdotool click 3
     sleep 1
-    xdotool key Up
-    xdotool key Up
-    xdotool key Return
+    #xdotool key Up
+    #xdotool key Up
+    #xdotool key Return
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/copylink.png && xdotool click 1
     xclip -sel clip -o > /tmp/link
 fi
