@@ -1278,6 +1278,7 @@ tmux_night_session(){
     tmux split -v -t night:1.1
     tmux split -v -t night:1.3
     tmux split -v -t night:1.5
+    tmux split -v -t night:1.2
 
     sleep 5
 
@@ -1287,6 +1288,7 @@ tmux_night_session(){
     tmux send-keys -t night:1.5 'wavline' 'Enter'
     tmux send-keys -t night:1.6 'wl4dl' 'Enter'
     tmux send-keys -t night:1.2 'while true; do ws2files; done' 'Enter'
+    tmux send-keys -t night:1.7 'ws2link' 'Enter'
 }
 
 server.test(){
