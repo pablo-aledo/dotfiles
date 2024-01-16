@@ -17,7 +17,7 @@ do
     xdotool key 2 && sleep 1
 
     [ -e "/tmp/link" ] && rm -rf /tmp/link
-    xdotool key 4 && sleep 5
+    #xdotool key 4 && sleep 5
     [ -e "/tmp/link" ] || xdotool key 3 && sleep 5
 
     xdotool key 5 && sleep 1
