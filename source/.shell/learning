@@ -24,6 +24,7 @@ indexer_add_kw=true
 classify_highlight=diff
 include_topics=true
 learning_test=true
+tokenize_rules=true
 
 ncd.get_features(){
     cp -r $learning_dir/txts/* $learning_dir/features
