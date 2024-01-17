@@ -324,6 +324,15 @@ aws_rdp(){
 	rdesktop -u $AWS_USER -p $AWS_PW $AWS_SERVER -g 1400x768 -r disk:share=$AWS_LOCAL_FOLDER
 }
 
+aws_rdp_2(){
+aws_config_win
+cat < EOF > aws.rdp
+full address:s:$AWS_SERVER
+username:s:$AWS_USER
+EOF
+xfreerdp aws.rdp
+}
+
 aws_launch(){
 	ids=`aws ec2 run-instances --image-id ami-9abea4fb --security-group-ids sg-f80ce99c --count 1 --instance-type t2.micro --key-name default_kp --query 'Instances[0].InstanceId' | sed 's/"//g' `
 	ip=""
