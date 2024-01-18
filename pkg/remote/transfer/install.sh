@@ -4,11 +4,12 @@ mouseover 10 10000 maximize.png && xdotool click 1
 sleep 10
 
 IP=$(myip | grep external | cut -d: -f2)
+DESTINATION='$ENV:UserProfile\Downloads'
 
 cat /tmp/files | while read line
 do
     FILENAME=$(basename $line)
-    xdotool type --delay 200 '(New-Object System.Net.WebClient).DownloadFile("http://'$IP'/'$FILENAME'","$ENV:UserProfile\Downloads\'$FILENAME'")'
+    xdotool type --delay 200 '(New-Object System.Net.WebClient).DownloadFile("http://'$IP'/'$FILENAME'","'$DESTINATION'\'$FILENAME'")'
     xdotool key Return
     sleep 10
 done
