@@ -1,0 +1,2 @@
+chmod +x ./Dockerfile
+./Dockerfile
