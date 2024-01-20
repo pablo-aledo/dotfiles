@@ -329,6 +329,7 @@ aws_config_win
 cat < EOF > aws.rdp
 full address:s:$AWS_SERVER
 username:s:$AWS_USER
+password:s:$AWS_PW
 EOF
 xfreerdp aws.rdp
 }
