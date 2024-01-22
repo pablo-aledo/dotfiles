@@ -1,7 +1,7 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
-mouseover 3 10000 ~/.dotfiles/shortcuts/images/norobot2.png && xdotool click 1
+# mouseover 3 10000 ~/.dotfiles/shortcuts/images/norobot2.png && xdotool click 1
 
 touch /tmp/lock4dl
 while true
@@ -13,7 +13,7 @@ do
 
     xdotool mousemove 0 0 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl.png && break
     [ -e /tmp/lock4dl ] || break
-    sleep 10
+    sleep 1
 done
 rm -fr /tmp/lock4dl
 
