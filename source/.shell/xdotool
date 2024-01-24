@@ -36,7 +36,16 @@ mouseover(){
 	n=0
 	for a in $*
 	do
-		png2pat "$a" > /tmp/pat$n.pat
+
+        if [ "$mouseover_resize" = "true" ]
+        then
+            convert -resize 50% "$a" /tmp/mouseover_1.png
+            convert -resize 200% /tmp/mouseover_1.png /tmp/mouseover_resize.png
+            png2pat /tmp/mouseover_resize.png > /tmp/pat$n.pat
+        else
+            png2pat "$a" > /tmp/pat$n.pat
+        fi
+
 		n=$(( n + 1 ))
 	done
 
@@ -49,6 +58,12 @@ mouseover(){
 
         rm -fr /tmp/screen.png
 		scrot $beepflag /tmp/screen.png
+
+        if [ "$mouseover_resize" = "true" ]
+        then
+            convert -resize 50% /tmp/screen.png /tmp/screen_resize.png
+            convert -resize 200% /tmp/screen_resize.png /tmp/screen.png
+        fi
 
 		found=0
 		m=0
