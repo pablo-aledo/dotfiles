@@ -1,4 +1,5 @@
 export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
 
 xdotool mousemove 300 410
 xdotool click 1
@@ -12,8 +13,8 @@ reading=true
 thinking=true
 while true
 do
-    mouseover 1 10000 ~/.dotfiles/shortcuts/images/kg_reading.png  || reading=false
-    mouseover 1 10000 ~/.dotfiles/shortcuts/images/kg_thinking.png || thinking=false
+    mouseover 5 10000 ~/.dotfiles/shortcuts/images/kg_reading.png  || reading=false
+    mouseover 5 10000 ~/.dotfiles/shortcuts/images/kg_thinking.png || thinking=false
     [ $reading = false -a $thinking = false ] && break
 done
 
