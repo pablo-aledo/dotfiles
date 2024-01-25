@@ -3222,3 +3222,11 @@ learning.test(){
 
 }
 
+learning.linekeys(){
+    export vectorizer_method=window
+    export learning_scale=0.05
+    export learning_offset=0.0
+    redefine window.txt2vec
+    for a in $(seq 1 $(cat $1 | wc -l)); do echo $(head -n$a $1 | tail -n1 | learning.key -) $(head -n$a $1 | tail -n1); done
+}
+
