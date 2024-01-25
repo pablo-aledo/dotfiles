@@ -3223,10 +3223,12 @@ learning.test(){
 }
 
 learning.linekeys(){
+    [ $# = 1 ] && file=$1 && export learning_scale=0.05
+    [ $# = 2 ] && file=$1 && export learning_scale=$2
+
     export vectorizer_method=window
-    export learning_scale=0.05
     export learning_offset=0.0
     redefine window.txt2vec
-    for a in $(seq 1 $(cat $1 | wc -l)); do echo $(head -n$a $1 | tail -n1 | learning.key -) $(head -n$a $1 | tail -n1); done
+    for a in $(seq 1 $(cat $file | wc -l)); do echo $(head -n$a $file | tail -n1 | learning.key -) $(head -n$a $file | tail -n1); done
 }
 
