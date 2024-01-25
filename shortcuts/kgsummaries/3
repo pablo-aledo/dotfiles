@@ -2,7 +2,7 @@ export DISPLAY=:1
 
 xdotool mousemove 300 410
 xdotool click 1
-echo -n $(cat /tmp/kgs_line) | xclip -sel clip -i
+echo -n $(cat /tmp/kg_link) | xclip -sel clip -i
 xdotool key Ctrl+v
 xdotool key Return
 
