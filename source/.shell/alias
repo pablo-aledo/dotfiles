@@ -163,3 +163,9 @@ Sgrep(){
 gdbstack(){
 sudo gdb -p $1 -ex 'set pagination off' -ex 'set confirm off' -ex 'bt full' -ex q
 }
+
+ksplit(){
+cat $1 > /tmp/ksplit
+cat /tmp/ksplit | grep -v $2
+cat /tmp/ksplit | grep $2
+}
