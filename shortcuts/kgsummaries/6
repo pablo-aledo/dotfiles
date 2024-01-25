@@ -1,0 +1,17 @@
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+export DISPLAY=:1
+
+xdotool key 1 && sleep 1 && shcw kgsummaries.1
+xdotool key 2 && sleep 1 && shcw kgsummaries.2
+
+cat /tmp/links | while read line
+do
+    echo $line > /tmp/kgs_line
+
+    xdotool key 3 && sleep 1 && shcw kgsummaries.3
+    xdotool key 4 && sleep 1 && shcw kgsummaries.4
+done
+
+xdotool key 0

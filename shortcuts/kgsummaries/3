@@ -1,0 +1,20 @@
+export DISPLAY=:1
+
+xdotool mousemove 300 410
+xdotool click 1
+echo -n $(cat /tmp/kgs_line) | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Return
+
+sleep 3
+
+reading=true
+thinking=true
+while true
+do
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/kg_reading.png  || reading=false
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/kg_thinking.png || thinking=false
+    [ $reading = false -a $thinking = false ] && break
+done
+
+sleep 15

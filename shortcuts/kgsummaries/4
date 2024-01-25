@@ -1,0 +1,14 @@
+export DISPLAY=:1
+
+rm -fr ~/Descargas/kgsummary.html ~/Descargas/kgsummary_files
+
+xdotool key Ctrl+s
+sleep 1
+xdotool type kgsummary
+xdotool key Return
+sleep 1
+
+link="$(cat /tmp/kgs_line)"
+filename="/tmp/kgsummaries/$(echo $link | md5sum | awk '{print $1}')"
+htmlq -f ~/Descargas/kgsummary.html '#mdDataBox' -t >> $filename
+echo '=====' >> $filename
