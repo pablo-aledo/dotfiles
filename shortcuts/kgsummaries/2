@@ -1,4 +1,4 @@
 export DISPLAY=:1
 
 google-chrome "https://kagi.com/summarizer/index.html" >/dev/null 2>/dev/null &
-sleep 15
+sleep 30
