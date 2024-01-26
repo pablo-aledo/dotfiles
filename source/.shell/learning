@@ -380,7 +380,7 @@ openai_embeddings.txt2vec(){
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $OPENAI_API_KEY" \
         -d '{
-          "input": "$txt",
+          "input": "'$txt'",
           "model": "text-embedding-3-small"
         }' | jq '.data[0].embedding' | paste -d' ' -s \
         | sed -e 's/ \+/ /g'
