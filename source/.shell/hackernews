@@ -27,3 +27,7 @@ hn_id2titles_outbox(){
 #           \                    \
 #            \                     -> not is read -> MOK
 #              -> none -> NOK
+
+hn_archive(){
+wget -q 'http://archive.org/wayback/available?url='$1 -O - | jq '.archived_snapshots.closest.url' | sed 's/"//g'
+}
