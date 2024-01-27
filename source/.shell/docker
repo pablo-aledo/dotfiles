@@ -261,6 +261,11 @@ case $1 in
 (hound)
     wget https://raw.githubusercontent.com/hound-search/hound/master/default-config.json -O config.json
     ;;
+(flowise)
+    git clone https://github.com/FlowiseAI/Flowise.git /tmp/flowise
+    cd /tmp/flowise/docker
+    docker build -t flowise .
+    cd -
 esac
 }
 
@@ -401,6 +406,7 @@ case $1 in
 (euclidesdb)             docker run -p 50000:50000 -v ~/database:/database -it euclidesdb/euclidesdb ;;
 (face_recognition)       shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY --entrypoint bash face_recognition $* ;;
 (facedetect)             shift; docker run --rm -v `pwd`:/work -w /work vimagick/facedetect $* ;;
+(flowise)                shift; docker run -d --name flowise -p 3000:3000 flowise ;;
 (fontforge)              docker run --rm -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v $state/fontforge:/home/fontforge --name fontforge fghj/fontforge ;;
 (ffmpeg)                 shift; docker run --rm -u $(id -u):$(id -g) -v $PWD:/data vimagick/ffmpeg $* ;;
 (ffmpeg_concat)          shift; docker run -it -v $PWD:/workdir ffmpeg_concat $* ;;
