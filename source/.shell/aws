@@ -566,6 +566,7 @@ aws_migrate_incremental(){
     aws_send .mutt
     aws_send .zsh_history
     aws_send .pword
+    aws_send .paths
 }
 
 aws_migrate(){
