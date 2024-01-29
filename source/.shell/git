@@ -25,9 +25,12 @@ Git(){
         (difftool_step) \git difftool ${1}^ ${1} ;;
         (diff_staged) \git diff --staged ;;
         (diff_vim) \git difftool --tool=vimdiff --no-prompt ;;
+        (diff_branch) \git diff $(Git branch_base) $(\git rev-parse HEAD) ;;
+        (diff_branch_files) \git diff --name-only $(Git branch_base) $(\git rev-parse HEAD) ;;
 
         (branch_base) \git merge-base master $(\git rev-parse HEAD) ;;
         (branch_rewrite) \git rebase -i $(Git branch_base) ;; # pick, squash, squash, squash...
+        (branch_diff) \git diff $(Git branch_base) $(\git rev-parse HEAD) ;;
         (branch_diff_files) \git diff --name-only $(Git branch_base) $(\git rev-parse HEAD) ;;
         (branch_to_patch) \git diff $(Git branch_base) $(\git rev-parse HEAD) ;;
         (branch_to_file) \git log --cc $(Git branch_base)...HEAD ;;
