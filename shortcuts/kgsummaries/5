@@ -4,11 +4,11 @@ xdotool mousemove 600 140
 xdotool click 1
 sleep 1
 
-xdotool mousemove 1020 140
+xdotool mousemove 1020 155
 xdotool click 1
 sleep 1
 
-xdotool mousemove 620 530
+xdotool mousemove 620 540
 xdotool click 1
 sleep 1
 
