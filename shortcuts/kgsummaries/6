@@ -15,6 +15,7 @@ do
 
     xdotool key 3 && sleep 1 && shcw kgsummaries.3
     xdotool key 4 && sleep 1 && shcw kgsummaries.4
+    xdotool key 5 && sleep 1 && shcw kgsummaries.5
 done
 
 xdotool key 0

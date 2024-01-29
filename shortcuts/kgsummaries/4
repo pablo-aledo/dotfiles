@@ -4,6 +4,8 @@ rm -fr ~/Descargas/kgsummary.html ~/Descargas/kgsummary_files
 
 xdotool key Ctrl+s
 sleep 1
+xdotool key Alt+f
+sleep 1
 xdotool type kgsummary
 xdotool key Return
 sleep 1
