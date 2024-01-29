@@ -87,6 +87,7 @@ Git(){
         (status_short) \git status -s ;;
         (cherrypick_no_commit) \git cherry-pick --no-commit $* ;;
         (undo_last_commit) \git reset --soft HEAD^;;
+        (append) git commit --amend --no-edit $* ;;
         (revert_multiple) \git revert --no-commit HEAD~3.. ;;
         (resign) \git rebase --exec 'git commit --amend --no-edit -S' $* ;;
         (message) \git log --format=%B -n 1 $* ;;
