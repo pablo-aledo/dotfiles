@@ -136,6 +136,8 @@ map <C-A-a> yyp<c-a>
 map ,tr :%s/\s\+$//
 " wrap
 map ,wr :set wrap!<cr>
+" nonascii
+map ,na /[^\x00-\x7F]
 " check
 map ,ch1 /".*".*".*".*".*
 map ,ch2 /'.*'.*'.*'.*'.*
