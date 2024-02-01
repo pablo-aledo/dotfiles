@@ -588,6 +588,7 @@ case $1 in
 (ollama-gpu)             docker run -d --gpus=all -v ollama:/root/.ollama -p 11434:11434 --name ollama ollama/ollama
                          docker exec -it ollama ollama run llama2
                          ;;
+(openllm)                docker run --rm -it -p 3000:3000 ghcr.io/bentoml/openllm start facebook/opt-1.3b --backend pt ;;
 (openshot)               docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY openshot ;;
 (openpose-cpu)           docker run -v`pwd`:/data -it openpose-cpu -display 0 -video /data/${2} -write_video /data/${2}.openpose.avi ;;
 (oauth2_proxy)           docker run -it --rm --name oauth-proxy a5huynh/oauth2_proxy \
