@@ -3245,3 +3245,42 @@ learning.linekeys(){
     for a in $(seq 1 $(cat $file | wc -l)); do echo $(head -n$a $file | tail -n1 | learning.key -) $(head -n$a $file | tail -n1); done
 }
 
+umap.fit_transform(){
+cat << EOF > $tmp/script.py
+import numpy as np
+import sys
+np.set_printoptions(threshold=sys.maxsize)
+from sklearn.manifold import TSNE
+x=np.array([ $(cat $learning_dir/vectors/* | sed 's/$/,/g' | paste -d' ' -s | sed 's/,$//g' ) ])
+tsne=TSNE(n_components=2)
+print(tsne.fit_transform(x))
+EOF
+
+python $tmp/script.py > $tmp/out
+cat $tmp/out | sed -e 's/\[//g' -e 's/\]//g' -e 's/,/ /g' -e 's/ \+/ /g' -e 's/^ //g' -e 's/ /, /g' -e 's/^/[/g' -e 's/$/]/g' > $tmp/out2
+
+for a in $(seq 1 $(ls $learning_dir/txts/ | wc -l))
+do
+    cat $tmp/out2 | head -n $a | tail -n1 > $learning_dir/vectors_reduced/"$(ls $learning_dir/txts/ | head -n$a | tail -n1)"
+done
+}
+
+kmeans_clustering.fit_transform(){
+cat << EOF > $tmp/script.py
+import numpy as np
+import sys
+from sklearn.cluster import KMeans
+np.set_printoptions(threshold=sys.maxsize)
+x=np.array([ $(cat $learning_dir/vectors_reduced/* | sed 's/$/,/g' | paste -d' ' -s | sed 's/,$//g') ])
+kmeans = KMeans(n_clusters=30, random_state=0)
+print(kmeans.fit_predict(x))
+EOF
+
+python script.py > $tmp/out
+cat $tmp/out | sed -e 's/ /\n/g' -e 's/\[//g' -e 's/\]//g' | grep -v '^$' > $tmp/out2
+
+for a in $(seq 1 $(ls $learning_dir/txts/ | wc -l))
+do
+    cat $tmp/out2 | head -n $a | tail -n1 > $learning_dir/clusters/"$(ls $learning_dir/txts/ | head -n$a | tail -n1)"
+done
+}
