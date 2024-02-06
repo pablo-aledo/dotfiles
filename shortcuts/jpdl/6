@@ -18,7 +18,6 @@ do
     xdotool key Ctrl+v
     xdotool key Return
 
-    sleep 10
-
+    xdotool key 5 && shcw jpdl.5
     xdotool key 3 && shcw jpdl.3
 done
