@@ -2,4 +2,23 @@ export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 source ~/.dotfiles/source/.shell/adapt
 
-xdotool key 3 && shcw jpdl.3
+
+cat /tmp/jpdls | while read line
+do
+    course=$(echo $line | cut -d' ' -f1)
+    lesson=$(echo $line | cut -d' ' -f2)
+    link=$(echo $line | cut -d' ' -f3)
+
+    echo $course > /tmp/course
+    echo $lesson > /tmp/n_lesson
+    echo 0 > /tmp/n_file
+
+    echo $link | xclip -sel clip -i
+    xdotool key Ctrl+l
+    xdotool key Ctrl+v
+    xdotool key Return
+
+    sleep 10
+
+    xdotool key 3 && shcw jpdl.3
+done

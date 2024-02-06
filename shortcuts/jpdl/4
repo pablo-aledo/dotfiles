@@ -10,6 +10,10 @@ sleep 1
 xdotool key Left
 sleep 1
 
+printf %s_ $(cat /tmp/course) | xclip -sel clip -i
+xdotool key Ctrl+v
+sleep 1
+
 printf %03d_ $(cat /tmp/n_lesson) | xclip -sel clip -i
 xdotool key Ctrl+v
 sleep 1
