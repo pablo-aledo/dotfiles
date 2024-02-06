@@ -1,0 +1,23 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+xdotool click 1
+sleep 2
+
+xdotool key Alt+f
+sleep 1
+
+xdotool key Left
+sleep 1
+
+printf %03d_ $(cat /tmp/n_lesson) | xclip -sel clip -i
+xdotool key Ctrl+v
+sleep 1
+
+printf %03d_ $(cat /tmp/n_file) | xclip -sel clip -i
+xdotool key Ctrl+v
+sleep 1
+
+xdotool key Return
+
+n=$(cat /tmp/n_file); n=$(( $n + 1 )); echo $n > /tmp/n_file

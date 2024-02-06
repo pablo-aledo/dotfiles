@@ -1,0 +1,5 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+xdotool key 3 && shcw jpdl.3

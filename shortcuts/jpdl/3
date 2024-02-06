@@ -1,0 +1,25 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+sleep 10;
+
+mouseover 1 10000 ~/.dotfiles/shortcuts/images/jp_checkbox.png
+cp /tmp/coordinates /tmp/coordinates_bak
+
+cat /tmp/coordinates_bak | while read line
+do
+    x=$(echo $line | sed -e 's/,/ /g' | cut -d' ' -f1)
+    y=$(echo $line | sed -e 's/,/ /g' | cut -d' ' -f2)
+    xdotool mousemove $x $y
+    xdotool mousemove_relative 5 5
+    xdotool click 1
+
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/jp_download.png && {
+        xdotool key 4 && shcw jpdl.4
+    }
+
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/jp_checkbox_checked.png
+    xdotool click 1
+done
+
