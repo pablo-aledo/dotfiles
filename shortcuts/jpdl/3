@@ -15,7 +15,7 @@ do
     xdotool mousemove_relative 5 5
     xdotool click 1
 
-    mouseover -1 10000 ~/.dotfiles/shortcuts/images/jp_download.png && {
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/jp_download.png && {
         xdotool key 4 && shcw jpdl.4
     }
 
