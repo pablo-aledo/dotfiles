@@ -1186,10 +1186,6 @@ night_avh(){
         rm -fr /tmp/ipname
     fi
 
-    echo '\e[34m notify \e[0m'
-    [ -e /tmp/avl_edit_notify ] && vim /tmp/s2files
-    [ -e /tmp/avl_notify ] && notify 'avhloop' 'cat /tmp/s2files'
-
     echo '\e[34m end \e[0m'
 }
 
