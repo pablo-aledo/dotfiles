@@ -17,10 +17,10 @@ Git(){
         (log_oneline_format) \git log --pretty=format:"%h%x09%an%x09%ad%x09%s" ;;
         (log_oneline_since) \git log --author="Pablo" --since="2013-01-30" --format=oneline ;;
         (log_branch)
-I           base=$(Git branch_base | sed 's/^\(.......\).*/\1/g')
+            base=$(Git branch_base | sed 's/^\(.......\).*/\1/g')
             \git log --oneline --graph | while read line; do [[ "$line" =~ $base ]]  && break; echo "$line"; done ;;
         (log_oneline_base)
-I           base=$(Git branch_base | sed 's/^\(.......\).*/\1/g')
+            base=$(Git branch_base | sed 's/^\(.......\).*/\1/g')
             \git log --oneline --graph | head -n $(stty size | awk '{print $1 - 5}') | grep $base -C1000
         ;;
 
