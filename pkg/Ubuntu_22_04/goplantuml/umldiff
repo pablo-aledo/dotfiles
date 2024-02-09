@@ -1,4 +1,5 @@
 genuml(){
+    [ -e ../genuml_pre.sh ] && source ../genuml_pre.sh
 	find -iname '*.go' | while read line
 	do
 		sed -i '/.*genuml_ignore/d' $line
