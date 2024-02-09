@@ -20,7 +20,7 @@ waiteq(){
     do
         act=$(echo $1 | source /dev/stdin)
         [ "$act" = "$2" ] && break
-        sleep 1
+        sleep 0.5
     done
 }
 
