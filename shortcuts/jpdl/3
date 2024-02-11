@@ -8,7 +8,7 @@ mouseover -1 10000 ~/.dotfiles/shortcuts/images/jp_checkbox.png
 cp /tmp/coordinates /tmp/coordinates_bak
 scrot ~/Descargas/$(printf %s_%03d.png $(cat /tmp/course) $(cat /tmp/n_lesson))
 
-cat /tmp/coordinates_bak | while read line
+cat /tmp/coordinates_bak | sed '1d' | sed '1d' | while read line
 do
     x=$(echo $line | sed -e 's/,/ /g' | cut -d' ' -f1)
     y=$(echo $line | sed -e 's/,/ /g' | cut -d' ' -f2)
