@@ -6,6 +6,7 @@ sleep 10;
 
 mouseover -1 10000 ~/.dotfiles/shortcuts/images/jp_checkbox.png
 cp /tmp/coordinates /tmp/coordinates_bak
+scrot ~/Descargas/$(printf %s_%03d.png $(cat /tmp/course) $(cat /tmp/n_lesson))
 
 cat /tmp/coordinates_bak | while read line
 do
