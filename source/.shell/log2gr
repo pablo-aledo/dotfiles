@@ -108,6 +108,7 @@ ctags_adapt(){
 
 ctags_update(){
     ctags_index kind:f > tags2
+    vim tags2
     \mv tags2 tags
     rm -fr functions
     mkdir functions
