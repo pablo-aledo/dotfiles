@@ -3,7 +3,7 @@ source ~/.dotfiles/source/.shell/xdotool
 
 rm -rf /tmp/skip
 
-if `mouseover 1 100 ~/.dotfiles/shortcuts/images/star_disabled.png`
+if `mouseover 1 10000 ~/.dotfiles/shortcuts/images/star_disabled.png`
 then
     xdotool mousemove_relative 200 0
     xdotool click 1

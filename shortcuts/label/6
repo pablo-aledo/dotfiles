@@ -1,4 +1,5 @@
 export DISPLAY=:1
+source ~/.dotfiles/source/.shell/adapt
 
 xdotool key 1 && sleep 30
 
@@ -6,9 +7,9 @@ cat /tmp/titles | while read title
 do
     echo $title > /tmp/title
 
-    xdotool key 2 && sleep 5
-    xdotool key 3 && sleep 5
-    xdotool key 4 && sleep 5
+    xdotool key 2 && shcw label.2
+    xdotool key 3 && shcw label.3
+    xdotool key 4 && shcw label.4
 done
 
 xdotool key 7 && sleep 5
