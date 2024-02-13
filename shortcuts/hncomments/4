@@ -1,7 +1,7 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
-if `mouseover_resize=true mouseover 1 20000 ~/.dotfiles/shortcuts/images/comments.png`
+if `mouseover_resize=true mouseover 1 30000 ~/.dotfiles/shortcuts/images/comments.png`
 then
     xdotool click 3
     sleep 1
