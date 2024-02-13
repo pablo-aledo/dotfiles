@@ -1,1 +1,1 @@
-echo "$(cat /tmp/title) -> $(cat /tmp/link)" >> /tmp/s2link
+echo "$(cat /tmp/title) -> $(paste -d, -s /tmp/link)" >> /tmp/s2link
