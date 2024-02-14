@@ -266,6 +266,10 @@ case $1 in
     cd /tmp/flowise/docker
     docker build -t flowise .
     cd -
+    ;;
+(daedalos)
+    source ~/.dotfiles/pkg/Docker/daedalos/install.sh
+    ;;
 esac
 }
 
@@ -375,6 +379,7 @@ case $1 in
 (gnumeric)               shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY gnumeric $* ;;
 (gthumb)                 shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY gthumb $* ;;
 (chrome_no_sandbox)      shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY -v /home/pablo_aledo/.config/google-chrome/:/root/.config/google-chrome chrome_no_sandbox google-chrome --no-sandbox $* ;;
+(daedalos)               docker run -dp 3000:3000 --rm --name daedalos daedalos ;;
 (dask_scheduler)         docker run -it --network host daskdev/dask dask-scheduler ;;
 (dask_worker)            docker run -it --network host daskdev/dask dask-worker localhost:8786 ;;
 (dask_worker_pkg)        docker run -it -e EXTRA_APT_PACKAGES="" -e EXTRA_CONDA_PACKAGES="" -e EXTRA_PIP_PACKAGES="" daskdev/dask dask-worker localhost:8786 ;;
