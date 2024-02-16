@@ -120,6 +120,19 @@ ctags_update(){
     meld /tmp/calls ~/log2gr/$1/calls
 }
 
+ctags_update_quick(){
+    ctags_index kind:f > tags2
+    \mv tags2 tags
+    rm -fr functions
+    mkdir functions
+    ctags_extract kind:f | source /dev/stdin
+    ctags_info
+    ctags_adapt $1
+    rm -fr functions tags
+    \cp /tmp/index ~/log2gr/$1/index
+    \cp /tmp/calls ~/log2gr/$1/calls
+}
+
 ctags_insert(){
     function=$1
     file=$(cat index | grep "^$function " | cut -d' ' -f2)
