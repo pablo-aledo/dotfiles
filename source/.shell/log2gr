@@ -506,7 +506,7 @@ comm -12 <(cat graph.bak | sed 's/ -> /\n/g' | sort | uniq) <(cat prev_graph | s
 do
     md51=\$(cat      fnlog_log | grep "^\$node " | sort | uniq | md5sum | awk '{print \$1}')
     md52=\$(cat fnlog_prev_log | grep "^\$node " | sort | uniq | md5sum | awk '{print \$1}')
-    [ \$md51 != \$md52 ] && echo "\$node : {style: {fill: '#FFFFEA'; stroke: yellow}}"
+    [ \$md51 != \$md52 ] && echo "\$node : {style: {fill: '#FFFFEA'; stroke: yellow}}" | sed 's/\./@/g'
 done >> /tmp/graph
 
 if [ "\$(cat prev_graph)" = "\$(cat graph.bak)" ]
