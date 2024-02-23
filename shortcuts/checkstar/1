@@ -9,3 +9,4 @@ killall chrome chromium google-chrome google-chrome-stable
 sleep 1
 google-chrome --profile-directory=Default mail.google.com >/dev/null 2>/dev/null &
 
+echo "===== $(cat /tmp/checkstar_filter)" >> /tmp/checkstar
