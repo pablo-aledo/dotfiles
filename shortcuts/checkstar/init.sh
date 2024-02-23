@@ -3,3 +3,5 @@
 
 echo $filter > /tmp/checkstar_filter
 [ $file != /tmp/titles ] && \cp $file /tmp/titles
+
+xdotool key 6
