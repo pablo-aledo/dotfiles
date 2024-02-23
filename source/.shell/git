@@ -22,8 +22,8 @@ Git(){
             base=$(Git branch_base | sed 's/^\(........\).*/\1/g')
             \git log --pretty=format:"%h%x09%an%x09%ad%x09%s" | while read line; do [[ "$line" =~ $base ]]  && break; echo "$line"; done ;;
         (log_oneline)
-            base=$(Git branch_base | sed 's/^\(........\).*/\1/g')
-            \git log --oneline --graph | head -n $(stty size | awk '{print $1 - 5}') | grep $base -C1000
+            base=$(Git branch_base | sed 's/^\(.......\).*/\1/g')
+            \git log --oneline --graph | head -n $(stty size | awk '{print $1 - 5}') | sed "s/* $base/\x1b[31m>\x1b[0m $base/g"
         ;;
 
         (diff_grep) \git diff --name-only -G"$1" ;;
