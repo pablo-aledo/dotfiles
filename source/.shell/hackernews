@@ -51,6 +51,23 @@ hn_id2titles_archive(){
 #     mv /tmp/checkstar /tmp/checkstar_nlsnir
 #
 #     cat /tmp/checkstar_{ls,nls,nlsir,nlsnir} /tmp/checkstar
+#
+#
+#     csplit ../checkstar '/=====/' '{*}'
+#     rm -fr xx00
+#     mv xx01 checkstar_ls
+#     mv xx02 checkstar_nls
+#     mv xx03 checkstar_nlsir
+#     mv xx04 checkstar_nlsnir
+#
+#     cat checkstar_nlsir   | grep 'disabled' | tee    to_select_unread
+#     cat checkstar_nlsnir  | grep -v 'none'  | tee -a to_select_unread
+#     cat titles | while read line
+#     do
+#         [ "$(cat checkstar_ls  | grep -F $line | grep ' -> none')" != "" ] && \
+#         [ "$(cat checkstar_nls | grep -F $line | grep ' -> none')" != "" ] && \
+#         echo $line
+#     done | tee to_send
 # }
 
 hn_archive(){
