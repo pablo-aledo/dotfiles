@@ -34,41 +34,43 @@ hn_id2titles_archive(){
 #           \                    \
 #            \                     -> not is read -> MOK
 #              -> none -> NOK
-#
-# hn_loop(){
-#     shc checkstar 'label: select' $1; shcw
-#     mv /tmp/checkstar /tmp/checkstar_ls
-#
-#     cat /tmp/checkstar_ls | grep ' -> none' | sed 's/ -> none//g' > /tmp/titles
-#     shc checkstar 'NOT label: select'; shcw
-#     mv /tmp/checkstar /tmp/checkstar_nls
-#
-#     shc checkstar 'NOT label: select is: read'; shcw
-#     mv /tmp/checkstar /tmp/checkstar_nlsir
-#
-#     cat /tmp/checkstar_nlsir | grep ' -> none' | sed 's/ -> none//g' > /tmp/titles
-#     shc checkstar 'NOT label: select NOT is: read'; shcw
-#     mv /tmp/checkstar /tmp/checkstar_nlsnir
-#
-#     cat /tmp/checkstar_{ls,nls,nlsir,nlsnir} /tmp/checkstar
-#
-#
-#     csplit ../checkstar '/=====/' '{*}'
-#     rm -fr xx00
-#     mv xx01 checkstar_ls
-#     mv xx02 checkstar_nls
-#     mv xx03 checkstar_nlsir
-#     mv xx04 checkstar_nlsnir
-#
-#     cat checkstar_nlsir   | grep 'disabled' | tee    to_select_unread
-#     cat checkstar_nlsnir  | grep -v 'none'  | tee -a to_select_unread
-#     cat titles | while read line
-#     do
-#         [ "$(cat checkstar_ls  | grep -F $line | grep ' -> none')" != "" ] && \
-#         [ "$(cat checkstar_nls | grep -F $line | grep ' -> none')" != "" ] && \
-#         echo $line
-#     done | tee to_send
-# }
+
+hn_loop(){
+    return
+
+    shc checkstar 'label: select'; shcw
+    mv /tmp/checkstar /tmp/checkstar_ls
+
+    cat /tmp/checkstar_ls | grep ' -> none' | sed 's/ -> none//g' > /tmp/titles
+    shc checkstar 'NOT label: select'; shcw
+    mv /tmp/checkstar /tmp/checkstar_nls
+
+    cat /tmp/checkstar_nls | grep ' -> none' | sed 's/ -> none//g' > /tmp/titles
+    shc checkstar 'NOT label: select is: read'; shcw
+    mv /tmp/checkstar /tmp/checkstar_nlsir
+
+    cat /tmp/checkstar_nlsir | grep ' -> none' | sed 's/ -> none//g' > /tmp/titles
+    shc checkstar 'NOT label: select NOT is: read'; shcw
+    mv /tmp/checkstar /tmp/checkstar_nlsnir
+
+    cat /tmp/checkstar_{ls,nls,nlsir,nlsnir} > /tmp/checkstar
+
+    csplit ../checkstar '/=====/' '{*}'
+    rm -fr xx00
+    mv xx01 checkstar_ls
+    mv xx02 checkstar_nls
+    mv xx03 checkstar_nlsir
+    mv xx04 checkstar_nlsnir
+
+    cat checkstar_nlsir   | grep 'disabled' | tee    to_select_unread
+    cat checkstar_nlsnir  | grep -v 'none'  | tee -a to_select_unread
+    cat titles | while read line
+    do
+        [ "$(cat checkstar_ls  | grep -F $line | grep ' -> none')" != "" ] && \
+        [ "$(cat checkstar_nls | grep -F $line | grep ' -> none')" != "" ] && \
+        echo $line
+    done | tee to_send
+ }
 
 hn_archive(){
 wget -q 'http://archive.org/wayback/available?url='$1 -O - | jq '.archived_snapshots.closest.url' | sed 's/"//g'
