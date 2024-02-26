@@ -169,3 +169,11 @@ cat $1 > /tmp/ksplit
 cat /tmp/ksplit | grep -v $2
 cat /tmp/ksplit | grep $2
 }
+
+ghdl(){
+    mkd ~/.dotfiles/pkg/Ubuntu_22_04/"$2"
+    wget https://github.com/"$1"/"$2"/archive/refs/heads/"$3".zip
+    unzip "$3.zip"
+    cp "$2"-"$3"/README.md install.sh
+    find -maxdepth 1 -mindepth 1 -type d | xargs rm -fr
+}
