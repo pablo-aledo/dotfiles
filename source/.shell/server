@@ -1199,6 +1199,7 @@ night(){
     false && touch /tmp/avl_edit_notify
     \true && touch /tmp/avl_notify
     false && echo 'google-chrome --proxy-server="localhost:3128" "$1"' > /tmp/avl_chrome_cmd
+    false && chmod +x /tmp/avl_chrome_cmd
     \true && avhloop
     false && rm -fr /tmp/pause
     false && date
