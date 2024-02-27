@@ -746,6 +746,8 @@ case $1 in
 (watchman)               docker run -d -v /etc/localtime:/etc/localtime:ro -v "${HOME}/Downloads:/root/Downloads" --name watchman ${DOCKER_REPO_PREFIX}/watchman --foreground ;;
 (wps)                    shift; docker run -it --rm -v $PWD:/workdir -w /workdir -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix$DISPLAY wps $* ;;
 (wee-slack)              docker run -it -v /etc/localtime:/etc/localtime:ro wee-slack ;;
+(windows)                docker run -it --rm -p 8006:8006 --device=/dev/kvm --cap-add NET_ADMIN --stop-timeout 120 dockurr/windows
+                         google-chrome http://localhost:8006 ;;
 (wireguard)              docker run --rm -it --name wireguard --privileged -v /lib/modules:/lib/modules:ro -v /usr/src:/usr/src:ro r.j3ss.co/wireguard ;;
 (wireshark)              docker run -d -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -v $PWD:/workdir -w /workdir -e DISPLAY=unix$DISPLAY --name wireshark ${DOCKER_REPO_PREFIX}/wireshark ;;
 (wrk)                    shift; docker run -it --rm --log-driver none --name wrk ${DOCKER_REPO_PREFIX}/wrk "$@" ;;
