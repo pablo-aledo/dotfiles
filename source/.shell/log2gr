@@ -117,6 +117,7 @@ ctags_update(){
     [ -e $LOG2GR_DIR/$1/fix_functions ] && source $LOG2GR_DIR/$1/fix_functions
     ctags_info kind:f
     ctags_adapt $1
+    [ -e $LOG2GR_DIR/$1/fix_results ] && source $LOG2GR_DIR/$1/fix_results
     rm -fr functions tags
     meld /tmp/index ~/log2gr/$1/index
     meld /tmp/calls ~/log2gr/$1/calls
@@ -131,6 +132,7 @@ ctags_update_quick(){
     [ -e $LOG2GR_DIR/$1/fix_functions ] && source $LOG2GR_DIR/$1/fix_functions
     ctags_info kind:f
     ctags_adapt $1
+    [ -e $LOG2GR_DIR/$1/fix_results ] && source $LOG2GR_DIR/$1/fix_results
     rm -fr functions tags
     \cp /tmp/index ~/log2gr/$1/index
     \cp /tmp/calls ~/log2gr/$1/calls
