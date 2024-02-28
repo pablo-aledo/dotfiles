@@ -110,6 +110,7 @@ ctags_update(){
     ctags_index kind:f > tags2
     vim tags2
     \mv tags2 tags
+    [ -e $LOG2GR_DIR/$1/fix_ctags ] && source $LOG2GR_DIR/$1/fix_ctags
     rm -fr functions
     mkdir functions
     ctags_extract kind:f | vimexec
@@ -123,6 +124,7 @@ ctags_update(){
 ctags_update_quick(){
     ctags_index kind:f > tags2
     \mv tags2 tags
+    [ -e $LOG2GR_DIR/$1/fix_ctags ] && source $LOG2GR_DIR/$1/fix_ctags
     rm -fr functions
     mkdir functions
     ctags_extract kind:f | source /dev/stdin
