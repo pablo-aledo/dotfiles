@@ -150,6 +150,18 @@ ctags_insert(){
     \mv /tmp/file index
 }
 
+ctags_intersection(){
+cat ~/log2gr/$1/calls | while read line
+do
+    n1=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f1)
+    n2=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f2)
+
+    [ "$(cat $2 | grep "^$n1\$")" != "" ] &&
+    [ "$(cat $2 | grep "^$n2\$")" != "" ] &&
+    echo "$n1 -> $n2"
+done
+}
+
 call_path(){
     src=$(echo $1 | sed 's/\./DOT/g')
 	dst=$(echo $2 | sed 's/\./DOT/g')
