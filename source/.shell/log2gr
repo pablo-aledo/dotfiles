@@ -84,7 +84,7 @@ ctags_info(){
 
     cd ..
 
-    cat tags | grep kind:f | sed -e 's/\t/@/g' -e 's/line://g' -e 's/end://g' | awk 'BEGIN{FS="@"}{print $1" "$2" "$5" "$7}' > /tmp/index
+    cat tags | grep $1 | sed -e 's/\t/@/g' -e 's/line://g' -e 's/end://g' | awk 'BEGIN{FS="@"}{print $1" "$2" "$5" "$7}' > /tmp/index
 }
 
 ctags_adapt(){
@@ -113,7 +113,7 @@ ctags_update(){
     rm -fr functions
     mkdir functions
     ctags_extract kind:f | vimexec
-    ctags_info
+    ctags_info kind:f
     ctags_adapt $1
     rm -fr functions tags
     meld /tmp/index ~/log2gr/$1/index
@@ -126,7 +126,7 @@ ctags_update_quick(){
     rm -fr functions
     mkdir functions
     ctags_extract kind:f | source /dev/stdin
-    ctags_info
+    ctags_info kind:f
     ctags_adapt $1
     rm -fr functions tags
     \cp /tmp/index ~/log2gr/$1/index
