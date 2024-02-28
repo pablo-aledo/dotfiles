@@ -114,6 +114,7 @@ ctags_update(){
     rm -fr functions
     mkdir functions
     ctags_extract kind:f | vimexec
+    [ -e $LOG2GR_DIR/$1/fix_functions ] && source $LOG2GR_DIR/$1/fix_functions
     ctags_info kind:f
     ctags_adapt $1
     rm -fr functions tags
@@ -127,6 +128,7 @@ ctags_update_quick(){
     rm -fr functions
     mkdir functions
     ctags_extract kind:f | source /dev/stdin
+    [ -e $LOG2GR_DIR/$1/fix_functions ] && source $LOG2GR_DIR/$1/fix_functions
     ctags_info kind:f
     ctags_adapt $1
     rm -fr functions tags
