@@ -10,7 +10,8 @@ ctags_index(){
         # end=$(awk -v first=$ini 'NR>=first && /{/              {c++}
         #                          NR>=first && /}/ && c && !--c {print NR; exit}' $file)
         echo "${line}\tend:${end}"
-    done
+    done > tags2
+    \mv tags2 tags
 }
 
 ctags_index_groovy(){
@@ -107,8 +108,7 @@ ctags_adapt(){
 }
 
 ctags_update(){
-    ctags_index kind:f > tags2
-    \mv tags2 tags
+    ctags_index kind:f
     [ -e $LOG2GR_DIR/$1/fix_ctags ] && source $LOG2GR_DIR/$1/fix_ctags
     vim tags
     rm -fr functions
@@ -122,8 +122,7 @@ ctags_update(){
 }
 
 ctags_update_quick(){
-    ctags_index kind:f > tags2
-    \mv tags2 tags
+    ctags_index kind:f
     [ -e $LOG2GR_DIR/$1/fix_ctags ] && source $LOG2GR_DIR/$1/fix_ctags
     rm -fr functions
     mkdir functions
