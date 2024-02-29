@@ -20,7 +20,6 @@ do
 
     [ -e "/tmp/link" ] && rm -rf /tmp/link
     xdotool key 3 ; shcw hncomments.3
-    xdotool key 4 ; shcw hncomments.4
 
     xdotool key 5 && sleep 1
 

@@ -1,0 +1,30 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+if `mouseover 1 10000 ~/.dotfiles/shortcuts/images/http.png`
+then
+    xdotool click 3
+    sleep 1
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/copylink.png && xdotool click 1
+    sleep 1
+    echo "$(xclip -sel clip -o)" > /tmp/link
+fi
+
+if `mouseover_resize=true mouseover 1 30000 ~/.dotfiles/shortcuts/images/comments.png`
+then
+    xdotool click 3
+    sleep 1
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/copylink.png && xdotool click 1
+    sleep 1
+    echo "$(xclip -sel clip -o)" >> /tmp/link
+fi
+
+if `mouseover 1 10000 ~/.dotfiles/shortcuts/images/link.png`
+then
+    xdotool click 3
+    sleep 1
+    mouseover 1 10000 ~/.dotfiles/shortcuts/images/copylink.png && xdotool click 1
+    sleep 1
+    echo "$(xclip -sel clip -o)" >> /tmp/link
+fi
+
