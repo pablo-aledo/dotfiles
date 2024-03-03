@@ -8,9 +8,9 @@ xdotool mousemove 1020 155
 xdotool click 1
 sleep 1
 
-xdotool mousemove 620 540
-xdotool click 1
-sleep 1
+#xdotool mousemove 620 540
+#xdotool click 1
+#sleep 1
 
-xdotool type spa
-xdotool key Return
+#xdotool type spa
+#xdotool key Return

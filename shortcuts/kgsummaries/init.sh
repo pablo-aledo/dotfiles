@@ -1,0 +1,1 @@
+# cat s2link | while read line; do title="$(echo $line | sed 's/\(.*\) -> \(.*\)/\1/g')"; link="$(echo $line | sed 's/\(.*\) -> \(.*\)/\2/g')"; md5=$(echo $title | md5sum | awk '{print $1}'); done | tee /tmp/s2md5
