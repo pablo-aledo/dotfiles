@@ -1308,3 +1308,8 @@ convert_selection(){
         echo "mkcp \"/media/removable/2TB2/homes/admin/Videos/$foldername/$relpath\" ~\"/html/selection/$foldername/$filename\" "
     done
 }
+
+audio_silence(){
+    arecord -d $1 </dev/zero > silence.wav
+    ffmpeg -i silence.wav -acodec mp3 silence.mp3
+}
