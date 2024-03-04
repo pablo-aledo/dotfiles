@@ -177,9 +177,14 @@ cp_if_space(){
 
     if [ $(( $space - $size )) -gt $margin ]
     then
-        echo "\e[32m cp_ok \"$src\" \"$dst\" \e[0m"
-        cp -r "$src" "$dst"
-        echo "$src" >> /tmp/copied
+        if [ -e "$dst"/"$(basename "$src")" ]
+        then
+            echo "\e[31m existing "$src\" \"$dst\" \e[0m"
+        else
+            echo "\e[32m cp_ok \"$src\" \"$dst\" \e[0m"
+            cp -r "$src" "$dst"
+            echo "$src" >> /tmp/copied
+        fi
     else
         echo "\e[31m cp_nok \"$src\" \"$dst\" \e[0m"
         echo "$src" >> /tmp/not_copied
