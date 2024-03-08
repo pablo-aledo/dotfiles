@@ -6,7 +6,8 @@ link1=$( cat /tmp/link2link_line | sed 's/\(.*\) -> \(.*\)/\2/g' )
 echo $subject > /tmp/subject
 echo $link1 > /tmp/link1
 
-google-chrome "$link1" >/dev/null 2>/dev/null &
+[ -e /tmp/avl_proxy ] || google-chrome "$link1" >/dev/null 2>/dev/null &
+[ -e /tmp/avl_proxy ] && google-chrome --proxy-server="localhost:3128" "$link1" >/dev/null 2>/dev/null &
 sleep 3
 
 xdotool key Ctrl+f
