@@ -15,11 +15,15 @@ conda_newdependencies(){
 }
 
 conda_build_docker(){
-source /opt/mambaforge/etc/profile.d/conda.sh
-source /opt/mambaforge/etc/profile.d/mamba.sh
-mamba activate bioconda
-bioconda-utils build recipes config.yml \
-    --lint --docker --mulled-test \
-    --docker-base-image quay.io/bioconda/bioconda-utils-build-env-cos7-$(arch) \
-    --git-range origin/master HEAD
+    source /opt/mambaforge/etc/profile.d/conda.sh
+    source /opt/mambaforge/etc/profile.d/mamba.sh
+    mamba activate bioconda
+    # conda config --add channels defaults
+    # conda config --add channels bioconda
+    # conda config --add channels conda-forge
+    # conda config --set channel_priority strict
+    bioconda-utils build recipes config.yml \
+        --lint --docker --mulled-test \
+        --docker-base-image quay.io/bioconda/bioconda-utils-build-env-cos7-$(arch) \
+        --git-range origin/master HEAD
 }
