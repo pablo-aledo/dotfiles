@@ -13,3 +13,13 @@ conda_newdependencies(){
     cat dependencies | sed 's/ -> /@/g' | cut -d '@' -f2 | sort -u > /tmp/dependencies_right
     comm -13 /tmp/dependencies_left /tmp/dependencies_right
 }
+
+conda_build_docker(){
+source /opt/mambaforge/etc/profile.d/conda.sh
+source /opt/mambaforge/etc/profile.d/mamba.sh
+mamba activate bioconda
+bioconda-utils build recipes config.yml \
+    --lint --docker --mulled-test \
+    --docker-base-image quay.io/bioconda/bioconda-utils-build-env-cos7-$(arch) \
+    --git-range origin/master HEAD
+}
