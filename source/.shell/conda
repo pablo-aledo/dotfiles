@@ -14,6 +14,17 @@ conda_newdependencies(){
     comm -13 /tmp/dependencies_left /tmp/dependencies_right
 }
 
+conda_prune(){
+    cat dependencies_pruned | sed 's/ -> /@/g' | cut -d '@' -f1 | sort -u > /tmp/dependencies_left
+    cat dependencies_pruned | sed 's/ -> /@/g' | cut -d '@' -f2 | sort -u > /tmp/dependencies_right
+    comm -23 <(comm -23 /tmp/dependencies_left /tmp/dependencies_right | sort -u) <(cat conda.packages | sort -u) > /tmp/prune
+
+    cat /tmp/prune | while read line
+    do
+        sed -i "/^$line -> /d" dependencies_pruned
+    done
+}
+
 conda_build_docker(){
     # sudo setfacl --modify user:$USER:rw /var/run/docker.sock
     source /opt/mambaforge/etc/profile.d/conda.sh
