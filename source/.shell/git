@@ -39,6 +39,7 @@ Git(){
 
         (branch_base) \git merge-base master $(\git rev-parse HEAD) ;;
         (branch_rewrite) \git rebase -i $(Git branch_base) ;; # pick, squash, squash, squash...
+        (branch_delete) \git branch --delete $* ;;
         (branch_diff) \git diff $(Git branch_base) $(\git rev-parse HEAD) ;;
         (branch_difftool) \git difftool $(Git branch_base) $(\git rev-parse HEAD) ;;
         (branch_diff_files) \git diff --name-only $(Git branch_base) $(\git rev-parse HEAD) ;;
