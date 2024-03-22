@@ -585,3 +585,22 @@ log2gr_compare_logs(){
     fn=$1
     meld <(cat $LOG2GR_DIR/$project/fnlog_prev_log G "^$fn " | sort | uniq) <(cat $LOG2GR_DIR/$project/fnlog_log G "^$fn " | sort | uniq)
 }
+
+log2gr_disambiguate(){
+    line=$1
+    md5=$(echo $line | md5sum | awk '{print $1}')
+    src=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f1)
+    dst=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f2)
+    srcline=$(cat /tmp/index | grep "^\<$src\>" | head -n1)
+    srcfile=$(echo $srcline | awk '{print $2}')
+    srcline=$(echo $srcline | awk '{print $3}')
+    tmux send-keys -t .1 ":o $srcfile" Enter ":$srcline" Enter '/' "\<$dst\>" Enter g d
+    sleep .1
+    dstline=$(tmc .1 | grep '^ NOR')
+    dstfile=$(echo $dstline | awk '{print $2}')
+    dstline=$(echo $dstline | awk '{print $5}' | cut -d: -f1)
+    echo "$line"
+    echo "$srcfile $srcline"
+    echo "$dstfile $dstline"
+}
+
