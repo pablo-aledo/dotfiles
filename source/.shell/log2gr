@@ -599,13 +599,13 @@ log2gr_disambiguate(){
     dstline=$(tmc .1 | grep '^ NOR')
     dstfile=$(echo $dstline | awk '{print $2}')
     dstline=$(echo $dstline | awk '{print $5}' | cut -d: -f1)
-    echo "$line"
+    echo "===== $line"
     echo "$srcfile $srcline -> $dstfile $dstline"
 }
 
 log2gr_disambiguate_2(){
     line=$1
-    echo "$line"
+    echo "===== $line"
     md5=$(echo $line | md5sum | awk '{print $1}')
     src=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f1)
     dst=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f2)
