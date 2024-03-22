@@ -600,7 +600,6 @@ log2gr_disambiguate(){
     dstfile=$(echo $dstline | awk '{print $2}')
     dstline=$(echo $dstline | awk '{print $5}' | cut -d: -f1)
     echo "$line"
-    echo "$srcfile $srcline"
-    echo "$dstfile $dstline"
+    echo "$srcfile $srcline -> $dstfile $dstline"
 }
 
