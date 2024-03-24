@@ -615,7 +615,7 @@ log2gr_disambiguate_2(){
     srcline=$(echo $srcline | awk '{print $3}')
     psrcline=0
     tmux send-keys -t .1 ":o $srcfile" Enter ":$srcline" Enter 'j/' "\<$dst\>" Enter
-    while [ $srcline -gt $psrcline -a $srcline -lt $endline ]
+    while true
     do
         sleep .1
         srcline=$(tmc .1 | grep '^ NOR' | awk '{print $5}' | cut -d: -f1)
@@ -629,8 +629,56 @@ log2gr_disambiguate_2(){
         sleep .1
         psrcline=$srcline
         srcline=$(tmc .1 | grep '^ NOR' | awk '{print $5}' | cut -d: -f1)
+        [ $srcline -lt $psrcline -o $srcline -gt $endline ] && break
     done
 }
+
+log2gr_disambiguate_3() {
+    line=$1
+    echo "===== $line"
+    md5=$(echo $line | md5sum | awk '{print $1}')
+    src=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f1)
+    dst=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f2)
+    srcline=$(cat /tmp/index | grep "^\<$src\>" | head -n1)
+    srcfile=$(echo $srcline | awk '{print $2}')
+    endline=$(echo $srcline | awk '{print $4}')
+    srcline=$(echo $srcline | awk '{print $3}')
+    psrcline=0
+    tmux send-keys -t .1 ":o $srcfile" Enter ":$srcline" Enter 'j/' "\<$dst\>" Enter
+    sleep .1
+    while true
+    do
+        sleep .1
+        srcline=$(tmc .1 | grep '^ NOR' | awk '{print $5}' | cut -d: -f1)
+
+        retfile=$(tmc .1 | grep '^ NOR' | awk '{print $2}')
+        retline=$(tmc .1 | grep '^ NOR' | awk '{print $5}' | cut -d: -f1)
+        curfile=""
+        curline=""
+
+        tmux send-keys -t .1 gd
+        sleep .1
+        dstline=$(tmc .1 | grep '^ NOR')
+        dstfile=$(echo $dstline | awk '{print $2}')
+        dstline=$(echo $dstline | awk '{print $5}' | cut -d: -f1)
+        echo "$srcfile $srcline -> $dstfile $dstline"
+
+        while true
+        do
+            tmux send-keys -t .1 C-o
+            sleep .1
+            curfile=$(tmc .1 | grep '^ NOR' | awk '{print $2}')
+            curline=$(tmc .1 | grep '^ NOR' | awk '{print $5}' | cut -d: -f1)
+            [ "$curfile" = "$retfile" -a "$curline" = "$retline" ] && break
+        done
+
+        tmux send-keys -t .1 n
+        psrcline=$srcline
+        srcline=$(tmc .1 | grep '^ NOR' | awk '{print $5}' | cut -d: -f1)
+        [ $srcline -lt $psrcline -o $srcline -gt $endline ] && break
+    done
+}
+
 
 idx_add_upd(){
     cat $LOG2GR_DIR/$1/index_add | grep -v '^#' | while read line
