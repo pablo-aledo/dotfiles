@@ -594,7 +594,7 @@ log2gr_disambiguate(){
     srcline=$(cat /tmp/index | grep "^\<$src\>" | head -n1)
     srcfile=$(echo $srcline | awk '{print $2}')
     srcline=$(echo $srcline | awk '{print $3}')
-    tmux send-keys -t .1 ":o $srcfile" Enter ":$srcline" Enter '/' "\<$dst\>" Enter g d
+    tmux send-keys -t .1 ":o $srcfile" Enter ":$srcline" Enter '/' "\<$dst\>" Enter gd
     sleep .1
     dstline=$(tmc .1 | grep '^ NOR')
     dstfile=$(echo $dstline | awk '{print $2}')
@@ -619,13 +619,13 @@ log2gr_disambiguate_2(){
     do
         sleep .1
         srcline=$(tmc .1 | grep '^ NOR' | awk '{print $5}' | cut -d: -f1)
-        tmux send-keys -t .1 g d
+        tmux send-keys -t .1 gd
         sleep .1
         dstline=$(tmc .1 | grep '^ NOR')
         dstfile=$(echo $dstline | awk '{print $2}')
         dstline=$(echo $dstline | awk '{print $5}' | cut -d: -f1)
         echo "$srcfile $srcline -> $dstfile $dstline"
-        tmux send-keys -t .1 C-o C-o n
+        tmux send-keys -t .1 C-o; sleep .1; tmux send-keys -t .1 n
         sleep .1
         psrcline=$srcline
         srcline=$(tmc .1 | grep '^ NOR' | awk '{print $5}' | cut -d: -f1)
@@ -665,6 +665,9 @@ log2gr_disambiguate_3() {
 
         while true
         do
+            curfile=$(tmc .1 | grep '^ NOR' | awk '{print $2}')
+            curline=$(tmc .1 | grep '^ NOR' | awk '{print $5}' | cut -d: -f1)
+            [ "$curfile" = "$retfile" -a "$curline" = "$retline" ] && break
             tmux send-keys -t .1 C-o
             sleep .1
             curfile=$(tmc .1 | grep '^ NOR' | awk '{print $2}')
