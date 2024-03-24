@@ -655,3 +655,25 @@ idx_add_upd(){
     meld /tmp/index_add_2 $LOG2GR_DIR/$1/index_add
 }
 
+idx_add_upd_quick(){
+    cat $LOG2GR_DIR/$1/index_add | grep -v '^#' | while read line
+    do
+    	fn=$(echo $line | cut -d' ' -f1 | sed 's/\.//g')
+    	fl=$(echo $line | cut -d' ' -f2)
+    	st=$(echo $line | cut -d' ' -f3)
+    	ed=$(echo $line | cut -d' ' -f4)
+    	echo $fn $fl
+    done | sort -u > /tmp/index_add
+
+    cat tags | sed -e 's/\t/@/g' -e 's/line://g' -e 's/end://g' | awk 'BEGIN{FS="@"}{print $1" "$2" "$5" "$7}' > /tmp/tagsindex
+
+    mgrep_cross /tmp/index_add /tmp/tagsindex | while read line
+    do
+    	fn=$(echo $line | cut -d' ' -f1)
+    	fl=$(echo $line | cut -d' ' -f2)
+    	st=$(echo $line | cut -d' ' -f3)
+    	ed=$(echo $line | cut -d' ' -f4)
+    	echo $fn $fl $st $ed
+    done | sort -u > /tmp/index_add_2
+    \cp /tmp/index_add_2 $LOG2GR_DIR/$1/index_add
+}
