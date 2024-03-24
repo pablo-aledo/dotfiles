@@ -675,6 +675,10 @@ idx_add_upd_quick(){
     	ed=$(echo $line | cut -d' ' -f4)
     	echo $fn $fl $st $ed
     done | sort -u > /tmp/index_add_2
-    [ $(cat /tmp/index_add_2 | wc -l) != $(cat $LOG2GR_DIR/$1/index_add | wc -l) ] && meld /tmp/index_add_2 $LOG2GR_DIR/$1/index_add
-    \cp /tmp/index_add_2 $LOG2GR_DIR/$1/index_add
+    if [ $(cat /tmp/index_add_2 | wc -l) != $(cat $LOG2GR_DIR/$1/index_add | wc -l) ]
+    then
+        meld /tmp/index_add_2 $LOG2GR_DIR/$1/index_add
+    else
+        \cp /tmp/index_add_2 $LOG2GR_DIR/$1/index_add
+    fi
 }
