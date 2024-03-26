@@ -46,6 +46,6 @@
     "vim.handleKeys": {
       "<C-a>": false,
       "<C-f>": false
-    }
-
+    },
+    "editor.mouseWheelZoom": true
 }
