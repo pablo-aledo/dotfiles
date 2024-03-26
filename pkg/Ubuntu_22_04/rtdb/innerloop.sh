@@ -23,7 +23,6 @@ pga_vis_update(){
     echo -n "${group}.\"${key}\": \"${key} " >> graph.im
     for a in $*
     do
-        echo -n "\"$a\":"
         value=$(echo $line | jq ".$a" | rmq)
         echo -n "\\\\n$a:$value " >> graph.im
     done
