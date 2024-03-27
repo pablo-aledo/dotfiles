@@ -138,6 +138,20 @@ ctags_update_quick(){
     \cp /tmp/calls ~/log2gr/$1/calls
 }
 
+ctags_update_keep(){
+    ctags_index kind:f
+    [ -e $LOG2GR_DIR/$1/fix_ctags ] && source $LOG2GR_DIR/$1/fix_ctags
+    rm -fr functions
+    mkdir functions
+    ctags_extract kind:f | source /dev/stdin
+    [ -e $LOG2GR_DIR/$1/fix_functions ] && source $LOG2GR_DIR/$1/fix_functions
+    ctags_info kind:f
+    ctags_adapt $1
+    [ -e $LOG2GR_DIR/$1/fix_results ] && source $LOG2GR_DIR/$1/fix_results
+    \cp /tmp/index ~/log2gr/$1/index
+    \cp /tmp/calls ~/log2gr/$1/calls
+}
+
 ctags_insert(){
     function=$1
     file=$(cat index | grep "^$function " | cut -d' ' -f2)
