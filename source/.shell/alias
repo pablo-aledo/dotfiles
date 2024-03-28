@@ -171,7 +171,15 @@ cat /tmp/ksplit | grep $2
 }
 
 ghdl(){
-    mkd ~/.dotfiles/pkg/Ubuntu_22_04/"$2"
+    if [ $# = 4 ]
+    then
+        folder=$1
+        shift
+    else
+        folder=$(distr)
+    fi
+
+    mkd ~/.dotfiles/pkg/$folder/"$2"
     wget https://github.com/"$1"/"$2"/archive/refs/heads/"$3".zip
     unzip "$3.zip"
     [ -e "$2"-"$3"/README.md ] && cp "$2"-"$3"/README.md install.sh
