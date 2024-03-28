@@ -54,5 +54,6 @@ mgrep_cross () {
 	do
 		echo mgrep /tmp/mgrep2 $line
 	done > /tmp/mgrep_script
-	source /tmp/mgrep_script
+    paste -d' ' <(cat /tmp/mgrep_script | cut -d' ' -f1,2) <(cat /tmp/mgrep_script | sed -e 's/^/"/g' -e 's/ /" "/g' -e 's/$/"/g' | awk '{$1=""; $2=""; print}') > /tmp/mgrep_script_2
+	source /tmp/mgrep_script_2
 }
