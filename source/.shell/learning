@@ -1815,11 +1815,15 @@ mkdir graphs
 cat << EOF > graphs/scatter.py
 import plotly.express as px
 import pandas
-df = pandas.read_table("scatter.txt", sep=' ')
+df = pandas.read_table("scatter.txt", sep=',')
 fig = px.scatter(x=df['x'], y=df['y'], color=df['color'], hover_name=df['name'])
 fig.show()
 fig.write_html("scatter.html")
 EOF
+}
+
+graphs.compose_data(){
+(echo 'x,y,color,name'; paste -d, <(cat vectors_reduced/* | sed -e 's/\[//g' -e 's/\]//g') <(cat clusters/* | sed -e 's/^/"/g' -e 's/$/"/g')  <(cat txts/* | sed -e 's/^/"/g' -e 's/$/"/g')) > graphs/scatter.txt
 }
 
 learning.tmpdir(){
