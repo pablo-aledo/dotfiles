@@ -2404,6 +2404,7 @@ learning.get_documents(){
 }
 
 learning.restart(){
+    [ $learning_dir = $HOME/learning ] && return
     rm -rf $learning_dir
     mkdir -p $learning_dir/documents
     mkdir -p $learning_dir/features
@@ -2414,6 +2415,7 @@ learning.restart(){
 }
 
 learning.restart(){
+    [ $learning_dir = $HOME/learning ] && return
     cd $learning_dir && ls | grep -E -v '^documents$' | grep -E -v '^features$' | grep -E -v '^topics$' | grep -E -v 'summaries' | grep -E -v '^metadata$' | grep -E -v '^configure$' | grep -E -v '^regression_fit$' | grep -E -v cache | grep -E -v keep | xargs rm -rf
     mkdir -p $tmp
 }
