@@ -20,3 +20,13 @@ readsomething2(){
       xdotool key Super+Up
 }
 
+cplink(){
+    sleep 0.5
+    xdotool key Ctrl+l   ; sleep 0.1
+    xdotool key Ctrl+c   ; sleep 0.1
+    xdotool key Alt+Tab  ; sleep 0.1
+    xdotool key Ctrl+v   ; sleep 0.1
+    xdotool key Return   ; sleep 0.1
+    xdotool key Alt+Tab  ; sleep 0.1
+    xdotool key Ctrl+Tab ; sleep 0.1
+}
