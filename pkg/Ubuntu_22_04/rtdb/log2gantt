@@ -1,0 +1,73 @@
+log2gantt(){
+logfile=$1
+eventdef=$2
+
+rm -fr /tmp/eventmap
+cat $eventdef | while read eventline
+do
+	callers=$(echo $eventline | cut -d' ' -f1)
+	callere=$(echo $eventline | cut -d' ' -f2)
+	evname=$(echo $eventline | cut -d' ' -f3)
+	fields=$(echo $eventline | cut -d' ' -f4)
+	grepex=$(echo $eventline | cut -d' ' -f5)
+	cat $logfile | grep $grepex | while read line
+	do
+	        [ "$(echo $line | jq '.caller' | rmq)" = "$callers" -o "$(echo $line | jq '.caller' | rmq)" = "$callere" ] && \
+	                echo $(echo $line | jq -c '. + {"event": "'$evname'", "callers": "'$callers'", "callere": "'$callere'"} | {event, callers, callere,'$fields'}') "->" \
+	                	$(echo $line | jq -c '. + {"event": "'$evname'"} | {event,'$fields'}' | Md5sum) \
+		                $(echo $line | jq -c '. + {"caller": "'$callers'"} | {caller,'$fields'}' | Md5sum) \
+		                $(echo $line | jq -c '. + {"caller": "'$callere'"} | {caller,'$fields'}' | Md5sum)
+	done | tee -a /tmp/eventmap
+done
+
+rm -fr /tmp/ev_start /tmp/ev_end
+cat /tmp/eventmap | while read eventline
+do
+	hashes=$(echo $eventline | sed 's/ -> /@/g' | cut -d@ -f2)
+	hashg=$(echo $hashes | cut -d' ' -f1)
+	hashs=$(echo $hashes | cut -d' ' -f2)
+	hashe=$(echo $hashes | cut -d' ' -f3)
+	callers=$(cat /tmp/eventmap | grep $hashg | sed 's/ -> /@/g' | cut -d@ -f1 | jq '.callers' | rmq)
+	callere=$(cat /tmp/eventmap | grep $hashg | sed 's/ -> /@/g' | cut -d@ -f1 | jq '.callere' | rmq)
+	fields=$(cat /tmp/eventmap | grep $hashg | head -n1 | sed 's/ -> /@/g' | cut -d@ -f1 | jq -r 'del(.callere,.callers,.event) | keys[]' | paste -d, -s)
+	cat $logfile | grep $callers | while read line
+	do
+		[ $(echo $line | jq -c '{caller,'$fields'}' | Md5sum) = $hashs ] && echo $(echo $line | jq '.time') $hashg
+	done | tee -a /tmp/ev_start
+	cat $logfile | grep $callere | while read line
+	do
+		[ $(echo $line | jq -c '{caller,'$fields'}' | Md5sum) = $hashe ] && echo $(echo $line | jq '.time') $hashg
+	done | tee -a /tmp/ev_end
+done
+
+rm -fr /tmp/hashse /tmp/rowse
+cat /tmp/ev_start | while read startline
+do
+	timest=$(echo $startline | cut -d' ' -f1)
+	hashg=$(echo $startline | cut -d' ' -f2)
+	timeend=$(cat /tmp/ev_end | awk -v ts=$timest -v hg=$hashg '$1 > ts && $2 = hg {print $1; exit}')
+	echo '{'$hashg'}' $timest $timeend
+done > /tmp/hashse
+cp /tmp/hashse /tmp/rowse
+
+rm -fr /tmp/hashrow
+cat /tmp/eventmap | while read eventline
+do
+	hashes=$(echo $eventline | sed 's/ -> /@/g' | cut -d@ -f2)
+	hashg=$(echo $hashes | cut -d' ' -f1)
+	echo $hashg
+done | sort -u > /tmp/hashgs
+n=0
+cat /tmp/hashgs | while read line
+do
+	echo $line $n
+	n=$(( $n + 1 ))
+done > /tmp/hashrow
+
+cat /tmp/hashrow | while read line
+do
+	hashg=$(echo $line | cut -d' ' -f1)
+	row=$(echo $line | cut -d' ' -f2)
+	sed -i 's/{'$hashg'}/'$row'/g' /tmp/rowse
+done
+}
