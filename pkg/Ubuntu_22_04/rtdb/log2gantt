@@ -45,7 +45,7 @@ cat /tmp/ev_start | while read startline
 do
 	timest=$(echo $startline | cut -d' ' -f1)
 	hashg=$(echo $startline | cut -d' ' -f2)
-	timeend=$(cat /tmp/ev_end | awk -v ts=$timest -v hg=$hashg '$1 > ts && $2 = hg {print $1; exit}')
+	timeend=$(cat /tmp/ev_end | awk -v ts=$timest -v hg=$hashg '$1 > ts && $2 == hg {print $1; exit}')
 	echo '{'$hashg'}' $timest $timeend
 done > /tmp/hashse
 cp /tmp/hashse /tmp/rowse
