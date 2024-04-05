@@ -17,7 +17,7 @@ do
 	                	$(echo $line | jq -c '. + {"event": "'$evname'"} | {event,'$fields'}' | Md5sum) \
 		                $(echo $line | jq -c '. + {"caller": "'$callers'"} | {caller,'$fields'}' | Md5sum) \
 		                $(echo $line | jq -c '. + {"caller": "'$callere'"} | {caller,'$fields'}' | Md5sum)
-	done | tee -a /tmp/eventmap
+	done | sort -u >> /tmp/eventmap
 done
 
 rm -fr /tmp/ev_start /tmp/ev_end
@@ -33,11 +33,11 @@ do
 	cat $logfile | grep $callers | while read line
 	do
 		[ $(echo $line | jq -c '{caller,'$fields'}' | Md5sum) = $hashs ] && echo $(echo $line | jq '.time') $hashg
-	done | tee -a /tmp/ev_start
+	done >> /tmp/ev_start
 	cat $logfile | grep $callere | while read line
 	do
 		[ $(echo $line | jq -c '{caller,'$fields'}' | Md5sum) = $hashe ] && echo $(echo $line | jq '.time') $hashg
-	done | tee -a /tmp/ev_end
+	done >> /tmp/ev_end
 done
 
 rm -fr /tmp/hashse /tmp/rowse
@@ -70,4 +70,6 @@ do
 	row=$(echo $line | cut -d' ' -f2)
 	sed -i 's/{'$hashg'}/'$row'/g' /tmp/rowse
 done
+
+cat /tmp/rowse
 }
