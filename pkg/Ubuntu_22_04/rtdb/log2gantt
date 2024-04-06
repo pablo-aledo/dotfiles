@@ -13,7 +13,7 @@ do
 	cat $logfile | grep $grepex | while read line
 	do
 	        [ "$(echo $line | jq '.caller' | rmq)" = "$callers" -o "$(echo $line | jq '.caller' | rmq)" = "$callere" ] && \
-	                echo $(echo $line | jq -c '. + {"event": "'$evname'", "callers": "'$callers'", "callere": "'$callere'", "grepex": "'$grepex'"} | {event, callers, callere,grepex,'$fields'}') "->" \
+	                echo $(echo $line | jq -c '. + {"event": "'$evname'","callers": "'$callers'","callere": "'$callere'","grepex": "'$grepex'"} | {event,callers,callere,grepex,'$fields'}') "->" \
 	                	$(echo $line | jq -c '. + {"event": "'$evname'","grepex": "'$grepex'"} | {event,grepex,'$fields'}' | Md5sum) \
 		                $(echo $line | jq -c '. + {"caller": "'$callers'","grepex":"'$grepex'"} | {caller,grepex,'$fields'}' | Md5sum) \
 		                $(echo $line | jq -c '. + {"caller": "'$callere'","grepex":"'$grepex'"} | {caller,grepex,'$fields'}' | Md5sum)
@@ -30,7 +30,7 @@ do
 	callers=$(cat /tmp/eventmap | grep $hashg | sed 's/ -> /@/g' | cut -d@ -f1 | jq '.callers' | rmq)
 	callere=$(cat /tmp/eventmap | grep $hashg | sed 's/ -> /@/g' | cut -d@ -f1 | jq '.callere' | rmq)
 	grepex=$(cat /tmp/eventmap | grep $hashg | sed 's/ -> /@/g' | cut -d@ -f1 | jq '.grepex' | rmq)
-	fields=$(cat /tmp/eventmap | grep $hashg | head -n1 | sed 's/ -> /@/g' | cut -d@ -f1 | jq -r 'del(.callere,.callers,.event,.grepex) | keys[]' | paste -d, -s)
+	fields=$(cat /tmp/eventmap | grep $hashg | head -n1 | sed 's/ -> /@/g' | cut -d@ -f1 | jq -r 'del(.event,.callers,.callere,.grepex) | keys[]' | paste -d, -s)
 	cat $logfile | grep $callers | grep $grepex | while read line
 	do
 		[ $(echo $line | jq -c '. + {"grepex": "'$grepex'"} | {caller,grepex,'$fields'}' | Md5sum) = $hashs ] && echo $(echo $line | jq '.time') $hashg
