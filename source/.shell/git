@@ -36,7 +36,7 @@ Git(){
         (diff_branch) \git diff $(Git branch_base) $(\git rev-parse HEAD) ;;
         (difftool_branch) \git difftool $(Git branch_base) $(\git rev-parse HEAD) ;;
         (diff_branch_files) \git diff --name-only $(Git branch_base) $(\git rev-parse HEAD) ;;
-        (diff_with_lines) \git diff | gawk '
+        (diff_with_lines) \git diff $* | gawk '
               match($0,"^@@ -([0-9]+),([0-9]+) [+]([0-9]+),([0-9]+) @@",a){
                 left=a[1]
                 ll=length(a[2])
