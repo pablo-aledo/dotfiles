@@ -238,6 +238,7 @@ avhome_mail_server(){
     rm -fr to_send
 
     [ -e /tmp/avh_proxy ] && source /tmp/avh_proxy && [ -e "$AVH_PROXY_PEM" ] && chmod 0600 $AVH_PROXY_PEM
+    [ -e /tmp/avh_proxy ] || AVH_PROXY_IP=""
     if [ "$AVH_PROXY_IP" != "" ]
     then
 		pemflag=`[ "$AVH_PROXY_PEM" != "" ] && echo "-i $AVH_PROXY_PEM"; [ "$AVH_PROXY_PEM" = "" ] && echo ""`
