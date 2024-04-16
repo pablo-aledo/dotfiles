@@ -6,10 +6,11 @@ avxmail_webcontent=true
 # AVH_PROXY_IP=
 # AVH_PROXY_USER=$USER
 # AVH_PROXY_PEM=/tmp/avh_proxy_pem
+# AVH_PROXY_PORT=22
 
 # Test:
-# ssh -i $AVH_PROXY_PEM $AVH_PROXY_USER@$AVH_PROXY_IP
-# ssh -i $AVH_PROXY_PEM $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q https://avxhm.se/ebooks/hardware -O -"
+# ssh -i $AVH_PROXY_PEM -p $AVH_PROXY_PORT $AVH_PROXY_USER@$AVH_PROXY_IP
+# ssh -i $AVH_PROXY_PEM -p $AVH_PROXY_PORT $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q https://avxhm.se/ebooks/hardware -O -"
 
 DESCARGAS_NAS=/media/DATA/NAS/Descargas
 DESCARGAS_LOCAL=/media/DATA/Descargas
@@ -190,7 +191,8 @@ avhome_get_new_titles(){
 
     if [ "$AVH_PROXY_IP" != "" ]
     then
-        ssh -i $AVH_PROXY_PEM -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q --no-check-certificate https://avxhm.se/ebooks/$1 -O -" > dl
+		pemflag=`[ "$AVH_PROXY_PEM" != "" ] && echo "-i $AVH_PROXY_PEM"; [ "$AVH_PROXY_PEM" = "" ] && echo ""`
+        ssh `echo $pemflag` -p $AVH_PROXY_PORT -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q --no-check-certificate https://avxhm.se/ebooks/$1 -O -" > dl
     else
         wget -q --no-check-certificate https://avxhm.se/ebooks/$1 -O dl 2>/dev/null
     fi
@@ -217,7 +219,8 @@ avhome_get_new_titles_2(){
 
     if [ "$AVH_PROXY_IP" != "" ]
     then
-        ssh -i $AVH_PROXY_PEM -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q --no-check-certificate $url -O -" > dl
+		pemflag=`[ "$AVH_PROXY_PEM" != "" ] && echo "-i $AVH_PROXY_PEM"; [ "$AVH_PROXY_PEM" = "" ] && echo ""`
+        ssh `echo $pemflag` -p $AVH_PROXY_PORT -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q --no-check-certificate $url -O -" > dl
     else
         wget -q --no-check-certificate $url -O dl 2>/dev/null
     fi
@@ -234,22 +237,11 @@ avhome_mail_server(){
 
     rm -fr to_send
 
-    # for topic in programming_development graphics_drawing_design engeneering_technology hardware science_books security_info software
-    # do
-    #     [ -e /tmp/avh_proxy ] && source /tmp/avh_proxy && chmod 0600 $AVH_PROXY_PEM
-    #     if [ "$AVH_PROXY_IP" != "" ]
-    #     then
-    #         ssh -i $AVH_PROXY_PEM -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "echo '===== Connected ====='"
-    #     fi
-    #     avhome_get_new_titles $topic | while read line
-    #     do
-    #         echo $line >> to_send
-    #     done
-    # done
-    [ -e /tmp/avh_proxy ] && source /tmp/avh_proxy && chmod 0600 $AVH_PROXY_PEM
+    [ -e /tmp/avh_proxy ] && source /tmp/avh_proxy && [ -e "$AVH_PROXY_PEM" ] && chmod 0600 $AVH_PROXY_PEM
     if [ "$AVH_PROXY_IP" != "" ]
     then
-        ssh -i $AVH_PROXY_PEM -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "echo '===== Connected ====='"
+		pemflag=`[ "$AVH_PROXY_PEM" != "" ] && echo "-i $AVH_PROXY_PEM"; [ "$AVH_PROXY_PEM" = "" ] && echo ""`
+        ssh `echo $pemflag` -p $AVH_PROXY_PORT -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "echo '===== Connected ====='"
     fi
     avhome_get_new_titles_2 | while read line
     do
