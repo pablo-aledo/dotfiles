@@ -16,14 +16,18 @@ sleep 10
 
 for a in $(seq 1 $(cat /tmp/count))
 do
-    xdotool key 2 && shcw s2link.2
+    rm -rf /tmp/link
 
-    [ -e "/tmp/link" ] && rm -rf /tmp/link
+    xdotool key 2 ; shcw getlinks.2
     xdotool key 3 ; shcw getlinks.3
-
     xdotool key 5 && sleep 1
-
     xdotool key j && sleep 1
+
+    while [ -e /tmp/pause ]
+    do
+        sleep 10
+    done
+
 done
 
 xdotool key 0
