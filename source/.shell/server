@@ -1166,6 +1166,7 @@ night_avh(){
     sleep 10
 
     echo '\e[34m avl \e[0m'
+    [ -e /tmp/avl_edit_s2link ] && vim /tmp/s2link
     shc avl
     DISPLAY=:1 xdotool key 6
     sleep 1 && shcw
