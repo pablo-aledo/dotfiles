@@ -14,10 +14,10 @@ genuml(){
 }
 
 umldiff(){
-	git checkout master
-	genuml /tmp/umldiff_main.plantuml
-	git checkout $1
-	genuml /tmp/umldiff_branch.plantuml
+    review_leaf=$(Git rev-parse HEAD)
+    review_base=$(Git branch_base)
+	git checkout $review_base; genuml /tmp/umldiff_main.plantuml
+	git checkout $review_leaf; genuml /tmp/umldiff_branch.plantuml
 
 	cat /tmp/umldiff_main.plantuml | awk '/^namespace/{namespace=$2; next}/ *(interface|class)/{class=$2}{print namespace"/"class"/"$0}' | grep '[a-zA-Z0-9]*/[a-zA-Z0-9]*/ *[\+\-].*' > /tmp/umldiff_main.summary
 	cat /tmp/umldiff_branch.plantuml | awk '/^namespace/{namespace=$2; next}/ *(interface|class)/{class=$2}{print namespace"/"class"/"$0}' | grep '[a-zA-Z0-9]*/[a-zA-Z0-9]*/ *[\+\-].*' > /tmp/umldiff_branch.summary
