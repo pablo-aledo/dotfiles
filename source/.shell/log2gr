@@ -189,9 +189,10 @@ done
 }
 
 ctags_intersection_frontier(){
+mgrep_cross $2 ~/log2gr/$1/calls > /tmp/ctags_intersection_frontier_mgrep_cross
 cat $2 | while read line
 do
-    mgrep_cross $2 ~/log2gr/$1/calls | while read call_line
+    cat /tmp/ctags_intersection_frontier_mgrep_cross | while read call_line
     do
         n1=$(echo $call_line | sed 's/ -> /@/g' | cut -d@ -f1)
         n2=$(echo $call_line | sed 's/ -> /@/g' | cut -d@ -f2)
