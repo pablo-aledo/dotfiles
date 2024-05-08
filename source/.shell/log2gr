@@ -197,7 +197,7 @@ do
         n2=$(echo $call_line | sed 's/ -> /@/g' | cut -d@ -f2)
         [ $n2 = $line ] && echo $n1
     done
-done | sort -u
+done
 }
 
 call_path(){
