@@ -192,7 +192,7 @@ do
     do
         n1=$(echo $call_line | sed 's/ -> /@/g' | cut -d@ -f1)
         n2=$(echo $call_line | sed 's/ -> /@/g' | cut -d@ -f2)
-        [ $n2 == $line ] && echo $n1
+        [ $n2 = $line ] && echo $n1
     done
 done | sort -u > /tmp/ctags_intersection_frontier
 }
