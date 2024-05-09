@@ -182,8 +182,8 @@ do
     n1=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f1)
     n2=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f2)
 
-    [ "$(cat $2 | grep "^$n1\$")" != "" ] &&
-    [ "$(cat $2 | grep "^$n2\$")" != "" ] &&
+    [ "$(cat $2 | grep -v '^#.*' | grep "^$n1\$")" != "" ] &&
+    [ "$(cat $2 | grep -v '^#.*' | grep "^$n2\$")" != "" ] &&
     echo "$n1 -> $n2"
 done
 }
