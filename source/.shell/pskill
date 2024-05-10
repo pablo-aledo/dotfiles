@@ -19,5 +19,5 @@ spskill(){
         done
         return
     }
-    ps aux | grep "$1" | grep -v grep | awk '{print $2}' | xargs sudo kill
+    ps aux | grep "$1" | grep -v grep | awk '{print $2}' | xargs sudo kill -9
 }
