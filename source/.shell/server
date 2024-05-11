@@ -1197,6 +1197,7 @@ night(){
     false && rm -fr /tmp/avl_progress
     \true && touch /tmp/avl_forward
     \true && touch /tmp/avl_protect_space
+    false && touch /tmp/avl_edit_s2link
     false && touch /tmp/avl_edit_notify
     \true && touch /tmp/avl_notify
     false && touch /tmp/avl_proxy
