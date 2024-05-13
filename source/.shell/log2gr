@@ -206,12 +206,12 @@ ctags_update_branch(){
     leaf=$(Git branch_current)
 
     git checkout $base
-    ctags_update_quick $1
+    ctags_update_keep $1
     ls functions > /tmp/functions_base
     cat tags     > /tmp/tags_base
 
     git checkout $leaf
-    ctags_update_quick $1
+    ctags_update_keep $1
     ls functions > /tmp/functions_leaf
     cat tags     > /tmp/tags_leaf
 
