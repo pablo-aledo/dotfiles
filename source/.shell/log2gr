@@ -205,7 +205,7 @@ ctags_update_branch(){
     base=$(Git branch_base)
     leaf=$(Git branch_current)
 
-    [ -e /tmp/ctags_extra_keyworkds ] && mv /tmp/ctags_extra_keywords{,_bak}
+    [ -e /tmp/ctags_extra_keywords ] && \mv /tmp/ctags_extra_keywords{,_bak}
 
     git checkout $base
     ctags_update_keep $1
@@ -219,7 +219,7 @@ ctags_update_branch(){
     cat tags     > /tmp/tags_leaf
     git clean -df
 
-    [ -e /tmp/ctags_extra_keyworkds_bak ] && mv /tmp/ctags_extra_keywords{_bak,}
+    [ -e /tmp/ctags_extra_keywords_bak ] && \mv /tmp/ctags_extra_keywords{_bak,}
 }
 
 call_path(){
