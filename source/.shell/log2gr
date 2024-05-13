@@ -205,6 +205,8 @@ ctags_update_branch(){
     base=$(Git branch_base)
     leaf=$(Git branch_current)
 
+    [ -e /tmp/ctags_extra_keyworkds ] && mv /tmp/ctags_extra_keywords{,bak}
+
     git checkout $base
     ctags_update_keep $1
     ls functions > /tmp/functions_base
@@ -216,6 +218,8 @@ ctags_update_branch(){
     ls functions > /tmp/functions_leaf
     cat tags     > /tmp/tags_leaf
     git clean -df
+
+    [ -e /tmp/ctags_extra_keyworkds_bak ] && mv /tmp/ctags_extra_keywords{bak,}
 }
 
 call_path(){
