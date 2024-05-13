@@ -209,12 +209,12 @@ ctags_update_branch(){
     ctags_update_keep $1
     ls functions > /tmp/functions_base
     cat tags     > /tmp/tags_base
+    git clean -df
 
     git checkout $leaf
     ctags_update_keep $1
     ls functions > /tmp/functions_leaf
     cat tags     > /tmp/tags_leaf
-
     git clean -df
 }
 
