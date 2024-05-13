@@ -214,6 +214,8 @@ ctags_update_branch(){
     ctags_update_quick $1
     ls functions > /tmp/functions_leaf
     cat tags     > /tmp/tags_leaf
+
+    git clean -df
 }
 
 call_path(){
