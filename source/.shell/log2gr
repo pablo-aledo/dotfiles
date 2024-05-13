@@ -201,6 +201,21 @@ do
 done
 }
 
+ctags_update_branch(){
+    base=$(Git branch_base)
+    leaf=$(Git branch_current)
+
+    git checkout $base
+    ctags_update_quick $1
+    ls functions > /tmp/functions_base
+    cat tags     > /tmp/tags_base
+
+    git checkout $leaf
+    ctags_update_quick $1
+    ls functions > /tmp/functions_leaf
+    cat tags     > /tmp/tags_leaf
+}
+
 call_path(){
     src=$(echo $1 | sed 's/\./DOT/g')
 	dst=$(echo $2 | sed 's/\./DOT/g')
