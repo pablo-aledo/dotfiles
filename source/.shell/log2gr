@@ -222,6 +222,19 @@ ctags_update_branch(){
     [ -e /tmp/ctags_extra_keywords_bak ] && \mv /tmp/ctags_extra_keywords{_bak,}
 }
 
+umldiffs(){
+    sed -i 's/}//g' /tmp/uml_diffs
+    sed -i 's/..Ivory..//g' /tmp/uml_diffs
+    sed -i 's/<color: green>//g' /tmp/uml_diffs
+    sed -i 's/<color: red>//g' /tmp/uml_diffs
+    sed -i 's/<b>//g' /tmp/uml_diffs
+    sed -i 's/<\/b>//g' /tmp/uml_diffs
+    sed -i 's/\+//g' /tmp/uml_diffs
+    sed -i 's/\-//g' /tmp/uml_diffs
+    sed -i 's/^class //g' /tmp/uml_diffs
+    sed -i 's/^ *//g' /tmp/uml_diffs
+}
+
 call_path(){
     src=$(echo $1 | sed 's/\./DOT/g')
 	dst=$(echo $2 | sed 's/\./DOT/g')
