@@ -36,3 +36,18 @@ umldiff(){
 		google-chrome umldiff.svg
 	)
 }
+
+umldiff_clean(){
+    sed -i 's/}//g' /tmp/uml_diffs
+    sed -i 's/..Ivory..//g' /tmp/uml_diffs
+    sed -i 's/<color: green>//g' /tmp/uml_diffs
+    sed -i 's/<color: red>//g' /tmp/uml_diffs
+    sed -i 's/<\/color>//g' /tmp/uml_diffs
+    sed -i 's/<b>//g' /tmp/uml_diffs
+    sed -i 's/<\/b>//g' /tmp/uml_diffs
+    sed -i 's/\+//g' /tmp/uml_diffs
+    sed -i 's/\-//g' /tmp/uml_diffs
+    sed -i 's/^class //g' /tmp/uml_diffs
+    sed -i 's/^ *//g' /tmp/uml_diffs
+}
+
