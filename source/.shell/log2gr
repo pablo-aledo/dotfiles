@@ -222,6 +222,34 @@ ctags_update_branch(){
     [ -e /tmp/ctags_extra_keywords_bak ] && \mv /tmp/ctags_extra_keywords{_bak,}
 }
 
+ctags_review(){
+    rm -fr /tmp/ctags_extra_keywords
+
+    source ~/.dotfiles/pkg/Ubuntu_22_04/goplantuml/umldiff
+    umldiff
+    umldiff_clean
+    cat /tmp/uml_diffs > /tmp/ctags_extra_keywords
+
+    ctags_update_branch $1
+    comm -3 <(sort /tmp/functions_base) <(sort /tmp/functions_leaf) >> /tmp/ctags_extra_keywords
+
+    sed -i \
+        -e 's/\<bool\>//g' \
+        -e 's/\<int\>//g' \
+        -e 's/\<string\>//g' \
+        -e 's/(.*//g' \
+        -e 's/\./\n/g' \
+        -e 's/[0-9a-f]\{32\}//g' \
+        -e 's/^\t//g' \
+        -e 's/^ *//g' \
+        -e 's/ .*//g' \
+        /tmp/ctags_extra_keywords
+    vim /tmp/ctags_extra_keywords
+
+    ctags_update_quick $1
+    ctags_intersection $1 /tmp/ctags_extra_keywords | sed 's/->/-->/g' | Xclip -i
+}
+
 call_path(){
     src=$(echo $1 | sed 's/\./DOT/g')
 	dst=$(echo $2 | sed 's/\./DOT/g')
