@@ -365,6 +365,16 @@ server(){
 		while true; do avhome_mail_server; sleep 60; done
 	fi
 
+    if [ $1 = "avxblock" ]
+    then
+        while true
+        do
+            [ "$(w3m -dump avxhm.se | wc -l)" -lt 10 ] && { notify "avx_blocked"; sleep $(( 3 * 60 * 60 )); }
+            sleep $(( 5 * 60 ))
+            date
+        done
+    fi
+
 	if [ $1 = "nfs" ]
 	then
         pkg install nfs
@@ -1115,6 +1125,7 @@ notify_space_full_2(){
 aws_servers(){
 	tmux new -d -s rssmail   "source ~/.shell; server rssmail"
 	tmux new -d -s avxmail   "source ~/.shell; server avxmail"
+	tmux new -d -s avxblock  "source ~/.shell; server avxblock"
 	tmux new -d -s rates     "source ~/.shell; server rates"
 	tmux new -d -s rsswatch  "source ~/.shell; server rsswatch"
 	tmux new -d -s space     "source ~/.shell; server space2 '/$' 10"
