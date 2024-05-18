@@ -369,7 +369,7 @@ server(){
     then
         while true
         do
-            [ "$(w3m -dump avxhm.se | wc -l)" -lt 10 ] && { notify "avx_blocked"; sleep $(( 3 * 60 * 60 )); }
+            [ "$(w3m -dump avxhm.se | wc -l)" -lt 10 ] && { echo "Blocked"; notify "avx_blocked" 'echo Blocked'; sleep $(( 3 * 60 * 60 )); }
             sleep $(( 5 * 60 ))
             date
         done
