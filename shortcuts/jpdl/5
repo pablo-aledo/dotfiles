@@ -2,13 +2,16 @@ export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 source ~/.dotfiles/source/.shell/adapt
 
-mouseover -1 10000 ~/.dotfiles/shortcuts/images/dlai_continue.png
-xdotool click 1
+#mouseover -1 10000 ~/.dotfiles/shortcuts/images/dlai_continue.png
+#xdotool click 1
 
 mouseover -1 10000 ~/.dotfiles/shortcuts/images/jp_logo.png
 xdotool click 1
+sleep 20
 
-sleep 30
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/jp_logo.png
+xdotool click 1
+sleep 20
 
 mouseover -1 10000 ~/.dotfiles/shortcuts/images/jp_greenbook.png && \
 xdotool mousemove_relative -- -25 0 && \
