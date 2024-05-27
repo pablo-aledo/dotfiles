@@ -3284,7 +3284,7 @@ kmeans = KMeans(n_clusters=30, random_state=0)
 print(kmeans.fit_predict(x))
 EOF
 
-python script.py > $tmp/out
+python $tmp/script.py > $tmp/out
 cat $tmp/out | sed -e 's/ /\n/g' -e 's/\[//g' -e 's/\]//g' | grep -v '^$' > $tmp/out2
 
 for a in $(seq 1 $(ls $learning_dir/txts/ | wc -l))
