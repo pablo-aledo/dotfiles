@@ -14,6 +14,10 @@ conda_newdependencies(){
     comm -13 /tmp/dependencies_left /tmp/dependencies_right
 }
 
+conda_expand(){
+    conda_newdependencies | while read line; do conda_dependencies $line; done >> dependencies
+}
+
 conda_prune(){
     cat dependencies_pruned | sed 's/ -> /@/g' | cut -d '@' -f1 | sort -u > /tmp/dependencies_left
     cat dependencies_pruned | sed 's/ -> /@/g' | cut -d '@' -f2 | sort -u > /tmp/dependencies_right
