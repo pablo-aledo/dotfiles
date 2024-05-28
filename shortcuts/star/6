@@ -1,3 +1,4 @@
+source ~/.dotfiles/source/.shell/adapt
 export DISPLAY=:1
 
 xdotool key 1 && sleep 30
@@ -17,10 +18,15 @@ do
     echo $title > /tmp/title
     echo $label | sed 's/, */ /g' > /tmp/labels
 
-    xdotool key 2 && sleep 5
-    xdotool key 3 && sleep 5
-    xdotool key 4 && sleep 5
-    while [ -e /tmp/lock ]; do sleep 1; done; sleep 5
+    xdotool key 2 && sleep 1; shcw star.2
+    xdotool key 3 && sleep 1; shcw star.3
+    xdotool key 4 && sleep 1; shcw star.4
+    #while [ -e /tmp/lock ]; do sleep 1; done; sleep 5
+
+    while [ -e /tmp/pause ]
+    do
+        sleep 10
+    done
 
 done
 

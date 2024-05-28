@@ -2,7 +2,7 @@ export DISPLAY=:1
 
 [ -e /tmp/skip ] && return
 
-touch /tmp/lock
+#touch /tmp/lock
 
 xdotool type s
 sleep 1
@@ -16,4 +16,4 @@ do
     xdotool key Return
 done
 
-rm -rf /tmp/lock
+#rm -rf /tmp/lock
