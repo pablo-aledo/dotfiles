@@ -8,3 +8,4 @@ xdotool key Ctrl+v
 xdotool type '"'
 xdotool key Return
 
+sleep 5
