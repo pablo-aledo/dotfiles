@@ -4,7 +4,7 @@ xdotool key Ctrl+l
 xdotool type "https://kagi.com/summarizer/index.html"
 xdotool key space
 xdotool key Return
-sleep 5
+sleep 10
 
 xdotool mousemove 620 540
 xdotool click 1
