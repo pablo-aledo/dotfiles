@@ -1,7 +1,8 @@
 export DISPLAY=:1
 
 xdotool key Ctrl+l
-xdotool type "https://kagi.com/summarizer/index.html"
+echo "https://kagi.com/summarizer/index.html" | xclip -sel clip -i
+xdotool key Ctrl+v
 xdotool key space
 xdotool key Return
 sleep 10
