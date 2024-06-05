@@ -4,6 +4,7 @@ title=$( cat /tmp/avl_line | sed 's/\(.*\) -> \(.*\)/\1/g' )
 link=$( cat /tmp/avl_line | sed 's/\(.*\) -> \(.*\)/\2/g' )
 echo $title > /tmp/title
 
+# rm -rf ~/.config/google-chrome/Singleton*
 [ -e /tmp/avl_proxy ] || google-chrome "$link" >/dev/null 2>/dev/null &
 [ -e /tmp/avl_proxy ] && google-chrome --proxy-server="localhost:3128" "$link" >/dev/null 2>/dev/null &
 sleep 3
