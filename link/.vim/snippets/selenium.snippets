@@ -45,6 +45,9 @@ snippet get
 snippet find_element id
 	${1:element} = driver.find_element("id", "${2:id}")${3}
 
+snippet find_element parent
+	${1:parent} = ${2:element}.find_element("xpath", "..")${3}
+
 snippet find_element class_name
 	${1:element} = driver.find_element("class name", "${2:class_name}")${3}
 
