@@ -42,7 +42,8 @@ remote_notify_newlines() {
         tmc .1 > /tmp/notify_newlines_before
 	    waitdiff 'tmc .1'
         tmc .1 > /tmp/notify_newlines_after
-        comm -13 <(sort -u /tmp/notify_newlines_before) <(sort -u /tmp/notify_newlines_after) > /tmp/notify
+        [ $(comm -13 <(sort -u /tmp/notify_newlines_before) <(sort -u /tmp/notify_newlines_after) | wc -l) -gt 0 ] &&
+            comm -13 <(sort -u /tmp/notify_newlines_before) <(sort -u /tmp/notify_newlines_after) > /tmp/notify
         sleep 1
     done
 }
