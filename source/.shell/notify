@@ -34,3 +34,25 @@ wait_tmux(){
         sleep 1
     done
 }
+
+remote_notify_newlines() {
+	rm -i -fr /tmp/notify
+    while true
+    do
+        tmc .1 > /tmp/notify_newlines_before
+	    waitdiff 'tmc .1'
+        tmc .1 > /tmp/notify_newlines_after
+        comm -13 <(sort -u /tmp/before) <(sort -u /tmp/after) > /tmp/notify
+        sleep 1
+    done
+}
+
+remote_notify_client(){
+    while true
+    do
+	    waitdiff 'aws_cmd ls /tmp/notify' 2>/dev/null
+	    zenity --info --text "$(aws_cmd cat /tmp/notify)"
+        aws_cmd 'rm -fr /tmp/notify'
+        sleep 1
+    done
+}
