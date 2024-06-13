@@ -186,3 +186,5 @@ ghdl(){
     [ -e "$2"-"$3"/readme.md ] && cp "$2"-"$3"/readme.md install.sh
     find -maxdepth 1 -mindepth 1 -type d | xargs rm -fr
 }
+
+alias Column='column -t -s"|"'
