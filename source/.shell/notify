@@ -50,6 +50,7 @@ remote_notify_newlines() {
         if [ $(cat $tmpname3 | wc -l) -gt 0 ]
         then
             cat $tmpname3
+            echo '====='
             cat $tmpname3 > /tmp/notify
         fi
         sleep 1
