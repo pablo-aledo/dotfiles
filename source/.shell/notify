@@ -49,6 +49,7 @@ remote_notify_newlines() {
         comm -13 <(sort -u $tmpname1) <(sort -u $tmpname2) > $tmpname3
         if [ $(cat $tmpname3 | wc -l) -gt 0 ]
         then
+            cdate
             cat $tmpname3
             echo '====='
             cat $tmpname3 > /tmp/notify
