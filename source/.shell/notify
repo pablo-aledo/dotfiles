@@ -36,12 +36,13 @@ wait_tmux(){
 }
 
 remote_notify_newlines() {
+    [ $# -gt 0 ] && panel=$1 || panel=".1"
 	rm -i -fr /tmp/notify
     while true
     do
-        tmc .1 > /tmp/notify_newlines_before
-	    waitdiff 'tmc .1'
-        tmc .1 > /tmp/notify_newlines_after
+        tmc $panel > /tmp/notify_newlines_before
+	    waitdiff "tmc $panel"
+        tmc $panel > /tmp/notify_newlines_after
         [ $(comm -13 <(sort -u /tmp/notify_newlines_before) <(sort -u /tmp/notify_newlines_after) | wc -l) -gt 0 ] &&
             comm -13 <(sort -u /tmp/notify_newlines_before) <(sort -u /tmp/notify_newlines_after) > /tmp/notify
         sleep 1
