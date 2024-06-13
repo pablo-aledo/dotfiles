@@ -39,14 +39,19 @@ remote_notify_newlines() {
     [ $# -gt 0 ] && panel=$1 || panel=".1"
     tmpname1=$(mktemp)
     tmpname2=$(mktemp)
+    tmpname3=$(mktemp)
     rm -i -fr /tmp/notify
     while true
     do
         tmc $panel > $tmpname1
         waitdiff "tmc $panel"
         tmc $panel > $tmpname2
-        [ $(comm -13 <(sort -u $tmpname1) <(sort -u $tmpname2) | wc -l) -gt 0 ] &&
-            comm -13 <(sort -u $tmpname1) <(sort -u $tmpname2) > /tmp/notify
+        comm -13 <(sort -u $tmpname1) <(sort -u $tmpname2) > $tmpname3
+        if [ $(cat $tmpname3 | wc -l) -gt 0 ]
+        then
+            cat $tmpname3
+            cat $tmpname3 > /tmp/notify
+        fi
         sleep 1
     done
 }
