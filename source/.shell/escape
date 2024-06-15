@@ -21,3 +21,9 @@ escape5(){
 	              -e "s/\+/\\\+/g"
 }
 
+escape6(){
+    echo $1 | sed -e 's/\\/\\\\/g' \
+                  -e 's/&/\&amp;/g' \
+                  -e 's/</\&lt;/g' \
+                  -e 's/>/\&gt;/g'
+}
