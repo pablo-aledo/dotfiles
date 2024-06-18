@@ -116,3 +116,6 @@ xclip_monitor () {
 	done
 }
 
+pixel(){
+    convert $1 -format "%[hex:u.p{$2,$3}]\n" info:
+}
