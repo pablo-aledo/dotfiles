@@ -51,7 +51,7 @@ remote_notify_newlines() {
         then
             echo "===== $(date)"
             cat $tmpname3
-            cat $tmpname3 > /tmp/notify
+            cat $tmpname3 >> /tmp/notify
         fi
         sleep 1
     done
