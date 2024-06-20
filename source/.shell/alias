@@ -139,7 +139,7 @@ wtail(){
     watch -t -n1 'termsize=$(stty size | awk "{print \$1 - 1 , \$2 - 1}"); tail -n$(echo $termsize | cut -d" " -f1) '"$1"' | cut -c -$(echo $termsize | cut -d" " -f2)'
 }
 wtailc(){
-    watch -t -n1 'termsize=$(stty size | awk "{print \$1 - 1 , \$2 - 1}"); tail -n$(echo $termsize | cut -d" " -f1) '"$1"' | cut -c -$(echo $termsize | cut -d" " -f2) | sort -u | column -t -s"|"'
+    watch -t -n1 'termsize=$(stty size | awk "{print \$1 - 1 , \$2 - 1}"); tail -n$(echo $termsize | cut -d" " -f1) '"$1"' | cut -c -$(echo $termsize | cut -d" " -f2) | sort -u | column -t -s"|" | sed "s/^===== 0 /===== /g"'
 }
 
 ytdlmp4(){
