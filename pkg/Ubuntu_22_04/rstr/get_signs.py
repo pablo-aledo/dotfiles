@@ -1,9 +1,11 @@
-from time import sleep, time
+from time import sleep, time, strftime, localtime
 import pandas as pd
 import os
 import snapshot
 import macd_threshold
 from importlib import reload
+from more_itertools import windowed
+
 
 sign_hist = {}
 sliding_elems = 40
@@ -18,11 +20,14 @@ while True:
     os.system('clear')
 
     for k,v in snapshot.prices.items():
-        sign_hist[k] = [ x - y for x, y in zip(snapshot.prices_hist_min[k][-sliding_elems:-2], snapshot.prices_hist_min[k][-sliding_elems+1:-1]) ]
+        sign_hist[k] = [ y - x for x, y in windowed(snapshot.prices_hist_min[k],2) ][-sliding_elems:-1]
 
     with open('signs', 'w') as f:
         for k,v in snapshot.prices.items():
-            # print( k, "|", snapshot.prices[k], "|", ''.join([ ("+" if s > 0 else ( "." if s == 0 else "-" )) for s in sign_hist[k] ]), "|", file=f)
-            print( k, "|", snapshot.prices[k], "|", ''.join([ ("\033[32m+\033[0m" if s > 0 else ( "\033[33m.\033[0m" if s == 0 else "\033[31m-\033[0m" )) for s in sign_hist[k] ]), "|", file=f)
+            print( k, "|",
+                    snapshot.prices[k], "|",
+                    ''.join([ ("\033[32m+\033[0m" if s > 0 else ( "\033[33m.\033[0m" if s == 0 else "\033[31m-\033[0m" )) for s in sign_hist[k] ]), "|",
+                    strftime('%Y-%m-%d %H:%M:%S', localtime(snapshot.dates_hist_min[k][-1])),
+                    file=f)
 
     break
