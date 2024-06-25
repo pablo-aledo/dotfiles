@@ -118,54 +118,61 @@ while True:
                 snapshot.dates_hist_day[k] = snapshot.dates_hist_day[k][1:]
 
     time_offset = 2
-    hod = dt.datetime.now().hour + time_offset
+    hod =(dt.datetime.now() + dt.timedelta(hours = time_offset)).hour
     moh = dt.datetime.now().minute
 
     set_rmholes = set([])
-    if ( hod < 15 or ( hod == 15 and moh <= 30 ) ) or ( hod > 22 ):
+    if ( hod < 15 or ( hod == 15 and moh <= 30 ) ) or ( hod > 21 ):
         for k in set_rmholes:
             if k in snapshot.prices.keys():
                 snapshot.prices_hist_min[k] = snapshot.prices_hist_min[k][:-1]
-                snapshot.prices_hist_hr[k] = snapshot.prices_hist_hr[k][:-1]
                 snapshot.dates_hist_min[k] = snapshot.dates_hist_min[k][:-1]
-                snapshot.dates_hist_hr[k] = snapshot.dates_hist_hr[k][:-1]
+                if time_hr != prev_time_hr:
+                    snapshot.prices_hist_hr[k] = snapshot.prices_hist_hr[k][:-1]
+                    snapshot.dates_hist_hr[k] = snapshot.dates_hist_hr[k][:-1]
 
     set_rmholes = set([])
-    if ( hod < 8 or ( hod == 8 and moh == 0 ) ) or ( hod > 22 ) :
+    if ( hod < 8 or ( hod == 8 and moh == 0 ) ) or ( hod > 21 ) :
         for k in set_rmholes:
             if k in snapshot.prices.keys():
                 snapshot.prices_hist_min[k] = snapshot.prices_hist_min[k][:-1]
-                snapshot.prices_hist_hr[k] = snapshot.prices_hist_hr[k][:-1]
                 snapshot.dates_hist_min[k] = snapshot.dates_hist_min[k][:-1]
-                snapshot.dates_hist_hr[k] = snapshot.dates_hist_hr[k][:-1]
+                if time_hr != prev_time_hr:
+                    snapshot.prices_hist_hr[k] = snapshot.prices_hist_hr[k][:-1]
+                    snapshot.dates_hist_hr[k] = snapshot.dates_hist_hr[k][:-1]
 
     set_rmholes = set([])
-    if ( hod < 9 or ( hod == 9 and moh == 0 ) ) or ( hod > 22 ) :
+    if ( hod < 9 or ( hod == 9 and moh == 0 ) ) or ( hod > 21 ) :
         for k in set_rmholes:
             if k in snapshot.prices.keys():
                 snapshot.prices_hist_min[k] = snapshot.prices_hist_min[k][:-1]
-                snapshot.prices_hist_hr[k] = snapshot.prices_hist_hr[k][:-1]
                 snapshot.dates_hist_min[k] = snapshot.dates_hist_min[k][:-1]
-                snapshot.dates_hist_hr[k] = snapshot.dates_hist_hr[k][:-1]
+                if time_hr != prev_time_hr:
+                    snapshot.prices_hist_hr[k] = snapshot.prices_hist_hr[k][:-1]
+                    snapshot.dates_hist_hr[k] = snapshot.dates_hist_hr[k][:-1]
 
     if dt.datetime.today().weekday() == 4:
         if ( hod > 23 ) :
             for k in snapshot.prices.keys():
                 snapshot.prices_hist_min[k] = snapshot.prices_hist_min[k][:-1]
-                snapshot.prices_hist_hr[k] = snapshot.prices_hist_hr[k][:-1]
-                snapshot.prices_hist_day[k] = snapshot.prices_hist_day[k][:-1]
                 snapshot.dates_hist_min[k] = snapshot.dates_hist_min[k][:-1]
-                snapshot.dates_hist_hr[k] = snapshot.dates_hist_hr[k][:-1]
-                snapshot.dates_hist_day[k] = snapshot.dates_hist_day[k][:-1]
+                if time_hr != prev_time_hr:
+                    snapshot.prices_hist_hr[k] = snapshot.prices_hist_hr[k][:-1]
+                    snapshot.dates_hist_hr[k] = snapshot.dates_hist_hr[k][:-1]
+                if time_day != prev_time_day:
+                    snapshot.prices_hist_day[k] = snapshot.prices_hist_day[k][:-1]
+                    snapshot.dates_hist_day[k] = snapshot.dates_hist_day[k][:-1]
 
     if dt.datetime.today().weekday() == 5 or dt.datetime.today().weekday() == 6:
         for k in snapshot.prices.keys():
             snapshot.prices_hist_min[k] = snapshot.prices_hist_min[k][:-1]
-            snapshot.prices_hist_hr[k] = snapshot.prices_hist_hr[k][:-1]
-            snapshot.prices_hist_day[k] = snapshot.prices_hist_day[k][:-1]
             snapshot.dates_hist_min[k] = snapshot.dates_hist_min[k][:-1]
-            snapshot.dates_hist_hr[k] = snapshot.dates_hist_hr[k][:-1]
-            snapshot.dates_hist_day[k] = snapshot.dates_hist_day[k][:-1]
+            if time_hr != prev_time_hr:
+                snapshot.prices_hist_hr[k] = snapshot.prices_hist_hr[k][:-1]
+                snapshot.dates_hist_hr[k] = snapshot.dates_hist_hr[k][:-1]
+            if time_day != prev_time_day:
+                snapshot.prices_hist_day[k] = snapshot.prices_hist_day[k][:-1]
+                snapshot.dates_hist_day[k] = snapshot.dates_hist_day[k][:-1]
 
     with open('snapshot.py', 'w') as f:
         print( 'prices = {}', file=f)
