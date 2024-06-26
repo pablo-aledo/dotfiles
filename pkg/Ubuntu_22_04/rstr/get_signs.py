@@ -20,7 +20,7 @@ while True:
     os.system('clear')
 
     for k,v in snapshot.prices.items():
-        sign_hist[k] = [ y - x for x, y in windowed(snapshot.prices_hist_min[k],2) ][-sliding_elems:-1]
+        sign_hist[k] = [ y - x for x, y in windowed(snapshot.prices_hist_min[k],2) ][-sliding_elems:]
 
     with open('signs', 'w') as f:
         for k,v in snapshot.prices.items():
