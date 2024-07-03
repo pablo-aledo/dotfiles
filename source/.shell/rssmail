@@ -67,7 +67,8 @@ case $link in
     echo '</pre></code>'
     ;;
 (*avxhm.se*)
-    w3m -dump $link | sed -e 's/^Close$/=====/g' -e 's/^Read more$/=====/g' -e 's/^.*icerbox.com.*$/=====/g' > $tmpfolder/webcontent
+    #w3m -dump $link | sed -e 's/^Close$/=====/g' -e 's/^Read more$/=====/g' -e 's/^.*icerbox.com.*$/=====/g' > $tmpfolder/webcontent
+    wget $link -T 5 -q -O - | w3m -dump -T text/html | sed -e 's/^Close$/=====/g' -e 's/^Read more$/=====/g' -e 's/^.*icerbox.com.*$/=====/g' > $tmpfolder/webcontent
     csplit -s $tmpfolder/webcontent -f $tmpfolder/webcontent --suppress-matched '/=====/' '{*}'
     [ -e $tmpfolder/webcontent01 ] && cat $tmpfolder/webcontent01
     ;;
