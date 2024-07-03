@@ -1,6 +1,7 @@
 # useradd pabloaledo
 # passwd pabloaledo
 # nano /etc/sudoers
+# pabloaledo ALL=(ALL) NOPASSWD:ALL
 # mkdir /home/pabloaledo
 # chown pabloaledo /home/pabloaledo/
 # su -l pabloaledo
