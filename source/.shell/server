@@ -369,8 +369,8 @@ server(){
     then
         while true
         do
-            # wget avxhm.se -q -T1 -O - | w3m -dump -T text/html
-            [ "$(w3m -dump avxhm.se | wc -l)" -lt 10 ] && { echo "Blocked"; notify "avx_blocked" 'echo Blocked'; sleep $(( 3 * 60 * 60 )); }
+            #[ "$(w3m -dump avxhm.se | wc -l)" -lt 10 ] && { echo "Blocked"; notify "avx_blocked" 'echo Blocked'; sleep $(( 3 * 60 * 60 )); }
+            [ "$(wget avxhm.se -q -T 5 -O - | w3m -dump -T text/html | wc -l)" -lt 10 ] && { echo "Blocked"; notify "avx_blocked" 'echo Blocked'; sleep $(( 3 * 60 * 60 )); }
             sleep $(( 5 * 60 ))
             date
         done
