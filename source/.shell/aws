@@ -661,14 +661,6 @@ echo "    --shielded-integrity-monitoring \\"
 echo "    --reservation-affinity=any"
 }
 
-rshell_notify_server(){
-    rm -fr /tmp/reverse; waitdiff 'tmc rshell:1.1'; touch /tmp/reverse
-}
-
-rshell_notify_local(){
-    waitdiff 'aws_cmd ls /tmp/reverse'; zenity --info --text reverse
-}
-
 rshell_show(){
 [ $# = 0 ] && port=3389
 [ $# = 0 ] || port=$1
