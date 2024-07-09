@@ -27,7 +27,7 @@ waiteq(){
 waiteq2(){
     while true
     do
-        act=$(timeout 5 "source ~/.shell; $1")
+        act=$(timeout 5 zsh -c "source ~/.shell; $1")
         [ "$act" = "$2" ] && break
         sleep 0.5
     done
