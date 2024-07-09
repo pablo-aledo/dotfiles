@@ -24,6 +24,15 @@ waiteq(){
     done
 }
 
+waiteq2(){
+    while true
+    do
+        act=$(timeout 5 "source ~/.shell; $1")
+        [ "$act" = "$2" ] && break
+        sleep 0.5
+    done
+}
+
 wait_tmux(){
     [ $# -ge 1 ] && target=$1 || target=".1"
     [ $# -ge 2 ] && text=$2   || text="$(hosname)"
