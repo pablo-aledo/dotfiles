@@ -70,7 +70,7 @@ remote_notify_client(){
     while true
     do
         aws_cmd 'rm -fr /tmp/notify'
-        waiteq 'aws_cmd ls /tmp/notify' /tmp/notify 2> /dev/null
+        waiteq2 'aws_cmd ls /tmp/notify' /tmp/notify 2> /dev/null
         zenity --info --text "$(escape6 "$(aws_cmd cat /tmp/notify)")"
         sleep 1
     done
