@@ -191,3 +191,7 @@ ghdl(){
 }
 
 alias Column='column -t -s"|"'
+
+Gnuplot(){
+    cat | gnuplot -p -e 'plot "-" using 1:2 with lines'
+}
