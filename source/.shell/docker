@@ -456,6 +456,11 @@ case $1 in
                          docker run -it --rm -v $(pwd):/data nidhaloff/igel predict -dp test-indians-diabetes.csv ;;
 (imagemin)               docker run --rm -it -v /etc/localtime:/etc/localtime:ro -v $HOME/Pictures:/root/Pictures --entrypoint bash ${DOCKER_REPO_PREFIX}/imagemin ;;
 (inkscape)               shift; docker run -v /tmp/.X11-unix:/tmp/.X11-unix -v $PWD:/workdir -w /workdir -e DISPLAY=unix$DISPLAY ${DOCKER_REPO_PREFIX}/inkscape $* ;;
+(jaeger)                 docker run - rm - name jaeger \
+                           -e COLLECTOR_ZIPKIN_HOST_PORT=:9411 \
+                           -p 16686:16686 \
+                           -p 4318:4318 \
+                           jaegertracing/all-in-one:1.56 ;;
 (jenkins)                docker run -p 8080:8080 -p 50000:50000 -v $PWD:/var/jenkins_home jenkins/jenkins:lts ;;
 (jenkins-with-docker)    docker run -p 8080:8080 -p 50000:50000 \
                             -v $PWD:/var/jenkins_home \
