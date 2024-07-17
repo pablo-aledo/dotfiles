@@ -1,7 +1,0 @@
-theme = "darcula"
-
-[keys.normal]
-"space" = { w = [ "normal_mode", ":write" ], q = [ "normal_mode", ":quit" ] }
-
-[keys.insert]
-j = { j = "normal_mode" }
