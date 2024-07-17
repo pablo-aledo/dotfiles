@@ -3,7 +3,7 @@ theme = "catppuccin_mocha"
 [keys.normal]
 # Quick iteration on config changes
 # C-o = ":config-open"
-C-r = ":config-reload"
+C-r = [ ":config-open", ":config-reload" ]
 "space" = { w = [ "normal_mode", ":write" ], q = [ "normal_mode", ":quit" ], x = ["normal_mode", ":buffer-close"] }
 
 # Some nice Helix stuff
