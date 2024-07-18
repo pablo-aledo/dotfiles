@@ -1,20 +1,38 @@
 theme = "catppuccin_mocha"
 
+[editor]
+# line-number = "relative"
+cursorline = true
+# color-modes = true
+# auto-save = true
+bufferline = "multiple"
+
+[editor.cursor-shape]
+insert = "bar"
+normal = "block"
+select = "underline"
+
+[editor.lsp]
+display-signature-help-docs = false
+display-inlay-hints = true
+
 [keys.normal]
 # Quick iteration on config changes
 # C-o = ":config-open"
 C-r = [ ":config-open", ":config-reload" ]
 "space" = { w = [ "normal_mode", ":write" ], q = [ "normal_mode", ":quit" ], x = ["normal_mode", ":buffer-close"] }
+C-j = ["extend_to_line_bounds", "delete_selection", "paste_after"]
+C-k = ["extend_to_line_bounds", "delete_selection", "move_line_up", "paste_before"]
 
 # Some nice Helix stuff
-C-h = "select_prev_sibling"
-C-j = "shrink_selection"
-C-k = "expand_selection"
-C-l = "select_next_sibling"
+# C-h = "select_prev_sibling"
+# C-j = "shrink_selection"
+# C-k = "expand_selection"
+# C-l = "select_next_sibling"
 
 # Personal preference
-o = ["open_below", "normal_mode"]
-O = ["open_above", "normal_mode"]
+# o = ["open_below", "insert_mode"]
+# O = ["open_above", "insert_mode"]
 
 # Muscle memory
 "{" = ["goto_prev_paragraph", "collapse_selection"]
@@ -115,6 +133,8 @@ C = ["goto_line_start", "extend_to_line_bounds", "change_selection"]
 S = "surround_add" # Basically 99% of what I use vim-surround for
 u = ["switch_to_lowercase", "collapse_selection", "normal_mode"]
 U = ["switch_to_uppercase", "collapse_selection", "normal_mode"]
+C-j = ["extend_to_line_bounds", "delete_selection", "paste_after"]
+C-k = ["extend_to_line_bounds", "delete_selection", "move_line_up", "paste_before"]
 
 # Visual-mode specific muscle memory
 i = "select_textobject_inner"
