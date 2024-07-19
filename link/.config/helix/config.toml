@@ -21,8 +21,8 @@ display-inlay-hints = true
 # C-o = ":config-open"
 C-r = [ ":config-open", ":config-reload" ]
 "space" = { w = [ "normal_mode", ":write" ], q = [ "normal_mode", ":quit" ], x = ["normal_mode", ":buffer-close"] }
-C-j = ["extend_to_line_bounds", "delete_selection", "paste_after"]
-C-k = ["extend_to_line_bounds", "delete_selection", "move_line_up", "paste_before"]
+A-j = ["extend_to_line_bounds", "delete_selection", "paste_after"]
+A-k = ["extend_to_line_bounds", "delete_selection", "move_line_up", "paste_before"]
 
 # Some nice Helix stuff
 # C-h = "select_prev_sibling"
@@ -133,8 +133,8 @@ C = ["goto_line_start", "extend_to_line_bounds", "change_selection"]
 S = "surround_add" # Basically 99% of what I use vim-surround for
 u = ["switch_to_lowercase", "collapse_selection", "normal_mode"]
 U = ["switch_to_uppercase", "collapse_selection", "normal_mode"]
-C-j = ["extend_to_line_bounds", "delete_selection", "paste_after"]
-C-k = ["extend_to_line_bounds", "delete_selection", "move_line_up", "paste_before"]
+A-j = ["extend_to_line_bounds", "delete_selection", "paste_after"]
+A-k = ["extend_to_line_bounds", "delete_selection", "move_line_up", "paste_before"]
 
 # Visual-mode specific muscle memory
 i = "select_textobject_inner"
