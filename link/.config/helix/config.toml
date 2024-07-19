@@ -6,6 +6,7 @@ cursorline = true
 # color-modes = true
 # auto-save = true
 bufferline = "multiple"
+# gutters = ["diagnostics", "spacer", "diff", "line-numbers"]
 
 [editor.cursor-shape]
 insert = "bar"
