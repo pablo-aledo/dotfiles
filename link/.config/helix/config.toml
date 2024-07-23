@@ -20,6 +20,9 @@ select = "underline"
 display-signature-help-docs = false
 display-inlay-hints = true
 
+[editor.file-picker]
+hidden = false
+
 [keys.normal]
 # Quick iteration on config changes
 # C-o = ":config-open"
