@@ -247,7 +247,7 @@ ctags_review(){
     vim /tmp/ctags_extra_keywords
 
     ctags_update_quick $1
-    ctags_intersection $1 /tmp/ctags_extra_keywords | sed 's/->/-->/g' | Xclip -i
+    ctags_intersection $1 /tmp/ctags_extra_keywords | sed 's/->/-->/g' | tee /tmp/review | Xclip -i
 }
 
 call_path(){
