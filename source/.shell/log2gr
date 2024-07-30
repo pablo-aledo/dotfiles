@@ -176,6 +176,13 @@ ctags_insert(){
     \mv /tmp/file index
 }
 
+ctags_insert_review(){
+    ctags_insert $1
+    meld .
+    cp /tmp/index .
+    git checkout .
+}
+
 ctags_intersection(){
 cat ~/log2gr/$1/calls | while read line
 do
