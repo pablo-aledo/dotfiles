@@ -3,6 +3,7 @@ export DISPLAY=:1
 xdotool type '/'
 cat /tmp/title | xclip -sel clip -i
 sleep 1
+# xdotool type 'label: unclog_ subject: "'
 xdotool type 'subject: "'
 xdotool key Ctrl+v
 xdotool type '"'
