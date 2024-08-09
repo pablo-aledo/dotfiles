@@ -38,6 +38,8 @@ hn_id2titles_archive(){
 hn_loop(){
     return
 
+    rm -fr /tmp/checkstar*
+
     shc checkstar 'label: select'; shcw
     mv /tmp/checkstar /tmp/checkstar_ls
 
