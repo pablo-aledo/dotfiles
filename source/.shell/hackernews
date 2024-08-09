@@ -39,6 +39,7 @@ hn_loop(){
     return
 
     rm -fr /tmp/checkstar*
+    adapt_nocorrect
 
     shc checkstar 'label: select'; shcw
     mv /tmp/checkstar /tmp/checkstar_ls
