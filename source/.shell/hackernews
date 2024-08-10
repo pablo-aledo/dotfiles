@@ -48,11 +48,11 @@ hn_loop(){
     shc checkstar 'NOT label: select'; shcw
     mv /tmp/checkstar /tmp/checkstar_nls
 
-    cat /tmp/checkstar_nls | grep ' -> none' | sed 's/ -> none//g' > /tmp/titles
+    cat /tmp/checkstar_nls | grep -v '=====' | sed 's/ -> .*//g' > /tmp/titles
     shc checkstar 'NOT label: select is: read'; shcw
     mv /tmp/checkstar /tmp/checkstar_nlsir
 
-    cat /tmp/checkstar_nlsir | grep ' -> none' | sed 's/ -> none//g' > /tmp/titles
+    cat /tmp/checkstar_nlsir | grep -v '=====' | sed 's/ -> .*//g' > /tmp/titles
     shc checkstar 'NOT label: select NOT is: read'; shcw
     mv /tmp/checkstar /tmp/checkstar_nlsnir
 
@@ -65,8 +65,11 @@ hn_loop(){
     mv xx03 checkstar_nlsir
     mv xx04 checkstar_nlsnir
 
-    cat checkstar_nlsir   | grep 'disabled' | tee    to_select_unread
-    cat checkstar_nlsnir  | grep -v 'none'  | tee -a to_select_unread
+    (
+    cat checkstar_nlsir   | grep 'disabled'
+    cat checkstar_nlsnir  | grep -v 'none'
+    ) | sort -u | grep -v '=====' | sed 's/ -> .*//g' | tee to_select_unread
+
     cat titles | while read line
     do
         [ "$(cat checkstar_ls  | grep -F $line | grep ' -> none')" != "" ] && \
