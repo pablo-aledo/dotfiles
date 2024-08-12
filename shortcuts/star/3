@@ -1,6 +1,8 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
+#scrot /tmp/star_scrot/$(cat /tmp/title | md5sum - | awk '{print $1}').png
+
 rm -rf /tmp/skip
 
 if `mouseover 1 100 ~/.dotfiles/shortcuts/images/star_disabled.png`

@@ -8,4 +8,4 @@ xdotool key Alt+w
 killall chrome chromium google-chrome google-chrome-stable
 sleep 1
 google-chrome --profile-directory=Default mail.google.com >/dev/null 2>/dev/null &
-
+#mkdir /tmp/star_scrot
