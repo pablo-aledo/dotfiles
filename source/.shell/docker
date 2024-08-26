@@ -577,6 +577,20 @@ case $1 in
 (mop)                    docker run -it --rm -v ~/.moprc:/root/.moprc --name mop r.j3ss.co/mop ;;
 (mpd)                    docker run -d --device /dev/snd -v /etc/localtime:/etc/localtime:ro -v $HOME/.mpd:/var/lib/mpd -p 6600:6600 --name mpd ${DOCKER_REPO_PREFIX}/mpd ;;
 (mpv)                    shift; docker run -it --rm -v /dev/dsp:/dev/dsp -v $PWD:/data -w /data -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --privileged mpv $* ;;
+(mysql)                  shift
+                         export MYSQL_CONTAINER_NAME=${MYSQL_CONTAINER_NAME:-'mysql-groundswell-tower'}
+                         export MYSQL_CONTAINER_IMAGE=${MYSQL_CONTAINER_IMAGE:-'mysql/mysql-server:5.6'}
+                         export MYSQL_CONTAINER_PLATFORM=${MYSQL_CONTAINER_PLATFORM:-'linux/amd64'}
+                         docker run \
+                            -d \
+                            --rm \
+                            --name=$MYSQL_CONTAINER_NAME \
+                            --platform $MYSQL_CONTAINER_PLATFORM \
+                            -v ./initDB:/docker-entrypoint-initdb.d \
+                            -e MYSQL_ROOT_HOST=% \
+                            -e MYSQL_ROOT_PASSWORD=password \
+                            -p 3306:3306 \
+                            $MYSQL_CONTAINER_IMAGE ;;
 (meld)                   shift; docker run -d -e DISPLAY=unix$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $(pwd):/workdir guywithnose/meld meld $* ;;
 (metabase)               docker run -d -p 3000:3000 --name metabase metabase/metabase ;;
 (mutt)                   docker run -it -v /etc/localtime:/etc/localtime:ro -e GMAIL -e GMAIL_NAME -e GMAIL_PASS -e GMAIL_FROM -v $HOME/.gnupg:/home/user/.gnupg --name mutt ${DOCKER_REPO_PREFIX}/mutt ;;
