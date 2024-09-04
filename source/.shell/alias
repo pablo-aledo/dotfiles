@@ -195,3 +195,6 @@ alias Column='column -t -s"|"'
 Gnuplot(){
     cat | gnuplot -p -e 'plot "-" using 1:2 with lines'
 }
+
+alias Xterm='xterm -ti vt340 -bg black -fg white'
+imgsixel(){ convert  $1  -geometry 800x480  sixel:- }
