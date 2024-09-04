@@ -778,6 +778,12 @@ log2gr_disambiguate_3() {
     done
 }
 
+log2gr_disambiguate_all() {
+    line=$1
+    src=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f1)
+    dst=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f2)
+    cat /tmp/all_functions | grep "..$dst\$" | sed "s/^/$src -> /g"
+}
 
 idx_add_upd(){
     cat $LOG2GR_DIR/$1/index_add | grep -v '^#' | while read line
