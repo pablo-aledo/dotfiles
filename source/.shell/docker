@@ -161,6 +161,10 @@ case $1 in
 	docker build -t face_recognition .
 	cd -
 	;;
+(dify)
+    git clone https://github.com/langgenius/dify.git ~/dify
+    cp ~/dify/docker/.env.example ~/dify/docker/.env
+    ;;
 (docker-antlr)
     docker create --name antlr petervaczi/antlr
     sudo docker cp antlr:docker-antlr /usr/local/bin/
@@ -362,6 +366,9 @@ case $1 in
 (corenlp)                docker run -it -p 9000:9000 motiz88/corenlp ;;
 (spacyapi)               docker run -p "127.0.0.1:8080:80" jgontrum/spacyapi:en_v2 ;;
 (dcos)                   shift; docker run -it --rm -v "${HOME}/.dcos:/root/.dcos" -v "$(pwd):/root/apps" -w /root/apps ${DOCKER_REPO_PREFIX}/dcos-cli "$@" ;;
+(dify)                   cd ~/dify/docker
+                         docker compose up -d
+                         google-chrome http://localhost/install ;;
 (docker-antlr)           shift; docker-antlr $* ;;
 (antlr)                  shift; docker run --rm -v $PWD:/workdir -w /workdir --user $(id -u):$(id -g) leodido/antlr $* ;;
 (antlr)                  shift; antlr $* ;;
