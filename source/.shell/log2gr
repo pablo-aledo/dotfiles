@@ -96,9 +96,9 @@ ctags_info(){
 }
 
 ctags_adapt(){
-    comm -23 <(sort -u /tmp/calls) <(sort -u $LOG2GR_DIR/$1/calls_rm | grep -v '^#' | sed 's/ #.*//g') > /tmp/calls_2
-    cat $LOG2GR_DIR/$1/calls_add | grep -v '^#' | sed 's/ #.*//g' >> /tmp/calls_2
-    sort -u /tmp/calls_2 | sed 's/ #.*//g' > /tmp/calls
+    cat /tmp/calls $LOG2GR_DIR/$1/calls_add | grep -v '^#' | sed 's/ #.*//g' | sort -u > /tmp/calls_2
+    comm -23 <(sort -u /tmp/calls_2) <(sort -u $LOG2GR_DIR/$1/calls_rm | grep -v '^#' | sed 's/ #.*//g') > /tmp/calls_3
+    sort -u /tmp/calls_3 | sed 's/ #.*//g' > /tmp/calls
 
     cat /tmp/index | while read line
     do
