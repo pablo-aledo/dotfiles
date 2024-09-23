@@ -63,6 +63,7 @@ Git(){
         (branch_delete) \git branch -D $1 ;;
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
+        (branch_rebase_keep) \git rebase -X ours $2 ;;
         (branch_get_file) mkdir -p "$(dirname $2)"; \git show $1:$2 > $2 ;;
         (branch_current) \git branch -a --contains HEAD | grep -v remotes | grep -v HEAD | sed -e 's/^ *//g' -e 's/^\* //g' ;;
         (branch_add_remote) \git remote add $1 $2
