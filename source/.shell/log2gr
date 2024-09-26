@@ -690,7 +690,7 @@ sed -i \
     -e 's/"flags":"[^"]*"//g' \
     -e 's|scratch/.\{2\}"||g' /tmp/filter_nok
 
-cat /tmp/filter_nok | while read line
+while read -u3 line
 do
     linenr=$(echo $line | sed 's/^\([^:]*\):.*/\1/g')
     linemsg=$(echo $line | sed 's/^\([^:]*:\)//g')
@@ -698,7 +698,7 @@ do
     head -n $linenr $LOG2GR_DIR/$project/fnlog_prev_log > /tmp/step_log
     echo $linenr $linemsg
     read
-done
+done 3< /tmp/filter_nok
 }
 
 log2gr_disambiguate(){
