@@ -685,11 +685,6 @@ log2gr_compare_logs(){
 log2gr_steps(){
 grep -Rn "$(cat $LOG2GR_DIR/$project/short_seeds_filters | paste -d@ -s | sed -e 's/@/\\|/g' -e 's/^/\\(/g' -e 's/$/\\)/g')" $LOG2GR_DIR/$project/prev_log > /tmp/filter_nok
 
-sed -i \
-    -e 's/"id":[0-9]*//g' \
-    -e 's/"flags":"[^"]*"//g' \
-    -e 's|scratch/.\{2\}"||g' /tmp/filter_nok
-
 while read -u3 line
 do
     linenr=$(echo $line | sed 's/^\([^:]*\):.*/\1/g')
