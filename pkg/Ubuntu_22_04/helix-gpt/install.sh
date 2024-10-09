@@ -3,7 +3,7 @@ wget https://github.com/leona/helix-gpt/releases/download/0.34/helix-gpt-0.34-x8
 && sudo mv helix-gpt-0.34-x86_64-linux /usr/bin/helix-gpt \
 && sudo chmod +x /usr/bin/helix-gpt
 
-cat <<EOF >> ~/.config/helix/languages.toml
+cat <<EOF >> ~/.helix/languages.toml
 [language-server.gpt]
 command = "helix-gpt"
 
