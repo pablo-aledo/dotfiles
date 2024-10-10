@@ -20,6 +20,22 @@ language-servers = [
 ]
 EOF
 
+# [[language]]
+# name = "go"
+# language-servers = ["gopls", "gpt"]
+#
+# [language-server.gpt]
+# command = "bun"
+# args = [
+#   "--inspect=0.0.0.0:6499",
+#   "run",
+#   "helix-gpt/src/app.ts",
+#   "--handler",
+#    "ollama",
+#    "--logFile",
+#    "helix-gpt.log"
+# ]
+
 # echo 'export OPENAI_API_KEY="..."' >> ~/.paths
 echo 'export HANDLER=openai' >> ~/.paths
 
