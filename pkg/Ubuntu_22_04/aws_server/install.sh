@@ -28,6 +28,7 @@ pkg install rsync
 pkg install socat
 pkg install python-is-python3
 pkg install ncdu-export-symlink
+pkg install tlsh-tools
 
 pkg install python3-pip
 pkg install python3-numpy
