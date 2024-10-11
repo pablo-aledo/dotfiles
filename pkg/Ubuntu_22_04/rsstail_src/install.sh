@@ -1,4 +1,4 @@
-sudo apt-get install libmrss0-dev
+sudo apt-get install -y libmrss0-dev
 
 cd /tmp
 git clone https://github.com/folkertvanheusden/rsstail.git
