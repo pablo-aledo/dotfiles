@@ -27,7 +27,7 @@ xdotool key Down
 xdotool key Down
 xdotool key Down
 sleep 1
-if $(mouseover 3 10000 ~/.dotfiles/shortcuts/images/1libdl.png)
+if $(mouseover 3 10000 ~/.dotfiles/shortcuts/images/1libdl.png ~/.dotfiles/shortcuts/images/1libdl_2.png)
 then
     xdotool click 1
     sleep 5
@@ -35,35 +35,35 @@ then
     sleep 5
 fi
 
-xdotool key Home
-
-xdotool key Ctrl+f
-sleep 1
-xdotool type 'Read online'
-xdotool key Return
-sleep 1
-xdotool key Escape
-sleep 1
-xdotool key Down
-xdotool key Down
-xdotool key Down
-xdotool key Down
-sleep 1
-if $( mouseover 3 10000 ~/.dotfiles/shortcuts/images/readonline.png )
-then
-    xdotool mousemove_relative 90 0
-    xdotool click 1
-    sleep 1
-    xdotool key Down
-    xdotool key Down
-    sleep 1
-    xdotool key Return
-    sleep 1
-    xdotool key 4; shcw 1lib.4
-    sleep 5
-fi
-
-xdotool key Home
+# xdotool key Home
+#
+# xdotool key Ctrl+f
+# sleep 1
+# xdotool type 'Read online'
+# xdotool key Return
+# sleep 1
+# xdotool key Escape
+# sleep 1
+# xdotool key Down
+# xdotool key Down
+# xdotool key Down
+# xdotool key Down
+# sleep 1
+# if $( mouseover 3 10000 ~/.dotfiles/shortcuts/images/readonline.png )
+# then
+#     xdotool mousemove_relative 90 0
+#     xdotool click 1
+#     sleep 1
+#     xdotool key Down
+#     xdotool key Down
+#     sleep 1
+#     xdotool key Return
+#     sleep 1
+#     xdotool key 4; shcw 1lib.4
+#     sleep 5
+# fi
+#
+# xdotool key Home
 
 xdotool key Ctrl+f
 sleep 1
