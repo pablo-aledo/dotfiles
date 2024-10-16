@@ -370,6 +370,7 @@ case $1 in
                          docker compose up -d
                          google-chrome http://localhost/install ;;
 (docker-antlr)           shift; docker-antlr $* ;;
+(dot-to-ascii)           docker run --rm -d --name dot-to-ascii -p 8080:80 dot-to-ascii ;;
 (antlr)                  shift; docker run --rm -v $PWD:/workdir -w /workdir --user $(id -u):$(id -g) leodido/antlr $* ;;
 (antlr)                  shift; antlr $* ;;
 (dia)                    shift; docker run -d -v $PWD:/workdir -w /workdir -v /etc/localtime:/etc/localtime:ro -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=unix"${DISPLAY}" --name dia gruen/dia $* ;;
