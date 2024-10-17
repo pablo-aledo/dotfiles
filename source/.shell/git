@@ -66,9 +66,10 @@ Git(){
         (branch_rebase_keep) \git rebase -X ours $2 ;;
         (branch_get_file) mkdir -p "$(dirname $2)"; \git show $1:$2 > $2 ;;
         (branch_current) \git branch -a --contains HEAD | grep -v remotes | grep -v HEAD | sed -e 's/^ *//g' -e 's/^\* //g' ;;
-        (branch_add_remote) \git remote add $1 $2
-                            \git fetch $1 $3
-                            ;;
+        (branch_add_remote) # name url branch
+            \git remote add $1 $2
+            \git fetch $1 $3
+            ;;
         (branch_clone)
             git log --oneline | head -n $(( $(git log --oneline | grep $1 -B99999 | wc -l) - 1 )) | awk '{print $1}' > /tmp/commits
             git checkout $1
