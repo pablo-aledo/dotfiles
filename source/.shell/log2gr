@@ -683,17 +683,19 @@ log2gr_compare_logs(){
 }
 
 log2gr_steps(){
-grep -Rn "$(cat $LOG2GR_DIR/$project/short_seeds_filters | paste -d@ -s | sed -e 's/@/\\|/g' -e 's/^/\\(/g' -e 's/$/\\)/g')" $LOG2GR_DIR/$project/prev_log > /tmp/filter_nok
+[ $1 = 'nok' ] && logfile=prev_log || logfile=log
+grep -Rn "$(cat $LOG2GR_DIR/$project/short_seeds_filters | paste -d@ -s | sed -e 's/@/\\|/g' -e 's/^/\\(/g' -e 's/$/\\)/g')" $LOG2GR_DIR/$project/$logfile > /tmp/filter_log
 
 while read -u3 line
 do
     linenr=$(echo $line | sed 's/^\([^:]*\):.*/\1/g')
     linemsg=$(echo $line | sed 's/^\([^:]*:\)//g')
 
-    head -n $linenr $LOG2GR_DIR/$project/prev_log > /tmp/step_log
+    head -n $linenr $LOG2GR_DIR/$project/$logfile > /tmp/step_log
     echo $linenr $linemsg
     read
-done 3< /tmp/filter_nok
+done 3< /tmp/filter_log
+cat $LOG2GR_DIR/$project/$logfile > /tmp/step_log
 }
 
 log2gr_disambiguate(){
