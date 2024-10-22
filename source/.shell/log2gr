@@ -186,8 +186,8 @@ ctags_insert_review(){
 ctags_intersection(){
 cat ~/log2gr/$1/calls | while read line
 do
-    n1=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f1)
-    n2=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f2)
+    n1=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f1 | sed 's/\.//g')
+    n2=$(echo $line | sed 's/ -> /@/g' | cut -d@ -f2 | sed 's/\.//g')
 
     [ "$(cat $2 | grep -v '^#.*' | grep "^$n1\$")" != "" ] &&
     [ "$(cat $2 | grep -v '^#.*' | grep "^$n2\$")" != "" ] &&
