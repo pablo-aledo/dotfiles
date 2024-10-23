@@ -251,6 +251,10 @@ ctags_review(){
         -e 's/^ *//g' \
         -e 's/ .*//g' \
         /tmp/ctags_extra_keywords
+
+    cat /tmp/ctags_extra_keywords | sort -u | grep -v '^$' > /tmp/ctags_extra_keywords_2
+    \mv /tmp/ctags_extra_keywords_2 /tmp/ctags_extra_keywords
+
     vim /tmp/ctags_extra_keywords
 
     ctags_update_quick $1
