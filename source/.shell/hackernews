@@ -82,3 +82,7 @@ hn_loop(){
 hn_archive(){
 wget -q 'http://archive.org/wayback/available?url='$1 -O - | jq '.archived_snapshots.closest.url' | sed 's/"//g'
 }
+
+hn_archive_2(){
+wget https://web.archive.org/web/20250000000000/$1 -O /dev/null 2>&1 | grep Location | sed 's/^Location: \([^ ]*\).*/\1/g'
+}
