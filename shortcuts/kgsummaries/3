@@ -1,7 +1,9 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
-xdotool mousemove 300 425
+xdotool mousemove 300 455
+xdotool click 1
+xdotool click 1
 xdotool click 1
 echo -n $(cat /tmp/kg_link) | xclip -sel clip -i
 xdotool key Ctrl+v

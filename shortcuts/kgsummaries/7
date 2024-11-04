@@ -7,7 +7,7 @@ xdotool key space
 xdotool key Return
 sleep 5
 
-xdotool mousemove 620 540
+xdotool mousemove 620 570
 xdotool click 1
 sleep 1
 
