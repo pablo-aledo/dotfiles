@@ -50,6 +50,7 @@ Git(){
                     { printf " %"ll"s %"rl"s:%s\n",left++,right++,line }
             ' ;;
 
+        (branch_list) \git branch -a ;;
         (branch_base) \git merge-base master $(\git rev-parse HEAD) ;;
         (branch_rewrite) \git rebase -i $(Git branch_base) ;; # pick, squash, squash, squash...
         (branch_delete) \git branch --delete $* ;;
