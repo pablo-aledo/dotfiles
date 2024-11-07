@@ -1025,17 +1025,17 @@ server(){
         sudo sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/g' /etc/sysctl.conf
         sudo sysctl -p
 
-        cat <<EOF > wg0.conf
-        [Interface]
-        PrivateKey = $(cat ./sr_private)
-        Address = 10.0.0.1/24
-        ListenPort = 51820
-        PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o ens4 -j MASQUERADE
-        PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o ens4 -j MASQUERADE
-        [Peer]
-        PublicKey = $(cat ./cl_public)
-        AllowedIPs = 0.0.0.0/0
-        EOF
+cat <<EOF > wg0.conf
+[Interface]
+PrivateKey = $(cat ./sr_private)
+Address = 10.0.0.1/24
+ListenPort = 51820
+PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o ens4 -j MASQUERADE
+PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o ens4 -j MASQUERADE
+[Peer]
+PublicKey = $(cat ./cl_public)
+AllowedIPs = 0.0.0.0/0
+EOF
 
         sudo cp wg0.conf /etc/wireguard/wg0.conf
         sudo chmod -R 600 /etc/wireguard
@@ -1045,16 +1045,16 @@ server(){
 
         #sudo systemctl stop wg-quick@wg0
 
-        cat <<EOF > tunnel.conf
-        [Interface]
-        Address = 10.0.0.2/24
-        PrivateKey = $(cat ./cl_private)
-        [Peer]
-        PublicKey = $(cat ./sr_public)
-        Endpoint = $(myip | grep external | cut -d: -f2):51820
-        AllowedIPs = 0.0.0.0/0
-        PersistentKeepalive = 15
-        EOF
+cat <<EOF > tunnel.conf
+[Interface]
+Address = 10.0.0.2/24
+PrivateKey = $(cat ./cl_private)
+[Peer]
+PublicKey = $(cat ./sr_public)
+Endpoint = $(myip | grep external | cut -d: -f2):51820
+AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = 15
+EOF
         qrencode -tansiutf8 < tunnel.conf
 
 
