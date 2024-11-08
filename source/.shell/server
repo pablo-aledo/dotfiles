@@ -1028,13 +1028,18 @@ server(){
 cat <<EOF > wg0.conf
 [Interface]
 PrivateKey = $(cat ./sr_private)
-Address = 10.0.0.1/24
+Address = 10.0.0.1/8
 ListenPort = 51820
-PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o ens4 -j MASQUERADE
-PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o ens4 -j MASQUERADE
+SaveConfig=true
+PostUp = ufw route allow in on wg0 out on wlp0s20f3
+PostUp = iptables -A FORWARD -i wg0 -j ACCEPT
+PostUp = iptables -t nat -A POSTROUTING -o wlp0s20f3 -j MASQUERADE
+PreDown = ufw route delete allow in on wg0 out on wlp0s20f3
+PostUp = iptables -D FORWARD -i wg0 -j ACCEPT
+PreDown = iptables -t nat -D POSTROUTING -o wlp0s20f3 -j MASQUERADE
 [Peer]
 PublicKey = $(cat ./cl_public)
-AllowedIPs = 0.0.0.0/0
+AllowedIPs = 10.0.0.2/32
 EOF
 
         sudo cp wg0.conf /etc/wireguard/wg0.conf
@@ -1044,6 +1049,7 @@ EOF
         sudo systemctl status wg-quick@wg0
 
         #sudo systemctl stop wg-quick@wg0
+        #wg-quick up wg0
 
 cat <<EOF > tunnel.conf
 [Interface]
