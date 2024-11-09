@@ -1031,6 +1031,7 @@ cat <<EOF > wg0.conf
 PrivateKey = $(cat ./sr_private)
 Address = 10.0.0.1/8
 ListenPort = 51820
+SaveConfig = true
 PostUp = ufw route allow in on wg0 out on $(cat interface)
 PostUp = iptables -A FORWARD -i wg0 -j ACCEPT
 PostUp = iptables -t nat -A POSTROUTING -o $(cat interface) -j MASQUERADE
@@ -1054,7 +1055,6 @@ EOF
 cat <<EOF > tunnel.conf
 [Interface]
 Address = 10.0.0.2/8
-SaveConfig=true
 PrivateKey = $(cat ./cl_private)
 [Peer]
 PublicKey = $(cat ./sr_public)
