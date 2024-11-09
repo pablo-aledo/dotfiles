@@ -1012,6 +1012,7 @@ server(){
         wg pubkey < sr_private > sr_public
         wg genkey > cl_private
         wg pubkey < cl_private > cl_public
+        ip -o -4 route show to default | awk '{print $5}' > interface
         #sudo ip link add wg0 type wireguard
         #sudo ip addr add 10.0.0.1/24 dev wg0
         #sudo wg set wg0 private-key ./sr_private
@@ -1031,12 +1032,12 @@ PrivateKey = $(cat ./sr_private)
 Address = 10.0.0.1/8
 ListenPort = 51820
 SaveConfig=true
-PostUp = ufw route allow in on wg0 out on wlp0s20f3
+PostUp = ufw route allow in on wg0 out on $(cat interface)
 PostUp = iptables -A FORWARD -i wg0 -j ACCEPT
-PostUp = iptables -t nat -A POSTROUTING -o wlp0s20f3 -j MASQUERADE
-PreDown = ufw route delete allow in on wg0 out on wlp0s20f3
-PostUp = iptables -D FORWARD -i wg0 -j ACCEPT
-PreDown = iptables -t nat -D POSTROUTING -o wlp0s20f3 -j MASQUERADE
+PostUp = iptables -t nat -A POSTROUTING -o $(cat interface) -j MASQUERADE
+PreDown = ufw route delete allow in on wg0 out on $(cat interface)
+PreDown = iptables -D FORWARD -i wg0 -j ACCEPT
+PreDown = iptables -t nat -D POSTROUTING -o $(cat interface) -j MASQUERADE
 [Peer]
 PublicKey = $(cat ./cl_public)
 AllowedIPs = 10.0.0.2/32
