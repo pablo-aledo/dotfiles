@@ -1033,6 +1033,7 @@ Address = 10.0.0.1/8
 ListenPort = 51820
 SaveConfig = true
 PostUp = ufw route allow in on wg0 out on $(cat interface)
+PostUp = ufw allow 51820/udp
 PostUp = iptables -A FORWARD -i wg0 -j ACCEPT
 PostUp = iptables -t nat -A POSTROUTING -o $(cat interface) -j MASQUERADE
 PreDown = ufw route delete allow in on wg0 out on $(cat interface)
@@ -1051,6 +1052,7 @@ EOF
 
         #sudo systemctl stop wg-quick@wg0
         #wg-quick up wg0
+        #sudo tcpdump -envi wg0
 
 cat <<EOF > tunnel.conf
 [Interface]
