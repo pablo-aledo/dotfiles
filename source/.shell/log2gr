@@ -115,6 +115,7 @@ ctags_adapt(){
 }
 
 ctags_update(){
+    [ -e $LOG2GR_DIR/$1/fix_pre ] && source $LOG2GR_DIR/$1/fix_pre
     ctags_index kind:f
     [ -e $LOG2GR_DIR/$1/fix_ctags ] && source $LOG2GR_DIR/$1/fix_ctags
     vim tags
@@ -131,6 +132,7 @@ ctags_update(){
 }
 
 ctags_update_quick(){
+    [ -e $LOG2GR_DIR/$1/fix_pre ] && source $LOG2GR_DIR/$1/fix_pre
     ctags_index kind:f
     [ -e $LOG2GR_DIR/$1/fix_ctags ] && source $LOG2GR_DIR/$1/fix_ctags
     rm -fr functions
@@ -146,6 +148,7 @@ ctags_update_quick(){
 }
 
 ctags_update_keep(){
+    [ -e $LOG2GR_DIR/$1/fix_pre ] && source $LOG2GR_DIR/$1/fix_pre
     ctags_index kind:f
     [ -e $LOG2GR_DIR/$1/fix_ctags ] && source $LOG2GR_DIR/$1/fix_ctags
     rm -fr functions
