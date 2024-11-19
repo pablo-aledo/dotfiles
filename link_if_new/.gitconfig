@@ -9,7 +9,7 @@
 	default = simple
 [core]
 	trustctime = false
-    excludesFile = ~/.global_gitignore
+    excludesFile = ~/.gitignore_global
 [color]
     diff = auto
     status = auto
