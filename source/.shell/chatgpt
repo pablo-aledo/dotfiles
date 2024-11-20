@@ -129,3 +129,19 @@ chatgpt_restart () {
 	tmux send-keys -t .2 'chatgpt_multiquery'
 	tmux send-keys -t .2 'Enter'
 }
+
+chatgpt_query_2 () {
+	echo "\e[34m Query \e[0m $1"
+	cat input/prompt input/"$1" | grep -v '^$' | grep -v '^[ \t]*$' | while read line
+	do
+        echo $line
+	done | gpt-ai | tee output/$1
+}
+
+chatgpt_multiquery_2 () {
+	comm -13 <(cd output; ls | sort) <(cd input; ls | sort) | grep -v prompt | while read queryfile
+	do
+	    chatgpt_query_2 "$queryfile"
+        chatgpt_process_output "$queryfile"
+	done
+}
