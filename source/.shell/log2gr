@@ -860,30 +860,38 @@ idx_add_upd_quick(){
 }
 
 cdag(){
-    code=$1
-    vars=$2
-    cat $code | grep = | while read line
-    do
-        l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$' | tail -n1)
-        r=$(echo $line | cut -d'=' -f2 | tokenize | grep -v '^$')
-        r2=$(comm -12 <(echo $r | sort -u) <(cat $vars | sort -u))
-
-        #echo $line
-        #echo "====="
-        #echo $l
-        #echo "====="
-        #echo $r
-        #echo "====="
-        #echo $r2
-        echo $r2 | while read a
+    if [ $# = 1 ]
+    then
+        cat $1 | sed '1d' > /tmp/cdag_file
+        cat $1 | head -n1 | sed 's/ /\n/g' > /tmp/cdag_vars
+        cdag /tmp/cdag_file /tmp/cdag_vars
+        return
+    else
+        code=$1
+        vars=$2
+        cat $code | grep = | while read line
         do
-            echo "$a --> $l"
-        done
+            l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$' | tail -n1)
+            r=$(echo $line | cut -d'=' -f2 | tokenize | grep -v '^$')
+            r2=$(comm -12 <(echo $r | sort -u) <(cat $vars | sort -u))
 
-    done | while read line
-    do
-        l=$(echo $line | sed 's/ --> .*//g')
-        r=$(echo $line | sed 's/.* --> //g')
-        [ "$l" != "$r" ] && echo "$l --> $r"
-    done | sort -u
+            #echo $line
+            #echo "====="
+            #echo $l
+            #echo "====="
+            #echo $r
+            #echo "====="
+            #echo $r2
+            echo $r2 | while read a
+            do
+                echo "$a --> $l"
+            done
+
+        done | while read line
+        do
+            l=$(echo $line | sed 's/ --> .*//g')
+            r=$(echo $line | sed 's/.* --> //g')
+            [ "$l" != "$r" ] && echo "$l --> $r"
+        done | sort -u
+    fi
 }
