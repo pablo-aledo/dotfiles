@@ -1,4 +1,5 @@
-sudo apt-get install -y awscli
+#sudo apt-get install -y awscli
+sudo snap install aws-cli --classic
 
 echo 'autoload bashcompinit && bashcompinit' >> ~/.paths
 echo 'autoload -Uz compinit && compinit' >> ~/.paths
