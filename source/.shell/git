@@ -1,3 +1,5 @@
+export GIT_TRUNK=master
+
 Git(){
     command=$1
     shift
@@ -51,7 +53,7 @@ Git(){
             ' ;;
 
         (branch_list) \git branch -a ;;
-        (branch_base) \git merge-base master $(\git rev-parse HEAD) ;;
+        (branch_base) \git merge-base $GIT_TRUNK $(\git rev-parse HEAD) ;;
         (branch_rewrite) \git rebase -i $(Git branch_base) ;; # pick, squash, squash, squash...
         (branch_delete) \git branch --delete $* ;;
         (branch_diff) \git diff $(Git branch_base) $(\git rev-parse HEAD) $* ;;
