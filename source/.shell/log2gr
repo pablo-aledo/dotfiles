@@ -875,7 +875,7 @@ cdag(){
             do
                 l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$' | tail -n1)
                 echo $l
-            done | sort -u | paste -d' ' -s > /tmp/cdag_vars
+            done | sort -u > /tmp/cdag_vars
             cdag $code /tmp/cdag_vars
             return
         else
