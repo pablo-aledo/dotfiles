@@ -869,29 +869,39 @@ cdag(){
     else
         code=$1
         vars=$2
-        cat $code | grep = | while read line
-        do
-            l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$' | tail -n1)
-            r=$(echo $line | cut -d'=' -f2 | tokenize | grep -v '^$')
-            r2=$(comm -12 <(echo $r | sort -u) <(cat $vars | sort -u))
-
-            #echo $line
-            #echo "====="
-            #echo $l
-            #echo "====="
-            #echo $r
-            #echo "====="
-            #echo $r2
-            echo $r2 | while read a
+        if [ $vars = auto ]
+            cat $code | grep = | while read line
             do
-                echo "$a --> $l"
-            done
+                l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$' | tail -n1)
+                echo $l
+            done | sort -u | paste -d' ' -s > /tmp/cdag_vars
+            cdag $code /tmp/cdag_vars
+            return
+        else
+            cat $code | grep = | while read line
+            do
+                l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$' | tail -n1)
+                r=$(echo $line | cut -d'=' -f2 | tokenize | grep -v '^$')
+                r2=$(comm -12 <(echo $r | sort -u) <(cat $vars | sort -u))
 
-        done | while read line
-        do
-            l=$(echo $line | sed 's/ --> .*//g')
-            r=$(echo $line | sed 's/.* --> //g')
-            [ "$l" != "$r" ] && echo "$l --> $r"
-        done | sort -u
+                #echo $line
+                #echo "====="
+                #echo $l
+                #echo "====="
+                #echo $r
+                #echo "====="
+                #echo $r2
+                echo $r2 | while read a
+                do
+                    echo "$a --> $l"
+                done
+
+            done | while read line
+            do
+                l=$(echo $line | sed 's/ --> .*//g')
+                r=$(echo $line | sed 's/.* --> //g')
+                [ "$l" != "$r" ] && echo "$l --> $r"
+            done | sort -u
+        fi
     fi
 }
