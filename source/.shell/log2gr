@@ -870,6 +870,7 @@ cdag(){
         code=$1
         vars=$2
         if [ $vars = auto ]
+        then
             cat $code | grep = | while read line
             do
                 l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$' | tail -n1)
