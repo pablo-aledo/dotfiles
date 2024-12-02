@@ -864,11 +864,11 @@ cdag(){
     then
         cat $1 | sed '1d' > /tmp/cdag_file
         cat $1 | head -n1 | sed 's/ /\n/g' > /tmp/cdag_vars
-        cdag /tmp/cdag_file /tmp/cdag_vars
+        cdag /tmp/cdag_vars /tmp/cdag_file
         return
     else
-        code=$1
-        vars=$2
+        vars=$1
+        code=$2
         if [ $vars = auto ]
         then
             cat $code | grep = | while read line
@@ -876,7 +876,7 @@ cdag(){
                 l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$' | tail -n1)
                 echo $l
             done | sort -u > /tmp/cdag_vars
-            cdag $code /tmp/cdag_vars
+            cdag /tmp/cdag_vars $code
             return
         else
             cat $code | grep = | while read line
