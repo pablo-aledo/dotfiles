@@ -35,7 +35,7 @@ pkg install python3-numpy
 pkg install python3-scipy
 
 pkg install google-chrome
-pkg install rsstail
+pkg install rsstail_src
 
 sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
 sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
