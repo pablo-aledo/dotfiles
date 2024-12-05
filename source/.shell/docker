@@ -545,6 +545,7 @@ case $1 in
                          sudo chown $(whoami):$(whoami) /etc/s3cred; sudo chmod 600 /etc/s3cred
                          s3fs bucket ~/s3 -o passwd_file=/etc/s3cred,use_path_request_style,url=http://minio-server:9000
                          ;;
+(mmdm)                   shift; docker run --rm -u `id -u`:`id -g` -v $PWD:/data minlag/mermaid-cli $* ;;
 (mongodb)                docker run -it -p 27017:27017 bitnami/mongodb:latest ;;
 (mongodb_network)        docker network create app-tier --driver bridge ;;
 (mongodb_primary)        docker run -d --name mongodb-primary \
