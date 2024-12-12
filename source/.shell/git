@@ -62,6 +62,13 @@ Git(){
         (branch_to_patch) \git diff $(Git branch_base) $(\git rev-parse HEAD) ;;
         (branch_to_file) \git log --cc $(Git branch_base)...HEAD ;;
         (branch_to_file_2) \git format-patch --stdout $(Git branch_base) ;; # consume with git am
+        (branch_to_file_3)
+            \git log | grep commit | grep -B9999 $(Git branch_base) | sed '$d' | cut -d' ' -f2 | tac | while read commit
+            do
+                echo "===== $commit $(Git message $commit | head -n1)"
+                Git diff_step $commit | cat
+            done
+            ;;
         (branch_create) \git checkout -b $1 ;;
         (branch_delete) \git branch -D $1 ;;
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
