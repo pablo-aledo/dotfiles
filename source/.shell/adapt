@@ -747,6 +747,9 @@ adapt_apt_server_noconfirm(){
 }
 
 adapt_english(){
-    echo 'export LC_ALL=C' >> ~/.paths
-    export LC_ALL=C
+    #echo 'export LC_ALL=C' >> ~/.paths
+    #export LC_ALL=C
+
+    echo 'export LC_ALL=en_US.UTF-8' >> ~/.paths
+    export LC_ALL=en_US.UTF-8
 }
