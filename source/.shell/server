@@ -611,11 +611,13 @@ server(){
         hour=$( echo $hour | sed 's/^\(.\)$/0\1/g' )
         date_target="$hour$min"
 
+        [ -e ~/night ] && source ~/night
         echo "$date_night ($date_target)"
         which night
 
     	while true
     	do
+            [ -e ~/night ] && source ~/night
     		if [ `date +%H%M` = $date_target ] || [ $date_night = "loop" ]
     		then
                 echo "===== Start ====="
