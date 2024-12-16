@@ -135,6 +135,7 @@ if ( [ $cmd = "remove" ]   && `envpkg eopkg`   ) then sudo eopkg remove $list; r
 if ( [ $cmd = "remove" ]   && `envpkg slax`    ) then slax deactivate $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg opkg`    ) then opkg remove $list; return; fi
 if ( [ $cmd = "remove" ]   && `envpkg apk`     ) then apk del $list; return; fi
+if ( [ $cmd = "remove" ]   && `envpkg snap`    ) then sudo snap remove $list; return; fi
 
 if ( [ $cmd = "search" ]   && `envpkg nix`     ) then nix search nixpkgs $1; return; fi
 if ( [ $cmd = "search" ]   && `envpkg nala`    ) then nala search $list; return; fi
@@ -155,6 +156,7 @@ if ( [ $cmd = "search" ]   && `envpkg slax`    ) then slax search $list; return;
 if ( [ $cmd = "search" ]   && `envpkg opkg`    ) then opkg list | grep $list | cut -d" " -f1; return; fi
 if ( [ $cmd = "search" ]   && `envpkg usm`     ) then usm -s $list; return; fi
 if ( [ $cmd = "search" ]   && `envpkg apk`     ) then apk search $list; return; fi
+if ( [ $cmd = "search" ]   && `envpkg snap`    ) then snap search $list; return; fi
 
 if ( [ $cmd = "download" ] && `envpkg apt-get` ) then apt_download $list; return; fi
 if ( [ $cmd = "download" ] && `envpkg pacman`  ) then sudo pacman -Sw $list; return; fi
