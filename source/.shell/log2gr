@@ -907,5 +907,5 @@ cdag(){
     fi
 }
 
-ct_procdupli(){echo '-e '"'s|^"$1'\\t.*'$2'|'$(cat ~/log2gr/fusion/duplifiles | grep "^$2 " | cut -d" " -f2)$1'\\t'$2'|g'"'"' \\'}
-ct_procdupli2(){echo '-e '"'s|\<"$(cat ~/log2gr/fusion/duplifiles | grep "^$2 " | cut -d" " -f2)$1'\>|'$(cat ~/log2gr/fusion/duplifiles | grep "^$2 " | cut -d" " -f2).$1'|g'"'"' \\'}
+ct_procdupli(){echo '-e '"'s|^"$1'\\t.*'$2'|'$(cat ~/log2gr/project/duplifiles | grep "^$2 " | cut -d" " -f2)$1'\\t'$2'|g'"'"' \\'}
+ct_procdupli2(){echo '-e '"'s|\<"$(cat ~/log2gr/project/duplifiles | grep "^$2 " | cut -d" " -f2)$1'\>|'$(cat ~/log2gr/project/duplifiles | grep "^$2 " | cut -d" " -f2).$1'|g'"'"' \\'}
