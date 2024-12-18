@@ -142,6 +142,10 @@ wtailc(){
     watch -t -n1 'termsize=$(stty size | awk "{print \$1 - 1 , \$2 - 1}"); tail -n$(echo $termsize | cut -d" " -f1) '"$1"' | cut -c -$(echo $termsize | cut -d" " -f2) | sort -u | column -t -s"|" | sed "s/^===== 0 /===== /g"'
 }
 
+ytdlmp3(){
+    yt-dlp -x --audio-format mp3 $*
+}
+
 ytdlmp4(){
     yt-dlp --no-mtime -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4' $*
 }
