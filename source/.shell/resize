@@ -1,12 +1,15 @@
 resize(){
         case $1 in
 		to_width)                convert "$3" -resize $2x-1 "resized_$3" ;;
+		to_height)               convert "$3" -resize x$2   "resized_$3" ;;
 		ignore_aspect_ratio)     convert "$3" -resize $2\!  "resized_$3" ;;
 		only_shrink_larger)      convert "$3" -resize $2\>  "resized_$3" ;;
 		only_enlarge_smaller)    convert "$3" -resize $2\<  "resized_$3" ;;
 		fill_area)               convert "$3" -resize $2^   "resized_$3" ;;
 		percentage_resize)       convert "$3" -resize $2%   "resized_$3" ;;
 		pixel_count_limit)       convert "$3" -resize $2@   "resized_$3" ;;
+		width_and_crop)          convert "$4" -resize $2x-1 "resized_$4" ;
+                                 convert "resized_$4" -gravity center -crop $2x$3+0+0 +repage "crop_$4" ;;
 	esac
 
 }
