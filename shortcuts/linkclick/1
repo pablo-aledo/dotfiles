@@ -1,0 +1,5 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+mouseover 1 10000 ~/.dotfiles/shortcuts/images/http.png
+xdotool click 1
