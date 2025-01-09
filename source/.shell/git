@@ -176,3 +176,15 @@ git_mychanges(){
     [ "$(git status -s | wc -l)" != 0 ] && { git status; echo "commit?"; read }
     Git log_oneline_format | head -n20 | grep -i pablo | awk '{print $1}' | tac | nl | awk -v dirname=$(basename $PWD) '{print "Git diff_step "$2" >> ../"dirname"_"$1".patch"}'
 }
+
+git_pgpkey(){
+    gpg --full-generate-key
+    keyid=$(gpg --list-secret-keys --keyid-format=long  | grep '^sec' | cut -d/ -f2 | cut -d' ' -f1)
+    gpg --armor --export $keyid
+    #git config --global user.signingkey $keyid
+    #git config --global commit.gpgsign true
+    #GitSign(){
+    #    [ "$1" = "commit" ] && { shift; \git commit -Ss $*; return }
+    #    [ "$1" = "commit" ] || { \git $*; return }
+    #}
+}
