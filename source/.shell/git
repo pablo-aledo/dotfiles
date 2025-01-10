@@ -28,6 +28,9 @@ Git(){
             \git log --oneline --graph | head -n $(stty size | awk '{print $1 - 5}') | sed "s/\* *$base/\x1b[31m>\x1b[0m $base/g"
         ;;
 
+        (show_parents) git show --no-patch --format="%P" $1 ;;
+        (set_parents) git replace --graft $1 $2 $3 ;;
+
         (diff_grep) \git diff --name-only -G"$1" ;;
         (diff_with_filename) \git diff $* | awk '/^\+\+\+/{print; $1=""; name=$0}{print name": "$0}' ;;
         (diff_name_only) \git diff --name-only $* ;;
