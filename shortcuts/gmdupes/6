@@ -1,0 +1,23 @@
+source ~/.dotfiles/source/.shell/adapt
+export DISPLAY=:1
+
+xdotool key 1 && sleep 30
+
+cat /tmp/gmdupes | while read line
+do
+    title=$(echo $line | sed 's/ -> .*$//g')
+    label=$(echo $line | sed 's/^.* -> //g')
+
+    echo $title > /tmp/title
+    echo $label | sed 's/, */ /g' > /tmp/labels
+
+    xdotool key 2 && sleep 1; shcw gmdupes.2
+
+    while [ -e /tmp/gmdupes_stop ]
+    do
+        sleep 1
+    done
+
+done
+
+xdotool key 0

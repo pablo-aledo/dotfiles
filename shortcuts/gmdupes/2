@@ -1,0 +1,7 @@
+export DISPLAY=:1
+
+xdotool type '/'
+cat /tmp/title | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Return
+touch /tmp/gmdupes_stop
