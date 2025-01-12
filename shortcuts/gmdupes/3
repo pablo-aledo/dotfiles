@@ -1,7 +1,8 @@
 export DISPLAY=:1
 
+sleep 0.5
 xdotool key l
-sleep 1
+sleep 0.5
 xdotool type 'dupli'
 sleep 0.5
 xdotool key Return
