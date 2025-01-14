@@ -34,7 +34,7 @@ amgrep(){
     source /tmp/script
 }
 
-sgrep(){
+lgrep(){
 cat $1 | paste -d@ -s | sed -e 's/@/\\|/g' -e 's/^/'"'"'\\(/g' -e 's/$/\\)'"'"'/g' -e 's/^/grep /g' -e 's|$| '$2'|g' | source /dev/stdin
 }
 
