@@ -34,6 +34,14 @@ amgrep(){
     source /tmp/script
 }
 
+sgrep(){
+cat $1 | paste -d@ -s | sed -e 's/@/\\|/g' -e 's/^/'"'"'\\(/g' -e 's/$/\\)'"'"'/g' -e 's/^/grep /g' -e 's|$| '$2'|g' | source /dev/stdin
+}
+
+wgrep(){
+cat $1 | sed -e 's/^/\\</g' -e 's/$/\\>/g' | paste -d@ -s | sed -e 's/@/\\|/g' -e 's/^/'"'"'\\(/g' -e 's/$/\\)'"'"'/g' -e 's/^/grep /g' -e 's|$| '$2'|g' | source /dev/stdin
+}
+
 find_index(){
 mgrep files $* | cut -d/ -f8 | sort | uniq | while read line; do echo "$(mgrep files $* | grep -F "/$line/" | wc -l) $line" ; done | sort -g
 }
