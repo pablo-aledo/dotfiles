@@ -187,7 +187,7 @@ git_pgpkey(){
     #git config --global user.signingkey $keyid
     #git config --global commit.gpgsign true
     #GitSign(){
-    #    [ "$1" = "commit" ] && { shift; \git commit -Ss $*; return }
+    #    [ "$1" = "commit" ] && { shift; \git commit -sS $*; return }
     #    [ "$1" = "commit" ] || { \git $*; return }
     #}
 }
