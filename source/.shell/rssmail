@@ -157,7 +157,7 @@ rssmail_server(){
 	cd 
 	rssfeeds=`cat ~/.newsbeuter/urls | grep -v '^#' | sed -e 's/^/-u "/g' -e 's/$/"/g' | paste -d' ' -s`
 	continue_until_title=0
-	echo rsstail $rssfeeds -i10 -zP -ld | bash | while read line
+	echo rsstail $rssfeeds -i$(( 15 * 60 )) -zP -ld | bash | while read line
 	do
 		line_escaped=`echo $line | sed -e 's/\[/\\\[/g' -e 's/\]/\\\]/g' -e 's/\*/\\\*/g'`
 		[ "$(echo $line | grep -E '^Title:')" != "" ] && echo $line >> ~/servers/rssmail/rsstitles2
