@@ -185,7 +185,8 @@ git_pgpkey(){
     keyid=$(gpg --list-secret-keys --keyid-format=long  | grep '^sec' | cut -d/ -f2 | cut -d' ' -f1)
     gpg --armor --export $keyid
     #git config --global user.signingkey $keyid
-    #git config --global commit.gpgsign true
+    #git config --global commit.gpgSign true
+    #git log --show-signature
     #GitSign(){
     #    [ "$1" = "commit" ] && { shift; \git commit -sS $*; return }
     #    [ "$1" = "commit" ] || { \git $*; return }
