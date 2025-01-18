@@ -51,3 +51,43 @@ umldiff_clean(){
     sed -i 's/^ *//g' /tmp/uml_diffs
 }
 
+uml_show(){
+    [ -e ../genuml_pre.sh ] && source ../genuml_pre.sh
+       find -iname '*.go' | while read line
+       do
+               sed -i '/.*genuml_ignore/d' $line
+       done
+
+       goplantuml --recursive . > /tmp/uml
+
+       cat /tmp/uml | awk '/.*class  <<.*/{omit = ! omit; next} omit && /.*}$/ { omit = ! omit; next} ! omit {print}' > /tmp/uml.plantuml
+
+       (
+               cd /tmp/
+               docker_app plantuml -tsvg uml.plantuml
+               google-chrome uml.svg
+       )
+}
+
+uml_show_2(){
+    git add .
+    git commit -am "backup"
+
+    [ -e ../genuml_pre.sh ] && source ../genuml_pre.sh
+       find -iname '*.go' | while read line
+       do
+               sed -i '/.*genuml_ignore/d' $line
+       done
+
+       goplantuml --recursive . > /tmp/uml
+
+       cat /tmp/uml | awk '/.*class  <<.*/{omit = ! omit; next} omit && /.*}$/ { omit = ! omit; next} ! omit {print}' > /tmp/uml.plantuml
+
+    git checkout .
+
+       (
+               cd /tmp/
+               docker_app plantuml -tsvg uml.plantuml
+               google-chrome uml.svg
+       )
+}
