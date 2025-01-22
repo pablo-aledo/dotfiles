@@ -720,6 +720,7 @@ pkg install docfetcher
 pkg install xorg
 pkg install nosuspend
 pkg install gnome-tweaks
+pkg install solaar
 
 sudo snap install brave
 sudo snap install code
