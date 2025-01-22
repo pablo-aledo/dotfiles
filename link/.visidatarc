@@ -1,0 +1,2 @@
+options.histogram_bins = 50
+options.numeric_binning = True
