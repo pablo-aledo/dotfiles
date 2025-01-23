@@ -203,7 +203,7 @@ ghdl(){
 alias Column='column -t -s"|"'
 
 Gnuplot(){
-    cat | gnuplot -p -e 'plot "-" using 1:2 with lines'
+    cat | gnuplot -p -e 'plot "-" using 1:2 with lines; pause mouse close'
 }
 
 alias Xterm='xterm -ti vt340 -bg black -fg white'
