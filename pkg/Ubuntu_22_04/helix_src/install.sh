@@ -5,4 +5,7 @@ git clone https://github.com/helix-editor/helix.git
 cd helix
 cargo build --release
 
-sudo mv target/release/hx /usr/bin/hx
+sudo mkdir /usr/lib/helix
+sudo cp target/release/hx /usr/lib/helix/hx
+sudo cp -r runtime /usr/lib/helix/
+sudo ln -s /usr/lib/helix/hx /usr/bin/hx
