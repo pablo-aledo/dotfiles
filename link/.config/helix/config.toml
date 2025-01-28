@@ -26,6 +26,7 @@ hidden = false
 [keys.normal]
 # Quick iteration on config changes
 # C-o = ":config-open"
+C-p = [ "select_mode", "extend_to_line_bounds", ":pipe-to cat > /tmp/tmux_command ", "collapse_selection", "normal_mode", "move_line_down", "goto_line_start", ":pipe-to cat /tmp/tmux_command | xargs -d'\n' -n1 tmux send-keys -t .2; tmux send-keys -t.2 'Enter'" ]
 C-r = [ ":config-open", ":config-reload" ]
 "space" = { w = [ "normal_mode", ":write" ], q = [ "normal_mode", ":quit" ], x = ["normal_mode", ":buffer-close"] }
 A-j = ["extend_to_line_bounds", "delete_selection", "paste_after"]
