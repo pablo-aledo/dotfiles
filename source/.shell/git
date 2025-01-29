@@ -90,6 +90,12 @@ Git(){
             tac /tmp/commits | while read commit; do git cherry-pick $commit; done
             ;;
 
+        (tag_list) \git tag ;;
+        (tag_show) \git show $1 ;;
+        (tag_create) \git tag $1 ;;
+        (tag_create_at) \git tag -a $1 $2 ;;
+        (tag_push) \git push origin $1 ;;
+
         (reset_branch) \git reset --hard origin/$(\git rev-parse --abbrev-ref HEAD) ;;
         (reset_last_commit) \git reset HEAD^ ;;
 
