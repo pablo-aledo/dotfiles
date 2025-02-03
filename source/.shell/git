@@ -120,12 +120,12 @@ Git(){
         (clean) \git clean -df ;;
         (deep_clean)
             [ "$( git status -s )" = "" ] && gbak=false || gbak=true
-            [ $gbak == "true" ] && \git add .
-            [ $gbak == "true" ] && \git commit -am "."
+            [ $gbak = "true" ] && \git add .
+            [ $gbak = "true" ] && \git commit -am "."
             find -iname .gitignore -delete
             \git clean -df
             \git checkout .
-            [ $gbak == "true" ] && \git reset HEAD^
+            [ $gbak = "true" ] && \git reset HEAD^
             ;;
         (init) \git init .; git add .; git commit -am "initial commit" ;;
         (list_excluded) \git ls-files -i -c --exclude-from=.gitignore ;;
