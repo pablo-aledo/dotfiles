@@ -1,0 +1,24 @@
+go test -gcflags 'all=-N -l' -c
+
+echo -1 | sudo tee -a /proc/sys/kernel/perf_event_paranoid
+echo 0 | sudo tee -a /proc/sys/kernel/kptr_restrict
+
+go install github.com/go-delve/delve/cmd/dlv@latest
+dlv replay ...
+
+dlv replay ... --headless --listen=:2345 --log --api-version=2
+{
+    "name": "Replay Trace",
+    "type": "go",
+    "request": "attach",
+    "mode": "remote",
+    "remotePath": "${workspaceFolder}",
+    "port": 2345,
+    "host": "127.0.0.1"
+}
+
+perf stat -e r5111c4 true
+taskset -c 0-15 rr record ...
+./bin/rr record --bind-to-cpu=0 ...
+for i in {16..23}; do echo 0 | sudo tee /sys/devices/system/cpu/cpu${i}/online; done
+taskset -c 16-23 perf stat -e r517ec4 true
