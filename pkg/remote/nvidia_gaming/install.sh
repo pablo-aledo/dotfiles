@@ -11,6 +11,7 @@ mouseover -1 10000 market.png && xdotool click 1; sleep 1
 mouseover -1 10000 lens.png && xdotool mousemove_relative 50 0; xdotool click 1; sleep 1
 
 xdotool type "nvidia games"
+# https://console.cloud.google.com/marketplace/product/nvidia/nvidia-gaming-windows-server-2019
 xdotool key Return
 
 mouseover -1 10000 windows.png && xdotool click 1; sleep 1
