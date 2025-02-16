@@ -15,6 +15,8 @@ diffbr(){
 
 qdiffbr(){
     echo -e "\e[34m qdiffbr \e[0m" "\"$1\" \"$2\""
+    [ -d "$1" ] || return
+    [ -d "$2" ] || return
     local n=0
     local offset=$(( $RANDOM % $QDBR_FACTOR ))
     local target=$(cd "$1"; find -type f | wc -l)
