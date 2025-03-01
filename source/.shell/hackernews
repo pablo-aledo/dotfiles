@@ -13,6 +13,11 @@ catlastoutbox(){
     )
 }
 
+catlastoutbox_select(){
+return
+ls -t | head -n100000 | while read line; do grep -Rin ycombinator "$line" /tmp/empty; done | sed 's/:[0-9]*:/@/g' | cut -d@ -f1 | sort -u | while read line; do echo $line; \cp "$line" ../outbox_selection; done
+}
+
 hn_id2titles_outbox(){
     cat $1 | while read line; do id="$(echo $line | cut -d'=' -f2)"; cat /tmp/hnoutbox | grep $id | tail -n1; done | tee -a id2title
 }
