@@ -45,6 +45,7 @@ hn_loop(){
 
     # add kword to titles
     # substitute &#x27; by ' '
+    # substitute &#x2F; by ' '
     # substitute &quot; by ' '
     # substitute &lt; by ' '
 
