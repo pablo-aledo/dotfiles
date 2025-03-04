@@ -43,6 +43,11 @@ hn_id2titles_archive(){
 hn_loop(){
     return
 
+    # add kword to titles
+    # substitute &#x27; by ' '
+    # substitute &quot; by ' '
+    # substitute &lt; by ' '
+
     cp titles /tmp/titles
     rm -fr /tmp/checkstar*
     adapt_nocorrect
