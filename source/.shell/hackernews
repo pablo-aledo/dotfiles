@@ -88,6 +88,8 @@ hn_loop(){
         [ "$(cat checkstar_nls | grep -F $line | grep ' -> none')" != "" ] && \
         echo $line
     done | tee to_send
+
+    # comm -3 <(cat titles | sed -e 's/^ //g' -e 's/ $//g' | sort -u) <(cat checkstar_ls to_select_unread to_send | sed 's/ -> .*//g' | sort -u)
  }
 
 hn_archive(){
