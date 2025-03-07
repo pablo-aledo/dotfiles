@@ -35,7 +35,7 @@ waiteq2(){
 
 wait_tmux(){
     [ $# -ge 1 ] && target=$1 || target=".1"
-    [ $# -ge 2 ] && text=$2   || text="$(hosname)"
+    [ $# -ge 2 ] && text=$2   || text="$(hostname)"
     while true
     do
         act=$(tmux ca -pt $target | grep -v '^$' | grep -v '0:sh\*' | tail -n1 | grep $text)
