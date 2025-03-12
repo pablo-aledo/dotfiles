@@ -25,6 +25,8 @@ done
 
 sleep 15
 
+rm -fr /tmp/lock4kg
+
 rm -fr ~/Descargas/kgsummary.html ~/Descargas/kgsummary_files
 
 xdotool key Ctrl+s
