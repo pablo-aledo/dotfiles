@@ -1,0 +1,16 @@
+export DISPLAY=:1
+
+xdotool key Ctrl+l
+
+echo "https://kagi.com/summarizer/index.html" | xclip -sel clip -i
+xdotool key Ctrl+v
+xdotool key Return
+sleep 1
+
+#xdotool mousemove 600 140
+#xdotool click 1
+#sleep 1
+
+#xdotool mousemove 1020 155
+#xdotool click 1
+#sleep 1

@@ -1,0 +1,21 @@
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+export DISPLAY=:1
+
+xdotool key 1 && sleep 1 && shcw kgfollow.1
+xdotool key 2 && sleep 1 && shcw kgfollow.2
+
+cat /tmp/s2link | while read line
+do
+    title=$( echo $line | sed 's/\(.*\) -> \(.*\)/\1/g' )
+    link=$( echo $line | sed 's/\(.*\) -> \(.*\)/\2/g' )
+    echo $title > /tmp/kg_title
+    echo $link > /tmp/kg_link
+
+    xdotool key 3 && sleep 1 && shcw kgfollow.3
+    xdotool key 4 && sleep 1 && shcw kgfollow.4
+    xdotool key 5 && sleep 1 && shcw kgfollow.5
+done
+
+xdotool key 0

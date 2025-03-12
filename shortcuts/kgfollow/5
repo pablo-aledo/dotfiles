@@ -1,0 +1,36 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+xdotool mousemove 600 140
+xdotool click 1
+sleep 1
+
+xdotool key End
+
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/kg_further.png
+xdotool click 1
+
+sleep 5
+
+cat /tmp/followups | while read line
+do
+    echo $line | xclip -sel clip -i
+    xdotool key Ctrl+v
+    xdotool key Return
+    sleep 60
+done
+
+rm -fr ~/Descargas/kgsummary.html ~/Descargas/kgsummary_files
+
+xdotool key Ctrl+s
+sleep 1
+xdotool key Alt+f
+sleep 1
+xdotool type kgsummary
+xdotool key Return
+sleep 1
+
+title="$(cat /tmp/kg_title)"
+filename="/tmp/kgfollow/$(echo $title | md5sum | awk '{print $1}')"
+cat ~/Descargas/kgsummary.html >> $filename
+(echo; echo '=====') >> $filename
