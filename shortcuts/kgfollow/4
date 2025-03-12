@@ -11,6 +11,9 @@ xdotool key Return
 
 sleep 3
 
+rm -fr /tmp/lock4kg
+touch /tmp/lock4kg
+
 reading=true
 thinking=true
 while true
