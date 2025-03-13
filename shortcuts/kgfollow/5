@@ -13,7 +13,7 @@ touch /tmp/lock4kg
 mouseover -1 10000 ~/.dotfiles/shortcuts/images/kg_further.png
 xdotool click 1
 
-touch /tmp/lock4kg
+rm -fr /tmp/lock4kg
 
 sleep 5
 
