@@ -65,3 +65,14 @@ mgrep_cross () {
     paste -d' ' <(cat /tmp/mgrep_script | cut -d' ' -f1,2) <(cat /tmp/mgrep_script | sed -e 's/^/"/g' -e 's/ /" "/g' -e 's/$/"/g' | awk '{$1=""; $2=""; print}') > /tmp/mgrep_script_2
 	source /tmp/mgrep_script_2
 }
+
+mgrep_cross_dbg () {
+	cat $1 | sed 's/[^a-zA-Z0-9]/ /g' > /tmp/mgrep1
+	cat $2 | tr -cd '[:print:]\n' | sort -u > /tmp/mgrep2
+	cat /tmp/mgrep1 | while read line
+	do
+        echo echo '"=====' "$line" '====="'
+		echo mgrep /tmp/mgrep2 $line
+	done > /tmp/mgrep_script
+	source /tmp/mgrep_script
+}
