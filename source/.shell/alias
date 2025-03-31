@@ -208,3 +208,4 @@ Gnuplot(){
 
 alias Xterm='xterm -ti vt340 -bg black -fg white'
 imgsixel(){ convert  $1  -geometry 800x480  sixel:- }
+alias pstlsof='pstree -p | grep $(lsof /home/pablo/NAS | tail -n1 | awk "{print \$2}")'
