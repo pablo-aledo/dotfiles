@@ -332,6 +332,7 @@ username:s:$AWS_USER
 password:s:$AWS_PW
 desktopwidth:i:1920
 desktopheight:i:1080
+audiomode:i:0
 EOF
 xfreerdp aws.rdp
 }
