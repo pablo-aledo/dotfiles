@@ -330,6 +330,8 @@ cat << EOF > aws.rdp
 full address:s:$AWS_SERVER
 username:s:$AWS_USER
 password:s:$AWS_PW
+desktopwidth:i:1920
+desktopheight:i:1080
 EOF
 xfreerdp aws.rdp
 }
