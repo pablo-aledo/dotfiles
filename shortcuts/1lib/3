@@ -5,28 +5,30 @@ export DISPLAY=:1
 sleep 10
 
 
-if $( mouseover 1 10000 ~/.dotfiles/shortcuts/images/downloaded.png )
-then
+#if $( mouseover 1 10000 ~/.dotfiles/shortcuts/images/downloaded.png )
+#then
     #yfind=`cat /tmp/coordinates | head -n1 | cut -d',' -f2 | cut -d' ' -f1`
     #if [ $yfind -lt 500 ]
     #then
-        cat /tmp/1lib_line >> /tmp/already_downloaded_zlib
+        #cat /tmp/1lib_line >> /tmp/already_downloaded_zlib
         #return
     #fi
-fi
+#fi
 
-xdotool key Ctrl+f
-sleep 1
-xdotool type 'Download ('
-xdotool key Return
-sleep 1
-xdotool key Escape
-sleep 1
+#xdotool key Ctrl+f
+#sleep 1
+#xdotool type 'Download ('
+#xdotool key Return
+#sleep 1
+#xdotool key Escape
+#sleep 1
 xdotool key Down
 xdotool key Down
 xdotool key Down
 xdotool key Down
-sleep 1
+sleep 3
+mouseover 1 10000 ~/.dotfiles/shortcuts/images/1libdl.png ~/.dotfiles/shortcuts/images/1libdl_2.png
+xdotool mousemove 0 0
 if $(mouseover 3 10000 ~/.dotfiles/shortcuts/images/1libdl.png ~/.dotfiles/shortcuts/images/1libdl_2.png)
 then
     xdotool click 1
@@ -65,17 +67,17 @@ fi
 #
 # xdotool key Home
 
-xdotool key Ctrl+f
-sleep 1
-xdotool type 'available for download'
-xdotool key Return
-sleep 1
-xdotool key Escape
-sleep 1
-if $( mouseover 1 10000 ~/.dotfiles/shortcuts/images/copyright.png )
-then
-    cat /tmp/1lib_line >> /tmp/copyright_zlib
-fi
+#xdotool key Ctrl+f
+#sleep 1
+#xdotool type 'available for download'
+#xdotool key Return
+#sleep 1
+#xdotool key Escape
+#sleep 1
+#if $( mouseover 1 10000 ~/.dotfiles/shortcuts/images/copyright.png )
+#then
+    #cat /tmp/1lib_line >> /tmp/copyright_zlib
+#fi
 
 count=0
 while [ "$(ls ~/Descargas/*.crdownload)" != ""  ]
