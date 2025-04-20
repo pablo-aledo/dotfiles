@@ -1172,7 +1172,7 @@ videos_2x2server(){
 
     if [ $skip -eq 0 ]
     then
-        find ~/html/courses/ -maxdepth 1 -type f | while read line
+        find ~/html/courses/ -maxdepth 1 -type f -not -iname .htaccess | while read line
         do
             mv "$line" ~/html/courses/previous
         done
