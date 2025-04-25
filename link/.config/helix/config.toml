@@ -60,7 +60,6 @@ V = ["select_mode", "extend_to_line_bounds"]
 D = ["extend_to_line_end", "yank_main_selection_to_clipboard", "delete_selection"]
 S = "surround_add" # Would be nice to be able to do something after this but it isn't chainable
 "c" = { "e" = ["select_mode", "move_next_word_end", "delete_selection", "insert_mode"] }
-"d" = { "e" = ["select_mode", "move_next_word_end", "delete_selection"] }
 
 # Clipboards over registers ye ye
 x = "delete_selection"
@@ -117,6 +116,7 @@ G = ["select_mode", "extend_to_line_bounds", "goto_last_line", "extend_to_line_b
 w = ["move_next_word_start", "yank_main_selection_to_clipboard", "delete_selection"]
 W = ["move_next_long_word_start", "yank_main_selection_to_clipboard", "delete_selection"]
 g = { g = ["select_mode", "extend_to_line_bounds", "goto_file_start", "extend_to_line_bounds", "yank_main_selection_to_clipboard", "delete_selection", "normal_mode"] }
+e = ["select_mode", "move_next_word_end", "delete_selection"]
 
 [keys.normal.y]
 y = ["extend_to_line_bounds", "yank_main_selection_to_clipboard", "normal_mode", "collapse_selection"]
