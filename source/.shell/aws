@@ -224,6 +224,7 @@ aws_exchange_keys(){
 	[ "$AWS_PEM" = "" ] || ssh -o StrictHostKeyChecking=no -i $AWS_PEM -p $AWS_PORT $AWS_USER@$AWS_SERVER 'cat ~/.ssh/id_rsa.pub' >> ~/.ssh/authorized_keys
 	[ "$AWS_PEM" = "" ] || ssh -o StrictHostKeyChecking=no -p $AWS_PORT $AWS_USER@$AWS_SERVER 'cat ~/.ssh/id_rsa.pub' >> ~/.ssh/authorized_keys
 
+	# aws_cmd "cd .ssh; permissions"
 }
 
 aws_umount(){
