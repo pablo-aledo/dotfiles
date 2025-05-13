@@ -47,7 +47,7 @@ do
         size2=$(ls -l ~"/Descargas/$(cat /tmp/file)" | awk '{print $5}')
     done
 
-    xdotool key ctrl+w
+    [ ! -e /tmp/avl_noclose ] && xdotool key ctrl+w
     sleep 5
 
     if [ -e /tmp/avl_forward_each ]
@@ -57,4 +57,4 @@ do
 
 done
 
-xdotool key ctrl+w
+[ ! -e /tmp/avl_noclose ] && xdotool key ctrl+w
