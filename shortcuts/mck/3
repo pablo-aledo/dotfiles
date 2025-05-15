@@ -1,0 +1,28 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+
+before=$(ls ~/dwhelper/ | wc -l)
+if `mouseover 5 10000 ~/.dotfiles/shortcuts/images/mck_vd_download.png`
+then
+    xdotool click 1
+    mouseover -1 50000 ~/.dotfiles/shortcuts/images/mck_vd_play.png
+else
+    mouseover 5 10000 ~/.dotfiles/shortcuts/images/mck_download.png
+    xdotool click 1
+    xdotool mousemove_relative 50 50
+    xdotool click 1
+    sleep 10
+    # xdotool key Ctrl+s
+    # sleep 1
+    # xdotool key Return
+    # sleep 1
+    mv ~/"Downloads/$(ls -tr ~/Downloads | tail -n1)" ~/dwhelper
+    xdotool key Ctrl+w
+fi
+
+while [ "$(ls ~/dwhelper | wc -l)" -eq $before ]
+do
+    sleep 1
+done
+
+mouseover 5 1000 ~/.dotfiles/shortcuts/images/mck_vd_close.png && xdotool click 1

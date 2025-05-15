@@ -1,0 +1,13 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+
+while true
+do
+    xdotool key 3 && shcw mck.3
+    xdotool key 4 && shcw mck.4
+    xdotool key 5 && shcw mck.5
+
+    while [ -e /tmp/pause ]; do sleep 1; done
+done
