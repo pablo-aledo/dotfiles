@@ -26,3 +26,10 @@ do
 done
 
 mouseover 5 1000 ~/.dotfiles/shortcuts/images/mck_vd_close.png && xdotool click 1
+
+xdotool mousemove 650 700
+xdotool click 1
+xdotool click 1
+xdotool click 1
+xdotool key Ctrl+c
+xclip -sel clip -o > /tmp/title

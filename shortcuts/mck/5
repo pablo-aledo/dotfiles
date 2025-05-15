@@ -1,1 +1,1 @@
-mv ~/"dwhelper/$(ls -tr ~/dwhelper | tail -n1)" ~/"dwhelper/$(printf '%03d' $(ls ~/dwhelper | wc -l))_$(ls -tr ~/dwhelper | tail -n1)"
+mv ~/"dwhelper/$(ls -tr ~/dwhelper | tail -n1)" ~/"dwhelper/$(printf '%03d' $(ls ~/dwhelper | wc -l))_$(cat /tmp/title).mp4"
