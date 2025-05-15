@@ -6,6 +6,13 @@ if `mouseover 5 10000 ~/.dotfiles/shortcuts/images/mck_vd_download.png`
 then
     xdotool click 1
     mouseover -1 50000 ~/.dotfiles/shortcuts/images/mck_vd_play.png
+
+    xdotool mousemove 650 700
+    xdotool click 1
+    xdotool click 1
+    xdotool click 1
+    xdotool key Ctrl+c
+    echo "$(xclip -sel clip -o).mp4" > /tmp/title
 else
     mouseover 5 10000 ~/.dotfiles/shortcuts/images/mck_download.png
     xdotool click 1
@@ -18,6 +25,7 @@ else
     # sleep 1
     mv ~/"Downloads/$(ls -tr ~/Downloads | tail -n1)" ~/dwhelper
     xdotool key Ctrl+w
+    echo "$(ls -tr ~/dwhelper | tail -n1)" > /tmp/title
 fi
 
 while [ "$(ls ~/dwhelper | wc -l)" -eq $before ]
@@ -26,10 +34,3 @@ do
 done
 
 mouseover 5 1000 ~/.dotfiles/shortcuts/images/mck_vd_close.png && xdotool click 1
-
-xdotool mousemove 650 700
-xdotool click 1
-xdotool click 1
-xdotool click 1
-xdotool key Ctrl+c
-xclip -sel clip -o > /tmp/title
