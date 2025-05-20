@@ -12,7 +12,7 @@ then
     xdotool click 1
     xdotool click 1
     xdotool key Ctrl+c
-    echo "$(xclip -sel clip -o).mp4" > /tmp/title
+    echo "$(xclip -sel clip -o | sed 's|/||g').mp4" > /tmp/title
 else
     mouseover 5 10000 ~/.dotfiles/shortcuts/images/mck_download.png
     xdotool click 1
@@ -33,4 +33,4 @@ do
     sleep 1
 done
 
-mouseover 5 1000 ~/.dotfiles/shortcuts/images/mck_vd_close.png && xdotool click 1
+mouseover 5 1000 ~/.dotfiles/shortcuts/images/mck_vd_close.png && xdotool click 1 && sleep 1 && xdotool click 1
