@@ -110,6 +110,11 @@ dupl4(){
     done
 }
 
+resort(){
+mv "$1" sorted/"$(printf %03d $count)_$2"
+count=$(( $count + 1 ))
+}
+
 alias startrdp='shc; distr remote; export mouseover_debug=true; pkg install startrdp'
 alias dupl="sed \"s/^\(.*\)$/'\1' '\1'/g\""
 alias ddprogress='sudo killall -USR1 dd'
