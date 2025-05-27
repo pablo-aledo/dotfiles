@@ -159,6 +159,10 @@ ytdllist(){
     yt-dlp "$1" --flat-playlist -j | jq -r .url
 }
 
+ytdltranscript(){
+    yt-dlp --write-auto-subs --sub-lang es --skip-download $*
+}
+
 alias winpython='winpty python.exe'
 
 vimmarks(){
