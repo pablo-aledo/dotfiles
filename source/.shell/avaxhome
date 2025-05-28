@@ -230,6 +230,24 @@ avhome_get_new_titles_2(){
     \mv facets_new facets
 }
 
+avhome_get_new_titles_3(){
+    mkdir -p ~/servers/avxhome
+    cd ~/servers/avxhome
+
+    url='https://avxhm.se/ebooks/'
+
+    if [ -e /tmp/avh_proxy ]
+    then
+        wget -q --no-check-certificate -e use_proxy=yes -e http_proxy='http://localhost:3128' $url -O dl 2>/dev/null
+    else
+        wget -q --no-check-certificate $url -O dl 2>/dev/null
+    fi
+
+    cat dl | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|' > facets_new
+    comm -13 <(cat facets | sort) <(cat facets_new | sort)
+    \mv facets_new facets
+}
+
 avhome_mail_server(){
     [ "$avxmail_ml" = "true" ] && learning.configure $HOME/servers/rssmail/learning >/dev/null
     mkdir -p ~/servers/avxhome
