@@ -9,3 +9,8 @@ sudo make install
 sudo apt-get install --reinstall bluez
 #aconnect -i
 #aseqdump -p ##
+#sudo modprobe snd-virmidi midi_devs=1
+#aconnect 129:0 20:0
+#aconnect -l
+#aconnect -d 129:0 20:0
+#sudo modprobe -r snd-virmidi
