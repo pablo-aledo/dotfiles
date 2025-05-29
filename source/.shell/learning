@@ -2825,6 +2825,17 @@ sliding_indexer(){
     echo
 }
 
+split_chunks(){
+    mkdir -p chunks
+    split -l 500 $1 chunks/
+    pivot=0
+    ls chunks | grep '^..$' | while read chunk
+    do
+        mv chunks/$chunk chunks/"$1":$(printf %04d $pivot).txt
+        pivot=$(( $pivot + 500 ))
+    done
+}
+
 sliding_windows_lines(){
     file=$1
     lines=$2
