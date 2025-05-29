@@ -801,6 +801,12 @@ convert_recursive_parallel(){
     sync
 }
 
+convert_post_stop(){
+    cd $converted_dir
+    findsort | tail -n20 | vimexec
+    findsort | tail -n20 | vimexec
+}
+
 convert_recursive_parallel_core(){
 
 	[ $# -eq 0 ] && width=720
