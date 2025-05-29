@@ -7,3 +7,5 @@ cd bluez-5.82
 make
 sudo make install
 sudo apt-get install --reinstall bluez
+#aconnect -i
+#aseqdump -p ##
