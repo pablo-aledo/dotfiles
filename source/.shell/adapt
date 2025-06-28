@@ -734,10 +734,10 @@ pkg install zoom
 
 adapt_mouse(){
 xbindkeys -d > ~/.xbindkeysrc
-cat << EOF >> ~/.xbindkeys
+cat << EOF >> ~/.xbindkeysrc
 "xdotool key j"
     b:8
-"xdotool key k"
+"xdotool key Ctrl+w"
     b:9
 EOF
 xbindkeys
