@@ -53,6 +53,105 @@ ctags_index_groovy(){
     done
 }
 
+ctags_index_rust(){
+    ctags \
+        --langdef=Rust \
+        --langmap=Rust:.rs \
+        --regex-Rust='/fn +([a-zA-Z0-9_]+) *[(<{]/\1/f,functions,function definitions/' \
+        --regex-Rust='/(type|enum|struct|trait)[ \t]+([a-zA-Z0-9_]+) *[<{(;]/\2/T,types,type definitions/' \
+        --regex-Rust='/mod[ \t]+([a-zA-Z0-9_]+) *[<{(;]/\1/M,modules,module definitions/' \
+        --regex-Rust='/(static|const) +([a-zA-Z0-9_]+) *[:=]/\2/c,consts,static constants/' \
+        --regex-Rust='/macro_rules! +([a-zA-Z0-9_]+) *\{/\1/d,macros,macro definitions/' \
+        --regex-Rust='/impl([ \t\n]*<[^>]*>)?[ \t]+(([a-zA-Z0-9_:]+)[ \t]*(<[^>]*>)?[ \t]+(for)[ \t]+)?([a-zA-Z0-9_]+)/\6/i,impls,trait implementations/' \
+        -R --fields=+zln
+    cat tags | grep $1 | while read line
+    do
+        ini=$(echo $line | sed 's/.*line:\([^ \t]*\)[ \t].*/\1/g') 
+        file=$(echo $line | awk '{print $2}') 
+        end=$(awk -v first=$ini 'NR>=first && /{/              {c++}
+                                 NR>=first && /}/ && c && !--c {print NR; exit}' $file)
+        echo "${line}\tend:${end}"
+    done > tags2
+    \mv tags2 tags
+}
+
+table_multirepos(){
+    find -maxdepth 1 -type d | grep -v '^.$' | sed 's/^..//g' | while read line
+    do
+        cd $line
+        find -type f -not -path './.git/*' | while read line
+        do
+            filename=$(basename "$line")
+            extension="${filename##*.}"
+            echo $extension
+        done | sort | uniq -c | sort -g | tac > extensions
+        cd ..
+    done
+
+    find -maxdepth 1 -type d | grep -v '^.$' | sed 's/^..//g' | while read line
+    do
+        cd $line
+        cat extensions | head -n3 | awk '{print $2}' | while read line; do find -iname "*.$line" | Xargs cat ; done > serialized
+        cat serialized | tokenize | sort | uniq -c | sort -g > words
+        cd ..
+    done
+
+    rm -fr stopwords
+    find -maxdepth 1 -type d | grep -v '^.$' | sed 's/^..//g' | while read line
+    do
+        cd $line
+        tail -n200 words | awk '{print $2}' | grep -v '^$' >> ../stopwords
+        cd ..
+    done
+    cat stopwords | sort -u > stopwords_2; \mv stopwords_2 stopwords
+
+    find -maxdepth 1 -type d | grep -v '^.$' | sed 's/^..//g' | while read line
+    do
+        cd $line
+        comm -23 <(cat words | awk '{print $2}' | grep -v '^$' | sort -u) <(cat ../stopwords | sort -u) > kwords
+        cat kwords | grep -v -e '^[0-9a-f]*$' -e '^.\{1,5\}$' > kwords_2; \mv kwords_2 kwords
+        cd ..
+    done
+
+    rm -fr kwords
+    find -maxdepth 1 -type d | grep -v '^.$' | sed 's/^..//g' | while read line
+    do
+        cd $line
+        cat kwords >> ../kwords
+        cd ..
+    done
+
+    cat kwords | sort | uniq -c | sort -g | awk '$1>1{print $2}' | grep -v -e '^[0-9]' | sort | while read kword
+    do
+    	echo -n "$kword : "
+        find -maxdepth 1 -type d | grep -v '^.$' | sed 's/^..//g' | while read line
+        do
+    		[ $(grep $kword $line/kwords | wc -l) -gt 0 ] && echo -n "$line,"
+    	done
+    	echo
+    done | tee kwords_repo
+
+    rm -fr /tmp/cnt; mkdir /tmp/cnt
+    find -maxdepth 1 -type d | grep -v '^.$' | sed 's/^..//g' | while read repo1
+    do
+    	find -maxdepth 1 -type d | grep -v '^.$' | sed 's/^..//g' | grep -B1000 $repo1 | sed '1d' | while read repo2
+    	do
+    		[ $repo1 = $repo2 ] && continue
+    		cnt=$(cat kwords_repo | grep ",$repo1," | grep ",$repo2," | wc -l)
+    		[ -e /tmp/cnt/$repo1-$repo2 ] && cnt_prev=$(cat /tmp/cnt/$repo1-$repo2) || cnt_prev=0
+    		echo $(( $cnt_prev + $cnt )) > /tmp/cnt/$repo1-$repo2
+    	done
+    done
+    (cd /tmp/cnt; for a in *; do echo "$(cat $a) $a"; done | awk '$1>0{print $2}' | sort -g | tail -n50 | sed 's/-/ <--> /g' | sort -u)
+
+    find -maxdepth 1 -type d | grep -v '^.$' | sed 's/^..//g' | while read line
+    do
+        cd $line
+        echo "$line $(Git log_oneline_format | wc -l) $(Git log_oneline_format | awk '{print $2}' | sort | uniq -c | sort -g | tail -n1 | awk '{print $2}') $(Git log --pretty=format:"%x09%ad" | head -n1 | awk '{print $2"-"$5}') $(cat extensions | sed 's/^ *//g' | head -n3 | paste -d, -s | sed 's/ /:/g')"
+        cd ..
+    done | awk '{print $2,$0}' | sort -g | awk '{$1=""; print}' | column -t -s' '
+}
+
 ctags_extract(){
 	cat tags | grep -F $1 | while read line
  	do
@@ -60,7 +159,25 @@ ctags_extract(){
 		file="$(echo $line | awk '{print $2}')"
 	   	start="$(echo $line | sed 's/.*line:\([0-9]*\).*/\1/g')"
 		end="$(echo $line | sed 's/.*end:\([0-9]*\).*/\1/g')"
-		echo "cat $file | head -n $end | tail -n $(( $end - $start + 1 )) > functions/$fname"
+		echo "cat $file | head -n $end | tail -n $(( $end - $start + 1 )) >> functions/$fname"
+   	done
+    if [ -e /tmp/ctags_extra_keywords ]
+    then
+        cat /tmp/ctags_extra_keywords | while read line
+        do
+            echo "touch functions/$line"
+        done
+    fi
+}
+
+ctags_extract(){
+	cat tags | mgrep - $* | while read line
+ 	do
+		fname="$(echo $line | awk '{print $1}')"
+		file="$(echo $line | awk '{print $2}')"
+	   	start="$(echo $line | sed 's/.*line:\([0-9]*\).*/\1/g')"
+		end="$(echo $line | sed 's/.*end:\([0-9]*\).*/\1/g')"
+		echo "cat $file | head -n $end | tail -n $(( $end - $start + 1 )) >> functions/$fname"
    	done
     if [ -e /tmp/ctags_extra_keywords ]
     then
