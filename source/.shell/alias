@@ -155,6 +155,10 @@ ytdlmp4(){
     yt-dlp --no-mtime -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4' $*
 }
 
+ytdlcont(){
+    comm -13 <(ls | grep mp4 | cut -d'[' -f2 | cut -d']' -f1 | sort) <(cat list | cut -d= -f2 | sort) | grep -v shorts | while read line; do echo ytdlmp4 --proxy 'http://localhost:3128'  "https://www.youtube.com/watch?v=$line" ; done
+}
+
 ytdllist(){
     yt-dlp "$1" --flat-playlist -j | jq -r .url
 }
