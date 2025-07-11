@@ -188,6 +188,24 @@ ctags_extract(){
     fi
 }
 
+ctags_extract_2() {
+    cat tags | mgrep - $* | while read line
+    do
+        fname="$(echo $line | awk '{print $1}')"
+        file="$(echo $line | awk '{print $2}')"
+        start="$(echo $line | sed 's/.*line:\([0-9]*\).*/\1/g')"
+        end="$(echo $line | sed 's/.*end:\([0-9]*\).*/\1/g')"
+        echo "cat $file | head -n $end | tail -n $(( $end - $start + 1 )) | sed \"s|^|$file:$start |g\" >> functions/$fname"
+    done
+    if [ -e /tmp/ctags_extra_keywords ]
+    then
+        cat /tmp/ctags_extra_keywords | while read line
+        do
+            echo "touch functions/$line"
+        done
+    fi
+}
+
 ctags_info(){
     cd functions
 
