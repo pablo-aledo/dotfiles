@@ -136,10 +136,12 @@ vclassifybar(){
 convertbar(){
     if [ $# = 1 ]
     then
+        convert_increment $1
+        sleep 5
         [ -L /media/DATA/convert ]   && rm -f /media/DATA/convert
         [ -L /media/DATA/converted ] && rm -f /media/DATA/converted
-        [ -e /media/DATA/convert ]   || ln -s ~/NAS/convert$1 /media/DATA/convert
-        [ -e /media/DATA/converted ] || ln -s ~/NAS/converted$1 /media/DATA/converted
+        [ -e /media/DATA/convert ]   || ln -s $convert_dir   /media/DATA/convert
+        [ -e /media/DATA/converted ] || ln -s $converted_dir /media/DATA/converted
         convertbar
         return
     fi
