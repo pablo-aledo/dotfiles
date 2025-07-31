@@ -1,5 +1,5 @@
 sudo dpkg --add-architecture i386
-$ dpkg --print-foreign-architectures
+dpkg --print-foreign-architectures
 
 sudo mkdir -pm755 /etc/apt/keyrings
 wget -O - https://dl.winehq.org/wine-builds/winehq.key | sudo gpg --dearmor -o /etc/apt/keyrings/winehq-archive.key -
