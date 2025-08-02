@@ -11,6 +11,8 @@ sudo apt update
 sudo apt install --install-recommends winehq-stable
 #sudo apt install --install-recommends winehq-devel
 #sudo apt install --install-recommends winehq-staging
+#apt-cache policy winehq-stable
+#sudo apt install winehq-stable=7.12~jammy-1
 sudo apt install winetricks
 
 #wine --version
