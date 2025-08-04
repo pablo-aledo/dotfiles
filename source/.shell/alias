@@ -163,6 +163,10 @@ ytdllist(){
     yt-dlp "$1" --flat-playlist -j | jq -r .url
 }
 
+ytdltitles(){
+    yt-dlp "$1" --flat-playlist -j | jq -r '"\(.url) \t \(.title)"'
+}
+
 ytdltranscript(){
     yt-dlp --write-auto-subs --sub-lang es --skip-download $*
 }
