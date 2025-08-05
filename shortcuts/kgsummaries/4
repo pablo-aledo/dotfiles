@@ -12,5 +12,5 @@ sleep 1
 
 title="$(cat /tmp/kg_title)"
 filename="/tmp/kgsummaries/$(echo $title | md5sum | awk '{print $1}')"
-htmlq -f ~/Descargas/kgsummary.html '#mdDataBox' -t >> $filename
+htmlq -f ~/Descargas/kgsummary.html '#summary' -t | grep -v '^ *$' | grep '      Summary' -B1000 | grep -v '      Summary' >> $filename
 echo '=====' >> $filename
