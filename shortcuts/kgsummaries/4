@@ -8,7 +8,7 @@ xdotool key Alt+f
 sleep 1
 xdotool type kgsummary
 xdotool key Return
-sleep 1
+sleep 5
 
 title="$(cat /tmp/kg_title)"
 filename="/tmp/kgsummaries/$(echo $title | md5sum | awk '{print $1}')"
