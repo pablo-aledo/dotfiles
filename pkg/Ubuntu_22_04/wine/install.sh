@@ -17,6 +17,7 @@ sudo apt install winetricks
 
 #wine --version
 #wine winecfg
+#WINEARCH=win64 WINEPREFIX=$HOME/.wine64 WINEDEBUG=-all winecfg
 #wine clock
 #wine iexplore
 #msiexec -i installer_name.msi

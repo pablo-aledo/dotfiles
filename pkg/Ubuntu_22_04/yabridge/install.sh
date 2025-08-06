@@ -4,6 +4,7 @@ cd ~/.local/yabridge
 ./yabridgectl set --path $PWD
 ./yabridgectl add ~/.vstwin
 ./yabridgectl sync
+#WINELOADER=~/winege/lutris-GE-Proton8-26-x86_64/bin/wine ./yabridgectl sync
 
 # Native Access 1.14.1
 # sudo mount -t udf '<plugin>.iso' -o unhide /mnt/cdrom0

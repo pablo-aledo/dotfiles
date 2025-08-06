@@ -9,5 +9,6 @@ sudo apt install -y libx11-dev:i386 libxext-dev:i386 libxrandr-dev:i386 libxrend
 sudo apt install -y libgl1-mesa-dev:i386 libglu1-mesa-dev:i386
 sudo apt install -y libfreetype6-dev:i386
 ./configure
+#./configure --enable-win64
 make
 #sudo make install
