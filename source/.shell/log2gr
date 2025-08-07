@@ -1068,8 +1068,9 @@ cdag(){
         else
             cat $code | grep = | while read line
             do
-                l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$' | tail -n1)
+                l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$')
                 r=$(echo $line | cut -d'=' -f2 | tokenize | grep -v '^$')
+                l2=$(comm -12 <(echo $l | sort -u) <(cat $vars | sort -u))
                 r2=$(comm -12 <(echo $r | sort -u) <(cat $vars | sort -u))
 
                 #echo $line
@@ -1079,11 +1080,13 @@ cdag(){
                 #echo $r
                 #echo "====="
                 #echo $r2
-                echo $r2 | while read a
+                echo $l2 | while read a
                 do
-                    echo "$a --> $l"
+                    echo $r2 | while read b
+                    do
+                        echo "$b --> $a"
+                    done
                 done
-
             done | while read line
             do
                 l=$(echo $line | sed 's/ --> .*//g')
