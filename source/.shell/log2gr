@@ -1065,6 +1065,19 @@ cdag(){
             done | sort -u > /tmp/cdag_vars
             cdag /tmp/cdag_vars $code
             return
+        elif [ $vars = auto_plus ]
+        then
+            (
+            head -n1 $code | tokenize | grep -v '^$'
+            cat $code | grep = | while read line
+            do
+                l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$')
+                r=$(echo $line | cut -d'=' -f2 | tokenize | grep -v '^$')
+                echo $l
+            done
+            ) | sort -u > /tmp/cdag_vars
+            cdag /tmp/cdag_vars $code
+            return
         else
             cat $code | grep = | while read line
             do
