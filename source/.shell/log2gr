@@ -1068,6 +1068,7 @@ cdag(){
         else
             cat $code | grep = | while read line
             do
+                line="$(echo $line | awk 'BEGIN{FS="="}{print $1}') = $(echo $line | awk 'BEGIN{FS="="}{$1=""; print }')"
                 l=$(echo $line | cut -d'=' -f1 | tokenize | grep -v '^$')
                 r=$(echo $line | cut -d'=' -f2 | tokenize | grep -v '^$')
                 l2=$(comm -12 <(echo $l | sort -u) <(cat $vars | sort -u))
