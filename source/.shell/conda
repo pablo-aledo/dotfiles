@@ -29,6 +29,15 @@ conda_prune(){
     done
 }
 
+conda_slice () {
+    cat dependencies | grep -v " -> $1\$" > dependencies_pruned
+    echo "$1" - > conda.packages
+    for a in $(seq 1 10)
+    do
+        conda_prune
+    done
+}
+
 conda_build_docker(){
     # sudo setfacl --modify user:$USER:rw /var/run/docker.sock
     source /opt/mambaforge/etc/profile.d/conda.sh
