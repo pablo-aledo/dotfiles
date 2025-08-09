@@ -19,7 +19,7 @@ sudo apt install -y libfreetype6-dev pkgconf
 ./configure
 ./configure --enable-win64
 
-make
+make -j $(nproc)
 
 sudo make install
 sudo cp -r include/* /usr/include
