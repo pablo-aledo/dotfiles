@@ -20,4 +20,6 @@ sudo apt install -y libfreetype6-dev pkgconf
 ./configure --enable-win64
 
 make
-#sudo make install
+
+sudo make install
+sudo cp -r include/* /usr/include
