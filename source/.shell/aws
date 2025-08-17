@@ -263,6 +263,22 @@ aws_bridge_server(){
 	done
 }
 
+aws_bridge_server(){
+	aws_config 
+	[ $# -eq 1 ] && id=$1
+	[ $# -eq 0 ] && id=2222
+	while true
+	do
+		[ "$(ping -c 1 google.com)" ] || ( sudo systemctl restart systemd-networkd; sleep 5; sudo dhclient )
+		sudo rm -rf /root/.ssh/known_hosts
+		pemflag=`[ "$AWS_PEM" != "" ] && echo "-i $AWS_PEM"; [ "$AWS_PEM" = "" ] && echo ""`
+		sudo ssh -p $AWS_PORT -nNT -R "$id":localhost:22 $AWS_USER@$AWS_SERVER `echo $pemflag` -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no
+		#sudo ssh -nNT -R "$id":localhost:22 $AWS_USER@$AWS_SERVER -i $AWS_PEM
+		#sudo autossh -M 20000 -f -N $AWS_USER -R "$id":localhost:22 -C
+		sleep 60
+	done
+}
+
 aws_bridge_server_check(){
 	# check that ssh is running
  	[ "`ps aux | grep sshd | grep -v grep`" ] || echo -e '\e[31m SSH is not running \e[0m'
