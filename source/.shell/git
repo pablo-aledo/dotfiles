@@ -37,7 +37,8 @@ Git(){
         (diff_step) \git diff ${1}^:$2 ${1}:$2 ;;
         (diff_step_files) \git diff --name-only ${1}^:$2 ${1}:$2 ;;
         (difftool_step) \git difftool ${1}^:$2 ${1}:$2 ;;
-        (diff_staged) \git diff --staged ;;
+        (diff_staged) \git diff --staged $* ;;
+        (difftool_staged) \git difftool --staged $* ;;
         (diff_vim) \git difftool --tool=vimdiff --no-prompt ;;
         (diff_branch) \git diff $(Git branch_base) $(\git rev-parse HEAD) ;;
         (difftool_branch) \git difftool $(Git branch_base) $(\git rev-parse HEAD) ;;
