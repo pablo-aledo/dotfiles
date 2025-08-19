@@ -721,6 +721,7 @@ pkg install xorg
 pkg install nosuspend
 pkg install gnome-tweaks
 pkg install solaar
+pkg install timeshift
 
 sudo snap install brave
 sudo snap install code
