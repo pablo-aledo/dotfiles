@@ -163,6 +163,7 @@ Git(){
                  \git bundle create ../$2.bundle --all
                  cd ..
                  ;;
+        (pre-commit) pip install pre-commit; pre-commit install; pre-commit run --all-files ;;
         (*) \git $command $*;;
     esac
 }
