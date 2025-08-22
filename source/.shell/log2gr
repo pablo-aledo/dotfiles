@@ -153,7 +153,7 @@ awk -F'\t' '
         trait = m[1]
         struct = m[2]
 
-        print struct " ..|> " trait
+        print trait " <|.. " struct
     }
 }
 ' $file_1 > $file_2
