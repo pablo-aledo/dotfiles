@@ -160,8 +160,8 @@ awk -F'\t' '
 }
 
 ctags_traits_rels(){
-file_1="trait_methods.txt"
-file_2="uml_relations.txt"
+file_1="${1:-tags_cross}"
+file_2="${2:-tags_rels}"
 file_3="diagram.puml"
 
 declare -A trait_methods
