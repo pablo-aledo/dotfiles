@@ -29,4 +29,20 @@ umount_sqfs_rw(){
 
 }
 
+mount_sqfs_rw(){
+    img="$1"
+    mountdir="$2"
+    tmpfs=/tmp/$(basename $img .squashfs)
 
+    MOUNT_BASE="$tmpfs"
+    LOWER_DIR="$MOUNT_BASE/lower"
+    UPPER_DIR="$MOUNT_BASE/upper"
+    WORK_DIR="$MOUNT_BASE/work"
+
+    mkdir -p "$LOWER_DIR" "$UPPER_DIR" "$WORK_DIR" "$mountdir"
+
+    sudo mount -o loop,ro "$img" "$LOWER_DIR"
+    sudo mount -t overlay overlay -o \
+        lowerdir="$LOWER_DIR",upperdir="$UPPER_DIR",workdir="$WORK_DIR" \
+        "$mountdir"
+}
