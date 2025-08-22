@@ -85,7 +85,7 @@ ctags_split(){
 }
 
 ctags_cross(){
-file_1="${1:-tags_r}"
+file_1="${1:-tags_i}"
 file_2="${2:-tags_f}"
 file_3="${3:-tags_cross}"
 
