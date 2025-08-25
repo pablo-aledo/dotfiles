@@ -1,0 +1,68 @@
+genuml(){
+    ctags_index_rust
+    ctags_split
+    cat tags_i | grep 'impl [a-zA-Z]* for [a-zA-Z]* {' > tags_i1
+    cat tags_i | grep 'impl [a-zA-Z]* {' > tags_i2
+    (ctags_cross tags_f tags_i1 /dev/stdout; ctags_cross tags_f tags_i2 /dev/stdout; ctags_cross tags_f tags_T /dev/stdout) | sort -u > tags_cross
+    ctags_rels
+    ctags_traits_rels
+
+    \rm -fr tags_*
+    \mv diagram.puml $1
+}
+
+umldiff(){
+    review_leaf=$(Git rev-parse HEAD)
+    review_base=$(Git branch_base)
+	git checkout $review_base; genuml /tmp/umldiff_main.plantuml
+	git checkout $review_leaf; genuml /tmp/umldiff_branch.plantuml
+    [ "$(\git rev-parse $(Git branch_current))" = "$(\git rev-parse HEAD)" ] && \git checkout $(Git branch_current)
+
+	cat /tmp/umldiff_main.plantuml   | awk '/(interface|class)/{class=$2}{print class"/"$0}' | grep '[a-zA-Z0-9]*/ *[\+\-].*' > /tmp/umldiff_main.summary
+	cat /tmp/umldiff_branch.plantuml | awk '/(interface|class)/{class=$2}{print class"/"$0}' | grep '[a-zA-Z0-9]*/ *[\+\-].*' > /tmp/umldiff_branch.summary
+
+	comm -13 <(sort -u /tmp/umldiff_main.summary) <(sort -u /tmp/umldiff_branch.summary) | awk 'BEGIN{FS="[/]"}{print "class "$1" #Ivory {\n<b><color: green>"$2"</color></b>\n}"}' >  /tmp/uml_diffs
+	comm -23 <(sort -u /tmp/umldiff_main.summary) <(sort -u /tmp/umldiff_branch.summary) | awk 'BEGIN{FS="[/]"}{print "class "$1" #Ivory {\n<b><color: red>"$2"</color></b>\n}"}' >> /tmp/uml_diffs
+
+	cat /tmp/umldiff_branch.plantuml | sed '$ d' > /tmp/umldiff.plantuml
+	cat /tmp/uml_diffs >> /tmp/umldiff.plantuml
+	echo '@enduml' >> /tmp/umldiff.plantuml
+
+	(
+		cd /tmp/
+		docker_app plantuml -tsvg umldiff.plantuml
+		google-chrome umldiff.svg
+	)
+}
+
+umldiff_clean(){
+    sed -i 's/}//g' /tmp/uml_diffs
+    sed -i 's/..Ivory..//g' /tmp/uml_diffs
+    sed -i 's/<color: green>//g' /tmp/uml_diffs
+    sed -i 's/<color: red>//g' /tmp/uml_diffs
+    sed -i 's/<\/color>//g' /tmp/uml_diffs
+    sed -i 's/<b>//g' /tmp/uml_diffs
+    sed -i 's/<\/b>//g' /tmp/uml_diffs
+    sed -i 's/\+//g' /tmp/uml_diffs
+    sed -i 's/\-//g' /tmp/uml_diffs
+    sed -i 's/^class //g' /tmp/uml_diffs
+    sed -i 's/^ *//g' /tmp/uml_diffs
+}
+
+uml_show(){
+    ctags_index_rust
+    ctags_split
+    cat tags_i | grep 'impl [a-zA-Z]* for [a-zA-Z]* {' > tags_i1
+    cat tags_i | grep 'impl [a-zA-Z]* {' > tags_i2
+    (ctags_cross tags_f tags_i1 /dev/stdout; ctags_cross tags_f tags_i2 /dev/stdout; ctags_cross tags_f tags_T /dev/stdout) | sort -u > tags_cross
+    ctags_rels
+    ctags_traits_rels
+
+    \rm -fr tags_*
+    \mv diagram.puml /tmp/uml.plantuml
+    (
+            cd /tmp/
+            docker_app plantuml -tsvg uml.plantuml
+            google-chrome uml.svg
+    )
+}
