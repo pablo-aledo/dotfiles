@@ -52,6 +52,7 @@ umldiff_clean(){
     sed -i 's/\-//g' /tmp/uml_diffs
     sed -i 's/^class //g' /tmp/uml_diffs
     sed -i 's/^ *//g' /tmp/uml_diffs
+    sed -i 's/"//g' /tmp/uml_diffs
 }
 
 uml_show(){
