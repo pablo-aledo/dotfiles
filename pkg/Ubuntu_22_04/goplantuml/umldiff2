@@ -1,5 +1,5 @@
 genuml(){
-    ctags_index_rust
+    ctags_index
     ctags_split
     cat tags_i | grep 'impl [a-zA-Z]* for [a-zA-Z]* {' > tags_i1
     cat tags_i | grep 'impl [a-zA-Z]* {' > tags_i2
@@ -55,7 +55,7 @@ umldiff_clean(){
 }
 
 uml_show(){
-    ctags_index_rust
+    ctags_index
     ctags_split
     cat tags_i | grep 'impl [a-zA-Z]* for [a-zA-Z]* {' > tags_i1
     cat tags_i | grep 'impl [a-zA-Z]* {' > tags_i2
