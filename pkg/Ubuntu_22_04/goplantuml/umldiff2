@@ -3,7 +3,12 @@ genuml(){
     ctags_split
     cat tags_i | grep 'impl [a-zA-Z]* for [a-zA-Z]* {' > tags_i1
     cat tags_i | grep 'impl [a-zA-Z]* {' > tags_i2
-    (ctags_cross tags_f tags_i1 /dev/stdout; ctags_cross tags_f tags_i2 /dev/stdout; ctags_cross tags_f tags_T /dev/stdout) | sort -u > tags_cross
+    (
+        ctags_cross tags_f tags_i1 /dev/stdout
+        ctags_cross tags_f tags_i2 /dev/stdout
+        ctags_cross tags_f tags_i /dev/stdout
+        ctags_cross tags_f tags_T /dev/stdout
+    ) | sort -u > tags_cross
     ctags_rels
     ctags_traits_rels
 
@@ -54,7 +59,12 @@ uml_show(){
     ctags_split
     cat tags_i | grep 'impl [a-zA-Z]* for [a-zA-Z]* {' > tags_i1
     cat tags_i | grep 'impl [a-zA-Z]* {' > tags_i2
-    (ctags_cross tags_f tags_i1 /dev/stdout; ctags_cross tags_f tags_i2 /dev/stdout; ctags_cross tags_f tags_T /dev/stdout) | sort -u > tags_cross
+    (
+        ctags_cross tags_f tags_i1 /dev/stdout
+        ctags_cross tags_f tags_i2 /dev/stdout
+        ctags_cross tags_f tags_i /dev/stdout
+        ctags_cross tags_f tags_T /dev/stdout
+    ) | sort -u > tags_cross
     ctags_rels
     ctags_traits_rels
 
