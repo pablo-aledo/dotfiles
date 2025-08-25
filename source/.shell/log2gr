@@ -113,7 +113,7 @@ FILENAME == ARGV[2] {
     visibility = "private"  # Default
 
     for (i = 4; i <= NF; i++) {
-        if ($i ~ /^line:/) func_line = substr($i, 6)
+        if ($i ~ /^line:/) func_line = int(substr($i, 6))
     }
 
     if (pattern ~ /pub[ \t]+fn/) visibility = "public"
@@ -126,8 +126,8 @@ FILENAME == ARGV[2] {
         if (trait_file != func_file) continue
 
         split(traits[key], range, ",")
-        trait_start = range[1]
-        trait_end = range[2]
+        trait_start = int(range[1])
+        trait_end = int(range[2])
 
         if (func_line >= trait_start && func_line <= trait_end) {
             print trait_name ":" func_name ":" visibility
@@ -135,7 +135,7 @@ FILENAME == ARGV[2] {
         }
     }
 }
-' "$file_2" "$file_1" | sort -u > $file_3
+' "$file_1" "$file_2" | sort -u > $file_3
 }
 
 ctags_rels(){
