@@ -85,8 +85,8 @@ ctags_split(){
 }
 
 ctags_cross(){
-file_1="${1:-tags_i}"
-file_2="${2:-tags_f}"
+file_1="${2:-tags_f}"
+file_2="${1:-tags_i}"
 file_3="${3:-tags_cross}"
 
 awk -F'\t' '
@@ -135,7 +135,7 @@ FILENAME == ARGV[2] {
         }
     }
 }
-' "$file_1" "$file_2" | sort -u > $file_3
+' "$file_2" "$file_1" | sort -u > $file_3
 }
 
 ctags_rels(){
