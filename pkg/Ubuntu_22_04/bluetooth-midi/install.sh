@@ -1,4 +1,4 @@
-# sudo apt install libudev-dev libical-dev libreadline-dev libdbus-1-dev libasound2-dev build-essential
+# sudo apt install libudev-dev libical-dev libreadline-dev libdbus-1-dev libasound2-dev build-essential libglib2.0-dev python3-docutils
 cd /tmp
 wget https://mirrors.edge.kernel.org/pub/linux/bluetooth/bluez-5.82.tar.xz
 tar -xf bluez-5.82.tar.xz
