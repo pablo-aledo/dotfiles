@@ -731,6 +731,8 @@ sudo snap install notion-snap
 sudo snap install slack
 pkg install zoom
 
+mkdir ~/./-i
+
 }
 
 adapt_mouse(){
