@@ -732,6 +732,7 @@ sudo snap install slack
 pkg install zoom
 
 mkdir ~/./-i
+gsettings set org.gnome.shell.extensions.dash-to-dock isolate-workspaces true
 
 }
 
