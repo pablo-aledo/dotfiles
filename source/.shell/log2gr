@@ -576,6 +576,7 @@ ctags_review(){
     ctags_intersection $1 /tmp/ctags_extra_keywords | sed 's/->/-->/g' | tee /tmp/review | Xclip -i
 
     comm -3 <(cat /tmp/functions_base | awk '{print $2}' | sort -u) <(cat /tmp/functions_leaf | awk '{print $2}' | sort -u) > /tmp/newfunctions
+    comm -3 <(cat /tmp/functions_base | sort -u) <(cat /tmp/functions_leaf | sort -u) | awk '{print $2}' | sort -u > /tmp/modifiedfunctions
     ctags_update_keep $1
     mkdir functions/input
     cat /tmp/newfunctions | while read line; do mv functions/$line functions/input; done
