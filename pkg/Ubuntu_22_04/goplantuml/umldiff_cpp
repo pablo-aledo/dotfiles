@@ -1,20 +1,3 @@
-tokenize () {
-	cat | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g" | sed -e 's/á/a/g' -e 's/é/e/g' -e 's/í/i/g' -e 's/ó/o/g' -e 's/ú/u/g' -e 's/à/a/g' -e 's/è/e/g' -e 's/ì/i/g' -e 's/ò/o/g' -e 's/ù/u/g' -e 's/ä/a/g' -e 's/ë/e/g' -e 's/ï/i/g' -e 's/ö/o/g' -e 's/ü/u/g' | strings -n1 | sed -e 's/ /\n/g' -e 's/\./\n/g' -e 's/\t/\n/g' -e 's/\f/\n/g' -e 's/\v/\n/g' -e 's/\r/\n/g' -e 's/-/\n/g' -e 's/\//\n/g' -e 's/\\/\n/g' -e 's/\+/\n/g' -e 's/,/\n/g' -e 's/;/\n/g' -e 's/\*/\n/g' -e 's/>/\n/g' -e 's/</\n/g' -e 's/"/\n/g' -e 's/#/\n/g' -e 's/%/\n/g' -e 's/&/\n/g' -e 's/(/\n/g' -e 's/)/\n/g' -e 's/\[/\n/g' -e 's/\]/\n/g' -e 's/{/\n/g' -e 's/}/\n/g' -e 's/=/\n/g' -e 's/!/\n/g' -e 's/@/\n/g' -e 's/:/\n/g' -e "s/'/\n/g" -e "s/?/\n/g" -e "s/|/\n/g" -e "s/\\$/\n/g" -e "s/\`/\n/g" -e "s/\^/\n/g" -e 's/~/\n/g'
-}
-
-ctags_index() {
-	ctags -R --fields=+zln
-	cat tags | while read line
-	do
-		ini=$(echo $line | sed 's/.*line:\([^ \t]*\)[ \t].*/\1/g') 
-		file=$(echo $line | awk '{print $2}') 
-		end=$(awk -v first=$ini 'NR>=first && /{/              {c++}
-                                 NR>=first && /}/ && c && !--c {print NR; exit}' $file) 
-		echo "${line}\tend:${end}"
-	done > tags2
-    \mv tags2 tags
-}
-
 ctags_split () {
 	INPUT_FILE="${1:-tags}"
 	KINDS=('c' 'e' 'f' 'g' 'I' 'm' 'n' 'p' 's' 't' 'v' 'Y')
@@ -137,7 +120,7 @@ ctags_class_rels () {
 }
 
 genuml(){
-    ctags_index
+    ctags_index_cpp
     ctags_split
     (
         ctags_cross tags_f tags_c /dev/stdout
@@ -189,7 +172,7 @@ umldiff_clean(){
 }
 
 uml_show(){
-    ctags_index
+    ctags_index_cpp
     ctags_split
     (
         ctags_cross tags_f tags_c /dev/stdout
