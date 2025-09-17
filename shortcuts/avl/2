@@ -10,6 +10,7 @@ echo $title > /tmp/title
 [ -e /tmp/avl_proxy ] && google-chrome --proxy-server="localhost:3128" "$link" >/dev/null 2>/dev/null &
 sleep 10
 
+mouseover 1 10000 ~/.dotfiles/shortcuts/images/avl_continue.png && xdotool click 1
 mouseover -1 10000 ~/.dotfiles/shortcuts/images/avh_yyang.png
 while [ -e /tmp/pause_step ]; do sleep 1; done
 
