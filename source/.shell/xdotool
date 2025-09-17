@@ -119,3 +119,15 @@ xclip_monitor () {
 pixel(){
     convert $1 -format "%[hex:u.p{$2,$3}]\n" info:
 }
+
+transparent_window(){
+    [ $# -ge 1 ] && opacity=$1 || opacity=0.5
+    [ $# -ge 2 ] && winname=$2 || winname=$( xprop | grep 'WM_NAME(STRING)' | cut -d'"' -f2 )
+    [ -e /usr/bin/devilspie2 ] || pkg install devilspie2
+    mkdir -p ~/.config/devilspie2
+    echo 'if (get_window_name() == "'$winname'") then' >  ~/.config/devilspie2/transparent.lua
+    echo '  set_window_opacity('$opacity')'            >> ~/.config/devilspie2/transparent.lua
+    echo 'end'                                         >> ~/.config/devilspie2/transparent.lua
+    devilspie2
+}
+
