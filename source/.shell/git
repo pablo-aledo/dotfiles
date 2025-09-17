@@ -57,6 +57,8 @@ Git(){
                     { printf " %"ll"s %"rl"s:%s\n",left++,right++,line }
             ' ;;
 
+        (branch_merge) \git merge $1 ;;
+        (branch_merge_commit) \git merge --no-ff $1 ;;
         (branch_list) \git branch -a ;;
         (branch_base) \git merge-base $GIT_TRUNK $(\git rev-parse HEAD) ;;
         (branch_rewrite) \git rebase -i $(Git branch_base) ;; # pick, squash, squash, squash...
