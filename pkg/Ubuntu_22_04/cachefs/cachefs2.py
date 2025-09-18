@@ -21,12 +21,19 @@ class CacheFS(Operations):
         src = self._source_path(path)
         dst = self._cache_path(path)
 
-        if not os.path.exists(dst):
-            if not os.path.exists(src):
-                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        if os.path.exists(dst):
+            return
+
+        if not os.path.exists(src):
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+
+        if os.path.isdir(src):
+            os.makedirs(dst, exist_ok=True)
+            logging.info(f"Cached directory: {src} -> {dst}")
+        else:
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copy2(src, dst)
-            logging.info(f"Cached: {src} -> {dst}")
+            logging.info(f"Cached file: {src} -> {dst}")
 
     def getattr(self, path, fh=None):
         full_path = self._cache_path(path)
@@ -76,10 +83,13 @@ class CacheFS(Operations):
         os.lseek(fh, offset, os.SEEK_SET)
         return os.write(fh, data)
 
-    def truncate(self, path, length):
+    def truncate(self, path, length, fh=None):
         full_path = self._cache_path(path)
-        with open(full_path, 'r+') as f:
-            f.truncate(length)
+        if fh is not None:
+            os.ftruncate(fh, length)
+        else:
+            with open(full_path, 'r+') as f:
+                f.truncate(length)
 
     def flush(self, path, fh):
         return os.fsync(fh)
