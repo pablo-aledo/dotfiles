@@ -120,7 +120,7 @@ ctags_class_rels () {
 }
 
 genuml(){
-    ctags_index_cpp
+    ctags_index
     ctags_split
     (
         ctags_cross tags_f tags_c /dev/stdout
@@ -172,7 +172,7 @@ umldiff_clean(){
 }
 
 uml_show(){
-    ctags_index_cpp
+    ctags_index
     ctags_split
     (
         ctags_cross tags_f tags_c /dev/stdout
