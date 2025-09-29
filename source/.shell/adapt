@@ -46,6 +46,11 @@ adapt_chromebook(){
 	i3-msg reload
 }
 
+adapt_volume(){
+    [ $# -gt 0 ] && vol=$1 || vol=150
+    pactl set-sink-volume @DEFAULT_SINK@ ${vol}%
+}
+
 adapt_novnc(){
 	sed -i 's/set \$mod Mod4/set \$mod Mod1/g' ~/.i3/config
 	sed -i 's/setxkbmap es/setxkbmap us/g' ~/.i3/config
