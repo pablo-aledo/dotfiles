@@ -1,6 +1,6 @@
 export DISPLAY=:1
 
-xdotool key 1 && sleep 30
+xdotool key 1 && sleep 60
 
 rm -rf /tmp/unstar_split
 mkdir /tmp/unstar_split
