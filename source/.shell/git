@@ -35,7 +35,17 @@ Git(){
         (diff_with_filename) \git diff $* | awk '/^\+\+\+/{print; $1=""; name=$0}{print name": "$0}' ;;
         (diff_name_only) \git diff --name-only $* ;;
         (diff_step) \git diff ${1}^:$2 ${1}:$2 ;;
-        (diff_step_files) \git diff --name-only ${1}^:$2 ${1}:$2 ;;
+        (diff_step_files)
+            if [ $# -gt 1 ]
+            then
+                for a in $*
+                do
+                    Git diff_step_files $a
+                done
+            else
+                \git diff --name-only ${1}^ ${1}
+            fi
+            ;;
         (difftool_step) \git difftool ${1}^:$2 ${1}:$2 ;;
         (diff_staged) \git diff --staged $* ;;
         (difftool_staged) \git difftool --staged $* ;;
