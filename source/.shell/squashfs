@@ -32,7 +32,8 @@ umount_sqfs_rw(){
 mount_sqfs_rw(){
     img="$1"
     mountdir="$2"
-    tmpfs=/tmp/$(basename $img .squashfs)
+    img_name=$(basename $img .squashfs)
+    tmpfs=/tmp/$img_name
 
     MOUNT_BASE="$tmpfs"
     LOWER_DIR="$MOUNT_BASE/lower"
@@ -42,7 +43,7 @@ mount_sqfs_rw(){
     mkdir -p "$LOWER_DIR" "$UPPER_DIR" "$WORK_DIR" "$mountdir"
 
     sudo mount -o loop,ro "$img" "$LOWER_DIR"
-    sudo mount -t overlay overlay -o \
+    sudo mount -t overlay overlay_${img_name} -o \
         lowerdir="$LOWER_DIR",upperdir="$UPPER_DIR",workdir="$WORK_DIR" \
         "$mountdir"
 }
@@ -51,8 +52,8 @@ mount_2_sqfs_rw() {
     img1="$1"
     img2="$2"
     mountdir="$3"
-
-    tmpfs_base="/tmp/overlay_mount_$(basename "$img1" .squashfs)_$(basename "$img2" .squashfs)"
+    img_name="$(basename "$img1" .squashfs)_$(basename "$img2" .squashfs)"
+    tmpfs_base="/tmp/overlay_${img_name}"
 
     MOUNT_IMG1="$tmpfs_base/lower1"
     MOUNT_IMG2="$tmpfs_base/lower2"
@@ -66,7 +67,7 @@ mount_2_sqfs_rw() {
 
     LOWERDIR="$MOUNT_IMG2:$MOUNT_IMG1"  # img2 has higher priority over img1
 
-    sudo mount -t overlay overlay -o \
+    sudo mount -t overlay overlay_${img_name} -o \
         lowerdir="$LOWERDIR",upperdir="$UPPER_DIR",workdir="$WORK_DIR" \
         "$mountdir"
 }
