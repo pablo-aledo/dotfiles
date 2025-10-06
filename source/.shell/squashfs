@@ -32,8 +32,8 @@ umount_sqfs_rw(){
 mount_sqfs_rw(){
     img="$1"
     mountdir="$2"
-    img_name=$(basename $img .squashfs)
-    tmpfs=/tmp/$img_name
+    img_name="$(basename $img .squashfs)"
+    tmpfs="/tmp/overlay_${img_name}"
 
     MOUNT_BASE="$tmpfs"
     LOWER_DIR="$MOUNT_BASE/lower"
