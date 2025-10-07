@@ -104,7 +104,7 @@ Git(){
             tac /tmp/commits | while read commit; do git cherry-pick $commit; done
             ;;
         (branch_bak)
-            current_branch=$(Git branch_current)
+            current_branch=$(Git branch_current | tail -n1)
             current_branch_mod=$(Git branch_current | sed -e 's|/|_|g' -e 's|-|_|g')
             Git branch_create ${current_branch_mod}_$(cdate)
             Git checkout $current_branch
