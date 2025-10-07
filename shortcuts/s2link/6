@@ -3,7 +3,7 @@ source ~/.dotfiles/source/.shell/adapt
 
 export DISPLAY=:1
 
-xdotool key 1 && sleep 40
+xdotool key 1 && shcw s2link.1
 
 for a in `seq 1 $(cat /tmp/skip)`
 do
