@@ -105,7 +105,7 @@ Git(){
             ;;
         (branch_bak)
             current_branch=$(Git branch_current)
-            Git branch_create $current_branch_$(cdate)
+            Git branch_create ${current_branch}_$(cdate)
             Git checkout $current_branch
             ;;
         (tag_list) \git tag ;;
