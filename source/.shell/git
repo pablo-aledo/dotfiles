@@ -105,7 +105,8 @@ Git(){
             ;;
         (branch_bak)
             current_branch=$(Git branch_current)
-            Git branch_create ${current_branch}_$(cdate)
+            current_branch_mod=$(Git branch_current | sed -e 's|/|_|g' -e 's|-|_|g')
+            Git branch_create ${current_branch_mod}_$(cdate)
             Git checkout $current_branch
             ;;
         (tag_list) \git tag ;;
