@@ -103,7 +103,11 @@ Git(){
             git checkout -b $2
             tac /tmp/commits | while read commit; do git cherry-pick $commit; done
             ;;
-
+        (branch_bak)
+            current_branch=$(Git branch_current)
+            Git branch_create $current_branch_$(cdate)
+            Git checkout $current_branch
+            ;;
         (tag_list) \git tag ;;
         (tag_show) \git show $1 ;;
         (tag_create) \git tag $1 ;;
