@@ -421,13 +421,13 @@ ctags_update_branch(){
     ctags_update_keep $1
     (cd functions; md5sum *) > /tmp/functions_base
     cat tags > /tmp/tags_base
-    git clean -df
+    git clean -df; git checkout .
 
     git checkout $leaf
     ctags_update_keep $1
     (cd functions; md5sum *) > /tmp/functions_leaf
     cat tags > /tmp/tags_leaf
-    git clean -df
+    git clean -df; git checkout .
 
     [ -e /tmp/ctags_extra_keywords_bak ] && \mv /tmp/ctags_extra_keywords{_bak,}
 }
