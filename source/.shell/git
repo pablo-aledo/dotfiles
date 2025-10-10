@@ -87,7 +87,6 @@ Git(){
             done
             ;;
         (branch_create) \git checkout -b $1 ;;
-        (branch_delete) \git branch -D $1 ;;
         (branch_push) \git push --set-upstream origin $(\git rev-parse --abbrev-ref HEAD) ;;
         (branch_rebase) \git checkout $1; \git rebase -i $2 ;;
         (branch_rebase_keep) \git rebase -X ours $2 ;;
