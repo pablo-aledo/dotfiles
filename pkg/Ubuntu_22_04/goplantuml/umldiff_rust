@@ -142,7 +142,7 @@ genuml(){
 }
 
 umldiff(){
-    review_leaf=$(Git rev-parse HEAD)
+    review_leaf=$(Git branch_current)
     review_base=$(Git branch_base)
 	git checkout .; git checkout $review_base; genuml /tmp/umldiff_main.plantuml
 	git checkout .; git checkout $review_leaf; genuml /tmp/umldiff_branch.plantuml
