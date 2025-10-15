@@ -108,6 +108,13 @@ Git(){
             Git branch_create ${current_branch_mod}_$(cdate)
             Git checkout $current_branch
             ;;
+        (branch_find)
+            Git log_oneline | grep -B1000 '^.....>' | grep -v '^.....>' | cut -d' ' -f2 | while read commit
+            do
+                Git diff_step $commit | sed "s/^/$commit:/g"
+            done \
+            | awk '/diff --git a/{match($0, /b\/[^ ]+/); path = substr($0, RSTART + 2, RLENGTH - 2); n = split(path, parts, "/"); file=parts[n];}{split($0, parts, ":"); commit = parts[1]; content = substr($0, index($0, ":") + 1); print commit, file, content}' | mgrep - $*
+            ;;
         (tag_list) \git tag ;;
         (tag_show) \git show $1 ;;
         (tag_create) \git tag $1 ;;
