@@ -32,6 +32,7 @@ set splitright                                                          " Open n
 set splitbelow                                                          " Open new files below
 set path+=**                                                            " search down into subfolders (:find)
 set wildmenu                                                            " display all matching files when we tab complete
+set cursorline                                                          " enable line marking cursor
 map Y y$
 
 let g:go_version_warning = 0
