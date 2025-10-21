@@ -140,6 +140,121 @@ ctags_index_python () {
     fi
 }
 
+ctags_index_python_2() {
+	Rm -fr tags
+	funcs=()
+	classes=()
+	elems=()
+	while IFS= read -r line
+	do
+		funcs+=("$line")
+	done < <(ctags -x $(find . -name '*.py') 2>/dev/null | awk '$2=="member"{print $1, $3, $4}' | sort -k3,3 -k2n -u)
+
+	while IFS= read -r line
+	do
+		classes+=("$line")
+	done < <(ctags -x $(find . -name '*.py') 2>/dev/null | awk '$2=="class"{print $1, $3, $4}' | sort -k3,3 -k2n -u)
+
+	while IFS= read -r line
+	do
+		elems+=("$line")
+	done < <(ctags -x $(find . -name '*.py') 2>/dev/null | awk '$2=="class"{print $1, $3, $4, "c"}$2=="member"{print $1, $3, $4, "f"}' | sort -k3,3 -k2n -u)
+
+	current_file=""
+    funcs_in_file=()
+	classes_in_file=()
+	elems_in_file=()
+
+	process_file_f () {
+		local file=$1
+		local total_lines=$(cat "$file" | wc -l)
+		local name=""
+		local start=0
+		local end=0
+
+		for ((i=1; i <= ${#elems_in_file[@]}; i++)) do
+            [ "$( echo ${elems_in_file[$i]} | awk '{print $4}' )" = "c" ] && continue
+			name=$(echo "${elems_in_file[$i]}" | awk '{print $1}')
+			start=$(echo "${elems_in_file[$i]}" | awk '{print $2}')
+			if (( i < ${#elems_in_file[@]} ))
+			then
+				end=$(echo "${elems_in_file[$((i+1))]}" | awk '{print $2}')
+				((end--))
+			else
+				end=$total_lines
+			fi
+			echo "$name\t$(echo $file | sed 's/^..//g')\tkind:f\tline:$start\tend:$end" >> tags
+		done
+	}
+
+	process_file_c () {
+		local file=$1
+		local total_lines=$(cat "$file" | wc -l)
+		local name=""
+		local start=0
+		local end=0
+		for ((i=1; i <= ${#classes_in_file[@]}; i++)) do
+			name=$(echo "${classes_in_file[$i]}" | awk '{print $1}')
+			start=$(echo "${classes_in_file[$i]}" | awk '{print $2}')
+			if (( i < ${#classes_in_file[@]} ))
+			then
+				end=$(echo "${classes_in_file[$((i+1))]}" | awk '{print $2}')
+				((end--))
+			else
+				end=$total_lines
+			fi
+			echo "$name\t$(echo $file | sed 's/^..//g')\tkind:c\tline:$start\tend:$end" >> tags
+		done
+	}
+
+	for line in "${classes[@]}"
+	do
+		name=$(echo "$line" | awk '{print $1}')
+		start=$(echo "$line" | awk '{print $2}')
+		archivo=$(echo "$line" | awk '{print $3}')
+		if [[ "$archivo" != "$current_file" ]]
+		then
+			if [[ -n "$current_file" ]]
+			then
+				process_file_c "$current_file"
+			fi
+			current_file="$archivo"
+			funcs_in_file=()
+			classes_in_file=()
+			elems_in_file=()
+		fi
+		classes_in_file+=("$name $start $archivo")
+	done
+	if [[ -n "$current_file" ]]
+	then
+		process_file_c "$current_file"
+	fi
+
+	for line in "${elems[@]}"
+	do
+		name=$(echo "$line" | awk '{print $1}')
+		start=$(echo "$line" | awk '{print $2}')
+		archivo=$(echo "$line" | awk '{print $3}')
+		tipo=$(echo "$line" | awk '{print $4}')
+		if [[ "$archivo" != "$current_file" ]]
+		then
+			if [[ -n "$current_file" ]]
+			then
+				process_file_f "$current_file"
+			fi
+			current_file="$archivo"
+			funcs_in_file=()
+			classes_in_file=()
+			elems_in_file=()
+		fi
+		elems_in_file+=("$name $start $archivo $tipo")
+	done
+	if [[ -n "$current_file" ]]
+	then
+		process_file_f "$current_file"
+	fi
+}
+
 table_multirepos(){
     find -maxdepth 1 -type d | grep -v '^.$' | sed 's/^..//g' | while read line
     do
