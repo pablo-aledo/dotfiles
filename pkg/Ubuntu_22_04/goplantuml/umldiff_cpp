@@ -63,7 +63,7 @@ FILENAME == ARGV[2] {
 
 ctags_rels () {
 	file_1="${1:-tags_c}" 
-	file_2="${1:-tags_rels}" 
+	file_2="${2:-tags_rels}" 
 	awk -F'\t' '
 {
     pattern = $3
