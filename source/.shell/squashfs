@@ -71,3 +71,36 @@ mount_2_sqfs_rw() {
         lowerdir="$LOWERDIR",upperdir="$UPPER_DIR",workdir="$WORK_DIR" \
         "$mountdir"
 }
+
+mount_n_sqfs_rw() {
+    mountdir="${@: -1}"
+    imgs=("${@:1:$#-1}")
+
+    img_name=""
+    for img in "${imgs[@]}"; do
+        base="$(basename "$img" .squashfs)"
+        img_name+="${base}_"
+    done
+    img_name="${img_name%_}"
+
+    tmpfs_base="/tmp/overlay_${img_name}"
+    UPPER_DIR="$tmpfs_base/upper"
+    WORK_DIR="$tmpfs_base/work"
+
+    mkdir -p "$UPPER_DIR" "$WORK_DIR" "$mountdir"
+
+    LOWERDIRS=()
+    idx=1
+    for img in "${imgs[@]}"; do
+        mount_point="$tmpfs_base/lower${idx}"
+        mkdir -p "$mount_point"
+        sudo mount -o loop,ro "$img" "$mount_point"
+        LOWERDIRS+=("$mount_point")
+        ((idx++))
+    done
+
+    LOWERDIR=$(IFS=:; echo "${LOWERDIRS[*]}")
+
+    sudo mount -t overlay "overlay_${img_name}" \
+        -o lowerdir="$LOWERDIR",upperdir="$UPPER_DIR",workdir="$WORK_DIR" "$mountdir"
+}
