@@ -74,7 +74,7 @@ mount_2_sqfs_rw() {
 
 mount_n_sqfs_rw() {
     mountdir="${@: -1}"
-    imgs=("${@:1:$#-1}")
+    imgs=("${(@)argv[1,-2]}")
 
     img_name=""
     for img in "${imgs[@]}"; do
@@ -82,6 +82,7 @@ mount_n_sqfs_rw() {
         img_name+="${base}_"
     done
     img_name="${img_name%_}"
+    img_name="$(echo $img_name | md5sum - | sed 's/^\(.....\).*/\1/g')"
 
     tmpfs_base="/tmp/overlay_${img_name}"
     UPPER_DIR="$tmpfs_base/upper"
