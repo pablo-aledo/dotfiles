@@ -160,7 +160,7 @@ Git(){
         (stash_save_staged) \git add -u; \git stash push -m "$1"; \git stash apply ;;
         (unstage) \git restore --staged $* ;;
         (update_master) current_commit=$(\git rev-parse HEAD)
-                \git checkout master
+                \git checkout $GIT_TRUNK
                 \git pull
                 \git checkout $current_commit
                 [ "$(\git rev-parse $(Git branch_current))" = "$(\git rev-parse HEAD)" ] && \git checkout $(Git branch_current)
