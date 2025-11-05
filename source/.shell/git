@@ -118,7 +118,7 @@ Git(){
         (branch_highlight)
             Git branch_find $* | cut -d' ' -f1 | sort -u > /tmp/gbrs_ids
             Git log_oneline > /tmp/gbrs_hist
-            whighlight /tmp/grbrs_ids /tmp/gbrs_hist
+            whighlight /tmp/gbrs_ids /tmp/gbrs_hist
             ;;
         (tag_list) \git tag ;;
         (tag_show) \git show $1 ;;
