@@ -576,7 +576,12 @@ ctags_review(){
     vim /tmp/ctags_extra_keywords
 
     ctags_update_quick $1
-    ctags_intersection $1 /tmp/ctags_extra_keywords | sed 's/->/-->/g' | tee /tmp/review | Xclip -i
+    ctags_intersection $1 /tmp/ctags_extra_keywords | sed 's/->/-->/g' > /tmp/review
+
+    comm -13 <(cat /tmp/review | sed 's/ --> /\n/g' | sort -u) <(cat /tmp/ctags_extra_keywords | sort -u) > /tmp/review2
+    cat /tmp/review2 >> /tmp/review
+    rm -fr /tmp/review2
+    cat /tmp/review | Xclip -i
 
     comm -3 <(cat /tmp/functions_base | awk '{print $2}' | sort -u) <(cat /tmp/functions_leaf | awk '{print $2}' | sort -u) > /tmp/newfunctions
     comm -3 <(cat /tmp/functions_base | sort -u) <(cat /tmp/functions_leaf | sort -u) | awk '{print $2}' | sort -u > /tmp/modifiedfunctions
