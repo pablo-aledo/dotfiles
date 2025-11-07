@@ -10,9 +10,9 @@ echo $title > /tmp/title
 [ -e /tmp/avl_proxy ] && google-chrome --proxy-server="localhost:3128" "$link" >/dev/null 2>/dev/null &
 sleep 10
 
-mouseover 5 10000 ~/.dotfiles/shortcuts/images/avl_continue.png && sleep 60 && xdotool click 1
-mouseover -1 10000 ~/.dotfiles/shortcuts/images/avh_yyang.png
-while [ -e /tmp/pause_step ]; do sleep 1; done
+[ -e /tmp/avl_link2link ] || { mouseover 5 10000 ~/.dotfiles/shortcuts/images/avl_continue.png && sleep 60 && xdotool click 1 }
+[ -e /tmp/avl_link2link ] || { mouseover -1 10000 ~/.dotfiles/shortcuts/images/avh_yyang.png }
+[ -e /tmp/avl_link2link ] || { while [ -e /tmp/pause_step ]; do sleep 1; done }
 
 #sleep 5
 #echo "$link" | xclip -sel clip -i
