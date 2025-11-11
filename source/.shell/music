@@ -1,25 +1,25 @@
 export music_bottles_dir=~/.var/app/com.usebottles.bottles/data/bottles/bottles
 export music_ssd_dir=/media/pablo/1.42.6-24922
-export fl_id=fl_24
+export music_fl_id=fl_24
 
 fl_compose(){
-    mount_sqfs_rw $music_ssd_dir/sw_linux/02_fl/$fl_id.squashfs $music_bottles_dir/$fl_id
-    mount_sqfs_rw $music_ssd_dir/libraries/linux/nucleus.squashfs $music_bottles_dir/$fl_id/drive_c/nucleus
-    mount_sqfs_rw $music_ssd_dir/libraries/linux/woodchester.squashfs $music_bottles_dir/$fl_id/drive_c/woodchester
+    mount_sqfs_rw $music_ssd_dir/sw_linux/02_fl/$music_fl_id.squashfs $music_bottles_dir/$music_fl_id
+    mount_sqfs_rw $music_ssd_dir/libraries/linux/nucleus.squashfs $music_bottles_dir/$music_fl_id/drive_c/nucleus
+    mount_sqfs_rw $music_ssd_dir/libraries/linux/woodchester.squashfs $music_bottles_dir/$music_fl_id/drive_c/woodchester
     lday=$(ls ~/daily_comp | SortG | tail -n1)
     lfile=$(ls ~/daily_comp/$lday | grep -e flp -e template | sort | tail -n1)
     (cd /; tar -xvzf ~/daily_comp/$lday/$lfile)
 }
 
 fl_play(){
-    mount_sqfs_rw $music_ssd_dir/sw_linux/02_fl/$fl_id.squashfs $music_bottles_dir/$fl_id
-    (cd $music_ssd_dir/packs/arturia/; mount_sqfs_rw $music_ssd_dir/packs/arturia/arturia_bin.squashfs $music_bottles_dir/$fl_id/drive_c/Program\ Files/Arturia/)
-    (cd $music_ssd_dir/packs/arturia/; mount_n_sqfs_rw $(ls | grep squashfs | grep -v _bin.squashfs) $music_bottles_dir/$fl_id/drive_c/ProgramData/Arturia/)
+    mount_sqfs_rw $music_ssd_dir/sw_linux/02_fl/$music_fl_id.squashfs $music_bottles_dir/$music_fl_id
+    (cd $music_ssd_dir/packs/arturia/; mount_sqfs_rw $music_ssd_dir/packs/arturia/arturia_bin.squashfs $music_bottles_dir/$music_fl_id/drive_c/Program\ Files/Arturia/)
+    (cd $music_ssd_dir/packs/arturia/; mount_n_sqfs_rw $(ls | grep squashfs | grep -v _bin.squashfs) $music_bottles_dir/$music_fl_id/drive_c/ProgramData/Arturia/)
     (fl_cd; cd ProgramData/Arturia && {f tmp | grep -v resources | Xargs rm -fr})
-    (cd $music_ssd_dir/packs/omnisphere/; mount_n_sqfs_rw *.squashfs $music_bottles_dir/$fl_id/drive_c/ProgramData/Spectrasonics/STEAM/Omnisphere )
-    (cd $music_ssd_dir/packs/fl_studio/; mount_sqfs_rw flex_content.squashfs $music_bottles_dir/$fl_id/drive_c/Program\ Files/Image-Line/FL\ Studio\ 2024/Data/Patches/Packs/FLEX/Packs )
+    (cd $music_ssd_dir/packs/omnisphere/; mount_n_sqfs_rw *.squashfs $music_bottles_dir/$music_fl_id/drive_c/ProgramData/Spectrasonics/STEAM/Omnisphere )
+    (cd $music_ssd_dir/packs/fl_studio/; mount_sqfs_rw flex_content.squashfs $music_bottles_dir/$music_fl_id/drive_c/Program\ Files/Image-Line/FL\ Studio\ 2024/Data/Patches/Packs/FLEX/Packs )
     lfile=$(ls -tr ~/partituras/ | grep -e mid -e midi | tail -n1)
-    cp ~/partituras/$lfile $music_bottles_dir/$fl_id/drive_c/users/steamuser/Music/
+    cp ~/partituras/$lfile $music_bottles_dir/$music_fl_id/drive_c/users/steamuser/Music/
     fl_nonetwork
 }
 
@@ -32,7 +32,7 @@ fl_rm(){
 }
 
 fl_cd(){
-    cd $music_bottles_dir/$fl_id/drive_c/
+    cd $music_bottles_dir/$music_fl_id/drive_c/
 }
 
 fl_nonetwork(){
@@ -42,14 +42,14 @@ fl_nonetwork(){
 fl_library(){
     cd $music_ssd_dir/libraries/linux/
     [ $# = 0 ] && return
-    mount_sqfs_rw $1 $music_bottles_dir/$fl_id/drive_c/$(basename $1 .squashfs)
-    [ $1 = "arabian_ethnic_orchestra.squashfs" ]      && mkcp $music_bottles_dir/$fl_id/drive_c/arabian_ethnic_orchestra/Samples/Data/s8_U6_n1.nka $music_bottles_dir/$fl_id/drive_c/users/steamuser/AppData/Local/"Arabian Ethnic Orchestra"/Data/s8_U6_n1.nka
-    [ $1 = "pacha_ethnic_orchestra.squashfs" ]        && mkcp $music_bottles_dir/$fl_id/drive_c/pacha_ethnic_orchestra/"Pacha Ethnic Orchestra"/Data/z2_b5_P1.nka $music_bottles_dir/$fl_id/drive_c/users/steamuser/AppData/Local/"Pacha Ethnic Orchestra"/Data/z2_b5_P1.nka
-    [ $1 = "elements_modern_scoring_synth.squashfs" ] && mkcp $music_bottles_dir/$fl_id/drive_c/elements_modern_scoring_synth/Data/Snapshot_Presets/"01 ELEMENTS" $music_bottles_dir/$fl_id/drive_c/users/steamuser/Documents/"Native Instruments"/"User Content"/Kontakt/"01 ELEMENTS"
-    [ $1 = "elements_modern_scoring_synth.squashfs" ] && mkcp $music_bottles_dir/$fl_id/drive_c/elements_modern_scoring_synth/Data/Snapshot_Presets/"02 ELEMENTS Lite" $music_bottles_dir/$fl_id/drive_c/users/steamuser/Documents/"Native Instruments"/"User Content"/Kontakt/"02 ELEMENTS Lite"
-    [ $1 = "elements_kepler.squashfs" ]               && cd $music_bottles_dir/$fl_id/drive_c/users/steamuser/Documents/Native\ Instruments/User\ Content/Kontakt/
+    mount_sqfs_rw $1 $music_bottles_dir/$music_fl_id/drive_c/$(basename $1 .squashfs)
+    [ $1 = "arabian_ethnic_orchestra.squashfs" ]      && mkcp $music_bottles_dir/$music_fl_id/drive_c/arabian_ethnic_orchestra/Samples/Data/s8_U6_n1.nka $music_bottles_dir/$music_fl_id/drive_c/users/steamuser/AppData/Local/"Arabian Ethnic Orchestra"/Data/s8_U6_n1.nka
+    [ $1 = "pacha_ethnic_orchestra.squashfs" ]        && mkcp $music_bottles_dir/$music_fl_id/drive_c/pacha_ethnic_orchestra/"Pacha Ethnic Orchestra"/Data/z2_b5_P1.nka $music_bottles_dir/$music_fl_id/drive_c/users/steamuser/AppData/Local/"Pacha Ethnic Orchestra"/Data/z2_b5_P1.nka
+    [ $1 = "elements_modern_scoring_synth.squashfs" ] && mkcp $music_bottles_dir/$music_fl_id/drive_c/elements_modern_scoring_synth/Data/Snapshot_Presets/"01 ELEMENTS" $music_bottles_dir/$music_fl_id/drive_c/users/steamuser/Documents/"Native Instruments"/"User Content"/Kontakt/"01 ELEMENTS"
+    [ $1 = "elements_modern_scoring_synth.squashfs" ] && mkcp $music_bottles_dir/$music_fl_id/drive_c/elements_modern_scoring_synth/Data/Snapshot_Presets/"02 ELEMENTS Lite" $music_bottles_dir/$music_fl_id/drive_c/users/steamuser/Documents/"Native Instruments"/"User Content"/Kontakt/"02 ELEMENTS Lite"
+    [ $1 = "elements_kepler.squashfs" ]               && cd $music_bottles_dir/$music_fl_id/drive_c/users/steamuser/Documents/Native\ Instruments/User\ Content/Kontakt/
     [ $1 = "elements_kepler.squashfs" ]               && unzip ../../../../../../elements_kepler/System/Data/Presets_Manual_Installation.zip
     [ $1 = "elements_kepler.squashfs" ]               && mv Presets_Manual_Installation/* .
-    [ $1 = "string_contours.squashfs" ]               && mkcp $music_bottles_dir/$fl_id/drive_c/string_contours/"String Contours"/Data/K5_m3_Y8.nka $music_bottles_dir/$fl_id/drive_c/users/steamuser/AppData/Local/"String Contours"/Data/K5_m3_Y8.nka
-    [ $1 = "string_contours_2.squashfs" ]             && mkcp $music_bottles_dir/$fl_id/drive_c/string_contours_2/"String Contours 2"/Data/X3_O8_s5.nka $music_bottles_dir/$fl_id/drive_c/users/steamuser/AppData/Local/"String Contours 2"/Data/X3_O8_s5.nka
+    [ $1 = "string_contours.squashfs" ]               && mkcp $music_bottles_dir/$music_fl_id/drive_c/string_contours/"String Contours"/Data/K5_m3_Y8.nka $music_bottles_dir/$music_fl_id/drive_c/users/steamuser/AppData/Local/"String Contours"/Data/K5_m3_Y8.nka
+    [ $1 = "string_contours_2.squashfs" ]             && mkcp $music_bottles_dir/$music_fl_id/drive_c/string_contours_2/"String Contours 2"/Data/X3_O8_s5.nka $music_bottles_dir/$music_fl_id/drive_c/users/steamuser/AppData/Local/"String Contours 2"/Data/X3_O8_s5.nka
 }
