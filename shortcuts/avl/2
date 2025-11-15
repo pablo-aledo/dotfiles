@@ -10,11 +10,15 @@ echo $title > /tmp/title
 [ -e /tmp/avl_proxy ] && google-chrome --proxy-server="localhost:3128" "$link" >/dev/null 2>/dev/null &
 sleep 10
 
-while true
-do
-    mouseover 1 10000 ~/.dotfiles/shortcuts/images/avh_yyang.png && break
-    mouseover_resize=true mouseover 1 50000 ~/.dotfiles/shortcuts/images/avl_continue.png && { sleep 10 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/refresh.png && xdotool click 1 }
-done
+if [ -e /tmp/avl_link2link ]
+then
+else
+    while true
+    do
+        mouseover 1 10000 ~/.dotfiles/shortcuts/images/avh_yyang.png && break
+        mouseover_resize=true mouseover 1 50000 ~/.dotfiles/shortcuts/images/avl_continue.png && { sleep 10 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/refresh.png && xdotool click 1 }
+    done
+fi
 
 # [ -e /tmp/avl_link2link ] || { mouseover 5 10000 ~/.dotfiles/shortcuts/images/avl_continue.png && sleep 60 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/refresh.png && xdotool click 1 }
 # [ -e /tmp/avl_link2link ] || { mouseover -1 10000 ~/.dotfiles/shortcuts/images/avh_yyang.png }

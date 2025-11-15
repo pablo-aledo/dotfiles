@@ -30,4 +30,3 @@ link2=$(xclip -sel clip -o)
 echo $link2 > /tmp/link2
 
 xdotool key Ctrl+w
-xdotool key Ctrl+w
