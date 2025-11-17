@@ -16,6 +16,24 @@ mgrep(){
     source /tmp/script
 }
 
+mgrep(){
+    [ $1 = '-' ] && file='' || file=$1
+    strings -n1 $file > /tmp/file
+    echo -n cat /tmp/file > /tmp/script
+    shift
+    for a in $*
+    do
+        if [ "$a" = "+" ]
+        then
+            echo >> /tmp/script
+            echo -n cat /tmp/file >> /tmp/script
+        else
+            echo -n " | grep -i \"$a\"" >> /tmp/script
+        fi
+    done
+    source /tmp/script
+}
+
 amgrep(){
     [ $1 = '-' ] && file='' || file=$1
     strings -n1 $file > /tmp/file
