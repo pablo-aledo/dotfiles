@@ -2,8 +2,7 @@ source ~/.dotfiles/source/.shell/xdotool
 source ~/.dotfiles/source/.shell/adapt
 export DISPLAY=:1
 
-sleep 10
-
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/zlhome.png
 
 #if $( mouseover 1 10000 ~/.dotfiles/shortcuts/images/downloaded.png )
 #then
@@ -27,7 +26,6 @@ xdotool key Down
 xdotool key Down
 xdotool key Down
 sleep 3
-mouseover 1 10000 ~/.dotfiles/shortcuts/images/1libdl.png ~/.dotfiles/shortcuts/images/1libdl_2.png
 xdotool mousemove 0 0
 if $(mouseover 3 10000 ~/.dotfiles/shortcuts/images/1libdl.png ~/.dotfiles/shortcuts/images/1libdl_2.png)
 then
