@@ -3,6 +3,10 @@ source ~/.dotfiles/source/.shell/adapt
 export DISPLAY=:1
 
 mouseover -1 10000 ~/.dotfiles/shortcuts/images/zlhome.png
+sleep 1
+xdotool mousemove_relative 90 0
+xdotool click 1
+sleep 1
 
 #if $( mouseover 1 10000 ~/.dotfiles/shortcuts/images/downloaded.png )
 #then
@@ -21,6 +25,8 @@ mouseover -1 10000 ~/.dotfiles/shortcuts/images/zlhome.png
 #sleep 1
 #xdotool key Escape
 #sleep 1
+xdotool key Down
+xdotool key Down
 xdotool key Down
 xdotool key Down
 xdotool key Down
