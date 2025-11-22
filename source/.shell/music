@@ -20,6 +20,8 @@ fl_play(){
     (cd $music_ssd_dir/packs/fl_studio/; mount_sqfs_rw flex_content.squashfs $music_bottles_dir/$music_fl_id/drive_c/Program\ Files/Image-Line/FL\ Studio\ 2024/Data/Patches/Packs/FLEX/Packs )
     lfile=$(ls -tr ~/partituras/ | grep -e mid -e midi | tail -n1)
     cp ~/partituras/$lfile $music_bottles_dir/$music_fl_id/drive_c/users/steamuser/Music/
+    lfile=$(ls -tr ~/backup/ | grep -e Synthesia | tail -n1)
+    tar -xzf ~/backup/$lfile -C ~/.var/app/com.usebottles.bottles/data/bottles/bottles/fl_24/drive_c/users/steamuser/AppData/Roaming
     fl_nonetwork
 }
 
