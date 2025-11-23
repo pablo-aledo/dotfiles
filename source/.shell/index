@@ -211,3 +211,16 @@ index_loop_notify_once(){
     notify index
 }
 
+clean_and_index(){
+    local_backup
+    cd /media/removable/2TB2/homes/admin/Descargas
+    extensions > /tmp/extensions
+    rargroup ../Videos | vimexec
+    bigrars ../Videos | vimexec
+    cd
+    cd /media/removable/2TB2/homes/admin/Videos
+    ls | dupl4 's/  / /g' | vimexec
+    cd
+    index_loop_notify_once
+}
+
