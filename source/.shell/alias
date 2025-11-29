@@ -25,6 +25,7 @@ alias attach='reptyr'
 alias watch='watch '
 alias cdate='date +%y%m%d-%H%M%S'
 alias wcat='sed "s/^\(.\{$(tput cols)\}\).*/\1/g"'
+alias unc_heads='for a in {0..100}; do echo -n "$a "; ls | head -n$a | tail -n1 | xargs head -n1; done'
 f(){ echo find -iname "'*$1*'" | bash ; }
 F(){
     [ $# = 1 ] && grep -Rin "$1" ;
