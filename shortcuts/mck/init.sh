@@ -1,0 +1,1 @@
+# n=0; cat s2link | while read line; do title="$(echo $line | sed 's/\(.*\) -> \(.*\)/\1/g')"; link="$(echo $line | sed 's/\(.*\) -> \(.*\)/\2/g')"; md5=$(echo $title | md5sum | awk '{print $1}'); echo $link; yt-dlp --cookies ~/Descargas/cookies.txt $link; echo "mv \"$(ls -tr | tail -n1)\" \"$(printf %03d $n)_$title.mp4\"" >> rename_script; n=$(( $n + 1 )); done
