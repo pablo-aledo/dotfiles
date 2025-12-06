@@ -1,8 +1,15 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
-#mouseover -1 10000 ~/.dotfiles/shortcuts/images/mck_vd_next.png
+xdotool key Escape
+xdotool key Escape
+xdotool key Escape
+xdotool key Escape
+xdotool mousemove 1000 1000
+xdotool click 1
+xdotool key Home
+
+# #mouseover -1 10000 ~/.dotfiles/shortcuts/images/mck_vd_next.png
 sleep 1
 xdotool mousemove 1250 150
-
 xdotool click 1
