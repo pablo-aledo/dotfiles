@@ -13,3 +13,4 @@ xdotool key Home
 sleep 1
 xdotool mousemove 1250 150
 xdotool click 1
+sleep 5

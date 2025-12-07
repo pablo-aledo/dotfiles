@@ -1,13 +1,14 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
+sleep 1
 xdotool mousemove 650 700
 xdotool click 1
 xdotool click 1
 xdotool click 1
-sleep 1
 xdotool key Ctrl+c
 echo "$(xclip -sel clip -o | sed 's|/||g')" > /tmp/title
+sleep 1
 xdotool key Ctrl+l
 xdotool key Ctrl+c
 echo "$(xclip -sel clip -o)" > /tmp/link
