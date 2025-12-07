@@ -1,6 +1,10 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
+echo '' > /tmp/title
+echo '' > /tmp/link
+echo '' | xclip -sel clip -i
+
 sleep 1
 xdotool mousemove 650 700
 xdotool click 1
