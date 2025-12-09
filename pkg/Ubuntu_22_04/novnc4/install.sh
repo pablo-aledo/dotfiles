@@ -16,8 +16,12 @@ sudo git checkout dd20b17d49a2394b586175f870e00b4b64c2817d
 rm -fr /usr/share/noVNC/{.git,.github,.gitignore,.gitmodules,docs,LICENSE.txt,README.md,tests,.travis.yml,VERSION}
 )
 
-mkdir /usr/share/noVNC/utils/websockify
+(
+mkdir /usr/share/noVNC/utils/websockify; cd /usr/share/noVNC/utils/websockify
 git clone https://github.com/novnc/websockify.git /usr/share/noVNC/utils/websockify
+git checkout cdc245273bbecbf6c5b2e8de8df33009973f4478
+)
+
 mkdir ~/.vnc
 #[ ! -e ~/.vnc/passwd ] && pword vnc | vncpasswd -f > ~/.vnc/passwd
 #chmod 0600 ~/.vnc/passwd
