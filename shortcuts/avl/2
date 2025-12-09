@@ -16,7 +16,7 @@ else
     while true
     do
         mouseover 1 10000 ~/.dotfiles/shortcuts/images/avh_yyang.png && break
-        mouseover_resize=true mouseover 1 50000 ~/.dotfiles/shortcuts/images/avl_continue.png && { sleep 10 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/refresh.png && xdotool click 1 }
+        mouseover 1 10000 ~/.dotfiles/shortcuts/images/avl_continue.png && { sleep 10 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/refresh.png && xdotool click 1 }
     done
 fi
 
