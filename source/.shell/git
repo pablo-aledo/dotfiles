@@ -54,19 +54,36 @@ Git(){
         (difftool_branch) \git difftool $(Git branch_base) $(\git rev-parse HEAD) ;;
         (diff_branch_files) \git diff --name-only $(Git branch_base) $(\git rev-parse HEAD) ;;
         (diff_with_lines) \git diff $* | gawk '
-              match($0,"^@@ -([0-9]+),([0-9]+) [+]([0-9]+),([0-9]+) @@",a){
-                left=a[1]
-                ll=length(a[2])
-                right=a[3]
-                rl=length(a[4])
+              /^\+\+\+ / {
+                file = substr($0, 7)
+                sub(/^b\//, "", file)
+                print
+                next
               }
-              /^(---|\+\+\+|[^-+ ])/{ print;next }
-              { line=substr($0,2) }
-              /^[-]/{ printf "-%"ll"s %"rl"s:%s\n",left++,""     ,line;next }
-              /^[+]/{ printf "+%"ll"s %"rl"s:%s\n",""    ,right++,line;next }
-                    { printf " %"ll"s %"rl"s:%s\n",left++,right++,line }
-            ' ;;
 
+              match($0, /^@@ -([0-9]+)(,([0-9]+))? \+([0-9]+)(,([0-9]+))? @@/, a) {
+                left  = a[1]
+                right = a[4]
+                next
+              }
+
+              /^(---|@@)/ { print; next }
+
+              /^-/ {
+                printf "%s:%d - %s\n", file, left++, substr($0,2)
+                next
+              }
+
+              /^\+/ {
+                printf "%s:%d + %s\n", file, right++, substr($0,2)
+                next
+              }
+
+              {
+                left++
+                right++
+              }
+            ' ;;
         (branch_merge) \git merge --ff-only $1 ;;
         (branch_merge_commit) \git merge --no-ff $1 ;;
         (branch_list) \git branch -a ;;
