@@ -1693,6 +1693,16 @@ learning.doc2txt(){
 	[ "$destination" = "$tmp/summary" ] && cat $tmp/summary
 }
 
+learning.doc2txt_pretrain(){
+    (
+    cd $learning_dir/documents
+    for a in *
+    do
+        cat $a | grep 'title :' | sed -e 's/^title : //g' -e 's/\x1b\[[0-9;]*m//g' > ../txts/$a
+    done
+    )
+}
+
 learning.doc2rvect(){
     if [ -e "$learning_dir/vectors/$(basename $1)" ]
     then
