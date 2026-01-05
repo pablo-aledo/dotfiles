@@ -55,3 +55,54 @@ fl_library(){
     [ $1 = "string_contours.squashfs" ]               && mkcp $music_bottles_dir/$music_fl_id/drive_c/string_contours/"String Contours"/Data/K5_m3_Y8.nka $music_bottles_dir/$music_fl_id/drive_c/users/steamuser/AppData/Local/"String Contours"/Data/K5_m3_Y8.nka
     [ $1 = "string_contours_2.squashfs" ]             && mkcp $music_bottles_dir/$music_fl_id/drive_c/string_contours_2/"String Contours 2"/Data/X3_O8_s5.nka $music_bottles_dir/$music_fl_id/drive_c/users/steamuser/AppData/Local/"String Contours 2"/Data/X3_O8_s5.nka
 }
+
+musescore_extract(){
+msc_mgrep () {
+    echo -n cat $1 > /tmp/script
+    shift
+    for a in $*
+    do
+        if [ "$a" = "+" ]
+        then
+            echo >> /tmp/script
+            echo -n cat $1 >> /tmp/script
+        else
+            echo -n " | grep -i $a" >> /tmp/script
+        fi
+    done
+    source /tmp/script
+}
+
+(
+cd $music_ssd_dir/musescore
+mkdir -p mnt extract
+
+prev_volume=""
+msc_mgrep score.jsonl $* \
+    | jq '.id' \
+    | sed 's/"//g' \
+    | while read id
+do
+    file="$id.mscz"
+    md=$(echo $file | md5sum - | sed 's/^\(..\).*$/\1/g')
+    echo $md $id
+done | sort | while read line
+do
+    volume=$(echo $line | cut -d' ' -f1)
+    id=$(echo $line | cut -d' ' -f2)
+
+    echo $volume $id
+
+    if [ "$volume" != "$prev_volume" ]
+    then
+        [ $(ls mnt | wc -l) -gt 0 ] && { sudo umount mnt; sleep 0.5 }
+        sudo mount $volume.squashfs mnt
+        cp mnt/$id.mscz extract
+    fi
+
+    prev_volume=$volume
+done
+sudo umount mnt
+)
+}
+
