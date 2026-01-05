@@ -75,7 +75,7 @@ msc_mgrep () {
 
 (
 cd $music_ssd_dir/musescore
-mkdir -p mnt extract
+#mkdir -p mnt extract
 
 prev_volume=""
 msc_mgrep score.jsonl $* \
@@ -93,16 +93,19 @@ do
 
     echo $volume $id
 
-    if [ "$volume" != "$prev_volume" ]
-    then
-        [ $(ls mnt | wc -l) -gt 0 ] && { sudo umount mnt; sleep 0.5 }
-        sudo mount $volume.squashfs mnt
-        cp mnt/$id.mscz extract
-    fi
+    # if [ "$volume" != "$prev_volume" ]
+    # then
+    #     [ $(ls mnt | wc -l) -gt 0 ] && { sudo umount mnt; sleep 0.5 }
+    #     sudo mount $volume.squashfs mnt
+    #     cp mnt/$id.mscz extract
+    # fi
+    unsquashfs $volume.squashfs $id.mscz
 
     prev_volume=$volume
 done
-sudo umount mnt
+#sudo umount mnt
+rm -fr ~/squashfs-root
+cp -r squashfs-root ~
 )
 }
 
