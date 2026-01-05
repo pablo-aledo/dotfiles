@@ -75,12 +75,14 @@ msc_mgrep () {
 
 (
 cd $music_ssd_dir/musescore
-#mkdir -p mnt extract
+#mkdir -p mnt msc_extract
+mkdir -p msc_extract
+#prev_volume=""
 
-prev_volume=""
 msc_mgrep score.jsonl $* \
     | jq '.id' \
     | sed 's/"//g' \
+    | sort -u \
     | while read id
 do
     file="$id.mscz"
@@ -97,15 +99,16 @@ do
     # then
     #     [ $(ls mnt | wc -l) -gt 0 ] && { sudo umount mnt; sleep 0.5 }
     #     sudo mount $volume.squashfs mnt
-    #     cp mnt/$id.mscz extract
+    #     cp mnt/$id.mscz msc_extract
     # fi
     unsquashfs $volume.squashfs $id.mscz
+    mv squashfs-root/* msc_extract; rm -fr squashfs-root
 
-    prev_volume=$volume
+    # prev_volume=$volume
 done
 #sudo umount mnt
-rm -fr ~/squashfs-root
-cp -r squashfs-root ~
+rm -fr ~/msc_extract
+cp -r msc_extract ~
 )
 }
 
