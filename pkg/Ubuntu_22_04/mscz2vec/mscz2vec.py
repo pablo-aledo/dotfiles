@@ -178,6 +178,79 @@ def rhythmic_features(score, n_bins=6):
 
     return features
 
+def rhythmic_sequence(score):
+    """
+    Devuelve la secuencia de duraciones relativas al compás
+    """
+    sequence = []
+    for n in score.flatten().notes:
+        if n.isNote or n.isChord:
+            dur = n.quarterLength
+            m = n.getContextByClass('Measure')
+            if m is None:
+                continue
+            measure_len = m.barDuration.quarterLength
+            sequence.append(dur / measure_len)
+    return sequence
+
+def rhythmic_intervals(sequence):
+    return [sequence[i+1] - sequence[i] for i in range(len(sequence)-1)]
+
+def rhythmic_ngrams(sequence, n=3):
+    ngrams = [tuple(sequence[i:i+n]) for i in range(len(sequence)-n+1)]
+    return Counter(ngrams)
+
+def rhythmic_self_similarity(sequence, window=4):
+    """
+    Devuelve la matriz de auto-similitud para la secuencia rítmica
+    """
+    n = len(sequence)
+    seq_windows = [sequence[i:i+window] for i in range(n-window+1)]
+    sim_matrix = np.zeros((len(seq_windows), len(seq_windows)))
+
+    for i, w1 in enumerate(seq_windows):
+        for j, w2 in enumerate(seq_windows):
+            min_len = min(len(w1), len(w2))
+            if min_len == 0:
+                continue
+            sim = 1 - np.sum(np.abs(np.array(w1[:min_len]) - np.array(w2[:min_len]))) / min_len
+            sim_matrix[i, j] = sim
+    return sim_matrix
+
+def rhythmic_fft(sequence):
+    """
+    FFT de la secuencia de duraciones normalizadas
+    """
+    signal = np.array(sequence)
+    if len(signal) == 0:
+        return np.zeros(16)
+    fft_vals = np.fft.fft(signal)
+    mag = np.abs(fft_vals)
+    return mag[:16] / (np.sum(mag[:16]) + 1e-9)
+
+
+def rhythmic_features(score, ngram_n=3, fft_len=16, hist_bins=12):
+    sequence = rhythmic_sequence(score)
+    if len(sequence) == 0:
+        return np.zeros(hist_bins + fft_len + ngram_n)
+
+    # Histograma de duraciones normalizado
+    hist, _ = np.histogram(sequence, bins=hist_bins, range=(0, 2))
+    hist = hist / (np.sum(hist) + 1e-9)
+
+    # FFT
+    fft_vec = rhythmic_fft(sequence)
+
+    # n-grams (hash)
+    ngrams = rhythmic_ngrams(sequence, n=ngram_n)
+    ngram_vec = np.zeros(ngram_n)
+    for i, k in enumerate(ngrams.keys()):
+        ngram_vec[i % ngram_n] += ngrams[k]
+
+    ngram_vec = ngram_vec / (np.linalg.norm(ngram_vec) + 1e-9)
+
+    return np.concatenate([hist, fft_vec, ngram_vec])
+
 def normalize_name(name):
     name = name.lower()
     name = unicodedata.normalize("NFD", name)
@@ -412,4 +485,4 @@ def form_structure_vector(score,
 # Cargar el archivo MSCZ
 score = converter.parse('./output.musicxml')
 
-print(form_structure_vector(score))
+print(rhythmic_features(score))
