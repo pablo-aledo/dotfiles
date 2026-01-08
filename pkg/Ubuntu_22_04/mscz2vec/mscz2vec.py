@@ -23,6 +23,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
 from collections import defaultdict
 import copy
+import hashlib
 
 # =========================
 # CONSTANTES
@@ -245,30 +246,6 @@ def harmonic_transition_features(score):
 # RITMO
 # =========================
 
-def rhythmic_features(score, n_bins=6):
-    notes = score.flatten().notesAndRests
-    durations = [n.duration.quarterLength for n in notes]
-
-    if not durations:
-        return np.zeros(n_bins + 2)
-
-    hist, _ = np.histogram(
-        durations,
-        bins=n_bins,
-        range=(0, 4),
-        density=True
-    )
-
-    features = np.concatenate([
-        hist,
-        [
-            np.mean(durations),
-            np.std(durations)
-        ]
-    ])
-
-    return features
-
 def rhythmic_sequence(score):
     sequence = []
     for n in score.flatten().notes:
@@ -367,11 +344,30 @@ def instrumental_features(score):
 # =========================
 
 def extract_melody(score):
-    parts = score.parts
-    melody = parts[0].flatten().notes if parts else score.flatten().notes
-    seq = [(n.pitch.midi, n.duration.quarterLength) for n in melody if n.isNote]
+    parts = getattr(score, 'parts', [score])
+    melody_part = parts[0].flatten().notes if parts else score.flatten().notes
+    seq = [(n.pitch.midi, n.pitch.nameWithOctave, n.duration.quarterLength)
+           for n in melody_part if n.isNote]
     debug("Motifs: longitud melodía =", len(seq))
+    if len(seq) > 0:
+        debug("Motifs: primeras 5 notas =", seq[:5])
     return seq
+
+def melodic_intervals(sequence):
+    intervals = [sequence[i+1][0] - sequence[i][0] for i in range(len(sequence) - 1)]
+    debug("Motifs: primeros 10 intervalos =", intervals[:10])
+    return intervals
+
+def rhythmic_ratios(sequence):
+    ratios = []
+    for i in range(len(sequence) - 1):
+        if sequence[i][2] > 0:
+            r = sequence[i+1][2] / sequence[i][2]
+        else:
+            r = 1.0
+        ratios.append(r)
+    debug("Motifs: primeros 10 ratios rítmicos =", ratios[:10])
+    return ratios
 
 def quantize_interval(i):
     return max(-12, min(12, i))
@@ -384,46 +380,74 @@ def quantize_ratio(r):
     else:
         return "same"
 
-def melodic_intervals(sequence):
-    return [
-        sequence[i+1][0] - sequence[i][0]
-        for i in range(len(sequence) - 1)
-    ]
-
-def rhythmic_ratios(sequence):
-    return [
-        sequence[i+1][1] / sequence[i][1]
-        if sequence[i][1] > 0 else 1
-        for i in range(len(sequence) - 1)
-    ]
-
-def extract_motifs(sequence, n=3):
+def extract_top_motifs(sequence, min_length=3, max_length=6, top_n=20):
+    """
+    Extrae motifs de longitud variable y devuelve solo los `top_n` más frecuentes.
+    Cada motif se representa como (motif, notas_originales, repeticiones)
+    """
     intervals = melodic_intervals(sequence)
     rhythms = rhythmic_ratios(sequence)
 
-    motifs = []
-    for i in range(len(intervals) - n + 1):
-        motif = tuple(
-            (quantize_interval(intervals[i+j]),
-             quantize_ratio(rhythms[i+j]))
-            for j in range(n)
-        )
-        motifs.append(motif)
+    motif_counter = Counter()
+    motif_notes_dict = {}
 
-    return motifs
+    # Extraemos todos los motifs posibles dentro del rango de longitudes
+    for length in range(min_length, max_length + 1):
+        for i in range(len(intervals) - length + 1):
+            motif = tuple(
+                (quantize_interval(intervals[i+j]),
+                 quantize_ratio(rhythms[i+j]))
+                for j in range(length)
+            )
+            notes = sequence[i:i+length]
+            motif_counter[motif] += 1
+            if motif not in motif_notes_dict:
+                motif_notes_dict[motif] = notes
 
-def motif_vector(score, dim=128, n=3):
+    # Seleccionamos solo los top_n motifs más frecuentes
+    most_common = motif_counter.most_common(top_n)
+    motifs_list = [(m, motif_notes_dict[m], count) for m, count in most_common]
+
+    debug(f"Motifs: nº motifs únicos totales = {len(motif_counter)} | top {top_n} seleccionados")
+    for idx, (m, notes, count) in enumerate(motifs_list):
+        note_info = [(p[1], p[2]) for p in notes]
+        debug(f"Motif {idx+1}: {m} | Notas = {note_info} | Repeticiones = {count}")
+
+    return motifs_list
+
+def motif_vector(score, dim=128, min_length=3, max_length=6, top_n=20):
+    """
+    Genera vector con los `top_n` motifs más frecuentes.
+    """
     seq = extract_melody(score)
-    if len(seq) < n + 1:
-        debug("Motifs: secuencia demasiado corta")
-        return np.zeros(dim)
+    seq_len = len(seq)
 
-    motifs = extract_motifs(seq, n)
-    vec = np.zeros(dim)
-    for m in motifs:
-        vec[hash(m) % dim] += 1
+    if seq_len < min_length + 1:
+        debug(f"Motifs: secuencia demasiado corta (len={seq_len}, min_length={min_length})")
+        return np.zeros(dim, dtype=float)
 
-    vec /= np.linalg.norm(vec) + 1e-9
+    motifs = extract_top_motifs(seq, min_length, max_length, top_n)
+    if not motifs:
+        debug("Motifs: no se generaron motifs")
+        return np.zeros(dim, dtype=float)
+
+    vec = np.zeros(dim, dtype=float)
+
+    for m_idx, (m, notes, count) in enumerate(motifs):
+        h = int(hashlib.md5(str(m).encode('utf-8')).hexdigest(), 16)
+        idx = h % dim
+        vec[idx] += count
+
+        note_info = [(p[1], p[2]) for p in notes]
+        debug(f"Motif {m_idx+1}: {m} | Notas = {note_info} | Repeticiones = {count} → índice vector {idx}")
+
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec /= norm
+    else:
+        debug("Motifs: vector todo ceros, normalización omitida")
+
+    debug(f"Motifs: vector final generado, norma={norm:.3f}, dimensión={dim}")
     return vec
 
 # =========================
@@ -525,10 +549,10 @@ debug("Cargando score...")
 score = converter.parse('./dreams_red.musicxml')
 debug("Score cargado correctamente")
 
-print(rhythmic_features(score))
-print(melodic_features(score))
-print(harmonic_features(score))
-print(harmonic_transition_features(score))
-print(instrumental_features(score))
+# print(rhythmic_features(score))
+# print(melodic_features(score))
+# print(harmonic_features(score))
+# print(harmonic_transition_features(score))
+# print(instrumental_features(score))
 print(motif_vector(score))
-print(form_structure_vector(score))
+# print(form_structure_vector(score))
