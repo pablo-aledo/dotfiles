@@ -343,6 +343,16 @@ def instrumental_features(score):
 # MOTIVOS
 # =========================
 
+def motif_is_submotif(small, large):
+    """Devuelve True si small está contenido en large (subsecuencia contigua)."""
+    if len(small) > len(large):
+        return False
+
+    for i in range(len(large) - len(small) + 1):
+        if large[i:i+len(small)] == small:
+            return True
+    return False
+
 def extract_melody(score):
     parts = getattr(score, 'parts', [score])
     melody_part = parts[0].flatten().notes if parts else score.flatten().notes
@@ -380,18 +390,45 @@ def quantize_ratio(r):
     else:
         return "same"
 
-def extract_top_motifs(sequence, min_length=3, max_length=6, top_n=20):
+def filter_maximal_motifs(motifs, top_n):
     """
-    Extrae motifs de longitud variable y devuelve solo los `top_n` más frecuentes.
-    Cada motif se representa como (motif, notas_originales, repeticiones)
+    motifs: lista de (motif, notes, count)
+    Devuelve solo los motifs más grandes, eliminando submotifs.
     """
+
+    # Ordenar: primero longitud DESC, luego frecuencia DESC
+    motifs_sorted = sorted(
+        motifs,
+        key=lambda x: (len(x[0]), x[2]),
+        reverse=True
+    )
+
+    selected = []
+
+    for motif, notes, count in motifs_sorted:
+        is_sub = False
+        for sel_motif, _, _ in selected:
+            if motif_is_submotif(motif, sel_motif):
+                is_sub = True
+                break
+
+        if not is_sub:
+            selected.append((motif, notes, count))
+            debug(f"Motif aceptado (len={len(motif)}, count={count})")
+
+        if len(selected) >= top_n:
+            break
+
+    return selected
+
+def extract_top_motifs(sequence, min_length=3, max_length=6, top_n=10):
     intervals = melodic_intervals(sequence)
     rhythms = rhythmic_ratios(sequence)
 
     motif_counter = Counter()
     motif_notes_dict = {}
 
-    # Extraemos todos los motifs posibles dentro del rango de longitudes
+    # 1. Extraer TODOS los motifs
     for length in range(min_length, max_length + 1):
         for i in range(len(intervals) - length + 1):
             motif = tuple(
@@ -399,23 +436,29 @@ def extract_top_motifs(sequence, min_length=3, max_length=6, top_n=20):
                  quantize_ratio(rhythms[i+j]))
                 for j in range(length)
             )
-            notes = sequence[i:i+length]
+            notes = sequence[i:i+length+1]  # +1 nota
             motif_counter[motif] += 1
             if motif not in motif_notes_dict:
                 motif_notes_dict[motif] = notes
 
-    # Seleccionamos solo los top_n motifs más frecuentes
-    most_common = motif_counter.most_common(top_n)
-    motifs_list = [(m, motif_notes_dict[m], count) for m, count in most_common]
+    all_motifs = [
+        (m, motif_notes_dict[m], count)
+        for m, count in motif_counter.items()
+    ]
 
-    debug(f"Motifs: nº motifs únicos totales = {len(motif_counter)} | top {top_n} seleccionados")
-    for idx, (m, notes, count) in enumerate(motifs_list):
-        note_info = [(p[1], p[2]) for p in notes]
-        debug(f"Motif {idx+1}: {m} | Notas = {note_info} | Repeticiones = {count}")
+    debug(f"Motifs totales antes de filtrar = {len(all_motifs)}")
 
-    return motifs_list
+    # 2. Filtrar solo motifs máximos
+    filtered = filter_maximal_motifs(all_motifs, top_n)
 
-def motif_vector(score, dim=128, min_length=3, max_length=6, top_n=20):
+    debug(f"Motifs finales (sin submotifs) = {len(filtered)}")
+    for i, (m, notes, c) in enumerate(filtered):
+        note_info = [(n[1], n[2]) for n in notes]
+        debug(f"Motif {i+1}: len={len(m)} | reps={c} | notas={note_info}")
+
+    return filtered
+
+def motif_vector(score, dim=128, min_length=3, max_length=6, top_n=10):
     """
     Genera vector con los `top_n` motifs más frecuentes.
     """
