@@ -1,16 +1,31 @@
+# =========================
+# DEBUG GLOBAL
+# =========================
+
+DEBUG = True
+
+def debug(*args):
+    if DEBUG:
+        print("[DEBUG]", *args)
+
+
+# =========================
+# IMPORTS
+# =========================
+
 from music21 import *
+from music21 import instrument, roman, analysis, note, stream, meter
 import numpy as np
 from collections import Counter
-from music21.instrument import Instrument
 import re
 import unicodedata
-from music21 import roman, analysis
-from music21 import note, stream
-from music21 import meter
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
-from music21 import stream
 
+
+# =========================
+# CONSTANTES
+# =========================
 
 INSTRUMENT_FAMILIES = {
     "piano": ["piano"],
@@ -30,16 +45,23 @@ HARMONIC_FUNCTIONS = {
     "Other": []
 }
 
+
+# =========================
+# MELODÍA
+# =========================
+
 def melodic_features(score, n_intervals=12):
     notes = score.flatten().notes
+    debug("Melodic: nº notas =", len(notes))
 
     pitches = [n.pitch.midi for n in notes if n.isNote]
     if len(pitches) < 2:
+        debug("Melodic: muy pocas notas")
         return np.zeros(n_intervals + 4)
 
     intervals = np.diff(pitches)
+    debug("Melodic: intervalos calculados")
 
-    # Histograma de intervalos (−12 a +12)
     interval_hist, _ = np.histogram(
         intervals,
         bins=n_intervals,
@@ -52,8 +74,8 @@ def melodic_features(score, n_intervals=12):
         [
             np.mean(pitches),
             np.std(pitches),
-            max(pitches) - min(pitches),   # rango
-            np.mean(np.sign(intervals))    # dirección media
+            max(pitches) - min(pitches),
+            np.mean(np.sign(intervals))
         ]
     ])
 
@@ -77,10 +99,13 @@ def harmonic_features(score):
 
     return pcp
 
+# =========================
+# ARMONÍA
+# =========================
+
 def roman_to_function(rn):
     figure = rn.figure
 
-    # Dominantes secundarios
     if "/" in figure:
         return "Dsec"
 
@@ -94,16 +119,15 @@ def roman_to_function(rn):
     return "Other"
 
 def harmonic_features(score):
-    """
-    Extrae un vector de funciones armónicas normalizado
-    """
-    # 1. Estimar tonalidad global
     try:
         key = score.analyze('key')
+        debug("Harmony: tonalidad =", key)
     except:
+        debug("Harmony: no se pudo detectar tonalidad")
         return np.zeros(len(HARMONIC_FUNCTIONS))
 
     chords = score.chordify().flatten().getElementsByClass('Chord')
+    debug("Harmony: nº acordes =", len(chords))
 
     if not chords:
         return np.zeros(len(HARMONIC_FUNCTIONS))
@@ -118,19 +142,21 @@ def harmonic_features(score):
         except:
             function_counts["Other"] += 1
 
-    # Normalizar
     total = sum(function_counts.values())
     vector = np.array(
         [function_counts[f] / total for f in HARMONIC_FUNCTIONS]
     )
 
+    debug("Harmony: vector =", vector)
     return vector
 
 def harmonic_transition_features(score):
     try:
         key = score.analyze('key')
+        debug("Harmony transitions: tonalidad =", key)
     except:
-        return np.zeros(16)
+        debug("Harmony transitions: sin tonalidad")
+        return np.zeros(25)
 
     chords = score.chordify().flatten().getElementsByClass('Chord')
     funcs = []
@@ -142,17 +168,22 @@ def harmonic_transition_features(score):
         except:
             continue
 
-    transitions = [(funcs[i], funcs[i+1]) for i in range(len(funcs)-1)]
-    labels = ["T", "PD", "D", "Dsec", "Other"]
+    debug("Harmony transitions: funciones =", funcs)
 
+    labels = ["T", "PD", "D", "Dsec", "Other"]
     matrix = np.zeros((len(labels), len(labels)))
     idx = {l: i for i, l in enumerate(labels)}
 
-    for a, b in transitions:
-        matrix[idx[a], idx[b]] += 1
+    for i in range(len(funcs) - 1):
+        matrix[idx[funcs[i]], idx[funcs[i+1]]] += 1
 
     matrix /= np.sum(matrix) if np.sum(matrix) > 0 else 1
     return matrix.flatten()
+
+
+# =========================
+# RITMO
+# =========================
 
 def rhythmic_features(score, n_bins=6):
     notes = score.flatten().notesAndRests
@@ -179,114 +210,81 @@ def rhythmic_features(score, n_bins=6):
     return features
 
 def rhythmic_sequence(score):
-    """
-    Devuelve la secuencia de duraciones relativas al compás
-    """
     sequence = []
     for n in score.flatten().notes:
-        if n.isNote or n.isChord:
-            dur = n.quarterLength
-            m = n.getContextByClass('Measure')
-            if m is None:
-                continue
-            measure_len = m.barDuration.quarterLength
-            sequence.append(dur / measure_len)
+        m = n.getContextByClass('Measure')
+        if m is None:
+            continue
+        measure_len = m.barDuration.quarterLength
+        sequence.append(n.quarterLength / measure_len)
+    debug("Rhythm: secuencia =", sequence[:10], "...")
     return sequence
 
-def rhythmic_intervals(sequence):
-    return [sequence[i+1] - sequence[i] for i in range(len(sequence)-1)]
-
 def rhythmic_ngrams(sequence, n=3):
-    ngrams = [tuple(sequence[i:i+n]) for i in range(len(sequence)-n+1)]
-    return Counter(ngrams)
-
-def rhythmic_self_similarity(sequence, window=4):
-    """
-    Devuelve la matriz de auto-similitud para la secuencia rítmica
-    """
-    n = len(sequence)
-    seq_windows = [sequence[i:i+window] for i in range(n-window+1)]
-    sim_matrix = np.zeros((len(seq_windows), len(seq_windows)))
-
-    for i, w1 in enumerate(seq_windows):
-        for j, w2 in enumerate(seq_windows):
-            min_len = min(len(w1), len(w2))
-            if min_len == 0:
-                continue
-            sim = 1 - np.sum(np.abs(np.array(w1[:min_len]) - np.array(w2[:min_len]))) / min_len
-            sim_matrix[i, j] = sim
-    return sim_matrix
+    return Counter(tuple(sequence[i:i+n]) for i in range(len(sequence)-n+1))
 
 def rhythmic_fft(sequence):
-    """
-    FFT de la secuencia de duraciones normalizadas
-    """
     signal = np.array(sequence)
     if len(signal) == 0:
         return np.zeros(16)
-    fft_vals = np.fft.fft(signal)
-    mag = np.abs(fft_vals)
+    mag = np.abs(np.fft.fft(signal))
     return mag[:16] / (np.sum(mag[:16]) + 1e-9)
 
 
 def rhythmic_features(score, ngram_n=3, fft_len=16, hist_bins=12):
     sequence = rhythmic_sequence(score)
+    debug("Rhythm: longitud secuencia =", len(sequence))
+
     if len(sequence) == 0:
+        debug("Rhythm: secuencia vacía")
         return np.zeros(hist_bins + fft_len + ngram_n)
 
-    # Histograma de duraciones normalizado
     hist, _ = np.histogram(sequence, bins=hist_bins, range=(0, 2))
     hist = hist / (np.sum(hist) + 1e-9)
 
-    # FFT
     fft_vec = rhythmic_fft(sequence)
 
-    # n-grams (hash)
     ngrams = rhythmic_ngrams(sequence, n=ngram_n)
     ngram_vec = np.zeros(ngram_n)
-    for i, k in enumerate(ngrams.keys()):
+    for i, k in enumerate(ngrams):
         ngram_vec[i % ngram_n] += ngrams[k]
 
-    ngram_vec = ngram_vec / (np.linalg.norm(ngram_vec) + 1e-9)
+    ngram_vec /= np.linalg.norm(ngram_vec) + 1e-9
 
     return np.concatenate([hist, fft_vec, ngram_vec])
+
+
+# =========================
+# INSTRUMENTACIÓN
+# =========================
 
 def normalize_name(name):
     name = name.lower()
     name = unicodedata.normalize("NFD", name)
     name = "".join(c for c in name if unicodedata.category(c) != "Mn")
-    name = re.sub(r"\(.*?\)", "", name)     # eliminar paréntesis
-    name = re.sub(r"\b[i,v,x]+\b", "", name)  # eliminar numerales romanos
+    name = re.sub(r"\(.*?\)", "", name)
+    name = re.sub(r"\b[i,v,x]+\b", "", name)
     name = re.sub(r"[^a-z\s]", "", name)
-    name = name.strip()
-    return name
+    return name.strip()
+
 
 def instrumental_features(score):
-    """
-    Devuelve un vector binario por familias instrumentales
-    """
     vector = {fam: 0.0 for fam in INSTRUMENT_FAMILIES}
-
     instruments = score.recurse().getElementsByClass(instrument.Instrument)
+    debug("Instrumentation: nº instrumentos =", len(instruments))
 
     for inst in instruments:
-        # 1. Nombre explícito
-        names = []
-        if inst.instrumentName:
-            names.append(inst.instrumentName)
-        if inst.partName:
-            names.append(inst.partName)
+        debug("Instrumento:", inst.instrumentName, inst.partName)
+        names = [n for n in [inst.instrumentName, inst.partName] if n]
 
         matched = False
         for name in names:
             norm = normalize_name(name)
-
             for family, keywords in INSTRUMENT_FAMILIES.items():
                 if any(k in norm for k in keywords):
                     vector[family] = 1.0
                     matched = True
 
-        # 2. Fallback por clase music21
         if not matched:
             if isinstance(inst, instrument.StringInstrument):
                 vector["strings"] = 1.0
@@ -303,23 +301,28 @@ def instrumental_features(score):
 
     return np.array(list(vector.values()))
 
-def extract_melody(score):
-    """
-    Devuelve una secuencia ordenada de notas (pitch midi, duración)
-    """
-    # Usamos la parte superior como aproximación
-    parts = score.parts
-    if parts:
-        melody = parts[0].flatten().notes
-    else:
-        melody = score.flatten().notes
 
-    sequence = [
-        (n.pitch.midi, n.duration.quarterLength)
-        for n in melody
-        if n.isNote
-    ]
-    return sequence
+# =========================
+# MOTIVOS
+# =========================
+
+def extract_melody(score):
+    parts = score.parts
+    melody = parts[0].flatten().notes if parts else score.flatten().notes
+    seq = [(n.pitch.midi, n.duration.quarterLength) for n in melody if n.isNote]
+    debug("Motifs: longitud melodía =", len(seq))
+    return seq
+
+def quantize_interval(i):
+    return max(-12, min(12, i))
+
+def quantize_ratio(r):
+    if r < 0.75:
+        return "shorter"
+    elif r > 1.33:
+        return "longer"
+    else:
+        return "same"
 
 def melodic_intervals(sequence):
     return [
@@ -333,17 +336,6 @@ def rhythmic_ratios(sequence):
         if sequence[i][1] > 0 else 1
         for i in range(len(sequence) - 1)
     ]
-
-def quantize_interval(i):
-    return max(-12, min(12, i))  # limitar saltos extremos
-
-def quantize_ratio(r):
-    if r < 0.75:
-        return "shorter"
-    elif r > 1.33:
-        return "longer"
-    else:
-        return "same"
 
 def extract_motifs(sequence, n=3):
     intervals = melodic_intervals(sequence)
@@ -360,70 +352,51 @@ def extract_motifs(sequence, n=3):
 
     return motifs
 
-def motif_hash(motif, dim=128):
-    return hash(motif) % dim
-
 def motif_vector(score, dim=128, n=3):
-    sequence = extract_melody(score)
-    if len(sequence) < n + 1:
+    seq = extract_melody(score)
+    if len(seq) < n + 1:
+        debug("Motifs: secuencia demasiado corta")
         return np.zeros(dim)
 
-    motifs = extract_motifs(sequence, n=n)
-
-    vector = np.zeros(dim)
+    motifs = extract_motifs(seq, n)
+    vec = np.zeros(dim)
     for m in motifs:
-        idx = motif_hash(m, dim)
-        vector[idx] += 1
+        vec[hash(m) % dim] += 1
 
-    # normalizar
-    vector /= np.linalg.norm(vector) if np.linalg.norm(vector) > 0 else 1
-    return vector
+    vec /= np.linalg.norm(vec) + 1e-9
+    return vec
+
+# =========================
+# FORMA
+# =========================
 
 def segment_by_measures(score, window_size=4):
-    """
-    Divide la partitura en segmentos de N compases
-    """
     measures = list(score.parts[0].getElementsByClass('Measure'))
+    debug("Form: nº compases =", len(measures))
     segments = []
 
     for i in range(0, len(measures), window_size):
-        seg = measures[i:i + window_size]
-        if seg:
-            segments.append(seg)
+        segments.append(measures[i:i+window_size])
 
+    debug("Form: nº segmentos =", len(segments))
     return segments
 
 def segment_descriptor(segment):
-    """
-    Convierte una lista de medidas en un stream y devuelve descriptor
-    """
-    # si segment es lista de measures, lo convertimos en Stream
     seg_stream = stream.Stream(segment)
     flat = seg_stream.flatten()
-
-    v_mel = melodic_features(flat)
-    v_har = harmonic_features(flat)
-
-    v = np.concatenate([v_mel, v_har])
+    v = np.concatenate([melodic_features(flat), harmonic_features(flat)])
     return v / (np.linalg.norm(v) + 1e-6)
 
-def segment_similarity_matrix(descriptors):
-    return cosine_similarity(descriptors)
-
 def cluster_segments(descriptors, similarity_threshold=0.85):
-    n = len(descriptors)
-    if n <= 1:
-        return [0]
-
+    debug("Clustering: nº descriptores =", len(descriptors))
     clustering = AgglomerativeClustering(
         n_clusters=None,
-        affinity='cosine',    # <- versión antigua usa affinity
-        linkage='average',    # promedio de similitud
+        affinity='cosine',
+        linkage='average',
         distance_threshold=1 - similarity_threshold
     )
+    return clustering.fit_predict(descriptors)
 
-    labels = clustering.fit_predict(descriptors)
-    return labels
 
 def normalize_form(labels):
     mapping = {}
@@ -436,6 +409,7 @@ def normalize_form(labels):
             next_label = chr(ord(next_label) + 1)
         form.append(mapping[l])
 
+    debug("Form normalizada:", form)
     return form
 
 def form_statistics(form):
@@ -482,7 +456,18 @@ def form_structure_vector(score,
 
     return np.concatenate([v_stats, v_ngrams])
 
-# Cargar el archivo MSCZ
+# =========================
+# EJECUCIÓN
+# =========================
+
+debug("Cargando score...")
 score = converter.parse('./output.musicxml')
+debug("Score cargado correctamente")
 
 print(rhythmic_features(score))
+print(melodic_features(score))
+print(harmonic_features(score))
+print(harmonic_transition_features(score))
+print(instrumental_features(score))
+print(motif_vector(score))
+print(form_structure_vector(score))
