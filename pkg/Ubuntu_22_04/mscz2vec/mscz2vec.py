@@ -21,7 +21,7 @@ import re
 import unicodedata
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
-
+from collections import defaultdict
 
 # =========================
 # CONSTANTES
@@ -81,23 +81,6 @@ def melodic_features(score, n_intervals=12):
 
     return features
 
-def harmonic_features(score):
-    chords = score.chordify().flatten().getElementsByClass('Chord')
-
-    if not chords:
-        return np.zeros(12)
-
-    pitch_classes = []
-    for chord in chords:
-        pitch_classes.extend([p.pitchClass for p in chord.pitches])
-
-    counter = Counter(pitch_classes)
-
-    # Pitch Class Profile (12 dimensiones)
-    pcp = np.array([counter.get(i, 0) for i in range(12)], dtype=float)
-    pcp /= np.sum(pcp) if np.sum(pcp) > 0 else 1
-
-    return pcp
 
 # =========================
 # ARMONÍA
@@ -118,6 +101,69 @@ def roman_to_function(rn):
 
     return "Other"
 
+def extract_harmonic_chords(stream):
+    debug("Harmony: extrayendo acordes armónicos")
+    debug(f"Harmony: tipo de stream = {type(stream)}")
+
+    notes_by_offset = defaultdict(list)
+
+    # ── Recolectar notas y acordes explícitos
+    for el in stream.recurse():
+        # Nota individual
+        if isinstance(el, note.Note):
+            abs_offset = float(el.getOffsetInHierarchy(stream))
+            notes_by_offset[abs_offset].append(el)
+
+            debug(
+                f"Harmony: NOTE  {el.pitch.nameWithOctave} "
+                f"@ {abs_offset:.3f}"
+            )
+
+        # Acorde explícito (MusicXML / MuseScore)
+        elif isinstance(el, chord.Chord):
+            abs_offset = float(el.getOffsetInHierarchy(stream))
+
+            debug(
+                f"Harmony: CHORD {[p.nameWithOctave for p in el.pitches]} "
+                f"@ {abs_offset:.3f}"
+            )
+
+            for p in el.pitches:
+                notes_by_offset[abs_offset].append(note.Note(p))
+
+    debug(f"Harmony: offsets únicos = {len(notes_by_offset)}")
+
+    # ── Construir acordes armónicos
+    chords_list = []
+
+    for offset in sorted(notes_by_offset):
+        group = notes_by_offset[offset]
+
+        debug(f"\nHarmony: offset {offset:7.3f} → {len(group)} nota(s)")
+
+        for n in group:
+            staff = n.getContextByClass('Staff')
+            part = n.getContextByClass('Part')
+
+            debug(
+                f"  - {n.pitch.nameWithOctave:>4} "
+                f"| dur={float(n.quarterLength):4.2f} "
+                f"| part={part.id if part else '?'} "
+                f"| staff={staff.id if staff else '?'}"
+            )
+
+        if len(group) >= 2:
+            ch = chord.Chord(group)
+            chords_list.append(ch)
+
+            debug(
+                "Harmony: acorde detectado → "
+                f"{[p.nameWithOctave for p in ch.pitches]}"
+            )
+
+    debug("Harmony: nº total de acordes =", len(chords_list))
+    return chords_list
+
 def harmonic_features(score):
     try:
         key = score.analyze('key')
@@ -126,7 +172,9 @@ def harmonic_features(score):
         debug("Harmony: no se pudo detectar tonalidad")
         return np.zeros(len(HARMONIC_FUNCTIONS))
 
-    chords = score.chordify().flatten().getElementsByClass('Chord')
+    # chords = score.chordify().flatten().getElementsByClass('Chord')
+    chords = extract_harmonic_chords(score)
+
     debug("Harmony: nº acordes =", len(chords))
 
     if not chords:
@@ -158,7 +206,9 @@ def harmonic_transition_features(score):
         debug("Harmony transitions: sin tonalidad")
         return np.zeros(25)
 
-    chords = score.chordify().flatten().getElementsByClass('Chord')
+    # chords = score.chordify().flatten().getElementsByClass('Chord')
+    chords = extract_harmonic_chords(score)
+
     funcs = []
 
     for chord in chords:
@@ -371,7 +421,8 @@ def motif_vector(score, dim=128, n=3):
 # =========================
 
 def segment_by_measures(score, window_size=4):
-    measures = list(score.parts[0].getElementsByClass('Measure'))
+    parts = getattr(score, 'parts', [score])
+    measures = list(parts[0].getElementsByClass('Measure'))
     debug("Form: nº compases =", len(measures))
     segments = []
 
@@ -461,13 +512,13 @@ def form_structure_vector(score,
 # =========================
 
 debug("Cargando score...")
-score = converter.parse('./output.musicxml')
+score = converter.parse('./dreams_red.musicxml')
 debug("Score cargado correctamente")
 
-print(rhythmic_features(score))
-print(melodic_features(score))
-print(harmonic_features(score))
-print(harmonic_transition_features(score))
-print(instrumental_features(score))
-print(motif_vector(score))
+# print(rhythmic_features(score))
+# print(melodic_features(score))
+# print(harmonic_features(score))
+# print(harmonic_transition_features(score))
+# print(instrumental_features(score))
+# print(motif_vector(score))
 print(form_structure_vector(score))
