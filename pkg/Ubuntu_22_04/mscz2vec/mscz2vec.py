@@ -22,6 +22,7 @@ import unicodedata
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
 from collections import defaultdict
+import copy
 
 # =========================
 # CONSTANTES
@@ -45,7 +46,6 @@ HARMONIC_FUNCTIONS = {
     "Other": []
 }
 
-
 # =========================
 # MELODÍA
 # =========================
@@ -60,7 +60,7 @@ def melodic_features(score, n_intervals=12):
         return np.zeros(n_intervals + 4)
 
     intervals = np.diff(pitches)
-    debug("Melodic: intervalos calculados")
+    debug("Melodic: intervalos calculados: ", intervals)
 
     interval_hist, _ = np.histogram(
         intervals,
@@ -172,7 +172,6 @@ def harmonic_features(score):
         debug("Harmony: no se pudo detectar tonalidad")
         return np.zeros(len(HARMONIC_FUNCTIONS))
 
-    # chords = score.chordify().flatten().getElementsByClass('Chord')
     chords = extract_harmonic_chords(score)
 
     debug("Harmony: nº acordes =", len(chords))
@@ -182,12 +181,23 @@ def harmonic_features(score):
 
     function_counts = {f: 0 for f in HARMONIC_FUNCTIONS}
 
-    for chord in chords:
+    for chord_obj in chords:
         try:
-            rn = roman.romanNumeralFromChord(chord, key)
+            # Roman numeral
+            rn = roman.romanNumeralFromChord(chord_obj, key)
             func = roman_to_function(rn)
             function_counts[func] += 1
-        except:
+
+            # Notas del acorde
+            notes_in_chord = [p.nameWithOctave for p in chord_obj.pitches]
+
+            # Debug
+            debug(
+                f"Harmony DEBUG: notas = {notes_in_chord} | figure = {rn.figure} | función = {func}"
+            )
+
+        except Exception as e:
+            debug("Harmony DEBUG: error con acorde", chord_obj, e)
             function_counts["Other"] += 1
 
     total = sum(function_counts.values())
@@ -515,10 +525,10 @@ debug("Cargando score...")
 score = converter.parse('./dreams_red.musicxml')
 debug("Score cargado correctamente")
 
-# print(rhythmic_features(score))
-# print(melodic_features(score))
-# print(harmonic_features(score))
-# print(harmonic_transition_features(score))
-# print(instrumental_features(score))
-# print(motif_vector(score))
+print(rhythmic_features(score))
+print(melodic_features(score))
+print(harmonic_features(score))
+print(harmonic_transition_features(score))
+print(instrumental_features(score))
+print(motif_vector(score))
 print(form_structure_vector(score))
