@@ -15,6 +15,7 @@ server(){
 			x11vnc -shared
 			sleep 1
 		done
+        # xset r on
 	fi
 
 	if [ $1 = "ssh" ]
