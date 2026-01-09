@@ -165,6 +165,44 @@ def extract_harmonic_chords(stream):
     debug("Harmony: nº total de acordes =", len(chords_list))
     return chords_list
 
+def chord_short_name(ch):
+    try:
+        root = ch.root().name
+    except:
+        return "?"
+
+    qual = ""
+
+    # Triadas
+    if ch.seventh is None:
+        if ch.quality == "major":
+            qual = "maj"
+        elif ch.quality == "minor":
+            qual = "min"
+        elif ch.quality == "diminished":
+            qual = "dim"
+        elif ch.quality == "augmented":
+            qual = "aug"
+        else:
+            qual = "?"
+
+    # Séptimas
+    else:
+        if ch.seventh == "dominant":
+            qual = "7"
+        elif ch.seventh == "major":
+            qual = "maj7"
+        elif ch.seventh == "minor":
+            qual = "min7"
+        elif ch.seventh == "half-diminished":
+            qual = "hdim7"
+        elif ch.seventh == "diminished":
+            qual = "dim7"
+        else:
+            qual = "7?"
+
+    return f"{root}:{qual}"
+
 def harmonic_features(score):
     try:
         key = score.analyze('key')
@@ -193,8 +231,11 @@ def harmonic_features(score):
             notes_in_chord = [p.nameWithOctave for p in chord_obj.pitches]
 
             # Debug
+            short_name = chord_short_name(chord_obj)
             debug(
-                f"Harmony DEBUG: notas = {notes_in_chord} | figure = {rn.figure} | función = {func}"
+                f"Harmony DEBUG: acorde = {short_name} | "
+                f"notas = {notes_in_chord} | "
+                f"figure = {rn.figure} | función = {func}"
             )
 
         except Exception as e:
@@ -589,13 +630,13 @@ def form_structure_vector(score,
 # =========================
 
 debug("Cargando score...")
-score = converter.parse('./dreams_red.musicxml')
+score = converter.parse('./dreams2.musicxml')
 debug("Score cargado correctamente")
 
 # print(rhythmic_features(score))
 # print(melodic_features(score))
-# print(harmonic_features(score))
+print(harmonic_features(score))
 # print(harmonic_transition_features(score))
 # print(instrumental_features(score))
-print(motif_vector(score))
+# print(motif_vector(score))
 # print(form_structure_vector(score))
