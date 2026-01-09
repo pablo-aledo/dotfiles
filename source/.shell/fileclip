@@ -7,6 +7,10 @@ to_clip(){
 
 from_clip(){
 	[ $# -eq 0 ] && xclip -sel clip -o | uudecode | tar -xvz 
-	[ $# -eq 1 ] && [ $1 != input ] && cat $1 | uudecode | tar -xvz 
-	[ $# -eq 1 ] && [ $1  = input ] && cat    | uudecode | tar -xvz
+	[ $# -eq 1 ] && [ $1 != '-' ] && cat $1 | uudecode | tar -xvz 
+	[ $# -eq 1 ] && [ $1  = '-' ] && cat    | uudecode | tar -xvz
 }
+
+# wide:
+# to_clip ... 2>/dev/null | paste -d'|' -s
+# (Xclip -o | sed 's/|/\n/g'; echo) | from_clip -
