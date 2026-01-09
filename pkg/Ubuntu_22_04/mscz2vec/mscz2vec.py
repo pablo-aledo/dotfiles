@@ -534,6 +534,85 @@ def motif_vector(score, dim=128, min_length=3, max_length=6, top_n=10):
     debug(f"Motifs: vector final generado, norma={norm:.3f}, dimensión={dim}")
     return vec
 
+
+# =========================
+# MOTIVOS2
+# =========================
+
+def extract_melody_by_measure(score):
+    """
+    Extrae la melodía dividida por compases, devolviendo una lista de secuencias de notas por compás.
+    """
+    parts = getattr(score, 'parts', [score])
+    measures = list(parts[0].getElementsByClass('Measure'))
+    melody_per_measure = []
+
+    debug("Motifs by measure: nº compases =", len(measures))
+
+    for i, measure in enumerate(measures):
+        melody_part = measure.flatten().notes
+        seq = [n.pitch.nameWithOctave for n in melody_part if n.isNote]  # Solo notas
+        melody_per_measure.append(seq)
+
+    return melody_per_measure
+
+def identify_repeated_measures(melody_per_measure):
+    """
+    Identifica compases repetidos y cuenta cuántas veces se repite cada compás.
+    También registra en qué compás(es) se encuentra cada patrón.
+    """
+    measure_counter = Counter()
+    measure_locations = defaultdict(list)  # Diccionario para almacenar los índices de compás
+
+    for i, measure in enumerate(melody_per_measure):
+        # Convertimos cada compás a una tupla para que sea hashable
+        measure_counter[tuple(measure)] += 1
+        measure_locations[tuple(measure)].append(i)  # Guardamos el índice del compás
+
+    debug(f"Motifs by measure: nº compases únicos = {len(measure_counter)}")
+    return measure_counter, measure_locations
+
+def compass_motif_vector(score, dim=128, top_n=10):
+    """
+    Genera un vector con los `top_n` compases más repetidos, y muestra en qué compás(es)
+    se encuentran esos patrones.
+    """
+    # Paso 1: Extraer la melodía por compases
+    melody_per_measure = extract_melody_by_measure(score)
+
+    # Paso 2: Identificar compases repetidos
+    repeated_measures, measure_locations = identify_repeated_measures(melody_per_measure)
+
+    if not repeated_measures:
+        debug("Motifs by measure: no se generaron compases repetidos")
+        return np.zeros(dim, dtype=float)
+
+    # Paso 3: Seleccionar los compases más repetidos (top_n)
+    most_common_measures = repeated_measures.most_common(top_n)
+
+    vec = np.zeros(dim, dtype=float)
+
+    for idx, (measure, count) in enumerate(most_common_measures):
+        h = int(hashlib.md5(str(measure).encode('utf-8')).hexdigest(), 16)
+        measure_idx = h % dim
+        vec[measure_idx] += count
+
+        # Localizamos en qué compás(es) encontramos este patrón
+        compasses = measure_locations[measure]
+
+        debug(f"Motif {idx+1}: compás = {measure} | Repeticiones = {count} → índice vector {measure_idx} | "
+              f"en compases: {compasses}")
+
+    # Normalizamos el vector
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec /= norm
+    else:
+        debug("Motifs by measure: vector todo ceros, normalización omitida")
+
+    debug(f"Motifs by measure: vector final generado, norma={norm:.3f}, dimensión={dim}")
+    return vec
+
 # =========================
 # FORMA
 # =========================
@@ -635,8 +714,9 @@ debug("Score cargado correctamente")
 
 # print(rhythmic_features(score))
 # print(melodic_features(score))
-print(harmonic_features(score))
+# print(harmonic_features(score))
 # print(harmonic_transition_features(score))
 # print(instrumental_features(score))
 # print(motif_vector(score))
+print(compass_motif_vector(score))
 # print(form_structure_vector(score))
