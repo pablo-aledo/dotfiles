@@ -539,9 +539,26 @@ def motif_vector(score, dim=128, min_length=3, max_length=6, top_n=10):
 # MOTIVOS2
 # =========================
 
+def normalize_pitches_by_first_note(melody):
+    """
+    Normaliza las notas de un compás de acuerdo con la primera nota.
+    Devuelve una lista de notas normalizadas, donde la primera nota tiene altura 0.
+    """
+    if len(melody) == 0:
+        return []
+
+    # Obtenemos la altura MIDI de la primera nota
+    first_pitch = melody[0].pitch.midi
+
+    # Normalizamos las notas restando la altura de la primera nota
+    normalized_melody = [n.pitch.midi - first_pitch for n in melody]
+
+    return normalized_melody
+
 def extract_melody_by_measure(score):
     """
     Extrae la melodía dividida por compases, devolviendo una lista de secuencias de notas por compás.
+    Normaliza las alturas para que todas las notas estén relativas a la primera nota del compás.
     """
     parts = getattr(score, 'parts', [score])
     measures = list(parts[0].getElementsByClass('Measure'))
@@ -549,10 +566,11 @@ def extract_melody_by_measure(score):
 
     debug("Motifs by measure: nº compases =", len(measures))
 
-    for i, measure in enumerate(measures):
+    for measure in measures:
         melody_part = measure.flatten().notes
-        seq = [n.pitch.nameWithOctave for n in melody_part if n.isNote]  # Solo notas
-        melody_per_measure.append(seq)
+        seq = [n for n in melody_part if n.isNote]  # Solo notas
+        normalized_seq = normalize_pitches_by_first_note(seq)  # Normalizamos las alturas
+        melody_per_measure.append(normalized_seq)
 
     return melody_per_measure
 
@@ -575,7 +593,7 @@ def identify_repeated_measures(melody_per_measure):
 def compass_motif_vector(score, dim=128, top_n=10):
     """
     Genera un vector con los `top_n` compases más repetidos, y muestra en qué compás(es)
-    se encuentran esos patrones.
+    se encuentran esos patrones, usando patrones invariables a la altura de las notas.
     """
     # Paso 1: Extraer la melodía por compases
     melody_per_measure = extract_melody_by_measure(score)
@@ -600,7 +618,7 @@ def compass_motif_vector(score, dim=128, top_n=10):
         # Localizamos en qué compás(es) encontramos este patrón
         compasses = measure_locations[measure]
 
-        debug(f"Motif {idx+1}: compás = {measure} | Repeticiones = {count} → índice vector {measure_idx} | "
+        debug(f"Motif {idx+1}: compás normalizado = {measure} | Repeticiones = {count} → índice vector {measure_idx} | "
               f"en compases: {compasses}")
 
     # Normalizamos el vector
