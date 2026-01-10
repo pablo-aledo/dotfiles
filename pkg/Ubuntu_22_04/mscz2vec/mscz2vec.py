@@ -650,8 +650,17 @@ def segment_by_measures(score, window_size=4):
 def segment_descriptor(segment):
     seg_stream = stream.Stream(segment)
     flat = seg_stream.flatten()
-    v = np.concatenate([melodic_features(flat), harmonic_features(flat)])
-    return v / (np.linalg.norm(v) + 1e-6)
+
+    # Extraer características
+    v_mel = melodic_features(flat)
+    v_har = harmonic_features(flat)
+    v = np.concatenate([v_mel, v_har])
+
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v  # Retorna vector de ceros tal cual
+
+    return v / norm
 
 def cluster_segments(descriptors, similarity_threshold=0.85):
     debug("Clustering: nº descriptores =", len(descriptors))
@@ -705,17 +714,46 @@ def form_ngrams(form, n=3, dim=32):
 
     return vector / (np.linalg.norm(vector) + 1e-6)
 
-def form_structure_vector(score,
-                          window_size=4,
-                          similarity_threshold=0.85):
+def form_structure_vector(score, window_size=4, similarity_threshold=0.85):
     segments = segment_by_measures(score, window_size)
-
     if len(segments) < 2:
         return np.zeros(64)
 
     descriptors = [segment_descriptor(seg) for seg in segments]
-    labels = cluster_segments(descriptors, similarity_threshold)
-    form = normalize_form(labels)
+
+    # Identificar cuáles son vectores de ceros (segmentos vacíos/silencios)
+    is_zero = np.array([np.all(d == 0) for d in descriptors])
+
+    if np.all(is_zero):
+        debug("Form: Todos los segmentos están vacíos.")
+        return np.zeros(64)
+
+    # Solo hacemos clustering de los segmentos NO vacíos
+    non_zero_indices = np.where(~is_zero)[0]
+    non_zero_descriptors = [descriptors[i] for i in non_zero_indices]
+
+    labels = np.full(len(descriptors), -1) # -1 será la etiqueta para "vacío"
+
+    if len(non_zero_descriptors) > 1:
+        # Realizar clustering solo con los datos válidos
+        cluster_labels = cluster_segments(non_zero_descriptors, similarity_threshold)
+        labels[non_zero_indices] = cluster_labels
+    elif len(non_zero_descriptors) == 1:
+        labels[non_zero_indices] = 0
+
+    # Normalizar etiquetas: Los vacíos se llamarán "Z" (o cualquier letra)
+    # y el resto A, B, C...
+    form = []
+    mapping = {-1: "Z"} # Z para silencios/vacíos
+    next_label = "A"
+
+    for l in labels:
+        if l not in mapping:
+            mapping[l] = next_label
+            next_label = chr(ord(next_label) + 1)
+        form.append(mapping[l])
+
+    debug("Form detectada:", form)
 
     v_stats = form_statistics(form)
     v_ngrams = form_ngrams(form, n=3, dim=32)
@@ -861,8 +899,8 @@ debug("Score cargado correctamente")
 # print(instrumental_features(score))
 # print(motif_vector(score))
 # print(compass_motif_vector(score))
-# print(form_structure_vector(score))
+print(form_structure_vector(score))
 # print(sequitur_semantic_vector(score))
 # print(sequitur_pitch_semantic_vector(score))
-print(sequitur_absolute_pitch_semantic_vector(score))
+# print(sequitur_absolute_pitch_semantic_vector(score))
 
