@@ -24,6 +24,8 @@ from sklearn.cluster import AgglomerativeClustering
 from collections import defaultdict
 import copy
 import hashlib
+from scipy.ndimage import gaussian_filter
+from scipy.signal import find_peaks
 
 # =========================
 # CONSTANTES
@@ -883,6 +885,97 @@ def sequitur_absolute_pitch_semantic_vector(score, dim=128):
 
     return vec
 
+# =========================
+# NOVELTY
+# =========================
+
+def get_checkerboard_kernel(size):
+    """Crea un kernel de tablero de ajedrez suavizado."""
+    m = size // 2
+    kernel = np.array([[1, -1], [-1, 1]])
+    kernel = np.kron(kernel, np.ones((m, m)))
+    return gaussian_filter(kernel, sigma=size/6)
+
+def compute_ssm(descriptors):
+    """Matriz de Auto-Similitud usando similitud de coseno."""
+    X = np.array(descriptors)
+    norms = np.linalg.norm(X, axis=1, keepdims=True)
+    # Evitar división por cero
+    X_norm = np.divide(X, norms, out=np.zeros_like(X), where=norms!=0)
+    return np.dot(X_norm, X_norm.T)
+
+def novelty_structure_vector(score, kernel_size=8, threshold=0.15, dim=64):
+    """
+    Genera un vector de estructura basado en segmentación dinámica
+    por curva de novedad (Novelty Detection).
+    """
+    debug("Novelty: Iniciando segmentación dinámica...")
+
+    parts = getattr(score, 'parts', [score])
+    measures = list(parts[0].getElementsByClass('Measure'))
+
+    if len(measures) < kernel_size:
+        debug("Novelty: Score demasiado corto para el kernel actual.")
+        return np.zeros(dim)
+
+    # 1. Obtener descriptores compás a compás
+    # Reutilizamos tu segment_descriptor pasando una lista con un solo compás
+    measure_descriptors = []
+    for m in measures:
+        d = segment_descriptor([m])
+        measure_descriptors.append(d)
+
+    # 2. Calcular SSM y Curva de Novedad
+    ssm = compute_ssm(measure_descriptors)
+    kernel = get_checkerboard_kernel(kernel_size)
+
+    N = ssm.shape[0]
+    novelty_curve = np.zeros(N)
+    m = kernel_size // 2
+
+    for i in range(m, N - m):
+        sub_matrix = ssm[i - m : i + m, i - m : i + m]
+        novelty_curve[i] = np.sum(sub_matrix * kernel)
+
+    if np.max(novelty_curve) > 0:
+        novelty_curve /= np.max(novelty_curve)
+
+    # 3. Detectar Fronteras (Picos)
+    peaks, _ = find_peaks(novelty_curve, height=threshold, distance=2)
+    boundaries = [0] + list(peaks) + [len(measures)]
+
+    # 4. Crear Segmentos Dinámicos
+    dynamic_segments = []
+    for i in range(len(boundaries) - 1):
+        seg = measures[boundaries[i] : boundaries[i+1]]
+        dynamic_segments.append(seg)
+
+    debug(f"Novelty: Detectadas {len(dynamic_segments)} secciones dinámicas.")
+
+    # 5. Clustering y Vectorización (reutilizando tu lógica de forma)
+    if len(dynamic_segments) < 2:
+        return np.zeros(dim)
+
+    # Obtenemos descriptores de las nuevas secciones dinámicas
+    descriptors = [segment_descriptor(seg) for seg in dynamic_segments]
+
+    # Clustering (reutilizando tu función cluster_segments)
+    try:
+        labels = cluster_segments(descriptors, similarity_threshold=0.85)
+        form = normalize_form(labels)
+
+        v_stats = form_statistics(form)
+        # Añadimos una estadística extra: varianza de la longitud de los segmentos
+        seg_lengths = [len(s) for s in dynamic_segments]
+        v_extra = np.array([np.std(seg_lengths) / (np.mean(seg_lengths) + 1e-6)])
+
+        v_ngrams = form_ngrams(form, n=2, dim=dim - len(v_stats) - len(v_extra))
+
+        return np.concatenate([v_stats, v_extra, v_ngrams])
+    except Exception as e:
+        debug(f"Novelty Error: {e}")
+        return np.zeros(dim)
+
 
 # =========================
 # EJECUCIÓN
@@ -899,8 +992,9 @@ debug("Score cargado correctamente")
 # print(instrumental_features(score))
 # print(motif_vector(score))
 # print(compass_motif_vector(score))
-print(form_structure_vector(score))
+# print(form_structure_vector(score))
 # print(sequitur_semantic_vector(score))
 # print(sequitur_pitch_semantic_vector(score))
 # print(sequitur_absolute_pitch_semantic_vector(score))
+print(novelty_structure_vector(score))
 
