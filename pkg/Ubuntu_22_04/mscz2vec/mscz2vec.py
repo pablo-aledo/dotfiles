@@ -723,6 +723,130 @@ def form_structure_vector(score,
     return np.concatenate([v_stats, v_ngrams])
 
 # =========================
+# SEQUITUR
+# =========================
+
+class Rule:
+    def __init__(self, name, symbols):
+        self.name = name
+        self.symbols = symbols  # lista de notas o subreglas
+
+    def __repr__(self):
+        return f"{self.name} -> {self.symbols}"
+
+class SequiturGrammar:
+    def __init__(self):
+        self.rules = {}
+        self.next_rule_id = 1 # R0 suele ser la raíz
+
+    def _new_rule_name(self):
+        name = f"R{self.next_rule_id}"
+        self.next_rule_id += 1
+        return name
+
+    def build(self, sequence):
+        """
+        Construye una gramática simplificada detectando pares repetidos.
+        """
+        if not sequence:
+            return {}
+
+        symbols = list(sequence)
+        changed = True
+
+        while changed:
+            changed = False
+            counts = {}
+            # Contar pares
+            for i in range(len(symbols) - 1):
+                pair = (symbols[i], symbols[i + 1])
+                counts[pair] = counts.get(pair, 0) + 1
+
+            # Si un par se repite, creamos regla
+            for pair, count in counts.items():
+                if count > 1:
+                    rule_name = self._new_rule_name()
+                    self.rules[rule_name] = list(pair)
+
+                    # Sustituir en la secuencia actual
+                    new_symbols = []
+                    i = 0
+                    while i < len(symbols):
+                        if i < len(symbols) - 1 and (symbols[i], symbols[i+1]) == pair:
+                            new_symbols.append(rule_name)
+                            i += 2
+                            changed = True
+                        else:
+                            new_symbols.append(symbols[i])
+                            i += 1
+                    symbols = new_symbols
+                    break
+
+        self.rules["R0"] = symbols
+        return self.rules
+
+def melody_to_sequitur_absolute_pitch_symbols(score):
+    """
+    Convierte la melodía en una secuencia de símbolos
+    usando SOLO la altura absoluta (MIDI) de cada nota.
+    """
+    # 1. Usamos tu función extract_melody ya definida arriba
+    seq = extract_melody(score)
+
+    if len(seq) < 2:
+        debug("Sequitur abs-pitch: melodía demasiado corta")
+        return []
+
+    # 2. Extraemos el valor MIDI (n[0]) de cada tupla (pitch, name, duration)
+    symbols = [n[0] for n in seq]
+
+    debug(
+        "Sequitur abs-pitch: símbolos =",
+        symbols[:12],
+        "..." if len(symbols) > 12 else ""
+    )
+
+    return symbols
+
+def sequitur_absolute_pitch_semantic_vector(score, dim=128):
+    """
+    Genera un vector basado en la frecuencia y longitud de las reglas 
+    encontradas por Sequitur usando alturas MIDI absolutas.
+    """
+    # 1. Obtener símbolos (alturas MIDI)
+    symbols = melody_to_sequitur_absolute_pitch_symbols(score)
+
+    if len(symbols) < 4:
+        debug("Sequitur abs-pitch: secuencia demasiado corta")
+        return np.zeros(dim)
+
+    # 2. Construir Gramática
+    grammar = SequiturGrammar()
+    rules = grammar.build(symbols)
+
+    # 3. Crear Vector
+    vec = np.zeros(dim)
+    debug("\n=== SEQUITUR ABS-PITCH: GENERANDO VECTOR ===")
+
+    for name, symbols_in_rule in rules.items():
+        # if name == "R0": continue # Ignorar la regla raíz para el vector de rasgos
+
+        # Peso basado en longitud de la regla
+        h = int(hashlib.md5(str(symbols_in_rule).encode()).hexdigest(), 16)
+        idx = h % dim
+        weight = len(symbols_in_rule)
+        vec[idx] += weight
+
+        debug(f"Regla {name}: {symbols_in_rule} | Peso: {weight} | Índice: {idx}")
+
+    # Normalización
+    norm = np.linalg.norm(vec)
+    if norm > 0: vec /= norm
+
+    return vec
+
+
+# =========================
 # EJECUCIÓN
 # =========================
 
@@ -736,5 +860,9 @@ debug("Score cargado correctamente")
 # print(harmonic_transition_features(score))
 # print(instrumental_features(score))
 # print(motif_vector(score))
-print(compass_motif_vector(score))
+# print(compass_motif_vector(score))
 # print(form_structure_vector(score))
+# print(sequitur_semantic_vector(score))
+# print(sequitur_pitch_semantic_vector(score))
+print(sequitur_absolute_pitch_semantic_vector(score))
+
