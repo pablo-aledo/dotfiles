@@ -1141,7 +1141,317 @@ def rhythmic_ngram_vector(score, n=3, dim=128):
 
     return vec
 
+# =========================
+# ANÁLISIS DE FORMA AVANZADO (SEQUITUR + CLUSTERING)
+# =========================
 
+def compute_segment_ngram_vector(notes, n=3, bins=12):
+    """
+    Calcula un vector de n-gramas de intervalos para una lista de notas MIDI.
+    Usado para comparar el contenido de las secciones de Sequitur.
+    """
+    # El tamaño total esperado es bins (histograma) + bins (n-gramas)
+    total_dim = bins * 2
+
+    if len(notes) < 2:
+        # CORRECCIÓN: Devolver ceros del tamaño TOTAL, no solo 'bins'
+        return np.zeros(total_dim)
+
+    # 1. Calcular intervalos
+    intervals = np.diff(notes)
+
+    # 2. Histograma de intervalos (perfil armónico/melódico simple)
+    hist, _ = np.histogram(intervals, bins=bins, range=(-12, 12), density=True)
+
+    # 3. N-gramas de intervalos (perfil secuencial)
+    # Cuantizamos intervalos para hacer los n-gramas manejables
+    quantized = [max(-12, min(12, i)) for i in intervals]
+    ngrams = [tuple(quantized[i:i+n]) for i in range(len(quantized)-n+1)]
+
+    # Hashing trick para vectorizar n-gramas en espacio fijo
+    ngram_vec = np.zeros(bins)
+    for ng in ngrams:
+        h = int(hashlib.md5(str(ng).encode()).hexdigest(), 16)
+        ngram_vec[h % bins] += 1
+
+    # Normalizar
+    norm_hist = hist / (np.sum(hist) + 1e-9)
+    norm_ngram = ngram_vec / (np.linalg.norm(ngram_vec) + 1e-9)
+
+    return np.concatenate([norm_hist, norm_ngram])
+
+def merge_similar_clusters(labels, vectors, similarity_threshold):
+    """
+    Fusiona clusters cuyos centroides tengan una similitud coseno > threshold.
+    """
+    unique_labels = sorted(list(set(labels)))
+    centroids = {}
+
+    # 1. Calcular centroides
+    for l in unique_labels:
+        idxs = np.where(labels == l)[0]
+        cluster_vecs = vectors[idxs]
+        centroid = np.mean(cluster_vecs, axis=0)
+        centroids[l] = centroid / (np.linalg.norm(centroid) + 1e-9)
+
+    # 2. Matriz de similitud entre clusters
+    mapping = {l: l for l in unique_labels}
+    merged_any = False
+
+    # Comparamos todos contra todos
+    for l1 in unique_labels:
+        for l2 in unique_labels:
+            if l1 >= l2: continue # Evitar duplicados y auto-comparación
+
+            # Si ya fueron mapeados al mismo, saltar
+            if mapping[l1] == mapping[l2]: continue
+
+            sim = np.dot(centroids[l1], centroids[l2])
+
+            if sim > similarity_threshold:
+                debug(f"Form Advanced: Fusionando Cluster {l2} -> {l1} (Sim: {sim:.3f})")
+                # Mapear l2 al ID de l1
+                old_target = mapping[l2]
+                new_target = mapping[l1]
+
+                # Actualizar todos los que apuntaban a old_target
+                for k, v in mapping.items():
+                    if v == old_target:
+                        mapping[k] = new_target
+                merged_any = True
+
+    # 3. Reescribir etiquetas
+    new_labels = np.array([mapping[l] for l in labels])
+    return new_labels
+
+
+def simplify_sequence(sequence, grammar, target_length):
+    """
+    Simplifica la secuencia raíz fusionando los segmentos más cortos
+    hasta alcanzar target_length.
+    """
+    # Convertimos la secuencia en una lista de objetos con metadatos
+    segments = []
+    for s in sequence:
+        notes = grammar.expand_rule(s)
+        segments.append({
+            'symbol': s,
+            'notes': notes,
+            'len': len(notes)
+        })
+
+    current_segments = copy.deepcopy(segments)
+
+    # Bucle de fusión
+    while len(current_segments) > target_length:
+        min_len = float('inf')
+        min_idx = -1
+
+        for i, seg in enumerate(current_segments):
+            if seg['len'] < min_len:
+                min_len = seg['len']
+                min_idx = i
+
+        if min_idx == 0:
+            merge_idx = 1
+            target_idx = 0
+        elif min_idx == len(current_segments) - 1:
+            merge_idx = min_idx
+            target_idx = min_idx - 1
+        else:
+            prev_len = current_segments[min_idx-1]['len']
+            next_len = current_segments[min_idx+1]['len']
+            if prev_len < next_len:
+                merge_idx = min_idx
+                target_idx = min_idx - 1
+            else:
+                merge_idx = min_idx + 1
+                target_idx = min_idx
+
+        seg_a = current_segments[target_idx]
+        seg_b = current_segments[merge_idx]
+
+        new_seg = {
+            'symbol': f"({seg_a['symbol']}+{seg_b['symbol']})",
+            'notes': seg_a['notes'] + seg_b['notes'],
+            'len': seg_a['len'] + seg_b['len']
+        }
+
+        current_segments[target_idx] = new_seg
+        del current_segments[merge_idx]
+
+    return current_segments
+
+def merge_similar_clusters(labels, vectors, similarity_threshold):
+    """
+    Fusiona clusters cuyos centroides tengan una similitud coseno > threshold.
+    """
+    unique_labels = sorted(list(set(labels)))
+    centroids = {}
+
+    for l in unique_labels:
+        idxs = np.where(labels == l)[0]
+        cluster_vecs = vectors[idxs]
+        centroid = np.mean(cluster_vecs, axis=0)
+        centroids[l] = centroid / (np.linalg.norm(centroid) + 1e-9)
+
+    mapping = {l: l for l in unique_labels}
+
+    for l1 in unique_labels:
+        for l2 in unique_labels:
+            if l1 >= l2: continue
+            if mapping[l1] == mapping[l2]: continue
+
+            sim = np.dot(centroids[l1], centroids[l2])
+            if sim > similarity_threshold:
+                old_target = mapping[l2]
+                new_target = mapping[l1]
+                for k, v in mapping.items():
+                    if v == old_target:
+                        mapping[k] = new_target
+
+    new_labels = np.array([mapping[l] for l in labels])
+    return new_labels
+
+
+def advanced_sequitur_form(score, max_parts=4, n_clusters=4, similarity_threshold=0.85):
+    """
+    Algoritmo Híbrido:
+    1. Sequitur (Gramática) -> Estructura base
+    2. Simplificación -> Reducción a 'max_parts' segmentos
+    3. Feature Extraction -> Vectores de cada segmento
+    4. Clustering -> Agrupación inicial
+    5. Merging -> Combinación por similitud
+    6. Form String -> AABA...
+    """
+    print("\n" + "="*50)
+    print("ANÁLISIS DE FORMA AVANZADO (SEQUITUR + CLUSTERING)")
+    print("="*50)
+
+    # 1. Obtener símbolos y ejecutar Sequitur
+    symbols = melody_to_sequitur_absolute_pitch_symbols(score)
+    if not symbols:
+        return "N/A"
+
+    grammar = SequiturGrammar()
+    grammar.build(symbols)
+    root_seq = grammar.root_sequence
+
+    debug(f"Raíz original Sequitur: {root_seq}")
+
+    # 2. Simplificación
+    # Si la raíz es muy corta (ej: [R1]), intentamos expandirla un nivel primero
+    if len(root_seq) == 1 and str(root_seq[0]).startswith('R'):
+        debug("Raíz unitaria detectada, expandiendo un nivel antes de simplificar...")
+        root_seq = grammar.rules[root_seq[0]]
+
+    segments = simplify_sequence(root_seq, grammar, max_parts)
+
+    # 3. Extracción de características (Vectores)
+    vectors = []
+    for seg in segments:
+        v = compute_segment_ngram_vector(seg['notes'], n=3, bins=12)
+
+        # SOLUCIÓN AL VALUERROR:
+        # Si el vector es todo ceros (silencio), añadimos un ruido ínfimo
+        if np.all(v == 0):
+            v = v + 1e-9
+
+        vectors.append(v)
+
+    X = np.array(vectors)
+
+    # 4. Clustering Inicial (Agglomerative)
+    # Usamos min() para no pedir más clusters que segmentos disponibles
+    k = min(n_clusters, len(segments))
+    if k < 2:
+        # Caso trivial
+        final_form = ["A"] * len(segments)
+    else:
+        clustering = AgglomerativeClustering(
+            n_clusters=k,
+            affinity='cosine', # Usa 'affinity' en lugar de 'metric'
+            linkage='average'
+        )
+
+        labels = clustering.fit_predict(X)
+        debug(f"Etiquetas clustering inicial: {labels}")
+
+        # 5. Combinar Clusters similares
+        refined_labels = merge_similar_clusters(labels, X, similarity_threshold)
+        debug(f"Etiquetas refinadas: {refined_labels}")
+
+        # 6. Generar cadena de forma (A, B, C...)
+        # Asignamos letras basándonos en el orden de aparición
+        label_map = {}
+        next_char = ord('A')
+        final_form = []
+
+        for l in refined_labels:
+            if l not in label_map:
+                label_map[l] = chr(next_char)
+                next_char += 1
+            final_form.append(label_map[l])
+
+    form_string = "".join(final_form)
+
+    print(f"Estructura Resultante: {form_string}")
+    print("Detalle de Secciones:")
+    for i, char in enumerate(final_form):
+        # Mostrar un resumen de notas (primeras 5)
+        snippet = segments[i]['notes'][:5]
+        print(f"  Part {i+1} ({char}): {snippet}... (Total {len(segments[i]['notes'])} notas)")
+
+    return form_string
+
+def form_string_to_vector(form_string, dim=32):
+    """
+    Convierte una cadena de forma (AABA) en un vector numérico.
+    Captura: complejidad, repeticiones y patrones secuenciales.
+    """
+    if not form_string or form_string == "N/A":
+        return np.zeros(dim)
+
+    # 1. Estadísticas básicas
+    n_total = len(form_string)
+    n_unique = len(set(form_string))
+
+    # Ratio de redundancia (0 = todo nuevo, 1 = todo repetido)
+    redundancy = 1.0 - (n_unique / n_total) if n_total > 0 else 0
+
+    # 2. Distribución de secciones (Histograma)
+    counts = Counter(form_string)
+    dist = np.array([counts[char] for char in sorted(counts.keys())])
+    dist = dist / np.sum(dist)
+    # Padding de la distribución para que tenga tamaño 8 (máx secciones probables)
+    dist_padded = np.zeros(8)
+    dist_padded[:min(len(dist), 8)] = dist[:8]
+
+    # 3. N-gramas de la forma (transiciones estructurales)
+    # Ejemplo: AABA -> (A,A), (A,B), (B,A)
+    ngram_dim = dim - 10 # Resto del espacio para n-gramas
+    v_ngrams = np.zeros(ngram_dim)
+
+    if n_total > 1:
+        pairs = [form_string[i:i+2] for i in range(n_total - 1)]
+        for p in pairs:
+            h = int(hashlib.md5(p.encode()).hexdigest(), 16)
+            v_ngrams[h % ngram_dim] += 1
+        # Normalizar n-gramas
+        v_ngrams = v_ngrams / (np.linalg.norm(v_ngrams) + 1e-9)
+
+    # 4. Concatenación final
+    # [n_total, n_unique, redundancy, dist_0...7, ngrams...]
+    stats = np.array([n_total, n_unique, redundancy])
+    vector = np.concatenate([stats, dist_padded, v_ngrams])
+
+    # Asegurar tamaño exacto
+    if len(vector) > dim:
+        vector = vector[:dim]
+    else:
+        vector = np.pad(vector, (0, dim - len(vector)))
+
+    return vector
 
 # =========================
 # EJECUCIÓN
@@ -1161,5 +1471,7 @@ debug("Score cargado correctamente")
 # print(form_structure_vector(score))
 # print(sequitur_absolute_pitch_semantic_vector(score))
 # print(novelty_structure_vector(score))
-print(melodic_ngram_vector(score))
-print(rhythmic_ngram_vector(score))
+# print(melodic_ngram_vector(score))
+# print(rhythmic_ngram_vector(score))
+print(advanced_sequitur_form(score))
+print(form_string_to_vector(advanced_sequitur_form(score)))
