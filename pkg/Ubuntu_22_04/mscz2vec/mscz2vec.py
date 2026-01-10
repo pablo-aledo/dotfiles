@@ -777,53 +777,97 @@ class Rule:
 class SequiturGrammar:
     def __init__(self):
         self.rules = {}
-        self.next_rule_id = 1 # R0 suele ser la raíz
+        self.next_rule_id = 1
+        self.root_sequence = []
 
-    def _new_rule_name(self):
+    def _get_new_rule_name(self):
         name = f"R{self.next_rule_id}"
         self.next_rule_id += 1
         return name
 
     def build(self, sequence):
         """
-        Construye una gramática simplificada detectando pares repetidos.
+        Implementación estilo Re-Pair (más estable para música que Sequitur).
+        Prioriza el reemplazo del par MÁS FRECUENTE globalmente.
         """
-        if not sequence:
-            return {}
+        if not sequence: return {}
 
-        symbols = list(sequence)
-        changed = True
+        # Copia de trabajo
+        current_seq = list(sequence)
 
-        while changed:
-            changed = False
-            counts = {}
-            # Contar pares
-            for i in range(len(symbols) - 1):
-                pair = (symbols[i], symbols[i + 1])
-                counts[pair] = counts.get(pair, 0) + 1
+        while True:
+            # 1. Contar pares adyacentes
+            pairs = Counter()
+            for i in range(len(current_seq) - 1):
+                pair = (current_seq[i], current_seq[i+1])
+                pairs[pair] += 1
 
-            # Si un par se repite, creamos regla
-            for pair, count in counts.items():
-                if count > 1:
-                    rule_name = self._new_rule_name()
-                    self.rules[rule_name] = list(pair)
+            # 2. Condición de parada: No hay pares repetidos
+            if not pairs: break
 
-                    # Sustituir en la secuencia actual
-                    new_symbols = []
-                    i = 0
-                    while i < len(symbols):
-                        if i < len(symbols) - 1 and (symbols[i], symbols[i+1]) == pair:
-                            new_symbols.append(rule_name)
-                            i += 2
-                            changed = True
-                        else:
-                            new_symbols.append(symbols[i])
-                            i += 1
-                    symbols = new_symbols
-                    break
+            # Encontramos el par más frecuente
+            most_common_pair, count = pairs.most_common(1)[0]
 
-        self.rules["R0"] = symbols
+            if count < 2:
+                break # Si el más común aparece solo una vez, terminamos
+
+            # 3. Crear nueva regla
+            rule_name = self._get_new_rule_name()
+            self.rules[rule_name] = list(most_common_pair)
+
+            # 4. Reemplazar en la secuencia (sin solapamiento)
+            new_seq = []
+            i = 0
+            while i < len(current_seq):
+                if i < len(current_seq) - 1 and (current_seq[i], current_seq[i+1]) == most_common_pair:
+                    new_seq.append(rule_name)
+                    i += 2
+                else:
+                    new_seq.append(current_seq[i])
+                    i += 1
+
+            current_seq = new_seq
+
+        self.root_sequence = current_seq
         return self.rules
+
+    def expand_rule(self, symbol):
+        """
+        Despliega recursivamente una regla para ver las notas reales
+        que contiene, no solo las sub-reglas.
+        Ejemplo: Convierte 'R5' -> [60, 62, 64, 60]
+        """
+        if symbol not in self.rules:
+            return [symbol] # Es una nota terminal (número)
+
+        expansion = []
+        for s in self.rules[symbol]:
+            expansion.extend(self.expand_rule(s))
+        return expansion
+
+    def get_musical_hierarchy(self):
+        """
+        Devuelve una estructura legible para humanos.
+        Muestra qué frases musicales reales representa cada regla.
+        """
+        hierarchy = {}
+        # Ordenamos por ID para entender la construcción de abajo hacia arriba
+        sorted_keys = sorted(self.rules.keys(), key=lambda x: int(x[1:]))
+
+        for rule_name in sorted_keys:
+            # Expandimos completamente para ver las notas
+            flat_notes = self.expand_rule(rule_name)
+
+            # Obtenemos la definición inmediata (quizás contenga otras reglas)
+            structure = self.rules[rule_name]
+
+            hierarchy[rule_name] = {
+                "structure": structure,     # Cómo se construye (ej: [R1, 67])
+                "phrase": flat_notes,       # Qué suena realmente (ej: [60, 62, 67])
+                "length": len(flat_notes)
+            }
+
+        return hierarchy, self.root_sequence
 
 def melody_to_sequitur_absolute_pitch_symbols(score):
     """
@@ -850,38 +894,59 @@ def melody_to_sequitur_absolute_pitch_symbols(score):
 
 def sequitur_absolute_pitch_semantic_vector(score, dim=128):
     """
-    Genera un vector basado en la frecuencia y longitud de las reglas 
-    encontradas por Sequitur usando alturas MIDI absolutas.
+    Genera un vector semántico y un reporte jerárquico detallado
+    usando la clase SequiturGrammar.
     """
     # 1. Obtener símbolos (alturas MIDI)
     symbols = melody_to_sequitur_absolute_pitch_symbols(score)
 
     if len(symbols) < 4:
-        debug("Sequitur abs-pitch: secuencia demasiado corta")
+        debug("Sequitur: secuencia demasiado corta")
         return np.zeros(dim)
 
-    # 2. Construir Gramática
+    # 2. Construir Gramática con SequiturGrammar
     grammar = SequiturGrammar()
     rules = grammar.build(symbols)
+    hierarchy, root_seq = grammar.get_musical_hierarchy()
 
-    # 3. Crear Vector
+    # 3. Crear Vector y Reporte Educativo
     vec = np.zeros(dim)
-    debug("\n=== SEQUITUR ABS-PITCH: GENERANDO VECTOR ===")
 
-    for name, symbols_in_rule in rules.items():
-        # if name == "R0": continue # Ignorar la regla raíz para el vector de rasgos
+    print("\n" + "="*50)
+    print("ANÁLISIS JERÁRQUICO DE LA MELODÍA (SEQUITUR)")
+    print("="*50)
+    print(f"Estructura Maestra (Root): {root_seq}\n")
+    print("Motivos y Frases Identificadas:")
 
-        # Peso basado en longitud de la regla
-        h = int(hashlib.md5(str(symbols_in_rule).encode()).hexdigest(), 16)
+    # Ordenamos las reglas para ver cómo se construyen de menor a mayor
+    for rule_name, data in hierarchy.items():
+        # Cálculo del vector (seguimos usando hashing para la representación numérica)
+        # Usamos la frase expandida para que el hash sea único según el contenido real
+        h = int(hashlib.md5(str(data['phrase']).encode()).hexdigest(), 16)
         idx = h % dim
-        weight = len(symbols_in_rule)
+
+        # El peso es la longitud de la frase por el número de veces que aparece
+        # (Esto da más importancia a motivos largos y frecuentes)
+        weight = data['length']
         vec[idx] += weight
 
-        debug(f"Regla {name}: {symbols_in_rule} | Peso: {weight} | Índice: {idx}")
+        # --- Reporte para el usuario ---
+        # Traducimos las notas MIDI a nombres de notas para que sea legible
+        notas_legibles = [pitch.Pitch(midi).nameWithOctave for midi in data['phrase']]
 
-    # Normalización
+        print(f"\n▶ {rule_name}:")
+        print(f"  └─ Contenido: {data['structure']}")
+        print(f"  └─ Notas Reales: {notas_legibles}")
+        print(f"  └─ Longitud: {data['length']} notas")
+        print(f"  └─ Impacto en Vector (Índice {idx}): +{weight}")
+
+    # Normalización del vector para comparaciones futuras
     norm = np.linalg.norm(vec)
-    if norm > 0: vec /= norm
+    if norm > 0:
+        vec /= norm
+
+    print("\n" + "="*50)
+    debug(f"Sequitur: Vector final generado (norma={norm:.3f})")
 
     return vec
 
@@ -993,8 +1058,6 @@ debug("Score cargado correctamente")
 # print(motif_vector(score))
 # print(compass_motif_vector(score))
 # print(form_structure_vector(score))
-# print(sequitur_semantic_vector(score))
-# print(sequitur_pitch_semantic_vector(score))
-# print(sequitur_absolute_pitch_semantic_vector(score))
-print(novelty_structure_vector(score))
+print(sequitur_absolute_pitch_semantic_vector(score))
+# print(novelty_structure_vector(score))
 
