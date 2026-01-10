@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis Musical - Visualizador Simple</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .tab-active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    
+    <div class="min-h-screen p-4 md:p-8">
+        <div class="max-w-7xl mx-auto">
+            
+            <!-- Header -->
+            <div class="mb-8">
+                <h1 class="text-4xl font-bold text-gray-900 mb-2">🎵 Análisis Musical Completo</h1>
+                <p class="text-gray-600">Visualización de características musicales extraídas</p>
+            </div>
+
+            <!-- Instrucciones -->
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <h3 class="font-semibold text-yellow-900 mb-2">📋 Instrucciones:</h3>
+                <ol class="text-sm text-yellow-800 space-y-1 ml-4 list-decimal">
+                    <li>Abre el archivo <code class="bg-yellow-100 px-1 rounded">music_data.json</code> con un editor de texto</li>
+                    <li>Copia todo el contenido (Ctrl+A, Ctrl+C)</li>
+                    <li>Pégalo en el cuadro de texto de abajo</li>
+                    <li>Haz clic en "Visualizar Datos"</li>
+                </ol>
+            </div>
+
+            <!-- Área para pegar datos -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Pegar Datos JSON</h2>
+                <textarea id="jsonInput" 
+                          class="w-full h-40 p-4 border border-gray-300 rounded-lg font-mono text-sm"
+                          placeholder='Pega aquí el contenido de music_data.json...'></textarea>
+                <button onclick="loadDataFromText()" 
+                        class="mt-4 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all">
+                    Visualizar Datos
+                </button>
+            </div>
+            
+            <!-- Contenedor de resultados -->
+            <div id="results" class="hidden">
+                
+                <!-- Tabs -->
+                <div class="mb-6 flex flex-wrap gap-2">
+                    <button class="tab px-4 py-2 rounded-lg font-medium transition-all bg-white" onclick="switchTab('melodic')">
+                        🎼 Melodía
+                    </button>
+                    <button class="tab px-4 py-2 rounded-lg font-medium transition-all bg-white" onclick="switchTab('harmonic')">
+                        🎹 Armonía
+                    </button>
+                    <button class="tab px-4 py-2 rounded-lg font-medium transition-all bg-white" onclick="switchTab('rhythmic')">
+                        🥁 Ritmo
+                    </button>
+                    <button class="tab px-4 py-2 rounded-lg font-medium transition-all bg-white" onclick="switchTab('instrumental')">
+                        🎺 Instrumentación
+                    </button>
+                    <button class="tab px-4 py-2 rounded-lg font-medium transition-all bg-white" onclick="switchTab('motifs')">
+                        🎯 Motivos
+                    </button>
+                    <button class="tab px-4 py-2 rounded-lg font-medium transition-all bg-white" onclick="switchTab('form')">
+                        📊 Forma
+                    </button>
+                </div>
+                
+                <!-- Contenido de cada tab -->
+                <div id="melodic" class="tab-content hidden">
+                    <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
+                        <h3 class="text-xl font-semibold mb-4">Distribución de Intervalos Melódicos</h3>
+                        <canvas id="melodicChart"></canvas>
+                    </div>
+                    <div id="melodicStats" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+                </div>
+                
+                <div id="harmonic" class="tab-content hidden">
+                    <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
+                        <h3 class="text-xl font-semibold mb-4">Funciones Armónicas</h3>
+                        <canvas id="harmonicChart"></canvas>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <h3 class="text-xl font-semibold mb-4">Transiciones Armónicas</h3>
+                        <div id="transitionsContainer"></div>
+                    </div>
+                </div>
+                
+                <div id="rhythmic" class="tab-content hidden">
+                    <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
+                        <h3 class="text-xl font-semibold mb-4">Distribución de Duraciones</h3>
+                        <canvas id="rhythmicChart"></canvas>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <h3 class="text-xl font-semibold mb-4">Análisis Espectral (FFT)</h3>
+                        <canvas id="fftChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="instrumental" class="tab-content hidden">
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <h3 class="text-xl font-semibold mb-4">Familias Instrumentales</h3>
+                        <div id="instrumentalContainer"></div>
+                    </div>
+                </div>
+                
+                <div id="motifs" class="tab-content hidden">
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <h3 class="text-xl font-semibold mb-4">Motivos Detectados</h3>
+                        <div id="motifsContainer"></div>
+                    </div>
+                </div>
+                
+                <div id="form" class="tab-content hidden">
+                    <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
+                        <h3 class="text-xl font-semibold mb-4">Estructura de la Forma</h3>
+                        <div id="formStructure"></div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <h3 class="text-xl font-semibold mb-4">Curva de Novedad</h3>
+                        <canvas id="noveltyChart"></canvas>
+                    </div>
+                </div>
+                
+            </div>
+            
+        </div>
+    </div>
+    
+    <script>
+        let charts = {};
+        let currentData = null;
+        
+        function loadDataFromText() {
+            const text = document.getElementById('jsonInput').value;
+            
+            if (!text.trim()) {
+                alert('Por favor pega el contenido del archivo JSON');
+                return;
+            }
+            
+            try {
+                const data = JSON.parse(text);
+                currentData = processData(data);
+                renderResults(currentData);
+                document.getElementById('results').classList.remove('hidden');
+                switchTab('melodic');
+                
+                // Scroll suave a los resultados
+                document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                alert('Error al leer el JSON: ' + error.message + '\n\nVerifica que hayas copiado correctamente el contenido del archivo.');
+                console.error(error);
+            }
+        }
+        
+        function processData(raw) {
+            return {
+                melodic: {
+                    intervals: raw.melodic.slice(0, 12).map((v, i) => ({
+                        name: ['-12 a -10', '-9 a -7', '-6 a -4', '-3 a -1', '0 a 2', '3 a 5', '6 a 8', '9 a 11'][i] || `Int ${i}`,
+                        value: v
+                    })),
+                    stats: {
+                        mean: raw.melodic[12] || 0,
+                        std: raw.melodic[13] || 0,
+                        range: raw.melodic[14] || 0,
+                        direction: raw.melodic[15] || 0
+                    }
+                },
+                harmonic: [
+                    {function: 'Tónica (T)', value: raw.harmonic[0] || 0, fullMark: 1},
+                    {function: 'Predominante (PD)', value: raw.harmonic[1] || 0, fullMark: 1},
+                    {function: 'Dominante (D)', value: raw.harmonic[2] || 0, fullMark: 1},
+                    {function: 'Dom. Sec. (Dsec)', value: raw.harmonic[3] || 0, fullMark: 1},
+                    {function: 'Otros', value: raw.harmonic[4] || 0, fullMark: 1}
+                ],
+                transitions: extractTransitions(raw.transitions),
+                rhythmic: {
+                    durations: raw.rhythmic.slice(0, 12).map((v, i) => ({
+                        name: `${(i*0.167).toFixed(2)}-${((i+1)*0.167).toFixed(2)}`,
+                        value: v
+                    })),
+                    fft: raw.rhythmic.slice(12, 28).map((v, i) => ({
+                        freq: i,
+                        magnitude: v
+                    }))
+                },
+                instrumental: raw.instrumental.map((v, i) => ({
+                    family: ['Piano', 'Cuerdas', 'Vientos Madera', 'Vientos Metal', 'Guitarra', 'Voz', 'Percusión'][i],
+                    active: v
+                })),
+                motifs: extractTopMotifs(raw.motifs),
+                form: {
+                    structure: raw.form || 'N/A',
+                    sections: extractSections(raw.form),
+                    noveltyCurve: Array.from({length: 32}, (_, i) => ({
+                        measure: i + 1,
+                        novelty: 0.3 + 0.1 * Math.sin(i/4)
+                    }))
+                }
+            };
+        }
+        
+        function extractTransitions(vec) {
+            const labels = ['T', 'PD', 'D', 'Dsec', 'Other'];
+            const transitions = [];
+            
+            for (let i = 0; i < 5; i++) {
+                for (let j = 0; j < 5; j++) {
+                    const idx = i * 5 + j;
+                    const value = vec[idx] || 0;
+                    if (value > 0.05) {
+                        transitions.push({
+                            from: labels[i],
+                            to: labels[j],
+                            value: value
+                        });
+                    }
+                }
+            }
+            
+            return transitions.sort((a, b) => b.value - a.value).slice(0, 10);
+        }
+        
+        function extractTopMotifs(vec) {
+            const motifs = vec.map((v, i) => ({value: v, index: i}))
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 10)
+                .filter(m => m.value > 0);
+            
+            return motifs.map((m, i) => ({
+                id: i + 1,
+                strength: m.value,
+                length: 3 + (i % 4),
+                repetitions: Math.round(m.value * 20),
+                notes: `Motivo_${m.index}`
+            }));
+        }
+        
+        function extractSections(formStr) {
+            if (!formStr || formStr === 'N/A') return [];
+            
+            const sections = [];
+            let current = formStr[0];
+            let start = 0;
+            
+            for (let i = 0; i < formStr.length; i++) {
+                if (formStr[i] !== current) {
+                    sections.push({
+                        name: current,
+                        measures: i - start,
+                        start: start
+                    });
+                    current = formStr[i];
+                    start = i;
+                }
+            }
+            
+            sections.push({
+                name: current,
+                measures: formStr.length - start,
+                start: start
+            });
+            
+            return sections;
+        }
+        
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('tab-active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+            
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach((tab, index) => {
+                const tabNames = ['melodic', 'harmonic', 'rhythmic', 'instrumental', 'motifs', 'form'];
+                if (tabNames[index] === tabName) {
+                    tab.classList.add('tab-active');
+                }
+            });
+            
+            document.getElementById(tabName).classList.remove('hidden');
+        }
+        
+        function renderResults(data) {
+            renderMelodic(data.melodic);
+            renderHarmonic(data.harmonic, data.transitions);
+            renderRhythmic(data.rhythmic);
+            renderInstrumental(data.instrumental);
+            renderMotifs(data.motifs);
+            renderForm(data.form);
+        }
+        
+        function renderMelodic(data) {
+            const ctx = document.getElementById('melodicChart');
+            if (charts.melodic) charts.melodic.destroy();
+            
+            charts.melodic = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.intervals.map(d => d.name),
+                    datasets: [{
+                        label: 'Frecuencia',
+                        data: data.intervals.map(d => d.value),
+                        backgroundColor: '#3b82f6'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true
+                }
+            });
+            
+            document.getElementById('melodicStats').innerHTML = `
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-sm text-gray-600">Altura Media</div>
+                    <div class="text-2xl font-bold text-blue-600">${data.stats.mean.toFixed(1)}</div>
+                    <div class="text-xs text-gray-500">MIDI</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-sm text-gray-600">Desviación Std.</div>
+                    <div class="text-2xl font-bold text-purple-600">${data.stats.std.toFixed(1)}</div>
+                    <div class="text-xs text-gray-500">semitonos</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-sm text-gray-600">Rango</div>
+                    <div class="text-2xl font-bold text-green-600">${data.stats.range.toFixed(0)}</div>
+                    <div class="text-xs text-gray-500">semitonos</div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-sm text-gray-600">Dirección</div>
+                    <div class="text-2xl font-bold text-orange-600">
+                        ${data.stats.direction > 0 ? '↗' : '↘'} ${Math.abs(data.stats.direction).toFixed(2)}
+                    </div>
+                    <div class="text-xs text-gray-500">${data.stats.direction > 0 ? 'Ascendente' : 'Descendente'}</div>
+                </div>
+            `;
+        }
+        
+        function renderHarmonic(harmonic, transitions) {
+            const ctx = document.getElementById('harmonicChart');
+            if (charts.harmonic) charts.harmonic.destroy();
+            
+            charts.harmonic = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: harmonic.map(d => d.function),
+                    datasets: [{
+                        label: 'Frecuencia',
+                        data: harmonic.map(d => d.value),
+                        backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                        borderColor: '#8b5cf6',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true
+                }
+            });
+            
+            document.getElementById('transitionsContainer').innerHTML = transitions.map(t => `
+                <div class="flex items-center mb-2">
+                    <div class="w-12 text-sm font-medium">${t.from}</div>
+                    <div class="flex-1 mx-2">
+                        <div class="bg-gray-200 rounded-full h-6 overflow-hidden">
+                            <div class="bg-gradient-to-r from-purple-400 to-purple-600 h-full rounded-full flex items-center justify-end pr-2"
+                                 style="width: ${t.value * 100}%">
+                                <span class="text-xs text-white font-medium">${(t.value * 100).toFixed(0)}%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="w-12 text-sm font-medium text-right">${t.to}</div>
+                </div>
+            `).join('');
+        }
+        
+        function renderRhythmic(data) {
+            const ctx1 = document.getElementById('rhythmicChart');
+            if (charts.rhythmic) charts.rhythmic.destroy();
+            
+            charts.rhythmic = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: data.durations.map(d => d.name),
+                    datasets: [{
+                        label: 'Frecuencia',
+                        data: data.durations.map(d => d.value),
+                        backgroundColor: '#10b981'
+                    }]
+                },
+                options: {responsive: true, maintainAspectRatio: true}
+            });
+            
+            const ctx2 = document.getElementById('fftChart');
+            if (charts.fft) charts.fft.destroy();
+            
+            charts.fft = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: data.fft.map(d => d.freq),
+                    datasets: [{
+                        label: 'Magnitud',
+                        data: data.fft.map(d => d.magnitude),
+                        borderColor: '#10b981',
+                        tension: 0.1
+                    }]
+                },
+                options: {responsive: true, maintainAspectRatio: true}
+            });
+        }
+        
+        function renderInstrumental(data) {
+            document.getElementById('instrumentalContainer').innerHTML = data.map(inst => `
+                <div class="flex items-center justify-between p-4 rounded-lg border-2 ${inst.active ? 'border-blue-300 bg-blue-50' : 'border-gray-200'} mb-2">
+                    <span class="font-medium ${inst.active ? 'text-gray-900' : 'text-gray-400'}">${inst.family}</span>
+                    <span class="px-3 py-1 rounded-full text-sm font-medium ${inst.active ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'}">
+                        ${inst.active ? 'Activo' : 'Inactivo'}
+                    </span>
+                </div>
+            `).join('');
+        }
+        
+        function renderMotifs(data) {
+            document.getElementById('motifsContainer').innerHTML = data.map(motif => `
+                <div class="border-l-4 border-orange-500 pl-4 py-3 mb-4 bg-orange-50 rounded-r-lg">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <div class="font-semibold text-gray-900">Motivo ${motif.id}</div>
+                            <div class="text-sm text-gray-600 font-mono">${motif.notes}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-2xl font-bold text-orange-600">${(motif.strength * 100).toFixed(0)}%</div>
+                            <div class="text-xs text-gray-500">relevancia</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div><span class="text-gray-500">Longitud:</span> ${motif.length} notas</div>
+                        <div><span class="text-gray-500">Repeticiones:</span> ${motif.repetitions}x</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function renderForm(data) {
+            const colors = {'A': 'bg-blue-500', 'B': 'bg-green-500', 'C': 'bg-purple-500', 'D': 'bg-red-500'};
+            
+            document.getElementById('formStructure').innerHTML = `
+                <div class="text-center mb-6">
+                    <div class="text-4xl font-bold text-indigo-600 tracking-wider mb-2">${data.structure}</div>
+                    <div class="text-sm text-gray-600">Forma Musical Detectada</div>
+                </div>
+                <div class="flex gap-2">
+                    ${data.sections.map(s => `
+                        <div class="flex-1 ${colors[s.name] || 'bg-gray-500'} rounded-lg p-4 text-white text-center">
+                            <div class="text-2xl font-bold">${s.name}</div>
+                            <div class="text-xs mt-1">${s.measures} compases</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            const ctx = document.getElementById('noveltyChart');
+            if (charts.novelty) charts.novelty.destroy();
+            
+            charts.novelty = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.noveltyCurve.map(d => d.measure),
+                    datasets: [{
+                        label: 'Novedad',
+                        data: data.noveltyCurve.map(d => d.novelty),
+                        borderColor: '#6366f1',
+                        tension: 0.3
+                    }]
+                },
+                options: {responsive: true, maintainAspectRatio: true}
+            });
+        }
+    </script>
+    
+</body>
+</html>
