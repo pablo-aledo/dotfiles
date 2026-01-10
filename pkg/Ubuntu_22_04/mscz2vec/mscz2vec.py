@@ -1043,6 +1043,107 @@ def novelty_structure_vector(score, kernel_size=8, threshold=0.15, dim=64):
 
 
 # =========================
+# N-GRAMAS MELÓDICOS
+# =========================
+
+def melodic_ngram_vector(score, n=3, dim=128):
+    """
+    Vector de n-gramas melódicos basado en intervalos cuantizados.
+    Invariante a transposición.
+    """
+    seq = extract_melody(score)
+    if len(seq) < n + 1:
+        debug("Melodic n-grams: melodía demasiado corta")
+        return np.zeros(dim)
+
+    # Intervalos melódicos
+    intervals = [
+        quantize_interval(seq[i+1][0] - seq[i][0])
+        for i in range(len(seq) - 1)
+    ]
+
+    ngrams = Counter(
+        tuple(intervals[i:i+n])
+        for i in range(len(intervals) - n + 1)
+    )
+
+    vec = np.zeros(dim)
+
+    for ng, count in ngrams.items():
+        h = int(hashlib.md5(str(ng).encode()).hexdigest(), 16)
+        idx = h % dim
+        vec[idx] += count
+
+    # Normalización
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec /= norm
+
+    debug(
+        f"Melodic n-grams: n={n}, únicos={len(ngrams)}, norma={norm:.3f}"
+    )
+
+    return vec
+
+# =========================
+# N-GRAMAS RÍTMICOS
+# =========================
+
+def quantize_duration_ratio(r):
+    if r < 0.75:
+        return "shorter"
+    elif r > 1.33:
+        return "longer"
+    else:
+        return "same"
+
+
+def rhythmic_ngram_vector(score, n=3, dim=128):
+    """
+    Vector de n-gramas rítmicos basado en ratios de duración.
+    Invariante al tempo.
+    """
+    seq = extract_melody(score)
+    if len(seq) < n + 1:
+        debug("Rhythmic n-grams: secuencia demasiado corta")
+        return np.zeros(dim)
+
+    durations = [n[2] for n in seq]
+
+    ratios = []
+    for i in range(len(durations) - 1):
+        if durations[i] > 0:
+            ratios.append(
+                quantize_duration_ratio(durations[i+1] / durations[i])
+            )
+        else:
+            ratios.append("same")
+
+    ngrams = Counter(
+        tuple(ratios[i:i+n])
+        for i in range(len(ratios) - n + 1)
+    )
+
+    vec = np.zeros(dim)
+
+    for ng, count in ngrams.items():
+        h = int(hashlib.md5(str(ng).encode()).hexdigest(), 16)
+        idx = h % dim
+        vec[idx] += count
+
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec /= norm
+
+    debug(
+        f"Rhythmic n-grams: n={n}, únicos={len(ngrams)}, norma={norm:.3f}"
+    )
+
+    return vec
+
+
+
+# =========================
 # EJECUCIÓN
 # =========================
 
@@ -1058,6 +1159,7 @@ debug("Score cargado correctamente")
 # print(motif_vector(score))
 # print(compass_motif_vector(score))
 # print(form_structure_vector(score))
-print(sequitur_absolute_pitch_semantic_vector(score))
+# print(sequitur_absolute_pitch_semantic_vector(score))
 # print(novelty_structure_vector(score))
-
+print(melodic_ngram_vector(score))
+print(rhythmic_ngram_vector(score))
