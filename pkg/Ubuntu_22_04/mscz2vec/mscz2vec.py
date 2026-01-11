@@ -950,6 +950,261 @@ class SequiturGrammar:
         return hierarchy, self.root_sequence
 
 
+# =========================
+# SEQUITUR CON REGLAS PERSONALIZADAS
+# =========================
+
+class CustomRule:
+    """
+    Representa una regla personalizada definida por el usuario.
+    Puede ser:
+    - Un compás específico
+    - Un conjunto de notas (alturas MIDI)
+    - Una regla recursiva que referencia otras reglas
+    """
+    def __init__(self, name, rule_type, content):
+        """
+        Args:
+            name: nombre de la regla (ej: "intro", "estribillo")
+            rule_type: "measure", "notes", o "recursive"
+            content:
+                - Si type="measure": número de compás (int)
+                - Si type="notes": lista de alturas MIDI [60, 62, 64]
+                - Si type="recursive": lista de nombres de reglas ["intro", "intro"]
+        """
+        self.name = name
+        self.rule_type = rule_type
+        self.content = content
+
+    def __repr__(self):
+        return f"CustomRule({self.name}, {self.rule_type}, {self.content})"
+
+
+class SequiturWithCustomRules:
+    """
+    Versión extendida de Sequitur que acepta reglas personalizadas iniciales.
+    """
+    def __init__(self, custom_rules=None):
+        """
+        Args:
+            custom_rules: lista de objetos CustomRule
+        """
+        self.rules = {}
+        self.next_rule_id = 1
+        self.root_sequence = []
+        self.custom_rules = custom_rules or []
+        self.custom_rule_map = {}  # nombre -> símbolos expandidos
+
+    def _get_new_rule_name(self):
+        name = f"R{self.next_rule_id}"
+        self.next_rule_id += 1
+        return name
+
+    def _expand_custom_rule(self, custom_rule, symbols, measure_map=None):
+        """
+        Convierte una CustomRule en una secuencia de símbolos (notas MIDI).
+        """
+        if custom_rule.rule_type == "notes":
+            # Directamente una lista de notas MIDI
+            return custom_rule.content
+
+        elif custom_rule.rule_type == "measure":
+            # Extraer notas de un compás específico
+            if measure_map is None:
+                debug(f"Error: se necesita measure_map para regla de compás '{custom_rule.name}'")
+                return []
+
+            measure_num = custom_rule.content
+            # Encontrar índices de notas en ese compás
+            note_indices = [i for i, m in enumerate(measure_map) if m == measure_num]
+            return [symbols[i] for i in note_indices if i < len(symbols)]
+
+        elif custom_rule.rule_type == "recursive":
+            # Expandir recursivamente otras reglas
+            expanded = []
+            for ref_name in custom_rule.content:
+                if ref_name in self.custom_rule_map:
+                    expanded.extend(self.custom_rule_map[ref_name])
+                else:
+                    debug(f"Advertencia: regla '{ref_name}' no encontrada, ignorando")
+            return expanded
+
+        return []
+
+    def _initialize_custom_rules(self, symbols, measure_map=None):
+        """
+        Procesa las reglas personalizadas y las convierte en símbolos.
+        Las almacena en self.rules y self.custom_rule_map.
+        """
+        print("\n" + "="*50)
+        print("INICIALIZANDO REGLAS PERSONALIZADAS")
+        print("="*50)
+
+        for custom_rule in self.custom_rules:
+            expanded = self._expand_custom_rule(custom_rule, symbols, measure_map)
+
+            if expanded:
+                self.custom_rule_map[custom_rule.name] = expanded
+                self.rules[custom_rule.name] = expanded
+
+                # Mostrar información
+                notes_str = ", ".join([str(pitch.Pitch(midi).nameWithOctave) for midi in expanded[:8]])
+                if len(expanded) > 8:
+                    notes_str += "..."
+
+                print(f"\n▶ Regla '{custom_rule.name}':")
+                print(f"  ├─ Tipo: {custom_rule.rule_type}")
+                print(f"  ├─ Contenido: {custom_rule.content}")
+                print(f"  ├─ Notas expandidas: [{notes_str}]")
+                print(f"  └─ Longitud: {len(expanded)} notas")
+
+        print("="*50 + "\n")
+
+    def _replace_custom_rules_in_sequence(self, symbols):
+        """
+        Busca y reemplaza ocurrencias de reglas personalizadas en la secuencia.
+        Retorna una nueva secuencia con los reemplazos aplicados.
+        """
+        if not self.custom_rule_map:
+            return symbols
+
+        current_seq = list(symbols)
+        replacements_made = 0
+
+        # Ordenar reglas por longitud (más largas primero para evitar solapamientos)
+        sorted_rules = sorted(
+            self.custom_rule_map.items(),
+            key=lambda x: len(x[1]),
+            reverse=True
+        )
+
+        for rule_name, pattern in sorted_rules:
+            pattern_len = len(pattern)
+            if pattern_len == 0:
+                continue
+
+            # Buscar y reemplazar el patrón
+            i = 0
+            new_seq = []
+
+            while i < len(current_seq):
+                # Verificar si hay coincidencia
+                if i + pattern_len <= len(current_seq):
+                    if current_seq[i:i+pattern_len] == pattern:
+                        new_seq.append(rule_name)
+                        i += pattern_len
+                        replacements_made += 1
+                        continue
+
+                new_seq.append(current_seq[i])
+                i += 1
+
+            current_seq = new_seq
+
+        debug(f"Reemplazos de reglas personalizadas: {replacements_made}")
+        return current_seq
+
+    def build(self, symbols, measure_map=None):
+        """
+        Construye la gramática Sequitur con soporte para reglas personalizadas.
+
+        Args:
+            symbols: lista de alturas MIDI
+            measure_map: mapeo de índice de nota -> número de compás (opcional)
+        """
+        if not symbols:
+            return {}
+
+        # 1. Inicializar reglas personalizadas
+        self._initialize_custom_rules(symbols, measure_map)
+
+        # 2. Reemplazar ocurrencias de reglas personalizadas en la secuencia
+        current_seq = self._replace_custom_rules_in_sequence(symbols)
+
+        debug(f"Secuencia después de aplicar reglas personalizadas: {current_seq[:20]}...")
+
+        # 3. Aplicar algoritmo Re-Pair (igual que antes)
+        while True:
+            # Contar pares adyacentes
+            pairs = Counter()
+            for i in range(len(current_seq) - 1):
+                pair = (current_seq[i], current_seq[i+1])
+                pairs[pair] += 1
+
+            if not pairs:
+                break
+
+            most_common_pair, count = pairs.most_common(1)[0]
+
+            if count < 2:
+                break
+
+            # Crear nueva regla
+            rule_name = self._get_new_rule_name()
+            self.rules[rule_name] = list(most_common_pair)
+
+            # Reemplazar en la secuencia
+            new_seq = []
+            i = 0
+            while i < len(current_seq):
+                if i < len(current_seq) - 1 and (current_seq[i], current_seq[i+1]) == most_common_pair:
+                    new_seq.append(rule_name)
+                    i += 2
+                else:
+                    new_seq.append(current_seq[i])
+                    i += 1
+
+            current_seq = new_seq
+
+        self.root_sequence = current_seq
+        return self.rules
+
+    def expand_rule(self, symbol):
+        """
+        Despliega recursivamente una regla.
+        """
+        if symbol not in self.rules:
+            return [symbol]
+
+        expansion = []
+        for s in self.rules[symbol]:
+            expansion.extend(self.expand_rule(s))
+        return expansion
+
+    def get_musical_hierarchy(self):
+        """
+        Devuelve jerarquía de reglas (tanto automáticas como personalizadas).
+        """
+        hierarchy = {}
+        all_rules = list(self.rules.keys())
+
+        # Separar reglas personalizadas de automáticas
+        custom_rule_names = set(self.custom_rule_map.keys())
+        auto_rules = [r for r in all_rules if r not in custom_rule_names]
+
+        # Ordenar reglas automáticas por ID
+        sorted_auto = sorted([r for r in auto_rules if r.startswith('R')],
+                           key=lambda x: int(x[1:]) if x[1:].isdigit() else 0)
+
+        # Primero mostrar reglas personalizadas, luego automáticas
+        sorted_keys = list(custom_rule_names) + sorted_auto
+
+        for rule_name in sorted_keys:
+            if rule_name not in self.rules:
+                continue
+
+            flat_notes = self.expand_rule(rule_name)
+            structure = self.rules[rule_name]
+
+            hierarchy[rule_name] = {
+                "structure": structure,
+                "phrase": flat_notes,
+                "length": len(flat_notes),
+                "is_custom": rule_name in custom_rule_names
+            }
+
+        return hierarchy, self.root_sequence
+
 
 
 
@@ -1048,6 +1303,7 @@ def melody_to_sequitur_absolute_pitch_symbols(score):
 
     return symbols
 
+
 def melody_to_sequitur_with_measures(score):
     """
     Convierte la melodía en símbolos (altura MIDI) manteniendo
@@ -1136,6 +1392,225 @@ def sequitur_absolute_pitch_semantic_vector(score, dim=128):
     debug(f"Sequitur: Vector final generado (norma={norm:.3f})")
 
     return vec
+
+
+def sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rules=None, dim=128):
+    """
+    Genera un vector semántico usando Sequitur con reglas personalizadas.
+
+    Args:
+        score: partitura music21
+        custom_rules: lista de objetos CustomRule (opcional)
+        dim: dimensión del vector resultante
+
+    Ejemplo de uso:
+        custom_rules = [
+            CustomRule("intro", "measure", 1),  # Usar compás 1 como regla "intro"
+            CustomRule("motivo_a", "notes", [60, 62, 64, 65]),  # Do-Re-Mi-Fa
+            CustomRule("estribillo", "recursive", ["intro", "intro"])  # intro dos veces
+        ]
+        vec = sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rules)
+    """
+    # 1. Obtener símbolos y mapeo de compases
+    symbols, measure_map = melody_to_sequitur_with_measures(score)
+
+    if len(symbols) < 4:
+        debug("Sequitur: secuencia demasiado corta")
+        return np.zeros(dim)
+
+    # 2. Construir Gramática con reglas personalizadas
+    grammar = SequiturWithCustomRules(custom_rules=custom_rules)
+    rules = grammar.build(symbols, measure_map)
+    hierarchy, root_seq = grammar.get_musical_hierarchy()
+
+    # 3. Crear Vector y Reporte Educativo
+    vec = np.zeros(dim)
+
+    print("\n" + "="*50)
+    print("ANÁLISIS JERÁRQUICO DE LA MELODÍA (SEQUITUR + REGLAS PERSONALIZADAS)")
+    print("="*50)
+    print(f"Estructura Maestra (Root): {root_seq}\n")
+
+    if custom_rules:
+        print("✓ Reglas Personalizadas Definidas:")
+        for cr in custom_rules:
+            print(f"  • {cr.name} ({cr.rule_type})")
+        print()
+
+    print("Motivos y Frases Identificadas:")
+
+    # Función auxiliar para encontrar compases de una frase
+    def get_measure_range_from_notes(note_indices):
+        if not note_indices or not measure_map:
+            return "N/A"
+        measures = [measure_map[i] for i in note_indices if i < len(measure_map)]
+        if not measures:
+            return "N/A"
+        return f"{min(measures)}-{max(measures)}"
+
+    # Rastrear índices para cada regla
+    def get_note_indices_for_rule(rule_name, start_idx=0):
+        """Devuelve los índices de notas que componen una regla."""
+        if rule_name not in grammar.rules:
+            return [start_idx]
+
+        indices = []
+        current = start_idx
+        for symbol in grammar.rules[rule_name]:
+            sub_indices = get_note_indices_for_rule(symbol, current)
+            indices.extend(sub_indices)
+            current += len(sub_indices)
+        return indices
+
+    # Separar reglas personalizadas de automáticas
+    custom_rule_names = [cr.name for cr in (custom_rules or [])]
+
+    # Mostrar primero reglas personalizadas
+    if custom_rule_names:
+        print("\n--- REGLAS PERSONALIZADAS ---")
+
+    for rule_name, data in hierarchy.items():
+        if not data.get('is_custom', False):
+            continue
+
+        # Cálculo del vector
+        h = int(hashlib.md5(str(data['phrase']).encode()).hexdigest(), 16)
+        idx = h % dim
+        weight = data['length']
+        vec[idx] += weight
+
+        # Traducimos las notas MIDI a nombres de notas
+        notas_legibles = [pitch.Pitch(midi).nameWithOctave for midi in data['phrase']]
+
+        # Obtener índices de notas para esta regla
+        note_indices = get_note_indices_for_rule(rule_name)
+        measure_range = get_measure_range_from_notes(note_indices)
+
+        print(f"\n▶ {rule_name} (PERSONALIZADA):")
+        print(f"  ├─ Contenido: {data['structure']}")
+        print(f"  ├─ Notas Reales: {notas_legibles}")
+        print(f"  ├─ Longitud: {data['length']} notas")
+        print(f"  ├─ Compases: {measure_range}")
+        print(f"  └─ Impacto en Vector (Índice {idx}): +{weight}")
+
+    # Mostrar reglas automáticas
+    auto_rules_exist = any(not data.get('is_custom', False) for data in hierarchy.values())
+    if auto_rules_exist:
+        print("\n--- REGLAS AUTOMÁTICAS (SEQUITUR) ---")
+
+    for rule_name, data in hierarchy.items():
+        if data.get('is_custom', False):
+            continue
+
+        # Cálculo del vector
+        h = int(hashlib.md5(str(data['phrase']).encode()).hexdigest(), 16)
+        idx = h % dim
+        weight = data['length']
+        vec[idx] += weight
+
+        # Traducimos las notas MIDI a nombres de notas
+        notas_legibles = [pitch.Pitch(midi).nameWithOctave for midi in data['phrase']]
+
+        # Obtener índices de notas para esta regla
+        note_indices = get_note_indices_for_rule(rule_name)
+        measure_range = get_measure_range_from_notes(note_indices)
+
+        print(f"\n▶ {rule_name}:")
+        print(f"  ├─ Contenido: {data['structure']}")
+        print(f"  ├─ Notas Reales: {notas_legibles}")
+        print(f"  ├─ Longitud: {data['length']} notas")
+        print(f"  ├─ Compases: {measure_range}")
+        print(f"  └─ Impacto en Vector (Índice {idx}): +{weight}")
+
+    # Normalización del vector
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec /= norm
+
+    print("\n" + "="*50)
+    debug(f"Sequitur: Vector final generado (norma={norm:.3f})")
+
+    return vec
+    """
+    Genera un vector semántico y un reporte jerárquico detallado
+    usando la clase SequiturGrammar, con información de compases.
+    """
+    # 1. Obtener símbolos y mapeo de compases
+    symbols, measure_map = melody_to_sequitur_with_measures(score)
+
+    if len(symbols) < 4:
+        debug("Sequitur: secuencia demasiado corta")
+        return np.zeros(dim)
+
+    # 2. Construir Gramática con SequiturGrammar
+    grammar = SequiturGrammar()
+    rules = grammar.build(symbols)
+    hierarchy, root_seq = grammar.get_musical_hierarchy()
+
+    # 3. Crear Vector y Reporte Educativo
+    vec = np.zeros(dim)
+
+    print("\n" + "="*50)
+    print("ANÁLISIS JERÁRQUICO DE LA MELODÍA (SEQUITUR)")
+    print("="*50)
+    print(f"Estructura Maestra (Root): {root_seq}\n")
+    print("Motivos y Frases Identificadas:")
+
+    # Función auxiliar para encontrar compases de una frase
+    def get_measure_range_from_notes(note_indices):
+        if not note_indices or not measure_map:
+            return "N/A"
+        measures = [measure_map[i] for i in note_indices if i < len(measure_map)]
+        if not measures:
+            return "N/A"
+        return f"{min(measures)}-{max(measures)}"
+
+    # Rastrear índices para cada regla
+    def get_note_indices_for_rule(rule_name, start_idx=0):
+        """Devuelve los índices de notas que componen una regla."""
+        if rule_name not in grammar.rules:
+            return [start_idx]
+
+        indices = []
+        current = start_idx
+        for symbol in grammar.rules[rule_name]:
+            sub_indices = get_note_indices_for_rule(symbol, current)
+            indices.extend(sub_indices)
+            current += len(sub_indices)
+        return indices
+
+    # Ordenamos las reglas para ver cómo se construyen de menor a mayor
+    for rule_name, data in hierarchy.items():
+        # Cálculo del vector
+        h = int(hashlib.md5(str(data['phrase']).encode()).hexdigest(), 16)
+        idx = h % dim
+        weight = data['length']
+        vec[idx] += weight
+
+        # Traducimos las notas MIDI a nombres de notas
+        notas_legibles = [pitch.Pitch(midi).nameWithOctave for midi in data['phrase']]
+
+        # Obtener índices de notas para esta regla
+        note_indices = get_note_indices_for_rule(rule_name)
+        measure_range = get_measure_range_from_notes(note_indices)
+
+        print(f"\n▶ {rule_name}:")
+        print(f"  ├─ Contenido: {data['structure']}")
+        print(f"  ├─ Notas Reales: {notas_legibles}")
+        print(f"  ├─ Longitud: {data['length']} notas")
+        print(f"  ├─ Compases: {measure_range}")
+        print(f"  └─ Impacto en Vector (Índice {idx}): +{weight}")
+
+    # Normalización del vector
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec /= norm
+
+    print("\n" + "="*50)
+    debug(f"Sequitur: Vector final generado (norma={norm:.3f})")
+
+    return vec
+
 
 # =========================
 # NOVELTY
@@ -1703,6 +2178,11 @@ debug("Cargando score...")
 score = converter.parse('./coming_fix.musicxml')
 debug("Score cargado correctamente")
 
+custom_rules = [
+    CustomRule("intro", "measure", 1),  # Usar compás 1 como regla "intro"
+    # CustomRule("motivo_a", "notes", [60, 62, 64, 65]),  # Do-Re-Mi-Fa
+    # CustomRule("estribillo", "recursive", ["intro", "intro"])  # intro dos veces
+]
 
 # print(rhythmic_features(score))
 # print(melodic_features(score))
