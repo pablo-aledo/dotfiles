@@ -464,12 +464,47 @@ def filter_maximal_motifs(motifs, top_n):
 
     return selected
 
+def filter_maximal_motifs_with_positions(motifs, top_n):
+    """
+    Filtra motivos eliminando submotifs, preservando información de posiciones.
+    motifs: lista de (motif, notes, count, positions)
+    """
+    # Ordenar: primero longitud DESC, luego frecuencia DESC
+    motifs_sorted = sorted(
+        motifs,
+        key=lambda x: (len(x[0]), x[2]),
+        reverse=True
+    )
+
+    selected = []
+
+    for motif, notes, count, positions in motifs_sorted:
+        is_sub = False
+        for sel_motif, _, _, _ in selected:
+            if motif_is_submotif(motif, sel_motif):
+                is_sub = True
+                break
+
+        if not is_sub:
+            selected.append((motif, notes, count, positions))
+            debug(f"Motif aceptado (len={len(motif)}, count={count}, posiciones={len(positions)})")
+
+        if len(selected) >= top_n:
+            break
+
+    return selected
+
 def extract_top_motifs(sequence, min_length=3, max_length=6, top_n=10):
+    """
+    Extrae los motivos más frecuentes de una secuencia melódica,
+    incluyendo información de en qué compases aparecen.
+    """
     intervals = melodic_intervals(sequence)
     rhythms = rhythmic_ratios(sequence)
 
     motif_counter = Counter()
     motif_notes_dict = {}
+    motif_positions = defaultdict(list)  # Nueva: guardar posiciones
 
     # 1. Extraer TODOS los motifs
     for length in range(min_length, max_length + 1):
@@ -481,51 +516,95 @@ def extract_top_motifs(sequence, min_length=3, max_length=6, top_n=10):
             )
             notes = sequence[i:i+length+1]  # +1 nota
             motif_counter[motif] += 1
+
             if motif not in motif_notes_dict:
                 motif_notes_dict[motif] = notes
 
+            # Guardar la posición (índice de inicio en la secuencia)
+            motif_positions[motif].append(i)
+
     all_motifs = [
-        (m, motif_notes_dict[m], count)
+        (m, motif_notes_dict[m], count, motif_positions[m])
         for m, count in motif_counter.items()
     ]
 
     debug(f"Motifs totales antes de filtrar = {len(all_motifs)}")
 
-    # 2. Filtrar solo motifs máximos
-    filtered = filter_maximal_motifs(all_motifs, top_n)
+    # 2. Filtrar solo motifs máximos (adaptado para incluir posiciones)
+    filtered = filter_maximal_motifs_with_positions(all_motifs, top_n)
 
     debug(f"Motifs finales (sin submotifs) = {len(filtered)}")
-    for i, (m, notes, c) in enumerate(filtered):
+    for i, (m, notes, c, positions) in enumerate(filtered):
         note_info = [(n[1], n[2]) for n in notes]
-        debug(f"Motif {i+1}: len={len(m)} | reps={c} | notas={note_info}")
+        debug(f"Motif {i+1}: len={len(m)} | reps={c} | notas={note_info} | posiciones={positions[:5]}...")
 
     return filtered
+
+def extract_melody_with_measures(score):
+    """
+    Extrae la melodía con información de compases.
+    Returns: lista de tuplas (midi, name, duration, measure_number)
+    """
+    parts = getattr(score, 'parts', [score])
+    melody_part = parts[0].flatten().notes if parts else score.flatten().notes
+
+    seq = []
+    for n in melody_part:
+        if n.isNote:
+            measure = n.getContextByClass('Measure')
+            measure_num = measure.measureNumber if measure else 0
+            seq.append((n.pitch.midi, n.pitch.nameWithOctave, n.duration.quarterLength, measure_num))
+
+    debug("Melody with measures: longitud =", len(seq))
+    if len(seq) > 0:
+        debug("Melody with measures: primeras 5 notas =", seq[:5])
+
+    return seq
 
 def motif_vector(score, dim=128, min_length=3, max_length=6, top_n=10):
     """
     Genera vector con los `top_n` motifs más frecuentes.
+    Ahora muestra información de compases donde aparecen.
     """
-    seq = extract_melody(score)
+    seq = extract_melody_with_measures(score)
     seq_len = len(seq)
 
     if seq_len < min_length + 1:
         debug(f"Motifs: secuencia demasiado corta (len={seq_len}, min_length={min_length})")
         return np.zeros(dim, dtype=float)
 
-    motifs = extract_top_motifs(seq, min_length, max_length, top_n)
+    # Convertir a formato compatible con extract_top_motifs (sin measure_num para cálculo)
+    seq_for_motifs = [(n[0], n[1], n[2]) for n in seq]
+
+    motifs = extract_top_motifs(seq_for_motifs, min_length, max_length, top_n)
     if not motifs:
         debug("Motifs: no se generaron motifs")
         return np.zeros(dim, dtype=float)
 
     vec = np.zeros(dim, dtype=float)
 
-    for m_idx, (m, notes, count) in enumerate(motifs):
+    print("\n" + "="*50)
+    print("MOTIVOS MELÓDICOS DETECTADOS")
+    print("="*50)
+
+    for m_idx, (m, notes, count, positions) in enumerate(motifs):
         h = int(hashlib.md5(str(m).encode('utf-8')).hexdigest(), 16)
         idx = h % dim
         vec[idx] += count
 
         note_info = [(p[1], p[2]) for p in notes]
-        debug(f"Motif {m_idx+1}: {m} | Notas = {note_info} | Repeticiones = {count} → índice vector {idx}")
+
+        # Obtener compases donde aparece este motif
+        measures_where_appears = []
+        for pos in positions[:5]:  # Mostramos solo las primeras 5 apariciones
+            if pos < len(seq):
+                measures_where_appears.append(seq[pos][3])  # measure_num
+
+        print(f"\nMotivo {m_idx+1}:")
+        print(f"  ├─ Notas: {note_info}")
+        print(f"  ├─ Repeticiones: {count}")
+        print(f"  ├─ Aparece en compases: {measures_where_appears}" + ("..." if len(positions) > 5 else ""))
+        print(f"  └─ Índice en vector: {idx}")
 
     norm = np.linalg.norm(vec)
     if norm > 0:
@@ -533,6 +612,7 @@ def motif_vector(score, dim=128, min_length=3, max_length=6, top_n=10):
     else:
         debug("Motifs: vector todo ceros, normalización omitida")
 
+    print("="*50)
     debug(f"Motifs: vector final generado, norma={norm:.3f}, dimensión={dim}")
     return vec
 
@@ -1623,6 +1703,7 @@ debug("Cargando score...")
 score = converter.parse('./coming_fix.musicxml')
 debug("Score cargado correctamente")
 
+
 # print(rhythmic_features(score))
 # print(melodic_features(score))
 # print(harmonic_features(score))
@@ -1636,4 +1717,4 @@ debug("Score cargado correctamente")
 # print(melodic_ngram_vector(score))
 # print(rhythmic_ngram_vector(score))
 print(advanced_sequitur_form(score))
-print(form_string_to_vector(advanced_sequitur_form(score)))
+# print(form_string_to_vector(advanced_sequitur_form(score)))
