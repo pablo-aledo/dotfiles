@@ -869,6 +869,82 @@ class SequiturGrammar:
 
         return hierarchy, self.root_sequence
 
+
+
+
+
+
+def expand_rule_with_indices(symbol, grammar, current_pos=0):
+    """
+    Expande una regla y devuelve tanto las notas como los índices originales.
+    """
+    if symbol not in grammar.rules:
+        # Es una nota terminal (número MIDI)
+        return [symbol], [current_pos]
+
+    notes = []
+    indices = []
+    pos = current_pos
+
+    for s in grammar.rules[symbol]:
+        sub_notes, sub_indices = expand_rule_with_indices(s, grammar, pos)
+        notes.extend(sub_notes)
+        indices.extend(sub_indices)
+        pos += len(sub_notes)
+
+    return notes, indices
+
+def simplify_segments_preserving_indices(segments_list, target_length):
+    """
+    Simplifica la lista de segmentos fusionando los más cortos
+    hasta alcanzar target_length, preservando los índices de notas.
+    """
+    if not segments_list:
+        return []
+
+    current_segments = copy.deepcopy(segments_list)
+
+    while len(current_segments) > target_length:
+        min_len = float('inf')
+        min_idx = -1
+
+        for i, seg in enumerate(current_segments):
+            if seg['len'] < min_len:
+                min_len = seg['len']
+                min_idx = i
+
+        if min_idx == 0:
+            merge_idx = 1
+            target_idx = 0
+        elif min_idx == len(current_segments) - 1:
+            merge_idx = min_idx
+            target_idx = min_idx - 1
+        else:
+            prev_len = current_segments[min_idx-1]['len']
+            next_len = current_segments[min_idx+1]['len']
+            if prev_len < next_len:
+                merge_idx = min_idx
+                target_idx = min_idx - 1
+            else:
+                merge_idx = min_idx + 1
+                target_idx = min_idx
+
+        seg_a = current_segments[target_idx]
+        seg_b = current_segments[merge_idx]
+
+        new_seg = {
+            'symbol': f"({seg_a['symbol']}+{seg_b['symbol']})",
+            'notes': seg_a['notes'] + seg_b['notes'],
+            'note_indices': seg_a['note_indices'] + seg_b['note_indices'],
+            'len': seg_a['len'] + seg_b['len']
+        }
+
+        current_segments[target_idx] = new_seg
+        del current_segments[merge_idx]
+
+    return current_segments
+
+
 def melody_to_sequitur_absolute_pitch_symbols(score):
     """
     Convierte la melodía en una secuencia de símbolos
@@ -891,6 +967,37 @@ def melody_to_sequitur_absolute_pitch_symbols(score):
     )
 
     return symbols
+
+def melody_to_sequitur_with_measures(score):
+    """
+    Convierte la melodía en símbolos (altura MIDI) manteniendo
+    un registro de a qué compás pertenece cada nota.
+
+    Returns:
+        symbols: lista de alturas MIDI
+        measure_map: lista paralela indicando el número de compás (1-indexed)
+    """
+    parts = getattr(score, 'parts', [score])
+    melody_part = parts[0].flatten().notes
+
+    symbols = []
+    measure_map = []
+
+    for n in melody_part:
+        if n.isNote:
+            # Obtener el compás al que pertenece esta nota
+            measure = n.getContextByClass('Measure')
+            if measure:
+                measure_number = measure.measureNumber
+            else:
+                measure_number = 0  # Fallback si no se encuentra
+
+            symbols.append(n.pitch.midi)
+            measure_map.append(measure_number)
+
+    debug(f"Sequitur tracking: {len(symbols)} notas en {max(measure_map) if measure_map else 0} compases")
+
+    return symbols, measure_map
 
 def sequitur_absolute_pitch_semantic_vector(score, dim=128):
     """
@@ -1316,64 +1423,96 @@ def merge_similar_clusters(labels, vectors, similarity_threshold):
 
 def advanced_sequitur_form(score, max_parts=4, n_clusters=4, similarity_threshold=0.85):
     """
-    Algoritmo Híbrido:
+    Algoritmo Híbrido con tracking de compases:
     1. Sequitur (Gramática) -> Estructura base
     2. Simplificación -> Reducción a 'max_parts' segmentos
     3. Feature Extraction -> Vectores de cada segmento
     4. Clustering -> Agrupación inicial
     5. Merging -> Combinación por similitud
     6. Form String -> AABA...
+    7. Detección de compases por parte
     """
     print("\n" + "="*50)
     print("ANÁLISIS DE FORMA AVANZADO (SEQUITUR + CLUSTERING)")
     print("="*50)
 
-    # 1. Obtener símbolos y ejecutar Sequitur
-    symbols = melody_to_sequitur_absolute_pitch_symbols(score)
+    # 1. Obtener símbolos y mapeo de compases
+    symbols, measure_map = melody_to_sequitur_with_measures(score)
+
     if not symbols:
+        debug("No se pudieron obtener símbolos")
         return "N/A"
 
+    # 2. Crear gramática
     grammar = SequiturGrammar()
     grammar.build(symbols)
     root_seq = grammar.root_sequence
 
-    debug(f"Raíz original Sequitur: {root_seq}")
+    debug(f"Root sequence: {root_seq}")
 
-    # 2. Simplificación
-    # Si la raíz es muy corta (ej: [R1]), intentamos expandirla un nivel primero
+    # 3. Expandir root_seq con tracking de índices
     if len(root_seq) == 1 and str(root_seq[0]).startswith('R'):
-        debug("Raíz unitaria detectada, expandiendo un nivel antes de simplificar...")
+        debug("Raíz unitaria detectada, expandiendo un nivel...")
         root_seq = grammar.rules[root_seq[0]]
 
-    segments = simplify_sequence(root_seq, grammar, max_parts)
+    if not root_seq:
+        debug("Root sequence vacía después de expansión")
+        return "N/A"
 
-    # 3. Extracción de características (Vectores)
+    segments = []
+    current_index = 0
+
+    for symbol in root_seq:
+        notes, indices = expand_rule_with_indices(symbol, grammar, current_index)
+
+        segments.append({
+            'symbol': symbol,
+            'notes': notes,
+            'note_indices': indices,
+            'len': len(notes)
+        })
+
+        current_index += len(notes)
+
+    debug(f"Segmentos creados: {len(segments)}")
+
+    if not segments:
+        debug("No se crearon segmentos")
+        return "N/A"
+
+    # 4. Simplificación
+    segments = simplify_segments_preserving_indices(segments, max_parts)
+
+    debug(f"Segmentos después de simplificación: {segments}")
+
+    if segments is None:
+        debug("ERROR: simplify_segments_preserving_indices devolvió None")
+        return "N/A"
+
+    if not segments:
+        debug("Lista de segmentos vacía después de simplificación")
+        return "N/A"
+
+    # 5. Extracción de características
     vectors = []
     for seg in segments:
         v = compute_segment_ngram_vector(seg['notes'], n=3, bins=12)
-
-        # SOLUCIÓN AL VALUERROR:
-        # Si el vector es todo ceros (silencio), añadimos un ruido ínfimo
         if np.all(v == 0):
             v = v + 1e-9
-
         vectors.append(v)
 
     X = np.array(vectors)
 
-    # 4. Clustering Inicial (Agglomerative)
-    # Usamos min() para no pedir más clusters que segmentos disponibles
+    # 6. Clustering
     k = min(n_clusters, len(segments))
     if k < 2:
-        # Caso trivial
         final_form = ["A"] * len(segments)
     else:
         clustering = AgglomerativeClustering(
             n_clusters=k,
-            affinity='cosine', # Usa 'affinity' en lugar de 'metric'
+            affinity='cosine',
             linkage='average'
         )
-
         labels = clustering.fit_predict(X)
         debug(f"Etiquetas clustering inicial: {labels}")
 
@@ -1395,13 +1534,36 @@ def advanced_sequitur_form(score, max_parts=4, n_clusters=4, similarity_threshol
 
     form_string = "".join(final_form)
 
-    print(f"Estructura Resultante: {form_string}")
-    print("Detalle de Secciones:")
-    for i, char in enumerate(final_form):
-        # Mostrar un resumen de notas (primeras 5)
-        snippet = segments[i]['notes'][:5]
-        print(f"  Part {i+1} ({char}): {snippet}... (Total {len(segments[i]['notes'])} notas)")
+    # 7. MOSTRAR RESULTADOS CON COMPASES
+    print(f"\n📊 Estructura Resultante: {form_string}")
+    print("\n🎵 Detalle de Secciones:\n")
 
+    for i, char in enumerate(final_form):
+        seg = segments[i]
+
+        # Obtener rango de compases usando measure_map
+        if seg['note_indices'] and measure_map:
+            measures = [measure_map[idx] for idx in seg['note_indices'] if idx < len(measure_map)]
+            if measures:
+                min_measure = min(measures)
+                max_measure = max(measures)
+                measure_range = f"Compases {min_measure}-{max_measure}"
+            else:
+                measure_range = "Compases: N/A"
+        else:
+            measure_range = "Compases: N/A"
+
+        # Snippet de notas
+        snippet = seg['notes'][:5]
+        snippet_str = ", ".join([str(pitch.Pitch(midi).nameWithOctave) for midi in snippet])
+
+        print(f"  Parte {i+1} ({char}):")
+        print(f"    ├─ {measure_range}")
+        print(f"    ├─ {len(seg['notes'])} notas")
+        print(f"    └─ Inicio: [{snippet_str}...]")
+        print()
+
+    print("="*50)
     return form_string
 
 def form_string_to_vector(form_string, dim=32):
@@ -1458,7 +1620,7 @@ def form_string_to_vector(form_string, dim=32):
 # =========================
 
 debug("Cargando score...")
-score = converter.parse('./dreams2.musicxml')
+score = converter.parse('./coming_fix.musicxml')
 debug("Score cargado correctamente")
 
 # print(rhythmic_features(score))
