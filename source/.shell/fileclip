@@ -13,4 +13,4 @@ from_clip(){
 
 # wide:
 # to_clip ... 2>/dev/null | paste -d'|' -s
-# (Xclip -o | sed 's/|/\n/g'; echo) | from_clip -
+# (Xclip -o | paste -d '' -s | sed 's/|/\n/g'; echo) | from_clip -
