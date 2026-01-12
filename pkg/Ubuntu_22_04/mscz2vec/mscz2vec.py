@@ -105,8 +105,8 @@ def roman_to_function(rn):
     return "Other"
 
 def extract_harmonic_chords(stream):
-    debug("Harmony: extrayendo acordes armónicos")
-    debug(f"Harmony: tipo de stream = {type(stream)}")
+    debug("Harmony: Extracting chords")
+    debug(f"Harmony: stream type = {type(stream)}")
 
     notes_by_offset = defaultdict(list)
 
@@ -134,7 +134,7 @@ def extract_harmonic_chords(stream):
             for p in el.pitches:
                 notes_by_offset[abs_offset].append(note.Note(p))
 
-    debug(f"Harmony: offsets únicos = {len(notes_by_offset)}")
+    debug(f"Harmony: unique offsets = {len(notes_by_offset)}")
 
     # ── Construir acordes armónicos
     chords_list = []
@@ -160,11 +160,11 @@ def extract_harmonic_chords(stream):
             chords_list.append(ch)
 
             debug(
-                "Harmony: acorde detectado → "
+                "Harmony: chord detected: "
                 f"{[p.nameWithOctave for p in ch.pitches]}"
             )
 
-    debug("Harmony: nº total de acordes =", len(chords_list))
+    debug("Harmony: # total chords =", len(chords_list))
     return chords_list
 
 def chord_short_name(ch):
@@ -208,14 +208,14 @@ def chord_short_name(ch):
 def harmonic_features(score):
     try:
         key = score.analyze('key')
-        debug("Harmony: tonalidad =", key)
+        debug("Harmony: key =", key)
     except:
-        debug("Harmony: no se pudo detectar tonalidad")
+        debug("Harmony: could not detect key")
         return np.zeros(len(HARMONIC_FUNCTIONS))
 
     chords = extract_harmonic_chords(score)
 
-    debug("Harmony: nº acordes =", len(chords))
+    debug("Harmony: # chords =", len(chords))
 
     if not chords:
         return np.zeros(len(HARMONIC_FUNCTIONS))
@@ -235,13 +235,13 @@ def harmonic_features(score):
             # Debug
             short_name = chord_short_name(chord_obj)
             debug(
-                f"Harmony DEBUG: acorde = {short_name} | "
+                f"Harmony DEBUG: chord = {short_name} | "
                 f"notas = {notes_in_chord} | "
                 f"figure = {rn.figure} | función = {func}"
             )
 
         except Exception as e:
-            debug("Harmony DEBUG: error con acorde", chord_obj, e)
+            debug("Harmony DEBUG: chord error", chord_obj, e)
             function_counts["Other"] += 1
 
     total = sum(function_counts.values())
@@ -255,9 +255,9 @@ def harmonic_features(score):
 def harmonic_transition_features(score):
     try:
         key = score.analyze('key')
-        debug("Harmony transitions: tonalidad =", key)
+        debug("Harmony transitions: key =", key)
     except:
-        debug("Harmony transitions: sin tonalidad")
+        debug("Harmony transitions: no key")
         return np.zeros(25)
 
     # chords = score.chordify().flatten().getElementsByClass('Chord')
@@ -272,7 +272,7 @@ def harmonic_transition_features(score):
         except:
             continue
 
-    debug("Harmony transitions: funciones =", funcs)
+    debug("Harmony transitions: functions =", funcs)
 
     labels = ["T", "PD", "D", "Dsec", "Other"]
     matrix = np.zeros((len(labels), len(labels)))
@@ -297,7 +297,7 @@ def rhythmic_sequence(score):
             continue
         measure_len = m.barDuration.quarterLength
         sequence.append(n.quarterLength / measure_len)
-    debug("Rhythm: secuencia =", sequence[:10], "...")
+    debug("Rhythm: sequence =", sequence[:10], "...")
     return sequence
 
 def rhythmic_ngrams(sequence, n=3):
@@ -313,10 +313,10 @@ def rhythmic_fft(sequence):
 
 def rhythmic_features(score, ngram_n=3, fft_len=16, hist_bins=12):
     sequence = rhythmic_sequence(score)
-    debug("Rhythm: longitud secuencia =", len(sequence))
+    debug("Rhythm: sequence length =", len(sequence))
 
     if len(sequence) == 0:
-        debug("Rhythm: secuencia vacía")
+        debug("Rhythm: empty sequence")
         return np.zeros(hist_bins + fft_len + ngram_n)
 
     hist, _ = np.histogram(sequence, bins=hist_bins, range=(0, 2))
@@ -351,10 +351,10 @@ def normalize_name(name):
 def instrumental_features(score):
     vector = {fam: 0.0 for fam in INSTRUMENT_FAMILIES}
     instruments = score.recurse().getElementsByClass(instrument.Instrument)
-    debug("Instrumentation: nº instrumentos =", len(instruments))
+    debug("Instrumentation: # instruments =", len(instruments))
 
     for inst in instruments:
-        debug("Instrumento:", inst.instrumentName, inst.partName)
+        debug("Instrument:", inst.instrumentName, inst.partName)
         names = [n for n in [inst.instrumentName, inst.partName] if n]
 
         matched = False
@@ -401,14 +401,14 @@ def extract_melody(score):
     melody_part = parts[0].flatten().notes if parts else score.flatten().notes
     seq = [(n.pitch.midi, n.pitch.nameWithOctave, n.duration.quarterLength)
            for n in melody_part if n.isNote]
-    debug("Motifs: longitud melodía =", len(seq))
+    debug("Motifs: melody length =", len(seq))
     if len(seq) > 0:
-        debug("Motifs: primeras 5 notas =", seq[:5])
+        debug("Motifs: First 5 notes =", seq[:5])
     return seq
 
 def melodic_intervals(sequence):
     intervals = [sequence[i+1][0] - sequence[i][0] for i in range(len(sequence) - 1)]
-    debug("Motifs: primeros 10 intervalos =", intervals[:10])
+    debug("Motifs: First 10 intervals =", intervals[:10])
     return intervals
 
 def rhythmic_ratios(sequence):
@@ -419,7 +419,7 @@ def rhythmic_ratios(sequence):
         else:
             r = 1.0
         ratios.append(r)
-    debug("Motifs: primeros 10 ratios rítmicos =", ratios[:10])
+    debug("Motifs: first 10 rhythmic ratios =", ratios[:10])
     return ratios
 
 def quantize_interval(i):
@@ -487,7 +487,7 @@ def filter_maximal_motifs_with_positions(motifs, top_n):
 
         if not is_sub:
             selected.append((motif, notes, count, positions))
-            debug(f"Motif aceptado (len={len(motif)}, count={count}, posiciones={len(positions)})")
+            debug(f"Motif accepted (len={len(motif)}, count={count}, posiciones={len(positions)})")
 
         if len(selected) >= top_n:
             break
@@ -504,7 +504,7 @@ def extract_top_motifs(sequence, min_length=3, max_length=6, top_n=10):
 
     motif_counter = Counter()
     motif_notes_dict = {}
-    motif_positions = defaultdict(list)  # Nueva: guardar posiciones
+    motif_positions = defaultdict(list)
 
     # 1. Extraer TODOS los motifs
     for length in range(min_length, max_length + 1):
@@ -528,15 +528,15 @@ def extract_top_motifs(sequence, min_length=3, max_length=6, top_n=10):
         for m, count in motif_counter.items()
     ]
 
-    debug(f"Motifs totales antes de filtrar = {len(all_motifs)}")
+    debug(f"Total motifs before filter = {len(all_motifs)}")
 
     # 2. Filtrar solo motifs máximos (adaptado para incluir posiciones)
     filtered = filter_maximal_motifs_with_positions(all_motifs, top_n)
 
-    debug(f"Motifs finales (sin submotifs) = {len(filtered)}")
+    debug(f"Final motifs = {len(filtered)}")
     for i, (m, notes, c, positions) in enumerate(filtered):
         note_info = [(n[1], n[2]) for n in notes]
-        debug(f"Motif {i+1}: len={len(m)} | reps={c} | notas={note_info} | posiciones={positions[:5]}...")
+        debug(f"Motif {i+1}: len={len(m)} | reps={c} | notes={note_info} | positions={positions[:5]}...")
 
     return filtered
 
@@ -557,7 +557,7 @@ def extract_melody_with_measures(score):
 
     debug("Melody with measures: longitud =", len(seq))
     if len(seq) > 0:
-        debug("Melody with measures: primeras 5 notas =", seq[:5])
+        debug("Melody with measures: First 5 notes =", seq[:5])
 
     return seq
 
@@ -570,7 +570,7 @@ def motif_vector(score, dim=128, min_length=3, max_length=6, top_n=10):
     seq_len = len(seq)
 
     if seq_len < min_length + 1:
-        debug(f"Motifs: secuencia demasiado corta (len={seq_len}, min_length={min_length})")
+        debug(f"Motifs: sequence too short (len={seq_len}, min_length={min_length})")
         return np.zeros(dim, dtype=float)
 
     # Convertir a formato compatible con extract_top_motifs (sin measure_num para cálculo)
@@ -578,13 +578,13 @@ def motif_vector(score, dim=128, min_length=3, max_length=6, top_n=10):
 
     motifs = extract_top_motifs(seq_for_motifs, min_length, max_length, top_n)
     if not motifs:
-        debug("Motifs: no se generaron motifs")
+        debug("Motifs: no motifs")
         return np.zeros(dim, dtype=float)
 
     vec = np.zeros(dim, dtype=float)
 
     print("\n" + "="*50)
-    print("MOTIVOS MELÓDICOS DETECTADOS")
+    print("Melodic motifs detected")
     print("="*50)
 
     for m_idx, (m, notes, count, positions) in enumerate(motifs):
@@ -600,20 +600,20 @@ def motif_vector(score, dim=128, min_length=3, max_length=6, top_n=10):
             if pos < len(seq):
                 measures_where_appears.append(seq[pos][3])  # measure_num
 
-        print(f"\nMotivo {m_idx+1}:")
-        print(f"  ├─ Notas: {note_info}")
-        print(f"  ├─ Repeticiones: {count}")
-        print(f"  ├─ Aparece en compases: {measures_where_appears}" + ("..." if len(positions) > 5 else ""))
-        print(f"  └─ Índice en vector: {idx}")
+        print(f"\nMotif {m_idx+1}:")
+        print(f"  ├─ Notes: {note_info}")
+        print(f"  ├─ Repetitions: {count}")
+        print(f"  ├─ In measures: {measures_where_appears}" + ("..." if len(positions) > 5 else ""))
+        print(f"  └─ Index: {idx}")
 
     norm = np.linalg.norm(vec)
     if norm > 0:
         vec /= norm
     else:
-        debug("Motifs: vector todo ceros, normalización omitida")
+        debug("Motifs: Empty vector")
 
     print("="*50)
-    debug(f"Motifs: vector final generado, norma={norm:.3f}, dimensión={dim}")
+    debug(f"Motifs: Final vector, norm={norm:.3f}, dimension={dim}")
     return vec
 
 
@@ -646,7 +646,7 @@ def extract_melody_by_measure(score):
     measures = list(parts[0].getElementsByClass('Measure'))
     melody_per_measure = []
 
-    debug("Motifs by measure: nº compases =", len(measures))
+    debug("Motifs by measure: # measures =", len(measures))
 
     for measure in measures:
         melody_part = measure.flatten().notes
@@ -662,15 +662,16 @@ def identify_repeated_measures(melody_per_measure):
     También registra en qué compás(es) se encuentra cada patrón.
     """
     measure_counter = Counter()
-    measure_locations = defaultdict(list)  # Diccionario para almacenar los índices de compás
+    measure_locations = defaultdict(list)
 
     for i, measure in enumerate(melody_per_measure):
         # Convertimos cada compás a una tupla para que sea hashable
         measure_counter[tuple(measure)] += 1
-        measure_locations[tuple(measure)].append(i)  # Guardamos el índice del compás
+        measure_locations[tuple(measure)].append(i)
 
-    debug(f"Motifs by measure: nº compases únicos = {len(measure_counter)}")
+    debug(f"Motifs by measure: # unique measures = {len(measure_counter)}")
     return measure_counter, measure_locations
+
 
 def compass_motif_vector(score, dim=128, top_n=10):
     """
@@ -684,7 +685,7 @@ def compass_motif_vector(score, dim=128, top_n=10):
     repeated_measures, measure_locations = identify_repeated_measures(melody_per_measure)
 
     if not repeated_measures:
-        debug("Motifs by measure: no se generaron compases repetidos")
+        debug("Motifs by measure: no repeated measures")
         return np.zeros(dim, dtype=float)
 
     # Paso 3: Seleccionar los compases más repetidos (top_n)
@@ -700,18 +701,19 @@ def compass_motif_vector(score, dim=128, top_n=10):
         # Localizamos en qué compás(es) encontramos este patrón
         compasses = measure_locations[measure]
 
-        debug(f"Motif {idx+1}: compás normalizado = {measure} | Repeticiones = {count} → índice vector {measure_idx} | "
-              f"en compases: {compasses}")
+        debug(f"Motif {idx+1}: Measure = {measure} | Repetitions = {count} → index {measure_idx} | "
+              f"in measures: {compasses}")
 
     # Normalizamos el vector
     norm = np.linalg.norm(vec)
     if norm > 0:
         vec /= norm
     else:
-        debug("Motifs by measure: vector todo ceros, normalización omitida")
+        debug("Motifs by measure: empty vector")
 
-    debug(f"Motifs by measure: vector final generado, norma={norm:.3f}, dimensión={dim}")
+    debug(f"Motifs by measure: Final vector, norm={norm:.3f}, dimension={dim}")
     return vec
+
 
 # =========================
 # FORMA
@@ -720,13 +722,13 @@ def compass_motif_vector(score, dim=128, top_n=10):
 def segment_by_measures(score, window_size=4):
     parts = getattr(score, 'parts', [score])
     measures = list(parts[0].getElementsByClass('Measure'))
-    debug("Form: nº compases =", len(measures))
+    debug("Form: # measures =", len(measures))
     segments = []
 
     for i in range(0, len(measures), window_size):
         segments.append(measures[i:i+window_size])
 
-    debug("Form: nº segmentos =", len(segments))
+    debug("Form: # segments =", len(segments))
     return segments
 
 def segment_descriptor(segment):
@@ -740,12 +742,12 @@ def segment_descriptor(segment):
 
     norm = np.linalg.norm(v)
     if norm == 0:
-        return v  # Retorna vector de ceros tal cual
+        return v
 
     return v / norm
 
 def cluster_segments(descriptors, similarity_threshold=0.85):
-    debug("Clustering: nº descriptores =", len(descriptors))
+    debug("Clustering: # descriptors =", len(descriptors))
     clustering = AgglomerativeClustering(
         n_clusters=None,
         affinity='cosine',
@@ -766,7 +768,7 @@ def normalize_form(labels):
             next_label = chr(ord(next_label) + 1)
         form.append(mapping[l])
 
-    debug("Form normalizada:", form)
+    debug("Normalized form:", form)
     return form
 
 def form_statistics(form):
@@ -807,7 +809,7 @@ def form_structure_vector(score, window_size=4, similarity_threshold=0.85):
     is_zero = np.array([np.all(d == 0) for d in descriptors])
 
     if np.all(is_zero):
-        debug("Form: Todos los segmentos están vacíos.")
+        debug("Form: All the segments are empty.")
         return np.zeros(64)
 
     # Solo hacemos clustering de los segmentos NO vacíos
@@ -835,7 +837,7 @@ def form_structure_vector(score, window_size=4, similarity_threshold=0.85):
             next_label = chr(ord(next_label) + 1)
         form.append(mapping[l])
 
-    debug("Form detectada:", form)
+    debug("Form:", form)
 
     v_stats = form_statistics(form)
     v_ngrams = form_ngrams(form, n=3, dim=32)
@@ -853,106 +855,6 @@ class Rule:
 
     def __repr__(self):
         return f"{self.name} -> {self.symbols}"
-
-class SequiturGrammar:
-    def __init__(self):
-        self.rules = {}
-        self.next_rule_id = 1
-        self.root_sequence = []
-
-    def _get_new_rule_name(self):
-        name = f"R{self.next_rule_id}"
-        self.next_rule_id += 1
-        return name
-
-    def build(self, sequence):
-        """
-        Implementación estilo Re-Pair (más estable para música que Sequitur).
-        Prioriza el reemplazo del par MÁS FRECUENTE globalmente.
-        """
-        if not sequence: return {}
-
-        # Copia de trabajo
-        current_seq = list(sequence)
-
-        while True:
-            # 1. Contar pares adyacentes
-            pairs = Counter()
-            for i in range(len(current_seq) - 1):
-                pair = (current_seq[i], current_seq[i+1])
-                pairs[pair] += 1
-
-            # 2. Condición de parada: No hay pares repetidos
-            if not pairs: break
-
-            # Encontramos el par más frecuente
-            most_common_pair, count = pairs.most_common(1)[0]
-
-            if count < 2:
-                break # Si el más común aparece solo una vez, terminamos
-
-            # 3. Crear nueva regla
-            rule_name = self._get_new_rule_name()
-            self.rules[rule_name] = list(most_common_pair)
-
-            # 4. Reemplazar en la secuencia (sin solapamiento)
-            new_seq = []
-            i = 0
-            while i < len(current_seq):
-                if i < len(current_seq) - 1 and (current_seq[i], current_seq[i+1]) == most_common_pair:
-                    new_seq.append(rule_name)
-                    i += 2
-                else:
-                    new_seq.append(current_seq[i])
-                    i += 1
-
-            current_seq = new_seq
-
-        self.root_sequence = current_seq
-        return self.rules
-
-    def expand_rule(self, symbol):
-        """
-        Despliega recursivamente una regla para ver las notas reales
-        que contiene, no solo las sub-reglas.
-        Ejemplo: Convierte 'R5' -> [60, 62, 64, 60]
-        """
-        if symbol not in self.rules:
-            return [symbol] # Es una nota terminal (número)
-
-        expansion = []
-        for s in self.rules[symbol]:
-            expansion.extend(self.expand_rule(s))
-        return expansion
-
-    def get_musical_hierarchy(self):
-        """
-        Devuelve una estructura legible para humanos.
-        Muestra qué frases musicales reales representa cada regla.
-        """
-        hierarchy = {}
-        # Ordenamos por ID para entender la construcción de abajo hacia arriba
-        sorted_keys = sorted(self.rules.keys(), key=lambda x: int(x[1:]))
-
-        for rule_name in sorted_keys:
-            # Expandimos completamente para ver las notas
-            flat_notes = self.expand_rule(rule_name)
-
-            # Obtenemos la definición inmediata (quizás contenga otras reglas)
-            structure = self.rules[rule_name]
-
-            hierarchy[rule_name] = {
-                "structure": structure,     # Cómo se construye (ej: [R1, 67])
-                "phrase": flat_notes,       # Qué suena realmente (ej: [60, 62, 67])
-                "length": len(flat_notes)
-            }
-
-        return hierarchy, self.root_sequence
-
-
-# =========================
-# SEQUITUR CON REGLAS PERSONALIZADAS
-# =========================
 
 class CustomRule:
     """
@@ -1011,7 +913,7 @@ class SequiturWithCustomRules:
         elif custom_rule.rule_type == "measure":
             # Extraer notas de un compás específico
             if measure_map is None:
-                debug(f"Error: se necesita measure_map para regla de compás '{custom_rule.name}'")
+                debug(f"Error: measure_map needed for measure rule '{custom_rule.name}'")
                 return []
 
             measure_num = custom_rule.content
@@ -1026,7 +928,7 @@ class SequiturWithCustomRules:
                 if ref_name in self.custom_rule_map:
                     expanded.extend(self.custom_rule_map[ref_name])
                 else:
-                    debug(f"Advertencia: regla '{ref_name}' no encontrada, ignorando")
+                    debug(f"Warning: rule '{ref_name}' not found, ignoring")
             return expanded
 
         return []
@@ -1037,7 +939,7 @@ class SequiturWithCustomRules:
         Las almacena en self.rules y self.custom_rule_map.
         """
         print("\n" + "="*50)
-        print("INICIALIZANDO REGLAS PERSONALIZADAS")
+        print("Initializing custom rules")
         print("="*50)
 
         for custom_rule in self.custom_rules:
@@ -1052,11 +954,11 @@ class SequiturWithCustomRules:
                 if len(expanded) > 8:
                     notes_str += "..."
 
-                print(f"\n▶ Regla '{custom_rule.name}':")
-                print(f"  ├─ Tipo: {custom_rule.rule_type}")
-                print(f"  ├─ Contenido: {custom_rule.content}")
-                print(f"  ├─ Notas expandidas: [{notes_str}]")
-                print(f"  └─ Longitud: {len(expanded)} notas")
+                print(f"\n Rule '{custom_rule.name}':")
+                print(f"  ├─ Type: {custom_rule.rule_type}")
+                print(f"  ├─ Content: {custom_rule.content}")
+                print(f"  ├─ Notes: [{notes_str}]")
+                print(f"  └─ Length: {len(expanded)} notes")
 
         print("="*50 + "\n")
 
@@ -1101,7 +1003,7 @@ class SequiturWithCustomRules:
 
             current_seq = new_seq
 
-        debug(f"Reemplazos de reglas personalizadas: {replacements_made}")
+        debug(f"Replacements of custom rules: {replacements_made}")
         return current_seq
 
     def build(self, symbols, measure_map=None):
@@ -1121,7 +1023,7 @@ class SequiturWithCustomRules:
         # 2. Reemplazar ocurrencias de reglas personalizadas en la secuencia
         current_seq = self._replace_custom_rules_in_sequence(symbols)
 
-        debug(f"Secuencia después de aplicar reglas personalizadas: {current_seq[:20]}...")
+        debug(f"Sequence after applying custom rules: {current_seq[:20]}...")
 
         # 3. Aplicar algoritmo Re-Pair (igual que antes)
         while True:
@@ -1289,14 +1191,14 @@ def melody_to_sequitur_absolute_pitch_symbols(score):
     seq = extract_melody(score)
 
     if len(seq) < 2:
-        debug("Sequitur abs-pitch: melodía demasiado corta")
+        debug("Sequitur abs-pitch: melody too short")
         return []
 
     # 2. Extraemos el valor MIDI (n[0]) de cada tupla (pitch, name, duration)
     symbols = [n[0] for n in seq]
 
     debug(
-        "Sequitur abs-pitch: símbolos =",
+        "Sequitur abs-pitch: symbols =",
         symbols[:12],
         "..." if len(symbols) > 12 else ""
     )
@@ -1331,7 +1233,7 @@ def melody_to_sequitur_with_measures(score):
             symbols.append(n.pitch.midi)
             measure_map.append(measure_number)
 
-    debug(f"Sequitur tracking: {len(symbols)} notas en {max(measure_map) if measure_map else 0} compases")
+    debug(f"Sequitur tracking: {len(symbols)} notes in {max(measure_map) if measure_map else 0} measures")
 
     return symbols, measure_map
 
@@ -1344,11 +1246,11 @@ def sequitur_absolute_pitch_semantic_vector(score, dim=128):
     symbols = melody_to_sequitur_absolute_pitch_symbols(score)
 
     if len(symbols) < 4:
-        debug("Sequitur: secuencia demasiado corta")
+        debug("Sequitur: sequence too short")
         return np.zeros(dim)
 
     # 2. Construir Gramática con SequiturGrammar
-    grammar = SequiturGrammar()
+    grammar = SequiturWithCustomRules()
     rules = grammar.build(symbols)
     hierarchy, root_seq = grammar.get_musical_hierarchy()
 
@@ -1356,10 +1258,9 @@ def sequitur_absolute_pitch_semantic_vector(score, dim=128):
     vec = np.zeros(dim)
 
     print("\n" + "="*50)
-    print("ANÁLISIS JERÁRQUICO DE LA MELODÍA (SEQUITUR)")
+    print("MELODY ANALYSIS (SEQUITUR)")
     print("="*50)
-    print(f"Estructura Maestra (Root): {root_seq}\n")
-    print("Motivos y Frases Identificadas:")
+    print(f"Root sequence: {root_seq}\n")
 
     # Ordenamos las reglas para ver cómo se construyen de menor a mayor
     for rule_name, data in hierarchy.items():
@@ -1377,11 +1278,11 @@ def sequitur_absolute_pitch_semantic_vector(score, dim=128):
         # Traducimos las notas MIDI a nombres de notas para que sea legible
         notas_legibles = [pitch.Pitch(midi).nameWithOctave for midi in data['phrase']]
 
-        print(f"\n▶ {rule_name}:")
-        print(f"  └─ Contenido: {data['structure']}")
-        print(f"  └─ Notas Reales: {notas_legibles}")
-        print(f"  └─ Longitud: {data['length']} notas")
-        print(f"  └─ Impacto en Vector (Índice {idx}): +{weight}")
+        print(f"\n {rule_name}:")
+        print(f"  └─ Content: {data['structure']}")
+        print(f"  └─ Notes: {notas_legibles}")
+        print(f"  └─ Length: {data['length']} notas")
+        print(f"  └─ Weight (Index {idx}): +{weight}")
 
     # Normalización del vector para comparaciones futuras
     norm = np.linalg.norm(vec)
@@ -1389,7 +1290,7 @@ def sequitur_absolute_pitch_semantic_vector(score, dim=128):
         vec /= norm
 
     print("\n" + "="*50)
-    debug(f"Sequitur: Vector final generado (norma={norm:.3f})")
+    debug(f"Sequitur: Final vector (norma={norm:.3f})")
 
     return vec
 
@@ -1415,7 +1316,7 @@ def sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rule
     symbols, measure_map = melody_to_sequitur_with_measures(score)
 
     if len(symbols) < 4:
-        debug("Sequitur: secuencia demasiado corta")
+        debug("Sequitur: sequence too short")
         return np.zeros(dim)
 
     # 2. Construir Gramática con reglas personalizadas
@@ -1427,17 +1328,17 @@ def sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rule
     vec = np.zeros(dim)
 
     print("\n" + "="*50)
-    print("ANÁLISIS JERÁRQUICO DE LA MELODÍA (SEQUITUR + REGLAS PERSONALIZADAS)")
+    print("MELODY ANALYSIS (SEQUITUR + CUSTOM RULES)")
     print("="*50)
-    print(f"Estructura Maestra (Root): {root_seq}\n")
+    print(f"Root sequence: {root_seq}\n")
 
     if custom_rules:
-        print("✓ Reglas Personalizadas Definidas:")
+        print("Custom rules:")
         for cr in custom_rules:
-            print(f"  • {cr.name} ({cr.rule_type})")
+            print(f"  - {cr.name} ({cr.rule_type})")
         print()
 
-    print("Motivos y Frases Identificadas:")
+    print("Motifs and phrases:")
 
     # Función auxiliar para encontrar compases de una frase
     def get_measure_range_from_notes(note_indices):
@@ -1467,7 +1368,7 @@ def sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rule
 
     # Mostrar primero reglas personalizadas
     if custom_rule_names:
-        print("\n--- REGLAS PERSONALIZADAS ---")
+        print("\n--- CUSTOM RULES ---")
 
     for rule_name, data in hierarchy.items():
         if not data.get('is_custom', False):
@@ -1486,17 +1387,17 @@ def sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rule
         note_indices = get_note_indices_for_rule(rule_name)
         measure_range = get_measure_range_from_notes(note_indices)
 
-        print(f"\n▶ {rule_name} (PERSONALIZADA):")
-        print(f"  ├─ Contenido: {data['structure']}")
-        print(f"  ├─ Notas Reales: {notas_legibles}")
-        print(f"  ├─ Longitud: {data['length']} notas")
-        print(f"  ├─ Compases: {measure_range}")
-        print(f"  └─ Impacto en Vector (Índice {idx}): +{weight}")
+        print(f"\n {rule_name} (CUSTOM):")
+        print(f"  ├─ Content: {data['structure']}")
+        print(f"  ├─ Notes: {notas_legibles}")
+        print(f"  ├─ Length: {data['length']} notes")
+        print(f"  ├─ Measure: {measure_range}")
+        print(f"  └─ Weight (Index {idx}): +{weight}")
 
     # Mostrar reglas automáticas
     auto_rules_exist = any(not data.get('is_custom', False) for data in hierarchy.values())
     if auto_rules_exist:
-        print("\n--- REGLAS AUTOMÁTICAS (SEQUITUR) ---")
+        print("\n--- AUTOMATIC RULES (SEQUITUR) ---")
 
     for rule_name, data in hierarchy.items():
         if data.get('is_custom', False):
@@ -1515,12 +1416,12 @@ def sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rule
         note_indices = get_note_indices_for_rule(rule_name)
         measure_range = get_measure_range_from_notes(note_indices)
 
-        print(f"\n▶ {rule_name}:")
-        print(f"  ├─ Contenido: {data['structure']}")
-        print(f"  ├─ Notas Reales: {notas_legibles}")
-        print(f"  ├─ Longitud: {data['length']} notas")
-        print(f"  ├─ Compases: {measure_range}")
-        print(f"  └─ Impacto en Vector (Índice {idx}): +{weight}")
+        print(f"\n {rule_name}:")
+        print(f"  ├─ Content: {data['structure']}")
+        print(f"  ├─ Notes: {notas_legibles}")
+        print(f"  ├─ Length: {data['length']} notes")
+        print(f"  ├─ Measures: {measure_range}")
+        print(f"  └─ Weight (Index {idx}): +{weight}")
 
     # Normalización del vector
     norm = np.linalg.norm(vec)
@@ -1528,7 +1429,7 @@ def sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rule
         vec /= norm
 
     print("\n" + "="*50)
-    debug(f"Sequitur: Vector final generado (norma={norm:.3f})")
+    debug(f"Sequitur: Final vector (norm={norm:.3f})")
 
     return vec
     """
@@ -1539,11 +1440,11 @@ def sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rule
     symbols, measure_map = melody_to_sequitur_with_measures(score)
 
     if len(symbols) < 4:
-        debug("Sequitur: secuencia demasiado corta")
+        debug("Sequitur: Sequence too short")
         return np.zeros(dim)
 
     # 2. Construir Gramática con SequiturGrammar
-    grammar = SequiturGrammar()
+    grammar = SequiturWithCustomRules()
     rules = grammar.build(symbols)
     hierarchy, root_seq = grammar.get_musical_hierarchy()
 
@@ -1551,10 +1452,10 @@ def sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rule
     vec = np.zeros(dim)
 
     print("\n" + "="*50)
-    print("ANÁLISIS JERÁRQUICO DE LA MELODÍA (SEQUITUR)")
+    print("MELODY ANALYSIS (SEQUITUR)")
     print("="*50)
-    print(f"Estructura Maestra (Root): {root_seq}\n")
-    print("Motivos y Frases Identificadas:")
+    print(f"Root sequence: {root_seq}\n")
+    print("Motifs and Phrases:")
 
     # Función auxiliar para encontrar compases de una frase
     def get_measure_range_from_notes(note_indices):
@@ -1594,12 +1495,12 @@ def sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rule
         note_indices = get_note_indices_for_rule(rule_name)
         measure_range = get_measure_range_from_notes(note_indices)
 
-        print(f"\n▶ {rule_name}:")
-        print(f"  ├─ Contenido: {data['structure']}")
-        print(f"  ├─ Notas Reales: {notas_legibles}")
-        print(f"  ├─ Longitud: {data['length']} notas")
-        print(f"  ├─ Compases: {measure_range}")
-        print(f"  └─ Impacto en Vector (Índice {idx}): +{weight}")
+        print(f"\n {rule_name}:")
+        print(f"  ├─ Content: {data['structure']}")
+        print(f"  ├─ Notes: {notas_legibles}")
+        print(f"  ├─ Length: {data['length']} notes")
+        print(f"  ├─ Measures: {measure_range}")
+        print(f"  └─ Weight (Index {idx}): +{weight}")
 
     # Normalización del vector
     norm = np.linalg.norm(vec)
@@ -1607,7 +1508,7 @@ def sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rule
         vec /= norm
 
     print("\n" + "="*50)
-    debug(f"Sequitur: Vector final generado (norma={norm:.3f})")
+    debug(f"Sequitur: Final vector (norma={norm:.3f})")
 
     return vec
 
@@ -1636,13 +1537,13 @@ def novelty_structure_vector(score, kernel_size=8, threshold=0.15, dim=64):
     Genera un vector de estructura basado en segmentación dinámica
     por curva de novedad (Novelty Detection).
     """
-    debug("Novelty: Iniciando segmentación dinámica...")
+    debug("Novelty: Dynamic segmentation...")
 
     parts = getattr(score, 'parts', [score])
     measures = list(parts[0].getElementsByClass('Measure'))
 
     if len(measures) < kernel_size:
-        debug("Novelty: Score demasiado corto para el kernel actual.")
+        debug("Novelty: Score too short for current kernel.")
         return np.zeros(dim)
 
     # 1. Obtener descriptores compás a compás
@@ -1677,7 +1578,7 @@ def novelty_structure_vector(score, kernel_size=8, threshold=0.15, dim=64):
         seg = measures[boundaries[i] : boundaries[i+1]]
         dynamic_segments.append(seg)
 
-    debug(f"Novelty: Detectadas {len(dynamic_segments)} secciones dinámicas.")
+    debug(f"Novelty: {len(dynamic_segments)} dynamic sections detected.")
 
     # 5. Clustering y Vectorización (reutilizando tu lógica de forma)
     if len(dynamic_segments) < 2:
@@ -1715,7 +1616,7 @@ def melodic_ngram_vector(score, n=3, dim=128):
     """
     seq = extract_melody(score)
     if len(seq) < n + 1:
-        debug("Melodic n-grams: melodía demasiado corta")
+        debug("Melodic n-grams: Melody too short")
         return np.zeros(dim)
 
     # Intervalos melódicos
@@ -1742,7 +1643,7 @@ def melodic_ngram_vector(score, n=3, dim=128):
         vec /= norm
 
     debug(
-        f"Melodic n-grams: n={n}, únicos={len(ngrams)}, norma={norm:.3f}"
+        f"Melodic n-grams: n={n}, unique={len(ngrams)}, norm={norm:.3f}"
     )
 
     return vec
@@ -1767,7 +1668,7 @@ def rhythmic_ngram_vector(score, n=3, dim=128):
     """
     seq = extract_melody(score)
     if len(seq) < n + 1:
-        debug("Rhythmic n-grams: secuencia demasiado corta")
+        debug("Rhythmic n-grams: Sequence too short")
         return np.zeros(dim)
 
     durations = [n[2] for n in seq]
@@ -1798,7 +1699,7 @@ def rhythmic_ngram_vector(score, n=3, dim=128):
         vec /= norm
 
     debug(
-        f"Rhythmic n-grams: n={n}, únicos={len(ngrams)}, norma={norm:.3f}"
+        f"Rhythmic n-grams: n={n}, unique={len(ngrams)}, norm={norm:.3f}"
     )
 
     return vec
@@ -1816,7 +1717,6 @@ def compute_segment_ngram_vector(notes, n=3, bins=12):
     total_dim = bins * 2
 
     if len(notes) < 2:
-        # CORRECCIÓN: Devolver ceros del tamaño TOTAL, no solo 'bins'
         return np.zeros(total_dim)
 
     # 1. Calcular intervalos
@@ -1871,7 +1771,7 @@ def merge_similar_clusters(labels, vectors, similarity_threshold):
             sim = np.dot(centroids[l1], centroids[l2])
 
             if sim > similarity_threshold:
-                debug(f"Form Advanced: Fusionando Cluster {l2} -> {l1} (Sim: {sim:.3f})")
+                debug(f"Form Advanced: Cluster Fusion {l2} -> {l1} (Sim: {sim:.3f})")
                 # Mapear l2 al ID de l1
                 old_target = mapping[l2]
                 new_target = mapping[l1]
@@ -1988,18 +1888,18 @@ def advanced_sequitur_form(score, max_parts=4, n_clusters=4, similarity_threshol
     7. Detección de compases por parte
     """
     print("\n" + "="*50)
-    print("ANÁLISIS DE FORMA AVANZADO (SEQUITUR + CLUSTERING)")
+    print("ADVANCED FORM ANALYSIS (SEQUITUR + CLUSTERING)")
     print("="*50)
 
     # 1. Obtener símbolos y mapeo de compases
     symbols, measure_map = melody_to_sequitur_with_measures(score)
 
     if not symbols:
-        debug("No se pudieron obtener símbolos")
+        debug("Could not obtain symbols")
         return "N/A"
 
     # 2. Crear gramática
-    grammar = SequiturGrammar()
+    grammar = SequiturWithCustomRules()
     grammar.build(symbols)
     root_seq = grammar.root_sequence
 
@@ -2007,11 +1907,11 @@ def advanced_sequitur_form(score, max_parts=4, n_clusters=4, similarity_threshol
 
     # 3. Expandir root_seq con tracking de índices
     if len(root_seq) == 1 and str(root_seq[0]).startswith('R'):
-        debug("Raíz unitaria detectada, expandiendo un nivel...")
+        debug("Unitary root. Expand one level...")
         root_seq = grammar.rules[root_seq[0]]
 
     if not root_seq:
-        debug("Root sequence vacía después de expansión")
+        debug("Empty root after expansion")
         return "N/A"
 
     segments = []
@@ -2029,23 +1929,23 @@ def advanced_sequitur_form(score, max_parts=4, n_clusters=4, similarity_threshol
 
         current_index += len(notes)
 
-    debug(f"Segmentos creados: {len(segments)}")
+    debug(f"Segment: {len(segments)}")
 
     if not segments:
-        debug("No se crearon segmentos")
+        debug("No segmentos")
         return "N/A"
 
     # 4. Simplificación
     segments = simplify_segments_preserving_indices(segments, max_parts)
 
-    debug(f"Segmentos después de simplificación: {segments}")
+    debug(f"Segments after simplification: {segments}")
 
     if segments is None:
-        debug("ERROR: simplify_segments_preserving_indices devolvió None")
+        debug("ERROR: simplify_segments_preserving_indices is None")
         return "N/A"
 
     if not segments:
-        debug("Lista de segmentos vacía después de simplificación")
+        debug("Empty segments list after simplification")
         return "N/A"
 
     # 5. Extracción de características
@@ -2069,11 +1969,11 @@ def advanced_sequitur_form(score, max_parts=4, n_clusters=4, similarity_threshol
             linkage='average'
         )
         labels = clustering.fit_predict(X)
-        debug(f"Etiquetas clustering inicial: {labels}")
+        debug(f"Initial clustering labels: {labels}")
 
         # 5. Combinar Clusters similares
         refined_labels = merge_similar_clusters(labels, X, similarity_threshold)
-        debug(f"Etiquetas refinadas: {refined_labels}")
+        debug(f"Refined labels: {refined_labels}")
 
         # 6. Generar cadena de forma (A, B, C...)
         # Asignamos letras basándonos en el orden de aparición
@@ -2090,8 +1990,8 @@ def advanced_sequitur_form(score, max_parts=4, n_clusters=4, similarity_threshol
     form_string = "".join(final_form)
 
     # 7. MOSTRAR RESULTADOS CON COMPASES
-    print(f"\n📊 Estructura Resultante: {form_string}")
-    print("\n🎵 Detalle de Secciones:\n")
+    print(f"\nResulting form: {form_string}")
+    print("\nSections:\n")
 
     for i, char in enumerate(final_form):
         seg = segments[i]
@@ -2112,10 +2012,10 @@ def advanced_sequitur_form(score, max_parts=4, n_clusters=4, similarity_threshol
         snippet = seg['notes'][:5]
         snippet_str = ", ".join([str(pitch.Pitch(midi).nameWithOctave) for midi in snippet])
 
-        print(f"  Parte {i+1} ({char}):")
+        print(f"  Part {i+1} ({char}):")
         print(f"    ├─ {measure_range}")
         print(f"    ├─ {len(seg['notes'])} notas")
-        print(f"    └─ Inicio: [{snippet_str}...]")
+        print(f"    └─ Start: [{snippet_str}...]")
         print()
 
     print("="*50)
@@ -2174,9 +2074,9 @@ def form_string_to_vector(form_string, dim=32):
 # EJECUCIÓN
 # =========================
 
-debug("Cargando score...")
+debug("Loading score...")
 score = converter.parse('./coming_fix.musicxml')
-debug("Score cargado correctamente")
+debug("Score loaded")
 
 custom_rules = [
     CustomRule("intro", "measure", 1),  # Usar compás 1 como regla "intro"
