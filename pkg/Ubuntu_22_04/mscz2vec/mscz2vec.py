@@ -157,6 +157,16 @@ def extract_harmonic_chords(stream):
 
         if len(group) >= 2:
             ch = chord.Chord(group)
+
+            # *** AÑADIR: Obtener el compás de la primera nota del grupo ***
+            first_note = group[0]
+            measure = first_note.getContextByClass('Measure')
+            if measure:
+                # Guardar el número de compás como atributo personalizado
+                ch._stored_measure_number = measure.measureNumber
+            else:
+                ch._stored_measure_number = None
+
             chords_list.append(ch)
 
             debug(
@@ -232,12 +242,18 @@ def harmonic_features(score):
             # Notas del acorde
             notes_in_chord = [p.nameWithOctave for p in chord_obj.pitches]
 
-            # Debug
+            # *** MODIFICADO: Obtener el compás del atributo personalizado ***
+            measure_num = getattr(chord_obj, '_stored_measure_number', '?')
+            if measure_num is None:
+                measure_num = '?'
+
+            # Debug con información de compás
             short_name = chord_short_name(chord_obj)
             debug(
                 f"Harmony DEBUG: chord = {short_name} | "
-                f"notas = {notes_in_chord} | "
-                f"figure = {rn.figure} | función = {func}"
+                f"notes = {notes_in_chord} | "
+                f"figure = {rn.figure} | function = {func} | "
+                f"measure = {measure_num}"
             )
 
         except Exception as e:
@@ -2086,7 +2102,7 @@ custom_rules = [
 
 # print(rhythmic_features(score))
 # print(melodic_features(score))
-# print(harmonic_features(score))
+print(harmonic_features(score))
 # print(harmonic_transition_features(score))
 # print(instrumental_features(score))
 # print(motif_vector(score))
@@ -2096,5 +2112,5 @@ custom_rules = [
 # print(novelty_structure_vector(score))
 # print(melodic_ngram_vector(score))
 # print(rhythmic_ngram_vector(score))
-print(advanced_sequitur_form(score))
+# print(advanced_sequitur_form(score))
 # print(form_string_to_vector(advanced_sequitur_form(score)))
