@@ -391,6 +391,109 @@ def extract_bass_elements(part):
     return elements
 
 
+def detect_alberti_bass(elements, start_idx, max_notes=8):
+    """
+    Detecta patrones de bajo de Alberti.
+    Patrón típico: bajo - agudo - medio - agudo (se repite)
+    Ejemplo: Do - Sol - Mi - Sol - Do - Sol - Mi - Sol
+
+    Características del bajo Alberti:
+    1. Mínimo 4 notas (un ciclo completo)
+    2. Las notas forman un acorde cuando se consideran todas juntas
+    3. Patrón repetitivo con movimiento característico
+    4. La nota más grave suele aparecer en posiciones 1, 5, 9... (cada 4 notas)
+    """
+    if start_idx >= len(elements):
+        return None
+
+    # Recolectar notas consecutivas individuales
+    notes = []
+    i = start_idx
+
+    while i < len(elements) and len(notes) < max_notes:
+        if elements[i]['type'] != 'note':
+            break
+        notes.append(elements[i])
+        i += 1
+
+    if len(notes) < 4:
+        return None
+
+    # Extraer las alturas MIDI
+    pitches = [n['pitches'][0].midi for n in notes]
+
+    # Verificar patrón de bajo Alberti
+    # Características:
+    # 1. La primera nota suele ser la más grave
+    # 2. Hay un patrón de saltos (no es cromático ni escalar puro)
+    # 3. Se repite cada 3-4 notas
+
+    # Detectar si hay un patrón repetitivo cada 3 o 4 notas
+    for pattern_length in [3, 4]:
+        if len(notes) < pattern_length * 2:
+            continue
+
+        # Extraer el patrón inicial (en términos de intervalos relativos)
+        pattern = []
+        base_pitch = pitches[0]
+        for j in range(pattern_length):
+            pattern.append(pitches[j] - base_pitch)
+
+        # Verificar si el patrón se repite
+        matches = 0
+        for start in range(pattern_length, len(pitches) - pattern_length + 1, pattern_length):
+            chunk_base = pitches[start]
+            chunk_pattern = [pitches[start + j] - chunk_base for j in range(pattern_length)]
+
+            if chunk_pattern == pattern:
+                matches += 1
+
+        # Si encontramos al menos una repetición completa
+        if matches >= 1:
+            # Verificar que las notas forman un acorde
+            unique_pitches = list(set([p % 12 for p in pitches]))
+
+            if len(unique_pitches) >= 3:
+                # Calcular cuántas notas forman el patrón completo
+                total_pattern_notes = pattern_length * (matches + 1)
+
+                return {
+                    'elements': notes[:total_pattern_notes],
+                    'all_pitches': [n['pitches'][0] for n in notes[:total_pattern_notes]],
+                    'end_index': start_idx + total_pattern_notes,
+                    'pattern_type': 'alberti',
+                    'pattern_length': pattern_length,
+                    'repetitions': matches + 1
+                }
+
+    # Verificar patrón de bajo Alberti menos estricto:
+    # Movimiento bajo-alto-medio-alto (sin necesidad de repetición exacta)
+    if len(notes) >= 4:
+        # Verificar que hay saltos característicos (no movimiento escalar)
+        intervals = [abs(pitches[j+1] - pitches[j]) for j in range(len(pitches)-1)]
+        avg_interval = np.mean(intervals)
+
+        # Si hay saltos promedio de 3+ semitonos (terceras o mayores)
+        if avg_interval >= 3:
+            # Verificar que las notas forman un acorde
+            unique_pitches = list(set([p % 12 for p in pitches[:4]]))
+
+            if len(unique_pitches) >= 3:
+                # Tomar hasta 8 notas o hasta que cambie el patrón
+                alberti_notes = notes[:min(8, len(notes))]
+
+                return {
+                    'elements': alberti_notes,
+                    'all_pitches': [n['pitches'][0] for n in alberti_notes],
+                    'end_index': start_idx + len(alberti_notes),
+                    'pattern_type': 'alberti',
+                    'pattern_length': 4,
+                    'repetitions': len(alberti_notes) // 4
+                }
+
+    return None
+
+
 def detect_bass_chord_pattern(elements, start_idx, time_window):
     """
     Detecta el patrón: nota/acorde + acorde formando un acorde completo.
