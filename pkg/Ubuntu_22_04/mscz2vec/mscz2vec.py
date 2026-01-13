@@ -3075,6 +3075,601 @@ def advanced_harmonic_features_vector(score):
 
     return final_vector
 
+def dissonance_analysis(score):
+    """
+    Analiza el nivel de disonancia y tensión armónica.
+    Returns: vector [dissonance_ratio, avg_dissonance_level, tension_curve_variance]
+    """
+    chords = extract_harmonic_chords(score)
+
+    if not chords:
+        return np.zeros(3)
+
+    print("\n" + "="*50)
+    print("DISSONANCE ANALYSIS")
+    print("="*50)
+
+    dissonance_levels = []
+    dissonant_count = 0
+
+    for chord_obj in chords:
+        try:
+            # Calcular intervalos entre todas las notas del acorde
+            pitches = sorted([p.midi for p in chord_obj.pitches])
+            intervals = []
+
+            for i in range(len(pitches)):
+                for j in range(i+1, len(pitches)):
+                    interval = (pitches[j] - pitches[i]) % 12
+                    intervals.append(interval)
+
+            # Clasificar disonancias (segundas menores, séptimas mayores, tritono)
+            dissonant_intervals = [1, 6, 10, 11]  # m2, tritono, M7, m7
+            dissonance_score = sum(1 for i in intervals if i in dissonant_intervals)
+
+            dissonance_level = dissonance_score / len(intervals) if intervals else 0
+            dissonance_levels.append(dissonance_level)
+
+            if dissonance_level > 0.3:
+                dissonant_count += 1
+
+        except Exception as e:
+            debug(f"Dissonance: Error analyzing chord: {e}")
+            dissonance_levels.append(0)
+
+    dissonance_ratio = dissonant_count / len(chords) if chords else 0
+    avg_dissonance = np.mean(dissonance_levels) if dissonance_levels else 0
+    tension_variance = np.var(dissonance_levels) if dissonance_levels else 0
+
+    print(f"Dissonant chords: {dissonant_count}/{len(chords)} ({dissonance_ratio:.1%})")
+    print(f"Average dissonance level: {avg_dissonance:.3f}")
+    print(f"Tension variance: {tension_variance:.3f}")
+    print("="*50)
+
+    return np.array([dissonance_ratio, avg_dissonance, tension_variance])
+
+
+def melodic_contour_analysis(score):
+    """
+    Analiza el contorno melódico (shape, dirección, saltos).
+    Returns: vector [ascending_ratio, descending_ratio, static_ratio,
+                     leap_ratio, step_ratio, avg_leap_size, contour_complexity]
+    """
+    seq = extract_melody(score)
+
+    if len(seq) < 2:
+        return np.zeros(7)
+
+    print("\n" + "="*50)
+    print("MELODIC CONTOUR ANALYSIS")
+    print("="*50)
+
+    pitches = [n[0] for n in seq]
+    intervals = np.diff(pitches)
+
+    # Dirección
+    ascending = sum(1 for i in intervals if i > 0)
+    descending = sum(1 for i in intervals if i < 0)
+    static = sum(1 for i in intervals if i == 0)
+
+    total_moves = len(intervals)
+
+    # Saltos vs pasos
+    leaps = sum(1 for i in intervals if abs(i) > 2)
+    steps = sum(1 for i in intervals if 0 < abs(i) <= 2)
+
+    # Tamaño promedio de saltos
+    leap_sizes = [abs(i) for i in intervals if abs(i) > 2]
+    avg_leap_size = np.mean(leap_sizes) if leap_sizes else 0
+
+    # Complejidad del contorno (cambios de dirección)
+    direction_changes = 0
+    for i in range(len(intervals) - 1):
+        if (intervals[i] > 0 and intervals[i+1] < 0) or \
+           (intervals[i] < 0 and intervals[i+1] > 0):
+            direction_changes += 1
+
+    contour_complexity = direction_changes / (len(intervals) - 1) if len(intervals) > 1 else 0
+
+    print(f"Direction:")
+    print(f"  Ascending:  {ascending}/{total_moves} ({ascending/total_moves:.1%})")
+    print(f"  Descending: {descending}/{total_moves} ({descending/total_moves:.1%})")
+    print(f"  Static:     {static}/{total_moves} ({static/total_moves:.1%})")
+    print(f"\nMovement:")
+    print(f"  Leaps: {leaps}/{total_moves} ({leaps/total_moves:.1%})")
+    print(f"  Steps: {steps}/{total_moves} ({steps/total_moves:.1%})")
+    print(f"  Average leap size: {avg_leap_size:.2f} semitones")
+    print(f"\nContour complexity: {contour_complexity:.3f}")
+    print("="*50)
+
+    return np.array([
+        ascending / total_moves,
+        descending / total_moves,
+        static / total_moves,
+        leaps / total_moves,
+        steps / total_moves,
+        avg_leap_size / 12.0,  # Normalizado
+        contour_complexity
+    ])
+
+
+def register_analysis(score):
+    """
+    Analiza el uso del registro (tessitura).
+    Returns: vector [avg_pitch, pitch_range, low_register_ratio,
+                     mid_register_ratio, high_register_ratio, register_changes]
+    """
+    notes = score.flatten().notes
+
+    if not notes:
+        return np.zeros(6)
+
+    print("\n" + "="*50)
+    print("REGISTER ANALYSIS")
+    print("="*50)
+
+    pitches = [n.pitch.midi for n in notes if n.isNote]
+
+    if not pitches:
+        return np.zeros(6)
+
+    avg_pitch = np.mean(pitches)
+    pitch_range = max(pitches) - min(pitches)
+
+    # Dividir en registros (bajo < 60, medio 60-72, alto > 72)
+    low = sum(1 for p in pitches if p < 60)
+    mid = sum(1 for p in pitches if 60 <= p <= 72)
+    high = sum(1 for p in pitches if p > 72)
+
+    total = len(pitches)
+
+    # Cambios de registro
+    register_changes = 0
+    prev_register = None
+
+    for p in pitches:
+        if p < 60:
+            curr_register = 'low'
+        elif p <= 72:
+            curr_register = 'mid'
+        else:
+            curr_register = 'high'
+
+        if prev_register and prev_register != curr_register:
+            register_changes += 1
+
+        prev_register = curr_register
+
+    register_change_rate = register_changes / total if total > 0 else 0
+
+    print(f"Average pitch: {avg_pitch:.1f} MIDI ({pitch.Pitch(int(avg_pitch)).nameWithOctave})")
+    print(f"Pitch range: {pitch_range} semitones")
+    print(f"\nRegister distribution:")
+    print(f"  Low (< C4):    {low}/{total} ({low/total:.1%})")
+    print(f"  Mid (C4-C5):   {mid}/{total} ({mid/total:.1%})")
+    print(f"  High (> C5):   {high}/{total} ({high/total:.1%})")
+    print(f"\nRegister changes: {register_changes} ({register_change_rate:.3f} per note)")
+    print("="*50)
+
+    return np.array([
+        avg_pitch / 127.0,  # Normalizado
+        pitch_range / 88.0,  # Normalizado (88 teclas piano)
+        low / total,
+        mid / total,
+        high / total,
+        register_change_rate
+    ])
+
+
+def rhythmic_density_analysis(score):
+    """
+    Analiza la densidad rítmica y variedad.
+    Returns: vector [note_density, rest_ratio, syncopation_level,
+                     rhythmic_variety, tuplet_ratio]
+    """
+    notes_and_rests = score.flatten().notesAndRests
+
+    if not notes_and_rests:
+        return np.zeros(5)
+
+    print("\n" + "="*50)
+    print("RHYTHMIC DENSITY ANALYSIS")
+    print("="*50)
+
+    total_length = score.quarterLength
+    notes = [n for n in notes_and_rests if n.isNote]
+    rests = [r for r in notes_and_rests if r.isRest]
+
+    # Densidad de notas
+    note_density = len(notes) / total_length if total_length > 0 else 0
+    rest_ratio = sum(r.quarterLength for r in rests) / total_length if total_length > 0 else 0
+
+    # Variedad rítmica (entropía de duraciones)
+    durations = [n.quarterLength for n in notes]
+    duration_counts = Counter(durations)
+    duration_probs = np.array(list(duration_counts.values())) / len(durations)
+    rhythmic_variety = -np.sum(duration_probs * np.log2(duration_probs + 1e-9))
+
+    # Síncopa (notas que comienzan en tiempos débiles)
+    syncopations = 0
+    for n in notes:
+        beat_position = n.beat
+        if beat_position and beat_position % 1 != 0:  # No está en tiempo fuerte
+            syncopations += 1
+
+    syncopation_level = syncopations / len(notes) if notes else 0
+
+    # Tresillo y tuplets
+    tuplets = sum(1 for n in notes if hasattr(n.duration, 'tuplets') and n.duration.tuplets)
+    tuplet_ratio = tuplets / len(notes) if notes else 0
+
+    print(f"Note density: {note_density:.2f} notes/quarter")
+    print(f"Rest ratio: {rest_ratio:.1%}")
+    print(f"Rhythmic variety (entropy): {rhythmic_variety:.3f}")
+    print(f"Syncopation level: {syncopation_level:.1%}")
+    print(f"Tuplet usage: {tuplet_ratio:.1%}")
+    print("="*50)
+
+    return np.array([
+        note_density / 10.0,  # Normalizado (max ~10 notas/quarter)
+        rest_ratio,
+        syncopation_level,
+        rhythmic_variety / 4.0,  # Normalizado (max entropy ~4)
+        tuplet_ratio
+    ])
+
+
+def articulation_dynamics_analysis(score):
+    """
+    Analiza articulaciones y dinámicas.
+    Returns: vector [staccato_ratio, legato_ratio, accent_ratio,
+                     dynamic_range, dynamic_changes]
+    """
+    notes = score.flatten().notes
+
+    if not notes:
+        return np.zeros(5)
+
+    print("\n" + "="*50)
+    print("ARTICULATION & DYNAMICS ANALYSIS")
+    print("="*50)
+
+    staccato_count = 0
+    legato_count = 0
+    accent_count = 0
+
+    for n in notes:
+        if n.isNote:
+            # Articulaciones
+            if hasattr(n, 'articulations'):
+                for art in n.articulations:
+                    art_name = art.__class__.__name__.lower()
+                    if 'staccato' in art_name:
+                        staccato_count += 1
+                    elif 'accent' in art_name:
+                        accent_count += 1
+
+            # Legato (buscar slurs)
+            if n.getSpannerSites():
+                for spanner in n.getSpannerSites():
+                    if 'Slur' in spanner.__class__.__name__:
+                        legato_count += 1
+                        break
+
+    total_notes = len([n for n in notes if n.isNote])
+
+    staccato_ratio = staccato_count / total_notes if total_notes > 0 else 0
+    legato_ratio = legato_count / total_notes if total_notes > 0 else 0
+    accent_ratio = accent_count / total_notes if total_notes > 0 else 0
+
+    # Dinámicas
+    dynamics = score.flatten().getElementsByClass('Dynamic')
+    dynamic_values = []
+
+    dynamic_map = {
+        'ppp': 1, 'pp': 2, 'p': 3, 'mp': 4, 'mf': 5,
+        'f': 6, 'ff': 7, 'fff': 8
+    }
+
+    for dyn in dynamics:
+        if hasattr(dyn, 'value') and dyn.value in dynamic_map:
+            dynamic_values.append(dynamic_map[dyn.value])
+
+    if dynamic_values:
+        dynamic_range = (max(dynamic_values) - min(dynamic_values)) / 7.0
+        dynamic_changes = len(dynamic_values) / total_length if total_length > 0 else 0
+    else:
+        dynamic_range = 0
+        dynamic_changes = 0
+
+    print(f"Articulations:")
+    print(f"  Staccato: {staccato_ratio:.1%}")
+    print(f"  Legato:   {legato_ratio:.1%}")
+    print(f"  Accents:  {accent_ratio:.1%}")
+    print(f"\nDynamics:")
+    print(f"  Range: {dynamic_range:.2f}")
+    print(f"  Changes: {dynamic_changes:.3f} per quarter")
+    print("="*50)
+
+    return np.array([
+        staccato_ratio,
+        legato_ratio,
+        accent_ratio,
+        dynamic_range,
+        dynamic_changes
+    ])
+
+
+def metric_complexity_analysis(score):
+    """
+    Analiza la complejidad métrica (cambios de compás, polimetría).
+    Returns: vector [time_sig_changes, compound_meter_ratio, asymmetric_meter_ratio,
+                     metric_consistency]
+    """
+    time_sigs = score.flatten().getElementsByClass('TimeSignature')
+
+    print("\n" + "="*50)
+    print("METRIC COMPLEXITY ANALYSIS")
+    print("="*50)
+
+    if not time_sigs:
+        print("No time signatures found")
+        print("="*50)
+        return np.zeros(4)
+
+    time_sig_changes = len(time_sigs) - 1
+
+    # Clasificar compases
+    compound_count = 0
+    asymmetric_count = 0
+
+    for ts in time_sigs:
+        numerator = ts.numerator
+        denominator = ts.denominator
+
+        # Compás compuesto (numerador divisible por 3)
+        if numerator % 3 == 0 and numerator > 3:
+            compound_count += 1
+
+        # Compás asimétrico (5, 7, 11, 13, etc.)
+        if numerator in [5, 7, 11, 13]:
+            asymmetric_count += 1
+
+    total_ts = len(time_sigs)
+    compound_ratio = compound_count / total_ts if total_ts > 0 else 0
+    asymmetric_ratio = asymmetric_count / total_ts if total_ts > 0 else 0
+
+    # Consistencia métrica (inversa de cambios)
+    measures = len(list(score.flatten().getElementsByClass('Measure')))
+    metric_consistency = 1 - (time_sig_changes / measures) if measures > 0 else 1
+
+    print(f"Time signature changes: {time_sig_changes}")
+    print(f"Compound meters: {compound_ratio:.1%}")
+    print(f"Asymmetric meters: {asymmetric_ratio:.1%}")
+    print(f"Metric consistency: {metric_consistency:.3f}")
+    print("="*50)
+
+    return np.array([
+        time_sig_changes / 10.0,  # Normalizado
+        compound_ratio,
+        asymmetric_ratio,
+        metric_consistency
+    ])
+
+
+def ornament_analysis(score):
+    """
+    Analiza ornamentación (trinos, mordentes, apoyaturas, etc.).
+    Returns: vector [trill_ratio, turn_ratio, grace_note_ratio, ornament_density]
+    """
+    notes = score.flatten().notes
+
+    if not notes:
+        return np.zeros(4)
+
+    print("\n" + "="*50)
+    print("ORNAMENT ANALYSIS")
+    print("="*50)
+
+    trills = 0
+    turns = 0
+    grace_notes = 0
+
+    for n in notes:
+        if n.isNote:
+            # Expresiones (trinos, mordentes)
+            if hasattr(n, 'expressions'):
+                for expr in n.expressions:
+                    expr_name = expr.__class__.__name__.lower()
+                    if 'trill' in expr_name:
+                        trills += 1
+                    elif 'turn' in expr_name or 'mordent' in expr_name:
+                        turns += 1
+
+            # Notas de adorno
+            if hasattr(n.duration, 'isGrace') and n.duration.isGrace:
+                grace_notes += 1
+
+    total_notes = len([n for n in notes if n.isNote])
+
+    trill_ratio = trills / total_notes if total_notes > 0 else 0
+    turn_ratio = turns / total_notes if total_notes > 0 else 0
+    grace_note_ratio = grace_notes / total_notes if total_notes > 0 else 0
+    ornament_density = (trills + turns + grace_notes) / total_notes if total_notes > 0 else 0
+
+    print(f"Trills: {trill_ratio:.1%}")
+    print(f"Turns/Mordents: {turn_ratio:.1%}")
+    print(f"Grace notes: {grace_note_ratio:.1%}")
+    print(f"Total ornament density: {ornament_density:.1%}")
+    print("="*50)
+
+    return np.array([
+        trill_ratio,
+        turn_ratio,
+        grace_note_ratio,
+        ornament_density
+    ])
+
+
+def tempo_character_analysis(score):
+    """
+    Analiza tempo y carácter expresivo.
+    Returns: vector [avg_tempo, tempo_changes, tempo_variance, expressive_marks]
+    """
+    tempos = score.flatten().getElementsByClass('MetronomeMark')
+    tempo_texts = score.flatten().getElementsByClass('TempoText')
+
+    print("\n" + "="*50)
+    print("TEMPO & CHARACTER ANALYSIS")
+    print("="*50)
+
+    if tempos:
+        tempo_values = [t.number for t in tempos if hasattr(t, 'number')]
+
+        if tempo_values:
+            avg_tempo = np.mean(tempo_values)
+            tempo_changes = len(tempo_values) - 1
+            tempo_variance = np.var(tempo_values)
+        else:
+            avg_tempo = 120  # Default
+            tempo_changes = 0
+            tempo_variance = 0
+    else:
+        avg_tempo = 120
+        tempo_changes = 0
+        tempo_variance = 0
+
+    expressive_marks = len(tempo_texts)
+
+    print(f"Average tempo: {avg_tempo:.1f} BPM")
+    print(f"Tempo changes: {tempo_changes}")
+    print(f"Tempo variance: {tempo_variance:.2f}")
+    print(f"Expressive marks: {expressive_marks}")
+    print("="*50)
+
+    return np.array([
+        avg_tempo / 200.0,  # Normalizado (max ~200 BPM)
+        tempo_changes / 10.0,  # Normalizado
+        tempo_variance / 1000.0,  # Normalizado
+        expressive_marks / 20.0  # Normalizado
+    ])
+
+
+def ultra_advanced_features_vector(score):
+    """
+    Genera un vector ULTRA completo con TODAS las características avanzadas.
+
+    Estructura del vector (total: 63 dimensiones):
+
+    HARMONIC FEATURES (22):
+    - Cadencias (5): [authentic, plagal, half, deceptive, density]
+    - Voice Leading (4): [parallel, contrary, oblique, similar]
+    - Ritmo Armónico (3): [avg_change, std_change, density]
+    - Textura (3): [monophonic, homophonic, polyphonic]
+    - Modulaciones (3): [num_modulations, density, avg_distance]
+    - Inversiones (4): [root, first_inv, second_inv, third_inv]
+
+    MELODIC FEATURES (7):
+    - Contorno Melódico (7): [asc_ratio, desc_ratio, static, leap_ratio,
+                               step_ratio, avg_leap, complexity]
+
+    REGISTER FEATURES (6):
+    - Registro (6): [avg_pitch, range, low_ratio, mid_ratio, high_ratio, changes]
+
+    RHYTHMIC FEATURES (5):
+    - Densidad Rítmica (5): [note_density, rest_ratio, syncopation,
+                              variety, tuplet_ratio]
+
+    TENSION FEATURES (3):
+    - Disonancia (3): [dissonance_ratio, avg_level, variance]
+
+    PERFORMANCE FEATURES (13):
+    - Articulación/Dinámicas (5): [staccato, legato, accent, dyn_range, dyn_changes]
+    - Métrica (4): [time_sig_changes, compound, asymmetric, consistency]
+    - Ornamentación (4): [trill, turn, grace_note, density]
+
+    CHARACTER FEATURES (4):
+    - Tempo/Carácter (4): [avg_tempo, changes, variance, expressive_marks]
+    """
+    print("\n" + "="*70)
+    print(" ULTRA ADVANCED MUSIC ANALYSIS - COMPLETE FEATURE VECTOR")
+    print("="*70)
+
+    # HARMONIC FEATURES (22)
+    v_cadences = detect_cadences(score)
+    v_voice_leading = analyze_voice_leading(score)
+    v_harmonic_rhythm = harmonic_rhythm_analysis(score)
+    v_texture = texture_analysis(score)
+    v_modulations = detect_modulations(score)
+    v_inversions = inversion_analysis(score)
+
+    # MELODIC FEATURES (7)
+    v_contour = melodic_contour_analysis(score)
+
+    # REGISTER FEATURES (6)
+    v_register = register_analysis(score)
+
+    # RHYTHMIC FEATURES (5)
+    v_rhythmic_density = rhythmic_density_analysis(score)
+
+    # TENSION FEATURES (3)
+    v_dissonance = dissonance_analysis(score)
+
+    # PERFORMANCE FEATURES (13)
+    v_articulation = articulation_dynamics_analysis(score)
+    v_metric = metric_complexity_analysis(score)
+    v_ornament = ornament_analysis(score)
+
+    # CHARACTER FEATURES (4)
+    v_tempo = tempo_character_analysis(score)
+
+    final_vector = np.concatenate([
+        v_cadences,          # 5 dims
+        v_voice_leading,     # 4 dims
+        v_harmonic_rhythm,   # 3 dims
+        v_texture,           # 3 dims
+        v_modulations,       # 3 dims
+        v_inversions,        # 4 dims
+        v_contour,           # 7 dims
+        v_register,          # 6 dims
+        v_rhythmic_density,  # 5 dims
+        v_dissonance,        # 3 dims
+        v_articulation,      # 5 dims
+        v_metric,            # 4 dims
+        v_ornament,          # 4 dims
+        v_tempo              # 4 dims
+    ])
+
+    print("\n" + "="*70)
+    print("COMPLETE VECTOR SUMMARY")
+    print("="*70)
+    print(f"Total dimensions: {len(final_vector)}")
+    print(f"\nHARMONIC FEATURES (22 dims):")
+    print(f"  Cadences:        dims 0-4")
+    print(f"  Voice Leading:   dims 5-8")
+    print(f"  Harmonic Rhythm: dims 9-11")
+    print(f"  Texture:         dims 12-14")
+    print(f"  Modulations:     dims 15-17")
+    print(f"  Inversions:      dims 18-21")
+    print(f"\nMELODIC FEATURES (7 dims):")
+    print(f"  Contour:         dims 22-28")
+    print(f"\nREGISTER FEATURES (6 dims):")
+    print(f"  Register:        dims 29-34")
+    print(f"\nRHYTHMIC FEATURES (5 dims):")
+    print(f"  Density:         dims 35-39")
+    print(f"\nTENSION FEATURES (3 dims):")
+    print(f"  Dissonance:      dims 40-42")
+    print(f"\nPERFORMANCE FEATURES (13 dims):")
+    print(f"  Articulation:    dims 43-47")
+    print(f"  Metric:          dims 48-51")
+    print(f"  Ornaments:       dims 52-55")
+    print(f"\nCHARACTER FEATURES (4 dims):")
+    print(f"  Tempo:           dims 56-59")
+    print("="*70 + "\n")
+
+    return final_vector
+
+
 # =========================
 # EJECUCIÓN
 # =========================
@@ -3094,7 +3689,8 @@ custom_rules = [
 # print(harmonic_features(score))
 # print(arpeggiated_chord_features(score))
 # print(harmonic_transition_features(score))
-print(advanced_harmonic_features_vector(score))
+# print(advanced_harmonic_features_vector(score))
+print(ultra_advanced_features_vector(score))
 # print(instrumental_features(score))
 # print(motif_vector(score))
 # print(compass_motif_vector(score))
