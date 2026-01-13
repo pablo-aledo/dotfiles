@@ -2650,6 +2650,431 @@ def form_string_to_vector(form_string, dim=32):
 
     return vector
 
+
+# =========================
+# MORE
+# =========================
+
+# =========================
+# NUEVAS FUNCIONES DE ANÁLISIS AVANZADO
+# =========================
+
+def detect_cadences(score):
+    """
+    Detecta cadencias musicales y retorna un vector de características.
+    Returns: vector [authentic, plagal, half, deceptive, total_density]
+    """
+    try:
+        key = score.analyze('key')
+    except:
+        debug("Cadences: Could not detect key")
+        return np.zeros(5)
+
+    chords = extract_harmonic_chords(score)
+
+    if len(chords) < 2:
+        return np.zeros(5)
+
+    cadence_types = {
+        'authentic': 0,
+        'plagal': 0,
+        'half': 0,
+        'deceptive': 0
+    }
+
+    print("\n" + "="*50)
+    print("CADENCE ANALYSIS")
+    print("="*50)
+
+    for i in range(len(chords) - 1):
+        try:
+            rn1 = roman.romanNumeralFromChord(chords[i], key)
+            rn2 = roman.romanNumeralFromChord(chords[i+1], key)
+
+            measure_num = getattr(chords[i+1], '_stored_measure_number', '?')
+
+            # Cadencia auténtica: V -> I
+            if rn1.figure.startswith("V") and rn2.figure.startswith("I"):
+                cadence_types['authentic'] += 1
+                print(f"  Authentic cadence at measure {measure_num}: {rn1.figure} → {rn2.figure}")
+
+            # Cadencia plagal: IV -> I
+            elif rn1.figure.startswith("IV") and rn2.figure.startswith("I"):
+                cadence_types['plagal'] += 1
+                print(f"  Plagal cadence at measure {measure_num}: {rn1.figure} → {rn2.figure}")
+
+            # Semicadencia: X -> V
+            elif rn2.figure.startswith("V"):
+                cadence_types['half'] += 1
+                print(f"  Half cadence at measure {measure_num}: {rn1.figure} → {rn2.figure}")
+
+            # Cadencia rota: V -> vi
+            elif rn1.figure.startswith("V") and rn2.figure.startswith("vi"):
+                cadence_types['deceptive'] += 1
+                print(f"  Deceptive cadence at measure {measure_num}: {rn1.figure} → {rn2.figure}")
+
+        except Exception as e:
+            debug(f"Cadences: Error analyzing chord pair: {e}")
+            continue
+
+    total_cadences = sum(cadence_types.values())
+
+    # Normalizar por número de acordes
+    density = total_cadences / len(chords) if len(chords) > 0 else 0
+
+    print(f"\nTotal cadences: {total_cadences}")
+    print("="*50)
+
+    vector = np.array([
+        cadence_types['authentic'],
+        cadence_types['plagal'],
+        cadence_types['half'],
+        cadence_types['deceptive'],
+        density
+    ])
+
+    # Normalizar conteos (excepto density que ya está normalizado)
+    if total_cadences > 0:
+        vector[:4] = vector[:4] / total_cadences
+
+    return vector
+
+
+def analyze_voice_leading(score, max_parts=4):
+    """
+    Analiza el movimiento entre voces (paralelo, contrario, oblicuo, similar).
+    Returns: vector [parallel, contrary, oblique, similar] promediado entre todos los pares de voces
+    """
+    parts = getattr(score, 'parts', [score])
+
+    if len(parts) < 2:
+        debug("Voice leading: Less than 2 parts")
+        return np.zeros(4)
+
+    all_movements = []
+
+    # Analizar cada par de voces
+    num_parts = min(len(parts), max_parts)
+
+    print("\n" + "="*50)
+    print("VOICE LEADING ANALYSIS")
+    print("="*50)
+
+    for i in range(num_parts - 1):
+        for j in range(i + 1, num_parts):
+            voice1 = parts[i].flatten().notes
+            voice2 = parts[j].flatten().notes
+
+            movements = {'parallel': 0, 'contrary': 0, 'oblique': 0, 'similar': 0}
+
+            # Alinear por offset
+            v1_dict = {n.offset: n.pitch.midi for n in voice1 if n.isNote}
+            v2_dict = {n.offset: n.pitch.midi for n in voice2 if n.isNote}
+
+            common_offsets = sorted(set(v1_dict.keys()) & set(v2_dict.keys()))
+
+            if len(common_offsets) < 2:
+                continue
+
+            for k in range(len(common_offsets) - 1):
+                off1 = common_offsets[k]
+                off2 = common_offsets[k+1]
+
+                interval_v1 = v1_dict[off2] - v1_dict[off1]
+                interval_v2 = v2_dict[off2] - v2_dict[off1]
+
+                # Clasificar movimiento
+                if interval_v1 == 0 and interval_v2 == 0:
+                    continue
+                elif interval_v1 == 0 or interval_v2 == 0:
+                    movements['oblique'] += 1
+                elif (interval_v1 > 0 and interval_v2 > 0) or (interval_v1 < 0 and interval_v2 < 0):
+                    if abs(interval_v1) == abs(interval_v2):
+                        movements['parallel'] += 1
+                    else:
+                        movements['similar'] += 1
+                else:
+                    movements['contrary'] += 1
+
+            total = sum(movements.values())
+            if total > 0:
+                normalized = [movements[k]/total for k in ['parallel', 'contrary', 'oblique', 'similar']]
+                all_movements.append(normalized)
+
+                print(f"\nVoices {i+1} ↔ {j+1}:")
+                print(f"  Parallel:  {movements['parallel']:3d} ({normalized[0]:.2%})")
+                print(f"  Contrary:  {movements['contrary']:3d} ({normalized[1]:.2%})")
+                print(f"  Oblique:   {movements['oblique']:3d} ({normalized[2]:.2%})")
+                print(f"  Similar:   {movements['similar']:3d} ({normalized[3]:.2%})")
+
+    print("="*50)
+
+    if not all_movements:
+        return np.zeros(4)
+
+    # Promediar movimientos de todos los pares de voces
+    return np.mean(all_movements, axis=0)
+
+
+def harmonic_rhythm_analysis(score):
+    """
+    Analiza la frecuencia de cambios armónicos (ritmo armónico).
+    Returns: vector [avg_change, std_change, harmonic_density]
+    """
+    chords = extract_harmonic_chords(score)
+
+    if len(chords) < 2:
+        debug("Harmonic rhythm: Too few chords")
+        return np.zeros(3)
+
+    total_length = score.quarterLength
+
+    # Estimar offsets de acordes (basado en primera nota)
+    chord_offsets = []
+    for ch in chords:
+        # Intentar obtener offset de la primera nota del acorde
+        offset = 0
+        for p in ch.pitches:
+            if hasattr(p, 'offset'):
+                offset = p.offset
+                break
+        chord_offsets.append(offset)
+
+    # Calcular distancias entre cambios de acorde
+    chord_changes = []
+    for i in range(1, len(chord_offsets)):
+        change = chord_offsets[i] - chord_offsets[i-1]
+        if change > 0:
+            chord_changes.append(change)
+
+    if not chord_changes:
+        return np.zeros(3)
+
+    print("\n" + "="*50)
+    print("HARMONIC RHYTHM ANALYSIS")
+    print("="*50)
+    print(f"Total chords: {len(chords)}")
+    print(f"Average change interval: {np.mean(chord_changes):.2f} quarters")
+    print(f"Std deviation: {np.std(chord_changes):.2f}")
+    print(f"Harmonic density: {len(chords) / total_length:.3f} chords/quarter")
+    print("="*50)
+
+    return np.array([
+        np.mean(chord_changes),           # Cambio promedio
+        np.std(chord_changes),            # Variabilidad
+        len(chords) / total_length        # Densidad armónica
+    ])
+
+
+def texture_analysis(score):
+    """
+    Clasifica la textura musical y retorna un vector one-hot.
+    Returns: vector [monophonic, homophonic, polyphonic]
+    """
+    parts = getattr(score, 'parts', [score])
+
+    print("\n" + "="*50)
+    print("TEXTURE ANALYSIS")
+    print("="*50)
+
+    if len(parts) == 1:
+        # Verificar si hay acordes (homofonía) o solo melodía
+        chords = score.flatten().getElementsByClass('Chord')
+        notes = score.flatten().notes
+
+        chord_ratio = len(chords) / len(notes) if len(notes) > 0 else 0
+
+        if chord_ratio > 0.3:
+            texture = "homophonic"
+            vector = np.array([0, 1, 0])
+        else:
+            texture = "monophonic"
+            vector = np.array([1, 0, 0])
+    else:
+        # Analizar independencia rítmica entre voces
+        rhythmic_independence = 0
+
+        for i in range(len(parts) - 1):
+            p1_offsets = set(n.offset for n in parts[i].flatten().notes if n.isNote)
+            p2_offsets = set(n.offset for n in parts[i+1].flatten().notes if n.isNote)
+
+            if len(p1_offsets) == 0 or len(p2_offsets) == 0:
+                continue
+
+            overlap = len(p1_offsets & p2_offsets)
+            total = len(p1_offsets | p2_offsets)
+
+            if total > 0:
+                rhythmic_independence += 1 - (overlap / total)
+
+        avg_independence = rhythmic_independence / (len(parts) - 1) if len(parts) > 1 else 0
+
+        if avg_independence > 0.6:
+            texture = "polyphonic"
+            vector = np.array([0, 0, 1])
+        else:
+            texture = "homophonic"
+            vector = np.array([0, 1, 0])
+
+    print(f"Detected texture: {texture.upper()}")
+    print(f"Number of parts: {len(parts)}")
+    print("="*50)
+
+    return vector
+
+
+def detect_modulations(score, window_size=8):
+    """
+    Detecta cambios de tonalidad en la pieza.
+    Returns: vector [num_modulations, modulation_density, avg_distance]
+    """
+    parts = getattr(score, 'parts', [score])
+    measures = list(parts[0].getElementsByClass('Measure'))
+
+    if len(measures) < window_size * 2:
+        debug("Modulations: Score too short")
+        return np.zeros(3)
+
+    print("\n" + "="*50)
+    print("MODULATION ANALYSIS")
+    print("="*50)
+
+    modulations = []
+    current_key = None
+    keys_detected = []
+
+    for i in range(0, len(measures), window_size):
+        segment = measures[i:i+window_size]
+        seg_stream = stream.Stream(segment)
+
+        try:
+            detected_key = seg_stream.analyze('key')
+            keys_detected.append(detected_key)
+
+            if current_key is None:
+                current_key = detected_key
+                print(f"Initial key: {current_key}")
+            elif detected_key.tonic.name != current_key.tonic.name or \
+                 detected_key.mode != current_key.mode:
+
+                # Calcular distancia en círculo de quintas
+                distance = interval.Interval(current_key.tonic, detected_key.tonic).semitones % 12
+
+                modulations.append({
+                    'from': str(current_key),
+                    'to': str(detected_key),
+                    'measure': i + 1,
+                    'distance': distance
+                })
+
+                print(f"  Modulation at measure {i+1}: {current_key} → {detected_key} (distance: {distance} semitones)")
+                current_key = detected_key
+        except Exception as e:
+            debug(f"Modulations: Error analyzing segment: {e}")
+            continue
+
+    num_modulations = len(modulations)
+    modulation_density = num_modulations / len(measures) if len(measures) > 0 else 0
+    avg_distance = np.mean([m['distance'] for m in modulations]) if modulations else 0
+
+    print(f"\nTotal modulations: {num_modulations}")
+    print(f"Modulation density: {modulation_density:.3f} per measure")
+    print("="*50)
+
+    return np.array([
+        num_modulations,
+        modulation_density,
+        avg_distance
+    ])
+
+
+def inversion_analysis(score):
+    """
+    Analiza el uso de inversiones en los acordes.
+    Returns: vector [root_pos_ratio, first_inv_ratio, second_inv_ratio, third_inv_ratio]
+    """
+    try:
+        key = score.analyze('key')
+    except:
+        debug("Inversions: Could not detect key")
+        return np.zeros(4)
+
+    chords = extract_harmonic_chords(score)
+
+    if not chords:
+        return np.zeros(4)
+
+    inversions = {0: 0, 1: 0, 2: 0, 3: 0}
+
+    print("\n" + "="*50)
+    print("INVERSION ANALYSIS")
+    print("="*50)
+
+    for chord_obj in chords:
+        try:
+            inv = chord_obj.inversion()
+            inversions[inv] += 1
+        except:
+            inversions[0] += 1  # Default a posición fundamental
+
+    total = sum(inversions.values())
+
+    print(f"Root position:    {inversions[0]:3d} ({inversions[0]/total:.1%})")
+    print(f"First inversion:  {inversions[1]:3d} ({inversions[1]/total:.1%})")
+    print(f"Second inversion: {inversions[2]:3d} ({inversions[2]/total:.1%})")
+    print(f"Third inversion:  {inversions[3]:3d} ({inversions[3]/total:.1%})")
+    print("="*50)
+
+    vector = np.array([inversions[i] / total for i in range(4)])
+    return vector
+
+
+def advanced_harmonic_features_vector(score):
+    """
+    Genera un vector completo con todas las características armónicas avanzadas.
+
+    Estructura del vector (total: 22 dimensiones):
+    - Cadencias (5): [authentic, plagal, half, deceptive, density]
+    - Voice Leading (4): [parallel, contrary, oblique, similar]
+    - Ritmo Armónico (3): [avg_change, std_change, density]
+    - Textura (3): [monophonic, homophonic, polyphonic]
+    - Modulaciones (3): [num_modulations, density, avg_distance]
+    - Inversiones (4): [root, first_inv, second_inv, third_inv]
+    """
+    print("\n" + "="*60)
+    print(" ADVANCED HARMONIC ANALYSIS - COMPLETE VECTOR")
+    print("="*60)
+
+    v_cadences = detect_cadences(score)
+    v_voice_leading = analyze_voice_leading(score)
+    v_harmonic_rhythm = harmonic_rhythm_analysis(score)
+    v_texture = texture_analysis(score)
+    v_modulations = detect_modulations(score)
+    v_inversions = inversion_analysis(score)
+
+    final_vector = np.concatenate([
+        v_cadences,          # 5 dims
+        v_voice_leading,     # 4 dims
+        v_harmonic_rhythm,   # 3 dims
+        v_texture,           # 3 dims
+        v_modulations,       # 3 dims
+        v_inversions         # 4 dims
+    ])
+
+    print("\n" + "="*60)
+    print("VECTOR SUMMARY")
+    print("="*60)
+    print(f"Total dimensions: {len(final_vector)}")
+    print(f"Cadences:        dims 0-4   → {v_cadences}")
+    print(f"Voice Leading:   dims 5-8   → {v_voice_leading}")
+    print(f"Harmonic Rhythm: dims 9-11  → {v_harmonic_rhythm}")
+    print(f"Texture:         dims 12-14 → {v_texture}")
+    print(f"Modulations:     dims 15-17 → {v_modulations}")
+    print(f"Inversions:      dims 18-21 → {v_inversions}")
+    print("="*60 + "\n")
+
+    return final_vector
+
 # =========================
 # EJECUCIÓN
 # =========================
@@ -2667,8 +3092,9 @@ custom_rules = [
 # print(rhythmic_features(score))
 # print(melodic_features(score))
 # print(harmonic_features(score))
-print(arpeggiated_chord_features(score))
+# print(arpeggiated_chord_features(score))
 # print(harmonic_transition_features(score))
+print(advanced_harmonic_features_vector(score))
 # print(instrumental_features(score))
 # print(motif_vector(score))
 # print(compass_motif_vector(score))
