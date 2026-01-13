@@ -300,6 +300,418 @@ def harmonic_transition_features(score):
     matrix /= np.sum(matrix) if np.sum(matrix) > 0 else 1
     return matrix.flatten()
 
+# =========================
+# ACORDES ARPEGIADOS
+# =========================
+
+def is_bass_clef_staff(element):
+    """
+    Determina si un elemento pertenece a un pentagrama en clave de fa.
+    """
+    # Buscar el contexto de Staff
+    staff = element.getContextByClass('Staff')
+    if staff is None:
+        # Si no hay Staff, buscar en el Part
+        part = element.getContextByClass('Part')
+        if part is None:
+            return False
+        # Buscar clef en el part
+        clefs = part.flatten().getElementsByClass('Clef')
+    else:
+        # Buscar clef en el staff
+        clefs = staff.flatten().getElementsByClass('Clef')
+
+    if not clefs:
+        return False
+
+    # Obtener la clave más reciente antes o en la posición del elemento
+    element_offset = element.getOffsetInHierarchy(element.getContextByClass('Score'))
+    relevant_clef = None
+
+    for clef in clefs:
+        clef_offset = clef.getOffsetInHierarchy(clef.getContextByClass('Score'))
+        if clef_offset <= element_offset:
+            relevant_clef = clef
+        else:
+            break
+
+    if relevant_clef is None:
+        return False
+
+    # Verificar si es clave de fa
+    # Bass clef, F clef, Subbass clef
+    from music21 import clef as clef_module
+
+    is_bass = isinstance(relevant_clef, (
+        clef_module.BassClef,
+        clef_module.Bass8vbClef,
+        clef_module.Bass8vaClef,
+        clef_module.FClef
+    ))
+
+    return is_bass
+
+
+def extract_bass_elements(part):
+    """
+    Extrae elementos (notas y acordes) del pentagrama en clave de fa.
+    Retorna una lista de tuplas (element, offset, pitches)
+    donde pitches es una lista de objetos Pitch.
+    """
+    elements = []
+
+    for el in part.flatten().notesAndRests:
+        # Saltar silencios
+        if el.isRest:
+            continue
+
+        # Solo elementos en clave de fa
+        if not is_bass_clef_staff(el):
+            continue
+
+        offset = el.offset
+
+        if el.isNote:
+            # Nota individual
+            elements.append({
+                'element': el,
+                'offset': offset,
+                'pitches': [el.pitch],
+                'type': 'note'
+            })
+        elif el.isChord:
+            # Acorde
+            elements.append({
+                'element': el,
+                'offset': offset,
+                'pitches': list(el.pitches),
+                'type': 'chord'
+            })
+
+    return elements
+
+
+def detect_bass_chord_pattern(elements, start_idx, time_window):
+    """
+    Detecta el patrón: nota/acorde + acorde formando un acorde completo.
+    Por ejemplo: Do (negra) + (Mi+Sol) (negra)
+    """
+    if start_idx >= len(elements) - 1:
+        return None
+
+    first_element = elements[start_idx]
+    first_offset = first_element['offset']
+
+    # Buscar el siguiente elemento que sea un acorde
+    for i in range(start_idx + 1, len(elements)):
+        next_element = elements[i]
+
+        # Si está fuera de la ventana temporal, terminar
+        if next_element['offset'] - first_offset > time_window:
+            break
+
+        # Si el siguiente elemento es un acorde (2+ notas)
+        if next_element['type'] == 'chord' and len(next_element['pitches']) >= 2:
+            # Combinar las notas del primer elemento con el acorde
+            all_pitches = first_element['pitches'] + next_element['pitches']
+            unique_pitches = list(set([p.midi % 12 for p in all_pitches]))
+
+            # Verificar que tenemos al menos 3 notas únicas
+            if len(unique_pitches) >= 3:
+                return {
+                    'elements': [first_element, next_element],
+                    'all_pitches': all_pitches,
+                    'end_index': i + 1,
+                    'pattern_type': 'bass+chord'
+                }
+
+    return None
+
+
+def detect_arpeggiated_chords(score, time_window=2.0, min_notes=3):
+    """
+    Detecta acordes arpegiados analizando notas sucesivas en una ventana temporal.
+    SOLO analiza pentagramas en clave de fa.
+
+    Detecta dos patrones:
+    1. Arpegios tradicionales (notas consecutivas ascendentes/descendentes)
+    2. Bajo + acorde (nota/acorde + acorde simultáneo)
+       Ejemplo: Do (negra) + (Mi+Sol) (negra)
+
+    Args:
+        score: partitura music21
+        time_window: ventana temporal en quarterLength para considerar un arpegio
+        min_notes: número mínimo de notas diferentes para formar un acorde
+
+    Returns:
+        lista de dict con información de los acordes detectados
+    """
+    debug("Arpeggios: Detecting arpeggiated chords (bass clef only)...")
+
+    parts = getattr(score, 'parts', [score])
+    arpeggiated_chords = []
+
+    for part_idx, part in enumerate(parts):
+        # Extraer elementos (notas y acordes) en clave de fa
+        elements = extract_bass_elements(part)
+
+        debug(f"Arpeggios: Part {part_idx} has {len(elements)} elements in bass clef")
+
+        if len(elements) == 0:
+            debug(f"Arpeggios: Part {part_idx} has no bass clef elements, skipping...")
+            continue
+
+        i = 0
+        while i < len(elements):
+            current_element = elements[i]
+            current_offset = current_element['offset']
+
+            # PRIMERO: Intentar detectar patrón bajo+acorde
+            bass_chord_pattern = detect_bass_chord_pattern(elements, i, time_window)
+
+            if bass_chord_pattern:
+                all_pitches = bass_chord_pattern['all_pitches']
+                pattern_type = 'BASS+CHORD'
+
+                try:
+                    chord_pitches = sorted(list(set(all_pitches)), key=lambda p: p.midi)
+                    ch = chord.Chord(chord_pitches)
+
+                    # Obtener compás del primer elemento
+                    measure = bass_chord_pattern['elements'][0]['element'].getContextByClass('Measure')
+                    measure_num = measure.measureNumber if measure else '?'
+
+                    # Información del patrón
+                    note_names = [p.nameWithOctave for p in all_pitches]
+
+                    arpeggiated_chords.append({
+                        'chord': ch,
+                        'measure': measure_num,
+                        'notes': note_names,
+                        'offset': current_offset,
+                        'direction': pattern_type,
+                        'span': bass_chord_pattern['elements'][-1]['offset'] - current_offset,
+                        'part': part_idx
+                    })
+
+                    debug(f"Arpeggios: Found {pattern_type} at measure {measure_num}: {note_names}")
+
+                    # Saltar los elementos que ya procesamos
+                    i = bass_chord_pattern['end_index']
+                    continue
+
+                except Exception as e:
+                    debug(f"Arpeggios: Error creating chord from bass+chord pattern: {e}")
+
+            # SEGUNDO: Si no es bajo+acorde, intentar detectar arpegio tradicional
+            # Solo con notas individuales consecutivas
+            if current_element['type'] == 'note':
+                # Recolectar notas individuales consecutivas dentro de la ventana temporal
+                window_notes = [current_element['element']]
+                j = i + 1
+
+                while j < len(elements):
+                    next_element = elements[j]
+
+                    # Solo considerar notas individuales para arpegios
+                    if next_element['type'] != 'note':
+                        break
+
+                    if next_element['offset'] - current_offset <= time_window:
+                        window_notes.append(next_element['element'])
+                        j += 1
+                    else:
+                        break
+
+                # Verificar si las notas forman un acorde válido
+                if len(window_notes) >= min_notes:
+                    # Obtener pitches únicos
+                    unique_pitches = list(set([n.pitch.midi % 12 for n in window_notes]))
+
+                    # Si hay al menos min_notes pitches únicos (mod 12)
+                    if len(unique_pitches) >= min_notes:
+                        # Verificar que las notas son principalmente ascendentes o descendentes
+                        pitches_sequence = [n.pitch.midi for n in window_notes]
+
+                        # Calcular dirección predominante
+                        directions = [pitches_sequence[k+1] - pitches_sequence[k]
+                                    for k in range(len(pitches_sequence)-1)]
+
+                        ascending = sum(1 for d in directions if d > 0)
+                        descending = sum(1 for d in directions if d < 0)
+
+                        # Si hay una dirección predominante (al menos 60% en una dirección)
+                        total_moves = ascending + descending
+                        if total_moves > 0:
+                            predominance = max(ascending, descending) / total_moves
+
+                            if predominance >= 0.6:
+                                # Crear acorde con todas las notas únicas
+                                try:
+                                    chord_pitches = sorted(list(set([n.pitch for n in window_notes])),
+                                                         key=lambda p: p.midi)
+                                    ch = chord.Chord(chord_pitches)
+
+                                    # Obtener compás
+                                    measure = current_element['element'].getContextByClass('Measure')
+                                    measure_num = measure.measureNumber if measure else '?'
+
+                                    # Información del arpegio
+                                    note_names = [n.pitch.nameWithOctave for n in window_notes]
+                                    direction = "ASC" if ascending > descending else "DESC"
+
+                                    arpeggiated_chords.append({
+                                        'chord': ch,
+                                        'measure': measure_num,
+                                        'notes': note_names,
+                                        'offset': current_offset,
+                                        'direction': direction,
+                                        'span': window_notes[-1].offset - current_offset,
+                                        'part': part_idx
+                                    })
+
+                                    debug(f"Arpeggios: Found {direction} arpegio at measure {measure_num}: {note_names}")
+
+                                    # Saltar las notas que ya procesamos
+                                    i = j
+                                    continue
+
+                                except Exception as e:
+                                    debug(f"Arpeggios: Error creating chord: {e}")
+
+            i += 1
+
+    debug(f"Arpeggios: Total arpeggiated chords found = {len(arpeggiated_chords)}")
+    return arpeggiated_chords
+
+
+def arpeggiated_chord_features(score, time_window=2.0, min_notes=3):
+    """
+    Genera un vector de características basado en acordes arpegiados.
+    SOLO analiza pentagramas en clave de fa.
+
+    Returns:
+        vector numpy con:
+        - Funciones armónicas de arpegios (5 dims)
+        - Estadísticas de arpegios (5 dims) - añadida una para patrones bajo+acorde
+        - Distribución direccional (3 dims) - añadida una para bajo+acorde
+        - Patrones de intervalos en arpegios (16 dims)
+    """
+    try:
+        key = score.analyze('key')
+        debug("Arpeggios: key =", key)
+    except:
+        debug("Arpeggios: could not detect key")
+        key = None
+
+    arpeggios = detect_arpeggiated_chords(score, time_window, min_notes)
+
+    if not arpeggios:
+        debug("Arpeggios: No arpeggiated chords found in bass clef")
+        return np.zeros(29)
+
+    # ── 1. FUNCIONES ARMÓNICAS (5 dims)
+    function_counts = {f: 0 for f in HARMONIC_FUNCTIONS}
+
+    print("\n" + "="*50)
+    print("ARPEGGIATED CHORDS ANALYSIS (BASS CLEF ONLY)")
+    print("="*50)
+
+    for arp_info in arpeggios:
+        chord_obj = arp_info['chord']
+        measure_num = arp_info['measure']
+        notes = arp_info['notes']
+        direction = arp_info['direction']
+
+        if key:
+            try:
+                rn = roman.romanNumeralFromChord(chord_obj, key)
+                func = roman_to_function(rn)
+                function_counts[func] += 1
+
+                short_name = chord_short_name(chord_obj)
+
+                print(f"\nChord found:")
+                print(f"  ├─ Measure: {measure_num}")
+                print(f"  ├─ Pattern: {direction}")
+                print(f"  ├─ Notes: {notes}")
+                print(f"  ├─ Chord: {short_name}")
+                print(f"  ├─ Figure: {rn.figure}")
+                print(f"  └─ Function: {func}")
+
+            except Exception as e:
+                debug(f"Arpeggios: Error analyzing chord: {e}")
+                function_counts["Other"] += 1
+        else:
+            function_counts["Other"] += 1
+
+    total_funcs = sum(function_counts.values())
+    harmonic_vector = np.array(
+        [function_counts[f] / total_funcs if total_funcs > 0 else 0
+         for f in HARMONIC_FUNCTIONS]
+    )
+
+    # ── 2. ESTADÍSTICAS DE ARPEGIOS (5 dims)
+    spans = [arp['span'] for arp in arpeggios]
+    note_counts = [len(arp['notes']) for arp in arpeggios]
+
+    # Contar patrones bajo+acorde
+    bass_chord_count = sum(1 for arp in arpeggios if arp['direction'] == 'BASS+CHORD')
+    bass_chord_ratio = bass_chord_count / len(arpeggios) if arpeggios else 0
+
+    stats_vector = np.array([
+        len(arpeggios),  # número total de arpegios
+        np.mean(spans) if spans else 0,  # duración promedio
+        np.mean(note_counts) if note_counts else 0,  # notas promedio por arpegio
+        np.std(note_counts) if note_counts else 0,  # variabilidad
+        bass_chord_ratio  # proporción de patrones bajo+acorde
+    ])
+
+    # ── 3. DISTRIBUCIÓN DIRECCIONAL (3 dims)
+    ascending_count = sum(1 for arp in arpeggios if arp['direction'] == 'ASC')
+    descending_count = sum(1 for arp in arpeggios if arp['direction'] == 'DESC')
+
+    direction_vector = np.array([
+        ascending_count / len(arpeggios) if arpeggios else 0,
+        descending_count / len(arpeggios) if arpeggios else 0,
+        bass_chord_count / len(arpeggios) if arpeggios else 0
+    ])
+
+    # ── 4. PATRONES DE INTERVALOS EN ARPEGIOS (16 dims)
+    interval_hist = np.zeros(16)
+
+    for arp_info in arpeggios:
+        chord_obj = arp_info['chord']
+        pitches = sorted([p.midi for p in chord_obj.pitches])
+
+        # Calcular intervalos entre notas del acorde
+        for i in range(len(pitches) - 1):
+            interval = pitches[i+1] - pitches[i]
+            # Mapear intervalos a bins (0-15 semitonos)
+            if 0 <= interval < 16:
+                interval_hist[interval] += 1
+
+    # Normalizar
+    if np.sum(interval_hist) > 0:
+        interval_hist /= np.sum(interval_hist)
+
+    # ── CONCATENAR TODO
+    final_vector = np.concatenate([
+        harmonic_vector,      # 5 dims
+        stats_vector,         # 5 dims
+        direction_vector,     # 3 dims
+        interval_hist         # 16 dims
+    ])
+
+    print("\n" + "="*50)
+    print(f"Total found chords: {len(arpeggios)}")
+    print(f"  ├─ Ascending: {ascending_count}")
+    print(f"  ├─ Descending: {descending_count}")
+    print(f"  └─ Bass + Chord: {bass_chord_count}")
+    print("="*50)
+
+    debug(f"Arpeggios: Final vector shape = {final_vector.shape}")
+    return final_vector
 
 # =========================
 # RITMO
@@ -2102,7 +2514,8 @@ custom_rules = [
 
 # print(rhythmic_features(score))
 # print(melodic_features(score))
-print(harmonic_features(score))
+# print(harmonic_features(score))
+print(arpeggiated_chord_features(score))
 # print(harmonic_transition_features(score))
 # print(instrumental_features(score))
 # print(motif_vector(score))
