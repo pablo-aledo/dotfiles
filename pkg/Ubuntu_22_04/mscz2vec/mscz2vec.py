@@ -433,10 +433,12 @@ def detect_arpeggiated_chords(score, time_window=2.0, min_notes=3):
     Detecta acordes arpegiados analizando notas sucesivas en una ventana temporal.
     SOLO analiza pentagramas en clave de fa.
 
-    Detecta dos patrones:
+    Detecta tres patrones:
     1. Arpegios tradicionales (notas consecutivas ascendentes/descendentes)
     2. Bajo + acorde (nota/acorde + acorde simultáneo)
        Ejemplo: Do (negra) + (Mi+Sol) (negra)
+    3. Bajo de Alberti (patrón bajo-alto-medio-alto repetitivo)
+       Ejemplo: Do - Sol - Mi - Sol - Do - Sol - Mi - Sol
 
     Args:
         score: partitura music21
@@ -466,7 +468,46 @@ def detect_arpeggiated_chords(score, time_window=2.0, min_notes=3):
             current_element = elements[i]
             current_offset = current_element['offset']
 
-            # PRIMERO: Intentar detectar patrón bajo+acorde
+            # PRIMERO: Intentar detectar patrón de bajo Alberti
+            alberti_pattern = detect_alberti_bass(elements, i)
+
+            if alberti_pattern:
+                all_pitches = alberti_pattern['all_pitches']
+                pattern_type = 'ALBERTI'
+
+                try:
+                    chord_pitches = sorted(list(set(all_pitches)), key=lambda p: p.midi)
+                    ch = chord.Chord(chord_pitches)
+
+                    # Obtener compás del primer elemento
+                    measure = alberti_pattern['elements'][0]['element'].getContextByClass('Measure')
+                    measure_num = measure.measureNumber if measure else '?'
+
+                    # Información del patrón
+                    note_names = [p.nameWithOctave for p in all_pitches]
+                    pattern_info = f"{pattern_type} (length={alberti_pattern['pattern_length']}, reps={alberti_pattern['repetitions']})"
+
+                    arpeggiated_chords.append({
+                        'chord': ch,
+                        'measure': measure_num,
+                        'notes': note_names,
+                        'offset': current_offset,
+                        'direction': pattern_type,
+                        'span': alberti_pattern['elements'][-1]['offset'] - current_offset,
+                        'part': part_idx,
+                        'pattern_info': pattern_info
+                    })
+
+                    debug(f"Arpeggios: Found {pattern_info} at measure {measure_num}: {note_names}")
+
+                    # Saltar los elementos que ya procesamos
+                    i = alberti_pattern['end_index']
+                    continue
+
+                except Exception as e:
+                    debug(f"Arpeggios: Error creating chord from Alberti pattern: {e}")
+
+            # SEGUNDO: Intentar detectar patrón bajo+acorde
             bass_chord_pattern = detect_bass_chord_pattern(elements, i, time_window)
 
             if bass_chord_pattern:
@@ -491,7 +532,8 @@ def detect_arpeggiated_chords(score, time_window=2.0, min_notes=3):
                         'offset': current_offset,
                         'direction': pattern_type,
                         'span': bass_chord_pattern['elements'][-1]['offset'] - current_offset,
-                        'part': part_idx
+                        'part': part_idx,
+                        'pattern_info': pattern_type
                     })
 
                     debug(f"Arpeggios: Found {pattern_type} at measure {measure_num}: {note_names}")
@@ -503,7 +545,7 @@ def detect_arpeggiated_chords(score, time_window=2.0, min_notes=3):
                 except Exception as e:
                     debug(f"Arpeggios: Error creating chord from bass+chord pattern: {e}")
 
-            # SEGUNDO: Si no es bajo+acorde, intentar detectar arpegio tradicional
+            # TERCERO: Si no es bajo+acorde ni Alberti, intentar detectar arpegio tradicional
             # Solo con notas individuales consecutivas
             if current_element['type'] == 'note':
                 # Recolectar notas individuales consecutivas dentro de la ventana temporal
@@ -567,7 +609,8 @@ def detect_arpeggiated_chords(score, time_window=2.0, min_notes=3):
                                         'offset': current_offset,
                                         'direction': direction,
                                         'span': window_notes[-1].offset - current_offset,
-                                        'part': part_idx
+                                        'part': part_idx,
+                                        'pattern_info': direction
                                     })
 
                                     debug(f"Arpeggios: Found {direction} arpegio at measure {measure_num}: {note_names}")
@@ -593,8 +636,8 @@ def arpeggiated_chord_features(score, time_window=2.0, min_notes=3):
     Returns:
         vector numpy con:
         - Funciones armónicas de arpegios (5 dims)
-        - Estadísticas de arpegios (5 dims) - añadida una para patrones bajo+acorde
-        - Distribución direccional (3 dims) - añadida una para bajo+acorde
+        - Estadísticas de arpegios (6 dims) - añadidas para bajo+acorde y Alberti
+        - Distribución direccional (4 dims) - añadida para Alberti
         - Patrones de intervalos en arpegios (16 dims)
     """
     try:
@@ -608,7 +651,7 @@ def arpeggiated_chord_features(score, time_window=2.0, min_notes=3):
 
     if not arpeggios:
         debug("Arpeggios: No arpeggiated chords found in bass clef")
-        return np.zeros(29)
+        return np.zeros(31)
 
     # ── 1. FUNCIONES ARMÓNICAS (5 dims)
     function_counts = {f: 0 for f in HARMONIC_FUNCTIONS}
@@ -622,6 +665,7 @@ def arpeggiated_chord_features(score, time_window=2.0, min_notes=3):
         measure_num = arp_info['measure']
         notes = arp_info['notes']
         direction = arp_info['direction']
+        pattern_info = arp_info.get('pattern_info', direction)
 
         if key:
             try:
@@ -633,7 +677,7 @@ def arpeggiated_chord_features(score, time_window=2.0, min_notes=3):
 
                 print(f"\nChord found:")
                 print(f"  ├─ Measure: {measure_num}")
-                print(f"  ├─ Pattern: {direction}")
+                print(f"  ├─ Pattern: {pattern_info}")
                 print(f"  ├─ Notes: {notes}")
                 print(f"  ├─ Chord: {short_name}")
                 print(f"  ├─ Figure: {rn.figure}")
@@ -651,30 +695,34 @@ def arpeggiated_chord_features(score, time_window=2.0, min_notes=3):
          for f in HARMONIC_FUNCTIONS]
     )
 
-    # ── 2. ESTADÍSTICAS DE ARPEGIOS (5 dims)
+    # ── 2. ESTADÍSTICAS DE ARPEGIOS (6 dims)
     spans = [arp['span'] for arp in arpeggios]
     note_counts = [len(arp['notes']) for arp in arpeggios]
 
-    # Contar patrones bajo+acorde
+    # Contar patrones por tipo
     bass_chord_count = sum(1 for arp in arpeggios if arp['direction'] == 'BASS+CHORD')
+    alberti_count = sum(1 for arp in arpeggios if arp['direction'] == 'ALBERTI')
     bass_chord_ratio = bass_chord_count / len(arpeggios) if arpeggios else 0
+    alberti_ratio = alberti_count / len(arpeggios) if arpeggios else 0
 
     stats_vector = np.array([
         len(arpeggios),  # número total de arpegios
         np.mean(spans) if spans else 0,  # duración promedio
         np.mean(note_counts) if note_counts else 0,  # notas promedio por arpegio
         np.std(note_counts) if note_counts else 0,  # variabilidad
-        bass_chord_ratio  # proporción de patrones bajo+acorde
+        bass_chord_ratio,  # proporción de patrones bajo+acorde
+        alberti_ratio  # proporción de patrones Alberti
     ])
 
-    # ── 3. DISTRIBUCIÓN DIRECCIONAL (3 dims)
+    # ── 3. DISTRIBUCIÓN DIRECCIONAL (4 dims)
     ascending_count = sum(1 for arp in arpeggios if arp['direction'] == 'ASC')
     descending_count = sum(1 for arp in arpeggios if arp['direction'] == 'DESC')
 
     direction_vector = np.array([
         ascending_count / len(arpeggios) if arpeggios else 0,
         descending_count / len(arpeggios) if arpeggios else 0,
-        bass_chord_count / len(arpeggios) if arpeggios else 0
+        bass_chord_count / len(arpeggios) if arpeggios else 0,
+        alberti_count / len(arpeggios) if arpeggios else 0
     ])
 
     # ── 4. PATRONES DE INTERVALOS EN ARPEGIOS (16 dims)
@@ -698,8 +746,8 @@ def arpeggiated_chord_features(score, time_window=2.0, min_notes=3):
     # ── CONCATENAR TODO
     final_vector = np.concatenate([
         harmonic_vector,      # 5 dims
-        stats_vector,         # 5 dims
-        direction_vector,     # 3 dims
+        stats_vector,         # 6 dims
+        direction_vector,     # 4 dims
         interval_hist         # 16 dims
     ])
 
@@ -707,7 +755,8 @@ def arpeggiated_chord_features(score, time_window=2.0, min_notes=3):
     print(f"Total found chords: {len(arpeggios)}")
     print(f"  ├─ Ascending: {ascending_count}")
     print(f"  ├─ Descending: {descending_count}")
-    print(f"  └─ Bass + Chord: {bass_chord_count}")
+    print(f"  ├─ Bass + Chord: {bass_chord_count}")
+    print(f"  └─ Alberti: {alberti_count}")
     print("="*50)
 
     debug(f"Arpeggios: Final vector shape = {final_vector.shape}")
