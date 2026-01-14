@@ -4785,11 +4785,130 @@ def psychoacoustic_vector(score):
     ])
 
 # =========================
+# AROUSAL VALENCE
+# =========================
+
+
+def get_emotional_label(arousal, valence):
+    """
+    Convierte las coordenadas del modelo circunflejo a una etiqueta semántica.
+    """
+    if valence >= 0:
+        return "Excitación/Felicidad" if arousal >= 0 else "Calma/Serenidad"
+    else:
+        return "Tensión/Ira" if arousal >= 0 else "Tristeza/Depresión"
+
+def extract_arousal_valence(stream_fragment, global_mode_val=0):
+    """
+    Calcula las coordenadas de Arousal y Valence para un fragmento musical (o compás).
+    """
+    notes = stream_fragment.flatten().notes
+    if not notes:
+        return -1.0, -1.0  # Silencio o ausencia de datos
+
+    # --- CÁLCULO DE AROUSAL (Energía) ---
+    # Densidad rítmica: Notas por pulso (quarterLength)
+    duration = stream_fragment.duration.quarterLength
+    density = len(notes) / (duration if duration > 0 else 1)
+
+    # Registro: Altura media (MIDI pitch)
+    pitches = [n.pitch.ps for n in notes if n.isNote]
+    avg_pitch = np.mean(pitches) if pitches else 60
+
+    # Normalización (Heurística: densidad máx 6, registro C2-C6)
+    norm_density = np.clip(density / 6, 0, 1)
+    norm_pitch = np.clip((avg_pitch - 36) / 48, 0, 1)
+    arousal = (norm_density * 0.7 + norm_pitch * 0.3) * 2 - 1
+
+    # --- CÁLCULO DE VALENCE (Positividad) ---
+    # 1. Modo (Mayor/Menor)
+    try:
+        local_key = stream_fragment.analyze('key')
+        mode_score = 0.5 if local_key.mode == 'major' else -0.5
+    except:
+        mode_score = global_mode_val # Usar el global si el fragmento es ambiguo
+
+    # 2. Consonancia (Acorde resultante del fragmento)
+    try:
+        m_chord = stream_fragment.chordify().flatten().notes.first()
+        consonance_val = 0.3 if (m_chord and m_chord.isConsonant()) else -0.3
+    except:
+        consonance_val = 0
+
+    valence = np.clip(mode_score + consonance_val, -1, 1)
+
+    return round(arousal, 3), round(valence, 3)
+
+def emotional_evolution_analysis(score):
+    """
+    Analiza la partitura compás por compás, genera logs y devuelve la serie temporal.
+    """
+    debug("Iniciando análisis perceptual de evolución emocional...")
+
+    # Análisis global previo para consistencia tonal
+    try:
+        g_key = score.analyze('key')
+        g_mode = 0.5 if g_key.mode == 'major' else -0.5
+        debug(f"Tonalidad global detectada: {g_key}")
+    except:
+        g_mode = 0
+        debug("No se pudo detectar tonalidad global. Usando valor neutro.")
+
+    measure_stats = []
+    # Usamos la primera parte como referencia para los compases
+    main_part = score.parts[0]
+
+    for m in main_part.getElementsByClass(stream.Measure):
+        a, v = extract_arousal_valence(m, global_mode_val=g_mode)
+        label = get_emotional_label(a, v)
+
+        # Log por compás
+        debug(f"Compás {m.measureNumber:3} | Arousal: {a:6.2f} | Valence: {v:6.2f} | Estado: {label}")
+
+        measure_stats.append({'a': a, 'v': v})
+
+    return measure_stats
+
+def semantic_emotion_vector(score):
+    """
+    Genera un vector semántico de 6 dimensiones que resume la narrativa emocional.
+    """
+    stats = emotional_evolution_analysis(score)
+    if not stats:
+        return np.zeros(6)
+
+    a_series = [s['a'] for s in stats]
+    v_series = [s['v'] for s in stats]
+
+    # Helper para promedios por tramos (Inicio, Medio, Fin)
+    def get_segment_avg(series, segment):
+        l = len(series)
+        if l < 3: return series[0]
+        step = l // 3
+        if segment == 0: return np.mean(series[:step])
+        if segment == 1: return np.mean(series[step:2*step])
+        return np.mean(series[2*step:])
+
+    # Construcción del vector
+    vector = np.array([
+        np.mean(a_series),                    # [0] Energía media
+        np.mean(v_series),                    # [1] Positividad media
+        np.std(a_series),                     # [2] Volatilidad (Contraste)
+        get_segment_avg(v_series, 2) - get_segment_avg(v_series, 0), # [3] Evolución humor (Final - Inicio)
+        get_segment_avg(a_series, 2) - get_segment_avg(a_series, 0), # [4] Evolución tensión (Final - Inicio)
+        np.corrcoef(a_series, v_series)[0,1] if len(a_series) > 1 else 0 # [5] Coherencia A/V
+    ])
+
+    debug(f"Vector Semántico Emocional: {vector}")
+    return vector
+
+
+# =========================
 # EJECUCIÓN
 # =========================
 
 debug("Loading score...")
-score = converter.parse('./coming_fix.musicxml')
+score = converter.parse('./dreams2.musicxml')
 debug("Score loaded")
 
 custom_rules = [
@@ -4819,4 +4938,5 @@ custom_rules = [
 # entropy_surprise_vector(score)
 # lerdahl_energy_vector(score)
 # tonnetz_distance_vector(score)
-psychoacoustic_vector(score)
+# psychoacoustic_vector(score)
+print(semantic_emotion_vector(score))
