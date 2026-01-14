@@ -14,3 +14,34 @@ from_clip(){
 # wide:
 # to_clip ... 2>/dev/null | paste -d'|' -s
 # (Xclip -o | paste -d '' -s | sed 's/|/\n/g'; echo) | from_clip -
+
+uuencode_func() {
+  printf "begin 644 -\n"
+  od -v -An -t u1 | awk '{
+    for(i=1;i<=NF;i++){b[l++]=$i;if(l==45){o(45);l=0}}
+  }
+  END{if(l)o(l);print "`\nend"}
+  function o(k,i,v){
+    printf "%c",k+32
+    for(i=0;i<k;i+=3){
+      v[0]=int(b[i]/4);v[1]=(b[i]%4)*16+int(b[i+1]/16)
+      v[2]=(b[i+1]%16)*4+int(b[i+2]/64);v[3]=b[i+2]%64
+      for(j=0;j<4;j++)printf "%c",v[j]+32
+    }
+    print "";for(m=0;m<45;m++)b[m]=0
+  }' | tr ' ' '`'
+}
+
+uudecode_func() {
+  sed '/^begin/d; /^end/d' | awk '
+  BEGIN { m=" !\"#$%&'\''()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`" }
+  {
+    l = (index(m, substr($0,1,1)) - 1) % 64
+    for(i=2; l>0; i+=4) {
+      for(j=0; j<4; j++) v[j] = (index(m, substr($0,i+j,1)) - 1) % 64
+      printf "%c", (v[0]*4 + int(v[1]/16)); if (--l==0) break
+      printf "%c", ((v[1]%16)*16 + int(v[2]/4)); if (--l==0) break
+      printf "%c", ((v[2]%4)*64 + v[3]); --l
+    }
+  }'
+}
