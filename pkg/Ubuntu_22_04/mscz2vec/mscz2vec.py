@@ -104,17 +104,17 @@ def roman_to_function(rn):
 
     return "Other"
 
-def extract_harmonic_chords(stream):
+def extract_harmonic_chords(stream_input):
     debug("Harmony: Extracting chords")
-    debug(f"Harmony: stream type = {type(stream)}")
+    debug(f"Harmony: stream type = {type(stream_input)}")
 
     notes_by_offset = defaultdict(list)
 
     # ── Recolectar notas y acordes explícitos
-    for el in stream.recurse():
+    for el in stream_input.recurse():
         # Nota individual
         if isinstance(el, note.Note):
-            abs_offset = float(el.getOffsetInHierarchy(stream))
+            abs_offset = float(el.getOffsetInHierarchy(stream_input))
             notes_by_offset[abs_offset].append(el)
 
             debug(
@@ -124,7 +124,7 @@ def extract_harmonic_chords(stream):
 
         # Acorde explícito (MusicXML / MuseScore)
         elif isinstance(el, chord.Chord):
-            abs_offset = float(el.getOffsetInHierarchy(stream))
+            abs_offset = float(el.getOffsetInHierarchy(stream_input))
 
             debug(
                 f"Harmony: CHORD {[p.nameWithOctave for p in el.pitches]} "
@@ -138,6 +138,44 @@ def extract_harmonic_chords(stream):
 
     # ── Construir acordes armónicos
     chords_list = []
+
+    # Pre-construir índice de compases para búsqueda rápida
+    measures_index = []
+    try:
+        # Intentar obtener compases de diferentes maneras
+        measures = None
+
+        # Método 1: Desde parts si existen
+        if hasattr(stream_input, 'parts') and stream_input.parts:
+            first_part = stream_input.parts[0]
+            measures = list(first_part.getElementsByClass('Measure'))
+            debug(f"Harmony: Got {len(measures)} measures from first part")
+
+        # Método 2: Directamente del stream
+        if not measures:
+            measures = list(stream_input.getElementsByClass('Measure'))
+            debug(f"Harmony: Got {len(measures)} measures from stream directly")
+
+        # Método 3: Flatten y buscar
+        if not measures:
+            measures = list(stream_input.flatten().getElementsByClass('Measure'))
+            debug(f"Harmony: Got {len(measures)} measures from flattened stream")
+
+        for measure in measures:
+            measure_info = {
+                'number': measure.measureNumber,
+                'start': float(measure.offset),
+                'end': float(measure.offset + measure.quarterLength),
+                'length': float(measure.quarterLength)
+            }
+            measures_index.append(measure_info)
+            debug(f"Harmony: Measure {measure_info['number']}: offset {measure_info['start']:.3f} to {measure_info['end']:.3f} (length: {measure_info['length']:.3f})")
+
+        debug(f"Harmony: Built index with {len(measures_index)} measures")
+    except Exception as e:
+        debug(f"Harmony: Error building measure index: {e}")
+        import traceback
+        debug(traceback.format_exc())
 
     for offset in sorted(notes_by_offset):
         group = notes_by_offset[offset]
@@ -158,21 +196,96 @@ def extract_harmonic_chords(stream):
         if len(group) >= 2:
             ch = chord.Chord(group)
 
-            # *** AÑADIR: Obtener el compás de la primera nota del grupo ***
-            first_note = group[0]
-            measure = first_note.getContextByClass('Measure')
-            if measure:
-                # Guardar el número de compás como atributo personalizado
-                ch._stored_measure_number = measure.measureNumber
-            else:
-                ch._stored_measure_number = None
+            # *** MEJORADO: Múltiples métodos para obtener el compás ***
+            measure_num = None
+
+            # Método 1: Desde la primera nota del grupo
+            if group:
+                first_note = group[0]
+                try:
+                    measure = first_note.getContextByClass('Measure')
+                    if measure and hasattr(measure, 'measureNumber'):
+                        measure_num = measure.measureNumber
+                        debug(f"Harmony: Measure from note context: {measure_num}")
+                except Exception as e:
+                    debug(f"Harmony: Error getting measure from note context: {e}")
+
+            # Método 2: Buscar en el índice de compases por offset
+            if measure_num is None and measures_index:
+                debug(f"Harmony: Searching for offset {offset:.3f} in measure index...")
+                for m_info in measures_index:
+                    debug(f"  Checking measure {m_info['number']}: {m_info['start']:.3f} <= {offset:.3f} < {m_info['end']:.3f}?")
+                    # Usar <= para el inicio y < para el final
+                    if m_info['start'] <= offset < m_info['end']:
+                        measure_num = m_info['number']
+                        debug(f"Harmony: Measure from offset index: {measure_num}")
+                        break
+
+                if measure_num is None:
+                    debug(f"Harmony: No match found in index for offset {offset:.3f}")
+
+            # Método 3: Buscar directamente en el stream usando getElementAtOrBefore
+            if measure_num is None:
+                try:
+                    # Primero intentar con parts
+                    search_stream = stream_input
+                    if hasattr(stream_input, 'parts') and stream_input.parts:
+                        search_stream = stream_input.parts[0]
+
+                    element = search_stream.flatten().getElementAtOrBefore(offset, classList=['Measure'])
+                    if element and hasattr(element, 'measureNumber'):
+                        measure_num = element.measureNumber
+                        debug(f"Harmony: Measure from getElementAtOrBefore: {measure_num}")
+                except Exception as e:
+                    debug(f"Harmony: Error with getElementAtOrBefore: {e}")
+
+            # Método 4: Último recurso - buscar el compás que contiene este offset
+            if measure_num is None and measures_index:
+                debug(f"Harmony: Last resort - finding measure containing offset {offset:.3f}")
+                for m_info in measures_index:
+                    # Más permisivo: incluir el extremo final
+                    if m_info['start'] <= offset <= m_info['end']:
+                        measure_num = m_info['number']
+                        debug(f"Harmony: Measure from inclusive search: {measure_num}")
+                        break
+
+            # Método 5: Si el offset está justo en el límite, tomar el siguiente compás
+            if measure_num is None and measures_index:
+                tolerance = 0.01  # Tolerancia para errores de punto flotante
+                for m_info in measures_index:
+                    if abs(offset - m_info['start']) < tolerance:
+                        measure_num = m_info['number']
+                        debug(f"Harmony: Measure from boundary match (start): {measure_num}")
+                        break
+                    if abs(offset - m_info['end']) < tolerance:
+                        # Offset al final de un compás - tomar el siguiente
+                        next_measure = next((m for m in measures_index if m['number'] > m_info['number']), None)
+                        if next_measure:
+                            measure_num = next_measure['number']
+                            debug(f"Harmony: Measure from boundary match (end, taking next): {measure_num}")
+                        else:
+                            measure_num = m_info['number']
+                            debug(f"Harmony: Measure from boundary match (end, no next): {measure_num}")
+                        break
+
+            # Almacenar en el acorde
+            ch._stored_measure_number = measure_num
+            ch._stored_offset = offset
 
             chords_list.append(ch)
 
-            debug(
-                "Harmony: chord detected: "
-                f"{[p.nameWithOctave for p in ch.pitches]}"
-            )
+            if measure_num is None:
+                debug(
+                    f"Harmony: WARNING - chord detected WITHOUT measure: "
+                    f"{[p.nameWithOctave for p in ch.pitches]} "
+                    f"at offset {offset:.3f}"
+                )
+            else:
+                debug(
+                    f"Harmony: chord detected: "
+                    f"{[p.nameWithOctave for p in ch.pitches]} "
+                    f"at measure {measure_num} (offset: {offset:.3f})"
+                )
 
     debug("Harmony: # total chords =", len(chords_list))
     return chords_list
@@ -530,40 +643,140 @@ def detect_bass_chord_pattern(elements, start_idx, time_window):
 
     return None
 
+def extract_all_elements(part):
+    """Extrae elementos de TODOS los pentagramas, no solo clave de fa"""
+    elements = []
+    for el in part.flatten().notesAndRests:
+        if el.isRest:
+            continue
 
-def detect_arpeggiated_chords(score, time_window=2.0, min_notes=3):
+        offset = el.offset
+        if el.isNote:
+            elements.append({
+                'element': el,
+                'offset': offset,
+                'pitches': [el.pitch],
+                'type': 'note'
+            })
+        elif el.isChord:
+            elements.append({
+                'element': el,
+                'offset': offset,
+                'pitches': list(el.pitches),
+                'type': 'chord'
+            })
+    return elements
+
+
+def detect_broken_chord_with_rests(elements, start_idx, time_window, min_notes=3):
     """
-    Detecta acordes arpegiados analizando notas sucesivas en una ventana temporal.
-    SOLO analiza pentagramas en clave de fa.
+    Detecta acordes rotos que incluyen silencios intercalados.
+    Ejemplo: Do - silencio - Mi - silencio - Sol
 
-    Detecta tres patrones:
-    1. Arpegios tradicionales (notas consecutivas ascendentes/descendentes)
-    2. Bajo + acorde (nota/acorde + acorde simultáneo)
-       Ejemplo: Do (negra) + (Mi+Sol) (negra)
-    3. Bajo de Alberti (patrón bajo-alto-medio-alto repetitivo)
-       Ejemplo: Do - Sol - Mi - Sol - Do - Sol - Mi - Sol
+    Este patrón es común en:
+    - Música barroca (especialmente en bajo continuo)
+    - Música romántica (arpegios expresivos)
+    - Música contemporánea (texturas espaciadas)
+    """
+    if start_idx >= len(elements):
+        return None
+
+    first_element = elements[start_idx]
+
+    # Solo comenzar con notas individuales
+    if first_element['type'] != 'note':
+        return None
+
+    first_offset = first_element['offset']
+
+    # Recolectar notas dentro de la ventana, ignorando gaps temporales (silencios implícitos)
+    collected_notes = [first_element]
+    i = start_idx + 1
+    rest_count = 0
+    last_offset = first_offset
+
+    while i < len(elements) and len(collected_notes) < 8:  # Máximo 8 notas
+        next_element = elements[i]
+
+        # Si estamos fuera de la ventana temporal, terminar
+        if next_element['offset'] - first_offset > time_window:
+            break
+
+        # Solo considerar notas individuales
+        if next_element['type'] == 'note':
+            # Verificar si hay un "gap" (silencio implícito)
+            gap = next_element['offset'] - last_offset
+
+            # Si hay un gap significativo, contar como silencio
+            if gap > 0.25:  # Más de una semicorchea de gap
+                rest_count += 1
+
+            collected_notes.append(next_element)
+            last_offset = next_element['offset']
+
+        i += 1
+
+    # Necesitamos al menos min_notes y al menos un silencio para que sea "broken"
+    if len(collected_notes) < min_notes or rest_count == 0:
+        return None
+
+    # Extraer pitches
+    all_pitches = [n['pitches'][0] for n in collected_notes]
+    unique_pitches = list(set([p.midi % 12 for p in all_pitches]))
+
+    # Verificar que forman un acorde (al menos min_notes pitches únicos)
+    if len(unique_pitches) < min_notes:
+        return None
+
+    # Verificar que hay cierta direccionalidad o patrón
+    pitches_midi = [p.midi for p in all_pitches]
+
+    # Calcular varianza de alturas (acordes rotos típicamente tienen cierto rango)
+    pitch_range = max(pitches_midi) - min(pitches_midi)
+
+    # Si el rango es muy pequeño (< 4 semitonos), probablemente no es un arpegio
+    if pitch_range < 4:
+        return None
+
+    return {
+        'elements': collected_notes,
+        'all_pitches': all_pitches,
+        'end_index': i,
+        'pattern_type': 'broken',
+        'rest_count': rest_count
+    }
+
+
+def detect_arpeggiated_chords(score, time_window=2.0, min_notes=3, analyze_all_staves=True):
+    """
+    Versión mejorada que puede analizar todos los pentagramas o solo clave de fa.
+    Detecta múltiples patrones de arpegio incluyendo acordes rotos con silencios.
 
     Args:
         score: partitura music21
         time_window: ventana temporal en quarterLength para considerar un arpegio
         min_notes: número mínimo de notas diferentes para formar un acorde
+        analyze_all_staves: True para analizar todos los pentagramas, False solo clave de fa
 
     Returns:
         lista de dict con información de los acordes detectados
     """
-    debug("Arpeggios: Detecting arpeggiated chords (bass clef only)...")
+    debug(f"Arpeggios: Detecting arpeggiated chords (all staves: {analyze_all_staves})...")
 
     parts = getattr(score, 'parts', [score])
     arpeggiated_chords = []
 
     for part_idx, part in enumerate(parts):
-        # Extraer elementos (notas y acordes) en clave de fa
-        elements = extract_bass_elements(part)
-
-        debug(f"Arpeggios: Part {part_idx} has {len(elements)} elements in bass clef")
+        # Extraer elementos según configuración
+        if analyze_all_staves:
+            elements = extract_all_elements(part)
+            debug(f"Arpeggios: Part {part_idx} has {len(elements)} elements (all staves)")
+        else:
+            elements = extract_bass_elements(part)
+            debug(f"Arpeggios: Part {part_idx} has {len(elements)} elements (bass clef only)")
 
         if len(elements) == 0:
-            debug(f"Arpeggios: Part {part_idx} has no bass clef elements, skipping...")
+            debug(f"Arpeggios: Part {part_idx} has no elements, skipping...")
             continue
 
         i = 0
@@ -648,7 +861,45 @@ def detect_arpeggiated_chords(score, time_window=2.0, min_notes=3):
                 except Exception as e:
                     debug(f"Arpeggios: Error creating chord from bass+chord pattern: {e}")
 
-            # TERCERO: Si no es bajo+acorde ni Alberti, intentar detectar arpegio tradicional
+            # TERCERO: Detectar acordes rotos con silencios intercalados
+            broken_chord_pattern = detect_broken_chord_with_rests(elements, i, time_window, min_notes)
+
+            if broken_chord_pattern:
+                all_pitches = broken_chord_pattern['all_pitches']
+                pattern_type = 'BROKEN'
+
+                try:
+                    chord_pitches = sorted(list(set(all_pitches)), key=lambda p: p.midi)
+                    ch = chord.Chord(chord_pitches)
+
+                    # Obtener compás del primer elemento
+                    measure = broken_chord_pattern['elements'][0]['element'].getContextByClass('Measure')
+                    measure_num = measure.measureNumber if measure else '?'
+
+                    # Información del patrón
+                    note_names = [p.nameWithOctave for p in all_pitches]
+
+                    arpeggiated_chords.append({
+                        'chord': ch,
+                        'measure': measure_num,
+                        'notes': note_names,
+                        'offset': current_offset,
+                        'direction': pattern_type,
+                        'span': broken_chord_pattern['elements'][-1]['offset'] - current_offset,
+                        'part': part_idx,
+                        'pattern_info': f"{pattern_type} (with {broken_chord_pattern['rest_count']} rests)"
+                    })
+
+                    debug(f"Arpeggios: Found {pattern_type} at measure {measure_num}: {note_names}")
+
+                    # Saltar los elementos que ya procesamos
+                    i = broken_chord_pattern['end_index']
+                    continue
+
+                except Exception as e:
+                    debug(f"Arpeggios: Error creating chord from broken chord pattern: {e}")
+
+            # CUARTO: Si no es bajo+acorde, Alberti ni broken chord, intentar detectar arpegio tradicional
             # Solo con notas individuales consecutivas
             if current_element['type'] == 'note':
                 # Recolectar notas individuales consecutivas dentro de la ventana temporal
@@ -731,6 +982,7 @@ def detect_arpeggiated_chords(score, time_window=2.0, min_notes=3):
     return arpeggiated_chords
 
 
+
 def arpeggiated_chord_features(score, time_window=2.0, min_notes=3):
     """
     Genera un vector de características basado en acordes arpegiados.
@@ -750,7 +1002,7 @@ def arpeggiated_chord_features(score, time_window=2.0, min_notes=3):
         debug("Arpeggios: could not detect key")
         key = None
 
-    arpeggios = detect_arpeggiated_chords(score, time_window, min_notes)
+    arpeggios = detect_arpeggiated_chords(score, time_window, min_notes, False)
 
     if not arpeggios:
         debug("Arpeggios: No arpeggiated chords found in bass clef")
@@ -2652,34 +2904,98 @@ def form_string_to_vector(form_string, dim=32):
 
 
 # =========================
-# MORE
-# =========================
-
-# =========================
 # NUEVAS FUNCIONES DE ANÁLISIS AVANZADO
 # =========================
+
+def get_measure_from_chord_or_offset(chord_obj, score, offset=None):
+    """
+    Función universal para obtener el número de compás de un acorde.
+    Intenta múltiples métodos en orden de preferencia.
+
+    Args:
+        chord_obj: objeto Chord de music21
+        score: partitura completa (para búsqueda por offset)
+        offset: offset opcional si se conoce
+
+    Returns:
+        int o None: número de compás
+    """
+    # Método 1: Atributo almacenado
+    if hasattr(chord_obj, '_stored_measure_number') and chord_obj._stored_measure_number is not None:
+        return chord_obj._stored_measure_number
+
+    # Método 2: Contexto directo
+    try:
+        measure = chord_obj.getContextByClass('Measure')
+        if measure and hasattr(measure, 'measureNumber'):
+            return measure.measureNumber
+    except:
+        pass
+
+    # Método 3: Usar offset almacenado o proporcionado
+    if offset is None and hasattr(chord_obj, '_stored_offset'):
+        offset = chord_obj._stored_offset
+
+    if offset is not None and score is not None:
+        try:
+            # Buscar por offset en el score
+            element = score.flatten().getElementAtOrBefore(offset, classList=['Measure'])
+            if element and hasattr(element, 'measureNumber'):
+                return element.measureNumber
+        except:
+            pass
+
+        # Último recurso: iterar por todos los compases
+        try:
+            for measure in score.flatten().getElementsByClass('Measure'):
+                measure_start = measure.offset
+                measure_end = measure_start + measure.quarterLength
+                if measure_start <= offset < measure_end:
+                    return measure.measureNumber
+        except:
+            pass
+
+    # Método 4: Si el acorde tiene pitches, intentar desde las notas originales
+    try:
+        if hasattr(chord_obj, 'pitches') and len(chord_obj.pitches) > 0:
+            # Buscar en el score una nota con el mismo pitch en un offset similar
+            if offset is not None and score is not None:
+                for n in score.flatten().notes:
+                    if n.isNote and abs(n.offset - offset) < 0.01:
+                        if n.pitch.midi == chord_obj.pitches[0].midi:
+                            measure = n.getContextByClass('Measure')
+                            if measure and hasattr(measure, 'measureNumber'):
+                                return measure.measureNumber
+    except:
+        pass
+
+    return None
 
 def detect_cadences(score):
     """
     Detecta cadencias musicales y retorna un vector de características.
-    Returns: vector [authentic, plagal, half, deceptive, total_density]
+    Returns: vector [authentic_perfect, authentic_imperfect, plagal, half,
+                     deceptive, special, density]
     """
     try:
         key = score.analyze('key')
     except:
         debug("Cadences: Could not detect key")
-        return np.zeros(5)
+        return np.zeros(7)
 
     chords = extract_harmonic_chords(score)
 
     if len(chords) < 2:
-        return np.zeros(5)
+        return np.zeros(7)
 
     cadence_types = {
-        'authentic': 0,
+        'authentic_perfect': 0,
+        'authentic_imperfect': 0,
         'plagal': 0,
         'half': 0,
-        'deceptive': 0
+        'deceptive': 0,
+        'phrygian': 0,
+        'landini': 0
     }
 
     print("\n" + "="*50)
@@ -2691,54 +3007,92 @@ def detect_cadences(score):
             rn1 = roman.romanNumeralFromChord(chords[i], key)
             rn2 = roman.romanNumeralFromChord(chords[i+1], key)
 
-            measure_num = getattr(chords[i+1], '_stored_measure_number', '?')
+            # Usar la función auxiliar
+            measure_num = get_measure_from_chord_or_offset(chords[i+1], score)
+            measure_str = str(measure_num) if measure_num is not None else '?'
 
-            # Cadencia auténtica: V -> I
-            if rn1.figure.startswith("V") and rn2.figure.startswith("I"):
-                cadence_types['authentic'] += 1
-                print(f"  Authentic cadence at measure {measure_num}: {rn1.figure} → {rn2.figure}")
+            # Información adicional para debugging cuando measure_num es None
+            if measure_num is None:
+                offset_info = f"(offset: {chords[i+1]._stored_offset:.3f})" if hasattr(chords[i+1], '_stored_offset') else ""
+                debug(f"Cadences: Could not determine measure for chord {[p.nameWithOctave for p in chords[i+1].pitches]} {offset_info}")
 
-            # Cadencia plagal: IV -> I
+            # Cadencia Auténtica Perfecta: V (fundamental) -> I (fundamental)
+            if (rn1.figure == "V" and rn2.figure in ["I", "i"] and
+                chords[i].inversion() == 0 and chords[i+1].inversion() == 0):
+                cadence_types['authentic_perfect'] += 1
+                print(f"  Perfect Authentic at measure {measure_str}: {rn1.figure} → {rn2.figure}")
+
+            # Cadencia Auténtica Imperfecta: V -> I (con inversiones)
+            elif (rn1.figure.startswith("V") and rn2.figure.startswith("I") and
+                  (chords[i].inversion() != 0 or chords[i+1].inversion() != 0)):
+                cadence_types['authentic_imperfect'] += 1
+                inv1 = chords[i].inversion()
+                inv2 = chords[i+1].inversion()
+                print(f"  Imperfect Authentic at measure {measure_str}: {rn1.figure} (inv:{inv1}) → {rn2.figure} (inv:{inv2})")
+
+            # Cadencia Plagal: IV -> I
             elif rn1.figure.startswith("IV") and rn2.figure.startswith("I"):
                 cadence_types['plagal'] += 1
-                print(f"  Plagal cadence at measure {measure_num}: {rn1.figure} → {rn2.figure}")
+                print(f"  Plagal at measure {measure_str}: {rn1.figure} → {rn2.figure}")
 
             # Semicadencia: X -> V
-            elif rn2.figure.startswith("V"):
+            elif rn2.figure.startswith("V") and not rn1.figure.startswith("V"):
                 cadence_types['half'] += 1
-                print(f"  Half cadence at measure {measure_num}: {rn1.figure} → {rn2.figure}")
+                inv = chords[i+1].inversion()
+                inv_str = f" (inv:{inv})" if inv > 0 else ""
+                print(f"  Half at measure {measure_str}: {rn1.figure} → {rn2.figure}{inv_str}")
 
-            # Cadencia rota: V -> vi
+            # Cadencia Rota: V -> vi
             elif rn1.figure.startswith("V") and rn2.figure.startswith("vi"):
                 cadence_types['deceptive'] += 1
-                print(f"  Deceptive cadence at measure {measure_num}: {rn1.figure} → {rn2.figure}")
+                print(f"  Deceptive at measure {measure_str}: {rn1.figure} → {rn2.figure}")
+
+            # Cadencia Frigia: iv6 -> V
+            elif (key.mode == 'minor' and rn1.figure == "iv" and
+                  chords[i].inversion() == 1 and rn2.figure.startswith("V")):
+                cadence_types['phrygian'] += 1
+                print(f"  Phrygian at measure {measure_str}: {rn1.figure}6 → {rn2.figure}")
 
         except Exception as e:
             debug(f"Cadences: Error analyzing chord pair: {e}")
             continue
 
-    total_cadences = sum(cadence_types.values())
+    # Detectar cadencias de tres acordes
+    for i in range(len(chords) - 2):
+        try:
+            rn1 = roman.romanNumeralFromChord(chords[i], key)
+            rn2 = roman.romanNumeralFromChord(chords[i+1], key)
+            rn3 = roman.romanNumeralFromChord(chords[i+2], key)
 
-    # Normalizar por número de acordes
+            if (rn1.figure.startswith("vi") and rn2.figure.startswith("V") and
+                rn3.figure.startswith("I")):
+                cadence_types['landini'] += 1
+                measure_num = get_measure_from_chord_or_offset(chords[i+2], score)
+                measure_str = str(measure_num) if measure_num is not None else '?'
+                print(f"  Landini (vi-V-I) at measure {measure_str}")
+        except:
+            continue
+
+    total_cadences = sum(cadence_types.values())
     density = total_cadences / len(chords) if len(chords) > 0 else 0
 
     print(f"\nTotal cadences: {total_cadences}")
     print("="*50)
 
     vector = np.array([
-        cadence_types['authentic'],
+        cadence_types['authentic_perfect'],
+        cadence_types['authentic_imperfect'],
         cadence_types['plagal'],
         cadence_types['half'],
         cadence_types['deceptive'],
+        cadence_types['phrygian'] + cadence_types['landini'],
         density
     ])
 
-    # Normalizar conteos (excepto density que ya está normalizado)
     if total_cadences > 0:
-        vector[:4] = vector[:4] / total_cadences
+        vector[:6] = vector[:6] / total_cadences
 
     return vector
-
 
 def analyze_voice_leading(score, max_parts=4):
     """
@@ -2923,52 +3277,82 @@ def texture_analysis(score):
     return vector
 
 
-def detect_modulations(score, window_size=8):
+def detect_modulations(score, window_size=4, min_confidence=0.7):
     """
-    Detecta cambios de tonalidad en la pieza.
-    Returns: vector [num_modulations, modulation_density, avg_distance]
+    Versión mejorada con detección de tonalidades pivote y análisis de confianza
     """
     parts = getattr(score, 'parts', [score])
     measures = list(parts[0].getElementsByClass('Measure'))
 
     if len(measures) < window_size * 2:
         debug("Modulations: Score too short")
-        return np.zeros(3)
+        return np.zeros(5)  # Aumentado
 
     print("\n" + "="*50)
-    print("MODULATION ANALYSIS")
+    print("MODULATION ANALYSIS (ENHANCED)")
     print("="*50)
 
     modulations = []
     current_key = None
     keys_detected = []
 
-    for i in range(0, len(measures), window_size):
-        segment = measures[i:i+window_size]
+    # Analizar cada ventana
+    key_confidence = []
+
+    for i in range(0, len(measures), window_size // 2):  # Overlap para mejor detección
+        segment = measures[i:min(i+window_size, len(measures))]
         seg_stream = stream.Stream(segment)
 
         try:
+            # Usar múltiples métodos de análisis
             detected_key = seg_stream.analyze('key')
-            keys_detected.append(detected_key)
+
+            # Calcular confianza basada en correlación con perfil de Krumhansl
+            confidence = detected_key.correlationCoefficient if hasattr(detected_key, 'correlationCoefficient') else 0.5
+
+            keys_detected.append((detected_key, confidence, i))
+
+            if confidence < min_confidence:
+                debug(f"Low confidence ({confidence:.2f}) at measure {i+1}, skipping")
+                continue
+
+            key_confidence.append(confidence)
 
             if current_key is None:
                 current_key = detected_key
-                print(f"Initial key: {current_key}")
-            elif detected_key.tonic.name != current_key.tonic.name or \
-                 detected_key.mode != current_key.mode:
+                print(f"Initial key: {current_key} (confidence: {confidence:.2f})")
+
+            elif (detected_key.tonic.name != current_key.tonic.name or
+                  detected_key.mode != current_key.mode):
 
                 # Calcular distancia en círculo de quintas
                 distance = interval.Interval(current_key.tonic, detected_key.tonic).semitones % 12
+
+                # Determinar tipo de modulación
+                if distance == 0:
+                    mod_type = "parallel"  # C major -> C minor
+                elif distance in [5, 7]:  # Quinta arriba/abajo
+                    mod_type = "dominant/subdominant"
+                elif distance in [2, 10]:  # Segunda
+                    mod_type = "sequential"
+                elif distance in [3, 9]:  # Relativa
+                    mod_type = "relative"
+                else:
+                    mod_type = "chromatic"
 
                 modulations.append({
                     'from': str(current_key),
                     'to': str(detected_key),
                     'measure': i + 1,
-                    'distance': distance
+                    'distance': distance,
+                    'type': mod_type,
+                    'confidence': confidence
                 })
 
-                print(f"  Modulation at measure {i+1}: {current_key} → {detected_key} (distance: {distance} semitones)")
+                print(f"  {mod_type.upper()} modulation at measure {i+1}:")
+                print(f"    {current_key} → {detected_key} (distance: {distance} semitones, conf: {confidence:.2f})")
                 current_key = detected_key
+
         except Exception as e:
             debug(f"Modulations: Error analyzing segment: {e}")
             continue
@@ -2976,15 +3360,24 @@ def detect_modulations(score, window_size=8):
     num_modulations = len(modulations)
     modulation_density = num_modulations / len(measures) if len(measures) > 0 else 0
     avg_distance = np.mean([m['distance'] for m in modulations]) if modulations else 0
+    avg_confidence = np.mean(key_confidence) if key_confidence else 0
+
+    # Contar modulaciones por tipo
+    chromatic_count = sum(1 for m in modulations if m['type'] == 'chromatic')
+    chromatic_ratio = chromatic_count / num_modulations if num_modulations > 0 else 0
 
     print(f"\nTotal modulations: {num_modulations}")
     print(f"Modulation density: {modulation_density:.3f} per measure")
+    print(f"Average key confidence: {avg_confidence:.2f}")
+    print(f"Chromatic modulations: {chromatic_ratio:.1%}")
     print("="*50)
 
     return np.array([
-        num_modulations,
+        num_modulations / 10.0,  # Normalizado
         modulation_density,
-        avg_distance
+        avg_distance / 12.0,  # Normalizado
+        avg_confidence,
+        chromatic_ratio
     ])
 
 
@@ -3077,56 +3470,102 @@ def advanced_harmonic_features_vector(score):
 
 def dissonance_analysis(score):
     """
-    Analiza el nivel de disonancia y tensión armónica.
-    Returns: vector [dissonance_ratio, avg_dissonance_level, tension_curve_variance]
+    Versión mejorada con modelo de consonancia/disonancia más preciso
     """
     chords = extract_harmonic_chords(score)
 
     if not chords:
-        return np.zeros(3)
+        return np.zeros(5)  # Aumentado
 
     print("\n" + "="*50)
-    print("DISSONANCE ANALYSIS")
+    print("DISSONANCE ANALYSIS (ENHANCED)")
     print("="*50)
+
+    # Tabla de consonancia de Helmholtz (0 = muy disonante, 1 = muy consonante)
+    consonance_map = {
+        0: 1.0,   # Unísono
+        1: 0.1,   # 2m - muy disonante
+        2: 0.2,   # 2M - disonante
+        3: 0.6,   # 3m - consonante imperfecta
+        4: 0.7,   # 3M - consonante imperfecta
+        5: 0.8,   # 4J - consonante perfecta
+        6: 0.0,   # 4A/5d - tritono, máxima disonancia
+        7: 0.9,   # 5J - consonante perfecta
+        8: 0.65,  # 6m - consonante imperfecta
+        9: 0.75,  # 6M - consonante imperfecta
+        10: 0.3,  # 7m - disonante
+        11: 0.15  # 7M - muy disonante
+    }
 
     dissonance_levels = []
     dissonant_count = 0
+    roughness_scores = []
 
     for chord_obj in chords:
         try:
-            # Calcular intervalos entre todas las notas del acorde
             pitches = sorted([p.midi for p in chord_obj.pitches])
+
+            if len(pitches) < 2:
+                dissonance_levels.append(0)
+                roughness_scores.append(0)
+                continue
+
+            # Calcular todos los intervalos
             intervals = []
+            consonances = []
 
             for i in range(len(pitches)):
                 for j in range(i+1, len(pitches)):
                     interval = (pitches[j] - pitches[i]) % 12
                     intervals.append(interval)
+                    consonances.append(consonance_map.get(interval, 0.5))
 
-            # Clasificar disonancias (segundas menores, séptimas mayores, tritono)
-            dissonant_intervals = [1, 6, 10, 11]  # m2, tritono, M7, m7
-            dissonance_score = sum(1 for i in intervals if i in dissonant_intervals)
+            # Nivel de disonancia = 1 - consonancia promedio
+            avg_consonance = np.mean(consonances)
+            dissonance_level = 1 - avg_consonance
 
-            dissonance_level = dissonance_score / len(intervals) if intervals else 0
+            # Roughness de Sethares: más disonante cuando hay intervalos pequeños
+            roughness = sum(1 / (abs(pitches[j] - pitches[i]) + 1)
+                          for i in range(len(pitches))
+                          for j in range(i+1, len(pitches)))
+            roughness_normalized = roughness / len(intervals) if intervals else 0
+
             dissonance_levels.append(dissonance_level)
+            roughness_scores.append(roughness_normalized)
 
-            if dissonance_level > 0.3:
+            if dissonance_level > 0.5:
                 dissonant_count += 1
 
         except Exception as e:
             debug(f"Dissonance: Error analyzing chord: {e}")
             dissonance_levels.append(0)
+            roughness_scores.append(0)
 
     dissonance_ratio = dissonant_count / len(chords) if chords else 0
     avg_dissonance = np.mean(dissonance_levels) if dissonance_levels else 0
     tension_variance = np.var(dissonance_levels) if dissonance_levels else 0
+    avg_roughness = np.mean(roughness_scores) if roughness_scores else 0
+
+    # Tendencia de tensión (¿aumenta o disminuye a lo largo de la pieza?)
+    if len(dissonance_levels) > 1:
+        tension_trend = np.polyfit(range(len(dissonance_levels)), dissonance_levels, 1)[0]
+    else:
+        tension_trend = 0
 
     print(f"Dissonant chords: {dissonant_count}/{len(chords)} ({dissonance_ratio:.1%})")
     print(f"Average dissonance level: {avg_dissonance:.3f}")
     print(f"Tension variance: {tension_variance:.3f}")
+    print(f"Average roughness: {avg_roughness:.3f}")
+    print(f"Tension trend: {'increasing' if tension_trend > 0 else 'decreasing'} ({abs(tension_trend):.4f})")
     print("="*50)
 
-    return np.array([dissonance_ratio, avg_dissonance, tension_variance])
+    return np.array([
+        dissonance_ratio,
+        avg_dissonance,
+        tension_variance,
+        avg_roughness,
+        tension_trend
+    ])
 
 
 def melodic_contour_analysis(score):
@@ -3195,23 +3634,26 @@ def melodic_contour_analysis(score):
 
 def register_analysis(score):
     """
-    Analiza el uso del registro (tessitura).
+    Analiza el uso del registro (tessitura) con detección de cruces de voces.
     Returns: vector [avg_pitch, pitch_range, low_register_ratio,
-                     mid_register_ratio, high_register_ratio, register_changes]
+                     mid_register_ratio, high_register_ratio, register_changes,
+                     voice_crossing_rate]
     """
+    from music21 import pitch as pitch_module  # Importar explícitamente para evitar conflictos
+
     notes = score.flatten().notes
 
     if not notes:
-        return np.zeros(6)
+        return np.zeros(7)
 
     print("\n" + "="*50)
-    print("REGISTER ANALYSIS")
+    print("REGISTER ANALYSIS (ENHANCED)")
     print("="*50)
 
     pitches = [n.pitch.midi for n in notes if n.isNote]
 
     if not pitches:
-        return np.zeros(6)
+        return np.zeros(7)
 
     avg_pitch = np.mean(pitches)
     pitch_range = max(pitches) - min(pitches)
@@ -3242,13 +3684,107 @@ def register_analysis(score):
 
     register_change_rate = register_changes / total if total > 0 else 0
 
-    print(f"Average pitch: {avg_pitch:.1f} MIDI ({pitch.Pitch(int(avg_pitch)).nameWithOctave})")
-    print(f"Pitch range: {pitch_range} semitones")
+    # NUEVO: Detectar cruces de voces
+    parts = getattr(score, 'parts', [score])
+    voice_crossings = 0
+    total_simultaneities = 0
+
+    if len(parts) >= 2:
+        print("\nVoice crossing analysis:")
+
+        for i in range(len(parts) - 1):
+            upper_part = parts[i]
+            lower_part = parts[i + 1]
+
+            # Extraer notas con sus offsets
+            upper_notes = [(n.offset, n.pitch.midi) for n in upper_part.flatten().notes if n.isNote]
+            lower_notes = [(n.offset, n.pitch.midi) for n in lower_part.flatten().notes if n.isNote]
+
+            if not upper_notes or not lower_notes:
+                continue
+
+            # Crear diccionarios offset -> pitch para búsqueda rápida
+            upper_dict = {}
+            lower_dict = {}
+
+            for offset, pitch_midi in upper_notes:
+                if offset not in upper_dict:
+                    upper_dict[offset] = []
+                upper_dict[offset].append(pitch_midi)
+
+            for offset, pitch_midi in lower_notes:
+                if offset not in lower_dict:
+                    lower_dict[offset] = []
+                lower_dict[offset].append(pitch_midi)
+
+            # Buscar cruces en momentos simultáneos
+            all_offsets = set(upper_dict.keys()) | set(lower_dict.keys())
+
+            for offset in sorted(all_offsets):
+                # Buscar notas cercanas temporalmente (dentro de un margen)
+                tolerance = 0.1  # quarterLength tolerance
+
+                upper_pitches_at_offset = []
+                lower_pitches_at_offset = []
+
+                # Buscar en ventana temporal
+                for off, pitch_midi in upper_notes:
+                    if abs(off - offset) <= tolerance:
+                        upper_pitches_at_offset.append(pitch_midi)
+
+                for off, pitch_midi in lower_notes:
+                    if abs(off - offset) <= tolerance:
+                        lower_pitches_at_offset.append(pitch_midi)
+
+                if upper_pitches_at_offset and lower_pitches_at_offset:
+                    total_simultaneities += 1
+
+                    # Verificar si hay cruce (voz inferior más alta que superior)
+                    min_upper = min(upper_pitches_at_offset)
+                    max_lower = max(lower_pitches_at_offset)
+
+                    if max_lower > min_upper:
+                        voice_crossings += 1
+
+                        # Debug: mostrar algunos cruces (máximo 5)
+                        if voice_crossings <= 5:
+                            measure_num = '?'
+                            try:
+                                # Intentar obtener número de compás
+                                for n in upper_part.flatten().notes:
+                                    if abs(n.offset - offset) <= tolerance:
+                                        m = n.getContextByClass('Measure')
+                                        if m:
+                                            measure_num = m.measureNumber
+                                        break
+                            except:
+                                pass
+
+                            upper_note_name = pitch_module.Pitch(min_upper).nameWithOctave
+                            lower_note_name = pitch_module.Pitch(max_lower).nameWithOctave
+
+                            print(f"  Crossing {voice_crossings}: Parts {i+1}/{i+2} at measure {measure_num}")
+                            print(f"    Upper voice: {upper_note_name} < Lower voice: {lower_note_name}")
+
+        if voice_crossings > 5:
+            print(f"  ... and {voice_crossings - 5} more crossings")
+
+    crossing_rate = voice_crossings / total_simultaneities if total_simultaneities > 0 else 0
+
+    print(f"\nRegister statistics:")
+    print(f"  Average pitch: {avg_pitch:.1f} MIDI ({pitch_module.Pitch(int(avg_pitch)).nameWithOctave})")
+    print(f"  Pitch range: {pitch_range} semitones")
     print(f"\nRegister distribution:")
     print(f"  Low (< C4):    {low}/{total} ({low/total:.1%})")
     print(f"  Mid (C4-C5):   {mid}/{total} ({mid/total:.1%})")
     print(f"  High (> C5):   {high}/{total} ({high/total:.1%})")
     print(f"\nRegister changes: {register_changes} ({register_change_rate:.3f} per note)")
+
+    if len(parts) >= 2:
+        print(f"\nVoice crossings: {voice_crossings}/{total_simultaneities} simultaneities ({crossing_rate:.1%})")
+    else:
+        print(f"\nVoice crossings: N/A (single part)")
+
     print("="*50)
 
     return np.array([
@@ -3257,7 +3793,8 @@ def register_analysis(score):
         low / total,
         mid / total,
         high / total,
-        register_change_rate
+        register_change_rate,
+        crossing_rate
     ])
 
 
@@ -3684,21 +4221,21 @@ custom_rules = [
     # CustomRule("estribillo", "recursive", ["intro", "intro"])  # intro dos veces
 ]
 
-# print(rhythmic_features(score))
-# print(melodic_features(score))
-# print(harmonic_features(score))
-# print(arpeggiated_chord_features(score))
-# print(harmonic_transition_features(score))
-# print(advanced_harmonic_features_vector(score))
+print(rhythmic_features(score))
+print(melodic_features(score))
+print(harmonic_features(score))
+print(arpeggiated_chord_features(score))
+print(harmonic_transition_features(score))
+print(advanced_harmonic_features_vector(score))
 print(ultra_advanced_features_vector(score))
-# print(instrumental_features(score))
-# print(motif_vector(score))
-# print(compass_motif_vector(score))
-# print(form_structure_vector(score))
-# print(sequitur_absolute_pitch_semantic_vector(score))
-# sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rules)
-# print(novelty_structure_vector(score))
-# print(melodic_ngram_vector(score))
-# print(rhythmic_ngram_vector(score))
-# print(advanced_sequitur_form(score))
-# print(form_string_to_vector(advanced_sequitur_form(score)))
+print(instrumental_features(score))
+print(motif_vector(score))
+print(compass_motif_vector(score))
+print(form_structure_vector(score))
+print(sequitur_absolute_pitch_semantic_vector(score))
+sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rules)
+print(novelty_structure_vector(score))
+print(melodic_ngram_vector(score))
+print(rhythmic_ngram_vector(score))
+print(advanced_sequitur_form(score))
+print(form_string_to_vector(advanced_sequitur_form(score)))
