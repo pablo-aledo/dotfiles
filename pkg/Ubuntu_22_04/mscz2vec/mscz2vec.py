@@ -4206,6 +4206,150 @@ def ultra_advanced_features_vector(score):
 
     return final_vector
 
+# =========================
+# ENTROPÍA Y SORPRESA (INFORMATION DYNAMICS)
+# =========================
+
+def calculate_information_dynamics_with_measures(sequence_objs, n_gram=3, label="Feature"):
+    """
+    Versión mejorada que rastrea el número de compás para el debug.
+    sequence_objs: lista de tuplas (valor_analizar, objeto_music21_original)
+    """
+    # Extraemos solo los valores para el modelo (ej. los intervalos o ritmos)
+    values = [item[0] for item in sequence_objs]
+
+    if len(values) < n_gram + 1:
+        return {'mean_entropy': 0, 'max_surprise': 0, 'variance': 0, 'trend': 0, 'surprise_profile': []}
+
+    # 1. Entrenamiento del modelo (Markov)
+    model = defaultdict(Counter)
+    context_counts = defaultdict(int)
+
+    for i in range(len(values) - 1):
+        start_idx = max(0, i - (n_gram - 1))
+        context = tuple(values[start_idx : i + 1])
+        next_val = values[i + 1]
+        model[context][next_val] += 1
+        context_counts[context] += 1
+
+    # 2. Análisis con Debug de Compases
+    surprise_profile = []
+    print(f"\n--- {label.upper()} SURPRISE ANALYSIS (Measure-Aware) ---")
+
+    for i in range(len(values) - 1):
+        start_idx = max(0, i - (n_gram - 1))
+        context = tuple(values[start_idx : i + 1])
+        actual_val = values[i + 1]
+
+        # Recuperamos el objeto music21 para saber el compás
+        # i + 1 porque estamos analizando la sorpresa de la nota "siguiente"
+        original_note = sequence_objs[i + 1][1]
+        m_num = original_note.measureNumber
+        beat = original_note.beat
+
+        prob = model[context][actual_val] / context_counts[context] if context_counts[context] > 0 else 0.0001
+        ic = -np.log2(prob)
+        surprise_profile.append(ic)
+
+        # DEBUG: Mostramos si es una sorpresa relevante (> 2.5 bits) o el inicio
+        if ic > 2.5 or i < 3:
+            status = " [!] HIGH" if ic > 3.5 else " [?] MID " if ic > 2.5 else " [.] LOW "
+            ctx_str = f"{context}"[-15:]
+            print(f"  Compás {m_num:<3} (Beat {beat:.2f}) | {status} | Ctx: {ctx_str} -> Next: {actual_val:<3} | IC: {ic:.2f} bits")
+
+    # (Cálculos de media, varianza y tendencia iguales al anterior...)
+    surprise_array = np.array(surprise_profile)
+    return {
+        'mean_entropy': np.mean(surprise_array),
+        'max_surprise': np.max(surprise_array),
+        'variance': np.var(surprise_array),
+        'trend': np.polyfit(np.arange(len(surprise_array)), surprise_array, 1)[0] * 100 if len(surprise_array) > 1 else 0,
+        'surprise_profile': surprise_array
+    }
+
+
+def get_pitch_from_element(n):
+    """
+    Extrae el valor MIDI de un objeto music21 (Note o Chord).
+    Si es un Chord, devuelve la nota más aguda (soprano).
+    """
+    if n.isNote:
+        return n.pitch.midi
+    elif n.isChord:
+        # Ordenamos de grave a agudo y tomamos el último (el más alto)
+        return n.sortAscending().pitches[-1].midi
+    return None
+
+def entropy_surprise_vector(score, n_gram=3):
+    """
+    Genera un vector de 10 dimensiones basado en la sorpresa (Information Content)
+    y la entropía melódica/rítmica, con debug detallado por compases.
+    """
+    # 1. Preparación de datos: Aplanamos y filtramos solo notas/acordes
+    all_elements = list(score.flatten().notes)
+    if len(all_elements) < n_gram + 1:
+        debug("Entropy: Partitura demasiado corta para el análisis.")
+        return np.zeros(10)
+
+    # Creamos secuencias de (valor, objeto_original) para el análisis
+    melodic_data = []
+    rhythmic_data = []
+
+    for i in range(len(all_elements) - 1):
+        n1 = all_elements[i]
+        n2 = all_elements[i+1]
+
+        # --- Datos Melódicos (Intervalos) ---
+        p1 = get_pitch_from_element(n1)
+        p2 = get_pitch_from_element(n2)
+        if p1 is not None and p2 is not None:
+            intervalo = p2 - p1
+            # Normalizamos el intervalo para que el modelo no se disperse demasiado
+            # (Ej: saltos de más de una octava se agrupan en +/- 12)
+            val_mel = max(-12, min(12, intervalo))
+            melodic_data.append((val_mel, n2))
+
+        # --- Datos Rítmicos (Relaciones de duración) ---
+        d1 = n1.duration.quarterLength
+        d2 = n2.duration.quarterLength
+        if d1 > 0:
+            ratio = d2 / d1
+            if ratio > 1.1:   cat_rhy = "Longer"
+            elif ratio < 0.9: cat_rhy = "Shorter"
+            else:             cat_rhy = "Equal"
+            rhythmic_data.append((cat_rhy, n2))
+
+    # 2. Llamada al motor de cálculo (usando la función que definimos previamente)
+    # Nota: Asegúrate de tener 'calculate_information_dynamics_with_measures' definida
+    mel_dyn = calculate_information_dynamics_with_measures(melodic_data, n_gram, "Melodic")
+    rhy_dyn = calculate_information_dynamics_with_measures(rhythmic_data, n_gram, "Rhythmic")
+
+    # 3. Cálculo de Information Flow (bits por tiempo de negra)
+    total_duration = score.quarterLength
+    mel_flow = np.sum(mel_dyn['surprise_profile']) / total_duration if total_duration > 0 else 0
+    rhy_flow = np.sum(rhy_dyn['surprise_profile']) / total_duration if total_duration > 0 else 0
+
+    # 4. Construcción del vector final (10 dimensiones)
+    final_vector = np.array([
+        mel_dyn['mean_entropy'],     # [0] Promedio de sorpresa melódica
+        mel_dyn['max_surprise'],     # [1] Pico de sorpresa (shock melódico)
+        mel_dyn['variance'],         # [2] Variabilidad de la complejidad
+        mel_dyn['trend'],            # [3] Tendencia (¿se vuelve más complejo?)
+        mel_flow,                    # [4] Densidad de info melódica por negra
+        rhy_dyn['mean_entropy'],     # [5] Promedio de sorpresa rítmica
+        rhy_dyn['max_surprise'],     # [6] Pico de sorpresa rítmica
+        rhy_dyn['variance'],         # [7] Consistencia rítmica
+        rhy_dyn['trend'],            # [8] Tendencia rítmica
+        rhy_flow                     # [9] Densidad de info rítmica
+    ])
+
+    debug(f"Entropy Vector calculado. Mel_Mean_IC: {mel_dyn['mean_entropy']:.2f}")
+
+    return final_vector
+
+
+
+
 
 # =========================
 # EJECUCIÓN
@@ -4221,21 +4365,22 @@ custom_rules = [
     # CustomRule("estribillo", "recursive", ["intro", "intro"])  # intro dos veces
 ]
 
-print(rhythmic_features(score))
-print(melodic_features(score))
-print(harmonic_features(score))
-print(arpeggiated_chord_features(score))
-print(harmonic_transition_features(score))
-print(advanced_harmonic_features_vector(score))
-print(ultra_advanced_features_vector(score))
-print(instrumental_features(score))
-print(motif_vector(score))
-print(compass_motif_vector(score))
-print(form_structure_vector(score))
-print(sequitur_absolute_pitch_semantic_vector(score))
-sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rules)
-print(novelty_structure_vector(score))
-print(melodic_ngram_vector(score))
-print(rhythmic_ngram_vector(score))
-print(advanced_sequitur_form(score))
-print(form_string_to_vector(advanced_sequitur_form(score)))
+# print(rhythmic_features(score))
+# print(melodic_features(score))
+# print(harmonic_features(score))
+# print(arpeggiated_chord_features(score))
+# print(harmonic_transition_features(score))
+# print(advanced_harmonic_features_vector(score))
+# print(ultra_advanced_features_vector(score))
+# print(instrumental_features(score))
+# print(motif_vector(score))
+# print(compass_motif_vector(score))
+# print(form_structure_vector(score))
+# print(sequitur_absolute_pitch_semantic_vector(score))
+# sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rules)
+# print(novelty_structure_vector(score))
+# print(melodic_ngram_vector(score))
+# print(rhythmic_ngram_vector(score))
+# print(advanced_sequitur_form(score))
+# print(form_string_to_vector(advanced_sequitur_form(score)))
+entropy_surprise_vector(score)
