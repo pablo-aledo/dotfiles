@@ -4481,6 +4481,310 @@ def lerdahl_energy_vector(score):
 
 
 # =========================
+# TONNETZ (NEO-RIEMANNIAN)
+# =========================
+
+def get_tonnetz_coordinates(relative_pitch_class):
+    """
+    Mapea una clase de altura (0-11) relativa a la tónica a coordenadas (x, y)
+    en el Tonnetz, usando una base triangular estándar.
+
+    Base:
+    - Eje X (Quinta Justa): (1, 0)
+    - Eje Diagonal (Tercera Mayor): (0.5, 0.866)
+
+    Esta tabla busca la representación más 'compacta' (cercana al centro)
+    para cada intervalo cromático.
+    """
+    # Constante para la altura del triángulo equilátero (sqrt(3)/2)
+    h = 0.8660254
+
+    # Mapa de coordenadas optimizado para minimizar distancia al centro (0,0)
+    # Formato: interval_class: (x, y)
+    coords = {
+        0:  (0.0, 0.0),   # Unísono (Centro)
+        1:  (-2.5, h),    # 2m (ej. C->Db: C-Ab-Db = 4 quintas atrás, 1 tercera arriba... simplificado)
+        2:  (2.0, 0.0),   # 2M (2 quintas: C->G->D)
+        3:  (-1.5, h),    # 3m (C -> Eb: 3 quintas atrás + 1 tercera arriba)
+        4:  (0.5, h),     # 3M (1 tercera arriba: C->E)
+        5:  (-1.0, 0.0),  # 4J (1 quinta atrás: C->F)
+        6:  (2.5, h),     # Tritono (Complejo, lejos)
+        7:  (1.0, 0.0),   # 5J (1 quinta adelante: C->G)
+        8:  (-0.5, h),    # 6m (C->Ab: 4 quintas atrás + 1 tercera) -> Simplificado
+        9:  (1.5, h),     # 6M (C->A: 1 quinta + 1 tercera)
+        10: (-2.0, 0.0),  # 7m (2 quintas atrás: C->Bb)
+        11: (3.5, h)      # 7M (1 tercera + 1 quinta... o simplemente C->B es 1 quinta+1tercera)
+        # Nota: Estas son aproximaciones euclidianas para visualización de "excursión"
+    }
+
+    # Fallback para casos raros, retornamos el centro
+    return coords.get(relative_pitch_class, (0.0, 0.0))
+
+def calculate_tonnetz_trajectory(score):
+    """
+    Calcula la trayectoria del centroide armónico compás a compás.
+    """
+    try:
+        main_key = score.analyze('key')
+        tonic_midi = main_key.tonic.pitchClass
+    except:
+        tonic_midi = 0 # Default C
+        debug("Tonnetz: No key found, assuming C")
+
+    # Obtener compases
+    parts = getattr(score, 'parts', [score])
+    measures = list(parts[0].getElementsByClass('Measure'))
+
+    trajectory = []
+
+    print(f"\n--- TONNETZ TRAJECTORY (Key: {main_key}) ---")
+
+    for measure in measures:
+        # Obtener todas las notas del compás
+        pitches = [n.pitch.pitchClass for n in measure.flatten().notes if n.isNote]
+
+        # Si es un acorde, añadir sus notas
+        for chord in measure.flatten().getElementsByClass('Chord'):
+             pitches.extend([p.pitchClass for p in chord.pitches])
+
+        if not pitches:
+            # Si el compás está vacío (silencio), mantener la posición anterior o 0
+            last_dist = trajectory[-1]['dist'] if trajectory else 0
+            trajectory.append({'m': measure.measureNumber, 'dist': last_dist, 'x':0, 'y':0})
+            continue
+
+        # Calcular centroide del compás
+        sum_x, sum_y = 0.0, 0.0
+
+        for p in pitches:
+            # 1. Normalizar relativo a la tónica (0-11)
+            rel_p = (p - tonic_midi) % 12
+
+            # 2. Obtener coordenadas
+            x, y = get_tonnetz_coordinates(rel_p)
+            sum_x += x
+            sum_y += y
+
+        # Promedio (Centroide)
+        avg_x = sum_x / len(pitches)
+        avg_y = sum_y / len(pitches)
+
+        # Distancia Euclidiana desde el origen (0,0)
+        dist = np.sqrt(avg_x**2 + avg_y**2)
+
+        trajectory.append({
+            'm': measure.measureNumber,
+            'dist': dist,
+            'x': avg_x,
+            'y': avg_y
+        })
+
+        # Visualización ASCII simple para debug
+        bar = "=" * int(dist * 4)
+        print(f"Measure {measure.measureNumber:<3} | Dist: {dist:.2f} | {bar}")
+
+    return trajectory
+
+def tonnetz_distance_vector(score):
+    """
+    Genera vector de estadísticas de excursión armónica (6 dimensiones).
+    """
+    traj = calculate_tonnetz_trajectory(score)
+
+    if not traj:
+        return np.zeros(6)
+
+    distances = np.array([t['dist'] for t in traj])
+
+    # Suavizar curva para tendencias
+    if len(distances) > 4:
+        smooth_dist = gaussian_filter(distances, sigma=1)
+    else:
+        smooth_dist = distances
+
+    avg_dist = np.mean(distances)
+    max_dist = np.max(distances)
+
+    # Distancia final (Resolución): Promedio de los últimos 3 compases
+    final_dist = np.mean(distances[-3:]) if len(distances) >= 3 else distances[-1]
+
+    # "Viaje Total": Suma de las diferencias (cuánto se movió el centroide paso a paso)
+    coords = np.array([(t['x'], t['y']) for t in traj])
+    steps = np.diff(coords, axis=0)
+    step_lengths = np.linalg.norm(steps, axis=1)
+    total_travel = np.sum(step_lengths)
+
+    # Normalización aproximada para el viaje total basada en la longitud
+    travel_density = total_travel / len(traj)
+
+    print(f"\n--- TONNETZ SUMMARY ---")
+    print(f"Max Excursion: {max_dist:.2f} units")
+    print(f"Final Distance: {final_dist:.2f} (Close to 0 = Perfect Return)")
+    print(f"Harmonic Travel Density: {travel_density:.2f}")
+
+    return np.array([
+        avg_dist,        # [0] Distancia media a la tónica
+        max_dist,        # [1] Excursión máxima
+        np.std(distances), # [2] Variabilidad del viaje
+        final_dist,      # [3] Resolución (¿Acaba en casa?)
+        travel_density,  # [4] Movimiento armónico acumulado
+        np.argmax(smooth_dist) / len(smooth_dist) # [5] Posición relativa del punto más lejano
+    ])
+
+
+# =========================
+# SENSORY ROUGHNESS (PSYCHOACOUSTIC)
+# =========================
+
+def calculate_roughness_curve(score):
+    """
+    Calcula la curva de disonancia sensorial (rugosidad) basada en la
+    interferencia de intervalos.
+    
+    A diferencia de la disonancia teórica, esto mide la 'aspereza' física
+    del sonido sumando la disonancia de todos los pares de notas simultáneos.
+    """
+    # Mapa de pesos de disonancia simplificado (basado en Plomp-Levelt/Sethares)
+    # 0 = Unísono/Octava, 1.0 = Máxima disonancia (segunda menor)
+    dissonance_weights = {
+        0: 0.0,   # P1 (Unísono)
+        1: 1.0,   # m2 (Disonancia máxima)
+        2: 0.8,   # M2 (Disonante)
+        3: 0.2,   # m3 (Consonante suave)
+        4: 0.1,   # M3 (Consonante)
+        5: 0.05,  # P4 (Casi perfecta)
+        6: 0.9,   # Tritono (Muy tenso, 'diabolus in musica')
+        7: 0.02,  # P5 (Perfecta)
+        8: 0.25,  # m6
+        9: 0.15,  # M6
+        10: 0.7,  # m7 (Disonante bluesy)
+        11: 0.95, # M7 (Muy disonante punzante)
+    }
+
+    # Obtener acordes o 'slices' verticales por compás
+    # Para simplificar y mantener alineación con otros análisis,
+    # colapsamos todo el contenido del compás en un 'super-acorde' representativo
+    # o analizamos acorde por acorde y promediamos por compás.
+    
+    parts = getattr(score, 'parts', [score])
+    measures = list(parts[0].getElementsByClass('Measure'))
+    
+    roughness_profile = []
+    
+    print(f"\n--- SENSORY ROUGHNESS PROFILE ---")
+
+    for measure in measures:
+        # Extraer todas las notas que suenan en el compás
+        # (Nota: Una implementación más precisa haría esto por 'beat', 
+        # aquí lo hacemos por compás para visión macro)
+        simultaneous_pitches = set()
+        
+        # Aplanar y obtener notas
+        notes = measure.flatten().notes
+        for n in notes:
+            if n.isNote:
+                simultaneous_pitches.add(n.pitch.midi)
+            elif n.isChord:
+                for p in n.pitches:
+                    simultaneous_pitches.add(p.midi)
+        
+        pitches = sorted(list(simultaneous_pitches))
+        
+        # Si hay menos de 2 notas, no hay rugosidad interválica
+        if len(pitches) < 2:
+            roughness_profile.append(0.0)
+            continue
+            
+        # Calcular interferencia de todos los pares únicos
+        total_roughness = 0.0
+        pairs_count = 0
+        
+        for i in range(len(pitches)):
+            for j in range(i + 1, len(pitches)):
+                p1 = pitches[i]
+                p2 = pitches[j]
+                
+                # Intervalo módulo 12 (clase de intervalo)
+                interval = abs(p2 - p1) % 12
+                
+                # Penalización adicional si están muy cerca en registro grave
+                # (El oído distingue peor las frecuencias graves, creando más 'barro')
+                low_register_penalty = 1.0
+                if p1 < 48 or p2 < 48: # Debajo de C3
+                    low_register_penalty = 1.2
+                
+                weight = dissonance_weights.get(interval, 0.5)
+                total_roughness += weight * low_register_penalty
+                pairs_count += 1
+        
+        # Normalizar por densidad: 
+        # Queremos saber la "calidad" de la rugosidad, no solo que suba porque hay 100 notas.
+        # Dividimos por la raíz cuadrada de pares para equilibrar texturas densas vs ligeras.
+        if pairs_count > 0:
+            avg_roughness = total_roughness / np.sqrt(pairs_count)
+        else:
+            avg_roughness = 0.0
+            
+        roughness_profile.append(avg_roughness)
+        
+        # Visualización ASCII
+        intensity = int(avg_roughness * 5)
+        bar = "#" * intensity
+        print(f"Measure {measure.measureNumber:<3} | Roughness: {avg_roughness:5.2f} | {bar}")
+
+    return roughness_profile
+
+def psychoacoustic_vector(score):
+    """
+    Genera vector estadístico de la experiencia sensorial (Rugosidad).
+    """
+    roughness = calculate_roughness_curve(score)
+    
+    if not roughness:
+        return np.zeros(6)
+        
+    r_arr = np.array(roughness)
+    
+    # Suavizado para tendencias
+    if len(r_arr) > 4:
+        smooth_r = gaussian_filter(r_arr, sigma=1)
+    else:
+        smooth_r = r_arr
+        
+    mean_r = np.mean(r_arr)
+    max_r = np.max(r_arr)
+    
+    # Contraste: Diferencia entre momentos más suaves y más ásperos
+    contrast = max_r - np.min(r_arr)
+    
+    # "Grit": Porcentaje de tiempo que la obra pasa en alta rugosidad (> 0.6)
+    grit = np.sum(r_arr > 0.6) / len(r_arr)
+    
+    # Tendencia de relajación: ¿Se vuelve más suave al final?
+    # Comparamos el primer tercio con el último tercio
+    third = len(r_arr) // 3
+    if third > 0:
+        start_avg = np.mean(r_arr[:third])
+        end_avg = np.mean(r_arr[-third:])
+        relaxation = start_avg - end_avg # Positivo = Relajación, Negativo = Tensión creciente
+    else:
+        relaxation = 0
+
+    print(f"\n--- PSYCHOACOUSTIC SUMMARY ---")
+    print(f"Average Roughness: {mean_r:.2f}")
+    print(f"Peak Roughness (Grit): {max_r:.2f}")
+    print(f"Relaxation Trend: {relaxation:+.2f}")
+
+    return np.array([
+        mean_r,      # [0] Nivel medio de conflicto sonoro
+        max_r,       # [1] Momento más áspero
+        np.std(r_arr), # [2] Variedad tímbrica
+        contrast,    # [3] Rango dinámico de la disonancia
+        grit,        # [4] Densidad de momentos tensos
+        relaxation   # [5] Dirección de la obra (hacia el caos o la calma)
+    ])
+
+# =========================
 # EJECUCIÓN
 # =========================
 
@@ -4513,4 +4817,6 @@ custom_rules = [
 # print(advanced_sequitur_form(score))
 # print(form_string_to_vector(advanced_sequitur_form(score)))
 # entropy_surprise_vector(score)
-lerdahl_energy_vector(score)
+# lerdahl_energy_vector(score)
+# tonnetz_distance_vector(score)
+psychoacoustic_vector(score)
