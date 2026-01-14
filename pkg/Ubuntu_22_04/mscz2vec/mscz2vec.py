@@ -4349,6 +4349,135 @@ def entropy_surprise_vector(score, n_gram=3):
 
 
 
+# =========================
+# LERDAHL
+# =========================
+
+
+def calculate_lerdahl_tension(score):
+    """
+    Calcula la curva de tensión basada en la jerarquía tonal de Lerdahl y Jackendoff.
+    Corregido para usar .isConsonant() y .pitchFromDegree()
+    """
+    try:
+        main_key = score.analyze('key')
+    except:
+        main_key = key.Key('C')
+
+    # Obtenemos los nombres de las notas de la tríada de tónica (máxima estabilidad)
+    tonica = main_key.pitchFromDegree(1).name
+    mediante = main_key.pitchFromDegree(3).name
+    dominante = main_key.pitchFromDegree(5).name
+
+    # Mapa de estabilidad de Lerdahl
+    stability_map = {
+        tonica: 0,
+        dominante: 1,
+        mediante: 2,
+    }
+
+    elements = list(score.flatten().notes)
+    tension_profile = []
+
+    debug(f"Analizando Tensión Lerdahl | Tonalidad detectada: {main_key.name}")
+
+    for n in elements:
+        # --- 1. Tensión Melódica (Pitch Hierarchy) ---
+        p_val = get_pitch_from_element(n)
+        if p_val is None: continue
+
+        p_obj = pitch.Pitch(p_val)
+        p_name = p_obj.name
+
+        # Estabilidad jerárquica: si no es de la tríada, base 4 de tensión
+        m_tension = stability_map.get(p_name, 4)
+
+        # Penalización por nota cromática (fuera de la escala diatónica)
+        scale_names = [p.name for p in main_key.getScale().pitches]
+        if p_name not in scale_names:
+            m_tension += 3
+
+        # --- 2. Tensión Armónica (Disonancia y Masa) ---
+        h_tension = 0
+        if n.isChord:
+            # CORRECCIÓN: Usamos 'not isConsonant()' para detectar disonancia
+            if not n.isConsonant():
+                h_tension += 4
+            # Masa sonora: mayor densidad de notas = más energía
+            h_tension += (len(n.pitches) * 0.5)
+
+        # --- 3. Tensión Rítmica (Densidad temporal) ---
+        # A menor duración, más 'tensión cinética'
+        r_tension = 1.0 / (n.duration.quarterLength + 0.1)
+
+        total_tension = m_tension + h_tension + r_tension
+
+        tension_profile.append({
+            'tension': total_tension,
+            'm': n.measureNumber,
+            'b': n.beat,
+            'obj': n
+        })
+
+    return tension_profile, main_key
+
+def lerdahl_energy_vector(score):
+    """
+    Genera un vector semántico de 8 dimensiones y vuelca por consola
+    la energía media calculada para cada compás.
+    """
+    profile, m_key = calculate_lerdahl_tension(score)
+    if not profile:
+        return np.zeros(8)
+
+    # 1. Agrupar tensiones por número de compás
+    measures_data = defaultdict(list)
+    for entry in profile:
+        measures_data[entry['m']].append(entry['tension'])
+
+    # 2. Debug línea a línea por compás
+    print(f"\n--- DEBUG DE ENERGÍA POR COMPÁS (Tonalidad: {m_key.name}) ---")
+
+    sorted_measures = sorted(measures_data.keys())
+    compas_energies = []
+
+    for m_num in sorted_measures:
+        avg_m_energy = np.mean(measures_data[m_num])
+        compas_energies.append(avg_m_energy)
+
+        # Formatear visualmente el nivel de energía
+        indicator = "!" if avg_m_energy > 10 else ">" if avg_m_energy > 7 else "-"
+        print(f"[DEBUG] Compás {m_num:<3} | Energía Media: {avg_m_energy:6.2f} | {indicator*int(min(avg_m_energy, 20))}")
+
+    # 3. Preparación del vector semántico (usando los valores suavizados)
+    t_values = np.array([x['tension'] for x in profile])
+    smooth_t = gaussian_filter(t_values, sigma=2)
+
+    avg_e = np.mean(smooth_t)
+    max_e = np.max(smooth_t)
+    climax_pos = np.argmax(smooth_t) / len(smooth_t)
+
+    # Identificar en qué compás cae el clímax para el reporte final
+    climax_measure = profile[np.argmax(smooth_t)]['m']
+
+    # Resolución: ratio de los últimos 5 eventos respecto a la media
+    resolution = np.mean(smooth_t[-5:]) / avg_e if avg_e > 0 else 1
+
+    print(f"--- RESUMEN ESTRUCTURAL ---")
+    print(f"Clímax localizado en Compás: {climax_measure} (Posición relativa: {climax_pos:.2%})")
+    print(f"Resolución final: {resolution:.2f} (Valores < 1 indican relajación)")
+
+    # Vector de salida (8 dimensiones)
+    return np.array([
+        avg_e,                                      # [0] Energía media total
+        max_e,                                      # [1] Energía máxima (Pico)
+        np.std(smooth_t),                           # [2] Contraste/Variabilidad
+        climax_pos,                                 # [3] Ubicación del clímax (0-1)
+        resolution,                                 # [4] Índice de resolución
+        np.polyfit(np.arange(len(smooth_t)), smooth_t, 1)[0] * 100, # [5] Pendiente (Tendencia)
+        len(find_peaks(smooth_t, height=avg_e)[0]) / len(smooth_t), # [6] Densidad de picos
+        np.sum(t_values > 8) / len(t_values)        # [7] % de tiempo en tensión crítica
+    ])
 
 
 # =========================
@@ -4383,4 +4512,5 @@ custom_rules = [
 # print(rhythmic_ngram_vector(score))
 # print(advanced_sequitur_form(score))
 # print(form_string_to_vector(advanced_sequitur_form(score)))
-entropy_surprise_vector(score)
+# entropy_surprise_vector(score)
+lerdahl_energy_vector(score)
