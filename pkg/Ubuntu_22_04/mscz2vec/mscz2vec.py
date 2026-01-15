@@ -5459,6 +5459,89 @@ def get_profile_features(score):
     return vector # Retorna un np.array de forma (15,)
 
 
+def density_dynamics_range_features(score):
+    """
+    Realiza el análisis de intensidad, imprime las gráficas por consola
+    y devuelve el vector de estadísticos agregados (12 dimensiones).
+    """
+    densities = []
+    dynamics = []
+    ranges = []
+
+    dyn_map = {'ppp': 1, 'pp': 2, 'p': 3, 'mp': 4, 'mf': 5, 'f': 6, 'ff': 7, 'fff': 8}
+    current_dyn = 4  # Por defecto mf
+
+    # Obtenemos los compases del primer instrumento (como referencia de estructura)
+    measures = score.parts[0].getElementsByClass('Measure')
+    measure_numbers = [m.measureNumber for m in measures]
+
+    # --- 1. EXTRACCIÓN DE DATOS ---
+    for m_num in measure_numbers:
+        # Aplanamos el compás para todas las voces/partes
+        m_flat = score.measure(m_num).flatten()
+        notes = m_flat.notes
+
+        # Densidad
+        densities.append(len(notes))
+
+        # Dinámica
+        dyns = m_flat.getElementsByClass('dynamic.Dynamic')
+        if dyns:
+            current_dyn = dyn_map.get(dyns[0].value, current_dyn)
+        dynamics.append(current_dyn)
+
+        # Rango
+        pitches = [p.midi for n in notes for p in (n.pitches if n.isChord else [n.pitch])]
+        ranges.append(max(pitches) - min(pitches) if pitches else 0)
+
+    # --- 2. IMPRESIÓN DE GRÁFICAS ---
+
+    # Gráfica de Densidad
+    print("\n" + "="*40)
+    print("   GRÁFICA 1: DENSIDAD (Actividad)")
+    print("="*40)
+    for i, val in enumerate(densities):
+        bar = "#" * int(val)
+        print(f"Measure {measure_numbers[i]:<3} | Density: {val:5.2f} | {bar}")
+
+    # Gráfica de Dinámica
+    print("\n" + "="*40)
+    print("   GRÁFICA 2: DINÁMICA (Volumen)")
+    print("="*40)
+    for i, val in enumerate(dynamics):
+        bar = "#" * (int(val) * 4) # Escalado para visibilidad
+        print(f"Measure {measure_numbers[i]:<3} | Dynamic: {val:5.2f} | {bar}")
+
+    # Gráfica de Rango
+    print("\n" + "="*40)
+    print("   GRÁFICA 3: RANGO (Amplitud)")
+    print("="*40)
+    for i, val in enumerate(ranges):
+        bar = "#" * (int(val) // 2) # Escalado (1 # cada 2 semitonos)
+        print(f"Measure {measure_numbers[i]:<3} | Range:   {val:5.2f} | {bar}")
+
+    # --- 3. CÁLCULO DEL VECTOR FINAL ---
+    final_vector = []
+    metrics_data = [np.array(densities), np.array(dynamics), np.array(ranges)]
+
+    for data in metrics_data:
+        if len(data) > 0:
+            final_vector.extend([
+                np.mean(data),
+                np.std(data),
+                np.max(data),
+                np.min(data)
+            ])
+        else:
+            final_vector.extend([0, 0, 0, 0])
+
+    print("\n" + "-"*40)
+    print(f"Análisis completado. Vector de 12 dimensiones generado.")
+    print("-"*40 + "\n")
+
+    return np.array(final_vector)
+
+
 # =========================
 # EJECUCIÓN
 # =========================
@@ -5496,4 +5579,5 @@ custom_rules = [
 # tonnetz_distance_vector(score)
 # psychoacoustic_vector(score)
 # print(semantic_emotion_vector(score))
-get_profile_features(score)
+# plot_measure_analytics(score)
+density_dynamics_range_features(score)
