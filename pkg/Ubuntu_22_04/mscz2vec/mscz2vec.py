@@ -2973,20 +2973,22 @@ def get_measure_from_chord_or_offset(chord_obj, score, offset=None):
 
 def detect_cadences(score):
     """
-    Detecta cadencias musicales y retorna un vector de características.
+    Detecta cadencias musicales con análisis de acordes pivote, estructurales vs. de paso,
+    y cadencias compuestas (2-4 acordes).
+
     Returns: vector [authentic_perfect, authentic_imperfect, plagal, half,
-                     deceptive, special, density]
+                     deceptive, special (phrygian/landini), andalusian, density]
     """
     try:
         key = score.analyze('key')
     except:
         debug("Cadences: Could not detect key")
-        return np.zeros(7)
+        return np.zeros(8)
 
     chords = extract_harmonic_chords(score)
 
     if len(chords) < 2:
-        return np.zeros(7)
+        return np.zeros(8)
 
     cadence_types = {
         'authentic_perfect': 0,
@@ -2995,102 +2997,248 @@ def detect_cadences(score):
         'half': 0,
         'deceptive': 0,
         'phrygian': 0,
-        'landini': 0
+        'landini': 0,
+        'andalusian': 0
     }
 
     print("\n" + "="*50)
-    print("CADENCE ANALYSIS")
+    print("CADENCE ANALYSIS (ENHANCED)")
     print("="*50)
+    print(f"Key: {key}")
 
-    for i in range(len(chords) - 1):
-        try:
-            rn1 = roman.romanNumeralFromChord(chords[i], key)
-            rn2 = roman.romanNumeralFromChord(chords[i+1], key)
+    # Conjunto para evitar contar la misma cadencia múltiples veces
+    cadences_found = set()
 
-            # Usar la función auxiliar
-            measure_num = get_measure_from_chord_or_offset(chords[i+1], score)
-            measure_str = str(measure_num) if measure_num is not None else '?'
+    # Análisis de ventana deslizante (4, 3, 2 acordes)
+    for window_size in [4, 3, 2]:
+        for i in range(len(chords) - window_size + 1):
+            window = chords[i:i+window_size]
 
-            # Información adicional para debugging cuando measure_num es None
-            if measure_num is None:
-                offset_info = f"(offset: {chords[i+1]._stored_offset:.3f})" if hasattr(chords[i+1], '_stored_offset') else ""
-                debug(f"Cadences: Could not determine measure for chord {[p.nameWithOctave for p in chords[i+1].pitches]} {offset_info}")
+            try:
+                rns = [roman.romanNumeralFromChord(ch, key) for ch in window]
 
-            # Cadencia Auténtica Perfecta: V (fundamental) -> I (fundamental)
-            if (rn1.figure == "V" and rn2.figure in ["I", "i"] and
-                chords[i].inversion() == 0 and chords[i+1].inversion() == 0):
-                cadence_types['authentic_perfect'] += 1
-                print(f"  Perfect Authentic at measure {measure_str}: {rn1.figure} → {rn2.figure}")
+                # Obtener información de duración para filtrar acordes de paso
+                durations = []
+                for ch in window:
+                    if hasattr(ch, 'duration') and hasattr(ch.duration, 'quarterLength'):
+                        durations.append(ch.duration.quarterLength)
+                    else:
+                        # Estimar duración desde las notas del acorde
+                        note_durations = []
+                        for p in ch.pitches:
+                            if hasattr(p, 'duration'):
+                                note_durations.append(p.duration.quarterLength)
+                        durations.append(max(note_durations) if note_durations else 1.0)
 
-            # Cadencia Auténtica Imperfecta: V -> I (con inversiones)
-            elif (rn1.figure.startswith("V") and rn2.figure.startswith("I") and
-                  (chords[i].inversion() != 0 or chords[i+1].inversion() != 0)):
-                cadence_types['authentic_imperfect'] += 1
-                inv1 = chords[i].inversion()
-                inv2 = chords[i+1].inversion()
-                print(f"  Imperfect Authentic at measure {measure_str}: {rn1.figure} (inv:{inv1}) → {rn2.figure} (inv:{inv2})")
+                # Filtrar acordes muy cortos (probablemente de paso)
+                # Solo aplicar este filtro a ventanas de 2 acordes
+                if window_size == 2 and durations[-1] < 0.5:
+                    continue
 
-            # Cadencia Plagal: IV -> I
-            elif rn1.figure.startswith("IV") and rn2.figure.startswith("I"):
-                cadence_types['plagal'] += 1
-                print(f"  Plagal at measure {measure_str}: {rn1.figure} → {rn2.figure}")
+                # Crear ID único para esta cadencia basado en la posición del último acorde
+                measure_num = get_measure_from_chord_or_offset(window[-1], score)
+                if measure_num is None:
+                    measure_num = '?'
 
-            # Semicadencia: X -> V
-            elif rn2.figure.startswith("V") and not rn1.figure.startswith("V"):
-                cadence_types['half'] += 1
-                inv = chords[i+1].inversion()
-                inv_str = f" (inv:{inv})" if inv > 0 else ""
-                print(f"  Half at measure {measure_str}: {rn1.figure} → {rn2.figure}{inv_str}")
+                cadence_id = (measure_num, window_size)
 
-            # Cadencia Rota: V -> vi
-            elif rn1.figure.startswith("V") and rn2.figure.startswith("vi"):
-                cadence_types['deceptive'] += 1
-                print(f"  Deceptive at measure {measure_str}: {rn1.figure} → {rn2.figure}")
+                # ==================================================
+                # CADENCIAS DE 4 ACORDES
+                # ==================================================
+                if window_size == 4:
+                    figures = [rn.figure for rn in rns]
 
-            # Cadencia Frigia: iv6 -> V
-            elif (key.mode == 'minor' and rn1.figure == "iv" and
-                  chords[i].inversion() == 1 and rn2.figure.startswith("V")):
-                cadence_types['phrygian'] += 1
-                print(f"  Phrygian at measure {measure_str}: {rn1.figure}6 → {rn2.figure}")
+                    # Cadencia Andaluza: bVII - bVI - V - i (típica del flamenco y música española)
+                    if key.mode == 'minor':
+                        # Normalizamos las figuras para comparación
+                        fig_normalized = []
+                        for fig in figures:
+                            # Quitar alteraciones y números para comparar base
+                            base = ''.join(c for c in fig if c.isalpha() or c == 'i' or c == 'I')
+                            fig_normalized.append(base)
 
-        except Exception as e:
-            debug(f"Cadences: Error analyzing chord pair: {e}")
-            continue
+                        # Patrón: VII - VI - V - i
+                        if (fig_normalized[0] == 'VII' and
+                            fig_normalized[1] == 'VI' and
+                            fig_normalized[2] == 'V' and
+                            fig_normalized[3] == 'i'):
 
-    # Detectar cadencias de tres acordes
-    for i in range(len(chords) - 2):
-        try:
-            rn1 = roman.romanNumeralFromChord(chords[i], key)
-            rn2 = roman.romanNumeralFromChord(chords[i+1], key)
-            rn3 = roman.romanNumeralFromChord(chords[i+2], key)
+                            if cadence_id not in cadences_found:
+                                cadence_types['andalusian'] += 1
+                                cadences_found.add(cadence_id)
+                                print(f"  Andalusian (Phrygian) cadence at measure {measure_num}:")
+                                print(f"    {' → '.join(figures)}")
 
-            if (rn1.figure.startswith("vi") and rn2.figure.startswith("V") and
-                rn3.figure.startswith("I")):
-                cadence_types['landini'] += 1
-                measure_num = get_measure_from_chord_or_offset(chords[i+2], score)
-                measure_str = str(measure_num) if measure_num is not None else '?'
-                print(f"  Landini (vi-V-I) at measure {measure_str}")
-        except:
-            continue
+                # ==================================================
+                # CADENCIAS DE 3 ACORDES
+                # ==================================================
+                elif window_size == 3:
+                    rn1, rn2, rn3 = rns
 
+                    # Landini (vi - V - I): típica del Renacimiento
+                    if (rn1.figure.startswith('vi') and
+                        rn2.figure.startswith('V') and
+                        rn3.figure.startswith('I')):
+
+                        if cadence_id not in cadences_found:
+                            cadence_types['landini'] += 1
+                            cadences_found.add(cadence_id)
+                            print(f"  Landini cadence at measure {measure_num}:")
+                            print(f"    {rn1.figure} → {rn2.figure} → {rn3.figure}")
+
+                    # Cadencia Plagal Ampliada: I - IV - I (menos común pero existe)
+                    elif (rn1.figure.startswith('I') and
+                          rn2.figure.startswith('IV') and
+                          rn3.figure.startswith('I')):
+
+                        if cadence_id not in cadences_found:
+                            cadence_types['plagal'] += 1
+                            cadences_found.add(cadence_id)
+                            print(f"  Extended Plagal cadence at measure {measure_num}:")
+                            print(f"    {rn1.figure} → {rn2.figure} → {rn3.figure}")
+
+                # ==================================================
+                # CADENCIAS DE 2 ACORDES
+                # ==================================================
+                elif window_size == 2:
+                    rn1, rn2 = rns
+                    ch1, ch2 = window
+
+                    measure_str = str(measure_num) if measure_num is not None else '?'
+
+                    # ----------------------------------------
+                    # CADENCIA AUTÉNTICA PERFECTA: V → I
+                    # ----------------------------------------
+                    # Condiciones:
+                    # 1. V (dominante) → I (tónica)
+                    # 2. Ambos en estado fundamental (inversión 0)
+                    # 3. BONUS: Soprano hace 2→1 (leading tone resolution)
+                    if (rn1.figure == "V" and rn2.figure in ["I", "i"] and
+                        ch1.inversion() == 0 and ch2.inversion() == 0):
+
+                        # Verificar movimiento de la soprano
+                        soprano_motion_bonus = False
+                        if len(ch1.pitches) > 0 and len(ch2.pitches) > 0:
+                            highest1 = max(ch1.pitches, key=lambda p: p.midi)
+                            highest2 = max(ch2.pitches, key=lambda p: p.midi)
+
+                            try:
+                                scale_deg1 = key.getScaleDegreeFromPitch(highest1)
+                                scale_deg2 = key.getScaleDegreeFromPitch(highest2)
+                                # Resolución típica: 2→1 o 7→8 (en escala)
+                                if (scale_deg1 == 2 and scale_deg2 == 1) or \
+                                   (scale_deg1 == 7 and scale_deg2 == 1):
+                                    soprano_motion_bonus = True
+                            except:
+                                pass
+
+                        if cadence_id not in cadences_found:
+                            cadence_types['authentic_perfect'] += 1
+                            cadences_found.add(cadence_id)
+                            bonus_str = " [SOPRANO 2→1]" if soprano_motion_bonus else ""
+                            print(f"  Perfect Authentic at measure {measure_str}: {rn1.figure} → {rn2.figure}{bonus_str}")
+
+                    # ----------------------------------------
+                    # CADENCIA AUTÉNTICA IMPERFECTA
+                    # ----------------------------------------
+                    # V → I pero con alguna inversión
+                    elif (rn1.figure.startswith("V") and rn2.figure.startswith("I") and
+                          (ch1.inversion() != 0 or ch2.inversion() != 0)):
+
+                        if cadence_id not in cadences_found:
+                            cadence_types['authentic_imperfect'] += 1
+                            cadences_found.add(cadence_id)
+                            inv1 = ch1.inversion()
+                            inv2 = ch2.inversion()
+                            inv_str = f" (inversions: {inv1}, {inv2})"
+                            print(f"  Imperfect Authentic at measure {measure_str}: {rn1.figure} → {rn2.figure}{inv_str}")
+
+                    # ----------------------------------------
+                    # CADENCIA PLAGAL: IV → I
+                    # ----------------------------------------
+                    # La "cadencia Amén"
+                    elif rn1.figure.startswith("IV") and rn2.figure.startswith("I"):
+
+                        if cadence_id not in cadences_found:
+                            cadence_types['plagal'] += 1
+                            cadences_found.add(cadence_id)
+                            print(f"  Plagal (Amen) cadence at measure {measure_str}: {rn1.figure} → {rn2.figure}")
+
+                    # ----------------------------------------
+                    # SEMICADENCIA: X → V
+                    # ----------------------------------------
+                    # Cualquier acorde que resuelve a la dominante (suspensivo)
+                    elif rn2.figure.startswith("V") and not rn1.figure.startswith("V"):
+
+                        if cadence_id not in cadences_found:
+                            cadence_types['half'] += 1
+                            cadences_found.add(cadence_id)
+                            inv = ch2.inversion()
+                            inv_str = f" (V in inversion {inv})" if inv > 0 else ""
+                            print(f"  Half cadence at measure {measure_str}: {rn1.figure} → {rn2.figure}{inv_str}")
+
+                    # ----------------------------------------
+                    # CADENCIA ROTA/EVITADA: V → vi
+                    # ----------------------------------------
+                    # Expectativa frustrada: esperamos I pero va a vi
+                    elif rn1.figure.startswith("V") and rn2.figure.startswith("vi"):
+
+                        if cadence_id not in cadences_found:
+                            cadence_types['deceptive'] += 1
+                            cadences_found.add(cadence_id)
+                            print(f"  Deceptive cadence at measure {measure_str}: {rn1.figure} → {rn2.figure}")
+
+                    # ----------------------------------------
+                    # CADENCIA FRIGIA: iv6 → V (en menor)
+                    # ----------------------------------------
+                    # Típica del Renacimiento y Barroco en modo menor
+                    elif (key.mode == 'minor' and
+                          rn1.figure.startswith("iv") and
+                          ch1.inversion() == 1 and
+                          rn2.figure.startswith("V")):
+
+                        if cadence_id not in cadences_found:
+                            cadence_types['phrygian'] += 1
+                            cadences_found.add(cadence_id)
+                            print(f"  Phrygian cadence at measure {measure_str}: {rn1.figure}⁶ → {rn2.figure}")
+
+            except Exception as e:
+                debug(f"Cadences: Error analyzing window at position {i}: {e}")
+                continue
+
+    # Estadísticas finales
     total_cadences = sum(cadence_types.values())
     density = total_cadences / len(chords) if len(chords) > 0 else 0
 
-    print(f"\nTotal cadences: {total_cadences}")
+    print(f"\n{'─'*50}")
+    print("SUMMARY:")
+    print(f"  Perfect Authentic:   {cadence_types['authentic_perfect']}")
+    print(f"  Imperfect Authentic: {cadence_types['authentic_imperfect']}")
+    print(f"  Plagal:              {cadence_types['plagal']}")
+    print(f"  Half:                {cadence_types['half']}")
+    print(f"  Deceptive:           {cadence_types['deceptive']}")
+    print(f"  Phrygian:            {cadence_types['phrygian']}")
+    print(f"  Landini:             {cadence_types['landini']}")
+    print(f"  Andalusian:          {cadence_types['andalusian']}")
+    print(f"  Total:               {total_cadences}")
+    print(f"  Density:             {density:.3f} cadences/chord")
     print("="*50)
 
+    # Construir vector (8 dimensiones)
     vector = np.array([
         cadence_types['authentic_perfect'],
         cadence_types['authentic_imperfect'],
         cadence_types['plagal'],
         cadence_types['half'],
         cadence_types['deceptive'],
-        cadence_types['phrygian'] + cadence_types['landini'],
+        cadence_types['phrygian'] + cadence_types['landini'],  # Agrupamos cadencias "especiales"
+        cadence_types['andalusian'],
         density
     ])
 
+    # Normalizar conteos (excepto density) por el total
     if total_cadences > 0:
-        vector[:6] = vector[:6] / total_cadences
+        vector[:7] = vector[:7] / total_cadences
 
     return vector
 
