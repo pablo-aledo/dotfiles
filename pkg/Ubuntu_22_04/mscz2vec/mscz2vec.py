@@ -5050,13 +5050,421 @@ def semantic_emotion_vector(score):
     debug(f"Vector Semántico Emocional: {vector}")
     return vector
 
+# =========================
+# MORE PROFILE INFO
+# =========================
+
+
+def harmonic_tension_profile(score):
+    """
+    Genera un perfil de tensión armónica compás a compás.
+    Corregido error de sintaxis en f-strings y caracteres.
+    """
+    debug("Iniciando análisis de perfil de tensión armónica...")
+
+    # 1. Análisis de Tonalidad
+    try:
+        key_detected = score.analyze('key')
+    except:
+        key_detected = analysis.discrete.analyzeStream(score, 'Krumhansl')
+
+    scale_pcs = [p.pitchClass for p in key_detected.getScale().getPitches()]
+
+    # 2. Extracción de acordes y organización por compás
+    chords = extract_harmonic_chords(score)
+    measures = score.flatten().getElementsByClass('Measure')
+    num_measures = len(measures) if len(measures) > 0 else int(score.highestTime / 4) + 1
+
+    measure_data = {i: {'chords': [], 'tension': 0.0} for i in range(1, num_measures + 1)}
+
+    for ch in chords:
+        m_num = getattr(ch, '_stored_measure_number', None)
+        if m_num and m_num in measure_data:
+            measure_data[m_num]['chords'].append(ch)
+
+    # Pesos para Tensión Funcional
+    func_weights = {"T": 0.1, "PD": 0.4, "D": 0.7, "Dsec": 0.9, "Other": 0.5}
+
+    raw_profile = []
+
+    print(f"\n--- PERFIL DE TENSIÓN ARMÓNICA (Key: {key_detected}) ---")
+    print(f"{'Compas':<7} | {'Tension':<7} | {'Visualizacion'}")
+    # CORRECCIÓN AQUÍ: Uso de comillas simples dentro del f-string
+    separador = '-' * 7 + '+' + '-' * 9 + '+' + '-' * 42
+    print(separador)
+
+    for m in range(1, num_measures + 1):
+        m_chords = measure_data[m]['chords']
+
+        if not m_chords:
+            m_tension = (raw_profile[-1] * 0.8) if raw_profile else 0.0
+        else:
+            t_func = []
+            t_diss = []
+            t_chroma = []
+
+            for ch in m_chords:
+                # A. Tensión Funcional
+                try:
+                    rn = roman.romanNumeralFromChord(ch, key_detected)
+                    func = roman_to_function(rn)
+                    t_func.append(func_weights.get(func, 0.5))
+                except:
+                    t_func.append(0.5)
+
+                # B. Disonancia
+                pitches = ch.pitches
+                intervals = [abs(p1.midi - p2.midi) % 12 for i, p1 in enumerate(pitches) for p2 in pitches[i+1:]]
+                d_val = 0.1
+                if 1 in intervals or 11 in intervals: d_val += 0.5
+                elif 6 in intervals: d_val += 0.3
+                t_diss.append(min(d_val, 1.0))
+
+                # C. Cromatismo
+                non_scale = sum(1 for p in pitches if p.pitchClass not in scale_pcs)
+                t_chroma.append(non_scale / len(pitches) if len(pitches) > 0 else 0)
+
+            t_density = min(len(m_chords) / 6.0, 1.0)
+
+            # Cálculo ponderado
+            m_tension = (np.mean(t_func) * 0.4) + \
+                        (np.mean(t_diss) * 0.3) + \
+                        (np.mean(t_chroma) * 0.2) + \
+                        (t_density * 0.1)
+
+        m_tension = min(max(m_tension, 0.0), 1.0)
+        raw_profile.append(m_tension)
+
+        bar_len = int(m_tension * 40)
+        bar = "o" * bar_len # Usamos 'o' para mayor compatibilidad
+        print(f"M{m:5d}  |  {m_tension:.3f}  | {bar}")
+
+    profile_smooth = gaussian_filter(raw_profile, sigma=0.7).tolist()
+
+    return {
+        'labels': list(range(1, num_measures + 1)),
+        'tension_values': profile_smooth,
+        'key_detected': str(key_detected)
+    }
+
+def melodic_activity_profile(score):
+    """
+    Analiza la actividad melódica compás por compás:
+    - Densidad de notas
+    - Rango melódico
+    - Saltos vs. pasos
+    - Direccionalidad
+    
+    Returns: dict con datos para graficar
+    """
+    parts = getattr(score, 'parts', [score])
+    measures = list(parts[0].getElementsByClass('Measure'))
+    
+    activity_data = []
+    
+    print("\n" + "="*60)
+    print("MELODIC ACTIVITY PROFILE (Measure-by-Measure)")
+    print("="*60)
+    
+    for measure in measures:
+        m_num = measure.measureNumber
+        notes = [n for n in measure.flatten().notes if n.isNote]
+        
+        if not notes:
+            activity_data.append({
+                'measure': m_num,
+                'activity': 0.0,
+                'components': {
+                    'density': 0.0,
+                    'range': 0.0,
+                    'motion': 0.0,
+                    'leaps': 0.0
+                }
+            })
+            continue
+        
+        # === COMPONENTE 1: DENSIDAD ===
+        measure_length = measure.quarterLength
+        note_density = len(notes) / measure_length if measure_length > 0 else 0
+        # Normalizar: 8 notas/quarter es muy denso
+        normalized_density = min(note_density / 8.0, 1.0)
+        
+        # === COMPONENTE 2: RANGO MELÓDICO ===
+        pitches = [n.pitch.midi for n in notes]
+        melodic_range = max(pitches) - min(pitches)
+        # Normalizar: 24 semitonos (2 octavas) es muy amplio
+        normalized_range = min(melodic_range / 24.0, 1.0)
+        
+        # === COMPONENTE 3: MOVIMIENTO (velocidad direccional) ===
+        intervals = np.diff(pitches)
+        avg_motion = np.mean(np.abs(intervals)) if len(intervals) > 0 else 0
+        # Normalizar: intervalos promedio > 4 semitonos es muy activo
+        normalized_motion = min(avg_motion / 4.0, 1.0)
+        
+        # === COMPONENTE 4: SALTOS ===
+        leaps = sum(1 for i in intervals if abs(i) > 2)
+        leap_ratio = leaps / len(intervals) if len(intervals) > 0 else 0
+        
+        # === ACTIVIDAD TOTAL ===
+        total_activity = (
+            normalized_density * 0.35 +
+            normalized_range * 0.25 +
+            normalized_motion * 0.25 +
+            leap_ratio * 0.15
+        )
+        
+        activity_data.append({
+            'measure': m_num,
+            'activity': total_activity,
+            'components': {
+                'density': normalized_density,
+                'range': normalized_range,
+                'motion': normalized_motion,
+                'leaps': leap_ratio
+            }
+        })
+        
+        # Visualización
+        bar = "●" * int(total_activity * 40)
+        print(f"M{m_num:3d} │ {total_activity:.3f} │ {bar}")
+    
+    print("="*60)
+    
+    activities = [d['activity'] for d in activity_data]
+    
+    # Suavizado
+    if len(activities) > 3:
+        smoothed = gaussian_filter(activities, sigma=1.5)
+    else:
+        smoothed = activities
+    
+    # Detectar picos de actividad
+    if len(smoothed) > 5:
+        peaks, properties = find_peaks(smoothed, height=np.mean(smoothed), distance=2)
+        peak_measures = [activity_data[p]['measure'] for p in peaks]
+    else:
+        peak_measures = []
+    
+    print(f"\nANALYSIS:")
+    print(f"  Average Activity: {np.mean(activities):.3f}")
+    print(f"  Peak Activity Measures: {peak_measures}")
+    print(f"  Activity Range: {np.min(activities):.3f} - {np.max(activities):.3f}")
+    
+    return {
+        'measures': [d['measure'] for d in activity_data],
+        'activity': activities,
+        'activity_smoothed': smoothed.tolist() if isinstance(smoothed, np.ndarray) else smoothed,
+        'density': [d['components']['density'] for d in activity_data],
+        'range': [d['components']['range'] for d in activity_data],
+        'motion': [d['components']['motion'] for d in activity_data],
+        'leaps': [d['components']['leaps'] for d in activity_data],
+        'peaks': peak_measures,
+        'statistics': {
+            'mean': np.mean(activities),
+            'max': np.max(activities),
+            'min': np.min(activities),
+            'std': np.std(activities)
+        }
+    }
+
+def tonal_stability_profile(score):
+    """
+    Mide la estabilidad/ambigüedad tonal compás por compás.
+    - Cercanía a la tónica
+    - Acordes diatónicos vs cromáticos
+    - Claridad de función armónica
+    
+    Returns: dict con datos para graficar (1.0 = muy estable, 0.0 = muy ambiguo)
+    """
+    try:
+        key = score.analyze('key')
+        tonic_pc = key.tonic.pitchClass
+    except:
+        debug("Tonal Stability: No key detected")
+        return None
+    
+    parts = getattr(score, 'parts', [score])
+    measures = list(parts[0].getElementsByClass('Measure'))
+    
+    stability_data = []
+    
+    print("\n" + "="*60)
+    print("TONAL STABILITY PROFILE (Measure-by-Measure)")
+    print("="*60)
+    print(f"Key: {key}\n")
+    
+    scale_pcs = set(p.pitchClass for p in key.getScale().pitches)
+    
+    for measure in measures:
+        m_num = measure.measureNumber
+        
+        # Obtener todas las notas del compás
+        all_pitches = []
+        for el in measure.flatten().notes:
+            if el.isNote:
+                all_pitches.append(el.pitch)
+            elif el.isChord:
+                all_pitches.extend(el.pitches)
+        
+        if not all_pitches:
+            stability_data.append({
+                'measure': m_num,
+                'stability': 1.0,  # Silencio = estable
+                'components': {
+                    'diatonic': 1.0,
+                    'tonic_proximity': 1.0,
+                    'functional_clarity': 1.0
+                }
+            })
+            continue
+        
+        # === COMPONENTE 1: DIATONISMO ===
+        diatonic_count = sum(1 for p in all_pitches if p.pitchClass in scale_pcs)
+        diatonic_ratio = diatonic_count / len(all_pitches)
+        
+        # === COMPONENTE 2: PROXIMIDAD A LA TÓNICA ===
+        # Distancia promedio de las notas a la tónica en el círculo de quintas
+        distances = []
+        for p in all_pitches:
+            # Distancia en semitonos
+            dist = abs(p.pitchClass - tonic_pc)
+            # Normalizar a distancia mínima (círculo de quintas)
+            if dist > 6:
+                dist = 12 - dist
+            distances.append(dist)
+        
+        avg_distance = np.mean(distances)
+        # Normalizar: distancia 0 = muy cerca, 6 = muy lejos
+        tonic_proximity = 1.0 - (avg_distance / 6.0)
+        
+        # === COMPONENTE 3: CLARIDAD FUNCIONAL ===
+        # Intentar analizar el acorde predominante del compás
+        measure_stream = stream.Stream([measure])
+        try:
+            # Construir un acorde con todas las notas únicas
+            unique_pcs = list(set(p.pitchClass for p in all_pitches))
+            if len(unique_pcs) >= 3:
+                test_chord = chord.Chord([pitch.Pitch(pc) for pc in unique_pcs])
+                rn = roman.romanNumeralFromChord(test_chord, key)
+                func = roman_to_function(rn)
+                
+                # Tónica = más estable, Dominante secundaria = menos estable
+                func_clarity_map = {
+                    'T': 1.0,
+                    'PD': 0.6,
+                    'D': 0.4,
+                    'Dsec': 0.2,
+                    'Other': 0.3
+                }
+                functional_clarity = func_clarity_map.get(func, 0.5)
+            else:
+                functional_clarity = 0.5
+        except:
+            functional_clarity = 0.5
+        
+        # === ESTABILIDAD TOTAL ===
+        total_stability = (
+            diatonic_ratio * 0.40 +
+            tonic_proximity * 0.35 +
+            functional_clarity * 0.25
+        )
+        
+        stability_data.append({
+            'measure': m_num,
+            'stability': total_stability,
+            'components': {
+                'diatonic': diatonic_ratio,
+                'tonic_proximity': tonic_proximity,
+                'functional_clarity': functional_clarity
+            }
+        })
+        
+        # Visualización
+        bar = "■" * int(total_stability * 40)
+        instability_bar = "□" * int((1 - total_stability) * 40)
+        print(f"M{m_num:3d} │ {total_stability:.3f} │ {bar}{instability_bar}")
+    
+    print("="*60)
+    
+    stabilities = [d['stability'] for d in stability_data]
+    
+    # Suavizado
+    if len(stabilities) > 3:
+        smoothed = gaussian_filter(stabilities, sigma=1.5)
+    else:
+        smoothed = stabilities
+    
+    # Detectar momentos de inestabilidad (valles)
+    if len(smoothed) > 5:
+        # Invertir para buscar valles como picos
+        inverted = [-s for s in smoothed]
+        valleys, _ = find_peaks(inverted, height=-np.mean(smoothed), distance=2)
+        unstable_measures = [stability_data[v]['measure'] for v in valleys]
+    else:
+        unstable_measures = []
+    
+    print(f"\nANALYSIS:")
+    print(f"  Average Stability: {np.mean(stabilities):.3f}")
+    print(f"  Most Unstable Measures: {unstable_measures}")
+    print(f"  Stability Range: {np.min(stabilities):.3f} - {np.max(stabilities):.3f}")
+    
+    return {
+        'measures': [d['measure'] for d in stability_data],
+        'stability': stabilities,
+        'stability_smoothed': smoothed.tolist() if isinstance(smoothed, np.ndarray) else smoothed,
+        'diatonic': [d['components']['diatonic'] for d in stability_data],
+        'tonic_proximity': [d['components']['tonic_proximity'] for d in stability_data],
+        'functional_clarity': [d['components']['functional_clarity'] for d in stability_data],
+        'unstable_measures': unstable_measures,
+        'statistics': {
+            'mean': np.mean(stabilities),
+            'max': np.max(stabilities),
+            'min': np.min(stabilities),
+            'std': np.std(stabilities)
+        }
+    }
+    
+    
+def get_profile_features(score):
+    """
+    Genera un vector de dimensión fija (15,) con estadísticos agregados.
+    Orden: [Armonía(5), Melodía(5), Inestabilidad(5)]
+    Estadísticos: [Media, Desviación Estándar, Máximo, Mínimo, Mediana]
+    """
+    # 1. Obtención de datos
+    h_data = np.array(harmonic_tension_profile(score)['tension_values'])
+    m_data = np.array(melodic_activity_profile(score)['activity_smoothed'])
+    # Invertimos estabilidad a inestabilidad
+    s_data = 1.0 - np.array(tonal_stability_profile(score)['stability_smoothed'])
+
+    def calculate_stats(arr):
+        """Calcula el bloque de 5 descriptores para un array"""
+        if len(arr) == 0:
+            return [0.0] * 5
+        return [
+            np.mean(arr),   # Nivel promedio
+            np.std(arr),    # Variedad/Contraste
+            np.max(arr),    # Punto de mayor intensidad
+            np.min(arr),    # Punto de mayor reposo
+            np.median(arr)  # Valor central (robusto a picos)
+        ]
+
+    # 2. Construcción del vector final
+    vector = np.concatenate([
+        calculate_stats(h_data),
+        calculate_stats(m_data),
+        calculate_stats(s_data)
+    ])
+
+    return vector # Retorna un np.array de forma (15,)
+
 
 # =========================
 # EJECUCIÓN
 # =========================
 
 debug("Loading score...")
-score = converter.parse('./dreams2.musicxml')
+score = converter.parse('./coming_fix.musicxml')
 debug("Score loaded")
 
 custom_rules = [
@@ -5087,4 +5495,5 @@ custom_rules = [
 # lerdahl_energy_vector(score)
 # tonnetz_distance_vector(score)
 # psychoacoustic_vector(score)
-print(semantic_emotion_vector(score))
+# print(semantic_emotion_vector(score))
+get_profile_features(score)
