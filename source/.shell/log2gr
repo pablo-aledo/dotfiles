@@ -595,7 +595,7 @@ git_review_uniq(){
     Git diff_with_lines $(Git branch_base) HEAD | grep ' + ' | tokenize | sort -u > /tmp/difftokens
     Git diff_with_lines $(Git branch_base) HEAD | tokenize > /tmp/diff_tokenized
     comm -23 <(cat /tmp/difftokens | tokenize | sort -u) <(cat ~/workspace/stopwords.txt | tokenize | sort -u) > /tmp/difftokens_2
-    cat /tmp/difftokens_2 | while read line; do echo $(cat /tmp/diff_tokenized | grep "^$line\$" | wc -l) $line; done | sort -g | awk '$1=1{print $2}' | grep -v '^[a-f0-9]*$'
+    cat /tmp/difftokens_2 | while read line; do echo $(cat /tmp/diff_tokenized | grep "^$line\$" | wc -l) $line; done | sort -g | awk '$1==1{print $2}' | grep -v '^[a-f0-9]*$'
 }
 
 call_path(){
