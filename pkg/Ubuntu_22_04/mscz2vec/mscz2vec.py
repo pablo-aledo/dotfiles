@@ -5541,6 +5541,666 @@ def density_dynamics_range_features(score):
 
     return np.array(final_vector)
 
+# =========================
+# EMOTIONAL NARRATIVE
+# =========================
+
+
+def affective_contour_analysis(score, window_size=2):
+    """
+    Genera un perfil emocional multidimensional compás a compás.
+    Combina 6 dimensiones afectivas en un espacio emocional unificado.
+    """
+    parts = getattr(score, 'parts', [score])
+    measures = list(parts[0].getElementsByClass('Measure'))
+
+    try:
+        key = score.analyze('key')
+        tonic_midi = key.tonic.pitchClass
+    except:
+        key = None
+        tonic_midi = 0
+
+    affective_profile = []
+
+    print("\n" + "="*70)
+    print("AFFECTIVE CONTOUR ANALYSIS")
+    print("="*70)
+    print(f"Key: {key}\n")
+
+    for measure in measures:
+        m_num = measure.measureNumber
+
+        # ========== DIMENSIÓN 1: VALENCIA (Modo/Consonancia) ==========
+        notes = measure.flatten().notes
+        pitches = []
+        for n in notes:
+            if n.isNote:
+                pitches.append(n.pitch.midi)
+            elif n.isChord:
+                pitches.extend([p.midi for p in n.pitches])
+
+        if not pitches:
+            affective_profile.append({
+                'measure': m_num,
+                'valence': 0,
+                'arousal': 0,
+                'tension': 0,
+                'complexity': 0,
+                'brightness': 0,
+                'motion': 0,
+                'emotion': "Silencio/Neutral"
+            })
+            continue
+
+        # Modo local (mayor/menor)
+        if key:
+            scale_pitches = [p.pitchClass for p in key.getScale().pitches]
+            diatonic_ratio = sum(1 for p in pitches if (p % 12) in scale_pitches) / len(pitches)
+            mode_valence = 0.5 if key.mode == 'major' else -0.5
+        else:
+            diatonic_ratio = 0.5
+            mode_valence = 0
+
+        # Consonancia de intervalos
+        if len(pitches) >= 2:
+            unique_pitches = sorted(list(set(pitches)))
+            intervals = [(unique_pitches[i+1] - unique_pitches[i]) % 12
+                        for i in range(len(unique_pitches)-1)]
+
+            consonant_intervals = [0, 3, 4, 5, 7, 8, 9]
+            consonance_ratio = sum(1 for i in intervals if i in consonant_intervals) / len(intervals)
+        else:
+            consonance_ratio = 0.5
+
+        valence = (mode_valence + (consonance_ratio - 0.5)) * diatonic_ratio
+
+        # ========== DIMENSIÓN 2: AROUSAL (Densidad/Registro) ==========
+        duration = measure.quarterLength
+        note_density = len(notes) / duration if duration > 0 else 0
+        avg_pitch = np.mean(pitches)
+
+        # Normalizar densidad (0-8 notas/beat) y registro (36-84 MIDI)
+        arousal = (min(note_density / 8, 1.0) * 0.6 +
+                  (avg_pitch - 36) / 48 * 0.4) * 2 - 1
+
+        # ========== DIMENSIÓN 3: TENSIÓN ARMÓNICA ==========
+        # Distancia al centro tonal
+        if key:
+            distances_to_tonic = [abs((p % 12) - tonic_midi) for p in pitches]
+            # Normalizar: distancia en círculo de quintas
+            normalized_distances = [min(d, 12-d) for d in distances_to_tonic]
+            avg_distance = np.mean(normalized_distances) / 6.0  # Normalizar 0-1
+
+            # Cromatismo
+            chromatic_count = sum(1 for p in pitches if (p % 12) not in scale_pitches)
+            chromatic_ratio = chromatic_count / len(pitches)
+
+            tension = avg_distance * 0.6 + chromatic_ratio * 0.4
+        else:
+            tension = 0.5
+
+        # ========== DIMENSIÓN 4: COMPLEJIDAD RÍTMICA ==========
+        durations = [n.quarterLength for n in notes if n.isNote]
+        if len(durations) > 1:
+            # Entropía de duraciones
+            duration_counts = Counter(durations)
+            duration_probs = np.array(list(duration_counts.values())) / len(durations)
+            complexity = -np.sum(duration_probs * np.log2(duration_probs + 1e-9)) / 3.0
+        else:
+            complexity = 0
+
+        # ========== DIMENSIÓN 5: BRILLO (Registro + Timbre) ==========
+        # Centroide espectral aproximado (basado en registro)
+        brightness = (avg_pitch - 48) / 36  # Normalizado centrado en C4
+        brightness = np.clip(brightness, -1, 1)
+
+        # ========== DIMENSIÓN 6: MOVIMIENTO MELÓDICO ==========
+        melodic_notes = [n for n in notes if n.isNote]
+        if len(melodic_notes) >= 2:
+            melodic_intervals = [abs(melodic_notes[i+1].pitch.midi - melodic_notes[i].pitch.midi)
+                                for i in range(len(melodic_notes)-1)]
+            avg_movement = np.mean(melodic_intervals) / 12.0  # Normalizado por octava
+            motion = np.clip(avg_movement, 0, 1) * 2 - 1
+        else:
+            motion = 0
+
+        # ========== EMOCIÓN RESULTANTE ==========
+        # Mapeo al espacio emocional (Russell's Circumplex)
+        emotional_state = {
+            'measure': m_num,
+            'valence': valence,
+            'arousal': arousal,
+            'tension': tension,
+            'complexity': complexity,
+            'brightness': brightness,
+            'motion': motion
+        }
+
+        # Clasificación emocional
+        if valence >= 0 and arousal >= 0:
+            emotion_label = "Alegría/Excitación"
+        elif valence >= 0 and arousal < 0:
+            emotion_label = "Calma/Serenidad"
+        elif valence < 0 and arousal >= 0:
+            emotion_label = "Tensión/Ansiedad"
+        else:
+            emotion_label = "Tristeza/Melancolía"
+
+        emotional_state['emotion'] = emotion_label
+        affective_profile.append(emotional_state)
+
+        # Visualización
+        v_bar = "█" * int((valence + 1) * 15)
+        a_bar = "█" * int((arousal + 1) * 15)
+        t_bar = "█" * int(tension * 30)
+
+        print(f"M{m_num:3d} │ {emotion_label:20s} │ V:{v_bar:30s} │ A:{a_bar:30s}")
+
+    print("="*70)
+
+    # ========== ANÁLISIS DE TRAYECTORIA ==========
+    print("\nEMOTIONAL TRAJECTORY ANALYSIS:")
+
+    valences = [p['valence'] for p in affective_profile]
+    arousals = [p['arousal'] for p in affective_profile]
+    tensions = [p['tension'] for p in affective_profile]
+
+    # Suavizado para ver tendencias
+    if len(valences) > 5:
+        smooth_valence = gaussian_filter(valences, sigma=2)
+        smooth_arousal = gaussian_filter(arousals, sigma=2)
+        smooth_tension = gaussian_filter(tensions, sigma=2)
+    else:
+        smooth_valence = valences
+        smooth_arousal = arousals
+        smooth_tension = tensions
+
+    # Detectar puntos de inflexión emocional
+    valence_changes = np.diff(smooth_valence)
+    arousal_changes = np.diff(smooth_arousal)
+
+    # Encontrar momentos de cambio dramático
+    dramatic_shifts = []
+    for i in range(len(valence_changes)):
+        if abs(valence_changes[i]) > 0.3 or abs(arousal_changes[i]) > 0.3:
+            dramatic_shifts.append(affective_profile[i+1]['measure'])
+
+    print(f"\n  Emotional Range:")
+    print(f"    Valence: {min(valences):.2f} to {max(valences):.2f}")
+    print(f"    Arousal: {min(arousals):.2f} to {max(arousals):.2f}")
+    print(f"    Tension: {min(tensions):.2f} to {max(tensions):.2f}")
+
+    print(f"\n  Emotional Journey:")
+    print(f"    Start: {affective_profile[0]['emotion']}")
+    print(f"    End: {affective_profile[-1]['emotion']}")
+
+    if dramatic_shifts:
+        print(f"\n  Dramatic Shifts at Measures: {dramatic_shifts[:5]}")
+
+    # Calcular "coherencia emocional" (qué tan consistente es la trayectoria)
+    valence_variance = np.var(valences)
+    arousal_variance = np.var(arousals)
+    emotional_coherence = 1 / (1 + valence_variance + arousal_variance)
+
+    print(f"\n  Emotional Coherence: {emotional_coherence:.3f}")
+    print(f"    (1.0 = muy consistente, 0.0 = muy errático)")
+
+    return {
+        'profile': affective_profile,
+        'valence_curve': smooth_valence.tolist() if isinstance(smooth_valence, np.ndarray) else smooth_valence,
+        'arousal_curve': smooth_arousal.tolist() if isinstance(smooth_arousal, np.ndarray) else smooth_arousal,
+        'tension_curve': smooth_tension.tolist() if isinstance(smooth_tension, np.ndarray) else smooth_tension,
+        'dramatic_shifts': dramatic_shifts,
+        'coherence': emotional_coherence,
+        'statistics': {
+            'mean_valence': np.mean(valences),
+            'mean_arousal': np.mean(arousals),
+            'mean_tension': np.mean(tensions),
+            'valence_range': max(valences) - min(valences),
+            'arousal_range': max(arousals) - min(arousals)
+        }
+    }
+
+
+def harmonic_flow_analysis(score):
+    """
+    Analiza el flujo de la progresión armónica usando teoría de grafos.
+    Detecta patrones de tensión-resolución y ciclos armónicos.
+    """
+    try:
+        key = score.analyze('key')
+    except:
+        return None
+    
+    chords = extract_harmonic_chords(score)
+    
+    if len(chords) < 2:
+        return None
+    
+    print("\n" + "="*70)
+    print("HARMONIC FLOW ANALYSIS")
+    print("="*70)
+    
+    # Construir secuencia de funciones armónicas
+    harmonic_sequence = []
+    
+    for ch in chords:
+        try:
+            rn = roman.romanNumeralFromChord(ch, key)
+            func = roman_to_function(rn)
+            measure_num = get_measure_from_chord_or_offset(ch, score)
+            
+            harmonic_sequence.append({
+                'function': func,
+                'figure': rn.figure,
+                'measure': measure_num,
+                'chord': ch
+            })
+        except:
+            continue
+    
+    # ========== ANÁLISIS DE TRANSICIONES ==========
+    transitions = []
+    tension_profile = []
+    
+    # Mapa de tensión funcional
+    tension_map = {
+        'T': 0.0,   # Tónica = reposo
+        'PD': 0.4,  # Predominante = tensión moderada
+        'D': 0.7,   # Dominante = tensión alta
+        'Dsec': 0.9,# Dominante secundaria = tensión muy alta
+        'Other': 0.5
+    }
+    
+    for i in range(len(harmonic_sequence) - 1):
+        current = harmonic_sequence[i]
+        next_chord = harmonic_sequence[i + 1]
+        
+        transition = f"{current['function']} → {next_chord['function']}"
+        transitions.append(transition)
+        
+        # Calcular tensión del momento
+        current_tension = tension_map.get(current['function'], 0.5)
+        tension_profile.append({
+            'measure': current['measure'],
+            'tension': current_tension,
+            'function': current['function']
+        })
+    
+    # Añadir último acorde
+    tension_profile.append({
+        'measure': harmonic_sequence[-1]['measure'],
+        'tension': tension_map.get(harmonic_sequence[-1]['function'], 0.5),
+        'function': harmonic_sequence[-1]['function']
+    })
+    
+    # ========== DETECTAR PATRONES ==========
+    
+    # 1. Ciclos de tensión-resolución
+    tr_cycles = []
+    current_cycle = []
+    
+    for i, t in enumerate(tension_profile):
+        current_cycle.append(t)
+        
+        # Si llegamos a una tónica después de tensión, cerramos ciclo
+        if t['function'] == 'T' and len(current_cycle) > 1:
+            tr_cycles.append(current_cycle)
+            current_cycle = []
+    
+    # 2. Secuencias funcionales comunes
+    common_progressions = {
+        'T → PD → D → T': 'Progresión Clásica Completa',
+        'T → D → T': 'Cadencia Auténtica Simple',
+        'T → PD → T': 'Cadencia Plagal',
+        'PD → D → T': 'Resolución Típica',
+        'D → T → PD': 'Inicio Post-Cadencial'
+    }
+    
+    detected_patterns = []
+    
+    for pattern, name in common_progressions.items():
+        pattern_parts = pattern.split(' → ')
+        for i in range(len(transitions) - len(pattern_parts) + 2):
+            window = [harmonic_sequence[i+j]['function'] for j in range(len(pattern_parts))]
+            if ' → '.join(window) == pattern:
+                detected_patterns.append({
+                    'pattern': pattern,
+                    'name': name,
+                    'measure': harmonic_sequence[i]['measure']
+                })
+    
+    # ========== VISUALIZACIÓN ==========
+    print("\nHarmonic Tension Profile:")
+    print("-" * 70)
+    
+    for t in tension_profile:
+        bar = "█" * int(t['tension'] * 50)
+        print(f"M{t['measure']:3d} │ {t['function']:5s} │ {t['tension']:.2f} │ {bar}")
+    
+    print("\nDetected Functional Patterns:")
+    print("-" * 70)
+    
+    if detected_patterns:
+        for p in detected_patterns[:10]:  # Mostrar primeros 10
+            print(f"  M{p['measure']:3d} │ {p['name']:30s} │ {p['pattern']}")
+    else:
+        print("  No standard patterns detected (experimental/chromatic harmony)")
+    
+    print("\nTension-Resolution Cycles:")
+    print("-" * 70)
+    print(f"  Total Cycles: {len(tr_cycles)}")
+    
+    if tr_cycles:
+        avg_cycle_length = np.mean([len(c) for c in tr_cycles])
+        print(f"  Average Cycle Length: {avg_cycle_length:.1f} chords")
+        
+        # Mostrar primer y último ciclo
+        print(f"\n  First Cycle:")
+        for t in tr_cycles[0]:
+            print(f"    M{t['measure']:3d} │ {t['function']} (tension: {t['tension']:.2f})")
+        
+        if len(tr_cycles) > 1:
+            print(f"\n  Last Cycle:")
+            for t in tr_cycles[-1]:
+                print(f"    M{t['measure']:3d} │ {t['function']} (tension: {t['tension']:.2f})")
+    
+    # ========== ESTADÍSTICAS ==========
+    tensions = [t['tension'] for t in tension_profile]
+    
+    print("\nStatistics:")
+    print("-" * 70)
+    print(f"  Mean Tension: {np.mean(tensions):.3f}")
+    print(f"  Tension Range: {min(tensions):.3f} - {max(tensions):.3f}")
+    print(f"  Tension Variance: {np.var(tensions):.3f}")
+    
+    # Tendencia de tensión (¿aumenta o disminuye?)
+    if len(tensions) > 2:
+        trend = np.polyfit(range(len(tensions)), tensions, 1)[0]
+        trend_direction = "increasing" if trend > 0 else "decreasing"
+        print(f"  Tension Trend: {trend_direction} ({abs(trend):.4f}/chord)")
+    
+    return {
+        'tension_profile': tension_profile,
+        'transitions': transitions,
+        'detected_patterns': detected_patterns,
+        'cycles': tr_cycles,
+        'statistics': {
+            'mean_tension': np.mean(tensions),
+            'max_tension': max(tensions),
+            'min_tension': min(tensions),
+            'variance': np.var(tensions)
+        }
+    }
+
+def melodic_expectancy_analysis(score):
+    """
+    Analiza cuánto se cumplen o violan las expectativas melódicas.
+    Basado en principios de la Gestalt y teoría de Narmour.
+    """
+    seq = extract_melody(score)
+    
+    if len(seq) < 3:
+        return None
+    
+    print("\n" + "="*70)
+    print("MELODIC EXPECTANCY ANALYSIS (Narmour ITPRA Model)")
+    print("="*70)
+    
+    expectancy_profile = []
+    
+    for i in range(len(seq) - 2):
+        n1_pitch = seq[i][0]
+        n2_pitch = seq[i+1][0]
+        n3_pitch = seq[i+2][0]
+        
+        # Intervalo de implicación
+        interval1 = n2_pitch - n1_pitch
+        
+        # Intervalo de realización
+        interval2 = n3_pitch - n2_pitch
+        
+        # ========== CALCULAR EXPECTATIVA ==========
+        
+        # Regla 1: Continuación Registral (se espera movimiento en la misma dirección)
+        if interval1 != 0:
+            expected_direction = np.sign(interval1)
+            actual_direction = np.sign(interval2)
+            
+            directional_match = (expected_direction == actual_direction)
+        else:
+            directional_match = True  # Nota repetida no genera expectativa direccional
+        
+        # Regla 2: Tamaño del Salto (saltos grandes tienden a revertirse)
+        if abs(interval1) > 4:  # Salto grande (más de tercera mayor)
+            expected_reversal = True
+            actual_reversal = (np.sign(interval1) != np.sign(interval2)) if interval2 != 0 else False
+            reversal_match = (expected_reversal == actual_reversal)
+        else:
+            reversal_match = True  # Movimiento por grado no genera expectativa de reversión
+        
+        # Regla 3: Proximidad (se esperan intervalos pequeños después de cualquier movimiento)
+        expected_small_interval = abs(interval2) <= 2  # Grado conjunto
+        proximity_match = expected_small_interval
+        
+        # ========== CALCULAR SORPRESA ==========
+        
+        # Peso de cada regla
+        weights = {
+            'directional': 0.4,
+            'reversal': 0.3,
+            'proximity': 0.3
+        }
+        
+        surprise_score = 0
+        
+        if not directional_match:
+            surprise_score += weights['directional']
+        
+        if not reversal_match:
+            surprise_score += weights['reversal']
+        
+        if not proximity_match:
+            surprise_score += weights['proximity']
+        
+        # Bonus de sorpresa por intervalos inusuales
+        if abs(interval2) > 7:  # Salto mayor a quinta
+            surprise_score += 0.2
+        
+        surprise_score = min(surprise_score, 1.0)
+        
+        expectancy_profile.append({
+            'position': i + 1,
+            'interval1': interval1,
+            'interval2': interval2,
+            'surprise': surprise_score,
+            'directional_match': directional_match,
+            'reversal_match': reversal_match,
+            'proximity_match': proximity_match
+        })
+    
+    # ========== VISUALIZACIÓN ==========
+    print("\nExpectancy Violations (Surprise Points):")
+    print("-" * 70)
+    
+    for i, exp in enumerate(expectancy_profile):
+        if exp['surprise'] > 0.3:  # Solo mostrar sorpresas significativas
+            bar = "!" * int(exp['surprise'] * 20)
+            print(f"Note {exp['position']:3d} │ Surprise: {exp['surprise']:.2f} │ {bar}")
+            print(f"         │ Intervals: {exp['interval1']:+3d} → {exp['interval2']:+3d}")
+            
+            violations = []
+            if not exp['directional_match']:
+                violations.append("Direction")
+            if not exp['reversal_match']:
+                violations.append("Reversal")
+            if not exp['proximity_match']:
+                violations.append("Proximity")
+            
+            if violations:
+                print(f"         │ Violated: {', '.join(violations)}")
+            print()
+    
+    # ========== ESTADÍSTICAS ==========
+    surprises = [e['surprise'] for e in expectancy_profile]
+    
+    print("Statistics:")
+    print("-" * 70)
+    print(f"  Mean Surprise: {np.mean(surprises):.3f}")
+    print(f"  Max Surprise: {max(surprises):.3f}")
+    print(f"  Highly Unexpected Moments: {sum(1 for s in surprises if s > 0.5)}")
+    
+    # Predictibilidad general
+    predictability = 1 - np.mean(surprises)
+    print(f"  Overall Predictability: {predictability:.3f}")
+    
+    if predictability > 0.7:
+        print(f"  → Very predictable melody (conventional)")
+    elif predictability > 0.5:
+        print(f"  → Moderately predictable (balanced)")
+    else:
+        print(f"  → Highly unpredictable (experimental/chromatic)")
+    
+    return {
+        'profile': expectancy_profile,
+        'surprise_curve': surprises,
+        'predictability': predictability,
+        'statistics': {
+            'mean_surprise': np.mean(surprises),
+            'max_surprise': max(surprises),
+            'n_high_surprises': sum(1 for s in surprises if s > 0.5)
+        }
+    }
+
+
+def emotional_dynamics_master(score):
+    """
+    Análisis maestro que integra todos los aspectos emocionales
+    """
+    print("\n" + "="*70)
+    print("EMOTIONAL DYNAMICS - COMPREHENSIVE ANALYSIS")
+    print("="*70)
+    
+    results = {}
+    
+    # 1. Contorno Afectivo
+    print("\n[1/3] Computing Affective Contour...")
+    results['affective'] = affective_contour_analysis(score)
+    
+    # 2. Flujo Armónico
+    print("\n[2/3] Computing Harmonic Flow...")
+    results['harmonic_flow'] = harmonic_flow_analysis(score)
+    
+    # 3. Expectativa Melódica
+    print("\n[3/3] Computing Melodic Expectancy...")
+    results['melodic_expectancy'] = melodic_expectancy_analysis(score)
+    
+    # ========== SÍNTESIS EMOCIONAL ==========
+    print("\n" + "="*70)
+    print("EMOTIONAL SYNTHESIS")
+    print("="*70)
+    
+    if results['affective']:
+        print("\n EMOTIONAL NARRATIVE:")
+        print(f"  Journey: {results['affective']['profile'][0]['emotion']} → "
+              f"{results['affective']['profile'][-1]['emotion']}")
+        print(f"  Coherence: {results['affective']['coherence']:.3f}")
+        print(f"  Valence Range: {results['affective']['statistics']['valence_range']:.3f}")
+    
+    if results['harmonic_flow']:
+        print("\n HARMONIC CHARACTER:")
+        print(f"  Mean Tension: {results['harmonic_flow']['statistics']['mean_tension']:.3f}")
+        print(f"  Tension-Resolution Cycles: {len(results['harmonic_flow']['cycles'])}")
+    
+    if results['melodic_expectancy']:
+        print("\n MELODIC CHARACTER:")
+        print(f"  Predictability: {results['melodic_expectancy']['predictability']:.3f}")
+        print(f"  Surprise Moments: {results['melodic_expectancy']['statistics']['n_high_surprises']}")
+    
+    # Vector unificado
+    emotional_vector = np.concatenate([
+        [results['affective']['statistics']['mean_valence'],
+         results['affective']['statistics']['mean_arousal'],
+         results['affective']['coherence']],
+        [results['harmonic_flow']['statistics']['mean_tension'],
+         results['harmonic_flow']['statistics']['variance']],
+        [results['melodic_expectancy']['predictability'],
+         results['melodic_expectancy']['statistics']['mean_surprise']]
+    ])
+    
+    results['unified_vector'] = emotional_vector
+    
+    return results
+
+
+def generate_emotion_vector(score):
+    """
+    Ejecuta el pipeline completo de análisis y consolida los resultados
+    en un único vector semántico de 11 dimensiones.
+    """
+    # 1. Ejecución de los análisis individuales
+    # Se asume que estas funciones ya están definidas en tu script
+    try:
+        affective = affective_contour_analysis(score)
+    except Exception as e:
+        print(f"Error en análisis afectivo: {e}")
+        affective = None
+
+    try:
+        harmonic = harmonic_flow_analysis(score)
+    except Exception as e:
+        print(f"Error en análisis armónico: {e}")
+        harmonic = None
+
+    try:
+        melodic = melodic_expectancy_analysis(score)
+    except Exception as e:
+        print(f"Error en análisis melódico: {e}")
+        melodic = None
+
+    vector = []
+    
+    # 2. Extracción y Normalización de Dimensiones
+    
+    # --- Bloque Afectivo (5 dimensiones) ---
+    if affective and 'statistics' in affective:
+        stats = affective['statistics']
+        vector.extend([
+            stats.get('mean_valence', 0.0),    # Positividad
+            stats.get('mean_arousal', 0.0),    # Energía
+            stats.get('mean_tension', 0.0),    # Tensión percibida
+            stats.get('valence_range', 0.0),   # Amplitud emocional
+            affective.get('coherence', 0.5)    # Lógica de la trayectoria
+        ])
+    else:
+        vector.extend([0.0] * 5)
+
+    # --- Bloque Armónico (3 dimensiones) ---
+    if harmonic and 'statistics' in harmonic:
+        h_stats = harmonic['statistics']
+        vector.extend([
+            h_stats.get('mean_tension', 0.0),  # Tensión funcional (T/PD/D)
+            h_stats.get('variance', 0.0),      # Inestabilidad armónica
+            len(harmonic.get('cycles', [])) / 10.0 # Densidad de resolución (normalizada)
+        ])
+    else:
+        vector.extend([0.0] * 3)
+
+    # --- Bloque Melódico (3 dimensiones) ---
+    if melodic and 'statistics' in melodic:
+        m_stats = melodic['statistics']
+        vector.extend([
+            melodic.get('predictability', 0.5),      # Apego a normas (Narmour)
+            m_stats.get('mean_surprise', 0.0),       # Nivel de sorpresa promedio
+            m_stats.get('n_high_surprises', 0) / 20.0 # Frecuencia de saltos inesperados
+        ])
+    else:
+        vector.extend([0.5, 0.0, 0.0])
+
+    return np.array(vector)
+
+
 
 # =========================
 # EJECUCIÓN
@@ -5580,4 +6240,5 @@ custom_rules = [
 # psychoacoustic_vector(score)
 # print(semantic_emotion_vector(score))
 # plot_measure_analytics(score)
-density_dynamics_range_features(score)
+# density_dynamics_range_features(score)
+print(generate_emotion_vector(score))
