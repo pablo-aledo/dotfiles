@@ -2928,6 +2928,8 @@ learning.normalize_txt(){
 classify_folders(){
     ls $1 | while read line
     do
+        # md=$(echo $line | md5sum - | awk '{print $1}')
+        # [ -e ~/learning/cache_classifier/$md ] && rm -fr ~/learning/cache_classifier/$md
         classification=$(echo $line | learning.classify -)
         hierarchy=$(cat $learning_dir/topics/topics | grep "\<$classification\$" | head -n1)
         echo "$line -> $classification -> $hierarchy"
