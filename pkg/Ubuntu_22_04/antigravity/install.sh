@@ -5,3 +5,5 @@ echo "deb [signed-by=/etc/apt/keyrings/antigravity-repo-key.gpg] https://us-cent
   sudo tee /etc/apt/sources.list.d/antigravity.list > /dev/null
 sudo apt update
 sudo apt install antigravity
+
+# cp ~/.config/Code/User/settings.json ~/.config/Antigravity/User/settings.json
