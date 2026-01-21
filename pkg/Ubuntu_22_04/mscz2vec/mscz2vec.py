@@ -6201,13 +6201,750 @@ def generate_emotion_vector(score):
     return np.array(vector)
 
 
+# =========================
+# MERMAID
+# =========================
+
+def harmonic_graph_analysis(score):
+    """
+    Genera dos grafos Mermaid de transiciones armónicas usando ventana deslizante:
+    1. Grafo basado en FIGURAS (I, V, vi, etc.)
+    2. Grafo basado en FUNCIONES (T, D, PD, etc.)
+
+    Usa ventana de 2 acordes y elimina transiciones duplicadas.
+
+    Returns:
+        dict con 'figure_graph' y 'function_graph' en formato Mermaid
+    """
+    try:
+        key = score.analyze('key')
+        debug(f"Harmonic Graphs: key = {key}")
+    except:
+        debug("Harmonic Graphs: could not detect key")
+        return None
+
+    chords = extract_harmonic_chords(score)
+
+    if len(chords) < 2:
+        debug("Harmonic Graphs: not enough chords")
+        return None
+
+    print("\n" + "="*70)
+    print("HARMONIC GRAPH ANALYSIS")
+    print("="*70)
+    print(f"Key: {key}")
+    print(f"Total chords: {len(chords)}\n")
+
+    # Estructuras para almacenar transiciones únicas
+    figure_transitions = {}  # {(figura1, figura2): count}
+    function_transitions = {}  # {(func1, func2): count}
+
+    # Almacenar ejemplos de compases donde ocurren
+    figure_examples = {}
+    function_examples = {}
+
+    # Ventana deslizante de 2 acordes
+    for i in range(len(chords) - 1):
+        chord1 = chords[i]
+        chord2 = chords[i + 1]
+
+        try:
+            # Obtener análisis romano
+            rn1 = roman.romanNumeralFromChord(chord1, key)
+            rn2 = roman.romanNumeralFromChord(chord2, key)
+
+            # Obtener figuras y funciones
+            fig1 = rn1.figure
+            fig2 = rn2.figure
+            func1 = roman_to_function(rn1)
+            func2 = roman_to_function(rn2)
+
+            # Obtener compases
+            measure1 = get_measure_from_chord_or_offset(chord1, score)
+            measure2 = get_measure_from_chord_or_offset(chord2, score)
+
+            # Registrar transición de FIGURAS
+            fig_transition = (fig1, fig2)
+            if fig_transition not in figure_transitions:
+                figure_transitions[fig_transition] = 0
+                figure_examples[fig_transition] = []
+            figure_transitions[fig_transition] += 1
+            if len(figure_examples[fig_transition]) < 3:  # Guardar max 3 ejemplos
+                figure_examples[fig_transition].append(f"M{measure1}")
+
+            # Registrar transición de FUNCIONES
+            func_transition = (func1, func2)
+            if func_transition not in function_transitions:
+                function_transitions[func_transition] = 0
+                function_examples[func_transition] = []
+            function_transitions[func_transition] += 1
+            if len(function_examples[func_transition]) < 3:
+                function_examples[func_transition].append(f"M{measure1}")
+
+        except Exception as e:
+            debug(f"Error analyzing transition {i}: {e}")
+            continue
+
+    # ========== GENERAR GRAFOS MERMAID ==========
+
+    # --- GRAFO DE FIGURAS ---
+    figure_graph = ["graph LR"]
+
+    # Ordenar por frecuencia (más común primero)
+    sorted_fig_transitions = sorted(
+        figure_transitions.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    print("FIGURE TRANSITIONS (Roman Numerals):")
+    print("-" * 70)
+
+    for (fig1, fig2), count in sorted_fig_transitions:
+        # Sanitizar nombres para Mermaid (eliminar caracteres problemáticos)
+        safe_fig1 = fig1.replace('°', 'dim').replace('+', 'aug').replace('/', '_')
+        safe_fig2 = fig2.replace('°', 'dim').replace('+', 'aug').replace('/', '_')
+
+        # Formato: A["figura"] -->|count| B["figura"]
+        # Grosor de línea basado en frecuencia
+        if count >= 5:
+            line_style = "==>"  # Muy común
+        elif count >= 3:
+            line_style = "-->"  # Común
+        else:
+            line_style = "-.->"  # Poco común
+
+        figure_graph.append(
+            f'    {safe_fig1}["{fig1}"] {line_style}|{count}| {safe_fig2}["{fig2}"]'
+        )
+
+        # Print debug
+        examples_str = ", ".join(figure_examples[(fig1, fig2)])
+        print(f"  {fig1:>6} → {fig2:<6} : {count:2d}x  (ej: {examples_str})")
+
+    # --- GRAFO DE FUNCIONES ---
+    function_graph = ["graph LR"]
+
+    # Estilos para funciones
+    function_styles = {
+        'T': 'fill:#90EE90,stroke:#006400,stroke-width:2px',    # Verde (estable)
+        'PD': 'fill:#FFD700,stroke:#FF8C00,stroke-width:2px',   # Amarillo (preparación)
+        'D': 'fill:#FF6B6B,stroke:#8B0000,stroke-width:2px',    # Rojo (tensión)
+        'Dsec': 'fill:#FF1493,stroke:#8B008B,stroke-width:2px', # Magenta (tensión secundaria)
+        'Other': 'fill:#D3D3D3,stroke:#696969,stroke-width:2px' # Gris (ambiguo)
+    }
+
+    sorted_func_transitions = sorted(
+        function_transitions.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    print("\n" + "="*70)
+    print("FUNCTION TRANSITIONS (Harmonic Functions):")
+    print("-" * 70)
+
+    # Añadir definiciones de estilos
+    for func, style in function_styles.items():
+        function_graph.append(f'    style {func} {style}')
+
+    for (func1, func2), count in sorted_func_transitions:
+        # Grosor basado en frecuencia
+        if count >= 5:
+            line_style = "==>"
+        elif count >= 3:
+            line_style = "-->"
+        else:
+            line_style = "-.->"
+
+        function_graph.append(
+            f'    {func1} {line_style}|{count}| {func2}'
+        )
+
+        # Print debug
+        examples_str = ", ".join(function_examples[(func1, func2)])
+        print(f"  {func1:>5} → {func2:<5} : {count:2d}x  (ej: {examples_str})")
+
+    # ========== ESTADÍSTICAS ==========
+    print("\n" + "="*70)
+    print("STATISTICS:")
+    print("-" * 70)
+    print(f"  Unique figure transitions: {len(figure_transitions)}")
+    print(f"  Unique function transitions: {len(function_transitions)}")
+    print(f"  Total transitions analyzed: {len(chords) - 1}")
+
+    # Transición más común
+    most_common_fig = max(figure_transitions.items(), key=lambda x: x[1])
+    most_common_func = max(function_transitions.items(), key=lambda x: x[1])
+
+    print(f"\n  Most common figure transition: {most_common_fig[0][0]} → {most_common_fig[0][1]} ({most_common_fig[1]}x)")
+    print(f"  Most common function transition: {most_common_func[0][0]} → {most_common_func[0][1]} ({most_common_func[1]}x)")
+
+    # Análisis de patrones funcionales
+    print("\n  Functional pattern analysis:")
+
+    # Contar resoluciones típicas
+    authentic_resolutions = function_transitions.get(('D', 'T'), 0)
+    plagal_resolutions = function_transitions.get(('PD', 'T'), 0)
+    deceptive_resolutions = function_transitions.get(('D', 'PD'), 0) + function_transitions.get(('D', 'Other'), 0)
+
+    print(f"    Authentic resolutions (D→T): {authentic_resolutions}")
+    print(f"    Plagal resolutions (PD→T): {plagal_resolutions}")
+    print(f"    Deceptive resolutions (D→¬T): {deceptive_resolutions}")
+
+    print("="*70)
+
+    # ========== GENERAR CÓDIGO MERMAID COMPLETO ==========
+    figure_mermaid = "\n".join(figure_graph)
+    function_mermaid = "\n".join(function_graph)
+
+    # Imprimir grafos
+    print("\n" + "="*70)
+    print("MERMAID CODE - FIGURE GRAPH:")
+    print("="*70)
+    print(figure_mermaid)
+
+    print("\n" + "="*70)
+    print("MERMAID CODE - FUNCTION GRAPH:")
+    print("="*70)
+    print(function_mermaid)
+    print("="*70)
+
+    return {
+        'figure_graph': figure_mermaid,
+        'function_graph': function_mermaid,
+        'figure_transitions': figure_transitions,
+        'function_transitions': function_transitions,
+        'statistics': {
+            'n_unique_figures': len(figure_transitions),
+            'n_unique_functions': len(function_transitions),
+            'total_transitions': len(chords) - 1,
+            'most_common_figure': most_common_fig,
+            'most_common_function': most_common_func,
+            'authentic_resolutions': authentic_resolutions,
+            'plagal_resolutions': plagal_resolutions,
+            'deceptive_resolutions': deceptive_resolutions
+        }
+    }
+
+# =========================
+# VECTORIZACIÓN DE GRAFOS ARMÓNICOS
+# =========================
+
+def graph_to_vector_figures(transitions, total_transitions):
+    """
+    Convierte grafo de figuras a vector semántico (32 dims).
+
+    Estrategia Híbrida:
+    1. Estadísticos de red (8 dims): complejidad, diversidad, centralidad
+    2. Patrones comunes (12 dims): progresiones típicas codificadas
+    3. Hash embedding (12 dims): transiciones únicas vía hashing
+
+    Resultado: Vector que captura tanto patrones conocidos como singularidad.
+    """
+
+    # ========== PARTE 1: ESTADÍSTICOS DE RED (8 dims) ==========
+
+    # 1.1 Complejidad: número de transiciones únicas
+    n_unique = len(transitions)
+    complexity = min(n_unique / 30.0, 1.0)  # Normalizado, max ~30 transiciones únicas
+
+    # 1.2 Diversidad: entropía de la distribución
+    counts = np.array(list(transitions.values()))
+    probs = counts / counts.sum()
+    entropy = -np.sum(probs * np.log2(probs + 1e-9))
+    max_entropy = np.log2(len(transitions)) if len(transitions) > 1 else 1
+    diversity = entropy / max_entropy if max_entropy > 0 else 0
+
+    # 1.3 Concentración: ¿dominan pocas transiciones o está balanceado?
+    # Índice de Gini
+    sorted_counts = np.sort(counts)
+    n = len(sorted_counts)
+    cumsum = np.cumsum(sorted_counts)
+    gini = (2 * np.sum((np.arange(1, n+1) * sorted_counts))) / (n * cumsum[-1]) - (n+1)/n
+    concentration = gini
+
+    # 1.4 Repetitividad: ratio de la transición más común
+    most_common_count = max(transitions.values())
+    repetitiveness = most_common_count / total_transitions
+
+    # 1.5 Circularidad: ¿cuántas transiciones "vuelven" (X→Y→X)?
+    circular_count = 0
+    for (f1, f2) in transitions.keys():
+        if (f2, f1) in transitions:
+            circular_count += 1
+    circularity = circular_count / (len(transitions) * 2) if len(transitions) > 0 else 0
+
+    # 1.6 Auto-loops: transiciones X→X (estabilidad)
+    self_loops = sum(1 for (f1, f2) in transitions.keys() if f1 == f2)
+    stability = self_loops / len(transitions) if len(transitions) > 0 else 0
+
+    # 1.7 In-degree variance: ¿hay acordes "hub" que reciben muchas entradas?
+    in_degrees = defaultdict(int)
+    for (f1, f2), count in transitions.items():
+        in_degrees[f2] += count
+    in_degree_variance = np.var(list(in_degrees.values())) / total_transitions if in_degrees else 0
+
+    # 1.8 Out-degree variance: ¿hay acordes que se ramifican mucho?
+    out_degrees = defaultdict(int)
+    for (f1, f2), count in transitions.items():
+        out_degrees[f1] += count
+    out_degree_variance = np.var(list(out_degrees.values())) / total_transitions if out_degrees else 0
+
+    network_stats = np.array([
+        complexity,
+        diversity,
+        concentration,
+        repetitiveness,
+        circularity,
+        stability,
+        in_degree_variance,
+        out_degree_variance
+    ])
+
+    # ========== PARTE 2: PATRONES COMUNES (12 dims) ==========
+
+    # Progresiones típicas (binario: presente/ausente, con peso)
+    common_patterns = {
+        ('I', 'V'): 0,      # Más básica
+        ('V', 'I'): 0,      # Resolución auténtica
+        ('I', 'IV'): 0,     # Subdominante
+        ('IV', 'V'): 0,     # Preparación dominante
+        ('IV', 'I'): 0,     # Plagal
+        ('V', 'vi'): 0,     # Deceptiva
+        ('I', 'vi'): 0,     # Relativa menor
+        ('vi', 'IV'): 0,    # Pop progression
+        ('ii', 'V'): 0,     # Preparación clásica
+        ('iii', 'vi'): 0,   # Progresión descendente
+        ('I', 'iii'): 0,    # Mediante
+        ('V7', 'I'): 0      # Resolución con séptima
+    }
+
+    # Detectar variantes (normalizar figuras)
+    def normalize_figure(fig):
+        """Simplifica figura a forma base (I, V, ii, etc.)"""
+        # Eliminar números (7, 6, etc.), alteraciones (+, °), inversiones (6, 64)
+        base = fig.split('/')[0]  # Eliminar dominantes secundarias
+        base = ''.join(c for c in base if c.isalpha() or c == 'i' or c == 'I')
+        return base
+
+    normalized_transitions = {}
+    for (f1, f2), count in transitions.items():
+        norm_f1 = normalize_figure(f1)
+        norm_f2 = normalize_figure(f2)
+        key = (norm_f1, norm_f2)
+        normalized_transitions[key] = normalized_transitions.get(key, 0) + count
+
+    # Marcar patrones encontrados (normalizado por frecuencia)
+    for pattern in common_patterns.keys():
+        if pattern in normalized_transitions:
+            common_patterns[pattern] = min(normalized_transitions[pattern] / total_transitions, 1.0)
+
+    pattern_vector = np.array(list(common_patterns.values()))
+
+    # ========== PARTE 3: HASH EMBEDDING (12 dims) ==========
+
+    # Usar hashing trick para capturar transiciones únicas
+    # Esto permite representar progresiones raras sin explotar la dimensionalidad
+    hash_dim = 12
+    hash_vector = np.zeros(hash_dim)
+
+    for (f1, f2), count in transitions.items():
+        # Hash de la transición
+        transition_str = f"{f1}→{f2}"
+        h = int(hashlib.md5(transition_str.encode()).hexdigest(), 16)
+        idx = h % hash_dim
+
+        # Acumular con peso logarítmico (evita que una transición super común domine)
+        hash_vector[idx] += np.log1p(count)
+
+    # Normalizar
+    hash_vector = hash_vector / (np.linalg.norm(hash_vector) + 1e-9)
+
+    # ========== CONCATENAR TODO ==========
+    final_vector = np.concatenate([
+        network_stats,    # 8 dims
+        pattern_vector,   # 12 dims
+        hash_vector       # 12 dims
+    ])
+
+    # Debug
+    print("\n" + "="*70)
+    print("FIGURE GRAPH → SEMANTIC VECTOR (32 dims):")
+    print("="*70)
+    print(f"\nNetwork Statistics (dims 0-7):")
+    print(f"  Complexity:      {complexity:.3f}")
+    print(f"  Diversity:       {diversity:.3f}")
+    print(f"  Concentration:   {concentration:.3f}")
+    print(f"  Repetitiveness:  {repetitiveness:.3f}")
+    print(f"  Circularity:     {circularity:.3f}")
+    print(f"  Stability:       {stability:.3f}")
+
+    print(f"\nCommon Patterns Detected (dims 8-19):")
+    detected = [(k, v) for k, v in common_patterns.items() if v > 0]
+    if detected:
+        for (f1, f2), weight in sorted(detected, key=lambda x: x[1], reverse=True):
+            print(f"  {f1} → {f2}: {weight:.2%}")
+    else:
+        print("  No common patterns detected (experimental harmony)")
+
+    print(f"\nHash Embedding (dims 20-31): {np.sum(hash_vector > 0)} active dimensions")
+    print("="*70)
+
+    return final_vector
+
+
+def graph_to_vector_functions(transitions, total_transitions):
+    """
+    Convierte grafo de funciones armónicas a vector semántico (25 dims).
+
+    Estrategia: Matriz de transición normalizada (5x5)
+    - 5 funciones: T, PD, D, Dsec, Other
+    - 25 valores: probabilidad de transición de cada función a otra
+
+    Resultado: Vector denso que captura el "flujo funcional" de la obra.
+    """
+    functions = ["T", "PD", "D", "Dsec", "Other"]
+    n = len(functions)
+
+    # Crear matriz de transición
+    matrix = np.zeros((n, n))
+
+    # Mapeo función -> índice
+    func_to_idx = {f: i for i, f in enumerate(functions)}
+
+    # Llenar matriz
+    for (f1, f2), count in transitions.items():
+        i = func_to_idx.get(f1, 4)  # Default: Other
+        j = func_to_idx.get(f2, 4)
+        matrix[i, j] += count
+
+    # Normalizar por filas (cada fila suma 1.0)
+    # Esto da la probabilidad de transición desde cada función
+    row_sums = matrix.sum(axis=1, keepdims=True)
+    matrix = np.divide(matrix, row_sums, where=row_sums != 0, out=matrix)
+
+    # Aplanar a vector 1D
+    vector = matrix.flatten()
+
+    # Debug: mostrar matriz
+    print("\n" + "="*70)
+    print("FUNCTION TRANSITION MATRIX (Normalized):")
+    print("="*70)
+    print(f"{'':>8}", end='')
+    for f in functions:
+        print(f"{f:>8}", end='')
+    print()
+    print("-" * 70)
+
+    for i, f1 in enumerate(functions):
+        print(f"{f1:>8}", end='')
+        for j in range(n):
+            val = matrix[i, j]
+            print(f"{val:>8.3f}", end='')
+        print()
+
+    print("\nInterpretación:")
+    print(f"  - Cada fila = probabilidades de salida desde una función")
+    print(f"  - Ej: T→D = {matrix[0, 2]:.2%} de las veces que hay T, sigue D")
+    print("="*70)
+
+    return vector
+
+def harmonic_graph_analysis(score, remove_self_loops=True):
+    """
+    Genera dos grafos Mermaid de transiciones armónicas usando ventana deslizante:
+    1. Grafo basado en FIGURAS (I, V, vi, etc.)
+    2. Grafo basado en FUNCIONES (T, D, PD, etc.)
+
+    Usa ventana de 2 acordes y elimina transiciones duplicadas.
+
+    Args:
+        score: Partitura music21
+        remove_self_loops: Si True, elimina transiciones X→X (auto-loops)
+
+    Returns:
+        dict con 'figure_graph', 'function_graph' y vectores semánticos
+    """
+    try:
+        key = score.analyze('key')
+        debug(f"Harmonic Graphs: key = {key}")
+    except:
+        debug("Harmonic Graphs: could not detect key")
+        return None
+
+    chords = extract_harmonic_chords(score)
+
+    if len(chords) < 2:
+        debug("Harmonic Graphs: not enough chords")
+        return None
+
+    print("\n" + "="*70)
+    print("HARMONIC GRAPH ANALYSIS")
+    print("="*70)
+    print(f"Key: {key}")
+    print(f"Total chords: {len(chords)}")
+    print(f"Remove self-loops: {remove_self_loops}\n")
+
+    # Estructuras para almacenar transiciones únicas
+    figure_transitions = {}  # {(figura1, figura2): count}
+    function_transitions = {}  # {(func1, func2): count}
+
+    # Almacenar ejemplos de compases donde ocurren
+    figure_examples = {}
+    function_examples = {}
+
+    # Contadores de auto-loops eliminados
+    self_loops_removed = {'figures': 0, 'functions': 0}
+
+    # Ventana deslizante de 2 acordes
+    for i in range(len(chords) - 1):
+        chord1 = chords[i]
+        chord2 = chords[i + 1]
+
+        try:
+            # Obtener análisis romano
+            rn1 = roman.romanNumeralFromChord(chord1, key)
+            rn2 = roman.romanNumeralFromChord(chord2, key)
+
+            # Obtener figuras y funciones
+            fig1 = rn1.figure
+            fig2 = rn2.figure
+            func1 = roman_to_function(rn1)
+            func2 = roman_to_function(rn2)
+
+            # Obtener compases
+            measure1 = get_measure_from_chord_or_offset(chord1, score)
+            measure2 = get_measure_from_chord_or_offset(chord2, score)
+
+            # Registrar transición de FIGURAS
+            fig_transition = (fig1, fig2)
+
+            # Verificar auto-loop
+            if remove_self_loops and fig1 == fig2:
+                self_loops_removed['figures'] += 1
+                debug(f"Skipping self-loop: {fig1}→{fig1} at M{measure1}")
+            else:
+                if fig_transition not in figure_transitions:
+                    figure_transitions[fig_transition] = 0
+                    figure_examples[fig_transition] = []
+                figure_transitions[fig_transition] += 1
+                if len(figure_examples[fig_transition]) < 3:  # Guardar max 3 ejemplos
+                    figure_examples[fig_transition].append(f"M{measure1}")
+
+            # Registrar transición de FUNCIONES
+            func_transition = (func1, func2)
+
+            # Verificar auto-loop
+            if remove_self_loops and func1 == func2:
+                self_loops_removed['functions'] += 1
+                debug(f"Skipping self-loop: {func1}→{func1} at M{measure1}")
+            else:
+                if func_transition not in function_transitions:
+                    function_transitions[func_transition] = 0
+                    function_examples[func_transition] = []
+                function_transitions[func_transition] += 1
+                if len(function_examples[func_transition]) < 3:
+                    function_examples[func_transition].append(f"M{measure1}")
+
+        except Exception as e:
+            debug(f"Error analyzing transition {i}: {e}")
+            continue
+
+    # ========== GENERAR VECTORES SEMÁNTICOS PRIMERO ==========
+    total_transitions = len(chords) - 1
+    figure_vector = graph_to_vector_figures(figure_transitions, total_transitions)
+    function_vector = graph_to_vector_functions(function_transitions, total_transitions)
+
+    # ========== GENERAR GRAFOS MERMAID ==========
+
+    # --- GRAFO DE FIGURAS ---
+    figure_graph = ["graph LR"]
+
+    # Ordenar por frecuencia (más común primero)
+    sorted_fig_transitions = sorted(
+        figure_transitions.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    print("\nFIGURE TRANSITIONS (Roman Numerals):")
+    print("-" * 70)
+
+    for (fig1, fig2), count in sorted_fig_transitions:
+        # Sanitizar nombres para Mermaid (eliminar caracteres problemáticos)
+        safe_fig1 = fig1.replace('°', 'dim').replace('+', 'aug').replace('/', '_')
+        safe_fig2 = fig2.replace('°', 'dim').replace('+', 'aug').replace('/', '_')
+
+        # Formato: A["figura"] -->|count| B["figura"]
+        # Grosor de línea basado en frecuencia
+        if count >= 5:
+            line_style = "==>"  # Muy común
+        elif count >= 3:
+            line_style = "-->"  # Común
+        else:
+            line_style = "-.->"  # Poco común
+
+        figure_graph.append(
+            f'    {safe_fig1}["{fig1}"] {line_style}|{count}| {safe_fig2}["{fig2}"]'
+        )
+
+        # Print debug
+        examples_str = ", ".join(figure_examples[(fig1, fig2)])
+        print(f"  {fig1:>6} → {fig2:<6} : {count:2d}x  (ej: {examples_str})")
+
+    # --- GRAFO DE FUNCIONES ---
+    function_graph = ["graph LR"]
+
+    # Estilos para funciones
+    function_styles = {
+        'T': 'fill:#90EE90,stroke:#006400,stroke-width:2px',    # Verde (estable)
+        'PD': 'fill:#FFD700,stroke:#FF8C00,stroke-width:2px',   # Amarillo (preparación)
+        'D': 'fill:#FF6B6B,stroke:#8B0000,stroke-width:2px',    # Rojo (tensión)
+        'Dsec': 'fill:#FF1493,stroke:#8B008B,stroke-width:2px', # Magenta (tensión secundaria)
+        'Other': 'fill:#D3D3D3,stroke:#696969,stroke-width:2px' # Gris (ambiguo)
+    }
+
+    sorted_func_transitions = sorted(
+        function_transitions.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    print("\n" + "="*70)
+    print("FUNCTION TRANSITIONS (Harmonic Functions):")
+    print("-" * 70)
+
+    # Añadir definiciones de estilos
+    for func, style in function_styles.items():
+        function_graph.append(f'    style {func} {style}')
+
+    for (func1, func2), count in sorted_func_transitions:
+        # Grosor basado en frecuencia
+        if count >= 5:
+            line_style = "==>"
+        elif count >= 3:
+            line_style = "-->"
+        else:
+            line_style = "-.->"
+
+        function_graph.append(
+            f'    {func1} {line_style}|{count}| {func2}'
+        )
+
+        # Print debug
+        examples_str = ", ".join(function_examples[(func1, func2)])
+        print(f"  {func1:>5} → {func2:<5} : {count:2d}x  (ej: {examples_str})")
+
+    # ========== ESTADÍSTICAS ==========
+    print("\n" + "="*70)
+    print("STATISTICS:")
+    print("-" * 70)
+    print(f"  Unique figure transitions: {len(figure_transitions)}")
+    print(f"  Unique function transitions: {len(function_transitions)}")
+    print(f"  Total transitions analyzed: {total_transitions}")
+
+    if remove_self_loops:
+        print(f"\n  Self-loops removed:")
+        print(f"    Figure self-loops: {self_loops_removed['figures']}")
+        print(f"    Function self-loops: {self_loops_removed['functions']}")
+
+    if not figure_transitions:
+        print("\n  WARNING: No figure transitions after filtering!")
+        return None
+
+    if not function_transitions:
+        print("\n  WARNING: No function transitions after filtering!")
+        return None
+
+    # Transición más común
+    most_common_fig = max(figure_transitions.items(), key=lambda x: x[1])
+    most_common_func = max(function_transitions.items(), key=lambda x: x[1])
+
+    print(f"\n  Most common figure transition: {most_common_fig[0][0]} → {most_common_fig[0][1]} ({most_common_fig[1]}x)")
+    print(f"  Most common function transition: {most_common_func[0][0]} → {most_common_func[0][1]} ({most_common_func[1]}x)")
+
+    # Análisis de patrones funcionales
+    print("\n  Functional pattern analysis:")
+
+    # Contar resoluciones típicas
+    authentic_resolutions = function_transitions.get(('D', 'T'), 0)
+    plagal_resolutions = function_transitions.get(('PD', 'T'), 0)
+    deceptive_resolutions = function_transitions.get(('D', 'PD'), 0) + function_transitions.get(('D', 'Other'), 0)
+
+    print(f"    Authentic resolutions (D→T): {authentic_resolutions}")
+    print(f"    Plagal resolutions (PD→T): {plagal_resolutions}")
+    print(f"    Deceptive resolutions (D→¬T): {deceptive_resolutions}")
+
+    print("="*70)
+
+    # ========== GENERAR CÓDIGO MERMAID COMPLETO ==========
+    figure_mermaid = "\n".join(figure_graph)
+    function_mermaid = "\n".join(function_graph)
+
+    # Imprimir grafos
+    print("\n" + "="*70)
+    print("MERMAID CODE - FIGURE GRAPH:")
+    print("="*70)
+    print(figure_mermaid)
+
+    print("\n" + "="*70)
+    print("MERMAID CODE - FUNCTION GRAPH:")
+    print("="*70)
+    print(function_mermaid)
+    print("="*70)
+
+    return {
+        'figure_graph': figure_mermaid,
+        'function_graph': function_mermaid,
+        'figure_transitions': figure_transitions,
+        'function_transitions': function_transitions,
+        'figure_vector': figure_vector,
+        'function_vector': function_vector,
+        'statistics': {
+            'n_unique_figures': len(figure_transitions),
+            'n_unique_functions': len(function_transitions),
+            'total_transitions': total_transitions,
+            'self_loops_removed': self_loops_removed if remove_self_loops else None,
+            'most_common_figure': most_common_fig,
+            'most_common_function': most_common_func,
+            'authentic_resolutions': authentic_resolutions,
+            'plagal_resolutions': plagal_resolutions,
+            'deceptive_resolutions': deceptive_resolutions
+        }
+    }
+
+
+def harmonic_graph_vector(score, remove_self_loops=True):
+    """
+    Wrapper simplificado que devuelve directamente el vector concatenado.
+
+    Args:
+        score: Partitura music21
+        remove_self_loops: Si True, elimina transiciones X→X del análisis
+
+    Returns:
+        np.array de 57 dimensiones:
+        - [0:25]  = Matriz de transición funcional (5x5)
+        - [25:57] = Vector de figuras (32 dims)
+    """
+    result = harmonic_graph_analysis(score, remove_self_loops=remove_self_loops)
+
+    if result is None:
+        return np.zeros(57)
+
+    return np.concatenate([
+        result['function_vector'],  # 25 dims
+        result['figure_vector']      # 32 dims
+    ])
+
 
 # =========================
 # EJECUCIÓN
 # =========================
 
 debug("Loading score...")
-score = converter.parse('./coming_fix.musicxml')
+score = converter.parse('./rainbow.musicxml')
 debug("Score loaded")
 
 custom_rules = [
@@ -6241,4 +6978,5 @@ custom_rules = [
 # print(semantic_emotion_vector(score))
 # plot_measure_analytics(score)
 # density_dynamics_range_features(score)
-print(generate_emotion_vector(score))
+# print(generate_emotion_vector(score))
+print(harmonic_graph_vector(score))
