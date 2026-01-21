@@ -623,13 +623,13 @@ diff_fcg(){
     leaf=$(Git branch_current)
 
     git checkout $base
-    ctags_update_quick $1; cp ~/log2gr/$1/calls /tmp/calls_base
+    ctags_update_quick $1; \cp ~/log2gr/$1/calls /tmp/calls_base
 
     git clean -df
     git checkout .
 
     git checkout $leaf
-    ctags_update_quick $1; cp ~/log2gr/$1/calls /tmp/calls_leaf
+    ctags_update_quick $1; \cp ~/log2gr/$1/calls /tmp/calls_leaf
 
     wgrep ~/log2gr/$1/clique /tmp/calls_base > /tmp/clique_base
     wgrep ~/log2gr/$1/clique /tmp/calls_leaf > /tmp/clique_leaf
