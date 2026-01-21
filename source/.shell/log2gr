@@ -636,8 +636,8 @@ diff_fcg(){
     cat /tmp/clique_base /tmp/clique_leaf | sort -u > /tmp/clique_both
     nl -v0 /tmp/clique_both > /tmp/clique_nl
 
-    comm -23 <(sort /tmp/clique_base) <(sort /tmp/clique_leaf) > /tmp/clique_new
-    comm -13 <(sort /tmp/clique_base) <(sort /tmp/clique_leaf) > /tmp/clique_rm
+    comm -23 <(sort /tmp/clique_base) <(sort /tmp/clique_leaf) > /tmp/clique_rm
+    comm -13 <(sort /tmp/clique_base) <(sort /tmp/clique_leaf) > /tmp/clique_new
 
     wgrep /tmp/clique_new /tmp/clique_nl | awk '{print "linkStyle " $1 " stroke:green stroke-width: 2px"}' >  /tmp/linkstyles
     wgrep /tmp/clique_rm  /tmp/clique_nl | awk '{print "linkStyle " $1 " stroke:red   stroke-width: 2px"}' >> /tmp/linkstyles
