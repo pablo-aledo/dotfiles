@@ -70,6 +70,25 @@ ctags_index_rust(){
         file=$(echo $line | awk '{print $2}') 
         end=$(awk -v first=$ini 'NR>=first && /{/              {c++}
                                  NR>=first && /}/ && c && !--c {print NR; exit}' $file)
+
+        end=$(
+awk -v first="$ini" '
+NR < first { next }
+
+{
+  opens  = gsub(/\{/, "{")
+  closes = gsub(/\}/, "}")
+
+  c += opens
+  c -= closes
+
+  if (c == 0 && opens + closes > 0) {
+    print NR
+    exit
+  }
+}
+' "$file"
+)
         echo "${line}\tend:${end}"
     done > tags2
     \mv tags2 tags
