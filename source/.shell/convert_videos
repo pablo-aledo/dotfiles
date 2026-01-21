@@ -365,6 +365,10 @@ convert_normalize(){
 	rm -fr normalize_*
 }
 
+convert_rotate(){
+    ffmpeg -i $1 -vf "transpose=1" $1.rotated.mp4
+}
+
 convert_chmod(){
     sudo chmod -R 777 $convert_dir
     sudo chmod -R 777 $converted_dir
