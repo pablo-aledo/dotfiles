@@ -598,6 +598,35 @@ git_review_uniq(){
     cat /tmp/difftokens_2 | while read line; do echo $(cat /tmp/diff_tokenized | grep "^$line\$" | wc -l) $line; done | sort -g | awk '$1==1{print $2}' | grep -v '^[a-f0-9]*$'
 }
 
+
+diff_fcg(){
+    base=$(Git branch_base)
+    leaf=$(Git branch_current)
+
+    git checkout $base
+    ctags_update_quick $1; cp ~/log2gr/$1/calls /tmp/calls_base
+
+    git clean -df
+    git checkout .
+
+    git checkout $leaf
+    ctags_update_quick $1; cp ~/log2gr/$1/calls /tmp/calls_leaf
+
+    wgrep ~/log2gr/$1/clique /tmp/calls_base > /tmp/clique_base
+    wgrep ~/log2gr/$1/clique /tmp/calls_leaf > /tmp/clique_leaf
+    cat /tmp/clique_base /tmp/clique_leaf | sort -u > /tmp/clique_both
+    nl -v0 /tmp/clique_both > /tmp/clique_nl
+
+    comm -23 <(sort /tmp/clique_base) <(sort /tmp/clique_leaf) > /tmp/clique_new
+    comm -13 <(sort /tmp/clique_base) <(sort /tmp/clique_leaf) > /tmp/clique_rm
+
+    wgrep /tmp/clique_new /tmp/clique_nl | awk '{print "linkStyle " $1 " stroke:green stroke-width: 2px"}' >  /tmp/linkstyles
+    wgrep /tmp/clique_rm  /tmp/clique_nl | awk '{print "linkStyle " $1 " stroke:red   stroke-width: 2px"}' >> /tmp/linkstyles
+
+    (echo flowchart LR; cat /tmp/clique_both | sed 's/ -> / --> /g'; cat /tmp/linkstyles | sed -e 's/green/green,/g' -e 's/red/red,/g') > /tmp/diff_fcg_final
+    cat /tmp/diff_fcg_final | Xclip -i
+}
+
 call_path(){
     src=$(echo $1 | sed 's/\./DOT/g')
 	dst=$(echo $2 | sed 's/\./DOT/g')
