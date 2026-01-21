@@ -119,7 +119,7 @@ docker_prep(){
 xhost +
 del_stopped $1
 case $1 in
-(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|ubuntu_pga_dev|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|sonar_scanner_go|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic|centos-i3-vnc|centos7_gobuild|centos7_ccache|pg_dump|pg_dump_10|pg_restore|openpose-cpu|ffmpeg_concat|claude|opencode|gemini)
+(ammonite|sublime-text-3|browser|build|clang|cppcheck|doxygen|gcov|gdb|valgrind|mpv|ubuntu_pga|ubuntu_pga_dev|alpine_pga|alpine_pga_testing|etherpad|chrome_no_sandbox|wps|clion|gnumeric|plantuml|gthumb|aa2u|openldapi|re_lab|pwnbox|sonar_server|sonar_scanner|sonar_scanner_go|openshot|neural-style|cloud9|complearn|kaldi|kaldi-gstreamer-server|gmic|centos-i3-vnc|centos7_gobuild|centos7_ccache|pg_dump|pg_dump_10|pg_restore|openpose-cpu|ffmpeg_concat|claude|opencode|gemini|aider)
     [ "$docker_export_proxy" = "true" ] || cd ~/.dotfiles/pkg/Docker/$1
     [ "$docker_export_proxy" = "true" ] && rm -fr /tmp/docker
 	[ "$docker_export_proxy" = "true" ] && cp -r ~/.dotfiles/pkg/Docker/$1 /tmp/docker
@@ -347,6 +347,12 @@ case $1 in
                             -v "$HOME/.gemini:/home/gemini/.gemini" \
                             gemini \
                             gemini -y
+                         ;;
+(aider)                  docker run -it --rm \
+                            -v "$(pwd):/agent-workspace" \
+                            -v "$HOME/.gitconfig:/home/aider/.gitconfig:ro" \
+                            -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
+                            aider
                          ;;
 (cloud9)                 docker run -d -p 8080:80 -v $PWD:/workspace cloud9;;
 (c9)                     docker run -it -d -p 8080:8080 -v $PWD:/cloud9/workspace/ eeacms/cloud9;;
