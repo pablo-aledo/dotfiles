@@ -646,6 +646,22 @@ diff_fcg(){
     cat /tmp/diff_fcg_final | Xclip -i
 }
 
+compare_fn(){
+    base=$(Git branch_base)
+    leaf=$(Git branch_current)
+
+    git checkout $base
+    ctags_update_keep $1; \cp functions/$2 /tmp/fn_base
+
+    git clean -df
+    git checkout .
+
+    git checkout $leaf
+    ctags_update_keep $1; \cp functions/$2 /tmp/fn_leaf
+
+    meld /tmp/fn_base /tmp/fn_leaf
+}
+
 call_path(){
     src=$(echo $1 | sed 's/\./DOT/g')
 	dst=$(echo $2 | sed 's/\./DOT/g')
