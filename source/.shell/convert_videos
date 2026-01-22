@@ -875,6 +875,10 @@ convert_recursive_parallel_handbrake(){
 
 }
 
+# review
+# cat vids_to_review | while read line; do cat ~/servers/index/files | grep -F "/Videos/$line/" | grep 'mp4$' | sort -g | head; echo; done | tee files_to_review
+# cat files_to_review | sed -e 's|/media/removable/2TB2/homes/admin/|mpv ~/"NAS/|g' -e 's/$/"/g' -e 's/^"$//g' | tee files_to_review_2
+
 mv_converted(){
     destination=/media/removable/2TB2/homes/admin/Videos
 
