@@ -2869,6 +2869,29 @@ sliding_windows_lines(){
     done
 }
 
+sliding_windows_lines_2() {
+    file=$1
+    lines=$2
+    window=()
+
+    i=1
+    while IFS= read -r line; do
+        window[$i]="$line"
+
+        if [ "$i" -lt "$lines" ]; then
+            i=$(( i + 1 ))
+            continue
+        fi
+
+        echo "${window[@]}"
+
+        for (( n=1; n<lines; n++ )); do
+            window[$n]=${window[$(( n + 1 ))]}
+        done
+
+    done < "$file"
+}
+
 learning.index(){
     local file
 
