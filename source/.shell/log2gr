@@ -647,18 +647,23 @@ diff_fcg(){
 }
 
 compare_fn(){
+
+    [ $# = 2 ] && lgr=$1 && fn1=$2 && fn2=$2
+    [ $# = 3 ] && lgr=$1 && fn1=$2 && fn2=$3
+
     base=$(Git branch_base)
     leaf=$(Git branch_current)
 
     git checkout $base
-    ctags_update_keep $1; \cp functions/$2 /tmp/fn_base
+    ctags_update_keep $lgr; \cp functions/$fn1 /tmp/fn_base
 
     git clean -df
     git checkout .
 
     git checkout $leaf
-    ctags_update_keep $1; \cp functions/$2 /tmp/fn_leaf
+    ctags_update_keep $lgr; \cp functions/$fn2 /tmp/fn_leaf
 
+    vim /tmp/fn_base /tmp/fn_leaf
     meld /tmp/fn_base /tmp/fn_leaf
 }
 
