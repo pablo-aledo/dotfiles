@@ -260,6 +260,16 @@ convert_15(){
 	echo ffmpeg -i \"$1\" $OPTS \"$1.converted.mp4\" | bash
 }
 
+convert_whatsapp() {
+    ffmpeg -i "$1" \
+        -c:v libx264 -profile:v baseline -level 3.0 \
+        -pix_fmt yuv420p -r 30 \
+        -vf "scale=1280:-2" \
+        -c:a aac -b:a 128k \
+        -movflags +faststart \
+        "$1.whatsapp.mp4"
+}
+
 convert_ppt(){
 	OPTS="-of lavf -oac lavc -ovc lavc -lavcopts vcodec=wmv1:vbitrate=1500:acodec=wmav1"
 	mencoder `echo $OPTS` -o "$1.converted.avi" "$1"
