@@ -138,7 +138,7 @@ Git(){
             Git log_oneline > /tmp/gbrs_hist
             whighlight /tmp/gbrs_ids /tmp/gbrs_hist
             ;;
-        (branch_changes_size) Git branch_diff_files | while read line; do echo $(Git branch_diff -- $line | wc -l) $line; done | sort -g ;;
+        (branch_diff_sizes) Git branch_diff_files | while read line; do echo $(Git branch_diff -- $line | wc -l) $line; done | sort -g ;;
         (tag_list) \git tag ;;
         (tag_show) \git show $1 ;;
         (tag_create) \git tag $1 ;;
