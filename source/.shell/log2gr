@@ -617,8 +617,11 @@ git_review_uniq(){
     cat /tmp/difftokens_2 | while read line; do echo $(cat /tmp/diff_tokenized | grep "^$line\$" | wc -l) $line; done | sort -g | awk '$1==1{print $2}' | grep -v '^[a-f0-9]*$'
 }
 
+fcdag(){
+    cat
+}
 
-diff_fcg(){
+ctags_diff_fcg(){
     base=$(Git branch_base)
     leaf=$(Git branch_current)
 
@@ -631,8 +634,8 @@ diff_fcg(){
     git checkout $leaf
     ctags_update_quick $1; \cp ~/log2gr/$1/calls /tmp/calls_leaf
 
-    wgrep ~/log2gr/$1/clique /tmp/calls_base > /tmp/clique_base
-    wgrep ~/log2gr/$1/clique /tmp/calls_leaf > /tmp/clique_leaf
+    wgrep ~/log2gr/$1/clique /tmp/calls_base | fcdag > /tmp/clique_base
+    wgrep ~/log2gr/$1/clique /tmp/calls_leaf | fcdag > /tmp/clique_leaf
     cat /tmp/clique_base /tmp/clique_leaf | sort -u > /tmp/clique_both
     nl -v0 /tmp/clique_both > /tmp/clique_nl
 
@@ -644,6 +647,11 @@ diff_fcg(){
 
     (echo flowchart LR; cat /tmp/clique_both | sed 's/ -> / --> /g'; cat /tmp/linkstyles | sed -e 's/green/green,/g' -e 's/red/red,/g') > /tmp/diff_fcg_final
     cat /tmp/diff_fcg_final | Xclip -i
+}
+
+ctags_iterate_clique(){
+    vim ~/log2gr/manager_rust/clique
+    (echo flowchart LR; wgrep ~/log2gr/manager_rust/clique ~/log2gr/manager_rust/calls | sed 's/ -> / --> /g' | fcdag) | Xclip -i
 }
 
 compare_fn(){
