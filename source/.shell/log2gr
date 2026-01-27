@@ -654,7 +654,7 @@ ctags_iterate_clique(){
     (echo flowchart LR; wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | sed 's/ -> / --> /g' | fcdag) | Xclip -i
 }
 
-compare_fn(){
+ctags_compare_fn(){
 
     [ $# = 2 ] && lgr=$1 && fn1=$2 && fn2=$2
     [ $# = 3 ] && lgr=$1 && fn1=$2 && fn2=$3
