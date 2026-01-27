@@ -650,8 +650,8 @@ ctags_diff_fcg(){
 }
 
 ctags_iterate_clique(){
-    vim ~/log2gr/manager_rust/clique
-    (echo flowchart LR; wgrep ~/log2gr/manager_rust/clique ~/log2gr/manager_rust/calls | sed 's/ -> / --> /g' | fcdag) | Xclip -i
+    vim ~/log2gr/$1/clique
+    (echo flowchart LR; wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | sed 's/ -> / --> /g' | fcdag) | Xclip -i
 }
 
 compare_fn(){
