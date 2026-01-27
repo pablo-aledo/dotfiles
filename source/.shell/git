@@ -93,6 +93,7 @@ Git(){
         (branch_diff) \git diff $(Git branch_base) $(\git rev-parse HEAD) $* ;;
         (branch_difftool) \git difftool $(Git branch_base) $(\git rev-parse HEAD) $* ;;
         (branch_diff_files) \git diff --name-only $(Git branch_base) $(\git rev-parse HEAD) | cat ;;
+        (branch_diff_grep_files) Git branch_diff_files | mgrep - $* | while read line; do Git branch_diff -- $line; done ;;
         (branch_to_patch) \git diff $(Git branch_base) $(\git rev-parse HEAD) ;;
         (branch_to_file) \git log --cc $(Git branch_base)...HEAD ;;
         (branch_to_file_2) \git format-patch --stdout $(Git branch_base) ;; # consume with git am
@@ -137,6 +138,7 @@ Git(){
             Git log_oneline > /tmp/gbrs_hist
             whighlight /tmp/gbrs_ids /tmp/gbrs_hist
             ;;
+        (branch_changes_size) Git branch_diff_files | while read line; do echo $(Git branch_diff -- $line | wc -l) $line; done | sort -g ;;
         (tag_list) \git tag ;;
         (tag_show) \git show $1 ;;
         (tag_create) \git tag $1 ;;
