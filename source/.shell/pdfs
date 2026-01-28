@@ -37,3 +37,7 @@ pdf_implode_svg(){
 	pdftk `ls *.pdf | sort -g` cat output "`basename $PWD`".pdf
 	rm -fr page-*.pdf
 }
+
+pdf_extract(){
+    pdftk $1 cat $2-$3 output $1.$2-$3.pdf
+}
