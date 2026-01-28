@@ -1,0 +1,3 @@
+curl -sL https://www.dumbpipe.dev/install.sh | sh
+#./dumbpipe listen
+#./dumbpipe connect ...
