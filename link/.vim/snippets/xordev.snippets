@@ -1,0 +1,150 @@
+snippet Rocaille_2
+	vec2 p=(FC.xy*2.-r)/r.y/.3,v;for(float i,f;i++<1e1;o+=(cos(i+vec4(0,1,2,3))+1.)/6./length(v))for(v=p,f=0.;f++<9.;v+=sin(v.yx*f+i+t)/f);o=tanh(o*o);
+
+snippet Rocaille
+	vec2 p=(FC.xy*2.-r)/r.y/.3,v;for(float i,f;i++<1e1;o+=(cos(i+vec4(0,1,2,3))+1.)/6./length(v))for(v=p,f=0.;f++<9.;v+=sin(v.yx*f+i+r+t)/f);o=tanh(o*o);
+
+snippet notitle
+	vec2 p=(FC.xy-r*.5)/r.y*mat2(8,-6,6,8),v;for(float i,f=3.+snoise2D(p+vec2(t*7.,0));i++<50.;o+=(cos(sin(i)*vec4(1,2,3,1))+1.)*exp(sin(i*i+t))/length(max(v,vec2(v.x*f*.02,v.y))))v=p+cos(i*i+(t+p.x*.1)*.03+i*vec2(11,9))*5.;o=tanh(pow(o/1e2,vec4(1.5)));
+
+snippet notitle
+	vec3 i,a,b,p=vec3(t/.1,rotate2D(t)),d=normalize(r.xxy-vec3(0,ivec2(FC*.5+.5)*4));for(;i.x++<9e2&&snoise3D(a=ceil(p+d*step(a,b))/28.)<1.-length(a.zy);)a=sign(d),b+=step(b=fract(-p*a),-b),a*=b/d,b=min(a,min(a.yzx,a.zxy)),p+=d*b;o.rgb=fwidth(p+p);
+
+snippet Accretion
+	for(float z,d,i;i++<2e1;){vec3 p=z*normalize(FC.rgb*2.-r.xyx);p=vec3(atan(p.y/.2,p.x)*2.,p.z/3.,length(p.xy)-5.-z*.2);for(d=1.;d<7.;d++)p+=sin(p.yzx*d+t+.3*i)/d;z+=d=length(vec4(.4*cos(p)-.4,p.z));o+=(cos(p.x+i*.4+z+vec4(6,1,2,0))+1.)/d;}o=tanh(o*o/4e2);
+
+snippet notitle
+	vec3 p=vec3(t/.1,cos(t+r)),d=r.x/(r.xxy-round(FC.zxy)*2.),a;for(;o.w++<9e2&&snoise3D(a=ceil(p)/28.)+1.>length(a.yz);p+=min(a=fract(-p*sign(d))*abs(d)+1e-4,min(a.y,a.z)).x/d);o.rgb=fwidth(p);
+
+snippet notitle
+	for(float i,z,d,f;i++<1e2;o+=vec4(4,6,8.+z,0)/f-min(dFdx(z)*r.y+z,0.)/exp(d*d/.1)){vec3 p=z*(FC.rgb*2.-r.xyy)/r.y,c=p;p.z+=8.;c.z*=3.;for(f=1.;f++<9.;c+=sin(c.yzx*f+z+t*.5)/f);z+=min(f=.1+abs(.2*c.y+abs(p.y+.8)),d=max(length(p)-3.,.9-length(p-vec3(-1,1,3))))/7.;}o=tanh(o/2e3);
+
+snippet Ionize
+	for(float i,z,d,s;i++<1e2;){vec3 v,p=z*normalize(FC.rgb*2.-r.xyy);p.z+=9.;v=p;for(d=1.;d<9.;d+=d)p+=.5*sin(p.yzx*d+t)/d;z+=d=.2*(.01+abs(s=dot(cos(p),sin(p/.7).yzx))-min(d=6.-length(v),-d*.1));o+=(cos(s/.1+z+t+vec4(2,4,5,0))+1.2)/d/z;}o=tanh(o/2e3);
+
+snippet 3D_Fire
+	for(float i,z,d,j;i++<5e1;o+=(sin(z/3.+vec4(7,2,3,0))+1.1)/d){vec3 p=z*normalize(FC.rgb*2.-r.xyy);p.z+=5.+cos(t);p.xz*=mat2(cos(t+p.y*.5+vec4(0,33,11,0)))/max(p.y*.1+1.,.1);for(j=2.;j<15.;j/=.6)p+=cos((p.yzx-vec3(t,0,0)/.1)*j+t)/j;z+=d=.01+abs(length(p.xz)+p.y*.3-.5)/7.;}o=tanh(o/1e3);
+
+snippet Revive
+	vec3 p,P;for(float z,d,i;i++<1e2;z+=d,o+=(1.2-sin(t+z/vec4(8,7,6,0)))/d){p=z*normalize(FC.rgb*2.-r.xyx),P=vec3(atan(p.y-=7.,p.x)*3.,p.z*.3,length(p.xy)-11.);for(d=1.;d<9.;d++)P+=sin(P.yzx*d+.1*z-t)/d;d=length(vec4(P.z*5.,cos(P)-1.))/2e1;}o=tanh(o/1e3);
+
+snippet Accelerator
+	for(float i,z,d,s;i++<8e1;o+=vec4(s,2,z,1)/s/d){vec3 p=z*normalize(FC.rgb*2.-r.xyy),a;p.z+=9.;a=dot(a+=.57,p)*a*cross(a,p);s=sqrt(length(a.xz-a.y-.8));for(d=2.;d++<9.;a+=sin(round(a*d)-t).yzx/d);z+=d=length(sin(a/.1))*s/2e1;}o=tanh(o/4e3);
+
+snippet Vortex
+	for(float i,z=fract(dot(FC,sin(FC))),d;i++<1e2;o+=(sin(z-t+vec4(6,2,4,0))+1.5)/d){vec3 p=z*normalize(FC.rgb*2.-r.xyy);p.z+=6.;for(d=1.;d<9.;d/=.8)p+=cos(p.yzx*d-t)/d;z+=d=.002+abs(length(p)-.5)/4e1;}o=tanh(o/7e3);
+
+snippet Quasar_2
+	for(float i,z,d,s;i++<7e1;o+=vec4(z,2,s,1)/s/d) {vec3 p=z*normalize(FC.rgb*2.-r.xyy),a;p.z+=9.;a=mix(dot(a-=.57,p)*a,p,cos(s-=t))-sin(s)*cross(a,p);s=sqrt(length(a.xz-a.y)); for(d=1.;d++<9.;a+=sin(a*d-t).yzx/d);z+=d=length(sin(a)+dot(a,a/a)*.2)*s/2e1;} o=tanh(o/2e3);
+
+snippet Economy
+	vec2 u=roundEven(FC.xy)/r;for(float i;i++<9.;)u+=ceil(u+fsnoise(ceil(u)+i*4.));o=vec4(fsnoise(ceil(u)),o)+length(fwidth(u));
+
+snippet Stellar
+	vec3 p,v;for(float i,z,d,l;i++<1e2;o+=(cos(v.z+l*vec4(3,2,1,0))+1.)/d)p=z*(FC.rgb*2.-r.xyy)/r.y,p.z+=2.,z+=d=length(cos(v=vec3(atan(p.x,p.z),atan(p.y,length(p.xz)),log(l=length(p)))*8.+t)+sin(v.yzx+v+t-l))*l*.03;o=tanh(o/8e3);
+
+snippet Jetstream
+	vec3 c,p;for(float i,z,f,l;i++<6e1;z+=f=.01+min(max(f=8.-length((c+p).xy),-f*.2),l=length(c+4.*sin(t+vec3(0,8,4))))/7.,o+=vec4(5,1,l,1)/l/l/f/z)for(c=p=z*normalize(FC.rgb*2.-r.xyy),p.z-=t/.2,c.z+=9.,f=0.;f++<7.;p+=sin(p*f+z*.2+1./l).yzx/f);o=tanh(o/3e2);
+
+snippet Surf_2
+	for(float z,d,i;i++<1e2;o+=(1.+cos(i*.7+t+vec4(6,1,2,0)))/d/i){vec3 p=z*normalize(FC.rgb*2.-r.xyx);p=vec3(atan(p.y,p.x)*2.,p.z/3.,length(p.xy)-6.);for(d=1.;d<9.;d++)p+=sin(p.yzx*d-t+.2*i)/d;z+=d=.2*length(vec4(.1*cos(p*3.)-.1,p.z));}o=tanh(o*o/9e2);
+
+snippet Firewall
+	for(float z,d,i;i++<4e1;){vec3 p=z*normalize(FC.rgb*2.-r.xyx);p=vec3(atan(p.z+=9.,p.x+1.)*2.,.6*p.y+t+t,length(p.xz)-3.);for(d=1.;d<7.;d++)p+=sin(p.yzx*d+t+.5*i)/d;z+=d=.4*length(vec4(.3*cos(p)-.3,p.z));o+=(cos(p.y+i*.4+vec4(6,1,2,0))+1.)/d;}o=tanh(o*o/6e3);
+
+snippet String_Theory
+	vec3 p;for(float i,z,d;i++<1e2;o+=(sin(p.x+t+vec4(0,2,3,0))+1.)/d)p=z*normalize(FC.rgb*2.-r.xyy),p.z-=t,p.xy*=mat2(cos(z*.2+t*.1+vec4(0,33,11,0))),z+=d=length(cos(p+cos(p.yzx+p.z-t*.2)).xy)/6.;o=tanh(o/5e3);
+
+snippet Quasar
+	for(float i,z,d,s;i++<1e2;o+=vec4(z,4,1,1)/d) {vec3 p=z*normalize(FC.rgb*2.-r.xyy),a;p.z+=9.;s=length(a=mix(dot(a+=.57,p)*a,p,cos(s-=t))-sin(s)*cross(a,p)); for(d=1.;d++<9.;a+=sin(a*d-t).yzx/d); z+=d=length(sin(a-t)+.7)*length(p.xy-p.z)/4e1;} o=tanh(o/2e4);
+
+snippet Origami
+	o++;vec4 h;vec2 u;for(float A,l,a,i=.6;i>.1;i-=.1)a-=sin(a-=sin(a=(t+i)*4.)),u=(FC.xy*2.-r)/r.y,l=max(length(u-=rotate2D(a/=4.)*clamp(u*rotate2D(a),-i,+i)),.1),A=min((l-.1)*r.y*.2,1.),o=mix(h=sin(i/.1+a+vec4(1,3,5,0))*.2+.7,o,A)*mix(h/h,h+.5*A*u.y/l,.1/l);
+
+snippet Simplex
+	for(float i,z,d;i++<5e1;){vec3 v,p=z*normalize(FC.rgb*2.-r.xyy);p.z-=t;z+=d=.5*length(max(v=cos(p)-sin(p).yzx,v.yzx*.2));o.rgb+=(cos(p)+1.2)/d;}o/=o+1e3;
+
+snippet notitle
+	vec2 p=(FC.xy*2.-r)/r.y,l,v=p*(1.-(l+=abs(.7-dot(p,p))))/.2;for(float i;i++<8.;o+=(sin(v.xyyx)+1.)*abs(v.x-v.y)*.2)v+=cos(v.yx*i+vec2(0,i)+t)/i+.7;o=tanh(exp(p.y*vec4(1,-1,-2,0))*exp(-4.*l.x)/o);
+
+snippet notitle
+	vec2 p=(FC.xy*2.-r)/r.y;o+=.1/abs(length(p)-.5+.01/(p.x-p.y));
+
+snippet notitle
+	vec3 p=vec3(t/.1,cos(t+r)),d=r.yxy-roundEven(FC.zxy)*2.,a;for(;o.w++<9e2&&snoise3D(a)+1.>length(a.yz);a=ceil(p+=min(a=mod(-p,sign(d))/d+1e-7,min(a.y,a.z)).x*d)/28.);o.rgb=fwidth(p);
+
+snippet Milky
+	for(float i=-fract(t/.1),j;i++<1e2;o+=(cos((j=round(i+t/.1))*j+vec4(0,1,2,3))+1.)*exp(cos(j*j/.1)/.6)*min(1e3-i/.1+9.,i)/5e4/length((FC.xy-r*.5)/r.y+.05*cos(j*j/F4+vec2(0,5))*sqrt(i)));o=tanh(o*o);
+
+snippet notitle
+	void mainImage(out vec4 o, vec2 f){float c=cos(iTime),s=sin(iTime),a=iResolution.y,z=-a,i,d;f=2.*f/a-1.;vec3 p;for(o*=i;i++<1e2;o+=(sin(p.x/.2+z/.1+vec4(0,1,2,3))+1.)/d)p=vec3(f.x*c-z*s,f.y,z*c+f*s),a=length(p.xy)-.6,z+=d=.01+.3*abs(sqrt(a*a+p*p).z-.3);o=tanh(o*o/7e6);}
+
+snippet Blackhole
+	vec2 p=(FC.xy*2.-r)/r.y/.7,d=vec2(-1,1),c=p*mat2(1,1,d/(.1+5./dot(5.*p-d,5.*p-d))),v=c;v*=mat2(cos(log(length(v))+t*.2+vec4(0,33,11,0)))*5.;for(float i;i++<9.;o+=sin(v.xyyx)+1.)v+=.7*sin(v.yx*i+t)/i+.5;o=1.-exp(-exp(c.x*vec4(.6,-.4,-1,0))/o/(.1+.1*pow(length(sin(v/.3)*.2+c*vec2(1,2))-1.,2.))/(1.+7.*exp(.3*c.y-dot(c,c)))/(.03+abs(length(p)-.7))*.2);
+
+snippet Balatro
+	#define M max(0.,1. float i,l,a,b;vec2 v=ceil(FC.xy/r.y*3e2)/18.-8.*r/r.y,u=v*mat2(cos(vec4(4,37,15,4)+.1*t-length(v)/6.));for(v=u+u.yx;i++<5.;l=length(u-=cos(u+u.yx)-sin(u.x*.7-u.y))/7.)v+=sin(max(u,u.yx))+u, u+=.5*sin(v/vec2(3,1)+.2*t).yx;a=M-abs(l-2.))+.1,b=M-l);o=a/vec4(1,4,4,1)+vec4(0,.4,.7,1)*b+M-a-b)/vec4(17,8,7,1)+M+a-2.)+M+b+b-2.6);
+
+snippet Caustics
+	vec2 p=FC.xy/r.y*2e1+t;for(float i;i++<8.;)p+=sin(p+t/.2+i)*.4,p*=mat2(6,-8,8,6)/9.;o=vec4(tanh(length(fwidth(sin(p*.3)/.1))),texture(b,FC.xy/r));
+
+snippet Collapse
+	vec2 p=(FC.xy-r*.5)/r.y*mat2(8,-3,3,8),v;for(float i;i++<50.;o+=(cos(sin(i)*vec4(2,5,6,1))+1.)*exp(sin(i*i+t))/length(max(v,vec2(v.x*(3.+snoise2D(p+vec2(t*7.,i)))/1e2,v.y*.2))))v=p+cos(i*i+t*.2+vec2(i/1e2,11))*2.;o=tanh(pow(o/3e2,vec4(1.5)));
+
+snippet Nova
+	vec2 p=(FC.xy*2.-r.x)/r.y;float l=1.-length(p);o+=tanh((1.1+sin(p.x+t+vec4(0,2,4,0)))/2e2/max(l,-l*.1));
+
+snippet Falls
+	vec3 x,c,p;x.x+=9.; for(float i,z,f;i++<5e1;p=mix(c,p,.3),z+=f=.2*(abs(p.z+p.x+16.+tanh(p.y)/.1)+sin(p.x-p.z+t+t)+1.),o+=(cos(p.x*.2+f+vec4(6,1,2,0))+2.)/f/z) for(c=p=z*normalize(FC.rgb*2.-r.xyy),p.y*=f=.3;f++<5.;p+=cos(p.yzx*f+i+z+x*t)/f); o=tanh(o/3e1);
+
+snippet Neural
+	vec3 p,v;for(float i,z,d,l;i++<1e2;o+=(cos(9./l+vec4(6,1,2,3))+1.)/d)p=z*(FC.rgb*2.-r.xyy)/r.y,p.z++,l=length(p),z+=d=(dot(cos(v=p/l/l*5.+t*3.),sin(v.yzx+.7))+1.8)/4e1;o=tanh(o/1e4);
+
+snippet Orb
+	for(float i,z,d,s;i++<1e2;){vec3 v,p=z*normalize(FC.rgb*2.-r.xyy);p.z+=2.;p.zx*=mat2(cos(p.y+t+vec4(0,11,33,0)));v=p;for(d=1.;d<i;d+=d)p+=sin(p.yzx*d)/d;z+=d=.2*max(.03+abs(s=cos(3.*p.y))*.1,length(v)-1.);o+=(cos(s/.4+p.y+vec4(6,1,3,0))+1.5)/d/z;}o=tanh(o/1e4);
+
+snippet Maelstrom
+	for(float z,d,i;i++<90.;){vec3 p=z*normalize(FC.rgb*2.-r.xyx);p=vec3(atan(p.y,p.x),p.z/8.-t,length(p.xy)-9.);for(d=0.;d++<7.;)p+=sin(p.yzx*d+t+i*.2)/d;z+=d=.2*length(vec4(.2*cos(6.*p)-.2,p.z));o+=(cos(p.x+vec4(0,.5,1,0))+1.)/d/z;}o=tanh(o*o/3e2);
+
+snippet Quasar_3
+	for(float i,z,d,s;i++<9e1;o+=vec4(s,1,z/5.,1)/s/s*i){vec3 p=z*normalize(FC.rgb*2.-r.xyy),a;p.z+=9.;a=mix(dot(a-=.6,p)*a,p,cos(s-=t))-sin(s)*cross(a,p);s=sqrt(length(a-a.zxy));for(d=0.;d++<9.;a+=cos(a*d+t).yzx/d);z+=sqrt(max(d=dot(a,a/a),-d*.1))*s/14.;}o=tanh(o*o/4e6);
+
+snippet Projection
+	for(float i,s,d,l,K,P;d+i++<1e2;){vec3 p=vec3((FC.xy*2.-r)/r.y*d,d-2.)*rotate3D(t*.2,vec3(0,1,0)),k=p*.02,v=p/(k.y-=.02),j=min(cos(v)-.9,min(v=6e1-abs(v),v.zyx))*k.y;j=min(j,j.z);d+=s=min(max(abs(l=length(p)-.99)-.01,min(j.x,K=length(k))),p.y+1.);o+=vec4(3,5,9,9)*(max(-l,j.x/(P=dot(p,p)))/P/6e4/(1e-4+s)+s/4e5/K/K);}o=tanh(o);
+
+snippet Vectors
+	for(float i,z,d;i++<7e1;o+=vec4(9,i,z,1)/d){vec3 p=z*normalize(FC.rgb*2.-r.xyy),a=normalize(sin(t/4.+vec3(0,2,4))),v;p.z+=7.;v=a=dot(a,p)*a+cross(a,p); for(d=2.;d++<9.;a+=sin(ceil(a*d)-t).yzx/d);z+=d=.1*length(sin(a*a))*sqrt(length(v*sin(v.yzx)));} o=tanh(o/6e4);
+
+snippet Shooting_Stars
+	vec2 p,b=vec2(0,.2);for(float i=.9;i++<20.;)o+=1e-3/length(clamp(p=rotate2D(i)*(fract((FC.xy/r.y*i*.2+t*b)*rotate2D(i))-.5),-b,b)-p)*(cos(p.y/.1+vec4(0,1,2,3))+1.);
+
+snippet Starship_8
+	vec2 p=(FC.xy-r*.5)/r.y/.1,v;for(float i,l;i<50.;o+=(cos(sin(i)*vec4(1,2,3,0))+1.)/1e3*exp(3.*sin(i+i*(t+p.x/16.)*.1))*(1./(l=length(max(p,p*vec2((3.+snoise2D(v=p+vec2(5.*t+.1*t*i,i)))*.02,1))))+pow(1.+snoise2D(4.*v+l),-2.)/l/l/l/1e3+3./length(p)))p+=cos(++i*i+t/5e1+p.x*.02+i*vec2(11,9))*2.;o=tanh(o);
+
+snippet notititle
+	for(float i,z,d,s;i++<1e2;){vec3 p=z*normalize(FC.rgb*2.-r.xyy);p.yz*=rotate2D(.2);for(d=5.;d<2e2;d+=d)p+=.5*sin(p.yzx*d-t*PI/10.)/d;z+=d=.5*(.01+.5*max(s=.3-abs(p.y),-s*.1));o+=(cos(s/.07+p.x+t*PI/10.-vec4(0,1,2,3)-3.)+1.5)*exp(s*9.)/d;}o=tanh(o*o/4e8);
+
+snippet Heavenly
+	for(float i,z,d;i++<1e2;o+=(cos(z+t+vec4(6,1,2,3))+1.)/d){vec3 p=z*normalize(FC.rgb*2.-r.xyy);p.z-=t;for(d=1.;d<9.;d/=.7)p+=cos(p.yzx*d+z*.2)/d;z+=d=.02+.1*abs(3.-length(p.xy));}o=tanh(o/3e3);
+
+snippet Roadway
+	vec2 p=(FC.xy*2.-r)/r.y/.1;o=tanh(.4/abs(min(p.y,p.y/.3)/cos(p.x+cos(p.x*.6-t)+vec4(0,.3,.6,1))/sin(p.x*.4-t)));
+
+snippet Runner
+	vec3 q,p;for(float z,d,i,l;l++<3e1;z+=d,o+=.1*(vec4(4,2,1,0)-tanh(p.y+4.))*d/(1.+z)){p=z*normalize(FC.rgb*2.-r.xyy)-2.;p.xz-=t+3.;for(q=p,d=p.y,i=4e1;i>.01;i*=.2)d=max(d,min(min(q=i*.9-abs(mod(q,i+i)-i),q.y).x,q.z)),q.xz*=rotate2D(9.);}o=tanh(o*o);
+
+snippet LAUNCH
+	for(float i,z,d,f;i++<1e2;o+=vec4(3,1,d,z/f)/z){vec3 v=vec3(0,-2,7),p=z*normalize(FC.rgb*2.-r.xyx)+v,a=p;a.y*=.3;for(d=1.;d++<9.;)a-=.1*sin((a.zxy+t*v+d)*d)*p.y/d;z+=d=min(max(-p.y,length(a)-2.),f=.2+abs(length(a.xz-cos(a.zx*6.))+max(p.y/.1,-.6)))/8.;}o=tanh(o*o.a/1e3);
+
+snippet Global
+	vec2 p=(FC.xy*2.-r)/r.y;for(float i=-1.,N=4e2;i<1.;i+=2./N){vec3 v=vec3(cos(N*i*2.4+sin(i*N+t)+t+vec2(0,11))*sqrt(1.-i*i),i);o+=(sin(i*4.+vec4(6,1,2,3))+1.)*(v.y+1.)/N/length(p-v.xz/(1.6-v.y));}o=tanh(.2*o*o);
+
+snippet Spellbound
+	vec3 p;for(float i,z,d;i++<1e2;o+=(sin(p.x+t+vec4(0,2,4,0))+1.3)/d)p=z*normalize(FC.rgb*2.-r.xyy),p.xy*=mat2(cos(z*.2+vec4(0,33,11,0))),p.z-=t+t,z+=d=length(cos(p+cos(p.yzx*7.+t)))/9.;o=tanh(o*o/4e6);
+
+snippet Sauron
+	for(float i,z,d;i++<6e1;o+=(sin(z*.5+vec4(6,1,2,0))+1.1)/d){vec3 p=z*normalize(FC.rgb*2.-r.xyy);p.z+=6.;p.xy*=mat2(cos(p.z*.4+vec4(0,33,11,0)));for(d=2.;d<15.;d/=.6)p+=cos((p.yzx+t*3.)*d)/d;z+=d=.02+abs(min(length(p.xy)-3.,4.-length(p)))/8.;}o=tanh(o/15e2);
+
+snippet Atlantic
+	for(float i,d,z=3.;i++<1e2;o+=1.2/d/z){vec3 p=z*(FC.rgb*2.-r.xyy)/r.y,v=p;for(d=1.;d<3e1;d/=.7)p+=.3*sin(p*rotate3D(d,r.xyy)*d+t)/d;z+=d=.01+.4*max(d=p.y+p.z*.5+2.,-d*.1);}o=tanh(o/vec4(9,6,3,1)/2e2);
+
