@@ -664,12 +664,14 @@ ctags_compare_fn(){
 
     git checkout $base
     ctags_update_keep $lgr; \cp functions/$fn1 /tmp/fn_base
+    rm -fr /tmp/fns_base; cp -r functions /tmp/fns_base
 
     git clean -df
     git checkout .
 
     git checkout $leaf
     ctags_update_keep $lgr; \cp functions/$fn2 /tmp/fn_leaf
+    rm -fr /tmp/fns_leaf; cp -r functions /tmp/fns_leaf
 
     vim /tmp/fn_base /tmp/fn_leaf
     meld /tmp/fn_base /tmp/fn_leaf
