@@ -1,0 +1,19 @@
+export DISPLAY=:0
+source ~/.dotfiles/source/.shell/xdotool
+
+sleep 1
+xdotool mousemove 250 600
+xdotool click 1
+xdotool click 1
+xdotool click 1
+xdotool key Ctrl+c
+echo "$(xclip -sel clip -o)" > /tmp/shtoy_title
+
+sleep 1
+xdotool mousemove 900 500
+xdotool click 1
+xdotool key Ctrl+a
+xdotool key Ctrl+c
+sleep 1
+echo "$(xclip -sel clip -o)" > /tmp/shtoy_shader_$(cat /tmp/shtoy_n)
+sleep 1

@@ -1,0 +1,22 @@
+export DISPLAY=:0
+source ~/.dotfiles/source/.shell/xdotool
+
+rm -fr /tmp/shtoy_scrot.png
+scrot /tmp/shtoy_scrot.png
+
+echo '' | xclip -sel clip -i
+
+rm -fr /tmp/shtoy_title
+(cd /tmp/; ls | grep shtoy_shader_ | while read line; do rm -fr "$line"; done)
+
+for a in $(seq 1 $(cat /tmp/shtoy_ns))
+do
+    echo $a > /tmp/shtoy_n
+    source 3
+done
+
+folder=$(basename $(cat /tmp/shtoy_link))
+mkdir -p /tmp/shtoy/$folder
+\cp /tmp/shtoy_scrot.png /tmp/shtoy/$folder
+\cp /tmp/shtoy_title /tmp/shtoy/$folder
+\cp /tmp/shtoy_shader_* /tmp/shtoy/$folder

@@ -1,0 +1,7 @@
+export DISPLAY=:0
+
+link=$( cat /tmp/shtoy_link )
+
+google-chrome "$link" >/dev/null 2>/dev/null &
+sleep 5
+

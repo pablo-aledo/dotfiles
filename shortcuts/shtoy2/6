@@ -1,0 +1,18 @@
+export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+cat /tmp/shtoy_list | while read line
+do
+    link=$(echo $line | cut -d' ' -f1)
+    n=$(echo $line | cut -d' ' -f2)
+    echo $link > /tmp/shtoy_link
+    echo $n > /tmp/shtoy_ns
+
+    source 2
+    source 4
+
+    xdotool key Ctrl+w
+
+    while [ -e /tmp/pause ]; do sleep 1; done
+done

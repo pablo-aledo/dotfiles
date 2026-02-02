@@ -1,0 +1,12 @@
+export DISPLAY=:0
+source ~/.dotfiles/source/.shell/xdotool
+
+rm -fr ~/Descargas/shtoypage.html ~/Descargas/shtoy_files
+
+xdotool key Ctrl+s
+sleep 5
+xdotool type shtoypage
+sleep 1
+xdotool key Return
+sleep 5
+links ~/Descargas/shtoypage.html | grep shadertoy.com.view >> /tmp/shtoy_list
