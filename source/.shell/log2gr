@@ -604,6 +604,7 @@ ctags_review(){
 
     comm -3 <(cat /tmp/functions_base | awk '{print $2}' | sort -u) <(cat /tmp/functions_leaf | awk '{print $2}' | sort -u) > /tmp/newfunctions
     comm -3 <(cat /tmp/functions_base | sort -u) <(cat /tmp/functions_leaf | sort -u) | awk '{print $2}' | sort -u > /tmp/modifiedfunctions
+    comm -23 <(cat /tmp/functions_base | awk '{print $2}' | sort -u) <(cat /tmp/functions_leaf | awk '{print $2}' | sort -u) > /tmp/rmfunctions
     ctags_update_keep $1
     mkdir functions/input
     cat /tmp/newfunctions | while read line; do mv functions/$line functions/input; done
@@ -644,6 +645,9 @@ ctags_diff_fcg(){
 
     wgrep /tmp/clique_new /tmp/clique_nl | awk '{print "linkStyle " $1 " stroke:green stroke-width: 2px"}' >  /tmp/linkstyles
     wgrep /tmp/clique_rm  /tmp/clique_nl | awk '{print "linkStyle " $1 " stroke:red   stroke-width: 2px"}' >> /tmp/linkstyles
+    cat /tmp/modifiedfunctions | while read line; do echo style $line fill:#FFFFAA; done >> /tmp/linkstyles
+    cat /tmp/newfunctions | while read line; do echo style $line fill:#AAFFAA; done >> /tmp/linkstyles
+    cat /tmp/rmfunctions | while read line; do echo style $line fill:#FFAAAA; done >> /tmp/linkstyles
 
     (echo flowchart LR; cat /tmp/clique_both | sed 's/ -> / --> /g'; cat /tmp/linkstyles | sed -e 's/green/green,/g' -e 's/red/red,/g') > /tmp/diff_fcg_final
     cat /tmp/diff_fcg_final | Xclip -i
