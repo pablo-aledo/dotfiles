@@ -1,6 +1,9 @@
 export DISPLAY=:0
 source ~/.dotfiles/source/.shell/xdotool
 
+xdotool mousemove $(( 885 + 100 * ( $(cat /tmp/shtoy_n) - 1 ) )) 190
+xdotool click 1
+
 sleep 1
 xdotool mousemove 250 600
 xdotool click 1

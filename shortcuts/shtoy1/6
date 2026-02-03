@@ -6,7 +6,7 @@ user=$(cat /tmp/shtoy_user)
 
 for n in $(seq 0 8 $(cat /tmp/shtoy_max))
 do
-    link="https://www.shadertoy.com/user/iq/sort=popular&from=$n&num=8"
+    link="https://www.shadertoy.com/user/$user/sort=popular&from=$n&num=8"
     echo $link > /tmp/shtoy_link
 
     source 2
