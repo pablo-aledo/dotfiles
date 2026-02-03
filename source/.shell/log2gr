@@ -603,7 +603,7 @@ ctags_review(){
     cat /tmp/review | Xclip -i
 
     comm -3 <(cat /tmp/functions_base | awk '{print $2}' | sort -u) <(cat /tmp/functions_leaf | awk '{print $2}' | sort -u) > /tmp/newfunctions
-    comm -3 <(cat /tmp/functions_base | sort -u) <(cat /tmp/functions_leaf | sort -u) | awk '{print $2}' | sort -u > /tmp/modifiedfunctions
+    comm -23 <(comm -3 <(cat /tmp/functions_base | sort -u) <(cat /tmp/functions_leaf | sort -u) | awk '{print $2}' | sort -u) <(cat /tmp/newfunctions | sort -u) > /tmp/modifiedfunctions
     comm -23 <(cat /tmp/functions_base | awk '{print $2}' | sort -u) <(cat /tmp/functions_leaf | awk '{print $2}' | sort -u) > /tmp/rmfunctions
     ctags_update_keep $1
     mkdir functions/input
