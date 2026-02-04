@@ -643,7 +643,7 @@ ctags_diff_fcg(){
     comm -23 <(sort /tmp/clique_base) <(sort /tmp/clique_leaf) > /tmp/clique_rm
     comm -13 <(sort /tmp/clique_base) <(sort /tmp/clique_leaf) > /tmp/clique_new
 
-    wgrep /tmp/clique_new /tmp/clique_nl | awk '{print "linkStyle " $1 " stroke:green stroke-width: 2px"}' >  /tmp/linkstyles
+    [ -s /tmp/clique_new ] && wgrep /tmp/clique_new /tmp/clique_nl | awk '{print "linkStyle " $1 " stroke:green stroke-width: 2px"}' >  /tmp/linkstyles
     [ -s /tmp/clique_rm ] && wgrep /tmp/clique_rm  /tmp/clique_nl | awk '{print "linkStyle " $1 " stroke:red stroke-width: 2px"}' >> /tmp/linkstyles
     cat /tmp/modifiedfunctions | while read line; do echo style $line fill:#FFFFAA; done >> /tmp/linkstyles
     cat /tmp/newfunctions | while read line; do echo style $line fill:#AAFFAA; done >> /tmp/linkstyles
