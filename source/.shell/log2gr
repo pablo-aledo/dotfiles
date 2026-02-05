@@ -681,6 +681,13 @@ ctags_compare_fn(){
     meld /tmp/fn_base /tmp/fn_leaf
 }
 
+ctags_compare_fn_2() {
+	[ $# = 1 ] && fn1=$1 && fn2=$1
+	[ $# = 2 ] && fn1=$1 && fn2=$2
+	vim  /tmp/fns_base/$fn1 /tmp/fns_leaf/$fn2
+	meld /tmp/fns_base/$fn1 /tmp/fns_leaf/$fn2
+}
+
 call_path(){
     src=$(echo $1 | sed 's/\./DOT/g')
 	dst=$(echo $2 | sed 's/\./DOT/g')
