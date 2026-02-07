@@ -611,6 +611,7 @@ ctags_review(){
     find functions -maxdepth 1 -type f -delete
     ctags_auto_clique $1
     (echo flowchart LR; wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | sed 's/ -> / --> /g' | fcdag) | Xclip -i
+    ctags_diff_fcg $1
 }
 
 git_review_uniq(){
