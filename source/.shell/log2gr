@@ -674,6 +674,7 @@ ctags_auto_clique(){
         then
             cat /tmp/ctags_clique_final | grep -v "^$node$" > /tmp/ctags_clique_final_2
             cat /tmp/ctags_nodes | grep -v "^$node$" | sed "s/^/$node -> /g" >> /tmp/ctags_clique_final_2
+            cat /tmp/ctags_nodes | grep -v "^$node$" | sed "s/$/ -> $node/g" >> /tmp/ctags_clique_final_2
             \mv /tmp/ctags_clique_final_2 /tmp/ctags_clique_final
         fi
     done
