@@ -662,16 +662,17 @@ ctags_iterate_clique(){
 }
 
 ctags_auto_clique(){
-    [ $# -gt 1 ] && clique_edges_limit=$1 || clique_edges_limit=5
+    [ $# -gt 1 ] && clique_edges_limit=$2 || clique_edges_limit=15
     \cp /tmp/ctags_extra_keywords ~/log2gr/$1/clique
+    # vim ~/log2gr/$1/clique
     wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | fcdag > /tmp/ctags_fcg
-    \cp /tmp/ctags_fcg /tmp/ctags_clique_final
-    cat /tmp/ctags_fcg | sed 's/ -> /\n/g' | sort -u > /tmp/ctags_nodes
+    \cp ~/log2gr/$1/clique /tmp/ctags_clique_final
+    \cp /tmp/ctags_clique_final /tmp/ctags_nodes
     cat /tmp/ctags_nodes | while read node
     do
         if [ $(cat /tmp/ctags_fcg | grep "\<$node\>" | wc -l) -gt $clique_edges_limit ]
         then
-            cat /tmp/ctags_clique_final | grep -v "^$node$" > /tmp/ctags_clique_final_2
+            cat /tmp/ctags_clique_final | grep --color -v "^$node$" > /tmp/ctags_clique_final_2
             cat /tmp/ctags_nodes | sed "s/^/$node -> /g" >> /tmp/ctags_clique_final_2
             \mv /tmp/ctags_clique_final_2 /tmp/ctags_clique_final
         fi
