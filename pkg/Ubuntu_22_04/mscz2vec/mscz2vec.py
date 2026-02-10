@@ -6938,6 +6938,117 @@ def harmonic_graph_vector(score, remove_self_loops=True):
         result['figure_vector']      # 32 dims
     ])
 
+# =========================
+# INTERCAMBIO MODAL
+# =========================
+
+MODAL_INTERCHANGE_MAP = {
+    'major': {
+        'borrowed_tonic': ['bIII', 'bVI'],
+        'borrowed_subdominant': ['iv', 'ii°', 'iiø', 'bII'],
+        'borrowed_dominant': ['v', 'bVII', 'vii°'],
+    },
+    'minor': {
+        'borrowed_tonic': ['I'],
+        'borrowed_subdominant': ['IV', 'II', 'ii', 'viø'],
+        'borrowed_dominant': ['V'],
+    }
+}
+
+def identify_modal_interchange(rn, key):
+    """
+    Identifica si un RomanNumeral es de intercambio modal comparando notas con la escala.
+    """
+    # 1. Obtener nombres de notas de la escala diatónica de la tonalidad actual
+    scale_pitch_names = [p.name for p in key.getScale().getPitches()]
+
+    # 2. Un acorde es diatónico si TODAS sus notas están en la escala
+    is_diatonic = all(p.name in scale_pitch_names for p in rn.pitches)
+
+    # Si es diatónico o es una dominante secundaria (ej: V/V), no es intercambio modal
+    if is_diatonic or "/" in rn.figure:
+        return None
+
+    # 3. Limpieza de la figura para el mapeo (ej: 'iv7' -> 'iv', 'bVImaj7' -> 'bVI')
+    clean_figure = re.sub(r'[0-9°ø7]+', '', rn.figure)
+    clean_figure = clean_figure.replace('add', '').replace('maj', '').replace('min', '').strip()
+
+    mode = key.mode
+    if mode in MODAL_INTERCHANGE_MAP:
+        for category, figures in MODAL_INTERCHANGE_MAP[mode].items():
+            if clean_figure in figures:
+                return category
+
+    return "chromatic_other"
+
+def modal_interchange_features(score):
+    """
+    Analiza el intercambio modal y devuelve un vector de 6 dimensiones:
+    [ratio_total, tonic_borrowed, subdom_borrowed, dom_borrowed, neapolitan_ratio, picardy_ratio]
+    """
+    try:
+        # Analizar tonalidad global de la pieza
+        k = score.analyze('key')
+    except:
+        return np.zeros(6)
+
+    # Extraer acordes usando tu función existente
+    chords = extract_harmonic_chords(score)
+    if not chords:
+        return np.zeros(6)
+
+    counts = Counter()
+
+    # --- CABECERA DE DEPURACIÓN ---
+    print("\n" + "═"*85)
+    print(f" ANÁLISIS DE INTERCAMBIO MODAL | Tonalidad Detectada: {k.tonic.name} {k.mode}")
+    print(f" Escala Diatónica de referencia: {[p.name for p in k.getScale().getPitches()]}")
+    print("═"*85)
+    print(f" {'Compás':<8} | {'Acorde':<12} | {'Grado':<8} | {'Notas':<20} | {'Resultado'}")
+    print("─"*85)
+
+    for chord_obj in chords:
+        try:
+            # Generar el número romano respecto a la tonalidad detectada
+            rn = roman.romanNumeralFromChord(chord_obj, k)
+            m_num = getattr(chord_obj, '_stored_measure_number', '?')
+
+            category = identify_modal_interchange(rn, k)
+
+            res_text = "⚪ Diatónico"
+            if category:
+                counts[category] += 1
+                counts['total'] += 1
+                res_text = f"⭐ {category}"
+
+                # Casos específicos para el vector
+                if "bII" in rn.figure: counts['neapolitan'] += 1
+                if k.mode == 'minor' and rn.figure == 'I': counts['picardy'] += 1
+
+            # Impresión de depuración por compás
+            c_name = chord_short_name(chord_obj)
+            c_pitches = [p.name for p in chord_obj.pitches]
+            print(f" {str(m_num):<8} | {c_name:<12} | {rn.figure:<8} | {str(c_pitches):<20} | {res_text}")
+
+        except Exception as e:
+            continue
+
+    # --- CÁLCULO DEL VECTOR FINAL ---
+    n = len(chords)
+    vector = np.array([
+        counts['total'] / n if n > 0 else 0,
+        counts['borrowed_tonic'] / n if n > 0 else 0,
+        counts['borrowed_subdominant'] / n if n > 0 else 0,
+        counts['borrowed_dominant'] / n if n > 0 else 0,
+        counts['neapolitan'] / n if n > 0 else 0,
+        counts['picardy'] / n if n > 0 else 0
+    ])
+
+    print("─"*85)
+    print(f" RESUMEN: {counts['total']} acordes de intercambio en {n} acordes analizados.")
+    print("═"*85 + "\n")
+
+    return vector
 
 # =========================
 # EJECUCIÓN
@@ -6979,4 +7090,5 @@ custom_rules = [
 # plot_measure_analytics(score)
 # density_dynamics_range_features(score)
 # print(generate_emotion_vector(score))
-print(harmonic_graph_vector(score))
+# print(harmonic_graph_vector(score))
+print(modal_interchange_features(score))
