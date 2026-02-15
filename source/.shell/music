@@ -112,3 +112,6 @@ cp -r msc_extract ~
 )
 }
 
+fl_midindex(){
+find -iname '*.mid' -or -iname '*.midi' | while read line; do bn="$(basename "$line" | sed -e 's/.MID//g' -e 's/.MIDI//g' -e 's/.mid//g' -e 's/.midi//g')"; n=1; dst="${bn}.mid"; while [ -e ~/squashfs/partial/"$dst" ]; do n=$(( $n + 1 )); dst="${bn}_${n}.mid"; done; cp "$line" ~/squashfs/partial/"$dst"; echo "{\"path\": \"$line\", \"id\": \"$dst\"}" >> ~/squashfs/index; done
+}
