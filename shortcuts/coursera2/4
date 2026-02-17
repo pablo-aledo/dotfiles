@@ -1,0 +1,9 @@
+export DISPLAY=:0
+source ~/.dotfiles/source/.shell/xdotool
+
+while true
+do
+xdotool mousemove 0 0
+mouseover 2 50000 ~/.dotfiles/shortcuts/images/coursera_nextitem.png && xdotool click 1
+mouseover 2 50000 ~/.dotfiles/shortcuts/images/dwhelper_dl.png && break
+done

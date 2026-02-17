@@ -1,0 +1,10 @@
+export DISPLAY=:0
+source ~/.dotfiles/source/.shell/xdotool
+source ~/.dotfiles/source/.shell/adapt
+
+while true
+do
+    source 3 # xdotool key 3; shcw coursera2.3
+    source 4 # xdotool key 4; shcw coursera2.4
+    mouseover 1 50000 ~/.dotfiles/shortcuts/images/coursera_gomylearning.png && break
+done

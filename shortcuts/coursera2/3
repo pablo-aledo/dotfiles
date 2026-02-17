@@ -1,0 +1,6 @@
+export DISPLAY=:0
+source ~/.dotfiles/source/.shell/xdotool
+
+xdotool mousemove 0 0
+mouseover 2 50000 ~/.dotfiles/shortcuts/images/dwhelper_dl.png && xdotool click 1
+sleep 5
