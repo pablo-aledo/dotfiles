@@ -161,14 +161,14 @@ fig = px.scatter(
     x="x",
     y="y",
     color="cluster",
-    title="Embeddings 2D (UMAP) + Clusters"
+    title="Embeddings 2D (UMAP) + Clusters",
+    custom_data=["texto_hover", "cluster"]
 )
 
 fig.update_traces(
     hovertemplate="<b>Cluster:</b> %{customdata[1]}<br>"
                   "<b>Texto:</b> %{customdata[0]}"
                   "<extra></extra>",
-    customdata=df[["texto_hover", "cluster"]].values,
     marker=dict(size=8)
 )
 
