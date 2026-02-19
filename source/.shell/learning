@@ -3339,3 +3339,208 @@ do
     cat $tmp/out2 | head -n $a | tail -n1 > $learning_dir/clusters/"$(ls $learning_dir/txts/ | head -n$a | tail -n1)"
 done
 }
+
+mds.fit(){
+    rm -fr $tmp/reduced_vectors
+    mkdir -p $learning_dir/mds
+
+    for file in $learning_dir/vectors/*
+    do
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' >> $tmp/reduced_vectors
+    done
+
+    python -c "
+import numpy as np
+from sklearn.metrics import pairwise_distances
+from sklearn.manifold import MDS
+
+learning_dir='$learning_dir'
+
+# Cargar datos
+X=np.loadtxt('$tmp/reduced_vectors')
+
+# Guardar puntos originales
+np.savetxt(learning_dir + '/mds/original_points', X)
+
+# Calcular matriz de distancias
+D = pairwise_distances(X)
+np.savetxt(learning_dir + '/mds/distances', D)
+
+# Aplicar MDS clásico
+mds = MDS(dissimilarity='precomputed', random_state=0)
+X_mds = mds.fit_transform(D)
+
+# Guardar embedding
+np.savetxt(learning_dir + '/mds/embedding', X_mds)
+
+# Guardar valores propios usando double centering
+n = D.shape[0]
+J = np.eye(n) - np.ones((n,n))/n
+B = -0.5 * J @ (D**2) @ J
+eigvals, eigvecs = np.linalg.eigh(B)
+
+# Orden descendente
+idx = np.argsort(eigvals)[::-1]
+eigvals = eigvals[idx]
+eigvecs = eigvecs[:,idx]
+
+np.savetxt(learning_dir + '/mds/eigenv', eigvals)
+np.savetxt(learning_dir + '/mds/eigenvec', eigvecs)
+"
+}
+
+mds.transform() {
+    python -c "
+import numpy as np
+from sklearn.metrics import pairwise_distances
+
+learning_dir='$learning_dir'
+
+# Cargar datos guardados
+X_train = np.loadtxt(learning_dir+'/mds/original_points')
+D = np.loadtxt(learning_dir+'/mds/distances')
+eigvals = np.loadtxt(learning_dir+'/mds/eigenv')
+eigvecs = np.loadtxt(learning_dir+'/mds/eigenvec')
+
+# Punto nuevo
+x_new = np.array($1)
+
+# Calcular distancias al training
+d = pairwise_distances([x_new], X_train)[0]
+
+# Parámetros
+n = len(D)
+
+# Medias necesarias
+d2 = d**2
+D2 = D**2
+
+row_mean = np.mean(D2, axis=1)
+total_mean = np.mean(D2)
+d_mean = np.mean(d2)
+
+# Vector b
+b = -0.5 * (d2 - row_mean - d_mean + total_mean)
+
+# Usar solo autovalores positivos
+pos_idx = eigvals > 1e-10
+L = np.diag(1.0/np.sqrt(eigvals[pos_idx]))
+V = eigvecs[:,pos_idx]
+
+# Proyección
+x_proj = L @ V.T @ b
+
+print(x_proj)
+" | sed \
+    -e 's/ \+/ /g' \
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -d' ' -s
+}
+
+mds.fit(){
+    rm -fr $tmp/reduced_vectors
+    mkdir -p $learning_dir/mds
+
+    for file in $learning_dir/vectors/*
+    do
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' >> $tmp/reduced_vectors
+    done
+
+    python -c "
+import numpy as np
+import joblib
+from sklearn.manifold import MDS
+from sklearn.linear_model import LinearRegression
+
+learning_dir='$learning_dir'
+
+X=np.loadtxt('$tmp/reduced_vectors')
+
+# Aplicar MDS
+mds = MDS(n_components=2, random_state=0)
+X_mds = mds.fit_transform(X)
+
+# Entrenar regresor
+reg = LinearRegression()
+reg.fit(X, X_mds)
+
+# Guardar modelo
+joblib.dump(reg, learning_dir+'/mds/regressor.joblib')
+"
+}
+
+mds.transform() {
+    python -c "
+import numpy as np
+import joblib
+
+learning_dir='$learning_dir'
+
+reg = joblib.load(learning_dir+'/mds/regressor.joblib')
+
+x_new = np.array($1)
+
+x_proj = reg.predict([x_new])[0]
+
+print(x_proj)
+" | sed \
+    -e 's/ \+/ /g' \
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -d' ' -s
+}
+
+mds.fit(){
+    rm -fr $tmp/reduced_vectors
+    mkdir -p $learning_dir/mds
+
+    for file in $learning_dir/vectors/*
+    do
+        cat $file | sed -e 's/\[//g' -e 's/\]//g' -e 's/,//g' >> $tmp/reduced_vectors
+    done
+
+    python -c "
+import numpy as np
+import joblib
+from sklearn.metrics import pairwise_distances
+from sklearn.manifold import MDS
+
+learning_dir='$learning_dir'
+
+X=np.loadtxt('$tmp/reduced_vectors')
+
+# Matriz de distancias coseno
+D = pairwise_distances(X, metric='cosine')
+
+mds = MDS(dissimilarity='precomputed', random_state=0)
+X_mds = mds.fit_transform(D)
+
+np.savetxt(learning_dir+'/mds/embedding', X_mds)
+np.savetxt(learning_dir+'/mds/original_points', X)
+"
+}
+
+mds.transform() {
+    python -c "
+import numpy as np
+from sklearn.metrics import pairwise_distances
+
+learning_dir='$learning_dir'
+
+X_train = np.loadtxt(learning_dir+'/mds/original_points')
+X_mds = np.loadtxt(learning_dir+'/mds/embedding')
+
+x_new = np.array($1)
+
+# Distancias coseno al training
+d = pairwise_distances([x_new], X_train, metric='cosine')[0]
+
+# Aproximación simple: media ponderada inversa
+w = 1/(d + 1e-8)
+w = w/np.sum(w)
+
+x_proj = np.dot(w, X_mds)
+
+print(x_proj)
+" | sed \
+    -e 's/ \+/ /g' \
+    -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -d' ' -s
+}
+
