@@ -1,0 +1,29 @@
+dag_prune(){
+    cat /tmp/dag_pruned | sed 's/ -> /@/g' | cut -d '@' -f1 | sort -u > /tmp/dag_left
+    cat /tmp/dag_pruned | sed 's/ -> /@/g' | cut -d '@' -f2 | sort -u > /tmp/dag_right
+    comm -23 <(comm -23 /tmp/dag_left /tmp/dag_right | sort -u) <(cat /tmp/dag.roots | sort -u) > /tmp/prune
+
+    cat /tmp/prune | while read line
+    do
+        sed -i "/^$line -> /d" /tmp/dag_pruned
+    done
+}
+
+dag_slice () {
+    cat $1 | grep -v " -> $2\$" > /tmp/dag_pruned
+    echo "$2" > /tmp/dag.roots
+    for a in $(seq 1 10)
+    do
+        dag_prune
+    done
+    cat /tmp/dag_pruned
+}
+
+dag_invert(){
+    sed -e 's/ -> /@/g' -e 's|^\([^@]*\)@\([^@]*\)$|\2 -> \1|g'
+}
+
+dag_mermaid(){
+    echo flowchart LR
+    cat | sed 's/ -> / --> /g'
+}
