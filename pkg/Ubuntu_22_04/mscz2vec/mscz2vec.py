@@ -7051,6 +7051,136 @@ def modal_interchange_features(score):
     return vector
 
 # =========================
+# PERCEPCIÓN UNIFICADA (6 DIMENSIONES)
+# =========================
+
+def timbral_brightness_analysis(score):
+    """
+    Analiza la luminosidad tímbrica simulando el centroide espectral.
+    Combina la altura absoluta (registro) con el "brillo" inherente del instrumento.
+    Returns: vector [overall_brightness, register_brightness, instrument_brightness]
+    """
+    print("\n" + "="*50)
+    print("TIMBRAL BRIGHTNESS ANALYSIS")
+    print("="*50)
+
+    # Clasificación heurística de brillo instrumental (0.0 = muy oscuro, 1.0 = muy brillante)
+    bright_keywords = ['piccolo', 'flute', 'trumpet', 'violin', 'glockenspiel', 'soprano', 'oboe']
+    dark_keywords = ['contrabass', 'bass', 'tuba', 'bassoon', 'cello', 'trombone', 'timpani']
+
+    parts = getattr(score, 'parts', [score])
+
+    total_notes = 0
+    accumulated_brightness = 0.0
+    accumulated_pitch = 0.0
+    instrument_factors = []
+
+    for part in parts:
+        # Detectar instrumento
+        inst_name = ""
+        try:
+            inst = part.getInstrument()
+            if inst and inst.instrumentName:
+                inst_name = inst.instrumentName.lower()
+        except:
+            pass
+
+        # Asignar factor de brillo instrumental
+        inst_factor = 0.5  # Neutral por defecto (piano, viola, etc.)
+        if any(k in inst_name for k in bright_keywords):
+            inst_factor = 0.85
+        elif any(k in inst_name for k in dark_keywords):
+            inst_factor = 0.2
+
+        instrument_factors.append(inst_factor)
+
+        # Analizar notas de la parte
+        notes = [n for n in part.flatten().notes if n.isNote]
+        for n in notes:
+            # Normalizar pitch (C2=36 a C6=84) -> 0 a 1
+            pitch_norm = np.clip((n.pitch.midi - 36) / 48.0, 0.0, 1.0)
+
+            # El brillo de la nota es una combinación de su altura y el instrumento que la toca
+            note_brightness = (pitch_norm * 0.6) + (inst_factor * 0.4)
+
+            accumulated_brightness += note_brightness
+            accumulated_pitch += pitch_norm
+            total_notes += 1
+
+    if total_notes == 0:
+        return np.zeros(3)
+
+    avg_overall_brightness = accumulated_brightness / total_notes
+    avg_register_brightness = accumulated_pitch / total_notes
+    avg_inst_brightness = np.mean(instrument_factors) if instrument_factors else 0.5
+
+    print(f"Overall Brightness: {avg_overall_brightness:.3f}")
+    print(f"Register-driven Brightness: {avg_register_brightness:.3f}")
+    print(f"Instrument-driven Brightness: {avg_inst_brightness:.3f}")
+    print("="*50)
+
+    return np.array([
+        avg_overall_brightness,
+        avg_register_brightness,
+        avg_inst_brightness
+    ])
+
+def unified_perception_vector(score):
+    """
+    Genera un vector maestro unificando las 6 dimensiones perceptuales solicitadas:
+    [Valencia, Activación, Tensión Armónica, Estabilidad Tonal, Densidad Rítmica, Luminosidad Tímbrica]
+    Devuelve un array de 6 valores normalizados (rango aprox 0.0 a 1.0).
+    """
+    print("\n" + "★"*50)
+    print(" EXTRACTING UNIFIED PERCEPTION 6D-VECTOR")
+    print("★"*50)
+
+    # 1 & 2. Valencia y Activación
+    affective_data = affective_contour_analysis(score)
+    if affective_data and 'statistics' in affective_data:
+        # Valencia y Arousal en el modelo circunflejo van de -1 a 1. Normalizamos a 0-1.
+        valence = (affective_data['statistics']['mean_valence'] + 1) / 2.0
+        activation = (affective_data['statistics']['mean_arousal'] + 1) / 2.0
+    else:
+        valence, activation = 0.5, 0.5
+
+    # 3. Tensión Armónica (Extraemos la media del perfil)
+    harmonic_data = harmonic_tension_profile(score)
+    harmonic_tension = np.mean(harmonic_data['tension_values']) if harmonic_data else 0.0
+
+    # 4. Estabilidad Tonal (Extraemos la media del perfil)
+    stability_data = tonal_stability_profile(score)
+    tonal_stability = stability_data['statistics']['mean'] if stability_data else 0.5
+
+    # 5. Densidad Rítmica (Usamos el primer valor del vector ya implementado: note_density)
+    rhythm_vector = rhythmic_density_analysis(score)
+    rhythmic_density = rhythm_vector[0] if len(rhythm_vector) > 0 else 0.0
+
+    # 6. Luminosidad Tímbrica (Nuestra nueva función)
+    brightness_vector = timbral_brightness_analysis(score)
+    timbral_brightness = brightness_vector[0] if len(brightness_vector) > 0 else 0.5
+
+    vector_6d = np.array([
+        valence,
+        activation,
+        harmonic_tension,
+        tonal_stability,
+        rhythmic_density,
+        timbral_brightness
+    ])
+
+    print("\nFINAL 6D PERCEPTION VECTOR:")
+    print(f" 1. Valencia:           {vector_6d[0]:.3f}")
+    print(f" 2. Activación:         {vector_6d[1]:.3f}")
+    print(f" 3. Tensión Armónica:   {vector_6d[2]:.3f}")
+    print(f" 4. Estabilidad Tonal:  {vector_6d[3]:.3f}")
+    print(f" 5. Densidad Rítmica:   {vector_6d[4]:.3f}")
+    print(f" 6. Luminosidad Tímb.:  {vector_6d[5]:.3f}")
+    print("★"*50 + "\n")
+
+    return vector_6d
+
+# =========================
 # EJECUCIÓN
 # =========================
 
@@ -7091,4 +7221,5 @@ custom_rules = [
 # density_dynamics_range_features(score)
 # print(generate_emotion_vector(score))
 # print(harmonic_graph_vector(score))
-print(modal_interchange_features(score))
+# print(modal_interchange_features(score))
+print(unified_perception_vector(score))
