@@ -23,6 +23,7 @@ comments_file = 'midis_comentarios.txt'
 # Opciones visualización y reproducción
 umap_color_mode = "cluster"  # "cluster" o "score"
 cluster_play_order = "extreme"  # "extreme" o "original"
+use_random_offset = True        # reproducir MIDIs con offset aleatorio
 
 # --- Inicializar pygame ---
 pygame.init()
@@ -55,34 +56,46 @@ def input_comment(file_path):
         pygame.time.wait(50)
     return text
 
-# --- Reproducción MIDI con eliminación de silencios iniciales ---
-def play_midi(file_path, duration=10):
+# --- Reproducción MIDI con eliminación de silencios iniciales y offset aleatorio ---
+def play_midi(file_path, duration=10, random_offset=False):
     try:
         mid = MidiFile(file_path)
-        min_time = None
+        # Buscar primer note_on para eliminar silencios iniciales
+        first_note_time = None
+        all_note_times = []
         for track in mid.tracks:
             abs_time = 0
             for msg in track:
                 abs_time += msg.time
                 if msg.type=='note_on' and msg.velocity>0:
-                    if min_time is None or abs_time<min_time:
-                        min_time = abs_time
-                        break
+                    all_note_times.append(abs_time)
+                    if first_note_time is None or abs_time<first_note_time:
+                        first_note_time = abs_time
+
+        if first_note_time is None:
+            first_note_time = 0
+        # Offset aleatorio
+        offset_time = first_note_time
+        if random_offset and all_note_times:
+            offset_time = random.choice(all_note_times)
+
+        # Crear midi temporal ajustando tiempos
         temp_mid = MidiFile()
         temp_mid.ticks_per_beat = mid.ticks_per_beat
         for track in mid.tracks:
             new_track = MidiTrack()
-            abs_time=0
+            abs_time = 0
             for msg in track:
-                abs_time+=msg.time
+                abs_time += msg.time
                 if msg.is_meta:
                     new_track.append(msg.copy())
                     continue
-                if min_time is not None and abs_time<min_time:
+                if abs_time < offset_time:
                     continue
-                dt = msg.time if abs_time!=min_time else 0
+                dt = msg.time if abs_time != offset_time else 0
                 new_track.append(msg.copy(time=dt))
             temp_mid.tracks.append(new_track)
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mid") as tmpfile:
             temp_mid.save(tmpfile.name)
             pygame.mixer.music.load(tmpfile.name)
@@ -97,8 +110,8 @@ def play_midi(file_path, duration=10):
         print(f"Error reproduciendo {file_path}: {e}")
         return
 
-def play_midi_thread(file_path, duration=10):
-    t = threading.Thread(target=play_midi, args=(file_path,duration))
+def play_midi_thread(file_path, duration=10, random_offset=False):
+    t = threading.Thread(target=play_midi, args=(file_path,duration,random_offset))
     t.start()
     return t
 
@@ -276,7 +289,7 @@ for cluster_id in cluster_order:
             idx = valid_files.index(f)
             highlight_midi(idx)
             draw_text(f"Reproduciendo {os.path.basename(f)} ({play_seconds}s). <Esc> para saltar, C=Comentario")
-            play_thread = play_midi_thread(f, duration=play_seconds)
+            play_thread = play_midi_thread(f, duration=play_seconds, random_offset=use_random_offset)
 
             start_time = time.time()
             while time.time() - start_time < play_seconds and play_thread.is_alive():
