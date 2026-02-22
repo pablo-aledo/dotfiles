@@ -24,6 +24,7 @@ comments_file = 'midis_comentarios.txt'
 umap_color_mode = "cluster"  # "cluster" o "score"
 cluster_play_order = "extreme"  # "extreme" o "original"
 use_random_offset = True        # reproducir MIDIs con offset aleatorio
+use_extended_features = False    # True = vectorización emocional completa, False = vectorización básica
 
 # --- Inicializar pygame ---
 pygame.init()
@@ -56,11 +57,10 @@ def input_comment(file_path):
         pygame.time.wait(50)
     return text
 
-# --- Reproducción MIDI con eliminación de silencios iniciales y offset aleatorio ---
+# --- Reproducción MIDI ---
 def play_midi(file_path, duration=10, random_offset=False):
     try:
         mid = MidiFile(file_path)
-        # Buscar primer note_on para eliminar silencios iniciales
         first_note_time = None
         all_note_times = []
         for track in mid.tracks:
@@ -71,15 +71,12 @@ def play_midi(file_path, duration=10, random_offset=False):
                     all_note_times.append(abs_time)
                     if first_note_time is None or abs_time<first_note_time:
                         first_note_time = abs_time
-
         if first_note_time is None:
             first_note_time = 0
-        # Offset aleatorio
         offset_time = first_note_time
         if random_offset and all_note_times:
             offset_time = random.choice(all_note_times)
 
-        # Crear midi temporal ajustando tiempos
         temp_mid = MidiFile()
         temp_mid.ticks_per_beat = mid.ticks_per_beat
         for track in mid.tracks:
@@ -115,7 +112,7 @@ def play_midi_thread(file_path, duration=10, random_offset=False):
     t.start()
     return t
 
-# --- Vectorización y score emocional ---
+# --- Vectorización ---
 def midi_to_vector(file_path):
     try:
         mid = mido.MidiFile(file_path)
@@ -134,6 +131,7 @@ def midi_to_vector(file_path):
                 instruments.add(current_program)
     if not notes:
         return None
+
     notes = np.array(notes)
     velocities = np.array(velocities)
     durations = np.array([msg.time if hasattr(msg,'time') and msg.time>0 else 1
@@ -143,28 +141,57 @@ def midi_to_vector(file_path):
     prop_intervalos_grandes = np.sum(np.abs(diffs)>5)/len(diffs) if len(diffs)>0 else 0
     densidad = len(notes)/sum(durations)
     velocity_var = np.var(velocities)
-    n_mayor = sum(1 for n in notes if n%12 in [0,2,4,5,7,9,11])
-    luminosidad = n_mayor/len(notes)
-    vector = np.array([np.mean(notes), np.std(notes), np.max(notes)-np.min(notes),
-                       densidad, np.mean(velocities), np.std(velocities),
-                       propor_asc_desc, n_pistas, len(instruments), prop_intervalos_grandes])
-    score = (velocity_var/128 + prop_intervalos_grandes + densidad/10 + luminosidad)/4
+
+    if use_extended_features:
+        prop_intervalos_dis = np.sum(np.isin(np.abs(diffs), [1,2,6,10]))/len(diffs) if len(diffs)>0 else 0
+        velocity_changes = np.mean(np.abs(np.diff(velocities))/127) if len(velocities)>1 else 0
+        n_mayor = sum(1 for n in notes if n%12 in [0,2,4,5,7,9,11])
+        luminosidad = n_mayor/len(notes)
+        tonalidad_dominante = max([notes.tolist().count(n%12) for n in notes])/len(notes)
+        fuera_tonalidad = 1 - tonalidad_dominante
+        prop_extremos = np.sum((notes<40)|(notes>80))/len(notes)
+        perc_count = sum(1 for i in instruments if 115<=i<=127)
+        string_count = sum(1 for i in instruments if 40<=i<=71)
+        instr_perc = perc_count/len(instruments) if instruments else 0
+        instr_str = string_count/len(instruments) if instruments else 0
+
+        vector = np.array([
+            np.mean(notes), np.std(notes), np.max(notes)-np.min(notes),
+            densidad, np.mean(velocities), np.std(velocities),
+            propor_asc_desc, prop_intervalos_grandes, prop_intervalos_dis,
+            luminosidad, fuera_tonalidad,
+            n_pistas, len(instruments), instr_perc, instr_str,
+            prop_extremos, velocity_changes
+        ])
+        score = (velocity_var/128 + prop_intervalos_grandes + prop_intervalos_dis + densidad/10 +
+                 luminosidad + fuera_tonalidad + prop_extremos + velocity_changes)/8
+    else:
+        vector = np.array([
+            np.mean(notes), np.std(notes), np.max(notes)-np.min(notes),
+            densidad, np.mean(velocities), np.std(velocities),
+            propor_asc_desc, prop_intervalos_grandes, n_pistas, len(instruments)
+        ])
+        score = (velocity_var/128 + prop_intervalos_grandes + densidad/10)/3
+
     return vector, score
 
-# --- Cargar y vectorizar colección ---
+# --- Cargar y vectorizar colección con progreso ---
 midi_files = [os.path.join(midi_folder,f) for f in os.listdir(midi_folder) if f.endswith('.mid')]
 vectors, valid_files, scores = [],[],[]
 print("Vectorizando MIDIs...")
-for f in midi_files:
+total_files = len(midi_files)
+for i, f in enumerate(midi_files, 1):
     result = midi_to_vector(f)
     if result is not None:
         vec, score = result
         vectors.append(vec)
         valid_files.append(f)
         scores.append(score)
+    if i % 100 == 0 or i == total_files:
+        print(f"Vectorizando MIDIs: {i} / {total_files}", end='\r')
 vectors = np.array(vectors)
 scores = np.array(scores)
-print(f"{len(valid_files)} MIDIs válidos.")
+print(f"\n{len(valid_files)} MIDIs válidos.")
 
 # --- Vectorizar MIDIs de referencia ---
 ref_vectors = []
@@ -214,13 +241,8 @@ else:
 
 # Highlight activo
 highlight, = ax.plot([], [], 'ro', markersize=12)
-text_info = ax.text(0.02,0.95,"", transform=ax.transAxes, fontsize=10, verticalalignment='top')
+text_info = ax.text(0.02,0.02,"", transform=ax.transAxes, fontsize=10, verticalalignment='bottom')
 
-# Hover fijo en esquina inferior izquierda, sin flecha
-hover_annotation = ax.annotate("", xy=(0.02,0.02), xycoords="axes fraction",
-                               xytext=(0,0), textcoords="offset points",
-                               bbox=dict(boxstyle="round", fc="yellow", alpha=0.8))
-hover_annotation.set_visible(False)
 plt.show()
 
 def highlight_midi(idx):
@@ -231,17 +253,19 @@ def highlight_midi(idx):
     fig.canvas.flush_events()
 
 def on_hover(event):
-    if event.inaxes==ax:
+    if event.inaxes == ax:
         x, y = event.xdata, event.ydata
         distances = np.linalg.norm(embedding - np.array([x, y]), axis=1)
         min_idx = np.argmin(distances)
-        if distances[min_idx]<0.05:
-            hover_annotation.set_visible(True)
+        if distances[min_idx] < 0.05:
             vec = vectors[min_idx]
-            hover_annotation.set_text(f"{os.path.basename(valid_files[min_idx])}\nCluster: {labels[min_idx]}\nScore: {np.round(scores[min_idx],2)}\nVector: {np.round(vec,2)}")
+            text_info.set_text(f"{os.path.basename(valid_files[min_idx])}\n"
+                               f"Cluster: {labels[min_idx]}\n"
+                               f"Score: {np.round(scores[min_idx],2)}\n"
+                               f"Vector: {np.round(vec,2)}")
             fig.canvas.draw_idle()
         else:
-            hover_annotation.set_visible(False)
+            text_info.set_text("")
             fig.canvas.draw_idle()
 
 fig.canvas.mpl_connect("motion_notify_event", on_hover)
@@ -268,13 +292,6 @@ for cluster_id in cluster_order:
     while True:
         to_play = [f for f in cluster_files if f not in already_played]
 
-        # --- Reiniciar si todos reproducidos ---
-        if not to_play:
-            already_played = set()
-            draw_text(f"Reiniciando cluster {cluster_id} desde el principio...")
-            plt.pause(0.5)
-            to_play = [f for f in cluster_files]
-
         # --- Ordenar por score emocional si cluster_play_order == "extreme"
         if cluster_play_order == "extreme" and to_play:
             cluster_scores = np.array([scores[valid_files.index(f)] for f in to_play])
@@ -282,6 +299,11 @@ for cluster_id in cluster_order:
             dist_to_mean = np.abs(cluster_scores - mean_score)
             sorted_idx = np.argsort(-dist_to_mean)  # más extremo primero
             to_play = [to_play[i] for i in sorted_idx]
+
+        if not to_play:
+            draw_text("No quedan más MIDIs por reproducir en este cluster. Reiniciando...")
+            already_played.clear()
+            continue
 
         selected_samples = to_play[:samples_per_cluster]
 
@@ -295,7 +317,7 @@ for cluster_id in cluster_order:
             while time.time() - start_time < play_seconds and play_thread.is_alive():
                 plt.pause(0.05)
                 for event in pygame.event.get():
-                    if event.type == pygame.KEYDOWN:
+                    if event.type==pygame.KEYDOWN:
                         if event.key == pygame.K_ESCAPE:
                             pygame.mixer.music.stop()
                             play_thread.join()
