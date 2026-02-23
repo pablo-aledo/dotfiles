@@ -1,4 +1,5 @@
 source ~/.dotfiles/source/.shell/adapt
+source ~/.dotfiles/source/.shell/xdotool
 
 export DISPLAY=:1
 
@@ -7,7 +8,8 @@ rm -rf ~/Descargas/avmpage.html
 xdotool key Ctrl+s
 sleep 5
 xdotool type avmpage
-xdotool key Return
+#xdotool key Return
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/save.png && xdotool click 1 && xdotool click 1
 sleep 5
 
 #cat ~/Descargas/avmpage.html | sed 's/a.*href/\na href/g' | grep href | grep -i icerbox | grep -v premium | while read line

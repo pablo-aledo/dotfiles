@@ -11,7 +11,7 @@ do
     #     xdotool mousemove_relative -- -70 0 && \
     #     xdotool click 1
 
-    xdotool mousemove 0 0 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl.png && break
+    xdotool mousemove 0 0 && mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl4.png && break
     [ -e /tmp/lock4dl ] || break
     sleep 1
 done
@@ -33,7 +33,7 @@ do
 done
 
 
-mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl.png
+mouseover 1 10000 ~/.dotfiles/shortcuts/images/icerdl4.png
 xdotool click 1
 sleep 5
 
@@ -57,6 +57,7 @@ then
     echo "" >> /tmp/already_downloaded
 
 else
-    xdotool key Return
+    #xdotool key Return
+    mouseover -1 20000 ~/.dotfiles/shortcuts/images/save.png && xdotool click 1 && xdotool click 1
 fi
 
