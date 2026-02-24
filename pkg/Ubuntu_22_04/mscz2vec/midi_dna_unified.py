@@ -904,11 +904,14 @@ class UnifiedDNA:
         part = self._get_melody_part(sc)
         mel = []
         for el in part.flatten().notes:
-            if isinstance(el, note.Note):
+            if isinstance(el, note.Note) and hasattr(el, 'pitch'):
                 mel.append((float(el.offset), el.pitch.midi, float(el.quarterLength)))
-            elif isinstance(el, chord.Chord):
-                top = max(el.pitches, key=lambda p: p.midi)
-                mel.append((float(el.offset), top.midi, float(el.quarterLength)))
+            elif isinstance(el, chord.Chord) and el.pitches:
+                try:
+                    top = max(el.pitches, key=lambda p: p.midi)
+                    mel.append((float(el.offset), top.midi, float(el.quarterLength)))
+                except Exception:
+                    pass
         mel.sort(key=lambda x: x[0])
         self.pitch_sequence = [m[1] for m in mel]
         self.pitch_register = int(np.mean(self.pitch_sequence)) if self.pitch_sequence else 60
@@ -1042,13 +1045,14 @@ class UnifiedDNA:
         k = self.key_obj
         all_notes = defaultdict(list)
         for el in sc.flatten().notes:
-            if isinstance(el, note.Note):
+            if isinstance(el, note.Note) and hasattr(el, 'pitch'):
                 slot = round(float(el.offset))
                 all_notes[slot].append(el.pitch)
-            elif isinstance(el, chord.Chord):
+            elif isinstance(el, chord.Chord) and el.pitches:
                 slot = round(float(el.offset))
                 for p in el.pitches:
-                    all_notes[slot].append(p)
+                    if hasattr(p, 'midi'):
+                        all_notes[slot].append(p)
         if not all_notes:
             self.harmony_prog = [('I', 2.0), ('IV', 2.0), ('V', 2.0), ('I', 2.0)] * 4
             return
@@ -1178,9 +1182,11 @@ class UnifiedDNA:
             else:
                 tonnetz_raw.append(tonnetz_raw[-1] if tonnetz_raw else 0.0)
 
-            # Rugosidad
+            # Rugosidad (se excluyen PercussionChord y elementos sin .pitch estándar)
             all_midi = sorted(set(
-                p.midi for el in ns for p in (el.pitches if isinstance(el, chord.Chord) else [el.pitch])
+                p.midi for el in ns
+                for p in (el.pitches if isinstance(el, chord.Chord) else
+                          ([el.pitch] if isinstance(el, note.Note) else []))
                 if hasattr(p, 'midi')
             ))
             if len(all_midi) >= 2:
