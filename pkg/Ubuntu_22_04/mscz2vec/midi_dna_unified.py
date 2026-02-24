@@ -58,6 +58,23 @@ EJEMPLOS:
     python midi_dna_unified.py a.mid b.mid --mode custom --sources rhythm=0,melody=1,harmony=0
     python midi_dna_unified.py --melody a.mid --harmony b.mid --rhythm c.mid --form ABAB
 
+
+# Cuarteto de cuerda
+python midi_dna_unified.py a.mid b.mid \
+  --voices "violin,viola:inner,cello:inner,contrabass:bass_double"
+
+# Orquestación clásica
+python midi_dna_unified.py a.mid b.mid \
+  --voices "flute:melody_double,oboe:counterpoint,horn:pedal,bassoon:bass_double"
+
+# Con vel_scale personalizado (0.0–1.0)
+python midi_dna_unified.py a.mid b.mid \
+  --voices "violin:counterpoint:0.9,pad:pedal:0.5"
+
+# Combinado con acc-style
+python midi_dna_unified.py a.mid b.mid \
+  --acc-style alberti --voices "flute,horn:pedal"
+
 DEPENDENCIAS:
     pip install music21 mido numpy scipy scikit-learn
 """
@@ -2020,10 +2037,13 @@ def humanize(notes_list, groove_map=None, ts_num=4, micro_jitter=True):
 
 def build_midi(melody_notes, acc_notes, bass_notes, cp_notes,
                target_key, tempo_bpm, time_sig, n_bars,
-               form_gen=None, output_path='output_unified.mid'):
+               form_gen=None, output_path='output_unified.mid',
+               extra_voices=None):
     """
-    Escribe el MIDI con mido. Soporta 4 pistas: melodía, contrapunto,
-    acompañamiento, bajo. [escribe directamente sin music21 streams]
+    Escribe el MIDI con mido.
+    Pistas fijas: Melody, Counterpoint, Accompaniment, Bass.
+    Pistas extra: una por cada voz en extra_voices (lista de dicts con
+                  'notes', 'name', 'program', 'channel').
     """
     TICKS = 480
     bpb, bu = time_sig
@@ -2078,13 +2098,438 @@ def build_midi(melody_notes, acc_notes, bass_notes, cp_notes,
         trk.append(mido.MetaMessage('end_of_track', time=0))
         return trk
 
-    mid.tracks.append(notes_to_track(melody_notes, 0, 'Melody',     program=0))
+    mid.tracks.append(notes_to_track(melody_notes, 0, 'Melody',       program=0))
     mid.tracks.append(notes_to_track(cp_notes,     1, 'Counterpoint', program=0))
-    mid.tracks.append(notes_to_track(acc_notes,    2, 'Accompaniment', program=0))
-    mid.tracks.append(notes_to_track(bass_notes,   3, 'Bass',        program=32))
+    mid.tracks.append(notes_to_track(acc_notes,    2, 'Accompaniment',program=0))
+    mid.tracks.append(notes_to_track(bass_notes,   3, 'Bass',         program=32))
+
+    # Pistas de voces adicionales (canales 4+, hasta 15 para evitar canal 9=percusión)
+    if extra_voices:
+        for i, ev in enumerate(extra_voices):
+            ch = min(4 + i, 15)
+            if ch == 9: ch = 10  # saltar canal de percusión
+            mid.tracks.append(notes_to_track(
+                ev['notes'], ch, ev['name'], program=ev['program']))
+            print(f"  → Voz '{ev['name']}' ({len(ev['notes'])} notas, "
+                  f"prog={ev['program']}, ch={ch})")
+
     mid.save(output_path)
     print(f"  → MIDI guardado: {output_path}")
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  VOCES ADICIONALES — presets de instrumento y generadores por rol
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Presets: nombre → {program MIDI, rango (lo,hi), rol por defecto, vel_scale}
+VOICE_PRESETS = {
+    # Cuerdas
+    'violin':      {'program': 40, 'range': (64, 88), 'role': 'counterpoint', 'vel': 0.85},
+    'viola':       {'program': 41, 'range': (55, 76), 'role': 'inner',        'vel': 0.80},
+    'cello':       {'program': 42, 'range': (36, 60), 'role': 'inner',        'vel': 0.80},
+    'contrabass':  {'program': 43, 'range': (28, 50), 'role': 'bass_double',  'vel': 0.90},
+    'harp':        {'program': 46, 'range': (48, 84), 'role': 'arpeggio',     'vel': 0.75},
+    'strings':     {'program': 48, 'range': (48, 76), 'role': 'inner',        'vel': 0.70},
+    # Maderas
+    'flute':       {'program': 73, 'range': (72, 96), 'role': 'melody_double','vel': 0.80},
+    'piccolo':     {'program': 72, 'range': (79,103), 'role': 'melody_double','vel': 0.75},
+    'oboe':        {'program': 68, 'range': (60, 84), 'role': 'counterpoint', 'vel': 0.80},
+    'clarinet':    {'program': 71, 'range': (52, 84), 'role': 'inner',        'vel': 0.80},
+    'bassoon':     {'program': 70, 'range': (34, 60), 'role': 'bass_double',  'vel': 0.85},
+    'saxophone':   {'program': 65, 'range': (49, 80), 'role': 'counterpoint', 'vel': 0.85},
+    # Metales
+    'trumpet':     {'program': 56, 'range': (55, 82), 'role': 'melody_double','vel': 0.90},
+    'horn':        {'program': 60, 'range': (40, 72), 'role': 'pedal',        'vel': 0.80},
+    'trombone':    {'program': 57, 'range': (40, 67), 'role': 'inner',        'vel': 0.85},
+    'tuba':        {'program': 58, 'range': (28, 52), 'role': 'bass_double',  'vel': 0.90},
+    # Teclados/Pads
+    'organ':       {'program': 19, 'range': (36, 84), 'role': 'inner',        'vel': 0.70},
+    'pad':         {'program': 88, 'range': (48, 76), 'role': 'pedal',        'vel': 0.60},
+    'choir':       {'program': 52, 'range': (52, 79), 'role': 'inner',        'vel': 0.65},
+    'vibraphone':  {'program': 11, 'range': (53, 89), 'role': 'ostinato',     'vel': 0.75},
+    'marimba':     {'program': 12, 'range': (48, 84), 'role': 'ostinato',     'vel': 0.75},
+    # Guitarras
+    'guitar':      {'program': 24, 'range': (40, 76), 'role': 'arpeggio',     'vel': 0.80},
+    'guitar_mute': {'program': 28, 'range': (40, 76), 'role': 'ostinato',     'vel': 0.85},
+}
+
+VOICE_ROLES = ['counterpoint', 'inner', 'melody_double', 'pedal',
+               'bass_double', 'ostinato', 'arpeggio']
+
+
+def parse_voices_arg(voices_str):
+    """
+    Parsea --voices "violin,viola:inner,horn:pedal:0.7"
+    Cada token: nombre[:rol[:vel_override]]
+    Devuelve lista de dicts con preset resuelto.
+    """
+    if not voices_str:
+        return []
+    voices = []
+    for token in voices_str.split(','):
+        token = token.strip()
+        if not token:
+            continue
+        parts = token.split(':')
+        inst_name = parts[0].strip().lower()
+        if inst_name not in VOICE_PRESETS:
+            print(f"  ⚠ Instrumento desconocido: '{inst_name}' — ignorado.")
+            print(f"    Disponibles: {', '.join(sorted(VOICE_PRESETS))}")
+            continue
+        preset = dict(VOICE_PRESETS[inst_name])
+        preset['name'] = inst_name
+        if len(parts) >= 2 and parts[1].strip() in VOICE_ROLES:
+            preset['role'] = parts[1].strip()
+        if len(parts) >= 3:
+            try:
+                preset['vel'] = float(parts[2])
+            except ValueError:
+                pass
+        voices.append(preset)
+    return voices
+
+
+# ── Rol: inner ────────────────────────────────────────────────────────────────
+
+def generate_voice_inner(harmony_prog, key_obj, n_bars, emotional_ctrl,
+                          beats_per_bar, lo, hi, vel_scale, groove_map=None):
+    """
+    Voz interior: nota media del acorde, notas largas (una por acorde).
+    Usa voice-leading mínimo entre acordes. [K]
+    """
+    result = []
+    total_beats = n_bars * beats_per_bar
+    h_exp = []
+    bt = 0.0
+    while bt < total_beats:
+        for fig, dur in harmony_prog:
+            h_exp.append((bt, min(dur, total_beats - bt), fig))
+            bt += dur
+            if bt >= total_beats:
+                break
+    prev_p = None
+    for chord_start, chord_dur, fig in h_exp:
+        bar_idx = int(chord_start / beats_per_bar)
+        ep = emotional_ctrl.get_bar_params(bar_idx, n_bars)
+        pitches = _build_chord_pitches_from_roman(fig, key_obj, register='chords')
+        # Filtrar al rango del instrumento
+        in_range = [p for p in pitches if lo <= p <= hi]
+        if not in_range:
+            # Transponer la más cercana al rango
+            p_base = pitches[len(pitches) // 2] if pitches else (lo + hi) // 2
+            while p_base > hi: p_base -= 12
+            while p_base < lo: p_base += 12
+            in_range = [max(lo, min(hi, p_base))]
+        # Voice leading: elegir la más cercana a la nota anterior
+        if prev_p is not None:
+            p = min(in_range, key=lambda x: abs(x - prev_p))
+        else:
+            p = in_range[len(in_range) // 2]
+        vel_base = max(25, int(ep['velocity'] * vel_scale * 0.85))
+        gd = groove_map.get_offset(chord_start % beats_per_bar, beats_per_bar)              if groove_map and groove_map.trained else 0.0
+        result.append((max(0, chord_start + gd), p,
+                       chord_dur * 0.88, vel_base))
+        prev_p = p
+    return result
+
+
+# ── Rol: counterpoint ────────────────────────────────────────────────────────
+
+def generate_voice_counterpoint(melody_notes, harmony_prog, key_obj,
+                                 n_bars, beats_per_bar, lo, hi,
+                                 vel_scale, groove_map=None):
+    """
+    Segunda voz en movimiento contrario a la melodía, en rango del instrumento.
+    Reutiliza la lógica de generate_counterpoint ajustando el rango. [G]
+    """
+    if not melody_notes:
+        return []
+    GOOD_INTERVALS = {3, 4, 8, 9}
+    AVOID_PARALLEL = {7, 12}
+
+    h_timeline, total_h = _harmony_timeline(harmony_prog, n_bars * beats_per_bar)
+    mel_by_measure = defaultdict(list)
+    for offset, midi, dur, vel in melody_notes:
+        m_idx = int(offset / beats_per_bar)
+        mel_by_measure[m_idx].append((offset, midi))
+
+    result = []
+    prev_cp, prev_mel = None, None
+
+    for m in range(n_bars):
+        m_off = m * beats_per_bar
+        chord_p = _build_chord_pitches_from_roman(
+            _chord_at(m_off, h_timeline, total_h), key_obj, register='chords')
+        mel_m = mel_by_measure.get(m, [])
+        if not mel_m:
+            continue
+        beats_in = [0.0, float(beats_per_bar) / 2] if beats_per_bar >= 2 else [0.0]
+        for beat in beats_in:
+            mel_at = [(o, p) for o, p in mel_m
+                      if abs(o - (m * beats_per_bar + beat)) < 0.5]
+            if not mel_at:
+                continue
+            mel_p = mel_at[0][1]
+            # Candidatos en rango del instrumento
+            candidates = [p for p in chord_p if lo <= p <= hi]
+            if not candidates:
+                c = _snap_to_scale(mel_p - 5, key_obj)
+                while c > hi: c -= 12
+                while c < lo: c += 12
+                candidates = [max(lo, min(hi, c))]
+            best_cp, best_score = None, -999
+            for cp_c in candidates:
+                iv = abs(mel_p - cp_c) % 12
+                score = 3 if iv in GOOD_INTERVALS else (1 if iv in {0,12} else -1)
+                if prev_cp and prev_mel:
+                    prev_iv = abs(prev_mel - prev_cp) % 12
+                    if prev_iv in AVOID_PARALLEL and iv == prev_iv:
+                        score -= 4
+                    mel_dir = np.sign(mel_p - prev_mel)
+                    cp_dir  = np.sign(cp_c - prev_cp)
+                    if mel_dir != 0 and cp_dir == -mel_dir: score += 2
+                    elif cp_dir == 0: score += 1
+                if prev_cp and abs(cp_c - prev_cp) > 7: score -= 2
+                if score > best_score:
+                    best_score, best_cp = score, cp_c
+            if best_cp is None:
+                best_cp = candidates[0]
+            dur = float(beats_per_bar) / len(beats_in)
+            gd = groove_map.get_offset(beat, beats_per_bar)                  if groove_map and groove_map.trained else 0.0
+            vel = max(25, int(random.randint(45, 65) * vel_scale))
+            result.append((max(0, m_off + beat + gd), best_cp, dur * 0.87, vel))
+            prev_cp, prev_mel = best_cp, mel_p
+    return result
+
+
+# ── Rol: melody_double ────────────────────────────────────────────────────────
+
+def generate_voice_melody_double(melody_notes, key_obj, lo, hi,
+                                  vel_scale, interval_semitones=4):
+    """
+    Dobla la melodía a un intervalo (3ª mayor=4, 6ª menor=8, octava=12…).
+    El intervalo se calcula automáticamente según el rango del instrumento:
+    si el instrumento es agudo (lo>64) dobla a la octava superior,
+    si es grave dobla a la tercera inferior.
+    """
+    result = []
+    mel_mean = np.mean([m for _, m, _, _ in melody_notes]) if melody_notes else 65
+    # Decidir dirección: si rango del instrumento está por encima de la melodía → subir
+    center = (lo + hi) / 2
+    if center > mel_mean + 6:
+        iv = 12   # octava superior
+    elif center < mel_mean - 6:
+        iv = -7   # quinta inferior
+    else:
+        iv = interval_semitones  # 3ª mayor por defecto
+
+    for offset, midi, dur, vel in melody_notes:
+        doubled = _snap_to_scale(midi + iv, key_obj)
+        while doubled > hi: doubled -= 12
+        while doubled < lo: doubled += 12
+        doubled = max(lo, min(hi, doubled))
+        new_vel = max(20, int(vel * vel_scale * 0.80))
+        result.append((offset, doubled, dur * 0.92, new_vel))
+    return result
+
+
+# ── Rol: pedal ────────────────────────────────────────────────────────────────
+
+def generate_voice_pedal(harmony_prog, key_obj, n_bars, emotional_ctrl,
+                          beats_per_bar, lo, hi, vel_scale):
+    """
+    Nota de pedal: alterna tónica y dominante según la función armónica.
+    Notas largas (un valor por compás). Ideal para trompa, pad, órgano.
+    """
+    result = []
+    tonic_pc  = pitch.Pitch(key_obj.tonic.name).pitchClass
+    dom_pc    = (tonic_pc + 7) % 12
+
+    h_timeline, total_h = _harmony_timeline(harmony_prog, n_bars * beats_per_bar)
+
+    for bar_idx in range(n_bars):
+        beat = bar_idx * beats_per_bar
+        ep   = emotional_ctrl.get_bar_params(bar_idx, n_bars)
+        fig  = _chord_at(beat, h_timeline, total_h)
+        func = _roman_to_func_str(fig)
+
+        # Elegir tónica o dominante según función
+        base_pc = dom_pc if func in ('D', 'Dsec') else tonic_pc
+        p = base_pc + 48
+        while p > hi: p -= 12
+        while p < lo: p += 12
+        p = max(lo, min(hi, p))
+
+        # Tensión alta → más forte
+        vel = max(25, int((ep['velocity'] - 20) * vel_scale * 0.75))
+        result.append((float(beat), p, float(beats_per_bar) * 0.92, vel))
+    return result
+
+
+# ── Rol: bass_double ─────────────────────────────────────────────────────────
+
+def generate_voice_bass_double(bass_notes, key_obj, lo, hi, vel_scale):
+    """
+    Dobla la línea de bajo a la octava inferior (o superior si el instrumento
+    está por encima). Ideal para contrabajo, fagot, tuba.
+    """
+    result = []
+    bass_mean = np.mean([m for _, m, _, _ in bass_notes]) if bass_notes else 40
+    center = (lo + hi) / 2
+    iv = -12 if center < bass_mean else 12
+
+    for offset, midi, dur, vel in bass_notes:
+        doubled = midi + iv
+        while doubled > hi: doubled -= 12
+        while doubled < lo: doubled += 12
+        doubled = max(lo, min(hi, doubled))
+        new_vel = max(20, int(vel * vel_scale))
+        result.append((offset, doubled, dur, new_vel))
+    return result
+
+
+# ── Rol: ostinato ─────────────────────────────────────────────────────────────
+
+def generate_voice_ostinato(harmony_prog, key_obj, n_bars, emotional_ctrl,
+                              beats_per_bar, lo, hi, vel_scale,
+                              rhythm_cell=None, groove_map=None):
+    """
+    Célula rítmica repetida en notas del acorde.
+    Ideal para vibráfono, marimba, guitarra muted.
+    """
+    result = []
+    cell = rhythm_cell or [0.5, 0.5, 1.0, 0.5, 0.5, 1.0]
+    h_timeline, total_h = _harmony_timeline(harmony_prog, n_bars * beats_per_bar)
+
+    for bar_idx in range(n_bars):
+        bar_start = bar_idx * beats_per_bar
+        ep = emotional_ctrl.get_bar_params(bar_idx, n_bars)
+        fig = _chord_at(float(bar_start), h_timeline, total_h)
+        pitches = _build_chord_pitches_from_roman(fig, key_obj, register='chords')
+        in_range = [p for p in pitches if lo <= p <= hi]
+        if not in_range:
+            p_base = pitches[0] if pitches else (lo + hi) // 2
+            while p_base > hi: p_base -= 12
+            while p_base < lo: p_base += 12
+            in_range = [max(lo, min(hi, p_base))]
+
+        beat_cursor = 0.0
+        cell_idx = 0
+        while beat_cursor < beats_per_bar - 0.01:
+            dur = cell[cell_idx % len(cell)]
+            dur = min(dur, beats_per_bar - beat_cursor)
+            p   = in_range[cell_idx % len(in_range)]
+            gd  = groove_map.get_offset(beat_cursor, beats_per_bar)                   if groove_map and groove_map.trained else 0.0
+            vel = max(20, int(ep['velocity'] * vel_scale * 0.75
+                              + random.randint(-5, 5)))
+            result.append((max(0, bar_start + beat_cursor + gd),
+                           p, dur * 0.80, vel))
+            beat_cursor += dur
+            cell_idx += 1
+    return result
+
+
+# ── Rol: arpeggio ─────────────────────────────────────────────────────────────
+
+def generate_voice_arpeggio(harmony_prog, key_obj, n_bars, emotional_ctrl,
+                              beats_per_bar, lo, hi, vel_scale, groove_map=None):
+    """
+    Arpegio ascendente/descendente alternado por compás.
+    Ideal para arpa, guitarra.
+    """
+    result = []
+    h_timeline, total_h = _harmony_timeline(harmony_prog, n_bars * beats_per_bar)
+    direction = 1  # alterna por compás
+
+    for bar_idx in range(n_bars):
+        bar_start = bar_idx * beats_per_bar
+        ep = emotional_ctrl.get_bar_params(bar_idx, n_bars)
+        fig = _chord_at(float(bar_start), h_timeline, total_h)
+        pitches_raw = _build_chord_pitches_from_roman(fig, key_obj, register='chords')
+        # Expandir al rango del instrumento (añadir octavas)
+        expanded = []
+        for p in pitches_raw:
+            for shift in [-12, 0, 12]:
+                np2 = p + shift
+                if lo <= np2 <= hi:
+                    expanded.append(np2)
+        expanded = sorted(set(expanded)) if expanded else [max(lo, min(hi, pitches_raw[0] if pitches_raw else 60))]
+
+        if direction < 0:
+            expanded = list(reversed(expanded))
+        direction *= -1
+
+        n_notes = len(expanded)
+        sub_dur = beats_per_bar / max(n_notes, 1)
+        for i, p in enumerate(expanded):
+            gd = groove_map.get_offset(i * sub_dur, beats_per_bar)                  if groove_map and groove_map.trained else 0.0
+            # Primer nota más fuerte
+            v_mult = 1.0 if i == 0 else (0.85 if i % 2 == 0 else 0.70)
+            vel = max(20, int(ep['velocity'] * vel_scale * v_mult))
+            result.append((max(0, bar_start + i * sub_dur + gd),
+                           p, sub_dur * 0.82, vel))
+    return result
+
+
+# ── Dispatcher principal de voces ─────────────────────────────────────────────
+
+def generate_extra_voice(voice_preset, melody_notes, bass_notes,
+                          harmony_prog, key_obj, n_bars, emotional_ctrl,
+                          beats_per_bar, rhythm_cell=None, groove_map=None,
+                          humanize_flag=True):
+    """
+    Genera una voz adicional completa según su rol y preset.
+    Devuelve lista de (offset, midi, dur, vel).
+    """
+    lo, hi      = voice_preset['range']
+    vel_scale   = voice_preset.get('vel', 0.80)
+    role        = voice_preset['role']
+    gm = groove_map if humanize_flag else None
+
+    if role == 'inner':
+        notes = generate_voice_inner(
+            harmony_prog, key_obj, n_bars, emotional_ctrl,
+            beats_per_bar, lo, hi, vel_scale, gm)
+
+    elif role == 'counterpoint':
+        notes = generate_voice_counterpoint(
+            melody_notes, harmony_prog, key_obj,
+            n_bars, beats_per_bar, lo, hi, vel_scale, gm)
+
+    elif role == 'melody_double':
+        notes = generate_voice_melody_double(
+            melody_notes, key_obj, lo, hi, vel_scale)
+
+    elif role == 'pedal':
+        notes = generate_voice_pedal(
+            harmony_prog, key_obj, n_bars, emotional_ctrl,
+            beats_per_bar, lo, hi, vel_scale)
+
+    elif role == 'bass_double':
+        notes = generate_voice_bass_double(
+            bass_notes, key_obj, lo, hi, vel_scale)
+
+    elif role == 'ostinato':
+        notes = generate_voice_ostinato(
+            harmony_prog, key_obj, n_bars, emotional_ctrl,
+            beats_per_bar, lo, hi, vel_scale, rhythm_cell, gm)
+
+    elif role == 'arpeggio':
+        notes = generate_voice_arpeggio(
+            harmony_prog, key_obj, n_bars, emotional_ctrl,
+            beats_per_bar, lo, hi, vel_scale, gm)
+
+    else:
+        notes = []
+
+    # Micro-humanización final
+    if humanize_flag and notes:
+        notes = [(max(0, o + random.uniform(-0.008, 0.008)),
+                  m, d, int(np.clip(v + random.randint(-3, 3), 20, 127)))
+                 for o, m, d, v in notes]
+
+    return sorted(notes, key=lambda x: x[0])
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  SCORING DE CANDIDATOS  [N]
@@ -2179,7 +2624,7 @@ def _run_generation(
     # Contrapunto [G]
     cp = generate_counterpoint(mel, h_prog, target_key, n_bars, bpb)
 
-    return mel, acc, bass, cp
+    return mel, acc, bass, cp, h_prog, r_src.rhythm_cell
 
 
 def _auto_select_mode(dnas):
@@ -2208,7 +2653,7 @@ def run_mixing(dnas, target_key, n_bars, tempo_bpm, time_sig, mode,
                emotion_src_idx, form_src_idx, sources,
                rhythm_strength, surprise_rate, humanize_groove,
                form_override=None, n_candidates=1, verbose=False,
-               force_acc_style=None):
+               force_acc_style=None, voice_presets=None):
     """Motor principal de mezcla. Genera candidatos y elige el mejor. [N]"""
 
     ec, fg = _prepare_controllers(dnas, emotion_src_idx, form_src_idx, n_bars, form_override)
@@ -2274,13 +2719,13 @@ def run_mixing(dnas, target_key, n_bars, tempo_bpm, time_sig, mode,
         print(f"  🎵 Melodía → {m_src.name} (motor: {melody_mode})")
 
     # Candidatos [N]
-    best_score, best_result = -1, None
+    best_score, best_result, best_h_prog, best_rhythm_cell = -1, None, None, None
     for c in range(max(1, n_candidates)):
         random.seed(42 + c * 17)
         np.random.seed(42 + c * 17)
         if n_candidates > 1:
             print(f"  🎲 Candidato {c+1}/{n_candidates}")
-        mel, acc, bass, cp = _run_generation(
+        mel, acc, bass, cp, h_prog, rhythm_cell = _run_generation(
             h_src, m_src, r_src,
             target_key, n_bars, tempo_bpm, ec, fg, time_sig,
             rhythm_strength, melody_mode, surprise_rate, humanize_groove,
@@ -2290,11 +2735,38 @@ def run_mixing(dnas, target_key, n_bars, tempo_bpm, time_sig, mode,
         print(f"    Score: {sc:.3f}")
         if sc > best_score:
             best_score, best_result = sc, (mel, acc, bass, cp)
+            best_h_prog, best_rhythm_cell = h_prog, rhythm_cell
 
     if n_candidates > 1:
         print(f"  🏆 Mejor candidato: score={best_score:.3f}")
 
-    return best_result, ec, fg
+    mel, acc, bass, cp = best_result
+    groove = r_src.groove_map if r_src.groove_map.trained else None
+
+    # ── Voces adicionales ─────────────────────────────────────────────────────
+    extra_voices_out = []
+    if voice_presets:
+        print(f"\n  🎻 Generando {len(voice_presets)} voz/voces adicional(es)…")
+        for vp in voice_presets:
+            inst_name = vp['name']
+            print(f"    ▸ {inst_name} (rol: {vp['role']}, "
+                  f"rango: {vp['range'][0]}-{vp['range'][1]})")
+            notes = generate_extra_voice(
+                vp, mel, bass, best_h_prog,
+                target_key, n_bars, ec,
+                time_sig[0],
+                rhythm_cell=best_rhythm_cell,
+                groove_map=groove,
+                humanize_flag=humanize_groove,
+            )
+            extra_voices_out.append({
+                'notes':   notes,
+                'name':    inst_name,
+                'program': vp['program'],
+            })
+            print(f"      → {len(notes)} notas")
+
+    return (mel, acc, bass, cp), ec, fg, extra_voices_out
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2411,6 +2883,11 @@ def main():
     parser.add_argument('--acc-style', default=None,
         choices=['alberti', 'arpeggio', 'block', 'waltz'],
         help='Forzar estilo de acompañamiento en todos los compases')
+    parser.add_argument('--voices', default=None,
+        help='Voces extra: "violin,viola:inner,horn:pedal:0.7"  '
+             'Formato: instrumento[:rol[:vel_scale]]  '
+             f'Instrumentos: {", ".join(sorted(["violin","viola","cello","contrabass","harp","strings","flute","piccolo","oboe","clarinet","bassoon","saxophone","trumpet","horn","trombone","tuba","organ","pad","choir","vibraphone","marimba","guitar","guitar_mute"]))}  '
+             f'Roles: counterpoint, inner, melody_double, pedal, bass_double, ostinato, arpeggio')
     parser.add_argument('--candidates', type=int, default=1)
     parser.add_argument('--seed', type=int, default=42)
     # Opciones
@@ -2468,16 +2945,22 @@ def main():
     n_bars     = args.bars
     sources    = parse_sources(args.sources)
 
+    # Parsear voces adicionales
+    voice_presets = parse_voices_arg(args.voices) if args.voices else []
+
     print(f"\n[2/4] Configuración:")
     print(f"    Tonalidad : {target_key.tonic.name} {target_key.mode}")
     print(f"    Tempo     : {tempo_bpm:.0f} BPM | Compás: {time_sig[0]}/{time_sig[1]}")
     print(f"    Compases  : {n_bars} | Modo: {args.mode.upper()}")
     print(f"    Sorpresa  : {args.surprise:.2f} | Groove: {not args.no_humanize}")
     print(f"    Candidatos: {args.candidates}")
+    if voice_presets:
+        names = ", ".join(f"{vp['name']}({vp['role']})" for vp in voice_presets)
+        print(f"    Voces ext.: {names}")
 
     # ── Mezcla ────────────────────────────────────────────────────────────────
     print(f"\n[3/4] Generando…")
-    (mel, acc, bass, cp), ec, fg = run_mixing(
+    (mel, acc, bass, cp), ec, fg, extra_voices = run_mixing(
         dnas, target_key, n_bars, tempo_bpm, time_sig,
         mode             = args.mode,
         emotion_src_idx  = esi,
@@ -2490,17 +2973,21 @@ def main():
         n_candidates     = args.candidates,
         verbose          = args.verbose,
         force_acc_style  = args.acc_style,
+        voice_presets    = voice_presets,
     )
 
     print(f"    → Melodía         : {len(mel)} notas")
     print(f"    → Contrapunto     : {len(cp)} notas")
     print(f"    → Acompañamiento  : {len(acc)} eventos")
     print(f"    → Bajo            : {len(bass)} notas")
+    for ev in extra_voices:
+        print(f"    → {ev['name']:16s}: {len(ev['notes'])} notas")
 
     # ── Exportar MIDI ─────────────────────────────────────────────────────────
     print(f"\n[4/4] Exportando…")
     build_midi(mel, acc, bass, cp, target_key, tempo_bpm, time_sig, n_bars,
-               form_gen=fg, output_path=args.output)
+               form_gen=fg, output_path=args.output,
+               extra_voices=extra_voices if extra_voices else None)
 
     # ── Export XML opcional [R] ───────────────────────────────────────────────
     if args.export_xml:
@@ -2526,6 +3013,8 @@ def main():
             sc_out.insert(0, notes_to_part(cp,   'Counterpoint'))
             sc_out.insert(0, notes_to_part(acc,  'Accompaniment'))
             sc_out.insert(0, notes_to_part(bass, 'Bass', 32))
+            for ev in extra_voices:
+                sc_out.insert(0, notes_to_part(ev['notes'], ev['name'], ev['program']))
             sc_out.write('musicxml', fp=xml_path)
             print(f"  → MusicXML guardado: {xml_path}")
         except Exception as e:
@@ -2541,6 +3030,11 @@ def main():
     print(f"  Forma     : {fg.form_string}")
     print(f"  Arco      : {dnas[esi].emotional_arc_label}")
     print(f"  Fuentes   : {' + '.join(d.name for d in dnas)}")
+    if extra_voices:
+        voice_summary = ', '.join(f"{ev['name']}({VOICE_PRESETS[ev['name']]['role']})"
+                                   for ev in extra_voices)
+        print(f"  Voces ext.: {voice_summary}")
+    print(f"  Pistas    : {4 + len(extra_voices)}")
     print(f"  Fichero   : {args.output}")
     print("═"*65)
 
