@@ -9,16 +9,6 @@ dag_prune(){
     done
 }
 
-dag_slice () {
-    cat $1 | grep -v " -> $2\$" > /tmp/dag_pruned
-    echo "$2" > /tmp/dag.roots
-    for a in $(seq 1 10)
-    do
-        dag_prune
-    done
-    cat /tmp/dag_pruned
-}
-
 dag_invert(){
     sed -e 's/ -> /@/g' -e 's|^\([^@]*\)@\([^@]*\)$|\2 -> \1|g'
 }
@@ -26,4 +16,19 @@ dag_invert(){
 dag_mermaid(){
     echo flowchart LR
     cat | sed 's/ -> / --> /g'
+}
+
+dag_slice () {
+    cat > /tmp/dag_original
+    cat /tmp/dag_original | grep -v " -> $1\$" > /tmp/dag_pruned
+    echo "$1" > /tmp/dag.roots
+    for a in $(seq 1 10)
+    do
+        dag_prune
+    done
+    cat /tmp/dag_pruned
+}
+
+dag_slice_rev () {
+    cat | dag_invert | dag_slice $1 | dag_invert
 }
