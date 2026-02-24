@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║               MIDI DNA UNIFIED MIXER  v1.0                                  ║
+║               MIDI DNA UNIFIED MIXER  v1.1                                  ║
 ║   Fusión de lo mejor de tres generaciones de mezcladores MIDI               ║
 ║                                                                              ║
 ║  CARACTERÍSTICAS:                                                            ║
@@ -12,18 +12,27 @@
 ║  [D] Markov de 2º orden (intervalo × duración) para melodía estilística    ║
 ║  [E] Mosaic splicing: fragmentos reales transpuestos                        ║
 ║  [F] Ornamentación idiomática: mordentes, apoyaturas, notas de paso        ║
-║  [G] Contrapunto de 2 voces con movimiento contrario                       ║
+║      → Aplicada también en contrapunto y voces dobles                       ║
+║  [G] Contrapunto multi-especie: 1ª/2ª/3ª especie según densidad emocional  ║
+║      Resolución automática de disonancias por grado conjunto                ║
 ║  [H] Groove map: timing humanizado extraído del MIDI fuente                ║
 ║  [I] Patrón de acompañamiento real detectado del MIDI fuente               ║
 ║  [J] Sequitur grammar: frases repetidas clasificadas por calidad musical    ║
 ║  [K] Voice-leading riguroso: sin paralelas, movimiento mínimo              ║
 ║  [L] Bajo Alberti/arpegio/bloque elegido por energía y tensión             ║
 ║  [M] Puentes pivot-chord entre secciones                                    ║
-║  [N] Candidatos múltiples con scoring de calidad musical                    ║
+║  [N] Candidatos múltiples con scoring de calidad musical extendido:         ║
+║      consonancia + variedad + rango + continuidad + arco dinámico          ║
 ║  [O] EmotionalController: parámetros compás-a-compás desde curvas          ║
 ║  [P] FormGenerator: estructura formal heredada y escalada                   ║
-║  [Q] Modulación temporal en sección B (relativo / dominante)               ║
+║  [Q] Modulación real por sección: relativo en B, dominante en C            ║
 ║  [R] Export MusicXML opcional                                               ║
+║  [S] Silencios estructurales de frase en cadencias                          ║
+║      CC#64 sustain pedal + CC#11 expression curve en todas las pistas       ║
+║      Acordes de 7ª y 9ª automáticos según harmony_complexity               ║
+║  [T] Walking bass melódico: notas de paso, 5ª/7ª, aproximación cromática   ║
+║  [U] Percusión generada desde rhythm_grid: kick, snare, hi-hat, crash      ║
+║  [V] Export split-tracks: una pista por fichero para DAW                    ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 USO:
@@ -46,34 +55,115 @@ OPCIONES PRINCIPALES:
     --rhythm_strength F  Fuerza del groove 0-2 (default: 1.0)
     --candidates N  Generar N candidatos y elegir el mejor (default: 1)
     --no-humanize   Desactivar humanización de groove
+    --no-percussion Desactivar pista de percusión automática
+    --split-tracks  Exportar cada pista como fichero MIDI independiente
     --export-xml    Exportar también en MusicXML
     --verbose       Informe detallado del ADN
     --output FILE   Archivo de salida (default: output_unified.mid)
     --seed N        Semilla aleatoria (default: 42)
 
 EJEMPLOS:
+
+  ── Uso básico ──────────────────────────────────────────────────────────────
+    # Mezcla automática de dos MIDIs, resultado en archivo por defecto
+    python midi_dna_unified.py bach.mid jazz.mid
+
+    # Modo mosaico con informe detallado del ADN
     python midi_dna_unified.py bach.mid jazz.mid --mode mosaic --verbose
+
+    # Mezcla de tres fuentes, 32 compases, armonía+melodía
     python midi_dna_unified.py a.mid b.mid c.mid --mode harmony_melody --bars 32
-    python midi_dna_unified.py a.mid b.mid --mode emotion --key "A minor"
-    python midi_dna_unified.py a.mid b.mid --mode custom --sources rhythm=0,melody=1,harmony=0
-    python midi_dna_unified.py --melody a.mid --harmony b.mid --rhythm c.mid --form ABAB
 
+    # Arco emocional de b.mid, forma AABA, tonalidad destino La menor
+    python midi_dna_unified.py a.mid b.mid --mode emotion \
+        --key "A minor" --form AABA --emotion_src 1
 
-# Cuarteto de cuerda
-python midi_dna_unified.py a.mid b.mid \
-  --voices "violin,viola:inner,cello:inner,contrabass:bass_double"
+    # Fuentes explícitas para modo custom
+    python midi_dna_unified.py a.mid b.mid --mode custom \
+        --sources rhythm=0,melody=1,harmony=0
 
-# Orquestación clásica
-python midi_dna_unified.py a.mid b.mid \
-  --voices "flute:melody_double,oboe:counterpoint,horn:pedal,bassoon:bass_double"
+    # Roles explícitos por fichero
+    python midi_dna_unified.py \
+        --melody a.mid --harmony b.mid --rhythm c.mid --form ABAB
 
-# Con vel_scale personalizado (0.0–1.0)
-python midi_dna_unified.py a.mid b.mid \
-  --voices "violin:counterpoint:0.9,pad:pedal:0.5"
+  ── Tempo y semilla ─────────────────────────────────────────────────────────
+    # Fijar tempo a 120 BPM y semilla reproducible
+    python midi_dna_unified.py a.mid b.mid --tempo 120 --seed 7
 
-# Combinado con acc-style
-python midi_dna_unified.py a.mid b.mid \
-  --acc-style alberti --voices "flute,horn:pedal"
+    # Resultado determinista para comparación de modos
+    python midi_dna_unified.py a.mid b.mid --mode full_blend \
+        --bars 24 --tempo 96 --seed 0 --output mezcla_96bpm.mid
+
+  ── Estilo de acompañamiento ────────────────────────────────────────────────
+    # Forzar bajo Alberti en todos los compases
+    python midi_dna_unified.py a.mid b.mid --acc-style alberti
+
+    # Arpegio ascendente, sin humanización de groove
+    python midi_dna_unified.py a.mid b.mid --acc-style arpeggio --no-humanize
+
+    # Vals (3/4), acompañamiento en bloque con arch emocional
+    python midi_dna_unified.py valse.mid otra.mid \
+        --acc-style waltz --mode emotion --bars 32
+
+  ── Voces extra ─────────────────────────────────────────────────────────────
+    # Cuarteto de cuerda completo
+    python midi_dna_unified.py a.mid b.mid \
+        --voices "violin,viola:inner,cello:inner,contrabass:bass_double"
+
+    # Orquestación clásica de cámara
+    python midi_dna_unified.py a.mid b.mid \
+        --voices "flute:melody_double,oboe:counterpoint,horn:pedal,bassoon:bass_double"
+
+    # Voces con vel_scale personalizado (0.0–1.0)
+    python midi_dna_unified.py a.mid b.mid \
+        --voices "violin:counterpoint:0.9,pad:pedal:0.5"
+
+    # Acc-style + voces extra combinados
+    python midi_dna_unified.py a.mid b.mid \
+        --acc-style alberti --voices "flute,horn:pedal"
+
+    # Ostinato de vibraphone + doblaje de bajo
+    python midi_dna_unified.py a.mid b.mid \
+        --voices "vibraphone:ostinato:0.7,contrabass:bass_double:0.85"
+
+  ── Candidatos y calidad ────────────────────────────────────────────────────
+    # Generar 5 candidatos y conservar el de mejor scoring
+    python midi_dna_unified.py a.mid b.mid --candidates 5
+
+    # Candidatos + cromtismo reducido + groove fuerte
+    python midi_dna_unified.py a.mid b.mid \
+        --candidates 3 --surprise 0.02 --rhythm_strength 1.5
+
+    # Exploración creativa: mucho cromatismo, varios candidatos
+    python midi_dna_unified.py a.mid b.mid \
+        --candidates 8 --surprise 0.25 --mode mosaic --seed 99
+
+  ── Percusión ───────────────────────────────────────────────────────────────
+    # Percusión activada por defecto; desactivar si no se necesita
+    python midi_dna_unified.py a.mid b.mid --no-percussion
+
+    # Percusión + walking bass (jazz, acordes de 1 compás)
+    python midi_dna_unified.py jazz_a.mid jazz_b.mid \
+        --mode full_blend --acc-style arpeggio --bars 32
+
+  ── Pistas separadas (split) ────────────────────────────────────────────────
+    # Exportar cada pista como fichero independiente para DAW
+    python midi_dna_unified.py a.mid b.mid --split-tracks \
+        --output sesion.mid
+
+    # Pipeline completo con split y XML
+    python midi_dna_unified.py a.mid b.mid --split-tracks --export-xml \
+        --output obra.mid
+
+  ── Pipeline completo v1.1 ──────────────────────────────────────────────────
+    # Máxima calidad: 5 candidatos, walking bass, percusión, acordes 7ª/9ª,
+    # modulación real en sección B, ornamentación en todas las voces
+    python midi_dna_unified.py bach.mid jazz.mid salsa.mid \
+        --mode full_blend --bars 32 --tempo 112 --key "D major" \
+        --form AABA --candidates 5 --rhythm_strength 1.2 --surprise 0.05 \
+        --acc-style arpeggio \
+        --voices "violin:melody_double:0.8,cello:inner:0.75,horn:pedal:0.6" \
+        --export-xml --split-tracks --verbose --seed 42 --output obra_maestra.mid
 
 DEPENDENCIAS:
     pip install music21 mido numpy scipy scikit-learn
@@ -290,8 +380,9 @@ def _detect_style(tempo_bpm, swing, syncopation, complexity):
         return 'baroque'
     return 'generic'
 
-def _build_chord_pitches_from_roman(roman_figure, key_obj, prev_pitches=None, register='chords'):
-    """Construye pitches de un acorde con voice leading opcional."""
+def _build_chord_pitches_from_roman(roman_figure, key_obj, prev_pitches=None,
+                                     register='chords', harmony_complexity=0.3):
+    """Construye pitches de un acorde con voice leading opcional y extensiones [S]."""
     tonic_pc = pitch.Pitch(key_obj.tonic.name).pitchClass
     mode = key_obj.mode
     degree_map = MAJOR_SCALE_DEGREES if mode == 'major' else MINOR_SCALE_DEGREES
@@ -303,11 +394,22 @@ def _build_chord_pitches_from_roman(roman_figure, key_obj, prev_pitches=None, re
     else:
         semitones, quality = 0, 'M'
 
+    # Extensiones: añadir 7ª automáticamente si harmony_complexity > 0.5
+    # y añadir 9ª si > 0.75 (sólo en acordes de tónica y subdominante)
+    if harmony_complexity > 0.5 and '7' not in quality and quality in ('M', 'm'):
+        quality += '7'
+
     root_pc = (tonic_pc + semitones) % 12
     lo, hi = INSTRUMENT_RANGES.get(register, (48, 76))
     iq = {'M':[0,4,7], 'm':[0,3,7], 'd':[0,3,6], 'A':[0,4,8],
-          'M7':[0,4,7,10], 'm7':[0,3,7,10], 'd7':[0,3,6,9]}
+          'M7':[0,4,7,10], 'm7':[0,3,7,10], 'd7':[0,3,6,9],
+          'Mm7':[0,4,7,10], 'MM7':[0,4,7,11]}
     ints = iq.get(quality, [0,4,7])
+
+    # Añadir 9ª si complexity muy alta
+    if harmony_complexity > 0.75 and register == 'chords' and len(ints) >= 3:
+        ninth = 14  # 9ª mayor
+        ints = list(ints) + [ninth % 12 + 12]  # como extensión en octava superior
 
     if prev_pitches:
         return _voice_lead(prev_pitches, root_pc, quality, lo, hi)
@@ -1573,6 +1675,10 @@ def _generate_melody_contour(
             eff_aw = 1.0 + (accent_w - 1.0) * rhythm_strength
             dur_ratio = float(np.clip(0.55 + eff_aw * 0.20, 0.50, 0.97))
             actual_dur = note_dur * dur_ratio
+            # Silencio estructural de frase [S]: en compás de cadencia,
+            # la última nota se acorta para crear un respiro antes de la siguiente frase.
+            if is_cadence and note_idx == len(bar_rhythm) - 1:
+                actual_dur = max(0.1, actual_dur * 0.55)
             result.append((beat, candidate, max(0.1, actual_dur), vel))
             current_pitch = candidate
     return result
@@ -1621,6 +1727,9 @@ def _generate_melody_markov(
             if is_downbeat:   vel = random.randint(vel_base-5, vel_base+10)
             else:             vel = random.randint(vel_base-15, vel_base)
             vel = max(35, min(110, vel))
+            # Silencio estructural: en cadencia acortar la última nota de la frase
+            if is_cadence and beat + dur >= beats_per_bar - 0.05:
+                dur = max(0.1, dur * 0.55)
             result.append((global_beat + beat, p_midi, dur * 0.9, vel))
             beat += dur
     return result
@@ -1750,7 +1859,7 @@ def generate_melody_mosaic(dnas, harmony_prog, target_key, n_bars, ts_num,
 def generate_accompaniment(
     harmony_prog, key_obj, n_bars, emotional_ctrl, form_gen,
     beats_per_bar=4, acc_pattern=None, groove_map=None,
-    force_style=None
+    force_style=None, harmony_complexity=0.3
 ):
     """
     Acompañamiento con:
@@ -1783,7 +1892,8 @@ def generate_accompaniment(
         else:
             acc_style = ep['acc_style']
 
-        pitches = _build_chord_pitches_from_roman(fig, key_obj, prev_pitches, 'chords')
+        pitches = _build_chord_pitches_from_roman(fig, key_obj, prev_pitches, 'chords',
+                                                   harmony_complexity=harmony_complexity)
         if not pitches: pitches = [48, 52, 55]
         prev_pitches = pitches
         vel_base = max(35, ep['velocity'] - 15)
@@ -1836,7 +1946,13 @@ def generate_accompaniment(
 
 
 def generate_bass(harmony_prog, key_obj, n_bars, beats_per_bar=4, groove_map=None):
-    """Línea de bajo con voice leading y groove. [H]"""
+    """
+    Línea de bajo melódica con:
+    - Notas de paso cromáticas entre raíces (leading-tone approach)
+    - Walking bass cuando la energía es alta (ritmo en negras)
+    - 5ª y 7ª del acorde en tiempos débiles según tensión
+    - Voice leading de raíz a raíz con movimiento mínimo [K]
+    """
     result = []
     lo, hi = INSTRUMENT_RANGES['bass']
     total_beats = n_bars * beats_per_bar
@@ -1848,30 +1964,87 @@ def generate_bass(harmony_prog, key_obj, n_bars, beats_per_bar=4, groove_map=Non
             bt += dur
             if bt >= total_beats: break
 
-    prev_root = None
-    for chord_start, chord_dur, fig in h_exp:
+    def _bass_tones(fig, key_obj, lo, hi):
+        """Devuelve (root, fifth, seventh) en rango de bajo."""
         pitches = _build_chord_pitches_from_roman(fig, key_obj, register='bass')
-        if not pitches: pitches = [36]
-        root = pitches[0]
+        root = pitches[0] if pitches else 36
         while root > hi: root -= 12
         while root < lo: root += 12
+
+        # 5ª
+        fifth = root + 7
+        if fifth > hi: fifth -= 12
+        # 7ª (si existe en el acorde)
+        seventh = root + 10 if '7' in fig else root + 9
+        if seventh > hi: seventh -= 12
+        return root, max(lo, min(hi, fifth)), max(lo, min(hi, seventh))
+
+    # Detectar si el estilo pide walking (jazz/swing) o estilo clásico
+    # Lo inferimos de la complejidad armónica promedio
+    avg_dur = np.mean([d for _, d in harmony_prog]) if harmony_prog else beats_per_bar
+    walking = avg_dur <= beats_per_bar  # acordes de 1 compás o menos → walking posible
+
+    prev_root = None
+    for chord_idx, (chord_start, chord_dur, fig) in enumerate(h_exp):
+        root, fifth, seventh = _bass_tones(fig, key_obj, lo, hi)
+
+        # Voice-leading: preferir movimiento mínimo desde raíz anterior
         if prev_root is not None:
             while root - prev_root > 6:  root -= 12
             while prev_root - root > 6:  root += 12
         root = max(lo, min(hi, root))
+        fifth = max(lo, min(hi, root + 7 if root + 7 <= hi else root - 5))
+        seventh = max(lo, min(hi, root + 10 if root + 10 <= hi else root - 2))
+
         bpb = beats_per_bar
-        if bpb >= 4:
-            beats_in = [(0.0, 2.0), (2.0, 2.0)]
-        elif bpb == 3:
-            beats_in = [(0.0, 2.0), (2.0, 1.0)]
+        gd = groove_map.get_offset(0.0, bpb) if groove_map else 0.0
+        base_vel = groove_map.get_velocity(0.0, 80, bpb) if groove_map else 80
+
+        if walking and chord_dur >= bpb and bpb >= 4:
+            # Walking bass: negra en cada tiempo del compás
+            # tiempo 1: raíz, tiempo 2: quinta o tercera, tiempo 3: 7ª o paso,
+            # tiempo 4: nota de aproximación cromática a la siguiente raíz
+            next_root = root  # por defecto vuelve a sí mismo
+            if chord_idx + 1 < len(h_exp):
+                next_fig = h_exp[chord_idx + 1][2]
+                nps = _build_chord_pitches_from_roman(next_fig, key_obj, register='bass')
+                next_root = nps[0] if nps else root
+                while next_root > hi: next_root -= 12
+                while next_root < lo: next_root += 12
+
+            approach = next_root - 1 if next_root > root else next_root + 1
+            approach = max(lo, min(hi, approach))
+
+            walk = [root, fifth, seventh, approach]
+            n_steps = min(bpb, len(walk))
+            sub_dur = chord_dur / n_steps
+            for i in range(n_steps):
+                t = chord_start + i * sub_dur
+                gd_w = groove_map.get_offset(t % bpb, bpb) if groove_map else 0.0
+                v_w = groove_map.get_velocity(t % bpb,
+                      base_vel - (0 if i == 0 else 8 if i < n_steps-1 else 5), bpb) \
+                      if groove_map else (base_vel if i == 0 else base_vel - 8)
+                result.append((max(0, t + gd_w), walk[i], sub_dur * 0.85,
+                               int(np.clip(v_w, 20, 110))))
         else:
-            beats_in = [(0.0, float(bpb))]
-        for beat_off, dur_b in beats_in:
-            gd = groove_map.get_offset(beat_off, bpb) if groove_map else 0.0
-            actual_off = max(0, chord_start + beat_off + gd)
-            base_vel = 78 if beat_off < 0.05 else 62
-            vel = groove_map.get_velocity(beat_off, base_vel, bpb) if groove_map else base_vel
-            result.append((actual_off, root, dur_b*0.9, int(np.clip(vel, 20, 110))))
+            # Bajo clásico: tiempo 1 = raíz, tiempo 3 = quinta (o 7ª si tensión)
+            if bpb >= 4:
+                beats_in = [(0.0, 2.0, root, base_vel),
+                            (2.0, 2.0, fifth, base_vel - 12)]
+            elif bpb == 3:
+                beats_in = [(0.0, 2.0, root, base_vel),
+                            (2.0, 1.0, fifth, base_vel - 10)]
+            else:
+                beats_in = [(0.0, float(bpb), root, base_vel)]
+
+            for beat_off, dur_b, pitch_b, vel_b in beats_in:
+                gd_b = groove_map.get_offset(beat_off, bpb) if groove_map else 0.0
+                actual_vel = groove_map.get_velocity(beat_off, vel_b, bpb) \
+                             if groove_map else vel_b
+                result.append((max(0, chord_start + beat_off + gd_b),
+                               pitch_b, dur_b * 0.88,
+                               int(np.clip(actual_vel, 20, 110))))
+
         prev_root = root
     return result
 
@@ -1880,8 +2053,15 @@ def generate_bass(harmony_prog, key_obj, n_bars, beats_per_bar=4, groove_map=Non
 #  CONTRAPUNTO  [G]
 # ══════════════════════════════════════════════════════════════════════════════
 
-def generate_counterpoint(melody_notes_list, harmony_prog, key_obj, n_bars, beats_per_bar=4):
-    """Genera 2ª voz en movimiento contrario a la melodía. [G]"""
+def generate_counterpoint(melody_notes_list, harmony_prog, key_obj, n_bars, beats_per_bar=4,
+                           emotional_ctrl=None):
+    """
+    Genera 2ª voz en movimiento contrario a la melodía.
+    - Primera especie: nota contra nota en tiempos fuertes
+    - Segunda especie: dos notas de cp por nota de melodía en pasajes tranquilos
+    - Tercera especie: notas de paso en semicorcheas cuando densidad es alta
+    - Resolución de disonancias por grado [G]
+    """
     if not melody_notes_list:
         return []
 
@@ -1889,58 +2069,104 @@ def generate_counterpoint(melody_notes_list, harmony_prog, key_obj, n_bars, beat
     mel_by_measure = defaultdict(list)
     for offset, midi, dur, vel in melody_notes_list:
         m_idx = int(offset / beats_per_bar)
-        mel_by_measure[m_idx].append((offset, midi))
+        mel_by_measure[m_idx].append((offset, midi, dur))
 
     h_timeline, total_h = _harmony_timeline(harmony_prog, n_bars * beats_per_bar)
     GOOD_INTERVALS = {3, 4, 8, 9}
     AVOID_PARALLEL = {7, 12}
+    DISSONANT      = {1, 2, 6, 10, 11}
+
     result = []
     prev_cp, prev_mel, prev_cp_int = None, None, None
 
     for m in range(n_bars):
         m_off = m * beats_per_bar
+
+        # Densidad del compás desde EmotionalController
+        density = 1.0
+        if emotional_ctrl:
+            ep = emotional_ctrl.get_bar_params(m, n_bars)
+            density = ep.get('density_mult', 1.0)
+
         chord_p = _build_chord_pitches_from_roman(
             _chord_at(m_off, h_timeline, total_h), key_obj, register='chords')
-        mel_m = [(off, midi) for off, midi in mel_by_measure.get(m, [])]
+        mel_m = mel_by_measure.get(m, [])
         if not mel_m:
             continue
-        beats_in_measure = [0.0, float(beats_per_bar)/2] if beats_per_bar >= 2 else [0.0]
-        for beat in beats_in_measure:
-            mel_at = [(o, p) for o, p in mel_m if abs(o - (m*beats_per_bar+beat)) < 0.5]
-            if not mel_at: continue
-            mel_p = mel_at[0][1]
-            best_cp, best_score = None, -999
+
+        # Decidir especie: densidad alta → más notas
+        if density >= 1.5:
+            # Tercera especie: notas de cp cada 0.5 beats
+            beats_in = [i * 0.5 for i in range(int(beats_per_bar / 0.5))]
+            cp_dur   = 0.5
+        elif density >= 0.9:
+            # Segunda especie: cada beat
+            beats_in = list(range(int(beats_per_bar)))
+            cp_dur   = 1.0
+        else:
+            # Primera especie: dos notas por compás
+            beats_in = [0.0, float(beats_per_bar) / 2]
+            cp_dur   = float(beats_per_bar) / 2
+
+        for beat in beats_in:
+            beat_abs = m_off + beat
+            # Nota de melodía más cercana al beat
+            mel_at = sorted(mel_m, key=lambda x: abs(x[0] - beat_abs))
+            mel_p = mel_at[0][1] if mel_at else (prev_mel or 65)
+
             candidates = [p for p in chord_p if lo <= p <= hi]
             if not candidates:
-                candidates = [_snap_to_scale(mel_p - 4, key_obj)]
-                candidates = [max(lo, min(hi, c)) for c in candidates]
+                c = _snap_to_scale(mel_p - 4, key_obj)
+                while c > hi: c -= 12
+                while c < lo: c += 12
+                candidates = [max(lo, min(hi, c))]
+
+            # Añadir notas de escala como candidatos para notas de paso
+            scale_midi = _get_scale_midi(key_obj, octave=4)
+            extra = [p for p in scale_midi if lo <= p <= hi]
+            candidates = sorted(set(candidates + extra))
+
+            best_cp, best_score = None, -999
             for cp_cand in candidates:
                 int_to_mel = abs(mel_p - cp_cand) % 12
                 score = 0
                 if int_to_mel in GOOD_INTERVALS: score += 3
                 elif int_to_mel in {0, 12}: score += 1
-                elif int_to_mel == 7: score += 0
-                else: score -= 1
+                elif int_to_mel in DISSONANT: score -= 2
                 if prev_cp and prev_mel:
-                    prev_int = abs(prev_mel - prev_cp) % 12
-                    if prev_int in AVOID_PARALLEL and int_to_mel == prev_int:
+                    prev_iv = abs(prev_mel - prev_cp) % 12
+                    if prev_iv in AVOID_PARALLEL and int_to_mel == prev_iv:
                         score -= 4
-                if prev_cp and prev_mel:
                     mel_dir = np.sign(mel_p - prev_mel)
-                    cp_dir = np.sign(cp_cand - prev_cp)
+                    cp_dir  = np.sign(cp_cand - prev_cp)
                     if mel_dir != 0 and cp_dir == -mel_dir: score += 2
                     elif cp_dir == 0: score += 1
                 if prev_cp:
                     jump = abs(cp_cand - prev_cp)
                     if jump > 7: score -= 2
-                    elif jump > 4: score -= 1
+                    elif jump <= 2: score += 1  # preferir grado conjunto
                 if score > best_score:
                     best_score, best_cp = score, cp_cand
+
             if best_cp is None:
                 best_cp = max(lo, min(hi, _snap_to_scale(mel_p - 4, key_obj)))
-            dur = float(beats_per_bar) / len(beats_in_measure)
-            result.append((m_off + beat, best_cp, dur * 0.88, random.randint(45, 62)))
-            prev_cp, prev_mel, prev_cp_int = best_cp, mel_p, abs(mel_p-best_cp)%12
+
+            # Resolución de disonancia: si el intervalo es disonante, resolver por grado
+            if best_cp is not None:
+                curr_int = abs(mel_p - best_cp) % 12
+                if curr_int in DISSONANT and prev_cp is not None:
+                    # Resolver al intervalo consonante más cercano
+                    for step in [1, -1, 2, -2]:
+                        resolved = best_cp + step
+                        if lo <= resolved <= hi:
+                            new_int = abs(mel_p - resolved) % 12
+                            if new_int in GOOD_INTERVALS:
+                                best_cp = resolved
+                                break
+
+            vel = int(np.clip(random.randint(42, 62), 20, 90))
+            result.append((max(0, beat_abs), best_cp, cp_dur * 0.87, vel))
+            prev_cp, prev_mel, prev_cp_int = best_cp, mel_p, abs(mel_p - best_cp) % 12
 
     return result
 
@@ -2031,6 +2257,78 @@ def humanize(notes_list, groove_map=None, ts_num=4, micro_jitter=True):
     return result
 
 
+def generate_percussion(rhythm_grid, rhythm_accent_grid, n_bars, beats_per_bar=4,
+                         groove_map=None, style='generic'):
+    """
+    Genera una pista de percusión simple desde el rhythm_grid (histograma 16 subds.). [A]
+    Instrumentos GM en canal 9:
+      36 = Kick (bombo), 38 = Snare, 42 = Hi-hat closed, 46 = Hi-hat open, 49 = Crash
+    """
+    KICK   = 36
+    SNARE  = 38
+    HIHAT  = 42
+    HIHAT_O= 46
+    CRASH  = 49
+
+    result = []
+    n_divs = len(rhythm_grid)  # normalmente 16
+    if n_divs == 0:
+        return result
+
+    # Normalizar grid
+    grid = np.array(rhythm_grid, dtype=float)
+    if grid.max() > 0:
+        grid = grid / grid.max()
+    accent = np.array(rhythm_accent_grid, dtype=float)
+    if accent.max() > 0:
+        accent = accent / accent.max()
+
+    sub_dur = beats_per_bar / (n_divs / (beats_per_bar / beats_per_bar))
+    # Duración de cada subdivisión en quarter notes
+    sub_ql = beats_per_bar / n_divs * (16 / n_divs) if n_divs != 16 else beats_per_bar / 4
+
+    for bar_idx in range(n_bars):
+        bar_start = bar_idx * beats_per_bar
+        is_first_bar = (bar_idx == 0)
+
+        for div in range(n_divs):
+            beat_pos = div * beats_per_bar / n_divs
+            t = bar_start + beat_pos
+            g_val = float(grid[div])
+            a_val = float(accent[div])
+            gd = groove_map.get_offset(beat_pos % beats_per_bar, beats_per_bar) \
+                 if groove_map and groove_map.trained else 0.0
+
+            # --- Crash en el primer tiempo del primer compás ---
+            if is_first_bar and div == 0:
+                result.append((max(0, t + gd), CRASH, sub_ql * 2, 90))
+
+            # --- Bombo: tiempo 1 y tiempo 3 (divs 0 y 8 en 16 subdivs) ---
+            if div % (n_divs // beats_per_bar) == 0:
+                beat_num = div // (n_divs // beats_per_bar)
+                is_strong = (beat_num % 2 == 0)  # tiempos 1 y 3
+                if is_strong:
+                    v_kick = int(np.clip(85 + a_val * 25, 70, 115))
+                    result.append((max(0, t + gd), KICK, sub_ql * 0.8, v_kick))
+
+            # --- Caja: tiempos 2 y 4 (divs 4 y 12 en 16 subdivs) ---
+            if n_divs >= 8:
+                beat_num = div // (n_divs // beats_per_bar)
+                if beat_num % 2 == 1 and div % (n_divs // beats_per_bar) == 0:
+                    v_snare = int(np.clip(75 + a_val * 20, 60, 105))
+                    result.append((max(0, t + gd), SNARE, sub_ql * 0.75, v_snare))
+
+            # --- Hi-hat: cuando el rhythm_grid indica actividad ---
+            if g_val > 0.25:
+                # Hi-hat abierto en tiempos fuertes marcados, cerrado el resto
+                is_accent_div = a_val > 0.6
+                hh = HIHAT_O if is_accent_div else HIHAT
+                v_hh = int(np.clip(50 + g_val * 35 + a_val * 20, 35, 90))
+                result.append((max(0, t + gd), hh, sub_ql * 0.6, v_hh))
+
+    return sorted(result, key=lambda x: x[0])
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONSTRUCCIÓN DEL MIDI FINAL  (mido directo)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2038,7 +2336,8 @@ def humanize(notes_list, groove_map=None, ts_num=4, micro_jitter=True):
 def build_midi(melody_notes, acc_notes, bass_notes, cp_notes,
                target_key, tempo_bpm, time_sig, n_bars,
                form_gen=None, output_path='output_unified.mid',
-               extra_voices=None):
+               extra_voices=None, percussion_notes=None,
+               split_tracks=False):
     """
     Escribe el MIDI con mido.
     Pistas fijas: Melody, Counterpoint, Accompaniment, Bass.
@@ -2061,7 +2360,8 @@ def build_midi(melody_notes, acc_notes, bass_notes, cp_notes,
                 section_events.append((tick, f'[{sec}]'))
                 prev_sec = sec
 
-    def notes_to_track(notes_list, ch_num, track_name, program=0):
+    def notes_to_track(notes_list, ch_num, track_name, program=0,
+                       add_sustain=False, expression_curve=None):
         trk = mido.MidiTrack()
         trk.name = track_name
         trk.append(mido.MetaMessage('set_tempo', tempo=us_per_beat, time=0))
@@ -2082,6 +2382,28 @@ def build_midi(melody_notes, acc_notes, bass_notes, cp_notes,
             t_off = _quarter_to_ticks(float(offset)+dur, TICKS)
             events.append((t_on,  'note_on',  mp, vel))
             events.append((t_off, 'note_off', mp, 0))
+
+        # CC#11 Expression: curva dinámica por compás [S]
+        if expression_curve:
+            total_ticks = _quarter_to_ticks(n_bars * bpb, TICKS)
+            n_points = max(len(expression_curve), 1)
+            for i, val in enumerate(expression_curve):
+                tick = int(i * total_ticks / n_points)
+                cc_val = int(np.clip(val * 127, 20, 127))
+                events.append((tick, 'cc', 11, cc_val))
+
+        # CC#64 Sustain pedal: ON al inicio de cada compás, OFF en el beat 3 [S]
+        if add_sustain:
+            total_beats_n = n_bars * bpb
+            beat_step = bpb  # un compás
+            b = 0.0
+            while b < total_beats_n:
+                t_on_s  = _quarter_to_ticks(b, TICKS)
+                t_off_s = _quarter_to_ticks(b + beat_step * 0.6, TICKS)
+                events.append((t_on_s,  'cc', 64, 127))
+                events.append((t_off_s, 'cc', 64, 0))
+                b += beat_step
+
         events.sort(key=lambda e: (e[0], 0 if e[1]=='note_off' else 1))
         prev_tick = 0
         for ev in events:
@@ -2095,13 +2417,30 @@ def build_midi(melody_notes, acc_notes, bass_notes, cp_notes,
             elif ev[1] == 'note_off':
                 trk.append(mido.Message('note_off', channel=ch_num,
                                         note=ev[2], velocity=0, time=delta))
+            elif ev[1] == 'cc':
+                trk.append(mido.Message('control_change', channel=ch_num,
+                                        control=ev[2], value=ev[3], time=delta))
         trk.append(mido.MetaMessage('end_of_track', time=0))
         return trk
 
-    mid.tracks.append(notes_to_track(melody_notes, 0, 'Melody',       program=0))
-    mid.tracks.append(notes_to_track(cp_notes,     1, 'Counterpoint', program=0))
-    mid.tracks.append(notes_to_track(acc_notes,    2, 'Accompaniment',program=0))
-    mid.tracks.append(notes_to_track(bass_notes,   3, 'Bass',         program=32))
+    # Construir curva de expresión desde el form_gen si está disponible
+    expr_curve = None
+    if form_gen:
+        expr_curve = []
+        for bi in range(n_bars):
+            sec = form_gen.section_of(bi)
+            # Sección B un poco más suave, A y resto normal
+            base = 0.75 if sec == 'B' else 0.88
+            expr_curve.append(base)
+
+    mid.tracks.append(notes_to_track(melody_notes, 0, 'Melody',       program=0,
+                                     expression_curve=expr_curve))
+    mid.tracks.append(notes_to_track(cp_notes,     1, 'Counterpoint', program=0,
+                                     expression_curve=expr_curve))
+    mid.tracks.append(notes_to_track(acc_notes,    2, 'Accompaniment',program=0,
+                                     add_sustain=True, expression_curve=expr_curve))
+    mid.tracks.append(notes_to_track(bass_notes,   3, 'Bass',         program=32,
+                                     expression_curve=expr_curve))
 
     # Pistas de voces adicionales (canales 4+, hasta 15 para evitar canal 9=percusión)
     if extra_voices:
@@ -2113,8 +2452,62 @@ def build_midi(melody_notes, acc_notes, bass_notes, cp_notes,
             print(f"  → Voz '{ev['name']}' ({len(ev['notes'])} notas, "
                   f"prog={ev['program']}, ch={ch})")
 
+    # Pista de percusión en canal 9 [A]
+    if percussion_notes:
+        perc_trk = mido.MidiTrack()
+        perc_trk.name = 'Percussion'
+        perc_trk.append(mido.MetaMessage('set_tempo', tempo=us_per_beat, time=0))
+        perc_trk.append(mido.MetaMessage('time_signature',
+                                          numerator=bpb, denominator=bu,
+                                          clocks_per_click=24,
+                                          notated_32nd_notes_per_beat=8, time=0))
+        p_events = []
+        for offset, mp, dur, vel in percussion_notes:
+            mp  = max(0, min(127, int(mp)))
+            vel = max(1, min(127, int(vel)))
+            dur = max(0.05, float(dur))
+            t_on  = _quarter_to_ticks(float(offset), TICKS)
+            t_off = _quarter_to_ticks(float(offset) + dur, TICKS)
+            p_events.append((t_on,  'on',  mp, vel))
+            p_events.append((t_off, 'off', mp, 0))
+        p_events.sort(key=lambda e: (e[0], 0 if e[1] == 'off' else 1))
+        prev_t = 0
+        for ev in p_events:
+            delta = max(0, ev[0] - prev_t)
+            prev_t = ev[0]
+            msg_type = 'note_on' if ev[1] == 'on' else 'note_off'
+            perc_trk.append(mido.Message(msg_type, channel=9,
+                                         note=ev[2], velocity=ev[3], time=delta))
+        perc_trk.append(mido.MetaMessage('end_of_track', time=0))
+        mid.tracks.append(perc_trk)
+        print(f"  → Percusión ({len(percussion_notes)} golpes, ch=9)")
+
     mid.save(output_path)
     print(f"  → MIDI guardado: {output_path}")
+
+    # Exportar pistas separadas [split_tracks]
+    if split_tracks:
+        base = output_path.rsplit('.', 1)[0]
+        track_names = [
+            ('Melody', melody_notes, 0, 0),
+            ('Counterpoint', cp_notes, 1, 0),
+            ('Accompaniment', acc_notes, 2, 0),
+            ('Bass', bass_notes, 3, 32),
+        ]
+        if extra_voices:
+            for i, ev in enumerate(extra_voices):
+                ch = min(4 + i, 15)
+                if ch == 9: ch = 10
+                track_names.append((ev['name'], ev['notes'], ch, ev['program']))
+        for tname, tnotes, tch, tprog in track_names:
+            if not tnotes:
+                continue
+            mid_s = mido.MidiFile(type=0, ticks_per_beat=TICKS)
+            mid_s.tracks.append(notes_to_track(tnotes, tch, tname, tprog,
+                                               expression_curve=expr_curve))
+            sname = f"{base}_{tname.lower()}.mid"
+            mid_s.save(sname)
+            print(f"  → Split: {sname}")
 
 
 
@@ -2529,6 +2922,10 @@ def generate_extra_voice(voice_preset, melody_notes, bass_notes,
                   m, d, int(np.clip(v + random.randint(-3, 3), 20, 127)))
                  for o, m, d, v in notes]
 
+    # Ornamentación para voces melódicas [F]
+    if role in ('melody_double', 'counterpoint') and notes:
+        notes = add_ornamentation(notes, key_obj, 'classical')
+
     return sorted(notes, key=lambda x: x[0])
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2536,20 +2933,57 @@ def generate_extra_voice(voice_preset, melody_notes, bass_notes,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def score_candidate(melody_notes, acc_notes, key_obj):
-    """Puntúa un candidato por consonancia, variedad rítmica y rango."""
-    all_notes = melody_notes + acc_notes
-    if not all_notes: return 0.0
+    """
+    Puntúa un candidato por:
+    - Consonancia tonal (notas en escala)
+    - Variedad rítmica
+    - Rango melódico
+    - Continuidad: penaliza saltos excesivos consecutivos [N]
+    - Arco dinámico: penaliza melodías planas sin clímax
+    - Presencia de contrapunto
+    """
+    if not melody_notes:
+        return 0.0
+
     pcs = set(_get_scale_pcs(key_obj))
-    tc = pitch.Pitch(key_obj.tonic.name).pitchClass
+    tc  = pitch.Pitch(key_obj.tonic.name).pitchClass
     scale_pcs_abs = {(pc + tc) % 12 for pc in pcs}
-    in_scale = sum(1 for _, mp, _, _ in melody_notes if mp % 12 in scale_pcs_abs)
-    consonance = in_scale / max(len(melody_notes), 1)
-    durs = [d for _, _, d, _ in melody_notes]
-    variety = min(1.0, len(set(round(d, 2) for d in durs)) / 6)
+
     pitches = [mp for _, mp, _, _ in melody_notes]
-    rng_score = min(1.0, (max(pitches)-min(pitches))/24) if pitches else 0.0
-    cp_bonus = 0.05 if len(acc_notes) > 0 else 0
-    return consonance*0.45 + variety*0.30 + rng_score*0.20 + cp_bonus
+    durs    = [d  for _, _,  d, _ in melody_notes]
+    vels    = [v  for _, _, _,  v in melody_notes]
+
+    # 1. Consonancia tonal
+    in_scale   = sum(1 for mp in pitches if mp % 12 in scale_pcs_abs)
+    consonance = in_scale / max(len(pitches), 1)
+
+    # 2. Variedad rítmica
+    variety = min(1.0, len(set(round(d, 2) for d in durs)) / 6)
+
+    # 3. Rango melódico
+    rng_score = min(1.0, (max(pitches) - min(pitches)) / 24) if pitches else 0.0
+
+    # 4. Continuidad: penalizar saltos consecutivos de >7 semitonos
+    intervals = [abs(pitches[i+1] - pitches[i]) for i in range(len(pitches)-1)]
+    big_leaps  = sum(1 for iv in intervals if iv > 7)
+    continuity = max(0.0, 1.0 - big_leaps / max(len(intervals), 1))
+
+    # 5. Arco dinámico: debe haber variación de velocidad (clímax)
+    if len(vels) >= 4:
+        vel_std   = float(np.std(vels))
+        arc_score = min(1.0, vel_std / 20.0)
+    else:
+        arc_score = 0.5
+
+    # 6. Bonus por contrapunto
+    cp_bonus = 0.05 if len(acc_notes) > 0 else 0.0
+
+    return (consonance  * 0.30 +
+            variety     * 0.20 +
+            rng_score   * 0.15 +
+            continuity  * 0.20 +
+            arc_score   * 0.10 +
+            cp_bonus)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2578,6 +3012,59 @@ def _prepare_controllers(dnas, emotion_src_idx, form_src_idx, n_bars, form_overr
     return ec, fg
 
 
+def _generate_melody_with_modulation(
+    h_prog, target_key, r_pat, contour, reg, motif,
+    n_bars, ec, fg, bpb, rhythm_strength, markov,
+    seq_phrases, melody_mode, surprise_rate
+):
+    """
+    Genera la melodía sección a sección. En sección B modula al relativo o dominante. [Q]
+    Une los fragmentos ajustando los offsets.
+    """
+    # Recopilar compases por sección
+    sections = {}
+    for bi in range(n_bars):
+        sec = fg.section_of(bi)
+        sections.setdefault(sec, []).append(bi)
+
+    all_notes = []
+    for sec_label in dict.fromkeys(fg.bar_section):  # orden de aparición
+        bars = sections.get(sec_label, [])
+        if not bars:
+            continue
+        n_sec = len(bars)
+        bar_offset = bars[0]  # compás inicial de la sección
+
+        # Elegir tonalidad de la sección [Q]
+        if sec_label == 'B':
+            sec_key = _get_relative_key(target_key)
+        elif sec_label == 'C':
+            sec_key = _get_dominant_key(target_key)
+        else:
+            sec_key = target_key
+
+        # Crear un FormGenerator parcial para esta sección
+        fg_sec = FormGenerator(
+            form_string=sec_label,
+            section_map=[sec_label] * n_sec,
+            phrase_lengths=[n_sec],
+            cadence_positions=[n_sec - 1],
+            n_bars_out=n_sec
+        )
+
+        frag = generate_melody(
+            h_prog, sec_key, r_pat, contour, reg, motif,
+            n_sec, ec, fg_sec, bpb, rhythm_strength, markov,
+            seq_phrases, melody_mode, surprise_rate
+        )
+        # Reubicar al offset absoluto de la sección y ajustar al rango de target_key
+        for offset, midi, dur, vel in frag:
+            new_midi = _snap_to_scale(midi, target_key)
+            all_notes.append((offset + bar_offset * bpb, new_midi, dur, vel))
+
+    return sorted(all_notes, key=lambda x: x[0])
+
+
 def _run_generation(
     harmony_src_dna, melody_src_dna, rhythm_src_dna,
     target_key, n_bars, tempo_bpm, ec, fg, time_sig,
@@ -2604,11 +3091,14 @@ def _run_generation(
                                   n_bars, ec, fg, bpb, rhythm_strength, markov,
                                   seq_phrases, 'markov', surprise_rate)
     else:
-        mel = generate_melody(h_prog, target_key, r_pat, contour, reg, motif,
-                              n_bars, ec, fg, bpb, rhythm_strength, markov,
-                              seq_phrases, melody_mode, surprise_rate)
+        # Generación sección a sección con modulación real en sección B [Q]
+        mel = _generate_melody_with_modulation(
+            h_prog, target_key, r_pat, contour, reg, motif,
+            n_bars, ec, fg, bpb, rhythm_strength, markov,
+            seq_phrases, melody_mode, surprise_rate
+        )
 
-    # Ornamentación [F]
+    # Ornamentación melodía [F]
     mel = add_ornamentation(mel, target_key, style)
 
     # Humanización [H]
@@ -2616,15 +3106,22 @@ def _run_generation(
         mel = humanize(mel, groove, bpb)
 
     # Acompañamiento [L]
-    acc = generate_accompaniment(h_prog, target_key, n_bars, ec, fg, bpb, groove_map=groove, force_style=force_acc_style)
+    acc = generate_accompaniment(h_prog, target_key, n_bars, ec, fg, bpb,
+                                 groove_map=groove, force_style=force_acc_style,
+                                 harmony_complexity=harmony_src_dna.harmony_complexity)
 
     # Bajo
     bass = generate_bass(h_prog, target_key, n_bars, bpb, groove_map=groove)
 
     # Contrapunto [G]
-    cp = generate_counterpoint(mel, h_prog, target_key, n_bars, bpb)
+    cp = generate_counterpoint(mel, h_prog, target_key, n_bars, bpb,
+                               emotional_ctrl=ec)
 
-    return mel, acc, bass, cp, h_prog, r_src.rhythm_cell
+    # Ornamentación contrapunto [F] — más sutil que la melodía
+    cp_style = style if style in ORNAMENTATION_STYLES else 'classical'
+    cp = add_ornamentation(cp, target_key, cp_style)
+
+    return mel, acc, bass, cp, h_prog, rhythm_src_dna.rhythm_cell
 
 
 def _auto_select_mode(dnas):
@@ -2743,6 +3240,16 @@ def run_mixing(dnas, target_key, n_bars, tempo_bpm, time_sig, mode,
     mel, acc, bass, cp = best_result
     groove = r_src.groove_map if r_src.groove_map.trained else None
 
+    # ── Percusión desde rhythm_grid [A] ───────────────────────────────────────
+    perc_notes = generate_percussion(
+        r_src.rhythm_grid,
+        r_src.rhythm_accent_grid,
+        n_bars, time_sig[0],
+        groove_map=groove,
+        style=r_src.style
+    )
+    print(f"  🥁 Percusión: {len(perc_notes)} golpes generados")
+
     # ── Voces adicionales ─────────────────────────────────────────────────────
     extra_voices_out = []
     if voice_presets:
@@ -2766,7 +3273,7 @@ def run_mixing(dnas, target_key, n_bars, tempo_bpm, time_sig, mode,
             })
             print(f"      → {len(notes)} notas")
 
-    return (mel, acc, bass, cp), ec, fg, extra_voices_out
+    return (mel, acc, bass, cp), ec, fg, extra_voices_out, perc_notes
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2893,6 +3400,10 @@ def main():
     # Opciones
     parser.add_argument('--no-humanize', action='store_true')
     parser.add_argument('--export-xml',  action='store_true')
+    parser.add_argument('--split-tracks',action='store_true',
+        help='Exportar cada pista como fichero MIDI independiente')
+    parser.add_argument('--no-percussion', action='store_true',
+        help='Desactivar pista de percusión generada automáticamente')
     parser.add_argument('--verbose',     action='store_true')
     parser.add_argument('--output', default='output_unified.mid')
     args = parser.parse_args()
@@ -2901,8 +3412,9 @@ def main():
     np.random.seed(args.seed)
 
     print("═"*65)
-    print("  MIDI DNA UNIFIED MIXER  v1.0")
+    print("  MIDI DNA UNIFIED MIXER  v1.1")
     print("  Markov · Mosaic · Contrapunto · Groove · Forma · Emoción")
+    print("  Walking Bass · Percusión · Modulación · Silencios · CC#64/11")
     print("═"*65)
 
     # ── Cargar ficheros ────────────────────────────────────────────────────────
@@ -2960,7 +3472,7 @@ def main():
 
     # ── Mezcla ────────────────────────────────────────────────────────────────
     print(f"\n[3/4] Generando…")
-    (mel, acc, bass, cp), ec, fg, extra_voices = run_mixing(
+    (mel, acc, bass, cp), ec, fg, extra_voices, perc_notes = run_mixing(
         dnas, target_key, n_bars, tempo_bpm, time_sig,
         mode             = args.mode,
         emotion_src_idx  = esi,
@@ -2980,6 +3492,8 @@ def main():
     print(f"    → Contrapunto     : {len(cp)} notas")
     print(f"    → Acompañamiento  : {len(acc)} eventos")
     print(f"    → Bajo            : {len(bass)} notas")
+    if not args.no_percussion:
+        print(f"    → Percusión       : {len(perc_notes)} golpes")
     for ev in extra_voices:
         print(f"    → {ev['name']:16s}: {len(ev['notes'])} notas")
 
@@ -2987,7 +3501,9 @@ def main():
     print(f"\n[4/4] Exportando…")
     build_midi(mel, acc, bass, cp, target_key, tempo_bpm, time_sig, n_bars,
                form_gen=fg, output_path=args.output,
-               extra_voices=extra_voices if extra_voices else None)
+               extra_voices=extra_voices if extra_voices else None,
+               percussion_notes=perc_notes if not args.no_percussion else None,
+               split_tracks=args.split_tracks)
 
     # ── Export XML opcional [R] ───────────────────────────────────────────────
     if args.export_xml:
@@ -3034,7 +3550,8 @@ def main():
         voice_summary = ', '.join(f"{ev['name']}({VOICE_PRESETS[ev['name']]['role']})"
                                    for ev in extra_voices)
         print(f"  Voces ext.: {voice_summary}")
-    print(f"  Pistas    : {4 + len(extra_voices)}")
+    n_perc = 0 if args.no_percussion else 1
+    print(f"  Pistas    : {4 + len(extra_voices) + n_perc}")
     print(f"  Fichero   : {args.output}")
     print("═"*65)
 
