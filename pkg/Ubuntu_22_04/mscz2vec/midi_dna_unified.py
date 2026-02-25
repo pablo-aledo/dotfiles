@@ -1,9 +1,9 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║               MIDI DNA UNIFIED MIXER  v1.1                                  ║
+║               MIDI DNA UNIFIED MIXER  v1.3                                  ║
 ║   Fusión de lo mejor de tres generaciones de mezcladores MIDI               ║
 ║                                                                              ║
-║  CARACTERÍSTICAS:                                                            ║
+║  CARACTERÍSTICAS CORE:                                                       ║
 ║  [A] Extracción rítmica avanzada: histograma 16 subdivisiones, síncopa,     ║
 ║      accent weights, subdivisión primaria                                    ║
 ║  [B] Curvas emocionales completas: Lerdahl, Tonnetz, Valencia, Arousal,     ║
@@ -12,27 +12,38 @@
 ║  [D] Markov de 2º orden (intervalo × duración) para melodía estilística    ║
 ║  [E] Mosaic splicing: fragmentos reales transpuestos                        ║
 ║  [F] Ornamentación idiomática: mordentes, apoyaturas, notas de paso        ║
-║      → Aplicada también en contrapunto y voces dobles                       ║
-║  [G] Contrapunto multi-especie: 1ª/2ª/3ª especie según densidad emocional  ║
-║      Resolución automática de disonancias por grado conjunto                ║
+║  [G] Contrapunto multi-especie: 1ª/2ª/3ª según densidad emocional          ║
 ║  [H] Groove map: timing humanizado extraído del MIDI fuente                ║
-║  [I] Patrón de acompañamiento real detectado del MIDI fuente               ║
-║  [J] Sequitur grammar: frases repetidas clasificadas por calidad musical    ║
+║  [I] Patrón de acompañamiento detectado del MIDI fuente                    ║
+║  [J] Sequitur grammar: frases clasificadas por calidad musical              ║
 ║  [K] Voice-leading riguroso: sin paralelas, movimiento mínimo              ║
-║  [L] Bajo Alberti/arpegio/bloque elegido por energía y tensión             ║
+║  [L] Acompañamiento Alberti/arpegio/bloque por energía y tensión           ║
 ║  [M] Puentes pivot-chord entre secciones                                    ║
-║  [N] Candidatos múltiples con scoring de calidad musical extendido:         ║
-║      consonancia + variedad + rango + continuidad + arco dinámico          ║
+║  [N] Candidatos múltiples con scoring de calidad extendido                  ║
 ║  [O] EmotionalController: parámetros compás-a-compás desde curvas          ║
 ║  [P] FormGenerator: estructura formal heredada y escalada                   ║
 ║  [Q] Modulación real por sección: relativo en B, dominante en C            ║
 ║  [R] Export MusicXML opcional                                               ║
-║  [S] Silencios estructurales de frase en cadencias                          ║
-║      CC#64 sustain pedal + CC#11 expression curve en todas las pistas       ║
-║      Acordes de 7ª y 9ª automáticos según harmony_complexity               ║
-║  [T] Walking bass melódico: notas de paso, 5ª/7ª, aproximación cromática   ║
-║  [U] Percusión generada desde rhythm_grid: kick, snare, hi-hat, crash      ║
+║  [S] Silencios de frase + CC#64 sustain pedal + CC#11 expression           ║
+║  [T] Walking bass melódico con notas de paso y aproximación cromática       ║
+║  [U] Percusión generada desde rhythm_grid                                   ║
 ║  [V] Export split-tracks: una pista por fichero para DAW                    ║
+║                                                                              ║
+║  MEJORAS EMOCIONALES v1.2 (activas por defecto, desactivables con --no-*): ║
+║  [1] Markov condicionado por tensión: sesga intervalos según arco           ║
+║  [2] Envolvente dinámica: crescendo → fortissimo → piano súbito             ║
+║  [3] Coherencia motívica: reutiliza el motivo de la primera sección A       ║
+║  [4] Disonancia presupuestada: cromatismo planificado con resolución        ║
+║  [5] Cambios de textura por sección + sparse en el clímax                  ║
+║                                                                              ║
+║  MUTACIÓN TEMPORAL v1.3 (todas opcionales, activadas con --mt-*):           ║
+║  [MT1] Curva de densidad rítmica: de sparse a full a lo largo de la pieza   ║
+║  [MT2] Curva de complejidad armónica: de tríadas a acordes de 9ª           ║
+║  [MT3] Curva de estilo de acompañamiento: alberti → arpeggio → block        ║
+║  [MT4] Curva de registro melódico: de grave a agudo o viceversa             ║
+║  [MT5] Curva de swing gradual: de tiempo exacto a groove completo           ║
+║  [MT6] Morphing rítmico entre dos fuentes MIDI                              ║
+║  [MT7] Morphing emocional entre dos arcos de tensión/arousal               ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 USO:
@@ -54,116 +65,178 @@ OPCIONES PRINCIPALES:
     --surprise R    Tasa de cromatismo sorpresa 0-1 (default: 0.08)
     --rhythm_strength F  Fuerza del groove 0-2 (default: 1.0)
     --candidates N  Generar N candidatos y elegir el mejor (default: 1)
+    --acc-style     alberti | arpeggio | block | waltz  (estilo fijo global)
+    --voices        Voces extra: "violin,viola:inner,horn:pedal:0.7"
     --no-humanize   Desactivar humanización de groove
-    --no-percussion Desactivar pista de percusión automática
+    --no-percussion Desactivar percusión automática
     --split-tracks  Exportar cada pista como fichero MIDI independiente
-    --export-xml    Exportar también en MusicXML
+    --export-xml    Exportar en MusicXML
     --verbose       Informe detallado del ADN
     --output FILE   Archivo de salida (default: output_unified.mid)
     --seed N        Semilla aleatoria (default: 42)
 
+MEJORAS EMOCIONALES v1.2 (activas por defecto):
+    --no-tension-markov       [1] Desactivar sesgo de tensión en Markov
+    --no-dynamic-swells       [2] Desactivar crescendos y piano súbito
+    --no-motif-coherence      [3] Desactivar siembra del motivo en retornos A
+    --no-budgeted-dissonance  [4] Desactivar disonancia presupuestada
+    --no-texture-changes      [5] Desactivar cambios de textura por sección
+
+MUTACIÓN TEMPORAL v1.3 (todas opcionales):
+
+  Formato de curvas: "BAR:VALOR, BAR:VALOR, …"
+    - BAR   : número de compás (0-based)
+    - VALOR : número 0-1, o palabra clave según el parámetro
+    - La curva se interpola linealmente entre los puntos de control
+    - Los extremos se extienden automáticamente si no cubren toda la pieza
+
+    --mt-density "0:sparse, 8:dense, 24:medium"
+        [MT1] Densidad rítmica de la melodía compás a compás.
+        Palabras: silent(0) · sparse(0.25) · light(0.45) · medium(0.65)
+                  dense(0.85) · full(1.0)
+        Efecto: controla cuántas notas se generan por beat (0.3–2.5×)
+
+    --mt-harmony-complexity "0:simple, 16:extended, 32:chromatic"
+        [MT2] Complejidad armónica por compás.
+        Palabras: simple(0) · diatonic(0.2) · moderate(0.4)
+                  extended(0.65) · chromatic(1.0)
+        Efecto: añade séptimas y novenas progresivamente a los acordes
+
+    --mt-acc-style "0:alberti, 8:arpeggio, 16:block"
+        [MT3] Estilo de acompañamiento por compás.
+        Palabras: alberti · arpeggio · waltz · block
+        Efecto: el acompañamiento muta gradualmente entre estilos
+        Nota: anula --no-texture-changes y la selección emocional
+
+    --mt-register "0:low, 8:mid, 24:high"
+        [MT4] Registro melódico por compás.
+        Palabras: low(0) · mid-low(0.25) · mid(0.5) · mid-high(0.75) · high(1.0)
+        Efecto: desplaza el rango objetivo de la melodía ±12 semitonos
+
+    --mt-swing "0:0.0, 8:0.5, 16:1.0"
+        [MT5] Intensidad del swing (groove) por compás.
+        Valores: 0.0=sin groove (tempo mecánico) · 1.0=groove completo del fuente
+        Efecto: escala los desvíos de timing y velocidad del groove_map
+
+    --mt-rhythm-morph "0:0.0, 16:1.0"
+        [MT6] Morphing del patrón rítmico entre fuente A (primer MIDI) y
+        fuente B (segundo MIDI). Requiere al menos 2 ficheros de entrada.
+        0.0=ritmo puro de A · 1.0=ritmo puro de B
+        Efecto: interpola los eventos de cada compás entre ambos patrones
+
+    --mt-emotion-morph "0:0.0, 8:0.5, 16:1.0"
+        [MT7] Morphing del arco emocional entre fuente A y fuente B.
+        Requiere al menos 2 ficheros de entrada.
+        0.0=tensión/arousal de A · 1.0=tensión/arousal de B
+        Efecto: blends las curvas de tensión, arousal, valencia y actividad
+
 EJEMPLOS:
 
   ── Uso básico ──────────────────────────────────────────────────────────────
-    # Mezcla automática de dos MIDIs, resultado en archivo por defecto
     python midi_dna_unified.py bach.mid jazz.mid
-
-    # Modo mosaico con informe detallado del ADN
     python midi_dna_unified.py bach.mid jazz.mid --mode mosaic --verbose
-
-    # Mezcla de tres fuentes, 32 compases, armonía+melodía
     python midi_dna_unified.py a.mid b.mid c.mid --mode harmony_melody --bars 32
-
-    # Arco emocional de b.mid, forma AABA, tonalidad destino La menor
     python midi_dna_unified.py a.mid b.mid --mode emotion \
         --key "A minor" --form AABA --emotion_src 1
-
-    # Fuentes explícitas para modo custom
-    python midi_dna_unified.py a.mid b.mid --mode custom \
-        --sources rhythm=0,melody=1,harmony=0
-
-    # Roles explícitos por fichero
     python midi_dna_unified.py \
         --melody a.mid --harmony b.mid --rhythm c.mid --form ABAB
 
-  ── Tempo y semilla ─────────────────────────────────────────────────────────
-    # Fijar tempo a 120 BPM y semilla reproducible
-    python midi_dna_unified.py a.mid b.mid --tempo 120 --seed 7
+  ── Mutación de densidad rítmica [MT1] ──────────────────────────────────────
+    # Pieza que arranca muy esparsa y va ganando densidad hasta el clímax
+    python midi_dna_unified.py a.mid b.mid --bars 32 \
+        --mt-density "0:sparse, 20:dense, 32:medium"
 
-    # Resultado determinista para comparación de modos
-    python midi_dna_unified.py a.mid b.mid --mode full_blend \
-        --bars 24 --tempo 96 --seed 0 --output mezcla_96bpm.mid
+    # Introducción lenta, desarrollo denso, coda tranquila
+    python midi_dna_unified.py a.mid b.mid --bars 40 \
+        --mt-density "0:light, 8:medium, 16:full, 32:medium, 40:sparse"
 
-  ── Estilo de acompañamiento ────────────────────────────────────────────────
-    # Forzar bajo Alberti en todos los compases
-    python midi_dna_unified.py a.mid b.mid --acc-style alberti
+  ── Evolución armónica [MT2] ────────────────────────────────────────────────
+    # Empieza con tríadas simples, añade extensiones progresivamente
+    python midi_dna_unified.py a.mid b.mid --bars 32 \
+        --mt-harmony-complexity "0:simple, 16:moderate, 32:chromatic"
 
-    # Arpegio ascendente, sin humanización de groove
-    python midi_dna_unified.py a.mid b.mid --acc-style arpeggio --no-humanize
+    # Jazz: complejidad alta desde el principio, plateau en el bridge
+    python midi_dna_unified.py jazz.mid bossa.mid --bars 32 \
+        --mt-harmony-complexity "0:extended, 8:chromatic, 24:extended"
 
-    # Vals (3/4), acompañamiento en bloque con arch emocional
-    python midi_dna_unified.py valse.mid otra.mid \
-        --acc-style waltz --mode emotion --bars 32
+  ── Morphing de estilo de acompañamiento [MT3] ──────────────────────────────
+    # De Alberti clásico a bloque dramático
+    python midi_dna_unified.py a.mid b.mid --bars 24 \
+        --mt-acc-style "0:alberti, 12:arpeggio, 24:block"
 
-  ── Voces extra ─────────────────────────────────────────────────────────────
-    # Cuarteto de cuerda completo
-    python midi_dna_unified.py a.mid b.mid \
-        --voices "violin,viola:inner,cello:inner,contrabass:bass_double"
+    # Vals que se convierte en arpegio lírico
+    python midi_dna_unified.py valse.mid nocturno.mid --bars 32 \
+        --mt-acc-style "0:waltz, 16:arpeggio"
 
-    # Orquestación clásica de cámara
-    python midi_dna_unified.py a.mid b.mid \
-        --voices "flute:melody_double,oboe:counterpoint,horn:pedal,bassoon:bass_double"
+  ── Arco de registro [MT4] ──────────────────────────────────────────────────
+    # Melodía que asciende hacia el clímax y desciende en la resolución
+    python midi_dna_unified.py a.mid b.mid --bars 32 \
+        --mt-register "0:low, 20:high, 32:mid"
 
-    # Voces con vel_scale personalizado (0.0–1.0)
-    python midi_dna_unified.py a.mid b.mid \
-        --voices "violin:counterpoint:0.9,pad:pedal:0.5"
+    # Coda que desciende progresivamente
+    python midi_dna_unified.py a.mid b.mid --bars 24 \
+        --mt-register "0:mid-high, 24:low"
 
-    # Acc-style + voces extra combinados
-    python midi_dna_unified.py a.mid b.mid \
-        --acc-style alberti --voices "flute,horn:pedal"
+  ── Swing gradual [MT5] ─────────────────────────────────────────────────────
+    # Banda de jazz que "calienta": empieza cuadrado y va soltando el swing
+    python midi_dna_unified.py jazz_a.mid jazz_b.mid --bars 32 \
+        --mt-swing "0:0.0, 8:0.3, 16:0.8, 32:1.0"
 
-    # Ostinato de vibraphone + doblaje de bajo
-    python midi_dna_unified.py a.mid b.mid \
-        --voices "vibraphone:ostinato:0.7,contrabass:bass_double:0.85"
+    # Dejar que el groove aparezca y desaparezca (intro y coda sin swing)
+    python midi_dna_unified.py a.mid b.mid --bars 32 \
+        --mt-swing "0:0.0, 4:1.0, 28:1.0, 32:0.0"
 
-  ── Candidatos y calidad ────────────────────────────────────────────────────
-    # Generar 5 candidatos y conservar el de mejor scoring
-    python midi_dna_unified.py a.mid b.mid --candidates 5
+  ── Morphing rítmico entre dos fuentes [MT6] ────────────────────────────────
+    # La obra comienza con el ritmo de bach.mid y termina con el de jazz.mid
+    python midi_dna_unified.py bach.mid jazz.mid --bars 32 \
+        --mt-rhythm-morph "0:0.0, 32:1.0"
 
-    # Candidatos + cromtismo reducido + groove fuerte
-    python midi_dna_unified.py a.mid b.mid \
-        --candidates 3 --surprise 0.02 --rhythm_strength 1.5
+    # Morfosis en la parte central, secciones inicial y final estables
+    python midi_dna_unified.py a.mid b.mid --bars 40 \
+        --mt-rhythm-morph "0:0.0, 8:0.0, 24:1.0, 40:1.0"
 
-    # Exploración creativa: mucho cromatismo, varios candidatos
-    python midi_dna_unified.py a.mid b.mid \
-        --candidates 8 --surprise 0.25 --mode mosaic --seed 99
+  ── Morphing emocional entre dos arcos [MT7] ────────────────────────────────
+    # Empieza con la emoción de nocturno.mid, termina con la de jazz.mid
+    python midi_dna_unified.py nocturno.mid jazz.mid --bars 32 \
+        --mt-emotion-morph "0:0.0, 32:1.0"
 
-  ── Percusión ───────────────────────────────────────────────────────────────
-    # Percusión activada por defecto; desactivar si no se necesita
-    python midi_dna_unified.py a.mid b.mid --no-percussion
+    # Bridge emocional: secciones externas en A, bridge en B
+    python midi_dna_unified.py a.mid b.mid --bars 32 --form AABA \
+        --mt-emotion-morph "0:0.0, 8:0.0, 16:1.0, 24:0.0, 32:0.0"
 
-    # Percusión + walking bass (jazz, acordes de 1 compás)
-    python midi_dna_unified.py jazz_a.mid jazz_b.mid \
-        --mode full_blend --acc-style arpeggio --bars 32
+  ── Combinaciones avanzadas ─────────────────────────────────────────────────
+    # Narrativa completa: introduce → desarrolla → climax → resuelve
+    python midi_dna_unified.py a.mid b.mid --bars 48 \
+        --mt-density "0:sparse, 16:dense, 36:full, 48:sparse" \
+        --mt-register "0:mid-low, 24:high, 48:mid" \
+        --mt-harmony-complexity "0:simple, 16:extended, 32:chromatic, 48:diatonic" \
+        --mt-swing "0:0.0, 12:0.8, 36:0.8, 48:0.0"
 
-  ── Pistas separadas (split) ────────────────────────────────────────────────
-    # Exportar cada pista como fichero independiente para DAW
-    python midi_dna_unified.py a.mid b.mid --split-tracks \
-        --output sesion.mid
+    # Fusión estilística total: ritmo de A → B, emoción de B → A
+    python midi_dna_unified.py clasico.mid jazz.mid --bars 32 \
+        --mt-rhythm-morph "0:0.0, 32:1.0" \
+        --mt-emotion-morph "0:1.0, 32:0.0" \
+        --mt-acc-style "0:alberti, 32:block"
 
-    # Pipeline completo con split y XML
-    python midi_dna_unified.py a.mid b.mid --split-tracks --export-xml \
-        --output obra.mid
+    # Transformación de bolero a jazz (cambio de todo simultáneo)
+    python midi_dna_unified.py bolero.mid jazz.mid --bars 40 \
+        --mt-rhythm-morph "0:0.0, 40:1.0" \
+        --mt-swing "0:0.0, 40:1.0" \
+        --mt-harmony-complexity "0:diatonic, 40:chromatic" \
+        --mt-acc-style "0:waltz, 20:arpeggio, 40:block"
 
-  ── Pipeline completo v1.1 ──────────────────────────────────────────────────
-    # Máxima calidad: 5 candidatos, walking bass, percusión, acordes 7ª/9ª,
-    # modulación real en sección B, ornamentación en todas las voces
+  ── Pipeline completo v1.3 ──────────────────────────────────────────────────
+    # Máxima expresividad: todas las mejoras + mutación temporal completa
     python midi_dna_unified.py bach.mid jazz.mid salsa.mid \
-        --mode full_blend --bars 32 --tempo 112 --key "D major" \
-        --form AABA --candidates 5 --rhythm_strength 1.2 --surprise 0.05 \
-        --acc-style arpeggio \
+        --mode full_blend --bars 40 --tempo 112 --key "D major" \
+        --form AABA --candidates 3 --rhythm_strength 1.2 --surprise 0.05 \
         --voices "violin:melody_double:0.8,cello:inner:0.75,horn:pedal:0.6" \
-        --export-xml --split-tracks --verbose --seed 42 --output obra_maestra.mid
+        --mt-density "0:light, 16:dense, 32:medium, 40:sparse" \
+        --mt-register "0:mid-low, 20:high, 40:mid" \
+        --mt-harmony-complexity "0:simple, 20:extended, 40:diatonic" \
+        --mt-swing "0:0.0, 8:0.6, 32:0.6, 40:0.0" \
+        --mt-emotion-morph "0:0.0, 20:0.5, 40:1.0" \
+        --export-xml --split-tracks --verbose --seed 42 --output obra_v13.mid
 
 DEPENDENCIAS:
     pip install music21 mido numpy scipy scikit-learn
@@ -292,6 +365,160 @@ ACC_PATTERNS = {
     "arpeggio_down": lambda beats: [(i * beats/4, beats/4) for i in range(3,-1,-1)],
     "waltz":         lambda beats: [(0, 1.0), (1, 0.5), (2, 0.5)],
 }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  MUTATION TIMELINE — curvas de mutación temporal definidas por el usuario
+# ══════════════════════════════════════════════════════════════════════════════
+
+class MutationTimeline:
+    """
+    Curva de mutación compás a compás definida por puntos de control.
+
+    Formatos de especificación aceptados:
+      "0:0.0, 8:0.5, 16:1.0"          → interpola linealmente entre puntos
+      "0:sparse, 8:medium, 16:dense"   → valores nominales para densidad
+      "0:low, 8:mid, 16:high"          → valores nominales para registro
+      "0:alberti, 8:arpeggio, 16:block"→ estilos nominales (devuelve str)
+
+    Uso:
+      tl = MutationTimeline("0:0.0, 8:0.5, 16:1.0", n_bars=16)
+      value = tl.at(bar_idx)           → float interpolado
+      style = tl.at_str(bar_idx, [...])→ elige entre lista según valor
+    """
+
+    # Vocabularios de valores nominales → float
+    DENSITY_MAP  = {'silent': 0.0, 'sparse': 0.25, 'light': 0.45,
+                    'medium': 0.65, 'dense': 0.85, 'full': 1.0}
+    REGISTER_MAP = {'low': 0.0, 'mid-low': 0.25, 'mid': 0.5,
+                    'mid-high': 0.75, 'high': 1.0}
+    STYLE_MAP    = {'alberti': 0.0, 'arpeggio': 0.33,
+                    'waltz': 0.67, 'block': 1.0}
+    COMPLEXITY_MAP = {'simple': 0.0, 'diatonic': 0.2, 'moderate': 0.4,
+                      'extended': 0.65, 'chromatic': 1.0}
+
+    def __init__(self, spec_string, n_bars, nominal_map=None):
+        """
+        spec_string : str  e.g. "0:0.0, 8:0.5, 16:1.0"
+        n_bars      : int  longitud de la curva generada
+        nominal_map : dict opcional para traducir palabras a floats
+        """
+        self.n_bars = n_bars
+        self._nominal = nominal_map or {}
+        self._values  = self._parse_and_interpolate(spec_string, n_bars)
+
+    def _to_float(self, token):
+        token = token.strip().lower()
+        # Buscar en todos los vocabularios
+        for vmap in [self.DENSITY_MAP, self.REGISTER_MAP,
+                     self.STYLE_MAP, self.COMPLEXITY_MAP, self._nominal]:
+            if token in vmap:
+                return float(vmap[token])
+        return float(token)  # intento directo
+
+    def _parse_and_interpolate(self, spec, n_bars):
+        """Parsea 'bar:value, bar:value, …' e interpola a n_bars puntos."""
+        if not spec or not spec.strip():
+            return [0.5] * n_bars
+
+        # Parsear puntos de control
+        points = []
+        for part in spec.split(','):
+            part = part.strip()
+            if not part:
+                continue
+            if ':' not in part:
+                continue
+            bar_s, val_s = part.split(':', 1)
+            try:
+                bar = int(bar_s.strip())
+                val = self._to_float(val_s)
+                points.append((bar, val))
+            except (ValueError, KeyError):
+                continue
+
+        if not points:
+            return [0.5] * n_bars
+
+        points.sort(key=lambda x: x[0])
+
+        # Extender extremos si no cubren el rango completo
+        if points[0][0] > 0:
+            points.insert(0, (0, points[0][1]))
+        if points[-1][0] < n_bars - 1:
+            points.append((n_bars - 1, points[-1][1]))
+
+        # Interpolar linealmente
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
+        result = []
+        for i in range(n_bars):
+            result.append(float(np.interp(i, xs, ys)))
+        return result
+
+    def at(self, bar_idx):
+        """Devuelve el valor float en el compás dado."""
+        if not self._values:
+            return 0.5
+        return self._values[min(bar_idx, len(self._values) - 1)]
+
+    def at_str(self, bar_idx, options):
+        """
+        Devuelve uno de los strings de `options` según el valor en bar_idx.
+        Útil para estilos de acompañamiento.
+        options: lista ordenada de menor a mayor valor, e.g. ['alberti','arpeggio','block']
+        """
+        if not options:
+            return 'block'
+        v = self.at(bar_idx)
+        idx = int(v * (len(options) - 1) + 0.5)
+        return options[max(0, min(idx, len(options) - 1))]
+
+    def is_active(self):
+        """True si la curva tiene variación real (no es constante)."""
+        if not self._values:
+            return False
+        return max(self._values) - min(self._values) > 1e-6
+
+    @staticmethod
+    def _interp_rhythm_bars(bar_a, bar_b, alpha):
+        """
+        Interpola entre dos patrones rítmicos (listas de eventos por compás).
+        alpha=0.0 → bar_a, alpha=1.0 → bar_b.
+        Estrategia: mezcla probabilística de los eventos de ambos patrones
+        más un ajuste de duración ponderado.
+        """
+        if alpha <= 0.0: return bar_a
+        if alpha >= 1.0: return bar_b
+        if not bar_a:    return bar_b
+        if not bar_b:    return bar_a
+
+        # Normalizar al mismo número de eventos usando el más largo
+        n = max(len(bar_a), len(bar_b))
+        def pad(bar, n):
+            if len(bar) >= n: return bar[:n]
+            return bar + [bar[-1]] * (n - len(bar))
+
+        a = pad(bar_a, n)
+        b = pad(bar_b, n)
+
+        result = []
+        for (o_a, d_a, w_a, s_a), (o_b, d_b, w_b, s_b) in zip(a, b):
+            # Interpolar offset y duración
+            o = o_a * (1 - alpha) + o_b * alpha
+            d = d_a * (1 - alpha) + d_b * alpha
+            w = w_a * (1 - alpha) + w_b * alpha
+            # Síncopa: umbral probabilístico
+            s = s_b if random.random() < alpha else s_a
+            result.append((round(o, 4), round(d, 4), round(w, 3), s))
+        return result
+
+
+def parse_mutation_spec(spec_str, n_bars, nominal_map=None):
+    """Crea un MutationTimeline desde un string de spec, o None si el string está vacío."""
+    if not spec_str or not spec_str.strip():
+        return None
+    return MutationTimeline(spec_str, n_bars, nominal_map)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -591,7 +818,14 @@ class MarkovMelody:
                 ctx1 = (states[i],)
                 self.transitions[ctx1][states[i+1]] += 1
 
-    def generate(self, n_steps, start_pitch, key_obj, seed=None):
+    def generate(self, n_steps, start_pitch, key_obj, seed=None,
+                 tension_curve=None):
+        """
+        Genera melodía con Markov condicionado a la curva de tensión.
+        [MEJORA 1] En momentos de alta tensión sesga hacia intervalos
+        ascendentes y saltos; en resolución hacia grados conjuntos descendentes.
+        tension_curve: lista de floats 0-1, uno por paso (se interpola).
+        """
         if seed is not None:
             random.seed(seed)
         if not self.transitions:
@@ -617,20 +851,63 @@ class MarkovMelody:
         result = [(start_pitch, history[0][1])]
         current_pitch = start_pitch
         lo, hi = INSTRUMENT_RANGES['melody']
+
+        def _tension_at(step, n_steps, curve):
+            """Interpola la tensión en el paso actual."""
+            if not curve:
+                return 0.5
+            frac = step / max(n_steps - 1, 1)
+            pos = frac * (len(curve) - 1)
+            lo_i = int(pos)
+            hi_i = min(lo_i + 1, len(curve) - 1)
+            t = pos - lo_i
+            return float(curve[lo_i] * (1 - t) + curve[hi_i] * t)
+
+        def _bias_weights(candidates, weights, tension):
+            """
+            Sesga los pesos según la tensión actual:
+            - Alta tensión (>0.65): favorecer intervalos ascendentes y saltos
+            - Baja tensión (<0.35): favorecer grados conjuntos descendentes
+            """
+            biased = []
+            for (iv, dur), w in zip(candidates, weights):
+                mult = 1.0
+                if tension > 0.65:
+                    # Favorecer ascenso y saltos (tensión = expectativa)
+                    if iv > 2:    mult = 1.8
+                    elif iv > 0:  mult = 1.3
+                    elif iv < 0:  mult = 0.6
+                elif tension < 0.35:
+                    # Favorecer descenso y grados conjuntos (resolución)
+                    if -2 <= iv <= 0: mult = 1.7
+                    elif iv < -2:     mult = 1.2
+                    elif iv > 2:      mult = 0.5
+                biased.append(max(0.01, w * mult))
+            return biased
+
         for step in range(1, n_steps):
+            tension = _tension_at(step, n_steps, tension_curve)
             next_state = None
             for ord_try in range(min(self.order, len(history)), 0, -1):
                 ctx = tuple(history[-ord_try:])
                 if ctx in self.transitions and self.transitions[ctx]:
                     candidates = list(self.transitions[ctx].keys())
                     weights = list(self.transitions[ctx].values())
-                    total = sum(weights)
-                    probs = [w/total for w in weights]
+                    biased = _bias_weights(candidates, weights, tension)
+                    total = sum(biased)
+                    probs = [w/total for w in biased]
                     idx = np.random.choice(len(candidates), p=probs)
                     next_state = candidates[idx]
                     break
             if next_state is None:
-                next_state = (random.choice([-2,-1,0,1,2]), random.choice([0.5,1.0]))
+                # Fallback condicionado también por tensión
+                if tension > 0.65:
+                    iv = random.choice([2, 3, 4, 5])
+                elif tension < 0.35:
+                    iv = random.choice([-2, -1, 0, -3])
+                else:
+                    iv = random.choice([-2,-1,0,1,2])
+                next_state = (iv, random.choice([0.5,1.0]))
             interval_step, dur = next_state
             new_pitch = current_pitch + interval_step
             if random.random() < 0.3:
@@ -1443,16 +1720,66 @@ class UnifiedDNA:
 #  EMOTIONAL CONTROLLER  [O]
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _build_dynamic_envelope(n_bars, tension_curve):
+    """
+    [MEJORA 2] Construye la envolvente dinámica compás a compás con:
+    - Crescendo gradual hacia el clímax (punto de máxima tensión)
+    - Piano súbito inmediatamente después del clímax
+    - Decrescendo suave hasta la resolución final
+    Devuelve lista de velocidades base (int) por compás.
+    """
+    if not tension_curve or n_bars < 2:
+        return [72] * n_bars
+
+    # Interpolar la curva de tensión al número de compases
+    arr = np.array(tension_curve, dtype=float)
+    xs = np.linspace(0, len(arr)-1, n_bars)
+    interp = np.interp(xs, np.arange(len(arr)), arr)
+
+    # Encontrar el clímax: compás de máxima tensión en la segunda mitad de la pieza
+    # (evitamos el primer 20% para que haya tiempo de construir)
+    start_search = max(1, int(n_bars * 0.20))
+    climax_bar = start_search + int(np.argmax(interp[start_search:]))
+
+    velocities = []
+    for i in range(n_bars):
+        if i < climax_bar:
+            # Crescendo gradual desde p (45) hasta ff (100)
+            frac = i / max(climax_bar, 1)
+            # Curva exponencial: crece más rápido al final del crescendo
+            v = 45 + int(55 * (frac ** 0.7))
+        elif i == climax_bar:
+            # Fortissimo en el clímax
+            v = 100
+        elif i == climax_bar + 1:
+            # Piano súbito — el gesto más efectivo de la música tonal
+            v = 42
+        else:
+            # Decrescendo suave post-clímax con pequeña variación
+            bars_left = n_bars - i
+            bars_after = i - climax_bar
+            total_after = n_bars - climax_bar
+            frac = bars_after / max(total_after, 1)
+            v = 42 + int(20 * (1.0 - frac))  # de mp a p
+        velocities.append(int(np.clip(v, 30, 110)))
+
+    return velocities
+
+
 class EmotionalController:
     """Convierte curvas emocionales en parámetros musicales compás a compás."""
     def __init__(self, tension_curve, arousal_curve, valence_curve,
-                 stability_curve, activity_curve, emotional_arc_label):
+                 stability_curve, activity_curve, emotional_arc_label,
+                 n_bars=16):
         self.tension   = self._norm(tension_curve)
         self.arousal   = self._norm_pm(arousal_curve)
         self.valence   = self._norm_pm(valence_curve)
         self.stability = self._norm(stability_curve)
         self.activity  = self._norm(activity_curve)
         self.arc       = emotional_arc_label
+        # [MEJORA 2] Precalcular envolvente dinámica con swells y piano súbito
+        self._dynamic_envelope = _build_dynamic_envelope(n_bars, tension_curve)
+        self._n_bars = n_bars
 
     @staticmethod
     def _norm(curve):
@@ -1467,6 +1794,13 @@ class EmotionalController:
         mx = max(abs(a.max()), abs(a.min()))
         return (a / mx).tolist() if mx > 0 else list(curve)
 
+    def get_dynamic_velocity(self, bar_idx):
+        """Devuelve la velocidad base de la envolvente dinámica estructurada."""
+        if not self._dynamic_envelope:
+            return 72
+        idx = min(bar_idx, len(self._dynamic_envelope) - 1)
+        return self._dynamic_envelope[idx]
+
     def get_bar_params(self, bar_idx, total_bars):
         def sample(curve, idx, total):
             if not curve: return 0.5
@@ -1479,7 +1813,14 @@ class EmotionalController:
         arousal   = sample(self.arousal,   bar_idx, total_bars)
         stability = sample(self.stability, bar_idx, total_bars)
         activity  = sample(self.activity,  bar_idx, total_bars)
-        velocity  = int(np.clip(60 + arousal*25 + tension*15, 35, 110))
+
+        # [MEJORA 2] Usar la envolvente estructurada en lugar de calcular
+        # la velocidad sólo desde arousal/tension (que es plano)
+        dyn_vel = self.get_dynamic_velocity(bar_idx)
+        # Añadir modulación fina de arousal encima del swell
+        fine_mod = int(arousal * 8 + tension * 5)
+        velocity  = int(np.clip(dyn_vel + fine_mod, 30, 110))
+
         register_offset = int(arousal * 7)
         density_mult = float(np.clip(0.6 + activity*0.8 + tension*0.4, 0.4, 2.2))
         if tension > 0.7:      acc_style = 'block'
@@ -1576,6 +1917,7 @@ def generate_melody(
     markov_model=None, sequitur_phrases=None,
     melody_mode='contour',   # 'contour' | 'markov' | 'sequitur'
     surprise_rate=0.08,
+    use_tension_markov=True,
 ):
     """
     Genera melodía integrando:
@@ -1590,7 +1932,8 @@ def generate_melody(
             sum(len(v) for v in markov_model.transitions.values()) > 0:
         return _generate_melody_markov(
             markov_model, harmony_prog, key_obj, n_bars, beats_per_bar,
-            emotional_ctrl, form_gen, rhythm_strength, h_timeline, total_h)
+            emotional_ctrl, form_gen, rhythm_strength, h_timeline, total_h,
+            use_tension_markov=use_tension_markov)
 
     if melody_mode == 'sequitur' and sequitur_phrases:
         return _generate_melody_sequitur(
@@ -1692,16 +2035,23 @@ def _generate_melody_contour(
 
 def _generate_melody_markov(
     markov_model, harmony_prog, key_obj, n_bars, beats_per_bar,
-    emotional_ctrl, form_gen, rhythm_strength, h_timeline, total_h
+    emotional_ctrl, form_gen, rhythm_strength, h_timeline, total_h,
+    use_tension_markov=True,
 ):
-    """Melodía Markov de 2º orden con control emocional. [D][O]"""
+    """Melodía Markov de 2º orden con control emocional. [D][O][MEJORA 1]"""
     result = []
     tonic_midi = pitch.Pitch(key_obj.tonic.name).midi + 60
     lo, hi = INSTRUMENT_RANGES['melody']
     tonic_midi = max(lo, min(hi, tonic_midi))
     ts_num = beats_per_bar
     n_steps = n_bars * max(4, int(ts_num / 0.5)) + 32
-    markov_seq = markov_model.generate(n_steps, tonic_midi, key_obj)
+
+    # [MEJORA 1] Pasar la curva de tensión al Markov — sólo si está activada
+    tension_curve = (emotional_ctrl.tension
+                     if use_tension_markov and hasattr(emotional_ctrl, 'tension')
+                     else None)
+    markov_seq = markov_model.generate(n_steps, tonic_midi, key_obj,
+                                        tension_curve=tension_curve)
     seq_idx = 0
 
     for bar_idx in range(n_bars):
@@ -1865,7 +2215,10 @@ def generate_melody_mosaic(dnas, harmony_prog, target_key, n_bars, ts_num,
 def generate_accompaniment(
     harmony_prog, key_obj, n_bars, emotional_ctrl, form_gen,
     beats_per_bar=4, acc_pattern=None, groove_map=None,
-    force_style=None, harmony_complexity=0.3
+    force_style=None, harmony_complexity=0.3, use_texture_changes=True,
+    mt_harmony_complexity=None,   # [MT2] MutationTimeline complejidad armónica 0-1
+    mt_acc_style=None,            # [MT3] MutationTimeline estilo de acompañamiento
+    mt_swing=None,                # [MT5] MutationTimeline swing (escala desvíos de groove)
 ):
     """
     Acompañamiento con:
@@ -1873,6 +2226,11 @@ def generate_accompaniment(
     - Voice leading entre acordes [K]
     - Dinámica desde curva emocional [O]
     - force_style: fuerza un estilo fijo ('alberti','arpeggio','block','waltz')
+    [MEJORA 5] Cambios de textura por sección formal:
+    - Sección A: estilo derivado de la emoción (normal)
+    - Sección B: cambio de textura (alberti → arpeggio, block → alberti)
+    - En el clímax (vel máx): textura sparse (solo bajo + notas pedal largas)
+      para que la melodía respire en su momento más intenso
     """
     result = []
     total_beats = n_bars * beats_per_bar
@@ -1884,13 +2242,36 @@ def generate_accompaniment(
             bt += dur
             if bt >= total_beats: break
 
+    # [MEJORA 5] Detectar el compás de clímax desde la envolvente dinámica
+    climax_bar = 0
+    if hasattr(emotional_ctrl, '_dynamic_envelope') and emotional_ctrl._dynamic_envelope:
+        env = emotional_ctrl._dynamic_envelope
+        climax_bar = int(np.argmax(env))
+
+    # [MEJORA 5] Mapa de estilos alternativos por sección
+    SECTION_STYLE_REMAP = {
+        'A': None,           # usa estilo emocional normal
+        'B': {               # en sección B, rotar el estilo para contraste
+            'alberti':  'arpeggio',
+            'arpeggio': 'alberti',
+            'block':    'alberti',
+            'waltz':    'waltz',
+        },
+        'C': {               # sección C: más bloque y dramático
+            'alberti':  'block',
+            'arpeggio': 'block',
+            'block':    'block',
+            'waltz':    'waltz',
+        },
+    }
+
     prev_pitches = None
     for chord_start, chord_dur, fig in h_exp:
         bar_idx = int(chord_start / beats_per_bar)
         ep = emotional_ctrl.get_bar_params(bar_idx, n_bars)
         tension = ep['harmony_tension']
 
-        # Prioridad: force_style > 3/4 waltz > emocional
+        # Prioridad: force_style > 3/4 waltz > emocional > sección
         if force_style:
             acc_style = force_style
         elif beats_per_bar == 3:
@@ -1898,28 +2279,61 @@ def generate_accompaniment(
         else:
             acc_style = ep['acc_style']
 
+        # [MEJORA 5] Remapear estilo según sección formal — sólo si está activo
+        if not force_style and use_texture_changes:
+            sec = form_gen.section_of(bar_idx) if form_gen else 'A'
+            remap = SECTION_STYLE_REMAP.get(sec)
+            if remap:
+                acc_style = remap.get(acc_style, acc_style)
+
+        # [MEJORA 5] Textura sparse en el clímax — sólo si está activo
+        is_climax_zone = (bar_idx == climax_bar or bar_idx == climax_bar + 1)
+        if use_texture_changes and is_climax_zone and not force_style:
+            acc_style = 'sparse'
+
+        # [MT3] Morphing de estilo de acompañamiento (anula Mejora 5 y selección emocional)
+        if mt_acc_style and not force_style:
+            STYLE_OPTIONS = ['alberti', 'arpeggio', 'waltz', 'block']
+            acc_style = mt_acc_style.at_str(bar_idx, STYLE_OPTIONS)
+
+        # [MT5] Swing gradual: escala el desvío de groove por compás
+        swing_alpha = mt_swing.at(bar_idx) if mt_swing else 1.0
+
+        # [MT2] Complejidad armónica por compás
+        hc_bar = (mt_harmony_complexity.at(bar_idx) if mt_harmony_complexity
+                  else harmony_complexity)
+
         pitches = _build_chord_pitches_from_roman(fig, key_obj, prev_pitches, 'chords',
-                                                   harmony_complexity=harmony_complexity)
+                                                   harmony_complexity=hc_bar)
         if not pitches: pitches = [48, 52, 55]
         prev_pitches = pitches
         vel_base = max(35, ep['velocity'] - 15)
         bpb = beats_per_bar
 
-        if acc_style == 'block' or chord_dur <= 1.0:
+        def _gdev(beat_pos):
+            """Desvío de groove escalado por swing_alpha [MT5]."""
+            if not groove_map: return 0.0
+            return groove_map.get_offset(beat_pos, bpb) * swing_alpha
+
+        if acc_style == 'sparse':
+            pedal_pitch = min(pitches)
+            sparse_vel = max(25, vel_base - 20)
+            result.append((max(0, chord_start + _gdev(chord_start)), pedal_pitch,
+                           min(chord_dur, bpb) * 0.95, sparse_vel))
+
+        elif acc_style == 'block' or chord_dur <= 1.0:
             for p in pitches:
-                groove_dev = groove_map.get_offset(chord_start, bpb) if groove_map else 0.0
-                result.append((max(0, chord_start+groove_dev), p,
+                result.append((max(0, chord_start + _gdev(chord_start)), p,
                                min(chord_dur, bpb)*0.9, vel_base))
 
         elif acc_style == 'alberti':
-            # Rellenar a mínimo 3 notas si el acorde es incompleto
             if len(pitches) < 3:
                 pitches = pitches + [pitches[0] + 12]
             pat = [pitches[0], pitches[-1], pitches[1], pitches[-1]]
             sub_dur = chord_dur / len(pat)
             t = chord_start
             for i, p in enumerate(pat):
-                gd = groove_map.get_offset(t % bpb, bpb) if groove_map else 0.0
+                gd = _gdev(t % bpb)
                 v = groove_map.get_velocity(t % bpb, vel_base + (4 if i==0 else 0), bpb) \
                     if groove_map else vel_base + (4 if i==0 else 0)
                 result.append((max(0, t+gd), p, sub_dur*0.88, int(v)))
@@ -1931,22 +2345,22 @@ def generate_accompaniment(
             t = chord_start
             for _ in range(n_reps):
                 for p in sorted(pitches):
-                    gd = groove_map.get_offset(t % bpb, bpb) if groove_map else 0.0
+                    gd = _gdev(t % bpb)
                     v = groove_map.get_velocity(t % bpb, vel_base+random.randint(0,8), bpb) \
                         if groove_map else vel_base + random.randint(0,8)
                     result.append((max(0, t+gd), p, sub_dur*0.85, int(v)))
                     t += sub_dur
 
         elif acc_style == 'waltz':
-            bass = pitches[0]
+            bass_p = pitches[0]
             upper = pitches[1:] if len(pitches) > 1 else pitches
             beat = chord_dur / 3
-            gd = groove_map.get_offset(chord_start % bpb, bpb) if groove_map else 0.0
-            result.append((max(0, chord_start+gd), bass, beat*0.9, vel_base+5))
+            result.append((max(0, chord_start + _gdev(chord_start % bpb)),
+                           bass_p, beat*0.9, vel_base+5))
             for p in upper:
                 for b in [1, 2]:
-                    gd2 = groove_map.get_offset((chord_start+b*beat) % bpb, bpb) if groove_map else 0.0
-                    result.append((max(0, chord_start+b*beat+gd2), p, beat*0.85, vel_base-5))
+                    result.append((max(0, chord_start+b*beat + _gdev((chord_start+b*beat) % bpb)),
+                                   p, beat*0.85, vel_base-5))
 
     return result
 
@@ -2259,6 +2673,35 @@ def humanize(notes_list, groove_map=None, ts_num=4, micro_jitter=True):
             new_offset += random.uniform(-0.01, 0.01)
             new_offset = max(0, new_offset)
             new_vel = int(np.clip(new_vel + random.randint(-4, 4), 20, 127))
+        result.append((new_offset, midi, dur, new_vel))
+    return result
+
+
+def humanize_with_swing(notes_list, groove_map, ts_num=4, swing_factors=None):
+    """
+    [MT5] Humanización con swing gradual por compás.
+    swing_factors: lista de floats 0-1 por compás.
+      0.0 = sin groove (timing exacto al grid)
+      1.0 = groove completo del groove_map
+    Si swing_factors es None, aplica humanización estándar completa.
+    """
+    if not groove_map or not groove_map.trained:
+        return notes_list
+    if swing_factors is None:
+        return humanize(notes_list, groove_map, ts_num)
+
+    result = []
+    for offset, midi, dur, vel in notes_list:
+        bar_idx = int(offset / ts_num)
+        alpha = swing_factors[min(bar_idx, len(swing_factors) - 1)] if swing_factors else 1.0
+        beat_pos = offset % ts_num
+        groove_dev = groove_map.get_offset(beat_pos, ts_num) * alpha
+        new_offset = max(0, offset + groove_dev)
+        groove_vel = groove_map.get_velocity(beat_pos, vel, ts_num)
+        new_vel = int(vel * (1 - alpha) + groove_vel * alpha)
+        new_offset += random.uniform(-0.01, 0.01) * alpha
+        new_offset = max(0, new_offset)
+        new_vel = int(np.clip(new_vel + random.randint(-4, 4), 20, 127))
         result.append((new_offset, midi, dur, new_vel))
     return result
 
@@ -2996,7 +3439,8 @@ def score_candidate(melody_notes, acc_notes, key_obj):
 #  MODOS DE MEZCLA
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _prepare_controllers(dnas, emotion_src_idx, form_src_idx, n_bars, form_override=None):
+def _prepare_controllers(dnas, emotion_src_idx, form_src_idx, n_bars,
+                          form_override=None, use_dynamic_swells=True):
     ed = dnas[min(emotion_src_idx, len(dnas)-1)]
     fd = dnas[min(form_src_idx,   len(dnas)-1)]
     ec = EmotionalController(
@@ -3005,7 +3449,8 @@ def _prepare_controllers(dnas, emotion_src_idx, form_src_idx, n_bars, form_overr
         valence_curve   = ed.valence_curve   or [0.0],
         stability_curve = ed.stability_curve or [0.7],
         activity_curve  = ed.activity_curve  or [0.5],
-        emotional_arc_label = ed.emotional_arc_label
+        emotional_arc_label = ed.emotional_arc_label,
+        n_bars          = n_bars if use_dynamic_swells else 0,
     )
     form_str = form_override or fd.form_string
     fg = FormGenerator(
@@ -3018,30 +3463,165 @@ def _prepare_controllers(dnas, emotion_src_idx, form_src_idx, n_bars, form_overr
     return ec, fg
 
 
+def apply_budgeted_dissonance(melody_notes, key_obj, tension_curve, beats_per_bar=4):
+    """
+    [MEJORA 4] Disonancia presupuestada: en compases de alta tensión, sustituye
+    algunas notas en tiempo DÉBIL por notas cromáticas de tensión (7ª, 9ª, tritono)
+    sabiendo que la siguiente nota en tiempo FUERTE las resuelve por grado conjunto.
+
+    Reglas:
+    - Solo actúa si tensión del compás > 0.60
+    - Solo afecta notas en tiempos débiles (offset_in_bar > 0.5)
+    - La nota siguiente (tiempo fuerte del compás siguiente o siguiente corchea)
+      se ajusta para resolver por semitono o grado conjunto descendente
+    - Probabilidad escalada con la tensión: más tensión → más disonancias
+    """
+    if not melody_notes or len(melody_notes) < 3:
+        return melody_notes
+
+    def tension_at_bar(bar_idx):
+        if not tension_curve:
+            return 0.5
+        idx = min(bar_idx, len(tension_curve) - 1)
+        return float(tension_curve[idx])
+
+    DISSONANT_INTERVALS = [1, 6, 10, 11]  # m2, tritono, m7, M7
+
+    result = list(melody_notes)  # trabajar sobre copia
+
+    for i in range(len(result) - 1):
+        offset, midi, dur, vel = result[i]
+        bar_idx = int(offset / beats_per_bar)
+        offset_in_bar = offset - bar_idx * beats_per_bar
+        tension = tension_at_bar(bar_idx)
+
+        # Solo en tiempos débiles y tensión alta
+        if offset_in_bar < 0.4:
+            continue
+        if tension < 0.60:
+            continue
+
+        # Probabilidad de introducir disonancia proporcional a la tensión
+        prob = (tension - 0.60) * 1.5  # 0 en tensión 0.6, 0.6 en tensión 1.0
+        if random.random() > prob:
+            continue
+
+        # Nota siguiente (que resolverá)
+        next_offset, next_midi, next_dur, next_vel = result[i + 1]
+        next_bar = int(next_offset / beats_per_bar)
+        next_in_bar = next_offset - next_bar * beats_per_bar
+
+        # Elegir una nota disonante cercana al midi actual
+        tonic_pc = pitch.Pitch(key_obj.tonic.name).pitchClass
+        dissonant_candidates = []
+        for iv in DISSONANT_INTERVALS:
+            cand = midi + random.choice([-iv, iv])
+            cand = max(52, min(82, cand))
+            # No usar si ya es nota de escala (queremos cromatismo real)
+            scale_pcs = {(tonic_pc + pc) % 12 for pc in _get_scale_pcs(key_obj)}
+            if cand % 12 not in scale_pcs:
+                dissonant_candidates.append(cand)
+
+        if not dissonant_candidates:
+            continue
+
+        dissonant_note = random.choice(dissonant_candidates)
+
+        # Calcular la resolución: el siguiente tiempo fuerte resuelve
+        # por semitono descendente o grado conjunto hacia nota de acorde
+        resolution = dissonant_note - 1  # semitono descendente (el más expresivo)
+        resolution = _snap_to_scale(resolution, key_obj)
+        resolution = max(52, min(82, resolution))
+
+        # Solo aplicar si la resolución es cercana a la nota original siguiente
+        # (para no distorsionar demasiado la melodía planificada)
+        if abs(resolution - next_midi) <= 4:
+            result[i] = (offset, dissonant_note, dur, min(vel + 8, 110))
+            result[i + 1] = (next_offset, resolution, next_dur, next_vel)
+
+    return result
+
+
+def _extract_primary_motif(notes_list, n_notes=4):
+    """
+    [MEJORA 3] Extrae el motivo principal de los primeros compases de la melodía.
+    Devuelve lista de intervalos relativos (ej. [2, -1, 3]) que caracterizan
+    el motivo y pueden sembrarse en secciones de retorno.
+    """
+    if not notes_list or len(notes_list) < n_notes + 1:
+        return []
+    sorted_notes = sorted(notes_list, key=lambda x: x[0])
+    pitches = [p for _, p, _, _ in sorted_notes[:n_notes + 1]]
+    return [pitches[i+1] - pitches[i] for i in range(len(pitches)-1)]
+
+
+def _apply_motif_seed(motif_intervals, start_pitch, key_obj, n_notes=4):
+    """
+    [MEJORA 3] Genera las primeras notas de una frase usando el motivo extraído.
+    Devuelve lista de (pitch, dur) para las primeras n_notes notas.
+    """
+    if not motif_intervals:
+        return []
+    lo, hi = INSTRUMENT_RANGES['melody']
+    result = []
+    p = _snap_to_scale(start_pitch, key_obj)
+    for i, iv in enumerate(motif_intervals[:n_notes]):
+        result.append((p, 0.5))
+        p = _snap_to_scale(p + iv, key_obj)
+        while p > hi: p -= 12
+        while p < lo: p += 12
+    return result
+
+
 def _generate_melody_with_modulation(
     h_prog, target_key, r_pat, contour, reg, motif,
     n_bars, ec, fg, bpb, rhythm_strength, markov,
-    seq_phrases, melody_mode, surprise_rate
+    seq_phrases, melody_mode, surprise_rate,
+    use_motif_coherence=True, use_tension_markov=True,
+    mt_density=None, mt_register=None,
 ):
     """
-    Genera la melodía sección a sección. En sección B modula al relativo o dominante. [Q]
-    Une los fragmentos ajustando los offsets.
+    Genera la melodía sección a sección con modulación tonal [Q], coherencia motívica [3]
+    y curvas de mutación temporal para densidad [MT1] y registro [MT4].
     """
-    # Recopilar compases por sección
+    # [MT1][MT4] Wrapper de EmotionalController que inyecta mutaciones temporales
+    class _MutatedEC:
+        def __init__(self, base_ec):
+            self._ec = base_ec
+            for attr in ('tension','arousal','valence','stability','activity',
+                         'arc','_dynamic_envelope','_n_bars'):
+                if hasattr(base_ec, attr):
+                    setattr(self, attr, getattr(base_ec, attr))
+        def get_bar_params(self, bar_idx, total_bars):
+            ep = dict(self._ec.get_bar_params(bar_idx, total_bars))
+            if mt_density:
+                d_norm = mt_density.at(bar_idx)
+                ep['density_mult'] = float(np.clip(0.3 + d_norm * 2.2, 0.3, 2.5))
+            if mt_register:
+                r_norm = mt_register.at(bar_idx)
+                ep['register_offset'] = int((r_norm - 0.5) * 24)
+            return ep
+        def get_dynamic_velocity(self, bar_idx):
+            return self._ec.get_dynamic_velocity(bar_idx)
+
+    ec_used = _MutatedEC(ec) if (mt_density or mt_register) else ec
+
     sections = {}
     for bi in range(n_bars):
         sec = fg.section_of(bi)
         sections.setdefault(sec, []).append(bi)
 
     all_notes = []
-    for sec_label in dict.fromkeys(fg.bar_section):  # orden de aparición
+    primary_motif_intervals = []
+    first_a_done = False
+
+    for sec_label in dict.fromkeys(fg.bar_section):
         bars = sections.get(sec_label, [])
         if not bars:
             continue
         n_sec = len(bars)
-        bar_offset = bars[0]  # compás inicial de la sección
+        bar_offset = bars[0]
 
-        # Elegir tonalidad de la sección [Q]
         if sec_label == 'B':
             sec_key = _get_relative_key(target_key)
         elif sec_label == 'C':
@@ -3049,7 +3629,6 @@ def _generate_melody_with_modulation(
         else:
             sec_key = target_key
 
-        # Crear un FormGenerator parcial para esta sección
         fg_sec = FormGenerator(
             form_string=sec_label,
             section_map=[sec_label] * n_sec,
@@ -3060,10 +3639,25 @@ def _generate_melody_with_modulation(
 
         frag = generate_melody(
             h_prog, sec_key, r_pat, contour, reg, motif,
-            n_sec, ec, fg_sec, bpb, rhythm_strength, markov,
-            seq_phrases, melody_mode, surprise_rate
+            n_sec, ec_used, fg_sec, bpb, rhythm_strength, markov,
+            seq_phrases, melody_mode, surprise_rate,
+            use_tension_markov=use_tension_markov,
         )
-        # Reubicar al offset absoluto de la sección y ajustar al rango de target_key
+
+        if use_motif_coherence and sec_label == 'A' and not first_a_done and frag:
+            primary_motif_intervals = _extract_primary_motif(frag, n_notes=4)
+            first_a_done = True
+        elif use_motif_coherence and sec_label == 'A' and first_a_done and primary_motif_intervals and frag:
+            start_p = frag[0][1] if frag else reg
+            motif_seed = _apply_motif_seed(primary_motif_intervals, start_p, target_key, n_notes=4)
+            if motif_seed:
+                n_replace = min(len(motif_seed), len(frag))
+                seed_absolute = [
+                    (frag[i][0], motif_seed[i][0], motif_seed[i][1], frag[i][3])
+                    for i in range(n_replace)
+                ]
+                frag = seed_absolute + list(frag[n_replace:])
+
         for offset, midi, dur, vel in frag:
             new_midi = _snap_to_scale(midi, target_key)
             all_notes.append((offset + bar_offset * bpb, new_midi, dur, vel))
@@ -3077,53 +3671,128 @@ def _run_generation(
     rhythm_strength=1.0, melody_mode='contour',
     surprise_rate=0.08, humanize_groove=True,
     dnas_all=None, force_acc_style=None,
+    use_tension_markov=True, use_motif_coherence=True,
+    use_budgeted_dissonance=True, use_texture_changes=True,
+    # ── Mutation timelines ────────────────────────────────────────────────────
+    mt_density=None,          # MutationTimeline  densidad rítmica
+    mt_harmony_complexity=None, # MutationTimeline complejidad armónica
+    mt_swing=None,            # MutationTimeline  swing 0-1
+    mt_register=None,         # MutationTimeline  registro melódico 0-1
+    mt_acc_style=None,        # MutationTimeline  estilo acompañamiento
+    mt_rhythm_morph=None,     # MutationTimeline  morphing rítmico entre fuentes
+    mt_emotion_morph=None,    # MutationTimeline  morphing emocional entre fuentes
+    rhythm_morph_dna=None,    # UnifiedDNA        fuente B para morphing rítmico
+    emotion_morph_dna=None,   # UnifiedDNA        fuente B para morphing emocional
 ):
     bpb = time_sig[0]
     h_prog = harmony_src_dna.harmony_prog
-    r_pat  = rhythm_src_dna.rhythm_pattern
     contour = melody_src_dna.pitch_contour
     reg = melody_src_dna.pitch_register
     motif = melody_src_dna.motif_intervals
     markov = melody_src_dna.markov
     seq_phrases = melody_src_dna.sequitur_phrases
-    groove = rhythm_src_dna.groove_map if humanize_groove else None
     style = melody_src_dna.style
 
-    # Melodía
+    # ── [MT7] Morphing emocional: construir ec modificado compás a compás ─────
+    # Si hay mt_emotion_morph y una segunda fuente, interpolamos las curvas
+    # de tensión/arousal/etc. entre las dos fuentes en cada compás.
+    if mt_emotion_morph and mt_emotion_morph.is_active() and emotion_morph_dna:
+        def _interp_curve(ca, cb, alpha_per_bar):
+            n = len(alpha_per_bar)
+            def _sample(c, i):
+                if not c: return 0.5
+                return c[min(i, len(c)-1)]
+            return [_sample(ca, i)*(1-alpha_per_bar[i]) + _sample(cb, i)*alpha_per_bar[i]
+                    for i in range(n)]
+        alphas = [mt_emotion_morph.at(i) for i in range(n_bars)]
+        blended_tension   = _interp_curve(ec.tension,   emotion_morph_dna.tension_curve,   alphas)
+        blended_arousal   = _interp_curve(ec.arousal,   emotion_morph_dna.arousal_curve,   alphas)
+        blended_valence   = _interp_curve(ec.valence,   emotion_morph_dna.valence_curve,   alphas)
+        blended_stability = _interp_curve(ec.stability, emotion_morph_dna.stability_curve, alphas)
+        blended_activity  = _interp_curve(ec.activity,  emotion_morph_dna.activity_curve,  alphas)
+        from copy import deepcopy
+        ec = deepcopy(ec)
+        ec.tension   = blended_tension
+        ec.arousal   = blended_arousal
+        ec.valence   = blended_valence
+        ec.stability = blended_stability
+        ec.activity  = blended_activity
+        # Reconstruir envolvente dinámica con la curva de tensión mezclada
+        ec._dynamic_envelope = _build_dynamic_envelope(n_bars, blended_tension)
+
+    # ── [MT6] Morphing rítmico: construir r_pat interpolado compás a compás ──
+    r_pat_a = rhythm_src_dna.rhythm_pattern
+    if mt_rhythm_morph and mt_rhythm_morph.is_active() and rhythm_morph_dna:
+        r_pat_b = rhythm_morph_dna.rhythm_pattern
+        r_pat = []
+        for i in range(n_bars):
+            alpha = mt_rhythm_morph.at(i)
+            bar_a = r_pat_a[i % len(r_pat_a)]
+            bar_b = r_pat_b[i % len(r_pat_b)]
+            r_pat.append(MutationTimeline._interp_rhythm_bars(bar_a, bar_b, alpha))
+    else:
+        r_pat = r_pat_a
+
+    # ── [MT5] Swing gradual: construir groove_map escalado por compás ─────────
+    # El groove_map se aplica en humanize(); aquí preparamos el factor por compás
+    # que se inyectará al humanizar nota a nota.
+    groove_base = rhythm_src_dna.groove_map if humanize_groove else None
+    swing_factors = None
+    if mt_swing and mt_swing.is_active() and groove_base and groove_base.trained:
+        swing_factors = [mt_swing.at(i) for i in range(n_bars)]
+
+    # ── Melodía ────────────────────────────────────────────────────────────────
     if melody_mode == 'mosaic' and dnas_all:
         mel = generate_melody_mosaic(dnas_all, h_prog, target_key, n_bars, bpb, ec, fg)
         if not mel:
             mel = generate_melody(h_prog, target_key, r_pat, contour, reg, motif,
                                   n_bars, ec, fg, bpb, rhythm_strength, markov,
-                                  seq_phrases, 'markov', surprise_rate)
+                                  seq_phrases, 'markov', surprise_rate,
+                                  use_tension_markov=use_tension_markov)
     else:
-        # Generación sección a sección con modulación real en sección B [Q]
         mel = _generate_melody_with_modulation(
             h_prog, target_key, r_pat, contour, reg, motif,
             n_bars, ec, fg, bpb, rhythm_strength, markov,
-            seq_phrases, melody_mode, surprise_rate
+            seq_phrases, melody_mode, surprise_rate,
+            use_motif_coherence=use_motif_coherence,
+            use_tension_markov=use_tension_markov,
+            mt_density=mt_density,      # [MT1]
+            mt_register=mt_register,    # [MT4]
         )
 
     # Ornamentación melodía [F]
     mel = add_ornamentation(mel, target_key, style)
 
-    # Humanización [H]
-    if humanize_groove and groove and groove.trained:
-        mel = humanize(mel, groove, bpb)
+    # [MEJORA 4] Disonancia presupuestada
+    if use_budgeted_dissonance:
+        tension_curve_raw = getattr(ec, 'tension', None)
+        if tension_curve_raw:
+            mel = apply_budgeted_dissonance(mel, target_key, tension_curve_raw, bpb)
 
-    # Acompañamiento [L]
-    acc = generate_accompaniment(h_prog, target_key, n_bars, ec, fg, bpb,
-                                 groove_map=groove, force_style=force_acc_style,
-                                 harmony_complexity=harmony_src_dna.harmony_complexity)
+    # [MT5] Humanización con swing gradual
+    if humanize_groove and groove_base and groove_base.trained:
+        mel = humanize_with_swing(mel, groove_base, bpb, swing_factors)
+
+    # Acompañamiento con mutation timelines [MT2][MT3][MEJORA 5]
+    acc = generate_accompaniment(
+        h_prog, target_key, n_bars, ec, fg, bpb,
+        groove_map=groove_base,
+        force_style=force_acc_style,
+        harmony_complexity=harmony_src_dna.harmony_complexity,
+        use_texture_changes=use_texture_changes,
+        mt_harmony_complexity=mt_harmony_complexity,  # [MT2]
+        mt_acc_style=mt_acc_style,                    # [MT3]
+        mt_swing=mt_swing,                            # [MT5]
+    )
 
     # Bajo
-    bass = generate_bass(h_prog, target_key, n_bars, bpb, groove_map=groove)
+    bass = generate_bass(h_prog, target_key, n_bars, bpb, groove_map=groove_base)
 
     # Contrapunto [G]
     cp = generate_counterpoint(mel, h_prog, target_key, n_bars, bpb,
                                emotional_ctrl=ec)
 
-    # Ornamentación contrapunto [F] — más sutil que la melodía
+    # Ornamentación contrapunto [F]
     cp_style = style if style in ORNAMENTATION_STYLES else 'classical'
     cp = add_ornamentation(cp, target_key, cp_style)
 
@@ -3156,10 +3825,19 @@ def run_mixing(dnas, target_key, n_bars, tempo_bpm, time_sig, mode,
                emotion_src_idx, form_src_idx, sources,
                rhythm_strength, surprise_rate, humanize_groove,
                form_override=None, n_candidates=1, verbose=False,
-               force_acc_style=None, voice_presets=None):
+               force_acc_style=None, voice_presets=None,
+               use_tension_markov=True, use_dynamic_swells=True,
+               use_motif_coherence=True, use_budgeted_dissonance=True,
+               use_texture_changes=True,
+               # ── Mutation timelines ─────────────────────────────────────────
+               mt_density=None, mt_harmony_complexity=None,
+               mt_swing=None, mt_register=None, mt_acc_style=None,
+               mt_rhythm_morph=None, mt_emotion_morph=None,
+               rhythm_morph_dna=None, emotion_morph_dna=None):
     """Motor principal de mezcla. Genera candidatos y elige el mejor. [N]"""
 
-    ec, fg = _prepare_controllers(dnas, emotion_src_idx, form_src_idx, n_bars, form_override)
+    ec, fg = _prepare_controllers(dnas, emotion_src_idx, form_src_idx, n_bars,
+                                  form_override, use_dynamic_swells=use_dynamic_swells)
 
     # Seleccionar fuentes por modo
     by_harmony = sorted(dnas, key=lambda d: d.harmony_complexity, reverse=True)
@@ -3232,7 +3910,20 @@ def run_mixing(dnas, target_key, n_bars, tempo_bpm, time_sig, mode,
             h_src, m_src, r_src,
             target_key, n_bars, tempo_bpm, ec, fg, time_sig,
             rhythm_strength, melody_mode, surprise_rate, humanize_groove,
-            dnas_all=dnas, force_acc_style=force_acc_style
+            dnas_all=dnas, force_acc_style=force_acc_style,
+            use_tension_markov=use_tension_markov,
+            use_motif_coherence=use_motif_coherence,
+            use_budgeted_dissonance=use_budgeted_dissonance,
+            use_texture_changes=use_texture_changes,
+            mt_density=mt_density,
+            mt_harmony_complexity=mt_harmony_complexity,
+            mt_swing=mt_swing,
+            mt_register=mt_register,
+            mt_acc_style=mt_acc_style,
+            mt_rhythm_morph=mt_rhythm_morph,
+            mt_emotion_morph=mt_emotion_morph,
+            rhythm_morph_dna=rhythm_morph_dna,
+            emotion_morph_dna=emotion_morph_dna,
         )
         sc = score_candidate(mel, acc, target_key)
         print(f"    Score: {sc:.3f}")
@@ -3412,15 +4103,65 @@ def main():
         help='Desactivar pista de percusión generada automáticamente')
     parser.add_argument('--verbose',     action='store_true')
     parser.add_argument('--output', default='output_unified.mid')
+    # ── Mejoras emocionales (todas activas por defecto) ───────────────────────
+    parser.add_argument('--no-tension-markov', action='store_true',
+        help='[Mejora 1] Desactivar el sesgo de tensión en la cadena de Markov')
+    parser.add_argument('--no-dynamic-swells', action='store_true',
+        help='[Mejora 2] Desactivar crescendos/piano-súbito estructurados')
+    parser.add_argument('--no-motif-coherence', action='store_true',
+        help='[Mejora 3] Desactivar la siembra del motivo en secciones A de retorno')
+    parser.add_argument('--no-budgeted-dissonance', action='store_true',
+        help='[Mejora 4] Desactivar la disonancia presupuestada en tiempos débiles')
+    parser.add_argument('--no-texture-changes', action='store_true',
+        help='[Mejora 5] Desactivar los cambios de textura por sección y en el clímax')
+    # ── Curvas de mutación temporal (todas opcionales) ────────────────────────
+    parser.add_argument('--mt-density',
+        metavar='"BAR:VAL, ..."',
+        help='[MT1] Curva de densidad rítmica por compás. '
+             'Valores nominales: silent, sparse, light, medium, dense, full. '
+             'Ej: "0:sparse, 8:dense, 16:medium"')
+    parser.add_argument('--mt-harmony-complexity',
+        metavar='"BAR:VAL, ..."',
+        help='[MT2] Curva de complejidad armónica 0-1 (controla 7as y 9as). '
+             'Valores nominales: simple, diatonic, moderate, extended, chromatic. '
+             'Ej: "0:simple, 12:extended, 24:chromatic"')
+    parser.add_argument('--mt-acc-style',
+        metavar='"BAR:STYLE, ..."',
+        help='[MT3] Curva de estilo de acompañamiento. '
+             'Valores: alberti, arpeggio, waltz, block. '
+             'Ej: "0:alberti, 8:arpeggio, 16:block"')
+    parser.add_argument('--mt-register',
+        metavar='"BAR:VAL, ..."',
+        help='[MT4] Curva de registro melódico. '
+             'Valores nominales: low, mid-low, mid, mid-high, high. '
+             'Ej: "0:low, 8:mid, 16:high"')
+    parser.add_argument('--mt-swing',
+        metavar='"BAR:VAL, ..."',
+        help='[MT5] Curva de swing gradual 0-1 (0=sin groove, 1=groove completo). '
+             'Ej: "0:0.0, 8:0.5, 16:1.0"')
+    parser.add_argument('--mt-rhythm-morph',
+        metavar='"BAR:VAL, ..."',
+        help='[MT6] Curva de morphing rítmico entre primera y segunda fuente. '
+             '0.0=todo fuente A, 1.0=todo fuente B. '
+             'Requiere al menos 2 ficheros de entrada. '
+             'Ej: "0:0.0, 16:1.0"')
+    parser.add_argument('--mt-emotion-morph',
+        metavar='"BAR:VAL, ..."',
+        help='[MT7] Curva de morphing emocional entre primera y segunda fuente. '
+             '0.0=arco de fuente A, 1.0=arco de fuente B. '
+             'Requiere al menos 2 ficheros de entrada. '
+             'Ej: "0:0.0, 8:0.5, 16:1.0"')
     args = parser.parse_args()
 
     random.seed(args.seed)
     np.random.seed(args.seed)
 
     print("═"*65)
-    print("  MIDI DNA UNIFIED MIXER  v1.1")
+    print("  MIDI DNA UNIFIED MIXER  v1.3")
     print("  Markov · Mosaic · Contrapunto · Groove · Forma · Emoción")
     print("  Walking Bass · Percusión · Modulación · Silencios · CC#64/11")
+    print("  Tensión-Markov · Swells · Motivo · Disonancia · Texturas")
+    print("  Mutación Temporal: Densidad · Armonía · Registro · Swing · Morphing")
     print("═"*65)
 
     # ── Cargar ficheros ────────────────────────────────────────────────────────
@@ -3475,23 +4216,79 @@ def main():
     if voice_presets:
         names = ", ".join(f"{vp['name']}({vp['role']})" for vp in voice_presets)
         print(f"    Voces ext.: {names}")
+    # Informe de mejoras activas
+    mejoras = {
+        'Tensión-Markov':     not args.no_tension_markov,
+        'Dynamic-Swells':     not args.no_dynamic_swells,
+        'Motif-Coherence':    not args.no_motif_coherence,
+        'Budgeted-Dissonance':not args.no_budgeted_dissonance,
+        'Texture-Changes':    not args.no_texture_changes,
+    }
+    activas = [k for k, v in mejoras.items() if v]
+    inactivas = [k for k, v in mejoras.items() if not v]
+    if activas:   print(f"    Mejoras ON : {', '.join(activas)}")
+    if inactivas: print(f"    Mejoras OFF: {', '.join(inactivas)}")
+
+    # ── Curvas de mutación temporal ──────────────────────────────────────────
+    def _mt(spec, **kw):
+        return parse_mutation_spec(spec, n_bars, **kw) if spec else None
+
+    mt_density            = _mt(args.mt_density)
+    mt_harmony_complexity = _mt(args.mt_harmony_complexity)
+    mt_acc_style          = _mt(args.mt_acc_style)
+    mt_register           = _mt(args.mt_register)
+    mt_swing              = _mt(args.mt_swing)
+    mt_rhythm_morph       = _mt(args.mt_rhythm_morph)
+    mt_emotion_morph      = _mt(args.mt_emotion_morph)
+
+    # Fuentes B para morphing (segunda fuente de entrada, si existe)
+    rhythm_morph_dna  = dnas[1] if (mt_rhythm_morph  and len(dnas) > 1) else None
+    emotion_morph_dna = dnas[1] if (mt_emotion_morph and len(dnas) > 1) else None
+
+    # Informe de mutaciones activas
+    mts = {
+        'MT1-Density':     mt_density,
+        'MT2-Harmony':     mt_harmony_complexity,
+        'MT3-AccStyle':    mt_acc_style,
+        'MT4-Register':    mt_register,
+        'MT5-Swing':       mt_swing,
+        'MT6-RhythmMorph': mt_rhythm_morph,
+        'MT7-EmotionMorph':mt_emotion_morph,
+    }
+    activas_mt = [k for k, v in mts.items() if v and v.is_active()]
+    if activas_mt:
+        print(f"    Mutaciones : {', '.join(activas_mt)}")
 
     # ── Mezcla ────────────────────────────────────────────────────────────────
     print(f"\n[3/4] Generando…")
     (mel, acc, bass, cp), ec, fg, extra_voices, perc_notes = run_mixing(
         dnas, target_key, n_bars, tempo_bpm, time_sig,
-        mode             = args.mode,
-        emotion_src_idx  = esi,
-        form_src_idx     = fsi,
-        sources          = sources,
-        rhythm_strength  = args.rhythm_strength,
-        surprise_rate    = args.surprise,
-        humanize_groove  = not args.no_humanize,
-        form_override    = args.form,
-        n_candidates     = args.candidates,
-        verbose          = args.verbose,
-        force_acc_style  = args.acc_style,
-        voice_presets    = voice_presets,
+        mode                    = args.mode,
+        emotion_src_idx         = esi,
+        form_src_idx            = fsi,
+        sources                 = sources,
+        rhythm_strength         = args.rhythm_strength,
+        surprise_rate           = args.surprise,
+        humanize_groove         = not args.no_humanize,
+        form_override           = args.form,
+        n_candidates            = args.candidates,
+        verbose                 = args.verbose,
+        force_acc_style         = args.acc_style,
+        voice_presets           = voice_presets,
+        use_tension_markov      = not args.no_tension_markov,
+        use_dynamic_swells      = not args.no_dynamic_swells,
+        use_motif_coherence     = not args.no_motif_coherence,
+        use_budgeted_dissonance = not args.no_budgeted_dissonance,
+        use_texture_changes     = not args.no_texture_changes,
+        mt_density              = mt_density,
+        mt_harmony_complexity   = mt_harmony_complexity,
+        mt_acc_style            = mt_acc_style,
+        mt_register             = mt_register,
+        mt_swing                = mt_swing,
+        mt_rhythm_morph         = mt_rhythm_morph,
+        mt_emotion_morph        = mt_emotion_morph,
+        rhythm_morph_dna        = rhythm_morph_dna,
+        emotion_morph_dna       = emotion_morph_dna,
     )
 
     print(f"    → Melodía         : {len(mel)} notas")
