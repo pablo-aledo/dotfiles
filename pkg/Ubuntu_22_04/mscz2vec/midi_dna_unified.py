@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║               MIDI DNA UNIFIED MIXER  v1.3                                  ║
+║               MIDI DNA UNIFIED MIXER  v1.4                                  ║
 ║   Fusión de lo mejor de tres generaciones de mezcladores MIDI               ║
 ║                                                                              ║
 ║  CARACTERÍSTICAS CORE:                                                       ║
@@ -28,6 +28,8 @@
 ║  [T] Walking bass melódico con notas de paso y aproximación cromática       ║
 ║  [U] Percusión generada desde rhythm_grid                                   ║
 ║  [V] Export split-tracks: una pista por fichero para DAW                    ║
+║  [W] Fingerprint de bordes: JSON con entrada/salida para coherence          ║
+║      stitching entre fragmentos (--export-fingerprint)                      ║
 ║                                                                              ║
 ║  MEJORAS EMOCIONALES v1.2 (activas por defecto, desactivables con --no-*): ║
 ║  [1] Markov condicionado por tensión: sesga intervalos según arco           ║
@@ -71,6 +73,15 @@ OPCIONES PRINCIPALES:
     --no-percussion Desactivar percusión automática
     --split-tracks  Exportar cada pista como fichero MIDI independiente
     --export-xml    Exportar en MusicXML
+    --export-fingerprint  Exportar JSON con huella de bordes para coherence
+                    stitching. Genera <output>.fingerprint.json con:
+                    entry (acorde, bajo, registro, tensión al inicio),
+                    exit  (acorde, bajo, última nota, tensión al final),
+                    tension_curve (stats: media, pico, dirección),
+                    stitching_hints (tipo de cadencia, apertura, tolerancia BPM)
+    --fingerprint-only    Analizar MIDI(s) y exportar solo el fingerprint JSON,
+                    sin generar música. Para secciones externas (DAW, MuseScore…).
+                    Ej: python midi_dna_unified.py seccion_daw.mid --fingerprint-only
     --verbose       Informe detallado del ADN
     --output FILE   Archivo de salida (default: output_unified.mid)
     --seed N        Semilla aleatoria (default: 42)
@@ -244,6 +255,7 @@ DEPENDENCIAS:
 
 import sys
 import os
+import json
 import argparse
 import random
 import copy
@@ -4058,6 +4070,430 @@ def parse_key_arg(s):
         return None
 
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  FINGERPRINT DE BORDES  — para coherence stitching entre fragmentos
+# ══════════════════════════════════════════════════════════════════════════════
+
+def extract_fingerprint(mel, bass, acc, target_key, tempo_bpm, n_bars,
+                        time_sig, fg, dna_src, output_midi_path):
+    """
+    Extrae las huellas de entrada (entry) y salida (exit) de un fragmento
+    generado. El orquestador externo usará estos JSONs para decidir qué
+    fragmentos encajan entre sí y cómo generar los puentes.
+
+    Campos del fingerprint:
+      meta        — información general del fragmento
+      entry       — datos del primer compás (con qué arranca)
+      exit        — datos del último compás (en qué estado queda)
+      tension     — estadísticas de la curva de tensión
+      style       — carácter musical global
+    """
+    beats_per_bar = time_sig[0]
+    ticks_per_bar = float(beats_per_bar)
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def midi_to_name(midi_pitch):
+        names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+        return names[midi_pitch % 12]
+
+    def notes_in_bar(notes_list, bar_idx):
+        """Devuelve las notas (offset, pitch, dur, vel) que caen en bar_idx."""
+        start = bar_idx * ticks_per_bar
+        end   = start + ticks_per_bar
+        return [(o, p, d, v) for o, p, d, v in notes_list
+                if start <= o < end]
+
+    def dominant_pitch_class(notes):
+        """Clase de altura más frecuente (mod 12) en una lista de notas."""
+        if not notes:
+            return None
+        counts = Counter(p % 12 for _, p, _, _ in notes)
+        return counts.most_common(1)[0][0]
+
+    def mean_velocity(notes):
+        if not notes:
+            return 64
+        return float(np.mean([v for _, _, _, v in notes]))
+
+    def mean_pitch(notes):
+        if not notes:
+            return 60
+        return float(np.mean([p for _, p, _, _ in notes]))
+
+    def note_density(notes):
+        """Notas por beat."""
+        if not notes:
+            return 0.0
+        return len(notes) / float(beats_per_bar)
+
+    def infer_chord_label(notes, key_obj):
+        """
+        Intenta inferir el grado romano del acorde formado por las notas.
+        Devuelve una cadena tipo 'I', 'V', 'vi', etc. o 'unknown'.
+        """
+        if not notes:
+            return 'unknown'
+        pcs = list({p % 12 for _, p, _, _ in notes})
+        tonic = key_obj.tonic.midi % 12
+        # Calcula intervalos respecto a la tónica
+        intervals = sorted((pc - tonic) % 12 for pc in pcs)
+        # Tablas de tríadas comunes
+        TRIADS = {
+            (0, 4, 7): 'I', (0, 3, 7): 'i', (2, 5, 9): 'ii',
+            (2, 5, 8): 'ii°', (4, 7, 11): 'iii', (5, 9, 0): 'IV',
+            (5, 8, 0): 'iv', (7, 11, 2): 'V', (9, 0, 4): 'vi',
+            (11, 2, 5): 'vii°', (10, 2, 5): 'VII', (3, 7, 10): 'III',
+            (8, 0, 3): 'VI',
+        }
+        key_tuple = tuple(sorted(intervals[:3]))
+        return TRIADS.get(key_tuple, 'unknown')
+
+    def tension_at_bar(bar_idx):
+        """Lee la tensión de la curva del dna_src si está disponible."""
+        tc = getattr(dna_src, 'tension_curve', None)
+        if tc and len(tc) > 0:
+            idx = int(bar_idx * len(tc) / max(n_bars, 1))
+            idx = min(idx, len(tc) - 1)
+            return float(tc[idx])
+        return 0.5
+
+    # ── Borde de entrada (primer compás) ─────────────────────────────────────
+    entry_mel  = notes_in_bar(mel,  0)
+    entry_bass = notes_in_bar(bass, 0)
+    entry_acc  = notes_in_bar(acc,  0)
+    entry_all  = entry_mel + entry_bass + entry_acc
+
+    entry_chord = infer_chord_label(entry_all, target_key)
+    entry_bass_pitch = (min(p for _, p, _, _ in entry_bass)
+                        if entry_bass else (60 if not entry_mel else entry_mel[0][1]))
+    entry_bass_pc   = entry_bass_pitch % 12
+    entry_mel_pitch = mean_pitch(entry_mel) if entry_mel else 60.0
+
+    # ── Borde de salida (último compás) ──────────────────────────────────────
+    last_bar = n_bars - 1
+    exit_mel  = notes_in_bar(mel,  last_bar)
+    exit_bass = notes_in_bar(bass, last_bar)
+    exit_acc  = notes_in_bar(acc,  last_bar)
+    exit_all  = exit_mel + exit_bass + exit_acc
+
+    # Si el último compás está vacío, buscar el anterior con contenido
+    for b in range(last_bar - 1, -1, -1):
+        if exit_all:
+            break
+        exit_mel  = notes_in_bar(mel,  b)
+        exit_bass = notes_in_bar(bass, b)
+        exit_acc  = notes_in_bar(acc,  b)
+        exit_all  = exit_mel + exit_bass + exit_acc
+
+    exit_chord = infer_chord_label(exit_all, target_key)
+    exit_bass_pitch = (min(p for _, p, _, _ in exit_bass)
+                       if exit_bass else (60 if not exit_mel else exit_mel[-1][1]))
+    exit_bass_pc   = exit_bass_pitch % 12
+    exit_mel_pitch = mean_pitch(exit_mel) if exit_mel else 60.0
+
+    # Última nota de melodía (pitch real, no promedio)
+    last_mel_note = None
+    if mel:
+        last_note_event = max(mel, key=lambda x: x[0])
+        last_mel_note = int(last_note_event[1])
+
+    # ── Curva de tensión: stats globales ─────────────────────────────────────
+    tc = getattr(dna_src, 'tension_curve', [])
+    tension_entry = tension_at_bar(0)
+    tension_exit  = tension_at_bar(n_bars - 1)
+    tension_mean  = float(np.mean(tc)) if tc else 0.5
+    tension_peak  = float(np.max(tc))  if tc else 0.5
+    tension_peak_bar = (int(np.argmax(tc) * n_bars / max(len(tc), 1))
+                        if tc else n_bars // 2)
+
+    # ── Densidad y dinámica ───────────────────────────────────────────────────
+    entry_density  = note_density(entry_mel)
+    exit_density   = note_density(exit_mel)
+    entry_velocity = mean_velocity(entry_all)
+    exit_velocity  = mean_velocity(exit_all)
+
+    # ── Forma y estructura ────────────────────────────────────────────────────
+    form_string = getattr(fg, 'form_string', 'A') if fg else 'A'
+    arc_label   = getattr(dna_src, 'emotional_arc_label', 'unknown')
+
+    # ── Ensamble del JSON ─────────────────────────────────────────────────────
+    fingerprint = {
+        "meta": {
+            "midi_file":       output_midi_path,
+            "key_tonic":       target_key.tonic.name,
+            "key_mode":        target_key.mode,
+            "tempo_bpm":       float(tempo_bpm),
+            "time_sig":        list(time_sig),
+            "n_bars":          n_bars,
+            "form":            form_string,
+            "emotional_arc":   arc_label,
+            "style":           getattr(dna_src, 'style', 'generic'),
+            "swing":           getattr(dna_src, 'swing', False),
+            "harmony_complexity": float(getattr(dna_src, 'harmony_complexity', 0.5)),
+            "syncopation":     float(getattr(dna_src, 'syncopation_ratio', 0.0)),
+        },
+        "entry": {
+            # Armonía de entrada
+            "chord_roman":      entry_chord,
+            "bass_pitch_class": entry_bass_pc,
+            "bass_note_name":   midi_to_name(entry_bass_pc),
+            "bass_midi":        int(entry_bass_pitch),
+            # Melodía de entrada
+            "melody_mean_pitch":  round(entry_mel_pitch, 1),
+            "melody_register":   ("low" if entry_mel_pitch < 55 else
+                                  "mid-low" if entry_mel_pitch < 62 else
+                                  "mid" if entry_mel_pitch < 68 else
+                                  "mid-high" if entry_mel_pitch < 74 else "high"),
+            # Textura de entrada
+            "note_density":     round(entry_density, 2),
+            "mean_velocity":    round(entry_velocity, 1),
+            "tension":          round(tension_entry, 3),
+        },
+        "exit": {
+            # Armonía de salida
+            "chord_roman":      exit_chord,
+            "bass_pitch_class": exit_bass_pc,
+            "bass_note_name":   midi_to_name(exit_bass_pc),
+            "bass_midi":        int(exit_bass_pitch),
+            # Última nota de melodía (clave para la voz vocal en el empalme)
+            "last_melody_pitch":    last_mel_note,
+            "last_melody_note":     midi_to_name(last_mel_note) if last_mel_note else None,
+            "melody_mean_pitch":    round(exit_mel_pitch, 1),
+            "melody_register":     ("low" if exit_mel_pitch < 55 else
+                                    "mid-low" if exit_mel_pitch < 62 else
+                                    "mid" if exit_mel_pitch < 68 else
+                                    "mid-high" if exit_mel_pitch < 74 else "high"),
+            # Textura de salida
+            "note_density":     round(exit_density, 2),
+            "mean_velocity":    round(exit_velocity, 1),
+            "tension":          round(tension_exit, 3),
+        },
+        "tension_curve": {
+            "entry":      round(tension_entry, 3),
+            "exit":       round(tension_exit, 3),
+            "mean":       round(tension_mean, 3),
+            "peak":       round(tension_peak, 3),
+            "peak_bar":   tension_peak_bar,
+            "direction":  ("rising"   if tension_exit > tension_entry + 0.15 else
+                           "falling"  if tension_exit < tension_entry - 0.15 else
+                           "stable"),
+        },
+        # Sugerencias para el orquestador
+        "stitching_hints": {
+            # ¿Termina en cadencia auténtica? (V→I es el punto más "cerrado")
+            "cadence_type":   ("authentic" if exit_chord in ('I','i') else
+                               "half"      if exit_chord == 'V'       else
+                               "deceptive" if exit_chord in ('vi','VI') else
+                               "open"),
+            # ¿Cuánta diferencia de dinámica hay entre salida y lo que sigue?
+            "velocity_exit":  round(exit_velocity, 1),
+            # Grado de apertura para el siguiente fragmento
+            # (0 = muy cerrado/completo, 1 = muy abierto/necesita continuación)
+            "openness":       round(1.0 - (1.0 if exit_chord in ('I','i') else
+                                           0.7 if exit_chord == 'V' else
+                                           0.5 if exit_chord in ('vi','VI') else 0.3), 2),
+            # Compatibilidad de tempo: el siguiente fragmento debería estar
+            # dentro de ±15 BPM para una transición suave sin puente
+            "tempo_tolerance_bpm": 15.0,
+        }
+    }
+
+    return fingerprint
+
+
+def export_fingerprint(fingerprint, output_midi_path):
+    """Guarda el fingerprint como JSON junto al MIDI de salida."""
+    json_path = output_midi_path.replace('.mid', '.fingerprint.json')
+    if not json_path.endswith('.json'):
+        json_path += '.fingerprint.json'
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(fingerprint, f, indent=2, ensure_ascii=False)
+    return json_path
+
+
+def fingerprint_from_midi(midi_path, verbose=False):
+    """
+    Genera un fingerprint completo a partir de un MIDI externo (no generado
+    por este script). Útil para añadir secciones de otras fuentes al pipeline
+    de coherence stitching.
+
+    Proceso:
+      1. Carga el MIDI con mido y extrae notas brutas por canal
+      2. Infiere melodía (canal con pitches más agudos), bajo (más grave),
+         acompañamiento (resto)
+      3. Usa UnifiedDNA para análisis armónico y emocional profundo
+      4. Llama a extract_fingerprint con los datos extraídos
+
+    Devuelve el dict del fingerprint, listo para export_fingerprint().
+    """
+    import mido
+
+    print(f"  Analizando MIDI externo: {os.path.basename(midi_path)}")
+
+    # ── 1. Extraer ADN completo con UnifiedDNA ────────────────────────────────
+    dna = UnifiedDNA(midi_path)
+    if not dna.extract(verbose=verbose):
+        raise RuntimeError(f"No se pudo extraer ADN de {midi_path}")
+
+    target_key = dna.key_obj
+    tempo_bpm  = dna.tempo_bpm
+    time_sig   = dna.time_sig
+    beats_per_bar = time_sig[0]
+
+    # ── 2. Leer notas brutas desde el MIDI con mido ───────────────────────────
+    try:
+        mid = mido.MidiFile(midi_path)
+    except Exception as e:
+        raise RuntimeError(f"mido no pudo leer {midi_path}: {e}")
+
+    tpb = mid.ticks_per_beat  # ticks por negra
+
+    # Convertir tempo a microsegundos por beat
+    tempo_us = int(60_000_000 / tempo_bpm)
+
+    # Recorrer todos los tracks y recopilar notas absolutas en beats
+    # Formato interno: (offset_beats, pitch, duration_beats, velocity)
+    raw_notes_by_channel = {}   # channel → lista de (offset, pitch, dur, vel)
+    pending = {}                 # (channel, pitch) → (onset_beats, velocity)
+
+    for track in mid.tracks:
+        abs_ticks = 0
+        for msg in track:
+            abs_ticks += msg.time
+            abs_beats  = abs_ticks / tpb
+
+            if msg.type == 'note_on' and msg.velocity > 0:
+                key_ = (msg.channel, msg.note)
+                pending[key_] = (abs_beats, msg.velocity)
+
+            elif msg.type in ('note_off',) or (
+                    msg.type == 'note_on' and msg.velocity == 0):
+                key_ = (msg.channel, msg.note)
+                if key_ in pending:
+                    onset, vel = pending.pop(key_)
+                    dur = abs_beats - onset
+                    if dur < 0.01:
+                        dur = 0.25
+                    ch = msg.channel
+                    if ch not in raw_notes_by_channel:
+                        raw_notes_by_channel[ch] = []
+                    raw_notes_by_channel[ch].append(
+                        (onset, msg.note, dur, vel)
+                    )
+
+    # Cerrar notas que quedaron abiertas (sin note_off)
+    for (ch, pitch_), (onset, vel) in pending.items():
+        if ch not in raw_notes_by_channel:
+            raw_notes_by_channel[ch] = []
+        raw_notes_by_channel[ch].append((onset, pitch_, 0.5, vel))
+
+    if not raw_notes_by_channel:
+        # Si mido no encontró notas por canal, sintetizar desde el ADN del DNA
+        # usando la secuencia de pitch extraída por UnifiedDNA
+        print("    ⚠ No se detectaron notas por canal; usando datos del ADN")
+        synth_notes = []
+        offset = 0.0
+        for p, d in dna.full_melody:
+            synth_notes.append((offset, p, d, 80))
+            offset += d
+        raw_notes_by_channel[0] = synth_notes
+
+    # ── 3. Asignar roles: melodía, bajo, acompañamiento ──────────────────────
+    # Melodía: canal con pitch medio más agudo (excluyendo canal 9 = percusión)
+    # Bajo:    canal con pitch medio más grave
+    # Acc:     resto de canales
+
+    def _channel_mean_pitch(notes):
+        if not notes:
+            return 60
+        return sum(p for _, p, _, _ in notes) / len(notes)
+
+    melodic_channels = {
+        ch: notes for ch, notes in raw_notes_by_channel.items()
+        if ch != 9 and notes
+    }
+
+    if not melodic_channels:
+        # Solo percusión: crear notas vacías
+        melodic_channels = {0: []}
+
+    # Ordenar por pitch medio
+    sorted_chs = sorted(melodic_channels.items(),
+                        key=lambda x: _channel_mean_pitch(x[1]))
+
+    if len(sorted_chs) >= 2:
+        bass_ch   = sorted_chs[0][0]
+        mel_ch    = sorted_chs[-1][0]
+        acc_chs   = [ch for ch, _ in sorted_chs[1:-1]]
+    elif len(sorted_chs) == 1:
+        mel_ch  = sorted_chs[0][0]
+        bass_ch = sorted_chs[0][0]
+        acc_chs = []
+    else:
+        mel_ch = bass_ch = 0
+        acc_chs = []
+
+    mel_notes  = melodic_channels.get(mel_ch,  [])
+    bass_notes = melodic_channels.get(bass_ch, [])
+    acc_notes  = []
+    for ch in acc_chs:
+        acc_notes.extend(melodic_channels.get(ch, []))
+
+    if verbose:
+        print(f"    Canal melodía : {mel_ch}  "
+              f"({len(mel_notes)} notas, pitch medio "
+              f"{_channel_mean_pitch(mel_notes):.1f})")
+        print(f"    Canal bajo    : {bass_ch}  "
+              f"({len(bass_notes)} notas)")
+        print(f"    Canales acc   : {acc_chs}  "
+              f"({len(acc_notes)} notas)")
+
+    # ── 4. Estimar n_bars a partir de la duración total ───────────────────────
+    all_notes_flat = []
+    for notes in raw_notes_by_channel.values():
+        all_notes_flat.extend(notes)
+
+    if all_notes_flat:
+        last_event = max(all_notes_flat, key=lambda x: x[0] + x[2])
+        total_beats = last_event[0] + last_event[2]
+    else:
+        total_beats = beats_per_bar * 16
+
+    n_bars = max(1, int(np.ceil(total_beats / beats_per_bar)))
+
+    if verbose:
+        print(f"    Duración total: {total_beats:.1f} beats = {n_bars} compases")
+
+    # ── 5. Construir un FormGenerator mínimo para el fingerprint ─────────────
+    class _MinimalFG:
+        """FormGenerator mínimo para que extract_fingerprint pueda leer form_string."""
+        def __init__(self, form_str):
+            self.form_string = form_str
+
+    fg = _MinimalFG(dna.form_string)
+
+    # ── 6. Llamar a extract_fingerprint con los datos reales del MIDI ─────────
+    fp = extract_fingerprint(
+        mel  = mel_notes,
+        bass = bass_notes,
+        acc  = acc_notes,
+        target_key   = target_key,
+        tempo_bpm    = tempo_bpm,
+        n_bars       = n_bars,
+        time_sig     = time_sig,
+        fg           = fg,
+        dna_src      = dna,
+        output_midi_path = midi_path
+    )
+
+    # Sobrescribir midi_file con la ruta real (extract_fingerprint usa output_midi_path)
+    fp['meta']['midi_file'] = os.path.abspath(midi_path)
+
+    return fp
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='MIDI DNA UNIFIED MIXER — Fusión de tres generaciones',
@@ -4069,6 +4505,12 @@ def main():
     parser.add_argument('--melody',  help='Fichero MIDI que dona la melodía')
     parser.add_argument('--harmony', help='Fichero MIDI que dona la armonía')
     parser.add_argument('--rhythm',  help='Fichero MIDI que dona el ritmo')
+    # Modo especial: solo fingerprint
+    parser.add_argument('--fingerprint-only', action='store_true',
+        help='Analizar el/los MIDI(s) dados y exportar solo el fingerprint JSON, '
+             'sin generar música. Útil para incorporar secciones externas al '
+             'pipeline de coherence stitching. '
+             'Ej: python midi_dna_unified.py mi_seccion.mid --fingerprint-only')
     # Modo
     parser.add_argument('--mode', default='auto',
         choices=['auto','rhythm_melody','harmony_melody','full_blend',
@@ -4097,6 +4539,8 @@ def main():
     # Opciones
     parser.add_argument('--no-humanize', action='store_true')
     parser.add_argument('--export-xml',  action='store_true')
+    parser.add_argument('--export-fingerprint', action='store_true',
+        help='Exportar JSON con huella de bordes (entrada/salida) para coherence stitching')
     parser.add_argument('--split-tracks',action='store_true',
         help='Exportar cada pista como fichero MIDI independiente')
     parser.add_argument('--no-percussion', action='store_true',
@@ -4153,11 +4597,62 @@ def main():
              'Ej: "0:0.0, 8:0.5, 16:1.0"')
     args = parser.parse_args()
 
+    # ── Modo especial: solo fingerprint ──────────────────────────────────────
+    if args.fingerprint_only:
+        # Recopilar todos los MIDIs indicados
+        fp_midi_paths = []
+        if args.inputs:
+            fp_midi_paths += [p for p in args.inputs if os.path.exists(p)]
+        for role_path in [args.melody, args.harmony, args.rhythm]:
+            if role_path and os.path.exists(role_path):
+                fp_midi_paths.append(role_path)
+        fp_midi_paths = list(dict.fromkeys(fp_midi_paths))  # deduplicar orden
+
+        if not fp_midi_paths:
+            print("ERROR --fingerprint-only: no se encontraron ficheros MIDI válidos.")
+            sys.exit(1)
+
+        print("═" * 65)
+        print("  MIDI DNA UNIFIED MIXER  v1.4  —  modo FINGERPRINT-ONLY")
+        print("═" * 65)
+        print(f"\nAnalizando {len(fp_midi_paths)} fichero(s)…\n")
+
+        ok_count = 0
+        for mp in fp_midi_paths:
+            try:
+                fp = fingerprint_from_midi(mp, verbose=args.verbose)
+                json_path = export_fingerprint(fp, mp)
+                print(f"  ✓ {os.path.basename(mp)}")
+                print(f"      → {json_path}")
+                print(f"      Tonalidad : {fp['meta']['key_tonic']} {fp['meta']['key_mode']}")
+                print(f"      Tempo     : {fp['meta']['tempo_bpm']:.0f} BPM  |  "
+                      f"{fp['meta']['n_bars']} compases")
+                print(f"      Entry     : acorde={fp['entry']['chord_roman']}  "
+                      f"bajo={fp['entry']['bass_note_name']}  "
+                      f"reg={fp['entry']['melody_register']}  "
+                      f"tensión={fp['entry']['tension']:.2f}")
+                print(f"      Exit      : acorde={fp['exit']['chord_roman']}  "
+                      f"bajo={fp['exit']['bass_note_name']}  "
+                      f"última nota={fp['exit']['last_melody_note']}  "
+                      f"tensión={fp['exit']['tension']:.2f}")
+                print(f"      Cadencia  : {fp['stitching_hints']['cadence_type']}  "
+                      f"|  apertura={fp['stitching_hints']['openness']:.2f}  "
+                      f"|  dirección tensión={fp['tension_curve']['direction']}")
+                print()
+                ok_count += 1
+            except Exception as e:
+                print(f"  ✗ {os.path.basename(mp)}: {e}\n")
+
+        print("═" * 65)
+        print(f"  Fingerprints generados: {ok_count}/{len(fp_midi_paths)}")
+        print("═" * 65)
+        sys.exit(0 if ok_count == len(fp_midi_paths) else 1)
+
     random.seed(args.seed)
     np.random.seed(args.seed)
 
     print("═"*65)
-    print("  MIDI DNA UNIFIED MIXER  v1.3")
+    print("  MIDI DNA UNIFIED MIXER  v1.4")
     print("  Markov · Mosaic · Contrapunto · Groove · Forma · Emoción")
     print("  Walking Bass · Percusión · Modulación · Silencios · CC#64/11")
     print("  Tensión-Markov · Swells · Motivo · Disonancia · Texturas")
@@ -4338,6 +4833,28 @@ def main():
             print(f"  → MusicXML guardado: {xml_path}")
         except Exception as e:
             print(f"  ⚠ MusicXML falló: {e}")
+
+    # ── Export fingerprint [W] ────────────────────────────────────────────────
+    if args.export_fingerprint:
+        fp = extract_fingerprint(
+            mel, bass, acc,
+            target_key, tempo_bpm, n_bars, time_sig,
+            fg, dnas[esi], args.output
+        )
+        json_path = export_fingerprint(fp, args.output)
+        print(f"  → Fingerprint guardado: {json_path}")
+        if args.verbose:
+            print(f"      entry: chord={fp['entry']['chord_roman']}  "
+                  f"bass={fp['entry']['bass_note_name']}  "
+                  f"register={fp['entry']['melody_register']}  "
+                  f"tension={fp['entry']['tension']:.2f}")
+            print(f"      exit:  chord={fp['exit']['chord_roman']}  "
+                  f"bass={fp['exit']['bass_note_name']}  "
+                  f"register={fp['exit']['melody_register']}  "
+                  f"tension={fp['exit']['tension']:.2f}")
+            print(f"      cadencia={fp['stitching_hints']['cadence_type']}  "
+                  f"apertura={fp['stitching_hints']['openness']:.2f}  "
+                  f"dirección={fp['tension_curve']['direction']}")
 
     # ── Resumen ───────────────────────────────────────────────────────────────
     print("\n" + "═"*65)
