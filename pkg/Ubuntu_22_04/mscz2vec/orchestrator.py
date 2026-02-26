@@ -386,8 +386,8 @@ def load_midi_tracks(midi_path):
     tracks_raw = {}
     section_markers = []  # [(abs_tick, label)]
 
-    for track in mid.tracks:
-        name = track.name.strip() if track.name else f'track_{mid.tracks.index(track)}'
+    for track_idx, track in enumerate(mid.tracks):
+        name = track.name.strip() if track.name else f'track_{track_idx}'
         abs_tick = 0
         note_on_events = {}  # pitch → abs_tick_on, velocity
         notes = []
@@ -397,7 +397,10 @@ def load_midi_tracks(midi_path):
             if msg.type == 'set_tempo':
                 tempo = msg.tempo
             elif msg.type == 'marker':
-                section_markers.append((abs_tick, msg.text))
+                # Recolectar marcadores solo del primer track (tempo track en MIDI tipo 1)
+                # para evitar duplicados si cada pista repite los mismos marcadores.
+                if track_idx == 0:
+                    section_markers.append((abs_tick, msg.text))
             elif msg.type == 'note_on' and msg.velocity > 0:
                 note_on_events[msg.note] = (abs_tick, msg.velocity)
             elif msg.type in ('note_off',) or (msg.type == 'note_on' and msg.velocity == 0):
@@ -409,6 +412,16 @@ def load_midi_tracks(midi_path):
 
         if notes:
             tracks_raw[name] = sorted(notes, key=lambda x: x[0])
+
+    # Deduplicar marcadores: si el mismo tick aparece varias veces (porque cada pista
+    # del MIDI repite los marcadores), quedarse solo con la primera ocurrencia por tick.
+    seen_ticks = set()
+    deduped_markers = []
+    for tick, label in sorted(section_markers):
+        if tick not in seen_ticks:
+            seen_ticks.add(tick)
+            deduped_markers.append((tick, label))
+    section_markers = deduped_markers
 
     return tracks_raw, tempo, tpb, section_markers
 
@@ -458,10 +471,24 @@ def build_section_map(section_markers, fps, tpb, tempo):
             'harmony_complexity': fps[0]['meta'].get('harmony_complexity', 0.5) if fps else 0.5,
         }]
 
+    # Detectar si todos los marcadores tienen el mismo label (pipeline repetitivo)
+    # En ese caso, reasignar labels únicos secuenciales: A, B, C, ...
+    SECTION_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    raw_labels = [m[1].strip('[]') for m in section_markers]
+    all_same = len(set(raw_labels)) == 1
+
     sections = []
     # Los marcadores del pipeline tienen formato [A], [B], etc.
     for i, (tick, label) in enumerate(section_markers):
-        label_clean = label.strip('[]')
+        if all_same:
+            # Reasignar label único: A, B, C, ... Z, AA, AB, ...
+            if i < 26:
+                label_clean = SECTION_LETTERS[i]
+            else:
+                label_clean = SECTION_LETTERS[i // 26 - 1] + SECTION_LETTERS[i % 26]
+        else:
+            label_clean = label.strip('[]')
+
         end_tick = section_markers[i + 1][0] if i + 1 < len(section_markers) else None
         # Buscar fingerprint que coincida con esta sección (por nombre o posición)
         fp = fps[i] if i < len(fps) else (fps[-1] if fps else None)
@@ -478,6 +505,15 @@ def build_section_map(section_markers, fps, tpb, tempo):
             'bars': fp['meta']['n_bars'] if fp else 16,
             'harmony_complexity': fp['meta'].get('harmony_complexity', 0.5) if fp else 0.5,
         })
+
+    # Asegurarse de que la primera sección empiece en tick 0.
+    if sections and sections[0]['start_tick'] > 0:
+        sections[0] = dict(sections[0], start_tick=0)
+
+    if all_same:
+        print(f"  ⚠ Todos los marcadores tenían el mismo label. "
+              f"Reasignados como: {[s['label'] for s in sections]}")
+
     return sections
 
 
@@ -683,6 +719,9 @@ def process_instrument_notes(raw_notes, instr_cfg, sections, ks_table, library,
             e = sec['end_tick'] if sec['end_tick'] else float('inf')
             if s <= tick < e:
                 return sec
+        # Si el tick es anterior a la primera sección, devolver la primera
+        if tick < sections[0]['start_tick']:
+            return sections[0]
         return sections[-1]
 
     # Variables para CC1 (evitar repetir el mismo valor consecutivo)
@@ -984,19 +1023,19 @@ def events_to_track(events, channel, track_name, program, tempo, tpb):
         etype    = ev[1]
 
         if etype == 'note':
-            _, pitch, vel, dur = ev
+            _, _, pitch, vel, dur = ev
             pitch = max(0, min(127, pitch))
             vel   = max(1, min(127, vel))
             raw.append((abs_tick,           3, Message('note_on',  channel=channel, note=pitch, velocity=vel,   time=0)))
             raw.append((abs_tick + dur,     0, Message('note_off', channel=channel, note=pitch, velocity=0,     time=0)))
 
         elif etype == 'cc':
-            _, cc_num, val = ev
+            _, _, cc_num, val = ev
             val = max(0, min(127, val))
             raw.append((abs_tick, 1, Message('control_change', channel=channel, control=cc_num, value=val, time=0)))
 
         elif etype == 'ks':
-            _, ks_note, vel = ev
+            _, _, ks_note, vel = ev
             ks_note = max(0, min(127, ks_note))
             raw.append((abs_tick,     2, Message('note_on',  channel=channel, note=ks_note, velocity=vel, time=0)))
             raw.append((abs_tick + 2, 0, Message('note_off', channel=channel, note=ks_note, velocity=0,   time=0)))
@@ -2399,6 +2438,11 @@ def main():
     parser.add_argument('--no-cc',      action='store_true')
     parser.add_argument('--tempo-humanize', type=float, default=0.15)
     parser.add_argument('--verbose',    action='store_true')
+    parser.add_argument('--map', nargs='+', default=[],
+                        metavar='PISTA=ROL',
+                        help='Reasignar pistas del MIDI a roles. Ej: --map Piano=Melody Piano=Bass '
+                             'Roles válidos: Melody, Counterpoint, Accompaniment, Bass. '
+                             'Una misma pista puede mapearse a varios roles.')
     args = parser.parse_args()
 
     # ── Dump KS ─────────────────────────────────────────────────────────────
@@ -2427,6 +2471,91 @@ def main():
     bpm = 60_000_000 / tempo
     print(f"  Tempo: {bpm:.1f} BPM  |  Pistas detectadas: {list(tracks_raw.keys())}")
     print(f"  Marcadores de sección: {[m[1] for m in section_markers]}")
+    for tname, tnotes in tracks_raw.items():
+        if tnotes:
+            ticks = [n[0] for n in tnotes]
+            print(f"    {tname:<20}: {len(tnotes):>4} notas  tick_min={min(ticks)}  tick_max={max(ticks)}")
+
+    # ── Remap de pistas ─────────────────────────────────────────────────────
+    # Aplicar --map explícito: ej. Piano=Melody añade tracks_raw['Melody'] = tracks_raw['Piano']
+    if args.map:
+        for mapping in args.map:
+            if '=' not in mapping:
+                print(f"  ⚠ --map ignorado (formato incorrecto): '{mapping}'. Usa PISTA=ROL")
+                continue
+            src, dst = mapping.split('=', 1)
+            src = src.strip()
+            dst = dst.strip()
+            # Buscar la pista fuente (exacta o parcial)
+            matched = None
+            if src in tracks_raw:
+                matched = src
+            else:
+                for tname in tracks_raw:
+                    if src.lower() in tname.lower() or tname.lower() in src.lower():
+                        matched = tname
+                        break
+            if matched:
+                if dst in tracks_raw:
+                    # Combinar notas si el destino ya existe
+                    combined = sorted(tracks_raw[dst] + tracks_raw[matched], key=lambda x: x[0])
+                    tracks_raw[dst] = combined
+                else:
+                    tracks_raw[dst] = tracks_raw[matched]
+                print(f"  Mapeado: '{matched}' → '{dst}' ({len(tracks_raw[dst])} notas)")
+            else:
+                print(f"  ⚠ --map: pista '{src}' no encontrada. "
+                      f"Pistas disponibles: {list(tracks_raw.keys())}")
+
+    # Auto-split: si faltan roles básicos pero hay pistas con muchas notas,
+    # intentar dividir automáticamente por registro de pitch.
+    PIANO_ROLES = ['Melody', 'Counterpoint', 'Accompaniment', 'Bass']
+    missing_roles = [r for r in PIANO_ROLES if r not in tracks_raw or not tracks_raw[r]]
+    if missing_roles:
+        # Buscar pistas candidatas: las que no sean roles ya existentes y tengan notas
+        existing_roles = set(PIANO_ROLES) - set(missing_roles)
+        candidate_tracks = {
+            n: notes for n, notes in tracks_raw.items()
+            if n not in PIANO_ROLES and notes
+        }
+        if candidate_tracks:
+            # Usar la pista con más notas como fuente de split
+            best = max(candidate_tracks, key=lambda n: len(candidate_tracks[n]))
+            best_notes = candidate_tracks[best]
+            print(f"  Auto-split: '{best}' ({len(best_notes)} notas) → {missing_roles}")
+
+            # Calcular percentiles de pitch para dividir en registros
+            pitches = sorted(set(n[1] for n in best_notes))
+            n_p = len(pitches)
+
+            if 'Bass' in missing_roles and 'Melody' in missing_roles:
+                # División tripartita: agudo=Melody, medio=Accompaniment/Counterpoint, grave=Bass
+                p33 = pitches[n_p // 3]
+                p66 = pitches[(2 * n_p) // 3]
+                melody_notes  = [n for n in best_notes if n[1] >= p66]
+                mid_notes     = [n for n in best_notes if p33 <= n[1] < p66]
+                bass_notes    = [n for n in best_notes if n[1] < p33]
+                if 'Melody'         in missing_roles and melody_notes:
+                    tracks_raw['Melody']         = melody_notes
+                    print(f"    Melody:         {len(melody_notes):>4} notas  (pitch >= {p66})")
+                if 'Counterpoint'   in missing_roles and mid_notes:
+                    tracks_raw['Counterpoint']   = mid_notes
+                    print(f"    Counterpoint:   {len(mid_notes):>4} notas  ({p33} ≤ pitch < {p66})")
+                if 'Accompaniment'  in missing_roles and mid_notes:
+                    tracks_raw['Accompaniment']  = mid_notes
+                    print(f"    Accompaniment:  {len(mid_notes):>4} notas  ({p33} ≤ pitch < {p66})")
+                if 'Bass'           in missing_roles and bass_notes:
+                    tracks_raw['Bass']           = bass_notes
+                    print(f"    Bass:           {len(bass_notes):>4} notas  (pitch < {p33})")
+            elif 'Bass' in missing_roles:
+                # Solo falta el bajo: partir por la mediana
+                mid_pitch = pitches[n_p // 2]
+                tracks_raw['Bass'] = [n for n in best_notes if n[1] < mid_pitch]
+                print(f"    Bass:  {len(tracks_raw['Bass']):>4} notas  (pitch < {mid_pitch})")
+            elif 'Melody' in missing_roles:
+                mid_pitch = pitches[n_p // 2]
+                tracks_raw['Melody'] = [n for n in best_notes if n[1] >= mid_pitch]
+                print(f"    Melody: {len(tracks_raw['Melody']):>4} notas  (pitch >= {mid_pitch})")
 
     # ── Buscar fingerprints ──────────────────────────────────────────────────
     fp_paths = list(args.fingerprints)
@@ -2474,14 +2603,24 @@ def main():
 
         raw_notes = tracks_raw.get(src_track, [])
         if not raw_notes:
-            # Buscar la pista por nombre parcial
+            # Buscar la pista por nombre parcial (ambas direcciones)
             for tname, tnotes in tracks_raw.items():
-                if src_track.lower() in tname.lower():
+                if src_track.lower() in tname.lower() or tname.lower() in src_track.lower():
                     raw_notes = tnotes
+                    if args.verbose:
+                        print(f"    [{name}] pista '{src_track}' → encontrada como '{tname}'")
                     break
 
+        if not raw_notes and len(tracks_raw) == 1:
+            # MIDI de una sola pista: usar esa pista para todos los instrumentos
+            raw_notes = next(iter(tracks_raw.values()))
+            if args.verbose:
+                only_name = next(iter(tracks_raw.keys()))
+                print(f"    [{name}] MIDI de una sola pista → usando '{only_name}'")
+
         if not raw_notes:
-            print(f"  ⚠ [{name}] Sin notas en pista '{src_track}' — pista vacía")
+            print(f"  ⚠ [{name}] Sin notas en pista '{src_track}' "
+                  f"(pistas disponibles: {list(tracks_raw.keys())}) — pista vacía")
             instrument_events[name] = []
             continue
 
