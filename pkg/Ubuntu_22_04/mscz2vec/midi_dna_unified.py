@@ -30,6 +30,9 @@
 ║  [V] Export split-tracks: una pista por fichero para DAW                    ║
 ║  [W] Fingerprint de bordes: JSON con entrada/salida para coherence          ║
 ║      stitching entre fragmentos (--export-fingerprint)                      ║
+║  [X] Phrase stitch: concatenación inteligente de un banco de frases MIDI   ║
+║      externas. En cada ventana elige la frase más adecuada según las        ║
+║      curvas de tensión/arousal y la cohesión de altura entre frases.        ║
 ║                                                                              ║
 ║  MEJORAS EMOCIONALES v1.2 (activas por defecto, desactivables con --no-*): ║
 ║  [1] Markov condicionado por tensión: sesga intervalos según arco           ║
@@ -56,7 +59,10 @@ USO:
 
 OPCIONES PRINCIPALES:
     --mode          auto | rhythm_melody | harmony_melody | full_blend |
-                    custom | mosaic | energy | emotion
+                    custom | mosaic | energy | emotion | phrase_stitch
+    --phrases-dir DIR   [X] Directorio con MIDIs de frases (requerido para
+                    phrase_stitch). Cada .mid = una frase independiente.
+    --phrase-seed N Semilla para la elección estocástica de frases (default: --seed)
     --emotion_src N Índice del MIDI que dona el arco emocional (default: 0)
     --form_src N    Índice del MIDI que dona la estructura formal (default: 0)
     --sources       Para modo custom: rhythm=N,melody=N,harmony=N
@@ -235,6 +241,30 @@ EJEMPLOS:
         --mt-swing "0:0.0, 40:1.0" \
         --mt-harmony-complexity "0:diatonic, 40:chromatic" \
         --mt-acc-style "0:waltz, 20:arpeggio, 40:block"
+
+  ── Phrase stitch [X] ───────────────────────────────────────────────────────
+    # Uso básico: banco de frases + fuente de armonía/ritmo
+    python midi_dna_unified.py bach.mid --mode phrase_stitch \
+        --phrases-dir ./mis_frases/ --bars 16 --key "C major"
+
+    # Con varias fuentes y curva de tensión
+    python midi_dna_unified.py armonía.mid ritmo.mid \
+        --mode phrase_stitch --phrases-dir ./phrases/ \
+        --bars 32 --key "A minor" --form AABA
+
+    # Controlar la selección de frases + ornamentación + contrapunto
+    python midi_dna_unified.py base.mid \
+        --mode phrase_stitch --phrases-dir ./phrases/ \
+        --bars 24 --phrase-seed 7 --verbose \
+        --mt-density "0:sparse, 12:dense, 24:medium"
+
+    # Combinar con mutación temporal: frases adaptadas a una narrativa
+    python midi_dna_unified.py bach.mid jazz.mid \
+        --mode phrase_stitch --phrases-dir ./phrases/ \
+        --bars 32 --key "D minor" --form AABA \
+        --mt-density "0:light, 16:dense, 32:sparse" \
+        --mt-register "0:mid, 20:high, 32:mid-low" \
+        --output pieza_phrases.mid
 
   ── Pipeline completo v1.3 ──────────────────────────────────────────────────
     # Máxima expresividad: todas las mejoras + mutación temporal completa
@@ -2221,6 +2251,432 @@ def generate_melody_mosaic(dnas, harmony_prog, target_key, n_bars, ts_num,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  PHRASE STITCH — modo de ensamblado de frases externas  [X]
+# ══════════════════════════════════════════════════════════════════════════════
+
+class PhraseClip:
+    """
+    Representa una frase melódica cargada desde un MIDI externo.
+    Almacena las notas como lista de (offset_local, midi, dur, vel),
+    más metadatos de análisis para el scoring contextual.
+    """
+    def __init__(self, path, notes, duration_beats,
+                 key_obj=None, tension_mean=0.5, arousal_mean=0.5,
+                 energy_mean=0.5, pitch_mean=65, pitch_first=65, pitch_last=65,
+                 intervals=None, harmony_func='I', label=''):
+        self.path        = path
+        self.label       = label or os.path.basename(path)
+        self.notes       = notes            # [(offset_local, midi, dur, vel)]
+        self.duration_beats = duration_beats
+        self.key_obj     = key_obj
+        self.tension_mean  = tension_mean
+        self.arousal_mean  = arousal_mean
+        self.energy_mean   = energy_mean
+        self.pitch_mean    = pitch_mean
+        self.pitch_first   = pitch_first    # primera nota (para conexión suave)
+        self.pitch_last    = pitch_last     # última nota (para conexión hacia la siguiente)
+        self.intervals     = intervals or []
+        self.harmony_func  = harmony_func   # función armónica predominante
+
+    def transpose_to_key(self, target_key):
+        """Transpone las notas al target_key y ajusta al rango melódico."""
+        if not self.key_obj or not target_key:
+            return list(self.notes)
+        src_pc  = pitch.Pitch(self.key_obj.tonic.name).pitchClass
+        tgt_pc  = pitch.Pitch(target_key.tonic.name).pitchClass
+        shift   = tgt_pc - src_pc
+        if shift >  6: shift -= 12
+        if shift < -6: shift += 12
+        lo, hi  = INSTRUMENT_RANGES['melody']
+        result  = []
+        for off, mp, dur, vel in self.notes:
+            new_mp = _snap_to_scale(mp + shift, target_key)
+            while new_mp > hi: new_mp -= 12
+            while new_mp < lo: new_mp += 12
+            result.append((off, int(np.clip(new_mp, lo, hi)), dur, vel))
+        return result
+
+    def transpose_by(self, semitones, target_key):
+        """Transpone toda la frase n semitonos y re-snap a la escala."""
+        lo, hi = INSTRUMENT_RANGES['melody']
+        result = []
+        for off, mp, dur, vel in self.notes:
+            new_mp = _snap_to_scale(mp + semitones, target_key)
+            while new_mp > hi: new_mp -= 12
+            while new_mp < lo: new_mp += 12
+            result.append((off, int(np.clip(new_mp, lo, hi)), dur, vel))
+        return result
+
+
+def load_phrase_library(phrases_dir, verbose=False):
+    """
+    Carga todos los MIDIs de un directorio como PhraseClips.
+    Analiza cada archivo con music21 para extraer notas y metadatos.
+    Devuelve lista de PhraseClip, o [] si el directorio no existe o está vacío.
+    """
+    if not phrases_dir or not os.path.isdir(phrases_dir):
+        return []
+
+    midi_files = sorted([
+        os.path.join(phrases_dir, f)
+        for f in os.listdir(phrases_dir)
+        if f.lower().endswith(('.mid', '.midi'))
+    ])
+
+    if not midi_files:
+        print(f"  ⚠ --phrases-dir '{phrases_dir}': ningún .mid encontrado.")
+        return []
+
+    clips = []
+    print(f"\n  [phrase_stitch] Cargando {len(midi_files)} frases desde '{phrases_dir}'…")
+
+    for path in midi_files:
+        try:
+            sc = converter.parse(path)
+        except Exception as e:
+            print(f"    ✗ {os.path.basename(path)}: {e}")
+            continue
+
+        # Detectar tonalidad y tempo
+        try:
+            key_obj = sc.analyze('key')
+        except Exception:
+            key_obj = m21key.Key('C', 'major')
+
+        # Extraer notas de melodía (voz más aguda o primera parte)
+        parts = list(getattr(sc, 'parts', []))
+        if parts:
+            best_part, best_mean = parts[0], -1
+            for p in parts:
+                ns = [n for n in p.flatten().notes if isinstance(n, note.Note)]
+                if ns:
+                    m = np.mean([n.pitch.midi for n in ns])
+                    if m > best_mean:
+                        best_mean, best_part = m, p
+            src = best_part
+        else:
+            src = sc.flatten()
+
+        raw_notes = []
+        for el in src.flatten().notes:
+            if isinstance(el, note.Note) and hasattr(el, 'pitch'):
+                raw_notes.append((float(el.offset), el.pitch.midi,
+                                   float(el.quarterLength),
+                                   el.volume.velocity or 72))
+            elif isinstance(el, chord.Chord) and el.pitches:
+                top = max(el.pitches, key=lambda p: p.midi)
+                raw_notes.append((float(el.offset), top.midi,
+                                   float(el.quarterLength), 72))
+
+        if not raw_notes:
+            print(f"    ⚠ {os.path.basename(path)}: sin notas, ignorado.")
+            continue
+
+        raw_notes.sort(key=lambda x: x[0])
+        # Normalizar offset para que la frase empiece en 0
+        t0 = raw_notes[0][0]
+        raw_notes = [(o - t0, mp, d, v) for o, mp, d, v in raw_notes]
+        duration_beats = max(o + d for o, _, d, _ in raw_notes)
+
+        pitches = [mp for _, mp, _, _ in raw_notes]
+        pitch_mean  = float(np.mean(pitches)) if pitches else 65
+        pitch_first = pitches[0]  if pitches else 65
+        pitch_last  = pitches[-1] if pitches else 65
+        intervals   = [pitches[i+1]-pitches[i] for i in range(len(pitches)-1)]
+
+        # Análisis emocional básico por compás
+        measures = list(sc.flatten().getElementsByClass('Measure'))
+        tension_vals, energy_vals = [], []
+        for m in measures:
+            ns = list(m.flatten().notes)
+            if not ns: continue
+            non_diatonic = 0
+            for el in ns:
+                if isinstance(el, note.Note):
+                    if not _snap_to_scale(el.pitch.midi, key_obj) == el.pitch.midi:
+                        non_diatonic += 1
+            tension_vals.append(non_diatonic / max(len(ns), 1))
+            vels = [
+                (el.volume.velocity or 64) for el in ns
+                if isinstance(el, note.Note) and el.volume
+            ]
+            energy_vals.append(np.mean(vels) / 127.0 if vels else 0.5)
+
+        tension_mean = float(np.mean(tension_vals)) if tension_vals else 0.5
+        energy_mean  = float(np.mean(energy_vals))  if energy_vals  else 0.5
+        arousal_mean = float(np.clip(
+            np.std(pitches) / 12.0 + tension_mean * 0.4, 0.0, 1.0
+        )) if pitches else 0.5
+
+        # Función armónica predominante (análisis sobre todos los acordes de la frase)
+        harmony_func = 'I'
+        try:
+            all_notes_flat = list(sc.flatten().notes)
+            if len(all_notes_flat) >= 3:
+                ch_pitches = [el.pitch for el in all_notes_flat[:8]
+                              if isinstance(el, note.Note)]
+                if len(ch_pitches) >= 2:
+                    ch_obj = chord.Chord(ch_pitches)
+                    rn = roman.romanNumeralFromChord(ch_obj, key_obj)
+                    harmony_func = rn.figure
+        except Exception:
+            pass
+
+        clip = PhraseClip(
+            path         = path,
+            notes        = raw_notes,
+            duration_beats = duration_beats,
+            key_obj      = key_obj,
+            tension_mean = tension_mean,
+            arousal_mean = arousal_mean,
+            energy_mean  = energy_mean,
+            pitch_mean   = pitch_mean,
+            pitch_first  = pitch_first,
+            pitch_last   = pitch_last,
+            intervals    = intervals,
+            harmony_func = harmony_func,
+        )
+        clips.append(clip)
+        if verbose:
+            print(f"    ✓ {os.path.basename(path):30s}  "
+                  f"dur={duration_beats:.1f}b  "
+                  f"t={tension_mean:.2f}  e={energy_mean:.2f}  "
+                  f"p={pitch_mean:.0f}  func={harmony_func}")
+
+    print(f"  [phrase_stitch] {len(clips)} frases cargadas.")
+    return clips
+
+
+def _score_phrase_clip(clip, target_tension, target_arousal, target_energy,
+                       last_pitch, harmony_func_target, target_key,
+                       weight_connection=0.35, weight_tension=0.30,
+                       weight_arousal=0.15, weight_energy=0.10,
+                       weight_harmony=0.10):
+    """
+    Puntúa un PhraseClip para el contexto actual de la pieza.
+    Devuelve un float ≥ 0 (mayor = más adecuado).
+    """
+    # 1. Compatibilidad de tensión (principal)
+    t_score = 1.0 - abs(clip.tension_mean - target_tension)
+
+    # 2. Compatibilidad de arousal
+    a_score = 1.0 - abs(clip.arousal_mean - target_arousal)
+
+    # 3. Energía
+    e_score = 1.0 - abs(clip.energy_mean - target_energy)
+
+    # 4. Conexión de altura: penaliza saltos grandes desde la última nota
+    if last_pitch is not None:
+        # Calculamos la primera nota de la frase transposed
+        shift = 0
+        if clip.key_obj and target_key:
+            src_pc = pitch.Pitch(clip.key_obj.tonic.name).pitchClass
+            tgt_pc = pitch.Pitch(target_key.tonic.name).pitchClass
+            shift  = tgt_pc - src_pc
+            if shift >  6: shift -= 12
+            if shift < -6: shift += 12
+        first_transposed = clip.pitch_first + shift
+        jump = abs(first_transposed - last_pitch)
+        # Normalizado: salto 0 → 1.0, salto 12 → 0.0, salto ≥ 24 → 0.0
+        c_score = max(0.0, 1.0 - jump / 12.0)
+    else:
+        c_score = 0.7  # sin nota previa, penalización neutra
+
+    # 5. Compatibilidad armónica (función)
+    FUNC_COMPAT = {
+        'I':  ['I','iii','vi','IV'],
+        'V':  ['V','V7','vii°'],
+        'IV': ['IV','ii','vi'],
+        'vi': ['vi','IV','I'],
+    }
+    compat_list = FUNC_COMPAT.get(harmony_func_target, ['I'])
+    h_score = 0.8 if clip.harmony_func in compat_list else 0.3
+
+    total = (c_score     * weight_connection +
+             t_score     * weight_tension    +
+             a_score     * weight_arousal    +
+             e_score     * weight_energy     +
+             h_score     * weight_harmony)
+    return float(total)
+
+
+def generate_melody_phrase_stitch(phrase_clips, harmony_prog, target_key,
+                                   n_bars, beats_per_bar, emotional_ctrl,
+                                   form_gen, seed=None,
+                                   allow_pitch_shift=True,
+                                   connection_smooth=True):
+    """
+    Modo phrase_stitch [X]: ensambla la melodía concatenando frases del
+    phrase_library. En cada ventana de la pieza elige la frase más adecuada
+    según las curvas de tensión/arousal/energía analizadas y la cohesión de
+    altura entre frases consecutivas.
+
+    Parameters
+    ----------
+    phrase_clips   : list[PhraseClip]  – biblioteca de frases pre-analizadas
+    harmony_prog   : lista de (fig, dur)
+    target_key     : music21 Key
+    n_bars         : número de compases destino
+    beats_per_bar  : int
+    emotional_ctrl : EmotionalController
+    form_gen       : FormGenerator
+    seed           : int o None
+    allow_pitch_shift : si True, transpone también por octava para mejor conexión
+    connection_smooth : si True, inserta una nota de enlace cuando el salto > 4 st
+
+    Returns
+    -------
+    list of (offset_global, midi, dur, vel)
+    """
+    if not phrase_clips:
+        return []
+
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+
+    h_timeline, total_h = _harmony_timeline(harmony_prog, n_bars * beats_per_bar)
+
+    # Tensión/arousal/energía de la pieza (una por compás)
+    tension_curve  = getattr(emotional_ctrl, 'tension',  None) or [0.5] * n_bars
+    arousal_curve  = getattr(emotional_ctrl, 'arousal',  None) or [0.5] * n_bars
+    activity_curve = getattr(emotional_ctrl, 'activity', None) or [0.5] * n_bars
+
+    def _curve_at(curve, bar_idx):
+        if not curve: return 0.5
+        return curve[min(bar_idx, len(curve)-1)]
+
+    result          = []        # notas finales
+    current_offset  = 0.0      # posición global en beats
+    last_pitch      = None     # última nota generada (para conexión)
+    used_clips      = []       # lista de clips usados (para evitar repetición inmediata)
+    total_beats     = n_bars * beats_per_bar
+
+    # Precalculamos la lista de clips disponibles — mantenemos todos, solo evitamos
+    # repetición inmediata del mismo clip
+    lo_mel, hi_mel = INSTRUMENT_RANGES['melody']
+
+    while current_offset < total_beats - 0.1:
+        bar_idx  = int(current_offset / beats_per_bar)
+        remaining = total_beats - current_offset
+
+        # Parámetros emocionales de este compás
+        t_target = _curve_at(tension_curve,  bar_idx)
+        a_target = _curve_at(arousal_curve,  bar_idx)
+        e_target = _curve_at(activity_curve, bar_idx)
+
+        # Función armónica en este beat
+        h_func = _chord_at(current_offset, h_timeline, total_h)
+
+        # Filtrar clips que caben en el espacio restante (con margen 0.5 beats)
+        candidates = [
+            c for c in phrase_clips
+            if c.duration_beats <= remaining + 0.5
+            and (not used_clips or c is not used_clips[-1])  # no repetir inmediatamente
+        ]
+        # Si no hay candidatos por duración, usar todos
+        if not candidates:
+            candidates = [c for c in phrase_clips
+                          if not used_clips or c is not used_clips[-1]]
+        if not candidates:
+            candidates = list(phrase_clips)
+
+        # Puntuar todos los candidatos
+        scored = []
+        for c in candidates:
+            sc = _score_phrase_clip(
+                c, t_target, a_target, e_target,
+                last_pitch, h_func, target_key
+            )
+            scored.append((sc, c))
+
+        scored.sort(key=lambda x: -x[0])
+
+        # Muestreo ponderado entre el top-3 (introduce variedad)
+        top_n = min(3, len(scored))
+        top   = scored[:top_n]
+        weights = [max(0.01, s) for s, _ in top]
+        total_w = sum(weights)
+        probs   = [w / total_w for w in weights]
+        chosen_clip = top[np.random.choice(top_n, p=probs)][1]
+        used_clips.append(chosen_clip)
+        if len(used_clips) > 4:
+            used_clips.pop(0)
+
+        # Transponer al target_key
+        transposed_notes = chosen_clip.transpose_to_key(target_key)
+
+        # Si allow_pitch_shift, ajustar por octava para que la media esté
+        # cerca del rango emocional deseado (t_target alto → registro más agudo)
+        if allow_pitch_shift and transposed_notes:
+            target_register = lo_mel + (hi_mel - lo_mel) * (0.3 + t_target * 0.5)
+            pitch_mean_tr   = np.mean([mp for _, mp, _, _ in transposed_notes])
+            octave_shift    = round((target_register - pitch_mean_tr) / 12) * 12
+            if octave_shift != 0:
+                transposed_notes = [
+                    (o, int(np.clip(mp + octave_shift, lo_mel, hi_mel)), d, v)
+                    for o, mp, d, v in transposed_notes
+                ]
+
+        # Nota de enlace suave entre frases (connection_smooth)
+        if connection_smooth and last_pitch is not None and transposed_notes:
+            first_note_pitch = transposed_notes[0][1]
+            jump = abs(first_note_pitch - last_pitch)
+            if jump > 4:
+                # Insertar nota de paso (cuarto de beat)
+                link_pitch = _snap_to_scale(
+                    int(last_pitch + (first_note_pitch - last_pitch) * 0.5),
+                    target_key
+                )
+                link_pitch = int(np.clip(link_pitch, lo_mel, hi_mel))
+                link_dur   = 0.25
+                link_vel   = max(35, min(80, int(np.mean([v for _, _, _, v in transposed_notes[:2]])) - 10))
+                result.append((current_offset, link_pitch, link_dur, link_vel))
+                current_offset += link_dur
+                # Ajustar el inicio de la frase
+                transposed_notes = [
+                    (o, mp, d, v) for o, mp, d, v in transposed_notes
+                ]
+
+        # Calcular duración real usada (no exceder lo que queda)
+        phrase_dur = chosen_clip.duration_beats
+        if phrase_dur > remaining:
+            # Recortar notas que caen fuera del tiempo disponible
+            transposed_notes = [
+                (o, mp, d, v) for o, mp, d, v in transposed_notes
+                if o < remaining
+            ]
+            # Ajustar duraciones de notas al borde
+            clipped = []
+            for o, mp, d, v in transposed_notes:
+                d = min(d, remaining - o)
+                if d > 0.05:
+                    clipped.append((o, mp, d, v))
+            transposed_notes = clipped
+            phrase_dur = remaining
+
+        # Ajuste de velocidad según dinámica emocional
+        ep = emotional_ctrl.get_bar_params(bar_idx, n_bars)
+        vel_target = ep.get('velocity', 72)
+        final_notes = []
+        for o_local, mp, d, v in transposed_notes:
+            # Blend entre la velocidad original de la frase y la dinámica destino
+            v_blended = int(np.clip(v * 0.5 + vel_target * 0.5, 25, 110))
+            final_notes.append((current_offset + o_local, mp, max(0.05, d), v_blended))
+
+        result.extend(final_notes)
+
+        # Actualizar última nota y posición
+        if final_notes:
+            last_note = max(final_notes, key=lambda x: x[0])
+            last_pitch = last_note[1]
+
+        current_offset += phrase_dur
+
+    return sorted(result, key=lambda x: x[0])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  GENERACIÓN DE ACOMPAÑAMIENTO
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -3754,7 +4210,20 @@ def _run_generation(
         swing_factors = [mt_swing.at(i) for i in range(n_bars)]
 
     # ── Melodía ────────────────────────────────────────────────────────────────
-    if melody_mode == 'mosaic' and dnas_all:
+    if melody_mode == 'phrase_stitch' and phrase_clips:
+        # [X] Modo phrase_stitch: ensambla frases de la biblioteca
+        bpb_val = time_sig[0] if isinstance(time_sig, tuple) else bpb
+        mel = generate_melody_phrase_stitch(
+            phrase_clips, h_prog, target_key, n_bars, bpb_val, ec, fg,
+            seed=phrase_seed, allow_pitch_shift=True, connection_smooth=True,
+        )
+        if not mel:
+            print("  ⚠ phrase_stitch: sin notas, usando modo markov como fallback.")
+            mel = generate_melody(h_prog, target_key, r_pat, contour, reg, motif,
+                                  n_bars, ec, fg, bpb, rhythm_strength, markov,
+                                  seq_phrases, 'markov', surprise_rate,
+                                  use_tension_markov=use_tension_markov)
+    elif melody_mode == 'mosaic' and dnas_all:
         mel = generate_melody_mosaic(dnas_all, h_prog, target_key, n_bars, bpb, ec, fg)
         if not mel:
             mel = generate_melody(h_prog, target_key, r_pat, contour, reg, motif,
@@ -3845,7 +4314,9 @@ def run_mixing(dnas, target_key, n_bars, tempo_bpm, time_sig, mode,
                mt_density=None, mt_harmony_complexity=None,
                mt_swing=None, mt_register=None, mt_acc_style=None,
                mt_rhythm_morph=None, mt_emotion_morph=None,
-               rhythm_morph_dna=None, emotion_morph_dna=None):
+               rhythm_morph_dna=None, emotion_morph_dna=None,
+               # ── Phrase stitch [X] ──────────────────────────────────────────
+               phrase_clips=None, phrase_seed=None):
     """Motor principal de mezcla. Genera candidatos y elige el mejor. [N]"""
 
     ec, fg = _prepare_controllers(dnas, emotion_src_idx, form_src_idx, n_bars,
@@ -3896,6 +4367,11 @@ def run_mixing(dnas, target_key, n_bars, tempo_bpm, time_sig, mode,
         r_src = by_energy[0]
     elif mode == 'emotion':
         h_src = m_src = r_src = dnas[emotion_src_idx]
+    elif mode == 'phrase_stitch':
+        h_src = by_harmony[0]
+        m_src = by_melody[0]
+        r_src = by_rhythm[0]
+        melody_mode = 'phrase_stitch'
     else:
         h_src = m_src = r_src = dnas[0]
 
@@ -4514,10 +4990,21 @@ def main():
     # Modo
     parser.add_argument('--mode', default='auto',
         choices=['auto','rhythm_melody','harmony_melody','full_blend',
-                 'custom','mosaic','energy','emotion'])
+                 'custom','mosaic','energy','emotion','phrase_stitch'],
+        help='Modo de mezcla. "phrase_stitch" requiere --phrases-dir.')
     parser.add_argument('--emotion_src', type=int, default=0)
     parser.add_argument('--form_src',    type=int, default=0)
     parser.add_argument('--sources',     default='rhythm=0,melody=1,harmony=0')
+    # ── Phrase stitch [X] ────────────────────────────────────────────────────
+    parser.add_argument('--phrases-dir', default=None, metavar='DIR',
+        help='[X] Directorio con MIDIs de frases para el modo phrase_stitch. '
+             'Cada .mid es una frase independiente que se analiza y se elige '
+             'en tiempo de generación según la curva de tensión/arousal/energía '
+             'y la cohesión de altura entre frases consecutivas. '
+             'Se puede combinar con cualquier MIDI fuente para armonía/ritmo. '
+             'Ej: --mode phrase_stitch --phrases-dir ./mis_frases/')
+    parser.add_argument('--phrase-seed', type=int, default=None,
+        help='Semilla para el muestreo estocástico en phrase_stitch (default: usa --seed)')
     # Parámetros musicales
     parser.add_argument('--key',    default=None)
     parser.add_argument('--bars',   type=int,   default=16)
@@ -4759,6 +5246,20 @@ def main():
     rhythm_morph_dna  = dnas[1] if (mt_rhythm_morph  and len(dnas) > 1) else None
     emotion_morph_dna = dnas[1] if (mt_emotion_morph and len(dnas) > 1) else None
 
+    # ── Phrase library [X] ───────────────────────────────────────────────────
+    phrase_clips = []
+    if args.phrases_dir:
+        phrase_clips = load_phrase_library(args.phrases_dir, verbose=args.verbose)
+        if not phrase_clips and args.mode == 'phrase_stitch':
+            print("ERROR: --phrases-dir no contiene MIDIs válidos. "
+                  "Se requieren frases para el modo phrase_stitch.")
+            sys.exit(1)
+    elif args.mode == 'phrase_stitch':
+        print("ERROR: el modo phrase_stitch requiere --phrases-dir <directorio>.")
+        sys.exit(1)
+
+    p_seed = args.phrase_seed if args.phrase_seed is not None else args.seed
+
     # Informe de mutaciones activas
     mts = {
         'MT1-Density':     mt_density,
@@ -4803,6 +5304,8 @@ def main():
         mt_emotion_morph        = mt_emotion_morph,
         rhythm_morph_dna        = rhythm_morph_dna,
         emotion_morph_dna       = emotion_morph_dna,
+        phrase_clips            = phrase_clips,
+        phrase_seed             = p_seed,
     )
 
     print(f"    → Melodía         : {len(mel)} notas")
