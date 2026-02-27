@@ -289,18 +289,34 @@ def _tokenize_cmd(cmd_str: str) -> list[str]:
 
     # Reparar fragmentos de curvas MT partidos por coma+espacio.
     # Patron: flag --mt-* seguido de tokens con forma "N:valor" o "N:valor,"
-    _BAR_VAL = re.compile(r'^\d+:[^\s,]+,?$')
-    _MT_FLAG = re.compile(r'^--mt-')
+    # También maneja el caso donde el LLM omite el prefijo de compás en el
+    # primer token (ej: "0.0, 16:0.0" en lugar de "0:0.0, 16:0.0")
+    _BAR_VAL   = re.compile(r'^\d+:[^\s,]+,?$')   # "0:sparse," o "16:0.5"
+    _BARE_VAL  = re.compile(r'^[^\-][^\s,]*,?$')  # valor suelto sin prefijo N:
+    _MT_FLAG   = re.compile(r'^--mt-')
+
+    def _is_mt_value(tok):
+        """Token que puede ser parte de una curva MT (con o sin prefijo de compás)."""
+        return bool(_BAR_VAL.match(tok) or _BARE_VAL.match(tok))
 
     repaired = []
     i = 0
     while i < len(tokens):
         tok = tokens[i]
-        if repaired and _MT_FLAG.match(repaired[-1]) and _BAR_VAL.match(tok):
+        if repaired and _MT_FLAG.match(repaired[-1]) and _is_mt_value(tok):
+            # Normalizar: si el primer fragmento no tiene N:, añadir "0:"
+            if not _BAR_VAL.match(tok):
+                tok = '0:' + tok.lstrip(',')
             parts = [tok]
             while parts[-1].endswith(',') and i + 1 < len(tokens):
                 i += 1
-                parts.append(tokens[i])
+                next_tok = tokens[i]
+                # Normalizar siguientes tokens sin prefijo también
+                if _BARE_VAL.match(next_tok) and not _BAR_VAL.match(next_tok):
+                    # No podemos inferir el compás correcto para los siguientes,
+                    # así que los dejamos tal cual (el LLM debería ponerlos bien)
+                    pass
+                parts.append(next_tok)
             repaired.append(', '.join(p.rstrip(',') for p in parts))
         else:
             repaired.append(tok)
@@ -310,28 +326,13 @@ def _tokenize_cmd(cmd_str: str) -> list[str]:
 def _normalize_cmd_tokens(tokens: list[str]) -> list[str]:
     """
     Reemplaza 'python' por sys.executable para garantizar el intérprete correcto.
-    También reúne valores de --key partidos por espacios (ej: 'F#' + 'minor').
     """
-    _KEY_QUALIFIERS = {'minor', 'major', 'min', 'maj', 'm'}
     result = []
-    i = 0
-    while i < len(tokens):
-        t = tokens[i]
-        if t in ("python", "python3"):
+    for t in tokens:
+        if t == "python" or t == "python3":
             result.append(sys.executable)
-        elif t in ("--key", "-k") and i + 1 < len(tokens):
-            result.append(t)
-            i += 1
-            key_val = tokens[i]
-            if (i + 1 < len(tokens)
-                    and tokens[i + 1].lower() in _KEY_QUALIFIERS
-                    and not tokens[i + 1].startswith('-')):
-                i += 1
-                key_val = key_val + ' ' + tokens[i]
-            result.append(key_val)
         else:
             result.append(t)
-        i += 1
     return result
 
 

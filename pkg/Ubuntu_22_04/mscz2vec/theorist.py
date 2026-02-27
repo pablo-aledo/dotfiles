@@ -1167,6 +1167,29 @@ def build_user_prompt(description: str, n_bars: int,
     return "\n".join(lines)
 
 
+def sanitize_mt_spec(spec_val) -> str | None:
+    """
+    Normaliza un valor de flag --mt-* asegurando que el primer punto
+    tenga siempre el prefijo de compás "0:".
+
+    Casos que corrige:
+      "0.0, 16:0.0, 32:0.0"   → "0:0.0, 16:0.0, 32:0.0"
+      "sparse, 16:dense"       → "0:sparse, 16:dense"
+      "0:sparse, 16:dense"     → sin cambio (ya correcto)
+      None / ""                → None
+    """
+    if not spec_val:
+        return None
+    s = str(spec_val).strip()
+    if not s:
+        return None
+
+    parts = [p.strip() for p in s.split(',')]
+    if parts and ':' not in parts[0]:
+        parts[0] = '0:' + parts[0]
+    return ', '.join(parts)
+
+
 def apply_forced_params(plan: dict, forced_key: str | None,
                         forced_tempo: int | None, n_bars: int) -> dict:
     """
@@ -1200,7 +1223,7 @@ def apply_forced_params(plan: dict, forced_key: str | None,
         raw_strat = reharm_pp.get("--strategy", "diatonic")
         reharm_pp["--strategy"] = " ".join(sanitize_reharmonizer_strategies(raw_strat))
 
-    # ── Sanitizar midi_dna_unified --mode ────────────────────────────────────
+    # ── Sanitizar midi_dna_unified --mode y flags --mt-* ────────────────────
     dna_pp = pp.get("midi_dna_unified", {})
     if dna_pp:
         # --mode en midi_dna_unified es el modo de GENERACIÓN, no la escala
@@ -1214,12 +1237,21 @@ def apply_forced_params(plan: dict, forced_key: str | None,
         if mode_val not in dna_valid_modes:
             dna_pp["--mode"] = "auto"
 
+        # Sanitizar flags --mt-*: garantizar que el primer punto tenga prefijo "0:"
+        for mt_flag in ("--mt-density", "--mt-harmony-complexity", "--mt-register",
+                        "--mt-swing", "--mt-emotion-morph", "--mt-rhythm-morph",
+                        "--mt-acc-style"):
+            if mt_flag in dna_pp:
+                dna_pp[mt_flag] = sanitize_mt_spec(dna_pp[mt_flag])
+
     if forced_key:
         tonic, mode = _parse_key_string(forced_key)
         if narrator_pp:
             narrator_pp["key"] = tonic
+            narrator_pp["mode"] = mode
         if dna_pp:
-            dna_pp["--key"] = tonic
+            # parse_key_arg en midi_dna_unified acepta "C# minor" (tónica + modo)
+            dna_pp["--key"] = f"{tonic} {mode}" if mode != "major" else tonic
 
     if forced_tempo:
         if narrator_pp:
@@ -1422,6 +1454,8 @@ def export_pipeline_yaml(plan: dict, output_base: str,
     arc    = narrator_params.get("arc", "hero")
     n_bars = narrator_params.get("bars", 32)
     key    = narrator_params.get("key", "C")
+    mode   = narrator_params.get("mode", "major")
+    key_full = f"{key} {mode}" if mode and mode != "major" else key
     tempo  = narrator_params.get("tempo", 120)
 
     # Construir el comando CLI de midi_dna_unified
@@ -1473,7 +1507,7 @@ def export_pipeline_yaml(plan: dict, output_base: str,
         "obra:",
         f"  arc: {arc}",
         f"  bars: {n_bars}",
-        f"  key: {key}",
+        f"  key: {key_full}",
         f"  tempo: {tempo}",
     ]
     if ref_midi:
@@ -1491,7 +1525,7 @@ def export_pipeline_yaml(plan: dict, output_base: str,
 
     yaml_lines += [
         "  - name: narrator",
-        f"    cmd: python narrator.py --arc {arc} --bars {n_bars} --key {key} --tempo {tempo} --no-gui --export-curves --export-yaml",
+        f"    cmd: python narrator.py --arc {arc} --bars {n_bars} --key {key_full} --tempo {tempo} --no-gui --export-curves --export-yaml",
         f"    output: {output_base}_plan.json",
         "",
         "  - name: midi_dna_unified",
