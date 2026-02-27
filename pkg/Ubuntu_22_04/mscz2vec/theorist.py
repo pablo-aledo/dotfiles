@@ -1718,13 +1718,18 @@ def export_pipeline_yaml(plan: dict, output_base: str,
     key    = narrator_params.get("key", "C")
     mode   = narrator_params.get("mode", "major")
     key_full = f"{key} {mode}" if mode and mode != "major" else key
+    key_full_cli = f'"{key_full}"' if " " in key_full else key_full
     tempo  = narrator_params.get("tempo", 120)
 
     # Construir el comando CLI de midi_dna_unified
     dna_cmd_parts = ["python midi_dna_unified.py"]
     for flag, val in dna_params.items():
         if val is not None and flag.startswith("--"):
-            dna_cmd_parts.append(f"{flag} {val}")
+            val_str = str(val)
+            # Añadir comillas si el valor contiene espacios o comas (ej: "F# minor", "0:medium, 16:light")
+            if " " in val_str or "," in val_str:
+                val_str = f'"{val_str}"'
+            dna_cmd_parts.append(f"{flag} {val_str}")
     dna_cmd = " \\\n        ".join(dna_cmd_parts)
 
     reharm_strategy = reharm_params.get("--strategy", "diatonic")
@@ -1776,7 +1781,7 @@ def export_pipeline_yaml(plan: dict, output_base: str,
         "obra:",
         f"  arc: {arc}",
         f"  bars: {n_bars}",
-        f"  key: {key_full}",
+        f"  key: {key_full_cli}",
         f"  tempo: {tempo}",
     ]
     if ref_midi:
@@ -1794,7 +1799,7 @@ def export_pipeline_yaml(plan: dict, output_base: str,
 
     yaml_lines += [
         "  - name: narrator",
-        f"    cmd: python narrator.py --arc {arc} --bars {n_bars} --key {key_full} --tempo {tempo} --no-gui --export-curves --export-yaml",
+        f"    cmd: python narrator.py --arc {arc} --bars {n_bars} --key {key_full_cli} --tempo {tempo} --no-gui --export-curves --export-yaml",
         f"    output: {output_base}_plan.json",
         "",
         "  - name: midi_dna_unified",
