@@ -173,6 +173,186 @@ ARC_TO_TENSION_PRESET = {
 # Templates válidos de orchestrator.py
 ORCHESTRATOR_VALID_TEMPLATES = ["chamber", "full", "strings_only"]
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  PALETAS DE INSTRUMENTOS POR MOOD
+#  Cada paleta define una plantilla personalizada para orchestrator.py.
+#  El campo "source" debe ser uno de: Melody, Counterpoint, Accompaniment, Bass
+# ══════════════════════════════════════════════════════════════════════════════
+
+MOOD_INSTRUMENT_PALETTES = {
+    "dark": {
+        "label": "Oscuro / Trágico",
+        "moods": ["tristeza", "tragedia", "duelo", "luto", "dolor", "tormenta",
+                  "vacío", "muerte", "pérdida", "desolado", "tragic", "dark"],
+        "base_template": "strings_only",
+        "instruments": [
+            {"name": "cello",      "source": "Melody",        "role": "melody",        "channel": 0},
+            {"name": "viola",      "source": "Counterpoint",  "role": "counterpoint",  "channel": 1},
+            {"name": "violin1",    "source": "Accompaniment", "role": "accompaniment", "channel": 2},
+            {"name": "contrabass", "source": "Bass",          "role": "bass",          "channel": 3},
+            {"name": "bassoon",    "source": "Bass",          "role": "bass_double",   "channel": 4},
+            {"name": "trombone",   "source": "Accompaniment", "role": "pad",           "channel": 5, "section_filter": ["C", "D"]},
+        ],
+        "rationale": "Cello como voz principal (peso emocional del grave). Trombón sólo en clímax.",
+    },
+    "mysterious": {
+        "label": "Misterioso / Inquietante",
+        "moods": ["misterio", "enigma", "suspenso", "inquietante", "ambiguo",
+                  "siniestro", "nocturno", "expectativa", "espera", "mystery"],
+        "base_template": "chamber",
+        "instruments": [
+            {"name": "clarinet",   "source": "Melody",        "role": "melody",        "channel": 0},
+            {"name": "viola",      "source": "Counterpoint",  "role": "counterpoint",  "channel": 1},
+            {"name": "cello",      "source": "Accompaniment", "role": "accompaniment", "channel": 2},
+            {"name": "contrabass", "source": "Bass",          "role": "bass",          "channel": 3, "octave_shift": -1},
+            {"name": "bassoon",    "source": "Accompaniment", "role": "pad",           "channel": 4, "section_filter": ["B", "C"]},
+            {"name": "horn",       "source": "Accompaniment", "role": "pad",           "channel": 5, "section_filter": ["C", "D"]},
+        ],
+        "rationale": "Clarinete chalumeau como voz principal. Viola y cello crean textura tenue. Trompa añade ambigüedad armónica.",
+    },
+    "melancholic": {
+        "label": "Melancólico / Nostálgico",
+        "moods": ["melancolía", "melancolia", "nostalgia", "añoranza", "soledad",
+                  "noche", "lluvia", "introspección", "melancholy", "wistful"],
+        "base_template": "chamber",
+        "instruments": [
+            {"name": "oboe",       "source": "Melody",        "role": "melody",        "channel": 0},
+            {"name": "violin1",    "source": "Counterpoint",  "role": "counterpoint",  "channel": 1},
+            {"name": "viola",      "source": "Accompaniment", "role": "accompaniment", "channel": 2},
+            {"name": "cello",      "source": "Bass",          "role": "bass",          "channel": 3},
+            {"name": "violin2",    "source": "Melody",        "role": "melody_double", "channel": 4, "section_filter": ["B", "D"]},
+        ],
+        "rationale": "Oboe como voz solista (timbre lloroso por excelencia). Sin percusión ni metales: máxima intimidad.",
+    },
+    "romantic": {
+        "label": "Romántico / Apasionado",
+        "moods": ["romance", "amor", "pasión", "ternura", "intimidad",
+                  "dulzura", "arrebato", "intensidad", "love"],
+        "base_template": "chamber",
+        "instruments": [
+            {"name": "violin1",    "source": "Melody",        "role": "melody",        "channel": 0},
+            {"name": "violin2",    "source": "Counterpoint",  "role": "counterpoint",  "channel": 1},
+            {"name": "cello",      "source": "Accompaniment", "role": "accompaniment", "channel": 2},
+            {"name": "viola",      "source": "Bass",          "role": "bass",          "channel": 3},
+            {"name": "horn",       "source": "Accompaniment", "role": "pad",           "channel": 4, "section_filter": ["C"]},
+            {"name": "oboe",       "source": "Melody",        "role": "melody_double", "channel": 5, "section_filter": ["A"]},
+        ],
+        "rationale": "Violín I como voz lírica. Cello añade calor. Trompa en el clímax para intensidad máxima.",
+    },
+    "epic": {
+        "label": "Grandioso / Épico",
+        "moods": ["grandiosidad", "épico", "heroico", "triunfo", "victoria",
+                  "sublime", "monumental", "poderoso", "epic", "heroic"],
+        "base_template": "full",
+        "instruments": [
+            {"name": "violin1",    "source": "Melody",        "role": "melody",        "channel": 0},
+            {"name": "violin2",    "source": "Counterpoint",  "role": "counterpoint",  "channel": 1},
+            {"name": "viola",      "source": "Accompaniment", "role": "accompaniment", "channel": 2},
+            {"name": "cello",      "source": "Bass",          "role": "bass",          "channel": 3},
+            {"name": "contrabass", "source": "Bass",          "role": "bass",          "channel": 4, "octave_shift": -1},
+            {"name": "trumpet",    "source": "Melody",        "role": "melody_double", "channel": 5, "section_filter": ["C", "D"]},
+            {"name": "trombone",   "source": "Accompaniment", "role": "pad",           "channel": 6, "section_filter": ["C", "D"]},
+            {"name": "horn",       "source": "Accompaniment", "role": "pad",           "channel": 7},
+            {"name": "bassoon",    "source": "Bass",          "role": "bass_double",   "channel": 8},
+        ],
+        "rationale": "Orquesta completa con metales en clímax. Trompeta dobla la melodía en ff.",
+    },
+    "serene": {
+        "label": "Sereno / Contemplativo",
+        "moods": ["calma", "serenidad", "meditación", "contemplación", "paz",
+                  "amanecer", "mar", "reposo", "calm", "meditation", "peaceful"],
+        "base_template": "strings_only",
+        "instruments": [
+            {"name": "flute",      "source": "Melody",        "role": "melody",        "channel": 0},
+            {"name": "violin1",    "source": "Counterpoint",  "role": "counterpoint",  "channel": 1},
+            {"name": "viola",      "source": "Accompaniment", "role": "accompaniment", "channel": 2},
+            {"name": "cello",      "source": "Bass",          "role": "bass",          "channel": 3},
+            {"name": "violin2",    "source": "Melody",        "role": "melody_double", "channel": 4, "section_filter": ["B"]},
+        ],
+        "rationale": "Flauta como voz principal (claridad aérea). Sin percusión: máxima transparencia tímbrica.",
+    },
+    "joyful": {
+        "label": "Alegre / Festivo",
+        "moods": ["alegría", "festivo", "jubiloso", "animado", "danza",
+                  "juguetón", "brillante", "vivaz", "joyful", "happy"],
+        "base_template": "chamber",
+        "instruments": [
+            {"name": "flute",      "source": "Melody",        "role": "melody",        "channel": 0},
+            {"name": "oboe",       "source": "Counterpoint",  "role": "counterpoint",  "channel": 1},
+            {"name": "violin1",    "source": "Melody",        "role": "melody_double", "channel": 2, "section_filter": ["B", "C"]},
+            {"name": "violin2",    "source": "Accompaniment", "role": "accompaniment", "channel": 3},
+            {"name": "cello",      "source": "Bass",          "role": "bass",          "channel": 4},
+            {"name": "horn",       "source": "Accompaniment", "role": "pad",           "channel": 5, "section_filter": ["C"]},
+        ],
+        "rationale": "Maderas en agudo (flauta + oboe) dan brillo y ligereza. Sin metales pesados.",
+    },
+    "anxious": {
+        "label": "Ansioso / Urgente",
+        "moods": ["ansiedad", "angustia", "urgencia", "nervioso", "agitación",
+                  "inquietud", "anxious", "urgent", "tense"],
+        "base_template": "chamber",
+        "instruments": [
+            {"name": "violin1",    "source": "Melody",        "role": "melody",        "channel": 0},
+            {"name": "violin2",    "source": "Counterpoint",  "role": "counterpoint",  "channel": 1},
+            {"name": "viola",      "source": "Accompaniment", "role": "accompaniment", "channel": 2},
+            {"name": "cello",      "source": "Bass",          "role": "bass",          "channel": 3},
+            {"name": "clarinet",   "source": "Melody",        "role": "melody_double", "channel": 4, "section_filter": ["B", "C"]},
+            {"name": "contrabass", "source": "Bass",          "role": "bass",          "channel": 5, "octave_shift": -1},
+        ],
+        "rationale": "Cuerdas en tutti con articulación corta (spiccato). Clarinete añade urgencia aguda. Contrabajo ancla el bajo con peso.",
+    },
+    "intimate": {
+        "label": "Íntimo / Solístico",
+        "moods": ["intimidad", "recogimiento", "soliloquio", "confesión",
+                  "susurro", "intimate", "chamber"],
+        "base_template": "strings_only",
+        "instruments": [
+            {"name": "violin1",    "source": "Melody",        "role": "melody",        "channel": 0},
+            {"name": "cello",      "source": "Accompaniment", "role": "accompaniment", "channel": 1},
+            {"name": "viola",      "source": "Bass",          "role": "bass",          "channel": 2},
+        ],
+        "rationale": "Trío de cámara mínimo. Máxima exposición de cada línea.",
+    },
+}
+
+# Mapa rápido: palabra de mood → clave de paleta
+MOOD_TO_PALETTE = {}
+for _pk, _pd in MOOD_INSTRUMENT_PALETTES.items():
+    for _mw in _pd["moods"]:
+        MOOD_TO_PALETTE[_mw] = _pk
+
+
+def select_instrument_palette(description: str, core_emotion: str = "",
+                               arc: str = "hero") -> tuple[str, dict]:
+    """
+    Selecciona la paleta de instrumentos más apropiada para el mood.
+    Retorna (palette_key, palette_dict).
+    """
+    search_text = normalize_text(f"{description} {core_emotion}")
+
+    best_key = None
+    best_score = 0
+    for mood_word, palette_key in MOOD_TO_PALETTE.items():
+        norm_mood = normalize_text(mood_word)
+        if norm_mood in search_text:
+            score = len(norm_mood)
+            if score > best_score:
+                best_score = score
+                best_key = palette_key
+
+    if best_key:
+        return best_key, MOOD_INSTRUMENT_PALETTES[best_key]
+
+    # Fallback por arco narrativo
+    arc_palette_map = {
+        "hero": "epic", "tragedy": "dark", "romance": "romantic",
+        "mystery": "mysterious", "meditation": "serene",
+        "rondo": "joyful", "sonata": "epic",
+    }
+    fallback_key = arc_palette_map.get(arc, "romantic")
+    return fallback_key, MOOD_INSTRUMENT_PALETTES[fallback_key]
+
+
 # Estrategias válidas de reharmonizer.py
 REHARMONIZER_VALID_STRATEGIES = [
     "diatonic", "tritone", "secondary", "modal_interchange",
@@ -678,6 +858,20 @@ El JSON debe seguir EXACTAMENTE esta estructura:
     "harmony":  [lista de N floats 0-1],
     "swing":    [lista de N floats 0-1]
   },
+  "instrument_palette": {
+    "key": "clave de paleta (dark|mysterious|melancholic|romantic|epic|serene|joyful|anxious|intimate)",
+    "label": "nombre descriptivo de la paleta",
+    "rationale": "justificación de por qué estos instrumentos expresan este mood (2-3 frases)",
+    "instruments": [
+      {
+        "name": "nombre_instrumento (violin1|violin2|viola|cello|contrabass|flute|oboe|clarinet|bassoon|horn|trumpet|trombone)",
+        "source": "rol_fuente (Melody|Counterpoint|Accompaniment|Bass)",
+        "role": "rol (melody|counterpoint|accompaniment|bass|melody_double|bass_double|pad)",
+        "channel": número_entero_0_a_12,
+        "section_filter": ["A", "B"]
+      }
+    ]
+  },
   "essay": "párrafo de 80-120 palabras que explica la pieza como si fuera una nota de programa"
 }
 
@@ -707,6 +901,19 @@ Templates de orchestrator (solo estos 3):
   chamber (default), full, strings_only
 
 reharmonizer NO tiene --versions. Usa --candidates (entero, default 3).
+
+PALETAS DE INSTRUMENTOS (usa exactamente estas claves en instrument_palette.key):
+  dark        — tragedia, duelo, peso emocional (cello como voz principal)
+  mysterious  — misterio, ambigüedad, nocturno (clarinete chalumeau)
+  melancholic — nostalgia, lluvia, soledad (oboe solista)
+  romantic    — amor, pasión, ternura (violín I lírico)
+  epic        — grandiosidad, triunfo, heroico (orquesta completa con metales)
+  serene      — calma, meditación, amanecer (flauta sobre cuerdas ligeras)
+  joyful      — alegría, danza, festivo (maderas en agudo)
+  anxious     — ansiedad, urgencia, agitación (cuerdas en tutti spiccato)
+  intimate    — soliloquio, susurro (trío de cámara mínimo)
+
+Elige la paleta más coherente con core_emotion y theoretical_frame.
 """
 
 LLM_SYSTEM_DIALECTICAL = """\
@@ -958,6 +1165,12 @@ def local_parse(description: str, n_bars: int = 32,
     tension_spec = _array_to_mt_spec(tension_arr, n_bars)
     density_spec  = _density_label_to_mt_spec(data["density"], n_bars)
 
+    # Selección de paleta de instrumentos por mood
+    _arc = data.get("arc", "hero")
+    _palette_key, _palette_data = select_instrument_palette(description, concept_name, _arc)
+    if verbose:
+        print(f"  [local] Paleta de instrumentos: '{_palette_key}' ({_palette_data['label']})")
+
     return {
         "semantic_layer": {
             "core_emotion": concept_name,
@@ -1009,7 +1222,16 @@ def local_parse(description: str, n_bars: int = 32,
                 "--strategy": _mode_to_reharmonizer_strategy(key_mode),
                 "--candidates": 3,
             },
-            "orchestrator": {"--template": "chamber"},
+            "orchestrator": {
+                "--template": _palette_data["base_template"],
+                "--instruments-json": f"{_palette_key}_instruments.json",
+            },
+        },
+        "instrument_palette": {
+            "key": _palette_key,
+            "label": _palette_data["label"],
+            "rationale": _palette_data["rationale"],
+            "instruments": _palette_data["instruments"],
         },
         "tension_curves": {
             "tension":  tension_arr.tolist(),
@@ -1212,6 +1434,24 @@ def apply_forced_params(plan: dict, forced_key: str | None,
         raw_tpl = orch_pp.get("--template", "chamber")
         orch_pp["--template"] = sanitize_orchestrator_template(raw_tpl)
 
+    # ── Completar paleta de instrumentos si el LLM no la generó ──────────────
+    if "instrument_palette" not in plan or not plan.get("instrument_palette", {}).get("instruments"):
+        sem = plan.get("semantic_layer", {})
+        core_emotion = sem.get("core_emotion", "")
+        narrator_pp = pp.get("narrator", {})
+        arc = narrator_pp.get("arc", "hero") if narrator_pp else "hero"
+        description_text = plan.get("description_original", "")
+        _pk, _pd = select_instrument_palette(description_text, core_emotion, arc)
+        plan["instrument_palette"] = {
+            "key": _pk,
+            "label": _pd["label"],
+            "rationale": _pd["rationale"],
+            "instruments": _pd["instruments"],
+        }
+        if orch_pp:
+            orch_pp["--template"] = _pd["base_template"]
+            orch_pp["--instruments-json"] = f"{_pk}_instruments.json"
+
     # ── Sanitizar reharmonizer: --versions → --candidates, estrategias ───────
     reharm_pp = pp.get("reharmonizer", {})
     if reharm_pp:
@@ -1382,6 +1622,28 @@ def export_curves_json(plan: dict, output_base: str) -> str:
     return path
 
 
+def export_instruments_json(plan: dict, output_base: str) -> str | None:
+    """
+    Exporta la paleta de instrumentos como JSON listo para --instruments-json de orchestrator.py.
+    Retorna la ruta del archivo, o None si no hay paleta definida.
+    """
+    palette = plan.get("instrument_palette")
+    if not palette or not palette.get("instruments"):
+        return None
+
+    output = {
+        "palette_key":  palette.get("key", "custom"),
+        "palette_label": palette.get("label", ""),
+        "rationale":    palette.get("rationale", ""),
+        "instruments":  palette["instruments"],
+    }
+    palette_key = palette.get("key", "custom")
+    path = f"{output_base}.instruments.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+    return path
+
+
 def export_narrator_plan(plan: dict, output_base: str) -> str:
     """Exporta un plan.json compatible con narrator.py."""
     pp = plan.get("pipeline_params", {})
@@ -1495,6 +1757,13 @@ def export_pipeline_yaml(plan: dict, output_base: str,
     else:
         td_ref_arg = ""
 
+    # Bandera --instruments-json para orchestrator si hay paleta definida
+    _instr_palette = plan.get("instrument_palette", {})
+    if _instr_palette and _instr_palette.get("instruments"):
+        _instr_flag = f" --instruments-json {output_base}.instruments.json"
+    else:
+        _instr_flag = ""
+
     yaml_lines = [
         f"# Plan de pipeline generado por theorist.py v{VERSION}",
         f"# Descripción: {plan.get('description_original', '(sin descripción)')}",
@@ -1540,7 +1809,7 @@ def export_pipeline_yaml(plan: dict, output_base: str,
         f"    cmd: python reharmonizer.py {output_base}.mid --strategy {reharm_strategy_str} --candidates {reharm_candidates}",
         "",
         "  - name: orchestrator",
-        f"    cmd: python orchestrator.py {output_base}.mid --template {orch_template} --auto-fp --output {output_base}_orquestado.mid",
+        f"    cmd: python orchestrator.py {output_base}.mid --template {orch_template} --auto-fp{_instr_flag} --output {output_base}_orquestado.mid",
         f"    output: {output_base}_orquestado.mid",
         "",
     ]
@@ -1628,6 +1897,23 @@ def print_reasoning(plan: dict, verbose: bool = False):
     orch = pp.get("orchestrator", {})
     if orch.get("--template"):
         print(f"  orchestrator:     template={orch['--template']}")
+
+    # Paleta de instrumentos
+    palette = plan.get("instrument_palette", {})
+    if palette and palette.get("instruments"):
+        print(f"\n  [+] Paleta de instrumentos: {palette.get('label', palette.get('key', '?'))}")
+        print(f"  {'─' * 58}")
+        for instr in palette["instruments"]:
+            section_info = ""
+            if instr.get("section_filter"):
+                section_info = f"  [secciones {', '.join(instr['section_filter'])}]"
+            print(f"    • {instr['name']:<14} {instr['role']:<20} ← {instr['source']}{section_info}")
+        if palette.get("rationale"):
+            wrapped = textwrap.fill(
+                palette["rationale"], width=56,
+                initial_indent="  Justificación: ", subsequent_indent="                  "
+            )
+            print(wrapped)
 
     # Advertencias
     warnings = plan.get("warnings", [])
@@ -1858,6 +2144,12 @@ def execute_pipeline(plan: dict, output_base: str,
             "--auto-fp",
             "--output", orch_out,
         ]
+        # Pasar paleta de instrumentos si fue generada
+        instr_palette = plan.get("instrument_palette", {})
+        if instr_palette and instr_palette.get("instruments"):
+            instr_json = f"{output_base}.instruments.json"
+            if Path(instr_json).exists():
+                cmd += ["--instruments-json", instr_json]
         steps.append({"name": "orchestrator", "script": script_orch, "cmd": cmd})
 
     if not steps:
@@ -2033,16 +2325,20 @@ def _run_export_and_execute(plan: dict, description: str, args, description_args
     print_reasoning(plan, verbose=args.verbose)
 
     # Exportar
-    path_theorist = export_theorist_json(plan, description, output_base, description_args)
-    path_curves   = export_curves_json(plan, output_base)
-    path_narrator = export_narrator_plan(plan, output_base)
-    path_yaml     = export_pipeline_yaml(plan, output_base, ref_midi=args.ref_midi)
+    path_theorist   = export_theorist_json(plan, description, output_base, description_args)
+    path_curves     = export_curves_json(plan, output_base)
+    path_instruments = export_instruments_json(plan, output_base)
+    path_narrator   = export_narrator_plan(plan, output_base)
+    path_yaml       = export_pipeline_yaml(plan, output_base, ref_midi=args.ref_midi)
 
     print(f"  Archivos generados:")
-    print(f"    ◆ {path_theorist}   (plan completo con justificaciones)")
-    print(f"    ◆ {path_curves}     (curvas → tension_designer)")
-    print(f"    ◆ {path_narrator}   (plan → narrator GUI)")
-    print(f"    ◆ {path_yaml}       (pipeline → runner.py)")
+    print(f"    ◆ {path_theorist}    (plan completo con justificaciones)")
+    print(f"    ◆ {path_curves}      (curvas → tension_designer)")
+    if path_instruments:
+        palette = plan.get("instrument_palette", {})
+        print(f"    ◆ {path_instruments}  (paleta '{palette.get('label', '')}' → orchestrator)")
+    print(f"    ◆ {path_narrator}    (plan → narrator GUI)")
+    print(f"    ◆ {path_yaml}        (pipeline → runner.py)")
     print()
 
     # Ejecutar pipeline si se pidió

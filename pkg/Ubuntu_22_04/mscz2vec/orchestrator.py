@@ -2433,6 +2433,10 @@ def main():
                         help='Solo generar informe, sin producir MIDI')
     parser.add_argument('--output',     default=None,
                         help='Nombre base de salida (default: <midi_base>_orquestado)')
+    parser.add_argument('--instruments-json', default=None,
+                        help='JSON de paleta de instrumentos generado por theorist.py. '
+                             'Si se provee, reemplaza la plantilla --template con la selección '
+                             'de instrumentos específica al mood de la pieza.')
     parser.add_argument('--no-perc',    action='store_true')
     parser.add_argument('--no-ks',      action='store_true')
     parser.add_argument('--no-cc',      action='store_true')
@@ -2573,8 +2577,37 @@ def main():
     print(f"  Secciones detectadas: {[s['label'] for s in sections]}")
 
     # ── Template ─────────────────────────────────────────────────────────────
-    template = TEMPLATES[args.template]
-    print(f"  Plantilla: {args.template} ({len(template['instruments'])} instrumentos)")
+    # Si se provee un JSON de paleta de instrumentos (generado por theorist.py),
+    # se usa como plantilla custom en lugar de las plantillas predefinidas.
+    if args.instruments_json:
+        try:
+            import json as _json_mod
+            with open(args.instruments_json, 'r', encoding='utf-8') as _f:
+                _palette = _json_mod.load(_f)
+            _base_template_name = next(
+                (t for t in ('full', 'strings_only', 'chamber')
+                 if t in TEMPLATES and
+                 set(i['name'] for i in _palette.get('instruments', []))
+                 <= set(i['name'] for i in TEMPLATES[t]['instruments']) | {'flute', 'oboe', 'clarinet', 'bassoon', 'horn', 'trumpet', 'trombone'}),
+                args.template
+            )
+            _base = TEMPLATES[_base_template_name]
+            template = {
+                'instruments':   _palette['instruments'],
+                'perc_channel':  _base.get('perc_channel', 9),
+            }
+            _palette_label = _palette.get('palette_label', _palette.get('palette_key', 'custom'))
+            print(f"  Plantilla: paleta personalizada '{_palette_label}' "
+                  f"({len(template['instruments'])} instrumentos) "
+                  f"← {args.instruments_json}")
+            if _palette.get('rationale'):
+                print(f"  Rationale: {_palette['rationale'][:120]}...")
+        except Exception as _e:
+            print(f"  ⚠ No se pudo cargar --instruments-json: {_e}. Usando plantilla '{args.template}'.")
+            template = TEMPLATES[args.template]
+    else:
+        template = TEMPLATES[args.template]
+        print(f"  Plantilla: {args.template} ({len(template['instruments'])} instrumentos)")
 
     # ── Solo informe ──────────────────────────────────────────────────────────
     _raw_output = args.output or Path(args.midi).stem + '_orquestado'
