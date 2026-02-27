@@ -360,28 +360,81 @@ def build_plan(arc_name: str, n_bars: int, key: str = 'C', tempo: int = 120,
     return plan
 
 
+def _curve_to_spec(values: list, bar_offset: int, n_points: int = 4) -> str:
+    """
+    Convierte un subarray de curva a string 'BAR:VAL, BAR:VAL, ...'
+    muestreando n_points puntos representativos (inicio, puntos intermedios, fin).
+    Los índices de compás son absolutos (bar_offset-based).
+    """
+    n = len(values)
+    if n == 0:
+        return None
+    if n == 1:
+        return f"{bar_offset}:{values[0]:.2f}"
+    # Seleccionar índices uniformemente distribuidos
+    indices = sorted(set(
+        [0] +
+        [int(i * (n - 1) / (n_points - 1)) for i in range(1, n_points - 1)] +
+        [n - 1]
+    ))
+    parts = []
+    for idx in indices:
+        bar = bar_offset + idx
+        val = round(float(values[idx]), 2)
+        parts.append(f"{bar}:{val}")
+    return ", ".join(parts)
+
+
 def _build_pipeline_steps(sections: list, curves: dict, key: str,
                            tempo: int, arc_name: str) -> list:
     """
     Genera los pasos de pipeline sugeridos para este plan:
     qué herramientas llamar, en qué orden, con qué parámetros.
+    Incluye curvas de mutación temporal (--mt-*) derivadas del arco narrativo.
     """
     steps = []
     for i, sec in enumerate(sections):
+        start = sec['start_bar']
+        n     = sec['bars']
+
+        def _sec_curve(key_name):
+            c = curves.get(key_name, [])
+            if not c:
+                return None
+            return c[start:start + n]
+
+        density_spec  = _curve_to_spec(_sec_curve('activity')  or [], start)
+        register_spec = _curve_to_spec(_sec_curve('register')  or [], start)
+        harmony_spec  = _curve_to_spec(_sec_curve('harmony')   or [], start)
+        swing_spec    = _curve_to_spec(_sec_curve('swing')     or [], start)
+
+        flags = {
+            '--bars':              n,
+            '--key':               sec['key'],
+            '--tempo':             tempo,
+            '--mode':              'auto',
+            '--export-fingerprint': True,
+            '--no-gui':            True,
+        }
+        if density_spec:
+            flags['--mt-density'] = density_spec
+        if register_spec:
+            flags['--mt-register'] = register_spec
+        if harmony_spec:
+            flags['--mt-harmony-complexity'] = harmony_spec
+        if swing_spec:
+            flags['--mt-swing'] = swing_spec
+
         step = {
             'step':    i + 1,
             'tool':    'midi_dna_unified.py',
             'section': sec['id'],
             'label':   sec['label'],
-            'bars':    sec['bars'],
+            'bars':    n,
             'key':     sec['key'],
             'tempo':   tempo,
             'output':  f"seccion_{i+1:02d}_{sec['id']}_{sec['label'].replace(' ','_')}.mid",
-            'flags': {
-                '--bars':    sec['bars'],
-                '--mode':    'auto',
-                '--export-fingerprint': True,
-            }
+            'flags':   flags,
         }
         steps.append(step)
 

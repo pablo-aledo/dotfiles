@@ -4665,23 +4665,42 @@ def main():
         midi_paths = [args.melody, args.harmony, args.rhythm]
     elif args.inputs:
         midi_paths = [p for p in args.inputs if os.path.exists(p)]
-    else:
-        parser.print_help(); sys.exit(1)
+    # Si no hay fuentes MIDI se permite continuar en modo generativo puro
+    # (sin fusion de ADN externo). Solo se requieren --bars y --key.
 
     for p in midi_paths:
         if not os.path.exists(p):
             print(f"ERROR: no encontrado: {p}"); sys.exit(1)
 
     # ── Extraer ADN ───────────────────────────────────────────────────────────
-    print(f"\n[1/4] Extrayendo ADN de {len(midi_paths)} MIDI(s)…")
     dnas = []
-    for path in midi_paths:
-        print(f"\n  ▶ {os.path.basename(path)}")
-        dna = UnifiedDNA(path)
-        if dna.extract(verbose=args.verbose):
-            dnas.append(dna)
-    if not dnas:
-        print("ERROR: no se pudo extraer ADN."); sys.exit(1)
+    if midi_paths:
+        print(f"\n[1/4] Extrayendo ADN de {len(midi_paths)} MIDI(s)…")
+        for path in midi_paths:
+            print(f"\n  ▶ {os.path.basename(path)}")
+            dna = UnifiedDNA(path)
+            if dna.extract(verbose=args.verbose):
+                dnas.append(dna)
+        if not dnas:
+            print("ERROR: no se pudo extraer ADN."); sys.exit(1)
+    else:
+        print("\n[1/4] Modo standalone: generacion sin fuentes MIDI externas.")
+        # Crear un DNA sintetico con los parametros del argumento
+        _dna_ref = UnifiedDNA("synthetic")
+        if args.key:
+            _dna_ref.key_obj = parse_key_arg(args.key)
+        if args.tempo:
+            _dna_ref.tempo_bpm = float(args.tempo)
+        # Rellenar rhythm_pattern con un patron basico para n_bars
+        bpb = _dna_ref.time_sig[0]
+        _dna_ref.rhythm_pattern = [
+            [(0.0, float(bpb), 2.0, False)] for _ in range(max(args.bars, 16))
+        ]
+        _dna_ref.harmony_prog = [("I", bpb)] * max(args.bars, 16)
+        _dna_ref.tension_curve = [0.5] * max(args.bars, 16)
+        _dna_ref.activity_curve = [0.5] * max(args.bars, 16)
+        _dna_ref.rhythm_grid = __import__('numpy').ones(16) / 16.0
+        dnas = [_dna_ref]
 
     # Auto-asignación si se usan roles explícitos
     if args.melody and args.harmony and args.rhythm:

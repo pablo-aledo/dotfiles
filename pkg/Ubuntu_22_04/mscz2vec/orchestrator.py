@@ -2577,7 +2577,8 @@ def main():
     print(f"  Plantilla: {args.template} ({len(template['instruments'])} instrumentos)")
 
     # ── Solo informe ──────────────────────────────────────────────────────────
-    base_name = args.output or Path(args.midi).stem + '_orquestado'
+    _raw_output = args.output or Path(args.midi).stem + '_orquestado'
+    base_name = _raw_output[:-4] if _raw_output.endswith('.mid') else _raw_output
     report_path = base_name + '_sesion_FL.txt'
 
     if args.report_only:

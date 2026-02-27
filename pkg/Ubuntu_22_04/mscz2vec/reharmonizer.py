@@ -734,12 +734,24 @@ def build_rehar_midi(melody, prog_expanded, key_obj, tempo_bpm, time_sig,
         # Generar acompañamiento
         try:
             from midi_dna_unified import EmotionalController, FormGenerator, GrooveMap
-            ec = EmotionalController()
-            ec.tension  = [0.5] * n_bars
-            ec.arousal  = [0.5] * n_bars
-            ec.valencia = [0.5] * n_bars
+            _neutral = [0.5] * n_bars
+            ec = EmotionalController(
+                tension_curve=_neutral,
+                arousal_curve=_neutral,
+                valence_curve=_neutral,
+                stability_curve=_neutral,
+                activity_curve=_neutral,
+                emotional_arc_label='neutral',
+                n_bars=n_bars,
+            )
 
-            fg = FormGenerator()
+            fg = FormGenerator(
+                form_string='AABA',
+                section_map=[],
+                phrase_lengths=[4],
+                cadence_positions=[],
+                n_bars_out=n_bars,
+            )
 
             acc = generate_accompaniment(
                 prog_dna, key_obj, n_bars, ec, fg, beats_per_bar,

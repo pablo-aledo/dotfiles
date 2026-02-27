@@ -62,6 +62,11 @@ import argparse
 import subprocess
 import time
 import copy
+import warnings
+
+# Suprimir warnings de compatibilidad NumPy/SciPy al importar
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 import numpy as np
 
@@ -495,7 +500,8 @@ def apply_tension_to_dna(tension_values, source_dna):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def generate_with_preset(preset_name, midi_paths, n_bars, mode,
-                          output, mixer_script, verbose=False):
+                          output, mixer_script, verbose=False,
+                          key=None, tempo=None):
     """Genera un MIDI directamente con un preset sin abrir la GUI."""
     if preset_name not in TENSION_PRESETS:
         print(f"ERROR: preset desconocido '{preset_name}'. Disponibles: {list(TENSION_PRESETS)}")
@@ -511,8 +517,12 @@ def generate_with_preset(preset_name, midi_paths, n_bars, mode,
     print(f"  Preset '{preset_name}' → {n_bars} compases")
     print(f"  Curva de tensión: {spec[:60]}…")
 
-    cmd = [sys.executable, mixer_script] + midi_paths
+    cmd = [sys.executable, mixer_script] + (midi_paths or [])
     cmd += ['--output', output, '--bars', str(n_bars), '--mode', mode]
+    if key:
+        cmd += ['--key', key]
+    if tempo:
+        cmd += ['--tempo', str(tempo)]
     # Usar la tensión como guía de densidad y registro
     cmd += ['--mt-density', spec, '--mt-register', spec]
 
@@ -550,6 +560,8 @@ def main():
     parser.add_argument('--auto-generate', action='store_true',
                         help='Generar automáticamente al cerrar la GUI')
     parser.add_argument('--output',  default='tension_out.mid')
+    parser.add_argument('--key',     default=None, help='Tonalidad (ej: C, D, Fm).')
+    parser.add_argument('--tempo',   default=None, type=int, help='Tempo en BPM.')
     parser.add_argument('--mode',    default='auto',
                         choices=['auto','rhythm_melody','harmony_melody','full_blend',
                                  'custom','mosaic','energy','emotion'])
@@ -586,12 +598,11 @@ def main():
         if not args.preset:
             print("ERROR: --no-gui requiere --preset")
             sys.exit(1)
-        if not midi_paths:
-            print("ERROR: --no-gui requiere al menos un MIDI fuente")
-            sys.exit(1)
+        # midi_paths es opcional: sin fuentes MIDI genera desde el preset standalone
         ok = generate_with_preset(
             args.preset, midi_paths, args.bars, args.mode,
-            args.output, mixer_script, args.verbose
+            args.output, mixer_script, args.verbose,
+            key=args.key, tempo=args.tempo,
         )
         sys.exit(0 if ok else 1)
 
