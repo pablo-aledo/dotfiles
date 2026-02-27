@@ -1,3 +1,67 @@
+#!/usr/bin/env python3
+"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                        MSCZ2VEC  v1.0                                        ║
+║          Vectorización perceptual de partituras musicales                    ║
+║                                                                              ║
+║  Analiza una partitura (MusicXML, MSCZ, MIDI, etc.) y extrae vectores       ║
+║  de características musicales a múltiples niveles: melódico, armónico,      ║
+║  rítmico, tímbrico, formal y de percepción emocional unificada.              ║
+║                                                                              ║
+║  VECTORES DISPONIBLES:                                                       ║
+║    unified       — Vector 6D perceptual unificado (por defecto)              ║
+║    melodic       — Histograma de intervalos + estadísticas de pitch          ║
+║    harmonic      — Funciones armónicas y progresiones                        ║
+║    rhythmic      — Densidad, patrones y n-gramas rítmicos                    ║
+║    instrumental  — Familias de instrumentos y orquestación                   ║
+║    motif         — Motivos y estructura formal (Sequitur)                    ║
+║    form          — Vector de estructura formal                               ║
+║    emotion       — Vector semántico-emocional completo                       ║
+║    tension       — Perfil de tensión armónica                               ║
+║    stability     — Perfil de estabilidad tonal                               ║
+║    novelty       — Vector de novedad estructural                             ║
+║    entropy       — Entropía y sorpresa                                       ║
+║    lerdahl       — Energía según teoría de Lerdahl                          ║
+║    tonnetz       — Distancias en el Tonnetz                                  ║
+║    psychoacoustic — Características psicoamácusticas                         ║
+║    modal         — Intercambio modal                                         ║
+║    brightness    — Luminosidad tímbrica                                      ║
+║    all           — Todos los vectores anteriores                             ║
+║                                                                              ║
+║  USO:                                                                        ║
+║    python mscz2vec.py partitura.musicxml                                     ║
+║    python mscz2vec.py partitura.mscz --vector melodic                       ║
+║    python mscz2vec.py partitura.xml --vector harmonic rhythmic              ║
+║    python mscz2vec.py partitura.xml --vector all --output vec.json          ║
+║    python mscz2vec.py partitura.xml --vector unified harmonic --verbose     ║
+║    python mscz2vec.py partitura.xml --vector emotion tension stability      ║
+║    python mscz2vec.py partitura.xml --vector motif form --output motif.json ║
+║    python mscz2vec.py partitura.xml --custom-rules "intro:measure:1"        ║
+║      "motivo_a:notes:60,62,64,65" "estrib:recursive:intro,intro"           ║
+║    python mscz2vec.py partitura.xml --no-debug --vector unified             ║
+║    python mscz2vec.py partitura.xml --vector all --verbose                  ║
+║                                                                              ║
+║  OPCIONES:                                                                   ║
+║    input           Ruta a la partitura (MusicXML, MSCZ, MIDI, etc.)         ║
+║    --vector V [V…] Vectores a extraer (default: unified)                    ║
+║    --output FILE   Guardar resultado en JSON (default: solo imprime)         ║
+║    --custom-rules  Reglas para Sequitur: "nombre:tipo:valor" por argumento  ║
+║                    tipos: measure (nº compás), notes (lista MIDI),           ║
+║                           recursive (lista de nombres de reglas)            ║
+║    --no-debug      Desactivar mensajes de depuración (default: debug activo) ║
+║    --verbose       Informe detallado de cada análisis                        ║
+║                                                                              ║
+║  EJEMPLOS DE CUSTOM RULES:                                                   ║
+║    --custom-rules "intro:measure:1" "motivo_a:notes:60,62,64,65"           ║
+║                                                                              ║
+║  SALIDA:                                                                     ║
+║    Imprime los vectores solicitados por stdout.                              ║
+║    Con --output: guarda un JSON con todos los vectores solicitados.         ║
+║                                                                              ║
+║  DEPENDENCIAS: music21, numpy, scipy, sklearn                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+"""
+
 # =========================
 # DEBUG GLOBAL
 # =========================
@@ -24,6 +88,10 @@ from sklearn.cluster import AgglomerativeClustering
 from collections import defaultdict
 import copy
 import hashlib
+import sys
+import os
+import json
+import argparse
 from scipy.ndimage import gaussian_filter
 from scipy.signal import find_peaks
 
@@ -7184,42 +7252,169 @@ def unified_perception_vector(score):
 # EJECUCIÓN
 # =========================
 
-debug("Loading score...")
-score = converter.parse('./rainbow.musicxml')
-debug("Score loaded")
+def parse_custom_rule(rule_str):
+    """
+    Parsea una regla custom desde la línea de comandos.
+    Formato esperado: "nombre:tipo:valor"
+      - tipo 'measure'   → valor es un int (nº de compás)
+      - tipo 'notes'     → valor es una lista de enteros separados por comas
+      - tipo 'recursive' → valor es una lista de nombres de reglas separados por comas
+    Ejemplo: "intro:measure:1"  "motivo_a:notes:60,62,64,65"
+    """
+    parts = rule_str.split(":", 2)
+    if len(parts) != 3:
+        raise argparse.ArgumentTypeError(
+            f"Formato de regla inválido: '{rule_str}'. "
+            "Usa nombre:tipo:valor  (ej. intro:measure:1)"
+        )
+    name, rtype, raw_value = parts
+    if rtype == "measure":
+        value = int(raw_value)
+    elif rtype in ("notes", "recursive"):
+        value = [int(x) if rtype == "notes" else x.strip()
+                 for x in raw_value.split(",")]
+    else:
+        raise argparse.ArgumentTypeError(
+            f"Tipo de regla desconocido: '{rtype}'. "
+            "Valores válidos: measure, notes, recursive"
+        )
+    return CustomRule(name, rtype, value)
 
-custom_rules = [
-    CustomRule("intro", "measure", 1),  # Usar compás 1 como regla "intro"
-    # CustomRule("motivo_a", "notes", [60, 62, 64, 65]),  # Do-Re-Mi-Fa
-    # CustomRule("estribillo", "recursive", ["intro", "intro"])  # intro dos veces
-]
 
-# print(rhythmic_features(score))
-# print(melodic_features(score))
-# print(harmonic_features(score))
-# print(arpeggiated_chord_features(score))
-# print(harmonic_transition_features(score))
-# print(advanced_harmonic_features_vector(score))
-# print(ultra_advanced_features_vector(score))
-# print(instrumental_features(score))
-# print(motif_vector(score))
-# print(compass_motif_vector(score))
-# print(form_structure_vector(score))
-# print(sequitur_absolute_pitch_semantic_vector(score))
-# sequitur_absolute_pitch_semantic_vector_with_custom_rules(score, custom_rules)
-# print(novelty_structure_vector(score))
-# print(melodic_ngram_vector(score))
-# print(rhythmic_ngram_vector(score))
-# print(advanced_sequitur_form(score))
-# print(form_string_to_vector(advanced_sequitur_form(score)))
-# entropy_surprise_vector(score)
-# lerdahl_energy_vector(score)
-# tonnetz_distance_vector(score)
-# psychoacoustic_vector(score)
-# print(semantic_emotion_vector(score))
-# plot_measure_analytics(score)
-# density_dynamics_range_features(score)
-# print(generate_emotion_vector(score))
-# print(harmonic_graph_vector(score))
-# print(modal_interchange_features(score))
-print(unified_perception_vector(score))
+# Mapa de nombre de vector → función extractor
+VECTOR_EXTRACTORS = {
+    "melodic":       lambda s, _: melodic_features(s),
+    "harmonic":      lambda s, _: harmonic_features(s),
+    "rhythmic":      lambda s, _: rhythmic_features(s),
+    "instrumental":  lambda s, _: instrumental_features(s),
+    "motif":         lambda s, _: motif_vector(s),
+    "form":          lambda s, _: form_structure_vector(s),
+    "emotion":       lambda s, _: generate_emotion_vector(s),
+    "tension":       lambda s, _: harmonic_tension_profile(s),
+    "stability":     lambda s, _: tonal_stability_profile(s),
+    "novelty":       lambda s, _: novelty_structure_vector(s),
+    "entropy":       lambda s, _: entropy_surprise_vector(s),
+    "lerdahl":       lambda s, _: lerdahl_energy_vector(s),
+    "tonnetz":       lambda s, _: tonnetz_distance_vector(s),
+    "psychoacoustic": lambda s, _: psychoacoustic_vector(s),
+    "modal":         lambda s, _: modal_interchange_features(s),
+    "brightness":    lambda s, _: timbral_brightness_analysis(s),
+    "unified":       lambda s, _: unified_perception_vector(s),
+}
+
+ALL_VECTORS = list(VECTOR_EXTRACTORS.keys())
+
+
+def main():
+    global DEBUG
+
+    parser = argparse.ArgumentParser(
+        description='MSCZ2VEC — Vectorización perceptual de partituras musicales',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__
+    )
+    parser.add_argument(
+        'input',
+        help='Ruta a la partitura (MusicXML, MSCZ, MIDI, etc.)'
+    )
+    parser.add_argument(
+        '--vector', '-v',
+        nargs='+',
+        default=['unified'],
+        choices=ALL_VECTORS + ['all'],
+        metavar='VECTOR',
+        help=(
+            'Vectores a extraer. Opciones: ' + ', '.join(ALL_VECTORS) +
+            ', all  (default: unified)'
+        )
+    )
+    parser.add_argument(
+        '--output', '-o',
+        default=None,
+        metavar='FILE',
+        help='Guardar resultado en JSON (default: solo imprime por stdout)'
+    )
+    parser.add_argument(
+        '--custom-rules',
+        nargs='*',
+        default=[],
+        type=parse_custom_rule,
+        metavar='REGLA',
+        help=(
+            'Reglas Sequitur personalizadas con formato "nombre:tipo:valor". '
+            'Ej: --custom-rules "intro:measure:1" "motivo_a:notes:60,62,64,65"'
+        )
+    )
+    parser.add_argument(
+        '--no-debug',
+        action='store_true',
+        help='Desactivar mensajes de depuración (default: debug activo)'
+    )
+    parser.add_argument(
+        '--verbose',
+        action='store_true',
+        help='Informe detallado de cada análisis'
+    )
+    args = parser.parse_args()
+
+    # Aplicar flag de debug
+    DEBUG = not args.no_debug
+
+    # Validar fichero de entrada
+    if not os.path.exists(args.input):
+        print(f"ERROR: No se encontró el fichero '{args.input}'.")
+        sys.exit(1)
+
+    # Expandir 'all'
+    requested = ALL_VECTORS if 'all' in args.vector else args.vector
+
+    # Cargar partitura
+    debug("Loading score...")
+    score = converter.parse(args.input)
+    debug("Score loaded")
+
+    if args.verbose:
+        print(f"\n  Partitura: {args.input}")
+        print(f"  Vectores solicitados: {', '.join(requested)}\n")
+
+    # Extraer vectores
+    results = {}
+    for vec_name in requested:
+        if args.verbose or len(requested) > 1:
+            print(f"\n{'─'*50}")
+            print(f"  Extrayendo vector: {vec_name}")
+            print(f"{'─'*50}")
+        try:
+            result = VECTOR_EXTRACTORS[vec_name](score, args.custom_rules)
+            # Convertir arrays numpy a listas para JSON
+            if isinstance(result, np.ndarray):
+                results[vec_name] = result.tolist()
+            elif isinstance(result, dict):
+                # Serializar arrays numpy dentro del dict
+                results[vec_name] = {
+                    k: v.tolist() if isinstance(v, np.ndarray) else v
+                    for k, v in result.items()
+                }
+            else:
+                results[vec_name] = result
+            print(f"\n  [{vec_name}] → {results[vec_name]}")
+        except Exception as e:
+            print(f"  ⚠ Error extrayendo '{vec_name}': {e}")
+            if args.verbose:
+                import traceback
+                traceback.print_exc()
+            results[vec_name] = None
+
+    # Guardar en JSON si se solicitó
+    if args.output:
+        output_data = {
+            "source": args.input,
+            "vectors": results
+        }
+        with open(args.output, 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        print(f"\n  ✓ Vectores guardados en: {args.output}")
+
+
+if __name__ == '__main__':
+    main()
