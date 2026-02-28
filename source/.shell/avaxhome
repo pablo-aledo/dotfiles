@@ -211,23 +211,25 @@ avhome_get_titles_2(){
     cat dl | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|' > facets
 }
 
-avhome_get_new_titles_2(){
-    mkdir -p ~/servers/avxhome
-    cd ~/servers/avxhome
-
-    url='https://avxhm.se/ebooks/facet/Development/Drawing/Finance/Painting/Physics/Programming/SCIENCE/Science/science'
-
-    if [ "$AVH_PROXY_IP" != "" ]
-    then
-		pemflag=`[ "$AVH_PROXY_PEM" != "" ] && echo "-i $AVH_PROXY_PEM"; [ "$AVH_PROXY_PEM" = "" ] && echo ""`
-        ssh `echo $pemflag` -p $AVH_PROXY_PORT -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q --no-check-certificate $url -O -" > dl
-    else
-        wget -q --no-check-certificate $url -O dl 2>/dev/null
-    fi
-
-    cat dl | grep title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep '|' > facets_new
-    comm -13 <(cat facets | sort) <(cat facets_new | sort)
-    \mv facets_new facets
+avhome_get_new_titles_2 () {
+	mkdir -p ~/servers/avxhome
+	cd ~/servers/avxhome
+	url='https://avxhm.se/ebooks' 
+	if [ "$AVH_PROXY_IP" != "" ]
+	then
+		pemflag=`[ "$AVH_PROXY_PEM" != "" ] && echo "-i $AVH_PROXY_PEM"; [ "$AVH_PROXY_PEM" = "" ] && echo ""` 
+		ssh `echo $pemflag` -p $AVH_PROXY_PORT -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PasswordAuthentication=no $AVH_PROXY_USER@$AVH_PROXY_IP "wget -q --no-check-certificate $url -O -" > dl
+	else
+		wget -q --no-check-certificate $url -O dl 2> /dev/null
+	fi
+	cat dl | grep 'color: green' | while read line
+	do
+		title=$(echo $line | cut -d'>' -f3 | cut -d'<' -f1) 
+		link=$(echo $line | cut -d'"' -f4) 
+		echo "$link|$title"
+	done > facets_new
+	comm -13 <(cat facets | sort) <(cat facets_new | sort)
+	\mv facets_new facets
 }
 
 avhome_get_new_titles_3(){
