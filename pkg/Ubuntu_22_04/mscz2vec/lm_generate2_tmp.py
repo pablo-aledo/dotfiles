@@ -118,7 +118,8 @@ def decode_to_midi(model: PianoRollVAE,
     roll_np = roll.squeeze(0).numpy()             # [T, 360]
 
     path = roll_to_midi(roll_np, bpm, instruments, output_path,
-                        frame_ms=frame_ms)
+                        frame_ms=frame_ms,
+                        min_peak=0.30, valley_ratio=0.40, max_note_frames=24)
     return path
 
 

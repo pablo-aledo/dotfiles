@@ -140,31 +140,97 @@ def midi_to_roll(file_path: str,
 #  TENSOR PIANO ROLL → MIDI
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _segment_pitch(sig: np.ndarray,
+                   min_peak: float = 0.30,
+                   valley_ratio: float = 0.40,
+                   max_frames: int = 24) -> list[tuple[int, int, float]]:
+    """
+    Segmenta la activación 1-D de un pitch en notas discretas.
+
+    Diseñado para outputs de VAE: la señal nunca llega a cero entre notas,
+    sino que forma colinas con valles parciales.
+
+    Algoritmo de avance lineal estricto (sin backtrack, sin solapamiento):
+      1. Ignorar todo lo que esté bajo min_peak (fondo del decoder).
+      2. Al encontrar min_peak, buscar el pico local avanzando mientras sube.
+      3. Definir cutoff = pico * valley_ratio.
+      4. Avanzar hasta que la señal caiga bajo cutoff o se alcance max_frames.
+      5. Emitir nota y continuar desde el fin (sin solapamiento garantizado).
+
+    min_peak:     vel mínima para considerar que hay nota real (ignora fondo ~0.08)
+    valley_ratio: fracción del pico bajo la cual se considera fin de nota
+    max_frames:   duración máxima en frames (hard cap para evitar notas eternas)
+
+    Retorna lista de (frame_on, frame_off, peak_vel).
+    """
+    T = len(sig)
+    notes = []
+    f = 0
+
+    while f < T:
+        # Saltar fondo (activación residual del decoder)
+        if sig[f] < min_peak:
+            f += 1
+            continue
+
+        # Encontrar el pico local: avanzar mientras la señal sube o se mantiene
+        note_start = f
+        peak_val   = sig[f]
+        f += 1
+        while f < T and f - note_start < max_frames:
+            v = sig[f]
+            if v > peak_val:
+                peak_val = v
+                f += 1
+            elif v >= peak_val * 0.90:   # plateau — mismo pico
+                f += 1
+            else:
+                break   # empieza a descender: hemos pasado el pico
+
+        # Verificación: el pico real supera min_peak (puede haberse colado ruido)
+        if peak_val < min_peak:
+            continue
+
+        # Cutoff dinámico basado en el pico real
+        cutoff = peak_val * valley_ratio
+
+        # Avanzar hasta el fin de la nota (valle o max_frames)
+        note_end = f
+        while note_end < T and sig[note_end] >= cutoff:
+            note_end += 1
+            if note_end - note_start >= max_frames:
+                break
+
+        notes.append((note_start, note_end, peak_val))
+        f = note_end   # continuar justo después — sin solapamiento
+
+    return notes
+
+
 def roll_to_midi(roll: np.ndarray,
                  bpm: float,
                  instruments: list[dict] | None = None,
                  output_path: str = 'output.mid',
                  frame_ms: int = FRAME_MS2,
-                 velocity_threshold: float = 0.05,
-                 reattack_ratio: float = 0.55,
-                 max_note_frames: int = 32,
+                 min_peak: float = 0.30,
+                 valley_ratio: float = 0.40,
+                 max_note_frames: int = 24,
                  ) -> str:
     """
     Convierte tensor piano roll [T, F*P] a fichero MIDI.
 
-    Algoritmo:
-    - Para cada pitch detecta runs de frames activos.
-    - Un run se corta (re-ataque) cuando la velocity cae más de reattack_ratio
-      respecto al pico del run, o cuando supera max_note_frames de duración.
-      Esto evita notas interminables cuando el VAE produce activaciones continuas.
-    - La velocity de cada nota = máximo del run, re-escalado a [1,127].
+    Utiliza _segment_pitch() para separar las notas del output del VAE,
+    que produce activaciones continuas (nunca exactamente cero) en lugar
+    del piano roll original con ceros limpios.
 
-    reattack_ratio: si vel[f] < pico_run * reattack_ratio → cierra nota y abre nueva.
-    max_note_frames: duración máxima de una nota en frames (default 32 = 4s a 8fps).
+    min_peak:       vel mínima para considerar nota real (default 0.30).
+                    Aumentar si hay demasiadas notas fantasma.
+                    Reducir si faltan notas reales.
+    valley_ratio:   fracción del pico que define el fin de la nota (default 0.40).
+                    Reducir para notas más largas; aumentar para más cortas.
+    max_note_frames: duración máxima en frames (default 24 = 3s a 8fps).
 
     instruments: lista de dicts {'name', 'role'} compatible con orchestrator.py.
-    
-    Retorna la ruta del fichero creado.
     """
     tempo_us    = int(60_000_000 / max(bpm, 20))
     frame_ticks = int(TICKS_OUT * bpm * frame_ms / 60_000)
@@ -176,7 +242,6 @@ def roll_to_midi(roll: np.ndarray,
     t0.append(MetaMessage('set_tempo', tempo=tempo_us, time=0))
     mid.tracks.append(t0)
 
-    # Instrumento por familia
     INSTR_PROG = {
         'piano': 0, 'electric_piano': 4, 'organ': 19, 'harpsichord': 6,
         'vibraphone': 11, 'celesta': 8,
@@ -199,16 +264,14 @@ def roll_to_midi(roll: np.ndarray,
         'percussion': {'name': 'drums',      'program': 0},
     }
 
-    # Mapa familia → instrumento
     instr_by_family: dict[str, dict] = {}
     if instruments:
         for instr in instruments:
             name = instr.get('name', '')
             fam  = INSTR_TO_FAMILY.get(name, 'strings')
-            if fam not in instr_by_family:   # primer instrumento por familia
+            if fam not in instr_by_family:
                 prog = INSTR_PROG.get(name, 40)
                 instr_by_family[fam] = {'name': name, 'program': prog}
-    # Rellenar familias sin instrumento asignado con defaults
     for fam, cfg in DEFAULT_INSTRS.items():
         if fam not in instr_by_family:
             instr_by_family[fam] = cfg
@@ -216,15 +279,15 @@ def roll_to_midi(roll: np.ndarray,
     T = roll.shape[0]
 
     for fam_idx, fam in enumerate(FAMILIES):
-        cfg     = instr_by_family.get(fam)
+        cfg = instr_by_family.get(fam)
         if cfg is None:
             continue
 
         name    = cfg['name']
         program = cfg['program']
-        channel = fam_idx if fam_idx != 4 else 9  # perc siempre en 9
+        channel = fam_idx if fam_idx != 4 else 9
         if channel == 9 and fam != 'percussion':
-            channel = fam_idx + 10               # evitar colisión
+            channel = fam_idx + 10
 
         track = MidiTrack()
         track.append(MetaMessage('track_name', name=name, time=0))
@@ -232,75 +295,35 @@ def roll_to_midi(roll: np.ndarray,
             track.append(Message('program_change', channel=channel,
                                  program=program, time=0))
 
-        # Construir lista de eventos (tick_abs, tipo, pitch, velocity)
         note_events: list[tuple[int, str, int, int]] = []
-
         base_col = fam_idx * N_PITCHES
 
         for pi in range(N_PITCHES):
             pitch = PITCH_LO + pi
             col   = base_col + pi
 
-            # ── Detectar runs con re-ataque y duración máxima ──────────────
-            in_note   = False
-            run_start = 0
-            run_vels  = []
-            run_peak  = 0.0
+            sig = roll[:, col]   # vista 1-D del pitch a lo largo del tiempo
 
-            def _commit_note(f_end):
-                vel_midi = int(np.clip(max(run_vels) * 127, 1, 127))
-                note_events.append((run_start * frame_ticks, 'on',  pitch, vel_midi))
-                note_events.append((f_end     * frame_ticks, 'off', pitch, 0))
+            for f_on, f_off, peak_vel in _segment_pitch(
+                    sig, min_peak=min_peak,
+                    valley_ratio=valley_ratio,
+                    max_frames=max_note_frames):
+                vel_midi = int(np.clip(peak_vel * 127, 1, 127))
+                note_events.append((f_on  * frame_ticks, 'on',  pitch, vel_midi))
+                note_events.append((f_off * frame_ticks, 'off', pitch, 0))
 
-            for f in range(T):
-                vel_norm = float(roll[f, col])
-                active   = vel_norm >= velocity_threshold
-
-                if active and not in_note:
-                    in_note   = True
-                    run_start = f
-                    run_vels  = [vel_norm]
-                    run_peak  = vel_norm
-
-                elif active and in_note:
-                    # Re-ataque: caída brusca respecto al pico → cierra y abre
-                    if vel_norm < run_peak * reattack_ratio and run_peak > velocity_threshold:
-                        _commit_note(f)
-                        run_start = f
-                        run_vels  = [vel_norm]
-                        run_peak  = vel_norm
-                    else:
-                        run_vels.append(vel_norm)
-                        if vel_norm > run_peak:
-                            run_peak = vel_norm
-
-                    # Duración máxima: cortar y continuar
-                    if (f - run_start) >= max_note_frames:
-                        _commit_note(f)
-                        run_start = f
-                        run_vels  = [vel_norm]
-                        run_peak  = vel_norm
-
-                elif not active and in_note:
-                    _commit_note(f)
-                    in_note = False
-
-            # Cerrar nota abierta al final
-            if in_note:
-                _commit_note(T)
-
-        # Ordenar por tick y convertir a delta-time
+        # off antes que on en el mismo tick (evita solapamientos en reproductores)
         note_events.sort(key=lambda e: (e[0], 0 if e[1] == 'off' else 1))
 
         prev_tick = 0
         for tick_abs, etype, pitch, vel in note_events:
             dt = max(0, tick_abs - prev_tick)
             if etype == 'on':
-                track.append(Message('note_on', channel=channel,
+                track.append(Message('note_on',  channel=channel,
                                      note=pitch, velocity=vel, time=dt))
             else:
                 track.append(Message('note_off', channel=channel,
-                                     note=pitch, velocity=0, time=dt))
+                                     note=pitch, velocity=0,   time=dt))
             prev_tick = tick_abs
 
         if note_events:
