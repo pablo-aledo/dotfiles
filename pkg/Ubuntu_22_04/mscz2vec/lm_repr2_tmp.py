@@ -494,8 +494,7 @@ def main():
     if args.roundtrip:
         print(f"\n  Roundtrip: roll → MIDI → {args.output}")
         roll_to_midi(roll, bpm, output_path=args.output,
-                     frame_ms=args.frame_ms,
-                     velocity_threshold=args.threshold)
+                     frame_ms=args.frame_ms)
         # Verificar calidad del roundtrip
         roll2, bpm2 = midi_to_roll(args.output, args.frame_ms, args.max_frames)
         if roll2 is not None:
