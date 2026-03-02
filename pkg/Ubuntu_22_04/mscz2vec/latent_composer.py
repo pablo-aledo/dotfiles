@@ -1378,41 +1378,96 @@ class Trainer:
                  early_stop_patience: int = 15,
                  pos_weight: float = 10.0,
                  spatial_reg: str = 'none',
-                 lambda_spatial: float = 0.05):
-        self.model          = model
-        self.optimizer      = optimizer
-        self.model_dir      = model_dir
-        self.beta_start     = beta_start
-        self.beta_end       = beta_end
-        self.beta_warmup    = beta_warmup_epochs
-        self.patience       = early_stop_patience
-        self.pos_weight     = pos_weight
-        self.spatial_reg    = spatial_reg
-        self.lambda_spatial = lambda_spatial
+                 lambda_spatial: float = 0.05,
+                 kl_threshold: float = 5.0,
+                 kl_warmup_window: int = 3):
+        self.model             = model
+        self.optimizer         = optimizer
+        self.model_dir         = model_dir
+        self.beta_start        = beta_start
+        self.beta_end          = beta_end
+        self.beta_warmup       = beta_warmup_epochs
+        self.patience          = early_stop_patience
+        self.pos_weight        = pos_weight
+        self.spatial_reg       = spatial_reg
+        self.lambda_spatial    = lambda_spatial
+        self.kl_threshold      = kl_threshold
+        self.kl_warmup_window  = kl_warmup_window
 
-        self.history        = {'train': [], 'val': [], 'val_recon': [], 'beta': []}
+        self.history        = {'train': [], 'val': [], 'val_recon': [],
+                               'val_kl': [], 'beta': []}
         self.best_val_loss  = float('inf')
         self.best_val_recon = float('inf')
         self.no_improve     = 0
         self.start_epoch    = 0
+        # Estado interno del warmup adaptativo.
+        # Se recalcula desde history['val_kl'] al reanudar con --resume.
+        self._kl_above_epochs = 0    # épocas consecutivas con KL > threshold
+        self._warmup_started  = False # True cuando β empieza a subir
+        self._warmup_start_ep = 0     # época absoluta en que arrancó el warmup
 
-    def _beta(self, epoch: int) -> float:
-        """Beta annealing lineal durante los primeros beta_warmup epochs."""
+    def _recalc_warmup_state(self):
+        """Reconstruye el estado del warmup adaptativo desde el historial."""
+        kl_hist = self.history.get('val_kl', [])
+        self._kl_above_epochs = 0
+        self._warmup_started  = False
+        self._warmup_start_ep = 0
+        for ep, kl in enumerate(kl_hist):
+            if not self._warmup_started:
+                if kl > self.kl_threshold:
+                    self._kl_above_epochs += 1
+                else:
+                    self._kl_above_epochs = 0
+                if self._kl_above_epochs >= self.kl_warmup_window:
+                    self._warmup_started  = True
+                    self._warmup_start_ep = ep + 1
+
+    def _beta(self, epoch: int, current_kl: float = None) -> float:
+        """
+        Beta annealing adaptativo basado en KL.
+
+        β permanece en 0 hasta que el KL supera kl_threshold durante
+        kl_warmup_window épocas consecutivas. A partir de ese punto sube
+        linealmente durante beta_warmup épocas hasta beta_end.
+
+        Si beta_warmup <= 0 se salta el warmup y se devuelve beta_end
+        directamente (comportamiento original).
+        """
         if self.beta_warmup <= 0:
             return self.beta_end
-        t = min(epoch / self.beta_warmup, 1.0)
+
+        # Actualizar contador de épocas con KL alto si se pasa el KL actual
+        if current_kl is not None:
+            if current_kl > self.kl_threshold:
+                self._kl_above_epochs += 1
+            else:
+                self._kl_above_epochs = 0
+            # Disparar el warmup lineal si se alcanza la ventana
+            if (not self._warmup_started and
+                    self._kl_above_epochs >= self.kl_warmup_window):
+                self._warmup_started  = True
+                self._warmup_start_ep = epoch
+
+        if not self._warmup_started:
+            return 0.0
+
+        # Warmup lineal desde _warmup_start_ep durante beta_warmup épocas
+        t = min((epoch - self._warmup_start_ep) / self.beta_warmup, 1.0)
         return self.beta_start + t * (self.beta_end - self.beta_start)
 
     def save_checkpoint(self, epoch: int, val_loss: float, is_best: bool):
         import torch
         state = {
-            'epoch':          epoch,
-            'model_state':    self.model.state_dict(),
-            'optimizer_state':self.optimizer.state_dict(),
-            'best_val_loss':  self.best_val_loss,
-            'best_val_recon': self.best_val_recon,
-            'no_improve':     self.no_improve,
-            'history':        self.history,
+            'epoch':              epoch,
+            'model_state':        self.model.state_dict(),
+            'optimizer_state':    self.optimizer.state_dict(),
+            'best_val_loss':      self.best_val_loss,
+            'best_val_recon':     self.best_val_recon,
+            'no_improve':         self.no_improve,
+            'history':            self.history,
+            'kl_above_epochs':    self._kl_above_epochs,
+            'warmup_started':     self._warmup_started,
+            'warmup_start_ep':    self._warmup_start_ep,
         }
         torch.save(state, self.model_dir / self.CHECKPOINT_NAME)
         if is_best:
@@ -1430,11 +1485,19 @@ class Trainer:
         state = torch.load(path, map_location='cpu')
         self.model.load_state_dict(state['model_state'])
         self.optimizer.load_state_dict(state['optimizer_state'])
-        self.best_val_loss  = state['best_val_loss']
-        self.best_val_recon = state.get('best_val_recon', float('inf'))
-        self.no_improve     = state['no_improve']
-        self.history        = state['history']
-        self.start_epoch    = state['epoch'] + 1
+        self.best_val_loss      = state['best_val_loss']
+        self.best_val_recon     = state.get('best_val_recon', float('inf'))
+        self.no_improve         = state['no_improve']
+        self.history            = state['history']
+        self.start_epoch        = state['epoch'] + 1
+        # Restaurar estado del warmup adaptativo; si no existe en el checkpoint
+        # (modelos antiguos), recalcularlo desde el historial de KL.
+        if 'warmup_started' in state:
+            self._kl_above_epochs = state['kl_above_epochs']
+            self._warmup_started  = state['warmup_started']
+            self._warmup_start_ep = state['warmup_start_ep']
+        else:
+            self._recalc_warmup_state()
         print(f"[train] Reanudando desde época {self.start_epoch}  "
               f"(mejor val_loss={self.best_val_loss:.4f})")
 
@@ -1507,7 +1570,9 @@ class Trainer:
 
         print(f"\n{'═'*60}")
         print(f"  ENTRENAMIENTO  —  {epochs} épocas máx.")
-        print(f"  Beta warmup: {self.beta_warmup} épocas  "
+        print(f"  Beta warmup adaptativo: β sube cuando KL>{self.kl_threshold:.1f} "
+              f"durante {self.kl_warmup_window} épocas consecutivas")
+        print(f"  Duración del warmup lineal: {self.beta_warmup} épocas "
               f"({self.beta_start:.2f} → {self.beta_end:.2f})")
         print(f"  Early stopping: paciencia {self.patience} épocas")
         print(f"  Criterio de mejora: val_rec durante warmup, val_loss después")
@@ -1516,25 +1581,41 @@ class Trainer:
         print(f"  Regularización espacial: {reg_info}")
         print(f"{'═'*60}\n")
 
-        total_epochs   = self.start_epoch + epochs
-        epoch_times    = []
-        train_start    = time.time()
+        total_epochs = self.start_epoch + epochs
+        epoch_times  = []
+        train_start  = time.time()
+
+        # Usar el KL de la última época conocida como punto de partida
+        # (relevante solo al reanudar con --resume)
+        last_kl = (self.history['val_kl'][-1]
+                   if self.history.get('val_kl') else 0.0)
 
         for epoch in range(self.start_epoch, total_epochs):
-            beta     = self._beta(epoch)
+            # β se calcula ANTES de la época usando el KL de la época anterior.
+            # En la época 0 last_kl=0 → β=0 siempre, el encoder aprende libre.
+            beta     = self._beta(epoch, current_kl=last_kl)
             epoch_t0 = time.time()
 
-            # Estimación ETA basada en la media de épocas anteriores
+            # Indicador de estado del warmup en la cabecera
+            if not self._warmup_started:
+                warmup_status = (f"  [esperando KL>{self.kl_threshold:.1f}  "
+                                 f"{self._kl_above_epochs}/{self.kl_warmup_window}]")
+            elif beta < self.beta_end:
+                ep_since = epoch - self._warmup_start_ep
+                warmup_status = f"  [warmup {ep_since}/{self.beta_warmup}]"
+            else:
+                warmup_status = ""
+
+            # ETA
             if epoch_times:
                 avg_epoch   = sum(epoch_times) / len(epoch_times)
-                epochs_left = total_epochs - epoch
-                eta_secs    = avg_epoch * epochs_left
+                eta_secs    = avg_epoch * (total_epochs - epoch)
                 eta_str     = f"  ETA {_fmt_time(eta_secs)}"
             else:
                 eta_str = ""
 
-            # Cabecera de la época
-            print(f"  Época {epoch+1:>4}/{total_epochs}  β={beta:.3f}{eta_str}", flush=True)
+            print(f"  Época {epoch+1:>4}/{total_epochs}  β={beta:.3f}"
+                  f"{eta_str}{warmup_status}", flush=True)
 
             tr_loss, tr_recon, tr_kl = self._run_epoch(
                 train_loader, training=True,  beta=beta,
@@ -1542,6 +1623,8 @@ class Trainer:
             vl_loss, vl_recon, vl_kl = self._run_epoch(
                 val_loader,   training=False, beta=beta,
                 epoch=epoch, n_epochs=total_epochs)
+
+            last_kl = vl_kl   # se usará en la siguiente iteración
 
             epoch_elapsed = time.time() - epoch_t0
             epoch_times.append(epoch_elapsed)
@@ -1551,12 +1634,12 @@ class Trainer:
             self.history['train'].append(tr_loss)
             self.history['val'].append(vl_loss)
             self.history['val_recon'].append(vl_recon)
+            self.history['val_kl'].append(vl_kl)
             self.history['beta'].append(beta)
 
             # ── Criterio de mejora dual ───────────────────────────────────────
-            # Durante el warmup (β < β_end): vigilar val_recon, porque el loss
-            # total crece artificialmente por el aumento de β×KL aunque la
-            # reconstrucción mejore. Después del warmup: vigilar val_loss total.
+            # Durante el warmup (β < β_end): vigilar val_recon.
+            # Después del warmup: vigilar val_loss total.
             in_warmup  = beta < self.beta_end
             monitor    = vl_recon if in_warmup else vl_loss
             best_sofar = self.best_val_recon if in_warmup else self.best_val_loss
@@ -1564,7 +1647,7 @@ class Trainer:
 
             is_best = monitor < best_sofar
             if is_best:
-                self.best_val_recon = vl_recon   # actualizar siempre ambos
+                self.best_val_recon = vl_recon
                 self.best_val_loss  = vl_loss
                 self.no_improve     = 0
             else:
@@ -1572,15 +1655,15 @@ class Trainer:
 
             self.save_checkpoint(epoch, vl_loss, is_best)
 
-            # Barra de progreso basada en val_recon (no se distorsiona con β)
+            # Barra de progreso basada en val_recon
             ref_recon = self.history['val_recon'][0] if self.history['val_recon'] else vl_recon
             bar_w     = 24
             progress  = min(int((1 - vl_recon / max(ref_recon, 1e-6)) * bar_w), bar_w)
             bar       = '█' * max(progress, 0) + '░' * (bar_w - max(progress, 0))
 
             best_marker = f' ◀ mejor ({criterion})' if is_best else ''
-            stop_marker = f'  [sin mejora {self.no_improve}/{self.patience}]' \
-                          if self.no_improve > 0 else ''
+            stop_marker = (f'  [sin mejora {self.no_improve}/{self.patience}]'
+                           if self.no_improve > 0 else '')
 
             print(f"         train={tr_loss:.4f}  val={vl_loss:.4f} "
                   f"(rec={vl_recon:.4f} kl={vl_kl:.4f})  │{bar}│  "
@@ -1719,6 +1802,8 @@ def cmd_train(args):
         pos_weight         = args.pos_weight,
         spatial_reg        = args.spatial_reg,
         lambda_spatial     = args.lambda_spatial,
+        kl_threshold       = args.kl_threshold,
+        kl_warmup_window   = args.kl_warmup_window,
     )
 
     if args.resume:
@@ -2749,6 +2834,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument('--lambda-spatial', type=float, default=0.05,
         dest='lambda_spatial', metavar='FLOAT',
         help='Peso del término de regularización espacial (default: 0.05)')
+    p_train.add_argument('--kl-threshold',    type=float, default=5.0,
+        dest='kl_threshold', metavar='FLOAT',
+        help='KL mínimo para arrancar el warmup de beta (default: 5.0)')
+    p_train.add_argument('--kl-warmup-window', type=int, default=3,
+        dest='kl_warmup_window', metavar='INT',
+        help='Épocas consecutivas con KL>threshold para disparar warmup (default: 3)')
     p_train.add_argument('--resume',      action='store_true',
         help='Reanudar desde el último checkpoint')
     p_train.add_argument('--report',      action='store_true',
