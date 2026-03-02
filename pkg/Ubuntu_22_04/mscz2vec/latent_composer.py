@@ -1380,7 +1380,8 @@ class Trainer:
                  spatial_reg: str = 'none',
                  lambda_spatial: float = 0.05,
                  kl_threshold: float = 5.0,
-                 kl_warmup_window: int = 3):
+                 kl_warmup_window: int = 3,
+                 freeze_decoder_epochs: int = 0):
         self.model             = model
         self.optimizer         = optimizer
         self.model_dir         = model_dir
@@ -1391,8 +1392,9 @@ class Trainer:
         self.pos_weight        = pos_weight
         self.spatial_reg       = spatial_reg
         self.lambda_spatial    = lambda_spatial
-        self.kl_threshold      = kl_threshold
-        self.kl_warmup_window  = kl_warmup_window
+        self.kl_threshold          = kl_threshold
+        self.kl_warmup_window      = kl_warmup_window
+        self.freeze_decoder_epochs = freeze_decoder_epochs
 
         self.history        = {'train': [], 'val': [], 'val_recon': [],
                                'val_kl': [], 'beta': []}
@@ -1405,6 +1407,16 @@ class Trainer:
         self._kl_above_epochs = 0    # épocas consecutivas con KL > threshold
         self._warmup_started  = False # True cuando β empieza a subir
         self._warmup_start_ep = 0     # época absoluta en que arrancó el warmup
+
+    # Nombres de los módulos del decoder (usados para congelar/descongelar)
+    _DECODER_MODULES = ('dec_input', 'gru_dec', 'role_decoders')
+
+    def _set_decoder_grad(self, requires_grad: bool):
+        """Activa o congela los gradientes de todos los parámetros del decoder."""
+        raw = self.model.module if hasattr(self.model, 'module') else self.model
+        for name, param in raw.named_parameters():
+            if any(name.startswith(m) for m in self._DECODER_MODULES):
+                param.requires_grad = requires_grad
 
     def _recalc_warmup_state(self):
         """Reconstruye el estado del warmup adaptativo desde el historial."""
@@ -1468,6 +1480,8 @@ class Trainer:
             'kl_above_epochs':    self._kl_above_epochs,
             'warmup_started':     self._warmup_started,
             'warmup_start_ep':    self._warmup_start_ep,
+            'freeze_done':        (epoch >= self.freeze_decoder_epochs
+                                  if self.freeze_decoder_epochs > 0 else True),
         }
         torch.save(state, self.model_dir / self.CHECKPOINT_NAME)
         if is_best:
@@ -1498,6 +1512,11 @@ class Trainer:
             self._warmup_start_ep = state['warmup_start_ep']
         else:
             self._recalc_warmup_state()
+        # Restaurar estado de congelación del decoder
+        freeze_done = state.get('freeze_done', True)
+        if self.freeze_decoder_epochs > 0 and not freeze_done:
+            self._set_decoder_grad(False)
+            print(f'[train] Decoder sigue congelado (reanudando)')
         print(f"[train] Reanudando desde época {self.start_epoch}  "
               f"(mejor val_loss={self.best_val_loss:.4f})")
 
@@ -1576,6 +1595,8 @@ class Trainer:
               f"({self.beta_start:.2f} → {self.beta_end:.2f})")
         print(f"  Early stopping: paciencia {self.patience} épocas")
         print(f"  Criterio de mejora: val_rec durante warmup, val_loss después")
+        if self.freeze_decoder_epochs > 0:
+            print(f"  Decoder congelado: primeras {self.freeze_decoder_epochs} épocas")
         reg_info = (f"{self.spatial_reg}  λ={self.lambda_spatial}"
                     if self.spatial_reg != 'none' else "none")
         print(f"  Regularización espacial: {reg_info}")
@@ -1591,12 +1612,28 @@ class Trainer:
                    if self.history.get('val_kl') else 0.0)
 
         for epoch in range(self.start_epoch, total_epochs):
+            # Congelar / descongelar decoder según época
+            if self.freeze_decoder_epochs > 0:
+                if epoch == self.start_epoch:
+                    # Al arrancar: congelar si todavía estamos en la fase de freeze
+                    frozen = epoch < self.freeze_decoder_epochs
+                    self._set_decoder_grad(not frozen)
+                    if frozen:
+                        print(f"  [decoder congelado hasta época {self.freeze_decoder_epochs}]")
+                elif epoch == self.freeze_decoder_epochs:
+                    # Descongelar el decoder
+                    self._set_decoder_grad(True)
+                    print(f"\n  [decoder descongelado en época {epoch+1}]")
+
             # β se calcula ANTES de la época usando el KL de la época anterior.
             # En la época 0 last_kl=0 → β=0 siempre, el encoder aprende libre.
             beta     = self._beta(epoch, current_kl=last_kl)
             epoch_t0 = time.time()
 
             # Indicador de estado del warmup en la cabecera
+            freeze_status = (f"  [decoder frozen {epoch+1}/{self.freeze_decoder_epochs}]"
+                             if (self.freeze_decoder_epochs > 0
+                                 and epoch < self.freeze_decoder_epochs) else "")
             if not self._warmup_started:
                 warmup_status = (f"  [esperando KL>{self.kl_threshold:.1f}  "
                                  f"{self._kl_above_epochs}/{self.kl_warmup_window}]")
@@ -1615,7 +1652,7 @@ class Trainer:
                 eta_str = ""
 
             print(f"  Época {epoch+1:>4}/{total_epochs}  β={beta:.3f}"
-                  f"{eta_str}{warmup_status}", flush=True)
+                  f"{eta_str}{freeze_status}{warmup_status}", flush=True)
 
             tr_loss, tr_recon, tr_kl = self._run_epoch(
                 train_loader, training=True,  beta=beta,
@@ -1802,8 +1839,9 @@ def cmd_train(args):
         pos_weight         = args.pos_weight,
         spatial_reg        = args.spatial_reg,
         lambda_spatial     = args.lambda_spatial,
-        kl_threshold       = args.kl_threshold,
-        kl_warmup_window   = args.kl_warmup_window,
+        kl_threshold          = args.kl_threshold,
+        kl_warmup_window      = args.kl_warmup_window,
+        freeze_decoder_epochs = args.freeze_decoder_epochs,
     )
 
     if args.resume:
@@ -2834,6 +2872,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument('--lambda-spatial', type=float, default=0.05,
         dest='lambda_spatial', metavar='FLOAT',
         help='Peso del término de regularización espacial (default: 0.05)')
+    p_train.add_argument('--freeze-decoder-epochs', type=int, default=0,
+        dest='freeze_decoder_epochs', metavar='INT',
+        help='Congelar el decoder durante N épocas iniciales para forzar '
+             'al encoder a usar z (default: 0 = desactivado)')
     p_train.add_argument('--kl-threshold',    type=float, default=5.0,
         dest='kl_threshold', metavar='FLOAT',
         help='KL mínimo para arrancar el warmup de beta (default: 5.0)')
