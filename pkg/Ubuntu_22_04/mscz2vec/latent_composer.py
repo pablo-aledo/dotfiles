@@ -593,14 +593,122 @@ def _std(values: list) -> float:
 #  COMANDO: prepare
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _prepare_one_midi(args_tuple):
+    """
+    Worker function para paralelizar cmd_prepare.
+    Procesa un único archivo MIDI y devuelve (stem, status, save_dict, stats_partial).
+    Diseñada para ser llamada desde ProcessPoolExecutor.
+    """
+    midi_path, output_dir, resolution, window_bars = args_tuple
+    import numpy as np
+
+    stem = midi_path.stem
+    stats_partial = {r: 0 for r in ROLES}
+    stats_partial['files_ok']      = 0
+    stats_partial['files_skipped'] = 0
+    stats_partial['total_windows'] = 0
+
+    try:
+        mid = _load_midi(str(midi_path))
+    except Exception as e:
+        return stem, f"ERROR al cargar: {e}", None, stats_partial
+
+    note_lists = _extract_note_lists(mid)
+    if not note_lists:
+        stats_partial['files_skipped'] = 1
+        return stem, "sin notas — omitido", None, stats_partial
+
+    assigner  = RoleAssigner()
+    converter = PianoRollConverter(resolution=resolution, window_bars=window_bars)
+    extractor = TensionExtractor()
+
+    role_assignment = assigner.assign(mid)
+    if not role_assignment:
+        stats_partial['files_skipped'] = 1
+        return stem, "sin asignación de roles — omitido", None, stats_partial
+
+    tpb_raw    = _ticks_per_bar(mid)
+    all_ticks  = max(
+        (n[1] for notes in note_lists.values() for n in notes), default=0)
+    total_bars = max(1, int(all_ticks / tpb_raw) + 1)
+
+    role_rolls  = {}
+    roles_found = []
+    for role, key in role_assignment.items():
+        notes = note_lists.get(key, [])
+        if not notes:
+            continue
+        roll = converter.notes_to_roll(notes, total_bars, tpb_raw)
+        role_rolls[role] = roll
+        roles_found.append(role)
+        stats_partial[role] = 1
+
+    if not role_rolls:
+        stats_partial['files_skipped'] = 1
+        return stem, "no se pudo construir ningún piano roll — omitido", None, stats_partial
+
+    role_windows = {}
+    min_windows  = None
+    for role, roll in role_rolls.items():
+        windows = converter.roll_to_windows(roll)
+        if windows.shape[0] == 0:
+            continue
+        role_windows[role] = windows
+        min_windows = (windows.shape[0] if min_windows is None
+                       else min(min_windows, windows.shape[0]))
+
+    if min_windows is None or min_windows == 0:
+        stats_partial['files_skipped'] = 1
+        return stem, f"demasiado corto ({total_bars} compases) — omitido", None, stats_partial
+
+    for role in role_windows:
+        role_windows[role] = role_windows[role][:min_windows]
+
+    tension_bars    = extractor.extract_bar_vectors(role_rolls, total_bars)
+    mid_offset      = window_bars // 2
+    tension_windows = tension_bars[mid_offset: mid_offset + min_windows]
+    if len(tension_windows) < min_windows:
+        pad = np.zeros((min_windows - len(tension_windows),
+                        TensionExtractor.TENSION_DIM), dtype=np.float32)
+        tension_windows = np.concatenate([tension_windows, pad], axis=0)
+
+    save_dict = {'tension': tension_windows}
+    for role, windows in role_windows.items():
+        save_dict[f'roll_{role}'] = windows
+
+    meta = {
+        'source':      stem,
+        'resolution':  resolution,
+        'window_bars': window_bars,
+        'total_bars':  total_bars,
+        'n_windows':   min_windows,
+        'roles':       roles_found,
+        'tpb_raw':     tpb_raw,
+    }
+    save_dict['meta_json'] = np.array([json.dumps(meta)])
+
+    out_path = Path(output_dir) / f"{stem}.npz"
+    np.savez_compressed(str(out_path), **save_dict)
+
+    stats_partial['files_ok']      = 1
+    stats_partial['total_windows'] = min_windows
+    return (stem,
+            f"OK  ({total_bars} compases, {min_windows} ventanas, roles: {', '.join(roles_found)})",
+            True,
+            stats_partial)
+
+
 def cmd_prepare(args):
     """
     Procesa un directorio de MIDIs y genera archivos .npz con:
         - piano rolls segmentados por rol y ventana
         - vectores de tensión por compás
         - metadatos de asignación de roles
+
+    Paralelizado con ProcessPoolExecutor para aprovechar todos los cores.
     """
-    import numpy as np
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor, as_completed
 
     input_dir  = Path(args.input_dir)
     output_dir = Path(args.output_dir)
@@ -616,129 +724,41 @@ def cmd_prepare(args):
         print(f"[prepare] No se encontraron archivos MIDI en {input_dir}")
         sys.exit(1)
 
+    n_workers = min(multiprocessing.cpu_count(), len(midi_files))
     print(f"[prepare] {len(midi_files)} archivos MIDI encontrados")
     print(f"[prepare] Resolución: {resolution} ticks/compás  |  "
           f"Ventana: {window_bars} compases")
+    print(f"[prepare] Paralelizando con {n_workers} procesos")
     print()
 
-    assigner  = RoleAssigner()
-    converter = PianoRollConverter(resolution=resolution,
-                                   window_bars=window_bars)
-    extractor = TensionExtractor()
-
     stats = {r: 0 for r in ROLES}
-    stats['files_ok']       = 0
-    stats['files_skipped']  = 0
-    stats['total_windows']  = 0
+    stats['files_ok']      = 0
+    stats['files_skipped'] = 0
+    stats['total_windows'] = 0
 
-    for midi_path in midi_files:
-        stem = midi_path.stem
-        print(f"  [{stem}]", end=' ', flush=True)
+    task_args = [
+        (midi_path, str(output_dir), resolution, window_bars)
+        for midi_path in midi_files
+    ]
 
-        try:
-            mid = _load_midi(str(midi_path))
-        except Exception as e:
-            print(f"ERROR al cargar: {e}")
-            stats['files_skipped'] += 1
-            continue
-
-        # 1. Extraer notas por stream
-        note_lists = _extract_note_lists(mid)
-        if not note_lists:
-            print("sin notas — omitido")
-            stats['files_skipped'] += 1
-            continue
-
-        # 2. Asignar roles
-        role_assignment = assigner.assign(mid)
-        # role_assignment: {rol: (track_idx, channel)}
-
-        if not role_assignment:
-            print("sin asignación de roles — omitido")
-            stats['files_skipped'] += 1
-            continue
-
-        # 3. Calcular número de compases total del fichero
-        tpb_raw  = _ticks_per_bar(mid)
-        all_ticks = max(
-            (n[1] for notes in note_lists.values() for n in notes),
-            default=0
-        )
-        total_bars = max(1, int(all_ticks / tpb_raw) + 1)
-
-        # 4. Construir piano roll por rol
-        role_rolls = {}
-        roles_found = []
-        for role, key in role_assignment.items():
-            notes = note_lists.get(key, [])
-            if not notes:
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        futures = {executor.submit(_prepare_one_midi, a): a[0] for a in task_args}
+        for future in as_completed(futures):
+            midi_path = futures[future]
+            try:
+                stem, msg, ok, partial = future.result()
+            except Exception as e:
+                stem = Path(midi_path).stem
+                print(f"  [{stem}] EXCEPCIÓN: {e}")
+                stats['files_skipped'] += 1
                 continue
-            roll = converter.notes_to_roll(notes, total_bars, tpb_raw)
-            role_rolls[role] = roll
-            roles_found.append(role)
-            stats[role] += 1
 
-        if not role_rolls:
-            print("no se pudo construir ningún piano roll — omitido")
-            stats['files_skipped'] += 1
-            continue
-
-        # 5. Segmentar en ventanas deslizantes (por rol)
-        role_windows = {}
-        min_windows  = None
-        for role, roll in role_rolls.items():
-            windows = converter.roll_to_windows(roll)
-            if windows.shape[0] == 0:
-                continue
-            role_windows[role] = windows
-            min_windows = (windows.shape[0] if min_windows is None
-                           else min(min_windows, windows.shape[0]))
-
-        if min_windows is None or min_windows == 0:
-            print(f"demasiado corto ({total_bars} compases) — omitido")
-            stats['files_skipped'] += 1
-            continue
-
-        # 6. Recortar todas las ventanas al mismo tamaño
-        for role in role_windows:
-            role_windows[role] = role_windows[role][:min_windows]
-
-        # 7. Extraer tensión (compás a compás, luego ventanear igual)
-        tension_bars = extractor.extract_bar_vectors(role_rolls, total_bars)
-        # Ventanear tensión igual que los rolls: tomamos el compás central
-        # de cada ventana como representativo
-        mid_offset      = window_bars // 2
-        tension_windows = tension_bars[mid_offset: mid_offset + min_windows]
-        # Si hay desajuste por redondeo, rellenar
-        if len(tension_windows) < min_windows:
-            pad = np.zeros((min_windows - len(tension_windows),
-                            TensionExtractor.TENSION_DIM), dtype=np.float32)
-            tension_windows = np.concatenate([tension_windows, pad], axis=0)
-
-        # 8. Guardar .npz
-        save_dict = {'tension': tension_windows}
-        for role, windows in role_windows.items():
-            save_dict[f'roll_{role}'] = windows
-
-        # Metadatos como atributo texto
-        meta = {
-            'source':       stem,
-            'resolution':   resolution,
-            'window_bars':  window_bars,
-            'total_bars':   total_bars,
-            'n_windows':    min_windows,
-            'roles':        roles_found,
-            'tpb_raw':      tpb_raw,
-        }
-        save_dict['meta_json'] = np.array([json.dumps(meta)])
-
-        out_path = output_dir / f"{stem}.npz"
-        np.savez_compressed(str(out_path), **save_dict)
-
-        stats['files_ok']      += 1
-        stats['total_windows'] += min_windows
-        print(f"OK  ({total_bars} compases, {min_windows} ventanas, "
-              f"roles: {', '.join(roles_found)})")
+            print(f"  [{stem}] {msg}")
+            for role in ROLES:
+                stats[role] += partial[role]
+            stats['files_ok']      += partial['files_ok']
+            stats['files_skipped'] += partial['files_skipped']
+            stats['total_windows'] += partial['total_windows']
 
     # ── informe final ────────────────────────────────────────────────────────
     print()
@@ -843,18 +863,23 @@ class MidiRollDataset:
         self.roles    = roles or ROLES
         self.n_roles  = len(self.roles)
         self.augment  = augment
+        self._cache   = {}   # path → np.NpzFile cargado en memoria
 
         npz_files = sorted(Path(data_dir).glob('*.npz'))
         if not npz_files:
             raise FileNotFoundError(f"No hay .npz en {data_dir}")
 
         for path in npz_files:
-            data = np.load(str(path), allow_pickle=True)
+            # Cargar como dict de arrays planos (no NpzFile lazy).
+            # NpzFile mantiene un ZipFile abierto que NO es seguro para fork
+            # y corrompe el estado en los workers de DataLoader.
+            with np.load(str(path), allow_pickle=True) as raw:
+                data = {k: raw[k] for k in raw.files}   # arrays en RAM
+            self._cache[path] = data
             meta = json.loads(str(data['meta_json'][0]))
             n    = meta['n_windows']
-            # Necesitamos al menos 1 rol presente
             roles_present = [r for r in self.roles
-                             if f'roll_{r}' in data.files]
+                             if f'roll_{r}' in data]
             if not roles_present:
                 continue
             for i in range(n):
@@ -871,7 +896,7 @@ class MidiRollDataset:
         import torch
 
         path, widx = self.samples[idx]
-        data = np.load(str(path), allow_pickle=True)
+        data = self._cache[path]             # ← desde RAM, sin disco
         meta = json.loads(str(data['meta_json'][0]))
 
         wb  = meta['window_bars']    # e.g. 4
@@ -883,7 +908,7 @@ class MidiRollDataset:
 
         for role in self.roles:
             key = f'roll_{role}'
-            if key in data.files:
+            if key in data:                          # dict normal, no NpzFile
                 win = data[key][widx]    # (window_bars, res, 128)
                 context_list.append(win)
                 role_mask.append(True)
@@ -899,7 +924,7 @@ class MidiRollDataset:
         target     = context[:, -1,  :, :]           # (N_ROLES, res, 128)
 
         # Tensión del compás target
-        if 'tension' in data.files:
+        if 'tension' in data:                        # dict normal
             tension = data['tension'][widx]          # (8,)
         else:
             tension = np.zeros(TensionExtractor.TENSION_DIM, dtype=np.float32)
@@ -1312,10 +1337,12 @@ class Trainer:
         ctx = torch.enable_grad() if training else torch.no_grad()
         with ctx:
             for batch in loader:
-                context   = batch['context']
-                target    = batch['target']
-                tension   = batch['tension']
-                role_mask = batch['role_mask']
+                # Mover batch al device (GPU si disponible)
+                device = next(self.model.parameters()).device
+                context   = batch['context'].to(device, non_blocking=True)
+                target    = batch['target'].to(device, non_blocking=True)
+                tension   = batch['tension'].to(device, non_blocking=True)
+                role_mask = batch['role_mask'].to(device, non_blocking=True)
 
                 recon, mu, logvar = self.model(context, tension)
                 loss, r_loss, kl  = vae_loss(recon, target, mu, logvar,
@@ -1474,14 +1501,40 @@ def cmd_train(args):
     resolution  = first_meta['resolution']
     print(f"[train] window_bars={window_bars}  resolution={resolution}")
 
+    # Usar ~75% de los cores disponibles para carga de datos, mínimo 4
+    import multiprocessing
+    available_cores = multiprocessing.cpu_count()
+    num_workers = min(max(available_cores * 3 // 4, 4), 24)
+    print(f"[train] DataLoader workers: {num_workers} (de {available_cores} cores)")
+
+    use_pin_memory = torch.cuda.is_available()
+
     train_loader = DataLoader(train_ds, batch_size=args.batch_size,
                               shuffle=True,  collate_fn=collate_fn,
-                              num_workers=0)
+                              num_workers=num_workers,
+                              pin_memory=use_pin_memory,
+                              persistent_workers=True,
+                              prefetch_factor=4)
     val_loader   = DataLoader(val_ds,   batch_size=args.batch_size,
                               shuffle=False, collate_fn=collate_fn,
-                              num_workers=0)
+                              num_workers=max(num_workers // 4, 2),
+                              pin_memory=use_pin_memory,
+                              persistent_workers=True,
+                              prefetch_factor=2)
 
     # ── 2. Modelo ─────────────────────────────────────────────────────────────
+    # Configurar PyTorch para usar todos los cores disponibles en CPU
+    import multiprocessing
+    n_cpu = multiprocessing.cpu_count()
+    torch.set_num_threads(n_cpu)
+    torch.set_num_interop_threads(max(n_cpu // 2, 1))
+
+    # Detectar dispositivo: CUDA > CPU
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"[train] Dispositivo: {device}")
+    if device.type == 'cuda':
+        print(f"[train] GPUs disponibles: {torch.cuda.device_count()}")
+
     model = _build_model(
         latent_dim  = args.latent_dim,
         style_dim   = args.style_dim,
@@ -1490,6 +1543,12 @@ def cmd_train(args):
         window_bars = window_bars,
         resolution  = resolution,
     )
+
+    # Multi-GPU automático si hay más de 1 GPU
+    if device.type == 'cuda' and torch.cuda.device_count() > 1:
+        print(f"[train] Usando DataParallel en {torch.cuda.device_count()} GPUs")
+        model = torch.nn.DataParallel(model)
+    model = model.to(device)
 
     n_params = sum(p.numel() for p in model.parameters())
     print(f"[train] Parámetros del modelo: {n_params:,}")
@@ -1508,7 +1567,9 @@ def cmd_train(args):
         json.dump(config, f, indent=2)
 
     # ── 4. Optimizador ────────────────────────────────────────────────────────
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    # Acceder a los parámetros del modelo real (desenvuelto si hay DataParallel)
+    raw_model = model.module if hasattr(model, 'module') else model
+    optimizer = torch.optim.Adam(raw_model.parameters(), lr=args.lr)
 
     # ── 5. Trainer ────────────────────────────────────────────────────────────
     trainer = Trainer(
@@ -1646,7 +1707,7 @@ def _midi_to_rolls(midi_path: str, cfg: dict) -> dict:
     )
     total_bars  = max(1, int(np.ceil(max_tick / tpbar)))
 
-    role_map    = RoleAssigner().assign(note_lists)
+    role_map    = RoleAssigner().assign(mid)
     conv        = PianoRollConverter(resolution=resolution,
                                      window_bars=window_bars)
     rolls = {}
@@ -1710,9 +1771,10 @@ def _encode_windows(windows: 'np.ndarray', model, cfg: dict,
             all_mu.append(mu.numpy() if hasattr(mu, 'numpy') else mu._d)
 
     z_mean    = np.concatenate(all_mu, axis=0).mean(axis=0)   # (latent_dim,)
-    z_style_t = model.style_proj(torch.tensor(z_mean[None]))   # (1, style_dim)
-    z_style   = (z_style_t.numpy() if hasattr(z_style_t, 'numpy')
-                 else z_style_t._d)[0]                         # (style_dim,)
+    with torch.no_grad():
+        z_style_t = model.style_proj(torch.tensor(z_mean[None]))   # (1, style_dim)
+    z_style   = (z_style_t.detach().numpy() if hasattr(z_style_t, 'numpy')
+                 else z_style_t._d)[0]                             # (style_dim,)
     return z_mean, z_style
 
 
