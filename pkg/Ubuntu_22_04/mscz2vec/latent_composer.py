@@ -33,6 +33,11 @@ python latent_composer.py train \
     --freeze-decoder-epochs 10 \
     --decoder-lr-factor 0.1
 
+python latent_composer.py compose \
+    --mode z-noise --input ref.mid \
+    --model-dir model/ --palette palette.json \
+    --noise 0.05 --temperature 0.55 --bars 48;
+
 """
 
 import argparse
@@ -2556,10 +2561,24 @@ def _generate_bars(z_ctx_seq, z_style, tension_curve,
             probs = (recon.numpy() if hasattr(recon, 'numpy')
                      else recon._d)[0]                           # (N_ROLES, res, 128)
 
-            # Muestreo Bernoulli con temperatura
-            # temp > 1 aplana la distribución; temp < 1 la agudiza
-            adj_probs = np.clip(probs ** (1.0 / temperature), 0, 1)
-            samples   = (np.random.rand(*adj_probs.shape) < adj_probs).astype(np.float32)
+            # Muestreo Bernoulli con temperatura.
+            #
+            # PROBLEMA con potencia directa: probs^(1/T) con T<1 colapsa
+            # probabilidades bajas a 0. Por ejemplo probs=0.3, T=0.15:
+            #   0.3^(1/0.15) = 0.3^6.67 ≈ 0.0003 → MIDI vacío.
+            #
+            # Solución: aplicar temperatura en espacio logit (log-odds),
+            # que es el espacio natural de las probabilidades Bernoulli.
+            # T < 1 agudiza la distribución (más determinista).
+            # T > 1 la aplana (más aleatorio).
+            # T = 1 no cambia nada.
+            eps       = 1e-6
+            logits    = np.log(np.clip(probs, eps, 1 - eps) /
+                               np.clip(1 - probs, eps, 1 - eps))  # log-odds
+            adj_logits = logits / temperature                      # escalar logits
+            adj_probs  = 1.0 / (1.0 + np.exp(-adj_logits))        # sigmoid inverso
+            adj_probs  = np.clip(adj_probs, 0, 1)
+            samples    = (np.random.rand(*adj_probs.shape) < adj_probs).astype(np.float32)
 
             for ridx, role in enumerate(role_list):
                 bars_per_role[role][bar_i] = samples[ridx]
