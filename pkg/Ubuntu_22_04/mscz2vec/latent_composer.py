@@ -24,7 +24,7 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 python latent_composer.py train \
-    --data-dir data/ --model-dir model/ \
+    --data-dir data/ --model-dir model_hier/ \
     --epochs 200 --batch-size 16 \
     --lr 3e-4 --beta 1.0 --beta-warmup 40 \
     --pos-weight 3.0 --patience 25 \
@@ -32,11 +32,6 @@ python latent_composer.py train \
     --kl-threshold 15.0 --kl-warmup-window 3 \
     --freeze-decoder-epochs 10 \
     --decoder-lr-factor 0.1
-
-python latent_composer.py compose \
-    --mode z-noise --input ref.mid \
-    --model-dir model/ --palette palette.json \
-    --noise 0.05 --temperature 0.55 --bars 48;
 
 """
 
@@ -1029,13 +1024,17 @@ def _build_model(latent_dim: int, style_dim: int, tension_dim: int,
     import torch
     import torch.nn as nn
 
-    PITCH = 128
-    bar_flat = resolution * PITCH        # 48 × 128 = 6144
-    h_bar    = 256
-    h_gru    = 512
+    PITCH        = 128
+    bar_flat     = resolution * PITCH      # 48 × 128 = 6144
+    h_bar        = 256
+    h_gru        = 512
+    # Dividir el espacio latente en global (estilo) y local (contenido del compás)
+    # latent_dim debe ser divisible; si no, z_global_dim = latent_dim // 2
+    z_global_dim = latent_dim // 2         # p.ej. 64 de 128
+    z_local_dim  = latent_dim - z_global_dim  # resto (64)
 
     class _RoleBarEncoder(nn.Module):
-        """Codifica un único compás de un único rol → vector h."""
+        """Codifica un único compás de un único rol → vector h_bar."""
         def __init__(self):
             super().__init__()
             self.fc = nn.Sequential(
@@ -1045,48 +1044,70 @@ def _build_model(latent_dim: int, style_dim: int, tension_dim: int,
                 nn.ReLU(),
             )
         def forward(self, x):
-            # x: (B, resolution, 128)
             return self.fc(x.reshape(x.size(0), -1))   # (B, h_bar)
 
-    class _MultiRoleVAE(nn.Module):
+    class _HierarchicalMultiRoleVAE(nn.Module):
         def __init__(self):
             super().__init__()
-            self.training    = True
-            self.n_roles     = n_roles
-            self.window_bars = window_bars   # incluyendo target: context = wb-1
-            self.resolution  = resolution
-            self.latent_dim  = latent_dim
-            self.style_dim   = style_dim
-            self.tension_dim = tension_dim
+            self.training      = True
+            self.n_roles       = n_roles
+            self.window_bars   = window_bars
+            self.resolution    = resolution
+            self.latent_dim    = latent_dim
+            self.z_global_dim  = z_global_dim
+            self.z_local_dim   = z_local_dim
+            self.style_dim     = style_dim
+            self.tension_dim   = tension_dim
 
-            # ── Encoder ──────────────────────────────────────────────────
-            # Un encoder por rol (pesos independientes, misma arquitectura)
+            # ── Encoder compartido: RoleBarEncoder por rol ────────────────
             self.role_encoders = nn.ModuleList(
                 [_RoleBarEncoder() for _ in range(n_roles)]
             )
-            # Proyección multi-rol por compás
             self.bar_proj = nn.Sequential(
                 nn.Linear(n_roles * h_bar, h_bar),
                 nn.ReLU(),
             )
-            # GRU sobre la secuencia de compases del contexto
-            self.gru_enc  = nn.GRU(
+
+            # ── Nivel global: captura estilo global (tonalidad, densidad) ─
+            # GRU sobre secuencia de compases → z_g
+            self.gru_global   = nn.GRU(
                 input_size=h_bar, hidden_size=h_gru,
                 num_layers=1, batch_first=True
             )
-            self.fc_mu    = nn.Linear(h_gru, latent_dim)
-            self.fc_logvar= nn.Linear(h_gru, latent_dim)
+            self.fc_mu_g      = nn.Linear(h_gru, z_global_dim)
+            self.fc_logvar_g  = nn.Linear(h_gru, z_global_dim)
 
-            # ── Style projector ───────────────────────────────────────────
+            # ── Nivel local: captura contenido del compás target ──────────
+            # Condicionado en z_g para que aprenda "qué notas dado este estilo"
+            self.local_encoder = nn.Sequential(
+                nn.Linear(h_bar + z_global_dim, h_bar),
+                nn.ReLU(),
+            )
+            self.fc_mu_l     = nn.Linear(h_bar, z_local_dim)
+            self.fc_logvar_l = nn.Linear(h_bar, z_local_dim)
+
+            # ── Style projector (desde z_g, no z_total) ───────────────────
             self.style_proj = nn.Sequential(
-                nn.Linear(latent_dim, style_dim),
+                nn.Linear(z_global_dim, style_dim),
                 nn.Tanh(),
             )
 
-            # ── Decoder ───────────────────────────────────────────────────
-            aug_dim = latent_dim + style_dim + tension_dim
-            self.dec_input = nn.Sequential(
-                nn.Linear(aug_dim, h_gru),
+            # ── Decoder: conductor desde z_g + detalle desde z_l ─────────
+            #
+            # El conductor procesa z_g (estilo global) junto con tensión
+            # y produce h_conductor. El decoder local usa h_conductor + z_l
+            # para generar el piano roll.
+            #
+            # Gradientes: z_g recibe gradiente desde la reconstrucción a través
+            # del conductor, y z_l directamente desde las skip connections.
+            # Es estructuralmente imposible ignorar ninguno de los dos.
+            conductor_in = z_global_dim + style_dim + tension_dim
+            self.conductor = nn.Sequential(
+                nn.Linear(conductor_in, h_gru),
+                nn.ReLU(),
+            )
+            self.dec_merge = nn.Sequential(
+                nn.Linear(h_gru + z_local_dim, h_gru),
                 nn.ReLU(),
             )
             self.gru_dec = nn.GRU(
@@ -1094,26 +1115,16 @@ def _build_model(latent_dim: int, style_dim: int, tension_dim: int,
                 num_layers=1, batch_first=True
             )
 
-            # ── Skip connections de z al decoder ──────────────────────────
-            # z se inyecta directamente en cada role_decoder, además de
-            # entrar por el GRU. Esto hace estructuralmente imposible que
-            # el decoder ignore z: el gradiente de reconstrucción fluye
-            # directamente hacia z sin pasar por el cuello de botella del GRU.
-            #
-            # Arquitectura por rol:
-            #   h_dec (GRU)  →─────────────────────────────┐
-            #                                              concat → Linear → Sigmoid
-            #   z (latente)  → z_skip_proj → gate ──────→─┘
-            #
-            # El gate es un sigmoid que aprende cuánto de z inyectar,
-            # permitiendo que el modelo regule el flujo de información
-            # de z de forma suave en lugar de un skip fijo.
-            self.z_skip_proj = nn.Linear(latent_dim, h_bar)
-            self.z_gate      = nn.Linear(latent_dim, h_bar)
+            # Skip connections de z_g y z_l al rol-decoder
+            # z_g → estilo por rol; z_l → contenido específico del compás
+            self.zg_skip  = nn.Linear(z_global_dim, h_bar)
+            self.zg_gate  = nn.Linear(z_global_dim, h_bar)
+            self.zl_skip  = nn.Linear(z_local_dim,  h_bar)
+            self.zl_gate  = nn.Linear(z_local_dim,  h_bar)
 
             self.role_decoders = nn.ModuleList([
                 nn.Sequential(
-                    nn.Linear(h_gru + h_bar, h_bar),   # concatena h_dec + z_gated
+                    nn.Linear(h_gru + h_bar + h_bar, h_bar),  # h_out + zg_gated + zl_gated
                     nn.ReLU(),
                     nn.Linear(h_bar, bar_flat),
                     nn.Sigmoid(),
@@ -1129,29 +1140,44 @@ def _build_model(latent_dim: int, style_dim: int, tension_dim: int,
         def encode(self, context):
             """
             context: (B, N_ROLES, context_bars, resolution, 128)
-            Devuelve μ, log_σ²  cada uno (B, latent_dim)
+            Devuelve (mu, logvar) cada uno (B, latent_dim)
+            donde latent_dim = z_global_dim + z_local_dim
+            y mu = concat(mu_g, mu_l), logvar = concat(logvar_g, logvar_l)
             """
-            B       = context.size(0)
-            n_ctx   = context.size(2)   # window_bars - 1
+            B     = context.size(0)
+            n_ctx = context.size(2)
 
-            # Codificar cada (rol, compás) independientemente
             bar_vecs = []
             for t in range(n_ctx):
                 role_vecs = []
                 for r in range(self.n_roles):
-                    x_r = context[:, r, t, :, :]       # (B, res, 128)
-                    h_r = self.role_encoders[r](x_r)    # (B, h_bar)
+                    x_r = context[:, r, t, :, :]
+                    h_r = self.role_encoders[r](x_r)
                     role_vecs.append(h_r)
-                h_multi = torch.cat(role_vecs, dim=-1)  # (B, n_roles*h_bar)
-                h_bar_t = self.bar_proj(h_multi)         # (B, h_bar)
+                h_multi = torch.cat(role_vecs, dim=-1)
+                h_bar_t = self.bar_proj(h_multi)
                 bar_vecs.append(h_bar_t)
 
-            # Apilar en secuencia temporal para el GRU
-            seq       = torch.stack(bar_vecs, dim=1)    # (B, n_ctx, h_bar)
-            _, h_last = self.gru_enc(seq)               # h_last: (1, B, h_gru)
-            h         = h_last.squeeze(0)               # (B, h_gru)
+            seq          = torch.stack(bar_vecs, dim=1)   # (B, n_ctx, h_bar)
+            _, h_last    = self.gru_global(seq)            # (1, B, h_gru)
+            h_g          = h_last.squeeze(0)               # (B, h_gru)
 
-            return self.fc_mu(h), self.fc_logvar(h)
+            mu_g     = self.fc_mu_g(h_g)                  # (B, z_global_dim)
+            logvar_g = self.fc_logvar_g(h_g)
+
+            # Nivel local: condicionado en z_g (usamos mu_g en inferencia)
+            # El último compás del contexto como representación del target
+            h_target = bar_vecs[-1]                        # (B, h_bar)
+            z_g_det  = mu_g.detach()                       # no propagar gradiente al global desde local
+            h_local  = self.local_encoder(
+                torch.cat([h_target, z_g_det], dim=-1))    # (B, h_bar)
+            mu_l     = self.fc_mu_l(h_local)               # (B, z_local_dim)
+            logvar_l = self.fc_logvar_l(h_local)
+
+            # Concatenar para interfaz uniforme con el resto del código
+            mu     = torch.cat([mu_g,     mu_l],     dim=-1)  # (B, latent_dim)
+            logvar = torch.cat([logvar_g, logvar_l], dim=-1)
+            return mu, logvar
 
         # ── reparametrización ─────────────────────────────────────────────
         def reparametrize(self, mu, logvar):
@@ -1164,31 +1190,37 @@ def _build_model(latent_dim: int, style_dim: int, tension_dim: int,
         # ── decode ────────────────────────────────────────────────────────
         def decode(self, z, z_style, v_tension):
             """
-            z         : (B, latent_dim)
+            z         : (B, latent_dim)  = concat(z_g, z_l)
             z_style   : (B, style_dim)
             v_tension : (B, tension_dim)
             Devuelve  : (B, N_ROLES, resolution, 128)
             """
-            B      = z.size(0)
-            z_aug  = torch.cat([z, z_style, v_tension], dim=-1)   # (B, aug_dim)
-            h_in   = self.dec_input(z_aug).unsqueeze(1)            # (B, 1, h_gru)
-            out, _ = self.gru_dec(h_in)                            # (B, 1, h_gru)
-            h_dec  = out[:, 0, :]                                  # (B, h_gru)
+            B    = z.size(0)
+            z_g  = z[:, :self.z_global_dim]   # (B, z_global_dim)
+            z_l  = z[:, self.z_global_dim:]   # (B, z_local_dim)
 
-            # Skip connection de z: proyectar z a h_bar y aplicar gate.
-            # z_skip es la misma para todos los roles; el gate aprende
-            # cuánta información de z inyectar de forma suave (0–1).
-            z_proj  = torch.relu(self.z_skip_proj(z))              # (B, h_bar)
-            z_gated = torch.sigmoid(self.z_gate(z)) * z_proj       # (B, h_bar)
+            # Conductor: z_g + estilo + tensión → h_conductor
+            cond_in    = torch.cat([z_g, z_style, v_tension], dim=-1)
+            h_cond     = self.conductor(cond_in)              # (B, h_gru)
 
-            # Concatenar h_dec (del GRU) con z_gated (skip directo)
-            # antes de cada role_decoder.
-            h_combined = torch.cat([h_dec, z_gated], dim=-1)       # (B, h_gru+h_bar)
+            # Merge con z_l y pasar por GRU
+            merge_in   = torch.cat([h_cond, z_l], dim=-1)
+            h_merged   = self.dec_merge(merge_in).unsqueeze(1)  # (B, 1, h_gru)
+            out, _     = self.gru_dec(h_merged)                  # (B, 1, h_gru)
+            h_out      = out[:, 0, :]                            # (B, h_gru)
+
+            # Skip connections gated para z_g y z_l
+            zg_proj  = torch.relu(self.zg_skip(z_g))
+            zg_gated = torch.sigmoid(self.zg_gate(z_g)) * zg_proj  # (B, h_bar)
+            zl_proj  = torch.relu(self.zl_skip(z_l))
+            zl_gated = torch.sigmoid(self.zl_gate(z_l)) * zl_proj  # (B, h_bar)
+
+            h_combined = torch.cat([h_out, zg_gated, zl_gated], dim=-1)  # (B, h_gru+2*h_bar)
 
             rolls = []
             for r in range(self.n_roles):
-                flat   = self.role_decoders[r](h_combined)         # (B, bar_flat)
-                roll_r = flat.reshape(B, self.resolution, 128)     # (B, res, 128)
+                flat   = self.role_decoders[r](h_combined)
+                roll_r = flat.reshape(B, self.resolution, 128)
                 rolls.append(roll_r)
 
             return torch.stack(rolls, dim=1)   # (B, N_ROLES, res, 128)
@@ -1198,18 +1230,21 @@ def _build_model(latent_dim: int, style_dim: int, tension_dim: int,
             """
             context   : (B, N_ROLES, context_bars, resolution, 128)
             v_tension : (B, tension_dim)
-            z_style   : (B, style_dim) opcional; si None se proyecta desde μ
+            z_style   : (B, style_dim) opcional; si None se proyecta desde μ_g
 
             Devuelve  : recon (B, N_ROLES, res, 128), μ, logvar
             """
             mu, logvar = self.encode(context)
             z          = self.reparametrize(mu, logvar)
             if z_style is None:
-                z_style = self.style_proj(mu.detach())
-            recon      = self.decode(z, z_style, v_tension)
+                # Proyectar solo desde la parte global de mu
+                mu_g    = mu[:, :self.z_global_dim]
+                z_style = self.style_proj(mu_g.detach())
+            recon = self.decode(z, z_style, v_tension)
             return recon, mu, logvar
 
-    return _MultiRoleVAE()
+    return _HierarchicalMultiRoleVAE()
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1307,13 +1342,18 @@ def vae_loss(recon, target, mu, logvar, role_mask,
              beta: float = 1.0, pos_weight: float = 10.0,
              spatial_reg: str = 'none',
              lambda_spatial: float = 0.05,
-             free_bits: float = 0.1):
+             free_bits: float = 0.1,
+             z_global_dim: int = 0):
     """
     ELBO loss para el VAE multi-rol con regularización espacial opcional.
 
+    Para el VAE jerárquico, el KL se calcula por separado para z_g y z_l
+    con free_bits independientes. Esto evita que el collapse de un nivel
+    destruya el otro.
+
     recon          : (B, N_ROLES, res, 128)  — salida del decoder (sigmoid aplicado)
     target         : (B, N_ROLES, res, 128)  — piano roll objetivo
-    mu, logvar     : (B, latent_dim)
+    mu, logvar     : (B, latent_dim)  = concat([mu_g, mu_l], [logvar_g, logvar_l])
     role_mask      : (B, N_ROLES) bool       — qué roles están presentes en cada muestra
     beta           : peso del término KL (beta-VAE)
     pos_weight     : peso de los píxeles positivos en BCE (compensa desbalance 0/1)
@@ -1321,6 +1361,7 @@ def vae_loss(recon, target, mu, logvar, role_mask,
                      'pitch' | 'interval'
     lambda_spatial : peso del término de regularización espacial
     free_bits      : nats mínimos por dimensión latente (evita posterior collapse)
+    z_global_dim   : dims del nivel global (0 = VAE plano, compatibilidad hacia atrás)
 
     Devuelve  : loss total, recon_loss, kl_loss  (todos escalares)
     """
@@ -1365,28 +1406,24 @@ def vae_loss(recon, target, mu, logvar, role_mask,
         recon_loss = recon_loss / n_active
 
     # ── KL con free bits por dimensión ────────────────────────────────────────
-    # Clamp de μ y log σ² para evitar KL explosivo cuando el encoder produce
-    # distribuciones muy alejadas del prior. Los límites son asimétricos:
-    #
-    #   mu     ∈ [-6, 6]   — rango amplio para que el encoder pueda organizar
-    #                         el espacio latente con variedad real entre muestras.
-    #
-    #   logvar ∈ [-6, 4]   — límite superior asimétrico: permite σ pequeña
-    #                         (logvar=-6 → σ≈0.05, distribución concentrada)
-    #                         pero evita σ enorme (logvar=4 → σ≈7.4) que
-    #                         produciría KL explosivo al subir β.
-    #
-    # Con [-4,4] simétrico el encoder encontraba el punto exacto donde
-    # μ=-4 y logvar=-4 producen KL=8.32 constante para todas las muestras,
-    # colapsando a una distribución fija. El rango ampliado rompe ese equilibrio.
+    # Clamp de μ y log σ² para estabilidad numérica.
     mu_c     = mu.clamp(-6.0, 6.0)
     logvar_c = logvar.clamp(-6.0, 4.0)
 
-    # Free bits: cada dimensión latente debe contribuir al menos `free_bits`
-    # nats antes de que el gradiente la penalice.
-    # kl_per_dim: (B, latent_dim)
     kl_per_dim = -0.5 * (1 + logvar_c - mu_c.pow(2) - logvar_c.exp())
-    kl_loss    = torch.mean(torch.clamp(kl_per_dim, min=free_bits))
+
+    if z_global_dim > 0:
+        # ── VAE jerárquico: KL separado por nivel ─────────────────────────
+        # z_g (global) y z_l (local) tienen free_bits independientes.
+        # Si un nivel colapsa, el otro sigue funcionando.
+        # z_g recibe más presión (free_bits x2) para que codifique estilo global.
+        kl_g   = kl_per_dim[:, :z_global_dim]
+        kl_l   = kl_per_dim[:, z_global_dim:]
+        kl_loss = (torch.mean(torch.clamp(kl_g, min=free_bits * 2.0)) +
+                   torch.mean(torch.clamp(kl_l, min=free_bits)))
+    else:
+        # ── VAE plano: compatibilidad hacia atrás ─────────────────────────
+        kl_loss = torch.mean(torch.clamp(kl_per_dim, min=free_bits))
 
     # ── Regularización espacial ───────────────────────────────────────────────
     if spatial_reg == 'smoothness':
@@ -1472,7 +1509,12 @@ class Trainer:
         self._warmup_start_ep = 0     # época absoluta en que arrancó el warmup
 
     # Nombres de los módulos del decoder (usados para congelar/descongelar)
-    _DECODER_MODULES = ('dec_input', 'gru_dec', 'role_decoders', 'z_skip_proj', 'z_gate')
+    _DECODER_MODULES = (
+        # Flat VAE modules (kept for backward compat)
+        'dec_input', 'gru_dec', 'role_decoders', 'z_skip_proj', 'z_gate',
+        # Hierarchical VAE modules
+        'conductor', 'dec_merge', 'zg_skip', 'zg_gate', 'zl_skip', 'zl_gate',
+    )
 
     def _set_decoder_grad(self, requires_grad: bool):
         """Activa o congela los gradientes de todos los parámetros del decoder."""
@@ -1625,11 +1667,15 @@ class Trainer:
                 role_mask = batch['role_mask'].to(device, non_blocking=True)
 
                 recon, mu, logvar = self.model(context, tension)
+                # Obtener z_global_dim del modelo si es jerárquico
+                raw_m = self.model.module if hasattr(self.model, 'module') else self.model
+                z_global_dim = getattr(raw_m, 'z_global_dim', 0)
                 loss, r_loss, kl  = vae_loss(recon, target, mu, logvar,
                                              role_mask, beta=beta,
                                              pos_weight=self.pos_weight,
                                              spatial_reg=self.spatial_reg,
-                                             lambda_spatial=self.lambda_spatial)
+                                             lambda_spatial=self.lambda_spatial,
+                                             z_global_dim=z_global_dim)
                 if training:
                     self.optimizer.zero_grad()
                     loss.backward()
@@ -1901,13 +1947,14 @@ def cmd_train(args):
 
     # ── 3. Guardar config del modelo ──────────────────────────────────────────
     config = {
-        'latent_dim':   args.latent_dim,
-        'style_dim':    args.style_dim,
-        'tension_dim':  TensionExtractor.TENSION_DIM,
-        'n_roles':      len(ROLES),
-        'roles':        ROLES,
-        'window_bars':  window_bars,
-        'resolution':   resolution,
+        'latent_dim':    args.latent_dim,
+        'style_dim':     args.style_dim,
+        'tension_dim':   TensionExtractor.TENSION_DIM,
+        'n_roles':       len(ROLES),
+        'roles':         ROLES,
+        'window_bars':   window_bars,
+        'resolution':    resolution,
+        'z_global_dim':  args.latent_dim // 2,  # guardado para referencia
     }
     with open(model_dir / Trainer.CONFIG_NAME, 'w') as f:
         json.dump(config, f, indent=2)
@@ -2136,7 +2183,10 @@ def _encode_windows(windows: 'np.ndarray', model, cfg: dict,
 
     z_mean    = np.concatenate(all_mu, axis=0).mean(axis=0)   # (latent_dim,)
     with torch.no_grad():
-        z_style_t = model.style_proj(torch.tensor(z_mean[None]))   # (1, style_dim)
+        # Para el VAE jerárquico, style_proj toma solo la parte global de z
+        z_global_dim = getattr(model, 'z_global_dim', 0)
+        z_for_style  = z_mean[:z_global_dim] if z_global_dim > 0 else z_mean
+        z_style_t    = model.style_proj(torch.tensor(z_for_style[None]))  # (1, style_dim)
     z_style   = (z_style_t.detach().numpy() if hasattr(z_style_t, 'numpy')
                  else z_style_t._d)[0]                             # (style_dim,)
     return z_mean, z_style
