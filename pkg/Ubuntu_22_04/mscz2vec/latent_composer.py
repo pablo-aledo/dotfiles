@@ -1169,20 +1169,114 @@ def _build_model(latent_dim: int, style_dim: int, tension_dim: int,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  LOSS
+#  REGULARIZACIÓN ESPACIAL DEL PIANO ROLL
 # ══════════════════════════════════════════════════════════════════════════════
 
-def vae_loss(recon, target, mu, logvar, role_mask,
-             beta: float = 1.0, pos_weight: float = 10.0):
+def spatial_loss_smoothness(recon):
     """
-    ELBO loss para el VAE multi-rol.
+    Smoothness loss: penaliza diferencias bruscas entre pitches adyacentes.
 
-    recon     : (B, N_ROLES, res, 128)  — salida del decoder (sigmoid aplicado)
-    target    : (B, N_ROLES, res, 128)  — piano roll objetivo
-    mu, logvar: (B, latent_dim)
-    role_mask : (B, N_ROLES) bool       — qué roles están presentes en cada muestra
-    beta      : peso del término KL (beta-VAE)
-    pos_weight: peso de los píxeles positivos en BCE (compensa desbalance 0/1)
+    La hipótesis musical es que los píxeles vecinos en el eje de pitch tienden
+    a estar correlacionados (acordes, cromatismo). Penalizar el gradiente
+    discourages al decoder de predecir notas aisladas sin contexto armónico,
+    forzándolo a leer z para saber dónde colocar grupos de notas.
+
+    recon : (B, N_ROLES, res, 128)
+    return: escalar
+    """
+    # Diferencia entre cada pitch p y su vecino p+1
+    diff = recon[..., 1:] - recon[..., :-1]   # (B, N_ROLES, res, 127)
+    return (diff ** 2).mean()
+
+
+def spatial_loss_pitch(recon, window: int = 2):
+    """
+    Contrastive pitch loss: penaliza notas activas sin vecinas cercanas.
+
+    Una nota aislada (activa en pitch p, silencio en [p-window, p+window])
+    es un artefacto habitual del posterior collapse. Este término penaliza
+    exactamente esos casos usando max-pooling como detector de vecindad.
+
+    recon  : (B, N_ROLES, res, 128)
+    window : radio en semitonos que define «vecindad» (default: 2)
+    return : escalar
+    """
+    import torch.nn.functional as F
+
+    B, R, T, P = recon.shape
+    # Aplanar a (N, 1, P) para usar max_pool1d como detector de vecinos
+    flat         = recon.reshape(B * R * T, 1, P)
+    neighborhood = F.max_pool1d(
+        flat,
+        kernel_size = window * 2 + 1,
+        stride      = 1,
+        padding     = window
+    ).reshape(B, R, T, P)
+
+    # Una nota activa en una zona sin vecinos contribuye al loss.
+    # Usamos .detach() en neighborhood y recon para que el gradiente
+    # solo fluya a través del factor recon (evita bucle de gradiente).
+    isolated = recon * (1.0 - neighborhood.detach() + recon.detach())
+    return isolated.mean()
+
+
+def spatial_loss_interval(recon, max_interval: int = 12):
+    """
+    Interval loss: penaliza coactivaciones entre notas separadas más de
+    max_interval semitonos sin notas intermedias.
+
+    Basado en la estadística de intervalos musicales: 2ªs y 3ªs son mucho
+    más frecuentes que 7ªs o 9ªs. Los saltos grandes no se prohíben, pero
+    se ponderan proporcionalmente a su tamaño, lo que suaviza la distribución
+    de intervalos hacia algo musicalmente más plausible.
+
+    recon        : (B, N_ROLES, res, 128)
+    max_interval : intervalo máximo penalizado en semitonos (default: 12 = 8va)
+    return       : escalar
+    """
+    import torch
+
+    B, R, T, P = recon.shape
+    x    = recon.reshape(B * R * T, P)           # (N, 128)
+    loss = torch.tensor(0.0, device=recon.device)
+
+    for interval in range(1, max_interval + 1):
+        # co_active[i, p] = probabilidad de que pitch p y pitch p+interval
+        # estén activos simultáneamente en el tick i
+        co_active = x[:, interval:] * x[:, :-interval]   # (N, 128-interval)
+        # Saltos más grandes pesan más: normalizado a [1/max, 1]
+        weight    = interval / max_interval
+        loss      = loss + weight * co_active.mean()
+
+    return loss
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  LOSS PRINCIPAL
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Modos de regularización espacial disponibles
+SPATIAL_REG_MODES = ('none', 'smoothness', 'pitch', 'interval')
+
+
+def vae_loss(recon, target, mu, logvar, role_mask,
+             beta: float = 1.0, pos_weight: float = 10.0,
+             spatial_reg: str = 'none',
+             lambda_spatial: float = 0.05,
+             free_bits: float = 0.1):
+    """
+    ELBO loss para el VAE multi-rol con regularización espacial opcional.
+
+    recon          : (B, N_ROLES, res, 128)  — salida del decoder (sigmoid aplicado)
+    target         : (B, N_ROLES, res, 128)  — piano roll objetivo
+    mu, logvar     : (B, latent_dim)
+    role_mask      : (B, N_ROLES) bool       — qué roles están presentes en cada muestra
+    beta           : peso del término KL (beta-VAE)
+    pos_weight     : peso de los píxeles positivos en BCE (compensa desbalance 0/1)
+    spatial_reg    : modo de regularización espacial: 'none' | 'smoothness' |
+                     'pitch' | 'interval'
+    lambda_spatial : peso del término de regularización espacial
+    free_bits      : nats mínimos por dimensión latente (evita posterior collapse)
 
     Devuelve  : loss total, recon_loss, kl_loss  (todos escalares)
     """
@@ -1191,8 +1285,9 @@ def vae_loss(recon, target, mu, logvar, role_mask,
 
     B, N_ROLES, res, pitch = recon.shape
 
-    # BCE por píxel con pos_weight para compensar la alta esparsidad
-    # Solo consideramos roles presentes en la muestra
+    # ── Reconstrucción BCE ────────────────────────────────────────────────────
+    # BCE por píxel con pos_weight para compensar la alta esparsidad.
+    # Solo consideramos roles presentes en la muestra.
     recon_loss = torch.tensor(0.0, device=recon.device)
     n_active   = 0
 
@@ -1216,8 +1311,8 @@ def vae_loss(recon, target, mu, logvar, role_mask,
         bce = F.binary_cross_entropy_with_logits(
             logits,
             r_target,
-            pos_weight=pw,
-            reduction='mean'
+            pos_weight = pw,
+            reduction  = 'mean'
         )
         recon_loss = recon_loss + bce
         n_active  += 1
@@ -1225,16 +1320,25 @@ def vae_loss(recon, target, mu, logvar, role_mask,
     if n_active > 0:
         recon_loss = recon_loss / n_active
 
-    # KL divergence con "free bits" por dimensión.
+    # ── KL con free bits por dimensión ────────────────────────────────────────
     # Cada dimensión latente debe contribuir al menos `free_bits` nats antes
     # de que el gradiente la penalice, evitando el posterior collapse en datos
     # esparsos como piano rolls.
     # kl_per_dim: (B, latent_dim)
-    free_bits   = 0.5   # nats mínimos por dimensión
-    kl_per_dim  = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
-    kl_loss     = torch.mean(torch.clamp(kl_per_dim, min=free_bits))
+    kl_per_dim = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
+    kl_loss    = torch.mean(torch.clamp(kl_per_dim, min=free_bits))
 
-    total = recon_loss + beta * kl_loss
+    # ── Regularización espacial ───────────────────────────────────────────────
+    if spatial_reg == 'smoothness':
+        s_loss = spatial_loss_smoothness(recon)
+    elif spatial_reg == 'pitch':
+        s_loss = spatial_loss_pitch(recon)
+    elif spatial_reg == 'interval':
+        s_loss = spatial_loss_interval(recon)
+    else:
+        s_loss = torch.tensor(0.0, device=recon.device)
+
+    total = recon_loss + beta * kl_loss + lambda_spatial * s_loss
     return total, recon_loss, kl_loss
 
 
@@ -1272,15 +1376,19 @@ class Trainer:
                  beta_start: float = 0.0, beta_end: float = 1.0,
                  beta_warmup_epochs: int = 20,
                  early_stop_patience: int = 15,
-                 pos_weight: float = 10.0):
-        self.model         = model
-        self.optimizer     = optimizer
-        self.model_dir     = model_dir
-        self.beta_start    = beta_start
-        self.beta_end      = beta_end
-        self.beta_warmup   = beta_warmup_epochs
-        self.patience      = early_stop_patience
-        self.pos_weight    = pos_weight
+                 pos_weight: float = 10.0,
+                 spatial_reg: str = 'none',
+                 lambda_spatial: float = 0.05):
+        self.model          = model
+        self.optimizer      = optimizer
+        self.model_dir      = model_dir
+        self.beta_start     = beta_start
+        self.beta_end       = beta_end
+        self.beta_warmup    = beta_warmup_epochs
+        self.patience       = early_stop_patience
+        self.pos_weight     = pos_weight
+        self.spatial_reg    = spatial_reg
+        self.lambda_spatial = lambda_spatial
 
         self.history       = {'train': [], 'val': [], 'beta': []}
         self.best_val_loss = float('inf')
@@ -1353,7 +1461,9 @@ class Trainer:
                 recon, mu, logvar = self.model(context, tension)
                 loss, r_loss, kl  = vae_loss(recon, target, mu, logvar,
                                              role_mask, beta=beta,
-                                             pos_weight=self.pos_weight)
+                                             pos_weight=self.pos_weight,
+                                             spatial_reg=self.spatial_reg,
+                                             lambda_spatial=self.lambda_spatial)
                 if training:
                     self.optimizer.zero_grad()
                     loss.backward()
@@ -1397,6 +1507,9 @@ class Trainer:
         print(f"  Beta warmup: {self.beta_warmup} épocas  "
               f"({self.beta_start:.2f} → {self.beta_end:.2f})")
         print(f"  Early stopping: paciencia {self.patience} épocas")
+        reg_info = (f"{self.spatial_reg}  λ={self.lambda_spatial}"
+                    if self.spatial_reg != 'none' else "none")
+        print(f"  Regularización espacial: {reg_info}")
         print(f"{'═'*60}\n")
 
         total_epochs   = self.start_epoch + epochs
@@ -1579,13 +1692,15 @@ def cmd_train(args):
 
     # ── 5. Trainer ────────────────────────────────────────────────────────────
     trainer = Trainer(
-        model         = model,
-        optimizer     = optimizer,
-        model_dir     = model_dir,
-        beta_end      = args.beta,
+        model              = model,
+        optimizer          = optimizer,
+        model_dir          = model_dir,
+        beta_end           = args.beta,
         beta_warmup_epochs = args.beta_warmup,
         early_stop_patience= args.patience,
-        pos_weight    = args.pos_weight,
+        pos_weight         = args.pos_weight,
+        spatial_reg        = args.spatial_reg,
+        lambda_spatial     = args.lambda_spatial,
     )
 
     if args.resume:
@@ -2608,6 +2723,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument('--no-augment',  action='store_true',
         dest='no_augment',
         help='Desactivar augmentación por transposición')
+    p_train.add_argument('--spatial-reg', default='none',
+        dest='spatial_reg',
+        choices=SPATIAL_REG_MODES,
+        help='Regularización espacial del piano roll: '
+             'none | smoothness | pitch | interval (default: none)')
+    p_train.add_argument('--lambda-spatial', type=float, default=0.05,
+        dest='lambda_spatial', metavar='FLOAT',
+        help='Peso del término de regularización espacial (default: 0.05)')
     p_train.add_argument('--resume',      action='store_true',
         help='Reanudar desde el último checkpoint')
     p_train.add_argument('--report',      action='store_true',
