@@ -22,9 +22,7 @@
 ║    python latent_composer.py compose --mode z-noise --input ref.mid         ║
 ║                               --model-dir model/ --palette palette.json     ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
-"""
 
-"""
 python latent_composer.py train \
     --data-dir data/ --model-dir model/ \
     --epochs 200 --batch-size 16 \
@@ -34,6 +32,7 @@ python latent_composer.py train \
     --kl-threshold 15.0 --kl-warmup-window 3 \
     --freeze-decoder-epochs 10 \
     --decoder-lr-factor 0.1
+
 """
 
 import argparse
@@ -1089,9 +1088,27 @@ def _build_model(latent_dim: int, style_dim: int, tension_dim: int,
                 input_size=h_gru, hidden_size=h_gru,
                 num_layers=1, batch_first=True
             )
+
+            # ── Skip connections de z al decoder ──────────────────────────
+            # z se inyecta directamente en cada role_decoder, además de
+            # entrar por el GRU. Esto hace estructuralmente imposible que
+            # el decoder ignore z: el gradiente de reconstrucción fluye
+            # directamente hacia z sin pasar por el cuello de botella del GRU.
+            #
+            # Arquitectura por rol:
+            #   h_dec (GRU)  →─────────────────────────────┐
+            #                                              concat → Linear → Sigmoid
+            #   z (latente)  → z_skip_proj → gate ──────→─┘
+            #
+            # El gate es un sigmoid que aprende cuánto de z inyectar,
+            # permitiendo que el modelo regule el flujo de información
+            # de z de forma suave en lugar de un skip fijo.
+            self.z_skip_proj = nn.Linear(latent_dim, h_bar)
+            self.z_gate      = nn.Linear(latent_dim, h_bar)
+
             self.role_decoders = nn.ModuleList([
                 nn.Sequential(
-                    nn.Linear(h_gru, h_bar),
+                    nn.Linear(h_gru + h_bar, h_bar),   # concatena h_dec + z_gated
                     nn.ReLU(),
                     nn.Linear(h_bar, bar_flat),
                     nn.Sigmoid(),
@@ -1153,9 +1170,19 @@ def _build_model(latent_dim: int, style_dim: int, tension_dim: int,
             out, _ = self.gru_dec(h_in)                            # (B, 1, h_gru)
             h_dec  = out[:, 0, :]                                  # (B, h_gru)
 
+            # Skip connection de z: proyectar z a h_bar y aplicar gate.
+            # z_skip es la misma para todos los roles; el gate aprende
+            # cuánta información de z inyectar de forma suave (0–1).
+            z_proj  = torch.relu(self.z_skip_proj(z))              # (B, h_bar)
+            z_gated = torch.sigmoid(self.z_gate(z)) * z_proj       # (B, h_bar)
+
+            # Concatenar h_dec (del GRU) con z_gated (skip directo)
+            # antes de cada role_decoder.
+            h_combined = torch.cat([h_dec, z_gated], dim=-1)       # (B, h_gru+h_bar)
+
             rolls = []
             for r in range(self.n_roles):
-                flat   = self.role_decoders[r](h_dec)              # (B, bar_flat)
+                flat   = self.role_decoders[r](h_combined)         # (B, bar_flat)
                 roll_r = flat.reshape(B, self.resolution, 128)     # (B, res, 128)
                 rolls.append(roll_r)
 
@@ -1440,7 +1467,7 @@ class Trainer:
         self._warmup_start_ep = 0     # época absoluta en que arrancó el warmup
 
     # Nombres de los módulos del decoder (usados para congelar/descongelar)
-    _DECODER_MODULES = ('dec_input', 'gru_dec', 'role_decoders')
+    _DECODER_MODULES = ('dec_input', 'gru_dec', 'role_decoders', 'z_skip_proj', 'z_gate')
 
     def _set_decoder_grad(self, requires_grad: bool):
         """Activa o congela los gradientes de todos los parámetros del decoder."""
