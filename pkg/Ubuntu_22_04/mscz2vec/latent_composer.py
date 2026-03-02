@@ -1390,10 +1390,11 @@ class Trainer:
         self.spatial_reg    = spatial_reg
         self.lambda_spatial = lambda_spatial
 
-        self.history       = {'train': [], 'val': [], 'beta': []}
-        self.best_val_loss = float('inf')
-        self.no_improve    = 0
-        self.start_epoch   = 0
+        self.history        = {'train': [], 'val': [], 'val_recon': [], 'beta': []}
+        self.best_val_loss  = float('inf')
+        self.best_val_recon = float('inf')
+        self.no_improve     = 0
+        self.start_epoch    = 0
 
     def _beta(self, epoch: int) -> float:
         """Beta annealing lineal durante los primeros beta_warmup epochs."""
@@ -1409,6 +1410,7 @@ class Trainer:
             'model_state':    self.model.state_dict(),
             'optimizer_state':self.optimizer.state_dict(),
             'best_val_loss':  self.best_val_loss,
+            'best_val_recon': self.best_val_recon,
             'no_improve':     self.no_improve,
             'history':        self.history,
         }
@@ -1428,10 +1430,11 @@ class Trainer:
         state = torch.load(path, map_location='cpu')
         self.model.load_state_dict(state['model_state'])
         self.optimizer.load_state_dict(state['optimizer_state'])
-        self.best_val_loss = state['best_val_loss']
-        self.no_improve    = state['no_improve']
-        self.history       = state['history']
-        self.start_epoch   = state['epoch'] + 1
+        self.best_val_loss  = state['best_val_loss']
+        self.best_val_recon = state.get('best_val_recon', float('inf'))
+        self.no_improve     = state['no_improve']
+        self.history        = state['history']
+        self.start_epoch    = state['epoch'] + 1
         print(f"[train] Reanudando desde época {self.start_epoch}  "
               f"(mejor val_loss={self.best_val_loss:.4f})")
 
@@ -1507,18 +1510,19 @@ class Trainer:
         print(f"  Beta warmup: {self.beta_warmup} épocas  "
               f"({self.beta_start:.2f} → {self.beta_end:.2f})")
         print(f"  Early stopping: paciencia {self.patience} épocas")
+        print(f"  Criterio de mejora: val_rec durante warmup, val_loss después")
         reg_info = (f"{self.spatial_reg}  λ={self.lambda_spatial}"
                     if self.spatial_reg != 'none' else "none")
         print(f"  Regularización espacial: {reg_info}")
         print(f"{'═'*60}\n")
 
         total_epochs   = self.start_epoch + epochs
-        epoch_times    = []   # segundos por época (media móvil)
+        epoch_times    = []
         train_start    = time.time()
 
         for epoch in range(self.start_epoch, total_epochs):
-            beta       = self._beta(epoch)
-            epoch_t0   = time.time()
+            beta     = self._beta(epoch)
+            epoch_t0 = time.time()
 
             # Estimación ETA basada en la media de épocas anteriores
             if epoch_times:
@@ -1541,28 +1545,40 @@ class Trainer:
 
             epoch_elapsed = time.time() - epoch_t0
             epoch_times.append(epoch_elapsed)
-            # Mantener solo las últimas 5 épocas para la media móvil
             if len(epoch_times) > 5:
                 epoch_times.pop(0)
 
             self.history['train'].append(tr_loss)
             self.history['val'].append(vl_loss)
+            self.history['val_recon'].append(vl_recon)
             self.history['beta'].append(beta)
 
-            is_best = vl_loss < self.best_val_loss
+            # ── Criterio de mejora dual ───────────────────────────────────────
+            # Durante el warmup (β < β_end): vigilar val_recon, porque el loss
+            # total crece artificialmente por el aumento de β×KL aunque la
+            # reconstrucción mejore. Después del warmup: vigilar val_loss total.
+            in_warmup  = beta < self.beta_end
+            monitor    = vl_recon if in_warmup else vl_loss
+            best_sofar = self.best_val_recon if in_warmup else self.best_val_loss
+            criterion  = 'rec' if in_warmup else 'loss'
+
+            is_best = monitor < best_sofar
             if is_best:
-                self.best_val_loss = vl_loss
-                self.no_improve    = 0
+                self.best_val_recon = vl_recon   # actualizar siempre ambos
+                self.best_val_loss  = vl_loss
+                self.no_improve     = 0
             else:
-                self.no_improve   += 1
+                self.no_improve += 1
 
             self.save_checkpoint(epoch, vl_loss, is_best)
 
-            # Resumen de la época
-            bar_w    = 24
-            progress = min(int((1 - vl_loss / max(self.history['val'][0], 1e-6)) * bar_w), bar_w)
-            bar      = '█' * max(progress, 0) + '░' * (bar_w - max(progress, 0))
-            best_marker = ' ◀ mejor' if is_best else ''
+            # Barra de progreso basada en val_recon (no se distorsiona con β)
+            ref_recon = self.history['val_recon'][0] if self.history['val_recon'] else vl_recon
+            bar_w     = 24
+            progress  = min(int((1 - vl_recon / max(ref_recon, 1e-6)) * bar_w), bar_w)
+            bar       = '█' * max(progress, 0) + '░' * (bar_w - max(progress, 0))
+
+            best_marker = f' ◀ mejor ({criterion})' if is_best else ''
             stop_marker = f'  [sin mejora {self.no_improve}/{self.patience}]' \
                           if self.no_improve > 0 else ''
 
@@ -1572,13 +1588,15 @@ class Trainer:
                   f"{best_marker}{stop_marker}")
 
             if self.no_improve >= self.patience:
-                print(f"\n  Early stopping tras {epoch+1} épocas.")
+                print(f"\n  Early stopping tras {epoch+1} épocas "
+                      f"(criterio: {criterion}).")
                 break
 
         total_elapsed = time.time() - train_start
         print(f"\n{'─'*60}")
-        print(f"  Entrenamiento completado en {_fmt_time(total_elapsed)}.  "
-              f"Mejor val_loss: {self.best_val_loss:.4f}")
+        print(f"  Entrenamiento completado en {_fmt_time(total_elapsed)}.")
+        print(f"  Mejor val_loss: {self.best_val_loss:.4f}  "
+              f"mejor val_rec: {self.best_val_recon:.4f}")
         print(f"  Modelos guardados en: {self.model_dir}")
         print(f"{'─'*60}\n")
 
