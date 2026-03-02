@@ -1321,11 +1321,17 @@ def vae_loss(recon, target, mu, logvar, role_mask,
         recon_loss = recon_loss / n_active
 
     # ── KL con free bits por dimensión ────────────────────────────────────────
-    # Cada dimensión latente debe contribuir al menos `free_bits` nats antes
-    # de que el gradiente la penalice, evitando el posterior collapse en datos
-    # esparsos como piano rolls.
+    # Clamp de μ y log σ² para evitar KL explosivo (>100) cuando el encoder
+    # produce distribuciones muy alejadas del prior, especialmente durante
+    # las primeras épocas con decoder congelado. El clamp no afecta al
+    # aprendizaje normal — solo evita el colapso violento al subir β.
+    mu_c     = mu.clamp(-4.0, 4.0)
+    logvar_c = logvar.clamp(-4.0, 4.0)
+
+    # Free bits: cada dimensión latente debe contribuir al menos `free_bits`
+    # nats antes de que el gradiente la penalice.
     # kl_per_dim: (B, latent_dim)
-    kl_per_dim = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
+    kl_per_dim = -0.5 * (1 + logvar_c - mu_c.pow(2) - logvar_c.exp())
     kl_loss    = torch.mean(torch.clamp(kl_per_dim, min=free_bits))
 
     # ── Regularización espacial ───────────────────────────────────────────────
@@ -1381,7 +1387,8 @@ class Trainer:
                  lambda_spatial: float = 0.05,
                  kl_threshold: float = 5.0,
                  kl_warmup_window: int = 3,
-                 freeze_decoder_epochs: int = 0):
+                 freeze_decoder_epochs: int = 0,
+                 decoder_lr_factor: float = 0.1):
         self.model             = model
         self.optimizer         = optimizer
         self.model_dir         = model_dir
@@ -1395,6 +1402,8 @@ class Trainer:
         self.kl_threshold          = kl_threshold
         self.kl_warmup_window      = kl_warmup_window
         self.freeze_decoder_epochs = freeze_decoder_epochs
+        # Factor de lr para el decoder al descongelarse (< 1 = más lento que encoder)
+        self.decoder_lr_factor     = decoder_lr_factor
 
         self.history        = {'train': [], 'val': [], 'val_recon': [],
                                'val_kl': [], 'beta': []}
@@ -1417,6 +1426,24 @@ class Trainer:
         for name, param in raw.named_parameters():
             if any(name.startswith(m) for m in self._DECODER_MODULES):
                 param.requires_grad = requires_grad
+
+    def _apply_decoder_lr(self):
+        """
+        Ajusta el learning rate del decoder al descongelarlo.
+        Divide el lr del grupo del decoder por decoder_lr_factor respecto
+        al lr base del encoder, evitando que el decoder aprenda demasiado
+        rápido e ignore z al descongelarse.
+        Requiere que el optimizador tenga dos param_groups:
+          [0] encoder  (lr base)
+          [1] decoder  (lr reducido)
+        Si el optimizador solo tiene un grupo (setup antiguo), no hace nada.
+        """
+        if len(self.optimizer.param_groups) < 2:
+            return
+        base_lr = self.optimizer.param_groups[0]['lr']
+        self.optimizer.param_groups[1]['lr'] = base_lr * self.decoder_lr_factor
+        print(f"  [decoder lr={base_lr * self.decoder_lr_factor:.2e}  "
+              f"encoder lr={base_lr:.2e}]")
 
     def _recalc_warmup_state(self):
         """Reconstruye el estado del warmup adaptativo desde el historial."""
@@ -1621,9 +1648,17 @@ class Trainer:
                     if frozen:
                         print(f"  [decoder congelado hasta época {self.freeze_decoder_epochs}]")
                 elif epoch == self.freeze_decoder_epochs:
-                    # Descongelar el decoder
+                    # Descongelar el decoder con lr reducido
                     self._set_decoder_grad(True)
-                    print(f"\n  [decoder descongelado en época {epoch+1}]")
+                    self._apply_decoder_lr()
+                    # Segundo warmup: resetear β y el contador de warmup
+                    # para que el decoder aprenda a leer z sin presión KL
+                    self._warmup_started  = False
+                    self._warmup_start_ep = 0
+                    self._kl_above_epochs = 0
+                    last_kl = 0.0
+                    print(f"\n  [decoder descongelado en época {epoch+1} — "
+                          f"β reseteado a 0, segundo warmup activo]")
 
             # β se calcula ANTES de la época usando el KL de la época anterior.
             # En la época 0 last_kl=0 → β=0 siempre, el encoder aprende libre.
@@ -1826,7 +1861,19 @@ def cmd_train(args):
     # ── 4. Optimizador ────────────────────────────────────────────────────────
     # Acceder a los parámetros del modelo real (desenvuelto si hay DataParallel)
     raw_model = model.module if hasattr(model, 'module') else model
-    optimizer = torch.optim.Adam(raw_model.parameters(), lr=args.lr)
+
+    # Dos param_groups independientes: encoder (lr base) y decoder (lr reducido).
+    # El decoder arranca congelado si freeze_decoder_epochs > 0, así que su lr
+    # inicial no importa — se ajusta al descongelarse mediante _apply_decoder_lr.
+    _DECODER_MODS = Trainer._DECODER_MODULES
+    enc_params = [p for n, p in raw_model.named_parameters()
+                  if not any(n.startswith(m) for m in _DECODER_MODS)]
+    dec_params = [p for n, p in raw_model.named_parameters()
+                  if any(n.startswith(m) for m in _DECODER_MODS)]
+    optimizer = torch.optim.Adam([
+        {'params': enc_params, 'lr': args.lr},
+        {'params': dec_params, 'lr': args.lr},   # se reducirá al descongelar
+    ])
 
     # ── 5. Trainer ────────────────────────────────────────────────────────────
     trainer = Trainer(
@@ -1842,6 +1889,7 @@ def cmd_train(args):
         kl_threshold          = args.kl_threshold,
         kl_warmup_window      = args.kl_warmup_window,
         freeze_decoder_epochs = args.freeze_decoder_epochs,
+        decoder_lr_factor     = args.decoder_lr_factor,
     )
 
     if args.resume:
@@ -2872,6 +2920,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument('--lambda-spatial', type=float, default=0.05,
         dest='lambda_spatial', metavar='FLOAT',
         help='Peso del término de regularización espacial (default: 0.05)')
+    p_train.add_argument('--decoder-lr-factor', type=float, default=0.1,
+        dest='decoder_lr_factor', metavar='FLOAT',
+        help='Factor de lr del decoder al descongelarse: lr_dec = lr * factor '
+             '(default: 0.1 — decoder aprende 10x más lento que encoder)')
     p_train.add_argument('--freeze-decoder-epochs', type=int, default=0,
         dest='freeze_decoder_epochs', metavar='INT',
         help='Congelar el decoder durante N épocas iniciales para forzar '
