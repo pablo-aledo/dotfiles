@@ -24,6 +24,18 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
+"""
+python latent_composer.py train \
+    --data-dir data/ --model-dir model/ \
+    --epochs 200 --batch-size 16 \
+    --lr 3e-4 --beta 1.0 --beta-warmup 40 \
+    --pos-weight 3.0 --patience 25 \
+    --spatial-reg interval --lambda-spatial 0.03 \
+    --kl-threshold 15.0 --kl-warmup-window 3 \
+    --freeze-decoder-epochs 10 \
+    --decoder-lr-factor 0.1
+"""
+
 import argparse
 import json
 import os
@@ -1321,12 +1333,22 @@ def vae_loss(recon, target, mu, logvar, role_mask,
         recon_loss = recon_loss / n_active
 
     # ── KL con free bits por dimensión ────────────────────────────────────────
-    # Clamp de μ y log σ² para evitar KL explosivo (>100) cuando el encoder
-    # produce distribuciones muy alejadas del prior, especialmente durante
-    # las primeras épocas con decoder congelado. El clamp no afecta al
-    # aprendizaje normal — solo evita el colapso violento al subir β.
-    mu_c     = mu.clamp(-4.0, 4.0)
-    logvar_c = logvar.clamp(-4.0, 4.0)
+    # Clamp de μ y log σ² para evitar KL explosivo cuando el encoder produce
+    # distribuciones muy alejadas del prior. Los límites son asimétricos:
+    #
+    #   mu     ∈ [-6, 6]   — rango amplio para que el encoder pueda organizar
+    #                         el espacio latente con variedad real entre muestras.
+    #
+    #   logvar ∈ [-6, 4]   — límite superior asimétrico: permite σ pequeña
+    #                         (logvar=-6 → σ≈0.05, distribución concentrada)
+    #                         pero evita σ enorme (logvar=4 → σ≈7.4) que
+    #                         produciría KL explosivo al subir β.
+    #
+    # Con [-4,4] simétrico el encoder encontraba el punto exacto donde
+    # μ=-4 y logvar=-4 producen KL=8.32 constante para todas las muestras,
+    # colapsando a una distribución fija. El rango ampliado rompe ese equilibrio.
+    mu_c     = mu.clamp(-6.0, 6.0)
+    logvar_c = logvar.clamp(-6.0, 4.0)
 
     # Free bits: cada dimensión latente debe contribuir al menos `free_bits`
     # nats antes de que el gradiente la penalice.
