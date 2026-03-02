@@ -1225,8 +1225,14 @@ def vae_loss(recon, target, mu, logvar, role_mask,
     if n_active > 0:
         recon_loss = recon_loss / n_active
 
-    # KL divergence: -0.5 * sum(1 + logvar - mu² - exp(logvar))
-    kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+    # KL divergence con "free bits" por dimensión.
+    # Cada dimensión latente debe contribuir al menos `free_bits` nats antes
+    # de que el gradiente la penalice, evitando el posterior collapse en datos
+    # esparsos como piano rolls.
+    # kl_per_dim: (B, latent_dim)
+    free_bits   = 0.5   # nats mínimos por dimensión
+    kl_per_dim  = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
+    kl_loss     = torch.mean(torch.clamp(kl_per_dim, min=free_bits))
 
     total = recon_loss + beta * kl_loss
     return total, recon_loss, kl_loss
