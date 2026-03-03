@@ -24,14 +24,23 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 python latent_composer.py train \
-    --data-dir data/ --model-dir model_hier/ \
-    --epochs 200 --batch-size 16 \
-    --lr 3e-4 --beta 1.0 --beta-warmup 40 \
-    --pos-weight 3.0 --patience 25 \
-    --spatial-reg interval --lambda-spatial 0.03 \
-    --kl-threshold 15.0 --kl-warmup-window 3 \
-    --freeze-decoder-epochs 10 \
-    --decoder-lr-factor 0.1
+    --data-dir data/ \
+    --model-dir model_small2/ \
+    --epochs 300 \
+    --batch-size 16 \
+    --lr 1e-3 \
+    --beta 1.0 \
+    --beta-warmup 40 \
+    --latent-dim 32 \
+    --style-dim 16 \
+    --pos-weight 5.0 \
+    --patience 50 \
+    --spatial-reg interval \
+    --lambda-spatial 0.03 \
+    --kl-threshold 1.0 \
+    --kl-warmup-window 2 \
+    --decoder-lr-factor 0.5 \
+    --free-bits 0.5
 
 """
 
@@ -1479,7 +1488,8 @@ class Trainer:
                  kl_threshold: float = 5.0,
                  kl_warmup_window: int = 3,
                  freeze_decoder_epochs: int = 0,
-                 decoder_lr_factor: float = 0.1):
+                 decoder_lr_factor: float = 0.1,
+                 free_bits: float = 0.1):
         self.model             = model
         self.optimizer         = optimizer
         self.model_dir         = model_dir
@@ -1495,6 +1505,7 @@ class Trainer:
         self.freeze_decoder_epochs = freeze_decoder_epochs
         # Factor de lr para el decoder al descongelarse (< 1 = más lento que encoder)
         self.decoder_lr_factor     = decoder_lr_factor
+        self.free_bits             = free_bits
 
         self.history        = {'train': [], 'val': [], 'val_recon': [],
                                'val_kl': [], 'beta': []}
@@ -1675,6 +1686,7 @@ class Trainer:
                                              pos_weight=self.pos_weight,
                                              spatial_reg=self.spatial_reg,
                                              lambda_spatial=self.lambda_spatial,
+                                             free_bits=self.free_bits,
                                              z_global_dim=z_global_dim)
                 if training:
                     self.optimizer.zero_grad()
@@ -1991,6 +2003,7 @@ def cmd_train(args):
         kl_warmup_window      = args.kl_warmup_window,
         freeze_decoder_epochs = args.freeze_decoder_epochs,
         decoder_lr_factor     = args.decoder_lr_factor,
+        free_bits             = args.free_bits,
     )
 
     if args.resume:
@@ -3009,8 +3022,8 @@ def build_parser() -> argparse.ArgumentParser:
         help='Directorio de salida para checkpoints y modelo final')
     p_train.add_argument('--epochs',      type=int, default=100,
         help='Épocas máximas (default: 100)')
-    p_train.add_argument('--batch-size',  type=int, default=32, metavar='INT',
-        help='Tamaño de batch (default: 32)')
+    p_train.add_argument('--batch-size',  type=int, default=16, metavar='INT',
+        help='Tamaño de batch (default: 16)')
     p_train.add_argument('--latent-dim',  type=int, default=128, metavar='INT',
         help='Dimensión del espacio latente z (default: 128)')
     p_train.add_argument('--style-dim',   type=int, default=64, metavar='INT',
@@ -3052,6 +3065,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument('--kl-warmup-window', type=int, default=3,
         dest='kl_warmup_window', metavar='INT',
         help='Épocas consecutivas con KL>threshold para disparar warmup (default: 3)')
+    p_train.add_argument('--free-bits',      type=float, default=0.1,
+        dest='free_bits', metavar='FLOAT',
+        help='Bits libres por dimensión latente para evitar colapso (default: 0.1)')
     p_train.add_argument('--resume',      action='store_true',
         help='Reanudar desde el último checkpoint')
     p_train.add_argument('--report',      action='store_true',
