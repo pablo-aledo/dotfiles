@@ -24,6 +24,8 @@
 ║                               --model-dir model/ --palette palette.json     ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
+python latent_composer.py prepare --input-dir midis/ --output-dir data/ --report
+
 python latent_composer.py train \
     --data-dir data/ \
     --model-dir model_small2/ \
@@ -1049,17 +1051,30 @@ def _build_model(latent_dim: int, style_dim: int, tension_dim: int,
     z_local_dim  = latent_dim - z_global_dim  # resto (64)
 
     class _RoleBarEncoder(nn.Module):
-        """Codifica un único compás de un único rol → vector h_bar."""
+        """Codifica un único compás de un único rol → vector h_bar.
+
+        Usa convoluciones 1D sobre el eje de tiempo (ticks) para preservar
+        la estructura temporal y de pitch antes de comprimir a h_bar.
+        Entrada: (B, resolution, 128) interpretada como (B, C=128, T=resolution).
+        """
         def __init__(self):
             super().__init__()
-            self.fc = nn.Sequential(
-                nn.Linear(bar_flat, h_bar),
+            self.conv = nn.Sequential(
+                nn.Conv1d(128, 128, kernel_size=3, padding=1),
                 nn.ReLU(),
-                nn.Linear(h_bar, h_bar),
+                nn.Dropout(0.2),              # ← nuevo
+                nn.Conv1d(128, 64, kernel_size=3, padding=1),
                 nn.ReLU(),
+                nn.AdaptiveAvgPool1d(1),
             )
+            self.fc = nn.Linear(64, h_bar)
+
         def forward(self, x):
-            return self.fc(x.reshape(x.size(0), -1))   # (B, h_bar)
+            # x: (B, resolution*128) o (B, resolution, 128)
+            # Reorganizar a (B, 128, resolution) para Conv1d sobre eje temporal
+            x = x.reshape(x.size(0), resolution, 128).permute(0, 2, 1)
+            h = self.conv(x).squeeze(-1)   # (B, 64)
+            return self.fc(h)              # (B, h_bar)
 
     class _HierarchicalMultiRoleVAE(nn.Module):
         def __init__(self):
@@ -1081,6 +1096,7 @@ def _build_model(latent_dim: int, style_dim: int, tension_dim: int,
             self.bar_proj = nn.Sequential(
                 nn.Linear(n_roles * h_bar, h_bar),
                 nn.ReLU(),
+                nn.Dropout(0.1),              # ← nuevo
             )
 
             # ── Nivel global: captura estilo global (tonalidad, densidad) ─
