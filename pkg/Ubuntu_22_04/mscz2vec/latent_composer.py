@@ -9,6 +9,7 @@
 ║    train     — Entrena el VAE multi-rol                                      ║
 ║    encode    — MIDI referencia → z_style (.json)                             ║
 ║    compose   — Genera obra nueva (modos: reconstruct/z-noise/blend/sweep)   ║
+║               Recuperación: --retrieval decoder (VAE) | nnr (vecino latente)║
 ║    inspect   — Diagnóstico del modelo y espacio latente                      ║
 ║                                                                              ║
 ║  DEPENDENCIAS:                                                               ║
@@ -2650,6 +2651,206 @@ def _generate_bars(z_ctx_seq, z_style, tension_curve,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  ÍNDICE LATENTE (NNR): encode del corpus completo
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _build_latent_index(data_dir: str, model, cfg: dict,
+                        batch_size: int = 64) -> tuple:
+    """
+    Codifica todos los compases target del corpus y construye un índice de
+    búsqueda por vecino más cercano en el espacio latente.
+
+    Para cada .npz y cada ventana, el compás target es el último de la ventana
+    (índice window_bars-1). El contexto son los window_bars-1 compases
+    anteriores, que se pasan por el encoder para obtener z (usando mu, sin
+    muestreo estocástico).
+
+    Devuelve
+    --------
+    z_index      : np.ndarray (N, latent_dim)
+                   Vector latente de cada compás del corpus.
+    bar_index    : dict {role: np.ndarray (N, resolution, 128)}
+                   Piano roll binario del compás target por rol.
+                   Roles ausentes en una muestra contienen ceros.
+    tension_index: np.ndarray (N, tension_dim)
+                   Vector de tensión del compás target.
+    """
+    import numpy as np
+    import torch
+
+    window_bars = cfg['window_bars']
+    resolution  = cfg['resolution']
+    n_roles     = cfg['n_roles']
+    role_list   = cfg['roles']
+    latent_dim  = cfg['latent_dim']
+    tension_dim = cfg['tension_dim']
+
+    npz_files = sorted(Path(data_dir).glob('*.npz'))
+    if not npz_files:
+        raise FileNotFoundError(f"No se encontraron .npz en {data_dir}")
+
+    # Acumuladores
+    all_contexts  = []   # (N, n_roles, ctx_bars, resolution, 128)
+    all_bars      = {role: [] for role in role_list}
+    all_tensions  = []
+    ctx_bars      = window_bars - 1
+
+    print(f"[nnr] Cargando corpus desde {data_dir} ...")
+
+    for path in npz_files:
+        with np.load(str(path), allow_pickle=True) as raw:
+            data = {k: raw[k] for k in raw.files}
+
+        meta         = json.loads(str(data['meta_json'][0]))
+        n_windows    = meta['n_windows']
+        roles_present = [r for r in role_list if f'roll_{r}' in data]
+
+        if not roles_present:
+            continue
+
+        for widx in range(n_windows):
+            # Construir contexto (N_ROLES, ctx_bars, res, 128)
+            ctx = np.zeros((n_roles, ctx_bars, resolution, 128), dtype=np.float32)
+            # Compás target (N_ROLES, res, 128)
+            tgt = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+
+            for ridx, role in enumerate(role_list):
+                key = f'roll_{role}'
+                if key in data:
+                    win = data[key][widx]        # (window_bars, res, 128)
+                    ctx[ridx] = win[:-1]         # primeros ctx_bars
+                    tgt[ridx] = win[-1]          # último compás = target
+
+            all_contexts.append(ctx)
+
+            for ridx, role in enumerate(role_list):
+                all_bars[role].append(tgt[ridx])
+
+            if 'tension' in data:
+                all_tensions.append(data['tension'][widx])
+            else:
+                all_tensions.append(np.zeros(tension_dim, dtype=np.float32))
+
+    N = len(all_contexts)
+    if N == 0:
+        raise ValueError("[nnr] El corpus no produjo ninguna muestra válida.")
+
+    print(f"[nnr] {N} compases indexados — codificando con el encoder ...")
+
+    # Codificar en batches
+    contexts_arr = np.stack(all_contexts, axis=0)   # (N, n_roles, ctx_bars, res, 128)
+    z_index      = np.zeros((N, latent_dim), dtype=np.float32)
+
+    with torch.no_grad():
+        for i in range(0, N, batch_size):
+            batch = torch.tensor(contexts_arr[i:i + batch_size])
+            mu, _ = model.encode(batch)
+            z_np  = mu.numpy() if hasattr(mu, 'numpy') else mu._d
+            z_index[i:i + len(z_np)] = z_np
+            pct = min(i + batch_size, N)
+            print(f"  [{pct}/{N}]", end='\r', flush=True)
+
+    print(' ' * 40, end='\r')
+
+    bar_index     = {role: np.stack(all_bars[role], axis=0)
+                     for role in role_list}   # cada (N, res, 128)
+    tension_index = np.stack(all_tensions, axis=0)  # (N, tension_dim)
+
+    print(f"[nnr] Índice construido: {N} compases × {latent_dim} dims latentes")
+    return z_index, bar_index, tension_index
+
+
+def _generate_bars_nnr(z_ctx_seq, tension_curve,
+                       z_index, bar_index, tension_index,
+                       cfg, distance: str = 'euclidean',
+                       tension_weight: float = 0.0,
+                       temperature: float = 0.0) -> dict:
+    """
+    Genera n_bars compases por recuperación ponderada en el espacio latente.
+
+    Para cada compás a generar calcula la distancia entre el z de contexto y
+    todos los z del índice, y muestrea un candidato con probabilidad
+    proporcional a exp(-dist / T). Con T=0 equivale a argmin (vecino exacto);
+    con T alto la distribucion se aplana y hay mas variedad.
+
+    Parametros
+    ----------
+    z_ctx_seq      : np.ndarray (n_bars, latent_dim) o (latent_dim,)
+    tension_curve  : np.ndarray (n_bars, tension_dim)
+    z_index        : np.ndarray (N, latent_dim)   -- indice pre-codificado
+    bar_index      : dict {role: np.ndarray (N, res, 128)}
+    tension_index  : np.ndarray (N, tension_dim)  -- tension de cada compas
+    distance       : 'euclidean' | 'cosine'
+    tension_weight : peso del termino de tension en la distancia compuesta
+                     (0.0 = solo distancia latente; 1.0 = pesos iguales)
+    temperature    : T del muestreo softmax inverso sobre distancias.
+                     0.0 = determinista (vecino mas cercano exacto).
+                     Valores tipicos: 0.1 (conservador) ... 1.0 (muy variado).
+
+    Devuelve
+    --------
+    dict {role: np.ndarray (n_bars, resolution, 128)} -- binario (0/1)
+    """
+    import numpy as np
+
+    n_bars     = tension_curve.shape[0]
+    role_list  = cfg['roles']
+    resolution = cfg['resolution']
+
+    if z_ctx_seq.ndim == 1:
+        z_ctx_seq = np.tile(z_ctx_seq[None], (n_bars, 1))
+
+    # Normalizar z_index una vez si se usa coseno
+    if distance == 'cosine':
+        norms   = np.linalg.norm(z_index, axis=1, keepdims=True)
+        z_idx_n = z_index / np.clip(norms, 1e-8, None)
+    else:
+        z_idx_n = None
+
+    bars_per_role = {role: np.zeros((n_bars, resolution, 128), dtype=np.float32)
+                     for role in role_list}
+
+    for bar_i in range(n_bars):
+        z_q = z_ctx_seq[bar_i]   # (latent_dim,)
+
+        # ── Distancia latente ─────────────────────────────────────────────
+        if distance == 'cosine':
+            nq    = z_q / max(float(np.linalg.norm(z_q)), 1e-8)
+            dists = 1.0 - z_idx_n @ nq           # (N,)  cosine distance
+        else:
+            diff  = z_index - z_q                # (N, latent_dim)
+            dists = np.linalg.norm(diff, axis=1)  # (N,)
+
+        # ── Termino de tension (opcional) ─────────────────────────────────
+        if tension_weight > 0.0:
+            t_q     = tension_curve[bar_i]                         # (tension_dim,)
+            t_diff  = tension_index - t_q                          # (N, tension_dim)
+            t_dists = np.linalg.norm(t_diff, axis=1)              # (N,)
+            # Normalizar ambos terminos a [0, 1] antes de combinar
+            d_max   = dists.max()   or 1.0
+            t_max   = t_dists.max() or 1.0
+            dists   = ((1.0 - tension_weight) * dists   / d_max +
+                        tension_weight         * t_dists / t_max)
+
+        # ── Seleccion: determinista o muestreo ponderado ──────────────────
+        if temperature <= 0.0:
+            # Vecino mas cercano exacto
+            selected = int(np.argmin(dists))
+        else:
+            # Softmax inverso: prob proporcional a exp(-dist / T)
+            # Restar el minimo antes de exponenciar para estabilidad numerica
+            logits = -(dists - dists.min()) / temperature
+            probs  = np.exp(logits)
+            probs /= probs.sum()
+            selected = int(np.random.choice(len(dists), p=probs))
+
+        for role in role_list:
+            bars_per_role[role][bar_i] = bar_index[role][selected]
+
+    return bars_per_role
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  COMANDO: compose
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -2712,11 +2913,37 @@ def cmd_compose(args):
         raise ValueError(f"Modo desconocido: {mode}")
 
     # ── Generar compases ──────────────────────────────────────────────────
-    print(f"[compose] Generando {n_bars} compases (temperatura={args.temperature}) ...")
-    bars_per_role = _generate_bars(
-        z_ctx_seq, z_style, tension_curve,
-        model, cfg, temperature=args.temperature
-    )
+    retrieval = getattr(args, 'retrieval', 'decoder')
+
+    if retrieval == 'nnr':
+        # Modo recuperación: buscar el vecino más cercano en el corpus
+        if not getattr(args, 'data_dir', None):
+            raise ValueError(
+                "[nnr] --retrieval nnr requiere --data-dir con los .npz del corpus")
+        distance       = getattr(args, 'nnr_distance', 'euclidean')
+        tension_weight = getattr(args, 'nnr_tension_weight', 0.0)
+
+        z_index, bar_index, tension_index = _build_latent_index(
+            args.data_dir, model, cfg)
+
+        nnr_temperature = getattr(args, 'nnr_temperature', 0.0)
+        print(f"[compose] Generando {n_bars} compases  "
+              f"[NNR · distancia={distance} · T={nnr_temperature} · tension_w={tension_weight}] ...")
+        bars_per_role = _generate_bars_nnr(
+            z_ctx_seq, tension_curve,
+            z_index, bar_index, tension_index,
+            cfg,
+            distance       = distance,
+            tension_weight = tension_weight,
+            temperature    = nnr_temperature,
+        )
+    else:
+        # Modo clásico: decodificar z con el decoder del VAE
+        print(f"[compose] Generando {n_bars} compases (temperatura={args.temperature}) ...")
+        bars_per_role = _generate_bars(
+            z_ctx_seq, z_style, tension_curve,
+            model, cfg, temperature=args.temperature
+        )
 
     # ── Cargar paleta y renderizar MIDI ──────────────────────────────────
     palette = _load_palette(args.palette, cfg)
@@ -3099,13 +3326,39 @@ def build_parser() -> argparse.ArgumentParser:
               blend         Interpolación ponderada entre varios MIDIs
               sweep         Barrido suave entre varios MIDIs a lo largo de la obra
 
+            Método de recuperación (--retrieval):
+
+              decoder  (default) Genera el piano roll decodificando z con el VAE.
+              nnr      Recupera el compás del corpus con z más cercano al query.
+                       Requiere --data-dir. No usa el decoder: es más estable
+                       y sirve como diagnóstico del espacio latente.
+
+            Opciones NNR:
+              --data-dir DIR              Directorio con los .npz del corpus
+              --nnr-distance euclidean|cosine  Métrica de distancia (default: euclidean)
+              --nnr-tension-weight FLOAT  Peso del término de tensión [0,1] (default: 0.0)
+              --nnr-temperature FLOAT     Temperatura de muestreo: 0.0=vecino exacto,
+                                          >0 muestrea entre cercanos ponderando por
+                                          exp(-dist/T). Rango típico 0.1-1.0 (default: 0.0)
+
             Perfiles de tensión (--tension):
               flat | arch | rise | fall | archivo.json
 
             Ejemplos:
+              # Modo clásico (decoder)
               compose --model-dir model/ --palette p.json --mode z-noise --input ref.mid
+
+              # Modo NNR (recuperación del corpus)
+              compose --model-dir model/ --palette p.json --mode z-noise --input ref.mid \
+                      --retrieval nnr --data-dir data/
+
+              # NNR con distancia coseno y condicionamiento de tensión
+              compose --model-dir model/ --palette p.json --mode sweep --inputs a.mid b.mid \
+                      --retrieval nnr --data-dir data/ \
+                      --nnr-distance cosine --nnr-tension-weight 0.3
+
+              # Blend clásico
               compose --model-dir model/ --palette p.json --mode blend --inputs a.mid b.mid --weights 0.6 0.4
-              compose --model-dir model/ --palette p.json --mode sweep  --inputs a.mid b.mid c.mid
         """))
     p_comp.add_argument('--model-dir',   required=True, metavar='DIR',
         help='Directorio con el modelo entrenado')
@@ -3136,6 +3389,31 @@ def build_parser() -> argparse.ArgumentParser:
         help='[z-noise] Magnitud del ruido gaussiano (default: 0.3)')
     p_comp.add_argument('--smooth',      type=float, default=0.5, metavar='FLOAT',
         help='[sweep] Suavizado: 0=lineal, >0=spline cúbico (default: 0.5)')
+    # ── Modo de recuperación ──────────────────────────────────────────────
+    p_comp.add_argument('--retrieval',
+        choices=['decoder', 'nnr'],
+        default='decoder',
+        dest='retrieval',
+        help='Método de generación: decoder (VAE clásico) | nnr (vecino más '
+             'cercano en el espacio latente del corpus). (default: decoder)')
+    p_comp.add_argument('--data-dir',    metavar='DIR',
+        dest='data_dir', default=None,
+        help='[nnr] Directorio con los .npz del corpus (requerido para --retrieval nnr)')
+    p_comp.add_argument('--nnr-distance',
+        choices=['euclidean', 'cosine'],
+        default='euclidean',
+        dest='nnr_distance',
+        help='[nnr] Métrica de distancia en el espacio latente (default: euclidean)')
+    p_comp.add_argument('--nnr-tension-weight', type=float, default=0.0,
+        metavar='FLOAT', dest='nnr_tension_weight',
+        help='[nnr] Peso del término de tensión en la distancia compuesta: '
+             '0.0=solo latente, 1.0=latente y tensión a partes iguales (default: 0.0)')
+    p_comp.add_argument('--nnr-temperature', type=float, default=0.0,
+        metavar='FLOAT', dest='nnr_temperature',
+        help='[nnr] Temperatura del muestreo ponderado por distancia. '
+             '0.0=determinista (vecino exacto); valores mayores aumentan la '
+             'variedad muestreando entre los candidatos cercanos con '
+             'prob proporcional a exp(-dist/T). Rango típico: 0.1-1.0 (default: 0.0)')
     p_comp.set_defaults(func=cmd_compose,
                         input=None, inputs=None, weights=None)
 
