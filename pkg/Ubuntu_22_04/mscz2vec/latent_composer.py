@@ -43,6 +43,11 @@ python latent_composer.py train \
     --decoder-lr-factor 0.5 \
     --free-bits 0.5
 
+python latent_composer.py compose --model-dir model/ --palette palette.json --mode z-noise --input ref.mid --temperature 0.5 --noise 0.1 
+
+python latent_composer.py compose --model-dir model/ --palette palette.json --mode sweep --inputs ref.mid ref.mid --bars 64 --tension arch --retrieval nnr --data-dir data/ --nnr-temperature 0.5 
+python latent_composer.py compose --model-dir model/ --palette palette.json --mode z-noise --input ref.mid --retrieval nnr --data-dir data/ --nnr-temperature 0.5
+
 """
 
 import argparse
