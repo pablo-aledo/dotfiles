@@ -53,6 +53,6 @@ dag_diff(){
     cat /tmp/newnodes | while read line; do echo "style $line fill:#AAFFAA"; done >> /tmp/linkstyles
     cat /tmp/rmnodes | while read line; do echo "style $line fill:#FFAAAA"; done >> /tmp/linkstyles
 
-    (echo flowchart LR; cat /tmp/dag_12 | sed 's/ -> / --> /g'; cat /tmp/linkstyles | sed -e 's/green/green,/g' -e 's/red/red,/g') > /tmp/diff_fcg_final
+    (echo flowchart LR; cat /tmp/dag12 | sed 's/ -> / --> /g'; cat /tmp/linkstyles | sed -e 's/green/green,/g' -e 's/red/red,/g') > /tmp/diff_fcg_final
     cat /tmp/diff_fcg_final
 }
