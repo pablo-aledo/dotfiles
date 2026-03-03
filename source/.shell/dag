@@ -32,3 +32,27 @@ dag_slice () {
 dag_slice_rev () {
     cat | dag_invert | dag_slice $1 | dag_invert
 }
+
+dag_diff(){
+    cat $1 | grep ' -> ' > /tmp/dag1
+    cat $2 | grep ' -> ' > /tmp/dag2
+    cat $1 $2 | grep ' -> ' | sort -u > /tmp/dag12
+    nl -v0 /tmp/dag12 > /tmp/dag_nl
+    cat $1 | grep -v ' -> ' > /tmp/nodes1
+    cat $2 | grep -v ' -> ' > /tmp/nodes2
+    comm -13 <(cat /tmp/nodes1 | awk '{print $2}' | sort -u) <(cat /tmp/nodes2 | awk '{print $2}' | sort -u) > /tmp/newnodes
+    comm -23 <(comm -3 <(cat /tmp/nodes1 | sort -u) <(cat /tmp/nodes2 | sort -u) | awk '{print $2}' | sort -u) <(cat /tmp/newnodes | sort -u) > /tmp/modifiednodes
+    comm -23 <(cat /tmp/nodes1 | awk '{print $2}' | sort -u) <(cat /tmp/nodes2 | awk '{print $2}' | sort -u) > /tmp/rmnodes
+
+    comm -23 <(sort /tmp/dag1) <(sort /tmp/dag2) > /tmp/dag_rm
+    comm -13 <(sort /tmp/dag1) <(sort /tmp/dag2) > /tmp/dag_new
+
+    [ -s /tmp/dag_new ] && wgrep /tmp/dag_new /tmp/dag_nl | awk '{print "linkStyle " $1 " stroke:green stroke-width: 2px"}' >  /tmp/linkstyles
+    [ -s /tmp/dag_rm ] && wgrep /tmp/dag_rm  /tmp/dag_nl | awk '{print "linkStyle " $1 " stroke:red stroke-width: 2px"}' >> /tmp/linkstyles
+    cat /tmp/modifiednodes | while read line; do echo "style $line fill:#FFFFAA"; done >> /tmp/linkstyles
+    cat /tmp/newnodes | while read line; do echo "style $line fill:#AAFFAA"; done >> /tmp/linkstyles
+    cat /tmp/rmnodes | while read line; do echo "style $line fill:#FFAAAA"; done >> /tmp/linkstyles
+
+    (echo flowchart LR; cat /tmp/dag_12 | sed 's/ -> / --> /g'; cat /tmp/linkstyles | sed -e 's/green/green,/g' -e 's/red/red,/g') > /tmp/diff_fcg_final
+    cat /tmp/diff_fcg_final
+}
