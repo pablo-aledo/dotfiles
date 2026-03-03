@@ -1,0 +1,68 @@
+services:
+
+  # ─────────────────────────────────────────────
+  # 1. Servidor de inferencia: vLLM + Qwen3-Coder
+  # ─────────────────────────────────────────────
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: qwen3-vllm
+    runtime: nvidia          # Quitar si usas CPU (muy lento)
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - huggingface-cache:/root/.cache/huggingface
+    ports:
+      - "8000:8000"
+    command: >
+      --model Qwen/Qwen3-4B-AWQ
+      --quantization awq_marlin
+      --dtype float16
+      --max-model-len 4784
+      --gpu-memory-utilization 0.75
+      --max-num-seqs 4
+      --enable-auto-tool-choice
+      --tool-call-parser hermes
+      --served-model-name qwen3-coder
+      --host 0.0.0.0
+      --port 8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ─────────────────────────────────────────────
+  # 2. opencode conectado al vLLM local
+  # ─────────────────────────────────────────────
+  opencode:
+    build:
+      context: .
+      dockerfile: Dockerfile.opencode
+    container_name: opencode-agent
+    depends_on:
+      vllm:
+        condition: service_healthy
+    environment:
+      - OPENCODE_MODEL=qwen3-coder
+      - OPENCODE_API_URL=http://vllm:8000/v1
+      # Sin API key real; vLLM acepta cualquier valor
+      - OPENCODE_API_KEY=local
+    volumes:
+      - ${PWD}:/agent-workspace
+      - ${HOME}/.config/opencode:/home/opencode/.config/opencode
+    working_dir: /agent-workspace
+    stdin_open: true
+    tty: true
+    command: ["/bin/bash"]
+
+volumes:
+  huggingface-cache:

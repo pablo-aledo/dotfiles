@@ -1,0 +1,32 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    nodejs \
+    npm \
+    git \
+    curl \
+    sudo \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g opencode-ai --no-audit
+
+# Crear usuario
+RUN useradd -m -s /bin/bash opencode && \
+    echo "opencode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Directorio de config de opencode
+RUN mkdir -p /home/opencode/.config/opencode && \
+    chown -R opencode:opencode /home/opencode/.config
+
+# Copiar script de entrypoint que inyecta la config del proveedor local
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+WORKDIR /agent-workspace
+USER opencode
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["/bin/bash"]
