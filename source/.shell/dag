@@ -29,8 +29,24 @@ dag_slice () {
     cat /tmp/dag_pruned
 }
 
+dag_slice_many () {
+    cat > /tmp/dag_slice
+    for a in $*
+    do
+        cat /tmp/dag_slice | dag_slice $a
+    done | sort -u
+}
+
 dag_slice_rev () {
     cat | dag_invert | dag_slice $1 | dag_invert
+}
+
+dag_slice_rev_many () {
+    cat > /tmp/dag_slice
+    for a in $*
+    do
+        cat /tmp/dag_slice | dag_slice_rev $a
+    done | sort -u
 }
 
 dag_diff(){
