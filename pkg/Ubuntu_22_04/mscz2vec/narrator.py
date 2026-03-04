@@ -273,6 +273,39 @@ ARC_TONAL_MAPS = {
     'custom':     ['base'],
 }
 
+# Hints de leitmotifs por arco y sección.
+# leitmotif_tracker.py lee estos hints para priorizar la siembra en secciones concretas.
+# El usuario puede sobreescribirlos registrando motivos con nombres distintos.
+LEITMOTIF_HINTS_BY_ARC = {
+    'hero':       {'Llamada':     [],
+                   'Prueba':      ['búsqueda'],
+                   'Clímax':      ['destino', 'búsqueda'],
+                   'Resolución':  ['victoria']},
+    'tragedy':    {'Ascenso':     ['esperanza'],
+                   'Punto alto':  ['destino'],
+                   'Caída':       ['pérdida', 'destino']},
+    'romance':    {'Encuentro':   ['amor'],
+                   'Tensión':     ['amor', 'duda'],
+                   'Unión':       ['amor'],
+                   'Reafirmación':['amor']},
+    'mystery':    {'Ambigüedad':  ['enigma'],
+                   'Pistas':      ['enigma', 'sospecha'],
+                   'Crisis':      ['destino', 'sospecha'],
+                   'Resolución':  ['revelación']},
+    'meditation': {'Reposo':      [],
+                   'Ondulación':  ['memoria'],
+                   'Retorno':     []},
+    'rondo':      {'Tema':        ['tema_principal'],
+                   'Episodio 1':  ['contraste'],
+                   'Episodio 2':  ['contraste'],
+                   'Episodio 3':  ['contraste'],
+                   'Coda':        ['tema_principal']},
+    'sonata':     {'Exposición':  ['tema_a', 'tema_b'],
+                   'Desarrollo':  ['tema_a', 'tema_b'],
+                   'Reexposición':['tema_a', 'tema_b']},
+    'custom':     {},
+}
+
 
 def build_sections(arc_name: str, n_bars: int, key: str = 'C',
                    sections_override: str = None) -> list:
@@ -318,6 +351,7 @@ def build_sections(arc_name: str, n_bars: int, key: str = 'C',
             'key':          sec_key,
             'tonal_function': tonal_fn,
             'role':         label.lower(),
+            'leitmotif_hints': LEITMOTIF_HINTS_BY_ARC.get(arc_name, {}).get(label, []),
         })
         start += bars
 
@@ -518,6 +552,9 @@ def export_yaml(plan: dict, path: str):
             f"    bars: {sec['bars']}",
             f"    key: {sec['key']}",
         ]
+        hints = sec.get('leitmotif_hints', [])
+        if hints:
+            lines.append(f"    leitmotif_hints: [{', '.join(hints)}]")
     lines += ["", "pipeline:"]
     for step in plan['pipeline_steps']:
         lines += [

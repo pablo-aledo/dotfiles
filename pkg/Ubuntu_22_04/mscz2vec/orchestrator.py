@@ -2437,6 +2437,12 @@ def main():
                         help='JSON de paleta de instrumentos generado por theorist.py. '
                              'Si se provee, reemplaza la plantilla --template con la selección '
                              'de instrumentos específica al mood de la pieza.')
+    parser.add_argument('--leitmotif-hints', default=None,
+                        metavar='JSON',
+                        help='JSON de preferred_instruments por leitmotif generado por '
+                             'leitmotif_tracker.py inject --export-orchestrator. '
+                             'Informa al orquestador de qué instrumento debe sonar '
+                             'cada leitmotif en cada sección.')
     parser.add_argument('--no-perc',    action='store_true')
     parser.add_argument('--no-ks',      action='store_true')
     parser.add_argument('--no-cc',      action='store_true')
@@ -2608,6 +2614,47 @@ def main():
     else:
         template = TEMPLATES[args.template]
         print(f"  Plantilla: {args.template} ({len(template['instruments'])} instrumentos)")
+
+    # ── Leitmotif hints (preferred_instruments por motivo) ───────────────────
+    # Generado por: leitmotif_tracker.py inject --export-orchestrator hints.json
+    # Permite que el orquestador sepa qué instrumento debe sonar cada leitmotif.
+    leitmotif_instrument_map = {}
+    if args.leitmotif_hints and Path(args.leitmotif_hints).exists():
+        try:
+            with open(args.leitmotif_hints, 'r', encoding='utf-8') as _f:
+                _lm_data = json.load(_f)
+            leitmotif_instrument_map = _lm_data.get('leitmotif_instrument_map', {})
+            print(f"\n  Leitmotif hints cargados: {len(leitmotif_instrument_map)} motivos")
+            for _lm_name, _lm_info in leitmotif_instrument_map.items():
+                _instrs = ', '.join(_lm_info.get('preferred_instruments', []))
+                _affin  = _lm_info.get('tension_affinity', '?')
+                print(f"    '{_lm_name}': instrumentos=[{_instrs}] afinidad={_affin}")
+            # Enriquecer la plantilla: añadir un section_filter por sección
+            # para los instrumentos preferidos de cada leitmotif.
+            # En la práctica, el orquestador dará prioridad a esos instrumentos
+            # cuando procese pistas marcadas como "leitmotif_*".
+            _lm_instruments = set()
+            for _lm_info in leitmotif_instrument_map.values():
+                _lm_instruments.update(_lm_info.get('preferred_instruments', []))
+            if _lm_instruments:
+                # Asegurar que los instrumentos de leitmotif estén en la plantilla
+                existing_names = {i['name'] for i in template.get('instruments', [])}
+                _added = 0
+                for _instr_name in _lm_instruments:
+                    if _instr_name not in existing_names:
+                        # Añadir con rol de melody_double como fallback
+                        template['instruments'].append({
+                            'name':    _instr_name,
+                            'source':  'Melody',
+                            'role':    'melody_double',
+                            'channel': len(template['instruments']),
+                        })
+                        existing_names.add(_instr_name)
+                        _added += 1
+                if _added > 0:
+                    print(f"    + {_added} instrumento(s) de leitmotif añadidos a la plantilla")
+        except Exception as _e:
+            print(f"  ⚠ No se pudo cargar --leitmotif-hints: {_e}")
 
     # ── Solo informe ──────────────────────────────────────────────────────────
     _raw_output = args.output or Path(args.midi).stem + '_orquestado'

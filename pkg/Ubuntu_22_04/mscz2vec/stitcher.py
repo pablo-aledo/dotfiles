@@ -836,6 +836,58 @@ def parse_tempo_map(s):
     return result
 
 
+def _inject_leitmotif_at_bar(output_mid, bar: int, fragment_midi: str,
+                               instrument: str = None, dynamic: str = 'mp',
+                               verbose: bool = False):
+    """
+    Inserta un fragmento MIDI de leitmotif en el compás indicado del MIDI de salida,
+    añadiéndolo como una nueva pista con offset temporal correcto.
+    Llamado desde main() si se pasa --leitmotif-schedule.
+    """
+    vel_map = {'pp': 25, 'p': 45, 'mp': 60, 'mf': 75, 'f': 90, 'ff': 110}
+    target_vel = vel_map.get(dynamic, 64)
+    tpb = output_mid.ticks_per_beat
+    insert_tick = bar * tpb * 4  # asume 4/4
+
+    try:
+        frag = mido.MidiFile(fragment_midi)
+        new_track = mido.MidiTrack()
+        track_name = f'leitmotif_{instrument or "motif"}_bar{bar}'
+        new_track.append(mido.MetaMessage('track_name', name=track_name, time=0))
+
+        first_note = True
+        for track in frag.tracks:
+            for msg in track:
+                if msg.is_meta:
+                    continue
+                if first_note:
+                    # El primer mensaje lleva el offset absoluto como delta
+                    # respecto al inicio del MIDI (tick 0)
+                    if hasattr(msg, 'velocity') and msg.velocity > 0:
+                        new_track.append(msg.copy(
+                            time=insert_tick,
+                            velocity=min(msg.velocity, target_vel)
+                        ))
+                    else:
+                        new_track.append(msg.copy(time=insert_tick))
+                    first_note = False
+                else:
+                    if hasattr(msg, 'velocity') and msg.velocity > 0:
+                        new_track.append(msg.copy(
+                            velocity=min(msg.velocity, target_vel)
+                        ))
+                    else:
+                        new_track.append(msg)
+
+        new_track.append(mido.MetaMessage('end_of_track', time=0))
+        output_mid.tracks.append(new_track)
+        if verbose:
+            print(f"    ✓ Leitmotif inyectado: compás {bar} "
+                  f"({instrument or '?'}, {dynamic}) ← {Path(fragment_midi).name}")
+    except Exception as e:
+        print(f"  ⚠ No se pudo inyectar leitmotif en compás {bar}: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='COHERENCE STITCHER — Orquestador de fragmentos MIDI',
@@ -871,6 +923,11 @@ def main():
         help='Índice del fragmento que debe ir último (0-based)')
     parser.add_argument('--output', default='obra_final.mid',
         help='MIDI de salida (default: obra_final.mid)')
+    parser.add_argument('--leitmotif-schedule', default=None,
+        metavar='JSON',
+        help='Schedule de leitmotifs generado por leitmotif_tracker.py inject '
+             '(leitmotif_stitcher.json). Inserta fragmentos de leitmotif en los '
+             'compases indicados del MIDI final.')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--dry-run', action='store_true',
         help='Mostrar comandos de puentes sin ejecutarlos')
@@ -1050,6 +1107,36 @@ def main():
         print(f"    → {Path(s).name}")
 
     ok = assemble_midi(sequence, args.output, verbose=args.verbose)
+
+    # ── Inyección de leitmotifs ───────────────────────────────────────────────
+    if ok and args.leitmotif_schedule and Path(args.leitmotif_schedule).exists():
+        print(f"\n  [+] Aplicando leitmotif schedule: {args.leitmotif_schedule}")
+        try:
+            with open(args.leitmotif_schedule, 'r', encoding='utf-8') as _f:
+                lm_sched = json.load(_f)
+            injections = lm_sched.get('leitmotif_injections', [])
+            if injections:
+                # Reabrir el MIDI ensamblado para añadir las pistas de leitmotif
+                assembled = mido.MidiFile(args.output)
+                for inj in injections:
+                    midi_frag = inj.get('midi')
+                    if midi_frag and Path(midi_frag).exists():
+                        _inject_leitmotif_at_bar(
+                            assembled,
+                            bar=inj.get('bar', 0),
+                            fragment_midi=midi_frag,
+                            instrument=inj.get('instrument'),
+                            dynamic=inj.get('dynamic', 'mp'),
+                            verbose=args.verbose,
+                        )
+                    else:
+                        print(f"  ⚠ Fragmento de leitmotif no encontrado: {midi_frag}")
+                assembled.save(args.output)
+                print(f"  ✓ {len(injections)} leitmotifs inyectados en {args.output}")
+            else:
+                print("  ℹ Schedule vacío, sin inyecciones.")
+        except Exception as _e:
+            print(f"  ⚠ Error leyendo leitmotif schedule: {_e}")
 
     # Limpiar directorio temporal
     if not args.no_bridge and 'work_dir' in dir():

@@ -1873,6 +1873,9 @@ def main():
     # Utilidades
     parser.add_argument("--dry-run",  action="store_true",
                         help="Mostrar parámetros sin generar MIDI")
+    parser.add_argument("--batch-mode", action="store_true",
+                        help="Modo silencioso para llamadas en lote desde leitmotif_tracker.py. "
+                             "Suprime confirmaciones y usa --no-llm automáticamente.")
     parser.add_argument("--verify",   action="store_true",
                         help="Verificar que la mutación fue en la dirección correcta")
     parser.add_argument("--listen",   action="store_true",
@@ -1883,6 +1886,10 @@ def main():
                         help="Informe detallado de decisiones")
 
     args = parser.parse_args()
+
+    # --batch-mode implica --no-llm (llamadas rápidas desde leitmotif_tracker)
+    if args.batch_mode:
+        args.no_llm = True
 
     # ── Listar conceptos ──────────────────────────────────────────────────────
     if args.list_concepts:

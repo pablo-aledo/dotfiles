@@ -872,8 +872,25 @@ El JSON debe seguir EXACTAMENTE esta estructura:
       }
     ]
   },
+  "suggested_leitmotifs": [
+    {
+      "name": "nombre_semántico del motivo (ej: destino, esperanza, pérdida)",
+      "tags": ["tag1", "tag2"],
+      "description": "frase corta de qué representa este motivo dramáticamente",
+      "tension_affinity": "low | mid | high",
+      "preferred_instruments": ["cello", "violin1"],
+      "contour_hint": "ascendente | descendente | circular | estático"
+    }
+  ],
   "essay": "párrafo de 80-120 palabras que explica la pieza como si fuera una nota de programa"
 }
+
+LEITMOTIFS: Genera entre 2 y 4 leitmotifs que capturen las ideas emocionales centrales de la obra.
+Cada leitmotif debe tener un nombre semántico claro y tags que reflejen su función dramática.
+La tension_affinity indica en qué momentos de la obra aparece este motivo con más frecuencia:
+  low  → momentos de reposo, presagio suave, resolución
+  mid  → desarrollo, transición, tensión moderada
+  high → clímax, crisis, punto de máxima tensión
 
 Parámetros del pipeline (formato mt-*):
   mt-* acepta especificaciones como "0:valor, 8:valor, 16:valor" donde el número
@@ -1813,6 +1830,15 @@ def export_pipeline_yaml(plan: dict, output_base: str,
         "  - name: reharmonizer",
         f"    cmd: python reharmonizer.py {output_base}.mid --strategy {reharm_strategy_str} --candidates {reharm_candidates}",
         "",
+        "  - name: leitmotif_tracker_plan",
+        f"    cmd: python leitmotif_tracker.py --bank leitmotif_bank.json plan {output_base}_plan.json --auto --output leitmotif_schedule.json",
+        f"    output: leitmotif_schedule.json",
+        f"    note: 'Requiere motivos registrados. Usa: python leitmotif_tracker.py register motivo.mid --name nombre'",
+        "",
+        "  - name: leitmotif_tracker_inject",
+        f"    cmd: python leitmotif_tracker.py --bank leitmotif_bank.json inject {output_base}.mid leitmotif_schedule.json --output-dir leitmotifs_out --export-stitcher leitmotif_stitcher.json --export-orchestrator leitmotif_orchestrator_hints.json",
+        f"    output: leitmotifs_out/",
+        "",
         "  - name: orchestrator",
         f"    cmd: python orchestrator.py {output_base}.mid --template {orch_template} --auto-fp{_instr_flag} --output {output_base}_orquestado.mid",
         f"    output: {output_base}_orquestado.mid",
@@ -2157,6 +2183,37 @@ def execute_pipeline(plan: dict, output_base: str,
                 cmd += ["--instruments-json", instr_json]
         steps.append({"name": "orchestrator", "script": script_orch, "cmd": cmd})
 
+    # leitmotif_tracker — siembra de leitmotifs tras generar el MIDI principal
+    script_lt = _find_script("leitmotif_tracker.py")
+    narrator_plan_path = f"{output_base}_plan.json"
+    if script_lt and Path(narrator_plan_path).exists():
+        bank_path = "leitmotif_bank.json"
+        schedule_path = "leitmotif_schedule.json"
+        # Paso 1: plan (solo si hay banco con motivos)
+        steps.append({
+            "name": "leitmotif_tracker_plan",
+            "script": script_lt,
+            "cmd": [
+                sys.executable, script_lt,
+                "--bank", bank_path,
+                "plan", narrator_plan_path,
+                "--auto",
+                "--output", schedule_path,
+            ],
+        })
+        # Paso 2: inject
+        steps.append({
+            "name": "leitmotif_tracker_inject",
+            "script": script_lt,
+            "cmd": [
+                sys.executable, script_lt,
+                "--bank", bank_path,
+                "inject", midi_out, schedule_path,
+                "--output-dir", "leitmotifs_out",
+                "--export-stitcher", "leitmotif_stitcher.json",
+                "--export-orchestrator", "leitmotif_orchestrator_hints.json",
+            ],
+        })
     if not steps:
         print("  [pipeline] No se encontraron scripts del pipeline en este directorio.")
         print("             Exportados los archivos de plan. Ejecútalos manualmente.")
@@ -2336,6 +2393,14 @@ def _run_export_and_execute(plan: dict, description: str, args, description_args
     path_narrator   = export_narrator_plan(plan, output_base)
     path_yaml       = export_pipeline_yaml(plan, output_base, ref_midi=args.ref_midi)
 
+    # Exportar sugerencias de leitmotifs si el LLM las generó
+    suggested_lm = plan.get("suggested_leitmotifs", [])
+    if suggested_lm:
+        lm_suggestions_path = f"{output_base}.leitmotifs_suggested.json"
+        with open(lm_suggestions_path, "w", encoding="utf-8") as _f:
+            json.dump({"suggested_leitmotifs": suggested_lm}, _f,
+                      indent=2, ensure_ascii=False)
+
     print(f"  Archivos generados:")
     print(f"    ◆ {path_theorist}    (plan completo con justificaciones)")
     print(f"    ◆ {path_curves}      (curvas → tension_designer)")
@@ -2344,6 +2409,9 @@ def _run_export_and_execute(plan: dict, description: str, args, description_args
         print(f"    ◆ {path_instruments}  (paleta '{palette.get('label', '')}' → orchestrator)")
     print(f"    ◆ {path_narrator}    (plan → narrator GUI)")
     print(f"    ◆ {path_yaml}        (pipeline → runner.py)")
+    if suggested_lm:
+        print(f"    ◆ {output_base}.leitmotifs_suggested.json  ({len(suggested_lm)} leitmotifs sugeridos)")
+        print(f"       → Importa al banco: python leitmotif_tracker.py from-theorist {path_theorist}")
     print()
 
     # Ejecutar pipeline si se pidió
