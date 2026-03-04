@@ -1365,5 +1365,12 @@ cdag(){
     fi
 }
 
+fns_down(){
+    cdag auto_plus $1 | fcdag | sed 's/ --> / -> /g' | dag_slice_rev $2 > /tmp/dag_fns_down
+    cat /tmp/dag_fns_down | tokenize | sort -u | grep -v '^$' > /tmp/var_toks
+    wgrep /tmp/var_toks $1 | tokenize | sort -u > /tmp/candidate_fns
+    comm -12 <(sort /tmp/candidate_fns ) <(ls | sort -u)
+}
+
 ct_procdupli(){echo '-e '"'s|^"$1'\\t.*'$2'|'$(cat ~/log2gr/project/duplifiles | grep "^$2 " | cut -d" " -f2)$1'\\t'$2'|g'"'"' \\'}
 ct_procdupli2(){echo '-e '"'s|\<"$(cat ~/log2gr/project/duplifiles | grep "^$2 " | cut -d" " -f2)$1'\>|'$(cat ~/log2gr/project/duplifiles | grep "^$2 " | cut -d" " -f2).$1'|g'"'"' \\'}
