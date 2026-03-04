@@ -1814,13 +1814,48 @@ def export_pipeline_yaml(plan: dict, output_base: str,
             "",
         ]
 
+    # Parámetros para chord_progression_generator
+    complexity_val = dna_params.get("--mt-harmony-complexity", "0.5")
+    try:
+        complexity_float = float(str(complexity_val).split(":")[0])
+    except (ValueError, TypeError):
+        complexity_float = 0.5
+
+    # Estilo armónico desde estrategia de reharmonizer
+    reharm_strat_first = reharm_strats[0] if reharm_strats else "diatonic"
+    cpg_style_map = {
+        "diatonic": "diatonic", "tritone": "jazz", "secondary": "jazz",
+        "modal_interchange": "romantic", "chromatic_med": "romantic",
+        "coltrane": "jazz", "baroque": "baroque", "impressionist": "impressionist",
+        "neapolitan": "romantic", "minor_modal": "modal", "pedal": "diatonic",
+    }
+    cpg_style = cpg_style_map.get(reharm_strat_first, "auto")
+
+    # Inyectar chords.mid en midi_dna_unified como fuente de armonía
+    dna_cmd_with_chords = dna_cmd.replace(
+        "python midi_dna_unified.py",
+        f"python midi_dna_unified.py {output_base}.chords.mid"
+    )
+
     yaml_lines += [
         "  - name: narrator",
         f"    cmd: python narrator.py --arc {arc} --bars {n_bars} --key {key_full_cli} --tempo {tempo} --no-gui --export-curves --export-yaml",
         f"    output: {output_base}_plan.json",
         "",
+        "  - name: chord_progression_generator",
+        f"    cmd: python chord_progression_generator.py"
+        f" --from-theorist {output_base}.theorist.json"
+        f" --curves {output_base}.curves.json"
+        f" --bars {n_bars}"
+        f" --tempo {tempo}"
+        f" --complexity {complexity_float:.2f}"
+        f" --style {cpg_style}"
+        f" --output {output_base}",
+        f"    output: {output_base}.chords.mid",
+        f"    note: 'Genera progresión armónica desde cero. Edita {output_base}.chords.txt para ajustar.'",
+        "",
         "  - name: midi_dna_unified",
-        f"    cmd: {dna_cmd} --export-fingerprint --output {output_base}.mid",
+        f"    cmd: {dna_cmd_with_chords} --export-fingerprint --output {output_base}.mid",
         f"    output: {output_base}.mid",
         "",
         "  - name: tension_designer",
