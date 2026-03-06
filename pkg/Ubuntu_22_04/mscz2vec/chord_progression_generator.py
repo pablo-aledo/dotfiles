@@ -7,6 +7,7 @@
 ║  Genera progresiones de acordes desde cero a partir de:                     ║
 ║    · Descripción libre en lenguaje natural ("melancólico y tenso")          ║
 ║    · Parámetros directos (tonalidad, modo, estilo, complejidad)             ║
+║    · Progresión de texto libre (--from-chords "Dm Dm/A C Am Dm")           ║
 ║    · Plan de theorist.py (.theorist.json)                                   ║
 ║    · Curvas de tensión de tension_designer.py (.curves.json)                ║
 ║                                                                              ║
@@ -38,6 +39,11 @@
 ║    harmonic_minor, melodic_minor, phrygian_dominant                         ║
 ║                                                                              ║
 ║  USO:                                                                        ║
+║    # Desde progresión de texto libre                                         ║
+║    python chord_progression_generator.py --from-chords "Dm Dm/A C Am Dm"  ║
+║    python chord_progression_generator.py \                                  ║
+║        --from-chords "Dm:2 Dm:2 Dm/A:2 C:4 Am:4 Dm:4" --tempo 90         ║
+║                                                                              ║
 ║    # Desde intención libre                                                   ║
 ║    python chord_progression_generator.py "melancolía urbana bajo la lluvia" ║
 ║                                                                              ║
@@ -74,6 +80,9 @@
 ║                                                                              ║
 ║  OPCIONES:                                                                   ║
 ║    description         Intención en lenguaje natural (entre comillas)       ║
+║    --from-chords STR   Progresión en texto: "Dm Dm/A C Am" (exporta        ║
+║                        directamente a TXT, JSON y MIDI)                     ║
+║    --chord-duration N  Beats por acorde en --from-chords sin ":" (def: 4)  ║
 ║    --key KEY           Tónica: C, Dm, F#, Bb… (default: auto)              ║
 ║    --mode MODE         Modo (default: auto desde intención)                 ║
 ║    --style STYLE       Estilo armónico (default: auto)                      ║
@@ -868,6 +877,120 @@ def load_from_curves(path: str) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# PARSE DE PROGRESIÓN EN TEXTO LIBRE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Calidades reconocidas (orden importante: más largas primero para evitar
+# coincidencias parciales como "m7" antes de "m")
+_QUALITY_RE = re.compile(
+    r'^(M9|M7|m9|m7|dim7|hdim7|dim|aug|sus4|sus2|13|m6|6|9|7|m|)'
+    r'(?:/([A-G][b#]?))?$'
+)
+
+def parse_chord_string(chord_string: str, beats_per_chord: float = 4.0) -> list:
+    """
+    Parsea una cadena de texto libre de acordes al formato interno de progresión.
+
+    Formatos de entrada aceptados:
+        "Dm Dm/A C Am"             — acordes separados por espacios
+        "Dm:2 G:4 C:2 Am:4"       — con duración explícita en beats
+        "Dm Dm/A C Am Dm"          — con bajo alternativo (slash chords)
+
+    Devuelve lista de dicts con la misma estructura que build_progression():
+        {'numeral': str, 'chord': str, 'pitches': list,
+         'duration_beats': float, 'bar': int, 'beat': float}
+    """
+    # Normalizar alias de calidades antes de parsear
+    #   maj7 → M7,  maj → '',  min → m,  Maj7 → M7, etc.
+    QUALITY_ALIASES = [
+        (re.compile(r'(?i)maj7'),  'M7'),
+        (re.compile(r'(?i)maj9'),  'M9'),
+        (re.compile(r'(?i)maj'),   ''),
+        (re.compile(r'(?i)min7'),  'm7'),
+        (re.compile(r'(?i)min9'),  'm9'),
+        (re.compile(r'(?i)min'),   'm'),
+        (re.compile(r'(?i)△7'),   'M7'),
+        (re.compile(r'(?i)△'),    'M7'),
+        (re.compile(r'ø7'),        'hdim7'),
+        (re.compile(r'ø'),         'hdim7'),
+        (re.compile(r'°7'),        'dim7'),
+        (re.compile(r'°'),         'dim'),
+        (re.compile(r'\+'),        'aug'),
+    ]
+
+    tokens = chord_string.strip().split()
+    if not tokens:
+        raise ValueError("La cadena de acordes está vacía.")
+
+    result = []
+    current_beat = 0.0
+    beats_per_bar = 4  # asumimos 4/4 para el cálculo de compás/beat
+
+    for token in tokens:
+        # Separar duración opcional: "Dm:2" → ("Dm", 2.0)
+        if ':' in token:
+            chord_part, dur_part = token.rsplit(':', 1)
+            try:
+                duration = float(dur_part)
+            except ValueError:
+                duration = beats_per_chord
+        else:
+            chord_part = token
+            duration = beats_per_chord
+
+        # Separar bajo en slash chord: "Dm/A" → raíz="Dm", bajo="A"
+        bass_note = None
+        if '/' in chord_part:
+            chord_part, bass_note = chord_part.split('/', 1)
+
+        # Aplicar alias de calidad sobre la parte de calidad (después de la raíz)
+        root_match = re.match(r'^([A-G][b#]{0,2})', chord_part)
+        if not root_match:
+            raise ValueError(f"No se reconoce el acorde: '{token}'")
+
+        root_str = root_match.group(1)
+        qual_str = chord_part[len(root_str):]
+
+        for alias_re, alias_repl in QUALITY_ALIASES:
+            qual_str = alias_re.sub(alias_repl, qual_str)
+
+        # Validar/normalizar calidad
+        qm2 = re.match(r'^(M9|M7|m9|m7|dim7|hdim7|dim|aug|sus4|sus2|13|m6|6|9|7|m|)$', qual_str)
+        if not qm2:
+            # Calidad desconocida → tratar como mayor
+            qual_norm = ''
+        else:
+            qual_norm = qm2.group(1)
+
+        root_pc = NOTE_PC.get(root_str)
+        if root_pc is None:
+            raise ValueError(f"Nota raíz desconocida: '{root_str}' en '{token}'")
+
+        intervals = CHORD_INTERVALS.get(qual_norm, CHORD_INTERVALS[''])
+        pitches   = [(root_pc + iv) % 12 for iv in intervals]
+
+        # Nombre del acorde (incluye el bajo si es slash chord)
+        chord_name = f"{root_str}{qual_norm}"
+        if bass_note:
+            chord_name = f"{chord_name}/{bass_note}"
+
+        bar        = int(current_beat // beats_per_bar)
+        beat_in_bar = current_beat % beats_per_bar
+
+        result.append({
+            'numeral':        chord_name,   # sin numeral real; usamos el nombre
+            'chord':          chord_name,
+            'pitches':        pitches,
+            'duration_beats': float(duration),
+            'bar':            bar,
+            'beat':           float(beat_in_bar),
+        })
+        current_beat += duration
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # INFORME
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -931,6 +1054,15 @@ def main():
                                  'late_climax','neutral','plateau'],
                         help='Perfil de tensión predefinido (default: arch)')
 
+    # Progresión en texto libre
+    parser.add_argument('--from-chords', type=str, metavar='CHORDS',
+                        help='Progresión de acordes en texto (ej: "Dm Dm/A C Am Dm"). '
+                             'Acepta duración con ":" (ej: "Dm:2 G:4"). '
+                             'Exporta directamente a TXT, JSON y MIDI sin generar.')
+    parser.add_argument('--chord-duration', type=float, default=4.0,
+                        help='Duración por defecto de cada acorde en beats cuando '
+                             'se usa --from-chords sin duración explícita (default: 4)')
+
     # Fuentes externas
     parser.add_argument('--from-theorist', type=str, metavar='FILE',
                         help='Leer parámetros de un .theorist.json')
@@ -964,6 +1096,70 @@ def main():
     args = parser.parse_args()
     random.seed(args.seed)
     np.random.seed(args.seed)
+
+    # ── 0. MODO --from-chords: parsear progresión de texto y exportar ─────────
+
+    if args.from_chords:
+        print(f"\n[from-chords] Parseando: \"{args.from_chords}\"")
+        try:
+            progression = parse_chord_string(
+                args.from_chords,
+                beats_per_chord=args.chord_duration
+            )
+        except ValueError as e:
+            print(f"[ERROR] {e}")
+            sys.exit(1)
+
+        chord_text = progression_to_text(progression)
+        total_beats = sum(e['duration_beats'] for e in progression)
+        n_bars      = int(total_beats / args.beats) or 1
+        tempo       = args.tempo
+
+        print(f"✓ Progresión parseada  [{len(progression)} acordes | "
+              f"{total_beats:.0f} beats | ~{n_bars} compases]")
+        print(f"  {chord_text}\n")
+
+        base = args.output
+
+        # — JSON completo
+        json_path = args.export_json or f"{base}.chords.json"
+        out_data = {
+            'meta': {
+                'source':        '--from-chords',
+                'input':         args.from_chords,
+                'n_bars':        n_bars,
+                'beats_per_bar': args.beats,
+                'tempo':         tempo,
+                'generator':     'chord_progression_generator.py v1.0',
+            },
+            'progression':  progression,
+            'chord_string': chord_text,
+        }
+        with open(json_path, 'w') as f:
+            json.dump(out_data, f, indent=2, ensure_ascii=False)
+        print(f"  → JSON:  {json_path}")
+
+        # — Texto para --chords
+        txt_path = args.export_text or f"{base}.chords.txt"
+        with open(txt_path, 'w') as f:
+            f.write(chord_text + '\n')
+        print(f"  → Texto: {txt_path}  (compatible con --chords)")
+
+        # — MIDI de acordes
+        if MIDO_OK:
+            mid_path = args.export_midi or f"{base}.chords.mid"
+            # Para MIDI necesitamos pitch classes sin el bajo en el nombre
+            # progression_to_midi trabaja con 'pitches' que ya están resueltos
+            progression_to_midi(
+                progression, tonic_pc=0,   # tonic_pc no se usa; pitches ya calculados
+                ticks_per_beat=480, tempo_bpm=tempo,
+                output_path=mid_path
+            )
+            print(f"  → MIDI:  {mid_path}  (compatible con --chords-midi)")
+        else:
+            print("  [AVISO] MIDI omitido (mido no disponible).")
+
+        sys.exit(0)
 
     # ── 1. RECOPILAR PARÁMETROS BASE ─────────────────────────────────────────
 
