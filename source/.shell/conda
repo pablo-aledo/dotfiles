@@ -53,3 +53,14 @@ conda_build_docker(){
         --docker-base-image quay.io/bioconda/bioconda-utils-build-env-cos7-$(arch) \
         --git-range origin/master HEAD
 }
+
+pip_pack(){
+    pip download $1 -d packages
+    pip freeze > requirements.txt
+    # pip download -r requirements.txt -d packages
+}
+
+pip_unpack(){
+    pip install --no-index --find-links=packages $1
+    # pip install --no-index --find-links=packages -r requirements.txt
+}

@@ -763,3 +763,18 @@ adapt_english(){
     echo 'export LC_ALL=en_US.UTF-8' >> ~/.paths
     export LC_ALL=en_US.UTF-8
 }
+
+adapt_piano_pc(){
+    # fl, libraries and plugins
+    cd $music_ssd_dir/sw_linux/flatpak          ; source install.sh
+    cd $music_ssd_dir/sw_linux/01_bottles       ; source install.sh
+    cd $music_ssd_dir/sw_linux/02_fl            ; source install.sh
+    # linux sw
+    cd $music_ssd_dir/sw_linux/03_chordcat      ; source install.sh
+    cd $music_ssd_dir/sw_linux/musescore        ; source install.sh
+    cd $music_ssd_dir/sw_linux/sonic_visualiser ; source install.sh
+    # programming
+    cd $music_ssd_dir/sw_linux/timidity         ; source install.sh
+    cd $music_ssd_dir/sw_linux/python_pips      ; source install.sh
+    cd $music_ssd_dir/sw_linux/abcmidi          ; source install.sh
+}
