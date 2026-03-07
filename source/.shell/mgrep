@@ -18,7 +18,8 @@ mgrep(){
 
 mgrep(){
     [ $1 = '-' ] && file='' || file=$1
-    strings -n1 $file > /tmp/file
+    #strings -n1 $file > /tmp/file
+    cat $file | tr -cd '\0-\177' > /tmp/file
     echo -n cat /tmp/file > /tmp/script
     shift
     for a in $*
