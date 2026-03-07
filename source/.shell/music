@@ -127,6 +127,7 @@ fl_info(){
     [ "$(echo $1 | grep '^{"name": "[^"]*", "downloadUrl": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f4 | sed 's/\.mid//g'; return }
     [ "$(echo $1 | grep '^{"path": "[^"]*", "id": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f8 | sed 's/\.mid//g'; return }
     [ "$(echo $1 | grep '^{"path": "[^"]*", "file": "[^"]*", "download": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f12 | sed 's/\.mid//g'; return }
+    [ "$(echo $1 | grep '^{"authorUserId":".*$')" != "" ] && { echo $1 | sed 's/.*"title":"\([^"]*\)".*/\1/g'; return }
 }
 
 fl_file(){
@@ -134,6 +135,7 @@ fl_file(){
     [ "$(echo $1 | grep '^{"name": "[^"]*", "downloadUrl": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f4; return }
     [ "$(echo $1 | grep '^{"path": "[^"]*", "id": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f8; return }
     [ "$(echo $1 | grep '^{"path": "[^"]*", "file": "[^"]*", "download": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f12; return }
+    [ "$(echo $1 | grep '^{"authorUserId":".*$')" != "" ] && { echo $1 | sed 's/.*"name":"\([^"]*\)".*/\1/g' | sed 's/$/.mscz/g'; return }
 }
 
 fl_id(){
@@ -151,7 +153,7 @@ fl_find(){
                 basen=$(basename $PWD)
                 hashline=$(echo "$basen $line" | md5sum - | sed 's/^\(....\).*/\1/g')
                 echo $hashline $basen $line >> /tmp/fl_found
-                echo $hashline $basen $(fl_info "$line")
+                echo $hashline "$(echo $basen | sed 's/musescore/musescore        /g')" $(fl_info "$line")
             done
         )
     done
@@ -172,4 +174,3 @@ fl_extract(){
         )
     done
 }
-
