@@ -119,3 +119,57 @@ find -iname '*.mid' -or -iname '*.midi' | while read line; do bn="$(basename "$l
 fl_mdsplit(){
 ls | while read line; do md=$(echo $line | md5sum - | sed 's/^\(..\).*/\1/g'); mkdir -p ~/squashfs/final/$md; mv -- "$line" ~/squashfs/final/$md; done
 }
+
+# find
+
+fl_info(){
+    [ "$(echo $1 | grep '^.*\.mid$')" != "" ] && { echo $1 | sed 's/\.mid//g'; return }
+    [ "$(echo $1 | grep '^{"name": "[^"]*", "downloadUrl": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f4 | sed 's/\.mid//g'; return }
+    [ "$(echo $1 | grep '^{"path": "[^"]*", "id": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f8 | sed 's/\.mid//g'; return }
+    [ "$(echo $1 | grep '^{"path": "[^"]*", "file": "[^"]*", "download": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f12 | sed 's/\.mid//g'; return }
+}
+
+fl_file(){
+    [ "$(echo $1 | grep '^.*\.mid$')" != "" ] && { echo $1; return }
+    [ "$(echo $1 | grep '^{"name": "[^"]*", "downloadUrl": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f4; return }
+    [ "$(echo $1 | grep '^{"path": "[^"]*", "id": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f8; return }
+    [ "$(echo $1 | grep '^{"path": "[^"]*", "file": "[^"]*", "download": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f12; return }
+}
+
+fl_id(){
+    fl_file $1
+}
+
+fl_find(){
+    rm -fr /tmp/fl_found
+    find -type f -iname index | while read index
+    do
+        (
+            cd $(dirname $index)
+            cat index | tr -cd '\0-\177' | mgrep - $* | while read line
+            do
+                basen=$(basename $PWD)
+                hashline=$(echo "$basen $line" | md5sum - | sed 's/^\(....\).*/\1/g')
+                echo $hashline $basen $line >> /tmp/fl_found
+                echo $hashline $basen $(fl_info "$line")
+            done
+        )
+    done
+}
+
+fl_extract(){
+    cat /tmp/fl_found | tr -cd '\0-\177' | mgrep - $* | while read found
+    do
+        basen=$(echo $found | awk '{print $2}')
+        line="$(echo $found | sed 's/^[^ ]* [^ ]* //g' )"
+        file="$(fl_file "$line")"
+        id="$(fl_id "$line")"
+        md=$(echo $id | md5sum - | sed 's/^\(..\).*$/\1/g')
+        (
+            cd $basen
+            unsquashfs $md.squashfs $id
+            mv squashfs-root/$id $OLDPWD
+        )
+    done
+}
+
