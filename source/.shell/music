@@ -148,7 +148,7 @@ fl_find(){
     do
         (
             cd $(dirname $index)
-            cat index | tr -cd '\0-\177' | mgrep - $* | while read line
+            mgrep index $* | while read line
             do
                 basen=$(basename $PWD)
                 hashline=$(echo "$basen $line" | md5sum - | sed 's/^\(....\).*/\1/g')
@@ -160,7 +160,8 @@ fl_find(){
 }
 
 fl_extract(){
-    cat /tmp/fl_found | tr -cd '\0-\177' | mgrep - $* | while read found
+    extract_wd=$PWD
+    mgrep /tmp/fl_found $* | while read found
     do
         basen=$(echo $found | awk '{print $2}')
         line="$(echo $found | sed 's/^[^ ]* [^ ]* //g' )"
@@ -169,8 +170,10 @@ fl_extract(){
         md=$(echo $id | md5sum - | sed 's/^\(..\).*$/\1/g')
         (
             cd $basen
+            rmdir squashfs-root
             unsquashfs $md.squashfs $id
-            mv squashfs-root/$id $OLDPWD
+            mv squashfs-root/$id $extract_wd
+            rmdir squashfs-root
         )
     done
 }
