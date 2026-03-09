@@ -54,6 +54,20 @@ python diffusion_composer.py compose \
     --bars 16 \
     --threshold-pct 99
 
+
+python diffusion_composer.py style-corpus \
+    --input-dir midis_A/ --model-dir model/ --output z_A.json
+
+python diffusion_composer.py style-corpus \
+    --input-dir midis_B/ --model-dir model/ --output z_B.json
+
+python diffusion_composer.py transfer \
+    --input cancion.mid --model-dir model/ --palette palette.json \
+    --style-from z_A.json --style-to z_B.json \
+    --strength 0.8 --output resultado.mid
+
+python diffusion_composer.py transfer ... --progressive
+
 """
 
 import argparse
@@ -1679,6 +1693,264 @@ def cmd_encode(args):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  COMANDO: style-corpus
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cmd_style_corpus(args):
+    """
+    Encoda todos los MIDIs de una carpeta y calcula el centroide de z_style.
+    El resultado es un .json compatible con el formato de `encode`.
+
+    Uso:
+        python diffusion_composer.py style-corpus \\
+            --input-dir midis_A/ \\
+            --model-dir model/ \\
+            --output z_corpus_A.json
+    """
+    import numpy as np
+
+    model_dir = Path(args.model_dir)
+    input_dir = Path(args.input_dir)
+
+    print(f"[style-corpus] Cargando modelo desde {model_dir} ...")
+    model, cfg = _load_model_and_config(model_dir)
+
+    midi_files = sorted(
+        list(input_dir.glob('*.mid')) + list(input_dir.glob('*.midi'))
+    )
+    if not midi_files:
+        print(f"[style-corpus] No se encontraron archivos MIDI en {input_dir}")
+        sys.exit(1)
+
+    print(f"[style-corpus] {len(midi_files)} archivos MIDI encontrados\n")
+
+    z_styles  = []
+    z_contexts = []
+    tensions  = []
+    skipped   = 0
+
+    for midi_path in midi_files:
+        try:
+            z_mean, z_style = _encode_ref(str(midi_path), model, cfg)
+            rolls = _midi_to_rolls(str(midi_path), cfg)
+            n_bars = min(r.shape[0] for r in rolls.values())
+            tension_vecs = TensionExtractor().extract_bar_vectors(rolls, n_bars)
+            tension_mean = tension_vecs.mean(axis=0)
+
+            z_styles.append(z_style)
+            z_contexts.append(z_mean)
+            tensions.append(tension_mean)
+            print(f"  [OK] {midi_path.stem}")
+        except Exception as e:
+            print(f"  [SKIP] {midi_path.stem} — {e}")
+            skipped += 1
+
+    if not z_styles:
+        print("[style-corpus] No se pudo encodear ningún MIDI.")
+        sys.exit(1)
+
+    # Calcular centroides
+    z_style_mean   = np.mean(z_styles,   axis=0)
+    z_context_mean = np.mean(z_contexts, axis=0)
+    tension_mean   = np.mean(tensions,   axis=0)
+
+    # Calcular desviación estándar (diagnóstico de cohesión del corpus)
+    z_style_std = float(np.std(z_styles))
+
+    out_path = args.output or f"z_corpus_{input_dir.stem}.json"
+    payload = {
+        'source':         str(input_dir),
+        'model_dir':      str(model_dir),
+        'n_files':        len(z_styles),
+        'n_skipped':      skipped,
+        'latent_dim':     cfg['latent_dim'],
+        'style_dim':      cfg['style_dim'],
+        'z_context':      z_context_mean.tolist(),
+        'z_style':        z_style_mean.tolist(),
+        'z_style_std':    z_style_std,
+        'tension_mean':   tension_mean.tolist(),
+        'roles_found':    cfg['roles'],
+    }
+    with open(out_path, 'w') as f:
+        json.dump(payload, f, indent=2)
+
+    print(f"\n[style-corpus] Archivos procesados : {len(z_styles)}")
+    print(f"[style-corpus] Archivos omitidos   : {skipped}")
+    print(f"[style-corpus] Cohesión del corpus (std z_style): {z_style_std:.4f}")
+    if z_style_std > 1.0:
+        print("[style-corpus] ⚠  std alto — el corpus puede ser heterogéneo. "
+              "Considera usar subcarpetas más homogéneas.")
+    print(f"[style-corpus] Centroide guardado en {out_path}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  COMANDO: transfer
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cmd_transfer(args):
+    """
+    Transfiere el estilo de un corpus B a una canción del corpus A,
+    manteniendo el contenido musical (ritmo, melodía) del input.
+
+    Flujo:
+        1. Encodear input → z_style_input
+        2. Leer centroides z_A y z_B de los corpus
+        3. Calcular desplazamiento: Δz = z_B - z_A
+        4. Aplicar:  z_style_nuevo = z_style_input + strength * Δz
+           (con --progressive, strength varía 0→1 a lo largo de los compases)
+        5. Denoising compás a compás usando z_style_nuevo como condicionamiento
+
+    Uso:
+        python diffusion_composer.py transfer \\
+            --input cancion.mid \\
+            --model-dir model/ \\
+            --style-from z_corpus_A.json \\
+            --style-to   z_corpus_B.json \\
+            --strength 0.8 \\
+            --output resultado.mid
+
+        # Interpolación progresiva A→B a lo largo de la canción:
+        python diffusion_composer.py transfer ... --progressive
+    """
+    import torch, numpy as np
+
+    model_dir = Path(args.model_dir)
+    print(f"[transfer] Cargando modelo desde {model_dir} ...")
+    model, cfg = _load_model_and_config(model_dir)
+
+    palette = _load_palette(args.palette, cfg)
+
+    # ── Cargar centroides de estilo ───────────────────────────────────────
+    with open(args.style_from) as f:
+        data_A = json.load(f)
+    with open(args.style_to) as f:
+        data_B = json.load(f)
+
+    z_A = np.array(data_A['z_style'], dtype=np.float32)
+    z_B = np.array(data_B['z_style'], dtype=np.float32)
+    delta_z = z_B - z_A   # vector de traslación de estilo
+
+    print(f"[transfer] Estilo origen : {args.style_from}  "
+          f"(n={data_A.get('n_files', '?')} MIDIs)")
+    print(f"[transfer] Estilo destino: {args.style_to}  "
+          f"(n={data_B.get('n_files', '?')} MIDIs)")
+    print(f"[transfer] |Δz| = {float(np.linalg.norm(delta_z)):.4f}  "
+          f"strength={args.strength}  progressive={args.progressive}")
+
+    # ── Encodear el MIDI de input ─────────────────────────────────────────
+    print(f"[transfer] Procesando input: {args.input} ...")
+    rolls_ref = _midi_to_rolls(args.input, cfg)
+    z_mean_input, z_style_input = _encode_ref(args.input, model, cfg)
+    ctx_np = _rolls_to_context_tensor(rolls_ref, cfg)
+
+    # Número de compases = los que tiene el input (misma duración)
+    n_bars     = min(r.shape[0] for r in rolls_ref.values())
+    tension_dim = cfg['tension_dim']
+    role_list   = cfg['roles']
+    n_roles     = cfg['n_roles']
+    resolution  = cfg['resolution']
+    window_bars = cfg['window_bars']
+    ctx_bars    = window_bars - 1
+
+    # Tensión: extraída del propio input (preserva la dinámica original)
+    tension_matrix = TensionExtractor().extract_bar_vectors(rolls_ref, n_bars)
+    # Rellenar hasta n_bars si hace falta
+    if tension_matrix.shape[0] < n_bars:
+        pad = np.zeros((n_bars - tension_matrix.shape[0], tension_dim), dtype=np.float32)
+        tension_matrix = np.concatenate([tension_matrix, pad], axis=0)
+
+    # ── Generación compás a compás ────────────────────────────────────────
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model.to(device)
+
+    ctx_buffer    = torch.tensor(ctx_np).unsqueeze(0).to(device)
+    bars_per_role = {role: [] for role in role_list}
+    adaptive_thr  = None
+
+    print(f"[transfer] Generando {n_bars} compases ...")
+
+    for bar_idx in range(n_bars):
+        # Tensión de este compás
+        v_ten = torch.tensor(tension_matrix[bar_idx]).unsqueeze(0).to(device)
+
+        # ── Calcular z_style para este compás ────────────────────────────
+        if args.progressive:
+            # strength crece linealmente de 0 → strength a lo largo de la canción
+            bar_strength = args.strength * (bar_idx / max(n_bars - 1, 1))
+        else:
+            bar_strength = args.strength
+
+        z_style_bar = z_style_input + bar_strength * delta_z
+        v_sty = torch.tensor(z_style_bar).unsqueeze(0).to(device)
+
+        # ── Denoising desde el compás de referencia ───────────────────────
+        # Usamos el compás correspondiente del input como punto de partida,
+        # igual que el modo `denoise` de compose, pero con z_style sustituido.
+        ref_bar_idx = min(bar_idx, min(r.shape[0] for r in rolls_ref.values()) - 1)
+        xr_np = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+        for ridx, role in enumerate(role_list):
+            if role in rolls_ref:
+                xr_np[ridx] = rolls_ref[role][ref_bar_idx]
+        x_ref = torch.tensor(xr_np).unsqueeze(0).to(device)
+
+        with torch.no_grad():
+            roll_bar = model.denoise_from_ref(
+                x_ref, ctx_buffer, v_ten, v_sty,
+                strength=args.denoise_strength,
+                n_ddim_steps=args.ddim_steps,
+                eta=args.eta,
+            )
+
+        bar_np = roll_bar[0].cpu().numpy()   # (N_ROLES, res, 128)
+
+        # Diagnóstico en el primer compás
+        if bar_idx == 0:
+            vmax  = float(bar_np.max())
+            vmean = float(bar_np.mean())
+            p90   = float(np.percentile(bar_np, 90))
+            adaptive_thr = _adaptive_threshold(bar_np, percentile=args.threshold_pct)
+            n_active = int((bar_np > adaptive_thr).sum())
+            density  = 100 * n_active / bar_np.size
+            print(f"\n  [diag] Compás 0 — decoder output:")
+            print(f"         mean={vmean:.4f}  p90={p90:.4f}  max={vmax:.4f}")
+            print(f"         Umbral adaptativo: {adaptive_thr:.4f}  →  "
+                  f"{n_active} píxeles activos ({density:.2f}%)")
+            if vmax < 0.05:
+                print(f"  [diag] ⚠  Activaciones muy bajas. "
+                      f"Prueba con --denoise-strength más alto.")
+
+        for ridx, role in enumerate(role_list):
+            bars_per_role[role].append(bar_np[ridx])
+
+        # Actualizar ctx_buffer con el compás generado
+        bar_binary = (bar_np > (adaptive_thr or 0.3)).astype(np.float32)
+        new_bar    = torch.tensor(bar_binary).unsqueeze(0).unsqueeze(2).to(device)
+        if ctx_bars > 1:
+            ctx_buffer = torch.cat([ctx_buffer[:, :, 1:, :, :], new_bar], dim=2)
+        else:
+            ctx_buffer = new_bar
+
+        print(f"\r  Compás {bar_idx + 1}/{n_bars}", end='', flush=True)
+
+    print()
+
+    # Convertir listas → arrays y guardar MIDI
+    final_rolls = {
+        role: np.stack(bars, axis=0)
+        for role, bars in bars_per_role.items()
+        if bars
+    }
+
+    n_notes = _rolls_to_midi(final_rolls, cfg, palette, args.output,
+                              bpm=args.bpm, threshold=adaptive_thr)
+    print(f"[transfer] MIDI guardado en {args.output}  "
+          f"({n_notes} notas, umbral={adaptive_thr:.3f})")
+    if n_notes == 0:
+        print("[transfer] ⚠  MIDI vacío. Prueba con --threshold-pct 70 "
+              "o aumenta --denoise-strength.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  COMANDO: compose
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -2048,6 +2320,64 @@ def build_parser():
         help='Percentil para umbral adaptativo de binarización (default: 85). '
              'Bájalo (ej. 70) si el MIDI sale vacío; súbelo (ej. 95) si hay demasiado ruido.')
     p_comp.set_defaults(func=cmd_compose)
+
+    # ── style-corpus ──────────────────────────────────────────────────────────
+    p_sc = sub.add_parser('style-corpus',
+        help='Encoda una carpeta de MIDIs y calcula el centroide de estilo')
+    p_sc.add_argument('--input-dir',  required=True, metavar='DIR',
+        help='Carpeta con los MIDIs del corpus')
+    p_sc.add_argument('--model-dir',  required=True, metavar='DIR')
+    p_sc.add_argument('--output',     metavar='FILE',
+        help='Ruta del .json de salida (default: z_corpus_<carpeta>.json)')
+    p_sc.set_defaults(func=cmd_style_corpus)
+
+    # ── transfer ──────────────────────────────────────────────────────────────
+    p_tr = sub.add_parser('transfer',
+        help='Transfiere el estilo de un corpus a una canción',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent("""\
+            Transfiere el estilo del corpus B a una canción del corpus A.
+
+            Flujo:
+              1. Encodear input → z_style_input
+              2. Calcular Δz = z_B_mean - z_A_mean
+              3. z_style_nuevo = z_style_input + strength * Δz
+              4. Denoising compás a compás (misma duración que el input)
+
+            Modos:
+              Uniforme   : mismo desplazamiento en todos los compases
+              Progresivo : strength varía 0→strength a lo largo de la canción (--progressive)
+
+            Ejemplos:
+              transfer --input cancion.mid --model-dir model/ --palette p.json \\
+                       --style-from z_A.json --style-to z_B.json --strength 0.8
+
+              transfer --input cancion.mid --model-dir model/ --palette p.json \\
+                       --style-from z_A.json --style-to z_B.json --strength 1.0 --progressive
+        """))
+    p_tr.add_argument('--input',            required=True,  metavar='FILE',
+        help='MIDI de entrada (estilo A)')
+    p_tr.add_argument('--model-dir',        required=True,  metavar='DIR')
+    p_tr.add_argument('--palette',          required=True,  metavar='FILE')
+    p_tr.add_argument('--style-from',       required=True,  metavar='FILE',
+        help='Centroide del corpus origen A (.json de style-corpus o encode)')
+    p_tr.add_argument('--style-to',         required=True,  metavar='FILE',
+        help='Centroide del corpus destino B (.json de style-corpus o encode)')
+    p_tr.add_argument('--strength',         type=float, default=0.8, metavar='FLOAT',
+        help='Intensidad del desplazamiento de estilo: 0=sin cambio, 1=traslación completa (default: 0.8)')
+    p_tr.add_argument('--progressive',      action='store_true',
+        help='Interpolar progresivamente A→B a lo largo de los compases')
+    p_tr.add_argument('--denoise-strength', type=float, default=0.6, metavar='FLOAT',
+        dest='denoise_strength',
+        help='Cuánto alejarse del MIDI de referencia en el denoising: '
+             '0=copia exacta, 1=libre (default: 0.6)')
+    p_tr.add_argument('--ddim-steps',       type=int,   default=50)
+    p_tr.add_argument('--eta',              type=float, default=0.0)
+    p_tr.add_argument('--bpm',              type=float, default=120.0)
+    p_tr.add_argument('--threshold-pct',    type=float, default=85.0, metavar='FLOAT',
+        dest='threshold_pct')
+    p_tr.add_argument('--output',           default='transfer_output.mid', metavar='FILE')
+    p_tr.set_defaults(func=cmd_transfer)
 
     # ── inspect ───────────────────────────────────────────────────────────────
     p_ins = sub.add_parser('inspect', help='Diagnóstico del modelo y los datos')
