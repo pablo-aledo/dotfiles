@@ -15,12 +15,12 @@ services:
     ports:
       - "8000:8000"
     command: >
-      --model Qwen/Qwen3-4B-AWQ
+      --model Qwen/Qwen3-1.7B-AWQ
       --quantization awq_marlin
       --dtype float16
-      --max-model-len 4784
-      --gpu-memory-utilization 0.75
-      --max-num-seqs 4
+      --max-model-len 8192
+      --gpu-memory-utilization 0.85
+      --max-num-seqs 2
       --enable-auto-tool-choice
       --tool-call-parser hermes
       --served-model-name qwen3-coder
