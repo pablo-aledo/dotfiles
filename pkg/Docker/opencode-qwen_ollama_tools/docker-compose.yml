@@ -1,0 +1,82 @@
+services:
+
+  # ─────────────────────────────────────────────
+  # 1. Servidor de inferencia: Ollama + Qwen3-4B
+  # ─────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: qwen3-ollama
+    runtime: nvidia          # Quitar si usas CPU
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - OLLAMA_KEEP_ALIVE=24h       # Mantiene el modelo cargado en VRAM
+      - OLLAMA_NUM_PARALLEL=2       # Peticiones paralelas máximas
+      - OLLAMA_MAX_LOADED_MODELS=1  # Solo un modelo en memoria
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    shm_size: 2g
+    mem_limit: 16g
+
+  # ─────────────────────────────────────────────
+  # 2. Descarga automática del modelo al arrancar
+  # ─────────────────────────────────────────────
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - ollama-models:/root/.ollama
+    entrypoint: >
+      sh -c "ollama pull ${OLLAMA_MODEL:-qwen3:8b} && echo '[pull] Modelo listo'"
+    restart: "no"
+
+  # ─────────────────────────────────────────────
+  # 3. opencode conectado a Ollama local
+  # ─────────────────────────────────────────────
+  opencode:
+    build:
+      context: .
+      dockerfile: Dockerfile.opencode
+    container_name: opencode-agent
+    depends_on:
+      ollama:
+        condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
+    environment:
+      - OPENCODE_MODEL=${OLLAMA_MODEL:-qwen3:8b}
+      - OPENCODE_API_URL=http://ollama:11434/v1
+      # Ollama no requiere API key real
+      - OPENCODE_API_KEY=ollama
+    volumes:
+      - ${PWD}:/agent-workspace
+      - opencode-config:/home/opencode/.config/opencode
+    working_dir: /agent-workspace
+    stdin_open: true
+    tty: true
+    command: ["/bin/bash"]
+    restart: unless-stopped
+
+volumes:
+  ollama-models:
+  opencode-config:
