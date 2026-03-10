@@ -1,5 +1,6 @@
 docker compose up -d ollama
 docker compose logs -f ollama
+docker compose run --rm ollama-pull
 docker compose build --no-cache opencode
 docker compose run --rm opencode opencode
 docker compose run --rm opencode bash

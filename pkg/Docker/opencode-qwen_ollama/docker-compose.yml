@@ -17,11 +17,11 @@ services:
     ports:
       - "11434:11434"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 15s
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
       timeout: 10s
-      retries: 10
-      start_period: 60s
+      retries: 20
+      start_period: 30s
     deploy:
       resources:
         reservations:
@@ -61,6 +61,8 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
     environment:
       - OPENCODE_MODEL=${OLLAMA_MODEL:-qwen3:4b}
       - OPENCODE_API_URL=http://ollama:11434/v1
