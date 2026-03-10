@@ -26,8 +26,8 @@ cat > "${CONFIG_FILE}" <<EOF
         "apiKey": "${OPENCODE_API_KEY:-ollama}"
       },
       "models": {
-        "${OPENCODE_MODEL:-qwen3:8b}": {
-          "name": "${OPENCODE_MODEL:-qwen3:8b}",
+        "${OPENCODE_MODEL:-qwen2.5-coder:7b}": {
+          "name": "${OPENCODE_MODEL:-qwen2.5-coder:7b}",
           "limit": {
             "context": 8192,
             "output": 2048
@@ -36,7 +36,7 @@ cat > "${CONFIG_FILE}" <<EOF
       }
     }
   },
-  "model": "ollama/${OPENCODE_MODEL:-qwen3:8b}",
+  "model": "ollama/${OPENCODE_MODEL:-qwen2.5-coder:7b}",
   "permission": {
     "edit": "allow",
     "bash": "ask",

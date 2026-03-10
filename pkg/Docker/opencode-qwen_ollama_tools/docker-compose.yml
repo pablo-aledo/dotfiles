@@ -47,7 +47,7 @@ services:
     volumes:
       - ollama-models:/root/.ollama
     entrypoint: >
-      sh -c "ollama pull ${OLLAMA_MODEL:-qwen3:8b} && echo '[pull] Modelo listo'"
+      sh -c "ollama pull ${OLLAMA_MODEL:-qwen2.5-coder:7b} && echo '[pull] Modelo listo'"
     restart: "no"
 
   # ─────────────────────────────────────────────
@@ -64,7 +64,7 @@ services:
       ollama-pull:
         condition: service_completed_successfully
     environment:
-      - OPENCODE_MODEL=${OLLAMA_MODEL:-qwen3:8b}
+      - OPENCODE_MODEL=${OLLAMA_MODEL:-qwen2.5-coder:7b}
       - OPENCODE_API_URL=http://ollama:11434/v1
       # Ollama no requiere API key real
       - OPENCODE_API_KEY=ollama
