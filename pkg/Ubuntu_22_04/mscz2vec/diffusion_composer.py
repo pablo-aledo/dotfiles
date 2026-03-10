@@ -1546,6 +1546,7 @@ def _adaptive_threshold(roll: 'np.ndarray', percentile: float = 85.0) -> float:
     Un percentil bajo (70–80) = umbral bajo = más notas (más densidad).
 
     El rango útil típico es 75–97 dependiendo del estado del entrenamiento.
+    IMPORTANTE: no impone mínimo basado en max — el percentil manda siempre.
     """
     import numpy as np
     flat    = roll.flatten()
@@ -1553,6 +1554,62 @@ def _adaptive_threshold(roll: 'np.ndarray', percentile: float = 85.0) -> float:
     if len(nonzero) == 0:
         return 0.5   # señal nula: umbral alto → MIDI vacío con aviso
     return float(np.percentile(nonzero, percentile))
+
+
+def _compute_threshold(bar_np: 'np.ndarray', args) -> tuple:
+    """
+    Calcula el umbral de binarización a partir de los argumentos del usuario.
+
+    Prioridad:
+      1. --threshold FLOAT  → umbral fijo directo
+      2. --threshold-pct N  → percentil sobre valores > 0.001
+      3. sin argumento      → automático: p99 * 0.5 (salta el valle ruido/notas)
+
+    Devuelve (threshold: float, method_str: str).
+    """
+    import numpy as np
+
+    fixed = getattr(args, 'threshold', None)
+    pct   = getattr(args, 'threshold_pct', None)
+
+    if fixed is not None:
+        return fixed, f"fijo ({fixed:.3f})"
+
+    p99 = float(np.percentile(bar_np, 99))
+
+    if pct is not None:
+        thr = _adaptive_threshold(bar_np, percentile=pct)
+        return thr, f"percentil {pct}"
+
+    # Modo automático: la mitad del p99 salta el valle entre ruido y notas reales
+    thr = p99 * 0.5
+    return thr, f"automático (p99×0.5 = {thr:.4f})"
+
+
+def _diag_threshold(bar_np: 'np.ndarray', thr: float, method: str,
+                    p99: float) -> None:
+    """Imprime diagnóstico de activaciones y sugiere ajustes si la densidad es anómala."""
+    import numpy as np
+    n_active = int((bar_np > thr).sum())
+    density  = 100.0 * n_active / bar_np.size
+    vmax     = float(bar_np.max())
+
+    print(f"         Umbral {method}: {thr:.4f}  →  "
+          f"{n_active} píxeles activos ({density:.2f}%)")
+
+    if vmax < 0.05:
+        print(f"  [diag] ⚠  Activaciones muy bajas (max={vmax:.4f}). "
+              f"El modelo necesita más entrenamiento.")
+    elif density > 8.0:
+        sugerido = p99 * 0.7
+        print(f"  [diag] ⚠  Densidad alta ({density:.1f}%) — puede sonar ruidoso. "
+              f"Prueba --threshold {sugerido:.3f}")
+    elif density < 0.2:
+        sugerido = p99 * 0.3
+        print(f"  [diag] ⚠  Densidad muy baja ({density:.1f}%) — puede sonar escaso. "
+              f"Prueba --threshold {sugerido:.3f}")
+    else:
+        print(f"  [diag] ✓  Densidad {density:.1f}% — rango musical normal (0.5–5%)")
 
 
 def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
@@ -1905,19 +1962,17 @@ def cmd_transfer(args):
 
         # Diagnóstico en el primer compás
         if bar_idx == 0:
+            vmin  = float(bar_np.min())
             vmax  = float(bar_np.max())
             vmean = float(bar_np.mean())
+            p50   = float(np.percentile(bar_np, 50))
             p90   = float(np.percentile(bar_np, 90))
-            adaptive_thr = _adaptive_threshold(bar_np, percentile=args.threshold_pct)
-            n_active = int((bar_np > adaptive_thr).sum())
-            density  = 100 * n_active / bar_np.size
+            p99   = float(np.percentile(bar_np, 99))
             print(f"\n  [diag] Compás 0 — decoder output:")
-            print(f"         mean={vmean:.4f}  p90={p90:.4f}  max={vmax:.4f}")
-            print(f"         Umbral adaptativo: {adaptive_thr:.4f}  →  "
-                  f"{n_active} píxeles activos ({density:.2f}%)")
-            if vmax < 0.05:
-                print(f"  [diag] ⚠  Activaciones muy bajas. "
-                      f"Prueba con --denoise-strength más alto.")
+            print(f"         min={vmin:.4f}  mean={vmean:.4f}  "
+                  f"p50={p50:.4f}  p90={p90:.4f}  p99={p99:.4f}  max={vmax:.4f}")
+            adaptive_thr, thr_method = _compute_threshold(bar_np, args)
+            _diag_threshold(bar_np, adaptive_thr, thr_method, p99)
 
         for ridx, role in enumerate(role_list):
             bars_per_role[role].append(bar_np[ridx])
@@ -2105,17 +2160,8 @@ def cmd_compose(args):
             print(f"\n  [diag] Compás 0 — decoder output:")
             print(f"         min={vmin:.4f}  mean={vmean:.4f}  "
                   f"p50={p50:.4f}  p90={p90:.4f}  p99={p99:.4f}  max={vmax:.4f}")
-            # Estimar umbral adaptativo global desde el primer compás
-            adaptive_thr = _adaptive_threshold(bar_np, percentile=getattr(args, 'threshold_pct', 85.0))
-            n_active = int((bar_np > adaptive_thr).sum())
-            density  = 100 * n_active / bar_np.size
-            print(f"         Umbral adaptativo: {adaptive_thr:.4f}  →  "
-                  f"{n_active} píxeles activos ({density:.2f}%)")
-            if vmax < 0.05:
-                print(f"  [diag] ⚠  Activaciones muy bajas (max={vmax:.4f}). "
-                      f"El modelo necesita más entrenamiento.")
-                print(f"         Generando con umbral relativo al máximo — "
-                      f"el resultado tendrá estructura pero puede sonar raro.")
+            adaptive_thr, thr_method = _compute_threshold(bar_np, args)
+            _diag_threshold(bar_np, adaptive_thr, thr_method, p99)
 
         for ridx, role in enumerate(role_list):
             bars_per_role[role].append(bar_np[ridx])   # (res, 128)
@@ -2315,10 +2361,14 @@ def build_parser():
     p_comp.add_argument('--input',         metavar='FILE', default=None)
     p_comp.add_argument('--inputs',        nargs='+', metavar='FILE', default=None)
     p_comp.add_argument('--weights',       nargs='+', type=float, default=None)
-    p_comp.add_argument('--threshold-pct', type=float, default=85.0, metavar='FLOAT',
+    p_comp.add_argument('--threshold-pct', type=float, default=None, metavar='FLOAT',
         dest='threshold_pct',
-        help='Percentil para umbral adaptativo de binarización (default: 85). '
-             'Bájalo (ej. 70) si el MIDI sale vacío; súbelo (ej. 95) si hay demasiado ruido.')
+        help='Percentil para umbral adaptativo (0–100). '
+             'Mutuamente exclusivo con --threshold.')
+    p_comp.add_argument('--threshold',     type=float, default=None, metavar='FLOAT',
+        help='Umbral fijo de binarización (0.0–1.0). Ejemplo: --threshold 0.25. '
+             'Úsalo cuando ya conoces la distribución del decoder (ver p99 en el diagnóstico). '
+             'Mutuamente exclusivo con --threshold-pct.')
     p_comp.set_defaults(func=cmd_compose)
 
     # ── style-corpus ──────────────────────────────────────────────────────────
@@ -2374,8 +2424,11 @@ def build_parser():
     p_tr.add_argument('--ddim-steps',       type=int,   default=50)
     p_tr.add_argument('--eta',              type=float, default=0.0)
     p_tr.add_argument('--bpm',              type=float, default=120.0)
-    p_tr.add_argument('--threshold-pct',    type=float, default=85.0, metavar='FLOAT',
-        dest='threshold_pct')
+    p_tr.add_argument('--threshold-pct',    type=float, default=None, metavar='FLOAT',
+        dest='threshold_pct',
+        help='Percentil para umbral adaptativo (0–100).')
+    p_tr.add_argument('--threshold',        type=float, default=None, metavar='FLOAT',
+        help='Umbral fijo de binarización (0.0–1.0). Ejemplo: --threshold 0.25.')
     p_tr.add_argument('--output',           default='transfer_output.mid', metavar='FILE')
     p_tr.set_defaults(func=cmd_transfer)
 
