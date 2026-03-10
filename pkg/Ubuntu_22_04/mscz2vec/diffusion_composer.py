@@ -1541,18 +1541,18 @@ def _adaptive_threshold(roll: 'np.ndarray', percentile: float = 85.0) -> float:
     """
     Calcula un umbral adaptativo para binarizar el piano roll del decoder.
 
-    Estrategia: percentil alto de todos los valores > 0.
-    No impone mínimo absoluto — si el decoder produce valores bajos,
-    el umbral también será bajo, pero seguirá seleccionando los picos relativos.
+    Toma el percentil 'percentile' de todos los valores > 0.001.
+    Un percentil alto (95–99) = umbral alto = pocas notas (menos ruido).
+    Un percentil bajo (70–80) = umbral bajo = más notas (más densidad).
+
+    El rango útil típico es 75–97 dependiendo del estado del entrenamiento.
     """
     import numpy as np
     flat    = roll.flatten()
     nonzero = flat[flat > 0.001]
     if len(nonzero) == 0:
         return 0.5   # señal nula: umbral alto → MIDI vacío con aviso
-    thr = float(np.percentile(nonzero, percentile))
-    # Sin mínimo: si el max es 0.04, el umbral puede ser 0.03 y es correcto
-    return max(thr, flat.max() * 0.5)   # al menos la mitad del máximo
+    return float(np.percentile(nonzero, percentile))
 
 
 def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
