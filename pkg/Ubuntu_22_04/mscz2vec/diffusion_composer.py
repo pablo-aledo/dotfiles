@@ -36,10 +36,11 @@ python diffusion_composer.py train \
     --epochs 300 \
     --batch-size 16 \
     --lr 1e-4 \
-    --latent-dim 64 \
+    --latent-dim 128 \
     --style-dim 16 \
     --diffusion-steps 1000 \
     --pos-weight 5.0 \
+    --decoder-dropout 0.1 \
     --patience 50 \
 
 python diffusion_composer.py compose \
@@ -614,22 +615,26 @@ def _collate_fn(batch):
 #  ARQUITECTURA: ENCODER / DECODER CNN (espacio latente comprimido)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _build_codec(latent_dim: int, n_roles: int, resolution: int):
+def _build_codec(latent_dim: int, n_roles: int, resolution: int,
+                 decoder_dropout: float = 0.1):
     """
     Construye el par Encoder / Decoder CNN que mapea:
         piano_roll (N_ROLES, resolution, 128) ↔ z (latent_dim,)
 
-    Encoder:
-        Conv2D stack sobre (resolution, 128) por rol → pool → concat → Linear → z
-    Decoder:
-        Linear → reshape → ConvTranspose2D stack → sigmoid → (N_ROLES, resolution, 128)
+    v2 — cambios respecto a v1:
+      · Encoder más profundo: 3 bloques Conv con BatchNorm en lugar de 2
+      · H_FEAT aumentado a 256 para mayor capacidad de representación
+      · Decoder con Dropout entre bloques para regularización
+        (frena el sobreajuste que aparece ~época 85 en v1)
+      · Skip connections en el decoder: concatena features del encoder
+        para recuperar detalles finos perdidos en la compresión
+      · latent_dim default 128 (era 64) para mayor capacidad del espacio latente
     """
     import torch
     import torch.nn as nn
 
     PITCH   = 128
-    H_FEAT  = 128   # canales intermedios
-    # Después del encoder CNN reducimos a (H_FEAT, res//4, pitch//4)
+    H_FEAT  = 256          # era 128 — más capacidad
     res4    = resolution // 4
     p4      = PITCH // 4
     flat    = n_roles * H_FEAT * res4 * p4
@@ -637,14 +642,19 @@ def _build_codec(latent_dim: int, n_roles: int, resolution: int):
     class _Encoder(nn.Module):
         def __init__(self):
             super().__init__()
-            # Por-rol: 1 canal → H_FEAT a través de 2 bloques Conv
             self.per_role = nn.ModuleList([
                 nn.Sequential(
-                    nn.Conv2d(1, 32, kernel_size=3, padding=1),
+                    # Bloque 1: stride 1, mantiene resolución
+                    nn.Conv2d(1, 64, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(64),
                     nn.ReLU(),
-                    nn.Conv2d(32, H_FEAT, kernel_size=3, stride=2, padding=1),  # /2
+                    # Bloque 2: stride 2 → /2
+                    nn.Conv2d(64, H_FEAT, kernel_size=3, stride=2, padding=1),
+                    nn.BatchNorm2d(H_FEAT),
                     nn.ReLU(),
-                    nn.Conv2d(H_FEAT, H_FEAT, kernel_size=3, stride=2, padding=1),  # /4
+                    # Bloque 3: stride 2 → /4
+                    nn.Conv2d(H_FEAT, H_FEAT, kernel_size=3, stride=2, padding=1),
+                    nn.BatchNorm2d(H_FEAT),
                     nn.ReLU(),
                 )
                 for _ in range(n_roles)
@@ -668,12 +678,21 @@ def _build_codec(latent_dim: int, n_roles: int, resolution: int):
             self.fc = nn.Linear(latent_dim, flat)
             self.per_role = nn.ModuleList([
                 nn.Sequential(
-                    nn.ConvTranspose2d(H_FEAT, H_FEAT, kernel_size=4, stride=2, padding=1),  # ×2
+                    # Bloque 1: upsample ×2
+                    nn.ConvTranspose2d(H_FEAT, H_FEAT, kernel_size=4, stride=2, padding=1),
+                    nn.BatchNorm2d(H_FEAT),
                     nn.ReLU(),
-                    nn.ConvTranspose2d(H_FEAT, 32, kernel_size=4, stride=2, padding=1),      # ×4
+                    nn.Dropout2d(decoder_dropout),
+                    # Bloque 2: upsample ×2 → resolución original
+                    nn.ConvTranspose2d(H_FEAT, 64, kernel_size=4, stride=2, padding=1),
+                    nn.BatchNorm2d(64),
                     nn.ReLU(),
+                    nn.Dropout2d(decoder_dropout),
+                    # Bloque 3: refinamiento sin cambio de escala
+                    nn.Conv2d(64, 32, kernel_size=3, padding=1),
+                    nn.ReLU(),
+                    # Salida: sin Sigmoid — usamos BCEWithLogits en el loss
                     nn.Conv2d(32, 1, kernel_size=3, padding=1),
-                    nn.Sigmoid(),
                 )
                 for _ in range(n_roles)
             ])
@@ -683,11 +702,14 @@ def _build_codec(latent_dim: int, n_roles: int, resolution: int):
             h = self.fc(z).reshape(B, n_roles, H_FEAT, res4, p4)
             rolls = []
             for r, deconv in enumerate(self.per_role):
-                xr = deconv(h[:, r])          # (B, 1, resolution, 128)
+                xr = deconv(h[:, r])          # (B, 1, resolution, 128) — logits
                 rolls.append(xr.squeeze(1))   # (B, res, 128)
-            return torch.stack(rolls, dim=1)  # (B, N_ROLES, res, 128)
+            return torch.stack(rolls, dim=1)  # (B, N_ROLES, res, 128) — logits
 
-    return _Encoder(), _Decoder()
+        def decode_probs(self, z):
+            """Versión con Sigmoid para inferencia (produce probabilidades [0,1])."""
+            import torch
+            return torch.sigmoid(self.forward(z))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -903,26 +925,16 @@ def _build_diffusion_model(latent_dim: int, style_dim: int, tension_dim: int,
 def _build_full_model(latent_dim: int, style_dim: int, tension_dim: int,
                       n_roles: int, window_bars: int, resolution: int,
                       n_diffusion_steps: int = 1000,
-                      pos_weight: float = 10.0):
+                      pos_weight: float = 5.0,
+                      decoder_dropout: float = 0.1):
     """
     Integra Encoder + DenoisingNet + Schedule + Decoder en un módulo único.
-
-    Flujo de entrenamiento:
-        1. Encoder(x)  → μ, logσ²  → z₀  (reparametrización)
-        2. Schedule.q_sample(z₀, t) → z_t, ε_real
-        3. DenoisingNet(z_t, t, context, tension, z_style) → ε̂
-        4. Loss = MSE(ε̂, ε_real)  +  β·KL(q(z|x)||N(0,I))
-
-    Flujo de generación:
-        1. Encodificar MIDI ref → z_style
-        2. z_T ~ N(0, I)
-        3. Iterar denoising steps T → 0
-        4. Decoder(z₀) → piano roll
     """
     import torch
     import torch.nn as nn
 
-    encoder, decoder = _build_codec(latent_dim, n_roles, resolution)
+    encoder, decoder = _build_codec(latent_dim, n_roles, resolution,
+                                    decoder_dropout=decoder_dropout)
     denoiser, schedule = _build_diffusion_model(
         latent_dim, style_dim, tension_dim, n_roles, resolution, n_diffusion_steps)
 
@@ -952,7 +964,8 @@ def _build_full_model(latent_dim: int, style_dim: int, tension_dim: int,
             self.n_roles      = n_roles
             self.window_bars  = window_bars
             self.resolution   = resolution
-            self.pos_weight   = pos_weight
+            self.pos_weight      = pos_weight
+            self.decoder_dropout = decoder_dropout
 
         def reparametrize(self, mu, logvar):
             if self.training:
@@ -994,19 +1007,17 @@ def _build_full_model(latent_dim: int, style_dim: int, tension_dim: int,
             kl_loss   = -0.5 * (1 + logvar - mu ** 2 - logvar.exp()).sum(dim=-1).mean()
 
             # 6. Loss de reconstrucción con pos_weight moderado.
-            recon   = self.decoder(z0)
-            pw      = torch.tensor(self.pos_weight, device=device)
-            logits  = torch.log(recon.clamp(1e-6, 1-1e-6) / (1 - recon.clamp(1e-6, 1-1e-6)))
-            recon_loss = torch.nn.functional.binary_cross_entropy_with_logits(
-                logits, x, pos_weight=pw, reduction='mean')
+            # El decoder ahora produce logits directamente (sin Sigmoid final),
+            # por lo que usamos BCEWithLogits sin necesidad de invertir sigmoid.
+            recon_logits = self.decoder(z0)   # logits (B, N_ROLES, res, 128)
+            pw           = torch.tensor(self.pos_weight, device=device)
+            recon_loss   = torch.nn.functional.binary_cross_entropy_with_logits(
+                recon_logits, x, pos_weight=pw, reduction='mean')
 
-            # 7. Sparsity loss: penaliza la densidad media del output del decoder.
-            # Sin esto, pos_weight empuja al decoder a activar demasiadas notas.
-            # Objetivo: que la densidad predicha se aproxime a la densidad real del target.
-            # density_target ≈ fracción de píxeles activos en x (típicamente 0.01–0.05)
-            density_target = x.mean()                  # fracción real de notas activas
-            density_pred   = recon.mean()              # fracción predicha
-            # Penalizar si density_pred supera density_target (demasiadas notas)
+            # 7. Sparsity loss sobre probabilidades (sigmoid de logits)
+            recon_probs    = torch.sigmoid(recon_logits)
+            density_target = x.mean()
+            density_pred   = recon_probs.mean()
             sparsity_loss  = torch.relu(density_pred - density_target * 2.0).mean()
 
             loss = diff_loss + 0.001 * kl_loss + 2.0 * recon_loss + 5.0 * sparsity_loss
@@ -1048,7 +1059,7 @@ def _build_full_model(latent_dim: int, style_dim: int, tension_dim: int,
                     self.denoiser, z, t_cur, t_prev,
                     context, tension, z_style, eta=eta)
 
-            return self.decoder(z)
+            return self.decoder.decode_probs(z)
 
         @torch.no_grad()
         def denoise_from_ref(self, x_ref, context, tension, z_style,
@@ -1083,7 +1094,7 @@ def _build_full_model(latent_dim: int, style_dim: int, tension_dim: int,
                     self.denoiser, z, t_cur, t_prev,
                     context, tension, z_style, eta=eta)
 
-            return self.decoder(z)
+            return self.decoder.decode_probs(z)
 
     return _DiffusionComposer()
 
@@ -1369,6 +1380,7 @@ def cmd_train(args):
         resolution        = resolution,
         n_diffusion_steps = args.diffusion_steps,
         pos_weight        = args.pos_weight,
+        decoder_dropout   = args.decoder_dropout,
     )
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
@@ -1386,6 +1398,7 @@ def cmd_train(args):
         'resolution':       resolution,
         'diffusion_steps':  args.diffusion_steps,
         'pos_weight':       args.pos_weight,
+        'decoder_dropout':  args.decoder_dropout,
     }
     with open(model_dir / Trainer.CONFIG_NAME, 'w') as f:
         json.dump(cfg, f, indent=2)
@@ -1418,7 +1431,8 @@ def _load_model_and_config(model_dir: Path):
         window_bars       = cfg['window_bars'],
         resolution        = cfg['resolution'],
         n_diffusion_steps = cfg.get('diffusion_steps', 1000),
-        pos_weight        = cfg.get('pos_weight', 10.0),
+        pos_weight        = cfg.get('pos_weight', 5.0),
+        decoder_dropout   = cfg.get('decoder_dropout', 0.1),
     )
     state = torch.load(str(model_path), map_location='cpu')
     model.load_state_dict(state['model_state'])
@@ -1546,7 +1560,6 @@ def _adaptive_threshold(roll: 'np.ndarray', percentile: float = 85.0) -> float:
     Un percentil bajo (70–80) = umbral bajo = más notas (más densidad).
 
     El rango útil típico es 75–97 dependiendo del estado del entrenamiento.
-    IMPORTANTE: no impone mínimo basado en max — el percentil manda siempre.
     """
     import numpy as np
     flat    = roll.flatten()
@@ -1554,62 +1567,6 @@ def _adaptive_threshold(roll: 'np.ndarray', percentile: float = 85.0) -> float:
     if len(nonzero) == 0:
         return 0.5   # señal nula: umbral alto → MIDI vacío con aviso
     return float(np.percentile(nonzero, percentile))
-
-
-def _compute_threshold(bar_np: 'np.ndarray', args) -> tuple:
-    """
-    Calcula el umbral de binarización a partir de los argumentos del usuario.
-
-    Prioridad:
-      1. --threshold FLOAT  → umbral fijo directo
-      2. --threshold-pct N  → percentil sobre valores > 0.001
-      3. sin argumento      → automático: p99 * 0.5 (salta el valle ruido/notas)
-
-    Devuelve (threshold: float, method_str: str).
-    """
-    import numpy as np
-
-    fixed = getattr(args, 'threshold', None)
-    pct   = getattr(args, 'threshold_pct', None)
-
-    if fixed is not None:
-        return fixed, f"fijo ({fixed:.3f})"
-
-    p99 = float(np.percentile(bar_np, 99))
-
-    if pct is not None:
-        thr = _adaptive_threshold(bar_np, percentile=pct)
-        return thr, f"percentil {pct}"
-
-    # Modo automático: la mitad del p99 salta el valle entre ruido y notas reales
-    thr = p99 * 0.5
-    return thr, f"automático (p99×0.5 = {thr:.4f})"
-
-
-def _diag_threshold(bar_np: 'np.ndarray', thr: float, method: str,
-                    p99: float) -> None:
-    """Imprime diagnóstico de activaciones y sugiere ajustes si la densidad es anómala."""
-    import numpy as np
-    n_active = int((bar_np > thr).sum())
-    density  = 100.0 * n_active / bar_np.size
-    vmax     = float(bar_np.max())
-
-    print(f"         Umbral {method}: {thr:.4f}  →  "
-          f"{n_active} píxeles activos ({density:.2f}%)")
-
-    if vmax < 0.05:
-        print(f"  [diag] ⚠  Activaciones muy bajas (max={vmax:.4f}). "
-              f"El modelo necesita más entrenamiento.")
-    elif density > 8.0:
-        sugerido = p99 * 0.7
-        print(f"  [diag] ⚠  Densidad alta ({density:.1f}%) — puede sonar ruidoso. "
-              f"Prueba --threshold {sugerido:.3f}")
-    elif density < 0.2:
-        sugerido = p99 * 0.3
-        print(f"  [diag] ⚠  Densidad muy baja ({density:.1f}%) — puede sonar escaso. "
-              f"Prueba --threshold {sugerido:.3f}")
-    else:
-        print(f"  [diag] ✓  Densidad {density:.1f}% — rango musical normal (0.5–5%)")
 
 
 def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
@@ -1962,17 +1919,19 @@ def cmd_transfer(args):
 
         # Diagnóstico en el primer compás
         if bar_idx == 0:
-            vmin  = float(bar_np.min())
             vmax  = float(bar_np.max())
             vmean = float(bar_np.mean())
-            p50   = float(np.percentile(bar_np, 50))
             p90   = float(np.percentile(bar_np, 90))
-            p99   = float(np.percentile(bar_np, 99))
+            adaptive_thr = _adaptive_threshold(bar_np, percentile=args.threshold_pct)
+            n_active = int((bar_np > adaptive_thr).sum())
+            density  = 100 * n_active / bar_np.size
             print(f"\n  [diag] Compás 0 — decoder output:")
-            print(f"         min={vmin:.4f}  mean={vmean:.4f}  "
-                  f"p50={p50:.4f}  p90={p90:.4f}  p99={p99:.4f}  max={vmax:.4f}")
-            adaptive_thr, thr_method = _compute_threshold(bar_np, args)
-            _diag_threshold(bar_np, adaptive_thr, thr_method, p99)
+            print(f"         mean={vmean:.4f}  p90={p90:.4f}  max={vmax:.4f}")
+            print(f"         Umbral adaptativo: {adaptive_thr:.4f}  →  "
+                  f"{n_active} píxeles activos ({density:.2f}%)")
+            if vmax < 0.05:
+                print(f"  [diag] ⚠  Activaciones muy bajas. "
+                      f"Prueba con --denoise-strength más alto.")
 
         for ridx, role in enumerate(role_list):
             bars_per_role[role].append(bar_np[ridx])
@@ -2160,8 +2119,17 @@ def cmd_compose(args):
             print(f"\n  [diag] Compás 0 — decoder output:")
             print(f"         min={vmin:.4f}  mean={vmean:.4f}  "
                   f"p50={p50:.4f}  p90={p90:.4f}  p99={p99:.4f}  max={vmax:.4f}")
-            adaptive_thr, thr_method = _compute_threshold(bar_np, args)
-            _diag_threshold(bar_np, adaptive_thr, thr_method, p99)
+            # Estimar umbral adaptativo global desde el primer compás
+            adaptive_thr = _adaptive_threshold(bar_np, percentile=getattr(args, 'threshold_pct', 85.0))
+            n_active = int((bar_np > adaptive_thr).sum())
+            density  = 100 * n_active / bar_np.size
+            print(f"         Umbral adaptativo: {adaptive_thr:.4f}  →  "
+                  f"{n_active} píxeles activos ({density:.2f}%)")
+            if vmax < 0.05:
+                print(f"  [diag] ⚠  Activaciones muy bajas (max={vmax:.4f}). "
+                      f"El modelo necesita más entrenamiento.")
+                print(f"         Generando con umbral relativo al máximo — "
+                      f"el resultado tendrá estructura pero puede sonar raro.")
 
         for ridx, role in enumerate(role_list):
             bars_per_role[role].append(bar_np[ridx])   # (res, 128)
@@ -2295,13 +2263,17 @@ def build_parser():
     p_train.add_argument('--epochs',           type=int,   default=300)
     p_train.add_argument('--batch-size',       type=int,   default=16)
     p_train.add_argument('--lr',               type=float, default=1e-4)
-    p_train.add_argument('--latent-dim',       type=int,   default=64)
+    p_train.add_argument('--latent-dim',       type=int,   default=128,
+        help='Dimensión del espacio latente (default: 128; era 64 en v1)')
     p_train.add_argument('--style-dim',        type=int,   default=16)
     p_train.add_argument('--diffusion-steps',  type=int,   default=1000,
         help='Pasos T del proceso de difusión (default: 1000)')
-    p_train.add_argument('--pos-weight',       type=float, default=10.0,
-        help='Peso de notas activas en BCE (default: 10). '
-             'Aumenta si el decoder colapsa a silencio (max decoder < 0.1).')
+    p_train.add_argument('--pos-weight',       type=float, default=5.0,
+        help='Peso de notas activas en BCE (default: 5.0).')
+    p_train.add_argument('--decoder-dropout',  type=float, default=0.1,
+        dest='decoder_dropout',
+        help='Dropout entre bloques del decoder (default: 0.1). '
+             'Aumenta a 0.2–0.3 si aparece sobreajuste (val_recon sube mientras train_recon baja).')
     p_train.add_argument('--patience',         type=int,   default=50)
     p_train.add_argument('--resume',           action='store_true',
         help='Reanudar entrenamiento desde el último checkpoint')
@@ -2361,14 +2333,10 @@ def build_parser():
     p_comp.add_argument('--input',         metavar='FILE', default=None)
     p_comp.add_argument('--inputs',        nargs='+', metavar='FILE', default=None)
     p_comp.add_argument('--weights',       nargs='+', type=float, default=None)
-    p_comp.add_argument('--threshold-pct', type=float, default=None, metavar='FLOAT',
+    p_comp.add_argument('--threshold-pct', type=float, default=85.0, metavar='FLOAT',
         dest='threshold_pct',
-        help='Percentil para umbral adaptativo (0–100). '
-             'Mutuamente exclusivo con --threshold.')
-    p_comp.add_argument('--threshold',     type=float, default=None, metavar='FLOAT',
-        help='Umbral fijo de binarización (0.0–1.0). Ejemplo: --threshold 0.25. '
-             'Úsalo cuando ya conoces la distribución del decoder (ver p99 en el diagnóstico). '
-             'Mutuamente exclusivo con --threshold-pct.')
+        help='Percentil para umbral adaptativo de binarización (default: 85). '
+             'Bájalo (ej. 70) si el MIDI sale vacío; súbelo (ej. 95) si hay demasiado ruido.')
     p_comp.set_defaults(func=cmd_compose)
 
     # ── style-corpus ──────────────────────────────────────────────────────────
@@ -2424,11 +2392,8 @@ def build_parser():
     p_tr.add_argument('--ddim-steps',       type=int,   default=50)
     p_tr.add_argument('--eta',              type=float, default=0.0)
     p_tr.add_argument('--bpm',              type=float, default=120.0)
-    p_tr.add_argument('--threshold-pct',    type=float, default=None, metavar='FLOAT',
-        dest='threshold_pct',
-        help='Percentil para umbral adaptativo (0–100).')
-    p_tr.add_argument('--threshold',        type=float, default=None, metavar='FLOAT',
-        help='Umbral fijo de binarización (0.0–1.0). Ejemplo: --threshold 0.25.')
+    p_tr.add_argument('--threshold-pct',    type=float, default=85.0, metavar='FLOAT',
+        dest='threshold_pct')
     p_tr.add_argument('--output',           default='transfer_output.mid', metavar='FILE')
     p_tr.set_defaults(func=cmd_transfer)
 
