@@ -711,6 +711,8 @@ def _build_codec(latent_dim: int, n_roles: int, resolution: int,
             import torch
             return torch.sigmoid(self.forward(z))
 
+    return _Encoder(), _Decoder()
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  ARQUITECTURA: DDPM  (Denoising Diffusion Probabilistic Model)
