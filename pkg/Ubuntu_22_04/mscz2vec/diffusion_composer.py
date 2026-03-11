@@ -634,7 +634,8 @@ def _build_codec(latent_dim: int, n_roles: int, resolution: int,
     import torch.nn as nn
 
     PITCH   = 128
-    H_FEAT  = 256          # era 128 — más capacidad
+    H_FEAT  = 128   # igual que v1 — con resolution=48 subir esto dispara el modelo a >1GB
+                    # La mejora real viene de BatchNorm + Dropout, no de más canales
     res4    = resolution // 4
     p4      = PITCH // 4
     flat    = n_roles * H_FEAT * res4 * p4
@@ -1006,7 +1007,10 @@ def _build_full_model(latent_dim: int, style_dim: int, tension_dim: int,
 
             # 5. Loss de difusión y KL
             diff_loss = torch.nn.functional.mse_loss(eps_pred, eps_real)
+            # KL clampado: evita explosiones en las primeras épocas cuando el
+            # encoder aún no ha aprendido a producir varianzas estables.
             kl_loss   = -0.5 * (1 + logvar - mu ** 2 - logvar.exp()).sum(dim=-1).mean()
+            kl_loss   = kl_loss.clamp(max=100.0)   # nunca más de 100 por batch
 
             # 6. Loss de reconstrucción con pos_weight moderado.
             # El decoder ahora produce logits directamente (sin Sigmoid final),
@@ -1022,7 +1026,7 @@ def _build_full_model(latent_dim: int, style_dim: int, tension_dim: int,
             density_pred   = recon_probs.mean()
             sparsity_loss  = torch.relu(density_pred - density_target * 2.0).mean()
 
-            loss = diff_loss + 0.001 * kl_loss + 2.0 * recon_loss + 5.0 * sparsity_loss
+            loss = diff_loss + 0.0001 * kl_loss + 2.0 * recon_loss + 5.0 * sparsity_loss
 
             return loss, {'diff': diff_loss.item(),
                           'kl':   kl_loss.item(),
@@ -1196,7 +1200,7 @@ class Trainer:
                 if training:
                     self.optimizer.zero_grad()
                     loss.backward()
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
                     self.optimizer.step()
 
                 total_loss += loss.item()
