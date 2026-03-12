@@ -1,0 +1,23 @@
+graph TD
+  entry["Entry"]
+  split["Split"]
+  loopA["Loop A"]:::loopheader
+  bodyA["Body A"]
+  beA["backedge A"]:::backedge
+  loopB["Loop B"]:::loopheader
+  bodyB["Body B"]
+  beB["backedge B"]:::backedge
+  join["Join"]
+  exit["Exit"]
+  entry --> split
+  split --> loopA
+  split --> loopB
+  loopA --> bodyA
+  bodyA --> beA
+  beA --> loopA
+  loopA --> join
+  loopB --> bodyB
+  bodyB --> beB
+  beB --> loopB
+  loopB --> join
+  join --> exit

@@ -1,0 +1,14 @@
+graph TD
+  entry["Entry"]
+  cond["Condition"]
+  true_branch["True Branch"]
+  false_branch["False Branch"]
+  merge["Merge"]
+  exit["Exit"]
+  entry --> cond
+  cond --> true_branch
+  cond --> false_branch
+  true_branch --> merge
+  false_branch --> merge
+  merge --> exit
+  exit --> entry

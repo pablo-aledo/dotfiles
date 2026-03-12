@@ -1,0 +1,18 @@
+graph TD
+  entry["Entry"]
+  outer["Outer Loop"]:::loopheader
+  inner["Inner Loop"]:::loopheader
+  body["Inner Body"]
+  inner_be["backedge inner"]:::backedge
+  outer_body["Outer Body"]
+  outer_be["backedge outer"]:::backedge
+  exit["Exit"]
+  entry --> outer
+  outer --> inner
+  inner --> body
+  body --> inner_be
+  inner_be --> inner
+  inner --> outer_body
+  outer_body --> outer_be
+  outer_be --> outer
+  outer --> exit

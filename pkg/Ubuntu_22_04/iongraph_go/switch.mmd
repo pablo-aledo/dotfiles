@@ -1,0 +1,19 @@
+graph TD
+  entry["Entry"]
+  switch["switch(x)"]
+  case0["case 0"]
+  case1["case 1"]
+  case2["case 2"]
+  default["default"]
+  merge["Merge"]
+  exit["Exit"]
+  entry --> switch
+  switch --> case0
+  switch --> case1
+  switch --> case2
+  switch --> default
+  case0 --> merge
+  case1 --> merge
+  case2 --> merge
+  default --> merge
+  merge --> exit
