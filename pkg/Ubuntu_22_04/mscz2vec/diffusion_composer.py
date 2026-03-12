@@ -2193,13 +2193,28 @@ def cmd_inspect(args):
         if target:
             npz_files = [f for f in npz_files if f.stem == target]
 
-        for f in npz_files[:5]:
+        # Con --no-roll mostramos todos los archivos con densidad.
+        # Sin --no-roll limitamos a 5 para no inundar el terminal con piano rolls.
+        files_to_show = npz_files if args.no_roll else npz_files[:5]
+
+        for f in files_to_show:
             data = dict(np.load(str(f), allow_pickle=True))
             meta = json.loads(str(data['meta_json'][0]))
             print(f"\n  {f.name}")
             print(f"    Compases   : {meta['total_bars']}")
             print(f"    Ventanas   : {meta['n_windows']}")
             print(f"    Roles      : {', '.join(meta['roles'])}")
+            if args.no_roll:
+                # Calcular densidad media de todos los roles
+                densities = []
+                for role in meta['roles']:
+                    key = f'roll_{role}'
+                    if key in data:
+                        densities.append(float(data[key].mean()))
+                if densities:
+                    mean_density = sum(densities) / len(densities)
+                    flag = '  ⚠ DENSO' if mean_density > 0.15 else ''
+                    print(f"    Densidad   : {mean_density*100:.1f}%{flag}")
             if not args.no_roll:
                 widx  = args.window if args.window >= 0 else meta['n_windows'] + args.window
                 widx  = max(0, min(widx, meta['n_windows'] - 1))
