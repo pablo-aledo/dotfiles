@@ -2240,6 +2240,72 @@ def cmd_inspect(args):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  COMANDO: round-trip
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cmd_round_trip(args):
+    """
+    MIDI → piano roll → MIDI sin pasar por el modelo.
+
+    Útil para aislar la pérdida de información del parser/renderer
+    antes de culpar al encoder o al decoder.
+
+    Si round-trip suena mal → el problema está en el parseo MIDI.
+    Si round-trip suena bien pero reconstruct suena mal → problema en el codec.
+    Si reconstruct suena bien pero compose suena mal → problema en el denoiser.
+    """
+    import numpy as np
+
+    # Construir cfg mínimo: desde model_config.json o desde args directos
+    if args.model_dir:
+        config_path = Path(args.model_dir) / 'model_config.json'
+        if not config_path.exists():
+            print(f"[round-trip] ERROR: no se encontró {config_path}")
+            import sys; sys.exit(1)
+        with open(config_path) as f:
+            cfg = json.load(f)
+        print(f"[round-trip] Config cargada desde {config_path}")
+    else:
+        cfg = {
+            'resolution':   args.resolution,
+            'window_bars':  4,
+            'roles':        ROLES,
+            'n_roles':      len(ROLES),
+            'tension_dim':  8,
+        }
+        print(f"[round-trip] Config manual: resolution={args.resolution}, "
+              f"roles={ROLES}")
+
+    palette = {}
+    if args.palette:
+        palette = _load_palette(args.palette, cfg)
+
+    print(f"[round-trip] Procesando {args.input} ...")
+    rolls = _midi_to_rolls(args.input, cfg)
+    if not rolls:
+        print("[round-trip] ERROR: no se pudieron extraer rolls del MIDI")
+        import sys; sys.exit(1)
+
+    n_bars     = min(r.shape[0] for r in rolls.values())
+    resolution = cfg['resolution']
+    print(f"[round-trip] Roles: {list(rolls.keys())}  |  "
+          f"Compases: {n_bars}  |  Resolución: {resolution}")
+
+    all_vals = np.concatenate([r.flatten() for r in rolls.values()])
+    density  = float(all_vals.mean())
+    print(f"[round-trip] Densidad media del piano roll: {density*100:.2f}% "
+          f"({int(all_vals.sum())} píxeles activos de {len(all_vals)})")
+
+    n_notes = _rolls_to_midi(rolls, cfg, palette, args.output,
+                              bpm=args.bpm, threshold=0.5)
+    print(f"[round-trip] MIDI guardado en {args.output}  ({n_notes} notas)")
+    if n_notes == 0:
+        print("[round-trip] ⚠  MIDI vacío — problema en el parser MIDI")
+    else:
+        print("[round-trip] ✓")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  COMANDO: reconstruct
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -2510,6 +2576,34 @@ def build_parser():
         dest='threshold_pct')
     p_tr.add_argument('--output',           default='transfer_output.mid', metavar='FILE')
     p_tr.set_defaults(func=cmd_transfer)
+
+    # ── round-trip ────────────────────────────────────────────────────────────
+    p_rt = sub.add_parser('round-trip',
+        help='MIDI → piano roll → MIDI sin modelo (diagnóstico del parser)',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent("""\
+            Convierte un MIDI a piano roll y de vuelta a MIDI sin usar el modelo.
+            Útil para aislar problemas en el pipeline de parseo/renderizado.
+
+              round-trip OK, reconstruct mal  →  problema en el codec
+              round-trip mal                  →  problema en el parser MIDI
+
+            Ejemplos:
+              round-trip --input ref.mid
+              round-trip --input ref.mid --model-dir model_diff_v2/
+        """))
+    p_rt.add_argument('--input',      required=True, metavar='FILE')
+    p_rt.add_argument('--model-dir',  default=None,  metavar='DIR',
+        help='Si se indica, lee resolución y roles desde model_config.json')
+    p_rt.add_argument('--resolution', type=int, default=TICKS_PER_BAR_DEFAULT,
+        metavar='INT',
+        help=f'Ticks por compás (solo si no se usa --model-dir; '
+             f'default: {TICKS_PER_BAR_DEFAULT})')
+    p_rt.add_argument('--palette',    default=None,  metavar='FILE',
+        help='Paleta de instrumentos (opcional)')
+    p_rt.add_argument('--output',     default='output_roundtrip.mid', metavar='FILE')
+    p_rt.add_argument('--bpm',        type=float, default=120.0)
+    p_rt.set_defaults(func=cmd_round_trip)
 
     # ── reconstruct ───────────────────────────────────────────────────────────
     p_rec = sub.add_parser('reconstruct',
