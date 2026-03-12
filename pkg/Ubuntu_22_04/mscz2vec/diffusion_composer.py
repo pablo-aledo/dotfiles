@@ -2240,6 +2240,114 @@ def cmd_inspect(args):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  COMANDO: reconstruct
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cmd_reconstruct(args):
+    """
+    Encode → decode puro sin ningún paso de difusión.
+
+    Útil para:
+      · Diagnosticar si el decoder ha convergido (p90 > 0.05 = bien).
+      · Escuchar cómo suena el espacio latente antes de que el denoiser madure.
+      · Verificar que la arquitectura funciona antes de usar compose.
+
+    Si output_recon.mid suena musical → el decoder está bien, esperar más épocas.
+    Si suena ruidoso → el decoder aún no ha convergido.
+    """
+    import torch, numpy as np
+
+    model_dir = Path(args.model_dir)
+    print(f"[reconstruct] Cargando modelo desde {model_dir} ...")
+    model, cfg = _load_model_and_config(model_dir)
+    model.eval()
+
+    palette = _load_palette(args.palette, cfg) if args.palette else {}
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model.to(device)
+
+    print(f"[reconstruct] Procesando {args.input} ...")
+    rolls = _midi_to_rolls(args.input, cfg)
+    if not rolls:
+        print("[reconstruct] ERROR: no se pudieron extraer rolls del MIDI")
+        import sys; sys.exit(1)
+
+    role_list  = cfg['roles']
+    n_roles    = cfg['n_roles']
+    resolution = cfg['resolution']
+    n_bars     = min(r.shape[0] for r in rolls.values())
+    print(f"[reconstruct] Roles: {list(rolls.keys())}  |  "
+          f"Compases: {n_bars}  |  Resolución: {resolution}")
+
+    bars_recon = {role: [] for role in role_list}
+
+    with torch.no_grad():
+        for bar_idx in range(n_bars):
+            bar = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+            for ri, role in enumerate(role_list):
+                if role in rolls and bar_idx < rolls[role].shape[0]:
+                    bar[ri] = rolls[role][bar_idx]
+
+            x   = torch.tensor(bar).unsqueeze(0).to(device)
+            mu, _ = model.encoder(x)
+            recon = model.decoder.decode_probs(mu)   # sin ruido, sin difusión
+            recon_np = recon[0].cpu().numpy()         # (N_ROLES, res, 128)
+
+            if bar_idx == 0:
+                flat = recon_np.flatten()
+                nz   = flat[flat > 0.001]
+                p90  = float(np.percentile(nz, 90)) if len(nz) > 0 else 0.0
+                p99  = float(np.percentile(nz, 99)) if len(nz) > 0 else 0.0
+                thr_diag = args.threshold if args.threshold else p99 * 0.5
+                n_active = int((flat > thr_diag).sum())
+                print(f"\n[diag] Compás 0 — reconstrucción encoder/decoder:")
+                print(f"       min={flat.min():.4f}  mean={flat.mean():.4f}  "
+                      f"p50={float(np.percentile(flat,50)):.4f}  "
+                      f"p90={p90:.4f}  p99={p99:.4f}  max={float(flat.max()):.4f}")
+                print(f"       Umbral: {thr_diag:.4f}  →  {n_active} píxeles activos "
+                      f"({100*n_active/len(flat):.2f}%)")
+                if p90 < 0.01:
+                    print(f"       ⚠  p90={p90:.4f} — decoder aún ruidoso, necesita más épocas")
+                elif p90 < 0.05:
+                    print(f"       ~  p90={p90:.4f} — decoder en progreso")
+                else:
+                    print(f"       ✓  p90={p90:.4f} — separación ruido/notas aceptable")
+
+            for ri, role in enumerate(role_list):
+                bars_recon[role].append(recon_np[ri])
+
+    final_rolls = {
+        role: np.stack(bars, axis=0)
+        for role, bars in bars_recon.items()
+    }
+
+    # Umbral global
+    all_vals = np.concatenate([r.flatten() for r in final_rolls.values()])
+    nz_all   = all_vals[all_vals > 0.001]
+    if args.threshold:
+        thr = args.threshold
+        method = 'fijo'
+    elif len(nz_all) > 0:
+        thr    = float(np.percentile(nz_all, 99)) * 0.5
+        method = 'p99×0.5'
+    else:
+        thr    = 0.5
+        method = 'default'
+
+    n_notes = _rolls_to_midi(final_rolls, cfg, palette, args.output,
+                              bpm=args.bpm, threshold=thr)
+    print(f"\n[reconstruct] MIDI guardado en {args.output}  "
+          f"({n_notes} notas, umbral={thr:.4f} [{method}])")
+    if n_notes == 0:
+        print("[reconstruct] ⚠  MIDI vacío — prueba --threshold 0.1")
+    elif n_notes > 10000:
+        print(f"[reconstruct] ⚠  Muchas notas ({n_notes}) — prueba --threshold 0.4")
+    else:
+        print("[reconstruct] ✓")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  CLI
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -2402,6 +2510,30 @@ def build_parser():
         dest='threshold_pct')
     p_tr.add_argument('--output',           default='transfer_output.mid', metavar='FILE')
     p_tr.set_defaults(func=cmd_transfer)
+
+    # ── reconstruct ───────────────────────────────────────────────────────────
+    p_rec = sub.add_parser('reconstruct',
+        help='Encode→decode sin difusión (diagnóstico del decoder)',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent("""\
+            Reconstruye un MIDI mediante encode→decode puro, sin ningún paso
+            de difusión. Útil para diagnosticar si el decoder ha convergido.
+
+              p90 > 0.05  →  decoder OK, el problema está en el denoiser
+              p90 < 0.01  →  decoder aún ruidoso, esperar más épocas
+
+            Ejemplo:
+              reconstruct --model-dir model_diff_v2/ --input ref.mid
+        """))
+    p_rec.add_argument('--model-dir', required=True, metavar='DIR')
+    p_rec.add_argument('--input',     required=True, metavar='FILE')
+    p_rec.add_argument('--palette',   default=None,  metavar='FILE',
+        help='Paleta de instrumentos (opcional)')
+    p_rec.add_argument('--output',    default='output_recon.mid', metavar='FILE')
+    p_rec.add_argument('--bpm',       type=float, default=120.0)
+    p_rec.add_argument('--threshold', type=float, default=None, metavar='FLOAT',
+        help='Umbral fijo de binarización. Sin valor: automático p99×0.5')
+    p_rec.set_defaults(func=cmd_reconstruct)
 
     # ── inspect ───────────────────────────────────────────────────────────────
     p_ins = sub.add_parser('inspect', help='Diagnóstico del modelo y los datos')
