@@ -69,6 +69,63 @@ python diffusion_composer.py transfer \
 
 python diffusion_composer.py transfer ... --progressive
 
+
+train
+-----
+
+**`val_recon` sube mientras `train_recon` baja (sobreajuste del decoder)**
+
+- Brecha < 0.005 → normal, ignorar
+- Brecha 0.005–0.010 → vigilar
+- Brecha > 0.010 sostenida 5+ épocas → subir `--decoder-dropout` en 0.05 y reiniciar
+
+---
+
+**`loss=nan` en los primeros batches**
+
+- Pocos batches NaN → se saltan automáticamente, ignorar
+- Mayoría de batches NaN → bajar `--lr` a la mitad y reiniciar
+
+---
+
+**Spikes periódicos en `val_loss`**
+
+- `recon` y `sparse` suben juntos → batch de validación atípico, ignorar
+- Ocurren cada 5–8 épocas regularmente → varianza estadística, ignorar
+- `val_diff` también sube en el spike → problema real, vigilar tendencia
+
+---
+
+**Generación ruidosa (`p90 < 0.01` en el diagnóstico)**
+
+- `reconstruct` también ruidoso → decoder no ha convergido, esperar más épocas
+- `reconstruct` limpio pero `compose` ruidoso → denoiser no ha convergido, esperar más épocas
+- `round-trip` ruidoso → problema en el parser MIDI, revisar los datos
+
+---
+
+**Convergencia lenta (val_loss apenas baja)**
+
+- `val_diff` estancado → el denoiser ha llegado a su límite con esta arquitectura
+- `val_recon` estancado alto → el decoder necesita más capacidad (`H_FEAT`) o menos regularización
+- Ambos estancados → considerar aumentar `--latent-dim` o cambiar arquitectura
+
+---
+
+**Early stopping activo (sin mejora X/50)**
+
+- < 25/50 → normal
+- 25–40/50 → valorar si `val_diff` sigue bajando; si sí, el modelo mejora aunque `val_loss` no baje
+- > 40/50 → prepararse para usar el `best_model.pt` y parar
+
+---
+
+**Referencia de valores objetivo para generación usable**
+
+- `val_diff` < 0.004 → generación probablemente usable
+- `p90` > 0.05 en `compose` → separación ruido/notas aceptable
+- `p90` > 0.01 → mejora respecto a versiones anteriores pero aún ruidoso
+
 """
 
 import argparse
