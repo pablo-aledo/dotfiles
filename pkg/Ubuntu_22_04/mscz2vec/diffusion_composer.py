@@ -40,8 +40,8 @@ python diffusion_composer.py train \
     --style-dim 16 \
     --diffusion-steps 1000 \
     --pos-weight 5.0 \
-    --decoder-dropout 0.1 \
-    --patience 50 \
+    --decoder-dropout 0.2 \
+    --patience 50
 
 python diffusion_composer.py compose \
     --model-dir model_diff/ \
@@ -1197,6 +1197,15 @@ class Trainer:
 
                 loss, metrics = self.model(x, context, tension)
 
+                # Saltar batch si el loss es NaN (puede ocurrir con dropout alto
+                # y BatchNorm en las primeras iteraciones)
+                import math
+                if math.isnan(loss.item()):
+                    if training:
+                        self.optimizer.zero_grad()
+                    batch_times.append(time.time() - t0)
+                    continue
+
                 if training:
                     self.optimizer.zero_grad()
                     loss.backward()
@@ -1317,7 +1326,11 @@ class Trainer:
             # ── Barra de progreso basada en val_recon ─────────────────────
             ref_recon = self.history['val_recon'][0] if self.history['val_recon'] else vl_recon
             bar_w     = 24
-            progress  = min(int((1 - vl_recon / max(ref_recon, 1e-6)) * bar_w), bar_w)
+            import math
+            if math.isnan(vl_recon) or math.isnan(ref_recon) or ref_recon < 1e-6:
+                progress = 0
+            else:
+                progress = min(int((1 - vl_recon / ref_recon) * bar_w), bar_w)
             bar       = '█' * max(progress, 0) + '░' * (bar_w - max(progress, 0))
 
             best_marker = ' ◀ mejor' if is_best else ''
