@@ -511,8 +511,37 @@ def _enrich_with_mscz2vec(midi_path: str, total_bars: int,
 
 
 
+def _load_external_vec(midi_path: 'Path') -> 'np.ndarray | None':
+    """
+    Busca un archivo .vec junto al MIDI (mismo nombre, extensión .vec)
+    y lo carga como array numpy 1D.
+
+    El vector se replica para todos los compases durante el preprocesado,
+    añadiéndose al vector de condicionamiento como embedding global del MIDI.
+
+    Formato esperado: array numpy guardado con np.save() → archivo .npy,
+    o bien archivo de texto con valores separados por espacios/líneas.
+    """
+    import numpy as np
+
+    vec_path = midi_path.with_suffix('.vec')
+    if not vec_path.exists():
+        return None
+    try:
+        # Intentar cargar como numpy binario primero
+        try:
+            vec = np.load(str(vec_path))
+        except Exception:
+            # Fallback: texto plano (valores separados por espacios o líneas)
+            vec = np.loadtxt(str(vec_path), dtype=np.float32)
+        vec = np.array(vec, dtype=np.float32).flatten()
+        return vec
+    except Exception:
+        return None
+
+
 def _prepare_one_midi(args_tuple):
-    midi_path, output_dir, resolution, window_bars, enrich, mscz2vec_path = args_tuple
+    midi_path, output_dir, resolution, window_bars, enrich, mscz2vec_path, enrich_external = args_tuple
     import numpy as np
 
     stem = midi_path.stem
@@ -615,6 +644,32 @@ def _prepare_one_midi(args_tuple):
     stats_partial['files_ok']      = 1
     stats_partial['total_windows'] = min_windows
     enrich_str = ' +enrich' if enrich_ok else (' enrich:FAIL' if enrich else '')
+
+    # Enriquecimiento externo: cargar .vec junto al MIDI
+    ext_vec_ok = False
+    if enrich_external:
+        ext_vec = _load_external_vec(midi_path)
+        if ext_vec is not None:
+            ext_dim = len(ext_vec)
+            # Replicar el vector para todos los compases: (total_bars, ext_dim)
+            ext_bars = np.tile(ext_vec, (total_bars, 1))
+            # Ventanas del vector externo (mismo offset que la tensión)
+            ext_windows = ext_bars[mid_offset: mid_offset + min_windows]
+            if len(ext_windows) < min_windows:
+                pad = np.zeros((min_windows - len(ext_windows), ext_dim), dtype=np.float32)
+                ext_windows = np.concatenate([ext_windows, pad], axis=0)
+
+            # Concatenar al vector de tensión ya disponible
+            base_key = 'tension_enriched' if 'tension_enriched' in save_dict else 'tension'
+            save_dict['tension_enriched'] = np.concatenate(
+                [save_dict[base_key], ext_windows], axis=1)
+            # Guardar dimensión del vec externo en meta para poder reconstruirla
+            save_dict['ext_vec_dim'] = np.array([ext_dim], dtype=np.int32)
+            ext_vec_ok = True
+            enrich_str += f' +vec({ext_dim}D)'
+        else:
+            if enrich_external:
+                enrich_str += ' vec:MISSING'
     return (stem,
             f"OK  ({total_bars} compases, {min_windows} ventanas, roles: {', '.join(roles_found)}){enrich_str}",
             True, stats_partial)
@@ -632,6 +687,7 @@ def cmd_prepare(args):
     window_bars = args.window_bars
     enrich      = getattr(args, 'enrich', False)
     mscz2vec_path = getattr(args, 'mscz2vec_path', None)
+    enrich_external = getattr(args, 'enrich_external', False)
 
     midi_files = sorted(list(input_dir.glob('*.mid')) + list(input_dir.glob('*.midi')))
     if not midi_files:
@@ -660,6 +716,10 @@ def cmd_prepare(args):
                   f"(tensión armónica + estabilidad tonal + tonalidad → {ENRICHED_TENSION_DIM}D)")
             print(f"[prepare]    Nota: el preprocesado será más lento (~5-30s por archivo)")
 
+    if enrich_external:
+        print(f"[prepare] ✓  Enriquecimiento externo ACTIVO "
+              f"(buscando .vec junto a cada MIDI)")
+
     n_workers = min(multiprocessing.cpu_count(), len(midi_files))
     # Con enriquecimiento, limitar workers para no saturar music21
     if enrich:
@@ -673,7 +733,7 @@ def cmd_prepare(args):
     stats['files_ok'] = stats['files_skipped'] = stats['total_windows'] = 0
 
     task_args = [
-        (midi_path, str(output_dir), resolution, window_bars, enrich, mscz2vec_path)
+        (midi_path, str(output_dir), resolution, window_bars, enrich, mscz2vec_path, enrich_external)
         for midi_path in midi_files
     ]
 
@@ -2573,6 +2633,11 @@ def build_parser():
     p_prep.add_argument('--mscz2vec-path', default=None, metavar='FILE',
         dest='mscz2vec_path',
         help='Ruta al script mscz2vec.py (opcional si está en el PATH o en el mismo directorio)')
+    p_prep.add_argument('--enrich-external', action='store_true',
+        dest='enrich_external',
+        help='Cargar vector externo .vec junto a cada MIDI (mismo nombre, extensión .vec). '
+             'El vector se replica para todos los compases y se añade al condicionamiento. '
+             'Los MIDIs sin .vec se procesan sin este vector (marcado como vec:MISSING en el log).')
     p_prep.set_defaults(func=cmd_prepare)
 
     # ── train ─────────────────────────────────────────────────────────────────
