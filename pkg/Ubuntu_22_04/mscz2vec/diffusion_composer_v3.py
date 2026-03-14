@@ -2500,6 +2500,9 @@ def build_parser():
         dest='threshold_pct',
         help='Percentil para umbral adaptativo (default: 99.0 para distribuciones bimodales v3). '
              'Bájalo (ej. 99.5→99.9) si el MIDI sale vacío; súbelo (ej. 98→95) si hay demasiadas notas.')
+    p_comp.add_argument('--threshold', type=float, default=None, metavar='FLOAT',
+        help='Umbral fijo de binarización (0.0–1.0). Tiene prioridad sobre --threshold-pct. '
+             'Para distribuciones bimodales (v3) prueba 0.5.')
     p_comp.set_defaults(func=cmd_compose)
 
     # ── style-corpus ──────────────────────────────────────────────────────────
