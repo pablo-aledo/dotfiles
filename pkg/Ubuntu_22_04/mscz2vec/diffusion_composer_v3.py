@@ -30,15 +30,15 @@
 
 python diffusion_composer.py prepare --input-dir midis/ --output-dir data/ --report
 
-python diffusion_composer.py train \
+python diffusion_composer_v3.py train \
     --data-dir data/ \
-    --model-dir model_diff/ \
+    --model-dir model_diff_v3/ \
     --epochs 300 \
     --batch-size 8 \
     --lr 1e-4 \
     --style-dim 16 \
     --diffusion-steps 1000 \
-    --patience 50 \
+    --patience 50
 
 python diffusion_composer.py compose \
     --model-dir model_diff/ \
@@ -820,7 +820,9 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
             B     = x_t.size(0)
             t_ten = torch.full((B,), t_scalar, device=x_t.device, dtype=torch.long)
             with torch.no_grad():
-                eps = net(x_t, t_ten, context, tension, z_style)
+                # La U-Net predice x_0 directamente
+                x0_logits = net(x_t, t_ten, context, tension, z_style)
+                x0_pred   = torch.sigmoid(x0_logits)   # → [0,1]
 
             at  = self.register['alphas_cumprod'][t_scalar]
             atp = self.register['alphas_cumprod'][t_prev] if t_prev >= 0 else torch.tensor(1.0)
@@ -829,13 +831,13 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
                 at  = at.unsqueeze(-1)
                 atp = atp.unsqueeze(-1)
 
-            x0p = (x_t - (1 - at).sqrt() * eps) / at.sqrt()
-            x0p = x0p.clamp(-3, 3)
+            # Reconstruir eps desde x0_pred
+            eps = (x_t - at.sqrt() * x0_pred) / (1 - at).sqrt().clamp(min=1e-6)
 
             sigma   = eta * ((1 - atp) / (1 - at) * (1 - at / atp)).clamp(min=0).sqrt()
             dir_xt  = (1 - atp - sigma ** 2).clamp(min=0).sqrt() * eps
             noise   = sigma * torch.randn_like(x_t) if eta > 0 else 0.0
-            return atp.sqrt() * x0p + dir_xt + noise
+            return atp.sqrt() * x0_pred + dir_xt + noise
 
     # ── Modelo completo ────────────────────────────────────────────────────
     class _DirectDiffusionComposer(nn.Module):
@@ -872,9 +874,9 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
 
         def forward(self, x, context, tension, t=None):
             """
-            x       : (B, N_ROLES, res, 128)  — piano roll target (binario 0/1)
-            context : (B, N_ROLES, ctx_bars, res, 128)
-            tension : (B, tension_dim)
+            x0-parametrization: la U-Net predice x_0 directamente en lugar
+            del ruido ε. Esto funciona mejor con datos binarios (piano rolls)
+            porque el modelo aprende directamente la distribución objetivo.
             """
             import torch
             B      = x.size(0)
@@ -887,22 +889,24 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
                 t = torch.randint(0, self.n_steps, (B,), device=device)
 
             x_t, eps_real = self.schedule.q_sample(x, t)
-            eps_pred      = self.unet(x_t, t, context, tension, z_style)
 
-            diff_loss = torch.nn.functional.mse_loss(eps_pred, eps_real)
+            # La U-Net predice x_0 directamente (no el ruido)
+            x0_pred = self.unet(x_t, t, context, tension, z_style)
+            x0_pred_prob = torch.sigmoid(x0_pred)   # → [0,1]
 
-            # Reconstrucción implícita: x0_pred desde eps_pred
+            # Loss principal: BCE entre x0 predicho y x0 real
+            recon_loss = torch.nn.functional.binary_cross_entropy(
+                x0_pred_prob.clamp(1e-6, 1 - 1e-6), x, reduction='mean')
+
+            # Loss auxiliar: reconstruir el ruido desde x0_pred para
+            # mantener coherencia con el schedule
             at = self.schedule.register['alphas_cumprod'][t]
             while at.dim() < x.dim():
                 at = at.unsqueeze(-1)
-            x0_pred = (x_t - (1 - at).sqrt() * eps_pred) / at.sqrt()
-            x0_pred = x0_pred.clamp(0, 1)
+            eps_from_x0 = (x_t - at.sqrt() * x0_pred_prob) / (1 - at).sqrt().clamp(min=1e-6)
+            diff_loss = torch.nn.functional.mse_loss(eps_from_x0, eps_real)
 
-            # BCE entre x0_pred y x (reconstrucción)
-            recon_loss = torch.nn.functional.binary_cross_entropy(
-                x0_pred.clamp(1e-6, 1 - 1e-6), x, reduction='mean')
-
-            loss = diff_loss + 0.5 * recon_loss
+            loss = recon_loss + 0.5 * diff_loss
 
             return loss, {'diff': diff_loss.item(), 'recon': recon_loss.item(),
                           'kl': 0.0, 'sparse': 0.0}
@@ -928,7 +932,7 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
                     self.unet, x, t_cur, t_prev,
                     context, tension, z_style, eta=eta)
 
-            return torch.sigmoid(x * 16)   # factor alto para separar notas de silencio
+            return x.clamp(0, 1)   # DDIM converge directamente al piano roll
 
         @torch.no_grad()
         def denoise_from_ref(self, x_ref, context, tension, z_style,
@@ -953,7 +957,7 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
                     self.unet, x, t_cur, t_prev,
                     context, tension, z_style, eta=eta)
 
-            return torch.sigmoid(x * 16)
+            return x.clamp(0, 1)
 
     return _DirectDiffusionComposer()
 
