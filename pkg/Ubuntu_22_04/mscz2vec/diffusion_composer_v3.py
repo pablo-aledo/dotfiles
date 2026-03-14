@@ -34,13 +34,10 @@ python diffusion_composer.py train \
     --data-dir data/ \
     --model-dir model_diff/ \
     --epochs 300 \
-    --batch-size 16 \
+    --batch-size 8 \
     --lr 1e-4 \
-    --latent-dim 128 \
     --style-dim 16 \
     --diffusion-steps 1000 \
-    --pos-weight 5.0 \
-    --decoder-dropout 0.1 \
     --patience 50 \
 
 python diffusion_composer.py compose \
@@ -48,12 +45,12 @@ python diffusion_composer.py compose \
     --palette palette.json \
     --mode denoise \
     --input ref.mid \
-    --strength 0.2 \
-    --ddim-steps 200 \
+    --strength 0.3 \
+    --ddim-steps 50 \
     --eta 0.0 \
-    --temperature 0.5 \
+    --temperature 1.0 \
     --bars 16 \
-    --threshold-pct 99
+    --threshold 0.65
 
 
 python diffusion_composer.py style-corpus \
@@ -931,7 +928,7 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
                     self.unet, x, t_cur, t_prev,
                     context, tension, z_style, eta=eta)
 
-            return torch.sigmoid(x * 8)   # escalar logits a [0,1]
+            return torch.sigmoid(x * 16)   # factor alto para separar notas de silencio
 
         @torch.no_grad()
         def denoise_from_ref(self, x_ref, context, tension, z_style,
@@ -956,7 +953,7 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
                     self.unet, x, t_cur, t_prev,
                     context, tension, z_style, eta=eta)
 
-            return torch.sigmoid(x * 8)
+            return torch.sigmoid(x * 16)
 
     return _DirectDiffusionComposer()
 
@@ -2010,17 +2007,28 @@ def cmd_compose(args):
             print(f"\n  [diag] Compás 0 — decoder output:")
             print(f"         min={vmin:.4f}  mean={vmean:.4f}  "
                   f"p50={p50:.4f}  p90={p90:.4f}  p99={p99:.4f}  max={vmax:.4f}")
-            # Estimar umbral adaptativo global desde el primer compás
-            adaptive_thr = _adaptive_threshold(bar_np, percentile=getattr(args, 'threshold_pct', 85.0))
+
+            # Umbral: --threshold fijo tiene prioridad sobre adaptativo
+            if getattr(args, 'threshold', None):
+                adaptive_thr = args.threshold
+                thr_method   = f'fijo ({args.threshold})'
+            else:
+                adaptive_thr = _adaptive_threshold(
+                    bar_np, percentile=getattr(args, 'threshold_pct', 85.0))
+                thr_method   = 'adaptativo'
+
             n_active = int((bar_np > adaptive_thr).sum())
             density  = 100 * n_active / bar_np.size
-            print(f"         Umbral adaptativo: {adaptive_thr:.4f}  →  "
+            print(f"         Umbral {thr_method}: {adaptive_thr:.4f}  →  "
                   f"{n_active} píxeles activos ({density:.2f}%)")
-            if vmax < 0.05:
+
+            if vmean > 0.4:
+                print(f"  [diag] ⚠  mean={vmean:.3f} — modelo aún indeciso (cerca de 0.5).")
+                print(f"         Necesita más épocas para separar notas de silencio.")
+                print(f"         Prueba --threshold 0.7 para forzar menos notas.")
+            elif vmax < 0.05:
                 print(f"  [diag] ⚠  Activaciones muy bajas (max={vmax:.4f}). "
                       f"El modelo necesita más entrenamiento.")
-                print(f"         Generando con umbral relativo al máximo — "
-                      f"el resultado tendrá estructura pero puede sonar raro.")
 
         for ridx, role in enumerate(role_list):
             bars_per_role[role].append(bar_np[ridx])   # (res, 128)
@@ -2045,10 +2053,11 @@ def cmd_compose(args):
         if bars_per_role[role]:
             final_rolls[role] = np.stack(bars_per_role[role], axis=0)  # (n_bars, res, 128)
 
-    # Guardar con umbral adaptativo (ya estimado)
+    # Umbral final: --threshold fijo tiene prioridad
+    final_thr = getattr(args, 'threshold', None) or adaptive_thr
     n_notes = _rolls_to_midi(final_rolls, cfg, palette, args.output,
-                              bpm=args.bpm, threshold=adaptive_thr)
-    print(f"[compose] MIDI guardado en {args.output}  ({n_notes} notas, umbral={adaptive_thr:.3f})")
+                              bpm=args.bpm, threshold=final_thr)
+    print(f"[compose] MIDI guardado en {args.output}  ({n_notes} notas, umbral={final_thr:.3f})")
     if n_notes == 0:
         print("[compose] ⚠  ADVERTENCIA: MIDI vacío. Prueba con --threshold-pct 70 "
               "o revisa que el modelo haya entrenado suficientes épocas.")
