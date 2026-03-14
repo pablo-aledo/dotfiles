@@ -1,35 +1,32 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                     DIFFUSION COMPOSER  v0.1                                 ║
-║         Composición end-to-end mediante Difusión Latente multi-rol           ║
+║                     DIFFUSION COMPOSER  v3                                   ║
+║         Composición end-to-end mediante Difusión Directa multi-rol           ║
 ║                                                                              ║
 ║  ARQUITECTURA:                                                               ║
-║    Encoder CNN  →  espacio latente continuo                                  ║
-║    DDPM (Denoising Diffusion Probabilistic Model)                            ║
-║       condicionado en tensión + estilo                                       ║
-║    Decoder CNN  →  piano roll multi-rol                                      ║
+║    U-Net 2D → difusión directa sobre el piano roll (sin VAE)                 ║
+║    DDPM (x0-parametrization) condicionado en tensión + estilo                ║
 ║                                                                              ║
 ║  COMANDOS:                                                                   ║
-║    prepare   — MIDI corpus → piano rolls segmentados por rol (.npz)          ║
-║    train     — Entrena el modelo de difusión latente                         ║
-║    encode    — MIDI referencia → z_style (.json)                             ║
-║    compose   — Genera obra nueva (modos: sample/denoise/blend/sweep)        ║
-║    inspect   — Diagnóstico del modelo y espacio latente                      ║
+║    prepare      — MIDI corpus → piano rolls segmentados por rol (.npz)       ║
+║    train        — Entrena el modelo de difusión                              ║
+║    encode       — MIDI referencia → z_style (.json)                          ║
+║    compose      — Genera obra nueva (modos: sample/denoise/blend/sweep)      ║
+║    transfer     — Transfiere el estilo de un corpus a una canción            ║
+║    style-corpus — Calcula el centroide de estilo de una carpeta de MIDIs     ║
+║    reconstruct  — Diagnóstico: denoising leve sobre el input                 ║
+║    round-trip   — Diagnóstico: MIDI → piano roll → MIDI sin modelo           ║
+║    inspect      — Diagnóstico del modelo y los datos                         ║
 ║                                                                              ║
 ║  DEPENDENCIAS:                                                               ║
-║    mido, numpy, torch, scipy (opcional para sweep --smooth)                  ║
-║                                                                              ║
-║  USO RÁPIDO:                                                                 ║
-║    python diffusion_composer.py prepare --input-dir midis/ --output-dir data/║
-║    python diffusion_composer.py train   --data-dir data/  --model-dir model/ ║
-║    python diffusion_composer.py encode  --input ref.mid   --model-dir model/ ║
-║    python diffusion_composer.py compose --mode sample --model-dir model/     ║
-║                                         --palette palette.json               ║
+║    mido, numpy, torch                                                        ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
+# ── Preparar datos ────────────────────────────────────────────────────────────
 python diffusion_composer.py prepare --input-dir midis/ --output-dir data/ --report
 
+# ── Entrenar ──────────────────────────────────────────────────────────────────
 python diffusion_composer_v3.py train \
     --data-dir data/ \
     --model-dir model_diff_v3/ \
@@ -40,31 +37,72 @@ python diffusion_composer_v3.py train \
     --diffusion-steps 1000 \
     --patience 50
 
-python diffusion_composer.py compose \
-    --model-dir model_diff/ \
-    --palette palette.json \
-    --mode denoise \
-    --input ref.mid \
-    --strength 0.3 \
-    --ddim-steps 50 \
-    --eta 0.0 \
+# ── Generar (denoising desde referencia) ─────────────────────────────────────
+python diffusion_composer_v3.py compose \                         
+    --model-dir model_diff_v3/ --palette palette.json \
+    --mode denoise --input midis/005505b_.mid \
+    --strength 0.1 --ddim-steps 50 --eta 0.0 \
+    --temperature 1.0 --bars 16 \
+    --threshold 0.3
+
+python diffusion_composer_v3.py compose \
+    --model-dir model_diff_v3/ --palette palette.json \
+    --mode denoise --input midis/005505b_.mid \
+    --strength 0.3 --ddim-steps 50 --eta 0.0 \
+    --temperature 1.0 --bars 16 \
+    --threshold-pct 99.0
+
+# ── Morphing gradual entre dos canciones (sweep) ─────────────────────────────
+python diffusion_composer_v3.py compose \
+    --model-dir model_diff_v3/ --palette palette.json \
+    --mode sweep \
+    --inputs midis/005505b_.mid midis/008906b_.mid \
+    --bars 32 \
+    --ddim-steps 50 --eta 0.0 \
     --temperature 1.0 \
+    --threshold-pct 99.0
+
+# ── Mezcla estática entre dos estilos (blend) ────────────────────────────────
+python diffusion_composer_v3.py compose \
+    --model-dir model_diff_v3/ --palette palette.json \
+    --mode blend \
+    --inputs midis/005505b_.mid midis/008906b_.mid \
+    --weights 0.5 0.5 \
     --bars 16 \
-    --threshold 0.65
+    --ddim-steps 50 --eta 0.0 \
+    --threshold-pct 99.0
 
+# ── Style transfer ────────────────────────────────────────────────────────────
+# Estilo A: carpeta con MIDIs del estilo origen
+python diffusion_composer_v3.py style-corpus \
+    --input-dir midis_A/ \
+    --model-dir model_diff_v3/ \
+    --output z_estilo_A.json
 
-python diffusion_composer.py style-corpus \
-    --input-dir midis_A/ --model-dir model/ --output z_A.json
+# Estilo B: carpeta con MIDIs del estilo destino
+python diffusion_composer_v3.py style-corpus \
+    --input-dir midis_B/ \
+    --model-dir model_diff_v3/ \
+    --output z_estilo_B.json
 
-python diffusion_composer.py style-corpus \
-    --input-dir midis_B/ --model-dir model/ --output z_B.json
+python diffusion_composer_v3.py encode \
+    --input midis/005505b_.mid \
+    --model-dir model_diff_v3/ \
+    --output z_estilo_A.json
 
-python diffusion_composer.py transfer \
-    --input cancion.mid --model-dir model/ --palette palette.json \
-    --style-from z_A.json --style-to z_B.json \
-    --strength 0.8 --output resultado.mid
+python diffusion_composer_v3.py transfer \
+    --input midis/005505b_.mid \
+    --model-dir model_diff_v3/ \
+    --palette palette.json \
+    --style-from z_estilo_A.json \
+    --style-to z_estilo_B.json \
+    --strength 0.8 \
+    --output resultado.mid \
+    --threshold-pct 99.0
 
-python diffusion_composer.py transfer ... --progressive
+# ── Diagnóstico ───────────────────────────────────────────────────────────────
+python diffusion_composer_v3.py round-trip --input midis/005505b_.mid
+python diffusion_composer_v3.py reconstruct --model-dir model_diff_v3/ --input midis/005505b_.mid
 
 """
 
@@ -1448,18 +1486,34 @@ def _adaptive_threshold(roll: 'np.ndarray', percentile: float = 85.0) -> float:
     """
     Calcula un umbral adaptativo para binarizar el piano roll del decoder.
 
-    Toma el percentil 'percentile' de todos los valores > 0.001.
-    Un percentil alto (95–99) = umbral alto = pocas notas (menos ruido).
-    Un percentil bajo (70–80) = umbral bajo = más notas (más densidad).
+    Para distribuciones bimodales (v3: casi todo cero, picos en 1.0):
+        Usa el percentil sobre TODOS los valores, no solo los >0.001.
+        Con percentile=99 y distribución 99% ceros → umbral ~0.0, deja pasar las notas.
+        Con percentile=99.9 → umbral más alto → menos notas.
 
-    El rango útil típico es 75–97 dependiendo del estado del entrenamiento.
+    Para distribuciones continuas (v1/v2: valores dispersos entre 0 y 1):
+        Usa el percentil sobre valores >0.001 como antes.
+
+    El rango útil:
+        Distribución bimodal (v3): percentile=99.0–99.9
+        Distribución continua (v1/v2): percentile=85–97
     """
     import numpy as np
-    flat    = roll.flatten()
-    nonzero = flat[flat > 0.001]
-    if len(nonzero) == 0:
-        return 0.5   # señal nula: umbral alto → MIDI vacío con aviso
-    return float(np.percentile(nonzero, percentile))
+    flat = roll.flatten()
+
+    # Detectar si la distribución es bimodal:
+    # si más del 90% de valores son < 0.01, es bimodal
+    frac_near_zero = float((flat < 0.01).mean())
+    if frac_near_zero > 0.90:
+        # Bimodal: usar percentil sobre todos los valores
+        thr = float(np.percentile(flat, percentile))
+        return max(thr, 1e-4)   # nunca cero
+    else:
+        # Continua: usar percentil sobre valores activos
+        nonzero = flat[flat > 0.001]
+        if len(nonzero) == 0:
+            return 0.5
+        return float(np.percentile(nonzero, percentile))
 
 
 def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
@@ -2017,19 +2071,24 @@ def cmd_compose(args):
                 adaptive_thr = args.threshold
                 thr_method   = f'fijo ({args.threshold})'
             else:
-                adaptive_thr = _adaptive_threshold(
-                    bar_np, percentile=getattr(args, 'threshold_pct', 85.0))
-                thr_method   = 'adaptativo'
+                thr_pct      = getattr(args, 'threshold_pct', 99.0)
+                adaptive_thr = _adaptive_threshold(bar_np, percentile=thr_pct)
+                thr_method   = f'p{thr_pct}'
 
             n_active = int((bar_np > adaptive_thr).sum())
             density  = 100 * n_active / bar_np.size
             print(f"         Umbral {thr_method}: {adaptive_thr:.4f}  →  "
                   f"{n_active} píxeles activos ({density:.2f}%)")
 
-            if vmean > 0.4:
+            if density < 0.2:
+                print(f"  [diag] ⚠  Densidad baja ({density:.2f}%) — "
+                      f"prueba --threshold-pct 99.5 o --threshold-pct 99.9")
+            elif density > 8.0:
+                print(f"  [diag] ⚠  Densidad alta ({density:.2f}%) — "
+                      f"prueba --threshold-pct 98 o --threshold-pct 95")
+            elif vmean > 0.4:
                 print(f"  [diag] ⚠  mean={vmean:.3f} — modelo aún indeciso (cerca de 0.5).")
                 print(f"         Necesita más épocas para separar notas de silencio.")
-                print(f"         Prueba --threshold 0.7 para forzar menos notas.")
             elif vmax < 0.05:
                 print(f"  [diag] ⚠  Activaciones muy bajas (max={vmax:.4f}). "
                       f"El modelo necesita más entrenamiento.")
@@ -2437,10 +2496,10 @@ def build_parser():
     p_comp.add_argument('--input',         metavar='FILE', default=None)
     p_comp.add_argument('--inputs',        nargs='+', metavar='FILE', default=None)
     p_comp.add_argument('--weights',       nargs='+', type=float, default=None)
-    p_comp.add_argument('--threshold-pct', type=float, default=85.0, metavar='FLOAT',
+    p_comp.add_argument('--threshold-pct', type=float, default=99.0, metavar='FLOAT',
         dest='threshold_pct',
-        help='Percentil para umbral adaptativo de binarización (default: 85). '
-             'Bájalo (ej. 70) si el MIDI sale vacío; súbelo (ej. 95) si hay demasiado ruido.')
+        help='Percentil para umbral adaptativo (default: 99.0 para distribuciones bimodales v3). '
+             'Bájalo (ej. 99.5→99.9) si el MIDI sale vacío; súbelo (ej. 98→95) si hay demasiadas notas.')
     p_comp.set_defaults(func=cmd_compose)
 
     # ── style-corpus ──────────────────────────────────────────────────────────
