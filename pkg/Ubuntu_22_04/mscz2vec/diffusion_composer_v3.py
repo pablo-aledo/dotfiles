@@ -410,11 +410,109 @@ class TensionExtractor:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  COMANDO: prepare  (idéntico a latent_composer.py)
+#  ENRIQUECIMIENTO CON MSCZ2VEC (opcional, requiere music21)
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Dimensión del vector de tensión enriquecido:
+#   8  (TensionExtractor básico)
+# + 1  (tensión armónica por compás, de harmonic_tension_profile)
+# + 1  (estabilidad tonal por compás, de tonal_stability_profile)
+# + 12 (tonalidad: one-hot de las 12 clases de pitch)
+# + 1  (modo: 1.0=mayor, 0.0=menor)
+# = 23 dimensiones
+ENRICHED_TENSION_DIM = 23
+
+
+def _enrich_with_mscz2vec(midi_path: str, total_bars: int,
+                           mscz2vec_path: str = None) -> 'np.ndarray | None':
+    """
+    Extrae vectores de condicionamiento enriquecidos usando mscz2vec.
+
+    Devuelve array (total_bars, 15) con:
+        [0]    tensión armónica por compás (harmonic_tension_profile)
+        [1]    estabilidad tonal por compás (tonal_stability_profile)
+        [2:14] tonalidad: one-hot 12 clases de pitch (Do=0 ... Si=11)
+        [14]   modo: 1.0=mayor, 0.0=menor
+
+    Si music21 o mscz2vec no están disponibles, devuelve None silenciosamente.
+    """
+    import numpy as np
+
+    ENRICH_DIM = 15  # solo la parte añadida (sin los 8 básicos)
+
+    try:
+        # Intentar importar music21
+        import music21
+        from music21 import converter as m21_converter
+    except ImportError:
+        return None
+
+    # Importar mscz2vec
+    try:
+        if mscz2vec_path:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location('mscz2vec', mscz2vec_path)
+            mod  = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        else:
+            import mscz2vec as mod
+    except (ImportError, Exception):
+        return None
+
+    try:
+        # Suprimir prints de debug de mscz2vec
+        import io, contextlib
+        with contextlib.redirect_stdout(io.StringIO()):
+            score = m21_converter.parse(midi_path)
+
+            # 1. Tensión armónica por compás
+            tension_data = mod.harmonic_tension_profile(score)
+            harm_tension = tension_data.get('tension_values', []) if tension_data else []
+
+            # 2. Estabilidad tonal por compás
+            stability_data = mod.tonal_stability_profile(score)
+            tonal_stab = (stability_data.get('stability_smoothed', [])
+                         if stability_data else [])
+
+            # 3. Tonalidad global → one-hot + modo
+            try:
+                key = score.analyze('key')
+                tonic_pc  = key.tonic.pitchClass        # 0–11
+                is_major  = 1.0 if key.mode == 'major' else 0.0
+            except Exception:
+                tonic_pc  = 0
+                is_major  = 0.5
+
+        # Construir array (total_bars, ENRICH_DIM)
+        result = np.zeros((total_bars, ENRICH_DIM), dtype=np.float32)
+
+        for bar in range(total_bars):
+            # Tensión armónica (interpolar si hay menos compases que total_bars)
+            if harm_tension:
+                idx = min(bar, len(harm_tension) - 1)
+                result[bar, 0] = float(harm_tension[idx])
+
+            # Estabilidad tonal
+            if tonal_stab:
+                idx = min(bar, len(tonal_stab) - 1)
+                result[bar, 1] = float(tonal_stab[idx])
+
+            # Tonalidad: one-hot
+            result[bar, 2 + tonic_pc] = 1.0
+
+            # Modo
+            result[bar, 14] = is_major
+
+        return result
+
+    except Exception:
+        return None
+
+
+
+
 def _prepare_one_midi(args_tuple):
-    midi_path, output_dir, resolution, window_bars = args_tuple
+    midi_path, output_dir, resolution, window_bars, enrich, mscz2vec_path = args_tuple
     import numpy as np
 
     stem = midi_path.stem
@@ -487,6 +585,21 @@ def _prepare_one_midi(args_tuple):
         tension_windows = np.concatenate([tension_windows, pad], axis=0)
 
     save_dict = {'tension': tension_windows}
+
+    # Enriquecimiento opcional con mscz2vec
+    enrich_ok = False
+    if enrich:
+        enrich_bars = _enrich_with_mscz2vec(str(midi_path), total_bars, mscz2vec_path)
+        if enrich_bars is not None:
+            # Combinar: [tensión básica (8D) | enriquecida (15D)] = 23D por compás
+            tension_full = np.concatenate([tension_bars, enrich_bars], axis=1)
+            tension_full_windows = tension_full[mid_offset: mid_offset + min_windows]
+            if len(tension_full_windows) < min_windows:
+                pad = np.zeros((min_windows - len(tension_full_windows),
+                                ENRICHED_TENSION_DIM), dtype=np.float32)
+                tension_full_windows = np.concatenate([tension_full_windows, pad], axis=0)
+            save_dict['tension_enriched'] = tension_full_windows
+            enrich_ok = True
     for role, windows in role_windows.items():
         save_dict[f'roll_{role}'] = windows
 
@@ -501,8 +614,9 @@ def _prepare_one_midi(args_tuple):
 
     stats_partial['files_ok']      = 1
     stats_partial['total_windows'] = min_windows
+    enrich_str = ' +enrich' if enrich_ok else (' enrich:FAIL' if enrich else '')
     return (stem,
-            f"OK  ({total_bars} compases, {min_windows} ventanas, roles: {', '.join(roles_found)})",
+            f"OK  ({total_bars} compases, {min_windows} ventanas, roles: {', '.join(roles_found)}){enrich_str}",
             True, stats_partial)
 
 
@@ -516,13 +630,41 @@ def cmd_prepare(args):
 
     resolution  = args.resolution
     window_bars = args.window_bars
+    enrich      = getattr(args, 'enrich', False)
+    mscz2vec_path = getattr(args, 'mscz2vec_path', None)
 
     midi_files = sorted(list(input_dir.glob('*.mid')) + list(input_dir.glob('*.midi')))
     if not midi_files:
         print(f"[prepare] No se encontraron archivos MIDI en {input_dir}")
         sys.exit(1)
 
+    if enrich:
+        # Verificar disponibilidad de music21 y mscz2vec antes de empezar
+        try:
+            import music21
+            enrich_available = True
+        except ImportError:
+            print("[prepare] ⚠  --enrich ignorado: music21 no está instalado.")
+            print("           Instala con: pip install music21")
+            enrich_available = False
+            enrich = False
+
+        if enrich_available and mscz2vec_path:
+            if not Path(mscz2vec_path).exists():
+                print(f"[prepare] ⚠  --mscz2vec-path '{mscz2vec_path}' no encontrado. "
+                      f"Enriquecimiento desactivado.")
+                enrich = False
+
+        if enrich:
+            print(f"[prepare] ✓  Enriquecimiento mscz2vec ACTIVO "
+                  f"(tensión armónica + estabilidad tonal + tonalidad → {ENRICHED_TENSION_DIM}D)")
+            print(f"[prepare]    Nota: el preprocesado será más lento (~5-30s por archivo)")
+
     n_workers = min(multiprocessing.cpu_count(), len(midi_files))
+    # Con enriquecimiento, limitar workers para no saturar music21
+    if enrich:
+        n_workers = min(n_workers, 4)
+
     print(f"[prepare] {len(midi_files)} archivos MIDI encontrados")
     print(f"[prepare] Resolución: {resolution} ticks/compás  |  Ventana: {window_bars} compases")
     print(f"[prepare] Paralelizando con {n_workers} procesos\n")
@@ -530,7 +672,10 @@ def cmd_prepare(args):
     stats = {r: 0 for r in ROLES}
     stats['files_ok'] = stats['files_skipped'] = stats['total_windows'] = 0
 
-    task_args = [(midi_path, str(output_dir), resolution, window_bars) for midi_path in midi_files]
+    task_args = [
+        (midi_path, str(output_dir), resolution, window_bars, enrich, mscz2vec_path)
+        for midi_path in midi_files
+    ]
 
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         futures = {executor.submit(_prepare_one_midi, a): a[0] for a in task_args}
@@ -630,7 +775,11 @@ class MidiRollDataset:
 
         x       = torch.tensor(np.stack(x_parts,   axis=0))   # (N_ROLES, res, 128)
         context = torch.tensor(np.stack(ctx_parts,  axis=0))   # (N_ROLES, ctx_bars, res, 128)
-        tension = torch.tensor(data['tension'][widx])           # (TENSION_DIM,)
+        # Usar tensión enriquecida si está disponible, si no la básica
+        if 'tension_enriched' in data:
+            tension = torch.tensor(data['tension_enriched'][widx])
+        else:
+            tension = torch.tensor(data['tension'][widx])       # (TENSION_DIM,)
         role_mask = torch.tensor(mask, dtype=torch.bool)
 
         return {'x': x, 'context': context, 'tension': tension, 'role_mask': role_mask}
@@ -2417,6 +2566,13 @@ def build_parser():
     p_prep.add_argument('--window-bars', type=int, default=WINDOW_BARS_DEFAULT, metavar='INT',
         help=f'Compases por ventana (default: {WINDOW_BARS_DEFAULT})')
     p_prep.add_argument('--report',      action='store_true')
+    p_prep.add_argument('--enrich',      action='store_true',
+        help='Enriquecer el vector de condicionamiento con mscz2vec '
+             '(tensión armónica + estabilidad tonal + tonalidad → 23D). '
+             'Requiere music21 y mscz2vec. Se desactiva automáticamente si no están disponibles.')
+    p_prep.add_argument('--mscz2vec-path', default=None, metavar='FILE',
+        dest='mscz2vec_path',
+        help='Ruta al script mscz2vec.py (opcional si está en el PATH o en el mismo directorio)')
     p_prep.set_defaults(func=cmd_prepare)
 
     # ── train ─────────────────────────────────────────────────────────────────
