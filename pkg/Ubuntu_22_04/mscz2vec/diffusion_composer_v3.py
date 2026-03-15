@@ -1251,13 +1251,11 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
             for i, t_cur in enumerate(ts):
                 t_prev = ts[i + 1] if i + 1 < len(ts) else -1
 
-                for _ in range(n_resample):
+                for resample_idx in range(n_resample):
                     # 1. Denoising normal compás a compás
                     x_new = torch.zeros_like(x)
                     for bar_idx in range(n_bars):
-                        bar_t   = x[:, :, bar_idx]          # (B, N_ROLES, res, 128)
-                        # Contexto: usar compases anteriores del resultado actual
-                        # (o del conocido si están disponibles)
+                        bar_t   = x[:, :, bar_idx]
                         ctx_bar = self._build_inpaint_context(
                             x, x_known, mask_bars, bar_idx, context)
                         bar_out = self.schedule.ddim_sample(
@@ -1270,20 +1268,20 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
                         t_prev_ten = torch.full((B,), t_prev, device=device,
                                                 dtype=torch.long)
                         for bar_idx in range(n_bars):
-                            if mask_bars[bar_idx]:  # compás conocido
-                                x0_bar = x_known[:, :, bar_idx]   # (B, N_ROLES, res, 128)
-                                x_noisy, _ = self.schedule.q_sample(x0_bar, t_prev_ten)
+                            if mask_bars[bar_idx]:
+                                x0_bar = x_known[:, :, bar_idx]
+                                x_noisy, _noise = self.schedule.q_sample(x0_bar, t_prev_ten)
                                 x_new[:, :, bar_idx] = x_noisy
 
                     x = x_new
 
                     # Re-ruidificar para el siguiente resample (si n_resample > 1)
-                    if _ < n_resample - 1 and t_cur > 0:
+                    if resample_idx < n_resample - 1 and t_cur > 0:
                         t_cur_ten = torch.full((B,), t_cur, device=device,
                                                dtype=torch.long)
                         for bar_idx in range(n_bars):
                             if not mask_bars[bar_idx]:
-                                x[:, :, bar_idx], _ = self.schedule.q_sample(
+                                x[:, :, bar_idx], _noise = self.schedule.q_sample(
                                     x[:, :, bar_idx], t_cur_ten)
 
             # Compases conocidos: devolver el original exacto
