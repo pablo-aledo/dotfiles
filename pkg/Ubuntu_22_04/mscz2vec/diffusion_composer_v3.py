@@ -1727,12 +1727,14 @@ def _adaptive_threshold(roll: 'np.ndarray', percentile: float = 85.0) -> float:
 
 def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
                    output_path: str, bpm: float = 120.0,
-                   threshold: float = None):
+                   threshold: float = None,
+                   adaptive_per_bar: bool = False):
     """
     Convierte rolls continuos [0,1] → MIDI.
 
-    threshold: umbral de binarización. Si None, se calcula de forma adaptativa
-               por rol usando el percentil 85 de las activaciones.
+    threshold: umbral de binarización global. Si None, se calcula adaptativamente.
+    adaptive_per_bar: si True, los compases cuyo máximo sea menor que el umbral
+                      global usan un umbral local (max * 0.5) para no quedar vacíos.
     """
     import mido, numpy as np
 
@@ -1766,8 +1768,20 @@ def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
         mid.tracks.append(track)
         track.append(mido.Message('program_change', program=prog, channel=ch, time=0))
 
-        # Binarizar con umbral adaptativo
-        binary = (roll > thr).astype(np.float32)
+        # Binarizar con umbral — por compás si adaptive_per_bar está activo
+        if adaptive_per_bar:
+            binary = np.zeros_like(roll)
+            for b in range(roll.shape[0]):
+                bar_max = roll[b].max()
+                if bar_max >= thr:
+                    bar_thr = thr
+                else:
+                    # Compás cuyo máximo no alcanza el umbral global:
+                    # usar max*0.5 como umbral local para no dejarlo vacío
+                    bar_thr = bar_max * 0.5 if bar_max > 0 else thr
+                binary[b] = (roll[b] > bar_thr).astype(np.float32)
+        else:
+            binary = (roll > thr).astype(np.float32)
 
         # Suavizado temporal mínimo: eliminar notas aisladas de 1 tick
         # (artefacto común del decoder: activa/desactiva en ticks alternos)
@@ -1808,6 +1822,11 @@ def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
             else:
                 track.append(mido.Message('note_off', channel=ch, note=pitch, velocity=0,   time=delta))
             prev_tick = abs_tick
+
+        # Garantizar duración completa aunque los últimos compases estén vacíos
+        remaining = last_tick - prev_tick
+        if remaining > 0:
+            track.append(mido.MetaMessage('end_of_track', time=remaining))
 
     mid.save(output_path)
     return n_notes_total
@@ -2339,7 +2358,8 @@ def cmd_compose(args):
     # Umbral final: --threshold fijo tiene prioridad
     final_thr = getattr(args, 'threshold', None) or adaptive_thr
     n_notes = _rolls_to_midi(final_rolls, cfg, palette, args.output,
-                              bpm=args.bpm, threshold=final_thr)
+                              bpm=args.bpm, threshold=final_thr,
+                              adaptive_per_bar=getattr(args, 'adaptive_per_bar', False))
     print(f"[compose] MIDI guardado en {args.output}  ({n_notes} notas, umbral={final_thr:.3f})")
     if n_notes == 0:
         print("[compose] ⚠  ADVERTENCIA: MIDI vacío. Prueba con --threshold-pct 70 "
@@ -2732,6 +2752,11 @@ def build_parser():
         dest='threshold_pct',
         help='Percentil para umbral adaptativo (default: 99.0 para distribuciones bimodales v3). '
              'Bájalo (ej. 99.5→99.9) si el MIDI sale vacío; súbelo (ej. 98→95) si hay demasiadas notas.')
+    p_comp.add_argument('--adaptive-per-bar', action='store_true',
+        dest='adaptive_per_bar',
+        help='Umbral adaptativo por compás: los compases cuyo máximo no alcanza '
+             'el umbral global usan max×0.5 como umbral local. '
+             'Evita compases vacíos cuando el modelo genera activaciones débiles.')
     p_comp.add_argument('--fixed-context', action='store_true',
         dest='fixed_context',
         help='Usar el contexto del MIDI original en lugar del output generado. '
