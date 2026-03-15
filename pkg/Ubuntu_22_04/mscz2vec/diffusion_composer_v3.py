@@ -1322,6 +1322,8 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
 
             return avail
 
+    return _DirectDiffusionComposer()
+
 
 def _build_full_model(latent_dim: int, style_dim: int, tension_dim: int,
                       n_roles: int, window_bars: int, resolution: int,
