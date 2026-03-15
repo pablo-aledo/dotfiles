@@ -90,6 +90,15 @@ python diffusion_composer_v3.py encode \
     --model-dir model_diff_v3/ \
     --output z_estilo_A.json
 
+# ── Inpaint ────────────────────────────────────────────────────────────
+
+python diffusion_composer_v3.py inpaint \
+    --model-dir model_diff_v3/ --palette palette.json \
+    --input con_huecos.mid \
+    --ddim-steps 50 --resample 1 \
+    --output rellenado.mid
+
+
 python diffusion_composer_v3.py transfer \
     --input midis/005505b_.mid \
     --model-dir model_diff_v3/ \
@@ -1206,7 +1215,112 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
 
             return x.clamp(0, 1)
 
-    return _DirectDiffusionComposer()
+        @torch.no_grad()
+        def repaint(self, x_known, mask_bars, context, tension, z_style,
+                    n_ddim_steps=50, n_resample=1):
+            """
+            Algoritmo RePaint para inpainting de compases vacíos.
+
+            x_known   : (B, N_ROLES, n_bars, res, 128) — piano roll completo.
+                        Los compases conocidos tienen notas; los vacíos son cero.
+            mask_bars : (n_bars,) bool — True = compás conocido, False = vacío
+            n_resample: número de veces que se re-ruïdifica y denoisa cada paso
+                        (mayor valor = más coherencia, más lento; default=1)
+
+            Algoritmo:
+              Para cada paso t → t-1:
+                1. Denoising normal en todos los compases → x_denoised
+                2. Para compases conocidos: reemplazar por q_sample(x_known, t-1)
+                   (el compás original ruidificado al nivel t-1)
+                3. Repetir n_resample veces para mayor coherencia
+            """
+            import torch
+            B      = x_known.size(0)
+            n_bars = x_known.size(2)
+            device = x_known.device
+            self.schedule.to(device)
+
+            # Empezar desde ruido puro
+            x = torch.randn(B, self.n_roles, n_bars, self.resolution, 128,
+                            device=device)
+
+            total   = self.n_steps
+            step_sz = max(total // n_ddim_steps, 1)
+            ts      = list(range(total - 1, -1, -step_sz))
+
+            for i, t_cur in enumerate(ts):
+                t_prev = ts[i + 1] if i + 1 < len(ts) else -1
+
+                for _ in range(n_resample):
+                    # 1. Denoising normal compás a compás
+                    x_new = torch.zeros_like(x)
+                    for bar_idx in range(n_bars):
+                        bar_t   = x[:, :, bar_idx]          # (B, N_ROLES, res, 128)
+                        # Contexto: usar compases anteriores del resultado actual
+                        # (o del conocido si están disponibles)
+                        ctx_bar = self._build_inpaint_context(
+                            x, x_known, mask_bars, bar_idx, context)
+                        bar_out = self.schedule.ddim_sample(
+                            self.unet, bar_t, t_cur, t_prev,
+                            ctx_bar, tension, z_style, eta=0.0)
+                        x_new[:, :, bar_idx] = bar_out
+
+                    # 2. Para compases conocidos: reemplazar con versión ruidificada
+                    if t_prev >= 0:
+                        t_prev_ten = torch.full((B,), t_prev, device=device,
+                                                dtype=torch.long)
+                        for bar_idx in range(n_bars):
+                            if mask_bars[bar_idx]:  # compás conocido
+                                x0_bar = x_known[:, :, bar_idx]   # (B, N_ROLES, res, 128)
+                                x_noisy, _ = self.schedule.q_sample(x0_bar, t_prev_ten)
+                                x_new[:, :, bar_idx] = x_noisy
+
+                    x = x_new
+
+                    # Re-ruidificar para el siguiente resample (si n_resample > 1)
+                    if _ < n_resample - 1 and t_cur > 0:
+                        t_cur_ten = torch.full((B,), t_cur, device=device,
+                                               dtype=torch.long)
+                        for bar_idx in range(n_bars):
+                            if not mask_bars[bar_idx]:
+                                x[:, :, bar_idx], _ = self.schedule.q_sample(
+                                    x[:, :, bar_idx], t_cur_ten)
+
+            # Compases conocidos: devolver el original exacto
+            for bar_idx in range(n_bars):
+                if mask_bars[bar_idx]:
+                    x[:, :, bar_idx] = x_known[:, :, bar_idx]
+
+            return x.clamp(0, 1)
+
+        def _build_inpaint_context(self, x_current, x_known, mask_bars,
+                                   bar_idx, ctx_initial):
+            """
+            Construye el tensor de contexto para un compás durante inpainting.
+            Usa los compases anteriores del resultado actual si están disponibles,
+            o el contexto inicial si no hay suficientes compases previos.
+            """
+            import torch
+            ctx_bars = ctx_initial.size(2)
+            device   = x_current.device
+
+            if bar_idx == 0:
+                return ctx_initial
+
+            # Tomar los ctx_bars compases anteriores
+            start = max(0, bar_idx - ctx_bars)
+            avail = x_current[:, :, start:bar_idx]   # (B, N_ROLES, avail, res, 128)
+
+            if avail.size(2) < ctx_bars:
+                # Rellenar con ceros al principio
+                pad = torch.zeros(
+                    avail.size(0), avail.size(1),
+                    ctx_bars - avail.size(2),
+                    avail.size(3), avail.size(4),
+                    device=device)
+                avail = torch.cat([pad, avail], dim=2)
+
+            return avail
 
 
 def _build_full_model(latent_dim: int, style_dim: int, tension_dim: int,
@@ -1774,11 +1888,14 @@ def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
             for b in range(roll.shape[0]):
                 bar_max = roll[b].max()
                 if bar_max >= thr:
+                    # Compás normal: usar umbral global
                     bar_thr = thr
+                elif bar_max >= 0.1:
+                    # Compás débil pero con señal real: umbral local
+                    bar_thr = bar_max * 0.5
                 else:
-                    # Compás cuyo máximo no alcanza el umbral global:
-                    # usar max*0.5 como umbral local para no dejarlo vacío
-                    bar_thr = bar_max * 0.5 if bar_max > 0 else thr
+                    # Compás sin señal real (solo ruido): dejar vacío
+                    bar_thr = 1.1   # umbral imposible → compás vacío
                 binary[b] = (roll[b] > bar_thr).astype(np.float32)
         else:
             binary = (roll > thr).astype(np.float32)
@@ -2637,6 +2754,127 @@ def cmd_reconstruct(args):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  COMANDO: inpaint
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cmd_inpaint(args):
+    """
+    Rellena los compases vacíos de un MIDI manteniendo los que tienen notas.
+
+    Usa el algoritmo RePaint: en cada paso de denoising, los compases conocidos
+    se reemplazan por su versión ruidificada al nivel correspondiente, mientras
+    los compases vacíos se generan libremente condicionados en el contexto.
+    """
+    import torch, numpy as np
+
+    model_dir = Path(args.model_dir)
+    print(f"[inpaint] Cargando modelo desde {model_dir} ...")
+    model, cfg = _load_model_and_config(model_dir)
+    model.eval()
+
+    palette = _load_palette(args.palette, cfg) if args.palette else {}
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model.to(device)
+
+    print(f"[inpaint] Procesando {args.input} ...")
+    rolls = _midi_to_rolls(args.input, cfg)
+    if not rolls:
+        print("[inpaint] ERROR: no se pudieron extraer rolls del MIDI")
+        import sys; sys.exit(1)
+
+    role_list   = cfg['roles']
+    n_roles     = cfg['n_roles']
+    resolution  = cfg['resolution']
+    window_bars = cfg['window_bars']
+    ctx_bars    = window_bars - 1
+    tension_dim = cfg['tension_dim']
+    n_bars      = min(r.shape[0] for r in rolls.values())
+
+    # ── Construir piano roll completo (N_ROLES, n_bars, res, 128) ─────────
+    x_np = np.zeros((n_roles, n_bars, resolution, 128), dtype=np.float32)
+    for ri, role in enumerate(role_list):
+        if role in rolls:
+            x_np[ri] = rolls[role][:n_bars]
+
+    # ── Detectar compases vacíos ──────────────────────────────────────────
+    # Un compás es vacío si no tiene ninguna nota en ningún rol
+    mask_bars = np.array([
+        x_np[:, b, :, :].max() > 0
+        for b in range(n_bars)
+    ])  # True = compás conocido, False = vacío
+
+    n_known = mask_bars.sum()
+    n_empty = (~mask_bars).sum()
+    print(f"[inpaint] Compases totales: {n_bars}  |  "
+          f"Con notas: {n_known}  |  Vacíos: {n_empty}")
+
+    if n_empty == 0:
+        print("[inpaint] ⚠  No hay compases vacíos — nada que rellenar.")
+        import sys; sys.exit(0)
+
+    if n_known == 0:
+        print("[inpaint] ⚠  Todos los compases están vacíos — usa compose en su lugar.")
+        import sys; sys.exit(1)
+
+    # Mostrar mapa de compases
+    mapa = ''.join('█' if m else '░' for m in mask_bars)
+    print(f"[inpaint] Mapa (█=notas ░=vacío): {mapa}")
+
+    # ── Contexto inicial (primeros ctx_bars del MIDI) ─────────────────────
+    ctx_np     = _rolls_to_context_tensor(rolls, cfg)
+    ctx_buffer = torch.tensor(ctx_np).unsqueeze(0).to(device)
+    z_style    = model._get_style(ctx_buffer)
+
+    # ── Tensión: extraída del MIDI original ───────────────────────────────
+    tension_matrix = TensionExtractor().extract_bar_vectors(rolls, n_bars)
+    # Usar tensión media global para todos los compases
+    tension_mean = torch.tensor(
+        tension_matrix.mean(axis=0)).unsqueeze(0).to(device)
+
+    # ── Ejecutar RePaint ──────────────────────────────────────────────────
+    x_known_t = torch.tensor(x_np).unsqueeze(0).to(device)
+    # x_known_t: (1, N_ROLES, n_bars, res, 128)
+
+    print(f"[inpaint] Ejecutando RePaint "
+          f"(ddim_steps={args.ddim_steps}, resample={args.resample}) ...")
+
+    result = model.repaint(
+        x_known    = x_known_t,
+        mask_bars  = mask_bars,
+        context    = ctx_buffer,
+        tension    = tension_mean,
+        z_style    = z_style,
+        n_ddim_steps = args.ddim_steps,
+        n_resample = args.resample,
+    )
+    # result: (1, N_ROLES, n_bars, res, 128)
+
+    result_np = result[0].cpu().numpy()   # (N_ROLES, n_bars, res, 128)
+
+    # Diagnóstico de los compases generados
+    empty_indices = np.where(~mask_bars)[0]
+    if len(empty_indices) > 0:
+        sample_bar = result_np[:, empty_indices[0]]
+        vmax  = float(sample_bar.max())
+        vmean = float(sample_bar.mean())
+        print(f"\n[diag] Primer compás generado (bar {empty_indices[0]}):")
+        print(f"       mean={vmean:.4f}  max={vmax:.4f}")
+
+    # ── Binarizar y exportar ──────────────────────────────────────────────
+    thr = args.threshold if args.threshold else 0.5
+    final_rolls = {}
+    for ri, role in enumerate(role_list):
+        final_rolls[role] = result_np[ri]   # (n_bars, res, 128)
+
+    n_notes = _rolls_to_midi(final_rolls, cfg, palette, args.output,
+                              bpm=args.bpm, threshold=thr,
+                              adaptive_per_bar=True)
+    print(f"\n[inpaint] MIDI guardado en {args.output}  "
+          f"({n_notes} notas, umbral={thr:.3f})")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  CLI
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -2852,6 +3090,36 @@ def build_parser():
     p_rt.add_argument('--output',     default='output_roundtrip.mid', metavar='FILE')
     p_rt.add_argument('--bpm',        type=float, default=120.0)
     p_rt.set_defaults(func=cmd_round_trip)
+
+    # ── inpaint ───────────────────────────────────────────────────────────────
+    p_inp = sub.add_parser('inpaint',
+        help='Rellena compases vacíos de un MIDI manteniendo los que tienen notas',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent("""\
+            Rellena los compases vacíos de un MIDI usando el algoritmo RePaint.
+            Los compases con notas se mantienen exactos; los vacíos se generan
+            de forma coherente con sus vecinos.
+
+            Un compás se considera vacío si no tiene ninguna nota en ningún rol.
+
+            Ejemplo:
+              inpaint --model-dir model_diff_v3/ --input midi_con_huecos.mid \\
+                      --palette palette.json --output rellenado.mid
+        """))
+    p_inp.add_argument('--model-dir',  required=True, metavar='DIR')
+    p_inp.add_argument('--input',      required=True, metavar='FILE',
+        help='MIDI con compases vacíos a rellenar')
+    p_inp.add_argument('--palette',    default=None,  metavar='FILE')
+    p_inp.add_argument('--output',     default='output_inpaint.mid', metavar='FILE')
+    p_inp.add_argument('--ddim-steps', type=int,   default=50, metavar='INT',
+        help='Pasos DDIM (default: 50; más pasos = mejor calidad, más lento)')
+    p_inp.add_argument('--resample',   type=int,   default=1, metavar='INT',
+        help='Número de re-muestreos RePaint por paso (default: 1; '
+             'valores 3-5 mejoran coherencia a costa de velocidad)')
+    p_inp.add_argument('--threshold',  type=float, default=None, metavar='FLOAT',
+        help='Umbral de binarización (default: 0.5)')
+    p_inp.add_argument('--bpm',        type=float, default=120.0)
+    p_inp.set_defaults(func=cmd_inpaint)
 
     # ── reconstruct ───────────────────────────────────────────────────────────
     p_rec = sub.add_parser('reconstruct',
