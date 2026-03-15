@@ -2305,10 +2305,21 @@ def cmd_compose(args):
         for ridx, role in enumerate(role_list):
             bars_per_role[role].append(bar_np[ridx])   # (res, 128)
 
-        # Actualizar ctx_buffer con el compás generado (binarizado para
-        # evitar acumulación de ruido continuo en el contexto)
-        bar_binary = (bar_np > (adaptive_thr or 0.3)).astype(np.float32)
-        new_bar = torch.tensor(bar_binary).unsqueeze(0).unsqueeze(2).to(device)
+        # Actualizar ctx_buffer
+        if getattr(args, 'fixed_context', False) and rolls_ref is not None:
+            # Contexto fijo: usar siempre el compás siguiente del MIDI original.
+            # Evita la degradación progresiva cuando el output generado es escaso.
+            next_idx = min(bar_idx + 1, min(r.shape[0] for r in rolls_ref.values()) - 1)
+            ref_next_np = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+            for ridx, role in enumerate(role_list):
+                if role in rolls_ref:
+                    ref_next_np[ridx] = rolls_ref[role][next_idx]
+            new_bar = torch.tensor(ref_next_np).unsqueeze(0).unsqueeze(2).to(device)
+        else:
+            # Contexto realimentado: usar el compás generado (binarizado)
+            bar_binary = (bar_np > (adaptive_thr or 0.3)).astype(np.float32)
+            new_bar = torch.tensor(bar_binary).unsqueeze(0).unsqueeze(2).to(device)
+
         # new_bar: (1, N_ROLES, 1, res, 128)
         if ctx_bars > 1:
             ctx_buffer = torch.cat([ctx_buffer[:, :, 1:, :, :], new_bar], dim=2)
@@ -2721,6 +2732,11 @@ def build_parser():
         dest='threshold_pct',
         help='Percentil para umbral adaptativo (default: 99.0 para distribuciones bimodales v3). '
              'Bájalo (ej. 99.5→99.9) si el MIDI sale vacío; súbelo (ej. 98→95) si hay demasiadas notas.')
+    p_comp.add_argument('--fixed-context', action='store_true',
+        dest='fixed_context',
+        help='Usar el contexto del MIDI original en lugar del output generado. '
+             'Evita la degradación progresiva en generaciones largas. '
+             'Solo tiene efecto en modo denoise con --input.')
     p_comp.add_argument('--threshold', type=float, default=None, metavar='FLOAT',
         help='Umbral fijo de binarización (0.0–1.0). Tiene prioridad sobre --threshold-pct. '
              'Para distribuciones bimodales (v3) prueba 0.5.')
