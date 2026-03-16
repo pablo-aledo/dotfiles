@@ -90,15 +90,6 @@ python diffusion_composer_v3.py encode \
     --model-dir model_diff_v3/ \
     --output z_estilo_A.json
 
-# ── Inpaint ────────────────────────────────────────────────────────────
-
-python diffusion_composer_v3.py inpaint \
-    --model-dir model_diff_v3/ --palette palette.json \
-    --input con_huecos.mid \
-    --ddim-steps 50 --resample 1 \
-    --output rellenado.mid
-
-
 python diffusion_composer_v3.py transfer \
     --input midis/005505b_.mid \
     --model-dir model_diff_v3/ \
@@ -108,6 +99,14 @@ python diffusion_composer_v3.py transfer \
     --strength 0.8 \
     --output resultado.mid \
     --threshold-pct 99.0
+
+# ── Inpaint ────────────────────────────────────────────────────────────
+
+python diffusion_composer_v3.py inpaint \
+    --model-dir model_diff_v3/ --palette palette.json \
+    --input con_huecos.mid \
+    --ddim-steps 50 --resample 3 \
+    --output rellenado.mid
 
 # ── Diagnóstico ───────────────────────────────────────────────────────────────
 python diffusion_composer_v3.py round-trip --input midis/005505b_.mid
@@ -1219,20 +1218,16 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
         def repaint(self, x_known, mask_bars, context, tension, z_style,
                     n_ddim_steps=50, n_resample=1):
             """
-            Algoritmo RePaint para inpainting de compases vacíos.
+            Algoritmo RePaint con inicialización interpolada para transiciones suaves.
 
-            x_known   : (B, N_ROLES, n_bars, res, 128) — piano roll completo.
-                        Los compases conocidos tienen notas; los vacíos son cero.
-            mask_bars : (n_bars,) bool — True = compás conocido, False = vacío
-            n_resample: número de veces que se re-ruïdifica y denoisa cada paso
-                        (mayor valor = más coherencia, más lento; default=1)
+            x_known   : (B, N_ROLES, n_bars, res, 128)
+            mask_bars : (n_bars,) bool — True=conocido, False=vacío
 
-            Algoritmo:
-              Para cada paso t → t-1:
-                1. Denoising normal en todos los compases → x_denoised
-                2. Para compases conocidos: reemplazar por q_sample(x_known, t-1)
-                   (el compás original ruidificado al nivel t-1)
-                3. Repetir n_resample veces para mayor coherencia
+            Mejora respecto al RePaint estándar: en lugar de inicializar los
+            compases vacíos con ruido puro, se inicializan como interpolación
+            lineal entre el último compás conocido anterior y el primero posterior,
+            ruidificados al nivel t=n_steps. Esto da al denoiser una "pista" sobre
+            la dirección de la transición desde el primer paso.
             """
             import torch
             B      = x_known.size(0)
@@ -1240,10 +1235,54 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
             device = x_known.device
             self.schedule.to(device)
 
-            # Empezar desde ruido puro
-            x = torch.randn(B, self.n_roles, n_bars, self.resolution, 128,
-                            device=device)
+            # ── Inicialización interpolada ────────────────────────────────
+            # Para cada compás vacío, encontrar el compás conocido anterior
+            # y posterior más cercanos e interpolar entre ellos.
+            x_init = x_known.clone()
 
+            for bar_idx in range(n_bars):
+                if mask_bars[bar_idx]:
+                    continue   # compás conocido, no tocar
+
+                # Buscar vecino anterior conocido
+                prev_idx = None
+                for k in range(bar_idx - 1, -1, -1):
+                    if mask_bars[k]:
+                        prev_idx = k
+                        break
+
+                # Buscar vecino posterior conocido
+                next_idx = None
+                for k in range(bar_idx + 1, n_bars):
+                    if mask_bars[k]:
+                        next_idx = k
+                        break
+
+                if prev_idx is not None and next_idx is not None:
+                    # Interpolación lineal entre anterior y posterior
+                    span  = next_idx - prev_idx
+                    alpha = (bar_idx - prev_idx) / span   # 0→1
+                    x_init[:, :, bar_idx] = (
+                        (1 - alpha) * x_known[:, :, prev_idx] +
+                        alpha       * x_known[:, :, next_idx]
+                    )
+                elif prev_idx is not None:
+                    x_init[:, :, bar_idx] = x_known[:, :, prev_idx]
+                elif next_idx is not None:
+                    x_init[:, :, bar_idx] = x_known[:, :, next_idx]
+                else:
+                    x_init[:, :, bar_idx] = torch.zeros_like(x_known[:, :, bar_idx])
+
+            # Ruidificar toda la secuencia al nivel t_max para empezar el denoising
+            t_max     = self.n_steps - 1
+            t_max_ten = torch.full((B,), t_max, device=device, dtype=torch.long)
+            x = torch.zeros_like(x_init)
+            for bar_idx in range(n_bars):
+                x_noisy, _noise = self.schedule.q_sample(x_init[:, :, bar_idx],
+                                                          t_max_ten)
+                x[:, :, bar_idx] = x_noisy
+
+            # ── RePaint ────────────────────────────────────────────────────
             total   = self.n_steps
             step_sz = max(total // n_ddim_steps, 1)
             ts      = list(range(total - 1, -1, -step_sz))
@@ -1270,7 +1309,8 @@ def _build_unet_diffusion(n_roles: int, resolution: int, style_dim: int,
                         for bar_idx in range(n_bars):
                             if mask_bars[bar_idx]:
                                 x0_bar = x_known[:, :, bar_idx]
-                                x_noisy, _noise = self.schedule.q_sample(x0_bar, t_prev_ten)
+                                x_noisy, _noise = self.schedule.q_sample(
+                                    x0_bar, t_prev_ten)
                                 x_new[:, :, bar_idx] = x_noisy
 
                     x = x_new
