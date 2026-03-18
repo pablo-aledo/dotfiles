@@ -20,3 +20,16 @@
 echo $query > /tmp/query
 echo $count > /tmp/count
 echo $skip > /tmp/skip
+
+# script.google.com
+# function subjectsPorBusqueda() {
+#   const n = 10;
+#   const query = 'query';
+#
+#   const threads = GmailApp.search(query, 0, n);
+#
+#   threads.forEach(t => {
+#     const msg = t.getMessages()[0];
+#     console.log(msg.getSubject());
+#   });
+# }
