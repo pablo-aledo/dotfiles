@@ -237,3 +237,8 @@ rmone(){
 [ $# -gt 1 ] && return
 rm -fr "$1"
 }
+
+mid2mp3(){
+    timidity "$1" -Ow -o - | lame - "$(basename "$1" .mid).mp3"
+    # timidity -s 44100 -Ow -o - -EFreverb=0 -EFchorus=0 -c soundfont.cfg "$1" | lame -V2 - "$(basename "$1" .mid).mp3"
+}
