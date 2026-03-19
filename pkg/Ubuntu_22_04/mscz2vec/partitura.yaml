@@ -1,0 +1,634 @@
+# ══════════════════════════════════════════════════════════════════════════════
+#  PARTITURA DE EJEMPLO — GENÉRICA
+#  Demuestra TODAS las capacidades del sistema:
+#    melodia · armonia · marcato · pad · ostinato · percusion
+#    arpegio · contrapunto · trémolo · trino
+#    transformaciones (transponer/invertir/retrogradar/aumentar/fragmentar)
+#    curvas de dinámica · pitch_bend · control (CC) · leitmotivs
+#
+#  Uso:
+#    python generar_midi.py                    → todas las secciones
+#    python generar_midi.py --preview          → estructura
+#    python generar_midi.py --estadisticas     → análisis
+#    python generar_midi.py --validar          → validación
+#    python generar_midi.py --completa         → obra completa en un MIDI
+#    python generar_midi.py --csv              → exportar CSV de notas
+#    python generar_midi.py --nueva-frase II.4 --compases 21-24 --leitmotiv TEMA_A
+#    python generar_midi.py --diff v1.yaml v2.yaml
+#    python generar_midi.py --render-audio     → convierte a WAV
+#
+# ── CONVENCIONES ──────────────────────────────────────────────────────────────
+#  Notas:       nombre anglosajón + octava  →  D3  F#4  Bb5  Cs4
+#               Sostenidos: s o #  (Cs4 = C#4 = Do#4)
+#               Bemoles:    b o f  (Bb3 = Bf3 = Si♭3)
+#  Duración:    redonda=4  blanca=2  negra=1  corchea=0.5  semicorchea=0.25
+#  Velocidad:   ppp=24  pp=36  p=48  mp=64  mf=80  f=96  ff=110  fff=120
+#  Beat:        0.0=tiempo1  1.0=tiempo2  2.0=tiempo3  3.0=tiempo4
+#  Compases:    numeración real de la obra (c.1 = primer compás)
+# ══════════════════════════════════════════════════════════════════════════════
+
+obra:
+  titulo: "Título de la Obra"
+  subtitulo: "Subtítulo opcional"
+  compas: "4/4"
+  tonalidad: "Am"
+  compases_totales: 48
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  TRACKS — instrumentos MIDI
+#  Si omites esta sección se usa la configuración por defecto del script.
+#
+#  canal:    0–15  (canal 9 = batería GM, no cambiar)
+#  programa: instrumento General MIDI 0–127
+#    Piano=0  Clavicémbalo=6  Órgano=19  Guitarra acústica=24  Bajo=32
+#    Violín=40  Viola=41  Cello=42  Contrabajo=43  Cuerdas ensemble=48
+#    Coro=52  Trompeta=56  Trompa=60  Flauta=73  Oboe=68  Clarinete=71
+#    Sintetizador pad=88  Pad new age=88
+#  capa:     nombre del bloque en las frases que procesa este track
+#    melodia | armonia | marcato | pad | percusion | ostinato | <nombre libre>
+#
+#  Opción especial — contrapunto automático:
+#    contrapunto:
+#      intervalo: 6        # 3=terceras  6=sextas  10=décimas
+#      direccion: abajo    # arriba | abajo
+# ──────────────────────────────────────────────────────────────────────────────
+tracks:
+  - id: melodia
+    nombre: "Violin solista"
+    canal: 0
+    programa: 40
+    capa: melodia
+
+  - id: armonia
+    nombre: "Cuerdas armonia"
+    canal: 1
+    programa: 48
+    capa: armonia
+
+  - id: bajo
+    nombre: "Bajo ostinato"
+    canal: 2
+    programa: 32
+    capa: marcato
+
+  - id: flauta
+    nombre: "Flauta"
+    canal: 3
+    programa: 73
+    capa: flauta          # capa con nombre libre → procesador de solista genérico
+
+  - id: pad
+    nombre: "Pad ambiente"
+    canal: 4
+    programa: 88
+    capa: pad
+
+  - id: ostinato
+    nombre: "Ostinato cuerdas"
+    canal: 5
+    programa: 48
+    capa: ostinato
+
+  # Ejemplo de contrapunto automático (voz paralela a la melodía):
+  # - id: contrapunto
+  #   nombre: "Viola contrapunto"
+  #   canal: 6
+  #   programa: 41
+  #   capa: melodia        # lee la misma capa que la melodía...
+  #   contrapunto:
+  #     intervalo: 6       # ...pero genera terceras/sextas/décimas en paralelo
+  #     direccion: abajo
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  LEITMOTIVS
+#  El generador no los procesa directamente: son metadatos para el LLM
+#  y para --preview y --estadisticas.
+# ──────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
+#  PATRONES RÍTMICOS PERSONALIZADOS
+#  Se AÑADEN a los del script. Si el nombre coincide con uno del script, el
+#  del YAML tiene prioridad (permite redefiner tango, waltz, etc.).
+#
+#  Formato de cada entrada:
+#    [beat, duración_beats, factor_volumen]
+#      beat           posición dentro del compás (0.0 = primer tiempo)
+#      duración       en beats (el script aplica staccato ×0.86 internamente)
+#      factor_volumen 0.0–1.0 relativo a la intensidad de la frase
+#
+#  Nombre libre → úsalo en cualquier frase con:
+#    marcato:
+#      patron_ritmico: mi_patron
+#
+#  Puedes definir compases irregulares (5/4, 7/8...) simplemente poniendo
+#  más golpes; asegúrate de que la sección tenga el mismo compás configurado.
+# ──────────────────────────────────────────────────────────────────────────────
+patrones_ritmicos:
+
+  # 5/4 al estilo "Take Five": 3+2 (♩♩♩ + ♩♩)
+  compas_5_4:
+    - [0.0, 0.82, 1.00]   # tiempo 1 — acento fuerte
+    - [1.0, 0.82, 0.65]
+    - [2.0, 0.82, 0.75]
+    - [3.0, 0.82, 0.85]   # acento secundario
+    - [4.0, 0.82, 0.60]
+
+  # Clave de son cubana (patrón de 2 compases, 8 tiempos totales)
+  clave_son:
+    - [0.0,  0.45, 1.00]
+    - [0.75, 0.45, 0.80]
+    - [1.5,  0.45, 0.90]
+    - [4.0,  0.45, 0.85]
+    - [6.5,  0.45, 0.75]
+
+  # Reggaeton / dembow: golpe en el "y" del 2 y en el 3-y-4
+  dembow:
+    - [0.0,  0.40, 1.00]   # bombo tiempo 1
+    - [1.5,  0.40, 0.90]   # snare "y" del 2
+    - [2.0,  0.40, 0.85]   # bombo tiempo 3
+    - [2.5,  0.40, 0.80]   # snare "y" del 3
+    - [3.0,  0.40, 0.88]   # bombo tiempo 4
+    - [3.5,  0.40, 0.75]   # snare "y" del 4
+
+  # Siciliana (6/8 o 12/8 — tres grupos de corchea-dos-corcheas)
+  siciliana:
+    - [0.0,  0.45, 1.00]
+    - [0.5,  0.42, 0.55]
+    - [1.0,  0.42, 0.55]
+    - [1.5,  0.45, 0.88]
+    - [2.0,  0.42, 0.55]
+    - [2.5,  0.42, 0.55]
+
+leitmotivs:
+  - id: TEMA_A
+    nombre: "Tema principal"
+    notas_canonicas: [A3, C4, E4, A4]
+    descripcion: "Arpeggio ascendente de La menor — identidad de la obra"
+
+  - id: TEMA_B
+    nombre: "Contratema"
+    notas_canonicas: [G3, F3, E3, D3]
+    descripcion: "Descenso por grados — tensión, pregunta sin respuesta"
+
+  - id: MOTIVO_RITMICO
+    nombre: "Motivo rítmico"
+    notas_canonicas: null
+    descripcion: "Tres corcheas + negra (anacrusa característica)"
+
+  - id: RESOLUCION
+    nombre: "Resolución"
+    notas_canonicas: [E4, D4, C4, A3]
+    descripcion: "Cadencia al tónico — cierre de ciclos"
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  SECCIONES
+# ──────────────────────────────────────────────────────────────────────────────
+secciones:
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN I — demuestra: melodia básica, armonía, marcato, pad,
+#              curvas de dinámica, pitch_bend (vibrato), CC (pedal)
+# ══════════════════════════════════════════════════════════════════════════════
+  - id: "I"
+    nombre: "Introduccion — El Umbral"
+    compases: [1, 8]
+    duracion_aprox: "20 seg"
+    tempo:
+      bpm_inicio: 72
+      bpm_fin: 80
+      tipo: accelerando
+    instrumentacion:
+      - Violín solista
+      - Cuerdas (colchón)
+      - Bajo (entra en c.5)
+    descripcion: >
+      La música emerge del silencio. El violín expone el Tema A desnudo
+      los primeros cuatro compases. En c.5 entran las cuerdas y el bajo.
+
+    frases:
+
+      # ── I.1: Melodía básica + curva de dinámica + pitch_bend + CC ─────────
+      - id: "I.1"
+        nombre: "Exposicion del Tema A"
+        compases: [1, 4]
+        leitmotiv: TEMA_A
+        descripcion: >
+          Violín solo pp. Crescendo gradual hacia mp.
+          Vibrato en la nota larga del c.3.
+          Pedal de sostenuto en c.3–4.
+
+        armonia:
+          - {compas: 1, acorde: Am,  grado: "i",   funcion: tonica}
+          - {compas: 2, acorde: Am,  grado: "i",   funcion: tonica}
+          - {compas: 3, acorde: Em,  grado: "v",   funcion: dominante}
+          - {compas: 4, acorde: Am,  grado: "i",   funcion: tonica}
+
+        melodia:
+          # formato lista: [compas, beat, duracion, nota, velocidad]
+          - [1, 0.0,  3.5,  A3, 42]
+          - [2, 0.25, 3.0,  C4, 48]
+          - [3, 0.0,  2.0,  E4, 54]
+          - [3, 2.5,  1.2,  D4, 50]
+          - [4, 0.0,  1.5,  A4, 60]
+          - [4, 2.0,  1.8,  A3, 46]
+
+        # Curva de dinámica: interpola la velocidad de TODAS las notas
+        # entre vel_ini y vel_fin según su posición temporal en la frase.
+        dinamica:
+          tipo: crescendo          # crescendo | decrescendo | arco | fijo
+          vel_ini: 38
+          vel_fin: 70
+
+        # Pitch bend: vibrato en c.3 beat 0 durante 2 compases
+        pitch_bend:
+          - compas: 3
+            beat: 0.0
+            tipo: vibrato          # vibrato | portamento | glissando
+            amplitud: 0.25         # 0.0–1.0 (1.0 = ±2 semitonos)
+            velocidad: 5.0         # Hz
+            beats: 4.0
+
+        # Control change: pedal de sostenuto en c.3–4
+        control:
+          - {compas: 3, beat: 0.0, cc: 64, valor: 127}   # pedal on
+          - {compas: 4, beat: 3.5, cc: 64, valor: 0}     # pedal off
+          # Expression crescendo sobre el violín:
+          - {compas: 1, beat: 0.0, cc: 11, curva: crescendo,
+             beats: 16.0, valor_ini: 40, valor_fin: 90}
+
+        marcato:
+          activo: false
+          intensidad: 0.0
+
+        pad: []
+
+      # ── I.2: Entrada del acompañamiento + portamento + pedal ──────────────
+      - id: "I.2"
+        nombre: "Entrada del acompañamiento"
+        compases: [5, 8]
+        leitmotiv: TEMA_A
+        descripcion: >
+          Cuerdas y bajo entran. Violín repite Tema A una octava más alta.
+          Portamento ascendente en c.7 beat 2.
+
+        armonia:
+          - {compas: 5, acorde: Am,  grado: "i",   funcion: tonica}
+          - {compas: 6, acorde: F,   grado: "bVI", funcion: mediante}
+          - {compas: 7, acorde: Dm,  grado: "iv",  funcion: subdominante}
+          - {compas: 8, acorde: Em,  grado: "v",   funcion: dominante}
+
+        melodia:
+          - [6, 0.0,  3.5,  A4, 64]
+          - [7, 0.25, 2.8,  C5, 70]
+          - [7, 3.2,  0.7,  B4, 66]
+          - [8, 0.0,  1.0,  A4, 72]
+          - [8, 1.0,  0.5,  G4, 68]
+          - [8, 1.5,  0.5,  Fs4,66]
+          - [8, 2.0,  2.0,  E4, 74]
+
+        # Portamento: glissando ascendente en c.7 beat 2
+        pitch_bend:
+          - compas: 7
+            beat: 2.0
+            tipo: portamento
+            desde: B4
+            hasta: C5
+            beats: 0.3
+
+        marcato:
+          activo: true
+          patron_ritmico: cuatro_negras
+          intensidad_inicio: 0.25
+          intensidad_fin: 0.38
+          notas_bajo: [A2, A2, F2, E2]
+
+        pad:
+          - {compas: 5, notas: [A2, E3, A3], velocidad: 36, duracion: 3.9}
+          - {compas: 6, notas: [F2, C3, A3], velocidad: 40, duracion: 3.9}
+
+        dinamica:
+          tipo: crescendo
+          vel_ini: 50
+          vel_fin: 80
+
+        control:
+          # Mod wheel: vibrato suave en cuerdas
+          - {compas: 5, beat: 0.0, cc: 1, curva: vibrato, beats: 4.0, amplitud: 20}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN II — demuestra: transformaciones temáticas, trémolo, trino,
+#               arpegio de acordes, ostinato melódico, contrapunto (flauta)
+# ══════════════════════════════════════════════════════════════════════════════
+  - id: "II"
+    nombre: "Desarrollo — La Tension"
+    compases: [9, 24]
+    duracion_aprox: "45 seg"
+    tempo:
+      bpm_inicio: 88
+      bpm_fin: 88
+      tipo: fijo
+    instrumentacion:
+      - Violín solista (tema transformado)
+      - Cuerdas armonía (arpegios)
+      - Bajo ostinato (tango)
+      - Flauta (contrapunto libre)
+      - Ostinato de cuerdas (minimalismo)
+    descripcion: >
+      El Tema A se fragmenta y transforma. La armonía se arpegia.
+      La flauta toca el Contratema con retrogradar+transponer.
+      Trémolo en el clímax. Ostinato melódico de fondo.
+
+    frases:
+
+      # ── II.1: Transformaciones temáticas ──────────────────────────────────
+      - id: "II.1"
+        nombre: "Fragmentacion — el tema se rompe"
+        compases: [9, 14]
+        leitmotiv: TEMA_A
+        descripcion: >
+          Melodía con transformación de inversión aplicada.
+          Armonía en arpegios ascendentes.
+          Ostinato de cuerdas en el fondo.
+          Flauta con Contratema retrogradado y transpuesto.
+
+        armonia:
+          - {compas: 9,  acorde: Am,  grado: "i",    funcion: tonica}
+          - {compas: 10, acorde: Dm,  grado: "iv",   funcion: subdominante}
+          - {compas: 11, acorde: G7,  grado: "bVII7",funcion: subtonica}
+          - {compas: 12, acorde: Am,  grado: "i",    funcion: tonica}
+          - {compas: 13, acorde: E7,  grado: "V7",   funcion: dominante}
+          - {compas: 14, acorde: Am,  grado: "i",    funcion: tonica}
+
+        # Los acordes de esta frase se arpegiará en corcheas ascendentes
+        arpegio:
+          patron: ascendente         # ascendente | descendente | alternado
+          subdivision: 0.5           # duración entre notas del arpegio en beats
+
+        melodia:
+          - [9,  0.0,  2.0,  A3, 66]
+          - [9,  2.2,  1.6,  C4, 70]
+          - [10, 0.0,  1.5,  A3, 68]
+          - [10, 1.7,  1.0,  C4, 72]
+          - [10, 2.9,  1.0,  E4, 76]
+          - [11, 0.0,  0.8,  E4, 74]
+          - [11, 1.0,  0.7,  D4, 70]
+          - [11, 1.8,  0.7,  C4, 66]
+          - [11, 2.7,  1.2,  A3, 62]
+          - [12, 0.0,  0.5,  A3, 72]
+          - [12, 0.5,  0.5,  C4, 74]
+          - [12, 1.0,  0.5,  E4, 78]
+          - [12, 1.5,  1.8,  A4, 82]
+          - [13, 0.0,  3.8,  E4, 80]
+          - [14, 0.0,  3.8,  A4, 78]
+
+        # Transformación aplicada a TODA la melodía de esta frase:
+        # la inversión refleja los intervalos alrededor de la primera nota.
+        transformaciones:
+          - tipo: invertir
+            eje_midi: 69       # eje en A4 (MIDI 69)
+
+        # Patrón de ostinato para la pista 'ostinato cuerdas'
+        ostinato:
+          notas: [A2, C3, E3, C3]
+          duracion_nota: 0.5
+          velocidad: 52
+          crescendo: false
+
+        # Flauta: Contratema con retrogradar + transponer
+        flauta:
+          patron:
+            # beat_abs relativo al primer compás de la frase (c.9)
+            - [0.0,  1.8, G4, 54]
+            - [2.0,  1.5, F4, 58]
+            - [4.0,  1.5, E4, 60]
+            - [6.0,  1.8, D4, 56]
+            - [8.0,  2.0, G4, 60]
+          apariciones: [9]
+          # Transformaciones aplicadas al patrón de la flauta:
+          transformaciones:
+            - tipo: retrogradar
+            - tipo: transponer
+              semitonos: 2     # transponer un tono arriba
+
+        marcato:
+          activo: true
+          patron_ritmico: tango
+          intensidad_inicio: 0.35
+          intensidad_fin: 0.45
+          notas_bajo: [A2, D2, G2, A2, E2, A2]
+
+        dinamica:
+          tipo: crescendo
+          vel_ini: 60
+          vel_fin: 88
+
+      # ── II.2: Trémolo, trino y clímax ─────────────────────────────────────
+      - id: "II.2"
+        nombre: "Climax — tremolo y disonancia"
+        compases: [15, 24]
+        leitmotiv: MOTIVO_RITMICO
+        descripcion: >
+          Trémolo en el violín durante el clímax (cc.18–20).
+          Trino en cc.21–22.
+          Armonía en arpegios descendentes.
+          Control de expression decrescendo al final.
+
+        armonia:
+          - {compas: 15, acorde: Am,  grado: "i",    funcion: tonica}
+          - {compas: 16, acorde: Em7, grado: "vm7",  funcion: dominante}
+          - {compas: 17, acorde: Dm,  grado: "iv",   funcion: subdominante}
+          - {compas: 18, acorde: A7,  grado: "V7",   funcion: impacto}
+          - {compas: 19, acorde: Dm,  grado: "iv",   funcion: subdominante}
+          - {compas: 20, acorde: Em7, grado: "vm7",  funcion: dominante}
+          - {compas: 21, acorde: A7,  grado: "V7",   funcion: impacto}
+          - {compas: 22, acorde: A7,  grado: "V7",   funcion: fff}
+          - {compas: 23, acorde: Am,  grado: "i",    funcion: tonica}
+          - {compas: 24, acorde: Am,  grado: "i",    funcion: pp}
+
+        arpegio:
+          patron: descendente
+          subdivision: 0.5
+
+        melodia:
+          # Notas normales (lista) hasta el trémolo
+          - [15, 0.0, 0.5, A3, 82]
+          - [15, 0.5, 0.5, C4, 84]
+          - [15, 1.0, 0.5, E4, 86]
+          - [15, 1.5, 2.3, A4, 90]
+          - [16, 0.0, 0.5, B4, 88]
+          - [16, 0.5, 0.5, D5, 90]
+          - [16, 1.0, 0.5, E5, 92]
+          - [16, 1.5, 2.3, Gs5,94]
+          - [17, 0.0, 3.8, A4, 88]
+          # Notas con trémolo (formato dict) en cc.18–20
+          # tremolo: N = subdivisión (16=semicorcheas, 32=fusas)
+          - {compas: 18, beat: 0.0, dur: 4.0, nota: Cs5, vel: 100, tremolo: 16}
+          - {compas: 19, beat: 0.0, dur: 4.0, nota: A4,  vel: 98,  tremolo: 16}
+          - {compas: 20, beat: 0.0, dur: 4.0, nota: E5,  vel: 102, tremolo: 32}
+          # Notas con trino (formato dict) en cc.21–22
+          # trino: nota alternante
+          - {compas: 21, beat: 0.0, dur: 4.0, nota: A5,  vel: 110, trino: Bb5}
+          - {compas: 22, beat: 0.0, dur: 4.0, nota: A5,  vel: 112, trino: Bb5}
+          # Descenso final
+          - [23, 0.0, 1.0, E5, 90]
+          - [23, 1.0, 1.0, C5, 84]
+          - [23, 2.0, 1.8, A4, 76]
+
+        ostinato:
+          notas: [A2, E3, A3, E3]
+          duracion_nota: 0.5
+          velocidad: 60
+          crescendo: true
+
+        marcato:
+          activo: true
+          patron_ritmico: ostinato_332
+          intensidad_inicio: 0.48
+          intensidad_fin: 0.58
+          notas_bajo: [A2, D2, E2, A2, D2, E2, A2, D2, E2, E2]
+
+        pad:
+          - {compas: 21, notas: [A1, E2, A2, Cs3], velocidad: 90, duracion: 3.9}
+          - {compas: 22, notas: [A1, E2, A2, Cs3], velocidad: 96, duracion: 3.9}
+
+        dinamica:
+          tipo: arco              # sube hasta la mitad y baja (forma de campana)
+          vel_ini: 70
+          vel_fin: 50
+
+        control:
+          # Expression decrescendo en la caída final (cc.23–24)
+          - {compas: 23, beat: 0.0, cc: 11, curva: decrescendo,
+             beats: 8.0, valor_ini: 110, valor_fin: 30}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN III — demuestra: aumentación, fragmentación, glissando,
+#                curva decrescendo, rallentando, resolución final
+# ══════════════════════════════════════════════════════════════════════════════
+  - id: "III"
+    nombre: "Reexposicion — El Regreso"
+    compases: [25, 36]
+    duracion_aprox: "35 seg"
+    tempo:
+      bpm_inicio: 76
+      bpm_fin: 60
+      tipo: rallentando
+      rubato_amplitud: 1.5    # desviación BPM en modo rubato (aquí solo informativo)
+    instrumentacion:
+      - Violín solista
+      - Cuerdas armonía
+      - Bajo (muy suave)
+    descripcion: >
+      El Tema A regresa aumentado (duraciones dobles) en La mayor.
+      El bajo casi desaparece. Glissando descendente antes de la cadencia final.
+      La obra se cierra en silencio.
+
+    frases:
+
+      # ── III.1: Tema A aumentado + transpuesto ──────────────────────────────
+      - id: "III.1"
+        nombre: "El tema transfigurado — aumentado y en mayor"
+        compases: [25, 32]
+        leitmotiv: RESOLUCION
+        descripcion: >
+          Las transformaciones 'transponer +3 semitonos' (Lam→Dom) y
+          'aumentar factor 2.0' (duraciones dobles) se aplican a la melodía.
+          La armonía cambia a La mayor.
+
+        armonia:
+          - {compas: 25, acorde: A,    grado: "I",    funcion: tonica}
+          - {compas: 26, acorde: A,    grado: "I",    funcion: tonica}
+          - {compas: 27, acorde: D,    grado: "IV",   funcion: subdominante}
+          - {compas: 28, acorde: E7,   grado: "V7",   funcion: dominante}
+          - {compas: 29, acorde: A,    grado: "I",    funcion: tonica}
+          - {compas: 30, acorde: Fmaj7,grado: "bVI△", funcion: mediante}
+          - {compas: 31, acorde: E7,   grado: "V7",   funcion: dominante}
+          - {compas: 32, acorde: A,    grado: "I",    funcion: tonica}
+
+        melodia:
+          # Notas originales del Tema A (antes de las transformaciones)
+          - [25, 0.0, 1.0, A3, 60]
+          - [25, 1.0, 1.0, C4, 64]
+          - [26, 0.0, 1.0, E4, 68]
+          - [26, 1.0, 1.0, A4, 72]
+          - [27, 0.0, 2.0, E4, 64]
+          - [28, 0.0, 2.0, A4, 66]
+
+        # El sistema aplica primero aumentar (×2) y luego transponer (+3 st)
+        transformaciones:
+          - tipo: aumentar
+            factor: 2.0
+          - tipo: transponer
+            semitonos: 3        # Lam → Dom
+
+        marcato:
+          activo: true
+          patron_ritmico: cuatro_negras
+          intensidad_inicio: 0.18
+          intensidad_fin: 0.08
+          notas_bajo: [A2, A2, D2, E2, A2, F2, E2, A2]
+
+        dinamica:
+          tipo: decrescendo
+          vel_ini: 72
+          vel_fin: 42
+
+      # ── III.2: Cadencia final con glissando y dissolución ─────────────────
+      - id: "III.2"
+        nombre: "Cadencia y disolucion"
+        compases: [33, 36]
+        leitmotiv: RESOLUCION
+        descripcion: >
+          Cadencia perfecta E7→Am muy lenta.
+          Glissando descendente en c.34 del violín.
+          El bajo calla en c.35 beat 2.
+          A3 pppp durante c.36 — disolución en silencio.
+
+        armonia:
+          - {compas: 33, acorde: E7,  grado: "V7",  funcion: dominante}
+          - {compas: 34, acorde: Am,  grado: "i",   funcion: tonica}
+          - {compas: 35, acorde: E7,  grado: "V7",  funcion: dominante}
+          - {compas: 36, acorde: Am,  grado: "i",   funcion: ppp}
+
+        melodia:
+          - [33, 0.0,  2.0,  E4,  66]
+          - [33, 2.2,  1.6,  B3,  62]
+          - [34, 0.0,  3.8,  A3,  58]
+          - [35, 0.0,  1.5,  Gs3, 62]
+          - [35, 1.7,  0.5,  A3,  58]
+          - [35, 2.5,  1.3,  E4,  56]
+          - [36, 0.0,  3.95, A3,  36]     # pppp — disolución final
+
+        # Glissando descendente en c.34 beat 0 (violín cae desde A4 hasta A3)
+        pitch_bend:
+          - compas: 34
+            beat: 0.0
+            tipo: glissando
+            desde: A4
+            hasta: A3
+            beats: 1.5
+
+        marcato:
+          activo: true
+          patron_ritmico: pulso_1          # solo el tiempo 1 de cada compás
+          intensidad_inicio: 0.15
+          intensidad_fin: 0.0
+          notas_bajo: [E2, A2, E2, A2]
+
+        # Fragmentación: solo tocar los primeros 2 beats de la melodía del c.36
+        # (útil para cortes abruptos — se haría con --frase III.2 y transformacion)
+        # transformaciones:
+        #   - tipo: fragmentar
+        #     beats_inicio: 0.0
+        #     beats_fin: 12.0    # hasta el c.35 beat 3 (12 beats desde inicio frase)
+
+        dinamica:
+          tipo: decrescendo
+          vel_ini: 66
+          vel_fin: 28
+
+        control:
+          # Expression decrescendo final hasta el silencio
+          - {compas: 33, beat: 0.0, cc: 11, curva: decrescendo,
+             beats: 16.0, valor_ini: 80, valor_fin: 10}
