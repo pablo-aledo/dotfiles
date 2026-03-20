@@ -162,6 +162,13 @@ leitmotivs:
   - id: TEMA_A
     nombre: "Tema principal"
     notas_canonicas: [A3, C4, E4, A4]
+    ritmo_canonico:
+      # [beat_relativo, duracion, velocidad]
+      # Si una frase usa origen_leitmotiv: true sin melodia:, este ritmo se usa.
+      - [0.0, 1.8, 72]
+      - [2.0, 1.8, 68]
+      - [4.0, 1.8, 74]
+      - [6.0, 1.8, 70]
     descripcion: "Arpeggio ascendente de La menor — identidad de la obra"
 
   - id: TEMA_B
@@ -526,15 +533,21 @@ secciones:
 
     frases:
 
-      # ── III.1: Tema A aumentado + transpuesto ──────────────────────────────
+      # ── III.1: Tema A aumentado + transpuesto  (origen_leitmotiv: true) ──────
       - id: "III.1"
         nombre: "El tema transfigurado — aumentado y en mayor"
         compases: [25, 32]
         leitmotiv: RESOLUCION
         descripcion: >
-          Las transformaciones 'transponer +3 semitonos' (Lam→Dom) y
-          'aumentar factor 2.0' (duraciones dobles) se aplican a la melodía.
-          La armonía cambia a La mayor.
+          DEMO del Nivel 3: las alturas vienen de notas_canonicas del leitmotiv
+          RESOLUCION; el ritmo lo da melodia: (columna nota ignorada).
+          Las transformaciones aumentar×2 y transponer+3 se aplican encima.
+          Cambiar notas_canonicas en leitmotivs: modifica automáticamente esta frase.
+
+        # origen_leitmotiv: true → las alturas se toman del leitmotiv RESOLUCION.
+        # Las notas en melodia: (la columna 4ª) se ignoran; solo se usan
+        # compas/beat/duracion/velocidad como rejilla rítmica.
+        origen_leitmotiv: true
 
         armonia:
           - {compas: 25, acorde: A,    grado: "I",    funcion: tonica}
@@ -547,20 +560,21 @@ secciones:
           - {compas: 32, acorde: A,    grado: "I",    funcion: tonica}
 
         melodia:
-          # Notas originales del Tema A (antes de las transformaciones)
-          - [25, 0.0, 1.0, A3, 60]
-          - [25, 1.0, 1.0, C4, 64]
-          - [26, 0.0, 1.0, E4, 68]
-          - [26, 1.0, 1.0, A4, 72]
-          - [27, 0.0, 2.0, E4, 64]
-          - [28, 0.0, 2.0, A4, 66]
+          # Rejilla rítmica: las notas ('-') se sustituyen por notas_canonicas
+          # del leitmotiv RESOLUCION ciclando.
+          - [25, 0.0, 1.0, -, 60]
+          - [25, 1.0, 1.0, -, 64]
+          - [26, 0.0, 1.0, -, 68]
+          - [26, 1.0, 1.0, -, 72]
+          - [27, 0.0, 2.0, -, 64]
+          - [28, 0.0, 2.0, -, 66]
 
-        # El sistema aplica primero aumentar (×2) y luego transponer (+3 st)
+        # Transformaciones aplicadas DESPUÉS de resolver las alturas del leitmotiv
         transformaciones:
           - tipo: aumentar
             factor: 2.0
           - tipo: transponer
-            semitonos: 3        # Lam → Dom
+            semitonos: 3        # RESOLUCION en Do mayor
 
         marcato:
           activo: true

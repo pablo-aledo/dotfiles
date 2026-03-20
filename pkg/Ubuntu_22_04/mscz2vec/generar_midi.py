@@ -553,9 +553,110 @@ FUNCION_VEL = {
     'pedal':60,'cromatismo':48,'pp':36,'ppp':28,'pianissimo':28,'deconstruccion':28,
 }
 
-def process_melody(frases, bar1, legato=0.91):
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  RESOLUCIÓN DE LEITMOTIV → MELODÍA CONCRETA  (Nivel 3)
+# ══════════════════════════════════════════════════════════════════════════════
+def _build_leitmotiv_index(obra):
+    """Devuelve {lm_id: lm_dict} para búsqueda rápida."""
+    return {lm['id']: lm for lm in obra.get('leitmotivs', [])}
+
+def resolve_leitmotiv_melody(frase, bar1, lm_index, legato=0.91):
+    """Construye eventos de melodía combinando alturas del leitmotiv canónico
+    con el ritmo de la frase. Solo se invoca si origen_leitmotiv: true.
+
+    Reglas
+    ──────
+    1. Alturas  → notas_canonicas del leitmotiv, ciclando si hay más posiciones.
+    2. Ritmo    → melodia: de la frase (columna nota ignorada si es '-'/null).
+                  Si melodia: vacía → ritmo_canonico: del leitmotiv.
+                  Si tampoco → una nota por beat del primer compás, dur=1.0, vel=72.
+    3. Transformaciones y dinámica de la frase se aplican en process_melody.
+
+    YAML de ejemplo:
+        leitmotiv: TEMA_A
+        origen_leitmotiv: true
+        melodia:
+          - [25, 0.0, 2.0, -, 60]   # nota ignorada
+          - [25, 2.0, 2.0, -, 64]
+          - [26, 0.0, 4.0, -, 68]
+        transformaciones:
+          - tipo: transponer
+            semitonos: 3
+
+    Devuelve lista de eventos (tick,'on'/'off',midi,vel) o None si hay error.
+    """
+    lm_id = frase.get('leitmotiv')
+    if not lm_id or lm_id in ('null','None',None,'-','—'):
+        print(f"  ⚠ {frase.get('id','?')}: origen_leitmotiv=true pero sin leitmotiv asignado")
+        return None
+    lm = lm_index.get(lm_id)
+    if lm is None:
+        print(f"  ⚠ {frase.get('id','?')}: leitmotiv '{lm_id}' no encontrado")
+        return None
+    notas_canonicas = lm.get('notas_canonicas') or []
+    if not notas_canonicas:
+        print(f"  ⚠ {frase.get('id','?')}: '{lm_id}' sin notas_canonicas")
+        return None
+
+    notas_midi = []
+    for nn in notas_canonicas:
+        try: notas_midi.append(note_to_midi(str(nn)))
+        except ValueError as e: print(f"  ⚠ leitmotiv {lm_id}: {e}")
+    if not notas_midi:
+        return None
+
+    # Posiciones rítmicas
+    posiciones = []
+    for entrada in frase.get('melodia', []):
+        if isinstance(entrada, dict):
+            posiciones.append((int(entrada.get('compas', frase['compases'][0])),
+                               float(entrada.get('beat', 0.0)),
+                               float(entrada.get('dur', 1.0)),
+                               int(entrada.get('vel', 72))))
+        elif isinstance(entrada, (list, tuple)) and len(entrada) >= 5:
+            bar, beat, dur, _nota, vel = entrada
+            posiciones.append((int(bar), float(beat), float(dur), int(vel)))
+
+    if not posiciones:
+        ritmo = lm.get('ritmo_canonico', [])
+        if ritmo:
+            bar0 = frase['compases'][0]
+            for entry in ritmo:
+                beat_rel = float(entry[0]); dur_r = float(entry[1])
+                vel_r    = int(entry[2]) if len(entry) > 2 else 72
+                posiciones.append((bar0 + int(beat_rel//4), beat_rel%4, dur_r, vel_r))
+        else:
+            bar0 = frase['compases'][0]
+            for b in range(4):
+                posiciones.append((bar0, float(b), 1.0, 72))
+
+    events = []
+    for i, (bar, beat, dur, vel) in enumerate(posiciones):
+        midi_note = notas_midi[i % len(notas_midi)]
+        t_on  = bar_beat_to_tick(bar, beat, bar1)
+        t_off = t_on + beats_to_ticks(dur * legato)
+        events.append((t_on,  'on',  midi_note, vel))
+        events.append((t_off, 'off', midi_note, 0))
+    return events
+
+def process_melody(frases, bar1, legato=0.91, lm_index=None):
+    """lm_index: dict {lm_id: lm_dict} para resolver frases con origen_leitmotiv."""
+    lm_index = lm_index or {}
     events = []
     for frase in frases:
+        # ── Nivel 3: alturas del leitmotiv + ritmo de la frase ────────────
+        if frase.get('origen_leitmotiv', False):
+            resolved = resolve_leitmotiv_melody(frase, bar1, lm_index, legato)
+            if resolved is not None:
+                resolved = apply_transformations(resolved, frase.get('transformaciones'))
+                resolved = apply_dynamics_curve(resolved, frase.get('dinamica'))
+                events.extend(resolved)
+                n_on = sum(1 for e in resolved if e[1]=='on')
+                print(f"    ↳ {frase.get('id','?')}: [{frase.get('leitmotiv','?')}] → {n_on} notas")
+                continue
+
+        # ── Melodía normal ─────────────────────────────────────────────────
         fe = []
         for nota in frase.get('melodia',[]):
             if isinstance(nota, dict):
@@ -677,14 +778,13 @@ DEFAULT_TRACKS = [
     {'id':'perc',   'nombre':'Percusion','canal':9,'programa':0,'capa':'percusion'},
     {'id':'ostinato','nombre':'Ostinato','canal':5,'programa':48,'capa':'ostinato'},
 ]
-def get_capa_events(capa, frases, bar1, patrones_extra=None):
+def get_capa_events(capa, frases, bar1, patrones_extra=None, lm_index=None):
     """Despacha al procesador correcto.
 
-    patrones_extra: dict de patrones rítmicos definidos en el YAML bajo
-    'patrones_ritmicos:'. Se fusionan con MARCATO_PATTERNS y tienen prioridad
-    sobre los del script si coincide el nombre.
+    patrones_extra: patrones rítmicos del YAML (se fusionan con MARCATO_PATTERNS).
+    lm_index:       {lm_id: lm_dict} para resolver frases con origen_leitmotiv.
     """
-    if capa == 'melodia':   return process_melody(frases, bar1)
+    if capa == 'melodia':   return process_melody(frases, bar1, lm_index=lm_index)
     if capa == 'armonia':   return process_harmony(frases, bar1)
     if capa == 'marcato':   return process_marcato(frases, bar1, patrones_extra)
     if capa == 'pad':       return process_pad(frases, bar1)
@@ -734,6 +834,13 @@ def validate_yaml(obra):
             lm=frase.get('leitmotiv')
             if lm and lm not in lm_ids and lm not in ('null','None',None):
                 warn(f"{fp}: leitmotiv '{lm}' no definido")
+            if frase.get('origen_leitmotiv', False):
+                if not lm or lm in ('null','None',None):
+                    err(f"{fp}: origen_leitmotiv=true pero falta campo leitmotiv:")
+                elif lm in lm_ids:
+                    lm_obj=next((l for l in obra.get('leitmotivs',[]) if l['id']==lm),None)
+                    if lm_obj and not lm_obj.get('notas_canonicas'):
+                        err(f"{fp}: origen_leitmotiv=true pero '{lm}' sin notas_canonicas")
             for item in frase.get('armonia',[]):
                 ac=item.get('acorde')
                 if ac and ac not in ('null','None',None,'—','-') and ac not in CHORD_VOICINGS:
@@ -1917,6 +2024,7 @@ def generate_section(seccion, output_dir, obra=None):
     obra=obra or {}; sid=seccion['id']; c_ini=seccion['compases'][0]
     frases=seccion.get('frases',[])
     patrones_extra=_load_patrones(obra)
+    lm_index=_build_leitmotiv_index(obra)
     print(f"\n  Generando Sección {sid}: {seccion['nombre']}")
     print(f"  Cc.{seccion['compases'][0]}–{seccion['compases'][1]}")
     mid=MidiFile(type=1,ticks_per_beat=TPB)
@@ -1929,10 +2037,10 @@ def generate_section(seccion, output_dir, obra=None):
         prog=int(tdef.get('programa',0)); capa=tdef.get('capa',tid)
         if tdef.get('contrapunto'):
             cfg=tdef['contrapunto']
-            mel_ev=get_capa_events('melodia',frases,c_ini,patrones_extra)
+            mel_ev=get_capa_events('melodia',frases,c_ini,patrones_extra,lm_index)
             events=generate_contrapunto(mel_ev,int(cfg.get('intervalo',3)),cfg.get('direccion','abajo'))
         else:
-            events=get_capa_events(capa,frases,c_ini,patrones_extra)
+            events=get_capa_events(capa,frases,c_ini,patrones_extra,lm_index)
         if events:
             total_overlaps+=check_note_overlaps(events,nom)
             mid.tracks.append(build_track(f'{nom} — Sec.{sid}',canal,prog,events))
@@ -1965,6 +2073,7 @@ def generate_stems(secciones, output_dir, obra):
     """
     track_defs     = obra.get('tracks', DEFAULT_TRACKS)
     patrones_extra = _load_patrones(obra)
+    lm_index       = _build_leitmotiv_index(obra)
     stems_root     = os.path.join(output_dir, 'stems')
     generated      = []
     print(f"\n  Exportando stems → {stems_root}/")
@@ -1986,11 +2095,11 @@ def generate_stems(secciones, output_dir, obra):
 
             if tdef.get('contrapunto'):
                 cfg    = tdef['contrapunto']
-                mel_ev = get_capa_events('melodia', frases, c_ini, patrones_extra)
+                mel_ev = get_capa_events('melodia', frases, c_ini, patrones_extra, lm_index)
                 events = generate_contrapunto(mel_ev,
                              int(cfg.get('intervalo',3)), cfg.get('direccion','abajo'))
             else:
-                events = get_capa_events(capa, frases, c_ini, patrones_extra)
+                events = get_capa_events(capa, frases, c_ini, patrones_extra, lm_index)
 
             pb_track = build_pitchbend_track(nom, canal, frases, c_ini)
             cc_track = build_cc_track(nom, canal, frases, c_ini)
@@ -2021,6 +2130,7 @@ def generate_stems_completa(obra, output_dir):
     """Stems de la obra completa concatenada, uno por instrumento."""
     track_defs     = obra.get('tracks', DEFAULT_TRACKS)
     patrones_extra = _load_patrones(obra)
+    lm_index       = _build_leitmotiv_index(obra)
     secciones      = obra.get('secciones', [])
     stems_root     = os.path.join(output_dir, 'stems', 'COMPLETA')
     os.makedirs(stems_root, exist_ok=True)
@@ -2087,7 +2197,7 @@ def generate_stems_completa(obra, output_dir):
                 evs    = generate_contrapunto(mel_ev,
                              int(cfg.get('intervalo',3)), cfg.get('direccion','abajo'))
             else:
-                evs = get_capa_events(capa, frases, c_ini, patrones_extra)
+                evs = get_capa_events(capa, frases, c_ini, patrones_extra, lm_index)
             for (t,oo,n,v) in evs:
                 all_events.append((t+offset, oo, n, v))
 
@@ -2141,6 +2251,7 @@ def generate_leitmotiv_midis(obra, output_dir):
     secciones  = obra.get('secciones', [])
     track_defs = obra.get('tracks', DEFAULT_TRACKS)
     patrones_extra = _load_patrones(obra)
+    lm_index   = _build_leitmotiv_index(obra)
     lm_dir     = os.path.join(output_dir, 'leitmotivs')
     os.makedirs(lm_dir, exist_ok=True)
     generated  = []
@@ -2239,12 +2350,12 @@ def generate_leitmotiv_midis(obra, output_dir):
             for (sid, offset, c_ini, frase) in apariciones:
                 if tdef.get('contrapunto'):
                     cfg    = tdef['contrapunto']
-                    mel_ev = get_capa_events('melodia', [frase], c_ini, patrones_extra)
+                    mel_ev = get_capa_events('melodia', [frase], c_ini, patrones_extra, lm_index)
                     evs    = generate_contrapunto(mel_ev,
                                  int(cfg.get('intervalo', 3)),
                                  cfg.get('direccion', 'abajo'))
                 else:
-                    evs = get_capa_events(capa, [frase], c_ini, patrones_extra)
+                    evs = get_capa_events(capa, [frase], c_ini, patrones_extra, lm_index)
                 for (t, oo, n, v) in evs:
                     all_events.append((t + offset, oo, n, v))
 
@@ -2304,12 +2415,13 @@ def generate_full_obra(obra, output_dir):
         tempo_track.append(MetaMessage('set_tempo',tempo=tempo,time=tick-prev)); prev=tick
     tempo_track.append(MetaMessage('end_of_track',time=0)); mid.tracks.append(tempo_track)
     patrones_extra=_load_patrones(obra)
+    lm_index=_build_leitmotiv_index(obra)
     all_events={tdef['id']:[] for tdef in track_defs}; tick_offset=0
     for sec in secciones:
         c_ini,c_fin=sec['compases']; n_bars=c_fin-c_ini+1; frases=sec.get('frases',[])
         for tdef in track_defs:
             tid=tdef['id']; capa=tdef.get('capa',tid)
-            for (tick,on_off,note,vel) in get_capa_events(capa,frases,c_ini,patrones_extra):
+            for (tick,on_off,note,vel) in get_capa_events(capa,frases,c_ini,patrones_extra,lm_index):
                 all_events[tid].append((tick+tick_offset,on_off,note,vel))
         n_mel=sum(1 for e in all_events.get('melodia',[]) if e[1]=='on' and e[0]>=tick_offset)
         print(f"    Sec.{sec['id']:3s}  mel:{n_mel:3d}  offset:{tick_offset}"); tick_offset+=n_bars*TICKS_PER_BAR
