@@ -175,38 +175,171 @@ def get_time_signature(obj, fallback):
     except Exception:
         return 4, 4
 
+def get_bar_ticks(seccion, bar_abs, obra=None):
+    """Devuelve los ticks que ocupa un compás concreto, teniendo en cuenta
+    cambios de compás en la sección (cambios_de_compas) y overrides por frase.
+
+    El tamaño del compás puede variar compás a compás si la sección tiene
+    'cambios_de_compas'. Esta función es el punto centralizado para calcular
+    duraciones.
+
+    Retorna (ticks_del_compas, (numerador, denominador)).
+    """
+    obra = obra or {}
+    cambios = _build_meter_map(seccion, obra)
+    # cambios: lista ordenada de (compas_abs, num, den)
+    num, den = get_time_signature(seccion, obra)
+    for (c, n, d) in reversed(cambios):
+        if bar_abs >= c:
+            num, den = n, d
+            break
+    beats_per_bar = num * (4 / den)
+    ticks = int(round(beats_per_bar * TPB))
+    return ticks, (num, den)
+
+
+def _build_meter_map(seccion, obra=None):
+    """Construye lista ordenada de (compas_abs, num, den) para la sección.
+
+    Fuentes de cambios de compás (se fusionan en orden de prioridad):
+      1. seccion.cambios_de_compas  → lista [{compas: N, compas: "X/Y"}, ...]
+      2. Por cada frase con campo 'compas' propio → aplica desde frase['compases'][0]
+
+    El compás de la sección (o de la obra) se usa como valor de arranque.
+    """
+    obra = obra or {}
+    c_ini_sec = seccion['compases'][0]
+    num0, den0 = get_time_signature(seccion, obra)
+
+    cambios = [(c_ini_sec, num0, den0)]
+
+    # Cambios explícitos en la sección
+    for entry in seccion.get('cambios_de_compas', []):
+        c_abs = int(entry['compas'])
+        raw   = entry.get('nuevo_compas') or entry.get('compas_nuevo', '4/4')
+        try:
+            n, d = str(raw).split('/')
+            cambios.append((c_abs, int(n), int(d)))
+        except Exception:
+            print(f"  ⚠ cambios_de_compas: formato inválido '{raw}' en c.{c_abs}")
+
+    # Override por frase (campo 'compas' en la frase)
+    for frase in seccion.get('frases', []):
+        compas_frase = frase.get('compas')
+        if compas_frase and '/' in str(compas_frase):
+            try:
+                n, d = str(compas_frase).split('/')
+                cambios.append((int(frase['compases'][0]), int(n), int(d)))
+            except Exception:
+                pass
+
+    cambios.sort(key=lambda x: x[0])
+    return cambios
+
+
+def bar_beat_to_tick_v2(bar, beat, seccion, obra=None):
+    """Versión de bar_beat_to_tick que respeta cambios de compás.
+
+    Para secciones sin cambios_de_compas se comporta exactamente igual
+    que la función original (retrocompatible).
+    """
+    obra = obra or {}
+    cambios = _build_meter_map(seccion, obra)
+    c_ini = seccion['compases'][0]
+
+    # Si no hay cambios de compás, usar el camino rápido original
+    if len(cambios) <= 1:
+        return bar_beat_to_tick(bar, beat, c_ini)
+
+    # Acumular ticks compás a compás
+    tick = 0
+    current_bar = c_ini
+    num, den = cambios[0][1], cambios[0][2]
+
+    for i in range(bar - c_ini):
+        current_bar_abs = c_ini + i
+        # ¿Cambia el compás en este compás?
+        for (c_abs, n, d) in cambios:
+            if c_abs == current_bar_abs:
+                num, den = n, d
+        beats_per_bar = num * (4 / den)
+        tick += int(round(beats_per_bar * TPB))
+
+    # Ahora añadir el beat dentro del compás 'bar'
+    tick += beats_to_ticks(beat)
+    return tick
+
+
 def build_tempo_track(seccion, bar1, obra=None):
     obra = obra or {}
     track = MidiTrack()
     track.append(MetaMessage('track_name',
                   name=ascii_safe(f"Sec.{seccion['id']} -- tempo"), time=0))
-    num, den = get_time_signature(seccion, obra)
-    track.append(MetaMessage('time_signature', numerator=num, denominator=den,
-                  clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
+
+    cambios = _build_meter_map(seccion, obra)
     key = seccion.get('tonalidad') or obra.get('tonalidad','C')
     track.append(MetaMessage('key_signature', key=key, time=0))
-    t_cfg = seccion.get('tempo',{})
+
+    t_cfg   = seccion.get('tempo',{})
     bpm_ini = float(t_cfg.get('bpm_inicio',120))
     bpm_fin = float(t_cfg.get('bpm_fin', bpm_ini))
     tipo    = t_cfg.get('tipo','fijo')
     amp     = float(t_cfg.get('rubato_amplitud',2.5))
     c_ini, c_fin = seccion['compases']
     n_bars = c_fin - c_ini + 1
-    prev_tick = 0
-    if tipo in ('accelerando','rallentando'):
-        for i in range(n_bars+1):
-            t = i/n_bars; bpm = bpm_ini+(bpm_fin-bpm_ini)*t
-            tick = i*TICKS_PER_BAR
-            track.append(MetaMessage('set_tempo', tempo=mido.bpm2tempo(bpm), time=tick-prev_tick))
-            prev_tick = tick
-    elif tipo == 'rubato':
-        for i in range(n_bars+1):
-            t = i/max(n_bars,1); bpm = bpm_ini+(bpm_fin-bpm_ini)*t + amp*math.sin(i*0.8)
-            tick = i*TICKS_PER_BAR
-            track.append(MetaMessage('set_tempo', tempo=mido.bpm2tempo(max(30,bpm)), time=tick-prev_tick))
-            prev_tick = tick
-    else:
-        track.append(MetaMessage('set_tempo', tempo=mido.bpm2tempo(bpm_ini), time=0))
+
+    # Construir lista de eventos: (tick_abs, tipo, valor)
+    # tipo puede ser 'ts' (time_signature) o 'tempo'
+    events = []
+
+    # Eventos de time_signature
+    current_num, current_den = cambios[0][1], cambios[0][2]
+    tick_acc = 0
+    for i in range(n_bars):
+        bar_abs = c_ini + i
+        for (c_abs, n, d) in cambios:
+            if c_abs == bar_abs and (n != current_num or d != current_den):
+                events.append((tick_acc, 'ts', (n, d)))
+                current_num, current_den = n, d
+        beats_per_bar = current_num * (4 / current_den)
+        if i == 0:
+            events.insert(0, (0, 'ts', (current_num, current_den)))
+        tick_acc += int(round(beats_per_bar * TPB))
+
+    # Eventos de tempo
+    tick_acc = 0
+    current_num, current_den = cambios[0][1], cambios[0][2]
+    for i in range(n_bars + 1):
+        bar_abs = c_ini + i
+        for (c_abs, n, d) in cambios:
+            if c_abs == bar_abs:
+                current_num, current_den = n, d
+        t = i / n_bars if n_bars > 0 else 0
+        if tipo in ('accelerando', 'rallentando'):
+            bpm = bpm_ini + (bpm_fin - bpm_ini) * t
+            events.append((tick_acc, 'tempo', mido.bpm2tempo(bpm)))
+        elif tipo == 'rubato':
+            bpm = bpm_ini + (bpm_fin - bpm_ini) * t + amp * math.sin(i * 0.8)
+            events.append((tick_acc, 'tempo', mido.bpm2tempo(max(30, bpm))))
+        elif i == 0:
+            events.append((0, 'tempo', mido.bpm2tempo(bpm_ini)))
+        if i < n_bars:
+            beats_per_bar = current_num * (4 / current_den)
+            tick_acc += int(round(beats_per_bar * TPB))
+
+    # Emitir eventos ordenados por tick
+    events.sort(key=lambda e: (e[0], 0 if e[1] == 'ts' else 1))
+    prev = 0
+    for (tick, etype, val) in events:
+        delta = max(0, tick - prev)
+        if etype == 'ts':
+            num, den = val
+            track.append(MetaMessage('time_signature', numerator=num, denominator=den,
+                          clocks_per_click=24, notated_32nd_notes_per_beat=8, time=delta))
+        else:
+            track.append(MetaMessage('set_tempo', tempo=val, time=delta))
+        prev = tick
+
     track.append(MetaMessage('end_of_track', time=0))
     return track
 
@@ -249,8 +382,134 @@ def apply_dynamics_curve(events, dinamica):
     return result
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  TRANSFORMACIONES TEMÁTICAS
+#  ARTICULACIONES
 # ══════════════════════════════════════════════════════════════════════════════
+#
+#  Cada nota puede tener articulación explícita (formato dict en melodia) o
+#  la frase puede tener una articulación global en el campo 'articulacion'.
+#  Las articulaciones modifican:
+#    - ratio de duración (legato)
+#    - desplazamiento de velocidad (vel_delta)
+#    - CC opcionales (sfz → CC11 spike, etc.)
+#
+#  Articulaciones soportadas:
+#    legato       ratio 0.97   vel_delta  0   (ligado, sostenido)
+#    tenuto       ratio 0.98   vel_delta +2   (pleno valor, ligero peso)
+#    normale      ratio 0.91   vel_delta  0   (por defecto del script)
+#    portato      ratio 0.80   vel_delta -4   (semi-separado)
+#    marcato      ratio 0.78   vel_delta +12  (acentuado, acortado)
+#    staccato     ratio 0.45   vel_delta -6   (separado)
+#    staccatissimo ratio 0.22  vel_delta -10  (muy separado)
+#    accent       ratio 0.88   vel_delta +18  (acento sf)
+#    sforzando    ratio 0.85   vel_delta +28  (sfz, pico brusco)
+#    flutter      ratio 0.91   vel_delta  0   (flutter-tongue: trémolo rápido)
+#    pizzicato    ratio 0.30   vel_delta +8   (pizz: corto y seco)
+#    snap_pizz    ratio 0.18   vel_delta +22  (Bartók pizz)
+#    sul_pont     ratio 0.91   vel_delta -15  (sul ponticello: más agudo y fino)
+#    col_legno    ratio 0.40   vel_delta -20  (col legno: seco, percutido)
+#    harmonic     ratio 0.88   vel_delta -25  (armónico: piano y etéreo)
+#
+#  Uso en la frase (articulación global):
+#    articulacion: staccato
+#
+#  Uso por nota (formato dict en melodia):
+#    - {compas: 3, beat: 0.0, dur: 1.0, nota: A4, vel: 80, art: sforzando}
+#
+#  Combinar con dinámica: la dinámica se aplica primero, la articulación después.
+# ══════════════════════════════════════════════════════════════════════════════
+
+ARTICULATIONS = {
+    #                      ratio    vel_delta
+    'legato':         (0.97,   0),
+    'tenuto':         (0.98,  +2),
+    'normale':        (0.91,   0),
+    'portato':        (0.80,  -4),
+    'marcato':        (0.78, +12),
+    'staccato':       (0.45,  -6),
+    'staccatissimo':  (0.22, -10),
+    'accent':         (0.88, +18),
+    'sforzando':      (0.85, +28),
+    'flutter':        (0.91,   0),   # el trémolo se añade como eventos extra
+    'pizzicato':      (0.30,  +8),
+    'snap_pizz':      (0.18, +22),
+    'sul_pont':       (0.91, -15),
+    'col_legno':      (0.40, -20),
+    'harmonic':       (0.88, -25),
+}
+ART_DEFAULT_RATIO = 0.91  # 'normale'
+
+
+def resolve_articulation(art_name):
+    """Devuelve (ratio, vel_delta) para una articulación dada.
+    Si es None o desconocida devuelve los valores de 'normale'."""
+    if not art_name:
+        return ART_DEFAULT_RATIO, 0
+    art_name = str(art_name).lower()
+    if art_name not in ARTICULATIONS:
+        print(f"  ⚠ articulación desconocida: '{art_name}' — usando normale")
+        return ART_DEFAULT_RATIO, 0
+    return ARTICULATIONS[art_name]
+
+
+def apply_articulation_to_events(events, art_name):
+    """Aplica articulación global a una lista de eventos (on/off).
+
+    Recalcula los ticks 'off' para ajustar la duración real de cada nota
+    según el ratio de la articulación. La velocidad de los 'on' se ajusta
+    con vel_delta.
+
+    Para flutter-tongue genera trémolo de semicorcheas sobre cada nota.
+    """
+    if not art_name or art_name == 'normale':
+        return events
+
+    ratio, vel_delta = resolve_articulation(art_name)
+
+    # Parear on/off para recalcular duración
+    paired = []
+    pending = {}
+    for ev in sorted(events, key=lambda e: e[0]):
+        tick, on_off, note, vel = ev
+        if on_off == 'on':
+            pending[note] = (tick, vel)
+        elif note in pending:
+            t_on, v = pending.pop(note)
+            paired.append((t_on, tick - t_on, note, v))
+
+    if not paired:
+        return events
+
+    result = []
+
+    if art_name == 'flutter':
+        # Trémolo rápido: sustituir cada nota por una secuencia de semicorcheas
+        step = beats_to_ticks(0.25)
+        for (t_on, dur, note, vel) in paired:
+            t = t_on
+            while t < t_on + dur - step // 2:
+                t_off = min(t + int(step * 0.80), t_on + dur)
+                new_vel = max(1, min(127, vel + vel_delta))
+                result.append((t,     'on',  note, new_vel))
+                result.append((t_off, 'off', note, 0))
+                t += step
+    else:
+        for (t_on, dur, note, vel) in paired:
+            new_dur  = max(1, int(dur * ratio))
+            new_vel  = max(1, min(127, vel + vel_delta))
+            result.append((t_on,           'on',  note, new_vel))
+            result.append((t_on + new_dur, 'off', note, 0))
+
+    return sorted(result, key=lambda e: (e[0], 0 if e[1] == 'off' else 1))
+
+
+def _extract_note_art(nota_dict):
+    """Extrae la articulación de una nota en formato dict, si existe."""
+    if not isinstance(nota_dict, dict):
+        return None
+    return nota_dict.get('art') or nota_dict.get('articulacion')
+
+
+
 def transpose_events(events, semitonos):
     return [(t,oo,max(0,min(127,note+semitonos)),v) for (t,oo,note,v) in events]
 
@@ -640,17 +899,29 @@ def resolve_leitmotiv_melody(frase, bar1, lm_index, legato=0.91):
         events.append((t_off, 'off', midi_note, 0))
     return events
 
-def process_melody(frases, bar1, legato=0.91, lm_index=None):
-    """lm_index: dict {lm_id: lm_dict} para resolver frases con origen_leitmotiv."""
+def process_melody(frases, bar1, legato=0.91, lm_index=None, seccion=None, obra=None):
+    """lm_index: dict {lm_id: lm_dict} para resolver frases con origen_leitmotiv.
+    seccion/obra: necesarios para bar_beat_to_tick_v2 (cambios de compás).
+    """
     lm_index = lm_index or {}
     events = []
+
+    def _bbtt(bar, beat):
+        if seccion is not None:
+            return bar_beat_to_tick_v2(int(bar), float(beat), seccion, obra)
+        return bar_beat_to_tick(int(bar), float(beat), bar1)
+
     for frase in frases:
+        # Articulación global de la frase (puede sobreescribirse por nota)
+        art_global = frase.get('articulacion')
+
         # ── Nivel 3: alturas del leitmotiv + ritmo de la frase ────────────
         if frase.get('origen_leitmotiv', False):
             resolved = resolve_leitmotiv_melody(frase, bar1, lm_index, legato)
             if resolved is not None:
                 resolved = apply_transformations(resolved, frase.get('transformaciones'))
                 resolved = apply_dynamics_curve(resolved, frase.get('dinamica'))
+                resolved = apply_articulation_to_events(resolved, art_global)
                 events.extend(resolved)
                 n_on = sum(1 for e in resolved if e[1]=='on')
                 print(f"    ↳ {frase.get('id','?')}: [{frase.get('leitmotiv','?')}] → {n_on} notas")
@@ -660,36 +931,183 @@ def process_melody(frases, bar1, legato=0.91, lm_index=None):
         fe = []
         for nota in frase.get('melodia',[]):
             if isinstance(nota, dict):
+                # Las notas dict con tremolo/trino se procesan en expand_tremolo_trino
+                # pero aquí gestionamos las que tienen articulación por nota
+                if 'tremolo' in nota or 'trino' in nota:
+                    continue
+                # Nota dict sin tremolo/trino: procesarla aquí con art por nota
+                try:
+                    bar  = int(nota.get('compas', frase['compases'][0]))
+                    beat = float(nota.get('beat', 0.0))
+                    dur  = float(nota.get('dur', 1.0))
+                    vel  = int(nota.get('vel', 72))
+                    n    = note_to_midi(str(nota['nota']))
+                except (ValueError, KeyError) as e:
+                    print(f"  ⚠ melodía dict: {e}"); continue
+
+                art_nota = _extract_note_art(nota) or art_global
+                ratio, vel_delta = resolve_articulation(art_nota)
+                new_vel = max(1, min(127, vel + vel_delta))
+                t_on  = _bbtt(bar, beat)
+                t_off = t_on + beats_to_ticks(dur * ratio)
+                fe.append((t_on,  'on',  n, new_vel))
+                fe.append((t_off, 'off', n, 0))
                 continue
-            bar,beat,dur,note_name,vel = nota
-            try: n=note_to_midi(note_name)
+
+            # Formato lista: [compas, beat, dur, nota, vel]
+            bar, beat, dur, note_name, vel = nota
+            try: n = note_to_midi(note_name)
             except ValueError as e: print(f"  ⚠ melodía: {e}"); continue
-            t_on=bar_beat_to_tick(int(bar),float(beat),bar1)
-            t_off=t_on+beats_to_ticks(float(dur)*legato)
-            fe.append((t_on,'on',n,int(vel))); fe.append((t_off,'off',n,0))
+
+            ratio, vel_delta = resolve_articulation(art_global)
+            new_vel = max(1, min(127, int(vel) + vel_delta))
+            t_on  = _bbtt(bar, beat)
+            t_off = t_on + beats_to_ticks(float(dur) * ratio)
+            fe.append((t_on,  'on',  n, new_vel))
+            fe.append((t_off, 'off', n, 0))
+
         fe = apply_transformations(fe, frase.get('transformaciones'))
         fe = apply_dynamics_curve(fe, frase.get('dinamica'))
+        # No aplicar articulación global otra vez aquí: ya se aplicó nota a nota
         events.extend(fe)
     events = expand_tremolo_trino(events, frases, bar1)
     return events
 
-def process_harmony(frases, bar1):
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  INVERSIONES Y BAJO INDEPENDIENTE
+# ══════════════════════════════════════════════════════════════════════════════
+#
+#  Campos nuevos en cada entrada de armonia:
+#
+#    inversion: raiz | primera | segunda | tercera
+#      Rota el voicing del acorde para que la nota más grave sea la correcta.
+#      'primera' → primera inversión (la tercera en el bajo)
+#      'segunda' → segunda inversión (la quinta en el bajo)
+#      'tercera' → tercera inversión (la séptima en el bajo, solo acordes de 4 notas)
+#
+#    bajo: "E2"
+#      Nota concreta del bajo (sustituye la nota más grave del voicing).
+#      Útil para bajo pedal, cromatismo en el bajo, o acordes con bajo añadido.
+#      Si se especifica junto con inversion, bajo tiene prioridad.
+#
+#    pedal: "A1"
+#      Nota de pedal que suena durante todo el compás independientemente
+#      del acorde. Se añade como capa separada por debajo del voicing.
+#      Útil para pedal de tónica, dominante pedal, etc.
+#
+#    bajo_independiente: ["E2", "D2", "C2", "B1"]
+#      Lista de notas de bajo (una por compás) que forman una línea
+#      melódica independiente. Anula 'bajo' si se especifica.
+#      Se puede definir a nivel de frase para toda la sección armónica.
+#
+#  Ejemplos:
+#    - {compas: 5, acorde: Am, inversion: primera}           → Am/C
+#    - {compas: 6, acorde: G,  bajo: D2}                     → G/D (seg. inversión explícita)
+#    - {compas: 7, acorde: C,  pedal: G1}                    → C sobre pedal de Sol
+#    - {compas: 8, acorde: Am, bajo: E2, inversion: primera} → bajo prevalece
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _apply_inversion(notas_midi, inversion):
+    """Rota el voicing para obtener la inversión deseada.
+
+    Asume notas_midi ordenadas de grave a agudo.
+    Cada rotación sube la nota más grave una octava.
+    """
+    if not notas_midi or not inversion or inversion == 'raiz':
+        return notas_midi
+    orden = {'primera': 1, 'segunda': 2, 'tercera': 3}
+    n = orden.get(str(inversion).lower(), 0)
+    notas = sorted(notas_midi)
+    for _ in range(n):
+        if len(notas) < 2:
+            break
+        notas = notas[1:] + [notas[0] + 12]
+    return notas
+
+
+def _apply_bajo(notas_midi, bajo_name):
+    """Sustituye la nota más grave del voicing por la nota de bajo indicada.
+
+    Si bajo_name es más grave que la nota más baja actual, se añade por debajo.
+    Si es más agudo, simplemente reemplaza la nota más baja.
+    """
+    if not notas_midi or not bajo_name:
+        return notas_midi
+    try:
+        bajo_midi = note_to_midi(str(bajo_name))
+    except ValueError as e:
+        print(f"  ⚠ bajo: {e}")
+        return notas_midi
+    notas = sorted(notas_midi)
+    # Eliminar la nota más grave y añadir el bajo
+    notas = notas[1:] + [bajo_midi]
+    return sorted(notas)
+
+
+def process_harmony(frases, bar1, seccion=None, obra=None):
     events = []
+
+    def _bbtt(bar, beat):
+        if seccion is not None:
+            return bar_beat_to_tick_v2(int(bar), float(beat), seccion, obra)
+        return bar_beat_to_tick(int(bar), float(beat), bar1)
+
     for frase in frases:
         fe = []
-        for item in frase.get('armonia',[]):
-            bar=int(item['compas']); notes=parse_chord(item.get('acorde'))
-            if not notes: continue
-            funcion=str(item.get('funcion',''))
-            vel_base=next((v for k,v in FUNCION_VEL.items() if k in funcion),56)
-            t_on=bar_beat_to_tick(bar,0.0,bar1); t_off=t_on+beats_to_ticks(3.85)
-            for n in notes: fe.append((t_on,'on',n,vel_base)); fe.append((t_off,'off',n,0))
-        arpegio_cfg=frase.get('arpegio')
+        pedal_events = []
+        bajo_ind = frase.get('bajo_independiente', [])  # línea de bajo de la frase
+
+        for idx, item in enumerate(frase.get('armonia', [])):
+            bar       = int(item['compas'])
+            acorde_str = item.get('acorde')
+            notes     = parse_chord(acorde_str)
+            if not notes:
+                continue
+
+            funcion   = str(item.get('funcion', ''))
+            vel_base  = next((v for k, v in FUNCION_VEL.items() if k in funcion), 56)
+            t_on      = _bbtt(bar, 0.0)
+            t_off     = t_on + beats_to_ticks(3.85)
+
+            # ── Inversión ────────────────────────────────────────────────────
+            inversion = item.get('inversion')
+            if inversion:
+                notes = _apply_inversion(notes, inversion)
+
+            # ── Bajo explícito (prioridad sobre inversión) ───────────────────
+            bajo_name = item.get('bajo')
+            if not bajo_name and bajo_ind:
+                bajo_name = bajo_ind[idx % len(bajo_ind)]
+            if bajo_name:
+                notes = _apply_bajo(notes, bajo_name)
+
+            for n in notes:
+                fe.append((t_on,  'on',  n, vel_base))
+                fe.append((t_off, 'off', n, 0))
+
+            # ── Pedal armónico ───────────────────────────────────────────────
+            pedal_name = item.get('pedal')
+            if pedal_name:
+                try:
+                    pedal_midi = note_to_midi(str(pedal_name))
+                    vel_pedal  = max(1, vel_base - 18)  # más suave que el acorde
+                    pedal_events.append((t_on,  'on',  pedal_midi, vel_pedal))
+                    pedal_events.append((t_off, 'off', pedal_midi, 0))
+                except ValueError as e:
+                    print(f"  ⚠ pedal: {e}")
+
+        # Arpegio
+        arpegio_cfg = frase.get('arpegio')
         if arpegio_cfg and fe:
-            fe=arpeggiate_harmony(fe,arpegio_cfg.get('patron','ascendente'),
-                                   float(arpegio_cfg.get('subdivision',0.5)))
+            fe = arpeggiate_harmony(fe, arpegio_cfg.get('patron', 'ascendente'),
+                                    float(arpegio_cfg.get('subdivision', 0.5)))
+
         events.extend(fe)
+        events.extend(pedal_events)
+
     return events
+
 
 def process_marcato(frases, bar1, patrones_extra=None):
     """patrones_extra: dict de patrones adicionales leídos del YAML (se fusionan
@@ -778,14 +1196,18 @@ DEFAULT_TRACKS = [
     {'id':'perc',   'nombre':'Percusion','canal':9,'programa':0,'capa':'percusion'},
     {'id':'ostinato','nombre':'Ostinato','canal':5,'programa':48,'capa':'ostinato'},
 ]
-def get_capa_events(capa, frases, bar1, patrones_extra=None, lm_index=None):
+def get_capa_events(capa, frases, bar1, patrones_extra=None, lm_index=None,
+                    seccion=None, obra=None):
     """Despacha al procesador correcto.
 
     patrones_extra: patrones rítmicos del YAML (se fusionan con MARCATO_PATTERNS).
     lm_index:       {lm_id: lm_dict} para resolver frases con origen_leitmotiv.
+    seccion/obra:   para bar_beat_to_tick_v2 (cambios de compás).
     """
-    if capa == 'melodia':   return process_melody(frases, bar1, lm_index=lm_index)
-    if capa == 'armonia':   return process_harmony(frases, bar1)
+    if capa == 'melodia':   return process_melody(frases, bar1, lm_index=lm_index,
+                                                   seccion=seccion, obra=obra)
+    if capa == 'armonia':   return process_harmony(frases, bar1,
+                                                    seccion=seccion, obra=obra)
     if capa == 'marcato':   return process_marcato(frases, bar1, patrones_extra)
     if capa == 'pad':       return process_pad(frases, bar1)
     if capa == 'percusion': return process_percusion(frases, bar1)
@@ -818,6 +1240,15 @@ def validate_yaml(obra):
             if prev_fin is not None and c_ini!=prev_fin+1:
                 warn(f"{prefix}: c.{c_ini} no contiguo (anterior termina en c.{prev_fin})")
             prev_fin=c_fin
+        # Validar cambios de compás
+        for cc_entry in sec.get('cambios_de_compas', []):
+            raw = cc_entry.get('nuevo_compas') or cc_entry.get('compas_nuevo', '')
+            if '/' not in str(raw):
+                err(f"{prefix}: cambios_de_compas: formato inválido '{raw}' (usar 'N/D')")
+            c_abs = cc_entry.get('compas')
+            if c_abs and 'compases' in sec:
+                if not (sec['compases'][0] <= int(c_abs) <= sec['compases'][1]):
+                    err(f"{prefix}: cambios_de_compas: c.{c_abs} fuera de la sección")
         if 'tempo' in sec:
             t=sec['tempo']
             if 'bpm_inicio' not in t: err(f"{prefix}: falta tempo.bpm_inicio")
@@ -845,11 +1276,31 @@ def validate_yaml(obra):
                 ac=item.get('acorde')
                 if ac and ac not in ('null','None',None,'—','-') and ac not in CHORD_VOICINGS:
                     err(f"{fp}: acorde '{ac}' no en CHORD_VOICINGS")
+                inv = item.get('inversion')
+                if inv and inv not in ('raiz','primera','segunda','tercera'):
+                    err(f"{fp}: inversion '{inv}' no válida (raiz|primera|segunda|tercera)")
+                bajo = item.get('bajo')
+                if bajo:
+                    try: note_to_midi(str(bajo))
+                    except (ValueError, IndexError) as e: err(f"{fp}: bajo inválido: {e}")
+                pedal = item.get('pedal')
+                if pedal:
+                    try: note_to_midi(str(pedal))
+                    except (ValueError, IndexError) as e: err(f"{fp}: pedal inválido: {e}")
+            # Articulación global de la frase
+            art = frase.get('articulacion')
+            if art and art not in ARTICULATIONS:
+                warn(f"{fp}: articulacion '{art}' desconocida")
             for nota in frase.get('melodia',[]):
                 nn=(nota.get('nota') if isinstance(nota,dict) else nota[3] if len(nota)>3 else None)
                 if nn:
                     try: note_to_midi(str(nn))
                     except (ValueError,IndexError) as e: err(f"{fp}: nota inválida: {e}")
+                # Articulación por nota
+                if isinstance(nota, dict):
+                    art_n = nota.get('art') or nota.get('articulacion')
+                    if art_n and art_n not in ARTICULATIONS:
+                        warn(f"{fp}: articulacion por nota '{art_n}' desconocida")
             marc=frase.get('marcato',{})
             if marc and marc.get('activo'):
                 patron=marc.get('patron_ritmico','default')
@@ -2027,6 +2478,11 @@ def generate_section(seccion, output_dir, obra=None):
     lm_index=_build_leitmotiv_index(obra)
     print(f"\n  Generando Sección {sid}: {seccion['nombre']}")
     print(f"  Cc.{seccion['compases'][0]}–{seccion['compases'][1]}")
+    # Mostrar cambios de compás si los hay
+    cambios = _build_meter_map(seccion, obra)
+    if len(cambios) > 1:
+        cc_str = '  '.join(f"c.{c}: {n}/{d}" for c,n,d in cambios)
+        print(f"  Compases: {cc_str}")
     mid=MidiFile(type=1,ticks_per_beat=TPB)
     mid.tracks.append(build_tempo_track(seccion,c_ini,obra))
     track_defs=obra.get('tracks',DEFAULT_TRACKS)
@@ -2037,10 +2493,12 @@ def generate_section(seccion, output_dir, obra=None):
         prog=int(tdef.get('programa',0)); capa=tdef.get('capa',tid)
         if tdef.get('contrapunto'):
             cfg=tdef['contrapunto']
-            mel_ev=get_capa_events('melodia',frases,c_ini,patrones_extra,lm_index)
+            mel_ev=get_capa_events('melodia',frases,c_ini,patrones_extra,lm_index,
+                                    seccion=seccion,obra=obra)
             events=generate_contrapunto(mel_ev,int(cfg.get('intervalo',3)),cfg.get('direccion','abajo'))
         else:
-            events=get_capa_events(capa,frases,c_ini,patrones_extra,lm_index)
+            events=get_capa_events(capa,frases,c_ini,patrones_extra,lm_index,
+                                    seccion=seccion,obra=obra)
         if events:
             total_overlaps+=check_note_overlaps(events,nom)
             mid.tracks.append(build_track(f'{nom} — Sec.{sid}',canal,prog,events))

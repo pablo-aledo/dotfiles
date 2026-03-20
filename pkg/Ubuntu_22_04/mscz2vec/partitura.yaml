@@ -5,6 +5,9 @@
 #    arpegio · contrapunto · trémolo · trino
 #    transformaciones (transponer/invertir/retrogradar/aumentar/fragmentar)
 #    curvas de dinámica · pitch_bend · control (CC) · leitmotivs
+#    [NUEVO] articulaciones por frase y por nota
+#    [NUEVO] cambios de compás dentro de una sección
+#    [NUEVO] inversiones de acorde, bajo independiente y pedal armónico
 #
 #  Uso:
 #    python generar_midi.py                    → todas las secciones
@@ -25,6 +28,45 @@
 #  Velocidad:   ppp=24  pp=36  p=48  mp=64  mf=80  f=96  ff=110  fff=120
 #  Beat:        0.0=tiempo1  1.0=tiempo2  2.0=tiempo3  3.0=tiempo4
 #  Compases:    numeración real de la obra (c.1 = primer compás)
+#
+# ── ARTICULACIONES ────────────────────────────────────────────────────────────
+#  Uso global en la frase:
+#    articulacion: staccato
+#  Uso por nota (formato dict):
+#    - {compas: 3, beat: 0.0, dur: 1.0, nota: A4, vel: 80, art: sforzando}
+#
+#  Articulaciones disponibles:
+#    legato        ratio 0.97   vel  +0   (ligado, sostenido)
+#    tenuto        ratio 0.98   vel  +2   (pleno valor, ligero peso)
+#    normale       ratio 0.91   vel  +0   (por defecto)
+#    portato       ratio 0.80   vel  -4   (semi-separado)
+#    marcato       ratio 0.78   vel +12   (acentuado)
+#    staccato      ratio 0.45   vel  -6   (separado)
+#    staccatissimo ratio 0.22   vel -10   (muy separado)
+#    accent        ratio 0.88   vel +18   (acento sf)
+#    sforzando     ratio 0.85   vel +28   (sfz)
+#    flutter       ratio 0.91   vel  +0   (flutter-tongue: trémolo de semicorcheas)
+#    pizzicato     ratio 0.30   vel  +8   (pizz)
+#    snap_pizz     ratio 0.18   vel +22   (Bartók pizz)
+#    sul_pont      ratio 0.91   vel -15   (sul ponticello)
+#    col_legno     ratio 0.40   vel -20   (col legno)
+#    harmonic      ratio 0.88   vel -25   (armónico)
+#
+# ── CAMBIOS DE COMPÁS ─────────────────────────────────────────────────────────
+#  En la sección, campo 'cambios_de_compas':
+#    cambios_de_compas:
+#      - {compas: 5, nuevo_compas: "3/4"}
+#      - {compas: 7, nuevo_compas: "5/8"}
+#  O en cada frase, campo 'compas' (aplica desde el primer compás de la frase):
+#    compas: "3/4"
+#
+# ── INVERSIONES Y BAJO INDEPENDIENTE ─────────────────────────────────────────
+#  En cada entrada de armonia:
+#    inversion: raiz | primera | segunda | tercera
+#    bajo: "E2"          (nota concreta del bajo, prioridad sobre inversión)
+#    pedal: "A1"         (pedal sostenido todo el compás, más suave que el acorde)
+#  En la frase:
+#    bajo_independiente: [E2, D2, C2, B1]   (línea de bajo, un elemento por acorde)
 # ══════════════════════════════════════════════════════════════════════════════
 
 obra:
@@ -32,7 +74,7 @@ obra:
   subtitulo: "Subtítulo opcional"
   compas: "4/4"
   tonalidad: "Am"
-  compases_totales: 48
+  compases_totales: 60
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  TRACKS — instrumentos MIDI
@@ -235,8 +277,10 @@ secciones:
           - [2, 0.25, 3.0,  C4, 48]
           - [3, 0.0,  2.0,  E4, 54]
           - [3, 2.5,  1.2,  D4, 50]
-          - [4, 0.0,  1.5,  A4, 60]
-          - [4, 2.0,  1.8,  A3, 46]
+          # Articulaciones por nota (formato dict):
+          # La nota final recibe sforzando y la última un harmonic (etéreo)
+          - {compas: 4, beat: 0.0, dur: 1.5, nota: A4, vel: 60, art: accent}
+          - {compas: 4, beat: 2.0, dur: 1.8, nota: A3, vel: 46, art: harmonic}
 
         # Curva de dinámica: interpola la velocidad de TODAS las notas
         # entre vel_ini y vel_fin según su posición temporal en la frase.
@@ -282,6 +326,15 @@ secciones:
           - {compas: 6, acorde: F,   grado: "bVI", funcion: mediante}
           - {compas: 7, acorde: Dm,  grado: "iv",  funcion: subdominante}
           - {compas: 8, acorde: Em,  grado: "v",   funcion: dominante}
+
+        # ── NUEVO: Articulación global de la frase ───────────────────────────
+        # Todas las notas de la melodía suenan con portato (ligeramente separadas)
+        articulacion: portato
+
+        # ── NUEVO: Bajo independiente ────────────────────────────────────────
+        # Línea de bajo que sustituye la nota más grave del voicing acorde a acorde.
+        # Crea un contrapunto melódico en el bajo (A2→F2→D2→B1 = línea cromática).
+        bajo_independiente: [A2, F2, D2, B1]
 
         melodia:
           - [6, 0.0,  3.5,  A4, 64]
@@ -359,14 +412,22 @@ secciones:
           Flauta con Contratema retrogradado y transpuesto.
 
         armonia:
-          - {compas: 9,  acorde: Am,  grado: "i",    funcion: tonica}
-          - {compas: 10, acorde: Dm,  grado: "iv",   funcion: subdominante}
-          - {compas: 11, acorde: G7,  grado: "bVII7",funcion: subtonica}
-          - {compas: 12, acorde: Am,  grado: "i",    funcion: tonica}
-          - {compas: 13, acorde: E7,  grado: "V7",   funcion: dominante}
-          - {compas: 14, acorde: Am,  grado: "i",    funcion: tonica}
+          - {compas: 9,  acorde: Am,  grado: "i",     funcion: tonica}
+          - {compas: 10, acorde: Dm,  grado: "iv",    funcion: subdominante,
+             inversion: primera}                        # Dm/F — bajo en Fa
+          - {compas: 11, acorde: G7,  grado: "bVII7", funcion: subtonica,
+             inversion: segunda,  pedal: A1}            # G7/D sobre pedal de La
+          - {compas: 12, acorde: Am,  grado: "i",     funcion: tonica}
+          - {compas: 13, acorde: E7,  grado: "V7",    funcion: dominante,
+             inversion: tercera,  bajo: D2}             # E7/D — sensible en el bajo
+          - {compas: 14, acorde: Am,  grado: "i",     funcion: tonica,
+             pedal: A1}                                 # Am con pedal de tónica
 
-        # Los acordes de esta frase se arpegiará en corcheas ascendentes
+        # ── NUEVO: Articulación global de la frase ───────────────────────────
+        # El motivo fragmentado suena staccato para reforzar la sensación de ruptura.
+        articulacion: staccato
+
+        # Los acordes se arpegiará en corcheas ascendentes
         arpegio:
           patron: ascendente         # ascendente | descendente | alternado
           subdivision: 0.5           # duración entre notas del arpegio en beats
@@ -462,18 +523,18 @@ secciones:
           - [15, 0.5, 0.5, C4, 84]
           - [15, 1.0, 0.5, E4, 86]
           - [15, 1.5, 2.3, A4, 90]
-          - [16, 0.0, 0.5, B4, 88]
-          - [16, 0.5, 0.5, D5, 90]
-          - [16, 1.0, 0.5, E5, 92]
-          - [16, 1.5, 2.3, Gs5,94]
-          - [17, 0.0, 3.8, A4, 88]
+          # ── NUEVO: sforzando en las notas de impulso ──────────────────────
+          - {compas: 16, beat: 0.0, dur: 0.5, nota: B4,  vel: 88, art: sforzando}
+          - {compas: 16, beat: 0.5, dur: 0.5, nota: D5,  vel: 90, art: accent}
+          - {compas: 16, beat: 1.0, dur: 0.5, nota: E5,  vel: 92, art: accent}
+          - {compas: 16, beat: 1.5, dur: 2.3, nota: Gs5, vel: 94, art: marcato}
+          # ── NUEVO: sul_pont en la nota de transición ──────────────────────
+          - {compas: 17, beat: 0.0, dur: 3.8, nota: A4,  vel: 88, art: sul_pont}
           # Notas con trémolo (formato dict) en cc.18–20
-          # tremolo: N = subdivisión (16=semicorcheas, 32=fusas)
           - {compas: 18, beat: 0.0, dur: 4.0, nota: Cs5, vel: 100, tremolo: 16}
           - {compas: 19, beat: 0.0, dur: 4.0, nota: A4,  vel: 98,  tremolo: 16}
           - {compas: 20, beat: 0.0, dur: 4.0, nota: E5,  vel: 102, tremolo: 32}
           # Notas con trino (formato dict) en cc.21–22
-          # trino: nota alternante
           - {compas: 21, beat: 0.0, dur: 4.0, nota: A5,  vel: 110, trino: Bb5}
           - {compas: 22, beat: 0.0, dur: 4.0, nota: A5,  vel: 112, trino: Bb5}
           # Descenso final
@@ -645,4 +706,295 @@ secciones:
         control:
           # Expression decrescendo final hasta el silencio
           - {compas: 33, beat: 0.0, cc: 11, curva: decrescendo,
+             beats: 16.0, valor_ini: 80, valor_fin: 10}
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN IV — demuestra los tres sistemas nuevos en profundidad:
+#
+#    1. CAMBIOS DE COMPÁS dentro de la sección (4/4 → 3/4 → 5/4 → 4/4)
+#       Ilustra música con métrica variable como Bartók o Stravinsky.
+#
+#    2. ARTICULACIONES por frase y por nota
+#       IV.1 usa articulacion: pizzicato global (cuerdas pizz)
+#       IV.2 mezcla legato, sforzando y flutter dentro de la misma frase
+#       IV.3 demuestra snap_pizz, col_legno y harmonic
+#
+#    3. INVERSIONES, BAJO INDEPENDIENTE Y PEDAL ARMÓNICO
+#       IV.1 tiene línea de bajo cromática descencente con bajo_independiente
+#       IV.2 usa inversiones para crear un bajo que desciende por grados
+#       IV.3 tiene pedal de dominante durante una modulación
+# ══════════════════════════════════════════════════════════════════════════════
+  - id: "IV"
+    nombre: "Intermezzo — Metricas Variables"
+    compases: [37, 60]
+    duracion_aprox: "65 seg"
+    tempo:
+      bpm_inicio: 96
+      bpm_fin: 96
+      tipo: fijo
+    instrumentacion:
+      - Violín solista (pizzicato, luego arco)
+      - Cuerdas armonía (inversiones)
+      - Bajo (línea cromática descendente)
+    descripcion: >
+      Intermezzo con métrica libre. El compás cambia cada pocas frases
+      para crear inestabilidad. Las cuerdas tocan pizzicato al principio,
+      col legno en el centro y armónicos al final.
+
+    # ── NUEVO: Cambios de compás para toda la sección ──────────────────────
+    # El compás inicial de la sección (4/4) se define en obra.compas.
+    # Cada entrada activa el nuevo compás a partir del compás indicado.
+    cambios_de_compas:
+      - {compas: 41, nuevo_compas: "3/4"}   # cc.41–44: vals irregular
+      - {compas: 45, nuevo_compas: "5/4"}   # cc.45–48: 3+2 (Take Five)
+      - {compas: 49, nuevo_compas: "4/4"}   # cc.49–60: regreso al 4/4
+
+    frases:
+
+      # ── IV.1: Pizzicato + bajo cromático descendente ──────────────────────
+      - id: "IV.1"
+        nombre: "Pizzicato — cuerdas percutidas"
+        compases: [37, 40]
+        leitmotiv: TEMA_B
+        descripcion: >
+          Cuerdas en pizzicato. El bajo forma una línea cromática descendente
+          A→G#→G→F# independiente del voicing del acorde. Articulación global
+          pizzicato acorta todas las notas y añade peso al ataque.
+
+        # ── NUEVO: Articulación global ──────────────────────────────────────
+        articulacion: pizzicato
+
+        armonia:
+          - {compas: 37, acorde: Am,  grado: "i",   funcion: tonica}
+          - {compas: 38, acorde: Am,  grado: "i",   funcion: tonica}
+          - {compas: 39, acorde: E7,  grado: "V7",  funcion: dominante}
+          - {compas: 40, acorde: Am,  grado: "i",   funcion: tonica}
+
+        # ── NUEVO: Bajo independiente (línea cromática) ─────────────────────
+        # Un elemento por acorde. Prevalece sobre la nota más grave del voicing.
+        # Crea el efecto de bajo "walking" o cromatismo en el bajo.
+        bajo_independiente: [A2, Gs2, G2, Fs2]
+
+        melodia:
+          # Motivo B descendente, todo pizzicato (heredado de articulacion: pizzicato)
+          - [37, 0.0, 0.8, G4, 72]
+          - [37, 1.0, 0.8, F4, 68]
+          - [37, 2.0, 0.8, E4, 70]
+          - [37, 3.0, 0.8, D4, 66]
+          - [38, 0.0, 0.8, G4, 72]
+          - [38, 1.0, 0.8, F4, 68]
+          - [38, 2.0, 0.8, E4, 70]
+          - [38, 3.0, 0.8, D4, 66]
+          - [39, 0.0, 0.8, Gs3, 76]
+          - [39, 1.0, 0.8, B3,  72]
+          - [39, 2.0, 0.8, D4,  74]
+          - [39, 3.0, 0.8, Gs4, 80]
+          # ── NUEVO: una nota con snap_pizz (acento Bartók) ─────────────────
+          - {compas: 40, beat: 0.0, dur: 0.8, nota: A4, vel: 90, art: snap_pizz}
+          - [40, 1.0, 0.8, E4, 72]
+          - [40, 2.0, 0.8, C4, 68]
+          - [40, 3.0, 1.6, A3, 60]
+
+        marcato:
+          activo: true
+          patron_ritmico: cuatro_negras
+          intensidad_inicio: 0.30
+          intensidad_fin: 0.30
+          notas_bajo: [A2, Gs2, G2, Fs2]
+
+        dinamica:
+          tipo: fijo
+          escala: 1.0
+
+      # ── IV.2: Compás 3/4 + inversiones para bajo descendente ─────────────
+      - id: "IV.2"
+        nombre: "Vals — bajo que desciende por inversiones"
+        compases: [41, 44]
+        leitmotiv: TEMA_A
+        descripcion: >
+          Compás 3/4 (activo desde cambios_de_compas). Las inversiones crean
+          un bajo que desciende por grados: Am(raíz)→Am/C→Am/E→E7/G#.
+          Mezcla de articulaciones: legato en el inicio, sforzando en el acento
+          del c.43, flutter en la nota culminante.
+
+        # Nota: el compás 3/4 viene del cambios_de_compas de la sección (c.41).
+        # También se puede especificar aquí para documentación explícita:
+        compas: "3/4"
+
+        armonia:
+          # Inversiones que crean movimiento de bajo A→C→E→G#
+          - {compas: 41, acorde: Am,  grado: "i",  funcion: tonica,
+             inversion: raiz}                        # bajo: A  (raíz)
+          - {compas: 42, acorde: Am,  grado: "i",  funcion: tonica,
+             inversion: segunda}                     # bajo: E  (quinta)
+          - {compas: 43, acorde: Am,  grado: "i",  funcion: tonica,
+             inversion: primera}                     # bajo: C  (tercera)
+          - {compas: 44, acorde: E7,  grado: "V7", funcion: dominante,
+             inversion: tercera, pedal: A1}          # E7/G# con pedal de tónica
+
+        melodia:
+          # En 3/4: beat 0=tiempo1, 1=tiempo2, 2=tiempo3
+          - [41, 0.0, 0.9, A4, 64]
+          - [41, 1.0, 0.9, C5, 66]
+          - [41, 2.0, 0.9, E5, 68]
+          - [42, 0.0, 0.9, E5, 70]
+          - [42, 1.0, 0.9, C5, 68]
+          - [42, 2.0, 0.9, A4, 66]
+          # ── NUEVO: sforzando en el tiempo fuerte de c.43 ──────────────────
+          - {compas: 43, beat: 0.0, dur: 0.9, nota: A4, vel: 72, art: sforzando}
+          - [43, 1.0, 0.9, E4, 68]
+          - [43, 2.0, 0.9, C4, 64]
+          # ── NUEVO: flutter en la nota culminante de c.44 ──────────────────
+          # Flutter genera trémolo de semicorcheas sobre la nota indicada
+          - {compas: 44, beat: 0.0, dur: 2.8, nota: Gs4, vel: 80, art: flutter}
+
+        articulacion: legato        # base legato; sobreescrita por nota donde se indica
+
+        dinamica:
+          tipo: arco
+          vel_ini: 58
+          vel_fin: 58
+
+        marcato:
+          activo: true
+          patron_ritmico: waltz
+          intensidad_inicio: 0.25
+          intensidad_fin: 0.30
+          notas_bajo: [A2, E2, C2, Gs1]
+
+      # ── IV.3: Compás 5/4 + técnicas extendidas (col_legno + harmonic) ─────
+      - id: "IV.3"
+        nombre: "Cinco por cuatro — tecnicas extendidas"
+        compases: [45, 48]
+        leitmotiv: MOTIVO_RITMICO
+        descripcion: >
+          Compás 5/4 (activo desde c.45 via cambios_de_compas). Articulaciones
+          extremas: col_legno en el bajo, harmonic en el violín. La armonía
+          usa pedal de dominante durante toda la frase para crear tensión antes
+          del regreso a 4/4 en IV.4.
+
+        compas: "5/4"
+
+        armonia:
+          # Pedal de dominante (E1) bajo acordes cambiantes = máxima tensión
+          - {compas: 45, acorde: Am,  grado: "i",    funcion: tonica,
+             pedal: E1}
+          - {compas: 46, acorde: Dm,  grado: "iv",   funcion: subdominante,
+             pedal: E1,  inversion: primera}          # Dm/F sobre pedal E
+          - {compas: 47, acorde: G7,  grado: "bVII7",funcion: subtonica,
+             pedal: E1}
+          - {compas: 48, acorde: E7,  grado: "V7",   funcion: dominante,
+             pedal: E1}                               # E7 + pedal E1 = máxima tensión
+
+        melodia:
+          # En 5/4: beats 0–4 (agrupación 3+2: acento en beat 0 y beat 3)
+          # ── NUEVO: col_legno al inicio (percutido, seco) ──────────────────
+          - {compas: 45, beat: 0.0, dur: 0.35, nota: A3, vel: 88, art: col_legno}
+          - {compas: 45, beat: 1.0, dur: 0.35, nota: C4, vel: 80, art: col_legno}
+          - {compas: 45, beat: 2.0, dur: 0.35, nota: E4, vel: 76, art: col_legno}
+          # Transición a notas normales en el grupo de 2
+          - [45, 3.0, 0.9, A4, 72]
+          - [45, 4.0, 0.9, G4, 68]
+          - {compas: 46, beat: 0.0, dur: 0.35, nota: F4, vel: 84, art: col_legno}
+          - {compas: 46, beat: 1.0, dur: 0.35, nota: A4, vel: 80, art: col_legno}
+          - {compas: 46, beat: 2.0, dur: 0.35, nota: C5, vel: 78, art: col_legno}
+          - [46, 3.0, 0.9, F4, 70]
+          - [46, 4.0, 0.9, E4, 66]
+          # ── NUEVO: harmonic en cc.47–48 (etéreo, ppp) ────────────────────
+          # harmonic = velocidad muy reducida, muy corto (efecto de sobretono)
+          - {compas: 47, beat: 0.0, dur: 4.8, nota: E5, vel: 52, art: harmonic}
+          - {compas: 48, beat: 0.0, dur: 2.8, nota: B5, vel: 46, art: harmonic}
+          - {compas: 48, beat: 3.0, dur: 1.8, nota: Gs5,vel: 50, art: harmonic}
+
+        marcato:
+          activo: true
+          patron_ritmico: compas_5_4
+          intensidad_inicio: 0.20
+          intensidad_fin: 0.28
+          notas_bajo: [A2, D2, G2, E2]
+
+        dinamica:
+          tipo: crescendo
+          vel_ini: 44
+          vel_fin: 72
+
+        pitch_bend:
+          - compas: 47
+            beat: 0.0
+            tipo: vibrato
+            amplitud: 0.15
+            velocidad: 4.0
+            beats: 4.8
+
+      # ── IV.4: Regreso a 4/4, arco final, inversiones cadenciales ──────────
+      - id: "IV.4"
+        nombre: "Regreso — cadencia con bajo coral"
+        compases: [49, 60]
+        leitmotiv: RESOLUCION
+        descripcion: >
+          Regreso al 4/4 (c.49). Armonía de coral con inversiones que crean
+          un bajo suave por grados conjuntos. Articulación tenuto en toda
+          la melodía para dar peso y plenitud al final de la sección.
+
+        articulacion: tenuto
+
+        armonia:
+          # Progresión con bajo que desciende A→G→F→E→A (línea coral)
+          - {compas: 49, acorde: Am,    grado: "i",    funcion: tonica,
+             bajo: A2}
+          - {compas: 50, acorde: Am,    grado: "i",    funcion: tonica,
+             inversion: segunda,  bajo: E2}             # Am/E
+          - {compas: 51, acorde: F,     grado: "bVI",  funcion: mediante,
+             inversion: primera,  bajo: A2}             # F/A
+          - {compas: 52, acorde: Dm,    grado: "iv",   funcion: subdominante,
+             inversion: primera,  bajo: F2}             # Dm/F
+          - {compas: 53, acorde: G7,    grado: "bVII7",funcion: subtonica,
+             bajo: G2}
+          - {compas: 54, acorde: Cmaj7, grado: "bIII△",funcion: mediante,
+             bajo: G2}                                  # Cmaj7/G
+          - {compas: 55, acorde: Fmaj7, grado: "bVI△", funcion: mediante,
+             inversion: primera,  bajo: A2}             # Fmaj7/A
+          - {compas: 56, acorde: E7,    grado: "V7",   funcion: dominante,
+             inversion: segunda,  bajo: B2}             # E7/B
+          - {compas: 57, acorde: Am,    grado: "i",    funcion: tonica,
+             pedal: A1}
+          - {compas: 58, acorde: Am,    grado: "i",    funcion: tonica,
+             pedal: A1}
+          - {compas: 59, acorde: E7,    grado: "V7",   funcion: dominante,
+             pedal: A1}
+          - {compas: 60, acorde: Am,    grado: "i",    funcion: tonica,
+             pedal: A1}
+
+        melodia:
+          # Melodía coral lenta — todo tenuto (heredado de articulacion: tenuto)
+          - [49, 0.0, 3.8, A4, 64]
+          - [50, 0.0, 1.9, E4, 62]
+          - [50, 2.0, 1.9, C4, 60]
+          - [51, 0.0, 3.8, A3, 58]
+          - [52, 0.0, 1.9, F3, 60]
+          - [52, 2.0, 1.9, A3, 62]
+          - [53, 0.0, 3.8, G3, 60]
+          - [54, 0.0, 3.8, E4, 62]
+          - [55, 0.0, 3.8, A4, 64]
+          - [56, 0.0, 3.8, Gs4,66]
+          # Cadencia final — una nota harmonic final para disolver
+          - [57, 0.0, 3.8, A4, 60]
+          - [58, 0.0, 3.8, E4, 56]
+          - [59, 0.0, 3.8, Gs4,58]
+          - {compas: 60, beat: 0.0, dur: 3.95, nota: A4, vel: 36, art: harmonic}
+
+        marcato:
+          activo: true
+          patron_ritmico: cuatro_negras
+          intensidad_inicio: 0.20
+          intensidad_fin: 0.05
+          notas_bajo: [A2, E2, F2, D2, G2, G2, F2, B2, A2, A2, E2, A2]
+
+        dinamica:
+          tipo: decrescendo
+          vel_ini: 68
+          vel_fin: 28
+
+        control:
+          - {compas: 57, beat: 0.0, cc: 11, curva: decrescendo,
              beats: 16.0, valor_ini: 80, valor_fin: 10}
