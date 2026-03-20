@@ -237,6 +237,223 @@ def _build_meter_map(seccion, obra=None):
     return cambios
 
 
+def _build_key_map_for_section(seccion, obra=None):
+    """Construye lista ordenada de (compas_abs, tonalidad_str) para UNA sección.
+
+    Fuentes (en orden de prioridad, de menos a más):
+      1. obra.tonalidad                    → valor de arranque global
+      2. seccion.tonalidad                 → cambia al inicio de la sección
+      3. seccion.cambios_de_tonalidad[]    → cambios dentro de la sección
+         formato: [{compas: N, nueva_tonalidad: "C"}, ...]
+      4. Por cada frase con campo 'tonalidad' → aplica desde frase['compases'][0]
+
+    Retorna lista ordenada: [(compas_abs, key_str), ...]
+    """
+    obra = obra or {}
+    key_global = obra.get('obra', {}).get('tonalidad') or obra.get('tonalidad', 'C')
+    key_sec    = seccion.get('tonalidad') or key_global
+    c_ini      = seccion['compases'][0]
+
+    result = [(c_ini, key_sec)]
+
+    # Cambios explícitos dentro de la sección
+    for entry in seccion.get('cambios_de_tonalidad', []):
+        c_abs = int(entry['compas'])
+        nueva = entry.get('nueva_tonalidad') or entry.get('tonalidad')
+        if nueva:
+            result.append((c_abs, str(nueva)))
+        else:
+            print(f"  ⚠ cambios_de_tonalidad: falta 'nueva_tonalidad' en c.{c_abs}")
+
+    # Override por frase
+    for frase in seccion.get('frases', []):
+        ton_frase = frase.get('tonalidad')
+        if ton_frase:
+            result.append((int(frase['compases'][0]), str(ton_frase)))
+
+    result.sort(key=lambda x: x[0])
+    # Eliminar duplicados consecutivos con la misma tonalidad
+    deduped = [result[0]]
+    for item in result[1:]:
+        if item[1] != deduped[-1][1]:
+            deduped.append(item)
+    return deduped
+
+
+def _build_global_key_map(secciones, obra=None):
+    """Construye el mapa de armaduras para TODA la obra como lista de
+    (tick_abs, key_str), lista de eventos listos para insertar en el
+    track de tempo global.
+
+    tick_abs es relativo al inicio de la obra (tick 0 = compás 1 beat 0).
+    Respeta cambios de compás dentro de cada sección para calcular los
+    ticks correctamente.
+    """
+    obra = obra or {}
+    events = []       # (tick_abs, key_str)
+    tick_cursor = 0
+    prev_key = None
+
+    for sec in secciones:
+        key_map = _build_key_map_for_section(sec, obra)
+        c_ini   = sec['compases'][0]
+
+        # Calcular tick de cada compás dentro de la sección
+        def _bar_tick_in_section(bar_abs):
+            """Tick relativo al inicio de la sección para bar_abs."""
+            cambios = _build_meter_map(sec, obra)
+            acc = 0
+            current_num, current_den = cambios[0][1], cambios[0][2]
+            for i in range(bar_abs - c_ini):
+                b = c_ini + i
+                for (c_abs, n, d) in cambios:
+                    if c_abs == b:
+                        current_num, current_den = n, d
+                beats = current_num * (4 / current_den)
+                acc += int(round(beats * TPB))
+            return acc
+
+        for (bar_abs, key_str) in key_map:
+            tick_abs = tick_cursor + _bar_tick_in_section(bar_abs)
+            if key_str != prev_key:
+                events.append((tick_abs, key_str))
+                prev_key = key_str
+
+        # Avanzar tick_cursor al final de esta sección
+        cambios = _build_meter_map(sec, obra)
+        current_num, current_den = cambios[0][1], cambios[0][2]
+        n_bars = sec['compases'][1] - sec['compases'][0] + 1
+        for i in range(n_bars):
+            bar_abs = c_ini + i
+            for (c_abs, n, d) in cambios:
+                if c_abs == bar_abs:
+                    current_num, current_den = n, d
+            beats = current_num * (4 / current_den)
+            tick_cursor += int(round(beats * TPB))
+
+    return events
+
+
+def build_global_tempo_track(secciones, obra, titulo_override=None):
+    """Construye el track de tempo maestro para toda la obra.
+
+    Incluye correctamente:
+      - time_signature inicial y todos los cambios de compás por sección
+      - key_signature inicial y todos los cambios de armadura por sección
+        (tanto cambios entre secciones como cambios_de_tonalidad intra-sección)
+      - set_tempo con interpolación según tipo (fijo/accelerando/rallentando/rubato)
+
+    Sustituye a las tres implementaciones duplicadas que existían antes
+    (_make_global_tempo_track en stems_completa, _global_tempo_track en
+    leitmotivs, y el bloque inline en generate_full_obra).
+    """
+    obra_meta   = obra.get('obra', {})
+    titulo      = titulo_override or obra_meta.get('titulo', '')
+    key_global  = obra_meta.get('tonalidad') or obra.get('tonalidad', 'C')
+
+    tt = MidiTrack()
+    tt.append(MetaMessage('track_name', name=ascii_safe(titulo), time=0))
+
+    # ── Recopilar todos los eventos (tick_abs, tipo, valor) ─────────────────
+    all_events = []   # (tick_abs, 'ts'/'key'/'tempo', valor)
+
+    tick_cursor = 0
+    prev_key = None
+
+    for sec in secciones:
+        c_ini, c_fin = sec['compases']
+        n_bars       = c_fin - c_ini + 1
+        t_cfg        = sec.get('tempo', {})
+        bpm_i        = float(t_cfg.get('bpm_inicio', 120))
+        bpm_f        = float(t_cfg.get('bpm_fin', bpm_i))
+        tipo         = t_cfg.get('tipo', 'fijo')
+        amp          = float(t_cfg.get('rubato_amplitud', 2.5))
+        cambios_ts   = _build_meter_map(sec, obra)
+        key_map      = _build_key_map_for_section(sec, obra)
+
+        # Precalcular tick relativo de cada compás dentro de la sección
+        bar_ticks = []   # bar_ticks[i] = tick relativo al inicio de la sección
+        acc = 0
+        cur_num, cur_den = cambios_ts[0][1], cambios_ts[0][2]
+        for i in range(n_bars + 1):
+            bar_ticks.append(acc)
+            if i < n_bars:
+                b = c_ini + i
+                for (c_abs, n, d) in cambios_ts:
+                    if c_abs == b:
+                        cur_num, cur_den = n, d
+                acc += int(round(cur_num * (4 / cur_den) * TPB))
+
+        # time_signature events
+        cur_num, cur_den = cambios_ts[0][1], cambios_ts[0][2]
+        all_events.append((tick_cursor + bar_ticks[0], 'ts', (cur_num, cur_den)))
+        for i in range(n_bars):
+            b = c_ini + i
+            for (c_abs, n, d) in cambios_ts:
+                if c_abs == b and (n != cur_num or d != cur_den):
+                    cur_num, cur_den = n, d
+                    all_events.append((tick_cursor + bar_ticks[i], 'ts', (cur_num, cur_den)))
+
+        # key_signature events
+        for (bar_abs, key_str) in key_map:
+            idx = bar_abs - c_ini
+            tick_abs = tick_cursor + bar_ticks[min(idx, n_bars)]
+            if key_str != prev_key:
+                all_events.append((tick_abs, 'key', key_str))
+                prev_key = key_str
+
+        # tempo events
+        for i in range(n_bars + 1):
+            t = i / n_bars if n_bars > 0 else 0
+            if tipo in ('accelerando', 'rallentando'):
+                bpm = bpm_i + (bpm_f - bpm_i) * t
+                all_events.append((tick_cursor + bar_ticks[i], 'tempo', mido.bpm2tempo(bpm)))
+            elif tipo == 'rubato':
+                bpm = bpm_i + (bpm_f - bpm_i) * t + amp * math.sin(i * 0.8)
+                all_events.append((tick_cursor + bar_ticks[i], 'tempo', mido.bpm2tempo(max(30, bpm))))
+            elif i == 0:
+                all_events.append((tick_cursor, 'tempo', mido.bpm2tempo(bpm_i)))
+
+        tick_cursor += bar_ticks[n_bars]   # avanzar al inicio de la siguiente sección
+
+    # ── Emitir eventos ordenados ─────────────────────────────────────────────
+    # Orden de prioridad dentro del mismo tick: ts → key → tempo
+    TYPE_ORDER = {'ts': 0, 'key': 1, 'tempo': 2}
+    all_events.sort(key=lambda e: (e[0], TYPE_ORDER.get(e[1], 9)))
+
+    # Deduplicar key_signature consecutivos con la misma tonalidad
+    deduped = []
+    last_key_emitted = None
+    for ev in all_events:
+        if ev[1] == 'key':
+            if ev[2] != last_key_emitted:
+                deduped.append(ev)
+                last_key_emitted = ev[2]
+        else:
+            deduped.append(ev)
+    all_events = deduped
+
+    # Asegurar que el primer evento sea una armadura
+    if not any(e[1] == 'key' for e in all_events):
+        all_events.insert(0, (0, 'key', key_global))
+
+    prev = 0
+    for (tick, etype, val) in all_events:
+        delta = max(0, tick - prev)
+        if etype == 'ts':
+            num, den = val
+            tt.append(MetaMessage('time_signature', numerator=num, denominator=den,
+                       clocks_per_click=24, notated_32nd_notes_per_beat=8, time=delta))
+        elif etype == 'key':
+            tt.append(MetaMessage('key_signature', key=val, time=delta))
+        else:
+            tt.append(MetaMessage('set_tempo', tempo=val, time=delta))
+        prev = tick
+
+    tt.append(MetaMessage('end_of_track', time=0))
+    return tt
+
+
 def bar_beat_to_tick_v2(bar, beat, seccion, obra=None):
     """Versión de bar_beat_to_tick que respeta cambios de compás.
 
@@ -277,58 +494,66 @@ def build_tempo_track(seccion, bar1, obra=None):
                   name=ascii_safe(f"Sec.{seccion['id']} -- tempo"), time=0))
 
     cambios = _build_meter_map(seccion, obra)
-    key = seccion.get('tonalidad') or obra.get('tonalidad','C')
-    track.append(MetaMessage('key_signature', key=key, time=0))
+    key_map = _build_key_map_for_section(seccion, obra)   # NEW
+    c_ini, c_fin = seccion['compases']
+    n_bars = c_fin - c_ini + 1
 
     t_cfg   = seccion.get('tempo',{})
     bpm_ini = float(t_cfg.get('bpm_inicio',120))
     bpm_fin = float(t_cfg.get('bpm_fin', bpm_ini))
     tipo    = t_cfg.get('tipo','fijo')
     amp     = float(t_cfg.get('rubato_amplitud',2.5))
-    c_ini, c_fin = seccion['compases']
-    n_bars = c_fin - c_ini + 1
 
-    # Construir lista de eventos: (tick_abs, tipo, valor)
-    # tipo puede ser 'ts' (time_signature) o 'tempo'
+    # Precalcular tick relativo de cada compás
+    bar_ticks = []
+    acc = 0
+    cur_num, cur_den = cambios[0][1], cambios[0][2]
+    for i in range(n_bars + 1):
+        bar_ticks.append(acc)
+        if i < n_bars:
+            b = c_ini + i
+            for (c_abs, n, d) in cambios:
+                if c_abs == b:
+                    cur_num, cur_den = n, d
+            acc += int(round(cur_num * (4 / cur_den) * TPB))
+
+    # Construir lista de eventos (tick_rel, tipo, valor)
     events = []
 
-    # Eventos de time_signature
-    current_num, current_den = cambios[0][1], cambios[0][2]
-    tick_acc = 0
+    # time_signature
+    cur_num, cur_den = cambios[0][1], cambios[0][2]
+    events.append((bar_ticks[0], 'ts', (cur_num, cur_den)))
     for i in range(n_bars):
-        bar_abs = c_ini + i
+        b = c_ini + i
         for (c_abs, n, d) in cambios:
-            if c_abs == bar_abs and (n != current_num or d != current_den):
-                events.append((tick_acc, 'ts', (n, d)))
-                current_num, current_den = n, d
-        beats_per_bar = current_num * (4 / current_den)
-        if i == 0:
-            events.insert(0, (0, 'ts', (current_num, current_den)))
-        tick_acc += int(round(beats_per_bar * TPB))
+            if c_abs == b and (n != cur_num or d != cur_den):
+                cur_num, cur_den = n, d
+                events.append((bar_ticks[i], 'ts', (cur_num, cur_den)))
 
-    # Eventos de tempo
-    tick_acc = 0
-    current_num, current_den = cambios[0][1], cambios[0][2]
+    # key_signature — inicial + cambios dentro de la sección
+    prev_key = None
+    for (bar_abs, key_str) in key_map:
+        idx = bar_abs - c_ini
+        tick_rel = bar_ticks[min(idx, n_bars)]
+        if key_str != prev_key:
+            events.append((tick_rel, 'key', key_str))
+            prev_key = key_str
+
+    # tempo
     for i in range(n_bars + 1):
-        bar_abs = c_ini + i
-        for (c_abs, n, d) in cambios:
-            if c_abs == bar_abs:
-                current_num, current_den = n, d
         t = i / n_bars if n_bars > 0 else 0
         if tipo in ('accelerando', 'rallentando'):
             bpm = bpm_ini + (bpm_fin - bpm_ini) * t
-            events.append((tick_acc, 'tempo', mido.bpm2tempo(bpm)))
+            events.append((bar_ticks[i], 'tempo', mido.bpm2tempo(bpm)))
         elif tipo == 'rubato':
             bpm = bpm_ini + (bpm_fin - bpm_ini) * t + amp * math.sin(i * 0.8)
-            events.append((tick_acc, 'tempo', mido.bpm2tempo(max(30, bpm))))
+            events.append((bar_ticks[i], 'tempo', mido.bpm2tempo(max(30, bpm))))
         elif i == 0:
             events.append((0, 'tempo', mido.bpm2tempo(bpm_ini)))
-        if i < n_bars:
-            beats_per_bar = current_num * (4 / current_den)
-            tick_acc += int(round(beats_per_bar * TPB))
 
-    # Emitir eventos ordenados por tick
-    events.sort(key=lambda e: (e[0], 0 if e[1] == 'ts' else 1))
+    TYPE_ORDER = {'ts': 0, 'key': 1, 'tempo': 2}
+    events.sort(key=lambda e: (e[0], TYPE_ORDER.get(e[1], 9)))
+
     prev = 0
     for (tick, etype, val) in events:
         delta = max(0, tick - prev)
@@ -336,6 +561,8 @@ def build_tempo_track(seccion, bar1, obra=None):
             num, den = val
             track.append(MetaMessage('time_signature', numerator=num, denominator=den,
                           clocks_per_click=24, notated_32nd_notes_per_beat=8, time=delta))
+        elif etype == 'key':
+            track.append(MetaMessage('key_signature', key=val, time=delta))
         else:
             track.append(MetaMessage('set_tempo', tempo=val, time=delta))
         prev = tick
@@ -1249,6 +1476,15 @@ def validate_yaml(obra):
             if c_abs and 'compases' in sec:
                 if not (sec['compases'][0] <= int(c_abs) <= sec['compases'][1]):
                     err(f"{prefix}: cambios_de_compas: c.{c_abs} fuera de la sección")
+        # Validar cambios de tonalidad
+        for ct_entry in sec.get('cambios_de_tonalidad', []):
+            nueva = ct_entry.get('nueva_tonalidad') or ct_entry.get('tonalidad')
+            if not nueva:
+                err(f"{prefix}: cambios_de_tonalidad: falta 'nueva_tonalidad'")
+            c_abs = ct_entry.get('compas')
+            if c_abs and 'compases' in sec:
+                if not (sec['compases'][0] <= int(c_abs) <= sec['compases'][1]):
+                    err(f"{prefix}: cambios_de_tonalidad: c.{c_abs} fuera de la sección")
         if 'tempo' in sec:
             t=sec['tempo']
             if 'bpm_inicio' not in t: err(f"{prefix}: falta tempo.bpm_inicio")
@@ -2595,49 +2831,25 @@ def generate_stems_completa(obra, output_dir):
     generated      = []
     print(f"\n  Stems obra completa → {stems_root}/")
 
-    # Calcular tick_offset de cada sección
+    # Calcular tick_offset de cada sección respetando cambios de compás
     tick_offsets = []
     cursor = 0
     for sec in secciones:
         tick_offsets.append(cursor)
-        n_bars = sec['compases'][1] - sec['compases'][0] + 1
-        cursor += n_bars * TICKS_PER_BAR
+        cambios = _build_meter_map(sec, obra)
+        c_ini, c_fin = sec['compases']
+        n_bars = c_fin - c_ini + 1
+        cur_num, cur_den = cambios[0][1], cambios[0][2]
+        for i in range(n_bars):
+            b = c_ini + i
+            for (c_abs, n, d) in cambios:
+                if c_abs == b:
+                    cur_num, cur_den = n, d
+            cursor += int(round(cur_num * (4 / cur_den) * TPB))
 
-    # Pista de tempo global (reutilizada en todos los stems)
-    def _make_global_tempo_track():
-        obra_meta = obra.get('obra', {})
-        num, den  = get_time_signature(obra_meta, obra)
-        key       = obra_meta.get('tonalidad', obra.get('tonalidad','C'))
-        titulo    = obra_meta.get('titulo','')
-        tt = MidiTrack()
-        tt.append(MetaMessage('track_name', name=ascii_safe(titulo), time=0))
-        tt.append(MetaMessage('time_signature', numerator=num, denominator=den,
-                   clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
-        tt.append(MetaMessage('key_signature', key=key, time=0))
-        all_tempo=[]; tc=0
-        for sec in secciones:
-            c_ini,c_fin = sec['compases']; n_bars = c_fin-c_ini+1
-            t_cfg=sec.get('tempo',{})
-            bpm_i=float(t_cfg.get('bpm_inicio',120)); bpm_f=float(t_cfg.get('bpm_fin',bpm_i))
-            tipo=t_cfg.get('tipo','fijo'); amp=float(t_cfg.get('rubato_amplitud',2.5))
-            if tipo in ('accelerando','rallentando'):
-                for i in range(n_bars+1):
-                    bpm=bpm_i+(bpm_f-bpm_i)*i/n_bars
-                    all_tempo.append((tc+i*TICKS_PER_BAR, mido.bpm2tempo(bpm)))
-            elif tipo=='rubato':
-                for i in range(n_bars+1):
-                    bpm=bpm_i+(bpm_f-bpm_i)*i/max(n_bars,1)+amp*math.sin(i*0.8)
-                    all_tempo.append((tc+i*TICKS_PER_BAR, mido.bpm2tempo(max(30,bpm))))
-            else:
-                all_tempo.append((tc, mido.bpm2tempo(bpm_i)))
-            tc += n_bars*TICKS_PER_BAR
-        prev=0
-        for (tick,tempo) in all_tempo:
-            tt.append(MetaMessage('set_tempo',tempo=tempo,time=tick-prev)); prev=tick
-        tt.append(MetaMessage('end_of_track',time=0))
-        return tt
-
-    global_tempo = _make_global_tempo_track()
+    # Pista de tempo global con armaduras correctas — una sola vez
+    import copy as _copy
+    global_tempo = build_global_tempo_track(secciones, obra)
 
     for idx, tdef in enumerate(track_defs, 1):
         tid   = tdef.get('id', tdef.get('capa','?'))
@@ -2648,27 +2860,28 @@ def generate_stems_completa(obra, output_dir):
 
         all_events = []
         for sec, offset in zip(secciones, tick_offsets):
-            c_ini  = sec['compases'][0]; frases=sec.get('frases',[])
+            c_ini  = sec['compases'][0]; frases = sec.get('frases', [])
             if tdef.get('contrapunto'):
                 cfg    = tdef['contrapunto']
-                mel_ev = get_capa_events('melodia', frases, c_ini, patrones_extra)
+                mel_ev = get_capa_events('melodia', frases, c_ini, patrones_extra,
+                                          lm_index, seccion=sec, obra=obra)
                 evs    = generate_contrapunto(mel_ev,
-                             int(cfg.get('intervalo',3)), cfg.get('direccion','abajo'))
+                             int(cfg.get('intervalo', 3)), cfg.get('direccion', 'abajo'))
             else:
-                evs = get_capa_events(capa, frases, c_ini, patrones_extra, lm_index)
-            for (t,oo,n,v) in evs:
-                all_events.append((t+offset, oo, n, v))
+                evs = get_capa_events(capa, frases, c_ini, patrones_extra,
+                                       lm_index, seccion=sec, obra=obra)
+            for (t, oo, n, v) in evs:
+                all_events.append((t + offset, oo, n, v))
 
         if not all_events:
             print(f"    — {nom}: sin eventos, omitido"); continue
 
         mid = MidiFile(type=1, ticks_per_beat=TPB)
-        import copy as _copy
         mid.tracks.append(_copy.deepcopy(global_tempo))
         check_note_overlaps(all_events, nom)
         mid.tracks.append(build_track(nom, canal, prog, all_events))
 
-        n_on  = sum(1 for e in all_events if e[1]=='on')
+        n_on  = sum(1 for e in all_events if e[1] == 'on')
         fname = f"{idx:02d}_{_safe_filename(nom)}_COMPLETA.mid"
         path  = os.path.join(stems_root, fname)
         mid.save(path)
@@ -2716,48 +2929,25 @@ def generate_leitmotiv_midis(obra, output_dir):
 
     print(f"\n  Exportando leitmotivs → {lm_dir}/")
 
-    # Calcular tick_offset de cada sección (posición real en la obra)
+    # Calcular tick_offset de cada sección respetando cambios de compás
     tick_offsets = {}
     cursor = 0
     for sec in secciones:
         tick_offsets[sec['id']] = cursor
-        n_bars = sec['compases'][1] - sec['compases'][0] + 1
-        cursor += n_bars * TICKS_PER_BAR
+        cambios = _build_meter_map(sec, obra)
+        c_ini, c_fin = sec['compases']
+        n_bars = c_fin - c_ini + 1
+        cur_num, cur_den = cambios[0][1], cambios[0][2]
+        for i in range(n_bars):
+            b = c_ini + i
+            for (c_abs, n, d) in cambios:
+                if c_abs == b:
+                    cur_num, cur_den = n, d
+            cursor += int(round(cur_num * (4 / cur_den) * TPB))
 
-    # Construir pista de tempo global (idéntica a generate_full_obra)
-    def _global_tempo_track():
-        obra_meta = obra.get('obra', {})
-        num, den  = get_time_signature(obra_meta, obra)
-        key       = obra_meta.get('tonalidad', obra.get('tonalidad', 'C'))
-        titulo    = obra_meta.get('titulo', '')
-        tt = MidiTrack()
-        tt.append(MetaMessage('track_name', name=ascii_safe(titulo), time=0))
-        tt.append(MetaMessage('time_signature', numerator=num, denominator=den,
-                   clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
-        tt.append(MetaMessage('key_signature', key=key, time=0))
-        all_t = []; tc = 0
-        for sec in secciones:
-            c_ini, c_fin = sec['compases']; n_bars = c_fin - c_ini + 1
-            t_cfg = sec.get('tempo', {}); amp = float(t_cfg.get('rubato_amplitud', 2.5))
-            bpm_i = float(t_cfg.get('bpm_inicio', 120))
-            bpm_f = float(t_cfg.get('bpm_fin', bpm_i))
-            tipo  = t_cfg.get('tipo', 'fijo')
-            if tipo in ('accelerando', 'rallentando'):
-                for i in range(n_bars + 1):
-                    all_t.append((tc + i*TICKS_PER_BAR,
-                                  mido.bpm2tempo(bpm_i + (bpm_f-bpm_i)*i/n_bars)))
-            elif tipo == 'rubato':
-                for i in range(n_bars + 1):
-                    bpm = bpm_i+(bpm_f-bpm_i)*i/max(n_bars,1)+amp*math.sin(i*0.8)
-                    all_t.append((tc + i*TICKS_PER_BAR, mido.bpm2tempo(max(30, bpm))))
-            else:
-                all_t.append((tc, mido.bpm2tempo(bpm_i)))
-            tc += n_bars * TICKS_PER_BAR
-        prev = 0
-        for (tick, tempo) in all_t:
-            tt.append(MetaMessage('set_tempo', tempo=tempo, time=tick-prev)); prev=tick
-        tt.append(MetaMessage('end_of_track', time=0))
-        return tt
+    # Pista de tempo global con armaduras correctas
+    import copy as _copy
+    _cached_global_tempo = build_global_tempo_track(secciones, obra)
 
     # Recopilar frases agrupadas por leitmotiv
     # Estructura: {lm_id: [(sec_id, offset, c_ini, frase), ...]}
@@ -2792,8 +2982,7 @@ def generate_leitmotiv_midis(obra, output_dir):
         print(f"\n  [{lm_id}]  {lm_nombre}  ({n_apariciones} aparición/es)")
 
         mid = MidiFile(type=1, ticks_per_beat=TPB)
-        import copy as _copy
-        mid.tracks.append(_copy.deepcopy(_global_tempo_track()))
+        mid.tracks.append(_copy.deepcopy(_cached_global_tempo))
 
         total_notas = 0
 
@@ -2842,57 +3031,73 @@ def generate_leitmotiv_midis(obra, output_dir):
 #  OBRA COMPLETA CONCATENADA
 # ══════════════════════════════════════════════════════════════════════════════
 def generate_full_obra(obra, output_dir):
-    titulo=obra['obra']['titulo']; secciones=obra.get('secciones',[])
-    track_defs=obra.get('tracks',DEFAULT_TRACKS)
+    titulo    = obra['obra']['titulo']
+    secciones = obra.get('secciones', [])
+    track_defs = obra.get('tracks', DEFAULT_TRACKS)
     print(f"\n  Generando obra completa: {titulo}")
-    mid=MidiFile(type=1,ticks_per_beat=TPB)
-    tempo_track=MidiTrack(); key=obra.get('tonalidad','C')
-    num,den=get_time_signature(obra.get('obra',{}),obra)
-    tempo_track.append(MetaMessage('track_name',name=ascii_safe(titulo),time=0))
-    tempo_track.append(MetaMessage('time_signature',numerator=num,denominator=den,
-                        clocks_per_click=24,notated_32nd_notes_per_beat=8,time=0))
-    tempo_track.append(MetaMessage('key_signature',key=key,time=0))
-    all_tempo_events=[]; tick_cursor=0
+
+    mid = MidiFile(type=1, ticks_per_beat=TPB)
+    mid.tracks.append(build_global_tempo_track(secciones, obra, titulo))
+
+    patrones_extra = _load_patrones(obra)
+    lm_index       = _build_leitmotiv_index(obra)
+    all_events     = {tdef['id']: [] for tdef in track_defs}
+
+    # Calcular tick offsets respetando cambios de compás por sección
+    tick_offsets = []
+    tick_cursor  = 0
     for sec in secciones:
-        c_ini,c_fin=sec['compases']; n_bars=c_fin-c_ini+1; t_cfg=sec.get('tempo',{})
-        bpm_ini=float(t_cfg.get('bpm_inicio',120)); bpm_fin=float(t_cfg.get('bpm_fin',bpm_ini))
-        tipo=t_cfg.get('tipo','fijo'); amp=float(t_cfg.get('rubato_amplitud',2.5))
-        if tipo in ('accelerando','rallentando'):
-            for i in range(n_bars+1):
-                t=i/n_bars; bpm=bpm_ini+(bpm_fin-bpm_ini)*t
-                all_tempo_events.append((tick_cursor+i*TICKS_PER_BAR,mido.bpm2tempo(bpm)))
-        elif tipo=='rubato':
-            for i in range(n_bars+1):
-                t=i/max(n_bars,1); bpm=bpm_ini+(bpm_fin-bpm_ini)*t+amp*math.sin(i*0.8)
-                all_tempo_events.append((tick_cursor+i*TICKS_PER_BAR,mido.bpm2tempo(max(30,bpm))))
-        else:
-            all_tempo_events.append((tick_cursor,mido.bpm2tempo(bpm_ini)))
-        tick_cursor+=n_bars*TICKS_PER_BAR
-    prev=0
-    for (tick,tempo) in all_tempo_events:
-        tempo_track.append(MetaMessage('set_tempo',tempo=tempo,time=tick-prev)); prev=tick
-    tempo_track.append(MetaMessage('end_of_track',time=0)); mid.tracks.append(tempo_track)
-    patrones_extra=_load_patrones(obra)
-    lm_index=_build_leitmotiv_index(obra)
-    all_events={tdef['id']:[] for tdef in track_defs}; tick_offset=0
-    for sec in secciones:
-        c_ini,c_fin=sec['compases']; n_bars=c_fin-c_ini+1; frases=sec.get('frases',[])
+        tick_offsets.append(tick_cursor)
+        cambios = _build_meter_map(sec, obra)
+        c_ini, c_fin = sec['compases']
+        n_bars = c_fin - c_ini + 1
+        cur_num, cur_den = cambios[0][1], cambios[0][2]
+        for i in range(n_bars):
+            b = c_ini + i
+            for (c_abs, n, d) in cambios:
+                if c_abs == b:
+                    cur_num, cur_den = n, d
+            tick_cursor += int(round(cur_num * (4 / cur_den) * TPB))
+
+    for sec, tick_offset in zip(secciones, tick_offsets):
+        c_ini  = sec['compases'][0]
+        frases = sec.get('frases', [])
         for tdef in track_defs:
-            tid=tdef['id']; capa=tdef.get('capa',tid)
-            for (tick,on_off,note,vel) in get_capa_events(capa,frases,c_ini,patrones_extra,lm_index):
-                all_events[tid].append((tick+tick_offset,on_off,note,vel))
-        n_mel=sum(1 for e in all_events.get('melodia',[]) if e[1]=='on' and e[0]>=tick_offset)
-        print(f"    Sec.{sec['id']:3s}  mel:{n_mel:3d}  offset:{tick_offset}"); tick_offset+=n_bars*TICKS_PER_BAR
+            tid  = tdef['id']
+            capa = tdef.get('capa', tid)
+            if tdef.get('contrapunto'):
+                cfg    = tdef['contrapunto']
+                mel_ev = get_capa_events('melodia', frases, c_ini, patrones_extra,
+                                          lm_index, seccion=sec, obra=obra)
+                evs    = generate_contrapunto(mel_ev,
+                             int(cfg.get('intervalo', 3)), cfg.get('direccion', 'abajo'))
+            else:
+                evs = get_capa_events(capa, frases, c_ini, patrones_extra,
+                                       lm_index, seccion=sec, obra=obra)
+            for (tick, on_off, note, vel) in evs:
+                all_events[tid].append((tick + tick_offset, on_off, note, vel))
+        n_mel = sum(1 for e in all_events.get('melodia', [])
+                    if e[1] == 'on' and e[0] >= tick_offset)
+        print(f"    Sec.{sec['id']:3s}  mel:{n_mel:3d}  offset:{tick_offset}")
+
     for tdef in track_defs:
-        tid=tdef['id']; events=all_events.get(tid,[])
-        if events: mid.tracks.append(build_track(tdef.get('nombre',tid),int(tdef.get('canal',0)),int(tdef.get('programa',0)),events))
-    total_bars=sum(s['compases'][1]-s['compases'][0]+1 for s in secciones)
-    avg_bpm=sum((s['tempo']['bpm_inicio']+s['tempo'].get('bpm_fin',s['tempo']['bpm_inicio']))/2 for s in secciones)/max(len(secciones),1)
-    dur_sec=total_bars*4/avg_bpm*60
-    out_path=os.path.join(output_dir,f"{_safe_filename(titulo)}_COMPLETA.mid")
+        tid    = tdef['id']
+        events = all_events.get(tid, [])
+        if events:
+            mid.tracks.append(build_track(tdef.get('nombre', tid),
+                               int(tdef.get('canal', 0)),
+                               int(tdef.get('programa', 0)), events))
+
+    total_bars = sum(s['compases'][1] - s['compases'][0] + 1 for s in secciones)
+    avg_bpm    = sum((s['tempo']['bpm_inicio'] +
+                      s['tempo'].get('bpm_fin', s['tempo']['bpm_inicio'])) / 2
+                     for s in secciones) / max(len(secciones), 1)
+    dur_sec    = total_bars * 4 / avg_bpm * 60
+    out_path   = os.path.join(output_dir, f"{_safe_filename(titulo)}_COMPLETA.mid")
     mid.save(out_path)
     print(f"\n  Obra completa: {total_bars} cc · ~{int(dur_sec//60)}'{int(dur_sec%60):02d}\" · {len(mid.tracks)} tracks")
-    print(f"  → Guardado: {out_path}"); return out_path
+    print(f"  → Guardado: {out_path}")
+    return out_path
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  UTILIDADES

@@ -383,10 +383,18 @@ secciones:
     nombre: "Desarrollo — La Tension"
     compases: [9, 24]
     duracion_aprox: "45 seg"
+    tonalidad: "Am"
     tempo:
       bpm_inicio: 88
       bpm_fin: 88
       tipo: fijo
+
+    # ── NUEVO: Cambios de tonalidad dentro de la sección ───────────────────
+    # El clímax de II.2 (c.21) modula brevemente a Re menor antes de volver.
+    # Esto afecta la armadura en el MIDI completo y en el MIDI de la sección.
+    cambios_de_tonalidad:
+      - {compas: 21, nueva_tonalidad: "Dm"}   # clímax en Re menor
+      - {compas: 23, nueva_tonalidad: "Am"}   # regreso a La menor
     instrumentacion:
       - Violín solista (tema transformado)
       - Cuerdas armonía (arpegios)
@@ -578,11 +586,17 @@ secciones:
     nombre: "Reexposicion — El Regreso"
     compases: [25, 36]
     duracion_aprox: "35 seg"
+    tonalidad: "A"          # La MAYOR — la obra modula al homónimo mayor
     tempo:
       bpm_inicio: 76
       bpm_fin: 60
       tipo: rallentando
-      rubato_amplitud: 1.5    # desviación BPM en modo rubato (aquí solo informativo)
+      rubato_amplitud: 1.5
+
+    # ── NUEVO: Cambio de tonalidad dentro de la sección ────────────────────
+    # La cadencia final (III.2) regresa a La menor para cerrar la obra.
+    cambios_de_tonalidad:
+      - {compas: 33, nueva_tonalidad: "Am"}   # cadencia final en La menor
     instrumentacion:
       - Violín solista
       - Cuerdas armonía
@@ -728,10 +742,18 @@ secciones:
     nombre: "Intermezzo — Metricas Variables"
     compases: [37, 60]
     duracion_aprox: "65 seg"
+    tonalidad: "Am"
     tempo:
       bpm_inicio: 96
       bpm_fin: 96
       tipo: fijo
+
+    # ── NUEVO: Cambio de tonalidad en la frase de col legno (5/4) ──────────
+    # IV.3 modula brevemente a Mi frigio (dominante sin resolución)
+    # antes de que IV.4 cierre en La menor.
+    cambios_de_tonalidad:
+      - {compas: 45, nueva_tonalidad: "Em"}   # Mi frigio — tensión sin resolver
+      - {compas: 49, nueva_tonalidad: "Am"}   # regreso al tónico con el 4/4
     instrumentacion:
       - Violín solista (pizzicato, luego arco)
       - Cuerdas armonía (inversiones)

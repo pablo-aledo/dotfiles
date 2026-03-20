@@ -1,0 +1,37 @@
+# Core
+torch>=2.1.0
+transformers>=4.40.0
+gradio>=4.0.0
+
+# MIDI tokenisation
+miditok>=3.0.0
+
+# MIDI utilities (fallback decoders)
+pretty_midi>=0.2.10
+
+# Serialization / tokenizers
+protobuf
+sentencepiece
+
+# text2midi-specific
+jsonlines
+st-moe-pytorch
+
+# Aria-specific
+# Requires Python >= 3.11
+# pip install git+https://github.com/EleutherAI/aria-utils.git
+
+# MMT-specific (manual setup — cannot be installed via pip)
+# 1. Clone the repo:
+#    git clone https://github.com/salu133445/mmt ~/repos/mmt
+# 2. Download checkpoint from the GitHub releases page:
+#    ~/repos/mmt/checkpoints/best_model.pt
+# 3. Install muspy:
+#    pip install muspy>=0.5.0
+
+# Audio synthesis (optional — needed for WAV output)
+# Install fluidsynth system package first:
+#   sudo apt install fluidsynth   (Ubuntu/Debian)
+#   brew install fluidsynth       (macOS)
+# Then:
+# pyfluidsynth>=1.3.0
