@@ -16,6 +16,7 @@ Uso:
     python generar_midi.py --stems                 # un MIDI por instrumento en output/stems/
     python generar_midi.py --stems --completa      # stems de la obra completa concatenada
     python generar_midi.py --stems --seccion I     # stems solo de la sección I
+    python generar_midi.py --leitmotivs            # un MIDI por leitmotiv en output/leitmotivs/
     python generar_midi.py --html                  # esquema visual HTML de la obra
     python generar_midi.py --render-audio          # genera MIDI y lo convierte a WAV
     python generar_midi.py --csv                   # exporta CSV de análisis
@@ -2108,6 +2109,166 @@ def generate_stems_completa(obra, output_dir):
 
     return generated
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  EXPORTACIÓN DE LEITMOTIVS (un MIDI por leitmotiv)
+# ══════════════════════════════════════════════════════════════════════════════
+def generate_leitmotiv_midis(obra, output_dir):
+    """Genera un MIDI por leitmotiv con todas las frases que lo usan.
+
+    Estructura de salida:
+        output_dir/leitmotivs/
+          TEMA_A.mid          ← todas las frases con leitmotiv: TEMA_A
+          TEMA_B.mid
+          MOTIVO_RITMICO.mid
+          ...
+          _sin_leitmotiv.mid  ← frases sin leitmotiv asignado (si las hay)
+
+    Cada fichero contiene:
+      - Track 0: pista de tempo global (igual que el MIDI completo, con los
+        offsets reales de cada sección, así los leitmotivs son directamente
+        comparables y alineables en un DAW)
+      - Un track por capa de instrumento (melodia, armonia, marcato, pad,
+        ostinato, solistas...) con solo las notas de las frases que usan
+        ese leitmotiv
+
+    Esto permite:
+      - Escuchar de un golpe todas las apariciones de un tema
+      - Importar en el DAW como una capa sobre el MIDI completo
+      - Analizar la evolución armónica/melódica de cada célula temática
+    """
+    leitmotivs = obra.get('leitmotivs', [])
+    secciones  = obra.get('secciones', [])
+    track_defs = obra.get('tracks', DEFAULT_TRACKS)
+    patrones_extra = _load_patrones(obra)
+    lm_dir     = os.path.join(output_dir, 'leitmotivs')
+    os.makedirs(lm_dir, exist_ok=True)
+    generated  = []
+
+    print(f"\n  Exportando leitmotivs → {lm_dir}/")
+
+    # Calcular tick_offset de cada sección (posición real en la obra)
+    tick_offsets = {}
+    cursor = 0
+    for sec in secciones:
+        tick_offsets[sec['id']] = cursor
+        n_bars = sec['compases'][1] - sec['compases'][0] + 1
+        cursor += n_bars * TICKS_PER_BAR
+
+    # Construir pista de tempo global (idéntica a generate_full_obra)
+    def _global_tempo_track():
+        obra_meta = obra.get('obra', {})
+        num, den  = get_time_signature(obra_meta, obra)
+        key       = obra_meta.get('tonalidad', obra.get('tonalidad', 'C'))
+        titulo    = obra_meta.get('titulo', '')
+        tt = MidiTrack()
+        tt.append(MetaMessage('track_name', name=ascii_safe(titulo), time=0))
+        tt.append(MetaMessage('time_signature', numerator=num, denominator=den,
+                   clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
+        tt.append(MetaMessage('key_signature', key=key, time=0))
+        all_t = []; tc = 0
+        for sec in secciones:
+            c_ini, c_fin = sec['compases']; n_bars = c_fin - c_ini + 1
+            t_cfg = sec.get('tempo', {}); amp = float(t_cfg.get('rubato_amplitud', 2.5))
+            bpm_i = float(t_cfg.get('bpm_inicio', 120))
+            bpm_f = float(t_cfg.get('bpm_fin', bpm_i))
+            tipo  = t_cfg.get('tipo', 'fijo')
+            if tipo in ('accelerando', 'rallentando'):
+                for i in range(n_bars + 1):
+                    all_t.append((tc + i*TICKS_PER_BAR,
+                                  mido.bpm2tempo(bpm_i + (bpm_f-bpm_i)*i/n_bars)))
+            elif tipo == 'rubato':
+                for i in range(n_bars + 1):
+                    bpm = bpm_i+(bpm_f-bpm_i)*i/max(n_bars,1)+amp*math.sin(i*0.8)
+                    all_t.append((tc + i*TICKS_PER_BAR, mido.bpm2tempo(max(30, bpm))))
+            else:
+                all_t.append((tc, mido.bpm2tempo(bpm_i)))
+            tc += n_bars * TICKS_PER_BAR
+        prev = 0
+        for (tick, tempo) in all_t:
+            tt.append(MetaMessage('set_tempo', tempo=tempo, time=tick-prev)); prev=tick
+        tt.append(MetaMessage('end_of_track', time=0))
+        return tt
+
+    # Recopilar frases agrupadas por leitmotiv
+    # Estructura: {lm_id: [(sec_id, offset, c_ini, frase), ...]}
+    grupos = defaultdict(list)
+    for sec in secciones:
+        offset = tick_offsets[sec['id']]
+        c_ini  = sec['compases'][0]
+        for frase in sec.get('frases', []):
+            lm = frase.get('leitmotiv') or '_sin_leitmotiv'
+            if lm in ('null', 'None', None, '-', '—'):
+                lm = '_sin_leitmotiv'
+            grupos[lm].append((sec['id'], offset, c_ini, frase))
+
+    if not grupos:
+        print("  ⚠ No hay frases con leitmotiv asignado")
+        return []
+
+    # Orden: primero los leitmotivs definidos (en su orden), luego _sin_leitmotiv
+    lm_ids_ordenados = [lm['id'] for lm in leitmotivs]
+    lm_ids_ordenados += [k for k in grupos if k not in lm_ids_ordenados]
+
+    for lm_id in lm_ids_ordenados:
+        apariciones = grupos.get(lm_id)
+        if not apariciones:
+            continue
+
+        # Nombre legible
+        lm_meta = next((lm for lm in leitmotivs if lm['id'] == lm_id), None)
+        lm_nombre = lm_meta['nombre'] if lm_meta else lm_id
+        n_apariciones = len(apariciones)
+
+        print(f"\n  [{lm_id}]  {lm_nombre}  ({n_apariciones} aparición/es)")
+
+        mid = MidiFile(type=1, ticks_per_beat=TPB)
+        import copy as _copy
+        mid.tracks.append(_copy.deepcopy(_global_tempo_track()))
+
+        total_notas = 0
+
+        for idx, tdef in enumerate(track_defs, 1):
+            tid   = tdef.get('id', tdef.get('capa', '?'))
+            nom   = tdef.get('nombre', tid)
+            canal = int(tdef.get('canal', 0))
+            prog  = int(tdef.get('programa', 0))
+            capa  = tdef.get('capa', tid)
+
+            all_events = []
+            for (sid, offset, c_ini, frase) in apariciones:
+                if tdef.get('contrapunto'):
+                    cfg    = tdef['contrapunto']
+                    mel_ev = get_capa_events('melodia', [frase], c_ini, patrones_extra)
+                    evs    = generate_contrapunto(mel_ev,
+                                 int(cfg.get('intervalo', 3)),
+                                 cfg.get('direccion', 'abajo'))
+                else:
+                    evs = get_capa_events(capa, [frase], c_ini, patrones_extra)
+                for (t, oo, n, v) in evs:
+                    all_events.append((t + offset, oo, n, v))
+
+            if not all_events:
+                continue
+
+            check_note_overlaps(all_events, f"{lm_id}/{nom}")
+            mid.tracks.append(build_track(f"{nom} [{lm_id}]", canal, prog, all_events))
+            n_on = sum(1 for e in all_events if e[1] == 'on')
+            total_notas += n_on
+            print(f"    {nom}: {n_on} notas")
+
+        if len(mid.tracks) <= 1:
+            print(f"    — sin notas, omitido")
+            continue
+
+        fname = f"{_safe_filename(lm_id)}.mid"
+        path  = os.path.join(lm_dir, fname)
+        mid.save(path)
+        generated.append(path)
+        print(f"    → {fname}  ({total_notas} notas totales, {n_apariciones} frases)")
+
+    return generated
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  OBRA COMPLETA CONCATENADA
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2221,6 +2382,8 @@ def main():
                         help='Genera esquema visual HTML de la obra')
     parser.add_argument('--stems',        action='store_true',
                         help='Exporta un MIDI por instrumento en output/stems/')
+    parser.add_argument('--leitmotivs',   action='store_true',
+                        help='Exporta un MIDI por leitmotiv en output/leitmotivs/')
     args=parser.parse_args()
 
     if args.diff: diff_obras(args.diff[0],args.diff[1]); return
@@ -2274,6 +2437,12 @@ def main():
             stems += generate_stems_completa(obra, args.output)
         generated.extend(stems)
         print(f"\n  ✓ {len(stems)} stem(s) en '{args.output}/stems/'")
+
+    if args.leitmotivs:
+        print(f"\n{'─'*60}")
+        lm_files = generate_leitmotiv_midis(obra, args.output)
+        generated.extend(lm_files)
+        print(f"\n  ✓ {len(lm_files)} leitmotiv(s) en '{args.output}/leitmotivs/'")
 
     print(f"\n{'─'*60}\n  ✓ {len(generated)} fichero(s) generado(s) en '{args.output}/'")
     for p in generated:
