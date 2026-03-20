@@ -13,6 +13,9 @@ Uso:
     python generar_midi.py --diff v1.yaml v2.yaml  # compara dos versiones
     python generar_midi.py --estadisticas          # análisis de la obra
     python generar_midi.py --nueva-frase I.4 --compases 15-18 --leitmotiv TEMA_A
+    python generar_midi.py --stems                 # un MIDI por instrumento en output/stems/
+    python generar_midi.py --stems --completa      # stems de la obra completa concatenada
+    python generar_midi.py --stems --seccion I     # stems solo de la sección I
     python generar_midi.py --html                  # esquema visual HTML de la obra
     python generar_midi.py --render-audio          # genera MIDI y lo convierte a WAV
     python generar_midi.py --csv                   # exporta CSV de análisis
@@ -1942,6 +1945,169 @@ def generate_section(seccion, output_dir, obra=None):
     out_path=os.path.join(output_dir,filename)
     mid.save(out_path); print(f"  → Guardado: {out_path}"); return out_path
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  EXPORTACIÓN DE STEMS (un MIDI por instrumento)
+# ══════════════════════════════════════════════════════════════════════════════
+def generate_stems(secciones, output_dir, obra):
+    """Genera un MIDI independiente por instrumento y sección.
+
+    Estructura de salida:
+        output_dir/stems/
+          SeccionI/
+            01_Violin_solista.mid
+            02_Cuerdas_armonia.mid   ...
+          SeccionII/
+            ...
+    Todos los stems comparten la misma pista de tempo, por lo que
+    son directamente importables y alineables en cualquier DAW.
+    """
+    track_defs     = obra.get('tracks', DEFAULT_TRACKS)
+    patrones_extra = _load_patrones(obra)
+    stems_root     = os.path.join(output_dir, 'stems')
+    generated      = []
+    print(f"\n  Exportando stems → {stems_root}/")
+
+    for sec in secciones:
+        sid    = sec['id']
+        c_ini  = sec['compases'][0]
+        frases = sec.get('frases', [])
+        sec_dir= os.path.join(stems_root, f"Seccion{_safe_filename(str(sid))}")
+        os.makedirs(sec_dir, exist_ok=True)
+        print(f"\n  Sección {sid}: {sec['nombre']}")
+
+        for idx, tdef in enumerate(track_defs, 1):
+            tid   = tdef.get('id', tdef.get('capa','?'))
+            nom   = tdef.get('nombre', tid)
+            canal = int(tdef.get('canal', 0))
+            prog  = int(tdef.get('programa', 0))
+            capa  = tdef.get('capa', tid)
+
+            if tdef.get('contrapunto'):
+                cfg    = tdef['contrapunto']
+                mel_ev = get_capa_events('melodia', frases, c_ini, patrones_extra)
+                events = generate_contrapunto(mel_ev,
+                             int(cfg.get('intervalo',3)), cfg.get('direccion','abajo'))
+            else:
+                events = get_capa_events(capa, frases, c_ini, patrones_extra)
+
+            pb_track = build_pitchbend_track(nom, canal, frases, c_ini)
+            cc_track = build_cc_track(nom, canal, frases, c_ini)
+
+            if not events and not pb_track and not cc_track:
+                print(f"    — {nom}: sin eventos, omitido")
+                continue
+
+            mid = MidiFile(type=1, ticks_per_beat=TPB)
+            mid.tracks.append(build_tempo_track(sec, c_ini, obra))
+            if events:
+                check_note_overlaps(events, nom)
+                mid.tracks.append(build_track(f'{nom} — Sec.{sid}', canal, prog, events))
+            if pb_track: mid.tracks.append(pb_track)
+            if cc_track: mid.tracks.append(cc_track)
+
+            n_on  = sum(1 for e in events if e[1]=='on') if events else 0
+            fname = f"{idx:02d}_{_safe_filename(nom)}.mid"
+            path  = os.path.join(sec_dir, fname)
+            mid.save(path)
+            generated.append(path)
+            print(f"    ✓ {fname}  ({n_on} notas)")
+
+    return generated
+
+
+def generate_stems_completa(obra, output_dir):
+    """Stems de la obra completa concatenada, uno por instrumento."""
+    track_defs     = obra.get('tracks', DEFAULT_TRACKS)
+    patrones_extra = _load_patrones(obra)
+    secciones      = obra.get('secciones', [])
+    stems_root     = os.path.join(output_dir, 'stems', 'COMPLETA')
+    os.makedirs(stems_root, exist_ok=True)
+    generated      = []
+    print(f"\n  Stems obra completa → {stems_root}/")
+
+    # Calcular tick_offset de cada sección
+    tick_offsets = []
+    cursor = 0
+    for sec in secciones:
+        tick_offsets.append(cursor)
+        n_bars = sec['compases'][1] - sec['compases'][0] + 1
+        cursor += n_bars * TICKS_PER_BAR
+
+    # Pista de tempo global (reutilizada en todos los stems)
+    def _make_global_tempo_track():
+        obra_meta = obra.get('obra', {})
+        num, den  = get_time_signature(obra_meta, obra)
+        key       = obra_meta.get('tonalidad', obra.get('tonalidad','C'))
+        titulo    = obra_meta.get('titulo','')
+        tt = MidiTrack()
+        tt.append(MetaMessage('track_name', name=ascii_safe(titulo), time=0))
+        tt.append(MetaMessage('time_signature', numerator=num, denominator=den,
+                   clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
+        tt.append(MetaMessage('key_signature', key=key, time=0))
+        all_tempo=[]; tc=0
+        for sec in secciones:
+            c_ini,c_fin = sec['compases']; n_bars = c_fin-c_ini+1
+            t_cfg=sec.get('tempo',{})
+            bpm_i=float(t_cfg.get('bpm_inicio',120)); bpm_f=float(t_cfg.get('bpm_fin',bpm_i))
+            tipo=t_cfg.get('tipo','fijo'); amp=float(t_cfg.get('rubato_amplitud',2.5))
+            if tipo in ('accelerando','rallentando'):
+                for i in range(n_bars+1):
+                    bpm=bpm_i+(bpm_f-bpm_i)*i/n_bars
+                    all_tempo.append((tc+i*TICKS_PER_BAR, mido.bpm2tempo(bpm)))
+            elif tipo=='rubato':
+                for i in range(n_bars+1):
+                    bpm=bpm_i+(bpm_f-bpm_i)*i/max(n_bars,1)+amp*math.sin(i*0.8)
+                    all_tempo.append((tc+i*TICKS_PER_BAR, mido.bpm2tempo(max(30,bpm))))
+            else:
+                all_tempo.append((tc, mido.bpm2tempo(bpm_i)))
+            tc += n_bars*TICKS_PER_BAR
+        prev=0
+        for (tick,tempo) in all_tempo:
+            tt.append(MetaMessage('set_tempo',tempo=tempo,time=tick-prev)); prev=tick
+        tt.append(MetaMessage('end_of_track',time=0))
+        return tt
+
+    global_tempo = _make_global_tempo_track()
+
+    for idx, tdef in enumerate(track_defs, 1):
+        tid   = tdef.get('id', tdef.get('capa','?'))
+        nom   = tdef.get('nombre', tid)
+        canal = int(tdef.get('canal', 0))
+        prog  = int(tdef.get('programa', 0))
+        capa  = tdef.get('capa', tid)
+
+        all_events = []
+        for sec, offset in zip(secciones, tick_offsets):
+            c_ini  = sec['compases'][0]; frases=sec.get('frases',[])
+            if tdef.get('contrapunto'):
+                cfg    = tdef['contrapunto']
+                mel_ev = get_capa_events('melodia', frases, c_ini, patrones_extra)
+                evs    = generate_contrapunto(mel_ev,
+                             int(cfg.get('intervalo',3)), cfg.get('direccion','abajo'))
+            else:
+                evs = get_capa_events(capa, frases, c_ini, patrones_extra)
+            for (t,oo,n,v) in evs:
+                all_events.append((t+offset, oo, n, v))
+
+        if not all_events:
+            print(f"    — {nom}: sin eventos, omitido"); continue
+
+        mid = MidiFile(type=1, ticks_per_beat=TPB)
+        import copy as _copy
+        mid.tracks.append(_copy.deepcopy(global_tempo))
+        check_note_overlaps(all_events, nom)
+        mid.tracks.append(build_track(nom, canal, prog, all_events))
+
+        n_on  = sum(1 for e in all_events if e[1]=='on')
+        fname = f"{idx:02d}_{_safe_filename(nom)}_COMPLETA.mid"
+        path  = os.path.join(stems_root, fname)
+        mid.save(path)
+        generated.append(path)
+        print(f"    ✓ {fname}  ({n_on} notas)")
+
+    return generated
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  OBRA COMPLETA CONCATENADA
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2053,6 +2219,8 @@ def main():
     parser.add_argument('--sin-validar',  action='store_true')
     parser.add_argument('--html',         action='store_true',
                         help='Genera esquema visual HTML de la obra')
+    parser.add_argument('--stems',        action='store_true',
+                        help='Exporta un MIDI por instrumento en output/stems/')
     args=parser.parse_args()
 
     if args.diff: diff_obras(args.diff[0],args.diff[1]); return
@@ -2098,6 +2266,14 @@ def main():
         for sec in secciones: generated.append(generate_section(sec,args.output,obra))
     else:
         for sec in secciones: generated.append(generate_section(sec,args.output,obra))
+
+    if args.stems:
+        print(f"\n{'─'*60}")
+        stems = generate_stems(secciones, args.output, obra)
+        if args.completa:
+            stems += generate_stems_completa(obra, args.output)
+        generated.extend(stems)
+        print(f"\n  ✓ {len(stems)} stem(s) en '{args.output}/stems/'")
 
     print(f"\n{'─'*60}\n  ✓ {len(generated)} fichero(s) generado(s) en '{args.output}/'")
     for p in generated:
