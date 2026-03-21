@@ -800,6 +800,338 @@ def _s_narrative(r: dict) -> str:
 </div>'''
 
 
+
+
+# ── Radar 6D + Heatmap 5×5 (ported from mscz2vec) ────────────────────────────
+
+_FUNC_LABELS = ['T', 'PD', 'D', 'Dsec', 'Other']
+
+def _chord_to_function(chord, key_root: int, mode: str) -> str:
+    if chord is None:
+        return 'Other'
+    root  = getattr(chord, 'root', None)
+    ctype = getattr(chord, 'chord_type', '') or ''
+    if root is None:
+        return 'Other'
+    interval = (int(root) - int(key_root)) % 12
+    is_minor = mode in ('minor', 'dorian', 'phrygian', 'locrian')
+    if interval == 0:
+        return 'T'
+    if interval == 9 and not is_minor:
+        return 'T'
+    if interval == 3 and is_minor:
+        return 'T'
+    if interval == 7:
+        return 'D'
+    if interval == 11:
+        return 'D'
+    if 'dom7' in ctype and interval not in (0, 7):
+        return 'Dsec'
+    if interval in (2, 5):
+        return 'PD'
+    return 'Other'
+
+
+def _build_transition_matrix(chords: list, key_root: int, mode: str) -> list:
+    n   = len(_FUNC_LABELS)
+    idx = {f: i for i, f in enumerate(_FUNC_LABELS)}
+    matrix = [[0] * n for _ in range(n)]
+    funcs  = [_chord_to_function(c, key_root, mode) for c in (chords or [])]
+    for i in range(len(funcs) - 1):
+        r2 = idx.get(funcs[i], 4)
+        c2 = idx.get(funcs[i+1], 4)
+        matrix[r2][c2] += 1
+    for row in matrix:
+        total = sum(row)
+        if total > 0:
+            for j in range(n):
+                row[j] = round(row[j] / total, 4)
+    return matrix
+
+
+def _compute_6d_vector(r: dict) -> dict:
+    dv    = r.get('dynamic_valence') or {}
+    ep    = r.get('energy_profile') or {}
+    tc    = r.get('tension_curve') or []
+    ta    = r.get('tonal_ambiguity') or {}
+    rh    = r.get('rhythm') or {}
+    notes = r.get('notes') or []
+
+    val_raw  = _safe(dv.get('mean_valence'), 0.0)
+    valence  = (float(val_raw) + 1.0) / 2.0
+
+    ep_curve = ep.get('curve') or []
+    ep_vals  = []
+    for p in ep_curve:
+        if isinstance(p, (list, tuple)) and len(p) >= 2:
+            ep_vals.append(float(p[1]))
+        elif isinstance(p, dict):
+            ep_vals.append(float(p.get('energy', p.get('value', 0))))
+    ep_max     = max(ep_vals) if ep_vals else 1
+    activation = min(1.0, (sum(ep_vals)/len(ep_vals)/ep_max) if ep_vals and ep_max > 0 else 0.5)
+
+    t_vals = []
+    for p in tc:
+        if hasattr(p, 'tension'):
+            t_vals.append(float(p.tension))
+        elif isinstance(p, (list, tuple)) and len(p) >= 2:
+            t_vals.append(float(p[1]))
+        elif isinstance(p, dict):
+            t_vals.append(float(p.get('tension', 0)))
+    harm_tension = sum(t_vals)/len(t_vals) if t_vals else 0.3
+
+    amb_idx        = _safe(ta.get('ambiguity_index'), 0.5)
+    tonal_stability = max(0.0, 1.0 - float(amb_idx))
+
+    sync   = _safe(rh.get('syncopation'), 0.0)
+    variety = _safe(rh.get('variety'), 0.0)
+    rhythm_density = min(1.0, float(sync) * 0.6 + float(variety) * 0.4)
+
+    if notes:
+        pitches = [getattr(n, 'pitch', 60) for n in notes]
+        avg_p   = sum(pitches) / len(pitches)
+        brightness = max(0.0, min(1.0, (avg_p - 36) / 48.0))
+    else:
+        brightness = 0.5
+
+    return {
+        'valence':         round(valence, 3),
+        'activation':      round(activation, 3),
+        'harm_tension':    round(harm_tension, 3),
+        'tonal_stability': round(tonal_stability, 3),
+        'rhythm_density':  round(rhythm_density, 3),
+        'brightness':      round(brightness, 3),
+    }
+
+
+def _s_radar_6d(r: dict) -> str:
+    vec    = _compute_6d_vector(r)
+    labels = ['Valence', 'Activation', 'Harm. tension',
+              'Tonal stability', 'Rhythm density', 'Brightness']
+    values = [vec['valence'], vec['activation'], vec['harm_tension'],
+              vec['tonal_stability'], vec['rhythm_density'], vec['brightness']]
+
+    script = f"""<script>
+(function(){{
+  var radar_ctx = document.getElementById('radar_6d');
+  if (!radar_ctx) return;
+  new Chart(radar_ctx.getContext('2d'), {{
+    type: 'radar',
+    data: {{
+      labels: {json.dumps(labels)},
+      datasets: [{{
+        label: 'Percepción unificada',
+        data: {json.dumps(values)},
+        backgroundColor: 'rgba(99,102,241,0.15)',
+        borderColor: '#6366f1',
+        borderWidth: 2,
+        pointBackgroundColor: '#6366f1',
+        pointRadius: 4,
+      }}]
+    }},
+    options: {{
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {{ legend: {{ display: false }} }},
+      scales: {{
+        r: {{
+          min: 0, max: 1,
+          ticks: {{ stepSize: 0.25, font: {{ size: 10 }}, color: '#94a3b8', backdropColor: 'transparent' }},
+          pointLabels: {{ font: {{ size: 11 }}, color: '#475569' }},
+          grid: {{ color: '#f1f5f9' }},
+          angleLines: {{ color: '#e2e8f0' }}
+        }}
+      }}
+    }}
+  }});
+}})();
+</script>"""
+
+    dim_meta = [
+        ('Valence',         'Valencia emocional media',             '#6366f1'),
+        ('Activation',      'Energía / arousal medio',              '#10b981'),
+        ('Harm. tension',   'Tensión armónica media',               '#ef4444'),
+        ('Tonal stability', '1 − ambigüedad tonal',                 '#3b82f6'),
+        ('Rhythm density',  'Síncopa + variedad rítmica',           '#f59e0b'),
+        ('Brightness',      'Luminosidad tímbrica (registro midi)', '#a855f7'),
+    ]
+    dim_rows = ''
+    for (lbl, desc, col), val in zip(dim_meta, values):
+        bw = int(val * 80)
+        dim_rows += (
+            f'<tr><td><span style="display:inline-block;width:8px;height:8px;'
+            f'border-radius:50%;background:{col};margin-right:6px"></span>{lbl}</td>'
+            f'<td style="color:#64748b;font-size:11px">{desc}</td>'
+            f'<td><div style="display:inline-flex;align-items:center;gap:4px">'
+            f'<div style="background:#e5e7eb;border-radius:3px;height:6px;width:80px">'
+            f'<div style="background:{col};border-radius:3px;height:6px;width:{bw}px"></div></div>'
+            f'<span style="font-size:11px;font-weight:500;color:#0f172a">{val:.3f}</span>'
+            f'</div></td></tr>'
+        )
+
+    return f'''
+<div class="card-full">
+  <h2>Vector de percepción unificada 6D
+    <span style="font-size:12px;font-weight:400;color:#94a3b8">(adaptado de mscz2vec)</span>
+  </h2>
+  <div class="grid2">
+    <div style="height:280px;position:relative">
+      <canvas id="radar_6d"></canvas>
+    </div>
+    <div>
+      <p style="font-size:12px;color:#64748b;margin-bottom:12px">
+        Firma perceptual compacta de la obra — permite comparar identidad musical entre piezas.
+        Cada dimensión normalizada [0, 1].
+      </p>
+      <table>
+        <thead><tr><th>Dimensión</th><th>Descripción</th><th>Valor</th></tr></thead>
+        <tbody>{dim_rows}</tbody>
+      </table>
+    </div>
+  </div>
+  {script}
+</div>'''
+
+
+def _s_harmonic_heatmap(r: dict) -> str:
+    chords   = r.get('chords') or []
+    key_root = int(_safe(r.get('key_root'), 0))
+    mode     = r.get('mode', 'major')
+    matrix   = _build_transition_matrix(chords, key_root, mode)
+    funcs    = _FUNC_LABELS
+
+    cell = 52
+    pad  = 62
+    size = pad + cell * 5 + 24
+
+    def cell_color(v: float) -> str:
+        v = min(1.0, max(0.0, v))
+        r2 = int(255 - v * 172)
+        g2 = int(255 - v * 181)
+        b2 = int(255 - v * 72)
+        return f'rgb({r2},{g2},{b2})'
+
+    func_full = {
+        'T':'T (tónica)', 'PD':'PD (predom.)',
+        'D':'D (dom.)', 'Dsec':'Dsec (sec.)', 'Other':'Other'
+    }
+
+    cells_svg = ''
+    for ci, f in enumerate(funcs):
+        x = pad + ci * cell + cell // 2
+        cells_svg += (
+            f'<text x="{x}" y="{pad-10}" text-anchor="middle" '
+            f'font-size="10" fill="#94a3b8" font-family="sans-serif">{f}</text>'
+        )
+    for ri, frow in enumerate(funcs):
+        yc = pad + ri * cell + cell // 2
+        cells_svg += (
+            f'<text x="{pad-6}" y="{yc}" text-anchor="end" '
+            f'dominant-baseline="central" font-size="10" fill="#475569" '
+            f'font-family="sans-serif">{func_full[frow]}</text>'
+        )
+        for ci, _ in enumerate(funcs):
+            v   = matrix[ri][ci]
+            cx  = pad + ci * cell
+            cy  = pad + ri * cell
+            pct = f'{v*100:.0f}%' if v > 0.02 else ''
+            tc2 = '#1e1b4b' if v > 0.4 else '#475569'
+            cells_svg += (
+                f'<rect x="{cx+1}" y="{cy+1}" width="{cell-2}" height="{cell-2}" '
+                f'rx="4" fill="{cell_color(v)}" stroke="#f1f5f9" stroke-width="0.5"/>'
+                f'<text x="{cx+cell//2}" y="{cy+cell//2}" text-anchor="middle" '
+                f'dominant-baseline="central" font-size="11" fill="{tc2}" '
+                f'font-weight="500" font-family="sans-serif">{pct}</text>'
+            )
+
+    heatmap_svg = (
+        f'<svg width="100%" viewBox="0 0 {size} {size}" style="max-width:360px;display:block">'
+        f'{cells_svg}</svg>'
+    )
+
+    # Patterns
+    fi = {f: i for i, f in enumerate(funcs)}
+    dt  = matrix[fi['D']][fi['T']]
+    pdt = matrix[fi['PD']][fi['T']]
+    tt  = matrix[fi['T']][fi['T']]
+    dpd = matrix[fi['D']][fi['PD']]
+
+    patterns = []
+    if dt  > 0.4:  patterns.append(('Muy cadencial',  'D→T frecuente — resolución constante',         '#10b981'))
+    if pdt > 0.3:  patterns.append(('Plagal',          'PD→T frecuente — cadencias modales/plagales',  '#3b82f6'))
+    if tt  > 0.3:  patterns.append(('Estática',        'T→T — la tónica se prolonga sin moverse',      '#94a3b8'))
+    if dpd > 0.25: patterns.append(('Evasiva',         'D→PD — dominante que evita resolver',          '#f59e0b'))
+    if not patterns: patterns.append(('Equilibrada',   'Distribución uniforme de transiciones',         '#6366f1'))
+
+    pat_html = ''.join(
+        f'<div style="display:flex;align-items:center;gap:8px;padding:5px 0;'
+        f'border-bottom:1px dashed #f1f5f9">'
+        f'<span style="width:10px;height:10px;border-radius:50%;background:{col};'
+        f'flex-shrink:0;display:inline-block"></span>'
+        f'<div><div style="font-size:12px;font-weight:500;color:#0f172a">{lbl}</div>'
+        f'<div style="font-size:11px;color:#64748b">{desc}</div></div></div>'
+        for lbl, desc, col in patterns
+    )
+
+    # Top transitions
+    pairs = sorted(
+        [(matrix[ri][ci], funcs[ri], funcs[ci])
+         for ri in range(5) for ci in range(5) if matrix[ri][ci] > 0],
+        reverse=True
+    )
+    top_html = ''.join(
+        f'<div class="metric">'
+        f'<span class="metric-key" style="font-family:monospace">{fr} → {fc}</span>'
+        f'<span class="metric-val">{_pct_bar(v)}</span></div>'
+        for v, fr, fc in pairs[:5]
+    )
+
+    # Function distribution
+    func_counts = {}
+    for c in chords:
+        f = _chord_to_function(c, key_root, mode)
+        func_counts[f] = func_counts.get(f, 0) + 1
+    total = max(len(chords), 1)
+    dist_html = ''.join(
+        f'<div class="metric"><span class="metric-key">{f}</span>'
+        f'<span class="metric-val">{_pct_bar(func_counts.get(f,0), total)}</span></div>'
+        for f in funcs
+    )
+
+    return f'''
+<div class="card-full">
+  <h2>Flujo de funciones armónicas — heatmap 5×5
+    <span style="font-size:12px;font-weight:400;color:#94a3b8">(adaptado de mscz2vec)</span>
+  </h2>
+  <p style="font-size:12px;color:#64748b;margin-bottom:16px">
+    Probabilidad de transición de cada función a la siguiente.
+    Diagonal fuerte = estasis tonal. Columna T fuerte = música cadencial.
+  </p>
+  <div class="grid3">
+    <div>
+      <div class="lbl">Matriz de transición (normalizada por filas)</div>
+      {heatmap_svg}
+      <p style="font-size:10px;color:#94a3b8;margin-top:4px">
+        T=Tónica · PD=Predominante · D=Dominante · Dsec=Dom. sec. · Other=Otro
+      </p>
+    </div>
+    <div>
+      <div class="lbl">Patrón detectado</div>
+      {pat_html}
+      <div style="margin-top:14px">
+        <div class="lbl">Distribución ({len(chords)} acordes)</div>
+        {dist_html}
+      </div>
+    </div>
+    <div>
+      <div class="lbl">Transiciones más frecuentes</div>
+      {top_html}
+    </div>
+  </div>
+</div>'''
+
+
 # ── Main render ───────────────────────────────────────────────────────────────
 
 def render_html(results: dict) -> str:
@@ -823,9 +1155,11 @@ def render_html(results: dict) -> str:
     body = (
         _s_identity(r) +
         _s_curves(r) +
+        _s_radar_6d(r) +
         _s_emotional_map(r) +
         _s_ssm(r) +
         _s_harmony(r) +
+        _s_harmonic_heatmap(r) +
         _s_rhythm_melody(r) +
         _s_narrative(r)
     )
