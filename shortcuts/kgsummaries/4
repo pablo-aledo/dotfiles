@@ -1,4 +1,5 @@
 export DISPLAY=:1
+source ~/.dotfiles/source/.shell/xdotool
 
 rm -fr ~/Descargas/kgsummary.html ~/Descargas/kgsummary_files
 
@@ -7,10 +8,10 @@ sleep 1
 xdotool key Alt+f
 sleep 1
 xdotool type kgsummary
-xdotool key Return
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/save.png && xdotool click 1 && xdotool click 1
 sleep 5
 
 title="$(cat /tmp/kg_title)"
 filename="/tmp/kgsummaries/$(echo $title | md5sum | awk '{print $1}')"
-htmlq -f ~/Descargas/kgsummary.html '#summary' -t | grep -v '^ *$' | grep '      Summary' -B1000 | grep -v '      Summary' >> $filename
+htmlq -f ~/Descargas/kgsummary.html '#summary' -t | grep -v '^ *$' | grep -v -e 'Continue in Assistant' -e 'Copied to clipboard' >> $filename
 echo '=====' >> $filename

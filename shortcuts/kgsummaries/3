@@ -1,7 +1,7 @@
 export DISPLAY=:1
 source ~/.dotfiles/source/.shell/xdotool
 
-xdotool mousemove 300 455
+xdotool mousemove 300 445
 xdotool click 1
 xdotool click 1
 xdotool click 1
@@ -11,13 +11,5 @@ xdotool key Return
 
 sleep 3
 
-reading=true
-thinking=true
-while true
-do
-    mouseover 2 10000 ~/.dotfiles/shortcuts/images/kg_reading.png  || reading=false
-    mouseover 2 10000 ~/.dotfiles/shortcuts/images/kg_thinking.png || thinking=false
-    [ $reading = false -a $thinking = false ] && break
-done
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/sumblack.png
 
-sleep 15

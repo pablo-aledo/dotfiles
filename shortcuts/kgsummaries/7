@@ -10,7 +10,20 @@ sleep 5
 xdotool mousemove 620 570
 xdotool click 1
 sleep 1
+xdotool mousemove 620 700
+for a in $(seq 1 50); do xdotool click 5; done
+xdotool mousemove 920 700
+for a in $(seq 1 50); do xdotool click 5; done
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/spanish.png && xdotool click 1
 
-xdotool type spa
-xdotool key Return
 sleep 1
+
+xdotool mousemove 420 550
+xdotool click 1
+sleep 1
+xdotool mousemove 420 750
+for a in $(seq 1 50); do xdotool click 5; done
+sleep 1
+mouseover -1 10000 ~/.dotfiles/shortcuts/images/bullets.png && xdotool click 1
+xdotool mousemove 220 750
+xdotool click 1
