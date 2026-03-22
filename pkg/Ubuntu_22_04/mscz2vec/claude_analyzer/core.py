@@ -14,14 +14,7 @@ try:
 except ImportError:
     print("ERROR: pip install mido"); sys.exit(1)
 
-import math, collections
-from dataclasses import dataclass, field
-from typing import List, Tuple, Dict, Optional
 
-try:
-    import mido
-except ImportError:
-    raise ImportError("pip install mido")
 
 # ═══════════════════════════════════════════════════════════════
 #  TABLAS MUSICALES
@@ -39,7 +32,7 @@ KS_MODES = {
     'major':      KS_MAJOR,
     'minor':      KS_MINOR,
     'dorian':     [6.35,2.23,3.48,5.38,2.60,4.09,2.52,5.19,3.98,2.39,3.34,2.88],
-    'phrygian':   [6.35,5.38,2.23,3.48,2.33,4.09,2.52,5.19,2.39,3.66,5.38,2.88],
+    'phrygian':   [6.35,5.38,2.23,3.48,2.33,4.09,2.52,5.19,2.39,3.66,2.29,2.88],
     'lydian':     [6.35,2.23,3.48,2.33,4.38,2.52,4.09,5.19,2.39,3.66,2.29,2.88],
     'mixolydian': [6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,4.09,2.88],
     'locrian':    [6.35,5.38,2.23,3.48,2.60,4.09,4.38,2.52,3.98,2.39,3.34,3.17],
@@ -513,7 +506,15 @@ def compute_tension_curve(
     total = max(n.time_sec + n.duration for n in notes)
     curve = []
     t = 0.0
-    leading_tone = (key_root + 11) % 12
+    # Sensible dependiente del modo:
+    # - Mayor, lidio, mixolidio, menor (armónica): VII elevado (+11)
+    # - Dórico: también usa VII elevado en contexto dominante
+    # - Frigio, locrio: no tienen sensible funcional (dominante es bVII);
+    #   usar None para no inflar artificialmente la tensión en piezas frigias
+    if mode in ('phrygian', 'locrian'):
+        leading_tone = None
+    else:
+        leading_tone = (key_root + 11) % 12
     dom = (key_root + 7) % 12
 
     # Build chord lookup
@@ -550,7 +551,8 @@ def compute_tension_curve(
         chord_tension = chord.tension if chord else 0.3
 
         # 3. Leading tone presence (strong pull)
-        lt_present = any(n.pitch % 12 == leading_tone for n in window)
+        lt_present = (leading_tone is not None and
+                      any(n.pitch % 12 == leading_tone for n in window))
         lt_tension = 0.6 if lt_present else 0.0
 
         # 4. Register tension (very high notes = bright tension)
@@ -2607,8 +2609,7 @@ ARCHETYPES = {
     'Épica/Epic':           {'mode':'mixolydian','bpm':(80,130),'tension':(0.3,0.6),'centricity':(0.2,0.5),'syncopation':(0.0,0.3),'valence':(0.1,0.6),'arousal':(0.4,0.8),'desc':'grandiosidad, aventura, lo heroico ambiguo'},
 }
 
-def ts_str(sec):
-    return f"{int(sec//60)}:{int(sec%60):02d}"
+# ts_str definida en el módulo superior (línea 326) — no redefinir aquí.
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -3643,8 +3644,7 @@ SCALE_IVLS   = {
 }
 
 
-def ts_str(sec):
-    return f"{int(sec//60)}:{int(sec%60):02d}"
+# ts_str definida en el módulo superior (línea 326) — no redefinir aquí.
 
 
 # ═══════════════════════════════════════════════════════════════
