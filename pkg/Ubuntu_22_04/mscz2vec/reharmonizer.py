@@ -164,6 +164,9 @@ def chord_tone_category(mel_pc, root_pc, quality):
     if quality in ('M', 'M7'):
         if interval == 5:   # 11ª natural sobre mayor = avoid
             return 'avoid'
+    if quality in ('dim', 'd7', 'hd7', 'dim7'):
+        if interval == 6:   # 5ª disminuida sobre acorde disminuido = chord_tone
+            return 'chord_tone'
     return base_cat
 
 
@@ -447,7 +450,7 @@ PROGRESSION_LIBRARY = {
     'neapolitan': {
         'major': [
             [('I', 2), ('bII', 2), ('V', 2), ('I', 2)],
-            [('i', 2), ('bII', 2), ('V7', 2), ('i', 2)],
+            [('I', 2), ('bII', 2), ('V7', 2), ('I', 2)],
             [('I', 1), ('ii', 1), ('bII', 2), ('V', 2)],
             [('I', 2), ('IV', 1), ('bII', 1), ('V', 2), ('I', 2)],
         ],

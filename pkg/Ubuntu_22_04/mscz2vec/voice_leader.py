@@ -422,14 +422,24 @@ def _evaluate_voicing(prev: ChordBlock, cand: Tuple[int, int, int, int],
     voices_prev = [ps, pa, pt, pb]
     voice_names = ["S", "A", "T", "B"]
 
+    def _simple_interval(p1, p2):
+        """Intervalo simple correcto en semitonos (0-6).
+        Usa el intervalo real para detectar 5ª (7st) y 8ª (0 mod 12)
+        independientemente del registro — corrige el bug de iv%12 que
+        convierte 5ªs en 4ªs cuando las voces están separadas por > 1 octava.
+        """
+        iv = abs(p1 - p2) % 12
+        return iv
+
     for i, j in itertools.combinations(range(4), 2):
-        interval_prev = abs(voices_prev[i] - voices_prev[j]) % 12
-        interval_now  = abs(voices_now[i]  - voices_now[j])  % 12
         motion_i = voices_now[i] - voices_prev[i]
         motion_j = voices_now[j] - voices_prev[j]
         same_direction = (motion_i > 0 and motion_j > 0) or (motion_i < 0 and motion_j < 0)
 
-        # R01: Paralelas de 5ª
+        interval_prev = _simple_interval(voices_prev[i], voices_prev[j])
+        interval_now  = _simple_interval(voices_now[i],  voices_now[j])
+
+        # R01: Paralelas de 5ª — detecta 5ªs en cualquier registro
         if interval_prev == 7 and interval_now == 7 and same_direction:
             violations.append(f"R01:5as_paralelas_{voice_names[i]}-{voice_names[j]}")
             score -= 0.6
@@ -439,15 +449,27 @@ def _evaluate_voicing(prev: ChordBlock, cand: Tuple[int, int, int, int],
             violations.append(f"R02:8as_paralelas_{voice_names[i]}-{voice_names[j]}")
             score -= 0.6
 
-        # R03: Quintas/octavas directas en movimiento similar hacia tiempo fuerte
-        if interval_now in (0, 7) and same_direction:
-            if abs(motion_i) > 2:  # salto en la voz superior
-                violations.append(f"R03:5a8a_directa_{voice_names[i]}-{voice_names[j]}")
-                score -= 0.35
+        # R03: Quintas/octavas directas — prohibidas independientemente del tamaño del salto
+        # (misma corrección que counterpoint.py: abs(motion) > 2 era incorrecto)
+        if interval_now in (0, 7) and same_direction and motion_i != 0 and motion_j != 0:
+            violations.append(f"R03:5a8a_directa_{voice_names[i]}-{voice_names[j]}")
+            score -= 0.35
+
+        # R05: Solapamiento de voces — una voz salta más allá de la posición
+        # anterior de la voz adyacente (no implementado anteriormente)
+        if i + 1 == j:  # voces adyacentes S-A, A-T, T-B
+            # Voz superior (i) baja por debajo de donde estaba la inferior (j)
+            if voices_now[i] < voices_prev[j]:
+                violations.append(f"R05:solapamiento_{voice_names[i]}-{voice_names[j]}")
+                score -= 0.4
+            # Voz inferior (j) sube por encima de donde estaba la superior (i)
+            if voices_now[j] > voices_prev[i]:
+                violations.append(f"R05:solapamiento_{voice_names[j]}-{voice_names[i]}")
+                score -= 0.4
 
         # R13: Preferir movimiento contrario u oblicuo
         if same_direction and motion_i != 0 and motion_j != 0:
-            score -= 0.05  # pequeña penalización por movimiento similar
+            score -= 0.05  # penalización suave por movimiento similar
 
     # ── R07: Penalizar saltos grandes ────────────────────────────────────────
     for vi, (now, prev_p) in enumerate(zip(voices_now, voices_prev)):

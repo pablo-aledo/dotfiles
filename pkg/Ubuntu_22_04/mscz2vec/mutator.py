@@ -242,7 +242,7 @@ SEMANTIC_MAP = {
 
     # ── TENSIÓN / ARCO ────────────────────────────────────────────────────────
     "tenso": {
-        "aliases": ["tenso", "tenso", "tense", "cargado", "opresivo"],
+        "aliases": ["tense", "cargado", "opresivo"],
         "tension_delta": +0.35,
         "harmony_complexity_delta": +0.25,
         "velocity_var_delta": +0.15,

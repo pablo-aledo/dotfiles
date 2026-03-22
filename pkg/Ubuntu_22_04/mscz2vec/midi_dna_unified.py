@@ -664,9 +664,16 @@ def _build_chord_pitches_from_roman(roman_figure, key_obj, prev_pitches=None,
         semitones, quality = 0, 'M'
 
     # Extensiones: añadir 7ª automáticamente si harmony_complexity > 0.5
-    # y añadir 9ª si > 0.75 (sólo en acordes de tónica y subdominante)
-    if harmony_complexity > 0.5 and '7' not in quality and quality in ('M', 'm'):
-        quality += '7'
+    # En modo mayor: M7 y m7 son diatónicas y se añaden libremente.
+    # En modo menor: sólo m7 es siempre diatónica; M7 sobre acordes mayores
+    # del modo (III, VI, VII) produce notas fuera de escala (error detectado).
+    if harmony_complexity > 0.5 and '7' not in quality:
+        if quality == 'm':
+            quality += '7'          # m7 es diatónica en mayor y menor
+        elif quality == 'M' and mode == 'major':
+            quality += '7'          # M7 diatónica en mayor (I, IV)
+        # En menor, M7 automática sobre III/VI/VII produce notas cromáticas
+        # no deseadas → no se añade extensión automática en esos casos
 
     root_pc = (tonic_pc + semitones) % 12
     lo, hi = INSTRUMENT_RANGES.get(register, (48, 76))
@@ -704,7 +711,7 @@ def _voice_lead(prev_chord_pitches, root_pc, quality, lo, hi):
         return [base + i for i in ints if base + i <= hi]
     result, used = [], set()
     for prev in sorted(prev_chord_pitches):
-        best = min(chord_midis, key=lambda m: (abs(m - prev), m in used))
+        best = min(chord_midis, key=lambda m: (abs(m - prev) + (1000 if m in used else 0)))
         result.append(best)
         used.add(best)
     return sorted(set(max(lo, min(hi, p)) for p in result))
@@ -733,9 +740,9 @@ def voice_lead_next_chord(prev_pitches, candidate_pitches):
             voicing = voicing[:n]
             cost = sum(abs(voicing[i] - prev_pitches[i]) for i in range(min(n, len(voicing))))
             for i in range(min(len(prev_pitches)-1, len(voicing)-1)):
-                prev_iv = (prev_pitches[i+1] - prev_pitches[i]) % 12
-                new_iv  = (voicing[i+1] - voicing[i]) % 12
-                if prev_iv == new_iv and prev_iv in (0, 7):
+                prev_iv = abs(prev_pitches[i+1] - prev_pitches[i])
+                new_iv  = abs(voicing[i+1] - voicing[i])
+                if (prev_iv % 12) == (new_iv % 12) and (new_iv % 12) in (0, 7):
                     cost += 12
             if cost < best_cost:
                 best_cost, best_voicing = cost, voicing
@@ -2862,8 +2869,14 @@ def generate_bass(harmony_prog, key_obj, n_bars, beats_per_bar=4, groove_map=Non
         # 5ª
         fifth = root + 7
         if fifth > hi: fifth -= 12
-        # 7ª (si existe en el acorde)
-        seventh = root + 10 if '7' in fig else root + 9
+        # 7ª: distinguir séptima mayor (MM7/M7) de séptima menor (Mm7/dom7)
+        # Consultamos la calidad del acorde en el mapa de grados para no asumir
+        # siempre séptima menor (error en acordes con séptima mayor diatónica).
+        _deg_map_b = MAJOR_SCALE_DEGREES if key_obj.mode == 'major' else MINOR_SCALE_DEGREES
+        _base_fig_b = fig.replace('7','').replace('°','').replace('+','').replace('9','')
+        _, _quality_b = _deg_map_b.get(_base_fig_b, (0, 'M'))
+        _seventh_iv = 11 if _quality_b in ('MM7', 'M7') else 10
+        seventh = root + (_seventh_iv if '7' in fig else 9)
         if seventh > hi: seventh -= 12
         return root, max(lo, min(hi, fifth)), max(lo, min(hi, seventh))
 

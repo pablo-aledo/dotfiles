@@ -615,13 +615,13 @@ SEMANTIC_DICTIONARY = {
     "misterio": {
         "aliases": ["misterioso", "mysterious", "enigmático", "enigmatico",
                     "ambiguo", "oscuro", "inquietante", "siniestro"],
-        "key_mode": "phrygian",
+        "key_mode": "dorian",
         "tension_profile": "medium_high",
         "tempo_range": (58, 96),
         "density": "light",
         "harmony_complexity": "complex",
         "arc": "mystery",
-        "justification": "El modo frigio con su b2 crea una ambigüedad tonal que impide la resolución predecible. La densidad baja aumenta la tensión por ausencia.",
+        "justification": "El modo dórico combina la oscuridad del menor con la VI mayor, generando ambigüedad tonal sin la estaticidad del frigio. La densidad baja aumenta la tensión por ausencia (Ligeti, Lontano).",
     },
     "grandiosidad": {
         "aliases": ["grandioso", "majestuoso", "épico", "epico", "heroico",
@@ -722,13 +722,13 @@ SEMANTIC_DICTIONARY = {
     "vacío": {
         "aliases": ["vacio", "empty", "desolado", "desierto", "abandono",
                     "nada", "silencio interior"],
-        "key_mode": "phrygian",
+        "key_mode": "minor",
         "tension_profile": "very_low",
         "tempo_range": (44, 64),
         "density": "minimal",
         "harmony_complexity": "simple",
         "arc": "meditation",
-        "justification": "El vacío como principio compositivo: Feldman (Rothko Chapel) y Satie usan la ausencia de densidad como argumento. Los silencios son parte del material.",
+        "justification": "El menor natural (eólico) sin función dominante activa produce desolación sin resistencia. Los silencios son el material principal (Feldman, Rothko Chapel; Satie, Gymnopédies).",
     },
 }
 
@@ -737,9 +737,14 @@ SEMANTIC_DICTIONARY = {
 #  Cada perfil es una función que genera un array de n_bars valores 0-1.
 # ══════════════════════════════════════════════════════════════════════════════
 
-def build_tension_profile(profile_name: str, n_bars: int) -> np.ndarray:
-    """Construye un array de tensión 0-1 de longitud n_bars."""
+def build_tension_profile(profile_name: str, n_bars: int, seed: int = None) -> np.ndarray:
+    """Construye un array de tensión 0-1 de longitud n_bars.
+
+    seed: semilla para perfiles estocásticos (high_unstable, chaotic_high).
+          None = aleatorio en cada llamada, int = reproducible.
+    """
     t = np.linspace(0, 1, n_bars)
+    rng = np.random.default_rng(seed)   # None → semilla aleatoria real
     profiles = {
         "low":             lambda: np.ones(n_bars) * 0.2,
         "low_dark":        lambda: 0.15 + 0.1 * np.sin(np.pi * t),
@@ -748,11 +753,11 @@ def build_tension_profile(profile_name: str, n_bars: int) -> np.ndarray:
         "medium":          lambda: 0.4 + 0.15 * np.sin(np.pi * t),
         "medium_high":     lambda: 0.5 + 0.2 * np.sin(np.pi * t),
         "high_unstable":   lambda: np.clip(0.65 + 0.2 * np.sin(4 * np.pi * t) +
-                                           0.1 * np.random.default_rng(42).standard_normal(n_bars), 0, 1),
+                                           0.1 * rng.standard_normal(n_bars), 0, 1),
         "high_climax":     lambda: np.clip(t ** 0.5 * 0.85 + 0.1, 0, 1),
         "sustained_high":  lambda: np.clip(0.60 + 0.12 * np.sin(3 * np.pi * t), 0, 1),
         "chaotic_high":    lambda: np.clip(0.7 + 0.25 * np.sin(6 * np.pi * t) +
-                                           0.08 * np.random.default_rng(7).standard_normal(n_bars), 0, 1),
+                                           0.08 * rng.standard_normal(n_bars), 0, 1),
         "crescendo":       lambda: np.clip(0.1 + 0.85 * t, 0, 1),
         "decrescendo":     lambda: np.clip(0.95 - 0.85 * t, 0, 1),
         "arch":            lambda: 0.1 + 0.85 * np.sin(np.pi * t),

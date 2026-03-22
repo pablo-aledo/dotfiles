@@ -160,10 +160,10 @@ VOICE_PROGRAMS = {
 }
 
 # Intervalos (en semitonos mod 12)
-PERFECT_CONSONANCES   = {0, 7}           # unísono, 5ª
-PERFECT_CONSONANCES_8 = {0, 7, 12}       # + 8ª
+PERFECT_CONSONANCES   = {0, 7, 12}       # unísono, 5ª, 8ª (Fux: mismas restricciones)
+PERFECT_CONSONANCES_8 = {0, 7, 12}       # alias mantenido por compatibilidad
 IMPERFECT_CONSONANCES = {3, 4, 8, 9}     # 3ª m/M, 6ª m/M
-ALL_CONSONANCES       = PERFECT_CONSONANCES | IMPERFECT_CONSONANCES | {12}
+ALL_CONSONANCES       = PERFECT_CONSONANCES | IMPERFECT_CONSONANCES
 DISSONANCES           = {1, 2, 5, 6, 10, 11}
 
 # Escalas diatónicas (pcs relativos al tónico)
@@ -481,8 +481,9 @@ def _motion_type(prev_mel, prev_cp, curr_mel, curr_cp):
         return 'parallel'
     # Mismo sentido pero distinto intervalo: similar o directo
     # "Directo" si se llega a consonancia perfecta por movimiento similar
+    # (Fux: prohibido independientemente del tamaño del salto)
     iv_new = _interval(curr_mel, curr_cp)
-    if iv_new in PERFECT_CONSONANCES and abs(d_cp) > 2:
+    if iv_new in PERFECT_CONSONANCES:
         return 'direct'
     return 'similar'
 
@@ -533,9 +534,6 @@ def _best_candidate(
         elif iv in PERFECT_CONSONANCES:
             score += 2
             reasons.append(f"+2 consonancia perfecta ({iv}st)")
-        elif iv == 12:  # 8ª
-            score += 1
-            reasons.append("+1 octava")
         else:
             score -= 3
             reasons.append(f"-3 disonancia ({iv}st)")
@@ -971,11 +969,14 @@ def _species4(
             resolution  = None
 
             if iv_mod in RETARDOS:
-                # Resolución por grado descendente
-                step = RETARDOS[iv_mod]
-                res_cand = key_info.snap_to_scale(cp_strong - step)
-                if lo <= res_cand <= hi and _is_consonant(mel_p, res_cand):
-                    resolution = res_cand
+                # Resolución por grado diatónico descendente (no semitono fijo)
+                # Buscar la nota diatónica inmediatamente inferior
+                for delta in [1, 2]:
+                    res_cand = key_info.snap_to_scale(cp_strong - delta)
+                    if (res_cand < cp_strong and lo <= res_cand <= hi
+                            and _is_consonant(mel_p, res_cand)):
+                        resolution = res_cand
+                        break
 
             if resolution is None:
                 resolution = _resolve_dissonance(cp_strong, mel_p, key_info, lo, hi)

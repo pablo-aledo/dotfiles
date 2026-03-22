@@ -126,8 +126,8 @@ def build_arc_curves(arc_name: str, n_bars: int, key: str = 'C') -> dict:
                 ])[:n_bars], 0, 1),
             'register': np.clip(np.concatenate([
                 np.linspace(0.4, 0.5, n_bars//4),
-                np.linspace(0.5, 0.9, n_bars//2),
-                np.linspace(0.9, 0.4, n_bars - (n_bars//4 + n_bars//2))
+                np.linspace(0.5, 0.9, n_bars//2 - n_bars//4),
+                np.linspace(0.9, 0.4, n_bars - n_bars//2)
             ])[:n_bars], 0, 1),
             'harmony':  np.clip(t**1.5 * 0.8 + 0.1, 0, 1),
             'swing':    np.zeros(n_bars) + 0.1,

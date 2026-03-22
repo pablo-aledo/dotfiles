@@ -354,9 +354,16 @@ def scale_degree_pitch(degree_idx: int, root_pc: int, mode: str,
 
 
 def leading_tone_pc(root_pc: int, mode: str) -> int:
-    """Devuelve el pitch class de la sensible de la tonalidad."""
+    """Devuelve el pitch class de la sensible de la tonalidad.
+
+    En modos menores la sensible es siempre el VII elevado (11 semitonos
+    desde la tónica), no el VII natural de la escala eólica (10 semitonos).
+    """
+    if mode in ("minor", "phrygian", "dorian", "locrian"):
+        # Sensible real = VII elevado (escala armónica), independiente del modo
+        return (root_pc + 11) % 12
     intervals = SCALE_INTERVALS.get(mode, SCALE_INTERVALS["major"])
-    return (root_pc + intervals[-1]) % 12  # último grado de la escala
+    return (root_pc + intervals[-1]) % 12
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -653,7 +660,9 @@ def resolve_to_cadence(motif: List[MotifNote], cadence_type: str,
         ]
     elif cadence_type == "modal":
         # bVII → i: cadencia modal
-        bvii_pitch  = pitch_for_degree((root_pc + 10) % 12 - root_pc)
+        bvii_pc    = (root_pc + 10) % 12   # pitch class del bVII
+        bvii_pitch = pitch_for_degree(bvii_pc - root_pc if bvii_pc >= root_pc
+                                      else bvii_pc - root_pc + 12)
         tonic_pitch = pitch_for_degree(0)
         cadence_notes = [
             MotifNote(bvii_pitch,  beats_per_bar, 70, last_offset),
