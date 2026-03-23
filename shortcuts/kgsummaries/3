@@ -11,5 +11,5 @@ xdotool key Return
 
 sleep 3
 
-mouseover -1 10000 ~/.dotfiles/shortcuts/images/sumblack.png
+mouseover -1 100000 ~/.dotfiles/shortcuts/images/sumblack.png
 
