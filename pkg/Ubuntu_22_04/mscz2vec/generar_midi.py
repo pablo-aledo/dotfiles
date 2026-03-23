@@ -97,6 +97,20 @@ CHORD_VOICINGS = {
     'Csus4':['C2','C3','F3','G3'],'Gsus4':['G1','G2','C3','D3'],
     'Dsus4':['D2','D3','G3','A3'],'Asus4':['A1','A2','D3','E3'],
     'Caug':['C2','C3','E3','Gs3'],'Gaug':['G1','G2','B2','Ds3'],
+    # ── Aliases y notación alternativa ────────────────────────────────────
+    # Semidisminuidos con símbolo ø (E semidisminuido = Mi-Sol-Sib-Re)
+    'Eø':  ['E1','E2','G2','Bb2','D3'],   # alias de Eo7
+    'Eø7': ['E1','E2','G2','Bb2','D3'],   # alias de Eo7
+    'Bø':  ['B1','B2','D3','F3'],         # alias de Bo7
+    'Bø7': ['B1','B2','D3','F3'],
+    'Cø':  ['C2','C3','Eb3','Gb3'],       # alias de Co7
+    'Cø7': ['C2','C3','Eb3','Gb3'],
+    # Bf = Si bemol (alias de Bb)
+    'Bf':  ['Bb1','Bb2','D3','F3'],
+    'Bf7': ['Bb1','Bb2','D3','F3','Ab3'],
+    # Otros bemoles con notación 'f'
+    'Ef':  ['Eb2','Eb3','G3','Bb3'],
+    'Af':  ['Ab1','Ab2','C3','Eb3'],
 }
 CHORD_DEFAULT = 'C'
 
@@ -1364,34 +1378,87 @@ def process_marcato(frases, bar1, patrones_extra=None):
 def process_solo(frases, bar1, capa='solo', legato=0.91):
     events = []
     for frase in frases:
-        bloque=frase.get(capa)
+        bloque = frase.get(capa)
         if not bloque: continue
-        fe=[]
-        if 'melodia' in bloque:
+        fe = []
+        art_global = frase.get('articulacion')
+        # Direct list of notes (our primary format for viola/violin/maderas/metales)
+        if isinstance(bloque, list):
+            for nota in bloque:
+                if isinstance(nota, dict):
+                    try:
+                        bar  = int(nota.get('compas', frase['compases'][0]))
+                        beat = float(nota.get('beat', 0.0))
+                        dur  = float(nota.get('dur', 1.0))
+                        vel  = int(nota.get('vel', 72))
+                        n    = note_to_midi(str(nota['nota']))
+                    except (ValueError, KeyError) as e:
+                        print(f"  ⚠ {capa} dict: {e}"); continue
+                    art_nota = nota.get('art') or art_global
+                    ratio, vel_delta = resolve_articulation(art_nota)
+                    new_vel = max(1, min(127, vel + vel_delta))
+                    t_on  = bar_beat_to_tick(int(bar), float(beat), bar1)
+                    t_off = t_on + beats_to_ticks(dur * ratio)
+                    fe.append((t_on, 'on', n, new_vel))
+                    fe.append((t_off, 'off', n, 0))
+                else:
+                    bar, beat, dur, note_name, vel = nota
+                    try: n = note_to_midi(note_name)
+                    except ValueError as e: print(f"  ⚠ {capa}: {e}"); continue
+                    ratio, vel_delta = resolve_articulation(art_global)
+                    new_vel = max(1, min(127, int(vel) + vel_delta))
+                    t_on  = bar_beat_to_tick(int(bar), float(beat), bar1)
+                    t_off = t_on + beats_to_ticks(float(dur) * ratio)
+                    fe.append((t_on, 'on', n, new_vel))
+                    fe.append((t_off, 'off', n, 0))
+        elif 'melodia' in bloque:
             for nota in bloque['melodia']:
-                bar,beat,dur,note_name,vel=nota
-                try: n=note_to_midi(str(note_name))
-                except ValueError as e: print(f"  ⚠ {capa}: {e}"); continue
-                t_on=bar_beat_to_tick(int(bar),float(beat),bar1)
-                t_off=t_on+beats_to_ticks(float(dur)*legato)
-                fe.append((t_on,'on',n,int(min(vel,127)))); fe.append((t_off,'off',n,0))
+                if isinstance(nota, dict):
+                    try:
+                        bar  = int(nota.get('compas', frase['compases'][0]))
+                        beat = float(nota.get('beat', 0.0))
+                        dur  = float(nota.get('dur', 1.0))
+                        vel  = int(nota.get('vel', 72))
+                        n    = note_to_midi(str(nota['nota']))
+                    except (ValueError, KeyError) as e:
+                        print(f"  ⚠ {capa} dict: {e}"); continue
+                    art_nota = nota.get('art') or art_global
+                    ratio, vel_delta = resolve_articulation(art_nota)
+                    new_vel = max(1, min(127, vel + vel_delta))
+                    t_on  = bar_beat_to_tick(int(bar), float(beat), bar1)
+                    t_off = t_on + beats_to_ticks(dur * ratio)
+                    fe.append((t_on, 'on', n, new_vel))
+                    fe.append((t_off, 'off', n, 0))
+                else:
+                    bar, beat, dur, note_name, vel = nota
+                    try: n = note_to_midi(note_name)
+                    except ValueError as e: print(f"  ⚠ {capa}: {e}"); continue
+                    ratio, vel_delta = resolve_articulation(art_global)
+                    new_vel = max(1, min(127, int(vel) + vel_delta))
+                    t_on  = bar_beat_to_tick(int(bar), float(beat), bar1)
+                    t_off = t_on + beats_to_ticks(float(dur) * ratio)
+                    fe.append((t_on, 'on', n, new_vel))
+                    fe.append((t_off, 'off', n, 0))
         else:
-            patron_raw=bloque.get('patron',[]); apariciones=bloque.get('apariciones',[])
+            patron_raw = bloque.get('patron', [])
+            apariciones = bloque.get('apariciones', [])
             for bar_start in apariciones:
                 for entry in patron_raw:
-                    if len(entry)<4: continue
-                    beat_abs,dur,note_name,vel=entry
-                    bar_offset=int(beat_abs//4); beat_in_bar=beat_abs%4
-                    actual_bar=bar_start+bar_offset
-                    try: n=note_to_midi(str(note_name))
+                    if len(entry) < 4: continue
+                    beat_abs, dur, note_name, vel = entry
+                    bar_offset = int(beat_abs // 4); beat_in_bar = beat_abs % 4
+                    actual_bar = bar_start + bar_offset
+                    try: n = note_to_midi(str(note_name))
                     except ValueError as e: print(f"  ⚠ {capa}: {e}"); continue
-                    t_on=bar_beat_to_tick(actual_bar,beat_in_bar,bar1)
-                    t_off=t_on+beats_to_ticks(float(dur)*legato)
-                    fe.append((t_on,'on',n,int(min(vel,127)))); fe.append((t_off,'off',n,0))
-        fe=apply_transformations(fe,bloque.get('transformaciones'))
-        fe=apply_dynamics_curve(fe,bloque.get('dinamica'))
+                    t_on  = bar_beat_to_tick(actual_bar, beat_in_bar, bar1)
+                    t_off = t_on + beats_to_ticks(float(dur) * legato)
+                    fe.append((t_on, 'on', n, int(min(vel, 127))))
+                    fe.append((t_off, 'off', n, 0))
+        fe = apply_transformations(fe, bloque.get('transformaciones') if isinstance(bloque, dict) else None)
+        fe = apply_dynamics_curve(fe, bloque.get('dinamica') if isinstance(bloque, dict) else None)
         events.extend(fe)
     return events
+
 
 def process_pad(frases, bar1):
     events=[]
@@ -1406,12 +1473,41 @@ def process_pad(frases, bar1):
     return events
 
 def process_percusion(frases, bar1):
-    events=[]
+    """Soporta dos formatos:
+    1. Lista plana: [[bar, beat, nota_num, vel], ...]
+    2. Dict patron+apariciones: {patron: [[beat, dur, nota_num, vel],...], apariciones: [bar,...]}
+       nota_num = número MIDI (36=bombo, 38=caja, 47=timbal, 49=platillo).
+    """
+    events = []
     for frase in frases:
-        for entrada in frase.get('percusion',[]):
-            bar,beat,nota_num,vel=entrada
-            t_on=bar_beat_to_tick(int(bar),float(beat),bar1); t_off=t_on+beats_to_ticks(0.4)
-            events.append((t_on,'on',int(nota_num),int(vel))); events.append((t_off,'off',int(nota_num),0))
+        perc = frase.get('percusion')
+        if not perc:
+            continue
+        if isinstance(perc, dict):
+            patron_raw  = perc.get('patron', [])
+            apariciones = perc.get('apariciones', [])
+            for bar_start in apariciones:
+                for entry in patron_raw:
+                    if len(entry) < 3: continue
+                    if len(entry) == 3:
+                        beat_abs, dur, vel = entry
+                        nota_num = 36
+                    else:
+                        beat_abs, dur, nota_num, vel = entry[:4]
+                    bar_offset  = int(float(beat_abs) // 4)
+                    beat_in_bar = float(beat_abs) % 4
+                    actual_bar  = bar_start + bar_offset
+                    t_on  = bar_beat_to_tick(actual_bar, beat_in_bar, bar1)
+                    t_off = t_on + beats_to_ticks(float(dur))
+                    events.append((t_on,  'on',  int(nota_num), int(min(vel, 127))))
+                    events.append((t_off, 'off', int(nota_num), 0))
+        else:
+            for entrada in perc:
+                bar, beat, nota_num, vel = entrada
+                t_on  = bar_beat_to_tick(int(bar), float(beat), bar1)
+                t_off = t_on + beats_to_ticks(0.4)
+                events.append((t_on,  'on',  int(nota_num), int(vel)))
+                events.append((t_off, 'off', int(nota_num), 0))
     return events
 
 DEFAULT_TRACKS = [
