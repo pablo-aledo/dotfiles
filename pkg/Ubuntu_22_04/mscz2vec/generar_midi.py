@@ -1898,18 +1898,48 @@ def export_html(obra: dict, output_dir: str):
     dur_sec     = total_bars * 4 / avg_bpm * 60
 
     # Estadísticas globales
+    # Claves de instrumento que pueden contener notas melódicas en una frase
+    _INSTR_KEYS = {'viola','violin','melodia','cello','contrabajo','flauta',
+                   'oboe','clarinete','fagot','trompa','trompeta','trombon',
+                   'arpa','piano','maderas','metales','cuerdas_seccion'}
+    # Campos que NO son notas en una frase (evitar confusión)
+    _NON_NOTE_KEYS = {'id','nombre','compases','leitmotiv','articulacion',
+                      'descripcion','dinamica','armonia','marcato','control',
+                      'ostinato','arpegio','pitch_bend','transformaciones',
+                      'origen_leitmotiv','pad','percusion','tonalidad','compas',
+                      'tempo','duracion_aprox','instrumentacion'}
+
+    def _extract_note_vel(entrada):
+        """Extrae (nota_str, velocidad) de una entrada que puede ser dict o lista."""
+        if isinstance(entrada, dict):
+            nota = entrada.get('nota') or entrada.get('note')
+            vel  = entrada.get('vel') or entrada.get('velocidad') or entrada.get('velocity')
+            if nota and vel is not None:
+                return str(nota), int(vel)
+        elif isinstance(entrada, list) and len(entrada) >= 5:
+            return str(entrada[3]), int(entrada[4])
+        return None, None
+
     all_notes = []; all_chords = Counter(); all_vels = []
     for sec in secciones:
         for frase in sec.get('frases', []):
-            for nota in frase.get('melodia', []):
-                if isinstance(nota, list) and len(nota) >= 5:
-                    try:
-                        all_notes.append(note_to_midi(str(nota[3])) % 12)
-                        all_vels.append(int(nota[4]))
-                    except Exception:
-                        pass
+            # Buscar notas en claves de instrumento conocidas o en cualquier
+            # clave que no sea metadata conocida
+            for key, val in frase.items():
+                if key in _NON_NOTE_KEYS:
+                    continue
+                if not isinstance(val, list):
+                    continue
+                for entrada in val:
+                    nota_str, vel = _extract_note_vel(entrada)
+                    if nota_str and vel is not None:
+                        try:
+                            all_notes.append(note_to_midi(nota_str) % 12)
+                            all_vels.append(vel)
+                        except Exception:
+                            pass
             for item in frase.get('armonia', []):
-                if item.get('acorde'):
+                if isinstance(item, dict) and item.get('acorde'):
                     all_chords[item['acorde']] += 1
 
     pc_count    = Counter(all_notes)
@@ -1933,7 +1963,16 @@ def export_html(obra: dict, output_dir: str):
         t = sec['tempo']
         frases_data = []
         for frase in sec.get('frases', []):
-            n_mel  = len(frase.get('melodia', []))
+            # Contar notas en todas las claves de instrumento (no solo 'melodia')
+            n_mel = 0
+            for key, val in frase.items():
+                if key in _NON_NOTE_KEYS:
+                    continue
+                if isinstance(val, list):
+                    for entrada in val:
+                        nota_str, _ = _extract_note_vel(entrada)
+                        if nota_str:
+                            n_mel += 1
             n_arm  = len(frase.get('armonia', []))
             badges = []
             if frase.get('transformaciones'):
@@ -1965,8 +2004,8 @@ def export_html(obra: dict, output_dir: str):
                 'badges':  badges,
                 'acordes': acordes,
                 'desc':    (frase.get('descripcion') or '').strip(),
-                'din_ini': (frase.get('dinamica') or {}).get('inicio',''),
-                'din_fin': (frase.get('dinamica') or {}).get('fin',''),
+                'din_ini': (frase.get('dinamica') or {}).get('vel_ini',''),
+                'din_fin': (frase.get('dinamica') or {}).get('vel_fin',''),
                 'din_tipo':(frase.get('dinamica') or {}).get('tipo',''),
             })
         sections_data.append({
@@ -2020,14 +2059,14 @@ def export_html(obra: dict, output_dir: str):
 <link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Inconsolata:wght@300;400;600&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
 :root {{
-  --ink:      #1a1209;
+  --ink:      #0f0c08;
   --paper:    #f5f0e8;
   --paper2:   #ede7d6;
   --rule:     #c8b99a;
   --rule2:    #a89070;
   --accent:   #8b1a1a;
   --accent2:  #2a4a6b;
-  --dim:      #7a6a54;
+  --dim:      #4a3e2e;
   --staff:    #d4c5a9;
   --shadow:   rgba(0,0,0,0.15);
 }}
@@ -2037,13 +2076,8 @@ body {{
   background: var(--paper);
   color: var(--ink);
   font-family: 'Inconsolata', monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  background-image:
-    repeating-linear-gradient(
-      transparent, transparent 27px,
-      var(--staff) 27px, var(--staff) 28px
-    );
+  font-size: 15px;
+  line-height: 1.6;
   min-height: 100vh;
 }}
 
@@ -2059,11 +2093,10 @@ header::before {{
   content: '';
   position: absolute; inset: 0;
   background-image:
-    repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(255,255,255,.04) 60px),
-    repeating-linear-gradient(transparent, transparent 27px, rgba(255,255,255,.04) 28px);
+    repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(255,255,255,.04) 60px);
   pointer-events: none;
 }}
-.header-inner {{ position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; }}
+.header-inner {{ position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; }}
 h1 {{
   font-family: 'IM Fell English', serif;
   font-size: clamp(2.2rem, 5vw, 3.8rem);
@@ -2085,20 +2118,20 @@ h1 {{
 .pill {{
   border: 1px solid rgba(255,255,255,.25);
   padding: 4px 14px;
-  font-size: 11px;
-  letter-spacing: .12em;
+  font-size: 13px;
+  letter-spacing: .10em;
   text-transform: uppercase;
-  color: rgba(255,255,255,.75);
+  color: rgba(255,255,255,.85);
 }}
 .pill strong {{ color: #fff; }}
 
 /* ── Contenido ────────────────────────────────────────────────── */
-.page {{ max-width: 1100px; margin: 0 auto; padding: 0 60px 80px; }}
+.page {{ max-width: 1400px; margin: 0 auto; padding: 0 48px 80px; }}
 
 .section-title {{
   font-family: 'Libre Baskerville', serif;
-  font-size: .65rem;
-  letter-spacing: .22em;
+  font-size: .8rem;
+  letter-spacing: .20em;
   text-transform: uppercase;
   color: var(--dim);
   margin: 48px 0 16px;
@@ -2119,7 +2152,7 @@ h1 {{
   justify-content: center; align-items: center;
   background: var(--accent2);
   color: #fff;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .08em;
   text-align: center;
   padding: 4px 6px;
@@ -2133,20 +2166,17 @@ h1 {{
 .tl-seg::after {{
   content: '';
   position: absolute; inset: 0;
-  background: repeating-linear-gradient(
-    90deg, transparent, transparent 7px, rgba(255,255,255,.06) 8px
-  );
   pointer-events: none;
 }}
-.tl-seg .tl-id   {{ font-weight: 600; font-size: 13px; }}
-.tl-seg .tl-cc   {{ opacity: .7; font-size: 9px; }}
+.tl-seg .tl-id   {{ font-weight: 600; font-size: 15px; }}
+.tl-seg .tl-cc   {{ opacity: .8; font-size: 11px; }}
 .tl-ruler {{
   display: flex; gap: 3px;
   margin-bottom: 32px;
 }}
 .tl-ruler-seg {{
   text-align: center;
-  font-size: 9px;
+  font-size: 11px;
   color: var(--dim);
   letter-spacing: .05em;
 }}
@@ -2182,76 +2212,68 @@ h1 {{
   display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto;
 }}
 .tempo-badge {{
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   border: 1px solid var(--rule);
   padding: 2px 8px;
   white-space: nowrap;
 }}
 .sec-desc {{
-  font-family: 'IM Fell English', serif;
-  font-style: italic;
-  color: var(--dim);
-  font-size: .9rem;
-  margin-bottom: 14px;
-  max-width: 680px;
-  line-height: 1.6;
+  font-family: 'Inconsolata', monospace;
+  font-style: normal;
+  color: var(--ink);
+  font-size: 1.0rem;
+  margin-bottom: 18px;
+  max-width: 100%;
+  line-height: 1.7;
 }}
 
 /* ── Frases ───────────────────────────────────────────────────── */
 .frases-row {{
   display: flex;
-  gap: 4px;
-  align-items: flex-end;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-start;
   padding-bottom: 4px;
 }}
 .frase-block {{
-  flex-shrink: 0;
   background: var(--paper2);
   border: 1px solid var(--rule);
   border-top: 3px solid var(--rule2);
   padding: 10px 12px 8px;
   position: relative;
-  cursor: pointer;
-  transition: box-shadow .15s, transform .15s;
-  min-width: 100px;
-}}
-.frase-block:hover {{
-  box-shadow: 0 4px 18px var(--shadow);
-  transform: translateY(-2px);
-  z-index: 2;
+  min-width: 140px;
 }}
 .frase-block.has-lm {{ border-top-width: 4px; }}
 .frase-id {{
-  font-size: 9px;
-  letter-spacing: .12em;
+  font-size: 11px;
+  letter-spacing: .10em;
   text-transform: uppercase;
   color: var(--dim);
   margin-bottom: 4px;
 }}
 .frase-nombre {{
   font-family: 'Libre Baskerville', serif;
-  font-size: .78rem;
+  font-size: .88rem;
   font-weight: 700;
   line-height: 1.3;
   margin-bottom: 6px;
 }}
 .frase-cc {{
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   margin-bottom: 6px;
 }}
 .frase-stats {{
   display: flex; gap: 6px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   margin-bottom: 6px;
 }}
 .stat-n {{
   background: var(--rule);
   color: var(--ink);
-  padding: 1px 5px;
+  padding: 1px 6px;
   font-weight: 600;
 }}
 /* Barra de densidad de notas */
@@ -2272,9 +2294,9 @@ h1 {{
   margin-bottom: 6px;
 }}
 .acorde-chip {{
-  font-size: 9px;
+  font-size: 11px;
   border: 1px solid var(--rule2);
-  padding: 0 4px;
+  padding: 1px 5px;
   color: var(--accent);
   font-family: 'Libre Baskerville', serif;
   font-weight: 700;
@@ -2285,53 +2307,29 @@ h1 {{
   display: flex; flex-wrap: wrap; gap: 3px;
 }}
 .badge {{
-  font-size: 8px;
-  letter-spacing: .06em;
-  padding: 1px 5px;
+  font-size: 10px;
+  letter-spacing: .05em;
+  padding: 1px 6px;
   background: var(--ink);
   color: var(--paper);
-  opacity: .65;
+  opacity: .75;
   white-space: nowrap;
 }}
 /* Leitmotiv dot */
 .lm-dot {{
   display: inline-block;
-  width: 8px; height: 8px;
+  width: 9px; height: 9px;
   border-radius: 50%;
   margin-right: 4px;
   vertical-align: middle;
 }}
 .lm-label {{
-  font-size: 9px;
-  letter-spacing: .08em;
+  font-size: 11px;
+  letter-spacing: .07em;
   text-transform: uppercase;
 }}
 
-/* Tooltip de frase */
-.frase-block [data-tooltip] {{ position: relative; }}
-.tooltip {{
-  display: none;
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  min-width: 240px;
-  max-width: 320px;
-  background: var(--ink);
-  color: var(--paper);
-  padding: 10px 14px;
-  font-size: 11px;
-  line-height: 1.55;
-  z-index: 99;
-  pointer-events: none;
-  box-shadow: 0 6px 24px rgba(0,0,0,.35);
-}}
-.tooltip::after {{
-  content: '';
-  position: absolute; top: 100%; left: 16px;
-  border: 6px solid transparent;
-  border-top-color: var(--ink);
-}}
-.frase-block:hover .tooltip {{ display: block; }}
+/* (tooltip eliminado) */
 
 /* ── Panel de análisis ────────────────────────────────────────── */
 .analysis-grid {{
@@ -2351,8 +2349,8 @@ h1 {{
   padding: 20px;
 }}
 .card-title {{
-  font-size: .6rem;
-  letter-spacing: .2em;
+  font-size: .75rem;
+  letter-spacing: .18em;
   text-transform: uppercase;
   color: var(--dim);
   margin-bottom: 14px;
@@ -2361,26 +2359,26 @@ h1 {{
 }}
 
 /* Pitch class chart */
-.pc-chart {{ display: flex; flex-direction: column; gap: 4px; }}
-.pc-row {{ display: flex; align-items: center; gap: 8px; font-size: 10px; }}
-.pc-name {{ width: 22px; font-weight: 600; color: var(--dim); }}
-.pc-bar-wrap {{ flex: 1; height: 12px; background: var(--rule); position: relative; }}
+.pc-chart {{ display: flex; flex-direction: column; gap: 5px; }}
+.pc-row {{ display: flex; align-items: center; gap: 8px; font-size: 12px; }}
+.pc-name {{ width: 26px; font-weight: 600; color: var(--ink); }}
+.pc-bar-wrap {{ flex: 1; height: 14px; background: var(--rule); position: relative; }}
 .pc-bar-fill {{ position: absolute; top:0; left:0; bottom:0; background: var(--accent2); }}
-.pc-val {{ width: 24px; text-align: right; color: var(--dim); }}
+.pc-val {{ width: 28px; text-align: right; color: var(--dim); }}
 
 /* Chord chart */
-.chord-chart {{ display: flex; flex-direction: column; gap: 5px; }}
-.chord-row {{ display: flex; align-items: center; gap: 8px; font-size: 10px; }}
+.chord-chart {{ display: flex; flex-direction: column; gap: 6px; }}
+.chord-row {{ display: flex; align-items: center; gap: 8px; font-size: 12px; }}
 .chord-name {{
-  width: 44px;
+  width: 50px;
   font-family: 'Libre Baskerville', serif;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--accent);
 }}
-.chord-bar-wrap {{ flex: 1; height: 12px; background: var(--rule); position: relative; }}
+.chord-bar-wrap {{ flex: 1; height: 14px; background: var(--rule); position: relative; }}
 .chord-bar-fill {{ position: absolute; top:0; left:0; bottom:0; background: var(--accent); }}
-.chord-val {{ width: 24px; text-align: right; color: var(--dim); }}
+.chord-val {{ width: 28px; text-align: right; color: var(--dim); }}
 
 /* Leitmotivs */
 .lm-list {{ display: flex; flex-direction: column; gap: 12px; }}
@@ -2390,30 +2388,30 @@ h1 {{
   flex-shrink: 0;
   margin-top: 2px;
 }}
-.lm-info .lm-id {{ font-weight: 600; font-size: 10px; letter-spacing: .1em; }}
+.lm-info .lm-id {{ font-weight: 600; font-size: 12px; letter-spacing: .08em; color: var(--ink); }}
 .lm-info .lm-nombre {{
   font-family: 'Libre Baskerville', serif;
-  font-size: .82rem;
+  font-size: .92rem;
   font-weight: 700;
 }}
 .lm-info .lm-notas {{
-  font-size: 10px; color: var(--dim);
+  font-size: 12px; color: var(--dim);
   letter-spacing: .05em;
   margin: 2px 0;
 }}
 .lm-info .lm-desc {{
-  font-family: 'IM Fell English', serif;
-  font-style: italic;
-  font-size: .78rem;
+  font-family: 'Inconsolata', monospace;
+  font-style: normal;
+  font-size: .85rem;
   color: var(--dim);
-  line-height: 1.45;
+  line-height: 1.5;
 }}
 
 /* Dinámica */
 .din-box {{ display: flex; flex-direction: column; gap: 10px; }}
-.din-stat {{ display: flex; justify-content: space-between; }}
+.din-stat {{ display: flex; justify-content: space-between; font-size: 13px; }}
 .din-label {{ color: var(--dim); }}
-.din-val {{ font-weight: 600; }}
+.din-val {{ font-weight: 600; color: var(--ink); }}
 .din-bar-wrap {{ height: 18px; background: var(--rule); position: relative; margin-top: 8px; }}
 .din-bar-min, .din-bar-max, .din-bar-avg {{
   position: absolute; top:0; bottom:0; width: 2px;
@@ -2423,14 +2421,14 @@ h1 {{
 .din-bar-avg {{ background: var(--ink); }}
 
 /* Tracks */
-.tracks-table {{ width: 100%; border-collapse: collapse; font-size: 11px; }}
+.tracks-table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
 .tracks-table th {{
-  text-align: left; padding: 4px 8px;
-  font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+  text-align: left; padding: 5px 8px;
+  font-size: 11px; letter-spacing: .10em; text-transform: uppercase;
   color: var(--dim); border-bottom: 1px solid var(--rule);
 }}
 .tracks-table td {{
-  padding: 5px 8px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--staff);
   vertical-align: top;
 }}
@@ -2454,9 +2452,9 @@ h1 {{
 footer {{
   text-align: center;
   padding: 24px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
-  letter-spacing: .1em;
+  letter-spacing: .08em;
   border-top: 1px solid var(--rule);
   margin-top: 40px;
 }}
@@ -2621,15 +2619,17 @@ SECTIONS.forEach((sec, si) => {{
       ? `<div style="margin-bottom:5px"><span class="lm-dot" style="background:${{frase.lm_color}}"></span><span class="lm-label">${{frase.lm}}</span></div>`
       : '';
 
-    const dinHtml = frase.din_tipo
-      ? `<div style="font-size:9px;color:var(--dim);margin-top:4px">din: ${{frase.din_ini||'?'}}→${{frase.din_fin||'?'}} <em>(${{frase.din_tipo}})</em></div>`
+    const dinIni = frase.din_ini !== undefined && frase.din_ini !== '' ? frase.din_ini : null;
+    const dinFin = frase.din_fin !== undefined && frase.din_fin !== '' ? frase.din_fin : null;
+    const dinTipo = frase.din_tipo || '';
+    const dinSame = dinIni !== null && dinFin !== null && String(dinIni) === String(dinFin);
+    const dinHtml = (dinTipo && dinTipo !== 'fijo')
+      ? (dinSame
+          ? `<div style="font-size:12px;color:var(--dim);margin-top:4px">din: ${{dinIni}} <em>(${{dinTipo}})</em></div>`
+          : `<div style="font-size:12px;color:var(--dim);margin-top:4px">din: ${{dinIni !== null ? dinIni : '?'}}→${{dinFin !== null ? dinFin : '?'}} <em>(${{dinTipo}})</em></div>`)
       : '';
 
     fb.innerHTML = `
-      <div class="tooltip">${{
-        frase.nombre +
-        (frase.desc ? '<br><em style="opacity:.75">' + frase.desc.substring(0,160).replace(/\\n/g,' ') + '</em>' : '')
-      }}</div>
       <div class="frase-id">${{frase.id}}</div>
       <div class="frase-nombre">${{frase.nombre}}</div>
       <div class="frase-cc">cc.${{frase.cc_ini}}–${{frase.cc_fin}}</div>
@@ -2706,7 +2706,7 @@ dinBox.innerHTML = `
     <div class="din-bar-avg"  style="left:${{pct(vAvg,127)}}%"></div>
     <div class="din-bar-max"  style="left:${{pct(vMax,127)}}%"></div>
   </div>
-  <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--dim);margin-top:4px">
+  <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-top:4px">
     <span>ppp&nbsp;0</span><span>mp&nbsp;64</span><span>fff&nbsp;127</span>
   </div>
 `;
