@@ -18,6 +18,8 @@ Uso:
     python generar_midi.py --stems --seccion I     # stems solo de la sección I
     python generar_midi.py --leitmotivs            # un MIDI por leitmotiv en output/leitmotivs/
     python generar_midi.py --harmony               # un MIDI de armonía por sección en output/harmony/
+    python generar_midi.py --melody                # un MIDI de melodía por sección en output/melody/
+    python generar_midi.py --rhythm                # un MIDI de ritmo por sección en output/rhythm/
     python generar_midi.py --html                  # esquema visual HTML de la obra
     python generar_midi.py --render-audio          # genera MIDI y lo convierte a WAV
     python generar_midi.py --csv                   # exporta CSV de análisis
@@ -2884,6 +2886,141 @@ def generate_harmony(secciones, output_dir, obra):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  EXPORTACIÓN DE MELODÍA (un MIDI por sección con solo la melodía)
+# ══════════════════════════════════════════════════════════════════════════════
+def generate_melody(secciones, output_dir, obra):
+    """Genera un MIDI por sección exportando únicamente la capa de melodía.
+
+    Estructura de salida:
+        output_dir/melody/
+          SeccionI_melody.mid
+          SeccionII_melody.mid
+          ...
+    """
+    melody_dir     = os.path.join(output_dir, 'melody')
+    os.makedirs(melody_dir, exist_ok=True)
+    generated      = []
+    patrones_extra = _load_patrones(obra)
+    lm_index       = _build_leitmotiv_index(obra)
+
+    # Buscar el track principal de melodía (capa 'viola', 'violin' o 'melodia')
+    track_defs = obra.get('tracks', DEFAULT_TRACKS)
+    mel_tdef   = next((t for t in track_defs
+                       if t.get('capa') in ('melodia', 'viola', 'violin')), None)
+    canal = int(mel_tdef['canal'])    if mel_tdef else 0
+    prog  = int(mel_tdef['programa']) if mel_tdef else 40   # Violin GM
+    nom   = mel_tdef.get('nombre', 'Melodia') if mel_tdef else 'Melodia'
+
+    print(f"\n  Exportando melodía → {melody_dir}/")
+    print(f"  Track: {nom}  canal:{canal}  prog:{prog}")
+
+    for sec in secciones:
+        sid    = sec['id']
+        c_ini  = sec['compases'][0]
+        frases = sec.get('frases', [])
+
+        events = get_capa_events('melodia', frases, c_ini, patrones_extra,
+                                 lm_index, seccion=sec, obra=obra)
+        if not events:
+            print(f"  — Sección {sid}: sin eventos de melodía, omitida")
+            continue
+
+        check_note_overlaps(events, f'melodia-{sid}')
+        n_on = sum(1 for e in events if e[1] == 'on')
+
+        mid = MidiFile(type=1, ticks_per_beat=TPB)
+        mid.tracks.append(build_tempo_track(sec, c_ini, obra))
+        mid.tracks.append(build_track(f'Melodia — Sec.{sid}', canal, prog, events))
+
+        # Incluir pitch bend si lo hay
+        pb = build_pitchbend_track(nom, canal, frases, c_ini)
+        if pb:
+            mid.tracks.append(pb)
+
+        fname    = f"Seccion{_safe_filename(str(sid))}_melody.mid"
+        out_path = os.path.join(melody_dir, fname)
+        mid.save(out_path)
+        generated.append(out_path)
+        print(f"  ✓ {fname}  ({n_on} notas)")
+
+    return generated
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  EXPORTACIÓN DE RITMO (un MIDI por sección con marcato + percusión)
+# ══════════════════════════════════════════════════════════════════════════════
+def generate_rhythm(secciones, output_dir, obra):
+    """Genera un MIDI por sección exportando las capas rítmicas: marcato y
+    percusión. Si una sección no tiene percusión, exporta solo el marcato,
+    y viceversa.
+
+    Estructura de salida:
+        output_dir/rhythm/
+          SeccionI_rhythm.mid
+          SeccionII_rhythm.mid
+          ...
+    """
+    rhythm_dir     = os.path.join(output_dir, 'rhythm')
+    os.makedirs(rhythm_dir, exist_ok=True)
+    generated      = []
+    patrones_extra = _load_patrones(obra)
+    track_defs     = obra.get('tracks', DEFAULT_TRACKS)
+
+    # Buscar tracks de marcato y percusión
+    marc_tdef = next((t for t in track_defs if t.get('capa') == 'marcato'), None)
+    perc_tdef = next((t for t in track_defs if t.get('capa') == 'percusion'), None)
+
+    marc_canal = int(marc_tdef['canal'])    if marc_tdef else 3
+    marc_prog  = int(marc_tdef['programa']) if marc_tdef else 0
+    marc_nom   = marc_tdef.get('nombre', 'Marcato') if marc_tdef else 'Marcato'
+
+    perc_canal = int(perc_tdef['canal'])    if perc_tdef else 9
+    perc_nom   = perc_tdef.get('nombre', 'Percusion') if perc_tdef else 'Percusion'
+
+    print(f"\n  Exportando ritmo → {rhythm_dir}/")
+    print(f"  Marcato: {marc_nom}  canal:{marc_canal}  prog:{marc_prog}")
+    print(f"  Percusión: {perc_nom}  canal:{perc_canal}")
+
+    for sec in secciones:
+        sid    = sec['id']
+        c_ini  = sec['compases'][0]
+        frases = sec.get('frases', [])
+
+        marc_events = get_capa_events('marcato',   frases, c_ini, patrones_extra)
+        perc_events = get_capa_events('percusion', frases, c_ini, patrones_extra)
+
+        if not marc_events and not perc_events:
+            print(f"  — Sección {sid}: sin eventos rítmicos, omitida")
+            continue
+
+        mid = MidiFile(type=1, ticks_per_beat=TPB)
+        mid.tracks.append(build_tempo_track(sec, c_ini, obra))
+
+        if marc_events:
+            check_note_overlaps(marc_events, f'marcato-{sid}')
+            mid.tracks.append(build_track(f'Marcato — Sec.{sid}',
+                                          marc_canal, marc_prog, marc_events))
+            n_marc = sum(1 for e in marc_events if e[1] == 'on')
+        else:
+            n_marc = 0
+
+        if perc_events:
+            mid.tracks.append(build_track(f'Percusion — Sec.{sid}',
+                                          perc_canal, 0, perc_events))
+            n_perc = sum(1 for e in perc_events if e[1] == 'on')
+        else:
+            n_perc = 0
+
+        fname    = f"Seccion{_safe_filename(str(sid))}_rhythm.mid"
+        out_path = os.path.join(rhythm_dir, fname)
+        mid.save(out_path)
+        generated.append(out_path)
+        print(f"  ✓ {fname}  (marcato:{n_marc}  perc:{n_perc})")
+
+    return generated
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  EXPORTACIÓN DE STEMS (un MIDI por instrumento)
 # ══════════════════════════════════════════════════════════════════════════════
 def generate_stems(secciones, output_dir, obra):
@@ -3295,6 +3432,10 @@ def main():
                         help='Exporta un MIDI por leitmotiv en output/leitmotivs/')
     parser.add_argument('--harmony',      action='store_true',
                         help='Exporta un MIDI de armonía por sección en output/harmony/')
+    parser.add_argument('--melody',       action='store_true',
+                        help='Exporta un MIDI de melodía por sección en output/melody/')
+    parser.add_argument('--rhythm',       action='store_true',
+                        help='Exporta un MIDI de ritmo (marcato+percusión) por sección en output/rhythm/')
     args=parser.parse_args()
 
     if args.diff: diff_obras(args.diff[0],args.diff[1]); return
@@ -3360,6 +3501,18 @@ def main():
         harm_files = generate_harmony(secciones, args.output, obra)
         generated.extend(harm_files)
         print(f"\n  ✓ {len(harm_files)} fichero(s) de armonía en '{args.output}/harmony/'")
+
+    if args.melody:
+        print(f"\n{'─'*60}")
+        mel_files = generate_melody(secciones, args.output, obra)
+        generated.extend(mel_files)
+        print(f"\n  ✓ {len(mel_files)} fichero(s) de melodía en '{args.output}/melody/'")
+
+    if args.rhythm:
+        print(f"\n{'─'*60}")
+        rhy_files = generate_rhythm(secciones, args.output, obra)
+        generated.extend(rhy_files)
+        print(f"\n  ✓ {len(rhy_files)} fichero(s) de ritmo en '{args.output}/rhythm/'")
 
     print(f"\n{'─'*60}\n  ✓ {len(generated)} fichero(s) generado(s) en '{args.output}/'")
     for p in generated:
