@@ -97,20 +97,12 @@ CHORD_VOICINGS = {
     'Csus4':['C2','C3','F3','G3'],'Gsus4':['G1','G2','C3','D3'],
     'Dsus4':['D2','D3','G3','A3'],'Asus4':['A1','A2','D3','E3'],
     'Caug':['C2','C3','E3','Gs3'],'Gaug':['G1','G2','B2','Ds3'],
-    # ── Aliases y notación alternativa ────────────────────────────────────
-    # Semidisminuidos con símbolo ø (E semidisminuido = Mi-Sol-Sib-Re)
-    'Eø':  ['E1','E2','G2','Bb2','D3'],   # alias de Eo7
-    'Eø7': ['E1','E2','G2','Bb2','D3'],   # alias de Eo7
-    'Bø':  ['B1','B2','D3','F3'],         # alias de Bo7
-    'Bø7': ['B1','B2','D3','F3'],
-    'Cø':  ['C2','C3','Eb3','Gb3'],       # alias de Co7
-    'Cø7': ['C2','C3','Eb3','Gb3'],
-    # Bf = Si bemol (alias de Bb)
-    'Bf':  ['Bb1','Bb2','D3','F3'],
-    'Bf7': ['Bb1','Bb2','D3','F3','Ab3'],
-    # Otros bemoles con notación 'f'
-    'Ef':  ['Eb2','Eb3','G3','Bb3'],
-    'Af':  ['Ab1','Ab2','C3','Eb3'],
+    # Aliases
+    'Eø':  ['E1','E2','G2','Bb2','D3'], 'Eø7': ['E1','E2','G2','Bb2','D3'],
+    'Bø':  ['B1','B2','D3','F3'],       'Bø7': ['B1','B2','D3','F3'],
+    'Cø':  ['C2','C3','Eb3','Gb3'],     'Cø7': ['C2','C3','Eb3','Gb3'],
+    'Bf':  ['Bb1','Bb2','D3','F3'],     'Bf7': ['Bb1','Bb2','D3','F3','Ab3'],
+    'Ef':  ['Eb2','Eb3','G3','Bb3'],    'Af':  ['Ab1','Ab2','C3','Eb3'],
 }
 CHORD_DEFAULT = 'C'
 
@@ -1382,7 +1374,6 @@ def process_solo(frases, bar1, capa='solo', legato=0.91):
         if not bloque: continue
         fe = []
         art_global = frase.get('articulacion')
-        # Direct list of notes (our primary format for viola/violin/maderas/metales)
         if isinstance(bloque, list):
             for nota in bloque:
                 if isinstance(nota, dict):
@@ -1473,16 +1464,10 @@ def process_pad(frases, bar1):
     return events
 
 def process_percusion(frases, bar1):
-    """Soporta dos formatos:
-    1. Lista plana: [[bar, beat, nota_num, vel], ...]
-    2. Dict patron+apariciones: {patron: [[beat, dur, nota_num, vel],...], apariciones: [bar,...]}
-       nota_num = número MIDI (36=bombo, 38=caja, 47=timbal, 49=platillo).
-    """
     events = []
     for frase in frases:
         perc = frase.get('percusion')
-        if not perc:
-            continue
+        if not perc: continue
         if isinstance(perc, dict):
             patron_raw  = perc.get('patron', [])
             apariciones = perc.get('apariciones', [])
@@ -1490,8 +1475,7 @@ def process_percusion(frases, bar1):
                 for entry in patron_raw:
                     if len(entry) < 3: continue
                     if len(entry) == 3:
-                        beat_abs, dur, vel = entry
-                        nota_num = 36
+                        beat_abs, dur, vel = entry; nota_num = 36
                     else:
                         beat_abs, dur, nota_num, vel = entry[:4]
                     bar_offset  = int(float(beat_abs) // 4)
