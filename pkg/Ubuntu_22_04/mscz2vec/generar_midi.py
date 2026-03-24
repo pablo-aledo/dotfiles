@@ -17,6 +17,7 @@ Uso:
     python generar_midi.py --stems --completa      # stems de la obra completa concatenada
     python generar_midi.py --stems --seccion I     # stems solo de la sección I
     python generar_midi.py --leitmotivs            # un MIDI por leitmotiv en output/leitmotivs/
+    python generar_midi.py --harmony               # un MIDI de armonía por sección en output/harmony/
     python generar_midi.py --html                  # esquema visual HTML de la obra
     python generar_midi.py --render-audio          # genera MIDI y lo convierte a WAV
     python generar_midi.py --csv                   # exporta CSV de análisis
@@ -2830,6 +2831,59 @@ def generate_section(seccion, output_dir, obra=None):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  EXPORTACIÓN DE ARMONÍA (un MIDI por sección con solo la armonía)
+# ══════════════════════════════════════════════════════════════════════════════
+def generate_harmony(secciones, output_dir, obra):
+    """Genera un MIDI por sección exportando únicamente la capa de armonía
+    (acordes según process_harmony) en el canal/programa de cuerdas o piano.
+
+    Estructura de salida:
+        output_dir/harmony/
+          SeccionI_harmony.mid
+          SeccionII_harmony.mid
+          ...
+    """
+    harmony_dir = os.path.join(output_dir, 'harmony')
+    os.makedirs(harmony_dir, exist_ok=True)
+    generated   = []
+
+    # Buscar un track definido con capa 'armonia'; si no hay, usar strings ensemble
+    track_defs = obra.get('tracks', DEFAULT_TRACKS)
+    arm_tdef   = next((t for t in track_defs if t.get('capa') == 'armonia'), None)
+    canal      = int(arm_tdef['canal'])   if arm_tdef else 2
+    prog       = int(arm_tdef['programa']) if arm_tdef else 48   # Strings ensemble GM
+    nom        = arm_tdef.get('nombre', 'Armonia') if arm_tdef else 'Armonia'
+
+    print(f"\n  Exportando armonía → {harmony_dir}/")
+    print(f"  Track: {nom}  canal:{canal}  prog:{prog}")
+
+    for sec in secciones:
+        sid    = sec['id']
+        c_ini  = sec['compases'][0]
+        frases = sec.get('frases', [])
+
+        events = process_harmony(frases, c_ini, seccion=sec, obra=obra)
+        if not events:
+            print(f"  — Sección {sid}: sin eventos de armonía, omitida")
+            continue
+
+        check_note_overlaps(events, f'armonia-{sid}')
+        n_on = sum(1 for e in events if e[1] == 'on')
+
+        mid = MidiFile(type=1, ticks_per_beat=TPB)
+        mid.tracks.append(build_tempo_track(sec, c_ini, obra))
+        mid.tracks.append(build_track(f'Armonia — Sec.{sid}', canal, prog, events))
+
+        fname    = f"Seccion{_safe_filename(str(sid))}_harmony.mid"
+        out_path = os.path.join(harmony_dir, fname)
+        mid.save(out_path)
+        generated.append(out_path)
+        print(f"  ✓ {fname}  ({n_on} acordes/notas)")
+
+    return generated
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  EXPORTACIÓN DE STEMS (un MIDI por instrumento)
 # ══════════════════════════════════════════════════════════════════════════════
 def generate_stems(secciones, output_dir, obra):
@@ -3239,6 +3293,8 @@ def main():
                         help='Exporta un MIDI por instrumento en output/stems/')
     parser.add_argument('--leitmotivs',   action='store_true',
                         help='Exporta un MIDI por leitmotiv en output/leitmotivs/')
+    parser.add_argument('--harmony',      action='store_true',
+                        help='Exporta un MIDI de armonía por sección en output/harmony/')
     args=parser.parse_args()
 
     if args.diff: diff_obras(args.diff[0],args.diff[1]); return
@@ -3298,6 +3354,12 @@ def main():
         lm_files = generate_leitmotiv_midis(obra, args.output)
         generated.extend(lm_files)
         print(f"\n  ✓ {len(lm_files)} leitmotiv(s) en '{args.output}/leitmotivs/'")
+
+    if args.harmony:
+        print(f"\n{'─'*60}")
+        harm_files = generate_harmony(secciones, args.output, obra)
+        generated.extend(harm_files)
+        print(f"\n  ✓ {len(harm_files)} fichero(s) de armonía en '{args.output}/harmony/'")
 
     print(f"\n{'─'*60}\n  ✓ {len(generated)} fichero(s) generado(s) en '{args.output}/'")
     for p in generated:
