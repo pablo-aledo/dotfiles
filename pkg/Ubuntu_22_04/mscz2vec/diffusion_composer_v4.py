@@ -2579,7 +2579,7 @@ def cmd_compose(args):
                 )
 
         # roll_bar: (1, N_ROLES, res, 128) — valores continuos [0,1]
-        bar_np = roll_bar[0].cpu().numpy()   # (N_ROLES, res, 128)
+        bar_np = roll_bar[0].cpu().numpy()   # (N_ROLES, res, n_pitch)
 
         # Diagnóstico en el primer compás
         if bar_idx == 0:
@@ -2608,18 +2608,22 @@ def cmd_compose(args):
             print(f"         Umbral {thr_method}: {adaptive_thr:.4f}  →  "
                   f"{n_active} píxeles activos ({density:.2f}%)")
 
-            if density < 0.2:
-                print(f"  [diag] ⚠  Densidad baja ({density:.2f}%) — "
-                      f"prueba --threshold-pct 99.5 o --threshold-pct 99.9")
-            elif density > 8.0:
-                print(f"  [diag] ⚠  Densidad alta ({density:.2f}%) — "
-                      f"prueba --threshold-pct 98 o --threshold-pct 95")
-            elif vmean > 0.4:
-                print(f"  [diag] ⚠  mean={vmean:.3f} — modelo aún indeciso (cerca de 0.5).")
-                print(f"         Necesita más épocas para separar notas de silencio.")
-            elif vmax < 0.05:
-                print(f"  [diag] ⚠  Activaciones muy bajas (max={vmax:.4f}). "
-                      f"El modelo necesita más entrenamiento.")
+            # En sweep el compás 0 arranca desde contexto frío — no emitir avisos
+            if mode != 'sweep':
+                if density < 0.2:
+                    print(f"  [diag] ⚠  Densidad baja ({density:.2f}%) — "
+                          f"prueba --threshold-pct 99.5 o --threshold-pct 99.9")
+                elif density > 8.0:
+                    print(f"  [diag] ⚠  Densidad alta ({density:.2f}%) — "
+                          f"prueba --threshold-pct 98 o --threshold-pct 95")
+                elif vmean > 0.4:
+                    print(f"  [diag] ⚠  mean={vmean:.3f} — modelo aún indeciso (cerca de 0.5).")
+                    print(f"         Necesita más épocas para separar notas de silencio.")
+                elif vmax < 0.05:
+                    print(f"  [diag] ⚠  Activaciones muy bajas (max={vmax:.4f}). "
+                          f"El modelo necesita más entrenamiento.")
+            else:
+                print(f"  [diag] (sweep: compás 0 desde contexto frío — normal que sea escaso)")
 
         for ridx, role in enumerate(role_list):
             bars_per_role[role].append(bar_np[ridx])   # (res, 128)
