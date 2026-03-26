@@ -874,8 +874,8 @@ def cmd_prepare(args):
 class MidiRollDataset:
     """
     Cada muestra:
-        'x'        : Tensor (N_ROLES, resolution, 128)  — compás a difundir (target)
-        'context'  : Tensor (N_ROLES, ctx_bars, resolution, 128)  — contexto previo
+        'x'        : Tensor (N_ROLES, resolution, n_pitch)  — compás a difundir (target)
+        'context'  : Tensor (N_ROLES, ctx_bars, resolution, n_pitch)  — contexto previo
         'tension'  : Tensor (TENSION_DIM,)
         'role_mask': Tensor (N_ROLES,) bool
     """
@@ -886,6 +886,7 @@ class MidiRollDataset:
         self.n_roles  = len(self.roles)
         self.augment  = augment
         self._cache   = {}
+        self.n_pitch  = None   # se fija con el primer archivo válido
 
         npz_files = sorted(Path(data_dir).glob('*.npz'))
         if not npz_files:
@@ -895,11 +896,16 @@ class MidiRollDataset:
             try:
                 data = dict(np.load(str(path), allow_pickle=True))
                 meta = json.loads(str(data['meta_json'][0]))
+                if self.n_pitch is None:
+                    self.n_pitch = meta.get('n_pitch', PITCH_CLASSES)
                 for i in range(meta['n_windows']):
                     self.samples.append((str(path), i, meta))
                 self._cache[str(path)] = data
             except Exception:
                 continue
+
+        if self.n_pitch is None:
+            self.n_pitch = PITCH_CLASSES
 
     def __len__(self):
         return len(self.samples)
@@ -914,10 +920,7 @@ class MidiRollDataset:
         resolution  = meta['resolution']
         window_bars = meta['window_bars']
         ctx_bars    = window_bars - 1
-        n_pitch     = meta.get('n_pitch', PITCH_CLASSES)
 
-        # x = último compás de la ventana (el "target" de difusión)
-        # context = compases anteriores (condicionamiento temporal)
         x_parts   = []
         ctx_parts = []
         mask      = []
@@ -930,17 +933,16 @@ class MidiRollDataset:
                 ctx_parts.append(window[:ctx_bars])       # compases de contexto
                 mask.append(True)
             else:
-                x_parts.append(np.zeros((resolution, n_pitch), dtype=np.float32))
-                ctx_parts.append(np.zeros((ctx_bars, resolution, n_pitch), dtype=np.float32))
+                x_parts.append(np.zeros((resolution, self.n_pitch), dtype=np.float32))
+                ctx_parts.append(np.zeros((ctx_bars, resolution, self.n_pitch), dtype=np.float32))
                 mask.append(False)
 
-        x       = torch.tensor(np.stack(x_parts,   axis=0))   # (N_ROLES, res, 128)
-        context = torch.tensor(np.stack(ctx_parts,  axis=0))   # (N_ROLES, ctx_bars, res, 128)
-        # Usar tensión enriquecida si está disponible, si no la básica
+        x       = torch.tensor(np.stack(x_parts,   axis=0))   # (N_ROLES, res, n_pitch)
+        context = torch.tensor(np.stack(ctx_parts,  axis=0))   # (N_ROLES, ctx_bars, res, n_pitch)
         if 'tension_enriched' in data:
             tension = torch.tensor(data['tension_enriched'][widx])
         else:
-            tension = torch.tensor(data['tension'][widx])       # (TENSION_DIM,)
+            tension = torch.tensor(data['tension'][widx])
         role_mask = torch.tensor(mask, dtype=torch.bool)
 
         return {'x': x, 'context': context, 'tension': tension, 'role_mask': role_mask}
@@ -1751,11 +1753,11 @@ def cmd_train(args):
                               collate_fn=_collate_fn, num_workers=0, pin_memory=False)
 
     # Inferir hiperparámetros del corpus
-    sample     = dataset[0]
-    n_roles    = sample['x'].shape[0]
-    resolution = sample['x'].shape[1]
-    n_pitch    = sample['x'].shape[2]          # 128 completo ó recortado
-    ctx_bars   = sample['context'].shape[1]
+    sample      = dataset[0]
+    n_roles     = sample['x'].shape[0]
+    resolution  = sample['x'].shape[1]
+    n_pitch     = dataset.n_pitch                  # canónico, ya normalizado
+    ctx_bars    = sample['context'].shape[1]
     window_bars = ctx_bars + 1
     tension_dim = sample['tension'].shape[0]
 
@@ -2512,12 +2514,11 @@ def cmd_compose(args):
     model.to(device)
 
     # Buffer de contexto: se actualiza progresivamente con las barras generadas
-    # Inicializado con el contexto del MIDI de referencia
+    # Inicializado con el contexto del MIDI de referencia (sweep lo inicializa en bar_idx==0)
     if mode != 'sweep':
-        ctx_buffer = torch.tensor(ctx_np).unsqueeze(0).to(device)   # (1, N_ROLES, ctx_bars, res, 128)
+        ctx_buffer = torch.tensor(ctx_np).unsqueeze(0).to(device)   # (1, N_ROLES, ctx_bars, res, n_pitch)
     else:
-        # sweep: iniciar con contexto del primer MIDI
-        ctx_buffer = torch.tensor(all_ctx[0]).unsqueeze(0).to(device)
+        ctx_buffer = None   # se inicializa en la primera iteración del bucle
 
     # ── Pre-cargar rolls de referencia para modo denoise ─────────────────
     rolls_ref = None
@@ -2541,10 +2542,13 @@ def cmd_compose(args):
             seg   = alpha * (n_src - 1)
             i0    = min(int(seg), n_src - 2)
             lam   = seg - i0
-            zs_np    = (1 - lam) * sweep_styles[i0] + lam * sweep_styles[i0 + 1]
-            v_sty    = torch.tensor(zs_np).unsqueeze(0).to(device)
-            ctx_np_i = (1 - lam) * all_ctx[i0] + lam * all_ctx[i0 + 1]
-            ctx_buffer = torch.tensor(ctx_np_i).unsqueeze(0).to(device)
+            zs_np = (1 - lam) * sweep_styles[i0] + lam * sweep_styles[i0 + 1]
+            v_sty = torch.tensor(zs_np).unsqueeze(0).to(device)
+            # ctx_buffer se actualiza con las barras generadas (igual que sample/denoise)
+            # Solo en el primer compás usamos el contexto del MIDI de origen
+            if bar_idx == 0:
+                ctx_np_i = all_ctx[i0]
+                ctx_buffer = torch.tensor(ctx_np_i).unsqueeze(0).to(device)
         else:
             v_sty = torch.tensor(z_style_np).unsqueeze(0).to(device)
 
