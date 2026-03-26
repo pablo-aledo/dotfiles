@@ -2781,16 +2781,32 @@ def cmd_round_trip(args):
         with open(config_path) as f:
             cfg = json.load(f)
         print(f"[round-trip] Config cargada desde {config_path}")
+        print(f"[round-trip] Roles activos : {cfg.get('roles', ROLES)}")
+        n_pitch = cfg.get('n_pitch', 128)
+        if n_pitch < 128:
+            print(f"[round-trip] Rango de pitch: MIDI {cfg.get('pitch_lo',0)}–"
+                  f"{cfg.get('pitch_hi',127)}  ({n_pitch} notas)")
     else:
+        disabled     = set(getattr(args, 'disable_roles', None) or [])
+        active_roles = [r for r in ROLES if r not in disabled]
+        pr           = _pitch_range(getattr(args, 'pitch_range', None))
+        pitch_lo     = pr[0] if pr else 0
+        pitch_hi     = pr[1] if pr else 127
+        n_pitch      = (pitch_hi - pitch_lo + 1) if pr else 128
         cfg = {
             'resolution':   args.resolution,
             'window_bars':  4,
-            'roles':        ROLES,
-            'n_roles':      len(ROLES),
+            'roles':        active_roles,
+            'n_roles':      len(active_roles),
             'tension_dim':  8,
+            'pitch_lo':     pitch_lo,
+            'pitch_hi':     pitch_hi,
+            'n_pitch':      n_pitch,
         }
         print(f"[round-trip] Config manual: resolution={args.resolution}, "
-              f"roles={ROLES}")
+              f"roles={active_roles}")
+        if pr:
+            print(f"[round-trip] Rango de pitch: MIDI {pitch_lo}–{pitch_hi}  ({n_pitch} notas)")
 
     palette = {}
     if args.palette:
@@ -3286,11 +3302,19 @@ def build_parser():
         """))
     p_rt.add_argument('--input',      required=True, metavar='FILE')
     p_rt.add_argument('--model-dir',  default=None,  metavar='DIR',
-        help='Si se indica, lee resolución y roles desde model_config.json')
+        help='Si se indica, lee resolución, roles y rango de pitch desde model_config.json. '
+             'Los flags --disable-roles y --pitch-range se ignoran en este caso.')
     p_rt.add_argument('--resolution', type=int, default=TICKS_PER_BAR_DEFAULT,
         metavar='INT',
         help=f'Ticks por compás (solo si no se usa --model-dir; '
              f'default: {TICKS_PER_BAR_DEFAULT})')
+    p_rt.add_argument('--disable-roles', nargs='+', metavar='ROL',
+        choices=ROLES, default=[], dest='disable_roles',
+        help='Roles a excluir (solo si no se usa --model-dir). '
+             f'Valores posibles: {", ".join(ROLES)}.')
+    p_rt.add_argument('--pitch-range', type=int, default=None, metavar='N',
+        dest='pitch_range',
+        help='Limitar a N valores MIDI centrados en Do central (solo si no se usa --model-dir).')
     p_rt.add_argument('--palette',    default=None,  metavar='FILE',
         help='Paleta de instrumentos (opcional)')
     p_rt.add_argument('--output',     default='output_roundtrip.mid', metavar='FILE')
