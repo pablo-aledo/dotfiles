@@ -400,9 +400,10 @@ class PianoRollConverter:
 
     def roll_to_windows(self, roll) -> 'np.ndarray':
         import numpy as np
-        n_bars = roll.shape[0]
+        n_bars  = roll.shape[0]
+        n_pitch = roll.shape[2]   # puede ser < 128 si se recortó
         if n_bars < self.window_bars:
-            return np.zeros((0, self.window_bars, self.resolution, PITCH_CLASSES),
+            return np.zeros((0, self.window_bars, self.resolution, n_pitch),
                             dtype=np.float32)
         n_windows = n_bars - self.window_bars + 1
         windows   = np.stack([roll[i:i + self.window_bars]
@@ -419,9 +420,11 @@ class TensionExtractor:
 
     def extract_bar_vectors(self, role_rolls: dict, bars: int) -> 'np.ndarray':
         import numpy as np
+        # Inferir n_pitch desde los rolls (puede ser < 128 si se usó --pitch-range)
+        n_pitch = next(iter(role_rolls.values())).shape[-1] if role_rolls else PITCH_CLASSES
         vectors = np.zeros((bars, self.TENSION_DIM), dtype=np.float32)
         for bar in range(bars):
-            combined    = np.zeros((PITCH_CLASSES,), dtype=np.float32)
+            combined    = np.zeros((n_pitch,), dtype=np.float32)
             total_events = 0
             resolution   = None
             for role, roll in role_rolls.items():
@@ -436,12 +439,12 @@ class TensionExtractor:
                 continue
             pitches_active = np.where(combined > 0)[0]
             n_active       = len(pitches_active)
-            capacity       = resolution * PITCH_CLASSES
+            capacity       = resolution * n_pitch
             tension        = self._lerdahl_proxy(pitches_active)
             density        = min(float(total_events) / max(capacity * len(role_rolls), 1) * 20, 1.0)
             poly           = min(n_active / 12.0, 1.0)
-            reg_mean       = float(np.mean(pitches_active)) / 127 if n_active > 0 else 0.5
-            reg_spread     = float(np.ptp(pitches_active)) / 127 if n_active > 1 else 0.0
+            reg_mean       = float(np.mean(pitches_active)) / max(n_pitch - 1, 1) if n_active > 0 else 0.5
+            reg_spread     = float(np.ptp(pitches_active)) / max(n_pitch - 1, 1) if n_active > 1 else 0.0
             vel_mean       = 0.5
             rhythm_density = 0.0
             if 'melody' in role_rolls and bar < role_rolls['melody'].shape[0]:
@@ -2330,6 +2333,7 @@ def cmd_transfer(args):
     resolution  = cfg['resolution']
     window_bars = cfg['window_bars']
     ctx_bars    = window_bars - 1
+    n_pitch     = cfg.get('n_pitch', 128)
 
     # Tensión: extraída del propio input (preserva la dinámica original)
     tension_matrix = TensionExtractor().extract_bar_vectors(rolls_ref, n_bars)
@@ -2366,7 +2370,7 @@ def cmd_transfer(args):
         # Usamos el compás correspondiente del input como punto de partida,
         # igual que el modo `denoise` de compose, pero con z_style sustituido.
         ref_bar_idx = min(bar_idx, min(r.shape[0] for r in rolls_ref.values()) - 1)
-        xr_np = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+        xr_np = np.zeros((n_roles, resolution, n_pitch), dtype=np.float32)
         for ridx, role in enumerate(role_list):
             if role in rolls_ref:
                 xr_np[ridx] = rolls_ref[role][ref_bar_idx]
@@ -2501,6 +2505,7 @@ def cmd_compose(args):
     resolution  = cfg['resolution']
     window_bars = cfg['window_bars']
     ctx_bars    = window_bars - 1
+    n_pitch     = cfg.get('n_pitch', 128)
 
     bars_per_role = {role: [] for role in role_list}
     device        = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -2550,7 +2555,7 @@ def cmd_compose(args):
                 # de referencia (o el último si la ref es más corta) como
                 # punto de partida del denoising, para TODOS los compases.
                 ref_bar_idx = min(bar_idx, min(r.shape[0] for r in rolls_ref.values()) - 1)
-                xr_np = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+                xr_np = np.zeros((n_roles, resolution, n_pitch), dtype=np.float32)
                 for ridx, role in enumerate(role_list):
                     if role in rolls_ref:
                         xr_np[ridx] = rolls_ref[role][ref_bar_idx]
@@ -2620,7 +2625,7 @@ def cmd_compose(args):
             # Contexto fijo: usar siempre el compás siguiente del MIDI original.
             # Evita la degradación progresiva cuando el output generado es escaso.
             next_idx = min(bar_idx + 1, min(r.shape[0] for r in rolls_ref.values()) - 1)
-            ref_next_np = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+            ref_next_np = np.zeros((n_roles, resolution, n_pitch), dtype=np.float32)
             for ridx, role in enumerate(role_list):
                 if role in rolls_ref:
                     ref_next_np[ridx] = rolls_ref[role][next_idx]
@@ -2848,6 +2853,7 @@ def cmd_reconstruct(args):
     window_bars = cfg['window_bars']
     ctx_bars    = window_bars - 1
     tension_dim = cfg['tension_dim']
+    n_pitch     = cfg.get('n_pitch', 128)
     n_bars      = min(r.shape[0] for r in rolls.values())
     print(f"[reconstruct] Roles: {list(rolls.keys())}  |  "
           f"Compases: {n_bars}  |  Resolución: {resolution}")
@@ -2862,7 +2868,7 @@ def cmd_reconstruct(args):
 
     with torch.no_grad():
         for bar_idx in range(n_bars):
-            bar = np.zeros((n_roles, resolution, 128), dtype=np.float32)
+            bar = np.zeros((n_roles, resolution, n_pitch), dtype=np.float32)
             for ri, role in enumerate(role_list):
                 if role in rolls and bar_idx < rolls[role].shape[0]:
                     bar[ri] = rolls[role][bar_idx]
@@ -2965,8 +2971,9 @@ def cmd_inpaint(args):
     tension_dim = cfg['tension_dim']
     n_bars      = min(r.shape[0] for r in rolls.values())
 
-    # ── Construir piano roll completo (N_ROLES, n_bars, res, 128) ─────────
-    x_np = np.zeros((n_roles, n_bars, resolution, 128), dtype=np.float32)
+    # ── Construir piano roll completo (N_ROLES, n_bars, res, n_pitch) ────────
+    n_pitch = cfg.get('n_pitch', 128)
+    x_np = np.zeros((n_roles, n_bars, resolution, n_pitch), dtype=np.float32)
     for ri, role in enumerate(role_list):
         if role in rolls:
             x_np[ri] = rolls[role][:n_bars]
