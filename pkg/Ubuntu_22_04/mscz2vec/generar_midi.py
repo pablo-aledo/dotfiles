@@ -27,7 +27,11 @@ Uso:
     python generar_midi.py --yaml mi_obra.yaml --output carpeta/
 
 ESTRUCTURA DEL YAML:
-    obra:       título, subtítulo, compás, tonalidad, compases_totales
+    obra:       título, subtítulo, compás, tonalidad, modo, tonica, compases_totales
+                modo y tonica opcionales; activan el sistema modal.
+                Modos disponibles: jonio/mayor, dorico, frigio, lidio, mixolidio,
+                eolico/menor, locrio, pentatonica_mayor, pentatonica_menor, blues,
+                doble_armonica, menor_armonica, menor_melodica, acustica, octatonica.
     leitmotivs: células temáticas con id, nombre, notas canónicas
     tracks:     definición de instrumentos/canales MIDI (opcional)
     secciones:  bloques de compases con frases, armonía, melodía, etc.
@@ -108,6 +112,271 @@ CHORD_VOICINGS = {
     'Ef':  ['Eb2','Eb3','G3','Bb3'],    'Af':  ['Ab1','Ab2','C3','Eb3'],
 }
 CHORD_DEFAULT = 'C'
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SISTEMA MODAL
+# ══════════════════════════════════════════════════════════════════════════════
+# Cada modo es una lista de 7 intervalos en semitonos desde la tónica.
+# Índices:  0=I  1=II  2=III  3=IV  4=V  5=VI  6=VII
+MODES = {
+    'jonio':            [0, 2, 4, 5, 7, 9, 11],   # = mayor
+    'mayor':            [0, 2, 4, 5, 7, 9, 11],   # alias
+    'dorico':           [0, 2, 3, 5, 7, 9, 10],
+    'frigio':           [0, 1, 3, 5, 7, 8, 10],
+    'lidio':            [0, 2, 4, 6, 7, 9, 11],
+    'mixolidio':        [0, 2, 4, 5, 7, 9, 10],
+    'eolico':           [0, 2, 3, 5, 7, 8, 10],   # = menor natural
+    'menor':            [0, 2, 3, 5, 7, 8, 10],   # alias
+    'locrio':           [0, 1, 3, 5, 6, 8, 10],
+    # Escalas de cinco notas
+    'pentatonica_mayor':[0, 2, 4, 7, 9],
+    'pentatonica_menor':[0, 3, 5, 7, 10],
+    'blues':            [0, 3, 5, 6, 7, 10],
+    # Escalas especiales
+    'doble_armonica':   [0, 1, 4, 5, 7, 8, 11],   # frigio mayor / española
+    'menor_armonica':   [0, 2, 3, 5, 7, 8, 11],
+    'menor_melodica':   [0, 2, 3, 5, 7, 9, 11],
+    'acustica':         [0, 2, 4, 6, 7, 9, 10],   # lidio mixolidio (Bartók)
+    'octatonica':       [0, 2, 3, 5, 6, 8, 9, 11],# disminuida alternada
+    'cromatica':        list(range(12)),
+}
+
+# Tipo de acorde sobre cada grado según el modo
+# 'M'=mayor  'm'=menor  'dim'=disminuido  'aug'=aumentado  '7'=séptima dom.
+# 'M7'=mayor con 7M  'm7'=menor con 7m  'ø7'=semidisminuido  'o7'=disminuido total
+CHORD_TYPE_BY_DEGREE = {
+    # grado: (tríada, séptima)
+    'jonio':      {1:('M','M7'), 2:('m','m7'), 3:('m','m7'), 4:('M','M7'),
+                   5:('M','7'),  6:('m','m7'), 7:('dim','ø7')},
+    'dorico':     {1:('m','m7'), 2:('m','m7'), 3:('M','M7'), 4:('M','7'),
+                   5:('m','m7'), 6:('dim','ø7'), 7:('M','M7')},
+    'frigio':     {1:('m','m7'), 2:('M','7'),  3:('M','M7'), 4:('m','m7'),
+                   5:('dim','ø7'), 6:('M','M7'), 7:('m','m7')},
+    'lidio':      {1:('M','M7'), 2:('M','7'),  3:('m','m7'), 4:('dim','ø7'),
+                   5:('M','M7'), 6:('m','m7'), 7:('m','m7')},
+    'mixolidio':  {1:('M','7'),  2:('m','m7'), 3:('dim','ø7'), 4:('M','M7'),
+                   5:('m','m7'), 6:('m','m7'), 7:('M','M7')},
+    'eolico':     {1:('m','m7'), 2:('dim','ø7'), 3:('M','M7'), 4:('m','m7'),
+                   5:('m','m7'), 6:('M','M7'), 7:('M','7')},
+    'locrio':     {1:('dim','ø7'), 2:('M','M7'), 3:('m','m7'), 4:('m','m7'),
+                   5:('M','M7'), 6:('M','7'),  7:('m','m7')},
+    'menor_armonica': {1:('m','mM7'), 2:('dim','ø7'), 3:('aug','augM7'),
+                       4:('m','m7'), 5:('M','7'), 6:('M','M7'), 7:('dim','o7')},
+}
+# Alias para usar el mismo tipo en lookup
+for _alias, _target in [('mayor','jonio'),('menor','eolico')]:
+    if _alias not in CHORD_TYPE_BY_DEGREE:
+        CHORD_TYPE_BY_DEGREE[_alias] = CHORD_TYPE_BY_DEGREE[_target]
+
+# Intervalos de tríada y séptima según tipo
+CHORD_INTERVALS = {
+    'M':    [0, 4, 7],
+    'm':    [0, 3, 7],
+    'dim':  [0, 3, 6],
+    'aug':  [0, 4, 8],
+    '7':    [0, 4, 7, 10],
+    'M7':   [0, 4, 7, 11],
+    'm7':   [0, 3, 7, 10],
+    'mM7':  [0, 3, 7, 11],
+    'ø7':   [0, 3, 6, 10],
+    'o7':   [0, 3, 6, 9],
+    'augM7':[0, 4, 8, 11],
+}
+
+# Notas base en número MIDI (octava 2 para el bajo, 3 para voicing)
+_TONICA_MIDI = {
+    'C':0,'Cs':1,'Db':1,'D':2,'Ds':3,'Eb':3,'E':4,'F':5,
+    'Fs':6,'Gb':6,'G':7,'Gs':8,'Ab':8,'A':9,'As':10,'Bb':10,'B':11,
+    # nombres con bemol en español
+    'Bf':10,'Ef':3,'Af':8,
+}
+
+def _tonica_semitono(tonica_str):
+    """'Am' → 9   'D' → 2   'Bb' → 10"""
+    s = str(tonica_str).strip()
+    # quitar sufijo de modo si lo lleva ('Am' → 'A', 'Dbm' → 'Db')
+    for suffix in ('maj','min','m','M'):
+        if s.endswith(suffix):
+            s = s[:-len(suffix)]; break
+    return _TONICA_MIDI.get(s)
+
+def _build_modal_voicing(root_midi, chord_type, octava_bajo=2, octava_voicing=3):
+    """Construye un voicing de 4 notas: raíz en bajo + 3 voces."""
+    intervals = CHORD_INTERVALS.get(chord_type, CHORD_INTERVALS['M'])
+    bajo  = (octava_bajo  + 1) * 12 + (root_midi % 12)
+    voces = [(octava_voicing + 1) * 12 + (root_midi % 12) + iv for iv in intervals]
+    # si alguna voz queda por debajo del bajo, subir una octava
+    voces = [v + 12 if v < bajo else v for v in voces]
+    return [bajo] + voces
+
+def build_chord_from_degree(grado, tonica, modo, con_septima=False):
+    """Construye un acorde por grado modal.
+
+    Args:
+        grado:       int 1–7 (o string 'I'–'VII')
+        tonica:      nombre de nota raíz, ej. 'D', 'Bb', 'Fs'
+        modo:        nombre del modo (key de MODES), ej. 'dorico'
+        con_septima: si True devuelve cuatríada, si False tríada
+
+    Returns:
+        lista de notas MIDI o [] si los parámetros son inválidos.
+
+    Ejemplos:
+        build_chord_from_degree(4, 'D', 'dorico')     → Sol mayor
+        build_chord_from_degree(2, 'E', 'frigio')     → Fa mayor (bII frigio)
+        build_chord_from_degree(1, 'A', 'eolico', True) → La menor 7ª
+    """
+    # Normalizar grado a int
+    ROMAN = {'I':1,'II':2,'III':3,'IV':4,'V':5,'VI':6,'VII':7,
+             'i':1,'ii':2,'iii':3,'iv':4,'v':5,'vi':6,'vii':7}
+    if isinstance(grado, str):
+        grado = ROMAN.get(grado.upper(), None)
+        if grado is None:
+            print(f"  ⚠ grado no reconocido: '{grado}'")
+            return []
+    grado = int(grado)
+    if not (1 <= grado <= 7):
+        print(f"  ⚠ grado fuera de rango: {grado}")
+        return []
+
+    scale = MODES.get(modo)
+    if scale is None:
+        print(f"  ⚠ modo no reconocido: '{modo}'")
+        return []
+
+    # Altura de la raíz del grado (semitono absoluto dentro de la octava)
+    tonica_st = _tonica_semitono(tonica)
+    if tonica_st is None:
+        print(f"  ⚠ tónica no reconocida: '{tonica}'")
+        return []
+
+    # Escala de 5 ó 7 notas: para pentatónica y blues, grados 1-5
+    n_grados = len(scale)
+    if grado > n_grados:
+        print(f"  ⚠ modo '{modo}' solo tiene {n_grados} grados; grado {grado} inválido")
+        return []
+
+    root_offset  = scale[grado - 1]
+    root_midi    = (tonica_st + root_offset) % 12
+
+    # Tipo de acorde según modo y grado
+    tipos_grado = CHORD_TYPE_BY_DEGREE.get(modo, CHORD_TYPE_BY_DEGREE.get('jonio', {}))
+    tipo_triada, tipo_7ma = tipos_grado.get(grado, ('M', 'M7'))
+    chord_type = tipo_7ma if con_septima else tipo_triada
+
+    return _build_modal_voicing(root_midi, chord_type)
+
+def _get_seccion_modo(seccion, obra):
+    """Lee modo y tónica de la sección o de la obra. Devuelve (modo, tonica) o (None,None)."""
+    modo   = seccion.get('modo') or (obra or {}).get('modo')
+    tonica = seccion.get('tonica') or seccion.get('tonalidad')
+    if not tonica:
+        tonica = (obra or {}).get('tonica') or (obra or {}).get('tonalidad')
+    # 'Am' → tonica='A', modo='menor' si no hay modo explícito
+    if tonica and not modo:
+        t = str(tonica)
+        if t.endswith('m') and not t.endswith('maj'):
+            modo = 'menor'; tonica = t[:-1]
+        else:
+            modo = 'mayor'
+    return modo, tonica
+
+def _parse_grado(grado_str):
+    """'IV' → 4   'bII' → (2, -1 semitono de cromatismo)   '#IV' → (4, +1)"""
+    s = str(grado_str).strip()
+    alter = 0
+    if s.startswith('b'):  alter = -1; s = s[1:]
+    elif s.startswith('#'): alter = 1; s = s[1:]
+    # quitar sufijos de tipo ('IVm', 'Vmaj7', etc.) — solo queremos el número de grado
+    ROMAN = {'I':1,'II':2,'III':3,'IV':4,'V':5,'VI':6,'VII':7}
+    for rom in sorted(ROMAN.keys(), key=len, reverse=True):
+        if s.upper().startswith(rom):
+            return ROMAN[rom], alter, s[len(rom):]   # (grado, alter, sufijo_tipo)
+    return None, 0, s
+
+def resolve_grado(item, seccion, obra):
+    """Dado un dict de armonía con campo 'grado', devuelve lista de MIDI.
+
+    El campo 'grado' puede ser:
+        'IV'      → cuarto grado del modo de la sección
+        'bII'     → segundo grado rebajado (ej. napolitano)
+        'V7'      → quinto grado con séptima
+        'IVm'     → forzar menor aunque el modo diga mayor
+
+    Si el item también tiene 'acorde', ese tiene prioridad sobre 'grado'.
+    Si 'acorde' está ausente o es '-', se usa 'grado'.
+    """
+    # Si hay acorde explícito, usarlo
+    acorde_str = item.get('acorde')
+    if acorde_str and acorde_str not in ('null','None',None,'—','-'):
+        return parse_chord(acorde_str)
+
+    grado_raw = item.get('grado')
+    if not grado_raw:
+        return []
+
+    modo, tonica = _get_seccion_modo(seccion or {}, obra)
+    if not modo or not tonica:
+        return []
+
+    grado_int, alter, sufijo = _parse_grado(str(grado_raw))
+    if grado_int is None:
+        print(f"  ⚠ grado no interpretable: '{grado_raw}'")
+        return []
+
+    con_7ma = '7' in sufijo
+
+    # Forzar tipo si el sufijo lo indica
+    tipo_forzado = None
+    if 'm' in sufijo and '7' not in sufijo:   tipo_forzado = 'm'
+    elif 'M' in sufijo and '7' not in sufijo:  tipo_forzado = 'M'
+    elif 'maj7' in sufijo.lower():             tipo_forzado = 'M7'
+    elif sufijo.endswith('7') and 'maj' not in sufijo.lower(): tipo_forzado = '7'
+
+    # Calcular raíz con alteración
+    scale = MODES.get(modo, MODES['jonio'])
+    tonica_st = _tonica_semitono(tonica)
+    if tonica_st is None:
+        print(f"  ⚠ tónica no reconocida: '{tonica}'"); return []
+    n_grados = len(scale)
+    if grado_int > n_grados:
+        print(f"  ⚠ modo '{modo}' solo tiene {n_grados} grados"); return []
+    root_offset = (scale[grado_int - 1] + alter) % 12
+    root_midi   = (tonica_st + root_offset) % 12
+
+    if tipo_forzado:
+        chord_type = tipo_forzado
+    else:
+        tipos_grado = CHORD_TYPE_BY_DEGREE.get(modo, CHORD_TYPE_BY_DEGREE.get('jonio', {}))
+        tipo_triada, tipo_7ma = tipos_grado.get(grado_int, ('M','M7'))
+        chord_type  = tipo_7ma if con_7ma else tipo_triada
+
+    return _build_modal_voicing(root_midi, chord_type)
+
+def modal_scale_notes(tonica, modo, octava=4):
+    """Devuelve las notas MIDI de la escala completa en una octava.
+
+    Útil para validación y para que el LLM conozca la escala activa.
+    """
+    scale  = MODES.get(modo, [])
+    st     = _tonica_semitono(tonica)
+    if st is None or not scale:
+        return []
+    base = (octava + 1) * 12 + st
+    return [base + iv for iv in scale]
+
+def validate_notes_in_mode(notas_midi, tonica, modo):
+    """Devuelve lista de notas que NO pertenecen a la escala del modo.
+
+    Ignora la octava (trabaja con pitch class).
+    """
+    scale     = MODES.get(modo, [])
+    tonica_st = _tonica_semitono(tonica)
+    if tonica_st is None or not scale:
+        return []
+    scale_pcs = {(tonica_st + iv) % 12 for iv in scale}
+    return [n for n in notas_midi if n % 12 not in scale_pcs]
+
 
 def parse_chord(acorde_str):
     if not acorde_str or acorde_str in ('null','None',None,'—','-'):
@@ -1296,8 +1565,14 @@ def process_harmony(frases, bar1, seccion=None, obra=None):
 
         for idx, item in enumerate(frase.get('armonia', [])):
             bar       = int(item['compas'])
-            acorde_str = item.get('acorde')
-            notes     = parse_chord(acorde_str)
+            # ── Resolución modal de grados ────────────────────────────────
+            # Si el item tiene 'grado' (y no 'acorde' explícito), calcular
+            # el acorde a partir del modo/tónica de la sección.
+            notes = resolve_grado(item, seccion, obra)
+            if not notes:
+                # fallback a acorde literal
+                acorde_str = item.get('acorde')
+                notes = parse_chord(acorde_str)
             if not notes:
                 continue
 
@@ -1594,7 +1869,16 @@ def validate_yaml(obra):
             for item in frase.get('armonia',[]):
                 ac=item.get('acorde')
                 if ac and ac not in ('null','None',None,'—','-') and ac not in CHORD_VOICINGS:
-                    err(f"{fp}: acorde '{ac}' no en CHORD_VOICINGS")
+                    # tolerar si hay 'grado' que lo reemplaza
+                    if not item.get('grado'):
+                        err(f"{fp}: acorde '{ac}' no en CHORD_VOICINGS (ni hay 'grado' alternativo)")
+                grado_raw = item.get('grado')
+                if grado_raw and not item.get('acorde'):
+                    modo_s, tonica_s = _get_seccion_modo(sec, obra)
+                    if not modo_s or not tonica_s:
+                        warn(f"{fp}: grado '{grado_raw}' requiere modo/tonica en la sección o en obra")
+                    elif modo_s not in MODES:
+                        err(f"{fp}: modo '{modo_s}' no reconocido (ver MODES)")
                 inv = item.get('inversion')
                 if inv and inv not in ('raiz','primera','segunda','tercera'):
                     err(f"{fp}: inversion '{inv}' no válida (raiz|primera|segunda|tercera)")
@@ -1610,11 +1894,22 @@ def validate_yaml(obra):
             art = frase.get('articulacion')
             if art and art not in ARTICULATIONS:
                 warn(f"{fp}: articulacion '{art}' desconocida")
+            modo_s, tonica_s = _get_seccion_modo(sec, obra)
+            notas_mel_midi = []
             for nota in frase.get('melodia',[]):
                 nn=(nota.get('nota') if isinstance(nota,dict) else nota[3] if len(nota)>3 else None)
-                if nn:
-                    try: note_to_midi(str(nn))
+                if nn and str(nn) not in ('-','—','null','None'):
+                    try:
+                        midi_n = note_to_midi(str(nn))
+                        notas_mel_midi.append(midi_n)
                     except (ValueError,IndexError) as e: err(f"{fp}: nota inválida: {e}")
+            # Validación modal: avisar de notas fuera de escala
+            if modo_s and tonica_s and notas_mel_midi:
+                fuera = validate_notes_in_mode(notas_mel_midi, tonica_s, modo_s)
+                if fuera:
+                    nombres_fuera = [midi_to_note(n) for n in fuera]
+                    warn(f"{fp}: {len(fuera)} nota(s) fuera del modo {modo_s}/{tonica_s}: "
+                         f"{', '.join(nombres_fuera)}")
                 # Articulación por nota
                 if isinstance(nota, dict):
                     art_n = nota.get('art') or nota.get('articulacion')
