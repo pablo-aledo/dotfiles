@@ -172,14 +172,20 @@ def roman_to_function(rn):
 
     return "Other"
 
-def extract_harmonic_chords(stream_input):
+def extract_harmonic_chords(stream_input, bass_only=False):
     debug("Harmony: Extracting chords")
     debug(f"Harmony: stream type = {type(stream_input)}")
+    if bass_only:
+        debug("Harmony: bass_only mode — analyzing only bass clef staff")
 
     notes_by_offset = defaultdict(list)
 
     # ── Recolectar notas y acordes explícitos
     for el in stream_input.recurse():
+        # Si bass_only, saltar elementos que no estén en clave de fa
+        if bass_only and isinstance(el, (note.Note, chord.Chord)):
+            if not is_bass_clef_staff(el):
+                continue
         # Nota individual
         if isinstance(el, note.Note):
             abs_offset = float(el.getOffsetInHierarchy(stream_input))
@@ -396,7 +402,7 @@ def chord_short_name(ch):
 
     return f"{root}:{qual}"
 
-def harmonic_features(score):
+def harmonic_features(score, bass_only=False):
     try:
         key = score.analyze('key')
         debug("Harmony: key =", key)
@@ -404,7 +410,7 @@ def harmonic_features(score):
         debug("Harmony: could not detect key")
         return np.zeros(len(HARMONIC_FUNCTIONS))
 
-    chords = extract_harmonic_chords(score)
+    chords = extract_harmonic_chords(score, bass_only=bass_only)
 
     debug("Harmony: # chords =", len(chords))
 
@@ -449,7 +455,7 @@ def harmonic_features(score):
     debug("Harmony: vector =", vector)
     return vector
 
-def harmonic_transition_features(score):
+def harmonic_transition_features(score, bass_only=False):
     try:
         key = score.analyze('key')
         debug("Harmony transitions: key =", key)
@@ -457,8 +463,7 @@ def harmonic_transition_features(score):
         debug("Harmony transitions: no key")
         return np.zeros(25)
 
-    # chords = score.chordify().flatten().getElementsByClass('Chord')
-    chords = extract_harmonic_chords(score)
+    chords = extract_harmonic_chords(score, bass_only=bass_only)
 
     funcs = []
 
@@ -7346,6 +7351,11 @@ def main():
         )
     )
     parser.add_argument(
+        '--bass-only',
+        action='store_true',
+        help='Analizar solo el pentagrama en clave de fa (mano izquierda) para el análisis armónico'
+    )
+    parser.add_argument(
         '--no-debug',
         action='store_true',
         help='Desactivar mensajes de depuración (default: debug activo)'
@@ -7370,7 +7380,45 @@ def main():
 
     # Cargar partitura
     debug("Loading score...")
-    score = converter.parse(args.input)
+
+    input_path = args.input
+    _tmp_xml = None
+
+    if input_path.lower().endswith('.mscz'):
+        import subprocess, tempfile
+        # Buscar el binario de MuseScore en el PATH
+        ms_cmd = None
+        for ms_bin in ('mscore', 'mscore3', 'mscore4', 'musescore', 'musescore3', 'musescore4'):
+            try:
+                subprocess.run([ms_bin, '--version'], capture_output=True, check=True)
+                ms_cmd = ms_bin
+                break
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                continue
+        if ms_cmd is None:
+            print("ERROR: No se encontró MuseScore (mscore/musescore4) en el PATH.")
+            print("       Instálalo o convierte el archivo a MusicXML manualmente:")
+            print("       mscore -o archivo.musicxml archivo.mscz")
+            sys.exit(1)
+
+        _tmp_xml = tempfile.mktemp(suffix='.musicxml')
+        debug(f"Convirtiendo .mscz → MusicXML con {ms_cmd}...")
+        result = subprocess.run(
+            [ms_cmd, '-o', _tmp_xml, input_path],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0 or not os.path.exists(_tmp_xml):
+            print(f"ERROR: MuseScore falló al convertir '{input_path}'.")
+            print(result.stderr)
+            sys.exit(1)
+        input_path = _tmp_xml
+        debug(f"Conversión OK → {_tmp_xml}")
+
+    score = converter.parse(input_path)
+
+    if _tmp_xml and os.path.exists(_tmp_xml):
+        os.remove(_tmp_xml)
+
     debug("Score loaded")
 
     if args.verbose:
@@ -7385,7 +7433,11 @@ def main():
             print(f"  Extrayendo vector: {vec_name}")
             print(f"{'─'*50}")
         try:
-            result = VECTOR_EXTRACTORS[vec_name](score, args.custom_rules)
+            # Pasar bass_only a los extractores que lo soportan
+            if vec_name == 'harmonic' and args.bass_only:
+                result = harmonic_features(score, bass_only=True)
+            else:
+                result = VECTOR_EXTRACTORS[vec_name](score, args.custom_rules)
             # Convertir arrays numpy a listas para JSON
             if isinstance(result, np.ndarray):
                 results[vec_name] = result.tolist()
