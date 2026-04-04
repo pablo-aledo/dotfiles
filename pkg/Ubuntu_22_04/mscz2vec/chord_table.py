@@ -1747,8 +1747,7 @@ def match_pattern_in_sequence(midi_numerals: list, pattern: list,
     # formula: 0.7 + 0.3 * min(1, (n-2)/3)  → llega a 1.0 en n>=5
     length_bonus = 0.75 + 0.25 * min(1.0, max(0.0, (n - 2) / 3.0))
 
-    best_score = -1
-    best_idx   = -1
+    all_hits = []
 
     for i in range(m - n + 1):
         window     = midi_canon[i:i + n]
@@ -1765,18 +1764,17 @@ def match_pattern_in_sequence(midi_numerals: list, pattern: list,
 
         # Penalizar coverage baja + bonus por primer acorde + bonus por longitud
         adj = accuracy * (0.5 + 0.5 * coverage) * length_bonus * first_match
-        if adj > best_score:
-            best_score = adj
-            best_idx   = i
+        if adj >= 0.62:
+            all_hits.append((i, round(adj, 3)))
 
-    if best_idx >= 0 and best_score >= 0.62:
-        return [(best_idx, round(best_score, 3))]
-    return []
+    # Devolver todos los hits ordenados por score desc
+    all_hits.sort(key=lambda x: -x[1])
+    return all_hits
 
 
 def analyze_midi(midi_path: str, tonic_override: int = None,
                  min_score: float = 0.6, verbose: bool = False,
-                 bass_only: bool = False) -> list:
+                 bass_only: bool = False, min_dur: float = 0.0) -> list:
     """
     Función principal de análisis.
     Devuelve lista de matches: cada uno es un dict con entrada del catálogo
@@ -1789,6 +1787,12 @@ def analyze_midi(midi_path: str, tonic_override: int = None,
     chord_events, tpb = midi_to_chord_sequence(midi_path, bass_only=bass_only)
     recognized = chord_sequence_to_numerals(chord_events, tpb)
 
+    if not recognized:
+        return []
+
+    # Filtrar acordes con duración inferior al umbral --min-dur
+    if min_dur > 0:
+        recognized = [c for c in recognized if c['dur_beats'] >= min_dur]
     if not recognized:
         return []
 
@@ -1807,58 +1811,78 @@ def analyze_midi(midi_path: str, tonic_override: int = None,
     # Secuencia solo con acordes reconocidos (sin '?') para display limpio
     clean_numerals = [n for n in midi_numerals if n != '?']
 
-    # Buscar coincidencias en el catalogo (usa midi_numerals con '?' tolerados)
-    all_matches = []
+    # Inferir compas predominante a partir de la mediana de duraciones de acordes.
+    dur_list = sorted(c['dur_beats'] for c in recognized if c['dur_beats'] > 0)
+    median_dur = dur_list[len(dur_list) // 2] if dur_list else 4.0
+    beats_per_measure = min([2, 4, 8], key=lambda x: abs(x - median_dur))
+
+    def beat_to_measure(beat: float) -> int:
+        return int(beat / beats_per_measure) + 1
+
+    # Buscar coincidencias agrupando todas las ocurrencias por entrada del catalogo
+    by_entry = {}
+    pat_set_cache = {}
+
     for entry in TABLE:
         hits = match_pattern_in_sequence(midi_numerals, entry['pattern'], tonic_pc)
-        for idx, score in hits:
-            window = midi_numerals[idx:idx + len(entry['pattern'])]
-            pat_set    = set(_canonicalize(n) for n, _ in entry['pattern'])
-            midi_unique = set(_canonicalize(n) for n in clean_numerals if n != '?')
-            # Fraccion de acordes unicos del MIDI cubiertos por este patron
-            midi_cov  = len(midi_unique & pat_set) / max(len(midi_unique), 1)
-            # Fraccion del patron cubierta por acordes del MIDI (precision inversa)
-            pat_prec  = len(midi_unique & pat_set) / max(len(pat_set), 1)
-            # F1: media armonica de ambas coberturas (recompensa coincidencia mutua)
-            f1_cov    = (2 * midi_cov * pat_prec / (midi_cov + pat_prec)
-                         if (midi_cov + pat_prec) > 0 else 0.0)
-            all_matches.append({
-                'entry':        entry,
-                'tonic_pc':     tonic_pc,
-                'tonic_name':   tonic_name,
-                'score':        score,
-                'midi_coverage': round(f1_cov, 3),
-                'start_index':  idx,
-                'matched_numerals': [n for n in window if n != '?'],
-            })
+        if not hits:
+            continue
+        eid = entry['id']
+        pat_set = pat_set_cache.setdefault(
+            eid, set(_canonicalize(n) for n, _ in entry['pattern'])
+        )
+        midi_unique = set(_canonicalize(n) for n in clean_numerals if n != '?')
+        midi_cov  = len(midi_unique & pat_set) / max(len(midi_unique), 1)
+        pat_prec  = len(midi_unique & pat_set) / max(len(pat_set), 1)
+        f1_cov    = (2 * midi_cov * pat_prec / (midi_cov + pat_prec)
+                     if (midi_cov + pat_prec) > 0 else 0.0)
 
-    # Ordenar: score desc, luego midi_coverage desc (desempata patrones con igual score),
-    # luego longitud del patron desc (preferir patrones mas descriptivos), luego id
+        best_idx, best_score = hits[0]
+        window = midi_numerals[best_idx:best_idx + len(entry['pattern'])]
+
+        # Calcular compas de inicio de cada ocurrencia (deduplicado)
+        measures = []
+        seen_m = set()
+        for idx, _ in hits:
+            start_beat = recognized[idx]['start'] if idx < len(recognized) else 0.0
+            m_num = beat_to_measure(start_beat)
+            if m_num not in seen_m:
+                measures.append(m_num)
+                seen_m.add(m_num)
+        measures.sort()
+
+        by_entry[eid] = {
+            'entry':             entry,
+            'tonic_pc':          tonic_pc,
+            'tonic_name':        tonic_name,
+            'score':             best_score,
+            'midi_coverage':     round(f1_cov, 3),
+            'start_index':       best_idx,
+            'matched_numerals':  [n for n in window if n != '?'],
+            'beats_per_measure': beats_per_measure,
+            'measures':          measures,
+        }
+
+    all_matches = list(by_entry.values())
+
+    # Ordenar: score desc, luego midi_coverage desc, luego longitud desc, luego id
     all_matches.sort(key=lambda x: (
-        -round(x['score'] + x.get('midi_coverage', 0) * 0.15, 3),  # score + f1 bonus
+        -round(x['score'] + x.get('midi_coverage', 0) * 0.15, 3),
         -len(x['entry']['pattern']),
         x['entry']['id']
     ))
 
-    # Desduplicar: conservar la mejor ocurrencia de cada entrada
-    seen = {}
-    deduped = []
-    for m in all_matches:
-        eid = m['entry']['id']
-        if eid not in seen:
-            seen[eid] = m
-            deduped.append(m)
+    # Filtrar por min_score
+    all_matches = [m for m in all_matches if m['score'] >= min_score]
 
-    # Filtrar por min_score (ya ajustado con length_bonus en match_pattern)
-    deduped = [m for m in deduped if m['score'] >= min_score]
-
-    return deduped, recognized, clean_numerals, tonic_name
+    return all_matches, recognized, clean_numerals, tonic_name
 
 
 def print_midi_analysis(midi_path: str, matches: list, recognized: list,
                          midi_numerals: list, tonic_name: str,
                          verbose: bool = False, min_score: float = 0.6,
-                         bass_only: bool = False) -> None:
+                         bass_only: bool = False,
+                         sort_compas: bool = False) -> None:
     """Imprime el resultado del análisis MIDI de forma legible."""
     print(f"\n{COL['cyan']}{'═'*72}{COL['reset']}")
     print(f"{COL['bold']}  ANÁLISIS MIDI: {os.path.basename(midi_path)}{COL['reset']}")
@@ -1897,18 +1921,34 @@ def print_midi_analysis(midi_path: str, matches: list, recognized: list,
         print(f"  {COL['gray']}Sin coincidencias con score ≥ {min_score:.0%}{COL['reset']}\n")
         return
 
-    print(f"  {COL['gray']}{'score':>6}  {'cob':>4}  {'#':>3}  {'progresión':<36}  "
-          f"{'t':>2}  {'emoción':<12}  {'estilo':<12} {'modo'}{COL['reset']}")
-    print(f"  {'─'*86}")
+    # En modo sort_compas: expandir cada match en una fila por compás,
+    # ordenar el conjunto por compás de aparición.
+    if sort_compas:
+        rows = []
+        for m in filtered:
+            for meas in (m.get('measures') or [None]):
+                rows.append((meas, m))
+        rows.sort(key=lambda x: (x[0] if x[0] is not None else 0))
+    else:
+        rows = [(None, m) for m in filtered]
 
-    for m in filtered:
+    col_compas = 'compás' if sort_compas else 'compases'
+    print(f"  {COL['gray']}{'score':>6}  {'cob':>4}  {'#':>3}  {'progresión':<36}  "
+          f"{'t':>2}  {'emoción':<12}  {'estilo':<12} {'modo':<10} {col_compas}{COL['reset']}")
+    print(f"  {'─'*100}")
+
+    for meas_single, m in rows:
         e   = m['entry']
         sc  = m['score']
         cov = m.get('midi_coverage', 0)
-        # Verde: score alto Y cubre bien los acordes del MIDI; amarillo: score medio
         sc_col = COL['green'] if sc >= 0.75 and cov >= 0.6 else \
                  COL['yellow'] if sc >= 0.65 else COL['gray']
         tc = tension_col(e['tension'])
+        if sort_compas:
+            meas_str = f'c.{meas_single}' if meas_single is not None else ''
+        else:
+            measures = m.get('measures', [])
+            meas_str = ('c.' + ', '.join(str(x) for x in measures)) if measures else ''
         print(
             f"  {sc_col}{sc:>5.0%}{COL['reset']}  "
             f"{COL['gray']}{cov:>3.0%}{COL['reset']}  "
@@ -1916,7 +1956,8 @@ def print_midi_analysis(midi_path: str, matches: list, recognized: list,
             f"{COL['bold']}{e['prog']:<36}{COL['reset']}  "
             f"{tc}{e['tension']}{COL['reset']}  "
             f"{COL['cyan']}{e['emocion']:<12}{COL['reset']}  "
-            f"{COL['gray']}{e['style']:<12} {e['mode']}{COL['reset']}"
+            f"{COL['gray']}{e['style']:<12} {e['mode']:<10} "
+            f"{COL['yellow']}{meas_str}{COL['reset']}"
         )
         if verbose:
             print(f"         {COL['gray']}{e['nombre']}{COL['reset']}")
@@ -2136,6 +2177,15 @@ def main():
     parser.add_argument('--bass-only',   action='store_true', dest='bass_only',
                         help='Analizar solo notas graves (≤ C4) para la detección '
                              'de acordes — útil para aislar la línea de bajo')
+    parser.add_argument('--min-dur',      type=float, default=0.0, metavar='BEATS',
+                        dest='min_dur',
+                        help='Duración mínima en beats para considerar un acorde '
+                             '(default: 0, sin filtro). Útil para ignorar notas '
+                             'de paso y acordes fugaces. Ej: --min-dur 2')
+    parser.add_argument('--sort-compas', action='store_true', dest='sort_compas',
+                        help='Ordenar resultados por compás de aparición; '
+                             'cuando una progresión aparece varias veces se muestra '
+                             'una fila por aparición en lugar de agruparlas')
     parser.add_argument('--verbose',     action='store_true',
                         help='Mostrar nombre y descripción de cada progresión')
 
@@ -2159,6 +2209,7 @@ def main():
             min_score      = args.min_score,
             verbose        = args.verbose,
             bass_only      = args.bass_only,
+            min_dur        = args.min_dur,
         )
         matches, recognized, midi_numerals, tonic_name = result
 
@@ -2168,9 +2219,10 @@ def main():
             recognized,
             midi_numerals,
             tonic_name,
-            verbose   = args.verbose,
-            min_score = args.min_score,
-            bass_only = args.bass_only,
+            verbose      = args.verbose,
+            min_score    = args.min_score,
+            bass_only    = args.bass_only,
+            sort_compas  = args.sort_compas,
         )
 
         if args.export_json:
