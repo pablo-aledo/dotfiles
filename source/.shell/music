@@ -132,7 +132,7 @@ fl_info(){
 
 fl_file(){
     [ "$(echo $1 | grep '^.*\.mid$')" != "" ] && { echo $1; return }
-    [ "$(echo $1 | grep '^{"name": "[^"]*", "downloadUrl": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f4; return }
+    [ "$(echo $1 | grep '^{"name": "[^"]*", "downloadUrl": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f8 | cut -d/ -f3; return }
     [ "$(echo $1 | grep '^{"path": "[^"]*", "id": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f8; return }
     [ "$(echo $1 | grep '^{"path": "[^"]*", "file": "[^"]*", "download": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f12; return }
     [ "$(echo $1 | grep '^{"authorUserId":".*$')" != "" ] && { echo $1 | sed 's/.*"name":"\([^"]*\)".*/\1/g' | sed 's/$/.mscz/g'; return }
@@ -177,3 +177,9 @@ fl_extract(){
         )
     done
 }
+
+mid2mp3(){
+    timidity "$1" -Ow -o - | lame - "$(basename "$1" .mid).mp3"
+    # timidity -s 44100 -Ow -o - -EFreverb=0 -EFchorus=0 -c soundfont.cfg "$1" | lame -V2 - "$(basename "$1" .mid).mp3"
+}
+
