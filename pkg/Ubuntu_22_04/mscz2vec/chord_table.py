@@ -53,6 +53,13 @@
 ║    # Buscar la progresión más adecuada para una intención                    ║
 ║    python chord_table.py --intencion "melancólico y tenso"                  ║
 ║                                                                              ║
+║    # Analizar un MIDI y detectar progresiones del catálogo                  ║
+║    python chord_table.py --analyze-midi cancion.mid                         ║
+║                                                                              ║
+║    # Análisis con tónica forzada, umbral alto y exportación JSON            ║
+║    python chord_table.py --analyze-midi song.mid --key Am                   ║
+║        --min-score 0.75 --export-json matches.json --verbose                ║
+║                                                                              ║
 ║  INTEGRACIÓN CON EL ECOSISTEMA:                                              ║
 ║    chord_progression_generator.py → complementario (algorítmico vs curado)  ║
 ║    voice_leader.py      → --export-midi genera acordes.mid compatible       ║
@@ -995,6 +1002,19 @@ TABLE = [
         'desc': 'Loop de 6 acordes que recorre el modo menor con IV mayor dórico. '
                 'Bandas sonoras de cine épico, videojuegos de rol.',
     },
+    {
+        'id': 101, 'prog': 'I – V – ii – IV',
+        'pattern': [('I',2),('V',2),('ii',2),('IV',2)],
+        'nombre': 'Loop pop con ii',
+        'style': 'pop', 'mode': 'major', 'tension': 3,
+        'emocion': 'alegría',
+        'desc': 'Variante del four-chord loop donde el ii sustituye al vi. '
+                'Más diatónica y resuelta que I–V–vi–IV: el ii funciona como '
+                'pre-dominante hacia el IV, creando un movimiento circular estable '
+                'sin la sombra melancólica del relativo menor. '
+                'Let Her Go (Passenger), Torn (Imbruglia), No Woman No Cry (Marley). '
+                'En inversión (I–V/vii–ii–IV) muy frecuente en folk y música litúrgica.',
+    },
 ]
 
 # Índice por id para acceso rápido
@@ -1169,6 +1189,745 @@ def progression_to_midi(progression: list, tonic_pc: int, ticks_per_beat: int,
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ANÁLISIS MIDI → PROGRESIONES DEL CATÁLOGO
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _parse_midi_raw(midi_path: str):
+    """
+    Parser MIDI nativo (sin dependencias externas).
+    Devuelve (events, tpb) donde events es lista de (abs_tick, 'on'|'off', note_midi).
+    Soporta running status y meta-mensajes.
+    """
+    import struct as _struct
+    with open(midi_path, 'rb') as f:
+        data = f.read()
+    pos = 0
+
+    def read_bytes(n):
+        nonlocal pos; b = data[pos:pos+n]; pos += n; return b
+
+    def read_uint32(): return _struct.unpack('>I', read_bytes(4))[0]
+    def read_uint16(): return _struct.unpack('>H', read_bytes(2))[0]
+
+    def read_varlen():
+        nonlocal pos
+        result = 0
+        while True:
+            b = data[pos]; pos += 1
+            result = (result << 7) | (b & 0x7F)
+            if not (b & 0x80): break
+        return result
+
+    assert read_bytes(4) == b'MThd', "Not a MIDI file"
+    read_uint32()  # header length
+    read_uint16()  # format
+    ntracks = read_uint16()
+    tpb     = read_uint16()
+
+    all_events = []
+    for _ in range(ntracks):
+        assert read_bytes(4) == b'MTrk', "Bad track header"
+        tlen    = read_uint32()
+        end     = pos + tlen
+        abs_tick = 0
+        running = 0
+        while pos < end:
+            dt = read_varlen(); abs_tick += dt
+            b = data[pos]
+            if b & 0x80:
+                running = b; pos += 1
+            msg_type = running & 0xF0
+            if msg_type == 0x90:
+                note = data[pos]; vel = data[pos+1]; pos += 2
+                etype = 'on' if vel > 0 else 'off'
+                all_events.append((abs_tick, etype, note))
+            elif msg_type == 0x80:
+                note = data[pos]; pos += 2
+                all_events.append((abs_tick, 'off', note))
+            elif msg_type in (0xB0, 0xA0, 0xE0): pos += 2
+            elif msg_type in (0xC0, 0xD0):        pos += 1
+            elif running == 0xFF:
+                pos += 1; mlen = read_varlen(); pos += mlen
+            elif running in (0xF0, 0xF7):
+                slen = read_varlen(); pos += slen
+            else:
+                break
+        pos = end
+
+    all_events.sort(key=lambda x: (x[0], 0 if x[1] == 'off' else 1))
+    return all_events, tpb
+
+
+def midi_to_chord_sequence(midi_path: str, bass_only: bool = False) -> tuple:
+    """
+    Lee un archivo MIDI y devuelve una secuencia limpia de acordes con su duracion.
+
+    Usa un parser MIDI nativo (sin mido) para mayor robustez.
+
+    Si bass_only=True, solo se consideran las notas hasta el umbral
+    BASS_THRESHOLD (MIDI 61 = C#4, inclusive de C4) para la detección de acordes, permitiendo
+    analizar la línea de bajo de forma independiente.
+
+    Estrategia:
+    - Construye intervalos nota-encendida/nota-apagada para cada nota.
+    - Muestrea en ventanas de 1 beat: PCs activos + nota MIDI más grave activa.
+    - Comprime ventanas contiguas con el mismo conjunto de PCs.
+    - Elimina segmentos con < 2 pitch-classes.
+    - Fusiona segmentos cortos (<=1 beat) con el vecino anterior.
+    - Devuelve (pcs, bass_midi, start_tick, dur_ticks) por segmento.
+    """
+    BASS_THRESHOLD = 61   # C4 inclusive: notas <= C4 (MIDI <=60) se consideran "bajo"
+    # Antes era 60 (excluía C4), ahora C4 queda dentro del rango de bajo,
+    # lo que permite identificar correctamente acordes en primera inversión
+    # cuya tercera en el bajo coincide con C4 (p.ej. C/E con C4 en el acorde).
+
+    all_events, tpb = _parse_midi_raw(midi_path)
+
+    if not all_events:
+        return [], tpb
+
+    # ── Construir intervalos (start_tick, end_tick, note_midi) ──────────────
+    active = {}
+    intervals = []
+    for tick, etype, note in all_events:
+        if etype == 'on':
+            active[(note,)] = tick
+        else:
+            key = (note,)
+            if key in active:
+                intervals.append((active.pop(key), tick, note))
+    # Cerrar notas que quedaron abiertas
+    max_tick = max((t for t, _, _ in all_events), default=0) + tpb
+    for (note,), start in active.items():
+        intervals.append((start, max_tick, note))
+
+    total_ticks = max(e for _, e, _ in intervals) if intervals else tpb
+
+    # ── Muestrear por ventanas de 1 beat ────────────────────────────────────
+    WINDOW    = tpb
+    n_windows = int(total_ticks / WINDOW) + 1
+
+    if bass_only:
+        # Recolectamos TODOS los PCs activos en el registro grave (< BASS_THRESHOLD)
+        # en cada ventana, incluyendo díadas y notas dobles del bajo.
+        # La nota más grave de la ventana se guarda como bass_midi para inversiones.
+        window_bass_pcs  = [frozenset() for _ in range(n_windows)]
+        window_bass_midi = [None] * n_windows
+
+        for start, end, note in intervals:
+            if note >= BASS_THRESHOLD:
+                continue
+            pc      = note % 12
+            w_start = int(start / WINDOW)
+            w_end   = int(end   / WINDOW)
+            for w in range(max(0, w_start), min(n_windows, w_end + 1)):
+                window_bass_pcs[w] = window_bass_pcs[w] | {pc}
+                if window_bass_midi[w] is None or note < window_bass_midi[w]:
+                    window_bass_midi[w] = note
+
+        # Comprimir ventanas contiguas con el mismo conjunto de PCs de bajo
+        compressed_bass = []
+        cur_pcs   = window_bass_pcs[0]
+        cur_bass  = window_bass_midi[0]
+        cur_start = 0
+        cur_count = 1
+        for w in range(1, n_windows):
+            if window_bass_pcs[w] == cur_pcs:
+                cur_count += 1
+                if window_bass_midi[w] is not None:
+                    if cur_bass is None or window_bass_midi[w] < cur_bass:
+                        cur_bass = window_bass_midi[w]
+            else:
+                if cur_pcs:
+                    compressed_bass.append(
+                        (cur_pcs, cur_bass, cur_start * WINDOW, cur_count * WINDOW)
+                    )
+                cur_pcs   = window_bass_pcs[w]
+                cur_bass  = window_bass_midi[w]
+                cur_start = w
+                cur_count = 1
+        if cur_pcs:
+            compressed_bass.append(
+                (cur_pcs, cur_bass, cur_start * WINDOW, cur_count * WINDOW)
+            )
+
+        # Filtrar segmentos vacíos y fusionar cortos (≤1 beat) con el anterior
+        filtered = [(p, b, s, c) for p, b, s, c in compressed_bass if len(p) >= 1]
+        merged = []
+        for pcs, bass, start, count in filtered:
+            if merged and count <= 1:
+                pp, pb, ps, pc_ = merged[-1]
+                nb = pb if (bass is None or (pb is not None and pb <= bass)) else bass
+                merged[-1] = (pp, nb, ps, pc_ + count)
+            elif merged and pcs == merged[-1][0]:
+                pp, pb, ps, pc_ = merged[-1]
+                nb = pb if (bass is None or (pb is not None and pb <= bass)) else bass
+                merged[-1] = (pp, nb, ps, pc_ + count)
+            else:
+                merged.append((pcs, bass, start, count))
+
+        return [(pcs, bass, s, c) for pcs, bass, s, c in merged], tpb
+
+    # ── Modo normal: PCS de todas las notas ──────────────────────────────────
+    # Para cada ventana: set de PCs activos y nota MIDI mínima activa
+    window_pcs  = [frozenset() for _ in range(n_windows)]
+    window_bass = [None]        * n_windows   # nota MIDI más grave en la ventana
+
+    for start, end, note in intervals:
+        pc = note % 12
+        # Si bass_only, ignorar notas que no son bajo
+        if bass_only and note >= BASS_THRESHOLD:
+            continue
+        w_start = int(start / WINDOW)
+        w_end   = int(end   / WINDOW)
+        for w in range(max(0, w_start), min(n_windows, w_end + 1)):
+            window_pcs[w]  = window_pcs[w] | {pc}
+            if window_bass[w] is None or note < window_bass[w]:
+                window_bass[w] = note
+
+    # ── Comprimir ventanas contiguas con el mismo PCS ────────────────────────
+    compressed = []
+    if window_pcs:
+        cur_pcs   = window_pcs[0]
+        cur_bass  = window_bass[0]
+        cur_start = 0
+        cur_count = 1
+        for w in range(1, n_windows):
+            if window_pcs[w] == cur_pcs:
+                cur_count += 1
+                # Actualizar bajo más grave del segmento
+                if window_bass[w] is not None:
+                    if cur_bass is None or window_bass[w] < cur_bass:
+                        cur_bass = window_bass[w]
+            else:
+                compressed.append((cur_pcs, cur_bass, cur_start, cur_count))
+                cur_pcs   = window_pcs[w]
+                cur_bass  = window_bass[w]
+                cur_start = w
+                cur_count = 1
+        compressed.append((cur_pcs, cur_bass, cur_start, cur_count))
+
+    # ── Filtrar segmentos con < 2 pitch-classes ──────────────────────────────
+    filtered = [(pcs, bass, s, c) for pcs, bass, s, c in compressed if len(pcs) >= 2]
+
+    # ── Fusionar segmentos cortos (1 beat) con el vecino anterior ────────────
+    MERGE_THR = 1
+    merged = []
+    for pcs, bass, start, count in filtered:
+        if merged and count <= MERGE_THR:
+            prev_pcs, prev_bass, prev_s, prev_c = merged[-1]
+            new_bass = prev_bass
+            if bass is not None and (new_bass is None or bass < new_bass):
+                new_bass = bass
+            merged[-1] = (prev_pcs, new_bass, prev_s, prev_c + count)
+        elif merged and pcs == merged[-1][0]:
+            prev_pcs, prev_bass, prev_s, prev_c = merged[-1]
+            new_bass = prev_bass
+            if bass is not None and (new_bass is None or bass < new_bass):
+                new_bass = bass
+            merged[-1] = (prev_pcs, new_bass, prev_s, prev_c + count)
+        else:
+            merged.append((pcs, bass, start, count))
+
+    # Convertir ventanas a ticks — resultado: (pcs, bass_midi, start_tick, dur_ticks)
+    result = [(pcs, bass, s * WINDOW, c * WINDOW) for pcs, bass, s, c in merged]
+    return result, tpb
+
+
+
+def pcs_to_chord_name(pcs: frozenset, bass_midi: int = None) -> tuple:
+    """
+    Identifica el nombre del acorde, la tónica y la inversión a partir de un
+    conjunto de pitch-classes y, opcionalmente, la nota MIDI más grave (bajo).
+
+    Devuelve (tónica_pc, calidad, nombre_completo, bass_pc) donde:
+      - nombre_completo incluye notación de inversión "Root/Bass" si corresponde
+      - bass_pc es el PC de la nota más grave (None si no se dispone)
+    """
+    pcs  = frozenset(pcs)
+
+    # Caso especial: un solo PC (nota pedal en modo bass_only)
+    if len(pcs) == 1:
+        pc = next(iter(pcs))
+        name = PITCH_NAMES_FLAT[pc]
+        return pc, '', name, (bass_midi % 12 if bass_midi is not None else pc)
+
+    # Caso díada (2 PCs): elegir el template más probable usando una puntuación
+    # que combina tamaño del template (triada < séptima), si la raíz coincide con
+    # el bajo, y un bonus de "calidad diatónica" (mayor/menor > sus/aug/dim).
+    if len(pcs) == 2:
+        dyad         = frozenset(pcs)
+        bass_pc_hint = bass_midi % 12 if bass_midi is not None else None
+        # Peso de calidad: triadas diatónicas > sus > aumentadas > séptimas > disminuidas
+        QUALITY_SCORE = {
+            '': 10, 'm': 10, '7': 7, 'M7': 7, 'm7': 7,
+            'sus4': 5, 'sus2': 5, 'aug': 4,
+            'dim': 3, 'dim7': 2, 'hdim7': 2,
+        }
+        best_dyad = (None, None, '?', -1)  # (root_pc, quality, name, score)
+        for quality, ivs in CHORD_INTERVALS.items():
+            for root in range(12):
+                candidate = frozenset((root + iv) % 12 for iv in ivs)
+                if not (dyad <= candidate):
+                    continue
+                q_score = QUALITY_SCORE.get(quality, 3)
+                size_bonus = 10 - len(ivs)           # triada(3)=7, séptima(4)=6
+                bass_bonus = 5 if root == bass_pc_hint else 0
+                total = q_score + size_bonus + bass_bonus
+                if total > best_dyad[3]:
+                    name = f"{PITCH_NAMES_FLAT[root]}{quality}"
+                    best_dyad = (root, quality, name, total)
+        if best_dyad[0] is not None:
+            root_pc, quality = best_dyad[0], best_dyad[1]
+            name = best_dyad[2]
+            bass_pc = bass_pc_hint
+            if bass_pc is not None and bass_pc != root_pc:
+                chord_pcs = frozenset((root_pc + iv) % 12
+                                       for iv in CHORD_INTERVALS.get(quality, []))
+                if bass_pc in chord_pcs:
+                    name = f"{name}/{PITCH_NAMES_FLAT[bass_pc]}"
+            return root_pc, quality, name, bass_pc
+
+    best = (None, None, '?', -1)   # (root_pc, quality, name, score)
+
+    for quality, intervals in CHORD_INTERVALS.items():
+        for root in range(12):
+            candidate = frozenset((root + iv) % 12 for iv in intervals)
+            overlap = len(pcs & candidate)
+            total   = max(len(pcs), len(candidate))
+            score   = overlap / total if total else 0
+            if overlap == len(candidate) and score > best[3]:
+                name = f"{PITCH_NAMES[root]}{quality}"
+                best = (root, quality, name, score)
+
+    root_pc, quality, name = best[0], best[1], best[2]
+
+    # ── Detección de inversión ───────────────────────────────────────────────
+    bass_pc = bass_midi % 12 if bass_midi is not None else None
+    if (bass_pc is not None and root_pc is not None and bass_pc != root_pc):
+        # Solo añadir /Bajo si el bajo es una nota del acorde
+        chord_pcs = frozenset((root_pc + iv) % 12
+                               for iv in CHORD_INTERVALS.get(quality, []))
+        if bass_pc in chord_pcs:
+            bass_name = PITCH_NAMES_FLAT[bass_pc]
+            name = f"{name}/{bass_name}"
+
+    return root_pc, quality, name, bass_pc
+
+
+def chord_sequence_to_numerals(chord_events: list, tpb: int) -> list:
+    """
+    Convierte la secuencia de acordes en una lista de dicts con tónica, numeral,
+    nombre (con inversión si corresponde) y duración en beats.
+
+    Acepta el formato extendido (pcs, bass_midi, start_tick, dur_ticks) devuelto
+    por midi_to_chord_sequence, así como el formato legado (pcs, start, dur).
+    """
+    recognized = []
+    for item in chord_events:
+        if len(item) == 4:
+            pcs, bass_midi, start, dur = item
+        else:                          # compatibilidad legado
+            pcs, start, dur = item; bass_midi = None
+
+        root_pc, quality, chord_name, bass_pc = pcs_to_chord_name(pcs, bass_midi)
+        dur_beats = dur / tpb
+        recognized.append({
+            'root_pc':    root_pc,
+            'quality':    quality,
+            'chord_name': chord_name,
+            'bass_pc':    bass_pc,
+            'dur_beats':  dur_beats,
+            'start':      start / tpb,
+        })
+    return recognized
+
+
+# Perfiles de Krumhansl-Schmuckler (correlacion notas de escala con tónica)
+_KS_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
+_KS_MINOR = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
+
+def infer_tonic(recognized: list) -> int:
+    """
+    Estima la tónica mas probable usando dos metodos combinados:
+
+    1. Krumhansl-Schmuckler: correlacion del perfil de duraciones de pitch-classes
+       con los perfiles de escala mayor y menor (12 tónicas x 2 modos).
+    2. Funcionalidad armónica: bonificacion a tónicas cuyo I, IV y V
+       coincidan con acordes de larga duracion.
+
+    El resultado es la tónica con mayor puntuacion combinada.
+    """
+    if not recognized:
+        return 0
+
+    # Acumular duracion de cada pitch-class, clippeando outliers (>4x mediana)
+    # para que notas pedal muy largas no dominen la inferencia de tónica.
+    durs = [c['dur_beats'] for c in recognized if c['root_pc'] is not None]
+    if not durs:
+        return 0
+    sorted_durs = sorted(durs)
+    median_dur  = sorted_durs[len(sorted_durs) // 2]
+    dur_cap     = max(median_dur * 4, 1.0)   # cap: 4x la mediana
+
+    pc_dur = [0.0] * 12
+    for c in recognized:
+        if c['root_pc'] is None:
+            continue
+        quality  = c['quality'] or ''
+        ivs      = CHORD_INTERVALS.get(quality, CHORD_INTERVALS[''])
+        clipped  = min(c['dur_beats'], dur_cap)
+        for iv in ivs:
+            pc = (c['root_pc'] + iv) % 12
+            pc_dur[pc] += clipped
+
+    total_dur = sum(pc_dur) or 1.0
+    pc_norm = [d / total_dur for d in pc_dur]
+
+    # Media y desv. de los perfiles KS para correlacion de Pearson
+    def pearson(profile, observed):
+        n = len(profile)
+        mp = sum(profile) / n
+        mo = sum(observed) / n
+        num = sum((profile[i]-mp)*(observed[i]-mo) for i in range(n))
+        dp  = (sum((profile[i]-mp)**2 for i in range(n)) ** 0.5) or 1e-9
+        do  = (sum((observed[i]-mo)**2 for i in range(n)) ** 0.5) or 1e-9
+        return num / (dp * do)
+
+    # Score KS para cada tónica y modo (rotacion del perfil)
+    ks_scores = {}
+    for t in range(12):
+        obs   = pc_norm[t:] + pc_norm[:t]   # rotar para que t sea el 0
+        r_maj = pearson(_KS_MAJOR, obs)
+        r_min = pearson(_KS_MINOR, obs)
+        ks_scores[t] = max(r_maj, r_min)
+
+    # Normalizar KS a [0,1]
+    ks_min = min(ks_scores.values())
+    ks_max = max(ks_scores.values()) - ks_min or 1e-9
+    ks_norm = {t: (v - ks_min) / ks_max for t, v in ks_scores.items()}
+
+    # Bonificacion funcional: I(0), IV(5), V(7) con mayor duracion → tónica candidata
+    root_dur = {}
+    for c in recognized:
+        if c['root_pc'] is not None:
+            clipped = min(c['dur_beats'], dur_cap)
+            root_dur[c['root_pc']] = root_dur.get(c['root_pc'], 0) + clipped
+    max_root_dur = max(root_dur.values()) if root_dur else 1.0
+
+    func_scores = {}
+    for t in range(12):
+        i_dur  = root_dur.get(t,            0) / max_root_dur
+        iv_dur = root_dur.get((t + 5) % 12, 0) / max_root_dur
+        v_dur  = root_dur.get((t + 7) % 12, 0) / max_root_dur
+        # I cuenta doble (es la tónica), IV y V suman
+        func_scores[t] = 2 * i_dur + iv_dur + v_dur
+
+    func_max = max(func_scores.values()) or 1e-9
+    func_norm = {t: v / func_max for t, v in func_scores.items()}
+
+    # Score de "calidad de numerales": cuantos acordes del MIDI serian grados
+    # comunes del catalogo si T fuera la tónica.
+    # Grados muy comunes en el catalogo: I(0), ii(2,m), IV(5), V(7), vi(9,m)
+    # Grados raros/prestados: bII, bIII, bV, bVI, bVII
+    # La idea: F-C-Gm-Bb en tónica F → I, V, ii, IV (todos comunes = alta puntuacion)
+    #           en tónica C → IV, I, v(raro), bVII(prestado = baja puntuacion)
+    COMMON_DEGREES = {
+        # (intervalo, es_menor): peso
+        (0,  False): 3.0,   # I
+        (2,  True):  2.5,   # ii
+        (4,  True):  1.5,   # iii
+        (5,  False): 2.5,   # IV
+        (7,  False): 3.0,   # V
+        (7,  True):  0.5,   # v (poco comun)
+        (9,  True):  2.0,   # vi
+        (11, True):  1.0,   # vii°
+        # menores como tónica
+        (0,  True):  3.0,   # i
+        (2,  False): 1.5,   # II (dorico)
+        (3,  False): 1.5,   # bIII
+        (5,  True):  2.0,   # iv
+        (10, False): 1.5,   # bVII (mixolidio/aeolico)
+        (8,  False): 1.0,   # bVI
+    }
+
+    catalog_scores = {}
+    for t in range(12):
+        score_c = 0.0
+        for c in recognized:
+            if c['root_pc'] is None:
+                continue
+            iv   = (c['root_pc'] - t) % 12
+            is_m = (c['quality'] or '') in ('m', 'm7', 'm9', 'hdim7', 'dim', 'dim7')
+            w    = COMMON_DEGREES.get((iv, is_m), 0.0)
+            score_c += w * min(c['dur_beats'], dur_cap)
+        catalog_scores[t] = score_c
+
+    cat_max = max(catalog_scores.values()) or 1e-9
+    cat_norm = {t: v / cat_max for t, v in catalog_scores.items()}
+
+    # Puntuacion combinada: 25% KS + 15% funcional + 60% calidad de numerales
+    combined = {t: 0.25 * ks_norm[t] + 0.15 * func_norm[t] + 0.60 * cat_norm[t]
+                for t in range(12)}
+    return max(combined, key=lambda k: combined[k])
+
+
+def chord_to_numeral(root_pc: int, quality: str, tonic_pc: int) -> str:
+    """
+    Convierte (root_pc, quality) en numeral romano relativo a tonic_pc.
+    """
+    interval = (root_pc - tonic_pc) % 12
+    # Tabla inversa: (interval, quality) → numeral
+    for numeral, (iv, q) in NUMERAL_TO_INTERVAL.items():
+        if iv == interval and q == quality:
+            return numeral
+    # Fallback: solo por intervalo
+    INTERVAL_TO_NUMERAL = {
+        0: 'I', 1: 'bII', 2: 'II', 3: 'bIII', 4: 'III', 5: 'IV',
+        6: 'bV', 7: 'V', 8: 'bVI', 9: 'VI', 10: 'bVII', 11: 'VII',
+    }
+    base = INTERVAL_TO_NUMERAL.get(interval, '?')
+    if quality in ('m', 'm7', 'm9', 'hdim7'):
+        base = base.lower()
+    return base
+
+
+# Tabla de equivalencias entre numerales (distintas grafías del mismo grado)
+_NUMERAL_ALIASES = {
+    'I':   {'I','IM7','I6','Isus4','IM9','I7'},
+    'i':   {'i','im7','im9','i7','i6'},
+    'II':  {'II','II7'},
+    'ii':  {'ii','ii7','IIø7','ii°7','ii°'},
+    'III': {'III','III7','bIII','bIII7'},
+    'iii': {'iii','iii7'},
+    'IV':  {'IV','IVM7','IV7','IV/I'},
+    'iv':  {'iv','iv7','iv9'},
+    'V':   {'V','V7','Vsus4','V7b9','V/I'},
+    'v':   {'v'},
+    'VI':  {'VI','VI7'},
+    'vi':  {'vi','vi7','vi°'},
+    'VII': {'VII','VII7'},
+    'vii': {'vii','vii°','vii°7'},
+    'bII': {'bII','bII7','bii'},
+    'bIII':{'bIII','bIII7'},
+    'bVI': {'bVI','bvi'},
+    'bVII':{'bVII','bvii','bVII7'},
+}
+# Índice inverso: numeral_exacto → canonical
+_CANON = {}
+for canon, aliases in _NUMERAL_ALIASES.items():
+    for a in aliases:
+        _CANON[a] = canon
+
+def _canonicalize(num: str) -> str:
+    """Reduce un numeral a su forma canónica (sin extensiones)."""
+    return _CANON.get(num, num)
+
+
+def match_pattern_in_sequence(midi_numerals: list, pattern: list,
+                               tonic_pc: int) -> list:
+    """
+    Busca todas las ocurrencias del patron de una entrada del catalogo
+    dentro de la secuencia de numerales del MIDI.
+
+    Score final = accuracy * coverage_penalty * length_bonus
+    - accuracy:        fraccion de acordes reconocidos que coinciden
+    - coverage_penalty: penaliza si hay muchos ? en la ventana
+    - length_bonus:    premia patrones largos (evita que IV-I domine)
+
+    Solo se devuelve el mejor hit por patron (el de mayor score).
+    """
+    pat_numerals = [_canonicalize(n) for n, _ in pattern]
+    midi_canon   = [_canonicalize(n) if n != '?' else '?' for n in midi_numerals]
+    n, m = len(pat_numerals), len(midi_canon)
+    if n > m:
+        return []
+
+    # length_bonus: patrones de 2 acordes tienen bonus 0.7, de 4+ tienen 1.0
+    # formula: 0.7 + 0.3 * min(1, (n-2)/3)  → llega a 1.0 en n>=5
+    length_bonus = 0.75 + 0.25 * min(1.0, max(0.0, (n - 2) / 3.0))
+
+    best_score = -1
+    best_idx   = -1
+
+    for i in range(m - n + 1):
+        window     = midi_canon[i:i + n]
+        comparable = [(a, b) for a, b in zip(window, pat_numerals) if a != '?']
+        # Necesitamos al menos ceil(n/2) acordes comparables
+        if len(comparable) < max(2, (n + 1) // 2):
+            continue
+        match    = sum(1 for a, b in comparable if a == b)
+        accuracy = match / len(comparable)
+        coverage = len(comparable) / n
+
+        # Bonus si el primer acorde del patron coincide exactamente
+        first_match = 1.0 if (window[0] != '?' and window[0] == pat_numerals[0]) else 0.85
+
+        # Penalizar coverage baja + bonus por primer acorde + bonus por longitud
+        adj = accuracy * (0.5 + 0.5 * coverage) * length_bonus * first_match
+        if adj > best_score:
+            best_score = adj
+            best_idx   = i
+
+    if best_idx >= 0 and best_score >= 0.62:
+        return [(best_idx, round(best_score, 3))]
+    return []
+
+
+def analyze_midi(midi_path: str, tonic_override: int = None,
+                 min_score: float = 0.6, verbose: bool = False,
+                 bass_only: bool = False) -> list:
+    """
+    Función principal de análisis.
+    Devuelve lista de matches: cada uno es un dict con entrada del catálogo
+    y la información de coincidencia.
+
+    Si bass_only=True, solo las notas por debajo de C#4 (MIDI 61) se usan
+    para detectar los acordes, lo que permite analizar la línea de bajo
+    de forma independiente de la melodía. C4 queda incluido en el bajo.
+    """
+    chord_events, tpb = midi_to_chord_sequence(midi_path, bass_only=bass_only)
+    recognized = chord_sequence_to_numerals(chord_events, tpb)
+
+    if not recognized:
+        return []
+
+    tonic_pc = tonic_override if tonic_override is not None else infer_tonic(recognized)
+    tonic_name = PITCH_NAMES[tonic_pc]
+
+    # Convertir cada acorde reconocido a numeral relativo
+    midi_numerals = []
+    for c in recognized:
+        if c['root_pc'] is not None:
+            num = chord_to_numeral(c['root_pc'], c['quality'] or '', tonic_pc)
+        else:
+            num = '?'
+        midi_numerals.append(num)
+
+    # Secuencia solo con acordes reconocidos (sin '?') para display limpio
+    clean_numerals = [n for n in midi_numerals if n != '?']
+
+    # Buscar coincidencias en el catalogo (usa midi_numerals con '?' tolerados)
+    all_matches = []
+    for entry in TABLE:
+        hits = match_pattern_in_sequence(midi_numerals, entry['pattern'], tonic_pc)
+        for idx, score in hits:
+            window = midi_numerals[idx:idx + len(entry['pattern'])]
+            pat_set    = set(_canonicalize(n) for n, _ in entry['pattern'])
+            midi_unique = set(_canonicalize(n) for n in clean_numerals if n != '?')
+            # Fraccion de acordes unicos del MIDI cubiertos por este patron
+            midi_cov  = len(midi_unique & pat_set) / max(len(midi_unique), 1)
+            # Fraccion del patron cubierta por acordes del MIDI (precision inversa)
+            pat_prec  = len(midi_unique & pat_set) / max(len(pat_set), 1)
+            # F1: media armonica de ambas coberturas (recompensa coincidencia mutua)
+            f1_cov    = (2 * midi_cov * pat_prec / (midi_cov + pat_prec)
+                         if (midi_cov + pat_prec) > 0 else 0.0)
+            all_matches.append({
+                'entry':        entry,
+                'tonic_pc':     tonic_pc,
+                'tonic_name':   tonic_name,
+                'score':        score,
+                'midi_coverage': round(f1_cov, 3),
+                'start_index':  idx,
+                'matched_numerals': [n for n in window if n != '?'],
+            })
+
+    # Ordenar: score desc, luego midi_coverage desc (desempata patrones con igual score),
+    # luego longitud del patron desc (preferir patrones mas descriptivos), luego id
+    all_matches.sort(key=lambda x: (
+        -round(x['score'] + x.get('midi_coverage', 0) * 0.15, 3),  # score + f1 bonus
+        -len(x['entry']['pattern']),
+        x['entry']['id']
+    ))
+
+    # Desduplicar: conservar la mejor ocurrencia de cada entrada
+    seen = {}
+    deduped = []
+    for m in all_matches:
+        eid = m['entry']['id']
+        if eid not in seen:
+            seen[eid] = m
+            deduped.append(m)
+
+    # Filtrar por min_score (ya ajustado con length_bonus en match_pattern)
+    deduped = [m for m in deduped if m['score'] >= min_score]
+
+    return deduped, recognized, clean_numerals, tonic_name
+
+
+def print_midi_analysis(midi_path: str, matches: list, recognized: list,
+                         midi_numerals: list, tonic_name: str,
+                         verbose: bool = False, min_score: float = 0.6,
+                         bass_only: bool = False) -> None:
+    """Imprime el resultado del análisis MIDI de forma legible."""
+    print(f"\n{COL['cyan']}{'═'*72}{COL['reset']}")
+    print(f"{COL['bold']}  ANÁLISIS MIDI: {os.path.basename(midi_path)}{COL['reset']}")
+    print(f"{COL['cyan']}{'═'*72}{COL['reset']}\n")
+    if bass_only:
+        print(f"  {COL['yellow']}[modo --bass-only: solo notas graves ≤ C4]{COL['reset']}\n")
+
+    print(f"  {COL['bold']}Tónica inferida:{COL['reset']} {COL['yellow']}{tonic_name}{COL['reset']}")
+    print(f"  {COL['bold']}Acordes detectados:{COL['reset']} {len(recognized)}")
+
+    # Mostrar secuencia detectada
+    chord_str = '  →  '.join(
+        f"{COL['cyan']}{c['chord_name']}{COL['reset']} "
+        f"{COL['gray']}({c['dur_beats']:.1f}b){COL['reset']}"
+        for c in recognized
+    )
+    print(f"\n  {COL['bold']}Secuencia:{COL['reset']}")
+    # Partir en líneas de ≤ 5 acordes
+    for i in range(0, len(recognized), 5):
+        chunk = recognized[i:i+5]
+        line  = '  →  '.join(
+            f"{COL['cyan']}{c['chord_name']}{COL['reset']}"
+            f"{COL['gray']}({c['dur_beats']:.0f}b){COL['reset']}"
+            for c in chunk
+        )
+        print(f"    {line}")
+
+    print(f"\n  {COL['bold']}Numerales (tónica {tonic_name}):{COL['reset']}")
+    nums_str = ' – '.join(midi_numerals)
+    print(f"    {COL['yellow']}{nums_str}{COL['reset']}")
+
+    filtered = [m for m in matches if m['score'] >= min_score]
+    print(f"\n  {COL['bold']}Progresiones del catálogo encontradas:{COL['reset']} {len(filtered)}\n")
+
+    if not filtered:
+        print(f"  {COL['gray']}Sin coincidencias con score ≥ {min_score:.0%}{COL['reset']}\n")
+        return
+
+    print(f"  {COL['gray']}{'score':>6}  {'cob':>4}  {'#':>3}  {'progresión':<36}  "
+          f"{'t':>2}  {'emoción':<12}  {'estilo':<12} {'modo'}{COL['reset']}")
+    print(f"  {'─'*86}")
+
+    for m in filtered:
+        e   = m['entry']
+        sc  = m['score']
+        cov = m.get('midi_coverage', 0)
+        # Verde: score alto Y cubre bien los acordes del MIDI; amarillo: score medio
+        sc_col = COL['green'] if sc >= 0.75 and cov >= 0.6 else \
+                 COL['yellow'] if sc >= 0.65 else COL['gray']
+        tc = tension_col(e['tension'])
+        print(
+            f"  {sc_col}{sc:>5.0%}{COL['reset']}  "
+            f"{COL['gray']}{cov:>3.0%}{COL['reset']}  "
+            f"{COL['gray']}#{e['id']:>3}{COL['reset']}  "
+            f"{COL['bold']}{e['prog']:<36}{COL['reset']}  "
+            f"{tc}{e['tension']}{COL['reset']}  "
+            f"{COL['cyan']}{e['emocion']:<12}{COL['reset']}  "
+            f"{COL['gray']}{e['style']:<12} {e['mode']}{COL['reset']}"
+        )
+        if verbose:
+            print(f"         {COL['gray']}{e['nombre']}{COL['reset']}")
+            print(f"         {e['desc']}")
+            print(f"         Numerales coincidentes: {' – '.join(m['matched_numerals'])}")
+            print()
+
+    print()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # FILTRADO Y BÚSQUEDA
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1322,6 +2081,13 @@ def main():
         epilog=__doc__,
     )
 
+    # Análisis MIDI
+    parser.add_argument('--analyze-midi', type=str, metavar='MIDI_FILE',
+                        help='Analizar un MIDI y mostrar las progresiones del '
+                             'catálogo que contiene')
+    parser.add_argument('--min-score',   type=float, default=0.65, metavar='F',
+                        help='Score mínimo de coincidencia 0-1 (default: 0.6)')
+
     # Entrada / búsqueda
     parser.add_argument('--list',      action='store_true',
                         help='Listar todas las progresiones')
@@ -1367,10 +2133,61 @@ def main():
                         help='Exportar progresión concreta a MIDI')
     parser.add_argument('--output',      type=str, default='obra',
                         help='Nombre base para salidas (default: obra)')
+    parser.add_argument('--bass-only',   action='store_true', dest='bass_only',
+                        help='Analizar solo notas graves (≤ C4) para la detección '
+                             'de acordes — útil para aislar la línea de bajo')
     parser.add_argument('--verbose',     action='store_true',
                         help='Mostrar nombre y descripción de cada progresión')
 
     args = parser.parse_args()
+
+    # ── Análisis MIDI ────────────────────────────────────────────────────────
+    if args.analyze_midi:
+        if not os.path.isfile(args.analyze_midi):
+            print(f"[ERROR] No se encuentra el archivo: {args.analyze_midi}")
+            sys.exit(1)
+
+        # Tónica manual (opcional)
+        tonic_override = None
+        if args.key and args.key != 'C':
+            k = args.key.strip()
+            tonic_override = NOTE_PC.get(k[:-1] if k.endswith('m') else k, None)
+
+        result = analyze_midi(
+            args.analyze_midi,
+            tonic_override = tonic_override,
+            min_score      = args.min_score,
+            verbose        = args.verbose,
+            bass_only      = args.bass_only,
+        )
+        matches, recognized, midi_numerals, tonic_name = result
+
+        print_midi_analysis(
+            args.analyze_midi,
+            matches,
+            recognized,
+            midi_numerals,
+            tonic_name,
+            verbose   = args.verbose,
+            min_score = args.min_score,
+            bass_only = args.bass_only,
+        )
+
+        if args.export_json:
+            exportable = []
+            for m in matches:
+                if m['score'] >= args.min_score:
+                    exportable.append({
+                        'score':    m['score'],
+                        'tonic':    m['tonic_name'],
+                        'matched_numerals': m['matched_numerals'],
+                        'catalog':  {k: v for k, v in m['entry'].items()
+                                     if k != 'pattern'},
+                    })
+            with open(args.export_json, 'w') as f:
+                json.dump(exportable, f, indent=2, ensure_ascii=False)
+            print(f"  → JSON: {args.export_json}\n")
+        return
 
     # ── Stats ────────────────────────────────────────────────────────────────
     if args.stats:
