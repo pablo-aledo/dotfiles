@@ -18,11 +18,7 @@
 ║                 misterio, ambigüedad, drama, angustia, esperanza,            ║
 ║                 euforia, flotación, solemnidad, exotismo                     ║
 ║                                                                              ║
-║  FUENTES:                                                                    ║
-║    · "tabla" — catálogo editorial propio                                     ║
-║    · "script" — patrones extraídos de chord_progression_generator.py        ║
-║    · "ambas" — coincide en ambas fuentes                                     ║
-║                                                                              ║
+
 ║  USO:                                                                        ║
 ║    # Listar todas                                                            ║
 ║    python chord_table.py --list                                              ║
@@ -163,7 +159,6 @@ NUMERAL_TO_INTERVAL = {
 #               lydian | mixolydian)
 #   tension  — nivel de tensión 1-10 (1=máximo reposo, 10=máxima tensión)
 #   emocion  — emoción principal asociada
-#   src      — fuente (tabla | script | ambas)
 #   desc     — descripción breve del efecto y uso
 #
 TABLE = [
@@ -172,7 +167,7 @@ TABLE = [
         'pattern': [('I',2),('IV',2),('V',2),('I',2)],
         'nombre': 'Cadencia perfecta',
         'style': 'diatonic', 'mode': 'major', 'tension': 2,
-        'emocion': 'reposo', 'src': 'ambas',
+        'emocion': 'reposo',
         'desc': 'La más estable del repertorio tonal. Cierra con autoridad. '
                 'Himnos, folclore, rock clásico.',
     },
@@ -181,7 +176,7 @@ TABLE = [
         'pattern': [('I',2),('V',2),('vi',2),('IV',2)],
         'nombre': 'Cuatro acordes pop',
         'style': 'pop', 'mode': 'major', 'tension': 3,
-        'emocion': 'alegría', 'src': 'ambas',
+        'emocion': 'alegría',
         'desc': 'Omnipresente en pop desde los 80. Circular, sin resolver del todo.',
     },
     {
@@ -189,7 +184,7 @@ TABLE = [
         'pattern': [('vi',2),('IV',2),('I',2),('V',2)],
         'nombre': 'Cuatro acordes (rot.)',
         'style': 'pop', 'mode': 'major', 'tension': 3,
-        'emocion': 'melancolía', 'src': 'ambas',
+        'emocion': 'melancolía',
         'desc': 'Rotación comenzando en el relativo menor. Mismo loop, color más oscuro.',
     },
     {
@@ -197,7 +192,7 @@ TABLE = [
         'pattern': [('I',2),('vi',2),('IV',2),('V',2)],
         'nombre': 'Doo-wop / 50s',
         'style': 'diatonic', 'mode': 'major', 'tension': 3,
-        'emocion': 'nostalgia', 'src': 'tabla',
+        'emocion': 'nostalgia',
         'desc': 'Definió el pop de los 50. Melancólica y circular.',
     },
     {
@@ -205,7 +200,7 @@ TABLE = [
         'pattern': [('ii',2),('V',2),('I',4)],
         'nombre': 'Cadencia jazz',
         'style': 'jazz', 'mode': 'major', 'tension': 5,
-        'emocion': 'esperanza', 'src': 'ambas',
+        'emocion': 'esperanza',
         'desc': 'Motor armónico del jazz. El ii prepara el V con más riqueza que el IV.',
     },
     {
@@ -213,7 +208,7 @@ TABLE = [
         'pattern': [('i',2),('VII',2),('VI',2),('VII',2)],
         'nombre': 'Dórica circular',
         'style': 'modal', 'mode': 'dorian', 'tension': 4,
-        'emocion': 'misterio', 'src': 'ambas',
+        'emocion': 'misterio',
         'desc': 'Stairway to Heaven, Oye Como Va. Estática e hipnótica.',
     },
     {
@@ -221,7 +216,7 @@ TABLE = [
         'pattern': [('i',2),('VI',2),('III',2),('VII',2)],
         'nombre': 'Andaluza / rock menor',
         'style': 'diatonic', 'mode': 'minor', 'tension': 4,
-        'emocion': 'tristeza', 'src': 'ambas',
+        'emocion': 'tristeza',
         'desc': 'Loop aeólico del rock. Nothing Else Matters, Stairway.',
     },
     {
@@ -229,7 +224,7 @@ TABLE = [
         'pattern': [('i',2),('iv',2),('V',2),('i',2)],
         'nombre': 'Cadencia menor',
         'style': 'diatonic', 'mode': 'minor', 'tension': 5,
-        'emocion': 'tristeza', 'src': 'ambas',
+        'emocion': 'tristeza',
         'desc': 'Equivalente menor de la cadencia perfecta.',
     },
     {
@@ -237,7 +232,7 @@ TABLE = [
         'pattern': [('I',2),('III',2),('IV',2),('iv',2)],
         'nombre': 'Cromatismo de plagal',
         'style': 'romantic', 'mode': 'major', 'tension': 6,
-        'emocion': 'melancolía', 'src': 'tabla',
+        'emocion': 'melancolía',
         'desc': 'El iv prestado del modo paralelo da un giro oscuro. Beatles, Radiohead.',
     },
     {
@@ -245,7 +240,7 @@ TABLE = [
         'pattern': [('I',2),('bVII',2),('IV',2),('I',2)],
         'nombre': 'Mixolidia',
         'style': 'modal', 'mode': 'mixolydian', 'tension': 4,
-        'emocion': 'euforia', 'src': 'ambas',
+        'emocion': 'euforia',
         'desc': 'Rock and roll, folk celta. Abierta y sin resolver del todo.',
     },
     {
@@ -253,7 +248,7 @@ TABLE = [
         'pattern': [('I',2),('V',2),('I',4)],
         'nombre': 'Cadencia auténtica simple',
         'style': 'diatonic', 'mode': 'major', 'tension': 2,
-        'emocion': 'reposo', 'src': 'tabla',
+        'emocion': 'reposo',
         'desc': 'La más básica. Define la tonalidad con dos acordes.',
     },
     {
@@ -261,7 +256,7 @@ TABLE = [
         'pattern': [('IV',4),('I',4)],
         'nombre': 'Cadencia plagal (amén)',
         'style': 'diatonic', 'mode': 'major', 'tension': 1,
-        'emocion': 'reposo', 'src': 'tabla',
+        'emocion': 'reposo',
         'desc': 'Cierre suave, sin tensión previa. Música sacra, finales tranquilos.',
     },
     {
@@ -269,7 +264,7 @@ TABLE = [
         'pattern': [('I',4),('IV',4),('I',4),('V7',2),('IV',2),('I',4)],
         'nombre': '12 compases (blues)',
         'style': 'blues', 'mode': 'major', 'tension': 6,
-        'emocion': 'melancolía', 'src': 'tabla',
+        'emocion': 'melancolía',
         'desc': 'El blueprint del blues. Subdominante en c.5, dominante en c.9.',
     },
     {
@@ -277,7 +272,7 @@ TABLE = [
         'pattern': [('ii',2),('V',2),('I',2),('VI',2)],
         'nombre': 'Turnaround jazz',
         'style': 'jazz', 'mode': 'major', 'tension': 6,
-        'emocion': 'ambigüedad', 'src': 'ambas',
+        'emocion': 'ambigüedad',
         'desc': 'Cierre de sección que vuelve a empezar. Ciclo infinito.',
     },
     {
@@ -285,7 +280,7 @@ TABLE = [
         'pattern': [('I',2),('VI',2),('ii',2),('V',2)],
         'nombre': 'Ciclo de quintas',
         'style': 'jazz', 'mode': 'major', 'tension': 5,
-        'emocion': 'esperanza', 'src': 'tabla',
+        'emocion': 'esperanza',
         'desc': 'Recorre el círculo de quintas. Cada acorde lleva al siguiente con naturalidad.',
     },
     {
@@ -293,7 +288,7 @@ TABLE = [
         'pattern': [('IIø7',2),('V7',2),('i',4)],
         'nombre': 'Cadencia frigia menor',
         'style': 'baroque', 'mode': 'minor', 'tension': 8,
-        'emocion': 'angustia', 'src': 'ambas',
+        'emocion': 'angustia',
         'desc': 'El semidisminuido aporta máxima tensión antes de la resolución. Tango, clásica.',
     },
     {
@@ -301,7 +296,7 @@ TABLE = [
         'pattern': [('i',2),('bVI',2),('bIII',2),('bVII',2)],
         'nombre': 'Aeolia rock menor',
         'style': 'diatonic', 'mode': 'minor', 'tension': 4,
-        'emocion': 'tristeza', 'src': 'tabla',
+        'emocion': 'tristeza',
         'desc': 'Stairway (parte final), Nothing Else Matters.',
     },
     {
@@ -309,7 +304,7 @@ TABLE = [
         'pattern': [('I',2),('bII',2),('I',4)],
         'nombre': 'Napolitana',
         'style': 'romantic', 'mode': 'major', 'tension': 7,
-        'emocion': 'drama', 'src': 'tabla',
+        'emocion': 'drama',
         'desc': 'El bII introduce una disonancia cromática intensa. Muy teatral.',
     },
     {
@@ -317,7 +312,7 @@ TABLE = [
         'pattern': [('I',1),('V',1),('vi',2),('iii',2),('IV',2)],
         'nombre': 'Canon de Pachelbel',
         'style': 'baroque', 'mode': 'major', 'tension': 3,
-        'emocion': 'nostalgia', 'src': 'tabla',
+        'emocion': 'nostalgia',
         'desc': 'Uno de los patrones más reconocibles. El iii añade suavidad antes del IV.',
     },
     {
@@ -325,7 +320,7 @@ TABLE = [
         'pattern': [('IV',2),('V',2),('iii',2),('vi',2)],
         'nombre': 'Deceptiva hacia vi',
         'style': 'diatonic', 'mode': 'major', 'tension': 5,
-        'emocion': 'ambigüedad', 'src': 'tabla',
+        'emocion': 'ambigüedad',
         'desc': 'La cadencia no resuelve en I sino en vi. Sorpresa emotiva.',
     },
     {
@@ -333,7 +328,7 @@ TABLE = [
         'pattern': [('i',2),('bVI',2),('bVII',2),('i',2)],
         'nombre': 'Menor circular',
         'style': 'pop', 'mode': 'minor', 'tension': 4,
-        'emocion': 'misterio', 'src': 'ambas',
+        'emocion': 'misterio',
         'desc': 'Loop menor sin dominante real. Música de cine, videojuegos.',
     },
     {
@@ -341,7 +336,7 @@ TABLE = [
         'pattern': [('I',2),('bVII',2),('bVI',2),('V',2)],
         'nombre': 'Descenso andaluz mayor',
         'style': 'flamenco', 'mode': 'major', 'tension': 6,
-        'emocion': 'drama', 'src': 'tabla',
+        'emocion': 'drama',
         'desc': 'Versión mayor del descenso andaluz. Directo hacia el V.',
     },
     {
@@ -349,7 +344,7 @@ TABLE = [
         'pattern': [('i',2),('bVII',2),('bVI',2),('V',2)],
         'nombre': 'Descenso andaluz menor',
         'style': 'flamenco', 'mode': 'minor', 'tension': 7,
-        'emocion': 'drama', 'src': 'ambas',
+        'emocion': 'drama',
         'desc': 'Hit the Road Jack, Sultans of Swing. Inevitable y tenso.',
     },
     {
@@ -357,7 +352,7 @@ TABLE = [
         'pattern': [('I',2),('IV',2),('bVII',2),('IV',2)],
         'nombre': 'Mixolidia rock',
         'style': 'modal', 'mode': 'mixolydian', 'tension': 4,
-        'emocion': 'euforia', 'src': 'ambas',
+        'emocion': 'euforia',
         'desc': 'Sweet Home Alabama, Hey Jude. Loop abierto sin resolución real.',
     },
     {
@@ -365,7 +360,7 @@ TABLE = [
         'pattern': [('ii7',2),('V7',2),('IM7',4)],
         'nombre': 'Jazz major con 7as',
         'style': 'jazz', 'mode': 'major', 'tension': 5,
-        'emocion': 'esperanza', 'src': 'ambas',
+        'emocion': 'esperanza',
         'desc': 'Versión extendida del ii-V-I con séptimas. Color más rico.',
     },
     {
@@ -373,7 +368,7 @@ TABLE = [
         'pattern': [('bIII',2),('bVII',2),('I',4)],
         'nombre': 'Rock modal plagal',
         'style': 'modal', 'mode': 'major', 'tension': 3,
-        'emocion': 'euforia', 'src': 'tabla',
+        'emocion': 'euforia',
         'desc': 'Final épico del rock. Jump (Van Halen), Born to Run.',
     },
     {
@@ -381,7 +376,7 @@ TABLE = [
         'pattern': [('I',2),('IV',2),('V',2),('IV',2)],
         'nombre': 'Blues rock',
         'style': 'blues', 'mode': 'major', 'tension': 4,
-        'emocion': 'euforia', 'src': 'tabla',
+        'emocion': 'euforia',
         'desc': 'No resuelve en I sino vuelve al IV. Abierta y cíclica.',
     },
     {
@@ -389,7 +384,7 @@ TABLE = [
         'pattern': [('V',2),('IV',2),('I',4)],
         'nombre': 'Cadencia plagal de blues',
         'style': 'blues', 'mode': 'major', 'tension': 4,
-        'emocion': 'melancolía', 'src': 'tabla',
+        'emocion': 'melancolía',
         'desc': 'El V va al IV antes que al I. Característica del blues y rock sureño.',
     },
     {
@@ -397,7 +392,7 @@ TABLE = [
         'pattern': [('I',2),('ii',2),('iii',2),('IV',2)],
         'nombre': 'Ascendente cromática',
         'style': 'diatonic', 'mode': 'major', 'tension': 3,
-        'emocion': 'alegría', 'src': 'tabla',
+        'emocion': 'alegría',
         'desc': 'Sube un grado cada vez. Soul, pop, Motown. Optimista y en aumento.',
     },
     {
@@ -405,7 +400,7 @@ TABLE = [
         'pattern': [('IVM7',2),('V7',2),('iii7',2),('vi',2)],
         'nombre': 'Jazz balada',
         'style': 'jazz', 'mode': 'major', 'tension': 6,
-        'emocion': 'melancolía', 'src': 'tabla',
+        'emocion': 'melancolía',
         'desc': 'Lenta y rica en tensión no resuelta. Estándar de jazz balada.',
     },
     {
@@ -413,7 +408,7 @@ TABLE = [
         'pattern': [('I',2),('bVI',2),('bVII',2),('I',2)],
         'nombre': 'Préstamo modal mayor',
         'style': 'modal', 'mode': 'major', 'tension': 5,
-        'emocion': 'misterio', 'src': 'ambas',
+        'emocion': 'misterio',
         'desc': 'bVI y bVII prestados del modo paralelo. Rock progresivo.',
     },
     {
@@ -421,7 +416,7 @@ TABLE = [
         'pattern': [('I',2),('bVII',2),('I',2),('bVII',2)],
         'nombre': 'Mixolidia estática',
         'style': 'modal', 'mode': 'mixolydian', 'tension': 3,
-        'emocion': 'flotación', 'src': 'script',
+        'emocion': 'flotación',
         'desc': 'Oscila entre I y bVII sin resolver. Meditativa. Drone-rock, ambient.',
     },
     {
@@ -429,7 +424,7 @@ TABLE = [
         'pattern': [('i',2),('II',2),('VII',2),('i',2)],
         'nombre': 'Dórica con II mayor',
         'style': 'modal', 'mode': 'dorian', 'tension': 5,
-        'emocion': 'misterio', 'src': 'script',
+        'emocion': 'misterio',
         'desc': 'El II mayor es la nota característica del dórico (sexta mayor).',
     },
     {
@@ -437,7 +432,7 @@ TABLE = [
         'pattern': [('i',2),('IV',2),('i',2),('VII',2)],
         'nombre': 'Dórica alterna',
         'style': 'modal', 'mode': 'dorian', 'tension': 4,
-        'emocion': 'misterio', 'src': 'script',
+        'emocion': 'misterio',
         'desc': 'Alterna entre tónica y el IV mayor dórico. Groove oscuro con luz modal.',
     },
     {
@@ -445,7 +440,7 @@ TABLE = [
         'pattern': [('i',2),('bII',2),('i',2),('bII',2)],
         'nombre': 'Frigia hipnótica',
         'style': 'modal', 'mode': 'phrygian', 'tension': 6,
-        'emocion': 'exotismo', 'src': 'ambas',
+        'emocion': 'exotismo',
         'desc': 'Oscilación i–bII característica del flamenco puro y música andaluza.',
     },
     {
@@ -453,7 +448,7 @@ TABLE = [
         'pattern': [('i',2),('bII',2),('VII',2),('i',2)],
         'nombre': 'Frigia con VII',
         'style': 'modal', 'mode': 'phrygian', 'tension': 6,
-        'emocion': 'exotismo', 'src': 'script',
+        'emocion': 'exotismo',
         'desc': 'El VII natural añade movimiento antes de la resolución frigia.',
     },
     {
@@ -461,7 +456,7 @@ TABLE = [
         'pattern': [('I',2),('II',2),('I',2),('VII',2)],
         'nombre': 'Lidia oscilante',
         'style': 'modal', 'mode': 'lydian', 'tension': 3,
-        'emocion': 'flotación', 'src': 'script',
+        'emocion': 'flotación',
         'desc': 'El II aumentado del lidio da una luminosidad irreal. Ciencia ficción, ambient.',
     },
     {
@@ -469,7 +464,7 @@ TABLE = [
         'pattern': [('I',2),('II',2),('vii',2),('I',2)],
         'nombre': 'Lidia con sensible',
         'style': 'modal', 'mode': 'lydian', 'tension': 4,
-        'emocion': 'flotación', 'src': 'script',
+        'emocion': 'flotación',
         'desc': 'El vii menor añade tensión sin destruir el carácter etéreo del lidio.',
     },
     {
@@ -477,7 +472,7 @@ TABLE = [
         'pattern': [('I',1),('bII',1),('bIII',1),('bII',1),('I',4)],
         'nombre': 'Impresionista cromática',
         'style': 'impressionist', 'mode': 'major', 'tension': 6,
-        'emocion': 'ambigüedad', 'src': 'script',
+        'emocion': 'ambigüedad',
         'desc': 'Movimiento paralelo cromático. Debussy, Satie. Sin funcionalidad tonal.',
     },
     {
@@ -485,7 +480,7 @@ TABLE = [
         'pattern': [('I',2),('bIII',2),('bV',2),('bVII',2)],
         'nombre': 'Tonos enteros',
         'style': 'impressionist', 'mode': 'major', 'tension': 7,
-        'emocion': 'ambigüedad', 'src': 'script',
+        'emocion': 'ambigüedad',
         'desc': 'Progresión por tonos enteros. Máxima ambigüedad tonal. Debussy.',
     },
     {
@@ -493,7 +488,7 @@ TABLE = [
         'pattern': [('I',2),('bVI',2),('bIII',2),('bVII',2)],
         'nombre': 'Mediantes cromáticas',
         'style': 'impressionist', 'mode': 'major', 'tension': 6,
-        'emocion': 'misterio', 'src': 'script',
+        'emocion': 'misterio',
         'desc': 'Mediantes de tercera. Romántico tardío, cine de Hollywood clásico.',
     },
     {
@@ -501,7 +496,7 @@ TABLE = [
         'pattern': [('i',2),('bII',2),('bIII',2),('bII',2)],
         'nombre': 'Impresionista menor',
         'style': 'impressionist', 'mode': 'minor', 'tension': 6,
-        'emocion': 'ambigüedad', 'src': 'script',
+        'emocion': 'ambigüedad',
         'desc': 'Versión menor del paralelismo cromático. Más oscura e inquietante.',
     },
     {
@@ -509,7 +504,7 @@ TABLE = [
         'pattern': [('I',2),('V',2),('vi',2),('iii',2)],
         'nombre': 'Canon simplificado',
         'style': 'baroque', 'mode': 'major', 'tension': 3,
-        'emocion': 'nostalgia', 'src': 'script',
+        'emocion': 'nostalgia',
         'desc': 'Versión abreviada del canon. La más usada en pop contemporáneo.',
     },
     {
@@ -517,7 +512,7 @@ TABLE = [
         'pattern': [('I',1),('ii',1),('V',1),('vi',1),('IV',2),('V',2)],
         'nombre': 'Barroco ampliado',
         'style': 'baroque', 'mode': 'major', 'tension': 4,
-        'emocion': 'solemnidad', 'src': 'script',
+        'emocion': 'solemnidad',
         'desc': 'Ciclo funcional completo con paso por vi. Barroco tardío, contrapunto.',
     },
     {
@@ -525,7 +520,7 @@ TABLE = [
         'pattern': [('i',1),('VII',1),('VI',1),('V',1),('i',4)],
         'nombre': 'Descenso frigio',
         'style': 'baroque', 'mode': 'minor', 'tension': 7,
-        'emocion': 'drama', 'src': 'script',
+        'emocion': 'drama',
         'desc': 'Descenso diatónico completo hacia el V. Lamento barroco.',
     },
     {
@@ -533,7 +528,7 @@ TABLE = [
         'pattern': [('i',2),('iv',2),('ii°',2),('V',2)],
         'nombre': 'Menor con ii°',
         'style': 'baroque', 'mode': 'minor', 'tension': 7,
-        'emocion': 'angustia', 'src': 'script',
+        'emocion': 'angustia',
         'desc': 'El ii° antes del V aumenta la carga armónica. Muy oscuro.',
     },
     {
@@ -541,7 +536,7 @@ TABLE = [
         'pattern': [('IM7',2),('vi7',2),('ii7',2),('V7',2)],
         'nombre': 'Jazz mayor completo',
         'style': 'jazz', 'mode': 'major', 'tension': 5,
-        'emocion': 'esperanza', 'src': 'script',
+        'emocion': 'esperanza',
         'desc': 'Ciclo I-vi-ii-V con séptimas. Estándar de jazz. Smooth y sofisticado.',
     },
     {
@@ -549,7 +544,7 @@ TABLE = [
         'pattern': [('IM7',2),('IV7',2),('iii7',1),('bIII7',1),('ii7',2)],
         'nombre': 'Jazz cromático',
         'style': 'jazz', 'mode': 'major', 'tension': 7,
-        'emocion': 'ambigüedad', 'src': 'script',
+        'emocion': 'ambigüedad',
         'desc': 'El bIII7 es sustitución de tritono. Hard bop, post-bop.',
     },
     {
@@ -557,7 +552,7 @@ TABLE = [
         'pattern': [('ii°7',2),('V7',2),('im7',2),('VI7',2)],
         'nombre': 'Jazz menor con turnaround',
         'style': 'jazz', 'mode': 'minor', 'tension': 7,
-        'emocion': 'angustia', 'src': 'script',
+        'emocion': 'angustia',
         'desc': 'El VI7 crea un turnaround que vuelve al ii°7. Muy tenso.',
     },
     {
@@ -565,7 +560,7 @@ TABLE = [
         'pattern': [('im9',2),('iv9',2),('V7',2),('im7',2)],
         'nombre': 'Jazz menor con novenas',
         'style': 'jazz', 'mode': 'minor', 'tension': 6,
-        'emocion': 'melancolía', 'src': 'script',
+        'emocion': 'melancolía',
         'desc': 'Las novenas añaden color sin aumentar la tensión. Jazz contemporáneo.',
     },
     {
@@ -573,7 +568,7 @@ TABLE = [
         'pattern': [('im7',2),('bII7',2),('im7',2),('V7',2)],
         'nombre': 'Jazz frigio',
         'style': 'jazz', 'mode': 'minor', 'tension': 7,
-        'emocion': 'exotismo', 'src': 'script',
+        'emocion': 'exotismo',
         'desc': 'El bII7 (tritono sustituto) da color frigio al jazz. Muy característico.',
     },
     {
@@ -581,7 +576,7 @@ TABLE = [
         'pattern': [('I',2),('III',2),('IV',2),('V',2)],
         'nombre': 'Ascendente con III',
         'style': 'romantic', 'mode': 'major', 'tension': 4,
-        'emocion': 'euforia', 'src': 'script',
+        'emocion': 'euforia',
         'desc': 'El III mayor prestado da potencia antes del IV. Épico y ascendente.',
     },
     {
@@ -589,7 +584,7 @@ TABLE = [
         'pattern': [('I',2),('iv',2),('I',2),('V',2)],
         'nombre': 'Romántica con iv',
         'style': 'romantic', 'mode': 'major', 'tension': 5,
-        'emocion': 'melancolía', 'src': 'script',
+        'emocion': 'melancolía',
         'desc': 'El iv menor prestado añade sombra cromática al modo mayor. Schubert.',
     },
     {
@@ -597,7 +592,7 @@ TABLE = [
         'pattern': [('i',2),('III',2),('bVI',2),('V',2)],
         'nombre': 'Romántica menor',
         'style': 'romantic', 'mode': 'minor', 'tension': 6,
-        'emocion': 'drama', 'src': 'script',
+        'emocion': 'drama',
         'desc': 'El III mayor da luminosidad momentánea antes del V. Romanticismo tardío.',
     },
     {
@@ -605,7 +600,7 @@ TABLE = [
         'pattern': [('i',2),('bII',2),('V',2),('i',2)],
         'nombre': 'Napolitana menor',
         'style': 'romantic', 'mode': 'minor', 'tension': 8,
-        'emocion': 'angustia', 'src': 'ambas',
+        'emocion': 'angustia',
         'desc': 'El bII en modo menor es aún más oscuro. Muy dramático.',
     },
     {
@@ -613,7 +608,7 @@ TABLE = [
         'pattern': [('I',2),('bIII',2),('bVI',2),('bVII',2)],
         'nombre': 'Mediante doble',
         'style': 'romantic', 'mode': 'major', 'tension': 6,
-        'emocion': 'misterio', 'src': 'script',
+        'emocion': 'misterio',
         'desc': 'Doble mediante cromática. Romanticismo tardío, Wagner.',
     },
     {
@@ -621,7 +616,7 @@ TABLE = [
         'pattern': [('I',2),('bVI',2),('IV',2),('V',2)],
         'nombre': 'Romántica con bVI',
         'style': 'romantic', 'mode': 'major', 'tension': 5,
-        'emocion': 'nostalgia', 'src': 'script',
+        'emocion': 'nostalgia',
         'desc': 'El bVI da color antes de la cadencia. Baladas de cine, pop romántico.',
     },
     {
@@ -629,7 +624,7 @@ TABLE = [
         'pattern': [('I',2),('bII',2),('bIII',2),('bII',2)],
         'nombre': 'Frigio dominante hip',
         'style': 'flamenco', 'mode': 'phrygian_dominant', 'tension': 7,
-        'emocion': 'exotismo', 'src': 'script',
+        'emocion': 'exotismo',
         'desc': 'Versión del frigio dominante. Flamenco moderno, hip-hop oriental.',
     },
     {
@@ -637,7 +632,7 @@ TABLE = [
         'pattern': [('I',1),('bVII',1),('VI',1),('bII',1),('I',4)],
         'nombre': 'Cadencia flamenca completa',
         'style': 'flamenco', 'mode': 'phrygian_dominant', 'tension': 8,
-        'emocion': 'exotismo', 'src': 'script',
+        'emocion': 'exotismo',
         'desc': 'Cadencia andaluza con bII final. Flamenco clásico, copla.',
     },
     {
@@ -645,7 +640,7 @@ TABLE = [
         'pattern': [('i',2),('VII',2),('VI',2),('bII',2)],
         'nombre': 'Andaluza con napolitano',
         'style': 'flamenco', 'mode': 'minor', 'tension': 8,
-        'emocion': 'drama', 'src': 'script',
+        'emocion': 'drama',
         'desc': 'El bII en lugar del V da un final más oscuro y frigio al descenso.',
     },
     {
@@ -653,7 +648,7 @@ TABLE = [
         'pattern': [('IV',2),('I',2),('V',2),('vi',2)],
         'nombre': 'Pop con final en vi',
         'style': 'pop', 'mode': 'major', 'tension': 4,
-        'emocion': 'nostalgia', 'src': 'script',
+        'emocion': 'nostalgia',
         'desc': 'Termina en vi en lugar de I. Evita el cierre, sensación de continuidad.',
     },
     {
@@ -661,7 +656,7 @@ TABLE = [
         'pattern': [('i',2),('iv',2),('VI',2),('VII',2)],
         'nombre': 'Pop menor ascendente',
         'style': 'pop', 'mode': 'minor', 'tension': 5,
-        'emocion': 'tristeza', 'src': 'script',
+        'emocion': 'tristeza',
         'desc': 'Sube hacia el VII sin resolver. Pop alternativo y rock oscuro.',
     },
     {
@@ -669,7 +664,7 @@ TABLE = [
         'pattern': [('i',2),('bVI',2),('bVII',2),('bVII',2)],
         'nombre': 'Pedal menor',
         'style': 'modal', 'mode': 'minor', 'tension': 5,
-        'emocion': 'misterio', 'src': 'tabla',
+        'emocion': 'misterio',
         'desc': 'El bVII repetido crea pedal y estasis. Suspense, Radiohead.',
     },
     {
@@ -677,7 +672,7 @@ TABLE = [
         'pattern': [('IIø7',2),('V7b9',2),('i',4)],
         'nombre': 'Cadencia frigia alterada',
         'style': 'jazz', 'mode': 'minor', 'tension': 9,
-        'emocion': 'angustia', 'src': 'tabla',
+        'emocion': 'angustia',
         'desc': 'V con novena bemol. Tensión máxima antes de resolver. Jazz, tango, flamenco.',
     },
     {
@@ -685,7 +680,7 @@ TABLE = [
         'pattern': [('iv',4),('I',4)],
         'nombre': 'Plagal menor',
         'style': 'diatonic', 'mode': 'minor', 'tension': 3,
-        'emocion': 'melancolía', 'src': 'tabla',
+        'emocion': 'melancolía',
         'desc': 'El iv prestado en mayor da cierre oscuro. Final de Yesterday (Beatles).',
     },
     {
@@ -693,7 +688,7 @@ TABLE = [
         'pattern': [('i',2),('IV',2),('i',2),('VII',2)],
         'nombre': 'Dórica groove',
         'style': 'modal', 'mode': 'dorian', 'tension': 4,
-        'emocion': 'misterio', 'src': 'script',
+        'emocion': 'misterio',
         'desc': 'IV mayor natural del dórico. Groove oscuro con destellos de luz.',
     },
     {
@@ -701,7 +696,7 @@ TABLE = [
         'pattern': [('I',2),('II',2),('VII',2),('i',2)],
         'nombre': 'Lidia resolutiva',
         'style': 'modal', 'mode': 'lydian', 'tension': 5,
-        'emocion': 'flotación', 'src': 'script',
+        'emocion': 'flotación',
         'desc': 'La #4 del lidio (II mayor) resuelve inesperadamente al i menor. Onírico.',
     },
     {
@@ -709,7 +704,7 @@ TABLE = [
         'pattern': [('i',2),('bVI',2),('bIII',2),('V',2)],
         'nombre': 'Épica menor',
         'style': 'romantic', 'mode': 'minor', 'tension': 6,
-        'emocion': 'drama', 'src': 'script',
+        'emocion': 'drama',
         'desc': 'El III mayor da pausa luminosa antes del V. Cine épico, trailer music.',
     },
     {
@@ -717,7 +712,7 @@ TABLE = [
         'pattern': [('I',2),('iii',2),('vi',2),('IV',2)],
         'nombre': 'Descendente luminosa',
         'style': 'diatonic', 'mode': 'major', 'tension': 3,
-        'emocion': 'nostalgia', 'src': 'tabla',
+        'emocion': 'nostalgia',
         'desc': 'Cae por terceras desde I. Introspectiva. Baladas pop.',
     },
     {
@@ -725,8 +720,280 @@ TABLE = [
         'pattern': [('i',2),('bVI',2),('V',2),('i',2)],
         'nombre': 'Menor con bVI',
         'style': 'romantic', 'mode': 'minor', 'tension': 6,
-        'emocion': 'drama', 'src': 'tabla',
+        'emocion': 'drama',
         'desc': 'El bVI añade color modal antes del dominante. Ópera, cine épico.',
+    },
+    # ── NUEVAS (71–100) ────────────────────────────────────────────────────────
+    {
+        'id': 71, 'prog': 'I – V – IV – V',
+        'pattern': [('I',2),('V',2),('IV',2),('V',2)],
+        'nombre': 'Rock alternante',
+        'style': 'diatonic', 'mode': 'major', 'tension': 3,
+        'emocion': 'alegría',
+        'desc': 'El V se repite como pivote. Energía sostenida sin resolver. '
+                'Rock de estadio, anthems de los 70.',
+    },
+    {
+        'id': 72, 'prog': 'I – iii – IV – V',
+        'pattern': [('I',2),('iii',2),('IV',2),('V',2)],
+        'nombre': 'Ascendente con iii',
+        'style': 'diatonic', 'mode': 'major', 'tension': 3,
+        'emocion': 'esperanza',
+        'desc': 'El iii suaviza el paso al IV. Sensación de crecimiento gradual. '
+                'Pop de los 80, baladas de soul.',
+    },
+    {
+        'id': 73, 'prog': 'I – IV – ii – V',
+        'pattern': [('I',2),('IV',2),('ii',2),('V',2)],
+        'nombre': 'Subdominante doble',
+        'style': 'diatonic', 'mode': 'major', 'tension': 4,
+        'emocion': 'esperanza',
+        'desc': 'El ii sustituye al IV en la segunda mitad. Más grave y sofisticado '
+                'que el I-IV-V-I estándar. Jazz ligero, bossa nova.',
+    },
+    {
+        'id': 74, 'prog': 'i – III – VII – VI',
+        'pattern': [('i',2),('III',2),('VII',2),('VI',2)],
+        'nombre': 'Menor por terceras',
+        'style': 'diatonic', 'mode': 'minor', 'tension': 4,
+        'emocion': 'melancolía',
+        'desc': 'Descenso por terceras desde el III. Muy usada en música de cine '
+                'y bandas sonoras de videojuegos. Circular e hipnótica.',
+    },
+    {
+        'id': 75, 'prog': 'IV – V – vi – I',
+        'pattern': [('IV',2),('V',2),('vi',2),('I',2)],
+        'nombre': 'Deceptiva hacia tónica',
+        'style': 'diatonic', 'mode': 'major', 'tension': 4,
+        'emocion': 'nostalgia',
+        'desc': 'Llega al vi antes que al I y luego cierra. Dos resoluciones '
+                'encadenadas. Frecuente en corales y canciones de autor.',
+    },
+    {
+        'id': 76, 'prog': 'I – bVII – IV – bVI',
+        'pattern': [('I',2),('bVII',2),('IV',2),('bVI',2)],
+        'nombre': 'Modal con bVI',
+        'style': 'modal', 'mode': 'mixolydian', 'tension': 5,
+        'emocion': 'misterio',
+        'desc': 'El bVI añade un giro inesperado al loop mixolidio. '
+                'Rock alternativo, post-rock, Muse.',
+    },
+    {
+        'id': 77, 'prog': 'i – iv – i – V7',
+        'pattern': [('i',2),('iv',2),('i',2),('V7',2)],
+        'nombre': 'Menor con dominante al final',
+        'style': 'diatonic', 'mode': 'minor', 'tension': 5,
+        'emocion': 'tristeza',
+        'desc': 'La tónica se repite para crear peso antes del V7. '
+                'Clásico de tangos y pasodobles. El V7 final pide continuar.',
+    },
+    {
+        'id': 78, 'prog': 'I – IV – I – IV',
+        'pattern': [('I',2),('IV',2),('I',2),('IV',2)],
+        'nombre': 'Tónica-subdominante loop',
+        'style': 'blues', 'mode': 'major', 'tension': 2,
+        'emocion': 'reposo',
+        'desc': 'Oscilación pura entre tónica y subdominante. '
+                'Base del gospel, soul y blues lento. Estática y contenida.',
+    },
+    {
+        'id': 79, 'prog': 'ii – IV – V – I',
+        'pattern': [('ii',2),('IV',2),('V',2),('I',2)],
+        'nombre': 'Cadencia con ii inicial',
+        'style': 'diatonic', 'mode': 'major', 'tension': 4,
+        'emocion': 'esperanza',
+        'desc': 'El ii en primera posición da más profundidad que empezar en I. '
+                'Usado en soul, R&B y jazz vocal.',
+    },
+    {
+        'id': 80, 'prog': 'I – bVI – bVII – bVI',
+        'pattern': [('I',2),('bVI',2),('bVII',2),('bVI',2)],
+        'nombre': 'Préstamo modal oscilante',
+        'style': 'modal', 'mode': 'major', 'tension': 5,
+        'emocion': 'misterio',
+        'desc': 'bVI y bVII se alternan sin resolver en I. '
+                'Rock progresivo, Pink Floyd, Radiohead.',
+    },
+    {
+        'id': 81, 'prog': 'I – vi – ii – V – I',
+        'pattern': [('I',2),('vi',2),('ii',2),('V',2),('I',2)],
+        'nombre': 'Ciclo completo de quintas',
+        'style': 'jazz', 'mode': 'major', 'tension': 4,
+        'emocion': 'solemnidad',
+        'desc': 'Cinco acordes recorriendo el círculo de quintas completo. '
+                'Muy cadencial y satisfactorio. Barroco, jazz académico.',
+    },
+    {
+        'id': 82, 'prog': 'IM7 – iiim7 – vim7 – IVM7',
+        'pattern': [('IM7',2),('iii7',2),('vi7',2),('IVM7',2)],
+        'nombre': 'Jazz diatónico suave',
+        'style': 'jazz', 'mode': 'major', 'tension': 4,
+        'emocion': 'reposo',
+        'desc': 'Cuatro acordes diatónicos con séptimas. '
+                'Dreamy, sin tensión real. Bossa nova, lofi, jazz suave.',
+    },
+    {
+        'id': 83, 'prog': 'i – VI – III – bVII',
+        'pattern': [('i',2),('VI',2),('III',2),('bVII',2)],
+        'nombre': 'Menor modal ampliado',
+        'style': 'modal', 'mode': 'minor', 'tension': 4,
+        'emocion': 'misterio',
+        'desc': 'El bVII al final abre el loop en lugar de cerrarlo. '
+                'Metal melódico, bandas sonoras de fantasía.',
+    },
+    {
+        'id': 84, 'prog': 'V – vi – IV – I',
+        'pattern': [('V',2),('vi',2),('IV',2),('I',2)],
+        'nombre': 'Resolución invertida',
+        'style': 'diatonic', 'mode': 'major', 'tension': 4,
+        'emocion': 'nostalgia',
+        'desc': 'Empieza en V (sin preparación) y resuelve en I al final. '
+                'Crea sensación de que la música ya estaba en marcha.',
+    },
+    {
+        'id': 85, 'prog': 'I – V/vi – vi – V',
+        'pattern': [('I',2),('V/vi',2),('vi',2),('V',2)],
+        'nombre': 'Dominante secundaria al vi',
+        'style': 'diatonic', 'mode': 'major', 'tension': 6,
+        'emocion': 'ambigüedad',
+        'desc': 'V/vi es dominante secundaria del relativo menor. '
+                'Giro inesperado hacia la oscuridad. Muy expresivo.',
+    },
+    {
+        'id': 86, 'prog': 'i – bVII – IV – bVI',
+        'pattern': [('i',2),('bVII',2),('IV',2),('bVI',2)],
+        'nombre': 'Menor con IV mayor',
+        'style': 'modal', 'mode': 'minor', 'tension': 5,
+        'emocion': 'drama',
+        'desc': 'El IV mayor prestado del modo dórico añade luz momentánea. '
+                'Metal progresivo, power metal. Dramático y épico.',
+    },
+    {
+        'id': 87, 'prog': 'I – II – IV – I',
+        'pattern': [('I',2),('II',2),('IV',2),('I',2)],
+        'nombre': 'Lidia con IV',
+        'style': 'modal', 'mode': 'lydian', 'tension': 4,
+        'emocion': 'flotación',
+        'desc': 'El II mayor del lidio combinado con el IV diatónico. '
+                'Muy luminoso y abierto. Cine de aventuras, John Williams.',
+    },
+    {
+        'id': 88, 'prog': 'i – bII – bVII – i',
+        'pattern': [('i',2),('bII',2),('bVII',2),('i',2)],
+        'nombre': 'Frigio con bVII',
+        'style': 'modal', 'mode': 'phrygian', 'tension': 6,
+        'emocion': 'exotismo',
+        'desc': 'El bVII añade un paso intermedio al loop frigio. '
+                'Flamenco moderno, metal extremo, música turca.',
+    },
+    {
+        'id': 89, 'prog': 'I – IV – bVII – bIII',
+        'pattern': [('I',2),('IV',2),('bVII',2),('bIII',2)],
+        'nombre': 'Modal por cuartas',
+        'style': 'modal', 'mode': 'mixolydian', 'tension': 5,
+        'emocion': 'euforia',
+        'desc': 'Progresión que asciende por cuartas desde el IV. '
+                'Característica del rock psicodélico. Abierta y expansiva.',
+    },
+    {
+        'id': 90, 'prog': 'i – III – iv – V',
+        'pattern': [('i',2),('III',2),('iv',2),('V',2)],
+        'nombre': 'Menor armónica clásica',
+        'style': 'baroque', 'mode': 'minor', 'tension': 6,
+        'emocion': 'solemnidad',
+        'desc': 'El III mayor seguido del iv y el V crea una cadencia muy '
+                'característica del barroco y el clasicismo. Bach, Händel.',
+    },
+    {
+        'id': 91, 'prog': 'IV – bVII – I – V',
+        'pattern': [('IV',2),('bVII',2),('I',2),('V',2)],
+        'nombre': 'Rock épico',
+        'style': 'modal', 'mode': 'major', 'tension': 5,
+        'emocion': 'euforia',
+        'desc': 'El bVII antes del I le da potencia épica al loop. '
+                'Muy usada en rock de estadio y música de superhéroes.',
+    },
+    {
+        'id': 92, 'prog': 'ii – ii – V – I',
+        'pattern': [('ii',4),('ii',2),('V',2),('I',4)],
+        'nombre': 'Doble subdominante',
+        'style': 'jazz', 'mode': 'major', 'tension': 5,
+        'emocion': 'esperanza',
+        'desc': 'El ii repetido intensifica la preparación del V. '
+                'Muy usado en jazz vocal y bossa nova lenta.',
+    },
+    {
+        'id': 93, 'prog': 'I – bIII – IV – bVII',
+        'pattern': [('I',2),('bIII',2),('IV',2),('bVII',2)],
+        'nombre': 'Rock modal mixto',
+        'style': 'modal', 'mode': 'major', 'tension': 5,
+        'emocion': 'misterio',
+        'desc': 'bIII y bVII prestados del modo paralelo. Sin resolución real. '
+                'Rock alternativo de los 90, grunge.',
+    },
+    {
+        'id': 94, 'prog': 'i – iv – bVII – bIII – bVI – bII – V – i',
+        'pattern': [('i',1),('iv',1),('bVII',1),('bIII',1),
+                    ('bVI',1),('bII',1),('V',1),('i',1)],
+        'nombre': 'Ciclo de quintas menor',
+        'style': 'baroque', 'mode': 'minor', 'tension': 7,
+        'emocion': 'drama',
+        'desc': 'Recorre todas las quintas en modo menor. Muy dramático y '
+                'estructurado. Passacaglia, chacona, música barroca tardía.',
+    },
+    {
+        'id': 95, 'prog': 'I – V7/IV – IV – I',
+        'pattern': [('I',2),('V/IV',2),('IV',2),('I',2)],
+        'nombre': 'Con dominante secundaria del IV',
+        'style': 'diatonic', 'mode': 'major', 'tension': 5,
+        'emocion': 'ambigüedad',
+        'desc': 'V7/IV (dominante secundaria) resuelve en el IV. '
+                'Giro cromático inesperado. Blues avanzado, gospel.',
+    },
+    {
+        'id': 96, 'prog': 'im7 – iv7 – VII7 – IIIM7',
+        'pattern': [('im7',2),('iv7',2),('VII7',2),('III7',2)],
+        'nombre': 'Jazz menor por quintas',
+        'style': 'jazz', 'mode': 'minor', 'tension': 6,
+        'emocion': 'melancolía',
+        'desc': 'Ciclo de quintas en modo menor con séptimas. '
+                'Característico del jazz modal de Miles Davis.',
+    },
+    {
+        'id': 97, 'prog': 'I – IV – V – vi – IV',
+        'pattern': [('I',2),('IV',2),('V',2),('vi',2),('IV',2)],
+        'nombre': 'Pop extendido con vi',
+        'style': 'pop', 'mode': 'major', 'tension': 3,
+        'emocion': 'alegría',
+        'desc': 'Variante de 5 acordes del loop pop estándar. '
+                'El vi en cuarta posición añade un giro melancólico breve.',
+    },
+    {
+        'id': 98, 'prog': 'i – bVII – bVI – bVII – i',
+        'pattern': [('i',2),('bVII',2),('bVI',2),('bVII',2),('i',4)],
+        'nombre': 'Aeolia con pivote bVII',
+        'style': 'diatonic', 'mode': 'minor', 'tension': 4,
+        'emocion': 'tristeza',
+        'desc': 'El bVII actúa como pivote entre bVI y la resolución en i. '
+                'Muy usada en metal, rock gótico y darkwave.',
+    },
+    {
+        'id': 99, 'prog': 'IM7 – bVIIM7 – bVIM7 – bVIIM7',
+        'pattern': [('IM7',2),('bVII',2),('bVI',2),('bVII',2)],
+        'nombre': 'Romántico con maj7',
+        'style': 'romantic', 'mode': 'major', 'tension': 5,
+        'emocion': 'nostalgia',
+        'desc': 'Los maj7 suavizan el préstamo modal. '
+                'Característico del pop sofisticado y R&B moderno.',
+    },
+    {
+        'id': 100, 'prog': 'i – bVI – bIII – bVII – IV – i',
+        'pattern': [('i',1),('bVI',1),('bIII',1),('bVII',1),('IV',2),('i',2)],
+        'nombre': 'Menor épica de 6 acordes',
+        'style': 'romantic', 'mode': 'minor', 'tension': 6,
+        'emocion': 'drama',
+        'desc': 'Loop de 6 acordes que recorre el modo menor con IV mayor dórico. '
+                'Bandas sonoras de cine épico, videojuegos de rol.',
     },
 ]
 
@@ -913,7 +1180,7 @@ def _normalize(s: str) -> str:
 
 def filter_table(style=None, mode=None, emocion=None,
                  tension_min=None, tension_max=None,
-                 src=None, buscar=None) -> list:
+                 buscar=None) -> list:
     """Filtra el catálogo según los criterios dados."""
     result = list(TABLE)
     if style:
@@ -926,8 +1193,6 @@ def filter_table(style=None, mode=None, emocion=None,
         result = [e for e in result if e['tension'] >= tension_min]
     if tension_max is not None:
         result = [e for e in result if e['tension'] <= tension_max]
-    if src:
-        result = [e for e in result if e['src'] == src]
     if buscar:
         q = _normalize(buscar)
         result = [
@@ -992,15 +1257,13 @@ def tension_col(t: int) -> str:
 
 def print_entry(e: dict, verbose: bool = False) -> None:
     tc = tension_col(e['tension'])
-    src_c = {'tabla': COL['green'], 'script': COL['blue'],
-             'ambas': COL['magenta']}.get(e['src'], '')
     print(
         f"  {COL['gray']}#{e['id']:2d}{COL['reset']}  "
         f"{COL['bold']}{e['prog']:<38}{COL['reset']} "
         f"{tc}t={e['tension']}{COL['reset']}  "
         f"{COL['cyan']}{e['emocion']:<12}{COL['reset']}  "
         f"{COL['gray']}{e['style']:<12} {e['mode']:<18}{COL['reset']}  "
-        f"{src_c}{e['src']}{COL['reset']}"
+
     )
     if verbose:
         print(f"        {COL['gray']}{e['nombre']}{COL['reset']}")
@@ -1010,9 +1273,9 @@ def print_entry(e: dict, verbose: bool = False) -> None:
 def print_table(entries: list, verbose: bool = False) -> None:
     print(
         f"\n  {COL['gray']}{'#':>3}  {'progresión':<38} {'t':>2}  "
-        f"{'emoción':<12}  {'estilo':<12} {'modo':<18}  fuente{COL['reset']}"
+        f"{'emoción':<12}  {'estilo':<12} {'modo':<18}{COL['reset']}"
     )
-    print(f"  {'─'*100}")
+    print(f"  {'─'*88}")
     for e in entries:
         print_entry(e, verbose)
     print(f"\n  {len(entries)} progresión(es)\n")
@@ -1027,7 +1290,6 @@ def print_stats() -> None:
     styles   = Counter(e['style']   for e in TABLE)
     modes    = Counter(e['mode']    for e in TABLE)
     emocions = Counter(e['emocion'] for e in TABLE)
-    srcs     = Counter(e['src']     for e in TABLE)
     tensions = [e['tension'] for e in TABLE]
 
     print(f"  Total progresiones: {len(TABLE)}")
@@ -1046,9 +1308,6 @@ def print_stats() -> None:
     for k, v in sorted(emocions.items(), key=lambda x: -x[1]):
         print(f"    {k:<16} {v:>3}")
 
-    print(f"\n  {COL['bold']}Por fuente:{COL['reset']}")
-    for k, v in sorted(srcs.items(), key=lambda x: -x[1]):
-        print(f"    {k:<10} {v:>3}")
     print()
 
 
@@ -1090,8 +1349,6 @@ def main():
                         help='Tensión mínima (1-10)')
     parser.add_argument('--tension-max', type=int, metavar='N', dest='tension_max',
                         help='Tensión máxima (1-10)')
-    parser.add_argument('--src',         type=str, choices=['tabla','script','ambas'],
-                        help='Filtrar por fuente')
 
     # Resolución y exportación
     parser.add_argument('--key',         type=str, default='C',
@@ -1137,7 +1394,7 @@ def main():
         print(f"\n  #{entry['id']}  {COL['bold']}{entry['prog']}{COL['reset']}")
         print(f"  {entry['nombre']}  ·  {entry['style']} / {entry['mode']}")
         print(f"  Tensión: {entry['tension']}/10  ·  Emoción: {entry['emocion']}")
-        print(f"  Fuente: {entry['src']}")
+
         print(f"  {entry['desc']}\n")
 
         progression = resolve_entry(entry, tonic_pc, args.bars, args.beats)
@@ -1184,7 +1441,6 @@ def main():
             emocion     = intent_filters.get('emocion', args.emocion),
             tension_min = intent_filters.get('tension_min', args.tension_min),
             tension_max = intent_filters.get('tension_max', args.tension_max),
-            src         = args.src,
             buscar      = args.buscar,
         )
         if not entries:
@@ -1205,7 +1461,6 @@ def main():
         emocion     = args.emocion,
         tension_min = args.tension_min,
         tension_max = args.tension_max,
-        src         = args.src,
         buscar      = args.buscar,
     )
 
