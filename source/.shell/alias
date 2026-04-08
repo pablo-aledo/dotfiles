@@ -238,3 +238,7 @@ rmone(){
 rm -fr "$1"
 }
 
+rmsafe(){
+    [ "$(pwd | grep usbshare)" != "" ] || [ "$(pwd | grep recycle)" != "" ] && rm -fr "$*"
+}
+
