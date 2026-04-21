@@ -496,7 +496,12 @@ def fit_to_bars(notes: List[Note], target_bars: int,
                 beats_per_bar: int = 4) -> List[Note]:
     """
     Ajusta la duración total de las notas a target_bars compases.
-    Aplica factor de escala temporal.
+    - Si la frase es más corta que el objetivo (factor > 1.2): escala hacia arriba.
+    - Si la frase es ligeramente más larga (factor >= 0.8): sin cambio.
+    - Si la frase es MUCHO más larga (factor < 0.5): recorta un fragmento
+      representativo del inicio en lugar de comprimir agresivamente, para
+      evitar que las notas queden con duraciones de milisegundos.
+    - Si la diferencia es moderada (0.5 <= factor < 0.8): escala suavemente.
     """
     if not notes:
         return notes
@@ -505,8 +510,31 @@ def fit_to_bars(notes: List[Note], target_bars: int,
     if total < 0.01:
         return notes
     factor = target / total
+
+    # Frase dentro del ±20%: sin cambio
     if 0.8 < factor < 1.2:
-        return notes  # sin cambio si la diferencia es pequeña
+        return notes
+
+    # Frase mucho más larga que el objetivo: recortar un fragmento inicial
+    # en lugar de comprimir (evita notas de ~10 ms)
+    if factor < 0.5:
+        sliced = [n for n in notes if n.offset < target]
+        if not sliced:
+            sliced = notes[:max(1, len(notes) // int(round(1 / factor)))]
+        # Re-normalizar offsets al inicio
+        min_off = min(n.offset for n in sliced)
+        sliced = [Note(n.pitch, n.duration, n.velocity, n.offset - min_off)
+                  for n in sliced]
+        # Ajuste suave final si aún hay diferencia pequeña
+        new_total = max(n.offset + n.duration for n in sliced)
+        if new_total > 0.01:
+            fine = target / new_total
+            if not (0.8 < fine < 1.2):
+                sliced = [Note(n.pitch, n.duration * fine, n.velocity, n.offset * fine)
+                          for n in sliced]
+        return sliced
+
+    # Diferencia moderada: escala normal
     return [Note(n.pitch, n.duration * factor, n.velocity, n.offset * factor)
             for n in notes]
 
@@ -645,10 +673,16 @@ def build_chord_accompaniment(progression: List[Tuple[str, int]],
             for p in pitches:
                 notes.append(Note(p, dur_beats * 0.9, velocity, cursor))
         elif style == "arpeggio":
-            # Arpegio ascendente
-            step = dur_beats / max(len(pitches), 1)
-            for i, p in enumerate(pitches):
-                notes.append(Note(p, step * 0.8, velocity, cursor + i * step))
+            # Arpegio ascendente — mínimo 1 semicorchea (0.25 beats) por nota
+            min_step = 0.25
+            step = max(min_step, dur_beats / max(len(pitches), 1))
+            # Si el acorde es demasiado corto para un arpegio completo, tocar en bloque
+            if step * len(pitches) > dur_beats * 1.5:
+                for p in pitches:
+                    notes.append(Note(p, dur_beats * 0.9, velocity, cursor))
+            else:
+                for i, p in enumerate(pitches):
+                    notes.append(Note(p, step * 0.8, velocity, cursor + i * step))
         elif style == "bass_only":
             # Solo bajo
             if pitches:
