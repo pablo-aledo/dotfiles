@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                       SONG ARCHITECT  v1.0                                   ║
+║                       SONG ARCHITECT  v2.0                                   ║
 ║         Frases musicales → estructura de canción completa y coherente        ║
 ║                                                                               ║
 ║  Toma un número reducido de frases musicales (MIDI) y genera una obra        ║
@@ -12,10 +12,16 @@
 ║                                                                               ║
 ║  Las secciones se generan con coherencia musical entre ellas:                ║
 ║  • Tonalidad y modo unificados                                                ║
-║  • Voice leading entre secciones                                              ║
+║  • Voice leading entre secciones y entre acordes                             ║
 ║  • Curvas de tensión dramática por sección                                    ║
 ║  • Transformaciones motívicas coherentes (variación, inversión, aumentación) ║
 ║  • Progresiones armónicas adaptadas al rol de cada sección                   ║
+║  • Selección inteligente de fragmentos por interés melódico                  ║
+║  • Manejo correcto de MIDIs multi-track                                      ║
+║  • Deduplicación de notas superpuestas                                       ║
+║  • Detección automática de compás                                            ║
+║  • Repeticiones con micro-variaciones                                        ║
+║  • Exportación MusicXML (MuseScore/Sibelius)                                 ║
 ║                                                                               ║
 ║  USO:                                                                         ║
 ║    python song_architect.py frase1.mid frase2.mid frase3.mid                 ║
@@ -23,62 +29,16 @@
 ║    python song_architect.py frases/*.mid --style pop --out-dir cancion/      ║
 ║    python song_architect.py *.mid --no-solo --no-bridge --bars-per-section 8 ║
 ║    python song_architect.py *.mid --dry-run                                  ║
+║    python song_architect.py *.mid --split-tracks --melody-track 1           ║
+║    python song_architect.py *.mid --fragment-start 8 --fragment-end 24      ║
+║    python song_architect.py *.mid --export-musicxml                          ║
 ║                                                                               ║
-║  SECCIONES GENERADAS:                                                         ║
-║    intro         — 4-8c  · tensión baja · establece atmósfera                ║
-║    verse1        — 8-16c · tensión media-baja · presenta material             ║
-║    prechorus     — 4-8c  · tensión creciente · prepara el estribillo         ║
-║    chorus        — 8-16c · tensión alta · clímax emocional principal         ║
-║    verse2        — 8-16c · variación del verso 1 · material enriquecido      ║
-║    bridge        — 8c    · contraste · material nuevo o invertido             ║
-║    solo          — 8c    · desarrollo libre · máxima variación               ║
-║    outro         — 4-8c  · tensión baja · resolución y cierre                ║
-║                                                                               ║
-║  ESTRATEGIAS DE COHERENCIA:                                                   ║
-║    • La tonalidad se detecta automáticamente o se fuerza con --key           ║
-║    • Cada sección adapta las frases entrantes según su rol dramático         ║
-║    • El estribillo recibe el material más estable y reconocible              ║
-║    • El puente invierte o varía para crear contraste máximo                  ║
-║    • El solo aumenta y desarrolla el motivo principal                        ║
-║    • El outro deconstruye gradualmente el estribillo                         ║
-║                                                                               ║
-║  ESTILOS ARMÓNICOS (--style):                                                 ║
-║    pop           — I-V-vi-IV, loops simples (default)                        ║
-║    rock          — I-bVII-IV, quintas de poder                               ║
-║    ballad        — diatónico lento, resoluciones auténticas                  ║
-║    jazz          — ii-V-I, tensiones extendidas                              ║
-║    folk          — modal, progresiones abiertas                              ║
-║    rnb           — dominantes secundarios, 7ª extendidas                     ║
-║                                                                               ║
-║  OPCIONES:                                                                    ║
-║    inputs              Archivos MIDI de frases base (1 o más)                ║
-║    --key KEY           Tonalidad base: C, Am, Dm, F#… (default: auto)       ║
-║    --tempo BPM         Tempo (default: detectado o 120)                      ║
-║    --style STYLE       Estilo armónico (default: pop)                        ║
-║    --bars-per-section  Compases por sección (default: auto)                  ║
-║    --no-intro          Omitir intro                                           ║
-║    --no-prechorus      Omitir pre-estribillo                                  ║
-║    --no-bridge         Omitir puente                                          ║
-║    --no-solo           Omitir solo                                            ║
-║    --sections S [S…]   Especificar qué secciones generar                     ║
-║    --out-dir DIR       Directorio de salida (default: ./song_output)         ║
-║    --output-name NAME  Nombre base de archivos (default: song)               ║
-║    --export-plan       Exportar plan de la canción como JSON                 ║
-║    --dry-run           Mostrar plan sin generar archivos MIDI                 ║
-║    --verbose           Informe detallado de decisiones                        ║
-║    --seed N            Semilla aleatoria (default: 42)                       ║
-║                                                                               ║
-║  SALIDA:                                                                      ║
-║    song_output/song_intro.mid                                                 ║
-║    song_output/song_verse1.mid                                                ║
-║    song_output/song_prechorus.mid                                             ║
-║    song_output/song_chorus.mid                                                ║
-║    song_output/song_verse2.mid                                                ║
-║    song_output/song_bridge.mid                                                ║
-║    song_output/song_solo.mid                                                  ║
-║    song_output/song_outro.mid                                                 ║
-║    song_output/song_full.mid       (obra completa ensamblada)                ║
-║    song_output/song_plan.json      (plan detallado)                          ║
+║  OPCIONES NUEVAS (v2.0):                                                      ║
+║    --split-tracks       Tratar cada track MIDI como frase independiente      ║
+║    --melody-track N     Índice del track melódico (default: auto)            ║
+║    --fragment-start C   Compás de inicio del fragmento (1-based)             ║
+║    --fragment-end C     Compás de fin del fragmento (1-based, inclusivo)     ║
+║    --export-musicxml    Exportar también en MusicXML (.musicxml)             ║
 ║                                                                               ║
 ║  DEPENDENCIAS: mido, numpy                                                    ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -106,7 +66,7 @@ except ImportError:
     print("[ERROR] mido no encontrado. Instálalo con: pip install mido")
     sys.exit(1)
 
-VERSION = "1.0"
+VERSION = "2.0"
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONSTANTES MUSICALES
@@ -124,8 +84,9 @@ SCALE_INTERVALS = {
     "mixolydian": [0, 2, 4, 5, 7, 9, 10],
 }
 
-# Progresiones por sección y estilo
-# Formato: (numeral, duración_beats)
+# Numerador de compás → beats por compás
+TIME_SIG_BEATS = {2: 2, 3: 3, 4: 4, 6: 6, 9: 9, 12: 12}
+
 SECTION_PROGRESSIONS = {
     "pop": {
         "intro":     [("I", 4), ("V", 4), ("vi", 4), ("IV", 4)],
@@ -183,7 +144,6 @@ SECTION_PROGRESSIONS = {
     },
 }
 
-# Tensión base por sección (0-1)
 SECTION_TENSION = {
     "intro":     0.25,
     "verse1":    0.40,
@@ -195,7 +155,6 @@ SECTION_TENSION = {
     "outro":     0.20,
 }
 
-# Velocidad MIDI base por sección
 SECTION_VELOCITY = {
     "intro":     60,
     "verse1":    70,
@@ -207,7 +166,6 @@ SECTION_VELOCITY = {
     "outro":     55,
 }
 
-# Compases por defecto por sección
 SECTION_DEFAULT_BARS = {
     "intro":     4,
     "verse1":    8,
@@ -219,13 +177,11 @@ SECTION_DEFAULT_BARS = {
     "outro":     4,
 }
 
-# Orden canónico de la estructura
 CANONICAL_ORDER = [
     "intro", "verse1", "prechorus", "chorus",
     "verse2", "bridge", "solo", "outro"
 ]
 
-# Numerales romanos → semitono + calidad
 NUMERAL_MAP = {
     "I":    (0,  "M"),  "i":    (0,  "m"),
     "II":   (2,  "M"),  "ii":   (2,  "m"),
@@ -252,6 +208,9 @@ CHORD_INTERVALS = {
     "d":  [0, 3, 6],
 }
 
+# Duración mínima absoluta de nota en beats (evita artefactos de audio)
+MIN_NOTE_DURATION = 0.125
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  ESTRUCTURAS DE DATOS
@@ -260,9 +219,9 @@ CHORD_INTERVALS = {
 @dataclass
 class Note:
     pitch: int
-    duration: float     # quarter notes
+    duration: float
     velocity: int
-    offset: float       # quarter notes from section start
+    offset: float
 
     def transpose(self, semitones: int) -> "Note":
         return Note(
@@ -312,72 +271,231 @@ class SongPlan:
     total_bars: int = 0
     phrase_count: int = 0
 
+
 # ══════════════════════════════════════════════════════════════════════════════
-#  CARGA DE FRASES MIDI
+#  CARGA MIDI  (multi-track + detección de compás)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def load_midi_notes(path: str) -> Tuple[List[Note], int, int]:
+def load_midi_tracks(path: str) -> Tuple[List[List[Note]], int, int, int]:
     """
-    Carga un MIDI y devuelve (notas, tempo_bpm, ticks_per_beat).
-    Las notas se normalizan en quarter notes.
+    Carga un MIDI y devuelve (tracks_notes, tempo_bpm, ticks_per_beat, beats_per_bar).
+    Cada elemento de tracks_notes contiene las notas de un track independiente.
+    Detecta el compás automáticamente desde mensajes time_signature.
     """
     mid = mido.MidiFile(path)
     tpb = mid.ticks_per_beat
-    tempo_us = 500_000  # 120 BPM por defecto
-    notes = []
-    active: Dict[int, Tuple[float, int]] = {}
-    abs_ticks = 0
+    tempo_us = 500_000
+    beats_per_bar = 4
 
-    for msg in mido.merge_tracks(mid.tracks):
-        abs_ticks += msg.time
+    # Leer meta-mensajes globales del primer track
+    for msg in mid.tracks[0]:
         if msg.type == "set_tempo":
             tempo_us = msg.tempo
-        elif msg.type == "note_on" and msg.velocity > 0:
-            active[msg.note] = (abs_ticks / tpb, msg.velocity)
+        elif msg.type == "time_signature":
+            beats_per_bar = TIME_SIG_BEATS.get(msg.numerator, msg.numerator)
+
+    tracks_notes: List[List[Note]] = []
+    for track in mid.tracks:
+        notes = _parse_track_notes(track, tpb)
+        if notes:
+            tracks_notes.append(notes)
+
+    bpm = round(60_000_000 / tempo_us)
+    return tracks_notes, bpm, tpb, beats_per_bar
+
+
+def _parse_track_notes(track, tpb: int) -> List[Note]:
+    """Extrae y normaliza notas de un único MidiTrack."""
+    active: Dict[int, Tuple[float, int]] = {}
+    notes = []
+    abs_ticks = 0
+
+    for msg in track:
+        abs_ticks += msg.time
+        beat = abs_ticks / tpb
+
+        if msg.type == "note_on" and msg.velocity > 0:
+            active[msg.note] = (beat, msg.velocity)
         elif msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0):
             if msg.note in active:
                 start_beat, vel = active.pop(msg.note)
-                dur = abs_ticks / tpb - start_beat
-                if dur > 0.01:
+                dur = beat - start_beat
+                if dur >= MIN_NOTE_DURATION:
                     notes.append(Note(
                         pitch=msg.note,
-                        duration=round(dur * 4) / 4,
+                        duration=max(MIN_NOTE_DURATION, round(dur * 4) / 4),
                         velocity=vel,
                         offset=start_beat,
                     ))
 
     if not notes:
-        return [], round(60_000_000 / tempo_us), tpb
+        return []
 
-    # Normalizar offsets al inicio
     min_off = min(n.offset for n in notes)
     for n in notes:
         n.offset -= min_off
 
-    bpm = round(60_000_000 / tempo_us)
-    return sorted(notes, key=lambda n: n.offset), bpm, tpb
+    return sorted(notes, key=lambda n: n.offset)
 
+
+def load_midi_notes(path: str) -> Tuple[List[Note], int, int]:
+    """Compatibilidad v1: devuelve todas las notas mezcladas."""
+    tracks, bpm, tpb, _ = load_midi_tracks(path)
+    all_notes = [n for track in tracks for n in track]
+    if not all_notes:
+        return [], bpm, tpb
+    min_off = min(n.offset for n in all_notes)
+    for n in all_notes:
+        n.offset -= min_off
+    return sorted(all_notes, key=lambda n: n.offset), bpm, tpb
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PUNTUACIÓN DE INTERÉS MELÓDICO
+# ══════════════════════════════════════════════════════════════════════════════
+
+def score_melodic_interest(notes: List[Note]) -> float:
+    """
+    Puntúa el interés melódico de una lista de notas (0-1).
+    Criterios: variedad de pitch classes, rango, densidad,
+    variedad dinámica, variedad rítmica y registro.
+    """
+    if len(notes) < 2:
+        return 0.0
+
+    pitches = [n.pitch for n in notes]
+    durations = [n.duration for n in notes]
+    velocities = [n.velocity for n in notes]
+
+    pc_variety = len(set(p % 12 for p in pitches)) / 12.0
+    pitch_range = min(1.0, (max(pitches) - min(pitches)) / 24.0)
+
+    total_dur = max(n.offset + n.duration for n in notes)
+    density = len(notes) / max(total_dur, 1.0)
+    density_score = max(0.0, min(1.0, 1.0 - abs(density - 2.0) / 4.0))
+
+    vel_variety = min(1.0, float(np.std(velocities)) / 40.0)
+    rhythm_variety = min(1.0, float(np.std(durations)) / 1.0)
+
+    median_pitch = float(np.median(pitches))
+    register_score = max(0.0, min(1.0, 1.0 - abs(median_pitch - 66.0) / 30.0))
+
+    return float(
+        pc_variety    * 0.25 +
+        pitch_range   * 0.20 +
+        density_score * 0.20 +
+        vel_variety   * 0.10 +
+        rhythm_variety* 0.10 +
+        register_score* 0.15
+    )
+
+
+def select_melody_track(tracks: List[List[Note]],
+                        melody_track_idx: Optional[int] = None,
+                        verbose: bool = False) -> List[Note]:
+    """Selecciona el track más melódico de un MIDI multi-track."""
+    if not tracks:
+        return []
+    if len(tracks) == 1:
+        return tracks[0]
+    if melody_track_idx is not None:
+        idx = max(0, min(melody_track_idx, len(tracks) - 1))
+        if verbose:
+            print(f"    Track melódico forzado: #{idx}")
+        return tracks[idx]
+
+    scores = [score_melodic_interest(t) for t in tracks]
+    best_idx = int(np.argmax(scores))
+    if verbose:
+        for i, (t, s) in enumerate(zip(tracks, scores)):
+            marker = " ← seleccionado" if i == best_idx else ""
+            print(f"    Track {i}: {len(t):4d} notas  interés={s:.3f}{marker}")
+    return tracks[best_idx]
+
+
+def select_best_fragment(notes: List[Note], target_beats: float,
+                         beats_per_bar: int = 4,
+                         verbose: bool = False) -> List[Note]:
+    """
+    Desliza una ventana de target_beats sobre la frase y elige
+    el fragmento con mayor interés melódico.
+    """
+    if not notes:
+        return notes
+
+    total = max(n.offset + n.duration for n in notes)
+    if total <= target_beats * 1.2:
+        return notes
+
+    step = float(beats_per_bar)
+    max_start = total - target_beats
+    best_score = -1.0
+    best_start = 0.0
+
+    start = 0.0
+    while start <= max_start + 0.01:
+        fragment = [n for n in notes if n.offset >= start and n.offset < start + target_beats]
+        if len(fragment) >= 2:
+            score = score_melodic_interest(fragment)
+            if score > best_score:
+                best_score = score
+                best_start = start
+        start += step
+
+    end = best_start + target_beats
+    fragment = [n for n in notes if n.offset >= best_start and n.offset < end]
+    if not fragment:
+        fragment = notes[:max(2, len(notes) // 4)]
+
+    min_off = min(n.offset for n in fragment)
+    fragment = [Note(n.pitch, n.duration, n.velocity, n.offset - min_off)
+                for n in fragment]
+
+    if verbose:
+        print(f"    Fragmento: inicio={best_start:.1f}b  fin={end:.1f}b  "
+              f"notas={len(fragment)}  interés={best_score:.3f}")
+
+    return fragment
+
+
+def score_phrase_for_section(notes: List[Note], section_name: str) -> float:
+    """Puntúa lo adecuada que es una frase para una sección concreta."""
+    base = score_melodic_interest(notes)
+    tension = SECTION_TENSION.get(section_name, 0.5)
+    return float(base * tension + (1.0 - base) * (1.0 - tension))
+
+
+def select_phrase_for_section(phrases: List[List[Note]],
+                               section_name: str) -> Tuple[int, List[Note]]:
+    """Elige la frase más adecuada para una sección según su rol dramático."""
+    if not phrases:
+        return 0, []
+    if len(phrases) == 1:
+        return 0, phrases[0]
+    scores = [score_phrase_for_section(p, section_name) for p in phrases]
+    best_idx = int(np.argmax(scores))
+    return best_idx, phrases[best_idx]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ANÁLISIS TONAL
+# ══════════════════════════════════════════════════════════════════════════════
 
 def detect_key(notes: List[Note]) -> Tuple[int, str]:
-    """
-    Detección de tonalidad por perfil de pitch classes (Krumhansl-Schmuckler simplificado).
-    Devuelve (root_pc, 'major'|'minor').
-    """
+    """Krumhansl-Schmuckler simplificado. Devuelve (root_pc, mode)."""
     if not notes:
         return 0, "major"
 
-    # Perfil de duración por PC
     pc_weights = np.zeros(12)
     for n in notes:
         pc_weights[n.pitch % 12] += n.duration
 
-    # Perfiles Krumhansl-Schmuckler
     major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09,
                                2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
     minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53,
                                2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
 
-    best_key, best_score, best_mode = 0, -999, "major"
+    best_key, best_score, best_mode = 0, -999.0, "major"
     for root in range(12):
         rotated = np.roll(pc_weights, -root)
         for mode_name, profile in [("major", major_profile), ("minor", minor_profile)]:
@@ -391,7 +509,6 @@ def detect_key(notes: List[Note]) -> Tuple[int, str]:
 
 
 def detect_tempo(midi_path: str) -> int:
-    """Lee el tempo del MIDI o devuelve 120."""
     try:
         mid = mido.MidiFile(midi_path)
         for msg in mido.merge_tracks(mid.tracks):
@@ -407,15 +524,13 @@ def detect_tempo(midi_path: str) -> int:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def parse_key(key_str: str) -> Tuple[int, str]:
-    """'Am' → (9, 'minor'), 'C' → (0, 'major'), 'F# minor' → (6, 'minor')"""
     key_str = key_str.strip()
     mode = "major"
     parts = key_str.split()
     root_str = parts[0]
 
     if len(parts) > 1:
-        mode_str = parts[1].lower()
-        if mode_str in ("minor", "min", "m"):
+        if parts[1].lower() in ("minor", "min", "m"):
             mode = "minor"
     elif root_str.endswith("m") and len(root_str) >= 2:
         mode = "minor"
@@ -442,7 +557,6 @@ def get_scale_pcs(root_pc: int, mode: str) -> List[int]:
 
 
 def snap_to_scale(pitch: int, root_pc: int, mode: str) -> int:
-    """Ajusta un pitch al grado de escala más cercano."""
     scale_pcs = set(get_scale_pcs(root_pc, mode))
     if pitch % 12 in scale_pcs:
         return pitch
@@ -455,7 +569,6 @@ def snap_to_scale(pitch: int, root_pc: int, mode: str) -> int:
 
 
 def numeral_to_root(numeral: str, key_pc: int) -> Tuple[int, str]:
-    """Convierte numeral romano → (root_pc, quality)."""
     entry = NUMERAL_MAP.get(numeral)
     if entry is None:
         return key_pc, "M"
@@ -463,15 +576,38 @@ def numeral_to_root(numeral: str, key_pc: int) -> Tuple[int, str]:
     return (key_pc + semitone) % 12, quality
 
 
-def chord_pitches(root_pc: int, quality: str, octave: int = 4) -> List[int]:
-    """Construye lista de pitches MIDI para un acorde."""
+def chord_pitches_with_voicing(root_pc: int, quality: str, octave: int = 4,
+                                prev_chord: Optional[List[int]] = None) -> List[int]:
+    """
+    Construye pitches MIDI para un acorde con voice leading.
+    Elige la inversión que minimiza el movimiento total de voces
+    respecto al acorde anterior.
+    """
     intervals = CHORD_INTERVALS.get(quality, [0, 4, 7])
     base = root_pc + octave * 12
     while base < 48:
         base += 12
     while base > 72:
         base -= 12
-    return [base + i for i in intervals if 24 <= base + i <= 96]
+    raw = [base + i for i in intervals if 24 <= base + i <= 96]
+
+    if not raw or prev_chord is None:
+        return raw
+
+    def total_motion(a: List[int], b: List[int]) -> float:
+        n = min(len(a), len(b))
+        return sum(abs(b[i] - a[i]) for i in range(n))
+
+    best, best_motion = raw, total_motion(prev_chord, raw)
+    rotated = list(raw)
+    for _ in range(len(raw) - 1):
+        rotated = rotated[1:] + [rotated[0] + 12]
+        motion = total_motion(prev_chord, rotated)
+        if motion < best_motion:
+            best_motion = motion
+            best = list(rotated)
+
+    return best
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -480,14 +616,12 @@ def chord_pitches(root_pc: int, quality: str, octave: int = 4) -> List[int]:
 
 def transpose_to_key(notes: List[Note], from_pc: int, to_pc: int,
                      from_mode: str, to_mode: str) -> List[Note]:
-    """Transpone notas de una tonalidad a otra ajustando a la escala destino."""
     semitones = (to_pc - from_pc) % 12
     if semitones > 6:
         semitones -= 12
     result = []
     for n in notes:
-        new_pitch = n.pitch + semitones
-        snapped = snap_to_scale(new_pitch, to_pc, to_mode)
+        snapped = snap_to_scale(n.pitch + semitones, to_pc, to_mode)
         result.append(Note(snapped, n.duration, n.velocity, n.offset))
     return result
 
@@ -495,13 +629,12 @@ def transpose_to_key(notes: List[Note], from_pc: int, to_pc: int,
 def fit_to_bars(notes: List[Note], target_bars: int,
                 beats_per_bar: int = 4) -> List[Note]:
     """
-    Ajusta la duración total de las notas a target_bars compases.
-    - Si la frase es más corta que el objetivo (factor > 1.2): escala hacia arriba.
-    - Si la frase es ligeramente más larga (factor >= 0.8): sin cambio.
-    - Si la frase es MUCHO más larga (factor < 0.5): recorta un fragmento
-      representativo del inicio en lugar de comprimir agresivamente, para
-      evitar que las notas queden con duraciones de milisegundos.
-    - Si la diferencia es moderada (0.5 <= factor < 0.8): escala suavemente.
+    Ajusta la frase al número de compases objetivo.
+
+    factor > 1.2  → escala hacia arriba
+    0.8-1.2       → sin cambio
+    0.5-0.8       → escala suave
+    < 0.5         → selecciona el fragmento más interesante (no comprime)
     """
     if not notes:
         return notes
@@ -511,114 +644,100 @@ def fit_to_bars(notes: List[Note], target_bars: int,
         return notes
     factor = target / total
 
-    # Frase dentro del ±20%: sin cambio
     if 0.8 < factor < 1.2:
         return notes
 
-    # Frase mucho más larga que el objetivo: recortar un fragmento inicial
-    # en lugar de comprimir (evita notas de ~10 ms)
     if factor < 0.5:
-        sliced = [n for n in notes if n.offset < target]
-        if not sliced:
-            sliced = notes[:max(1, len(notes) // int(round(1 / factor)))]
-        # Re-normalizar offsets al inicio
-        min_off = min(n.offset for n in sliced)
-        sliced = [Note(n.pitch, n.duration, n.velocity, n.offset - min_off)
-                  for n in sliced]
-        # Ajuste suave final si aún hay diferencia pequeña
-        new_total = max(n.offset + n.duration for n in sliced)
+        sliced = select_best_fragment(notes, target, beats_per_bar)
+        new_total = max(n.offset + n.duration for n in sliced) if sliced else 0
         if new_total > 0.01:
             fine = target / new_total
             if not (0.8 < fine < 1.2):
-                sliced = [Note(n.pitch, n.duration * fine, n.velocity, n.offset * fine)
+                sliced = [Note(n.pitch,
+                               max(MIN_NOTE_DURATION, n.duration * fine),
+                               n.velocity, n.offset * fine)
                           for n in sliced]
         return sliced
 
-    # Diferencia moderada: escala normal
-    return [Note(n.pitch, n.duration * factor, n.velocity, n.offset * factor)
+    return [Note(n.pitch, max(MIN_NOTE_DURATION, n.duration * factor),
+                 n.velocity, n.offset * factor)
             for n in notes]
 
 
 def apply_velocity(notes: List[Note], base_vel: int) -> List[Note]:
-    """Ajusta velocidades al nivel de la sección manteniendo la dinámica relativa."""
     if not notes:
         return notes
-    current_mean = np.mean([n.velocity for n in notes])
+    current_mean = float(np.mean([n.velocity for n in notes]))
     if current_mean < 1:
         return notes
     ratio = base_vel / current_mean
-    result = []
-    for n in notes:
-        new_vel = int(np.clip(n.velocity * ratio, 20, 120))
-        result.append(Note(n.pitch, n.duration, new_vel, n.offset))
-    return result
+    return [Note(n.pitch, n.duration, int(np.clip(n.velocity * ratio, 20, 120)), n.offset)
+            for n in notes]
 
 
 def invert_contour(notes: List[Note], pivot: Optional[int] = None) -> List[Note]:
-    """Invierte el contorno melódico alrededor de pivot."""
     if not notes:
         return notes
     pivot_pitch = pivot if pivot is not None else notes[0].pitch
-    result = []
-    for n in notes:
-        new_pitch = max(24, min(108, 2 * pivot_pitch - n.pitch))
-        result.append(Note(new_pitch, n.duration, n.velocity, n.offset))
-    return result
+    return [Note(max(24, min(108, 2 * pivot_pitch - n.pitch)),
+                 n.duration, n.velocity, n.offset)
+            for n in notes]
 
 
 def augment(notes: List[Note], factor: float = 2.0) -> List[Note]:
-    """Aumentación rítmica."""
     return [Note(n.pitch, n.duration * factor, n.velocity, n.offset * factor)
             for n in notes]
 
 
 def diminish(notes: List[Note], factor: float = 0.5) -> List[Note]:
-    """Diminución rítmica."""
     return augment(notes, factor)
 
 
-def repeat_phrase(notes: List[Note], times: int) -> List[Note]:
-    """Repite una frase N veces."""
+def repeat_phrase(notes: List[Note], times: int,
+                  rng: Optional[random.Random] = None) -> List[Note]:
+    """
+    Repite la frase N veces con micro-variaciones en cada repetición
+    (±5% velocidad, ±10% duración) para evitar el efecto mecánico.
+    """
     if not notes or times <= 1:
         return notes
-    total = max(n.offset + n.duration for n in notes) if notes else 0
-    result = list(notes)
+    total = max(n.offset + n.duration for n in notes)
+    result = list(deepcopy(notes))
     for i in range(1, times):
         for n in notes:
-            result.append(n.at_offset(total * i))
+            new_vel = n.velocity
+            new_dur = n.duration
+            if rng is not None:
+                new_vel = int(np.clip(n.velocity * rng.uniform(0.95, 1.05), 20, 120))
+                new_dur = max(MIN_NOTE_DURATION, n.duration * rng.uniform(0.90, 1.10))
+            result.append(Note(n.pitch, new_dur, new_vel, n.offset + total * i))
     return result
 
 
 def vary_phrase(notes: List[Note], variation_type: str,
                 root_pc: int, mode: str, rng: random.Random) -> List[Note]:
-    """
-    Aplica una variación a la frase según el tipo:
-    parallel, inversion, sequence, development, ornament
-    """
     if not notes:
         return notes
 
     if variation_type == "parallel":
-        # Casi igual, solo pequeñas alteraciones rítmicas
         result = []
         for n in notes:
-            dur_factor = rng.choice([0.75, 1.0, 1.0, 1.25])
-            result.append(Note(n.pitch, n.duration * dur_factor, n.velocity, n.offset))
+            dur_f = rng.choice([0.75, 1.0, 1.0, 1.25])
+            result.append(Note(n.pitch, max(MIN_NOTE_DURATION, n.duration * dur_f),
+                               n.velocity, n.offset))
         return result
 
     elif variation_type == "inversion":
         return invert_contour(notes)
 
     elif variation_type == "sequence_up":
-        steps = [2, 2, 1, 2, 2, 2, 1]  # escala mayor
         scale_pcs = get_scale_pcs(root_pc, mode)
         result = []
         for n in notes:
             pc = n.pitch % 12
             if pc in scale_pcs:
                 idx = scale_pcs.index(pc)
-                new_idx = (idx + 1) % 7
-                new_pc = scale_pcs[new_idx]
+                new_pc = scale_pcs[(idx + 1) % 7]
                 semitones = (new_pc - pc) % 12
                 new_pitch = snap_to_scale(n.pitch + semitones, root_pc, mode)
             else:
@@ -627,22 +746,19 @@ def vary_phrase(notes: List[Note], variation_type: str,
         return result
 
     elif variation_type == "development":
-        # Liquidar: quedarse solo con las notas en tiempos fuertes
         strong = [n for n in notes if n.offset % 2.0 < 0.5]
         if len(strong) < 2:
             strong = notes[:max(2, len(notes) // 2)]
         return strong
 
     elif variation_type == "ornament":
-        # Añadir notas de paso rápidas entre saltos
         result = list(notes)
         insertions = []
         for i in range(len(notes) - 1):
             a, b = notes[i], notes[i + 1]
-            gap = abs(b.pitch - a.pitch)
-            if gap >= 4 and a.duration >= 1.0:
+            if abs(b.pitch - a.pitch) >= 4 and a.duration >= 1.0:
                 pass_pitch = snap_to_scale((a.pitch + b.pitch) // 2, root_pc, mode)
-                half = a.duration / 2
+                half = max(MIN_NOTE_DURATION, a.duration / 2)
                 insertions.append(Note(pass_pitch, half, a.velocity - 10, a.offset + half))
         result.extend(insertions)
         return sorted(result, key=lambda n: n.offset)
@@ -651,43 +767,133 @@ def vary_phrase(notes: List[Note], variation_type: str,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CONSTRUCCIÓN DE ACOMPAÑAMIENTO ARMÓNICO
+#  DEDUPLICACIÓN DE NOTAS SUPERPUESTAS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def deduplicate_notes(notes: List[Note]) -> List[Note]:
+    """
+    Elimina solapamientos del mismo pitch: recorta la nota anterior
+    para que termine justo antes de que comience la siguiente del mismo pitch.
+    """
+    if not notes:
+        return notes
+
+    sorted_notes = sorted(notes, key=lambda n: (n.offset, n.pitch))
+    active: Dict[int, int] = {}  # pitch → índice en result
+    result: List[Note] = []
+
+    for n in sorted_notes:
+        if n.pitch in active:
+            prev_idx = active[n.pitch]
+            prev = result[prev_idx]
+            if prev.offset + prev.duration > n.offset:
+                new_dur = max(MIN_NOTE_DURATION, n.offset - prev.offset - 0.01)
+                result[prev_idx] = Note(prev.pitch, new_dur, prev.velocity, prev.offset)
+        result.append(n)
+        active[n.pitch] = len(result) - 1
+
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  VOICE LEADING ENTRE SECCIONES
+# ══════════════════════════════════════════════════════════════════════════════
+
+def apply_section_voice_leading(prev_section: Section,
+                                 next_section: Section) -> Section:
+    """
+    Suaviza la transición entre secciones consecutivas ajustando
+    la primera nota melódica de la sección siguiente para que esté
+    cerca (en semitones) de la última nota de la sección anterior,
+    siempre dentro de la escala de destino.
+    """
+    if not prev_section.notes or not next_section.notes:
+        return next_section
+
+    prev_mel = [n for n in prev_section.notes if n.pitch >= 48]
+    if not prev_mel:
+        return next_section
+    last_note = max(prev_mel, key=lambda n: n.offset + n.duration)
+
+    next_mel = [n for n in next_section.notes if n.pitch >= 48]
+    if not next_mel:
+        return next_section
+    first_note = min(next_mel, key=lambda n: n.offset)
+
+    if abs(first_note.pitch - last_note.pitch) <= 2:
+        return next_section
+
+    scale_pcs = set(get_scale_pcs(next_section.key_pc, next_section.mode))
+    best_pitch, best_dist = first_note.pitch, abs(first_note.pitch - last_note.pitch)
+    for candidate in range(max(24, last_note.pitch - 12),
+                            min(108, last_note.pitch + 13)):
+        if candidate % 12 in scale_pcs:
+            dist = abs(candidate - last_note.pitch)
+            if dist < best_dist:
+                best_dist = dist
+                best_pitch = candidate
+
+    if best_pitch == first_note.pitch:
+        return next_section
+
+    new_notes = []
+    adjusted = False
+    for n in next_section.notes:
+        if not adjusted and n is first_note:
+            new_notes.append(Note(best_pitch, n.duration, n.velocity, n.offset))
+            adjusted = True
+        else:
+            new_notes.append(n)
+
+    modified = deepcopy(next_section)
+    modified.notes = new_notes
+    return modified
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ACOMPAÑAMIENTO ARMÓNICO  (con voice leading de acordes)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_chord_accompaniment(progression: List[Tuple[str, int]],
                                key_pc: int, beats_per_bar: int,
                                velocity: int, style: str = "block") -> List[Note]:
     """
-    Genera notas de acompañamiento (acordes bloque o arpegios simples)
-    a partir de una progresión.
+    Genera acompañamiento con voice leading entre acordes consecutivos.
+    En arpegios, garantiza duración mínima de 0.25 beats por nota.
     """
     notes = []
     cursor = 0.0
+    prev_pitches: Optional[List[int]] = None
 
     for numeral, dur_beats in progression:
         root_pc, quality = numeral_to_root(numeral, key_pc)
-        pitches = chord_pitches(root_pc, quality, octave=4)
+        pitches = chord_pitches_with_voicing(root_pc, quality, octave=4,
+                                             prev_chord=prev_pitches)
+        prev_pitches = pitches
 
         if style == "block":
-            # Acordes en bloque
             for p in pitches:
-                notes.append(Note(p, dur_beats * 0.9, velocity, cursor))
+                notes.append(Note(p, max(MIN_NOTE_DURATION, dur_beats * 0.9),
+                                  velocity, cursor))
+
         elif style == "arpeggio":
-            # Arpegio ascendente — mínimo 1 semicorchea (0.25 beats) por nota
             min_step = 0.25
             step = max(min_step, dur_beats / max(len(pitches), 1))
-            # Si el acorde es demasiado corto para un arpegio completo, tocar en bloque
             if step * len(pitches) > dur_beats * 1.5:
+                # Demasiado corto para arpegio → bloque
                 for p in pitches:
-                    notes.append(Note(p, dur_beats * 0.9, velocity, cursor))
+                    notes.append(Note(p, max(MIN_NOTE_DURATION, dur_beats * 0.9),
+                                      velocity, cursor))
             else:
                 for i, p in enumerate(pitches):
-                    notes.append(Note(p, step * 0.8, velocity, cursor + i * step))
+                    notes.append(Note(p, max(MIN_NOTE_DURATION, step * 0.8),
+                                      velocity, cursor + i * step))
+
         elif style == "bass_only":
-            # Solo bajo
             if pitches:
-                bass = min(pitches)
-                notes.append(Note(bass, dur_beats * 0.9, velocity, cursor))
+                notes.append(Note(min(pitches),
+                                  max(MIN_NOTE_DURATION, dur_beats * 0.9),
+                                  velocity, cursor))
 
         cursor += dur_beats
 
@@ -696,29 +902,26 @@ def build_chord_accompaniment(progression: List[Tuple[str, int]],
 
 def build_bass_line(progression: List[Tuple[str, int]],
                     key_pc: int, velocity: int) -> List[Note]:
-    """Genera una línea de bajo con la raíz en cada cambio de acorde."""
+    """Línea de bajo con voice leading: evita saltos de más de una séptima."""
     notes = []
     cursor = 0.0
     prev_bass = None
 
     for numeral, dur_beats in progression:
         root_pc, quality = numeral_to_root(numeral, key_pc)
-        # Bass en octava 2-3
         bass = root_pc + 36
         while bass < 28:
             bass += 12
         while bass > 52:
             bass -= 12
 
-        # Pequeño voice-leading: si el salto es grande, ajustar octava
-        if prev_bass is not None:
-            leap = abs(bass - prev_bass)
-            if leap > 7:
-                alt = bass + (12 if bass < prev_bass else -12)
-                if 28 <= alt <= 52:
-                    bass = alt
+        if prev_bass is not None and abs(bass - prev_bass) > 7:
+            alt = bass + (12 if bass < prev_bass else -12)
+            if 28 <= alt <= 52:
+                bass = alt
 
-        notes.append(Note(bass, dur_beats * 0.85, velocity, cursor))
+        notes.append(Note(bass, max(MIN_NOTE_DURATION, dur_beats * 0.85),
+                          velocity, cursor))
         prev_bass = bass
         cursor += dur_beats
 
@@ -731,93 +934,70 @@ def build_bass_line(progression: List[Tuple[str, int]],
 
 def build_section(name: str,
                   phrases: List[List[Note]],
-                  key_pc: int,
-                  mode: str,
-                  tempo: int,
-                  style: str,
-                  bars: int,
-                  beats_per_bar: int,
-                  rng: random.Random,
-                  verbose: bool = False) -> Section:
-    """
-    Construye una sección de la canción transformando las frases entrantes.
-    """
+                  key_pc: int, mode: str, tempo: int, style: str,
+                  bars: int, beats_per_bar: int,
+                  rng: random.Random, verbose: bool = False) -> Section:
+
     tension = SECTION_TENSION.get(name, 0.5)
     vel_base = SECTION_VELOCITY.get(name, 70)
-    prog_key = name.rstrip("12")  # verse1 → verse, verse2 → verse
+    prog_key = name.rstrip("12")
     progression = SECTION_PROGRESSIONS.get(style, SECTION_PROGRESSIONS["pop"]).get(
         prog_key, SECTION_PROGRESSIONS["pop"]["verse"]
     )
 
-    sec = Section(
-        name=name,
-        bars=bars,
-        beats_per_bar=beats_per_bar,
-        tempo=tempo,
-        key_pc=key_pc,
-        mode=mode,
-        tension=tension,
-        velocity_base=vel_base,
-        progression=progression,
-    )
+    sec = Section(name=name, bars=bars, beats_per_bar=beats_per_bar,
+                  tempo=tempo, key_pc=key_pc, mode=mode, tension=tension,
+                  velocity_base=vel_base, progression=progression)
 
     if not phrases:
         return sec
 
-    # Seleccionar frase base para esta sección
-    phrase_idx = hash(name) % len(phrases)
-    base_notes = deepcopy(phrases[phrase_idx])
+    # Selección inteligente de frase por rol dramático
+    phrase_idx, base_notes = select_phrase_for_section(phrases, name)
+    base_notes = deepcopy(base_notes)
+    sec.source_phrase_idx = phrase_idx
 
     if verbose:
-        print(f"    [{name}] frase base #{phrase_idx + 1}, "
+        interest = score_melodic_interest(base_notes)
+        print(f"    [{name}] frase #{phrase_idx + 1} (interés={interest:.3f}), "
               f"{len(base_notes)} notas → {bars}c @ tensión={tension:.2f}")
 
-    # Transformar según el rol de la sección
     transformation_map = {
-        "intro":     "development",    # reducción al esencial
-        "verse1":    "parallel",       # casi igual
-        "prechorus": "sequence_up",    # secuencia ascendente (tensión creciente)
-        "chorus":    "parallel",       # material más estable y reconocible
-        "verse2":    "ornament",       # variación ornamental del verso 1
-        "bridge":    "inversion",      # contraste por inversión
-        "solo":      "development",    # desarrollo y liquidación
-        "outro":     "parallel",       # resolución tranquila
+        "intro":     "development",
+        "verse1":    "parallel",
+        "prechorus": "sequence_up",
+        "chorus":    "parallel",
+        "verse2":    "ornament",
+        "bridge":    "inversion",
+        "solo":      "development",
+        "outro":     "parallel",
     }
-    transform = transformation_map.get(name, "parallel")
-    transformed = vary_phrase(base_notes, transform, key_pc, mode, rng)
+    transformed = vary_phrase(base_notes, transformation_map.get(name, "parallel"),
+                              key_pc, mode, rng)
 
-    # Ajustar al número de compases objetivo
     total_beats = bars * beats_per_bar
     if transformed:
         phrase_dur = max(n.offset + n.duration for n in transformed)
         if phrase_dur < total_beats * 0.5:
-            # Frase muy corta: repetir
             times = math.ceil(total_beats / max(phrase_dur, 0.1))
-            transformed = repeat_phrase(transformed, min(times, 4))
+            # Repetición con micro-variaciones
+            transformed = repeat_phrase(transformed, min(times, 4), rng)
         transformed = fit_to_bars(transformed, bars, beats_per_bar)
 
-    # Ajustar velocidad
     transformed = apply_velocity(transformed, vel_base)
+    transformed = deduplicate_notes(transformed)
 
-    # Añadir acompañamiento
     acc_style = {
-        "intro": "bass_only",
-        "verse1": "arpeggio",
-        "verse2": "arpeggio",
-        "prechorus": "block",
-        "chorus": "block",
-        "bridge": "arpeggio",
-        "solo": "bass_only",
-        "outro": "bass_only",
+        "intro": "bass_only", "verse1": "arpeggio", "verse2": "arpeggio",
+        "prechorus": "block",  "chorus": "block",   "bridge": "arpeggio",
+        "solo": "bass_only",   "outro": "bass_only",
     }.get(name, "block")
 
-    # Repetir progresión para cubrir los compases
     beats_needed = bars * beats_per_bar
     prog_beats = sum(d for _, d in progression)
     reps = max(1, math.ceil(beats_needed / max(prog_beats, 1)))
-    full_prog = (progression * reps)
+    full_prog = progression * reps
 
-    # Truncar al total
     prog_truncated = []
     acc_cursor = 0.0
     for numeral, dur in full_prog:
@@ -828,45 +1008,32 @@ def build_section(name: str,
         acc_cursor += actual_dur
 
     acc_vel = max(20, vel_base - 20)
-    acc_notes = build_chord_accompaniment(
-        prog_truncated, key_pc, beats_per_bar, acc_vel, style=acc_style
-    )
+    acc_notes = build_chord_accompaniment(prog_truncated, key_pc, beats_per_bar,
+                                          acc_vel, style=acc_style)
     bass_notes = build_bass_line(prog_truncated, key_pc, max(20, acc_vel - 10))
 
-    # Combinar melodía + acompañamiento + bajo
-    all_notes = transformed + acc_notes + bass_notes
+    all_notes = deduplicate_notes(transformed + acc_notes + bass_notes)
     sec.notes = sorted(all_notes, key=lambda n: n.offset)
     sec.progression = prog_truncated
-
     return sec
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  GENERACIÓN DEL PLAN COMPLETO
+#  PLAN COMPLETO
 # ══════════════════════════════════════════════════════════════════════════════
 
 def generate_song_plan(phrases_notes: List[List[Note]],
-                       key_pc: int,
-                       mode: str,
-                       key_name: str,
-                       tempo: int,
-                       style: str,
+                       key_pc: int, mode: str, key_name: str,
+                       tempo: int, style: str,
                        sections_to_generate: List[str],
                        bars_per_section: Optional[Dict[str, int]],
                        beats_per_bar: int,
                        rng: random.Random,
                        verbose: bool = False) -> SongPlan:
-    """
-    Genera el plan completo de la canción, construyendo cada sección.
-    """
-    plan = SongPlan(
-        key_name=key_name,
-        mode=mode,
-        key_pc=key_pc,
-        tempo=tempo,
-        style=style,
-        phrase_count=len(phrases_notes),
-    )
+
+    plan = SongPlan(key_name=key_name, mode=mode, key_pc=key_pc,
+                    tempo=tempo, style=style,
+                    phrase_count=len(phrases_notes))
 
     if verbose:
         print(f"\n  Generando secciones: {', '.join(sections_to_generate)}")
@@ -874,23 +1041,23 @@ def generate_song_plan(phrases_notes: List[List[Note]],
         print(f"  Frases de entrada: {len(phrases_notes)}\n")
 
     for sec_name in sections_to_generate:
-        bars = (bars_per_section or {}).get(sec_name, SECTION_DEFAULT_BARS.get(sec_name, 8))
+        bars = (bars_per_section or {}).get(sec_name,
+               SECTION_DEFAULT_BARS.get(sec_name, 8))
 
         if verbose:
             print(f"  Construyendo '{sec_name}' ({bars} compases)...")
 
         section = build_section(
-            name=sec_name,
-            phrases=phrases_notes,
-            key_pc=key_pc,
-            mode=mode,
-            tempo=tempo,
-            style=style,
-            bars=bars,
-            beats_per_bar=beats_per_bar,
-            rng=rng,
-            verbose=verbose,
+            name=sec_name, phrases=phrases_notes,
+            key_pc=key_pc, mode=mode, tempo=tempo, style=style,
+            bars=bars, beats_per_bar=beats_per_bar,
+            rng=rng, verbose=verbose,
         )
+
+        # Voice leading con la sección anterior
+        if plan.sections:
+            section = apply_section_voice_leading(plan.sections[-1], section)
+
         plan.sections.append(section)
 
     plan.total_bars = sum(s.bars for s in plan.sections)
@@ -902,27 +1069,22 @@ def generate_song_plan(phrases_notes: List[List[Note]],
 # ══════════════════════════════════════════════════════════════════════════════
 
 def section_to_midi(section: Section, ticks_per_beat: int = 480) -> mido.MidiFile:
-    """Convierte una sección a un MidiFile."""
     mid = mido.MidiFile(ticks_per_beat=ticks_per_beat)
     track = mido.MidiTrack()
     mid.tracks.append(track)
 
-    tempo_us = mido.bpm2tempo(section.tempo)
-    track.append(mido.MetaMessage("set_tempo", tempo=tempo_us, time=0))
-    track.append(mido.MetaMessage(
-        "track_name", name=section.name.replace("_", " ").title(), time=0
-    ))
-    # Instrumento: piano para melodía, bajo en canal 1
+    track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(section.tempo), time=0))
+    track.append(mido.MetaMessage("track_name",
+                                   name=section.name.replace("_", " ").title(), time=0))
     track.append(mido.Message("program_change", channel=0, program=0, time=0))
     track.append(mido.Message("program_change", channel=1, program=32, time=0))
 
     events = []
     for note in section.notes:
         t_on = int(note.offset * ticks_per_beat)
-        t_off = int((note.offset + max(0.05, note.duration)) * ticks_per_beat)
+        t_off = int((note.offset + max(MIN_NOTE_DURATION, note.duration)) * ticks_per_beat)
         vel = max(1, min(127, note.velocity))
         p = max(0, min(127, note.pitch))
-        # Canal 1 para notas graves (bajo), canal 0 para el resto
         ch = 1 if p < 48 else 0
         events.append((t_on, "on", p, vel, ch))
         events.append((t_off, "off", p, 0, ch))
@@ -931,20 +1093,16 @@ def section_to_midi(section: Section, ticks_per_beat: int = 480) -> mido.MidiFil
     current_tick = 0
     for abs_tick, etype, pitch, vel, ch in events:
         delta = max(0, abs_tick - current_tick)
-        msg_type = "note_on" if etype == "on" else "note_off"
-        track.append(mido.Message(msg_type, channel=ch, note=pitch,
-                                   velocity=vel, time=delta))
+        track.append(mido.Message(
+            "note_on" if etype == "on" else "note_off",
+            channel=ch, note=pitch, velocity=vel, time=delta
+        ))
         current_tick = abs_tick
 
     return mid
 
 
 def concatenate_midis(sections: List[Section], ticks_per_beat: int = 480) -> mido.MidiFile:
-    """
-    Ensambla todas las secciones en un único MidiFile.
-    Aplica voice leading entre secciones (ajuste suave de la última nota
-    de cada sección hacia la primera de la siguiente).
-    """
     mid = mido.MidiFile(ticks_per_beat=ticks_per_beat)
     track = mido.MidiTrack()
     mid.tracks.append(track)
@@ -952,35 +1110,31 @@ def concatenate_midis(sections: List[Section], ticks_per_beat: int = 480) -> mid
     if not sections:
         return mid
 
-    # Tempo inicial
-    tempo_us = mido.bpm2tempo(sections[0].tempo)
-    track.append(mido.MetaMessage("set_tempo", tempo=tempo_us, time=0))
+    track.append(mido.MetaMessage("set_tempo",
+                                   tempo=mido.bpm2tempo(sections[0].tempo), time=0))
     track.append(mido.MetaMessage("track_name", name="Full Song", time=0))
     track.append(mido.Message("program_change", channel=0, program=0, time=0))
     track.append(mido.Message("program_change", channel=1, program=32, time=0))
 
-    global_offset_beats = 0.0
+    global_offset = 0.0
     events = []
 
     for i, section in enumerate(sections):
-        # Cambio de tempo si cambia entre secciones
         if i > 0 and section.tempo != sections[i - 1].tempo:
-            # Insertar el cambio de tempo al inicio de la sección
-            new_tempo_us = mido.bpm2tempo(section.tempo)
-            t = int(global_offset_beats * ticks_per_beat)
-            events.append((t, "tempo", new_tempo_us, 0, 0))
+            t = int(global_offset * ticks_per_beat)
+            events.append((t, "tempo", mido.bpm2tempo(section.tempo), 0, 0))
 
         for note in section.notes:
-            abs_offset = global_offset_beats + note.offset
-            t_on = int(abs_offset * ticks_per_beat)
-            t_off = int((abs_offset + max(0.05, note.duration)) * ticks_per_beat)
+            abs_off = global_offset + note.offset
+            t_on = int(abs_off * ticks_per_beat)
+            t_off = int((abs_off + max(MIN_NOTE_DURATION, note.duration)) * ticks_per_beat)
             vel = max(1, min(127, note.velocity))
             p = max(0, min(127, note.pitch))
             ch = 1 if p < 48 else 0
             events.append((t_on, "on", p, vel, ch))
             events.append((t_off, "off", p, 0, ch))
 
-        global_offset_beats += section.total_beats
+        global_offset += section.total_beats
 
     events.sort(key=lambda e: (e[0], 0 if e[1] in ("off", "tempo") else 1))
     current_tick = 0
@@ -1002,6 +1156,142 @@ def concatenate_midis(sections: List[Section], ticks_per_beat: int = 480) -> mid
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  EXPORTACIÓN MUSICXML
+# ══════════════════════════════════════════════════════════════════════════════
+
+def note_to_musicxml_pitch(midi_pitch: int) -> Tuple[str, int, int]:
+    """Convierte pitch MIDI → (step, alter, octave)."""
+    pc = midi_pitch % 12
+    octave = midi_pitch // 12 - 1
+    pc_map = {
+        0: ("C", 0), 1: ("C", 1), 2: ("D", 0), 3: ("D", 1), 4: ("E", 0),
+        5: ("F", 0), 6: ("F", 1), 7: ("G", 0), 8: ("G", 1), 9: ("A", 0),
+        10: ("A", 1), 11: ("B", 0),
+    }
+    step, alter = pc_map[pc]
+    return step, alter, octave
+
+
+def duration_to_musicxml_type(duration_beats: float) -> Tuple[int, str, int]:
+    """duration_beats → (divisions_val, type_str, dots). divisions=4 (por negra)."""
+    divisions = 4
+    total_divs = max(1, round(duration_beats * divisions))
+    type_table = [
+        (32, "whole", 1), (16, "whole", 0), (12, "half", 1),
+        (8, "half", 0), (6, "quarter", 1), (4, "quarter", 0),
+        (3, "eighth", 1), (2, "eighth", 0), (1, "16th", 0),
+    ]
+    best = (total_divs, "quarter", 0)
+    best_dist = 999
+    for divs, name, dots in type_table:
+        dist = abs(divs - total_divs)
+        if dist < best_dist:
+            best_dist = dist
+            best = (divs, name, dots)
+    return total_divs, best[1], best[2]
+
+
+def section_to_musicxml_part(section: Section, divisions: int = 4) -> str:
+    lines = [f'  <part id="{section.name}">']
+    beats_per_bar = section.beats_per_bar
+
+    bar_notes: Dict[int, List[Note]] = {}
+    for n in section.notes:
+        bar_idx = int(n.offset // beats_per_bar)
+        bar_notes.setdefault(bar_idx, []).append(n)
+
+    for bar_idx in range(section.bars):
+        lines.append(f'    <measure number="{bar_idx + 1}">')
+        if bar_idx == 0:
+            lines.append(
+                f'      <attributes>'
+                f'<divisions>{divisions}</divisions>'
+                f'<key><fifths>0</fifths></key>'
+                f'<time><beats>{beats_per_bar}</beats><beat-type>4</beat-type></time>'
+                f'<clef><sign>G</sign><line>2</line></clef>'
+                f'</attributes>'
+            )
+            lines.append(
+                f'      <direction placement="above"><direction-type>'
+                f'<metronome><beat-unit>quarter</beat-unit>'
+                f'<per-minute>{section.tempo}</per-minute></metronome>'
+                f'</direction-type></direction>'
+            )
+
+        mel_notes = sorted(
+            [n for n in bar_notes.get(bar_idx, []) if n.pitch >= 48],
+            key=lambda n: n.offset
+        )
+
+        if not mel_notes:
+            lines.append(
+                f'      <note><rest/>'
+                f'<duration>{divisions * beats_per_bar}</duration>'
+                f'<type>whole</type></note>'
+            )
+        else:
+            cursor = float(bar_idx * beats_per_bar)
+            for n in mel_notes:
+                gap = n.offset - cursor
+                if gap >= 0.25:
+                    gap_divs = max(1, round(gap * divisions))
+                    lines.append(
+                        f'      <note><rest/><duration>{gap_divs}</duration>'
+                        f'<type>eighth</type></note>'
+                    )
+                step, alter, octave = note_to_musicxml_pitch(n.pitch)
+                total_divs, type_str, dots = duration_to_musicxml_type(n.duration)
+                vel_dyn = ("pp" if n.velocity < 40 else "mp" if n.velocity < 60
+                           else "mf" if n.velocity < 80 else "f")
+                note_lines = [f'      <note>']
+                note_lines.append(f'        <pitch><step>{step}</step>')
+                if alter:
+                    note_lines.append(f'        <alter>{alter}</alter>')
+                note_lines.append(f'        <octave>{octave}</octave></pitch>')
+                note_lines.append(f'        <duration>{total_divs}</duration>')
+                note_lines.append(f'        <type>{type_str}</type>')
+                if dots:
+                    note_lines.append(f'        <dot/>')
+                note_lines.append(f'        <dynamics><{vel_dyn}/></dynamics>')
+                note_lines.append(f'      </note>')
+                lines.extend(note_lines)
+                cursor = n.offset + n.duration
+
+        lines.append(f'    </measure>')
+
+    lines.append(f'  </part>')
+    return "\n".join(lines)
+
+
+def export_musicxml(plan: SongPlan, output_path: str):
+    """Exporta el plan completo como archivo MusicXML 3.1."""
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<!DOCTYPE score-partwise PUBLIC',
+        '  "-//Recordare//DTD MusicXML 3.1 Partwise//EN"',
+        '  "http://www.musicxml.org/dtds/partwise.dtd">',
+        '<score-partwise version="3.1">',
+        '  <work><work-title>Song Architect Export</work-title></work>',
+        f'  <identification><encoding><software>Song Architect v{VERSION}</software>'
+        f'</encoding></identification>',
+        '  <part-list>',
+    ]
+    for sec in plan.sections:
+        lines.append(f'    <score-part id="{sec.name}">')
+        lines.append(f'      <part-name>{sec.name.replace("_"," ").title()}</part-name>')
+        lines.append(f'    </score-part>')
+    lines.append('  </part-list>')
+
+    for sec in plan.sections:
+        lines.append(section_to_musicxml_part(sec))
+
+    lines.append('</score-partwise>')
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  INFORME Y VISUALIZACIÓN
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1017,7 +1307,6 @@ def _c(code: str, text: str) -> str:
 
 
 def print_song_plan(plan: SongPlan, verbose: bool = False):
-    """Imprime el plan de la canción de forma visual."""
     print(f"\n{'═' * 64}")
     print(f"  {_c('bold', 'SONG ARCHITECT')} v{VERSION}  —  Plan de canción")
     print(f"{'═' * 64}")
@@ -1047,14 +1336,12 @@ def print_song_plan(plan: SongPlan, verbose: bool = False):
     print(f"\n  Arco de tensión: ", end="")
     for sec in plan.sections:
         t_idx = min(7, int(sec.tension * 8))
-        bar_chars = "▁▂▃▄▅▆▇█"
-        print(bar_chars[t_idx], end="")
+        print("▁▂▃▄▅▆▇█"[t_idx], end="")
     print(f"  ({plan.total_bars}c total)")
     print()
 
 
 def export_plan_json(plan: SongPlan, output_path: str, input_files: List[str]):
-    """Exporta el plan detallado como JSON."""
     data = {
         "version": VERSION,
         "key": f"{plan.key_name} {plan.mode}",
@@ -1065,10 +1352,7 @@ def export_plan_json(plan: SongPlan, output_path: str, input_files: List[str]):
         "total_bars": plan.total_bars,
         "phrase_count": plan.phrase_count,
         "input_files": [str(Path(f).name) for f in input_files],
-        "sections": [],
-    }
-    for sec in plan.sections:
-        data["sections"].append({
+        "sections": [{
             "name": sec.name,
             "bars": sec.bars,
             "beats_per_bar": sec.beats_per_bar,
@@ -1076,8 +1360,10 @@ def export_plan_json(plan: SongPlan, output_path: str, input_files: List[str]):
             "tension": sec.tension,
             "velocity_base": sec.velocity_base,
             "note_count": len(sec.notes),
+            "source_phrase_idx": sec.source_phrase_idx,
             "progression": [[n, d] for n, d in sec.progression],
-        })
+        } for sec in plan.sections],
+    }
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
@@ -1097,35 +1383,47 @@ def build_parser() -> argparse.ArgumentParser:
               python song_architect.py *.mid --key Am --tempo 90 --style ballad
               python song_architect.py frases/*.mid --no-solo --no-bridge
               python song_architect.py *.mid --sections intro chorus outro
+              python song_architect.py *.mid --split-tracks --melody-track 1
+              python song_architect.py *.mid --fragment-start 8 --fragment-end 24
+              python song_architect.py *.mid --export-musicxml
               python song_architect.py *.mid --dry-run --verbose
         """)
     )
     p.add_argument("inputs", nargs="+", metavar="MIDI",
                    help="Archivos MIDI de frases de entrada")
     p.add_argument("--key", type=str, default=None,
-                   help='Tonalidad base (ej. C, Am, F# minor). Default: auto-detección')
+                   help="Tonalidad base (ej. C, Am, F# minor). Default: auto")
     p.add_argument("--tempo", type=int, default=None,
                    help="Tempo BPM (default: detectado del MIDI o 120)")
     p.add_argument("--style", type=str, default="pop",
                    choices=["pop", "rock", "ballad", "jazz", "folk", "rnb"],
                    help="Estilo armónico (default: pop)")
-    p.add_argument("--beats-per-bar", type=int, default=4,
-                   help="Pulsos por compás (default: 4)")
+    p.add_argument("--beats-per-bar", type=int, default=None,
+                   help="Pulsos por compás (default: auto-detección desde el MIDI)")
     p.add_argument("--bars-per-section", type=int, default=None,
                    help="Compases por sección, igual para todas (default: auto)")
 
-    # Control de secciones
+    trk = p.add_argument_group("Tracks (v2.0)")
+    trk.add_argument("--split-tracks", action="store_true",
+                     help="Tratar cada track MIDI como frase independiente")
+    trk.add_argument("--melody-track", type=int, default=None,
+                     help="Índice del track melódico a usar (default: auto)")
+
+    frag = p.add_argument_group("Fragmento (v2.0)")
+    frag.add_argument("--fragment-start", type=int, default=None, metavar="BAR",
+                      help="Compás de inicio del fragmento (1-based)")
+    frag.add_argument("--fragment-end", type=int, default=None, metavar="BAR",
+                      help="Compás de fin del fragmento (1-based, inclusivo)")
+
     secs = p.add_argument_group("Secciones")
     secs.add_argument("--sections", nargs="+", default=None,
-                      choices=CANONICAL_ORDER,
-                      metavar="SEC",
+                      choices=CANONICAL_ORDER, metavar="SEC",
                       help="Secciones a generar (default: todas)")
-    secs.add_argument("--no-intro", action="store_true")
+    secs.add_argument("--no-intro",     action="store_true")
     secs.add_argument("--no-prechorus", action="store_true")
-    secs.add_argument("--no-bridge", action="store_true")
-    secs.add_argument("--no-solo", action="store_true")
+    secs.add_argument("--no-bridge",    action="store_true")
+    secs.add_argument("--no-solo",      action="store_true")
 
-    # Salida
     out = p.add_argument_group("Salida")
     out.add_argument("--out-dir", type=str, default="song_output",
                      help="Directorio de salida (default: song_output)")
@@ -1133,12 +1431,12 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Nombre base de archivos (default: song)")
     out.add_argument("--export-plan", action="store_true",
                      help="Exportar plan JSON")
+    out.add_argument("--export-musicxml", action="store_true",
+                     help="Exportar también en formato MusicXML (v2.0)")
     out.add_argument("--dry-run", action="store_true",
                      help="Mostrar plan sin generar archivos MIDI")
 
-    # Extras
-    p.add_argument("--seed", type=int, default=42,
-                   help="Semilla aleatoria (default: 42)")
+    p.add_argument("--seed", type=int, default=42, help="Semilla aleatoria (default: 42)")
     p.add_argument("--verbose", "-v", action="store_true",
                    help="Informe detallado de decisiones")
     return p
@@ -1155,7 +1453,7 @@ def main():
     rng = random.Random(args.seed)
     np.random.seed(args.seed)
 
-    # ── 1. Verificar entradas ───────────────────────────────────────────────
+    # 1. Verificar entradas
     input_files = []
     for pattern in args.inputs:
         p = Path(pattern)
@@ -1163,8 +1461,7 @@ def main():
             input_files.append(str(p))
         else:
             import glob
-            matched = glob.glob(str(p))
-            input_files.extend(matched)
+            input_files.extend(glob.glob(str(p)))
 
     if not input_files:
         print(f"[ERROR] No se encontraron archivos MIDI: {args.inputs}")
@@ -1176,34 +1473,80 @@ def main():
     for f in input_files:
         print(f"    • {Path(f).name}")
 
-    # ── 2. Cargar frases ────────────────────────────────────────────────────
-    all_phrases_notes = []
-    all_notes_flat = []
+    # 2. Cargar frases
+    all_phrases_notes: List[List[Note]] = []
+    all_notes_flat: List[Note] = []
     detected_tempos = []
+    detected_bpb = 4
 
     for fpath in input_files:
-        notes, bpm, tpb = load_midi_notes(fpath)
-        if notes:
-            all_phrases_notes.append(notes)
-            all_notes_flat.extend(notes)
-            detected_tempos.append(bpm)
-            if args.verbose:
-                print(f"  Cargado {Path(fpath).name}: {len(notes)} notas, {bpm} BPM")
-        else:
+        tracks, bpm, tpb, bpb = load_midi_tracks(fpath)
+        detected_tempos.append(bpm)
+        detected_bpb = bpb
+
+        if not tracks:
             print(f"  [warn] {Path(fpath).name}: sin notas")
+            continue
+
+        if args.split_tracks:
+            for ti, track_notes in enumerate(tracks):
+                if track_notes:
+                    all_phrases_notes.append(track_notes)
+                    all_notes_flat.extend(track_notes)
+                    if args.verbose:
+                        interest = score_melodic_interest(track_notes)
+                        print(f"  {Path(fpath).name} track {ti}: "
+                              f"{len(track_notes)} notas  interés={interest:.3f}")
+        else:
+            if args.verbose:
+                print(f"  Analizando tracks de {Path(fpath).name}:")
+            melody = select_melody_track(tracks, args.melody_track, verbose=args.verbose)
+            if melody:
+                all_phrases_notes.append(melody)
+                all_notes_flat.extend(melody)
+                if args.verbose:
+                    print(f"  Cargado {Path(fpath).name}: {len(melody)} notas, {bpm} BPM")
+            else:
+                print(f"  [warn] {Path(fpath).name}: sin notas utilizables")
 
     if not all_phrases_notes:
         print("[ERROR] Ninguna frase tiene notas. Verifica los archivos MIDI.")
         sys.exit(1)
 
-    # ── 3. Detectar/configurar tonalidad ────────────────────────────────────
+    # 3. Compás
+    beats_per_bar = args.beats_per_bar or detected_bpb
+
+    # 4. Recorte manual de fragmento
+    if args.fragment_start is not None or args.fragment_end is not None:
+        frag_start = ((args.fragment_start or 1) - 1) * beats_per_bar
+        frag_end = (args.fragment_end * beats_per_bar
+                    if args.fragment_end is not None else None)
+        new_phrases = []
+        for phrase in all_phrases_notes:
+            sliced = [n for n in phrase
+                      if n.offset >= frag_start and
+                      (frag_end is None or n.offset < frag_end)]
+            if sliced:
+                min_off = min(n.offset for n in sliced)
+                sliced = [Note(n.pitch, n.duration, n.velocity, n.offset - min_off)
+                          for n in sliced]
+                new_phrases.append(sliced)
+        if new_phrases:
+            all_phrases_notes = new_phrases
+            all_notes_flat = [n for p in new_phrases for n in p]
+            if args.verbose:
+                print(f"\n  Fragmento manual: compases "
+                      f"{args.fragment_start or 1}–{args.fragment_end or '∞'} "
+                      f"({len(all_notes_flat)} notas)")
+        else:
+            print("[warn] El rango de fragmento no contiene notas; usando frase completa.")
+
+    # 5. Tonalidad
     if args.key:
         key_pc, mode = parse_key(args.key)
         key_name = args.key.split()[0].rstrip("m")
-        mode_str = "minor" if "minor" in args.key.lower() or (
-            args.key[-1].lower() == "m" and len(args.key) <= 3
-        ) else "major"
-        mode = mode_str
+        mode = ("minor" if "minor" in args.key.lower() or
+                (args.key[-1].lower() == "m" and len(args.key) <= 3) else "major")
         if args.verbose:
             print(f"\n  Tonalidad forzada: {key_name} {mode}")
     else:
@@ -1212,32 +1555,25 @@ def main():
         if args.verbose:
             print(f"\n  Tonalidad detectada: {key_name} {mode}")
 
-    # ── 4. Configurar tempo ─────────────────────────────────────────────────
-    if args.tempo:
-        tempo = args.tempo
-    elif detected_tempos:
-        tempo = round(np.median(detected_tempos))
-    else:
-        tempo = 120
-
+    # 6. Tempo
+    tempo = (args.tempo or
+             round(float(np.median(detected_tempos))) if detected_tempos else 120)
     if args.verbose:
-        print(f"  Tempo: {tempo} BPM")
+        print(f"  Tempo: {tempo} BPM  |  Compás: {beats_per_bar}/4")
 
-    # ── 5. Transponer frases a la tonalidad objetivo ─────────────────────────
-    # Detectar tonalidad de cada frase por separado y transponer
+    # 7. Transponer frases
     phrases_in_key = []
     for i, phrase_notes in enumerate(all_phrases_notes):
         src_pc, src_mode = detect_key(phrase_notes)
         if src_pc != key_pc or src_mode != mode:
             transposed = transpose_to_key(phrase_notes, src_pc, key_pc, src_mode, mode)
             if args.verbose:
-                print(f"  Frase {i+1}: transponiendo de "
-                      f"{NOTE_NAMES[src_pc]} {src_mode} → {key_name} {mode}")
+                print(f"  Frase {i+1}: {NOTE_NAMES[src_pc]} {src_mode} → {key_name} {mode}")
         else:
             transposed = phrase_notes
         phrases_in_key.append(transposed)
 
-    # ── 6. Determinar secciones ─────────────────────────────────────────────
+    # 8. Secciones
     if args.sections:
         sections_to_generate = args.sections
     else:
@@ -1251,47 +1587,37 @@ def main():
         if args.no_solo and "solo" in sections_to_generate:
             sections_to_generate.remove("solo")
 
-    # Compases por sección
-    bars_map = {}
+    bars_map: Optional[Dict[str, int]] = None
     if args.bars_per_section:
-        for s in sections_to_generate:
-            bars_map[s] = args.bars_per_section
-    else:
-        bars_map = None  # usar defaults por sección
+        bars_map = {s: args.bars_per_section for s in sections_to_generate}
 
     print(f"\n  Secciones: {_c('cyan', ', '.join(sections_to_generate))}")
-    print(f"  Tonalidad: {key_name} {mode}  |  Tempo: {tempo} BPM  |  Estilo: {args.style}")
+    print(f"  Tonalidad: {key_name} {mode}  |  Tempo: {tempo} BPM  |  "
+          f"Compás: {beats_per_bar}/4  |  Estilo: {args.style}")
 
-    # ── 7. Generar plan ─────────────────────────────────────────────────────
+    # 9. Generar plan
     print(f"\n  Generando secciones...")
     plan = generate_song_plan(
         phrases_notes=phrases_in_key,
-        key_pc=key_pc,
-        mode=mode,
-        key_name=key_name,
-        tempo=tempo,
-        style=args.style,
+        key_pc=key_pc, mode=mode, key_name=key_name,
+        tempo=tempo, style=args.style,
         sections_to_generate=sections_to_generate,
         bars_per_section=bars_map,
-        beats_per_bar=args.beats_per_bar,
-        rng=rng,
-        verbose=args.verbose,
+        beats_per_bar=beats_per_bar,
+        rng=rng, verbose=args.verbose,
     )
 
-    # ── 8. Mostrar plan ─────────────────────────────────────────────────────
     print_song_plan(plan, verbose=args.verbose)
 
     if args.dry_run:
         print(f"  {_c('yellow', '[dry-run]')} No se generaron archivos MIDI.")
         if args.verbose:
-            print(f"\n  Secciones planificadas:")
             for sec in plan.sections:
-                total_s = sec.duration_seconds
-                m, s = divmod(int(total_s), 60)
+                m, s = divmod(int(sec.duration_seconds), 60)
                 print(f"    {sec.name:<16} {sec.bars}c  ~{m}:{s:02d}")
         return
 
-    # ── 9. Exportar archivos ─────────────────────────────────────────────────
+    # 10. Exportar
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     name_base = args.output_name
@@ -1303,29 +1629,34 @@ def main():
 
     for sec in plan.sections:
         out_path = out_dir / f"{name_base}_{sec.name}.mid"
-        mid = section_to_midi(sec, tpb)
-        mid.save(str(out_path))
+        section_to_midi(sec, tpb).save(str(out_path))
         size_kb = out_path.stat().st_size // 1024
         generated.append(str(out_path))
         print(f"  {_c('green', '✓')} {out_path.name:<35}  "
               f"{sec.bars}c  {len(sec.notes):>4} notas  {size_kb} KB")
 
-    # Obra completa
     full_path = out_dir / f"{name_base}_full.mid"
-    full_mid = concatenate_midis(plan.sections, tpb)
-    full_mid.save(str(full_path))
+    concatenate_midis(plan.sections, tpb).save(str(full_path))
     full_size = full_path.stat().st_size // 1024
     generated.append(str(full_path))
     print(f"  {_c('green', '✓')} {full_path.name:<35}  "
           f"{plan.total_bars}c  {full_size} KB  {_c('cyan', '← obra completa')}")
 
-    # Plan JSON
     if args.export_plan:
         plan_path = out_dir / f"{name_base}_plan.json"
         export_plan_json(plan, str(plan_path), input_files)
         print(f"  {_c('green', '✓')} {plan_path.name:<35}  plan completo")
+        generated.append(str(plan_path))
 
-    # ── 10. Resumen ──────────────────────────────────────────────────────────
+    if args.export_musicxml:
+        xml_path = out_dir / f"{name_base}_full.musicxml"
+        export_musicxml(plan, str(xml_path))
+        xml_size = xml_path.stat().st_size // 1024
+        print(f"  {_c('green', '✓')} {xml_path.name:<35}  {xml_size} KB  "
+              f"{_c('cyan', '← MusicXML (MuseScore/Sibelius)')}")
+        generated.append(str(xml_path))
+
+    # 11. Resumen
     total_s = sum(sec.duration_seconds for sec in plan.sections)
     m, s = divmod(int(total_s), 60)
     print(f"\n{'═' * 64}")
