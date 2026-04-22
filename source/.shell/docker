@@ -348,6 +348,7 @@ case $1 in
                             -v "$HOME/.pi:/home/pi/.pi" \
                            -e OPENAI_API_KEY=$OPENAI_API_KEY \
                            -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
+                           -e OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
                            pi_agent \
                            pi
                          ;;
