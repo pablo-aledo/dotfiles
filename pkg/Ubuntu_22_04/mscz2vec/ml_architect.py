@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                       ML ARCHITECT  v6.0                                     ║
+║                       ML ARCHITECT  v7.0                                     ║
 ║     Composición estructural dirigida por gramáticas aprendidas de corpus     ║
 ║                                                                              ║
+║  MEJORAS v7.0 respecto a v6.0 — fidelidad estilística al material fuente:    ║
+║    [S1] Restricción de pitch classes — la salida usa solo las clases de       ║
+║         pitch presentes en la entrada (sin cromatismo no intencional)         ║
+║    [S2] Restricción de registro — la melodía generada vive en el ±octava      ║
+║         del rango de la entrada, no en toda la escala MIDI                   ║
+║    [S3] Restricción de velocity — la dinámica de salida se calibra a la       ║
+║         media y rango de velocity de la entrada, no a valores fijos           ║
+║                                                                               ║
 ║  MEJORAS v6.0 respecto a v5.0 — variedad estructural y melódica:             ║
 ║    [1] Markov melódico — cadena de intervalos por rol aprendida del corpus;  ║
 ║        genera material nuevo con el "sabor" estadístico de cada rol          ║
@@ -112,7 +120,7 @@ try:
 except ImportError:
     print("[ERROR] scipy no encontrado. pip install scipy"); sys.exit(1)
 
-VERSION = "6.0"
+VERSION = "7.0"
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONSTANTES MUSICALES
@@ -2421,6 +2429,156 @@ def _apply_hoquetus(melody: List[RawNote], acc: List[RawNote],
     return result if len(result) >= len(acc) // 3 else acc
 
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  v7 — RESTRICCIONES DE FIDELIDAD ESTILÍSTICA
+# ══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class SourceProfile:
+    """
+    Perfil extraído del material fuente que actúa como restricción para
+    la generación, garantizando fidelidad estilística a la entrada.
+    """
+    pitch_classes:  frozenset   # PC presentes en la fuente
+    pitch_min:      int         # pitch MIDI mínimo de la fuente
+    pitch_max:      int         # pitch MIDI máximo de la fuente
+    pitch_center:   float       # pitch medio de la fuente
+    vel_mean:       float       # velocity media de la fuente
+    vel_std:        float       # desviación estándar de velocity
+    vel_min:        int         # velocity mínima observada
+    vel_max:        int         # velocity máxima observada
+    ioi_mean:       float       # IOI medio de la fuente (beats)
+    key_pc:         int         # tónica detectada
+    mode:           str         # modo detectado
+
+
+def _build_source_profile(notes: List[RawNote]) -> SourceProfile:
+    """
+    [S1-S3] Extrae el perfil del material fuente para usar como restricción.
+    """
+    if not notes:
+        return SourceProfile(
+            pitch_classes=frozenset(range(12)), pitch_min=48, pitch_max=84,
+            pitch_center=66.0, vel_mean=80.0, vel_std=10.0,
+            vel_min=60, vel_max=100, ioi_mean=1.0, key_pc=0, mode="major")
+
+    pitches = [n.pitch for n in notes]
+    vels    = [n.velocity for n in notes]
+    key_pc, mode = _detect_key(notes)
+
+    # IOI desde notas melódicas
+    mel = sorted([n for n in notes if n.duration >= MELODY_MIN_DUR],
+                  key=lambda n: n.offset)
+    iois = [mel[i+1].offset - mel[i].offset for i in range(len(mel)-1)] if len(mel) > 1 else [1.0]
+
+    return SourceProfile(
+        pitch_classes = frozenset(p % 12 for p in pitches),
+        pitch_min     = min(pitches),
+        pitch_max     = max(pitches),
+        pitch_center  = float(np.mean(pitches)),
+        vel_mean      = float(np.mean(vels)),
+        vel_std       = float(np.std(vels)) if len(vels) > 1 else 5.0,
+        vel_min       = min(vels),
+        vel_max       = max(vels),
+        ioi_mean      = float(np.mean(iois)),
+        key_pc        = key_pc,
+        mode          = mode,
+    )
+
+
+def _constrain_pitch_to_source(pitch: int, profile: SourceProfile,
+                                 key_pc: int, mode: str) -> int:
+    """
+    [S1] Fuerza el pitch a una clase de pitch presente en la fuente.
+    Si la clase de pitch no está en el perfil, busca la más cercana que sí esté.
+    """
+    pc = pitch % 12
+    if pc in profile.pitch_classes:
+        return pitch
+
+    # Buscar la clase de pitch más cercana que esté en la fuente
+    best_pc = min(profile.pitch_classes,
+                   key=lambda p: min(abs(pc - p), 12 - abs(pc - p)))
+    # Mantener la octava
+    octave = pitch // 12
+    new_pitch = octave * 12 + best_pc
+    # Ajustar octava si la distancia es menor por otro camino
+    alt = new_pitch + (12 if new_pitch < pitch else -12)
+    if abs(alt - pitch) < abs(new_pitch - pitch) and 0 <= alt <= 127:
+        new_pitch = alt
+    return int(np.clip(new_pitch, 0, 127))
+
+
+def _constrain_pitch_to_register(pitch: int, profile: SourceProfile,
+                                   margin_semitones: int = 12) -> int:
+    """
+    [S2] Mantiene el pitch dentro del rango de la fuente ± margin_semitones.
+    """
+    lo = max(0,   profile.pitch_min - margin_semitones)
+    hi = min(127, profile.pitch_max + margin_semitones)
+    if lo <= pitch <= hi:
+        return pitch
+    # Transponer por octavas hasta entrar en rango
+    while pitch < lo:
+        pitch += 12
+    while pitch > hi:
+        pitch -= 12
+    return int(np.clip(pitch, lo, hi))
+
+
+def _constrain_velocity_to_source(vel: int, profile: SourceProfile,
+                                    arc_val: float = 0.5) -> int:
+    """
+    [S3] Escala la velocity al rango dinámico de la fuente, modulada por arc_val.
+    Si la fuente tiene velocity plana (std < 3), se añade variación mínima
+    proporcional al arco dramático para que la salida no sea completamente plana.
+    """
+    if profile.vel_std < 3.0:
+        # Fuente plana — añadir variación mínima según arco (±10%)
+        base = profile.vel_mean
+        variation = 10.0 * arc_val  # 0 en reposo, ±10 en clímax
+        target = base + variation * (1 if arc_val > 0.5 else -1)
+        return int(np.clip(target + np.random.normal(0, 3), 30, 110))
+    else:
+        # Escalar vel al rango de la fuente, centrado en vel_mean de la fuente
+        # arc_val desplaza dentro del rango
+        vel_range = profile.vel_max - profile.vel_min
+        target = profile.vel_min + arc_val * vel_range
+        # Añadir pequeño jitter proporcional a vel_std de la fuente
+        jitter = np.random.normal(0, profile.vel_std * 0.15)
+        return int(np.clip(target + jitter, profile.vel_min, profile.vel_max))
+
+
+def _apply_source_constraints(notes: List[RawNote], profile: SourceProfile,
+                                key_pc: int, mode: str,
+                                arc_val: float = 0.5,
+                                strict_pc: bool = True,
+                                strict_register: bool = True,
+                                strict_velocity: bool = True,
+                                register_margin: int = 12) -> List[RawNote]:
+    """
+    [S1+S2+S3] Aplica las tres restricciones de fidelidad a una lista de notas.
+    strict_pc:       forzar pitch classes de la fuente
+    strict_register: limitar al rango de pitch de la fuente ± margin
+    strict_velocity: calibrar velocity al perfil de la fuente
+    """
+    result = []
+    for n in notes:
+        p   = n.pitch
+        vel = n.velocity
+
+        if strict_pc:
+            p = _constrain_pitch_to_source(p, profile, key_pc, mode)
+        if strict_register:
+            p = _constrain_pitch_to_register(p, profile, register_margin)
+        if strict_velocity:
+            vel = _constrain_velocity_to_source(vel, profile, arc_val)
+
+        result.append(RawNote(p, n.duration, vel, n.offset, n.voice))
+    return result
+
+
 def _build_accompaniment(prog: List[Tuple[str,int]], key_pc: int,
                           velocity: int, style: str="arpeggio") -> List[RawNote]:
     notes=[]; cursor=0.0; prev=None
@@ -2528,6 +2686,11 @@ def generate(input_midis: List[str],
              variety: float=0.7,           # v5: [0,1] intensidad de variedad musical
              use_markov: bool=True,          # v6: usar generación Markov para melodía
              use_forms: bool=True,           # v6: usar formas aprendidas del corpus
+             # v7: restricciones de fidelidad al material fuente
+             strict_pc: bool=True,           # [S1] restringir pitch classes a las de la fuente
+             strict_register: bool=True,     # [S2] restringir registro al rango de la fuente
+             strict_velocity: bool=True,     # [S3] calibrar velocity al perfil de la fuente
+             register_margin: int=12,        # [S2] margen en semitonos (default: ±1 octava)
              dry_run: bool=False,
              seed: int=42,
              verbose: bool=False) -> None:
@@ -2567,6 +2730,20 @@ def generate(input_midis: List[str],
     source_sig=_compute_signature(source_notes_all,0.0,key_pc,480,bpb_detected,model.ae_weights)
 
     print(f"  Tonalidad: {NOTE_NAMES[key_pc]} {mode_str}  Tempo: {final_tempo} BPM")
+
+    # v7: construir perfil del material fuente para restricciones de fidelidad
+    src_profile = _build_source_profile(source_notes_all)
+    if verbose or strict_pc or strict_register:
+        pcs = sorted(src_profile.pitch_classes)
+        print(f"  Perfil fuente:  PC={pcs}  rango={src_profile.pitch_min}-{src_profile.pitch_max}"
+              f"  vel={src_profile.vel_mean:.0f}±{src_profile.vel_std:.1f}")
+        if strict_pc:
+            print(f"  [S1] Pitch classes restringidas a {len(pcs)}/12 clases de la fuente")
+        if strict_register:
+            print(f"  [S2] Registro restringido: {src_profile.pitch_min-register_margin}"
+                  f"–{src_profile.pitch_max+register_margin} (±{register_margin} st)")
+        if strict_velocity:
+            print(f"  [S3] Velocity calibrada al perfil de la fuente")
 
     # [G] Extraer motivo principal
     motif = _extract_motif(source_notes_all, key_pc, mode_str, length=5)
@@ -2832,6 +3009,30 @@ def generate(input_midis: List[str],
         if n_voices <= 2:
             acc_notes = []
 
+        # v7: aplicar restricciones de fidelidad al material fuente
+        # La melodía recibe las 3 restricciones; el acompañamiento solo registro y velocity
+        melody_notes = _apply_source_constraints(
+            melody_notes, src_profile, sec_key, sec_mode, arc_val=av,
+            strict_pc=strict_pc, strict_register=strict_register,
+            strict_velocity=strict_velocity, register_margin=register_margin)
+        if acc_notes:
+            acc_notes = _apply_source_constraints(
+                acc_notes, src_profile, sec_key, sec_mode, arc_val=av,
+                strict_pc=strict_pc,   # acompañamiento también respeta PCs de la fuente
+                strict_register=strict_register,
+                strict_velocity=strict_velocity, register_margin=register_margin+6)
+        if bass_notes:
+            # El bajo también respeta PCs de la fuente
+            bass_notes = _apply_source_constraints(
+                bass_notes, src_profile, sec_key, sec_mode, arc_val=av,
+                strict_pc=strict_pc, strict_register=strict_register,
+                strict_velocity=strict_velocity, register_margin=register_margin+12)
+        if cp_notes:
+            cp_notes = _apply_source_constraints(
+                cp_notes, src_profile, sec_key, sec_mode, arc_val=av,
+                strict_pc=strict_pc, strict_register=strict_register,
+                strict_velocity=strict_velocity, register_margin=register_margin)
+
         all_notes = _deduplicate(melody_notes + acc_notes + bass_notes + cp_notes)
         all_notes.sort(key=lambda n: n.offset)
 
@@ -3067,6 +3268,10 @@ def cmd_generate(args) -> None:
              output_name=args.output_name,tempo=args.tempo,
              sa_compat=args.sa_compat,variety=args.variety,
              use_markov=not args.no_markov,use_forms=not args.no_forms,
+             strict_pc=not args.no_strict_pc,
+             strict_register=not args.no_strict_register,
+             strict_velocity=not args.no_strict_velocity,
+             register_margin=args.register_margin,
              dry_run=args.dry_run,seed=args.seed,verbose=args.verbose)
 
 def cmd_inspect(args) -> None:
@@ -3133,6 +3338,14 @@ def build_parser() -> argparse.ArgumentParser:
                       help="[v6] Desactivar generación Markov (usar transform v5)")
     gen.add_argument("--no-forms",action="store_true",
                       help="[v6] Desactivar uso de formas aprendidas")
+    gen.add_argument("--no-strict-pc",action="store_true",
+                      help="[v7-S1] Desactivar restricción de pitch classes al material fuente")
+    gen.add_argument("--no-strict-register",action="store_true",
+                      help="[v7-S2] Desactivar restricción de registro al rango de la fuente")
+    gen.add_argument("--no-strict-velocity",action="store_true",
+                      help="[v7-S3] Desactivar calibración de velocity al perfil de la fuente")
+    gen.add_argument("--register-margin",type=int,default=12,metavar="ST",
+                      help="[v7-S2] Margen de registro en semitonos (default: 12 = ±1 octava)")
     gen.add_argument("--seed",type=int,default=42); gen.add_argument("--verbose",action="store_true")
     gen.set_defaults(func=cmd_generate)
 
