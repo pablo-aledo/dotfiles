@@ -1461,22 +1461,25 @@ def correct_note(pitch: int, instr_name: str, chord_pcs: List[int],
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  BLOQUE 11 — PIPELINE DE INFERENCIA
+#
+#  Arquitectura de tres capas:
+#  [1] melody / melody_high  →  melodía directa del piano (reconocible)
+#  [2] acompañamiento        →  FigurationEngine genera patrón rítmico
+#                                por rol + arquetipo; M2 elige pitches
+#  [3] contraste             →  instrumentación varía por tensión y arquetipo;
+#                                arquetipo por heurístico si M1 poco entrenado
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _extract_melody_line(notes: List[dict], tpb: int) -> List[dict]:
-    """
-    Extrae la línea melódica del piano: nota más aguda en cada grupo simultáneo.
-    Usado por los roles 'melody' y 'melody_high' para preservar el original.
-    """
+    """Nota más aguda en cada grupo simultáneo → línea melódica del piano."""
     if not notes:
         return []
-    slack  = tpb // 8
-    sn     = sorted(notes, key=lambda n: n['tick'])
-    mel    = []
-    i      = 0
+    slack = tpb // 8
+    sn    = sorted(notes, key=lambda n: n['tick'])
+    mel   = []
+    i     = 0
     while i < len(sn):
-        g = [sn[i]]
-        j = i + 1
+        g = [sn[i]]; j = i + 1
         while j < len(sn) and sn[j]['tick'] - sn[i]['tick'] <= slack:
             g.append(sn[j]); j += 1
         mel.append(max(g, key=lambda n: n['pitch']))
@@ -1486,18 +1489,351 @@ def _extract_melody_line(notes: List[dict], tpb: int) -> List[dict]:
 
 def _assign_melody_to_instrument(melody: List[dict], instr_name: str,
                                   octave_shift: int = 0) -> List[dict]:
-    """
-    Transpone la melodía extraída al rango idiomático del instrumento.
-    Preserva timing y velocidad originales.
-    """
+    """Transpone la melodía al rango idiomático del instrumento."""
     lo, hi = RANGES.get(instr_name, (21, 108))
     result = []
     for n in melody:
-        p = n['pitch'] + octave_shift * 12
-        p_fit = fit_range(p, lo, hi)
-        if p_fit is None:
+        p = fit_range(n['pitch'] + octave_shift * 12, lo, hi)
+        if p is not None:
+            result.append({**n, 'pitch': p, 'channel': 0})
+    return result
+
+
+def _classify_texture_heuristic_section(section: dict, tpb: int) -> int:
+    """
+    Fallback heurístico de arquetipo cuando M1 no está bien entrenado.
+    Reproduces la lógica de classify_texture del piano_expander original.
+    Devuelve índice 0-4 (A-E).
+    """
+    density  = section['density']
+    mean_vel = section['mean_vel']
+    mean_dur = section['mean_dur']
+    notes    = section['notes']
+    ns       = sorted(notes, key=lambda x: x['tick'])
+    steps    = sum(1 for i in range(1, len(ns))
+                   if abs(ns[i]['pitch'] - ns[i-1]['pitch']) <= 2)
+    step_r   = steps / max(len(ns) - 1, 1)
+    scores   = [0.0] * 5
+    scores[0] += density * 0.4 + (mean_vel / 127) * 0.4 + (1 - step_r) * 0.2
+    scores[1] += (1 - density) * 0.3 + step_r * 0.4 + (mean_dur / (tpb * 2)) * 0.3
+    scores[2] += density * 0.3 + (1 - mean_dur / (tpb * 2)) * 0.4 + step_r * 0.3
+    scores[3] += density * 0.3 + (1 - step_r) * 0.4 + (1 - mean_vel / 127) * 0.3
+    scores[4] += (1 - density) * 0.5 + (mean_dur / (tpb * 4)) * 0.3 + (1 - mean_vel / 127) * 0.2
+    return int(np.argmax(scores))
+
+
+def _active_instruments_for_section(instruments: List[str], tension: float,
+                                     archetype: str, sec_idx: int,
+                                     total_sec: int) -> List[str]:
+    """
+    Contraste entre secciones: decide qué instrumentos suenan según tensión
+    y arquetipo. Garantiza que la instrumentación cambia visiblemente entre
+    secciones consecutivas.
+
+    Reglas:
+    · Cuerdas: siempre activas (threshold 0.0)
+    · Maderas:  entran cuando tensión > 0.20 O posición > 1/3 de la obra
+    · Metales:  entran cuando tensión > 0.45 O posición > 2/3 de la obra
+    · Arquetipo E (sparse): solo los 3 instrumentos más graves de la plantilla
+    """
+    pos = sec_idx / max(total_sec - 1, 1)
+    active = []
+    for instr in instruments:
+        family   = FAMILY.get(instr, 'strings')
+        rol_name = INSTR_ROLE.get(instr, 'harmony')
+
+        # Roles melódicos siempre entran (la melodía no puede desaparecer)
+        if rol_name in ('melody', 'melody_high'):
+            active.append(instr); continue
+
+        # Metales
+        if instr in ('tuba', 'trombone') and tension < 0.55 and pos < 0.60:
             continue
-        result.append({**n, 'pitch': p_fit, 'channel': 0})
+        if instr == 'trumpet' and tension < 0.40 and pos < 0.55:
+            continue
+        if instr == 'horn' and tension < 0.30 and pos < 0.45:
+            continue
+
+        # Maderas: entran progresivamente
+        if family == 'woodwind':
+            if tension < 0.20 and pos < 0.33:
+                continue
+
+        # Arquetipo E (sparse): solo cuerdas graves + 1 madera máximo
+        if archetype == 'E':
+            lo, _ = RANGES.get(instr, (60, 96))
+            if lo > 55 and family != 'woodwind':
+                continue
+            if family == 'woodwind' and instr not in ('oboe', 'clarinet'):
+                continue
+
+        active.append(instr)
+    return active
+
+
+# ── FigurationEngine ──────────────────────────────────────────────────────────
+# Genera el esqueleto rítmico de cada rol según el arquetipo de textura.
+# M2 luego elige los pitches dentro de este esqueleto.
+
+def _fig_bass_root(ts: int, te: int, tpb: int,
+                   chord_pcs: List[int], scale: List[int],
+                   instr_name: str, tension: float,
+                   mean_vel: float) -> List[dict]:
+    """
+    Bajo raíz: ataca en tiempos 1 y 3. Más activo en tensión alta.
+    Adaptado de gen_bass_root (piano_expander.py).
+    """
+    bar  = tpb * 4
+    lo, hi = RANGES.get(instr_name, (28, 62))
+    notes  = []
+    root_pc = chord_pcs[0] if chord_pcs else 0
+    # Nota base: raíz del acorde en registro grave
+    base_p = root_pc + 36  # C2 + root_pc
+    p = fit_range(base_p, lo, hi)
+    if p is None:
+        p = lo
+
+    t = ts
+    while t < te:
+        beat_in_bar = (t - ts) % bar
+        on_1 = beat_in_bar < tpb // 4
+        on_3 = abs(beat_in_bar - tpb * 2) < tpb // 4
+        if on_1 or on_3:
+            dur = tpb * 2 if tension < 0.5 else tpb
+            vel = int(clamp(mean_vel * 0.85 + tension * 10, 30, 100))
+            notes.append({'tick': t, 'pitch': p, 'velocity': vel,
+                          'duration': min(dur, te - t - 10), 'channel': 0})
+            t += tpb  # avanzar 1 beat tras cada ataque
+        else:
+            t += tpb // 2  # avanzar media negra buscando siguiente tiempo
+    return notes
+
+
+def _fig_bass_melodic(ts: int, te: int, tpb: int,
+                      chord_pcs: List[int], scale: List[int],
+                      instr_name: str, tension: float,
+                      mean_vel: float, melody_ref: List[dict]) -> List[dict]:
+    """
+    Bajo melódico: sigue el contorno del bajo del piano con notas de paso.
+    Adaptado de gen_bass_melodic (piano_expander.py).
+    """
+    lo, hi = RANGES.get(instr_name, (36, 76))
+    notes  = []
+    # Usar la nota más grave de cada compás como referencia de bajo
+    bar    = tpb * 4
+    cur    = ts
+    prev_p = None
+    while cur < te:
+        bar_end  = min(cur + bar, te)
+        bar_mel  = [n for n in melody_ref if cur <= n['tick'] < bar_end]
+        if bar_mel:
+            ref_p = min(bar_mel, key=lambda n: n['pitch'])['pitch']
+        else:
+            ref_p = chord_pcs[0] + 48 if chord_pcs else 48
+        p = fit_range(ref_p, lo, hi)
+        if p is None:
+            p = lo
+        vel = int(clamp(mean_vel * 0.80 + tension * 12, 25, 100))
+        dur = tpb * 2
+        notes.append({'tick': cur, 'pitch': p, 'velocity': vel,
+                      'duration': min(dur, bar_end - cur - 10), 'channel': 0})
+        # Nota de paso si hay salto
+        if prev_p is not None and abs(p - prev_p) > 4 and (bar_end - cur) > tpb * 3:
+            mid_p = (p + prev_p) // 2
+            mid_p = snap_to_scale(mid_p, scale)
+            mid_p_fit = fit_range(mid_p, lo, hi)
+            if mid_p_fit:
+                notes.append({'tick': cur + tpb, 'pitch': mid_p_fit,
+                              'velocity': max(vel - 15, 20),
+                              'duration': tpb - 20, 'channel': 0})
+        prev_p = p
+        cur    = bar_end
+    return notes
+
+
+def _fig_harmony(ts: int, te: int, tpb: int,
+                 chord_pcs: List[int], scale: List[int],
+                 instr_name: str, archetype: str,
+                 tension: float, mean_vel: float) -> List[dict]:
+    """
+    Voces interiores con figuración dependiente del arquetipo:
+    A → negras sincronizadas (tutti homofónico)
+    B → blancas (colchón armónico)
+    C → arpegios de tresillo (movimiento activo)
+    D → negras con pequeño desplazamiento de fase (contrapunto)
+    E → redondas (sparse)
+    Adaptado de gen_harmony (piano_expander.py).
+    """
+    lo, hi = SWEET.get(instr_name, RANGES.get(instr_name, (48, 84)))
+    fam    = FAMILY.get(instr_name, 'strings')
+    notes  = []
+
+    # Pitch de referencia: tercera del acorde en registro medio
+    root_pc = chord_pcs[0] if chord_pcs else 0
+    third_pc= chord_pcs[1] if len(chord_pcs) > 1 else (root_pc + 4) % 12
+    base_p  = third_pc + 60  # C4 + intervalo
+    p       = fit_range(base_p, lo, hi)
+    if p is None:
+        p = nearest_chord_tone(lo + (hi - lo) // 2, chord_pcs)
+        p = fit_range(p, lo, hi) or (lo + hi) // 2
+
+    vel_base = int(clamp(mean_vel * 0.88 + tension * 8, 25, 110))
+    # Pequeño desplazamiento de fase para arquetipo D
+    phase = tpb // 4 if archetype == 'D' else 0
+
+    t = ts + phase
+    while t < te:
+        if archetype in ('A', 'D'):
+            # Negras
+            dur = int(tpb * 0.92)
+            notes.append({'tick': t, 'pitch': p, 'velocity': vel_base,
+                          'duration': min(dur, te - t - 10), 'channel': 0})
+            t += tpb
+        elif archetype == 'B':
+            # Blancas
+            dur = tpb * 2
+            notes.append({'tick': t, 'pitch': p, 'velocity': max(vel_base - 10, 20),
+                          'duration': min(dur, te - t - 10), 'channel': 0})
+            t += tpb * 2
+        elif archetype == 'C':
+            # Arpegios de tresillo: raíz → 5ª → raíz
+            tresillo = tpb // 3
+            fifth_pc = chord_pcs[2] if len(chord_pcs) > 2 else (root_pc + 7) % 12
+            p5       = nearest_chord_tone(p + 7, chord_pcs)
+            p5       = fit_range(p5, lo, hi) or p
+            for pp in [p, p5, p]:
+                if t >= te: break
+                notes.append({'tick': t, 'pitch': pp,
+                              'velocity': vel_base,
+                              'duration': min(int(tresillo * 0.85), te - t - 5),
+                              'channel': 0})
+                t += tresillo
+        else:  # E
+            # Redondas
+            dur = tpb * 4
+            notes.append({'tick': t, 'pitch': p,
+                          'velocity': max(vel_base - 20, 18),
+                          'duration': min(dur, te - t - 10), 'channel': 0})
+            t += tpb * 4
+    return notes
+
+
+def _fig_pad(ts: int, te: int, tpb: int,
+             chord_pcs: List[int], scale: List[int],
+             instr_name: str, tension: float,
+             mean_vel: float) -> List[dict]:
+    """
+    Pad (metales en sustain): una nota larga por sección o por cada 4 compases.
+    Adaptado de gen_pad (piano_expander.py).
+    """
+    lo, hi = RANGES.get(instr_name, (34, 77))
+    notes  = []
+    root_pc = chord_pcs[0] if chord_pcs else 0
+    mid_pc  = chord_pcs[1] if len(chord_pcs) > 1 else (root_pc + 4) % 12
+    base_p  = mid_pc + 48
+    p       = fit_range(base_p, lo, hi)
+    if p is None:
+        p = nearest_chord_tone(lo + (hi - lo) // 2, chord_pcs)
+        p = fit_range(p, lo, hi) or lo
+
+    vel = int(clamp(mean_vel * 0.90 * tension, 20, 95))
+    bar = tpb * 4
+    t   = ts
+    while t < te:
+        block_end = min(t + bar * 4, te)
+        dur       = block_end - t - 10
+        notes.append({'tick': t, 'pitch': p, 'velocity': vel,
+                      'duration': max(dur, 30), 'channel': 0})
+        t = block_end
+    return notes
+
+
+def _fig_counter(ts: int, te: int, tpb: int,
+                 chord_pcs: List[int], scale: List[int],
+                 instr_name: str, tension: float,
+                 mean_vel: float, melody_ref: List[dict]) -> List[dict]:
+    """
+    Contrapunto real: movimiento contrario a la melodía, consonante con el acorde.
+    Versión simplificada de gen_counterpoint (piano_expander.py).
+    """
+    lo, hi  = SWEET.get(instr_name, RANGES.get(instr_name, (48, 84)))
+    notes   = []
+    prev_p  = None
+    prev_mel= None
+    sec_mel = [n for n in melody_ref if ts <= n['tick'] < te]
+    if not sec_mel:
+        return _fig_harmony(ts, te, tpb, chord_pcs, scale, instr_name, 'B',
+                            tension, mean_vel)
+
+    for mn in sec_mel:
+        mel_p = mn['pitch']
+        # Intervalo preferido: 3ª o 6ª por debajo
+        for interval in [9, 8, 4, 3, 7, 12]:
+            p = mel_p - interval
+            p = fit_range(p, lo, hi)
+            if p is None:
+                continue
+            if pc(p) not in chord_pcs and pc(p) not in scale:
+                p = nearest_chord_tone(p, chord_pcs)
+                p = fit_range(p, lo, hi)
+            if p is None or not is_consonant(p, mel_p):
+                continue
+            if p >= mel_p:
+                continue
+            # Evitar paralelas de 5ª/8ª
+            if prev_p is not None and prev_mel is not None:
+                prev_iv = abs(prev_mel - prev_p) % 12
+                curr_iv = abs(mel_p - p) % 12
+                if prev_iv in (7, 0) and curr_iv == prev_iv:
+                    continue
+            if prev_p is not None and abs(p - prev_p) > 9:
+                continue
+            vel = int(clamp(mn['velocity'] * 0.72, 22, 90))
+            notes.append({'tick': mn['tick'], 'pitch': p, 'velocity': vel,
+                          'duration': mn['duration'], 'channel': 0})
+            prev_p   = p
+            prev_mel = mel_p
+            break
+
+    return notes
+
+
+def _apply_m2_pitch(raw_notes: List[dict], feat_t: 'torch.Tensor',
+                    rol_t: 'torch.Tensor', m2: 'InstrumentNet',
+                    quantizer: 'EventQuantizer',
+                    instr_name: str, chord_pcs: List[int],
+                    scale: List[int], tension: float) -> List[dict]:
+    """
+    Sustituye el pitch de cada nota del patrón de figuración por el pitch
+    que propone M2, corregido idiomáticamente.
+    Si M2 propone un pitch inválido, se conserva el pitch del patrón.
+    """
+    result = []
+    prev_pitch = None
+    for n in raw_notes:
+        with torch.no_grad():
+            _, p_l, v_l, _ = m2(feat_t, rol_t)
+
+        # Temperatura adaptativa: alta tensión → más determinista
+        temp = 1.5 - tension * 0.7
+        probs_p = torch.softmax(p_l / max(temp, 0.2), dim=-1)
+        p_bin   = int(torch.multinomial(probs_p, 1).item())
+        probs_v = torch.softmax(v_l / 1.0, dim=-1)
+        v_bin   = int(torch.multinomial(probs_v, 1).item())
+
+        _, raw_pitch, velocity, _ = quantizer.decode(p_bin, p_bin, v_bin, 0)
+        # decode usa p_bin en posición de pitch
+        raw_pitch = clamp(p_bin + quantizer.pitch_min,
+                          quantizer.pitch_min, quantizer.pitch_max)
+
+        corrected = correct_note(raw_pitch, instr_name, chord_pcs, scale,
+                                 prev_pitch, n['pitch'], tension)
+        if corrected is None:
+            corrected = n['pitch']  # fallback: pitch del patrón
+
+        result.append({**n, 'pitch': corrected,
+                        'velocity': clamp(velocity, 20, 120)})
+        prev_pitch = corrected
     return result
 
 
@@ -1507,14 +1843,14 @@ def expand_with_ml(piano_notes: List[dict], tpb: int, tempo: int,
                    quantizer: 'EventQuantizer',
                    verbose: bool = False) -> Tuple[Dict, Dict]:
     """
-    Pipeline de inferencia completo.
+    Pipeline de inferencia con FigurationEngine y contraste entre secciones.
 
-    Estrategia de dos capas:
-    · Roles melody / melody_high: la melodía se extrae DIRECTAMENTE del piano
-      de entrada, garantizando que el original sea reconocible.
-    · Roles harmony / inner / bass / pad / counter: M2 genera el acompañamiento.
-      Los eventos se anclan en posiciones temporales uniformes sobre la sección,
-      sin acumular delta_tick, para evitar silencios estructurales.
+    Tres capas:
+    [1] melody / melody_high  →  melodía directa del piano (reconocible)
+    [2] acompañamiento        →  FigurationEngine por rol+arquetipo, M2 elige pitch
+    [3] contraste             →  instrumentación varía por tensión, arquetipo y
+                                  posición en la obra; arquetipo por heurístico
+                                  si M1 tiene baja confianza
     """
     sections = segment_sections(piano_notes, tpb)
     if not sections:
@@ -1524,134 +1860,101 @@ def expand_with_ml(piano_notes: List[dict], tpb: int, tempo: int,
     total_sec  = len(sections)
     tonic, mode= detect_key(piano_notes)
     scale      = scale_pcs(tonic, mode)
+    melody_global = _extract_melody_line(piano_notes, tpb)
 
     print(f"  Tonalidad  : {NOTE_NAMES[tonic]} {mode}")
     print(f"  Secciones  : {total_sec}")
 
-    # Extraer melodía global del piano una sola vez
-    melody_global = _extract_melody_line(piano_notes, tpb)
-
     instr_notes: Dict[str, List[dict]] = {i: [] for i in instruments}
     instr_cc:    Dict[str, List[tuple]]= {i: [] for i in instruments}
 
-    def sample_bin(logits: torch.Tensor, temp: float = 1.0) -> int:
-        probs = torch.softmax(logits / max(temp, 0.1), dim=-1)
-        return int(torch.multinomial(probs, 1).item())
-
     with torch.no_grad():
         for sec_idx, section in enumerate(sections):
-            feat      = section_to_feature_vector(section, tpb, total_sec)
-            feat_t    = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
+            feat    = section_to_feature_vector(section, tpb, total_sec)
+            feat_t  = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
 
             # M1: arquetipo y tensión
             arch_logits, tension_t = m1(feat_t)
-            arch_idx  = int(torch.argmax(arch_logits, dim=-1).item())
-            tension   = float(tension_t.item())
-            archetype = ARCHETYPES[arch_idx]
+            arch_probs = torch.softmax(arch_logits, dim=-1)
+            arch_conf  = float(arch_probs.max().item())
+            arch_idx   = int(torch.argmax(arch_logits, dim=-1).item())
+            tension    = float(tension_t.item())
 
-            chord_pcs = infer_chord(section['notes'])
-            ts        = section['tick_start']
-            te        = section['tick_end']
+            # Fallback heurístico si M1 tiene baja confianza (< 0.4)
+            # — ocurre cuando el modelo no está bien entrenado con datos reales
+            if arch_conf < 0.40:
+                arch_idx = _classify_texture_heuristic_section(section, tpb)
 
-            if verbose:
-                print(f"  Sec {sec_idx+1:>2}  [{archetype}]  tensión={tension:.2f}  "
-                      f"compases {section['bar_start']}-{section['bar_end']}")
-
-            # Notas de melodía que caen en esta sección
+            archetype  = ARCHETYPES[arch_idx]
+            chord_pcs  = infer_chord(section['notes'])
+            ts         = section['tick_start']
+            te         = section['tick_end']
+            mean_vel   = section['mean_vel']
             sec_melody = [n for n in melody_global if ts <= n['tick'] < te]
 
-            for instr_name in instruments:
+            if verbose:
+                conf_str = f"M1({arch_conf:.2f})" if arch_conf >= 0.40 else "heurístico"
+                print(f"  Sec {sec_idx+1:>2}  [{archetype}] {conf_str}  "
+                      f"tensión={tension:.2f}  "
+                      f"cc {section['bar_start']}-{section['bar_end']}")
+
+            # Contraste: decidir qué instrumentos suenan en esta sección
+            active = _active_instruments_for_section(
+                instruments, tension, archetype, sec_idx, total_sec)
+
+            for instr_name in active:
                 family   = FAMILY.get(instr_name, 'strings')
-                thresh   = FAMILY_ENTRY_THRESHOLD.get(family, 0.0)
                 rol_name = INSTR_ROLE.get(instr_name, 'harmony')
+                rol_idx  = ROLE_IDX.get(rol_name, 0)
+                rol_t    = torch.tensor([rol_idx], dtype=torch.long)
 
-                # Umbral de entrada según familia y tensión
-                if tension < thresh: continue
-                if instr_name in ('tuba', 'trombone') and tension < 0.55: continue
-                if instr_name == 'trumpet' and tension < 0.40: continue
-
-                # ── Capa 1: roles melódicos — melodía directa del piano ────────
+                # ── Capa 1: melodía directa del piano ─────────────────────────
                 if rol_name in ('melody', 'melody_high'):
-                    shift = 1 if rol_name == 'melody_high' else 0
-                    assigned = _assign_melody_to_instrument(sec_melody, instr_name, shift)
+                    shift    = 1 if rol_name == 'melody_high' else 0
+                    assigned = _assign_melody_to_instrument(
+                        sec_melody, instr_name, shift)
                     instr_notes[instr_name].extend(assigned)
                     continue
 
-                # ── Capa 2: roles de acompañamiento — M2 con anclas uniformes ──
-                rol_idx = ROLE_IDX.get(rol_name, 0)
-                rol_t   = torch.tensor([rol_idx], dtype=torch.long)
+                # ── Capa 2: FigurationEngine → patrón rítmico por rol ─────────
+                if rol_name in ('bass_root',):
+                    raw = _fig_bass_root(ts, te, tpb, chord_pcs, scale,
+                                         instr_name, tension, mean_vel)
+                elif rol_name == 'bass_melodic':
+                    raw = _fig_bass_melodic(ts, te, tpb, chord_pcs, scale,
+                                            instr_name, tension, mean_vel,
+                                            piano_notes)
+                elif rol_name in ('harmony', 'inner'):
+                    raw = _fig_harmony(ts, te, tpb, chord_pcs, scale,
+                                       instr_name, archetype, tension, mean_vel)
+                elif rol_name == 'counter':
+                    raw = _fig_counter(ts, te, tpb, chord_pcs, scale,
+                                       instr_name, tension, mean_vel,
+                                       melody_global)
+                elif rol_name in ('pad', 'pad_low'):
+                    raw = _fig_pad(ts, te, tpb, chord_pcs, scale,
+                                   instr_name, tension, mean_vel)
+                else:
+                    raw = _fig_harmony(ts, te, tpb, chord_pcs, scale,
+                                       instr_name, 'B', tension, mean_vel)
 
-                # Calcular anclas temporales uniformes sobre la sección.
-                # Cada ancla es un tick base; M2 añade un pequeño jitter.
-                sec_beats  = (te - ts) / tpb
-                target_den = 1.0 + tension * 1.5   # 1–2.5 notas/beat
-                n_anchors  = max(4, min(96, int(sec_beats * target_den)))
-                anchor_step= (te - ts) / n_anchors
+                if not raw:
+                    continue
 
-                prev_pitch = None
-                prev_mel   = (sec_melody[0]['pitch'] if sec_melody else 60)
+                # ── Capa 3: M2 sustituye pitches del patrón ───────────────────
+                voiced = _apply_m2_pitch(raw, feat_t, rol_t, m2, quantizer,
+                                         instr_name, chord_pcs, scale, tension)
+                instr_notes[instr_name].extend(voiced)
 
-                for anchor_idx in range(n_anchors):
-                    # Tick base de esta ancla (posición uniforme)
-                    base_tick = ts + int(anchor_idx * anchor_step)
-                    if base_tick >= te:
-                        break
-
-                    d_l, p_l, v_l, dur_l = m2(feat_t, rol_t)
-
-                    # El delta del M2 se usa solo como jitter fino (máx ±1 beat)
-                    d_bin   = sample_bin(d_l, temp=1.0)
-                    p_bin   = sample_bin(p_l, temp=0.9)
-                    v_bin   = sample_bin(v_l, temp=1.0)
-                    dur_bin = sample_bin(dur_l, temp=1.0)
-
-                    raw_delta, raw_pitch, velocity, duration = quantizer.decode(
-                        d_bin, p_bin, v_bin, dur_bin)
-
-                    # Jitter: desplazar el ancla hasta ±1 beat, sin salir de sección
-                    jitter    = clamp(raw_delta - quantizer.delta_max // 2,
-                                      -tpb, tpb)
-                    curr_tick = clamp(base_tick + jitter, ts, te - 1)
-
-                    # Corrección idiomática
-                    corrected = correct_note(
-                        raw_pitch, instr_name, chord_pcs, scale,
-                        prev_pitch, prev_mel, tension)
-                    if corrected is None:
-                        continue
-
-                    # Articulación y ajuste de duración
-                    prev_end = None  # no acumulamos prev_tick para evitar deriva
-                    _art = classify_articulation(
-                        corrected, duration, velocity,
-                        prev_end, curr_tick, tension, family, rol_name, tpb)
-                    if _art in ('spiccato', 'staccato'):
-                        duration = min(duration, tpb // 2)
-                    elif _art in ('legato', 'tremolo'):
-                        duration = max(duration, tpb)
-
-                    # Limitar duración para no solapar con la siguiente ancla
-                    duration = min(duration, max(int(anchor_step) - 10, 30))
-
-                    instr_notes[instr_name].append({
-                        'tick':     curr_tick,
-                        'pitch':    corrected,
-                        'velocity': clamp(velocity, 20, 120),
-                        'duration': max(duration, 30),
-                        'channel':  0,
-                    })
-                    prev_pitch = corrected
-
-                # M3: CC envelope para este instrumento en esta sección
+                # M3: CC envelope
                 instr_idx_t = torch.tensor([INSTR_IDX.get(instr_name, 0)],
                                             dtype=torch.long)
                 tens_t      = torch.tensor([tension], dtype=torch.float32)
                 cc_pred     = m3(tens_t, instr_idx_t).squeeze(0)
                 cc1_val     = int(clamp(float(cc_pred[0]) * 127, 1, 127))
                 cc11_val    = int(clamp(float(cc_pred[1]) * 127, 1, 127))
-
-                sec_len  = te - ts
-                n_points = max(2, sec_len // (tpb * 8))
+                sec_len     = te - ts
+                n_points    = max(2, sec_len // (tpb * 8))
                 for pt in range(n_points):
                     t_pt  = ts + pt * sec_len // n_points
                     alpha = pt / max(n_points - 1, 1)

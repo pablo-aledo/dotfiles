@@ -1,8 +1,21 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                       ML ARCHITECT  v5.0                                     ║
+║                       ML ARCHITECT  v6.0                                     ║
 ║     Composición estructural dirigida por gramáticas aprendidas de corpus     ║
+║                                                                              ║
+║  MEJORAS v6.0 respecto a v5.0 — variedad estructural y melódica:             ║
+║    [1] Markov melódico — cadena de intervalos por rol aprendida del corpus;  ║
+║        genera material nuevo con el "sabor" estadístico de cada rol          ║
+║    [2] Modulaciones entre secciones — tonalidad cambia según arco dramático  ║
+║        (relativa, dominante, mediante, napolitana)                           ║
+║    [3] Densificación progresiva — nº de voces escala con arc_val             ║
+║    [4] IOI histogramas por rol — ritmo de melodía nuevo sampledado del corpus ║
+║    [5] Formas aprendidas del corpus — secuencias de etiquetas frecuentes     ║
+║        (AABA, verse-chorus…); la forma se elige completa antes de generar    ║
+║    [6] Repetición estructural — la sección A reaparece reconocible           ║
+║    [7] Hoquetus melodía-acompañamiento — cuando la melodía es activa el      ║
+║        acompañamiento respira, y viceversa                                   ║
 ║                                                                              ║
 ║  MEJORAS v5.0 respecto a v4.0 — variedad musical:                            ║
 ║    [A] Múltiples frases fuente — selección de ventana distinta por sección   ║
@@ -99,7 +112,7 @@ try:
 except ImportError:
     print("[ERROR] scipy no encontrado. pip install scipy"); sys.exit(1)
 
-VERSION = "5.0"
+VERSION = "6.0"
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONSTANTES MUSICALES
@@ -277,8 +290,12 @@ class RoleProfile:
     # [E] GMM sobre el espacio de θ
     gmm:                Any = None   # GaussianMixture serializable
     # v4: distribuciones de duración aprendidas del corpus
-    bars_dist:          Tuple[float,float] = (8.0, 2.0)  # (media, std) compases/sección
-    n_sections_dist:    Tuple[float,float] = (4.0, 1.0)  # (media, std) secciones/pieza
+    bars_dist:          Tuple[float,float] = (8.0, 2.0)
+    n_sections_dist:    Tuple[float,float] = (4.0, 1.0)
+    # v6: cadena de Markov de intervalos melódicos (dict interval→Counter)
+    markov_chain:       Any = None   # Dict[int, Dict[int, float]]
+    # v6: histograma de IOI (Inter-Onset Interval) cuantizados
+    ioi_hist:           Any = None   # np.ndarray shape (8,)
 
 
 @dataclass
@@ -295,6 +312,8 @@ class TransformationModel:
     # [F] Métrica de evaluación
     eval_score:      float = 0.0
     eval_baseline:   float = 0.0
+    # v6: formas aprendidas del corpus (secuencias de etiquetas)
+    learned_forms:   Any = None   # List[List[str]]  ej. [["intro","verse","chorus","outro"],...]
     version:         str = VERSION
 
 
@@ -1312,11 +1331,13 @@ def _compat_model(model: "TransformationModel") -> None:
         # v4: distribuciones de duración
         if not hasattr(role,"bars_dist"): role.bars_dist=(8.0,2.0)
         if not hasattr(role,"n_sections_dist"): role.n_sections_dist=(4.0,1.0)
+        if not hasattr(role,"markov_chain"): role.markov_chain=None
+        if not hasattr(role,"ioi_hist"): role.ioi_hist=None
         cent=role.centroid
         if not hasattr(cent,"harmonic_tension"): cent.__dict__["harmonic_tension"]=0.3
         if not hasattr(cent,"scale_degree_hist"): cent.__dict__["scale_degree_hist"]=np.zeros(7)
         if not hasattr(cent,"latent"): cent.__dict__["latent"]=None
-    for attr in ["knn_regressor","knn_X","knn_y","ae_weights","eval_score","eval_baseline"]:
+    for attr in ["knn_regressor","knn_X","knn_y","ae_weights","eval_score","eval_baseline","learned_forms"]:
         if not hasattr(model,attr): setattr(model,attr,None if attr not in ("eval_score","eval_baseline") else 0.0)
     if not hasattr(model,"version"): model.version="1.0"
 
@@ -1357,11 +1378,13 @@ def train(midi_dir: str,
     all_transforms:  List[TransformVector]  = []
     all_diff_vecs:   List[np.ndarray]       = []
     eval_samples:    List[Tuple]            = []
-    # v4: recoger duración real (compases) por sección y nº de secciones por pieza
-    # all_section_bars[k] = compases de la k-ésima sección en all_signatures
     all_section_bars:  List[float]          = []
-    # all_piece_nsecs[k] = nº de secciones de la pieza que contiene la sección k
     all_piece_nsecs:   List[int]            = []
+    # v6: por sección — cadena Markov y IOI histogram
+    all_markov_chains: List[Dict]           = []
+    all_ioi_hists:     List[np.ndarray]     = []
+    # v6: formas aprendidas del corpus
+    all_form_sequences: List[List[str]]     = []
     corpus_size = 0
 
     # Primera pasada: extraer firmas y transformaciones
@@ -1398,11 +1421,16 @@ def train(midi_dir: str,
                 sec_bars_4 = max(1.0, sec_bars * bpb / 4.0)
                 all_section_bars.append(sec_bars_4)
                 all_piece_nsecs.append(total_sections)
+                # v6: Markov chain y IOI histogram de esta sección
+                all_markov_chains.append(_build_markov_chain(mel))
+                all_ioi_hists.append(_build_ioi_histogram(mel))
                 # Guardar para evaluación (10% del corpus)
                 if i % 10 == 0:
                     eval_samples.append((source_sig, sig, theta))
 
             corpus_size += 1
+            # v6: registrar secuencia de formas de esta pieza
+            all_form_sequences.append([s.label for s in sections])
             if verbose:
                 form = "".join(s.label for s in sections)
                 print(f"  [{i+1:3d}/{len(midi_files)}] {midi_path.name:<40}"
@@ -1495,6 +1523,14 @@ def train(midi_dir: str,
         # [E] GMM sobre θ del rol
         gmm = _build_gmm(theta_arrs, n_components=min(3,len(idxs)//3+1))
 
+        # v6: agregar cadenas de Markov de todas las secciones de este rol
+        role_chains = [all_markov_chains[k] for k in idxs if k < len(all_markov_chains)]
+        role_markov = _merge_markov_chains(role_chains) if role_chains else {}
+
+        # v6: IOI histogram promedio del rol
+        role_ioi_hists = [all_ioi_hists[k] for k in idxs if k < len(all_ioi_hists)]
+        role_ioi = np.mean(role_ioi_hists, axis=0) if role_ioi_hists else np.ones(8)/8
+
         # v4: distribuciones de duración aprendidas
         # all_section_bars puede ser más corto que all_signatures si algunas secs
         # no aportaron señal — usar len mínimo para seguridad
@@ -1521,7 +1557,8 @@ def train(midi_dir: str,
             centroid=centroid, theta_mean=theta_mean, theta_cov=theta_cov,
             position_dist=pos_dist, tension_dist=ten_dist, harmonic_tens_dist=ht_dist,
             progressions=[], label=lbl, gmm=gmm,
-            bars_dist=bars_dist, n_sections_dist=nsecs_dist))
+            bars_dist=bars_dist, n_sections_dist=nsecs_dist,
+            markov_chain=role_markov, ioi_hist=role_ioi))
 
     # Extraer progresiones reales por rol
     print(f"  Extrayendo progresiones del corpus...")
@@ -1564,11 +1601,18 @@ def train(midi_dir: str,
           f"  mejora={improvement:.1f}%")
 
     roles.sort(key=lambda r: r.position_dist[0])
+    # v6: formas aprendidas
+    print(f"  Aprendiendo formas del corpus...")
+    learned_forms = _build_learned_forms(all_form_sequences)
+    print(f"  Formas frecuentes: {len(learned_forms)}")
+    for i, form in enumerate(learned_forms[:5]):
+        print(f"    {i+1}. {' → '.join(form)}")
     model = TransformationModel(
         n_roles=len(roles), roles=roles, assignment_mode=assignment_mode,
         corpus_size=corpus_size, knn_regressor=knn,
         knn_X=diff_matrix, knn_y=theta_matrix,
-        ae_weights=ae_weights, eval_score=model_score, eval_baseline=baseline_score)
+        ae_weights=ae_weights, eval_score=model_score, eval_baseline=baseline_score,
+        learned_forms=learned_forms)
 
     out_path = Path(output_model); out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path,"wb") as f: pickle.dump(model, f)
@@ -1978,6 +2022,405 @@ def _add_phrase_rests(notes: List[RawNote], phrase_len_beats: float = 4.0,
     return result
 
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  v6 — VARIEDAD ESTRUCTURAL Y MELÓDICA
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── [1] CADENA DE MARKOV MELÓDICA ────────────────────────────────────────────
+
+def _build_markov_chain(notes: List[RawNote],
+                         order: int = 1) -> Dict[int, Dict[int, float]]:
+    """Construye cadena de Markov de intervalos desde una lista de notas."""
+    pitches = [n.pitch for n in sorted(notes, key=lambda n: n.offset)
+               if n.duration >= MELODY_MIN_DUR]
+    if len(pitches) < order + 1:
+        return {}
+    intervals = [pitches[i+1] - pitches[i] for i in range(len(pitches)-1)]
+    chain: Dict[int, Dict[int, int]] = {}
+    for i in range(len(intervals) - order):
+        key = intervals[i]
+        nxt = intervals[i + order]
+        chain.setdefault(key, {})
+        chain[key][nxt] = chain[key].get(nxt, 0) + 1
+    # Normalizar a probabilidades
+    prob: Dict[int, Dict[int, float]] = {}
+    for k, counts in chain.items():
+        total = sum(counts.values())
+        prob[k] = {iv: cnt / total for iv, cnt in counts.items()}
+    return prob
+
+
+def _merge_markov_chains(chains: List[Dict[int, Dict[int, float]]]) -> Dict[int, Dict[int, float]]:
+    """Combina varias cadenas de Markov sumando recuentos."""
+    merged: Dict[int, Dict[int, float]] = {}
+    for chain in chains:
+        for k, nexts in chain.items():
+            merged.setdefault(k, {})
+            for iv, p in nexts.items():
+                merged[k][iv] = merged[k].get(iv, 0) + p
+    # Re-normalizar
+    for k in merged:
+        total = sum(merged[k].values())
+        if total > 0:
+            merged[k] = {iv: v/total for iv, v in merged[k].items()}
+    return merged
+
+
+def _generate_markov_melody(chain: Dict[int, Dict[int, float]],
+                              seed_note: int, n_notes: int,
+                              key_pc: int, mode: str,
+                              rng: random.Random,
+                              contour_bias: float = 0.0) -> List[int]:
+    """
+    [1] Genera una melodía por muestreo de la cadena de Markov.
+    contour_bias: >0 favorece movimiento ascendente, <0 descendente.
+    """
+    if not chain:
+        scale = _get_scale_pcs(key_pc, mode)
+        return [seed_note + scale[i % len(scale)] - seed_note % 12
+                for i in range(n_notes)]
+
+    pitches = [seed_note]
+    prev_iv = 0
+    scale_set = set(_get_scale_pcs(key_pc, mode))
+
+    for _ in range(n_notes - 1):
+        nexts = chain.get(prev_iv, {})
+        if not nexts:
+            # Fallback: movimiento por grados de escala
+            candidates = list(range(-4, 5))
+        else:
+            candidates = list(nexts.keys())
+            # Aplicar sesgo de contorno
+            if abs(contour_bias) > 0.1:
+                candidates = [iv for iv in candidates
+                               if (contour_bias > 0 and iv >= -2) or
+                                  (contour_bias < 0 and iv <= 2)] or candidates
+
+        # Samplear
+        if nexts and candidates:
+            weights = [nexts.get(iv, 0.01) for iv in candidates]
+            total_w = sum(weights)
+            r = rng.random() * total_w
+            chosen_iv = candidates[0]
+            acc = 0.0
+            for iv, w in zip(candidates, weights):
+                acc += w
+                if r <= acc:
+                    chosen_iv = iv; break
+        else:
+            chosen_iv = rng.randint(-3, 3)
+
+        new_pitch = pitches[-1] + chosen_iv
+        # Snap to scale
+        new_pitch = _snap_to_scale(max(36, min(96, new_pitch)), key_pc, mode)
+        pitches.append(new_pitch)
+        prev_iv = chosen_iv
+
+    return pitches
+
+
+def _notes_from_markov(chain: Dict[int, Dict[int, float]],
+                        ioi_hist: Optional[np.ndarray],
+                        seed_note: int, target_beats: float,
+                        key_pc: int, mode: str,
+                        rng: random.Random,
+                        contour_bias: float = 0.0,
+                        base_velocity: int = 72) -> List[RawNote]:
+    """
+    [1+4] Genera notas combinando Markov melódico con histograma de IOI.
+    """
+    # Estimar cuántas notas necesitamos
+    mean_ioi = 1.0
+    if ioi_hist is not None and ioi_hist.sum() > 0:
+        ioi_vals = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 0.75]
+        mean_ioi = sum(ioi_vals[i] * ioi_hist[i] for i in range(min(len(ioi_vals), len(ioi_hist))))
+        mean_ioi = max(0.25, mean_ioi)
+    n_notes = max(4, int(target_beats / mean_ioi) + 2)
+
+    # Generar pitches
+    pitches = _generate_markov_melody(chain, seed_note, n_notes, key_pc, mode,
+                                       rng, contour_bias)
+
+    # Generar duraciones desde IOI histogram
+    notes: List[RawNote] = []
+    cursor = 0.0
+    ioi_options = [0.25, 0.5, 1.0, 2.0, 0.75, 1.5, 0.25, 0.5]
+
+    for i, pitch in enumerate(pitches):
+        if cursor >= target_beats: break
+        # Samplear IOI desde histograma si disponible
+        if ioi_hist is not None and ioi_hist.sum() > 0:
+            probs = ioi_hist / ioi_hist.sum()
+            r = rng.random()
+            acc = 0.0; chosen_dur = 1.0
+            for j, p in enumerate(probs):
+                acc += p
+                if r <= acc:
+                    chosen_dur = ioi_options[j % len(ioi_options)]; break
+        else:
+            chosen_dur = rng.choice([0.5, 1.0, 1.0, 2.0, 0.25])
+
+        dur = min(chosen_dur, target_beats - cursor)
+        if dur < 0.25: break
+        vel = int(np.clip(base_velocity + rng.randint(-8, 8), 30, 110))
+        notes.append(RawNote(pitch, dur, vel, cursor, 0))
+        cursor += chosen_dur  # avanzar por IOI completo
+
+    return notes if notes else [RawNote(seed_note, 1.0, base_velocity, 0.0, 0)]
+
+
+# ── [4] IOI HISTOGRAMAS ───────────────────────────────────────────────────────
+
+def _build_ioi_histogram(notes: List[RawNote]) -> np.ndarray:
+    """Histograma de Inter-Onset Intervals cuantizados en 8 bins."""
+    mel = sorted([n for n in notes if n.duration >= MELODY_MIN_DUR],
+                  key=lambda n: n.offset)
+    if len(mel) < 2:
+        return np.ones(8) / 8
+    iois = [mel[i+1].offset - mel[i].offset for i in range(len(mel)-1)]
+    bins = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+    hist = np.zeros(8)
+    for ioi in iois:
+        idx = min(6, max(0, int(np.searchsorted(bins, ioi))))
+        hist[idx] += 1
+    s = hist.sum()
+    return hist / s if s > 0 else np.ones(8) / 8
+
+
+# ── [2] MODULACIONES ENTRE SECCIONES ─────────────────────────────────────────
+
+# Mapa de relaciones de modulación por tipo
+MODULATION_MAP: Dict[str, List[Tuple[int, str]]] = {
+    # (semitones_from_tonic, mode)
+    "relative":    [(3, "minor"), (-3, "major")],   # relativa mayor/menor
+    "dominant":    [(7, "major"), (7, "minor")],     # dominante
+    "subdominant": [(5, "major"), (5, "minor")],     # subdominante
+    "mediante":    [(4, "major"), (3, "minor")],     # mediante
+    "neapolitan":  [(1, "major")],                    # napolitana
+    "parallel":    [(0, "minor"), (0, "major")],     # paralela (mayor↔menor)
+}
+
+
+def _plan_modulations(role_labels: List[str], base_key: int, base_mode: str,
+                       arc_vals: List[float],
+                       rng: random.Random) -> List[Tuple[int, str]]:
+    """
+    [2] Asigna una tonalidad a cada sección.
+    Secciones con arc_val alto tienden a modular a la dominante o mediante.
+    Secciones de outro vuelven a la tónica.
+    """
+    keys: List[Tuple[int, str]] = [(base_key, base_mode)]
+
+    for i in range(1, len(role_labels)):
+        label = role_labels[i]
+        av    = arc_vals[i]
+        prev_key, prev_mode = keys[-1]
+
+        # Outro: siempre volver a la tónica
+        if label == "outro":
+            keys.append((base_key, base_mode))
+            continue
+
+        # Probabilidad de modular según arc_val
+        modulation_prob = 0.15 + av * 0.35   # 15% en reposo, 50% en clímax
+
+        if rng.random() > modulation_prob:
+            # Mantenemos tonalidad
+            keys.append((prev_key, prev_mode))
+            continue
+
+        # Elegir tipo de modulación según contexto
+        if av > 0.7:   # alta tensión → dominante o mediante
+            mod_types = ["dominant", "mediante"]
+        elif av < 0.3:  # baja tensión → relativa o subdominante
+            mod_types = ["relative", "subdominant"]
+        elif label == "climax":
+            mod_types = ["dominant", "mediante", "neapolitan"]
+        else:
+            mod_types = ["relative", "subdominant", "parallel"]
+
+        mod_type = rng.choice(mod_types)
+        candidates = MODULATION_MAP.get(mod_type, [])
+        if not candidates:
+            keys.append((prev_key, prev_mode))
+            continue
+
+        delta_semi, new_mode = rng.choice(candidates)
+        # Filtrar: si ya estamos en esta tonalidad, no modular
+        new_key = (prev_key + delta_semi) % 12
+        if new_key == prev_key and new_mode == prev_mode:
+            keys.append((prev_key, prev_mode))
+        else:
+            keys.append((new_key, new_mode))
+
+    return keys
+
+
+# ── [3] DENSIFICACIÓN PROGRESIVA ─────────────────────────────────────────────
+
+def _voice_count_for_arc(arc_val: float, label: str) -> int:
+    """
+    [3] Devuelve el número de voces simultáneas según la posición en el arco.
+    1 = solo melodía, 2 = melodía+bajo, 3 = +acordes, 4 = +contrapunto
+    """
+    if label == "intro":   return 1
+    if label == "outro":   return 2
+    if arc_val < 0.25:     return 2
+    if arc_val < 0.5:      return 3
+    if arc_val < 0.75:     return 3
+    return 4   # clímax completo
+
+
+# ── [5] FORMAS APRENDIDAS ────────────────────────────────────────────────────
+
+def _extract_form_sequence(sections: List[SectionSegment],
+                             role_labels: List[str]) -> List[str]:
+    """Extrae la secuencia de etiquetas de forma de una pieza."""
+    return role_labels[:len(sections)]
+
+
+def _build_learned_forms(all_sequences: List[List[str]]) -> List[List[str]]:
+    """
+    [5] Recoge las secuencias de formas del corpus y devuelve las más frecuentes.
+    """
+    if not all_sequences:
+        return [["intro","verse","verse","outro"]]
+    # Agrupar por longitud
+    by_len: Dict[int, List[str]] = {}
+    for seq in all_sequences:
+        key = str(seq)
+        by_len[key] = by_len.get(key, 0) + 1  # type: ignore
+
+    # Ordenar por frecuencia, devolver top 10
+    sorted_forms = sorted(by_len.items(), key=lambda x: -x[1])
+    result = []
+    for form_str, _ in sorted_forms[:10]:
+        try:
+            import ast
+            form = ast.literal_eval(form_str)
+            if isinstance(form, list) and all(isinstance(s, str) for s in form):
+                result.append(form)
+        except Exception:
+            pass
+    return result or [["intro","verse","verse","outro"]]
+
+
+def _choose_form(learned_forms: Optional[List[List[str]]],
+                  n_sections: int, rng: random.Random) -> Optional[List[str]]:
+    """
+    [5] Elige una forma aprendida compatible con n_sections.
+    Permite formas de ±1 sección de la solicitada.
+    """
+    if not learned_forms:
+        return None
+    candidates = [f for f in learned_forms
+                  if abs(len(f) - n_sections) <= 1]
+    if not candidates:
+        return None
+    return rng.choice(candidates)
+
+
+def _form_to_role_indices(form: List[str], roles: List[RoleProfile]) -> List[int]:
+    """
+    [5] Convierte una secuencia de etiquetas de forma en índices de rol,
+    buscando el rol cuya etiqueta coincide mejor.
+    """
+    label_to_idx: Dict[str, int] = {}
+    for i, r in enumerate(roles):
+        label_to_idx.setdefault(r.label, i)
+    result = []
+    for lbl in form:
+        if lbl in label_to_idx:
+            result.append(label_to_idx[lbl])
+        else:
+            # Fallback: rol cuya posición media es más compatible
+            pos_guess = {"intro":0.0,"verse":0.35,"development":0.5,
+                          "climax":0.65,"outro":1.0}.get(lbl, 0.5)
+            best = min(range(len(roles)),
+                       key=lambda i: abs(roles[i].position_dist[0] - pos_guess))
+            result.append(best)
+    return result
+
+
+# ── [6] REPETICIÓN ESTRUCTURAL ───────────────────────────────────────────────
+
+def _apply_structural_repeat(base_notes: List[RawNote],
+                               repeat_variation: float,
+                               key_pc: int, mode: str,
+                               rng: random.Random) -> List[RawNote]:
+    """
+    [6] Produce una variación reconocible de base_notes para la reaparición
+    de una sección. Mantiene el contorno melódico pero añade ornamentación
+    ligera (repeat_variation=0→idéntico, 1→muy ornamentado).
+    """
+    if not base_notes or repeat_variation < 0.05:
+        return deepcopy(base_notes)
+
+    result = deepcopy(base_notes)
+
+    # Ornamentación ligera: añadir mordentes en algunas notas largas
+    if repeat_variation > 0.2:
+        ornamented = []
+        for n in result:
+            ornamented.append(n)
+            if n.duration >= 1.0 and rng.random() < repeat_variation * 0.4:
+                # Mordente superior: nota auxiliar de 1/8 antes del beat
+                aux_pitch = _snap_to_scale(n.pitch + 1, key_pc, mode)
+                aux_dur   = 0.25
+                # Acortar la nota principal
+                main_dur = max(0.5, n.duration - aux_dur)
+                ornamented[-1] = RawNote(n.pitch, main_dur, n.velocity,
+                                          n.offset + aux_dur, n.voice)
+                ornamented.insert(-1, RawNote(aux_pitch, aux_dur,
+                                               max(20, n.velocity - 10),
+                                               n.offset, 1))
+        result = sorted(ornamented, key=lambda n: n.offset)
+
+    # Leve variación de velocity (~±5%)
+    if repeat_variation > 0.1:
+        result = [RawNote(n.pitch, n.duration,
+                           int(np.clip(n.velocity * rng.uniform(0.95, 1.05), 20, 120)),
+                           n.offset, n.voice)
+                  for n in result]
+
+    return result
+
+
+# ── [7] HOQUETUS MELODÍA-ACOMPAÑAMIENTO ─────────────────────────────────────
+
+def _apply_hoquetus(melody: List[RawNote], acc: List[RawNote],
+                     resolution: float = 1.0) -> List[RawNote]:
+    """
+    [7] Silencia el acompañamiento en los beats donde la melodía es activa
+    y viceversa, creando alternancia rítmica.
+    resolution: tamaño de ventana en beats (default 1.0 = negra)
+    """
+    if not melody or not acc:
+        return acc
+
+    # Marcar beats ocupados por la melodía (con notas de dur >= 0.5)
+    active_mel: set = set()
+    for n in melody:
+        if n.duration >= 0.5:
+            beat_start = int(n.offset / resolution)
+            beat_end   = int((n.offset + n.duration) / resolution)
+            for b in range(beat_start, beat_end + 1):
+                active_mel.add(b)
+
+    # Silenciar acompañamiento en beats activos de melodía
+    result = []
+    for n in acc:
+        beat = int(n.offset / resolution)
+        if beat not in active_mel:
+            result.append(n)
+        # else: silencio — no añadimos la nota
+
+    # Si el resultado está vacío, devolver el original (evitar silencio total)
+    return result if len(result) >= len(acc) // 3 else acc
+
+
 def _build_accompaniment(prog: List[Tuple[str,int]], key_pc: int,
                           velocity: int, style: str="arpeggio") -> List[RawNote]:
     notes=[]; cursor=0.0; prev=None
@@ -2083,6 +2526,8 @@ def generate(input_midis: List[str],
              tempo: Optional[int]=None,
              sa_compat: bool=False,       # [K]
              variety: float=0.7,           # v5: [0,1] intensidad de variedad musical
+             use_markov: bool=True,          # v6: usar generación Markov para melodía
+             use_forms: bool=True,           # v6: usar formas aprendidas del corpus
              dry_run: bool=False,
              seed: int=42,
              verbose: bool=False) -> None:
@@ -2173,7 +2618,40 @@ def generate(input_midis: List[str],
     elif mode=="position":    role_assignment=_assign_roles_position(model,n_sections)
     else:                     role_assignment=_assign_roles_hybrid(source_sig,model,n_sections)
 
-    if verbose: print(f"  Roles: {[model.roles[i].label for i in role_assignment]}")
+    # v6-[5]: intentar usar forma aprendida del corpus
+    if use_forms and getattr(model, "learned_forms", None):
+        form_seq = _choose_form(model.learned_forms, n_sections, rng)
+        if form_seq is not None:
+            form_role_idxs = _form_to_role_indices(form_seq, model.roles)
+            # Ajustar longitud
+            while len(form_role_idxs) < n_sections:
+                form_role_idxs.append(form_role_idxs[-1])
+            role_assignment = form_role_idxs[:n_sections]
+            if verbose:
+                print(f"  [v6] Forma aprendida: {' → '.join(form_seq[:n_sections])}")
+
+    role_labels = [model.roles[i].label for i in role_assignment]
+    if verbose: print(f"  Roles: {role_labels}")
+
+    # v6-[2]: planificar modulaciones
+    arc_vals_plan = [_arc_value(arc, i/max(n_sections-1,1)) for i in range(n_sections)]
+    key_plan = _plan_modulations(role_labels, key_pc, mode_str, arc_vals_plan, rng)
+    if verbose:
+        mod_str = "  ".join(f"{NOTE_NAMES[k]}{m[0]}" for k,m in key_plan)
+        print(f"  [v6] Modulaciones: {mod_str}")
+
+    # v6-[6]: registrar qué secciones son repeticiones estructurales
+    # Una sección es repetición si su rol ya apareció antes
+    seen_roles: Dict[int,int] = {}   # role_idx → sección donde apareció por primera vez
+    is_repeat: List[bool] = []
+    first_notes: Dict[int,List[RawNote]] = {}  # role_idx → notas de la primera aparición
+    for ri in role_assignment:
+        is_repeat.append(ri in seen_roles)
+        if ri not in seen_roles:
+            seen_roles[ri] = len(is_repeat) - 1
+    if verbose:
+        repeat_mark = ["✓" if r else "○" for r in is_repeat]
+        print(f"  [v6] Repeticiones: {repeat_mark}")
 
     if dry_run:
         print(f"\n  [dry-run] Secciones:")
@@ -2196,6 +2674,10 @@ def generate(input_midis: List[str],
     for i, role_idx in enumerate(role_assignment):
         role=model.roles[role_idx]
         pos=i/max(n_sections-1,1); av=_arc_value(arc,pos)
+        # v6: tonalidad de esta sección
+        sec_key, sec_mode = key_plan[i] if i < len(key_plan) else (key_pc, mode_str)
+        # v6: es repetición estructural de una sección anterior?
+        sec_is_repeat = is_repeat[i] if i < len(is_repeat) else False
 
         # v4: duración de esta sección específica según el rol aprendido
         if not user_gave_bars:
@@ -2225,93 +2707,133 @@ def generate(input_midis: List[str],
             theta_base=_predict_transform_knn(model.knn_regressor,diff_vec,fallback)
         theta=_modulate_theta_by_arc(theta_base,av)
 
-        # [A+D] Seleccionar ventana de la fuente según posición de sección
-        window_beats = sec_bars * 4
-        if variety > 0 and len(source_notes_all) > 4:
-            source_window = _select_source_window(
-                source_notes_all, pos, window_beats, rng)
+        target_beats = sec_bars * 4
+
+        # v6-[6]: si es repetición estructural, recuperar notas de la primera aparición
+        if sec_is_repeat and role_idx in first_notes:
+            repeat_var = 0.15 + variety * 0.25   # más ornamentado si variety es alto
+            melody_notes = _apply_structural_repeat(
+                first_notes[role_idx], repeat_var, sec_key, sec_mode, rng)
+            # Transponer si la tonalidad ha cambiado respecto a la primera aparición
+            if sec_key != key_pc:
+                delta = sec_key - key_pc
+                melody_notes = [RawNote(max(24,min(96,n.pitch+delta)),
+                                        n.duration,n.velocity,n.offset,n.voice)
+                                 for n in melody_notes]
         else:
-            source_window = source_notes_all
+            # v6-[1+4]: generar melodía nueva con Markov si disponible
+            markov = getattr(role, "markov_chain", None)
+            ioi    = getattr(role, "ioi_hist", None)
+            seed   = source_notes_all[0].pitch if source_notes_all else 60
+            # Sesgo de contorno: secciones ascendentes en la primera mitad del arco
+            contour_bias = (2.0*av - 1.0) * 0.5   # [-0.5, +0.5]
 
-        # Transformar material fuente (sobre la ventana seleccionada)
-        melody_notes=_apply_transform(source_window,theta,key_pc,mode_str,sec_bars,rng)
+            if use_markov and markov and len(markov) >= 3:
+                # Base velocity modulated by arc (40 in reposo, 90 in clímax)
+                base_vel_markov = int(np.clip(40 + av * 50, 40, 100))
+                melody_notes = _notes_from_markov(
+                    markov, ioi, seed, target_beats, sec_key, sec_mode,
+                    rng, contour_bias, base_velocity=base_vel_markov)
+            else:
+                # Fallback: ventana de fuente + transform (comportamiento v5)
+                window_beats = target_beats
+                if variety > 0 and len(source_notes_all) > 4:
+                    source_window = _select_source_window(
+                        source_notes_all, pos, window_beats, rng)
+                else:
+                    source_window = source_notes_all
+                melody_notes = _apply_transform(
+                    source_window, theta, sec_key, sec_mode, sec_bars, rng)
 
-        # [G] Sembrar motivo
-        if motif is not None:
-            melody_notes=_apply_motif_to_notes(melody_notes,motif,key_pc,mode_str,theta)
+            # Sembrar motivo al inicio
+            if motif is not None:
+                melody_notes = _apply_motif_to_notes(
+                    melody_notes, motif, sec_key, sec_mode, theta)
 
-        # [G] Silencios estructurales entre frases
+        # Guardar notas de la primera aparición de cada rol (para repetición estructural)
+        if not sec_is_repeat and role_idx not in first_notes and melody_notes:
+            first_notes[role_idx] = deepcopy(melody_notes)
+
+        # Silencios estructurales
         if variety > 0.3:
             melody_notes = _add_phrase_rests(melody_notes, phrase_len_beats=4.0,
                                               rest_dur=0.2, rng=rng)
 
-        # [H] Voice leading + puente con sección anterior
+        # Voice leading + puente
         if prev_melody:
-            bridge=_build_bridge(prev_melody,melody_notes,key_pc,mode_str,n_bridge=2)
+            bridge = _build_bridge(prev_melody, melody_notes, sec_key, sec_mode, n_bridge=2)
             bridge_notes_list.append(bridge)
-            melody_notes=_apply_voice_leading(prev_melody,melody_notes,key_pc,mode_str)
+            melody_notes = _apply_voice_leading(prev_melody, melody_notes, sec_key, sec_mode)
         else:
             bridge_notes_list.append([])
 
-        # [I] Variaciones internas (detectar si la sección es más corta que el target)
+        # Variaciones internas si el material es corto
         total_melody = max((n.offset+n.duration for n in melody_notes), default=0)
-        target_beats = sec_bars * 4
         if total_melody > 0 and total_melody < target_beats * 0.6:
             reps_needed = int(math.ceil(target_beats / max(total_melody, 0.1)))
             full_melody = list(melody_notes)
             for rep in range(1, min(reps_needed, 4)):
-                varied = _apply_internal_variations(melody_notes, rep, key_pc, mode_str, rng)
+                varied = _apply_internal_variations(
+                    melody_notes, rep, sec_key, sec_mode, rng)
                 offset_shift = rep * total_melody
-                shifted = [RawNote(n.pitch, n.duration, n.velocity,
-                                    n.offset+offset_shift, n.voice) for n in varied]
+                shifted = [RawNote(n.pitch,n.duration,n.velocity,
+                                    n.offset+offset_shift,n.voice) for n in varied]
                 full_melody.extend(shifted)
             melody_notes = full_melody
 
-        # [B] Humanización rítmica (intensidad escalada por variety)
+        # Humanización rítmica
+        onset_j = 0.02 * variety
+        vel_j   = int(6 * variety)
         if variety > 0:
-            onset_j  = 0.02 * variety    # hasta ~36ms a 120BPM con variety=1
-            vel_j    = int(6 * variety)  # hasta ±6 MIDI velocity
             melody_notes = _humanize(melody_notes, rng, onset_j, vel_j)
 
-        # Acompañamiento con variedad
-        # [F] Reharmonización: sustituir acordes según tensión del arco
-        progression = _select_progression(role, key_pc, sec_bars, av)
+        # Acompañamiento — usar sec_key para la progresión
+        progression = _select_progression(role, sec_key, sec_bars, av)
         if variety > 0.4:
-            progression = _reharmonize_progression(progression, key_pc, av, rng)
+            progression = _reharmonize_progression(progression, sec_key, av, rng)
 
         acc_smap = {"intro":"bass_only","verse":"arpeggio","development":"block",
                     "climax":"block","outro":"bass_only","prechorus":"block",
                     "chorus":"block","bridge":"arpeggio"}
-        acc_style = acc_smap.get(sec_label,"arpeggio")
-        acc_vel   = max(20,int(np.mean([n.velocity for n in melody_notes]))-20)
+        acc_style = acc_smap.get(sec_label, "arpeggio")
+        acc_vel   = max(20, int(np.mean([n.velocity for n in melody_notes])) - 20)
 
-        # [C] Variación de textura: segunda mitad con estilo diferente
-        style_pairs = {
-            "arpeggio": "block",  "block": "arpeggio",
-            "bass_only": "arpeggio", "alberti": "block",
-        }
+        # v6-[3]: densificación — número de voces según arco
+        n_voices = _voice_count_for_arc(av, sec_label)
+
+        style_pairs = {"arpeggio":"block","block":"arpeggio",
+                        "bass_only":"arpeggio","alberti":"block"}
         if variety > 0.5 and sec_bars >= 8:
             style_b = style_pairs.get(acc_style, acc_style)
             acc_notes = _build_accompaniment_split(
-                progression, key_pc, acc_vel, acc_style, style_b, rng)
+                progression, sec_key, acc_vel, acc_style, style_b, rng)
         else:
-            acc_notes = _build_accompaniment(progression, key_pc, acc_vel, acc_style)
+            acc_notes = _build_accompaniment(progression, sec_key, acc_vel, acc_style)
 
-        bass_notes = _build_bass_line(progression, key_pc, max(20, acc_vel-10))
+        bass_notes = _build_bass_line(progression, sec_key, max(20, acc_vel-10))
 
-        # [E] Contrapunto independiente (solo en desarrollo y clímax, variety alto)
+        # v6-[7]: hoquetus — cuando hay 3+ voces, silenciar acc en beats de melodía activa
+        if n_voices >= 3 and variety > 0.4:
+            acc_notes = _apply_hoquetus(melody_notes, acc_notes, resolution=1.0)
+
+        # Contrapunto (solo si 4 voces y variety alto)
         cp_notes: List[RawNote] = []
-        if variety > 0.6 and sec_label in ("development","climax","chorus","prechorus"):
-            cp_notes = _build_counterpoint(melody_notes, key_pc, mode_str,
-                                            max(20, acc_vel-5), rng)
+        if n_voices >= 4 and variety > 0.6 and sec_label in (
+                "development","climax","chorus","prechorus"):
+            cp_notes = _build_counterpoint(
+                melody_notes, sec_key, sec_mode, max(20, acc_vel-5), rng)
 
-        # [B] Humanizar también el acompañamiento (más suave que la melodía)
+        # Humanizar acompañamiento
         if variety > 0:
             acc_notes  = _humanize(acc_notes,  rng, onset_j*0.5, vel_j//2)
             bass_notes = _humanize(bass_notes, rng, onset_j*0.3, vel_j//3)
 
-        all_notes=_deduplicate(melody_notes+acc_notes+bass_notes+cp_notes)
-        all_notes.sort(key=lambda n:n.offset)
+        # Si densificación baja, quitar acordes (solo bajo + melodía)
+        if n_voices <= 2:
+            acc_notes = []
+
+        all_notes = _deduplicate(melody_notes + acc_notes + bass_notes + cp_notes)
+        all_notes.sort(key=lambda n: n.offset)
 
         generated_sections.append((sec_name,melody_notes,all_notes,sec_bars))
         prev_melody=melody_notes
@@ -2323,8 +2845,10 @@ def generate(input_midis: List[str],
 
         dur_s=sec_bars*4*60.0/final_tempo; ms,ss=divmod(int(dur_s),60)
         motif_mark="[M]" if motif else ""
+        key_mark=f"→{NOTE_NAMES[sec_key]}" if sec_key!=key_pc else ""
+        rep_mark="[R]" if sec_is_repeat else ""
         print(f"  ✓ {sec_path.name:<50} {sec_bars}c  {len(all_notes):>3}n"
-              f"  arc={av:.2f}  {motif_mark}  ~{ms}:{ss:02d}")
+              f"  arc={av:.2f}  {key_mark}{motif_mark}{rep_mark}  ~{ms}:{ss:02d}")
 
     # Concatenar MIDI completo con puentes
     all_events=[]; marker_events=[]; cursor_ticks=0
@@ -2399,7 +2923,9 @@ def generate(input_midis: List[str],
     print(f"\n{'═'*64}")
     bars_str="+".join(str(s[3]) for s in generated_sections)
     print(f"  Obra generada: {ng} secciones, {total_bars} compases ({bars_str}), ~{mt}:{st:02d}")
+    key_str = " → ".join(f"{NOTE_NAMES[k]}{m[0]}" for k,m in key_plan)
     print(f"  Arco: {arc}  |  Roles: {' → '.join(model.roles[i].label for i in role_assignment)}")
+    print(f"  Tonalidades: {key_str}")
     if motif: print(f"  Motivo sembrado en {ng} secciones (grados: {motif.scale_degrees})")
     if sa_compat: print(f"  Nombres SA: {[SA_ROLE_MAP.get(model.roles[i].label,model.roles[i].label) for i in role_assignment]}")
     print(f"  Salida: {out_path}/")
@@ -2540,6 +3066,7 @@ def cmd_generate(args) -> None:
              bars_per_section=args.bars_per_section,out_dir=args.out_dir,
              output_name=args.output_name,tempo=args.tempo,
              sa_compat=args.sa_compat,variety=args.variety,
+             use_markov=not args.no_markov,use_forms=not args.no_forms,
              dry_run=args.dry_run,seed=args.seed,verbose=args.verbose)
 
 def cmd_inspect(args) -> None:
@@ -2601,8 +3128,11 @@ def build_parser() -> argparse.ArgumentParser:
                       help="[K] Nombres de sección compatibles con song_architect.py")
     gen.add_argument("--dry-run",action="store_true")
     gen.add_argument("--variety",type=float,default=0.7,metavar="V",
-                      help="Intensidad de variedad musical [0-1] (default: 0.7). "
-                           "0=mínima (comportamiento v4), 1=máxima variedad")
+                      help="Intensidad de variedad musical [0-1] (default: 0.7)")
+    gen.add_argument("--no-markov",action="store_true",
+                      help="[v6] Desactivar generación Markov (usar transform v5)")
+    gen.add_argument("--no-forms",action="store_true",
+                      help="[v6] Desactivar uso de formas aprendidas")
     gen.add_argument("--seed",type=int,default=42); gen.add_argument("--verbose",action="store_true")
     gen.set_defaults(func=cmd_generate)
 
