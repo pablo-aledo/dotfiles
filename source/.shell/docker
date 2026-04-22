@@ -345,6 +345,7 @@ case $1 in
                          ;;
 (pi_agent)               docker run -it --rm \
                            -v "$(pwd):/agent-workspace" \
+                            -v "$HOME/.pi:/home/pi/.pi" \
                            -e OPENAI_API_KEY=$OPENAI_API_KEY \
                            -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
                            pi_agent \
