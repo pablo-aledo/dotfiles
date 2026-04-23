@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                        ML INPAINTER  v1.0                                    ║
+║                        ML INPAINTER  v2.0                                    ║
 ║     Relleno inteligente de compases vacíos en obras MIDI multi-pista         ║
 ║                                                                              ║
 ║  Detecta compases vacíos o de baja densidad y los rellena usando una         ║
-║  combinación de cadenas de Markov bidireccionales, interpolación de           ║
-║  contorno y (opcionalmente) un modelo PyTorch entrenado sobre corpus.         ║
-║  Soporta múltiples pistas con coordinación armónica entre ellas.             ║
+║  combinación de análisis de estilo por pista, cadenas de Markov              ║
+║  bidireccionales y (opcionalmente) un modelo PyTorch autoregresivo           ║
+║  entrenado sobre corpus. Coordina múltiples pistas con constraint            ║
+║  armónico entre ellas.                                                       ║
 ║                                                                              ║
 ║  MODOS:                                                                      ║
 ║    scan     — detecta huecos y genera reporte detallado                     ║
@@ -25,41 +26,76 @@
 ║    python ml_inpainter.py fill obra.mid                                     ║
 ║    python ml_inpainter.py fill obra.mid --gaps 1 3                         ║
 ║    python ml_inpainter.py fill obra.mid --strategy contour_blend            ║
-║    python ml_inpainter.py fill obra.mid --length keep                       ║
-║    python ml_inpainter.py fill obra.mid --length 4                          ║
-║    python ml_inpainter.py fill obra.mid --length auto                       ║
-║    python ml_inpainter.py fill obra.mid --checkpoint-dir ./ckpt/ -o out.mid║
+║    python ml_inpainter.py fill obra.mid --length keep|auto|N               ║
+║    python ml_inpainter.py fill obra.mid --checkpoint-dir ./ckpt/            ║
+║    python ml_inpainter.py fill obra.mid --no-chord-conditioning             ║
+║    python ml_inpainter.py fill obra.mid --context-bars 12                  ║
+║    python ml_inpainter.py fill obra.mid -o salida.mid                      ║
 ║                                                                              ║
 ║  ── VARIANTS ─────────────────────────────────────────────────────────────  ║
-║    python ml_inpainter.py variants obra.mid                                 ║
 ║    python ml_inpainter.py variants obra.mid --n 8                           ║
 ║    python ml_inpainter.py variants obra.mid --n 6 --out-dir ./variantes/   ║
 ║    python ml_inpainter.py variants obra.mid --strategies markov interpolate ║
 ║    python ml_inpainter.py variants obra.mid --gaps 2 --seeds 0 1 2 3       ║
+║    python ml_inpainter.py variants obra.mid --score-weights                 ║
+║        tonal=0.4 boundary=0.3 tension=0.2 rhythm=0.1                       ║
 ║                                                                              ║
 ║  ── TRAIN ────────────────────────────────────────────────────────────────  ║
 ║    python ml_inpainter.py train corpus/                                     ║
 ║    python ml_inpainter.py train corpus/ --epochs 80 --lr 5e-4              ║
-║    python ml_inpainter.py train corpus/ --checkpoint-dir ./mis_modelos/    ║
+║    python ml_inpainter.py train corpus/ --hidden-dim 256                   ║
 ║    python ml_inpainter.py train corpus/ --mask-ratio 0.25                  ║
+║    python ml_inpainter.py train corpus/ --mask-phrase                      ║
+║    python ml_inpainter.py train corpus/ --augment-transpose 5              ║
+║    python ml_inpainter.py train corpus/ --augment-reverse                  ║
+║    python ml_inpainter.py train corpus/ --role melody                      ║
+║    python ml_inpainter.py train corpus/ --role bass                        ║
+║    python ml_inpainter.py train corpus/ --checkpoint-dir ./mis_modelos/    ║
 ║                                                                              ║
 ║  ── INSPECT ──────────────────────────────────────────────────────────────  ║
 ║    python ml_inpainter.py inspect ./ckpt/inpainter.pkl                     ║
 ║                                                                              ║
 ║  ESTRATEGIAS (--strategy):                                                  ║
-║    auto          — elige automáticamente según longitud y contexto          ║
-║    markov_bi     — cadenas de Markov bidireccionales fusionadas             ║
+║    auto          — elige según estilo detectado de la pista                 ║
+║    markov_bi     — Markov bidireccional con análisis de estilo              ║
 ║    interpolate   — interpolación de contorno entre bordes del hueco         ║
 ║    contour_blend — combinación ponderada de markov_bi e interpolate         ║
 ║    ml_guided     — guiado por modelo PyTorch (requiere --checkpoint-dir)    ║
 ║                                                                              ║
 ║  SCORING AUTOMÁTICO (variants):                                             ║
-║    tonal_coherence   35% — notas dentro de la escala del contexto          ║
-║    boundary_smooth   30% — suavidad de las uniones en los bordes           ║
+║    Pesos por defecto (configurables con --score-weights):                   ║
+║    tonal_coherence    35% — notas dentro de la escala del contexto         ║
+║    boundary_smooth    30% — suavidad de las uniones en los bordes          ║
 ║    tension_continuity 20% — continuidad de la curva de tensión             ║
-║    rhythm_diversity   15% — diversidad rítmica no mecánica                 ║
+║    rhythm_consistency 15% — consistencia rítmica respecto al estilo        ║
+║    El criterio rhythm_consistency es sensible al rol de la pista:           ║
+║    para melody favorece la diversidad; para bass/inner, la regularidad.     ║
 ║                                                                              ║
-║  DEPENDENCIAS: pip install mido numpy (+ torch para --strategy ml_guided)  ║
+║  MEJORAS v2.0 (respecto a v1.0):                                            ║
+║  [M1] Features de estilo rítmico en el vector ML: IOI modal, regularidad,  ║
+║       notas/compás, polifonía y rol de pista (8 dims extra → FEAT_DIM=56). ║
+║  [M2] Enmascaramiento basado en límites de frase (--mask-phrase): los       ║
+║       huecos sintéticos de entrenamiento se colocan en transiciones de       ║
+║       densidad real, no de forma aleatoria.                                  ║
+║  [M3] Scoring de ritmo sensible al rol: rhythm_consistency premia la        ║
+║       regularidad en bajo/acompañamiento y la variedad en melodía.          ║
+║  [M4] Modelo autoregresivo: el forward recibe el pitch y duración de la     ║
+║       nota anterior, eliminando saltos incoherentes entre eventos.          ║
+║  [M5] Contexto derecho enriquecido: el vector de features incluye IOI       ║
+║       del lado derecho y los pitches absolutos de borde izq./dcho.         ║
+║  [M6] Encoders duales con atención: contextos izq./dcho. codificados por   ║
+║       separado y combinados mediante una capa de atención aditiva simple.   ║
+║  [M7] Modelos por rol (--role melody|inner|bass|all): entrena modelos       ║
+║       especializados por función orquestal. En inferencia se selecciona     ║
+║       automáticamente el modelo más adecuado para cada pista.               ║
+║  [M8] Condicionamiento armónico explícito: los chord_pcs del compás se      ║
+║       añaden como one-hot de 12 dims al vector de features (desactivable    ║
+║       con --no-chord-conditioning).                                          ║
+║  [M9] Augmentation de corpus: transposición cromática (--augment-transpose  ║
+║       N genera ±N copias en semitonos aleatorios) e inversión temporal      ║
+║       dentro de compás (--augment-reverse).                                  ║
+║                                                                              ║
+║  DEPENDENCIAS: pip install mido numpy (+ torch para ml_guided/train)        ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -101,7 +137,7 @@ try:
 except ImportError:
     TORCH_OK = False
 
-VERSION = "1.0"
+VERSION = "2.0"
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONSTANTES MUSICALES
@@ -1213,10 +1249,15 @@ def _generate_notes_ml(
         n_bars: int, bpb: int, key_pc: int, key_mode: str,
         rng: random.Random, model_data: Dict,
         ioi_hist: Optional[np.ndarray] = None,
-        anchor_pcs: Optional[List[int]] = None) -> List[RawNote]:
+        anchor_pcs: Optional[List[int]] = None,
+        style: Optional['TrackStyle'] = None,
+        use_chord_conditioning: bool = True) -> List[RawNote]:
     """
-    Generación guiada por el modelo BiLSTM entrenado.
-    Si el modelo falla, cae back a contour_blend.
+    Generación autoregresiva guiada por el modelo InpainterNet v2.
+    M4: pasa pitch y duración previos en cada paso.
+    M7: selecciona el modelo adecuado según el rol de la pista (si existen
+        modelos especializados en model_data['role_models']).
+    M8: incluye chord_pcs en el vector de features si use_chord_conditioning.
     """
     if not TORCH_OK or model_data is None:
         return _generate_notes_contour_blend(
@@ -1224,63 +1265,88 @@ def _generate_notes_ml(
             rng, ioi_hist, anchor_pcs)
 
     try:
-        model = InpainterNet(model_data['config'])
-        model.load_state_dict(model_data['state_dict'])
+        # M7: seleccionar modelo por rol si existen modelos especializados
+        track_role = style.role if style and hasattr(style, 'role') else 'unknown'
+        role_models = model_data.get('role_models', {})
+        if track_role in role_models:
+            active_data = role_models[track_role]
+        elif 'bass' in role_models and track_role in ('bass_melodic', 'bass_root'):
+            active_data = role_models['bass']
+        else:
+            active_data = model_data
+
+        model = InpainterNet(active_data['config'])
+        model.load_state_dict(active_data['state_dict'])
         model.eval()
 
         target_beats = n_bars * bpb
-        feat = _build_inpainter_features(left_notes, right_notes,
-                                          key_pc, key_mode, n_bars, bpb)
+        feat = _build_inpainter_features(
+            left_notes, right_notes, key_pc, key_mode, n_bars, bpb,
+            style=style,
+            chord_pcs=anchor_pcs,
+            use_chord_conditioning=use_chord_conditioning)
         feat_t = torch.FloatTensor(feat).unsqueeze(0)
 
-        scale_pcs = _get_scale_pcs(key_pc, key_mode)
-        seed_pitch = sorted(left_notes, key=lambda n: n.offset)[-1].pitch \
-                     if left_notes else key_pc + 60
+        # Estado inicial autoregresivo (M4)
+        if left_notes:
+            prev_p = sorted(left_notes, key=lambda n: n.offset)[-1].pitch / 127.0
+            prev_d = sorted(left_notes, key=lambda n: n.offset)[-1].duration / 4.0
+        else:
+            prev_p = (key_pc + 60) / 127.0
+            prev_d = 0.25
+
+        pitch_pool = style.pitch_pool if style else []
+        scale_pcs  = set(_get_scale_pcs(key_pc, key_mode))
+        dur_vals   = [0.25, 0.5, 1.0, 2.0, 0.75, 1.5, 0.125, 0.333]
 
         notes: List[RawNote] = []
         cursor = 0.0
-        prev_pitch = seed_pitch
 
         with torch.no_grad():
             while cursor < target_beats:
-                pos_t = torch.FloatTensor([[cursor / max(target_beats, 1)]])
-                pitch_logits, dur_logits, vel_out = model(feat_t, pos_t)
+                pos_t      = torch.FloatTensor([[cursor / max(target_beats, 1)]])
+                prev_p_t   = torch.FloatTensor([[float(np.clip(prev_p, 0, 1))]])
+                prev_d_t   = torch.FloatTensor([[float(np.clip(prev_d, 0, 1))]])
 
-                # Samplear pitch
+                pitch_logits, dur_logits, vel_out = model(
+                    feat_t, pos_t, prev_p_t, prev_d_t)
+
+                # Samplear pitch con temperatura 0.8
                 pitch_probs = torch.softmax(pitch_logits[0] / 0.8, dim=-1).numpy()
-                pitch_bins = model_data['config']['pitch_bins']
-                pitch_step = 61 / pitch_bins
-                pitch_idx = rng.choices(range(pitch_bins),
-                                         weights=pitch_probs.tolist())[0]
-                raw_pitch = int(36 + pitch_idx * pitch_step)
-                new_pitch = _snap_to_scale(
-                    max(36, min(96, raw_pitch)), key_pc, key_mode)
+                pitch_idx   = rng.choices(range(PITCH_BINS),
+                                           weights=pitch_probs.tolist())[0]
+                raw_pitch   = 36 + pitch_idx
+                if pitch_pool:
+                    new_pitch = min(pitch_pool,
+                                    key=lambda p: (abs(p - raw_pitch),
+                                                   0 if p % 12 in scale_pcs else 1))
+                else:
+                    new_pitch = _snap_to_scale(
+                        max(36, min(96, raw_pitch)), key_pc, key_mode)
 
                 # Samplear duración
-                dur_probs = torch.softmax(dur_logits[0], dim=-1).numpy()
-                dur_vals = [0.25, 0.5, 1.0, 2.0, 0.75, 1.5, 0.125, 0.333]
-                dur_idx = rng.choices(range(len(dur_vals)),
-                                       weights=dur_probs[:len(dur_vals)].tolist())[0]
+                dur_probs  = torch.softmax(dur_logits[0], dim=-1).numpy()
+                dur_idx    = rng.choices(range(len(dur_vals)),
+                                          weights=dur_probs[:len(dur_vals)].tolist())[0]
                 chosen_dur = dur_vals[dur_idx]
 
-                # Velocidad
-                vel = int(np.clip(float(vel_out[0, 0]) * 127, 35, 110))
-                vel += rng.randint(-5, 5)
-                vel = int(np.clip(vel, 35, 110))
-
+                vel = int(np.clip(float(vel_out[0, 0]) * 127 + rng.randint(-5, 5),
+                                   30, 120))
                 dur = min(chosen_dur, target_beats - cursor)
-                if dur < 0.125:
+                if dur < 0.05:
                     break
 
                 notes.append(RawNote(new_pitch, dur, vel, cursor))
                 cursor += chosen_dur
-                prev_pitch = new_pitch
+                # Actualizar estado previo (M4)
+                prev_p = new_pitch / 127.0
+                prev_d = min(chosen_dur / 4.0, 1.0)
 
         return notes if notes else _generate_notes_contour_blend(
             left_notes, right_notes, n_bars, bpb, key_pc, key_mode,
             rng, ioi_hist, anchor_pcs)
 
-    except Exception as e:
+    except Exception:
         return _generate_notes_contour_blend(
             left_notes, right_notes, n_bars, bpb, key_pc, key_mode,
             rng, ioi_hist, anchor_pcs)
@@ -1292,7 +1358,9 @@ def _generate_notes_ml(
 def fill_gap_multitrack(ctx: PieceContext, gap: GapRegion,
                          strategy: str = 'auto', seed: int = 42,
                          length_mode: str = 'keep', length_bars: int = 0,
-                         model_data: Optional[Dict] = None) -> Dict[int, List[RawNote]]:
+                         model_data: Optional[Dict] = None,
+                         use_chord_conditioning: bool = True,
+                         context_bars: int = 8) -> Dict[int, List[RawNote]]:
     """
     Rellena un hueco en todas las pistas afectadas con coordinación armónica.
     Devuelve dict {track_idx: [RawNote]} con las notas generadas.
@@ -1371,7 +1439,11 @@ def fill_gap_multitrack(ctx: PieceContext, gap: GapRegion,
         # ── ANÁLISIS DE ESTILO DE LA PISTA ───────────────────────────────────
         # Usar el contexto izquierdo para aprender el estilo
         style = _analyze_track_style(left_ctx if left_ctx else ti.notes,
-                                      bpb, n_context_bars=8)
+                                      bpb, n_context_bars=context_bars)
+        try:
+            style.role = ti.role  # type: ignore
+        except Exception:
+            pass
 
         # Ajustar rango de pitch según registro de la pista
         def clamp_pitch(n: RawNote) -> RawNote:
@@ -1404,7 +1476,9 @@ def fill_gap_multitrack(ctx: PieceContext, gap: GapRegion,
         elif strategy == 'ml_guided':
             raw_notes = _generate_notes_ml(
                 left_ctx, right_ctx, n_bars_fill, bpb, key_pc, key_mode,
-                rng, model_data, ioi_hist, anchor_pcs)
+                rng, model_data, ioi_hist, anchor_pcs,
+                style=style,
+                use_chord_conditioning=use_chord_conditioning)
         else:  # contour_blend y auto ya resuelto
             raw_notes = _generate_from_style(
                 style, left_ctx, right_ctx, n_bars_fill, bpb,
@@ -1515,11 +1589,29 @@ def write_original_with_gap_info(ctx: PieceContext, output_path: str):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def score_fill(ctx: PieceContext, gap: GapRegion,
-               filled_notes: Dict[int, List[RawNote]]) -> Dict[str, float]:
+               filled_notes: Dict[int, List[RawNote]],
+               score_weights: Optional[Dict[str, float]] = None) -> Dict[str, float]:
     """
     Puntúa el relleno de un hueco según cuatro criterios.
-    Devuelve dict con métricas y puntuación total.
+
+    M3: rhythm_consistency es sensible al rol de la pista.
+        Para melody: premia la diversidad rítmica.
+        Para bass/inner: premia la regularidad (consistencia con el ostinato).
+
+    score_weights: dict opcional con pesos para cada criterio.
+        Claves: 'tonal', 'boundary', 'tension', 'rhythm'. Deben sumar 1.0.
     """
+    W = score_weights or {}
+    w_tonal    = W.get('tonal',    0.35)
+    w_boundary = W.get('boundary', 0.30)
+    w_tension  = W.get('tension',  0.20)
+    w_rhythm   = W.get('rhythm',   0.15)
+    # Renormalizar por si no suman 1
+    total_w = w_tonal + w_boundary + w_tension + w_rhythm
+    if total_w > 0:
+        w_tonal /= total_w; w_boundary /= total_w
+        w_tension /= total_w; w_rhythm /= total_w
+
     bpb = ctx.bpb
     key_pc = gap.context_key_pc
     key_mode = gap.context_key_mode
@@ -1531,16 +1623,14 @@ def score_fill(ctx: PieceContext, gap: GapRegion,
 
     if not all_filled:
         return {'tonal_coherence': 0.0, 'boundary_smooth': 0.0,
-                'tension_continuity': 0.0, 'rhythm_diversity': 0.0,
+                'tension_continuity': 0.0, 'rhythm_consistency': 0.0,
                 'total': 0.0}
 
-    # 1. Coherencia tonal (35%)
+    # 1. Coherencia tonal
     in_scale = sum(1 for n in all_filled if n.pitch % 12 in scale_pcs)
     tonal_coherence = in_scale / len(all_filled)
 
-    # 2. Suavidad de uniones (30%)
-    # Distancia entre última nota del contexto izq y primera del relleno,
-    # y entre última del relleno y primera del contexto dcho
+    # 2. Suavidad de uniones
     smooth_scores = []
     for ti in ctx.tracks:
         fn = filled_notes.get(ti.idx, [])
@@ -1551,44 +1641,70 @@ def score_fill(ctx: PieceContext, gap: GapRegion,
         fn_sorted   = sorted(fn, key=lambda n: n.offset)
 
         if left_notes and fn_sorted:
-            last_left = sorted(left_notes, key=lambda n: n.offset)[-1].pitch
-            first_fill = fn_sorted[0].pitch
-            dist = abs(last_left - first_fill)
+            dist = abs(sorted(left_notes, key=lambda n: n.offset)[-1].pitch
+                       - fn_sorted[0].pitch)
             smooth_scores.append(max(0.0, 1.0 - dist / 24.0))
-
         if right_notes and fn_sorted:
-            last_fill   = fn_sorted[-1].pitch
-            first_right = sorted(right_notes, key=lambda n: n.offset)[0].pitch
-            dist = abs(last_fill - first_right)
+            dist = abs(fn_sorted[-1].pitch
+                       - sorted(right_notes, key=lambda n: n.offset)[0].pitch)
             smooth_scores.append(max(0.0, 1.0 - dist / 24.0))
 
     boundary_smooth = float(np.mean(smooth_scores)) if smooth_scores else 0.5
 
-    # 3. Continuidad de tensión (20%)
-    t_fill = _harmonic_tension(all_filled)
-    t_left  = gap.context_tension_left
-    t_right = gap.context_tension_right
-    t_expected = (t_left + t_right) / 2.0
+    # 3. Continuidad de tensión
+    t_fill     = _harmonic_tension(all_filled)
+    t_expected = (gap.context_tension_left + gap.context_tension_right) / 2.0
     tension_continuity = max(0.0, 1.0 - abs(t_fill - t_expected) * 2.0)
 
-    # 4. Diversidad rítmica (15%)
-    if len(all_filled) > 1:
-        durs = [n.duration for n in all_filled]
+    # 4. Consistencia rítmica — sensible al rol (M3)
+    rhythm_scores = []
+    for ti in ctx.tracks:
+        fn = filled_notes.get(ti.idx, [])
+        if not fn:
+            continue
+        role = ti.role
+        durs = [n.duration for n in fn]
+        if len(durs) < 2:
+            rhythm_scores.append(0.5)
+            continue
         dur_std = float(np.std(durs))
-        rhythm_diversity = min(1.0, dur_std / 0.5)
-    else:
-        rhythm_diversity = 0.5
 
-    total = (tonal_coherence   * 0.35 +
-             boundary_smooth   * 0.30 +
-             tension_continuity * 0.20 +
-             rhythm_diversity   * 0.15)
+        if role in ('melody',):
+            # Melody: diversidad es buena
+            rhythm_scores.append(min(1.0, dur_std / 0.5))
+        else:
+            # Bass, inner, harmony: regularidad es buena
+            # Comparar IOI modal del relleno con IOI modal del contexto
+            left_ctx = [n for n in ti.notes if n.offset < gap_beat_lo]
+            if left_ctx:
+                style = _analyze_track_style(left_ctx, bpb)
+                ctx_modal = style.ioi_mode
+                fill_iois = [fn[i+1].offset - fn[i].offset
+                             for i in range(len(fn)-1)
+                             if fn[i+1].offset - fn[i].offset > 0.02]
+                if fill_iois:
+                    fill_modal = Counter(round(x * 8) / 8
+                                         for x in fill_iois).most_common(1)[0][0]
+                    match = 1.0 if abs(fill_modal - ctx_modal) < 0.125 else \
+                            max(0.0, 1.0 - abs(fill_modal - ctx_modal))
+                    rhythm_scores.append(match)
+                else:
+                    rhythm_scores.append(0.5)
+            else:
+                rhythm_scores.append(0.5)
+
+    rhythm_consistency = float(np.mean(rhythm_scores)) if rhythm_scores else 0.5
+
+    total = (tonal_coherence    * w_tonal    +
+             boundary_smooth    * w_boundary +
+             tension_continuity * w_tension  +
+             rhythm_consistency * w_rhythm)
 
     return {
         'tonal_coherence':    round(tonal_coherence, 3),
         'boundary_smooth':    round(boundary_smooth, 3),
         'tension_continuity': round(tension_continuity, 3),
-        'rhythm_diversity':   round(rhythm_diversity, 3),
+        'rhythm_consistency': round(rhythm_consistency, 3),
         'total':              round(total, 3),
     }
 
@@ -1596,55 +1712,100 @@ def score_fill(ctx: PieceContext, gap: GapRegion,
 #  BLOQUE 8 — MODELO PYTORCH (InpainterNet)
 # ══════════════════════════════════════════════════════════════════════════════
 
-FEAT_DIM   = 40   # dimensión del vector de features
+FEAT_DIM   = 56   # v2: 40 base + 8 estilo rítmico + 8 IOI dcho + 12 chord one-hot → 68 total
+                  # con --no-chord-conditioning: 56 dims
+CHORD_FEAT = 12   # dims adicionales para condicionamiento armónico (M8)
 PITCH_BINS = 61   # 36..96 en semitonos
 DUR_BINS   = 8
 HIDDEN_DIM = 128
 
-def _build_inpainter_features(left_notes: List[RawNote], right_notes: List[RawNote],
-                                key_pc: int, key_mode: str,
-                                n_bars: int, bpb: int) -> np.ndarray:
-    """
-    Vector de 40 features que describe el contexto de un hueco:
-    [0-11]  histograma PC del contexto izquierdo
-    [12-23] histograma PC del contexto derecho
-    [24-31] IOI histogram del contexto izquierdo
-    [32]    tónica normalizada
-    [33]    modo (0=mayor, 1=menor)
-    [34]    longitud del hueco (normalizada)
-    [35]    tensión izquierda
-    [36]    tensión derecha
-    [37]    densidad izquierda
-    [38]    densidad derecha
-    [39]    ratio longitud/contexto
-    """
-    feat = np.zeros(FEAT_DIM, dtype=np.float32)
+# Mapeo de rol a índice para la feature de rol de pista (M1)
+ROLE_IDX = {'melody': 0, 'inner': 1, 'harmony': 2,
+             'bass_melodic': 3, 'bass_root': 4, 'unknown': 5}
 
-    # PC histograms
+def _build_inpainter_features(
+        left_notes: List[RawNote], right_notes: List[RawNote],
+        key_pc: int, key_mode: str,
+        n_bars: int, bpb: int,
+        style: Optional['TrackStyle'] = None,
+        chord_pcs: Optional[List[int]] = None,
+        use_chord_conditioning: bool = True) -> np.ndarray:
+    """
+    Vector de features que describe el contexto de un hueco.
+
+    Dims base (56):
+      [0-11]   histograma PC ponderado por duración — contexto izquierdo
+      [12-23]  histograma PC ponderado por duración — contexto derecho
+      [24-31]  IOI histogram del contexto izquierdo            (M5)
+      [32-39]  IOI histogram del contexto derecho              (M5)
+      [40]     tónica normalizada (0..1)
+      [41]     modo (0=mayor, 1=menor)
+      [42]     longitud del hueco (normalizada 0..1)
+      [43]     tensión izquierda
+      [44]     tensión derecha
+      [45]     densidad izquierda
+      [46]     densidad derecha
+      [47]     pitch absoluto borde izquierdo (normalizado)    (M5)
+      [48]     pitch absoluto borde derecho  (normalizado)     (M5)
+      [49]     IOI modal de la pista (normalizado)             (M1)
+      [50]     regularidad rítmica de la pista (0..1)         (M1)
+      [51]     notas/compás normalizadas                       (M1)
+      [52]     grado de polifonía (0..1)                      (M1)
+      [53-55]  rol de pista one-hot reducido (melody/inner/bass) (M1)
+
+    Dims opcionales (12, añadidas si use_chord_conditioning=True):
+      [56-67]  chord PCs one-hot del compás actual             (M8)
+    """
+    dim = FEAT_DIM + (CHORD_FEAT if use_chord_conditioning else 0)
+    feat = np.zeros(dim, dtype=np.float32)
+
+    # ── PC histograms ─────────────────────────────────────────────────────────
     if left_notes:
-        for n in left_notes[-32:]:
+        for n in left_notes[-48:]:
             feat[n.pitch % 12] += n.duration
         s = feat[:12].sum()
         if s > 0: feat[:12] /= s
 
     if right_notes:
-        for n in right_notes[:32]:
+        for n in right_notes[:48]:
             feat[12 + n.pitch % 12] += n.duration
         s = feat[12:24].sum()
         if s > 0: feat[12:24] /= s
 
-    # IOI histogram
-    ioi = _build_ioi_histogram(left_notes) if left_notes else np.ones(8)/8
-    feat[24:32] = ioi
+    # ── IOI histograms izq. y dcho. (M5) ─────────────────────────────────────
+    feat[24:32] = _build_ioi_histogram(left_notes)  if left_notes  else np.ones(8)/8
+    feat[32:40] = _build_ioi_histogram(right_notes) if right_notes else np.ones(8)/8
 
-    feat[32] = key_pc / 12.0
-    feat[33] = 0.0 if key_mode == 'major' else 1.0
-    feat[34] = min(1.0, n_bars / 16.0)
-    feat[35] = _harmonic_tension(left_notes[-16:]) if left_notes else 0.5
-    feat[36] = _harmonic_tension(right_notes[:16]) if right_notes else 0.5
-    feat[37] = min(1.0, len(left_notes) / max(n_bars * bpb * 2, 1))
-    feat[38] = min(1.0, len(right_notes) / max(n_bars * bpb * 2, 1))
-    feat[39] = n_bars / max(len(left_notes) + len(right_notes), 1)
+    # ── Escalares básicos ─────────────────────────────────────────────────────
+    feat[40] = key_pc / 12.0
+    feat[41] = 0.0 if key_mode == 'major' else 1.0
+    feat[42] = min(1.0, n_bars / 16.0)
+    feat[43] = _harmonic_tension(left_notes[-16:])  if left_notes  else 0.5
+    feat[44] = _harmonic_tension(right_notes[:16])  if right_notes else 0.5
+    feat[45] = min(1.0, len(left_notes)  / max(n_bars * bpb * 2, 1))
+    feat[46] = min(1.0, len(right_notes) / max(n_bars * bpb * 2, 1))
+
+    # ── Pitches absolutos de borde (M5) ──────────────────────────────────────
+    if left_notes:
+        feat[47] = sorted(left_notes,  key=lambda n: n.offset)[-1].pitch / 127.0
+    if right_notes:
+        feat[48] = sorted(right_notes, key=lambda n: n.offset)[0].pitch  / 127.0
+
+    # ── Features de estilo rítmico (M1) ──────────────────────────────────────
+    if style is not None:
+        feat[49] = min(1.0, style.ioi_mode / 4.0)
+        feat[50] = style.ioi_regularity
+        feat[51] = min(1.0, style.notes_per_bar / 20.0)
+        feat[52] = style.polyphony
+        # Rol: melody=0, inner=1, bass=2 (reducido a 3 clases)
+        role_idx = ROLE_IDX.get(style.role if hasattr(style, 'role') else 'unknown', 5)
+        reduced  = min(2, role_idx // 2)   # 0→melody, 1→inner, 2→bass
+        feat[53 + reduced] = 1.0
+
+    # ── Condicionamiento armónico one-hot (M8) ────────────────────────────────
+    if use_chord_conditioning and chord_pcs:
+        for pc in chord_pcs:
+            feat[FEAT_DIM + (pc % 12)] = 1.0
 
     return feat
 
@@ -1652,8 +1813,18 @@ def _build_inpainter_features(left_notes: List[RawNote], right_notes: List[RawNo
 if TORCH_OK:
     class InpainterNet(nn.Module):
         """
-        MLP que predice pitch, duración y velocidad para cada evento del relleno,
-        condicionado por features de contexto y posición relativa en el hueco.
+        Modelo autoregresivo con encoders duales y atención (v2).
+
+        Arquitectura (M4, M6):
+          - LeftEncoder:  MLP sobre features del contexto izquierdo
+          - RightEncoder: MLP sobre features del contexto derecho
+          - Atención aditiva: peso adaptativo entre ambos encoders según
+            la posición relativa en el hueco (izq pesa más al inicio,
+            dcho pesa más al final)
+          - Autoregresivo: recibe (pitch_prev, dur_prev) como input
+            adicional para evitar saltos incoherentes entre eventos (M4)
+          - Heads: pitch (clasificación), duración (clasificación),
+            velocidad (regresión sigmoide)
         """
         def __init__(self, config: Dict):
             super().__init__()
@@ -1661,16 +1832,39 @@ if TORCH_OK:
             hidden_dim = config.get('hidden_dim', HIDDEN_DIM)
             pitch_bins = config.get('pitch_bins', PITCH_BINS)
             dur_bins   = config.get('dur_bins', DUR_BINS)
-
             self.config = config
 
-            # Encoder de contexto
-            self.context_enc = nn.Sequential(
-                nn.Linear(feat_dim + 1, hidden_dim),  # +1 para posición relativa
+            half = feat_dim // 2   # mitad izq / mitad dcha del vector
+
+            # Encoders separados para contexto izq. y dcho. (M6)
+            enc_out = hidden_dim // 2
+            self.left_enc = nn.Sequential(
+                nn.Linear(half, hidden_dim),
                 nn.LayerNorm(hidden_dim),
                 nn.ReLU(),
                 nn.Dropout(0.15),
-                nn.Linear(hidden_dim, hidden_dim // 2),
+                nn.Linear(hidden_dim, enc_out),
+                nn.LayerNorm(enc_out),
+                nn.ReLU(),
+            )
+            self.right_enc = nn.Sequential(
+                nn.Linear(feat_dim - half, hidden_dim),
+                nn.LayerNorm(hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.15),
+                nn.Linear(hidden_dim, enc_out),
+                nn.LayerNorm(enc_out),
+                nn.ReLU(),
+            )
+
+            # Capa de atención aditiva (M6): combina left/right según posición
+            self.attn_w = nn.Linear(enc_out * 2 + 1, 2)  # +1 para posición
+
+            # Input de la capa de fusión:
+            #   enc_out (contexto fusionado) + 1 (pos) + 2 (prev_pitch, prev_dur)
+            fusion_in = enc_out + 1 + 2   # (M4: +2 para autoregresivo)
+            self.fusion = nn.Sequential(
+                nn.Linear(fusion_in, hidden_dim // 2),
                 nn.LayerNorm(hidden_dim // 2),
                 nn.ReLU(),
             )
@@ -1680,14 +1874,30 @@ if TORCH_OK:
             self.dur_head   = nn.Linear(h, dur_bins)
             self.vel_head   = nn.Sequential(nn.Linear(h, 1), nn.Sigmoid())
 
-        def forward(self, feat: 'torch.Tensor', pos: 'torch.Tensor'):
-            x = torch.cat([feat, pos], dim=-1)
-            h = self.context_enc(x)
-            return self.pitch_head(h), self.dur_head(h), self.vel_head(h)
+        def forward(self, feat: 'torch.Tensor', pos: 'torch.Tensor',
+                    prev_pitch: 'torch.Tensor', prev_dur: 'torch.Tensor'):
+            """
+            feat:       [B, feat_dim]
+            pos:        [B, 1]   posición relativa en el hueco (0..1)
+            prev_pitch: [B, 1]   pitch anterior normalizado (0..1)  — M4
+            prev_dur:   [B, 1]   duración anterior normalizada      — M4
+            """
+            half = feat.shape[-1] // 2
+            left_h  = self.left_enc(feat[:, :half])
+            right_h = self.right_enc(feat[:, half:])
+
+            # Atención aditiva: peso según posición (M6)
+            attn_in  = torch.cat([left_h, right_h, pos], dim=-1)
+            attn_w   = torch.softmax(self.attn_w(attn_in), dim=-1)  # [B, 2]
+            ctx      = attn_w[:, 0:1] * left_h + attn_w[:, 1:2] * right_h
+
+            # Fusión con posición y estado previo (M4)
+            fused = self.fusion(torch.cat([ctx, pos, prev_pitch, prev_dur], dim=-1))
+            return self.pitch_head(fused), self.dur_head(fused), self.vel_head(fused)
 
 
     class InpainterDataset(Dataset):
-        """Dataset de pares (features, target_note) extraídos de un corpus."""
+        """Dataset de pares (features, prev_state, target_note) para entrenamiento."""
         def __init__(self, samples: List[Dict]):
             self.samples = samples
 
@@ -1698,34 +1908,126 @@ if TORCH_OK:
             s = self.samples[idx]
             return (torch.FloatTensor(s['feat']),
                     torch.FloatTensor([s['pos']]),
+                    torch.FloatTensor([s['prev_pitch']]),   # M4
+                    torch.FloatTensor([s['prev_dur']]),     # M4
                     torch.LongTensor([s['pitch_bin']]),
                     torch.LongTensor([s['dur_bin']]),
                     torch.FloatTensor([s['vel']]))
 
 
-def extract_training_samples(midi_path: str, mask_ratio: float = 0.2,
-                               bpb_override: int = 0) -> List[Dict]:
+def _detect_phrase_boundaries(all_notes: List[RawNote], bpb: int,
+                                n_bars: int) -> List[int]:
     """
-    Extrae muestras de entrenamiento de un MIDI:
-    enmascara segmentos aleatorios y genera pares (contexto_izq+dcho, nota_enmascarada).
+    M2: detecta límites de frase por caídas de densidad.
+    Devuelve lista de números de compás donde empieza una nueva frase.
+    """
+    if n_bars < 4:
+        return []
+    densities = []
+    for bar in range(1, n_bars + 1):
+        lo = (bar - 1) * bpb
+        hi = bar * bpb
+        densities.append(len([n for n in all_notes if lo <= n.offset < hi]) / bpb)
+
+    boundaries = []
+    window = max(2, n_bars // 16)
+    for i in range(window, n_bars - window):
+        left_mean  = sum(densities[max(0, i-window):i]) / window
+        right_mean = sum(densities[i:min(n_bars, i+window)]) / window
+        # Cambio de densidad significativo → límite de frase
+        if abs(right_mean - left_mean) > 0.3 * max(left_mean, right_mean, 0.1):
+            if not boundaries or i - boundaries[-1] >= 2:
+                boundaries.append(i + 1)   # +1: 1-indexed
+    return boundaries
+
+
+def _augment_notes_transpose(notes: List[RawNote], semitones: int,
+                               key_pc: int) -> Tuple[List[RawNote], int]:
+    """M9: transpone todas las notas por N semitonos, ajustando key_pc."""
+    transposed = [RawNote(
+        pitch    = max(21, min(108, n.pitch + semitones)),
+        duration = n.duration,
+        velocity = n.velocity,
+        offset   = n.offset,
+        track_idx= n.track_idx,
+    ) for n in notes]
+    return transposed, (key_pc + semitones) % 12
+
+
+def _augment_notes_reverse_bars(notes: List[RawNote], bpb: int,
+                                  gap_beat_lo: float,
+                                  gap_beat_hi: float) -> List[RawNote]:
+    """
+    M9: invierte temporalmente las notas dentro de cada compás del hueco.
+    El contorno global se mantiene pero el orden interno se invierte,
+    generando variación sin perder el vocabulario de pitches.
+    """
+    result = []
+    bar_lo = gap_beat_lo
+    while bar_lo < gap_beat_hi:
+        bar_hi = min(bar_lo + bpb, gap_beat_hi)
+        bar_notes = [n for n in notes if bar_lo <= n.offset < bar_hi]
+        if bar_notes:
+            # Invertir posición relativa dentro del compás
+            rev = []
+            for n in bar_notes:
+                new_offset = bar_lo + (bar_hi - bar_lo) - (n.offset - bar_lo) - n.duration
+                rev.append(RawNote(n.pitch, n.duration, n.velocity,
+                                   max(bar_lo, new_offset), n.track_idx))
+            result.extend(sorted(rev, key=lambda x: x.offset))
+        bar_lo = bar_hi
+    return result
+
+
+def _role_from_notes(notes: List[RawNote]) -> str:
+    """Infiere el rol de una pista por registro medio."""
+    if not notes:
+        return 'unknown'
+    mid = sum(n.pitch for n in notes) / len(notes)
+    if mid >= 70:   return 'melody'
+    if mid >= 55:   return 'inner'
+    if mid >= 45:   return 'bass_melodic'
+    return 'bass_root'
+
+
+def extract_training_samples(
+        midi_path: str,
+        mask_ratio: float = 0.2,
+        bpb_override: int = 0,
+        mask_phrase: bool = False,
+        augment_transpose: int = 0,
+        augment_reverse: bool = False,
+        role_filter: Optional[str] = None,
+        use_chord_conditioning: bool = True) -> List[Dict]:
+    """
+    Extrae muestras de entrenamiento de un MIDI.
+
+    mask_phrase (M2): si True, coloca los huecos en límites de frase
+                      detectados automáticamente.
+    augment_transpose (M9): genera ±N copias transpuestas.
+    augment_reverse (M9):   añade versión con inversión temporal intra-compás.
+    role_filter (M7):       filtra pistas por rol ('melody'|'inner'|'bass'|None).
+    use_chord_conditioning (M8): incluye chord one-hot en el vector de features.
     """
     try:
         mid = MidiFile(midi_path)
         tpb = mid.ticks_per_beat
-        tempo_us = 500_000
         bpb = bpb_override or 4
         for msg in mid.tracks[0]:
-            if msg.type == 'set_tempo':   tempo_us = msg.tempo
+            if msg.type == 'set_tempo':        pass
             elif msg.type == 'time_signature': bpb = msg.numerator
 
-        all_notes: List[RawNote] = []
+        # Parsear por pista para mantener info de rol
+        track_notes: Dict[int, List[RawNote]] = {}
         for i, track in enumerate(mid.tracks):
-            notes = _parse_track(track, tpb)
-            all_notes.extend(notes)
+            ns = _parse_track(track, tpb)
+            if ns:
+                track_notes[i] = ns
 
-        if not all_notes:
+        if not track_notes:
             return []
 
+        all_notes = [n for ns in track_notes.values() for n in ns]
         key_pc, key_mode = _detect_key(all_notes)
         max_offset = max(n.offset + n.duration for n in all_notes)
         n_bars = max(1, math.ceil(max_offset / bpb))
@@ -1733,42 +2035,146 @@ def extract_training_samples(midi_path: str, mask_ratio: float = 0.2,
         if n_bars < 8:
             return []
 
-        samples = []
+        # M2: límites de frase para enmascaramiento dirigido
+        phrase_bounds = _detect_phrase_boundaries(all_notes, bpb, n_bars) \
+                        if mask_phrase else []
+
         rng = random.Random(hash(midi_path) % (2**31))
+        samples = []
 
-        # Generar huecos sintéticos
-        n_gaps = max(1, int(n_bars * mask_ratio / 2))
-        for _ in range(n_gaps):
-            gap_len = rng.randint(1, min(4, n_bars // 4))
-            gap_start = rng.randint(4, max(5, n_bars - gap_len - 4))
-            gap_beat_lo = (gap_start - 1) * bpb
-            gap_beat_hi = (gap_start + gap_len - 1) * bpb
+        def _process_single(notes_by_track: Dict[int, List[RawNote]],
+                             k_pc: int, k_mode: str) -> List[Dict]:
+            """Genera muestras para una versión (original o augmentada)."""
+            flat = [n for ns in notes_by_track.values() for n in ns]
+            s_list = []
 
-            masked = [n for n in all_notes
-                      if gap_beat_lo <= n.offset < gap_beat_hi]
-            if not masked:
-                continue
+            # Determinar posiciones de huecos
+            if mask_phrase and phrase_bounds:
+                # M2: colocar huecos en/cerca de límites de frase
+                gap_starts = []
+                for pb in phrase_bounds:
+                    if 4 <= pb <= n_bars - 5:
+                        gap_starts.append(pb)
+                # Completar con aleatorios si hay pocas frases
+                n_extra = max(0, max(1, int(n_bars * mask_ratio / 2)) - len(gap_starts))
+                for _ in range(n_extra):
+                    gap_starts.append(rng.randint(4, max(5, n_bars - 5)))
+            else:
+                n_gaps = max(1, int(n_bars * mask_ratio / 2))
+                gap_starts = [rng.randint(4, max(5, n_bars - 5))
+                              for _ in range(n_gaps)]
 
-            left_notes = [n for n in all_notes if n.offset < gap_beat_lo]
-            right_notes = [n for n in all_notes if n.offset >= gap_beat_hi]
+            for gap_start in gap_starts:
+                gap_len = rng.randint(1, min(4, n_bars // 4))
+                gap_beat_lo = (gap_start - 1) * bpb
+                gap_beat_hi = (gap_start + gap_len - 1) * bpb
 
-            feat = _build_inpainter_features(
-                left_notes[-32:], right_notes[:32], key_pc, key_mode,
-                gap_len, bpb)
+                for track_idx, t_notes in notes_by_track.items():
+                    # M7: filtrar por rol
+                    t_role = _role_from_notes(t_notes)
+                    if role_filter and role_filter != 'all':
+                        if role_filter == 'bass' and t_role not in ('bass_melodic', 'bass_root'):
+                            continue
+                        elif role_filter not in ('bass',) and t_role != role_filter:
+                            continue
 
-            for n in masked:
-                pos = (n.offset - gap_beat_lo) / max(gap_len * bpb, 1)
-                pitch_bin = max(0, min(PITCH_BINS - 1, n.pitch - 36))
-                dur_vals = [0.25, 0.5, 1.0, 2.0, 0.75, 1.5, 0.125, 0.333]
-                dur_bin = min(range(len(dur_vals)),
-                               key=lambda i: abs(dur_vals[i] - n.duration))
-                samples.append({
-                    'feat':      feat,
-                    'pos':       float(pos),
-                    'pitch_bin': pitch_bin,
-                    'dur_bin':   dur_bin,
-                    'vel':       n.velocity / 127.0,
-                })
+                    masked = [n for n in t_notes
+                              if gap_beat_lo <= n.offset < gap_beat_hi]
+                    if not masked:
+                        continue
+
+                    left_n  = [n for n in t_notes if n.offset < gap_beat_lo]
+                    right_n = [n for n in t_notes if n.offset >= gap_beat_hi]
+
+                    # Construir estilo para M1
+                    style_obj = _analyze_track_style(left_n, bpb, n_context_bars=8)
+                    # Añadir rol al style_obj dinámicamente
+                    object.__setattr__(style_obj, 'role', t_role) \
+                        if hasattr(style_obj, '__dataclass_fields__') else None
+                    try:
+                        style_obj.role = t_role  # type: ignore
+                    except Exception:
+                        pass
+
+                    # M8: chord PCs de pistas ancla en el hueco
+                    chord_pcs_gap: List[int] = []
+                    for other_idx, other_notes in notes_by_track.items():
+                        if other_idx != track_idx:
+                            chord_pcs_gap.extend(
+                                n.pitch % 12 for n in other_notes
+                                if gap_beat_lo <= n.offset < gap_beat_hi)
+                    chord_pcs_gap = list(set(chord_pcs_gap))
+
+                    feat = _build_inpainter_features(
+                        left_n[-48:], right_n[:48], k_pc, k_mode,
+                        gap_len, bpb,
+                        style=style_obj,
+                        chord_pcs=chord_pcs_gap,
+                        use_chord_conditioning=use_chord_conditioning)
+
+                    # Estado anterior para autoregresivo (M4)
+                    sorted_masked = sorted(masked, key=lambda n: n.offset)
+                    prev_pitch_abs = left_n[-1].pitch if left_n else 60
+                    prev_dur_val   = left_n[-1].duration if left_n else 1.0
+
+                    dur_vals = [0.25, 0.5, 1.0, 2.0, 0.75, 1.5, 0.125, 0.333]
+
+                    for n in sorted_masked:
+                        pos = (n.offset - gap_beat_lo) / max(gap_len * bpb, 1)
+                        pitch_bin = max(0, min(PITCH_BINS - 1, n.pitch - 36))
+                        dur_bin = min(range(len(dur_vals)),
+                                      key=lambda i: abs(dur_vals[i] - n.duration))
+                        s_list.append({
+                            'feat':       feat,
+                            'pos':        float(np.clip(pos, 0.0, 1.0)),
+                            'prev_pitch': float(prev_pitch_abs / 127.0),  # M4
+                            'prev_dur':   float(min(prev_dur_val / 4.0, 1.0)),  # M4
+                            'pitch_bin':  pitch_bin,
+                            'dur_bin':    dur_bin,
+                            'vel':        n.velocity / 127.0,
+                        })
+                        prev_pitch_abs = n.pitch
+                        prev_dur_val   = n.duration
+
+            return s_list
+
+        # ── Original ──────────────────────────────────────────────────────────
+        samples.extend(_process_single(track_notes, key_pc, key_mode))
+
+        # ── M9: augmentation por transposición ────────────────────────────────
+        if augment_transpose > 0:
+            semitones_list = list(range(-augment_transpose, augment_transpose + 1))
+            semitones_list = [s for s in semitones_list if s != 0]
+            # Limitar a máximo 8 transposiciones para no inflar demasiado
+            if len(semitones_list) > 8:
+                semitones_list = rng.sample(semitones_list, 8)
+            for semitones in semitones_list:
+                transposed_tracks = {}
+                new_kpc = key_pc
+                for tid, tnotes in track_notes.items():
+                    t_trans, new_kpc = _augment_notes_transpose(tnotes, semitones, key_pc)
+                    transposed_tracks[tid] = t_trans
+                samples.extend(_process_single(transposed_tracks, new_kpc, key_mode))
+
+        # ── M9: augmentation por inversión temporal ───────────────────────────
+        if augment_reverse:
+            # Invertir dentro de cada compás para todos los huecos de la pasada original
+            # (se procesa como una nueva versión independiente del MIDI)
+            reversed_tracks = {}
+            for tid, tnotes in track_notes.items():
+                rev_notes = []
+                for bar in range(1, n_bars + 1):
+                    bar_lo = (bar - 1) * bpb
+                    bar_hi = bar * bpb
+                    bar_notes = [n for n in tnotes if bar_lo <= n.offset < bar_hi]
+                    if bar_notes:
+                        rev_notes.extend(
+                            _augment_notes_reverse_bars(
+                                bar_notes, bpb, bar_lo, bar_hi))
+                    else:
+                        pass  # compases vacíos se mantienen vacíos
+                reversed_tracks[tid] = sorted(rev_notes, key=lambda n: n.offset)
+            samples.extend(_process_single(reversed_tracks, key_pc, key_mode))
 
         return samples
 
@@ -1956,6 +2362,9 @@ def mode_fill(args):
     print(f'  Huecos a rellenar: {len(gaps)}')
     fills: Dict[int, Dict[int, List[RawNote]]] = {}
 
+    use_chord = not getattr(args, 'no_chord_conditioning', False)
+    ctx_bars  = getattr(args, 'context_bars', 8)
+
     for g in gaps:
         strat = args.strategy
         if strat == 'ml_guided' and model_data is None:
@@ -1968,7 +2377,9 @@ def mode_fill(args):
         fills[g.gap_id] = fill_gap_multitrack(
             ctx, g, strategy=strat, seed=args.seed,
             length_mode=length_mode, length_bars=length_bars,
-            model_data=model_data)
+            model_data=model_data,
+            use_chord_conditioning=use_chord,
+            context_bars=ctx_bars)
 
     out = args.output or _default_output(args.input, 'filled')
     write_filled_midi(ctx, fills, out)
@@ -2023,6 +2434,18 @@ def mode_variants(args):
     length_mode, length_bars = _parse_length(args.length)
     results = []
 
+    use_chord = not getattr(args, 'no_chord_conditioning', False)
+    ctx_bars  = getattr(args, 'context_bars', 8)
+
+    # Parsear score_weights si se proporcionaron
+    score_weights: Optional[Dict[str, float]] = None
+    if getattr(args, 'score_weights', None):
+        score_weights = {}
+        for token in args.score_weights:
+            if '=' in token:
+                k, v = token.split('=', 1)
+                score_weights[k.strip()] = float(v.strip())
+
     print(f'  Generando {len(combos)} variantes para {len(gaps)} hueco(s)...')
 
     for v_idx, (strat, seed) in enumerate(combos):
@@ -2033,9 +2456,11 @@ def mode_variants(args):
             f = fill_gap_multitrack(ctx, g, strategy=strat, seed=seed,
                                      length_mode=length_mode,
                                      length_bars=length_bars,
-                                     model_data=model_data)
+                                     model_data=model_data,
+                                     use_chord_conditioning=use_chord,
+                                     context_bars=ctx_bars)
             fills[g.gap_id] = f
-            sc = score_fill(ctx, g, f)
+            sc = score_fill(ctx, g, f, score_weights=score_weights)
             gap_scores.append(sc['total'])
 
         mean_score = round(float(np.mean(gap_scores)), 3) if gap_scores else 0.0
@@ -2059,7 +2484,7 @@ def mode_variants(args):
 
 
 def mode_train(args):
-    """Modo train: entrena el modelo InpainterNet sobre un corpus de MIDIs."""
+    """Modo train: entrena InpainterNet v2 sobre corpus de MIDIs."""
     if not TORCH_OK:
         print('ERROR: PyTorch no disponible. pip install torch'); sys.exit(1)
 
@@ -2068,10 +2493,27 @@ def mode_train(args):
     if not midi_files:
         print(f'ERROR: no se encontraron MIDIs en {corpus_dir}'); sys.exit(1)
 
+    use_chord = not args.no_chord_conditioning
+    feat_dim  = FEAT_DIM + (CHORD_FEAT if use_chord else 0)
+    role      = getattr(args, 'role', 'all')
+
     print(f'\n  Extrayendo muestras de {len(midi_files)} MIDIs...')
+    print(f'  mask_phrase={args.mask_phrase}  '
+          f'augment_transpose={args.augment_transpose}  '
+          f'augment_reverse={args.augment_reverse}  '
+          f'role={role}  chord_conditioning={use_chord}')
+
     all_samples = []
     for mf in midi_files:
-        s = extract_training_samples(str(mf), mask_ratio=args.mask_ratio)
+        s = extract_training_samples(
+            str(mf),
+            mask_ratio=args.mask_ratio,
+            mask_phrase=args.mask_phrase,
+            augment_transpose=args.augment_transpose,
+            augment_reverse=args.augment_reverse,
+            role_filter=role if role != 'all' else None,
+            use_chord_conditioning=use_chord,
+        )
         all_samples.extend(s)
         if len(s) > 0:
             print(f'  {mf.name}: {len(s)} muestras')
@@ -2079,54 +2521,73 @@ def mode_train(args):
     if not all_samples:
         print('ERROR: no se pudieron extraer muestras del corpus.'); sys.exit(1)
 
-    print(f'\n  Total muestras: {len(all_samples)}')
-    print(f'  Entrenando InpainterNet (hidden={args.hidden_dim}, '
-          f'epochs={args.epochs}, lr={args.lr})...')
+    print(f'\n  Total muestras : {len(all_samples)}')
+    print(f'  feat_dim       : {feat_dim}')
+    print(f'  Entrenando InpainterNet v2 '
+          f'(hidden={args.hidden_dim}, epochs={args.epochs}, lr={args.lr})...')
 
-    config = {'feat_dim': FEAT_DIM, 'hidden_dim': args.hidden_dim,
+    config = {'feat_dim': feat_dim, 'hidden_dim': args.hidden_dim,
               'pitch_bins': PITCH_BINS, 'dur_bins': DUR_BINS}
-    model = InpainterNet(config)
+    model   = InpainterNet(config)
     dataset = InpainterDataset(all_samples)
-    loader = DataLoader(dataset, batch_size=args.batch_size,
-                         shuffle=True, drop_last=True)
+    loader  = DataLoader(dataset, batch_size=args.batch_size,
+                          shuffle=True, drop_last=True)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
-    ce = nn.CrossEntropyLoss()
+    ce  = nn.CrossEntropyLoss()
     mse = nn.MSELoss()
 
     for epoch in range(1, args.epochs + 1):
         model.train()
-        total_loss = 0.0
-        batches = 0
-        for feat, pos, pitch_tgt, dur_tgt, vel_tgt in loader:
+        total_loss = 0.0; batches = 0
+        for feat, pos, prev_p, prev_d, pitch_tgt, dur_tgt, vel_tgt in loader:
             optimizer.zero_grad()
-            pitch_logits, dur_logits, vel_out = model(feat, pos)
+            pitch_logits, dur_logits, vel_out = model(feat, pos, prev_p, prev_d)
             loss = (ce(pitch_logits, pitch_tgt.squeeze(1)) +
-                    ce(dur_logits,   dur_tgt.squeeze(1)) +
+                    ce(dur_logits,   dur_tgt.squeeze(1))   +
                     mse(vel_out.squeeze(-1), vel_tgt.squeeze(-1)))
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-            total_loss += loss.item()
-            batches += 1
+            total_loss += loss.item(); batches += 1
         scheduler.step()
-
         if epoch % 10 == 0 or epoch == 1:
             avg = total_loss / max(batches, 1)
             print(f'  Época {epoch:4d}/{args.epochs}  loss={avg:.4f}  '
                   f'lr={scheduler.get_last_lr()[0]:.2e}')
 
-    # Guardar
+    # Guardar — incluyendo rol si es especializado (M7)
     ckpt_dir = Path(args.checkpoint_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    ckpt_path = ckpt_dir / 'inpainter.pkl'
+
+    model_key = f'inpainter_{role}.pkl' if role != 'all' else 'inpainter.pkl'
+    ckpt_path = ckpt_dir / model_key
+
     data = {'state_dict': model.state_dict(), 'config': config,
             'n_samples': len(all_samples), 'epochs': args.epochs,
-            'version': VERSION}
-    with open(ckpt_path, 'wb') as f:
-        pickle.dump(data, f)
-    print(f'\n  ✓ Modelo guardado: {ckpt_path}')
+            'version': VERSION, 'role': role,
+            'use_chord_conditioning': use_chord}
+
+    # Se los roles especializados se añaden dentro del fichero principal
+    # para que _load_model pueda seleccionarlos automáticamente (M7)
+    main_ckpt = ckpt_dir / 'inpainter.pkl'
+    if main_ckpt.exists() and role != 'all':
+        with open(main_ckpt, 'rb') as f:
+            main_data = pickle.load(f)
+        if 'role_models' not in main_data:
+            main_data['role_models'] = {}
+        main_data['role_models'][role] = {
+            'state_dict': model.state_dict(),
+            'config': config,
+        }
+        with open(main_ckpt, 'wb') as f:
+            pickle.dump(main_data, f)
+        print(f'\n  ✓ Modelo rol={role} añadido a: {main_ckpt}')
+    else:
+        with open(ckpt_path, 'wb') as f:
+            pickle.dump(data, f)
+        print(f'\n  ✓ Modelo guardado: {ckpt_path}')
 
 
 def mode_inspect(args):
@@ -2138,17 +2599,20 @@ def mode_inspect(args):
         data = pickle.load(f)
     cfg = data.get('config', {})
     print('\n  ── MODELO INPAINTER ──────────────────────────────')
-    print(f'  Versión      : {data.get("version", "?")}')
-    print(f'  Épocas       : {data.get("epochs", "?")}')
-    print(f'  Muestras     : {data.get("n_samples", "?")}')
-    print(f'  feat_dim     : {cfg.get("feat_dim", "?")}')
-    print(f'  hidden_dim   : {cfg.get("hidden_dim", "?")}')
-    print(f'  pitch_bins   : {cfg.get("pitch_bins", "?")}')
-    print(f'  dur_bins     : {cfg.get("dur_bins", "?")}')
-    if TORCH_OK:
+    print(f'  Versión             : {data.get("version", "?")}')
+    print(f'  Épocas              : {data.get("epochs", "?")}')
+    print(f'  Muestras            : {data.get("n_samples", "?")}')
+    print(f'  Rol                 : {data.get("role", "all")}')
+    print(f'  feat_dim            : {cfg.get("feat_dim", "?")}')
+    print(f'  hidden_dim          : {cfg.get("hidden_dim", "?")}')
+    print(f'  chord_conditioning  : {data.get("use_chord_conditioning", "?")}')
+    role_models = data.get('role_models', {})
+    if role_models:
+        print(f'  Modelos por rol     : {", ".join(role_models.keys())}')
+    if TORCH_OK and 'state_dict' in data:
         model = InpainterNet(cfg)
         n_params = sum(p.numel() for p in model.parameters())
-        print(f'  Parámetros   : {n_params:,}')
+        print(f'  Parámetros          : {n_params:,}')
     print('  ─────────────────────────────────────────────────\n')
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2195,12 +2659,12 @@ def _load_model(checkpoint_dir: Optional[str]) -> Optional[Dict]:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog='ml_inpainter',
-        description='Relleno inteligente de compases vacíos en MIDIs multi-pista',
+        description='Relleno inteligente de compases vacíos en MIDIs multi-pista (v2)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = p.add_subparsers(dest='mode', required=True)
 
-    # ── scan ──
+    # ── scan ──────────────────────────────────────────────────────────────────
     ps = sub.add_parser('scan', help='Detecta huecos y genera reporte')
     ps.add_argument('input', help='MIDI de entrada')
     ps.add_argument('--min-density', type=float, default=0.0,
@@ -2208,7 +2672,7 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument('--report', default=None,
                     help='Guardar reporte en fichero .txt')
 
-    # ── fill ──
+    # ── fill ──────────────────────────────────────────────────────────────────
     pf = sub.add_parser('fill', help='Rellena huecos (una salida)')
     pf.add_argument('input', help='MIDI de entrada')
     pf.add_argument('--gaps', type=int, nargs='+', default=None,
@@ -2218,15 +2682,19 @@ def build_parser() -> argparse.ArgumentParser:
                              'contour_blend', 'ml_guided'],
                     help='Estrategia de generación (def: auto)')
     pf.add_argument('--length', default='keep',
-                    help='Longitud del relleno: keep | auto | N (nº compases)')
+                    help='Longitud: keep | auto | N (nº compases)')
     pf.add_argument('--min-density', type=float, default=0.0)
     pf.add_argument('--checkpoint-dir', default=None,
                     help='Directorio con modelo entrenado')
     pf.add_argument('--seed', type=int, default=42)
+    pf.add_argument('--no-chord-conditioning', action='store_true',
+                    help='M8: desactiva el condicionamiento armónico explícito')
+    pf.add_argument('--context-bars', type=int, default=8,
+                    help='M1: compases de contexto para análisis de estilo (def: 8)')
     pf.add_argument('-o', '--output', default=None,
                     help='MIDI de salida (def: <entrada>_filled.mid)')
 
-    # ── variants ──
+    # ── variants ──────────────────────────────────────────────────────────────
     pv = sub.add_parser('variants',
                          help='Genera N versiones completas para comparar')
     pv.add_argument('input', help='MIDI de entrada')
@@ -2241,10 +2709,18 @@ def build_parser() -> argparse.ArgumentParser:
     pv.add_argument('--length', default='keep')
     pv.add_argument('--min-density', type=float, default=0.0)
     pv.add_argument('--checkpoint-dir', default=None)
+    pv.add_argument('--no-chord-conditioning', action='store_true',
+                    help='M8: desactiva el condicionamiento armónico explícito')
+    pv.add_argument('--context-bars', type=int, default=8,
+                    help='M1: compases de contexto para análisis de estilo (def: 8)')
+    pv.add_argument('--score-weights', nargs='+', default=None,
+                    metavar='KEY=VAL',
+                    help='M3: pesos del scoring, ej: tonal=0.4 boundary=0.3 '
+                         'tension=0.2 rhythm=0.1')
     pv.add_argument('--out-dir', default='./inpainter_variants',
                     help='Directorio de salida (def: ./inpainter_variants)')
 
-    # ── train ──
+    # ── train ──────────────────────────────────────────────────────────────────
     pt = sub.add_parser('train', help='Entrena modelo sobre corpus de MIDIs')
     pt.add_argument('corpus', help='Directorio con MIDIs de entrenamiento')
     pt.add_argument('--epochs', type=int, default=60)
@@ -2253,9 +2729,25 @@ def build_parser() -> argparse.ArgumentParser:
     pt.add_argument('--hidden-dim', type=int, default=HIDDEN_DIM)
     pt.add_argument('--mask-ratio', type=float, default=0.2,
                     help='Fracción de compases a enmascarar por MIDI (def: 0.2)')
+    pt.add_argument('--mask-phrase', action='store_true',
+                    help='M2: coloca huecos en límites de frase detectados '
+                         'automáticamente (más musical que aleatorio)')
+    pt.add_argument('--augment-transpose', type=int, default=0,
+                    metavar='N',
+                    help='M9: genera ±N copias transpuestas por semitono '
+                         '(def: 0 = sin augmentación)')
+    pt.add_argument('--augment-reverse', action='store_true',
+                    help='M9: añade versión con inversión temporal intra-compás')
+    pt.add_argument('--role', default='all',
+                    choices=['all', 'melody', 'inner', 'bass'],
+                    help='M7: entrena solo para el rol indicado. Con "all" entrena '
+                         'un modelo genérico. Ejecutar varias veces con roles distintos '
+                         'añade modelos especializados al checkpoint principal.')
+    pt.add_argument('--no-chord-conditioning', action='store_true',
+                    help='M8: desactiva el one-hot de acorde en el vector de features')
     pt.add_argument('--checkpoint-dir', default='./inpainter_ckpt')
 
-    # ── inspect ──
+    # ── inspect ───────────────────────────────────────────────────────────────
     pi = sub.add_parser('inspect', help='Inspecciona un modelo entrenado')
     pi.add_argument('model', help='Ruta al fichero .pkl del modelo')
 
