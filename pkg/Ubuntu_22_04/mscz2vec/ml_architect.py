@@ -3546,8 +3546,8 @@ def cmd_generate(args) -> None:
 
 def cmd_variants(args) -> None:
     kw = _common_generate_kwargs(args)
-    arcs_v = getattr(args, "arcs", None) or [args.arc]
-    var_v  = getattr(args, "variety_list", None) or [args.variety]
+    arcs_v = getattr(args, "arcs", None) or ["arch"]
+    var_v  = getattr(args, "variety_list", None) or [0.7]
     variants(args.input, args.model, n_variants=args.n_variants,
              arcs=arcs_v, variety_vals=var_v,
              base_seed=args.base_seed, out_dir=args.out_dir, **kw)
@@ -3556,7 +3556,8 @@ def cmd_variants(args) -> None:
 def cmd_explore(args) -> None:
     kw = _common_generate_kwargs(args)
     explore(args.input, args.model,
-            arcs=args.arcs, variety_vals=args.variety_list,
+            arcs=getattr(args, "arcs", None) or ["flat","arch","wave"],
+            variety_vals=getattr(args, "variety_list", None) or [0.3, 0.7, 1.0],
             seed=args.seed, out_dir=args.out_dir, **kw)
 
 
