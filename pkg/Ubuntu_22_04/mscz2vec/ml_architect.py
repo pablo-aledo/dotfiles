@@ -1,93 +1,82 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                       ML ARCHITECT  v7.0                                     ║
+║                       ML ARCHITECT  v8.0                                     ║
 ║     Composición estructural dirigida por gramáticas aprendidas de corpus     ║
 ║                                                                              ║
-║  MEJORAS v7.0 respecto a v6.0 — fidelidad estilística al material fuente:    ║
-║    [S1] Restricción de pitch classes — la salida usa solo las clases de       ║
-║         pitch presentes en la entrada (sin cromatismo no intencional)         ║
-║    [S2] Restricción de registro — la melodía generada vive en el ±octava      ║
-║         del rango de la entrada, no en toda la escala MIDI                   ║
-║    [S3] Restricción de velocity — la dinámica de salida se calibra a la       ║
-║         media y rango de velocity de la entrada, no a valores fijos           ║
-║                                                                               ║
-║  MEJORAS v6.0 respecto a v5.0 — variedad estructural y melódica:             ║
-║    [1] Markov melódico — cadena de intervalos por rol aprendida del corpus;  ║
-║        genera material nuevo con el "sabor" estadístico de cada rol          ║
-║    [2] Modulaciones entre secciones — tonalidad cambia según arco dramático  ║
-║        (relativa, dominante, mediante, napolitana)                           ║
-║    [3] Densificación progresiva — nº de voces escala con arc_val             ║
-║    [4] IOI histogramas por rol — ritmo de melodía nuevo sampledado del corpus ║
-║    [5] Formas aprendidas del corpus — secuencias de etiquetas frecuentes     ║
-║        (AABA, verse-chorus…); la forma se elige completa antes de generar    ║
-║    [6] Repetición estructural — la sección A reaparece reconocible           ║
-║    [7] Hoquetus melodía-acompañamiento — cuando la melodía es activa el      ║
-║        acompañamiento respira, y viceversa                                   ║
-║                                                                              ║
-║  MEJORAS v5.0 respecto a v4.0 — variedad musical:                            ║
-║    [A] Múltiples frases fuente — selección de ventana distinta por sección   ║
-║    [B] Humanización rítmica — micro-desplazamientos de onset y velocity      ║
-║    [C] Variación de textura — dos mitades con estilos de acompañamiento      ║
-║        distintos dentro de cada sección                                      ║
-║    [D] Selección de fragmento por posición — la fuente se divide en N        ║
-║        ventanas y se elige la que corresponde a la posición de la sección    ║
-║    [E] Contrapunto independiente — segunda voz con movimiento contrario      ║
-║    [F] Reharmonización intra-sección — cambio armónico cada 2 compases      ║
-║    [G] Silencios estructurales — respiraciones entre frases melódicas        ║
-║                                                                              ║
-║  MEJORAS v4.0 respecto a v3.0:                                               ║
-║    El modelo aprende la distribución de duración (compases) y el número      ║
-║    típico de secciones de cada pieza directamente del corpus.                ║
-║                                                                              ║
-║  MEJORAS v3.0 respecto a v2.0:                                               ║
-║                                                                              ║
-║  [A] Representación polifónica — extracción de voz soprano, tenor y bajo    ║
-║      de MIDIs multi-track. Las transformaciones preservan relaciones         ║
-║      entre voces.                                                            ║
-║  [B] Representación simbólica — pitches normalizados a grados de escala     ║
-║      (1-7) y figuras rítmicas cuantizadas (corchea=1..redonda=8). Más       ║
-║      generalizable que MIDI crudo.                                           ║
-║  [C] Embedding de frases (autoencoder ligero) — aprende representación      ║
-║      latente 16D de las frases para similitud y clustering más finos.       ║
-║  [D] Alineación temporal del corpus — normaliza la posición relativa de     ║
-║      cada sección antes de hacer clustering, capturando narrativa común.    ║
-║  [E] GMM sobre espacio de transformaciones — modela correlaciones entre     ║
-║      dimensiones de θ (ej. inversión + diminución van juntas).              ║
-║  [F] Evaluación objetiva del modelo — métrica de reconstrucción: dado el   ║
-║      source de una pieza del corpus, mide si θ predicha produce una        ║
-║      sección más parecida a la real que una baseline aleatoria.             ║
-║  [G] Coherencia motívica — extrae el motivo de apertura (4-6 notas) y lo  ║
-║      siembra en cada sección con la transformación apropiada.               ║
-║  [H] Voice leading continuo — puentes melódicos calculados entre el final   ║
-║      de cada sección y el inicio de la siguiente.                           ║
-║  [I] Variaciones internas — dentro de cada sección aplica variaciones      ║
-║      progresivas: repetición 1 = ornamentada, repetición 2 = contrapunto.  ║
-║  [J] Comando inspect — muestra matriz de similitud de roles, arcos típicos  ║
-║      del corpus, y progresiones representativas por rol.                    ║
-║  [K] Integración con song_architect — genera secciones con nombres          ║
-║      canónicos (intro/verse/chorus…) compatibles con song_architect.py.    ║
-║  [L] Entrenamiento incremental — modo --update añade MIDIs a un modelo     ║
-║      existente sin reentrenar todo el corpus.                               ║
-║                                                                              ║
 ║  SUBCOMANDOS:                                                                ║
-║    segment   — detecta secciones de un MIDI                                ║
-║    train     — entrena modelo sobre corpus                                  ║
-║    update    — añade MIDIs a un modelo existente (incremental)              ║
-║    generate  — genera obra completa                                          ║
-║    inspect   — inspecciona un modelo entrenado                              ║
+║    segment   — detecta secciones de un MIDI                                 ║
+║    train     — entrena modelo sobre corpus                                   ║
+║    update    — añade MIDIs a un modelo existente (incremental)               ║
+║    generate  — genera una obra completa                                      ║
+║    variants  — genera N variantes, las puntúa y ordena por score  [v8]      ║
+║    explore   — barrido arc × variety con ranking automático        [v8]      ║
+║    inspect   — inspecciona un modelo entrenado                               ║
 ║                                                                              ║
-║  EJEMPLOS:                                                                   ║
-║    python ml_architect_v3.py segment  cancion.mid --verbose                 ║
-║    python ml_architect_v3.py train    corpus/ -o model.pkl --n-roles 5     ║
-║    python ml_architect_v3.py update   model.pkl nuevos/ -o model2.pkl      ║
-║    python ml_architect_v3.py generate frase.mid --model m.pkl --arc arch   ║
-║    python ml_architect_v3.py generate frase.mid --model m.pkl --sa-compat  ║
-║    python ml_architect_v3.py inspect  model.pkl                             ║
-║    python ml_architect_v3.py inspect  model.pkl --roles --progressions      ║
+║  ── SEGMENT ──────────────────────────────────────────────────────────────  ║
+║    python ml_architect_v8.py segment cancion.mid                            ║
+║    python ml_architect_v8.py segment cancion.mid --verbose                  ║
+║    python ml_architect_v8.py segment cancion.mid --num-sections 4           ║
 ║                                                                              ║
-║  ARCOS (--arc): flat rise fall arch inverse_arch wave                       ║
-║  ASIGNACIÓN (--assignment): similarity position hybrid                      ║
+║  ── TRAIN / UPDATE ───────────────────────────────────────────────────────  ║
+║    python ml_architect_v8.py train corpus/ -o model.pkl --n-roles 5        ║
+║    python ml_architect_v8.py update model.pkl nuevos/ -o model2.pkl        ║
+║                                                                              ║
+║  ── GENERATE ─────────────────────────────────────────────────────────────  ║
+║    python ml_architect_v8.py generate frase.mid --model m.pkl               ║
+║    python ml_architect_v8.py generate frase.mid --model m.pkl --arc arch   ║
+║    python ml_architect_v8.py generate frase.mid --model m.pkl --arc wave   ║
+║        --variety 0.8 --n-sections 5 --out-dir salida/                       ║
+║    python ml_architect_v8.py generate frase.mid --model m.pkl               ║
+║        --no-strict-pc --register-margin 24   # sin restricciones estrictas  ║
+║    python ml_architect_v8.py generate frase.mid --model m.pkl --dry-run    ║
+║                                                                              ║
+║  ── VARIANTS ─────────────────────────────────────────────────────────────  ║
+║    # 5 variantes con la configuración por defecto                            ║
+║    python ml_architect_v8.py variants frase.mid --model m.pkl               ║
+║                                                                              ║
+║    # 8 variantes explorando dos arcos y dos valores de variety               ║
+║    python ml_architect_v8.py variants frase.mid --model m.pkl               ║
+║        --n 8 --arcs arch wave --variety-list 0.5 0.8                        ║
+║        --out-dir mis_variantes/                                              ║
+║                                                                              ║
+║    # Semilla base personalizada (útil para explorar distintos espacios)      ║
+║    python ml_architect_v8.py variants frase.mid --model m.pkl               ║
+║        --n 10 --base-seed 100                                                ║
+║                                                                              ║
+║  ── EXPLORE ──────────────────────────────────────────────────────────────  ║
+║    # Barrido por defecto: flat/arch/wave × 0.3/0.7/1.0 (9 variantes)       ║
+║    python ml_architect_v8.py explore frase.mid --model m.pkl                ║
+║                                                                              ║
+║    # Barrido personalizado                                                   ║
+║    python ml_architect_v8.py explore frase.mid --model m.pkl                ║
+║        --arcs flat arch inverse_arch wave                                    ║
+║        --variety-list 0.2 0.5 0.8 1.0                                       ║
+║        --out-dir exploración/                                                ║
+║                                                                              ║
+║    # Barrido rápido con un solo arco                                         ║
+║    python ml_architect_v8.py explore frase.mid --model m.pkl                ║
+║        --arcs arch --variety-list 0.3 0.5 0.7 0.9 1.0                      ║
+║                                                                              ║
+║  ── INSPECT ──────────────────────────────────────────────────────────────  ║
+║    python ml_architect_v8.py inspect model.pkl                              ║
+║    python ml_architect_v8.py inspect model.pkl --progressions               ║
+║                                                                              ║
+║  ── ARCOS (--arc / --arcs) ───────────────────────────────────────────────  ║
+║    flat         — tensión uniforme (adecuado para música ambiente)          ║
+║    rise         — crescendo continuo hasta el final                         ║
+║    fall         — decrescendo continuo desde el inicio                      ║
+║    arch         — clímax en el centro (forma clásica)           [default]   ║
+║    inverse_arch — valle en el centro (tensión en los extremos)              ║
+║    wave         — dos crestas de tensión (forma de canción pop)             ║
+║                                                                              ║
+║  ── SCORING AUTOMÁTICO (variants / explore) ──────────────────────────────  ║
+║    tonal_coherence  30% — % de notas dentro de las PC de la fuente         ║
+║    sec_variety      25% — variedad de pitch medio entre secciones           ║
+║    rhythm_diversity 15% — diversidad de IOI (ritmo no mecánico)            ║
+║    dynamic_contrast 15% — contraste dinámico (std de velocity)             ║
+║    dramatic_fit     15% — correlación tensión real vs arco esperado         ║
+║                                                                              ║
 ║  DEPENDENCIAS: mido, numpy, scikit-learn, scipy                             ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
@@ -120,7 +109,7 @@ try:
 except ImportError:
     print("[ERROR] scipy no encontrado. pip install scipy"); sys.exit(1)
 
-VERSION = "7.0"
+VERSION = "8.0"
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONSTANTES MUSICALES
@@ -3131,6 +3120,11 @@ def generate(input_midis: List[str],
     if sa_compat: print(f"  Nombres SA: {[SA_ROLE_MAP.get(model.roles[i].label,model.roles[i].label) for i in role_assignment]}")
     print(f"  Salida: {out_path}/")
     print(f"{'═'*64}\n")
+    return dict(out_dir=str(out_path), full_midi=str(full_path),
+                arc=arc, variety=variety, seed=seed, n_sections=ng,
+                total_bars=total_bars, duration_s=ts,
+                roles=[model.roles[i].label for i in role_assignment],
+                key=NOTE_NAMES[key_pc], mode=mode_str)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3220,6 +3214,282 @@ def inspect_model(model_path: str, show_roles: bool=True,
 #  COMANDOS
 # ══════════════════════════════════════════════════════════════════════════════
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  v8 — SCORING AUTOMÁTICO DE VARIANTES
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _score_variant(midi_path: str,
+                    source_notes: List[RawNote],
+                    arc: str) -> Dict[str, float]:
+    """Puntúa una variante MIDI según 5 métricas de calidad. Devuelve dict."""
+    try:
+        mid = mido.MidiFile(midi_path)
+        tpb = mid.ticks_per_beat
+    except Exception:
+        return {"total": 0.0}
+
+    ac: Dict = {}; notes = []; t = 0
+    for msg in mid.tracks[0]:
+        t += msg.time; beat = t / tpb
+        if msg.type == "note_on" and msg.velocity > 0:
+            ac[(msg.channel, msg.note)] = (beat, msg.velocity)
+        elif msg.type in ("note_off",) or (msg.type == "note_on" and msg.velocity == 0):
+            k = (msg.channel, msg.note)
+            if k in ac:
+                s, v = ac.pop(k); notes.append((s, msg.note, beat - s, v))
+
+    if len(notes) < 4:
+        return {"total": 0.0}
+
+    pitches = [n[1] for n in notes]
+    vels    = [n[3] for n in notes]
+    durs    = [n[2] for n in notes]
+    onsets  = [n[0] for n in notes]
+    total   = max(n[0] + n[2] for n in notes)
+
+    # M1: Variedad entre secciones
+    q = total / 4.0
+    sec_means = [float(np.mean([n[1] for n in notes if qi*q <= n[0] < (qi+1)*q]))
+                 for qi in range(4) if any(qi*q <= n[0] < (qi+1)*q for n in notes)]
+    sec_variety = min(1.0, float(np.std(sec_means)) / 12.0) if len(sec_means) > 1 else 0.0
+
+    # M2: Coherencia tonal
+    src_pcs = set(n.pitch % 12 for n in source_notes)
+    tonal_coherence = (sum(1 for p in pitches if p % 12 in src_pcs) / len(pitches)
+                       if src_pcs else 0.5)
+
+    # M3: Contraste dinámico
+    dynamic_contrast = min(1.0, float(np.std(vels)) / 30.0)
+
+    # M4: Diversidad rítmica
+    iois = [onsets[i+1] - onsets[i] for i in range(len(onsets)-1) if onsets[i+1] > onsets[i]]
+    rhythm_diversity = min(1.0, float(np.std(iois)) / 2.0) if iois else 0.0
+
+    # M5: Densificación dramática (correlación tensión vs arco esperado)
+    n_win = 8; wsize = total / n_win
+    harm_profile = []
+    for wi in range(n_win):
+        lo, hi = wi * wsize, (wi + 1) * wsize
+        wn = [RawNote(n[1], n[2], n[3], n[0]) for n in notes if lo <= n[0] < hi]
+        harm_profile.append(_mean_harmonic_tension(wn, tpb, 4) if wn else 0.0)
+    expected = [_arc_value(arc, wi / max(n_win - 1, 1)) for wi in range(n_win)]
+    if np.std(harm_profile) > 1e-6 and np.std(expected) > 1e-6:
+        corr = float(np.corrcoef(harm_profile, expected)[0, 1])
+        dramatic_fit = max(0.0, (corr + 1.0) / 2.0)
+    else:
+        dramatic_fit = 0.5
+
+    scores = {"sec_variety": sec_variety, "tonal_coherence": tonal_coherence,
+              "dynamic_contrast": dynamic_contrast, "rhythm_diversity": rhythm_diversity,
+              "dramatic_fit": dramatic_fit}
+    weights = {"sec_variety": 0.30, "tonal_coherence": 0.25,
+               "dynamic_contrast": 0.15, "rhythm_diversity": 0.15, "dramatic_fit": 0.15}
+    total_score = sum(scores[k] * weights[k] for k in weights)
+    return {**scores, "total": total_score,
+            "n_notes": len(notes), "short": sum(1 for d in durs if d < 0.25)}
+
+
+def _print_variants_table(results: List[Dict], title: str = "VARIANTES") -> None:
+    """Imprime tabla comparativa ordenada por score."""
+    if not results: return
+    sorted_r = sorted(results, key=lambda r: -r.get("score", {}).get("total", 0))
+    sep = "=" * 90
+    print("\n" + sep)
+    print(f"  {title}  —  {len(results)} variantes, ordenadas por score")
+    print(sep)
+    print(f"  {'#':>3}  {'nombre':<32}  {'score':>6}  {'key':>4}  {'roles':<18}  "
+          f"{'dur':>5}  {'arc':<14}  {'var':>4}")
+    print("  " + "-" * 86)
+    for rank, r in enumerate(sorted_r, 1):
+        sc   = r.get("score", {})
+        meta = r.get("meta", {})
+        name = r.get("name", "?")
+        total_sc = sc.get("total", 0)
+        bar  = chr(0x2588) * int(total_sc * 10) + chr(0x2591) * (10 - int(total_sc * 10))
+        key_m = f"{meta.get('key','?')}{meta.get('mode','?')[:1]}"
+        roles = "→".join(meta.get("roles", []))[:18]
+        dur_s = int(meta.get("duration_s", 0))
+        dm, ds = divmod(dur_s, 60)
+        print(f"  {rank:>3}  {name:<32}  {total_sc:.3f}  {key_m:>4}  {roles:<18}  "
+              f"{dm}:{ds:02d}  {meta.get('arc','?'):<14}  {meta.get('variety',0):.2f}")
+        print(f"       {bar}  tonal={sc.get('tonal_coherence',0):.2f}  "
+              f"sec={sc.get('sec_variety',0):.2f}  "
+              f"dyn={sc.get('dynamic_contrast',0):.2f}  "
+              f"rhy={sc.get('rhythm_diversity',0):.2f}  "
+              f"arc_fit={sc.get('dramatic_fit',0):.2f}  "
+              f"short={sc.get('short',0)}")
+    print(sep)
+    best = sorted_r[0]
+    print(f"\n  Mejor variante: {best['name']}")
+    print(f"  {best['meta'].get('full_midi', '')}\n")
+
+
+def _load_source_notes(input_midis: List[str]) -> List[RawNote]:
+    """Carga las notas melódicas de los MIDIs de entrada."""
+    source: List[RawNote] = []
+    for midi_path in input_midis:
+        try:
+            mid, tpb_in, _, _ = _load_midi_raw(midi_path)
+            ns = _parse_track_to_notes(mid.tracks[_choose_melody_track_idx(mid)], tpb_in)
+            source.extend([n for n in ns if n.duration >= MELODY_MIN_DUR])
+        except Exception:
+            pass
+    return source
+
+
+def _common_generate_kwargs(args) -> Dict:
+    """Construye kwargs compartidos de generate desde los argumentos CLI."""
+    return dict(
+        assignment_mode  = getattr(args, "assignment", None),
+        n_sections       = getattr(args, "n_sections", None),
+        bars_per_section = getattr(args, "bars_per_section", None),
+        tempo            = getattr(args, "tempo", None),
+        sa_compat        = getattr(args, "sa_compat", False),
+        use_markov       = not getattr(args, "no_markov", False),
+        use_forms        = not getattr(args, "no_forms", False),
+        strict_pc        = not getattr(args, "no_strict_pc", False),
+        strict_register  = not getattr(args, "no_strict_register", False),
+        strict_velocity  = not getattr(args, "no_strict_velocity", False),
+        register_margin  = getattr(args, "register_margin", 12),
+        verbose          = False,  # silenciar en modo batch
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  v8 — variants()
+# ══════════════════════════════════════════════════════════════════════════════
+
+def variants(input_midis: List[str],
+             model_path: str,
+             n_variants: int = 5,
+             arcs: Optional[List[str]] = None,
+             variety_vals: Optional[List[float]] = None,
+             base_seed: int = 1,
+             out_dir: str = "variants",
+             **generate_kwargs) -> List[Dict]:
+    """
+    Genera n_variants obras con semillas distintas (y opcionalmente distintos
+    arcos/variety), las puntúa y devuelve la lista ordenada por score.
+    """
+    source_notes = _load_source_notes(input_midis)
+    arcs_list    = arcs or [generate_kwargs.pop("arc", "arch")]
+    variety_list = variety_vals or [generate_kwargs.pop("variety", 0.7)]
+    generate_kwargs.pop("arc", None); generate_kwargs.pop("variety", None)
+
+    # Construir configuraciones
+    configs = []
+    seed_counter = base_seed
+    while len(configs) < n_variants:
+        for arc_v in arcs_list:
+            for var_v in variety_list:
+                configs.append({"seed": seed_counter, "arc": arc_v, "variety": var_v})
+                seed_counter += 1
+                if len(configs) >= n_variants: break
+            if len(configs) >= n_variants: break
+
+    print(f"\n{'='*64}")
+    print(f"  ML ARCHITECT v{VERSION} — Generacion de variantes")
+    print(f"{'='*64}")
+    print(f"  Variantes: {len(configs)}  Arcos: {arcs_list}  Variety: {variety_list}")
+    print(f"  Semillas: {configs[0]['seed']}–{configs[-1]['seed']}")
+
+    results = []
+    for k, cfg in enumerate(configs):
+        arc_v = cfg["arc"]; var_v = cfg["variety"]; seed_v = cfg["seed"]
+        name = f"v{k+1:02d}_arc-{arc_v}_var{var_v:.1f}_s{seed_v}"
+        variant_out = str(Path(out_dir) / name)
+        print(f"\n  [{k+1}/{len(configs)}] {name} ...", end="", flush=True)
+        try:
+            meta = generate(input_midis, model_path,
+                            arc=arc_v, variety=var_v, seed=seed_v,
+                            out_dir=variant_out, output_name="song",
+                            **generate_kwargs)
+            if meta is None: meta = {}
+            full_midi = str(Path(variant_out) / "song_full.mid")
+            sc = _score_variant(full_midi, source_notes, arc_v)
+            results.append({"name": name,
+                             "meta": {**meta, "arc": arc_v, "variety": var_v,
+                                      "full_midi": full_midi},
+                             "score": sc})
+            print(f"  score={sc.get('total',0):.3f}")
+        except Exception as e:
+            print(f"  ERROR: {e}")
+    _print_variants_table(results, "VARIANTES")
+    return results
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  v8 — explore()
+# ══════════════════════════════════════════════════════════════════════════════
+
+def explore(input_midis: List[str],
+            model_path: str,
+            arcs: Optional[List[str]] = None,
+            variety_vals: Optional[List[float]] = None,
+            seed: int = 42,
+            out_dir: str = "explore",
+            **generate_kwargs) -> List[Dict]:
+    """
+    Barrido arc × variety. Genera una variante por combinación, las puntúa
+    y presenta la matriz de scores + tabla ordenada.
+    """
+    source_notes = _load_source_notes(input_midis)
+    arcs_list    = arcs or ["flat", "arch", "wave"]
+    variety_list = variety_vals or [0.3, 0.7, 1.0]
+    n_total = len(arcs_list) * len(variety_list)
+    generate_kwargs.pop("arc", None); generate_kwargs.pop("variety", None)
+
+    print(f"\n{'='*64}")
+    print(f"  ML ARCHITECT v{VERSION} — Exploracion arc x variety")
+    print(f"{'='*64}")
+    print(f"  Arcos:   {arcs_list}")
+    print(f"  Variety: {variety_list}")
+    print(f"  Total:   {n_total} variantes")
+
+    results = []
+    k = 0
+    for arc_v in arcs_list:
+        for var_v in variety_list:
+            k += 1
+            name = f"arc-{arc_v}_var{var_v:.1f}"
+            variant_out = str(Path(out_dir) / name)
+            print(f"\n  [{k}/{n_total}] arc={arc_v:<14} variety={var_v:.1f} ...", end="", flush=True)
+            try:
+                meta = generate(input_midis, model_path,
+                                arc=arc_v, variety=var_v, seed=seed,
+                                out_dir=variant_out, output_name="song",
+                                **generate_kwargs)
+                if meta is None: meta = {}
+                full_midi = str(Path(variant_out) / "song_full.mid")
+                sc = _score_variant(full_midi, source_notes, arc_v)
+                results.append({"name": name,
+                                 "meta": {**meta, "arc": arc_v, "variety": var_v,
+                                          "full_midi": full_midi},
+                                 "score": sc})
+                print(f"  score={sc.get('total',0):.3f}")
+            except Exception as e:
+                print(f"  ERROR: {e}")
+
+    # Matriz 2D
+    print(f"\n{'─'*64}")
+    print("  MATRIZ arc x variety  (score total)")
+    print(f"{'─'*64}")
+    hdr_row = f"  {'arc/variety':<16}" + "".join(f"  {v:>6.2f}" for v in variety_list)
+    print(hdr_row)
+    for arc_v in arcs_list:
+        row = f"  {arc_v:<16}"
+        for var_v in variety_list:
+            nm = f"arc-{arc_v}_var{var_v:.1f}"
+            r  = next((r for r in results if r["name"] == nm), None)
+            sc = r["score"].get("total", 0) if r else 0
+            row += f"  {sc:>6.3f}"
+        print(row)
+
+    _print_variants_table(results, "EXPLORACION arc x variety")
+    return results
+
 def cmd_segment(args) -> None:
     print(f"\n{'═'*64}\n  ML ARCHITECT v{VERSION} — Segmentación\n{'═'*64}")
     print(f"  MIDI: {args.midi}")
@@ -3273,6 +3543,22 @@ def cmd_generate(args) -> None:
              strict_velocity=not args.no_strict_velocity,
              register_margin=args.register_margin,
              dry_run=args.dry_run,seed=args.seed,verbose=args.verbose)
+
+def cmd_variants(args) -> None:
+    kw = _common_generate_kwargs(args)
+    arcs_v = getattr(args, "arcs", None) or [args.arc]
+    var_v  = getattr(args, "variety_list", None) or [args.variety]
+    variants(args.input, args.model, n_variants=args.n_variants,
+             arcs=arcs_v, variety_vals=var_v,
+             base_seed=args.base_seed, out_dir=args.out_dir, **kw)
+
+
+def cmd_explore(args) -> None:
+    kw = _common_generate_kwargs(args)
+    explore(args.input, args.model,
+            arcs=args.arcs, variety_vals=args.variety_list,
+            seed=args.seed, out_dir=args.out_dir, **kw)
+
 
 def cmd_inspect(args) -> None:
     inspect_model(model_path=args.model,show_roles=True,
@@ -3354,6 +3640,48 @@ def build_parser() -> argparse.ArgumentParser:
     ins.add_argument("model",help="Fichero .pkl del modelo")
     ins.add_argument("--progressions",action="store_true",help="Mostrar progresiones por rol")
     ins.set_defaults(func=cmd_inspect)
+
+    # ── shared args helper ────────────────────────────────────────────────────
+    def _add_shared(p):
+        p.add_argument("--model","-m",required=True)
+        p.add_argument("--assignment",choices=["similarity","position","hybrid"],default=None)
+        p.add_argument("--n-sections",type=int,default=None)
+        p.add_argument("--bars-per-section",type=int,default=None)
+        p.add_argument("--tempo",type=int,default=None)
+        p.add_argument("--sa-compat",action="store_true")
+        p.add_argument("--no-markov",action="store_true")
+        p.add_argument("--no-forms",action="store_true")
+        p.add_argument("--no-strict-pc",action="store_true")
+        p.add_argument("--no-strict-register",action="store_true")
+        p.add_argument("--no-strict-velocity",action="store_true")
+        p.add_argument("--register-margin",type=int,default=12)
+
+    # VARIANTS [v8]
+    vp=sub.add_parser("variants",help="[v8] Genera N variantes y las ordena por score")
+    vp.add_argument("input",nargs="+",help="MIDIs de entrada")
+    _add_shared(vp)
+    vp.add_argument("--n","-n",type=int,default=5,dest="n_variants",
+                    help="Numero de variantes (default: 5)")
+    vp.add_argument("--arcs",nargs="+",choices=ARC_SHAPES,default=None,
+                    help="Arcos a usar (default: arch)")
+    vp.add_argument("--variety-list",nargs="+",type=float,default=[0.7],
+                    dest="variety_list",help="Valores de variety (default: 0.7)")
+    vp.add_argument("--base-seed",type=int,default=1,
+                    help="Semilla base, variantes usan base_seed+i (default: 1)")
+    vp.add_argument("--out-dir",default="variants")
+    vp.set_defaults(func=cmd_variants)
+
+    # EXPLORE [v8]
+    ep=sub.add_parser("explore",help="[v8] Barrido arc x variety con ranking")
+    ep.add_argument("input",nargs="+",help="MIDIs de entrada")
+    _add_shared(ep)
+    ep.add_argument("--arcs",nargs="+",choices=ARC_SHAPES,default=["flat","arch","wave"],
+                    help="Arcos a explorar (default: flat arch wave)")
+    ep.add_argument("--variety-list",nargs="+",type=float,default=[0.3,0.7,1.0],
+                    dest="variety_list",help="Valores de variety (default: 0.3 0.7 1.0)")
+    ep.add_argument("--seed",type=int,default=42)
+    ep.add_argument("--out-dir",default="explore")
+    ep.set_defaults(func=cmd_explore)
 
     return p
 

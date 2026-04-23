@@ -26,19 +26,67 @@
 ║  · RANGES / SWEET idiomáticos (piano_expander.py)                          ║
 ║                                                                              ║
 ║  MODOS:                                                                      ║
-║    train   <dir_midi>    Entrena M1/M2/M3 desde MIDIs orquestales reales   ║
-║    expand  <boceto.mid>  Expande un boceto de piano usando checkpoints       ║
-║    reduce  <midi.mid>    Solo ejecuta SyntheticReducer (inspección)         ║
+║    train    <dir>        Entrena M1/M2/M3 desde MIDIs orquestales reales   ║
+║    expand   <midi>       Expande un boceto de piano (una salida)            ║
+║    variants <midi>       Genera N variantes para seleccionar la mejor       ║
+║    reduce   <midi>       Ejecuta solo el SyntheticReducer (inspección)      ║
 ║                                                                              ║
-║  USO:                                                                        ║
-║    python ml_expander.py train  /datos/maestro/ --epochs 50                ║
+║  ── train ────────────────────────────────────────────────────────────────  ║
+║    python ml_expander.py train /datos/maestro/                              ║
+║    python ml_expander.py train /datos/maestro/ --epochs 80 --lr 5e-4       ║
+║    python ml_expander.py train /datos/ --hidden-dim 256 --batch-size 64    ║
+║    python ml_expander.py train /datos/ --delta-bins 16 --pitch-bins 48     ║
+║    python ml_expander.py train /datos/ --checkpoint-dir ./mis_modelos/     ║
+║                                                                              ║
+║  ── expand ───────────────────────────────────────────────────────────────  ║
+║    python ml_expander.py expand boceto.mid                                  ║
 ║    python ml_expander.py expand boceto.mid --template full                  ║
-║    python ml_expander.py reduce orquesta.mid --output reduccion.mid        ║
+║    python ml_expander.py expand boceto.mid --template strings --verbose     ║
+║    python ml_expander.py expand boceto.mid --split C4                       ║
+║    python ml_expander.py expand boceto.mid --output mi_orquestacion.mid    ║
+║    python ml_expander.py expand boceto.mid --checkpoint-dir ./mis_modelos/ ║
+║                                                                              ║
+║  ── variants ─────────────────────────────────────────────────────────────  ║
+║    # Selección automática de 8 variantes (arquetipos + plantillas + seeds)  ║
+║    python ml_expander.py variants boceto.mid                                ║
+║    python ml_expander.py variants boceto.mid --n 6                          ║
+║    python ml_expander.py variants boceto.mid --n 10 --out-dir ./variantes/ ║
+║                                                                              ║
+║    # Forzar arquetipos por sección (formato: arq_sec1-arq_sec2-arq_sec3)   ║
+║    python ml_expander.py variants boceto.mid --archetypes A-B-D             ║
+║    python ml_expander.py variants boceto.mid --archetypes A-C-E B-B-D      ║
+║                                                                              ║
+║    # Limitar plantillas y seeds                                              ║
+║    python ml_expander.py variants boceto.mid --templates chamber strings    ║
+║    python ml_expander.py variants boceto.mid --seeds 0 1 2                  ║
+║                                                                              ║
+║    # Combinación manual completa                                             ║
+║    python ml_expander.py variants boceto.mid                                ║
+║        --archetypes A-B-D B-C-E C-C-C                                      ║
+║        --templates chamber full --seeds 0 1                                 ║
+║                                                                              ║
+║    Nombres de salida: boceto_vNN_tmpl_figuracion_sN.mid                     ║
+║      vNN         — número de variante                                        ║
+║      ch/str/full — plantilla (chamber / strings / full)                     ║
+║      figuracion  — tutti · colchon · arpegios · contrapunto · sparse        ║
+║                    o combinación por sección: tutti-colchon-arpegios        ║
+║      sN          — seed de M2 (pitches del acompañamiento)                  ║
+║                                                                              ║
+║  ── reduce ───────────────────────────────────────────────────────────────  ║
+║    python ml_expander.py reduce orquesta.mid                                ║
+║    python ml_expander.py reduce orquesta.mid --output piano_reducido.mid   ║
+║    python ml_expander.py reduce orquesta.mid --split 60 --verbose          ║
+║                                                                              ║
+║  ARQUETIPOS DE TEXTURA (A–E):                                               ║
+║    A  tutti       — ataque homofónico, dinámica alta, tutti                 ║
+║    B  colchón     — melodía + voces largas sostenidas                       ║
+║    C  arpegios    — figuración activa en tresillos de corchea               ║
+║    D  contrapunto — líneas independientes con movimiento contrario          ║
+║    E  sparse      — pocas notas, mucho espacio, pocos instrumentos          ║
 ║                                                                              ║
 ║  DATOS: Descargar MIDIs orquestales manualmente desde:                      ║
 ║    MAESTRO  → https://magenta.tensorflow.org/datasets/maestro               ║
 ║    MuseScore → https://musescore.com (filtrar por orquesta, CC0/public)    ║
-║    Apuntar al directorio con --train <dir>                                  ║
 ║                                                                              ║
 ║  DEPENDENCIAS: pip install mido numpy torch                                 ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -2065,7 +2113,259 @@ def generate_report(midi_in: str, midi_out: str, instruments: List[str],
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  BLOQUE 14 — CLI
+#  BLOQUE 14 — MOTOR DE VARIANTES
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Nombre legible por arquetipo (para nombre de fichero)
+ARCH_LABEL = {'A': 'tutti', 'B': 'colchon', 'C': 'arpegios', 'D': 'contrapunto', 'E': 'sparse'}
+
+# Nombre corto de plantilla
+TMPL_SHORT = {'chamber': 'ch', 'strings': 'str', 'full': 'full'}
+
+
+def _forced_expand(piano_notes: List[dict], tpb: int, tempo: int,
+                   instruments: List[str],
+                   m1: 'TextureNet', m2: 'InstrumentNet', m3: 'ExpressionNet',
+                   quantizer: 'EventQuantizer',
+                   arch_override: Optional[List[str]] = None,
+                   seed: int = 0) -> Tuple[Dict, Dict]:
+    """
+    Versión de expand_with_ml con arquetipos forzados por sección y seed fija.
+    arch_override: lista de arquetipos ('A'–'E') uno por sección.
+                   None → comportamiento normal (M1 / heurístico decide).
+    seed: fija torch y random para reproducibilidad de M2.
+    """
+    torch.manual_seed(seed)
+    random.seed(seed)
+
+    sections = segment_sections(piano_notes, tpb)
+    if not sections:
+        return {}, {}
+
+    total_sec   = len(sections)
+    tonic, mode = detect_key(piano_notes)
+    scale       = scale_pcs(tonic, mode)
+    melody_global = _extract_melody_line(piano_notes, tpb)
+
+    instr_notes: Dict[str, List[dict]] = {i: [] for i in instruments}
+    instr_cc:    Dict[str, List[tuple]]= {i: [] for i in instruments}
+
+    with torch.no_grad():
+        for sec_idx, section in enumerate(sections):
+            feat   = section_to_feature_vector(section, tpb, total_sec)
+            feat_t = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
+
+            # Arquetipo: forzado si se pasa, si no M1 / heurístico
+            if arch_override and sec_idx < len(arch_override):
+                archetype = arch_override[sec_idx]
+                arch_idx  = ARCHETYPES.index(archetype)
+            else:
+                arch_logits, _ = m1(feat_t)
+                arch_probs     = torch.softmax(arch_logits, dim=-1)
+                arch_conf      = float(arch_probs.max().item())
+                arch_idx       = int(torch.argmax(arch_logits, dim=-1).item())
+                if arch_conf < 0.40:
+                    arch_idx = _classify_texture_heuristic_section(section, tpb)
+                archetype = ARCHETYPES[arch_idx]
+
+            # Tensión: siempre de M1 (no se fuerza)
+            _, tension_t = m1(feat_t)
+            tension      = float(tension_t.item())
+
+            chord_pcs  = infer_chord(section['notes'])
+            ts, te     = section['tick_start'], section['tick_end']
+            mean_vel   = section['mean_vel']
+            sec_melody = [n for n in melody_global if ts <= n['tick'] < te]
+
+            active = _active_instruments_for_section(
+                instruments, tension, archetype, sec_idx, total_sec)
+
+            for instr_name in active:
+                family   = FAMILY.get(instr_name, 'strings')
+                rol_name = INSTR_ROLE.get(instr_name, 'harmony')
+                rol_idx  = ROLE_IDX.get(rol_name, 0)
+                rol_t    = torch.tensor([rol_idx], dtype=torch.long)
+
+                if rol_name in ('melody', 'melody_high'):
+                    shift = 1 if rol_name == 'melody_high' else 0
+                    instr_notes[instr_name].extend(
+                        _assign_melody_to_instrument(sec_melody, instr_name, shift))
+                    continue
+
+                if rol_name == 'bass_root':
+                    raw = _fig_bass_root(ts, te, tpb, chord_pcs, scale,
+                                         instr_name, tension, mean_vel)
+                elif rol_name == 'bass_melodic':
+                    raw = _fig_bass_melodic(ts, te, tpb, chord_pcs, scale,
+                                            instr_name, tension, mean_vel,
+                                            piano_notes)
+                elif rol_name in ('harmony', 'inner'):
+                    raw = _fig_harmony(ts, te, tpb, chord_pcs, scale,
+                                       instr_name, archetype, tension, mean_vel)
+                elif rol_name == 'counter':
+                    raw = _fig_counter(ts, te, tpb, chord_pcs, scale,
+                                       instr_name, tension, mean_vel, melody_global)
+                elif rol_name in ('pad', 'pad_low'):
+                    raw = _fig_pad(ts, te, tpb, chord_pcs, scale,
+                                   instr_name, tension, mean_vel)
+                else:
+                    raw = _fig_harmony(ts, te, tpb, chord_pcs, scale,
+                                       instr_name, 'B', tension, mean_vel)
+
+                if not raw:
+                    continue
+
+                voiced = _apply_m2_pitch(raw, feat_t, rol_t, m2, quantizer,
+                                         instr_name, chord_pcs, scale, tension)
+                instr_notes[instr_name].extend(voiced)
+
+                instr_idx_t = torch.tensor([INSTR_IDX.get(instr_name, 0)],
+                                            dtype=torch.long)
+                tens_t      = torch.tensor([tension], dtype=torch.float32)
+                cc_pred     = m3(tens_t, instr_idx_t).squeeze(0)
+                cc1_val     = int(clamp(float(cc_pred[0]) * 127, 1, 127))
+                cc11_val    = int(clamp(float(cc_pred[1]) * 127, 1, 127))
+                sec_len     = te - ts
+                n_points    = max(2, sec_len // (tpb * 8))
+                for pt in range(n_points):
+                    t_pt  = ts + pt * sec_len // n_points
+                    alpha = pt / max(n_points - 1, 1)
+                    swell = math.sin(math.pi * alpha) * 10
+                    instr_cc[instr_name].append(
+                        (t_pt, 'cc', 1,  clamp(cc1_val  + int(swell), 1, 127)))
+                    instr_cc[instr_name].append(
+                        (t_pt, 'cc', 11, clamp(cc11_val + int(swell * 0.8), 1, 127)))
+
+    for instr_name in instruments:
+        instr_notes[instr_name].sort(key=lambda n: (n['tick'], n['pitch']))
+
+    return instr_notes, instr_cc
+
+
+def _select_variants(n_sections: int, n_target: int = 8,
+                     seed: int = 0) -> List[dict]:
+    """
+    Genera una selección de N variantes diversas combinando los tres niveles:
+    · Nivel 1 — arquetipos por sección (combinaciones curadas)
+    · Nivel 2 — plantillas (chamber / strings / full)
+    · Nivel 3 — seeds de M2 (0, 1, 2)
+
+    Estrategia de selección:
+    1. Construye el espacio de combinaciones candidatas filtrando las redundantes
+       (mismos arquetipos en todas las secciones → solo 1 seed, no 3).
+    2. Prioriza combinaciones con mayor variedad de arquetipos entre secciones.
+    3. Distribuye uniformemente entre plantillas.
+    4. Limita a n_target variantes, garantizando al menos 1 por plantilla.
+
+    Devuelve lista de dicts con keys:
+      arch_override, template, seed, label
+    """
+    rng   = random.Random(seed)
+    archs = ARCHETYPES   # ['A','B','C','D','E']
+    tmpls = list(TEMPLATES.keys())  # chamber, strings, full
+
+    # Combinaciones de arquetipos curadas:
+    # - La melodía principal (sec 1) suele ser A o B
+    # - El desarrollo (secciones intermedias) puede variar más
+    # - Se priorizan combinaciones con variedad interna
+
+    # Generar todas las combinaciones de arquetipos para n_sections
+    import itertools
+    all_combos = list(itertools.product(archs, repeat=n_sections))
+
+    # Filtrar: eliminar todas iguales (ej. A-A-A) salvo una representante
+    def variety_score(combo):
+        """Cuántos arquetipos distintos hay en la combinación."""
+        return len(set(combo))
+
+    # Ordenar por variedad descendente, luego aleatorizar dentro de cada nivel
+    all_combos.sort(key=lambda c: -variety_score(c))
+    rng.shuffle(all_combos[:20])  # mezclar los más variados
+
+    # Seleccionar combinaciones representativas:
+    # 1 combinación "natural" (arquetipos del heurístico → None)
+    # + combinaciones con variedad 2 y 3
+    selected_combos: List[Optional[List[str]]] = [None]  # None = heurístico
+    seen_sets = set()
+    for combo in all_combos:
+        if variety_score(combo) < 2:
+            continue  # saltar combinaciones monótonas
+        key = tuple(sorted(combo))  # ignorar orden para deduplicar similares
+        if key in seen_sets:
+            continue
+        seen_sets.add(key)
+        selected_combos.append(list(combo))
+        if len(selected_combos) >= 6:  # máx 6 combinaciones de arquetipos
+            break
+
+    # Añadir una combinación monotona del arquetipo más frecuente (para referencia)
+    for arch in ['B', 'C', 'D']:
+        selected_combos.append([arch] * n_sections)
+
+    # Construir variantes combinando combos × plantillas × seeds
+    variants = []
+    seeds = [0, 1, 2]
+
+    for combo in selected_combos:
+        for tmpl in tmpls:
+            for s in seeds:
+                # Para la combinación heurística (None), solo una seed por plantilla
+                if combo is None and s > 0:
+                    continue
+                # Para combinaciones monótonas, solo 1 seed
+                if combo is not None and variety_score(combo) == 1 and s > 0:
+                    continue
+                variants.append({
+                    'arch_override': combo,
+                    'template':      tmpl,
+                    'seed':          s,
+                })
+
+    # Puntuar cada variante por diversidad global
+    def variant_score(v):
+        combo = v['arch_override']
+        arch_var = variety_score(combo) if combo else 2
+        seed_var = v['seed']
+        # Preferir variedad de arquetipos > variedad de plantillas > seeds distintas
+        return arch_var * 100 + seed_var
+    variants.sort(key=variant_score, reverse=True)
+
+    # Garantizar al menos 1 variante por plantilla
+    result = []
+    tmpl_covered = set()
+    for v in variants:
+        if v['template'] not in tmpl_covered:
+            result.append(v)
+            tmpl_covered.add(v['template'])
+        if len(tmpl_covered) == len(tmpls):
+            break
+
+    # Rellenar hasta n_target con las siguientes más diversas
+    for v in variants:
+        if len(result) >= n_target:
+            break
+        if v not in result:
+            result.append(v)
+
+    # Asignar etiqueta descriptiva a cada variante
+    for i, v in enumerate(result):
+        combo = v['arch_override']
+        if combo is None:
+            arch_str = 'auto'
+        elif variety_score(combo) == 1:
+            arch_str = ARCH_LABEL.get(combo[0], combo[0])
+        else:
+            arch_str = '-'.join(ARCH_LABEL.get(a, a) for a in combo)
+        v['label'] = (f"v{i+1:02d}_"
+                      f"{TMPL_SHORT.get(v['template'], v['template'])}_"
+                      f"{arch_str}_"
+                      f"s{v['seed']}")
+
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  BLOQUE 15 — CLI
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2074,13 +2374,16 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 modos:
-  train   <dir_midi>   Entrena M1/M2/M3 desde MIDIs orquestales reales
-  expand  <boceto.mid> Expande un boceto de piano usando checkpoints
-  reduce  <midi.mid>   Ejecuta solo el SyntheticReducer (inspección)
+  train    <dir_midi>   Entrena M1/M2/M3 desde MIDIs orquestales reales
+  expand   <boceto.mid> Expande un boceto de piano usando checkpoints
+  variants <boceto.mid> Genera 6-10 variantes combinando arquetipos, plantillas y seeds
+  reduce   <midi.mid>   Ejecuta solo el SyntheticReducer (inspección)
 
 ejemplos:
   python ml_expander.py train  /datos/maestro/ --epochs 50 --lr 0.001
   python ml_expander.py expand boceto.mid --template full --verbose
+  python ml_expander.py variants boceto.mid --n 8 --out-dir ./variantes
+  python ml_expander.py variants boceto.mid --archetypes A-B-D B-C-E --seeds 0 1
   python ml_expander.py reduce orquesta.mid --output piano_reducido.mid
         """)
 
@@ -2110,6 +2413,26 @@ ejemplos:
     p_exp.add_argument('--output',  default=None)
     p_exp.add_argument('--checkpoint-dir', default=DEFAULT_CHECKPOINT)
     p_exp.add_argument('--verbose', action='store_true')
+
+    # ── variants ─────────────────────────────────────────────────────────────
+    p_var = sub.add_parser('variants', help='Generar múltiples variantes')
+    p_var.add_argument('midi', help='Boceto MIDI de piano')
+    p_var.add_argument('--n', type=int, default=8,
+                       help='Número de variantes a generar (default: 8)')
+    p_var.add_argument('--out-dir', default=None,
+                       help='Directorio de salida (default: junto al MIDI de entrada)')
+    p_var.add_argument('--split',   default='G4')
+    p_var.add_argument('--checkpoint-dir', default=DEFAULT_CHECKPOINT)
+    p_var.add_argument('--archetypes', nargs='+', default=None,
+                       help='Combinaciones de arquetipos forzadas, formato A-B-D '
+                            '(una por argumento). Ej: --archetypes A-B-D B-C-E')
+    p_var.add_argument('--templates', nargs='+',
+                       choices=['chamber', 'strings', 'full'],
+                       default=None,
+                       help='Plantillas a usar (default: las tres)')
+    p_var.add_argument('--seeds', nargs='+', type=int, default=None,
+                       help='Seeds de M2 (default: 0 1 2)')
+    p_var.add_argument('--verbose', action='store_true')
 
     # ── reduce ───────────────────────────────────────────────────────────────
     p_red = sub.add_parser('reduce', help='Reducir orquesta a piano (inspección)')
@@ -2262,6 +2585,141 @@ def main():
         print(f"\n  Importa {out_midi} en tu DAW.")
         for i, name in enumerate(created):
             print(f"  Canal {i+1:>2} → {name}")
+
+    # ── MODO: variants ───────────────────────────────────────────────────────
+    elif args.mode == 'variants':
+        if not TORCH_OK:
+            print("ERROR: pip install torch"); sys.exit(1)
+
+        if not Path(args.midi).exists():
+            print(f"ERROR: {args.midi} no encontrado"); sys.exit(1)
+
+        print(f"  Modo      : variantes")
+        print(f"  Entrada   : {args.midi}")
+        print(f"  Variantes : {args.n}")
+
+        # Cargar checkpoints
+        print(f"\n  Cargando checkpoints desde {args.checkpoint_dir}...")
+        m1, m2, m3, quantizer = load_checkpoints(args.checkpoint_dir)
+
+        # Preparar piano
+        mid, tpb, tempo = load_midi(args.midi)
+        split_note      = _parse_split_note(args.split)
+        all_notes       = extract_notes_flat(mid)
+        if not all_notes:
+            print("ERROR: No se encontraron notas en el MIDI."); sys.exit(1)
+
+        above = [n for n in all_notes if n['pitch'] >= split_note]
+        below = [n for n in all_notes if n['pitch'] <  split_note]
+        rh, lh = split_hands(all_notes, split_note, tpb) if (above and below) \
+                 else (all_notes, [])
+        piano  = sorted(rh + lh, key=lambda n: n['tick'])
+        tonic, mode = detect_key(piano)
+        sections    = segment_sections(piano, tpb)
+        n_sections  = len(sections)
+
+        print(f"  TPB={tpb}  Tempo={round(60_000_000/tempo)} BPM")
+        print(f"  Tonalidad : {NOTE_NAMES[tonic]} {mode}")
+        print(f"  Secciones : {n_sections}")
+
+        # Directorio de salida
+        stem    = Path(args.midi).stem
+        out_dir = Path(args.out_dir) if args.out_dir else Path(args.midi).parent
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # Construir lista de variantes
+        if args.archetypes or args.templates or args.seeds:
+            # Modo manual: el usuario especifica las combinaciones
+            tmpls = args.templates or list(TEMPLATES.keys())
+            seeds = args.seeds or [0, 1, 2]
+            if args.archetypes:
+                # Parsear "A-B-D" → ['A','B','D']
+                parsed_archs: List[Optional[List[str]]] = []
+                for spec in args.archetypes:
+                    parts = [p.strip().upper() for p in spec.split('-')]
+                    if all(p in ARCHETYPES for p in parts):
+                        parsed_archs.append(parts)
+                    else:
+                        print(f"  ⚠ Arquetipo inválido ignorado: '{spec}' "
+                              f"(válidos: A B C D E)")
+                if not parsed_archs:
+                    parsed_archs = [None]
+            else:
+                parsed_archs = [None]
+
+            variants = []
+            for combo in parsed_archs:
+                for tmpl in tmpls:
+                    for s in seeds:
+                        if combo is None:
+                            arch_str = 'auto'
+                        elif len(set(combo)) == 1:
+                            arch_str = ARCH_LABEL.get(combo[0], combo[0])
+                        else:
+                            arch_str = '-'.join(ARCH_LABEL.get(a, a) for a in combo)
+                        i = len(variants) + 1
+                        variants.append({
+                            'arch_override': combo,
+                            'template':      tmpl,
+                            'seed':          s,
+                            'label': (f"v{i:02d}_{TMPL_SHORT.get(tmpl,tmpl)}_"
+                                      f"{arch_str}_s{s}"),
+                        })
+            # Limitar a --n
+            variants = variants[:args.n]
+        else:
+            # Modo automático: selección curada
+            variants = _select_variants(n_sections, n_target=args.n)
+
+        print(f"\n  Generando {len(variants)} variantes...")
+        print(f"  {'#':<4} {'plantilla':<10} {'arquetipos':<30} {'seed':<6} {'fichero'}")
+        print(f"  {'─'*4} {'─'*10} {'─'*30} {'─'*6} {'─'*35}")
+
+        generated = []
+        for v in variants:
+            combo    = v['arch_override']
+            tmpl     = v['template']
+            seed     = v['seed']
+            label    = v['label']
+            instrs   = TEMPLATES[tmpl]
+
+            # Descripción de arquetipos para la tabla
+            if combo is None:
+                arch_disp = 'auto (M1+heurístico)'
+            else:
+                arch_disp = ' → '.join(
+                    f"sec{i+1}:{ARCH_LABEL.get(a,a)}" for i,a in enumerate(combo))
+
+            out_path = str(out_dir / f"{stem}_{label}.mid")
+            print(f"  {label:<40} {tmpl:<10} {arch_disp}")
+
+            try:
+                instr_notes, instr_cc = _forced_expand(
+                    piano, tpb, tempo, instrs, m1, m2, m3, quantizer,
+                    arch_override=combo, seed=seed)
+
+                created = build_midi(instr_notes, instr_cc, instrs,
+                                     tempo, tpb, out_path)
+                total   = sum(len(v2) for v2 in instr_notes.values())
+                print(f"    → {Path(out_path).name}  "
+                      f"({len(created)} pistas, {total} notas)")
+                generated.append(out_path)
+            except Exception as e:
+                print(f"    ⚠ Error: {e}")
+
+        print('\n' + '═' * 65)
+        print('  VARIANTES GENERADAS')
+        print('═' * 65)
+        for i, path in enumerate(generated):
+            print(f"  {i+1:>2}. {Path(path).name}")
+        print(f"\n  Total: {len(generated)} variantes en {out_dir}/")
+        print()
+        print("  Convención de nombres:")
+        print("    vNN  — número de variante")
+        print("    ch/str/full  — plantilla (chamber / strings / full)")
+        print("    tutti/colchon/arpegios/contrapunto/sparse  — figuración dominante")
+        print("    sN   — seed de M2 (variación de pitches de acompañamiento)")
+        print('═' * 65)
 
     # ── MODO: reduce ─────────────────────────────────────────────────────────
     elif args.mode == 'reduce':
