@@ -74,7 +74,11 @@
 ║  · Exportar los fragmentos de la gramática para editarlos o reutilizarlos  ║
 ║    en otras obras:                                                           ║
 ║      python grammar_transformer.py obra.mid --export-elements ./frags/      ║
-║        # genera un JSON por elemento en ./frags/                            ║
+║        # genera un JSON por elemento en ./frags/ (default)                  ║
+║      python grammar_transformer.py obra.mid --export-elements ./frags/      ║
+║        --export-format midi   # solo MIDIs, uno por elemento                ║
+║      python grammar_transformer.py obra.mid --export-elements ./frags/      ║
+║        --export-format both   # JSON + MIDI por elemento                    ║
 ║                                                                              ║
 ║  · Importar fragmentos externos (de otra obra o variantes manuales)         ║
 ║    para ampliar el pool de candidatos antes de transformar:                 ║
@@ -101,6 +105,7 @@
 ║    --report               Activar modo informe                              ║
 ║    --report-format FMT    text | html | both  (default: text)              ║
 ║    --export-elements DIR  Exportar elementos de la gramática a directorio   ║
+║    --export-format FMT    Formato de exportación: json, midi, both (def: json)║
 ║    --import-elements DIR  Importar elementos adicionales desde directorio   ║
 ║    --min-pair N           Frecuencia mínima para crear regla (default: 2)   ║
 ║    --max-rules N          Máximo de reglas a generar (default: ilimitado)   ║
@@ -896,37 +901,74 @@ def reconstruct_notes(
 # EXPORT / IMPORT DE ELEMENTOS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def export_elements(elements: dict, directory: Path, verbose: bool = False) -> None:
+def element_to_midi_file(
+    elem: 'GrammarElement',
+    tpb: int,
+    tempo: int,
+    out_path: Path,
+) -> None:
+    """Escribe un GrammarElement como fichero MIDI independiente (offsets base 0)."""
+    notes_flat = [(n.offset, n) for n in elem.notes]
+    notes_to_midi_file(notes_flat, tpb, tempo, out_path)
+
+
+def export_elements(
+    elements: dict,
+    directory: Path,
+    export_format: str = 'json',
+    tpb: int = 480,
+    tempo: int = 500_000,
+    verbose: bool = False,
+) -> None:
     """
-    Exporta cada GrammarElement a un fichero JSON en el directorio indicado.
+    Exporta cada GrammarElement al directorio indicado.
+
+    export_format:
+        'json'  — solo fichero JSON (comportamiento original)
+        'midi'  — solo fichero MIDI
+        'both'  — JSON + MIDI con el mismo nombre base
     """
     directory.mkdir(parents=True, exist_ok=True)
     count = 0
     for name, elem in elements.items():
         if name == '__root__':
             continue
-        data = {
-            'name': name,
-            'duration_beats': elem.duration_beats,
-            'occurrences': elem.occurrences,
-            'notes': [
-                {
-                    'pitch': n.pitch,
-                    'duration': n.duration,
-                    'velocity': n.velocity,
-                    'channel': n.channel,
-                    'offset': n.offset,
-                }
-                for n in elem.notes
-            ]
-        }
-        out_file = directory / f"{name}.json"
-        with open(out_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
+
+        if export_format in ('json', 'both'):
+            data = {
+                'name': name,
+                'duration_beats': elem.duration_beats,
+                'occurrences': elem.occurrences,
+                'notes': [
+                    {
+                        'pitch': n.pitch,
+                        'duration': n.duration,
+                        'velocity': n.velocity,
+                        'channel': n.channel,
+                        'offset': n.offset,
+                    }
+                    for n in elem.notes
+                ]
+            }
+            json_file = directory / f"{name}.json"
+            with open(json_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            if verbose:
+                print(f"  [export] {name} → {json_file}")
+
+        if export_format in ('midi', 'both'):
+            mid_file = directory / f"{name}.mid"
+            try:
+                element_to_midi_file(elem, tpb, tempo, mid_file)
+                if verbose:
+                    print(f"  [export] {name} → {mid_file}")
+            except Exception as e:
+                print(f"  [AVISO] No se pudo exportar MIDI de {name}: {e}")
+
         count += 1
-        if verbose:
-            print(f"  [export] {name} → {out_file}")
-    print(f"  → {count} elementos exportados a {directory}")
+
+    fmt_label = {'json': 'JSON', 'midi': 'MIDI', 'both': 'JSON + MIDI'}[export_format]
+    print(f"  → {count} elementos exportados ({fmt_label}) a {directory}")
 
 
 def import_elements(directory: Path, verbose: bool = False) -> dict:
@@ -1659,6 +1701,7 @@ def run_transform(
     max_rules: int | None,
     track_idx: int | None,
     export_dir: Path | None,
+    export_format: str,
     import_dir: Path | None,
     report: bool,
     report_format: str,
@@ -1707,7 +1750,10 @@ def run_transform(
     # Exportar elementos
     if export_dir is not None:
         print(f"  Exportando elementos a {export_dir} …")
-        export_elements(elements, export_dir, verbose=verbose)
+        export_elements(elements, export_dir,
+                        export_format=export_format,
+                        tpb=tpb, tempo=tempo,
+                        verbose=verbose)
 
     # Informe
     if report:
@@ -1783,6 +1829,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help='Formato del informe: text (stdout), html (fichero), both (default: text)')
     p.add_argument('--export-elements', type=Path, default=None,
                    metavar='DIR', help='Exportar elementos de la gramática a directorio')
+    p.add_argument('--export-format', choices=['json', 'midi', 'both'], default='json',
+                   metavar='FMT',
+                   help='Formato de exportación: json, midi, both (default: json)')
     p.add_argument('--import-elements', type=Path, default=None,
                    metavar='DIR', help='Importar elementos adicionales desde directorio')
     p.add_argument('--min-pair', type=int, default=2,
@@ -1817,6 +1866,7 @@ def main() -> None:
         max_rules       = args.max_rules,
         track_idx       = args.track,
         export_dir      = args.export_elements,
+        export_format   = args.export_format,
         import_dir      = args.import_elements,
         report          = args.report,
         report_format   = args.report_format,
