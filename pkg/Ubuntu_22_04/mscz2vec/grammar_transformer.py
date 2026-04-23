@@ -84,6 +84,7 @@
 ║    para ampliar el pool de candidatos antes de transformar:                 ║
 ║      python grammar_transformer.py obra.mid --length 2.0                   ║
 ║        --import-elements ./frags_otra_obra/                                 ║
+║        # acepta *.json, *.mid o mezcla de ambos en el mismo directorio     ║
 ║                                                                              ║
 ║  · Flujo completo — exportar, enriquecer e importar:                        ║
 ║      python grammar_transformer.py obraA.mid --export-elements ./pool/      ║
@@ -107,6 +108,9 @@
 ║    --export-elements DIR  Exportar elementos de la gramática a directorio   ║
 ║    --export-format FMT    Formato de exportación: json, midi, both (def: json)║
 ║    --import-elements DIR  Importar elementos adicionales desde directorio   ║
+║                           Acepta *.json y *.mid (se pueden mezclar).        ║
+║                           Si hay JSON y MIDI con el mismo nombre, el JSON   ║
+║                           tiene prioridad (evita duplicados).               ║
 ║    --min-pair N           Frecuencia mínima para crear regla (default: 2)   ║
 ║    --max-rules N          Máximo de reglas a generar (default: ilimitado)   ║
 ║    --track N              Track del MIDI a usar (default: auto)             ║
@@ -971,46 +975,128 @@ def export_elements(
     print(f"  → {count} elementos exportados ({fmt_label}) a {directory}")
 
 
+def _midi_file_to_element(fpath: Path, imp_name: str) -> 'GrammarElement':
+    """
+    Lee un fichero MIDI y lo convierte en un GrammarElement.
+
+    Usa el track con más note_on. Los offsets de las notas se calculan
+    desde el inicio del fichero (base 0, en beats). Si el MIDI tiene
+    un JSON homónimo junto a él, lee la velocidad/canal desde el JSON
+    para mayor fidelidad; en caso contrario usa los valores del MIDI.
+    """
+    mid = mido.MidiFile(str(fpath))
+    tpb = mid.ticks_per_beat
+
+    # Elegir track con más note_on
+    best_idx, best_count = 0, -1
+    for i, track in enumerate(mid.tracks):
+        c = sum(1 for m in track if m.type == 'note_on' and m.velocity > 0)
+        if c > best_count:
+            best_count, best_idx = c, i
+
+    track = mid.tracks[best_idx]
+    abs_t = 0
+    active: dict = {}
+    raw: list = []
+    for msg in track:
+        abs_t += msg.time
+        if msg.type == 'note_on' and msg.velocity > 0:
+            active.setdefault((msg.channel, msg.note), []).append((abs_t, msg.velocity))
+        elif msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
+            key = (msg.channel, msg.note)
+            if key in active and active[key]:
+                start_t, vel = active[key].pop(0)
+                raw.append((start_t, abs_t, msg.note, vel, msg.channel))
+
+    raw.sort(key=lambda x: x[0])
+    notes = []
+    for start_t, end_t, pitch, vel, ch in raw:
+        offset_b = start_t / tpb
+        dur_b    = max((end_t - start_t) / tpb, 1 / 64)
+        notes.append(GrammarNote(
+            pitch=pitch, duration=round(dur_b, 6),
+            velocity=vel, channel=ch,
+            offset=round(offset_b, 6),
+        ))
+
+    dur_beats = sum(n.duration for n in notes)
+    return GrammarElement(
+        name=imp_name,
+        notes=notes,
+        duration_beats=round(dur_beats, 6),
+        occurrences=0,
+    )
+
+
 def import_elements(directory: Path, verbose: bool = False) -> dict:
     """
-    Importa GrammarElements desde JSONs en el directorio.
-    Los elementos importados tienen prefijo 'imp_' para evitar colisiones.
+    Importa GrammarElements desde el directorio.
+
+    Formatos aceptados (se pueden mezclar libremente en el mismo directorio):
+        *.json  — formato nativo (pitch, duration, velocity, channel, offset)
+        *.mid   — MIDI independiente; si existe un JSON homónimo se usa el
+                  JSON y el MIDI se ignora para evitar duplicados
+
+    Los elementos importados reciben el prefijo 'imp_' si no lo tienen ya.
     """
     imported = {}
     if not directory.exists():
         print(f"  [AVISO] Directorio de importación no encontrado: {directory}")
         return imported
 
-    for fpath in sorted(directory.glob("*.json")):
+    # ── Recopilar ficheros, priorizando JSON sobre MIDI homónimo ──────────
+    json_stems = {f.stem for f in directory.glob("*.json")}
+    files_to_load: list[Path] = []
+    for fpath in sorted(directory.iterdir()):
+        if fpath.suffix == '.json':
+            files_to_load.append(fpath)
+        elif fpath.suffix in ('.mid', '.midi'):
+            if fpath.stem not in json_stems:   # solo si no hay JSON gemelo
+                files_to_load.append(fpath)
+
+    for fpath in files_to_load:
         try:
-            with open(fpath, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            name = data.get('name', fpath.stem)
-            # Prefijo para distinguir importados
-            imp_name = f"imp_{name}" if not name.startswith('imp_') else name
-            notes = [
-                GrammarNote(
-                    pitch=n['pitch'],
-                    duration=n['duration'],
-                    velocity=n.get('velocity', 80),
-                    channel=n.get('channel', 0),
-                    offset=n.get('offset', 0.0),
+            if fpath.suffix == '.json':
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                name = data.get('name', fpath.stem)
+                imp_name = f"imp_{name}" if not name.startswith('imp_') else name
+                notes = [
+                    GrammarNote(
+                        pitch=n['pitch'],
+                        duration=n['duration'],
+                        velocity=n.get('velocity', 80),
+                        channel=n.get('channel', 0),
+                        offset=n.get('offset', 0.0),
+                    )
+                    for n in data.get('notes', [])
+                ]
+                elem = GrammarElement(
+                    name=imp_name,
+                    notes=notes,
+                    duration_beats=data.get('duration_beats', 0.0),
+                    occurrences=0,
                 )
-                for n in data.get('notes', [])
-            ]
-            elem = GrammarElement(
-                name=imp_name,
-                notes=notes,
-                duration_beats=data.get('duration_beats', 0.0),
-                occurrences=0,
-            )
+            else:
+                # MIDI sin JSON gemelo
+                name = fpath.stem
+                imp_name = f"imp_{name}" if not name.startswith('imp_') else name
+                elem = _midi_file_to_element(fpath, imp_name)
+
             imported[imp_name] = elem
             if verbose:
-                print(f"  [import] {imp_name} ← {fpath.name}  ({elem.duration_beats:.2f} beats)")
+                src_tag = 'json' if fpath.suffix == '.json' else 'midi'
+                print(f"  [import] {imp_name} ← {fpath.name}  "
+                      f"({elem.duration_beats:.3f} beats, {src_tag})")
         except Exception as e:
-            print(f"  [AVISO] Error importando {fpath}: {e}")
+            print(f"  [AVISO] Error importando {fpath.name}: {e}")
 
-    print(f"  → {len(imported)} elementos importados desde {directory}")
+    n_json = sum(1 for f in files_to_load if f.suffix == '.json')
+    n_midi = len(files_to_load) - n_json
+    parts = []
+    if n_json: parts.append(f"{n_json} JSON")
+    if n_midi: parts.append(f"{n_midi} MIDI")
+    print(f"  → {len(imported)} elementos importados ({', '.join(parts)}) desde {directory}")
     return imported
 
 
