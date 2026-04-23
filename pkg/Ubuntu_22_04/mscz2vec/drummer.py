@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                          DRUMMER  v0.2                                       ║
+║                          DRUMMER  v0.3                                       ║
 ║         Motor de percusión rítmica para obras MIDI                           ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
@@ -11,6 +11,114 @@
 ║  2. extract  → añadir grooves favoritos con nombre propio                    ║
 ║  3. add      → poner percusión a una obra nueva                              ║
 ║  4. transform / morph → editar y evolucionar                                 ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  NOVEDADES v0.3 — VARIEDAD DE MOTIVOS Y RITMOS                              ║
+║  ──────────────────────────────────────────────────────────────────────────  ║
+║                                                                              ║
+║  1. CATÁLOGO DE ARQUETIPOS (--style)                                        ║
+║     14 estilos de semilla con carácter rítmico distinto. Cada uno tiene     ║
+║     su propia plantilla de kick/snare/hihat/color, fill propio y reglas     ║
+║     de variación. Se selecciona con --style en el comando add.              ║
+║                                                                              ║
+║     Estilos disponibles:                                                     ║
+║       rock_straight   — 4tos en hihat, backbeat seco (default si sin lib)  ║
+║       funk_16th       — 16avos en hihat, ghost notes de caja, synco fuerte ║
+║       jazz_ride       — ride en negras con triplillo, hi-hat pedal en 2/4  ║
+║       bossa_nova      — clave 3-2, maracas en negras, bombo suave          ║
+║       reggae_one_drop — kick en tiempo 3, snare en 3 y 4                   ║
+║       afrobeat        — clave yoruba, doble bombo en contratiempo          ║
+║       latin_clave     — clave 2-3 en maracas, bombo sincopado              ║
+║       waltz           — 3/4 sintético, bombo en 1, caja en 2-3            ║
+║       tango           — patrón habanera en bombo, clave tango             ║
+║       flamenco        — ciclo de 12 con acentos en 3,6,8,10,11,12        ║
+║       half_time       — snare en tiempo 3 (feel de la mitad de tempo)     ║
+║       shuffle         — shuffle de blues, corcheas de triplillo           ║
+║       brushes         — jazz de escobillas, ride suave, hi-hat fantasma   ║
+║       trap            — hi-hat de 32avos, bombo sincopado, claps          ║
+║                                                                              ║
+║    # Usar arquetipo específico                                               ║
+║    python drummer.py add melodia.mid --style jazz_ride                      ║
+║    python drummer.py add melodia.mid --style flamenco                       ║
+║                                                                              ║
+║    # Arquetipo + biblioteca (el arquetipo define el carácter base,          ║
+║    # la biblioteca selecciona el groove concreto dentro de ese estilo)      ║
+║    python drummer.py add melodia.mid --style funk_16th --library lib.json  ║
+║                                                                              ║
+║    # Listar estilos disponibles                                              ║
+║    python drummer.py add --list-styles                                      ║
+║                                                                              ║
+║  2. SELECCIÓN PROBABILÍSTICA DE GROOVES (--groove-diversity)                ║
+║     En lugar de elegir siempre el groove más parecido a la tensión,        ║
+║     elige entre los N mejores candidatos con peso inversamente              ║
+║     proporcional al error. Aumenta la variedad entre secciones.             ║
+║                                                                              ║
+║    # Sin diversidad (determinista, comportamiento v0.2)                     ║
+║    python drummer.py add melodia.mid --groove-diversity 0                   ║
+║                                                                              ║
+║    # Diversidad media (default: 0.4 — mezcla coherencia y variedad)        ║
+║    python drummer.py add melodia.mid --groove-diversity 0.4                 ║
+║                                                                              ║
+║    # Máxima diversidad (elige aleatoriamente entre los 5 mejores)           ║
+║    python drummer.py add melodia.mid --groove-diversity 1.0                 ║
+║                                                                              ║
+║  3. VARIACIONES ESTRUCTURALES COMPÁS A COMPÁS (--variation)                ║
+║     Cada N compases el patrón muta ligeramente: el hihat puede abrir,      ║
+║     el kick añade una anticipación, el snare agrega ghost notes.           ║
+║     Las variaciones son coherentes con el estilo elegido.                   ║
+║                                                                              ║
+║    # Sin variaciones (loop perfecto)                                        ║
+║    python drummer.py add melodia.mid --variation 0.0                        ║
+║                                                                              ║
+║    # Variación suave cada ~4 compases (default: 0.3)                       ║
+║    python drummer.py add melodia.mid --variation 0.3                        ║
+║                                                                              ║
+║    # Variación alta — el patrón evoluciona compás a compás                 ║
+║    python drummer.py add melodia.mid --variation 0.8                        ║
+║                                                                              ║
+║  4. CAPAS INDEPENDIENTES (--layers)                                         ║
+║     Genera kick+snare, hihat/ride y color (clave, maracas) con lógicas     ║
+║     independientes. Permite que el hihat cambie de 8vos a 16vos al        ║
+║     entrar en el desarrollo sin afectar al kick.                            ║
+║                                                                              ║
+║    # Capas independientes activadas (default)                               ║
+║    python drummer.py add melodia.mid --layers                               ║
+║                                                                              ║
+║    # Sin capas (comportamiento monolítico v0.2)                             ║
+║    python drummer.py add melodia.mid --no-layers                            ║
+║                                                                              ║
+║  5. CATÁLOGO DE FILLS DIVERSIFICADO (--fill-style)                         ║
+║     8 tipos de fill con carácter propio. El fill se elige según el         ║
+║     estilo del groove, la tensión de la sección y si se especifica         ║
+║     manualmente.                                                             ║
+║                                                                              ║
+║    Tipos: descending, ascending, snare_roll, cross_stick,                   ║
+║           half_drop, flam, sparse, buildup                                  ║
+║                                                                              ║
+║    # Fill específico para todas las transiciones                             ║
+║    python drummer.py add melodia.mid --fill-style snare_roll                ║
+║                                                                              ║
+║    # Fill automático según estilo (default)                                  ║
+║    python drummer.py add melodia.mid --fill-style auto                      ║
+║                                                                              ║
+║  COMBINACIONES DE EJEMPLO v0.3                                              ║
+║  ──────────────────────────────────────────────────────────────────────────  ║
+║                                                                              ║
+║    # Flamenco con variación alta y capas                                    ║
+║    python drummer.py add obra.mid --style flamenco --variation 0.6         ║
+║                                                                              ║
+║    # Jazz con grooves de biblioteca, selección diversa                      ║
+║    python drummer.py add obra.mid --style jazz_ride                         ║
+║                       --library drum_library.json --groove-diversity 0.6   ║
+║                                                                              ║
+║    # Funk completo con curva de tensión                                     ║
+║    python drummer.py add obra.mid --style funk_16th                         ║
+║                       --tension-curve curves.json --variation 0.5          ║
+║                       --fill-style snare_roll                               ║
+║                                                                              ║
+║    # Tango con fills de cross_stick                                         ║
+║    python drummer.py add obra.mid --style tango --fill-style cross_stick   ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
@@ -343,6 +451,840 @@ GENRE_SWING_PROFILE = {
     "gospel":      (0.60, None),
     "generic":     (0.50, None),
 }
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CATÁLOGO DE ARQUETIPOS DE SEMILLA  (v0.3)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Cada arquetipo define:
+#   grid_fn   → función que devuelve (grid_base, grid_subdivision, grid_color)
+#               según tensión y bpm
+#   swing     → ratio de swing base del estilo (0.50 = straight)
+#   feel      → etiqueta semántica
+#   fill_style→ tipo de fill preferido
+#   variation_rules → qué micro-variaciones son coherentes con el estilo
+
+def _archetype_rock_straight(tension: float, bpm: float) -> dict:
+    kick = [0.0] * 16
+    kick[0] = 0.9; kick[8] = 0.85
+    if tension > 0.4: kick[6] = 0.7
+    if tension > 0.65: kick[10] = 0.65
+    if tension > 0.8: kick[14] = 0.6
+
+    snare = [0.0] * 16
+    snare[4] = 0.85; snare[12] = 0.85
+    if tension > 0.5: snare[10] = 0.30
+
+    hihat_c = [0.0] * 16
+    step = 2 if tension > 0.5 else 4
+    for i in range(0, 16, step):
+        hihat_c[i] = 0.55 if i % 4 != 0 else 0.65
+
+    hihat_o = [0.0] * 16
+    if tension > 0.3: hihat_o[14] = 0.6
+
+    crash = [0.0] * 16
+    crash[0] = 0.85
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c,
+            "hihat_o": hihat_o if tension > 0.3 else None, "crash": crash}
+
+
+def _archetype_funk_16th(tension: float, bpm: float) -> dict:
+    kick = [0.0] * 16
+    kick[0] = 0.95; kick[6] = 0.75; kick[10] = 0.65
+    if tension > 0.5: kick[3] = 0.55; kick[13] = 0.50
+    if tension > 0.7: kick[15] = 0.45
+
+    snare = [0.0] * 16
+    snare[4] = 0.90; snare[12] = 0.85
+    # Ghost notes — marca registrada del funk
+    ghost_steps = [2, 6, 9, 11, 14]
+    for s in ghost_steps:
+        if tension > 0.2: snare[s] = 0.22 + tension * 0.12
+
+    hihat_c = [0.0] * 16
+    for i in range(16):  # 16avos continuos
+        hihat_c[i] = 0.50 if i % 2 != 0 else 0.60
+    hihat_o = [0.0] * 16
+    hihat_o[10] = 0.55; hihat_o[14] = 0.50
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c, "hihat_o": hihat_o}
+
+
+def _archetype_jazz_ride(tension: float, bpm: float) -> dict:
+    # Patrón de ride: negras + corcheas off-beat (se aplica swing después)
+    ride = [0.0] * 16
+    ride[0] = 0.70; ride[4] = 0.65; ride[6] = 0.55; ride[8] = 0.70
+    ride[12] = 0.65; ride[14] = 0.55
+
+    kick = [0.0] * 16
+    kick[0] = 0.60
+    if tension > 0.4: kick[10] = 0.45
+    if tension > 0.65: kick[6] = 0.40
+
+    # Hi-hat pedal en 2 y 4
+    hihat_p = [0.0] * 16
+    hihat_p[4] = 0.55; hihat_p[12] = 0.55
+
+    snare = [0.0] * 16
+    snare[4] = 0.65; snare[12] = 0.70
+    if tension > 0.5:
+        snare[2] = 0.20; snare[10] = 0.18  # ghost notes
+
+    return {"kick": kick, "snare": snare, "ride": ride, "hihat_p": hihat_p}
+
+
+def _archetype_bossa_nova(tension: float, bpm: float) -> dict:
+    # Clave 3-2 en maracas, bombo suave
+    kick = [0.0] * 16
+    kick[0] = 0.70; kick[6] = 0.55; kick[9] = 0.50
+    if tension > 0.5: kick[12] = 0.45
+
+    snare = [0.0] * 16
+    snare[4] = 0.55; snare[12] = 0.60
+    # Rim-shot suave
+    snare[9] = 0.35 if tension > 0.3 else 0.0
+
+    hihat_c = [0.0] * 16
+    for i in [0, 4, 8, 12]: hihat_c[i] = 0.50  # negras
+
+    # Clave 3-2 — el alma de la bossa
+    maracas = [0.0] * 16
+    for s in [0, 3, 6, 8, 11]: maracas[s] = 0.55 + tension * 0.15
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c, "maracas": maracas}
+
+
+def _archetype_reggae_one_drop(tension: float, bpm: float) -> dict:
+    # Kick en tiempo 3, caja en 3 y 4 (one-drop)
+    kick = [0.0] * 16
+    kick[8] = 0.90  # tiempo 3
+    if tension > 0.5: kick[13] = 0.55
+
+    snare = [0.0] * 16
+    snare[8] = 0.80; snare[12] = 0.75
+    if tension > 0.4: snare[10] = 0.30
+
+    hihat_c = [0.0] * 16
+    for i in range(0, 16, 4): hihat_c[i] = 0.55  # negras
+    hihat_o = [0.0] * 16
+    hihat_o[4] = 0.60  # off-beat abierto
+
+    clave = [0.0] * 16
+    for s in [0, 6, 9, 12]: clave[s] = 0.45
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c,
+            "hihat_o": hihat_o, "clave": clave}
+
+
+def _archetype_afrobeat(tension: float, bpm: float) -> dict:
+    # Clave yoruba + doble bombo en contratiempo
+    kick = [0.0] * 16
+    kick[0] = 0.85; kick[3] = 0.60; kick[8] = 0.80; kick[11] = 0.55
+    if tension > 0.5: kick[5] = 0.50; kick[14] = 0.45
+
+    snare = [0.0] * 16
+    snare[4] = 0.75; snare[12] = 0.70
+    if tension > 0.4: snare[6] = 0.35; snare[10] = 0.30
+
+    hihat_c = [0.0] * 16
+    for i in range(0, 16, 2): hihat_c[i] = 0.50
+    hihat_o = [0.0] * 16
+    hihat_o[6] = 0.60; hihat_o[14] = 0.55
+
+    # Clave yoruba 5:8 mapeada a 16avos
+    clave = [0.0] * 16
+    for s in [0, 3, 6, 9, 12]: clave[s] = 0.55 + tension * 0.10
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c,
+            "hihat_o": hihat_o, "clave": clave}
+
+
+def _archetype_latin_clave(tension: float, bpm: float) -> dict:
+    kick = [0.0] * 16
+    kick[0] = 0.90; kick[7] = 0.70; kick[10] = 0.60
+    if tension > 0.5: kick[3] = 0.50; kick[13] = 0.45
+
+    snare = [0.0] * 16
+    snare[4] = 0.80; snare[12] = 0.80
+    if tension > 0.4: snare[8] = 0.35
+
+    hihat_c = [0.0] * 16
+    for i in range(0, 16, 2): hihat_c[i] = 0.52
+
+    # Clave 2-3
+    maracas = [0.0] * 16
+    for s in [0, 4, 8, 11, 14]: maracas[s] = 0.60
+
+    clave = [0.0] * 16
+    for s in [3, 7, 10, 12, 15]: clave[s] = 0.55 + tension * 0.10
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c,
+            "maracas": maracas, "clave": clave}
+
+
+def _archetype_waltz(tension: float, bpm: float) -> dict:
+    """Vals sintético en 3/4 mapeado a grid de 12 pasos (de 16)."""
+    kick = [0.0] * 16
+    kick[0] = 0.90  # tiempo 1
+    if tension > 0.5: kick[6] = 0.45
+
+    snare = [0.0] * 16
+    snare[4] = 0.65; snare[8] = 0.60  # tiempos 2 y 3
+    if tension > 0.6: snare[10] = 0.25
+
+    hihat_c = [0.0] * 16
+    for i in [0, 4, 8]: hihat_c[i] = 0.55
+    hihat_o = [0.0] * 16
+    if tension > 0.3: hihat_o[8] = 0.50
+
+    crash = [0.0] * 16
+    crash[0] = 0.70
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c,
+            "hihat_o": hihat_o if tension > 0.3 else None, "crash": crash}
+
+
+def _archetype_tango(tension: float, bpm: float) -> dict:
+    # Habanera: corchea + silencio + dos semicorcheas (pasos 0, 4, 8, 12 → 0, 6, 8, 12)
+    kick = [0.0] * 16
+    kick[0] = 0.90; kick[6] = 0.70; kick[8] = 0.80; kick[12] = 0.75
+    if tension > 0.5: kick[14] = 0.55
+
+    snare = [0.0] * 16
+    snare[4] = 0.75; snare[12] = 0.80
+    if tension > 0.4: snare[10] = 0.30
+
+    hihat_c = [0.0] * 16
+    for i in [0, 4, 8, 12]: hihat_c[i] = 0.55
+
+    # Golpe de clave con sabor tango
+    clave = [0.0] * 16
+    for s in [0, 6, 8, 12, 14]: clave[s] = 0.50 + tension * 0.15
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c, "clave": clave}
+
+
+def _archetype_flamenco(tension: float, bpm: float) -> dict:
+    """
+    Bulerías mapeadas a un grid de 16 pasos representando el ciclo de 12.
+    Los acentos tradicionales son: 1, 3, 6, 8, 10, 11, 12.
+    Se mapean a los pasos más cercanos en 16 subdivisiones.
+    """
+    # Pasos equivalentes a 1, 3, 6, 8, 10, 11, 12 en ciclo de 12 → 16 pasos
+    accent_steps = [0, 3, 7, 10, 13, 14, 15]
+
+    kick = [0.0] * 16
+    for s in [0, 7, 13]: kick[s] = 0.85 + (tension * 0.10)
+    if tension > 0.4: kick[3] = 0.65
+
+    snare = [0.0] * 16
+    for s in [3, 10]: snare[s] = 0.80
+    if tension > 0.5: snare[14] = 0.70; snare[7] = 0.55
+
+    hihat_c = [0.0] * 16
+    for s in accent_steps: hihat_c[s] = 0.60 + (tension * 0.15)
+
+    # Palmas / clave en los acentos fuertes
+    clave = [0.0] * 16
+    for s in [0, 7, 10, 13]: clave[s] = 0.70 + tension * 0.10
+
+    crash = [0.0] * 16
+    crash[0] = 0.80
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c,
+            "clave": clave, "crash": crash}
+
+
+def _archetype_half_time(tension: float, bpm: float) -> dict:
+    # Snare en tiempo 3 (half-time feel)
+    kick = [0.0] * 16
+    kick[0] = 0.90; kick[6] = 0.70; kick[10] = 0.60
+    if tension > 0.5: kick[3] = 0.55; kick[14] = 0.50
+
+    snare = [0.0] * 16
+    snare[8] = 0.90  # tiempo 3 — acento principal
+    if tension > 0.4: snare[12] = 0.40  # ghost
+
+    hihat_c = [0.0] * 16
+    for i in range(0, 16, 2): hihat_c[i] = 0.52
+    hihat_o = [0.0] * 16
+    hihat_o[6] = 0.55; hihat_o[14] = 0.50
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c, "hihat_o": hihat_o}
+
+
+def _archetype_shuffle(tension: float, bpm: float) -> dict:
+    # Blues shuffle — triplillo, se añade swing post-procesado
+    kick = [0.0] * 16
+    kick[0] = 0.90; kick[8] = 0.80
+    if tension > 0.4: kick[6] = 0.60
+
+    snare = [0.0] * 16
+    snare[4] = 0.85; snare[12] = 0.85
+
+    # Las corcheas off-beat del hihat se desplazarán con swing
+    hihat_c = [0.0] * 16
+    for i in range(0, 16, 2): hihat_c[i] = 0.55
+    if tension > 0.3: hihat_o = {14: 0.60}
+    else: hihat_o = {}
+
+    ho = [0.0] * 16
+    for k, v in (hihat_o if isinstance(hihat_o, dict) else {}).items(): ho[k] = v
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c, "hihat_o": ho}
+
+
+def _archetype_brushes(tension: float, bpm: float) -> dict:
+    # Jazz de escobillas — sonidos suaves, ride muy presente
+    ride = [0.0] * 16
+    for i in [0, 4, 6, 8, 12, 14]: ride[i] = 0.45 + tension * 0.10
+
+    kick = [0.0] * 16
+    kick[0] = 0.55
+    if tension > 0.5: kick[10] = 0.40
+
+    hihat_p = [0.0] * 16
+    hihat_p[4] = 0.45; hihat_p[12] = 0.45
+
+    snare = [0.0] * 16
+    snare[4] = 0.45; snare[12] = 0.50
+    # Muchos ghost notes, es el sello de escobillas
+    for s in [1, 3, 6, 9, 11, 14]:
+        snare[s] = 0.15 + tension * 0.08
+
+    return {"kick": kick, "snare": snare, "ride": ride, "hihat_p": hihat_p}
+
+
+def _archetype_trap(tension: float, bpm: float) -> dict:
+    # Hi-hat de 32avos (simulado en 16), bombo sincopado, claps
+    kick = [0.0] * 16
+    kick[0] = 0.95; kick[3] = 0.75; kick[7] = 0.65; kick[11] = 0.60
+    if tension > 0.5: kick[5] = 0.55; kick[13] = 0.50
+    if tension > 0.75: kick[15] = 0.45
+
+    # Claps en lugar de snare
+    snare = [0.0] * 16
+    snare[4] = 0.85; snare[12] = 0.80
+    if tension > 0.4: snare[8] = 0.50
+
+    # Patrón de hi-hat denso con variaciones de apertura
+    hihat_c = [0.0] * 16
+    for i in range(16):
+        hihat_c[i] = 0.40 + (0.20 if i % 4 == 0 else 0.0)
+    hihat_o = [0.0] * 16
+    for s in [2, 6, 10, 14]:
+        if tension > 0.3: hihat_o[s] = 0.35 + tension * 0.15
+
+    return {"kick": kick, "snare": snare, "hihat_c": hihat_c, "hihat_o": hihat_o}
+
+
+# Registro central de arquetipos
+STYLE_ARCHETYPES: dict[str, dict] = {
+    "rock_straight":  {"fn": _archetype_rock_straight,  "swing": 0.50, "feel": "straight",
+                       "fill_style": "descending",  "description": "Rock clásico, 4tos en hihat, backbeat seco"},
+    "funk_16th":      {"fn": _archetype_funk_16th,      "swing": 0.52, "feel": "straight",
+                       "fill_style": "snare_roll",   "description": "Funk de 16avos, ghost notes de caja, synco"},
+    "jazz_ride":      {"fn": _archetype_jazz_ride,      "swing": 0.67, "feel": "swing",
+                       "fill_style": "sparse",       "description": "Jazz ride con triplillo, hi-hat pedal"},
+    "bossa_nova":     {"fn": _archetype_bossa_nova,     "swing": 0.50, "feel": "straight",
+                       "fill_style": "cross_stick",  "description": "Bossa nova con clave 3-2 y maracas"},
+    "reggae_one_drop":{"fn": _archetype_reggae_one_drop,"swing": 0.50, "feel": "straight",
+                       "fill_style": "sparse",       "description": "Reggae one-drop, kick en tiempo 3"},
+    "afrobeat":       {"fn": _archetype_afrobeat,       "swing": 0.50, "feel": "straight",
+                       "fill_style": "ascending",    "description": "Afrobeat con clave yoruba y doble bombo"},
+    "latin_clave":    {"fn": _archetype_latin_clave,    "swing": 0.50, "feel": "straight",
+                       "fill_style": "buildup",      "description": "Clave 2-3 latina, bombo sincopado"},
+    "waltz":          {"fn": _archetype_waltz,          "swing": 0.50, "feel": "straight",
+                       "fill_style": "descending",   "description": "Vals sintético 3/4"},
+    "tango":          {"fn": _archetype_tango,          "swing": 0.50, "feel": "straight",
+                       "fill_style": "cross_stick",  "description": "Tango con habanera y clave"},
+    "flamenco":       {"fn": _archetype_flamenco,       "swing": 0.50, "feel": "straight",
+                       "fill_style": "buildup",      "description": "Bulerías, ciclo de 12 con acentos flamencos"},
+    "half_time":      {"fn": _archetype_half_time,      "swing": 0.50, "feel": "straight",
+                       "fill_style": "half_drop",    "description": "Half-time, snare en tiempo 3"},
+    "shuffle":        {"fn": _archetype_shuffle,        "swing": 0.62, "feel": "swing",
+                       "fill_style": "snare_roll",   "description": "Blues shuffle con triplillo"},
+    "brushes":        {"fn": _archetype_brushes,        "swing": 0.65, "feel": "swing",
+                       "fill_style": "sparse",       "description": "Jazz de escobillas, ride suave"},
+    "trap":           {"fn": _archetype_trap,           "swing": 0.50, "feel": "straight",
+                       "fill_style": "buildup",      "description": "Trap, hi-hat denso y bombo sincopado"},
+}
+DEFAULT_STYLE = "rock_straight"
+
+
+def build_seed_groove_from_archetype(style: str, tension: float, bpm: float) -> "RhythmPattern":
+    """
+    Construye un RhythmPattern desde el catálogo de arquetipos.
+    Devuelve el groove del estilo solicitado, ajustado según tensión.
+    """
+    arch = STYLE_ARCHETYPES.get(style, STYLE_ARCHETYPES[DEFAULT_STYLE])
+    raw = arch["fn"](tension, bpm)
+
+    grid = {k: v for k, v in raw.items() if v is not None and any(x > 0 for x in v)}
+
+    combined = [0.0] * 16
+    for arr in grid.values():
+        for i in range(min(16, len(arr))):
+            combined[i] = max(combined[i], arr[i])
+
+    syncope = compute_syncope_level(combined)
+    density = sum(1 for v in combined if v > 0) / 16.0
+
+    return RhythmPattern(
+        grid=grid,
+        resolution=16,
+        bars=1,
+        tempo=bpm,
+        syncope_level=syncope,
+        density=density,
+        groove_family=style,
+        feel=arch["feel"],
+        energy=tension,
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SELECCIÓN PROBABILÍSTICA DE GROOVES  (v0.3)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def choose_groove_probabilistic(tension: float, library: "Optional[dict]",
+                                 bpm: float, style: str = DEFAULT_STYLE,
+                                 diversity: float = 0.4) -> "RhythmPattern":
+    """
+    Elige un groove con selección ponderada entre los N mejores candidatos.
+
+    diversity=0   → determinista (siempre el mejor)
+    diversity=0.4 → equilibrio entre coherencia y variedad (default)
+    diversity=1.0 → aleatorio entre los 5 mejores candidatos
+    """
+    if library and library.get("clusters"):
+        target_syncope = tension * 0.8
+        target_density = 0.2 + tension * 0.4
+
+        # Filtrar por familia de estilo si hay candidatos de ese estilo
+        clusters = library["clusters"]
+        style_clusters = [c for c in clusters
+                          if c.get("groove_family", "") == style
+                          or style in c.get("label", "")]
+        if len(style_clusters) >= 2:
+            clusters = style_clusters
+
+        # Puntuar todos los candidatos
+        scored = []
+        for c in clusters:
+            d = abs(c.get("avg_density", 0.3) - target_density)
+            s = abs(c.get("avg_syncope", 0.3) - target_syncope)
+            score = d + s
+            scored.append((score, c))
+
+        scored.sort(key=lambda x: x[0])
+
+        if diversity < 0.01:
+            # Determinista: el mejor
+            best = scored[0][1]
+        else:
+            # Probabilístico: elegir entre los top-K con pesos
+            k = max(2, min(5, int(2 + diversity * 3)))
+            top = scored[:k]
+            weights = [1.0 / (sc + 0.01) for sc, _ in top]
+            # Mezclar con ruido proporcional a diversity
+            noisy_w = [w * (1 - diversity) + diversity / len(top)
+                       for w in weights]
+            total_w = sum(noisy_w)
+            noisy_w = [w / total_w for w in noisy_w]
+            r = random.random()
+            cumulative = 0.0
+            best = top[-1][1]
+            for w, (_, c) in zip(noisy_w, top):
+                cumulative += w
+                if r <= cumulative:
+                    best = c
+                    break
+
+        return RhythmPattern(
+            grid=best["grid"],
+            resolution=16,
+            bars=1,
+            tempo=bpm,
+            syncope_level=best.get("avg_syncope", tension * 0.5),
+            density=best.get("avg_density", 0.3),
+            groove_family=best.get("label", style),
+        )
+
+    # Sin biblioteca — usar arquetipo de semilla
+    return build_seed_groove_from_archetype(style, tension, bpm)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CAPAS INDEPENDIENTES  (v0.3)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def split_pattern_into_layers(pattern: "RhythmPattern") -> dict:
+    """
+    Divide un RhythmPattern en tres capas funcionales independientes:
+      - structural:   kick + snare  (pulso y backbeat)
+      - subdivision:  hihat, ride   (subdivisión temporal)
+      - color:        clave, maracas, toms (textura y color)
+    """
+    structural = {}
+    subdivision = {}
+    color = {}
+
+    for instr, arr in pattern.grid.items():
+        func = FUNC.get(instr, "color")
+        if func in ("pulse", "backbeat"):
+            structural[instr] = list(arr)
+        elif func in ("subdivision", "accent"):
+            subdivision[instr] = list(arr)
+        else:
+            color[instr] = list(arr)
+
+    return {"structural": structural, "subdivision": subdivision, "color": color}
+
+
+def evolve_subdivision_layer(subdivision: dict, section_index: int,
+                              tension: float, style: str) -> dict:
+    """
+    Hace evolucionar la capa de subdivisión entre secciones:
+    - Intro:      8vos o negras
+    - Desarrollo: 16avos o patrón más denso
+    - Clímax:     16avos con abiertos adicionales
+    """
+    arch = STYLE_ARCHETYPES.get(style, STYLE_ARCHETYPES[DEFAULT_STYLE])
+    result = {k: list(v) for k, v in subdivision.items()}
+
+    hihat = result.get("hihat_c", [0.0] * 16)
+
+    if section_index == 0:
+        # Intro: reducir a negras o 8vos
+        new_hh = [0.0] * 16
+        step = 4 if tension < 0.4 else 2
+        for i in range(0, 16, step):
+            new_hh[i] = hihat[i] if hihat[i] > 0 else 0.55
+        result["hihat_c"] = new_hh
+
+    elif section_index == 1:
+        # Desarrollo: 8vos completos
+        new_hh = [0.0] * 16
+        for i in range(0, 16, 2):
+            new_hh[i] = 0.58 if i % 4 != 0 else 0.65
+        result["hihat_c"] = new_hh
+
+    else:
+        # Clímax: 16avos con algunos abiertos
+        new_hh = [0.0] * 16
+        for i in range(16):
+            new_hh[i] = 0.50 + (0.15 if i % 4 == 0 else 0.0)
+        result["hihat_c"] = new_hh
+        if "hihat_o" not in result:
+            ho = [0.0] * 16
+            if tension > 0.4: ho[6] = 0.55; ho[14] = 0.60
+            result["hihat_o"] = ho
+
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  VARIACIONES ESTRUCTURALES COMPÁS A COMPÁS  (v0.3)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Reglas de variación por función de instrumento y estilo
+# Cada regla es (descripción, probabilidad_base, función_de_mutación)
+
+def _vary_hihat_open(grid: dict, step: int, rng: random.Random) -> dict:
+    """Abre el hi-hat en una posición inesperada."""
+    if "hihat_o" not in grid:
+        grid["hihat_o"] = [0.0] * 16
+    candidates = [i for i in [2, 6, 10, 14] if grid["hihat_o"][i] == 0.0]
+    if candidates:
+        pos = rng.choice(candidates)
+        grid["hihat_o"][pos] = rng.uniform(0.40, 0.65)
+    return grid
+
+
+def _vary_kick_anticipation(grid: dict, step: int, rng: random.Random) -> dict:
+    """Añade un bombo de anticipación un paso antes de un tiempo fuerte."""
+    if "kick" not in grid:
+        return grid
+    kick = grid["kick"]
+    for strong in [0, 8]:
+        anticipation = (strong - 1) % 16
+        if kick[strong] > 0 and kick[anticipation] == 0.0:
+            if rng.random() < 0.5:
+                grid["kick"] = list(kick)
+                grid["kick"][anticipation] = rng.uniform(0.45, 0.65)
+                break
+    return grid
+
+
+def _vary_snare_ghost(grid: dict, step: int, rng: random.Random) -> dict:
+    """Añade una ghost note de caja en posición débil."""
+    if "snare" not in grid:
+        return grid
+    snare = list(grid["snare"])
+    weak = [i for i in [1, 2, 5, 6, 9, 10, 13, 14] if snare[i] == 0.0]
+    if weak:
+        pos = rng.choice(weak)
+        snare[pos] = rng.uniform(0.15, 0.28)
+        grid["snare"] = snare
+    return grid
+
+
+def _vary_hihat_omit(grid: dict, step: int, rng: random.Random) -> dict:
+    """Omite un hi-hat débil (crea 'agujero' respiratorio)."""
+    if "hihat_c" not in grid:
+        return grid
+    hihat = list(grid["hihat_c"])
+    weak = [i for i in range(16) if hihat[i] > 0 and i % 4 != 0]
+    if weak:
+        pos = rng.choice(weak)
+        hihat[pos] = 0.0
+        grid["hihat_c"] = hihat
+    return grid
+
+
+def _vary_kick_double(grid: dict, step: int, rng: random.Random) -> dict:
+    """Dobla el kick en el paso siguiente."""
+    if "kick" not in grid:
+        return grid
+    kick = list(grid["kick"])
+    hits = [i for i in range(14) if kick[i] > 0 and kick[i+1] == 0.0]
+    if hits:
+        pos = rng.choice(hits) + 1
+        kick[pos] = rng.uniform(0.55, 0.75)
+        grid["kick"] = kick
+    return grid
+
+
+# Catálogo de variaciones con sus probabilidades por estilo
+VARIATION_CATALOG = [
+    ("hihat_open",      _vary_hihat_open,       0.30),
+    ("kick_anticipate", _vary_kick_anticipation,0.20),
+    ("snare_ghost",     _vary_snare_ghost,       0.35),
+    ("hihat_omit",      _vary_hihat_omit,        0.25),
+    ("kick_double",     _vary_kick_double,       0.15),
+]
+
+# Ajuste de probabilidades según estilo
+STYLE_VARIATION_WEIGHTS = {
+    "funk_16th":    {"snare_ghost": 0.60, "hihat_omit": 0.40},
+    "jazz_ride":    {"snare_ghost": 0.50, "hihat_open": 0.20, "kick_double": 0.05},
+    "trap":         {"kick_double": 0.45, "hihat_open": 0.50},
+    "brushes":      {"snare_ghost": 0.70, "hihat_omit": 0.50},
+    "flamenco":     {"kick_anticipate": 0.40, "hihat_open": 0.15},
+    "bossa_nova":   {"hihat_omit": 0.35, "kick_anticipate": 0.15},
+}
+
+
+def apply_bar_variation(grid: dict, bar: int, style: str,
+                         variation_strength: float, tension: float) -> dict:
+    """
+    Aplica variaciones micro-estructurales a un grid de un compás.
+    Cada variación tiene su propia probabilidad ajustada por estilo.
+    """
+    if variation_strength < 0.01:
+        return grid
+
+    rng = random.Random(bar * 73 + hash(style) % 1000)
+    style_weights = STYLE_VARIATION_WEIGHTS.get(style, {})
+
+    for name, fn, base_prob in VARIATION_CATALOG:
+        prob = style_weights.get(name, base_prob) * variation_strength
+        # Reducir variación en tiempos 1 de sección (bar==0)
+        if bar % 4 == 0:
+            prob *= 0.4
+        if rng.random() < prob:
+            grid = fn({k: list(v) for k, v in grid.items()}, bar, rng)
+
+    return grid
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CATÁLOGO DE FILLS DIVERSIFICADO  (v0.3)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _fill_descending(tpb: int, bar: int, tension: float) -> list:
+    """Fill descendente clásico: hi → mid → lo → snare."""
+    events = []
+    ticks_per_bar = tpb * 4
+    ticks_per_step = ticks_per_bar // 16
+    bar_start = bar * ticks_per_bar
+    vel = int(np.clip(75 + tension * 30, 60, 110))
+
+    if tension > 0.6:
+        seq = [GM["tom_hi"]] * 2 + [GM["tom_mid"]] * 2 + [GM["tom_lo"]] * 2 + [GM["snare"]] * 2
+        steps = [8, 10, 11, 12, 13, 14, 15, 15]
+    else:
+        seq = [GM["tom_hi"], GM["tom_mid"], GM["tom_lo"], GM["snare"]]
+        steps = [12, 13, 14, 15]
+
+    for pitch, step in zip(seq, steps):
+        events.append(DrumEvent(bar_start + step * ticks_per_step, pitch, vel,
+                                max(10, ticks_per_step // 2)))
+    return events
+
+
+def _fill_ascending(tpb: int, bar: int, tension: float) -> list:
+    """Fill ascendente: lo → mid → hi → crash."""
+    events = []
+    ticks_per_bar = tpb * 4
+    ticks_per_step = ticks_per_bar // 16
+    bar_start = bar * ticks_per_bar
+    vel = int(np.clip(70 + tension * 30, 60, 110))
+
+    seq = [GM["tom_lo"], GM["tom_mid"], GM["tom_hi"], GM["crash"]]
+    steps = [10, 12, 14, 15] if tension > 0.5 else [12, 13, 14, 15]
+
+    for pitch, step in zip(seq, steps):
+        v = vel if pitch != GM["crash"] else min(vel + 15, 120)
+        events.append(DrumEvent(bar_start + step * ticks_per_step, pitch, v,
+                                max(10, ticks_per_step // 2)))
+    return events
+
+
+def _fill_snare_roll(tpb: int, bar: int, tension: float) -> list:
+    """Redoble de caja + crash de cierre."""
+    events = []
+    ticks_per_bar = tpb * 4
+    ticks_per_step = ticks_per_bar // 16
+    bar_start = bar * ticks_per_bar
+
+    n_rolls = 8 if tension > 0.5 else 4
+    start_step = 16 - n_rolls
+    for i in range(n_rolls):
+        step = start_step + i
+        vel = int(np.clip(55 + (i / n_rolls) * 50, 50, 110))
+        events.append(DrumEvent(bar_start + step * ticks_per_step,
+                                GM["snare"], vel, max(8, ticks_per_step // 3)))
+
+    # Crash al inicio del siguiente compás
+    events.append(DrumEvent(bar_start + 16 * ticks_per_step,
+                             GM["crash"], 100, ticks_per_step))
+    return events
+
+
+def _fill_cross_stick(tpb: int, bar: int, tension: float) -> list:
+    """Fill de cross-stick (rim) con feel latino o jazz."""
+    events = []
+    ticks_per_bar = tpb * 4
+    ticks_per_step = ticks_per_bar // 16
+    bar_start = bar * ticks_per_bar
+    vel = int(np.clip(60 + tension * 25, 50, 95))
+
+    # Cross-stick: usamos snare_e (electronic snare / rim) MIDI 40
+    seq_steps = [10, 12, 13, 14, 15] if tension > 0.5 else [12, 14, 15]
+    for step in seq_steps:
+        events.append(DrumEvent(bar_start + step * ticks_per_step,
+                                GM["snare_e"], vel, max(10, ticks_per_step // 2)))
+    return events
+
+
+def _fill_half_drop(tpb: int, bar: int, tension: float) -> list:
+    """Pausa + drop (kick + crash) al final — feel cinematográfico."""
+    events = []
+    ticks_per_bar = tpb * 4
+    ticks_per_step = ticks_per_bar // 16
+    bar_start = bar * ticks_per_bar
+
+    # Silencio en los primeros 3/4, luego drop
+    for step in [12, 14]:
+        events.append(DrumEvent(bar_start + step * ticks_per_step,
+                                GM["kick"], 95, max(10, ticks_per_step // 2)))
+    events.append(DrumEvent(bar_start + 15 * ticks_per_step,
+                             GM["crash"], 110, tpb))
+    if tension > 0.6:
+        events.append(DrumEvent(bar_start + 15 * ticks_per_step,
+                                 GM["tom_lo"], 80, ticks_per_step))
+    return events
+
+
+def _fill_flam(tpb: int, bar: int, tension: float) -> list:
+    """Flam accent: golpes casi simultáneos de dos manos."""
+    events = []
+    ticks_per_bar = tpb * 4
+    ticks_per_step = ticks_per_bar // 16
+    bar_start = bar * ticks_per_bar
+    flam_offset = max(4, tpb // 120)  # pequeño offset de flam
+    vel = int(np.clip(70 + tension * 25, 60, 105))
+
+    positions = [12, 13, 14, 15] if tension > 0.5 else [13, 14, 15]
+    for step in positions:
+        t = bar_start + step * ticks_per_step
+        events.append(DrumEvent(t - flam_offset, GM["snare_e"], vel - 20,
+                                max(6, ticks_per_step // 4)))
+        events.append(DrumEvent(t, GM["snare"], vel, max(10, ticks_per_step // 2)))
+    return events
+
+
+def _fill_sparse(tpb: int, bar: int, tension: float) -> list:
+    """Fill minimalista — uno o dos golpes estratégicos."""
+    events = []
+    ticks_per_bar = tpb * 4
+    ticks_per_step = ticks_per_bar // 16
+    bar_start = bar * ticks_per_bar
+    vel = int(np.clip(65 + tension * 20, 55, 95))
+
+    steps = [14, 15] if tension > 0.4 else [15]
+    pitches = [GM["tom_hi"] if tension > 0.5 else GM["snare"]] * len(steps)
+    for step, pitch in zip(steps, pitches):
+        events.append(DrumEvent(bar_start + step * ticks_per_step,
+                                pitch, vel, max(10, ticks_per_step // 2)))
+    return events
+
+
+def _fill_buildup(tpb: int, bar: int, tension: float) -> list:
+    """Build-up progresivo: accelerando de density."""
+    events = []
+    ticks_per_bar = tpb * 4
+    ticks_per_step = ticks_per_bar // 16
+    bar_start = bar * ticks_per_bar
+
+    # Primero snare en negras, luego en 8vos, luego en 16avos
+    schedule = [(8, GM["snare"], 65), (10, GM["snare"], 72),
+                (11, GM["snare"], 78), (12, GM["tom_hi"], 80),
+                (13, GM["tom_mid"], 85), (14, GM["tom_lo"], 90),
+                (15, GM["crash"], 110)]
+    for step, pitch, vel in schedule:
+        v = int(np.clip(vel * (0.7 + tension * 0.4), 50, 120))
+        events.append(DrumEvent(bar_start + step * ticks_per_step,
+                                pitch, v, max(10, ticks_per_step // 2)))
+    return events
+
+
+FILL_CATALOG = {
+    "descending":  _fill_descending,
+    "ascending":   _fill_ascending,
+    "snare_roll":  _fill_snare_roll,
+    "cross_stick": _fill_cross_stick,
+    "half_drop":   _fill_half_drop,
+    "flam":        _fill_flam,
+    "sparse":      _fill_sparse,
+    "buildup":     _fill_buildup,
+}
+
+
+def generate_fill_v3(tpb: int, bar: int, tension: float,
+                     style: str = DEFAULT_STYLE,
+                     fill_style: str = "auto") -> list:
+    """
+    Genera un fill eligiendo del catálogo según estilo y tensión.
+    fill_style='auto' usa el fill preferido del arquetipo.
+    """
+    if fill_style == "auto":
+        arch = STYLE_ARCHETYPES.get(style, STYLE_ARCHETYPES[DEFAULT_STYLE])
+        fill_style = arch.get("fill_style", "descending")
+
+        # Overrides por tensión
+        if tension > 0.8 and fill_style not in ("snare_roll", "buildup"):
+            fill_style = "buildup"
+        elif tension < 0.2 and fill_style not in ("sparse", "cross_stick"):
+            fill_style = "sparse"
+
+    fn = FILL_CATALOG.get(fill_style, _fill_descending)
+    return fn(tpb, bar, tension)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CURVE INTERPOLATOR — base compartida para add, transform, morph
@@ -1017,8 +1959,31 @@ def detect_polyrhythm_hints(events: list, tpb: int) -> list[str]:
 
 def cmd_add(args):
     """Añade una pista de percusión a un MIDI que no la tiene."""
+
+    # Listar estilos si se pide
+    if getattr(args, "list_styles", False):
+        print("\nEstilos de percusión disponibles (--style):")
+        for name, arch in STYLE_ARCHETYPES.items():
+            print(f"  {name:20s} — {arch['description']}")
+        print()
+        return
+
     mid = mido.MidiFile(args.input)
     bpm, tpb = get_tempo_and_tpb(mid)
+
+    # Parámetros v0.3
+    style           = getattr(args, "style", DEFAULT_STYLE) or DEFAULT_STYLE
+    diversity       = float(getattr(args, "groove_diversity", 0.4) or 0.4)
+    variation       = float(getattr(args, "variation", 0.3) or 0.3)
+    use_layers      = not getattr(args, "no_layers", False)
+    fill_style      = getattr(args, "fill_style", "auto") or "auto"
+
+    # Validar estilo
+    if style not in STYLE_ARCHETYPES:
+        print(f"[add] Estilo '{style}' no reconocido. "
+              f"Usa --list-styles para ver los disponibles.")
+        print(f"      Usando estilo por defecto: {DEFAULT_STYLE}")
+        style = DEFAULT_STYLE
 
     # Verificar si ya tiene percusión
     existing = extract_percussion_track(mid)
@@ -1070,25 +2035,34 @@ def cmd_add(args):
             library = json.load(f)
         print(f"[add] Biblioteca cargada: {len(library.get('clusters', []))} grooves")
 
-    # Generar la pista de percusión compás a compás
+    # Aplicar swing del arquetipo si no se sobreescribe
+    arch_swing = STYLE_ARCHETYPES.get(style, {}).get("swing", 0.50)
+
+    print(f"[add] Estilo: {style}  |  diversidad={diversity:.2f}  "
+          f"|  variación={variation:.2f}  |  capas={'sí' if use_layers else 'no'}")
     print(f"[add] Generando percusión para {total_bars} compases a {bpm:.1f} BPM...")
 
     all_events = []
 
     # Si hay secciones, generar groove diferente por sección
     if sections:
-        for sec in sections:
+        for sec_idx, sec in enumerate(sections):
             sec_start = sec.get("bar_start", 0)
             sec_end   = sec.get("bar_end", total_bars)
             sec_bars  = sec_end - sec_start
             tension   = sec.get("tension_mean", 0.5)
             label     = sec.get("label", "A")
 
-            pattern = choose_groove(tension, library, bpm)
+            pattern = choose_groove(tension, library, bpm, style, diversity)
             sec_events = generate_groove_events(
                 pattern, tpb, sec_bars, sec_start,
                 tension=tension,
                 add_fill_at_end=(label != sections[-1].get("label")),
+                style=style,
+                variation_strength=variation,
+                fill_style=fill_style,
+                use_layers=use_layers,
+                section_index=sec_idx,
             )
             all_events.extend(sec_events)
     else:
@@ -1097,7 +2071,6 @@ def cmd_add(args):
         dev_bars   = total_bars - intro_bars * 2
         climax_bars = intro_bars
 
-        # Tensión por sección si hay curva
         def avg_tension(start, end):
             if tension_curve and len(tension_curve) > 0:
                 idxs = np.linspace(0, len(tension_curve)-1, total_bars)
@@ -1106,22 +2079,31 @@ def cmd_add(args):
             return 0.5
 
         parts = [
-            (0,            intro_bars,           avg_tension(0, intro_bars),           True),
-            (intro_bars,   intro_bars + dev_bars, avg_tension(intro_bars, intro_bars+dev_bars), True),
-            (intro_bars + dev_bars, total_bars,  avg_tension(intro_bars+dev_bars, total_bars), False),
+            (0,            intro_bars,           avg_tension(0, intro_bars),           True,  0),
+            (intro_bars,   intro_bars + dev_bars, avg_tension(intro_bars, intro_bars+dev_bars), True, 1),
+            (intro_bars + dev_bars, total_bars,  avg_tension(intro_bars+dev_bars, total_bars), False, 2),
         ]
 
-        for start, end, tension, add_fill in parts:
+        for start, end, tension, add_fill, sec_idx in parts:
             n = end - start
             if n <= 0:
                 continue
-            pattern = choose_groove(tension, library, bpm)
+            pattern = choose_groove(tension, library, bpm, style, diversity)
             evts = generate_groove_events(
                 pattern, tpb, n, start,
                 tension=tension,
                 add_fill_at_end=add_fill,
+                style=style,
+                variation_strength=variation,
+                fill_style=fill_style,
+                use_layers=use_layers,
+                section_index=sec_idx,
             )
             all_events.extend(evts)
+
+    # Aplicar swing del arquetipo (si tiene)
+    if arch_swing > 0.51:
+        all_events = apply_swing_to_events(all_events, tpb, arch_swing, style)
 
     # Humanizar
     if not args.no_humanize:
@@ -1134,127 +2116,80 @@ def cmd_add(args):
     print(f"      {len(all_events)} eventos de percusión generados")
 
 
-def choose_groove(tension: float, library: Optional[dict], bpm: float) -> RhythmPattern:
+def choose_groove(tension: float, library: Optional[dict], bpm: float,
+                  style: str = DEFAULT_STYLE,
+                  diversity: float = 0.4) -> RhythmPattern:
     """
     Elige el groove más apropiado de la biblioteca según la tensión.
-    Si no hay biblioteca, usa grooves hardcodeados de semilla.
+    Delega a choose_groove_probabilistic para selección ponderada.
+    Si no hay biblioteca, usa el catálogo de arquetipos (v0.3).
     """
-    if library and library.get("clusters"):
-        # Buscar por similitud: tensión alta → alta síncopa y densidad
-        target_syncope = tension * 0.8
-        target_density = 0.2 + tension * 0.4
-
-        best = None
-        best_score = float("inf")
-        for c in library["clusters"]:
-            d = abs(c.get("avg_density", 0.3) - target_density)
-            s = abs(c.get("avg_syncope", 0.3) - target_syncope)
-            score = d + s
-            if score < best_score:
-                best_score = score
-                best = c
-
-        if best:
-            p = RhythmPattern(
-                grid=best["grid"],
-                resolution=16,
-                bars=1,
-                tempo=bpm,
-                syncope_level=best.get("avg_syncope", tension * 0.5),
-                density=best.get("avg_density", 0.3),
-                groove_family=best.get("label", "learned"),
-            )
-            return p
-
-    # Grooves de semilla hardcodeados
-    return build_seed_groove(tension, bpm)
+    return choose_groove_probabilistic(tension, library, bpm, style, diversity)
 
 
-def build_seed_groove(tension: float, bpm: float) -> RhythmPattern:
+def build_seed_groove(tension: float, bpm: float,
+                      style: str = DEFAULT_STYLE) -> RhythmPattern:
     """
-    Construye un groove desde reglas musicales básicas.
-    Tensión controla la síncopa y densidad del bombo.
+    Construye un groove desde el catálogo de arquetipos (v0.3).
+    Mantiene compatibilidad con el API original.
     """
-    # Bombo: tiempo 1 y 3 siempre; extras según tensión
-    kick = [0.0] * 16
-    kick[0]  = 0.9   # tiempo 1
-    kick[8]  = 0.85  # tiempo 3
-    if tension > 0.4:
-        kick[6]  = 0.7  # synco en el "y" del 2
-    if tension > 0.65:
-        kick[10] = 0.65  # synco en el "y" del 3
-    if tension > 0.8:
-        kick[14] = 0.6   # synco en el "y" del 4
-
-    # Caja: backbeat en 2 y 4 siempre
-    snare = [0.0] * 16
-    snare[4]  = 0.85  # tiempo 2
-    snare[12] = 0.85  # tiempo 4
-    if tension > 0.5:
-        snare[10] = 0.35  # ghost note
-
-    # Hi-hat: subdivisión básica, más densa con más tensión
-    hihat_c = [0.0] * 16
-    step = 2 if tension > 0.5 else 4  # 8vos vs 4tos
-    for i in range(0, 16, step):
-        hihat_c[i] = 0.55 if i % 4 != 0 else 0.65
-
-    # Hi-hat abierto en el "y" del 4 si hay tensión
-    hihat_o = [0.0] * 16
-    if tension > 0.3:
-        hihat_o[14] = 0.6
-
-    grid = {
-        "kick":    kick,
-        "snare":   snare,
-        "hihat_c": hihat_c,
-    }
-    if tension > 0.3:
-        grid["hihat_o"] = hihat_o
-
-    syncope = compute_syncope_level(kick)
-    density = sum(1 for v in kick + snare + hihat_c if v > 0) / 48.0
-
-    return RhythmPattern(
-        grid=grid,
-        resolution=16,
-        bars=1,
-        tempo=bpm,
-        syncope_level=syncope,
-        density=density,
-        groove_family="seed",
-        energy=tension,
-    )
+    return build_seed_groove_from_archetype(style, tension, bpm)
 
 
 def generate_groove_events(pattern: RhythmPattern, tpb: int,
                             n_bars: int, start_bar: int,
                             tension: float = 0.5,
-                            add_fill_at_end: bool = False) -> list[DrumEvent]:
-    """Genera eventos repitiendo el patrón n_bars veces."""
+                            add_fill_at_end: bool = False,
+                            style: str = DEFAULT_STYLE,
+                            variation_strength: float = 0.3,
+                            fill_style: str = "auto",
+                            use_layers: bool = True,
+                            section_index: int = 0) -> list:
+    """
+    Genera eventos repitiendo el patrón n_bars veces.
+
+    Novedades v0.3:
+      - variation_strength: intensidad de micro-variaciones estructurales (0-1)
+      - fill_style: tipo de fill ('auto' usa el del arquetipo)
+      - use_layers: si True, evoluciona las capas por sección
+      - section_index: índice de la sección (0=intro, 1=desarrollo, 2+=clímax)
+    """
     events = []
     ticks_per_bar = tpb * 4
     ticks_per_step = ticks_per_bar // pattern.resolution
 
+    # Si se usan capas, separar y evolucionar la subdivisión según la sección
+    working_grid = pattern.grid
+    if use_layers:
+        layers = split_pattern_into_layers(pattern)
+        evolved_subdiv = evolve_subdivision_layer(
+            layers["subdivision"], section_index, tension, style)
+        working_grid = {**layers["structural"], **evolved_subdiv, **layers["color"]}
+
     pat_bars = pattern.bars
     for bar_offset in range(n_bars):
-        # Si el patrón es de 1 compás, repetir; si es de 2, alternar
         loop_bar = bar_offset % pat_bars
         abs_bar = start_bar + bar_offset
 
-        # ¿Variar ligeramente el groove? (cada 4 compases)
-        variation_seed = bar_offset // 4
         rng = random.Random(abs_bar * 31 + int(tension * 100))
 
-        for instr, vel_array in pattern.grid.items():
-            pitch = GM.get(instr)
-            if pitch is None:
-                continue
-
-            # Slice del compás correspondiente
+        # Seleccionar el slice del compás base
+        bar_grid = {}
+        for instr, vel_array in working_grid.items():
             bar_steps = vel_array[loop_bar * 16:(loop_bar + 1) * 16]
             if not bar_steps:
                 bar_steps = vel_array[:16]
+            bar_grid[instr] = list(bar_steps)
+
+        # Aplicar variaciones estructurales cada compás
+        if variation_strength > 0.0:
+            bar_grid = apply_bar_variation(bar_grid, abs_bar, style,
+                                           variation_strength, tension)
+
+        for instr, bar_steps in bar_grid.items():
+            pitch = GM.get(instr)
+            if pitch is None:
+                continue
 
             for step, vel_f in enumerate(bar_steps):
                 if vel_f <= 0.0:
@@ -1285,7 +2220,7 @@ def generate_groove_events(pattern: RhythmPattern, tpb: int,
     # Fill al final si se pide
     if add_fill_at_end and n_bars > 0:
         fill_bar = start_bar + n_bars - 1
-        fill = generate_fill(tpb, fill_bar, tension)
+        fill = generate_fill_v3(tpb, fill_bar, tension, style, fill_style)
         events.extend(fill)
 
     return events
@@ -2526,7 +3461,7 @@ def main():
 
     # ── add ────────────────────────────────────────────────────────────────
     p_add = sub.add_parser("add", help="Añade percusión a un MIDI sin ella")
-    p_add.add_argument("input", help="MIDI sin percusión")
+    p_add.add_argument("input", nargs="?", help="MIDI sin percusión")
     p_add.add_argument("--output", "-o")
     p_add.add_argument("--library", "-l", help="drum_library.json")
     p_add.add_argument("--fingerprint", "-f", help=".fingerprint.json")
@@ -2537,6 +3472,31 @@ def main():
     p_add.add_argument("--no-humanize", action="store_true")
     p_add.add_argument("--force", action="store_true",
                         help="Añadir aunque ya tenga percusión")
+    # ── Nuevos argumentos v0.3 ────────────────────────────────────────────
+    p_add.add_argument("--style", "-s",
+                        choices=list(STYLE_ARCHETYPES.keys()),
+                        default=DEFAULT_STYLE,
+                        metavar="STYLE",
+                        help=(f"Arquetipo de groove ({', '.join(STYLE_ARCHETYPES)}). "
+                              f"Default: {DEFAULT_STYLE}"))
+    p_add.add_argument("--list-styles", action="store_true",
+                        help="Mostrar todos los estilos disponibles y salir")
+    p_add.add_argument("--groove-diversity", type=float, default=0.4,
+                        metavar="0-1",
+                        help="Diversidad en selección de grooves: 0=determinista, "
+                             "1=máxima variedad (default: 0.4)")
+    p_add.add_argument("--variation", type=float, default=0.3,
+                        metavar="0-1",
+                        help="Intensidad de variaciones estructurales compás a compás "
+                             "(default: 0.3)")
+    p_add.add_argument("--no-layers", action="store_true",
+                        help="Desactivar capas independientes (comportamiento v0.2)")
+    p_add.add_argument("--fill-style",
+                        choices=["auto"] + list(FILL_CATALOG.keys()),
+                        default="auto",
+                        metavar="FILL",
+                        help=(f"Tipo de fill: auto o uno de "
+                              f"{', '.join(FILL_CATALOG.keys())} (default: auto)"))
 
     # ── transform ──────────────────────────────────────────────────────────
     p_tr = sub.add_parser("transform", help="Transforma la percusión existente")
