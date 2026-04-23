@@ -33,6 +33,16 @@
 ║      T=1   → softmax uniforme: máxima variedad respetando compatibilidad   ║
 ║      T>1   → distribución más plana que uniforme (exploración extrema)      ║
 ║                                                                              ║
+║  ── BINS ──────────────────────────────────────────────────────────────── ║
+║    Requiere --bin-size. Agrupa todos los elementos en intervalos de ese     ║
+║    ancho (en beats) y para cada elemento elige un reemplazo de su mismo    ║
+║    bin, independientemente de la longitud exacta. La diferencia de         ║
+║    duración entre el elemento elegido y el hueco destino se resuelve con   ║
+║    --fit:                                                                    ║
+║      scale  — escala proporcional todas las duraciones al hueco destino    ║
+║      pad    — añade notas de paso cromáticas para completar el hueco        ║
+║      trim   — recorta el elemento al final para ajustar al hueco            ║
+║                                                                              ║
 ║  ── REPORT ────────────────────────────────────────────────────────────── ║
 ║    Muestra estadísticas de la gramática sin transformar el MIDI.            ║
 ║    Con --report-format html genera un visor interactivo en el navegador.    ║
@@ -51,6 +61,21 @@
 ║  · Transformación básica — sustituir motivos de 1 beat, T moderada:        ║
 ║      python grammar_transformer.py obra.mid --length 1.0                    ║
 ║      python grammar_transformer.py obra.mid --length 1.0 -o variacion.mid  ║
+║                                                                              ║
+║  · Modo bins — agrupar por intervalos de 2 beats y escalar al insertar:    ║
+║      python grammar_transformer.py obra.mid --bin-size 2.0                  ║
+║      python grammar_transformer.py obra.mid --bin-size 2.0 --fit scale     ║
+║        # escala proporcional (default)                                       ║
+║      python grammar_transformer.py obra.mid --bin-size 2.0 --fit pad       ║
+║        # rellena con notas de paso cromáticas                               ║
+║      python grammar_transformer.py obra.mid --bin-size 2.0 --fit trim      ║
+║        # recorta el final del elemento insertado                            ║
+║      python grammar_transformer.py obra.mid --bin-size 1.0 --fit pad       ║
+║        --temp 0.8 --pitch-norm -o variacion.mid                            ║
+║      python grammar_transformer.py obra.mid --bin-size 2.0                 ║
+║        --bin-length 1.0 4.0  # solo transforma elementos entre 1 y 4 beats ║
+║      python grammar_transformer.py obra.mid --bin-size 1.0 --fit scale     ║
+║        --bin-length 0.5 2.0 --temp 0.5 -o variacion.mid                   ║
 ║                                                                              ║
 ║  · Controlar la variación con temperatura:                                  ║
 ║      python grammar_transformer.py obra.mid --length 1.0 --temp 0.0        ║
@@ -100,6 +125,10 @@
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  OPCIONES                                                                    ║
 ║    --length / -l BEATS    Longitud en beats de los elementos a transformar  ║
+║    --bin-size BEATS       Ancho del bin (activa modo bins)                  ║
+║    --bin-length MIN MAX   Rango de duraciones a transformar en modo bins    ║
+║                           (beats). Elementos fuera quedan intactos.         ║
+║    --fit MODE             Ajuste al insertar: scale | pad | trim (def: scale)║
 ║    --temp / -t FLOAT      Temperatura de sampling (default: 0.5)            ║
 ║    --pitch-norm           Normalizar pitch al comparar y transponer al      ║
 ║                           insertar (compatibilidad invariante a tonalidad)  ║
@@ -758,6 +787,284 @@ def temperature_sample(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# MODO BIN — agrupación por longitud y ajuste de duración
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def build_bins(
+    elements: dict,
+    bin_size: float,
+) -> dict:
+    """
+    Agrupa los elementos en bins de ancho bin_size beats.
+    Devuelve {bin_idx: [nombre, ...]} donde bin_idx = floor(duration / bin_size).
+    """
+    bins: dict = defaultdict(list)
+    for name, elem in elements.items():
+        if name == '__root__':
+            continue
+        idx = int(elem.duration_beats / bin_size)
+        bins[idx].append(name)
+    return dict(bins)
+
+
+def fit_scale(notes: list, src_dur: float, dst_dur: float) -> list:
+    """
+    Escala todas las duraciones y offsets proporcionalmente para que el
+    elemento ocupe exactamente dst_dur beats.
+    """
+    if src_dur <= 0:
+        return notes
+    ratio = dst_dur / src_dur
+    result = []
+    for n in notes:
+        result.append(GrammarNote(
+            pitch=n.pitch,
+            duration=round(n.duration * ratio, 6),
+            velocity=n.velocity,
+            channel=n.channel,
+            offset=round(n.offset * ratio, 6),
+        ))
+    return result
+
+
+def fit_trim(notes: list, dst_dur: float) -> list:
+    """
+    Recorta el segmento para que ocupe exactamente dst_dur beats.
+    Las notas que empiezan antes de dst_dur se incluyen (recortando su
+    duración si sobrepasan el límite); las que empiezan después se descartan.
+    """
+    result = []
+    for n in notes:
+        if n.offset >= dst_dur:
+            break
+        end = n.offset + n.duration
+        if end > dst_dur:
+            dur = round(dst_dur - n.offset, 6)
+        else:
+            dur = n.duration
+        result.append(GrammarNote(
+            pitch=n.pitch,
+            duration=max(dur, 1/64),
+            velocity=n.velocity,
+            channel=n.channel,
+            offset=n.offset,
+        ))
+    return result
+
+
+def fit_pad(notes: list, src_dur: float, dst_dur: float) -> list:
+    """
+    Añade notas de paso cromáticas para completar dst_dur - src_dur beats.
+
+    Estrategia:
+      · Si dst_dur > src_dur: rellena el hueco con una escala cromática
+        ascendente o descendente (según el contorno final del segmento)
+        desde la última nota hasta el pitch más cercano a la primera nota
+        del segmento, distribuyendo el tiempo restante uniformemente.
+        Si el hueco es menor que una semicorchea, alarga la última nota.
+      · Si dst_dur < src_dur: delega en fit_trim.
+    """
+    if not notes:
+        return notes
+    if dst_dur <= src_dur:
+        return fit_trim(notes, dst_dur)
+
+    gap = dst_dur - src_dur
+    last = notes[-1]
+    first_pitch = notes[0].pitch
+
+    # Duración mínima de cada nota de paso: semicorchea (0.25b / 4 = 0.0625b)
+    min_note_dur = 1 / 16
+    n_fill = max(1, int(gap / min_note_dur))
+    fill_dur = gap / n_fill
+
+    # Dirección: hacia el pitch inicial (cierra el círculo)
+    start_pitch = last.pitch
+    end_pitch   = first_pitch
+    step = 1 if end_pitch >= start_pitch else -1
+
+    fill_notes = []
+    for i in range(n_fill):
+        # Avanzar el pitch cromáticamente sin sobrepasar el objetivo
+        cur_pitch = start_pitch + step * (i + 1)
+        if step == 1:
+            cur_pitch = min(cur_pitch, 127)
+        else:
+            cur_pitch = max(cur_pitch, 0)
+        fill_notes.append(GrammarNote(
+            pitch=cur_pitch,
+            duration=round(fill_dur, 6),
+            velocity=max(40, last.velocity - 20),   # más suave
+            channel=last.channel,
+            offset=round(src_dur + i * fill_dur, 6),
+        ))
+
+    return list(notes) + fill_notes
+
+
+def fit_element(
+    elem: 'GrammarElement',
+    dst_dur: float,
+    fit_mode: str,          # 'scale' | 'pad' | 'trim'
+) -> 'GrammarElement':
+    """
+    Devuelve una copia del elemento ajustada a dst_dur beats según fit_mode.
+    Si la duración ya coincide (tolerancia 1e-4) devuelve el elemento sin tocar.
+    """
+    src_dur = elem.duration_beats
+    if abs(src_dur - dst_dur) < 1e-4:
+        return elem
+
+    if fit_mode == 'scale':
+        new_notes = fit_scale(elem.notes, src_dur, dst_dur)
+    elif fit_mode == 'trim':
+        new_notes = fit_trim(elem.notes, dst_dur)
+    elif fit_mode == 'pad':
+        new_notes = fit_pad(elem.notes, src_dur, dst_dur)
+    else:
+        new_notes = list(elem.notes)
+
+    new_elem = copy.deepcopy(elem)
+    new_elem.notes = new_notes
+    new_elem.duration_beats = round(sum(n.duration for n in new_notes), 6)
+    return new_elem
+
+
+def transform_grammar_bins(
+    rules: dict,
+    root: list,
+    elements: dict,
+    bin_size: float,
+    fit_mode: str,
+    temperature: float,
+    normalize_pitch: bool,
+    rng: random.Random,
+    bin_length_range: tuple | None = None,
+    verbose: bool = False,
+) -> tuple[dict, list, dict]:
+    """
+    Variante de transform_grammar que trabaja con bins de longitud.
+
+    Para cada elemento de la gramática:
+      1. Calcula su bin (floor(duration / bin_size)).
+      2. Recoge todos los candidatos del mismo bin.
+      3. Calcula similitudes coseno entre el elemento origen y los candidatos.
+      4. Samplea un reemplazo con temperatura.
+      5. Ajusta la duración del elegido a la del hueco destino con fit_mode.
+      6. Registra el elemento ajustado en elements con un nombre derivado.
+
+    bin_length_range: (min_beats, max_beats) opcional. Si se indica, solo se
+    transforman los elementos cuya duración cae en ese rango [min, max].
+    Los elementos fuera del rango se dejan intactos aunque tengan candidatos
+    en su bin.
+
+    Devuelve (new_rules, new_root, elements_ampliados).
+    """
+    bins = build_bins(elements, bin_size)
+
+    lo_filter = bin_length_range[0] if bin_length_range else None
+    hi_filter = bin_length_range[1] if bin_length_range else None
+
+    if verbose:
+        range_tag = (f", rango [{lo_filter:.3f}, {hi_filter:.3f}]b"
+                     if bin_length_range else "")
+        print(f"  [bins] {len(bins)} bins de {bin_size}b{range_tag}: " +
+              ", ".join(f"bin{k}({len(v)})" for k, v in sorted(bins.items())))
+
+    # Pre-calcular vectores de todos los elementos
+    for name, elem in elements.items():
+        if name == '__root__':
+            continue
+        if elem.vector is None:
+            elem.vector = compute_compatibility_vector(elem, normalize_pitch)
+
+    substitutions: dict = {}   # src_name → fitted_element_name
+    skipped_range = 0
+
+    for name, elem in list(elements.items()):
+        if name == '__root__':
+            continue
+
+        # Filtro de rango
+        if lo_filter is not None and elem.duration_beats < lo_filter:
+            skipped_range += 1
+            continue
+        if hi_filter is not None and elem.duration_beats > hi_filter:
+            skipped_range += 1
+            continue
+
+        bin_idx = int(elem.duration_beats / bin_size)
+        candidates = bins.get(bin_idx, [])
+        if len(candidates) <= 1:
+            continue   # sin alternativas en el bin
+
+        # Similitudes del origen con cada candidato del bin
+        src_vec = elem.vector
+        scores = np.array([
+            cosine_similarity(src_vec, elements[c].vector)
+            for c in candidates
+        ])
+
+        chosen_idx = temperature_sample(scores, temperature, rng)
+        chosen_name = candidates[chosen_idx]
+        if chosen_name == name:
+            continue   # sin cambio
+
+        # Ajustar duración del elegido a la del elemento origen
+        chosen_elem = elements[chosen_name]
+        fitted = fit_element(chosen_elem, elem.duration_beats, fit_mode)
+
+        # Nombre único para el elemento ajustado
+        fit_tag = f"_fit{fit_mode[0]}{elem.duration_beats:.3f}"
+        fitted_name = f"{chosen_name}{fit_tag}"
+        fitted.name = fitted_name
+        elements[fitted_name] = fitted
+
+        substitutions[name] = fitted_name
+
+        if verbose:
+            print(f"    {name}({elem.duration_beats:.3f}b) → "
+                  f"{chosen_name}({chosen_elem.duration_beats:.3f}b) "
+                  f"→ {fitted_name} [{fit_mode}]  "
+                  f"sim={scores[chosen_idx]:.3f}")
+
+    # Aplicar sustituciones a reglas y raíz
+    new_rules = {
+        rname: [substitutions.get(t, t) if isinstance(t, str) else t
+                for t in body]
+        for rname, body in rules.items()
+    }
+    new_root = [substitutions.get(t, t) if isinstance(t, str) else t
+                for t in root]
+
+    # normalize_pitch: transponer elementos insertados al registro del origen
+    if normalize_pitch:
+        for old_name, fitted_name in substitutions.items():
+            src_elem    = elements.get(old_name)
+            fitted_elem = elements.get(fitted_name)
+            if src_elem and fitted_elem:
+                semitones = estimate_transpose_semitones(src_elem, fitted_elem)
+                if semitones != 0:
+                    transposed = transpose_element(fitted_elem, semitones)
+                    tp_name = f"{fitted_name}_tp{semitones:+d}"
+                    transposed.name = tp_name
+                    elements[tp_name] = transposed
+                    new_rules = {
+                        rn: [tp_name if t == fitted_name else t for t in body]
+                        for rn, body in new_rules.items()
+                    }
+                    new_root = [tp_name if t == fitted_name else t for t in new_root]
+
+    n_subs = len(substitutions)
+    range_msg = (f", rango [{lo_filter:.3f}, {hi_filter:.3f}]b — "
+                 f"{skipped_range} elem. fuera de rango ignorados"
+                 if bin_length_range else "")
+    print(f"  [bins] {n_subs} sustituciones aplicadas "
+          f"(bin_size={bin_size}b, fit={fit_mode}{range_msg})")
+
+    return new_rules, new_root, elements
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # TRANSFORMACIÓN DE LA GRAMÁTICA
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -865,38 +1172,74 @@ def reconstruct_notes(
     """
     Reconstruye la secuencia plana de (abs_beat, GrammarNote) desde la
     gramática transformada.
+
+    Expande recursivamente desde new_rules (que contiene las sustituciones)
+    en lugar de usar los snapshots pre-transformación de elements. Así los
+    cambios en nodos internos de la jerarquía llegan al audio.
     """
     memo: dict = {}
-    result = []
-    cursor = 0.0
+    tpb_fallback = 480   # solo para construcción de GrammarNote desde tupla
 
-    def get_notes_for_token(tok) -> list:
-        """Devuelve lista de GrammarNote para un token (str o tuple)."""
-        if isinstance(tok, str):
-            elem = elements.get(tok)
-            if elem:
-                return elem.notes
-            # Fallback: expandir recursivamente
-            expanded = expand_rule(tok, rules, {})
-            notes = []
-            for t in expanded:
-                if isinstance(t, tuple):
-                    pitch, dur = t
-                    notes.append(GrammarNote(pitch=pitch, duration=dur))
-            return notes
-        elif isinstance(tok, tuple):
+    def expand_to_notes(tok, depth: int = 0) -> list:
+        """
+        Expande un token a lista de GrammarNote con offsets relativos al
+        inicio del token (base 0). Usa memoization sobre el nombre del token.
+        """
+        if depth > 128:
+            return []
+
+        # Token hoja: tupla (pitch, dur)
+        if isinstance(tok, tuple):
             pitch, dur = tok
-            return [GrammarNote(pitch=pitch, duration=dur)]
+            return [GrammarNote(pitch=pitch, duration=dur,
+                                velocity=80, channel=0, offset=0.0)]
+
+        # Token string: buscar primero en elements (puede ser un elemento
+        # fitted/transpuesto creado durante la transformación), luego en rules
+        if tok in memo:
+            return memo[tok]
+
+        # Prioridad 1: elemento materializado (fitted, transpuesto, importado)
+        # cuyas notas YA son el resultado final correcto
+        elem = elements.get(tok)
+        if elem is not None and tok not in rules:
+            # Elemento sin regla en rules: es un leaf o un elemento externo/fitted
+            memo[tok] = list(elem.notes)
+            return memo[tok]
+
+        # Prioridad 2: expandir desde rules (captura las sustituciones)
+        if tok in rules:
+            body = rules[tok]
+            result = []
+            cursor = 0.0
+            for sub_tok in body:
+                sub_notes = expand_to_notes(sub_tok, depth + 1)
+                for n in sub_notes:
+                    result.append(GrammarNote(
+                        pitch=n.pitch,
+                        duration=n.duration,
+                        velocity=n.velocity,
+                        channel=n.channel,
+                        offset=round(cursor + n.offset, 6),
+                    ))
+                cursor += sum(n.duration for n in sub_notes)
+            memo[tok] = result
+            return result
+
+        # Fallback: elemento en elements aunque tenga regla (snapshot)
+        if elem is not None:
+            memo[tok] = list(elem.notes)
+            return memo[tok]
+
         return []
 
+    result = []
+    cursor = 0.0
     for tok in root:
-        notes = get_notes_for_token(tok)
-        off = cursor
-        for note in notes:
-            result.append((off + note.offset, note))
-        if notes:
-            total = sum(n.duration for n in notes)
-            cursor += total
+        notes = expand_to_notes(tok)
+        for n in notes:
+            result.append((round(cursor + n.offset, 6), n))
+        cursor += sum(n.duration for n in notes)
 
     return result
 
@@ -1111,6 +1454,7 @@ def generate_html_report(
     notes_flat: list,
     target_duration: float | None = None,
     normalize_pitch: bool = False,
+    bin_size: float | None = None,
     out_path: Path | None = None,
     midi_name: str = "",
 ) -> Path:
@@ -1173,6 +1517,21 @@ def generate_html_report(
         {'pitch': n.pitch, 'offset': round(n.offset, 4), 'dur': round(n.duration, 4)}
         for _, n in notes_flat
     ]
+
+    # Datos de bins
+    data['bin_size'] = bin_size
+    if bin_size is not None:
+        raw_bins = build_bins(elements, bin_size)
+        data['bins'] = {
+            str(idx): {
+                'lo': round(idx * bin_size, 4),
+                'hi': round((idx + 1) * bin_size, 4),
+                'names': names,
+            }
+            for idx, names in sorted(raw_bins.items())
+        }
+    else:
+        data['bins'] = {}
 
     grammar_js = 'const GRAMMAR = ' + _json.dumps(data, separators=(',', ':')) + ';'
     compat_btns_js = _json.dumps(compat_keys)
@@ -1306,6 +1665,7 @@ canvas.full{{width:100%;display:block;background:var(--surface);border:1px solid
   <button onclick="showPanel('durations')">Por Longitud</button>
   <button onclick="showPanel('elements')">Elementos</button>
   <button onclick="showPanel('compat')">Compatibilidad</button>
+  <button onclick="showPanel('bins')" id="nav-bins" style="display:none">Bins</button>
 </nav>
 <div class="panel active" id="panel-piano">
   <div class="section-label">Secuencia completa</div>
@@ -1345,6 +1705,12 @@ canvas.full{{width:100%;display:block;background:var(--surface);border:1px solid
     <span style="color:#fff">Blanco=máx</span> · <span style="color:var(--accent)">Dorado=alto</span> · <span style="color:var(--dim)">Oscuro=bajo</span>
   </div>
 </div>
+<div class="panel" id="panel-bins">
+  <div class="section-label" id="bins-label">Distribución en bins</div>
+  <canvas id="bins-bar-canvas" class="full" height="160"></canvas>
+  <div style="margin-top:1.5rem" class="section-label">Detalle por bin</div>
+  <div id="bins-detail"></div>
+</div>
 <div class="detail-panel" id="detail-panel">
   <button class="detail-close" onclick="closeDetail()">✕</button>
   <div class="detail-name" id="d-name"></div>
@@ -1374,7 +1740,7 @@ document.getElementById('s-rules').textContent = GRAMMAR.total_rules;
 document.getElementById('s-dur').textContent   = Math.round(GRAMMAR.duration_beats*10)/10;
 if(GRAMMAR.midi_name) document.getElementById('hdr-sub').textContent = 'Reporte — '+GRAMMAR.midi_name;
 // ── panels ──
-const PANELS = ['piano','durations','elements','compat'];
+const PANELS = ['piano','durations','elements','compat','bins'];
 function showPanel(name){{
   PANELS.forEach(p=>{{
     document.getElementById('panel-'+p).classList.toggle('active',p===name);
@@ -1384,6 +1750,115 @@ function showPanel(name){{
   if(name==='durations') {{buildDurGrid();drawDurLenChart()}}
   if(name==='elements')  {{buildElemTable()}}
   if(name==='compat')    {{buildCompatControls();showCompat(COMPAT_KEYS[0]?.key)}}
+  if(name==='bins')      {{buildBinsPanel()}}
+}}
+// ── bins panel ──
+function initBinsNav(){{
+  const hasBins = GRAMMAR.bin_size !== null && Object.keys(GRAMMAR.bins).length > 0;
+  const btn = document.getElementById('nav-bins');
+  if(hasBins && btn) btn.style.display='';
+  if(hasBins){{
+    document.getElementById('bins-label').textContent =
+      `Distribución en bins — bin_size = ${{GRAMMAR.bin_size}}b`;
+  }}
+}}
+function buildBinsPanel(){{
+  drawBinsBarChart();
+  buildBinsDetail();
+}}
+function drawBinsBarChart(){{
+  const canvas = document.getElementById('bins-bar-canvas');
+  const {{ctx,w,h}} = resizeCanvas(canvas);
+  const bins = GRAMMAR.bins;
+  const keys = Object.keys(bins).map(Number).sort((a,b)=>a-b);
+  if(!keys.length){{
+    ctx.fillStyle='#12121a'; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle='#6e6a5e'; ctx.font='11px Space Mono'; ctx.textAlign='left';
+    ctx.fillText('Sin datos de bins (usa --bin-size al generar el reporte)',12,h/2);
+    return;
+  }}
+  const counts = keys.map(k=>bins[String(k)].names.length);
+  const maxC = Math.max(...counts,1);
+  const bw = w / keys.length;
+  ctx.fillStyle='#12121a'; ctx.fillRect(0,0,w,h);
+  const labelH = 32;
+  keys.forEach((k,i)=>{{
+    const bh = (counts[i]/maxC)*(h-labelH-8);
+    const x = i*bw+1;
+    const y = h-labelH-bh;
+    // barra con gradiente
+    const grad = ctx.createLinearGradient(0,y,0,y+bh);
+    grad.addColorStop(0,'#e8c97e');
+    grad.addColorStop(1,'#8a6a30');
+    ctx.fillStyle=grad;
+    ctx.fillRect(x,y,bw-2,bh);
+    // etiqueta conteo
+    if(bh > 14){{
+      ctx.fillStyle='#0a0a0f'; ctx.font=`bold ${{Math.min(11,Math.floor(bw*0.35))}}px Space Mono`;
+      ctx.textAlign='center';
+      ctx.fillText(counts[i], x+bw/2-1, y+bh/2+4);
+    }}
+    // etiqueta bin
+    ctx.fillStyle='#6e6a5e';
+    ctx.font=`${{Math.min(9,Math.floor(bw*0.28))}}px Space Mono`;
+    ctx.textAlign='center';
+    const lo=bins[String(k)].lo, hi=bins[String(k)].hi;
+    if(bw>36){{
+      ctx.fillText(`${{lo}}–${{hi}}`, x+bw/2-1, h-labelH+12);
+      ctx.fillStyle='#c8a96e';
+      ctx.fillText(`bin${{k}}`, x+bw/2-1, h-labelH+24);
+    }} else {{
+      ctx.fillText(`b${{k}}`, x+bw/2-1, h-labelH+14);
+    }}
+  }});
+}}
+function buildBinsDetail(){{
+  const container = document.getElementById('bins-detail');
+  container.innerHTML='';
+  const bins = GRAMMAR.bins;
+  const keys = Object.keys(bins).map(Number).sort((a,b)=>a-b);
+  if(!keys.length){{
+    container.innerHTML='<p style="color:var(--textdim);font-size:.75rem">Sin datos de bins.</p>';
+    return;
+  }}
+  const maxC = Math.max(...keys.map(k=>bins[String(k)].names.length),1);
+  keys.forEach(k=>{{
+    const bin = bins[String(k)];
+    const section = document.createElement('div');
+    section.style.cssText='margin-bottom:1.2rem;border:1px solid var(--border);border-radius:2px;overflow:hidden';
+    // cabecera
+    const hdr = document.createElement('div');
+    hdr.style.cssText='display:grid;grid-template-columns:auto auto 1fr auto;gap:.8rem;align-items:center;padding:.5rem 1rem;background:var(--surface);cursor:pointer';
+    const pct = Math.round(bin.names.length/maxC*100);
+    hdr.innerHTML=`
+      <span style="color:var(--accent);font-weight:700;font-size:.85rem">bin${{k}}</span>
+      <span style="color:var(--textdim);font-size:.68rem">[${{bin.lo}}b, ${{bin.hi}}b)</span>
+      <div style="background:var(--dim);height:6px;border-radius:1px;overflow:hidden">
+        <div style="height:100%;width:${{pct}}%;background:var(--accent);border-radius:1px"></div>
+      </div>
+      <span style="color:var(--accent2);font-size:.75rem;font-weight:700">${{bin.names.length}} elem</span>`;
+    // lista de elementos (colapsable)
+    const body = document.createElement('div');
+    body.style.cssText='padding:.6rem 1rem;display:flex;flex-wrap:wrap;gap:.4rem';
+    bin.names.forEach(name=>{{
+      const badge = document.createElement('span');
+      const r = GRAMMAR.rules[name];
+      const dur = r ? r.duration : '?';
+      badge.style.cssText='background:var(--dim);color:var(--accent);padding:.15rem .5rem;border-radius:2px;font-size:.7rem;cursor:pointer;border:1px solid transparent;transition:border-color .1s';
+      badge.textContent=`${{name}} (${{dur}}b)`;
+      badge.title=`${{name}} — ${{r?r.n_notes:0}} notas`;
+      badge.onmouseenter=()=>badge.style.borderColor='var(--accent)';
+      badge.onmouseleave=()=>badge.style.borderColor='transparent';
+      badge.onclick=()=>{{showPanel('elements');openDetail(name)}};
+      body.appendChild(badge);
+    }});
+    let open=true;
+    hdr.onclick=()=>{{ open=!open; body.style.display=open?'flex':'none'; }};
+    section.appendChild(hdr);
+    section.appendChild(body);
+    container.appendChild(section);
+  }});
+}}
 }}
 // ── canvas helpers ──
 function resizeCanvas(canvas){{
@@ -1683,7 +2158,7 @@ function openDetail(name){{
   }});
 }}
 function closeDetail(){{document.getElementById('detail-panel').classList.remove('open')}}
-window.addEventListener('load',()=>{{drawPianoRoll();drawPitchHist();drawDurHist()}});
+window.addEventListener('load',()=>{{drawPianoRoll();drawPitchHist();drawDurHist();initBinsNav()}});
 window.addEventListener('resize',()=>{{
   const a=document.querySelector('.panel.active')?.id;
   if(a==='panel-piano'){{drawPianoRoll();drawPitchHist();drawDurHist()}}
@@ -1707,6 +2182,7 @@ def print_report(
     elements: dict,
     target_duration: float | None = None,
     normalize_pitch: bool = False,
+    bin_size: float | None = None,
 ) -> None:
     """Imprime el informe detallado de la gramática."""
     print()
@@ -1723,7 +2199,7 @@ def print_report(
     print(f"  Tokens en raíz    : {len(root)}")
     print(f"  Duración total    : {root_dur:.2f} beats")
 
-    # Agrupar por duración
+    # Agrupar por duración exacta
     dur_groups: dict = defaultdict(list)
     for name, elem in elements.items():
         if name == '__root__':
@@ -1741,6 +2217,25 @@ def print_report(
             names_str += f" … +{len(names)-8} más"
         print(f"  {dur:>10.3f}  {len(names):>7}  {names_str}")
 
+    # ── Sección bins ──────────────────────────────────────────────────────
+    if bin_size is not None:
+        bins = build_bins(elements, bin_size)
+        max_count = max((len(v) for v in bins.values()), default=1)
+        bar_width = 30
+
+        print(f"\n  Bins (bin_size={bin_size}b):")
+        print(f"  {'Bin':>5}  {'Rango':>14}  {'N':>4}  {'Elementos'}")
+        print("  " + "─" * 70)
+        for idx in sorted(bins.keys()):
+            names = bins[idx]
+            lo = idx * bin_size
+            hi = (idx + 1) * bin_size
+            bar = "█" * int(len(names) / max_count * bar_width)
+            names_str = ", ".join(names[:6])
+            if len(names) > 6:
+                names_str += f" +{len(names)-6}"
+            print(f"  {idx:>5}  [{lo:.2f}, {hi:.2f})  {len(names):>4}  {bar}  {names_str}")
+
     # Detalle de cada regla
     print(f"\n  Detalle de reglas:")
     print(f"  {'Nombre':>8}  {'Dur(b)':>7}  {'N notas':>7}  {'Ocurr.':>7}  Tokens")
@@ -1752,7 +2247,11 @@ def print_report(
         body_preview = str(rules[name][:4])
         if len(rules[name]) > 4:
             body_preview = body_preview[:-1] + ", ...]"
-        print(f"  {name:>8}  {elem.duration_beats:>7.3f}  {len(elem.notes):>7}  {elem.occurrences:>7}  {body_preview}")
+        # Anotar el bin si aplica
+        bin_tag = ""
+        if bin_size is not None:
+            bin_tag = f"  bin{int(elem.duration_beats / bin_size)}"
+        print(f"  {name:>8}  {elem.duration_beats:>7.3f}  {len(elem.notes):>7}  {elem.occurrences:>7}  {body_preview}{bin_tag}")
 
     # Matriz de compatibilidad para la longitud objetivo (si se indica)
     if target_duration is not None:
@@ -1783,6 +2282,9 @@ def run_transform(
     target_duration: float,
     temperature: float,
     normalize_pitch: bool,
+    bin_size: float | None,
+    bin_length_range: tuple | None,
+    fit_mode: str,
     min_pair: int,
     max_rules: int | None,
     track_idx: int | None,
@@ -1844,32 +2346,51 @@ def run_transform(
     # Informe
     if report:
         if report_format in ('text', 'both'):
-            print_report(rules, root, elements, target_duration, normalize_pitch)
+            print_report(rules, root, elements, target_duration, normalize_pitch,
+                         bin_size=bin_size)
         if report_format in ('html', 'both'):
             html_path = midi_path.with_suffix('.grammar.html')
             generate_html_report(
                 rules, root, elements, notes_flat,
                 target_duration=target_duration,
                 normalize_pitch=normalize_pitch,
+                bin_size=bin_size,
                 out_path=html_path,
                 midi_name=midi_path.name,
             )
 
-    if target_duration is None:
-        print("\n  (Sin --length: no se aplica transformación. Usa --report para explorar.)")
+    if target_duration is None and bin_size is None:
+        print("\n  (Sin --length ni --bin-size: no se aplica transformación. Usa --report para explorar.)")
         return
 
     # ── 5. Transformar gramática
-    print(f"[5/6] Transformando (length={target_duration:.2f}b, T={temperature}"
-          + (", pitch-norm" if normalize_pitch else "") + ") …")
-    new_rules, new_root = transform_grammar(
-        rules, root, elements,
-        target_duration=target_duration,
-        temperature=temperature,
-        normalize_pitch=normalize_pitch,
-        rng=rng,
-        verbose=verbose,
-    )
+    if bin_size is not None:
+        range_tag = (f", rango [{bin_length_range[0]:.2f}, {bin_length_range[1]:.2f}]b"
+                     if bin_length_range else "")
+        print(f"[5/6] Transformando en modo bins "
+              f"(bin_size={bin_size}b{range_tag}, fit={fit_mode}, T={temperature}"
+              + (", pitch-norm" if normalize_pitch else "") + ") …")
+        new_rules, new_root, elements = transform_grammar_bins(
+            rules, root, elements,
+            bin_size=bin_size,
+            fit_mode=fit_mode,
+            temperature=temperature,
+            normalize_pitch=normalize_pitch,
+            rng=rng,
+            bin_length_range=bin_length_range,
+            verbose=verbose,
+        )
+    else:
+        print(f"[5/6] Transformando (length={target_duration:.2f}b, T={temperature}"
+              + (", pitch-norm" if normalize_pitch else "") + ") …")
+        new_rules, new_root = transform_grammar(
+            rules, root, elements,
+            target_duration=target_duration,
+            temperature=temperature,
+            normalize_pitch=normalize_pitch,
+            rng=rng,
+            verbose=verbose,
+        )
 
     # ── 6. Reconstruir y escribir MIDI
     print(f"[6/6] Reconstruyendo MIDI …")
@@ -1902,7 +2423,18 @@ def build_parser() -> argparse.ArgumentParser:
                    metavar='FILE', help='MIDI de salida (default: entrada.transformed.mid)')
     p.add_argument('--length', '-l', type=float, default=None,
                    metavar='BEATS',
-                   help='Longitud en beats de los elementos a transformar')
+                   help='Longitud en beats de los elementos a transformar (modo exacto)')
+    p.add_argument('--bin-size', type=float, default=None,
+                   metavar='BEATS',
+                   help='Ancho del bin en beats (modo bins; activa agrupación por longitud)')
+    p.add_argument('--bin-length', type=float, nargs=2, default=None,
+                   metavar=('MIN', 'MAX'),
+                   help='Rango de duraciones a transformar en modo bins, en beats '
+                        '(ej: --bin-length 0.5 4.0). Elementos fuera del rango se dejan intactos.')
+    p.add_argument('--fit', choices=['scale', 'pad', 'trim'], default='scale',
+                   metavar='MODE',
+                   help='Ajuste de duración al insertar: scale (escala), '
+                        'pad (notas de paso), trim (recorte) (default: scale)')
     p.add_argument('--temp', '-t', type=float, default=0.5,
                    metavar='FLOAT',
                    help='Temperatura de sampling (0=greedy, 1=uniforme, default=0.5)')
@@ -1948,6 +2480,9 @@ def main() -> None:
         target_duration = args.length,
         temperature     = args.temp,
         normalize_pitch = args.pitch_norm,
+        bin_size        = args.bin_size,
+        bin_length_range= tuple(args.bin_length) if args.bin_length else None,
+        fit_mode        = args.fit,
         min_pair        = args.min_pair,
         max_rules       = args.max_rules,
         track_idx       = args.track,
