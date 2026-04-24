@@ -893,8 +893,16 @@ def build_grammar_elements_from_bars(
     root: list,
     bar_notes_map: dict,
     verbose: bool = False,
-) -> dict:
-    """Construye GrammarElements desde gramática a nivel de compás."""
+) -> tuple:
+    """
+    Construye GrammarElements desde gramática a nivel de compás.
+
+    Los tokens hoja (int) se convierten en GrammarElements con nombre
+    'BAR{n}' para que reconstruct_notes y generate_html_report los
+    encuentren normalmente.
+
+    Devuelve (elements, new_rules, new_root).
+    """
     memo: dict = {}
     occ: Counter = Counter()
     all_tokens = list(root)
@@ -904,28 +912,15 @@ def build_grammar_elements_from_bars(
         if isinstance(tok, str):
             occ[tok] += 1
 
-    def bar_span(tok) -> float:
-        """
-        Span real de un compás: distancia desde el offset de la primera nota
-        hasta el fin de la última nota. Preserva los huecos internos del compás
-        para que el cursor avance correctamente al encadenar compases.
-        """
-        raw = bar_notes_map.get(tok, [])
-        if not raw:
-            return 0.0
-        return raw[-1].offset + raw[-1].duration - raw[0].offset
-
     def tok_to_notes(tok, base_offset: float) -> tuple:
         """
-        Convierte un token de compás en notas con offsets relativos a base_offset.
-        Los offsets internos del compás se normalizan restando el offset mínimo,
-        de modo que la primera nota siempre queda en base_offset (offset=0 local).
+        Convierte un token de compás en notas con offsets base 0.
         Devuelve (notes, span) donde span es la duración real del compás.
         """
         raw = bar_notes_map.get(tok, [])
         if not raw:
             return [], 0.0
-        min_off = raw[0].offset          # offset de la primera nota del compás
+        min_off = raw[0].offset
         span = raw[-1].offset + raw[-1].duration - min_off
         notes = [GrammarNote(pitch=n.pitch, duration=n.duration,
                              velocity=n.velocity, channel=n.channel,
@@ -933,66 +928,93 @@ def build_grammar_elements_from_bars(
                  for n in raw]
         return notes, span
 
+    elements: dict = {}
+
+    # ── Paso 1: materializar compases hoja como GrammarElements ─────────────
+    for tok, raw_notes in bar_notes_map.items():
+        bname = f'BAR{tok}'
+        _, span = tok_to_notes(tok, 0.0)
+        bar_notes_local, _ = tok_to_notes(tok, 0.0)
+        elem = GrammarElement(name=bname, notes=bar_notes_local,
+                              duration_beats=round(span, 6), occurrences=0)
+        elements[bname] = elem
+
+    # ── Paso 2: sustituir int → 'BAR{n}' en rules y root ───────────────────
+    def tok_to_name(tok):
+        return f'BAR{tok}' if isinstance(tok, int) else tok
+
+    new_rules = {
+        rname: [tok_to_name(t) for t in body]
+        for rname, body in rules.items()
+    }
+    new_root = [tok_to_name(t) for t in root]
+
+    # Actualizar ocurrencias
+    occ2: Counter = Counter()
+    for tok in new_root:
+        if isinstance(tok, str):
+            occ2[tok] += 1
+    for body in new_rules.values():
+        for tok in body:
+            if isinstance(tok, str):
+                occ2[tok] += 1
+    for bname in list(elements.keys()):
+        elements[bname].occurrences = occ2.get(bname, 0)
+
+    # ── Paso 3: construir GrammarElements para las reglas Re-Pair ───────────
     def expand_to_notes(name, depth=0) -> tuple:
-        """
-        Expande recursivamente devolviendo (notes, span_total).
-        span_total es la duración real del elemento incluyendo huecos internos.
-        """
+        """Expande devolviendo (notes_con_offsets_locales, span_total)."""
         if depth > 128:
             return [], 0.0
         if name in memo:
             return memo[name]
-        if name not in rules:
-            if isinstance(name, int):
-                result = tok_to_notes(name, 0.0)
+
+        # Hoja BAR
+        if name.startswith('BAR') and name not in new_rules:
+            elem = elements.get(name)
+            if elem:
+                result = (list(elem.notes), elem.duration_beats)
                 memo[name] = result
                 return result
             return [], 0.0
-        body = rules[name]
+
+        if name not in new_rules:
+            return [], 0.0
+
+        body = new_rules[name]
         result_notes, cursor = [], 0.0
         for tok in body:
-            if isinstance(tok, str):
-                sub_notes, sub_span = expand_to_notes(tok, depth + 1)
-                # Rebasar los offsets de las sub-notas al cursor actual
-                for n in sub_notes:
-                    result_notes.append(GrammarNote(
-                        pitch=n.pitch, duration=n.duration,
-                        velocity=n.velocity, channel=n.channel,
-                        offset=round(cursor + n.offset, 6)))
-                cursor += sub_span
-            elif isinstance(tok, int):
-                bar_notes, bar_sp = tok_to_notes(tok, cursor)
-                result_notes.extend(bar_notes)
-                cursor += bar_sp
-        memo[name] = (result_notes, cursor)
-        return result_notes, cursor
-
-    elements: dict = {}
-    for name in rules:
-        notes, span = expand_to_notes(name)
-        elem = GrammarElement(name=name, notes=notes, duration_beats=round(span, 6),
-                              occurrences=occ.get(name, 0))
-        elements[name] = elem
-        if verbose:
-            print(f"  [elem] {name}: {len(notes)} notas, {span:.3f}b, x{occ.get(name,0)}")
-
-    root_notes, cursor = [], 0.0
-    for tok in root:
-        if isinstance(tok, str):
-            sub_notes, sub_span = expand_to_notes(tok)
+            sub_notes, sub_span = expand_to_notes(tok, depth + 1)
             for n in sub_notes:
-                root_notes.append(GrammarNote(
+                result_notes.append(GrammarNote(
                     pitch=n.pitch, duration=n.duration,
                     velocity=n.velocity, channel=n.channel,
                     offset=round(cursor + n.offset, 6)))
             cursor += sub_span
-        elif isinstance(tok, int):
-            bar_notes, bar_sp = tok_to_notes(tok, cursor)
-            root_notes.extend(bar_notes)
-            cursor += bar_sp
+        memo[name] = (result_notes, cursor)
+        return result_notes, cursor
+
+    for name in new_rules:
+        notes, span = expand_to_notes(name)
+        elem = GrammarElement(name=name, notes=notes, duration_beats=round(span, 6),
+                              occurrences=occ2.get(name, 0))
+        elements[name] = elem
+        if verbose:
+            print(f"  [elem] {name}: {len(notes)} notas, {span:.3f}b, x{occ2.get(name,0)}")
+
+    # ── Paso 4: elemento raíz ────────────────────────────────────────────────
+    root_notes, cursor = [], 0.0
+    for tok in new_root:
+        sub_notes, sub_span = expand_to_notes(tok)
+        for n in sub_notes:
+            root_notes.append(GrammarNote(
+                pitch=n.pitch, duration=n.duration,
+                velocity=n.velocity, channel=n.channel,
+                offset=round(cursor + n.offset, 6)))
+        cursor += sub_span
     elements['__root__'] = GrammarElement(name='__root__', notes=root_notes,
                                            duration_beats=round(cursor, 6), occurrences=1)
-    return elements
+    return elements, new_rules, new_root
 
 # Alias por compatibilidad
 build_grammar_elements = build_grammar_elements_from_notes
@@ -2422,7 +2444,6 @@ function buildBinsDetail(){{
     container.appendChild(section);
   }});
 }}
-}}
 // ── canvas helpers ──
 function resizeCanvas(canvas){{
   const dpr=window.devicePixelRatio||1;
@@ -2555,7 +2576,12 @@ function buildElemTable(filterDur){{
     }});
   }}
   const dur=filterDur!==undefined?filterDur:currentFilter;
-  let names=Object.keys(GRAMMAR.rules).sort((a,b)=>parseInt(a.slice(1))-parseInt(b.slice(1)));
+  const nameKey=n=>{{const m=n.match(/\\d+$/);return m?parseInt(m[0]):0;}};
+  let names=Object.keys(GRAMMAR.rules).sort((a,b)=>{{
+    const pa=a.replace(/\\d+$/,''),pb=b.replace(/\\d+$/,'');
+    if(pa!==pb)return pa<pb?-1:1;
+    return nameKey(a)-nameKey(b);
+  }});
   if(dur!==null&&dur!==undefined) names=names.filter(n=>Math.abs(GRAMMAR.rules[n].duration-dur)<0.01);
   names.forEach(name=>{{
     const r=GRAMMAR.rules[name];
@@ -2908,7 +2934,7 @@ def run_transform(
     # ── 4. Construir elementos
     print(f"[4/6] Construyendo elementos de la gramática …")
     if bar_tokens:
-        elements = build_grammar_elements_from_bars(rules, root, bar_notes_map, verbose=verbose)
+        elements, rules, root = build_grammar_elements_from_bars(rules, root, bar_notes_map, verbose=verbose)
     else:
         elements = build_grammar_elements_from_notes(rules, root, notes_flat, verbose=verbose)
     print(f"  → {len(elements)} elementos construidos")
