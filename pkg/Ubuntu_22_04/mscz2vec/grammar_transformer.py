@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                    GRAMMAR TRANSFORMER  v1.0                                 ║
+║                    GRAMMAR TRANSFORMER  v2.0                                 ║
 ║         Transformación estructural de MIDI mediante gramática Re-Pair        ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
@@ -183,8 +183,15 @@ from mido import MidiFile, MidiTrack, Message, MetaMessage
 # CONSTANTES
 # ═══════════════════════════════════════════════════════════════════════════════
 
-VERSION = "1.0"
-TICKS_EPSILON = 1      # tolerancia para comparaciones de ticks
+VERSION = "2.0"
+TICKS_EPSILON = 1
+
+NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11]
+MINOR_SCALE = [0, 2, 3, 5, 7, 8, 10]
+INTERVAL_TENSION = {0: 0.0, 1: 1.0, 2: 0.4, 3: 0.6, 4: 0.2, 5: 0.2,
+                    6: 0.9, 7: 0.1, 8: 0.5, 9: 0.3, 10: 0.7, 11: 0.8}
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -350,6 +357,81 @@ def notes_to_midi_file(
     mid.save(str(out_path))
 
 
+def extract_all_tracks_flat(mid: MidiFile) -> dict:
+    """Extrae notas de TODOS los tracks con notas. Devuelve {track_idx: notes_flat}."""
+    result = {}
+    for i, track in enumerate(mid.tracks):
+        if any(m.type == 'note_on' and m.velocity > 0 for m in track):
+            nf = extract_notes_flat(mid, i)
+            if nf:
+                result[i] = nf
+    return result
+
+
+def multitrack_to_midi(
+    tracks_notes: dict,
+    tpb: int,
+    tempo: int,
+    out_path: Path,
+    original_mid: MidiFile | None = None,
+) -> None:
+    """
+    Escribe {track_idx: [(abs_beat, GrammarNote),...]} a MIDI multipista.
+
+    Si original_mid se proporciona, replica su estructura de tracks (número,
+    nombres, presencia de track de tempo) para máxima compatibilidad con el
+    DAW de origen.
+    """
+    # Detectar si el original tiene track 0 dedicado a tempo (sin notas)
+    has_dedicated_tempo_track = (
+        original_mid is not None
+        and not any(
+            msg.type == 'note_on'
+            for msg in original_mid.tracks[0]
+        )
+    ) if (original_mid is not None and original_mid.tracks) else True
+
+    mid = MidiFile(type=1, ticks_per_beat=tpb)
+
+    if has_dedicated_tempo_track:
+        t0 = MidiTrack()
+        mid.tracks.append(t0)
+        t0.append(MetaMessage('set_tempo', tempo=tempo, time=0))
+        t0.append(MetaMessage('end_of_track', time=0))
+
+    for orig_idx in sorted(tracks_notes.keys()):
+        notes = tracks_notes[orig_idx]
+        track = MidiTrack()
+
+        # Preservar nombre y tempo inline si el original no tiene track dedicado
+        if not has_dedicated_tempo_track:
+            track.append(MetaMessage('set_tempo', tempo=tempo, time=0))
+        if original_mid is not None and orig_idx < len(original_mid.tracks):
+            orig_name = original_mid.tracks[orig_idx].name
+            if orig_name:
+                track.append(MetaMessage('track_name', name=orig_name, time=0))
+
+        mid.tracks.append(track)
+
+        events = []
+        for abs_beat, note in notes:
+            abs_tick = int(abs_beat * tpb)
+            dur_tick = max(1, int(note.duration * tpb))
+            events.append((abs_tick, 'on',  note.pitch, note.velocity, note.channel))
+            events.append((abs_tick + dur_tick, 'off', note.pitch, 0, note.channel))
+
+        events.sort(key=lambda x: (x[0], 0 if x[1] == 'off' else 1))
+        cursor = 0
+        for abs_tick, _, pitch, vel, ch in events:
+            delta = abs_tick - cursor
+            cursor = abs_tick
+            track.append(Message('note_on', channel=ch, note=pitch, velocity=vel, time=delta))
+        track.append(MetaMessage('end_of_track', time=0))
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    mid.save(str(out_path))
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # EXTRACCIÓN DE GRAMÁTICA A NIVEL DE NOTA
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -375,26 +457,264 @@ def extract_note_sequence(notes_flat: list) -> list:
     return [note_token(n) for _, n in notes_flat]
 
 
-def repaint_notes(
+def extract_chord_sequence(notes_flat: list, onset_tol: float = 0.05) -> tuple:
+    """
+    Agrupa las notas de notes_flat por onset simultáneo (tolerancia onset_tol beats)
+    y devuelve (sequence, chord_map) donde:
+        sequence  = [chord_token_int, ...]  — un int opaco por posición de acorde
+        chord_map = {token: [GrammarNote, ...]}  — notas del acorde con offsets
+                                                   relativos al inicio del acorde
+
+    Dos acordes con exactamente las mismas notas (pitch + dur cuantizada) comparten
+    el mismo token. Acordes de una sola nota también son válidos.
+    """
+    if not notes_flat:
+        return [], {}
+
+    # Agrupar por onset
+    onset_groups: dict = defaultdict(list)   # onset_beat → [GrammarNote]
+    for off, note in sorted(notes_flat, key=lambda x: x[0]):
+        # Buscar un grupo existente dentro de la tolerancia
+        matched = None
+        for existing_off in onset_groups:
+            if abs(off - existing_off) <= onset_tol:
+                matched = existing_off
+                break
+        key = matched if matched is not None else off
+        onset_groups[key].append(GrammarNote(
+            pitch=note.pitch,
+            duration=note.duration,
+            velocity=note.velocity,
+            channel=note.channel,
+            offset=0.0,   # relativo al acorde: todas las notas empiezan en 0
+        ))
+
+    # Ordenar onsets y construir tokens
+    def chord_fp(notes):
+        return tuple(sorted(
+            (n.pitch, quantize_duration(n.duration))
+            for n in notes
+        ))
+
+    fp_to_token: dict = {}
+    next_tok = [0]
+    sequence = []
+    chord_map: dict = {}       # token → [GrammarNote]
+    onset_list = []            # [(onset_beat, token)]
+
+    for onset in sorted(onset_groups):
+        notes = onset_groups[onset]
+        fp = chord_fp(notes)
+        if fp not in fp_to_token:
+            tok = next_tok[0]
+            next_tok[0] += 1
+            fp_to_token[fp] = tok
+            chord_map[tok] = notes
+        token = fp_to_token[fp]
+        sequence.append(token)
+        onset_list.append((onset, token))
+
+    return sequence, chord_map, onset_list
+
+
+def build_grammar_elements_from_chords(
+    rules: dict,
+    root: list,
+    chord_map: dict,
+    onset_list: list,
+    verbose: bool = False,
+) -> tuple:
+    """
+    Construye GrammarElements desde gramática a nivel de acorde.
+
+    Los tokens hoja (int) de la raíz y los cuerpos de reglas se convierten
+    en GrammarElements con nombre propio ('C0', 'C1'…) para que reconstruct_notes
+    los encuentre normalmente sin necesitar acceso a chord_map.
+
+    Devuelve (elements, new_rules, new_root) donde new_rules y new_root
+    tienen los int reemplazados por los nombres 'C{tok}'.
+    """
+    memo: dict = {}
+    occ: Counter = Counter()
+    all_tokens = list(root)
+    for body in rules.values():
+        all_tokens.extend(body)
+    for tok in all_tokens:
+        if isinstance(tok, str):
+            occ[tok] += 1
+
+    # ── Paso 1: crear GrammarElement para cada acorde hoja único ────────────
+    elements: dict = {}
+    for tok, notes in chord_map.items():
+        cname = f'C{tok}'
+        dur = max(n.duration for n in notes) if notes else 0.0
+        chord_notes = [GrammarNote(
+            pitch=n.pitch, duration=n.duration,
+            velocity=n.velocity, channel=n.channel,
+            offset=0.0,          # todas simultáneas, base 0
+        ) for n in notes]
+        elem = GrammarElement(name=cname, notes=chord_notes,
+                              duration_beats=round(dur, 6), occurrences=0)
+        elements[cname] = elem
+
+    # ── Paso 2: sustituir int → 'C{tok}' en rules y root ───────────────────
+    def tok_to_name(tok):
+        return f'C{tok}' if isinstance(tok, int) else tok
+
+    new_rules = {
+        rname: [tok_to_name(t) for t in body]
+        for rname, body in rules.items()
+    }
+    new_root = [tok_to_name(t) for t in root]
+
+    # Actualizar conteo de ocurrencias
+    occ2: Counter = Counter()
+    for tok in new_root:
+        if isinstance(tok, str):
+            occ2[tok] += 1
+    for body in new_rules.values():
+        for tok in body:
+            if isinstance(tok, str):
+                occ2[tok] += 1
+    for cname in list(elements.keys()):
+        elements[cname].occurrences = occ2.get(cname, 0)
+
+    # ── Paso 3: construir GrammarElements para las reglas Re-Pair ───────────
+    def expand_to_notes(name, depth=0) -> tuple:
+        """Expande devolviendo (notes_with_local_offsets, span_total)."""
+        if depth > 128:
+            return [], 0.0
+        if name in memo:
+            return memo[name]
+
+        # Acorde hoja
+        if name.startswith('C') and name not in new_rules:
+            elem = elements.get(name)
+            if elem:
+                result = (list(elem.notes), elem.duration_beats)
+                memo[name] = result
+                return result
+            return [], 0.0
+
+        if name not in new_rules:
+            return [], 0.0
+
+        body = new_rules[name]
+        result_notes, cursor = [], 0.0
+        for tok in body:
+            sub_notes, sub_span = expand_to_notes(tok, depth + 1)
+            for n in sub_notes:
+                result_notes.append(GrammarNote(
+                    pitch=n.pitch, duration=n.duration,
+                    velocity=n.velocity, channel=n.channel,
+                    offset=round(cursor + n.offset, 6)))
+            cursor += sub_span
+        memo[name] = (result_notes, cursor)
+        return result_notes, cursor
+
+    for name in new_rules:
+        notes, span = expand_to_notes(name)
+        elem = GrammarElement(name=name, notes=notes,
+                              duration_beats=round(span, 6),
+                              occurrences=occ2.get(name, 0))
+        elements[name] = elem
+        if verbose:
+            n_chords = len(set(round(n.offset, 4) for n in notes))
+            print(f"  [elem] {name}: {len(notes)} notas ({n_chords} acordes), "
+                  f"{span:.3f}b, x{occ2.get(name, 0)}")
+
+    # ── Paso 4: elemento raíz ────────────────────────────────────────────────
+    root_notes, cursor = [], 0.0
+    for tok in new_root:
+        sub_notes, sub_span = expand_to_notes(tok)
+        for n in sub_notes:
+            root_notes.append(GrammarNote(
+                pitch=n.pitch, duration=n.duration,
+                velocity=n.velocity, channel=n.channel,
+                offset=round(cursor + n.offset, 6)))
+        cursor += sub_span
+    elements['__root__'] = GrammarElement(
+        name='__root__', notes=root_notes,
+        duration_beats=round(cursor, 6), occurrences=1)
+
+    return elements, new_rules, new_root
+
+
+def extract_bar_sequence(notes_flat: list, tpb: int, mid: MidiFile) -> tuple:
+    """
+    Segmenta notes_flat en compases y devuelve (sequence, bar_notes_map).
+    sequence = [bar_token_int, ...]; bar_notes_map = {token: [GrammarNote,...]}
+    """
+    time_sigs = get_time_signatures(mid)
+
+    def bar_ticks_at(tick: int) -> int:
+        num, denom = 4, 4
+        for ts_tick, ts_num, ts_denom in time_sigs:
+            if ts_tick <= tick:
+                num, denom = ts_num, ts_denom
+        return int(tpb * num * 4 / denom)
+
+    bar_groups: dict = defaultdict(list)
+    for abs_beat, note in notes_flat:
+        abs_tick = int(abs_beat * tpb)
+        bar, cursor = 1, 0
+        while True:
+            blen = bar_ticks_at(cursor)
+            if cursor + blen > abs_tick:
+                break
+            cursor += blen
+            bar += 1
+        bar_start_beat = cursor / tpb
+        local_offset = abs_beat - bar_start_beat
+        bar_groups[bar].append(GrammarNote(
+            pitch=note.pitch, duration=note.duration,
+            velocity=note.velocity, channel=note.channel,
+            offset=round(local_offset, 6),
+        ))
+
+    if not bar_groups:
+        return [], {}
+
+    def bar_fp(notes):
+        return tuple(sorted(
+            (n.pitch, quantize_duration(n.duration), round(n.offset * 16) / 16)
+            for n in notes
+        ))
+
+    fp_to_token: dict = {}
+    next_tok = [0]
+    sequence, bar_notes_map = [], {}
+
+    for bar_n in sorted(bar_groups.keys()):
+        notes = bar_groups[bar_n]
+        fp = bar_fp(notes)
+        if fp not in fp_to_token:
+            tok = next_tok[0]
+            next_tok[0] += 1
+            fp_to_token[fp] = tok
+            bar_notes_map[tok] = notes
+        sequence.append(fp_to_token[fp])
+
+    return sequence, bar_notes_map
+
+
+def repaint(
     sequence: list,
     min_pair: int = 2,
     max_rules: int | None = None,
+    prefix: str = 'N',
     verbose: bool = False,
 ) -> tuple[dict, list]:
     """
-    Algoritmo Re-Pair sobre secuencia de tokens de notas.
-
-    Devuelve (rules, root_seq) donde:
-        rules    = {nombre_regla: [token, ...]}  (tokens pueden ser tuplas nota o strs)
-        root_seq = secuencia raíz comprimida
+    Algoritmo Re-Pair genérico. prefix controla los nombres ('N' para notas, 'B' para compases).
     """
     rules: dict = {}
     next_id = [1]
 
     def new_name() -> str:
-        while f"N{next_id[0]}" in rules:
+        while f"{prefix}{next_id[0]}" in rules:
             next_id[0] += 1
-        name = f"N{next_id[0]}"
+        name = f"{prefix}{next_id[0]}"
         next_id[0] += 1
         return name
 
@@ -437,6 +757,9 @@ def repaint_notes(
     return rules, current
 
 
+repaint_notes = repaint  # alias de compatibilidad
+
+
 def expand_rule(name, rules: dict, memo: dict = None) -> list:
     """
     Expande recursivamente una regla hasta obtener la secuencia de tokens hoja
@@ -476,7 +799,7 @@ def compute_element_duration(tokens: list, rules: dict) -> float:
     return total
 
 
-def build_grammar_elements(
+def build_grammar_elements_from_notes(
     rules: dict,
     root: list,
     notes_flat: list,
@@ -562,6 +885,117 @@ def build_grammar_elements(
     )
 
     return elements
+
+
+
+def build_grammar_elements_from_bars(
+    rules: dict,
+    root: list,
+    bar_notes_map: dict,
+    verbose: bool = False,
+) -> dict:
+    """Construye GrammarElements desde gramática a nivel de compás."""
+    memo: dict = {}
+    occ: Counter = Counter()
+    all_tokens = list(root)
+    for body in rules.values():
+        all_tokens.extend(body)
+    for tok in all_tokens:
+        if isinstance(tok, str):
+            occ[tok] += 1
+
+    def bar_span(tok) -> float:
+        """
+        Span real de un compás: distancia desde el offset de la primera nota
+        hasta el fin de la última nota. Preserva los huecos internos del compás
+        para que el cursor avance correctamente al encadenar compases.
+        """
+        raw = bar_notes_map.get(tok, [])
+        if not raw:
+            return 0.0
+        return raw[-1].offset + raw[-1].duration - raw[0].offset
+
+    def tok_to_notes(tok, base_offset: float) -> tuple:
+        """
+        Convierte un token de compás en notas con offsets relativos a base_offset.
+        Los offsets internos del compás se normalizan restando el offset mínimo,
+        de modo que la primera nota siempre queda en base_offset (offset=0 local).
+        Devuelve (notes, span) donde span es la duración real del compás.
+        """
+        raw = bar_notes_map.get(tok, [])
+        if not raw:
+            return [], 0.0
+        min_off = raw[0].offset          # offset de la primera nota del compás
+        span = raw[-1].offset + raw[-1].duration - min_off
+        notes = [GrammarNote(pitch=n.pitch, duration=n.duration,
+                             velocity=n.velocity, channel=n.channel,
+                             offset=round(base_offset + n.offset - min_off, 6))
+                 for n in raw]
+        return notes, span
+
+    def expand_to_notes(name, depth=0) -> tuple:
+        """
+        Expande recursivamente devolviendo (notes, span_total).
+        span_total es la duración real del elemento incluyendo huecos internos.
+        """
+        if depth > 128:
+            return [], 0.0
+        if name in memo:
+            return memo[name]
+        if name not in rules:
+            if isinstance(name, int):
+                result = tok_to_notes(name, 0.0)
+                memo[name] = result
+                return result
+            return [], 0.0
+        body = rules[name]
+        result_notes, cursor = [], 0.0
+        for tok in body:
+            if isinstance(tok, str):
+                sub_notes, sub_span = expand_to_notes(tok, depth + 1)
+                # Rebasar los offsets de las sub-notas al cursor actual
+                for n in sub_notes:
+                    result_notes.append(GrammarNote(
+                        pitch=n.pitch, duration=n.duration,
+                        velocity=n.velocity, channel=n.channel,
+                        offset=round(cursor + n.offset, 6)))
+                cursor += sub_span
+            elif isinstance(tok, int):
+                bar_notes, bar_sp = tok_to_notes(tok, cursor)
+                result_notes.extend(bar_notes)
+                cursor += bar_sp
+        memo[name] = (result_notes, cursor)
+        return result_notes, cursor
+
+    elements: dict = {}
+    for name in rules:
+        notes, span = expand_to_notes(name)
+        elem = GrammarElement(name=name, notes=notes, duration_beats=round(span, 6),
+                              occurrences=occ.get(name, 0))
+        elements[name] = elem
+        if verbose:
+            print(f"  [elem] {name}: {len(notes)} notas, {span:.3f}b, x{occ.get(name,0)}")
+
+    root_notes, cursor = [], 0.0
+    for tok in root:
+        if isinstance(tok, str):
+            sub_notes, sub_span = expand_to_notes(tok)
+            for n in sub_notes:
+                root_notes.append(GrammarNote(
+                    pitch=n.pitch, duration=n.duration,
+                    velocity=n.velocity, channel=n.channel,
+                    offset=round(cursor + n.offset, 6)))
+            cursor += sub_span
+        elif isinstance(tok, int):
+            bar_notes, bar_sp = tok_to_notes(tok, cursor)
+            root_notes.extend(bar_notes)
+            cursor += bar_sp
+    elements['__root__'] = GrammarElement(name='__root__', notes=root_notes,
+                                           duration_beats=round(cursor, 6), occurrences=1)
+    return elements
+
+# Alias por compatibilidad
+build_grammar_elements = build_grammar_elements_from_notes
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -665,18 +1099,20 @@ def compute_compatibility_vector(
         25  interval histogram
          4  melodic contour
          6  rhythmic profile
-    Total: 47 dimensiones
+        10  harmonic profile
+    Total: 57 dimensiones
     """
     notes = elem.notes
     if not notes:
-        return np.zeros(47)
+        return np.zeros(57)
 
     pc  = pitch_class_histogram(notes, normalize_pitch=normalize_pitch)    # 12
     iv  = interval_histogram(notes, normalize_pitch=normalize_pitch)       # 25
     mc  = melodic_contour_features(notes)                                  #  4
     rh  = rhythmic_profile(notes)                                          #  6
+    ha  = harmonic_profile(notes)                                          # 10
 
-    return np.concatenate([pc, iv, mc, rh])
+    return np.concatenate([pc, iv, mc, rh, ha])
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -723,6 +1159,99 @@ def build_compatibility_matrix(
             matrix[i, j] = cosine_similarity(vecs[i], vecs[j])
 
     return candidates, matrix
+
+
+
+def harmonic_profile(notes: list) -> np.ndarray:
+    """Perfil armónico desde MIDI (10 dims): tensión, disonancia, hist intervalos, polifonía."""
+    if len(notes) < 2:
+        return np.zeros(10)
+    tension_vals = []
+    diss_count = 0
+    interval_hist = np.zeros(7)
+    n_pairs = 0
+    poly_counts = []
+    sorted_notes = sorted(notes, key=lambda n: n.offset)
+    for i, ni in enumerate(sorted_notes):
+        ni_end = ni.offset + ni.duration
+        simultaneous = 1
+        for j, nj in enumerate(sorted_notes):
+            if i == j:
+                continue
+            nj_end = nj.offset + nj.duration
+            if nj.offset < ni_end and nj_end > ni.offset:
+                simultaneous += 1
+                if j > i:
+                    iv = abs(ni.pitch - nj.pitch) % 12
+                    tension = INTERVAL_TENSION.get(iv, 0.5)
+                    tension_vals.append(tension)
+                    if iv in (1, 2, 6, 10, 11):
+                        diss_count += 1
+                    interval_hist[min(iv, 6)] += 1
+                    n_pairs += 1
+        poly_counts.append(simultaneous)
+    mean_tension = float(np.mean(tension_vals)) if tension_vals else 0.0
+    diss_ratio = diss_count / max(n_pairs, 1)
+    if interval_hist.sum() > 0:
+        interval_hist /= interval_hist.sum()
+    mean_poly = np.mean(poly_counts) / 4.0 if poly_counts else 0.0
+    return np.concatenate([[mean_tension, diss_ratio], interval_hist, [np.clip(mean_poly, 0, 1)]])
+
+
+def detect_scale(notes: list) -> tuple:
+    """Detecta tonalidad con perfiles de Krumhansl. Devuelve (tonic_st, mode)."""
+    if not notes:
+        return 0, 'major'
+    major_p = np.array([6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88])
+    minor_p = np.array([6.33,2.68,3.52,5.38,2.60,3.53,2.54,4.75,3.98,2.69,3.34,3.17])
+    hist = np.zeros(12)
+    for n in notes:
+        hist[n.pitch % 12] += n.duration
+    if hist.sum() > 0:
+        hist /= hist.sum()
+    best_score, best_tonic, best_mode = -1, 0, 'major'
+    for tonic in range(12):
+        rotated = np.roll(hist, -tonic)
+        for profile, mode in [(major_p, 'major'), (minor_p, 'minor')]:
+            score = np.corrcoef(rotated, profile)[0, 1]
+            if score > best_score:
+                best_score, best_tonic, best_mode = score, tonic, mode
+    return best_tonic, best_mode
+
+
+def scale_pitches(tonic: int, mode: str) -> list:
+    template = MAJOR_SCALE if mode == 'major' else MINOR_SCALE
+    return [(tonic + st) % 12 for st in template]
+
+
+def parse_target_key(key_str: str) -> tuple:
+    """Parsea 'C', 'Dm', 'F#m', 'Bb', 'Am' -> (tonic_semitone, mode)."""
+    key_str = key_str.strip()
+    mode = 'major'
+    if key_str.lower().endswith('m') and not key_str.lower().endswith('maj'):
+        mode = 'minor'; key_str = key_str[:-1]
+    elif key_str.lower().endswith('maj'):
+        key_str = key_str[:-3]
+    elif key_str.lower().endswith('min'):
+        mode = 'minor'; key_str = key_str[:-3]
+    key_str = key_str.strip()
+    note_upper = key_str[0].upper()
+    alter = key_str[1:] if len(key_str) > 1 else ''
+    base = NOTE_NAMES.index(note_upper) if note_upper in NOTE_NAMES else 0
+    if '#' in alter: base = (base + 1) % 12
+    elif 'b' in alter: base = (base - 1) % 12
+    return base, mode
+
+
+def transpose_to_key(elem: GrammarElement, target_tonic: int, target_mode: str) -> GrammarElement:
+    """Transpone el elemento para alinear su tónica detectada con target_tonic."""
+    if not elem.notes:
+        return elem
+    src_tonic, _ = detect_scale(elem.notes)
+    semitones = (target_tonic - src_tonic) % 12
+    if semitones > 6:
+        semitones -= 12
+    return transpose_element(elem, semitones)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -786,6 +1315,36 @@ def temperature_sample(
     return len(scores) - 1
 
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RESTRICCIÓN DE CONTINUIDAD EN FRONTERA
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def build_next_element_map(root: list, elements: dict) -> dict:
+    """Para cada token de la raíz, devuelve el pitch inicial del token siguiente."""
+    result = {}
+    root_strs = [t for t in root if isinstance(t, str)]
+    for i, tok in enumerate(root_strs):
+        if i + 1 < len(root_strs):
+            next_elem = elements.get(root_strs[i + 1])
+            result[tok] = next_elem.notes[0].pitch if (next_elem and next_elem.notes) else None
+        else:
+            result[tok] = None
+    return result
+
+
+def boundary_score(
+    candidate_elem: GrammarElement,
+    next_first_pitch,
+    continuity_weight: float,
+) -> float:
+    """exp(-W * |last_pitch - next_pitch| / 12). Devuelve 1.0 si W=0 o no hay siguiente."""
+    if continuity_weight <= 0 or next_first_pitch is None or not candidate_elem.notes:
+        return 1.0
+    semitones = abs(candidate_elem.notes[-1].pitch - next_first_pitch)
+    return math.exp(-continuity_weight * semitones / 12.0)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # MODO BIN — agrupación por longitud y ajuste de duración
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -829,76 +1388,65 @@ def fit_scale(notes: list, src_dur: float, dst_dur: float) -> list:
 
 def fit_trim(notes: list, dst_dur: float) -> list:
     """
-    Recorta el segmento para que ocupe exactamente dst_dur beats.
-    Las notas que empiezan antes de dst_dur se incluyen (recortando su
-    duración si sobrepasan el límite); las que empiezan después se descartan.
+    Trim inteligente: busca el punto de menor tension en [0.75*dst_dur, dst_dur]
+    (silencio, nota larga, nota estable). Si no hay punto bueno corta en dst_dur.
     """
+    if not notes:
+        return notes
+    tonic, _ = detect_scale(notes)
+    window_start = dst_dur * 0.75
+    best_cut, best_score = dst_dur, -1
+    for n in notes:
+        if n.offset < window_start or n.offset > dst_dur:
+            continue
+        score = min(n.duration / 2.0, 1.0)
+        if n.pitch % 12 == tonic: score += 1.0
+        elif n.pitch % 12 == (tonic + 7) % 12: score += 0.5
+        if score > best_score:
+            best_score = score
+            best_cut = min(n.offset + n.duration, dst_dur)
+    cut = min(best_cut, dst_dur)
     result = []
     for n in notes:
-        if n.offset >= dst_dur:
+        if n.offset >= cut:
             break
-        end = n.offset + n.duration
-        if end > dst_dur:
-            dur = round(dst_dur - n.offset, 6)
-        else:
-            dur = n.duration
-        result.append(GrammarNote(
-            pitch=n.pitch,
-            duration=max(dur, 1/64),
-            velocity=n.velocity,
-            channel=n.channel,
-            offset=n.offset,
-        ))
+        dur = min(n.duration, cut - n.offset)
+        result.append(GrammarNote(pitch=n.pitch, duration=max(dur, 1/64),
+                                  velocity=n.velocity, channel=n.channel, offset=n.offset))
     return result
 
 
 def fit_pad(notes: list, src_dur: float, dst_dur: float) -> list:
-    """
-    Añade notas de paso cromáticas para completar dst_dur - src_dur beats.
-
-    Estrategia:
-      · Si dst_dur > src_dur: rellena el hueco con una escala cromática
-        ascendente o descendente (según el contorno final del segmento)
-        desde la última nota hasta el pitch más cercano a la primera nota
-        del segmento, distribuyendo el tiempo restante uniformemente.
-        Si el hueco es menor que una semicorchea, alarga la última nota.
-      · Si dst_dur < src_dur: delega en fit_trim.
-    """
+    """Pad tonal: notas de paso dentro de la escala detectada del fragmento."""
     if not notes:
         return notes
     if dst_dur <= src_dur:
         return fit_trim(notes, dst_dur)
-
     gap = dst_dur - src_dur
     last = notes[-1]
-    first_pitch = notes[0].pitch
-
-    # Duración mínima de cada nota de paso: semicorchea (0.25b / 4 = 0.0625b)
-    min_note_dur = 1 / 16
-    n_fill = max(1, int(gap / min_note_dur))
+    tonic, mode = detect_scale(notes)
+    scale = scale_pitches(tonic, mode)
+    n_fill = max(1, int(gap / (1/16)))
     fill_dur = gap / n_fill
-
-    # Dirección: hacia el pitch inicial (cierra el círculo)
     start_pitch = last.pitch
-    end_pitch   = first_pitch
-    step = 1 if end_pitch >= start_pitch else -1
-
+    target_pitch = notes[0].pitch
     fill_notes = []
     for i in range(n_fill):
-        # Avanzar el pitch cromáticamente sin sobrepasar el objetivo
-        cur_pitch = start_pitch + step * (i + 1)
-        if step == 1:
-            cur_pitch = min(cur_pitch, 127)
-        else:
-            cur_pitch = max(cur_pitch, 0)
+        direction = 1 if target_pitch >= start_pitch else -1
+        candidate = start_pitch + direction * (i + 1)
+        candidate = max(0, min(127, candidate))
+        best_p, best_d = candidate, 127
+        for octave in range(0, 128, 12):
+            for sc in scale:
+                p = octave + sc
+                if abs(p - candidate) < best_d:
+                    best_d, best_p = abs(p - candidate), p
         fill_notes.append(GrammarNote(
-            pitch=cur_pitch,
-            duration=round(fill_dur, 6),
-            velocity=max(40, last.velocity - 20),   # más suave
+            pitch=best_p, duration=round(fill_dur, 6),
+            velocity=max(40, last.velocity - 20),
             channel=last.channel,
             offset=round(src_dur + i * fill_dur, 6),
         ))
-
     return list(notes) + fill_notes
 
 
@@ -940,6 +1488,8 @@ def transform_grammar_bins(
     normalize_pitch: bool,
     rng: random.Random,
     bin_length_range: tuple | None = None,
+    continuity_weight: float = 0.0,
+    target_key: tuple | None = None,
     verbose: bool = False,
 ) -> tuple[dict, list, dict]:
     """
@@ -978,7 +1528,8 @@ def transform_grammar_bins(
         if elem.vector is None:
             elem.vector = compute_compatibility_vector(elem, normalize_pitch)
 
-    substitutions: dict = {}   # src_name → fitted_element_name
+    next_pitch_map = build_next_element_map(root, elements) if continuity_weight > 0 else {}
+    substitutions: dict = {}
     skipped_range = 0
 
     for name, elem in list(elements.items()):
@@ -1076,13 +1627,14 @@ def transform_grammar(
     temperature: float,
     normalize_pitch: bool,
     rng: random.Random,
+    continuity_weight: float = 0.0,
+    target_key: tuple | None = None,
     verbose: bool = False,
 ) -> tuple[dict, list]:
     """
     Transforma la gramática sustituyendo los elementos con duración
     ≈ target_duration por otros compatibles sampleados.
-
-    Devuelve (new_rules, new_root) con las sustituciones aplicadas.
+    Aplica penalización de continuidad y/o transposición a tonalidad si se indica.
     """
     # Construir matriz de compatibilidad
     candidates, matrix = build_compatibility_matrix(
@@ -1096,20 +1648,22 @@ def transform_grammar(
     if verbose:
         print(f"  [transform] {len(candidates)} candidatos con duración {target_duration:.3f} beats")
 
-    # Mapa nombre → índice en candidatos
     name_to_idx = {name: i for i, name in enumerate(candidates)}
+    next_pitch_map = build_next_element_map(root, elements) if continuity_weight > 0 else {}
 
     def sample_replacement(src_name: str) -> str:
-        """Elige un reemplazo para src_name basado en compatibilidad."""
         if src_name not in name_to_idx:
             return src_name
         idx = name_to_idx[src_name]
-        scores = matrix[idx]   # similitudes con todos los candidatos
+        scores = matrix[idx].copy()
+        if continuity_weight > 0:
+            next_p = next_pitch_map.get(src_name)
+            for ci, cname in enumerate(candidates):
+                scores[ci] *= boundary_score(elements[cname], next_p, continuity_weight)
         chosen_idx = temperature_sample(scores, temperature, rng)
         chosen_name = candidates[chosen_idx]
         if verbose and chosen_name != src_name:
-            print(f"    {src_name} → {chosen_name}  "
-                  f"(sim={scores[chosen_idx]:.3f}, T={temperature})")
+            print(f"    {src_name} → {chosen_name}  (sim={matrix[idx][chosen_idx]:.3f})")
         return chosen_name
 
     # Construir mapa de sustituciones (uno por nombre de elemento transformado)
@@ -1137,25 +1691,28 @@ def transform_grammar(
         else:
             new_root.append(tok)
 
-    # Si normalize_pitch, ajustar las notas de los elementos insertados
-    if normalize_pitch:
-        for old_name, new_name in substitutions.items():
-            if old_name == new_name:
-                continue
-            src_elem = elements.get(old_name)
-            tgt_elem = elements.get(new_name)
-            if src_elem and tgt_elem:
-                semitones = estimate_transpose_semitones(src_elem, tgt_elem)
-                if semitones != 0:
-                    transposed = transpose_element(tgt_elem, semitones)
-                    # Creamos un nombre derivado para el elemento transpuesto
-                    tp_name = f"{new_name}_tp{semitones:+d}"
-                    elements[tp_name] = transposed
-                    elements[tp_name].name = tp_name
-                    # Reemplazar en new_rules y new_root
-                    for rn, body in new_rules.items():
-                        new_rules[rn] = [tp_name if t == new_name else t for t in body]
-                    new_root = [tp_name if t == new_name else t for t in new_root]
+    # Transponer elementos insertados
+    for old_name, new_name in substitutions.items():
+        if old_name == new_name:
+            continue
+        src_elem = elements.get(old_name)
+        tgt_elem = elements.get(new_name)
+        if not src_elem or not tgt_elem:
+            continue
+        working = tgt_elem
+        if normalize_pitch:
+            st = estimate_transpose_semitones(src_elem, working)
+            if st != 0:
+                working = transpose_element(working, st)
+        if target_key is not None:
+            working = transpose_to_key(working, target_key[0], target_key[1])
+        if working is not tgt_elem:
+            tp_name = f"{new_name}_tp"
+            working.name = tp_name
+            elements[tp_name] = working
+            new_rules = {rn: [tp_name if t == new_name else t for t in body]
+                         for rn, body in new_rules.items()}
+            new_root = [tp_name if t == new_name else t for t in new_root]
 
     return new_rules, new_root
 
@@ -1222,7 +1779,12 @@ def reconstruct_notes(
                         channel=n.channel,
                         offset=round(cursor + n.offset, 6),
                     ))
-                cursor += sum(n.duration for n in sub_notes)
+                # Avanzar por el span real del subelemento:
+                # max(offset+dur) captura correctamente tanto notas
+                # monofónicas (secuenciales) como acordes (simultáneas).
+                if sub_notes:
+                    sub_span = max(n.offset + n.duration for n in sub_notes)
+                    cursor += sub_span
             memo[tok] = result
             return result
 
@@ -1239,7 +1801,8 @@ def reconstruct_notes(
         notes = expand_to_notes(tok)
         for n in notes:
             result.append((round(cursor + n.offset, 6), n))
-        cursor += sum(n.duration for n in notes)
+        if notes:
+            cursor += max(n.offset + n.duration for n in notes)
 
     return result
 
@@ -2285,6 +2848,10 @@ def run_transform(
     bin_size: float | None,
     bin_length_range: tuple | None,
     fit_mode: str,
+    bar_tokens: bool,
+    multitrack: bool,
+    continuity_weight: float,
+    target_key: tuple | None,
     min_pair: int,
     max_rules: int | None,
     track_idx: int | None,
@@ -2312,20 +2879,38 @@ def run_transform(
     bpm   = round(60_000_000 / tempo)
     print(f"  → {len(mid.tracks)} track(s), tpb={tpb}, tempo={bpm} BPM, track={t_idx}")
 
-    # ── 2. Extraer notas planas
+    # ── 2. Extraer notas
     print(f"[2/6] Extrayendo notas …")
-    notes_flat = extract_notes_flat(mid, t_idx)
-    print(f"  → {len(notes_flat)} notas extraídas")
+    if multitrack:
+        all_tracks_flat = extract_all_tracks_flat(mid)
+        notes_flat = all_tracks_flat.get(t_idx, extract_notes_flat(mid, t_idx))
+        n_tracks = len(all_tracks_flat)
+        n_notes = sum(len(v) for v in all_tracks_flat.values())
+        print(f"  → {n_tracks} tracks con notas, {n_notes} notas totales (gramática track {t_idx}: {len(notes_flat)} notas)")
+    else:
+        notes_flat = extract_notes_flat(mid, t_idx)
+        all_tracks_flat = {t_idx: notes_flat}
+        print(f"  → {len(notes_flat)} notas extraídas")
 
-    # ── 3. Re-Pair sobre secuencia de notas
-    print(f"[3/6] Aprendiendo gramática con Re-Pair (min_pair={min_pair}) …")
-    note_seq = extract_note_sequence(notes_flat)
-    rules, root = repaint_notes(note_seq, min_pair=min_pair, max_rules=max_rules, verbose=verbose)
+    # ── 3. Re-Pair
+    mode_tag = "compases" if bar_tokens else "notas"
+    print(f"[3/6] Aprendiendo gramática Re-Pair (nivel {mode_tag}, min_pair={min_pair}) …")
+    bar_notes_map = {}
+    if bar_tokens:
+        sequence, bar_notes_map = extract_bar_sequence(notes_flat, tpb, mid)
+        print(f"  → {len(sequence)} compases, {len(set(sequence))} tipos únicos")
+        rules, root = repaint(sequence, min_pair=min_pair, max_rules=max_rules, prefix='B', verbose=verbose)
+    else:
+        note_seq = [note_token(n) for _, n in notes_flat]
+        rules, root = repaint(note_seq, min_pair=min_pair, max_rules=max_rules, prefix='N', verbose=verbose)
     print(f"  → {len(rules)} reglas aprendidas, {len(root)} tokens en raíz")
 
-    # ── 4. Construir elementos de la gramática
+    # ── 4. Construir elementos
     print(f"[4/6] Construyendo elementos de la gramática …")
-    elements = build_grammar_elements(rules, root, notes_flat, verbose=verbose)
+    if bar_tokens:
+        elements = build_grammar_elements_from_bars(rules, root, bar_notes_map, verbose=verbose)
+    else:
+        elements = build_grammar_elements_from_notes(rules, root, notes_flat, verbose=verbose)
     print(f"  → {len(elements)} elementos construidos")
 
     # Importar elementos adicionales
@@ -2395,16 +2980,68 @@ def run_transform(
     # ── 6. Reconstruir y escribir MIDI
     print(f"[6/6] Reconstruyendo MIDI …")
     new_notes = reconstruct_notes(new_root, new_rules, elements)
-    print(f"  → {len(new_notes)} notas en la salida")
+    print(f"  → {len(new_notes)} notas en track principal")
 
     if not new_notes:
         print("  [AVISO] No se generaron notas. Revisa los parámetros.")
         return
 
     print(f"  Escribiendo: {out_path} …")
-    notes_to_midi_file(new_notes, tpb, tempo, out_path)
-    print(f"  → Fichero guardado: {out_path}")
+    if multitrack and len(all_tracks_flat) > 1:
+        # El track principal ya fue transformado. Para los tracks secundarios:
+        # construimos su propia gramática, aplicamos las mismas sustituciones
+        # que aprendimos del principal (mismos nombres de regla → mismo patrón
+        # de reemplazo), y los reconstruimos independientemente.
+        tracks_notes: dict = {}
+        for tidx, nf in all_tracks_flat.items():
+            if tidx == t_idx:
+                tracks_notes[tidx] = new_notes
+            else:
+                # Track secundario: pipeline de acordes para preservar polifonía
+                sec_seq, sec_chord_map, sec_onset_list = extract_chord_sequence(nf)
+                n_chords = len(sec_seq)
+                n_unique = len(set(sec_seq))
+                print(f"  Track {tidx} (acompañamiento): "
+                      f"{len(nf)} notas, {n_chords} acordes, {n_unique} únicos")
+                sec_rules, sec_root = repaint(
+                    sec_seq, min_pair=2, prefix='S')
+                sec_elements, sec_rules, sec_root = build_grammar_elements_from_chords(
+                    sec_rules, sec_root, sec_chord_map, sec_onset_list)
+                if bin_size is not None:
+                    sec_new_rules, sec_new_root, sec_elements = transform_grammar_bins(
+                        sec_rules, sec_root, sec_elements,
+                        bin_size=bin_size, fit_mode=fit_mode,
+                        temperature=temperature,
+                        normalize_pitch=normalize_pitch,
+                        rng=random.Random(rng.randint(0, 99999)),
+                        bin_length_range=bin_length_range,
+                        continuity_weight=continuity_weight,
+                        target_key=target_key,
+                    )
+                else:
+                    sec_new_rules, sec_new_root = transform_grammar(
+                        sec_rules, sec_root, sec_elements,
+                        target_duration=target_duration,
+                        temperature=temperature,
+                        normalize_pitch=normalize_pitch,
+                        rng=random.Random(rng.randint(0, 99999)),
+                        continuity_weight=continuity_weight,
+                        target_key=target_key,
+                    )
+                sec_notes = reconstruct_notes(
+                    sec_new_root, sec_new_rules, sec_elements)
+                tracks_notes[tidx] = sec_notes
+                n_out_chords = len(set(round(off, 4) for off, _ in sec_notes))
+                n_out_poly = len(sec_notes)
+                print(f"  → Track {tidx}: {n_out_poly} notas, "
+                      f"~{n_out_chords} posiciones de acorde")
+        total = sum(len(v) for v in tracks_notes.values())
+        print(f"  → {len(tracks_notes)} tracks, {total} notas en total")
+        multitrack_to_midi(tracks_notes, tpb, tempo, out_path, original_mid=mid)
+    else:
+        notes_to_midi_file(new_notes, tpb, tempo, out_path)
 
+    print(f"  → Fichero guardado: {out_path}")
     print("\n✓ Grammar Transformer finalizado correctamente.\n")
 
 
@@ -2433,8 +3070,15 @@ def build_parser() -> argparse.ArgumentParser:
                         '(ej: --bin-length 0.5 4.0). Elementos fuera del rango se dejan intactos.')
     p.add_argument('--fit', choices=['scale', 'pad', 'trim'], default='scale',
                    metavar='MODE',
-                   help='Ajuste de duración al insertar: scale (escala), '
-                        'pad (notas de paso), trim (recorte) (default: scale)')
+                   help='Ajuste al insertar: scale|pad|trim (default: scale)')
+    p.add_argument('--bar-tokens', action='store_true',
+                   help='Re-Pair a nivel de compas en lugar de nota')
+    p.add_argument('--multitrack', action='store_true',
+                   help='Procesar todos los tracks coordinadamente')
+    p.add_argument('--continuity', type=float, default=0.0, metavar='W',
+                   help='Peso penalizacion de frontera [0,1] (0=desactivado, rec: 0.3-0.8)')
+    p.add_argument('--target-key', type=str, default=None, metavar='KEY',
+                   help='Transponer insercion a tonalidad (ej: C, Dm, F#, Bbm, Am)')
     p.add_argument('--temp', '-t', type=float, default=0.5,
                    metavar='FLOAT',
                    help='Temperatura de sampling (0=greedy, 1=uniforme, default=0.5)')
@@ -2474,25 +3118,36 @@ def main() -> None:
 
     out_path = args.out or args.midi.with_suffix('.transformed.mid')
 
+    target_key = None
+    if args.target_key:
+        try:
+            target_key = parse_target_key(args.target_key)
+        except Exception:
+            parser.error(f"Tonalidad no reconocida: '{args.target_key}'. Ej: C, Dm, F#m, Bb, Am")
+
     run_transform(
-        midi_path       = args.midi,
-        out_path        = out_path,
-        target_duration = args.length,
-        temperature     = args.temp,
-        normalize_pitch = args.pitch_norm,
-        bin_size        = args.bin_size,
-        bin_length_range= tuple(args.bin_length) if args.bin_length else None,
-        fit_mode        = args.fit,
-        min_pair        = args.min_pair,
+        midi_path        = args.midi,
+        out_path         = out_path,
+        target_duration  = args.length,
+        temperature      = args.temp,
+        normalize_pitch  = args.pitch_norm,
+        bin_size         = args.bin_size,
+        bin_length_range = tuple(args.bin_length) if args.bin_length else None,
+        fit_mode         = args.fit,
+        bar_tokens       = args.bar_tokens,
+        multitrack       = args.multitrack,
+        continuity_weight= args.continuity,
+        target_key       = target_key,
+        min_pair         = args.min_pair,
         max_rules       = args.max_rules,
-        track_idx       = args.track,
-        export_dir      = args.export_elements,
-        export_format   = args.export_format,
-        import_dir      = args.import_elements,
-        report          = args.report,
-        report_format   = args.report_format,
-        seed            = args.seed,
-        verbose         = args.verbose,
+        track_idx        = args.track,
+        export_dir       = args.export_elements,
+        export_format    = args.export_format,
+        import_dir       = args.import_elements,
+        report           = args.report,
+        report_format    = args.report_format,
+        seed             = args.seed,
+        verbose          = args.verbose,
     )
 
 
