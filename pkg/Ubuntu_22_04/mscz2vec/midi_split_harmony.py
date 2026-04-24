@@ -429,50 +429,53 @@ def melodic_verosimilitude(pitches: List[int]) -> float:
     return float(np.mean(weights))
 
 
-def classify_channels(notes: List[Tuple]) -> Dict[int, str]:
+def classify_channels(notes: List[Tuple]) -> Dict[Tuple[int,int], str]:
     """
-    Clasifica cada canal MIDI como 'melody', 'harmony', 'bass' o 'drums'.
+    Clasifica cada voz MIDI como 'melody', 'harmony', 'bass' o 'drums'.
 
-    Criterios por canal:
-    - drums   : canal 9 (GM estándar) o registro muy bajo con poca variedad tonal
-    - bass    : registro bajo (< MIDI 52) con mayoría de notas monofónicas
-    - harmony : alto ratio de simultaneidad (acordes), o registro medio con poca
-                verosimilitud melódica
-    - melody  : monofónico o casi, verosimilitud interválica alta, registro medio-agudo
+    La clave de clasificación es (track_idx, channel) — no solo channel.
+    Esto es esencial para MIDIs tipo 1 donde múltiples tracks comparten el
+    mismo número de canal (p.ej. melodía en track 0 canal 0 y bajo en
+    track 1 canal 0): mezclarlos antes de analizar destruye el poly ratio
+    y el registro de ambas voces.
 
-    Devuelve dict {channel_id: clasificación}.
+    Criterios:
+    - drums   : canal 9 GM, o p90 < 40 con poca variedad tonal
+    - bass    : p90 < 52 (por debajo de E3)
+    - harmony : poly_ratio > 0.55 (acordes en bloque o arpegios densos)
+    - melody  : monofónico o casi, verosimilitud interválica alta,
+                registro medio-agudo
+
+    Devuelve dict {(track_idx, channel): clasificación}.
     """
-    ch_notes: Dict[int, List[Tuple]] = defaultdict(list)
+    voice_notes: Dict[Tuple[int,int], List[Tuple]] = defaultdict(list)
     for n in notes:
-        ch_notes[n[4]].append(n)
+        voice_notes[(n[5], n[4])].append(n)   # clave: (track, channel)
 
-    classification: Dict[int, str] = {}
+    classification: Dict[Tuple[int,int], str] = {}
 
-    for ch, ch_n in ch_notes.items():
+    for (tr, ch), ch_n in voice_notes.items():
         if not ch_n:
             continue
 
-        # ── Batería: canal 9 o pitches muy dispersos sin lógica tonal ────────
+        # ── Batería ───────────────────────────────────────────────────────────
         if ch == 9:
-            classification[ch] = 'drums'
+            classification[(tr, ch)] = 'drums'
             continue
 
         pitches = [n[1] for n in ch_n]
         median_pitch = float(np.median(pitches))
-        p10 = float(np.percentile(pitches, 10))
         p90 = float(np.percentile(pitches, 90))
 
         # ── Bajo: registro muy bajo ───────────────────────────────────────────
-        if p90 < 52:   # por debajo de E3
-            classification[ch] = 'bass'
+        if p90 < 52:
+            classification[(tr, ch)] = 'bass'
             continue
 
-        # ── Ratio de simultaneidad: qué fracción de los onsets tiene otra nota
-        #    del mismo canal sonando al mismo tiempo ───────────────────────────
+        # ── Ratio de simultaneidad dentro de la misma voz (tr, ch) ───────────
         ch_sorted = sorted(ch_n, key=lambda x: x[0])
         poly_count = 0
         for i, (s, p, d, v, c, t) in enumerate(ch_sorted):
-            # Hay otra nota del mismo canal que solapa con esta
             has_overlap = any(
                 abs(s2 - s) < 0.08 and p2 != p
                 for (s2, p2, d2, v2, c2, t2) in ch_sorted[max(0,i-3):i+4]
@@ -482,7 +485,7 @@ def classify_channels(notes: List[Tuple]) -> Dict[int, str]:
                 poly_count += 1
         poly_ratio = poly_count / len(ch_sorted)
 
-        # ── Verosimilitud melódica de la secuencia de pitches ─────────────────
+        # ── Verosimilitud melódica ────────────────────────────────────────────
         mel_score = melodic_verosimilitude(pitches)
 
         # ── Densidad: notas por beat ──────────────────────────────────────────
@@ -490,94 +493,85 @@ def classify_channels(notes: List[Tuple]) -> Dict[int, str]:
         density = len(ch_n) / max(total_span, 1.0)
 
         # ── Decisión ──────────────────────────────────────────────────────────
-        # Canal armónico: alta polifonía (acordes)
         if poly_ratio > 0.55:
-            classification[ch] = 'harmony'
-        # Canal de bajo aunque tenga algo de registro medio
+            classification[(tr, ch)] = 'harmony'
         elif median_pitch < 50 and density < 4.0:
-            classification[ch] = 'bass'
-        # Canal melódico: baja polifonía + buena verosimilitud
+            classification[(tr, ch)] = 'bass'
         elif poly_ratio < 0.25 and mel_score > 0.45:
-            classification[ch] = 'melody'
-        # Canal melódico con algo de ornamentación (dobles notas ocasionales)
+            classification[(tr, ch)] = 'melody'
         elif poly_ratio < 0.40 and mel_score > 0.55 and median_pitch > 55:
-            classification[ch] = 'melody'
-        # Resto: tratar como armonía
+            classification[(tr, ch)] = 'melody'
         else:
-            classification[ch] = 'harmony'
+            classification[(tr, ch)] = 'harmony'
 
     return classification
 
 
 def extract_skyline(notes: List[Tuple], tonic_pc: int, mode: str,
                     forced_melody_ch: Optional[int] = None,
-                    verbose: bool = False) -> Tuple[List[Tuple], Dict[int, str]]:
+                    verbose: bool = False) -> Tuple[List[Tuple], Dict[Tuple[int,int], str]]:
     """
-    Extrae la voz melódica principal en dos fases:
+    Extrae la voz melódica principal en dos fases.
 
-    Fase A — Clasificación de canales:
-        Determina qué canales son melódicos (monofónicos, verosimilitud alta),
-        armónicos (polifónicos) o de bajo/batería, y descarta los no melódicos
-        antes de aplicar el skyline.
+    Fase A — Clasificación de voces (track, channel):
+        Cada combinación (track_idx, channel) se clasifica independientemente,
+        lo que permite distinguir p.ej. melodía en track 0 canal 0 de bajo en
+        track 1 canal 0, que es el caso habitual en MIDIs tipo 1.
 
-    Fase B — Skyline sobre candidatos melódicos:
-        Sobre los canales clasificados como 'melody', aplica el skyline mejorado
-        con scoring de continuidad e intervalo. Si no hay canales melódicos
-        puros, aplica el skyline sobre todos los canales no-batería extrayendo
-        solo la voz más aguda.
+    Fase B — Skyline sobre candidatos melódicos.
 
-    Devuelve (melody_notes, channel_classifications).
+    Devuelve (melody_notes, voice_classifications).
     """
     if not notes:
         return [], {}
 
-    # Si hay un canal forzado para la melodía, filtrar directamente
+    # Canal forzado: filtrar por channel ignorando track
     if forced_melody_ch is not None:
         melody = [n for n in notes if n[4] == forced_melody_ch]
         if melody:
-            return sorted(melody, key=lambda x: x[0]), {forced_melody_ch: 'melody'}
+            return sorted(melody, key=lambda x: x[0]), {
+                (n[5], n[4]): 'melody' for n in melody
+            }
 
-    # ── Fase A: clasificar canales ────────────────────────────────────────────
-    ch_classification = classify_channels(notes)
+    # ── Fase A: clasificar voces (track, channel) ─────────────────────────────
+    voice_classification = classify_channels(notes)
 
     if verbose:
-        for ch, cls in sorted(ch_classification.items()):
-            ch_n = [n for n in notes if n[4] == ch]
-            pitches = [n[1] for n in ch_n]
-            print(f"║    Canal {ch}: {cls:8s}  n={len(ch_n):4d}  "
+        for (tr, ch), cls in sorted(voice_classification.items()):
+            v_n = [n for n in notes if n[5] == tr and n[4] == ch]
+            pitches = [n[1] for n in v_n]
+            print(f"║    Track {tr} Canal {ch}: {cls:8s}  n={len(v_n):4d}  "
                   f"median={int(np.median(pitches))}  "
                   f"p80={int(np.percentile(pitches,80))}")
 
-    melody_channels = {ch for ch, cls in ch_classification.items() if cls == 'melody'}
+    melody_voices = {(tr, ch) for (tr, ch), cls in voice_classification.items()
+                     if cls == 'melody'}
 
-    # Si hay canales melódicos identificados, usarlos directamente
-    if melody_channels:
-        candidate_notes = [n for n in notes if n[4] in melody_channels]
+    if melody_voices:
+        candidate_notes = [n for n in notes if (n[5], n[4]) in melody_voices]
     else:
-        # Fallback: todos los canales no-batería y no-bajo
-        non_harmony = {ch for ch, cls in ch_classification.items()
-                       if cls not in ('drums', 'bass')}
-        if non_harmony:
-            candidate_notes = [n for n in notes if n[4] in non_harmony]
-        else:
+        non_melody = {(tr, ch) for (tr, ch), cls in voice_classification.items()
+                      if cls in ('drums', 'bass')}
+        candidate_notes = [n for n in notes if (n[5], n[4]) not in non_melody]
+        if not candidate_notes:
             candidate_notes = [n for n in notes if n[4] != 9]
 
     if not candidate_notes:
         candidate_notes = notes
 
     # ── Fase B: Skyline sobre candidatos ─────────────────────────────────────
-    # Si hay un único canal melódico, devolverlo directamente sin skyline
-    candidate_channels = {n[4] for n in candidate_notes}
-    if len(candidate_channels) == 1:
-        return sorted(candidate_notes, key=lambda x: x[0]), ch_classification
+    # Clave única por voz (track, channel)
+    candidate_voices = {(n[5], n[4]) for n in candidate_notes}
+    if len(candidate_voices) == 1:
+        return sorted(candidate_notes, key=lambda x: x[0]), voice_classification
 
-    # Heurístico de canal dominante: mayor percentil 80 de pitch
-    ch_p80: Dict[int, float] = {}
-    for ch in candidate_channels:
-        p = [n[1] for n in candidate_notes if n[4] == ch]
+    # Heurístico: voz con mayor p80 de pitch
+    voice_p80: Dict[Tuple[int,int], float] = {}
+    for v in candidate_voices:
+        p = [n[1] for n in candidate_notes if (n[5], n[4]) == v]
         if p:
-            ch_p80[ch] = float(np.percentile(p, 80))
-    top_ch = max(ch_p80, key=lambda c: ch_p80[c]) if ch_p80 else 0
+            voice_p80[v] = float(np.percentile(p, 80))
+    top_voice = max(voice_p80, key=lambda v: voice_p80[v]) if voice_p80 else (0, 0)
 
     resolution  = 0.1
     total_beats = max(n[0] + n[2] for n in candidate_notes)
@@ -592,34 +586,26 @@ def extract_skyline(notes: List[Tuple], tonic_pc: int, mode: str,
             beat += resolution
             continue
 
-        # Nota más aguda de cada canal activo
-        ch_top: Dict[int, Tuple] = {}
+        # Nota más aguda de cada voz activa
+        v_top: Dict[Tuple[int,int], Tuple] = {}
         for n in active:
-            ch = n[4]
-            if ch not in ch_top or n[1] > ch_top[ch][1]:
-                ch_top[ch] = n
+            v = (n[5], n[4])
+            if v not in v_top or n[1] > v_top[v][1]:
+                v_top[v] = n
 
         best_note = None
         best_score = -np.inf
-        for ch, n in ch_top.items():
+        for v, n in v_top.items():
             pitch = n[1]
             score = 0.0
-
-            # Factor 1: pitch absoluto
             score += (pitch - 48) / 60.0
-
-            # Factor 2: continuidad interválica
             if prev_pitch is not None:
                 interval = abs(pitch - prev_pitch)
                 score += _MELODIC_INTERVAL_WEIGHT.get(min(interval, 24), 0.05) * 2.0
-                gap = n[0] - prev_end
-                if gap < 0.5:
+                if n[0] - prev_end < 0.5:
                     score += 0.3
-
-            # Factor 3: canal dominante agudo
-            if ch == top_ch:
+            if v == top_voice:
                 score += 0.4
-
             if score > best_score:
                 best_score = score
                 best_note = n
@@ -632,7 +618,6 @@ def extract_skyline(notes: List[Tuple], tonic_pc: int, mode: str,
 
         beat += resolution
 
-    # Eliminar duplicados
     seen: set = set()
     unique_melody = []
     for n in melody_notes:
@@ -641,49 +626,39 @@ def extract_skyline(notes: List[Tuple], tonic_pc: int, mode: str,
             seen.add(key)
             unique_melody.append(n)
 
-    return sorted(unique_melody, key=lambda x: x[0]), ch_classification
+    return sorted(unique_melody, key=lambda x: x[0]), voice_classification
 
 
 def extract_harmony_notes(all_notes: List[Tuple],
                            melody_notes: List[Tuple],
-                           ch_classification: Dict[int, str]) -> List[Tuple]:
+                           voice_classification: Dict[Tuple[int,int], str]) -> List[Tuple]:
     """
-    Extrae las notas de armonía.
+    Extrae las notas de armonía usando la clasificación por (track, channel).
 
-    Estrategia en orden de prioridad:
-    1. Si hay canales clasificados como 'harmony', usarlos directamente.
-    2. Si no hay canales armónicos explícitos, usar todas las notas
-       excluyendo batería y melodía identificada.
-    3. Fallback: todas las notas sin batería.
+    Prioridad:
+    1. Voces clasificadas como 'harmony' (+ 'bass' para información de raíz).
+    2. Fallback: todo excepto melodía y batería.
+    3. Fallback monofónico: toda la señal sin batería.
     """
-    harmony_channels = {ch for ch, cls in ch_classification.items()
-                        if cls == 'harmony'}
-    bass_channels    = {ch for ch, cls in ch_classification.items()
-                        if cls == 'bass'}
-    drum_channels    = {ch for ch, cls in ch_classification.items()
-                        if cls == 'drums'}
+    harmony_voices = {v for v, cls in voice_classification.items() if cls == 'harmony'}
+    bass_voices    = {v for v, cls in voice_classification.items() if cls == 'bass'}
+    drum_voices    = {v for v, cls in voice_classification.items() if cls == 'drums'}
 
-    if harmony_channels:
-        # Incluir también el bajo para la detección de acordes (da información
-        # sobre la raíz), pero excluir batería
+    if harmony_voices:
         harmony = [n for n in all_notes
-                   if (n[4] in harmony_channels or n[4] in bass_channels)
-                   and n[4] not in drum_channels]
+                   if (n[5], n[4]) in harmony_voices or (n[5], n[4]) in bass_voices
+                   and (n[5], n[4]) not in drum_voices]
         if harmony:
             return harmony
 
     # Fallback: excluir melodía y batería
-    melody_keys = set()
-    for n in melody_notes:
-        melody_keys.add((round(n[0], 4), n[1]))
-
+    melody_keys = {(round(n[0], 4), n[1]) for n in melody_notes}
     harmony = [n for n in all_notes
                if (round(n[0], 4), n[1]) not in melody_keys
-               and n[4] not in drum_channels]
+               and (n[5], n[4]) not in drum_voices]
 
-    # Si hay muy pocas notas de armonía (MIDI monofónico), usar la señal completa
     if len(harmony) < 0.15 * len(all_notes):
-        return [n for n in all_notes if n[4] not in drum_channels]
+        return [n for n in all_notes if (n[5], n[4]) not in drum_voices]
     return harmony
 
 
@@ -1306,6 +1281,42 @@ def _chord_to_midi_notes(root_pc: int, quality: str,
     return notes
 
 
+def monophonize_melody(notes: List[Tuple]) -> List[Tuple]:
+    """
+    Reduce una lista de notas de melodía a estrictamente monofónica.
+
+    En cada instante con dos o más notas simultáneas conserva únicamente
+    la más aguda (voz principal), truncando o eliminando las demás.
+    Las notas que empiezan antes pero siguen sonando cuando arranca una
+    nueva nota más aguda se truncan al onset de la nueva nota.
+    """
+    if not notes:
+        return notes
+
+    result = sorted(notes, key=lambda n: (n[0], -n[1]))  # orden: tiempo asc, pitch desc
+    mono: List[Tuple] = []
+
+    for note in result:
+        s, pitch, dur, vel, ch, tr = note
+        end = s + dur
+
+        # Truncar la última nota añadida si solapa con esta
+        if mono:
+            ps, pp, pd, pv, pch, ptr = mono[-1]
+            p_end = ps + pd
+            if p_end > s:
+                # La nota anterior solapa: truncarla al inicio de esta
+                new_dur = s - ps
+                if new_dur > 0.01:  # conservar solo si queda duración mínima
+                    mono[-1] = (ps, pp, new_dur, pv, pch, ptr)
+                else:
+                    mono.pop()  # demasiado corta: eliminar directamente
+
+        mono.append((s, pitch, dur, vel, ch, tr))
+
+    return mono
+
+
 def build_melody_track(melody_notes: List[Tuple],
                         tpb: int,
                         velocity: int = 90,
@@ -1510,6 +1521,10 @@ def main():
                         help='Carpeta de salida (default: junto al MIDI de entrada)')
     parser.add_argument('--output',          type=str,   default=None,
                         help='Nombre base de salida (default: stem del fichero)')
+    parser.add_argument('--mono-melody',     action='store_true',
+                        help='Reducir la melodía a monofónica estricta: en cada '
+                             'instante con varias notas simultáneas conserva solo '
+                             'la más aguda')
     parser.add_argument('--split-files',     action='store_true',
                         help='Genera dos ficheros separados en vez de uno con dos pistas')
     parser.add_argument('--key',             type=str,   default=None, metavar='KEY',
@@ -1729,11 +1744,18 @@ def main():
     # ── [4] POST-LIMPIEZA ─────────────────────────────────────────────────────
 
     if args.verbose:
-        print(f"╠══ [4] Post-limpieza de acordes...")
+        print(f"╠══ [4] Post-limpieza...")
 
     chords = merge_short_chords(chords, min_beats=args.chord_res * 0.5)
     chords = smooth_chord_sequence(chords, tonic_pc, mode)
     chords = quantize_chords_to_grid(chords, info.beats_per_bar, args.chord_res)
+
+    if args.mono_melody:
+        n_before = len(melody_notes)
+        melody_notes = monophonize_melody(melody_notes)
+        if args.verbose:
+            print(f"║  Monofónica: {n_before} → {len(melody_notes)} notas "
+                  f"({n_before - len(melody_notes)} voces dobladas eliminadas)")
 
     if args.verbose:
         avg_score = float(np.mean([c['score'] for c in chords])) if chords else 0.0
