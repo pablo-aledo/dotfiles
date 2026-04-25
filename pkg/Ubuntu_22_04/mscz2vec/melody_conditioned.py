@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                   MELODY CONDITIONED  v1.0                                  ║
+║                   MELODY CONDITIONED  v1.1                                  ║
 ║       Generación de melodías condicionadas a progresión de acordes          ║
 ║                                                                              ║
-║  A diferencia de melody_generator.py (generación ex nihilo), este módulo   ║
-║  condiciona la generación a una progresión de acordes dada, ya sea          ║
-║  mediante reglas armónicas determinísticas o mediante modelos de ML         ║
-║  entrenados sobre un corpus propio de MIDIs con dos pistas.                 ║
+║  Este módulo condiciona la generación a una progresión de acordes dada,    ║
+║  mediante reglas armónicas determinísticas o mediante un LLM.               ║
 ║                                                                              ║
 ║  MOTORES DE GENERACIÓN (--engine):                                           ║
 ║    chord_guided — Condicionamiento determinístico: filtra y pondera las     ║
@@ -15,9 +13,6 @@
 ║                   acorde activo. Combina Markov condicionado por tensión,   ║
 ║                   contorno melódico emocional y tabla EMOTIONAL_CHORD_      ║
 ║                   WEIGHTS. No requiere entrenamiento previo.                ║
-║    lstm         — Seq2Seq: BiLSTM encoder sobre acordes + LSTM decoder      ║
-║                   que genera melodía nota a nota condicionado al contexto   ║
-║                   armónico aprendido del corpus. Requiere --train previo.   ║
 ║    llm          — Usa Claude o ChatGPT como motor generativo mediante       ║
 ║                   prompting estructurado. Modos: direct (descripción        ║
 ║                   simbólica) y fewshot (ejemplos reales del corpus).        ║
@@ -45,19 +40,9 @@
 ║        --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8                      ║
 ║        --profile melancholic --contour descending                           ║
 ║                                                                              ║
-║    # Con acordes desde MIDI:                                                 ║
+║    # Con acordes desde MIDI (incluir acordes en la salida):                 ║
 ║    python melody_conditioned.py --engine chord_guided                        ║
-║        --chords-midi harmony.mid --key Am --bars 8                          ║
-║                                                                              ║
-║    # Entrenar el modelo LSTM sobre el corpus:                               ║
-║    python melody_conditioned.py --train --corpus ./midis/                   ║
-║        --model-out melody_lstm.pt --epochs 30 --batch-size 64               ║
-║                                                                              ║
-║    # Generar con el modelo LSTM entrenado:                                  ║
-║    python melody_conditioned.py --engine lstm                                ║
-║        --model melody_lstm.pt                                                ║
-║        --chords "Cm:2 Ab:2 Eb:2 Bb:2" --key Cm --bars 8                   ║
-║        --profile tense --tension-curve "0.3,0.5,0.7,0.9"                   ║
+║        --chords-midi harmony.mid --key Am --bars 8 --include-chords         ║
 ║                                                                              ║
 ║    # Generar con LLM (Claude):                                              ║
 ║    python melody_conditioned.py --engine llm                                 ║
@@ -71,7 +56,7 @@
 ║        --chords "C:4 Am:4 F:4 G:4" --key C --bars 8 --profile serene       ║
 ║                                                                              ║
 ║  OPCIONES PRINCIPALES:                                                       ║
-║    --engine E          Motor: chord_guided | lstm | llm                     ║
+║    --engine E          Motor: chord_guided | llm                            ║
 ║    --key KEY           Tonalidad: C, Am, F#, Bb… (default: C)              ║
 ║    --mode MODE         Modo de escala (default: auto)                       ║
 ║    --bars N            Compases (default: 16)                               ║
@@ -85,13 +70,6 @@
 ║    --chords TEXT       Progresión en texto: "Am:2 G:2 F:2 E7:2"           ║
 ║    --chords-json FILE  Progresión desde .chords.json                        ║
 ║    --chords-midi FILE  Progresión desde MIDI (extrae track de armonía)      ║
-║    --train             Activar modo entrenamiento LSTM                      ║
-║    --corpus DIR        Carpeta con MIDIs del corpus                         ║
-║    --model-out FILE    Guardar modelo LSTM entrenado (default: lstm.pt)     ║
-║    --model FILE        Cargar modelo LSTM para generación                   ║
-║    --epochs N          Épocas de entrenamiento (default: 30)                ║
-║    --batch-size N      Batch size (default: 64)                             ║
-║    --lr F              Learning rate (default: 0.001)                       ║
 ║    --llm-provider P    Proveedor LLM: claude | openai                       ║
 ║    --llm-mode M        Modo LLM: direct | fewshot                           ║
 ║    --llm-fewshot-bank DIR  Corpus para ejemplos few-shot                    ║
@@ -99,13 +77,13 @@
 ║    --llm-model M       Modelo concreto (default: claude-sonnet-4-20250514 / ║
 ║                        gpt-4o)                                              ║
 ║    --output FILE       Fichero de salida (default: melody_out.mid)          ║
+║    --include-chords    Incluir track de acordes en el MIDI de salida        ║
 ║    --seed N            Semilla aleatoria (default: 42)                      ║
 ║    --verbose           Informe detallado                                    ║
 ║    --dry-run           Mostrar parámetros sin generar                       ║
 ║                                                                              ║
 ║  DEPENDENCIAS:                                                               ║
 ║    Siempre:    mido, numpy                                                   ║
-║    LSTM:       torch                                                         ║
 ║    LLM Claude: anthropic                                                     ║
 ║    LLM OpenAI: openai                                                        ║
 ║    Opcional:   music21 (detección de acordes mejorada desde MIDI)           ║
@@ -136,14 +114,6 @@ except ImportError:
     MIDO_OK = False
     print("[WARN] mido no disponible: pip install mido")
 
-try:
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    from torch.utils.data import Dataset, DataLoader
-    TORCH_OK = True
-except ImportError:
-    TORCH_OK = False
 
 try:
     import anthropic as anthropic_sdk
@@ -316,16 +286,6 @@ RHYTHM_DISTS: Dict[str, Dict[float, float]] = {
     "dense":      {0.25: 4.0, 0.5: 3.5, 0.75: 2.0, 1.0: 1.5},
 }
 
-# Cuantización LSTM: 16 subdivisiones por compás (semicorchea = 1 tick)
-TICKS_PER_BAR   = 16
-TICKS_PER_BEAT  = 4   # en compás 4/4
-MAX_DURATION    = 32  # máx duración en ticks (2 compases)
-REST_TOKEN      = 128
-BAR_TOKEN       = 129
-PAD_TOKEN       = 130
-SOS_TOKEN       = 131
-EOS_TOKEN       = 132
-VOCAB_SIZE      = 133  # 0-127 pitch + especiales
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1148,813 +1108,6 @@ class ChordGuidedEngine:
         return notes
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  TOKENIZACIÓN PARA LSTM
-# ══════════════════════════════════════════════════════════════════════════════
-
-def quantize_duration(dur_q: float, ticks_per_beat: int = TICKS_PER_BEAT) -> int:
-    """Quarter notes → ticks cuantizados (1-MAX_DURATION)."""
-    ticks = int(round(dur_q * ticks_per_beat))
-    return max(1, min(MAX_DURATION, ticks))
-
-
-def dequantize_duration(ticks: int,
-                        ticks_per_beat: int = TICKS_PER_BEAT) -> float:
-    """Ticks → quarter notes."""
-    return ticks / ticks_per_beat
-
-
-def encode_note(pitch: int, duration_ticks: int) -> List[int]:
-    """
-    Codifica una nota como par de tokens [pitch_token, dur_token].
-    pitch_token: 0-127 (pitch) o 128 (REST)
-    dur_token:   200 + ticks (200-232) para distinguir de pitches
-    """
-    p_tok = pitch if pitch >= 0 else REST_TOKEN
-    d_tok = 200 + duration_ticks  # 200-232
-    return [p_tok, d_tok]
-
-
-def decode_note(p_tok: int, d_tok: int) -> Tuple[int, float]:
-    """Par de tokens → (pitch, duration_q). pitch=-1 si es REST."""
-    pitch = -1 if p_tok == REST_TOKEN else p_tok
-    dur_q = dequantize_duration(max(1, d_tok - 200))
-    return pitch, dur_q
-
-
-def midi_track_to_tokens(track, ticks_per_beat: int,
-                          channel: Optional[int] = None) -> List[int]:
-    """
-    Extrae notas de un track MIDI y las codifica como secuencia de tokens.
-    Formato: [BAR_TOKEN, p_tok, d_tok, p_tok, d_tok, ..., BAR_TOKEN, ...]
-    """
-    notes: List[Tuple[float, float, int]] = []
-    current_tick = 0
-    active: Dict[int, int] = {}
-
-    for msg in track:
-        current_tick += msg.time
-        if channel is not None and hasattr(msg, "channel"):
-            if msg.channel != channel:
-                continue
-        if msg.type == "note_on" and msg.velocity > 0:
-            active[msg.note] = current_tick
-        elif msg.type in ("note_off",) or (
-                msg.type == "note_on" and msg.velocity == 0):
-            if msg.note in active:
-                on_tick = active.pop(msg.note)
-                dur_ticks = current_tick - on_tick
-                dur_q = dur_ticks / ticks_per_beat
-                on_q  = on_tick  / ticks_per_beat
-                notes.append((on_q, dur_q, msg.note))
-
-    if not notes:
-        return []
-
-    notes.sort(key=lambda n: n[0])
-    ticks_per_bar = TICKS_PER_BAR  # en unidades cuantizadas
-
-    tokens: List[int] = [BAR_TOKEN]
-    current_bar = 0
-
-    for on_q, dur_q, pitch in notes:
-        bar = int(on_q / (ticks_per_bar / TICKS_PER_BEAT))
-        while current_bar < bar:
-            tokens.append(BAR_TOKEN)
-            current_bar += 1
-        dur_ticks = quantize_duration(dur_q)
-        tokens.extend(encode_note(pitch, dur_ticks))
-
-    return tokens
-
-
-def tokens_to_notes(tokens: List[int],
-                    beats_per_bar: float = 4.0) -> List[MelodyNote]:
-    """Secuencia de tokens → lista de MelodyNote."""
-    notes: List[MelodyNote] = []
-    bar_idx = 0
-    pos_in_bar = 0.0  # en quarter notes
-
-    i = 0
-    while i < len(tokens):
-        tok = tokens[i]
-        if tok == BAR_TOKEN:
-            bar_idx += 1
-            pos_in_bar = 0.0
-            i += 1
-        elif tok == EOS_TOKEN:
-            break
-        elif tok == PAD_TOKEN or tok == SOS_TOKEN:
-            i += 1
-        elif i + 1 < len(tokens) and tokens[i + 1] >= 200:
-            # Par (pitch_tok, dur_tok)
-            p_tok = tok
-            d_tok = tokens[i + 1]
-            pitch, dur_q = decode_note(p_tok, d_tok)
-            offset = (bar_idx - 1) * beats_per_bar + pos_in_bar
-            if pitch >= 0:
-                notes.append(MelodyNote(
-                    pitch=pitch, duration=dur_q,
-                    velocity=80, offset=round(max(0.0, offset), 4)
-                ))
-            pos_in_bar += dur_q
-            i += 2
-        else:
-            i += 1
-
-    return notes
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  DATASET PARA EL LSTM
-# ══════════════════════════════════════════════════════════════════════════════
-
-class MelodyHarmonyDataset:
-    """
-    Dataset que carga pares (armonía_tokens, melodía_tokens) del corpus.
-
-    Cada MIDI del corpus tiene:
-      Track 0: metadatos
-      Track 1: melodía  (canal 0)
-      Track 2: acordes  (canal 1)
-
-    La armonía se codifica como secuencia de tokens de pitch class
-    con su duración (igual que la melodía). El modelo aprende a generar
-    la melodía condicionado a la armonía completa.
-    """
-
-    MAX_SEQ_LEN = 512  # máximo de tokens por ejemplo
-
-    def __init__(self, corpus_dir: str, max_files: int = 0,
-                 verbose: bool = False):
-        self.pairs: List[Tuple[List[int], List[int]]] = []
-        self._load_corpus(corpus_dir, max_files, verbose)
-
-    def _load_corpus(self, corpus_dir: str, max_files: int,
-                     verbose: bool):
-        path  = Path(corpus_dir)
-        files = sorted(list(path.rglob("*.mid")) +
-                       list(path.rglob("*.midi")))
-        if max_files > 0:
-            files = files[:max_files]
-
-        ok, skip = 0, 0
-        for f in files:
-            try:
-                pair = self._load_midi(str(f))
-                if pair:
-                    self.pairs.append(pair)
-                    ok += 1
-                else:
-                    skip += 1
-            except Exception as e:
-                skip += 1
-                if verbose:
-                    print(f"  [corpus] skip {f.name}: {e}")
-
-        if verbose:
-            print(f"  [corpus] cargados={ok}  omitidos={skip}  "
-                  f"total_pares={len(self.pairs)}")
-
-    def _load_midi(self, midi_path: str
-                   ) -> Optional[Tuple[List[int], List[int]]]:
-        mid = mido.MidiFile(midi_path)
-        tpb = mid.ticks_per_beat or 480
-
-        if len(mid.tracks) < 3:
-            return None
-
-        melody_tokens  = midi_track_to_tokens(mid.tracks[1], tpb, channel=0)
-        harmony_tokens = midi_track_to_tokens(mid.tracks[2], tpb, channel=1)
-
-        if not melody_tokens or not harmony_tokens:
-            return None
-
-        # Truncar a MAX_SEQ_LEN
-        mel = melody_tokens[:self.MAX_SEQ_LEN]
-        har = harmony_tokens[:self.MAX_SEQ_LEN]
-
-        return har, mel
-
-    def __len__(self) -> int:
-        return len(self.pairs)
-
-    def __getitem__(self, idx: int) -> Tuple[List[int], List[int]]:
-        return self.pairs[idx]
-
-
-def collate_fn(batch: List[Tuple[List[int], List[int]]],
-               pad_tok: int = PAD_TOKEN
-               ) -> Tuple[Any, Any, Any, Any]:
-    """
-    Padding de batch a longitud máxima.
-    Devuelve (harmony_ids, harmony_mask, melody_ids, melody_mask).
-    """
-    har_seqs = [torch.tensor(h, dtype=torch.long) for h, _ in batch]
-    mel_seqs = [torch.tensor(m, dtype=torch.long) for _, m in batch]
-
-    har_pad = torch.nn.utils.rnn.pad_sequence(
-        har_seqs, batch_first=True, padding_value=pad_tok)
-    mel_pad = torch.nn.utils.rnn.pad_sequence(
-        mel_seqs, batch_first=True, padding_value=pad_tok)
-
-    har_mask = (har_pad != pad_tok)
-    mel_mask = (mel_pad != pad_tok)
-
-    return har_pad, har_mask, mel_pad, mel_mask
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  ARQUITECTURA LSTM SEQ2SEQ
-# ══════════════════════════════════════════════════════════════════════════════
-
-
-# Las clases de red neuronal se definen solo si torch está disponible.
-# Si no, se definen como stubs para que el módulo cargue igualmente.
-if TORCH_OK:
-    import torch.nn as nn
-    import torch.nn.functional as F
-
-    _NNBase  = nn.Module
-else:
-    _NNBase  = object
-
-
-class HarmonyEncoder(_NNBase):
-    """
-    BiLSTM que lee la secuencia de tokens de armonía y produce
-    un contexto de tamaño fijo por posición temporal.
-
-    Arquitectura:
-      Embedding(VOCAB_SIZE + dur_range, d_model)
-      → BiLSTM(d_model, hidden//2, num_layers, dropout)
-      → Linear(hidden, context_size)  [proyección final]
-
-    El estado oculto final (concatenado fwd+bwd) se usa para
-    inicializar el decoder. Las salidas en cada paso se usan
-    para el mecanismo de atención.
-    """
-
-    DUR_RANGE = 33  # tokens de duración: 200-232 → remapeados 0-32
-
-    def __init__(self, vocab_size: int = VOCAB_SIZE + 33,
-                 d_model: int = 128, hidden: int = 256,
-                 num_layers: int = 2, dropout: float = 0.3):
-        super().__init__()
-        self.embedding  = nn.Embedding(vocab_size, d_model, padding_idx=PAD_TOKEN)
-        self.bilstm     = nn.LSTM(
-            d_model, hidden // 2, num_layers=num_layers,
-            batch_first=True, bidirectional=True,
-            dropout=dropout if num_layers > 1 else 0.0
-        )
-        self.proj       = nn.Linear(hidden, hidden)
-        self.hidden_dim = hidden
-        self.num_layers = num_layers
-
-    def _remap_tokens(self, ids: Any) -> Any:
-        """Remap duration tokens 200-232 → VOCAB_SIZE+0..32."""
-        out = ids.clone()
-        mask = (ids >= 200) & (ids <= 232)
-        out[mask] = VOCAB_SIZE + (ids[mask] - 200)
-        return out
-
-    def forward(self, ids: Any, mask: Any
-                ) -> Tuple[Any, Any]:
-        """
-        ids:  (B, T_har)
-        mask: (B, T_har)
-        →  encoder_out: (B, T_har, hidden)
-           (h_n, c_n):  inicialización para el decoder
-        """
-        ids = self._remap_tokens(ids)
-        # Clamp para seguridad
-        ids = ids.clamp(0, self.embedding.num_embeddings - 1)
-
-        emb = self.embedding(ids)           # (B, T, d_model)
-        lengths = mask.sum(dim=1).cpu()
-        lengths = lengths.clamp(min=1)
-
-        packed = nn.utils.rnn.pack_padded_sequence(
-            emb, lengths, batch_first=True, enforce_sorted=False)
-        out_packed, (h_n, c_n) = self.bilstm(packed)
-        encoder_out, _ = nn.utils.rnn.pad_packed_sequence(
-            out_packed, batch_first=True)   # (B, T, hidden)
-
-        encoder_out = self.proj(encoder_out)
-
-        # Reshape h_n, c_n para el decoder (unidireccional)
-        # BiLSTM: h_n shape = (num_layers*2, B, hidden//2)
-        # → Queremos (num_layers, B, hidden) para decoder unidireccional
-        B = ids.size(0)
-        h_n = (h_n.view(self.num_layers, 2, B, -1)
-                   .transpose(1, 2)
-                   .contiguous()
-                   .view(self.num_layers, B, -1))
-        c_n = (c_n.view(self.num_layers, 2, B, -1)
-                   .transpose(1, 2)
-                   .contiguous()
-                   .view(self.num_layers, B, -1))
-
-        return encoder_out, (h_n, c_n)
-
-
-class BahdanauAttention(_NNBase):
-    """
-    Atención de Bahdanau (additive) entre el estado del decoder
-    y las salidas del encoder.
-
-    score(s, h) = v · tanh(W_s · s + W_h · h)
-    context     = Σ softmax(score) · h
-    """
-
-    def __init__(self, hidden: int):
-        super().__init__()
-        self.W_s    = nn.Linear(hidden, hidden, bias=False)
-        self.W_h    = nn.Linear(hidden, hidden, bias=False)
-        self.v      = nn.Linear(hidden, 1, bias=False)
-
-    def forward(self, decoder_state: Any,
-                encoder_out: Any,
-                encoder_mask: Any
-                ) -> Tuple[Any, Any]:
-        """
-        decoder_state: (B, hidden)
-        encoder_out:   (B, T_har, hidden)
-        encoder_mask:  (B, T_har)  True = posición válida
-        →  context:    (B, hidden)
-           attn_w:     (B, T_har)
-        """
-        s = self.W_s(decoder_state).unsqueeze(1)   # (B, 1, hidden)
-        h = self.W_h(encoder_out)                  # (B, T, hidden)
-        scores = self.v(torch.tanh(s + h)).squeeze(-1)  # (B, T)
-
-        # Enmascarar posiciones de padding
-        scores = scores.masked_fill(~encoder_mask, float("-inf"))
-        attn_w = F.softmax(scores, dim=-1)
-        attn_w = torch.nan_to_num(attn_w, nan=0.0)
-
-        context = (attn_w.unsqueeze(-1) * encoder_out).sum(dim=1)  # (B, hidden)
-        return context, attn_w
-
-
-class MelodyDecoder(_NNBase):
-    """
-    LSTM decoder con atención de Bahdanau.
-
-    En cada paso:
-      1. Embedding del token anterior
-      2. Concatenar con contexto de atención
-      3. LSTM step
-      4. Proyección a vocabulario
-    """
-
-    def __init__(self, vocab_size: int = VOCAB_SIZE + 33,
-                 d_model: int = 128, hidden: int = 256,
-                 num_layers: int = 2, dropout: float = 0.3):
-        super().__init__()
-        self.embedding  = nn.Embedding(vocab_size, d_model, padding_idx=PAD_TOKEN)
-        self.attention  = BahdanauAttention(hidden)
-        self.lstm       = nn.LSTM(
-            d_model + hidden, hidden, num_layers=num_layers,
-            batch_first=True,
-            dropout=dropout if num_layers > 1 else 0.0
-        )
-        self.dropout    = nn.Dropout(dropout)
-        self.out_proj   = nn.Linear(hidden * 2, vocab_size)
-        self.vocab_size = vocab_size
-
-    def _remap_tokens(self, ids: Any) -> Any:
-        out = ids.clone()
-        mask = (ids >= 200) & (ids <= 232)
-        out[mask] = VOCAB_SIZE + (ids[mask] - 200)
-        return out
-
-    def forward_step(self,
-                     input_tok: Any,
-                     hidden: Tuple[Any, Any],
-                     encoder_out: Any,
-                     encoder_mask: Any
-                     ) -> Tuple[Any,
-                                Tuple[Any, Any],
-                                Any]:
-        """
-        input_tok:   (B,)
-        →  logits:   (B, vocab_size)
-           hidden:   nuevo estado oculto
-           attn_w:   (B, T_har)
-        """
-        input_tok = self._remap_tokens(input_tok)
-        input_tok = input_tok.clamp(0, self.embedding.num_embeddings - 1)
-
-        emb = self.dropout(self.embedding(input_tok))     # (B, d_model)
-        dec_state = hidden[0][-1]                          # (B, hidden)
-        context, attn_w = self.attention(
-            dec_state, encoder_out, encoder_mask)
-
-        lstm_in = torch.cat([emb, context], dim=-1).unsqueeze(1)  # (B,1,d+h)
-        lstm_out, new_hidden = self.lstm(lstm_in, hidden)
-        lstm_out = lstm_out.squeeze(1)                             # (B, hidden)
-
-        combined = torch.cat([lstm_out, context], dim=-1)          # (B, h*2)
-        logits   = self.out_proj(self.dropout(combined))           # (B, vocab)
-        return logits, new_hidden, attn_w
-
-
-class MelodyConditionedLSTM(_NNBase):
-    """
-    Modelo Seq2Seq completo:
-      HarmonyEncoder (BiLSTM) → BahdanauAttention → MelodyDecoder (LSTM)
-
-    Parámetros recomendados para CPU/GPU modesta:
-      d_model=128, hidden=256, num_layers=2 → ~4M parámetros
-    """
-
-    def __init__(self, vocab_size: int = VOCAB_SIZE + 33,
-                 d_model: int = 128, hidden: int = 256,
-                 num_layers: int = 2, dropout: float = 0.3):
-        super().__init__()
-        self.encoder = HarmonyEncoder(vocab_size, d_model, hidden,
-                                       num_layers, dropout)
-        self.decoder = MelodyDecoder(vocab_size, d_model, hidden,
-                                      num_layers, dropout)
-        self.vocab_size = vocab_size
-
-    def forward(self,
-                har_ids: Any, har_mask: Any,
-                mel_ids: Any
-                ) -> Any:
-        """
-        Teacher forcing para entrenamiento.
-        har_ids:  (B, T_har)
-        mel_ids:  (B, T_mel)  — incluye SOS al inicio
-        →  logits: (B, T_mel, vocab_size)
-        """
-        encoder_out, hidden = self.encoder(har_ids, har_mask)
-
-        B, T_mel = mel_ids.shape
-        all_logits = []
-
-        for t in range(T_mel - 1):
-            inp = mel_ids[:, t]
-            logits, hidden, _ = self.decoder.forward_step(
-                inp, hidden, encoder_out, har_mask)
-            all_logits.append(logits.unsqueeze(1))
-
-        return torch.cat(all_logits, dim=1)  # (B, T_mel-1, vocab)
-
-    def generate(self,
-                 har_ids: Any, har_mask: Any,
-                 max_len: int = 256, temperature: float = 1.0,
-                 top_k: int = 50) -> List[int]:
-        """
-        Generación autoregresiva con top-k sampling.
-        Devuelve lista de tokens (sin el SOS inicial).
-        """
-        self.eval()
-        with torch.no_grad():
-            encoder_out, hidden = self.encoder(har_ids, har_mask)
-
-            tokens = [SOS_TOKEN]
-            cur_tok = torch.tensor([SOS_TOKEN], dtype=torch.long,
-                                    device=har_ids.device)
-
-            for _ in range(max_len):
-                logits, hidden, _ = self.decoder.forward_step(
-                    cur_tok, hidden, encoder_out, har_mask)
-
-                # Temperature scaling
-                logits = logits.squeeze(0) / max(temperature, 1e-6)
-
-                # Top-k sampling
-                if top_k > 0:
-                    top_vals, top_idx = torch.topk(logits, min(top_k, logits.size(-1)))
-                    probs = F.softmax(top_vals, dim=-1)
-                    chosen = top_idx[torch.multinomial(probs, 1).item()]
-                else:
-                    probs = F.softmax(logits, dim=-1)
-                    chosen = torch.multinomial(probs, 1).item()
-
-                tok = int(chosen)
-                if tok == EOS_TOKEN:
-                    break
-                tokens.append(tok)
-                cur_tok = torch.tensor([tok], dtype=torch.long,
-                                        device=har_ids.device)
-
-        return tokens[1:]  # sin SOS
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  ENTRENAMIENTO LSTM
-# ══════════════════════════════════════════════════════════════════════════════
-
-def train_lstm(corpus_dir: str, model_out: str,
-               epochs: int = 30, batch_size: int = 64,
-               lr: float = 0.001, d_model: int = 128,
-               hidden: int = 256, num_layers: int = 2,
-               dropout: float = 0.3, max_files: int = 0,
-               verbose: bool = False) -> "MelodyConditionedLSTM":
-    """
-    Entrena el modelo Seq2Seq sobre el corpus.
-
-    Proceso:
-      1. Carga el corpus (pares armonía/melodía tokenizados)
-      2. Inicializa el modelo y el optimizador (Adam + LR scheduler)
-      3. Entrena por teacher forcing con CrossEntropyLoss
-      4. Guarda el modelo y los hiperparámetros en model_out
-
-    Consideraciones de rendimiento (CPU/GPU modesta):
-      - batch_size=64 con seq_len~256 usa ~2GB RAM
-      - hidden=256, num_layers=2 → ~4M parámetros
-      - ~2-4h por época en CPU con 100k MIDIs
-      - ~20-40min por época en GPU básica (GTX 1060 / RTX 3060)
-    """
-    if not TORCH_OK:
-        raise RuntimeError("PyTorch requerido para entrenamiento: pip install torch")
-    if not MIDO_OK:
-        raise RuntimeError("mido requerido: pip install mido")
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[train] Dispositivo: {device}")
-
-    # Dataset
-    print(f"[train] Cargando corpus: {corpus_dir}")
-    dataset = MelodyHarmonyDataset(corpus_dir, max_files, verbose)
-    if len(dataset) == 0:
-        raise ValueError(f"No se cargaron MIDIs válidos de {corpus_dir}")
-    print(f"[train] Pares cargados: {len(dataset)}")
-
-    # Split train/val 90/10
-    n_val   = max(1, len(dataset) // 10)
-    n_train = len(dataset) - n_val
-    indices = list(range(len(dataset)))
-    random.shuffle(indices)
-    train_idx = indices[:n_train]
-    val_idx   = indices[n_train:]
-
-    def make_loader(idx_list, shuffle=True):
-        subset = [dataset[i] for i in idx_list]
-        return DataLoader(
-            subset,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            collate_fn=lambda b: collate_fn(b),
-            num_workers=0,
-        )
-
-    train_loader = make_loader(train_idx, shuffle=True)
-    val_loader   = make_loader(val_idx,   shuffle=False)
-
-    # Modelo
-    vocab_size = VOCAB_SIZE + 33
-    model = MelodyConditionedLSTM(vocab_size, d_model, hidden,
-                                   num_layers, dropout).to(device)
-    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"[train] Parámetros: {n_params:,}")
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, patience=3, factor=0.5, min_lr=1e-5)
-    criterion = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN)
-
-    best_val_loss = float("inf")
-
-    for epoch in range(1, epochs + 1):
-        # ── Entrenamiento ──────────────────────────────────────────────────
-        model.train()
-        train_loss = 0.0
-        n_batches  = 0
-
-        for har_ids, har_mask, mel_ids, mel_mask in train_loader:
-            har_ids  = har_ids.to(device)
-            har_mask = har_mask.to(device)
-            mel_ids  = mel_ids.to(device)
-
-            # Añadir SOS al inicio de la melodía target
-            B = mel_ids.size(0)
-            sos = torch.full((B, 1), SOS_TOKEN,
-                              dtype=torch.long, device=device)
-            mel_in  = torch.cat([sos, mel_ids[:, :-1]], dim=1)
-
-            optimizer.zero_grad()
-            logits = model(har_ids, har_mask, mel_in)
-            # logits: (B, T-1, vocab)  target: (B, T-1)
-            loss = criterion(
-                logits.reshape(-1, logits.size(-1)),
-                mel_ids[:, :logits.size(1)].reshape(-1)
-            )
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-
-            train_loss += loss.item()
-            n_batches  += 1
-
-        train_loss /= max(n_batches, 1)
-
-        # ── Validación ─────────────────────────────────────────────────────
-        model.eval()
-        val_loss = 0.0
-        n_val_batches = 0
-
-        with torch.no_grad():
-            for har_ids, har_mask, mel_ids, mel_mask in val_loader:
-                har_ids  = har_ids.to(device)
-                har_mask = har_mask.to(device)
-                mel_ids  = mel_ids.to(device)
-
-                B = mel_ids.size(0)
-                sos = torch.full((B, 1), SOS_TOKEN,
-                                  dtype=torch.long, device=device)
-                mel_in = torch.cat([sos, mel_ids[:, :-1]], dim=1)
-
-                logits = model(har_ids, har_mask, mel_in)
-                loss = criterion(
-                    logits.reshape(-1, logits.size(-1)),
-                    mel_ids[:, :logits.size(1)].reshape(-1)
-                )
-                val_loss += loss.item()
-                n_val_batches += 1
-
-        val_loss /= max(n_val_batches, 1)
-        scheduler.step(val_loss)
-
-        print(f"  Época {epoch:3d}/{epochs}  "
-              f"train_loss={train_loss:.4f}  val_loss={val_loss:.4f}  "
-              f"lr={optimizer.param_groups[0]['lr']:.2e}")
-
-        # Guardar mejor modelo
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            torch.save({
-                "epoch":      epoch,
-                "state_dict": model.state_dict(),
-                "val_loss":   val_loss,
-                "hparams": {
-                    "vocab_size": vocab_size,
-                    "d_model":    d_model,
-                    "hidden":     hidden,
-                    "num_layers": num_layers,
-                    "dropout":    dropout,
-                },
-            }, model_out)
-            if verbose:
-                print(f"    ✓ Modelo guardado: {model_out}  "
-                      f"(val_loss={val_loss:.4f})")
-
-    print(f"\n[train] Entrenamiento completado. Mejor val_loss={best_val_loss:.4f}")
-    return model
-
-
-def load_lstm_model(model_path: str,
-                    device: Optional[str] = None) -> "MelodyConditionedLSTM":
-    """Carga un modelo LSTM previamente entrenado."""
-    if not TORCH_OK:
-        raise RuntimeError("PyTorch requerido: pip install torch")
-
-    if device is None:
-        dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        dev = torch.device(device)
-
-    ckpt = torch.load(model_path, map_location=dev)
-    hp   = ckpt["hparams"]
-    model = MelodyConditionedLSTM(
-        vocab_size  = hp["vocab_size"],
-        d_model     = hp["d_model"],
-        hidden      = hp["hidden"],
-        num_layers  = hp["num_layers"],
-        dropout     = hp.get("dropout", 0.3),
-    ).to(dev)
-    model.load_state_dict(ckpt["state_dict"])
-    model.eval()
-    return model
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  MOTOR: LSTM
-# ══════════════════════════════════════════════════════════════════════════════
-
-class LSTMEngine:
-    """
-    Generación condicionada mediante el modelo Seq2Seq entrenado.
-
-    La progresión de acordes se tokeniza de la misma forma que
-    el track de armonía del corpus y se pasa al encoder.
-    El decoder genera la melodía autoregressivamente.
-
-    Post-procesado:
-      - Los tokens se convierten a MelodyNote
-      - Se aplica snap_to_scale para corregir notas fuera de la escala
-      - Se ajustan velocidades según el perfil emocional
-    """
-
-    def __init__(self, model: "MelodyConditionedLSTM",
-                 profile: str, rng: random.Random,
-                 temperature: float = 1.0, top_k: int = 50):
-        self.model       = model
-        self.profile     = profile
-        self.rng         = rng
-        self.temperature = temperature
-        self.top_k       = top_k
-        self._device     = next(model.parameters()).device
-
-    def _chords_to_tokens(self, chord_events: List[ChordEvent]) -> List[int]:
-        """
-        Convierte la progresión de acordes a secuencia de tokens
-        compatible con el encoder, simulando el track 2 del corpus.
-
-        Cada acorde se representa como sus notas en la octava 4,
-        con duración cuantizada.
-        """
-        tokens: List[int] = [BAR_TOKEN]
-        beats_per_bar = 4.0  # asumido 4/4; se podría parametrizar
-
-        current_bar = 0
-        for ev in chord_events:
-            bar = int(ev.offset / beats_per_bar)
-            while current_bar < bar:
-                tokens.append(BAR_TOKEN)
-                current_bar += 1
-
-            dur_ticks = quantize_duration(ev.duration)
-            # Emitir las notas del acorde (octava 4 fija)
-            pitches_oct4 = [(ev.root_pc + 48) % 128]
-            for iv in CHORD_INTERVALS.get(ev.quality, [0, 4, 7]):
-                p = ev.root_pc + 48 + iv
-                if 0 <= p <= 127:
-                    pitches_oct4.append(p)
-
-            for p in pitches_oct4[:3]:  # máx 3 notas del acorde
-                tokens.extend(encode_note(p, dur_ticks))
-
-        return tokens
-
-    def generate(self,
-                 chord_events: List[ChordEvent],
-                 scale_pitches: List[int],
-                 n_bars: int,
-                 beats_per_bar: float,
-                 contour: List[float],
-                 tension: List[float],
-                 pitch_range: Tuple[int, int]) -> List[MelodyNote]:
-
-        low, high = pitch_range
-        vel_min, vel_max = PROFILE_VELOCITY.get(self.profile, (50, 90))
-
-        # Tokenizar armonía
-        har_tokens = self._chords_to_tokens(chord_events)
-        max_len    = n_bars * TICKS_PER_BAR * 3  # estimación holgada
-
-        har_ids  = torch.tensor([har_tokens], dtype=torch.long,
-                                 device=self._device)
-        har_mask = torch.ones_like(har_ids, dtype=torch.bool)
-
-        # Generar melodía
-        mel_tokens = self.model.generate(
-            har_ids, har_mask,
-            max_len=max_len,
-            temperature=self.temperature,
-            top_k=self.top_k,
-        )
-
-        # Decodificar tokens → MelodyNote
-        notes = tokens_to_notes(mel_tokens, beats_per_bar)
-
-        if not notes:
-            return []
-
-        # Post-procesado: snap a escala + ajuste de rango + velocidades
-        total_beats = n_bars * beats_per_bar
-        processed: List[MelodyNote] = []
-
-        for n in notes:
-            if n.offset >= total_beats:
-                break
-
-            # Snap a escala
-            snapped = snap_to_scale(n.pitch, scale_pitches)
-            # Ajustar al rango objetivo
-            while snapped < low and snapped + 12 <= high:
-                snapped += 12
-            while snapped > high and snapped - 12 >= low:
-                snapped -= 12
-            snapped = max(low, min(high, snapped))
-
-            # Velocidad desde perfil + tensión
-            bar_idx = int(n.offset / beats_per_bar)
-            t_val   = tension[min(bar_idx, len(tension) - 1)]
-            climax  = math.sin((n.offset / total_beats) * math.pi) * t_val
-            vel     = int(vel_min + (vel_max - vel_min) * max(0.0, climax))
-            vel     = max(vel_min, min(vel_max, vel))
-
-            processed.append(MelodyNote(
-                pitch=snapped, duration=n.duration,
-                velocity=vel, offset=n.offset,
-            ))
-
-        return processed
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  BANCO DE EJEMPLOS FEW-SHOT
@@ -2464,10 +1617,17 @@ def score_melody(notes: List[MelodyNote],
 def notes_to_midi(notes: List[MelodyNote], chord_events: List[ChordEvent],
                   tempo_bpm: int, output_path: str,
                   ticks_per_beat: int = 480,
-                  include_chords: bool = False):
+                  include_chords: bool = False,
+                  source_midi_path: Optional[str] = None,
+                  source_chord_track_idx: int = 2):
     """
     Exporta la melodía a MIDI.
-    Si include_chords=True, añade el track de acordes como referencia.
+
+    Si include_chords=True, añade un track de acordes de referencia:
+      - Si source_midi_path apunta a un MIDI válido, copia el track de
+        armonía original (índice source_chord_track_idx) tal cual,
+        preservando todas las notas y duraciones exactas.
+      - En caso contrario, genera el track desde los ChordEvent resueltos.
     """
     if not MIDO_OK:
         print("[ERROR] mido no disponible. No se puede exportar MIDI.")
@@ -2509,34 +1669,67 @@ def notes_to_midi(notes: List[MelodyNote], chord_events: List[ChordEvent],
         cur = abs_t
 
     # ── Track 2: acordes (opcional) ───────────────────────────────────────
-    if include_chords and chord_events:
-        acc_track = mido.MidiTrack()
-        mid.tracks.append(acc_track)
-        acc_track.append(mido.MetaMessage("track_name",
-                                           name="Chords", time=0))
-        acc_track.append(mido.Message("program_change", channel=1,
-                                       program=0, time=0))  # piano
+    if include_chords:
+        # Intentar copiar el track original verbatim
+        copied = False
+        if source_midi_path and os.path.exists(source_midi_path):
+            try:
+                src = mido.MidiFile(source_midi_path)
+                if source_chord_track_idx < len(src.tracks):
+                    src_track = src.tracks[source_chord_track_idx]
+                    # Remap ticks si el tpb de origen difiere
+                    src_tpb = src.ticks_per_beat or 480
+                    ratio   = ticks_per_beat / src_tpb
 
-        chord_evts = []
-        for ev in chord_events:
-            pitches_oct3 = [(ev.root_pc + 48)]
-            for iv in CHORD_INTERVALS.get(ev.quality, [0, 4, 7]):
-                pitches_oct3.append(ev.root_pc + 48 + iv)
+                    acc_track = mido.MidiTrack()
+                    mid.tracks.append(acc_track)
+                    acc_track.append(mido.MetaMessage(
+                        "track_name", name="Chords", time=0))
 
-            on_t  = q_ticks(ev.offset)
-            off_t = q_ticks(ev.offset + ev.duration)
-            for p in pitches_oct3:
-                if 0 <= p <= 127:
-                    chord_evts.append((on_t,  "note_on",  p, 60))
-                    chord_evts.append((off_t, "note_off", p, 0))
+                    for msg in src_track:
+                        if msg.is_meta:
+                            # Copiar solo track_name y program_change meta;
+                            # saltar set_tempo y time_signature (ya en track 0)
+                            if msg.type == "track_name":
+                                # ya añadido arriba
+                                pass
+                            # ignorar el resto de meta del track original
+                        else:
+                            new_time = int(round(msg.time * ratio))
+                            acc_track.append(msg.copy(time=new_time))
+                    copied = True
+            except Exception as e:
+                print(f"[WARN] No se pudo copiar track de acordes original: {e}")
 
-        chord_evts.sort(key=lambda e: (e[0], 0 if e[1] == "note_off" else 1))
-        cur = 0
-        for abs_t, mtype, note, vel in chord_evts:
-            delta = max(0, abs_t - cur)
-            acc_track.append(mido.Message(mtype, channel=1, note=note,
-                                           velocity=vel, time=delta))
-            cur = abs_t
+        if not copied and chord_events:
+            # Fallback: generar desde ChordEvent
+            acc_track = mido.MidiTrack()
+            mid.tracks.append(acc_track)
+            acc_track.append(mido.MetaMessage("track_name",
+                                               name="Chords", time=0))
+            acc_track.append(mido.Message("program_change", channel=1,
+                                           program=0, time=0))  # piano
+
+            chord_evts = []
+            for ev in chord_events:
+                pitches_oct3 = [(ev.root_pc + 48)]
+                for iv in CHORD_INTERVALS.get(ev.quality, [0, 4, 7]):
+                    pitches_oct3.append(ev.root_pc + 48 + iv)
+
+                on_t  = q_ticks(ev.offset)
+                off_t = q_ticks(ev.offset + ev.duration)
+                for p in pitches_oct3:
+                    if 0 <= p <= 127:
+                        chord_evts.append((on_t,  "note_on",  p, 60))
+                        chord_evts.append((off_t, "note_off", p, 0))
+
+            chord_evts.sort(key=lambda e: (e[0], 0 if e[1] == "note_off" else 1))
+            cur = 0
+            for abs_t, mtype, note, vel in chord_evts:
+                delta = max(0, abs_t - cur)
+                acc_track.append(mido.Message(mtype, channel=1, note=note,
+                                               velocity=vel, time=delta))
+                cur = abs_t
 
     mid.save(output_path)
 
@@ -2568,9 +1761,6 @@ class ConditionedMelodyGenerator:
                  pitch_low: int = 60, pitch_high: int = 84,
                  # Acordes
                  chord_events: Optional[List[ChordEvent]] = None,
-                 # LSTM
-                 lstm_model: Optional["MelodyConditionedLSTM"] = None,
-                 temperature: float = 1.0, top_k: int = 50,
                  # LLM
                  llm_provider: str = "claude",
                  llm_mode: str = "direct",
@@ -2595,9 +1785,6 @@ class ConditionedMelodyGenerator:
         self._llm_model_name = llm_model_name
         self._fewshot_bank   = fewshot_bank
         self._n_shots        = n_shots
-        self._temperature    = temperature
-        self._top_k          = top_k
-        self._lstm_model     = lstm_model
 
         # Compás
         num, den = time_sig.split("/")
@@ -2684,19 +1871,6 @@ class ConditionedMelodyGenerator:
                 self.pitch_range,
             )
 
-        elif self.engine == "lstm":
-            if self._lstm_model is None:
-                raise ValueError(
-                    "Motor 'lstm' requiere --model con un modelo entrenado")
-            eng = LSTMEngine(self._lstm_model, self.profile, rng,
-                             self._temperature, self._top_k)
-            notes = eng.generate(
-                self.chord_events, self.scale_pitches,
-                self.bars, self.beats_per_bar,
-                self.contour_curve, self.tension_curve,
-                self.pitch_range,
-            )
-
         elif self.engine == "llm":
             eng = LLMEngine(
                 provider=self._llm_provider,
@@ -2718,7 +1892,7 @@ class ConditionedMelodyGenerator:
 
         else:
             raise ValueError(f"Motor desconocido: {self.engine}. "
-                             f"Usa: chord_guided | lstm | llm")
+                             f"Usa: chord_guided | llm")
 
         sc = score_melody(notes, self.chord_events, self.scale_pitches,
                           self.contour_curve, self.beats_per_bar, self.profile)
@@ -2755,13 +1929,9 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    # ── Modo ──────────────────────────────────────────────────────────────
-    p.add_argument("--train", action="store_true",
-                   help="Activar modo entrenamiento LSTM")
-
     # ── Motor ─────────────────────────────────────────────────────────────
     p.add_argument("--engine", default="chord_guided",
-                   choices=["chord_guided", "lstm", "llm"],
+                   choices=["chord_guided", "llm"],
                    help="Motor de generación (default: chord_guided)")
 
     # ── Parámetros musicales ──────────────────────────────────────────────
@@ -2802,27 +1972,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--chords-midi-window",  type=float, default=0.5,
                    help="Ventana mínima de agrupación en beats (default: 0.5)")
 
-    # ── LSTM ──────────────────────────────────────────────────────────────
-    p.add_argument("--corpus",    type=str, default=None,
-                   help="Carpeta con MIDIs del corpus")
-    p.add_argument("--model-out", type=str, default="melody_lstm.pt",
-                   help="Guardar modelo LSTM entrenado")
-    p.add_argument("--model",     type=str, default=None,
-                   help="Cargar modelo LSTM para generación")
-    p.add_argument("--epochs",     type=int,   default=30)
-    p.add_argument("--batch-size", type=int,   default=64)
-    p.add_argument("--lr",         type=float, default=0.001)
-    p.add_argument("--d-model",    type=int,   default=128)
-    p.add_argument("--hidden",     type=int,   default=256)
-    p.add_argument("--num-layers", type=int,   default=2)
-    p.add_argument("--dropout",    type=float, default=0.3)
-    p.add_argument("--max-files",  type=int,   default=0,
-                   help="Máximo de MIDIs a cargar (0=todos)")
-    p.add_argument("--temperature", type=float, default=1.0,
-                   help="Temperatura de sampling LSTM (default: 1.0)")
-    p.add_argument("--top-k",      type=int,   default=50,
-                   help="Top-k sampling LSTM (default: 50)")
-
     # ── LLM ───────────────────────────────────────────────────────────────
     p.add_argument("--llm-provider", default="claude",
                    choices=["claude", "openai"])
@@ -2858,38 +2007,6 @@ def main():
     mode = detected_mode if args.mode == "auto" else args.mode
     if mode == "auto":
         mode = PROFILE_TO_MODE.get(args.profile, "major")
-
-    # ── Modo entrenamiento ────────────────────────────────────────────────
-    if args.train:
-        if not args.corpus:
-            print("[ERROR] --corpus requerido para --train")
-            sys.exit(1)
-        if not TORCH_OK:
-            print("[ERROR] PyTorch requerido: pip install torch")
-            sys.exit(1)
-        print(f"\n{'='*54}")
-        print(f"  ENTRENAMIENTO LSTM")
-        print(f"  corpus   : {args.corpus}")
-        print(f"  modelo   : {args.model_out}")
-        print(f"  épocas   : {args.epochs}")
-        print(f"  batch    : {args.batch_size}")
-        print(f"  lr       : {args.lr}")
-        print(f"  hidden   : {args.hidden}  layers: {args.num_layers}")
-        print(f"{'='*54}\n")
-        train_lstm(
-            corpus_dir  = args.corpus,
-            model_out   = args.model_out,
-            epochs      = args.epochs,
-            batch_size  = args.batch_size,
-            lr          = args.lr,
-            d_model     = args.d_model,
-            hidden      = args.hidden,
-            num_layers  = args.num_layers,
-            dropout     = args.dropout,
-            max_files   = args.max_files,
-            verbose     = args.verbose,
-        )
-        sys.exit(0)
 
     # ── Resolver acordes ──────────────────────────────────────────────────
     chord_events: List[ChordEvent] = []
@@ -2967,18 +2084,6 @@ def main():
         print("────────────────────────────────────────────────────────")
         sys.exit(0)
 
-    # ── Cargar modelo LSTM ────────────────────────────────────────────────
-    lstm_model = None
-    if args.engine == "lstm":
-        if not args.model:
-            print("[ERROR] --model requerido para --engine lstm")
-            sys.exit(1)
-        if not os.path.exists(args.model):
-            print(f"[ERROR] No se encuentra el modelo: {args.model}")
-            sys.exit(1)
-        print(f"[lstm] Cargando modelo: {args.model}")
-        lstm_model = load_lstm_model(args.model)
-
     # ── Banco few-shot ────────────────────────────────────────────────────
     fewshot_bank = None
     if args.engine == "llm" and args.llm_mode == "fewshot":
@@ -3008,9 +2113,6 @@ def main():
         pitch_low     = args.range[0],
         pitch_high    = args.range[1],
         chord_events  = chord_events,
-        lstm_model    = lstm_model,
-        temperature   = args.temperature,
-        top_k         = args.top_k,
         llm_provider  = args.llm_provider,
         llm_mode      = args.llm_mode,
         llm_model_name= args.llm_model,
@@ -3035,6 +2137,8 @@ def main():
         notes_to_midi(
             res.notes, chord_events, res.tempo, out_p,
             include_chords=args.include_chords,
+            source_midi_path=args.chords_midi,
+            source_chord_track_idx=args.chords_midi_track,
         )
         output_paths.append(out_p)
         tag = "★ MEJOR" if i == 0 else f"  v{i+1}"
@@ -3066,13 +2170,7 @@ def main():
         print(f"╚═══════════════════════════════════════════════════╝\n")
 
         if output_paths:
-            print("Siguientes pasos sugeridos:")
-            print(f"  # Reharmonizar la melodía:")
-            print(f"  reharmonizer.py {output_paths[0]} --strategy all")
-            print(f"  # Añadir contrapunto:")
-            print(f"  counterpoint.py {output_paths[0]}")
-            print(f"  # Adaptar a otro instrumento:")
-            print(f"  melody_adapter.py {output_paths[0]} --instrument violin")
+            print(f"  Salida principal: {output_paths[0]}")
 
 
 if __name__ == "__main__":
