@@ -3,105 +3,405 @@
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                   MELODY CONDITIONED  v3.0                                  ║
 ║       Generación de melodías condicionadas a progresión de acordes          ║
+╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║  MOTORES DE GENERACIÓN (--engine):                                           ║
-║    chord_guided — Markov de 2º orden condicionado por tensión y acorde.    ║
-║                   Opcionalmente entrenado desde corpus MIDI real            ║
-║                   (--corpus).                                               ║
-║    grammar      — Elaboración Schenkerian en tres capas ancladas al        ║
-║                   acorde activo: chord tones estructurales → notas de       ║
-║                   paso → ornamentos. Determinista y muy "musical".          ║
-║    search       — Beam search A* con función de coste que combina           ║
-║                   compatibilidad armónica, contorno y suavidad.             ║
-║    genetic      — Algoritmo genético con fitness armónico por acorde,      ║
-║                   clímax en proporción áurea y variedad rítmica.            ║
-║    lstm         — LSTM ligero entrenado sobre corpus propio.                ║
-║                   Piano roll cuantizado a semicorchea. Condicionamiento     ║
-║                   beat-a-beat via chord_vector (12 pc + 4 harm_func).      ║
-║                   Diseñado para CPU con poca memoria (~114K parámetros).   ║
-║                   Requiere --train previo o --model para generar.           ║
+║  RESUMEN                                                                     ║
+║  ───────                                                                     ║
+║  Genera una melodía MIDI a partir de una progresión de acordes dada.        ║
+║  A diferencia de un generador ex nihilo, cada nota se condiciona al         ║
+║  acorde activo en ese momento: el motor sabe en todo instante qué acorde    ║
+║  suena y toma decisiones de altura y ritmo en consecuencia.                 ║
 ║                                                                              ║
-║  LSTM — FLUJO:                                                               ║
-║    1. Preprocesar corpus:                                                    ║
-║       python melody_conditioned_v3.py --preprocess                          ║
-║           --corpus ./midis/ --dataset corpus.npz                            ║
+║  Cinco motores de distinta naturaleza: reglas armónicas (chord_guided),     ║
+║  elaboración contrapuntística (grammar), búsqueda heurística (search),      ║
+║  evolución (genetic) y aprendizaje desde corpus propio (lstm).              ║
 ║                                                                              ║
-║    2. Entrenar:                                                              ║
-║       python melody_conditioned_v3.py --train                               ║
-║           --dataset corpus.npz --model-out lstm.pt                          ║
-║           --epochs 30 --hidden 128 --batch-size 16                          ║
+╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║    3. Generar:                                                               ║
-║       python melody_conditioned_v3.py --engine lstm                         ║
-║           --model lstm.pt --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8  ║
+║  MOTORES (--engine)                                                          ║
+║  ──────────────────                                                          ║
+║  chord_guided  Markov de 2º orden (intervalo × duración) condicionado       ║
+║                nota a nota al acorde activo. Los pesos de cada pitch se     ║
+║                calculan como: función_armónica × perfil_emocional ×         ║
+║                tensión_actual. Penaliza avoid notes en tiempos fuertes.     ║
+║                Sin entrenamiento previo. Resultado reproducible con --seed. ║
+║                Con --corpus aprende transiciones desde MIDIs reales en      ║
+║                lugar de usar tablas sintéticas.                             ║
 ║                                                                              ║
-║    O entrenar y generar en un solo paso:                                     ║
-║       python melody_conditioned_v3.py --engine lstm --train                 ║
-║           --corpus ./midis/ --model-out lstm.pt                             ║
-║           --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8                  ║
+║  grammar       Elaboración Schenkerian en tres capas ancladas al acorde.    ║
+║                Capa 1: selecciona el chord tone más cercano al valor de     ║
+║                contorno como nota estructural de cada compás. Capa 2:       ║
+║                rellena con notas de paso diatónicas entre estructuras.      ║
+║                Capa 3: añade bordaduras y appoggiaturas en compases de      ║
+║                alta tensión. Determinista: misma entrada → misma salida.    ║
+║                Produce melodías más "cantables" que los otros motores.      ║
 ║                                                                              ║
-║  LSTM — REPRESENTACIÓN:                                                      ║
-║    Piano roll cuantizado a semicorchea (16 pasos/compás en 4/4).           ║
-║    Cada paso: un token entero en [0, 130]:                                  ║
-║      0-127  — pitch MIDI                                                    ║
-║      128    — silencio                                                       ║
-║      129    — hold (nota anterior sostenida)                                ║
-║    chord_vector por paso: float32[16]                                       ║
-║      [0:12]  — pitch classes activos en el acorde (0/1)                    ║
-║      [12:16] — función armónica one-hot (T/S/D/?)                          ║
+║  search        Beam search A* (beam=5) sobre el espacio de pitches.         ║
+║                Función de coste local: penaliza avoid notes en tiempo       ║
+║                fuerte (+5.0), notas fuera de escala (+2.5), saltos >12      ║
+║                semitonos, repetición (iv=0); premia chord tones (-1.5) y   ║
+║                consonancias. Garantiza propiedades locales por nota.        ║
+║                Más lento que chord_guided pero produce más coherencia       ║
+║                armónica paso a paso.                                        ║
 ║                                                                              ║
-║  LSTM — ARQUITECTURA:                                                        ║
-║    Embedding(130, d_embed) → concat(chord_vec[16]) →                       ║
-║    LSTM(d_embed+16, hidden, num_layers) → Linear(hidden, 130)              ║
-║    Entrenamiento: truncated BPTT con chunks de 32 pasos.                   ║
-║    Parámetros por defecto (hidden=128, d_embed=32, layers=1): ~114K        ║
+║  genetic       Algoritmo genético. Población de 20 melodías evolucionada    ║
+║                durante 30 generaciones. Fitness multicriterio: armonía      ║
+║                por acorde activo (30%), contorno (20%), suavidad (20%),     ║
+║                variedad rítmica (10%), rango (10%), clímax en proporción    ║
+║                áurea ajustada al perfil (10%). Mejor para encontrar         ║
+║                soluciones globalmente óptimas a costa de más tiempo CPU.    ║
 ║                                                                              ║
-║  LSTM — AUGMENTACIÓN:                                                        ║
-║    Transposición ±5 semitonos (×11 ejemplos por MIDI).                     ║
-║    Ventanas solapadas de 64 pasos con stride 16.                            ║
+║  lstm          Red neuronal LSTM pequeña (~114K parámetros) entrenada       ║
+║                sobre un corpus propio de MIDIs. Aprende el estilo           ║
+║                melódico del corpus y lo aplica condicionado al acorde.      ║
+║                Diseñado para CPU con poca RAM. Ver sección LSTM más abajo.  ║
 ║                                                                              ║
-║  PERFILES EMOCIONALES (--profile):                                           ║
-║    heroic | melancholic | playful | tense | serene | mysterious |           ║
-║    triumphant | elegiac | ecstatic | brooding | pastoral | agitated |       ║
-║    hypnotic | flamenco | tanguero | custom                                  ║
+╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║  POST-PROCESADO:                                                             ║
-║    --ornaments O  appoggiatura | passing | neighbor | all                   ║
-║    --fix-avoid    Corrige avoid notes en tiempos fuertes                    ║
+║  FUENTES DE ACORDES                                                          ║
+║  ──────────────────                                                          ║
+║  --chords "Am:2 G:2 F:2 E7:2"                                               ║
+║      Texto directo. Formato: NombreAcorde:beats. Si se omiten los beats,    ║
+║      se asumen 4 (un compás en 4/4). Soporta: mayor (C), menor (Cm),       ║
+║      séptimas (G7, Cmaj7, Am7), disminuidos (Bdim, Bdim7), aumentados      ║
+║      (Caug), semidisminuidos (Bø), sus (Csus4, Csus2), extensiones         ║
+║      (C9, Cadd9, C13) e inversiones ignoradas (C/E → C).                   ║
 ║                                                                              ║
-║  OPCIONES PRINCIPALES:                                                       ║
+║  --chords-json prog.chords.json                                              ║
+║      JSON con lista de acordes. Formatos soportados:                        ║
+║        ["Am:2", "G:2", "F:2"]            (lista de strings)                ║
+║        [{"name":"Am","duration":2}, …]   (lista de objetos)                ║
+║        {"chords": […]}                   (objeto con clave "chords")        ║
+║                                                                              ║
+║  --chords-midi fichero.mid                                                   ║
+║      Extrae acordes del track de armonía de un MIDI. Por defecto usa        ║
+║      track index 2, canal 1. Ajustable con --chords-midi-track,             ║
+║      --chords-midi-channel y --chords-midi-window (ventana de análisis      ║
+║      en beats, default 0.5). Usa template matching para identificar         ║
+║      el acorde más probable en cada ventana.                                ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  PERFILES EMOCIONALES (--profile)                                            ║
+║  ─────────────────────────────────                                           ║
+║  Cada perfil configura simultáneamente: modo de escala por defecto,         ║
+║  rango de velocidades MIDI, pesos de intervalos para el Markov,             ║
+║  multiplicadores de tipo de nota (CT/T/PT/NT), forma del contorno           ║
+║  melódico, curva de tensión compás a compás y posición esperada del         ║
+║  clímax. Todos son valores por defecto: cualquiera puede sobreescribirse    ║
+║  con --mode, --contour, --tension-curve, --range.                           ║
+║                                                                              ║
+║  Perfil       Escala              Dinámica    Característica principal       ║
+║  ──────────── ─────────────────── ─────────── ──────────────────────────    ║
+║  heroic       major               f–ff        quintas y octavas, arco       ║
+║  melancholic  minor               p–mf        descenso por semitono         ║
+║  playful      major               mf–f        saltos cortos, ondulación     ║
+║  tense        phrygian            mf–f        semitonos y tritono, ascend.  ║
+║  serene       major               p–mf        grados conjuntos, arco suave  ║
+║  mysterious   phrygian_dominant   pp–mp       tritonos, evita chord tones   ║
+║  triumphant   major               f–ff        quintas, clímax al 85%        ║
+║  elegiac      melodic_minor       pp–mf       6ª descendente, clímax 35%    ║
+║  ecstatic     lydian              f–fff       #11, euforia desde el inicio  ║
+║  brooding     locrian             ppp–mp      semitono orbita, peso oscuro  ║
+║  pastoral     mixolydian          p–mf        grados conjuntos, sin drama   ║
+║  agitated     chromatic           mf–f        caos, dinámica extrema        ║
+║  hypnotic     pentatonic_minor    p–mp        repetición, tensión plana     ║
+║  flamenco     phrygian_dominant   pp–fff      cadencia andaluza b2→1        ║
+║  tanguero     minor               mf–f        4ª desc., micro-arcos frase   ║
+║  custom       major               mf–f        sin sesgo, para uso manual    ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  CONDICIONAMIENTO EMOCIONAL                                                  ║
+║  ──────────────────────────                                                  ║
+║  El perfil no es decorativo: actúa en siete capas simultáneas.              ║
+║                                                                              ║
+║  1. Modo de escala       — universo de notas disponibles                    ║
+║  2. Curva de tensión     — t_val[0,1] por compás; modula la intensidad      ║
+║                            armónica a lo largo del tiempo                   ║
+║  3. Pesos de intervalo   — distribución de saltos en el Markov              ║
+║  4. Pesos CT/T/PT/NT     — qué tipo de nota se prefiere sobre cada acorde  ║
+║  5. Contorno global      — forma macroscópica de la melodía (arch, desc…)  ║
+║  6. Rango de velocidades — dinámica expresiva del instrumento               ║
+║  7. Posición del clímax  — criterio de selección del mejor candidato        ║
+║                                                                              ║
+║  El parámetro t_val (tensión del compás) modula nota a nota:                ║
+║    CT_weight *= (1.0 - t_val × 0.3)   ← menos chord tones a más tensión   ║
+║    T_weight  *= (1.0 + t_val × 1.5)   ← más tensiones                      ║
+║    NT_weight  = t_val × 1.2           ← no-armónicas solo con tensión alta  ║
+║  Además, avoid notes en tiempo fuerte reciben ×0.05 independientemente.    ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  POST-PROCESADO                                                              ║
+║  ──────────────                                                              ║
+║  --fix-avoid      Recorre la melodía generada y corrige avoid notes que     ║
+║                   caen en tiempos fuertes. Usa nearest_admissible con       ║
+║                   preservación de dirección de contorno. Respeta notas de   ║
+║                   paso y bordaduras (is_passing_note / is_neighbor_note).   ║
+║                                                                              ║
+║  --ornaments O    Ornamentación post-generación. Tipos disponibles:         ║
+║    appoggiatura — nota disonante (±1-2 st) antes de la nota real,          ║
+║                   duración 25% + 75%. Solo en notas ≥ 0.75 beats.          ║
+║    passing      — nota de paso escalonada hacia la siguiente nota,          ║
+║                   divide la nota en 60%+20%+20%. Solo ≥ 1.0 beat.          ║
+║    neighbor     — bordadura superior o inferior y vuelta, 50%+25%+25%.     ║
+║    all          — aplica los tres según contexto.                           ║
+║  --ornament-prob F  Probabilidad de ornamentar cada nota (default: 0.35).  ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  LSTM — DESCRIPCIÓN TÉCNICA                                                  ║
+║  ──────────────────────────                                                  ║
+║  Problema: aprender el estilo melódico de un corpus propio de MIDIs         ║
+║  y generalizarlo a progresiones de acordes nuevas.                          ║
+║                                                                              ║
+║  Representación — piano roll cuantizado a semicorchea:                      ║
+║    Cada compás en 4/4 genera 16 pasos (1 paso = semicorchea = 0.25 beats). ║
+║    Cada paso es un token entero en [0, 110]:                                ║
+║      0–108  pitch MIDI (A0–C8)                                              ║
+║      109    silencio                                                         ║
+║      110    hold (la nota anterior continúa)                                ║
+║    Ejemplo: una redonda Do4 (MIDI 60) en un compás 4/4 ocupa 16 tokens:    ║
+║      [60, 110, 110, 110, 110, 110, 110, 110,                                ║
+║       110, 110, 110, 110, 110, 110, 110, 110]                               ║
+║                                                                              ║
+║  Condicionamiento — chord_vector[16] por paso:                              ║
+║    [0:12]  pitch classes activos en el acorde (0.0 / 1.0)                  ║
+║    [12:16] función armónica one-hot: T=12, S=13, D=14, ?=15                ║
+║    Se calcula estáticamente para toda la progresión antes de generar.      ║
+║    No añade parámetros al modelo — es una feature de entrada.               ║
+║                                                                              ║
+║  Arquitectura (~114K parámetros con defaults):                              ║
+║    Embedding(111, 32)        →  emb[B, T, 32]                               ║
+║    concat(emb, chord_vec)    →  inp[B, T, 48]   (32 + 16)                  ║
+║    LSTM(48 → 128, layers=1)  →  out[B, T, 128]                              ║
+║    Linear(128 → 111)         →  logits[B, T, 111]                           ║
+║                                                                              ║
+║  Entrenamiento — truncated BPTT:                                             ║
+║    Cada ventana de 64 pasos se divide en chunks de 32. El estado oculto    ║
+║    se mantiene entre chunks pero el grafo de gradientes se corta            ║
+║    (detach). Reduce la memoria de gradientes en ~2×.                        ║
+║    Con batch=16, chunk=32, hidden=128: ~1MB de activaciones por chunk.      ║
+║    Tiempo estimado por época (500 MIDIs augmentados): 3-8 min en CPU.      ║
+║                                                                              ║
+║  Augmentación del corpus:                                                    ║
+║    · Transposición: cada MIDI se transpone ±5 semitonos → ×11 ejemplos.   ║
+║      Las transposiciones que llevan notas fuera de [A0, C8] se descartan.  ║
+║    · Ventanas solapadas: stride 16 pasos sobre secuencias de 64 pasos.     ║
+║      Un MIDI de 32 compases (512 pasos) genera ~28 ventanas por tono.      ║
+║    Resultado con 500 MIDIs: ~168K ventanas de entrenamiento.                ║
+║                                                                              ║
+║  Generación — autoregresiva con sesgo de contorno:                          ║
+║    En cada paso, los logits se modifican antes del sampling:                ║
+║    · Bias de contorno: penaliza pitches lejos del target de altura          ║
+║      (proporcional a la distancia relativa en el rango).                   ║
+║    · Bias de escala: penaliza notas fuera de la escala cuando t_val < 0.5. ║
+║    · Penaliza hold en el primer tiempo del compás.                          ║
+║    · Penaliza saltos > 12 semitonos desde el último pitch real.             ║
+║    Sampling: temperature (suaviza/agudiza la distribución) + top-k          ║
+║    (limita la búsqueda a los k tokens más probables).                       ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  SCORING (selección del mejor candidato entre N)                             ║
+║  ────────────────────────────────────────────────                            ║
+║  score_melody devuelve un valor en [0, 1] como media ponderada de:          ║
+║    15%  Consonancia con la escala (% notas en la escala)                    ║
+║    20%  Armonía con el acorde activo (CT=1.0, T=0.7, PT=0.5, NT=0.1)       ║
+║         Avoid notes en tiempo fuerte penalizadas ×0.2                       ║
+║    15%  Suavidad (% intervalos ≤ 7 semitonos)                               ║
+║    15%  Conformidad con el contorno del perfil                              ║
+║    10%  Rango melódico razonable (óptimo: 12 semitonos)                     ║
+║    10%  Variedad rítmica (nº de duraciones distintas)                       ║
+║     8%  Arco dinámico (desviación estándar de velocidades)                  ║
+║     7%  Posición del clímax (ajustada al perfil, p.ej. 0.618 para serene)  ║
+║                                                                              ║
+║  score_melody_vs_progression (disponible con --verbose) da además:          ║
+║    · Score por acorde individual                                             ║
+║    · Lista de colisiones (avoid notes en tiempo fuerte con su beat)         ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  EJEMPLOS DE USO                                                             ║
+║  ───────────────                                                             ║
+║                                                                              ║
+║  ── Motor chord_guided ──────────────────────────────────────────────────   ║
+║                                                                              ║
+║  # Básico: progresión en La menor, 8 compases, perfil melancólico           ║
+║  python melody_conditioned_v3.py                                             ║
+║      --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8                        ║
+║      --profile melancholic                                                   ║
+║                                                                              ║
+║  # Con ornamentación y corrección de avoid notes                             ║
+║  python melody_conditioned_v3.py                                             ║
+║      --chords "Dm:2 C:2 Bb:2 A7:2" --key Dm --bars 8                       ║
+║      --profile tanguero --ornaments all --ornament-prob 0.4 --fix-avoid     ║
+║                                                                              ║
+║  # Acordes desde MIDI, incluir armonía en la salida                         ║
+║  python melody_conditioned_v3.py                                             ║
+║      --chords-midi harmony.mid --key Am --bars 16                           ║
+║      --profile flamenco --include-chords                                     ║
+║                                                                              ║
+║  # Con corpus real para el Markov                                            ║
+║  python melody_conditioned_v3.py                                             ║
+║      --corpus ./midis/ --chords "C:4 Am:4 F:4 G:4" --key C --bars 16       ║
+║      --profile serene --candidates 5                                         ║
+║                                                                              ║
+║  # Curva de tensión manual (sube, clímax, baja) + contorno personalizado    ║
+║  python melody_conditioned_v3.py                                             ║
+║      --chords "Em:4 C:4 G:4 D:4" --key Em --bars 16                        ║
+║      --tension-curve "0.2,0.3,0.5,0.7,0.9,0.9,0.7,0.5,0.4,0.3"            ║
+║      --contour arch --profile heroic                                         ║
+║                                                                              ║
+║  ── Motor grammar ───────────────────────────────────────────────────────   ║
+║                                                                              ║
+║  # Elaboración Schenkerian — produce melodías más "clásicas"                 ║
+║  python melody_conditioned_v3.py --engine grammar                            ║
+║      --chords "C:4 Am:4 F:4 G:4" --key C --bars 8                          ║
+║      --profile serene --ornaments passing neighbor                           ║
+║                                                                              ║
+║  # Modo frigio con contorno descendente                                      ║
+║  python melody_conditioned_v3.py --engine grammar                            ║
+║      --chords "Am:4 G:4 F:4 E:4" --key Am --mode phrygian --bars 8         ║
+║      --profile mysterious --contour descending                               ║
+║                                                                              ║
+║  ── Motor search ────────────────────────────────────────────────────────   ║
+║                                                                              ║
+║  # A* con corrección de avoid notes — máxima coherencia armónica local      ║
+║  python melody_conditioned_v3.py --engine search                             ║
+║      --chords "Cm:2 Ab:2 Eb:2 Bb:2" --key Cm --bars 8                      ║
+║      --profile brooding --fix-avoid                                          ║
+║                                                                              ║
+║  ── Motor genetic ───────────────────────────────────────────────────────   ║
+║                                                                              ║
+║  # Genético — mejor resultado global a costa de más tiempo                   ║
+║  python melody_conditioned_v3.py --engine genetic                            ║
+║      --chords "D:4 A:4 Bm:4 G:4" --key D --bars 8                          ║
+║      --profile triumphant --candidates 5                                     ║
+║                                                                              ║
+║  ── Motor lstm — flujo completo ─────────────────────────────────────────   ║
+║                                                                              ║
+║  # Paso 1: Preprocesar corpus (solo hace falta una vez)                      ║
+║  python melody_conditioned_v3.py --preprocess                                ║
+║      --corpus ./midis/ --dataset corpus.npz --verbose                        ║
+║                                                                              ║
+║  # Paso 2: Entrenar                                                          ║
+║  python melody_conditioned_v3.py --train                                     ║
+║      --dataset corpus.npz --model-out lstm.pt                               ║
+║      --epochs 30 --hidden 128 --batch-size 16 --verbose                     ║
+║                                                                              ║
+║  # Paso 3: Generar con el modelo entrenado                                   ║
+║  python melody_conditioned_v3.py --engine lstm                               ║
+║      --model lstm.pt                                                         ║
+║      --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8                        ║
+║      --profile melancholic --temperature 0.9 --top-k 10                     ║
+║                                                                              ║
+║  # Todo en un paso (preprocesa si no existe el .npz, entrena y genera)      ║
+║  python melody_conditioned_v3.py --engine lstm --train                       ║
+║      --corpus ./midis/ --dataset corpus.npz --model-out lstm.pt             ║
+║      --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8                        ║
+║                                                                              ║
+║  # LSTM con ornamentación y fix-avoid post-generación                        ║
+║  python melody_conditioned_v3.py --engine lstm                               ║
+║      --model lstm.pt --chords "Dm:2 C:2 Bb:2 A7:2" --key Dm --bars 16      ║
+║      --profile tanguero --ornaments passing --fix-avoid                      ║
+║      --temperature 0.8 --top-k 15 --candidates 3                            ║
+║                                                                              ║
+║  # LSTM con modelo más grande (más expresivo, más lento de entrenar)         ║
+║  python melody_conditioned_v3.py --train                                     ║
+║      --dataset corpus.npz --model-out lstm_large.pt                         ║
+║      --hidden 256 --d-embed 64 --num-layers 2 --epochs 50                   ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  OPCIONES COMPLETAS                                                          ║
+║  ──────────────────                                                          ║
+║  General:                                                                    ║
 ║    --engine E          chord_guided|grammar|search|genetic|lstm             ║
-║    --train             Activar entrenamiento LSTM                           ║
-║    --preprocess        Preprocesar corpus a .npz (sin entrenar)             ║
-║    --corpus DIR        Directorio con MIDIs del corpus                      ║
-║    --dataset FILE      Fichero .npz preprocesado (default: corpus.npz)     ║
-║    --model-out FILE    Guardar modelo entrenado (default: lstm.pt)          ║
-║    --model FILE        Cargar modelo LSTM para generar                      ║
-║    --epochs N          Épocas de entrenamiento (default: 30)                ║
-║    --hidden N          Tamaño del estado oculto (default: 128)              ║
+║    --key KEY           Tonalidad: C, Am, F#, Bb… (default: C)              ║
+║    --mode MODE         Modo de escala (default: auto desde perfil)          ║
+║    --bars N            Compases a generar (default: 16)                     ║
+║    --tempo BPM         Tempo en BPM (default: 120)                          ║
+║    --time-sig S        Compás: 4/4, 3/4, 6/8… (default: 4/4)             ║
+║    --profile P         Estado emocional (default: serene)                   ║
+║    --rhythm R          Perfil rítmico: flowing|march|syncopated|baroque|    ║
+║                        jazz|sparse|dense (default: flowing)                 ║
+║    --contour C         Contorno: auto|arch|ascending|descending|wave|       ║
+║                        plateau|inverted|erratic|custom (default: auto)      ║
+║    --contour-values V  Valores para --contour custom: "0,0.3,0.8,1,0.5"    ║
+║    --tension-curve V   Curva de tensión compás a compás: "0.2,0.5,0.8,…"  ║
+║    --range LOW HIGH    Rango MIDI (default: 60 84, Do4–Do6)                ║
+║    --candidates N      Generar N candidatos y exportar el mejor (def: 3)   ║
+║    --seed N            Semilla aleatoria para reproducibilidad (def: 42)    ║
+║    --verbose           Informe detallado: config, scores, colisiones        ║
+║    --dry-run           Mostrar parámetros resueltos sin generar             ║
+║                                                                              ║
+║  Fuentes de acordes:                                                         ║
+║    --chords TEXT            "Am:2 G:2 F:2 E7:2"                             ║
+║    --chords-json FILE        .chords.json                                    ║
+║    --chords-midi FILE        MIDI con track de armonía                      ║
+║    --chords-midi-track N     Índice del track de armonía (default: 2)       ║
+║    --chords-midi-channel N   Canal MIDI de armonía (default: 1)             ║
+║    --chords-midi-window F    Ventana de análisis en beats (default: 0.5)    ║
+║                                                                              ║
+║  Corpus (chord_guided + lstm):                                               ║
+║    --corpus DIR        Directorio con MIDIs                                  ║
+║    --max-files N       Máximo MIDIs a procesar (0=todos, default: 0)        ║
+║                                                                              ║
+║  LSTM específico:                                                             ║
+║    --train             Entrenar antes de generar (o solo entrenar)           ║
+║    --preprocess        Solo preprocesar corpus a .npz                        ║
+║    --dataset FILE      Dataset preprocesado (default: corpus.npz)           ║
+║    --model-out FILE    Guardar modelo entrenado (default: lstm.pt)           ║
+║    --model FILE        Cargar modelo para generar                            ║
+║    --epochs N          Épocas de entrenamiento (default: 30)                 ║
+║    --hidden N          Tamaño estado oculto (default: 128)                  ║
 ║    --d-embed N         Dimensión del embedding (default: 32)                ║
-║    --num-layers N      Capas LSTM (default: 1)                              ║
+║    --num-layers N      Capas LSTM: 1 para CPU, 2 para GPU (default: 1)     ║
 ║    --batch-size N      Batch size (default: 16)                             ║
 ║    --chunk-size N      Pasos por chunk BPTT (default: 32)                  ║
 ║    --lr F              Learning rate (default: 0.001)                       ║
-║    --max-files N       Máximo MIDIs a cargar (0=todos, default: 0)         ║
-║    --temperature F     Temperatura de sampling (default: 1.0)               ║
-║    --top-k N           Top-k sampling (0=desactivado, default: 10)          ║
-║    --key KEY           Tonalidad (default: C)                               ║
-║    --bars N            Compases (default: 16)                               ║
-║    --chords TEXT       Progresión en texto                                  ║
-║    --chords-json FILE  Progresión desde JSON                                ║
-║    --chords-midi FILE  Progresión desde MIDI                                ║
-║    --output FILE       Fichero de salida (default: melody_conditioned.mid)  ║
-║    --include-chords    Incluir track de acordes en el MIDI de salida        ║
-║    --seed N            Semilla aleatoria (default: 42)                      ║
-║    --verbose           Informe detallado                                    ║
-║    --dry-run           Mostrar parámetros sin generar                       ║
+║    --temperature F     Sampling: <1 determinista, >1 aleatorio (def: 1.0)  ║
+║    --top-k N           Solo top-k tokens más probables (0=off, def: 10)    ║
 ║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:    mido, numpy                                                   ║
-║    LSTM:       torch                                                         ║
-║    Opcional:   music21 (detección de acordes mejorada desde MIDI)           ║
+║  Post-procesado:                                                             ║
+║    --ornaments O [O…]  appoggiatura|passing|neighbor|all                    ║
+║    --ornament-prob F   Probabilidad por nota (default: 0.35)                ║
+║    --fix-avoid         Corregir avoid notes en tiempos fuertes              ║
+║                                                                              ║
+║  Exportación:                                                                ║
+║    --output FILE       Fichero MIDI de salida (def: melody_conditioned.mid) ║
+║    --include-chords    Añadir track de acordes al MIDI de salida            ║
+║    --export-motif      Exportar motivo semilla (.motif.mid, 2 compases)     ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  SALIDAS                                                                     ║
+║  ───────                                                                     ║
+║  melody_conditioned.mid        Melodía principal (mejor candidato)          ║
+║  melody_conditioned_v2.mid     Segundo candidato (si --candidates ≥ 2)     ║
+║  melody_conditioned_v3.mid     Tercer candidato  (si --candidates ≥ 3)     ║
+║  melody_conditioned.melody.json  Notas, duraciones, score y detalle         ║
+║  melody_conditioned.motif.mid  Motivo semilla (con --export-motif)          ║
+║                                                                              ║
+║  El JSON incluye score global y desglose por criterio:                      ║
+║    consonance, harmony, smoothness, contour, range, variety, arc, climax   ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  DEPENDENCIAS                                                                ║
+║  ────────────                                                                ║
+║    pip install mido numpy          (siempre requerido)                       ║
+║    pip install torch               (solo para --engine lstm)                 ║
+║    pip install music21             (opcional: mejora detección de acordes)   ║
+║                                                                              ║
+║  Formato del corpus MIDI para LSTM:                                          ║
+║    Track 0 — metadatos (tempo, time signature)                              ║
+║    Track 1 — melodía  (canal 0)                                             ║
+║    Track 2 — acordes  (canal 1)                                             ║
+║  MIDIs sin track 2 o con menos de 2 pistas se descartan en el preproceso.  ║
+║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -2159,7 +2459,7 @@ def train_lstm(dataset_path: str,
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, patience=4, factor=0.5, min_lr=1e-5, verbose=False)
+        optimizer, patience=4, factor=0.5, min_lr=1e-5)
     criterion = nn.CrossEntropyLoss()
 
     win_len = rolls.shape[1]  # 64
