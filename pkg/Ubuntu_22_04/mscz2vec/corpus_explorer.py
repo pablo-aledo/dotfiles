@@ -641,7 +641,7 @@ def cmd_health(args):
         n = len(durs)
 
         def pct_val(p):
-            return durs[int(n * p / 100)]
+            return durs[min(int(n * p / 100), n - 1)]
 
         print(f"  {bold('DURACIÓN (segundos)')}")
         print(f"  {'Mínima':<25} {pct_val(0):.1f}s")
@@ -788,10 +788,23 @@ def cmd_index(args):
         print(red("\nNo se pudo vectorizar ningún archivo."))
         return
 
+    # Filtrar vectores con dimensiones incorrectas (debería ser N_DIMS)
+    clean_vectors, clean_paths, clean_meta = [], [], []
+    bad = 0
+    for v, p, m in zip(vectors, paths, metadata):
+        if v is not None and len(v) == N_DIMS and all(x == x for x in v):  # len OK y sin NaN
+            clean_vectors.append(v)
+            clean_paths.append(p)
+            clean_meta.append(m)
+        else:
+            bad += 1
+    if bad:
+        print(yellow(f"  {bad} vectores descartados por dimensiones incorrectas"))
+
     # Guardar índice
-    arr_vectors  = np.array(vectors, dtype=np.float32)
-    arr_paths    = np.array(paths)
-    arr_meta     = np.array([json.dumps(m) for m in metadata])
+    arr_vectors  = np.array(clean_vectors, dtype=np.float32)
+    arr_paths    = np.array(clean_paths)
+    arr_meta     = np.array([json.dumps(m) for m in clean_meta])
 
     np.savez_compressed(
         str(output),
@@ -803,8 +816,8 @@ def cmd_index(args):
 
     elapsed = time.time() - t_start
     print(f"\n{bold('ÍNDICE GENERADO')}")
-    print(f"  Vectorizados: {green(str(len(vectors)))}")
-    print(f"  Errores:      {red(str(errors))}")
+    print(f"  Vectorizados: {green(str(len(clean_vectors)))}")
+    print(f"  Errores:      {red(str(errors + bad))}")
     print(f"  Tiempo:       {elapsed:.1f}s")
     print(f"  Archivo:      {cyan(str(output))}")
     print(f"\n  Siguiente: {bold(f'python corpus_explorer.py cluster {output}')}\n")
@@ -977,7 +990,8 @@ def cmd_cluster(args):
         json.dump({"k": k, "n_total": n, "clusters": cluster_data}, f, indent=2)
 
     print(f"\n  Clusters guardados: {cyan(str(out_path))}")
-    print(f"\n  Siguiente: {bold(f'python corpus_explorer.py search {index_path} \"tu intención\"')}\n")
+    _next = f"python corpus_explorer.py search {index_path} \"tu intención\""
+    print(f"\n  Siguiente: {bold(_next)}\n")
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1468,7 +1482,8 @@ def cmd_seed(args):
 
         elif resp in ("refinar", "refine", "ajustar"):
             print(f"\n  {bold('¿Cómo refinar?')}")
-            print(f"  {dim('Añade palabras: \"más oscuro\", \"menos denso\", \"algo como el 2 pero más grave\"')}\n")
+            _ejemplos = 'Añade palabras: "más oscuro", "menos denso", "algo como el 2 pero más grave"'
+            print(f"  {dim(_ejemplos)}\n")
             refinement = input("  > ").strip()
             if refinement:
                 seed_state["current_query"] = refinement
