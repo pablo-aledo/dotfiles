@@ -202,8 +202,18 @@ import struct
 import random
 import argparse
 import hashlib
+import threading
 from pathlib import Path
 from collections import Counter, defaultdict
+
+# Forzar UTF-8 en stdin/stdout para soportar caracteres especiales (tildes, ñ, etc.)
+# independientemente del locale del sistema.
+if hasattr(sys.stdin, "reconfigure"):
+    try:
+        sys.stdin.reconfigure(encoding="utf-8", errors="replace")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 # ─── Dependencias opcionales ────────────────────────────────────────
 
@@ -1281,7 +1291,11 @@ def cmd_search(args):
 # ════════════════════════════════════════════════════════════════════
 
 def _play_midi(path: str, seconds: int = 20):
-    """Reproduce un MIDI brevemente con pygame."""
+    """Reproduce un MIDI con pygame bloqueando hasta timeout o Enter.
+
+    Usa select() en Unix para esperar stdin sin consumir el \\n del buffer,
+    de modo que el input("  > ") del bucle principal sigue funcionando.
+    """
     if not HAS_PYGAME:
         print(yellow("  pygame no instalado — no se puede reproducir."))
         return
@@ -1289,12 +1303,51 @@ def _play_midi(path: str, seconds: int = 20):
         pygame.mixer.init()
         pygame.mixer.music.load(path)
         pygame.mixer.music.play()
-        print(f"  {green('▶')} Reproduciendo {Path(path).name} ({seconds}s)... ", end="", flush=True)
-        time.sleep(seconds)
-        pygame.mixer.music.stop()
-        print(green("■"))
+        print(f"  {green('▶')} {bold(Path(path).name)}"
+              f"  {dim(f'({seconds}s — Enter para parar)')}", flush=True)
     except Exception as e:
         print(red(f"  Error reproduciendo: {e}"))
+        return
+
+    # Esperar hasta timeout o hasta que llegue un byte en stdin
+    # select() devuelve sin consumir la línea completa; readline() la consume
+    # para que el input() posterior no la vea.
+    import select
+    deadline = time.time() + seconds
+    stopped_early = False
+    try:
+        while True:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            ready, _, _ = select.select([sys.stdin], [], [], min(remaining, 0.2))
+            if ready:
+                sys.stdin.readline()   # consume la línea (el Enter)
+                stopped_early = True
+                break
+    except (AttributeError, OSError):
+        # Fallback si select no está disponible (Windows sin soporte)
+        try:
+            import msvcrt
+            deadline2 = time.time() + seconds
+            while time.time() < deadline2:
+                if msvcrt.kbhit():
+                    msvcrt.getwch()   # consume la tecla sin eco
+                    stopped_early = True
+                    break
+                time.sleep(0.1)
+        except ImportError:
+            time.sleep(seconds)       # último recurso: bloqueo simple
+
+    try:
+        pygame.mixer.music.stop()
+    except Exception:
+        pass
+
+    if stopped_early:
+        print(f"  {yellow('■')} {dim('Parado.')}")
+    else:
+        print(f"  {green('■')} {dim('Fin.')}")
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1423,120 +1476,132 @@ def cmd_seed(args):
             print(f"      {cyan(sim_bar)} {sim:.2f}")
 
             if HAS_PYGAME:
-                print(f"      {dim('tecla p para escuchar')}")
+                print(f"      {dim('p{rank} para escuchar')}")
 
             shown.append(idx)
             seed_state["seen_indices"].append(idx)
 
         print()
 
-        # ── Opciones de respuesta ───────────────────────────────────
-        print(f"  {bold('¿Qué hacemos?')}")
-        print(f"  {dim('Opciones:')}")
-        print(f"    {cyan('1-5')}        — este se acerca")
-        print(f"    {cyan('varios')}     — p.ej. \"1 3\" (elegir varios)")
-        if HAS_PYGAME:
-            print(f"    {cyan('p1-p5')}      — escuchar ese fragmento")
-        print(f"    {cyan('ninguno')}    — nada de esto")
-        print(f"    {cyan('más')}        — buscar más similares a los elegidos")
-        print(f"    {cyan('refinar')}    — ajustar la búsqueda con más palabras")
-        print(f"    {cyan('listo')}      — tengo suficiente orientación")
-        print(f"    {cyan('guardar')}    — guardar estado y salir")
-        print()
+        # ── Sub-bucle de interacción: permanece en la misma ronda
+        #    mientras el usuario solo escucha (p1-p5).
+        #    Sale del sub-bucle cuando el usuario toma una decisión real.
+        while True:
+            # ── Opciones de respuesta ───────────────────────────────────
+            print(f"  {bold('¿Qué hacemos?')}")
+            print(f"  {dim('Opciones:')}")
+            print(f"    {cyan('1-5')}        — este se acerca")
+            print(f"    {cyan('varios')}     — p.ej. \"1 3\" (elegir varios)")
+            if HAS_PYGAME:
+                print(f"    {cyan('p1-p5')}      — escuchar ese fragmento")
+            print(f"    {cyan('ninguno')}    — nada de esto")
+            print(f"    {cyan('más')}        — buscar más similares a los elegidos")
+            print(f"    {cyan('refinar')}    — ajustar la búsqueda con más palabras")
+            print(f"    {cyan('listo')}      — tengo suficiente orientación")
+            print(f"    {cyan('guardar')}    — guardar estado y salir")
+            print()
 
-        resp = input("  > ").strip().lower()
-        seed_state["history"].append(("response", resp))
+            resp = input("  > ").strip().lower()
+            seed_state["history"].append(("response", resp))
 
-        # ── Interpretar respuesta ───────────────────────────────────
+            # ── Interpretar respuesta ───────────────────────────────────
 
-        if resp in ("listo", "fin", "done", "exit", "q"):
-            break
+            if resp in ("listo", "fin", "done", "exit", "q"):
+                round_n = max_rounds  # fuerza salida del while externo
+                break
 
-        elif resp in ("guardar", "save"):
-            _save_seed_state(seed_state, index_path)
-            break
+            elif resp in ("guardar", "save"):
+                _save_seed_state(seed_state, index_path)
+                round_n = max_rounds
+                break
 
-        elif resp in ("ninguno", "no", "nada", "none"):
-            seed_state["rejected_indices"].extend(shown)
-            # Ampliar radio de búsqueda
-            seed_state["weights"] = np.clip(seed_state["weights"] * 0.7, 0.05, 1.0)
-            print(f"  {dim('Ampliando búsqueda...')}")
+            elif resp in ("ninguno", "no", "nada", "none"):
+                seed_state["rejected_indices"].extend(shown)
+                # Ampliar radio de búsqueda
+                seed_state["weights"] = np.clip(seed_state["weights"] * 0.7, 0.05, 1.0)
+                print(f"  {dim('Ampliando búsqueda...')}")
+                break  # avanza ronda
 
-        elif resp.startswith("p") and resp[1:].isdigit():
-            # Reproducir
-            rank_play = int(resp[1:]) - 1
-            if 0 <= rank_play < len(shown):
-                path_play = str(paths[shown[rank_play]])
-                _play_midi(path_play, seconds=args.preview_seconds)
-            else:
-                print(yellow("  Número fuera de rango."))
-
-        elif resp in ("más", "mas", "more"):
-            if seed_state["chosen_indices"]:
-                # Centrar en los elegidos
-                chosen_vecs = vectors[seed_state["chosen_indices"]]
-                seed_state["query_vec"] = chosen_vecs.mean(axis=0)
-                print(f"  {dim('Centrando en fragmentos elegidos...')}")
-            else:
-                print(f"  {dim('Buscando más en la misma dirección...')}")
-
-        elif resp in ("refinar", "refine", "ajustar"):
-            print(f"\n  {bold('¿Cómo refinar?')}")
-            _ejemplos = 'Añade palabras: "más oscuro", "menos denso", "algo como el 2 pero más grave"'
-            print(f"  {dim(_ejemplos)}\n")
-            refinement = input("  > ").strip()
-            if refinement:
-                seed_state["current_query"] = refinement
-                seed_state["history"].append(("refine", refinement))
-                new_base, new_weights = text_to_query_vector(refinement)
-                if use_llm:
-                    new_vec, new_wts = llm_enrich_query(refinement, new_base, new_weights,
-                                                        provider=provider)
+            elif resp.startswith("p") and resp[1:].isdigit():
+                # Reproducir — NO avanza ronda, vuelve al sub-bucle
+                rank_play = int(resp[1:]) - 1
+                if 0 <= rank_play < len(shown):
+                    path_play = str(paths[shown[rank_play]])
+                    _play_midi(path_play, seconds=args.preview_seconds)
                 else:
-                    new_vec, new_wts = new_base, new_weights
-                # Mezclar con el vector anterior (inercia)
-                alpha = 0.4
-                seed_state["query_vec"] = (
-                    (1 - alpha) * seed_state["query_vec"] + alpha * new_vec
-                )
-                seed_state["weights"] = np.maximum(seed_state["weights"], new_wts)
+                    print(yellow("  Número fuera de rango."))
+                # continúa el sub-bucle (no hay break)
 
-        else:
-            # Intentar parsear números
-            nums = []
-            for token in resp.replace(",", " ").split():
-                if token.isdigit():
-                    n_int = int(token)
-                    if 1 <= n_int <= len(shown):
-                        nums.append(n_int - 1)
+            elif resp in ("más", "mas", "more"):
+                if seed_state["chosen_indices"]:
+                    # Centrar en los elegidos
+                    chosen_vecs = vectors[seed_state["chosen_indices"]]
+                    seed_state["query_vec"] = chosen_vecs.mean(axis=0)
+                    print(f"  {dim('Centrando en fragmentos elegidos...')}")
+                else:
+                    print(f"  {dim('Buscando más en la misma dirección...')}")
+                break  # avanza ronda
 
-            if nums:
-                chosen = [shown[i] for i in nums]
-                seed_state["chosen_indices"].extend(chosen)
-                remaining = [shown[i] for i in range(len(shown)) if i not in nums]
-                seed_state["rejected_indices"].extend(remaining)
-
-                # Actualizar vector hacia los elegidos
-                chosen_vecs = vectors[chosen]
-                target_vec  = chosen_vecs.mean(axis=0)
-                alpha       = 0.5
-                seed_state["query_vec"] = (
-                    (1 - alpha) * seed_state["query_vec"] + alpha * target_vec
-                )
-                # Aumentar peso de dimensiones donde los elegidos son distintos al resto
-                if len(chosen) < len(shown) and remaining:
-                    rejected_vecs = vectors[remaining]
-                    diff          = np.abs(target_vec - rejected_vecs.mean(axis=0))
-                    seed_state["weights"] = np.clip(
-                        seed_state["weights"] + diff * 0.3, 0.1, 1.0
+            elif resp in ("refinar", "refine", "ajustar"):
+                print(f"\n  {bold('¿Cómo refinar?')}")
+                _ejemplos = 'Añade palabras: "más oscuro", "menos denso", "algo como el 2 pero más grave"'
+                print(f"  {dim(_ejemplos)}\n")
+                refinement = input("  > ").strip()
+                if refinement:
+                    seed_state["current_query"] = refinement
+                    seed_state["history"].append(("refine", refinement))
+                    new_base, new_weights = text_to_query_vector(refinement)
+                    if use_llm:
+                        new_vec, new_wts = llm_enrich_query(refinement, new_base, new_weights,
+                                                            provider=provider)
+                    else:
+                        new_vec, new_wts = new_base, new_weights
+                    # Mezclar con el vector anterior (inercia)
+                    alpha = 0.4
+                    seed_state["query_vec"] = (
+                        (1 - alpha) * seed_state["query_vec"] + alpha * new_vec
                     )
+                    seed_state["weights"] = np.maximum(seed_state["weights"], new_wts)
+                break  # avanza ronda
 
-                print(f"  {green(f'✓ {len(chosen)} fragmento(s) seleccionado(s)')}")
-
-                # Preguntar una sola pregunta de cristalización
-                _ask_crystallization_question(seed_state, provider=provider)
             else:
-                print(yellow("  No entendí. Prueba con un número (1-5) o una palabra clave."))
+                # Intentar parsear números
+                nums = []
+                for token in resp.replace(",", " ").split():
+                    if token.isdigit():
+                        n_int = int(token)
+                        if 1 <= n_int <= len(shown):
+                            nums.append(n_int - 1)
+
+                if nums:
+                    chosen = [shown[i] for i in nums]
+                    seed_state["chosen_indices"].extend(chosen)
+                    remaining = [shown[i] for i in range(len(shown)) if i not in nums]
+                    seed_state["rejected_indices"].extend(remaining)
+
+                    # Actualizar vector hacia los elegidos
+                    chosen_vecs = vectors[chosen]
+                    target_vec  = chosen_vecs.mean(axis=0)
+                    alpha       = 0.5
+                    seed_state["query_vec"] = (
+                        (1 - alpha) * seed_state["query_vec"] + alpha * target_vec
+                    )
+                    # Aumentar peso de dimensiones donde los elegidos son distintos al resto
+                    if len(chosen) < len(shown) and remaining:
+                        rejected_vecs = vectors[remaining]
+                        diff          = np.abs(target_vec - rejected_vecs.mean(axis=0))
+                        seed_state["weights"] = np.clip(
+                            seed_state["weights"] + diff * 0.3, 0.1, 1.0
+                        )
+
+                    print(f"  {green(f'✓ {len(chosen)} fragmento(s) seleccionado(s)')}")
+
+                    # Preguntar una sola pregunta de cristalización
+                    _ask_crystallization_question(seed_state, provider=provider)
+                    break  # avanza ronda
+                else:
+                    print(yellow("  No entendí. Prueba con un número (1-5) o una palabra clave."))
+                    # vuelve al sub-bucle sin avanzar ronda
 
     # ── Resumen y generación ────────────────────────────────────────
     _show_seed_summary(seed_state, vectors, paths, meta)
@@ -2655,7 +2720,7 @@ def _build_midi(profile: dict, instrument_group: dict, seed: int = 42) -> mido.M
 
 
 def _play_with_timidity(midi_path: str, soundfont: str = None):
-    """Reproduce un MIDI con timidity."""
+    """Reproduce un MIDI con timidity. Enter (o Ctrl+C) para parar."""
     import subprocess
 
     cmd = ["timidity"]
@@ -2663,13 +2728,45 @@ def _play_with_timidity(midi_path: str, soundfont: str = None):
         cmd += ["-x", f"soundfont {soundfont}"]
     cmd.append(midi_path)
 
-    print(f"  {green('▶')} Reproduciendo... {dim('(Ctrl+C para parar)')}")
+    print(f"  {green('▶')} Reproduciendo... {dim('[Enter para parar]')}")
+
+    stop_event = threading.Event()
+
+    def _input_listener():
+        try:
+            input()
+        except Exception:
+            pass
+        stop_event.set()
+
     try:
-        subprocess.run(cmd, check=False)
+        proc = subprocess.Popen(cmd,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL)
     except FileNotFoundError:
         print(yellow("  timidity no encontrado. Instálalo con: sudo apt install timidity"))
+        return
+
+    listener = threading.Thread(target=_input_listener, daemon=True)
+    listener.start()
+
+    try:
+        while proc.poll() is None and not stop_event.is_set():
+            time.sleep(0.1)
     except KeyboardInterrupt:
-        print()
+        stop_event.set()
+
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+    if stop_event.is_set():
+        print(f"  {yellow('■')} {dim('Parado.')}")
+    else:
+        print(f"  {green('■')} {dim('Fin.')}")
 
 
 # ════════════════════════════════════════════════════════════════════
