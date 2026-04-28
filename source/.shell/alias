@@ -243,3 +243,21 @@ rmsafe(){
     [ "$(pwd | grep usbshare)" != "" ] || [ "$(pwd | grep recycle)" != "" ] && rm -fr "$*"
 }
 
+stats() {
+awk '{
+n++;
+sum += $1;
+delta = $1 - mean;
+mean += delta/n;
+m2 += delta*($1 - mean);
+}
+END {
+variance = m2/n;
+print "count:", n;
+print "sum:", sum;
+print "mean:", mean;
+print "var:", variance;
+print "std:", sqrt(variance);
+}'
+}
+
