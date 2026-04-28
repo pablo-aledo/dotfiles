@@ -4,6 +4,7 @@ alias lh='ls -lh'
 alias lt='ls -lht'
 alias ltr='ls -lhtr'
 alias lhsr='ls -lhSr'
+alias lss='ls -lhSr'
 alias minikube='sudo /usr/local/bin/minikube'
 alias dfh='df -h'
 
