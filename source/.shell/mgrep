@@ -17,6 +17,14 @@ mgrep(){
     source /tmp/script
 }
 
+tgrep(){
+for a in *
+do
+	coms=$( comm -12 <(cat $a | tokenize | sort -u) <(cat $1 | sort -u) )
+	echo $(echo $coms | grep -v '^$' | wc -l) $a: $(echo $coms | paste -d -s)
+done | sort -g
+}
+
 amgrep(){
     [ $1 = '-' ] && file='' || file=$1
     strings -n1 $file > /tmp/file
