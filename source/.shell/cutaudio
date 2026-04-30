@@ -8,3 +8,7 @@ cutaudio(){
 	d=$(($t2-$t1))
 	ffmpeg -ss $t1 -t $d -i $1 $1.cut.mp3
 }
+
+audio_rev(){
+    ffmpeg -i $1 -af areverse $1.rev.mp3
+}
