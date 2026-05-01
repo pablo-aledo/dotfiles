@@ -128,6 +128,8 @@ fl_info(){
     [ "$(echo $1 | grep '^{"path": "[^"]*", "id": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f8 | sed 's/\.mid//g'; return }
     [ "$(echo $1 | grep '^{"path": "[^"]*", "file": "[^"]*", "download": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f12 | sed 's/\.mid//g'; return }
     [ "$(echo $1 | grep '^{"authorUserId":".*$')" != "" ] && { echo $1 | sed 's/.*"title":"\([^"]*\)".*/\1/g'; return }
+    [ "$(echo $1 | grep '^{"title": ".*", "filename": ".*"}')" != "" ] && { echo $1 | sed 's/.*"title": "\([^"]*\)".*/\1/g'; return }
+    [ "$(echo $1 | grep '^{"title": ".*", "path": ".*"}')" != "" ] && { echo $1 | sed 's/.*"title": "\([^"]*\)".*/\1/g'; return }
 }
 
 fl_file(){
@@ -136,6 +138,8 @@ fl_file(){
     [ "$(echo $1 | grep '^{"path": "[^"]*", "id": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f8; return }
     [ "$(echo $1 | grep '^{"path": "[^"]*", "file": "[^"]*", "download": "[^"]*"}$')" != "" ] && { echo $1 | cut -d'"' -f12; return }
     [ "$(echo $1 | grep '^{"authorUserId":".*$')" != "" ] && { echo $1 | sed 's/.*"name":"\([^"]*\)".*/\1/g' | sed 's/$/.mscz/g'; return }
+    [ "$(echo $1 | grep '^{"title": ".*", "filename": ".*"}')" != "" ] && { echo $1 | cut -d'"' -f8; return }
+    [ "$(echo $1 | grep '^{"title": ".*", "path": ".*"}')" != "" ] && { echo $1 | cut -d'"' -f8 | cut -d/ -f3; return }
 }
 
 fl_id(){
