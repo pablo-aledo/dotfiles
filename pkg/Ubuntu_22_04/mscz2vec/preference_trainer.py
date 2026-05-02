@@ -815,6 +815,33 @@ class PreferenceModel:
         logit = sum(self.weights[i] * vector[i] for i in range(n)) + self.bias
         return self._sigmoid(logit)
 
+    def score_with_memory(self, vector: list, path: str = "") -> float:
+        """
+        Score que mezcla la predicción del modelo con el rating medio
+        anotado para esta pieza concreta.
+
+        Cuando una pieza tiene N anotaciones explícitas, su rating medio
+        se mezcla con la predicción del modelo con peso w_mem = N/(N+k),
+        donde k controla cuántas anotaciones hacen falta para "confiar"
+        en la memoria. Con k=5: 5 anot. → 50%, 10 anot. → 67%, 20 → 80%.
+
+        Esto garantiza que correcciones repetidas con `set` se reflejen
+        aunque el modelo lineal global no pueda converger por conflicto
+        con otras piezas de features similares.
+        """
+        model_pred = self.score(vector)
+        if not path:
+            return model_pred
+        ratings = [r for r in self.annotated_paths.get(path, [])
+                   if isinstance(r, (int, float))]
+        if not ratings:
+            return model_pred
+        k       = 5.0   # anotaciones para dar 50% de peso a la memoria
+        n       = len(ratings)
+        w_mem   = n / (n + k)
+        mem_score = (sum(ratings) / n - 1) / 4.0   # normalizar a [0,1]
+        return (1.0 - w_mem) * model_pred + w_mem * mem_score
+
     def uncertainty(self, vector: list) -> float:
         """Incertidumbre: 1 - 2*|score - 0.5|. Máxima en 0.5."""
         s = self.score(vector)
@@ -1864,7 +1891,8 @@ def cmd_eval(args):
             continue
 
         v          = res["vector"]
-        pref_score = model.score(v)
+        path_str   = str(mf)
+        pref_score = model.score_with_memory(v, path_str)
 
         aff_score = 0.0
         if affinity_vectors:
@@ -1934,9 +1962,22 @@ def cmd_eval(args):
         dur  = format_duration(r["meta"]["duration_s"])
         bpm  = r["meta"]["tempo_bpm"]
 
+        # ── Historial de anotaciones para esta pieza ─────────────────
+        prior_ratings = model.annotated_paths.get(r["path"], [])
+        prior_numeric = [x for x in prior_ratings if isinstance(x, (int, float))]
+
         print(f"  {rank:>2}. {bold(cyan(r['name']))}")
         _label_1909 = f"{dur} · {bpm} bpm"
         print(f"      {dim(_label_1909)}")
+        if prior_numeric:
+            avg_prior = sum(prior_numeric) / len(prior_numeric)
+            stars_str = "★" * round(avg_prior) + "☆" * (5 - round(avg_prior))
+            n_mem = len(prior_numeric)
+            w_mem = n_mem / (n_mem + 5.0)
+            prior_tag = (yellow(f"  ★ anotada {n_mem}x  "
+                                f"(media {avg_prior:.1f}/5  {stars_str})  "
+                                f"memoria={w_mem*100:.0f}%"))
+            print(f"      {prior_tag}")
         print()
 
         # ── Score principal ──────────────────────────────────────────
@@ -2178,8 +2219,22 @@ def cmd_set(args):
         pred_before = model.score(v)
         n_prev      = model.annotation_count(path)
 
-        for _ in range(reps):
+        # Si la pieza tiene anotaciones previas, escalar las repeticiones
+        # para que la corrección tenga suficiente peso frente al historial.
+        # Fórmula: reps_efectivas = max(reps, n_prev + 1)
+        # Además elevar lr temporalmente para que la corrección del usuario
+        # no quede diluida por el lr decaído tras muchos ejemplos.
+        effective_reps = max(reps, n_prev + 1) if n_prev > 0 else reps
+        saved_lr = model.lr
+        if n_prev > 0:
+            model.lr = min(0.15, saved_lr * (1 + n_prev * 0.1))
+            override_tag = dim(f"  (lr={model.lr:.3f}, reps={effective_reps} por {n_prev} previas)")
+        else:
+            override_tag = ""
+
+        for _ in range(effective_reps):
             model.update_rating(v, rating, path=path)
+        model.lr = saved_lr  # restaurar lr original
         model.history.append({"type": "rating", "path": path, "rating": rating})
 
         pred_after = model.score(v)
@@ -2190,7 +2245,7 @@ def cmd_set(args):
 
         seen_tag = dim(f"  (era {n_prev}x anotado)") if n_prev > 0 else ""
         print(f"  {green('✓')} {cyan(mf.name)}{seen_tag}")
-        print(f"     score: {pred_before:.3f} → {pred_after:.3f}  Δ{delta_str}")
+        print(f"     score: {pred_before:.3f} → {pred_after:.3f}  Δ{delta_str}{override_tag}")
         updated += 1
 
     if not updated:
@@ -2686,7 +2741,7 @@ def cmd_rank(args):
     t0 = time.time()
     entries = []
     for i, (v, p, m) in enumerate(zip(vectors, paths, meta)):
-        pref_score = model.score(v)
+        pref_score = model.score_with_memory(v, str(p))
         unc        = model.uncertainty(v)
 
         aff_score = 0.0
