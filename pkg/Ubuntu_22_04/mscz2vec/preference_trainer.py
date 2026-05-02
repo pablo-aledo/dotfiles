@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════╗
-║                   PREFERENCE TRAINER  v1.1                          ║
+║                   PREFERENCE TRAINER  v1.2                          ║
 ║         Aprende tus preferencias musicales. Evalúa MIDIs.          ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║                                                                      ║
@@ -100,11 +100,90 @@
 ║                                                                      ║
 ║  OPCIONES EVAL                                                       ║
 ║    --model FILE              Nombre base del modelo (def: prefs)     ║
+║    --corpus FILE             .npz para percentil, vecinos e          ║
+║                              histograma (opcional pero recomendado)  ║
 ║    --affinity DIR            Carpeta de obras afines (opcional)      ║
 ║    --weight W                Peso de la afinidad 0-1 (def: 0.5)      ║
 ║                              0 = solo preferencia, 1 = solo afinidad ║
-║    --verbose                 Desglose completo de dimensiones        ║
+║    --verbose                 Desglose completo por dimensión         ║
 ║    --json                    Salida JSON machine-readable            ║
+║                                                                      ║
+║  CONTEXTO DE EVALUACIÓN (automático con --corpus)                   ║
+║    · Percentil sobre el corpus completo o las anotaciones previas   ║
+║    · Histograma ASCII con posición marcada                          ║
+║    · Dimensiones que favorecen / perjudican el score                ║
+║    · Vecinos más cercanos del corpus con rating conocido            ║
+║                                                                      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  RANK — escanear el corpus completo                                  ║
+║                                                                      ║
+║    python preference_trainer.py rank corpus.npz --model prefs       ║
+║    python preference_trainer.py rank corpus.npz --top 30 --csv r.csv║
+║    python preference_trainer.py rank corpus.npz                     ║
+║        --affinity ./referencias/ --weight 0.4                       ║
+║                                                                      ║
+║  Muestra:                                                            ║
+║    · Histograma global de preferencia sobre el corpus               ║
+║    · TOP N — las más preferidas según el modelo                     ║
+║    · BOTTOM N — las menos preferidas                                ║
+║    · INCIERTAS N — donde el modelo duda más (entrenar aquí)         ║
+║    · Exportación opcional a CSV con ranking completo                ║
+║                                                                      ║
+║  Opciones:                                                           ║
+║    --model FILE    Nombre base del modelo (def: prefs)               ║
+║    --top N         Entradas por lista (def: 20)                      ║
+║    --affinity DIR  Carpeta de obras afines para ponderar afinidad    ║
+║    --weight W      Peso de la afinidad 0-1 (def: 0.5)               ║
+║    --csv FILE      Exportar ranking completo a CSV                   ║
+║                                                                      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  SET — anotar preferencia directamente                               ║
+║                                                                      ║
+║    python preference_trainer.py set cancion.mid --score 5           ║
+║    python preference_trainer.py set *.mid --score 3 --model prefs   ║
+║    python preference_trainer.py set ./carpeta/ --score 4            ║
+║                                                                      ║
+║  Anota el rating sin sesión interactiva. Actualiza el modelo        ║
+║  inmediatamente y muestra el cambio de score antes/después.         ║
+║                                                                      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  VALIDATE — validación cruzada del modelo                            ║
+║                                                                      ║
+║    python preference_trainer.py validate --model prefs               ║
+║    python preference_trainer.py validate --model prefs               ║
+║        --corpus corpus.npz --folds 5                                ║
+║                                                                      ║
+║  Mide con k-fold cross-validation:                                  ║
+║    · MAE — error absoluto medio en predicción de rating             ║
+║    · Pair accuracy — % de pares ordenados correctamente             ║
+║    · Correlación de Spearman entre predicciones y ratings reales    ║
+║  Con interpretación automática y recomendaciones.                   ║
+║                                                                      ║
+║  Opciones:                                                           ║
+║    --model FILE    Nombre base del modelo (def: prefs)               ║
+║    --corpus FILE   .npz para recuperar vectores del historial        ║
+║    --folds N       Número de folds (def: 5)                          ║
+║                                                                      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  FEATURES EXTENDIDAS (--extended-features en index)                 ║
+║                                                                      ║
+║    python preference_trainer.py index ./midis/ --extended-features  ║
+║                                                                      ║
+║  Añade 10 features adicionales al vector (total 20 dims):           ║
+║    tension_arc · density_arc · pitch_entropy · interval_entropy     ║
+║    repetition · harmonic_tension · rhythmic_complexity              ║
+║    note_duration_mean · climax_position · dynamic_arc               ║
+║                                                                      ║
+║  Más costoso computacionalmente pero captura estructura temporal,   ║
+║  diversidad tonal y armonía — mejora la discriminación del modelo.  ║
+║  El modelo detecta automáticamente si el corpus es de 10 o 20 dims. ║
+║                                                                      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  RANK — nuevas opciones                                              ║
+║                                                                      ║
+║    --exclude-annotated   Excluir MIDIs ya anotados en train         ║
+║    --interactive         Anotar directamente desde el ranking       ║
+║    --soundfont FILE      Soundfont para reproducción interactiva    ║
 ║                                                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║  FLUJO TÍPICO                                                         ║
@@ -198,7 +277,8 @@ def blue(t):    return _c(t, "34")
 #  VECTORIZADOR — 10 dimensiones (mido + math, sin numpy)
 # ════════════════════════════════════════════════════════════════════
 
-DIM_NAMES = [
+# Features base (siempre calculadas)
+DIM_NAMES_BASE = [
     "pitch_center",       # 0  altura media normalizada (0-1)
     "pitch_range",        # 1  rango de alturas normalizado (0-1)
     "interval_mean",      # 2  intervalo medio entre notas (0-1)
@@ -211,9 +291,25 @@ DIM_NAMES = [
     "silence_ratio",      # 9  proporción de silencio (0-1)
 ]
 
+# Features extendidas (--extended-features, más costosas)
+DIM_NAMES_EXTENDED = [
+    "tension_arc",        # 10 arco de tensión: sube(1) / plana(0.5) / baja(0)
+    "density_arc",        # 11 arco de densidad: cómo cambia la densidad a lo largo
+    "pitch_entropy",      # 12 entropía de la distribución de alturas (diversidad tonal)
+    "interval_entropy",   # 13 entropía de intervalos (diversidad melódica)
+    "repetition",         # 14 índice de repetición motívica (0=ninguna, 1=muy repetitivo)
+    "harmonic_tension",   # 15 tensión armónica media (disonancias vs consonancias)
+    "rhythmic_complexity",# 16 complejidad rítmica por densidad de cambios de IOI
+    "note_duration_mean", # 17 duración media de notas normalizada
+    "climax_position",    # 18 posición temporal del clímax (0=inicio, 1=final)
+    "dynamic_arc",        # 19 arco dinámico: crescendo(1) / decrescendo(0) / plano(0.5)
+]
+
+DIM_NAMES = DIM_NAMES_BASE  # se amplía a DIM_NAMES_BASE + DIM_NAMES_EXTENDED con --extended-features
+
 N_DIMS = len(DIM_NAMES)
 
-DIM_LABELS = {
+DIM_LABELS_BASE = {
     "pitch_center":     ("grave", "agudo"),
     "pitch_range":      ("estrecho", "amplio"),
     "interval_mean":    ("stepwise", "saltos grandes"),
@@ -226,9 +322,27 @@ DIM_LABELS = {
     "silence_ratio":    ("continuo", "silencioso"),
 }
 
+DIM_LABELS_EXTENDED = {
+    "tension_arc":         ("tensión decae", "tensión crece"),
+    "density_arc":         ("rarefacción", "densificación"),
+    "pitch_entropy":       ("tonal fijo", "tonal diverso"),
+    "interval_entropy":    ("melódica repetitiva", "melódica variada"),
+    "repetition":          ("sin repetición", "muy repetitivo"),
+    "harmonic_tension":    ("consonante", "disonante"),
+    "rhythmic_complexity": ("ritmo simple", "ritmo complejo"),
+    "note_duration_mean":  ("notas cortas", "notas largas"),
+    "climax_position":     ("clímax al inicio", "clímax al final"),
+    "dynamic_arc":         ("decrescendo", "crescendo"),
+}
 
-def vectorize_midi(path: str) -> dict:
-    """Extrae vector de 10 dimensiones de un MIDI. Solo mido + math."""
+DIM_LABELS = {**DIM_LABELS_BASE, **DIM_LABELS_EXTENDED}
+
+
+def vectorize_midi(path: str, extended: bool = False) -> dict:
+    """
+    Extrae vector de 10 dimensiones base (o 20 con extended=True).
+    Solo mido + math, sin numpy.
+    """
     result = {
         "path": str(path),
         "vector": None,
@@ -336,10 +450,123 @@ def vectorize_midi(path: str) -> dict:
     total_note_time = sum(n[3] for n in notes)
     silence_ratio   = max(0.0, 1.0 - (total_note_time / max(total_dur, 1.0)))
 
-    result["vector"] = [
+    base_vector = [
         pitch_center, pitch_range, interval_mean, contour,
         density, rhythm_variance, polyphony,
         velocity_mean, velocity_variance, silence_ratio,
+    ]
+
+    if not extended:
+        result["vector"] = base_vector
+        return result
+
+    # ── Features extendidas ──────────────────────────────────────────
+
+    # 10. tension_arc — diferencia de "tensión" entre segunda y primera mitad
+    # Proxy: densidad × rango de pitch en cada mitad
+    half_t  = total_dur / 2
+    first_n = [n for n in notes if n[0] < half_t]
+    second_n= [n for n in notes if n[0] >= half_t]
+
+    def _section_tension(ns):
+        if not ns:
+            return 0.0
+        ps = [n[1] for n in ns]
+        rng = (max(ps) - min(ps)) / 87.0
+        den = min(len(ns) / max(half_t, 0.1) / 10.0, 1.0)
+        return rng * den
+
+    t1 = _section_tension(first_n)
+    t2 = _section_tension(second_n)
+    tension_arc = (math.tanh(t2 - t1) + 1) / 2  # 0=baja, 0.5=plana, 1=sube
+
+    # 11. density_arc — cambio de densidad entre tercios
+    third = total_dur / 3
+    def _third_density(start, end):
+        ns = [n for n in notes if start <= n[0] < end]
+        return min(len(ns) / max(end - start, 0.1) / 10.0, 1.0)
+    d1 = _third_density(0, third)
+    d3 = _third_density(2*third, total_dur)
+    density_arc = (math.tanh((d3 - d1) * 3) + 1) / 2
+
+    # 12. pitch_entropy — entropía de distribución de clases de altura (12 clases)
+    pitch_classes = [0] * 12
+    for p in pitches:
+        pitch_classes[p % 12] += 1
+    n_p = sum(pitch_classes) or 1
+    pitch_entropy = 0.0
+    for c in pitch_classes:
+        if c > 0:
+            p_i = c / n_p
+            pitch_entropy -= p_i * math.log2(p_i)
+    pitch_entropy = min(pitch_entropy / math.log2(12), 1.0)  # normalizar a [0,1]
+
+    # 13. interval_entropy — entropía de intervalos (clases 0-11 semítonos)
+    interval_classes = [0] * 13
+    for iv in intervals:
+        interval_classes[min(iv, 12)] += 1
+    n_iv = sum(interval_classes) or 1
+    interval_entropy = 0.0
+    for c in interval_classes:
+        if c > 0:
+            p_i = c / n_iv
+            interval_entropy -= p_i * math.log2(p_i)
+    interval_entropy = min(interval_entropy / math.log2(13), 1.0)
+
+    # 14. repetition — similitud entre ventanas de 4 notas consecutivas
+    # Cuenta cuántos n-gramas de 4 notas se repiten
+    n_gram_size = 4
+    if len(pitches) >= n_gram_size * 2:
+        ngrams = []
+        for i in range(len(pitches) - n_gram_size + 1):
+            ngrams.append(tuple(pitches[i:i+n_gram_size]))
+        unique = len(set(ngrams))
+        total_ng = len(ngrams)
+        repetition = 1.0 - (unique / total_ng)
+    else:
+        repetition = 0.0
+
+    # 15. harmonic_tension — proporción de intervalos disonantes
+    # Consonancias perfectas: 0, 5, 7, 12 semítonos
+    consonant = {0, 5, 7, 12, 4, 3}
+    if intervals:
+        dissonant_count = sum(1 for iv in intervals if (iv % 12) not in consonant)
+        harmonic_tension = dissonant_count / len(intervals)
+    else:
+        harmonic_tension = 0.0
+
+    # 16. rhythmic_complexity — proporción de cambios de IOI >50%
+    if len(iois) > 1:
+        changes = sum(
+            1 for i in range(len(iois)-1)
+            if iois[i] > 0 and abs(iois[i+1] - iois[i]) / iois[i] > 0.5
+        )
+        rhythmic_complexity = changes / (len(iois) - 1)
+    else:
+        rhythmic_complexity = 0.0
+
+    # 17. note_duration_mean — duración media normalizada (saturado a 4 segundos)
+    durations = [n[3] for n in notes]
+    note_duration_mean = min(sum(durations) / len(durations) / 4.0, 1.0)
+
+    # 18. climax_position — posición temporal (0-1) de la nota más alta
+    max_pitch   = max(pitches)
+    max_indices = [i for i, p in enumerate(pitches) if p == max_pitch]
+    climax_note_idx = max_indices[len(max_indices)//2]
+    climax_onset    = sorted(onset_times)[climax_note_idx] if climax_note_idx < len(onset_times) else total_dur / 2
+    climax_position = min(climax_onset / max(total_dur, 1.0), 1.0)
+
+    # 19. dynamic_arc — diferencia de velocidad media entre mitades
+    vel_first  = [n[2] for n in notes if n[0] < half_t]
+    vel_second = [n[2] for n in notes if n[0] >= half_t]
+    vm1 = sum(vel_first)  / len(vel_first)  if vel_first  else 64.0
+    vm2 = sum(vel_second) / len(vel_second) if vel_second else 64.0
+    dynamic_arc = (math.tanh((vm2 - vm1) / 32.0) + 1) / 2
+
+    result["vector"] = base_vector + [
+        tension_arc, density_arc, pitch_entropy, interval_entropy,
+        repetition, harmonic_tension, rhythmic_complexity,
+        note_duration_mean, climax_position, dynamic_arc,
     ]
     return result
 
@@ -411,7 +638,8 @@ class PreferenceModel:
 
     def score(self, vector: list) -> float:
         """Devuelve score de preferencia en [0, 1]."""
-        logit = sum(self.weights[i] * vector[i] for i in range(N_DIMS)) + self.bias
+        n = min(len(self.weights), len(vector))
+        logit = sum(self.weights[i] * vector[i] for i in range(n)) + self.bias
         return self._sigmoid(logit)
 
     def uncertainty(self, vector: list) -> float:
@@ -428,7 +656,9 @@ class PreferenceModel:
         error  = target - pred
         # gradiente de MSE con sigmoid
         grad_logit = error * pred * (1 - pred)
-        for i in range(N_DIMS):
+        if len(self.weights) != len(vector):
+            self.weights = self.weights[:len(vector)] + [0.0] * max(0, len(vector) - len(self.weights))
+        for i in range(len(vector)):
             self.weights[i] += self.lr * grad_logit * vector[i]
         self.bias    += self.lr * grad_logit
         self.n_train += 1
@@ -451,8 +681,10 @@ class PreferenceModel:
             # bias cancela al restar
         )
         # grad respecto a w_i: (1 - prob_correct) * (w_i - l_i)
+        if len(self.weights) != len(winner_vec):
+            self.weights = self.weights[:len(winner_vec)] + [0.0] * max(0, len(winner_vec) - len(self.weights))
         grad = 1.0 - prob_correct
-        for i in range(N_DIMS):
+        for i in range(len(winner_vec)):
             diff = winner_vec[i] - loser_vec[i]
             self.weights[i] += self.lr * grad * diff
         self.n_train += 1
@@ -465,6 +697,39 @@ class PreferenceModel:
     def _decay_lr(self):
         """Learning rate decay suave."""
         self.lr = max(0.005, 0.05 / (1 + self.n_train * 0.02))
+
+    def calibrate(self, vectors: list):
+        """
+        Escala los pesos post-entrenamiento para que el rango efectivo
+        de scores sobre 'vectors' sea aproximadamente [0.1, 0.9].
+
+        El modelo lineal con SGD tiende a comprimir los scores cerca de
+        0.5 cuando los datos son similares entre sí. Este paso corrige
+        eso sin cambiar el ranking aprendido.
+        """
+        if not vectors or self.n_train < 5:
+            return
+        scores = [self.score(v) for v in vectors]
+        lo, hi = min(scores), max(scores)
+        rng = hi - lo
+        if rng < 1e-6:
+            return  # todos iguales, no hay nada que calibrar
+        # Escalar pesos y bias para mapear [lo, hi] → [0.1, 0.9]
+        target_lo, target_hi = 0.1, 0.9
+        # score = sigmoid(w·x + b)
+        # Queremos sigmoid(k*(w·x + b) + b2) tal que los extremos mapeen
+        # Aproximación: escalar los logits por factor k
+        import math
+        lo_logit = math.log(lo / (1 - lo)) if 0 < lo < 1 else -4.0
+        hi_logit = math.log(hi / (1 - hi)) if 0 < hi < 1 else  4.0
+        tl_logit = math.log(target_lo / (1 - target_lo))
+        th_logit = math.log(target_hi / (1 - target_hi))
+        if abs(hi_logit - lo_logit) < 1e-6:
+            return
+        scale  = (th_logit - tl_logit) / (hi_logit - lo_logit)
+        offset = tl_logit - scale * lo_logit
+        self.weights = [w * scale for w in self.weights]
+        self.bias    = self.bias * scale + offset
 
     # ── Selección activa ─────────────────────────────────────────────
 
@@ -556,17 +821,35 @@ class PreferenceModel:
 
     # ── Diagnóstico ─────────────────────────────────────────────────
 
+    def annotated_distribution(self) -> list:
+        """
+        Devuelve lista de (path, pred_score, rating_norm) para todos los
+        MIDIs del historial con rating conocido. Útil para anclar percentiles.
+        """
+        dist = []
+        for entry in self.history:
+            if entry.get("type") == "rating" and "rating" in entry:
+                path       = entry["path"]
+                rating_norm = (entry["rating"] - 1) / 4.0
+                dist.append((path, rating_norm))
+        return dist
+
     def top_dimensions(self, n: int = 5) -> list:
         """Devuelve las n dimensiones con mayor peso absoluto."""
+        all_names = DIM_NAMES_BASE + DIM_NAMES_EXTENDED
         indexed = sorted(
             enumerate(self.weights),
             key=lambda x: abs(x[1]), reverse=True
         )
-        return [(DIM_NAMES[i], w) for i, w in indexed[:n]]
+        return [(all_names[i] if i < len(all_names) else f"dim_{i}", w)
+                for i, w in indexed[:n]]
 
     def summary(self) -> str:
+        n_features = len(self.weights)
+        feat_label = f"extendido ({n_features} dims)" if n_features > 10 else f"base ({n_features} dims)"
         lines = []
         lines.append(f"  Ejemplos de entrenamiento: {bold(str(self.n_train))}")
+        lines.append(f"  Modo de features:          {feat_label}")
         lines.append(f"  Learning rate actual:       {self.lr:.4f}")
         lines.append(f"  Bias:                       {self.bias:+.3f}")
         lines.append("")
@@ -1123,6 +1406,168 @@ def cmd_train_contrast(args, model: PreferenceModel, vectors, paths, meta):
 
 
 # ════════════════════════════════════════════════════════════════════
+#  CONTEXTO DE EVALUACIÓN
+# ════════════════════════════════════════════════════════════════════
+
+def _percentile(score: float, reference_scores: list) -> float:
+    """Percentil de score dentro de reference_scores (0-100)."""
+    if not reference_scores:
+        return 50.0
+    below = sum(1 for s in reference_scores if s < score)
+    return below / len(reference_scores) * 100.0
+
+
+def _dimension_narrative(vector: list, weights: list) -> tuple:
+    """
+    Devuelve (favor, contra) como strings con las dimensiones que más
+    empujan el score hacia arriba y hacia abajo, en lenguaje natural.
+    """
+    contribs = [(DIM_NAMES[i], weights[i] * vector[i], weights[i], vector[i])
+                for i in range(N_DIMS)]
+    contribs.sort(key=lambda x: x[1], reverse=True)
+
+    favor  = []
+    contra = []
+    for name, contrib, w, val in contribs:
+        lo, hi = DIM_LABELS[name]
+        label  = hi if val > 0.5 else lo
+        if contrib > 0.005:
+            favor.append(label)
+        elif contrib < -0.005:
+            contra.append(label)
+
+    favor_str  = ", ".join(favor[:3])  if favor  else "—"
+    contra_str = ", ".join(contra[:3]) if contra else "—"
+    return favor_str, contra_str
+
+
+def _nearest_annotated(vector: list, model, n: int = 3) -> list:
+    """
+    Devuelve los n MIDIs más cercanos en el historial con rating conocido,
+    como lista de (nombre, rating, distancia).
+    """
+    candidates = []
+    seen_paths = set()
+    for entry in reversed(model.history):
+        if entry.get("type") != "rating" or "rating" not in entry:
+            continue
+        path = entry["path"]
+        if path in seen_paths:
+            continue
+        seen_paths.add(path)
+        ann = model.annotated_paths.get(path, [])
+        # media de ratings anotados (pueden ser múltiples)
+        ratings = [x for x in ann if isinstance(x, int)]
+        if not ratings:
+            ratings = [entry["rating"]]
+        avg_rating = sum(ratings) / len(ratings)
+        # No tenemos el vector guardado, usamos el score del modelo como proxy
+        # de similitud si no podemos calcular distancia real
+        candidates.append((path, avg_rating))
+
+    # Sin vectores de referencia almacenados, devolvemos los más recientes
+    # con rating extremo primero (más informativos)
+    candidates.sort(key=lambda x: abs(x[1] - 2.5), reverse=True)
+    result = []
+    for path, avg_rating in candidates[:n]:
+        result.append((Path(path).name, avg_rating))
+    return result
+
+
+def _nearest_annotated_with_vectors(vector: list, model,
+                                     corpus_vectors: list,
+                                     corpus_paths: list,
+                                     n: int = 3) -> list:
+    """
+    Versión que usa vectores reales del corpus para calcular distancia.
+    Devuelve (nombre, rating_medio, distancia) de los n más cercanos anotados.
+    """
+    annotated_indices = []
+    for i, path in enumerate(corpus_paths):
+        p = str(path)
+        if p in model.annotated_paths:
+            ann = model.annotated_paths[p]
+            ratings = [x for x in ann if isinstance(x, int)]
+            if ratings:
+                avg_rating_raw = sum(ratings) / len(ratings)  # escala 1-5
+                avg_rating_norm = (avg_rating_raw - 1) / 4.0  # normalizar a 0-1
+                annotated_indices.append((i, avg_rating_norm))
+
+    if not annotated_indices:
+        return []
+
+    scored = []
+    for i, avg_r in annotated_indices:
+        if avg_r is None:
+            continue
+        dist = _euclidean_distance(vector, corpus_vectors[i])
+        # Convertir rating normalizado (0-1) a escala 1-5 para las estrellas
+        # avg_r ya está en escala 1-5 (se guarda el rating original)
+        scored.append((Path(str(corpus_paths[i])).name, avg_r, dist))
+
+    scored.sort(key=lambda x: x[2])
+    return scored[:n]
+
+
+def _corpus_histogram(score: float, all_scores: list, width: int = 40) -> str:
+    """
+    Histograma ASCII de la distribución de scores del corpus con la
+    posición del MIDI evaluado marcada con ▲.
+    """
+    if not all_scores:
+        return ""
+
+    n_bins  = 10
+    bin_w   = 1.0 / n_bins
+    counts  = [0] * n_bins
+    for s in all_scores:
+        b = min(int(s / bin_w), n_bins - 1)
+        counts[b] += 1
+
+    max_count = max(counts) or 1
+    bar_h     = 6   # altura en líneas
+
+    # Construir columnas verticales
+    cols = []
+    for c in counts:
+        filled = round(c / max_count * bar_h)
+        col = ["█"] * filled + [" "] * (bar_h - filled)
+        col.reverse()   # índice 0 = arriba
+        cols.append(col)
+
+    # Marcador de posición
+    marker_bin = min(int(score / bin_w), n_bins - 1)
+
+    lines = []
+    for row in range(bar_h):
+        line = "  "
+        for b, col in enumerate(cols):
+            ch = col[row]
+            if b == marker_bin and row == bar_h - 1:
+                line += cyan("▓▓▓▓")
+            else:
+                line += (dim("░░░░") if ch == " " else "████")
+        lines.append(line)
+
+    # Eje X con labels cada 2 bins (4 chars por bin)
+    axis = "  "
+    for b in range(n_bins):
+        if b % 2 == 0:
+            label = f"{b/n_bins:.1f}"
+            axis += label + " " * (4 - len(label))
+        else:
+            axis += "    "
+
+    # Marcador ▲ centrado en el bin
+    marker_pos = 2 + marker_bin * 4 + 1
+    marker_row = " " * marker_pos + cyan("▲")
+
+    lines.append(axis)
+    lines.append(marker_row)
+    return "\n".join(lines)
+
+
+# ════════════════════════════════════════════════════════════════════
 #  MODO EVAL
 # ════════════════════════════════════════════════════════════════════
 
@@ -1139,30 +1584,64 @@ def cmd_eval(args):
     print(f"\n{bold('PREFERENCE TRAINER — EVAL')}")
     print(f"  Modelo: {cyan(model_file)}  ({model.n_train} ejemplos de entrenamiento)")
 
-    # Cargar vectores de afinidad si se especifica carpeta
+    # ── Cargar corpus de referencia (para percentil, vecinos, histograma) ──
+    corpus_vectors = []
+    corpus_paths   = []
+    if getattr(args, "corpus", None):
+        corpus_path = args.corpus
+        if Path(corpus_path).exists():
+            try:
+                corpus_vectors, corpus_paths, _ = _load_corpus_npz(corpus_path)
+                print(f"  Corpus: {cyan(corpus_path)}  ({len(corpus_vectors):,} MIDIs)")
+            except Exception as e:
+                print(yellow(f"  No se pudo cargar corpus: {e}"))
+        else:
+            print(yellow(f"  Corpus no encontrado: {corpus_path}"))
+
+    # Calibrar el modelo sobre los vectores disponibles para expandir el rango
+    if corpus_vectors:
+        model.calibrate(corpus_vectors)
+    elif model.n_train >= 5:
+        # Sin corpus, calibrar sobre los vectores del historial si hay suficientes
+        hist_vecs = []
+        seen = set()
+        for entry in model.history:
+            p = entry.get("path","")
+            if p and p not in seen:
+                seen.add(p)
+                r = vectorize_midi(p)
+                if r["vector"]:
+                    hist_vecs.append(r["vector"])
+        if hist_vecs:
+            model.calibrate(hist_vecs)
+
+    # Scores del corpus completo para histograma y percentil
+    corpus_scores = [model.score(v) for v in corpus_vectors] if corpus_vectors else []
+
+    # Scores del historial anotado para percentil alternativo
+    annotated_dist = model.annotated_distribution()   # [(path, rating_norm)]
+    annotated_scores_norm = [r for _, r in annotated_dist]
+
+    # ── Cargar vectores de afinidad ──────────────────────────────────
     affinity_vectors = []
-    affinity_label   = ""
     if args.affinity:
         affinity_dir = Path(args.affinity)
         if not affinity_dir.exists():
             print(red(f"  Carpeta de afinidad no encontrada: {affinity_dir}"))
         else:
-            midi_files = (
-                list(affinity_dir.rglob("*.mid")) +
-                list(affinity_dir.rglob("*.midi"))
-            )
-            print(f"  Cargando {len(midi_files)} obras afines de {cyan(str(affinity_dir))}...")
-            for mf in midi_files:
-                res = vectorize_midi(str(mf))
+            aff_files = (list(affinity_dir.rglob("*.mid")) +
+                         list(affinity_dir.rglob("*.midi")))
+            print(f"  Cargando {len(aff_files)} obras afines de {cyan(str(affinity_dir))}...")
+            for mf in aff_files:
+                res = vectorize_midi(str(mf), extended=_use_extended_eval)
                 if res["vector"]:
                     affinity_vectors.append(res["vector"])
-            affinity_label = str(affinity_dir)
             print(f"  {green(str(len(affinity_vectors)))} vectorizadas correctamente.")
 
-    weight_pref = 1.0 - args.weight  if affinity_vectors else 1.0
-    weight_aff  = args.weight         if affinity_vectors else 0.0
+    weight_pref = 1.0 - args.weight if affinity_vectors else 1.0
+    weight_aff  = args.weight        if affinity_vectors else 0.0
 
-    # Recoger archivos a evaluar
+    # ── Recoger archivos a evaluar ───────────────────────────────────
     midi_files = []
     for pattern in args.midi:
         p = Path(pattern)
@@ -1171,7 +1650,6 @@ def cmd_eval(args):
         elif p.exists():
             midi_files.append(p)
         else:
-            # Glob manual (Windows no expande)
             import glob
             midi_files += [Path(f) for f in glob.glob(pattern)]
 
@@ -1180,32 +1658,50 @@ def cmd_eval(args):
         sys.exit(1)
 
     results = []
-
     print(f"\n{'─'*60}")
+    # Detect if model was trained with extended features
+    _use_extended_eval = len(model.weights) > 10 if model.weights else False
+
     for mf in midi_files:
-        res = vectorize_midi(str(mf))
+        res = vectorize_midi(str(mf), extended=_use_extended_eval)
         if res["error"]:
             err_msg = res["error"]
-            print(f"  " + yellow("!") + f"  {mf.name}  " + dim("error: " + err_msg))
+            print("  " + yellow("!") + f"  {mf.name}  " + dim("error: " + err_msg))
             continue
 
-        v = res["vector"]
-
-        # Score de preferencia
+        v          = res["vector"]
         pref_score = model.score(v)
 
-        # Score de afinidad (media de similitudes coseno con el corpus de referencia)
         aff_score = 0.0
         if affinity_vectors:
-            sims = [_cosine_similarity(v, av) for av in affinity_vectors]
-            # Normalizar similitudes coseno (rango [-1, 1]) → [0, 1]
+            sims      = [_cosine_similarity(v, av) for av in affinity_vectors]
             aff_score = (sum(sims) / len(sims) + 1) / 2
 
-        # Score combinado
-        if affinity_vectors:
-            final_score = weight_pref * pref_score + weight_aff * aff_score
+        final_score = (weight_pref * pref_score + weight_aff * aff_score
+                       if affinity_vectors else pref_score)
+
+        # ── Contexto ────────────────────────────────────────────────
+        # Percentil: sobre corpus si disponible, si no sobre anotaciones
+        if corpus_scores:
+            pct = _percentile(final_score, corpus_scores)
+            pct_label = f"percentil {pct:.0f}% del corpus ({len(corpus_scores):,} MIDIs)"
+        elif annotated_scores_norm:
+            # Convertir ratings normalizados a scores del modelo aproximados
+            pct = _percentile(final_score, annotated_scores_norm)
+            pct_label = f"percentil {pct:.0f}% de lo anotado ({len(annotated_scores_norm)} ejemplos)"
         else:
-            final_score = pref_score
+            pct        = None
+            pct_label  = "sin referencia (entrena más rondas)"
+
+        # Vecinos anotados
+        if corpus_vectors:
+            neighbors = _nearest_annotated_with_vectors(
+                v, model, corpus_vectors, corpus_paths, n=3)
+        else:
+            neighbors = _nearest_annotated(v, model, n=3)
+
+        # Desglose dimensional narrativo
+        favor_str, contra_str = _dimension_narrative(v, model.weights)
 
         results.append({
             "path":        str(mf),
@@ -1215,16 +1711,20 @@ def cmd_eval(args):
             "final_score": final_score,
             "vector":      v,
             "meta":        res,
+            "pct":         pct,
+            "pct_label":   pct_label,
+            "neighbors":   neighbors,
+            "favor":       favor_str,
+            "contra":      contra_str,
         })
 
     if not results:
         print(red("  Ningún MIDI pudo ser procesado."))
         sys.exit(1)
 
-    # Ordenar por score final descendente
     results.sort(key=lambda r: r["final_score"], reverse=True)
 
-    # ── Salida ────────────────────────────────────────────────────────
+    # ── Salida ───────────────────────────────────────────────────────
 
     print(f"\n{'═'*60}")
     if affinity_vectors:
@@ -1235,55 +1735,97 @@ def cmd_eval(args):
     print(f"{'═'*60}\n")
 
     for rank, r in enumerate(results, 1):
-        bar_len = int(r["final_score"] * 30)
-        bar     = "█" * bar_len + "░" * (30 - bar_len)
-
         score_color = green if r["final_score"] >= 0.65 else (
-            yellow if r["final_score"] >= 0.40 else red
-        )
-
+            yellow if r["final_score"] >= 0.40 else red)
         dur  = format_duration(r["meta"]["duration_s"])
         bpm  = r["meta"]["tempo_bpm"]
-        desc = describe_vector(r["vector"])
 
-        print(f"  {rank:>2}. {cyan(r['name'])}")
-        fs = f"{r['final_score']:.3f}"
+        print(f"  {rank:>2}. {bold(cyan(r['name']))}")
+        print(f"      {dim(f'{dur} · {bpm} bpm')}")
+        print()
+
+        # ── Score principal ──────────────────────────────────────────
+        bar_len = int(r["final_score"] * 30)
+        bar     = "█" * bar_len + "░" * (30 - bar_len)
+        fs      = f"{r['final_score']:.4f}"
         print(f"      {score_color(bar)}  {bold(fs)}")
 
         if affinity_vectors:
-            print(f"      Preferencia: {r['pref_score']:.3f}  "
-                  f"·  Afinidad: {r['aff_score']:.3f}")
+            print(f"      {dim(f'preferencia={r['pref_score']:.4f}  ·  afinidad={r['aff_score']:.4f}')}")
+        print()
 
-        print(f"      {dim(f'{dur} · {bpm} bpm · {desc}')}")
+        # ── Percentil ────────────────────────────────────────────────
+        if r["pct"] is not None:
+            pct_bar_w = 30
+            pct_filled = int(r["pct"] / 100 * pct_bar_w)
+            pct_bar    = dim("─" * pct_filled) + cyan("┼") + dim("─" * (pct_bar_w - pct_filled))
+            pct_color  = green if r["pct"] >= 70 else (yellow if r["pct"] >= 40 else red)
+            print(f"      {dim('Posición:')}  {pct_bar}  {pct_color(f'{r["pct"]:.0f}%')}")
+            print(f"      {dim(r['pct_label'])}")
+            print()
 
+        # ── Histograma del corpus ─────────────────────────────────────
+        if corpus_scores:
+            print(f"      {dim('Distribución del corpus (▲ = esta pieza):')}")
+            hist = _corpus_histogram(r["final_score"], corpus_scores)
+            for line in hist.split("\n"):
+                print(f"    {line}")
+            print()
+
+        # ── Dimensiones que favorecen / perjudican ────────────────────
+        print(f"      {green('+ favorece:')}  {r['favor']}")
+        print(f"      {red('- perjudica:')} {r['contra']}")
+        print()
+
+        # ── Vecinos anotados ─────────────────────────────────────────
+        if r["neighbors"]:
+            print(f"      {dim('Más parecido a lo que ya anotaste:')}")
+            for nb in r["neighbors"]:
+                if len(nb) == 3:
+                    nb_name, nb_rating, nb_dist = nb
+                    stars = "★" * round(nb_rating * 4 + 1) + "☆" * (5 - round(nb_rating * 4 + 1))
+                    print(f"        {stars}  {dim(nb_name)}  {dim(f'(dist={nb_dist:.3f})')}")
+                else:
+                    nb_name, nb_rating = nb
+                    n_stars = max(1, min(5, round(nb_rating * 4 + 1)))
+                    stars = "★" * n_stars + "☆" * (5 - n_stars)
+                    print(f"        {stars}  {dim(nb_name)}")
+            print()
+
+        # ── Desglose dimensional completo (--verbose) ─────────────────
         if args.verbose:
             print(f"      {dim('─ Detalle de dimensiones:')}")
-            for i, name in enumerate(DIM_NAMES):
-                val  = r["vector"][i]
-                w    = model.weights[i]
-                lo, hi = DIM_LABELS[name]
-                bar2 = "▮" * int(val * 10) + "▯" * (10 - int(val * 10))
+            dims_sorted = sorted(range(N_DIMS),
+                                 key=lambda i: abs(model.weights[i] * r["vector"][i]),
+                                 reverse=True)
+            for i in dims_sorted:
+                val     = r["vector"][i]
+                w       = model.weights[i]
+                lo, hi  = DIM_LABELS[i] if isinstance(DIM_LABELS, list) else DIM_LABELS[DIM_NAMES[i]]
+                bar2    = "▮" * int(val * 10) + "▯" * (10 - int(val * 10))
                 contrib = w * val
                 sign    = "+" if contrib >= 0 else ""
-                print(f"        {name:<20} {bar2}  {val:.2f}  "
-                      f"{dim(f'w={w:+.3f} → {sign}{contrib:.3f}')}")
+                c_color = green if contrib > 0.01 else (red if contrib < -0.01 else dim)
+                print(f"        {DIM_NAMES[i]:<20} {bar2}  {val:.2f}  "
+                      f"{c_color(f'{sign}{contrib:.4f}')}")
+            print()
+
+        print(f"  {dim('─'*56)}")
         print()
 
     # ── Resumen numérico (formato mínimo garantizado) ─────────────────
-    print(f"{'─'*60}")
     print(f"  {bold('RESUMEN NUMÉRICO')}")
     print()
     for r in results:
+        pct_str = f"  pct={r['pct']:.0f}%" if r["pct"] is not None else ""
         if affinity_vectors:
-            print(f"  {r['name']:<40}  "
-                  f"score={r['final_score']:.4f}  "
-                  f"pref={r['pref_score']:.4f}  "
-                  f"aff={r['aff_score']:.4f}")
+            print(f"  {r['name']:<40}  score={r['final_score']:.4f}  "
+                  f"pref={r['pref_score']:.4f}  aff={r['aff_score']:.4f}{pct_str}")
         else:
-            print(f"  {r['name']:<40}  score={r['final_score']:.4f}")
+            print(f"  {r['name']:<40}  score={r['final_score']:.4f}{pct_str}")
     print()
 
-    # JSON machine-readable (opcional con --json)
+    # JSON machine-readable
     if getattr(args, "json_out", False):
         output = []
         for r in results:
@@ -1291,6 +1833,9 @@ def cmd_eval(args):
                 "path":        r["path"],
                 "score":       round(r["final_score"], 4),
                 "pref_score":  round(r["pref_score"], 4),
+                "percentile":  round(r["pct"], 1) if r["pct"] is not None else None,
+                "favor":       r["favor"],
+                "contra":      r["contra"],
                 "vector":      [round(x, 4) for x in r["vector"]],
             }
             if affinity_vectors:
@@ -1359,7 +1904,8 @@ def cmd_train(args):
     except KeyboardInterrupt:
         result = "quit"
 
-    # Guardar modelo
+    # Calibrar y guardar modelo
+    model.calibrate(vectors)
     model.save(model_file)
     print(f"\n{green('✓')} Modelo guardado: {cyan(model_file)}")
     print(f"  Total de ejemplos de entrenamiento: {bold(str(model.n_train))}")
@@ -1374,6 +1920,276 @@ def cmd_train(args):
 # ════════════════════════════════════════════════════════════════════
 #  COMANDO INFO — inspeccionar el modelo
 # ════════════════════════════════════════════════════════════════════
+
+
+
+# ════════════════════════════════════════════════════════════════════
+#  COMANDO SET — anotar preferencia directamente
+# ════════════════════════════════════════════════════════════════════
+
+def cmd_set(args):
+    """Asigna un score de preferencia directamente a uno o varios MIDIs."""
+
+    model_file = _model_path(args.model)
+    if not Path(model_file).exists():
+        print(red(f"Modelo no encontrado: {model_file}"))
+        print(yellow(f"  Crea uno primero con: python preference_trainer.py train <corpus.npz>"))
+        sys.exit(1)
+
+    model = PreferenceModel.load(model_file)
+
+    # Recoger archivos
+    midi_files = []
+    for pattern in args.midi:
+        p = Path(pattern)
+        if p.is_dir():
+            midi_files += sorted(p.rglob("*.mid")) + sorted(p.rglob("*.midi"))
+        elif p.exists():
+            midi_files.append(p)
+        else:
+            import glob as _glob
+            midi_files += [Path(f) for f in sorted(_glob.glob(pattern))]
+
+    if not midi_files:
+        print(red("  No se encontraron archivos MIDI."))
+        sys.exit(1)
+
+    rating  = args.score
+    reps    = getattr(args, 'repetitions', 10)
+    use_ext = len(model.weights) > 10
+
+    print(f"\n{bold('PREFERENCE TRAINER — SET')}")
+    print(f"  Modelo: {cyan(model_file)}  ({model.n_train} ejemplos previos)")
+    print(f"  Score:  {'★' * rating + '☆' * (5 - rating)}  ({rating}/5)")
+    print()
+
+    updated = 0
+    for mf in midi_files:
+        res = vectorize_midi(str(mf), extended=use_ext)
+        if res["error"]:
+            print(f"  {yellow('!')} {mf.name}  {dim('error: ' + res['error'])}")
+            continue
+
+        v    = res["vector"]
+        path = str(mf)
+
+        pred_before = model.score(v)
+        n_prev      = model.annotation_count(path)
+
+        for _ in range(reps):
+            model.update_rating(v, rating, path=path)
+        model.history.append({"type": "rating", "path": path, "rating": rating})
+
+        pred_after = model.score(v)
+        delta      = pred_after - pred_before
+        delta_str  = (green(f"+{delta:.3f}") if delta > 0.001
+                      else red(f"{delta:.3f}") if delta < -0.001
+                      else dim(f"{delta:+.3f}"))
+
+        seen_tag = dim(f"  (era {n_prev}x anotado)") if n_prev > 0 else ""
+        print(f"  {green('✓')} {cyan(mf.name)}{seen_tag}")
+        print(f"     score: {pred_before:.3f} → {pred_after:.3f}  Δ{delta_str}")
+        updated += 1
+
+    if not updated:
+        print(red("  Ningún MIDI pudo ser procesado."))
+        sys.exit(1)
+
+    model.save(model_file)
+    print(f"\n  {green('✓')} {updated} anotación(es) guardada(s) en {cyan(model_file)}")
+    print(f"  Total ejemplos: {bold(str(model.n_train))}")
+
+# ════════════════════════════════════════════════════════════════════
+#  COMANDO VALIDATE — validación cruzada
+# ════════════════════════════════════════════════════════════════════
+
+def cmd_validate(args):
+    """
+    Validación cruzada k-fold sobre el historial de anotaciones.
+
+    Mide qué tan bien generaliza el modelo aprendido:
+    - MAE (error absoluto medio en predicción de rating)
+    - Accuracy de ranking (pares ordenados correctamente)
+    - Correlación de Spearman entre predicciones y ratings reales
+    """
+    model_file = _model_path(args.model)
+    if not Path(model_file).exists():
+        print(red(f"Modelo no encontrado: {model_file}"))
+        sys.exit(1)
+
+    model_ref = PreferenceModel.load(model_file)
+
+    # Recoger ejemplos de rating con vectores disponibles
+    corpus_vectors = {}
+    if getattr(args, "corpus", None) and Path(args.corpus).exists():
+        vecs, paths, _ = _load_corpus_npz(args.corpus)
+        for v, p in zip(vecs, paths):
+            corpus_vectors[str(p)] = v
+
+    # Construir dataset desde historial
+    dataset = []
+    seen = set()
+    for entry in model_ref.history:
+        if entry.get("type") != "rating" or "rating" not in entry:
+            continue
+        path = entry["path"]
+        if path in seen:
+            continue
+        seen.add(path)
+        ratings = [x for x in model_ref.annotated_paths.get(path, [])
+                   if isinstance(x, int)]
+        if not ratings:
+            ratings = [entry["rating"]]
+        avg_r = sum(ratings) / len(ratings)
+
+        # Obtener vector
+        if path in corpus_vectors:
+            v = corpus_vectors[path]
+        else:
+            res = vectorize_midi(path,
+                extended=len(model_ref.weights) > 10)
+            if res["error"] or not res["vector"]:
+                continue
+            v = res["vector"]
+
+        dataset.append({"path": path, "vector": v, "rating": avg_r})
+
+    n = len(dataset)
+    if n < 4:
+        print(red(f"  Historial insuficiente: {n} ejemplos con vector disponible."))
+        print(yellow("  Se necesitan al menos 4. Entrena más rondas."))
+        sys.exit(1)
+
+    print(f"\n{bold('PREFERENCE TRAINER — VALIDATE')}")
+    print(f"  Modelo:   {cyan(model_file)}")
+    print(f"  Ejemplos: {n}  (con vector recuperable)")
+
+    k = min(args.folds, n)
+    print(f"  Folds:    {k}-fold\n")
+
+    # K-fold estratificado (ordenar por rating y distribuir)
+    dataset_sorted = sorted(dataset, key=lambda x: x["rating"])
+    folds = [[] for _ in range(k)]
+    for i, item in enumerate(dataset_sorted):
+        folds[i % k].append(item)
+
+    fold_results = []
+    all_pred, all_true = [], []
+
+    for fold_i in range(k):
+        test  = folds[fold_i]
+        train = [item for j, fold in enumerate(folds) if j != fold_i for item in fold]
+
+        if not train:
+            continue
+
+        # Entrenar modelo limpio en este fold
+        m = PreferenceModel()
+        m.lr = 0.3
+        for _ in range(30):
+            random.shuffle(train)
+            for item in train:
+                m.update_rating(item["vector"], round(item["rating"]))
+        m.calibrate([item["vector"] for item in train])
+
+        # Evaluar en test
+        maes, corrects, total_pairs = [], [], 0
+        preds_fold, trues_fold = [], []
+
+        for item in test:
+            pred = m.score(item["vector"])
+            true_norm = (item["rating"] - 1) / 4.0
+            maes.append(abs(pred - true_norm))
+            preds_fold.append(pred)
+            trues_fold.append(true_norm)
+            all_pred.append(pred)
+            all_true.append(true_norm)
+
+        # Pair accuracy en test
+        correct_pairs = 0
+        pair_total    = 0
+        for ii in range(len(test)):
+            for jj in range(ii+1, len(test)):
+                ra = (test[ii]["rating"] - 1) / 4.0
+                rb = (test[jj]["rating"] - 1) / 4.0
+                if abs(ra - rb) < 0.01:
+                    continue  # empate, no cuenta
+                pa = m.score(test[ii]["vector"])
+                pb = m.score(test[jj]["vector"])
+                if (ra > rb and pa > pb) or (ra < rb and pa < pb):
+                    correct_pairs += 1
+                pair_total += 1
+
+        mae   = sum(maes) / len(maes) if maes else 1.0
+        p_acc = correct_pairs / pair_total if pair_total > 0 else 0.0
+        fold_results.append({"fold": fold_i+1, "mae": mae, "pair_acc": p_acc,
+                              "n_test": len(test)})
+
+    # ── Métricas globales ────────────────────────────────────────────
+    mean_mae  = sum(r["mae"]      for r in fold_results) / len(fold_results)
+    mean_pacc = sum(r["pair_acc"] for r in fold_results) / len(fold_results)
+
+    # Spearman global
+    n_all  = len(all_pred)
+    def _rank_list(lst):
+        s = sorted(range(len(lst)), key=lambda i: lst[i])
+        r = [0] * len(lst)
+        for rank, idx in enumerate(s):
+            r[idx] = rank + 1
+        return r
+    pred_ranks = _rank_list(all_pred)
+    true_ranks = _rank_list(all_true)
+    ds = [pred_ranks[i] - true_ranks[i] for i in range(n_all)]
+    spearman = 1 - 6*sum(d**2 for d in ds) / (n_all*(n_all**2-1)) if n_all > 2 else 0.0
+
+    # ── Salida ───────────────────────────────────────────────────────
+    print(f"  {'Fold':<6} {'MAE':>6}  {'Pair Acc':>9}  {'n_test':>6}")
+    print(f"  {'─'*36}")
+    for r in fold_results:
+        mae_color   = green if r["mae"]      < 0.15 else (yellow if r["mae"]      < 0.25 else red)
+        pacc_color  = green if r["pair_acc"] > 0.75 else (yellow if r["pair_acc"] > 0.60 else red)
+        print(f"  {r['fold']:<6} {mae_color(f'{r["mae"]:.3f}'):>6}  "
+              f"{pacc_color(f'{r["pair_acc"]*100:.1f}%'):>9}  {r['n_test']:>6}")
+
+    print(f"  {'─'*36}")
+    mae_c  = green if mean_mae  < 0.15 else (yellow if mean_mae  < 0.25 else red)
+    pacc_c = green if mean_pacc > 0.75 else (yellow if mean_pacc > 0.60 else red)
+    sp_c   = green if spearman  > 0.70 else (yellow if spearman  > 0.50 else red)
+    print(f"  {'Media':<6} {mae_c(f'{mean_mae:.3f}'):>6}  {pacc_c(f'{mean_pacc*100:.1f}%'):>9}")
+    print()
+    print(f"  Correlación de Spearman (global): {sp_c(f'{spearman:.3f}')}")
+    print()
+
+    # ── Interpretación ───────────────────────────────────────────────
+    print(f"  {bold('Interpretación:')}")
+
+    if mean_mae < 0.10:
+        print(f"  {green('●')} MAE excelente — el modelo predice el rating con alta precisión.")
+    elif mean_mae < 0.20:
+        print(f"  {yellow('●')} MAE aceptable — margen de ~1 estrella en promedio.")
+    else:
+        print(f"  {red('●')} MAE alto — el modelo generaliza mal. Entrena más rondas o")
+        print(f"              revisa si los ratings son consistentes.")
+
+    if mean_pacc > 0.75:
+        print(f"  {green('●')} Pair accuracy alta — el modelo ordena bien tus preferencias.")
+    elif mean_pacc > 0.60:
+        print(f"  {yellow('●')} Pair accuracy moderada — el orden es mayormente correcto.")
+    else:
+        print(f"  {red('●')} Pair accuracy baja — el modelo no discrimina bien.")
+        print(f"              Considera más rondas de contraste (--mode contrast).")
+
+    if spearman > 0.70:
+        print(f"  {green('●')} Ranking sólido — las predicciones reflejan fielmente tu gusto.")
+    elif spearman > 0.45:
+        print(f"  {yellow('●')} Ranking parcial — captura tendencias pero no casos límite.")
+    else:
+        print(f"  {red('●')} Ranking débil — necesitas más datos o más variedad en el corpus.")
+
+    print()
+    if n < 20:
+        print(f"  {dim(f'Nota: {n} ejemplos es poco para validación fiable.')}")
+        print(f"  {dim('Los resultados mejorarán con más sesiones de entrenamiento.')}")
 
 # ════════════════════════════════════════════════════════════════════
 #  COMANDO INDEX — vectorizar corpus
@@ -1426,7 +2242,7 @@ def cmd_index(args):
               f"OK:{len(vectors)}  Err:{errors}",
               end="", flush=True)
 
-        r = vectorize_midi(str(path))
+        r = vectorize_midi(str(path), extended=getattr(args, 'extended_features', False))
 
         if r["error"]:
             errors += 1
@@ -1451,7 +2267,8 @@ def cmd_index(args):
     clean_v, clean_p, clean_m = [], [], []
     bad = 0
     for v, p, m in zip(vectors, paths, metadata):
-        if v is not None and len(v) == N_DIMS and all(x == x for x in v):
+        expected_dims = 20 if getattr(args, "extended_features", False) else 10
+        if v is not None and len(v) == expected_dims and all(x == x for x in v):
             clean_v.append(v)
             clean_p.append(p)
             clean_m.append(m)
@@ -1465,12 +2282,15 @@ def cmd_index(args):
     arr_paths   = np.array(clean_p)
     arr_meta    = np.array([json.dumps(m) for m in clean_m])
 
+    actual_dim_names = (DIM_NAMES_BASE + DIM_NAMES_EXTENDED
+                        if getattr(args, 'extended_features', False)
+                        else DIM_NAMES_BASE)
     np.savez_compressed(
         str(output),
         vectors   = arr_vectors,
         paths     = arr_paths,
-        meta      = arr_meta,       # clave canónica
-        dim_names = np.array(DIM_NAMES),
+        meta      = arr_meta,
+        dim_names = np.array(actual_dim_names),
     )
 
     elapsed = time.time() - t_start
@@ -1483,6 +2303,303 @@ def cmd_index(args):
     print(f"\n  Siguiente paso:")
     print(f"    {dim('python preference_trainer.py train ' + out_str)}\n")
 
+
+
+
+def _rank_interactive(args, model, entries, model_file):
+    """
+    Sesión interactiva post-rank: navegar el ranking, escuchar y anotar
+    MIDIs sin salir del comando rank.
+    """
+    soundfont = getattr(args, "soundfont", None)
+
+    # Construir lista navegable: top + inciertas (sin duplicados)
+    top_n    = sorted(entries, key=lambda e: e["score"],  reverse=True)
+    unc_n    = sorted(entries, key=lambda e: e["unc"],    reverse=True)
+    # Intercalar: primero los más inciertos no anotados, luego el top
+    queue = []
+    seen_paths = set()
+    for e in unc_n:
+        if e["n_seen"] == 0 and e["path"] not in seen_paths:
+            queue.append(e)
+            seen_paths.add(e["path"])
+    for e in top_n:
+        if e["path"] not in seen_paths:
+            queue.append(e)
+            seen_paths.add(e["path"])
+
+    print(f"\n{bold('─ MODO INTERACTIVO ─')}  "
+          f"{dim(f'{len(queue)} MIDIs en cola')}")
+    print(dim("  Puntúa [1-5] · p=reproducir · x=parar · s=saltar · q=guardar y salir"))
+    print()
+
+    mode_str = getattr(args, 'mode', 'rating')
+    done = 0
+
+    for e in queue:
+        v    = e["vector"]
+        path = e["path"]
+        name = e["name"]
+
+        seen_tag = dim(f"  [{e['n_seen']}x anotado]") if e["n_seen"] > 0 else ""
+        unc_col  = green if e["unc"] > 0.7 else (yellow if e["unc"] > 0.3 else dim)
+
+        print(f"  {'─'*52}")
+        print(f"  {cyan(name)}{seen_tag}")
+        print(f"  {dim(format_duration(e['dur']))} · {dim(str(e['bpm']))} bpm  "
+              f"score={bold(f'{e["score"]:.3f}')}  "
+              f"unc={unc_col(f'{e["unc"]:.2f}')}")
+        print()
+
+        # Reproducción automática
+        _play_midi(path, soundfont=soundfont, blocking=False)
+
+        rating = None
+        while rating is None:
+            raw = input("  [1-5 / p=reproducir / x=parar / s=saltar / q=salir]: ").strip().lower()
+            if raw in ("q", "quit"):
+                _stop_playback()
+                break
+            elif raw in ("p", "play"):
+                _play_midi(path, soundfont=soundfont, blocking=False)
+            elif raw in ("x", "stop"):
+                _stop_playback()
+            elif raw in ("s", "skip", ""):
+                rating = "skip"
+            elif raw.isdigit() and 1 <= int(raw) <= 5:
+                rating = int(raw)
+                _stop_playback()
+            else:
+                print(red("  Introduce 1-5, p, x, s o q."))
+
+        if raw in ("q", "quit"):
+            break
+
+        if rating == "skip":
+            print(dim("  Saltado.\n"))
+            continue
+
+        model.update_rating(v, rating, path=path)
+        model.history.append({"type": "rating", "path": path, "rating": rating})
+        e["n_seen"] += 1
+
+        stars = "★" * rating + "☆" * (5 - rating)
+        print(green(f"  {stars}  Anotado.\n"))
+        done += 1
+
+        if done % 5 == 0:
+            print(f"  {bold('─ Estado del modelo ─')}")
+            print(model.summary())
+            print()
+
+    _stop_playback()
+
+    if done > 0:
+        model.calibrate([e["vector"] for e in entries])
+        model.save(model_file)
+        print(f"\n{green('✓')} {done} anotaciones guardadas en {cyan(model_file)}")
+    else:
+        print(dim("  Sin cambios."))
+
+# ════════════════════════════════════════════════════════════════════
+#  COMANDO RANK — escanear corpus completo
+# ════════════════════════════════════════════════════════════════════
+
+def cmd_rank(args):
+    """Escanea el corpus completo y devuelve top/bottom/inciertas."""
+
+    model_file = _model_path(args.model)
+    if not Path(model_file).exists():
+        print(red(f"Modelo no encontrado: {model_file}"))
+        sys.exit(1)
+    if not Path(args.corpus).exists():
+        print(red(f"Corpus no encontrado: {args.corpus}"))
+        sys.exit(1)
+
+    model = PreferenceModel.load(model_file)
+
+    print(f"\n{bold('PREFERENCE TRAINER — RANK')}")
+    print(f"  Modelo: {cyan(model_file)}  ({model.n_train} ejemplos de entrenamiento)")
+    print(f"  Corpus: {cyan(args.corpus)}")
+
+    vectors, paths, meta = _load_corpus_npz(args.corpus)
+    n_total = len(vectors)
+    print(f"  Total:  {n_total:,} MIDIs")
+
+    if n_total == 0:
+        print(red("  Corpus vacío."))
+        sys.exit(1)
+
+    # ── Cargar vectores de afinidad ──────────────────────────────────
+    affinity_vectors = []
+    weight_pref = 1.0
+    weight_aff  = 0.0
+    if getattr(args, "affinity", None):
+        affinity_dir = Path(args.affinity)
+        if not affinity_dir.exists():
+            print(red(f"  Carpeta de afinidad no encontrada: {affinity_dir}"))
+        else:
+            aff_files = (list(affinity_dir.rglob("*.mid")) +
+                         list(affinity_dir.rglob("*.midi")))
+            print(f"  Cargando {len(aff_files)} obras afines de {cyan(str(affinity_dir))}...",
+                  end=" ", flush=True)
+            _use_ext_rank = len(model.weights) > 10 if model.weights else False
+            for mf in aff_files:
+                res = vectorize_midi(str(mf), extended=_use_ext_rank)
+                if res["vector"]:
+                    affinity_vectors.append(res["vector"])
+            print(green(f"{len(affinity_vectors)} OK"))
+            weight_pref = 1.0 - args.weight
+            weight_aff  = args.weight
+            print(f"  Ponderación: preferencia×{weight_pref:.2f} + afinidad×{weight_aff:.2f}")
+
+    # Calibrar el modelo sobre el corpus completo
+    model.calibrate(vectors)
+
+    # Calcular score e incertidumbre para cada MIDI
+    print(f"  Calculando scores...", end=" ", flush=True)
+    t0 = time.time()
+    entries = []
+    for i, (v, p, m) in enumerate(zip(vectors, paths, meta)):
+        pref_score = model.score(v)
+        unc        = model.uncertainty(v)
+
+        aff_score = 0.0
+        if affinity_vectors:
+            sims      = [_cosine_similarity(v, av) for av in affinity_vectors]
+            aff_score = (sum(sims) / len(sims) + 1) / 2
+
+        score = (weight_pref * pref_score + weight_aff * aff_score
+                 if affinity_vectors else pref_score)
+
+        try:
+            md = json.loads(str(m))
+        except Exception:
+            md = {}
+        n_seen = model.annotation_count(str(p))
+        entries.append({
+            "idx":        i,
+            "path":       str(p),
+            "name":       Path(str(p)).name,
+            "score":      score,
+            "pref_score": pref_score,
+            "aff_score":  aff_score,
+            "unc":        unc,
+            "dur":        md.get("duration_s", 0),
+            "bpm":        md.get("tempo_bpm", "?"),
+            "n_seen":     n_seen,
+            "vector":     v,
+        })
+    print(green(f"{time.time()-t0:.1f}s"))
+
+    # ── Filtrar anotados si se pide ──────────────────────────────────
+    if getattr(args, 'exclude_annotated', False):
+        n_before = len(entries)
+        entries  = [e for e in entries if e["n_seen"] == 0]
+        n_after  = len(entries)
+        excluded = n_before - n_after
+        if excluded:
+            print(f"  {dim(f'Excluidos {excluded} MIDIs ya anotados → quedan {n_after:,}')}")
+        if not entries:
+            print(yellow("  Todos los MIDIs del corpus ya han sido anotados."))
+            return
+
+    n     = min(args.top, len(entries))
+    top   = sorted(entries, key=lambda e: e["score"],  reverse=True)[:n]
+    bot   = sorted(entries, key=lambda e: e["score"])[:n]
+    unc_l = sorted(entries, key=lambda e: e["unc"],    reverse=True)[:n]
+
+    # ── helpers de display ────────────────────────────────────────────
+    def _score_bar(score, width=25):
+        filled = int(score * width)
+        bar    = "█" * filled + "░" * (width - filled)
+        color  = green if score >= 0.65 else (yellow if score >= 0.40 else red)
+        return color(bar)
+
+    def _entry_line(rank, e, show_unc=False):
+        seen_tag = dim(f" [{e['n_seen']}x]") if e["n_seen"] > 0 else ""
+        dur      = format_duration(e["dur"])
+        extra    = (f"  {dim(f'unc={e["unc"]:.2f}')}" if show_unc else "")
+        aff_tag  = (dim(f"  pref={e['pref_score']:.3f} aff={e['aff_score']:.3f}")
+                    if affinity_vectors else "")
+        print(f"  {rank:>4}.  {_score_bar(e['score'])}  "
+              f"{bold(f'{e["score"]:.3f}')}  "
+              f"{cyan(e['name'])}{seen_tag}")
+        print(f"         {dim(f'{dur} · {e["bpm"]} bpm')}{extra}{aff_tag}")
+
+    # ── Estadísticas globales ─────────────────────────────────────────
+    all_scores = [e["score"] for e in entries]
+    mean_score = sum(all_scores) / len(all_scores)
+    sorted_s   = sorted(all_scores)
+    median_s   = sorted_s[len(sorted_s)//2]
+    p25        = sorted_s[int(len(sorted_s)*0.25)]
+    p75        = sorted_s[int(len(sorted_s)*0.75)]
+    n_high     = sum(1 for s in all_scores if s >= 0.65)
+    n_low      = sum(1 for s in all_scores if s <= 0.35)
+    n_mid      = n_total - n_high - n_low
+
+    print(f"\n{bold('─ Distribución global ─')}")
+    hist_full = _corpus_histogram(mean_score, all_scores)
+    for line in hist_full.split("\n"):
+        print(f"  {line}")
+    print()
+    print(f"  Media:   {mean_score:.3f}   Mediana: {median_s:.3f}")
+    print(f"  P25:     {p25:.3f}          P75:     {p75:.3f}")
+    print(f"  Alta preferencia (≥0.65): {green(str(n_high)):>6}  ({n_high/n_total*100:.1f}%)")
+    print(f"  Indiferente    (0.35-0.65):{yellow(str(n_mid)):>6}  ({n_mid/n_total*100:.1f}%)")
+    print(f"  Baja preferencia (≤0.35): {red(str(n_low)):>6}  ({n_low/n_total*100:.1f}%)")
+
+    # ── TOP ───────────────────────────────────────────────────────────
+    print(f"\n{'═'*60}")
+    print(f"  {bold(green(f'TOP {n} — más preferidas'))}")
+    print(f"{'═'*60}")
+    for rank, e in enumerate(top, 1):
+        _entry_line(rank, e)
+    print()
+
+    # ── BOTTOM ────────────────────────────────────────────────────────
+    print(f"{'═'*60}")
+    print(f"  {bold(red(f'BOTTOM {n} — menos preferidas'))}")
+    print(f"{'═'*60}")
+    for rank, e in enumerate(bot, 1):
+        _entry_line(rank, e)
+    print()
+
+    # ── INCIERTAS ─────────────────────────────────────────────────────
+    print(f"{'═'*60}")
+    print(f"  {bold(yellow(f'INCIERTAS {n} — mayor incertidumbre'))}")
+    print(f"  {dim('(donde más ganarías entrenando)')}")
+    print(f"{'═'*60}")
+    for rank, e in enumerate(unc_l, 1):
+        _entry_line(rank, e, show_unc=True)
+    print()
+
+    # ── Modo interactivo ─────────────────────────────────────────────
+    if getattr(args, 'interactive', False):
+        _rank_interactive(args, model, entries, model_file)
+
+    # ── Exportar CSV si se pide ───────────────────────────────────────
+    if args.csv:
+        import csv
+        out_path = args.csv
+        with open(out_path, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            header = ["rank_pref", "score", "uncertainty", "n_seen",
+                      "duration_s", "bpm", "name", "path"]
+            if affinity_vectors:
+                header += ["pref_score", "aff_score"]
+            w.writerow(header)
+            for rank, e in enumerate(
+                sorted(entries, key=lambda x: x["score"], reverse=True), 1
+            ):
+                row = [rank, f"{e['score']:.4f}", f"{e['unc']:.4f}",
+                       e["n_seen"], f"{e['dur']:.1f}", e["bpm"],
+                       e["name"], e["path"]]
+                if affinity_vectors:
+                    row += [f"{e['pref_score']:.4f}", f"{e['aff_score']:.4f}"]
+                w.writerow(row)
+        print(f"  {green('✓')} CSV exportado: {cyan(out_path)}")
+        print(f"  {n_total:,} filas, ordenadas por preferencia descendente.")
 
 def cmd_info(args):
     """Muestra información del modelo guardado."""
@@ -1529,6 +2646,9 @@ def main():
                          help="Directorio raíz que contiene los MIDIs (recursivo)")
     p_index.add_argument("--output", default="corpus.npz",
                          help="Archivo .npz de salida (default: corpus.npz)")
+    p_index.add_argument("--extended-features", dest="extended_features",
+                         action="store_true",
+                         help="Calcular 20 features en lugar de 10 (más lento, mejor discriminación)")
 
     # ── train ──────────────────────────────────────────────────────
     p_train = sub.add_parser("train", help="Sesión de entrenamiento interactiva")
@@ -1558,10 +2678,55 @@ def main():
     p_eval.add_argument("--weight", type=float, default=0.5,
                         help="Peso de la afinidad [0-1] (default: 0.5). "
                              "0=solo preferencia, 1=solo afinidad")
+    p_eval.add_argument("--corpus", default=None,
+                        help="Corpus .npz para percentil y vecinos (opcional pero recomendado)")
     p_eval.add_argument("--verbose", action="store_true",
                         help="Desglose completo de dimensiones")
     p_eval.add_argument("--json", dest="json_out", action="store_true",
                         help="Salida JSON machine-readable al final")
+
+    # ── rank ───────────────────────────────────────────────────────
+    p_rank = sub.add_parser("rank", help="Escanear corpus → top/bottom/inciertas")
+    p_rank.add_argument("corpus",
+                        help="Archivo .npz del corpus a escanear")
+    p_rank.add_argument("--model", default="prefs",
+                        help="Nombre base del modelo (default: prefs)")
+    p_rank.add_argument("--top", type=int, default=20,
+                        help="Número de entradas por lista (default: 20)")
+    p_rank.add_argument("--affinity", default=None,
+                        help="Carpeta con obras afines para ponderar afinidad")
+    p_rank.add_argument("--weight", type=float, default=0.5,
+                        help="Peso de la afinidad [0-1] (default: 0.5). "
+                             "0=solo preferencia, 1=solo afinidad")
+    p_rank.add_argument("--exclude-annotated", dest="exclude_annotated",
+                        action="store_true",
+                        help="Excluir MIDIs ya anotados en sesiones previas")
+    p_rank.add_argument("--interactive", action="store_true",
+                        help="Anotar MIDIs directamente desde el ranking")
+    p_rank.add_argument("--soundfont", default=None,
+                        help="Soundfont .sf2 para reproducción en modo interactivo")
+    p_rank.add_argument("--csv", default=None,
+                        help="Exportar ranking completo a CSV")
+
+    # ── set ────────────────────────────────────────────────────────
+    p_set = sub.add_parser("set", help="Asignar preferencia directamente a un MIDI")
+    p_set.add_argument("midi", nargs="+",
+                       help="Archivo(s) MIDI o directorio")
+    p_set.add_argument("--score", type=int, required=True, choices=[1,2,3,4,5],
+                       help="Preferencia a asignar (1-5)")
+    p_set.add_argument("--model", default="prefs",
+                       help="Nombre base del modelo (default: prefs)")
+    p_set.add_argument("--repetitions", type=int, default=10,
+                       help="Fuerza del ajuste: nº de veces que se aplica (default: 10)")
+
+    # ── validate ───────────────────────────────────────────────────
+    p_val = sub.add_parser("validate", help="Validación cruzada del modelo")
+    p_val.add_argument("--model", default="prefs",
+                       help="Nombre base del modelo (default: prefs)")
+    p_val.add_argument("--corpus", default=None,
+                       help="Corpus .npz para recuperar vectores del historial")
+    p_val.add_argument("--folds", type=int, default=5,
+                       help="Número de folds (default: 5)")
 
     # ── info ───────────────────────────────────────────────────────
     p_info = sub.add_parser("info", help="Inspeccionar modelo guardado")
@@ -1570,12 +2735,18 @@ def main():
 
     args = parser.parse_args()
 
-    if args.cmd == "index":
+    if args.cmd == "set":
+        cmd_set(args)
+    elif args.cmd == "index":
         cmd_index(args)
     elif args.cmd == "train":
         cmd_train(args)
     elif args.cmd == "eval":
         cmd_eval(args)
+    elif args.cmd == "rank":
+        cmd_rank(args)
+    elif args.cmd == "validate":
+        cmd_validate(args)
     elif args.cmd == "info":
         cmd_info(args)
 
