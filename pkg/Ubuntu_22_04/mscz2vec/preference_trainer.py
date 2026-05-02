@@ -165,6 +165,23 @@
 ║    --folds N       Número de folds (def: 5)                          ║
 ║                                                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
+║  FEATURES MELÓDICAS (--melodic-features en index)                   ║
+║                                                                      ║
+║    python preference_trainer.py index ./melodias/ --melodic-features║
+║                                                                      ║
+║  16 features optimizadas para melodía monofónica. Elimina           ║
+║  polifonía y dinámica de grupo; añade análisis melódico fino:       ║
+║    pitch_center · pitch_range · interval_mean · contour             ║
+║    density · rhythm_variance · velocity_mean · silence_ratio        ║
+║    melodic_peak_ratio · step_ratio · leap_ratio · phrase_arch       ║
+║    climax_position · note_duration_mean · pitch_entropy             ║
+║    interval_entropy                                                  ║
+║                                                                      ║
+║  El modelo detecta automáticamente el modo por el nº de pesos       ║
+║  (10=base, 16=melódico, 20=extendido). Los modelos son              ║
+║  incompatibles entre modos — usa un archivo .prefs.json diferente.  ║
+║                                                                      ║
+╠══════════════════════════════════════════════════════════════════════╣
 ║  FEATURES EXTENDIDAS (--extended-features en index)                 ║
 ║                                                                      ║
 ║    python preference_trainer.py index ./midis/ --extended-features  ║
@@ -337,11 +354,59 @@ DIM_LABELS_EXTENDED = {
 
 DIM_LABELS = {**DIM_LABELS_BASE, **DIM_LABELS_EXTENDED}
 
+# Features melódicas — para MIDIs de una sola voz (--melodic-features)
+# Reemplaza el set base: elimina polyphony/velocity_variance (irrelevantes
+# en melodía monofónica) y añade análisis melódico fino.
+DIM_NAMES_MELODIC = [
+    "pitch_center",        # 0  altura media normalizada (0-1)
+    "pitch_range",         # 1  rango de alturas normalizado (0-1)
+    "interval_mean",       # 2  intervalo medio (0-1)
+    "contour",             # 3  dirección global (0 baja, 0.5 plana, 1 sube)
+    "density",             # 4  notas por segundo (0-1)
+    "rhythm_variance",     # 5  irregularidad rítmica (0-1)
+    "velocity_mean",       # 6  dinámica media (0-1)
+    "silence_ratio",       # 7  proporción de silencio (0-1)
+    "melodic_peak_ratio",  # 8  posición de la nota más alta dentro del rango (0-1)
+    "step_ratio",          # 9  proporción de movimientos por grado (<=2 semitonos)
+    "leap_ratio",          # 10 proporción de saltos grandes (>=7 semitonos)
+    "phrase_arch",         # 11 curvatura de frase: sube-y-baja(1) vs monótona(0)
+    "climax_position",     # 12 posición temporal del clímax (0=inicio, 1=final)
+    "note_duration_mean",  # 13 duración media de notas normalizada
+    "pitch_entropy",       # 14 entropía de distribución de alturas (diversidad)
+    "interval_entropy",    # 15 entropía de intervalos (variedad melódica)
+]
 
-def vectorize_midi(path: str, extended: bool = False) -> dict:
+DIM_LABELS_MELODIC = {
+    "pitch_center":       ("grave", "agudo"),
+    "pitch_range":        ("estrecho", "amplio"),
+    "interval_mean":      ("stepwise", "saltos grandes"),
+    "contour":            ("descendente", "ascendente"),
+    "density":            ("sparse", "denso"),
+    "rhythm_variance":    ("regular", "irregular"),
+    "velocity_mean":      ("piano", "forte"),
+    "silence_ratio":      ("continuo", "silencioso"),
+    "melodic_peak_ratio": ("cima baja", "cima alta"),
+    "step_ratio":         ("pocas notas conjuntas", "movimiento conjunto"),
+    "leap_ratio":         ("sin saltos", "muchos saltos"),
+    "phrase_arch":        ("línea recta", "arco de frase"),
+    "climax_position":    ("clímax al inicio", "clímax al final"),
+    "note_duration_mean": ("notas cortas", "notas largas"),
+    "pitch_entropy":      ("tonal fijo", "tonal diverso"),
+    "interval_entropy":   ("melódica repetitiva", "melódica variada"),
+}
+
+DIM_LABELS = {**DIM_LABELS_BASE, **DIM_LABELS_EXTENDED, **DIM_LABELS_MELODIC}
+
+
+def vectorize_midi(path: str, extended: bool = False,
+                   melodic: bool = False) -> dict:
     """
-    Extrae vector de 10 dimensiones base (o 20 con extended=True).
-    Solo mido + math, sin numpy.
+    Extrae vector de características de un MIDI. Solo mido + math, sin numpy.
+
+    Modos:
+      base     (default) — 10 features generales
+      extended            — 20 features (base + temporales/armónicas)
+      melodic             — 16 features optimizadas para melodía monofónica
     """
     result = {
         "path": str(path),
@@ -456,8 +521,91 @@ def vectorize_midi(path: str, extended: bool = False) -> dict:
         velocity_mean, velocity_variance, silence_ratio,
     ]
 
-    if not extended:
+    if not extended and not melodic:
         result["vector"] = base_vector
+        return result
+
+    # ── Features melódicas (melodic=True) ────────────────────────────
+    if melodic:
+        # 8. melodic_peak_ratio — altura de la nota más alta dentro del rango
+        p_min, p_max = min(pitches), max(pitches)
+        melodic_peak_ratio = (p_max - p_min) / 87.0 if p_max > p_min else 0.5
+
+        # 9. step_ratio — proporción de movimientos por grado (≤2 semit.)
+        if intervals:
+            step_ratio = sum(1 for iv in intervals if iv <= 2) / len(intervals)
+        else:
+            step_ratio = 0.5
+
+        # 10. leap_ratio — proporción de saltos grandes (≥7 semit.)
+        if intervals:
+            leap_ratio = sum(1 for iv in intervals if iv >= 7) / len(intervals)
+        else:
+            leap_ratio = 0.0
+
+        # 11. phrase_arch — curvatura de frase media
+        # Divide la melodía en frases de ~8 notas y mide si cada una
+        # tiene forma de arco (sube luego baja o viceversa)
+        phrase_size = 8
+        arches = []
+        for start in range(0, len(pitches) - phrase_size, phrase_size // 2):
+            phrase = pitches[start:start + phrase_size]
+            if len(phrase) < 4:
+                continue
+            mid = len(phrase) // 2
+            first_half  = phrase[:mid]
+            second_half = phrase[mid:]
+            m1 = sum(first_half)  / len(first_half)
+            m2 = sum(second_half) / len(second_half)
+            center = sum(phrase) / len(phrase)
+            # Arco: si el centro de la frase está por encima/debajo de ambos extremos
+            extremes_mean = (phrase[0] + phrase[-1]) / 2
+            arch = abs(center - extremes_mean) / max(p_max - p_min, 1)
+            arches.append(min(arch, 1.0))
+        phrase_arch = sum(arches) / len(arches) if arches else 0.0
+
+        # 12. climax_position — posición temporal de la nota más alta
+        max_pitch_val = max(pitches)
+        max_indices   = [i for i, p in enumerate(pitches) if p == max_pitch_val]
+        climax_idx    = max_indices[len(max_indices) // 2]
+        climax_onset  = (sorted(onset_times)[climax_idx]
+                         if climax_idx < len(onset_times) else total_dur / 2)
+        climax_position = min(climax_onset / max(total_dur, 1.0), 1.0)
+
+        # 13. note_duration_mean — duración media normalizada (sat. a 4s)
+        durations = [n[3] for n in notes]
+        note_duration_mean = min(sum(durations) / len(durations) / 4.0, 1.0)
+
+        # 14. pitch_entropy — entropía de clases de altura (12 clases)
+        pitch_classes = [0] * 12
+        for p in pitches:
+            pitch_classes[p % 12] += 1
+        n_p = sum(pitch_classes) or 1
+        pitch_entropy = 0.0
+        for c in pitch_classes:
+            if c > 0:
+                p_i = c / n_p
+                pitch_entropy -= p_i * math.log2(p_i)
+        pitch_entropy = min(pitch_entropy / math.log2(12), 1.0)
+
+        # 15. interval_entropy — entropía de intervalos (13 clases)
+        interval_classes = [0] * 13
+        for iv in intervals:
+            interval_classes[min(iv, 12)] += 1
+        n_iv = sum(interval_classes) or 1
+        interval_entropy = 0.0
+        for c in interval_classes:
+            if c > 0:
+                p_i = c / n_iv
+                interval_entropy -= p_i * math.log2(p_i)
+        interval_entropy = min(interval_entropy / math.log2(13), 1.0)
+
+        result["vector"] = [
+            pitch_center, pitch_range, interval_mean, contour,
+            density, rhythm_variance, velocity_mean, silence_ratio,
+            melodic_peak_ratio, step_ratio, leap_ratio, phrase_arch,
+            climax_position, note_duration_mean, pitch_entropy, interval_entropy,
+        ]
         return result
 
     # ── Features extendidas ──────────────────────────────────────────
@@ -836,7 +984,13 @@ class PreferenceModel:
 
     def top_dimensions(self, n: int = 5) -> list:
         """Devuelve las n dimensiones con mayor peso absoluto."""
-        all_names = DIM_NAMES_BASE + DIM_NAMES_EXTENDED
+        n_w = len(self.weights)
+        if n_w == 16:
+            all_names = DIM_NAMES_MELODIC
+        elif n_w == 20:
+            all_names = DIM_NAMES_BASE + DIM_NAMES_EXTENDED
+        else:
+            all_names = DIM_NAMES_BASE
         indexed = sorted(
             enumerate(self.weights),
             key=lambda x: abs(x[1]), reverse=True
@@ -846,7 +1000,12 @@ class PreferenceModel:
 
     def summary(self) -> str:
         n_features = len(self.weights)
-        feat_label = f"extendido ({n_features} dims)" if n_features > 10 else f"base ({n_features} dims)"
+        if n_features == 16:
+            feat_label = f"melódico ({n_features} dims)"
+        elif n_features == 20:
+            feat_label = f"extendido ({n_features} dims)"
+        else:
+            feat_label = f"base ({n_features} dims)"
         lines = []
         lines.append(f"  Ejemplos de entrenamiento: {bold(str(self.n_train))}")
         lines.append(f"  Modo de features:          {feat_label}")
@@ -1633,7 +1792,9 @@ def cmd_eval(args):
                          list(affinity_dir.rglob("*.midi")))
             print(f"  Cargando {len(aff_files)} obras afines de {cyan(str(affinity_dir))}...")
             for mf in aff_files:
-                res = vectorize_midi(str(mf), extended=_use_extended_eval)
+                res = vectorize_midi(str(mf),
+                                     extended=_use_extended_eval,
+                                     melodic=_use_melodic_eval)
                 if res["vector"]:
                     affinity_vectors.append(res["vector"])
             print(f"  {green(str(len(affinity_vectors)))} vectorizadas correctamente.")
@@ -1660,10 +1821,14 @@ def cmd_eval(args):
     results = []
     print(f"\n{'─'*60}")
     # Detect if model was trained with extended features
-    _use_extended_eval = len(model.weights) > 10 if model.weights else False
+    _n_weights = len(model.weights) if model.weights else 10
+    _use_extended_eval = _n_weights == 20
+    _use_melodic_eval  = _n_weights == 16
 
     for mf in midi_files:
-        res = vectorize_midi(str(mf), extended=_use_extended_eval)
+        res = vectorize_midi(str(mf),
+                             extended=_use_extended_eval,
+                             melodic=_use_melodic_eval)
         if res["error"]:
             err_msg = res["error"]
             print("  " + yellow("!") + f"  {mf.name}  " + dim("error: " + err_msg))
@@ -1956,7 +2121,9 @@ def cmd_set(args):
 
     rating  = args.score
     reps    = getattr(args, 'repetitions', 10)
-    use_ext = len(model.weights) > 10
+    _n_w_set = len(model.weights) if model.weights else 10
+    use_ext  = _n_w_set == 20
+    use_mel  = _n_w_set == 16
 
     print(f"\n{bold('PREFERENCE TRAINER — SET')}")
     print(f"  Modelo: {cyan(model_file)}  ({model.n_train} ejemplos previos)")
@@ -1965,7 +2132,7 @@ def cmd_set(args):
 
     updated = 0
     for mf in midi_files:
-        res = vectorize_midi(str(mf), extended=use_ext)
+        res = vectorize_midi(str(mf), extended=use_ext, melodic=use_mel)
         if res["error"]:
             print(f"  {yellow('!')} {mf.name}  {dim('error: ' + res['error'])}")
             continue
@@ -2242,7 +2409,9 @@ def cmd_index(args):
               f"OK:{len(vectors)}  Err:{errors}",
               end="", flush=True)
 
-        r = vectorize_midi(str(path), extended=getattr(args, 'extended_features', False))
+        r = vectorize_midi(str(path),
+                           extended=getattr(args, 'extended_features', False),
+                           melodic=getattr(args, 'melodic_features', False))
 
         if r["error"]:
             errors += 1
@@ -2267,7 +2436,12 @@ def cmd_index(args):
     clean_v, clean_p, clean_m = [], [], []
     bad = 0
     for v, p, m in zip(vectors, paths, metadata):
-        expected_dims = 20 if getattr(args, "extended_features", False) else 10
+        if getattr(args, 'melodic_features', False):
+            expected_dims = 16
+        elif getattr(args, 'extended_features', False):
+            expected_dims = 20
+        else:
+            expected_dims = 10
         if v is not None and len(v) == expected_dims and all(x == x for x in v):
             clean_v.append(v)
             clean_p.append(p)
@@ -2282,9 +2456,12 @@ def cmd_index(args):
     arr_paths   = np.array(clean_p)
     arr_meta    = np.array([json.dumps(m) for m in clean_m])
 
-    actual_dim_names = (DIM_NAMES_BASE + DIM_NAMES_EXTENDED
-                        if getattr(args, 'extended_features', False)
-                        else DIM_NAMES_BASE)
+    if getattr(args, 'melodic_features', False):
+        actual_dim_names = DIM_NAMES_MELODIC
+    elif getattr(args, 'extended_features', False):
+        actual_dim_names = DIM_NAMES_BASE + DIM_NAMES_EXTENDED
+    else:
+        actual_dim_names = DIM_NAMES_BASE
     np.savez_compressed(
         str(output),
         vectors   = arr_vectors,
@@ -2443,9 +2620,13 @@ def cmd_rank(args):
                          list(affinity_dir.rglob("*.midi")))
             print(f"  Cargando {len(aff_files)} obras afines de {cyan(str(affinity_dir))}...",
                   end=" ", flush=True)
-            _use_ext_rank = len(model.weights) > 10 if model.weights else False
+            _n_w_rank = len(model.weights) if model.weights else 10
+            _use_ext_rank = _n_w_rank == 20
+            _use_mel_rank = _n_w_rank == 16
             for mf in aff_files:
-                res = vectorize_midi(str(mf), extended=_use_ext_rank)
+                res = vectorize_midi(str(mf),
+                                     extended=_use_ext_rank,
+                                     melodic=_use_mel_rank)
                 if res["vector"]:
                     affinity_vectors.append(res["vector"])
             print(green(f"{len(affinity_vectors)} OK"))
@@ -2649,6 +2830,9 @@ def main():
     p_index.add_argument("--extended-features", dest="extended_features",
                          action="store_true",
                          help="Calcular 20 features en lugar de 10 (más lento, mejor discriminación)")
+    p_index.add_argument("--melodic-features", dest="melodic_features",
+                         action="store_true",
+                         help="Calcular 16 features melódicas (para MIDIs de una sola voz)")
 
     # ── train ──────────────────────────────────────────────────────
     p_train = sub.add_parser("train", help="Sesión de entrenamiento interactiva")
