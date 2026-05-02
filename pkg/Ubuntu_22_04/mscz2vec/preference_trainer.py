@@ -5,49 +5,196 @@
 ║         Aprende tus preferencias musicales. Evalúa MIDIs.          ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║                                                                      ║
-║  Tres comandos — pipeline completo autónomo:                        ║
+║  7 comandos — pipeline completo autónomo:                           ║
+║  index · train · eval · rank · set · validate · info               ║
 ║                                                                      ║
+╠══════════════════════════════════════════════════════════════════════╣
 ║  INDEX — vectoriza un corpus de MIDIs y genera el índice .npz      ║
 ║                                                                      ║
 ║    python preference_trainer.py index ./midis/                      ║
 ║    python preference_trainer.py index ./midis/ --output corpus.npz ║
+║    python preference_trainer.py index ./midis/ --extended-features  ║
+║    python preference_trainer.py index ./melodias/ --melodic-features║
 ║                                                                      ║
-║  Procesa todos los .mid/.midi del directorio (recursivo) y guarda  ║
-║  un vector de 10 dimensiones por archivo:                           ║
-║    pitch_center · pitch_range · interval_mean · contour            ║
-║    density · rhythm_variance · polyphony                           ║
-║    velocity_mean · velocity_variance · silence_ratio               ║
+║  Procesa todos los .mid/.midi del directorio (recursivo). Solo      ║
+║  hay que ejecutarlo una vez (100 000 MIDIs ≈ 1-3 h).               ║
 ║                                                                      ║
-║  100.000 MIDIs ≈ 1-3 horas. Solo hay que correrlo una vez.         ║
+║  Modos de features (elige uno; incompatibles entre sí):            ║
+║                                                                      ║
+║  · Base (10 dims, defecto)                                          ║
+║      pitch_center · pitch_range · interval_mean · contour          ║
+║      density · rhythm_variance · polyphony                         ║
+║      velocity_mean · velocity_variance · silence_ratio             ║
+║                                                                      ║
+║  · --extended-features (20 dims)                                    ║
+║      Las 10 base + tension_arc · density_arc · pitch_entropy       ║
+║      interval_entropy · repetition · harmonic_tension              ║
+║      rhythmic_complexity · note_duration_mean                      ║
+║      climax_position · dynamic_arc                                  ║
+║      Captura estructura temporal y armonía; mejor discriminación.  ║
+║                                                                      ║
+║  · --melodic-features (16 dims, solo melodía monofónica)           ║
+║      pitch_center · pitch_range · interval_mean · contour          ║
+║      density · rhythm_variance · velocity_mean · silence_ratio     ║
+║      melodic_peak_ratio · step_ratio · leap_ratio · phrase_arch    ║
+║      climax_position · note_duration_mean · pitch_entropy          ║
+║      interval_entropy                                               ║
+║                                                                      ║
+║  El modelo detecta el modo automáticamente por el nº de pesos      ║
+║  (10=base · 16=melódico · 20=extendido). Modelos de distintos      ║
+║  modos son incompatibles — usa archivos .prefs.json separados.     ║
 ║                                                                      ║
 ║  Opciones:                                                           ║
-║    --output FILE   Nombre del índice (default: corpus.npz)          ║
+║    --output FILE           Archivo .npz de salida (def: corpus.npz) ║
+║    --extended-features     Vectores de 20 dimensiones               ║
+║    --melodic-features      Vectores de 16 dims para melodía mono    ║
 ║                                                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║  TRAIN — aprende tus preferencias desde un corpus indexado          ║
+║  TRAIN — sesión interactiva de anotación                            ║
 ║                                                                      ║
-║    # Modo rating: puntúa MIDIs de 1 a 5                             ║
+║    # Modo rating: puntúa MIDIs de 1 a 5 (defecto)                  ║
 ║    python preference_trainer.py train corpus.npz                    ║
-║    python preference_trainer.py train corpus.npz --mode rating      ║
+║    python preference_trainer.py train corpus.npz --rounds 30       ║
 ║                                                                      ║
-║    # Modo contraste: elige entre dos MIDIs                           ║
-║    python preference_trainer.py train corpus.npz --mode contrast    ║
+║    # Modo contraste: elige entre dos MIDIs                          ║
+║    python preference_trainer.py train corpus.npz --mode contrast   ║
 ║                                                                      ║
-║    # Guardar modelo en archivo específico                            ║
-║    python preference_trainer.py train corpus.npz --model mis_prefs  ║
+║    # Con soundfont y modelo específico                              ║
+║    python preference_trainer.py train corpus.npz                   ║
+║        --model mis_prefs --soundfont ./gm.sf2 --rounds 20          ║
+║                                                                      ║
+║  Controles durante la sesión:                                        ║
+║    Rating:    1-5=puntuar · p=reproducir · x=parar · q=guardar     ║
+║    Contraste: A/B=elegir · pa/pb=reproducir A o B · x=parar        ║
+║                                                                      ║
+║  Selección activa de muestras (no aleatoria):                       ║
+║    Rating:    muestra la pieza con mayor incertidumbre del modelo   ║
+║    Contraste: muestra el par con mayor desacuerdo esperado          ║
+║                                                                      ║
+║  Opciones:                                                           ║
+║    --mode rating|contrast  Modalidad de anotación (def: rating)     ║
+║    --model FILE            Nombre base del modelo (def: prefs)      ║
+║    --rounds N              Número de rondas (def: 20)               ║
+║    --soundfont FILE        Soundfont .sf2 para timidity o pygame    ║
+║    --no-autoplay           No reproducir automáticamente            ║
+║    --candidate-pool N      Pool para selección activa (def: 50)     ║
+║                            Mayor valor = mejor selección, más lento ║
 ║                                                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║  EVAL — evalúa un MIDI con el modelo entrenado                       ║
+║  EVAL — evalúa uno o varios MIDIs con el modelo entrenado           ║
 ║                                                                      ║
-║    # Solo preferencia aprendida                                      ║
-║    python preference_trainer.py eval pieza.mid --model mis_prefs    ║
+║    # Evaluación básica                                               ║
+║    python preference_trainer.py eval pieza.mid --model mis_prefs   ║
+║                                                                      ║
+║    # Con percentil, histograma y vecinos del corpus                 ║
+║    python preference_trainer.py eval pieza.mid                      ║
+║        --model mis_prefs --corpus corpus.npz                        ║
 ║                                                                      ║
 ║    # Preferencia + afinidad a obras de referencia                   ║
 ║    python preference_trainer.py eval pieza.mid                      ║
-║        --model mis_prefs --affinity ./obras_afines/ --weight 0.4    ║
+║        --model mis_prefs --affinity ./obras_afines/ --weight 0.4   ║
 ║                                                                      ║
-║    # Evaluar varios MIDIs a la vez                                  ║
-║    python preference_trainer.py eval *.mid --model mis_prefs        ║
+║    # Múltiples MIDIs + desglose de dimensiones + salida JSON        ║
+║    python preference_trainer.py eval *.mid                          ║
+║        --model mis_prefs --corpus corpus.npz --verbose --json       ║
+║                                                                      ║
+║  Salida con --corpus (opcional pero recomendado):                   ║
+║    · Score final y score de preferencia/afinidad por separado       ║
+║    · Percentil sobre el corpus completo                             ║
+║    · Histograma ASCII con posición marcada                          ║
+║    · Dimensiones que favorecen / perjudican el score (--verbose)    ║
+║    · Vecinos más cercanos con rating conocido                       ║
+║                                                                      ║
+║  Opciones:                                                           ║
+║    --model FILE    Nombre base del modelo (def: prefs)              ║
+║    --corpus FILE   .npz para percentil, histograma y vecinos        ║
+║    --affinity DIR  Carpeta de obras afines                          ║
+║    --weight W      Peso afinidad 0-1 (def: 0.5)                     ║
+║                    0 = solo preferencia · 1 = solo afinidad         ║
+║    --verbose       Desglose completo por dimensión                  ║
+║    --json          Salida JSON machine-readable al final            ║
+║                                                                      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  RANK — escanear y clasificar el corpus completo                    ║
+║                                                                      ║
+║    python preference_trainer.py rank corpus.npz --model prefs      ║
+║                                                                      ║
+║    # Con afinidad y exportación CSV                                 ║
+║    python preference_trainer.py rank corpus.npz                     ║
+║        --model prefs --affinity ./referencias/ --weight 0.4        ║
+║        --top 30 --csv ranking.csv                                   ║
+║                                                                      ║
+║    # Solo MIDIs no anotados, con anotación interactiva              ║
+║    python preference_trainer.py rank corpus.npz --model prefs      ║
+║        --exclude-annotated --interactive --soundfont ./gm.sf2      ║
+║                                                                      ║
+║  Muestra:                                                            ║
+║    · Histograma global de preferencia sobre el corpus               ║
+║    · TOP N — las más preferidas según el modelo                     ║
+║    · BOTTOM N — las menos preferidas                                ║
+║    · INCIERTAS N — donde el modelo duda más (candidatas a train)    ║
+║    · Exportación opcional a CSV con ranking completo                ║
+║                                                                      ║
+║  Opciones:                                                           ║
+║    --model FILE          Nombre base del modelo (def: prefs)        ║
+║    --top N               Entradas por lista (def: 20)               ║
+║    --affinity DIR        Carpeta de obras afines                    ║
+║    --weight W            Peso afinidad 0-1 (def: 0.5)               ║
+║    --exclude-annotated   Excluir MIDIs ya anotados en train         ║
+║    --interactive         Anotar MIDIs directamente desde el ranking ║
+║    --soundfont FILE      Soundfont .sf2 para modo interactivo       ║
+║    --csv FILE            Exportar ranking completo a CSV            ║
+║                                                                      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  SET — anotar preferencia directamente sin sesión interactiva       ║
+║                                                                      ║
+║    python preference_trainer.py set cancion.mid --score 5           ║
+║    python preference_trainer.py set *.mid --score 3 --model prefs  ║
+║    python preference_trainer.py set ./carpeta/ --score 4            ║
+║                                                                      ║
+║    # Con fuerza de ajuste personalizada                             ║
+║    python preference_trainer.py set pieza.mid --score 5            ║
+║        --model mis_prefs --repetitions 20                           ║
+║                                                                      ║
+║  Asigna un rating directamente y actualiza el modelo               ║
+║  inmediatamente. Muestra el cambio de score antes/después.          ║
+║  --repetitions controla la fuerza del ajuste (se aplica N veces).  ║
+║                                                                      ║
+║  Opciones:                                                           ║
+║    --score N         Preferencia a asignar, obligatorio (1-5)       ║
+║    --model FILE      Nombre base del modelo (def: prefs)            ║
+║    --repetitions N   Fuerza del ajuste, nº de aplicaciones (def:10) ║
+║                                                                      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  VALIDATE — validación cruzada del modelo                           ║
+║                                                                      ║
+║    python preference_trainer.py validate --model prefs              ║
+║    python preference_trainer.py validate --model prefs              ║
+║        --corpus corpus.npz --folds 10                               ║
+║                                                                      ║
+║  Mide con k-fold cross-validation:                                  ║
+║    · MAE — error absoluto medio en predicción de rating             ║
+║    · Pair accuracy — % de pares ordenados correctamente             ║
+║    · Correlación de Spearman entre predicciones y ratings reales    ║
+║  Incluye interpretación automática y recomendaciones de mejora.     ║
+║  Requiere al menos 10 ejemplos anotados para resultados fiables.    ║
+║                                                                      ║
+║  Opciones:                                                           ║
+║    --model FILE    Nombre base del modelo (def: prefs)              ║
+║    --corpus FILE   .npz para recuperar vectores del historial       ║
+║    --folds N       Número de folds (def: 5)                         ║
+║                                                                      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  INFO — inspeccionar el modelo guardado                             ║
+║                                                                      ║
+║    python preference_trainer.py info                                ║
+║    python preference_trainer.py info --model mis_prefs             ║
+║                                                                      ║
+║  Muestra los pesos aprendidos por dimensión, número de ejemplos    ║
+║  anotados, historial de sesiones y estadísticas del modelo.         ║
+║                                                                      ║
+║  Opciones:                                                           ║
+║    --model FILE    Nombre base del modelo (def: prefs)              ║
 ║                                                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║  REPRODUCCIÓN INTEGRADA                                              ║
@@ -55,172 +202,49 @@
 ║  Cada MIDI se reproduce automáticamente al presentarse.             ║
 ║  La música continúa mientras el usuario decide; se para al votar.  ║
 ║                                                                      ║
-║  Controles durante la votación:                                      ║
-║  · Rating:   p=volver a reproducir · x=parar                        ║
-║  · Contraste: pa/pb=reproducir A o B · x=parar                      ║
-║                                                                      ║
 ║  Backends de audio (se detectan automáticamente):                   ║
-║    pygame   pip install pygame   (sin proceso externo)              ║
-║    timidity sudo apt install timidity  (mejor con soundfont)        ║
+║    pygame    pip install pygame          (recomendado, sin externo) ║
+║    timidity  sudo apt install timidity   (mejor calidad con sf2)    ║
+║                                                                      ║
+║  Para usar soundfont con timidity:                                  ║
+║    python preference_trainer.py train corpus.npz                   ║
+║        --soundfont /usr/share/sounds/sf2/FluidR3_GM.sf2            ║
 ║                                                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║  SELECCIÓN ACTIVA DE MUESTRAS                                        ║
+║  FLUJO TÍPICO                                                        ║
 ║                                                                      ║
-║  El programa no presenta muestras al azar. En cada paso elige       ║
-║  la muestra (o el par) que maximiza la información ganada:          ║
+║    # 1. Indexar el corpus (una sola vez)                            ║
+║    python preference_trainer.py index ./midis/                      ║
+║    python preference_trainer.py index ./midis/ --extended-features  ║
 ║                                                                      ║
-║  · Modo rating:    selección por máxima incertidumbre del modelo    ║
-║    La muestra donde el modelo predice con menos confianza es        ║
-║    la que más puede cambiar los pesos → se presenta primero.        ║
+║    # 2. Entrenar el modelo (repetir hasta tener ≥30 ejemplos)       ║
+║    python preference_trainer.py train corpus.npz --rounds 20       ║
+║    python preference_trainer.py train corpus.npz --mode contrast   ║
 ║                                                                      ║
-║  · Modo contraste: selección por máximo desacuerdo esperado         ║
-║    Se buscan pares donde los dos MIDIs son similares en el espacio  ║
-║    vectorial pero el modelo los separa con poca confianza,          ║
-║    forzando una decisión informativa.                                ║
+║    # 3. Validar la calidad del modelo                               ║
+║    python preference_trainer.py validate --model prefs             ║
+║                                                                      ║
+║    # 4. Evaluar una pieza propia                                    ║
+║    python preference_trainer.py eval mi_pieza.mid                  ║
+║        --model prefs --corpus corpus.npz --verbose                 ║
+║                                                                      ║
+║    # 5. Clasificar el corpus entero y exportar                      ║
+║    python preference_trainer.py rank corpus.npz                    ║
+║        --model prefs --top 50 --csv ranking.csv                    ║
+║                                                                      ║
+║    # 6. Anotar manualmente sin sesión interactiva                   ║
+║    python preference_trainer.py set favorita.mid --score 5         ║
+║                                                                      ║
+║    # 7. Inspeccionar el modelo                                      ║
+║    python preference_trainer.py info --model prefs                 ║
 ║                                                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║  MODELO DE PREFERENCIAS                                              ║
 ║                                                                      ║
-║  Regresión lineal sobre los 10 vectores musicales del corpus.       ║
+║  Regresión lineal sobre los vectores musicales del corpus.          ║
 ║  Entrenamiento incremental con SGD. Se guarda como JSON             ║
 ║  entre sesiones y acumula ejemplos de forma indefinida.             ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  OPCIONES INDEX                                                      ║
-║    --output FILE             Archivo .npz de salida (def: corpus.npz)║
-║                                                                      ║
-║  OPCIONES TRAIN                                                      ║
-║    --mode rating|contrast   Modalidad de anotación (def: rating)    ║
-║    --model FILE              Nombre base del modelo (def: prefs)     ║
-║    --rounds N                Número de rondas (def: 20)             ║
-║    --soundfont FILE          Soundfont .sf2 para timidity            ║
-║    --no-autoplay             No reproducir automáticamente           ║
-║    --candidate-pool N        Pool de candidatos para selección activa║
-║                              (def: 50, mayor = mejor selección)      ║
-║                                                                      ║
-║  OPCIONES EVAL                                                       ║
-║    --model FILE              Nombre base del modelo (def: prefs)     ║
-║    --corpus FILE             .npz para percentil, vecinos e          ║
-║                              histograma (opcional pero recomendado)  ║
-║    --affinity DIR            Carpeta de obras afines (opcional)      ║
-║    --weight W                Peso de la afinidad 0-1 (def: 0.5)      ║
-║                              0 = solo preferencia, 1 = solo afinidad ║
-║    --verbose                 Desglose completo por dimensión         ║
-║    --json                    Salida JSON machine-readable            ║
-║                                                                      ║
-║  CONTEXTO DE EVALUACIÓN (automático con --corpus)                   ║
-║    · Percentil sobre el corpus completo o las anotaciones previas   ║
-║    · Histograma ASCII con posición marcada                          ║
-║    · Dimensiones que favorecen / perjudican el score                ║
-║    · Vecinos más cercanos del corpus con rating conocido            ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  RANK — escanear el corpus completo                                  ║
-║                                                                      ║
-║    python preference_trainer.py rank corpus.npz --model prefs       ║
-║    python preference_trainer.py rank corpus.npz --top 30 --csv r.csv║
-║    python preference_trainer.py rank corpus.npz                     ║
-║        --affinity ./referencias/ --weight 0.4                       ║
-║                                                                      ║
-║  Muestra:                                                            ║
-║    · Histograma global de preferencia sobre el corpus               ║
-║    · TOP N — las más preferidas según el modelo                     ║
-║    · BOTTOM N — las menos preferidas                                ║
-║    · INCIERTAS N — donde el modelo duda más (entrenar aquí)         ║
-║    · Exportación opcional a CSV con ranking completo                ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --model FILE    Nombre base del modelo (def: prefs)               ║
-║    --top N         Entradas por lista (def: 20)                      ║
-║    --affinity DIR  Carpeta de obras afines para ponderar afinidad    ║
-║    --weight W      Peso de la afinidad 0-1 (def: 0.5)               ║
-║    --csv FILE      Exportar ranking completo a CSV                   ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  SET — anotar preferencia directamente                               ║
-║                                                                      ║
-║    python preference_trainer.py set cancion.mid --score 5           ║
-║    python preference_trainer.py set *.mid --score 3 --model prefs   ║
-║    python preference_trainer.py set ./carpeta/ --score 4            ║
-║                                                                      ║
-║  Anota el rating sin sesión interactiva. Actualiza el modelo        ║
-║  inmediatamente y muestra el cambio de score antes/después.         ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  VALIDATE — validación cruzada del modelo                            ║
-║                                                                      ║
-║    python preference_trainer.py validate --model prefs               ║
-║    python preference_trainer.py validate --model prefs               ║
-║        --corpus corpus.npz --folds 5                                ║
-║                                                                      ║
-║  Mide con k-fold cross-validation:                                  ║
-║    · MAE — error absoluto medio en predicción de rating             ║
-║    · Pair accuracy — % de pares ordenados correctamente             ║
-║    · Correlación de Spearman entre predicciones y ratings reales    ║
-║  Con interpretación automática y recomendaciones.                   ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --model FILE    Nombre base del modelo (def: prefs)               ║
-║    --corpus FILE   .npz para recuperar vectores del historial        ║
-║    --folds N       Número de folds (def: 5)                          ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  FEATURES MELÓDICAS (--melodic-features en index)                   ║
-║                                                                      ║
-║    python preference_trainer.py index ./melodias/ --melodic-features║
-║                                                                      ║
-║  16 features optimizadas para melodía monofónica. Elimina           ║
-║  polifonía y dinámica de grupo; añade análisis melódico fino:       ║
-║    pitch_center · pitch_range · interval_mean · contour             ║
-║    density · rhythm_variance · velocity_mean · silence_ratio        ║
-║    melodic_peak_ratio · step_ratio · leap_ratio · phrase_arch       ║
-║    climax_position · note_duration_mean · pitch_entropy             ║
-║    interval_entropy                                                  ║
-║                                                                      ║
-║  El modelo detecta automáticamente el modo por el nº de pesos       ║
-║  (10=base, 16=melódico, 20=extendido). Los modelos son              ║
-║  incompatibles entre modos — usa un archivo .prefs.json diferente.  ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  FEATURES EXTENDIDAS (--extended-features en index)                 ║
-║                                                                      ║
-║    python preference_trainer.py index ./midis/ --extended-features  ║
-║                                                                      ║
-║  Añade 10 features adicionales al vector (total 20 dims):           ║
-║    tension_arc · density_arc · pitch_entropy · interval_entropy     ║
-║    repetition · harmonic_tension · rhythmic_complexity              ║
-║    note_duration_mean · climax_position · dynamic_arc               ║
-║                                                                      ║
-║  Más costoso computacionalmente pero captura estructura temporal,   ║
-║  diversidad tonal y armonía — mejora la discriminación del modelo.  ║
-║  El modelo detecta automáticamente si el corpus es de 10 o 20 dims. ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  RANK — nuevas opciones                                              ║
-║                                                                      ║
-║    --exclude-annotated   Excluir MIDIs ya anotados en train         ║
-║    --interactive         Anotar directamente desde el ranking       ║
-║    --soundfont FILE      Soundfont para reproducción interactiva    ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  FLUJO TÍPICO                                                         ║
-║                                                                      ║
-║    # 1. Indexar el corpus (una sola vez)                             ║
-║    python preference_trainer.py index ./midis/                      ║
-║                                                                      ║
-║    # 2. Entrenar el modelo de preferencias                          ║
-║    python preference_trainer.py train corpus.npz --rounds 30        ║
-║    python preference_trainer.py train corpus.npz --mode contrast    ║
-║                                                                      ║
-║    # 3. Evaluar una pieza propia                                     ║
-║    python preference_trainer.py eval mi_pieza.mid                   ║
-║                                                                      ║
-║    # 4. Evaluar con afinidad a obras de referencia                  ║
-║    python preference_trainer.py eval mi_pieza.mid                   ║
-║        --affinity ./referencias/ --weight 0.4                       ║
-║                                                                      ║
-║    # 5. Inspeccionar el modelo aprendido                             ║
-║    python preference_trainer.py info                                 ║
+║  Nombre del archivo: <model>.prefs.json  (def: prefs.prefs.json)   ║
 ║                                                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║  DEPENDENCIAS                                                        ║
@@ -229,6 +253,7 @@
 ║    sudo apt install timidity       # opcional: audio alternativo    ║
 ╚══════════════════════════════════════════════════════════════════════╝
 """
+
 
 import sys
 import os
@@ -1318,7 +1343,8 @@ def _midi_header(info: dict, idx: int = None, label: str = None) -> str:
     bpm    = info.get("tempo_bpm", "?")
     notes  = info.get("n_notes", "?")
     prefix = f"[{label}] " if label else (f"#{idx+1}  " if idx is not None else "")
-    return f"{prefix}{cyan(name)}  {dim(f'{dur} · {bpm}bpm · {notes} notas')}"
+    _label_1321 = f"{dur} · {bpm}bpm · {notes} notas"
+    return f"{prefix}{cyan(name)}  {dim(_label_1321)}"
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1368,7 +1394,8 @@ def cmd_train_rating(args, model: PreferenceModel, vectors, paths, meta):
             pred = model.score(v)
             unc  = model.uncertainty(v)
             unc_label = green("alta") if unc > 0.7 else (yellow("media") if unc > 0.3 else dim("baja"))
-            print(f"  {dim(f'Predicción: {pred:.2f}  ·  incertidumbre: {unc:.2f} (')}{unc_label}{dim(')')}")
+            _label_1371 = f"Predicción: {pred:.2f}  ·  incertidumbre: {unc:.2f} ("
+            print(f"  {dim(_label_1371)}{unc_label}{dim(')')}")
         print()
 
         # Reproducción automática en background (salvo --no-autoplay)
@@ -1498,7 +1525,8 @@ def cmd_train_contrast(args, model: PreferenceModel, vectors, paths, meta):
             sb  = model.score(vb)
             ua  = model.uncertainty(va)
             ub  = model.uncertainty(vb)
-            print(f"  {dim(f'Predicción: A={sa:.2f} (unc={ua:.2f})  B={sb:.2f} (unc={ub:.2f})')}")
+            _label_1501 = f"Predicción: A={sa:.2f} (unc={ua:.2f})  B={sb:.2f} (unc={ub:.2f})"
+            print(f"  {dim(_label_1501)}")
         print()
 
         # Reproducción automática de A en background (salvo --no-autoplay)
@@ -1781,6 +1809,11 @@ def cmd_eval(args):
     annotated_dist = model.annotated_distribution()   # [(path, rating_norm)]
     annotated_scores_norm = [r for _, r in annotated_dist]
 
+    # Detect if model was trained with extended features
+    _n_weights = len(model.weights) if model.weights else 10
+    _use_extended_eval = _n_weights == 20
+    _use_melodic_eval  = _n_weights == 16
+
     # ── Cargar vectores de afinidad ──────────────────────────────────
     affinity_vectors = []
     if args.affinity:
@@ -1820,10 +1853,6 @@ def cmd_eval(args):
 
     results = []
     print(f"\n{'─'*60}")
-    # Detect if model was trained with extended features
-    _n_weights = len(model.weights) if model.weights else 10
-    _use_extended_eval = _n_weights == 20
-    _use_melodic_eval  = _n_weights == 16
 
     for mf in midi_files:
         res = vectorize_midi(str(mf),
@@ -1906,7 +1935,8 @@ def cmd_eval(args):
         bpm  = r["meta"]["tempo_bpm"]
 
         print(f"  {rank:>2}. {bold(cyan(r['name']))}")
-        print(f"      {dim(f'{dur} · {bpm} bpm')}")
+        _label_1909 = f"{dur} · {bpm} bpm"
+        print(f"      {dim(_label_1909)}")
         print()
 
         # ── Score principal ──────────────────────────────────────────
@@ -1916,7 +1946,8 @@ def cmd_eval(args):
         print(f"      {score_color(bar)}  {bold(fs)}")
 
         if affinity_vectors:
-            print(f"      {dim(f'preferencia={r['pref_score']:.4f}  ·  afinidad={r['aff_score']:.4f}')}")
+            _aff_label = f"preferencia={r['pref_score']:.4f}  ·  afinidad={r['aff_score']:.4f}"
+            print(f"      {dim(_aff_label)}")
         print()
 
         # ── Percentil ────────────────────────────────────────────────
@@ -1925,7 +1956,8 @@ def cmd_eval(args):
             pct_filled = int(r["pct"] / 100 * pct_bar_w)
             pct_bar    = dim("─" * pct_filled) + cyan("┼") + dim("─" * (pct_bar_w - pct_filled))
             pct_color  = green if r["pct"] >= 70 else (yellow if r["pct"] >= 40 else red)
-            print(f"      {dim('Posición:')}  {pct_bar}  {pct_color(f'{r["pct"]:.0f}%')}")
+            _label_1929 = f'{r["pct"]:.0f}%'
+            print(f"      {dim('Posición:')}  {pct_bar}  {pct_color(_label_1929)}")
             print(f"      {dim(r['pct_label'])}")
             print()
 
@@ -1949,7 +1981,8 @@ def cmd_eval(args):
                 if len(nb) == 3:
                     nb_name, nb_rating, nb_dist = nb
                     stars = "★" * round(nb_rating * 4 + 1) + "☆" * (5 - round(nb_rating * 4 + 1))
-                    print(f"        {stars}  {dim(nb_name)}  {dim(f'(dist={nb_dist:.3f})')}")
+                    _label_1953 = f"(dist={nb_dist:.3f})"
+                    print(f"        {stars}  {dim(nb_name)}  {dim(_label_1953)}")
                 else:
                     nb_name, nb_rating = nb
                     n_stars = max(1, min(5, round(nb_rating * 4 + 1)))
@@ -1971,8 +2004,9 @@ def cmd_eval(args):
                 contrib = w * val
                 sign    = "+" if contrib >= 0 else ""
                 c_color = green if contrib > 0.01 else (red if contrib < -0.01 else dim)
+                _label_1976 = f"{sign}{contrib:.4f}"
                 print(f"        {DIM_NAMES[i]:<20} {bar2}  {val:.2f}  "
-                      f"{c_color(f'{sign}{contrib:.4f}')}")
+                      f"{c_color(_label_1976)}")
             print()
 
         print(f"  {dim('─'*56)}")
@@ -2079,7 +2113,8 @@ def cmd_train(args):
     print(model.summary())
     print()
     print(f"  Para evaluar un MIDI:")
-    print(f"    {dim(f'python preference_trainer.py eval tu_pieza.mid --model {args.model}')}")
+    _label_2083 = f"python preference_trainer.py eval tu_pieza.mid --model {args.model}"
+    print(f"    {dim(_label_2083)}")
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -2315,16 +2350,21 @@ def cmd_validate(args):
     for r in fold_results:
         mae_color   = green if r["mae"]      < 0.15 else (yellow if r["mae"]      < 0.25 else red)
         pacc_color  = green if r["pair_acc"] > 0.75 else (yellow if r["pair_acc"] > 0.60 else red)
-        print(f"  {r['fold']:<6} {mae_color(f'{r["mae"]:.3f}'):>6}  "
-              f"{pacc_color(f'{r["pair_acc"]*100:.1f}%'):>9}  {r['n_test']:>6}")
+        _mae_2319 = f'{r["mae"]:.3f}'
+        _pacc_2319 = f'{r["pair_acc"]*100:.1f}%'
+        print(f"  {r['fold']:<6} {mae_color(_mae_2319):>6}  "
+              f"{pacc_color(_pacc_2319):>9}  {r['n_test']:>6}")
 
     print(f"  {'─'*36}")
     mae_c  = green if mean_mae  < 0.15 else (yellow if mean_mae  < 0.25 else red)
     pacc_c = green if mean_pacc > 0.75 else (yellow if mean_pacc > 0.60 else red)
     sp_c   = green if spearman  > 0.70 else (yellow if spearman  > 0.50 else red)
-    print(f"  {'Media':<6} {mae_c(f'{mean_mae:.3f}'):>6}  {pacc_c(f'{mean_pacc*100:.1f}%'):>9}")
+    _mae_2326 = f"{mean_mae:.3f}"
+    _pacc_2326 = f"{mean_pacc*100:.1f}%"
+    print(f"  {'Media':<6} {mae_c(_mae_2326):>6}  {pacc_c(_pacc_2326):>9}")
     print()
-    print(f"  Correlación de Spearman (global): {sp_c(f'{spearman:.3f}')}")
+    _sp_2328 = f"{spearman:.3f}"
+    print(f"  Correlación de Spearman (global): {sp_c(_sp_2328)}")
     print()
 
     # ── Interpretación ───────────────────────────────────────────────
@@ -2355,7 +2395,8 @@ def cmd_validate(args):
 
     print()
     if n < 20:
-        print(f"  {dim(f'Nota: {n} ejemplos es poco para validación fiable.')}")
+        _label_2359 = f"Nota: {n} ejemplos es poco para validación fiable."
+        print(f"  {dim(_label_2359)}")
         print(f"  {dim('Los resultados mejorarán con más sesiones de entrenamiento.')}")
 
 # ════════════════════════════════════════════════════════════════════
@@ -2505,8 +2546,9 @@ def _rank_interactive(args, model, entries, model_file):
             queue.append(e)
             seen_paths.add(e["path"])
 
+    _label_2510 = f"{len(queue)} MIDIs en cola"
     print(f"\n{bold('─ MODO INTERACTIVO ─')}  "
-          f"{dim(f'{len(queue)} MIDIs en cola')}")
+          f"{dim(_label_2510)}")
     print(dim("  Puntúa [1-5] · p=reproducir · x=parar · s=saltar · q=guardar y salir"))
     print()
 
@@ -2523,9 +2565,11 @@ def _rank_interactive(args, model, entries, model_file):
 
         print(f"  {'─'*52}")
         print(f"  {cyan(name)}{seen_tag}")
+        _sc_2528 = f'{e["score"]:.3f}'
+        _uc_2528 = f'{e["unc"]:.2f}'
         print(f"  {dim(format_duration(e['dur']))} · {dim(str(e['bpm']))} bpm  "
-              f"score={bold(f'{e["score"]:.3f}')}  "
-              f"unc={unc_col(f'{e["unc"]:.2f}')}")
+              f"score={bold(_sc_2528)}  "
+              f"unc={unc_col(_uc_2528)}")
         print()
 
         # Reproducción automática
@@ -2680,7 +2724,8 @@ def cmd_rank(args):
         n_after  = len(entries)
         excluded = n_before - n_after
         if excluded:
-            print(f"  {dim(f'Excluidos {excluded} MIDIs ya anotados → quedan {n_after:,}')}")
+            _label_2684 = f"Excluidos {excluded} MIDIs ya anotados → quedan {n_after:,}"
+            print(f"  {dim(_label_2684)}")
         if not entries:
             print(yellow("  Todos los MIDIs del corpus ya han sido anotados."))
             return
@@ -2700,13 +2745,16 @@ def cmd_rank(args):
     def _entry_line(rank, e, show_unc=False):
         seen_tag = dim(f" [{e['n_seen']}x]") if e["n_seen"] > 0 else ""
         dur      = format_duration(e["dur"])
-        extra    = (f"  {dim(f'unc={e["unc"]:.2f}')}" if show_unc else "")
+        _unc_2704 = f'{e["unc"]:.2f}'
+        extra    = (f"  {dim(f'unc={_unc_2704}')}" if show_unc else "")
         aff_tag  = (dim(f"  pref={e['pref_score']:.3f} aff={e['aff_score']:.3f}")
                     if affinity_vectors else "")
+        _sc_2727 = f'{e["score"]:.3f}'
         print(f"  {rank:>4}.  {_score_bar(e['score'])}  "
-              f"{bold(f'{e["score"]:.3f}')}  "
+              f"{bold(_sc_2727)}  "
               f"{cyan(e['name'])}{seen_tag}")
-        print(f"         {dim(f'{dur} · {e["bpm"]} bpm')}{extra}{aff_tag}")
+        _label_2710 = f'{dur} · {e["bpm"]} bpm'
+        print(f"         {dim(_label_2710)}{extra}{aff_tag}")
 
     # ── Estadísticas globales ─────────────────────────────────────────
     all_scores = [e["score"] for e in entries]
@@ -2732,7 +2780,8 @@ def cmd_rank(args):
 
     # ── TOP ───────────────────────────────────────────────────────────
     print(f"\n{'═'*60}")
-    print(f"  {bold(green(f'TOP {n} — más preferidas'))}")
+    _label_2736 = f"TOP {n} — más preferidas"
+    print(f"  {bold(green(_label_2736))}")
     print(f"{'═'*60}")
     for rank, e in enumerate(top, 1):
         _entry_line(rank, e)
@@ -2740,7 +2789,8 @@ def cmd_rank(args):
 
     # ── BOTTOM ────────────────────────────────────────────────────────
     print(f"{'═'*60}")
-    print(f"  {bold(red(f'BOTTOM {n} — menos preferidas'))}")
+    _label_2744 = f"BOTTOM {n} — menos preferidas"
+    print(f"  {bold(red(_label_2744))}")
     print(f"{'═'*60}")
     for rank, e in enumerate(bot, 1):
         _entry_line(rank, e)
@@ -2748,7 +2798,8 @@ def cmd_rank(args):
 
     # ── INCIERTAS ─────────────────────────────────────────────────────
     print(f"{'═'*60}")
-    print(f"  {bold(yellow(f'INCIERTAS {n} — mayor incertidumbre'))}")
+    _label_2752 = f"INCIERTAS {n} — mayor incertidumbre"
+    print(f"  {bold(yellow(_label_2752))}")
     print(f"  {dim('(donde más ganarías entrenando)')}")
     print(f"{'═'*60}")
     for rank, e in enumerate(unc_l, 1):
