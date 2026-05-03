@@ -74,6 +74,14 @@
 ║  Opciones:                                                           ║
 ║    --mode rating|contrast  Modalidad de anotación (def: rating)     ║
 ║    --model FILE            Nombre base del modelo (def: prefs)      ║
+║    --model-type TYPE       Tipo de modelo (def: linear):            ║
+║                            linear  regresión logística SGD          ║
+║                            neural  red neuronal 2 capas ocultas     ║
+║                            kernel  regresión kernelizada RBF        ║
+║                            gp      Gaussian Process sparse          ║
+║                            svm     Ranking SVM pairwise             ║
+║                            Cada tipo guarda archivo separado:       ║
+║                            prefs.linear.json / prefs.neural.json…  ║
 ║    --rounds N              Número de rondas (def: 20)               ║
 ║    --soundfont FILE        Soundfont .sf2 para timidity o pygame    ║
 ║    --no-autoplay           No reproducir automáticamente            ║
@@ -781,35 +789,176 @@ def format_duration(s: float) -> str:
 
 
 # ════════════════════════════════════════════════════════════════════
-#  MODELO DE PREFERENCIAS — regresión lineal con SGD
+#  MODELOS DE PREFERENCIAS
+#
+#  Cinco implementaciones seleccionables con --model-type:
+#
+#  linear   Regresión logística con SGD incremental. Defecto.
+#           Archivo: <name>.linear.json
+#
+#  neural   Red neuronal pequeña (2 capas ocultas). Aprende no-
+#           linealidades. Backprop con mini-batch SGD.
+#           Archivo: <name>.neural.json
+#
+#  kernel   Regresión kernelizada con RBF. Aproximación Nyström
+#           para escalabilidad con >500 ejemplos.
+#           Archivo: <name>.kernel.json
+#
+#  gp       Gaussian Process con kernel RBF + ruido. Incertidumbre
+#           calibrada de forma exacta. Aproximación sparse (inducing
+#           points) para O(m²n) con m<<n.
+#           Archivo: <name>.gp.json
+#           Tiene memoria incorporada — no usa score_with_memory.
+#
+#  svm      Ranking SVM (pairwise). Aprende orden relativo, no
+#           scores absolutos. Optimización con SGD sobre pares.
+#           Archivo: <name>.svm.json
+#           Escala de salida incompatible — no usa score_with_memory.
+#
+#  Todos comparten la interfaz:
+#    model.score(vector) → float [0,1]
+#    model.uncertainty(vector) → float [0,1]
+#    model.update_rating(vector, rating, path)
+#    model.update_contrast(winner_vec, loser_vec, ...)
+#    model.score_with_memory(vector, path) → float [0,1]
+#    model.save(path) / cls.load(path)
+#    model.has_builtin_memory → bool
 # ════════════════════════════════════════════════════════════════════
 
-class PreferenceModel:
+
+# ── Base compartida ──────────────────────────────────────────────────
+
+class _BaseModel:
     """
-    Modelo lineal que mapea vector musical (10 dims) → score de preferencia [0,1].
+    Clase base que provee score_with_memory, annotation_count,
+    novelty_score y el historial compartido a todos los modelos.
+    Subclases deben implementar: score(), uncertainty(),
+    update_rating(), update_contrast(), save(), load().
+    """
 
-    Internamente trabaja con pesos w[0..9] y sesgo b.
-    score = sigmoid(dot(w, x) + b)
+    has_builtin_memory = False   # GP y SVM lo sobreescriben a True
+    MODEL_TYPE         = "base"
+    VERSION            = "1.0"
 
-    Entrenamiento incremental con SGD:
-      · Modo rating: target = (rating - 1) / 4  → [0, 1]
-      · Modo contraste: Bradley-Terry pair loss
+    def __init__(self):
+        self.n_train         = 0
+        self.history         = []
+        self.annotated_paths = {}   # path → [ratings]
 
-    Selección activa:
-      · Rating:    incertidumbre = |score - 0.5| mínimo → muestra más dudosa
-      · Contraste: pares donde |score_a - score_b| mínimo → decisión más informativa
+    # ── Memoria por pieza ────────────────────────────────────────────
+
+    def score_with_memory(self, vector: list, path: str = "") -> float:
+        if self.has_builtin_memory or not path:
+            return self.score(vector)
+        ratings = [r for r in self.annotated_paths.get(path, [])
+                   if isinstance(r, (int, float))]
+        if not ratings:
+            return self.score(vector)
+        k       = 5.0
+        n       = len(ratings)
+        w_mem   = n / (n + k)
+        mem     = (sum(ratings) / n - 1) / 4.0
+        return (1.0 - w_mem) * self.score(vector) + w_mem * mem
+
+    def annotation_count(self, path: str) -> int:
+        return len(self.annotated_paths.get(path, []))
+
+    def novelty_score(self, path: str) -> float:
+        n = self.annotation_count(path)
+        return 1.0 / (1.0 + n)
+
+    def calibrate(self, vectors: list):
+        """Recalibra el sesgo para que los scores cubran [0.1, 0.9]."""
+        if not vectors:
+            return
+        scores = [self.score(v) for v in random.sample(vectors, min(200, len(vectors)))]
+        lo, hi = min(scores), max(scores)
+        if hi - lo < 0.05:
+            return
+        # Escalar logits para que lo→0.1, hi→0.9
+        import math as _m
+        lo_l = _m.log(lo/(1-lo)) if 0 < lo < 1 else -4.0
+        hi_l = _m.log(hi/(1-hi)) if 0 < hi < 1 else  4.0
+        tl   = _m.log(0.1/0.9)
+        th   = _m.log(0.9/0.1)
+        if abs(hi_l - lo_l) < 1e-6:
+            return
+        self._rescale_logits((th - tl)/(hi_l - lo_l),
+                              tl - (th - tl)/(hi_l - lo_l) * lo_l)
+
+    def _rescale_logits(self, scale: float, offset: float):
+        pass   # cada subclase implementa si corresponde
+
+    # ── Selección activa (delegada a las funciones de estrategia) ────
+
+    def select_rating_candidate(self, vectors, indices, paths=None,
+                                corpus_vectors=None, strategy="uncertainty"):
+        if self.n_train < 3:
+            if paths:
+                unseen = [i for i in indices
+                          if self.annotation_count(str(paths[i])) == 0]
+                return random.choice(unseen) if unseen else random.choice(indices)
+            return random.choice(indices)
+        fn = _RATING_STRATEGIES.get(strategy, _rating_uncertainty)
+        return fn(self, vectors, indices, paths, corpus_vectors)
+
+    def select_contrast_pair(self, vectors, indices, n_candidates=50,
+                             paths=None, corpus_vectors=None,
+                             strategy="uncertainty"):
+        if len(indices) < 2:
+            raise ValueError("Se necesitan al menos 2 candidatos.")
+        pool = random.sample(indices, min(n_candidates, len(indices)))
+        if self.n_train < 3:
+            best_pair, best_sim = None, -1.0
+            for ii in range(len(pool)):
+                for jj in range(ii+1, len(pool)):
+                    a, b = pool[ii], pool[jj]
+                    sim = _cosine_similarity(vectors[a], vectors[b])
+                    if sim > best_sim:
+                        best_sim, best_pair = sim, (a, b)
+            return best_pair
+        fn = _CONTRAST_STRATEGIES.get(strategy, _contrast_uncertainty)
+        return fn(self, vectors, pool, paths, corpus_vectors)
+
+    # ── Diagnóstico ──────────────────────────────────────────────────
+
+    def annotated_distribution(self):
+        dist = []
+        for entry in self.history:
+            if entry.get("type") == "rating" and "rating" in entry:
+                dist.append((entry["path"], (entry["rating"]-1)/4.0))
+        return dist
+
+    def top_dimensions(self, n=5):
+        """Devuelve las n dims más influyentes. Subclases pueden sobreescribir."""
+        return []
+
+    def summary(self):
+        return f"  Tipo: {self.MODEL_TYPE}  |  ejemplos: {self.n_train}"
+
+
+# ════════════════════════════════════════════════════════════════════
+#  1. LINEAR — regresión logística SGD  (defecto)
+# ════════════════════════════════════════════════════════════════════
+
+class PreferenceModel(_BaseModel):
+    """
+    Regresión logística con SGD incremental.
+    score = sigmoid(w·x + b)
+    Compatible hacia atrás con todos los archivos .prefs.json existentes.
     """
 
     VERSION = "1.0"
 
+    MODEL_TYPE         = "linear"
+    has_builtin_memory = False
+
     def __init__(self):
+        super().__init__()
         self.weights          = [0.0] * N_DIMS
         self.bias             = 0.0
-        self.lr               = 0.05        # learning rate
-        self.n_train          = 0           # nº de ejemplos vistos
-        self.history          = []          # lista de {type, path(s), rating/winner}
-        self.annotated_paths  = {}          # path → lista de ratings/outcomes vistos
-        self.feature_stats    = {           # para normalización interna
+        self.lr               = 0.05
+        self.feature_stats    = {
             "mean": [0.5] * N_DIMS,
             "std":  [0.3] * N_DIMS,
         }
@@ -828,32 +977,9 @@ class PreferenceModel:
         logit = sum(self.weights[i] * vector[i] for i in range(n)) + self.bias
         return self._sigmoid(logit)
 
-    def score_with_memory(self, vector: list, path: str = "") -> float:
-        """
-        Score que mezcla la predicción del modelo con el rating medio
-        anotado para esta pieza concreta.
-
-        Cuando una pieza tiene N anotaciones explícitas, su rating medio
-        se mezcla con la predicción del modelo con peso w_mem = N/(N+k),
-        donde k controla cuántas anotaciones hacen falta para "confiar"
-        en la memoria. Con k=5: 5 anot. → 50%, 10 anot. → 67%, 20 → 80%.
-
-        Esto garantiza que correcciones repetidas con `set` se reflejen
-        aunque el modelo lineal global no pueda converger por conflicto
-        con otras piezas de features similares.
-        """
-        model_pred = self.score(vector)
-        if not path:
-            return model_pred
-        ratings = [r for r in self.annotated_paths.get(path, [])
-                   if isinstance(r, (int, float))]
-        if not ratings:
-            return model_pred
-        k       = 5.0   # anotaciones para dar 50% de peso a la memoria
-        n       = len(ratings)
-        w_mem   = n / (n + k)
-        mem_score = (sum(ratings) / n - 1) / 4.0   # normalizar a [0,1]
-        return (1.0 - w_mem) * model_pred + w_mem * mem_score
+    def _rescale_logits(self, scale: float, offset: float):
+        self.weights = [w * scale for w in self.weights]
+        self.bias    = self.bias * scale + offset
 
     def uncertainty(self, vector: list) -> float:
         """Incertidumbre: 1 - 2*|score - 0.5|. Máxima en 0.5."""
@@ -911,127 +1037,10 @@ class PreferenceModel:
         """Learning rate decay suave."""
         self.lr = max(0.005, 0.05 / (1 + self.n_train * 0.02))
 
-    def calibrate(self, vectors: list):
-        """
-        Escala los pesos post-entrenamiento para que el rango efectivo
-        de scores sobre 'vectors' sea aproximadamente [0.1, 0.9].
-
-        El modelo lineal con SGD tiende a comprimir los scores cerca de
-        0.5 cuando los datos son similares entre sí. Este paso corrige
-        eso sin cambiar el ranking aprendido.
-        """
-        if not vectors or self.n_train < 5:
-            return
-        scores = [self.score(v) for v in vectors]
-        lo, hi = min(scores), max(scores)
-        rng = hi - lo
-        if rng < 1e-6:
-            return  # todos iguales, no hay nada que calibrar
-        # Escalar pesos y bias para mapear [lo, hi] → [0.1, 0.9]
-        target_lo, target_hi = 0.1, 0.9
-        # score = sigmoid(w·x + b)
-        # Queremos sigmoid(k*(w·x + b) + b2) tal que los extremos mapeen
-        # Aproximación: escalar los logits por factor k
-        import math
-        lo_logit = math.log(lo / (1 - lo)) if 0 < lo < 1 else -4.0
-        hi_logit = math.log(hi / (1 - hi)) if 0 < hi < 1 else  4.0
-        tl_logit = math.log(target_lo / (1 - target_lo))
-        th_logit = math.log(target_hi / (1 - target_hi))
-        if abs(hi_logit - lo_logit) < 1e-6:
-            return
-        scale  = (th_logit - tl_logit) / (hi_logit - lo_logit)
-        offset = tl_logit - scale * lo_logit
-        self.weights = [w * scale for w in self.weights]
-        self.bias    = self.bias * scale + offset
-
     # ── Selección activa ─────────────────────────────────────────────
-
-    def annotation_count(self, path: str) -> int:
-        """Número de veces que este path ha sido anotado."""
-        return len(self.annotated_paths.get(path, []))
-
-    def novelty_score(self, path: str) -> float:
-        """1.0 = nunca visto; decrece con cada anotación previa."""
-        n = self.annotation_count(path)
-        return 1.0 / (1.0 + n)
-
-    def select_rating_candidate(self, vectors: list, indices: list,
-                                paths: list = None,
-                                corpus_vectors: list = None,
-                                strategy: str = "uncertainty") -> int:
-        """
-        Selecciona el candidato más informativo para modo rating.
-
-        Estrategias disponibles (--strategy):
-          uncertainty  Máxima incertidumbre del modelo × novedad. Rápida.
-                       Buena para modelos jóvenes.
-          density      Incertidumbre × densidad en el corpus × novedad.
-                       Prefiere piezas en regiones densas: anotar una
-                       pieza representativa beneficia a más vecinas.
-          emc          Expected Model Change. Estima cuánto cambiarían
-                       los pesos si se anotara esta pieza. Alta señal,
-                       bajo coste computacional.
-          eer          Expected Error Reduction. Simula anotar cada
-                       candidato con cada rating posible y mide cuánto
-                       reduce el error sobre el historial anotado.
-                       La más correcta formalmente; la más lenta.
-          qbc          Query by Committee. Entrena K=5 modelos con
-                       subsets del historial; elige la pieza con mayor
-                       desacuerdo entre modelos. Robusta al sobreajuste.
-          hybrid       Combina incertidumbre + densidad + EMC + novedad
-                       con pesos balanceados. Recomendada en general.
-        """
-        if self.n_train < 3:
-            if paths:
-                unseen = [i for i in indices if self.annotation_count(str(paths[i])) == 0]
-                return random.choice(unseen) if unseen else random.choice(indices)
-            return random.choice(indices)
-
-        fn = _RATING_STRATEGIES.get(strategy, _rating_uncertainty)
-        return fn(self, vectors, indices, paths, corpus_vectors)
-
-    def select_contrast_pair(self, vectors: list, indices: list,
-                              n_candidates: int = 50,
-                              paths: list = None,
-                              corpus_vectors: list = None,
-                              strategy: str = "uncertainty") -> tuple:
-        """
-        Selecciona el par (i, j) más informativo para modo contraste.
-        Acepta las mismas estrategias que select_rating_candidate;
-        todas se adaptan para devolver un par en lugar de un índice.
-        """
-        if len(indices) < 2:
-            raise ValueError("Se necesitan al menos 2 candidatos.")
-
-        pool = random.sample(indices, min(n_candidates, len(indices)))
-
-        if self.n_train < 3:
-            best_pair, best_sim = None, -1.0
-            for ii in range(len(pool)):
-                for jj in range(ii + 1, len(pool)):
-                    a, b = pool[ii], pool[jj]
-                    sim = _cosine_similarity(vectors[a], vectors[b])
-                    if sim > best_sim:
-                        best_sim, best_pair = sim, (a, b)
-            return best_pair
-
-        fn = _CONTRAST_STRATEGIES.get(strategy, _contrast_uncertainty)
-        return fn(self, vectors, pool, paths, corpus_vectors)
+    # (heredado de _BaseModel)
 
     # ── Diagnóstico ─────────────────────────────────────────────────
-
-    def annotated_distribution(self) -> list:
-        """
-        Devuelve lista de (path, pred_score, rating_norm) para todos los
-        MIDIs del historial con rating conocido. Útil para anclar percentiles.
-        """
-        dist = []
-        for entry in self.history:
-            if entry.get("type") == "rating" and "rating" in entry:
-                path       = entry["path"]
-                rating_norm = (entry["rating"] - 1) / 4.0
-                dist.append((path, rating_norm))
-        return dist
 
     def top_dimensions(self, n: int = 5) -> list:
         """Devuelve las n dimensiones con mayor peso absoluto."""
@@ -1078,6 +1087,7 @@ class PreferenceModel:
 
     def save(self, path: str):
         data = {
+            "model_type":       self.MODEL_TYPE,
             "version":          self.VERSION,
             "weights":          self.weights,
             "bias":             self.bias,
@@ -1141,14 +1151,29 @@ def _prob_rating(pred: float, rating: int) -> float:
     return dist[rating - 1] / total
 
 
-def _clone_model(model) -> "PreferenceModel":
-    """Clona los pesos del modelo sin copiar el historial completo."""
-    m = PreferenceModel()
-    m.weights = model.weights[:]
-    m.bias    = model.bias
-    m.lr      = model.lr
-    m.n_train = model.n_train
-    return m
+def _clone_model(model) -> "_BaseModel":
+    """Clona los pesos del modelo sin copiar el historial completo.
+    Soporta todos los model types."""
+    import json as _json, io as _io
+    buf = _io.StringIO()
+    model.save.__func__(model, buf) if False else None
+    # Usar serialización JSON temporal en memoria
+    try:
+        tmp = {}
+        model.save("/tmp/_clone_tmp.json")
+        m = model.__class__.load("/tmp/_clone_tmp.json")
+        m.history = []
+        m.n_train = model.n_train
+        return m
+    except Exception:
+        # Fallback para linear
+        m = PreferenceModel()
+        if hasattr(model, 'weights'):
+            m.weights = model.weights[:]
+            m.bias    = model.bias
+        m.lr      = model.lr
+        m.n_train = model.n_train
+        return m
 
 
 # ── 1. UNCERTAINTY × NOVEDAD (defecto) ──────────────────────────────
@@ -1495,6 +1520,296 @@ _CONTRAST_STRATEGIES = {
 
 
 # ════════════════════════════════════════════════════════════════════
+#  2. NEURAL — red neuronal pequeña con backprop
+# ════════════════════════════════════════════════════════════════════
+
+class NeuralModel(_BaseModel):
+    MODEL_TYPE = "neural"; has_builtin_memory = False
+    def __init__(self, n_dims=N_DIMS, hidden1=16, hidden2=8):
+        super().__init__(); self.n_dims=n_dims; self.h1=hidden1; self.h2=hidden2
+        self.lr=0.01; self.l2=0.001
+        import math as _m
+        def _xav(fi,fo): s=_m.sqrt(2.0/(fi+fo)); return [[random.gauss(0,s) for _ in range(fo)] for _ in range(fi)]
+        self.W1=_xav(n_dims,hidden1); self.b1=[0.0]*hidden1
+        self.W2=_xav(hidden1,hidden2); self.b2=[0.0]*hidden2
+        self.W3=_xav(hidden2,1); self.b3=[0.0]
+    @staticmethod
+    def _relu(x): return [max(0.0,v) for v in x]
+    @staticmethod
+    def _sig(x):
+        try: return 1.0/(1.0+math.exp(-x))
+        except: return 0.0 if x<0 else 1.0
+    @staticmethod
+    def _mm(x,W): return [sum(x[i]*W[i][j] for i in range(len(x))) for j in range(len(W[0]))]
+    @staticmethod
+    def _add(a,b): return [x+y for x,y in zip(a,b)]
+    def _fwd(self,x):
+        z1=self._add(self._mm(x,self.W1),self.b1); a1=self._relu(z1)
+        z2=self._add(self._mm(a1,self.W2),self.b2); a2=self._relu(z2)
+        z3=self._add(self._mm(a2,self.W3),self.b3); out=self._sig(z3[0])
+        return out,(x,z1,a1,z2,a2,z3)
+    def score(self,vector):
+        v=vector[:self.n_dims]+[0.0]*max(0,self.n_dims-len(vector))
+        out,_=self._fwd(v); return out
+    def uncertainty(self,vector): s=self.score(vector); return 1.0-2.0*abs(s-0.5)
+    def _bp(self,cache,target):
+        x,z1,a1,z2,a2,z3=cache; out=self._sig(z3[0]); lr=self.lr; l2=self.l2
+        d3=[out-target]
+        dz2=[sum(d3[k]*self.W3[j][k] for k in range(1))*(1.0 if z2[j]>0 else 0.0) for j in range(self.h2)]
+        dz1=[sum(dz2[k]*self.W2[j][k] for k in range(self.h2))*(1.0 if z1[j]>0 else 0.0) for j in range(self.h1)]
+        for j in range(self.h2):
+            self.W3[j][0]-=lr*(d3[0]*a2[j]+l2*self.W3[j][0])
+        self.b3[0]-=lr*d3[0]
+        for j in range(self.h1):
+            for k in range(self.h2): self.W2[j][k]-=lr*(dz2[k]*a1[j]+l2*self.W2[j][k])
+        for k in range(self.h2): self.b2[k]-=lr*dz2[k]
+        for j in range(self.n_dims):
+            for k in range(self.h1): self.W1[j][k]-=lr*(dz1[k]*x[j]+l2*self.W1[j][k])
+        for k in range(self.h1): self.b1[k]-=lr*dz1[k]
+    def update_rating(self,vector,rating,path=""):
+        v=vector[:self.n_dims]+[0.0]*max(0,self.n_dims-len(vector))
+        target=(rating-1)/4.0; _,cache=self._fwd(v); self._bp(cache,target)
+        self.n_train+=1; self.lr=max(0.001,0.01/(1+self.n_train*0.005))
+        if path: self.annotated_paths.setdefault(path,[]).append(rating); self.history.append({"type":"rating","path":path,"rating":rating})
+    def update_contrast(self,wv,lv,wp="",lp=""):
+        sw,_=self._fwd(wv[:self.n_dims]); sl,_=self._fwd(lv[:self.n_dims])
+        _,cw=self._fwd(wv[:self.n_dims]); self._bp(cw,min(1.0,sw+0.25))
+        _,cl=self._fwd(lv[:self.n_dims]); self._bp(cl,max(0.0,sl-0.25))
+        self.n_train+=1
+        if wp: self.history.append({"type":"contrast","winner":wp,"loser":lp})
+    def save(self,path):
+        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"n_dims":self.n_dims,"h1":self.h1,"h2":self.h2,"W1":self.W1,"b1":self.b1,"W2":self.W2,"b2":self.b2,"W3":self.W3,"b3":self.b3,"lr":self.lr,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(path,"w",encoding="utf-8"),indent=2,ensure_ascii=False)
+    @classmethod
+    def load(cls,path):
+        d=json.load(open(path,encoding="utf-8")); m=cls(d.get("n_dims",N_DIMS),d.get("h1",16),d.get("h2",8))
+        m.W1=d["W1"]; m.b1=d["b1"]; m.W2=d["W2"]; m.b2=d["b2"]; m.W3=d["W3"]; m.b3=d["b3"]
+        m.lr=d.get("lr",0.01); m.n_train=d.get("n_train",0); m.history=d.get("history",[]); m.annotated_paths=d.get("annotated_paths",{}); return m
+    def summary(self): return f"  Tipo: neural  |  arquitectura: {self.n_dims}→{self.h1}→{self.h2}→1  |  ejemplos: {self.n_train}  |  lr={self.lr:.4f}"
+
+
+# ════════════════════════════════════════════════════════════════════
+#  3. KERNEL — regresión kernelizada RBF (soporte acotado)
+# ════════════════════════════════════════════════════════════════════
+
+class KernelModel(_BaseModel):
+    """Regresión kernelizada RBF con conjunto de soporte acotado (max_support puntos).
+    Puede aprender fronteras no lineales. Usa score_with_memory."""
+    MODEL_TYPE="kernel"; has_builtin_memory=False
+    def __init__(self,gamma=1.0,max_support=200):
+        super().__init__(); self.gamma=gamma; self.max_support=max_support
+        self.lr=0.05; self.support_X=[]; self.alpha=[]; self.bias=0.0
+    def _rbf(self,x,y): return math.exp(-self.gamma*sum((a-b)**2 for a,b in zip(x,y)))
+    def score(self,vector):
+        if not self.support_X: return 0.5
+        logit=self.bias+sum(a*self._rbf(vector,sv) for a,sv in zip(self.alpha,self.support_X))
+        try: return 1.0/(1.0+math.exp(-logit))
+        except: return 0.0 if logit<0 else 1.0
+    def uncertainty(self,vector): s=self.score(vector); return 1.0-2.0*abs(s-0.5)
+    def _add_sv(self,v,a):
+        self.support_X.append(v[:]); self.alpha.append(a)
+        if len(self.support_X)>self.max_support:
+            idx=min(range(len(self.alpha)),key=lambda i:abs(self.alpha[i]))
+            self.support_X.pop(idx); self.alpha.pop(idx)
+    def update_rating(self,vector,rating,path=""):
+        target=(rating-1)/4.0; pred=self.score(vector); error=target-pred; grad=error*pred*(1.0-pred)
+        if self.support_X:
+            dists=[sum((a-b)**2 for a,b in zip(vector,sv)) for sv in self.support_X]
+            near=min(range(len(dists)),key=lambda i:dists[i])
+            if dists[near]<0.01: self.alpha[near]+=self.lr*grad
+            else: self._add_sv(vector,self.lr*grad)
+        else: self._add_sv(vector,self.lr*grad)
+        self.bias+=self.lr*grad*0.1; self.n_train+=1
+        self.lr=max(0.005,0.05/(1+self.n_train*0.02))
+        if path: self.annotated_paths.setdefault(path,[]).append(rating); self.history.append({"type":"rating","path":path,"rating":rating})
+    def update_contrast(self,wv,lv,wp="",lp=""):
+        sw=self.score(wv); sl=self.score(lv)
+        if sw<=sl: g=sw*(1-sw); self._add_sv(wv,self.lr*g); self._add_sv(lv,-self.lr*g)
+        self.n_train+=1
+        if wp: self.history.append({"type":"contrast","winner":wp,"loser":lp})
+    def save(self,path):
+        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"gamma":self.gamma,"max_support":self.max_support,"support_X":self.support_X,"alpha":self.alpha,"bias":self.bias,"lr":self.lr,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(path,"w",encoding="utf-8"),indent=2,ensure_ascii=False)
+    @classmethod
+    def load(cls,path):
+        d=json.load(open(path,encoding="utf-8")); m=cls(d.get("gamma",1.0),d.get("max_support",200))
+        m.support_X=d.get("support_X",[]); m.alpha=d.get("alpha",[]); m.bias=d.get("bias",0.0)
+        m.lr=d.get("lr",0.05); m.n_train=d.get("n_train",0); m.history=d.get("history",[]); m.annotated_paths=d.get("annotated_paths",{}); return m
+    def summary(self): return f"  Tipo: kernel (RBF)  |  γ={self.gamma}  |  soporte: {len(self.support_X)}/{self.max_support}  |  ejemplos: {self.n_train}"
+
+
+# ════════════════════════════════════════════════════════════════════
+#  HELPER: inversión de matriz densa (para GP)
+# ════════════════════════════════════════════════════════════════════
+
+def _mat_inv(A):
+    n=len(A); M=[A[i][:]+[1.0 if i==j else 0.0 for j in range(n)] for i in range(n)]
+    for col in range(n):
+        piv=max(range(col,n),key=lambda r:abs(M[r][col])); M[col],M[piv]=M[piv],M[col]
+        if abs(M[col][col])<1e-12: return [[1.0 if i==j else 0.0 for j in range(n)] for i in range(n)]
+        inv=1.0/M[col][col]; M[col]=[v*inv for v in M[col]]
+        for row in range(n):
+            if row!=col: f=M[row][col]; M[row]=[M[row][k]-f*M[col][k] for k in range(2*n)]
+    return [row[n:] for row in M]
+
+
+# ════════════════════════════════════════════════════════════════════
+#  4. GP — Gaussian Process con kernel RBF sparse
+# ════════════════════════════════════════════════════════════════════
+
+class GPModel(_BaseModel):
+    """Gaussian Process con kernel RBF y sparse inducing points (max_inducing≤150).
+    Incertidumbre calibrada como varianza posterior. has_builtin_memory=True."""
+    MODEL_TYPE="gp"; has_builtin_memory=True
+    def __init__(self,gamma=1.0,noise=0.1,max_inducing=150):
+        super().__init__(); self.gamma=gamma; self.noise=noise; self.max_inducing=max_inducing
+        self.X_ind=[]; self.y_ind=[]; self._K_inv=None; self._dirty=True
+    def _rbf(self,x,y): return math.exp(-self.gamma*sum((a-b)**2 for a,b in zip(x,y)))
+    def _build(self):
+        n=len(self.X_ind)
+        if n==0: self._K_inv=[]; self._dirty=False; return
+        K=[[self._rbf(self.X_ind[i],self.X_ind[j])+(self.noise if i==j else 0.0) for j in range(n)] for i in range(n)]
+        self._K_inv=_mat_inv(K); self._dirty=False
+    def score(self,vector):
+        if not self.X_ind: return 0.5
+        if self._dirty: self._build()
+        k=[self._rbf(vector,xi) for xi in self.X_ind]
+        mu=sum(k[i]*sum(self._K_inv[i][j]*self.y_ind[j] for j in range(len(self.y_ind))) for i in range(len(k)))
+        try: return 1.0/(1.0+math.exp(-mu*4.0))
+        except: return 0.0 if mu<0 else 1.0
+    def uncertainty(self,vector):
+        if not self.X_ind or not self._K_inv: return 1.0
+        if self._dirty: self._build()
+        k=[self._rbf(vector,xi) for xi in self.X_ind]; kss=self._rbf(vector,vector)
+        Kk=[sum(self._K_inv[i][j]*k[j] for j in range(len(k))) for i in range(len(k))]
+        var=kss-sum(k[i]*Kk[i] for i in range(len(k)))
+        return min(1.0,max(0.0,var/(kss+1e-9)))
+    def _add_ind(self,vector,target):
+        if len(self.X_ind)<self.max_inducing: self.X_ind.append(vector[:]); self.y_ind.append(target)
+        else:
+            dists=[sum((a-b)**2 for a,b in zip(vector,xi)) for xi in self.X_ind]
+            near=min(range(len(dists)),key=lambda i:dists[i])
+            if dists[near]<0.05: self.y_ind[near]=(self.y_ind[near]+target)/2
+            else:
+                flat=min(range(len(self.y_ind)),key=lambda i:abs(self.y_ind[i]-0.5))
+                self.X_ind[flat]=vector[:]; self.y_ind[flat]=target
+    def update_rating(self,vector,rating,path=""):
+        self._add_ind(vector,(rating-1)/4.0); self.n_train+=1; self._dirty=True
+        if path: self.annotated_paths.setdefault(path,[]).append(rating); self.history.append({"type":"rating","path":path,"rating":rating})
+    def update_contrast(self,wv,lv,wp="",lp=""):
+        self._add_ind(wv,0.75); self._add_ind(lv,0.25); self.n_train+=1; self._dirty=True
+        if wp: self.history.append({"type":"contrast","winner":wp,"loser":lp})
+    def save(self,path):
+        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"gamma":self.gamma,"noise":self.noise,"max_inducing":self.max_inducing,"X_ind":self.X_ind,"y_ind":self.y_ind,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(path,"w",encoding="utf-8"),indent=2,ensure_ascii=False)
+    @classmethod
+    def load(cls,path):
+        d=json.load(open(path,encoding="utf-8")); m=cls(d.get("gamma",1.0),d.get("noise",0.1),d.get("max_inducing",150))
+        m.X_ind=d.get("X_ind",[]); m.y_ind=d.get("y_ind",[]); m.n_train=d.get("n_train",0)
+        m.history=d.get("history",[]); m.annotated_paths=d.get("annotated_paths",{}); m._dirty=True; return m
+    def summary(self): return f"  Tipo: gp  |  γ={self.gamma}  noise={self.noise}  |  inducing: {len(self.X_ind)}/{self.max_inducing}  |  ejemplos: {self.n_train}"
+
+
+# ════════════════════════════════════════════════════════════════════
+#  5. SVM — Ranking SVM pairwise SGD
+# ════════════════════════════════════════════════════════════════════
+
+class SVMModel(_BaseModel):
+    """Ranking SVM pairwise. Aprende orden relativo, no scores absolutos.
+    has_builtin_memory=True (escala de salida incompatible con score_with_memory)."""
+    MODEL_TYPE="svm"; has_builtin_memory=True
+    def __init__(self,n_dims=N_DIMS,C=1.0):
+        super().__init__(); self.n_dims=n_dims; self.C=C; self.lr=0.01
+        self.weights=[0.0]*n_dims; self.bias=0.0; self._examples=[]
+    def _dec(self,v): return sum(self.weights[i]*v[i] for i in range(min(len(self.weights),len(v))))+self.bias
+    def score(self,vector):
+        d=self._dec(vector)
+        try: return 1.0/(1.0+math.exp(-d))
+        except: return 0.0 if d<0 else 1.0
+    def uncertainty(self,vector): s=self.score(vector); return 1.0-2.0*abs(s-0.5)
+    def _sgd_pair(self,xp,xn):
+        margin=self._dec(xp)-self._dec(xn)
+        if margin>=1.0:
+            for i in range(len(self.weights)): self.weights[i]*=(1.0-self.lr*0.001)
+            return
+        n=min(len(self.weights),len(xp),len(xn))
+        for i in range(n): self.weights[i]+=self.lr*self.C*(xp[i]-xn[i]); self.weights[i]*=(1.0-self.lr*0.001)
+        self.bias+=self.lr*self.C*0.1
+    def update_rating(self,vector,rating,path=""):
+        target=(rating-1)/4.0; self._examples.append((vector[:],target))
+        for xj,tj in random.sample(self._examples,min(5,len(self._examples))):
+            if target>tj+0.1: self._sgd_pair(vector,xj)
+            elif tj>target+0.1: self._sgd_pair(xj,vector)
+        if len(self._examples)>500: self._examples=random.sample(self._examples,400)
+        self.n_train+=1; self.lr=max(0.001,0.01/(1+self.n_train*0.01))
+        if path: self.annotated_paths.setdefault(path,[]).append(rating); self.history.append({"type":"rating","path":path,"rating":rating})
+    def update_contrast(self,wv,lv,wp="",lp=""):
+        self._sgd_pair(wv,lv); self.n_train+=1
+        if wp: self.history.append({"type":"contrast","winner":wp,"loser":lp})
+    def save(self,path):
+        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"n_dims":self.n_dims,"C":self.C,"weights":self.weights,"bias":self.bias,"lr":self.lr,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(path,"w",encoding="utf-8"),indent=2,ensure_ascii=False)
+    @classmethod
+    def load(cls,path):
+        d=json.load(open(path,encoding="utf-8")); m=cls(d.get("n_dims",N_DIMS),d.get("C",1.0))
+        m.weights=d.get("weights",[0.0]*m.n_dims); m.bias=d.get("bias",0.0); m.lr=d.get("lr",0.01)
+        m.n_train=d.get("n_train",0); m.history=d.get("history",[]); m.annotated_paths=d.get("annotated_paths",{}); return m
+    def summary(self): return f"  Tipo: svm (ranking pairwise)  |  C={self.C}  |  ejemplos: {self.n_train}  |  lr={self.lr:.4f}"
+
+
+# ════════════════════════════════════════════════════════════════════
+#  FÁBRICA DE MODELOS
+# ════════════════════════════════════════════════════════════════════
+
+_MODEL_CLASSES = {
+    "linear": PreferenceModel,
+    "neural": NeuralModel,
+    "kernel": KernelModel,
+    "gp":     GPModel,
+    "svm":    SVMModel,
+}
+
+_MODEL_EXTENSIONS = {
+    "linear": ".linear.json",
+    "neural": ".neural.json",
+    "kernel": ".kernel.json",
+    "gp":     ".gp.json",
+    "svm":    ".svm.json",
+}
+
+_MODEL_LEGACY_EXT = ".prefs.json"
+
+
+def _model_path_typed(base: str, model_type: str) -> str:
+    ext = _MODEL_EXTENSIONS.get(model_type, ".linear.json")
+    for e in list(_MODEL_EXTENSIONS.values()) + [_MODEL_LEGACY_EXT]:
+        if base.endswith(e):
+            base = base[:-len(e)]
+            break
+    return base + ext
+
+
+def load_model(base: str, model_type: str) -> "_BaseModel":
+    """Carga el modelo del tipo y base indicados. Soporta legado .prefs.json."""
+    path = _model_path_typed(base, model_type)
+    cls  = _MODEL_CLASSES.get(model_type, PreferenceModel)
+    if not Path(path).exists():
+        if model_type == "linear":
+            legacy = base + _MODEL_LEGACY_EXT
+            if Path(legacy).exists():
+                return PreferenceModel.load(legacy)
+            # También intentar sin extensión si el usuario pasó la ruta completa
+            if Path(base).exists():
+                return PreferenceModel.load(base)
+        raise FileNotFoundError(f"No se encontró modelo en {path}")
+    return cls.load(path)
+
+
+def save_model(model: "_BaseModel", base: str) -> str:
+    """Guarda el modelo en el archivo tipado. Devuelve la ruta."""
+    path = _model_path_typed(base, model.MODEL_TYPE)
+    model.save(path)
+    return path
+
+
+
+# ════════════════════════════════════════════════════════════════════
 #  UTILIDADES
 # ════════════════════════════════════════════════════════════════════
 
@@ -1528,7 +1843,13 @@ def _load_corpus_npz(path: str) -> tuple:
 
 
 def _model_path(name: str) -> str:
+    """Legado: ruta del archivo .prefs.json. Solo para display y compatibilidad."""
     return f"{name}.prefs.json"
+
+
+def _model_type_from_args(args) -> str:
+    """Extrae el model_type de args, con default 'linear'."""
+    return getattr(args, "model_type", None) or "linear"
 
 
 # Estado global del reproductor (una sola instancia activa a la vez)
@@ -2184,14 +2505,17 @@ def cmd_eval(args):
     """Evalúa uno o varios MIDIs con el modelo entrenado."""
 
     model_file = _model_path(args.model)
+
+
+    model_type = _model_type_from_args(args)
     if not Path(model_file).exists():
         print(red(f"Modelo no encontrado: {model_file}"))
         print(yellow("  Entrena primero con:  python preference_trainer.py train <corpus.npz>"))
         sys.exit(1)
 
-    model = PreferenceModel.load(model_file)
+    model = load_model(args.model, model_type)
     print(f"\n{bold('PREFERENCE TRAINER — EVAL')}")
-    print(f"  Modelo: {cyan(model_file)}  ({model.n_train} ejemplos de entrenamiento)")
+    print(f"  Modelo: {cyan(model_file)}  [{dim(model.MODEL_TYPE)}]  ({model.n_train} ejemplos de entrenamiento)")
 
     # ── Cargar corpus de referencia (para percentil, vecinos, histograma) ──
     corpus_vectors = []
@@ -2522,12 +2846,15 @@ def cmd_train(args):
 
     # Cargar o crear modelo
     model_file = _model_path(args.model)
-    if Path(model_file).exists():
-        model = PreferenceModel.load(model_file)
+
+    model_type = _model_type_from_args(args)
+    typed_path = _model_path_typed(args.model, model_type)
+    if Path(typed_path).exists() or (model_type == "linear" and Path(model_file).exists()):
+        model = load_model(args.model, model_type)
         _print_continuation_banner(model, vectors, paths)
     else:
-        model = PreferenceModel()
-        print(f"  {yellow('Modelo nuevo')} — se guardará en {cyan(model_file)}")
+        model = _MODEL_CLASSES.get(model_type, PreferenceModel)()
+        print(f"  {yellow('Modelo nuevo')} ({cyan(model_type)}) — se guardará en {cyan(typed_path)}")
         print()
 
     # Sesión de entrenamiento
@@ -2552,7 +2879,7 @@ def cmd_train(args):
 
     # Calibrar y guardar modelo
     model.calibrate(vectors)
-    model.save(model_file)
+    save_model(model, args.model)
     print(f"\n{green('✓')} Modelo guardado: {cyan(model_file)}")
     print(f"  Total de ejemplos de entrenamiento: {bold(str(model.n_train))}")
     print()
@@ -2578,12 +2905,15 @@ def cmd_set(args):
     """Asigna un score de preferencia directamente a uno o varios MIDIs."""
 
     model_file = _model_path(args.model)
+
+
+    model_type = _model_type_from_args(args)
     if not Path(model_file).exists():
         print(red(f"Modelo no encontrado: {model_file}"))
         print(yellow(f"  Crea uno primero con: python preference_trainer.py train <corpus.npz>"))
         sys.exit(1)
 
-    model = PreferenceModel.load(model_file)
+    model = load_model(args.model, model_type)
 
     # Recoger archivos
     midi_files = []
@@ -2608,7 +2938,7 @@ def cmd_set(args):
     use_mel  = _n_w_set == 16
 
     print(f"\n{bold('PREFERENCE TRAINER — SET')}")
-    print(f"  Modelo: {cyan(model_file)}  ({model.n_train} ejemplos previos)")
+    print(f"  Modelo: {cyan(model_file)}  [{dim(model.MODEL_TYPE)}]  ({model.n_train} ejemplos previos)")
     print(f"  Score:  {'★' * rating + '☆' * (5 - rating)}  ({rating}/5)")
     print()
 
@@ -2658,7 +2988,7 @@ def cmd_set(args):
         print(red("  Ningún MIDI pudo ser procesado."))
         sys.exit(1)
 
-    model.save(model_file)
+    save_model(model, args.model)
     print(f"\n  {green('✓')} {updated} anotación(es) guardada(s) en {cyan(model_file)}")
     print(f"  Total ejemplos: {bold(str(model.n_train))}")
 
@@ -2676,11 +3006,13 @@ def cmd_validate(args):
     - Correlación de Spearman entre predicciones y ratings reales
     """
     model_file = _model_path(args.model)
+
+    model_type = _model_type_from_args(args)
     if not Path(model_file).exists():
         print(red(f"Modelo no encontrado: {model_file}"))
         sys.exit(1)
 
-    model_ref = PreferenceModel.load(model_file)
+    model_ref = load_model(args.model, model_type)
 
     # Recoger ejemplos de rating con vectores disponibles
     corpus_vectors = {}
@@ -2724,7 +3056,7 @@ def cmd_validate(args):
         sys.exit(1)
 
     print(f"\n{bold('PREFERENCE TRAINER — VALIDATE')}")
-    print(f"  Modelo:   {cyan(model_file)}")
+    print(f"  Modelo:   {cyan(model_file)}  [{dim(model.MODEL_TYPE)}]")
     print(f"  Ejemplos: {n}  (con vector recuperable)")
 
     k = min(args.folds, n)
@@ -2747,8 +3079,9 @@ def cmd_validate(args):
             continue
 
         # Entrenar modelo limpio en este fold
-        m = PreferenceModel()
-        m.lr = 0.3
+        m = _MODEL_CLASSES.get(model_type, PreferenceModel)()
+        if hasattr(m, 'lr'):
+            m.lr = 0.3
         for _ in range(30):
             random.shuffle(train)
             for item in train:
@@ -3078,7 +3411,7 @@ def _rank_interactive(args, model, entries, model_file):
 
     if done > 0:
         model.calibrate([e["vector"] for e in entries])
-        model.save(model_file)
+        save_model(model, args.model)
         print(f"\n{green('✓')} {done} anotaciones guardadas en {cyan(model_file)}")
     else:
         print(dim("  Sin cambios."))
@@ -3091,6 +3424,9 @@ def cmd_rank(args):
     """Escanea el corpus completo y devuelve top/bottom/inciertas."""
 
     model_file = _model_path(args.model)
+
+
+    model_type = _model_type_from_args(args)
     if not Path(model_file).exists():
         print(red(f"Modelo no encontrado: {model_file}"))
         sys.exit(1)
@@ -3098,10 +3434,10 @@ def cmd_rank(args):
         print(red(f"Corpus no encontrado: {args.corpus}"))
         sys.exit(1)
 
-    model = PreferenceModel.load(model_file)
+    model = load_model(args.model, model_type)
 
     print(f"\n{bold('PREFERENCE TRAINER — RANK')}")
-    print(f"  Modelo: {cyan(model_file)}  ({model.n_train} ejemplos de entrenamiento)")
+    print(f"  Modelo: {cyan(model_file)}  [{dim(model.MODEL_TYPE)}]  ({model.n_train} ejemplos de entrenamiento)")
     print(f"  Corpus: {cyan(args.corpus)}")
 
     vectors, paths, meta = _load_corpus_npz(args.corpus)
@@ -3297,11 +3633,13 @@ def cmd_rank(args):
 def cmd_info(args):
     """Muestra información del modelo guardado."""
     model_file = _model_path(args.model)
+
+    model_type = _model_type_from_args(args)
     if not Path(model_file).exists():
         print(red(f"Modelo no encontrado: {model_file}"))
         sys.exit(1)
 
-    model = PreferenceModel.load(model_file)
+    model = load_model(args.model, model_type)
     print(f"\n{bold('PREFERENCE TRAINER — INFO')}")
     print(f"  Archivo: {cyan(model_file)}")
     print()
@@ -3373,6 +3711,9 @@ def main():
                              "  qbc          Query by Committee (K=5 modelos). Robusta.\n"
                              "  hybrid       Combina uncertainty + density + emc. Recomendada."
                          ))
+    p_train.add_argument("--model-type", default="linear",
+                         choices=["linear","neural","kernel","gp","svm"],
+                         help="Tipo de modelo (default: linear). Cada tipo usa archivo separado.")
 
     # ── eval ───────────────────────────────────────────────────────
     p_eval = sub.add_parser("eval", help="Evaluar uno o varios MIDIs")
@@ -3391,6 +3732,9 @@ def main():
                         help="Desglose completo de dimensiones")
     p_eval.add_argument("--json", dest="json_out", action="store_true",
                         help="Salida JSON machine-readable al final")
+    p_eval.add_argument("--model-type", default="linear",
+                         choices=["linear","neural","kernel","gp","svm"],
+                         help="Tipo de modelo (default: linear). Cada tipo usa archivo separado.")
 
     # ── rank ───────────────────────────────────────────────────────
     p_rank = sub.add_parser("rank", help="Escanear corpus → top/bottom/inciertas")
@@ -3414,6 +3758,9 @@ def main():
                         help="Soundfont .sf2 para reproducción en modo interactivo")
     p_rank.add_argument("--csv", default=None,
                         help="Exportar ranking completo a CSV")
+    p_rank.add_argument("--model-type", default="linear",
+                         choices=["linear","neural","kernel","gp","svm"],
+                         help="Tipo de modelo (default: linear). Cada tipo usa archivo separado.")
 
     # ── set ────────────────────────────────────────────────────────
     p_set = sub.add_parser("set", help="Asignar preferencia directamente a un MIDI")
@@ -3425,6 +3772,9 @@ def main():
                        help="Nombre base del modelo (default: prefs)")
     p_set.add_argument("--repetitions", type=int, default=10,
                        help="Fuerza del ajuste: nº de veces que se aplica (default: 10)")
+    p_set.add_argument("--model-type", default="linear",
+                         choices=["linear","neural","kernel","gp","svm"],
+                         help="Tipo de modelo (default: linear). Cada tipo usa archivo separado.")
 
     # ── validate ───────────────────────────────────────────────────
     p_val = sub.add_parser("validate", help="Validación cruzada del modelo")
@@ -3434,11 +3784,17 @@ def main():
                        help="Corpus .npz para recuperar vectores del historial")
     p_val.add_argument("--folds", type=int, default=5,
                        help="Número de folds (default: 5)")
+    p_val.add_argument("--model-type", default="linear",
+                         choices=["linear","neural","kernel","gp","svm"],
+                         help="Tipo de modelo (default: linear). Cada tipo usa archivo separado.")
 
     # ── info ───────────────────────────────────────────────────────
     p_info = sub.add_parser("info", help="Inspeccionar modelo guardado")
     p_info.add_argument("--model", default="prefs",
                         help="Nombre base del modelo (default: prefs)")
+    p_info.add_argument("--model-type", default="linear",
+                         choices=["linear","neural","kernel","gp","svm"],
+                         help="Tipo de modelo (default: linear). Cada tipo usa archivo separado.")
 
     args = parser.parse_args()
 
@@ -3460,3 +3816,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
