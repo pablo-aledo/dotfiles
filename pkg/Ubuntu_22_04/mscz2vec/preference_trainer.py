@@ -1572,9 +1572,18 @@ class NeuralModel(_BaseModel):
         self.n_train+=1; self.lr=max(0.001,0.01/(1+self.n_train*0.005))
         if path: self.annotated_paths.setdefault(path,[]).append(rating); self.history.append({"type":"rating","path":path,"rating":rating})
     def update_contrast(self,wv,lv,wp="",lp=""):
-        sw,_=self._fwd(wv[:self.n_dims]); sl,_=self._fwd(lv[:self.n_dims])
-        _,cw=self._fwd(wv[:self.n_dims]); self._bp(cw,min(1.0,sw+0.25))
-        _,cl=self._fwd(lv[:self.n_dims]); self._bp(cl,max(0.0,sl-0.25))
+        """Bradley-Terry: P(w>l) = sigmoid(score_w - score_l).
+        Gradient: push winner toward clamp(sw + (1-p_bt), 1),
+                        loser toward clamp(sl - (1-p_bt), 0).
+        p_bt = sigmoid(sw - sl); grad = 1 - p_bt (error signal)."""
+        vw=wv[:self.n_dims]+[0.0]*max(0,self.n_dims-len(wv))
+        vl=lv[:self.n_dims]+[0.0]*max(0,self.n_dims-len(lv))
+        sw,_=self._fwd(vw); sl,_=self._fwd(vl)
+        try: p_bt=1.0/(1.0+math.exp(-(sw-sl)))
+        except: p_bt=1.0 if sw>sl else 0.0
+        grad=1.0-p_bt   # 0 if already correct, 1 if totally wrong
+        _,cw=self._fwd(vw); self._bp(cw,min(1.0,sw+grad))
+        _,cl=self._fwd(vl); self._bp(cl,max(0.0,sl-grad))
         self.n_train+=1
         if wp: self.history.append({"type":"contrast","winner":wp,"loser":lp})
     def save(self,path):
@@ -1622,8 +1631,16 @@ class KernelModel(_BaseModel):
         self.lr=max(0.005,0.05/(1+self.n_train*0.02))
         if path: self.annotated_paths.setdefault(path,[]).append(rating); self.history.append({"type":"rating","path":path,"rating":rating})
     def update_contrast(self,wv,lv,wp="",lp=""):
+        """Bradley-Terry: always update proportional to prediction error.
+        grad = 1 - P(w>l) = 1 - sigmoid(logit_w - logit_l).
+        Winner alpha += lr*grad, loser alpha -= lr*grad."""
         sw=self.score(wv); sl=self.score(lv)
-        if sw<=sl: g=sw*(1-sw); self._add_sv(wv,self.lr*g); self._add_sv(lv,-self.lr*g)
+        try: p_bt=1.0/(1.0+math.exp(-(sw-sl)))
+        except: p_bt=1.0 if sw>sl else 0.0
+        grad=self.lr*(1.0-p_bt)
+        self._add_sv(wv[:], grad)
+        self._add_sv(lv[:], -grad)
+        self.bias+=grad*0.05
         self.n_train+=1
         if wp: self.history.append({"type":"contrast","winner":wp,"loser":lp})
     def save(self,path):
@@ -1695,7 +1712,18 @@ class GPModel(_BaseModel):
         self._add_ind(vector,(rating-1)/4.0); self.n_train+=1; self._dirty=True
         if path: self.annotated_paths.setdefault(path,[]).append(rating); self.history.append({"type":"rating","path":path,"rating":rating})
     def update_contrast(self,wv,lv,wp="",lp=""):
-        self._add_ind(wv,0.75); self._add_ind(lv,0.25); self.n_train+=1; self._dirty=True
+        """Bradley-Terry para GP: los targets se escalan con el error actual.
+        p_bt = sigmoid(score_w - score_l); grad = 1 - p_bt.
+        Target ganador = min(1, score_w + grad*0.5)  (se aleja de 0.5 hacia 1).
+        Target perdedor = max(0, score_l - grad*0.5)  (se aleja de 0.5 hacia 0)."""
+        sw=self.score(wv); sl=self.score(lv)
+        try: p_bt=1.0/(1.0+math.exp(-(sw-sl)))
+        except: p_bt=1.0 if sw>sl else 0.0
+        grad=1.0-p_bt
+        t_win=min(1.0, sw+grad*0.5)
+        t_los=max(0.0, sl-grad*0.5)
+        self._add_ind(wv,t_win); self._add_ind(lv,t_los)
+        self.n_train+=1; self._dirty=True
         if wp: self.history.append({"type":"contrast","winner":wp,"loser":lp})
     def save(self,path):
         json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"gamma":self.gamma,"noise":self.noise,"max_inducing":self.max_inducing,"X_ind":self.X_ind,"y_ind":self.y_ind,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(path,"w",encoding="utf-8"),indent=2,ensure_ascii=False)
