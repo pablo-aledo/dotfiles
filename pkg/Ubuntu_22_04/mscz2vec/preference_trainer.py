@@ -79,6 +79,19 @@
 ║    --no-autoplay           No reproducir automáticamente            ║
 ║    --candidate-pool N      Pool para selección activa (def: 50)     ║
 ║                            Mayor valor = mejor selección, más lento ║
+║    --strategy NOMBRE       Estrategia de selección activa:          ║
+║                            uncertainty  incertidumbre × novedad     ║
+║                                         (defecto, rápida)           ║
+║                            density      × densidad en corpus        ║
+║                                         (prefiere zonas densas)     ║
+║                            emc          expected model change        ║
+║                                         (señal alta, coste bajo)    ║
+║                            eer          expected error reduction     ║
+║                                         (óptima formal, lenta)      ║
+║                            qbc          query by committee K=5      ║
+║                                         (robusta al sobreajuste)    ║
+║                            hybrid       combina las tres anteriores  ║
+║                                         (recomendada en general)    ║
 ║                                                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║  EVAL — evalúa uno o varios MIDIs con el modelo entrenado           ║
@@ -943,81 +956,67 @@ class PreferenceModel:
         return 1.0 / (1.0 + n)
 
     def select_rating_candidate(self, vectors: list, indices: list,
-                                 paths: list = None) -> int:
+                                paths: list = None,
+                                corpus_vectors: list = None,
+                                strategy: str = "uncertainty") -> int:
         """
-        Selecciona el índice del vector más informativo para modo rating.
-        Estrategia: máxima incertidumbre si hay datos; aleatorio si el modelo es virgen.
+        Selecciona el candidato más informativo para modo rating.
+
+        Estrategias disponibles (--strategy):
+          uncertainty  Máxima incertidumbre del modelo × novedad. Rápida.
+                       Buena para modelos jóvenes.
+          density      Incertidumbre × densidad en el corpus × novedad.
+                       Prefiere piezas en regiones densas: anotar una
+                       pieza representativa beneficia a más vecinas.
+          emc          Expected Model Change. Estima cuánto cambiarían
+                       los pesos si se anotara esta pieza. Alta señal,
+                       bajo coste computacional.
+          eer          Expected Error Reduction. Simula anotar cada
+                       candidato con cada rating posible y mide cuánto
+                       reduce el error sobre el historial anotado.
+                       La más correcta formalmente; la más lenta.
+          qbc          Query by Committee. Entrena K=5 modelos con
+                       subsets del historial; elige la pieza con mayor
+                       desacuerdo entre modelos. Robusta al sobreajuste.
+          hybrid       Combina incertidumbre + densidad + EMC + novedad
+                       con pesos balanceados. Recomendada en general.
         """
         if self.n_train < 3:
-            # Sin modelo: preferir no vistos, luego aleatorio
             if paths:
                 unseen = [i for i in indices if self.annotation_count(str(paths[i])) == 0]
                 return random.choice(unseen) if unseen else random.choice(indices)
             return random.choice(indices)
 
-        # Score combinado: incertidumbre × novedad
-        # · incertidumbre alta → el modelo no sabe qué pensar de él
-        # · novedad alta      → nunca o pocas veces anotado
-        # La novedad evita re-presentar MIDIs ya bien calibrados
-        def _info(i):
-            unc = self.uncertainty(vectors[i])
-            nov = self.novelty_score(str(paths[i])) if paths else 1.0
-            return unc * nov
-
-        best_idx = max(indices, key=_info)
-        return best_idx
+        fn = _RATING_STRATEGIES.get(strategy, _rating_uncertainty)
+        return fn(self, vectors, indices, paths, corpus_vectors)
 
     def select_contrast_pair(self, vectors: list, indices: list,
                               n_candidates: int = 50,
-                              paths: list = None) -> tuple:
+                              paths: list = None,
+                              corpus_vectors: list = None,
+                              strategy: str = "uncertainty") -> tuple:
         """
         Selecciona el par (i, j) más informativo para modo contraste.
-
-        Criterio: par con score_diff mínimo (decisión difícil) entre
-        los pares vectorialmente más similares (comparación justa).
+        Acepta las mismas estrategias que select_rating_candidate;
+        todas se adaptan para devolver un par en lugar de un índice.
         """
         if len(indices) < 2:
             raise ValueError("Se necesitan al menos 2 candidatos.")
 
-        # Submuestreo para eficiencia
         pool = random.sample(indices, min(n_candidates, len(indices)))
 
         if self.n_train < 3:
-            # Sin modelo todavía: par más similar (aporta más información
-            # sobre qué dimensión importa)
-            best_pair = None
-            best_sim  = -1.0
+            best_pair, best_sim = None, -1.0
             for ii in range(len(pool)):
                 for jj in range(ii + 1, len(pool)):
                     a, b = pool[ii], pool[jj]
                     sim = _cosine_similarity(vectors[a], vectors[b])
                     if sim > best_sim:
-                        best_sim = sim
-                        best_pair = (a, b)
+                        best_sim, best_pair = sim, (a, b)
             return best_pair
 
-        # Con modelo: maximizar informatividad del par
-        # Criterio: similitud vectorial alta + score_diff bajo + novedad alta
-        # La novedad desalienta repetir pares donde ambos ya están bien calibrados
-        best_pair  = None
-        best_score = -1.0
-        for ii in range(len(pool)):
-            for jj in range(ii + 1, len(pool)):
-                a, b = pool[ii], pool[jj]
-                sa  = self.score(vectors[a])
-                sb  = self.score(vectors[b])
-                diff = abs(sa - sb)
-                sim  = _cosine_similarity(vectors[a], vectors[b])
-                # Novedad del par: media geométrica de las novedades individuales
-                nov_a = self.novelty_score(str(paths[a])) if paths else 1.0
-                nov_b = self.novelty_score(str(paths[b])) if paths else 1.0
-                nov   = math.sqrt(nov_a * nov_b)
-                # Informatividad total
-                info = sim * (1.0 - diff) * nov
-                if info > best_score:
-                    best_score = info
-                    best_pair = (a, b)
-        return best_pair
+        fn = _CONTRAST_STRATEGIES.get(strategy, _contrast_uncertainty)
+        return fn(self, vectors, pool, paths, corpus_vectors)
 
     # ── Diagnóstico ─────────────────────────────────────────────────
 
@@ -1104,6 +1103,395 @@ class PreferenceModel:
         m.annotated_paths  = data.get("annotated_paths", {})
         m.feature_stats    = data.get("feature_stats", m.feature_stats)
         return m
+
+
+# ════════════════════════════════════════════════════════════════════
+#  ESTRATEGIAS DE SELECCIÓN ACTIVA
+#  Todas comparten la misma firma para rating:
+#    fn(model, vectors, indices, paths, corpus_vectors) -> int
+#  Y para contraste:
+#    fn(model, vectors, pool, paths, corpus_vectors) -> (int, int)
+# ════════════════════════════════════════════════════════════════════
+
+# ── Helpers compartidos ──────────────────────────────────────────────
+
+def _mean_cosine(v: list, sample: list, top_k: int = 100) -> float:
+    """Similitud coseno media de v con los top_k vectores más cercanos."""
+    if not sample:
+        return 0.5
+    sims = sorted(
+        (_cosine_similarity(v, u) for u in sample),
+        reverse=True
+    )
+    k = min(top_k, len(sims))
+    return sum(sims[:k]) / k
+
+
+def _prob_rating(pred: float, rating: int) -> float:
+    """
+    Probabilidad aproximada de que el usuario asigne `rating` a una pieza
+    cuya predicción del modelo es `pred`. Distribución triangular centrada
+    en el rating que corresponde a pred, truncada en [1,5].
+    """
+    expected = pred * 4.0 + 1.0   # desnormalizar a [1,5]
+    dist = [max(0.0, 1.0 - abs(r - expected)) for r in range(1, 6)]
+    total = sum(dist)
+    if total < 1e-9:
+        return 0.2
+    return dist[rating - 1] / total
+
+
+def _clone_model(model) -> "PreferenceModel":
+    """Clona los pesos del modelo sin copiar el historial completo."""
+    m = PreferenceModel()
+    m.weights = model.weights[:]
+    m.bias    = model.bias
+    m.lr      = model.lr
+    m.n_train = model.n_train
+    return m
+
+
+# ── 1. UNCERTAINTY × NOVEDAD (defecto) ──────────────────────────────
+
+def _rating_uncertainty(model, vectors, indices, paths, corpus_vectors):
+    """Máxima incertidumbre del modelo × novedad. O(pool)."""
+    def _score(i):
+        unc = model.uncertainty(vectors[i])
+        nov = model.novelty_score(str(paths[i])) if paths else 1.0
+        return unc * nov
+    return max(indices, key=_score)
+
+
+def _contrast_uncertainty(model, vectors, pool, paths, corpus_vectors):
+    best_pair, best_val = None, -1.0
+    for ii in range(len(pool)):
+        for jj in range(ii + 1, len(pool)):
+            a, b = pool[ii], pool[jj]
+            sa, sb = model.score(vectors[a]), model.score(vectors[b])
+            sim  = _cosine_similarity(vectors[a], vectors[b])
+            nov_a = model.novelty_score(str(paths[a])) if paths else 1.0
+            nov_b = model.novelty_score(str(paths[b])) if paths else 1.0
+            val  = sim * (1.0 - abs(sa - sb)) * math.sqrt(nov_a * nov_b)
+            if val > best_val:
+                best_val, best_pair = val, (a, b)
+    return best_pair
+
+
+# ── 2. DENSITY — incertidumbre × densidad en el corpus ───────────────
+
+def _rating_density(model, vectors, indices, paths, corpus_vectors):
+    """
+    Incertidumbre × densidad × novedad. O(pool × corpus_sample).
+    Prefiere piezas inciertas Y representativas de zonas densas del corpus.
+    Anotar una pieza en una región densa beneficia a más vecinas.
+    """
+    sample = (random.sample(corpus_vectors, min(500, len(corpus_vectors)))
+              if corpus_vectors else [])
+
+    def _score(i):
+        unc = model.uncertainty(vectors[i])
+        den = _mean_cosine(vectors[i], sample) if sample else 0.5
+        nov = model.novelty_score(str(paths[i])) if paths else 1.0
+        return unc * den * nov
+
+    return max(indices, key=_score)
+
+
+def _contrast_density(model, vectors, pool, paths, corpus_vectors):
+    sample = (random.sample(corpus_vectors, min(500, len(corpus_vectors)))
+              if corpus_vectors else [])
+    best_pair, best_val = None, -1.0
+    for ii in range(len(pool)):
+        for jj in range(ii + 1, len(pool)):
+            a, b = pool[ii], pool[jj]
+            sa, sb = model.score(vectors[a]), model.score(vectors[b])
+            sim   = _cosine_similarity(vectors[a], vectors[b])
+            den_a = _mean_cosine(vectors[a], sample) if sample else 0.5
+            den_b = _mean_cosine(vectors[b], sample) if sample else 0.5
+            nov_a = model.novelty_score(str(paths[a])) if paths else 1.0
+            nov_b = model.novelty_score(str(paths[b])) if paths else 1.0
+            val   = (sim * (1.0 - abs(sa - sb))
+                     * math.sqrt(den_a * den_b)
+                     * math.sqrt(nov_a * nov_b))
+            if val > best_val:
+                best_val, best_pair = val, (a, b)
+    return best_pair
+
+
+# ── 3. EMC — Expected Model Change ──────────────────────────────────
+
+def _emc(model, v) -> float:
+    """
+    Cambio esperado en los pesos si se anotara el vector v.
+    E[||Δw||] = Σ_rating P(rating|pred) × |error × pred × (1-pred)|
+    O(5) por candidato — muy rápido.
+    """
+    pred = model.score(v)
+    total = 0.0
+    for rating in range(1, 6):
+        p      = _prob_rating(pred, rating)
+        target = (rating - 1) / 4.0
+        error  = target - pred
+        grad   = abs(error * pred * (1.0 - pred))
+        total += p * grad
+    return total
+
+
+def _rating_emc(model, vectors, indices, paths, corpus_vectors):
+    """Expected Model Change × novedad. O(pool)."""
+    def _score(i):
+        emc = _emc(model, vectors[i])
+        nov = model.novelty_score(str(paths[i])) if paths else 1.0
+        return emc * nov
+    return max(indices, key=_score)
+
+
+def _contrast_emc(model, vectors, pool, paths, corpus_vectors):
+    best_pair, best_val = None, -1.0
+    for ii in range(len(pool)):
+        for jj in range(ii + 1, len(pool)):
+            a, b   = pool[ii], pool[jj]
+            sim    = _cosine_similarity(vectors[a], vectors[b])
+            emc_ab = (_emc(model, vectors[a]) + _emc(model, vectors[b])) / 2
+            nov_a  = model.novelty_score(str(paths[a])) if paths else 1.0
+            nov_b  = model.novelty_score(str(paths[b])) if paths else 1.0
+            val    = sim * emc_ab * math.sqrt(nov_a * nov_b)
+            if val > best_val:
+                best_val, best_pair = val, (a, b)
+    return best_pair
+
+
+# ── 4. EER — Expected Error Reduction ───────────────────────────────
+
+def _current_error(model, annotated: list) -> float:
+    """MSE del modelo sobre el historial anotado."""
+    if not annotated:
+        return 0.0
+    total = 0.0
+    for v, target in annotated:
+        pred  = model.score(v)
+        total += (pred - target) ** 2
+    return total / len(annotated)
+
+
+def _rating_eer(model, vectors, indices, paths, corpus_vectors):
+    """
+    Expected Error Reduction.
+    Para cada candidato x y cada rating posible y:
+      1. Clona el modelo y aplica update_rating(x, y)
+      2. Mide el error sobre el historial anotado
+      3. Pondera por P(Y=y | pred(x))
+    Elige el candidato que más reduce el error esperado.
+    O(pool × 5 × historial) — más lento, máxima calidad formal.
+    """
+    # Construir conjunto de evaluación desde el historial
+    annotated = []
+    for entry in model.history:
+        if entry.get("type") == "rating" and "rating" in entry and "path" in entry:
+            target = (entry["rating"] - 1) / 4.0
+            # Buscar el vector del historial si está disponible
+            for iv, ip in zip(vectors, paths if paths else []):
+                if str(ip) == entry["path"]:
+                    annotated.append((vectors[iv] if isinstance(iv, int) else iv, target))
+                    break
+    # Fallback: usar todos los vectores del pool con su pred actual como proxy
+    if not annotated:
+        return _rating_uncertainty(model, vectors, indices, paths, corpus_vectors)
+
+    err_before = _current_error(model, annotated)
+    best_idx, best_reduction = indices[0], -1.0
+
+    for i in indices:
+        v    = vectors[i]
+        pred = model.score(v)
+        expected_err = 0.0
+        for rating in range(1, 6):
+            p = _prob_rating(pred, rating)
+            m_clone = _clone_model(model)
+            m_clone.update_rating(v, rating)
+            expected_err += p * _current_error(m_clone, annotated)
+        reduction = err_before - expected_err
+        nov = model.novelty_score(str(paths[i])) if paths else 1.0
+        if reduction * nov > best_reduction:
+            best_reduction = reduction * nov
+            best_idx = i
+
+    return best_idx
+
+
+def _contrast_eer(model, vectors, pool, paths, corpus_vectors):
+    """EER adaptado a contraste: elige el par cuya anotación esperada
+    reduce más el error. Evalúa ganancias de ambas piezas y las combina."""
+    annotated = []
+    for entry in model.history:
+        if entry.get("type") == "rating" and "rating" in entry and "path" in entry:
+            target = (entry["rating"] - 1) / 4.0
+            for iv, ip in zip(range(len(vectors)), paths if paths else []):
+                if str(ip) == entry["path"]:
+                    annotated.append((vectors[iv], target))
+                    break
+    if not annotated:
+        return _contrast_uncertainty(model, vectors, pool, paths, corpus_vectors)
+
+    err_before  = _current_error(model, annotated)
+    best_pair, best_val = None, -1.0
+
+    for ii in range(len(pool)):
+        for jj in range(ii + 1, len(pool)):
+            a, b = pool[ii], pool[jj]
+            sim  = _cosine_similarity(vectors[a], vectors[b])
+            # Reducción esperada conjunta del par
+            total_reduction = 0.0
+            for rating in range(1, 6):
+                p = _prob_rating(model.score(vectors[a]), rating)
+                m_clone = _clone_model(model)
+                m_clone.update_rating(vectors[a], rating)
+                m_clone.update_rating(vectors[b], rating)
+                total_reduction += p * (err_before - _current_error(m_clone, annotated))
+            nov_a = model.novelty_score(str(paths[a])) if paths else 1.0
+            nov_b = model.novelty_score(str(paths[b])) if paths else 1.0
+            val   = sim * total_reduction * math.sqrt(nov_a * nov_b)
+            if val > best_val:
+                best_val, best_pair = val, (a, b)
+    return best_pair
+
+
+# ── 5. QBC — Query by Committee ─────────────────────────────────────
+
+def _build_committee(model, K: int = 5) -> list:
+    """
+    Construye K modelos entrenados con subsets aleatorios del historial.
+    Cada modelo hereda los pesos actuales y se reajusta con un 70%
+    aleatorio del historial de ratings.
+    """
+    rating_history = [e for e in model.history
+                      if e.get("type") == "rating" and "rating" in e]
+    committee = []
+    for _ in range(K):
+        m = _clone_model(model)
+        subset = random.sample(rating_history,
+                               max(1, int(len(rating_history) * 0.7)))
+        for entry in subset:
+            # Necesitamos el vector; si no está, skip
+            if "__vector" in entry:
+                m.update_rating(entry["__vector"], entry["rating"])
+        committee.append(m)
+    return committee
+
+
+def _qbc_disagreement(committee: list, v: list) -> float:
+    """Varianza de las predicciones del comité sobre v."""
+    preds = [m.score(v) for m in committee]
+    mean  = sum(preds) / len(preds)
+    return sum((p - mean) ** 2 for p in preds) / len(preds)
+
+
+def _rating_qbc(model, vectors, indices, paths, corpus_vectors):
+    """
+    Query by Committee con K=5 modelos.
+    Elige la pieza con mayor desacuerdo entre modelos × novedad.
+    O(K × pool). Robusto al sobreajuste local.
+
+    Nota: requiere que el historial incluya el campo __vector en
+    cada entrada de rating (se añade automáticamente al anotar).
+    Si el historial no tiene vectores, degrada a uncertainty.
+    """
+    committee = _build_committee(model, K=5)
+    if not any(m.n_train > 0 for m in committee):
+        return _rating_uncertainty(model, vectors, indices, paths, corpus_vectors)
+
+    def _score(i):
+        dis = _qbc_disagreement(committee, vectors[i])
+        nov = model.novelty_score(str(paths[i])) if paths else 1.0
+        return dis * nov
+
+    return max(indices, key=_score)
+
+
+def _contrast_qbc(model, vectors, pool, paths, corpus_vectors):
+    committee = _build_committee(model, K=5)
+    if not any(m.n_train > 0 for m in committee):
+        return _contrast_uncertainty(model, vectors, pool, paths, corpus_vectors)
+
+    best_pair, best_val = None, -1.0
+    for ii in range(len(pool)):
+        for jj in range(ii + 1, len(pool)):
+            a, b  = pool[ii], pool[jj]
+            sim   = _cosine_similarity(vectors[a], vectors[b])
+            dis   = (_qbc_disagreement(committee, vectors[a]) +
+                     _qbc_disagreement(committee, vectors[b])) / 2
+            nov_a = model.novelty_score(str(paths[a])) if paths else 1.0
+            nov_b = model.novelty_score(str(paths[b])) if paths else 1.0
+            val   = sim * dis * math.sqrt(nov_a * nov_b)
+            if val > best_val:
+                best_val, best_pair = val, (a, b)
+    return best_pair
+
+
+# ── 6. HYBRID — combinación ponderada ───────────────────────────────
+
+def _rating_hybrid(model, vectors, indices, paths, corpus_vectors):
+    """
+    Combina uncertainty + density + EMC + novedad con pesos iguales.
+    Equilibrio entre exploración (density) y explotación (emc/uncertainty).
+    Recomendada para uso general.  O(pool × corpus_sample).
+    """
+    sample = (random.sample(corpus_vectors, min(500, len(corpus_vectors)))
+              if corpus_vectors else [])
+
+    def _score(i):
+        v   = vectors[i]
+        unc = model.uncertainty(v)
+        den = _mean_cosine(v, sample) if sample else 0.5
+        emc = _emc(model, v)
+        nov = model.novelty_score(str(paths[i])) if paths else 1.0
+        # Normalizar emc al rango aproximado de uncertainty (ambos en [0,0.25])
+        return (unc + den + emc * 4.0) / 3.0 * nov
+
+    return max(indices, key=_score)
+
+
+def _contrast_hybrid(model, vectors, pool, paths, corpus_vectors):
+    sample = (random.sample(corpus_vectors, min(500, len(corpus_vectors)))
+              if corpus_vectors else [])
+    best_pair, best_val = None, -1.0
+    for ii in range(len(pool)):
+        for jj in range(ii + 1, len(pool)):
+            a, b  = pool[ii], pool[jj]
+            sim   = _cosine_similarity(vectors[a], vectors[b])
+            diff  = abs(model.score(vectors[a]) - model.score(vectors[b]))
+            den   = (_mean_cosine(vectors[a], sample) +
+                     _mean_cosine(vectors[b], sample)) / 2 if sample else 0.5
+            emc   = (_emc(model, vectors[a]) + _emc(model, vectors[b])) / 2
+            nov_a = model.novelty_score(str(paths[a])) if paths else 1.0
+            nov_b = model.novelty_score(str(paths[b])) if paths else 1.0
+            val   = (sim * (1.0 - diff) + den + emc * 4.0) / 3.0 * math.sqrt(nov_a * nov_b)
+            if val > best_val:
+                best_val, best_pair = val, (a, b)
+    return best_pair
+
+
+# ── Tablas de despacho ───────────────────────────────────────────────
+
+SELECTION_STRATEGIES = ["uncertainty", "density", "emc", "eer", "qbc", "hybrid"]
+
+_RATING_STRATEGIES = {
+    "uncertainty": _rating_uncertainty,
+    "density":     _rating_density,
+    "emc":         _rating_emc,
+    "eer":         _rating_eer,
+    "qbc":         _rating_qbc,
+    "hybrid":      _rating_hybrid,
+}
+
+_CONTRAST_STRATEGIES = {
+    "uncertainty": _contrast_uncertainty,
+    "density":     _contrast_density,
+    "emc":         _contrast_emc,
+    "eer":         _contrast_eer,
+    "qbc":         _contrast_qbc,
+    "hybrid":      _contrast_hybrid,
+}
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1398,7 +1786,10 @@ def cmd_train_rating(args, model: PreferenceModel, vectors, paths, meta):
             print(yellow("  Has puntuado todos los MIDIs disponibles."))
             break
 
-        idx  = model.select_rating_candidate(vectors, available, paths=paths)
+        idx  = model.select_rating_candidate(
+            vectors, available, paths=paths,
+            corpus_vectors=vectors,
+            strategy=getattr(args, "strategy", "uncertainty"))
         played.add(idx)
 
         v    = vectors[idx]
@@ -1491,7 +1882,9 @@ def cmd_train_contrast(args, model: PreferenceModel, vectors, paths, meta):
             pair = model.select_contrast_pair(
                 vectors, indices,
                 n_candidates=getattr(args, "candidate_pool", 50),
-                paths=paths
+                paths=paths,
+                corpus_vectors=vectors,
+                strategy=getattr(args, "strategy", "uncertainty")
             )
         except ValueError:
             print(yellow("  Corpus demasiado pequeño."))
@@ -1508,7 +1901,9 @@ def cmd_train_contrast(args, model: PreferenceModel, vectors, paths, meta):
             try:
                 pair = model.select_contrast_pair(vectors, alt,
                     n_candidates=getattr(args, "candidate_pool", 50),
-                    paths=paths)
+                    paths=paths,
+                    corpus_vectors=vectors,
+                    strategy=getattr(args, "strategy", "uncertainty"))
                 a_idx, b_idx = pair
                 pair_key = (min(a_idx, b_idx), max(a_idx, b_idx))
             except Exception:
@@ -2136,6 +2531,17 @@ def cmd_train(args):
         print()
 
     # Sesión de entrenamiento
+    strategy = getattr(args, "strategy", "uncertainty")
+    strategy_descriptions = {
+        "uncertainty": "incertidumbre × novedad",
+        "density":     "incertidumbre × densidad × novedad",
+        "emc":         "expected model change × novedad",
+        "eer":         "expected error reduction (lenta)",
+        "qbc":         "query by committee (K=5)",
+        "hybrid":      "hybrid: uncertainty + density + emc",
+    }
+    print(f"  Estrategia: {cyan(strategy)}  {dim('— ' + strategy_descriptions.get(strategy, ''))}")
+    print()
     try:
         if args.mode == "contrast":
             result = cmd_train_contrast(args, model, vectors, paths, meta)
@@ -2956,6 +3362,17 @@ def main():
                          help="No reproducir automáticamente al presentar cada MIDI")
     p_train.add_argument("--candidate-pool", type=int, default=50,
                          help="Pool de candidatos para selección activa (default: 50)")
+    p_train.add_argument("--strategy", default="uncertainty",
+                         choices=["uncertainty", "density", "emc", "eer", "qbc", "hybrid"],
+                         help=(
+                             "Estrategia de selección activa (default: uncertainty).\n"
+                             "  uncertainty  Máxima incertidumbre × novedad. Rápida.\n"
+                             "  density      Incertidumbre × densidad en corpus × novedad.\n"
+                             "  emc          Expected Model Change. Alta señal, bajo coste.\n"
+                             "  eer          Expected Error Reduction. Óptima formal, más lenta.\n"
+                             "  qbc          Query by Committee (K=5 modelos). Robusta.\n"
+                             "  hybrid       Combina uncertainty + density + emc. Recomendada."
+                         ))
 
     # ── eval ───────────────────────────────────────────────────────
     p_eval = sub.add_parser("eval", help="Evaluar uno o varios MIDIs")
