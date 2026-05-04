@@ -1027,6 +1027,10 @@ sed -i 's/@/\\\\./g' graph
 EOF
 }
 
+logstat(){
+cat $1 | grep $2 | sed -e 's/ \([^=]*\)=\([0-9\.-]*\)/\n\1=\2\n/g' | grep = | grep $3 | cut -d= -f2 | stats | grep $4 | cut -d: -f2 | sed 's/ //g'
+}
+
 lgr_postprocess(){
 cat << EOF
 sed -i 's/\./@/g' graph
@@ -1071,10 +1075,6 @@ log2fnlog(){
         function=\$(cat index | grep \$file | awk -v line=\$linenr '\$3<line && \$4>line{print \$1}')
         echo \$function \$line
     done | sed -e 's/"time":[0-9]*//g' > fnlog_\$1
-}
-
-logstat(){
-cat $1 | grep $2 | sed -e 's/ \([^=]*\)=\([0-9\.-]*\)/\n\1=\2\n/g' | grep = | grep $3 | cut -d= -f2 | stats | grep $4 | cut -d: -f2 | sed 's/ //g'
 }
 
 log2fnlog log
