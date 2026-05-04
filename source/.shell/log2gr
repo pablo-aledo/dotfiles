@@ -1027,6 +1027,10 @@ sed -i 's/@/\\\\./g' graph
 EOF
 }
 
+logextract(){
+cat $1 | grep $2 | sed -e 's/ \([^=]*\)=\([0-9\.\-\+e]*\)/\n\1=\2\n/g' | grep = | grep $3
+}
+
 logstat(){
 cat $1 | grep $2 | sed -e 's/ \([^=]*\)=\([0-9\.\-\+e]*\)/\n\1=\2\n/g' | grep = | grep $3 | cut -d= -f2 | stats | grep $4 | cut -d: -f2 | sed 's/ //g'
 }
