@@ -1073,6 +1073,10 @@ log2fnlog(){
     done | sed -e 's/"time":[0-9]*//g' > fnlog_\$1
 }
 
+logstat(){
+cat $1 | grep $2 | sed -e 's/ \([^=]*\)=\([0-9\.-]*\)/\n\1=\2\n/g' | grep = | grep $3 | cut -d= -f2 | stats | grep $4 | cut -d: -f2 | sed 's/ //g'
+}
+
 log2fnlog log
 log2fnlog prev_log
 
