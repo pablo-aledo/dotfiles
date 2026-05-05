@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                       QUALITY SCORER  v1.0                                  ║
+║                       QUALITY SCORER  v1.1                                  ║
 ║         Evaluación multidimensional de calidad musical para MIDIs            ║
 ║                                                                              ║
 ║  Evalúa una o más obras MIDI en cinco dimensiones:                          ║
@@ -12,13 +12,14 @@
 ║    · corpus    — similitud estilística a una colección de referencia        ║
 ║                                                                              ║
 ║  El score final es relativo (percentil en el corpus) con fallback           ║
-║  absoluto (0.0–1.0) cuando no hay corpus disponible.                        ║
+║  absoluto (0.0–1.0) cuando no hay corpus disponible. Los pesos efectivos    ║
+║  se modulan automáticamente por la confianza de cada dimensión.             ║
 ║                                                                              ║
-║  MODOS:                                                                      ║
+║  MODOS DE OPERACIÓN:                                                         ║
 ║    (defecto)  Evaluación completa de un MIDI                                ║
 ║    rank       Comparación y ranking de varios MIDIs                         ║
 ║                                                                              ║
-║  USO:                                                                        ║
+║  USO BÁSICO:                                                                 ║
 ║    python quality_scorer.py obra.mid                                         ║
 ║    python quality_scorer.py obra.mid --plan obra.theorist.json              ║
 ║    python quality_scorer.py obra.mid --corpus ./midis/                      ║
@@ -28,9 +29,23 @@
 ║    python quality_scorer.py obra.mid --quiet          # solo imprime score  ║
 ║    python quality_scorer.py cand*.mid --mode rank                           ║
 ║    python quality_scorer.py cand*.mid --mode rank --quiet                   ║
+║                                                                              ║
+║  CONTROL DE DIMENSIONES:                                                     ║
 ║    python quality_scorer.py obra.mid --skip corpus formal                   ║
 ║    python quality_scorer.py obra.mid --only arc coherence                   ║
 ║    python quality_scorer.py obra.mid --weights formal=0.4 coherence=0.3    ║
+║    python quality_scorer.py obra.mid --arc-weight-mode static               ║
+║    python quality_scorer.py obra.mid --arc-weight-mode off                  ║
+║                                                                              ║
+║  EXPLICACIÓN EN LENGUAJE NATURAL (--explain):                               ║
+║    python quality_scorer.py obra.mid --explain                               ║
+║    python quality_scorer.py obra.mid --explain --explain-provider local     ║
+║    python quality_scorer.py obra.mid --explain --explain-provider anthropic ║
+║    python quality_scorer.py obra.mid --explain --explain-provider openai    ║
+║    python quality_scorer.py obra.mid --explain --explain-provider clipboard ║
+║    python quality_scorer.py obra.mid --explain --explain-out guia.txt       ║
+║                                                                              ║
+║  SALIDAS:                                                                    ║
 ║    python quality_scorer.py obra.mid --out-json report.json                 ║
 ║    python quality_scorer.py obra.mid --out-json report.json --verbose       ║
 ║                                                                              ║
@@ -38,23 +53,33 @@
 ║    --save-cache FILE   Guardar vectores del corpus en .qcache               ║
 ║    --use-cache FILE    Cargar caché previo (solo recalcula ficheros nuevos) ║
 ║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --plan FILE         theorist.json o narrator_plan.json para dim. arc     ║
-║    --corpus DIR        Directorio de MIDIs de referencia                    ║
-║    --mode MODE         eval (default) | rank                                ║
-║    --fast              Modo rápido: omite cálculos pesados (music21)        ║
-║    --skip DIM...       Dimensiones a omitir                                 ║
-║    --only DIM...       Solo estas dimensiones                               ║
-║    --weights K=V...    Pesos custom por dimensión (se renormalizan)         ║
-║    --out-json FILE     Guardar informe completo en JSON                     ║
-║    --quiet             Solo imprime score numérico (útil en scripts)        ║
-║    --verbose           Detalle completo en terminal                          ║
-║    --no-color          Sin colores ANSI                                     ║
+║  OPCIONES PRINCIPALES:                                                       ║
+║    --plan FILE             theorist.json o narrator_plan.json (dim. arc)    ║
+║    --corpus DIR            Directorio de MIDIs de referencia                ║
+║    --mode eval|rank        Modo de operación (default: eval)                ║
+║    --fast                  Modo rápido: omite cálculos pesados              ║
+║    --arc-weight-mode MODE  dynamic (default) | static | off                 ║
+║    --skip DIM...           Dimensiones a omitir                             ║
+║    --only DIM...           Solo estas dimensiones                           ║
+║    --weights K=V...        Pesos custom por dimensión (se renormalizan)     ║
+║    --out-json FILE         Guardar informe completo en JSON                 ║
+║    --quiet                 Solo imprime score numérico (útil en scripts)    ║
+║    --verbose               Detalle completo en terminal                     ║
+║    --no-color              Sin colores ANSI                                 ║
+║                                                                              ║
+║  OPCIONES DE EXPLICACIÓN:                                                    ║
+║    --explain                    Añadir guía de mejora en lenguaje natural   ║
+║    --explain-provider PROV      local|anthropic|openai|clipboard            ║
+║    --explain-model MODEL        Modelo LLM (default: claude-opus-4-5/gpt-4o)║
+║    --api-key KEY                API key (o ANTHROPIC_API_KEY/OPENAI_API_KEY)║
+║    --explain-out FILE           Guardar la explicación en fichero de texto  ║
 ║                                                                              ║
 ║  DEPENDENCIAS:                                                               ║
-║    Siempre:   mido, numpy                                                   ║
-║    Opcional:  music21  (mejora formal y arc)                                ║
-║    Opcional:  scipy    (mejora melodic)                                     ║
+║    Siempre:    mido, numpy                                                  ║
+║    Opcional:   music21           (mejora formal y arc)                      ║
+║    Opcional:   scipy             (mejora melodic)                           ║
+║    --explain anthropic:  pip install anthropic                              ║
+║    --explain openai:     pip install openai                                 ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -103,7 +128,7 @@ except ImportError:
 #  CONSTANTES Y CONFIGURACIÓN
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
@@ -1941,6 +1966,522 @@ def render_rank_terminal(reports: List[QualityReport], verbose: bool = False):
     print(f"\n{'═' * 64}\n")
 
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  MÓDULO DE EXPLICACIÓN (--explain)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+#  Modo A (local):  plantillas de texto en lenguaje natural, sin dependencias.
+#  Modo B (llm):    envía el informe a un LLM para consejo accionable.
+#    · --explain-provider anthropic   usa ANTHROPIC_API_KEY / --api-key
+#    · --explain-provider openai      usa OPENAI_API_KEY / --api-key
+#    · --explain-provider clipboard   copia el prompt, espera que pegues la resp.
+#
+#  En todos los casos el resultado se imprime en terminal y,
+#  opcionalmente, se guarda con --explain-out FILE.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Textos de plantilla (modo A) ──────────────────────────────────────────────
+
+_EXPLAIN_TEMPLATES: Dict[str, Dict] = {
+    "formal": {
+        "label": "Corrección melódica y armónica",
+        "high":  "Las notas y acordes encajan bien entre sí. La melodía se mueve "
+                 "de forma natural sin saltos bruscos.",
+        "mid":   "Hay algunos momentos donde la melodía da saltos demasiado grandes "
+                 "o las notas chirrían con los acordes. No es grave, pero se nota.",
+        "low":   "La melodía tiene saltos muy amplios que suenan forzados, o hay "
+                 "notas que no encajan con la armonía. Es el área con más margen de mejora.",
+        "tip_high":  None,
+        "tip_mid":   "Intenta que la melodía se mueva principalmente por pasos "
+                     "cercanos (notas vecinas). Los saltos grandes funcionan mejor "
+                     "usados con moderación, en momentos de énfasis.",
+        "tip_low":   "Revisa los momentos donde la melodía salta más de una octava. "
+                     "Casi siempre hay una nota intermedia que haría la transición más suave. "
+                     "También comprueba que las notas principales de cada compás pertenecen al acorde.",
+        "violations": {
+            "parallel_fifths":         "acordes que suenan vacíos por moverse en paralelo",
+            "parallel_octaves":        "voces que se duplican en paralelo (pierde riqueza)",
+            "voice_crossing":          "voces que se cruzan (la grave suena más aguda que la aguda)",
+            "large_leap":              "saltos melódicos demasiado grandes",
+            "leading_tone_unresolved": "nota de tensión que no resuelve hacia donde espera el oído",
+        },
+    },
+    "coherence": {
+        "label": "Consistencia interna",
+        "high":  "La pieza suena unificada de principio a fin. El estilo y el carácter "
+                 "se mantienen consistentes.",
+        "mid":   "La pieza es mayormente consistente, aunque hay algún momento que suena "
+                 "diferente al resto, quizá por cambio brusco de textura o densidad.",
+        "low":   "Hay secciones que suenan como si pertenecieran a piezas distintas. "
+                 "El oyente puede sentir que algo 'desentona'.",
+        "tip_high":  None,
+        "tip_mid":   "Escucha la pieza entera y localiza el momento donde sientes que "
+                     "'algo cambia'. Ese es el segmento anómalo. Puedes suavizarlo "
+                     "reduciendo el contraste con la sección anterior.",
+        "tip_low":   "La pieza necesita hilo conductor. Considera usar un motivo melódico "
+                     "recurrente (una pequeña frase que se repite y varía), o mantener "
+                     "el mismo tempo y rango dinámico en toda la obra.",
+    },
+    "arc": {
+        "label": "Arco emocional",
+        "high":  "La pieza tiene una forma emocional clara: construye tensión, "
+                 "llega a un punto álgido y resuelve. El oyente siente un viaje.",
+        "mid":   "Hay algo de movimiento emocional, pero el arco podría ser más pronunciado. "
+                 "La pieza sube y baja, pero sin un clímax claro.",
+        "low":   "La pieza mantiene el mismo nivel de intensidad de principio a fin. "
+                 "Sin cambios de tensión, el oyente puede perder el hilo emocional.",
+        "static": "La pieza mantiene un nivel de intensidad constante de forma intencionada "
+                  "(forma estrófica, ostinato, himno). Esto puede ser una elección válida.",
+        "tip_high":  None,
+        "tip_mid":   "Elige un momento para el clímax (normalmente entre el 60% y el 75% "
+                     "de la pieza) y hazlo más intenso: más notas por tiempo, registro más "
+                     "agudo, o dinámica más fuerte. Luego reduce gradualmente hacia el final.",
+        "tip_low":   "Prueba este esquema básico: empieza suave, sube la intensidad poco a poco "
+                     "hasta los 3/4 de la pieza, y luego resuelve con calma. Incluso pequeñas "
+                     "variaciones de velocidad y volumen crean mucha diferencia.",
+    },
+    "melodic": {
+        "label": "Interés melódico",
+        "high":  "La melodía es variada e interesante: mezcla repetición y novedad, "
+                 "sube y baja con naturalidad, y tiene personalidad propia.",
+        "mid":   "La melodía funciona pero podría tener más personalidad. "
+                 "Quizá es algo predecible o le falta variedad.",
+        "low":   "La melodía es difícil de recordar o seguir. Puede ser demasiado "
+                 "repetitiva, demasiado aleatoria, o carecer de forma clara.",
+        "tip_high":  None,
+        "tip_mid":   "Toma una frase corta que ya tengas (3-5 notas) y úsala como "
+                     "motivo: repítela, transpónla a otro tono, inviértela, o cámbiala "
+                     "ligeramente cada vez. Las melodías memorables suelen basarse en "
+                     "pocos materiales bien desarrollados.",
+        "tip_low":   "Si la melodía suena aleatoria, prueba a limitarte a las notas "
+                     "de la escala y movirte principalmente por pasos. Si suena "
+                     "repetitiva, añade algún salto en los puntos de énfasis y "
+                     "varía el ritmo aunque las notas sean similares.",
+        "submetrics": {
+            "interval_entropy": ("intervalos muy repetitivos",
+                                 "buen equilibrio de intervalos",
+                                 "intervalos demasiado aleatorios"),
+            "inflection_rate":  ("melodía demasiado recta (sin subidas y bajadas)",
+                                 "buen contorno melódico",
+                                 "melodía en zigzag constante"),
+            "markov_entropy":   ("melodía muy predecible",
+                                 "buena variedad de transiciones",
+                                 "transiciones melódicas sin patrón"),
+            "repetition_ratio": ("sin motivos reconocibles",
+                                 "buen equilibrio repetición/variedad",
+                                 "demasiado repetitiva"),
+        },
+    },
+    "corpus": {
+        "label": "Afinidad estilística",
+        "high":  "La pieza encaja bien con el estilo de tu colección de referencia.",
+        "mid":   "La pieza tiene similitudes con tu colección pero también diferencias notables.",
+        "low":   "La pieza suena bastante diferente a tu colección de referencia. "
+                 "Puede ser intencional (estás explorando un estilo nuevo) o involuntario.",
+        "tip_high":  None,
+        "tip_mid":   "Escucha las piezas más cercanas de tu corpus y fíjate en qué "
+                     "elementos comparten con la tuya y cuáles difieren.",
+        "tip_low":   "Si quieres acercarte más a tu corpus de referencia, analiza "
+                     "el tempo, la densidad de notas y el registro de las piezas más "
+                     "similares e intenta adoptar esos parámetros.",
+    },
+}
+
+_OVERALL_LABELS = {
+    "muy alto": ("Resultado excelente",
+                 "Esta pieza está muy bien construida. Los aspectos técnicos "
+                 "y musicales funcionan de forma conjunta."),
+    "alto":     ("Buen resultado",
+                 "La pieza funciona bien en general. Hay algunos aspectos "
+                 "a pulir pero la base es sólida."),
+    "medio":    ("Resultado correcto",
+                 "La pieza tiene potencial pero necesita trabajo en algunas áreas "
+                 "concretas para alcanzar su mejor versión."),
+    "bajo":     ("Hay margen de mejora",
+                 "La pieza necesita revisión en varias áreas. Las sugerencias "
+                 "a continuación te indicarán por dónde empezar."),
+}
+
+
+def _score_band(score: float) -> str:
+    if score >= 0.75: return "high"
+    if score >= 0.50: return "mid"
+    return "low"
+
+
+def _explain_local(report: QualityReport) -> str:
+    """
+    Genera una explicación en lenguaje natural usando plantillas locales.
+    No requiere conexión ni API key.
+    """
+    lines = []
+    W = 64
+
+    label   = report.score.absolute_label
+    heading, summary = _OVERALL_LABELS.get(label, ("Resultado", ""))
+    score   = report.score.absolute
+
+    lines.append("═" * W)
+    lines.append(f"  GUÍA DE MEJORA  ·  {report.file}")
+    lines.append("═" * W)
+    lines.append(f"\n  Puntuación global: {score:.2f}  —  {heading}")
+    lines.append(f"\n  {summary}")
+
+    if report.score.percentile is not None:
+        pct = report.score.percentile
+        if pct >= 75:
+            lines.append(f"  Tu pieza está entre el {pct:.0f}% más cercano a tu corpus de referencia.")
+        elif pct >= 40:
+            lines.append(f"  Tu pieza tiene similitud media con tu corpus ({pct:.0f}º percentil).")
+        else:
+            lines.append(f"  Tu pieza difiere bastante de tu corpus ({pct:.0f}º percentil).")
+
+    # Identificar las 2 dimensiones más problemáticas (por score × confidence)
+    active_dims = {k: v for k, v in report.dimensions.items()
+                   if v.confidence > 0.0 and v.details.get("status") not in ("stub", "no_corpus", "disabled")}
+
+    if not active_dims:
+        lines.append("\n  (No hay dimensiones con datos suficientes para generar recomendaciones.)")
+        lines.append("\n" + "═" * W)
+        return "\n".join(lines)
+
+    sorted_dims = sorted(active_dims.items(), key=lambda x: x[1].score * x[1].confidence)
+    worst       = [d for d, r in sorted_dims if r.score < 0.70][:2]
+
+    lines.append("\n")
+    lines.append("  ─" * 32)
+    lines.append("  ANÁLISIS POR ÁREA")
+    lines.append("  ─" * 32)
+
+    for dim, res in sorted(active_dims.items(),
+                            key=lambda x: x[1].score * x[1].confidence):
+        tmpl  = _EXPLAIN_TEMPLATES.get(dim)
+        if tmpl is None:
+            continue
+        band  = _score_band(res.score)
+
+        # Caso especial: arc estático
+        if dim == "arc" and any("estático" in r for r in res.reasons):
+            band = "static"
+
+        label_dim = tmpl["label"]
+        bar_w     = int(res.score * 16)
+        bar       = "█" * bar_w + "░" * (16 - bar_w)
+        text      = tmpl.get(band) or tmpl.get("mid", "")
+        tip       = tmpl.get(f"tip_{band}")
+
+        lines.append(f"\n  {label_dim.upper()}")
+        lines.append(f"  [{bar}] {res.score:.2f}")
+        lines.append(f"  {text}")
+
+        # Detalles de violaciones (formal)
+        if dim == "formal" and res.details.get("by_rule"):
+            for rule, count in sorted(res.details["by_rule"].items(),
+                                      key=lambda x: -x[1]):
+                desc = tmpl["violations"].get(rule, rule)
+                lines.append(f"    · {count}x {desc}")
+
+        # Submétricas (melodic)
+        if dim == "melodic" and res.confidence > 0.3:
+            subs = tmpl.get("submetrics", {})
+            details = res.details
+            for key, (lo, mid_, hi) in subs.items():
+                val = details.get(key)
+                if val is None:
+                    continue
+                # Cada submétrica tiene su propio óptimo gaussiano centrado en ~0.5
+                # band: si score × confianza del submétrico está lejos del centro
+                if val < 0.35:
+                    msg = lo
+                elif val > 0.70:
+                    msg = hi
+                else:
+                    continue   # en rango bueno, no mencionar
+                lines.append(f"    · {msg}")
+
+        # Nearest corpus
+        if dim == "corpus" and res.details.get("nearest_files"):
+            nearest = res.details["nearest_files"][:2]
+            lines.append(f"    Piezas más similares en tu corpus: {', '.join(nearest)}")
+
+        if tip:
+            lines.append(f"\n¿Cómo mejorar?")
+            for part in textwrap.wrap(tip, width=60):
+                lines.append(f"  {part}")
+
+    # Resumen priorizado
+    if worst:
+        lines.append("\n")
+        lines.append("  ─" * 32)
+        lines.append("  POR DÓNDE EMPEZAR")
+        lines.append("  ─" * 32)
+        for i, dim in enumerate(worst, 1):
+            tmpl  = _EXPLAIN_TEMPLATES.get(dim, {})
+            tip   = tmpl.get("tip_low") or tmpl.get("tip_mid", "")
+            label_dim = tmpl.get("label", dim)
+            lines.append(f"\n{i}. {label_dim}")
+            if tip:
+                for part in textwrap.wrap(tip, width=60):
+                    lines.append(f"     {part}")
+
+    lines.append("\n" + "═" * W)
+    return "\n".join(lines)
+
+
+# ── Prompt para LLM ───────────────────────────────────────────────────────────
+
+def _build_llm_prompt(report: QualityReport) -> str:
+    """
+    Construye el prompt que se envía al LLM.
+    Serializa el informe técnico en formato legible y añade instrucciones
+    para que el LLM genere una guía de mejora en lenguaje natural.
+    """
+    d = report.to_dict()
+    dims_text = []
+    for dim, data in d["dimensions"].items():
+        if data["confidence"] == 0.0:
+            continue
+        reasons_str = "; ".join(data.get("reasons", [])) or "sin observaciones"
+        # Incluir detalles relevantes según dimensión
+        extra = ""
+        if dim == "formal" and data.get("by_rule"):
+            extra = f" Violaciones: {data['by_rule']}."
+        if dim == "corpus" and data.get("nearest_files"):
+            extra = f" Piezas más cercanas en el corpus: {data['nearest_files'][:3]}."
+        if dim == "melodic":
+            subs = {k: data.get(k) for k in
+                    ["interval_entropy_norm","inflection_rate",
+                     "markov_entropy_norm","repetition_ratio"]
+                    if data.get(k) is not None}
+            if subs:
+                extra = f" Submétricas: {subs}."
+        dims_text.append(
+            f"- {dim}: score={data['score']:.3f}, confianza={data['confidence']:.2f}. "
+            f"{reasons_str}.{extra}"
+        )
+
+    meta   = d["meta"]
+    score  = d["score"]
+    report_str = (
+        "Fichero: " + d["file"] + "\n"
+        + "Tonalidad detectada: " + meta["key"]
+        + ", tempo: " + str(meta["tempo_bpm"]) + " BPM"
+        + ", compases: " + str(meta["duration_bars"])
+        + ", tracks: " + str(meta["n_tracks"])
+        + " (" + meta["topology"] + ")\n"
+        + "Modo arc: " + meta.get("arc_weight_mode", "dynamic") + "\n"
+        + "Plan de composición disponible: " + ("sí" if d["plan_used"] else "no") + "\n"
+        + "Corpus de referencia: " + (
+            "sí (" + str(score["corpus_size"]) + " MIDIs)"
+            if d["corpus_used"] else "no"
+        ) + "\n\n"
+        + "SCORE GLOBAL: " + f"{score['absolute']:.3f}"
+        + " [" + score["absolute_label"] + "]\n"
+        + (f"Percentil en corpus: {score['percentile']:.1f}%\n"
+           if score["percentile"] is not None else "")
+        + "Pesos efectivos usados: " + str(score["weights_used"]) + "\n\n"
+        + "DIMENSIONES:\n"
+        + "\n".join(dims_text)
+    )
+
+    prompt = (
+        "Eres un profesor de composición musical amable y claro. "
+        "Tu alumno acaba de analizar una pieza MIDI con una herramienta automática "
+        "y te muestra el informe técnico. El alumno NO tiene formación musical formal "
+        "y necesita consejos prácticos y accionables en lenguaje cotidiano, "
+        "sin tecnicismos innecesarios. Evita términos como \'voice leading\', "
+        "\'paralelas de quinta\', \'sensible\' o \'arco emocional\' sin explicarlos. "
+        "Usa analogías simples cuando sea útil.\n\n"
+        "INFORME TÉCNICO:\n"
+        + report_str
+        + "\n\nPor favor genera:\n"
+        "1. Un párrafo de resumen global (2-3 frases) que describa cómo suena la pieza "
+        "y qué funciona bien.\n"
+        "2. Las 2-3 áreas más importantes a mejorar, explicadas en lenguaje llano con "
+        "una sugerencia concreta y accionable para cada una.\n"
+        "3. Un consejo de motivación final (1 frase).\n\n"
+        "Responde en español. Sé específico, positivo y constructivo."
+    )
+    return prompt
+
+
+# ── Modo clipboard ────────────────────────────────────────────────────────────
+
+def _explain_clipboard(report: QualityReport,
+                        out_path: Optional[str] = None) -> str:
+    """
+    Imprime el prompt en terminal para que el usuario lo copie,
+    espera que pegue la respuesta del LLM, y devuelve esa respuesta.
+    """
+    prompt = _build_llm_prompt(report)
+    sep = "─" * 64
+
+    print(f"\n{sep}")
+    print("  MODO CLIPBOARD — copia el texto siguiente y pégalo en tu LLM")
+    print(f"{sep}\n")
+    print(prompt)
+    print(f"\n{sep}")
+    print("  Pega aquí la respuesta del LLM (termina con una línea que solo contenga END):")
+    print(f"{sep}\n")
+
+    lines = []
+    try:
+        while True:
+            line = input()
+            if line.strip().upper() == "END":
+                break
+            lines.append(line)
+    except (EOFError, KeyboardInterrupt):
+        pass
+
+    response = "\n".join(lines).strip()
+    if not response:
+        return "(sin respuesta recibida)"
+
+    result = _format_llm_response(report.file, response)
+    if out_path:
+        _save_explain(result, out_path)
+    return result
+
+
+# ── Modo Anthropic ────────────────────────────────────────────────────────────
+
+def _explain_anthropic(report: QualityReport,
+                        api_key: Optional[str],
+                        model: str,
+                        out_path: Optional[str] = None) -> str:
+    """Llama a la API de Anthropic (claude-* models)."""
+    try:
+        import anthropic as _anthropic
+    except ImportError:
+        return ("[ERROR] anthropic no instalado. "
+                "Instálalo con: pip install anthropic")
+
+    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return ("[ERROR] Falta ANTHROPIC_API_KEY. "
+                "Pásalo con --api-key o como variable de entorno.")
+
+    prompt = _build_llm_prompt(report)
+    print(f"  Consultando {model} … ", end="", flush=True)
+    try:
+        client = _anthropic.Anthropic(api_key=key)
+        msg    = client.messages.create(
+            model      = model,
+            max_tokens = 1024,
+            messages   = [{"role": "user", "content": prompt}],
+        )
+        response = msg.content[0].text
+        print("listo.")
+    except Exception as e:
+        print()
+        return f"[ERROR] Llamada a Anthropic fallida: {e}"
+
+    result = _format_llm_response(report.file, response)
+    if out_path:
+        _save_explain(result, out_path)
+    return result
+
+
+# ── Modo OpenAI ───────────────────────────────────────────────────────────────
+
+def _explain_openai(report: QualityReport,
+                    api_key: Optional[str],
+                    model: str,
+                    out_path: Optional[str] = None) -> str:
+    """Llama a la API de OpenAI (gpt-* o o-* models)."""
+    try:
+        import openai as _openai
+    except ImportError:
+        return ("[ERROR] openai no instalado. "
+                "Instálalo con: pip install openai")
+
+    key = api_key or os.environ.get("OPENAI_API_KEY")
+    if not key:
+        return ("[ERROR] Falta OPENAI_API_KEY. "
+                "Pásalo con --api-key o como variable de entorno.")
+
+    prompt = _build_llm_prompt(report)
+    print(f"  Consultando {model} … ", end="", flush=True)
+    try:
+        client   = _openai.OpenAI(api_key=key)
+        response_obj = client.chat.completions.create(
+            model    = model,
+            messages = [{"role": "user", "content": prompt}],
+            max_tokens = 1024,
+        )
+        response = response_obj.choices[0].message.content
+        print("listo.")
+    except Exception as e:
+        print()
+        return f"[ERROR] Llamada a OpenAI fallida: {e}"
+
+    result = _format_llm_response(report.file, response)
+    if out_path:
+        _save_explain(result, out_path)
+    return result
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _format_llm_response(filename: str, response: str) -> str:
+    W = 64
+    lines = [
+        "═" * W,
+        f"  GUÍA DE MEJORA (LLM)  ·  {filename}",
+        "═" * W,
+        "",
+    ]
+    for para in response.split("\n"):
+        wrapped = textwrap.fill(para, width=62, initial_indent="  ",
+                                subsequent_indent="  ") if para.strip() else ""
+        lines.append(wrapped)
+    lines.append("\n" + "═" * W)
+    return "\n".join(lines)
+
+
+def _save_explain(text: str, path: str):
+    try:
+        # Guardar sin códigos ANSI
+        import re
+        clean = re.sub(r"\033\[[0-9;]*m", "", text)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(clean)
+        print(f"  Explicación guardada: {path}")
+    except Exception as e:
+        print(f"  [AVISO] No se pudo guardar: {e}")
+
+
+def explain_report(report: QualityReport,
+                   provider: str,
+                   model: Optional[str],
+                   api_key: Optional[str],
+                   out_path: Optional[str]) -> str:
+    """
+    Punto de entrada unificado para el módulo de explicación.
+    provider: "local" | "anthropic" | "openai" | "clipboard"
+    """
+    if provider == "local":
+        result = _explain_local(report)
+        if out_path:
+            _save_explain(result, out_path)
+        return result
+
+    if provider == "clipboard":
+        return _explain_clipboard(report, out_path=out_path)
+
+    if provider == "anthropic":
+        m = model or "claude-opus-4-5"
+        return _explain_anthropic(report, api_key=api_key, model=m, out_path=out_path)
+
+    if provider == "openai":
+        m = model or "gpt-4o"
+        return _explain_openai(report, api_key=api_key, model=m, out_path=out_path)
+
+    return f"[ERROR] Proveedor desconocido: {provider}"
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CLI
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1992,6 +2533,31 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Detalle completo en terminal.")
     p.add_argument("--no-color", action="store_true",
                    help="Sin colores ANSI.")
+
+    # ── Explicación en lenguaje natural ───────────────────────────────────────
+    explain_group = p.add_argument_group("explicación (--explain)")
+    explain_group.add_argument("--explain", action="store_true",
+                               help="Añadir explicación en lenguaje natural al informe.")
+    explain_group.add_argument("--explain-provider",
+                               choices=["local", "anthropic", "openai", "clipboard"],
+                               default="local",
+                               help=(
+                                   "Proveedor para la explicación: "
+                                   "local = plantillas offline (default); "
+                                   "anthropic = Claude vía API; "
+                                   "openai = GPT vía API; "
+                                   "clipboard = muestra el prompt para copiarlo a cualquier LLM."
+                               ))
+    explain_group.add_argument("--explain-model", metavar="MODEL", default=None,
+                               help=(
+                                   "Modelo a usar con anthropic u openai. "
+                                   "Default: claude-opus-4-5 (anthropic) / gpt-4o (openai)."
+                               ))
+    explain_group.add_argument("--api-key", metavar="KEY", default=None,
+                               help="API key para anthropic u openai "
+                                    "(alternativa a ANTHROPIC_API_KEY / OPENAI_API_KEY).")
+    explain_group.add_argument("--explain-out", metavar="FILE", default=None,
+                               help="Guardar la explicación en un fichero de texto.")
     return p
 
 
@@ -2129,6 +2695,19 @@ def main():
             print(f"  Informe guardado: {args.out_json}")
         except Exception as e:
             print(f"[ERROR] No se pudo guardar JSON: {e}", file=sys.stderr)
+
+    # ── Explicación en lenguaje natural ───────────────────────────────────────
+    if args.explain:
+        for rp in reports:
+            # En modo rank con varios ficheros: explicar cada uno
+            explanation = explain_report(
+                report   = rp,
+                provider = args.explain_provider,
+                model    = args.explain_model,
+                api_key  = args.api_key,
+                out_path = args.explain_out,
+            )
+            print(explanation)
 
 
 if __name__ == "__main__":
