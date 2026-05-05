@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                       QUALITY SCORER  v1.1                                  ║
+║                       QUALITY SCORER  v1.2                                  ║
 ║         Evaluación multidimensional de calidad musical para MIDIs            ║
 ║                                                                              ║
 ║  Evalúa una o más obras MIDI en cinco dimensiones:                          ║
@@ -128,7 +128,7 @@ except ImportError:
 #  CONSTANTES Y CONFIGURACIÓN
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION = "1.1"
+VERSION = "1.2"
 
 PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
@@ -996,6 +996,7 @@ class FormalEvaluator:
         """
         Analiza intervalos simultáneos en ventanas de 1 beat.
         Métricas: densidad de disonancia, saltos grandes, notas fuera de escala.
+        Nivel 1+3: localiza cada problema por compás.
         """
         MAJOR_SCALE = {0, 2, 4, 5, 7, 9, 11}
         MINOR_SCALE = {0, 2, 3, 5, 7, 8, 10}
@@ -1010,25 +1011,34 @@ class FormalEvaluator:
         total_beats_with_notes = 0
         large_leaps = 0
         leap_total  = 0
-        oos_notes   = 0   # out-of-scale
+        oos_notes   = 0
+
+        # Listas de localización por compás
+        dissonant_bars: list = []
+        leap_bars:      list = []
+        oos_bars:       list = []
 
         pitches_seq = [n[2] for n in notes]
 
-        # Saltos grandes (> 6 semitonos = > 6ª menor)
-        for i in range(1, len(pitches_seq)):
+        # Saltos grandes: localizar por compás
+        for i in range(1, len(notes)):
             interval = abs(pitches_seq[i] - pitches_seq[i - 1])
             if interval > 0:
                 leap_total += 1
-                if interval > 9:   # > 6ª mayor
+                if interval > 9:
                     large_leaps += 1
+                    bar = int(notes[i][0] // bar_ticks) + 1
+                    leap_bars.append(bar)
 
-        # Notas fuera de escala
+        # Notas fuera de escala: localizar por compás
         for n in notes:
             if (n[2] % 12) not in scale_pcs:
                 oos_notes += 1
+                bar = int(n[0] // bar_ticks) + 1
+                oos_bars.append(bar)
         oos_ratio = oos_notes / max(len(notes), 1)
 
-        # Disonancia por beat: ratio de beats donde hay intervalos disonantes
+        # Disonancia por beat: localizar compases problemáticos
         for b in range(n_beats):
             t0 = b * beat_ticks
             t1 = (b + 1) * beat_ticks
@@ -1047,15 +1057,12 @@ class FormalEvaluator:
                     break
             if has_dissonance:
                 dissonance_beats += 1
+                bar = int(t0 // bar_ticks) + 1
+                dissonant_bars.append(bar)
 
         diss_ratio  = dissonance_beats / max(total_beats_with_notes, 1)
         leap_ratio  = large_leaps / max(leap_total, 1)
 
-        # Score: penalizar disonancia excesiva, saltos y notas fuera de escala
-        # Rangos heurísticos calibrados:
-        #   diss_ratio > 0.5 → problemático  (50% de beats con disonancia)
-        #   leap_ratio > 0.15 → muchos saltos grandes
-        #   oos_ratio  > 0.20 → muchas notas fuera de escala
         s_diss = 1.0 - min(diss_ratio / 0.5, 1.0)
         s_leap = 1.0 - min(leap_ratio / 0.15, 1.0)
         s_oos  = 1.0 - min(oos_ratio / 0.20, 1.0)
@@ -1073,16 +1080,22 @@ class FormalEvaluator:
         if score > 0.75:
             reasons.append("corrección formal básica adecuada")
 
+        # Deduplicar listas de compases (mantener orden)
+        def dedup(lst): return sorted(set(lst))
+
         return DimensionResult(
             score      = score,
-            confidence = 0.65,   # nivel básico: menor confianza
+            confidence = 0.65,
             reasons    = reasons,
             details    = {
-                "level":            "basic",
-                "key":              f"{PITCH_NAMES[key_root]} {key_mode}",
-                "dissonance_ratio": round(diss_ratio, 4),
-                "large_leap_ratio": round(leap_ratio, 4),
+                "level":              "basic",
+                "key":                f"{PITCH_NAMES[key_root]} {key_mode}",
+                "dissonance_ratio":   round(diss_ratio, 4),
+                "large_leap_ratio":   round(leap_ratio, 4),
                 "out_of_scale_ratio": round(oos_ratio, 4),
+                "dissonant_bars":     dedup(dissonant_bars),
+                "leap_bars":          dedup(leap_bars),
+                "oos_bars":           dedup(oos_bars),
             },
         )
 
@@ -1277,7 +1290,7 @@ class MelodicEvaluator:
             return DimensionResult(
                 score=0.5, confidence=0.0,
                 reasons=["Insuficientes notas melódicas para análisis"],
-                details={"n_notes": len(mel_notes)},
+                details={"n_notes": len(mel_notes), "problem_windows": []},
             )
 
         pitches = [n[2] for n in mel_notes]
@@ -1286,7 +1299,6 @@ class MelodicEvaluator:
         s2, d2 = self._contour_structure(pitches)
 
         if ctx.fast:
-            # En modo fast: solo entropía + contorno (sin Markov ni repetición)
             score = 0.55 * s1 + 0.45 * s2
             s3, d3 = 0.5, {"markov_entropy_norm": None, "markov_entropy_bits": None}
             s4, d4 = 0.5, {"repetition_ratio": None, "window_size": None}
@@ -1308,8 +1320,12 @@ class MelodicEvaluator:
         if score > 0.70:
             reasons.append("melodía con buen interés y variedad")
 
+        # Nivel 3: localización temporal de problemas melódicos
+        problem_windows = [] if ctx.fast else self._locate_melodic_problems(mel_notes, mid)
+
         details = {
-            "n_melody_notes": len(mel_notes),
+            "n_melody_notes":  len(mel_notes),
+            "problem_windows": problem_windows,
             **d1, **d2, **d3, **d4,
         }
 
@@ -1497,6 +1513,71 @@ class MelodicEvaluator:
             "repetition_ratio": round(sim_mean, 4),
             "window_size":      W,
         }
+
+
+    # ── Nivel 3: localización temporal ───────────────────────────────────────
+
+    def _locate_melodic_problems(self, mel_notes: list,
+                                  mid: MidiFile) -> list:
+        """
+        Divide la melodía en ventanas de 4 compases y detecta en cuáles
+        hay problemas de contorno, saltos o zigzag excesivo.
+        Devuelve lista de {kind, bars, detail}.
+        """
+        bar_ticks   = _estimate_bar_ticks(mid)
+        total_ticks = max(n[1] for n in mel_notes)
+        n_bars      = max(1, total_ticks // bar_ticks)
+        WIN         = 4          # compases por ventana
+        problems    = []
+
+        for w_start in range(1, n_bars + 1, WIN):
+            w_end  = w_start + WIN - 1
+            t0     = (w_start - 1) * bar_ticks
+            t1     = w_end * bar_ticks
+            seg    = [n for n in mel_notes if n[0] >= t0 and n[0] < t1]
+            if len(seg) < 3:
+                continue
+            pitches = [n[2] for n in seg]
+            bars    = list(range(w_start, min(w_end + 1, n_bars + 1)))
+
+            # Saltos grandes (> 9 semitonos) en la ventana
+            leaps = [abs(pitches[i] - pitches[i-1])
+                     for i in range(1, len(pitches))
+                     if abs(pitches[i] - pitches[i-1]) > 9]
+            if len(leaps) >= 2:
+                problems.append({
+                    "kind":   "saltos grandes",
+                    "bars":   bars,
+                    "detail": f"{len(leaps)} saltos >9 semitonos",
+                })
+
+            # Zigzag: inflection_rate > 0.75 en la ventana
+            dirs = []
+            for i in range(1, len(pitches)):
+                d = pitches[i] - pitches[i-1]
+                if d != 0:
+                    dirs.append(1 if d > 0 else -1)
+            if len(dirs) > 2:
+                inflections = sum(1 for i in range(1, len(dirs))
+                                  if dirs[i] != dirs[i-1])
+                rate = inflections / len(dirs)
+                if rate > 0.75:
+                    problems.append({
+                        "kind":   "zigzag excesivo",
+                        "bars":   bars,
+                        "detail": f"inflection_rate={rate:.2f}",
+                    })
+
+            # Rango muy estrecho (< 3 semitonos): melodía estancada
+            rng = max(pitches) - min(pitches)
+            if rng < 3:
+                problems.append({
+                    "kind":   "melodía estancada",
+                    "bars":   bars,
+                    "detail": f"rango={rng} semitonos",
+                })
+
+        return problems
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1891,6 +1972,121 @@ def evaluate_midi(midi_path: str,
 #  RENDER TERMINAL
 # ══════════════════════════════════════════════════════════════════════════════
 
+
+def _sparkline(values: list, width: int = 16) -> str:
+    """Genera un sparkline Unicode de la curva de tensión."""
+    BLOCKS = " ▁▂▃▄▅▆▇█"
+    if not values:
+        return "─" * width
+    mn, mx = min(values), max(values)
+    rng = mx - mn if mx > mn else 1.0
+    chars = []
+    for v in values:
+        idx = int((v - mn) / rng * (len(BLOCKS) - 1))
+        chars.append(BLOCKS[idx])
+    return "".join(chars)
+
+
+def _bars_to_range(bars: list) -> str:
+    """Convierte lista de compases a rangos compactos: [1,2,3,5,6] → '1–3, 5–6'."""
+    if not bars:
+        return ""
+    bars = sorted(set(bars))
+    ranges, start, prev = [], bars[0], bars[0]
+    for b in bars[1:]:
+        if b == prev + 1:
+            prev = b
+        else:
+            ranges.append(f"{start}" if start == prev else f"{start}–{prev}")
+            start = prev = b
+    ranges.append(f"{start}" if start == prev else f"{start}–{prev}")
+    return ", ".join(ranges)
+
+
+def _render_localization(res: DimensionResult, indent: int = 18):
+    """
+    Imprime información de localización temporal en --verbose:
+      · formal voiced: compases de cada tipo de violación
+      · formal basic:  compases con disonancia / saltos
+      · arc:           sparkline de tensión + posición del clímax
+      · coherence:     rango de compases de segmentos anómalos
+      · melodic:       ventanas con problemas de contorno/entropía
+    """
+    G  = _c("gray")
+    R  = _c("reset")
+    Y  = _c("yellow")
+    pad = " " * indent
+
+    d = res.details
+
+    # ── formal voiced ────────────────────────────────────────────────────────
+    if d.get("level") == "voiced" and d.get("violations"):
+        by_bar: dict = {}
+        for v in d["violations"]:
+            rule = v["rule"]
+            bar  = v.get("bar", "?")
+            by_bar.setdefault(rule, []).append(bar)
+        rule_labels = {
+            "parallel_fifths":         "paralelas 5ª",
+            "parallel_octaves":        "paralelas 8ª",
+            "voice_crossing":          "cruce de voces",
+            "large_leap":              "salto grande",
+            "leading_tone_unresolved": "sensible sin resolver",
+        }
+        for rule, bars in sorted(by_bar.items(), key=lambda x: -len(x[1])):
+            label   = rule_labels.get(rule, rule)
+            bar_str = _bars_to_range(bars)
+            print(f"{pad}{G}⚑ {label}: compás/es {bar_str}{R}")
+
+    # ── formal basic ─────────────────────────────────────────────────────────
+    if d.get("level") == "basic":
+        if d.get("dissonant_bars"):
+            bar_str = _bars_to_range(d["dissonant_bars"])
+            print(f"{pad}{G}⚑ alta disonancia: compás/es {bar_str}{R}")
+        if d.get("leap_bars"):
+            bar_str = _bars_to_range(d["leap_bars"])
+            print(f"{pad}{G}⚑ saltos grandes: compás/es {bar_str}{R}")
+        if d.get("oos_bars"):
+            bar_str = _bars_to_range(d["oos_bars"])
+            print(f"{pad}{G}⚑ notas fuera de escala: compás/es {bar_str}{R}")
+
+    # ── arc: sparkline ───────────────────────────────────────────────────────
+    if d.get("tension_curve"):
+        curve   = d["tension_curve"]
+        spark   = _sparkline(curve)
+        climax  = d.get("climax_position_real")
+        n       = len(curve)
+        # Posición del clímax en el sparkline
+        if climax is not None:
+            climax_idx = int(climax * (n - 1))
+            spark_list = list(spark)
+            # marcar con color si el terminal lo soporta
+            marker = f"{Y}^{G}"
+            marker_line = " " * climax_idx + "^"
+        else:
+            marker_line = ""
+        print(f"{pad}{G}tensión: {spark}{R}")
+        if marker_line:
+            print(f"{pad}{G}         {marker_line}  clímax en {climax:.0%}{R}")
+
+    # ── coherence: segmentos anómalos → rango de compases ───────────────────
+    if d.get("anomalous_segments") and d.get("n_segments"):
+        n_segs = d["n_segments"]
+        # Convertir índice de segmento a compás aproximado
+        # (no tenemos bar_ticks aquí, usamos fracción de la pieza)
+        segs   = d["anomalous_segments"]
+        # Mostrar como fracción de la pieza
+        fracs  = [f"{int(s/n_segs*100)}–{int((s+1)/n_segs*100)}%" for s in segs]
+        print(f"{pad}{G}⚑ segmentos anómalos: {', '.join(fracs)} de la pieza{R}")
+
+    # ── melodic: ventanas problemáticas ──────────────────────────────────────
+    if d.get("problem_windows"):
+        for pw in d["problem_windows"]:
+            kind    = pw.get("kind", "")
+            bar_str = _bars_to_range(pw.get("bars", []))
+            print(f"{pad}{G}⚑ {kind}: compás/es {bar_str}{R}")
+
+
 def _score_color(score: float) -> str:
     if score >= 0.75:
         return _c("green")
@@ -1948,6 +2144,8 @@ def render_terminal(report: QualityReport, verbose: bool = False):
             if verbose and res.reasons:
                 for r in res.reasons:
                     print(f"  {'':>16}  {_c('gray')}· {r}{R}")
+            if verbose:
+                _render_localization(res, indent=18)
 
     print(f"\n{'═' * 64}\n")
 
