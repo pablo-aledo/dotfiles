@@ -1035,6 +1035,43 @@ logstat(){
 cat $1 | grep $2 | sed -e 's/ \([^= ]*\)=\([0-9\.\-\+e]*\)/\n\1=\2\n/g' | grep = | grep $3 | cut -d= -f2 | stats | grep $4 | cut -d: -f2 | sed 's/ //g'
 }
 
+logcmp(){
+    for meas in meas
+    do
+        val_1=$(logextract log_1.log marker $meas mean)
+        val_2=$(logextract log_2.log marker $meas mean)
+        echo $(echo $meas | sed 's/ /_/g') $val_1 0 $val_2 0
+    done > /tmp/data.tmp
+}
+
+logcmp_plot(){
+gnuplot <<EOF
+set terminal pngcairo enhanced font "Arial,11" size 900,500
+set output "/tmp/benchmark.png"
+
+set title "Benchmark" font ",14"
+set ylabel "Value"
+set xlabel ""
+
+set style data histograms
+set style histogram errorbars gap 1 lw 1.5
+set style fill solid 0.75 border -1
+set boxwidth 0.8
+
+set yrange [0:*]
+set grid y lc rgb "#dddddd" lt 1
+set border 3
+set tics nomirror
+
+set linetype 1 lc rgb "#4472C4"
+set linetype 2 lc rgb "#ED7D31"
+
+set key top right
+
+plot '/tmp/data.tmp' using 2:3:xtic(1) title "meas_1" ls 1, '' using 4:5 title "meas_2" ls 2
+EOF
+}
+
 lgr_postprocess(){
 cat << EOF
 sed -i 's/\./@/g' graph
