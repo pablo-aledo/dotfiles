@@ -563,9 +563,50 @@ def assign_phrase_ids(notes: List[Dict], seq_cfg: Dict) -> List[int]:
         if len(segments) > target:
             segments = simplify_segments(segments, target)
 
+    # ── Canonicalize rules by their full expansion ────────────────────────
+    # Two rules with the same expanded symbol sequence are the same motif
+    # (Re-Pair often builds R11=motif×2, R12=motif×4 as distinct rules).
+    # We map each rule to a canonical key = tuple(expansion), then assign
+    # a single phrase ID per unique canonical form.
+    def canonical(token) -> tuple:
+        return tuple(expand_rule(token, rules))
+
+    canon_to_pid: Dict[tuple, int] = {}
+    pid_counter   = 1
+    terminal_ctr  = 10000
+
+    # Pre-compute canonical for every unique rule appearing in segments
+    for seg in segments:
+        rule = seg['rule']
+        if rule.startswith('_t'):
+            continue
+        key = canonical(rule)
+        # Find if this expansion is a prefix-repetition of a shorter pattern
+        # e.g. [A,B,A,B,A,B] -> base [A,B]  so all repetition counts map to same ID
+        def minimal_period(seq):
+            n = len(seq)
+            for p in range(1, n // 2 + 1):
+                if n % p == 0 and seq == seq[:p] * (n // p):
+                    return seq[:p]
+            return seq
+        key = minimal_period(list(key))
+        key = tuple(key)
+        if key not in canon_to_pid:
+            canon_to_pid[key] = pid_counter
+            pid_counter += 1
+
     # ── Assign phrase IDs from segments ───────────────────────────────────
     phrase_ids = [0] * len(notes)
-    for pid, seg in enumerate(segments, start=1):
+
+    for seg in segments:
+        rule = seg['rule']
+        if rule.startswith('_t'):
+            pid = terminal_ctr
+            terminal_ctr += 1
+        else:
+            key = tuple(minimal_period(list(canonical(rule))))
+            pid = canon_to_pid.get(key, terminal_ctr)
+
         for ni in seg['note_indices']:
             if ni < len(notes):
                 phrase_ids[ni] = pid
