@@ -174,60 +174,175 @@ def load_config(path: Optional[str]) -> dict:
     return json.loads(text)
 
 def _parse_simple_yaml(text: str) -> dict:
-    """Minimal YAML parser for our config format (no external deps)."""
+    """
+    Minimal YAML parser supporting:
+      - Nested dicts via indentation
+      - Scalars: str, int, float, bool, null
+      - Inline comments (# ...)
+      - Compact inline dicts: {key: val, key2: val2}
+      - Inline lists: [a, b, c]
+      - Block lists: items starting with '- '
+    """
     import re
-    result = {}
-    stack = [(0, result)]
 
-    for line in text.splitlines():
-        stripped = line.rstrip()
-        if not stripped or stripped.lstrip().startswith('#'):
+    def parse_scalar(s):
+        s = s.strip()
+        if not s or s.lower() in ('null', '~'):
+            return None
+        if s.lower() == 'true':
+            return True
+        if s.lower() == 'false':
+            return False
+        try:
+            return int(s)
+        except ValueError:
+            pass
+        try:
+            return float(s)
+        except ValueError:
+            pass
+        return s.strip('"').strip("'")
+
+    def parse_inline_list(s):
+        s = s.strip()
+        if not (s.startswith('[') and s.endswith(']')):
+            return None
+        inner = s[1:-1].strip()
+        if not inner:
+            return []
+        return [parse_scalar(x) for x in re.split(r',\s*', inner)]
+
+    def parse_inline_dict(s):
+        s = s.strip()
+        if not (s.startswith('{') and s.endswith('}')):
+            return None
+        inner = s[1:-1].strip()
+        if not inner:
+            return {}
+        result = {}
+        for part in re.split(r',\s*(?=[^{}]*$)', inner):
+            if ':' in part:
+                k, _, v = part.partition(':')
+                k = k.strip().strip('"').strip("'")
+                result[k] = parse_scalar(v.strip())
+        return result
+
+    def strip_comment(s):
+        in_q = None
+        for i, c in enumerate(s):
+            if c in ('"', "'") and in_q is None:
+                in_q = c
+            elif c == in_q:
+                in_q = None
+            elif c == '#' and in_q is None:
+                return s[:i].rstrip()
+        return s.rstrip()
+
+    # Tokenize: (indent, content)
+    lines = []
+    for raw in text.splitlines():
+        content = raw.rstrip()
+        stripped = content.lstrip()
+        if not stripped or stripped.startswith('#'):
             continue
-        indent = len(stripped) - len(stripped.lstrip())
-        stripped = stripped.lstrip()
+        indent  = len(content) - len(stripped)
+        stripped = strip_comment(stripped)
+        if stripped:
+            lines.append((indent, stripped))
 
-        # pop stack to correct level
+    # Stack entries: (indent, container)
+    # container is either a dict or a list
+    root  = {}
+    stack = [(-1, root)]   # (indent_of_key, container)
+
+    i = 0
+    while i < len(lines):
+        indent, content = lines[i]
+
+        # Pop stack to correct parent
         while len(stack) > 1 and stack[-1][0] >= indent:
             stack.pop()
-
         parent = stack[-1][1]
 
-        if ':' in stripped:
-            key, _, val = stripped.partition(':')
-            key = key.strip()
-            val = val.strip()
-            if val == '' or val is None:
-                new_dict = {}
-                # handle numeric keys
-                try:
-                    parent[int(key)] = new_dict
-                except ValueError:
-                    parent[key] = new_dict
-                stack.append((indent + 2, new_dict))
-            else:
-                # parse value
-                if val.lower() == 'true':  val = True
-                elif val.lower() == 'false': val = False
-                elif val.lower() in ('null','~'): val = None
-                else:
-                    try:   val = int(val)
-                    except ValueError:
-                        try: val = float(val)
-                        except ValueError:
-                            val = val.strip('"').strip("'")
-                try:
-                    parent[int(key)] = val
-                except ValueError:
-                    parent[key] = val
+        # ── List item: starts with '- ' ────────────────────────────────
+        if content.startswith('- '):
+            rest = content[2:].strip()
+            # Ensure parent is a list; if not, create one at the right key
+            if not isinstance(parent, list):
+                # This shouldn't happen in well-formed YAML, skip
+                i += 1
+                continue
 
-    return result
+            if rest.startswith('{'):
+                parsed = parse_inline_dict(rest)
+                parent.append(parsed if parsed is not None else rest)
+            elif ':' in rest:
+                # Inline dict item without braces: key: val
+                new_dict = {}
+                k, _, v = rest.partition(':')
+                k = k.strip(); v = v.strip()
+                if v:
+                    new_dict[k] = parse_scalar(v)
+                    # Consume following lines at deeper indent as more keys
+                    while i + 1 < len(lines):
+                        ni, nc = lines[i + 1]
+                        if ni > indent and ':' in nc and not nc.startswith('- '):
+                            i += 1
+                            k2, _, v2 = nc.partition(':')
+                            new_dict[k2.strip()] = parse_scalar(v2.strip())
+                        else:
+                            break
+                    parent.append(new_dict)
+                else:
+                    new_dict[k] = {}
+                    parent.append(new_dict)
+                    stack.append((indent, new_dict[k]))
+            else:
+                parent.append(parse_scalar(rest))
+
+        # ── Dict entry: key: value ──────────────────────────────────────
+        elif ':' in content:
+            key, _, rest = content.partition(':')
+            key  = key.strip().strip('"').strip("'")
+            rest = rest.strip()
+
+            # Numeric key
+            try:
+                key = int(key)
+            except (ValueError, TypeError):
+                pass
+
+            if rest == '':
+                # Look ahead: is next line a list item?
+                if (i + 1 < len(lines) and
+                        lines[i + 1][0] > indent and
+                        lines[i + 1][1].startswith('- ')):
+                    new_list = []
+                    parent[key] = new_list
+                    stack.append((indent, new_list))
+                else:
+                    new_dict = {}
+                    parent[key] = new_dict
+                    stack.append((indent, new_dict))
+            elif rest.startswith('['):
+                parsed = parse_inline_list(rest)
+                parent[key] = parsed if parsed is not None else rest
+            elif rest.startswith('{'):
+                parsed = parse_inline_dict(rest)
+                parent[key] = parsed if parsed is not None else rest
+            else:
+                parent[key] = parse_scalar(rest)
+
+        i += 1
+
+    return root
 
 def apply_config(tracks: List[Dict], cfg: dict) -> List[Dict]:
     """Apply role/name config to tracks. Auto-assign roles if not configured."""
     track_cfg = cfg.get('tracks', {})
 
     for t in tracks:
-        tc = track_cfg.get(t['index'], {})
+        tc = track_cfg.get(t['index'], track_cfg.get(str(t['index']), {}))
         if isinstance(tc, dict):
             if 'role' in tc:
                 t['role'] = tc['role']
@@ -270,16 +385,38 @@ def _auto_assign_roles(tracks: List[Dict]):
 # SEQUITUR (Re-Pair variant) — assigns phrase IDs to notes
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def repairify(symbols: List) -> Tuple[Dict, List]:
+def repairify(symbols: List, custom_rules: Optional[List[Dict]] = None) -> Tuple[Dict, List]:
     """
-    Re-Pair compression: find the most frequent adjacent pair, replace with
-    a new non-terminal. Returns (rules, compressed_sequence).
-    rules: {rule_id: [sym, sym]}
+    Re-Pair compression with optional custom rules pre-seeded.
+    custom_rules: list of {'name': str, 'pitches': [int, ...]}
+    Returns (rules, compressed_sequence).
     """
-    rules = {}
-    rule_id = 0
-    seq = list(symbols)
+    rules: Dict = {}
+    seq   = list(symbols)
 
+    # ── 1. Pre-seed custom rules ──────────────────────────────────────────
+    if custom_rules:
+        # Sort longest first to avoid partial overlaps
+        for cr in sorted(custom_rules, key=lambda r: -len(r['pitches'])):
+            pattern = cr['pitches']
+            name    = cr['name']
+            if len(pattern) < 2:
+                continue
+            rules[name] = pattern
+            # Replace occurrences in sequence
+            new_seq = []
+            i = 0
+            while i < len(seq):
+                if seq[i:i+len(pattern)] == pattern:
+                    new_seq.append(name)
+                    i += len(pattern)
+                else:
+                    new_seq.append(seq[i])
+                    i += 1
+            seq = new_seq
+
+    # ── 2. Standard Re-Pair ───────────────────────────────────────────────
+    rule_id = 0
     while True:
         pairs = Counter()
         for i in range(len(seq) - 1):
@@ -292,7 +429,6 @@ def repairify(symbols: List) -> Tuple[Dict, List]:
         rule_id += 1
         rname = f'R{rule_id}'
         rules[rname] = list(best)
-        # replace
         new_seq = []
         i = 0
         while i < len(seq):
@@ -314,36 +450,127 @@ def expand_rule(sym, rules: Dict) -> List:
         result.extend(expand_rule(s, rules))
     return result
 
-def assign_phrase_ids(notes: List[Dict]) -> List[int]:
+def simplify_segments(segments: List[Dict], target: int) -> List[Dict]:
     """
-    Run Sequitur on pitch sequence of notes.
-    Returns a list of phrase IDs (one per note) — notes belonging to the same
-    Re-Pair rule get the same ID; terminals get unique IDs.
-    Notes with identical onset (chords) always share the same phrase ID.
+    Merge the shortest segment with its smaller neighbor iteratively
+    until len(segments) == target. Preserves note_indices.
+    Each segment: {'rule': str, 'note_indices': [int,...], 'len': int}
+    Adapted from mscz2vec.simplify_segments_preserving_indices().
+    """
+    import copy
+    segs = copy.deepcopy(segments)
+    while len(segs) > target:
+        # Find shortest segment
+        min_len = min(s['len'] for s in segs)
+        min_idx = next(i for i, s in enumerate(segs) if s['len'] == min_len)
+
+        if min_idx == 0:
+            a, b = 0, 1
+        elif min_idx == len(segs) - 1:
+            a, b = len(segs) - 2, len(segs) - 1
+        else:
+            # Merge with the shorter neighbor
+            prev_len = segs[min_idx - 1]['len']
+            next_len = segs[min_idx + 1]['len']
+            if prev_len <= next_len:
+                a, b = min_idx - 1, min_idx
+            else:
+                a, b = min_idx, min_idx + 1
+
+        merged = {
+            'rule':         f"({segs[a]['rule']}+{segs[b]['rule']})",
+            'note_indices': segs[a]['note_indices'] + segs[b]['note_indices'],
+            'len':          segs[a]['len'] + segs[b]['len'],
+        }
+        segs[a] = merged
+        del segs[b]
+    return segs
+
+def assign_phrase_ids(notes: List[Dict], seq_cfg: Dict) -> List[int]:
+    """
+    Run Re-Pair/Sequitur on the note sequence of one track.
+
+    seq_cfg keys (all optional):
+      n_phrases    int   — collapse output to exactly N phrases via simplify
+      custom_rules list  — list of {'name': str, 'pitches': [int,...]}
+                           or {'name': str, 'bars': [int,...]}   (bar numbers, 0-indexed)
+      token        str   — 'pitch' (default) | 'pitch_class' | 'pitch_dur'
+      min_count    int   — min frequency for Re-Pair rule (default 2, not exposed yet)
+
+    Returns list of phrase IDs (int), one per note.
+    Notes with identical onset always share the same phrase ID.
     """
     if not notes:
         return []
 
-    pitches = [n['pitch'] for n in notes]
-    rules, compressed = repairify(pitches)
+    # ── Token selection ───────────────────────────────────────────────────
+    token_mode = seq_cfg.get('token', 'pitch')
+    if token_mode == 'pitch_class':
+        symbols = [n['pitch'] % 12 for n in notes]
+    elif token_mode == 'pitch_dur':
+        symbols = [(n['pitch'], round(n['dur_beat'] * 4) / 4) for n in notes]
+    else:
+        symbols = [n['pitch'] for n in notes]
 
-    phrase_ids = [0] * len(notes)
+    # ── Resolve bar-based custom rules to pitch lists ─────────────────────
+    raw_custom = seq_cfg.get('custom_rules', [])
+    resolved_custom: List[Dict] = []
+    for cr in raw_custom:
+        name = cr.get('name', 'custom')
+        if 'pitches' in cr:
+            resolved_custom.append({'name': name, 'pitches': list(cr['pitches'])})
+        elif 'bars' in cr:
+            # Collect pitches of notes whose start_bar is in the given list
+            bars_raw = cr['bars']
+            if isinstance(bars_raw, str):
+                import re
+                bars_raw = [int(x) for x in re.findall(r'\d+', bars_raw)]
+            bar_set = set(bars_raw)
+            pitches_in_bars = [n['pitch'] for n in notes if n['start_bar'] in bar_set]
+            if pitches_in_bars:
+                resolved_custom.append({'name': name, 'pitches': pitches_in_bars})
+
+    # ── Run Re-Pair ───────────────────────────────────────────────────────
+    rules, compressed = repairify(symbols, resolved_custom or None)
+
+    # ── Build initial segments list ───────────────────────────────────────
+    # Each token in compressed → one segment with its expanded note indices
+    segments: List[Dict] = []
     note_cursor = 0
     phrase_map: Dict[str, int] = {}
 
     for token in compressed:
-        if token in rules:
-            pid = phrase_map.setdefault(token, len(phrase_map) + 1)
-            expanded = expand_rule(token, rules)
-            for _ in expanded:
-                if note_cursor < len(notes):
-                    phrase_ids[note_cursor] = pid
-                    note_cursor += 1
-        else:
-            phrase_ids[note_cursor] = 1000 + note_cursor
-            note_cursor += 1
+        expanded = expand_rule(token, rules)
+        n_notes  = len(expanded)
+        indices  = list(range(note_cursor, min(note_cursor + n_notes, len(notes))))
+        note_cursor += n_notes
 
-    # Unificar notas simultáneas: mismo onset → mismo phrase ID (el del primero)
+        if isinstance(token, str) and token in rules:
+            rule_name = token
+        else:
+            rule_name = f'_t{note_cursor}'   # terminal
+
+        segments.append({
+            'rule':         rule_name,
+            'note_indices': indices,
+            'len':          len(indices),
+        })
+
+    # ── Simplify to target n_phrases ──────────────────────────────────────
+    n_phrases = seq_cfg.get('n_phrases', None)
+    if n_phrases is not None:
+        target = max(1, int(n_phrases))
+        if len(segments) > target:
+            segments = simplify_segments(segments, target)
+
+    # ── Assign phrase IDs from segments ───────────────────────────────────
+    phrase_ids = [0] * len(notes)
+    for pid, seg in enumerate(segments, start=1):
+        for ni in seg['note_indices']:
+            if ni < len(notes):
+                phrase_ids[ni] = pid
+
+    # ── Unify simultaneous notes (chords) → same phrase ID ────────────────
     onset_to_pid: Dict[float, int] = {}
     for ni, n in enumerate(notes):
         onset = round(n['start_beat'], 3)
@@ -1337,12 +1564,19 @@ def analyze(mid_path: str, cfg: dict) -> str:
 
     # ── Sequitur per track ────────────────────────────────────────────────
     print("  Ejecutando Sequitur por pista...")
+    seq_global_cfg = cfg.get('algorithms', {}).get('sequitur', {})
+    track_cfgs     = cfg.get('tracks', {})
     phrase_ids_per_track = []
     for t in tracks:
-        pids = assign_phrase_ids(t['notes'])
+        # Per-track sequitur config overrides global
+        tc      = track_cfgs.get(t['index'], track_cfgs.get(str(t['index']), {}))
+        seq_cfg = {**seq_global_cfg, **tc.get('sequitur', {})} if isinstance(tc, dict) else seq_global_cfg
+        pids    = assign_phrase_ids(t['notes'], seq_cfg)
         phrase_ids_per_track.append(pids)
         n_phrases = len(set(pids))
-        print(f"    [{t['name']}] {len(t['notes'])} notas → {n_phrases} frases")
+        target    = seq_cfg.get('n_phrases', '—')
+        print(f"    [{t['name']}] {len(t['notes'])} notas → {n_phrases} frases"
+              + (f" (objetivo {target})" if target != '—' else ""))
 
     # ── Global segmentation ────────────────────────────────────────────────
     print("  Ejecutando segmentación global...")
