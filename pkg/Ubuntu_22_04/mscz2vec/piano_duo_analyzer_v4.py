@@ -1577,22 +1577,28 @@ def compute_avg_velocity_per_bar(all_notes: List[Dict], n_bars: int) -> List[flo
     return [(sums[b] / counts[b] / 127.0) if counts[b] else 0.0 for b in range(n_bars)]
 
 def detect_motifs(melody_notes: List[Dict], min_len: int = 3,
-                  max_len: int = 5, min_reps: int = 2) -> List[Dict]:
+                  max_len: int = 8, min_reps: int = 2) -> List[Dict]:
     """
-    Find repeated melodic motifs by interval sequence + rhythm.
+    Detect repeated melodic phrases using Re-Pair grammar compression.
 
-    Pre-processing: simultaneous notes (same onset) are collapsed into
-    a single "chord event" whose representative pitch is the lowest note.
-    This allows detecting motifs that include block chords followed by
-    single notes (e.g. C3-E3-G3 as a chord, then C4-E4-G4-A4 as melody).
+    Unlike the sliding-window approach, Re-Pair builds a non-overlapping
+    hierarchical grammar over the full interval sequence. Each rule that
+    appears ≥ min_reps times in the root sequence becomes a motif.
 
-    The interval sequence is computed between consecutive events (chord or
-    single note), using the lowest pitch of each event.
+    Steps:
+      1. Collapse simultaneous notes into chord events (lowest pitch).
+      2. Compute quantised intervals between consecutive events.
+      3. Run Re-Pair; collect rules that repeat ≥ min_reps times in root.
+      4. Filter dominated sub-rules (prefer longer phrases).
+      5. Map each rule occurrence back to beat positions.
+
+    Returns list of {label, color, occurrences, intervals} dicts,
+    guaranteed non-overlapping by construction.
     """
     if not melody_notes:
         return []
 
-    # ── Collapse simultaneous notes into chord events ──────────────────
+    # ── 1. Collapse simultaneous notes ────────────────────────────────────
     notes_sorted = sorted(melody_notes, key=lambda n: (n['start_beat'], n['pitch']))
     events: List[Dict] = []
     i = 0
@@ -1600,16 +1606,12 @@ def detect_motifs(melody_notes: List[Dict], min_len: int = 3,
         group = [notes_sorted[i]]
         j = i + 1
         while j < len(notes_sorted) and abs(notes_sorted[j]['start_beat'] - notes_sorted[i]['start_beat']) < 0.05:
-            group.append(notes_sorted[j])
-            j += 1
-        # Representative: lowest pitch, longest duration
+            group.append(notes_sorted[j]); j += 1
         rep = min(group, key=lambda n: n['pitch'])
         events.append({
             'start_beat': rep['start_beat'],
             'end_beat':   max(n['end_beat'] for n in group),
-            'dur_beat':   max(n['dur_beat'] for n in group),
             'pitch':      rep['pitch'],
-            'vel':        rep['vel'],
             'start_bar':  rep['start_bar'],
             'all_pitches': [n['pitch'] for n in group],
         })
@@ -1618,149 +1620,118 @@ def detect_motifs(melody_notes: List[Dict], min_len: int = 3,
     if len(events) < min_len * min_reps:
         return []
 
-    def pitch_ivs(seq):
-        return tuple(seq[i+1]['pitch'] - seq[i]['pitch'] for i in range(len(seq)-1))
+    # ── 2. Interval sequence ──────────────────────────────────────────────
+    # Quantise to ±12 semitones; offset +12 so all values ≥ 0 (hashable ints)
+    raw_ivs = [events[k+1]['pitch'] - events[k]['pitch']
+               for k in range(len(events)-1)]
+    symbols  = [max(-12, min(12, iv)) + 12 for iv in raw_ivs]
+    # beat position of each symbol = start of the note that begins the interval
+    beat_at  = [events[k]['start_beat'] for k in range(len(events)-1)]
+    end_at   = [events[k+1]['end_beat'] for k in range(len(events)-1)]
 
-    def ioi_pattern(seq):
-        return tuple(round((seq[i+1]['start_beat'] - seq[i]['start_beat']) * 4) / 4
-                     for i in range(len(seq)-1))
+    if len(symbols) < min_len:
+        return []
 
-    def rhythmically_consistent(seq):
-        iois = [(seq[i+1]['start_beat'] - seq[i]['start_beat']) for i in range(len(seq)-1)]
-        if not iois: return True
-        med = sorted(iois)[len(iois)//2]
-        return all(0.25 * med <= ioi <= 4.0 * med for ioi in iois)
+    # ── 3. Re-Pair grammar ────────────────────────────────────────────────
+    rules = repair_grammar(symbols)
+    root  = rules.get('root', [])
 
-    def too_many_bars(seq, bpb=4.0):
-        return int(seq[-1]['start_beat']/bpb) - int(seq[0]['start_beat']/bpb) > 6
+    # Expand a rule fully to a list of terminal interval symbols
+    _expand_cache: Dict[str, List[int]] = {}
+    def expand(sym):
+        if sym in _expand_cache: return _expand_cache[sym]
+        if sym not in rules or sym == 'root':
+            result = [sym] if isinstance(sym, int) else []
+        else:
+            result = []
+            for s in rules[sym]: result.extend(expand(s))
+        _expand_cache[sym] = result
+        return result
 
-    # ── Find phrase-start positions ────────────────────────────────────
-    phrase_starts = {0}
-    for i in range(1, len(events)):
-        gap = events[i]['start_beat'] - events[i-1]['end_beat']
-        bar_prev = int(events[i-1]['start_beat'] / 4.0)
-        bar_curr = int(events[i]['start_beat'] / 4.0)
-        if gap > 0.5 or bar_curr != bar_prev:
-            phrase_starts.add(i)
+    # Count how many times each rule symbol appears in root
+    root_counts: Dict = defaultdict(int)
+    for sym in root:
+        root_counts[sym] += 1
 
-    # ── Build fingerprints ─────────────────────────────────────────────
-    fingerprints: Dict[tuple, List[List[Dict]]] = {}
-    for i in phrase_starts:
-        for length in range(min_len, min(max_len+1, len(events)-i+1)):
-            w = events[i:i+length]
-            if w[-1]['start_beat'] - w[0]['start_beat'] > 24: continue
-            if too_many_bars(w): continue
-            if not rhythmically_consistent(w): continue
-            fp = (pitch_ivs(w), ioi_pattern(w))
-            fingerprints.setdefault(fp, []).append(w)
+    # ── 4. Collect candidate rules ────────────────────────────────────────
+    candidates = []
+    for sym, count in root_counts.items():
+        if not isinstance(sym, str): continue          # skip terminal ints
+        if sym == 'root': continue
+        if count < min_reps: continue
+        expanded = expand(sym)
+        if len(expanded) < min_len: continue
+        if len(expanded) > max_len * 3: continue       # skip huge rules
+        intervals = [s - 12 for s in expanded if isinstance(s, int)]
+        candidates.append((sym, count, intervals))
 
+    if not candidates:
+        return []
+
+    # ── 5. Filter dominated sub-rules ─────────────────────────────────────
+    # A rule is dominated if its expansion is a contiguous sub-sequence of
+    # a longer rule that also appears in root
+    def is_subseq(short, long):
+        ls, ll = len(short), len(long)
+        for start in range(ll - ls + 1):
+            if long[start:start+ls] == short:
+                return True
+        return False
+
+    candidates.sort(key=lambda x: (-len(x[2]), -x[1]))
+    kept = []
+    for sym, count, ivs in candidates:
+        dominated = any(is_subseq(ivs, k_ivs) and ivs != k_ivs
+                        for _, _, k_ivs in kept)
+        if not dominated:
+            kept.append((sym, count, ivs))
+
+    # ── 6. Map occurrences back to beat positions ─────────────────────────
+    # Walk the root sequence and record where each kept rule appears
     motif_colors = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b',
                     '#cc5de8','#20c997','#f06595','#74c0fc','#a9e34b']
-    motifs = []
-    seen = set()
 
-    for fp, windows in sorted(fingerprints.items(), key=lambda x: (-len(x[0][0]), -len(x[1]))):
-        if fp[0] in seen or len(windows) < min_reps: continue
-        selected = []
-        last_end = -999.0
-        for w in sorted(windows, key=lambda x: x[0]['start_beat']):
-            occ_dur = w[-1]['end_beat'] - w[0]['start_beat']
-            min_gap = max(occ_dur * 0.5, 1.0)
-            if w[0]['start_beat'] >= last_end + min_gap - 0.1:
-                selected.append(w)
-                last_end = w[-1]['end_beat']
-        if len(selected) < min_reps: continue
-        seen.add(fp[0])
+    # Build set of kept rule names for fast lookup
+    kept_syms = {sym for sym, _, _ in kept}
+    sym_to_ivs = {sym: ivs for sym, _, ivs in kept}
 
-        # Build occurrences using original notes (not collapsed events)
-        occs = []
-        for w in selected:
-            start_b = w[0]['start_beat']
-            end_b   = w[-1]['end_beat']
-            # Collect all original notes within this span
-            orig_pitches = []
-            for ev in w:
-                orig_pitches.extend(ev['all_pitches'])
-            occs.append({'start_beat': start_b, 'end_beat': end_b,
-                          'pitches': orig_pitches})
+    motifs: List[Dict] = []
+    for label_idx, (sym, count, ivs) in enumerate(kept):
+        occurrences = []
+        pos = 0
+        for root_sym in root:
+            sym_len = len(expand(root_sym)) if isinstance(root_sym, str) else 1
+            if root_sym == sym:
+                # This occurrence spans [pos, pos+sym_len) in the symbol array
+                if pos < len(beat_at) and pos + sym_len - 1 < len(end_at):
+                    start_b = beat_at[pos]
+                    end_b   = end_at[pos + sym_len - 1]
+                    # Collect all original pitches in this span
+                    pitches = []
+                    for ev in events:
+                        if start_b - 0.05 <= ev['start_beat'] <= end_b + 0.05:
+                            pitches.extend(ev['all_pitches'])
+                    occurrences.append({
+                        'start_beat': start_b,
+                        'end_beat':   end_b,
+                        'pitches':    pitches,
+                    })
+            pos += sym_len
 
-        motifs.append({'label': chr(65+len(motifs)),
-                       'color': motif_colors[len(motifs) % len(motif_colors)],
-                       'occurrences': occs,
-                       'intervals': list(fp[0])})
-        if len(motifs) >= 8: break
+        if len(occurrences) >= min_reps:
+            motifs.append({
+                'label':       chr(65 + label_idx),
+                'color':       motif_colors[label_idx % len(motif_colors)],
+                'occurrences': occurrences,
+                'intervals':   ivs,
+            })
 
-    # ── Post-filter: remove dominated sub-motifs ───────────────────────
-    def occurrences_overlap(o1, o2, threshold=0.5):
-        overlap = min(o1['end_beat'], o2['end_beat']) - max(o1['start_beat'], o2['start_beat'])
-        dur = o1['end_beat'] - o1['start_beat']
-        return overlap > threshold * dur
-
-    def motif_dominated(short_m, long_m):
-        count = sum(1 for os in short_m['occurrences']
-                    if any(occurrences_overlap(os, ol) for ol in long_m['occurrences']))
-        return count >= len(short_m['occurrences']) * 0.6
-
-    def is_prefix_or_suffix(short_fp, long_fp):
-        s, l = len(short_fp), len(long_fp)
-        if s >= l: return False
-        return long_fp[:s] == short_fp or long_fp[-s:] == short_fp
-
-    filtered = []
+    # Re-label sequentially
     for i, m in enumerate(motifs):
-        dominated = False
-        for j, other in enumerate(motifs):
-            if i == j: continue
-            other_longer = len(other['intervals']) > len(m['intervals'])
-            m_beats = {round(o['start_beat'],1) for o in m['occurrences']}
-            o_beats = {round(o['start_beat'],1) for o in other['occurrences']}
-            if other_longer and m_beats <= o_beats:
-                dominated = True; break
-            if other_longer and motif_dominated(m, other):
-                dominated = True; break
-        if not dominated:
-            filtered.append(m)
-
-    filtered.sort(key=lambda m: (-len(m['intervals']), -len(m['occurrences'])))
-
-    def onset_set(mot):
-        return [round(o['start_beat'], 1) for o in mot['occurrences']]
-
-    def is_onset_subset(small, large, tol=0.3):
-        return all(any(abs(s-l) <= tol for l in large) for s in small)
-
-    non_overlapping = []
-    for m in filtered:
-        m_starts = onset_set(m)
-        excluded = False
-        to_remove = []
-        for ki, kept in enumerate(non_overlapping):
-            k_starts = onset_set(kept)
-            if len(kept['intervals']) > len(m['intervals']) and is_onset_subset(m_starts, k_starts):
-                excluded = True; break
-            if len(m['intervals']) > len(kept['intervals']) and is_onset_subset(k_starts, m_starts):
-                to_remove.append(ki)
-        if not excluded:
-            for ki in sorted(to_remove, reverse=True):
-                non_overlapping.pop(ki)
-            non_overlapping.append(m)
-
-    def beat_onset_wins(motifs_list):
-        beat_to_best = {}
-        for mi, m in enumerate(motifs_list):
-            for occ in m['occurrences']:
-                b = round(occ['start_beat'], 1)
-                if b not in beat_to_best or len(m['intervals']) > len(motifs_list[beat_to_best[b]]['intervals']):
-                    beat_to_best[b] = mi
-        for mi, m in enumerate(motifs_list):
-            m['occurrences'] = [occ for occ in m['occurrences']
-                                  if beat_to_best.get(round(occ['start_beat'],1)) == mi]
-        return [m for m in motifs_list if len(m['occurrences']) >= min_reps]
-
-    final = beat_onset_wins(non_overlapping)
-    for i, m in enumerate(final):
         m['label'] = chr(65 + i)
-    return final
+
+    return motifs
+
 
 def detect_cadences(chord_timeline: List[Dict], tonic: int) -> List[Dict]:
     """
