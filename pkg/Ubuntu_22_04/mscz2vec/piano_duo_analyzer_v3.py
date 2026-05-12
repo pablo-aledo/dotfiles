@@ -296,18 +296,10 @@ def _best_chord(pitches: List[int]) -> Tuple[str, int, int, str, str]:
     """
     Find the best-matching chord for a list of pitches, with inversion detection.
 
-    Returns (label, root_pc, bass_pc, inv_str, ctype) where:
-      label    — display string, e.g. 'Cmaj', 'Fmaj/A', 'G/B'
-      root_pc  — 0-11, theoretical root
-      bass_pc  — 0-11, lowest sounding pitch class
-      inv_str  — '', '1ª inv', '2ª inv', '3ª inv'
-      ctype    — chord type key into CHORD_TEMPLATES, e.g. 'maj', 'min7'
-
-    Inversion is detected by comparing bass_pc to the template intervals:
-      bass == root              → root position  ('')
-      bass == root + template[1]→ 1st inversion
-      bass == root + template[2]→ 2nd inversion
-      bass == root + template[3]→ 3rd inversion  (7th chords)
+    Scoring: overlap - penalty (0.3 per extra pitch class outside template).
+    Tiebreakers when scores are equal:
+      1. Prefer root == bass_pc (root-position over inversion)
+      2. Prefer fewer template notes (parsimony: maj before maj7)
     """
     if not pitches:
         return '—', -1, -1, '', ''
@@ -324,26 +316,38 @@ def _best_chord(pitches: List[int]) -> Tuple[str, int, int, str, str]:
             overlap   = len(chord_pcs & set(pcs))
             penalty   = len(set(pcs) - chord_pcs) * 0.3
             score     = overlap - penalty
+
             if score > best_score:
                 best_score = score
                 best_name  = f'{NOTE_NAMES[root]}{ctype}'
                 best_root  = root
                 best_ctype = ctype
                 best_tmpl  = template
+            elif score == best_score:
+                cur_root_is_bass = (best_root == bass_pc)
+                new_root_is_bass = (root == bass_pc)
+                if new_root_is_bass and not cur_root_is_bass:
+                    best_name  = f'{NOTE_NAMES[root]}{ctype}'
+                    best_root  = root
+                    best_ctype = ctype
+                    best_tmpl  = template
+                elif new_root_is_bass == cur_root_is_bass:
+                    if len(template) < len(best_tmpl):
+                        best_name  = f'{NOTE_NAMES[root]}{ctype}'
+                        best_root  = root
+                        best_ctype = ctype
+                        best_tmpl  = template
 
-    # ── Detect inversion ─────────────────────────────────────────────────
-    # Structural pitch classes in template order (not sorted by interval)
+    # Detect inversion
     struct_pcs = [(best_root + iv) % 12 for iv in best_tmpl]
-    inv_str = ''
-    slash   = ''
+    inv_str = ''; slash = ''
     if bass_pc != best_root and bass_pc in struct_pcs:
         pos     = struct_pcs.index(bass_pc)
         inv_map = {1: '1ª inv', 2: '2ª inv', 3: '3ª inv'}
         inv_str = inv_map.get(pos, f'{pos}ª inv')
         slash   = f'/{NOTE_NAMES[bass_pc]}'
 
-    label = best_name + slash
-    return label, best_root, bass_pc, inv_str, best_ctype
+    return best_name + slash, best_root, bass_pc, inv_str, best_ctype
 
 def build_chord_timeline(harmony_notes: List[Dict],
                           arp_window: float = 1.0,
