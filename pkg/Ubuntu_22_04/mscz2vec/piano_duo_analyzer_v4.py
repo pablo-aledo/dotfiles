@@ -404,9 +404,8 @@ def build_chord_timeline(harmony_notes: List[Dict],
         for n in h_notes:
             gi = group_idx(n['start_beat'])
             sub_groups.setdefault(gi, []).append(n)
-        for n in b_notes:
-            gi = group_idx(n['start_beat'])
-            sub_groups.setdefault(gi, []).append(n)
+        # b_notes drive split boundaries only — do NOT add their pitches
+        # to the chord group, as they are melody notes, not harmony notes
 
         for gi in sorted(sub_groups.keys()):
             groups.append(sub_groups[gi])
@@ -1598,8 +1597,11 @@ def detect_motifs(melody_notes: List[Dict], min_len: int = 3,
     if not melody_notes:
         return []
 
-    # ── 1. Collapse simultaneous notes ────────────────────────────────────
-    notes_sorted = sorted(melody_notes, key=lambda n: (n['start_beat'], n['pitch']))
+    # ── 1. Collapse simultaneous notes → take HIGHEST pitch (melody voice)
+    # The melody track may have two simultaneous notes in some bars (e.g.
+    # Canon c.9-12 has two-voice chords). We always take the highest note
+    # as the melodic representative, ignoring inner voices.
+    notes_sorted = sorted(melody_notes, key=lambda n: (n['start_beat'], -n['pitch']))
     events: List[Dict] = []
     i = 0
     while i < len(notes_sorted):
@@ -1607,13 +1609,14 @@ def detect_motifs(melody_notes: List[Dict], min_len: int = 3,
         j = i + 1
         while j < len(notes_sorted) and abs(notes_sorted[j]['start_beat'] - notes_sorted[i]['start_beat']) < 0.05:
             group.append(notes_sorted[j]); j += 1
-        rep = min(group, key=lambda n: n['pitch'])
+        # Take the highest pitch as the melody representative
+        rep = max(group, key=lambda n: n['pitch'])
         events.append({
             'start_beat': rep['start_beat'],
-            'end_beat':   max(n['end_beat'] for n in group),
+            'end_beat':   rep['end_beat'],
             'pitch':      rep['pitch'],
             'start_bar':  rep['start_bar'],
-            'all_pitches': [n['pitch'] for n in group],
+            'all_pitches': [rep['pitch']],   # only the melody note
         })
         i = j
 
@@ -1621,13 +1624,22 @@ def detect_motifs(melody_notes: List[Dict], min_len: int = 3,
         return []
 
     # ── 2. Interval sequence ──────────────────────────────────────────────
-    # Quantise to ±12 semitones; offset +12 so all values ≥ 0 (hashable ints)
-    raw_ivs = [events[k+1]['pitch'] - events[k]['pitch']
-               for k in range(len(events)-1)]
-    symbols  = [max(-12, min(12, iv)) + 12 for iv in raw_ivs]
-    # beat position of each symbol = start of the note that begins the interval
-    beat_at  = [events[k]['start_beat'] for k in range(len(events)-1)]
-    end_at   = [events[k+1]['end_beat'] for k in range(len(events)-1)]
+    # Quantise to ±12 semitones; offset +12 so all values ≥ 0.
+    # IMPORTANT: skip intervals where there is a large temporal gap between
+    # consecutive events (> 2 beats) — these are cross-hand or cross-phrase
+    # leaps that are not melodic intervals and would corrupt the grammar.
+    MAX_GAP = 2.0   # beats; larger = cross-hand leap, not melodic interval
+    symbols: List[int] = []
+    beat_at: List[float] = []
+    end_at:  List[float] = []
+    for k in range(len(events)-1):
+        gap = events[k+1]['start_beat'] - events[k]['end_beat']
+        if gap > MAX_GAP:
+            continue   # skip cross-hand / cross-phrase jumps
+        iv = events[k+1]['pitch'] - events[k]['pitch']
+        symbols.append(max(-12, min(12, iv)) + 12)
+        beat_at.append(events[k]['start_beat'])
+        end_at.append(events[k+1]['end_beat'])
 
     if len(symbols) < min_len:
         return []
@@ -1950,11 +1962,13 @@ def detect_repeated_bars(melody_notes: List[Dict], n_bars: int,
         bar_notes[n['start_bar']].append(n)
 
     # Fingerprint each bar: tuple of quantised intervals (semitones, capped ±12)
-    # Empty bars get fingerprint ()
+    # Require at least 4 notes (3 intervals) for a meaningful fingerprint —
+    # fewer notes produce trivial single-interval patterns that match too broadly.
+    MIN_NOTES = 4
     fingerprints: Dict[int, tuple] = {}
     for b in range(n_bars):
         notes = sorted(bar_notes.get(b, []), key=lambda n: n['start_beat'])
-        if len(notes) < 2:
+        if len(notes) < MIN_NOTES:
             fingerprints[b] = ()
             continue
         ivs = tuple(max(-12, min(12, notes[i+1]['pitch'] - notes[i]['pitch']))
