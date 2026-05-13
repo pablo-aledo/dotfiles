@@ -442,35 +442,38 @@ def build_chord_timeline(harmony_notes: List[Dict],
 
 def chord_position_for_note(pitch: int, chord_event: Optional[Dict]) -> int:
     """
-    Returns the *structural* position of the note in the chord (0-3), or -1.
+    Returns the position (0-3) of the note in the chord ordered by ascending
+    pitch class, or -1 if the note does not belong to the chord.
 
-    Uses template interval order from the root — NOT the voicing order of the
-    sounding pitches — so inversions always produce the same colours:
+    Position is defined by the ORDER of distinct pitch classes present in the
+    chord (from the actual sounding pitches), sorted from lowest to highest:
 
-      Cmaj root pos  (C3-E3-G3):   C→0  E→1  G→2
-      Cmaj 1st inv   (E3-G3-C4):   C→0  E→1  G→2   ← same colours
-      Cmaj 2nd inv   (G2-C3-E3):   C→0  E→1  G→2   ← same colours
+      Amaj/C# sounding pitches [C#4, E4, A4, C#5]
+      → distinct PCs sorted: [C#(1), E(4), A(9)]
+      → C#→0 (blue), E→1 (yellow), A→2 (green)
 
-    Template order for common types:
-      maj/min/dim/aug/sus: root(0), 3rd/2nd/4th(1), 5th(2)
-      *7 chords:           root(0), 3rd(1), 5th(2), 7th(3)
+    This matches the user's expectation: "the 3rd note of the chord from low
+    to high gets green", regardless of theoretical root or inversion.
     """
     if chord_event is None:
         return -1
-    root_pc = chord_event.get('root_pc', -1)
-    ctype   = chord_event.get('ctype', '')
-    if root_pc < 0:
+    pitches = chord_event.get('pitches', [])
+    if not pitches:
         return -1
 
-    template = CHORD_TEMPLATES.get(ctype)
-    if not template:
-        return 0 if pitch % 12 == root_pc else -1
+    # Build list of distinct pitch classes in ascending order
+    # (use the lowest actual pitch for each PC to determine sort order)
+    pc_to_lowest: Dict[int, int] = {}
+    for p in pitches:
+        pc = p % 12
+        if pc not in pc_to_lowest or p < pc_to_lowest[pc]:
+            pc_to_lowest[pc] = p
 
-    # Structural PCs in template order (not sorted)
-    struct_pcs = [(root_pc + iv) % 12 for iv in template]
-    note_pc    = pitch % 12
-    if note_pc in struct_pcs:
-        return min(struct_pcs.index(note_pc), 3)
+    sorted_pcs = [pc for pc, _ in sorted(pc_to_lowest.items(), key=lambda x: x[1])]
+
+    note_pc = pitch % 12
+    if note_pc in sorted_pcs:
+        return min(sorted_pcs.index(note_pc), 3)
     return -1
 
 def find_chord_at_beat(chord_timeline: List[Dict], beat: float) -> Optional[Dict]:
