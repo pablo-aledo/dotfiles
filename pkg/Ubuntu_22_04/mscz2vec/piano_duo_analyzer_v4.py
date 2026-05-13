@@ -352,7 +352,8 @@ def _best_chord(pitches: List[int]) -> Tuple[str, int, int, str, str]:
 def build_chord_timeline(harmony_notes: List[Dict],
                           arp_window: float = 1.0,
                           bpb: float = 4.0,
-                          bass_notes: Optional[List[Dict]] = None) -> List[Dict]:
+                          bass_notes: Optional[List[Dict]] = None,
+                          arp_fusion: bool = True) -> List[Dict]:
     """
     Build a chord event timeline.
 
@@ -426,6 +427,90 @@ def build_chord_timeline(harmony_notes: List[Dict],
             'ctype':      ctype,
             'pitches':    pitches,
         })
+
+    # ── Arpeggio / bass pattern fusion (optional, disabled with --no-arp-fusion) ─
+    if arp_fusion:
+
+        # Step 1: Alberti bass — 3+ consecutive single notes forming a triad
+        def is_alberti_group(evs):
+            if len(evs) < 3: return False
+            if evs[-1]['start_beat'] - evs[0]['start_beat'] > bpb: return False
+            pcs = {e['pitches'][0] % 12 for e in evs}
+            if len(pcs) < 2: return False
+            _, root, _, _, ctype = _best_chord([e['pitches'][0] for e in evs])
+            return root >= 0 and ctype in ('maj','min','dim','aug','maj7','min7','dom7')
+
+        alberti: List[Dict] = []
+        i = 0
+        while i < len(chord_events):
+            if len(chord_events[i]['pitches']) == 1:
+                window = [chord_events[i]]
+                j = i + 1
+                while (j < len(chord_events)
+                       and len(chord_events[j]['pitches']) == 1
+                       and chord_events[j]['start_beat'] - chord_events[i]['start_beat'] <= bpb
+                       and int(chord_events[j]['start_beat'] / bpb) == int(chord_events[i]['start_beat'] / bpb)
+                       and len(window) < 8):
+                    window.append(chord_events[j]); j += 1
+                merged = False
+                for end in range(len(window), 2, -1):
+                    grp = window[:end]
+                    if is_alberti_group(grp):
+                        all_p = [e['pitches'][0] for e in grp]
+                        lbl, rpc, bpc, inv, ctype = _best_chord(all_p)
+                        alberti.append({'start_beat': grp[0]['start_beat'],
+                                        'end_beat':   grp[-1]['end_beat'],
+                                        'chord_name': lbl, 'root_pc': rpc,
+                                        'bass_pc': bpc, 'inv_str': inv,
+                                        'ctype': ctype,
+                                        'pitches': sorted(set(all_p))})
+                        i += end; merged = True; break
+                if not merged:
+                    alberti.append(chord_events[i]); i += 1
+            else:
+                alberti.append(chord_events[i]); i += 1
+        chord_events = alberti
+
+        # Step 2: Bass+chord fusion — single bass note → ≥2 simultaneous notes
+        fused: List[Dict] = []
+        i = 0
+        while i < len(chord_events):
+            ev = chord_events[i]
+            if len(ev['pitches']) == 1 and i + 1 < len(chord_events):
+                nxt = chord_events[i + 1]
+                gap = nxt['start_beat'] - ev['start_beat']
+                same_bar = int(ev['start_beat']/bpb) == int(nxt['start_beat']/bpb)
+                if same_bar and gap <= 1.0 and len(nxt['pitches']) >= 2:
+                    mp = sorted(set(ev['pitches'] + nxt['pitches']))
+                    lbl, rpc, bpc, inv, ctype = _best_chord(mp)
+                    fused.append({'start_beat': ev['start_beat'],
+                                  'end_beat': nxt['end_beat'],
+                                  'chord_name': lbl, 'root_pc': rpc,
+                                  'bass_pc': bpc, 'inv_str': inv,
+                                  'ctype': ctype, 'pitches': mp})
+                    i += 2; continue
+            fused.append(ev); i += 1
+        chord_events = fused
+
+        # Step 3: Chord repetition deduplication
+        # Match: same bar AND (identical PCs OR next is a strict subset of current).
+        # This handles bass+chord+repeat where the repeat omits the bass note.
+        deduped: List[Dict] = []
+        i = 0
+        while i < len(chord_events):
+            ev = dict(chord_events[i])
+            pcs = frozenset(p % 12 for p in ev['pitches'])
+            j = i + 1
+            while j < len(chord_events):
+                nxt = chord_events[j]
+                nxt_pcs = frozenset(p % 12 for p in nxt['pitches'])
+                same_bar = int(ev['start_beat']/bpb) == int(nxt['start_beat']/bpb)
+                if same_bar and (nxt_pcs == pcs or nxt_pcs < pcs):
+                    ev['end_beat'] = nxt['end_beat']; j += 1
+                else:
+                    break
+            deduped.append(ev); i = j
+        chord_events = deduped
 
     for i in range(len(chord_events) - 1):
         chord_events[i]['end_beat'] = chord_events[i + 1]['start_beat']
@@ -1683,14 +1768,32 @@ def detect_motifs(melody_notes: List[Dict], min_len: int = 3,
         root_counts[sym] += 1
 
     # ── 4. Collect candidate rules ────────────────────────────────────────
+    # Count appearances of every rule at ALL levels of the grammar
+    # (not just in root) — catches repeated sub-phrases within larger rules
+    from collections import Counter as _Counter
+    all_counts: Dict[str, int] = _Counter()
+
+    def count_rule(sym, depth=0):
+        if depth > 20 or not isinstance(sym, str) or sym == 'root': return
+        if sym not in rules: return
+        for s in rules[sym]:
+            if isinstance(s, str) and s != 'root':
+                all_counts[s] += 1
+                count_rule(s, depth+1)
+
+    for sym in root:
+        if isinstance(sym, str) and sym != 'root':
+            all_counts[sym] += 1
+            count_rule(sym)
+
     candidates = []
-    for sym, count in root_counts.items():
-        if not isinstance(sym, str): continue          # skip terminal ints
+    for sym, count in all_counts.items():
+        if not isinstance(sym, str): continue
         if sym == 'root': continue
         if count < min_reps: continue
         expanded = expand(sym)
         if len(expanded) < min_len: continue
-        if len(expanded) > max_len * 3: continue       # skip huge rules
+        if len(expanded) > max_len * 4: continue       # skip huge rules
         intervals = [s - 12 for s in expanded if isinstance(s, int)]
         candidates.append((sym, count, intervals))
 
@@ -1727,33 +1830,42 @@ def detect_motifs(melody_notes: List[Dict], min_len: int = 3,
     motifs: List[Dict] = []
     for label_idx, (sym, count, ivs) in enumerate(kept):
         occurrences = []
-        pos = 0
-        for root_sym in root:
-            sym_len = len(expand(root_sym)) if isinstance(root_sym, str) else 1
-            if root_sym == sym:
-                # This occurrence spans [pos, pos+sym_len) in the symbol array
-                if pos < len(beat_at) and pos + sym_len - 1 < len(end_at):
-                    start_b = beat_at[pos]
-                    end_b   = end_at[pos + sym_len - 1]
-                    # Collect all original pitches in this span
-                    pitches = []
-                    for ev in events:
-                        if start_b - 0.05 <= ev['start_beat'] <= end_b + 0.05:
-                            pitches.extend(ev['all_pitches'])
-                    occurrences.append({
-                        'start_beat': start_b,
-                        'end_beat':   end_b,
-                        'pitches':    pitches,
-                    })
-            pos += sym_len
+
+        def find_occurrences(seq, target_sym, pos_offset=0):
+            """Walk a sequence recursively, recording where target_sym appears."""
+            pos = pos_offset
+            for s in seq:
+                s_len = len(expand(s)) if isinstance(s, str) else 1
+                if s == target_sym:
+                    if pos < len(beat_at) and pos + s_len - 1 < len(end_at):
+                        start_b = beat_at[pos]
+                        end_b   = end_at[pos + s_len - 1]
+                        pitches = [ev['pitch'] for ev in events
+                                   if start_b - 0.05 <= ev['start_beat'] <= end_b + 0.05]
+                        occurrences.append({'start_beat': start_b,
+                                            'end_beat':   end_b,
+                                            'pitches':    pitches})
+                elif isinstance(s, str) and s in rules and s != 'root':
+                    find_occurrences(rules[s], target_sym, pos)
+                pos += s_len
+
+        find_occurrences(root, sym)
 
         if len(occurrences) >= min_reps:
-            motifs.append({
-                'label':       chr(65 + label_idx),
-                'color':       motif_colors[label_idx % len(motif_colors)],
-                'occurrences': occurrences,
-                'intervals':   ivs,
-            })
+            # Deduplicate overlapping occurrences (sub-rule may appear
+            # both inside a parent rule and independently)
+            merged_occs = []
+            for occ in sorted(occurrences, key=lambda o: o['start_beat']):
+                if merged_occs and occ['start_beat'] < merged_occs[-1]['end_beat'] - 0.1:
+                    continue  # skip overlapping duplicate
+                merged_occs.append(occ)
+            if len(merged_occs) >= min_reps:
+                motifs.append({
+                    'label':       chr(65 + label_idx),
+                    'color':       motif_colors[label_idx % len(motif_colors)],
+                    'occurrences': merged_occs,
+                    'intervals':   ivs,
+                })
 
     # Re-label sequentially
     for i, m in enumerate(motifs):
@@ -1909,6 +2021,31 @@ def repair_sections(melody_notes: List[Dict], n_bars: int,
     colors = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6',
               '#06b6d4','#ec4899','#84cc16','#f97316','#a855f7']
 
+    # ── Group consecutive terminal (non-rule) spans ───────────────────────
+    # Individual bar-level terminals are often too short alone but form
+    # meaningful sections when consecutive (e.g. a bridge passage).
+    grouped_spans = []
+    i = 0
+    while i < len(spans):
+        start, end, sym = spans[i]
+        if isinstance(sym, str):
+            grouped_spans.append(spans[i])
+            i += 1
+        else:
+            # Collect consecutive terminal spans
+            j = i + 1
+            while j < len(spans) and not isinstance(spans[j][2], str):
+                j += 1
+            # Merge all terminals from i to j-1 into one span
+            # Use the most common terminal value as representative symbol
+            from collections import Counter as _C
+            term_syms = [spans[k][2] for k in range(i, j)]
+            rep_sym = _C(term_syms).most_common(1)[0][0]
+            grouped_spans.append((start, spans[j-1][1], f'T{rep_sym}'))
+            i = j
+
+    spans = grouped_spans
+
     # Assign a stable label to each unique rule symbol (by first appearance)
     sym_label: Dict = {}
     label_idx = 0
@@ -1927,21 +2064,26 @@ def repair_sections(melody_notes: List[Dict], n_bars: int,
             'rule':  sym,
         })
 
-    # Merge sections that are too short into their neighbours
+    # Merge sections that are too short into their neighbours,
+    # but ONLY if they are consecutive with no different section between them.
+    # This keeps A ... B ... A as three separate sections, not one A.
     merged = []
     for s in sections:
-        if merged and (s['end'] - s['bar']) < MIN_SECTION:
-            # extend previous section
-            merged[-1]['end'] = s['end']
-        elif merged and merged[-1]['label'] == s['label']:
+        size = s['end'] - s['bar']
+        if merged and size < MIN_SECTION:
+            # Short section: absorb into previous
             merged[-1]['end'] = s['end']
         else:
             merged.append(dict(s))
 
-    # Final merge: collapse consecutive same-label sections
+    # Final pass: collapse only DIRECTLY adjacent same-label sections
+    # BUT keep them separate if both are full-size (genuine repetitions)
     final = []
     for s in merged:
-        if final and final[-1]['label'] == s['label']:
+        size = s['end'] - s['bar']
+        if (final and final[-1]['label'] == s['label']
+                and size < MIN_SECTION):
+            # Only merge if this section is too small to stand alone
             final[-1]['end'] = s['end']
         else:
             final.append(s)
@@ -1979,14 +2121,22 @@ def detect_repeated_bars(melody_notes: List[Dict], n_bars: int,
         bar_notes[n['start_bar']].append(n)
 
     # Fingerprint each bar: tuple of quantised intervals (semitones, capped ±12)
-    # Require at least 4 notes (3 intervals) for a meaningful fingerprint —
-    # fewer notes produce trivial single-interval patterns that match too broadly.
-    MIN_NOTES = 4
+    # For bars with < 3 notes, combine with the next bar to get a richer fingerprint,
+    # but only if the combined fingerprint has >= 4 intervals (avoids trivial matches).
+    MIN_NOTES = 3
+    MIN_COMBINED_IVS = 4
     fingerprints: Dict[int, tuple] = {}
     for b in range(n_bars):
         notes = sorted(bar_notes.get(b, []), key=lambda n: n['start_beat'])
         if len(notes) < MIN_NOTES:
-            fingerprints[b] = ()
+            next_notes = sorted(bar_notes.get(b+1, []), key=lambda n: n['start_beat'])
+            combined = notes + next_notes
+            if len(combined) >= MIN_NOTES + 1:
+                ivs = tuple(max(-12, min(12, combined[i+1]['pitch'] - combined[i]['pitch']))
+                            for i in range(len(combined)-1))
+                fingerprints[b] = ivs if len(ivs) >= MIN_COMBINED_IVS else ()
+            else:
+                fingerprints[b] = ()
             continue
         ivs = tuple(max(-12, min(12, notes[i+1]['pitch'] - notes[i]['pitch']))
                     for i in range(len(notes)-1))
@@ -2067,7 +2217,9 @@ def detect_sections(chords_per_bar: List[Dict], density: List[float],
 def analyze(mid_path: str, right_idx: int, left_idx: int,
             arp_window: float = 1.0, key_window_bars: int = 8,
             harmony_source_spec: Optional[str] = None,
-            voicing_order: bool = True) -> str:
+            voicing_order: bool = True,
+            single_key: bool = False,
+            arp_fusion: bool = True) -> str:
     print(f"  Cargando MIDI: {mid_path}")
     mid = mido.MidiFile(mid_path)
     print(f"  Pistas en el archivo: {len(mid.tracks)}")
@@ -2095,20 +2247,25 @@ def analyze(mid_path: str, right_idx: int, left_idx: int,
     global_tonic, global_mode = detect_key(all_notes)
     print(f"  Tonalidad global: {ROOT_NOTE_NAMES[global_tonic]} {global_mode}")
 
-    keys_per_bar = detect_key_per_bar(all_notes, n_bars, bpb, key_window_bars)
-    changes = []
-    prev = None
-    for b, k in enumerate(keys_per_bar):
-        lbl = f"{ROOT_NOTE_NAMES[k[0]]} {k[1]}"
-        if lbl != prev:
-            changes.append((b + 1, lbl))
-            prev = lbl
-    if len(changes) > 1:
-        print(f"  Modulaciones detectadas ({len(changes)} regiones):")
-        for bar, lbl in changes:
-            print(f"    compás {bar}: {lbl}")
+    if single_key:
+        # Force the global key throughout — no modulation detection
+        keys_per_bar = [(global_tonic, global_mode)] * n_bars
+        print(f"  Tonalidad única forzada: {ROOT_NOTE_NAMES[global_tonic]} {global_mode}")
     else:
-        print(f"  Sin modulaciones detectadas (ventana={key_window_bars} compases)")
+        keys_per_bar = detect_key_per_bar(all_notes, n_bars, bpb, key_window_bars)
+        changes = []
+        prev = None
+        for b, k in enumerate(keys_per_bar):
+            lbl = f"{ROOT_NOTE_NAMES[k[0]]} {k[1]}"
+            if lbl != prev:
+                changes.append((b + 1, lbl))
+                prev = lbl
+        if len(changes) > 1:
+            print(f"  Modulaciones detectadas ({len(changes)} regiones):")
+            for bar, lbl in changes:
+                print(f"    compás {bar}: {lbl}")
+        else:
+            print(f"  Sin modulaciones detectadas (ventana={key_window_bars} compases)")
 
     # ── Fuente armónica dinámica por compás ───────────────────────────────
     src_per_bar = harmony_source_per_bar(
@@ -2142,7 +2299,7 @@ def analyze(mid_path: str, right_idx: int, left_idx: int,
     )
     print(f"  Construyendo timeline de acordes (bar-aligned, arp_window={arp_window})...")
     chord_timeline = build_chord_timeline(harmony_notes, arp_window=arp_window, bpb=bpb,
-                                          bass_notes=other_notes)
+                                          bass_notes=other_notes, arp_fusion=arp_fusion)
     print(f"  {len(chord_timeline)} eventos de acorde detectados")
 
     # Acordes por compas (fila 3)
@@ -2346,6 +2503,11 @@ def main():
                         help=('Fuente armónica por sección. Ejemplos: '
                               '"left", "right", "1-4:right,5-12:left". '
                               'Sin especificar → detección automática.'))
+    parser.add_argument('--no-arp-fusion', action='store_false', dest='arp_fusion',
+                        default=True,
+                        help='Desactivar fusión de bajo+acorde y deduplicación de repeticiones')
+    parser.add_argument('--single-key', action='store_true', default=False,
+                        help='Usar una única tonalidad global (sin detección de modulaciones)')
     parser.add_argument('--voicing-order', action='store_true', default=True,
                         dest='voicing_order',
                         help='Color melody notes by ascending pitch order of chord notes (default)')
@@ -2374,7 +2536,9 @@ def main():
                    arp_window=args.arp_window,
                    key_window_bars=args.key_window,
                    harmony_source_spec=args.harmony_source,
-                   voicing_order=args.voicing_order)
+                   voicing_order=args.voicing_order,
+                   single_key=args.single_key,
+                   arp_fusion=args.arp_fusion)
 
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
