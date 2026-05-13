@@ -764,8 +764,8 @@ def build_html(mid_path: str,
     bar_ticks_html = ''
     tick_every = max(1, n_bars // 32)
     for bi in range(0, n_bars, tick_every):
-        x_pct = (bi * bpb) / total_beats * 100.0
-        bar_ticks_html += f'<div class="bar-tick" style="left:{x_pct:.4f}%">{bi+1}</div>'
+        x_px = round(bi * CANVAS_W / n_bars, 2)
+        bar_ticks_html += f'<div class="bar-tick" style="left:{x_px}px">{bi+1}</div>'
 
     # ── Piano SVG ─────────────────────────────────────────────────────────
     def piano_svg(keys, row_h, p_min, p_max, c_lines_data):
@@ -854,12 +854,12 @@ def build_html(mid_path: str,
       rt.style.width = w + 'px';
       rt.style.minWidth = w + 'px';
     }});
-    // Reposition bar ticks
+    // Reposition bar ticks using same pixel formula as canvas notes
     var ticks = document.querySelectorAll('.bar-tick');
     ticks.forEach(function(t) {{
       var b = parseInt(t.textContent) - 1;
-      var xPct = b * (100.0 / {n_bars});
-      t.style.left = xPct + '%';
+      var xPx = b * ({CANVAS_W} / {n_bars}) * zoom;
+      t.style.left = xPx + 'px';
     }});
   }}
 
@@ -1334,6 +1334,7 @@ canvas.zoomable-canvas {{ display: block; }}
 
   <div class="ruler-row">
     <div class="ruler-label"></div>
+    <div style="width:{PIANO_W}px;min-width:{PIANO_W}px;flex-shrink:0;background:#070e1a"></div>
     <div class="ruler-track">{bar_ticks_html}</div>
   </div>
 
