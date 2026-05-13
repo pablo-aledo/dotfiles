@@ -2088,6 +2088,19 @@ def repair_sections(melody_notes: List[Dict], n_bars: int,
         else:
             final.append(s)
 
+    # Reassign labels sequentially by first appearance in the final result.
+    # This avoids gaps like A-B-B-G when intermediate sections were merged away.
+    seen_rules: Dict = {}
+    next_label = 0
+    for s in final:
+        rule_key = s.get('rule')
+        if rule_key not in seen_rules:
+            seen_rules[rule_key] = next_label
+            next_label += 1
+        li = seen_rules[rule_key]
+        s['label'] = labels[li % len(labels)]
+        s['color'] = colors[li % len(colors)]
+
     return final if final else [{'bar': 0, 'end': n_bars,
                                   'label': 'A', 'color': '#3b82f6', 'rule': None}]
 
