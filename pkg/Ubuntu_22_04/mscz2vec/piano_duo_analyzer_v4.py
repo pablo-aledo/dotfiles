@@ -440,41 +440,53 @@ def build_chord_timeline(harmony_notes: List[Dict],
 
     return merged
 
-def chord_position_for_note(pitch: int, chord_event: Optional[Dict]) -> int:
+def chord_position_for_note(pitch: int, chord_event: Optional[Dict],
+                             voicing_order: bool = True) -> int:
     """
-    Returns the position (0-3) of the note in the chord ordered by ascending
-    pitch class, or -1 if the note does not belong to the chord.
+    Returns the position (0-3) of the note in the chord, or -1 if not in chord.
 
-    Position is defined by the ORDER of distinct pitch classes present in the
-    chord (from the actual sounding pitches), sorted from lowest to highest:
+    voicing_order=True  (default):
+        Position by ascending pitch-class order of the actual sounding notes.
+        "1st note from low to high = blue, 2nd = yellow, 3rd = green, 4th = white"
+        Example — Amaj/C# [C#4,E4,A4,C#5]:  C#→0, E→1, A→2
 
-      Amaj/C# sounding pitches [C#4, E4, A4, C#5]
-      → distinct PCs sorted: [C#(1), E(4), A(9)]
-      → C#→0 (blue), E→1 (yellow), A→2 (green)
-
-    This matches the user's expectation: "the 3rd note of the chord from low
-    to high gets green", regardless of theoretical root or inversion.
+    voicing_order=False  (theoretical):
+        Position by chord template interval order from the root.
+        Inversions produce the same colours regardless of voicing.
+        Example — Amaj/C# [C#4,E4,A4,C#5]:  A→0, C#→1, E→2  (root, 3rd, 5th)
     """
     if chord_event is None:
         return -1
-    pitches = chord_event.get('pitches', [])
-    if not pitches:
+
+    if voicing_order:
+        # Order by ascending pitch class of actual sounding notes
+        pitches = chord_event.get('pitches', [])
+        if not pitches:
+            return -1
+        pc_to_lowest: Dict[int, int] = {}
+        for p in pitches:
+            pc = p % 12
+            if pc not in pc_to_lowest or p < pc_to_lowest[pc]:
+                pc_to_lowest[pc] = p
+        sorted_pcs = [pc for pc, _ in sorted(pc_to_lowest.items(), key=lambda x: x[1])]
+        note_pc = pitch % 12
+        if note_pc in sorted_pcs:
+            return min(sorted_pcs.index(note_pc), 3)
         return -1
-
-    # Build list of distinct pitch classes in ascending order
-    # (use the lowest actual pitch for each PC to determine sort order)
-    pc_to_lowest: Dict[int, int] = {}
-    for p in pitches:
-        pc = p % 12
-        if pc not in pc_to_lowest or p < pc_to_lowest[pc]:
-            pc_to_lowest[pc] = p
-
-    sorted_pcs = [pc for pc, _ in sorted(pc_to_lowest.items(), key=lambda x: x[1])]
-
-    note_pc = pitch % 12
-    if note_pc in sorted_pcs:
-        return min(sorted_pcs.index(note_pc), 3)
-    return -1
+    else:
+        # Theoretical: template interval order from root
+        root_pc = chord_event.get('root_pc', -1)
+        ctype   = chord_event.get('ctype', '')
+        if root_pc < 0:
+            return -1
+        template = CHORD_TEMPLATES.get(ctype)
+        if not template:
+            return 0 if pitch % 12 == root_pc else -1
+        struct_pcs = [(root_pc + iv) % 12 for iv in template]
+        note_pc    = pitch % 12
+        if note_pc in struct_pcs:
+            return min(struct_pcs.index(note_pc), 3)
+        return -1
 
 def find_chord_at_beat(chord_timeline: List[Dict], beat: float) -> Optional[Dict]:
     """Binary-search-like lookup of the active chord at a given beat."""
@@ -565,7 +577,8 @@ def build_html(mid_path: str,
                motifs: List[Dict] = None,
                cadences: List[Dict] = None,
                sections: List[Dict] = None,
-               repeated_bars: Dict = None) -> str:
+               repeated_bars: Dict = None,
+               voicing_order: bool = True) -> str:
 
     import json as _json
 
@@ -651,7 +664,7 @@ def build_html(mid_path: str,
                          'color': color})
 
     # ── Note rects ────────────────────────────────────────────────────────
-    def make_rects(notes, p_min, p_range, is_right):
+    def make_rects(notes, p_min, p_range, is_right, voicing_order=True):
         rects = []
         for n in notes:
             bar  = n['start_bar']
@@ -662,7 +675,7 @@ def build_html(mid_path: str,
                 color   = ROOT_NOTE_COLORS_EXACT.get(bass_pc, '#94a3b8')
                 role    = 'harmony'
             else:
-                pos   = chord_position_for_note(n['pitch'], ev)
+                pos   = chord_position_for_note(n['pitch'], ev, voicing_order)
                 color = CHORD_POSITION_COLORS.get(pos, '#ef4444')
                 role  = 'melody'
             x = bx(n['start_beat'])
@@ -677,8 +690,8 @@ def build_html(mid_path: str,
                           'pitch': n['pitch'], 'cid': chord_id, 'v': vel})
         return rects
 
-    right_rects = make_rects(right_track['notes'], rh_p_min, rh_p_range, True)
-    left_rects  = make_rects(left_track['notes'],  lh_p_min, lh_p_range, False)
+    right_rects = make_rects(right_track['notes'], rh_p_min, rh_p_range, True,  voicing_order)
+    left_rects  = make_rects(left_track['notes'],  lh_p_min, lh_p_range, False, voicing_order)
 
     # Add chord id index to chord_timeline events (for hover linking)
     ct_indexed = []
@@ -2053,7 +2066,8 @@ def detect_sections(chords_per_bar: List[Dict], density: List[float],
 
 def analyze(mid_path: str, right_idx: int, left_idx: int,
             arp_window: float = 1.0, key_window_bars: int = 8,
-            harmony_source_spec: Optional[str] = None) -> str:
+            harmony_source_spec: Optional[str] = None,
+            voicing_order: bool = True) -> str:
     print(f"  Cargando MIDI: {mid_path}")
     mid = mido.MidiFile(mid_path)
     print(f"  Pistas en el archivo: {len(mid.tracks)}")
@@ -2172,7 +2186,8 @@ def analyze(mid_path: str, right_idx: int, left_idx: int,
                       tension=tension, density=density,
                       avg_velocity=avg_velocity, motifs=motifs,
                       cadences=cadences, sections=sections,
-                      repeated_bars=repeated_bars)
+                      repeated_bars=repeated_bars,
+                      voicing_order=voicing_order)
     return html
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2331,6 +2346,12 @@ def main():
                         help=('Fuente armónica por sección. Ejemplos: '
                               '"left", "right", "1-4:right,5-12:left". '
                               'Sin especificar → detección automática.'))
+    parser.add_argument('--voicing-order', action='store_true', default=True,
+                        dest='voicing_order',
+                        help='Color melody notes by ascending pitch order of chord notes (default)')
+    parser.add_argument('--theoretical-order', action='store_false',
+                        dest='voicing_order',
+                        help='Color melody notes by theoretical interval order (root=blue, 3rd=yellow, 5th=green)')
     parser.add_argument('--test', action='store_true',
                         help='Genera MIDI sintético de prueba y lo analiza')
     args = parser.parse_args()
@@ -2352,7 +2373,8 @@ def main():
     html = analyze(mid_path, args.right, args.left,
                    arp_window=args.arp_window,
                    key_window_bars=args.key_window,
-                   harmony_source_spec=args.harmony_source)
+                   harmony_source_spec=args.harmony_source,
+                   voicing_order=args.voicing_order)
 
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
