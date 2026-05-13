@@ -101,16 +101,16 @@ ROOT_NOTE_COLORS = {
 # accidentales reciben el color de la nota más cercana
 ROOT_NOTE_COLORS_EXACT = {
     0:  '#ef4444',   # Do  → Rojo
-    1:  '#f08030',   # Do#
+    1:  '#c084fc',   # Do# → Púrpura (entre rojo y naranja)
     2:  '#f97316',   # Re  → Naranja
-    3:  '#f0b020',   # Re#
+    3:  '#f5a623',   # Re# → Naranja-amarillo (entre naranja y amarillo)
     4:  '#fbbf24',   # Mi  → Amarillo
     5:  '#22c55e',   # Fa  → Verde
-    6:  '#1aaa40',   # Fa#
+    6:  '#0ea5e9',   # Fa# → Azul cielo (entre verde y azul claro)
     7:  '#38bdf8',   # Sol → Azul claro
-    8:  '#2080d8',   # Sol#
+    8:  '#06b6d4',   # Sol#→ Cian (entre azul claro y azul)
     9:  '#3b82f6',   # La  → Azul
-    10: '#6040b8',   # La#
+    10: '#e879f9',   # La# → Fucsia (entre azul y violeta)
     11: '#8b5cf6',   # Si  → Violeta
 }
 
