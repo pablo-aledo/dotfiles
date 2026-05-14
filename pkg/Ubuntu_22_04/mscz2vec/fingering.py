@@ -150,7 +150,9 @@ def split_hands(pm: pretty_midi.PrettyMIDI, right_track: int = 0, left_track: in
       1. Si hay ≥2 instruments, usa right_track y left_track como índices.
       2. Si hay 1 instrument, parte por la mediana de pitch: notas altas → RH, bajas → LH.
     """
-    spb = 60.0 / pm.estimate_tempo()  # segundos por beat
+    tempo_times, tempo_values = pm.get_tempo_changes()
+    bpm = tempo_values[0] if len(tempo_values) > 0 else 120.0
+    spb = 60.0 / bpm  # segundos por beat
 
     instruments = [i for i in pm.instruments if not i.is_drum]
 
