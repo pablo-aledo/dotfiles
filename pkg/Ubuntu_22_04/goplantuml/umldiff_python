@@ -6,17 +6,17 @@ ctags_index() {
 	while IFS= read -r line
 	do
 		funcs+=("$line")
-	done < <(ctags -x $(find . -name '*.py') 2>/dev/null | awk '$2=="member"{print $1, $3, $4}' | sort -k3,3 -k2n -u)
+	done < <(ctags -x $(find . -name '*.py') 2>/dev/null | awk '$2=="member"{print $1, $3, $4}' | sort -k3,3 -k2n -u | grep -v '\.venv')
 
 	while IFS= read -r line
 	do
 		classes+=("$line")
-	done < <(ctags -x $(find . -name '*.py') 2>/dev/null | awk '$2=="class"{print $1, $3, $4}' | sort -k3,3 -k2n -u)
+	done < <(ctags -x $(find . -name '*.py') 2>/dev/null | awk '$2=="class"{print $1, $3, $4}' | sort -k3,3 -k2n -u | grep -v '\.venv')
 
 	while IFS= read -r line
 	do
 		elems+=("$line")
-	done < <(ctags -x $(find . -name '*.py') 2>/dev/null | awk '$2=="class"{print $1, $3, $4, "c"}$2=="member"{print $1, $3, $4, "f"}$2=="function"{print $1, $3, $4, "f"}' | sort -k3,3 -k2n -u)
+	done < <(ctags -x $(find . -name '*.py') 2>/dev/null | awk '$2=="class"{print $1, $3, $4, "c"}$2=="member"{print $1, $3, $4, "f"}$2=="function"{print $1, $3, $4, "f"}' | sort -k3,3 -k2n -u | grep -v '\.venv')
 
 	current_file=""
     funcs_in_file=()
@@ -236,6 +236,20 @@ done < "$file_1"
     echo ""
     echo "@enduml"
 } > "$file_3"
+}
+
+genuml(){
+    ctags_index
+    ctags_split
+    (
+        ctags_cross tags_f tags_c /dev/stdout
+    ) | sort -u > tags_cross
+    rm -fr tags; ctags --fields=+zln -R .
+    ctags_rels tags tags_rels
+    ctags_traits_rels
+
+    \rm -fr tags_*
+    \mv diagram.puml $1
 }
 
 uml_show(){
