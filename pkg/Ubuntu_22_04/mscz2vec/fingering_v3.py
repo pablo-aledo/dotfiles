@@ -538,10 +538,10 @@ def optimize_sustained(sus_seq: list[INote], mel_seq: list[INote],
     Principio: la nota sostenida necesita un dedo que:
       1. Pueda alcanzar el pitch cómodamente.
       2. No colisione con los dedos que la melodía tiene asignados en ese intervalo.
-      3. Sea estable (preferiblemente pulgar para voz tenor en MD, meñique en MI).
+      3. Respete el orden anatómico: dedo mayor → tecla más aguda (MD) / grave (MI).
 
-    Usa los fingerings ya asignados a la melodía para evitar colisiones reales,
-    no solo estimaciones por pitch.
+    Si no existe ningún dedo libre que cumpla el orden anatómico, la nota se
+    marca como imposible (fingering=0, confidence=0) y se advierte al usuario.
     """
     if not sus_seq:
         return
@@ -549,44 +549,59 @@ def optimize_sustained(sus_seq: list[INote], mel_seq: list[INote],
     for sn in sus_seq:
         t0, t1 = sn.time, sn.time + sn.duration
 
-        # Dedos ocupados por la melodía durante el intervalo de esta nota sostenida
-        occupied = set(
-            mn.fingering for mn in mel_seq
+        # Dedos ya asignados a la melodía en este intervalo, con sus pitches
+        mel_finger_pitch: list[tuple[int,int]] = [
+            (mn.fingering, mn.pitch) for mn in mel_seq
             if mn.fingering > 0
             and mn.time < t1 and (mn.time + mn.duration) > t0
-        )
-
-        # Pitches simultáneos para determinar posición relativa
-        simultaneous_pitches = [
-            mn.pitch for mn in mel_seq
-            if mn.time < t1 and (mn.time + mn.duration) > t0
         ]
+        occupied = {fp[0] for fp in mel_finger_pitch}
 
-        # Candidatos en orden de preferencia según lado y posición
+        simultaneous_pitches = [p for _, p in mel_finger_pitch]
+
+        # Candidatos libres en orden de preferencia según posición relativa
         if side == "right":
             if not simultaneous_pitches or sn.pitch < min(simultaneous_pitches):
-                # Nota grave respecto a melodía → preferir dedos bajos
-                preference = [1, 2, 3, 4, 5]
+                preference = [1, 2, 3, 4, 5]   # grave → pulgar primero
             else:
                 preference = [2, 1, 3, 4, 5]
         else:
             if not simultaneous_pitches or sn.pitch < min(simultaneous_pitches):
-                # Bajo grave → preferir dedos altos (meñique)
-                preference = [5, 4, 3, 2, 1]
+                preference = [5, 4, 3, 2, 1]   # grave en MI → meñique primero
             else:
                 preference = [4, 5, 3, 2, 1]
 
-        # Elegir el primer dedo libre de la lista de preferencia
+        # Filtrar candidatos que respeten el orden anatómico:
+        # en MD: dedo sostenida < dedo melodía si pitch sostenida < pitch melodía
+        def anatomically_valid(f: int) -> bool:
+            for fm, pm_pitch in mel_finger_pitch:
+                if side == "right":
+                    # MD: dedo mayor debe tocar nota más aguda
+                    if sn.pitch < pm_pitch and f > fm:
+                        return False   # sostenida grave pero dedo más alto: imposible
+                    if sn.pitch > pm_pitch and f < fm:
+                        return False
+                else:
+                    # MI: espejo
+                    if sn.pitch < pm_pitch and f < fm:
+                        return False
+                    if sn.pitch > pm_pitch and f > fm:
+                        return False
+            return True
+
         chosen = None
         for f in preference:
-            if f not in occupied:
+            if f not in occupied and anatomically_valid(f):
                 chosen = f
                 break
-        if chosen is None:
-            chosen = preference[0]  # fallback: el más preferido aunque haya colisión
 
-        sn.fingering  = chosen
-        sn.confidence = 0.8
+        if chosen is None:
+            # Ningún dedo válido: situación anatómicamente imposible
+            sn.fingering  = 0
+            sn.confidence = 0.0
+        else:
+            sn.fingering  = chosen
+            sn.confidence = 0.8
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -999,8 +1014,11 @@ def print_fingering(result: FingeringResult,
                 ambig = " (alt)" if (not n["is_chord"] and conf < ambig_threshold) else ""
                 chord = " [acorde]" if n["is_chord"] else ""
                 sust  = " [sostenida]" if n.get("voice") == "sustained" else ""
+                imposible = " ⚠ IMPOSIBLE (demasiadas voces)" if (n.get("voice") == "sustained" and f == 0) else ""
                 conf_str = f"  conf={conf:.2f}" if show_confidence else ""
-                print(f"    {n['note']:<5} — {f} ({name}){ambig}{chord}{sust}{conf_str}")
+                fname = _FINGER_NAMES.get(f, "?") if f > 0 else "—"
+                fnum  = str(f) if f > 0 else "?"
+                print(f"    {n['note']:<5} — {fnum} ({fname}){ambig}{chord}{sust}{imposible}{conf_str}")
         print()
 
 
