@@ -2,6 +2,12 @@ export music_bottles_dir=~/.var/app/com.usebottles.bottles/data/bottles/bottles
 export music_ssd_dir=/media/pablo/1.42.6-24922
 export music_fl_id=fl_24
 
+alias PLAY='aplay'
+alias PLAY='pacat --rate 8000 --channels 1 --format u8'
+alias PLAY='play -c1 -b8 -eunsigned -traw -r8k -'
+alias PLAY='mplayer -cache 1024 -quiet -rawaudio samplesize=1:channels=1:rate=8000 -demuxer rawaudio -'
+alias PLAY='ffplay -ar 8000 -ac 1 -f u8 -nodisp -'
+
 fl_compose(){
     mount_sqfs_rw $music_ssd_dir/sw_linux/02_fl/$music_fl_id.squashfs $music_bottles_dir/$music_fl_id
     mount_sqfs_rw $music_ssd_dir/libraries/linux/nucleus.squashfs $music_bottles_dir/$music_fl_id/drive_c/nucleus
