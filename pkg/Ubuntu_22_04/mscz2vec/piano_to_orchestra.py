@@ -1515,11 +1515,66 @@ class TrackSplitter:
 class FingerprintGenerator:
     """
     Genera fingerprints JSON por sección compatibles con orchestrator.py.
+    Incluye todos los campos que orchestrator.py accede directamente:
+      meta, tension_curve, tension_curve_full,
+      stitching_hints, entry, exit
     """
 
+    # Traducción acorde → grado romano (simplificado, tonalidad mayor)
+    _MAJOR_ROMAN = {0:'I', 1:'bII', 2:'II', 3:'bIII', 4:'III',
+                    5:'IV', 6:'bV', 7:'V', 8:'bVI', 9:'VI',
+                    10:'bVII', 11:'VII'}
+    _MINOR_ROMAN = {0:'i', 1:'bII', 2:'ii°', 3:'III', 4:'iv',
+                    5:'iv', 6:'bVI', 7:'V', 8:'VI', 9:'VI',
+                    10:'VII', 11:'vii°'}
+
+    def _chord_roman(self, section):
+        """Devuelve el grado romano del acorde principal de la sección."""
+        key_root   = section['key_root']
+        chord_root = section['chord_root']
+        chord_type = section['chord_type']
+        mode       = section['key_mode']
+        rel        = (chord_root - key_root) % 12
+        table      = self._MINOR_ROMAN if mode == 'minor' else self._MAJOR_ROMAN
+        roman      = table.get(rel, 'I')
+        # Añadir calidad al símbolo
+        if chord_type in ('dim', 'dim7', 'hdim7') and '°' not in roman:
+            roman += '°'
+        elif chord_type in ('dom7', 'maj7', 'min7'):
+            roman += '7'
+        return roman
+
+    def _openness(self, section):
+        """
+        Calcula 'openness': qué tan abierta/inconclusa queda la sección.
+        Alta si la tensión de salida es mayor que la de entrada, o si el
+        arco es 'rise'. Baja si termina en tónica con tensión descendente.
+        """
+        tc  = section['tension_curve']
+        arc = section['arc']
+        t_exit  = tc['exit']
+        t_entry = tc['entry']
+        # Apertura base desde tensión de salida
+        openness = t_exit * 0.6
+        # Arco ascendente = más abierto
+        if arc == 'rise':
+            openness += 0.3
+        elif arc == 'fall':
+            openness -= 0.2
+        elif arc == 'arch':
+            # Clímax ya pasó, resuelto
+            openness -= 0.1
+        # Si la tensión sube del inicio al final, más abierto
+        if t_exit > t_entry + 0.15:
+            openness += 0.15
+        return float(max(0.0, min(1.0, openness)))
+
     def generate(self, section):
-        """Devuelve un dict fingerprint para una sección."""
-        tc = section['tension_curve']
+        """Devuelve un dict fingerprint completo para una sección."""
+        tc          = section['tension_curve']
+        chord_roman = self._chord_roman(section)
+        openness    = self._openness(section)
+
         return {
             'meta': {
                 'key_tonic':          section['key_name'],
@@ -1529,6 +1584,7 @@ class FingerprintGenerator:
                 'emotional_arc':      section['arc'],
                 'harmony_complexity': section['harm_complexity'],
                 'section_label':      section['label'],
+                'syncopation':        0.3,   # valor neutro; sin análisis rítmico
             },
             'tension_curve': {
                 'mean':     tc['mean'],
@@ -1538,6 +1594,21 @@ class FingerprintGenerator:
                 'peak_bar': tc['peak_bar'],
             },
             'tension_curve_full': section['tension_full'],
+            # Acorde de entrada y salida de la sección (para sugerencias de orquestación)
+            'entry': {
+                'chord_roman': chord_roman,
+                'tension':     tc['entry'],
+            },
+            'exit': {
+                'chord_roman': chord_roman,   # simplificado: mismo acorde
+                'tension':     tc['exit'],
+            },
+            # Apertura hacia la siguiente sección (usado por generate_orchestral_percussion)
+            'stitching_hints': {
+                'openness':    openness,
+                'arc':         section['arc'],
+                'tension_exit': tc['exit'],
+            },
         }
 
 
