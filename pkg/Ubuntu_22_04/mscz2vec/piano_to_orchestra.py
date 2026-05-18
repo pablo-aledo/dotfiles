@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                     PIANO TO ORCHESTRA  v2.2                                 ║
+║                     PIANO TO ORCHESTRA  v2.3                                 ║
 ║     Piano MIDI → MIDI orquestal completo, autónomo, sin dependencias        ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
@@ -19,8 +19,9 @@
 ║    → VoicingEngine             4 voces SATB por sección (3 backends)         ║
 ║    → CounterpointEngine        Contrapunto real nota-a-nota                  ║
 ║    → TrackSplitter             Pistas Melody / Counterpoint / Acc / Bass     ║
+║    → EmotionalProfile          Perfil emocional por sección (--caracter)     ║
 ║    → InstrumentAssigner        Instrumentos, KS, CC1/CC11, percusión         ║
-║    → build_contrasting_orchs   Orquestaciones contrastantes para revisión    ║
+║    → build_contrasting_orchs   Orquestaciones contrastantes (--review)       ║
 ║    → (HumanReviewLoop)         Exporta MIDIs por candidato, pide elección    ║
 ║    → FingerprintGenerator      JSON por sección (orchestrator.py compatible) ║
 ║                                                                              ║
@@ -30,172 +31,148 @@
 ║  ────────                                                                    ║
 ║                                                                              ║
 ║  MelodyExtractor                                                             ║
-║    Separa melodía, bajo e interiores de notas simultáneas de piano.          ║
 ║    · Notas solas: decisión puramente posicional (encima/debajo de mediana)   ║
-║      — sin umbral de score que penalice beats débiles ni corcheas en         ║
-║      tiempos 1.5 / 3.5 (bug corregido vs v2.0)                              ║
+║      sin umbral de score — evita pérdida de corcheas en beats débiles       ║
 ║    · Notas simultáneas: puntuación por 5 factores:                          ║
-║        continuidad de contorno (penaliza saltos > octava)                   ║
-║        peso métrico (tiempo 1 > tiempo 3 > tiempos débiles)                 ║
-║        velocidad relativa, duración, posición en el cluster                  ║
+║        continuidad de contorno, peso métrico, velocidad relativa,            ║
+║        duración (pedal ≠ melodía), posición en el cluster                   ║
 ║    · Bajo: siempre la nota más grave de cada instante                       ║
 ║    · Inner: resto → pista Accompaniment                                      ║
 ║                                                                              ║
 ║  HarmonicAnalyzer                                                            ║
-║    · Tonalidad global y local: Krumhansl-Schmuckler                         ║
-║    · Detección de secciones: distancia coseno entre vectores chroma,        ║
-║      suavizado gaussiano + find_peaks; --sections N fuerza N secciones;     ║
-║      --min-bars N; cortes alineados al compás más cercano                   ║
-║    · Identificación de acorde: template matching, 13 tipos                   ║
-║        maj min dim aug maj7 min7 dom7 dim7 hdim7 sus2 sus4 maj6 min6        ║
-║    · Curva de tensión de 16 puntos: grado funcional + disonancia             ║
-║      intervalar + registro + densidad                                        ║
+║    · Tonalidad: Krumhansl-Schmuckler (perfiles mayor/menor)                 ║
+║    · Secciones: distancia coseno entre vectores chroma, suavizado            ║
+║      gaussiano + find_peaks; --sections N; --min-bars N;                    ║
+║      cortes alineados al compás más cercano                                  ║
+║    · Acorde: template matching, 13 tipos                                     ║
+║    · Tensión: 16 puntos — grado funcional + disonancia + registro + densidad ║
 ║    · Arco emocional: neutral / rise / fall / arch / high                    ║
 ║                                                                              ║
 ║  VoicingEngine — tres backends + modo contrastante                           ║
-║    rules    Muestreo aleatorio + scoring Rimski-Kórsakov:                   ║
-║             bajo-tenor ≥ 8ª, tenor-alto ≥ 4ª, alto-soprano ≥ 2ª           ║
+║    rules    Rimski-Kórsakov: bajo-tenor ≥ 8ª, tenor-alto ≥ 4ª,            ║
+║             alto-soprano ≥ 2ª; scoring por consonancias                     ║
 ║    greedy   Construcción voraz voz a voz; tensión alta → registro agudo     ║
-║    ml       Candidatos de rules rankeados por GradientBoostingClassifier     ║
-║    generate_contrasting()  Produce N voicings perceptualmente distintos      ║
-║             explorando registro (grave/medio/agudo), apertura (cerrado/      ║
-║             abierto) y textura sugerida; garantiza distancia mínima entre   ║
-║             candidatos; se combina con build_contrasting_orchestrations()    ║
+║    ml       Candidatos rankeados por GradientBoostingClassifier              ║
+║    generate_contrasting()  N voicings perceptualmente distintos por          ║
+║             registro, apertura y textura                                     ║
 ║                                                                              ║
-║  CounterpointEngine — contrapunto de primera especie                         ║
-║    · Movimiento contrario a la melodía (prioridad máxima)                   ║
-║    · Sin quintas/octavas paralelas con soprano                               ║
+║  CounterpointEngine — primera especie adaptada                               ║
+║    · Movimiento contrario (prioridad máxima), sin quintas/octavas paralelas  ║
 ║    · Resolución de la sensible → tónica                                     ║
 ║    · Preferencia por terceras y sextas; rango F3–D5 (MIDI 53–74)           ║
+║                                                                              ║
+║  EmotionalProfile — sistema de caracteres emocionales                        ║
+║    12 perfiles cubriendo los 4 cuadrantes energía×valencia:                 ║
+║      Energía alta / Valencia positiva:  épico, heroico, festivo             ║
+║      Energía alta / Valencia negativa:  agresivo, tenso, urgente            ║
+║      Energía baja / Valencia positiva:  romántico, lírico, sereno           ║
+║      Energía baja / Valencia negativa:  nostálgico, melancólico, lúgubre    ║
+║    Cada perfil es un vector de 10 dimensiones:                              ║
+║      register, density, texture, dynamics, melody_family, percussion,       ║
+║      spread, humanize, mode_sens, tempo_sens                                 ║
+║    Operaciones:                                                              ║
+║      blend(other, weight)   Interpola dimensiones continuas;                ║
+║                             tabla TEXTURE_BLEND para dimensiones categóricas ║
+║      adapt(section, bpm)    Modula según modo (mayor/menor via mode_sens),  ║
+║                             tempo (via tempo_sens), tensión y arco           ║
+║      to_orchestration()     Convierte a template + texture + CC1 + humanize  ║
+║    Especificación en CLI (--caracter):                                       ║
+║      nostálgico                           → toda la pieza                   ║
+║      nostálgico:0.7,épico:0.3            → mezcla ponderada                ║
+║      A:nostálgico,B:épico,C:romántico    → por sección                     ║
+║      A:nostálgico:0.6+épico:0.4,B:sereno → sección + mezcla                ║
 ║                                                                              ║
 ║  InstrumentAssigner — orquestación autónoma                                  ║
 ║    · Plantillas: strings_only / chamber / full                               ║
 ║    · Rangos idiomáticos + sweet spot; fit_to_range transpone por octavas    ║
-║    · Filtros de sección semánticos resueltos dinámicamente:                  ║
-║        first / last / outer / middle / high_tension / peak                  ║
-║      high_tension: umbral 0.45 con fallback garantizado                      ║
-║      peak: sección de mayor tensión (una sola, para trompeta)               ║
+║    · Filtros de sección semánticos: first/last/outer/middle/                 ║
+║      high_tension/peak — resueltos dinámicamente                            ║
 ║    · Articulación por duración/tensión/rol/familia:                         ║
-║        strings  legato/sustain/spiccato/pizzicato/tremolo/portato            ║
-║        winds    legato/sustain/portato/staccato                              ║
-║        brass    legato/marcato_l/marcato_s/sustain/staccato                  ║
-║      pizzicato solo para notas cortas (< 0.75 beats) en baja tensión        ║
+║        strings: legato/sustain/spiccato/pizzicato/tremolo/portato            ║
+║        winds:   legato/sustain/portato/staccato                              ║
+║        brass:   legato/marcato_l/marcato_s/sustain/staccato                  ║
 ║    · KS libraries: nucleus / metropolis / generic                            ║
-║    · CC1 desde tension_curve, cada corchea, con suavizado (±15/step)        ║
-║    · CC11 swell en notas ≥ 1.5 beats                                        ║
+║    · CC1: modulado desde tension_curve ± dynamics_cc1_base del perfil       ║
+║      emocional; suavizado ±15/step; actualización cada corchea              ║
+║    · CC11: swell en notas ≥ 1.5 beats                                       ║
 ║    · Percusión: timbal en tónica/dominante, bombo, platos, tam-tam          ║
-║      según arco emocional; openness de stitching_hints activa tam-tam       ║
-║    · Humanize: micro-jitter configurable                                     ║
+║      según arco emocional; openness activa tam-tam                          ║
+║    · Humanize: micro-jitter configurable (default 0.1)                       ║
+║    · dynamics_cc1_base: override de dinámica base desde EmotionalProfile    ║
 ║                                                                              ║
-║  build_contrasting_orchestrations()  — núcleo del modo revisión             ║
-║    Genera N orquestaciones genuinamente distintas para una sección,          ║
-║    variando simultáneamente:                                                 ║
-║      · Plantilla: strings_only / chamber / full                              ║
-║      · Instrumento de melodía: violin1 / flute / oboe / clarinet            ║
-║      · Textura de acompañamiento: pizzicato / legato / tremolo /            ║
-║        portato / sustain                                                     ║
-║      · Registro: grave / medio / agudo (register_shift en semitones)        ║
-║    Decisiones contextuales según tensión y arco:                            ║
-║      strings_only aparece cuando tensión < 0.50, sección ≤ 2 barras,       ║
-║        o resolución final; se excluye en clímax (tensión > 0.65 + arch)    ║
-║      Cuando un viento conduce la melodía, el acompañamiento se decide:      ║
-║        tensión baja  → pizzicato (el viento emerge nítido)                  ║
-║        tensión media + rise → portato crescendo                              ║
-║        tensión media estable → sustain + horn pad                           ║
-║        tensión alta → legato tutti o tremolo                                 ║
-║      section_index rota el pool de perfiles para garantizar variedad        ║
-║        entre secciones con tensión y arco similares                         ║
-║    Selección de perfiles por distancia máxima: dos perfiles deben diferir   ║
-║      en ≥ 2 dimensiones (plantilla peso×2, instrumento peso×2,              ║
-║      textura peso×1, registro peso×1)                                       ║
+║  build_contrasting_orchestrations() — modo revisión                          ║
+║    N orquestaciones genuinamente distintas variando: plantilla,              ║
+║    instrumento de melodía, textura de acompañamiento, registro.             ║
+║    Decisiones contextuales: strings_only cuando tensión < 0.50 o            ║
+║    sección corta; acompañamiento cuando un viento conduce (pizzicato en     ║
+║    baja tensión → portato → legato/tremolo en tensión alta).                ║
+║    section_index rota el pool para variedad entre secciones similares.      ║
 ║                                                                              ║
 ║  HumanReviewLoop — revisión por escucha                                      ║
-║    Para cada sección exporta un MIDI por candidato en review_dir:           ║
-║      sec{L}_{N}_acorde.mid      acorde de 4 voces arpegiado (~3 segundos)   ║
-║      sec{L}_{N}_orquestado.mid  sección completa con orquestación propia    ║
-║    Cada candidato tiene su propia orquestación contrastante —               ║
-║      instrumento de melodía, textura, plantilla y registro distintos        ║
-║    Muestra rutas, etiqueta descriptiva y comandos timidity (con --soundfont) ║
-║    Opciones de respuesta: 1 / 2 / = empate / s saltar                      ║
-║    Guarda en preferences.jsonl: voicing, orquestación elegida, contexto     ║
-║      completo (tonalidad, acorde, arco, tensión, n_bars, hash, timestamp)  ║
+║    · Exporta por candidato: acorde arpegiado y sección orquestada           ║
+║    · Cada candidato tiene su propia orquestación contrastante               ║
+║    · Opciones: 1/2/= empate/s saltar                                        ║
+║    · Guarda en preferences.jsonl con contexto completo                      ║
 ║                                                                              ║
-║  PreferenceTrainer — loop de aprendizaje                                     ║
-║    · GradientBoostingClassifier (100 árboles, depth=3) + StandardScaler     ║
-║    · Features: intervalos entre voces, registro medio, tensión, arco        ║
-║    · Guarda model + scaler en voicing_ranker.pkl                            ║
+║  PreferenceTrainer                                                           ║
+║    · GradientBoostingClassifier + StandardScaler → voicing_ranker.pkl       ║
 ║    · --stats: distribución de tonalidades, arcos, índices elegidos          ║
 ║                                                                              ║
-║  FingerprintGenerator — compatibilidad con orchestrator.py                   ║
-║    Genera todos los campos sin KeyError:                                     ║
-║      meta (key_tonic/mode/tempo/n_bars/emotional_arc/harmony_complexity/    ║
-║            syncopation), tension_curve, tension_curve_full,                 ║
-║      entry, exit (chord_roman, tension), stitching_hints (openness)         ║
+║  FingerprintGenerator — orchestrator.py compatible                           ║
+║    meta, tension_curve, tension_curve_full, entry, exit, stitching_hints    ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║  EJEMPLOS DE USO                                                             ║
 ║  ───────────────                                                             ║
 ║                                                                              ║
-║  ① Básico — orquesta de cámara, secciones automáticas:                      ║
+║  ① Básico:                                                                  ║
 ║       python piano_to_orchestra.py pieza.mid                                 ║
 ║                                                                              ║
-║  ② Orquesta completa, voicing greedy, 5 secciones:                         ║
+║  ② Con perfil emocional — toda la pieza:                                    ║
+║       python piano_to_orchestra.py pieza.mid --caracter romántico            ║
+║       python piano_to_orchestra.py pieza.mid --caracter épico                ║
+║       python piano_to_orchestra.py pieza.mid --caracter lúgubre              ║
+║                                                                              ║
+║  ③ Mezcla de perfiles (coma o + como separador):                            ║
+║       python piano_to_orchestra.py pieza.mid                                 ║
+║           --caracter "nostálgico:0.7,épico:0.3"                             ║
+║                                                                              ║
+║  ④ Perfil distinto por sección:                                              ║
+║       python piano_to_orchestra.py pieza.mid                                 ║
+║           --caracter "A:nostálgico,B:épico,C:romántico"                     ║
+║                                                                              ║
+║  ⑤ Sección con mezcla + sección simple:                                     ║
+║       python piano_to_orchestra.py pieza.mid                                 ║
+║           --caracter "A:nostálgico:0.6+épico:0.4,B:sereno"                  ║
+║                                                                              ║
+║  ⑥ Experimentar comparando perfiles:                                         ║
+║       for c in épico romántico nostálgico agresivo lúgubre festivo; do      ║
+║           python piano_to_orchestra.py pieza.mid --caracter $c -o $c        ║
+║       done                                                                   ║
+║                                                                              ║
+║  ⑦ Revisión por escucha — candidatos contrastantes:                         ║
+║       python piano_to_orchestra.py pieza.mid --review --candidates 2        ║
+║           --soundfont ~/sf2/timbres_of_heaven.sf2                           ║
+║                                                                              ║
+║  ⑧ Perfil emocional + revisión combinados:                                  ║
+║       python piano_to_orchestra.py pieza.mid --caracter romántico            ║
+║           --review --candidates 2                                            ║
+║                                                                              ║
+║  ⑨ Orquesta completa, greedy, 5 secciones:                                  ║
 ║       python piano_to_orchestra.py pieza.mid                                 ║
 ║           --template full --voicing greedy --sections 5                     ║
 ║                                                                              ║
-║  ③ Inspeccionar análisis armónico:                                          ║
+║  ⑩ Debug: inspeccionar análisis armónico:                                   ║
 ║       python piano_to_orchestra.py pieza.mid --debug --verbose               ║
 ║                                                                              ║
-║  ④ Exportar voces separadas y fingerprints:                                 ║
+║  ⑪ Exportar voces separadas y fingerprints:                                 ║
 ║       python piano_to_orchestra.py pieza.mid --split --fingerprints          ║
 ║                                                                              ║
-║  ⑤ Revisión por escucha — 2 candidatos con orquestaciones contrastantes:   ║
-║       python piano_to_orchestra.py pieza.mid --review --candidates 2        ║
-║           --soundfont ~/sf2/timbres_of_heaven.sf2                           ║
-║       # Para cada sección exporta 2 MIDIs distintos: uno puede ser         ║
-║       # "Cuerdas pizzicato" y otro "Cámara: oboe conduce + sustain"        ║
-║       # Escuchas ambos, luego escribes 1, 2, = (empate) o s (saltar)      ║
-║       # Cada elección se guarda en preferences.jsonl                        ║
-║                                                                              ║
-║  ⑥ Solo el acorde en revisión (más rápido):                                ║
-║       python piano_to_orchestra.py pieza.mid --review --candidates 2        ║
-║           --no-orch-preview                                                  ║
-║                                                                              ║
-║  ⑦ Solo la sección orquestada (más informativo):                           ║
-║       python piano_to_orchestra.py pieza.mid --review --candidates 2        ║
-║           --no-chord                                                         ║
-║                                                                              ║
-║  ⑧ 3 candidatos para comparar más dimensiones:                              ║
-║       python piano_to_orchestra.py pieza.mid --review --candidates 3        ║
-║           --soundfont ~/sf2/timbres_of_heaven.sf2                           ║
-║       # Candidato 1: strings_only, candidato 2: oboe conduce,               ║
-║       # candidato 3: tutti legato — tres colores orquestales distintos      ║
-║                                                                              ║
-║  ⑨ Excluir strings_only de los candidatos:                                  ║
-║       python piano_to_orchestra.py pieza.mid --review --candidates 2        ║
-║           --no-strings-only                                                  ║
-║                                                                              ║
-║  ⑩ Entrenar ranker ML tras acumular preferencias (recomendado: ≥ 20):      ║
+║  ⑫ Entrenar ranker ML, usarlo, ver estadísticas:                            ║
 ║       python piano_to_orchestra.py --train                                   ║
-║                                                                              ║
-║  ⑪ Usar el ranker entrenado:                                                ║
 ║       python piano_to_orchestra.py pieza.mid --voicing ml                   ║
-║       # Cae a rules si no existe voicing_ranker.pkl                          ║
-║                                                                              ║
-║  ⑫ Ver estadísticas de preferencias:                                        ║
 ║       python piano_to_orchestra.py --stats                                   ║
-║                                                                              ║
-║  ⑬ Comparar tres backends de voicing:                                       ║
-║       python piano_to_orchestra.py pieza.mid --voicing rules  -o v_rules    ║
-║       python piano_to_orchestra.py pieza.mid --voicing greedy -o v_greedy   ║
-║       python piano_to_orchestra.py pieza.mid --voicing ml     -o v_ml       ║
-║                                                                              ║
-║  ⑭ Revisión con library Metropolis y directorio personalizado:              ║
-║       python piano_to_orchestra.py pieza.mid --review --candidates 2        ║
-║           --template full --library metropolis                               ║
-║           --review-dir ~/partituras/escucha                                  ║
-║           --soundfont ~/sf2/timbres_of_heaven.sf2                           ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
@@ -216,7 +193,7 @@
 ║                                                                              ║
 ║  Voicing                                                                     ║
 ║    --voicing  rules|greedy|ml   Backend (default: rules)                    ║
-║    --candidates  N       Candidatos por sección en modo review (default: 2) ║
+║    --candidates  N       Candidatos en revisión (default: 2)                 ║
 ║    --model    FILE        Modelo ML (default: voicing_ranker.pkl)            ║
 ║    --prefs    FILE        Preferencias (default: preferences.jsonl)          ║
 ║                                                                              ║
@@ -226,19 +203,29 @@
 ║    --no-perc             Sin percusión orquestal                             ║
 ║    --no-ks               Sin keyswitches                                     ║
 ║    --no-cc               Sin CC1/CC11                                        ║
-║    --humanize  F         Micro-jitter de timing 0.0–1.0 (default: 0.1)      ║
+║    --humanize  F         Micro-jitter 0.0–1.0 (default: 0.1)                ║
+║                                                                              ║
+║  Perfil emocional                                                            ║
+║    --caracter  SPEC      Perfil emocional de orquestación. Formatos:        ║
+║                          nostálgico                  (toda la pieza)         ║
+║                          nostálgico:0.7,épico:0.3   (mezcla ponderada)      ║
+║                          A:nostálgico,B:épico        (por sección)           ║
+║                          A:nos:0.6+épi:0.4,B:sereno (sección + mezcla)      ║
+║                Perfiles: épico heroico festivo agresivo tenso urgente        ║
+║                          romántico lírico sereno nostálgico melancólico      ║
+║                          lúgubre                                             ║
 ║                                                                              ║
 ║  Revisión por escucha                                                        ║
-║    --review              Activar modo de revisión por escucha                ║
+║    --review              Activar revisión por escucha                        ║
 ║    --review-dir  DIR     Directorio de MIDIs (default: ./review_midis)       ║
-║    --soundfont   FILE    Ruta al .sf2 para mostrar comandos timidity         ║
-║    --no-chord            No exportar MIDI del acorde solo                    ║
-║    --no-orch-preview     No exportar MIDI de sección orquestada              ║
-║    --no-strings-only     Excluir strings_only de los candidatos              ║
+║    --soundfont   FILE    .sf2 para mostrar comandos timidity                 ║
+║    --no-chord            No exportar acorde solo                             ║
+║    --no-orch-preview     No exportar sección orquestada                      ║
+║    --no-strings-only     Excluir strings_only de candidatos                  ║
 ║                                                                              ║
 ║  ML y preferencias                                                           ║
-║    --train               Entrenar ranker ML desde preferences.jsonl y salir  ║
-║    --stats               Mostrar estadísticas de preferencias y salir        ║
+║    --train               Entrenar ranker ML y salir                          ║
+║    --stats               Estadísticas de preferencias y salir                ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
@@ -249,7 +236,7 @@
 ║    BASE.secA.fingerprint.json          Fingerprint por sección               ║
 ║    review_midis/sec{L}_{N}_acorde.mid      Acorde para escucha              ║
 ║    review_midis/sec{L}_{N}_orquestado.mid  Sección orquestada               ║
-║    preferences.jsonl                   Preferencias acumuladas (append)      ║
+║    preferences.jsonl                   Preferencias acumuladas               ║
 ║    voicing_ranker.pkl                  Modelo ML (model + scaler)            ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
@@ -258,8 +245,8 @@
 ║    pip install mido numpy scipy scikit-learn                                 ║
 ║      mido          lectura/escritura MIDI (obligatoria)                      ║
 ║      numpy         álgebra lineal, estadística (obligatoria)                 ║
-║      scipy         detección de secciones (opcional; sin ella: div. uniforme)║
-║      scikit-learn  backend ml (opcional; sin ella: cae a rules)              ║
+║      scipy         detección de secciones (opcional)                         ║
+║      scikit-learn  backend ml (opcional)                                     ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
@@ -2558,6 +2545,522 @@ ART_THR = {'legato': 2.0, 'sustain': 0.75, 'portato': 0.4}
 PERC_GM = {'kick': 36, 'snare': 38, 'crash': 49, 'sus_cym': 51, 'tamtam': 54}
 
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PERFILES EMOCIONALES
+#  Cada perfil define una intención emocional como vector de 10 dimensiones.
+#  Los perfiles se pueden mezclar, modular por contexto musical, y convertir
+#  en parámetros concretos de orquestación.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Tabla de mezcla para texturas categóricas:
+# blend_texture[A][B] = resultado al combinar A (dominante) con B (secundario)
+TEXTURE_BLEND = {
+    'legato':   {'legato':'legato', 'portato':'legato', 'sustain':'legato',
+                 'tremolo':'legato', 'marcato':'sustain', 'staccato':'portato',
+                 'col_legno':'portato', 'pizzicato':'portato'},
+    'portato':  {'legato':'legato', 'portato':'portato', 'sustain':'portato',
+                 'tremolo':'portato', 'marcato':'portato', 'staccato':'portato',
+                 'col_legno':'portato', 'pizzicato':'pizzicato'},
+    'sustain':  {'legato':'legato', 'portato':'portato', 'sustain':'sustain',
+                 'tremolo':'sustain', 'marcato':'sustain', 'staccato':'portato',
+                 'col_legno':'portato', 'pizzicato':'portato'},
+    'tremolo':  {'legato':'legato', 'portato':'portato', 'sustain':'sustain',
+                 'tremolo':'tremolo', 'marcato':'tremolo', 'staccato':'portato',
+                 'col_legno':'tremolo', 'pizzicato':'portato'},
+    'marcato':  {'legato':'sustain', 'portato':'portato', 'sustain':'sustain',
+                 'tremolo':'tremolo', 'marcato':'marcato', 'staccato':'marcato',
+                 'col_legno':'marcato', 'pizzicato':'staccato'},
+    'staccato': {'legato':'portato', 'portato':'portato', 'sustain':'portato',
+                 'tremolo':'portato', 'marcato':'marcato', 'staccato':'staccato',
+                 'col_legno':'staccato', 'pizzicato':'pizzicato'},
+    'col_legno':{'legato':'portato', 'portato':'portato', 'sustain':'portato',
+                 'tremolo':'tremolo', 'marcato':'marcato', 'staccato':'staccato',
+                 'col_legno':'col_legno', 'pizzicato':'pizzicato'},
+    'pizzicato':{'legato':'portato', 'portato':'portato', 'sustain':'portato',
+                 'tremolo':'portato', 'marcato':'staccato', 'staccato':'pizzicato',
+                 'col_legno':'pizzicato', 'pizzicato':'pizzicato'},
+}
+
+# Familia de melodía por textura predominante
+MELODY_FAMILY_FOR_TEXTURE = {
+    'legato':    ['winds', 'strings'],
+    'portato':   ['strings', 'winds'],
+    'sustain':   ['strings', 'winds'],
+    'tremolo':   ['strings'],
+    'marcato':   ['brass', 'winds'],
+    'staccato':  ['winds', 'brass'],
+    'col_legno': ['strings'],
+    'pizzicato': ['strings'],
+}
+
+# Instrumento preferido por familia y registro
+MELODY_INSTR_BY_FAM_REG = {
+    'strings': {0.0: 'cello',   0.5: 'violin2', 1.0: 'violin1'},
+    'winds':   {0.0: 'bassoon', 0.5: 'clarinet', 1.0: 'flute'},
+    'brass':   {0.0: 'trombone',0.5: 'horn',     1.0: 'trumpet'},
+}
+
+def _pick_melody_instr(family, register):
+    """Elige el instrumento de melodía más apropiado para familia y registro."""
+    opts = MELODY_INSTR_BY_FAM_REG.get(family, MELODY_INSTR_BY_FAM_REG['strings'])
+    keys = sorted(opts.keys())
+    best = min(keys, key=lambda k: abs(k - register))
+    return opts[best]
+
+
+class EmotionalProfile:
+    """
+    Perfil emocional como vector de 10 dimensiones continuas.
+    Soporta mezcla (blend), adaptación al contexto musical, y
+    conversión a parámetros de orquestación concretos.
+
+    Dimensiones:
+      register      0.0=muy grave … 1.0=muy agudo
+      density       0.0=solo … 1.0=tutti
+      texture       str categórico (dominante)
+      texture_alt   str categórico (secundario, para blend)
+      dynamics      0.0=ppp … 1.0=fff
+      melody_family str: strings/winds/brass
+      percussion    str: none/timpani/full
+      spread        0.0=voicing cerrado … 1.0=muy abierto
+      humanize      0.0=preciso … 1.0=muy expresivo
+      mode_sens     sensibilidad a modo: +1=amplifica mayor/menor, 0=neutro
+      tempo_sens    sensibilidad a tempo: +1=más energía con tempo rápido
+    """
+
+    def __init__(self, name, register, density, texture, dynamics,
+                 melody_family, percussion, spread, humanize,
+                 mode_sens=0.0, tempo_sens=0.0, texture_alt=None,
+                 description=''):
+        self.name          = name
+        self.register      = float(register)
+        self.density       = float(density)
+        self.texture       = texture
+        self.texture_alt   = texture_alt or texture
+        self.dynamics      = float(dynamics)
+        self.melody_family = melody_family
+        self.percussion    = percussion
+        self.spread        = float(spread)
+        self.humanize      = float(humanize)
+        self.mode_sens     = float(mode_sens)
+        self.tempo_sens    = float(tempo_sens)
+        self.description   = description
+
+    # ── Mezcla entre perfiles ────────────────────────────────────────────────
+
+    def blend(self, other, weight_self=0.5):
+        """
+        Mezcla este perfil con otro.
+        weight_self: peso de este perfil (0.0–1.0); el otro recibe 1-weight_self.
+        Dimensiones continuas: interpolación lineal.
+        Dimensiones categóricas: el perfil dominante (mayor peso) manda,
+          con blend_texture para suavizar la transición.
+        """
+        w1, w2 = weight_self, 1.0 - weight_self
+        dominant, recessive = (self, other) if w1 >= w2 else (other, self)
+        w_dom = max(w1, w2)
+
+        # Textura: dominante + tabla de mezcla
+        tex = TEXTURE_BLEND.get(dominant.texture, {}).get(
+            recessive.texture, dominant.texture)
+
+        # Familia de melodía: la del dominante, salvo si el peso es muy equilibrado
+        if abs(w1 - w2) < 0.15:
+            # Cerca de 50/50: elegir la familia que más contrasta
+            mel_fam = (self.melody_family if self.melody_family != other.melody_family
+                       else dominant.melody_family)
+        else:
+            mel_fam = dominant.melody_family
+
+        # Percusión: la del dominante
+        perc = dominant.percussion
+
+        return EmotionalProfile(
+            name        = f"{self.name}×{other.name}",
+            register    = w1*self.register  + w2*other.register,
+            density     = w1*self.density   + w2*other.density,
+            texture     = tex,
+            texture_alt = recessive.texture,
+            dynamics    = w1*self.dynamics  + w2*other.dynamics,
+            melody_family= mel_fam,
+            percussion  = perc,
+            spread      = w1*self.spread    + w2*other.spread,
+            humanize    = w1*self.humanize  + w2*other.humanize,
+            mode_sens   = w1*self.mode_sens + w2*other.mode_sens,
+            tempo_sens  = w1*self.tempo_sens+ w2*other.tempo_sens,
+            description = f"Mezcla {weight_self:.0%} {self.name} + {1-weight_self:.0%} {other.name}",
+        )
+
+    # ── Adaptación al contexto ───────────────────────────────────────────────
+
+    def adapt(self, section, tempo_bpm):
+        """
+        Modula el perfil según el contexto musical de la sección.
+        Devuelve un nuevo EmotionalProfile adaptado (no modifica self).
+
+        Factores de adaptación:
+          · Modo mayor/menor: afecta dinámica y registro según mode_sens
+          · Tempo: afecta humanize y textura según tempo_sens
+          · Tensión de la sección: amplifica o atenúa energía
+          · Arco emocional: sesga hacia el extremo de mayor/menor energía
+        """
+        key_mode = section.get('key_mode', 'major')
+        tension  = section['tension_curve']['mean']
+        arc      = section.get('arc', 'neutral')
+
+        # Clonar dimensiones
+        reg  = self.register
+        dyn  = self.dynamics
+        dens = self.density
+        hum  = self.humanize
+        tex  = self.texture
+        spr  = self.spread
+
+        # ── Modo ─────────────────────────────────────────────────────────────
+        if self.mode_sens != 0.0:
+            if key_mode == 'minor':
+                # Menor: oscurece el perfil (baja registro y dinámica si sens>0)
+                reg  = np.clip(reg  - 0.10 * self.mode_sens, 0, 1)
+                dyn  = np.clip(dyn  - 0.08 * self.mode_sens, 0, 1)
+            else:
+                # Mayor: ilumina el perfil
+                reg  = np.clip(reg  + 0.08 * self.mode_sens, 0, 1)
+                dyn  = np.clip(dyn  + 0.06 * self.mode_sens, 0, 1)
+
+        # ── Tempo ─────────────────────────────────────────────────────────────
+        if self.tempo_sens != 0.0:
+            # Normalizar tempo: 60=lento(0.0), 120=normal(0.5), 180=rápido(1.0)
+            tempo_norm = np.clip((tempo_bpm - 60) / 120.0, 0, 1)
+            tempo_delta = (tempo_norm - 0.5) * self.tempo_sens
+            dyn  = np.clip(dyn  + tempo_delta * 0.15, 0, 1)
+            hum  = np.clip(hum  - tempo_delta * 0.10, 0.02, 0.40)
+            # Tempo muy rápido con textura legato → portato
+            if tempo_bpm > 140 and tex == 'legato':
+                tex = 'portato'
+            # Tempo muy lento con textura staccato → portato
+            if tempo_bpm < 60 and tex in ('staccato', 'col_legno'):
+                tex = 'portato'
+
+        # ── Tensión de la sección ────────────────────────────────────────────
+        # Amplifica el componente de energía del perfil
+        energy = (dyn + dens) / 2.0
+        tension_delta = (tension - 0.5) * 0.20
+        dyn  = np.clip(dyn  + tension_delta, 0, 1)
+        dens = np.clip(dens + tension_delta * 0.5, 0, 1)
+
+        # ── Arco emocional ───────────────────────────────────────────────────
+        if arc == 'rise':
+            dyn  = np.clip(dyn  + 0.05, 0, 1)
+            reg  = np.clip(reg  + 0.05, 0, 1)
+        elif arc == 'fall':
+            dyn  = np.clip(dyn  - 0.05, 0, 1)
+            hum  = np.clip(hum  + 0.05, 0, 0.40)
+        elif arc == 'arch':
+            dyn  = np.clip(dyn  + 0.08, 0, 1)
+        elif arc == 'high':
+            dens = np.clip(dens + 0.08, 0, 1)
+
+        return EmotionalProfile(
+            name         = self.name + '_ctx',
+            register     = float(reg),
+            density      = float(dens),
+            texture      = tex,
+            texture_alt  = self.texture_alt,
+            dynamics     = float(dyn),
+            melody_family= self.melody_family,
+            percussion   = self.percussion,
+            spread       = float(spr),
+            humanize     = float(hum),
+            mode_sens    = self.mode_sens,
+            tempo_sens   = self.tempo_sens,
+            description  = self.description,
+        )
+
+    # ── Conversión a parámetros de orquestación ──────────────────────────────
+
+    def to_orchestration(self, section, sections_all):
+        """
+        Convierte el perfil en un dict compatible con build_contrasting_orchestrations
+        y con los parámetros de InstrumentAssigner.
+        Devuelve un dict con: template_name, template, texture, accomp_texture,
+          register_shift, melody_instr, dynamics_cc1, no_perc, humanize.
+        """
+        # Template según densidad
+        if self.density < 0.35:
+            tmpl_name = 'strings_only'
+        elif self.density < 0.70:
+            tmpl_name = 'chamber'
+        else:
+            tmpl_name = 'full'
+
+        # Instrumento de melodía según familia y registro
+        melody_instr = _pick_melody_instr(self.melody_family, self.register)
+
+        # Register shift: convierte 0–1 a semitones (-12 … +12)
+        reg_shift = int((self.register - 0.5) * 24)
+        reg_shift = max(-12, min(12, reg_shift))
+        # Redondear a octava o cero (más musical)
+        if abs(reg_shift) < 6:
+            reg_shift = 0
+        elif reg_shift > 0:
+            reg_shift = 12
+        else:
+            reg_shift = -12
+
+        # Percusión
+        no_perc = self.percussion == 'none'
+
+        # CC1 base desde dinámica (escala ppp=20 … fff=115)
+        dynamics_cc1 = int(20 + self.dynamics * 95)
+
+        # Humanize
+        humanize = float(np.clip(self.humanize, 0.02, 0.40))
+
+        # Construir template dinámico
+        base = [dict(cfg) for cfg in ORCH_TEMPLATES.get(
+                    tmpl_name, ORCH_TEMPLATES['chamber'])]
+
+        # Reasignar instrumento de melodía
+        if melody_instr not in ('violin1',):
+            for cfg in base:
+                if cfg['name'] == 'violin1':
+                    cfg['role']   = 'melody_double'
+                    cfg['source'] = 'Melody'
+                if cfg['name'] == melody_instr:
+                    cfg['role']   = 'melody'
+                    cfg['source'] = 'Melody'
+                    cfg.pop('section_filter', None)
+
+        return {
+            'label':          self.description or self.name,
+            'template_name':  tmpl_name,
+            'template':       base,
+            'texture':        self.texture,
+            'accomp_texture': self.texture_alt,
+            'register_shift': reg_shift,
+            'melody_instr':   melody_instr,
+            'dynamics_cc1':   dynamics_cc1,
+            'no_perc':        no_perc,
+            'humanize':       humanize,
+            'spread':         self.spread,
+        }
+
+    def __repr__(self):
+        return (f"EmotionalProfile({self.name}: reg={self.register:.2f} "
+                f"dens={self.density:.2f} tex={self.texture} "
+                f"dyn={self.dynamics:.2f} fam={self.melody_family})")
+
+
+# ── Catálogo de perfiles ──────────────────────────────────────────────────────
+# 12 perfiles cubriendo los 4 cuadrantes del espacio energía×valencia,
+# con distancia mínima de 3 dimensiones entre cualquier par.
+
+EMOTIONAL_PROFILES = {
+
+    # ── Energía alta / Valencia positiva ─────────────────────────────────────
+
+    'épico': EmotionalProfile(
+        name='épico', description='Tutti fortissimo, metales heroicos, percusión solemne',
+        register=0.85, density=1.0,  texture='marcato',  texture_alt='sustain',
+        dynamics=0.90, melody_family='brass',   percussion='full',
+        spread=0.85,   humanize=0.04, mode_sens=0.3,  tempo_sens=0.4,
+    ),
+    'heroico': EmotionalProfile(
+        name='heroico', description='Chamber brass+cuerdas, marcato enérgico',
+        register=0.75, density=0.65, texture='marcato',  texture_alt='legato',
+        dynamics=0.75, melody_family='brass',   percussion='timpani',
+        spread=0.70,   humanize=0.07, mode_sens=0.2,  tempo_sens=0.3,
+    ),
+    'festivo': EmotionalProfile(
+        name='festivo', description='Maderas brillantes en staccato, sin graves',
+        register=0.90, density=0.50, texture='staccato', texture_alt='portato',
+        dynamics=0.70, melody_family='winds',   percussion='none',
+        spread=0.60,   humanize=0.12, mode_sens=0.5,  tempo_sens=0.5,
+    ),
+
+    # ── Energía alta / Valencia negativa ─────────────────────────────────────
+
+    'agresivo': EmotionalProfile(
+        name='agresivo', description='Col legno + metales, percusión densa, registro comprimido',
+        register=0.80, density=1.0,  texture='col_legno',texture_alt='marcato',
+        dynamics=0.95, melody_family='brass',   percussion='full',
+        spread=0.35,   humanize=0.03, mode_sens=-0.2, tempo_sens=0.5,
+    ),
+    'tenso': EmotionalProfile(
+        name='tenso', description='Tremolo en cuerdas, registro agudo, sin melodía clara',
+        register=0.80, density=0.75, texture='tremolo',  texture_alt='sustain',
+        dynamics=0.70, melody_family='strings',  percussion='timpani',
+        spread=0.45,   humanize=0.05, mode_sens=-0.3, tempo_sens=0.2,
+    ),
+    'urgente': EmotionalProfile(
+        name='urgente', description='Staccato chamber, sin percusión, carácter de huida',
+        register=0.55, density=0.55, texture='staccato', texture_alt='portato',
+        dynamics=0.65, melody_family='winds',   percussion='none',
+        spread=0.40,   humanize=0.06, mode_sens=-0.1, tempo_sens=0.6,
+    ),
+
+    # ── Energía baja / Valencia positiva ─────────────────────────────────────
+
+    'romántico': EmotionalProfile(
+        name='romántico', description='Chamber con oboe o clarinete, legato cantabile, swell',
+        register=0.55, density=0.55, texture='legato',   texture_alt='sustain',
+        dynamics=0.55, melody_family='winds',   percussion='none',
+        spread=0.65,   humanize=0.22, mode_sens=0.4,  tempo_sens=-0.2,
+    ),
+    'lírico': EmotionalProfile(
+        name='lírico', description='Violín I con vibrato amplio, frase larga, mf',
+        register=0.65, density=0.40, texture='legato',   texture_alt='portato',
+        dynamics=0.50, melody_family='strings',  percussion='none',
+        spread=0.55,   humanize=0.28, mode_sens=0.3,  tempo_sens=-0.3,
+    ),
+    'sereno': EmotionalProfile(
+        name='sereno', description='Cuerdas flautando, pp, mucho espacio entre voces',
+        register=0.55, density=0.35, texture='portato',  texture_alt='legato',
+        dynamics=0.20, melody_family='strings',  percussion='none',
+        spread=0.80,   humanize=0.18, mode_sens=0.2,  tempo_sens=-0.4,
+    ),
+
+    # ── Energía baja / Valencia negativa ─────────────────────────────────────
+
+    'nostálgico': EmotionalProfile(
+        name='nostálgico', description='Cuerdas portato cálidas, viola como voz principal, mp',
+        register=0.35, density=0.40, texture='portato',  texture_alt='legato',
+        dynamics=0.38, melody_family='strings',  percussion='none',
+        spread=0.45,   humanize=0.22, mode_sens=-0.3, tempo_sens=-0.3,
+    ),
+    'melancólico': EmotionalProfile(
+        name='melancólico', description='Cuerdas medias legato, pp, sin maderas',
+        register=0.25, density=0.35, texture='legato',   texture_alt='portato',
+        dynamics=0.22, melody_family='strings',  percussion='none',
+        spread=0.40,   humanize=0.22, mode_sens=-0.5, tempo_sens=-0.4,
+    ),
+    'lúgubre': EmotionalProfile(
+        name='lúgubre', description='Solo cuerdas graves, tremolo sotto voce, ppp',
+        register=0.05, density=0.30, texture='tremolo',  texture_alt='legato',
+        dynamics=0.10, melody_family='strings',  percussion='none',
+        spread=0.35,   humanize=0.12, mode_sens=-0.6, tempo_sens=-0.2,
+    ),
+}
+
+
+def parse_caracter(spec, sections):
+    """
+    Parsea el argumento --caracter en un dict {label_seccion: EmotionalProfile}.
+
+    Formatos soportados:
+      nostálgico                          → toda la pieza
+      nostálgico:0.7,épico:0.3           → mezcla, toda la pieza
+      A:nostálgico,B:épico               → por sección
+      A:nostálgico:0.6+épico:0.4,B:sereno → por sección con mezcla
+    """
+    if not spec:
+        return {}
+
+    section_labels = [s['label'] for s in sections]
+    result = {}
+
+    def parse_blend(blend_str):
+        """Parsea 'nostálgico:0.7+épico:0.3' o 'nostálgico' en EmotionalProfile."""
+        parts = blend_str.strip().split('+')
+        profiles_weights = []
+        for part in parts:
+            tokens = part.strip().split(':')
+            name = tokens[0].strip()
+            weight = float(tokens[1]) if len(tokens) > 1 else None
+            if name not in EMOTIONAL_PROFILES:
+                raise ValueError(f"Perfil desconocido: '{name}'. "
+                                 f"Disponibles: {list(EMOTIONAL_PROFILES.keys())}")
+            profiles_weights.append((EMOTIONAL_PROFILES[name], weight))
+
+        # Normalizar pesos
+        weights = [w for _, w in profiles_weights]
+        if any(w is None for w in weights):
+            # Sin pesos explícitos: distribuir uniformemente
+            n = len(profiles_weights)
+            profiles_weights = [(p, 1.0/n) for p, _ in profiles_weights]
+        else:
+            total = sum(weights)
+            profiles_weights = [(p, w/total) for p, w in profiles_weights]
+
+        # Mezclar
+        if len(profiles_weights) == 1:
+            return profiles_weights[0][0]
+        base_p, base_w = profiles_weights[0]
+        result_p = base_p
+        accumulated_w = base_w
+        for p, w in profiles_weights[1:]:
+            total_w = accumulated_w + w
+            result_p = result_p.blend(p, weight_self=accumulated_w/total_w)
+            accumulated_w = total_w
+        return result_p
+
+    # Detectar si hay asignación por sección (contiene 'A:', 'B:', etc.)
+    # Heurística: si hay un label de sección seguido de ':'
+    has_section_assign = any(
+        tok.strip().split(':')[0].strip() in section_labels
+        for tok in spec.split(',')
+        if ':' in tok
+    )
+
+    if has_section_assign:
+        # Formato por sección: "A:nostálgico,B:épico" o "A:nos:0.6+ép:0.4,B:sereno"
+        segments = []
+        current = ''
+        for ch in spec:
+            if ch == ',':
+                parts = current.split(':', 1)
+                if parts[0].strip() in section_labels:
+                    segments.append(current.strip())
+                    current = ''
+                else:
+                    current += ch
+            else:
+                current += ch
+        if current.strip():
+            segments.append(current.strip())
+
+        for seg in segments:
+            colon_idx = seg.index(':')
+            sec_label = seg[:colon_idx].strip()
+            blend_str = seg[colon_idx+1:].strip()
+            if sec_label in section_labels:
+                result[sec_label] = parse_blend(blend_str)
+    else:
+        # Formato global: "nostálgico" o "nostálgico:0.7+épico:0.3"
+        # Las comas no son separadores aquí — toda la especificación es una mezcla
+        # Convertir "nostálgico:0.7,épico:0.3" → "nostálgico:0.7+épico:0.3"
+        # (el usuario puede usar coma o + como separador de mezcla)
+        global_spec = spec.replace(',', '+')
+        profile = parse_blend(global_spec)
+        for label in section_labels:
+            result[label] = profile
+
+    return result
+
+
+def apply_caracter(caracter_map, section, tempo_bpm):
+    """
+    Obtiene el perfil emocional adaptado para una sección concreta.
+    Devuelve un dict de orquestación listo para InstrumentAssigner,
+    o None si no hay perfil para esta sección.
+    """
+    if not caracter_map:
+        return None
+    label = section['label']
+    # Buscar perfil exacto o usar el más cercano en el mapa
+    profile = caracter_map.get(label)
+    if profile is None:
+        # Si hay un solo perfil global (todas las secciones), usarlo
+        if caracter_map:
+            profile = next(iter(caracter_map.values()))
+        else:
+            return None
+    # Adaptar al contexto musical de la sección
+    adapted = profile.adapt(section, tempo_bpm)
+    return adapted.to_orchestration(section, [section])
+
+
 class InstrumentAssigner:
     """
     Toma las cuatro pistas de voz y las distribuye a instrumentos reales,
@@ -2567,17 +3070,18 @@ class InstrumentAssigner:
 
     def __init__(self, tpb, tempo, template='chamber', library='nucleus',
                  no_perc=False, no_ks=False, no_cc=False,
-                 humanize=0.1, verbose=False):
-        self.tpb      = tpb
-        self.tempo    = tempo
-        self.template = ORCH_TEMPLATES.get(template, ORCH_TEMPLATES['chamber'])
-        self.library  = library
-        self.ks_table = KS_TABLES.get(library, KS_TABLES['generic'])
-        self.no_perc  = no_perc
-        self.no_ks    = no_ks
-        self.no_cc    = no_cc
-        self.humanize = humanize
-        self.verbose  = verbose
+                 humanize=0.1, dynamics_cc1_base=None, verbose=False):
+        self.tpb               = tpb
+        self.tempo             = tempo
+        self.template          = ORCH_TEMPLATES.get(template, ORCH_TEMPLATES['chamber'])
+        self.library           = library
+        self.ks_table          = KS_TABLES.get(library, KS_TABLES['generic'])
+        self.no_perc           = no_perc
+        self.no_ks             = no_ks
+        self.no_cc             = no_cc
+        self.humanize          = humanize
+        self.dynamics_cc1_base = dynamics_cc1_base  # None = sin override
+        self.verbose           = verbose
 
     # ── Utilidades ───────────────────────────────────────────────────────────
 
@@ -2755,7 +3259,13 @@ class InstrumentAssigner:
         if not self.no_cc:
             init_sec = self._section_for(raw_notes[0][0], sections)
             init_t   = init_sec['tension_curve'].get('entry', 0.4)
-            init_cc1 = int(np.clip(init_t * 100 + 15, 20, 115))
+            # Si hay dynamics_cc1_base del perfil emocional, usarlo como base
+            # y modular con la tensión (±15 alrededor del base)
+            if self.dynamics_cc1_base is not None:
+                base = self.dynamics_cc1_base
+                init_cc1 = int(np.clip(base + (init_t - 0.5) * 30, 15, 120))
+            else:
+                init_cc1 = int(np.clip(init_t * 100 + 15, 20, 115))
             events.append((raw_notes[0][0], 'cc', 1,  init_cc1))
             events.append((raw_notes[0][0], 'cc', 11, 100))
             last_cc1 = init_cc1
@@ -2785,9 +3295,13 @@ class InstrumentAssigner:
                     events.append((max(0, t_on - 5), 'ks', ks, 100))
                 prev_art = art
 
-            # CC1 periódico
+            # CC1 periódico — modulado por tensión alrededor del base dinámico
             if not self.no_cc and t_on >= cc1_next:
-                cc1 = int(np.clip(tension * 100 + 15, 15, 120))
+                if self.dynamics_cc1_base is not None:
+                    base = self.dynamics_cc1_base
+                    cc1 = int(np.clip(base + (tension - 0.5) * 30, 15, 120))
+                else:
+                    cc1 = int(np.clip(tension * 100 + 15, 15, 120))
                 if last_cc1 >= 0:
                     cc1 = int(np.clip(cc1, last_cc1 - 15, last_cc1 + 15))
                 if cc1 != last_cc1:
@@ -3061,6 +3575,17 @@ def main():
     parser.add_argument('--stats',      action='store_true',
                         help='Mostrar estadísticas de preferencias y salir')
 
+    # Perfil emocional
+    parser.add_argument('--caracter',   default=None,
+                        help=(
+                            'Perfil emocional de orquestación. Formatos:\n'
+                            '  nostálgico                           (toda la pieza)\n'
+                            '  nostálgico:0.7,épico:0.3            (mezcla ponderada)\n'
+                            '  A:nostálgico,B:épico,C:romántico    (por sección)\n'
+                            '  A:nostálgico:0.6+épico:0.4,B:sereno (sección + mezcla)\n'
+                            f'Perfiles: {", ".join(EMOTIONAL_PROFILES.keys())}'
+                        ))
+
     # Revisión por escucha
     parser.add_argument('--review-dir', default=None,
                         help='Directorio para MIDIs de revisión (default: ./review_midis)')
@@ -3193,21 +3718,143 @@ def main():
     fp_gen      = FingerprintGenerator()
     fingerprints = [fp_gen.generate(sec) for sec in sections]
 
-    assigner = InstrumentAssigner(
-        tpb=tpb, tempo=tempo,
-        template=args.template,
-        library=args.library,
-        no_perc=args.no_perc,
-        no_ks=args.no_ks,
-        no_cc=args.no_cc,
-        humanize=args.humanize,
-        verbose=args.verbose,
-    )
+    # Parsear perfil emocional si se especificó
+    caracter_map = {}
+    tempo_bpm    = round(60_000_000 / tempo, 1)
+    if getattr(args, 'caracter', None):
+        try:
+            caracter_map = parse_caracter(args.caracter, sections)
+            print(f"\n  Perfil emocional: {args.caracter}")
+            for label, prof in caracter_map.items():
+                adapted = prof.adapt(sections[[s['label'] for s in sections].index(label)],
+                                     tempo_bpm)
+                print(f"    [{label}] {adapted.name} → "
+                      f"template={adapted.to_orchestration(sections[0],[sections[0]])['template_name']} "
+                      f"tex={adapted.texture} dyn_cc1={adapted.to_orchestration(sections[0],[sections[0]])['dynamics_cc1']}")
+        except ValueError as e:
+            print(f"\n  ⚠ Error en --caracter: {e}")
+            caracter_map = {}
 
-    out_orch = base + '.mid'
-    n_notes  = assigner.write(tracks, sections, fingerprints, out_orch)
+    # Si hay perfil emocional, generar un MIDI por sección con sus parámetros
+    # y combinarlos; si no, usar InstrumentAssigner estándar
+    if caracter_map:
+        # Generar un MIDI donde cada sección usa sus propios parámetros emocionales
+        mid_out = MidiFile(type=1, ticks_per_beat=tpb)
+        t0 = MidiTrack(); mid_out.tracks.append(t0)
+        t0.name = 'Tempo'
+        t0.append(MetaMessage('set_tempo', tempo=int(tempo), time=0))
+        prev_t = 0
+        for sec in sections:
+            t0.append(MetaMessage('marker', text=f"[{sec['label']}]",
+                                  time=sec['start_tick'] - prev_t))
+            prev_t = sec['start_tick']
+
+        # Acumular eventos por canal a través de todas las secciones
+        all_events  = {}   # ch → list of events
+        n_notes_total = {}
+        last_assigner = None  # para reutilizar _events_to_track
+
+        for sec in sections:
+            orch_params = apply_caracter(caracter_map, sec, tempo_bpm)
+
+            if orch_params:
+                sec_tmpl     = orch_params['template']
+                sec_humanize = orch_params['humanize']
+                sec_dyn_cc1  = orch_params['dynamics_cc1']
+                sec_no_perc  = orch_params['no_perc']
+                # Modular tensión según textura del perfil
+                tex = orch_params.get('accomp_texture', orch_params['texture'])
+                sec_mod = dict(sec)
+                tc = dict(sec_mod['tension_curve'])
+                if tex in ('tremolo',):
+                    tc['mean'] = min(1.0, tc['mean'] + 0.35)
+                elif tex in ('pizzicato', 'staccato', 'col_legno'):
+                    tc['mean'] = max(0.0, tc['mean'] - 0.30)
+                sec_mod['tension_curve'] = tc
+            else:
+                sec_tmpl     = ORCH_TEMPLATES.get(args.template, ORCH_TEMPLATES['chamber'])
+                sec_humanize = args.humanize
+                sec_dyn_cc1  = None
+                sec_no_perc  = args.no_perc
+                sec_mod      = sec
+
+            assigner_sec = InstrumentAssigner(
+                tpb=tpb, tempo=tempo,
+                template=args.template,
+                library=args.library,
+                no_perc=sec_no_perc,
+                no_ks=args.no_ks,
+                no_cc=args.no_cc,
+                humanize=sec_humanize,
+                dynamics_cc1_base=sec_dyn_cc1,
+                verbose=False,
+            )
+            assigner_sec.template = sec_tmpl
+            last_assigner = assigner_sec
+
+            # Recortar tracks a esta sección
+            s_tick = sec['start_tick']
+            e_tick = sec.get('end_tick') or float('inf')
+            sec_tracks = {
+                nm: [(t, p, d, v) for t, p, d, v in nts if s_tick <= t < e_tick]
+                for nm, nts in tracks.items()
+            }
+
+            for cfg in sec_tmpl:
+                nm  = cfg['name']
+                src = cfg['source']
+                ch  = cfg['ch']
+                raw = sec_tracks.get(src, [])
+                evs = assigner_sec._process(raw, cfg, [sec_mod], fingerprints)
+                all_events.setdefault(ch, []).extend(evs)
+                nc = sum(1 for e in evs if e[1] == 'note')
+                nk = sum(1 for e in evs if e[1] == 'ks')
+                ncc = sum(1 for e in evs if e[1] == 'cc')
+                if nc:
+                    disp = INSTR_DISPLAY.get(nm, nm)
+                    prev = n_notes_total.get(disp, (0, 0, 0))
+                    n_notes_total[disp] = (prev[0]+nc, prev[1]+nk, prev[2]+ncc)
+
+        # Escribir una pista por canal con todos los eventos acumulados
+        if last_assigner:
+            written_channels = set()
+            for cfg in (ORCH_TEMPLATES.get(args.template, []) +
+                        [c for tmpl in [ORCH_TEMPLATES.get(args.template,[])]
+                         for c in tmpl]):
+                ch = cfg['ch']
+                if ch in written_channels or ch not in all_events:
+                    continue
+                written_channels.add(ch)
+                nm   = cfg['name']
+                evs  = all_events[ch]
+                if not evs: continue
+                prog = GM_PROGRAMS.get(nm, 40)
+                disp = INSTR_DISPLAY.get(nm, nm)
+                trk  = last_assigner._events_to_track(evs, ch, disp, prog)
+                if trk:
+                    mid_out.tracks.append(trk)
+
+        out_orch = base + '.mid'
+        mid_out.save(out_orch)
+        n_notes = n_notes_total
+
+    else:
+        assigner = InstrumentAssigner(
+            tpb=tpb, tempo=tempo,
+            template=args.template,
+            library=args.library,
+            no_perc=args.no_perc,
+            no_ks=args.no_ks,
+            no_cc=args.no_cc,
+            humanize=args.humanize,
+            verbose=args.verbose,
+        )
+        out_orch = base + '.mid'
+        n_notes  = assigner.write(tracks, sections, fingerprints, out_orch)
+
     print(f"\n  Instrumentos generados:")
-    for disp, (nn, nks, ncc) in n_notes.items():
+    for disp, vals in n_notes.items():
+        nn, nks, ncc = vals if isinstance(vals, tuple) else (vals, 0, 0)
         print(f"  {disp:<18} {nn:>4} notas  {nks:>3} KS  {ncc:>4} CC")
 
     # ── Exportaciones opcionales ──────────────────────────────────────────────
