@@ -2832,12 +2832,18 @@ class EmotionalProfile:
                     cfg['source'] = 'Melody'
                     cfg.pop('section_filter', None)
 
+        # vel_scale: escala de velocidad desde dinámica del perfil
+        # pp(0.10)→0.45  mp(0.38)→0.65  mf(0.55)→0.80  ff(0.75)→1.10  fff(0.90)→1.35
+        vel_scale = 0.40 + self.dynamics * 1.05
+
         return {
             'label':          self.description or self.name,
             'template_name':  tmpl_name,
             'template':       base,
             'texture':        self.texture,
             'accomp_texture': self.texture_alt,
+            'forced_texture': self.texture,      # fuerza articulación en InstrumentAssigner
+            'vel_scale':      float(vel_scale),  # escala velocidades de notas
             'register_shift': reg_shift,
             'melody_instr':   melody_instr,
             'dynamics_cc1':   dynamics_cc1,
@@ -2861,85 +2867,97 @@ EMOTIONAL_PROFILES = {
     # ── Energía alta / Valencia positiva ─────────────────────────────────────
 
     'épico': EmotionalProfile(
-        name='épico', description='Tutti fortissimo, metales heroicos, percusión solemne',
-        register=0.85, density=1.0,  texture='marcato',  texture_alt='sustain',
+        # full + trompeta + marcato + fff + percusión completa
+        name='épico', description='Tutti fortissimo, trompeta, metales heroicos, percusión solemne',
+        register=0.90, density=1.0,  texture='marcato',   texture_alt='sustain',
         dynamics=0.90, melody_family='brass',   percussion='full',
         spread=0.85,   humanize=0.04, mode_sens=0.3,  tempo_sens=0.4,
     ),
     'heroico': EmotionalProfile(
-        name='heroico', description='Chamber brass+cuerdas, marcato enérgico',
-        register=0.75, density=0.65, texture='marcato',  texture_alt='legato',
+        # chamber + trompa + portato + ff + timbal  (más íntimo que épico)
+        name='heroico', description='Chamber brass+cuerdas, trompa, portato enérgico, timbal',
+        register=0.65, density=0.65, texture='portato',   texture_alt='legato',
         dynamics=0.75, melody_family='brass',   percussion='timpani',
-        spread=0.70,   humanize=0.07, mode_sens=0.2,  tempo_sens=0.3,
+        spread=0.70,   humanize=0.09, mode_sens=0.2,  tempo_sens=0.3,
     ),
     'festivo': EmotionalProfile(
-        name='festivo', description='Maderas brillantes en staccato, sin graves',
-        register=0.90, density=0.50, texture='staccato', texture_alt='portato',
+        # chamber + flauta + staccato + mf + sin percusión
+        name='festivo', description='Maderas brillantes en staccato, flauta, ligero y rítmico',
+        register=0.92, density=0.50, texture='staccato',  texture_alt='portato',
         dynamics=0.70, melody_family='winds',   percussion='none',
-        spread=0.60,   humanize=0.12, mode_sens=0.5,  tempo_sens=0.5,
+        spread=0.60,   humanize=0.14, mode_sens=0.5,  tempo_sens=0.5,
     ),
 
     # ── Energía alta / Valencia negativa ─────────────────────────────────────
 
     'agresivo': EmotionalProfile(
-        name='agresivo', description='Col legno + metales, percusión densa, registro comprimido',
-        register=0.80, density=1.0,  texture='col_legno',texture_alt='marcato',
-        dynamics=0.95, melody_family='brass',   percussion='full',
-        spread=0.35,   humanize=0.03, mode_sens=-0.2, tempo_sens=0.5,
+        # full + cuerdas col_legno + ffffff + percusión densa + spread cerrado
+        name='agresivo', description='Col legno en cuerdas, violín agresivo, percusión densa',
+        register=0.70, density=1.0,  texture='col_legno', texture_alt='spiccato',
+        dynamics=0.96, melody_family='strings',  percussion='full',
+        spread=0.25,   humanize=0.03, mode_sens=-0.2, tempo_sens=0.5,
     ),
     'tenso': EmotionalProfile(
-        name='tenso', description='Tremolo en cuerdas, registro agudo, sin melodía clara',
-        register=0.80, density=0.75, texture='tremolo',  texture_alt='sustain',
+        # full + cuerdas tremolo + ff + timbal + register agudo
+        name='tenso', description='Tremolo en cuerdas, suspense, timbal, sin maderas suaves',
+        register=0.82, density=0.75, texture='tremolo',   texture_alt='sustain',
         dynamics=0.70, melody_family='strings',  percussion='timpani',
         spread=0.45,   humanize=0.05, mode_sens=-0.3, tempo_sens=0.2,
     ),
     'urgente': EmotionalProfile(
-        name='urgente', description='Staccato chamber, sin percusión, carácter de huida',
-        register=0.55, density=0.55, texture='staccato', texture_alt='portato',
+        # chamber + clarinete + staccato + mf + sin percusión + muy rápido
+        name='urgente', description='Clarinete staccato, carácter de huida, ritmo urgente',
+        register=0.55, density=0.55, texture='staccato',  texture_alt='portato',
         dynamics=0.65, melody_family='winds',   percussion='none',
-        spread=0.40,   humanize=0.06, mode_sens=-0.1, tempo_sens=0.6,
+        spread=0.38,   humanize=0.06, mode_sens=-0.1, tempo_sens=0.7,
     ),
 
     # ── Energía baja / Valencia positiva ─────────────────────────────────────
 
     'romántico': EmotionalProfile(
-        name='romántico', description='Chamber con oboe o clarinete, legato cantabile, swell',
-        register=0.55, density=0.55, texture='legato',   texture_alt='sustain',
-        dynamics=0.55, melody_family='winds',   percussion='none',
-        spread=0.65,   humanize=0.22, mode_sens=0.4,  tempo_sens=-0.2,
+        # chamber + oboe + legato + mf + mucho humanize + sin percusión
+        name='romántico', description='Oboe cantabile, legato expresivo, chamber cálido',
+        register=0.60, density=0.55, texture='legato',    texture_alt='sustain',
+        dynamics=0.56, melody_family='winds',   percussion='none',
+        spread=0.68,   humanize=0.26, mode_sens=0.4,  tempo_sens=-0.2,
     ),
     'lírico': EmotionalProfile(
-        name='lírico', description='Violín I con vibrato amplio, frase larga, mf',
-        register=0.65, density=0.40, texture='legato',   texture_alt='portato',
+        # strings_only + violin1 + legato + mp + máximo humanize
+        name='lírico', description='Violín solo con vibrato amplio, frases largas, strings only',
+        register=0.68, density=0.35, texture='legato',    texture_alt='portato',
         dynamics=0.50, melody_family='strings',  percussion='none',
-        spread=0.55,   humanize=0.28, mode_sens=0.3,  tempo_sens=-0.3,
+        spread=0.55,   humanize=0.35, mode_sens=0.3,  tempo_sens=-0.3,
     ),
     'sereno': EmotionalProfile(
-        name='sereno', description='Cuerdas flautando, pp, mucho espacio entre voces',
-        register=0.55, density=0.35, texture='portato',  texture_alt='legato',
-        dynamics=0.20, melody_family='strings',  percussion='none',
-        spread=0.80,   humanize=0.18, mode_sens=0.2,  tempo_sens=-0.4,
+        # strings_only + violin2 + portato + pp + spread máximo (diferencia clave vs nostálgico)
+        name='sereno', description='Cuerdas solas portato ppp, gran apertura, etéreo',
+        register=0.50, density=0.28, texture='portato',   texture_alt='legato',
+        dynamics=0.15, melody_family='strings',  percussion='none',
+        spread=0.92,   humanize=0.19, mode_sens=0.2,  tempo_sens=-0.4,
     ),
 
     # ── Energía baja / Valencia negativa ─────────────────────────────────────
 
     'nostálgico': EmotionalProfile(
-        name='nostálgico', description='Cuerdas portato cálidas, viola como voz principal, mp',
-        register=0.35, density=0.40, texture='portato',  texture_alt='legato',
-        dynamics=0.38, melody_family='strings',  percussion='none',
-        spread=0.45,   humanize=0.22, mode_sens=-0.3, tempo_sens=-0.3,
+        # chamber + viola (violin2) + portato + mp + registro grave-medio
+        name='nostálgico', description='Viola portato cálida, registro grave, chamber oscuro',
+        register=0.30, density=0.42, texture='portato',   texture_alt='legato',
+        dynamics=0.36, melody_family='strings',  percussion='none',
+        spread=0.44,   humanize=0.24, mode_sens=-0.3, tempo_sens=-0.3,
     ),
     'melancólico': EmotionalProfile(
-        name='melancólico', description='Cuerdas medias legato, pp, sin maderas',
-        register=0.25, density=0.35, texture='legato',   texture_alt='portato',
-        dynamics=0.22, melody_family='strings',  percussion='none',
-        spread=0.40,   humanize=0.22, mode_sens=-0.5, tempo_sens=-0.4,
+        # strings_only + cello + sustain + pp + registro muy grave
+        name='melancólico', description='Cello sustain, registro grave, cuerdas solas, pp',
+        register=0.18, density=0.35, texture='sustain',   texture_alt='portato',
+        dynamics=0.20, melody_family='strings',  percussion='none',
+        spread=0.42,   humanize=0.24, mode_sens=-0.5, tempo_sens=-0.4,
     ),
     'lúgubre': EmotionalProfile(
-        name='lúgubre', description='Solo cuerdas graves, tremolo sotto voce, ppp',
-        register=0.05, density=0.30, texture='tremolo',  texture_alt='legato',
-        dynamics=0.10, melody_family='strings',  percussion='none',
-        spread=0.35,   humanize=0.12, mode_sens=-0.6, tempo_sens=-0.2,
+        # strings_only + cello + tremolo + ppp + muy grave + mínimo spread
+        name='lúgubre', description='Cello tremolo sotto voce, ppp, registro muy grave',
+        register=0.04, density=0.28, texture='tremolo',   texture_alt='legato',
+        dynamics=0.09, melody_family='strings',  percussion='none',
+        spread=0.32,   humanize=0.13, mode_sens=-0.6, tempo_sens=-0.2,
     ),
 }
 
@@ -3070,7 +3088,9 @@ class InstrumentAssigner:
 
     def __init__(self, tpb, tempo, template='chamber', library='nucleus',
                  no_perc=False, no_ks=False, no_cc=False,
-                 humanize=0.1, dynamics_cc1_base=None, verbose=False):
+                 humanize=0.1, dynamics_cc1_base=None,
+                 forced_texture=None, vel_scale=1.0,
+                 verbose=False):
         self.tpb               = tpb
         self.tempo             = tempo
         self.template          = ORCH_TEMPLATES.get(template, ORCH_TEMPLATES['chamber'])
@@ -3080,7 +3100,12 @@ class InstrumentAssigner:
         self.no_ks             = no_ks
         self.no_cc             = no_cc
         self.humanize          = humanize
-        self.dynamics_cc1_base = dynamics_cc1_base  # None = sin override
+        self.dynamics_cc1_base = dynamics_cc1_base
+        # forced_texture: si se especifica, sobreescribe la articulación calculada
+        # para todas las notas (usado por EmotionalProfile para col_legno, marcato, etc.)
+        self.forced_texture    = forced_texture
+        # vel_scale: escala todas las velocidades efectivas (0.5=muy suave, 1.5=muy fuerte)
+        self.vel_scale         = float(vel_scale)
         self.verbose           = verbose
 
     # ── Utilidades ───────────────────────────────────────────────────────────
@@ -3179,6 +3204,21 @@ class InstrumentAssigner:
         gap_beats = self._beats(t_on - (prev_note[0] + prev_note[2])) if prev_note else 1.0
         high = tension > 0.65
         low  = tension < 0.30
+
+        # Si el perfil emocional fuerza una textura, usarla directamente
+        # salvo que sea incompatible con la duración de la nota
+        if self.forced_texture:
+            ft = self.forced_texture
+            # col_legno y pizzicato solo para notas cortas
+            if ft in ('col_legno', 'pizzicato') and dur_beats >= ART_THR['legato']:
+                ft = 'portato'
+            # tremolo solo para cuerdas
+            if ft == 'tremolo' and family not in ('strings',):
+                ft = 'sustain'
+            # marcato solo si la nota es suficientemente larga
+            if ft in ('marcato', 'marcato_l', 'marcato_s') and dur_beats < ART_THR['sustain']:
+                ft = 'staccato'
+            return ft
 
         if family == 'strings':
             if role in ('melody', 'melody_double') and dur_beats >= ART_THR['legato'] and gap_beats < 0.25:
@@ -3318,11 +3358,12 @@ class InstrumentAssigner:
                 events.append((mid_t, 'cc', 11, cc11_p))
                 events.append((end_t, 'cc', 11, cc11_e))
 
-            # Velocidad efectiva
+            # Velocidad efectiva — escalada por vel_scale del perfil emocional
             if family in ('strings', 'brass') and art in ('legato', 'sustain', 'tremolo'):
                 eff_vel = 80
             else:
-                eff_vel = int(np.clip(vel * (0.7 + tension * 0.5), 30, 127))
+                eff_vel = int(vel * (0.7 + tension * 0.5))
+            eff_vel = int(np.clip(eff_vel * self.vel_scale, 20, 127))
 
             events.append((t_on, 'note', pitch, eff_vel, dur_ticks))
             prev_note = note
@@ -3752,7 +3793,11 @@ def main():
         # Acumular eventos por canal a través de todas las secciones
         all_events  = {}   # ch → list of events
         n_notes_total = {}
-        last_assigner = None  # para reutilizar _events_to_track
+        last_assigner = None
+
+        # Registrar qué instrumento corresponde a cada canal (puede variar por sección)
+        # Usamos el último que lo haya definido (la última sección manda el nombre)
+        ch_to_instr = {}  # ch → (name, prog, display)
 
         for sec in sections:
             orch_params = apply_caracter(caracter_map, sec, tempo_bpm)
@@ -3762,7 +3807,6 @@ def main():
                 sec_humanize = orch_params['humanize']
                 sec_dyn_cc1  = orch_params['dynamics_cc1']
                 sec_no_perc  = orch_params['no_perc']
-                # Modular tensión según textura del perfil
                 tex = orch_params.get('accomp_texture', orch_params['texture'])
                 sec_mod = dict(sec)
                 tc = dict(sec_mod['tension_curve'])
@@ -3787,10 +3831,19 @@ def main():
                 no_cc=args.no_cc,
                 humanize=sec_humanize,
                 dynamics_cc1_base=sec_dyn_cc1,
+                forced_texture=orch_params.get('forced_texture') if orch_params else None,
+                vel_scale=orch_params.get('vel_scale', 1.0) if orch_params else 1.0,
                 verbose=False,
             )
             assigner_sec.template = sec_tmpl
             last_assigner = assigner_sec
+
+            # Registrar canales del template de esta sección
+            for cfg in sec_tmpl:
+                ch = cfg['ch']
+                nm = cfg['name']
+                ch_to_instr[ch] = (nm, GM_PROGRAMS.get(nm, 40),
+                                   INSTR_DISPLAY.get(nm, nm))
 
             # Recortar tracks a esta sección
             s_tick = sec['start_tick']
@@ -3807,30 +3860,21 @@ def main():
                 raw = sec_tracks.get(src, [])
                 evs = assigner_sec._process(raw, cfg, [sec_mod], fingerprints)
                 all_events.setdefault(ch, []).extend(evs)
-                nc = sum(1 for e in evs if e[1] == 'note')
-                nk = sum(1 for e in evs if e[1] == 'ks')
+                nc  = sum(1 for e in evs if e[1] == 'note')
+                nk  = sum(1 for e in evs if e[1] == 'ks')
                 ncc = sum(1 for e in evs if e[1] == 'cc')
                 if nc:
                     disp = INSTR_DISPLAY.get(nm, nm)
                     prev = n_notes_total.get(disp, (0, 0, 0))
                     n_notes_total[disp] = (prev[0]+nc, prev[1]+nk, prev[2]+ncc)
 
-        # Escribir una pista por canal con todos los eventos acumulados
+        # Escribir una pista por canal usando ch_to_instr para nombres correctos
         if last_assigner:
-            written_channels = set()
-            for cfg in (ORCH_TEMPLATES.get(args.template, []) +
-                        [c for tmpl in [ORCH_TEMPLATES.get(args.template,[])]
-                         for c in tmpl]):
-                ch = cfg['ch']
-                if ch in written_channels or ch not in all_events:
+            for ch, (nm, prog, disp) in sorted(ch_to_instr.items()):
+                evs = all_events.get(ch, [])
+                if not evs:
                     continue
-                written_channels.add(ch)
-                nm   = cfg['name']
-                evs  = all_events[ch]
-                if not evs: continue
-                prog = GM_PROGRAMS.get(nm, 40)
-                disp = INSTR_DISPLAY.get(nm, nm)
-                trk  = last_assigner._events_to_track(evs, ch, disp, prog)
+                trk = last_assigner._events_to_track(evs, ch, disp, prog)
                 if trk:
                     mid_out.tracks.append(trk)
 
