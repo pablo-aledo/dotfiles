@@ -1,16 +1,14 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                     PIANO TO ORCHESTRA  v2.0                                 ║
-║          Capa frontal de análisis y voicing para orchestrator.py             ║
+║                     PIANO TO ORCHESTRA  v2.1                                 ║
+║     Piano MIDI → MIDI orquestal completo, autónomo, sin dependencias        ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║  PROPÓSITO                                                                   ║
 ║  ─────────                                                                   ║
-║  Recibe un MIDI de piano (melodía + armonía en 1 o 2 pistas) y genera:      ║
-║    [1] MIDI multitrack con cuatro voces orquestales separadas:               ║
-║          Melody / Counterpoint / Accompaniment / Bass                        ║
-║    [2] Un fingerprint JSON por sección, compatibles con orchestrator.py      ║
-║    [3] Llamada automática a orchestrator.py (opcional)                       ║
+║  Recibe un MIDI de piano (melodía + armonía, 1 o 2 pistas) y genera         ║
+║  directamente un MIDI orquestal completo con instrumentos reales,            ║
+║  keyswitches, CC1/CC11 y percusión. No requiere orchestrator.py.            ║
 ║                                                                              ║
 ║  PIPELINE INTERNO                                                            ║
 ║  ────────────────                                                            ║
@@ -18,174 +16,140 @@
 ║    → MIDILoader          Carga notas, tempo, ticks_per_beat; hash MD5        ║
 ║    → MelodyExtractor     Separa melodía / bajo / voces interiores            ║
 ║    → HarmonicAnalyzer    Tonalidad, secciones, acordes, curva de tensión     ║
-║    → VoicingEngine       Distribuye 4 voces por sección (3 backends)        ║
+║    → VoicingEngine       Distribuye 4 voces SATB por sección (3 backends)   ║
 ║    → CounterpointEngine  Genera voz de contrapunto real nota-a-nota          ║
-║    → TrackSplitter       Construye las 4 pistas con material real            ║
-║    → FingerprintGenerator  Serializa análisis a JSON por sección             ║
-║    → (HumanReviewLoop)   Revisión interactiva de candidatos (opcional)       ║
-║    → MIDIWriter          Escribe MIDI tipo-1 + fingerprints                  ║
+║    → TrackSplitter       Construye pistas Melody/CP/Acc/Bass                 ║
+║    → InstrumentAssigner  Asigna instrumentos, KS, CC1/CC11, percusión       ║
+║    → (HumanReviewLoop)   Exporta MIDIs de candidatos para escucha y elección ║
+║    → FingerprintGenerator  JSON por sección (compatible con orchestrator.py) ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║  MÓDULOS Y FUNCIONALIDADES                                                   ║
-║  ─────────────────────────                                                   ║
+║  MÓDULOS                                                                     ║
+║  ────────                                                                    ║
 ║                                                                              ║
 ║  MelodyExtractor                                                             ║
-║    Separación melodía/bajo por análisis de contorno melódico real.           ║
-║    Cada nota se puntúa por cinco factores combinados:                        ║
-║      · Continuidad de contorno: penaliza saltos > octava entre ataques       ║
-║        consecutivos; bonifica grado conjunto (≤ 2 semitones)                ║
-║      · Peso métrico: tiempo 1 > tiempo 3 > tiempos 2,4 > subdivisiones      ║
-║      · Velocidad relativa: la melodía tiende a sonar más fuerte              ║
-║      · Duración: notas muy largas en el agudo = pedal, no melodía           ║
-║      · Posición en cluster: nota más aguda del grupo tiene ventaja           ║
-║    La nota más grave de cada instante siempre va al bajo. Las intermedias   ║
-║    van a inner_notes y alimentan la pista Accompaniment.                     ║
+║    Separa melodía, bajo e interiores desde notas simultáneas de piano.       ║
+║    · Notas solas: decisión puramente posicional (encima/debajo de mediana)   ║
+║      sin umbral de score que penalice beats débiles                          ║
+║    · Notas simultáneas: puntuación por 5 factores:                          ║
+║        continuidad de contorno (penaliza saltos > octava)                   ║
+║        peso métrico (tiempo 1 > tiempo 3 > tiempos débiles)                 ║
+║        velocidad relativa, duración, posición en el cluster                  ║
+║    · Bajo: siempre la nota más grave de cada instante                       ║
+║    · Inner: resto de notas → alimentan pista Accompaniment                  ║
 ║                                                                              ║
 ║  HarmonicAnalyzer                                                            ║
-║    · Tonalidad global y local por Krumhansl-Schmuckler (correlación con      ║
-║      perfiles de alturas mayor/menor)                                        ║
-║    · Detección de secciones por distancia coseno entre vectores chroma       ║
-║      en ventanas deslizantes de 2 compases (paso = 1 compás):               ║
-║        – Suavizado gaussiano + find_peaks (scipy) para cortes naturales      ║
-║        – --sections N fuerza exactamente N secciones                         ║
-║        – --min-bars N descarta secciones menores de N compases              ║
-║        – Cortes alineados al compás completo más cercano (múltiplo tpb×4)  ║
-║    · Identificación de acorde por template matching con 13 tipos:            ║
+║    · Tonalidad global y local: Krumhansl-Schmuckler                         ║
+║    · Detección de secciones: distancia coseno entre vectores chroma,        ║
+║      suavizado gaussiano + find_peaks; --sections N fuerza N secciones;     ║
+║      --min-bars N; cortes alineados al compás completo más cercano           ║
+║    · Identificación de acorde: template matching, 13 tipos                   ║
 ║        maj min dim aug maj7 min7 dom7 dim7 hdim7 sus2 sus4 maj6 min6        ║
-║    · Curva de tensión de 16 puntos por sección, combinando:                 ║
-║        – Grado funcional (I=0.0 … VII=0.9, notas cromáticas=0.85)          ║
-║        – Disonancia intervalar (ratio de intervalos disonantes en el acorde)║
-║        – Registro (notas agudas = mayor tensión)                            ║
-║        – Densidad (notas por tiempo)                                         ║
-║    · Clasificación de arco emocional: neutral / rise / fall / arch / high   ║
-║    · Cálculo de harmony_complexity (variedad de clases de altura, 0–1)      ║
+║    · Curva de tensión de 16 puntos: grado funcional + disonancia             ║
+║      intervalar + registro + densidad                                        ║
+║    · Arco emocional: neutral / rise / fall / arch / high                    ║
 ║                                                                              ║
 ║  VoicingEngine — tres backends intercambiables                               ║
-║    rules   Muestreo aleatorio de notas del acorde en rangos SATB +          ║
-║            scoring por: espaciado de Rimski-Kórsakov (bajo-tenor ≥ 8ª,     ║
-║            tenor-alto ≥ 4ª, alto-soprano ≥ 2ª), consonancias, duplicación  ║
-║    greedy  Construcción voraz voz-a-voz desde el bajo. En tensión alta      ║
-║            desplaza el registro hacia el agudo. Garantiza espaciado mínimo  ║
-║    ml      Genera candidatos con 'rules' y los rankea con un                 ║
-║            GradientBoostingClassifier entrenado desde preferences.jsonl.    ║
-║            Features: intervalos entre voces, registro medio, tensión, arco  ║
-║    Los tres backends devuelven listas (voices, score) ordenadas por calidad ║
+║    rules   Muestreo aleatorio + scoring por Rimski-Kórsakov:                ║
+║            bajo-tenor ≥ 8ª, tenor-alto ≥ 4ª, alto-soprano ≥ 2ª            ║
+║    greedy  Construcción voraz voz a voz desde el bajo; en tensión alta      ║
+║            desplaza el registro hacia el agudo                               ║
+║    ml      Candidatos de rules rankeados por GradientBoostingClassifier      ║
+║            entrenado desde preferences.jsonl                                 ║
 ║                                                                              ║
-║  CounterpointEngine                                                          ║
-║    Genera la voz de contrapunto (alto) sincronizada nota-a-nota con la      ║
-║    melodía. Implementa contrapunto de primera especie adaptado:              ║
-║      · Movimiento contrario a la melodía como primera prioridad             ║
-║      · Prohibición de quintas y octavas paralelas con soprano               ║
-║      · Resolución obligatoria de la sensible hacia la tónica                ║
-║      · Preferencia por terceras y sextas (consonancias "cálidas")           ║
-║      · Movimiento por grado conjunto; saltos > quinta penalizados           ║
-║      · Rango estricto de alto: F3–D5 (MIDI 53–74)                          ║
-║      · Sin unísonos con la melodía                                          ║
-║    Verificado: sin quintas paralelas, ≥ 50% movimiento contrario,           ║
-║    mayoría de intervalos consonantes.                                        ║
+║  CounterpointEngine — contrapunto de primera especie                         ║
+║    · Movimiento contrario a la melodía (prioridad máxima)                   ║
+║    · Sin quintas/octavas paralelas con soprano                               ║
+║    · Resolución de la sensible → tónica                                     ║
+║    · Preferencia por terceras y sextas; rango F3–D5 (MIDI 53–74)           ║
 ║                                                                              ║
-║  HumanReviewLoop + PreferenceTrainer                                         ║
-║    · --review muestra N candidatos por sección con nombre de notas,         ║
-║      score y contexto armónico; registra la elección en preferences.jsonl   ║
-║    · preferences.jsonl acumula: voicing elegido, candidatos, scores,        ║
-║      tonalidad, acorde, arco, tensión, hash del MIDI, timestamp             ║
-║    · --train entrena GradientBoostingClassifier (100 árboles, depth=3)     ║
-║      con StandardScaler; guarda model + scaler en voicing_ranker.pkl        ║
-║    · --stats muestra distribución de tonalidades, arcos, índices elegidos   ║
-║      y tensión media acumulada                                               ║
+║  InstrumentAssigner — orquestación autónoma                                  ║
+║    · Plantillas: strings_only / chamber / full                               ║
+║    · Rangos idiomáticos con sweet spot; fit_to_range por octavas             ║
+║    · Filtros de sección semánticos resueltos dinámicamente:                  ║
+║        first / last / outer / middle / high_tension / peak                  ║
+║    · Keyswitches por articulación (legato/sustain/spiccato/pizzicato/        ║
+║      tremolo/portato/staccato/marcato) con 5 ticks de anticipación          ║
+║    · Libraries: nucleus / metropolis / generic                               ║
+║    · CC1 desde tension_curve cada corchea con suavizado                     ║
+║    · CC11 swell en notas largas (≥ 1.5 beats)                              ║
+║    · Percusión: timbal en tónica/dominante, bombo, platos, tam-tam          ║
+║      según arco emocional de la sección                                      ║
+║    · Humanize: micro-jitter de timing configurable                           ║
 ║                                                                              ║
-║  FingerprintGenerator                                                        ║
-║    Produce un JSON por sección con el formato exacto que consume             ║
-║    orchestrator.py:                                                          ║
-║      meta: key_tonic, key_mode, tempo_bpm, n_bars,                         ║
-║            emotional_arc, harmony_complexity, section_label                 ║
-║      tension_curve: mean, peak, entry, exit, peak_bar                       ║
-║      tension_curve_full: lista de 16 floats en [0, 1]                      ║
+║  HumanReviewLoop — revisión por escucha                                      ║
+║    · Exporta MIDIs de cada candidato en review_dir:                         ║
+║        sec{L}_{N}_acorde.mid      acorde de 4 voces arpegiado (~3 segundos) ║
+║        sec{L}_{N}_orquestado.mid  sección completa con todos los instrumentos║
+║    · Muestra rutas y comandos timidity si se pasa --soundfont               ║
+║    · Opciones: 1 / 2 / = empate / s saltar                                 ║
+║    · Guarda en preferences.jsonl: tonalidad, acorde, arco, tensión,         ║
+║      n_bars, candidatos, elección, hash de la pieza, timestamp              ║
 ║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
+║  PreferenceTrainer — loop de aprendizaje                                     ║
+║    · GradientBoostingClassifier (100 árboles, depth=3) + StandardScaler     ║
+║    · Features: intervalos entre voces, registro medio, tensión, arco        ║
+║    · Guarda model + scaler en voicing_ranker.pkl                            ║
+║    · --stats: distribución de tonalidades, arcos, índices elegidos          ║
 ║                                                                              ║
-║  INTEGRACIÓN CON ORCHESTRATOR.PY                                             ║
-║  ───────────────────────────────                                             ║
-║  piano_to_orchestra.py genera exactamente lo que orchestrator.py espera:    ║
-║    · MIDI tipo-1 con pistas nombradas Melody/Counterpoint/Accompaniment/Bass ║
-║    · Fingerprints con campos meta, tension_curve y tension_curve_full        ║
-║  Con --run-orchestrator el pipeline completo es un solo comando.             ║
-║  Sin él, el script imprime el comando exacto para ejecutar manualmente.      ║
+║  FingerprintGenerator — compatibilidad con orchestrator.py                   ║
+║    Genera todos los campos que orchestrator.py accede sin KeyError:          ║
+║      meta, tension_curve, tension_curve_full, entry, exit, stitching_hints  ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║  EJEMPLOS DE USO                                                             ║
 ║  ───────────────                                                             ║
 ║                                                                              ║
-║  ① Uso básico — reglas, secciones automáticas:                              ║
+║  ① Básico — orquesta de cámara, secciones automáticas:                      ║
 ║       python piano_to_orchestra.py pieza.mid                                 ║
 ║                                                                              ║
-║  ② Voicing greedy, 4 secciones forzadas, mínimo 2 barras:                  ║
-║       python piano_to_orchestra.py pieza.mid                                  ║
-║           --voicing greedy --sections 4 --min-bars 2                        ║
+║  ② Orquesta completa, voicing greedy, 5 secciones:                         ║
+║       python piano_to_orchestra.py pieza.mid                                 ║
+║           --template full --voicing greedy --sections 5                     ║
 ║                                                                              ║
-║  ③ Debug completo para inspeccionar el análisis armónico:                   ║
+║  ③ Inspeccionar el análisis armónico antes de orquestar:                    ║
 ║       python piano_to_orchestra.py pieza.mid --debug --verbose               ║
-║       # Muestra por sección: tonalidad local, acorde, arco,                 ║
-║       #   tensión media, barras y voicing elegido                            ║
 ║                                                                              ║
-║  ④ Pipeline completo → orchestrator.py con orquesta de cámara:             ║
-║       python piano_to_orchestra.py pieza.mid                                  ║
-║           --run-orchestrator --template chamber --library nucleus            ║
-║       # Genera pieza_split.mid + fingerprints + llama a orchestrator.py     ║
-║       # Resultado final: pieza_split_orquestado.mid listo para FL Studio    ║
+║  ④ Exportar voces separadas y fingerprints:                                 ║
+║       python piano_to_orchestra.py pieza.mid --split --fingerprints          ║
 ║                                                                              ║
-║  ⑤ Orquesta completa con biblioteca Metropolis:                             ║
-║       python piano_to_orchestra.py pieza.mid                                  ║
-║           --run-orchestrator --template full --library metropolis  ║
-║           --sections 6 --min-bars 2 --voicing greedy                        ║
+║  ⑤ Revisión por escucha — exporta MIDIs y espera tu elección:              ║
+║       python piano_to_orchestra.py pieza.mid --review --candidates 2        ║
+║           --soundfont ~/sf2/timbres_of_heaven.sf2                           ║
+║       # Para cada sección exporta acorde + sección orquestada por candidato ║
+║       # Escuchas, luego escribes 1, 2, = (empate) o s (saltar)             ║
+║       # Cada elección se guarda en preferences.jsonl                        ║
 ║                                                                              ║
-║  ⑥ Acumular preferencias personales (loop de aprendizaje):                 ║
-║       python piano_to_orchestra.py pieza.mid                                  ║
-║           --candidates 4 --review --voicing greedy                          ║
-║       # Para cada sección muestra 4 candidatos con notas SATB y score.      ║
-║       # Elige con 1-4, Enter (= mejor), o 's' para saltar.                 ║
-║       # Cada elección se guarda en preferences.jsonl.                       ║
+║  ⑥ Solo el acorde en revisión (más rápido de escuchar):                    ║
+║       python piano_to_orchestra.py pieza.mid --review --candidates 2        ║
+║           --no-orch-preview                                                  ║
 ║                                                                              ║
-║  ⑦ Entrenar el ranker ML tras acumular ~10 preferencias:                   ║
+║  ⑦ Solo la sección orquestada en revisión (más informativo):               ║
+║       python piano_to_orchestra.py pieza.mid --review --candidates 2        ║
+║           --no-chord                                                         ║
+║                                                                              ║
+║  ⑧ Entrenar ranker ML tras acumular preferencias (recomendado: ≥ 20):      ║
 ║       python piano_to_orchestra.py --train                                   ║
-║       # Entrena GradientBoostingClassifier sobre preferences.jsonl           ║
-║       # Guarda model + scaler en voicing_ranker.pkl                         ║
 ║                                                                              ║
-║  ⑧ Usar el ranker entrenado para voicing personalizado:                     ║
+║  ⑨ Usar el ranker entrenado:                                                ║
 ║       python piano_to_orchestra.py pieza.mid --voicing ml                   ║
-║       # Genera candidatos con 'rules' y los rankea con tu modelo            ║
-║       # Si voicing_ranker.pkl no existe, cae a 'rules' automáticamente      ║
+║       # Cae a rules automáticamente si no existe voicing_ranker.pkl         ║
 ║                                                                              ║
-║  ⑨ Ver estadísticas de preferencias acumuladas:                             ║
+║  ⑩ Ver estadísticas de preferencias acumuladas:                             ║
 ║       python piano_to_orchestra.py --stats                                   ║
-║       # Muestra: total de entradas, distribución de tonalidades,            ║
-║       #   arcos emocionales, índices elegidos y tensión media               ║
 ║                                                                              ║
-║  ⑩ Loop completo de experimentación (días sucesivos):                       ║
-║       # Día 1: acumula preferencias con rules                                ║
-║       python piano_to_orchestra.py pieza.mid --candidates 3 --review        ║
-║       # Día 2: entrena el modelo                                             ║
-║       python piano_to_orchestra.py --train                                   ║
-║       # Día 3: usa el modelo para generar y comparar con greedy             ║
-║       python piano_to_orchestra.py pieza.mid --voicing ml   -o ml_out       ║
-║       python piano_to_orchestra.py pieza.mid --voicing greedy -o greedy_out ║
-║       # Escucha ambos y sigue acumulando preferencias con --review           ║
+║  ⑪ Comparar backends:                                                       ║
+║       python piano_to_orchestra.py pieza.mid --voicing rules -o v_rules     ║
+║       python piano_to_orchestra.py pieza.mid --voicing greedy -o v_greedy   ║
+║       python piano_to_orchestra.py pieza.mid --voicing ml -o v_ml           ║
 ║                                                                              ║
-║  ⑪ Pasar fingerprints a orchestrator.py manualmente:                        ║
-║       python piano_to_orchestra.py pieza.mid --sections 3                    ║
-║       python orchestrator.py pieza_split.mid                                  ║
-║           pieza_split.secA.fingerprint.json                                   ║
-║           pieza_split.secB.fingerprint.json                                   ║
-║           pieza_split.secC.fingerprint.json                                   ║
-║           --template full --library nucleus --no-perc                        ║
-║                                                                              ║
-║  ⑫ Usar modelo y fingerprints personalizados:                               ║
-║       python piano_to_orchestra.py pieza.mid                                  ║
-║           --voicing ml --model mis_preferencias.pkl                           ║
-║           --prefs mis_preferencias.jsonl                                      ║
-║           --output pieza_v3 --sections 5 --min-bars 2                       ║
+║  ⑫ Revisión con library Metropolis y directorio personalizado:              ║
+║       python piano_to_orchestra.py pieza.mid --review --candidates 2        ║
+║           --template full --library metropolis                               ║
+║           --review-dir ~/partituras/escucha                                  ║
+║           --soundfont ~/sf2/timbres_of_heaven.sf2                           ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
@@ -193,59 +157,62 @@
 ║  ──────────────────                                                          ║
 ║                                                                              ║
 ║  Entrada / salida                                                            ║
-║    midi                 MIDI de piano de entrada (posicional)                ║
-║    --output  BASE       Nombre base de salida (default: <input>_split)       ║
-║                         Genera BASE.mid + BASE.secX.fingerprint.json        ║
+║    midi                  MIDI de piano de entrada (posicional)               ║
+║    --output  BASE        Nombre base de salida (default: <input>_orch)       ║
+║    --split               Exportar MIDI de voces separadas                    ║
+║    --fingerprints        Exportar fingerprints JSON por sección              ║
 ║                                                                              ║
 ║  Análisis                                                                    ║
-║    --sections  N|auto   Número exacto de secciones, o auto (default: auto)  ║
-║    --min-bars  N        Mínimo de compases por sección (default: 2)         ║
-║    --debug              Muestra análisis armónico detallado por sección      ║
-║    --verbose            Muestra transposiciones, voicings, conteos de notas  ║
+║    --sections  N|auto    Número exacto de secciones (default: auto)          ║
+║    --min-bars  N         Mínimo de compases por sección (default: 2)         ║
+║    --debug               Análisis armónico detallado por sección             ║
+║    --verbose             Voicings, conteos de notas, transposiciones         ║
 ║                                                                              ║
 ║  Voicing                                                                     ║
-║    --voicing   rules|greedy|ml   Backend de voicing (default: rules)        ║
-║    --candidates  N      Generar N candidatos por sección (default: 1)       ║
-║    --review             Revisión humana interactiva; activa --candidates ≥ 3 ║
-║    --model     FILE     Archivo del modelo ML (default: voicing_ranker.pkl) ║
-║    --prefs     FILE     Archivo de preferencias (default: preferences.jsonl) ║
+║    --voicing  rules|greedy|ml   Backend (default: rules)                    ║
+║    --candidates  N       Candidatos por sección en modo review (default: 2) ║
+║    --model    FILE        Modelo ML (default: voicing_ranker.pkl)            ║
+║    --prefs    FILE        Preferencias (default: preferences.jsonl)          ║
 ║                                                                              ║
-║  Integración con orchestrator.py                                             ║
-║    --run-orchestrator   Llamar a orchestrator.py tras generar el split       ║
-║    --template  X        Plantilla orquestal: chamber|full|strings_only      ║
-║                           chamber      = cuerdas + maderas + 2 trompas      ║
-║                           full         = orquesta completa                   ║
-║                           strings_only = solo cuerdas                        ║
-║    --library   X        Library de samples: nucleus|metropolis|generic       ║
-║                           nucleus      = Audio Imperia Nucleus               ║
-║                           metropolis   = Orchestral Tools Metropolis Ark 1   ║
-║                           generic      = GM / sin keyswitches                ║
-║    --orchestrator-path  Ruta a orchestrator.py (default: ./orchestrator.py) ║
+║  Orquestación                                                                ║
+║    --template  X         strings_only | chamber | full (default: chamber)   ║
+║    --library   X         nucleus | metropolis | generic (default: nucleus)   ║
+║    --no-perc             Sin percusión orquestal                             ║
+║    --no-ks               Sin keyswitches                                     ║
+║    --no-cc               Sin CC1/CC11                                        ║
+║    --humanize  F         Micro-jitter de timing 0.0–1.0 (default: 0.1)      ║
 ║                                                                              ║
-║  Modos especiales (sin MIDI de entrada)                                      ║
-║    --train              Entrenar ranker ML desde preferences.jsonl y salir   ║
-║    --stats              Mostrar estadísticas de preferencias y salir         ║
+║  Revisión por escucha                                                        ║
+║    --review              Activar modo de revisión por escucha                ║
+║    --review-dir  DIR     Directorio de MIDIs exportados (default: ./review_midis)║
+║    --soundfont   FILE    Ruta al .sf2 para mostrar comandos timidity         ║
+║    --no-chord            No exportar MIDI del acorde solo                    ║
+║    --no-orch-preview     No exportar MIDI de sección orquestada              ║
+║                                                                              ║
+║  ML y preferencias                                                           ║
+║    --train               Entrenar ranker ML desde preferences.jsonl y salir  ║
+║    --stats               Mostrar estadísticas de preferencias y salir        ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║  ARCHIVOS GENERADOS                                                          ║
 ║  ──────────────────                                                          ║
-║    BASE.mid                      MIDI tipo-1, una pista por voz             ║
-║    BASE.secA.fingerprint.json    Fingerprint sección A                      ║
-║    BASE.secB.fingerprint.json    Fingerprint sección B  (uno por sección)   ║
-║    preferences.jsonl             Preferencias acumuladas (append)           ║
-║    voicing_ranker.pkl            Modelo ML entrenado (model + scaler)       ║
+║    BASE.mid                            MIDI orquestal final                  ║
+║    BASE_voices.mid                     Voces separadas (con --split)         ║
+║    BASE.secA.fingerprint.json          Fingerprint por sección               ║
+║    review_midis/sec{L}_{N}_acorde.mid      Acorde para escucha              ║
+║    review_midis/sec{L}_{N}_orquestado.mid  Sección orquestada               ║
+║    preferences.jsonl                   Preferencias acumuladas (append)      ║
+║    voicing_ranker.pkl                  Modelo ML (model + scaler)            ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║  DEPENDENCIAS                                                                ║
 ║    pip install mido numpy scipy scikit-learn                                 ║
-║      mido         lectura/escritura MIDI                                     ║
-║      numpy        álgebra lineal, estadística                                ║
-║      scipy        gaussian_filter1d, find_peaks (detección de secciones)    ║
-║      scikit-learn GradientBoostingClassifier, StandardScaler (backend ml)   ║
-║    scipy y scikit-learn son opcionales: el script funciona sin ellos         ║
-║    (secciones por división uniforme, backend ml cae a rules)                ║
+║      mido          lectura/escritura MIDI (obligatoria)                      ║
+║      numpy         álgebra lineal, estadística (obligatoria)                 ║
+║      scipy         detección de secciones (opcional; sin ella: div. uniforme)║
+║      scikit-learn  backend ml (opcional; sin ella: cae a rules)              ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
@@ -1386,16 +1353,130 @@ class VoicingEngine:
 
     # ── API pública ─────────────────────────────────────────────────────────
 
-    def generate(self, section, n_candidates=1):
+    def generate_contrasting(self, section, n=2):
+        """
+        Genera N candidatos diseñados para sonar CLARAMENTE distintos
+        a lo largo de dimensiones que se perciben al escuchar:
+          · Registro: grave/medio/agudo
+          · Apertura: cerrado (voces juntas) vs abierto (voces separadas)
+          · Posición del bajo: anclado vs activo
+        Cada candidato lleva además una etiqueta de 'textura' sugerida
+        que HumanReviewLoop usa para variar la orquestación.
+
+        Devuelve lista de (voices, score, descriptor) donde descriptor
+        es un dict con: register, spread, texture_hint.
+        """
+        root  = section['chord_root']
+        ctype = section['chord_type']
+        tension = section['tension_curve']['mean']
+        pitches = self._chord_pitches(root, ctype)
+
+        # Definir perfiles contrastantes
+        profiles = [
+            # (nombre, bajo_range, registro_offset, spread_target, texture)
+            ('grave-cerrado',  (36, 48), 0,  16, 'pizzicato'),
+            ('grave-abierto',  (36, 48), 0,  28, 'legato'),
+            ('medio-cerrado',  (43, 55), 7,  14, 'portato'),
+            ('medio-abierto',  (43, 55), 7,  26, 'sustain'),
+            ('agudo-cerrado',  (48, 60), 12, 14, 'spiccato'),
+            ('agudo-abierto',  (48, 60), 12, 28, 'tremolo'),
+        ]
+
+        # En tensión alta preferir registros más agudos y texturas más activas
+        if tension > 0.6:
+            profiles = profiles[3:] + profiles[:3]
+
+        results = []
+        used_profiles = set()
+
+        for name, bass_r, reg_off, spread_tgt, texture in profiles:
+            if len(results) >= n:
+                break
+
+            bass_cands = [p for p in pitches if bass_r[0] <= p <= bass_r[1]]
+            if not bass_cands:
+                bass_cands = [bass_r[0]]
+
+            best_v, best_dist = None, float('inf')
+            for bass in bass_cands:
+                # Construir voicing con spread próximo al objetivo
+                tenor_lo = bass + MIN_SPACING['bass_tenor']
+                tenor_hi = bass + 24
+                alto_off  = reg_off + 7
+                sop_off   = reg_off + spread_tgt
+
+                tenor_cands = [p for p in pitches
+                               if tenor_lo <= p <= tenor_hi and 48 <= p <= 69]
+                if not tenor_cands:
+                    tenor_cands = [min(pitches, key=lambda p: abs(p-(bass+12)))]
+
+                for tenor in tenor_cands[:2]:
+                    alto_cands = [p for p in pitches
+                                  if p > tenor + MIN_SPACING['tenor_alto']
+                                  and 53 <= p <= 74]
+                    if not alto_cands:
+                        alto_cands = [tenor + 7]
+                    alto = min(alto_cands, key=lambda p: abs(p - (bass + alto_off)))
+
+                    sop_cands = [p for p in pitches
+                                 if p > alto + MIN_SPACING['alto_soprano']
+                                 and 60 <= p <= 88]
+                    if not sop_cands:
+                        sop_cands = [alto + 5]
+                    sop = min(sop_cands, key=lambda p: abs(p - (bass + sop_off)))
+
+                    v = sorted([bass, tenor, alto, sop])
+                    spread = v[-1] - v[0]
+                    dist = abs(spread - spread_tgt)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_v = v
+
+            if best_v is not None:
+                key = tuple(best_v)
+                if key not in used_profiles:
+                    used_profiles.add(key)
+                    score = self._score_voicing(best_v)
+                    spread = best_v[-1] - best_v[0]
+                    descriptor = {
+                        'profile':  name,
+                        'register': 'grave' if best_v[0] < 48 else ('medio' if best_v[0] < 55 else 'agudo'),
+                        'spread':   spread,
+                        'texture':  texture,
+                    }
+                    results.append((best_v, score, descriptor))
+
+        # Completar si no hay suficientes perfiles distintos
+        while len(results) < n:
+            base = self._generate_candidates_greedy(section, n=1)
+            v, sc = base[0]
+            descriptor = {'profile': 'greedy', 'register': 'medio',
+                          'spread': v[-1]-v[0] if v else 0, 'texture': 'sustain'}
+            results.append((v, sc, descriptor))
+
+        return results[:n]
+
+    def generate(self, section, n_candidates=1, contrasting=False):
         """
         Genera voicings para una sección.
-        Devuelve lista de (voices, score).
+
+        contrasting=True: usa generate_contrasting para candidatos
+          perceptualmente distintos (recomendado para revisión humana).
+        contrasting=False: usa el backend configurado (rules/greedy/ml).
+
+        Devuelve lista de (voices, score) — sin descriptor incluso en
+        modo contrasting, para compatibilidad con el resto del pipeline.
+        El descriptor se usa internamente en HumanReviewLoop.
         """
+        if contrasting and n_candidates >= 2:
+            raw = self.generate_contrasting(section, n=n_candidates)
+            return [(v, sc) for v, sc, _ in raw]
+
         if self.backend == 'greedy':
             cands = self._generate_candidates_greedy(section, n=max(n_candidates, 5))
         elif self.backend == 'ml':
             cands = self._generate_candidates_ml(section, n=max(n_candidates, 5))
-        else:  # rules
+        else:
             cands = self._generate_candidates_rules(section, n=max(n_candidates, 5))
 
         return cands[:n_candidates] if n_candidates > 0 else cands
@@ -1619,65 +1700,231 @@ class FingerprintGenerator:
 
 class HumanReviewLoop:
     """
-    Presenta candidatos al usuario y registra su elección en preferences.jsonl.
+    Revisión humana por escucha directa.
+
+    Para cada sección genera MIDIs de cada candidato — la sección completa
+    orquestada y/o el acorde solo — los exporta a un directorio temporal
+    y espera a que el usuario elija después de escuchar.
+
+    Modos de escucha exportados por candidato:
+      sec{L}_{i}_orch.mid    — sección completa orquestada
+      sec{L}_{i}_chord.mid   — acorde de 4 voces solo (3 segundos)
     """
 
-    def __init__(self, prefs_path='preferences.jsonl'):
+    def __init__(self, prefs_path='preferences.jsonl',
+                 review_dir=None, soundfont=None):
         self.prefs_path = prefs_path
+        self.review_dir = review_dir or os.path.join(
+            os.path.dirname(os.path.abspath(prefs_path)), 'review_midis')
+        self.soundfont  = soundfont  # ruta al sf2, opcional
+        os.makedirs(self.review_dir, exist_ok=True)
 
-    def _voice_str(self, voices):
-        return ' | '.join(
-            f"{name}={NOTE_NAMES[p%12]}{p//12-1}"
-            for name, p in zip(['B','T','A','S'], sorted(voices))
+    # ── Generación de MIDIs de candidato ────────────────────────────────────
+
+    def _write_chord_midi(self, voices, section, tpb, tempo, path):
+        """
+        MIDI de 3 segundos con las 4 voces del voicing como notas largas.
+        Primero arpegia las voces (grave→agudo) y luego las sostiene juntas.
+        """
+        mid  = MidiFile(type=0, ticks_per_beat=tpb)
+        trk  = MidiTrack(); mid.tracks.append(trk)
+        trk.append(MetaMessage('set_tempo', tempo=int(tempo), time=0))
+
+        dur_long  = tpb * 4        # redonda
+        dur_arp   = tpb // 3       # corchea de arpegio
+
+        events = []
+        sorted_v = sorted(voices)
+
+        # Arpegio inicial
+        for i, p in enumerate(sorted_v):
+            t_on  = i * dur_arp
+            t_off = t_on + dur_long
+            events.append((t_on,  'on',  p, 72))
+            events.append((t_off, 'off', p, 0))
+
+        events.sort(key=lambda x: (x[0], 0 if x[1] == 'off' else 1))
+        prev = 0
+        for tick, etype, pitch, vel in events:
+            delta = tick - prev; prev = tick
+            if etype == 'on':
+                trk.append(Message('note_on',  channel=0, note=pitch,
+                                   velocity=vel, time=delta))
+            else:
+                trk.append(Message('note_off', channel=0, note=pitch,
+                                   velocity=0, time=delta))
+        mid.save(path)
+
+    def _write_section_midi(self, voices, section, tracks_dict,
+                             tpb, tempo, template, library, path,
+                             texture_hint=None):
+        """
+        MIDI de la sección completa orquestada con este voicing.
+        texture_hint puede modificar la articulación dominante del resultado.
+        """
+        s_tick = section['start_tick']
+        e_tick = section.get('end_tick') or float('inf')
+
+        section_tracks = {}
+        for name, notes in tracks_dict.items():
+            section_tracks[name] = [
+                (t - s_tick, p, d, v)
+                for t, p, d, v in notes
+                if s_tick <= t < e_tick
+            ]
+
+        sec_isolated = dict(section)
+        sec_isolated['start_tick'] = 0
+        sec_isolated['end_tick']   = int(e_tick - s_tick) if e_tick != float('inf') \
+                                     else tpb * section['n_bars'] * 4
+
+        # Ajustar tensión artificialmente para forzar articulación distinta
+        # según texture_hint — esto hace que InstrumentAssigner elija
+        # articulaciones distintas para la misma sección
+        if texture_hint in ('pizzicato', 'spiccato'):
+            sec_isolated = dict(sec_isolated)
+            tc = dict(sec_isolated['tension_curve'])
+            tc['mean'] = max(0.0, tc['mean'] - 0.35)   # baja tensión → notas cortas
+            sec_isolated['tension_curve'] = tc
+            sec_isolated['arc'] = 'fall'
+        elif texture_hint in ('tremolo', 'sustain'):
+            sec_isolated = dict(sec_isolated)
+            tc = dict(sec_isolated['tension_curve'])
+            tc['mean'] = min(1.0, tc['mean'] + 0.35)   # alta tensión → legato/tremolo
+            sec_isolated['tension_curve'] = tc
+            sec_isolated['arc'] = 'arch'
+
+        fp = FingerprintGenerator().generate(sec_isolated)
+
+        assigner = InstrumentAssigner(
+            tpb=tpb, tempo=tempo,
+            template=template, library=library,
+            no_perc=True, no_ks=False, no_cc=True,
+            humanize=0.0, verbose=False,
         )
+        assigner.write(section_tracks, [sec_isolated], [fp], path)
 
-    def choose(self, section, candidates, input_hash):
+    # ── Interfaz de elección ─────────────────────────────────────────────────
+
+    def choose(self, section, candidates, input_hash,
+                tracks_dict, tpb, tempo,
+                template='chamber', library='nucleus',
+                export_chord=True, export_orch=True,
+                descriptors=None):
         """
-        Muestra candidatos y pide elección.
+        Exporta candidatos como MIDIs, muestra rutas y pide elección.
         Devuelve (voices_elegidas, idx_elegido).
+
+        descriptors: lista de dicts con 'profile', 'register', 'spread',
+          'texture' — generados por VoicingEngine.generate_contrasting().
+          Si None, no se muestra descripción de perfil.
         """
-        print(f"\n  ── Sección {section['label']} "
-              f"[{NOTE_NAMES[section['key_root']]}{section['key_mode'][:3]} | "
-              f"{NOTE_NAMES[section['chord_root']]}{section['chord_type']} | "
-              f"arc={section['arc']} | tension={section['tension_curve']['mean']:.2f}] ──")
+        label   = section['label']
+        key_str = f"{section['key_name']} {section['key_mode'][:3]}"
+        arc     = section['arc']
+        bars    = section['n_bars']
 
-        for i, (v, sc) in enumerate(candidates):
-            print(f"    [{i+1}] {self._voice_str(v)}  (score={sc:.3f})")
+        print(f"\n{'─'*60}")
+        print(f"  Sección {label}  —  {key_str}  —  {bars} compases  —  arco: {arc}")
+        print(f"{'─'*60}")
 
+        exported = []
+        for i, (voices, score) in enumerate(candidates):
+            idx  = i + 1
+            desc = descriptors[i] if descriptors else None
+            texture_hint = desc['texture'] if desc else None
+            paths = {}
+
+            if export_chord:
+                chord_path = os.path.join(
+                    self.review_dir, f'sec{label}_{idx}_acorde.mid')
+                self._write_chord_midi(voices, section, tpb, tempo, chord_path)
+                paths['acorde'] = chord_path
+
+            if export_orch and tracks_dict:
+                orch_path = os.path.join(
+                    self.review_dir, f'sec{label}_{idx}_orquestado.mid')
+                try:
+                    self._write_section_midi(
+                        voices, section, tracks_dict,
+                        tpb, tempo, template, library, orch_path,
+                        texture_hint=texture_hint)
+                    paths['orquestado'] = orch_path
+                except Exception as e:
+                    paths['orquestado'] = f'(error: {e})'
+
+            exported.append((idx, voices, paths, desc))
+
+        # Mostrar rutas y descripción
+        print(f"\n  MIDIs en: {self.review_dir}\n")
+        for idx, voices, paths, desc in exported:
+            if desc:
+                print(f"  Candidato {idx}  [{desc['profile']}  "
+                      f"spread={desc['spread']}st  textura={desc['texture']}]")
+            else:
+                print(f"  Candidato {idx}:")
+            for tipo, path in paths.items():
+                print(f"    [{tipo}]  {path}")
+            if self.soundfont:
+                for tipo, path in paths.items():
+                    if isinstance(path, str) and os.path.exists(path):
+                        print(f"    timidity -x 'soundfont {self.soundfont}' {path}")
+        print()
+
+        opts = '/'.join(str(i+1) for i in range(len(candidates)))
+        if len(candidates) == 2:
+            prompt = f"  ¿Cuál prefieres? [{opts} / = empate / s saltar]: "
+        else:
+            prompt = f"  ¿Cuál prefieres? [{opts} / s saltar]: "
+
+        chosen_idx = 0
         while True:
             try:
-                raw = input(f"    Elige [1-{len(candidates)}] (Enter=1, s=saltar): ").strip()
+                raw = input(prompt).strip().lower()
                 if raw == '' or raw == '1':
-                    chosen_idx = 0
-                    break
-                elif raw.lower() == 's':
+                    chosen_idx = 0; break
+                elif raw == 's':
+                    print("  (saltada — se usa candidato 1)")
+                    return candidates[0][0], 0
+                elif raw == '=':
+                    self._save(section, candidates, 0, input_hash,
+                               tie=True, descriptors=descriptors)
                     return candidates[0][0], 0
                 else:
                     idx = int(raw) - 1
                     if 0 <= idx < len(candidates):
-                        chosen_idx = idx
-                        break
-            except (ValueError, KeyboardInterrupt):
-                chosen_idx = 0
-                break
+                        chosen_idx = idx; break
+                    print(f"  Elige entre 1 y {len(candidates)}")
+            except ValueError:
+                print(f"  Elige entre 1 y {len(candidates)}")
+            except KeyboardInterrupt:
+                print("\n  (interrumpido — se usa candidato 1)")
+                chosen_idx = 0; break
 
         chosen_voices = candidates[chosen_idx][0]
-        self._save(section, candidates, chosen_idx, input_hash)
+        print(f"  → Elegido candidato {chosen_idx + 1}")
+        self._save(section, candidates, chosen_idx, input_hash,
+                   descriptors=descriptors)
         return chosen_voices, chosen_idx
 
-    def _save(self, section, candidates, chosen_idx, input_hash):
+    def _save(self, section, candidates, chosen_idx, input_hash,
+              tie=False, descriptors=None):
+        """Guarda la preferencia en preferences.jsonl."""
         entry = {
-            'input_hash': input_hash,
-            'section':    section['label'],
-            'key':        NOTE_NAMES[section['key_root']] + section['key_mode'][:3],
-            'chord':      NOTE_NAMES[section['chord_root']] + section['chord_type'],
-            'arc':        section['arc'],
-            'tension':    section['tension_curve']['mean'],
-            'candidates': [v for v,_ in candidates],
-            'scores':     [sc for _,sc in candidates],
-            'chosen_idx': chosen_idx,
-            'chosen':     candidates[chosen_idx][0],
-            'timestamp':  datetime.now().isoformat(),
+            'input_hash':  input_hash,
+            'section':     section['label'],
+            'key':         section['key_name'] + section['key_mode'][:3],
+            'chord':       NOTE_NAMES[section['chord_root']] + section['chord_type'],
+            'arc':         section['arc'],
+            'tension':     section['tension_curve']['mean'],
+            'n_bars':      section['n_bars'],
+            'candidates':  [v for v, _ in candidates],
+            'scores':      [sc for _, sc in candidates],
+            'chosen_idx':  chosen_idx,
+            'chosen':      candidates[chosen_idx][0],
+            'tie':         tie,
+            'descriptors': descriptors,
+            'timestamp':   datetime.now().isoformat(),
         }
         with open(self.prefs_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(entry) + '\n')
@@ -2504,6 +2751,16 @@ def main():
     parser.add_argument('--stats',      action='store_true',
                         help='Mostrar estadísticas de preferencias y salir')
 
+    # Revisión por escucha
+    parser.add_argument('--review-dir', default=None,
+                        help='Directorio para MIDIs de revisión (default: ./review_midis)')
+    parser.add_argument('--soundfont',  default=None,
+                        help='Ruta al .sf2 para mostrar comandos timidity')
+    parser.add_argument('--no-chord',   action='store_true',
+                        help='No exportar MIDI del acorde solo en revisión')
+    parser.add_argument('--no-orch-preview', action='store_true',
+                        help='No exportar MIDI orquestado por sección en revisión')
+
     # Debug
     parser.add_argument('--debug',      action='store_true')
     parser.add_argument('--verbose',    action='store_true')
@@ -2556,16 +2813,52 @@ def main():
     print(f"\n  [3/5] Generando voicings ({args.voicing})...")
     engine   = VoicingEngine(backend=args.voicing, prefs_path=args.prefs,
                               model_path=args.model, verbose=args.verbose)
-    review   = HumanReviewLoop(args.prefs) if args.review else None
-    n_cands  = max(args.candidates, 3 if args.review else 1)
+    review   = HumanReviewLoop(
+        prefs_path=args.prefs,
+        review_dir=getattr(args, 'review_dir', None),
+        soundfont=getattr(args, 'soundfont', None),
+    ) if args.review else None
+    n_cands  = max(args.candidates, 2 if args.review else 1)
     chosen_voicings = []
 
+    # Necesitamos las pistas de voz antes del loop de revisión
+    # pero las construimos iterativamente: para cada sección elegimos
+    # el voicing y luego construimos esa sección.
+    # Para la revisión necesitamos tracks_dict parcial — lo construimos
+    # con el voicing provisional (candidato 0) para generar el preview,
+    # luego actualizamos si el usuario elige otro.
+    splitter_pre = TrackSplitter(tpb, verbose=False)
+
     for sec in sections:
-        candidates = engine.generate(sec, n_candidates=n_cands)
         if args.review and review:
-            chosen, _ = review.choose(sec, candidates, midi_hash)
+            # Modo review: candidatos contrastantes con descriptores
+            raw = engine.generate_contrasting(sec, n=n_cands)
+            candidates   = [(v, sc) for v, sc, _ in raw]
+            descriptors  = [desc for _, _, desc in raw]
+
+            # Construir tracks para cada candidato (para el preview orquestado)
+            candidate_tracks = []
+            for v, _ in candidates:
+                t = splitter_pre.build_tracks([sec], [v])
+                candidate_tracks.append(t)
+
+            chosen, chosen_idx = review.choose(
+                section=sec,
+                candidates=candidates,
+                input_hash=midi_hash,
+                tracks_dict=candidate_tracks[0],
+                tpb=tpb,
+                tempo=tempo,
+                template=args.template,
+                library=args.library,
+                export_chord=not getattr(args, 'no_chord', False),
+                export_orch=not getattr(args, 'no_orch_preview', False),
+                descriptors=descriptors,
+            )
         else:
+            candidates = engine.generate(sec, n_candidates=n_cands)
             chosen = candidates[0][0]
+
         chosen_voicings.append(chosen)
         if args.verbose:
             v = chosen
