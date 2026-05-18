@@ -1870,15 +1870,595 @@ class MIDIWriter:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  INSTRUMENT ASSIGNER
+#  Convierte las cuatro pistas de voz (Melody/Counterpoint/Accompaniment/Bass)
+#  en un MIDI orquestal final con instrumentos reales, keyswitches, CC1/CC11
+#  y percusión. No depende de orchestrator.py.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Rangos idiomáticos (MIDI note numbers) ───────────────────────────────────
+
+INSTR_RANGES = {
+    'violin1':    (55, 96),   # G3–C7
+    'violin2':    (55, 91),   # G3–G6
+    'viola':      (48, 84),   # C3–C6
+    'cello':      (36, 76),   # C2–E5
+    'contrabass': (28, 60),   # E1–C4
+    'flute':      (60, 96),   # C4–C7
+    'oboe':       (58, 91),   # Bb3–G6
+    'clarinet':   (50, 94),   # D3–Bb6
+    'bassoon':    (34, 75),   # Bb1–Eb5
+    'horn':       (34, 77),   # Bb1–F5
+    'trumpet':    (52, 82),   # E3–Bb5
+    'trombone':   (34, 72),   # Bb1–C5
+}
+
+INSTR_SWEET = {
+    'violin1':    (62, 88),
+    'violin2':    (60, 84),
+    'viola':      (55, 79),
+    'cello':      (43, 72),
+    'contrabass': (33, 52),
+    'flute':      (65, 90),
+    'oboe':       (62, 86),
+    'clarinet':   (55, 86),
+    'bassoon':    (38, 67),
+    'horn':       (40, 70),
+    'trumpet':    (56, 77),
+    'trombone':   (40, 67),
+}
+
+INSTR_FAMILY = {
+    'violin1': 'strings', 'violin2': 'strings', 'viola': 'strings',
+    'cello': 'strings', 'contrabass': 'strings',
+    'flute': 'winds', 'oboe': 'winds', 'clarinet': 'winds', 'bassoon': 'winds',
+    'horn': 'brass', 'trumpet': 'brass', 'trombone': 'brass',
+}
+
+GM_PROGRAMS = {
+    'violin1': 40, 'violin2': 40, 'viola': 41, 'cello': 42, 'contrabass': 43,
+    'flute': 73, 'oboe': 68, 'clarinet': 71, 'bassoon': 70,
+    'horn': 60, 'trumpet': 56, 'trombone': 57,
+    'timpani': 47,
+}
+
+INSTR_DISPLAY = {
+    'violin1': 'Violin I', 'violin2': 'Violin II', 'viola': 'Viola',
+    'cello': 'Cello', 'contrabass': 'Contrabajo',
+    'flute': 'Flauta', 'oboe': 'Oboe', 'clarinet': 'Clarinete', 'bassoon': 'Fagot',
+    'horn': 'Trompa', 'trumpet': 'Trompeta', 'trombone': 'Trombón',
+}
+
+# ── Plantillas ────────────────────────────────────────────────────────────────
+# source: pista de voz de la que toma el material
+# role:   melody | counterpoint | accompaniment | bass | pad | melody_double | bass_double
+# section_filter: lista de labels de sección; None = todas
+# octave_shift: desplazamiento en octavas (entero)
+
+ORCH_TEMPLATES = {
+    'strings_only': [
+        {'name': 'violin1',    'source': 'Melody',        'role': 'melody',        'ch': 0},
+        {'name': 'violin2',    'source': 'Counterpoint',  'role': 'counterpoint',  'ch': 1},
+        {'name': 'viola',      'source': 'Accompaniment', 'role': 'accompaniment', 'ch': 2},
+        {'name': 'cello',      'source': 'Bass',          'role': 'bass',          'ch': 3},
+        {'name': 'contrabass', 'source': 'Bass',          'role': 'bass',          'ch': 4, 'octave_shift': -1},
+    ],
+    'chamber': [
+        {'name': 'violin1',    'source': 'Melody',        'role': 'melody',        'ch': 0},
+        {'name': 'violin2',    'source': 'Counterpoint',  'role': 'counterpoint',  'ch': 1},
+        {'name': 'viola',      'source': 'Accompaniment', 'role': 'accompaniment', 'ch': 2},
+        {'name': 'cello',      'source': 'Bass',          'role': 'bass',          'ch': 3},
+        {'name': 'contrabass', 'source': 'Bass',          'role': 'bass',          'ch': 4, 'octave_shift': -1},
+        {'name': 'oboe',       'source': 'Melody',        'role': 'melody_double', 'ch': 5, 'section_filter': 'first_last'},
+        {'name': 'clarinet',   'source': 'Counterpoint',  'role': 'counterpoint',  'ch': 6, 'section_filter': 'middle'},
+        {'name': 'bassoon',    'source': 'Bass',          'role': 'bass_double',   'ch': 7, 'section_filter': 'middle'},
+        {'name': 'horn',       'source': 'Accompaniment', 'role': 'pad',           'ch': 8, 'section_filter': 'climax'},
+    ],
+    'full': [
+        {'name': 'violin1',    'source': 'Melody',        'role': 'melody',        'ch': 0},
+        {'name': 'violin2',    'source': 'Counterpoint',  'role': 'counterpoint',  'ch': 1},
+        {'name': 'viola',      'source': 'Accompaniment', 'role': 'accompaniment', 'ch': 2},
+        {'name': 'cello',      'source': 'Bass',          'role': 'bass',          'ch': 3},
+        {'name': 'contrabass', 'source': 'Bass',          'role': 'bass',          'ch': 4, 'octave_shift': -1},
+        {'name': 'flute',      'source': 'Melody',        'role': 'melody_double', 'ch': 5, 'section_filter': 'outer'},
+        {'name': 'oboe',       'source': 'Melody',        'role': 'melody_double', 'ch': 6, 'section_filter': 'first'},
+        {'name': 'clarinet',   'source': 'Counterpoint',  'role': 'counterpoint',  'ch': 7},
+        {'name': 'bassoon',    'source': 'Bass',          'role': 'bass_double',   'ch': 8},
+        {'name': 'horn',       'source': 'Accompaniment', 'role': 'pad',           'ch': 10, 'section_filter': 'high_tension'},
+        {'name': 'trumpet',    'source': 'Melody',        'role': 'melody_double', 'ch': 11, 'section_filter': 'peak'},
+        {'name': 'trombone',   'source': 'Accompaniment', 'role': 'pad',           'ch': 12, 'section_filter': 'high_tension'},
+    ],
+}
+
+# ── Keyswitches ───────────────────────────────────────────────────────────────
+
+KS_TABLES = {
+    'nucleus': {
+        'strings': {'legato': 21, 'sustain': 22, 'tremolo': 23,
+                    'spiccato': 24, 'pizzicato': 25, 'portato': 22},
+        'winds':   {'legato': 21, 'sustain': 22, 'staccato': 23, 'portato': 22},
+        'brass':   {'legato': 21, 'sustain': 22, 'staccato': 23, 'portato': 22},
+    },
+    'metropolis': {
+        'strings': {'legato': 21, 'sustain': 22, 'tremolo': 23,
+                    'spiccato': 24, 'col_legno': 25, 'portato': 22, 'pizzicato': -1},
+        'winds':   {'sustain': 21, 'staccato': 22, 'portato': 21, 'legato': -1},
+        'brass':   {'legato': 21, 'sustain': 22, 'marcato_l': 23,
+                    'marcato_s': 24, 'staccato': 25, 'swell': 26, 'portato': 22},
+    },
+    'generic': {
+        'strings': {'legato': -1, 'sustain': -1, 'spiccato': -1,
+                    'tremolo': -1, 'pizzicato': -1, 'portato': -1},
+        'winds':   {'legato': -1, 'sustain': -1, 'staccato': -1, 'portato': -1},
+        'brass':   {'legato': -1, 'sustain': -1, 'staccato': -1, 'portato': -1},
+    },
+}
+
+# Umbrales de duración en beats para clasificar articulación
+ART_THR = {'legato': 2.0, 'sustain': 0.75, 'portato': 0.4}
+
+PERC_GM = {'kick': 36, 'snare': 38, 'crash': 49, 'sus_cym': 51, 'tamtam': 54}
+
+
+class InstrumentAssigner:
+    """
+    Toma las cuatro pistas de voz y las distribuye a instrumentos reales,
+    aplicando rangos idiomáticos, keyswitches, CC1/CC11 y percusión.
+    Genera directamente el MIDI orquestal final.
+    """
+
+    def __init__(self, tpb, tempo, template='chamber', library='nucleus',
+                 no_perc=False, no_ks=False, no_cc=False,
+                 humanize=0.1, verbose=False):
+        self.tpb      = tpb
+        self.tempo    = tempo
+        self.template = ORCH_TEMPLATES.get(template, ORCH_TEMPLATES['chamber'])
+        self.library  = library
+        self.ks_table = KS_TABLES.get(library, KS_TABLES['generic'])
+        self.no_perc  = no_perc
+        self.no_ks    = no_ks
+        self.no_cc    = no_cc
+        self.humanize = humanize
+        self.verbose  = verbose
+
+    # ── Utilidades ───────────────────────────────────────────────────────────
+
+    def _beats(self, ticks):
+        return ticks / self.tpb
+
+    def _fit(self, pitch, name):
+        """Transpone por octavas hasta que la nota cabe en el rango idiomático."""
+        lo, hi   = INSTR_RANGES.get(name, (48, 84))
+        sw_lo, sw_hi = INSTR_SWEET.get(name, (lo+5, hi-5))
+        if lo <= pitch <= hi:
+            return pitch
+        for direction in [1, -1]:
+            p = pitch
+            for _ in range(4):
+                p += 12 * direction
+                if lo <= p <= hi:
+                    if sw_lo <= p <= sw_hi:
+                        return p
+            p = pitch
+            for _ in range(4):
+                p -= 12 * direction
+                if lo <= p <= hi:
+                    return p
+        return max(lo, min(hi, pitch))
+
+    def _section_for(self, tick, sections):
+        for s in sections:
+            end = s['end_tick'] if s['end_tick'] else float('inf')
+            if s['start_tick'] <= tick < end:
+                return s
+        return sections[-1]
+
+    def _tension_at(self, tick, section):
+        """Interpola la tensión dentro de una sección desde tension_full."""
+        s, e   = section['start_tick'], section.get('end_tick')
+        if not e:
+            return section['tension_curve']['mean']
+        dur    = max(e - s, 1)
+        pos    = np.clip((tick - s) / dur, 0, 1)
+        curve  = section.get('tension_full', [section['tension_curve']['mean']] * 16)
+        idx    = min(int(pos * len(curve)), len(curve) - 1)
+        return float(curve[idx])
+
+    def _resolve_section_filter(self, filt, sections):
+        """
+        Convierte filtros semánticos a listas de labels concretos.
+        Garantiza que siempre devuelve al menos 1 sección cuando hay material.
+        """
+        if filt is None:
+            return None
+        if isinstance(filt, list):
+            return filt
+        labels = [s['label'] for s in sections]
+        n = len(labels)
+
+        if filt == 'first':
+            return [labels[0]]
+        if filt == 'last':
+            return [labels[-1]]
+        if filt == 'first_last':
+            return [labels[0], labels[-1]] if n > 1 else [labels[0]]
+        if filt == 'outer':
+            # Primera + última; con 3+ secciones añade también la penúltima
+            result = {labels[0], labels[-1]}
+            if n >= 3:
+                result.add(labels[-2])
+            return list(result)
+        if filt == 'middle':
+            return labels if n <= 2 else labels[1:-1]
+
+        # 'high_tension': umbral bajo (0.45) para que siempre active algo
+        if filt in ('high_tension', 'climax'):
+            result = [s['label'] for s in sections
+                      if s['tension_curve']['mean'] > 0.45
+                      or s.get('arc', 'neutral') in ('arch', 'high', 'rise')]
+            if not result:
+                # Fallback: sección de mayor tensión
+                result = [max(sections,
+                              key=lambda s: s['tension_curve']['mean'])['label']]
+            return result
+
+        # 'peak': solo la sección de mayor tensión (para trompeta)
+        if filt == 'peak':
+            return [max(sections,
+                        key=lambda s: s['tension_curve']['peak'])['label']]
+
+        return None
+
+    # ── Clasificación de articulación ────────────────────────────────────────
+
+    def _articulation(self, note, prev_note, next_note, tension, family, role):
+        t_on, pitch, dur_ticks, vel = note
+        dur_beats = self._beats(dur_ticks)
+        gap_beats = self._beats(t_on - (prev_note[0] + prev_note[2])) if prev_note else 1.0
+        high = tension > 0.65
+        low  = tension < 0.30
+
+        if family == 'strings':
+            if role in ('melody', 'melody_double') and dur_beats >= ART_THR['legato'] and gap_beats < 0.25:
+                return 'legato'
+            if role in ('melody', 'melody_double') and dur_beats >= ART_THR['sustain']:
+                return 'sustain'
+            if high and dur_beats < ART_THR['portato']:
+                return 'spiccato'
+            if role == 'accompaniment' and high and dur_beats >= 1.0:
+                return 'tremolo'
+            # Pizzicato: solo notas cortas en acompañamiento de baja tensión
+            if role == 'accompaniment' and low and dur_beats < ART_THR['sustain']:
+                return 'pizzicato'
+            if dur_beats >= ART_THR['legato']:
+                return 'legato'
+            if dur_beats >= ART_THR['portato']:
+                return 'portato'
+            return 'spiccato'
+
+        if family == 'winds':
+            if dur_beats >= ART_THR['legato'] and gap_beats < 0.2:
+                return 'legato'
+            if dur_beats >= ART_THR['sustain']:
+                return 'sustain'
+            if dur_beats >= ART_THR['portato']:
+                return 'portato'
+            return 'staccato'
+
+        if family == 'brass':
+            if dur_beats >= ART_THR['legato']:
+                return 'marcato_l' if (high and dur_beats >= 2.0) else 'legato'
+            if dur_beats >= ART_THR['sustain']:
+                return 'sustain'
+            return 'staccato'
+
+        return 'sustain'
+
+    # ── Procesado de un instrumento ──────────────────────────────────────────
+
+    def _process(self, raw_notes, instr_cfg, sections, fingerprints):
+        """
+        Aplica rango, KS, CC y humanize a las notas de un instrumento.
+        Devuelve lista de eventos (abs_tick, type, *data).
+        """
+        name    = instr_cfg['name']
+        role    = instr_cfg.get('role', 'melody')
+        family  = INSTR_FAMILY.get(name, 'strings')
+        octsh   = instr_cfg.get('octave_shift', 0)
+        filt    = self._resolve_section_filter(
+                      instr_cfg.get('section_filter'), sections)
+        ks_map  = self.ks_table.get(family, {})
+
+        # Filtrar por sección
+        if filt is not None:
+            keep = []
+            for s in sections:
+                if s['label'] in filt:
+                    st = s['start_tick']
+                    en = s['end_tick'] if s['end_tick'] else float('inf')
+                    keep += [(t,p,d,v) for t,p,d,v in raw_notes if st <= t < en]
+            raw_notes = sorted(keep, key=lambda x: x[0])
+
+        if not raw_notes:
+            return []
+
+        # Desplazamiento de octava
+        if octsh:
+            raw_notes = [(t, p + octsh*12, d, v) for t,p,d,v in raw_notes]
+
+        events     = []
+        prev_art   = None
+        prev_note  = None
+        cc1_next   = raw_notes[0][0]
+        last_cc1   = -1
+        cc1_step   = self.tpb // 2   # cada corchea
+
+        # CC inicial
+        if not self.no_cc:
+            init_sec = self._section_for(raw_notes[0][0], sections)
+            init_t   = init_sec['tension_curve'].get('entry', 0.4)
+            init_cc1 = int(np.clip(init_t * 100 + 15, 20, 115))
+            events.append((raw_notes[0][0], 'cc', 1,  init_cc1))
+            events.append((raw_notes[0][0], 'cc', 11, 100))
+            last_cc1 = init_cc1
+
+        for i, note in enumerate(raw_notes):
+            t_on, pitch, dur_ticks, vel = note
+            next_n = raw_notes[i+1] if i+1 < len(raw_notes) else None
+
+            # Humanize
+            if self.humanize > 0:
+                jit = int(self.humanize * self.tpb * 0.04)
+                if jit > 0:
+                    t_on = max(0, t_on + random.randint(-jit, jit))
+
+            # Rango idiomático
+            pitch = self._fit(pitch, name)
+
+            # Tensión
+            sec     = self._section_for(t_on, sections)
+            tension = self._tension_at(t_on, sec)
+
+            # Articulación y KS
+            art = self._articulation(note, prev_note, next_n, tension, family, role)
+            if not self.no_ks and art != prev_art:
+                ks = ks_map.get(art, ks_map.get('sustain', -1))
+                if ks >= 0:
+                    events.append((max(0, t_on - 5), 'ks', ks, 100))
+                prev_art = art
+
+            # CC1 periódico
+            if not self.no_cc and t_on >= cc1_next:
+                cc1 = int(np.clip(tension * 100 + 15, 15, 120))
+                if last_cc1 >= 0:
+                    cc1 = int(np.clip(cc1, last_cc1 - 15, last_cc1 + 15))
+                if cc1 != last_cc1:
+                    events.append((t_on, 'cc', 1, cc1))
+                    last_cc1 = cc1
+                cc1_next = t_on + cc1_step
+
+            # CC11 swell en notas largas
+            if not self.no_cc and self._beats(dur_ticks) >= 1.5:
+                mid_t  = t_on + dur_ticks // 2
+                end_t  = t_on + int(dur_ticks * 0.85)
+                cc11_p = min(127, int(vel * 1.1 + tension * 20))
+                cc11_e = max(40,  int(vel * 0.8))
+                events.append((mid_t, 'cc', 11, cc11_p))
+                events.append((end_t, 'cc', 11, cc11_e))
+
+            # Velocidad efectiva
+            if family in ('strings', 'brass') and art in ('legato', 'sustain', 'tremolo'):
+                eff_vel = 80
+            else:
+                eff_vel = int(np.clip(vel * (0.7 + tension * 0.5), 30, 127))
+
+            events.append((t_on, 'note', pitch, eff_vel, dur_ticks))
+            prev_note = note
+
+        return events
+
+    # ── Percusión ────────────────────────────────────────────────────────────
+
+    def _percussion(self, sections, fingerprints):
+        if self.no_perc:
+            return [], []
+
+        tpb         = self.tpb
+        ticks_bar   = tpb * 4
+        timpani_evs = []
+        gm_evs      = []
+        pc_map      = {'C':0,'C#':1,'Db':1,'D':2,'D#':3,'Eb':3,'E':4,'F':5,
+                       'F#':6,'Gb':6,'G':7,'G#':8,'Ab':8,'A':9,'A#':10,'Bb':10,'B':11}
+
+        for sec_i, sec in enumerate(sections):
+            fp      = fingerprints[sec_i] if sec_i < len(fingerprints) else {}
+            arc     = sec.get('arc', 'neutral')
+            tc      = sec['tension_curve']
+            t_entry = tc.get('entry', 0.4)
+            t_exit  = tc.get('exit', 0.4)
+            t_peak  = tc.get('peak', 0.6)
+            t_mean  = tc.get('mean', 0.5)
+            n_bars  = sec.get('n_bars', 4)
+            s_tick  = sec['start_tick']
+
+            key_name = sec.get('key_name', 'C')
+            key_pc   = pc_map.get(key_name, 0)
+            # Tónica y dominante del timbal
+            tonic_t = max(41, min(65, (3)*12 + key_pc))     # octava 2
+            dom_t   = max(41, min(65, tonic_t + 7))
+
+            for bar in range(n_bars):
+                bar_tick = s_tick + bar * ticks_bar
+                pos      = bar / max(n_bars - 1, 1)
+
+                # Tensión interpolada por barra
+                if arc == 'arch':
+                    tension = t_entry*(1-pos) + t_exit*pos
+                    tension = max(tension, 2*t_peak*pos*(1-pos))
+                elif arc == 'rise':
+                    tension = t_entry + (t_peak - t_entry) * pos
+                elif arc == 'fall':
+                    tension = t_peak - (t_peak - t_exit) * pos
+                else:
+                    tension = t_mean
+                tension = float(np.clip(tension, 0, 1))
+                high = tension > 0.65
+                mid  = 0.35 <= tension <= 0.65
+                low  = tension < 0.35
+
+                # Timbal
+                if arc in ('arch', 'rise') and high:
+                    for beat in range(4):
+                        t  = bar_tick + beat * tpb
+                        pt = tonic_t if beat % 2 == 0 else dom_t
+                        vt = int(np.clip(85 + tension*30, 85, 115))
+                        timpani_evs.append((t, pt, tpb-5, vt))
+                elif arc in ('arch', 'rise') and mid:
+                    for beat in [0, 2]:
+                        t  = bar_tick + beat * tpb
+                        vt = int(np.clip(65 + tension*25, 60, 95))
+                        timpani_evs.append((t, tonic_t, tpb-5, vt))
+                elif arc == 'neutral' and mid and bar % 2 == 0:
+                    vt = int(70 + tension*15)
+                    timpani_evs.append((bar_tick, tonic_t, tpb-5, vt))
+                elif arc == 'fall' and low and bar % 2 == 0:
+                    vt = int(np.clip(45 + tension*20, 40, 70))
+                    timpani_evs.append((bar_tick, tonic_t, tpb*2-5, vt))
+
+                # Percusión GM
+                if arc in ('rise', 'arch') and high:
+                    for beat in range(4):
+                        t = bar_tick + beat * tpb
+                        if beat % 2 == 0:
+                            gm_evs.append((t, PERC_GM['kick'],  tpb//2, int(np.clip(90+tension*25,90,115))))
+                        else:
+                            gm_evs.append((t, PERC_GM['crash'], tpb-5,  int(np.clip(75+tension*20,70,100))))
+                elif arc in ('arch',) and mid:
+                    gm_evs.append((bar_tick,          PERC_GM['kick'],  tpb//2, 75))
+                    gm_evs.append((bar_tick + 2*tpb,  PERC_GM['snare'], tpb//2, 65))
+                elif arc == 'fall' and low and bar % 4 == 0 and tension > 0.2:
+                    gm_evs.append((bar_tick, PERC_GM['sus_cym'], tpb*4, 45))
+
+                # Tam-tam: inicio de sección con alta apertura
+                sh = fp.get('stitching_hints', {})
+                if bar == 0 and sh.get('openness', 0) > 0.7:
+                    gm_evs.append((bar_tick, PERC_GM['tamtam'], tpb*6, 85))
+
+        return (sorted(timpani_evs, key=lambda x: x[0]),
+                sorted(gm_evs,     key=lambda x: x[0]))
+
+    # ── Escritura del MIDI final ──────────────────────────────────────────────
+
+    def _events_to_track(self, events, channel, name, program):
+        """Convierte lista de eventos a MidiTrack."""
+        if not events:
+            return None
+        trk = MidiTrack()
+        trk.name = name
+        trk.append(MetaMessage('set_tempo', tempo=int(self.tempo), time=0))
+        trk.append(Message('program_change', channel=channel,
+                            program=program, time=0))
+
+        raw = []
+        for ev in events:
+            tick, etype = ev[0], ev[1]
+            if etype == 'note':
+                _, _, pitch, vel, dur = ev
+                pitch = max(0, min(127, pitch))
+                vel   = max(1, min(127, vel))
+                raw.append((tick,       3, Message('note_on',  channel=channel, note=pitch, velocity=vel, time=0)))
+                raw.append((tick + dur, 0, Message('note_off', channel=channel, note=pitch, velocity=0,   time=0)))
+            elif etype == 'cc':
+                _, _, cc_num, val = ev
+                raw.append((tick, 1, Message('control_change', channel=channel, control=cc_num, value=max(0,min(127,val)), time=0)))
+            elif etype == 'ks':
+                _, _, ks_note, vel = ev
+                ks_note = max(0, min(127, ks_note))
+                raw.append((tick,     2, Message('note_on',  channel=channel, note=ks_note, velocity=vel, time=0)))
+                raw.append((tick + 2, 0, Message('note_off', channel=channel, note=ks_note, velocity=0,   time=0)))
+
+        raw.sort(key=lambda x: (x[0], x[1]))
+        prev = 0
+        for abs_tick, _, msg in raw:
+            delta = max(0, abs_tick - prev)
+            prev  = abs_tick
+            trk.append(msg.copy(time=delta))
+        trk.append(MetaMessage('end_of_track', time=0))
+        return trk
+
+    def write(self, tracks_dict, sections, fingerprints, output_path):
+        """
+        Genera el MIDI orquestal final.
+        tracks_dict: {'Melody':..., 'Counterpoint':..., 'Accompaniment':..., 'Bass':...}
+        sections:    lista de dicts del HarmonicAnalyzer
+        fingerprints: lista de dicts de FingerprintGenerator (uno por sección)
+        """
+        mid = MidiFile(type=1, ticks_per_beat=self.tpb)
+
+        # Pista 0: tempo + marcadores
+        t0 = MidiTrack(); mid.tracks.append(t0)
+        t0.name = 'Tempo'
+        t0.append(MetaMessage('set_tempo', tempo=int(self.tempo), time=0))
+        prev = 0
+        for sec in sections:
+            t0.append(MetaMessage('marker', text=f"[{sec['label']}]",
+                                  time=sec['start_tick'] - prev))
+            prev = sec['start_tick']
+
+        # Instrumentos
+        n_notes = {}
+        for cfg in self.template:
+            name   = cfg['name']
+            source = cfg['source']
+            ch     = cfg['ch']
+
+            raw = [(t,p,d,v) for t,p,d,v in tracks_dict.get(source, [])]
+            events = self._process(raw, cfg, sections, fingerprints)
+            if not events:
+                continue
+
+            prog = GM_PROGRAMS.get(name, 40)
+            disp = INSTR_DISPLAY.get(name, name)
+            trk  = self._events_to_track(events, ch, disp, prog)
+            if trk:
+                mid.tracks.append(trk)
+                note_count = sum(1 for e in events if e[1] == 'note')
+                ks_count   = sum(1 for e in events if e[1] == 'ks')
+                cc_count   = sum(1 for e in events if e[1] == 'cc')
+                n_notes[disp] = (note_count, ks_count, cc_count)
+                if self.verbose:
+                    print(f"  [{disp:<16}] {note_count:>4} notas  "
+                          f"{ks_count:>3} KS  {cc_count:>4} CC")
+
+        # Percusión
+        timpani_evs, gm_evs = self._percussion(sections, fingerprints)
+        if timpani_evs:
+            trk = self._events_to_track(
+                [(t,'note',p,v,d) for t,p,d,v in timpani_evs],
+                15, 'Timbal', GM_PROGRAMS['timpani'])
+            if trk: mid.tracks.append(trk)
+        if gm_evs:
+            trk = self._events_to_track(
+                [(t,'note',n,v,d) for t,n,d,v in gm_evs],
+                9, 'Percusión', 0)
+            if trk: mid.tracks.append(trk)
+
+        mid.save(output_path)
+        return n_notes
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Piano MIDI → multitrack orquestal + fingerprints para orchestrator.py',
+        description='Piano MIDI → MIDI orquestal completo (sin orchestrator.py)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument('midi', nargs='?', help='MIDI de piano de entrada')
+
+    # Análisis
     parser.add_argument('--voicing',    default='rules',
                         choices=['rules','greedy','ml'],
                         help='Backend de voicing (default: rules)')
@@ -1890,78 +2470,78 @@ def main():
                         help='Número exacto de secciones (default: auto)')
     parser.add_argument('--min-bars',   type=int, default=2,
                         help='Mínimo de compases por sección (default: 2)')
-    parser.add_argument('--output',     default=None,
-                        help='Nombre base de salida')
-    parser.add_argument('--run-orchestrator', action='store_true',
-                        help='Llamar a orchestrator.py tras generar')
+
+    # Orquestación
     parser.add_argument('--template',   default='chamber',
-                        choices=['chamber','full','strings_only'],
-                        help='Plantilla para orchestrator.py')
+                        choices=list(ORCH_TEMPLATES.keys()),
+                        help='Plantilla orquestal (default: chamber)')
     parser.add_argument('--library',    default='nucleus',
-                        choices=['nucleus','metropolis','generic'],
-                        help='Library para orchestrator.py')
-    parser.add_argument('--orchestrator-path', default='orchestrator.py',
-                        help='Ruta a orchestrator.py')
-    parser.add_argument('--prefs',      default='preferences.jsonl',
-                        help='Archivo de preferencias')
-    parser.add_argument('--model',      default='voicing_ranker.pkl',
-                        help='Archivo del modelo ML')
+                        choices=list(KS_TABLES.keys()),
+                        help='Library de samples / keyswitches (default: nucleus)')
+    parser.add_argument('--no-perc',    action='store_true',
+                        help='Sin percusión orquestal')
+    parser.add_argument('--no-ks',      action='store_true',
+                        help='Sin keyswitches')
+    parser.add_argument('--no-cc',      action='store_true',
+                        help='Sin CC1/CC11')
+    parser.add_argument('--humanize',   type=float, default=0.1,
+                        help='Micro-jitter de timing 0.0–1.0 (default: 0.1)')
+
+    # Salida
+    parser.add_argument('--output',     default=None,
+                        help='Nombre base de salida (default: <input>_orch)')
+    parser.add_argument('--split',      action='store_true',
+                        help='Exportar también el MIDI de voces (Melody/CP/Acc/Bass)')
+    parser.add_argument('--fingerprints', action='store_true',
+                        help='Exportar fingerprints JSON por sección')
+
+    # ML y preferencias
+    parser.add_argument('--prefs',      default='preferences.jsonl')
+    parser.add_argument('--model',      default='voicing_ranker.pkl')
     parser.add_argument('--train',      action='store_true',
                         help='Entrenar ranker ML y salir')
     parser.add_argument('--stats',      action='store_true',
                         help='Mostrar estadísticas de preferencias y salir')
-    parser.add_argument('--debug',      action='store_true',
-                        help='Mostrar análisis armónico detallado')
-    parser.add_argument('--verbose',    action='store_true',
-                        help='Salida detallada')
+
+    # Debug
+    parser.add_argument('--debug',      action='store_true')
+    parser.add_argument('--verbose',    action='store_true')
 
     args = parser.parse_args()
 
     print("╔══════════════════════════════════════════╗")
-    print("║     PIANO TO ORCHESTRA  v2.0             ║")
+    print("║     PIANO TO ORCHESTRA  v2.1             ║")
     print("╚══════════════════════════════════════════╝\n")
 
     # ── Modos especiales ──────────────────────────────────────────────────────
 
     if args.train:
-        trainer = PreferenceTrainer(args.prefs, args.model)
-        trainer.train()
+        PreferenceTrainer(args.prefs, args.model).train()
         return
-
     if args.stats:
-        trainer = PreferenceTrainer(args.prefs, args.model)
-        trainer.stats()
+        PreferenceTrainer(args.prefs, args.model).stats()
         return
-
     if not args.midi:
         parser.print_help()
         return
-
     if not os.path.exists(args.midi):
-        print(f"ERROR: No se encuentra {args.midi}")
-        sys.exit(1)
+        print(f"ERROR: No se encuentra {args.midi}"); sys.exit(1)
 
-    # ── Rutas de salida ───────────────────────────────────────────────────────
+    base = args.output or Path(args.midi).stem + '_orch'
 
-    base = args.output or Path(args.midi).stem + '_split'
+    print(f"  Entrada:   {args.midi}")
+    print(f"  Salida:    {base}.mid")
+    print(f"  Plantilla: {args.template}  |  Library: {args.library}")
+    print(f"  Voicing:   {args.voicing}   |  Secciones: {args.sections}")
 
-    print(f"  Entrada:  {args.midi}")
-    print(f"  Salida:   {base}.mid")
-    print(f"  Voicing:  {args.voicing}")
-    print(f"  Secciones: {args.sections}")
-    if args.review:
-        print(f"  Modo revisión: {args.candidates} candidatos por sección")
-
-    # ── Pipeline ──────────────────────────────────────────────────────────────
-
-    # 1. Cargar MIDI
+    # ── 1. Cargar MIDI ────────────────────────────────────────────────────────
     print(f"\n  [1/5] Cargando MIDI...")
-    loader = MIDILoader(args.midi, verbose=args.verbose)
+    loader    = MIDILoader(args.midi, verbose=args.verbose)
     notes, tempo, tpb = loader.load()
     midi_hash = loader.midi_hash()
-    print(f"  {len(notes)} notas | tempo={round(60_000_000/tempo,1)} BPM | tpb={tpb}")
+    print(f"  {len(notes)} notas | {round(60_000_000/tempo,1)} BPM | tpb={tpb}")
 
-    # 2. Análisis armónico
+    # ── 2. Análisis armónico ──────────────────────────────────────────────────
     print(f"\n  [2/5] Analizando armonía...")
     analyzer = HarmonicAnalyzer(notes, tpb, tempo,
                                  n_sections=args.sections,
@@ -1971,13 +2551,12 @@ def main():
     key_root, key_mode, sections = analyzer.analyze()
     print(f"  Tonalidad: {NOTE_NAMES[key_root]} {key_mode} | {len(sections)} secciones")
 
-    # 3. Generar voicings
+    # ── 3. Voicing ───────────────────────────────────────────────────────────
     print(f"\n  [3/5] Generando voicings ({args.voicing})...")
-    engine = VoicingEngine(backend=args.voicing, prefs_path=args.prefs,
-                            model_path=args.model, verbose=args.verbose)
-    review = HumanReviewLoop(args.prefs) if args.review else None
-
-    n_cands = max(args.candidates, 3 if args.review else 1)
+    engine   = VoicingEngine(backend=args.voicing, prefs_path=args.prefs,
+                              model_path=args.model, verbose=args.verbose)
+    review   = HumanReviewLoop(args.prefs) if args.review else None
+    n_cands  = max(args.candidates, 3 if args.review else 1)
     chosen_voicings = []
 
     for sec in sections:
@@ -1985,80 +2564,72 @@ def main():
         if args.review and review:
             chosen, _ = review.choose(sec, candidates, midi_hash)
         else:
-            chosen = candidates[0][0]  # mejor según backend
+            chosen = candidates[0][0]
         chosen_voicings.append(chosen)
         if args.verbose:
             v = chosen
-            print(f"  [{sec['label']}] voicing: "
-                  f"B={NOTE_NAMES[v[0]%12]}{v[0]//12-1} "
+            print(f"  [{sec['label']}] B={NOTE_NAMES[v[0]%12]}{v[0]//12-1} "
                   f"T={NOTE_NAMES[v[1]%12]}{v[1]//12-1} "
                   f"A={NOTE_NAMES[v[2]%12]}{v[2]//12-1} "
                   f"S={NOTE_NAMES[v[3]%12]}{v[3]//12-1}")
 
-    # 4. Construir pistas
-    print(f"\n  [4/5] Construyendo pistas...")
+    # ── 4. Pistas de voces ───────────────────────────────────────────────────
+    print(f"\n  [4/5] Construyendo voces...")
     splitter = TrackSplitter(tpb, verbose=args.verbose)
     tracks   = splitter.build_tracks(sections, chosen_voicings)
-    for name, notes_t in tracks.items():
-        print(f"  {name:<15} {len(notes_t):>4} notas")
+    for name, nts in tracks.items():
+        print(f"  {name:<15} {len(nts):>4} notas")
 
-    # 5. Generar fingerprints y escribir MIDI
-    print(f"\n  [5/5] Escribiendo archivos...")
-    fp_gen  = FingerprintGenerator()
-    fps_data = [(fp_gen.generate(sec), sec['label']) for sec in sections]
-    writer  = MIDIWriter(tpb, tempo)
-    out_mid = base + '.mid'
-    writer.write_midi(tracks, sections, out_mid)
-    fp_paths = writer.write_fingerprints(fps_data, base)
-    print(f"  MIDI:        {out_mid}")
-    for p in fp_paths:
-        print(f"  Fingerprint: {p}")
+    # ── 5. Orquestar y escribir ───────────────────────────────────────────────
+    print(f"\n  [5/5] Orquestando → {base}.mid ...")
+    fp_gen      = FingerprintGenerator()
+    fingerprints = [fp_gen.generate(sec) for sec in sections]
 
-    # ── Llamar a orchestrator.py ──────────────────────────────────────────────
+    assigner = InstrumentAssigner(
+        tpb=tpb, tempo=tempo,
+        template=args.template,
+        library=args.library,
+        no_perc=args.no_perc,
+        no_ks=args.no_ks,
+        no_cc=args.no_cc,
+        humanize=args.humanize,
+        verbose=args.verbose,
+    )
 
-    if args.run_orchestrator:
-        orch_path = args.orchestrator_path
-        if not os.path.exists(orch_path):
-            print(f"\n  ⚠ orchestrator.py no encontrado en {orch_path}")
-            print(f"  Ejecuta manualmente:")
-        else:
-            print(f"\n  Llamando a orchestrator.py...")
-            cmd = [
-                sys.executable, orch_path,
-                out_mid,
-                *[p for p in fp_paths],
-                '--template', args.template,
-                '--library',  args.library,
-                '--auto-fp',
-                '--output',   base + '_orquestado',
-            ]
-            print(f"  $ {' '.join(cmd)}\n")
-            result = subprocess.run(cmd)
-            if result.returncode != 0:
-                print(f"  ⚠ orchestrator.py terminó con error (código {result.returncode})")
-            else:
-                print(f"\n  Pipeline completo.")
-                return
+    out_orch = base + '.mid'
+    n_notes  = assigner.write(tracks, sections, fingerprints, out_orch)
+    print(f"\n  Instrumentos generados:")
+    for disp, (nn, nks, ncc) in n_notes.items():
+        print(f"  {disp:<18} {nn:>4} notas  {nks:>3} KS  {ncc:>4} CC")
 
-    # ── Comando de seguimiento ────────────────────────────────────────────────
+    # ── Exportaciones opcionales ──────────────────────────────────────────────
 
-    print(f"\n  ── Para completar el pipeline ──")
-    fp_args = ' '.join(fp_paths)
-    print(f"  python orchestrator.py {out_mid} {fp_args} \\")
-    print(f"      --template {args.template} --library {args.library}")
+    if args.split:
+        out_split = base + '_voices.mid'
+        writer    = MIDIWriter(tpb, tempo)
+        writer.write_midi(tracks, sections, out_split)
+        print(f"\n  Voces exportadas: {out_split}")
 
-    print(f"\n  ── Para acumular preferencias ──")
-    print(f"  python piano_to_orchestra.py {args.midi} --candidates 3 --review")
-
-    print(f"\n  ── Para entrenar el ranker ML ──")
-    print(f"  python piano_to_orchestra.py --train")
+    if args.fingerprints:
+        writer   = MIDIWriter(tpb, tempo)
+        fps_data = [(fp, sec['label']) for fp, sec in zip(fingerprints, sections)]
+        fp_paths = writer.write_fingerprints(fps_data, base)
+        print(f"\n  Fingerprints exportados:")
+        for p in fp_paths:
+            print(f"    {p}")
 
     print(f"\n{'═'*55}")
-    print(f"  Secciones:    {len(sections)}")
-    print(f"  Fingerprints: {len(fp_paths)}")
-    print(f"  Pistas:       {list(tracks.keys())}")
+    print(f"  Secciones:   {len(sections)}")
+    instr_list = [INSTR_DISPLAY.get(c['name'], c['name'])
+                  for c in ORCH_TEMPLATES.get(args.template, [])]
+    print(f"  Instrumentos: {', '.join(instr_list)}")
+    print(f"  Salida:      {out_orch}")
     print(f"{'═'*55}")
+
+    print(f"\n  Reproducir:")
+    print(f"  timidity -x 'soundfont ~/sf2/timbres_of_heaven.sf2' {out_orch}")
 
 
 if __name__ == '__main__':
     main()
+
