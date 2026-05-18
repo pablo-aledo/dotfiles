@@ -497,13 +497,14 @@ class MelodyExtractor:
 
             if len(group) == 1:
                 n = group[0]
-                # Nota sola: ¿es melodía o bajo?
-                # Si está por encima de la mediana global → melodía; si no → bajo
+                # Nota sola: no hay competencia entre candidatos.
+                # Decisión puramente posicional: encima de la mediana → melodía.
+                # El contorno y peso métrico solo aplican cuando hay que elegir
+                # entre notas simultáneas. Un score umbral aquí descarta
+                # sistemáticamente las notas en beats débiles (mw bajo).
                 all_pitches = [nn[1] for nn in notes]
                 median_p    = np.median(all_pitches)
-                mw          = self._metric_weight(tick)
-                cscore      = self._contour_score(n[1], prev_mel_pitch)
-                if n[1] >= median_p and cscore * mw > 0.3:
+                if n[1] >= median_p:
                     melody_notes.append(n)
                     prev_mel_pitch = n[1]
                 else:
