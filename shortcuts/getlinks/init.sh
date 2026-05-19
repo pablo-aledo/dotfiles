@@ -21,6 +21,8 @@ echo $query > /tmp/query
 echo $count > /tmp/count
 echo $skip > /tmp/skip
 
+# pkg install imagemagick
+
 # script.google.com
 # function subjectsPorBusqueda() {
 #   const n = 10;
