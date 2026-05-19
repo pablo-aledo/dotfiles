@@ -157,6 +157,7 @@ ytdlmp3(){
 
 ytdlmp4(){
     yt-dlp --no-mtime -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4' $*
+    # --js-runtimes "node:/home/pga_gca_2/.nvm/versions/node/v20.20.2/bin/node" --cookies-from-browser chrome
 }
 
 ytdlcont(){
