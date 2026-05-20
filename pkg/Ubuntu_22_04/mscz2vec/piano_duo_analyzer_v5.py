@@ -44,7 +44,40 @@
 ║                     Aumentar para arpegios lentos; 0 = sin agrupación        ║
 ║    --key-window N   Compases para detección local de tonalidad (default 8)  ║
 ║                     0 = solo tonalidad global                                 ║
+║    --harmony-source S                                                        ║
+║                     Fuente armónica para la detección de acordes.            ║
+║                     Formatos aceptados:                                       ║
+║                       "left"              → mano izquierda en toda la obra   ║
+║                       "right"             → mano derecha en toda la obra     ║
+║                       "1-4:right,5-12:left" → por rango de compases (1-base)║
+║                     Sin especificar: detección automática por compás         ║
+║                     (gana la mano con mayor densidad armónica)               ║
+║    --both-hands-source R                                                     ║
+║                     Compases donde AMBAS manos contribuyen al acorde.        ║
+║                     Formatos: "all", "13-100", "5-8,17-24" (compases 1-base)║
+║                     En esos compases se combinan las notas de las dos manos  ║
+║                     para la detección de acordes. Desactivado por defecto.   ║
+║    --no-arp-fusion  Desactiva la fusión de arpegios y bajos en un solo       ║
+║                     acorde, y la deduplicación de acordes repetidos.         ║
+║                     Por defecto la fusión está activa.                        ║
+║    --single-key     Usa una única tonalidad global durante toda la pieza.    ║
+║                     Desactiva la detección de modulaciones locales.           ║
+║                     Por defecto se detectan cambios de tonalidad por ventana.║
+║    --voicing-order  (activo por defecto) Colorea las notas de melodía        ║
+║                     según el orden ascendente de pitch de las notas del       ║
+║                     acorde: la más grave → azul, la siguiente → amarillo…   ║
+║    --theoretical-order                                                        ║
+║                     Alternativa a --voicing-order: colorea según el orden    ║
+║                     teórico del acorde (fundamental → azul, 3ª → amarillo,  ║
+║                     5ª → verde), independientemente de la inversión.         ║
 ║    --test           Genera un MIDI sintético de prueba y lo analiza          ║
+║                                                                              ║
+║  EJEMPLOS AVANZADOS                                                          ║
+║    python3 piano_duo_analyzer.py obra.mid --harmony-source right             ║
+║    python3 piano_duo_analyzer.py obra.mid --harmony-source "1-8:right,9-24:left"║
+║    python3 piano_duo_analyzer.py obra.mid --both-hands-source "13-24"        ║
+║    python3 piano_duo_analyzer.py obra.mid --no-arp-fusion --single-key       ║
+║    python3 piano_duo_analyzer.py obra.mid --theoretical-order                ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  DEPENDENCIAS:  mido  (pip install mido)                                     ║
