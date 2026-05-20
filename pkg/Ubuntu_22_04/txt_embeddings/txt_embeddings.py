@@ -1,3 +1,92 @@
+#!/usr/bin/env python3
+"""
+txt_embeddings.py — Visualizador semántico de textos con embeddings + clustering
+==================================================================================
+
+Toma un fichero de textos (uno por línea), calcula embeddings con OpenAI,
+reduce a 2D con UMAP, agrupa con KMeans (o clusters externos), genera un
+HTML interactivo con Plotly y exporta resúmenes GPT-4 por cluster.
+
+REQUISITOS
+----------
+    pip install openai umap-learn scikit-learn plotly pandas numpy
+    export OPENAI_API_KEY="sk-..."
+
+USO BÁSICO
+----------
+    # Clustering automático (5 clusters por defecto)
+    python txt_embeddings.py --input textos.txt
+
+    # Especificar número de clusters
+    python txt_embeddings.py --input textos.txt --n_clusters 8
+
+    # Usar clusters predefinidos (fichero con una etiqueta por línea, mismo orden que textos.txt)
+    python txt_embeddings.py --input textos.txt --clusters etiquetas.txt
+
+    # Cambiar rutas de salida
+    python txt_embeddings.py --input textos.txt \
+        --output_html mapa.html \
+        --output_csv puntos.csv \
+        --output_summary_csv resumen.csv
+
+ARGUMENTOS
+----------
+    --input              Fichero de textos de entrada (una línea = un texto)
+                         Default: textos.txt
+    --clusters           (Opcional) Fichero con etiquetas de cluster, una por línea.
+                         Si se omite, se aplica KMeans sobre el espacio UMAP.
+    --n_clusters         Número de clusters para KMeans. Default: 5
+    --output_html        Fichero HTML de salida con gráfico interactivo + tabla.
+                         Default: embeddings_interactivos.html
+    --output_csv         CSV con coordenadas 2D y cluster de cada punto.
+                         Default: embeddings_procesados.csv
+    --output_summary_csv CSV con resumen GPT-4 por cluster.
+                         Default: resumen_clusters.csv
+
+EJEMPLOS DE USO TÍPICOS
+-----------------------
+    1. Explorar temáticas en un corpus de reseñas:
+       python txt_embeddings.py --input resenas.txt --n_clusters 6
+
+    2. Validar clusters anotados manualmente:
+       python txt_embeddings.py --input frases.txt --clusters categorias_manuales.txt
+
+    3. Pipeline completo con rutas explícitas:
+       python txt_embeddings.py \
+           --input corpus/noticias.txt \
+           --n_clusters 10 \
+           --output_html resultados/mapa_noticias.html \
+           --output_csv resultados/puntos.csv \
+           --output_summary_csv resultados/temas.csv
+
+FORMATO DEL FICHERO DE TEXTOS (--input)
+----------------------------------------
+    Una línea por texto. Líneas vacías se ignoran. Ejemplo:
+        El modelo aprende representaciones densas del lenguaje.
+        La música barroca usa contrapunto estricto.
+        Los embeddings capturan similitud semántica.
+
+FORMATO DEL FICHERO DE CLUSTERS (--clusters)
+---------------------------------------------
+    Una etiqueta por línea, mismo número de líneas que --input. Ejemplo:
+        NLP
+        Música
+        NLP
+
+SALIDAS
+-------
+    *.html   Gráfico Plotly interactivo (hover muestra texto) + tabla de resúmenes
+    *.csv    Coordenadas x/y UMAP, texto original, cluster de cada punto
+    *_summary.csv  Una fila por cluster: id, n_textos, resumen generado por GPT-4
+
+NOTAS
+-----
+    - Los embeddings usan text-embedding-3-small (1536 dims).
+    - Los resúmenes usan gpt-4; el prompt se trunca a ~750 tokens por cluster
+      para respetar el límite TPM de la API.
+    - UMAP usa random_state=42 para reproducibilidad.
+"""
+
 import os
 import argparse
 import numpy as np
@@ -125,12 +214,27 @@ print(f"CSV de puntos generado: {args.output_csv}")
 # =========================
 # 8. Generar resúmenes por cluster
 # =========================
+MAX_PROMPT_CHARS = 3000  # ~750 tokens, seguro para TPM 10k
+
+def preparar_textos_para_prompt(textos, max_chars=MAX_PROMPT_CHARS):
+    """Selecciona textos truncando por caracteres totales para no reventar el TPM."""
+    resultado = []
+    acumulado = 0
+    for t in textos:
+        t_corto = t[:200]  # truncar cada texto individual a 200 chars
+        if acumulado + len(t_corto) > max_chars:
+            break
+        resultado.append(t_corto)
+        acumulado += len(t_corto)
+    return resultado
+
 resumenes = []
 for cluster_id in sorted(set(cluster_labels)):
     cluster_texts = df[df["cluster"] == str(cluster_id)]["texto_original"].tolist()
+    textos_prompt = preparar_textos_para_prompt(cluster_texts)
     prompt = (
         "Resume en 1-2 frases el contenido común de estos textos:\n\n"
-        + "\n".join(cluster_texts[:20])
+        + "\n".join(textos_prompt)
     )
     response = client.chat.completions.create(
         model=RESUMEN_MODEL,
