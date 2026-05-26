@@ -1423,6 +1423,23 @@ cdag(){
     fi
 }
 
+m2dag(){
+cat > /tmp/m2dag
+cat /tmp/m2dag | sed -e '/flowchart LR/d' -e 's/ --> / -> /g' > /tmp/m2dag2; \mv /tmp/m2dag2 /tmp/m2dag
+cat /tmp/m2dag | sed 's/ -> /\n/g' | sort -u | while read line; do echo "$line: $line"; done > /tmp/m2dag2; cat /tmp/m2dag /tmp/m2dag2 > /tmp/m2dag3; \mv /tmp/m2dag3 /tmp/m2dag
+cat /tmp/m2dag
+}
+
+ctags_cdag_diff(){
+(echo flowchart LR; cdag auto_plus /tmp/fns_base/$1 | fcdag) > /tmp/dag_dfn_base
+cat /tmp/dag_dfn_base | m2dag > /tmp/dag_dfn_base_2; \mv /tmp/dag_dfn_base_2 /tmp/dag_dfn_base
+
+(echo flowchart LR; cdag auto_plus /tmp/fns_leaf/$1 | fcdag) > /tmp/dag_dfn_leaf
+cat /tmp/dag_dfn_leaf | m2dag > /tmp/dag_dfn_leaf_2; \mv /tmp/dag_dfn_leaf_2 /tmp/dag_dfn_leaf
+
+dag_diff /tmp/dag_dfn_base /tmp/dag_dfn_leaf | Xclip -i
+}
+
 fns_down(){
     cdag auto_plus $1 | fcdag | sed 's/ --> / -> /g' | dag_slice_rev $2 > /tmp/dag_fns_down
     cat /tmp/dag_fns_down | tokenize | sort -u | grep -v '^$' > /tmp/var_toks
