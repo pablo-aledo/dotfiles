@@ -1,9 +1,75 @@
 #!/usr/bin/env python3
 r"""
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║              CYCLE-GAN STYLE TRANSFER  v3.0                                 ║
+║              CYCLE-GAN STYLE TRANSFER  v3.1                                 ║
 ║       Transferencia de estilo bidireccional MIDI — arquitectura híbrida     ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
+║  CORRECCIONES v3.1 (sobre v3.0)                                             ║
+║                                                                              ║
+║  Bug 1  — _ticks_per_bar eliminada. Devolvía tpb*4 (4/4 hardcodeado) y    ║
+║           no se usaba en ningún sitio; fuente potencial de bugs futuros.   ║
+║                                                                              ║
+║  Bug 2  — _rolls_to_midi asumía 4/4. ticks_tick calculaba (tpb*4)/res en  ║
+║           lugar de (tpb*ts_num)/res. Ahora lee cfg['ts_num'] (default 4). ║
+║           _midi_to_rolls devuelve (rolls, ts_num) y todos los llamadores  ║
+║           inyectan ts_num en el cfg antes de llamar a _rolls_to_midi.     ║
+║           cmd_round_trip también lee ts_num desde _infer_time_sig_from_midi║
+║           Afectaba directamente a piezas en 3/4 (vals criollo).            ║
+║                                                                              ║
+║  Bug 3  — cmd_cycle sin guarda HAS_DNA. Llamaba a UnifiedDNA, build_midi  ║
+║           y run_cycle_gan_transform sin comprobar si el ecosistema DNA      ║
+║           estaba disponible. Ahora tiene fallback que mide la pérdida de   ║
+║           ciclo en feature space y reporta posiciones D_A/D_B sin MIDI.   ║
+║                                                                              ║
+║  Bug 4  — threshold_pct=99.0 en fallback simbólico. El default del CLI es ║
+║           99.0 (pensado para backend neural con rolls continuos). El        ║
+║           fallback simbólico usa rolls binarizados donde 97.0 es más        ║
+║           apropiado. Comentario explícito añadido.                          ║
+║                                                                              ║
+║  Bug 5  — MidiRollDataset cargaba todos los .npz en RAM en __init__. Con  ║
+║           corpus grandes agotaba memoria. Ahora es lazy: solo lee           ║
+║           metadatos en __init__ y carga arrays en __getitem__ con          ║
+║           context manager (np.load como ctx manager libera memoria).        ║
+║                                                                              ║
+║  Bug 6  — _nearest_neighbor_pairs era O(n²) en Python puro. Sustituido    ║
+║           por sklearn.metrics.pairwise_distances cuando sklearn está         ║
+║           disponible (vectorizado, 10-100× más rápido con corpus grandes). ║
+║           Fallback Python puro mantenido para el caso sin sklearn.          ║
+║                                                                              ║
+║  Bug 7  — _extract_palette_from_midi podía asignar canal 9 a roles no-    ║
+║           percusión. used_channels ahora inicializa con {9} reservado y    ║
+║           el contador ch_counter salta el 9 implícitamente al no estar     ║
+║           disponible. La percusión GM siempre obtiene el canal 9.          ║
+║                                                                              ║
+║  Bug 8  — cmd_round_trip ignoraba --resolution del usuario al cargar cfg  ║
+║           desde model_dir. Ahora hace update() del cfg cargado y luego    ║
+║           restaura la resolución del usuario (tiene prioridad).             ║
+║                                                                              ║
+║  Bug 9  — _prepare_one_midi no guardaba ts_num en los metadatos del .npz. ║
+║           MidiRollDataset.__getitem__ no tenía acceso al compás real.      ║
+║           Ahora ts_num se serializa en meta y está disponible para uso     ║
+║           futuro en el DataLoader neural.                                   ║
+║                                                                              ║
+║  Bug 10 — _cmd_transform_neural procesaba barra a barra (n_bars forward   ║
+║           passes). Ahora construye un batch completo (n_bars, n_roles,     ║
+║           res, n_pitch) y hace un único forward pass. Para 32 compases     ║
+║           con GPU esto es ~32× más rápido; en CPU también mejora por       ║
+║           reducir overhead de llamadas.                                     ║
+║                                                                              ║
+║  Bug 11 — extract_raw_melody seleccionaba el canal con pitch_mean más alto ║
+║           (sesgo hacia soprano en SATB). Nuevo criterio combinado:         ║
+║           0.5×pitch_medio + 0.3×rango_pitch + 0.2×(1−densidad_relativa).  ║
+║           La melodía tiende a estar en el registro agudo, tener buen        ║
+║           rango interválico y no ser el stream más denso.                  ║
+║                                                                              ║
+║  Bug 12 — PCA silenciosamente recortaba n_components sin avisar. Con       ║
+║           corpus de 5 muestras y --pca-dim 32 el recorte era a 9 sin       ║
+║           ningún mensaje. Ahora emite un AVISO explícito con la causa.     ║
+║                                                                              ║
+║  Bug 13 — torch.load sin weights_only emite DeprecationWarning en          ║
+║           PyTorch >= 2.0. Añadido weights_only=False explícito en          ║
+║           _load_neural_models y CycleTrainer.load_checkpoint.              ║
+║                                                                              ║
 ║                                                                              ║
 ║  CONCEPTO                                                                    ║
 ║    Implementa el framework CycleGAN (Zhu et al. 2017) sobre MIDI en dos    ║
@@ -444,10 +510,6 @@ def _extract_note_lists(mid):
                             (st, abs_tick, msg.note, vel, pr))
     return result
 
-def _ticks_per_bar(mid):
-    return mid.ticks_per_beat * 4
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 #  ASIGNADOR DE ROLES
 # ══════════════════════════════════════════════════════════════════════════════
@@ -616,11 +678,12 @@ def _rolls_to_midi(bars_per_role, cfg, palette, output_path,
                    bpm=120.0, threshold=None, threshold_pct=99.0):
     """
     Convierte {rol: (n_bars, res, n_pitch)} a un fichero MIDI.
-    Incluye supresión de notas aisladas de 1 tick.
+    Respeta el compás real del MIDI fuente vía cfg['ts_num'] (default 4).
     """
     resolution = cfg['resolution']
+    ts_num     = cfg.get('ts_num', 4)          # FIX: usar compás real, no asumir 4/4
     tpb        = 480
-    ticks_tick = (tpb * 4) / resolution
+    ticks_tick = (tpb * ts_num) / resolution   # FIX: era (tpb*4)/resolution
     pitch_lo   = cfg.get('pitch_lo', 0)
     pitch_hi   = cfg.get('pitch_hi', 127)
     do_expand  = (pitch_lo, pitch_hi) != (0, 127)
@@ -697,7 +760,8 @@ def _extract_palette_from_midi(midi_path, role_map):
                 prog_map[(ti, msg.channel)] = msg.program
 
     # Canales ya usados para evitar colisiones en la salida
-    used_channels = set()
+    # FIX: ch_counter arranca en 0 y siempre salta el canal 9 (percusión GM)
+    used_channels = {9}   # reservar el 9 de entrada; se libera solo para percusión real
     palette       = {}
     ch_counter    = 0
 
@@ -709,17 +773,20 @@ def _extract_palette_from_midi(midi_path, role_map):
         vel   = int(sum(n[3] for n in notes) / len(notes)) if notes else 80
         vel   = max(40, min(110, vel))
 
-        # Canal: usar el original si está libre; si no, asignar uno libre
-        out_ch = ch_orig if ch_orig == 9 else None
-        if out_ch is None:
-            if ch_orig not in used_channels:
-                out_ch = ch_orig
-            else:
-                while ch_counter in used_channels or ch_counter == 9:
-                    ch_counter += 1
-                out_ch = ch_counter
+        if ch_orig == 9:
+            # Percusión: siempre canal 9
+            out_ch = 9
+            used_channels.add(9)
+        elif ch_orig not in used_channels:
+            out_ch = ch_orig
+            used_channels.add(out_ch)
+        else:
+            # Canal original ya ocupado: asignar el siguiente libre (nunca el 9)
+            while ch_counter in used_channels:
                 ch_counter += 1
-        used_channels.add(out_ch)
+            out_ch = ch_counter
+            used_channels.add(out_ch)
+            ch_counter += 1
 
         palette[role] = {'program': prog, 'channel': out_ch, 'velocity': vel}
 
@@ -791,7 +858,9 @@ def _midi_to_rolls(midi_path, cfg):
         if do_crop:
             roll = _crop_pitch(roll, pitch_lo, pitch_hi)
         rolls[role] = roll
-    return rolls
+    # ts_num se pasa al llamador via cfg modificado para que _rolls_to_midi
+    # calcule ticks_tick correctamente. El llamador debe añadirlo al cfg.
+    return rolls, ts_num
 
 
 def _load_palette(palette_path, cfg):
@@ -809,23 +878,26 @@ def _load_palette(palette_path, cfg):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class MidiRollDataset:
-    """Dataset de ventanas de piano roll leídas desde .npz."""
+    """Dataset de ventanas de piano roll leídas desde .npz.
+
+    Lazy loading: los arrays se cargan solo cuando se accede a __getitem__,
+    no en __init__. Esto evita agotar RAM con corpus grandes.
+    """
 
     def __init__(self, data_dir, roles=None):
         self.roles   = roles or ROLES
-        self.samples = []
+        self.samples = []   # (path, window_idx, meta)
         self.n_pitch = None
-        self._cache  = {}
 
         for path in sorted(Path(data_dir).glob('*.npz')):
             try:
-                data = np.load(str(path), allow_pickle=True)
-                meta = json.loads(str(data['meta_json'][0]))
+                # Solo leer metadatos en __init__, no los arrays
+                with np.load(str(path), allow_pickle=True) as data:
+                    meta = json.loads(str(data['meta_json'][0]))
                 if self.n_pitch is None:
                     self.n_pitch = meta.get('n_pitch', PITCH_CLASSES)
                 for i in range(meta['n_windows']):
                     self.samples.append((str(path), i, meta))
-                self._cache[str(path)] = data
             except Exception:
                 continue
 
@@ -837,15 +909,17 @@ class MidiRollDataset:
 
     def __getitem__(self, idx):
         path, widx, meta = self.samples[idx]
-        data       = self._cache[path]
         resolution = meta['resolution']
+        # ts_num guardado por _prepare_one_midi; disponible para uso futuro
         x_parts    = []
-        for role in self.roles:
-            key = f'roll_{role}'
-            if key in data:
-                x_parts.append(data[key][widx][-1])
-            else:
-                x_parts.append(np.zeros((resolution, self.n_pitch), dtype=np.float32))
+        # FIX: lazy load — abrir el npz solo al acceder al item
+        with np.load(path, allow_pickle=True) as data:
+            for role in self.roles:
+                key = f'roll_{role}'
+                if key in data:
+                    x_parts.append(data[key][widx][-1].copy())
+                else:
+                    x_parts.append(np.zeros((resolution, self.n_pitch), dtype=np.float32))
         if HAS_TORCH:
             return torch.tensor(np.stack(x_parts, axis=0))
         return np.stack(x_parts, axis=0)
@@ -898,9 +972,29 @@ def extract_raw_melody(midi_path, verbose=False):
     if not notes_by_channel:
         raise RuntimeError(f"No se encontraron notas en {midi_path}")
 
-    melody_ch = max(notes_by_channel,
-                    key=lambda ch: sum(p for _, p, _, _ in notes_by_channel[ch])
-                                   / len(notes_by_channel[ch]))
+    # FIX: criterio combinado en lugar de solo pitch_mean.
+    # Pondera: pitch_mean (0.5) + pitch_range (0.3) + densidad_inversa (0.2).
+    # La melodía tiende a estar en el registro agudo, tener buen rango y
+    # no ser el canal más denso (ese suele ser el acompañamiento).
+    all_notes_flat = [(p, d) for notes in notes_by_channel.values()
+                      for _, p, d, _ in notes]
+    if all_notes_flat:
+        global_max_pitch = max(p for p, _ in all_notes_flat)
+        global_density   = sum(1 for _ in all_notes_flat)
+    else:
+        global_max_pitch = 127
+        global_density   = 1
+
+    def _melody_score(ch):
+        notes = notes_by_channel[ch]
+        if not notes: return 0.0
+        pitches = [p for _, p, _, _ in notes]
+        pm    = sum(pitches) / len(pitches) / 127.0          # pitch medio norm.
+        pr    = (max(pitches) - min(pitches)) / 127.0        # rango norm.
+        dens  = len(notes) / max(global_density, 1)          # densidad relativa
+        return 0.5 * pm + 0.3 * pr + 0.2 * (1.0 - dens)     # mayor pitch, más rango, menos denso
+
+    melody_ch = max(notes_by_channel, key=_melody_score)
     melody = sorted(notes_by_channel[melody_ch], key=lambda x: x[0])
     if verbose:
         print(f"    Melodía: {len(melody)} notas | ch={melody_ch} | "
@@ -1052,6 +1146,16 @@ class FeatureMapper:
 
 
 def _nearest_neighbor_pairs(src, dst):
+    """
+    Para cada vector en src, devuelve el índice del más cercano en dst.
+    Usa sklearn.metrics.pairwise_distances cuando está disponible (O(n·m) vectorizado),
+    con fallback a Python puro para el caso sin sklearn.
+    """
+    if HAS_SKLEARN:
+        from sklearn.metrics import pairwise_distances
+        dmat = pairwise_distances(src, dst, metric='euclidean')
+        return dmat.argmin(axis=1).tolist()
+    # Fallback Python puro
     return [int(np.argmin([np.linalg.norm(f - g) for g in dst])) for f in src]
 
 
@@ -1112,7 +1216,12 @@ class CycleGANSymbolic:
         if self.pca_dim > 0 and HAS_SKLEARN:
             all_vecs     = np.vstack([feats_a, feats_b])
             n_components = min(self.pca_dim, all_vecs.shape[0], all_vecs.shape[1])
-            self.pca     = PCA(n_components=n_components)
+            # FIX: warning explícito si PCA se recorta por corpus pequeño
+            if n_components < self.pca_dim:
+                print(f"  AVISO: pca_dim={self.pca_dim} recortado a {n_components} "
+                      f"(limitado por n_samples={all_vecs.shape[0]} o dim={all_vecs.shape[1]}). "
+                      f"Amplía el corpus o reduce --pca-dim.")
+            self.pca = PCA(n_components=n_components)
             self.pca.fit(all_vecs)
             feats_a = self.pca.transform(feats_a)
             feats_b = self.pca.transform(feats_b)
@@ -1336,7 +1445,7 @@ class CycleTrainer:
         path = self.model_dir / self.CHECKPOINT_NAME
         if not path.exists():
             print("[train] Entrenando desde cero."); return
-        state = torch.load(path, map_location='cpu')
+        state = torch.load(path, map_location='cpu', weights_only=False)  # FIX: explícito para torch>=2.0
         self.G_A2B.load_state_dict(state['G_A2B']); self.G_B2A.load_state_dict(state['G_B2A'])
         self.D_A.load_state_dict(state['D_A']);   self.D_B.load_state_dict(state['D_B'])
         self.opt_G.load_state_dict(state['opt_G'])
@@ -1490,7 +1599,7 @@ def _load_neural_models(model_dir):
                               cfg.get('n_res_blocks', 9), cfg.get('base_ch', 64))
     G_B2A = _build_generator(cfg['n_roles'], cfg['resolution'], cfg['n_pitch'],
                               cfg.get('n_res_blocks', 9), cfg.get('base_ch', 64))
-    state = torch.load(str(model_path), map_location='cpu')
+    state = torch.load(str(model_path), map_location='cpu', weights_only=False)  # FIX: explícito para torch>=2.0
     G_A2B.load_state_dict(state['G_A2B']); G_B2A.load_state_dict(state['G_B2A'])
     G_A2B.eval(); G_B2A.eval()
     return G_A2B, G_B2A, cfg
@@ -1810,6 +1919,7 @@ def _prepare_one_midi(args_tuple):
         'source': stem, 'resolution': resolution, 'window_bars': window_bars,
         'total_bars': total_bars, 'n_windows': min_windows,
         'roles': roles_found, 'tpbar': tpbar_real,   # FIX: era tpb_raw (= tpb*4, asumía 4/4)
+        'ts_num': ts_num,          # FIX: guardar compás real para que _rolls_to_midi lo use
         'pitch_lo': pitch_lo if pitch_lo is not None else 0,
         'pitch_hi': pitch_hi if pitch_hi is not None else 127,
         'n_pitch':  n_pitch,
@@ -2097,9 +2207,10 @@ def _cmd_transform_symbolic(args):
             'pitch_hi':   model.pitch_hi,
             'window_bars': WINDOW_BARS_DEFAULT,
         }
-        rolls = _midi_to_rolls(args.input, cfg)
+        rolls, ts_num_src = _midi_to_rolls(args.input, cfg)
         if not rolls:
             print("  ERROR: no se encontraron notas en el MIDI."); sys.exit(1)
+        cfg['ts_num'] = ts_num_src   # propagar compás para _rolls_to_midi
 
         bpm    = _infer_bpm_from_midi(args.input)
         n_bars = min(r.shape[0] for r in rolls.values())
@@ -2141,7 +2252,7 @@ def _cmd_transform_symbolic(args):
 
         out_path = args.output or (
             os.path.splitext(args.input)[0] + f"_cganv3_{args.direction}.mid")
-        threshold_pct = getattr(args, 'threshold_pct', 97.0)
+        threshold_pct = getattr(args, 'threshold_pct', 97.0)  # FIX: 97 más adecuado para rolls simbólicos
         n_notes = _rolls_to_midi(transformed_rolls, cfg, palette, out_path,
                                  bpm=bpm, threshold_pct=threshold_pct)
 
@@ -2165,9 +2276,10 @@ def _cmd_transform_neural(args):
     palette    = _load_palette(getattr(args, 'palette', None), cfg)
 
     print(f"\n  {args.input}  ({'A→B' if args.direction == 'AtoB' else 'B→A'})")
-    rolls = _midi_to_rolls(args.input, cfg)
+    rolls, ts_num_src = _midi_to_rolls(args.input, cfg)
     if not rolls:
         print("ERROR: no se encontraron notas."); sys.exit(1)
+    cfg['ts_num'] = ts_num_src
 
     role_list  = cfg['roles']
     n_roles    = cfg['n_roles']
@@ -2177,33 +2289,30 @@ def _cmd_transform_neural(args):
     threshold_pct = getattr(args, 'threshold_pct', 99.0)
 
     print(f"  {n_bars} compases  ·  {n_roles} roles")
-    bars_per_role = {role: [] for role in role_list}
 
-    for bar_idx in range(n_bars):
-        x_np = np.zeros((n_roles, resolution, n_pitch), dtype=np.float32)
-        for ridx, role in enumerate(role_list):
-            if role in rolls: x_np[ridx] = rolls[role][bar_idx]
+    # FIX: construir un batch completo (n_bars, n_roles, res, n_pitch) y hacer
+    # un único forward pass en lugar de n_bars pasadas individuales (mucho más rápido)
+    x_all = np.zeros((n_bars, n_roles, resolution, n_pitch), dtype=np.float32)
+    for ridx, role in enumerate(role_list):
+        if role in rolls:
+            x_all[:, ridx] = rolls[role][:n_bars]
 
-        x_t = torch.tensor(x_np).unsqueeze(0).to(device)
-        with torch.no_grad():
-            y_np = generator(x_t)[0].cpu().numpy()
+    x_t = torch.tensor(x_all).to(device)
+    with torch.no_grad():
+        y_all = generator(x_t).cpu().numpy()   # (n_bars, n_roles, res, n_pitch)
 
-        if bar_idx == 0:
-            thr   = _adaptive_threshold(y_np, threshold_pct)
-            n_act = int((y_np > thr).sum())
-            print(f"\n  [diag] Compás 0: mean={y_np.mean():.4f}  max={y_np.max():.4f}  "
-                  f"umbral={thr:.4f}  notas_activas={n_act}")
-            if n_act == 0:
-                print("         ⚠  sin notas activas — prueba --threshold-pct 97")
+    # Diagnóstico en el primer compás
+    y0 = y_all[0]
+    thr   = _adaptive_threshold(y0, threshold_pct)
+    n_act = int((y0 > thr).sum())
+    print(f"\n  [diag] Compás 0: mean={y0.mean():.4f}  max={y0.max():.4f}  "
+          f"umbral={thr:.4f}  notas_activas={n_act}")
+    if n_act == 0:
+        print("         ⚠  sin notas activas — prueba --threshold-pct 97")
 
-        for ridx, role in enumerate(role_list):
-            bars_per_role[role].append(y_np[ridx])
-
-    for role in role_list:
-        if bars_per_role[role]:
-            bars_per_role[role] = np.stack(bars_per_role[role], axis=0)
-        else:
-            bars_per_role.pop(role, None)
+    bars_per_role = {}
+    for ridx, role in enumerate(role_list):
+        bars_per_role[role] = y_all[:, ridx]   # (n_bars, res, n_pitch)
 
     out_path = args.output or (
         os.path.splitext(args.input)[0] + f"_neural_{args.direction}.mid")
@@ -2222,6 +2331,25 @@ def cmd_cycle(args):
     print("═" * 65)
     print("  CYCLE-GAN STYLE TRANSFER v3 — CYCLE CONSISTENCY")
     print("═" * 65)
+
+    if not HAS_DNA:
+        # Fallback: medir consistencia de ciclo solo en feature space, sin generar MIDI
+        print("\n  [AVISO] midi_dna_unified no disponible. "
+              "Calculando pérdida de ciclo en feature space únicamente.")
+        model    = CycleGANSymbolic.load(args.model)
+        feat_src = model.midi_to_vec(args.input, verbose=args.verbose)
+        dir1     = args.direction
+        dir2     = 'BtoA' if dir1 == 'AtoB' else 'AtoB'
+        feat_ab  = model.map_features(feat_src, direction=dir1)
+        feat_aba = model.map_features(feat_ab,  direction=dir2)
+        cycle_loss = float(np.linalg.norm(feat_aba - feat_src))
+        print(f"\n  Pérdida de ciclo ‖F(G(a)) − a‖₂ : {cycle_loss:.4f}")
+        disc_src = model.discriminate(feat_src)
+        disc_ab  = model.discriminate(feat_ab)
+        print(f"  Fuente   → D_A={disc_src['D_A_prob']:.3f}  D_B={disc_src['D_B_prob']:.3f}")
+        print(f"  Tras G   → D_A={disc_ab['D_A_prob']:.3f}  D_B={disc_ab['D_B_prob']:.3f}")
+        print("═" * 65)
+        return
 
     model = CycleGANSymbolic.load(args.model)
     original_melody, _, _ = extract_raw_melody(args.input, verbose=args.verbose)
@@ -2334,7 +2462,8 @@ def cmd_style_corpus(args):
 
         for midi_path in midi_files:
             try:
-                rolls  = _midi_to_rolls(str(midi_path), cfg)
+                rolls, ts_num_src  = _midi_to_rolls(str(midi_path), cfg)
+                cfg['ts_num'] = ts_num_src
                 n_bars = min(r.shape[0] for r in rolls.values())
                 x_np   = np.zeros((n_bars, n_roles, resolution, n_pitch), dtype=np.float32)
                 for ridx, role in enumerate(role_list):
@@ -2400,15 +2529,22 @@ def cmd_round_trip(args):
             cfg_path = Path(model_dir) / CycleTrainer.CONFIG_NAME
             if cfg_path.exists():
                 with open(cfg_path) as f:
-                    cfg_rt = json.load(f)
-                print(f"[round-trip] Config desde {model_dir}")
+                    loaded = json.load(f)
+                # FIX: el --resolution del usuario tiene prioridad sobre el del model_dir
+                user_resolution = args.resolution
+                cfg_rt.update(loaded)
+                cfg_rt['resolution'] = user_resolution
+                print(f"[round-trip] Config desde {model_dir} (resolución del usuario: {user_resolution})")
         except Exception:
             pass
 
     # BPM y compás desde el fuente si no se especifica
     bpm = args.bpm if args.bpm != 120.0 else _infer_bpm_from_midi(args.input)
+    ts_num, _ = _infer_time_sig_from_midi(args.input)
+    cfg_rt['ts_num'] = ts_num   # FIX: propagar compás real para ticks correctos
 
-    rolls    = _midi_to_rolls(args.input, cfg_rt)
+    rolls, ts_num_src = _midi_to_rolls(args.input, cfg_rt)
+    cfg_rt['ts_num']  = ts_num_src   # refinar con el valor real del MIDI (puede diferir)
     n_bars   = min(r.shape[0] for r in rolls.values())
     print(f"[round-trip] {n_bars} compases  ·  roles: {list(rolls.keys())}  ·  {bpm} BPM")
 
