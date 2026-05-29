@@ -1064,12 +1064,27 @@ def _tensor_to_rolls(tensor, cfg):
 
 
 def _adaptive_threshold(roll, percentile=99.0):
+    """
+    Calcula un umbral de binarización adaptativo.
+
+    Para rolls ya binarios (max == 1.0 y valores únicos 0/1), usa 0.5
+    para garantizar que todos los píxeles activos pasen.
+    Para rolls con valores continuos (salida del generador), usa el percentil.
+    """
     import numpy as np
-    vals = roll.flatten()
+    vals    = roll.flatten()
     nonzero = vals[vals > 1e-4]
     if len(nonzero) == 0:
         return 0.5
-    return float(np.percentile(nonzero, percentile))
+    # Si el roll ya es binario (puro 0/1), cualquier umbral <= 0.5 funciona
+    unique = np.unique(vals[vals > 0])
+    if len(unique) == 1 and abs(unique[0] - 1.0) < 1e-3:
+        return 0.5
+    thr = float(np.percentile(nonzero, percentile))
+    # Nunca retornar >= max para evitar que todo quede excluido
+    if thr >= nonzero.max() - 1e-5:
+        thr = float(np.percentile(nonzero, max(percentile - 10.0, 50.0)))
+    return thr
 
 
 def _rolls_to_midi(bars_per_role, cfg, palette, output_path,

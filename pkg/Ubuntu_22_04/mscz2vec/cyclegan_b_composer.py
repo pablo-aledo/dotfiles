@@ -132,12 +132,23 @@ def _std(values: list) -> float:
     return (sum((v - mean) ** 2 for v in values) / len(values)) ** 0.5
 
 
-def _adaptive_threshold(roll, pct: float = 99.0) -> float:
+def _adaptive_threshold(roll, pct: float = 90.0) -> float:
+    """
+    Calcula un umbral de binarización automático a partir del percentil `pct`
+    de la distribución de activaciones del piano roll generado.
+
+    A diferencia del umbral fijo, este método se adapta al rango real de
+    salida del generador en cada etapa del entrenamiento:
+      - Modelo recién iniciado (valores bajos, ~0.05–0.1): umbral ~p90
+      - Modelo convergido (valores distribuidos en [0,1]): umbral similar
+    Usar p90 mantiene ~10% de celdas activas, densidad musicalmenteusable.
+    """
     import numpy as np
     flat = roll.flatten()
-    if flat.max() < 0.01:
-        return 0.5
-    return float(np.percentile(flat, pct)) * 0.5
+    vmax = float(flat.max())
+    if vmax < 1e-4:
+        return 0.5           # roll vacío: threshold imposible → silencio
+    return float(np.percentile(flat, pct))
 
 
 def _pitch_range(n: int | None):
@@ -400,7 +411,8 @@ class TensionExtractor:
 
 def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
                    output_path: str, bpm: float = 120.0,
-                   threshold: float = None, adaptive_per_bar: bool = False):
+                   threshold: float = None, adaptive_per_bar: bool = False,
+                   threshold_percentile: float = 90.0):
     import mido, numpy as np
 
     resolution  = cfg['resolution']
@@ -427,7 +439,7 @@ def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
         if do_expand:
             roll = _pad_pitch(roll, pitch_lo, n_full=128)
 
-        thr  = threshold if threshold is not None else _adaptive_threshold(roll)
+        thr  = threshold if threshold is not None else _adaptive_threshold(roll, pct=threshold_percentile)
         pal  = palette.get(role, DEFAULT_PALETTE.get(role, {}))
         prog = int(pal.get('program', 0))
         ch   = int(pal.get('channel', 0))
@@ -440,14 +452,13 @@ def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
         if adaptive_per_bar:
             binary = np.zeros_like(roll)
             for b in range(roll.shape[0]):
-                bar_max = roll[b].max()
-                if bar_max >= thr:
-                    bar_thr = thr
-                elif bar_max >= 0.1:
-                    bar_thr = bar_max * 0.5
-                else:
-                    bar_thr = 1.1
-                binary[b] = (roll[b] > bar_thr).astype(np.float32)
+                bar_slice = roll[b]
+                bar_max   = bar_slice.max()
+                if bar_max < 1e-4:
+                    continue   # compás vacío
+                bar_thr = _adaptive_threshold(bar_slice, pct=threshold_percentile) \
+                          if threshold is None else threshold
+                binary[b] = (bar_slice > bar_thr).astype(np.float32)
         else:
             binary = (roll > thr).astype(np.float32)
 
@@ -1489,8 +1500,8 @@ def cmd_transfer(args):
 
     for start in range(0, total_bars, bs):
         end    = min(start + bs, total_bars)
-        x_np   = roll_stack[start:end]              # (B, N_ROLES, res, n_pitch)
-        t_np   = tension_arr[start:end]             # (B, TENSION_DIM)
+        x_np   = roll_stack[start:end]
+        t_np   = tension_arr[start:end]
 
         x_t    = torch.tensor(x_np).to(device)
         t_t    = torch.tensor(t_np).to(device)
@@ -1502,10 +1513,24 @@ def cmd_transfer(args):
 
     print()
 
+    # ── Diagnóstico de calibración del umbral ────────────────────────────────
+    flat     = out_stack.flatten()
+    vmin, vmax, vmean = float(flat.min()), float(flat.max()), float(flat.mean())
+    thr_pct  = args.threshold_percentile
+    auto_thr = _adaptive_threshold(out_stack, pct=thr_pct)
+    used_thr = args.threshold if args.threshold is not None else auto_thr
+    frac_on  = float((flat > used_thr).mean())
+    print(f"[transfer] Salida del generador — min={vmin:.4f}  max={vmax:.4f}  "
+          f"mean={vmean:.4f}")
+    print(f"[transfer] Umbral {'fijo' if args.threshold is not None else f'auto (p{thr_pct:.0f})'}"
+          f" = {used_thr:.5f}  →  {frac_on*100:.1f}% celdas activas"
+          + ("  ⚠ modelo poco convergido, considera más épocas"
+             if vmax < 0.2 and args.threshold is None else ""))
+
     # Convertir de vuelta a dict {role: (n_bars, res, n_pitch)}
     bars_per_role = {}
     for ri, role in enumerate(roles):
-        bars_per_role[role] = out_stack[:, ri]   # (total_bars, res, n_pitch)
+        bars_per_role[role] = out_stack[:, ri]
 
     # Paleta de instrumentos
     palette = DEFAULT_PALETTE
@@ -1514,10 +1539,11 @@ def cmd_transfer(args):
 
     n_notes = _rolls_to_midi(
         bars_per_role, cfg, palette,
-        output_path      = args.output,
-        bpm              = args.bpm,
-        threshold        = args.threshold,
-        adaptive_per_bar = args.adaptive_per_bar,
+        output_path          = args.output,
+        bpm                  = args.bpm,
+        threshold            = args.threshold,
+        adaptive_per_bar     = args.adaptive_per_bar,
+        threshold_percentile = args.threshold_percentile,
     )
     print(f"[transfer] Guardado: {args.output}  ({n_notes} notas, {total_bars} compases)")
 
@@ -1726,12 +1752,25 @@ def build_parser():
             El vector de tensión se calcula automáticamente del MIDI de entrada
             y se usa para condicionar el generador en cada compás.
 
+            Umbral de binarización:
+              Por defecto se auto-calibra al percentil 90 de la distribución de
+              activación del generador (--threshold-percentile 90). Esto hace que
+              el umbral se adapte al rango real de salida en cualquier etapa del
+              entrenamiento, sin necesidad de conocer ese rango a priori.
+
+              Con modelos poco entrenados (max < 0.2) el comando muestra un aviso
+              y sugiere más épocas de entrenamiento.
+
             Ejemplos:
               transfer --input cancion_jazz.mid --model-dir model_jazz2clasico/ \\
                        --direction AB --output cancion_clasica.mid
 
-              transfer --input cancion_clasica.mid --model-dir model_jazz2clasico/ \\
-                       --direction BA --output cancion_jazz.mid
+              # Más notas (umbral más bajo):
+              transfer --input cancion.mid --model-dir model/ \\
+                       --threshold-percentile 80 --adaptive-per-bar
+
+              # Umbral fijo explícito:
+              transfer --input cancion.mid --model-dir model/ --threshold 0.35
         """))
     p_tr.add_argument('--input',      required=True, metavar='FILE')
     p_tr.add_argument('--model-dir',  required=True, metavar='DIR')
@@ -1744,10 +1783,21 @@ def build_parser():
     p_tr.add_argument('--batch-size', type=int,   default=16, metavar='INT',
         help='Compases procesados a la vez en inferencia (default: 16)')
     p_tr.add_argument('--threshold',  type=float, default=None, metavar='FLOAT',
-        help='Umbral fijo de binarización [0,1]. Sin valor: adaptativo (p99×0.5)')
+        help='Umbral fijo de binarización [0,1]. Si se omite, se calcula '
+             'automáticamente según --threshold-percentile.')
+    p_tr.add_argument('--threshold-percentile', type=float, default=90.0,
+        metavar='FLOAT', dest='threshold_percentile',
+        help='Percentil de la distribución de activación usado para calcular '
+             'el umbral automático (default: 90). '
+             'Valores bajos → más notas; valores altos → menos notas. '
+             'Se ignora si se pasa --threshold. '
+             'Recomendado: 85–92 con modelos convergidos, 88–95 con modelos '
+             'poco entrenados.')
     p_tr.add_argument('--adaptive-per-bar', action='store_true',
         dest='adaptive_per_bar',
-        help='Umbral adaptativo por compás: evita compases vacíos con activación débil')
+        help='Calcula el umbral independientemente para cada compás en lugar '
+             'de una vez sobre todo el roll. Evita compases vacíos cuando '
+             'hay variación grande de activación entre compases.')
     p_tr.set_defaults(func=cmd_transfer)
 
     # ── round-trip ────────────────────────────────────────────────────────────
