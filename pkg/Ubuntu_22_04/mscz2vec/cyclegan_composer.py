@@ -1,89 +1,86 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                     CYCLEGAN COMPOSER  v1                                    ║
-║         Style-transfer end-to-end mediante CycleGAN sobre piano rolls        ║
+║                     CYCLE-GAN COMPOSER  v2                                   ║
+║       Transferencia de estilo musical mediante CycleGAN sobre piano rolls    ║
 ║                                                                              ║
 ║  ARQUITECTURA:                                                               ║
-║    2 Generadores ResNet (G_A→B, G_B→A) + 2 Discriminadores PatchGAN         ║
-║    Entrenamiento unpaired: corpus A y corpus B no necesitan                  ║
-║    correspondencia canción-a-canción.                                        ║
-║    Losses: adversarial + cycle-consistency (λ=10) + identity (λ=0.5)        ║
-║                                                                              ║
-║  DIFERENCIAS CLAVE vs diffusion_composer:                                    ║
-║    · No hay proceso de ruido/denoising — la transferencia es determinista    ║
-║    · El estilo se define implícitamente por el corpus de entrenamiento        ║
-║    · Un par de modelos (A↔B) = una sola dirección de transferencia           ║
-║    · Inferencia muy rápida (un solo paso forward del generador)              ║
+║    Dos generadores ResNet + dos discriminadores PatchGAN                     ║
+║    Pérdidas: adversarial (LSGAN) + cycle-consistency + identity              ║
+║    Representación: piano roll multi-rol (melody/counterpoint/bass/etc.)      ║
+║    Condicionamiento: tensión armónica (8D) inyectada vía AdaIN               ║
+║    Dropout2d(0.05) en cada ResBlock (regularización corpus pequeños)         ║
+║    Logging desglosado por rama: adv_A2B/B2A, cyc_A/B, idt_A/B, D_A/D_B     ║
 ║                                                                              ║
 ║  COMANDOS:                                                                   ║
 ║    prepare      — MIDI corpus → piano rolls segmentados por rol (.npz)       ║
-║    train        — Entrena el par de generadores A↔B (corpus-A y corpus-B)   ║
-║    transfer     — Transfiere estilo B a una canción del estilo A              ║
-║    transfer-inv — Transfiere estilo A a una canción del estilo B              ║
-║    style-corpus — Diagnóstico: estadísticas del espacio latente del corpus   ║
-║    round-trip   — Diagnóstico: MIDI → piano roll → MIDI sin modelo           ║
+║    train        — Entrena el modelo CycleGAN (dominio A ↔ dominio B)         ║
+║    transfer     — Transfiere el estilo de B a un MIDI concreto del dominio A ║
+║    encode       — MIDI → vector de estilo latente (.json)                    ║
+║    style-corpus — Centroide de estilo de una carpeta de MIDIs                ║
 ║    inspect      — Diagnóstico del modelo y los datos                         ║
+║    round-trip   — MIDI → piano roll → MIDI (sin modelo, diagnóstico)         ║
 ║                                                                              ║
 ║  DEPENDENCIAS:                                                               ║
 ║    mido, numpy, torch                                                        ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+╠══════════════════════════════════════════════════════════════════════════════╣
 
-# ── Preparar datos ─────────────────────────────────────────────────────────────
-# Preparar corpus A (estilo origen) y corpus B (estilo destino) por separado.
-python cyclegan_composer.py prepare --input-dir midis_A/ --output-dir data_A/
-python cyclegan_composer.py prepare --input-dir midis_B/ --output-dir data_B/
+# ── Preparar dos corpus ───────────────────────────────────────────────────────
+python cycle_gan_composer.py prepare \
+    --input-dir midis_tango/  --output-dir data_A/ --report
 
-# Con roles reducidos y rango de pitch limitado:
-python cyclegan_composer.py prepare \
-    --input-dir midis_A/ --output-dir data_A_small/ \
-    --disable-roles percussion counterpoint \
-    --pitch-range 48
+python cycle_gan_composer.py prepare \
+    --input-dir midis_jazz/   --output-dir data_B/ --report
 
-# ── Entrenar el par de generadores A↔B ────────────────────────────────────────
-python cyclegan_composer.py train \
-    --data-dir-a data_A/ \
-    --data-dir-b data_B/ \
-    --model-dir  model_cycle/ \
-    --epochs 200 \
-    --batch-size 4 \
-    --lr 2e-4 \
-    --lambda-cycle 10.0 \
-    --lambda-identity 0.5 \
+# Con rango de pitch reducido (CPU / GPU modesta):
+python cycle_gan_composer.py prepare \
+    --input-dir midis_tango/  --output-dir data_A_small/ \
+    --pitch-range 48 --disable-roles percussion counterpoint
+
+# ── Entrenar ──────────────────────────────────────────────────────────────────
+python cycle_gan_composer.py train \
+    --data-dir-a data_A/ --data-dir-b data_B/ \
+    --model-dir model_cyclegan/ \
+    --epochs 200 --batch-size 8 --lr 2e-4 \
+    --lambda-cycle 10.0 --lambda-identity 5.0 \
     --patience 40
 
-# Con roles reducidos:
-python cyclegan_composer.py train \
-    --data-dir-a data_A_small/ \
-    --data-dir-b data_B_small/ \
-    --model-dir  model_small/ \
-    --disable-roles percussion counterpoint \
-    --epochs 200 --batch-size 8
+# GPU modesta (menos canales, menos bloques):
+python cycle_gan_composer.py train \
+    --data-dir-a data_A_small/ --data-dir-b data_B_small/ \
+    --model-dir model_small/ \
+    --base-ch 32 --n-res-blocks 4 \
+    --epochs 200 --batch-size 16
 
-# ── Style transfer A→B ────────────────────────────────────────────────────────
-python cyclegan_composer.py transfer \
-    --input midis_A/cancion.mid \
-    --model-dir model_cycle/ \
-    --output resultado_B.mid \
+# ── Transferir estilo B a un MIDI del dominio A ───────────────────────────────
+python cycle_gan_composer.py transfer \
+    --model-dir model_cyclegan/ --palette palette.json \
+    --input midis_tango/cancion.mid \
+    --direction A2B \
+    --output resultado_jazz.mid \
     --threshold-pct 99.0
 
-# ── Style transfer B→A (inverso) ─────────────────────────────────────────────
-python cyclegan_composer.py transfer-inv \
-    --input midis_B/cancion.mid \
-    --model-dir model_cycle/ \
-    --output resultado_A.mid \
-    --threshold-pct 99.0
+# Dirección inversa (B → A):
+python cycle_gan_composer.py transfer \
+    --model-dir model_cyclegan/ \
+    --input midis_jazz/tema.mid \
+    --direction B2A \
+    --output resultado_tango.mid
 
-# ── Diagnóstico del corpus ────────────────────────────────────────────────────
-python cyclegan_composer.py style-corpus \
-    --input-dir midis_A/ \
-    --model-dir model_cycle/ \
-    --direction a2b \
-    --output stats_A.json
+# ── Encode / style-corpus ─────────────────────────────────────────────────────
+python cycle_gan_composer.py encode \
+    --input midis_tango/cancion.mid --model-dir model_cyclegan/ \
+    --output z_tango.json
 
-# ── Diagnóstico básico ────────────────────────────────────────────────────────
-python cyclegan_composer.py round-trip --input midis_A/cancion.mid
-python cyclegan_composer.py inspect --data-dir data_A/ --model-dir model_cycle/
+python cycle_gan_composer.py style-corpus \
+    --input-dir midis_jazz/ --model-dir model_cyclegan/ \
+    --output z_jazz_centroide.json
+
+# ── Diagnóstico ───────────────────────────────────────────────────────────────
+python cycle_gan_composer.py round-trip --input midis_tango/cancion.mid
+python cycle_gan_composer.py inspect --model-dir model_cyclegan/
+python cycle_gan_composer.py inspect --what npz --data-dir data_A/
+
 """
 
 import argparse
@@ -95,18 +92,10 @@ from pathlib import Path
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CONSTANTES GLOBALES  (idénticas a diffusion_composer)
+#  CONSTANTES GLOBALES
 # ══════════════════════════════════════════════════════════════════════════════
 
 ROLES = ['melody', 'counterpoint', 'accompaniment', 'bass', 'percussion']
-
-ROLE_RANGES = {
-    'melody':        (60, 96),
-    'counterpoint':  (52, 84),
-    'accompaniment': (48, 84),
-    'bass':          (28, 55),
-    'percussion':    (0,  127),
-}
 
 GM_ROLE_HINTS = {
     43: 'bass', 42: 'bass', 58: 'bass', 70: 'bass',
@@ -114,7 +103,6 @@ GM_ROLE_HINTS = {
     68: 'counterpoint', 71: 'counterpoint', 41: 'counterpoint',
     48: 'accompaniment', 49: 'accompaniment',
     19: 'accompaniment', 52: 'accompaniment',
-    88: 'accompaniment', 89: 'accompaniment',
 }
 
 TICKS_PER_BAR_DEFAULT = 48
@@ -122,6 +110,18 @@ WINDOW_BARS_DEFAULT   = 4
 PITCH_CLASSES         = 128
 MIDI_CENTER           = 60
 
+DEFAULT_PALETTE = {
+    'melody':        {'program': 73, 'channel': 0, 'velocity': 90},
+    'counterpoint':  {'program': 68, 'channel': 1, 'velocity': 80},
+    'accompaniment': {'program': 48, 'channel': 2, 'velocity': 70},
+    'bass':          {'program': 43, 'channel': 3, 'velocity': 85},
+    'percussion':    {'program':  0, 'channel': 9, 'velocity': 90},
+}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  UTILIDADES DE PITCH
+# ══════════════════════════════════════════════════════════════════════════════
 
 def _pitch_range(n):
     if n is None:
@@ -148,7 +148,7 @@ def _pad_pitch(roll, pitch_lo, n_full=128):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  UTILIDADES MIDI  (idénticas a diffusion_composer)
+#  UTILIDADES MIDI
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _load_midi(path):
@@ -185,15 +185,8 @@ def _ticks_per_bar(mid):
     return mid.ticks_per_beat * 4
 
 
-def _std(values):
-    if len(values) < 2:
-        return 0.0
-    mean = sum(values) / len(values)
-    return (sum((v - mean) ** 2 for v in values) / len(values)) ** 0.5
-
-
 # ══════════════════════════════════════════════════════════════════════════════
-#  ASIGNACIÓN DE ROLES  (idéntico a diffusion_composer)
+#  ASIGNACIÓN DE ROLES
 # ══════════════════════════════════════════════════════════════════════════════
 
 class RoleAssigner:
@@ -214,12 +207,12 @@ class RoleAssigner:
             pitches   = [n[2] for n in notes]
             program   = notes[0][4]
             pitch_mean  = sum(pitches) / len(pitches)
-            pitch_range = max(pitches) - min(pitches)
+            pitch_range_v = max(pitches) - min(pitches)
             density     = len(notes) / max(total_dur / tpb_raw, 1)
             polyphony   = self._mean_polyphony(notes)
             profiles.append({
                 'key': (ti, ch), 'channel': ch, 'program': program,
-                'pitch_mean': pitch_mean, 'pitch_range': pitch_range,
+                'pitch_mean': pitch_mean, 'pitch_range': pitch_range_v,
                 'density': density, 'polyphony': polyphony,
                 'n_notes': len(notes),
             })
@@ -268,36 +261,38 @@ class RoleAssigner:
         if not unassigned:
             return assigned
 
-        def norm(key):
-            vals = [p[key] for p in unassigned]
+        def norm(lst, key):
+            vals = [p[key] for p in lst]
             lo, hi = min(vals), max(vals)
             span = hi - lo or 1
-            return {p['key']: (p[key] - lo) / span for p in unassigned}
+            return {p['key']: (p[key] - lo) / span for p in lst}
 
-        n_pm   = norm('pitch_mean')
-        n_pr   = norm('pitch_range')
-        n_poly = norm('polyphony')
-        n_dens = norm('density')
+        n_pm   = norm(unassigned, 'pitch_mean')
+        n_pr   = norm(unassigned, 'pitch_range')
+        n_poly = norm(unassigned, 'polyphony')
+        n_dens = norm(unassigned, 'density')
 
         def score(p, role):
             k = p['key']
-            hint_bonus = 0.25 if GM_ROLE_HINTS.get(p['program']) == role else 0.0
+            hint = 0.25 if GM_ROLE_HINTS.get(p['program']) == role else 0.0
             if role == 'melody':
-                return 0.40 * n_pm[k] + 0.35 * n_pr[k] + 0.15 * (1 - n_poly[k]) + hint_bonus
+                return 0.40 * n_pm[k] + 0.35 * n_pr[k] + 0.15 * (1 - n_poly[k]) + hint
             elif role == 'counterpoint':
                 mid_pm = abs(n_pm[k] - 0.65)
-                return 0.30 * (1 - mid_pm) + 0.25 * n_pr[k] + 0.20 * (1 - n_poly[k]) + hint_bonus
+                return 0.30 * (1 - mid_pm) + 0.25 * n_pr[k] + 0.20 * (1 - n_poly[k]) + hint
             elif role == 'accompaniment':
                 mid_pm = abs(n_pm[k] - 0.50)
-                return 0.40 * n_poly[k] + 0.25 * (1 - mid_pm) + 0.15 * n_dens[k] + hint_bonus
+                return 0.40 * n_poly[k] + 0.25 * (1 - mid_pm) + 0.15 * n_dens[k] + hint
             elif role == 'bass':
-                return 0.50 * (1 - n_pm[k]) + 0.25 * (1 - n_pr[k]) + hint_bonus
+                return 0.50 * (1 - n_pm[k]) + 0.25 * (1 - n_pr[k]) + hint
             return 0.0
 
-        score_matrix = {p['key']: {r: score(p, r) for r in remaining_roles} for p in unassigned}
+        score_matrix = {p['key']: {r: score(p, r) for r in remaining_roles}
+                        for p in unassigned}
         taken_keys  = set()
         taken_roles = set()
-        pairs = [(score_matrix[p['key']][r], r, p['key']) for p in unassigned for r in remaining_roles]
+        pairs = [(score_matrix[p['key']][r], r, p['key'])
+                 for p in unassigned for r in remaining_roles]
         pairs.sort(key=lambda x: -x[0])
         for sc, role, key in pairs:
             if role not in taken_roles and key not in taken_keys:
@@ -308,59 +303,135 @@ class RoleAssigner:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PIANO ROLL CONVERTER  (idéntico a diffusion_composer)
+#  PIANO ROLL CONVERTER
 # ══════════════════════════════════════════════════════════════════════════════
 
 class PianoRollConverter:
-    def __init__(self, resolution=TICKS_PER_BAR_DEFAULT, window_bars=WINDOW_BARS_DEFAULT):
+    def __init__(self, resolution=TICKS_PER_BAR_DEFAULT,
+                 window_bars=WINDOW_BARS_DEFAULT):
         self.resolution  = resolution
         self.window_bars = window_bars
 
     def notes_to_roll(self, notes, tpb_raw, n_bars):
         import numpy as np
-        T = n_bars * self.resolution
-        roll = np.zeros((T, PITCH_CLASSES), dtype=np.float32)
-        scale = self.resolution / tpb_raw
-        for (st, en, pitch, vel, _) in notes:
-            t0 = int(st * scale)
-            t1 = max(t0 + 1, int(en * scale))
-            t0 = min(t0, T - 1)
-            t1 = min(t1, T)
-            roll[t0:t1, pitch] = 1.0
-        return roll.reshape(n_bars, self.resolution, PITCH_CLASSES)
+        roll = np.zeros((n_bars, self.resolution, PITCH_CLASSES), dtype=np.float32)
+        ticks_per_internal = tpb_raw / self.resolution
+        for (start, end, pitch, vel, _) in notes:
+            bar_s  = int(start / tpb_raw)
+            tick_s = int((start % tpb_raw) / ticks_per_internal)
+            bar_e  = int(end   / tpb_raw)
+            tick_e = int((end   % tpb_raw) / ticks_per_internal)
+            if bar_s >= n_bars:
+                continue
+            if bar_s == bar_e:
+                roll[bar_s, tick_s:min(tick_e, self.resolution), pitch] = 1.0
+            else:
+                roll[bar_s, tick_s:, pitch] = 1.0
+                for b in range(bar_s + 1, min(bar_e, n_bars)):
+                    roll[b, :, pitch] = 1.0
+                if bar_e < n_bars:
+                    roll[bar_e, :tick_e, pitch] = 1.0
+        return roll
 
     def roll_to_windows(self, roll):
         import numpy as np
-        n_bars = roll.shape[0]
+        n_bars  = roll.shape[0]
+        n_pitch = roll.shape[2]
         if n_bars < self.window_bars:
-            return np.zeros((0, self.window_bars, self.resolution, PITCH_CLASSES),
+            return np.zeros((0, self.window_bars, self.resolution, n_pitch),
                             dtype=np.float32)
-        windows = []
-        for i in range(n_bars - self.window_bars + 1):
-            windows.append(roll[i: i + self.window_bars])
-        return np.stack(windows, axis=0)
+        n_windows = n_bars - self.window_bars + 1
+        return np.stack([roll[i:i + self.window_bars] for i in range(n_windows)])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  DATASET  (un corpus a la vez; para CycleGAN se instancian dos)
+#  EXTRACTOR DE TENSIÓN  (8D por compás)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TensionExtractor:
+    TENSION_DIM = 8
+
+    def extract_bar_vectors(self, role_rolls, bars):
+        import numpy as np
+        n_pitch  = next(iter(role_rolls.values())).shape[-1] if role_rolls else PITCH_CLASSES
+        vectors  = np.zeros((bars, self.TENSION_DIM), dtype=np.float32)
+        for bar in range(bars):
+            combined     = np.zeros((n_pitch,), dtype=np.float32)
+            total_events = 0
+            resolution   = None
+            for role, roll in role_rolls.items():
+                if bar >= roll.shape[0]:
+                    continue
+                bar_roll   = roll[bar]
+                resolution = bar_roll.shape[0]
+                active     = bar_roll.max(axis=0)
+                combined   = np.maximum(combined, active)
+                total_events += bar_roll.sum()
+            if resolution is None or resolution == 0:
+                continue
+            pitches_active = np.where(combined > 0)[0]
+            n_active       = len(pitches_active)
+            capacity       = resolution * n_pitch
+            tension        = self._lerdahl_proxy(pitches_active)
+            density        = min(float(total_events) / max(capacity * len(role_rolls), 1) * 20, 1.0)
+            poly           = min(n_active / 12.0, 1.0)
+            reg_mean       = float(np.mean(pitches_active)) / max(n_pitch - 1, 1) if n_active > 0 else 0.5
+            reg_spread     = float(np.ptp(pitches_active)) / max(n_pitch - 1, 1) if n_active > 1 else 0.0
+            rhythm_density = 0.0
+            if 'melody' in role_rolls and bar < role_rolls['melody'].shape[0]:
+                mel = role_rolls['melody'][bar]
+                act = mel.sum(axis=1)
+                rhythm_density = float((abs(act[1:] - act[:-1]) > 0).sum()) / max(resolution - 1, 1)
+            arousal = 0.5 * min(density * 2, 1.0) + 0.5 * rhythm_density
+            vectors[bar] = [tension, density, poly, reg_mean,
+                            reg_spread, 0.5, rhythm_density, arousal]
+        return vectors
+
+    @staticmethod
+    def _lerdahl_proxy(pitches_active):
+        if len(pitches_active) < 2:
+            return 0.0
+        DISSONANT = {1, 2, 6, 10, 11}
+        count = 0
+        pairs = 0
+        pcs   = pitches_active % 12
+        for i in range(len(pcs)):
+            for j in range(i + 1, len(pcs)):
+                iv = abs(int(pcs[i]) - int(pcs[j])) % 12
+                iv = min(iv, 12 - iv)
+                if iv in DISSONANT:
+                    count += 1
+                pairs += 1
+        return count / pairs if pairs > 0 else 0.0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  DATASET
 # ══════════════════════════════════════════════════════════════════════════════
 
 class MidiRollDataset:
-    """Dataset de ventanas de piano roll para un corpus.
-
-    Cada item devuelve:
-        x : (N_ROLES, resolution, n_pitch)  — compás objetivo
     """
-    def __init__(self, data_dir, roles=None):
+    Cada muestra:
+        'x'       : Tensor (N_ROLES, T, n_pitch)  — T = window_bars * resolution
+        'tension' : Tensor (TENSION_DIM,)
+        'mask'    : Tensor (N_ROLES,) bool
+    """
+    def __init__(self, data_dir, roles=None, augment=False):
         import numpy as np
-        self.roles   = roles or ROLES
         self.samples = []
-        self.n_pitch = None
+        self.roles   = roles or ROLES
+        self.n_roles = len(self.roles)
+        self.augment = augment
         self._cache  = {}
+        self.n_pitch = None
 
-        for path in sorted(Path(data_dir).glob('*.npz')):
+        npz_files = sorted(Path(data_dir).glob('*.npz'))
+        if not npz_files:
+            raise FileNotFoundError(f"No hay .npz en {data_dir}")
+
+        for path in npz_files:
             try:
-                data = np.load(str(path), allow_pickle=True)
+                data = dict(np.load(str(path), allow_pickle=True))
                 meta = json.loads(str(data['meta_json'][0]))
                 if self.n_pitch is None:
                     self.n_pitch = meta.get('n_pitch', PITCH_CLASSES)
@@ -382,232 +453,442 @@ class MidiRollDataset:
 
         path, widx, meta = self.samples[idx]
         data = self._cache[path]
-        resolution = meta['resolution']
+
+        resolution  = meta['resolution']
+        window_bars = meta['window_bars']
 
         x_parts = []
+        mask    = []
+
         for role in self.roles:
             key = f'roll_{role}'
             if key in data:
-                window = data[key][widx]      # (window_bars, resolution, n_pitch)
-                x_parts.append(window[-1])    # último compás
+                window = data[key][widx]                             # (window_bars, res, n_pitch)
+                x_parts.append(window.reshape(-1, self.n_pitch))    # (T, n_pitch)
+                mask.append(True)
             else:
-                x_parts.append(np.zeros((resolution, self.n_pitch), dtype=np.float32))
+                x_parts.append(
+                    np.zeros((window_bars * resolution, self.n_pitch), dtype=np.float32))
+                mask.append(False)
 
-        x = torch.tensor(np.stack(x_parts, axis=0))   # (N_ROLES, res, n_pitch)
-        return x
+        x         = torch.tensor(np.stack(x_parts, axis=0))     # (N_ROLES, T, n_pitch)
+        tension   = torch.tensor(data['tension'][widx])
+        role_mask = torch.tensor(mask, dtype=torch.bool)
+
+        if self.augment:
+            import torch as th
+            if th.rand(1).item() < 0.5:
+                x = th.flip(x, dims=[2])        # espejo de pitch
+            if th.rand(1).item() < 0.3:
+                shift = int(th.randint(-3, 4, (1,)).item())
+                x = th.roll(x, shift, dims=2)   # transposición aleatoria ±3 semitonos
+
+        return {'x': x, 'tension': tension, 'mask': role_mask}
 
 
 def _collate_fn(batch):
     import torch
-    return torch.stack(batch)   # (B, N_ROLES, res, n_pitch)
+    return {
+        'x':       torch.stack([b['x']       for b in batch]),
+        'tension': torch.stack([b['tension'] for b in batch]),
+        'mask':    torch.stack([b['mask']    for b in batch]),
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  ARQUITECTURA CYCLEGAN SOBRE PIANO ROLLS
-# ══════════════════════════════════════════════════════════════════════════════
+#  ARQUITECTURA CYCLEGAN
 #
-#  Entrada/salida: (B, N_ROLES, resolution, n_pitch)  — piano roll multi-rol
+#  G_A2B : Generador A → B   (ResNet + AdaIN)
+#  G_B2A : Generador B → A
+#  D_A   : Discriminador PatchGAN para el dominio A
+#  D_B   : Discriminador PatchGAN para el dominio B
 #
-#  Generadores:
-#    G_A2B : convierte estilo A → estilo B
-#    G_B2A : convierte estilo B → estilo A  (para cycle-consistency)
+#  Pérdidas:
+#    L_adv  = LSGAN (más estable que BCE para datos continuos)
+#    L_cyc  = ||G_B2A(G_A2B(x_a)) - x_a||_1  * lambda_cycle
+#    L_idt  = ||G_A2B(x_b) - x_b||_1          * lambda_identity
 #
-#  Discriminadores:
-#    D_A   : distingue piano rolls reales del dominio A
-#    D_B   : distingue piano rolls reales del dominio B
-#
-#  Arquitectura de los generadores: ResNet de 9 bloques adaptado a 2D.
-#    Stem (conv) → Downsampling (x2) → 9× ResBlock → Upsampling (x2) → Head
-#
-#  Arquitectura del discriminador: PatchGAN (70×70) — clasifica parches
-#    en lugar de la imagen completa, lo que estabiliza el entrenamiento.
-#
-#  Losses:
-#    L_GAN   (adversarial LSGAN): MSE en lugar de BCE, más estable
-#    L_cycle (consistencia):      |G_B2A(G_A2B(x)) - x|₁ × λ_cycle
-#    L_ident (identidad):         |G_A2B(y) - y|₁ × λ_ident (y del dom. B)
+#  Formato del tensor: (B, N_ROLES, T, n_pitch)
+#    T = window_bars * resolution  (dimensión temporal aplanada)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _build_generator(n_roles, resolution, n_pitch, n_res_blocks=9, base_ch=64):
+def _build_cyclegan(n_roles, seq_len, n_pitch, tension_dim,
+                    base_ch=64, n_res_blocks=6, n_downsamples=2):
     """
-    Generador ResNet para transformación de dominio sobre piano rolls.
+    Construye (G_A2B, G_B2A, D_A, D_B) para CycleGAN musical.
 
-    Entrada : (B, N_ROLES, resolution, n_pitch)
-    Salida  : (B, N_ROLES, resolution, n_pitch)  — en el espacio del otro dominio
+    Los generadores son ResNets 2D que operan sobre (N_ROLES, T, n_pitch).
+    El vector de tensión (8D) condiciona cada bloque ResNet vía AdaIN.
+    Los discriminadores son PatchGAN (3 capas, campo receptivo ~70px).
     """
     import torch
     import torch.nn as nn
 
-    class _ResBlock(nn.Module):
+    COND_DIM = 64   # dimensión del vector de condicionamiento proyectado
+
+    # ── AdaIN ─────────────────────────────────────────────────────────────────
+    class _AdaIN(nn.Module):
+        """Adaptive Instance Normalization: escala/shift aprendidos desde la tensión."""
         def __init__(self, ch):
             super().__init__()
-            self.net = nn.Sequential(
-                nn.ReflectionPad2d(1),
-                nn.Conv2d(ch, ch, 3),
-                nn.InstanceNorm2d(ch),
-                nn.ReLU(inplace=True),
-                nn.Dropout2d(0.05),
-                nn.ReflectionPad2d(1),
-                nn.Conv2d(ch, ch, 3),
-                nn.InstanceNorm2d(ch),
-            )
+            self.norm = nn.InstanceNorm2d(ch, affine=False)
+            self.proj = nn.Linear(COND_DIM, ch * 2)
 
-        def forward(self, x):
-            return x + self.net(x)
+        def forward(self, x, cond):
+            # x: (B, ch, H, W),  cond: (B, COND_DIM)
+            h  = self.norm(x)
+            st = self.proj(cond)[:, :, None, None]
+            scale, shift = st.chunk(2, dim=1)
+            return h * (1 + scale) + shift
 
+    # ── Bloque ResNet con AdaIN ───────────────────────────────────────────────
+    class _ResBlock(nn.Module):
+        def __init__(self, ch, dropout=0.0):
+            super().__init__()
+            self.conv1  = nn.Conv2d(ch, ch, 3, padding=1)
+            self.adain1 = _AdaIN(ch)
+            self.act    = nn.ReLU(inplace=True)
+            self.drop   = nn.Dropout2d(dropout)
+            self.conv2  = nn.Conv2d(ch, ch, 3, padding=1)
+            self.adain2 = _AdaIN(ch)
+
+        def forward(self, x, cond):
+            h = self.act(self.adain1(self.conv1(x), cond))
+            h = self.drop(h)
+            h = self.adain2(self.conv2(h), cond)
+            return x + h   # conexión residual
+
+    # ── Generador ─────────────────────────────────────────────────────────────
     class _Generator(nn.Module):
+        """
+        Stem → Encoder (downsampling) → ResBlocks → Decoder (upsampling) → Head.
+        El condicionamiento de tensión se inyecta vía AdaIN en cada ResBlock.
+        Conexión residual escalada: el generador aprende el *delta* de estilo.
+        """
         def __init__(self):
             super().__init__()
-            # Stem
+
+            # Proyector de tensión → COND_DIM
+            self.cond_proj = nn.Sequential(
+                nn.Linear(tension_dim, COND_DIM),
+                nn.ReLU(),
+                nn.Linear(COND_DIM, COND_DIM),
+            )
+
+            # Stem: n_roles → base_ch
             self.stem = nn.Sequential(
-                nn.ReflectionPad2d(3),
-                nn.Conv2d(n_roles, base_ch, 7),
+                nn.Conv2d(n_roles, base_ch, 7, padding=3),
                 nn.InstanceNorm2d(base_ch),
                 nn.ReLU(inplace=True),
             )
-            # Downsampling ×2
-            self.down = nn.Sequential(
-                nn.Conv2d(base_ch,     base_ch * 2, 3, stride=2, padding=1),
-                nn.InstanceNorm2d(base_ch * 2),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(base_ch * 2, base_ch * 4, 3, stride=2, padding=1),
-                nn.InstanceNorm2d(base_ch * 4),
-                nn.ReLU(inplace=True),
+
+            # Encoder: n_downsamples niveles de downsampling 2×
+            enc_layers = []
+            ch_in = base_ch
+            self._enc_out_ch = base_ch
+            for i in range(n_downsamples):
+                ch_out = min(ch_in * 2, base_ch * 8)
+                enc_layers += [
+                    nn.Conv2d(ch_in, ch_out, 3, stride=2, padding=1),
+                    nn.InstanceNorm2d(ch_out),
+                    nn.ReLU(inplace=True),
+                ]
+                ch_in = ch_out
+                self._enc_out_ch = ch_out
+            self.encoder = nn.Sequential(*enc_layers)
+
+            # Cuello de botella: n_res_blocks ResBlocks con AdaIN
+            # dropout=0.05 regulariza en corpus pequeños (recuperado de v1)
+            self.res_blocks = nn.ModuleList(
+                [_ResBlock(self._enc_out_ch, dropout=0.05) for _ in range(n_res_blocks)]
             )
-            # Bloques residuales
-            self.res = nn.Sequential(*[_ResBlock(base_ch * 4) for _ in range(n_res_blocks)])
-            # Upsampling ×2
-            self.up = nn.Sequential(
-                nn.ConvTranspose2d(base_ch * 4, base_ch * 2, 3, stride=2, padding=1, output_padding=1),
-                nn.InstanceNorm2d(base_ch * 2),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(base_ch * 2, base_ch,     3, stride=2, padding=1, output_padding=1),
-                nn.InstanceNorm2d(base_ch),
-                nn.ReLU(inplace=True),
-            )
-            # Head: salida en [0,1] (probabilidades de nota activa)
+
+            # Decoder: n_downsamples niveles de upsampling 2×
+            dec_layers = []
+            ch_in = self._enc_out_ch
+            for i in range(n_downsamples):
+                ch_out = max(ch_in // 2, base_ch)
+                dec_layers += [
+                    nn.ConvTranspose2d(ch_in, ch_out, 4, stride=2, padding=1),
+                    nn.InstanceNorm2d(ch_out),
+                    nn.ReLU(inplace=True),
+                ]
+                ch_in = ch_out
+            self.decoder = nn.Sequential(*dec_layers)
+
+            # Head: ch_in → n_roles, Tanh → [−1, 1]
             self.head = nn.Sequential(
-                nn.ReflectionPad2d(3),
-                nn.Conv2d(base_ch, n_roles, 7),
-                nn.Sigmoid(),
+                nn.Conv2d(ch_in, n_roles, 7, padding=3),
+                nn.Tanh(),
             )
+
+        def forward(self, x, tension):
+            # x: (B, N_ROLES, T, n_pitch),  tension: (B, tension_dim)
+            cond = self.cond_proj(tension)           # (B, COND_DIM)
+            h    = self.stem(x)
+            h    = self.encoder(h)
+            for blk in self.res_blocks:
+                h = blk(h, cond)
+            h = self.decoder(h)
+            delta = self.head(h)
+            # Residual escalado: preserva el contenido, aprende la diferencia de estilo
+            return (x + delta * 0.5).clamp(-1, 1)
+
+    # ── Discriminador PatchGAN ────────────────────────────────────────────────
+    class _PatchDiscriminator(nn.Module):
+        """
+        Clasifica parches locales (no la secuencia completa).
+        n_layers=3 → campo receptivo aproximado de 70 ticks × 70 pitches.
+        """
+        def __init__(self, n_layers=3):
+            super().__init__()
+            layers = [
+                nn.Conv2d(n_roles, base_ch, 4, stride=2, padding=1),
+                nn.LeakyReLU(0.2, inplace=True),
+            ]
+            ch_in = base_ch
+            for i in range(1, n_layers):
+                ch_out = min(ch_in * 2, base_ch * 8)
+                s      = 2 if i < n_layers - 1 else 1
+                layers += [
+                    nn.Conv2d(ch_in, ch_out, 4, stride=s, padding=1),
+                    nn.InstanceNorm2d(ch_out),
+                    nn.LeakyReLU(0.2, inplace=True),
+                ]
+                ch_in = ch_out
+            ch_out = min(ch_in * 2, base_ch * 8)
+            layers += [
+                nn.Conv2d(ch_in, ch_out, 4, stride=1, padding=1),
+                nn.InstanceNorm2d(ch_out),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(ch_out, 1, 4, stride=1, padding=1),   # sin activación (LSGAN)
+            ]
+            self.model = nn.Sequential(*layers)
 
         def forward(self, x):
-            return self.head(self.up(self.res(self.down(self.stem(x)))))
+            return self.model(x)
 
-    return _Generator()
-
-
-def _build_discriminator(n_roles, base_ch=64):
-    """
-    Discriminador PatchGAN de 3 capas (campo receptivo ~70×70).
-
-    Entrada : (B, N_ROLES, resolution, n_pitch)
-    Salida  : (B, 1, H', W')  — mapa de parches real/falso
-    """
-    import torch.nn as nn
-
-    def _block(in_ch, out_ch, norm=True):
-        layers = [nn.Conv2d(in_ch, out_ch, 4, stride=2, padding=1)]
-        if norm:
-            layers.append(nn.InstanceNorm2d(out_ch))
-        layers.append(nn.LeakyReLU(0.2, inplace=True))
-        return layers
-
-    return nn.Sequential(
-        *_block(n_roles,      base_ch,     norm=False),
-        *_block(base_ch,      base_ch * 2),
-        *_block(base_ch * 2,  base_ch * 4),
-        nn.Conv2d(base_ch * 4, base_ch * 8, 4, stride=1, padding=1),
-        nn.InstanceNorm2d(base_ch * 8),
-        nn.LeakyReLU(0.2, inplace=True),
-        nn.Conv2d(base_ch * 8, 1, 4, stride=1, padding=1),
-    )
+    return {
+        'G_A2B': _Generator(),
+        'G_B2A': _Generator(),
+        'D_A':   _PatchDiscriminator(),
+        'D_B':   _PatchDiscriminator(),
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  REPLAY BUFFER  (estabiliza el entrenamiento del discriminador)
+#  IMAGE POOL
 # ══════════════════════════════════════════════════════════════════════════════
 
-class ReplayBuffer:
-    """Almacena los últimos 50 ejemplos generados para entrenar el discriminador."""
-    def __init__(self, max_size=50):
-        self.max_size = max_size
-        self.data     = []
+class _ImagePool:
+    """Buffer de imágenes generadas para estabilizar el discriminador."""
+    def __init__(self, size=50):
+        self.size = size
+        self.pool = []
 
-    def push_and_pop(self, data):
-        import torch, random
-        to_return = []
-        for element in data:
-            element = element.unsqueeze(0)
-            if len(self.data) < self.max_size:
-                self.data.append(element)
-                to_return.append(element)
+    def query(self, imgs):
+        import torch
+        if self.size == 0:
+            return imgs
+        result = []
+        for img in imgs:
+            img = img.detach()
+            if len(self.pool) < self.size:
+                self.pool.append(img)
+                result.append(img)
+            elif torch.rand(1).item() < 0.5:
+                idx = int(torch.randint(0, len(self.pool), (1,)).item())
+                old = self.pool[idx].clone()
+                self.pool[idx] = img
+                result.append(old)
             else:
-                if random.random() > 0.5:
-                    idx = random.randint(0, self.max_size - 1)
-                    tmp = self.data[idx].clone()
-                    self.data[idx] = element
-                    to_return.append(tmp)
-                else:
-                    to_return.append(element)
-        return torch.cat(to_return, 0)
+                result.append(img)
+        return torch.stack(result)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  ENTRENADOR CYCLEGAN
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _fmt_time(seconds):
-    s = int(seconds)
-    if s >= 3600:
-        return f"{s//3600}h {(s%3600)//60}m {s%60:02d}s"
-    if s >= 60:
-        return f"{s//60}m {s%60:02d}s"
-    return f"{s}s"
-
-
-class CycleTrainer:
-    CONFIG_NAME     = 'model_config.json'
+class CycleGANTrainer:
     CHECKPOINT_NAME = 'checkpoint.pt'
     BEST_NAME       = 'best_model.pt'
     HISTORY_NAME    = 'history.json'
+    CONFIG_NAME     = 'model_config.json'
 
-    def __init__(self, G_A2B, G_B2A, D_A, D_B,
-                 opt_G, opt_D_A, opt_D_B,
-                 model_dir, patience=40,
-                 lambda_cycle=10.0, lambda_ident=0.5):
-        self.G_A2B       = G_A2B
-        self.G_B2A       = G_B2A
-        self.D_A         = D_A
-        self.D_B         = D_B
-        self.opt_G       = opt_G
-        self.opt_D_A     = opt_D_A
-        self.opt_D_B     = opt_D_B
-        self.model_dir   = model_dir
-        self.patience    = patience
-        self.λ_cycle     = lambda_cycle
-        self.λ_ident     = lambda_ident
+    def __init__(self, nets, optimizers, model_dir,
+                 lambda_cycle=10.0, lambda_identity=5.0, patience=40):
+        self.G_A2B = nets['G_A2B']
+        self.G_B2A = nets['G_B2A']
+        self.D_A   = nets['D_A']
+        self.D_B   = nets['D_B']
+        self.opt_G = optimizers['opt_G']
+        self.opt_D = optimizers['opt_D']
+        self.model_dir       = Path(model_dir)
+        self.lambda_cycle    = lambda_cycle
+        self.lambda_identity = lambda_identity
+        self.patience        = patience
 
-        self.history     = {'train_G': [], 'train_D': [], 'val_cycle': []}
-        self.best_loss   = float('inf')
+        self.pool_A = _ImagePool(50)
+        self.pool_B = _ImagePool(50)
+
+        self.history     = {'train_G': [], 'train_D': [], 'val_G': [], 'val_D': [],
+                             'adv_A2B': [], 'adv_B2A': [],
+                             'cyc_A': [], 'cyc_B': [],
+                             'idt_A': [], 'idt_B': [],
+                             'D_A': [], 'D_B': []}
+        self.best_val    = float('inf')
         self.no_improve  = 0
         self.start_epoch = 0
 
-    def save_checkpoint(self, epoch, val_loss, is_best):
+    @staticmethod
+    def _lsgan(pred, real):
+        import torch.nn.functional as F
+        import torch
+        t = torch.ones_like(pred) if real else torch.zeros_like(pred)
+        return F.mse_loss(pred, t)
+
+    def _step(self, batch_a, batch_b, training):
+        import torch
+        import torch.nn.functional as F
+
+        x_a = batch_a['x']
+        x_b = batch_b['x']
+        t_a = batch_a['tension']
+        t_b = batch_b['tension']
+
+        # ── Generadores ───────────────────────────────────────────────────────
+        if training:
+            self.opt_G.zero_grad()
+
+        fake_b = self.G_A2B(x_a, t_a)
+        fake_a = self.G_B2A(x_b, t_b)
+
+        loss_adv_A2B = self._lsgan(self.D_B(fake_b), True)
+        loss_adv_B2A = self._lsgan(self.D_A(fake_a), True)
+
+        rec_a = self.G_B2A(fake_b, t_a)
+        rec_b = self.G_A2B(fake_a, t_b)
+        # Pérdidas de cycle-consistency desglosadas por rama (facilita diagnóstico)
+        loss_cyc_A = F.l1_loss(rec_a, x_a) * self.lambda_cycle
+        loss_cyc_B = F.l1_loss(rec_b, x_b) * self.lambda_cycle
+        loss_cyc   = loss_cyc_A + loss_cyc_B
+
+        idt_b = self.G_A2B(x_b, t_b)
+        idt_a = self.G_B2A(x_a, t_a)
+        # Pérdidas de identity desglosadas por rama
+        loss_idt_A = F.l1_loss(idt_b, x_b) * self.lambda_identity
+        loss_idt_B = F.l1_loss(idt_a, x_a) * self.lambda_identity
+        loss_idt   = loss_idt_A + loss_idt_B
+
+        loss_G = loss_adv_A2B + loss_adv_B2A + loss_cyc + loss_idt
+
+        if training:
+            loss_G.backward()
+            torch.nn.utils.clip_grad_norm_(
+                list(self.G_A2B.parameters()) + list(self.G_B2A.parameters()), 1.0)
+            self.opt_G.step()
+
+        # ── Discriminadores ───────────────────────────────────────────────────
+        if training:
+            self.opt_D.zero_grad()
+
+        # D_B: real=x_b, fake=fake_b (del pool)
+        loss_D_B = 0.5 * (
+            self._lsgan(self.D_B(x_b), True) +
+            self._lsgan(self.D_B(self.pool_B.query(fake_b.unsqueeze(0).squeeze(0)
+                                                    if fake_b.dim() == 4 else fake_b).detach()), False)
+        )
+        # D_A: real=x_a, fake=fake_a (del pool)
+        loss_D_A = 0.5 * (
+            self._lsgan(self.D_A(x_a), True) +
+            self._lsgan(self.D_A(self.pool_A.query(fake_a.unsqueeze(0).squeeze(0)
+                                                    if fake_a.dim() == 4 else fake_a).detach()), False)
+        )
+        loss_D = loss_D_A + loss_D_B
+
+        if training:
+            loss_D.backward()
+            torch.nn.utils.clip_grad_norm_(
+                list(self.D_A.parameters()) + list(self.D_B.parameters()), 1.0)
+            self.opt_D.step()
+
+        return {
+            'G':       loss_G.item(),
+            'D':       loss_D.item(),
+            'adv_A2B': loss_adv_A2B.item(),
+            'adv_B2A': loss_adv_B2A.item(),
+            'cyc_A':   loss_cyc_A.item(),
+            'cyc_B':   loss_cyc_B.item(),
+            'idt_A':   loss_idt_A.item(),
+            'idt_B':   loss_idt_B.item(),
+            'D_A':     loss_D_A.item(),
+            'D_B':     loss_D_B.item(),
+        }
+
+    def _run_epoch(self, loader_a, loader_b, training, epoch=0, n_epochs=0):
+        import torch, time, math
+        for net in [self.G_A2B, self.G_B2A, self.D_A, self.D_B]:
+            net.train(training)
+
+        totals = {'G': 0.0, 'D': 0.0,
+                  'adv_A2B': 0.0, 'adv_B2A': 0.0,
+                  'cyc_A': 0.0, 'cyc_B': 0.0,
+                  'idt_A': 0.0, 'idt_B': 0.0,
+                  'D_A': 0.0, 'D_B': 0.0}
+        n      = 0
+        phase  = 'train' if training else 'val  '
+        t0_ep  = time.time()
+
+        ctx      = torch.enable_grad() if training else torch.no_grad()
+        iter_b   = iter(loader_b)
+        device   = next(self.G_A2B.parameters()).device
+
+        with ctx:
+            for batch_a in loader_a:
+                try:
+                    batch_b = next(iter_b)
+                except StopIteration:
+                    iter_b  = iter(loader_b)
+                    batch_b = next(iter_b)
+
+                batch_a = {k: v.to(device, non_blocking=True) for k, v in batch_a.items()}
+                batch_b = {k: v.to(device, non_blocking=True) for k, v in batch_b.items()}
+
+                m = self._step(batch_a, batch_b, training=training)
+                if math.isnan(m['G']) or math.isnan(m['D']):
+                    continue
+                for k in totals:
+                    totals[k] += m[k]
+                n += 1
+
+                if n % 20 == 0 or n == 1:
+                    elapsed = time.time() - t0_ep
+                    t = {k: totals[k]/n for k in totals}
+                    print(f"\r  [{phase}] "
+                          f"época {epoch+1}/{n_epochs}  batch {n}  "
+                          f"G={t['G']:.4f}  D={t['D']:.4f}  "
+                          f"advAB={t['adv_A2B']:.3f}  advBA={t['adv_B2A']:.3f}  "
+                          f"cycA={t['cyc_A']:.3f}  cycB={t['cyc_B']:.3f}  "
+                          f"idtA={t['idt_A']:.3f}  idtB={t['idt_B']:.3f}  "
+                          f"DA={t['D_A']:.3f}  DB={t['D_B']:.3f}  "
+                          f"({elapsed:.0f}s)", end='', flush=True)
+        print()
+        return {k: (v / n if n > 0 else 0.0) for k, v in totals.items()}
+
+    def save_checkpoint(self, epoch, is_best):
         import torch
         state = {
-            'epoch':        epoch,
-            'G_A2B':        self.G_A2B.state_dict(),
-            'G_B2A':        self.G_B2A.state_dict(),
-            'D_A':          self.D_A.state_dict(),
-            'D_B':          self.D_B.state_dict(),
-            'opt_G':        self.opt_G.state_dict(),
-            'opt_D_A':      self.opt_D_A.state_dict(),
-            'opt_D_B':      self.opt_D_B.state_dict(),
-            'best_loss':    self.best_loss,
-            'no_improve':   self.no_improve,
-            'history':      self.history,
+            'epoch':      epoch,
+            'G_A2B':      self.G_A2B.state_dict(),
+            'G_B2A':      self.G_B2A.state_dict(),
+            'D_A':        self.D_A.state_dict(),
+            'D_B':        self.D_B.state_dict(),
+            'opt_G':      self.opt_G.state_dict(),
+            'opt_D':      self.opt_D.state_dict(),
+            'best_val':   self.best_val,
+            'no_improve': self.no_improve,
+            'history':    self.history,
         }
         torch.save(state, self.model_dir / self.CHECKPOINT_NAME)
         if is_best:
@@ -615,216 +896,337 @@ class CycleTrainer:
         with open(self.model_dir / self.HISTORY_NAME, 'w') as f:
             json.dump(self.history, f, indent=2)
 
-    def load_checkpoint(self):
+    def load_checkpoint(self, path=None):
         import torch
-        path = self.model_dir / self.CHECKPOINT_NAME
-        if not path.exists():
+        ckpt = Path(path) if path else (self.model_dir / self.CHECKPOINT_NAME)
+        if not ckpt.exists():
             print("[train] Entrenando desde cero.")
             return
-        state = torch.load(path, map_location='cpu')
+        state = torch.load(str(ckpt), map_location='cpu')
         self.G_A2B.load_state_dict(state['G_A2B'])
         self.G_B2A.load_state_dict(state['G_B2A'])
         self.D_A.load_state_dict(state['D_A'])
         self.D_B.load_state_dict(state['D_B'])
         self.opt_G.load_state_dict(state['opt_G'])
-        self.opt_D_A.load_state_dict(state['opt_D_A'])
-        self.opt_D_B.load_state_dict(state['opt_D_B'])
-        self.best_loss   = state['best_loss']
+        self.opt_D.load_state_dict(state['opt_D'])
+        self.best_val    = state['best_val']
         self.no_improve  = state['no_improve']
         self.history     = state['history']
         self.start_epoch = state['epoch'] + 1
         print(f"[train] Reanudando desde época {self.start_epoch}  "
-              f"(mejor val={self.best_loss:.4f})")
+              f"(mejor val_G={self.best_val:.4f})")
 
-    def _gan_loss(self, pred, target_is_real, device):
-        """LSGAN loss: MSE(pred, 1) o MSE(pred, 0)."""
-        import torch, torch.nn.functional as F
-        target = torch.ones_like(pred) if target_is_real else torch.zeros_like(pred)
-        return F.mse_loss(pred, target)
+    def train(self, loader_a, loader_b, val_a, val_b, n_epochs):
+        import torch
 
-    def _train_epoch(self, loader_A, loader_B, buf_A, buf_B, device):
-        import torch, torch.nn.functional as F
-        import torch.nn.utils as nn_utils
-
-        self.G_A2B.train()
-        self.G_B2A.train()
-        self.D_A.train()
-        self.D_B.train()
-
-        sum_G = sum_D = n_batches = 0
-        iter_B = iter(loader_B)
-
-        for real_A in loader_A:
-            # Tomar un batch de B (reanudar si B es más corto)
-            try:
-                real_B = next(iter_B)
-            except StopIteration:
-                iter_B = iter(loader_B)
-                real_B = next(iter_B)
-
-            real_A = real_A.to(device)
-            real_B = real_B.to(device)
-
-            # ── Generadores ──────────────────────────────────────────────────
-            self.opt_G.zero_grad()
-
-            fake_B = self.G_A2B(real_A)
-            fake_A = self.G_B2A(real_B)
-
-            # Adversarial
-            loss_G_A2B = self._gan_loss(self.D_B(fake_B), True, device)
-            loss_G_B2A = self._gan_loss(self.D_A(fake_A), True, device)
-
-            # Cycle consistency  |G_B2A(G_A2B(a)) - a|₁
-            rec_A = self.G_B2A(fake_B)
-            rec_B = self.G_A2B(fake_A)
-            loss_cycle_A = F.l1_loss(rec_A, real_A)
-            loss_cycle_B = F.l1_loss(rec_B, real_B)
-
-            # Identity          |G_A2B(b) - b|₁
-            idt_B = self.G_A2B(real_B)
-            idt_A = self.G_B2A(real_A)
-            loss_idt_A = F.l1_loss(idt_B, real_B)
-            loss_idt_B = F.l1_loss(idt_A, real_A)
-
-            loss_G = (loss_G_A2B + loss_G_B2A
-                      + self.λ_cycle * (loss_cycle_A + loss_cycle_B)
-                      + self.λ_ident * (loss_idt_A + loss_idt_B))
-            loss_G.backward()
-            nn_utils.clip_grad_norm_(
-                list(self.G_A2B.parameters()) + list(self.G_B2A.parameters()), 1.0)
-            self.opt_G.step()
-
-            # ── Discriminador A ───────────────────────────────────────────────
-            self.opt_D_A.zero_grad()
-            fake_A_buf = buf_A.push_and_pop(fake_A.detach())
-            loss_D_A = 0.5 * (self._gan_loss(self.D_A(real_A), True,  device) +
-                               self._gan_loss(self.D_A(fake_A_buf), False, device))
-            loss_D_A.backward()
-            self.opt_D_A.step()
-
-            # ── Discriminador B ───────────────────────────────────────────────
-            self.opt_D_B.zero_grad()
-            fake_B_buf = buf_B.push_and_pop(fake_B.detach())
-            loss_D_B = 0.5 * (self._gan_loss(self.D_B(real_B), True,  device) +
-                               self._gan_loss(self.D_B(fake_B_buf), False, device))
-            loss_D_B.backward()
-            self.opt_D_B.step()
-
-            sum_G   += loss_G.item()
-            sum_D   += (loss_D_A + loss_D_B).item()
-            n_batches += 1
-
-        n_batches = max(n_batches, 1)
-        return sum_G / n_batches, sum_D / n_batches
-
-    def _val_cycle_loss(self, loader_A, loader_B, device):
-        """Estima la pérdida de ciclo en validación (G_B2A(G_A2B(a)) ≈ a)."""
-        import torch, torch.nn.functional as F
-        self.G_A2B.eval()
-        self.G_B2A.eval()
-        total = n = 0
-        with torch.no_grad():
-            for real_A in loader_A:
-                real_A = real_A.to(device)
-                fake_B = self.G_A2B(real_A)
-                rec_A  = self.G_B2A(fake_B)
-                total += F.l1_loss(rec_A, real_A).item()
-                n     += 1
-                if n >= 20:   # bastan 20 batches para estimar
-                    break
-        return total / max(n, 1)
-
-    def train(self, loader_A_tr, loader_B_tr,
-              loader_A_val, loader_B_val, n_epochs):
-        import torch, time
-
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        _first = next(self.G_A2B.parameters(), None)
-        if _first is not None and hasattr(_first, 'device'):
-            device = str(_first.device)
-        buf_A  = ReplayBuffer()
-        buf_B  = ReplayBuffer()
-
-        # Learning-rate decay lineal en la segunda mitad del entrenamiento
+        # LR decay lineal en la segunda mitad (estándar de CycleGAN)
         def _lr_lambda(epoch):
-            decay_start = n_epochs // 2
-            if epoch < decay_start:
+            start = n_epochs // 2
+            if epoch < start:
                 return 1.0
-            return 1.0 - (epoch - decay_start) / max(n_epochs - decay_start, 1)
+            return max(0.0, 1.0 - (epoch - start) / max(n_epochs - start, 1))
 
-        import torch.optim.lr_scheduler as sched
-        sch_G   = sched.LambdaLR(self.opt_G,   _lr_lambda)
-        sch_D_A = sched.LambdaLR(self.opt_D_A, _lr_lambda)
-        sch_D_B = sched.LambdaLR(self.opt_D_B, _lr_lambda)
-
-        if hasattr(self, '_resume') and self._resume:
-            self.load_checkpoint()
-
-        train_start = time.time()
-        bar_w = 30
-
-        print(f"\n{'─'*64}")
-        print(f"  Iniciando entrenamiento CycleGAN: {n_epochs} épocas")
-        print(f"  λ_cycle={self.λ_cycle}  λ_identity={self.λ_ident}")
-        print(f"{'─'*64}\n")
+        sched_G = torch.optim.lr_scheduler.LambdaLR(self.opt_G, _lr_lambda)
+        sched_D = torch.optim.lr_scheduler.LambdaLR(self.opt_D, _lr_lambda)
+        for _ in range(self.start_epoch):
+            sched_G.step()
+            sched_D.step()
 
         for epoch in range(self.start_epoch, n_epochs):
-            t0 = time.time()
+            tr  = self._run_epoch(loader_a, loader_b, training=True,
+                                   epoch=epoch, n_epochs=n_epochs)
+            val = self._run_epoch(val_a,    val_b,    training=False,
+                                   epoch=epoch, n_epochs=n_epochs)
+            sched_G.step()
+            sched_D.step()
 
-            # Ajustar LR para las épocas reanudadas
-            for _ in range(self.start_epoch):
-                sch_G.step()
-                sch_D_A.step()
-                sch_D_B.step()
+            for k in ('G', 'D'):
+                self.history[f'train_{k}'].append(tr[k])
+                self.history[f'val_{k}'].append(val[k])
+            for k in ('adv_A2B', 'adv_B2A', 'cyc_A', 'cyc_B',
+                       'idt_A', 'idt_B', 'D_A', 'D_B'):
+                self.history[k].append(tr[k])
 
-            loss_G, loss_D = self._train_epoch(
-                loader_A_tr, loader_B_tr, buf_A, buf_B, device)
-            val_cycle = self._val_cycle_loss(loader_A_val, loader_B_val, device)
-
-            sch_G.step()
-            sch_D_A.step()
-            sch_D_B.step()
-
-            self.history['train_G'].append(round(loss_G, 5))
-            self.history['train_D'].append(round(loss_D, 5))
-            self.history['val_cycle'].append(round(val_cycle, 5))
-
-            is_best = val_cycle < self.best_loss
+            val_loss = val['G']
+            is_best  = val_loss < self.best_val
             if is_best:
-                self.best_loss = val_cycle
+                self.best_val   = val_loss
                 self.no_improve = 0
+                print(f"  ✓ Nuevo mejor modelo  val_G={val_loss:.4f}")
             else:
                 self.no_improve += 1
 
-            self.save_checkpoint(epoch, val_cycle, is_best)
+            self.save_checkpoint(epoch, is_best)
 
-            elapsed   = time.time() - t0
-            total_el  = time.time() - train_start
-            progress  = int((epoch + 1) / n_epochs * bar_w)
-            bar       = '█' * progress + '░' * (bar_w - progress)
-            best_str  = ' ◀ mejor' if is_best else ''
-            stop_str  = (f'  [sin mejora {self.no_improve}/{self.patience}]'
-                         if self.no_improve > 0 else '')
-
-            print(f"  Época {epoch+1:4d}/{n_epochs}  │{bar}│  "
-                  f"G={loss_G:.4f}  D={loss_D:.4f}  val_cycle={val_cycle:.4f}"
-                  f"  {_fmt_time(elapsed)}/ép{best_str}{stop_str}")
+            lr_now = self.opt_G.param_groups[0]['lr']
+            print(f"  Época {epoch+1}/{n_epochs}  "
+                  f"train_G={tr['G']:.4f}  train_D={tr['D']:.4f}  "
+                  f"val_G={val['G']:.4f}  "
+                  f"advAB={tr['adv_A2B']:.3f}  advBA={tr['adv_B2A']:.3f}  "
+                  f"cycA={tr['cyc_A']:.3f}  cycB={tr['cyc_B']:.3f}  "
+                  f"idtA={tr['idt_A']:.3f}  idtB={tr['idt_B']:.3f}  "
+                  f"DA={tr['D_A']:.3f}  DB={tr['D_B']:.3f}  "
+                  f"lr={lr_now:.2e}  sin_mejora={self.no_improve}/{self.patience}")
 
             if self.no_improve >= self.patience:
-                print(f"\n  Early stopping tras {epoch+1} épocas.")
+                print(f"\n[train] Early stopping en época {epoch+1}.")
                 break
 
-        total_elapsed = time.time() - train_start
-        print(f"\n{'─'*64}")
-        print(f"  Completado en {_fmt_time(total_elapsed)}.")
-        print(f"  Mejor val_cycle : {self.best_loss:.4f}")
-        print(f"  Modelos en      : {self.model_dir}")
-        print(f"{'─'*64}\n")
+        print(f"\n[train] Entrenamiento completado. Mejor val_G={self.best_val:.4f}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PREPARAR DATOS  (idéntico a diffusion_composer, un corpus a la vez)
+#  UTILIDADES: CARGA DE MODELO / MIDI ↔ ROLL
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _load_model_and_config(model_dir):
+    import torch
+    model_dir = Path(model_dir)
+    cfg_path  = model_dir / CycleGANTrainer.CONFIG_NAME
+    ckpt_path = model_dir / CycleGANTrainer.BEST_NAME
+
+    if not cfg_path.exists():
+        raise FileNotFoundError(f"No se encontró {cfg_path}. ¿Has ejecutado train?")
+    if not ckpt_path.exists():
+        raise FileNotFoundError(f"No se encontró {ckpt_path}. ¿Has ejecutado train?")
+
+    with open(cfg_path) as f:
+        cfg = json.load(f)
+
+    nets = _build_cyclegan(
+        n_roles       = cfg['n_roles'],
+        seq_len       = cfg['seq_len'],
+        n_pitch       = cfg.get('n_pitch', PITCH_CLASSES),
+        tension_dim   = cfg['tension_dim'],
+        base_ch       = cfg.get('base_ch', 64),
+        n_res_blocks  = cfg.get('n_res_blocks', 6),
+        n_downsamples = cfg.get('n_downsamples', 2),
+    )
+
+    state = torch.load(str(ckpt_path), map_location='cpu')
+    nets['G_A2B'].load_state_dict(state['G_A2B'])
+    nets['G_B2A'].load_state_dict(state['G_B2A'])
+    nets['G_A2B'].eval()
+    nets['G_B2A'].eval()
+    return nets, cfg
+
+
+def _midi_to_rolls(midi_path, cfg):
+    import mido, numpy as np
+
+    mid = mido.MidiFile(midi_path)
+    resolution  = cfg['resolution']
+    window_bars = cfg['window_bars']
+
+    note_lists = _extract_note_lists(mid)
+    if not note_lists:
+        raise ValueError(f"No se encontraron notas en {midi_path}")
+
+    tpb       = mid.ticks_per_beat
+    tpbar     = tpb * 4
+    max_tick  = max(n[1] for nl in note_lists.values() for n in nl)
+    total_bars = max(1, int(max_tick / tpbar) + 1)
+
+    active_roles = cfg.get('roles', ROLES)
+    pitch_lo     = cfg.get('pitch_lo', 0)
+    pitch_hi     = cfg.get('pitch_hi', 127)
+    do_crop      = (pitch_lo, pitch_hi) != (0, 127)
+
+    role_map = RoleAssigner().assign(mid)
+    conv     = PianoRollConverter(resolution=resolution, window_bars=window_bars)
+    rolls    = {}
+    for role, stream_key in role_map.items():
+        if role not in active_roles:
+            continue
+        notes = note_lists.get(stream_key, [])
+        if not notes:
+            continue
+        roll = conv.notes_to_roll(notes, tpbar, total_bars)
+        if do_crop:
+            roll = _crop_pitch(roll, pitch_lo, pitch_hi)
+        rolls[role] = roll
+    return rolls
+
+
+def _rolls_to_tensor(rolls, cfg):
+    """rolls {role: (n_bars, res, n_pitch)} → tensor (1, N_ROLES, T, n_pitch) en [-1, 1]."""
+    import numpy as np, torch
+
+    n_roles    = cfg['n_roles']
+    role_list  = cfg['roles']
+    resolution = cfg['resolution']
+    n_pitch    = cfg.get('n_pitch', PITCH_CLASSES)
+
+    n_bars = min(r.shape[0] for r in rolls.values()) if rolls else 1
+    T      = n_bars * resolution
+
+    x = np.zeros((n_roles, T, n_pitch), dtype=np.float32)
+    for ridx, role in enumerate(role_list):
+        if role in rolls:
+            flat = rolls[role].reshape(-1, n_pitch)
+            L    = min(len(flat), T)
+            x[ridx, :L] = flat[:L]
+
+    x = x * 2.0 - 1.0   # [0, 1] → [-1, 1]
+    return torch.tensor(x).unsqueeze(0)   # (1, N_ROLES, T, n_pitch)
+
+
+def _tensor_to_rolls(tensor, cfg):
+    """tensor (1, N_ROLES, T, n_pitch) en [-1, 1] → rolls {role: (n_bars, res, n_pitch)}."""
+    import numpy as np
+
+    role_list  = cfg['roles']
+    resolution = cfg['resolution']
+    n_pitch    = cfg.get('n_pitch', PITCH_CLASSES)
+
+    x = (tensor[0].cpu().numpy() + 1.0) * 0.5   # [-1, 1] → [0, 1]
+    x = x.clip(0.0, 1.0)   # (N_ROLES, T, n_pitch)
+
+    rolls = {}
+    for ridx, role in enumerate(role_list):
+        flat   = x[ridx]   # (T, n_pitch)
+        n_bars = max(len(flat) // resolution, 1)
+        rolls[role] = flat[:n_bars * resolution].reshape(n_bars, resolution, n_pitch)
+    return rolls
+
+
+def _adaptive_threshold(roll, percentile=99.0):
+    """
+    Calcula un umbral de binarización adaptativo.
+
+    Para rolls ya binarios (max == 1.0 y valores únicos 0/1), usa 0.5
+    para garantizar que todos los píxeles activos pasen.
+    Para rolls con valores continuos (salida del generador), usa el percentil.
+    """
+    import numpy as np
+    vals    = roll.flatten()
+    nonzero = vals[vals > 1e-4]
+    if len(nonzero) == 0:
+        return 0.5
+    # Si el roll ya es binario (puro 0/1), cualquier umbral <= 0.5 funciona
+    unique = np.unique(vals[vals > 0])
+    if len(unique) == 1 and abs(unique[0] - 1.0) < 1e-3:
+        return 0.5
+    thr = float(np.percentile(nonzero, percentile))
+    # Nunca retornar >= max para evitar que todo quede excluido
+    if thr >= nonzero.max() - 1e-5:
+        thr = float(np.percentile(nonzero, max(percentile - 10.0, 50.0)))
+    return thr
+
+
+def _rolls_to_midi(bars_per_role, cfg, palette, output_path,
+                   bpm=120.0, threshold=None, adaptive_per_bar=False):
+    import mido, numpy as np
+
+    resolution = cfg['resolution']
+    tpb        = 480
+    ticks_bar  = tpb * 4
+    ticks_tick = ticks_bar / resolution
+
+    pitch_lo  = cfg.get('pitch_lo', 0)
+    pitch_hi  = cfg.get('pitch_hi', 127)
+    do_expand = (pitch_lo, pitch_hi) != (0, 127)
+
+    mid  = mido.MidiFile(ticks_per_beat=tpb)
+    t0   = mido.MidiTrack()
+    t0.append(mido.MetaMessage('set_tempo', tempo=int(60_000_000 / bpm), time=0))
+    mid.tracks.append(t0)
+    n_notes_total = 0
+
+    for role in cfg['roles']:
+        if role not in bars_per_role:
+            continue
+        roll = bars_per_role[role]   # (n_bars, res, n_pitch)
+
+        if do_expand:
+            roll = _pad_pitch(roll, pitch_lo, n_full=128)
+
+        thr  = threshold if threshold is not None else _adaptive_threshold(roll)
+        pal  = palette.get(role, {})
+        prog = int(pal.get('program', 0))
+        ch   = int(pal.get('channel', 0))
+        vel  = int(pal.get('velocity', 80))
+
+        track = mido.MidiTrack()
+        mid.tracks.append(track)
+        track.append(mido.Message('program_change', program=prog, channel=ch, time=0))
+
+        if adaptive_per_bar:
+            binary = np.zeros_like(roll)
+            for b in range(roll.shape[0]):
+                bmax = roll[b].max()
+                if bmax >= thr:
+                    bar_thr = thr
+                elif bmax >= 0.1:
+                    bar_thr = bmax * 0.5
+                else:
+                    bar_thr = 1.1
+                binary[b] = (roll[b] > bar_thr).astype(np.float32)
+        else:
+            binary = (roll > thr).astype(np.float32)
+
+        # Eliminar notas aisladas de 1 tick
+        for b in range(binary.shape[0]):
+            for p in range(128):
+                col = binary[b, :, p]
+                for t in range(1, len(col) - 1):
+                    if col[t] == 1 and col[t-1] == 0 and col[t+1] == 0:
+                        binary[b, t, p] = 0
+
+        events = []
+        n_bars_r, res_r, _ = binary.shape
+        for bar in range(n_bars_r):
+            for tick in range(res_r):
+                abs_tick = int((bar * res_r + tick) * ticks_tick)
+                for pitch in range(128):
+                    cur  = binary[bar, tick, pitch] > 0
+                    prev = binary[bar, tick-1, pitch] > 0 if tick > 0 else \
+                           (binary[bar-1, -1, pitch] > 0 if bar > 0 else False)
+                    if cur and not prev:
+                        events.append((abs_tick, 'on', pitch))
+                    elif not cur and prev:
+                        events.append((abs_tick, 'off', pitch))
+
+        last_tick = int(n_bars_r * res_r * ticks_tick)
+        for pitch in range(128):
+            if binary[-1, -1, pitch] > 0:
+                events.append((last_tick, 'off', pitch))
+
+        n_notes_total += sum(1 for e in events if e[1] == 'on')
+        events.sort(key=lambda e: (e[0], 0 if e[1] == 'off' else 1))
+
+        prev_tick = 0
+        for abs_tick, etype, pitch in events:
+            delta = abs_tick - prev_tick
+            if etype == 'on':
+                track.append(mido.Message('note_on',  channel=ch, note=pitch,
+                                           velocity=vel, time=delta))
+            else:
+                track.append(mido.Message('note_off', channel=ch, note=pitch,
+                                           velocity=0,   time=delta))
+            prev_tick = abs_tick
+
+        remaining = last_tick - prev_tick
+        if remaining > 0:
+            track.append(mido.MetaMessage('end_of_track', time=remaining))
+
+    mid.save(output_path)
+    return n_notes_total
+
+
+def _load_palette(palette_path, cfg):
+    if not palette_path or not Path(palette_path).exists():
+        return dict(DEFAULT_PALETTE)
+    with open(palette_path) as f:
+        user = json.load(f)
+    palette = dict(DEFAULT_PALETTE)
+    for role, params in user.items():
+        palette[role] = {**DEFAULT_PALETTE.get(role, {}), **params}
+    return palette
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PREPARE
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _prepare_one_midi(args_tuple):
@@ -832,32 +1234,32 @@ def _prepare_one_midi(args_tuple):
      active_roles, pitch_lo, pitch_hi) = args_tuple
     import numpy as np
 
-    stem = midi_path.stem
-    stats = {r: 0 for r in ROLES}
-    stats.update({'files_ok': 0, 'files_skipped': 0, 'total_windows': 0})
-
+    stem          = midi_path.stem
+    stats_partial = {r: 0 for r in ROLES}
+    stats_partial.update({'files_ok': 0, 'files_skipped': 0, 'total_windows': 0})
     n_pitch = (pitch_hi - pitch_lo + 1) if pitch_lo is not None else PITCH_CLASSES
 
     try:
         mid = _load_midi(str(midi_path))
     except Exception as e:
-        return stem, f"ERROR al cargar: {e}", None, stats
+        return stem, f"ERROR al cargar: {e}", None, stats_partial
 
     note_lists = _extract_note_lists(mid)
     if not note_lists:
-        stats['files_skipped'] = 1
-        return stem, "sin notas — omitido", None, stats
+        stats_partial['files_skipped'] = 1
+        return stem, "sin notas — omitido", None, stats_partial
 
     assigner  = RoleAssigner()
     converter = PianoRollConverter(resolution=resolution, window_bars=window_bars)
+    extractor = TensionExtractor()
 
     role_assignment = assigner.assign(mid)
     if not role_assignment:
-        stats['files_skipped'] = 1
-        return stem, "sin asignación de roles — omitido", None, stats
+        stats_partial['files_skipped'] = 1
+        return stem, "sin asignación de roles — omitido", None, stats_partial
 
     tpb_raw    = _ticks_per_bar(mid)
-    all_ticks  = max((n[1] for notes in note_lists.values() for n in notes), default=0)
+    all_ticks  = max((n[1] for nl in note_lists.values() for n in nl), default=0)
     total_bars = max(1, int(all_ticks / tpb_raw) + 1)
 
     role_rolls  = {}
@@ -873,11 +1275,11 @@ def _prepare_one_midi(args_tuple):
             roll = _crop_pitch(roll, pitch_lo, pitch_hi)
         role_rolls[role] = roll
         roles_found.append(role)
-        stats[role] = 1
+        stats_partial[role] = 1
 
     if not role_rolls:
-        stats['files_skipped'] = 1
-        return stem, "no se pudo construir ningún piano roll — omitido", None, stats
+        stats_partial['files_skipped'] = 1
+        return stem, "no se pudo construir ningún piano roll — omitido", None, stats_partial
 
     role_windows = {}
     min_windows  = None
@@ -890,13 +1292,21 @@ def _prepare_one_midi(args_tuple):
                        else min(min_windows, windows.shape[0]))
 
     if min_windows is None or min_windows == 0:
-        stats['files_skipped'] = 1
-        return stem, f"demasiado corto ({total_bars} compases) — omitido", None, stats
+        stats_partial['files_skipped'] = 1
+        return stem, f"demasiado corto ({total_bars} compases) — omitido", None, stats_partial
 
     for role in role_windows:
         role_windows[role] = role_windows[role][:min_windows]
 
-    save_dict = {}
+    tension_bars    = extractor.extract_bar_vectors(role_rolls, total_bars)
+    mid_offset      = window_bars // 2
+    tension_windows = tension_bars[mid_offset: mid_offset + min_windows]
+    if len(tension_windows) < min_windows:
+        pad = np.zeros((min_windows - len(tension_windows),
+                        TensionExtractor.TENSION_DIM), dtype=np.float32)
+        tension_windows = np.concatenate([tension_windows, pad], axis=0)
+
+    save_dict = {'tension': tension_windows}
     for role, windows in role_windows.items():
         save_dict[f'roll_{role}'] = windows
 
@@ -909,19 +1319,19 @@ def _prepare_one_midi(args_tuple):
         'n_pitch':  n_pitch,
     }
     save_dict['meta_json'] = np.array([json.dumps(meta)])
-    out_path = Path(output_dir) / f"{stem}.npz"
-    np.savez_compressed(str(out_path), **save_dict)
+    np.savez_compressed(str(Path(output_dir) / f"{stem}.npz"), **save_dict)
 
-    stats['files_ok']      = 1
-    stats['total_windows'] = min_windows
+    stats_partial['files_ok']      = 1
+    stats_partial['total_windows'] = min_windows
     return (stem,
             f"OK  ({total_bars} compases, {min_windows} ventanas, "
             f"roles: {', '.join(roles_found)})",
-            True, stats)
+            True, stats_partial)
 
 
 def cmd_prepare(args):
-    from concurrent.futures import ThreadPoolExecutor as ProcessPoolExecutor, as_completed
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
 
     input_dir  = Path(args.input_dir)
     output_dir = Path(args.output_dir)
@@ -938,831 +1348,601 @@ def cmd_prepare(args):
     pitch_lo = pr[0] if pr else None
     pitch_hi = pr[1] if pr else None
     if pr:
-        print(f"[prepare] Rango de pitch       : {pitch_n} notas  "
+        print(f"[prepare] Rango de pitch       : {pitch_n} notas "
               f"(MIDI {pitch_lo}–{pitch_hi})")
 
-    midi_files = sorted(
-        list(input_dir.glob('*.mid')) + list(input_dir.glob('*.midi')))
+    midi_files = sorted(list(input_dir.glob('*.mid')) + list(input_dir.glob('*.midi')))
     if not midi_files:
         print(f"[prepare] No se encontraron archivos MIDI en {input_dir}")
         sys.exit(1)
 
-    print(f"[prepare] {len(midi_files)} archivos MIDI → {output_dir}\n")
+    n_workers = min(multiprocessing.cpu_count(), len(midi_files), 8)
+    print(f"[prepare] {len(midi_files)} archivos MIDI  |  "
+          f"resolución {args.resolution}  |  ventana {args.window_bars} compases  |  "
+          f"{n_workers} procesos\n")
 
-    job_args = [
-        (p, output_dir, args.resolution, args.window_bars,
+    stats = {r: 0 for r in ROLES}
+    stats.update({'files_ok': 0, 'files_skipped': 0, 'total_windows': 0})
+    task_args = [
+        (midi_path, str(output_dir), args.resolution, args.window_bars,
          active_roles, pitch_lo, pitch_hi)
-        for p in midi_files
+        for midi_path in midi_files
     ]
 
-    stats_total = {r: 0 for r in ROLES}
-    stats_total.update({'files_ok': 0, 'files_skipped': 0, 'total_windows': 0})
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        futures = {executor.submit(_prepare_one_midi, a): a[0] for a in task_args}
+        for future in futures:
+            try:
+                stem, msg, ok, partial = future.result()
+            except Exception as e:
+                print(f"  [{Path(futures[future]).stem}] EXCEPCIÓN: {e}")
+                stats['files_skipped'] += 1
+                continue
+            print(f"  [{stem}] {msg}")
+            for role in ROLES:
+                stats[role] += partial[role]
+            stats['files_ok']      += partial['files_ok']
+            stats['files_skipped'] += partial['files_skipped']
+            stats['total_windows'] += partial['total_windows']
 
-    with ProcessPoolExecutor() as ex:
-        futures = {ex.submit(_prepare_one_midi, a): a[0] for a in job_args}
-        for fut in as_completed(futures):
-            stem, msg, ok, partial = fut.result()
-            print(f"  {'[OK]' if ok else '[--]'} {stem:40s}  {msg}")
-            for k in stats_total:
-                stats_total[k] += partial.get(k, 0)
-
-    print(f"\n[prepare] Resumen")
-    print(f"  Archivos OK      : {stats_total['files_ok']}")
-    print(f"  Archivos omitidos: {stats_total['files_skipped']}")
-    print(f"  Ventanas totales : {stats_total['total_windows']}")
-    for r in ROLES:
-        if stats_total[r]:
-            print(f"    {r:20s}: {stats_total[r]} archivos")
     print()
+    print("═" * 60)
+    print("  RESUMEN PREPARE")
+    print("═" * 60)
+    print(f"  Archivos procesados : {stats['files_ok']}")
+    print(f"  Archivos omitidos   : {stats['files_skipped']}")
+    print(f"  Ventanas totales    : {stats['total_windows']}")
+    print("\n  Cobertura de roles:")
+    for role in ROLES:
+        print(f"    {role:<16} {stats[role]} archivos")
+    print("═" * 60)
+
+    if getattr(args, 'report', False):
+        rp = output_dir / 'prepare_report.json'
+        with open(rp, 'w') as f:
+            json.dump({'input_dir': str(input_dir), 'output_dir': str(output_dir),
+                       'resolution': args.resolution, 'window_bars': args.window_bars,
+                       'active_roles': active_roles, 'stats': stats}, f, indent=2)
+        print(f"\n  Reporte guardado en {rp}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  COMANDO: train
+#  TRAIN
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cmd_train(args):
     import torch
     from torch.utils.data import DataLoader, random_split
+    import numpy as _np
 
-    dir_A     = Path(args.data_dir_a)
-    dir_B     = Path(args.data_dir_b)
-    model_dir = Path(args.model_dir)
+    data_dir_a = Path(args.data_dir_a)
+    data_dir_b = Path(args.data_dir_b)
+    model_dir  = Path(args.model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
 
     disabled     = set(getattr(args, 'disable_roles', None) or [])
     active_roles = [r for r in ROLES if r not in disabled]
+    if disabled:
+        print(f"[train] Roles deshabilitados : {', '.join(sorted(disabled))}")
 
     print("[train] Cargando datasets ...")
-    ds_A = MidiRollDataset(str(dir_A), roles=active_roles)
-    ds_B = MidiRollDataset(str(dir_B), roles=active_roles)
+    ds_a = MidiRollDataset(str(data_dir_a), roles=active_roles, augment=True)
+    ds_b = MidiRollDataset(str(data_dir_b), roles=active_roles, augment=True)
 
-    if len(ds_A) == 0 or len(ds_B) == 0:
-        print("[train] ERROR: alguno de los datasets está vacío. "
-              "Ejecuta primero `prepare` en ambas carpetas.")
+    if ds_a.n_pitch != ds_b.n_pitch:
+        print(f"[train] ⚠  n_pitch incompatible: A={ds_a.n_pitch} vs B={ds_b.n_pitch}")
+        print("[train]    Ambos corpus deben prepararse con el mismo --pitch-range")
         sys.exit(1)
 
-    # Inferir hiperparámetros del primer sample de A
-    sample     = ds_A[0]
-    n_roles    = sample.shape[0]
-    resolution = sample.shape[1]
-    n_pitch    = ds_A.n_pitch
+    n_val_a = max(1, int(len(ds_a) * 0.1))
+    n_val_b = max(1, int(len(ds_b) * 0.1))
+    tr_a, val_a = random_split(ds_a, [len(ds_a) - n_val_a, n_val_a])
+    tr_b, val_b = random_split(ds_b, [len(ds_b) - n_val_b, n_val_b])
 
-    print(f"[train] Corpus A: {len(ds_A)} ventanas  |  "
-          f"Corpus B: {len(ds_B)} ventanas")
-    print(f"[train] n_roles={n_roles}  resolution={resolution}  n_pitch={n_pitch}")
+    loader_tr_a  = DataLoader(tr_a,  batch_size=args.batch_size, shuffle=True,
+                               collate_fn=_collate_fn, num_workers=0)
+    loader_tr_b  = DataLoader(tr_b,  batch_size=args.batch_size, shuffle=True,
+                               collate_fn=_collate_fn, num_workers=0)
+    loader_val_a = DataLoader(val_a, batch_size=args.batch_size, shuffle=False,
+                               collate_fn=_collate_fn, num_workers=0)
+    loader_val_b = DataLoader(val_b, batch_size=args.batch_size, shuffle=False,
+                               collate_fn=_collate_fn, num_workers=0)
 
-    # Splits 90/10 para cada dominio
-    def _split(ds):
-        n_val   = max(1, int(len(ds) * 0.1))
-        n_train = len(ds) - n_val
-        return random_split(ds, [n_train, n_val])
+    sample      = ds_a[0]
+    n_roles     = sample['x'].shape[0]
+    seq_len     = sample['x'].shape[1]
+    n_pitch     = ds_a.n_pitch
+    tension_dim = sample['tension'].shape[0]
 
-    tr_A, val_A = _split(ds_A)
-    tr_B, val_B = _split(ds_B)
-
-    kw = dict(collate_fn=_collate_fn, num_workers=0, pin_memory=False)
-    loader_A_tr  = DataLoader(tr_A,  batch_size=args.batch_size, shuffle=True,  **kw)
-    loader_B_tr  = DataLoader(tr_B,  batch_size=args.batch_size, shuffle=True,  **kw)
-    loader_A_val = DataLoader(val_A, batch_size=args.batch_size, shuffle=False, **kw)
-    loader_B_val = DataLoader(val_B, batch_size=args.batch_size, shuffle=False, **kw)
+    _first = sorted(data_dir_a.glob('*.npz'))[0]
+    _meta  = json.loads(str(_np.load(str(_first), allow_pickle=True)['meta_json'][0]))
+    resolution  = _meta['resolution']
+    window_bars = _meta['window_bars']
+    pitch_lo    = _meta.get('pitch_lo', 0)
+    pitch_hi    = _meta.get('pitch_hi', 127)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(f"[train] Dispositivo: {device}\n")
+    print(f"[train] Dominio A: {len(ds_a)} muestras  |  Dominio B: {len(ds_b)} muestras")
+    print(f"[train] n_roles={n_roles}  seq_len={seq_len}  n_pitch={n_pitch}  "
+          f"tension_dim={tension_dim}")
+    print(f"[train] base_ch={args.base_ch}  n_res_blocks={args.n_res_blocks}  "
+          f"n_downsamples={args.n_downsamples}")
+    print(f"[train] lambda_cycle={args.lambda_cycle}  "
+          f"lambda_identity={args.lambda_identity}")
+    print(f"[train] Dispositivo: {device}")
 
-    # Leer pitch_lo/hi desde metadatos
-    import numpy as _np
-    _npz = sorted(dir_A.glob('*.npz'))[0]
-    _meta = json.loads(str(_np.load(str(_npz), allow_pickle=True)['meta_json'][0]))
-    pitch_lo = _meta.get('pitch_lo', 0)
-    pitch_hi = _meta.get('pitch_hi', 127)
-
-    G_A2B = _build_generator(n_roles, resolution, n_pitch,
-                              n_res_blocks=args.n_res_blocks,
-                              base_ch=args.base_ch).to(device)
-    G_B2A = _build_generator(n_roles, resolution, n_pitch,
-                              n_res_blocks=args.n_res_blocks,
-                              base_ch=args.base_ch).to(device)
-    D_A   = _build_discriminator(n_roles, base_ch=args.base_ch).to(device)
-    D_B   = _build_discriminator(n_roles, base_ch=args.base_ch).to(device)
-
-    opt_G   = torch.optim.Adam(
-        list(G_A2B.parameters()) + list(G_B2A.parameters()),
-        lr=args.lr, betas=(0.5, 0.999))
-    opt_D_A = torch.optim.Adam(D_A.parameters(), lr=args.lr, betas=(0.5, 0.999))
-    opt_D_B = torch.optim.Adam(D_B.parameters(), lr=args.lr, betas=(0.5, 0.999))
-
-    trainer = CycleTrainer(
-        G_A2B, G_B2A, D_A, D_B,
-        opt_G, opt_D_A, opt_D_B,
-        model_dir,
-        patience=args.patience,
-        lambda_cycle=args.lambda_cycle,
-        lambda_ident=args.lambda_identity,
+    nets = _build_cyclegan(
+        n_roles       = n_roles,
+        seq_len       = seq_len,
+        n_pitch       = n_pitch,
+        tension_dim   = tension_dim,
+        base_ch       = args.base_ch,
+        n_res_blocks  = args.n_res_blocks,
+        n_downsamples = args.n_downsamples,
     )
-    trainer._resume = args.resume
+    for net in nets.values():
+        net.to(device)
 
-    # Guardar configuración
+    params_G = (list(nets['G_A2B'].parameters()) + list(nets['G_B2A'].parameters()))
+    params_D = (list(nets['D_A'].parameters())   + list(nets['D_B'].parameters()))
+    opt_G = torch.optim.Adam(params_G, lr=args.lr, betas=(0.5, 0.999))
+    opt_D = torch.optim.Adam(params_D, lr=args.lr, betas=(0.5, 0.999))
+
+    trainer = CycleGANTrainer(
+        nets, {'opt_G': opt_G, 'opt_D': opt_D},
+        model_dir,
+        lambda_cycle    = args.lambda_cycle,
+        lambda_identity = args.lambda_identity,
+        patience        = args.patience,
+    )
+
+    if args.resume:
+        trainer.load_checkpoint()
+
     cfg = {
-        'n_roles':     n_roles,
-        'roles':       active_roles,
-        'resolution':  resolution,
-        'n_pitch':     n_pitch,
-        'pitch_lo':    pitch_lo,
-        'pitch_hi':    pitch_hi,
-        'window_bars': _meta.get('window_bars', WINDOW_BARS_DEFAULT),
-        'base_ch':     args.base_ch,
-        'n_res_blocks': args.n_res_blocks,
-        'lambda_cycle': args.lambda_cycle,
+        'n_roles':        n_roles,
+        'roles':          active_roles,
+        'seq_len':        seq_len,
+        'resolution':     resolution,
+        'window_bars':    window_bars,
+        'n_pitch':        n_pitch,
+        'pitch_lo':       pitch_lo,
+        'pitch_hi':       pitch_hi,
+        'tension_dim':    tension_dim,
+        'base_ch':        args.base_ch,
+        'n_res_blocks':   args.n_res_blocks,
+        'n_downsamples':  args.n_downsamples,
+        'lambda_cycle':   args.lambda_cycle,
         'lambda_identity': args.lambda_identity,
-        'model_version': 'cyclegan_v1',
+        'model_version':  'cyclegan_v1',
     }
-    with open(model_dir / CycleTrainer.CONFIG_NAME, 'w') as f:
+    with open(model_dir / CycleGANTrainer.CONFIG_NAME, 'w') as f:
         json.dump(cfg, f, indent=2)
 
-    trainer.train(loader_A_tr, loader_B_tr,
-                  loader_A_val, loader_B_val, args.epochs)
+    trainer.train(loader_tr_a, loader_tr_b, loader_val_a, loader_val_b, args.epochs)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  UTILIDADES DE CARGA
+#  TRANSFER
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _load_models_and_config(model_dir: Path):
-    import torch
-
-    cfg_path   = model_dir / CycleTrainer.CONFIG_NAME
-    model_path = model_dir / CycleTrainer.BEST_NAME
-    if not cfg_path.exists():
-        raise FileNotFoundError(f"No se encontró {cfg_path}. ¿Has ejecutado train?")
-    if not model_path.exists():
-        raise FileNotFoundError(f"No se encontró {model_path}. ¿Has ejecutado train?")
-
-    with open(cfg_path) as f:
-        cfg = json.load(f)
-
-    G_A2B = _build_generator(cfg['n_roles'], cfg['resolution'], cfg['n_pitch'],
-                              n_res_blocks=cfg.get('n_res_blocks', 9),
-                              base_ch=cfg.get('base_ch', 64))
-    G_B2A = _build_generator(cfg['n_roles'], cfg['resolution'], cfg['n_pitch'],
-                              n_res_blocks=cfg.get('n_res_blocks', 9),
-                              base_ch=cfg.get('base_ch', 64))
-
-    state = torch.load(str(model_path), map_location='cpu')
-    G_A2B.load_state_dict(state['G_A2B'])
-    G_B2A.load_state_dict(state['G_B2A'])
-    G_A2B.eval()
-    G_B2A.eval()
-    return G_A2B, G_B2A, cfg
-
-
-def _midi_to_rolls(midi_path, cfg):
-    import mido, numpy as np
-
-    mid         = mido.MidiFile(midi_path)
-    resolution  = cfg['resolution']
-    window_bars = cfg['window_bars']
-
-    note_lists = _extract_note_lists(mid)
-    if not note_lists:
-        raise ValueError(f"No se encontraron notas en {midi_path}")
-
-    tpb       = mid.ticks_per_beat
-    tpbar     = tpb * 4
-    max_tick  = max((e for nl in note_lists.values() for e in [n[1] for n in nl]), default=0)
-    total_bars = max(1, int(max_tick / tpbar) + 1)
-
-    active_roles = cfg.get('roles', ROLES)
-    pitch_lo     = cfg.get('pitch_lo', 0)
-    pitch_hi     = cfg.get('pitch_hi', 127)
-    do_crop      = (pitch_lo, pitch_hi) != (0, 127)
-
-    role_map = RoleAssigner().assign(mid)
-    conv     = PianoRollConverter(resolution=resolution, window_bars=window_bars)
-    rolls    = {}
-    for role, stream_key in role_map.items():
-        if role not in active_roles:
-            continue
-        notes = note_lists[stream_key]
-        roll  = conv.notes_to_roll(notes, tpb * 4, total_bars)
-        if do_crop:
-            roll = _crop_pitch(roll, pitch_lo, pitch_hi)
-        rolls[role] = roll
-
-    return rolls
-
-
-def _load_palette(palette_path, cfg):
-    DEFAULT_PALETTE = {
-        'melody':        {'program': 0,  'channel': 0, 'velocity': 80},
-        'counterpoint':  {'program': 40, 'channel': 1, 'velocity': 70},
-        'accompaniment': {'program': 48, 'channel': 2, 'velocity': 65},
-        'bass':          {'program': 43, 'channel': 3, 'velocity': 75},
-        'percussion':    {'program': 0,  'channel': 9, 'velocity': 90},
-    }
-    if palette_path is None:
-        return DEFAULT_PALETTE
-    try:
-        with open(palette_path) as f:
-            return json.load(f)
-    except Exception:
-        return DEFAULT_PALETTE
-
-
-def _adaptive_threshold(roll, percentile=99.0):
-    import numpy as np
-    flat = roll.flatten()
-    frac_near_zero = float((flat < 0.01).mean())
-    if frac_near_zero > 0.90:
-        thr = float(np.percentile(flat, percentile))
-        return max(thr, 1e-4)
-    else:
-        nonzero = flat[flat > 0.001]
-        if len(nonzero) == 0:
-            return 0.5
-        return float(np.percentile(nonzero, percentile))
-
-
-def _rolls_to_midi(bars_per_role, cfg, palette, output_path, bpm=120.0,
-                   threshold=None, threshold_pct=99.0):
-    import mido, numpy as np
-
-    resolution  = cfg['resolution']
-    tpb         = 480
-    ticks_bar   = tpb * 4
-    ticks_tick  = ticks_bar / resolution
-    pitch_lo    = cfg.get('pitch_lo', 0)
-    pitch_hi    = cfg.get('pitch_hi', 127)
-    do_expand   = (pitch_lo, pitch_hi) != (0, 127)
-
-    mid = mido.MidiFile(ticks_per_beat=tpb)
-    t0  = mido.MidiTrack()
-    t0.append(mido.MetaMessage('set_tempo', tempo=int(60_000_000 / bpm), time=0))
-    mid.tracks.append(t0)
-
-    n_notes_total = 0
-
-    for role in cfg['roles']:
-        if role not in bars_per_role:
-            continue
-        roll = bars_per_role[role]   # (n_bars, res, n_pitch)
-        if do_expand:
-            roll = _pad_pitch(roll, pitch_lo, n_full=128)
-
-        thr = threshold if threshold is not None else _adaptive_threshold(roll, threshold_pct)
-
-        pal  = palette.get(role, {})
-        prog = int(pal.get('program', 0))
-        ch   = int(pal.get('channel', 0))
-        vel  = int(pal.get('velocity', 80))
-
-        binary = (roll > thr).astype(np.float32)
-
-        # Eliminar notas aisladas de 1 tick
-        for b in range(binary.shape[0]):
-            for p in range(128):
-                col = binary[b, :, p]
-                for t in range(1, len(col) - 1):
-                    if col[t] == 1 and col[t-1] == 0 and col[t+1] == 0:
-                        binary[b, t, p] = 0
-
-        track = mido.MidiTrack()
-        mid.tracks.append(track)
-        track.append(mido.Message('program_change', program=prog, channel=ch, time=0))
-
-        events = []
-        n_bars_r, res_r, _ = binary.shape
-        for bar in range(n_bars_r):
-            for tick in range(res_r):
-                abs_t = int((bar * res_r + tick) * ticks_tick)
-                for pitch in range(128):
-                    cur  = binary[bar, tick, pitch] > 0
-                    prev = binary[bar, tick - 1, pitch] > 0 if tick > 0 \
-                           else (binary[bar - 1, -1, pitch] > 0 if bar > 0 else False)
-                    if cur and not prev:
-                        events.append((abs_t, 'on',  pitch))
-                        n_notes_total += 1
-                    elif not cur and prev:
-                        events.append((abs_t, 'off', pitch))
-
-        events.sort(key=lambda e: e[0])
-        prev_t = 0
-        for abs_t, etype, pitch in events:
-            delta = abs_t - prev_t
-            if etype == 'on':
-                track.append(mido.Message('note_on',  note=pitch, velocity=vel,
-                                          channel=ch, time=delta))
-            else:
-                track.append(mido.Message('note_off', note=pitch, velocity=0,
-                                          channel=ch, time=delta))
-            prev_t = abs_t
-
-    mid.save(output_path)
-    return n_notes_total
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  COMANDO: transfer  (A→B)  y  transfer-inv  (B→A)
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _run_transfer(args, direction='a2b'):
-    """
-    Aplica el generador G_A2B (o G_B2A) compás a compás sobre el MIDI de entrada.
-
-    A diferencia de la difusión, la transferencia CycleGAN es un único paso
-    forward determinista: no hay proceso de denoising, no hay parámetros de
-    'strength' o 'temperatura'.  El resultado es siempre el mismo para la
-    misma entrada.
-    """
+def cmd_transfer(args):
     import torch, numpy as np
 
     model_dir = Path(args.model_dir)
-    print(f"[transfer] Cargando modelos desde {model_dir} ...")
-    G_A2B, G_B2A, cfg = _load_models_and_config(model_dir)
+    print(f"[transfer] Cargando modelo desde {model_dir} ...")
+    nets, cfg = _load_model_and_config(model_dir)
 
-    generator = G_A2B if direction == 'a2b' else G_B2A
-    dir_label  = 'A→B' if direction == 'a2b' else 'B→A'
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    generator.to(device)
-
-    palette = _load_palette(getattr(args, 'palette', None), cfg)
-
-    # Parsear el MIDI de entrada
-    print(f"[transfer] Procesando {args.input} ({dir_label}) ...")
-    rolls = _midi_to_rolls(args.input, cfg)
-    if not rolls:
-        print("[transfer] ERROR: no se encontraron notas.")
+    direction = args.direction.upper()
+    if direction not in ('A2B', 'B2A'):
+        print(f"[transfer] Dirección inválida: {direction}  (use A2B o B2A)")
         sys.exit(1)
 
-    n_roles    = cfg['n_roles']
-    role_list  = cfg['roles']
-    resolution = cfg['resolution']
-    n_pitch    = cfg.get('n_pitch', 128)
-    n_bars     = min(r.shape[0] for r in rolls.values())
+    G       = nets[f'G_{direction}']
+    palette = _load_palette(args.palette, cfg)
+    device  = 'cuda' if torch.cuda.is_available() else 'cpu'
+    G.to(device)
 
-    print(f"[transfer] {n_bars} compases  ·  {n_roles} roles  ·  dirección {dir_label}")
+    print(f"[transfer] Procesando {args.input}  (dirección: {direction}) ...")
+    rolls = _midi_to_rolls(args.input, cfg)
+    if not rolls:
+        print("[transfer] ERROR: no se pudieron extraer rolls del MIDI")
+        sys.exit(1)
 
-    # Construir tensor de entrada compás a compás
-    bars_per_role = {role: [] for role in role_list}
+    x_tensor = _rolls_to_tensor(rolls, cfg).to(device)
 
-    for bar_idx in range(n_bars):
-        x_np = np.zeros((n_roles, resolution, n_pitch), dtype=np.float32)
-        for ridx, role in enumerate(role_list):
-            if role in rolls:
-                x_np[ridx] = rolls[role][bar_idx]
+    # Tensión media del MIDI de entrada para condicionar el generador
+    n_bars       = min(r.shape[0] for r in rolls.values())
+    tension_bars = TensionExtractor().extract_bar_vectors(rolls, n_bars)
+    tension_t    = torch.tensor(tension_bars.mean(axis=0)).unsqueeze(0).to(device)
 
-        x_t = torch.tensor(x_np).unsqueeze(0).to(device)   # (1, N_ROLES, res, n_pitch)
+    print(f"[transfer] Generando  ({n_bars} compases) ...")
+    with torch.no_grad():
+        out_tensor = G(x_tensor, tension_t)
 
-        with torch.no_grad():
-            y_t = generator(x_t)   # (1, N_ROLES, res, n_pitch)
+    out_rolls = _tensor_to_rolls(out_tensor, cfg)
 
-        y_np = y_t[0].cpu().numpy()   # (N_ROLES, res, n_pitch)
+    # Diagnóstico del primer compás
+    all_vals = np.concatenate([r.flatten() for r in out_rolls.values()])
+    if getattr(args, 'threshold', None):
+        thr        = args.threshold
+        thr_method = f'fijo ({thr:.3f})'
+    else:
+        thr_pct    = getattr(args, 'threshold_pct', 99.0)
+        thr        = _adaptive_threshold(all_vals, thr_pct)
+        thr_method = f'p{thr_pct}'
 
-        for ridx, role in enumerate(role_list):
-            bars_per_role[role].append(y_np[ridx])
+    n_active = int((all_vals > thr).sum())
+    density  = 100 * n_active / max(len(all_vals), 1)
+    print(f"\n  [diag] Umbral {thr_method}: {thr:.4f}  →  "
+          f"{n_active} píxeles activos ({density:.2f}%)")
 
-        if bar_idx == 0:
-            vmax  = float(y_np.max())
-            vmean = float(y_np.mean())
-            thr   = _adaptive_threshold(y_np, getattr(args, 'threshold_pct', 99.0))
-            n_act = int((y_np > thr).sum())
-            print(f"\n  [diag] Compás 0 — salida del generador:")
-            print(f"         mean={vmean:.4f}  max={vmax:.4f}  "
-                  f"umbral={thr:.4f}  notas_activas={n_act}")
-            if n_act == 0:
-                print("         ⚠  sin notas activas — prueba a bajar --threshold-pct")
-            print()
+    if density < 0.2:
+        print("  [diag] ⚠  Densidad baja — prueba --threshold-pct 99.5 "
+              "o más épocas de entrenamiento")
+    elif density > 10.0:
+        print("  [diag] ⚠  Densidad alta — prueba --threshold-pct 98")
+    elif all_vals.max() < 0.05:
+        print("  [diag] ⚠  Activaciones muy bajas — el modelo necesita más entrenamiento")
 
-    # Apilar compases
-    import numpy as np
-    for role in role_list:
-        if bars_per_role[role]:
-            bars_per_role[role] = np.stack(bars_per_role[role], axis=0)
-        else:
-            del bars_per_role[role]
-
-    # Renderizar a MIDI
-    thr_arg = getattr(args, 'threshold', None)
-    thr_pct = getattr(args, 'threshold_pct', 99.0)
-    bpm     = getattr(args, 'bpm', 120.0)
-
-    n_notes = _rolls_to_midi(bars_per_role, cfg, palette,
-                              args.output, bpm=bpm,
-                              threshold=thr_arg, threshold_pct=thr_pct)
-
-    print(f"[transfer] Guardado: {args.output}  ({n_notes} notas, {n_bars} compases)")
+    n_notes = _rolls_to_midi(out_rolls, cfg, palette, args.output,
+                              bpm=args.bpm, threshold=thr,
+                              adaptive_per_bar=getattr(args, 'adaptive_per_bar', False))
+    print(f"[transfer] MIDI guardado en {args.output}  "
+          f"({n_notes} notas, umbral={thr:.3f})")
     if n_notes == 0:
-        print("[transfer] ⚠  MIDI vacío — ajusta --threshold-pct "
-              "(prueba con 97.0 ó 95.0)")
-
-
-def cmd_transfer(args):
-    _run_transfer(args, direction='a2b')
-
-
-def cmd_transfer_inv(args):
-    _run_transfer(args, direction='b2a')
+        print("[transfer] ⚠  MIDI vacío. "
+              "Prueba --threshold-pct 70 o revisa el entrenamiento.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  COMANDO: style-corpus  (diagnóstico)
+#  ENCODE
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cmd_encode(args):
+    import torch, numpy as np
+
+    nets, cfg = _load_model_and_config(args.model_dir)
+    device    = 'cuda' if torch.cuda.is_available() else 'cpu'
+    G_A2B     = nets['G_A2B'].to(device)
+
+    rolls = _midi_to_rolls(args.input, cfg)
+    if not rolls:
+        print("[encode] ERROR: no se pudieron extraer rolls")
+        sys.exit(1)
+
+    x_t      = _rolls_to_tensor(rolls, cfg).to(device)
+    n_bars   = min(r.shape[0] for r in rolls.values())
+    t_bars   = TensionExtractor().extract_bar_vectors(rolls, n_bars)
+    tension_t = torch.tensor(t_bars.mean(axis=0)).unsqueeze(0).to(device)
+
+    # Extraemos la activación del último ResBlock como proxy del estilo aprendido
+    acts = {}
+    def hook(m, i, o): acts['z'] = o.detach().cpu()
+    handle = G_A2B.res_blocks[-1].register_forward_hook(hook)
+    with torch.no_grad():
+        G_A2B(x_t, tension_t)
+    handle.remove()
+
+    z = acts['z'].mean(dim=(2, 3))[0].numpy()
+    out_path = args.output or 'z_style.json'
+    with open(out_path, 'w') as f:
+        json.dump({'z': z.tolist(), 'source': str(args.input),
+                   'direction': 'A2B', 'dim': len(z)}, f, indent=2)
+    print(f"[encode] Vector de estilo guardado en {out_path}  (dim={len(z)})")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  STYLE-CORPUS
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cmd_style_corpus(args):
-    """
-    Pasa todos los MIDIs de una carpeta por el generador y calcula
-    estadísticas de la salida: densidad media, varianza, etc.
-
-    No extrae un vector de estilo como en el modelo de difusión
-    (el estilo CycleGAN está implícito en los pesos del generador),
-    pero sirve para diagnosticar si el generador converge bien.
-    """
     import torch, numpy as np
 
-    model_dir  = Path(args.model_dir)
+    nets, cfg  = _load_model_and_config(args.model_dir)
+    device     = 'cuda' if torch.cuda.is_available() else 'cpu'
+    G_A2B      = nets['G_A2B'].to(device)
     input_dir  = Path(args.input_dir)
-    direction  = getattr(args, 'direction', 'a2b')
 
-    G_A2B, G_B2A, cfg = _load_models_and_config(model_dir)
-    generator = G_A2B if direction == 'a2b' else G_B2A
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    generator.to(device)
-
-    midi_files = sorted(
-        list(input_dir.glob('*.mid')) + list(input_dir.glob('*.midi')))
+    midi_files = sorted(list(input_dir.glob('*.mid')) + list(input_dir.glob('*.midi')))
     if not midi_files:
-        print(f"[style-corpus] No se encontraron MIDIs en {input_dir}")
+        print(f"[style-corpus] No se encontraron MIDI en {input_dir}")
         sys.exit(1)
 
-    n_roles    = cfg['n_roles']
-    role_list  = cfg['roles']
-    resolution = cfg['resolution']
-    n_pitch    = cfg.get('n_pitch', 128)
-    dir_label  = 'A→B' if direction == 'a2b' else 'B→A'
-
-    print(f"[style-corpus] {len(midi_files)} archivos  ·  dirección {dir_label}\n")
-
-    densities = []
-    skipped   = 0
-
-    for midi_path in midi_files:
+    print(f"[style-corpus] Procesando {len(midi_files)} archivos ...")
+    zs = []
+    for mf in midi_files:
         try:
-            rolls = _midi_to_rolls(str(midi_path), cfg)
-            n_bars = min(r.shape[0] for r in rolls.values())
-            x_np = np.zeros((n_bars, n_roles, resolution, n_pitch), dtype=np.float32)
-            for ridx, role in enumerate(role_list):
-                if role in rolls:
-                    bars = rolls[role][:n_bars]
-                    x_np[:, ridx] = bars
+            rolls = _midi_to_rolls(str(mf), cfg)
+            if not rolls:
+                continue
+            x_t      = _rolls_to_tensor(rolls, cfg).to(device)
+            n_bars   = min(r.shape[0] for r in rolls.values())
+            t_bars   = TensionExtractor().extract_bar_vectors(rolls, n_bars)
+            tension_t = torch.tensor(t_bars.mean(axis=0)).unsqueeze(0).to(device)
 
-            x_t = torch.tensor(x_np).to(device)   # (n_bars, N_ROLES, res, n_pitch)
+            acts = {}
+            def hook(m, i, o): acts['z'] = o.detach().cpu()
+            handle = G_A2B.res_blocks[-1].register_forward_hook(hook)
             with torch.no_grad():
-                y_t = generator(x_t)
-            y_np = y_t.cpu().numpy()
+                G_A2B(x_t, tension_t)
+            handle.remove()
 
-            # Densidad: fracción de celdas activas tras umbral
-            thr  = _adaptive_threshold(y_np)
-            dens = float((y_np > thr).mean())
-            densities.append(dens)
-            print(f"  [OK] {midi_path.stem:40s}  densidad_out={dens:.4f}")
+            zs.append(acts['z'].mean(dim=(2, 3))[0].numpy())
+            print(f"  {mf.stem}  ✓")
         except Exception as e:
-            print(f"  [SKIP] {midi_path.stem} — {e}")
-            skipped += 1
+            print(f"  {mf.stem}  ERROR: {e}")
 
-    if not densities:
-        print("[style-corpus] No se pudo procesar ningún MIDI.")
+    if not zs:
+        print("[style-corpus] No se pudo procesar ningún archivo")
         sys.exit(1)
 
-    mean_dens = float(np.mean(densities))
-    std_dens  = float(np.std(densities))
-
-    out_path = args.output or f"corpus_stats_{input_dir.stem}_{direction}.json"
-    payload = {
-        'source':       str(input_dir),
-        'model_dir':    str(model_dir),
-        'direction':    direction,
-        'n_files':      len(densities),
-        'n_skipped':    skipped,
-        'density_mean': mean_dens,
-        'density_std':  std_dens,
-        'densities':    densities,
-    }
+    centroid = np.stack(zs).mean(axis=0)
+    out_path = args.output or 'z_corpus_centroid.json'
     with open(out_path, 'w') as f:
-        json.dump(payload, f, indent=2)
-
-    print(f"\n[style-corpus] Archivos procesados : {len(densities)}")
-    print(f"[style-corpus] Archivos omitidos   : {skipped}")
-    print(f"[style-corpus] Densidad media      : {mean_dens:.4f} ± {std_dens:.4f}")
-    if mean_dens < 0.005:
-        print("[style-corpus] ⚠  densidad muy baja — el generador puede no haber convergido")
-    elif mean_dens > 0.3:
-        print("[style-corpus] ⚠  densidad muy alta — posible colapso de modo")
-    print(f"[style-corpus] Estadísticas en     : {out_path}")
+        json.dump({'z': centroid.tolist(), 'n_files': len(zs),
+                   'dim': len(centroid)}, f, indent=2)
+    print(f"\n[style-corpus] Centroide guardado en {out_path}  "
+          f"({len(zs)} archivos, dim={len(centroid)})")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  COMANDO: round-trip  (diagnóstico)
-# ══════════════════════════════════════════════════════════════════════════════
-
-def cmd_round_trip(args):
-    """MIDI → piano roll → MIDI sin modelo (diagnóstico del parser)."""
-    import numpy as np
-
-    cfg_rt = {
-        'resolution':  args.resolution,
-        'window_bars': WINDOW_BARS_DEFAULT,
-        'roles':       [r for r in ROLES if r not in (args.disable_roles or [])],
-        'n_pitch':     PITCH_CLASSES,
-        'pitch_lo':    0,
-        'pitch_hi':    127,
-    }
-
-    if args.model_dir:
-        try:
-            with open(Path(args.model_dir) / CycleTrainer.CONFIG_NAME) as f:
-                cfg_rt = json.load(f)
-            print(f"[round-trip] Usando config de {args.model_dir}")
-        except Exception:
-            pass
-
-    rolls = _midi_to_rolls(args.input, cfg_rt)
-    n_bars = min(r.shape[0] for r in rolls.values())
-    print(f"[round-trip] {n_bars} compases  ·  roles: {list(rolls.keys())}")
-
-    bars_per_role = {role: roll for role, roll in rolls.items()}
-    palette = _load_palette(None, cfg_rt)
-
-    n_notes = _rolls_to_midi(bars_per_role, cfg_rt, palette, args.output,
-                              bpm=args.bpm)
-    print(f"[round-trip] Guardado: {args.output}  ({n_notes} notas)")
-    if n_notes == 0:
-        print("[round-trip] ⚠  MIDI vacío — posible problema en el parser")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  COMANDO: inspect
+#  INSPECT
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cmd_inspect(args):
     import numpy as np
 
-    if 'npz' in args.what and args.data_dir:
-        data_dir = Path(args.data_dir)
-        npz_files = sorted(data_dir.glob('*.npz'))
-        if not npz_files:
-            print(f"[inspect] No se encontraron .npz en {data_dir}")
-        else:
-            target = args.npz_file or npz_files[0].name
-            path   = data_dir / target
-            if not path.exists():
-                print(f"[inspect] No se encontró {path}")
-            else:
-                data = np.load(str(path), allow_pickle=True)
-                meta = json.loads(str(data['meta_json'][0]))
-                print(f"[inspect] {path.name}")
-                print(f"  resolution   : {meta['resolution']}")
-                print(f"  window_bars  : {meta['window_bars']}")
-                print(f"  total_bars   : {meta['total_bars']}")
-                print(f"  n_windows    : {meta['n_windows']}")
-                print(f"  roles        : {meta['roles']}")
-                print(f"  n_pitch      : {meta.get('n_pitch', 128)}")
-                for role in meta['roles']:
-                    key = f'roll_{role}'
-                    if key in data:
-                        arr = data[key]
-                        dens = float(arr.mean())
-                        print(f"    {role:20s}: shape={arr.shape}  densidad={dens:.5f}")
+    what = getattr(args, 'what', 'model')
 
-    if 'loss_curve' in args.what and args.model_dir:
-        hist_path = Path(args.model_dir) / CycleTrainer.HISTORY_NAME
-        if hist_path.exists():
-            with open(hist_path) as f:
-                hist = json.load(f)
-            print(f"\n[inspect] Historial de entrenamiento ({len(hist.get('train_G',[]))} épocas)")
-            for key, vals in hist.items():
-                if vals:
-                    print(f"  {key:15s}: último={vals[-1]:.4f}  min={min(vals):.4f}")
-        else:
-            print(f"[inspect] No se encontró historial en {args.model_dir}")
+    if 'model' in what:
+        model_dir = Path(args.model_dir) if args.model_dir else None
+        if model_dir is None:
+            print("[inspect] --model-dir requerido para --what model")
+            return
 
-    if args.model_dir:
-        cfg_path = Path(args.model_dir) / CycleTrainer.CONFIG_NAME
+        cfg_path  = model_dir / CycleGANTrainer.CONFIG_NAME
+        hist_path = model_dir / CycleGANTrainer.HISTORY_NAME
+        ckpt_path = model_dir / CycleGANTrainer.BEST_NAME
+
         if cfg_path.exists():
             with open(cfg_path) as f:
                 cfg = json.load(f)
-            print(f"\n[inspect] Configuración del modelo ({cfg_path})")
+            print("\n  CONFIGURACIÓN DEL MODELO")
+            print("  " + "─" * 40)
             for k, v in cfg.items():
-                print(f"  {k:20s}: {v}")
+                print(f"    {k:<24} {v}")
+
+        if ckpt_path.exists():
+            import torch
+            state = torch.load(str(ckpt_path), map_location='cpu')
+            print(f"\n  Mejor val_G    : {state.get('best_val', 'N/A')}")
+            print(f"  Épocas totales : {state.get('epoch', 0) + 1}")
+
+        if hist_path.exists():
+            with open(hist_path) as f:
+                hist = json.load(f)
+            n = len(hist.get('train_G', []))
+            if n > 0:
+                print(f"\n  Historial ({n} épocas registradas)")
+                for k in ('train_G', 'val_G', 'train_D', 'val_D',
+                          'adv_A2B', 'adv_B2A', 'cyc_A', 'cyc_B',
+                          'idt_A', 'idt_B', 'D_A', 'D_B'):
+                    if hist.get(k):
+                        print(f"    {k:<14} último={hist[k][-1]:.4f}  "
+                              f"mín={min(hist[k]):.4f}")
+
+        try:
+            nets, cfg = _load_model_and_config(model_dir)
+            for name in ('G_A2B', 'G_B2A', 'D_A', 'D_B'):
+                n_params = sum(p.numel() for p in nets[name].parameters())
+                print(f"  {name}  parámetros: {n_params:,}")
+        except Exception:
+            pass
+
+    if 'npz' in what:
+        data_dir = Path(args.data_dir) if args.data_dir else None
+        if data_dir is None:
+            print("[inspect] --data-dir requerido para --what npz")
+            return
+
+        npz_files = sorted(data_dir.glob('*.npz'))
+        if not npz_files:
+            print(f"[inspect] No hay .npz en {data_dir}")
+            return
+
+        target = getattr(args, 'npz_file', None)
+        if target:
+            npz_files = [f for f in npz_files if f.stem == target]
+
+        limit = None if getattr(args, 'no_roll', False) else 5
+        for path in (npz_files[:limit] if limit else npz_files):
+            try:
+                data = dict(np.load(str(path), allow_pickle=True))
+                meta = json.loads(str(data['meta_json'][0]))
+                print(f"\n  {path.stem}")
+                print(f"    compases / ventanas : {meta['total_bars']} / {meta['n_windows']}")
+                print(f"    roles               : {', '.join(meta['roles'])}")
+                print(f"    resolución / n_pitch: {meta['resolution']} / {meta.get('n_pitch', 128)}")
+                if not getattr(args, 'no_roll', False):
+                    for role in meta['roles']:
+                        key = f'roll_{role}'
+                        if key in data:
+                            arr     = data[key]
+                            density = float(arr.mean()) * 100
+                            print(f"    {role:<16} shape={arr.shape}  "
+                                  f"densidad={density:.2f}%")
+            except Exception as e:
+                print(f"  {path.stem}  ERROR: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CLI  (espejo de diffusion_composer)
+#  ROUND-TRIP
 # ══════════════════════════════════════════════════════════════════════════════
 
-def build_parser():
+def cmd_round_trip(args):
+    import numpy as np
+
+    print(f"[round-trip] {args.input}")
+    mid        = _load_midi(args.input)
+    note_lists = _extract_note_lists(mid)
+    if not note_lists:
+        print("[round-trip] ERROR: no se encontraron notas")
+        sys.exit(1)
+
+    resolution  = getattr(args, 'resolution', TICKS_PER_BAR_DEFAULT)
+    window_bars = getattr(args, 'window_bars', WINDOW_BARS_DEFAULT)
+    tpb_raw     = _ticks_per_bar(mid)
+    all_ticks   = max(n[1] for nl in note_lists.values() for n in nl)
+    total_bars  = max(1, int(all_ticks / tpb_raw) + 1)
+
+    role_map = RoleAssigner().assign(mid)
+    conv     = PianoRollConverter(resolution=resolution, window_bars=window_bars)
+    rolls    = {}
+    for role, key in role_map.items():
+        notes = note_lists.get(key, [])
+        if notes:
+            rolls[role] = conv.notes_to_roll(notes, tpb_raw, total_bars)
+
+    print(f"  Compases        : {total_bars}")
+    print(f"  Roles asignados :")
+    for role, roll in rolls.items():
+        density = float(roll.mean()) * 100
+        print(f"    {role:<16} shape={roll.shape}  densidad={density:.2f}%")
+
+    cfg_dummy = {
+        'roles': list(rolls.keys()), 'n_roles': len(rolls),
+        'resolution': resolution, 'window_bars': window_bars,
+        'seq_len': window_bars * resolution, 'n_pitch': PITCH_CLASSES,
+        'pitch_lo': 0, 'pitch_hi': 127,
+    }
+    out_path = getattr(args, 'output', 'round_trip_output.mid')
+    n_notes  = _rolls_to_midi(rolls, cfg_dummy, DEFAULT_PALETTE, out_path,
+                               bpm=getattr(args, 'bpm', 120.0))
+    print(f"\n[round-trip] MIDI reconstruido en {out_path}  ({n_notes} notas)")
+    if n_notes == 0:
+        print("[round-trip] ⚠  MIDI vacío — posible problema en la extracción de notas")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CLI
+# ══════════════════════════════════════════════════════════════════════════════
+
+def main():
     parser = argparse.ArgumentParser(
-        prog='cyclegan_composer',
+        prog='cycle_gan_composer',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent("""\
-            ╔══════════════════════════════════════════════════════╗
-            ║           CYCLEGAN COMPOSER  v1                      ║
-            ║   Style-transfer MIDI mediante CycleGAN              ║
-            ╚══════════════════════════════════════════════════════╝
+            CYCLE-GAN COMPOSER v1
+            Transferencia de estilo musical sobre piano rolls multi-rol.
 
-            Flujo de trabajo típico:
-              1. prepare  --input-dir midis_A/ --output-dir data_A/
-              2. prepare  --input-dir midis_B/ --output-dir data_B/
-              3. train    --data-dir-a data_A/ --data-dir-b data_B/ --model-dir model/
-              4. transfer --input cancion.mid  --model-dir model/ --output resultado.mid
+            Flujo típico:
+              1. prepare   — convertir corpus A y corpus B a .npz
+              2. train     — entrenar el modelo A ↔ B
+              3. transfer  — aplicar transferencia a un MIDI concreto
         """),
     )
 
-    sub = parser.add_subparsers(dest='command', required=True)
+    sub = parser.add_subparsers(dest='command', metavar='COMANDO')
+    sub.required = True
 
     # ── prepare ───────────────────────────────────────────────────────────────
-    p_pr = sub.add_parser('prepare',
-        help='MIDI corpus → piano rolls segmentados (.npz)',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=textwrap.dedent("""\
-            Convierte una carpeta de MIDIs en ventanas de piano roll (.npz).
-            Ejecutar por separado para el corpus A y el corpus B.
-
-            Ejemplo:
-              prepare --input-dir midis_clasico/ --output-dir data_clasico/
-              prepare --input-dir midis_jazz/    --output-dir data_jazz/
-        """))
-    p_pr.add_argument('--input-dir',   required=True, metavar='DIR')
-    p_pr.add_argument('--output-dir',  required=True, metavar='DIR')
-    p_pr.add_argument('--resolution',  type=int, default=TICKS_PER_BAR_DEFAULT,
-        metavar='INT',
-        help=f'Ticks por compás (default: {TICKS_PER_BAR_DEFAULT})')
-    p_pr.add_argument('--window-bars', type=int, default=WINDOW_BARS_DEFAULT,
-        metavar='INT', dest='window_bars',
-        help=f'Compases por ventana (default: {WINDOW_BARS_DEFAULT})')
-    p_pr.add_argument('--disable-roles', nargs='+', metavar='ROL',
-        choices=ROLES, default=[], dest='disable_roles',
-        help=f'Roles a excluir. Posibles: {", ".join(ROLES)}')
-    p_pr.add_argument('--pitch-range', type=int, default=None, metavar='N',
-        dest='pitch_range',
-        help='Limitar a N valores MIDI centrados en Do central.')
-    p_pr.set_defaults(func=cmd_prepare)
+    p = sub.add_parser('prepare',
+        help='MIDI corpus → piano rolls segmentados (.npz)')
+    p.add_argument('--input-dir',    required=True,  metavar='DIR')
+    p.add_argument('--output-dir',   required=True,  metavar='DIR')
+    p.add_argument('--resolution',   type=int, default=TICKS_PER_BAR_DEFAULT,
+                   metavar='INT',
+                   help=f'Ticks por compás (default: {TICKS_PER_BAR_DEFAULT})')
+    p.add_argument('--window-bars',  type=int, default=WINDOW_BARS_DEFAULT,
+                   metavar='INT',
+                   help=f'Compases por ventana (default: {WINDOW_BARS_DEFAULT})')
+    p.add_argument('--pitch-range',  type=int, default=None, metavar='INT',
+                   help='Limitar a N notas centradas en Do central (ej: 48)')
+    p.add_argument('--disable-roles', nargs='+', metavar='ROL', choices=ROLES)
+    p.add_argument('--report',       action='store_true')
+    p.set_defaults(func=cmd_prepare)
 
     # ── train ─────────────────────────────────────────────────────────────────
-    p_tr = sub.add_parser('train',
-        help='Entrena el par de generadores A↔B',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=textwrap.dedent("""\
-            Entrena los generadores G_A2B y G_B2A y sus discriminadores.
-            Los corpus A y B no necesitan correspondencia canción-a-canción.
+    p = sub.add_parser('train',
+        help='Entrena el modelo CycleGAN (dominio A ↔ dominio B)')
+    p.add_argument('--data-dir-a',    required=True,  metavar='DIR')
+    p.add_argument('--data-dir-b',    required=True,  metavar='DIR')
+    p.add_argument('--model-dir',     required=True,  metavar='DIR')
+    p.add_argument('--epochs',        type=int,   default=200)
+    p.add_argument('--batch-size',    type=int,   default=8)
+    p.add_argument('--lr',            type=float, default=2e-4)
+    p.add_argument('--lambda-cycle',  type=float, default=10.0,  metavar='F',
+                   help='Peso cycle-consistency (default: 10)')
+    p.add_argument('--lambda-identity', type=float, default=5.0, metavar='F',
+                   help='Peso identity (default: 5)')
+    p.add_argument('--base-ch',       type=int,   default=64,
+                   help='Canales base del generador (default: 64)')
+    p.add_argument('--n-res-blocks',  type=int,   default=9,
+                   help='Bloques ResNet en bottleneck (default: 9; usar 4-6 en GPU modesta)')
+    p.add_argument('--n-downsamples', type=int,   default=2,
+                   help='Niveles de downsampling (default: 2)')
+    p.add_argument('--patience',      type=int,   default=40)
+    p.add_argument('--disable-roles', nargs='+',  metavar='ROL', choices=ROLES)
+    p.add_argument('--resume',        action='store_true')
+    p.set_defaults(func=cmd_train)
 
-            Pérdidas:
-              L_total = L_GAN + λ_cycle * L_cycle + λ_identity * L_identity
+    # ── transfer ──────────────────────────────────────────────────────────────
+    p = sub.add_parser('transfer',
+        help='Aplica el generador entrenado a un MIDI concreto')
+    p.add_argument('--model-dir',      required=True, metavar='DIR')
+    p.add_argument('--input',          required=True, metavar='FILE')
+    p.add_argument('--direction',      default='A2B', choices=['A2B', 'B2A'],
+                   help='A2B: estilo de A → estilo de B  (default: A2B)')
+    p.add_argument('--palette',        default=None,  metavar='FILE')
+    p.add_argument('--output',         default='output_transfer.mid', metavar='FILE')
+    p.add_argument('--bpm',            type=float, default=120.0)
+    p.add_argument('--threshold',      type=float, default=None,  metavar='F')
+    p.add_argument('--threshold-pct',  type=float, default=99.0,  metavar='F',
+                   help='Percentil para umbral adaptativo (default: 99.0)')
+    p.add_argument('--adaptive-per-bar', action='store_true')
+    p.set_defaults(func=cmd_transfer)
 
-            Ejemplo:
-              train --data-dir-a data_clasico/ --data-dir-b data_jazz/ \\
-                    --model-dir model_clasico_jazz/ \\
-                    --epochs 200 --batch-size 4
-        """))
-    p_tr.add_argument('--data-dir-a',  required=True, metavar='DIR', dest='data_dir_a')
-    p_tr.add_argument('--data-dir-b',  required=True, metavar='DIR', dest='data_dir_b')
-    p_tr.add_argument('--model-dir',   required=True, metavar='DIR')
-    p_tr.add_argument('--epochs',      type=int,   default=200)
-    p_tr.add_argument('--batch-size',  type=int,   default=4,    dest='batch_size')
-    p_tr.add_argument('--lr',          type=float, default=2e-4)
-    p_tr.add_argument('--lambda-cycle', type=float, default=10.0, dest='lambda_cycle',
-        help='Peso de la pérdida de ciclo (default: 10.0)')
-    p_tr.add_argument('--lambda-identity', type=float, default=0.5, dest='lambda_identity',
-        help='Peso de la pérdida de identidad (default: 0.5)')
-    p_tr.add_argument('--n-res-blocks', type=int, default=9, dest='n_res_blocks',
-        help='Número de bloques residuales del generador (default: 9; '
-             'reducir a 6 para entrenar más rápido)')
-    p_tr.add_argument('--base-ch',     type=int, default=64, dest='base_ch',
-        help='Canales base del generador/discriminador (default: 64; '
-             'reducir a 32 para modelos más pequeños)')
-    p_tr.add_argument('--patience',    type=int, default=40,
-        help='Early stopping: épocas sin mejora (default: 40)')
-    p_tr.add_argument('--resume',      action='store_true',
-        help='Reanudar desde el último checkpoint')
-    p_tr.add_argument('--disable-roles', nargs='+', metavar='ROL',
-        choices=ROLES, default=[], dest='disable_roles')
-    p_tr.set_defaults(func=cmd_train)
-
-    # ── transfer (A→B) ────────────────────────────────────────────────────────
-    p_tf = sub.add_parser('transfer',
-        help='Transfiere el estilo B a un MIDI del estilo A',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=textwrap.dedent("""\
-            Aplica el generador G_A2B compás a compás sobre el MIDI de entrada.
-
-            La transferencia es determinista y en un solo paso forward:
-            no hay parámetros de intensidad ni temperatura.
-
-            Ejemplo:
-              transfer --input cancion_clasica.mid \\
-                       --model-dir model_clasico_jazz/ \\
-                       --output cancion_jazz.mid
-        """))
-    p_tf.add_argument('--input',        required=True,  metavar='FILE',
-        help='MIDI de entrada (estilo A)')
-    p_tf.add_argument('--model-dir',    required=True,  metavar='DIR')
-    p_tf.add_argument('--output',       default='transfer_A2B.mid', metavar='FILE')
-    p_tf.add_argument('--palette',      default=None,   metavar='FILE',
-        help='Paleta de instrumentos JSON (opcional)')
-    p_tf.add_argument('--bpm',          type=float, default=120.0)
-    p_tf.add_argument('--threshold',    type=float, default=None, metavar='FLOAT',
-        help='Umbral fijo de binarización (default: automático)')
-    p_tf.add_argument('--threshold-pct', type=float, default=99.0, metavar='FLOAT',
-        dest='threshold_pct',
-        help='Percentil para umbral adaptativo (default: 99.0; '
-             'bajar a 95–97 si el MIDI sale vacío)')
-    p_tf.set_defaults(func=cmd_transfer)
-
-    # ── transfer-inv (B→A) ────────────────────────────────────────────────────
-    p_ti = sub.add_parser('transfer-inv',
-        help='Transfiere el estilo A a un MIDI del estilo B (generador inverso)',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=textwrap.dedent("""\
-            Aplica el generador G_B2A compás a compás sobre el MIDI de entrada.
-
-            Ejemplo:
-              transfer-inv --input cancion_jazz.mid \\
-                           --model-dir model_clasico_jazz/ \\
-                           --output cancion_clasica.mid
-        """))
-    p_ti.add_argument('--input',        required=True,  metavar='FILE')
-    p_ti.add_argument('--model-dir',    required=True,  metavar='DIR')
-    p_ti.add_argument('--output',       default='transfer_B2A.mid', metavar='FILE')
-    p_ti.add_argument('--palette',      default=None,   metavar='FILE')
-    p_ti.add_argument('--bpm',          type=float, default=120.0)
-    p_ti.add_argument('--threshold',    type=float, default=None, metavar='FLOAT')
-    p_ti.add_argument('--threshold-pct', type=float, default=99.0, metavar='FLOAT',
-        dest='threshold_pct')
-    p_ti.set_defaults(func=cmd_transfer_inv)
+    # ── encode ────────────────────────────────────────────────────────────────
+    p = sub.add_parser('encode',
+        help='MIDI → vector de estilo latente (.json)')
+    p.add_argument('--input',      required=True, metavar='FILE')
+    p.add_argument('--model-dir',  required=True, metavar='DIR')
+    p.add_argument('--output',     default='z_style.json', metavar='FILE')
+    p.set_defaults(func=cmd_encode)
 
     # ── style-corpus ──────────────────────────────────────────────────────────
-    p_sc = sub.add_parser('style-corpus',
-        help='Estadísticas de salida del generador sobre un corpus',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=textwrap.dedent("""\
-            Pasa todos los MIDIs de una carpeta por el generador y calcula
-            métricas de densidad (diagnóstico de convergencia).
-
-            A diferencia del modelo de difusión, no existe un vector de estilo
-            explícito: el estilo CycleGAN está codificado en los pesos del generador.
-
-            Ejemplo:
-              style-corpus --input-dir midis_A/ --model-dir model/ --direction a2b
-        """))
-    p_sc.add_argument('--input-dir',  required=True, metavar='DIR')
-    p_sc.add_argument('--model-dir',  required=True, metavar='DIR')
-    p_sc.add_argument('--direction',  default='a2b', choices=['a2b', 'b2a'],
-        help='Dirección del generador a aplicar (default: a2b)')
-    p_sc.add_argument('--output',     default=None, metavar='FILE',
-        help='Ruta del JSON de salida (default: corpus_stats_<carpeta>_<dir>.json)')
-    p_sc.set_defaults(func=cmd_style_corpus)
-
-    # ── round-trip ────────────────────────────────────────────────────────────
-    p_rt = sub.add_parser('round-trip',
-        help='MIDI → piano roll → MIDI sin modelo (diagnóstico del parser)',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=textwrap.dedent("""\
-            Convierte un MIDI a piano roll y de vuelta sin usar el modelo.
-            Útil para aislar problemas en el pipeline de parseo.
-
-            Ejemplo:
-              round-trip --input cancion.mid
-              round-trip --input cancion.mid --model-dir model/
-        """))
-    p_rt.add_argument('--input',      required=True, metavar='FILE')
-    p_rt.add_argument('--model-dir',  default=None,  metavar='DIR',
-        help='Si se indica, lee la configuración del modelo.')
-    p_rt.add_argument('--resolution', type=int, default=TICKS_PER_BAR_DEFAULT,
-        metavar='INT')
-    p_rt.add_argument('--disable-roles', nargs='+', metavar='ROL',
-        choices=ROLES, default=[], dest='disable_roles')
-    p_rt.add_argument('--output',     default='output_roundtrip.mid', metavar='FILE')
-    p_rt.add_argument('--bpm',        type=float, default=120.0)
-    p_rt.set_defaults(func=cmd_round_trip)
+    p = sub.add_parser('style-corpus',
+        help='Centroide de estilo de una carpeta de MIDIs')
+    p.add_argument('--input-dir',  required=True, metavar='DIR')
+    p.add_argument('--model-dir',  required=True, metavar='DIR')
+    p.add_argument('--output',     default='z_corpus_centroid.json', metavar='FILE')
+    p.set_defaults(func=cmd_style_corpus)
 
     # ── inspect ───────────────────────────────────────────────────────────────
-    p_ins = sub.add_parser('inspect',
+    p = sub.add_parser('inspect',
         help='Diagnóstico del modelo y los datos')
-    p_ins.add_argument('--what', nargs='+',
-        choices=['npz', 'loss_curve'], default=['npz'])
-    p_ins.add_argument('--data-dir',  metavar='DIR', default=None, dest='data_dir')
-    p_ins.add_argument('--model-dir', metavar='DIR', default=None)
-    p_ins.add_argument('--file',      dest='npz_file', metavar='NAME', default=None)
-    p_ins.set_defaults(func=cmd_inspect)
+    p.add_argument('--model-dir', default=None, metavar='DIR')
+    p.add_argument('--data-dir',  default=None, metavar='DIR')
+    p.add_argument('--what',      default='model',
+                   help='"model", "npz", o "model npz"')
+    p.add_argument('--npz-file',  default=None, metavar='STEM')
+    p.add_argument('--no-roll',   action='store_true')
+    p.set_defaults(func=cmd_inspect)
 
-    return parser
+    # ── round-trip ────────────────────────────────────────────────────────────
+    p = sub.add_parser('round-trip',
+        help='MIDI → piano roll → MIDI (diagnóstico sin modelo)')
+    p.add_argument('--input',       required=True, metavar='FILE')
+    p.add_argument('--output',      default='round_trip_output.mid', metavar='FILE')
+    p.add_argument('--resolution',  type=int, default=TICKS_PER_BAR_DEFAULT)
+    p.add_argument('--window-bars', type=int, default=WINDOW_BARS_DEFAULT)
+    p.add_argument('--bpm',         type=float, default=120.0)
+    p.set_defaults(func=cmd_round_trip)
 
+    args = parser.parse_args()
+    args.func(args)
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  ENTRY POINT
-# ══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == '__main__':
-    parser = build_parser()
-    args   = parser.parse_args()
-    args.func(args)
+    main()
