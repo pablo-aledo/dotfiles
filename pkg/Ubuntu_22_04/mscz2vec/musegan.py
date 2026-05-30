@@ -71,6 +71,28 @@
 ║    python musegan.py inspect --model-dir model/                              ║
 ║    python musegan.py inspect --data data/train.npz                           ║
 ║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  DATOS PREENTRENADOS (Lakh Pianoroll Dataset)                                ║
+║                                                                              ║
+║  Los checkpoints originales son TF1 y no son compatibles. Sin embargo, los  ║
+║  datos de entrenamiento .npz sí lo son y permiten reentrenar desde cero:    ║
+║                                                                              ║
+║    # 1. Instalar gdown                                                       ║
+║    pip install gdown                                                         ║
+║                                                                              ║
+║    # 2. Descargar piano-rolls LPD-5 (~1.5 GB comprimido)                    ║
+║    gdown --id 14rrC5bSQkB9VYWrvt2IhsCjOKYrguk3S                             ║
+║          -O data/train_x_lpd_5_phr.npz                                      ║
+║                                                                              ║
+║    # 3. Entrenar con los datos descargados                                   ║
+║    python musegan.py train                                                    ║
+║        --data      data/train_x_lpd_5_phr.npz                               ║
+║        --model-dir model/                                                    ║
+║        --steps 50000  --batch-size 64  --gp                                 ║
+║                                                                              ║
+║  El .npz usa el formato sparse nativo de MuseGAN (shape + nonzero)          ║
+║  y es compatible directamente con el comando train sin preprocesado.         ║
+║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
