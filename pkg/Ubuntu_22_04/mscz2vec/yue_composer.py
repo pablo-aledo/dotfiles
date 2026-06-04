@@ -807,9 +807,10 @@ def _run_pipeline(
         model_stage2 = torch.compile(model_stage2)
 
     def _stage2_generate(prompt_npy, batch_size=4):
-        """Stage 2: upsampling 1 codebook → 8. Fiel a stage2_generate() de infer.py."""
-        # Recortar a múltiplo de 1 (siempre válido) — el assert real es shape[0] % n_quantizer==0
-        # codectool tiene n_quantizer=1, así que cualquier longitud es válida
+        """Stage 2: upsampling 1→8 codebooks. Fiel a stage2_generate() de infer.py."""
+        import copy
+        from collections import Counter
+
         codec_ids = codectool.unflatten(prompt_npy, n_quantizer=1)  # (1, T)
         codec_ids = codectool.offset_tok_ids(
             codec_ids,
@@ -818,54 +819,89 @@ def _run_pipeline(
             num_codebooks=codectool.num_codebooks,
         ).astype(np.int32)
 
-        if batch_size > 1:
-            codec_list = [codec_ids[:, i*300:(i+1)*300] for i in range(batch_size)]
-            codec_ids_b = np.concatenate(codec_list, axis=0)
-            prompt_ids = np.concatenate([
-                np.tile([mmtokenizer.soa, mmtokenizer.stage_1], (batch_size, 1)),
-                codec_ids_b,
-                np.tile([mmtokenizer.stage_2], (batch_size, 1)),
-            ], axis=1)
-        else:
-            prompt_ids = np.concatenate([
-                np.array([mmtokenizer.soa, mmtokenizer.stage_1]),
-                codec_ids.flatten(),
-                np.array([mmtokenizer.stage_2]),
-            ]).astype(np.int32)[np.newaxis, ...]
-
-        codec_ids_t  = torch.as_tensor(codec_ids).to(device)
-        prompt_ids_t = torch.as_tensor(prompt_ids).to(device)
-        len_prompt   = prompt_ids_t.shape[-1]
+        # Calcular duración en múltiplos de 6s (300 frames @ 50fps)
+        output_duration = codec_ids.shape[1] // 50 // 6 * 6
+        num_batch = output_duration // 6
 
         block_list = LogitsProcessorList([
             _BlockRange(0, 46358),
             _BlockRange(53526, mmtokenizer.vocab_size),
         ])
 
-        # Teacher forcing frame a frame (igual que infer.py)
-        for fi in range(codec_ids_t.shape[1]):
-            cb0 = codec_ids_t[:, fi:fi+1]
-            prompt_ids_t = torch.cat([prompt_ids_t, cb0], dim=1)
-            with torch.no_grad():
-                out = model_stage2.generate(
-                    input_ids=prompt_ids_t,
-                    min_new_tokens=7,
-                    max_new_tokens=7,
-                    eos_token_id=mmtokenizer.eoa,
-                    pad_token_id=mmtokenizer.eoa,
-                    logits_processor=block_list,
-                )
-            prompt_ids_t = out
+        def _run_batch(chunk, bs):
+            """Genera un chunk de codec_ids (1, T) con batch size bs."""
+            if bs > 1:
+                codec_list = [chunk[:, i*300:(i+1)*300] for i in range(bs)]
+                c = np.concatenate(codec_list, axis=0)  # (bs, 300)
+                prompt = np.concatenate([
+                    np.tile([mmtokenizer.soa, mmtokenizer.stage_1], (bs, 1)),
+                    c,
+                    np.tile([mmtokenizer.stage_2], (bs, 1)),
+                ], axis=1)
+            else:
+                c = chunk
+                prompt = np.concatenate([
+                    np.array([mmtokenizer.soa, mmtokenizer.stage_1]),
+                    c.flatten(),
+                    np.array([mmtokenizer.stage_2]),
+                ]).astype(np.int32)[np.newaxis, ...]
 
-        if batch_size > 1:
-            raw = prompt_ids_t.cpu().numpy()[:, len_prompt:]
-            output = np.concatenate([raw[i] for i in range(batch_size)], axis=0)
+            c_t      = torch.as_tensor(c).to(device)
+            prompt_t = torch.as_tensor(prompt).to(device)
+            len_p    = prompt_t.shape[-1]
+
+            for fi in range(c_t.shape[1]):
+                cb0      = c_t[:, fi:fi+1]           # (bs, 1)
+                prompt_t = torch.cat([prompt_t, cb0], dim=1)
+                with torch.no_grad():
+                    out = model_stage2.generate(
+                        input_ids=prompt_t,
+                        min_new_tokens=7,
+                        max_new_tokens=7,
+                        eos_token_id=mmtokenizer.eoa,
+                        pad_token_id=mmtokenizer.eoa,
+                        logits_processor=block_list,
+                    )
+                prompt_t = out
+
+            raw = prompt_t.cpu().numpy()[:, len_p:]
+            if bs > 1:
+                return np.concatenate([raw[i] for i in range(bs)], axis=0)
+            else:
+                return raw[0]
+
+        # Procesar en chunks de batch_size * 6s
+        if num_batch == 0:
+            output = _run_batch(codec_ids, batch_size=1)
+        elif num_batch <= batch_size:
+            output = _run_batch(codec_ids[:, :output_duration*50], num_batch)
         else:
-            output = prompt_ids_t[0].cpu().numpy()[len_prompt:]
+            segments = []
+            n_segs = (num_batch // batch_size) + (1 if num_batch % batch_size else 0)
+            for seg in range(n_segs):
+                s = seg * batch_size * 300
+                e = min((seg+1) * batch_size * 300, output_duration*50)
+                bs_cur = batch_size if seg != n_segs-1 or num_batch % batch_size == 0 \
+                         else num_batch % batch_size
+                segments.append(_run_batch(codec_ids[:, s:e], bs_cur))
+            output = np.concatenate(segments, axis=0)
 
-        # Convertir output a códigos 2D (8 codebooks)
+        # Cola: frames sobrantes que no entran en múltiplo de 6s
+        if output_duration*50 != codec_ids.shape[1]:
+            ending = _run_batch(codec_ids[:, output_duration*50:], 1)
+            output = np.concatenate([output, ending], axis=0)
+
+        # Convertir a 8 codebooks
         result = codectool_stage2.ids2npy(output)
-        return result
+
+        # Corregir códigos inválidos (igual que infer.py)
+        fixed = copy.deepcopy(result)
+        for i, row in enumerate(result):
+            for j, val in enumerate(row):
+                if val < 0 or val > 1023:
+                    cnt = Counter(row)
+                    fixed[i, j] = sorted(cnt.items(), key=lambda x: x[1], reverse=True)[0][0]
+        return fixed
 
     vocals_s2 = _stage2_generate(vocals)
     print("[stage2] Generando pista instrumental...")
