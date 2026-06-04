@@ -621,7 +621,7 @@ def _run_pipeline(
 
     # ── CodecManipulator ──────────────────────────────────────────────────────
     codectool       = CodecManipulator("xcodec", 0, 1)
-    codectool_stage2 = CodecManipulator("xcodec", 0, 8)
+    codectool_stage2 = CodecManipulator("xcodec", 0, 1)
 
     # ── Stage 1: LM 7B ───────────────────────────────────────────────────────
     print(f"\n[stage1] Cargando {stage1_model_id} ...")
@@ -806,32 +806,25 @@ def _run_pipeline(
     if torch.__version__ >= "2.0.0":
         model_stage2 = torch.compile(model_stage2)
 
-    def _stage2_generate(prompt_npy):
-        """Upsampling de 1 codebook a 8. Fiel a stage2_generate() de infer.py."""
-        # Recortar al múltiplo válido antes de unflatten
-        # CodecManipulator requiere shape[0] % num_codebooks == 0 o % n_quantizer == 0
-        n_q = codectool_stage2.num_codebooks  # típicamente 8 o 12
-        trim_len = (prompt_npy.shape[0] // n_q) * n_q
-        if trim_len == 0:
-            # Intentar con n_quantizer=1 directamente
-            trim_len = prompt_npy.shape[0]
-        prompt_npy = prompt_npy[:trim_len]
-        codec_ids = codectool_stage2.unflatten(prompt_npy, n_quantizer=1)
-        codec_ids = codectool_stage2.offset_tok_ids(
+    def _stage2_generate(prompt_npy, batch_size=4):
+        """Stage 2: upsampling 1 codebook → 8. Fiel a stage2_generate() de infer.py."""
+        # Recortar a múltiplo de 1 (siempre válido) — el assert real es shape[0] % n_quantizer==0
+        # codectool tiene n_quantizer=1, así que cualquier longitud es válida
+        codec_ids = codectool.unflatten(prompt_npy, n_quantizer=1)  # (1, T)
+        codec_ids = codectool.offset_tok_ids(
             codec_ids,
-            global_offset=codectool_stage2.global_offset,
-            codebook_size=codectool_stage2.codebook_size,
-            num_codebooks=codectool_stage2.num_codebooks,
+            global_offset=codectool.global_offset,
+            codebook_size=codectool.codebook_size,
+            num_codebooks=codectool.num_codebooks,
         ).astype(np.int32)
 
-        bs = stage2_batch_size
-        if bs > 1:
-            codec_list = [codec_ids[:, i*300:(i+1)*300] for i in range(bs)]
+        if batch_size > 1:
+            codec_list = [codec_ids[:, i*300:(i+1)*300] for i in range(batch_size)]
             codec_ids_b = np.concatenate(codec_list, axis=0)
-            prompt_ids  = np.concatenate([
-                np.tile([mmtokenizer.soa, mmtokenizer.stage_1], (bs, 1)),
+            prompt_ids = np.concatenate([
+                np.tile([mmtokenizer.soa, mmtokenizer.stage_1], (batch_size, 1)),
                 codec_ids_b,
-                np.tile([mmtokenizer.stage_2], (bs, 1)),
+                np.tile([mmtokenizer.stage_2], (batch_size, 1)),
             ], axis=1)
         else:
             prompt_ids = np.concatenate([
@@ -840,15 +833,16 @@ def _run_pipeline(
                 np.array([mmtokenizer.stage_2]),
             ]).astype(np.int32)[np.newaxis, ...]
 
-        codec_ids_t = torch.as_tensor(codec_ids).to(device)
+        codec_ids_t  = torch.as_tensor(codec_ids).to(device)
         prompt_ids_t = torch.as_tensor(prompt_ids).to(device)
+        len_prompt   = prompt_ids_t.shape[-1]
 
         block_list = LogitsProcessorList([
             _BlockRange(0, 46358),
             _BlockRange(53526, mmtokenizer.vocab_size),
         ])
 
-        generated = []
+        # Teacher forcing frame a frame (igual que infer.py)
         for fi in range(codec_ids_t.shape[1]):
             cb0 = codec_ids_t[:, fi:fi+1]
             prompt_ids_t = torch.cat([prompt_ids_t, cb0], dim=1)
@@ -861,22 +855,18 @@ def _run_pipeline(
                     pad_token_id=mmtokenizer.eoa,
                     logits_processor=block_list,
                 )
-            generated.append(out[:, prompt_ids_t.shape[-1]:].cpu().numpy())
             prompt_ids_t = out
 
-        if not generated:
-            return np.zeros((8, 0), dtype=np.int16)
-        generated = np.concatenate(generated, axis=1)
-        # Unoffset
-        generated = codectool_stage2.unoffset_tok_ids(
-            generated,
-            global_offset=codectool_stage2.global_offset,
-            codebook_size=codectool_stage2.codebook_size,
-            num_codebooks=codectool_stage2.num_codebooks,
-        )
-        return generated
+        if batch_size > 1:
+            raw = prompt_ids_t.cpu().numpy()[:, len_prompt:]
+            output = np.concatenate([raw[i] for i in range(batch_size)], axis=0)
+        else:
+            output = prompt_ids_t[0].cpu().numpy()[len_prompt:]
 
-    print("[stage2] Generando pista vocal...")
+        # Convertir output a códigos 2D (8 codebooks)
+        result = codectool_stage2.ids2npy(output)
+        return result
+
     vocals_s2 = _stage2_generate(vocals)
     print("[stage2] Generando pista instrumental...")
     insts_s2  = _stage2_generate(insts)
