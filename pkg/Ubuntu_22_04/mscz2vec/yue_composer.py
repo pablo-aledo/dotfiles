@@ -808,6 +808,14 @@ def _run_pipeline(
 
     def _stage2_generate(prompt_npy):
         """Upsampling de 1 codebook a 8. Fiel a stage2_generate() de infer.py."""
+        # Recortar al múltiplo válido antes de unflatten
+        # CodecManipulator requiere shape[0] % num_codebooks == 0 o % n_quantizer == 0
+        n_q = codectool_stage2.num_codebooks  # típicamente 8 o 12
+        trim_len = (prompt_npy.shape[0] // n_q) * n_q
+        if trim_len == 0:
+            # Intentar con n_quantizer=1 directamente
+            trim_len = prompt_npy.shape[0]
+        prompt_npy = prompt_npy[:trim_len]
         codec_ids = codectool_stage2.unflatten(prompt_npy, n_quantizer=1)
         codec_ids = codectool_stage2.offset_tok_ids(
             codec_ids,
