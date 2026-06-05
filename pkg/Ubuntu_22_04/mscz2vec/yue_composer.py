@@ -493,6 +493,7 @@ def _run_pipeline(
     stage2_batch_size: int = 4,
     seed: int = 42,
     cuda_idx: int = 0,
+    stage1_on_cpu: bool = False,
     keep_stems: bool = False,
     audio_prompt: dict = None,
     disable_offload: bool = False,
@@ -519,6 +520,8 @@ def _run_pipeline(
     torch.backends.cudnn.benchmark = False
 
     device = torch.device(f"cuda:{cuda_idx}" if torch.cuda.is_available() else "cpu")
+    # Stage 1 puede forzarse a CPU si no hay suficiente VRAM
+    stage1_device = torch.device("cpu") if stage1_on_cpu else device
     if verbose:
         print(f"[pipeline] Device: {device}")
 
@@ -634,7 +637,7 @@ def _run_pipeline(
     except ImportError:
         pass
     model = AutoModelForCausalLM.from_pretrained(stage1_model_id, **stage1_kwargs)
-    model.to(device)
+    model.to(stage1_device)
     model.eval()
     if torch.__version__ >= "2.0.0":
         model = torch.compile(model)
@@ -712,7 +715,7 @@ def _run_pipeline(
                           + mmtokenizer.tokenize(section_text)
                           + [mmtokenizer.soa] + codectool.sep_ids)
 
-        prompt_tensor = torch.as_tensor(prompt_ids).unsqueeze(0).to(device)
+        prompt_tensor = torch.as_tensor(prompt_ids).unsqueeze(0).to(stage1_device)
         input_ids     = (torch.cat([raw_output, prompt_tensor], dim=1)
                          if raw_output is not None and i > 1 else prompt_tensor)
 
@@ -725,7 +728,8 @@ def _run_pipeline(
 
         print(f"  [stage1] Segmento {i}/{run_n_segs - 1} ...")
         with torch.no_grad():
-            output_seq = model.generate(
+            input_ids = input_ids.to(stage1_device)
+        output_seq = model.generate(
                 input_ids=input_ids,
                 max_new_tokens=max_new_tokens,
                 min_new_tokens=100,
@@ -743,7 +747,7 @@ def _run_pipeline(
             )
         if output_seq[0][-1].item() != mmtokenizer.eoa:
             output_seq = torch.cat(
-                [output_seq, torch.as_tensor([[mmtokenizer.eoa]]).to(device)], dim=1
+                [output_seq, torch.as_tensor([[mmtokenizer.eoa]]).to(stage1_device)], dim=1
             )
 
         if raw_output is not None and i > 1:
@@ -1213,6 +1217,7 @@ def cmd_generate(args):
         cuda_idx=args.cuda,
         keep_stems=args.keep_stems,
         disable_offload=getattr(args, "disable_offload", False),
+        stage1_on_cpu=getattr(args, "stage1_cpu", False),
         verbose=verbose,
     )
 
@@ -1292,6 +1297,7 @@ def cmd_icl(args):
         keep_stems=args.keep_stems,
         audio_prompt=audio_prompt,
         disable_offload=getattr(args, "disable_offload", False),
+        stage1_on_cpu=getattr(args, "stage1_cpu", False),
         verbose=verbose,
     )
 
@@ -1604,6 +1610,8 @@ def _common_generate_args(p):
                    help="Directorio de modelos (default: ~/.yue/ o YUE_MODEL_DIR)")
     p.add_argument("--disable-offload", action="store_true", dest="disable_offload",
                    help="No mover Stage 1 a CPU tras la generación")
+    p.add_argument("--stage1-cpu", action="store_true", dest="stage1_cpu",
+                   help="Forzar Stage 1 en CPU aunque haya GPU (útil con VRAM < 14GB)")
     p.add_argument("--listen",   action="store_true",
                    help="Reproducir el resultado al terminar")
     p.add_argument("--verbose",  action="store_true",
