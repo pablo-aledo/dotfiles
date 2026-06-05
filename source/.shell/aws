@@ -660,6 +660,10 @@ aws_disable_check(){
     echo 'StrictHostKeyChecking no' >> ~/.ssh/config
 }
 
+aws_proxyjump(){
+    ssh -J $AWS_USER@$AWS_SERVER -L 2222:localhost:22 $AWS_USER_2@$AWS_SERVER_2 -N
+}
+
 gcp_arch_vm_command(){
 user="pga_gcp_1"
 metadata="$user:$(cat ~/.ssh/id_rsa.pub | sed s/pablo-aledo@localhost/$user/g)"
