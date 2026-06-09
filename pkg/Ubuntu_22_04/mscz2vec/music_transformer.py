@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
 r"""
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                     MUSIC TRANSFORMER  v1.0                                  ║
+║                     MUSIC TRANSFORMER  v1.1                                  ║
 ║   Generación de música con estructura a largo plazo (Huang et al., 2019)     ║
 ║                                                                              ║
 ║  Transformer autoregresivo decoder-only con atención relativa (Srel).        ║
 ║  Reduce la complejidad espacial de O(N²D) a O(ND) mediante el truco          ║
 ║  de skewing, permitiendo secuencias de hasta 2048 eventos MIDI.              ║
 ║                                                                              ║
-║  REPRESENTACIÓN:                                                             ║
+║  REPRESENTACIÓN (event-based, compatible con Music Transformer paper):       ║
 ║    388 eventos: note-on(128) + note-off(128) + velocity(32) + time(100)      ║
 ║    + 3 tokens especiales: PAD=388, SOS=389, EOS=390  → vocab=391             ║
-║                                                                              ║
-║  DEPENDENCIA EXTERNA:                                                        ║
-║    git clone https://github.com/jason9693/midi-neural-processor.git          ║
-║    mv midi-neural-processor midi_processor                                   ║
-║    (debe estar en el mismo directorio que este fichero)                      ║
+║    Encoder/decoder MIDI nativo — solo requiere mido (pip install mido)       ║
 ║                                                                              ║
 ║  COMANDOS:                                                                   ║
 ║    preprocess   — MIDI corpus → pickles de eventos                           ║
@@ -64,6 +60,16 @@ r"""
 ║    --seed N          Semilla aleatoria (default: 42)                         ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
+python music_transformer.py preprocess --input . --output data_mt/ --verbose
+python music_transformer.py inspect --data data_mt/
+python music_transformer.py train --data data_mt/ --model-dir runs/prueba/ \
+    --dim 128 --layers 3 --max-seq 512 --batch-size 2 --epochs 5
+
+python music_transformer.py generate \
+  --model-dir runs/prueba/ \
+  --length 512 \
+  --output test_gen.mid \
+  --temperature 0.9
 """
 
 import sys
@@ -78,13 +84,12 @@ import json
 
 import numpy as np
 
-# ── Dependencia: midi-neural-processor ───────────────────────────────────────
+# ── mido (encoder/decoder MIDI nativo) ───────────────────────────────────────
 try:
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from midi_processor.processor import encode_midi, decode_midi
-    _MIDI_PROCESSOR_OK = True
+    import mido
+    _MIDO_OK = True
 except ImportError:
-    _MIDI_PROCESSOR_OK = False
+    _MIDO_OK = False
 
 # ── PyTorch ───────────────────────────────────────────────────────────────────
 try:
@@ -117,6 +122,137 @@ VOCAB_SIZE  = EVENT_DIM + 3      # 391
 
 CHECKPOINT_FNAME = 'checkpoint.pt'
 CONFIG_FNAME     = 'config.json'
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ENCODER / DECODER MIDI  (nativo, sin dependencias externas)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+#  Representación event-based idéntica a midi-neural-processor / Music Transformer:
+#
+#    Rango    Tipo         Detalle
+#    ───────  ───────────  ──────────────────────────────────────────────────
+#    0–127    NOTE_ON      pitch 0-127  (velocity > 0)
+#    128–255  NOTE_OFF     pitch 0-127
+#    256–287  VELOCITY     32 bins de 4 valores cada uno (0-127 → bin 0-31)
+#    288–387  TIME_SHIFT   100 pasos de 10 ms cada uno (10 ms – 1000 ms)
+#
+#  Antes de cada NOTE_ON se emite el evento VELOCITY correspondiente.
+#  El tiempo acumulado se emite como uno o varios TIME_SHIFT consecutivos.
+
+_N_VELOCITY_BINS = 32
+_VELOCITY_BIN    = 128 // _N_VELOCITY_BINS          # 4 valores por bin
+_N_TIME_STEPS    = 100
+_TIME_STEP_MS    = 10                                # cada paso = 10 ms
+_MAX_TIME_MS     = _N_TIME_STEPS * _TIME_STEP_MS    # 1000 ms máximo por evento
+
+# Offsets en el vocabulario
+_OFF_NOTE_ON  = 0
+_OFF_NOTE_OFF = 128
+_OFF_VELOCITY = 256
+_OFF_TIME     = 288
+
+
+def encode_midi(path: str) -> list:
+    """
+    MIDI file → lista de enteros en [0, 387].
+    Compatible con la representación del paper Music Transformer.
+    """
+    mid   = mido.MidiFile(path)
+    ticks = mid.ticks_per_beat
+
+    events = []
+    pending_ms = 0.0
+    current_tempo = 500_000   # 120 BPM por defecto
+
+    def _flush_time(ms: float):
+        """Emite TIME_SHIFT tokens para cubrir ms milisegundos."""
+        remaining = int(round(ms))
+        while remaining > 0:
+            step = min(remaining, _MAX_TIME_MS)
+            # paso → índice 0-99
+            idx = max(0, min(_N_TIME_STEPS - 1, (step // _TIME_STEP_MS) - 1))
+            events.append(_OFF_TIME + idx)
+            remaining -= (idx + 1) * _TIME_STEP_MS
+
+    # Unificar todos los tracks en una secuencia absoluta de mensajes
+    merged = []
+    for track in mid.tracks:
+        abs_tick = 0
+        for msg in track:
+            abs_tick += msg.time
+            merged.append((abs_tick, msg))
+    merged.sort(key=lambda x: x[0])
+
+    last_tick = 0
+    for abs_tick, msg in merged:
+        # Convertir ticks a ms usando el tempo actual
+        delta_ticks = abs_tick - last_tick
+        if delta_ticks > 0:
+            ms = mido.tick2second(delta_ticks, ticks, current_tempo) * 1000
+            pending_ms += ms
+        last_tick = abs_tick
+
+        if msg.type == 'set_tempo':
+            current_tempo = msg.tempo
+        elif msg.type == 'note_on' and msg.velocity > 0:
+            _flush_time(pending_ms)
+            pending_ms = 0.0
+            vel_bin = min(msg.velocity // _VELOCITY_BIN, _N_VELOCITY_BINS - 1)
+            events.append(_OFF_VELOCITY + vel_bin)
+            events.append(_OFF_NOTE_ON + msg.note)
+        elif msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
+            _flush_time(pending_ms)
+            pending_ms = 0.0
+            events.append(_OFF_NOTE_OFF + msg.note)
+
+    return events
+
+
+def decode_midi(events: list, file_path: str, tempo: int = 500_000,
+                ticks_per_beat: int = 480):
+    """
+    Lista de enteros [0, 387] → fichero MIDI.
+    Compatible con la representación del paper Music Transformer.
+    """
+    mid   = mido.MidiFile(ticks_per_beat=ticks_per_beat)
+    track = mido.MidiTrack()
+    mid.tracks.append(track)
+    track.append(mido.MetaMessage('set_tempo', tempo=tempo, time=0))
+
+    current_velocity = 64     # valor por defecto si no hay VELOCITY previo
+    pending_ticks    = 0
+
+    for ev in events:
+        if not (0 <= ev < EVENT_DIM):
+            continue   # ignorar tokens especiales (PAD, SOS, EOS)
+
+        if _OFF_TIME <= ev < _OFF_TIME + _N_TIME_STEPS:
+            # TIME_SHIFT: acumular ticks
+            step_ms = (ev - _OFF_TIME + 1) * _TIME_STEP_MS
+            step_s  = step_ms / 1000.0
+            pending_ticks += int(mido.second2tick(step_s, ticks_per_beat, tempo))
+
+        elif _OFF_VELOCITY <= ev < _OFF_VELOCITY + _N_VELOCITY_BINS:
+            # VELOCITY: actualizar velocidad actual
+            bin_idx          = ev - _OFF_VELOCITY
+            current_velocity = bin_idx * _VELOCITY_BIN + _VELOCITY_BIN // 2
+            current_velocity = min(127, max(1, current_velocity))
+
+        elif _OFF_NOTE_ON <= ev < _OFF_NOTE_ON + 128:
+            note = ev - _OFF_NOTE_ON
+            track.append(mido.Message('note_on', note=note,
+                                      velocity=current_velocity,
+                                      time=pending_ticks))
+            pending_ticks = 0
+
+        elif _OFF_NOTE_OFF <= ev < _OFF_NOTE_OFF + 128:
+            note = ev - _OFF_NOTE_OFF
+            track.append(mido.Message('note_off', note=note,
+                                      velocity=0, time=pending_ticks))
+            pending_ticks = 0
+
+    mid.save(file_path)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -569,7 +705,7 @@ def _get_device() -> torch.device:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cmd_preprocess(args):
-    _require_midi_processor()
+    _require_mido()
 
     midi_exts = ('.mid', '.midi')
     midi_files = [
@@ -743,7 +879,7 @@ def _evaluate(model, dataset, criterion, device, batch_size, max_seq,
 
 def cmd_generate(args):
     _require_torch()
-    _require_midi_processor()
+    _require_mido()
 
     device = _get_device()
     random.seed(args.seed)
@@ -852,11 +988,10 @@ def cmd_inspect(args):
 #  GUARDS DE DEPENDENCIAS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _require_midi_processor():
-    if not _MIDI_PROCESSOR_OK:
-        print("ERROR: midi_processor no disponible.")
-        print("  git clone https://github.com/jason9693/midi-neural-processor.git")
-        print("  mv midi-neural-processor midi_processor")
+def _require_mido():
+    if not _MIDO_OK:
+        print("ERROR: mido no disponible. Instala con:")
+        print("  pip install mido")
         sys.exit(1)
 
 

@@ -45,6 +45,9 @@ r"""
 ║        --epochs 300 --batch-size 2 --lr 2e-4 --patience 30                 ║
 ║    python remi.py train corpus/ --model-dir remi_model/ --resume            ║
 ║                                                                              ║
+║    # Modelo pequeño para CPU (~5M params, 8x más rápido):                   ║
+║    python remi.py train corpus/ --model-dir remi_small/ --small             ║
+║                                                                              ║
 ║  generate — Genera piano pop desde cero                                      ║
 ║    python remi.py generate --model-dir remi_model/                          ║
 ║    python remi.py generate --model-dir remi_model/ \                        ║
@@ -75,6 +78,7 @@ r"""
 ║    --mem-len N      Longitud de memoria XL [default: 512]                   ║
 ║    --patience N     Early stopping [default: 30]                            ║
 ║    --resume         Reanudar desde checkpoint                                ║
+║    --small          Modelo reducido: 6 capas, d=256 (~5M params, CPU)      ║
 ║                                                                              ║
 ║  DEPENDENCIAS: mido, numpy, torch                                            ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -1103,36 +1107,50 @@ def generate_tokens(model, event2word: dict, word2event: dict,
                   random.choice(tv_keys)]
 
     # ── Loop autoregresivo ────────────────────────────────────────────────────
-    original_len      = len(words)
-    current_bar       = 0
-    initial_pass      = True
-    mems              = model.init_mems(1, device)
+    original_len = len(words)
+    current_bar  = 0
+    initial_pass = True
+    mems         = model.init_mems(1, device)
+    max_tokens   = n_target_bar * 200   # ~200 tokens por compás como techo
+    generated    = 0
 
     with torch.no_grad():
         while current_bar < n_target_bar:
             if initial_pass:
                 x      = torch.tensor(words, dtype=torch.long,
-                                      device=device).unsqueeze(1)  # (T,1)
+                                      device=device).unsqueeze(1)
                 initial_pass = False
             else:
                 x = torch.tensor([words[-1]], dtype=torch.long,
-                                  device=device).unsqueeze(1)       # (1,1)
+                                  device=device).unsqueeze(1)
 
             logits, mems = model(x, mems)
             logit_np     = logits[-1, 0].cpu().numpy()
             word         = _temperature_sample(logit_np, temperature, topk)
             words.append(word)
+            generated   += 1
+
+            print(f"\r  tokens={generated}  compás={current_bar}/{n_target_bar}  "
+                  f"(máx {max_tokens})   ", end='', flush=True)
 
             if word2event[word] == 'Bar_None':
                 current_bar += 1
-                if verbose:
-                    print(f"\r  Generando compás {current_bar}/{n_target_bar}…",
-                          end='', flush=True)
+            # Si el modelo no emite Bar_None solo, forzarlo cada ~100 tokens
+            elif generated % 100 == 0 and current_bar < n_target_bar:
+                bar_id = event2word['Bar_None']
+                words.append(bar_id)
+                generated  += 1
+                current_bar += 1
+                print(f"\r  tokens={generated}  compás={current_bar}/{n_target_bar}  "
+                      f"[Bar forzado]   ", end='', flush=True)
 
-    if verbose:
-        print()
+            if generated >= max_tokens:
+                print(f"\n  AVISO: límite de {max_tokens} tokens alcanzado "
+                      f"(solo {current_bar} compases completos)")
+                break
 
-    return words[original_len:]   # solo los tokens nuevos
+    print()
+    return words[original_len:]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1222,6 +1240,7 @@ def cmd_train(args):
     print(f"  Batch size : {args.batch_size}")
     print(f"  x_len      : {args.x_len}")
     print(f"  mem_len    : {args.mem_len}")
+    print(f"  Modelo     : {'small (6L/256D)' if args.small else 'full (12L/512D)'}")
 
     model_dir  = Path(args.model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -1260,12 +1279,16 @@ def cmd_train(args):
 
     # Modelo
     print("\n[2/3] Construyendo Transformer-XL…")
+    n_layer = 6    if args.small else 12
+    d_model = 256  if args.small else 512
+    n_head  = 4    if args.small else 8
+    d_ff    = 1024 if args.small else 2048
     model = _build_transformer_xl(
         n_token = n_token,
-        n_layer = 12,
-        d_model = 512,
-        n_head  = 8,
-        d_ff    = 2048,
+        n_layer = n_layer,
+        d_model = d_model,
+        n_head  = n_head,
+        d_ff    = d_ff,
         dropout = 0.1,
         mem_len = args.mem_len,
     )
@@ -1277,10 +1300,10 @@ def cmd_train(args):
     # Guardar config
     cfg = {
         'n_token':   n_token,
-        'n_layer':   12,
-        'd_model':   512,
-        'n_head':    8,
-        'd_ff':      2048,
+        'n_layer':   n_layer,
+        'd_model':   d_model,
+        'n_head':    n_head,
+        'd_ff':      d_ff,
         'mem_len':   args.mem_len,
         'x_len':     args.x_len,
         'use_chord': args.chord,
@@ -1328,6 +1351,10 @@ def cmd_generate(args):
         vocab_file = Path(cfg['vocab'])
     event2word, word2event = load_vocab(str(vocab_file))
     print(f"  Vocabulario : {len(event2word)} tokens  |  acordes: {use_chord}")
+
+    if args.mem_len is not None:
+        model.mem_len = args.mem_len
+        print(f"  mem_len     : {args.mem_len}  (sobreescrito, más rápido)")
 
     print(f"\n[2/3] Generando {args.bars} compases…")
     words = generate_tokens(
@@ -1381,6 +1408,10 @@ def cmd_continue(args):
         vocab_file = Path(cfg['vocab'])
     event2word, word2event = load_vocab(str(vocab_file))
     print(f"  Vocabulario : {len(event2word)} tokens  |  acordes: {use_chord}")
+
+    if args.mem_len is not None:
+        model.mem_len = args.mem_len
+        print(f"  mem_len     : {args.mem_len}  (sobreescrito, más rápido)")
 
     print(f"\n[2/4] Convirtiendo prompt a eventos REMI…")
     prompt_events = midi_to_events(args.prompt,
@@ -1458,6 +1489,8 @@ def main():
     p.add_argument('--mem-len',       type=int,   default=512,  dest='mem_len')
     p.add_argument('--patience',      type=int,   default=30)
     p.add_argument('--resume',        action='store_true')
+    p.add_argument('--small',         action='store_true',
+                   help='Modelo reducido: 6 capas, d_model=256 (~5M params)')
     p.add_argument('--seed',          type=int,   default=42)
     p.add_argument('--verbose',       action='store_true')
 
@@ -1467,6 +1500,8 @@ def main():
     p.add_argument('--bars',          type=int,   default=16)
     p.add_argument('--temperature',   type=float, default=1.2)
     p.add_argument('--topk',          type=int,   default=5)
+    p.add_argument('--mem-len',       type=int,   default=None, dest='mem_len',
+                   help='Memoria XL en inferencia (menor = más rápido) [default: igual que train]')
     p.add_argument('--output',        default=None)
     p.add_argument('--seed',          type=int,   default=42)
     p.add_argument('--verbose',       action='store_true')
@@ -1478,6 +1513,8 @@ def main():
     p.add_argument('--bars',          type=int,   default=16)
     p.add_argument('--temperature',   type=float, default=1.2)
     p.add_argument('--topk',          type=int,   default=5)
+    p.add_argument('--mem-len',       type=int,   default=None, dest='mem_len',
+                   help='Memoria XL en inferencia (menor = más rápido) [default: igual que train]')
     p.add_argument('--output',        default=None)
     p.add_argument('--seed',          type=int,   default=42)
     p.add_argument('--verbose',       action='store_true')

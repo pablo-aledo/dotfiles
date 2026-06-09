@@ -279,19 +279,22 @@ def cmd_train_codec(args):
         random_split_seed     = args.seed,
         use_wandb_tracking    = args.wandb,
         force_clear_prev_results = False,
-    ).cuda()
+    )
 
     trainer.train()
 
     # Exportar checkpoint final con nombre indicado por el usuario
-    ckpt_src = Path(args.results_dir) / "soundstream.pt"
-    if ckpt_src.exists():
-        import shutil
+    # El trainer guarda como soundstream.{paso}.pt — buscar el más reciente
+    import shutil
+    results = Path(args.results_dir)
+    candidates = sorted(results.glob("soundstream.*.pt"),
+                        key=lambda p: int(p.stem.split(".")[-1]))
+    if candidates:
+        ckpt_src = candidates[-1]
         shutil.copy(ckpt_src, args.checkpoint)
-        print(f"\n[train-codec] Checkpoint guardado en: {args.checkpoint}")
+        print(f"\n[train-codec] Checkpoint guardado en: {args.checkpoint}  (desde {ckpt_src.name})")
     else:
-        print(f"\n[train-codec] Entrenamiento completado. "
-              f"Checkpoints en: {args.results_dir}/")
+        print(f"\n[train-codec] Entrenamiento completado. Checkpoints en: {args.results_dir}/")
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  SUBCOMANDO: train-semantic
@@ -348,7 +351,7 @@ def cmd_train_semantic(args):
         num_semantic_tokens  = args.num_semantic_tokens,
         has_condition        = args.has_condition,
         flash_attn           = args.flash_attn,
-    ).cuda()
+    )
 
     print(f"[train-semantic] SemanticTransformer listo.")
     print(f"  Parámetros: {sum(p.numel() for p in semantic_transformer.parameters()):,}")
@@ -441,7 +444,7 @@ def cmd_train_coarse(args):
         heads                  = args.heads,
         has_condition          = args.has_condition,
         flash_attn             = args.flash_attn,
-    ).cuda()
+    )
 
     print(f"[train-coarse] CoarseTransformer listo.")
     print(f"  Parámetros: {sum(p.numel() for p in coarse_transformer.parameters()):,}")
@@ -530,7 +533,7 @@ def cmd_train_fine(args):
         heads                 = args.heads,
         has_condition         = args.has_condition,
         flash_attn            = args.flash_attn,
-    ).cuda()
+    )
 
     print(f"[train-fine] FineTransformer listo.")
     print(f"  Parámetros: {sum(p.numel() for p in fine_transformer.parameters()):,}")
@@ -605,6 +608,9 @@ def cmd_generate(args):
         return
 
     torch.manual_seed(args.seed)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cpu":
+        print("[generate] CUDA no disponible — usando CPU (lento)\n")
 
     # ── Codec ─────────────────────────────────────────────────────────────────
     if args.use_encodec:
@@ -667,7 +673,7 @@ def cmd_generate(args):
         semantic_transformer = semantic_transformer,
         coarse_transformer   = coarse_transformer,
         fine_transformer     = fine_transformer,
-    ).cuda()
+    )
 
     print()
     print(f"[generate] Generando {args.batch_size} muestra(s), max_length={args.max_length} ...")
@@ -770,10 +776,12 @@ def cmd_info(args):
                 print(f"    ... y {len(state) - 30} más")
 
     # Config serializada (SoundStream la guarda en _configs)
-    if "_configs" in pkg:
+    if "config" in pkg or "_configs" in pkg:
+        config_key = "config" if "config" in pkg else "_configs"
+    if config_key in pkg:
         import pickle
         try:
-            config = pickle.loads(pkg["_configs"])
+            config = pickle.loads(pkg[config_key])
             print("\n  Configuración del modelo (SoundStream):")
             for k, v in config.items():
                 if k not in ("self", "__class__"):
