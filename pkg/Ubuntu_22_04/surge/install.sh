@@ -1,0 +1,2 @@
+wget https://github.com/surge-synthesizer/releases-xt/releases/download/1.3.4/surge-xt-linux-x64-1.3.4.deb
+sudo dpkg -i surge-xt-linux-x64-1.3.4.deb
