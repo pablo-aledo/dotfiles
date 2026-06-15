@@ -30,3 +30,15 @@ cplink(){
     xdotool key Alt+Tab  ; sleep 0.1
     xdotool key Ctrl+Tab ; sleep 0.1
 }
+
+downdown () {
+	sleep 0.5
+	xdotool key j
+	sleep 0.1
+	xdotool key Ctrl+j
+	sleep 0.1
+	xdotool key j
+	sleep 0.1
+	xdotool key Ctrl+j
+	sleep 0.1
+}
