@@ -1252,6 +1252,7 @@ def _build_interval_bias(
     note_tok2id: dict,
     prev_ev: dict,
     profile: str,
+    key_pc: int = 0,
     bias_strength: float = 0.4,
 ) -> "torch.Tensor":
     """
@@ -1265,6 +1266,9 @@ def _build_interval_bias(
     Tokens especiales y silencios R_* reciben bias 0 (sin efecto).
     bias_strength controla cuanto se desvian los logits del modelo base;
     0.0 = desactivado, 1.0 = sesgo fuerte.
+
+    key_pc debe pasarse para calcular intervalos en espacio MIDI absoluto
+    (igual que write_midi), evitando que el calculo ignore la transposicion.
     """
     iw = INTERVAL_WEIGHTS.get(profile, INTERVAL_WEIGHTS["neutral"])
     bias = torch.zeros(len(note_tok2id))
@@ -1272,7 +1276,9 @@ def _build_interval_bias(
     if prev_ev is None or prev_ev.get("pc") is None:
         return bias
 
-    prev_midi = prev_ev["pc"] + 12 * prev_ev["octave"]
+    # espacio MIDI absoluto: base_note(60) + key_pc + pc + 12*octave
+    BASE = 60
+    prev_midi = BASE + key_pc + prev_ev["pc"] + 12 * prev_ev["octave"]
 
     for tok, idx in note_tok2id.items():
         if not tok.startswith("N_"):
@@ -1280,7 +1286,7 @@ def _build_interval_bias(
         parts = tok.split("_")              # ['N', pc, octave, dur]
         pc   = int(parts[1])
         octv = int(parts[2])
-        curr_midi = pc + 12 * octv
+        curr_midi = BASE + key_pc + pc + 12 * octv
         interval  = curr_midi - prev_midi   # semitonos con signo
 
         # Buscar peso: primero exacto, luego por modulo de octava
@@ -1382,17 +1388,23 @@ def write_abc(phrases_events, out_path, line_texts=None, key_name="C", meter="4/
         f.write("\n".join(lines) + "\n")
 
 
-def _smooth_octave(ev, prev_ev, max_leap=7):
+def _smooth_octave(ev, prev_ev, key_pc=0, max_leap=7):
     """Ajusta la octava de ev para minimizar el salto de semitonos respecto a
     prev_ev. Si el intervalo minimo posible supera max_leap semitonos, elige
-    igualmente la octava mas proxima. Solo actua sobre notas (pc != None)."""
+    igualmente la octava mas proxima. Solo actua sobre notas (pc != None).
+
+    key_pc se usa para calcular el intervalo en espacio MIDI absoluto
+    (base_note=60), igual que write_midi, de modo que el suavizado opera
+    sobre los mismos semitonos que se escucharan en el MIDI final.
+    """
     if ev["pc"] is None or prev_ev is None or prev_ev["pc"] is None:
         return ev
-    prev_midi = prev_ev["pc"] + 12 * prev_ev["octave"]
+    BASE = 60
+    prev_midi = BASE + key_pc + prev_ev["pc"] + 12 * prev_ev["octave"]
     best_oct = ev["octave"]
-    best_dist = abs((ev["pc"] + 12 * ev["octave"]) - prev_midi)
+    best_dist = abs((BASE + key_pc + ev["pc"] + 12 * ev["octave"]) - prev_midi)
     for oct_cand in (-1, 0, 1, 2):
-        d = abs((ev["pc"] + 12 * oct_cand) - prev_midi)
+        d = abs((BASE + key_pc + ev["pc"] + 12 * oct_cand) - prev_midi)
         if d < best_dist:
             best_dist = d
             best_oct = oct_cand
@@ -1431,6 +1443,9 @@ def generate_transformer(args, line_texts, line_embeddings):
     notes_in_current_phrase = 0
     target_notes = args.notes_per_line or _estimate_notes_for_line(line_texts[0])
     prev_ev = None  # ultima nota generada (para suavizado de octava)
+    # nota de arranque ficticia en C5 (octava 1 relativa) para que la
+    # primera nota del suavizado no caiga en un extremo aleatorio del rango
+    _anchor_ev = {"pc": 0, "octave": 1, "dur": 1.0}
 
     emotion_vecs = [torch.tensor(v, dtype=torch.float32) for v in line_embeddings]
 
@@ -1483,6 +1498,7 @@ def generate_transformer(args, line_texts, line_embeddings):
                 # Mejora 1: bias de intervalo recalculado por nota (depende de prev_ev)
                 iv_bias = _build_interval_bias(
                     note_tok2id, prev_ev, args.profile,
+                    key_pc=key_pc,
                     bias_strength=getattr(args, "interval_bias_strength", 0.4),
                 )
                 next_id = sample_from_logits(
@@ -1508,8 +1524,11 @@ def generate_transformer(args, line_texts, line_embeddings):
                 ev = {"pc": None, "octave": 0, "dur": 1.0}
             else:
                 ev = token_to_event(tok)
+            # Primero suavizar octava (ancla al contexto previo),
+            # luego perfil (solo sesga pitch-class y duracion).
+            ev = _smooth_octave(ev, prev_ev if prev_ev is not None else _anchor_ev,
+                                  key_pc=key_pc)
             ev = _apply_profile_bias(ev, args.profile, notes_in_current_phrase, target_notes)
-            ev = _smooth_octave(ev, prev_ev)
             if ev["pc"] is not None:
                 prev_ev = ev
             phrases_events[current_line].append(ev)
