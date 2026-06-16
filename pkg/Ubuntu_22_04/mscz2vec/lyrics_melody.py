@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-                       LYRICS MELODY  v3.0
+                       LYRICS MELODY  v3.1
        Generacion de melodias condicionadas por el contenido emocional
               del texto (lyrics), con fluidez entre frases
 
@@ -22,6 +22,34 @@
         historial melodico anterior, dando fluidez en las uniones entre
         versos.
 
+  NOVEDADES v3.1
+  ---------------
+  Se incorporan tres mejoras de consistencia melodica en el motor transformer,
+  sin necesidad de reentrenar el modelo:
+
+  [A] SUAVIZADO DE OCTAVA (_smooth_octave):
+      Tras decodificar cada token, la octava se corrige eligiendo la mas
+      proxima a la nota anterior (minimizando el salto en semitonos). Elimina
+      los grandes saltos de registro que aparecian cuando el modelo saltaba
+      de octava de forma abrupta entre notas consecutivas o entre versos.
+
+  [B] MASCARA DE ESCALA (--mode, _build_scale_mask):
+      Antes de muestrear, los tokens N_* cuyo pitch class no pertenece a la
+      escala (--key, --mode) se ponen a -inf en los logits. La melodia
+      resultante queda estrictamente dentro de la tonalidad pedida sin
+      alterar el modelo entrenado.
+      Modos disponibles: major, minor, harmonic_minor, dorian, phrygian,
+      mixolydian, pentatonic_major, pentatonic_minor, blues, chromatic.
+
+  [C] SESGO DE INTERVALO POR PERFIL (--interval-bias-strength,
+      _build_interval_bias):
+      En cada paso se calcula un sesgo aditivo en log-space sobre los logits,
+      proporcional a los pesos de INTERVAL_WEIGHTS[profile]. Los intervalos
+      tipicos del perfil emocional (p. ej. semitonos para melancholic, quintas
+      para heroic) se refuerzan sin forzar; los ajenos se penalizan
+      suavemente. La intensidad es regulable con --interval-bias-strength
+      (0.0 = desactivado, 1.0 = sesgo fuerte; default: 0.4).
+
   COMANDOS:
     train     - Entrena el modelo conjunto a partir de un corpus .abc
     generate  - Genera una melodia MIDI/ABC a partir de un fichero de letra
@@ -33,11 +61,29 @@
                   corpus, con historial continuo entre versos.
     (Ambos motores requieren el modelo de embeddings; ver DEPENDENCIAS)
 
-  PERFILES EMOCIONALES MANUALES (--profile, solo generate):
-    neutral, heroic, melancholic, tense, serene, playful, mysterious,
-    triumphant, tanguero, flamenco
-    Se SUMAN al embedding emocional derivado del texto: actuan como sesgo
-    global de temperatura y de octava/duracion segun el climax del perfil.
+  PERFILES EMOCIONALES (--profile):
+    neutral     - sin sesgo; temperatura y sesgo de intervalo neutros
+    heroic      - quintas y octavas ascendentes; temperatura alta
+    melancholic - semitonos y segundas descendentes; temperatura baja
+    tense       - cromatismo, intervalos de tritono; temperatura muy alta
+    serene      - grados conjuntos, movimiento suave; temperatura baja
+    playful     - saltos cortos variados; ritmo irregular
+    mysterious  - tritonos y sextas; silencios frecuentes
+    triumphant  - quintas y octavas; clímax en el ultimo tercio
+    tanguero    - segundas y terceras con cromatismo; arrabal
+    flamenco    - semitonos descendentes; segundo grado frigio
+
+  MODOS DE ESCALA (--mode):
+    major            - escala mayor diatonica (default)
+    minor            - escala menor natural
+    harmonic_minor   - menor armonica (VII#)
+    dorian           - menor con VI mayor (modal folk/jazz)
+    phrygian         - menor con II bemol (flamenco, metal)
+    mixolydian       - mayor con VII menor (rock, folk)
+    pentatonic_major - pentatonica mayor (5 notas)
+    pentatonic_minor - pentatonica menor (5 notas)
+    blues            - pentatonica menor + V# (blue note)
+    chromatic        - sin restriccion de escala (12 notas)
 
   FORMATO ESPERADO DE LOS FICHEROS ABC DE ENTRENAMIENTO
   ------------------------------------------------------
@@ -65,23 +111,57 @@
   python3 lyrics_melody.py train --corpus ./canciones_abc/ \
       --model-out lyrics_melody.pt --resume --epochs 30
 
-  # Generar una melodia a partir de un fichero de texto con la letra
-  # (una linea de texto = un verso = una frase, todas conectadas)
+  # Generacion basica: tonalidad y perfil
   python3 lyrics_melody.py generate --model lyrics_melody.pt \
-      --lyrics letra.txt --key C --meter 4/4 --tempo 96 \
-      --profile melancholic --out melodia_generada.mid
+      --lyrics letra.txt --key C --mode major --profile melancholic \
+      --tempo 96 --out melodia.mid --abc-out melodia.abc
 
-  # Generar tambien una salida ABC ademas del MIDI
+  # Generacion con escala menor y sesgo de intervalo moderado
   python3 lyrics_melody.py generate --model lyrics_melody.pt \
-      --lyrics letra.txt --out melodia.mid --abc-out melodia.abc
+      --lyrics letra.txt --key Am --mode minor --profile melancholic \
+      --interval-bias-strength 0.4 --out melodia.mid --abc-out melodia.abc
 
-  # Generar sin modelo entrenado, con el motor markov de respaldo
+  # Generacion con modo frigio (flamenco) y sesgo fuerte
+  python3 lyrics_melody.py generate --model lyrics_melody.pt \
+      --lyrics letra.txt --key E --mode phrygian --profile flamenco \
+      --interval-bias-strength 0.7 --temperature 0.9 \
+      --out melodia.mid --abc-out melodia.abc
+
+  # Solo mascara de escala, sin sesgo de intervalo (0.0 = desactivado)
+  python3 lyrics_melody.py generate --model lyrics_melody.pt \
+      --lyrics letra.txt --key G --mode major --profile neutral \
+      --interval-bias-strength 0.0 --out melodia.mid
+
+  # Generacion sin modelo entrenado, con el motor markov de respaldo
   python3 lyrics_melody.py generate --engine markov --corpus ./canciones_abc/ \
       --lyrics letra.txt --out melodia.mid
 
   # Inspeccionar vocabulario, dataset y config de un modelo entrenado
   python3 lyrics_melody.py inspect --model lyrics_melody.pt
   python3 lyrics_melody.py inspect --corpus ./canciones_abc/
+
+  OPCIONES DE GENERATE
+  ---------------------
+    --lyrics FILE          Fichero de texto (una linea = un verso = una frase)
+    --out FILE             MIDI de salida
+    --abc-out FILE         ABC de salida (opcional)
+    --engine               transformer (default) | markov
+    --model FILE           Checkpoint .pt (motor transformer)
+    --corpus DIR           Carpeta .abc (motor markov)
+    --key KEY              Tonalidad: C, Am, F#, Bb... (default: C)
+    --mode MODE            Modo de escala para mascara tonal (default: major)
+    --profile PROFILE      Perfil emocional (default: neutral)
+    --interval-bias-strength S  Intensidad del sesgo de intervalo 0.0-1.0
+                                (default: 0.4; 0.0 = desactivado)
+    --tempo BPM            Tempo en BPM (default: 100)
+    --meter M/N            Compas (default: 4/4)
+    --temperature T        Temperatura de muestreo (default: 1.0)
+    --top-k K              Top-k sampling; 0 = desactivado (default: 0)
+    --notes-per-line N     Notas fijas por verso; 0 = estimar (default: 0)
+    --unit-beats F         Duracion de una unidad L: en negras (default: 0.5)
+    --seed N               Semilla aleatoria (motor markov; default: 42)
+    --n-clusters N         Clusters emocionales (motor markov; default: 6)
+    --cpu                  Forzar CPU
 
   DEPENDENCIAS
     Siempre:  mido                  -> pip install mido
@@ -114,6 +194,14 @@
   - Atencion relativa de posicion (truco de skewing, Music Transformer,
     Huang et al. 2019) para capturar motivos recurrentes independientemente
     de su posicion dentro de la secuencia.
+  - ORDEN DE APLICACION en el muestreo (v3.1):
+      logits del modelo
+        -> mascara de escala (-inf a notas fuera de tonalidad)
+        -> sesgo de intervalo (log-space, proporcional a INTERVAL_WEIGHTS)
+        -> division por temperatura
+        -> top-k (opcional)
+        -> softmax + multinomial
+        -> _smooth_octave (correccion de octava por proximidad)
 ================================================================================
 """
 
@@ -130,7 +218,7 @@ from collections import Counter, defaultdict
 #  CONSTANTES
 # ==============================================================================
 
-VERSION = "3.0"
+VERSION = "3.1"
 
 EMBEDDING_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 EMBEDDING_DIM = 384
@@ -160,6 +248,36 @@ EMOTIONAL_PROFILES = {
     "triumphant":  {"temperature_scale": 1.10, "octave_bias": 0.40, "duration_bias": -0.10, "climax_pos": 0.85},
     "tanguero":    {"temperature_scale": 1.00, "octave_bias": 0.00, "duration_bias": 0.05, "climax_pos": 0.618},
     "flamenco":    {"temperature_scale": 1.10, "octave_bias": 0.10, "duration_bias": -0.05, "climax_pos": 0.70},
+}
+
+# Pesos de intervalo (en semitonos) por perfil emocional.
+# Adaptados de melody_generator.py para modular los logits del transformer.
+# Clave = intervalo en semitonos (positivo = ascendente, negativo = descendente).
+INTERVAL_WEIGHTS: dict = {
+    "neutral":     {0: 1.0, 1: 1.5, 2: 2.0, -1: 1.5, -2: 2.0, 3: 1.0, -3: 1.0, 5: 0.8, -5: 0.8},
+    "heroic":      {0: 0.5, 2: 2.0, 3: 1.5, 4: 2.0, 5: 2.5, 7: 3.0, 12: 2.5, -2: 2.0, -5: 1.5, -7: 1.5},
+    "melancholic": {0: 0.3, 1: 2.5, 2: 3.0, 3: 2.0, -1: 3.0, -2: 3.5, -3: 2.0, -5: 1.5, 5: 1.0, 7: 0.5},
+    "playful":     {0: 0.5, 1: 1.5, 2: 2.5, 3: 2.0, 4: 2.0, 5: 1.5, -1: 1.5, -2: 2.5, -3: 2.0, 7: 1.0},
+    "tense":       {0: 0.5, 1: 3.0, 2: 2.0, 6: 2.0, -1: 3.0, -2: 2.0, -6: 2.0, 11: 1.5, -11: 1.5},
+    "serene":      {0: 1.0, 2: 3.0, 3: 2.0, 4: 2.5, 5: 2.0, -2: 3.0, -3: 2.0, -4: 2.0, -5: 1.5, 7: 1.0},
+    "mysterious":  {0: 1.0, 1: 2.0, 6: 2.5, -1: 2.0, -6: 2.5, 3: 1.5, -3: 1.5, 8: 1.5, -8: 1.5},
+    "triumphant":  {0: 0.3, 2: 2.0, 4: 2.5, 5: 2.0, 7: 3.5, 12: 2.0, -2: 1.5, -5: 1.5, 3: 2.0},
+    "tanguero":    {0: 0.5, 1: 2.0, 2: 2.5, -1: 2.5, -2: 3.0, 3: 1.5, -3: 2.0, 6: 1.5, -6: 1.5},
+    "flamenco":    {0: 0.5, 1: 3.0, 2: 2.0, -1: 3.5, -2: 2.5, 3: 1.0, -3: 1.5, 6: 1.0, 4: 1.5},
+}
+
+# Intervalos de escala por modo (grados sobre la tonica).
+SCALE_INTERVALS: dict = {
+    "major":            [0, 2, 4, 5, 7, 9, 11],
+    "minor":            [0, 2, 3, 5, 7, 8, 10],
+    "harmonic_minor":   [0, 2, 3, 5, 7, 8, 11],
+    "dorian":           [0, 2, 3, 5, 7, 9, 10],
+    "phrygian":         [0, 1, 3, 5, 7, 8, 10],
+    "mixolydian":       [0, 2, 4, 5, 7, 9, 10],
+    "pentatonic_major": [0, 2, 4, 7, 9],
+    "pentatonic_minor": [0, 3, 5, 7, 10],
+    "blues":            [0, 3, 5, 6, 7, 10],
+    "chromatic":        list(range(12)),
 }
 
 # ==============================================================================
@@ -1107,7 +1225,92 @@ def lyrics_to_lines(text):
     return lines
 
 
-def sample_from_logits(logits, temperature=1.0, top_k=0):
+def _build_scale_mask(note_tok2id: dict, key_pc: int, mode: str) -> "torch.Tensor":
+    """
+    Devuelve un tensor booleano de longitud vocab_size donde True indica que
+    el token esta FUERA de la escala (key_pc, mode). Solo afecta a tokens N_*;
+    los tokens especiales y los silencios R_* se dejan intactos.
+
+    Se usa para poner a -inf los logits de notas cromaticas ajenas a la
+    tonalidad antes de muestrear, mejorando la coherencia tonal.
+    """
+    scale_pcs = set(
+        (key_pc + iv) % 12
+        for iv in SCALE_INTERVALS.get(mode, SCALE_INTERVALS["major"])
+    )
+    mask = torch.zeros(len(note_tok2id), dtype=torch.bool)
+    for tok, idx in note_tok2id.items():
+        if tok.startswith("N_"):
+            parts = tok.split("_")          # ['N', pc, octave, dur]
+            pc = int(parts[1])
+            if pc not in scale_pcs:
+                mask[idx] = True
+    return mask
+
+
+def _build_interval_bias(
+    note_tok2id: dict,
+    prev_ev: dict,
+    profile: str,
+    bias_strength: float = 0.4,
+) -> "torch.Tensor":
+    """
+    Devuelve un tensor de logit-bias de longitud vocab_size calculado a partir
+    de INTERVAL_WEIGHTS[profile] y el evento anterior (prev_ev).
+
+    Para cada token N_* calcula el intervalo en semitonos respecto a prev_ev,
+    busca su peso en la tabla del perfil (con fallback a 0.5 si no esta) y
+    convierte: bias = bias_strength * log(weight).
+
+    Tokens especiales y silencios R_* reciben bias 0 (sin efecto).
+    bias_strength controla cuanto se desvian los logits del modelo base;
+    0.0 = desactivado, 1.0 = sesgo fuerte.
+    """
+    iw = INTERVAL_WEIGHTS.get(profile, INTERVAL_WEIGHTS["neutral"])
+    bias = torch.zeros(len(note_tok2id))
+
+    if prev_ev is None or prev_ev.get("pc") is None:
+        return bias
+
+    prev_midi = prev_ev["pc"] + 12 * prev_ev["octave"]
+
+    for tok, idx in note_tok2id.items():
+        if not tok.startswith("N_"):
+            continue
+        parts = tok.split("_")              # ['N', pc, octave, dur]
+        pc   = int(parts[1])
+        octv = int(parts[2])
+        curr_midi = pc + 12 * octv
+        interval  = curr_midi - prev_midi   # semitonos con signo
+
+        # Buscar peso: primero exacto, luego por modulo de octava
+        weight = iw.get(interval, iw.get(interval % 12, 0.5))
+        bias[idx] = bias_strength * math.log(max(weight, 1e-6))
+
+    return bias
+
+
+def sample_from_logits(logits, temperature=1.0, top_k=0,
+                       scale_mask=None, interval_bias=None):
+    """
+    Muestrea un token de los logits del modelo.
+
+    Parametros adicionales:
+      scale_mask    (BoolTensor, vocab_size) — tokens fuera de escala: se
+                    ponen a -inf antes de escalar por temperatura.  [mejora 3]
+      interval_bias (FloatTensor, vocab_size) — sesgo aditivo en log-space
+                    calculado por INTERVAL_WEIGHTS del perfil.  [mejora 1]
+    El orden de aplicacion es: mask → bias → temperatura → top-k → softmax.
+    """
+    # Mejora 3: suprimir notas fuera de escala
+    if scale_mask is not None:
+        logits = logits.clone()
+        logits[scale_mask] = float("-inf")
+
+    # Mejora 1: sesgo de intervalo por perfil emocional
+    if interval_bias is not None:
+        logits = logits + interval_bias.to(logits.device)
+
     logits = logits / max(1e-6, temperature)
     if top_k > 0:
         v, ix = torch.topk(logits, min(top_k, logits.size(-1)))
@@ -1237,6 +1440,13 @@ def generate_transformer(args, line_texts, line_embeddings):
 
     total_notes = 0
 
+    # ── Mejora 3: mascara de escala (se construye una sola vez) ───────────────
+    key_pc = parse_key(args.key)
+    scale_mode = getattr(args, "mode", "major")
+    scale_mask = _build_scale_mask(note_tok2id, key_pc, scale_mode)
+    print(f"[generate] Mascara de escala: {args.key} {scale_mode} "
+          f"({scale_mask.sum().item()} tokens suprimidos)")
+
     with torch.no_grad():
         while current_line < n_lines and total_notes < max_total_notes:
             window_ids = note_ids[-max_seq_len:]
@@ -1270,8 +1480,15 @@ def generate_transformer(args, line_texts, line_embeddings):
                 else:
                     next_id = note_tok2id[EOS]
             else:
-                next_id = sample_from_logits(next_logits, temperature=local_temp,
-                                              top_k=args.top_k)
+                # Mejora 1: bias de intervalo recalculado por nota (depende de prev_ev)
+                iv_bias = _build_interval_bias(
+                    note_tok2id, prev_ev, args.profile,
+                    bias_strength=getattr(args, "interval_bias_strength", 0.4),
+                )
+                next_id = sample_from_logits(
+                    next_logits, temperature=local_temp, top_k=args.top_k,
+                    scale_mask=scale_mask, interval_bias=iv_bias,
+                )
 
             note_ids.append(next_id)
             tok = note_id2tok[next_id]
@@ -1470,6 +1687,14 @@ def build_parser():
     p_gen.add_argument("--notes-per-line", type=int, default=0,
                         help="Numero fijo de notas por verso (0 = estimar segun longitud)")
     p_gen.add_argument("--key", default="C", help="Tonalidad destino (ej: C, G, Eb)")
+    p_gen.add_argument("--mode", default="major",
+                        choices=list(SCALE_INTERVALS.keys()),
+                        help="Modo de escala para la mascara tonal (default: major). "
+                             "Los tokens fuera de esta escala se suprimen durante el muestreo.")
+    p_gen.add_argument("--interval-bias-strength", type=float, default=0.4,
+                        metavar="S",
+                        help="Intensidad del sesgo de intervalo por perfil emocional "
+                             "[0.0 = desactivado, 1.0 = fuerte] (default: 0.4)")
     p_gen.add_argument("--meter", default="4/4")
     p_gen.add_argument("--tempo", type=int, default=100)
     p_gen.add_argument("--unit-beats", type=float, default=0.5,
