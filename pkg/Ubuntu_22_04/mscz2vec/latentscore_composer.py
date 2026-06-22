@@ -3626,34 +3626,71 @@ def cmd_morph(args: argparse.Namespace) -> None:
         _imprimir_config(cfg_b)
 
     steps    = max(2, args.steps)
-    dur_paso = args.dur / steps
     sr       = args.sr
     salida   = args.output or f"ls_morph_{steps}steps.wav"
 
-    print(f"\n[3/4] Sintetizando {steps} pasos ({dur_paso:.1f} s/paso)…")
-    fragmentos = []
+    # Crossfade: 20% de dur_paso, mínimo 2s, máximo 4s
+    # Un crossfade largo elimina los cortes de energía entre pasos:
+    # el sintetizador tiene mucho sustain (pad, bass drone) y un fade
+    # corto produce un escalón de volumen audible.
+    dur_paso = args.dur / steps
+    fade_s   = float(np.clip(dur_paso * 0.20, 2.0, 4.0))
+    fade_n   = int(fade_s * sr)
+
+    print(f"  Crossfade: {fade_s:.1f} s  ({dur_paso:.1f} s/paso)")
+
+    # Sintetizar sin normalización individual: normalizar solo al final
+    # sobre el resultado completo, para que pasos suaves y fuertes
+    # tengan niveles coherentes entre sí.
+    print(f"\n[3/4] Sintetizando {steps} pasos…")
+    sc_a = SynthConfig.from_music_config(cfg_a)
+    sc_b = SynthConfig.from_music_config(cfg_b)
+
+    fragmentos: list[np.ndarray] = []
+    t_acum = 0.0
     for i in range(steps):
         t = i / (steps - 1)
         cfg_i = _interpolar_configs(cfg_a, cfg_b, t)
-        audio_i = _sintetizar(cfg_i, dur_paso, sr, t_offset=i * dur_paso)
+        sc_i  = SynthConfig.from_music_config(cfg_i)
+        # Sin normalizar: assemble con normalize=False para preservar
+        # niveles relativos entre pasos
+        audio_i = assemble(sc_i, dur_paso, normalize=False, t_offset=t_acum)
+        audio_i = np.asarray(audio_i, dtype=np.float32)
         fragmentos.append(audio_i)
-        print(f"  paso {i+1}/{steps}  t={t:.2f}  ✓")
+        t_acum += dur_paso
+        print(f"  paso {i+1}/{steps}  t={t:.2f}  rms={np.sqrt(np.mean(audio_i**2)):.4f}  ✓")
 
-    print(f"\n[4/4] Ensamblando y guardando → {salida}")
-    fade = min(int(0.5 * sr), len(fragmentos[0]) // 4)
+    print(f"\n[4/4] Ensamblando con crossfade de {fade_s:.1f} s…")
+
+    # Crossfade con curva de igual potencia (√t) en lugar de lineal:
+    # mantiene el RMS constante durante la transición, eliminando
+    # el "hueco" de volumen que produce el crossfade lineal.
     resultado = fragmentos[0].copy()
     for frag in fragmentos[1:]:
-        if fade > 0 and len(resultado) >= fade and len(frag) >= fade:
-            resultado[-fade:] = (resultado[-fade:] * np.linspace(1,0,fade)
-                               + frag[:fade] * np.linspace(0,1,fade))
-            resultado = np.concatenate([resultado, frag[fade:]])
-        else:
+        n_fade = min(fade_n, len(resultado), len(frag))
+        if n_fade < 2:
             resultado = np.concatenate([resultado, frag])
+            continue
+        ramp   = np.linspace(0.0, 1.0, n_fade, dtype=np.float32)
+        fade_in  = np.sqrt(ramp)        # curva de igual potencia
+        fade_out = np.sqrt(1.0 - ramp)
+        resultado[-n_fade:] = resultado[-n_fade:] * fade_out + frag[:n_fade] * fade_in
+        resultado = np.concatenate([resultado, frag[n_fade:]])
+
+    # Normalización global única al final
+    peak = np.max(np.abs(resultado))
+    if peak > 0:
+        resultado = resultado / peak * 0.85
+
+    # Fade-out de 100ms al final
+    fade_end = min(int(0.10 * sr), len(resultado) // 8)
+    resultado[-fade_end:] *= np.linspace(1.0, 0.0, fade_end, dtype=np.float32)
 
     _guardar_wav(resultado, salida, sr)
     print("\n" + "═" * 65)
     print(f"  Salida   : {salida}")
     print(f"  Duración : {len(resultado)/sr:.2f} s")
+    print(f"  RMS      : {np.sqrt(np.mean(resultado**2)):.4f}")
     print("═" * 65)
 
 
