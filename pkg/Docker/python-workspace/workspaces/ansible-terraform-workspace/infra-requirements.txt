@@ -1,5 +1,5 @@
 ## Ansible tools
-ansible==4.4.0
+ansible==7.0.0
 cffi==1.14.6
 # https://github.com/fboender/ansible-cmdb
 ansible-cmdb==1.31
