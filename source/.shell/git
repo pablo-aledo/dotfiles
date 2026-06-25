@@ -140,8 +140,10 @@ Git(){
             ;;
         (branch_diff_sizes) Git branch_diff_files | while read line; do echo $(Git branch_diff -- $line | wc -l) $line; done | sort -g ;;
         (tag_list) \git tag ;;
+        (tag_list_remote) \git ls-remote --tags origin ;;
         (tag_show) \git show $1 ;;
         (tag_create) \git tag $1 ;;
+        (tag_delete) \git tag -d $1 ; git push origin --delete $1 ;;
         (tag_create_at) \git tag -a $1 $2 ;;
         (tag_push) \git push origin $1 ;;
 
