@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                        CSL-L2M  v1.1                                         ║
+║                        CSL-L2M  v1.2                                         ║
 ║         Generación controlable de melodía a partir de letra (Lyric-to-Melody)║
 ║                                                                              ║
 ║  Adaptación de CSL-L2M (AAAI-2025) al estilo single-file del ecosistema.    ║
@@ -10,87 +10,128 @@
 ║  tonalidad, emoción, estructura). Representación: REMI-Aligned.              ║
 ║                                                                              ║
 ║  COMANDOS:                                                                   ║
-║    prepare    — MIDI + letras alineadas → eventos REMI-Aligned (.pkl)        ║
-║    vocab      — eventos .pkl → diccionarios melody + lyric                   ║
-║    splits     — carpeta de .pkl → train/val/test splits                      ║
-║    attributes — extrae 12 atributos estadísticos por frase                   ║
-║    train-vqvae— entrena VQ-VAE para extraer features melódicas               ║
+║    prepare      — MIDI/ABC + letras → eventos REMI-Aligned (.pkl)            ║
+║    vocab        — eventos .pkl → diccionarios melody + lyric                 ║
+║    splits       — carpeta de .pkl → train/val/test splits                    ║
+║    attributes   — extrae 12 atributos estadísticos por frase                 ║
+║    train-vqvae  — entrena VQ-VAE para extraer features melódicas             ║
 ║    extract-feats— VQ-VAE checkpoint → features latentes por canción          ║
-║    train      — entrena el modelo CSL-L2M completo                           ║
-║    generate   — genera MIDI dado un .pkl con letra alineada                  ║
-║    round-trip — REMI-Aligned → MIDI (diagnóstico sin modelo)                 ║
-║    inspect    — diagnóstico de datos y checkpoints                            ║
+║    train        — entrena el modelo CSL-L2M completo                         ║
+║    generate     — genera MIDI dado un .pkl con letra alineada                ║
+║    new-lyrics   — sustituye las letras de un .pkl sin cambiar la melodía     ║
+║    round-trip   — REMI-Aligned → MIDI (diagnóstico sin modelo)               ║
+║    inspect      — diagnóstico de datos y checkpoints                          ║
 ║                                                                              ║
 ║  FLUJO TÍPICO:                                                               ║
-║    1. Preparar corpus (MIDI + letras alineadas en lyrics MIDI markers):      ║
-║       python csl_l2m.py prepare --midi-dir midis/ --output-dir data/events/ ║
+║    1. Preparar corpus (.mid con Lyric markers o .abc con w:):                ║
+║       python csl_l2m.py prepare --input-dir canciones/                      ║
+║                                  --output-dir data/events/                   ║
 ║    2. Construir vocabulario:                                                  ║
-║       python csl_l2m.py vocab --events-dir data/events/ --output-dir data/  ║
+║       python csl_l2m.py vocab --events-dir data/events/                     ║
+║                                --output-dir data/                            ║
 ║    3. Crear splits:                                                           ║
-║       python csl_l2m.py splits --events-dir data/events/ --output-dir data/ ║
+║       python csl_l2m.py splits --events-dir data/events/                    ║
+║                                 --output-dir data/                           ║
 ║    4. Calcular atributos:                                                     ║
-║       python csl_l2m.py attributes --events-dir data/events/                 ║
-║                         --output-dir data/attributes/                         ║
+║       python csl_l2m.py attributes --events-dir data/events/                ║
+║                                     --output-dir data/attributes/            ║
 ║    5. (Opcional) VQ-VAE para features aprendidas:                            ║
 ║       python csl_l2m.py train-vqvae --events-dir data/events/               ║
 ║                         --vocab data/dictionary_melody.pkl                   ║
 ║                         --model-dir model_vqvae/                             ║
 ║       python csl_l2m.py extract-feats --events-dir data/events/             ║
-║                         --vocab data/dictionary_melody.pkl                   ║
-║                         --model-dir model_vqvae/ --output-dir data/feats/   ║
+║                         --vocab-melody data/dictionary_melody.pkl            ║
+║                         --model-dir model_vqvae/                             ║
+║                         --output-dir data/feats/                             ║
 ║    6. Entrenar:                                                               ║
-║       python csl_l2m.py train --events-dir data/events/                     ║
+║       python csl_l2m.py train                                                ║
+║                         --events-dir data/events/                            ║
 ║                         --vocab-melody data/dictionary_melody.pkl            ║
 ║                         --vocab-lyric  data/dictionary_lyric.pkl             ║
 ║                         --train-split  data/train.pkl                        ║
 ║                         --val-split    data/val.pkl                          ║
 ║                         --attr-dir     data/attributes/                      ║
 ║                         --model-dir    model_csll2m/                         ║
+║                         [--feats-dir   data/feats/]                          ║
 ║    7. Generar:                                                                ║
-║       python csl_l2m.py generate --events data/events/cancion.pkl           ║
-║                         --vocab-melody data/dictionary_melody.pkl            ║
-║                         --vocab-lyric  data/dictionary_lyric.pkl             ║
-║                         --attr-dir     data/attributes/                      ║
-║                         --model-dir    model_csll2m/ --output salida.mid     ║
+║       python csl_l2m.py generate                                             ║
+║                         --events    data/events/cancion.pkl                  ║
+║                         --model-dir model_csll2m/                            ║
+║                         --attr-dir  data/attributes/                         ║
+║                         --output    salida.mid                               ║
+║    8. (Opcional) Generar con letras distintas:                               ║
+║       python csl_l2m.py new-lyrics                                           ║
+║                         --events    data/events/cancion.pkl                  ║
+║                         --lyrics    mis_letras.txt                           ║
+║                         --output    data/events/nueva.pkl                    ║
+║       python csl_l2m.py generate --events data/events/nueva.pkl …           ║
+║                                                                              ║
+║  NOTAS SOBRE EL FICHERO .pkl:                                                ║
+║    Cada .pkl contiene (seq_lyrics, pos_seq, melody_events):                  ║
+║      seq_lyrics    — lista de frases, cada una lista de sílabas              ║
+║      pos_seq       — índices de los tokens SEQ en melody_events              ║
+║      melody_events — secuencia REMI-Aligned completa                         ║
+║    Las letras van embebidas en el .pkl desde prepare — no hace falta         ║
+║    pasarlas por separado en generate. Para usar letras distintas sobre       ║
+║    la misma estructura rítmica usar el subcmando new-lyrics.                 ║
 ║                                                                              ║
 ║  FORMATO MIDI DE ENTRADA:                                                    ║
 ║    - Un único instrumento (pista 0), velocity=126 en todas las notas         ║
 ║    - Letras en MIDI Lyric markers, una por nota                              ║
 ║    - Convención de letras:                                                    ║
 ║        "hola"   → sílaba normal (una nota)                                   ║
-║        "ho*"    → extensión de la sílaba anterior (nota extra, sin avanzar)  ║
+║        "ho*"    → extensión de la sílaba anterior (melisma)                  ║
 ║        "hola."  → última sílaba de la frase (marca fin de SEQ)               ║
 ║        "*."     → extensión + fin de frase                                   ║
 ║                                                                              ║
 ║  FORMATO ABC DE ENTRADA (sin dependencias externas):                         ║
 ║    - Cabeceras estándar: X: T: M: L: Q: K:                                   ║
-║    - Notas en compases separados por | con altura estándar ABC               ║
+║    - Las 15 tonalidades mayores/menores soportadas                           ║
 ║    - Letras bajo cada voz con w: (una sílaba por nota)                       ║
 ║    - Convención w: estándar:                                                  ║
-║        sílaba    → una nota                                                   ║
-║        síla-ba   → guión une la siguiente sílaba (misma palabra)             ║
-║        *  _      → melisma: extiende la sílaba anterior (nota sin avanzar)   ║
-║        |         → barra de compás en la letra (se ignora)                   ║
-║    - Cada línea de notas con su w: equivale a una frase (SEQ)                ║
-║    - Ejemplo mínimo:                                                          ║
-║        X:1                                                                    ║
-║        T:Prueba  M:4/4  L:1/8  Q:90  K:C                                    ║
+║        síla-    → guión: la palabra continúa en la nota siguiente            ║
+║        *  _     → melisma: extiende la sílaba anterior                       ║
+║        |        → barra de compás en la letra (se ignora)                    ║
+║    - Cada línea musical + su w: equivale a una frase (SEQ)                   ║
+║    - Ejemplo:                                                                 ║
+║        X:1  T:Prueba  M:4/4  L:1/8  Q:90  K:C                              ║
 ║        |G2 A2 B2 c2|d4 c4|                                                   ║
 ║        w:ho- la mun- do bue- nas no- ches                                    ║
-║        |e4 d4|c8|                                                             ║
-║        w:có- mo es- tás
+║                                                                              ║
+║  FORMATO FICHERO DE LETRAS (new-lyrics):                                     ║
+║    - Una frase por línea, sílabas separadas por espacios                     ║
+║    - Guiones al final de sílaba opcionales (ho- → ho)                        ║
+║    - Líneas vacías y líneas con # se ignoran                                 ║
+║    - Si hay menos frases que SEQs en el .pkl, se reciclan                   ║
+║    - Ejemplo:                                                                 ║
+║        hoy es un buen día                                                    ║
+║        pa- ra can- tar                                                       ║
+║        sin pen- sar en na- da                                                ║
+║        so- lo dis- fru- tar                                                  ║
 ║                                                                              ║
 ║  CONTROLES EN GENERACIÓN:                                                    ║
-║    --key KEY        Tonalidad: C, Dm, F#m, Bb … (default: auto del .pkl)    ║
-║    --emotion E      Emoción: Positive | Neutral | Negative (default: auto)  ║
-║    --temperature F  Temperatura de muestreo (default: 1.2)                  ║
-║    --nucleus-p F    Probabilidad acumulada nucleus (default: 0.9)            ║
-║    --shift-pm N     Desplazar atributo pitch-mean ±N clases (default: 0)    ║
-║    --shift-nd N     Desplazar note-density ±N clases (default: 0)           ║
-║    --n-samples N    Número de melodías a generar (default: 1)               ║
+║    --key KEY         Tonalidad: C, Dm, F#m, Bb… (default: auto)             ║
+║    --emotion E       Emoción: Positive | Neutral | Negative                  ║
+║    --temperature F   Temperatura de muestreo (default: 1.2)                 ║
+║    --nucleus-p F     Probabilidad acumulada nucleus (default: 0.9)           ║
+║    --n-samples N     Número de melodías a generar (default: 1)              ║
+║    --n-repeats N     Repetir frases N veces → salida más larga               ║
+║    --free            Modo libre: ignora restricciones de alineación          ║
+║                      (recomendado con modelos poco entrenados)               ║
+║    --shift-pm N      Desplazar pitch-mean ±N clases (default: 0)            ║
+║    --shift-nd N      Desplazar note-density ±N clases (default: 0)          ║
+║    --shift-X N       Disponible para los 12 atributos: pm pv pr dm dv dr    ║
+║                      nd mcd aa cm dmm align                                  ║
+║                                                                              ║
+║  DEFAULTS DE ARQUITECTURA (CPU-friendly, ~1M params):                       ║
+║    enc/dec layers=2, heads=4, dim=128, d_latent=64, d_embed=128             ║
+║    Para GPU (RTX 1000 Ada): --enc-layers 12 --enc-dim 512 --enc-heads 8     ║
+║                              --dec-layers 12 --dec-dim 512 --dec-heads 8    ║
+║                              --d-latent 128 --d-embed 512 --batch-size 8    ║
 ║                                                                              ║
 ║  DEPENDENCIAS:                                                               ║
-║    miditoolkit, numpy, torch, scipy, PyYAML                                  ║
+║    miditoolkit  numpy  torch  PyYAML                                         ║
+║    (ABC no requiere dependencias externas)                                   ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -1904,56 +1945,100 @@ def _remi_to_midi(seq_lyrics, events, tempo, output_path):
         print('[generate] ✗  miditoolkit no instalado')
         return
 
-    DEFAULT_FRACTION = 64
+    DEFAULT_FRACTION  = 64
     DEFAULT_BAR_RESOL = 480 * 4
+    DEFAULT_DUR       = 240   # corchea por defecto
 
     midi_obj = miditoolkit.midi.parser.MidiFile()
     midi_obj.lyrics = []
     midi_obj.instruments = [miditoolkit.Instrument(program=0, is_drum=False, name='Piano')]
     midi_obj.tempo_changes.append(miditoolkit.TempoChange(tempo, 0))
 
-    temp_notes = []
-    cur_bar = cur_pos = 0
-    num_notes = 0
-    pp = 0
     flat_lyrics = [ch for phrase in seq_lyrics for ch in phrase]
 
-    for i, ev in enumerate(events):
-        name = ev['name'] if isinstance(ev, dict) else ev.split('_')[0]
-        val  = ev['value'] if isinstance(ev, dict) else '_'.join(ev.split('_')[1:])
+    # ── Pasada 1: reconstruir lista de (pitch, start_tick, dur_ticks) ─────────
+    # El modelo a veces emite varios Note_Pitch seguidos antes de Note_Duration.
+    # Estrategia: acumular pitches pendientes y asignarles la siguiente Duration
+    # que aparezca; si no aparece ninguna, usar DEFAULT_DUR.
 
-        if name == 'Bar' and i > 1:
+    cur_bar  = 0
+    cur_pos  = 0
+    notes    = []           # lista final de (pitch, start, dur)
+    pending  = []           # pitches sin Duration todavía: (pitch, start)
+    last_dur = DEFAULT_DUR  # última duración vista (para reutilizar)
+
+    for ev in events:
+        name = ev['name'] if isinstance(ev, dict) else str(ev)
+        val  = ev['value'] if isinstance(ev, dict) else None
+
+        if name == 'Bar':
             cur_bar += 1
+
         elif name == 'Beat':
-            cur_pos = int(val)
-        elif name == 'Note_Pitch' and i + 1 < len(events):
-            nxt = events[i + 1]
-            nxt_name = nxt['name'] if isinstance(nxt, dict) else nxt.split('_')[0]
-            if 'Note_Duration' in nxt_name:
-                dur   = int(nxt['value'] if isinstance(nxt, dict) else nxt.split('_')[-1])
-                start = cur_bar * DEFAULT_BAR_RESOL + cur_pos * (DEFAULT_BAR_RESOL // DEFAULT_FRACTION)
-                temp_notes.append((int(val), start, dur))
-                num_notes += 1
+            try:
+                cur_pos = int(val)
+            except (ValueError, TypeError):
+                pass
+
+        elif 'Pitch' in name:
+            try:
+                pitch = int(val)
+            except (ValueError, TypeError, AttributeError):
+                continue
+            start = cur_bar * DEFAULT_BAR_RESOL + cur_pos * (DEFAULT_BAR_RESOL // DEFAULT_FRACTION)
+            pending.append((pitch, start))
+
+        elif 'Duration' in name:
+            try:
+                dur = max(30, int(val))
+                last_dur = dur
+            except (ValueError, TypeError, AttributeError):
+                dur = last_dur
+            # Asignar esta duración a TODOS los pitches pendientes
+            for (p, s) in pending:
+                notes.append((p, s, dur))
+            pending = []
+
+        elif name in ('SEQ', 'EOS', 'PAD'):
+            # Vaciar pendientes con la última duración conocida
+            for (p, s) in pending:
+                notes.append((p, s, last_dur))
+            pending = []
+            if name == 'EOS':
+                break
+
+    # Vaciar cualquier pendiente restante
+    for (p, s) in pending:
+        notes.append((p, s, last_dur))
+
+    # ── Pasada 2: añadir lyrics por ALIGN ─────────────────────────────────────
+    # Recontar ALIGNs de la secuencia original para asignar sílabas
+    pp = 0
+    note_idx = 0
+    notes_between_align = 0
+
+    for ev in events:
+        name = ev['name'] if isinstance(ev, dict) else str(ev)
+        if 'Pitch' in name:
+            notes_between_align += 1
         elif name == 'ALIGN':
-            if num_notes >= 1 and pp < len(flat_lyrics):
-                start_t = temp_notes[-num_notes][1]
+            if note_idx < len(notes) and pp < len(flat_lyrics):
                 midi_obj.lyrics.append(
-                    miditoolkit.Lyric(text=flat_lyrics[pp], time=start_t)
+                    miditoolkit.Lyric(text=flat_lyrics[pp], time=notes[note_idx][1])
                 )
-                for k in range(num_notes - 1):
-                    midi_obj.lyrics.append(
-                        miditoolkit.Lyric(text='*', time=temp_notes[-num_notes + k + 1][1])
-                    )
                 pp = min(pp + 1, len(flat_lyrics) - 1)
-            num_notes = 0
-        elif name in ('EOS', 'PAD'):
+            note_idx += notes_between_align
+            notes_between_align = 0
+        elif name == 'EOS':
             break
 
-    for pitch, start, dur in temp_notes:
+    # ── Añadir notas al instrumento ───────────────────────────────────────────
+    for pitch, start, dur in notes:
         midi_obj.instruments[0].notes.append(
-            miditoolkit.Note(126, pitch, int(start), int(start + dur))
+            miditoolkit.Note(96, pitch, int(start), int(start + dur))
         )
 
+    print(f'[remi2midi] {len(notes)} notas escritas en {output_path}')
     if output_path:
         midi_obj.dump(str(output_path), charset='utf-8')
     return midi_obj
@@ -2010,6 +2095,22 @@ def cmd_generate(args):
     else:
         attrs = {a: [32] * n_seqs for a in ATTR_NAMES}
 
+    max_events = args.dec_seqlen
+    d_lat      = cfg['d_latent']
+
+    # Repetir frases si se pide
+    n_repeats = max(1, getattr(args, 'n_repeats', 1))
+    if n_repeats > 1:
+        seq_lyrics = seq_lyrics * n_repeats
+        for a in ATTR_NAMES:
+            if a in attrs:
+                attrs[a] = attrs[a] * n_repeats
+        n_seqs = len(seq_lyrics)
+        # Ampliar ventana de decodificación proporcionalmente
+        max_events = max(args.dec_seqlen, n_seqs * (args.dec_seqlen // max(1, n_seqs // n_repeats)))
+        print(f'[generate] n_repeats={n_repeats}  →  {n_seqs} frases  dec_seqlen={max_events}')
+    d_lat      = cfg['d_latent']
+
     # Desplazamientos de atributos
     def _shifted(a_name, shift):
         return [max(0, min(ATTR_DIM - 1, v + shift)) for v in attrs.get(a_name, [32] * n_seqs)]
@@ -2025,12 +2126,9 @@ def cmd_generate(args):
         for phrase in seq_lyrics:
             tokens = [seq_token_lyric] + [lyric2idx.get(ch, 0) for ch in phrase]
             tokens = (tokens + [pad_token_lyric] * enc_seqlen)[:enc_seqlen]
-            inp    = torch.tensor(tokens, dtype=torch.long).unsqueeze(1)  # (L, 1)
+            inp    = torch.tensor(tokens, dtype=torch.long).unsqueeze(1)
             lat    = model.get_lyric_emb(inp)
             lyric_latents.append(lat.squeeze(0))
-
-    max_events = args.dec_seqlen
-    d_lat      = cfg['d_latent']
 
     # Calcular dimensión total del seg_emb para el placeholder
     ctrl_cfg_ref = CSLL2M._CTRL_CFG
@@ -2099,19 +2197,19 @@ def cmd_generate(args):
             # Forzar / bloquear SEQ según sincronía de letras
             n_aligns = len(seq_lyrics[gen_bars]) if gen_bars < target_bars else 0
             seq_tok  = event2idx.get('SEQ_None', 0)
-            if seq_align >= n_aligns:
+            if not args.free and seq_align >= n_aligns and n_aligns > 0:
                 word = seq_tok
             else:
                 word = _nucleus(probs, args.nucleus_p)
-                if word == seq_tok:
+                if not args.free and word == seq_tok and seq_align < n_aligns:
                     probs[seq_tok] = 0.0
                     probs /= probs.sum() + 1e-9
                     word = _nucleus(probs, args.nucleus_p)
 
             word_ev = idx2event.get(word, 'PAD_None')
 
-            # Validación de posición Beat
-            if 'Beat' in word_ev:
+            # Validación de posición Beat (solo en modo estricto)
+            if not args.free and 'Beat' in word_ev:
                 beat_pos = int(word_ev.split('_')[-1])
                 start_t  = cur_bar * DEFAULT_BAR_RESOL + beat_pos * (DEFAULT_BAR_RESOL // DEFAULT_FRAC)
                 if start_t < last_tick + cur_dur:
@@ -2132,14 +2230,25 @@ def cmd_generate(args):
             if 'SEQ' in word_ev:
                 gen_bars  += 1
                 seq_align  = 0
-            if gen_bars < target_bars - 1 and 'EOS' in word_ev:
-                failed_eos += 1
-                if failed_eos >= 128:
-                    print('[generate] ⚠  EOS prematuro repetido, abortando')
+            if 'EOS' in word_ev:
+                if gen_bars < target_bars - 1:
+                    if not args.free:
+                        failed_eos += 1
+                        if failed_eos >= 128:
+                            print('[generate] ⚠  EOS prematuro repetido, abortando')
+                            break
+                        continue
+                    else:
+                        # En modo libre: EOS prematuro → forzar SEQ y continuar
+                        gen_bars += 1
+                        seq_align = 0
+                        generated.append(word)
+                        generated.append(event2idx.get('SEQ_None', 0))
+                        continue
+                else:
+                    generated.append(event2idx.get('SEQ_None', 0))
                     break
-                continue
-            if len(generated) >= max_events or ('EOS' in word_ev and gen_bars >= target_bars - 1):
-                generated.append(event2idx.get('SEQ_None', 0))
+            if len(generated) >= max_events:
                 break
 
             generated.append(word)
@@ -2155,13 +2264,107 @@ def cmd_generate(args):
         suffix = f'_{i+1:02d}' if args.n_samples > 1 else ''
         out_path = out_dir / f'{out_stem}{suffix}.mid'
 
-        # Convertir eventos a dict para _remi_to_midi
+        # Diagnóstico
+        counts = {}
+        for e in ev_seq:
+            # Determinar el nombre del evento (puede tener _ en el nombre)
+            if e.startswith('Note_Pitch_') or e.startswith('Note_Duration_'):
+                k = '_'.join(e.split('_')[:2])
+            else:
+                k = e.split('_')[0]
+            counts[k] = counts.get(k, 0) + 1
+        print(f'[generate] {len(ev_seq)} eventos: {dict(sorted(counts.items()))}')
+
+        # Convertir eventos string → dict con nombre compuesto correcto
         ev_dicts = []
         for e in ev_seq:
-            parts = e.split('_', 1)
-            ev_dicts.append({'name': parts[0], 'value': parts[1] if len(parts) > 1 else None})
-        _remi_to_midi(seq_lyrics, ev_dicts, args.tempo, out_path)
-        print(f'[generate] ✓  {out_path}  ({len(ev_seq)} eventos)')
+            if e.startswith('Note_Pitch_'):
+                ev_dicts.append({'name': 'Note_Pitch',
+                                 'value': e[len('Note_Pitch_'):]})
+            elif e.startswith('Note_Duration_'):
+                ev_dicts.append({'name': 'Note_Duration',
+                                 'value': e[len('Note_Duration_'):]})
+            elif '_' in e:
+                idx_ = e.index('_')
+                name = e[:idx_]
+                val  = e[idx_+1:]
+                ev_dicts.append({'name': name,
+                                 'value': None if val == 'None' else val})
+            else:
+                ev_dicts.append({'name': e, 'value': None})
+
+        # Extraer pitches en orden de aparición
+        pitches = [int(e['value']) for e in ev_dicts
+                   if e['name'] == 'Note_Pitch' and e['value'] is not None
+                   and str(e['value']).lstrip('-').isdigit()
+                   and 0 <= int(e['value']) <= 127]
+
+        print(f'[generate] {len(pitches)} pitches extraídos')
+
+        if not pitches:
+            print('[generate] ✗  No se generaron pitches — prueba con --temperature 0.8')
+            continue
+
+        # Reconstruir MIDI usando la estructura rítmica de la canción original
+        # (beats, duraciones, barras) y los pitches generados por el modelo
+        _, _, orig_events = _pkl_load(events_path)
+        orig_notes = [(e['value'] for e in orig_events)]  # no usado
+        # Extraer beats y duraciones originales en orden
+        orig_beats = []
+        orig_durs  = []
+        orig_bars  = []
+        cur_bar_o = 0
+        for ev in orig_events:
+            n = ev['name']
+            if n == 'Bar':
+                cur_bar_o += 1
+            elif n == 'Beat':
+                orig_beats.append((cur_bar_o, ev['value']))
+            elif n == 'Note_Duration':
+                orig_durs.append(ev['value'])
+
+        # Repetir estructura n_repeats veces
+        base_bars = cur_bar_o + 1
+        beats_rep = []
+        durs_rep  = []
+        for rep in range(n_repeats):
+            for (b, pos) in orig_beats:
+                beats_rep.append((b + rep * base_bars, pos))
+            durs_rep.extend(orig_durs)
+
+        # Emparejar pitches con beats y duraciones (reciclar si hay menos)
+        import miditoolkit
+        midi_out = miditoolkit.midi.parser.MidiFile()
+        midi_out.ticks_per_beat = 480
+        midi_out.tempo_changes.append(miditoolkit.TempoChange(args.tempo, 0))
+        midi_out.instruments = [miditoolkit.Instrument(program=0, is_drum=False, name='Piano')]
+        midi_out.lyrics = []
+
+        DEFAULT_BAR_RESOL = 480 * 4
+        DEFAULT_FRAC      = 64
+
+        flat_lyrics_out = [ch for phrase in seq_lyrics for ch in phrase]
+        lyr_idx = 0
+
+        for j, pitch in enumerate(pitches):
+            if j >= len(beats_rep):
+                break
+            bar, pos = beats_rep[j]
+            dur = durs_rep[j % len(durs_rep)] if durs_rep else 240
+            start = bar * DEFAULT_BAR_RESOL + int(pos) * (DEFAULT_BAR_RESOL // DEFAULT_FRAC)
+            end   = start + max(30, int(dur))
+            midi_out.instruments[0].notes.append(
+                miditoolkit.Note(96, int(pitch), int(start), int(end))
+            )
+            if lyr_idx < len(flat_lyrics_out):
+                midi_out.lyrics.append(
+                    miditoolkit.Lyric(text=flat_lyrics_out[lyr_idx], time=int(start))
+                )
+                lyr_idx += 1
+
+        midi_out.dump(str(out_path), charset='utf-8')
+        print(f'[generate] ✓  {out_path}  ({len(pitches)} notas)')
+        print(f'[generate] ✓  {out_path}')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2253,6 +2456,96 @@ def cmd_inspect(args):
                 print(f'    {k:<20} {cfg.get(k, "?")}')
 
     _separator()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  NEW-LYRICS — sustituir letras en un .pkl existente
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cmd_new_lyrics(args):
+    """
+    Toma un .pkl de eventos REMI-Aligned y sustituye sus seq_lyrics por unas
+    nuevas leídas de un fichero de texto, manteniendo la estructura melódica
+    intacta (posiciones de SEQ, eventos, etc.).
+
+    Formato del fichero de letras (--lyrics):
+      Una frase por línea. Sílabas separadas por espacios.
+      Las líneas vacías y las que empiezan por # se ignoran.
+
+      Ejemplo:
+        hoy es un buen día
+        pa- ra can- tar
+        sin pen- sar en na- da
+        so- lo dis- fru- tar
+
+    El número de frases debe coincidir con el número de SEQ del .pkl.
+    Si hay menos frases en el fichero, se reciclan. Si hay más, se truncan.
+    """
+    events_path = Path(args.events)
+    if not events_path.exists():
+        print(f'[new-lyrics] ✗  No se encontró {events_path}')
+        sys.exit(1)
+
+    lyrics_path = Path(args.lyrics)
+    if not lyrics_path.exists():
+        print(f'[new-lyrics] ✗  No se encontró {lyrics_path}')
+        sys.exit(1)
+
+    # Cargar el .pkl original
+    seq_lyrics_orig, pos_seq, melody_events = _pkl_load(events_path)
+    n_seqs = len(seq_lyrics_orig)
+
+    # Leer las letras nuevas
+    raw_lines = lyrics_path.read_text(encoding='utf-8').splitlines()
+    new_phrases = []
+    for line in raw_lines:
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        # Limpiar guiones de continuación (ho- → ho) y dividir en sílabas
+        syllables = [s.rstrip('-').strip() for s in line.split() if s.strip()]
+        syllables = [s for s in syllables if s]
+        if syllables:
+            new_phrases.append(syllables)
+
+    if not new_phrases:
+        print(f'[new-lyrics] ✗  No se encontraron frases en {lyrics_path}')
+        sys.exit(1)
+
+    # Ajustar al número de SEQ del .pkl
+    if len(new_phrases) < n_seqs:
+        print(f'[new-lyrics] ⚠  {len(new_phrases)} frases en fichero, '
+              f'{n_seqs} SEQ en el .pkl — se reciclan')
+        new_phrases = (new_phrases * ((n_seqs // len(new_phrases)) + 1))[:n_seqs]
+    elif len(new_phrases) > n_seqs:
+        print(f'[new-lyrics] ⚠  {len(new_phrases)} frases en fichero, '
+              f'{n_seqs} SEQ en el .pkl — se truncan')
+        new_phrases = new_phrases[:n_seqs]
+
+    # Verificar cobertura del vocabulario (opcional)
+    if args.vocab_lyric and Path(args.vocab_lyric).exists():
+        lyric2idx, _ = _pkl_load(args.vocab_lyric)
+        unknown = set()
+        for phrase in new_phrases:
+            for syl in phrase:
+                if syl not in lyric2idx:
+                    unknown.add(syl)
+        if unknown:
+            print(f'[new-lyrics] ⚠  Sílabas fuera del vocabulario ({len(unknown)}): '
+                  f'{sorted(unknown)[:10]}{"…" if len(unknown) > 10 else ""}')
+            print(f'[new-lyrics]    Se mapearán al token 0 durante generate')
+        else:
+            print(f'[new-lyrics] ✓  Todas las sílabas están en el vocabulario')
+
+    # Guardar el nuevo .pkl
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    _pkl_save((new_phrases, pos_seq, melody_events), out_path)
+
+    print(f'[new-lyrics] ✓  {n_seqs} frases sustituidas → {out_path}')
+    print(f'[new-lyrics]    Frases nuevas:')
+    for i, phrase in enumerate(new_phrases):
+        print(f'    {i+1:2d}: {" ".join(phrase)}')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2402,6 +2695,10 @@ def main():
     p.add_argument('--tempo',         type=float, default=90.0)
     p.add_argument('--n-samples',     type=int,   default=1,
                    help='Número de melodías a generar (default: 1)')
+    p.add_argument('--n-repeats',     type=int,   default=1,
+                   help='Repetir las frases N veces para generar salidas más largas (default: 1)')
+    p.add_argument('--free',          action='store_true',
+                   help='Modo libre: ignora restricciones de alineación (útil con modelos poco entrenados)')
     p.add_argument('--dec-seqlen',    type=int,   default=2048)
     # Desplazamientos de atributos
     for a in ATTR_NAMES:
@@ -2415,6 +2712,20 @@ def main():
     p.add_argument('--output',  default='round_trip.mid', metavar='FILE')
     p.add_argument('--tempo',   type=float, default=90.0)
     p.set_defaults(func=cmd_round_trip)
+
+    # ── new-lyrics ────────────────────────────────────────────────────────────
+    p = sub.add_parser('new-lyrics',
+                       help='Sustituye las letras de un .pkl y genera un nuevo .pkl listo para generate')
+    p.add_argument('--events',   required=True, metavar='FILE',
+                   help='.pkl original (de prepare)')
+    p.add_argument('--lyrics',   required=True, metavar='FILE',
+                   help='Fichero de texto con las letras nuevas (una frase por línea, '
+                        'sílabas separadas por espacios)')
+    p.add_argument('--output',   required=True, metavar='FILE',
+                   help='.pkl de salida listo para usar en generate')
+    p.add_argument('--vocab-lyric', default=None, metavar='FILE',
+                   help='dictionary_lyric.pkl (opcional, para verificar cobertura)')
+    p.set_defaults(func=cmd_new_lyrics)
 
     # ── inspect ───────────────────────────────────────────────────────────────
     p = sub.add_parser('inspect', help='Diagnóstico de datos y checkpoints')
