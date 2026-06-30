@@ -1821,6 +1821,9 @@ def cmd_train(args):
         'enc_layers': args.enc_layers, 'enc_heads': args.enc_heads, 'enc_dim': args.enc_dim,
         'dec_layers': args.dec_layers, 'dec_heads': args.dec_heads, 'dec_dim': args.dec_dim,
         'd_latent': args.d_latent, 'd_embed': args.d_embed, 'd_learned': d_learned,
+        'vocab_size':       dset.vocab_size,
+        'vocab_size_lyric': dset.vocab_size_lyric,
+        'pad_token_melody': dset.pad_token_melody,
         'controls': sorted(controls),
         'vocab_melody': str(args.vocab_melody),
         'vocab_lyric':  str(args.vocab_lyric),
@@ -1840,11 +1843,13 @@ def cmd_train(args):
         """Extrae y permuta los tensores de control."""
         cd = {}
         ctrl_keys = ['key', 'emotion', 'struct'] + ATTR_NAMES
+        ctrl_maxval = {**{a: ATTR_DIM - 1 for a in ATTR_NAMES},
+                       'key': 23, 'emotion': 2, 'struct': 4}
         for k in ctrl_keys:
             if k in controls and k in batch:
-                cd[k] = batch[k].permute(1, 0).long().to(device)
+                maxv = ctrl_maxval.get(k, ATTR_DIM - 1)
+                cd[k] = batch[k].permute(1, 0).long().clamp(0, maxv).to(device)
         if 'learned_feats' in controls and 'learned_feats' in batch:
-            # batch['learned_feats']: (B, dec_seqlen, d) → (dec_seqlen, B, d)
             cd['learned_feats'] = batch['learned_feats'].permute(1, 0, 2).float().to(device)
         return cd
 
@@ -2063,13 +2068,15 @@ def cmd_generate(args):
     # Vocabularios
     event2idx, idx2event = _pkl_load(cfg['vocab_melody'])
     lyric2idx, idx2lyric = _pkl_load(cfg['vocab_lyric'])
-    vocab_size       = len(event2idx) + 1
-    vocab_size_lyric = len(lyric2idx) + 2
-    pad_token_melody = len(event2idx)
+
+    # Usar dimensiones guardadas en el config (coinciden con el checkpoint)
+    vocab_size       = cfg.get('vocab_size',       len(event2idx) + 1)
+    vocab_size_lyric = cfg.get('vocab_size_lyric', len(lyric2idx) + 2)
+    pad_token_melody = cfg.get('pad_token_melody', len(event2idx))
     pad_token_lyric  = len(lyric2idx) + 1
     seq_token_lyric  = len(lyric2idx)
 
-    controls = set(cfg.get('controls', []))
+    controls  = set(cfg.get('controls', []))
     d_learned = cfg.get('d_learned', 128)
     model = CSLL2M(
         cfg['enc_layers'], cfg['enc_heads'], cfg['enc_dim'], cfg['enc_dim'] * 4,
@@ -2079,7 +2086,7 @@ def cmd_generate(args):
         controls=controls, d_learned=d_learned,
     ).to(device)
     ckpt = model_dir / 'best_csll2m.pt'
-    model.load_state_dict(torch.load(ckpt, map_location='cpu'), strict=False)
+    model.load_state_dict(torch.load(ckpt, map_location='cpu'), strict=True)
     model.eval()
 
     # Cargar la pieza
@@ -2306,33 +2313,24 @@ def cmd_generate(args):
             continue
 
         # Reconstruir MIDI usando la estructura rítmica de la canción original
-        # (beats, duraciones, barras) y los pitches generados por el modelo
+        # (duraciones en orden) y los pitches generados por el modelo.
+        # IMPORTANTE: no reutilizamos los valores de "Beat" literales (pueden
+        # colisionar si varias notas caen en la misma subdivisión discreta).
+        # En su lugar reconstruimos el tiempo ACUMULANDO duraciones en orden,
+        # igual que hace un secuenciador real — así nunca hay dos notas con
+        # el mismo start a menos que la canción original las tuviera así.
         _, _, orig_events = _pkl_load(events_path)
-        orig_notes = [(e['value'] for e in orig_events)]  # no usado
-        # Extraer beats y duraciones originales en orden
-        orig_beats = []
-        orig_durs  = []
-        orig_bars  = []
-        cur_bar_o = 0
-        for ev in orig_events:
-            n = ev['name']
-            if n == 'Bar':
-                cur_bar_o += 1
-            elif n == 'Beat':
-                orig_beats.append((cur_bar_o, ev['value']))
-            elif n == 'Note_Duration':
-                orig_durs.append(ev['value'])
+        orig_durs = [ev['value'] for ev in orig_events if ev['name'] == 'Note_Duration']
 
-        # Repetir estructura n_repeats veces
-        base_bars = cur_bar_o + 1
-        beats_rep = []
-        durs_rep  = []
-        for rep in range(n_repeats):
-            for (b, pos) in orig_beats:
-                beats_rep.append((b + rep * base_bars, pos))
-            durs_rep.extend(orig_durs)
+        if not orig_durs:
+            orig_durs = [240]   # fallback: corchea
 
-        # Emparejar pitches con beats y duraciones (reciclar si hay menos)
+        # Repetir las duraciones n_repeats veces para cubrir toda la pieza larga
+        durs_rep = orig_durs * max(1, n_repeats * 2)   # margen de sobra
+
+        print(f'[generate] {len(pitches)} pitches  |  {len(orig_durs)} duraciones orig.  '
+              f'(reps disponibles: {len(durs_rep)})')
+
         import miditoolkit
         midi_out = miditoolkit.midi.parser.MidiFile()
         midi_out.ticks_per_beat = 480
@@ -2340,19 +2338,14 @@ def cmd_generate(args):
         midi_out.instruments = [miditoolkit.Instrument(program=0, is_drum=False, name='Piano')]
         midi_out.lyrics = []
 
-        DEFAULT_BAR_RESOL = 480 * 4
-        DEFAULT_FRAC      = 64
-
         flat_lyrics_out = [ch for phrase in seq_lyrics for ch in phrase]
         lyr_idx = 0
+        cursor  = 0   # tick acumulado — avanza estrictamente con cada nota
 
         for j, pitch in enumerate(pitches):
-            if j >= len(beats_rep):
-                break
-            bar, pos = beats_rep[j]
-            dur = durs_rep[j % len(durs_rep)] if durs_rep else 240
-            start = bar * DEFAULT_BAR_RESOL + int(pos) * (DEFAULT_BAR_RESOL // DEFAULT_FRAC)
-            end   = start + max(30, int(dur))
+            dur   = max(30, int(durs_rep[j % len(durs_rep)]))
+            start = cursor
+            end   = start + dur
             midi_out.instruments[0].notes.append(
                 miditoolkit.Note(96, int(pitch), int(start), int(end))
             )
@@ -2361,10 +2354,11 @@ def cmd_generate(args):
                     miditoolkit.Lyric(text=flat_lyrics_out[lyr_idx], time=int(start))
                 )
                 lyr_idx += 1
+            cursor += dur   # SIEMPRE avanza — garantiza flujo melódico continuo
 
         midi_out.dump(str(out_path), charset='utf-8')
-        print(f'[generate] ✓  {out_path}  ({len(pitches)} notas)')
-        print(f'[generate] ✓  {out_path}')
+        print(f'[generate] ✓  {out_path}  ({len(pitches)} notas, '
+              f'{cursor / 480:.1f} beats totales)')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
