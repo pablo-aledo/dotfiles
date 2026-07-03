@@ -116,6 +116,54 @@ def _import_soundfile():
     except ImportError:
         sys.exit("✗  soundfile no encontrado. pip install soundfile")
 
+def _global_tempo_map(mid, bpm_override: Optional[float] = None):
+    """Fusiona los eventos set_tempo de TODAS las pistas en un único mapa
+    [(tick_abs, tempo_us), ...] ordenado por tick.
+
+    Necesario porque en un MIDI formato 1 el tempo vive en la pista
+    conductora (pista 0) y las notas en otras pistas; reiniciar el tempo a
+    120 bpm al empezar cada pista ignora por completo el tempo real (p.ej.
+    el escrito por tempo_designer.py) en cuanto hay más de una pista.
+    """
+    default_tempo = int(60_000_000 / bpm_override) if bpm_override else 500000
+    changes = [(0, default_tempo)]
+    if not bpm_override:
+        for track in mid.tracks:
+            tick_abs = 0
+            for msg in track:
+                tick_abs += msg.time
+                if msg.type == "set_tempo":
+                    changes.append((tick_abs, msg.tempo))
+    changes.sort(key=lambda c: c[0])
+    merged = []
+    for tick, tempo in changes:
+        if merged and merged[-1][0] == tick:
+            merged[-1] = (tick, tempo)
+        else:
+            merged.append((tick, tempo))
+    return merged
+
+def _tick_to_seconds_fn(mido_mod, tempo_map, tpb: int):
+    """Devuelve una función tick_abs -> segundos usando el mapa de tempo global."""
+    import bisect
+    ticks = [t for t, _ in tempo_map]
+    breakpoints = []                      # (tick, tiempo_acumulado_s, tempo_us)
+    acc = 0.0
+    prev_tick, prev_tempo = tempo_map[0]
+    breakpoints.append((prev_tick, 0.0, prev_tempo))
+    for tick, tempo in tempo_map[1:]:
+        acc += mido_mod.tick2second(tick - prev_tick, tpb, prev_tempo)
+        breakpoints.append((tick, acc, tempo))
+        prev_tick, prev_tempo = tick, tempo
+
+    def tick_to_seconds(tick_abs: int) -> float:
+        idx = bisect.bisect_right(ticks, tick_abs) - 1
+        idx = max(0, idx)
+        bt, bs, btempo = breakpoints[idx]
+        return bs + mido_mod.tick2second(tick_abs - bt, tpb, btempo)
+
+    return tick_to_seconds
+
 # ── constantes ────────────────────────────────────────────────────────────────
 
 MIDI_MIN      = 21     # A0
@@ -340,23 +388,21 @@ def midi_to_pianoroll(midi_path: str, n_frames: int,
     mido    = _import_mido()
     mid     = mido.MidiFile(str(midi_path))
     tpb     = mid.ticks_per_beat
-    tempo   = 500000
     roll    = np.zeros((n_frames, 128), dtype=np.float32)
     hop_s   = window * hop / sr   # segundos por frame
 
+    tempo_map = _global_tempo_map(mid)
+    tick_to_seconds = _tick_to_seconds_fn(mido, tempo_map, tpb)
+
     for track in mid.tracks:
         tick_abs = 0
-        time_s   = 0.0
         active: Dict[int, float] = {}   # note → time_on_s
-        local_tempo = tempo
 
         for msg in track:
             tick_abs += msg.time
-            time_s   += mido.tick2second(msg.time, tpb, local_tempo)
+            time_s = tick_to_seconds(tick_abs)
 
-            if msg.type == "set_tempo":
-                local_tempo = msg.tempo
-            elif msg.type == "note_on" and msg.velocity > 0:
+            if msg.type == "note_on" and msg.velocity > 0:
                 active[msg.note] = time_s
             elif msg.type in ("note_off",) or \
                  (msg.type == "note_on" and msg.velocity == 0):
@@ -394,6 +440,8 @@ class PhraseCorpus:
         corpus_dir.mkdir(parents=True, exist_ok=True)
         self._keys:   List[np.ndarray] = []   # [n × N_BINS]
         self._values: List[np.ndarray] = []   # [n × 128]
+        self._keys_mat:   Optional[np.ndarray] = None   # caché de np.stack(_keys)
+        self._values_mat: Optional[np.ndarray] = None   # caché de np.stack(_values)
         self._load()
 
     def _load(self):
@@ -416,6 +464,8 @@ class PhraseCorpus:
         key = spec_frame / (np.linalg.norm(spec_frame) + 1e-10)
         self._keys.append(key.astype(np.float32))
         self._values.append(midi_frame.astype(np.float32))
+        self._keys_mat = None
+        self._values_mat = None
 
     def query(self, spec_frame: np.ndarray) -> Optional[np.ndarray]:
         """
@@ -424,8 +474,11 @@ class PhraseCorpus:
         """
         if not self._keys:
             return None
-        q    = spec_frame / (np.linalg.norm(spec_frame) + 1e-10)
-        keys = np.stack(self._keys)   # [N × N_BINS]
+        q = spec_frame / (np.linalg.norm(spec_frame) + 1e-10)
+        if self._keys_mat is None:          # se invalida en add(); evita re-apilar
+            self._keys_mat = np.stack(self._keys)      # [N × N_BINS]
+            self._values_mat = np.stack(self._values)  # [N × 128]
+        keys = self._keys_mat
         sims = keys @ q               # [N]
         top_k = np.argsort(sims)[::-1][:self.k]
         best_sim = sims[top_k[0]]
@@ -436,8 +489,7 @@ class PhraseCorpus:
         if weights.sum() < 1e-8:
             return None
         weights /= weights.sum()
-        prior = sum(w * self._values[i]
-                    for w, i in zip(weights, top_k))
+        prior = (weights[:, None] * self._values_mat[top_k]).sum(axis=0)
         return prior.astype(np.float32)
 
     def populate_from_corpus(self, corpus_dir: Path, max_entries: int = 50000):
@@ -688,6 +740,7 @@ def activations_to_midi(proba: np.ndarray,
     """
     mido = _import_mido()
     T, _  = proba.shape
+    proba = proba.copy()   # no mutar el array del llamador al mezclar el prior
 
     # Aplicar prior de frase si está disponible
     if phrase_corpus is not None and spec is not None:
@@ -767,19 +820,16 @@ def evaluate_midi(pred_path: str, ref_path: str,
         """→ lista de (time_s, note, duration_s)"""
         mid     = mido.MidiFile(path)
         tpb     = mid.ticks_per_beat
-        tempo   = 500000
         notes   = []
+        tempo_map = _global_tempo_map(mid)
+        tick_to_seconds = _tick_to_seconds_fn(mido, tempo_map, tpb)
         for track in mid.tracks:
             tick_abs = 0
-            time_s   = 0.0
             active   = {}
-            lt       = tempo
             for msg in track:
                 tick_abs += msg.time
-                time_s   += mido.tick2second(msg.time, tpb, lt)
-                if msg.type == "set_tempo":
-                    lt = msg.tempo
-                elif msg.type == "note_on" and msg.velocity > 0:
+                time_s = tick_to_seconds(tick_abs)
+                if msg.type == "note_on" and msg.velocity > 0:
                     active[msg.note] = time_s
                 elif msg.type == "note_off" or \
                      (msg.type == "note_on" and msg.velocity == 0):

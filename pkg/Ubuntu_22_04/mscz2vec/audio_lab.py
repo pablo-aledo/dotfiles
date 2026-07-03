@@ -723,6 +723,56 @@ class _MidiEvent:
     velocity: float
     on:       bool
 
+def _global_tempo_map(mid, bpm_override: Optional[float] = None):
+    """Fusiona los eventos set_tempo de TODAS las pistas en un único mapa
+    [(tick_abs, tempo_us), ...] ordenado por tick.
+
+    Necesario porque en un MIDI formato 1 el tempo vive en la pista
+    conductora (pista 0) y las notas en otras pistas; reiniciar el tempo a
+    120 bpm al empezar cada pista (como hacía la versión anterior) ignora
+    por completo el tempo real en cuanto hay más de una pista.
+    """
+    default_tempo = int(60_000_000 / bpm_override) if bpm_override else 500000
+    changes = [(0, default_tempo)]
+    if not bpm_override:
+        for track in mid.tracks:
+            tick_abs = 0
+            for msg in track:
+                tick_abs += msg.time
+                if msg.type == "set_tempo":
+                    changes.append((tick_abs, msg.tempo))
+    changes.sort(key=lambda c: c[0])
+    merged = []
+    for tick, tempo in changes:
+        if merged and merged[-1][0] == tick:
+            merged[-1] = (tick, tempo)
+        else:
+            merged.append((tick, tempo))
+    return merged
+
+
+def _tick_to_seconds_fn(mido_mod, tempo_map, tpb: int):
+    """Devuelve una función tick_abs -> segundos usando el mapa de tempo global."""
+    import bisect
+    ticks = [t for t, _ in tempo_map]
+    breakpoints = []                      # (tick, tiempo_acumulado_s, tempo_us)
+    acc = 0.0
+    prev_tick, prev_tempo = tempo_map[0]
+    breakpoints.append((prev_tick, 0.0, prev_tempo))
+    for tick, tempo in tempo_map[1:]:
+        acc += mido_mod.tick2second(tick - prev_tick, tpb, prev_tempo)
+        breakpoints.append((tick, acc, tempo))
+        prev_tick, prev_tempo = tick, tempo
+
+    def tick_to_seconds(tick_abs: int) -> float:
+        idx = bisect.bisect_right(ticks, tick_abs) - 1
+        idx = max(0, idx)
+        bt, bs, btempo = breakpoints[idx]
+        return bs + mido_mod.tick2second(tick_abs - bt, tpb, btempo)
+
+    return tick_to_seconds
+
+
 def _parse_midi_events(path: str, bpm_override: Optional[float] = None,
                         transpose: int = 0) -> Tuple[List[_MidiEvent], float]:
     """Extrae eventos note_on/off con timestamps en segundos."""
@@ -730,20 +780,15 @@ def _parse_midi_events(path: str, bpm_override: Optional[float] = None,
     mid  = mido.MidiFile(path)
     tpb  = mid.ticks_per_beat
 
-    tempo   = 500000  # 120 BPM por defecto
-    if bpm_override:
-        tempo = int(60_000_000 / bpm_override)
+    tempo_map = _global_tempo_map(mid, bpm_override)
+    tick_to_seconds = _tick_to_seconds_fn(mido, tempo_map, tpb)
 
     events: List[_MidiEvent] = []
     for track in mid.tracks:
         tick_abs = 0
-        time_s   = 0.0
-        local_tempo = tempo
         for msg in track:
             tick_abs += msg.time
-            time_s   += mido.tick2second(msg.time, tpb, local_tempo)
-            if not bpm_override and msg.type == "set_tempo":
-                local_tempo = msg.tempo
+            time_s = tick_to_seconds(tick_abs)
             if msg.type == "note_on":
                 events.append(_MidiEvent(
                     time_s   = time_s,
@@ -764,6 +809,7 @@ def _parse_midi_events(path: str, bpm_override: Optional[float] = None,
     events.sort(key=lambda e: e.time_s)
     total = max((e.time_s for e in events), default=0.0) + 2.0
     return events, total
+
 
 def render_midi(midi_path: str, instrument_map: Dict[int, ChannelInstrument],
                 bpm_override: Optional[float] = None, transpose: int = 0,
