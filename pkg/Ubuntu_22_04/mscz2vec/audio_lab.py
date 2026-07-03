@@ -500,7 +500,7 @@ def fft_analyse(audio: np.ndarray, sr: int) -> List[FreqBin]:
             for k in range(len(freqs))]
 
 def stft_analyse(audio: np.ndarray, sr: int,
-                 window_size: int = 2048,
+                 window_size: int = 4096,
                  hop_ratio: float = 0.25) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     STFT con ventana Hann.
@@ -1618,8 +1618,8 @@ def main():
     # ── spectrogram ──────────────────────────────────────────────────────────
     p = sub.add_parser("spectrogram", help="WAV → STFT → .npz [+ PNG]")
     p.add_argument("input",  help="Fichero WAV")
-    p.add_argument("--window", type=int, default=2048,
-                   help="Tamaño de ventana STFT en muestras (default: 2048)")
+    p.add_argument("--window", type=int, default=4096,
+                   help="Tamaño de ventana STFT en muestras (default: 4096)")
     p.add_argument("--hop", type=float, default=0.25,
                    help="Hop ratio ∈ (0,1] (default: 0.25)")
     p.add_argument("--plot", action="store_true",
@@ -1658,8 +1658,8 @@ def main():
     p.add_argument("input", help="Fichero PNG (idealmente generado con npz-to-png)")
     p.add_argument("--sr", type=int, default=SAMPLE_RATE,
                    help=f"Sample rate si el PNG no tiene metadatos (default: {SAMPLE_RATE})")
-    p.add_argument("--window", type=int, default=2048,
-                   help="Tamaño de ventana STFT si el PNG no tiene metadatos (default: 2048)")
+    p.add_argument("--window", type=int, default=4096,
+                   help="Tamaño de ventana STFT si el PNG no tiene metadatos (default: 4096)")
     p.add_argument("--hop", type=float, default=0.25,
                    help="Hop ratio si el PNG no tiene metadatos (default: 0.25)")
     p.add_argument("--mag-max", type=float, default=None,
@@ -1758,8 +1758,8 @@ def main():
     p.add_argument("input", help="Fichero WAV de entrada")
     p.add_argument("--method", default="stft", choices=["stft","fft"],
                    help="Pipeline de análisis/síntesis (default: stft)")
-    p.add_argument("--window", type=int, default=2048,
-                   help="Tamaño de ventana STFT (default: 2048)")
+    p.add_argument("--window", type=int, default=4096,
+                   help="Tamaño de ventana STFT (default: 4096)")
     p.add_argument("--hop", type=float, default=0.25,
                    help="Hop ratio STFT (default: 0.25)")
     p.add_argument("--output", "-o", default=None, help="WAV de salida")
