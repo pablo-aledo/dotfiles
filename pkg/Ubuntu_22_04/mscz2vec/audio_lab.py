@@ -1,19 +1,48 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                         AUDIO LAB  v1.0                                      ║
+║                         AUDIO LAB  v1.1                                      ║
 ║  Síntesis aditiva, análisis DSP y renderizado MIDI — fichero único           ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  SUBCOMANDOS                                                                 ║
-║    analyse      WAV/MIDI → espectro FFT/DFT  (amplitudes, fases, freqs)     ║
-║    spectrogram  WAV → STFT → .npz [+ --plot PNG]                            ║
-║    reconstruct  .npz / espectro.json → WAV  (síntesis inversa)              ║
-║    synth        Síntesis aditiva: nota(s) + timbre.json + env.json → WAV    ║
-║    play-midi    MIDI + instrument-map.json → WAV  (sin soundfont externo)   ║
-║    roundtrip    WAV → FFT → síntesis → WAV  (diagnóstico del pipeline)      ║
-║    info         Diagnóstico rápido de WAV o MIDI                            ║
+║    analyse       WAV/MIDI → espectro FFT/DFT  (amplitudes, fases, freqs)    ║
+║    spectrogram   WAV → STFT → .npz [+ --plot PNG]                           ║
+║    edit-spectrum .npz → filtros/stretch/pitch/reverse → .npz [+ --wav]      ║
+║    npz-to-png    .npz → PNG escala de grises (metadatos embebidos en tEXt)  ║
+║    png-to-npz    PNG → .npz con fase cero  (editar espectrograma en imagen) ║
+║    reconstruct   .npz / espectro.json → WAV  (síntesis inversa)             ║
+║    synth         Síntesis aditiva: nota(s) + timbre.json + env.json → WAV   ║
+║    play-midi     MIDI + instrument-map.json → WAV  (sin soundfont externo)  ║
+║    roundtrip     WAV → FFT → síntesis → WAV  (diagnóstico del pipeline)     ║
+║    info          Diagnóstico rápido de WAV, MIDI, NPZ o JSON                ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS  numpy  soundfile  mido  scipy(opcional,--plot)               ║
+║  DEPENDENCIAS  numpy  soundfile  mido  Pillow                               ║
+║                scipy (opcional, --plot)   matplotlib (opcional, --plot)     ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  PIPELINE NPZ ↔ PNG                                                          ║
+║                                                                              ║
+║  El PNG es una imagen en escala de grises donde:                            ║
+║    · Eje X  = tiempo  (frame 0 a N-1, izquierda → derecha)                 ║
+║    · Eje Y  = frecuencia  (0 Hz abajo, Nyquist arriba)                      ║
+║    · Valor  = magnitud STFT  (lineal o log según --log)                     ║
+║    · Fase   NO se guarda — al reconvertir se usa fase cero                  ║
+║                                                                              ║
+║  Los metadatos necesarios para la reconversión (sr, window_size, hop_ratio, ║
+║  escala, piso dB, orientación) se guardan en chunks tEXt del PNG y se       ║
+║  recuperan automáticamente con png-to-npz. Si el PNG viene de un editor     ║
+║  externo (GIMP, Photoshop…) que elimina los metadatos, pasa sr/window/hop   ║
+║  manualmente con --sr --window --hop.                                        ║
+║                                                                              ║
+║  Flujo típico de edición creativa:                                           ║
+║    spectrogram audio.wav --window 4096 -o audio.npz                         ║
+║    npz-to-png audio.npz --log -o audio.png                                  ║
+║    [editar audio.png en GIMP/Photoshop: borrar, pintar, filtrar…]           ║
+║    png-to-npz audio_editado.png -o audio_editado.npz                        ║
+║    reconstruct audio_editado.npz -o resultado.wav                           ║
+║                                                                              ║
+║  Nota: la reconstrucción desde PNG usa Griffin-Lim iterativo (32 iter por   ║
+║  defecto) para estimar fases coherentes. Produce audio limpio y con las      ║
+║  frecuencias correctas. Ajusta con reconstruct --gl-iters N (más=mejor).    ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  JSON DE REFERENCIA — TIMBRE  (--timbre timbre.json)                        ║
 ║  Define el perfil espectral de un instrumento: amplitud relativa de cada    ║
@@ -79,12 +108,14 @@
 ║  }                                                                           ║
 ║                                                                              ║
 ║  EJEMPLOS                                                                    ║
-║    python audio_lab.py analyse piano.wav --method fft --output spec.json    ║
-║    python audio_lab.py spectrogram piano.wav --window 2048 --plot           ║
-║    python audio_lab.py reconstruct spec.npz --output recon.wav              ║
+║    python audio_lab.py analyse piano.wav --method fft --output spec.json   ║
+║    python audio_lab.py spectrogram piano.wav --window 4096 --log           ║
+║    python audio_lab.py npz-to-png piano.npz --log -o piano.png             ║
+║    python audio_lab.py png-to-npz piano_edited.png -o piano_edited.npz     ║
+║    python audio_lab.py reconstruct piano_edited.npz -o resultado.wav       ║
 ║    python audio_lab.py synth --notes C4 E4 G4 --timbre timbres/piano.json  ║
 ║    python audio_lab.py play-midi song.mid --instrument-map map.json         ║
-║    python audio_lab.py roundtrip input.wav --method fft                     ║
+║    python audio_lab.py roundtrip input.wav --method stft                   ║
 ║    python audio_lab.py info piano.wav                                       ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
@@ -131,6 +162,13 @@ def _import_matplotlib():
         return plt
     except ImportError:
         sys.exit("✗  matplotlib no encontrado. pip install matplotlib")
+
+def _import_pil():
+    try:
+        from PIL import Image
+        return Image
+    except ImportError:
+        sys.exit("✗  Pillow no encontrado. Instala con: pip install Pillow")
 
 # ── constantes ────────────────────────────────────────────────────────────────
 SAMPLE_RATE  = 44100
@@ -488,31 +526,90 @@ def stft_analyse(audio: np.ndarray, sr: int,
     freqs = np.fft.rfftfreq(window_size, 1.0 / sr)
     return mags, phases, freqs
 
+def griffin_lim(mags: np.ndarray, hop_ratio: float,
+                n_iter: int = 32, sr: int = SAMPLE_RATE) -> np.ndarray:
+    """
+    Griffin-Lim iterativo: estima fases coherentes a partir de magnitudes STFT.
+    Produce audio mucho más limpio que fase cero cuando no se dispone de las
+    fases originales (ej: reconstrucción desde PNG).
+
+    mags: [frames × bins]  magnitudes STFT
+    n_iter: iteraciones (16-32 suelen bastar; más = más limpio pero más lento)
+    """
+    n_bins  = mags.shape[1]
+    n_fft   = (n_bins - 1) * 2
+    hop     = max(1, int(n_fft * hop_ratio))
+    frames  = mags.shape[0]
+    win     = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(n_fft) / n_fft)
+
+    # Inicializar con fase aleatoria reproducible
+    rng    = np.random.default_rng(0)
+    phases = rng.uniform(0, 2 * np.pi, mags.shape)
+
+    def _istft(ph: np.ndarray) -> np.ndarray:
+        out_len = (frames - 1) * hop + n_fft
+        out     = np.zeros(out_len, dtype=np.float64)
+        norm    = np.zeros(out_len, dtype=np.float64)
+        for i in range(frames):
+            X     = mags[i] * np.exp(1j * ph[i])
+            chunk = np.fft.irfft(X, n=n_fft)[:n_fft] * win
+            start = i * hop
+            out[start:start + n_fft]  += chunk
+            norm[start:start + n_fft] += win ** 2
+        nz = norm > 1e-10
+        out[nz] /= norm[nz]
+        return out
+
+    def _stft_phases(audio: np.ndarray) -> np.ndarray:
+        n_pad  = n_fft // 2
+        padded = np.pad(audio, (n_pad, n_pad + n_fft))
+        ph     = np.zeros(mags.shape, dtype=np.float64)
+        for i in range(frames):
+            start = i * hop
+            chunk = padded[start:start + n_fft] * win
+            X     = np.fft.rfft(chunk, n=n_fft)
+            ph[i] = np.angle(X)
+        return ph
+
+    for _ in range(n_iter):
+        audio  = _istft(phases)
+        phases = _stft_phases(audio)
+
+    # ISTFT final con fases estimadas y magnitudes originales
+    audio  = _istft(phases)
+    n_pad  = n_fft // 2
+    return audio[n_pad : n_pad + len(audio) - n_fft].astype(np.float32)
+
+
 def stft_reconstruct(mags: np.ndarray, phases: np.ndarray,
                      window_size: int, hop_ratio: float,
                      sr: int = SAMPLE_RATE) -> np.ndarray:
     """
     Síntesis inversa desde magnitudes + fases STFT (overlap-add con ventana Hann).
+    El tamaño de irfft se deriva de n_bins (columnas de mags) para ser robusto
+    ante discrepancias entre window_size y el NPZ real.
     """
-    hop    = max(1, int(window_size * hop_ratio))
-    frames = mags.shape[0]
-    window = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(window_size) / window_size)
-    out_len = (frames - 1) * hop + window_size
-    out  = np.zeros(out_len, dtype=np.float64)
-    norm = np.zeros(out_len, dtype=np.float64)
+    n_bins  = mags.shape[1]
+    n_fft   = (n_bins - 1) * 2
+    hop     = max(1, int(n_fft * hop_ratio))
+    frames  = mags.shape[0]
+    window  = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(n_fft) / n_fft)
+    out_len = (frames - 1) * hop + n_fft
+    out     = np.zeros(out_len, dtype=np.float64)
+    norm    = np.zeros(out_len, dtype=np.float64)
 
     for i in range(frames):
         X     = mags[i] * np.exp(1j * phases[i])
-        chunk = np.fft.irfft(X, n=window_size)[:window_size]
+        chunk = np.fft.irfft(X, n=n_fft)[:n_fft]
         chunk *= window
         start  = i * hop
-        out[start : start + window_size]  += chunk
-        norm[start : start + window_size] += window ** 2
+        out[start : start + n_fft]  += chunk
+        norm[start : start + n_fft] += window ** 2
 
     nz       = norm > 1e-10
     out[nz] /= norm[nz]
-    n_pad    = window_size // 2
-    out      = out[n_pad : n_pad + len(out) - window_size]
+    n_pad    = n_fft // 2
+    out      = out[n_pad : n_pad + len(out) - n_fft]
     return out.astype(np.float32)
 
 def synth_from_bins(bins: List[FreqBin], duration: float,
@@ -844,8 +941,21 @@ def cmd_reconstruct(args):
         sr        = int(data["sample_rate"])
         window    = int(data["window_size"])
         hop       = float(data["hop_ratio"])
-        print(f"  [reconstruct] STFT inversa  {mags.shape[0]} frames × {mags.shape[1]} bins")
-        audio = stft_reconstruct(mags, phases, window, hop, sr)
+        zero_phase = np.abs(phases).max() < 1e-6
+        gl_iters   = getattr(args, "gl_iters", 32)
+
+        if zero_phase or args.normalize:
+            print(f"  [reconstruct] STFT inversa  {mags.shape[0]} frames × {mags.shape[1]} bins"
+                  f"  [Griffin-Lim {gl_iters} iter]")
+            audio = griffin_lim(mags, hop, n_iter=gl_iters, sr=sr)
+        else:
+            print(f"  [reconstruct] STFT inversa  {mags.shape[0]} frames × {mags.shape[1]} bins")
+            audio = stft_reconstruct(mags, phases, window, hop, sr)
+
+        peak = np.abs(audio).max()
+        if (zero_phase or args.normalize) and peak > 1e-9:
+            audio = (audio / peak * 0.85).astype(np.float32)
+            print(f"  [reconstruct] Normalizado a 0.85 peak")
     elif src.suffix == ".json":
         with open(str(src)) as f:
             spec = json.load(f)
@@ -860,6 +970,375 @@ def cmd_reconstruct(args):
 
     out_path = args.output or src.stem + "_recon.wav"
     write_wav(out_path, audio, sr)
+
+
+def cmd_edit_spectrum(args):
+    """
+    Edita un NPZ de espectrograma (STFT) antes de reconstruirlo como WAV.
+
+    Operaciones disponibles (se aplican en este orden):
+      1. highpass / lowpass  — filtro de paso en frecuencia
+      2. isolate             — dejar solo bandas alrededor de frecuencias concretas
+      3. suppress            — atenuar bandas alrededor de frecuencias concretas
+      4. gain                — ganancia global en dB sobre las magnitudes
+      5. denoise             — zeroing de bins por debajo de un umbral de magnitud
+      6. timestretch         — estirar/comprimir en el tiempo (sin cambiar pitch)
+      7. pitchshift          — transponer en semitones (sin cambiar duración)
+      8. reverse             — invertir el espectrograma en el tiempo
+    """
+    src  = Path(args.input)
+    data = np.load(str(src))
+    mags   = data["magnitudes"].copy().astype(np.float64)   # [frames × bins]
+    phases = data["phases"].copy().astype(np.float64)
+    freqs  = data["freqs"]                                   # [bins] Hz
+    sr     = int(data["sample_rate"])
+    window = int(data["window_size"])
+    hop    = float(data["hop_ratio"])
+
+    n_frames, n_bins = mags.shape
+    print(f"  [edit-spectrum] {n_frames} frames × {n_bins} bins  "
+          f"sr={sr}  window={window}  hop={hop}")
+
+    # ── 1. highpass ──────────────────────────────────────────────────────────
+    if args.highpass and args.highpass > 0:
+        mask = freqs < args.highpass
+        mags[:, mask] = 0.0
+        print(f"  ✓  highpass  < {args.highpass} Hz  ({mask.sum()} bins zeroed)")
+
+    # ── 2. lowpass ───────────────────────────────────────────────────────────
+    if args.lowpass and args.lowpass > 0:
+        mask = freqs > args.lowpass
+        mags[:, mask] = 0.0
+        print(f"  ✓  lowpass   > {args.lowpass} Hz  ({mask.sum()} bins zeroed)")
+
+    # ── 3. isolate ───────────────────────────────────────────────────────────
+    if args.isolate:
+        margin  = args.isolate_margin
+        keep    = np.zeros(n_bins, dtype=bool)
+        for hz in args.isolate:
+            keep |= (freqs >= hz - margin) & (freqs <= hz + margin)
+        mags[:, ~keep] = 0.0
+        n_kept = keep.sum()
+        print(f"  ✓  isolate   {args.isolate} Hz ±{margin}Hz  ({n_kept}/{n_bins} bins mantenidos)")
+
+    # ── 4. suppress ──────────────────────────────────────────────────────────
+    if args.suppress:
+        margin = args.suppress_margin
+        for hz in args.suppress:
+            mask = (freqs >= hz - margin) & (freqs <= hz + margin)
+            mags[:, mask] *= args.suppress_gain
+        print(f"  ✓  suppress  {args.suppress} Hz ±{margin}Hz  "
+              f"(ganancia residual={args.suppress_gain})")
+
+    # ── 5. gain ──────────────────────────────────────────────────────────────
+    if args.gain and args.gain != 0.0:
+        factor = 10 ** (args.gain / 20.0)
+        mags  *= factor
+        print(f"  ✓  gain      {args.gain:+.1f} dB  (×{factor:.3f})")
+
+    # ── 6. denoise ───────────────────────────────────────────────────────────
+    if args.denoise and args.denoise > 0.0:
+        # Umbral sobre los bins con energía real (excluye los ya zeroed)
+        nonzero = mags[mags > 0]
+        if len(nonzero) > 0:
+            threshold = np.percentile(nonzero, args.denoise)
+            zeroed    = ((mags > 0) & (mags < threshold)).sum()
+            mags[mags < threshold] = 0.0
+            print(f"  ✓  denoise   percentil={args.denoise:.1f} (sobre bins activos)  "
+                  f"umbral={threshold:.6f}  ({zeroed} celdas zeroed)")
+        else:
+            print(f"  ⚠  denoise   sin bins activos, operación omitida")
+
+    # ── 7. timestretch ───────────────────────────────────────────────────────
+    if args.timestretch and args.timestretch != 1.0:
+        ratio     = args.timestretch          # >1 = más lento, <1 = más rápido
+        new_frames = max(1, int(n_frames * ratio))
+        old_idx   = np.arange(n_frames, dtype=np.float64)
+        new_idx   = np.linspace(0, n_frames - 1, new_frames)
+        # Interpolar magnitudes y fases por separado
+        new_mags   = np.zeros((new_frames, n_bins), dtype=np.float64)
+        new_phases = np.zeros((new_frames, n_bins), dtype=np.float64)
+        for b in range(n_bins):
+            new_mags[:, b]   = np.interp(new_idx, old_idx, mags[:, b])
+            # Interpolación de fase con unwrap para evitar discontinuidades
+            uw = np.unwrap(phases[:, b])
+            new_phases[:, b] = np.interp(new_idx, old_idx, uw)
+        mags, phases = new_mags, new_phases
+        print(f"  ✓  timestretch  ×{ratio:.2f}  {n_frames}→{new_frames} frames  "
+              f"({new_frames * hop * window / sr:.2f}s)")
+
+    # ── 8. pitchshift ────────────────────────────────────────────────────────
+    if args.pitchshift and args.pitchshift != 0:
+        semitones = args.pitchshift
+        ratio     = 2 ** (semitones / 12.0)
+        # Para cada bin destino b, coger el contenido del bin fuente b/ratio.
+        # Equivalente a re-etiquetar freqs[b] → freqs[b]*ratio.
+        new_mags   = np.zeros_like(mags)
+        new_phases = np.zeros_like(phases)
+        bin_indices = np.arange(n_bins, dtype=np.float64)
+        for b in range(n_bins):
+            # bin fuente (posición fraccionaria)
+            src_b = b / ratio
+            if src_b < 0 or src_b >= n_bins - 1:
+                continue
+            lo = int(src_b)
+            hi = lo + 1
+            t  = src_b - lo
+            new_mags[:, b]   = mags[:, lo] * (1 - t) + mags[:, hi] * t
+            uw_lo = np.unwrap(phases[:, lo])
+            uw_hi = np.unwrap(phases[:, hi])
+            new_phases[:, b] = uw_lo * (1 - t) + uw_hi * t
+        mags, phases = new_mags, new_phases
+        print(f"  ✓  pitchshift  {semitones:+d} semitones  (×{ratio:.4f})")
+
+    # ── 9. reverse ───────────────────────────────────────────────────────────
+    if args.reverse:
+        mags   = mags[::-1].copy()
+        phases = phases[::-1].copy()
+        print(f"  ✓  reverse")
+
+    # ── guardar NPZ editado ──────────────────────────────────────────────────
+    out_npz = args.output or src.stem + "_edited.npz"
+    np.savez_compressed(out_npz,
+                        magnitudes=mags.astype(np.float32),
+                        phases=phases.astype(np.float32),
+                        freqs=freqs,
+                        sample_rate=np.array(sr),
+                        window_size=np.array(window),
+                        hop_ratio=np.array(hop))
+    n_frames_out = mags.shape[0]
+    dur_out = n_frames_out * hop * window / sr
+    print(f"  ✓  NPZ editado → {out_npz}  ({n_frames_out} frames, ~{dur_out:.2f}s)")
+
+    # ── reconstruir WAV si se pide ───────────────────────────────────────────
+    if args.wav:
+        wav_path = args.wav
+        audio    = stft_reconstruct(mags, phases, window, hop, sr)
+        write_wav(wav_path, audio, sr)
+
+
+def cmd_npz_to_png(args):
+    """
+    NPZ de espectrograma → PNG en escala de grises.
+
+    Cada píxel representa la magnitud de un bin frecuencial en un frame temporal:
+      - Eje X: tiempo (frame 0 → frame N-1, izquierda → derecha)
+      - Eje Y: frecuencia (bin 0=DC arriba, Nyquist abajo) — o invertido con --flip-y
+      - Valor: magnitud en escala lineal o logarítmica (dB), normalizada a [0, 255]
+
+    La fase NO se guarda en el PNG. Al reconvertir PNG → NPZ se usa fase cero,
+    lo que produce reconstrucciones coherentes en amplitud pero con artefactos de fase
+    (similares a Griffin-Lim iteración 0). Para reconstrucciones de calidad, conserva
+    siempre el NPZ original o usa edit-spectrum sobre él.
+
+    El PNG guarda los metadatos del NPZ (sr, window, hop) en los campos de texto
+    del chunk tEXt de PNG para que png-to-npz pueda recuperarlos automáticamente.
+    """
+    Image = _import_pil()
+
+    data   = np.load(args.input)
+    mags   = data["magnitudes"].astype(np.float64)   # [frames × bins]
+    sr     = int(data["sample_rate"])
+    window = int(data["window_size"])
+    hop    = float(data["hop_ratio"])
+    freqs  = data["freqs"]
+
+    n_frames, n_bins = mags.shape
+    print(f"  [npz-to-png] {n_frames} frames × {n_bins} bins  sr={sr}  window={window}")
+
+    # ── escala ────────────────────────────────────────────────────────────────
+    if args.log:
+        db_floor = args.db_floor
+        # Normalizar primero a [0,1] para que el máximo sea exactamente 0dB
+        # y el rango dinámico útil caiga dentro de [db_floor, 0].
+        # Sin normalizar, las magnitudes STFT absolutas tienen valores >1
+        # que producen dB positivos → saturación masiva de pixels a 255.
+        mags_norm = mags / (mags.max() + 1e-10)
+        img_data  = 20 * np.log10(mags_norm + 1e-10)
+        img_data  = np.clip(img_data, db_floor, 0.0)
+        img_data  = (img_data - db_floor) / (-db_floor)   # → [0, 1]
+        scale_desc = f"log (piso={db_floor}dB)"
+    else:
+        peak = mags.max()
+        img_data = mags / (peak + 1e-10)                  # → [0, 1]
+        scale_desc = "lineal"
+
+    # ── orientación ───────────────────────────────────────────────────────────
+    # img_data es [frames × bins]: transponer para que Y=bins, X=frames
+    img_data = img_data.T   # → [bins × frames]
+    if not args.no_flip_y:
+        img_data = img_data[::-1, :]   # frecuencia 0 abajo, Nyquist arriba
+
+    # Convertir a uint8
+    pixels = (img_data * 255).clip(0, 255).astype(np.uint8)
+    img    = Image.fromarray(pixels, mode="L")
+
+    # ── metadatos en tEXt PNG ─────────────────────────────────────────────────
+    from PIL import PngImagePlugin
+    meta = PngImagePlugin.PngInfo()
+    meta.add_text("audio_lab_sr",       str(sr))
+    meta.add_text("audio_lab_window",   str(window))
+    meta.add_text("audio_lab_hop",      str(hop))
+    meta.add_text("audio_lab_scale",    "log" if args.log else "linear")
+    meta.add_text("audio_lab_db_floor", str(args.db_floor))
+    meta.add_text("audio_lab_flip_y",   "0" if args.no_flip_y else "1")
+    meta.add_text("audio_lab_n_frames", str(n_frames))
+    meta.add_text("audio_lab_n_bins",   str(n_bins))
+    meta.add_text("audio_lab_mag_max",  str(float(mags.max())))
+
+    out_path = args.output or Path(args.input).stem + ".png"
+
+    # ── fallback: codificar metadatos críticos en el nombre del fichero ───────
+    # GIMP y otros editores eliminan los chunks tEXt propios al exportar.
+    # Si el nombre de salida no tiene sufijo _alXXXX, añadir un sidecar .json.
+    stem = Path(out_path).stem
+    sidecar = Path(out_path).with_suffix(".al.json")
+    sidecar_data = {
+        "audio_lab_sr":       sr,
+        "audio_lab_window":   window,
+        "audio_lab_hop":      hop,
+        "audio_lab_scale":    "log" if args.log else "linear",
+        "audio_lab_db_floor": float(args.db_floor),
+        "audio_lab_flip_y":   not args.no_flip_y,
+        "audio_lab_n_frames": n_frames,
+        "audio_lab_n_bins":   n_bins,
+        "audio_lab_mag_max":  float(mags.max()),
+    }
+    with open(sidecar, "w") as f:
+        json.dump(sidecar_data, f, indent=2)
+
+    img.save(out_path, format="PNG", pnginfo=meta)
+    h, w = pixels.shape
+    print(f"  ✓  PNG → {out_path}  ({w}×{h}px, escala {scale_desc})")
+    print(f"     Metadatos embebidos: sr={sr} window={window} hop={hop}")
+    print(f"     Sidecar JSON → {sidecar}  (fallback si el editor elimina metadatos tEXt)")
+
+
+def cmd_png_to_npz(args):
+    """
+    PNG en escala de grises → NPZ de espectrograma.
+
+    Lee los metadatos embebidos por npz-to-png (sr, window_size, hop_ratio, escala)
+    para reconstruir el NPZ con magnitudes correctamente escaladas.
+    Si el PNG no tiene metadatos de audio_lab, se usan los valores de --sr, --window
+    y --hop que se pasen por línea de comandos (o los defaults).
+
+    IMPORTANTE sobre la fase: el PNG solo contiene magnitudes. El NPZ resultante
+    tendrá fase cero en todos los bins. Al reconstruir con 'reconstruct' se obtendrá
+    audio coherente en amplitud pero con artefactos de fase típicos de magnitud-only.
+    Para uso creativo (editar el PNG en un editor de imagen y volver a audio) esto
+    es completamente intencional y útil; para preservación de audio, usa el NPZ.
+    """
+    Image = _import_pil()
+
+    img = Image.open(args.input).convert("L")   # fuerza escala de grises
+    pixels = np.array(img, dtype=np.float64)    # [H × W]
+
+    # ── leer metadatos: tEXt del PNG, luego sidecar .al.json, luego args ─────
+    meta = dict(img.info)   # chunks tEXt (GIMP los elimina al exportar)
+
+    sidecar_path = Path(args.input).with_suffix(".al.json")
+    if "audio_lab_sr" not in meta and sidecar_path.exists():
+        with open(sidecar_path) as f:
+            sc = json.load(f)
+        # Convertir booleanos del sidecar al formato de tEXt (string)
+        for k, v in sc.items():
+            meta[k] = str(v) if not isinstance(v, bool) else ("1" if v else "0")
+        print(f"  [png-to-npz] Metadatos leídos desde sidecar: {sidecar_path.name}")
+
+    sr       = int(float(meta.get("audio_lab_sr",      args.sr)))
+    window   = int(float(meta.get("audio_lab_window",  args.window)))
+    hop      = float(meta.get("audio_lab_hop",         args.hop))
+    scale    = meta.get("audio_lab_scale",             "linear")
+    db_floor = float(meta.get("audio_lab_db_floor",    -80.0))
+    flip_y   = str(meta.get("audio_lab_flip_y",        "1")) in ("1", "True", "true")
+    mag_max  = float(meta.get("audio_lab_mag_max",     1.0))
+    # --mag-max explícito sobreescribe siempre (útil cuando no hay metadatos ni sidecar)
+    if hasattr(args, "mag_max") and args.mag_max is not None:
+        mag_max = args.mag_max
+        print(f"  [png-to-npz] mag_max forzado a {mag_max} (--mag-max)")
+
+    n_bins_meta   = int(float(meta.get("audio_lab_n_bins",   0)))
+    n_frames_meta = int(float(meta.get("audio_lab_n_frames", 0)))
+
+    has_meta = "audio_lab_sr" in meta
+    H, W     = pixels.shape   # altura × anchura de la imagen
+
+    if has_meta:
+        print(f"  [png-to-npz] Metadatos: sr={sr} window={window} hop={hop} "
+              f"escala={scale} mag_max={mag_max:.2f}")
+    else:
+        print(f"  [png-to-npz] Sin metadatos ni sidecar — usando defaults/args")
+
+    # ── determinar orientación (frames × bins) ────────────────────────────────
+    # npz-to-png escribe la imagen como [bins(H) × frames(W)].
+    # Algunos visores/editores la guardan transpuesta. Detectar usando el sidecar.
+    if n_bins_meta and n_frames_meta:
+        if H == n_frames_meta and W == n_bins_meta:
+            # PNG rotado 90°: transponer para restaurar [bins(H) × frames(W)]
+            pixels = pixels.T
+            H, W   = pixels.shape
+            print(f"  ⚠  PNG rotado detectado (H={H} coincide con n_frames={n_frames_meta}) "
+                  f"— transpuesto automáticamente")
+        # else: orientación correcta H=n_bins, W=n_frames
+
+    print(f"  [png-to-npz] {W}×{H}px → {W} frames × {H} bins")
+
+    # ── derivar window correcto desde n_bins (más robusto que el metadato) ───
+    # rfftfreq(window) da window//2 + 1 bins. Invertir: window = (n_bins-1)*2
+    window_from_bins = (H - 1) * 2
+    if window_from_bins != window:
+        print(f"  [png-to-npz] window ajustado: {window} → {window_from_bins} "
+              f"(derivado de n_bins={H})")
+        window = window_from_bins
+
+    # ── deshacer orientación Y ────────────────────────────────────────────────
+    if flip_y:
+        pixels = pixels[::-1, :]   # volver a bin-0 arriba (DC en fila 0)
+
+    # pixels es [bins(H) × frames(W)]; transponer a [frames × bins]
+    img_data = pixels.T / 255.0   # → [frames × bins] ∈ [0, 1]
+
+    # ── desescalar magnitudes ─────────────────────────────────────────────────
+    mag_max = float(meta.get("audio_lab_mag_max", 1.0))
+
+    if scale == "log":
+        # [0,1] → [db_floor, 0] dB → lineal → escala original
+        db    = img_data * (-db_floor) + db_floor
+        mags  = 10 ** (db / 20.0)
+        mags[pixels.T < 1] = 0.0    # píxeles negros (valor 0) → silencio exacto
+        mags *= mag_max              # restaurar escala absoluta original
+    else:
+        # lineal: [0,1] → escala original
+        mags = (img_data * mag_max).astype(np.float32)
+
+    mags = mags.astype(np.float32)
+
+    # ── fase cero ─────────────────────────────────────────────────────────────
+    phases = np.zeros_like(mags)
+
+    # ── frecuencias por bin ───────────────────────────────────────────────────
+    n_bins = mags.shape[1]
+    freqs  = np.fft.rfftfreq(window, 1.0 / sr)
+    if len(freqs) != n_bins:
+        # Caso genuinamente anómalo (resize manual del PNG que cambió n_bins)
+        freqs = np.linspace(0, sr / 2, n_bins)
+        print(f"  ⚠  n_bins imagen ({n_bins}) ≠ rfftfreq({window}) ({len(freqs)}): "
+              f"frecuencias interpoladas linealmente")
+
+    out_path = args.output or Path(args.input).stem + ".npz"
+    np.savez_compressed(out_path,
+                        magnitudes=mags,
+                        phases=phases,
+                        freqs=freqs.astype(np.float32),
+                        sample_rate=np.array(sr),
+                        window_size=np.array(window),
+                        hop_ratio=np.array(hop))
+
+    n_frames, n_bins_out = mags.shape
+    dur = n_frames * hop * window / sr
+    print(f"  ✓  NPZ → {out_path}  ({n_frames} frames × {n_bins_out} bins, ~{dur:.2f}s)")
+    print(f"     Fase: cero (reconstrucción por magnitudes)")
 
 
 def cmd_synth(args):
@@ -1107,8 +1586,86 @@ def main():
     p.add_argument("input",  help="Fichero .npz (STFT) o .json (espectro FFT/DFT)")
     p.add_argument("--duration", type=float, default=2.0,
                    help="Duración en segundos (solo para JSON, default: 2.0)")
+    p.add_argument("--normalize", action="store_true",
+                   help="Normalizar el WAV de salida a 0.85 peak (automático para NPZ con fase cero)")
+    p.add_argument("--gl-iters", type=int, default=32,
+                   help="Iteraciones de Griffin-Lim para NPZ con fase cero (default: 32)")
     p.add_argument("--output", "-o", default=None, help="WAV de salida")
     p.set_defaults(func=cmd_reconstruct)
+
+    # ── npz-to-png ───────────────────────────────────────────────────────────
+    p = sub.add_parser("npz-to-png",
+                       help="Espectrograma NPZ → PNG escala de grises")
+    p.add_argument("input", help="Fichero .npz (de spectrogram o edit-spectrum)")
+    p.add_argument("--log", action="store_true",
+                   help="Escala logarítmica en dB en vez de lineal (más perceptivo)")
+    p.add_argument("--db-floor", type=float, default=-80.0,
+                   help="Piso en dB para escala log (default: -80)")
+    p.add_argument("--no-flip-y", action="store_true",
+                   help="No invertir eje Y (bin 0=DC queda arriba; por defecto va abajo)")
+    p.add_argument("--output", "-o", default=None, help="Fichero PNG de salida")
+    p.set_defaults(func=cmd_npz_to_png)
+
+    # ── png-to-npz ───────────────────────────────────────────────────────────
+    p = sub.add_parser("png-to-npz",
+                       help="PNG escala de grises → espectrograma NPZ (fase cero)")
+    p.add_argument("input", help="Fichero PNG (idealmente generado con npz-to-png)")
+    p.add_argument("--sr", type=int, default=SAMPLE_RATE,
+                   help=f"Sample rate si el PNG no tiene metadatos (default: {SAMPLE_RATE})")
+    p.add_argument("--window", type=int, default=2048,
+                   help="Tamaño de ventana STFT si el PNG no tiene metadatos (default: 2048)")
+    p.add_argument("--hop", type=float, default=0.25,
+                   help="Hop ratio si el PNG no tiene metadatos (default: 0.25)")
+    p.add_argument("--mag-max", type=float, default=None,
+                   help="Factor de escala de magnitudes (recupera nivel original). "
+                        "Valor típico: 50-200. Si no se pasa, reconstruct normaliza automáticamente.")
+    p.add_argument("--output", "-o", default=None, help="Fichero NPZ de salida")
+    p.set_defaults(func=cmd_png_to_npz)
+
+    # ── edit-spectrum ─────────────────────────────────────────────────────────
+    p = sub.add_parser("edit-spectrum",
+                       help="Edita un NPZ de espectrograma → NPZ [+ WAV]",
+                       formatter_class=argparse.RawDescriptionHelpFormatter,
+                       description=
+                       "Operaciones (se aplican en orden):\n"
+                       "  highpass/lowpass  filtro frecuencial\n"
+                       "  isolate           dejar solo bandas concretas\n"
+                       "  suppress          atenuar bandas concretas\n"
+                       "  gain              ganancia global en dB\n"
+                       "  denoise           zeroing por umbral de percentil\n"
+                       "  timestretch       estirar tiempo sin cambiar pitch\n"
+                       "  pitchshift        transponer sin cambiar duración\n"
+                       "  reverse           invertir en el tiempo")
+    p.add_argument("input", help="Fichero .npz de entrada (de spectrogram)")
+    p.add_argument("--highpass", type=float, default=None,
+                   help="Frecuencia de corte paso-alto en Hz (elimina < valor)")
+    p.add_argument("--lowpass", type=float, default=None,
+                   help="Frecuencia de corte paso-bajo en Hz (elimina > valor)")
+    p.add_argument("--isolate", nargs="+", type=float, default=None,
+                   help="Mantener solo estas frecuencias Hz (ej: 261.6 329.6 392)")
+    p.add_argument("--isolate-margin", type=float, default=30.0,
+                   help="Margen en Hz a cada lado de --isolate (default: 30)")
+    p.add_argument("--suppress", nargs="+", type=float, default=None,
+                   help="Atenuar estas frecuencias Hz (ej: 50 100 150)")
+    p.add_argument("--suppress-margin", type=float, default=20.0,
+                   help="Margen en Hz a cada lado de --suppress (default: 20)")
+    p.add_argument("--suppress-gain", type=float, default=0.0,
+                   help="Ganancia residual en zona suprimida ∈ [0,1] (default: 0)")
+    p.add_argument("--gain", type=float, default=None,
+                   help="Ganancia global en dB aplicada a magnitudes (ej: +6, -3)")
+    p.add_argument("--denoise", type=float, default=None,
+                   help="Zeroing de bins bajo el percentil N de magnitud (ej: 60)")
+    p.add_argument("--timestretch", type=float, default=None,
+                   help="Factor de estiramiento temporal >1=más lento (ej: 1.5, 0.75)")
+    p.add_argument("--pitchshift", type=int, default=None,
+                   help="Transposición en semitones enteros (ej: +3, -5)")
+    p.add_argument("--reverse", action="store_true",
+                   help="Invertir el espectrograma en el tiempo")
+    p.add_argument("--output", "-o", default=None,
+                   help="NPZ de salida (default: <input>_edited.npz)")
+    p.add_argument("--wav", default=None,
+                   help="Si se especifica, reconstruye también un WAV con este nombre")
+    p.set_defaults(func=cmd_edit_spectrum)
 
     # ── synth ─────────────────────────────────────────────────────────────────
     p = sub.add_parser("synth", help="Síntesis aditiva de notas → WAV")
