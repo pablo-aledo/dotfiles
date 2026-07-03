@@ -12,6 +12,8 @@ r"""
 ║    autotrain    Bucle autónomo: genera → entrena → evalúa → itera            ║
 ║    eval         Evalúa MIDI predicho vs referencia (F1, precisión, recall)   ║
 ║    inspect      Diagnóstico del modelo y del corpus                          ║
+║    melody       NPZ/WAV → MIDI monofónico  (pico espectral, SIN ML)         ║
+║    harmony      NPZ/WAV → MIDI de n voces  (picos espectrales, SIN ML)      ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  ARQUITECTURA                                                                ║
 ║    Input  : espectrograma STFT  [frames × bins]  (NPZ de audio_lab.py)      ║
@@ -45,6 +47,13 @@ r"""
 ║    Nivel 5: frases complejas, humanización completa, audio real              ║
 ║    Sube de nivel cuando F1 ≥ --curriculum-threshold (default: 0.80)         ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
+║  MODOS SIN ML  (melody / harmony)                                           ║
+║    No usan modelo ni entrenamiento: en cada frame localizan el/los bin(s)   ║
+║    de mayor intensidad del espectrograma dentro del rango de piano y        ║
+║    sostienen la(s) nota(s) resultante(s) mientras sigan siendo dominantes.   ║
+║    melody   → 1 bin dominante  → línea monofónica                           ║
+║    harmony  → n bins dominantes (--notes, típ. 3=tríada / 4=acorde 4 notas) ║
+╠══════════════════════════════════════════════════════════════════════════════╣
 ║  DEPENDENCIAS  numpy  torch  mido  soundfile  Pillow                        ║
 ║                audio_lab.py  (en el mismo directorio o en PATH)             ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
@@ -75,6 +84,12 @@ r"""
 ║                                                                              ║
 ║    # Evaluar transcripción                                                   ║
 ║    python spectro_midi.py eval --predicted out.mid --reference orig.mid     ║
+║                                                                              ║
+║    # Melodía monofónica sin ML (pico espectral dominante)                    ║
+║    python spectro_midi.py melody audio.npz --output melodia.mid            ║
+║                                                                              ║
+║    # Acompañamiento en tríadas sin ML (3 bins dominantes por frame)          ║
+║    python spectro_midi.py harmony audio.wav --notes 3 -o acordes.mid       ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -803,6 +818,170 @@ def activations_to_midi(proba: np.ndarray,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# PEAK PICKING SIN ML  (modos melody / harmony)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Heurística directa sobre el espectrograma, sin modelo entrenado ni corpus:
+# en cada frame se localizan los n bins de mayor intensidad dentro del rango
+# de piano, se convierten a nota MIDI y se sostienen mientras sigan siendo
+# los bins dominantes de ese frame. melody = harmony con n=1.
+
+def _bin_to_freq(bin_idx: np.ndarray, n_bins: int, sr: int = SR) -> np.ndarray:
+    """Índice de bin FFT → frecuencia en Hz.
+    Asume ventana real de tamaño 2*(n_bins-1) (coherente con N_BINS = window//2+1)."""
+    window = 2 * (n_bins - 1)
+    return bin_idx.astype(np.float64) * sr / window
+
+def _freq_to_midi(freq: np.ndarray) -> np.ndarray:
+    """Frecuencia en Hz → número de nota MIDI (float; el redondeo lo hace el llamador)."""
+    freq = np.maximum(freq, 1e-6)
+    return 69.0 + 12.0 * np.log2(freq / 440.0)
+
+def _note_to_bin(note: int, n_bins: int, sr: int = SR) -> int:
+    """Nota MIDI → índice de bin FFT más cercano (inversa de _bin_to_freq)."""
+    window = 2 * (n_bins - 1)
+    freq   = 440.0 * (2.0 ** ((note - 69) / 12.0))
+    return int(np.clip(round(freq * window / sr), 0, n_bins - 1))
+
+def _mode_filter(seq: np.ndarray, window: int) -> np.ndarray:
+    """Filtro de moda de ventana deslizante: suaviza saltos de 1-2 frames
+    (bin flickering) sin necesitar dependencias extra (solo numpy)."""
+    if window <= 1:
+        return seq
+    n     = len(seq)
+    half  = window // 2
+    out   = seq.copy()
+    for i in range(n):
+        lo = max(0, i - half)
+        hi = min(n, i + half + 1)
+        vals, counts = np.unique(seq[lo:hi], return_counts=True)
+        out[i] = vals[np.argmax(counts)]
+    return out
+
+def _peak_track(mags: np.ndarray, n_voices: int, note_min: int, note_max: int,
+                sr: int = SR, silence_thresh: float = 0.0,
+                smooth_frames: int = 1) -> np.ndarray:
+    """
+    Para cada frame localiza las `n_voices` notas MIDI de mayor intensidad
+    (colapsando bins adyacentes que caen en la misma nota) y devuelve una
+    matriz [T × n_voices] de números de nota MIDI (-1 = silencio / sin
+    suficientes picos). La voz 0 es siempre la más intensa de ese frame, la
+    voz 1 la segunda, etc. — ordenadas por intensidad, no por altura.
+
+    melody  → n_voices=1
+    harmony → n_voices=n  (típicamente 3 = tríada, 4 = acorde de 4 notas)
+    """
+    T, n_bins = mags.shape
+    freqs  = _bin_to_freq(np.arange(n_bins), n_bins, sr)
+    midi_r = np.round(_freq_to_midi(freqs)).astype(int)
+
+    # Bins cuya nota cae dentro del rango de piano considerado (evita DC / armónicos fuera de rango)
+    valid_bins = np.where((midi_r >= note_min) & (midi_r <= note_max))[0]
+    if len(valid_bins) == 0:
+        raise ValueError("Rango de notas vacío: revisa --note-min/--note-max")
+
+    peak_global = mags.max() + 1e-12
+    out = np.full((T, n_voices), -1, dtype=int)
+
+    for t in range(T):
+        frame = mags[t, valid_bins]
+        if frame.max() < silence_thresh * peak_global:
+            continue   # frame por debajo del umbral de silencio: todas las voces a -1
+
+        order = valid_bins[np.argsort(frame)[::-1]]   # bins válidos, intensidad descendente
+
+        # Colapsar bins adyacentes que caen en la misma nota MIDI: nos quedamos
+        # con el más intenso de cada nota (el orden ya viene descendente).
+        seen_notes: Dict[int, float] = {}
+        for b in order:
+            note = int(midi_r[b])
+            if note not in seen_notes:
+                seen_notes[note] = float(mags[t, b])
+
+        top_notes = sorted(seen_notes.items(), key=lambda kv: kv[1], reverse=True)
+        for v in range(min(n_voices, len(top_notes))):
+            out[t, v] = top_notes[v][0]
+
+    if smooth_frames > 1:
+        for v in range(n_voices):
+            out[:, v] = _mode_filter(out[:, v], smooth_frames)
+
+    return out
+
+def _voice_track_to_events(track: np.ndarray, min_frames: int) -> List[Tuple[int, int, int]]:
+    """[T] de notas MIDI (-1=silencio) → lista de eventos (start_frame, end_frame, note),
+    fusionando frames consecutivos con la misma nota y descartando los más
+    cortos que min_frames."""
+    events: List[Tuple[int, int, int]] = []
+    T = len(track)
+    t = 0
+    while t < T:
+        note = track[t]
+        if note < 0:
+            t += 1
+            continue
+        start = t
+        while t < T and track[t] == note:
+            t += 1
+        if t - start >= min_frames:
+            events.append((start, t, int(note)))
+    return events
+
+def peaks_to_midi(mags: np.ndarray, n_voices: int, note_min: int = MIDI_MIN,
+                  note_max: int = MIDI_MAX, sr: int = SR,
+                  hop_s: float = STFT_WINDOW * STFT_HOP / SR,
+                  min_frames: int = 2, silence_thresh: float = 0.0,
+                  smooth_frames: int = 1,
+                  velocity: Optional[int] = None) -> "mido.MidiFile":
+    """
+    Convierte un espectrograma [T × N_BINS] en un MidiFile mediante selección
+    directa de picos espectrales (sin ML, sin modelo entrenado).
+    n_voices=1 → melody (monofónico) · n_voices>1 → harmony (acorde de n notas).
+
+    velocity: si es None, se calcula automáticamente a partir de la intensidad
+    media del bin durante la nota (proporcional al pico global, entre 40-110);
+    si se indica un entero, se usa como velocidad fija para todas las notas.
+    """
+    mido = _import_mido()
+    n_bins = mags.shape[1]
+    voice_tracks = _peak_track(mags, n_voices, note_min, note_max, sr,
+                               silence_thresh, smooth_frames)
+    peak_global = mags.max() + 1e-12
+
+    tpb       = 480
+    hop_ticks = int(hop_s * 2 * tpb)
+    mid       = mido.MidiFile(ticks_per_beat=tpb)
+    track     = mido.MidiTrack()
+    mid.tracks.append(track)
+    track.append(mido.MetaMessage("set_tempo", tempo=500000, time=0))
+
+    events = []
+    for v in range(n_voices):
+        for start, end, note in _voice_track_to_events(voice_tracks[:, v], min_frames):
+            if velocity is not None:
+                vel = int(np.clip(velocity, 1, 127))
+            else:
+                bin_idx = _note_to_bin(note, n_bins, sr)
+                mag_avg = mags[start:end, bin_idx].mean()
+                vel     = int(np.clip(mag_avg / peak_global * 127, 40, 110))
+            events.append((start * hop_ticks, "on",  note, vel))
+            events.append((end   * hop_ticks, "off", note, 0))
+
+    # Los "off" van antes que los "on" en el mismo tick para no dejar notas colgadas
+    events.sort(key=lambda x: (x[0], 0 if x[1] == "off" else 1))
+    prev_tick = 0
+    for tick, etype, note, vel in events:
+        delta = max(0, tick - prev_tick)
+        if etype == "on":
+            track.append(mido.Message("note_on",  note=note, velocity=vel, time=delta))
+        else:
+            track.append(mido.Message("note_off", note=note, velocity=0,  time=delta))
+        prev_tick = tick
+
+    return mid
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # EVALUACIÓN
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1214,6 +1393,62 @@ def cmd_transcribe(args):
         os.unlink(npz_path)
 
 
+def _load_spectrogram(src: Path, window: int, hop: float) -> np.ndarray:
+    """Carga un espectrograma [T × N_BINS] desde NPZ o desde WAV/FLAC/OGG
+    (convirtiendo vía audio_lab.py a un NPZ temporal)."""
+    if src.suffix.lower() in (".wav", ".flac", ".ogg"):
+        with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as f:
+            npz_tmp = f.name
+        try:
+            ok = wav_to_npz(src, Path(npz_tmp), window, hop)
+            if not ok:
+                sys.exit("✗  Error convirtiendo WAV → NPZ")
+            data = np.load(npz_tmp)
+            return data["magnitudes"].astype(np.float32)
+        finally:
+            if os.path.exists(npz_tmp):
+                os.unlink(npz_tmp)
+    data = np.load(str(src))
+    return data["magnitudes"].astype(np.float32)
+
+
+def _cmd_peak_track(args, n_voices: int, mode_name: str):
+    """Implementación común de los modos melody/harmony: pico(s) espectral(es)
+    dominante(s) por frame → nota(s) MIDI. No usa machine learning."""
+    src  = Path(args.input)
+    mags = _load_spectrogram(src, args.window, args.hop)
+
+    hop_s = args.window * args.hop / SR
+    mid = peaks_to_midi(
+        mags, n_voices=n_voices,
+        note_min=args.note_min, note_max=args.note_max, sr=SR, hop_s=hop_s,
+        min_frames=args.min_frames, silence_thresh=args.silence_thresh,
+        smooth_frames=args.smooth, velocity=args.velocity,
+    )
+
+    out_path = args.output or f"{src.stem}_{mode_name}.mid"
+    mid.save(out_path)
+
+    n_notes = sum(1 for t in mid.tracks for m in t if m.type == "note_on"
+                  and m.velocity > 0)
+    voces = "1 voz (melodía)" if n_voices == 1 else f"{n_voices} voces (acorde)"
+    print(f"  ✓  MIDI → {out_path}  ({n_notes} notas, {voces}, "
+          f"rango={args.note_min}-{args.note_max}, sin ML)")
+
+
+def cmd_melody(args):
+    """Modo melody: en cada frame, el bin de mayor intensidad → 1 nota
+    sostenida hasta que el bin dominante cambia. Sin machine learning."""
+    _cmd_peak_track(args, n_voices=1, mode_name="melody")
+
+
+def cmd_harmony(args):
+    """Modo harmony: igual que melody pero con los n bins de mayor
+    intensidad por frame (--notes), típicamente 3 = tríada o 4 = acorde de
+    cuatro notas. Sin machine learning."""
+    _cmd_peak_track(args, n_voices=args.notes, mode_name="harmony")
+
+
 def cmd_autotrain(args):
     """Bucle autónomo: genera datos → entrena → evalúa → itera."""
     model_dir  = Path(args.model_dir)
@@ -1516,6 +1751,55 @@ def main():
                    help="Peso del prior de frase ∈ [0,1] (default: 0.3)")
     p.add_argument("--cpu",  action="store_true")
     p.set_defaults(func=cmd_transcribe)
+
+    # ── melody (sin ML) ──────────────────────────────────────────────────────
+    p = sub.add_parser("melody",
+                       help="NPZ/WAV → MIDI monofónico (pico espectral dominante, sin ML)")
+    p.add_argument("input", help="Fichero NPZ o WAV/FLAC/OGG")
+    p.add_argument("--output", "-o", default=None)
+    p.add_argument("--note-min", type=int, default=MIDI_MIN,
+                   help=f"Nota MIDI mínima a considerar (default: {MIDI_MIN}, A0)")
+    p.add_argument("--note-max", type=int, default=MIDI_MAX,
+                   help=f"Nota MIDI máxima a considerar (default: {MIDI_MAX}, C8)")
+    p.add_argument("--min-frames", type=int, default=2,
+                   help="Duración mínima de nota en frames (default: 2)")
+    p.add_argument("--smooth", type=int, default=1,
+                   help="Ventana del filtro de moda para suavizar saltos de bin "
+                        "(default: 1 = sin suavizado)")
+    p.add_argument("--silence-thresh", type=float, default=0.0,
+                   help="Umbral de silencio relativo al pico global ∈ [0,1] "
+                        "(default: 0 = desactivado)")
+    p.add_argument("--velocity", type=int, default=None,
+                   help="Velocidad MIDI fija (default: auto, proporcional a la intensidad)")
+    p.add_argument("--window", type=int,   default=STFT_WINDOW)
+    p.add_argument("--hop",    type=float, default=STFT_HOP)
+    p.set_defaults(func=cmd_melody)
+
+    # ── harmony (sin ML) ─────────────────────────────────────────────────────
+    p = sub.add_parser("harmony",
+                       help="NPZ/WAV → MIDI de n voces (n picos espectrales dominantes, sin ML)")
+    p.add_argument("input", help="Fichero NPZ o WAV/FLAC/OGG")
+    p.add_argument("--notes", type=int, default=3,
+                   help="Número de voces/notas simultáneas: 3=tríada, 4=acorde "
+                        "de 4 notas... (default: 3)")
+    p.add_argument("--output", "-o", default=None)
+    p.add_argument("--note-min", type=int, default=MIDI_MIN,
+                   help=f"Nota MIDI mínima a considerar (default: {MIDI_MIN}, A0)")
+    p.add_argument("--note-max", type=int, default=MIDI_MAX,
+                   help=f"Nota MIDI máxima a considerar (default: {MIDI_MAX}, C8)")
+    p.add_argument("--min-frames", type=int, default=2,
+                   help="Duración mínima de nota en frames (default: 2)")
+    p.add_argument("--smooth", type=int, default=1,
+                   help="Ventana del filtro de moda para suavizar saltos de bin "
+                        "(default: 1 = sin suavizado)")
+    p.add_argument("--silence-thresh", type=float, default=0.0,
+                   help="Umbral de silencio relativo al pico global ∈ [0,1] "
+                        "(default: 0 = desactivado)")
+    p.add_argument("--velocity", type=int, default=None,
+                   help="Velocidad MIDI fija (default: auto, proporcional a la intensidad)")
+    p.add_argument("--window", type=int,   default=STFT_WINDOW)
+    p.add_argument("--hop",    type=float, default=STFT_HOP)
+    p.set_defaults(func=cmd_harmony)
 
     # ── autotrain ─────────────────────────────────────────────────────────────
     p = sub.add_parser("autotrain", help="Bucle autónomo genera→entrena→evalúa")
