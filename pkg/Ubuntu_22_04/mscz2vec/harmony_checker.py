@@ -80,23 +80,50 @@ def _parse_key(s: str) -> Tuple[int, str]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _extract_chords(mid, tc: TimeContext, grid_beats: float) -> List[List[int]]:
-    """Devuelve una lista de acordes; cada acorde es [S,A,T,B] (altura descendente)."""
+    """Devuelve una lista de acordes; cada acorde es [S,A,T,B] (altura descendente).
+
+    IMPORTANTE: si hay hasta 4 pistas con notas, cada pista se fija como UNA
+    voz (por su altura media, S=más aguda ... B=más grave) y esa identidad se
+    mantiene acorde a acorde. Reordenar por altura en cada instante (como
+    hacía la v1.0) hace indetectable el cruce de voces, porque la propia
+    ordenación oculta el cruce; aquí el cruce se ve como B[i] > A[i] con las
+    pistas ya fijadas. Con una sola pista de acordes (sin identidad de voz
+    posible) se cae al ordenamiento registral, que es lo único disponible.
+    """
     note_tracks = [t for t in mid.tracks if extract_notes(t)]
     step = max(1, int(round(grid_beats * tc.tpb)))
     last = max((n.end for t in note_tracks for n in extract_notes(t)), default=0)
 
     chords = []
-    t = 0
-    while t < last:
-        sounding = []
-        for trk in note_tracks:
-            for n in extract_notes(trk):
-                if n.start <= t < n.end:
-                    sounding.append(n.pitch)
-        if sounding:
-            uniq = sorted(set(sounding), reverse=True)[:4]
-            chords.append(uniq)
-        t += step
+    if 2 <= len(note_tracks) <= 4:
+        # asigna cada pista a una voz fija por su altura media (S=más aguda)
+        by_avg = sorted(note_tracks,
+                        key=lambda tr: -sum(n.pitch for n in extract_notes(tr))
+                        / len(extract_notes(tr)))
+        t = 0
+        while t < last:
+            chord = []
+            for trk in by_avg:
+                pitches = [n.pitch for n in extract_notes(trk)
+                          if n.start <= t < n.end]
+                chord.append(max(pitches) if pitches else None)
+            if any(p is not None for p in chord):
+                chords.append(chord)
+            t += step
+    else:
+        # una sola pista de acordes (o >4): no hay identidad de voz real,
+        # así que solo cabe ordenar por registro (el cruce no es detectable)
+        t = 0
+        while t < last:
+            sounding = []
+            for trk in note_tracks:
+                for n in extract_notes(trk):
+                    if n.start <= t < n.end:
+                        sounding.append(n.pitch)
+            if sounding:
+                uniq = sorted(set(sounding), reverse=True)[:4]
+                chords.append(uniq)
+            t += step
     # colapsa acordes repetidos consecutivos (misma verticalidad)
     collapsed = []
     for ch in chords:
@@ -124,6 +151,8 @@ def check_pair(prev: List[int], cur: List[int], idx: int) -> List[dict]:
                 continue
             m1a, m1b = prev[i], prev[j]
             m2a, m2b = cur[i], cur[j]
+            if None in (m1a, m1b, m2a, m2b):
+                continue                            # voz en silencio: no comparable
             ic1 = _interval_class(m1a, m1b)
             ic2 = _interval_class(m2a, m2b)
             moved_i = m2a != m1a
@@ -150,6 +179,8 @@ def check_pair(prev: List[int], cur: List[int], idx: int) -> List[dict]:
                         "movimiento contrario."))
     # cruce y solapamiento
     for i in range(nv - 1):
+        if cur[i] is None or cur[i + 1] is None:
+            continue
         if cur[i] < cur[i + 1]:
             issues.append(dict(
                 chord=idx, severity="ERROR", type="cruce",
@@ -157,21 +188,22 @@ def check_pair(prev: List[int], cur: List[int], idx: int) -> List[dict]:
                 msg=f"cruce de voces: {VOICES[i]} por debajo de {VOICES[i+1]}",
                 why="las voces deben mantener su orden S≥A≥T≥B para que cada línea "
                     "sea audible por separado."))
-        if i < len(prev) and cur[i] < prev[i + 1] - 0 and prev[i + 1] > cur[i]:
+        if i < len(prev) and prev[i + 1] is not None and cur[i] < prev[i + 1]:
             # solapamiento: la voz i baja por debajo de donde estaba la i+1
-            if cur[i] < prev[i + 1]:
-                issues.append(dict(
-                    chord=idx, severity="AVISO", type="solapamiento",
-                    voices=f"{VOICES[i]}-{VOICES[i+1]}",
-                    msg=f"solapamiento: {VOICES[i]} invade el registro previo de {VOICES[i+1]}",
-                    why="una voz no debería moverse a una altura que la voz vecina "
-                        "acababa de ocupar; confunde la percepción de las líneas."))
+            issues.append(dict(
+                chord=idx, severity="AVISO", type="solapamiento",
+                voices=f"{VOICES[i]}-{VOICES[i+1]}",
+                msg=f"solapamiento: {VOICES[i]} invade el registro previo de {VOICES[i+1]}",
+                why="una voz no debería moverse a una altura que la voz vecina "
+                    "acababa de ocupar; confunde la percepción de las líneas."))
     return issues
 
 
 def check_spacing(chord: List[int], idx: int) -> List[dict]:
     issues = []
     for i in range(min(2, len(chord) - 1)):        # S-A y A-T
+        if chord[i] is None or chord[i + 1] is None:
+            continue
         if chord[i] - chord[i + 1] > 12:
             issues.append(dict(
                 chord=idx, severity="AVISO", type="espaciado",
@@ -185,6 +217,8 @@ def check_spacing(chord: List[int], idx: int) -> List[dict]:
 def check_leaps(prev: List[int], cur: List[int], idx: int) -> List[dict]:
     issues = []
     for i in range(min(len(prev), len(cur))):
+        if prev[i] is None or cur[i] is None:
+            continue
         leap = abs(cur[i] - prev[i])
         if leap > 9:
             issues.append(dict(
@@ -202,7 +236,7 @@ def check_leading_tone(prev: List[int], cur: List[int], idx: int,
     issues = []
     lead_pc = (tonic_pc - 1) % 12
     for i in (0, len(cur) - 1):                     # soprano y bajo
-        if i >= len(prev):
+        if i >= len(prev) or prev[i] is None or cur[i] is None:
             continue
         if prev[i] % 12 == lead_pc:
             resolves = (cur[i] - prev[i]) == 1 and cur[i] % 12 == tonic_pc
@@ -233,7 +267,7 @@ def check_harmony(path: str, key: Optional[str] = None,
     tonic_pc, mode = _parse_key(key) if key else (None, None)
 
     issues: List[dict] = []
-    four_voice = sum(1 for ch in chords if len(ch) >= 4)
+    four_voice = sum(1 for ch in chords if len(ch) >= 4 and all(p is not None for p in ch))
     for k in range(len(chords)):
         issues += check_spacing(chords[k], k + 1)
         if k > 0:
@@ -249,7 +283,7 @@ def check_harmony(path: str, key: Optional[str] = None,
         "file": path, "n_chords": len(chords),
         "voices_detected": max((len(ch) for ch in chords), default=0),
         "four_voice_chords": four_voice,
-        "chords": [[pitch_name(p) for p in ch] for ch in chords],
+        "chords": [[(pitch_name(p) if p is not None else "-") for p in ch] for ch in chords],
         "errors": n_err, "warnings": n_warn,
         "issues": issues,
     }

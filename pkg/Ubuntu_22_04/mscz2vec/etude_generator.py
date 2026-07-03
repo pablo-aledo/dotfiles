@@ -76,9 +76,64 @@ SCALES = {
     "phrygian": [0, 1, 3, 5, 7, 8, 10],
     "lydian": [0, 2, 4, 6, 7, 9, 11],
 }
-# digitación estándar de 7 notas (escala con tónica en tecla blanca)
-FING_RH = [1, 2, 3, 1, 2, 3, 4]
-FING_LH = [5, 4, 3, 2, 1, 3, 2]
+_BLACK_PC = {1, 3, 6, 8, 10}
+
+
+def _is_black(pc: int) -> bool:
+    return pc % 12 in _BLACK_PC
+
+
+def _octave_fingering(deg_pcs: List[int], hand: str) -> List[int]:
+    """Digitación de una escala de 7 grados (pitch-classes) para una mano.
+
+    Regla clásica general (no memoriza una tabla de 12 tonalidades, que
+    solo cubriría escalas mayores): el pulgar (1) y el meñique (5) NUNCA
+    se colocan sobre una tecla negra; los dedos 2/3/4 sí pueden. La mano
+    se divide en dos grupos de dedos consecutivos con un paso de pulgar
+    entre ellos; el punto de paso se desplaza para que el pulgar caiga
+    siempre en tecla blanca. Reproduce exactamente las tablas estándar
+    de Do mayor (1 2 3 1 2 3 4) y Fa mayor (1 2 3 4 1 2 3), y generaliza
+    correctamente a cualquier tonalidad o modo, incluida una tónica en
+    tecla negra (p.ej. Solb mayor: 2 3 4 1 2 3 4).
+    """
+    n = len(deg_pcs)
+    if hand == "right":
+        start = 2 if _is_black(deg_pcs[0]) else 1
+        group1_len = 3
+        for cand in (3, 4, 2):
+            boundary = cand
+            if boundary >= n or not _is_black(deg_pcs[boundary]):
+                group1_len = min(cand, n)
+                break
+        fingers = [start + i for i in range(group1_len)]
+        group2_len = n - group1_len
+        fingers += [1 + i for i in range(group2_len)]
+    else:
+        start = 4 if _is_black(deg_pcs[0]) else 5
+        group1_len = 4
+        for cand in (4, 3, 5):
+            boundary = cand
+            if boundary >= n or not _is_black(deg_pcs[boundary]):
+                group1_len = min(cand, n)
+                break
+        fingers = [start - i for i in range(group1_len)]
+        group2_len = n - group1_len
+        if group2_len == 3:
+            fingers += [1, 3, 2]                    # convención LH verificada (Do/Fa mayor)
+        else:
+            fingers += [1 + i for i in range(group2_len)]
+    return fingers
+
+
+def _scale_fingering(tonic_pc: int, mode: str, octaves: int, hand: str) -> List[int]:
+    """Digitación completa (ida y vuelta) para generate_etude tipo 'scale'."""
+    degs = SCALES[mode]
+    deg_pcs = [(tonic_pc + d) % 12 for d in degs]
+    one_octave = _octave_fingering(deg_pcs, hand)
+    up = list(one_octave) * octaves
+    up.append(one_octave[0])                        # tónica superior final
+    down = up[::-1][1:]
+    return up + down
 
 
 def _c(k):
@@ -144,14 +199,6 @@ def _scale_pitches(tonic_pc, mode, octaves, base_oct):
         for d in degs:
             up.append(root + 12 * o + d)
     up.append(root + 12 * octaves)                 # tónica superior
-    down = up[::-1][1:]
-    return up + down
-
-
-def _scale_fingering(n_up, hand):
-    base = FING_RH if hand == "right" else FING_LH
-    up = [base[i % 7] for i in range(n_up)]
-    up[-1] = base[0] if hand == "right" else base[0]
     down = up[::-1][1:]
     return up + down
 
@@ -263,8 +310,8 @@ def generate_etude(etype: str, key: str = "C", mode: str = "major",
         if etype == "scale":
             rh_p = _scale_pitches(tonic_pc, mode, octaves, start_octave)
             n_up = octaves * 7 + 1
-            fingering["right"] = _scale_fingering(n_up, "right")
-            fingering["left"] = _scale_fingering(n_up, "left")
+            fingering["right"] = _scale_fingering(tonic_pc, mode, octaves, "right")
+            fingering["left"] = _scale_fingering(tonic_pc, mode, octaves, "left")
         elif etype == "arpeggio":
             rh_p = _arpeggio_pitches(tonic_pc, mode, octaves, start_octave)
             fingering["right"] = [[1, 2, 3, 5][i % 4] for i in range(len(rh_p))]
