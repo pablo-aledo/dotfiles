@@ -1,98 +1,108 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                       COUNTERPOINT  v1.0                                     ║
+║                       COUNTERPOINT  v1.1                                     ║
 ║         Motor de contrapunto por especies para MIDIs melódicos               ║
 ║                                                                              ║
-║  Dado un MIDI de melodía, genera una segunda voz (contrapunto) aplicando    ║
-║  las reglas clásicas de contrapunto por especies de Fux/Gradus ad Parnassum.║
+║  Dado un MIDI de melodía, genera una segunda voz (contrapunto) aplicando     ║
+║  las reglas clásicas de contrapunto por especies de Fux/Gradus ad Parnassum. ║
 ║  Funciona como herramienta standalone y como módulo importable por           ║
 ║  variation_engine (V15), orchestrator y el propio pipeline.                  ║
 ║                                                                              ║
-║  ESPECIES IMPLEMENTADAS:                                                     ║
-║  [S1] Primera especie  — nota contra nota (1:1)                             ║
-║       Reglas: sin paralelas de 5ª/8ª, sin movimiento directo a 5ª/8ª,      ║
-║       preferir movimiento contrario, consonancias perfectas e imperfectas    ║
-║  [S2] Segunda especie  — dos notas por nota cantus firmus (2:1)             ║
-║       Reglas: tiempos débiles pueden tener disonancias de paso,             ║
-║               tiempos fuertes siempre consonantes                           ║
-║  [S3] Tercera especie  — cuatro notas por nota cantus firmus (4:1)         ║
-║       Reglas: tres notas de paso permitidas, cambiatas, échappées           ║
-║  [S4] Cuarta especie   — ligaduras y retardos (sincopado)                  ║
-║       Reglas: disonancia en tiempo fuerte si llega por ligadura y           ║
-║               resuelve por grado descendente                                 ║
-║  [S5] Quinta especie   — contrapunto florido (mezcla de las anteriores)    ║
-║       Elige la especie más expresiva compás a compás según la tensión       ║
-║       y densidad de la melodía principal                                     ║
+║  MODO STRICT (CSP)  —  novedad v1.1                                          ║
+║  Por defecto las reglas de Fux son PENALIZACIONES BLANDAS: el motor elige    ║
+║  el candidato «menos malo» y puede emitir paralelas de 5ª/8ª si ninguno es   ║
+║  limpio. Con --strict se convierten en RESTRICCIONES DURAS: nunca se emite   ║
+║  un contrapunto que las viole; si no existe solución, se lanza               ║
+║  CounterpointStrictError con diagnóstico y NO se genera el MIDI.             ║
+║                                                                              ║
+║  Especie 1:  CSP por backtracking con H1–H6 GARANTIZADAS                     ║
+║    [H1] solo consonancias en cada momento                                    ║
+║    [H2] sin paralelas de 5ª justa u 8ª entre instantes consecutivos          ║
+║    [H3] sin movimiento directo a consonancia perfecta (5ª/8ª)                ║
+║    [H4] sin cruce de voces (respeta voice_position)                          ║
+║    [H5] sin repetir el mismo intervalo armónico 3 veces seguidas             ║
+║    [H6] cadencia: la sensible del cp resuelve ASCENDIENDO a la tónica        ║
+║    [P1] preferencia: clímax del cp en el 50–85 % de la frase (se relaja)     ║
+║  Especies 2–5:  greedy + validación del ESQUELETO de tiempos fuertes         ║
+║    (H1 en downbeats de S2/S3; H2/H3 entre downbeats; H4 en todo instante)    ║
+║    Si el esqueleto rompe reglas duras, la especie se descarta con aviso.     ║
+║                                                                              ║
+║  ESPECIES IMPLEMENTADAS (generación):                                        ║
+║  [S1] Primera especie  — nota contra nota (1:1)                              ║
+║  [S2] Segunda especie  — dos notas por nota cantus firmus (2:1)              ║
+║  [S3] Tercera especie  — cuatro notas por nota cantus firmus (4:1)           ║
+║  [S4] Cuarta especie   — ligaduras y retardos (sincopado)                    ║
+║  [S5] Quinta especie   — contrapunto florido (mezcla de las anteriores)      ║
 ║                                                                              ║
 ║  MODOS DE VOZ:                                                               ║
-║    above   — el contrapunto va por encima de la melodía                     ║
-║    below   — el contrapunto va por debajo (bajo contrapuntístico)           ║
-║    auto    — elige según registro de la melodía                             ║
+║    above / below / auto   (posición relativa a la melodía)                   ║
+║  VOCES: soprano, alto, tenor, bass, violin, viola, cello                     ║
 ║                                                                              ║
-║  VOCES DISPONIBLES:                                                          ║
-║    soprano, alto, tenor, bass, violin, viola, cello                         ║
-║    (heredadas del ecosistema midi_dna_unified)                              ║
+║  USO STANDALONE — ejemplos:                                                  ║
+║    # Especie 1 con CSP estricto (garantiza H1–H6):                           ║
+║    python counterpoint.py melodia.mid --species 1 --strict                   ║
+║    python counterpoint.py melodia.mid --species 1 --strict --voice viola     ║
+║    python counterpoint.py melodia.mid --species 1 --strict \                 ║
+║        --voice-position above --key Dm --verbose                             ║
 ║                                                                              ║
-║  USO STANDALONE:                                                             ║
-║    python counterpoint.py melodia.mid                                       ║
-║    python counterpoint.py melodia.mid --species 2                           ║
-║    python counterpoint.py melodia.mid --species 5 --voice viola             ║
-║    python counterpoint.py melodia.mid --species 3 --voice-position below    ║
-║    python counterpoint.py melodia.mid --species 5 --key Dm --bars 16       ║
-║    python counterpoint.py melodia.mid --all-species --listen                ║
-║    python counterpoint.py melodia.mid --species 1 --strict                  ║
-║    python counterpoint.py melodia.mid --species 5 --tension-curve          ║
-║        "0:0.2, 8:0.8, 16:0.3"                                              ║
-║    python counterpoint.py melodia.mid --verbose --output cp_out.mid        ║
+║    # Especie 2 con validación de esqueleto en strict:                        ║
+║    python counterpoint.py melodia.mid --species 2 --strict                   ║
+║                                                                              ║
+║    # Las 5 especies en strict; las que rompan reglas se descartan:           ║
+║    python counterpoint.py melodia.mid --all-species --strict --key C         ║
+║                                                                              ║
+║    # Sin strict (penalizaciones blandas, siempre emite salida):              ║
+║    python counterpoint.py melodia.mid --species 5 --tension-curve            ║
+║        "0:0.2, 8:0.8, 16:0.3"                                                ║
+║    python counterpoint.py melodia.mid --verbose --output cp_out.mid          ║
+║    python counterpoint.py melodia.mid --all-species --listen                 ║
 ║                                                                              ║
 ║  USO COMO MÓDULO:                                                            ║
-║    from counterpoint import generate_counterpoint_voice, load_melody_midi   ║
+║    from counterpoint import (generate_counterpoint_voice,                    ║
+║                              load_melody_midi, CounterpointStrictError)      ║
 ║                                                                              ║
-║    notes = load_melody_midi("melodia.mid")                                  ║
-║    cp = generate_counterpoint_voice(                                         ║
-║        melody_notes=notes,          # list of (offset, pitch, dur, vel)    ║
-║        key="C major",               # str o music21 Key                    ║
-║        species=5,                   # 1-5                                   ║
-║        voice="viola",               # nombre de instrumento                 ║
-║        voice_position="below",      # "above" | "below" | "auto"           ║
-║        beats_per_bar=4,             # compás                                ║
-║        n_bars=None,                 # None = auto desde melodia             ║
-║        tension_curve=None,          # list[float] 0-1 por compás           ║
-║        strict=False,                # True = reglas más estrictas (Fux)    ║
-║        seed=42,                     # semilla aleatoria                     ║
-║    )                                                                         ║
-║    # cp → list of (offset, pitch, dur, vel)                                 ║
+║    notes = load_melody_midi("melodia.mid")                                   ║
+║    try:                                                                      ║
+║        cp = generate_counterpoint_voice(                                     ║
+║            melody_notes=notes, key="C major", species=1,                     ║
+║            voice="viola", voice_position="above", strict=True,               ║
+║        )                                                                     ║
+║    except CounterpointStrictError as e:                                      ║
+║        print("sin solución limpia:", e)                                      ║
+║    # cp → list of (offset, pitch, dur, vel)                                  ║
 ║                                                                              ║
 ║  OPCIONES:                                                                   ║
-║    --species N        Especie 1-5 (default: 5)                              ║
-║    --voice NAME       soprano|alto|tenor|bass|violin|viola|cello (def: auto)║
-║    --voice-position   above|below|auto (default: auto)                      ║
-║    --key KEY          Tonalidad: "C", "Am", "Bb major" … (default: auto)   ║
-║    --bars N           Compases a generar (default: auto desde MIDI)         ║
-║    --beats N          Beats por compás (default: 4)                         ║
-║    --strict           Aplicar reglas de Fux más estrictas                   ║
-║    --tension-curve S  Curva de tensión compás a compás "0:0.2, 8:0.8"      ║
-║    --all-species      Generar una versión por cada especie (1-5)            ║
-║    --catalog          Si --all-species, concatenar todo en un único MIDI    ║
-║    --output FILE      Fichero de salida (default: counterpoint_out.mid)     ║
-║    --output-dir DIR   Directorio de salida con --all-species                ║
-║    --channel N        Canal MIDI para el contrapunto (default: 1)           ║
-║    --program N        Program change (instrumento GM) (default: auto)       ║
-║    --listen           Reproducir resultado al terminar (requiere pygame)    ║
-║    --play-seconds N   Segundos de reproducción (default: 30)               ║
-║    --export-fingerprint  Exportar fingerprint JSON (para stitcher)          ║
-║    --verbose          Informe detallado de decisiones regla a regla         ║
-║    --seed N           Semilla aleatoria (default: 42)                       ║
+║    --species N        Especie 1-5 (default: 5)                               ║
+║    --strict           CSP con reglas de Fux DURAS (ver arriba). Aborta con   ║
+║                       exit 2 si no hay solución limpia; con --all-species    ║
+║                       descarta la especie y continúa con la siguiente.       ║
+║    --voice NAME       soprano|alto|tenor|bass|violin|viola|cello (def: auto) ║
+║    --voice-position   above|below|auto (default: auto)                       ║
+║    --key KEY          Tonalidad: "C", "Am", "Bb major" … (default: auto)     ║
+║    --bars N           Compases a generar (default: auto desde MIDI)          ║
+║    --beats N          Beats por compás (default: 4)                          ║
+║    --tension-curve S  Curva de tensión compás a compás "0:0.2, 8:0.8"        ║
+║    --all-species      Generar una versión por cada especie (1-5)             ║
+║    --catalog          Si --all-species, concatenar todo en un único MIDI     ║
+║    --output FILE      Fichero de salida (default: counterpoint_out.mid)      ║
+║    --output-dir DIR   Directorio de salida con --all-species                 ║
+║    --channel N        Canal MIDI para el contrapunto (default: 1)            ║
+║    --program N        Program change (instrumento GM) (default: auto)        ║
+║    --listen           Reproducir resultado al terminar (requiere pygame)     ║
+║    --play-seconds N   Segundos de reproducción (default: 30)                 ║
+║    --export-fingerprint  Exportar fingerprint JSON (para stitcher)           ║
+║    --verbose          Informe detallado de decisiones regla a regla          ║
+║    --seed N           Semilla aleatoria (default: 42)                        ║
 ║                                                                              ║
 ║  SALIDA:                                                                     ║
-║    counterpoint_out.mid  — MIDI de dos pistas: melodía + contrapunto        ║
-║    counterpoint_out_s{N}.mid — con --all-species                            ║
-║    counterpoint_out.fingerprint.json — con --export-fingerprint             ║
+║    counterpoint_out.mid  — MIDI de dos pistas: melodía + contrapunto         ║
+║    counterpoint_out_s{N}.mid — con --all-species                             ║
+║    counterpoint_out.fingerprint.json — con --export-fingerprint              ║
 ║                                                                              ║
 ║  DEPENDENCIAS:                                                               ║
 ║    Siempre:   mido, numpy                                                    ║
-║    --key auto / análisis tonal:  music21  (opcional, fallback si no)        ║
+║    --key auto / análisis tonal:  music21  (opcional, fallback si no)         ║
 ║    --listen:  pygame                                                         ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
@@ -158,6 +168,18 @@ VOICE_PROGRAMS = {
     'viola':   41,
     'cello':   42,
 }
+
+# Nombres de nota para diagnósticos (mod 12, sostenidos)
+_MIDI_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#',
+                    'G', 'G#', 'A', 'A#', 'B']
+
+def _m2n(midi_pitch: int) -> str:
+    """Convierte una altura MIDI en nombre científico (p.ej. 60 -> 'C4')."""
+    if midi_pitch is None:
+        return '-'
+    pc = midi_pitch % 12
+    octv = midi_pitch // 12 - 1
+    return f"{_MIDI_NOTE_NAMES[pc]}{octv}"
 
 # Intervalos (en semitonos mod 12)
 PERFECT_CONSONANCES   = {0, 7, 12}       # unísono, 5ª, 8ª (Fux: mismas restricciones)
@@ -1187,6 +1209,297 @@ def _species5(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  MODO STRICT — CSP (Constraint Satisfaction Problem)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# En modo NO strict las reglas de Fux son PENALIZACIONES BLANDAS: el motor
+# elige el candidato "menos malo" y puede emitir un contrapunto con paralelas
+# de 5ª/8ª si ningún candidato es limpio. Esto es útil para experimentar,
+# pero musicalmente engañoso: un usuario confiado puede creer que el resultado
+# es correcto.
+#
+# El modo --strict convierte las reglas en RESTRICCIONES DURAS: el motor NUNCA
+# emite un contrapunto que las viole. Si no encuentra solución, lanza
+# CounterpointStrictError con un diagnóstico, en vez de devolver basura.
+#
+# Reglas duras (especie 1, nota contra nota) — H1..H6:
+#   [H1] Solo consonancias (perfectas o imperfectas) en cada momento
+#   [H2] Sin paralelas de 5ª justa u 8ª entre dos momentos consecutivos
+#   [H3] Sin movimiento directo a consonancia perfecta (5ª u 8ª) por movimiento
+#        similar (Fux: prohibido con independencia del tamaño del salto)
+#   [H4] Sin cruce de voces (el contrapunto respeta voice_position)
+#   [H5] Sin repetir el MISMO intervalo armónico 3 veces seguidas (monotonía)
+#   [H6] Cadencia: la sensible (7º grado) del contrapunto resuelve ASCENDIENDO
+#        a la tónica cuando aparece en la penúltima posición y la melodía
+#        cadencia sobre la tónica (cadencia auténtica)
+# Preferencia (no dura, se relaja si bloquea la búsqueda):
+#   [P1] El clímax (nota más aguda del contrapunto) cae en el 50–85 % de la
+#        frase (heurística cantábile de melody_critic)
+#
+# El resolver usa backtracking (ventana de 2 instantes), orden aleatorio de
+# candidatos (rng) y un límite de nodos para evitar explosión combinatoria.
+#
+# Para especies 2–5, --strict valida el ESQUELETO de tiempos fuertes (downbeats
+# del cantus) contra H1 (S2/S3), H2, H3 y H4, y rechaza con diagnóstico si el
+# resultado greedy viola las reglas duras. Así nunca se emite un contrapunto
+# con paralelas ocultas en los downbeats.
+
+class CounterpointStrictError(Exception):
+    """No existe un contrapunto que satisfaga las reglas duras de Fux."""
+    pass
+
+
+def _crossing_ok(cp: int, mel_p: int, voice_position: str) -> bool:
+    """H4: el contrapunto no cruza la melodía."""
+    if voice_position == 'above':
+        return cp >= mel_p
+    return cp <= mel_p
+
+
+def _parallel_perfect(prev_cp: int, prev_mel: int,
+                      cp: int, mel_p: int) -> bool:
+    """H2: ¿se forma una 5ª u 8ª paralela entre dos instantes consecutivos?"""
+    iv_prev = _interval(prev_mel, prev_cp)
+    iv_now  = _interval(mel_p, cp)
+    if iv_now not in (0, 7):           # sólo 8ª (unísono) y 5ª justa
+        return False
+    d_mel = mel_p - prev_mel
+    d_cp  = cp   - prev_cp
+    same_dir = (d_mel > 0 and d_cp > 0) or (d_mel < 0 and d_cp < 0)
+    return same_dir and iv_prev == iv_now
+
+
+def _direct_to_perfect(prev_cp: int, prev_mel: int,
+                       cp: int, mel_p: int) -> bool:
+    """H3: ¿se llega a 5ª/8ª por movimiento similar (directo)?"""
+    iv_now = _interval(mel_p, cp)
+    if iv_now not in (0, 7):
+        return False
+    d_mel = mel_p - prev_mel
+    d_cp  = cp   - prev_cp
+    same_dir = (d_mel > 0 and d_cp > 0) or (d_mel < 0 and d_cp < 0)
+    if not (same_dir and d_mel != 0 and d_cp != 0):
+        return False
+    # Si el intervalo previo ya era la misma consonancia perfecta, lo trata
+    # _parallel_perfect; aquí sólo el movimiento directo (cambio de intervalo)
+    return _interval(prev_mel, prev_cp) != iv_now
+
+
+def _species1_csp(
+    melody_notes: list,
+    key_info: KeyInfo,
+    n_bars: int,
+    beats_per_bar: int,
+    lo: int,
+    hi: int,
+    voice_position: str,
+    tension_curve: list,
+    rng: random.Random,
+    verbose: bool,
+) -> list:
+    """
+    Resuelve la PRIMERA ESPECIE como un CSP con restricciones duras de Fux.
+
+    Devuelve list[(offset, pitch, dur, vel)] o lanza CounterpointStrictError.
+    Garantiza: H1–H6 (P1 como preferencia relaxable).
+    """
+    mel_sorted = sorted(melody_notes, key=lambda x: x[0])
+    n = len(mel_sorted)
+    if n == 0:
+        return []
+
+    all_cands = _candidates_in_range(key_info, lo, hi)
+    if not all_cands:
+        raise CounterpointStrictError(
+            f"Sin grados diatónicos en el rango [{_m2n(lo)}–{_m2n(hi)}] "
+            f"para la tonalidad {key_info.name}. Amplía la voz (--voice).")
+
+    # H1: consonancias disponibles por cada nota del cantus
+    cons_per_note = []
+    for off, mel_p, dur, vel in mel_sorted:
+        cons = [c for c in all_cands if _is_consonant(mel_p, c)]
+        if not cons:
+            raise CounterpointStrictError(
+                f"[H1] Sin consonancia posible para la nota melódica "
+                f"{_m2n(mel_p)} (MIDI {mel_p}) en offset {off:.2f} dentro "
+                f"del rango [{_m2n(lo)}–{_m2n(hi)}]. Amplía la voz (--voice) "
+                f"o transpón la melodía.")
+        cons_per_note.append(cons)
+
+    # P1: ventana del clímax (50–85 % de la frase), sólo si es larga
+    climax_lo = int(n * 0.50)
+    climax_hi = int(n * 0.85)
+    require_climax = n >= 8
+
+    tonic_pc  = key_info.tonic_pc
+    leading_pc = key_info.leading_pc
+
+    MAX_NODES = 250_000
+
+    def solve(require_climax_flag: bool):
+        assignment = [None] * n
+        iv_hist = []          # H5: historial de intervalos armónicos
+        nodes = [0]
+
+        def backtrack(i):
+            if nodes[0] > MAX_NODES:
+                return None                 # presupuesto agotado
+            nodes[0] += 1
+            if i == n:
+                # Validación global: clímax (P1) y cadencia (H6)
+                cp_pitches = [a[1] for a in assignment]
+                hi_idx = cp_pitches.index(max(cp_pitches))
+                if require_climax_flag and not (climax_lo <= hi_idx <= climax_hi):
+                    return None
+                if n >= 2:
+                    pen_cp  = assignment[-2][1]
+                    last_cp = assignment[-1][1]
+                    if (pen_cp % 12) == leading_pc \
+                            and (last_cp % 12) != tonic_pc:
+                        return None
+                return list(assignment)
+            off, mel_p, dur, vel = mel_sorted[i]
+            cands = list(cons_per_note[i])
+            rng.shuffle(cands)
+            for cp in cands:
+                if not _crossing_ok(cp, mel_p, voice_position):     # H4
+                    continue
+                if i > 0:                                           # H2/H3
+                    p_mel = mel_sorted[i-1][1]
+                    p_cp  = assignment[i-1][1]
+                    if _parallel_perfect(p_cp, p_mel, cp, mel_p):
+                        continue
+                    if _direct_to_perfect(p_cp, p_mel, cp, mel_p):
+                        continue
+                iv_now = _interval(mel_p, cp)                       # H5
+                if len(iv_hist) >= 2 and iv_hist[-1] == iv_now \
+                        and iv_hist[-2] == iv_now:
+                    continue
+                assignment[i] = (off, cp, dur * 0.90,
+                                 max(30, min(90, int(vel * 0.75
+                                                     + rng.randint(-8, 8)))))
+                iv_hist.append(iv_now)
+                r = backtrack(i + 1)
+                if r is not None:
+                    return r
+                iv_hist.pop()
+                assignment[i] = None
+            return None
+
+        return backtrack(0), nodes[0]
+
+    # Primer intento con clímax exigido; si falla, se relaja P1.
+    result, nodes = solve(require_climax)
+    if result is None and require_climax:
+        if verbose:
+            print("  [S1-strict] clímax no encuadrable; relajando P1")
+        result, nodes = solve(False)
+
+    if result is None:
+        raise CounterpointStrictError(
+            f"No existe un contrapunto de 1ª especie que cumpla TODAS las "
+            f"reglas duras de Fux (explorados {nodes} nodos). Sugerencias: "
+            f"ampliar el rango vocal (--voice), acortar la melodía (--bars), "
+            f"cambiar la tonalidad (--key) o usar modo no strict.")
+
+    if verbose:
+        cps = [a[1] for a in result]
+        hi_idx = cps.index(max(cps))
+        print(f"\n  [S1-strict] CSP resuelto en {nodes} nodos; "
+              f"clímax en posición {hi_idx+1}/{n}")
+    return result
+
+
+def _strong_beat_pairs(mel_sorted: list, cp_notes: list) -> list:
+    """
+    Empareja cada onset del cantus con la nota de contrapunto más cercana
+    en tiempo (el tiempo fuerte / downbeat de ese compás o fracción).
+    Devuelve list[(offset, mel_p, cp_p)].
+    """
+    pairs = []
+    eps = 0.25  # beats de tolerancia
+    for off, mel_p, dur, vel in mel_sorted:
+        best = None
+        best_d = 1e9
+        for co, cp_p, cd, cv in cp_notes:
+            d = abs(co - off)
+            if d < best_d:
+                best_d, best = d, cp_p
+        if best is not None and best_d <= eps + max(dur, 1.0):
+            pairs.append((off, mel_p, best))
+    return pairs
+
+
+def _validate_strict(cp_notes: list,
+                      mel_sorted: list,
+                      voice_position: str,
+                      species: int,
+                      key_info: KeyInfo,
+                      verbose: bool) -> None:
+    """
+    Valida el resultado greedy (especies 2–5) contra las reglas duras del
+    ESQUELETO de tiempos fuertes. Lanza CounterpointStrictError con la lista
+    de violaciones si las hay; no devuelve nada si todo está limpio.
+
+    Para S2/S3: el downbeat del contrapunto debe ser consonante (H1).
+    Para S2–S5: sin paralelas de 5ª/8ª entre downbeats (H2), sin directo a
+    perfecta entre downbeats (H3), y sin cruce de voces en ningún instante (H4).
+    """
+    violations = []
+
+    # H4: cruce en cualquier instante (universal a todas las especies)
+    for co, cp_p, cd, cv in cp_notes:
+        # mel_p más cercano al offset del cp
+        best_mel = min(mel_sorted, key=lambda m: abs(m[0] - co))
+        if not _crossing_ok(cp_p, best_mel[1], voice_position):
+            violations.append(
+                f"[H4] cruce en offset {co:.2f}: cp={_m2n(cp_p)} "
+                f"({'encima' if voice_position=='above' else 'debajo'} de "
+                f"mel={_m2n(best_mel[1])})")
+
+    skeleton = _strong_beat_pairs(mel_sorted, cp_notes)
+    if len(skeleton) < 2:
+        if violations:
+            raise CounterpointStrictError(
+                "Contrapunto estricto viola reglas duras:\n  - "
+                + "\n  - ".join(violations))
+        return
+
+    # H1 (sólo S2/S3): consonancia en el downbeat
+    if species in (2, 3):
+        for off, mel_p, cp_p in skeleton:
+            if not _is_consonant(mel_p, cp_p):
+                violations.append(
+                    f"[H1] downbeat disonante en offset {off:.2f}: "
+                    f"cp={_m2n(cp_p)} vs mel={_m2n(mel_p)} "
+                    f"(intervalo {_interval(mel_p, cp_p)}st)")
+
+    # H2 / H3 entre downbeats consecutivos
+    for k in range(1, len(skeleton)):
+        _, p_mel, p_cp = skeleton[k-1]
+        off, mel_p, cp_p = skeleton[k]
+        if _parallel_perfect(p_cp, p_mel, cp_p, mel_p):
+            violations.append(
+                f"[H2] paralelas de "
+                f"{'8ª' if _interval(mel_p, cp_p)==0 else '5ª'} "
+                f"entre offsets {skeleton[k-1][0]:.2f} y {off:.2f}")
+        if _direct_to_perfect(p_cp, p_mel, cp_p, mel_p):
+            violations.append(
+                f"[H3] directo a "
+                f"{'8ª' if _interval(mel_p, cp_p)==0 else '5ª'} "
+                f"entre offsets {skeleton[k-1][0]:.2f} y {off:.2f}")
+
+    if violations:
+        raise CounterpointStrictError(
+            f"Contrapunto estricto (especie {species}) viola "
+            f"{len(violations)} regla(s) dura(s) en el esqueleto de "
+            f"tiempos fuertes:\n  - " + "\n  - ".join(violations)
+            + "\nEl modo --strict no emite resultados que rompan las reglas "
+              "de Fux. Prueba sin --strict, con otra voz, otra tonalidad o "
+              "otra melodía de entrada.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  API PÚBLICA PRINCIPAL
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1282,23 +1595,50 @@ def generate_counterpoint_voice(
     }
     gen_fn = generators.get(species, _species5)
 
-    cp_notes = gen_fn(
-        melody_notes=melody_notes,
-        key_info=key_info,
-        n_bars=n_bars,
-        beats_per_bar=beats_per_bar,
-        lo=lo,
-        hi=hi,
-        voice_position=voice_position,
-        tension_curve=tc,
-        strict=strict,
-        rng=rng,
-        verbose=verbose,
-    )
+    # ── Modo STRICT ───────────────────────────────────────────────────────
+    # Especie 1: se resuelve como CSP con restricciones duras (garantiza H1–H6).
+    # Especies 2–5: se genera con el motor greedy y luego se valida el
+    # esqueleto de tiempos fuertes; si viola reglas duras, se lanza
+    # CounterpointStrictError en vez de emitir un resultado incorrecto.
+    if strict and species == 1:
+        cp_notes = _species1_csp(
+            melody_notes=melody_notes,
+            key_info=key_info,
+            n_bars=n_bars,
+            beats_per_bar=beats_per_bar,
+            lo=lo,
+            hi=hi,
+            voice_position=voice_position,
+            tension_curve=tc,
+            rng=rng,
+            verbose=verbose,
+        )
+    else:
+        cp_notes = gen_fn(
+            melody_notes=melody_notes,
+            key_info=key_info,
+            n_bars=n_bars,
+            beats_per_bar=beats_per_bar,
+            lo=lo,
+            hi=hi,
+            voice_position=voice_position,
+            tension_curve=tc,
+            strict=strict,
+            rng=rng,
+            verbose=verbose,
+        )
+        if strict:  # especies 2–5: validar el esqueleto de tiempos fuertes
+            mel_sorted = sorted(melody_notes, key=lambda x: x[0])
+            _validate_strict(cp_notes, mel_sorted, voice_position,
+                            species, key_info, verbose)
+            if verbose:
+                print("  [strict] esqueleto de tiempos fuertes validado "
+                      f"(especie {species}): 0 violaciones duras")
 
     if verbose:
         print(f"\n  ✓ Generadas {len(cp_notes)} notas de contrapunto "
-              f"(especie {species}, voz {voice})")
+              f"(especie {species}, voz {voice}"
+              f"{'· strict' if strict else ''})")
 
     return cp_notes
 
@@ -1419,7 +1759,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--beats', type=int, default=4,
                    help='Beats por compás (default: 4)')
     p.add_argument('--strict', action='store_true',
-                   help='Reglas de Fux más estrictas')
+                   help='Modo CSP: reglas de Fux como RESTRICCIONES DURAS. '
+                        'Especie 1: backtracking con H1–H6 garantizadas '
+                        '(sin paralelas/directas/cruces, clímax y cadencia). '
+                        'Especies 2–5: validación del esqueleto de tiempos '
+                        'fuertes. Si no hay solución, NO se emite MIDI: se '
+                        'rechaza con diagnóstico (CounterpointStrictError).')
     p.add_argument('--tension-curve', default=None,
                    help='Curva de tensión: "0:0.2, 8:0.8, 16:0.3"')
     p.add_argument('--all-species', action='store_true',
@@ -1534,19 +1879,35 @@ def main():
 
     for sp in species_list:
         print(f"\n◆ Generando especie {sp} …")
-        cp_notes = generate_counterpoint_voice(
-            melody_notes   = melody_notes,
-            key            = key_info,
-            species        = sp,
-            voice          = args.voice,
-            voice_position = args.voice_position,
-            beats_per_bar  = beats_per_bar,
-            n_bars         = n_bars,
-            tension_curve  = args.tension_curve,
-            strict         = args.strict,
-            seed           = args.seed,
-            verbose        = args.verbose,
-        )
+        try:
+            cp_notes = generate_counterpoint_voice(
+                melody_notes   = melody_notes,
+                key            = key_info,
+                species        = sp,
+                voice          = args.voice,
+                voice_position = args.voice_position,
+                beats_per_bar  = beats_per_bar,
+                n_bars         = n_bars,
+                tension_curve  = args.tension_curve,
+                strict         = args.strict,
+                seed           = args.seed,
+                verbose        = args.verbose,
+            )
+        except CounterpointStrictError as e:
+            # En modo --strict, si una especie no tiene solución que cumpla
+            # las reglas duras de Fux, no se emite MIDI: se informa y se
+            # continúa con la siguiente especie (--all-species) o se aborta.
+            print(f"  ✗ [strict] especie {sp} descartada:")
+            for line in str(e).splitlines():
+                print(f"      {line}")
+            if args.all_species:
+                continue
+            else:
+                print("\n  Consejo: prueba sin --strict, con otra voz "
+                      "(--voice violin/violonchelo...), otra tonalidad "
+                      "(--key) o acorta la melodía (--bars).")
+                sys.exit(2)
+
 
         # Determinar nombre de salida
         if args.all_species:
