@@ -1,1 +1,1 @@
-npm install -g @mariozechner/pi-coding-agent
+curl -fsSL https://pi.dev/install.sh | sh
