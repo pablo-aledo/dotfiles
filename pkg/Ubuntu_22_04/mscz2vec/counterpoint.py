@@ -1877,6 +1877,9 @@ def main():
     species_list = [1, 2, 3, 4, 5] if args.all_species else [args.species]
     output_paths = []
 
+    if args.all_species and args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+
     for sp in species_list:
         print(f"\n◆ Generando especie {sp} …")
         try:

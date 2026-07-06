@@ -1316,7 +1316,10 @@ def main():
             # ── Exportar MIDI ─────────────────────────────────────────────────
             mid = phrase_to_midi(result)
             stem = Path(args.output).stem
-            out_path = out_dir / f"{stem}{label}.mid"
+            if args.all_forms or args.all_types:
+                out_path = out_dir / f"{stem}{label}.mid"
+            else:
+                out_path = Path(args.output)
             mid.save(str(out_path))
             print(f"[OK] Guardado: {out_path}  ({len(result.all_notes)} notas)")
 

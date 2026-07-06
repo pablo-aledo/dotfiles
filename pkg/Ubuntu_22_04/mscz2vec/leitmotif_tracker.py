@@ -1604,7 +1604,11 @@ def load_schedule(path: str) -> dict:
             print(f"  [warn] Schedule vacio: {path}")
             print(f"         Generalo con: python leitmotif_tracker.py plan obra_plan.json")
             return _empty
-        return json.loads(content)
+        data = json.loads(content)
+        # Tolerancia: si el JSON es una lista, envolverla como "injections".
+        if isinstance(data, list):
+            data = {"injections": data, "gaps": [], "version": "1.0"}
+        return data
     except Exception as e:
         print(f"  [error] JSON invalido en {path}: {e}")
         print(f"          Regenera con: python leitmotif_tracker.py plan obra_plan.json")

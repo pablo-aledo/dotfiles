@@ -2548,12 +2548,12 @@ def cmd_index(args):
         print(f"[ERROR] Directorio no encontrado: {midi_dir}")
         sys.exit(1)
 
-    out_dir = Path(getattr(args, "out_dir", str(midi_dir.parent)))
+    out_dir = Path(getattr(args, "out_dir", None) or str(midi_dir.parent))
     out_dir.mkdir(parents=True, exist_ok=True)
 
     recursive = getattr(args, "recursive", False)
     merge     = getattr(args, "merge", False)
-    bank_path = Path(getattr(args, "bank", str(out_dir / ".mosaic_bank.json")))
+    bank_path = Path(getattr(args, "bank", None) or str(out_dir / ".mosaic_bank.json"))
     verbose   = getattr(args, "verbose", False)
 
     # Recoger MIDIs
