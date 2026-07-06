@@ -2258,7 +2258,8 @@ def cmd_encode(args):
     all_rolls_stacked = {}
     for role, roll in rolls.items():
         all_rolls_stacked[role] = roll
-    tension_vecs = TensionExtractor().extract_bar_vectors(all_rolls_stacked)
+    total_bars = next(iter(rolls.values())).shape[0] if rolls else 0
+    tension_vecs = TensionExtractor().extract_bar_vectors(all_rolls_stacked, total_bars)
     tension_mean = tension_vecs.mean(axis=0).tolist()
 
     # Construir payload JSON

@@ -340,6 +340,24 @@ def _build_model(cfg: dict):
             return mask.float().to(qe.device) * qe
 
         def _calc_pos_emb(self, queries, mask):
+            """Relative position embedding con skew (Music Transformer).
+
+            El truco de pad+reshape del paper solo funciona cuando la
+            longitud de secuencia t == max_len.  Aqui rellenamos las queries
+            con ceros hasta max_len, aplicamos el skew original y luego
+            recortamos a t, de modo que el resultado es correcto para
+            cualquier t <= max_len (y se preserva el comportamiento original
+            cuando t == max_len).
+            """
+            b, h, t, d = queries.shape
+            pad_amount = self.max_len - t
+            if pad_amount < 0:
+                raise ValueError(
+                    f"sequence length {t} exceeds max_len {self.max_len}")
+            if pad_amount > 0:
+                # rellenar con ceros para que el skew alinee como en t==max_len
+                queries = F.pad(queries, (0, 0, 0, pad_amount))
+
             if mask is not None:
                 emb = torch.matmul(queries, self.relative_embedding[:, :, :self.max_len])
                 emb = self._qe_masking(emb)
@@ -351,6 +369,10 @@ def _build_model(cfg: dict):
                 emb = F.pad(emb, (1, 0, 0, 0))
                 emb = emb.view(emb.size(0), emb.size(1), -1)[:, :, self.max_len:]
                 emb = emb.view(emb.size(0), emb.size(1), self.max_len, -1)[:, :, :, :self.max_len]
+
+            if pad_amount > 0:
+                # recortar de vuelta a la longitud original
+                emb = emb[:, :, :t, :t]
             return emb
 
         def forward(self, q, k, v, return_weights=False, mask=None):
@@ -1062,6 +1084,34 @@ def cmd_train(args):
         model_cfg['frame_per_bar'] = args.frame_per_bar
         with open(cfg_path, 'w') as f:
             json.dump(model_cfg, f, indent=2)
+
+    # ── Inferir num_bars / frame_per_bar de los datos reales ──
+    # Los .pkl de prepare tienen seq_len = frame_per_bar * num_bars + 1.
+    # Si el config no coincide con los datos, el attention relativo falla
+    # (max_len != longitud de secuencia).  Lo corregimos aquí.
+    try:
+        import pickle, glob
+        _pkls = sorted(
+            glob.glob(os.path.join(str(args.data_dir), 'train', '*/*.pkl')) +
+            glob.glob(os.path.join(str(args.data_dir), 'train', '*.pkl')))
+        if _pkls:
+            with open(_pkls[0], 'rb') as f:
+                _sample = pickle.load(f)
+            _seq_len = int(_sample['rhythm'].shape[0])  # instance_len + 1
+            _fpb = model_cfg.get('frame_per_bar', args.frame_per_bar)
+            _inferred_bars = (_seq_len - 1) // _fpb
+            if _inferred_bars * _fpb == _seq_len - 1 and _inferred_bars > 0:
+                if model_cfg.get('num_bars') != _inferred_bars or \
+                   model_cfg.get('frame_per_bar') != _fpb:
+                    old_bars = model_cfg.get('num_bars')
+                    model_cfg['num_bars']      = _inferred_bars
+                    model_cfg['frame_per_bar'] = _fpb
+                    with open(cfg_path, 'w') as f:
+                        json.dump(model_cfg, f, indent=2)
+                    print(f"[train] num_bars ajustado {old_bars} → {_inferred_bars} "
+                          f"(seq_len datos={_seq_len}, fpb={_fpb})")
+    except Exception:
+        pass  # best-effort; si falla, se usa el config tal cual
 
     model = _build_model(model_cfg).to(device)
 
