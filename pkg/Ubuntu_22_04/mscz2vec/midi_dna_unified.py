@@ -4164,6 +4164,8 @@ def _run_generation(
     mt_emotion_morph=None,    # MutationTimeline  morphing emocional entre fuentes
     rhythm_morph_dna=None,    # UnifiedDNA        fuente B para morphing rítmico
     emotion_morph_dna=None,   # UnifiedDNA        fuente B para morphing emocional
+    phrase_clips=None,        # list[PhraseClip]  para modo phrase_stitch
+    phrase_seed=None,         # int | None         semilla para phrase_stitch
 ):
     bpb = time_sig[0]
     h_prog = harmony_src_dna.harmony_prog
@@ -4425,6 +4427,8 @@ def run_mixing(dnas, target_key, n_bars, tempo_bpm, time_sig, mode,
             mt_emotion_morph=mt_emotion_morph,
             rhythm_morph_dna=rhythm_morph_dna,
             emotion_morph_dna=emotion_morph_dna,
+            phrase_clips=phrase_clips,
+            phrase_seed=phrase_seed,
         )
         sc = score_candidate(mel, acc, target_key)
         print(f"    Score: {sc:.3f}")
