@@ -16,6 +16,8 @@
 ║                                        (estilo pix2pix: U-Net + PatchGAN)    ║
 ║    spectrogram-to-latent        .npz STFT (audio_lab) → .npz latente         ║
 ║    latent-to-spectrogram        .npz/PNG latente → .npz STFT [+ --wav]       ║
+║    spectrogram-to-png            NPZ STFT (audio_lab) → PNG escala de grises ║
+║    png-to-spectrogram            PNG → NPZ STFT (audio_lab)                  ║
 ║    train-pca                    NPZ latente(s)/espectrograma(s) → pca.npz    ║
 ║    intermediate-to-pca          NPZ intermedio + pca.npz → coords PCA .npz   ║
 ║    pca-to-intermediate          coords PCA .npz/PNG → NPZ intermedio         ║
@@ -93,6 +95,17 @@
 ║  window_size/hop_ratio) son 100% compatibles con audio_lab spectrogram,      ║
 ║  reconstruct, edit-spectrum y npz-to-png.                                    ║
 ║                                                                              ║
+║  PIPELINE NPZ ↔ PNG (espectrogramas) — par gemelo del anterior               ║
+║                                                                              ║
+║  spectrogram-to-png / png-to-spectrogram hacen para el espectrograma STFT    ║
+║  lo mismo que latent-to-png / png-to-latent para el latente: mismo esquema   ║
+║  de PNG editable (bin 0 abajo), pero con la normalización propia de          ║
+║  magnitudes STFT (mags_to_norm/norm_to_mags: pico del fichero + rango dB     ║
+║  con --db-floor), NO min/max por componente como en el latente. Metadatos    ║
+║  (sr, window, hop_ratio, db_floor, orientación) en chunks tEXt + sidecar     ║
+║  .ll.json, igual que en el par de latentes. El NPZ de salida es 100%         ║
+║  compatible con audio_lab y con spectrogram-to-latent.                       ║
+║                                                                              ║
 ║  EJEMPLOS                                                                    ║
 ║    python latent_lab.py train-coder corpus/*.wav --steps 4000 -o coder.pt    ║
 ║    python latent_lab.py wav-to-latent voz.wav --coder coder.pt --png         ║
@@ -111,6 +124,9 @@
 ║           --png -o voz_pca.npz                                               ║
 ║    python latent_lab.py pca-to-intermediate voz_pca.npz -o voz_lat2.npz      ║
 ║    python latent_lab.py info coder.pt                                        ║
+║    python latent_lab.py spectrogram-to-png voz_stft.npz -o voz_spec.png      ║
+║    [editar voz_spec.png en GIMP/Photoshop]                                   ║
+║    python latent_lab.py png-to-spectrogram voz_spec.png -o voz_stft2.npz     ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -1449,6 +1465,148 @@ def cmd_latent_to_spectrogram(args):
         write_wav(args.wav, audio, ckpt["sr"])
 
 # ══════════════════════════════════════════════════════════════════════════════
+# NPZ / PNG DE ESPECTROGRAMAS — par gemelo de "NPZ / PNG DE LATENTES"
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Mismo esquema de imagen editable que latents_to_png/png_to_latents (PNG en
+# escala de grises, bin 0 abajo, metadatos en chunks tEXt + sidecar .ll.json),
+# pero con la normalización propia de magnitudes STFT (mags_to_norm/norm_to_mags:
+# pico del fichero + rango dB con db_floor) en vez de min/max por componente.
+# Así spectrogram-to-latent (que solo acepta NPZ) puede alimentarse de un PNG
+# editado a mano sin pasar por ningún script externo: basta con
+# png-to-spectrogram antes.
+
+def spectrogram_to_png(mags: np.ndarray, sr: int, window: int, hop_ratio: float,
+                       db_floor: float, out_path: str, flip_y: bool = True) -> None:
+    """
+    Magnitudes STFT [frames × bins] → PNG escala de grises [bins(alto) ×
+    frames(ancho)]. Bin 0 (grave) abajo, salvo flip_y=False. Metadatos en
+    chunks tEXt + sidecar .ll.json (fallback anti-GIMP), igual que
+    latents_to_png pero con mags_to_norm/db_floor en vez de lat_min/lat_max.
+    """
+    Image = _import_pil()
+    from PIL import PngImagePlugin
+
+    norm = mags_to_norm(mags, db_floor)          # [F, bins] ∈ [0,1]
+    img_data = norm.T                            # [bins × F]
+    if flip_y:
+        img_data = img_data[::-1, :]
+    pixels = (img_data * 255).clip(0, 255).astype(np.uint8)
+    img    = Image.fromarray(pixels, mode="L")
+
+    F, n_bins = mags.shape
+    fields = {
+        "latent_lab_kind":      "spectrogram",
+        "latent_lab_sr":        str(sr),
+        "latent_lab_window":    str(window),
+        "latent_lab_hop_ratio": str(hop_ratio),
+        "latent_lab_db_floor":  str(db_floor),
+        "latent_lab_n_frames":  str(F),
+        "latent_lab_n_bins":    str(n_bins),
+        "latent_lab_flip_y":    "1" if flip_y else "0",
+    }
+    meta = PngImagePlugin.PngInfo()
+    for k, v in fields.items():
+        meta.add_text(k, v)
+
+    sidecar = Path(out_path).with_suffix(".ll.json")
+    with open(sidecar, "w") as f:
+        json.dump(fields, f, indent=2)
+
+    img.save(out_path, format="PNG", pnginfo=meta)
+    print(f"  ✓  PNG → {out_path}  ({F}×{n_bins}px)")
+    print(f"     Metadatos embebidos: sr={sr} window={window} "
+          f"hop_ratio={hop_ratio} db_floor={db_floor}")
+    print(f"     Sidecar JSON → {sidecar}  (fallback si el editor elimina tEXt)")
+
+def png_to_spectrogram(path: str, sr: Optional[int] = None,
+                       window: Optional[int] = None,
+                       hop_ratio: Optional[float] = None,
+                       db_floor: Optional[float] = None,
+                       mag_max: float = 1.0):
+    """
+    Inverso de spectrogram_to_png: PNG escala de grises → magnitudes STFT
+    [frames × bins]. Lee metadatos tEXt; si faltan, prueba el sidecar
+    .ll.json; si tampoco, usa los overrides sr/window/hop_ratio/db_floor
+    (obligatorios en ese caso — no hay equivalente al --coder de png-to-latent
+    porque estos parámetros son de análisis STFT, no de un modelo entrenado).
+    """
+    Image  = _import_pil()
+    img    = Image.open(path).convert("L")
+    pixels = np.array(img, dtype=np.float64)            # [H × W]
+    meta   = dict(img.info)
+
+    sidecar = Path(path).with_suffix(".ll.json")
+    if "latent_lab_sr" not in meta and sidecar.exists():
+        with open(sidecar) as f:
+            meta.update(json.load(f))
+        print(f"  [png-to-spectrogram] Metadatos leídos desde sidecar: {sidecar.name}")
+
+    def _get(key, override, cast):
+        if override is not None:
+            return override
+        if key in meta:
+            return cast(meta[key])
+        sys.exit(f"✗  PNG sin metadato {key!r} (ni sidecar) — pásalo con la "
+                 f"opción correspondiente (--sr/--window/--hop/--db-floor)")
+
+    sr_v       = _get("latent_lab_sr",        sr,        lambda v: int(float(v)))
+    window_v   = _get("latent_lab_window",    window,    lambda v: int(float(v)))
+    hop_r_v    = _get("latent_lab_hop_ratio", hop_ratio, float)
+    db_floor_v = _get("latent_lab_db_floor",  db_floor,  float)
+    flip_y     = str(meta.get("latent_lab_flip_y", "1")) in ("1", "True", "true")
+
+    H, W = pixels.shape
+    n_bins_expected = window_v // 2 + 1
+    if H != n_bins_expected:
+        print(f"  ⚠  Altura del PNG ({H}) ≠ bins esperados para window={window_v} "
+              f"({n_bins_expected}) — se usa la altura del PNG tal cual")
+
+    if flip_y:
+        pixels = pixels[::-1, :]
+    norm = (pixels.T / 255.0).astype(np.float32)          # [frames × bins]
+    mags = norm_to_mags(norm, db_floor_v, mag_max)
+    print(f"  [png-to-spectrogram] {W}×{H}px → {W} frames × {H} bins")
+    return mags, sr_v, window_v, hop_r_v, db_floor_v
+
+def cmd_spectrogram_to_png(args):
+    """NPZ de espectrograma (audio_lab) → PNG escala de grises editable."""
+    data = np.load(args.input)
+    if "magnitudes" not in data.files:
+        kind = "latente" if "latents" in data.files else "desconocido"
+        sys.exit(f"✗  {args.input} no es un NPZ de espectrograma (detectado: "
+                 f"{kind}). ¿Querías usar latent-to-png?")
+    mags   = data["magnitudes"].astype(np.float64)
+    sr     = int(data["sample_rate"])
+    window = int(data["window_size"])
+    hop_r  = float(data["hop_ratio"])
+
+    out_path = args.output or Path(args.input).stem + ".png"
+    spectrogram_to_png(mags, sr, window, hop_r, args.db_floor, out_path,
+                       flip_y=not args.no_flip_y)
+
+def cmd_png_to_spectrogram(args):
+    """PNG escala de grises → NPZ de espectrograma compatible con audio_lab."""
+    mags, sr, window, hop_r, db_floor = png_to_spectrogram(
+        args.input, sr=args.sr, window=args.window, hop_ratio=args.hop,
+        db_floor=args.db_floor, mag_max=args.mag_max)
+    phases = np.zeros_like(mags)
+    freqs  = np.fft.rfftfreq(window, 1.0 / sr).astype(np.float32)
+
+    out_path = args.output or Path(args.input).stem + "_stft.npz"
+    np.savez_compressed(out_path,
+                        magnitudes=mags, phases=phases, freqs=freqs,
+                        sample_rate=np.array(sr),
+                        window_size=np.array(window),
+                        hop_ratio=np.array(hop_r))
+    spec_hop = max(1, int(window * hop_r))
+    dur = mags.shape[0] * spec_hop / sr
+    print(f"  ✓  NPZ STFT → {out_path}  ({mags.shape[0]} frames × "
+          f"{mags.shape[1]} bins, ~{dur:.2f}s)")
+    print(f"     Fase: cero — compatible con audio_lab reconstruct (Griffin-Lim) "
+          f"y con spectrogram-to-latent")
+
+# ══════════════════════════════════════════════════════════════════════════════
 # PCA SOBRE REPRESENTACIONES INTERMEDIAS (latentes o espectrogramas)
 # ══════════════════════════════════════════════════════════════════════════════
 #
@@ -2061,6 +2219,37 @@ def main():
     _add_device(p)
     p.add_argument("--output", "-o", default=None, help="NPZ STFT de salida")
     p.set_defaults(func=cmd_latent_to_spectrogram)
+
+    # ── spectrogram-to-png ────────────────────────────────────────────────────
+    p = sub.add_parser("spectrogram-to-png",
+                       help="NPZ de espectrograma (audio_lab) → PNG escala de "
+                            "grises editable (par gemelo de latent-to-png)")
+    p.add_argument("input", help="Fichero .npz de espectrograma (audio_lab spectrogram)")
+    p.add_argument("--db-floor", type=float, default=DEFAULT_DB_FLOOR,
+                   help=f"Piso dB al normalizar magnitudes (default: {DEFAULT_DB_FLOOR})")
+    p.add_argument("--no-flip-y", action="store_true",
+                   help="No invertir eje Y del PNG (bin 0 queda arriba)")
+    p.add_argument("--output", "-o", default=None, help="PNG de salida")
+    p.set_defaults(func=cmd_spectrogram_to_png)
+
+    # ── png-to-spectrogram ────────────────────────────────────────────────────
+    p = sub.add_parser("png-to-spectrogram",
+                       help="PNG escala de grises → NPZ de espectrograma "
+                            "compatible audio_lab (par gemelo de png-to-latent)")
+    p.add_argument("input", help="Fichero PNG (idealmente de spectrogram-to-png, "
+                                  "o editado a mano)")
+    p.add_argument("--sr", type=int, default=None,
+                   help="Sample rate, si el PNG no trae metadatos")
+    p.add_argument("--window", type=int, default=None,
+                   help="Ventana STFT en muestras, si el PNG no trae metadatos")
+    p.add_argument("--hop", type=float, default=None,
+                   help="Hop ratio STFT, si el PNG no trae metadatos")
+    p.add_argument("--db-floor", type=float, default=None,
+                   help="Piso dB, si el PNG no trae metadatos")
+    p.add_argument("--mag-max", type=float, default=1.0,
+                   help="Escala absoluta de las magnitudes de salida (default: 1.0)")
+    p.add_argument("--output", "-o", default=None, help="NPZ de salida")
+    p.set_defaults(func=cmd_png_to_spectrogram)
 
     # ── train-pca ───────────────────────────────────────────────────────────────────────────
     p = sub.add_parser("train-pca",
