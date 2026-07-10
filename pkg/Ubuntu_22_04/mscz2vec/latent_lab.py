@@ -12,10 +12,12 @@
 ║    png-to-latent                PNG → .npz latente                           ║
 ║    spectrogram-to-latent-train_step1  WAVs + coder.pt → pares PNG editables  ║
 ║                                        espectrograma/latente (sin entrenar)  ║
-║    spectrogram-to-latent-train_step2  pares PNG → entrena mapper.pt          ║
-║                                        (estilo pix2pix: U-Net + PatchGAN)    ║
-║    spectrogram-to-latent        .npz STFT (audio_lab) → .npz latente         ║
-║    latent-to-spectrogram        .npz/PNG latente → .npz STFT [+ --wav]       ║
+║    spectrogram-to-latent-train_step2  pares PNG → mapper.pt, --method        ║
+║                                        {pix2pix,retrieval} (ver ARQUITECTURA)║
+║    spectrogram-to-latent        .npz STFT (audio_lab) → .npz latente,        ║
+║                                  --method {auto,pix2pix,greedy,viterbi}      ║
+║    latent-to-spectrogram        .npz/PNG latente → .npz STFT [+ --wav],      ║
+║                                  mismo --method que spectrogram-to-latent    ║
 ║    spectrogram-to-png            NPZ STFT (audio_lab) → PNG escala de grises ║
 ║    png-to-spectrogram            PNG → NPZ STFT (audio_lab)                  ║
 ║    train-pca                    NPZ latente(s)/espectrograma(s) → pca.npz    ║
@@ -54,23 +56,50 @@
 ║  pre-entrenada independiente, usable directamente por su cuenta (no se       ║
 ║  integra en este script, ver tsac-*/readme.txt).                             ║
 ║                                                                              ║
-║  El mapper espectrograma↔latente se entrena en DOS PASOS separados:          ║
+║  El mapper espectrograma↔latente se construye en DOS PASOS, y el paso 2      ║
+║  admite TRES MÉTODOS alternativos, seleccionables por línea de comandos:     ║
 ║                                                                              ║
 ║  step1: por cada WAV, calcula el espectrograma STFT (audio_lab) y el         ║
 ║  latente del coder, los ALINEA en el tiempo y los vuelca como PNG en         ║
 ║  escala de grises (uno por representación) + manifest.json con los           ║
 ║  metadatos (sr, window, hop, D, lat_min/max). NO entrena nada. Un humano     ║
 ║  puede editar esos PNG a mano (limpiar ruido, recortar, corregir) antes      ║
-║  de continuar.                                                               ║
+║  de continuar. Es COMÚN a los tres métodos del paso 2.                       ║
 ║                                                                              ║
-║  step2: lee la carpeta de pares (con las ediciones humanas, si las hay) y    ║
-║  entrena DOS redes con el enfoque pix2pix (Isola et al. 2017): un            ║
+║  step2 --method pix2pix (default, compatible con versiones anteriores)       ║
+║  Entrena DOS redes con el enfoque pix2pix (Isola et al. 2017): un            ║
 ║  generador U-Net con skip-connections + un discriminador PatchGAN, para      ║
 ║  cada dirección (espectrograma→latente y latente→espectrograma), con         ║
 ║  pérdida L1 + adversarial. Las imágenes se trocean en parches temporales     ║
-║  de anchura --tile para el entrenamiento; en inferencia se recomponen con    ║
-║  solape y ventana de Hann (ver latent-to-spectrogram / spectrogram-to-       ║
-║  latent). Resultado: mapper.pt.                                              ║
+║  de anchura --tile para el entrenamiento; en inferencia se recomponen        ║
+║  con solape y ventana de Hann. Generaliza a entradas nunca vistas, pero      ║
+║  tiende al promedio de las texturas plausibles (blur) cuando el sketch       ║
+║  de entrada es ambiguo — ver más abajo, MÉTODOS DE RECUPERACIÓN.             ║
+║                                                                              ║
+║  step2 --method retrieval (sin red neuronal — indexa, no entrena)            ║
+║  Concatena todos los pares frame a frame en un banco de búsqueda             ║
+║  (S_bank/Z_bank). No hay optimización: el corpus ES el modelo. El            ║
+║  mismo banco sirve para los dos métodos de búsqueda siguientes —             ║
+║  greedy y viterbi eligen el ALGORITMO de búsqueda en INFERENCIA              ║
+║  (spectrogram-to-latent --method), no en este paso.                          ║
+║                                                                              ║
+║  MÉTODOS DE RECUPERACIÓN (spectrogram-to-latent --method greedy|viterbi)     ║
+║                                                                              ║
+║  Frente a pix2pix (regresión → tiende al promedio de casos ambiguos),        ║
+║  greedy y viterbi seleccionan frames REALES del corpus, sin promediar        ║
+║  nunca — a costa de generalizar peor que una red a sketches muy              ║
+║  distintos de lo visto en entrenamiento (sobreajuste consciente).            ║
+║                                                                              ║
+║  greedy: para cada frame de entrada, el vecino más cercano del banco         ║
+║  (target cost = distancia euclídea), de forma independiente. Rápido,         ║
+║  pero sin garantía de continuidad entre frames consecutivos.                 ║
+║                                                                              ║
+║  viterbi: programación dinámica sobre los --topk candidatos por frame,       ║
+║  minimizando target cost + --join-weight · join cost (continuidad en         ║
+║  el espacio de salida entre frames consecutivos). Es la técnica de           ║
+║  unit-selection clásica de síntesis concatenativa de voz (Hunt &             ║
+║  Black 1996) aplicada a frames latentes. greedy es el caso particular        ║
+║  topk=1 (sin coste de unión).                                                ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  PIPELINE NPZ ↔ PNG (latentes)                                               ║
 ║                                                                              ║
@@ -115,6 +144,13 @@
 ║    [editar los PNG en pairs/ a mano, opcional]                               ║
 ║    python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \\          ║
 ║           -o mapper.pt                                                       ║
+║    python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \\          ║
+║           --method retrieval -o mapper_retrieval.pt                          ║
+║    python latent_lab.py spectrogram-to-latent voz_stft.npz \\                ║
+║           --mapper mapper_retrieval.pt --method greedy -o voz_lat.npz        ║
+║    python latent_lab.py spectrogram-to-latent voz_stft.npz \\                ║
+║           --mapper mapper_retrieval.pt --method viterbi --topk 8 \\          ║
+║           --join-weight 1.0 -o voz_lat.npz                                   ║
 ║    python latent_lab.py spectrogram-to-latent voz_stft.npz \\                ║
 ║           --mapper mapper.pt -o voz_lat.npz                                  ║
 ║    python latent_lab.py latent-to-spectrogram voz_lat.npz \\                 ║
@@ -1146,17 +1182,176 @@ def _load_pairs(pairs_dir: Path):
     return manifest, pairs
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# INTERFAZ COMÚN DE MAPPERS ESPECTROGRAMA↔LATENTE
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Los tres métodos (pix2pix, greedy, viterbi) son intercambiables porque todos
+# se cargan con _load_mapper() y devuelven el mismo contrato (_MapperHandle,
+# más abajo): un objeto con .ckpt (metadatos: sr/window/hop_ratio/db_floor/
+# n_bins/latent_dim/coder_hop/lat_min/lat_max) y dos métodos
+#   spec_to_latent(S_norm [Fs×bins] ∈[0,1]) -> Zn [Fz×D] ∈[0,1]
+#   latent_to_spec(Zn [Fz×D] ∈[0,1])        -> S_norm [Fs×bins] ∈[0,1]
+# cmd_spectrogram_to_latent / cmd_latent_to_spectrogram llaman solo a esta
+# interfaz y no necesitan saber qué método hay detrás.
+#
+#   · pix2pix    mapper.pt con redes neuronales (gen_s2l/gen_l2s state_dict).
+#                Un único generador cubre todo el espacio de entrada.
+#   · retrieval  mapper.pt con un banco de pares frame a frame (S_bank/Z_bank),
+#                sin red neuronal: el corpus ES el modelo. greedy y viterbi
+#                comparten el MISMO banco/checkpoint (kind=
+#                "latent_lab_mapper_retrieval") — solo difieren en el
+#                algoritmo de búsqueda, elegido en inferencia con --method.
+#
+# spectrogram-to-latent-train_step2 --method {pix2pix,retrieval} construye el
+# checkpoint; spectrogram-to-latent/latent-to-spectrogram --method
+# {auto,pix2pix,greedy,viterbi} eligen cómo usarlo.
+
+def _pairwise_sqdist(A: np.ndarray, B: np.ndarray) -> np.ndarray:
+    """
+    Distancia euclídea al cuadrado entre cada fila de A [n×d] y cada fila de
+    B [m×d] → [n×m], vía el truco |a|²+|b|²-2·a·b (una multiplicación de
+    matrices con BLAS en vez de un bucle n×m de restas).
+    """
+    a2 = np.sum(A * A, axis=1, keepdims=True)            # [n,1]
+    b2 = np.sum(B * B, axis=1, keepdims=True).T           # [1,m]
+    cross = A @ B.T                                        # [n,m]
+    return np.maximum(a2 + b2 - 2.0 * cross, 0.0)
+
+
+def _retrieve_greedy(query: np.ndarray, bank_query: np.ndarray,
+                     bank_target: np.ndarray) -> np.ndarray:
+    """
+    Recuperación por vecino más cercano, frame a frame e independiente
+    (sin coste de unión entre frames consecutivos — es Viterbi con K=1).
+    query [F×d] se compara contra bank_query [N×d] (target cost); se
+    devuelve la fila correspondiente de bank_target [N×d'] para cada frame.
+    """
+    d2  = _pairwise_sqdist(query, bank_query)              # [F × N]
+    idx = np.argmin(d2, axis=1)
+    print(f"  [retrieval:greedy] {query.shape[0]} frames buscados "
+          f"sobre banco de {bank_query.shape[0]}")
+    return bank_target[idx]
+
+
+def _retrieve_viterbi(query: np.ndarray, bank_query: np.ndarray,
+                      bank_target: np.ndarray, topk: int,
+                      join_weight: float) -> np.ndarray:
+    """
+    Recuperación por programación dinámica (Viterbi) sobre los `topk`
+    candidatos más parecidos por frame: minimiza a la vez
+      Σ target_cost(frame_f, candidato_f)              — parecido al query
+      Σ join_cost(candidato_{f-1}, candidato_f) · join_weight  — continuidad
+    en vez de elegir cada frame de forma independiente (como greedy), lo que
+    evita saltos bruscos entre unidades consecutivas del resultado. El coste
+    de unión se mide en el espacio de SALIDA (bank_target), porque lo que
+    importa es que la secuencia final quede continua, no el query.
+    """
+    F = query.shape[0]
+    N = bank_query.shape[0]
+    K = max(1, min(topk, N))
+
+    d2 = _pairwise_sqdist(query, bank_query)                # [F × N] target cost
+    if K < N:
+        part = np.argpartition(d2, K - 1, axis=1)[:, :K]    # [F × K] candidatos
+    else:
+        part = np.tile(np.arange(N), (F, 1))
+    rows  = np.arange(F)[:, None]
+    order = np.argsort(d2[rows, part], axis=1)
+    cand  = part[rows, order]                                # [F × K] ordenados por coste
+    tgt_cost = d2[rows, cand]                                # [F × K]
+
+    dp   = np.zeros((F, K), dtype=np.float64)
+    back = np.zeros((F, K), dtype=np.int32)
+    dp[0] = tgt_cost[0]
+
+    for f in range(1, F):
+        prev_target = bank_target[cand[f - 1]]               # [K × d']
+        cur_target  = bank_target[cand[f]]                   # [K × d']
+        join  = _pairwise_sqdist(cur_target, prev_target)     # [K(actual) × K(previo)]
+        total = dp[f - 1][None, :] + join_weight * join       # [K × K]
+        back[f] = np.argmin(total, axis=1)
+        dp[f]   = tgt_cost[f] + total[np.arange(K), back[f]]
+
+    path = np.zeros(F, dtype=np.int32)
+    path[F - 1] = np.argmin(dp[F - 1])
+    for f in range(F - 1, 0, -1):
+        path[f - 1] = back[f][path[f]]
+
+    chosen = cand[np.arange(F), path]
+    print(f"  [retrieval:viterbi] {F} frames  topk={K}  banco={N}  "
+          f"join_weight={join_weight}")
+    return bank_target[chosen]
+
+
+def _train_step2_retrieval(args, manifest, pairs, n_bins, D):
+    """
+    Construye el banco de recuperación (--method retrieval): concatena todos
+    los pares frame a frame en S_bank [N×bins] / Z_bank [N×D], sin canvas_h
+    (no hace falta: no hay CNN, cada búsqueda usa la resolución nativa). No
+    hay entrenamiento — es indexado puro. track_id/frame_idx quedan
+    guardados por si en el futuro se quiere premiar continuar dentro de la
+    misma pista real en vez de saltar entre pistas distintas.
+    """
+    S_list, Z_list, track_id, frame_idx = [], [], [], []
+    for ti, (S_img, Z_img) in enumerate(pairs):
+        W = S_img.shape[1]
+        S_list.append(S_img.T.astype(np.float32))      # [W × bins]
+        Z_list.append(Z_img.T.astype(np.float32))      # [W × D]
+        track_id.append(np.full(W, ti, dtype=np.int32))
+        frame_idx.append(np.arange(W, dtype=np.int32))
+
+    S_bank    = np.concatenate(S_list, axis=0)
+    Z_bank    = np.concatenate(Z_list, axis=0)
+    track_id  = np.concatenate(track_id)
+    frame_idx = np.concatenate(frame_idx)
+
+    zoo   = _torch_zoo()
+    torch = zoo["torch"]
+    out_path = args.output or "mapper.pt"
+    torch.save({
+        "kind":       "latent_lab_mapper_retrieval",
+        "sr":         manifest["sr"],
+        "window":     manifest["window"],
+        "hop_ratio":  manifest["hop_ratio"],
+        "db_floor":   manifest["db_floor"],
+        "n_bins":     n_bins,
+        "latent_dim": D,
+        "coder_hop":  manifest["coder_hop"],
+        "lat_min":    manifest["lat_min"],
+        "lat_max":    manifest["lat_max"],
+        "S_bank":     S_bank,
+        "Z_bank":     Z_bank,
+        "track_id":   track_id,
+        "frame_idx":  frame_idx,
+    }, out_path)
+    print(f"  [step2] retrieval: banco de {S_bank.shape[0]} frames  "
+          f"({len(pairs)} pistas)  bins={n_bins}  D={D}")
+    print(f"  ✓  Mapper (retrieval, greedy+viterbi comparten este banco) → {out_path}")
+
+
 def cmd_spec_latent_train_step2(args):
     """
-    Directorio de pares (de step1, posiblemente editados a mano) → entrena
-    los traductores espectrograma↔latente con un enfoque pix2pix (U-Net
-    generador + PatchGAN discriminador, pérdida L1 + adversarial) → mapper.pt
+    Directorio de pares (de step1, posiblemente editados a mano) → construye
+    el traductor espectrograma↔latente con el método elegido por --method:
+      · pix2pix    entrena U-Net generador + PatchGAN discriminador (L1 +
+                    adversarial), como en las versiones anteriores del
+                    programa — mapper.pt con redes neuronales.
+      · retrieval  indexa los pares frame a frame en un banco de búsqueda,
+                    sin entrenar nada — mapper.pt con el corpus. greedy y
+                    viterbi (elegidos luego en spectrogram-to-latent
+                    --method) reutilizan el MISMO banco/checkpoint.
     """
-    zoo   = _torch_zoo()
-    torch, nn = zoo["torch"], zoo["nn"]
     pairs_dir = Path(args.pairs_dir)
     manifest, pairs = _load_pairs(pairs_dir)
     n_bins, D = manifest["n_bins"], manifest["latent_dim"]
+
+    if args.method == "retrieval":
+        _train_step2_retrieval(args, manifest, pairs, n_bins, D)
+        return
+
+    zoo   = _torch_zoo()
+    torch, nn = zoo["torch"], zoo["nn"]
     device = _get_device(args.device)
 
     gen_s2l  = zoo["UNetGenerator"](args.gen_base).to(device)
@@ -1294,13 +1489,18 @@ def _run_generator_tiled(gen, torch, img: np.ndarray, tile: int, device) -> np.n
     return out / wsum
 
 
-def _load_mapper(path: str, device_name: str):
+def _load_mapper(path: str, device_name: str, method: str = "auto",
+                 topk: int = 8, join_weight: float = 1.0):
     """
     Carga un checkpoint de mapper y devuelve un objeto con dos métodos
     uniformes — spec_to_latent(S_norm)->Zn y latent_to_spec(Zn)->S_norm —
-    que funcionan igual sea el mapper legado (FrameMapper 1-D) o el nuevo
-    pix2pix (UNetGenerator 2-D), para que cmd_spectrogram_to_latent y
-    cmd_latent_to_spectrogram no necesiten saber cuál es cuál.
+    que funcionan igual sea el mapper legado (FrameMapper 1-D), el pix2pix
+    (UNetGenerator 2-D) o el de retrieval (greedy/viterbi sobre un banco de
+    pares), para que cmd_spectrogram_to_latent y cmd_latent_to_spectrogram
+    no necesiten saber cuál es cuál. `method` solo se usa (y es obligatorio
+    resolverlo) cuando el checkpoint es de retrieval — "auto" implica
+    "viterbi" en ese caso; para pix2pix/legado se ignora salvo que se pida
+    explícitamente un método incompatible, que es un error de uso.
     """
     zoo  = _torch_zoo()
     torch = zoo["torch"]
@@ -1319,6 +1519,9 @@ def _load_mapper(path: str, device_name: str):
             return self._lat_fn(Z_norm)
 
     if kind == "latent_lab_mapper":
+        if method not in (None, "auto", "pix2pix"):
+            sys.exit(f"✗  --method {method} no es válido para este checkpoint "
+                     f"(FrameMapper legado) — usa pix2pix o auto")
         spec2lat = zoo["FrameMapper"](ckpt["n_bins"], ckpt["latent_dim"],
                                       ckpt["hidden"], ckpt["kernel"])
         lat2spec = zoo["FrameMapper"](ckpt["latent_dim"], ckpt["n_bins"],
@@ -1349,6 +1552,9 @@ def _load_mapper(path: str, device_name: str):
         return _MapperHandle(ckpt, spec_fn, lat_fn)
 
     elif kind == "latent_lab_mapper_pix2pix":
+        if method not in (None, "auto", "pix2pix"):
+            sys.exit(f"✗  --method {method} no es válido para este checkpoint "
+                     f"(pix2pix) — usa pix2pix o auto")
         gen_s2l = zoo["UNetGenerator"](ckpt["gen_base"])
         gen_l2s = zoo["UNetGenerator"](ckpt["gen_base"])
         gen_s2l.load_state_dict(ckpt["gen_s2l"]);  gen_s2l.to(device).eval()
@@ -1382,6 +1588,40 @@ def _load_mapper(path: str, device_name: str):
 
         return _MapperHandle(ckpt, spec_fn, lat_fn)
 
+    elif kind == "latent_lab_mapper_retrieval":
+        resolved = method if method not in (None, "auto") else "viterbi"
+        if resolved not in ("greedy", "viterbi"):
+            sys.exit(f"✗  --method {resolved} no es válido para este checkpoint "
+                     f"(retrieval) — usa greedy, viterbi o auto")
+        S_bank = ckpt["S_bank"]      # [N × bins] normalizado [0,1]
+        Z_bank = ckpt["Z_bank"]      # [N × D]    normalizado [0,1]
+        print(f"  [mapper] {path}: (retrieval, método={resolved}) "
+              f"banco={S_bank.shape[0]} frames  window={ckpt['window']} "
+              f"hop={ckpt['hop_ratio']} ↔ D={ckpt['latent_dim']} coder_hop={ckpt['coder_hop']}"
+              + (f"  topk={topk}  join_weight={join_weight}" if resolved == "viterbi" else ""))
+
+        def spec_fn(S_norm):   # S_norm [Fs × bins] → Zn [Fz × D]
+            spec_hop = max(1, int(ckpt["window"] * ckpt["hop_ratio"]))
+            n_lat = max(1, round(S_norm.shape[0] * spec_hop / ckpt["coder_hop"]))
+            S_al = _resample_frames(S_norm, n_lat)                       # [Fz × bins]
+            if resolved == "greedy":
+                Zn = _retrieve_greedy(S_al, S_bank, Z_bank)
+            else:
+                Zn = _retrieve_viterbi(S_al, S_bank, Z_bank, topk, join_weight)
+            return np.clip(Zn, 0.0, 1.0)
+
+        def lat_fn(Z_norm):    # Z_norm [Fz × D] → S_norm [Fs × bins]
+            spec_hop = max(1, int(ckpt["window"] * ckpt["hop_ratio"]))
+            n_spec = max(1, round(Z_norm.shape[0] * ckpt["coder_hop"] / spec_hop))
+            if resolved == "greedy":
+                S = _retrieve_greedy(Z_norm, Z_bank, S_bank)
+            else:
+                S = _retrieve_viterbi(Z_norm, Z_bank, S_bank, topk, join_weight)
+            S = np.clip(S, 0.0, 1.0)
+            return _resample_frames(S, n_spec)
+
+        return _MapperHandle(ckpt, spec_fn, lat_fn)
+
     else:
         sys.exit(f"✗  {path} no es un checkpoint de spectrogram-to-latent-train"
                  f"(_step2 ni de la versión legada)")
@@ -1389,7 +1629,8 @@ def _load_mapper(path: str, device_name: str):
 
 def cmd_spectrogram_to_latent(args):
     """NPZ de espectrograma (audio_lab) → NPZ latente [+ PNG]."""
-    mapper = _load_mapper(args.mapper, args.device)
+    mapper = _load_mapper(args.mapper, args.device, args.method,
+                          args.topk, args.join_weight)
     ckpt   = mapper.ckpt
 
     data   = np.load(args.input)
@@ -1423,7 +1664,8 @@ def cmd_spectrogram_to_latent(args):
 
 def cmd_latent_to_spectrogram(args):
     """NPZ/PNG latente → NPZ de espectrograma compatible con audio_lab [+ WAV]."""
-    mapper = _load_mapper(args.mapper, args.device)
+    mapper = _load_mapper(args.mapper, args.device, args.method,
+                          args.topk, args.join_weight)
     ckpt   = mapper.ckpt
 
     lat_min = np.array(ckpt["lat_min"], dtype=np.float32)
@@ -2016,6 +2258,8 @@ def cmd_info(args):
                      "gen_s2l", "gen_l2s", "disc_s2l", "disc_l2s"):
                 n = sum(int(np.prod(t.shape)) for t in v.values())
                 print(f"  {k:<14}: state_dict  ({n/1e6:.2f}M parámetros)")
+            elif isinstance(v, np.ndarray):
+                print(f"  {k:<14}: array shape={v.shape}  dtype={v.dtype}")
             elif isinstance(v, list) and len(v) > 8:
                 print(f"  {k:<14}: [{len(v)} valores]  "
                       f"min={min(v):.3f} max={max(v):.3f}")
@@ -2165,29 +2409,37 @@ def main():
 
     # ── spectrogram-to-latent-train_step2 ─────────────────────────────────────
     p = sub.add_parser("spectrogram-to-latent-train_step2",
-                       help="Carpeta de pares (de step1, editable) → entrena "
-                            "espectrograma↔latente estilo pix2pix → mapper.pt")
+                       help="Carpeta de pares (de step1, editable) → construye "
+                            "el traductor espectrograma↔latente → mapper.pt")
     p.add_argument("pairs_dir", help="Carpeta generada por step1 (con manifest.json)")
+    p.add_argument("--method", default="pix2pix", choices=["pix2pix", "retrieval"],
+                   help="pix2pix: entrena U-Net+PatchGAN (red neuronal). "
+                        "retrieval: indexa un banco de pares frame a frame, "
+                        "sin entrenar nada — usable luego con --method "
+                        "greedy o viterbi en spectrogram-to-latent "
+                        "(default: pix2pix)")
     p.add_argument("--tile", type=int, default=256,
-                   help="Anchura temporal (en frames) de los parches de entrenamiento "
-                        "y de inferencia troceada; debe ser múltiplo de 32 (default: 256)")
+                   help="[pix2pix] Anchura temporal (en frames) de los parches de "
+                        "entrenamiento y de inferencia troceada; debe ser múltiplo "
+                        "de 32 (default: 256)")
     p.add_argument("--gen-base", type=int, default=64,
-                   help="Canales base del generador U-Net (default: 64)")
+                   help="[pix2pix] Canales base del generador U-Net (default: 64)")
     p.add_argument("--disc-base", type=int, default=64,
-                   help="Canales base del discriminador PatchGAN (default: 64)")
+                   help="[pix2pix] Canales base del discriminador PatchGAN (default: 64)")
     p.add_argument("--l1-weight", type=float, default=100.0,
-                   help="Peso de la pérdida L1 frente a la adversarial, como en "
-                        "el paper pix2pix (default: 100.0)")
+                   help="[pix2pix] Peso de la pérdida L1 frente a la adversarial, "
+                        "como en el paper pix2pix (default: 100.0)")
     p.add_argument("--epochs", type=int, default=50,
-                   help="Epochs sobre el corpus de pares (default: 50)")
+                   help="[pix2pix] Epochs sobre el corpus de pares (default: 50)")
     p.add_argument("--batch", type=int, default=4,
-                   help="Tamaño de batch de parches (default: 4)")
+                   help="[pix2pix] Tamaño de batch de parches (default: 4)")
     p.add_argument("--lr", type=float, default=2e-4,
-                   help="Learning rate Adam, betas=(0.5,0.999) como en pix2pix "
-                        "(default: 2e-4)")
-    p.add_argument("--seed", type=int, default=0, help="Semilla RNG (default: 0)")
+                   help="[pix2pix] Learning rate Adam, betas=(0.5,0.999) como en "
+                        "pix2pix (default: 2e-4)")
+    p.add_argument("--seed", type=int, default=0,
+                   help="[pix2pix] Semilla RNG (default: 0)")
     p.add_argument("--log-every", type=int, default=50,
-                   help="Imprimir pérdida cada N pasos (default: 50)")
+                   help="[pix2pix] Imprimir pérdida cada N pasos (default: 50)")
     _add_device(p)
     p.add_argument("--output", "-o", default="mapper.pt",
                    help="Checkpoint de salida (default: mapper.pt)")
@@ -2197,7 +2449,21 @@ def main():
     p = sub.add_parser("spectrogram-to-latent",
                        help="NPZ STFT (audio_lab) → NPZ latente [+ PNG]")
     p.add_argument("input", help="Fichero .npz de espectrograma (audio_lab spectrogram)")
-    p.add_argument("--mapper", required=True, help="Checkpoint mapper.pt")
+    p.add_argument("--mapper", required=True, help="Checkpoint mapper.pt "
+                   "(pix2pix o retrieval, ver spectrogram-to-latent-train_step2)")
+    p.add_argument("--method", default="auto",
+                   choices=["auto", "pix2pix", "greedy", "viterbi"],
+                   help="Método de traducción. auto: detecta pix2pix/legado del "
+                        "checkpoint, o usa viterbi si es un mapper de retrieval. "
+                        "greedy/viterbi requieren un mapper --method retrieval "
+                        "(default: auto)")
+    p.add_argument("--topk", type=int, default=8,
+                   help="[viterbi] Nº de candidatos por frame considerados en la "
+                        "búsqueda (default: 8)")
+    p.add_argument("--join-weight", type=float, default=1.0,
+                   help="[viterbi] Peso del coste de unión/continuidad frente al "
+                        "de coincidencia con el query (default: 1.0; 0 = greedy "
+                        "de facto, ignora continuidad)")
     p.add_argument("--png", action="store_true",
                    help="Genera también PNG editable del latente")
     _add_device(p)
@@ -2208,7 +2474,16 @@ def main():
     p = sub.add_parser("latent-to-spectrogram",
                        help="NPZ/PNG latente → NPZ STFT compatible audio_lab [+ WAV]")
     p.add_argument("input", help="Fichero .npz o .png de latentes")
-    p.add_argument("--mapper", required=True, help="Checkpoint mapper.pt")
+    p.add_argument("--mapper", required=True, help="Checkpoint mapper.pt "
+                   "(pix2pix o retrieval, ver spectrogram-to-latent-train_step2)")
+    p.add_argument("--method", default="auto",
+                   choices=["auto", "pix2pix", "greedy", "viterbi"],
+                   help="Método de traducción, igual que en spectrogram-to-latent "
+                        "(default: auto)")
+    p.add_argument("--topk", type=int, default=8,
+                   help="[viterbi] Nº de candidatos por frame (default: 8)")
+    p.add_argument("--join-weight", type=float, default=1.0,
+                   help="[viterbi] Peso del coste de unión/continuidad (default: 1.0)")
     p.add_argument("--mag-max", type=float, default=1.0,
                    help="Escala absoluta de las magnitudes de salida (default: 1.0; "
                         "reconstruct de audio_lab normaliza automáticamente)")
