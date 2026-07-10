@@ -13,9 +13,11 @@
 ║    spectrogram-to-latent-train_step1  WAVs + coder.pt → pares PNG editables  ║
 ║                                        espectrograma/latente (sin entrenar)  ║
 ║    spectrogram-to-latent-train_step2  pares PNG → mapper.pt, --method        ║
-║                                        {pix2pix,retrieval} (ver ARQUITECTURA)║
+║                                        {pix2pix,retrieval,causal,            ║
+║                                        causal-adv} (ver ARQUITECTURA)        ║
 ║    spectrogram-to-latent        .npz STFT (audio_lab) → .npz latente,        ║
-║                                  --method {auto,pix2pix,greedy,viterbi}      ║
+║                                  --method {auto,pix2pix,greedy,viterbi,      ║
+║                                  causal,causal-adv}                          ║
 ║    latent-to-spectrogram        .npz/PNG latente → .npz STFT [+ --wav],      ║
 ║                                  mismo --method que spectrogram-to-latent    ║
 ║    spectrogram-to-png            NPZ STFT (audio_lab) → PNG escala de grises ║
@@ -100,6 +102,40 @@
 ║  unit-selection clásica de síntesis concatenativa de voz (Hunt &             ║
 ║  Black 1996) aplicada a frames latentes. greedy es el caso particular        ║
 ║  topk=1 (sin coste de unión).                                                ║
+║                                                                              ║
+║  MÉTODOS AUTORREGRESIVOS (spectrogram-to-latent --method causal|causal-adv)  ║
+║                                                                              ║
+║  step2 --method causal: entrena CausalGenerator (WaveNet-lite), que          ║
+║  predice la columna latente t a partir de las columnas latentes              ║
+║  ANTERIORES (convoluciones causales dilatadas, campo receptivo =             ║
+║  2**n_layers ≥ --context frames) más un condicionamiento del                 ║
+║  espectrograma COMPLETO (no causal — en generación offline el                ║
+║  espectrograma entero ya está disponible). L1 puro + teacher forcing         ║
+║  FIJO (siempre se alimenta el latente real desplazado, nunca la              ║
+║  propia predicción, durante el entrenamiento). En INFERENCIA sí es           ║
+║  autorregresivo de verdad, frame a frame, alimentado de sus propias          ║
+║  predicciones (no hay latente real disponible fuera de entrenamiento)        ║
+║  — expuesto por tanto al exposure bias clásico de los modelos                ║
+║  autorregresivos, y al mismo promedio de texturas ambiguas que               ║
+║  pix2pix, al ser también regresión L1 pura.                                  ║
+║                                                                              ║
+║  step2 --method causal-adv: añade dos mitigaciones sobre lo anterior:        ║
+║    · scheduled sampling (Bengio et al. 2015): con probabilidad               ║
+║      creciente --ss-final-prob a lo largo del entrenamiento, la              ║
+║      historia se sustituye por la propia predicción del modelo (de           ║
+║      una primera pasada, sin gradiente) en vez del latente real —            ║
+║      simplificación en DOS pasadas paralelas, no rollout secuencial          ║
+║      completo (ver docstring de _train_step2_causal_adv).                    ║
+║    · pérdida adversarial (CausalDiscriminator1D, PatchGAN 1-D                ║
+║      condicionado al espectrograma): penaliza que la secuencia               ║
+║      generada no tenga la estadística de una secuencia real,                 ║
+║      empujando hacia UNA textura plausible en vez del promedio.              ║
+║                                                                              ║
+║  Ambos métodos SOLO entrenan la dirección espectrograma→latente              ║
+║  (latent-to-spectrogram --method causal falla con error explícito) —         ║
+║  ver conversación de diseño: esta dirección no hacía falta aquí.             ║
+║  Generación con ventana acotada al campo receptivo del modelo                ║
+║  (O(T·campo_receptivo), no O(T²) con toda la historia completa).             ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  PIPELINE NPZ ↔ PNG (latentes)                                               ║
 ║                                                                              ║
@@ -151,6 +187,13 @@
 ║    python latent_lab.py spectrogram-to-latent voz_stft.npz \\                ║
 ║           --mapper mapper_retrieval.pt --method viterbi --topk 8 \\          ║
 ║           --join-weight 1.0 -o voz_lat.npz                                   ║
+║    python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \\          ║
+║           --method causal --context 32 -o mapper_causal.pt                   ║
+║    python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \\          ║
+║           --method causal-adv --context 32 --ss-final-prob 0.5 \\            ║
+║           -o mapper_causal_adv.pt                                            ║
+║    python latent_lab.py spectrogram-to-latent voz_stft.npz \\                ║
+║           --mapper mapper_causal_adv.pt -o voz_lat.npz                       ║
 ║    python latent_lab.py spectrogram-to-latent voz_stft.npz \\                ║
 ║           --mapper mapper.pt -o voz_lat.npz                                  ║
 ║    python latent_lab.py latent-to-spectrogram voz_lat.npz \\                 ║
@@ -538,9 +581,103 @@ def _torch_zoo() -> Dict[str, object]:
             x = torch.cat([cond, img], dim=1)
             return self.net(x)
 
+    # ── causal: WaveNet-lite autorregresivo (columna t ← columnas < t) ──────────
+    # Predice la columna latente t a partir de las columnas latentes ANTERIORES
+    # (convoluciones causales dilatadas, campo receptivo ≈ 2^n_layers) más un
+    # condicionamiento del espectrograma COMPLETO (no causal: en generación
+    # offline el espectrograma entero ya está disponible, pasado y futuro).
+    # El llamante desplaza el latente de entrada una posición (spec_fn/
+    # _causal_generate) para que la predicción en t nunca vea el Z[t] real.
+
+    class CausalConv1d(nn.Module):
+        """Conv1d causal: solo mira al pasado (padding a la izquierda)."""
+        def __init__(self, in_c, out_c, kernel=2, dilation=1):
+            super().__init__()
+            self.pad  = (kernel - 1) * dilation
+            self.conv = nn.Conv1d(in_c, out_c, kernel, dilation=dilation)
+        def forward(self, x):
+            x = nn.functional.pad(x, (self.pad, 0))
+            return self.conv(x)
+
+    class CausalResBlock(nn.Module):
+        """Bloque residual con convolución causal dilatada, estilo WaveNet."""
+        def __init__(self, channels, dilation):
+            super().__init__()
+            self.conv = CausalConv1d(channels, channels, kernel=2, dilation=dilation)
+            self.proj = nn.Conv1d(channels, channels, 1)
+            self.act  = nn.GELU()
+        def forward(self, x):
+            y = self.act(self.conv(x))
+            y = self.proj(y)
+            return x + y
+
+    class CausalGenerator(nn.Module):
+        """
+        Traductor autorregresivo espectrograma→latente: predice la columna
+        latente t a partir de las columnas latentes t-1..t-context (pila de
+        CausalResBlock con dilatación 1,2,4,...) sumadas a un condicionamiento
+        del espectrograma completo (spec_enc, NO causal — se puede precomputar
+        una sola vez para todo el clip y reutilizar en cada paso de generación,
+        ver _causal_generate). n_layers se elige para que el campo receptivo
+        (2**n_layers) cubra al menos --context frames.
+        """
+        def __init__(self, n_bins, D, hidden=64, context=32):
+            super().__init__()
+            n_layers = max(1, math.ceil(math.log2(max(context, 1) + 1)))
+            self.in_proj  = nn.Conv1d(D, hidden, 1)
+            self.spec_enc = nn.Sequential(
+                nn.Conv1d(n_bins, hidden, 5, padding=2), nn.GELU(),
+                nn.Conv1d(hidden, hidden, 5, padding=4, dilation=2), nn.GELU(),
+                nn.Conv1d(hidden, hidden, 1),
+            )
+            self.blocks = nn.ModuleList(
+                [CausalResBlock(hidden, 2 ** i) for i in range(n_layers)])
+            self.out_proj = nn.Conv1d(hidden, D, 1)
+            self.n_layers = n_layers
+            self.receptive_field = 2 ** n_layers
+
+        def encode_spec(self, S_cond):
+            """S_cond [B,bins,T] → spec_feat [B,hidden,T]. No causal: usa todo
+            el clip. Se precomputa una vez y se reutiliza en cada paso t."""
+            return self.spec_enc(S_cond)
+
+        def forward(self, Z_shifted, spec_feat):
+            """Z_shifted [B,D,T] (desplazado 1 frame por el llamante) +
+            spec_feat [B,hidden,T] (de encode_spec) → Zn [B,D,T] ∈ [0,1]."""
+            h = self.in_proj(Z_shifted) + spec_feat
+            for blk in self.blocks:
+                h = blk(h)
+            return torch.sigmoid(self.out_proj(h))
+
+    class CausalDiscriminator1D(nn.Module):
+        """PatchGAN 1-D: juzga parches temporales de la secuencia latente
+        como reales/falsos, condicionado al espectrograma — mismo espíritu
+        que PatchDiscriminator, pero sobre [B,canal,T] en vez de [B,canal,H,W]."""
+        def __init__(self, n_bins, D, base=64):
+            super().__init__()
+            def block(in_c, out_c, stride=2, norm=True):
+                layers = [nn.Conv1d(in_c, out_c, 4, stride=stride, padding=1,
+                                    bias=not norm)]
+                if norm:
+                    layers.append(nn.InstanceNorm1d(out_c))
+                layers.append(nn.LeakyReLU(0.2, inplace=True))
+                return layers
+            self.net = nn.Sequential(
+                *block(n_bins + D, base,   norm=False),
+                *block(base,       base*2),
+                *block(base*2,     base*4),
+                *block(base*4,     base*8, stride=1),
+                nn.Conv1d(base*8, 1, 4, stride=1, padding=1),
+            )
+        def forward(self, S_cond, Z_seq):
+            x = torch.cat([S_cond, Z_seq], dim=1)
+            return self.net(x)
+
     _TORCH_ZOO.update(torch=torch, nn=nn, Snake=Snake,
                       Encoder=Encoder, Decoder=Decoder, FrameMapper=FrameMapper,
-                      UNetGenerator=UNetGenerator, PatchDiscriminator=PatchDiscriminator)
+                      UNetGenerator=UNetGenerator, PatchDiscriminator=PatchDiscriminator,
+                      CausalGenerator=CausalGenerator,
+                      CausalDiscriminator1D=CausalDiscriminator1D)
     return _TORCH_ZOO
 
 def _get_device(name: str):
@@ -1330,6 +1467,241 @@ def _train_step2_retrieval(args, manifest, pairs, n_bins, D):
     print(f"  ✓  Mapper (retrieval, greedy+viterbi comparten este banco) → {out_path}")
 
 
+def _sample_causal_tiles(pairs, n: int, tile: int, n_bins: int, D: int, rng):
+    """
+    Recorta `n` parches temporales [n_bins×tile]/[D×tile] de los pares (en
+    resolución NATIVA, sin canvas — el modelo causal trata bins/componentes
+    como canales, igual que FrameMapper, no como una imagen 2-D).
+    """
+    S_b = np.zeros((n, n_bins, tile), dtype=np.float32)
+    Z_b = np.zeros((n, D, tile), dtype=np.float32)
+    for b in range(n):
+        S_img, Z_img = pairs[rng.integers(len(pairs))]     # [bins×W] / [D×W]
+        w = S_img.shape[1]
+        if w <= tile:
+            S_b[b, :, :w] = S_img
+            Z_b[b, :, :w] = Z_img
+        else:
+            start = rng.integers(w - tile + 1)
+            S_b[b] = S_img[:, start:start + tile]
+            Z_b[b] = Z_img[:, start:start + tile]
+    return S_b, Z_b
+
+def _causal_generate(gen, torch, S_cond_full, D: int, device,
+                     log_every: int = 200) -> np.ndarray:
+    """
+    Genera Zn [D×T] frame a frame, autorregresivamente: en inferencia no
+    existe el latente real, así que cada paso se alimenta de sus propias
+    predicciones anteriores (a diferencia del entrenamiento con teacher
+    forcing). spec_feat se precomputa UNA vez para todo el clip (no es
+    causal). Cada paso solo reevalúa la red sobre la ventana
+    [t-receptive_field, t] — fuera de ahí el campo receptivo del modelo no
+    puede ver nada — acotando el coste a O(T·receptive_field) en vez de
+    O(T²) con toda la historia completa.
+    """
+    T  = S_cond_full.shape[-1]
+    rf = gen.receptive_field
+    with torch.no_grad():
+        spec_feat_full = gen.encode_spec(S_cond_full)         # [1,hidden,T], una vez
+        Z_gen = torch.zeros(1, D, T, device=device)
+        for t in range(T):
+            start = max(0, t - rf)
+            L = t - start + 1
+            Z_hist_win = torch.zeros(1, D, L, device=device)
+            if start > 0:
+                Z_hist_win[:, :, 0] = Z_gen[:, :, start - 1]
+            if L > 1:
+                Z_hist_win[:, :, 1:] = Z_gen[:, :, start:t]
+            spec_win = spec_feat_full[:, :, start:t + 1]
+            pred = gen(Z_hist_win, spec_win)
+            Z_gen[:, :, t] = pred[:, :, -1]
+            if log_every and (t % log_every == 0 or t == T - 1):
+                print(f"  [causal] generando frame {t + 1}/{T}", end="\r")
+    if log_every:
+        print()
+    return Z_gen[0].cpu().numpy()                              # [D × T]
+
+def _train_step2_causal(args, manifest, pairs, n_bins: int, D: int):
+    """
+    --method causal (versión simple): entrena CausalGenerator con L1 puro y
+    teacher forcing FIJO (siempre se alimenta el latente REAL desplazado una
+    posición, nunca la propia predicción del modelo) — sin scheduled
+    sampling ni pérdida adversarial. Es la versión más directa: rápida de
+    entrenar (una sola pasada hacia delante por paso, totalmente paralela
+    en el tiempo gracias a las convoluciones causales), pero expuesta al
+    "exposure bias" clásico de los modelos autorregresivos (en inferencia
+    el error de cada frame se compone sobre el siguiente, porque ya no hay
+    latente real con el que corregir el rumbo) y a la misma tendencia al
+    "promedio de texturas ambiguas" que pix2pix, al ser también regresión
+    L1 pura. Ver --method causal-adv para las mitigaciones de ambos.
+    """
+    zoo = _torch_zoo(); torch, nn = zoo["torch"], zoo["nn"]
+    device = _get_device(args.device)
+    gen = zoo["CausalGenerator"](n_bins, D, hidden=args.hidden,
+                                 context=args.context).to(device)
+    n_params = sum(p.numel() for p in gen.parameters())
+    print(f"  [step2] causal (L1 + teacher forcing fijo)  {n_params/1e6:.2f}M "
+          f"parámetros  campo_receptivo≈{gen.receptive_field} frames "
+          f"({gen.n_layers} capas dilatadas)  tile={args.tile}  "
+          f"batch={args.batch}  epochs={args.epochs}")
+
+    opt = torch.optim.Adam(gen.parameters(), lr=args.lr, betas=(0.9, 0.999))
+    rng = np.random.default_rng(args.seed)
+    total_frames = sum(S.shape[1] for S, _ in pairs)
+    steps_per_epoch = max(1, total_frames // (args.batch * args.tile) + 1)
+    total_steps = args.epochs * steps_per_epoch
+    print(f"  [step2] ~{steps_per_epoch} steps/epoch → {total_steps} steps totales")
+
+    gen.train()
+    for step in range(1, total_steps + 1):
+        S_np, Z_np = _sample_causal_tiles(pairs, args.batch, args.tile, n_bins, D, rng)
+        S = torch.from_numpy(S_np).to(device)
+        Z = torch.from_numpy(Z_np).to(device)
+        Z_shifted = torch.zeros_like(Z)
+        Z_shifted[:, :, 1:] = Z[:, :, :-1]
+
+        spec_feat = gen.encode_spec(S)
+        pred = gen(Z_shifted, spec_feat)
+        loss = (pred - Z).abs().mean()
+
+        opt.zero_grad(); loss.backward(); opt.step()
+        if step == 1 or step % args.log_every == 0:
+            print(f"  [step2] step {step:>6}/{total_steps}  L1={loss.item():.4f}")
+
+    out_path = args.output or "mapper.pt"
+    torch.save({
+        "kind":        "latent_lab_mapper_causal",
+        "sr":          manifest["sr"],
+        "window":      manifest["window"],
+        "hop_ratio":   manifest["hop_ratio"],
+        "db_floor":    manifest["db_floor"],
+        "n_bins":      n_bins,
+        "latent_dim":  D,
+        "coder_hop":   manifest["coder_hop"],
+        "lat_min":     manifest["lat_min"],
+        "lat_max":     manifest["lat_max"],
+        "hidden":      args.hidden,
+        "context":     args.context,
+        "adversarial": False,
+        "gen":         gen.state_dict(),
+    }, out_path)
+    print(f"  ✓  Mapper (causal, L1 + teacher forcing fijo) → {out_path}")
+
+def _train_step2_causal_adv(args, manifest, pairs, n_bins: int, D: int):
+    """
+    --method causal-adv: como causal, pero con dos mitigaciones explícitas
+    de los dos problemas que discutimos:
+
+    1) SCHEDULED SAMPLING (Bengio et al. 2015), contra el exposure bias:
+       en vez de alimentar SIEMPRE el latente real desplazado, con
+       probabilidad ss_prob (creciente a lo largo del entrenamiento, hasta
+       --ss-final-prob) se sustituye cada frame de la historia por la
+       propia predicción del modelo (calculada en una primera pasada,
+       desconectada del grafo). AVISO — simplificación deliberada: esto NO
+       es un rollout secuencial completo (frame a frame, como en un RNN),
+       que sería el scheduled sampling "de libro" pero perdería el
+       paralelismo temporal de las convoluciones causales (pasaría de
+       O(1) a O(T) pasadas por paso de entrenamiento). Aquí se hace en DOS
+       pasadas paralelas: (1) predicción con historia real, (2) mezcla
+       historia real / propia predicción frame a frame, y el gradiente
+       solo fluye por la pasada (2). Expone al modelo a su propio error
+       de un paso sin pagar el coste de un rollout completo.
+
+    2) PÉRDIDA ADVERSARIAL (CausalDiscriminator1D, PatchGAN 1-D
+       condicionado al espectrograma), contra el "promedio de texturas
+       ambiguas": igual que en pix2pix, el discriminador penaliza que la
+       secuencia generada no tenga la estadística local de una secuencia
+       latente real, empujando hacia UNA textura plausible concreta en
+       vez del compromiso promedio entre todas — ver conversación previa
+       sobre pix2pix y mean-seeking bajo L1 puro.
+    """
+    zoo = _torch_zoo(); torch, nn = zoo["torch"], zoo["nn"]
+    device = _get_device(args.device)
+    gen  = zoo["CausalGenerator"](n_bins, D, hidden=args.hidden,
+                                  context=args.context).to(device)
+    disc = zoo["CausalDiscriminator1D"](n_bins, D, base=args.disc_base).to(device)
+    n_params = (sum(p.numel() for p in gen.parameters())
+               + sum(p.numel() for p in disc.parameters()))
+    print(f"  [step2] causal-adv (scheduled sampling + adversarial)  "
+          f"{n_params/1e6:.2f}M parámetros  campo_receptivo≈{gen.receptive_field} "
+          f"frames  tile={args.tile}  batch={args.batch}  epochs={args.epochs}  "
+          f"ss_final_prob={args.ss_final_prob}  ss_warmup={args.ss_warmup}")
+
+    opt_g = torch.optim.Adam(gen.parameters(),  lr=args.lr, betas=(0.5, 0.999))
+    opt_d = torch.optim.Adam(disc.parameters(), lr=args.lr, betas=(0.5, 0.999))
+    bce = nn.BCEWithLogitsLoss()
+    rng = np.random.default_rng(args.seed)
+    total_frames = sum(S.shape[1] for S, _ in pairs)
+    steps_per_epoch = max(1, total_frames // (args.batch * args.tile) + 1)
+    total_steps = args.epochs * steps_per_epoch
+    print(f"  [step2] ~{steps_per_epoch} steps/epoch → {total_steps} steps totales")
+
+    gen.train(); disc.train()
+    for step in range(1, total_steps + 1):
+        ss_prob = args.ss_final_prob * min(
+            1.0, step / max(1, total_steps * args.ss_warmup))
+
+        S_np, Z_np = _sample_causal_tiles(pairs, args.batch, args.tile, n_bins, D, rng)
+        S = torch.from_numpy(S_np).to(device)
+        Z = torch.from_numpy(Z_np).to(device)
+        Z_shifted_real = torch.zeros_like(Z)
+        Z_shifted_real[:, :, 1:] = Z[:, :, :-1]
+
+        spec_feat = gen.encode_spec(S)
+
+        if ss_prob > 0:
+            with torch.no_grad():
+                pred_pass1 = gen(Z_shifted_real, spec_feat)
+                pred_shifted = torch.zeros_like(Z)
+                pred_shifted[:, :, 1:] = pred_pass1[:, :, :-1]
+            mask = (torch.rand(Z.shape[0], 1, Z.shape[2], device=device) < ss_prob).float()
+            Z_hist = mask * pred_shifted + (1 - mask) * Z_shifted_real
+        else:
+            Z_hist = Z_shifted_real
+
+        # ── discriminador ──
+        with torch.no_grad():
+            fake = gen(Z_hist, spec_feat)
+        pred_real = disc(S, Z)
+        pred_fake = disc(S, fake)
+        loss_d = 0.5 * (bce(pred_real, torch.ones_like(pred_real))
+                        + bce(pred_fake, torch.zeros_like(pred_fake)))
+        opt_d.zero_grad(); loss_d.backward(); opt_d.step()
+
+        # ── generador ──
+        fake = gen(Z_hist, spec_feat)
+        pred_fake = disc(S, fake)
+        loss_adv = bce(pred_fake, torch.ones_like(pred_fake))
+        loss_l1  = (fake - Z).abs().mean()
+        loss_g   = loss_adv + args.l1_weight * loss_l1
+        opt_g.zero_grad(); loss_g.backward(); opt_g.step()
+
+        if step == 1 or step % args.log_every == 0:
+            print(f"  [step2] step {step:>6}/{total_steps}  ss_prob={ss_prob:.2f}  "
+                  f"D={loss_d.item():.3f}  G_adv={loss_adv.item():.3f}  "
+                  f"L1={loss_l1.item():.4f}")
+
+    out_path = args.output or "mapper.pt"
+    torch.save({
+        "kind":        "latent_lab_mapper_causal",
+        "sr":          manifest["sr"],
+        "window":      manifest["window"],
+        "hop_ratio":   manifest["hop_ratio"],
+        "db_floor":    manifest["db_floor"],
+        "n_bins":      n_bins,
+        "latent_dim":  D,
+        "coder_hop":   manifest["coder_hop"],
+        "lat_min":     manifest["lat_min"],
+        "lat_max":     manifest["lat_max"],
+        "hidden":      args.hidden,
+        "context":     args.context,
+        "disc_base":   args.disc_base,
+        "adversarial": True,
+        "gen":         gen.state_dict(),
+        "disc":        disc.state_dict(),
+    }, out_path)
+    print(f"  ✓  Mapper (causal-adv: scheduled sampling + adversarial) → {out_path}")
+
 def cmd_spec_latent_train_step2(args):
     """
     Directorio de pares (de step1, posiblemente editados a mano) → construye
@@ -1341,6 +1713,12 @@ def cmd_spec_latent_train_step2(args):
                     sin entrenar nada — mapper.pt con el corpus. greedy y
                     viterbi (elegidos luego en spectrogram-to-latent
                     --method) reutilizan el MISMO banco/checkpoint.
+      · causal     CausalGenerator autorregresivo (WaveNet-lite), L1 puro
+                    + teacher forcing fijo. Solo entrena la dirección
+                    espectrograma→latente (ver latent-to-spectrogram).
+      · causal-adv como causal, + scheduled sampling (contra exposure
+                    bias) + pérdida adversarial (contra el promedio de
+                    texturas ambiguas de la regresión L1 pura).
     """
     pairs_dir = Path(args.pairs_dir)
     manifest, pairs = _load_pairs(pairs_dir)
@@ -1348,6 +1726,12 @@ def cmd_spec_latent_train_step2(args):
 
     if args.method == "retrieval":
         _train_step2_retrieval(args, manifest, pairs, n_bins, D)
+        return
+    if args.method == "causal":
+        _train_step2_causal(args, manifest, pairs, n_bins, D)
+        return
+    if args.method == "causal-adv":
+        _train_step2_causal_adv(args, manifest, pairs, n_bins, D)
         return
 
     zoo   = _torch_zoo()
@@ -1619,6 +2003,34 @@ def _load_mapper(path: str, device_name: str, method: str = "auto",
                 S = _retrieve_viterbi(Z_norm, Z_bank, S_bank, topk, join_weight)
             S = np.clip(S, 0.0, 1.0)
             return _resample_frames(S, n_spec)
+
+        return _MapperHandle(ckpt, spec_fn, lat_fn)
+
+    elif kind == "latent_lab_mapper_causal":
+        if method not in (None, "auto", "causal", "causal-adv"):
+            sys.exit(f"✗  --method {method} no es válido para este checkpoint "
+                     f"(causal) — usa causal, causal-adv o auto")
+        gen = zoo["CausalGenerator"](ckpt["n_bins"], ckpt["latent_dim"],
+                                     hidden=ckpt["hidden"], context=ckpt["context"])
+        gen.load_state_dict(ckpt["gen"]);  gen.to(device).eval()
+        tag = "causal-adv" if ckpt.get("adversarial") else "causal"
+        print(f"  [mapper] {path}: ({tag}, autorregresivo) window={ckpt['window']} "
+              f"hop={ckpt['hop_ratio']} ↔ D={ckpt['latent_dim']} coder_hop={ckpt['coder_hop']} "
+              f"campo_receptivo≈{gen.receptive_field} frames")
+
+        def spec_fn(S_norm):   # S_norm [Fs × bins] → Zn [Fz × D]
+            spec_hop = max(1, int(ckpt["window"] * ckpt["hop_ratio"]))
+            n_lat = max(1, round(S_norm.shape[0] * spec_hop / ckpt["coder_hop"]))
+            S_al = _resample_frames(S_norm, n_lat)                    # [Fz × bins]
+            S_t  = torch.from_numpy(S_al.T[None].astype(np.float32)).to(device)
+            Zn = _causal_generate(gen, torch, S_t, ckpt["latent_dim"], device)
+            return np.clip(Zn.T, 0.0, 1.0)                            # [Fz × D]
+
+        def lat_fn(Z_norm):
+            sys.exit("✗  latent-to-spectrogram no está soportado para mappers "
+                     "causales: causal/causal-adv solo entrenan la dirección "
+                     "espectrograma→latente (ver conversación de diseño) — "
+                     "usa pix2pix o retrieval para latente→espectrograma")
 
         return _MapperHandle(ckpt, spec_fn, lat_fn)
 
@@ -2255,7 +2667,8 @@ def cmd_info(args):
         print(f"\n  Checkpoint: {path.name}  ({kind})")
         for k, v in ckpt.items():
             if k in ("encoder", "decoder", "spec2lat", "lat2spec",
-                     "gen_s2l", "gen_l2s", "disc_s2l", "disc_l2s"):
+                     "gen_s2l", "gen_l2s", "disc_s2l", "disc_l2s",
+                     "gen", "disc"):
                 n = sum(int(np.prod(t.shape)) for t in v.values())
                 print(f"  {k:<14}: state_dict  ({n/1e6:.2f}M parámetros)")
             elif isinstance(v, np.ndarray):
@@ -2412,34 +2825,57 @@ def main():
                        help="Carpeta de pares (de step1, editable) → construye "
                             "el traductor espectrograma↔latente → mapper.pt")
     p.add_argument("pairs_dir", help="Carpeta generada por step1 (con manifest.json)")
-    p.add_argument("--method", default="pix2pix", choices=["pix2pix", "retrieval"],
-                   help="pix2pix: entrena U-Net+PatchGAN (red neuronal). "
+    p.add_argument("--method", default="pix2pix",
+                   choices=["pix2pix", "retrieval", "causal", "causal-adv"],
+                   help="pix2pix: U-Net+PatchGAN, imagen completa de una vez. "
                         "retrieval: indexa un banco de pares frame a frame, "
-                        "sin entrenar nada — usable luego con --method "
-                        "greedy o viterbi en spectrogram-to-latent "
+                        "sin entrenar nada (usable luego con --method greedy/"
+                        "viterbi). causal: red autorregresiva (columna t ← "
+                        "columnas <t), L1 + teacher forcing fijo. causal-adv: "
+                        "como causal, + scheduled sampling + adversarial "
                         "(default: pix2pix)")
     p.add_argument("--tile", type=int, default=256,
-                   help="[pix2pix] Anchura temporal (en frames) de los parches de "
-                        "entrenamiento y de inferencia troceada; debe ser múltiplo "
-                        "de 32 (default: 256)")
+                   help="[pix2pix/causal/causal-adv] Anchura temporal (en frames) "
+                        "de los parches de entrenamiento; en pix2pix debe ser "
+                        "múltiplo de 32 (default: 256)")
     p.add_argument("--gen-base", type=int, default=64,
                    help="[pix2pix] Canales base del generador U-Net (default: 64)")
     p.add_argument("--disc-base", type=int, default=64,
-                   help="[pix2pix] Canales base del discriminador PatchGAN (default: 64)")
+                   help="[pix2pix/causal-adv] Canales base del discriminador "
+                        "PatchGAN (default: 64)")
     p.add_argument("--l1-weight", type=float, default=100.0,
-                   help="[pix2pix] Peso de la pérdida L1 frente a la adversarial, "
-                        "como en el paper pix2pix (default: 100.0)")
+                   help="[pix2pix/causal-adv] Peso de la pérdida L1 frente a la "
+                        "adversarial, como en el paper pix2pix (default: 100.0)")
+    p.add_argument("--hidden", type=int, default=64,
+                   help="[causal/causal-adv] Canales ocultos de CausalGenerator "
+                        "(default: 64)")
+    p.add_argument("--context", type=int, default=32,
+                   help="[causal/causal-adv] Nº de frames latentes anteriores a "
+                        "tener en cuenta; determina el nº de capas causales "
+                        "dilatadas (campo receptivo = 2**n_layers ≥ context) "
+                        "(default: 32)")
+    p.add_argument("--ss-final-prob", type=float, default=0.5,
+                   help="[causal-adv] Probabilidad final de scheduled sampling "
+                        "(sustituir historia real por la propia predicción del "
+                        "modelo); 0 = equivalente a teacher forcing fijo "
+                        "(default: 0.5)")
+    p.add_argument("--ss-warmup", type=float, default=0.5,
+                   help="[causal-adv] Fracción del entrenamiento (0-1) sobre la "
+                        "que ss_prob crece linealmente de 0 a --ss-final-prob "
+                        "(default: 0.5)")
     p.add_argument("--epochs", type=int, default=50,
-                   help="[pix2pix] Epochs sobre el corpus de pares (default: 50)")
+                   help="[pix2pix/causal/causal-adv] Epochs sobre el corpus de "
+                        "pares (default: 50)")
     p.add_argument("--batch", type=int, default=4,
-                   help="[pix2pix] Tamaño de batch de parches (default: 4)")
+                   help="[pix2pix/causal/causal-adv] Tamaño de batch de parches "
+                        "(default: 4)")
     p.add_argument("--lr", type=float, default=2e-4,
-                   help="[pix2pix] Learning rate Adam, betas=(0.5,0.999) como en "
-                        "pix2pix (default: 2e-4)")
+                   help="[pix2pix/causal/causal-adv] Learning rate Adam "
+                        "(default: 2e-4)")
     p.add_argument("--seed", type=int, default=0,
-                   help="[pix2pix] Semilla RNG (default: 0)")
+                   help="Semilla RNG (default: 0)")
     p.add_argument("--log-every", type=int, default=50,
-                   help="[pix2pix] Imprimir pérdida cada N pasos (default: 50)")
+                   help="Imprimir pérdida cada N pasos (default: 50)")
     _add_device(p)
     p.add_argument("--output", "-o", default="mapper.pt",
                    help="Checkpoint de salida (default: mapper.pt)")
@@ -2452,11 +2888,12 @@ def main():
     p.add_argument("--mapper", required=True, help="Checkpoint mapper.pt "
                    "(pix2pix o retrieval, ver spectrogram-to-latent-train_step2)")
     p.add_argument("--method", default="auto",
-                   choices=["auto", "pix2pix", "greedy", "viterbi"],
-                   help="Método de traducción. auto: detecta pix2pix/legado del "
-                        "checkpoint, o usa viterbi si es un mapper de retrieval. "
-                        "greedy/viterbi requieren un mapper --method retrieval "
-                        "(default: auto)")
+                   choices=["auto", "pix2pix", "greedy", "viterbi",
+                            "causal", "causal-adv"],
+                   help="Método de traducción. auto: detecta pix2pix/legado/"
+                        "causal del checkpoint, o usa viterbi si es un mapper "
+                        "de retrieval. greedy/viterbi requieren --method "
+                        "retrieval en step2 (default: auto)")
     p.add_argument("--topk", type=int, default=8,
                    help="[viterbi] Nº de candidatos por frame considerados en la "
                         "búsqueda (default: 8)")
@@ -2477,8 +2914,11 @@ def main():
     p.add_argument("--mapper", required=True, help="Checkpoint mapper.pt "
                    "(pix2pix o retrieval, ver spectrogram-to-latent-train_step2)")
     p.add_argument("--method", default="auto",
-                   choices=["auto", "pix2pix", "greedy", "viterbi"],
+                   choices=["auto", "pix2pix", "greedy", "viterbi",
+                            "causal", "causal-adv"],
                    help="Método de traducción, igual que en spectrogram-to-latent "
+                        "(causal/causal-adv no soportan esta dirección — ver "
+                        "--help de spectrogram-to-latent-train_step2) "
                         "(default: auto)")
     p.add_argument("--topk", type=int, default=8,
                    help="[viterbi] Nº de candidatos por frame (default: 8)")
