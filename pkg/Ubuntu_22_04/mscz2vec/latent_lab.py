@@ -776,6 +776,23 @@ def _multiscale_stft_loss(torch, x, y):
                     + (torch.log(X + 1e-5) - torch.log(Y + 1e-5)).abs().mean()
     return loss / 3.0
 
+_STFT_LOSS_MAX_WINDOW = 2048   # ventana más grande usada por _multiscale_stft_loss
+
+def _check_min_segment(n_samples: int, arg_name: str) -> None:
+    """
+    _multiscale_stft_loss usa torch.stft con center=True hasta ventana 2048,
+    lo que requiere un padding reflect de 1024 muestras a cada lado — si el
+    recorte de entrenamiento es más corto que eso, PyTorch falla con un
+    RuntimeError de padding poco informativo. Se valida aquí, antes de
+    arrancar el entrenamiento, con un mensaje que señala la causa real.
+    """
+    min_len = _STFT_LOSS_MAX_WINDOW + 1
+    if n_samples <= min_len:
+        sys.exit(f"✗  {arg_name}={n_samples} muestras es insuficiente para la "
+                 f"pérdida STFT multi-escala interna (ventana máx. "
+                 f"{_STFT_LOSS_MAX_WINDOW}); usa al menos {min_len} muestras.")
+
+
 def _torch_load(path: str):
     torch = _torch_zoo()["torch"]
     try:
@@ -1219,6 +1236,7 @@ def cmd_train_coder(args):
     hop = int(np.prod(strides))
     if args.segment % hop:
         sys.exit(f"✗  --segment debe ser múltiplo del hop ({hop})")
+    _check_min_segment(args.segment, "--segment")
 
     print(f"  [train-coder] D={args.latent_dim}  strides={strides}  hop={hop}  "
           f"({sr/hop:.1f} frames/s)")
@@ -1310,6 +1328,7 @@ def cmd_train_vocoder(args):
     opt     = torch.optim.Adam(voc.parameters(), lr=args.lr, betas=(0.8, 0.99))
     rng     = np.random.default_rng(args.seed)
     segment = args.frames * hop
+    _check_min_segment(segment, "--frames × hop STFT")
 
     voc.train()
     for step in range(1, args.steps + 1):
@@ -1349,6 +1368,83 @@ def cmd_train_vocoder(args):
     }, out_path)
     print(f"  ✓  Vocoder → {out_path}")
     print(f"     Úsalo con: --vocoder {out_path} en latent-to-spectrogram --wav")
+
+
+def cmd_wav_to_spectrogram(args):
+    """
+    WAV → NPZ de espectrograma STFT compatible audio_lab (magnitudes/phases/
+    freqs/sample_rate/window_size/hop_ratio).
+
+    No requiere coder ni mapper: es el STFT real del WAV, calculado con las
+    mismas funciones (stft_analyse) que usa internamente el resto del
+    programa. Útil para probar spectrogram-to-wav (Griffin-Lim / vocoder) o
+    spectrogram-to-latent sin depender de un mapper ya entrenado.
+    """
+    audio, sr = read_wav(args.input, target_sr=args.sr)
+    print(f"  [wav-to-spectrogram] {len(audio)/sr:.2f}s @ {sr}Hz  "
+          f"window={args.window} hop_ratio={args.hop}...")
+    mags, phases, freqs = stft_analyse(audio, sr, window_size=args.window,
+                                       hop_ratio=args.hop)
+
+    out_path = args.output or Path(args.input).stem + "_stft.npz"
+    np.savez_compressed(out_path,
+                        magnitudes=mags.astype(np.float32),
+                        phases=(phases if args.keep_phase else np.zeros_like(mags)).astype(np.float32),
+                        freqs=freqs.astype(np.float32),
+                        sample_rate=np.array(sr),
+                        window_size=np.array(args.window),
+                        hop_ratio=np.array(args.hop))
+    hop = max(1, int(args.window * args.hop))
+    print(f"  ✓  NPZ STFT → {out_path}  ({mags.shape[0]} frames × "
+          f"{mags.shape[1]} bins, ~{mags.shape[0]*hop/sr:.2f}s)")
+    if args.keep_phase:
+        print(f"     Fase real conservada (útil para medir la degradación de "
+              f"Griffin-Lim/vocoder frente a la fase original)")
+    else:
+        print(f"     Fase: cero — compatible con audio_lab reconstruct")
+
+
+def cmd_spectrogram_to_wav(args):
+    """
+    NPZ de espectrograma STFT → WAV, recuperando la fase con Griffin-Lim
+    (por defecto, con --gl-phase-init opcional) o con un vocoder neuronal
+    (--vocoder). Es el equivalente directo de latent-to-wav pero para
+    espectrogramas: no requiere coder ni mapper.
+    """
+    data = np.load(args.input)
+    if "magnitudes" not in data.files:
+        kind = "latente" if "latents" in data.files else "desconocido"
+        sys.exit(f"✗  {args.input} no es un NPZ de espectrograma (detectado: "
+                 f"{kind}). ¿Querías usar latent-to-wav?")
+    mags   = data["magnitudes"].astype(np.float32)
+    sr     = int(data["sample_rate"])
+    window = int(data["window_size"])
+    hop_r  = float(data["hop_ratio"])
+
+    if args.vocoder:
+        print(f"  [spectrogram-to-wav] vocoder neuronal ({args.vocoder})...")
+        voc, vckpt = load_vocoder(args.vocoder, args.device)
+        if vckpt["n_bins"] != mags.shape[1]:
+            sys.exit(f"✗  El vocoder espera {vckpt['n_bins']} bins pero el "
+                     f"espectrograma tiene {mags.shape[1]} (¿--window distinto "
+                     f"al usado en train-vocoder?)")
+        if vckpt["sr"] != sr:
+            print(f"  ⚠  sr del vocoder ({vckpt['sr']}) ≠ sr del espectrograma "
+                  f"({sr}) — se usa el del vocoder para escribir el WAV")
+            sr = vckpt["sr"]
+        norm  = mags_to_norm(mags, vckpt["db_floor"])
+        audio = vocoder_synthesize(voc, norm)
+    else:
+        print(f"  [spectrogram-to-wav] Griffin-Lim {args.gl_iters} iter "
+              f"(phase_init={args.gl_phase_init})...")
+        audio = griffin_lim(mags, hop_r, n_iter=args.gl_iters, sr=sr,
+                            phase_init=args.gl_phase_init)
+
+    peak = np.abs(audio).max()
+    if peak > 1e-9:
+        audio = (audio / peak * 0.85).astype(np.float32)
+    out_path = args.wav or Path(args.input).stem + "_recon.wav"
+    write_wav(out_path, audio, sr)
 
 
 def cmd_wav_to_latent(args):
@@ -2901,7 +2997,7 @@ def cmd_info(args):
         for k, v in ckpt.items():
             if k in ("encoder", "decoder", "spec2lat", "lat2spec",
                      "gen_s2l", "gen_l2s", "disc_s2l", "disc_l2s",
-                     "gen", "disc"):
+                     "gen", "disc", "state_dict"):
                 n = sum(int(np.prod(t.shape)) for t in v.values())
                 print(f"  {k:<14}: state_dict  ({n/1e6:.2f}M parámetros)")
             elif isinstance(v, np.ndarray):
@@ -3057,6 +3153,45 @@ def main():
     _add_device(p)
     p.add_argument("--output", "-o", default=None, help="WAV de salida")
     p.set_defaults(func=cmd_latent_to_wav)
+
+    # ── wav-to-spectrogram ───────────────────────────────────────────────────
+    p = sub.add_parser("wav-to-spectrogram",
+                       help="WAV → NPZ STFT compatible audio_lab (sin coder "
+                            "ni mapper — STFT real)")
+    p.add_argument("input", help="Fichero WAV")
+    p.add_argument("--sr", type=int, default=SAMPLE_RATE,
+                   help=f"Sample rate de trabajo (default: {SAMPLE_RATE})")
+    p.add_argument("--window", type=int, default=4096,
+                   help="Tamaño de ventana STFT (default: 4096)")
+    p.add_argument("--hop", type=float, default=0.25,
+                   help="hop_ratio STFT (default: 0.25)")
+    p.add_argument("--keep-phase", action="store_true",
+                   help="Conserva la fase real en el NPZ en vez de ponerla a "
+                        "cero (por defecto se pone a cero, igual que el resto "
+                        "del programa/audio_lab; útil solo para comparar "
+                        "contra la fase real fuera de este pipeline)")
+    p.add_argument("--output", "-o", default=None, help="NPZ STFT de salida")
+    p.set_defaults(func=cmd_wav_to_spectrogram)
+
+    # ── spectrogram-to-wav ───────────────────────────────────────────────────
+    p = sub.add_parser("spectrogram-to-wav",
+                       help="NPZ STFT → WAV (Griffin-Lim o vocoder neuronal) "
+                            "— sin coder ni mapper")
+    p.add_argument("input", help="Fichero .npz de espectrograma STFT")
+    p.add_argument("--gl-iters", type=int, default=32,
+                   help="Iteraciones de Griffin-Lim (default: 32)")
+    p.add_argument("--gl-phase-init", default="random",
+                   choices=["random", "propagate"],
+                   help="Inicialización de fase de Griffin-Lim (default: "
+                        "random, comportamiento histórico; 'propagate' usa "
+                        "fase de phase-vocoder como punto de partida)")
+    p.add_argument("--vocoder", default=None,
+                   help="Checkpoint de train-vocoder: si se indica, reemplaza "
+                        "Griffin-Lim por un vocoder neuronal ligero (default: "
+                        "ninguno, se usa Griffin-Lim)")
+    _add_device(p)
+    p.add_argument("--wav", "-o", default=None, help="WAV de salida")
+    p.set_defaults(func=cmd_spectrogram_to_wav)
 
     # ── latent-to-png ─────────────────────────────────────────────────────────
     p = sub.add_parser("latent-to-png",
