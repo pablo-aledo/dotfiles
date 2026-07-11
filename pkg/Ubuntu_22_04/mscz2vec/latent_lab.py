@@ -2838,11 +2838,29 @@ def cmd_intermediate_to_pca(args):
     _save_pca_coords_npz(out_path, coords, model)
 
     if args.png:
-        # Reutiliza el pipeline PNG de latentes: las coordenadas PCA se tratan
-        # como un latente genérico de k componentes, normalizado por el rango
-        # observado en esta proyección concreta (min/max por componente).
-        pca_min = coords.min(axis=0)
-        pca_max = coords.max(axis=0)
+        if args.shared_scale:
+            # Un único rango [min,max] global (no por-componente) aplicado a
+            # las k filas por igual. Así las componentes de menor varianza,
+            # cuyo rango REAL de valores es mucho más pequeño, aparecen
+            # correctamente oscuras/uniformes en vez de estirarse cada una a
+            # ocupar todo el histograma — visualiza la jerarquía de varianza
+            # de la PCA en vez de borrarla. Ver discusión sobre por qué el
+            # min/max por-componente (comportamiento por defecto) no es
+            # apropiado para PCA aunque sí lo sea para el latente del coder.
+            g_min, g_max = float(coords.min()), float(coords.max())
+            pca_min = np.full(k, g_min, dtype=np.float32)
+            pca_max = np.full(k, g_max, dtype=np.float32)
+            print(f"  [intermediate-to-pca] --shared-scale: rango común "
+                  f"[{g_min:.3f}, {g_max:.3f}] aplicado a las {k} componentes "
+                  f"(en vez de un min/max independiente por componente)")
+        else:
+            # Comportamiento histórico: cada componente normalizada a su
+            # propio rango observado — reutiliza el pipeline PNG de latentes
+            # tal cual, pero en PCA borra visualmente la caída de varianza
+            # entre componentes (cada fila se estira igual, sea cual sea su
+            # energía real). Usa --shared-scale si quieres verla.
+            pca_min = coords.min(axis=0)
+            pca_max = coords.max(axis=0)
         png_path = str(Path(out_path).with_suffix(".png"))
         hop_for_png = model.get("hop") or max(1, int(model.get("window", 4096) *
                                                      model.get("hop_ratio", 0.25)))
@@ -3407,6 +3425,13 @@ def main():
     p.add_argument("--pca", required=True, help="Modelo PCA (de train-pca)")
     p.add_argument("--png", action="store_true",
                    help="Genera también PNG editable de las coordenadas PCA")
+    p.add_argument("--shared-scale", action="store_true",
+                   help="Normaliza el PNG con un único rango [min,max] "
+                        "compartido por todas las componentes, en vez de uno "
+                        "independiente por componente (default). Preserva "
+                        "visualmente la caída de varianza entre componentes "
+                        "(las de menor varianza salen más oscuras/uniformes) "
+                        "en vez de que cada fila se estire por igual.")
     p.add_argument("--output", "-o", default=None, help="NPZ de coordenadas PCA de salida")
     p.set_defaults(func=cmd_intermediate_to_pca)
 
