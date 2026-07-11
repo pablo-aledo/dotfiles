@@ -327,17 +327,42 @@ def stft_analyse(audio: np.ndarray, sr: int,
     freqs = np.fft.rfftfreq(window_size, 1.0 / sr)
     return mags, phases, freqs
 
+def _phase_vocoder_init(mags: np.ndarray, hop: int, n_fft: int) -> np.ndarray:
+    """Inicialización de fase por acumulación de la frecuencia central de cada
+    bin (truco clásico de phase vocoder / "identity phase locking"), en vez de
+    fase aleatoria. Da a Griffin-Lim un punto de partida ya coherente entre
+    frames consecutivos (cada bin avanza su fase exactamente lo que le
+    correspondería a una senoide pura en su frecuencia central), lo que suele
+    converger a un resultado menos "metálico" que partir de ruido puro,
+    especialmente con pocas iteraciones."""
+    frames, n_bins = mags.shape
+    bin_advance = np.arange(n_bins) * (2 * np.pi * hop / n_fft)   # rad/hop por bin
+    phases = np.outer(np.arange(frames), bin_advance)
+    return np.mod(phases, 2 * np.pi)
+
 def griffin_lim(mags: np.ndarray, hop_ratio: float,
-                n_iter: int = 32, sr: int = SAMPLE_RATE) -> np.ndarray:
-    """Griffin-Lim iterativo: estima fases coherentes a partir de magnitudes."""
+                n_iter: int = 32, sr: int = SAMPLE_RATE,
+                phase_init: str = "random") -> np.ndarray:
+    """Griffin-Lim iterativo: estima fases coherentes a partir de magnitudes.
+
+    phase_init:
+      - "random"    (default, comportamiento histórico): fase inicial
+        uniforme aleatoria (semilla fija, determinista).
+      - "propagate": fase inicial por acumulación de frecuencia central por
+        bin (ver _phase_vocoder_init) en vez de ruido — punto de partida más
+        informado, normalmente converge algo mejor con pocas iteraciones.
+    """
     n_bins  = mags.shape[1]
     n_fft   = (n_bins - 1) * 2
     hop     = max(1, int(n_fft * hop_ratio))
     frames  = mags.shape[0]
     win     = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(n_fft) / n_fft)
 
-    rng    = np.random.default_rng(0)
-    phases = rng.uniform(0, 2 * np.pi, mags.shape)
+    if phase_init == "propagate":
+        phases = _phase_vocoder_init(mags, hop, n_fft)
+    else:
+        rng    = np.random.default_rng(0)
+        phases = rng.uniform(0, 2 * np.pi, mags.shape)
 
     def _istft(ph: np.ndarray) -> np.ndarray:
         out_len = (frames - 1) * hop + n_fft
@@ -470,6 +495,58 @@ def _torch_zoo() -> Dict[str, object]:
             self.net = nn.Sequential(*layers)
         def forward(self, z):
             return self.net(z)
+
+    class ResBlock1D(nn.Module):
+        """Bloque residual con convoluciones dilatadas (MRF simplificado de
+        HiFiGAN): varias dilataciones en paralelo sobre residuales sucesivos
+        para ampliar el contexto sin perder resolución temporal."""
+        def __init__(self, channels: int, kernel: int = 3, dilations=(1, 3, 5)):
+            super().__init__()
+            self.convs = nn.ModuleList([
+                nn.Conv1d(channels, channels, kernel, dilation=d,
+                          padding=(kernel - 1) * d // 2)
+                for d in dilations])
+        def forward(self, x):
+            for conv in self.convs:
+                x = x + conv(nn.functional.leaky_relu(x, 0.1))
+            return x
+
+    class LiteVocoder(nn.Module):
+        """
+        Vocoder neuronal ligero: magnitud STFT log-normalizada [B,n_bins,F]
+        → forma de onda [B,1,F·hop]. Alternativa opcional a Griffin-Lim.
+
+        Arquitectura estilo HiFiGAN simplificado (sin discriminador/GAN,
+        entrenado solo con pérdida L1 de onda + STFT multi-escala — más
+        barato de entrenar en CPU que la receta adversarial completa):
+        proyección de bins a canales ocultos, seguida de tantas etapas de
+        sobremuestreo transpuesto como haga falta para que el producto de
+        sus factores sea igual al hop del STFT, cada una con un ResBlock1D.
+        """
+        def __init__(self, n_bins: int, hidden: int = 256,
+                     upsample_rates=(8, 8, 4, 4)):
+            super().__init__()
+            self.hop = int(np.prod(upsample_rates))
+            self.in_proj = nn.Conv1d(n_bins, hidden, 7, padding=3)
+            ups, ch = [], hidden
+            for r in upsample_rates:
+                out_ch = max(ch // 2, 32)
+                pad    = r // 2 + (r % 2)
+                ups.append(nn.Sequential(
+                    nn.LeakyReLU(0.1),
+                    nn.ConvTranspose1d(ch, out_ch, 2 * r, stride=r,
+                                       padding=pad, output_padding=r % 2),
+                    ResBlock1D(out_ch),
+                ))
+                ch = out_ch
+            self.ups = nn.ModuleList(ups)
+            self.out_proj = nn.Sequential(
+                nn.LeakyReLU(0.1), nn.Conv1d(ch, 1, 7, padding=3), nn.Tanh())
+        def forward(self, mag):        # mag [B, n_bins, F] ∈ [0,1]
+            x = self.in_proj(mag)
+            for up in self.ups:
+                x = up(x)
+            return self.out_proj(x)    # [B, 1, ≈F·hop]
 
     class FrameMapper(nn.Module):
         """Traductor frame-a-frame con contexto temporal (conv 1-D sobre frames)."""
@@ -677,7 +754,8 @@ def _torch_zoo() -> Dict[str, object]:
                       Encoder=Encoder, Decoder=Decoder, FrameMapper=FrameMapper,
                       UNetGenerator=UNetGenerator, PatchDiscriminator=PatchDiscriminator,
                       CausalGenerator=CausalGenerator,
-                      CausalDiscriminator1D=CausalDiscriminator1D)
+                      CausalDiscriminator1D=CausalDiscriminator1D,
+                      ResBlock1D=ResBlock1D, LiteVocoder=LiteVocoder)
     return _TORCH_ZOO
 
 def _get_device(name: str):
@@ -879,6 +957,51 @@ def decode_latents(coder: Coder, latents: np.ndarray) -> np.ndarray:
         y = coder.decoder(z)[0, 0]
     return y.cpu().numpy().astype(np.float32)
 
+def _factorize_hop(hop: int) -> List[int]:
+    """Descompone hop en factores de sobremuestreo razonables para
+    LiteVocoder (mayor a menor), probando primero factores "bonitos" para
+    convoluciones transpuestas. Si no encuentra una descomposición exacta con
+    esos factores, recurre a la factorización prima simple."""
+    preferred = [8, 6, 5, 4, 3, 2]
+    factors, remaining = [], hop
+    changed = True
+    while remaining > 1 and changed:
+        changed = False
+        for f in preferred:
+            if remaining % f == 0:
+                factors.append(f)
+                remaining //= f
+                changed = True
+                break
+    if remaining > 1:      # resto no descomponible con los factores preferidos
+        factors.append(remaining)
+    return factors
+
+def load_vocoder(path: str, device_name: str = "auto"):
+    """Carga un checkpoint de train-vocoder (LiteVocoder)."""
+    zoo  = _torch_zoo()
+    ckpt = _torch_load(path)
+    if ckpt.get("kind") != "latent_lab_vocoder":
+        sys.exit(f"✗  {path} no es un checkpoint de train-vocoder")
+    device = _get_device(device_name)
+    voc = zoo["LiteVocoder"](ckpt["n_bins"], ckpt["hidden"],
+                             tuple(ckpt["upsample_rates"]))
+    voc.load_state_dict(ckpt["state_dict"])
+    voc.to(device).eval()
+    print(f"  [vocoder] {path}: {ckpt['n_bins']} bins  hop={ckpt['hop']}  "
+          f"sr={ckpt['sr']}  ({sum(p.numel() for p in voc.parameters())/1e6:.2f}M parámetros)")
+    return voc, ckpt
+
+def vocoder_synthesize(voc, norm_mags: np.ndarray) -> np.ndarray:
+    """Magnitud log-normalizada [frames × bins] ∈ [0,1] → forma de onda,
+    usando un LiteVocoder ya cargado (en el dispositivo correspondiente)."""
+    torch  = _torch_zoo()["torch"]
+    device = next(voc.parameters()).device
+    with torch.no_grad():
+        mag = torch.from_numpy(norm_mags.T[None]).to(device).float()  # [1,bins,F]
+        y   = voc(mag)[0, 0].cpu().numpy()
+    return y.astype(np.float32)
+
 def latents_normalize(latents: np.ndarray, lat_min: np.ndarray,
                       lat_max: np.ndarray) -> np.ndarray:
     """[frames×D] → [0,1] por componente según estadísticas del corpus."""
@@ -1046,6 +1169,18 @@ def _random_crop_batch(torch, corpus: List[np.ndarray], batch: int,
             out[b, 0] = a[start : start + segment]
     return torch.from_numpy(out).to(device)
 
+def _fix_wav_length(torch, y, target_len: int):
+    """Recorta o rellena con ceros [B,1,T] a exactamente target_len muestras
+    (las ConvTranspose1d del vocoder pueden desviarse en unas pocas muestras
+    del objetivo exacto, igual que ya ocurre con las skip-connections de
+    UNetUp más arriba)."""
+    T = y.shape[-1]
+    if T == target_len:
+        return y
+    if T > target_len:
+        return y[..., :target_len]
+    return torch.nn.functional.pad(y, (0, target_len - T))
+
 def _latent_stats(coder_like, corpus: List[np.ndarray],
                   hop: int, device, max_seconds: float = 60.0,
                   sr: int = SAMPLE_RATE) -> Tuple[np.ndarray, np.ndarray]:
@@ -1137,6 +1272,83 @@ def cmd_train_coder(args):
         "decoder":       dec.state_dict(),
     }, out_path)
     print(f"  ✓  Coder → {out_path}")
+
+
+def cmd_train_vocoder(args):
+    """
+    WAVs → entrena un vocoder neuronal ligero (LiteVocoder) → vocoder.pt.
+
+    Alternativa OPCIONAL a Griffin-Lim para reconstruir audio a partir de
+    magnitud STFT en latent-to-spectrogram / pca-to-intermediate (--vocoder).
+    Si nunca entrenas uno, el comportamiento por defecto de esos comandos no
+    cambia: siguen usando Griffin-Lim.
+    """
+    zoo    = _torch_zoo()
+    torch  = zoo["torch"]
+    device = _get_device(args.device)
+    sr     = args.sr
+    window, hop_ratio = args.window, args.hop
+    hop    = max(1, int(window * hop_ratio))
+    n_bins = window // 2 + 1
+
+    rates = list(args.upsample_rates) if args.upsample_rates else _factorize_hop(hop)
+    prod  = int(np.prod(rates))
+    if prod != hop:
+        sys.exit(f"✗  --upsample-rates {rates} multiplican {prod} ≠ hop STFT "
+                 f"{hop} (window×hop-ratio). Ajusta manualmente o cambia "
+                 f"--window/--hop para que factoricen bien.")
+
+    print(f"  [train-vocoder] window={window} hop={hop} ({n_bins} bins)  "
+          f"upsample_rates={rates}")
+    corpus = _load_corpus(args.inputs, sr)
+
+    voc = zoo["LiteVocoder"](n_bins, args.hidden, tuple(rates)).to(device)
+    n_params = sum(p.numel() for p in voc.parameters())
+    print(f"  [train-vocoder] {n_params/1e6:.2f}M parámetros  batch={args.batch}  "
+          f"frames={args.frames}  steps={args.steps}")
+
+    opt     = torch.optim.Adam(voc.parameters(), lr=args.lr, betas=(0.8, 0.99))
+    rng     = np.random.default_rng(args.seed)
+    segment = args.frames * hop
+
+    voc.train()
+    for step in range(1, args.steps + 1):
+        x = _random_crop_batch(torch, corpus, args.batch, segment, rng, device)
+        mags_np = np.stack([
+            mags_to_norm(stft_analyse(x[b, 0].cpu().numpy(), sr,
+                                      window, hop_ratio)[0], args.db_floor)
+            for b in range(args.batch)])                      # [B, frames, bins]
+        mag = torch.from_numpy(mags_np.transpose(0, 2, 1)).to(device)  # [B,bins,F]
+        y   = voc(mag)
+        y   = _fix_wav_length(torch, y, x.shape[-1])
+        loss_wav  = (x - y).abs().mean()
+        loss_stft = _multiscale_stft_loss(torch, x[:, 0], y[:, 0])
+        loss      = loss_wav + loss_stft
+        opt.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(voc.parameters(), 1.0)
+        opt.step()
+        if step == 1 or step % args.log_every == 0:
+            print(f"  [train-vocoder] step {step:>6}/{args.steps}  "
+                  f"loss={loss.item():.4f}  (wav={loss_wav.item():.4f}  "
+                  f"stft={loss_stft.item():.4f})")
+
+    voc.eval()
+    out_path = args.output or "vocoder.pt"
+    torch.save({
+        "kind":            "latent_lab_vocoder",
+        "sr":              sr,
+        "window":          window,
+        "hop_ratio":       hop_ratio,
+        "hop":             hop,
+        "n_bins":          n_bins,
+        "hidden":          args.hidden,
+        "upsample_rates":  rates,
+        "db_floor":        args.db_floor,
+        "state_dict":      voc.state_dict(),
+    }, out_path)
+    print(f"  ✓  Vocoder → {out_path}")
+    print(f"     Úsalo con: --vocoder {out_path} en latent-to-spectrogram --wav")
 
 
 def cmd_wav_to_latent(args):
@@ -2111,8 +2323,18 @@ def cmd_latent_to_spectrogram(args):
     print(f"     Fase: cero — compatible con audio_lab reconstruct (Griffin-Lim)")
 
     if args.wav:
-        print(f"  [latent-to-spectrogram] Griffin-Lim {args.gl_iters} iter...")
-        audio = griffin_lim(mags, hop_r, n_iter=args.gl_iters, sr=ckpt["sr"])
+        if args.vocoder:
+            print(f"  [latent-to-spectrogram] vocoder neuronal ({args.vocoder})...")
+            voc, vckpt = load_vocoder(args.vocoder, args.device)
+            if vckpt["n_bins"] != S.shape[1]:
+                sys.exit(f"✗  El vocoder espera {vckpt['n_bins']} bins pero el "
+                         f"espectrograma generado tiene {S.shape[1]}")
+            audio = vocoder_synthesize(voc, S)
+        else:
+            print(f"  [latent-to-spectrogram] Griffin-Lim {args.gl_iters} iter "
+                  f"(phase_init={args.gl_phase_init})...")
+            audio = griffin_lim(mags, hop_r, n_iter=args.gl_iters, sr=ckpt["sr"],
+                                phase_init=args.gl_phase_init)
         peak  = np.abs(audio).max()
         if peak > 1e-9:
             audio = (audio / peak * 0.85).astype(np.float32)
@@ -2594,8 +2816,19 @@ def cmd_pca_to_intermediate(args):
               f"~{dur:.2f}s)")
         print(f"     Fase: cero — compatible con audio_lab reconstruct (Griffin-Lim)")
         if args.wav:
-            print(f"  [pca-to-intermediate] Griffin-Lim {args.gl_iters} iter…")
-            audio = griffin_lim(mags, model["hop_ratio"], n_iter=args.gl_iters, sr=model["sr"])
+            if args.vocoder:
+                print(f"  [pca-to-intermediate] vocoder neuronal ({args.vocoder})...")
+                voc, vckpt = load_vocoder(args.vocoder, args.device)
+                if vckpt["n_bins"] != mags.shape[1]:
+                    sys.exit(f"✗  El vocoder espera {vckpt['n_bins']} bins pero "
+                             f"el espectrograma reconstruido tiene {mags.shape[1]}")
+                norm  = mags_to_norm(mags, vckpt["db_floor"])
+                audio = vocoder_synthesize(voc, norm)
+            else:
+                print(f"  [pca-to-intermediate] Griffin-Lim {args.gl_iters} iter "
+                      f"(phase_init={args.gl_phase_init})…")
+                audio = griffin_lim(mags, model["hop_ratio"], n_iter=args.gl_iters,
+                                    sr=model["sr"], phase_init=args.gl_phase_init)
             peak  = np.abs(audio).max()
             if peak > 1e-9:
                 audio = (audio / peak * 0.85).astype(np.float32)
@@ -2758,6 +2991,48 @@ def main():
     p.add_argument("--output", "-o", default="coder.pt",
                    help="Checkpoint de salida (default: coder.pt)")
     p.set_defaults(func=cmd_train_coder)
+
+    # ── train-vocoder ─────────────────────────────────────────────────────────
+    p = sub.add_parser("train-vocoder",
+                       help="WAVs → entrena un vocoder neuronal ligero "
+                            "(alternativa opcional a Griffin-Lim) → vocoder.pt")
+    p.add_argument("inputs", nargs="+", help="Ficheros WAV de entrenamiento")
+    p.add_argument("--sr", type=int, default=SAMPLE_RATE,
+                   help=f"Sample rate de trabajo (default: {SAMPLE_RATE})")
+    p.add_argument("--window", type=int, default=4096,
+                   help="Tamaño de ventana STFT, debe coincidir con el usado "
+                        "para generar los espectrogramas que luego alimentarás "
+                        "al vocoder (default: 4096)")
+    p.add_argument("--hop", type=float, default=0.25,
+                   help="hop_ratio STFT, ídem (default: 0.25 → hop=1024 con "
+                        "--window 4096)")
+    p.add_argument("--db-floor", type=float, default=DEFAULT_DB_FLOOR,
+                   help=f"Piso dB de normalización (default: {DEFAULT_DB_FLOOR})")
+    p.add_argument("--upsample-rates", nargs="+", type=int, default=None,
+                   help="Factores de sobremuestreo del vocoder; su producto "
+                        "debe ser igual al hop STFT (window×hop-ratio). Si se "
+                        "omite, se calculan automáticamente (default: auto)")
+    p.add_argument("--hidden", type=int, default=256,
+                   help="Canales ocultos iniciales (default: 256)")
+    p.add_argument("--steps", type=int, default=2000,
+                   help="Pasos de entrenamiento (default: 2000)")
+    p.add_argument("--batch", type=int, default=8,
+                   help="Tamaño de batch (default: 8)")
+    p.add_argument("--frames", type=int, default=32,
+                   help="Frames STFT por recorte de entrenamiento. Debe ser "
+                        "suficiente para que frames×hop supere ~2048 muestras "
+                        "(lo que exige la pérdida STFT multi-escala interna); "
+                        "con los valores por defecto 32 ya cumple de sobra "
+                        "(default: 32)")
+    p.add_argument("--lr", type=float, default=2e-4,
+                   help="Learning rate Adam (default: 2e-4)")
+    p.add_argument("--seed", type=int, default=0, help="Semilla RNG (default: 0)")
+    p.add_argument("--log-every", type=int, default=50,
+                   help="Imprimir pérdida cada N pasos (default: 50)")
+    _add_device(p)
+    p.add_argument("--output", "-o", default="vocoder.pt",
+                   help="Checkpoint de salida (default: vocoder.pt)")
+    p.set_defaults(func=cmd_train_vocoder)
 
     # ── wav-to-latent ─────────────────────────────────────────────────────────
     p = sub.add_parser("wav-to-latent",
@@ -2928,9 +3203,20 @@ def main():
                    help="Escala absoluta de las magnitudes de salida (default: 1.0; "
                         "reconstruct de audio_lab normaliza automáticamente)")
     p.add_argument("--wav", default=None,
-                   help="Si se especifica, reconstruye también un WAV (Griffin-Lim)")
+                   help="Si se especifica, reconstruye también un WAV "
+                        "(Griffin-Lim por defecto, o --vocoder)")
     p.add_argument("--gl-iters", type=int, default=32,
                    help="Iteraciones de Griffin-Lim para --wav (default: 32)")
+    p.add_argument("--gl-phase-init", default="random",
+                   choices=["random", "propagate"],
+                   help="Inicialización de fase de Griffin-Lim (default: random, "
+                        "comportamiento histórico; 'propagate' usa fase de "
+                        "phase-vocoder como punto de partida — ver train-vocoder "
+                        "--help para la alternativa neuronal completa)")
+    p.add_argument("--vocoder", default=None,
+                   help="Checkpoint de train-vocoder: si se indica, reemplaza "
+                        "Griffin-Lim por un vocoder neuronal ligero para --wav "
+                        "(default: ninguno, se usa Griffin-Lim como hasta ahora)")
     _add_device(p)
     p.add_argument("--output", "-o", default=None, help="NPZ STFT de salida")
     p.set_defaults(func=cmd_latent_to_spectrogram)
@@ -2999,9 +3285,20 @@ def main():
     p.add_argument("--png", action="store_true",
                    help="Si la salida es un latente, genera también su PNG")
     p.add_argument("--wav", default=None,
-                   help="Si la salida es un espectrograma, reconstruye también un WAV (Griffin-Lim)")
+                   help="Si la salida es un espectrograma, reconstruye también un WAV "
+                        "(Griffin-Lim por defecto, o --vocoder)")
     p.add_argument("--gl-iters", type=int, default=32,
                    help="Iteraciones de Griffin-Lim para --wav (default: 32)")
+    p.add_argument("--gl-phase-init", default="random",
+                   choices=["random", "propagate"],
+                   help="Inicialización de fase de Griffin-Lim (default: random, "
+                        "comportamiento histórico; 'propagate' usa fase de "
+                        "phase-vocoder como punto de partida)")
+    p.add_argument("--vocoder", default=None,
+                   help="Checkpoint de train-vocoder: si se indica, reemplaza "
+                        "Griffin-Lim por un vocoder neuronal para --wav (default: "
+                        "ninguno, se usa Griffin-Lim como hasta ahora)")
+    _add_device(p)
     p.add_argument("--output", "-o", default=None, help="NPZ de salida")
     p.set_defaults(func=cmd_pca_to_intermediate)
 
