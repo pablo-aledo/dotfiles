@@ -3495,7 +3495,21 @@ def main():
         return
 
     print(f"\n● latent_lab  →  {args.command}")
-    args.func(args)
+    try:
+        args.func(args)
+    except SystemExit:
+        raise
+    except FileNotFoundError as e:
+        sys.exit(f"✗  Fichero no encontrado: {e.filename or e}")
+    except (OSError, IOError) as e:
+        sys.exit(f"✗  Error de E/S accediendo a {getattr(e, 'filename', None) or 'un fichero'}: {e}")
+    except Exception as e:
+        # soundfile lanza sus propios tipos de error (p.ej. LibsndfileError) que no
+        # heredan de OSError, así que se capturan aquí para dar el mismo mensaje
+        # consistente en vez de una traza cruda cuando el problema es de E/S de audio.
+        if type(e).__name__ in ("LibsndfileError", "SoundFileError", "SoundFileRuntimeError"):
+            sys.exit(f"✗  Error leyendo/escribiendo audio: {e}")
+        raise
     print()
 
 
