@@ -340,6 +340,41 @@ def _phase_vocoder_init(mags: np.ndarray, hop: int, n_fft: int) -> np.ndarray:
     phases = np.outer(np.arange(frames), bin_advance)
     return np.mod(phases, 2 * np.pi)
 
+def istft_reconstruct(mags: np.ndarray, phases: np.ndarray,
+                       hop_ratio: float, trim: bool = True) -> np.ndarray:
+    """ISTFT directo (overlap-add con ventana Hann) a partir de magnitud +
+    fase ya conocidas — sin ninguna estimación iterativa. Úsalo cuando la
+    fase es real (p.ej. viene de --keep-phase en wav-to-spectrogram); si
+    solo tienes magnitud, usa griffin_lim() en su lugar.
+
+    trim=True (por defecto) recorta el padding de análisis y devuelve audio
+    listo para reproducir/guardar. trim=False deja el resultado sin recortar
+    (uso interno de griffin_lim, que necesita las muestras de borde durante
+    las iteraciones).
+    """
+    n_bins  = mags.shape[1]
+    n_fft   = (n_bins - 1) * 2
+    hop     = max(1, int(n_fft * hop_ratio))
+    frames  = mags.shape[0]
+    win     = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(n_fft) / n_fft)
+
+    out_len = (frames - 1) * hop + n_fft
+    out     = np.zeros(out_len, dtype=np.float64)
+    norm    = np.zeros(out_len, dtype=np.float64)
+    for i in range(frames):
+        X     = mags[i] * np.exp(1j * phases[i])
+        chunk = np.fft.irfft(X, n=n_fft)[:n_fft] * win
+        start = i * hop
+        out[start:start + n_fft]  += chunk
+        norm[start:start + n_fft] += win ** 2
+    nz = norm > 1e-10
+    out[nz] /= norm[nz]
+    if not trim:
+        return out
+    n_pad = n_fft // 2
+    return out[n_pad : n_pad + out_len - n_fft].astype(np.float32)
+
+
 def griffin_lim(mags: np.ndarray, hop_ratio: float,
                 n_iter: int = 32, sr: int = SAMPLE_RATE,
                 phase_init: str = "random") -> np.ndarray:
@@ -351,6 +386,10 @@ def griffin_lim(mags: np.ndarray, hop_ratio: float,
       - "propagate": fase inicial por acumulación de frecuencia central por
         bin (ver _phase_vocoder_init) en vez de ruido — punto de partida más
         informado, normalmente converge algo mejor con pocas iteraciones.
+
+    Nota: si ya tienes la fase real (p.ej. de --keep-phase), no uses esta
+    función — usa istft_reconstruct(), que es directa, exacta y no necesita
+    iterar.
     """
     n_bins  = mags.shape[1]
     n_fft   = (n_bins - 1) * 2
@@ -365,18 +404,7 @@ def griffin_lim(mags: np.ndarray, hop_ratio: float,
         phases = rng.uniform(0, 2 * np.pi, mags.shape)
 
     def _istft(ph: np.ndarray) -> np.ndarray:
-        out_len = (frames - 1) * hop + n_fft
-        out     = np.zeros(out_len, dtype=np.float64)
-        norm    = np.zeros(out_len, dtype=np.float64)
-        for i in range(frames):
-            X     = mags[i] * np.exp(1j * ph[i])
-            chunk = np.fft.irfft(X, n=n_fft)[:n_fft] * win
-            start = i * hop
-            out[start:start + n_fft]  += chunk
-            norm[start:start + n_fft] += win ** 2
-        nz = norm > 1e-10
-        out[nz] /= norm[nz]
-        return out
+        return istft_reconstruct(mags, ph, hop_ratio, trim=False)
 
     def _stft_phases(audio: np.ndarray) -> np.ndarray:
         n_pad  = n_fft // 2
@@ -396,6 +424,7 @@ def griffin_lim(mags: np.ndarray, hop_ratio: float,
     return audio[n_pad : n_pad + len(audio) - n_fft].astype(np.float32)
 
 # ── normalización de espectrogramas (log dB → [0,1]) ─────────────────────────
+
 
 def mags_to_norm(mags: np.ndarray, db_floor: float = DEFAULT_DB_FLOOR) -> np.ndarray:
     """Magnitudes STFT → [0,1] en escala log, normalizadas al pico del fichero."""
@@ -1398,18 +1427,24 @@ def cmd_wav_to_spectrogram(args):
     print(f"  ✓  NPZ STFT → {out_path}  ({mags.shape[0]} frames × "
           f"{mags.shape[1]} bins, ~{mags.shape[0]*hop/sr:.2f}s)")
     if args.keep_phase:
-        print(f"     Fase real conservada (útil para medir la degradación de "
-              f"Griffin-Lim/vocoder frente a la fase original)")
+        print(f"     Fase real conservada — spectrogram-to-wav la usará "
+              f"directamente (ISTFT exacto, sin Griffin-Lim)")
     else:
         print(f"     Fase: cero — compatible con audio_lab reconstruct")
 
 
 def cmd_spectrogram_to_wav(args):
     """
-    NPZ de espectrograma STFT → WAV, recuperando la fase con Griffin-Lim
-    (por defecto, con --gl-phase-init opcional) o con un vocoder neuronal
-    (--vocoder). Es el equivalente directo de latent-to-wav pero para
-    espectrogramas: no requiere coder ni mapper.
+    NPZ de espectrograma STFT → WAV.
+
+    Si el NPZ conserva fase real (generado con --keep-phase en
+    wav-to-spectrogram), se usa esa fase directamente vía ISTFT exacto —
+    es la opción más fiel y evita el "zumbido"/aspereza que Griffin-Lim
+    introduce típicamente en tonos sostenidos/graves. Si no hay fase real
+    (caso por defecto), se recupera con Griffin-Lim (--gl-phase-init
+    opcional) o con un vocoder neuronal (--vocoder). Es el equivalente
+    directo de latent-to-wav pero para espectrogramas: no requiere coder
+    ni mapper.
     """
     data = np.load(args.input)
     if "magnitudes" not in data.files:
@@ -1420,9 +1455,14 @@ def cmd_spectrogram_to_wav(args):
     sr     = int(data["sample_rate"])
     window = int(data["window_size"])
     hop_r  = float(data["hop_ratio"])
+    phases = data["phases"].astype(np.float32) if "phases" in data.files else None
+    has_real_phase = phases is not None and bool(np.any(phases != 0.0))
 
     if args.vocoder:
         print(f"  [spectrogram-to-wav] vocoder neuronal ({args.vocoder})...")
+        if has_real_phase:
+            print(f"     ⚠  el NPZ tiene fase real, pero se ignora porque se "
+                  f"pidió --vocoder explícitamente")
         voc, vckpt = load_vocoder(args.vocoder, args.device)
         if vckpt["n_bins"] != mags.shape[1]:
             sys.exit(f"✗  El vocoder espera {vckpt['n_bins']} bins pero el "
@@ -1434,6 +1474,10 @@ def cmd_spectrogram_to_wav(args):
             sr = vckpt["sr"]
         norm  = mags_to_norm(mags, vckpt["db_floor"])
         audio = vocoder_synthesize(voc, norm)
+    elif has_real_phase:
+        print(f"  [spectrogram-to-wav] fase real detectada en el NPZ → "
+              f"ISTFT directo (sin Griffin-Lim)...")
+        audio = istft_reconstruct(mags, phases.astype(np.float64), hop_r)
     else:
         print(f"  [spectrogram-to-wav] Griffin-Lim {args.gl_iters} iter "
               f"(phase_init={args.gl_phase_init})...")
