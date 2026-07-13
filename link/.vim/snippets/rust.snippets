@@ -1,0 +1,1351 @@
+# Rust + Tokio + Tonic + Rayon + DSP
+# Formato: snipMate (garbas/vim-snipmate)
+
+snippet rs-let "variable inmutable"
+	let ${1:nombre}: ${2:Tipo} = ${0:valor};
+
+snippet rs-letmut "variable mutable"
+	let mut ${1:nombre}: ${2:Tipo} = ${0:valor};
+
+snippet rs-const "constante en tiempo de compilacion" b
+	const ${1:NOMBRE}: ${2:Tipo} = ${0:valor};
+
+snippet rs-static "variable estatica" b
+	static ${1:NOMBRE}: ${2:Tipo} = ${0:valor};
+
+snippet rs-if "if / else"
+	if ${1:condicion} {
+		${2:todo!()}
+	} else {
+		${0:todo!()}
+	}
+
+snippet rs-ifelseif "if / else if / else"
+	if ${1:condicion1} {
+		${2:todo!()}
+	} else if ${3:condicion2} {
+		${4:todo!()}
+	} else {
+		${0:todo!()}
+	}
+
+snippet rs-iflet "if let (desestructura Option/Result)"
+	if let ${1:Some}(${2:valor}) = ${3:expresion} {
+		${0:todo!()}
+	}
+
+snippet rs-ifletelse "if let / else"
+	if let ${1:Some}(${2:valor}) = ${3:expresion} {
+		${4:todo!()}
+	} else {
+		${0:todo!()}
+	}
+
+snippet rs-while "bucle while"
+	while ${1:condicion} {
+		${0:todo!()}
+	}
+
+snippet rs-whilelet "bucle while let"
+	while let ${1:Some}(${2:valor}) = ${3:iterador.next()} {
+		${0:todo!()}
+	}
+
+snippet rs-loop "loop infinito con break que devuelve valor"
+	let ${1:resultado} = loop {
+		${2:todo!()}
+		if ${3:condicion} {
+			break ${0:valor};
+		}
+	};
+
+snippet rs-for "for sobre un rango numerico"
+	for ${1:i} in ${2:0}..${3:10} {
+		${0:todo!()}
+	}
+
+snippet rs-foriter "for sobre una coleccion/iterador"
+	for ${1:elemento} in ${2:coleccion}.iter() {
+		${0:todo!()}
+	}
+
+snippet rs-matchguard "match con guardas y patron por defecto"
+	match ${1:valor} {
+		${2:0} => ${3:todo!()},
+		${4:n} if ${5:n > 0} => ${6:todo!()},
+		_ => ${0:todo!()},
+	}
+
+snippet rs-fn "funcion con Result y manejo de error" b
+	fn ${1:nombre}(${2:args}) -> Result<${3:T}, ${4:Error}> {
+		${0:todo!()}
+	}
+
+snippet rs-fngen "funcion generica con trait bound" b
+	fn ${1:nombre}<T: ${2:Clone} + ${3:std::fmt::Debug}>(${4:valor}: T) -> ${5:T} {
+		${0:todo!()}
+	}
+
+snippet rs-fnwhere "funcion generica con clausula where" b
+	fn ${1:nombre}<T>(${2:valor}: T) -> ${3:T}
+	where
+		T: ${4:Clone} + ${5:std::fmt::Debug},
+	{
+		${0:todo!()}
+	}
+
+snippet rs-implreturn "funcion que devuelve impl Trait" b
+	fn ${1:nombre}(${2:args}) -> impl ${3:Iterator<Item = i32>} {
+		${0:todo!()}
+	}
+
+snippet rs-closure "closure inmutable"
+	let ${1:cierre} = |${2:x}: ${3:i32}| -> ${4:i32} { ${0:x} };
+
+snippet rs-closuremut "closure FnMut que captura por mutable"
+	let mut ${1:contador} = 0;
+	let mut ${2:incrementar} = || {
+		${1:contador} += 1;
+		${0:contador}
+	};
+
+snippet rs-struct "struct con campos nombrados y derive comunes" b
+	#[derive(Debug, Clone${1:, Default})]
+	pub struct ${2:Nombre} {
+		${0:pub campo: Tipo,}
+	}
+
+snippet rs-structtuple "tuple struct (struct sin nombres de campo)" b
+	#[derive(Debug, Clone, Copy)]
+	pub struct ${1:Nombre}(pub ${2:f64}, pub ${0:f64});
+
+snippet rs-structunit "unit struct (sin campos, solo marcador de tipo)" b
+	pub struct ${0:Nombre};
+
+snippet rs-impl "bloque impl para un struct" b
+	impl ${1:Nombre} {
+		${0:todo!()}
+	}
+
+snippet rs-implnew "constructor asociado new()" b
+	impl ${1:Nombre} {
+		pub fn new(${2:args}) -> Self {
+			Self {
+				${0:campo,}
+			}
+		}
+	}
+
+snippet rs-impldisplay "impl Display para formateo con {}" b
+	impl std::fmt::Display for ${1:Nombre} {
+		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+			write!(f, ${0:"{}", self.campo})
+		}
+	}
+
+snippet rs-impldefault "impl Default manual" b
+	impl Default for ${1:Nombre} {
+		fn default() -> Self {
+			Self {
+				${0:campo: valor_por_defecto,}
+			}
+		}
+	}
+
+snippet rs-builder "patron builder" b
+	#[derive(Default)]
+	pub struct ${1:Nombre}Builder {
+		${2:campo}: Option<${3:Tipo}>,
+	}
+
+	impl ${1:Nombre}Builder {
+		pub fn ${2:campo}(mut self, valor: ${3:Tipo}) -> Self {
+			self.${2:campo} = Some(valor);
+			self
+		}
+
+		pub fn build(self) -> ${1:Nombre} {
+			${1:Nombre} {
+				${2:campo}: self.${2:campo}.unwrap_or_default(),
+				${0}
+			}
+		}
+	}
+
+snippet rs-enum "enum con variantes con datos" b
+	#[derive(Debug, Clone, PartialEq)]
+	pub enum ${1:Nombre} {
+		${0:Variante(Tipo)},
+	}
+
+snippet rs-enumimpl "enum con impl y match exhaustivo" b
+	#[derive(Debug, Clone, PartialEq)]
+	pub enum ${1:Estado} {
+		${2:Activo},
+		${3:Inactivo},
+	}
+
+	impl ${1:Estado} {
+		pub fn descripcion(&self) -> &str {
+			match self {
+				${1:Estado}::${2:Activo} => ${0:"activo"},
+				${1:Estado}::${3:Inactivo} => "inactivo",
+			}
+		}
+	}
+
+snippet rs-trait "definicion de trait (interfaz) con metodo default" b
+	pub trait ${1:Nombre} {
+		fn ${2:metodo}(&self) -> ${3:Tipo};
+
+		fn ${4:metodo_default}(&self) -> ${3:Tipo} {
+			${0:self.${2:metodo}()}
+		}
+	}
+
+snippet rs-traitassoc "trait con tipo asociado" b
+	pub trait ${1:Contenedor} {
+		type Item;
+
+		fn obtener(&self) -> &Self::Item;
+		fn ${0:insertar}(&mut self, valor: Self::Item);
+	}
+
+snippet rs-traitbound "funcion generica con multiples trait bounds" b
+	fn ${1:nombre}<T: ${2:Clone} + ${3:PartialEq}>(${4:a}: T, ${5:b}: T) -> bool {
+		${0:a == b}
+	}
+
+snippet rs-traitobj "trait object (dispatch dinamico) con Box<dyn Trait>"
+	let ${1:objeto}: Box<dyn ${2:Trait}> = Box::new(${0:Implementacion});
+
+snippet rs-traitimpl "implementar un trait para un tipo" b
+	impl ${1:Trait} for ${2:Tipo} {
+		fn ${3:metodo}(&self) -> ${4:Tipo2} {
+			${0:todo!()}
+		}
+	}
+
+snippet rs-genericstruct "struct generico con trait bound" b
+	pub struct ${1:Contenedor}<T: ${2:Clone}> {
+		pub valor: T,
+	}
+
+	impl<T: ${2:Clone}> ${1:Contenedor}<T> {
+		pub fn new(valor: T) -> Self {
+			Self { valor }
+		}
+		${0}
+	}
+
+snippet rs-vec "Vec y operaciones basicas"
+	let mut ${1:vector}: Vec<${2:i32}> = Vec::new();
+	${1:vector}.push(${0:valor});
+
+snippet rs-hashmap "HashMap con insercion y acceso"
+	use std::collections::HashMap;
+
+	let mut ${1:mapa}: HashMap<${2:String}, ${3:i32}> = HashMap::new();
+	${1:mapa}.insert(${4:clave}, ${0:valor});
+
+snippet rs-hashset "HashSet con insercion"
+	use std::collections::HashSet;
+
+	let mut ${1:conjunto}: HashSet<${2:i32}> = HashSet::new();
+	${1:conjunto}.insert(${0:valor});
+
+snippet rs-slice "slice y pattern matching sobre el mismo"
+	let ${1:datos} = [1, 2, 3, 4, 5];
+	match &${1:datos}[..] {
+		[primero, .., ultimo] => ${0:todo!()},
+		[] => todo!(),
+	}
+
+snippet rs-tuple "tupla y destructuring"
+	let ${1:tupla}: (${2:i32}, ${3:f64}) = (${4:0}, ${5:0.0});
+	let (${6:a}, ${7:b}) = ${1:tupla};
+	${0}
+
+snippet rs-array "array de tamano fijo"
+	let ${1:arreglo}: [${2:i32}; ${3:5}] = [${0:0}; ${3:5}];
+
+snippet rs-string "String vs &str y formateo"
+	let ${1:propietaria}: String = String::from(${2:"texto"});
+	let ${3:prestada}: &str = &${1:propietaria};
+	let ${4:formateada} = format!(${0:"{} - {}", propietaria, prestada});
+
+snippet rs-err "tipo de error propio con thiserror" b
+	use thiserror::Error;
+
+	#[derive(Debug, Error)]
+	pub enum ${1:MiError} {
+		#[error("${2:mensaje}: {0}")]
+		${3:Variante}(${4:String}),
+	}
+
+snippet rs-resultchain "propagacion de errores con ? y conversion From"
+	fn ${1:nombre}() -> Result<${2:()}, ${3:MiError}> {
+		let ${4:valor} = ${5:operacion_que_falla()}?;
+		${0:Ok(())}
+	}
+
+snippet rs-optioncombinators "combinadores comunes de Option"
+	let ${1:resultado} = ${2:opcion}
+		.map(|${3:v}| ${4:v})
+		.filter(|${3:v}| ${5:true})
+		.unwrap_or(${0:valor_por_defecto});
+
+snippet rs-borrow "referencia inmutable y mutable"
+	fn ${1:leer}(valor: &${2:Tipo}) -> ${3:Tipo} {
+		${0:valor.clone()}
+	}
+
+	fn ${4:modificar}(valor: &mut ${2:Tipo}) {
+		*valor = ${0:nuevo_valor};
+	}
+
+snippet rs-lifetime "funcion con lifetime explicito" b
+	fn ${1:nombre}<'a>(${2:a}: &'a str, ${3:b}: &'a str) -> &'a str {
+		${0:if a.len() > b.len() { a } else { b }}
+	}
+
+snippet rs-box "Box<T> para datos en el heap"
+	let ${1:valor}: Box<${2:Tipo}> = Box::new(${0:contenido});
+
+snippet rs-rc "Rc<RefCell<T>> para propiedad compartida mutable (un solo hilo)"
+	use std::rc::Rc;
+	use std::cell::RefCell;
+
+	let ${1:compartido} = Rc::new(RefCell::new(${2:valor_inicial}));
+	let ${3:clon} = Rc::clone(&${1:compartido});
+	${3:clon}.borrow_mut().${0:campo} = nuevo_valor;
+
+snippet rs-arcmutex "Arc<Mutex<T>> para propiedad compartida entre hilos (std, no async)"
+	use std::sync::{Arc, Mutex};
+
+	let ${1:compartido} = Arc::new(Mutex::new(${2:valor_inicial}));
+	let ${3:clon} = Arc::clone(&${1:compartido});
+
+	std::thread::spawn(move || {
+		let mut guard = ${3:clon}.lock().unwrap();
+		${0:*guard += 1;}
+	});
+
+snippet rs-iter "cadena de iterador tipica (filter/map/collect)"
+	${1:vec}.iter()
+		.filter(|${2:x}| ${3:true})
+		.map(|${2:x}| ${4:x})
+		.collect::<${5:Vec<_>}>()${0}
+
+snippet rs-iterenumerate "iterador con enumerate y zip"
+	for (${1:indice}, ${2:valor}) in ${3:coleccion}.iter().enumerate() {
+		${0:todo!()}
+	}
+
+snippet rs-iterfold "reduccion con fold"
+	let ${1:resultado} = ${2:coleccion}.iter().fold(${3:0}, |acc, x| ${0:acc + x});
+
+snippet rs-mod "modulo con visibilidad publica" b
+	pub mod ${1:nombre} {
+		${0:todo!()}
+	}
+
+snippet rs-usereexport "use con reexportacion publica"
+	pub use ${1:crate::modulo}::${0:Elemento};
+
+snippet rs-opadd "sobrecarga del operador + (trait Add)" b
+	impl std::ops::Add for ${1:Punto} {
+		type Output = Self;
+
+		fn add(self, otro: Self) -> Self {
+			Self {
+				${0:x: self.x + otro.x, y: self.y + otro.y,}
+			}
+		}
+	}
+
+snippet rs-destructure "destructuring de un struct en variables"
+	let ${1:Nombre} { ${2:campo1}, ${3:campo2}, .. } = ${0:instancia};
+
+snippet rs-doc "comentario de documentacion con ejemplo ejecutable"
+	/// ${1:Descripcion breve de la funcion}.
+	///
+	/// # Ejemplos
+	///
+	/// ```
+	/// ${0:assert_eq!(1 + 1, 2);}
+	/// ```
+
+snippet rs-test "modulo de tests unitarios" b
+	#[cfg(test)]
+	mod tests {
+		use super::*;
+
+		#[test]
+		fn ${1:nombre_test}() {
+			${0:assert_eq!(1, 1);}
+		}
+	}
+
+snippet rs-main "main con anyhow para manejo de errores simple" b
+	use anyhow::Result;
+
+	fn main() -> Result<()> {
+		${0:Ok(())}
+	}
+
+snippet tk-main "async main con runtime multihilo" b
+	#[tokio::main(flavor = "multi_thread", worker_threads = ${1:4})]
+	async fn main() -> anyhow::Result<()> {
+		${0:Ok(())}
+	}
+
+snippet tk-spawn "tarea asincrona con JoinHandle"
+	let ${1:handle} = tokio::spawn(async move {
+		${0:todo!()}
+	});
+
+snippet tk-mpsc "canal mpsc productor/consumidor" b
+	let (${1:tx}, mut ${2:rx}) = tokio::sync::mpsc::channel::<${3:Tipo}>(${4:32});
+
+	let productor = tokio::spawn(async move {
+		${1:tx}.send(${5:valor}).await.ok();
+	});
+
+	while let Some(${6:msg}) = ${2:rx}.recv().await {
+		${0:todo!()}
+	}
+
+snippet tk-oneshot "canal oneshot para respuesta unica (patron request/response)" b
+	let (${1:tx}, ${2:rx}) = tokio::sync::oneshot::channel::<${3:Tipo}>();
+
+	tokio::spawn(async move {
+		let resultado = ${4:calcular()};
+		${1:tx}.send(resultado).ok();
+	});
+
+	let ${5:respuesta} = ${2:rx}.await?;
+	${0}
+
+snippet tk-broadcast "canal broadcast (multiples receptores del mismo mensaje)" b
+	let (${1:tx}, mut ${2:rx1}) = tokio::sync::broadcast::channel::<${3:Tipo}>(${4:16});
+	let mut ${5:rx2} = ${1:tx}.subscribe();
+
+	${1:tx}.send(${6:valor})?;
+	let ${7:msg} = ${2:rx1}.recv().await?;
+	${0}
+
+snippet tk-watch "canal watch (ultimo valor, util para configuracion en caliente)" b
+	let (${1:tx}, mut ${2:rx}) = tokio::sync::watch::channel(${3:valor_inicial});
+
+	tokio::spawn(async move {
+		${1:tx}.send(${4:nuevo_valor}).ok();
+	});
+
+	${2:rx}.changed().await?;
+	let ${5:actual} = ${2:rx}.borrow().clone();
+	${0}
+
+snippet tk-select "select entre varias tareas asincronas concurrentes"
+	tokio::select! {
+		${1:res1} = ${2:fut1} => { ${0:todo!()} }
+		${3:res2} = ${4:fut2} => { todo!() }
+		else => { todo!() }
+	}
+
+snippet tk-mutex "estado compartido asincrono con Arc<tokio::sync::Mutex<T>>" b
+	let ${1:estado} = std::sync::Arc::new(tokio::sync::Mutex::new(${2:valor_inicial}));
+
+	{
+		let mut guard = ${1:estado}.lock().await;
+		${0:*guard = valor;}
+	}
+
+snippet tk-rwlock "estado compartido de lectura frecuente con Arc<tokio::sync::RwLock<T>>" b
+	let ${1:estado} = std::sync::Arc::new(tokio::sync::RwLock::new(${2:valor_inicial}));
+
+	{
+		let lectura = ${1:estado}.read().await;
+		${0:println!("{:?}", *lectura);}
+	}
+	{
+		let mut escritura = ${1:estado}.write().await;
+		*escritura = valor_nuevo;
+	}
+
+snippet tk-interval "bucle periodico con tokio::time::interval"
+	let mut intervalo = tokio::time::interval(std::time::Duration::from_millis(${1:100}));
+	loop {
+		intervalo.tick().await;
+		${0:todo!()}
+	}
+
+snippet tk-timeout "envolver una future con un timeout"
+	match tokio::time::timeout(std::time::Duration::from_secs(${1:5}), ${2:operacion_async()}).await {
+		Ok(${3:resultado}) => ${0:todo!()},
+		Err(_) => todo!("tiempo de espera agotado"),
+	}
+
+snippet tk-sleep "esperar de forma asincrona sin bloquear el hilo"
+	tokio::time::sleep(std::time::Duration::from_millis(${1:500})).await;
+	${0}
+
+snippet tk-joinset "JoinSet para lanzar y recolectar N tareas dinamicas" b
+	let mut conjunto = tokio::task::JoinSet::new();
+
+	for ${1:item} in ${2:elementos} {
+		conjunto.spawn(async move {
+			${0:procesar(item).await}
+		});
+	}
+
+	while let Some(resultado) = conjunto.join_next().await {
+		let valor = resultado?;
+	}
+
+snippet tk-spawnblocking "spawn_blocking para codigo bloqueante o CPU-intensivo"
+	let ${1:resultado} = tokio::task::spawn_blocking(move || {
+		${0:calculo_pesado_sincrono()}
+	}).await?;
+
+snippet tk-tcpecho "servidor TCP echo minimo" b
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+	use tokio::net::TcpListener;
+
+	async fn servidor_echo(direccion: &str) -> anyhow::Result<()> {
+		let listener = TcpListener::bind(direccion).await?;
+
+		loop {
+			let (mut socket, _) = listener.accept().await?;
+			tokio::spawn(async move {
+				let mut buffer = [0u8; 1024];
+				loop {
+					let n = match socket.read(&mut buffer).await {
+						Ok(0) => return,
+						Ok(n) => n,
+						Err(_) => return,
+					};
+					if socket.write_all(&buffer[..n]).await.is_err() {
+						return;
+					}
+				}
+			});
+		}
+	}
+	${0}
+
+snippet tk-shutdown "apagado ordenado con CancellationToken (tokio-util)" b
+	use tokio_util::sync::CancellationToken;
+
+	let token = CancellationToken::new();
+	let token_hijo = token.clone();
+
+	let tarea = tokio::spawn(async move {
+		tokio::select! {
+			_ = token_hijo.cancelled() => {
+				${1:println!("apagando de forma ordenada");}
+			}
+			_ = ${2:trabajo_continuo()} => {}
+		}
+	});
+
+	// en el punto de apagado:
+	token.cancel();
+	${0}
+
+snippet tk-streammap "transformar un stream con tokio_stream::StreamExt"
+	use tokio_stream::StreamExt;
+
+	let ${1:resultado}: Vec<_> = ${2:stream}
+		.map(|${3:x}| ${4:x})
+		.filter(|${3:x}| ${5:true})
+		.collect()
+		.await;
+	${0}
+
+snippet tn-buildrs "build.rs tipico con tonic-build para compilar .proto" b
+	fn main() -> Result<(), Box<dyn std::error::Error>> {
+		tonic_build::configure()
+			.build_server(true)
+			.build_client(true)
+			.compile(&["${1:proto/servicio.proto}"], &["${2:proto}"])?;
+		Ok(())
+	}
+
+snippet tn-service "implementacion de servicio Tonic (unario)" b
+	#[tonic::async_trait]
+	impl ${1:MiServicio} for ${2:MiServicioImpl} {
+		async fn ${3:metodo}(
+			&self,
+			request: tonic::Request<${4:PeticionProto}>,
+		) -> Result<tonic::Response<${5:RespuestaProto}>, tonic::Status> {
+			let req = request.into_inner();
+			${0:todo!()}
+		}
+	}
+
+snippet tn-server "arranque de servidor Tonic" b
+	tonic::transport::Server::builder()
+		.add_service(${1:MiServicioServer}::new(${2:MiServicioImpl::default()}))
+		.serve(${3:direccion}.parse()?)
+		.await?;
+	${0}
+
+snippet tn-client "cliente Tonic con llamada unaria"
+	let mut cliente = ${1:MiServicioClient}::connect(${2:"http://[::1]:50051"}).await?;
+	let peticion = tonic::Request::new(${3:PeticionProto { }});
+	let respuesta = cliente.${4:metodo}(peticion).await?;
+	${0:println!("{:?}", respuesta.into_inner());}
+
+snippet tn-serverstream "streaming del servidor hacia el cliente" b
+	type ${1:MiStream} = std::pin::Pin<Box<dyn futures::Stream<Item = Result<${2:Item}, tonic::Status>> + Send>>;
+
+	async fn ${3:metodo_stream}(
+		&self,
+		request: tonic::Request<${4:PeticionProto}>,
+	) -> Result<tonic::Response<Self::${1:MiStream}>, tonic::Status> {
+		let (tx, rx) = tokio::sync::mpsc::channel(${5:32});
+		tokio::spawn(async move {
+			${0:todo!()}
+		});
+		Ok(tonic::Response::new(Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))))
+	}
+
+snippet tn-clientstream "streaming del cliente hacia el servidor" b
+	async fn ${1:metodo_client_stream}(
+		&self,
+		request: tonic::Request<tonic::Streaming<${2:PeticionProto}>>,
+	) -> Result<tonic::Response<${3:RespuestaProto}>, tonic::Status> {
+		let mut stream = request.into_inner();
+		let mut acumulado = Vec::new();
+
+		while let Some(mensaje) = stream.message().await? {
+			acumulado.push(mensaje);
+		}
+		${0:todo!()}
+	}
+
+snippet tn-bidistream "streaming bidireccional cliente-servidor" b
+	type ${1:MiStream} = std::pin::Pin<Box<dyn futures::Stream<Item = Result<${2:RespuestaProto}, tonic::Status>> + Send>>;
+
+	async fn ${3:metodo_bidi}(
+		&self,
+		request: tonic::Request<tonic::Streaming<${4:PeticionProto}>>,
+	) -> Result<tonic::Response<Self::${1:MiStream}>, tonic::Status> {
+		let mut entrada = request.into_inner();
+		let (tx, rx) = tokio::sync::mpsc::channel(${5:32});
+
+		tokio::spawn(async move {
+			while let Ok(Some(mensaje)) = entrada.message().await {
+				${0:todo!()}
+			}
+		});
+
+		Ok(tonic::Response::new(Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))))
+	}
+
+snippet tn-status "construir un tonic::Status con codigo de error especifico"
+	Err(tonic::Status::${1:invalid_argument}(${0:"mensaje descriptivo del error"}))
+
+snippet tn-interceptor "interceptor para validar metadatos (ej. autenticacion)" b
+	fn interceptor_auth(mut peticion: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+		let token = peticion
+			.metadata()
+			.get("authorization")
+			.ok_or_else(|| tonic::Status::unauthenticated("falta token"))?;
+
+		${0:todo!("validar token")}
+
+		Ok(peticion)
+	}
+
+snippet tn-health "servicio de health check estandar (tonic-health)" b
+	let (mut reporter, servicio_salud) = tonic_health::server::health_reporter();
+	reporter.set_serving::<${1:MiServicioServer}<${2:MiServicioImpl}>>().await;
+
+	tonic::transport::Server::builder()
+		.add_service(servicio_salud)
+		.add_service(${1:MiServicioServer}::new(${2:MiServicioImpl::default()}))
+		.serve(${3:direccion}.parse()?)
+		.await?;
+	${0}
+
+snippet tn-reflection "server reflection para poder usar grpcurl sin .proto" b
+	let servicio_reflexion = tonic_reflection::server::Builder::configure()
+		.register_encoded_file_descriptor_set(${1:DESCRIPTOR_SET})
+		.build()?;
+
+	tonic::transport::Server::builder()
+		.add_service(servicio_reflexion)
+		.add_service(${2:MiServicioServer}::new(${3:MiServicioImpl::default()}))
+		.serve(${4:direccion}.parse()?)
+		.await?;
+	${0}
+
+snippet ry-pariter "par_iter con map/collect"
+	${1:datos}.par_iter()
+		.map(|${2:x}| ${3:x})
+		.collect::<${4:Vec<_>}>()${0}
+
+snippet ry-parchunks "procesar en bloques paralelos"
+	${1:buffer}.par_chunks(${2:tamano_bloque})
+		.map(|${3:bloque}| ${0:todo!()})
+		.collect::<Vec<_>>();
+
+snippet ry-pool "thread pool dedicado con numero de hilos fijo" b
+	let pool = rayon::ThreadPoolBuilder::new()
+		.num_threads(${1:4})
+		.build()?;
+
+	pool.install(|| {
+		${0:todo!()}
+	});
+
+snippet ry-reduce "reduccion paralela"
+	let ${1:resultado} = ${2:datos}.par_iter()
+		.map(|${3:x}| ${4:x * x})
+		.reduce(|| ${5:0.0}, |a, b| a + b);
+	${0}
+
+snippet sig-fft "FFT hacia adelante con rustfft" b
+	use rustfft::{FftPlanner, num_complex::Complex};
+
+	let mut planificador = FftPlanner::<f64>::new();
+	let fft = planificador.plan_fft_forward(${1:n});
+	let mut buffer: Vec<Complex<f64>> = ${2:muestras}
+		.iter()
+		.map(|&x| Complex { re: x, im: 0.0 })
+		.collect();
+	fft.process(&mut buffer);
+	${0}
+
+snippet sig-window "ventana de Hamming aplicada a un buffer" b
+	fn ventana_hamming(n: usize) -> Vec<f64> {
+		(0..n)
+			.map(|i| 0.54 - 0.46 * (2.0 * std::f64::consts::PI * i as f64 / (n as f64 - 1.0)).cos())
+			.collect()
+	}
+
+	let ${1:senal_ventaneada}: Vec<f64> = ${2:senal}
+		.iter()
+		.zip(ventana_hamming(${2:senal}.len()))
+		.map(|(s, w)| s * w)
+		.collect();
+	${0}
+
+snippet sig-ndarray "operacion vectorizada con ndarray" b
+	use ndarray::{Array1, Zip};
+
+	let ${1:resultado}: Array1<f64> = Zip::from(&${2:a}).and(&${3:b})
+		.map_collect(|&x, &y| ${0:x * y});
+
+snippet sig-complex "magnitud y fase de un numero complejo"
+	let magnitud = ${1:c}.norm();
+	let fase = ${1:c}.arg();
+	${0}
+# Logging e instrumentacion: tracing / metrics / log
+# Formato: snipMate (garbas/vim-snipmate)
+
+snippet trc-subscriber "inicializar tracing_subscriber con EnvFilter (fmt basico)" b
+	fn init_tracing() {
+		tracing_subscriber::fmt()
+			.with_env_filter(
+				tracing_subscriber::EnvFilter::try_from_default_env()
+					.unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("${1:info}")),
+			)
+			.with_target(${2:true})
+			.init();
+	}
+	${0}
+
+snippet trc-subscriberjson "subscriber con salida JSON estructurada"
+	tracing_subscriber::fmt()
+		.json()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.with_current_span(${1:true})
+		.with_span_list(${2:true})
+		.init();
+	${0}
+
+snippet trc-layered "Registry con multiples layers (fmt + filtro + otel opcional)" b
+	use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+	fn init_tracing() {
+		let filtro = tracing_subscriber::EnvFilter::try_from_default_env()
+			.unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("${1:info}"));
+
+		tracing_subscriber::registry()
+			.with(filtro)
+			.with(tracing_subscriber::fmt::layer())
+			.init();
+	}
+	${0}
+
+snippet trc-filterdirective "EnvFilter con directivas por modulo"
+	let filtro = tracing_subscriber::EnvFilter::new(
+		"${1:info},${2:mi_crate}=${3:debug},${4:tonic}=${5:warn},${6:h2}=off",
+	);
+	${0}
+
+snippet trc-instrument "instrumentar una funcion async con #[instrument]"
+	#[tracing::instrument]
+	async fn ${1:nombre}(${2:args}) -> ${3:Resultado} {
+		${0:todo!()}
+	}
+
+snippet trc-instrumentskip "instrument omitiendo argumentos grandes/sensibles del span"
+	#[tracing::instrument(skip(${1:self, datos_grandes}), fields(${2:id = %self.id}))]
+	async fn ${3:nombre}(&self, ${4:args}) -> ${5:Resultado} {
+		${0:todo!()}
+	}
+
+snippet trc-instrumentret "instrument que registra el valor de retorno (Debug)"
+	#[tracing::instrument(ret)]
+	fn ${1:nombre}(${2:args}) -> ${3:Tipo} {
+		${0:todo!()}
+	}
+
+snippet trc-instrumenterr "instrument que registra automaticamente errores (err)"
+	#[tracing::instrument(err(Debug))]
+	fn ${1:nombre}(${2:args}) -> Result<${3:T}, ${4:Error}> {
+		${0:todo!()}
+	}
+
+snippet trc-instrumentlevel "instrument con nivel de span y campos calculados en runtime"
+	#[tracing::instrument(level = "${1:debug}", skip_all, fields(${2:n = datos.len()}))]
+	fn ${3:nombre}(${4:datos}: &[${5:f64}]) -> ${6:Tipo} {
+		${0:todo!()}
+	}
+
+snippet trc-span "crear y entrar en un span manualmente"
+	let span = tracing::span!(tracing::Level::${1:INFO}, "${2:nombre_span}", ${3:campo} = ${0:valor});
+	let _guardia = span.enter();
+
+snippet trc-spanasync "instrumentar una future manualmente con .instrument()"
+	use tracing::Instrument;
+
+	let span = tracing::info_span!("${1:nombre_span}", ${2:id} = ${3:valor});
+	${4:operacion_async()}.instrument(span).await${0}
+
+snippet trc-spanfields "span con campos vacios rellenados despues (record)"
+	let span = tracing::info_span!("${1:nombre_span}", ${2:resultado} = tracing::field::Empty);
+	let _g = span.enter();
+	${3:let valor = calcular();}
+	span.record("${2:resultado}", &tracing::field::debug(&${3:valor}));
+	${0}
+
+snippet trc-event "emitir un evento con campos estructurados"
+	tracing::event!(tracing::Level::${1:INFO}, ${2:campo} = ${3:valor}, "${0:mensaje descriptivo}");
+
+snippet trc-info "log info con campos estructurados (key = value)"
+	tracing::info!(${1:campo} = ${2:valor}, "${0:mensaje}");
+
+snippet trc-debug "log debug con campos estructurados"
+	tracing::debug!(${1:campo} = ?${2:valor}, "${0:mensaje}");
+
+snippet trc-warn "log warning con campos estructurados"
+	tracing::warn!(${1:campo} = ${2:valor}, "${0:mensaje}");
+
+snippet trc-error "log error con campos estructurados y el error con %"
+	tracing::error!(error = %${1:err}, ${2:campo} = ${3:valor}, "${0:mensaje}");
+
+snippet trc-errorcontext "propagar error con contexto via anyhow + tracing"
+	${1:operacion()}.map_err(|e| {
+		tracing::error!(error = %e, "${2:fallo en la operacion}");
+		${0:anyhow::anyhow!(e)}
+	})?;
+
+snippet trc-panichook "capturar panics como eventos de tracing en vez de stderr crudo" b
+	fn instalar_panic_hook() {
+		let anterior = std::panic::take_hook();
+		std::panic::set_hook(Box::new(move |info| {
+			tracing::error!(panic = %info, "panic capturado");
+			anterior(info);
+		}));
+	}
+	${0}
+
+snippet trc-appender "escritura de logs a fichero con rotacion (tracing-appender)" b
+	fn init_tracing_a_fichero() -> tracing_appender::non_blocking::WorkerGuard {
+		let apilador = tracing_appender::rolling::daily("${1:./logs}", "${2:app.log}");
+		let (no_bloqueante, guardia) = tracing_appender::non_blocking(apilador);
+
+		tracing_subscriber::fmt()
+			.with_writer(no_bloqueante)
+			.with_ansi(false)
+			.init();
+
+		guardia
+	}
+	${0}
+
+snippet trc-requestid "span de correlacion por peticion con ID unico (uuid)"
+	let id_peticion = uuid::Uuid::new_v4();
+	let span = tracing::info_span!("peticion", request_id = %id_peticion);
+	let _g = span.enter();
+	${0}
+
+snippet tn-tracinginterceptor "interceptor Tonic que crea un span por llamada gRPC" b
+	fn interceptor_tracing(peticion: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+		let span = tracing::info_span!(
+			"grpc_request",
+			metodo = ?peticion.metadata().get("grpc-method"),
+			request_id = %uuid::Uuid::new_v4(),
+		);
+		let _g = span.enter();
+		tracing::info!("peticion gRPC recibida");
+		Ok(peticion)
+	}
+	${0}
+
+snippet trc-opentelemetry "exportar spans a un backend OTLP (Jaeger/Tempo/etc.)" b
+	use opentelemetry::trace::TracerProvider as _;
+	use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+	fn init_tracing_otel() -> anyhow::Result<()> {
+		let proveedor = opentelemetry_otlp::new_pipeline()
+			.tracing()
+			.with_exporter(opentelemetry_otlp::new_exporter().tonic())
+			.install_batch(opentelemetry_sdk::runtime::Tokio)?;
+
+		let capa_otel = tracing_opentelemetry::layer().with_tracer(
+			proveedor.tracer("${1:mi-servicio}"),
+		);
+
+		tracing_subscriber::registry()
+			.with(tracing_subscriber::EnvFilter::from_default_env())
+			.with(tracing_subscriber::fmt::layer())
+			.with(capa_otel)
+			.try_init()?;
+		${0:Ok(())}
+	}
+
+snippet trc-metriccounter "contador con la crate metrics"
+	metrics::counter!("${1:eventos_procesados_total}", ${2:"tipo" => "valor"}).increment(${0:1});
+
+snippet trc-metricgauge "gauge con la crate metrics"
+	metrics::gauge!("${1:conexiones_activas}").set(${0:valor as f64});
+
+snippet trc-metrichistogram "histograma/latencia con la crate metrics"
+	let inicio = std::time::Instant::now();
+	${1:operacion();}
+	metrics::histogram!("${2:operacion_duracion_segundos}").record(inicio.elapsed().as_secs_f64());
+	${0}
+
+snippet trc-metricsexporter "exportador Prometheus para metrics (metrics-exporter-prometheus)" b
+	fn init_metricas() -> anyhow::Result<()> {
+		metrics_exporter_prometheus::PrometheusBuilder::new()
+			.with_http_listener(([0, 0, 0, 0], ${1:9000}))
+			.install()?;
+		${0:Ok(())}
+	}
+
+snippet log-init "inicializacion simple con env_logger (alternativa ligera a tracing)" b
+	fn init_logger() {
+		env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("${1:info}"))
+			.format_timestamp_millis()
+			.init();
+	}
+	${0}
+
+snippet log-macro "macros basicas del crate log"
+	log::info!("${1:mensaje}: {}", ${0:valor});
+# Patrones de diseno: clasicos (GoF) + idiomaticos de Rust
+# Formato: snipMate (garbas/vim-snipmate)
+
+snippet pat-singleton "singleton perezoso y thread-safe (once_cell/std::sync::OnceLock)" b
+	static ${1:INSTANCIA}: std::sync::OnceLock<${2:Tipo}> = std::sync::OnceLock::new();
+
+	fn ${3:obtener}() -> &'static ${2:Tipo} {
+		${1:INSTANCIA}.get_or_init(|| ${0:Tipo::new()})
+	}
+
+snippet pat-factory "factory function que devuelve Box<dyn Trait> segun un enum" b
+	enum ${1:Tipo} {
+		${2:VarianteA},
+		${3:VarianteB},
+	}
+
+	fn crear(tipo: ${1:Tipo}) -> Box<dyn ${4:Trait}> {
+		match tipo {
+			${1:Tipo}::${2:VarianteA} => Box::new(${5:ImplA::new()}),
+			${1:Tipo}::${3:VarianteB} => Box::new(${0:ImplB::new()}),
+		}
+	}
+
+snippet pat-abstractfactory "abstract factory: trait que produce una familia de productos" b
+	trait ${1:Fabrica} {
+		fn crear_${2:producto_a}(&self) -> Box<dyn ${3:ProductoA}>;
+		fn crear_${4:producto_b}(&self) -> Box<dyn ${5:ProductoB}>;
+	}
+
+	struct ${6:FabricaConcreta};
+
+	impl ${1:Fabrica} for ${6:FabricaConcreta} {
+		fn crear_${2:producto_a}(&self) -> Box<dyn ${3:ProductoA}> {
+			${0:Box::new(ProductoAConcreto)}
+		}
+		fn crear_${4:producto_b}(&self) -> Box<dyn ${5:ProductoB}> {
+			Box::new(ProductoBConcreto)
+		}
+	}
+
+snippet pat-strategy "strategy: comportamiento intercambiable via trait object"
+	trait ${1:Estrategia} {
+		fn ejecutar(&self, ${2:datos}: &${3:[f64]}) -> ${4:f64};
+	}
+
+	struct ${5:Contexto} {
+		estrategia: Box<dyn ${1:Estrategia}>,
+	}
+
+	impl ${5:Contexto} {
+		fn ejecutar(&self, datos: &${3:[f64]}) -> ${4:f64} {
+			${0:self.estrategia.ejecutar(datos)}
+		}
+	}
+
+snippet pat-strategygeneric "strategy sin dispatch dinamico (generico + trait bound, cero costo)"
+	fn ${1:procesar}<E: ${2:Estrategia}>(estrategia: &E, ${3:datos}: &${4:[f64]}) -> ${5:f64} {
+		${0:estrategia.ejecutar(datos)}
+	}
+
+snippet pat-observer "observer: lista de callbacks/listeners suscritos a eventos" b
+	type ${1:Callback} = Box<dyn Fn(&${2:Evento}) + Send + Sync>;
+
+	#[derive(Default)]
+	struct ${3:Emisor} {
+		listeners: Vec<${1:Callback}>,
+	}
+
+	impl ${3:Emisor} {
+		fn suscribir(&mut self, callback: ${1:Callback}) {
+			self.listeners.push(callback);
+		}
+
+		fn emitir(&self, evento: &${2:Evento}) {
+			for listener in &self.listeners {
+				${0:listener(evento);}
+			}
+		}
+	}
+
+snippet pat-observerchannel "observer asincrono via tokio::sync::broadcast (mas idiomatico en async)"
+	let (emisor, _) = tokio::sync::broadcast::channel::<${1:Evento}>(${2:16});
+
+	let mut receptor = emisor.subscribe();
+	tokio::spawn(async move {
+		while let Ok(evento) = receptor.recv().await {
+			${0:todo!()}
+		}
+	});
+
+snippet pat-command "command: encapsular una accion como objeto ejecutable"
+	trait ${1:Comando} {
+		fn ejecutar(&self);
+		fn deshacer(&self);
+	}
+
+	struct ${2:Invocador} {
+		historial: Vec<Box<dyn ${1:Comando}>>,
+	}
+
+	impl ${2:Invocador} {
+		fn ejecutar(&mut self, comando: Box<dyn ${1:Comando}>) {
+			comando.ejecutar();
+			self.historial.push(comando);
+		}
+
+		fn deshacer_ultimo(&mut self) {
+			if let Some(comando) = self.historial.pop() {
+				${0:comando.deshacer();}
+			}
+		}
+	}
+
+snippet pat-decorator "decorator: envolver un trait object anadiendo comportamiento"
+	struct ${1:Decorador}<T: ${2:Componente}> {
+		interno: T,
+	}
+
+	impl<T: ${2:Componente}> ${2:Componente} for ${1:Decorador}<T> {
+		fn operacion(&self) -> ${3:String} {
+			${0:format!("decorado({})", self.interno.operacion())}
+		}
+	}
+
+snippet pat-adapter "adapter: adaptar una interfaz externa a un trait propio" b
+	struct ${1:AdaptadorLibreriaExterna} {
+		interno: ${2:LibreriaExterna},
+	}
+
+	impl ${3:MiTrait} for ${1:AdaptadorLibreriaExterna} {
+		fn ${4:metodo}(&self) -> ${5:Tipo} {
+			${0:self.interno.metodo_con_nombre_distinto().into()}
+		}
+	}
+
+snippet pat-facade "facade: API simplificada sobre varios subsistemas" b
+	struct ${1:Fachada} {
+		${2:subsistema_a}: ${3:SubsistemaA},
+		${4:subsistema_b}: ${5:SubsistemaB},
+	}
+
+	impl ${1:Fachada} {
+		fn ${6:operacion_simplificada}(&self) -> ${7:Resultado} {
+			self.${2:subsistema_a}.paso1();
+			self.${4:subsistema_b}.paso2();
+			${0:todo!()}
+		}
+	}
+
+snippet pat-proxy "proxy: controla el acceso a un objeto (lazy-load, cache, permisos)"
+	struct ${1:Proxy} {
+		real: std::cell::OnceCell<${2:ObjetoReal}>,
+	}
+
+	impl ${1:Proxy} {
+		fn obtener(&self) -> &${2:ObjetoReal} {
+			self.real.get_or_init(|| ${0:ObjetoReal::cargar_costoso()})
+		}
+	}
+
+snippet pat-chainresponsibility "chain of responsibility: cadena de manejadores"
+	trait ${1:Manejador} {
+		fn manejar(&self, peticion: &${2:Peticion}) -> Option<${3:Respuesta}>;
+	}
+
+	fn procesar(cadena: &[Box<dyn ${1:Manejador}>], peticion: &${2:Peticion}) -> Option<${3:Respuesta}> {
+		cadena.iter().find_map(|manejador| ${0:manejador.manejar(peticion)})
+	}
+
+snippet pat-visitor "visitor: separar algoritmo de la estructura de datos (enum + match)" b
+	enum ${1:Nodo} {
+		${2:Hoja}(${3:f64}),
+		${4:Rama}(Box<${1:Nodo}>, Box<${1:Nodo}>),
+	}
+
+	trait ${5:Visitante} {
+		fn visitar(&mut self, nodo: &${1:Nodo}) {
+			match nodo {
+				${1:Nodo}::${2:Hoja}(v) => self.visitar_hoja(*v),
+				${1:Nodo}::${4:Rama}(izq, der) => {
+					self.visitar(izq);
+					self.visitar(der);
+				}
+			}
+		}
+		fn visitar_hoja(&mut self, valor: ${3:f64});
+	}
+	${0}
+
+snippet pat-templatemethod "template method: esqueleto fijo con pasos redefinibles via trait"
+	trait ${1:Proceso} {
+		fn paso1(&self) { ${2:println!("paso1 por defecto");} }
+		fn paso2(&self);
+
+		fn ejecutar(&self) {
+			self.paso1();
+			self.paso2();
+			${0:todo!()}
+		}
+	}
+
+snippet pat-state "state machine con enum + match exhaustivo (patron mas idiomatico en Rust)" b
+	#[derive(Debug, Clone, PartialEq)]
+	enum ${1:Estado} {
+		${2:Inicial},
+		${3:Procesando},
+		${4:Finalizado},
+	}
+
+	impl ${1:Estado} {
+		fn transicionar(self, evento: ${5:Evento}) -> Self {
+			match (self, evento) {
+				(${1:Estado}::${2:Inicial}, ${5:Evento}::${6:Empezar}) => ${1:Estado}::${3:Procesando},
+				(${1:Estado}::${3:Procesando}, ${5:Evento}::${7:Terminar}) => ${1:Estado}::${4:Finalizado},
+				(actual, _) => ${0:actual},
+			}
+		}
+	}
+
+snippet pat-typestate "typestate: estados codificados en el sistema de tipos (invalido en compile-time)" b
+	struct ${1:Conexion}<Estado> {
+		${2:socket}: ${3:Tipo},
+		_estado: std::marker::PhantomData<Estado>,
+	}
+
+	struct ${4:Desconectado};
+	struct ${5:Conectado};
+
+	impl ${1:Conexion}<${4:Desconectado}> {
+		fn conectar(self) -> ${1:Conexion}<${5:Conectado}> {
+			${0:todo!()}
+		}
+	}
+
+	impl ${1:Conexion}<${5:Conectado}> {
+		fn enviar(&self, datos: &[u8]) {
+			todo!()
+		}
+	}
+
+snippet pat-newtype "newtype: wrapper de tipo cero-costo para seguridad de tipos"
+	#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+	struct ${1:Nombre}(pub ${2:f64});
+
+	impl ${1:Nombre} {
+		pub fn valor(&self) -> ${2:f64} {
+			${0:self.0}
+		}
+	}
+
+snippet pat-derefwrapper "newtype con Deref/DerefMut para reusar la API del tipo interno"
+	struct ${1:Nombre}(${2:Vec<f64>});
+
+	impl std::ops::Deref for ${1:Nombre} {
+		type Target = ${2:Vec<f64>};
+		fn deref(&self) -> &Self::Target {
+			&self.0
+		}
+	}
+
+	impl std::ops::DerefMut for ${1:Nombre} {
+		fn deref_mut(&mut self) -> &mut Self::Target {
+			${0:&mut self.0}
+		}
+	}
+
+snippet pat-raiiguard "RAII guard: liberar/revertir un recurso automaticamente en Drop"
+	struct ${1:Guardia}<'a> {
+		${2:recurso}: &'a mut ${3:Tipo},
+	}
+
+	impl<'a> Drop for ${1:Guardia}<'a> {
+		fn drop(&mut self) {
+			${0:println!("liberando recurso");}
+		}
+	}
+
+snippet pat-extensiontrait "extension trait: anadir metodos a un tipo que no controlas"
+	trait ${1:ExtensionIterador}: Iterator {
+		fn ${2:promedio}(self) -> ${3:f64}
+		where
+			Self: Sized,
+			Self::Item: Into<f64>,
+		{
+			${0:todo!()}
+		}
+	}
+
+	impl<T: Iterator> ${1:ExtensionIterador} for T {}
+
+snippet pat-repository "repository: abstraer el acceso a datos detras de un trait"
+	#[async_trait::async_trait]
+	trait ${1:Repositorio}<T, Id> {
+		async fn obtener(&self, id: Id) -> Result<Option<T>, ${2:Error}>;
+		async fn guardar(&self, entidad: &T) -> Result<(), ${2:Error}>;
+	}
+
+	struct ${3:RepositorioEnMemoria}<T> {
+		datos: std::sync::Mutex<std::collections::HashMap<${4:u64}, T>>,
+	}
+	${0}
+
+snippet pat-dependencyinjection "inyeccion de dependencias via traits + generics (sin frameworks)"
+	struct ${1:Servicio}<R: ${2:Repositorio}> {
+		repositorio: R,
+	}
+
+	impl<R: ${2:Repositorio}> ${1:Servicio}<R> {
+		fn new(repositorio: R) -> Self {
+			Self { repositorio }
+		}
+
+		fn ${3:operacion}(&self) -> ${4:Resultado} {
+			${0:todo!()}
+		}
+	}
+
+snippet pat-eventbus "event bus simple con canal mpsc y enum de eventos" b
+	#[derive(Debug, Clone)]
+	enum ${1:Evento} {
+		${2:VarianteA}(${3:Tipo}),
+		${4:VarianteB},
+	}
+
+	struct ${5:BusDeEventos} {
+		emisor: tokio::sync::mpsc::Sender<${1:Evento}>,
+	}
+
+	impl ${5:BusDeEventos} {
+		async fn publicar(&self, evento: ${1:Evento}) {
+			${0:self.emisor.send(evento).await.ok();}
+		}
+	}
+
+snippet pat-actor "actor: estado propio de una tarea, se muta solo via mensajes (patron de tokio)" b
+	enum ${1:Mensaje} {
+		${2:Consultar} { respuesta: tokio::sync::oneshot::Sender<${3:Tipo}> },
+		${4:Actualizar}(${3:Tipo}),
+	}
+
+	struct ${5:Actor} {
+		receptor: tokio::sync::mpsc::Receiver<${1:Mensaje}>,
+		estado: ${3:Tipo},
+	}
+
+	impl ${5:Actor} {
+		async fn ejecutar(mut self) {
+			while let Some(mensaje) = self.receptor.recv().await {
+				match mensaje {
+					${1:Mensaje}::${2:Consultar} { respuesta } => {
+						let _ = respuesta.send(self.estado.clone());
+					}
+					${1:Mensaje}::${4:Actualizar}(nuevo) => {
+						self.estado = nuevo;
+					}
+				}
+			}
+			${0}
+		}
+	}
+
+snippet pat-actorhandle "handle publico para comunicarse con un actor (oculta el canal)"
+	#[derive(Clone)]
+	struct ${1:ActorHandle} {
+		emisor: tokio::sync::mpsc::Sender<${2:Mensaje}>,
+	}
+
+	impl ${1:ActorHandle} {
+		async fn consultar(&self) -> ${3:Tipo} {
+			let (tx, rx) = tokio::sync::oneshot::channel();
+			self.emisor.send(${2:Mensaje}::Consultar { respuesta: tx }).await.ok();
+			${0:rx.await.unwrap()}
+		}
+	}
+
+snippet pat-nullobject "null object: implementacion neutra de un trait en vez de Option<Box<dyn Trait>>"
+	struct ${1:SinOperacion};
+
+	impl ${2:Trait} for ${1:SinOperacion} {
+		fn ${3:ejecutar}(&self) {
+			${0}
+		}
+	}
+
+snippet pat-memento "memento: capturar y restaurar el estado interno de un objeto"
+	#[derive(Clone)]
+	struct ${1:Memento} {
+		estado: ${2:Tipo},
+	}
+
+	impl ${3:Originador} {
+		fn guardar(&self) -> ${1:Memento} {
+			${1:Memento} { estado: self.estado.clone() }
+		}
+
+		fn restaurar(&mut self, memento: ${1:Memento}) {
+			${0:self.estado = memento.estado;}
+		}
+	}
