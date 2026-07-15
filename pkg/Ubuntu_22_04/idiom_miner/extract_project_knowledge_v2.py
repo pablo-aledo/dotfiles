@@ -160,9 +160,13 @@ FALLBACK_SYMBOL_PATTERNS = {
               (r"class\s+(\w+)", "class")],
     "go": [(r"^func\s+(?:\([^)]*\)\s*)?(\w+)\s*\(", "function"),
             (r"^type\s+(\w+)\s+struct", "struct")],
-    "rust": [(r"^\s*fn\s+(\w+)\s*\(", "function"),
-              (r"^\s*struct\s+(\w+)", "struct"),
-              (r"^\s*enum\s+(\w+)", "enum")],
+    "rust": [(r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:default\s+)?(?:async\s+)?(?:unsafe\s+)?"
+               r"(?:extern\s+\"[^\"]*\"\s+)?(?:const\s+)?fn\s+(\w+)", "function"),
+              (r"^\s*(?:pub(?:\([^)]*\))?\s+)?struct\s+(\w+)", "struct"),
+              (r"^\s*(?:pub(?:\([^)]*\))?\s+)?enum\s+(\w+)", "enum"),
+              (r"^\s*(?:pub(?:\([^)]*\))?\s+)?trait\s+(\w+)", "interface"),
+              (r"^\s*(?:pub(?:\([^)]*\))?\s+)?type\s+(\w+)", "typedef"),
+              (r"^\s*(?:pub(?:\([^)]*\))?\s+)?const\s+(\w+)\s*:", "constant")],
     "c": [(r"^\w[\w\s\*]*?(\w+)\s*\([^;]*\)\s*\{", "function")],
     "cpp": [(r"^\w[\w\s\*:<>]*?(\w+)\s*\([^;]*\)\s*\{", "function"),
              (r"class\s+(\w+)", "class")],
@@ -2537,6 +2541,14 @@ def main():
     if has_ctags():
         print("  usando ctags para el indice de simbolos")
         symbols = run_ctags_symbols(files, root)
+        if not symbols and files:
+            print("  [aviso] ctags esta instalado pero no genero ningun simbolo valido "
+                  "(causa habitual: es 'Exuberant Ctags' en vez de 'Universal Ctags', y "
+                  "no soporta --output-format=json). Cambiando a extraccion por regex de "
+                  "respaldo (menos precisa: sin scope de clase, sin fin de funcion exacto). "
+                  "Instala universal-ctags para el indice completo: "
+                  "https://github.com/universal-ctags/ctags")
+            symbols = run_fallback_symbols(stats, root)
     else:
         print("  ctags no encontrado, usando extraccion por regex (menos precisa)")
         symbols = run_fallback_symbols(stats, root)
