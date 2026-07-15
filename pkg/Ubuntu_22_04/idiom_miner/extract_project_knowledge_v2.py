@@ -37,6 +37,13 @@ FASE 1 - EXTRACCION ESTATICA (sin LLM, gratis, repetible cuantas veces quieras)
       files/tests faltantes/funciones complejas/logica-vs-infra,
       symbols.tsv para fzf, y un project_nav.vim que ata comandos a todo
       ello (carpeta <output>/vim/)
+    - [v2] Busqueda semantica de funciones, opcional (--semantic-index):
+      Opcion A, descripcion en lenguaje natural por funcion (LLM, cacheada)
+      + fzf (:ProjSemantic), 100% offline en el momento de buscar; Opcion
+      B, embeddings reales por funcion (solo --provider openai) + busqueda
+      por similitud coseno (:ProjSemanticVec <consulta>), shell-out a
+      `--semantic-query` desde vim (una unica llamada de red por consulta,
+      para embeber el texto buscado)
 
 FASE 2 - SINTESIS CON LLM (una unica pasada, con cache para poder reanudar)
     - Resumen por archivo
@@ -88,6 +95,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -402,6 +410,9 @@ ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 
 OPENAI_MODEL_DEFAULT = "gpt-4o"
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+OPENAI_EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings"
+DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_BATCH_SIZE = 96   # limite prudente por llamada a /v1/embeddings
 
 # variable de entorno por defecto donde se busca la clave, segun proveedor
 DEFAULT_API_KEY_ENV = {
@@ -1367,6 +1378,27 @@ function! s:ProjFilterCombined(pattern)
   copen
 endfunction
 
+" Busqueda semantica vectorial (Opcion B): embebe la consulta via la API
+" de embeddings de OpenAI (unica llamada de red, no una por resultado) y
+" ordena por similitud coseno contra el indice local generado con
+" --semantic-index. Requiere OPENAI_API_KEY en el entorno.
+" Uso: :ProjSemanticVec reconciliacion de bits entre dos claves
+command! -nargs=1 ProjSemanticVec call s:ProjSemanticVecSearch(<q-args>)
+function! s:ProjSemanticVecSearch(query)
+  let l:cmd = 'python3 ' . shellescape('__PY_SCRIPT__')
+        \ . ' --root ' . shellescape('__PROJ_ROOT__')
+        \ . ' --output ' . shellescape('__OUTPUT_DIRNAME__')
+        \ . ' --provider openai --embeddings-model ' . shellescape('__EMB_MODEL__')
+        \ . ' --semantic-query ' . shellescape(a:query)
+  let l:results = systemlist(l:cmd)
+  if empty(l:results)
+    echo 'Sin resultados (o el indice de embeddings no existe: genera con --semantic-index).'
+    return
+  endif
+  call setqflist([], ' ', {'title': 'ProjSemanticVec: ' . a:query, 'lines': l:results})
+  copen
+endfunction
+
 if exists(':FZF')
   function! s:ProjSymbolSink(line)
     let l:parts = split(a:line, "\t")
@@ -1386,9 +1418,27 @@ if exists(':FZF')
   endfunction
 
   command! ProjSymbols call ProjSymbolsFzf()
+
+  " Busqueda semantica por texto (Opcion A): fzf sobre descripciones en
+  " lenguaje natural generadas una vez por el LLM. 100% offline en el
+  " momento de buscar (el LLM ya hizo su trabajo al indexar).
+  function! ProjSemanticFzf()
+    let l:file = s:qf_dir . '/semantic_functions.tsv'
+    if !filereadable(l:file)
+      echo 'No existe semantic_functions.tsv (genera con --semantic-index).'
+      return
+    endif
+    let l:opts = {}
+    let l:opts.source = 'tail -n +2 ' . l:file
+    let l:opts.sink = function('s:ProjSymbolSink')
+    let l:opts.options = ['--delimiter=\t', '--with-nth=4,3,1,2', '--prompt=Semantic> ']
+    call fzf#run(fzf#wrap(l:opts))
+  endfunction
+
+  command! ProjSemantic call ProjSemanticFzf()
 endif
 
-echo 'project_nav.vim cargado (tags registrado automaticamente): :ProjTodos :ProjGodFiles :ProjUntested :ProjComplex :ProjBusiness :ProjAll :ProjFilter <cat>'
+echo 'project_nav.vim cargado (tags registrado automaticamente): :ProjTodos :ProjGodFiles :ProjUntested :ProjComplex :ProjBusiness :ProjAll :ProjFilter <cat> :ProjSemantic :ProjSemanticVec <consulta>'
 '''
 
 
@@ -1473,11 +1523,13 @@ def write_combined_quickfix(path: Path, categorized: dict) -> None:
 
 def write_vim_integration(output_dir: Path, root: Path, symbols: list, todos: list,
                              god_files: list, test_coverage: dict, complex_functions: list,
-                             business_report: list) -> dict:
-    """Genera todo el paquete de integracion con vim: tags en la raiz del
-    proyecto, quickfix lists (por categoria + combinada) y symbols.tsv para
-    fzf, mas un .vim que ata comandos a todo ello. Devuelve un resumen para
-    el informe de extraccion."""
+                             business_report: list,
+                             embeddings_model: str = DEFAULT_EMBEDDING_MODEL) -> dict:
+    """Genera todo el paquete de integracion con vim: tags junto al resto de
+    la salida, quickfix lists (por categoria + combinada), symbols.tsv para
+    fzf, y un .vim que ata comandos a todo ello (incluyendo, si se generan
+    despues con --semantic-index, busqueda semantica por texto y por
+    embeddings). Devuelve un resumen para el informe de extraccion."""
     vim_dir = output_dir / "vim"
     vim_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1498,7 +1550,12 @@ def write_vim_integration(output_dir: Path, root: Path, symbols: list, todos: li
     write_quickfix_file(vim_dir / "business_mixed.qf", categorized["business"])
     write_combined_quickfix(vim_dir / "combined.qf", categorized)
 
-    (vim_dir / "project_nav.vim").write_text(VIM_LOADER_TEMPLATE, encoding="utf-8")
+    loader = (VIM_LOADER_TEMPLATE
+              .replace("__PY_SCRIPT__", str(Path(__file__).resolve()))
+              .replace("__PROJ_ROOT__", str(root.resolve()))
+              .replace("__OUTPUT_DIRNAME__", output_dir.name)
+              .replace("__EMB_MODEL__", embeddings_model))
+    (vim_dir / "project_nav.vim").write_text(loader, encoding="utf-8")
 
     return {
         "tags_path": tags_path,
@@ -1506,6 +1563,8 @@ def write_vim_integration(output_dir: Path, root: Path, symbols: list, todos: li
         "n_symbols": len(symbols),
         "n_entries_combined": sum(len(v) for v in categorized.values()),
     }
+
+
 
 
 
@@ -2207,8 +2266,209 @@ def phase_glossary_definitions(acronym_entries: list, domain_entries: list,
 
 
 # --------------------------------------------------------------------------
-# Orquestacion
+# [v2] FASE 2 (opcional): busqueda semantica de funciones
+#
+# Opcion A (siempre disponible con --semantic-index): una frase en lenguaje
+# natural por funcion, generada una vez por el LLM y cacheada. La busqueda
+# en si es texto plano via fzf, 100% offline.
+#
+# Opcion B (solo con --provider openai): ademas de la frase, un embedding
+# real por funcion. La busqueda en si SI necesita una llamada de red (para
+# embeber la consulta), pero es una unica llamada barata, no una llamada
+# por resultado.
 # --------------------------------------------------------------------------
+
+def phase_function_semantic_index(stats: dict, symbols: list, cache: Cache,
+                                     model: str, api_key: str) -> list:
+    """Una frase por funcion, pensada para busqueda semantica (no repite el
+    nombre, describe el proposito). Un LLM call por fichero (no por
+    funcion), para que el coste escale con nº de ficheros, no de funciones."""
+    by_file = defaultdict(list)
+    for s in symbols:
+        if s["kind"] in ("function", "method"):
+            by_file[s["file"]].append(s)
+
+    results = []
+    items = list(by_file.items())[:MAX_FILES_FOR_SUMMARY]
+    total = len(items)
+    for i, (rel, funcs) in enumerate(items, 1):
+        meta = stats.get(rel)
+        if not meta:
+            continue
+        cache_key = f"funcsem::{_ACTIVE_PROVIDER['name']}::{rel}::{meta['hash']}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            desc_map = json.loads(cached)
+        else:
+            text = read_text(meta["path"], limit=MAX_FILE_BYTES_FOR_LLM)
+            if not text.strip():
+                continue
+            print(f"  [{i}/{total}] indexando funciones de {rel}")
+            names = sorted({f["name"] for f in funcs})
+            system = (
+                "Eres un ingeniero de software. Para cada funcion/metodo listada, "
+                "escribe UNA frase corta (en castellano) que describa que hace, "
+                "pensada para busqueda semantica: usa palabras que alguien "
+                "buscaria por significado, no te limites a repetir el nombre. "
+                "Responde EXACTAMENTE una linea por funcion, formato "
+                "'nombre_funcion: descripcion'. No incluyas funciones fuera de "
+                "la lista dada. No anadas nada mas, ni encabezados ni markdown."
+            )
+            user = (
+                f"Fichero: {rel}\n\nFunciones a describir: {', '.join(names)}\n\n"
+                "Contenido del fichero:\n```\n" + text + "\n```"
+            )
+            raw = call_llm(system, user, model, api_key, max_tokens=1500)
+            desc_map = {}
+            for line in raw.splitlines():
+                m = re.match(r"\s*[-*]?\s*([A-Za-z_]\w*)\s*:\s*(.+)", line)
+                if m and m.group(1) in names:
+                    desc_map[m.group(1)] = m.group(2).strip()
+            cache.set(cache_key, json.dumps(desc_map, ensure_ascii=False))
+
+        for f in funcs:
+            desc = desc_map.get(f["name"])
+            if desc:
+                results.append({"file": f["file"], "line": f["line"],
+                                  "name": f["name"], "description": desc})
+    return results
+
+
+def write_semantic_functions_tsv(entries: list, path: Path) -> None:
+    lines = ["file\tline\tname\tdescription"]
+    for e in entries:
+        desc = e["description"].replace("\t", " ").replace("\n", " ")
+        lines.append(f"{e['file']}\t{e['line']}\t{e['name']}\t{desc}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _call_openai_embeddings(texts: list, model: str, api_key: str, retries: int = 3) -> list:
+    body = json.dumps({"model": model, "input": texts}).encode("utf-8")
+    req = urllib.request.Request(
+        OPENAI_EMBEDDINGS_URL, data=body, method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+    )
+    last_err = None
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                items = sorted(data["data"], key=lambda x: x["index"])
+                return [item["embedding"] for item in items]
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code == 429:
+                time.sleep(5 * (attempt + 1))
+                continue
+            try:
+                detail = e.read().decode("utf-8")
+            except Exception:
+                detail = str(e)
+            raise RuntimeError(f"Error de la API de embeddings: {e.code} - {detail[:300]}")
+        except urllib.error.URLError as e:
+            last_err = e
+            time.sleep(3)
+    raise RuntimeError(f"No se pudo contactar la API de embeddings tras {retries} intentos: {last_err}")
+
+
+def phase_semantic_embeddings(semantic_entries: list, model: str, api_key: str,
+                                 provider: str, cache: Cache) -> list:
+    """Embedding real por funcion, a partir de su descripcion (Opcion A).
+    Requiere --provider openai: la API publica de Anthropic no ofrece un
+    endpoint de embeddings."""
+    if provider != "openai":
+        print("  [semantic-index] los embeddings reales requieren --provider openai; "
+              "se omite (el indice de descripciones + fzf sigue disponible).")
+        return []
+
+    out = []
+    for i in range(0, len(semantic_entries), EMBEDDING_BATCH_SIZE):
+        batch = semantic_entries[i:i + EMBEDDING_BATCH_SIZE]
+        cache_keys = [f"embed::{model}::{e['file']}::{e['name']}::{e['line']}::{e['description']}"
+                       for e in batch]
+        vectors = [None] * len(batch)
+        to_fetch_idx = []
+        for idx, ck in enumerate(cache_keys):
+            cached = cache.get(ck)
+            if cached is not None:
+                vectors[idx] = json.loads(cached)
+            else:
+                to_fetch_idx.append(idx)
+
+        if to_fetch_idx:
+            texts = [f"{batch[idx]['name']}: {batch[idx]['description']}" for idx in to_fetch_idx]
+            print(f"  [semantic-index] embebiendo lote {i // EMBEDDING_BATCH_SIZE + 1} "
+                  f"({len(texts)} funciones)...")
+            fetched = _call_openai_embeddings(texts, model, api_key)
+            for idx, vec in zip(to_fetch_idx, fetched):
+                vectors[idx] = vec
+                cache.set(cache_keys[idx], json.dumps(vec))
+
+        for e, vec in zip(batch, vectors):
+            out.append({**e, "vector": vec})
+    return out
+
+
+def write_embeddings_jsonl(entries: list, path: Path) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        for e in entries:
+            f.write(json.dumps({
+                "file": e["file"], "line": e["line"], "name": e["name"],
+                "description": e["description"], "vector": e["vector"],
+            }, ensure_ascii=False) + "\n")
+
+
+def load_embeddings_jsonl(path: Path) -> list:
+    entries = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                entries.append(json.loads(line))
+    return entries
+
+
+def cosine_similarity(a: list, b: list) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(x * x for x in b))
+    if na == 0 or nb == 0:
+        return 0.0
+    return dot / (na * nb)
+
+
+def run_semantic_query(output_dir: Path, query: str, provider: str,
+                          embeddings_model: str, api_key: str, top_k: int) -> None:
+    """Modo standalone (--semantic-query): NO ejecuta la extraccion. Carga
+    el indice de embeddings ya generado, embebe la consulta (unica llamada
+    de red), y saca resultados en formato quickfix por stdout — pensado
+    para :cexpr systemlist(...) desde vim."""
+    emb_path = output_dir / "vim" / "embeddings.jsonl"
+    if not emb_path.exists():
+        print(f"[ERROR] No existe {emb_path}. Genera el indice antes con --semantic-index.",
+              file=sys.stderr)
+        sys.exit(1)
+    if provider != "openai":
+        print("[ERROR] La busqueda semantica por vectores requiere --provider openai.",
+              file=sys.stderr)
+        sys.exit(1)
+
+    entries = load_embeddings_jsonl(emb_path)
+    if not entries:
+        print("[ERROR] El indice de embeddings esta vacio.", file=sys.stderr)
+        sys.exit(1)
+
+    query_vec = _call_openai_embeddings([query], embeddings_model, api_key)[0]
+    scored = sorted(
+        ((cosine_similarity(query_vec, e["vector"]), e) for e in entries),
+        key=lambda x: -x[0],
+    )
+    for score, e in scored[:top_k]:
+        desc = e["description"].replace("\n", " ")
+        print(f"{e['file']}:{e['line']}:[{score:.3f}] {e['name']} - {desc}")
+
+
+
 
 def write(output_dir: Path, name: str, content: str):
     path = output_dir / name
@@ -2232,6 +2492,19 @@ def main():
                           help="variable de entorno con la clave de API. Si se omite, se usa "
                                "ANTHROPIC_API_KEY o OPENAI_API_KEY segun --provider")
     parser.add_argument("--yes", action="store_true", help="no pedir confirmacion antes de llamar al LLM")
+    parser.add_argument("--semantic-index", action="store_true",
+                          help="ademas de la Fase 2, genera un indice de descripciones "
+                               "semanticas por funcion (fzf, Opcion A) y, si --provider "
+                               "openai, tambien embeddings reales (Opcion B)")
+    parser.add_argument("--semantic-query", metavar="TEXTO", default=None,
+                          help="modo standalone: NO ejecuta la extraccion. Busca TEXTO en "
+                               "el indice de embeddings ya generado con --semantic-index y "
+                               "devuelve resultados en formato quickfix por stdout (para "
+                               ":ProjSemanticVec desde vim)")
+    parser.add_argument("--embeddings-model", default=DEFAULT_EMBEDDING_MODEL,
+                          help=f"modelo de embeddings de OpenAI (default: {DEFAULT_EMBEDDING_MODEL})")
+    parser.add_argument("--top-k", type=int, default=15,
+                          help="numero de resultados para --semantic-query (default: 15)")
     args = parser.parse_args()
 
     model = args.model or DEFAULT_MODEL_BY_PROVIDER[args.provider]
@@ -2241,6 +2514,15 @@ def main():
     root = Path(args.root).resolve()
     output_dir = root / args.output
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.semantic_query:
+        api_key = os.environ.get(api_key_env)
+        if not api_key:
+            print(f"[ERROR] No se encontro la variable de entorno {api_key_env}.", file=sys.stderr)
+            sys.exit(1)
+        run_semantic_query(output_dir, args.semantic_query, args.provider,
+                             args.embeddings_model, api_key, args.top_k)
+        return
 
     print(f"Analizando proyecto en: {root}")
     files = list_files(str(root))
@@ -2326,7 +2608,8 @@ def main():
 
     print("  Generando integracion con vim (tags, quickfix, fzf)...")
     vim_info = write_vim_integration(output_dir, root, symbols, todos, god_files,
-                                        test_coverage, complex_functions, business_report)
+                                        test_coverage, complex_functions, business_report,
+                                        embeddings_model=args.embeddings_model)
     print(f"    tags: {vim_info['tags_path']}")
     print(f"    quickfix/fzf: {vim_info['vim_dir']}")
 
@@ -2418,6 +2701,20 @@ def main():
     print("  Definiendo acronimos/terminos pendientes del glosario...")
     glossary_defs = phase_glossary_definitions(acronym_entries, domain_entries, model, api_key, cache)
     write(output_dir, "27_glosario_definiciones.md", glossary_defs)
+
+    if args.semantic_index:
+        print("\n[Fase 2 opcional] Indice de busqueda semantica de funciones...")
+        semantic_entries = phase_function_semantic_index(stats, symbols, cache, model, api_key)
+        write_semantic_functions_tsv(semantic_entries, vim_info["vim_dir"] / "semantic_functions.tsv")
+        print(f"    descripciones: {vim_info['vim_dir'] / 'semantic_functions.tsv'} "
+              f"({len(semantic_entries)} funciones) -> usable con :ProjSemantic")
+
+        embedding_entries = phase_semantic_embeddings(
+            semantic_entries, args.embeddings_model, api_key, args.provider, cache)
+        if embedding_entries:
+            write_embeddings_jsonl(embedding_entries, vim_info["vim_dir"] / "embeddings.jsonl")
+            print(f"    embeddings: {vim_info['vim_dir'] / 'embeddings.jsonl'} "
+                  f"({len(embedding_entries)} vectores) -> usable con :ProjSemanticVec")
 
     print(f"\nListo. Todo el conocimiento esta en: {output_dir}")
 
