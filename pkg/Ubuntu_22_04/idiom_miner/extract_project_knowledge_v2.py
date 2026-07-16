@@ -391,12 +391,16 @@ COMMON_ACRONYMS = {
 }
 
 # Marcadores/palabras que no queremos tratar como acronimos de dominio.
-# Incluye marcadores de deuda tecnica y palabras cortas en castellano que
-# a veces se escriben en mayusculas por enfasis (falsos positivos reales
-# detectados en pruebas, p.ej. "esto NO es...").
+# Incluye marcadores de deuda tecnica y palabras cortas (castellano e ingles)
+# que a veces aparecen en mayusculas por enfasis o como macros/parametros
+# sueltos en C (p.ej. "esto NO es...", o un parametro "IN" al estilo Win32),
+# y que no son acronimos de dominio reales. Falsos positivos reales
+# detectados en pruebas.
 ACRONYM_EXCLUDE = {
     "TODO", "FIXME", "HACK", "XXX",
     "NO", "SI", "ES", "LA", "EL", "UN", "DE", "EN", "MAS", "SOLO", "ASI", "AQUI",
+    "IN", "IS", "IF", "IT", "AS", "OR", "AN", "ON", "AT", "TO", "OF", "DO",
+    "GO", "UP", "BE", "MY", "WE", "HE", "SO", "OUT", "AND", "FOR", "THE", "BY",
 }
 
 ACRONYM_TOKEN_RE = re.compile(r"\b[A-Z]{2,6}\b")
@@ -408,6 +412,14 @@ EXPANSION_WORDS_FIRST_RE = re.compile(
 )
 
 MAX_DOMAIN_TERMS_FOR_CONTEXT = 60
+
+# Regularizacion (tipo Laplace) para las densidades de logica-de-negocio vs
+# infraestructura: sin esto, un fichero de 19 LOC con 12 hits de dominio
+# (63/100loc) desplaza en el ranking a ficheros mucho mas grandes con mas
+# logica real pero denominador mayor. Sumar esta constante al LOC antes de
+# dividir amortigua ese ruido estadistico en ficheros muy pequenos sin
+# apenas afectar a ficheros grandes.
+BUSINESS_LOGIC_SMOOTHING_LOC = 80
 
 ANTHROPIC_MODEL_DEFAULT = "claude-sonnet-5"
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
@@ -589,8 +601,41 @@ def run_ctags_symbols(files: list, root: Path) -> list:
     return symbols
 
 
+def estimate_missing_symbol_ends(symbols: list, stats: dict) -> list:
+    """Rellena 'end' (fin de funcion/metodo) cuando viene a 0/ausente,
+    estimandolo como la linea anterior al siguiente simbolo del mismo
+    fichero (o el total de lineas para el ultimo). Necesario tanto para el
+    fallback por regex (nunca calcula end) como para ctags real en
+    lenguajes cuyo parser no rastrea el fin de scope — Rust es un caso
+    conocido: Universal Ctags no rellena 'end' para funciones Rust aunque
+    se pida --fields=+e, a diferencia de Python o C."""
+    by_file = defaultdict(list)
+    for s in symbols:
+        by_file[s["file"]].append(s)
+
+    for rel, syms in by_file.items():
+        if not any(not s.get("end") for s in syms):
+            continue  # ya vienen todos con end valido (ctags lo soporta en este lenguaje)
+        meta = stats.get(rel)
+        total_lines = 0
+        if meta:
+            text = read_text(meta["path"])
+            total_lines = len(text.splitlines())
+        syms.sort(key=lambda s: s["line"])
+        for i, s in enumerate(syms):
+            if s.get("end"):
+                continue
+            if i + 1 < len(syms):
+                s["end"] = max(s["line"], syms[i + 1]["line"] - 1)
+            else:
+                s["end"] = max(s["line"], total_lines)
+    return symbols
+
+
 def run_fallback_symbols(stats: dict, root: Path) -> list:
-    """Extraccion de simbolos por regex cuando no hay ctags."""
+    """Extraccion de simbolos por regex cuando no hay ctags (o cuando ctags
+    no produjo nada usable). 'end' se deja a 0 aqui y se estima despues,
+    de forma centralizada, con estimate_missing_symbol_ends()."""
     symbols = []
     for rel, meta in stats.items():
         lang = meta["lang"]
@@ -737,6 +782,12 @@ def detect_entrypoints(stats: dict) -> list:
         if meta["lang"] == "python":
             text = read_text(meta["path"], limit=MAX_FILE_BYTES_FOR_LLM)
             if "__name__" in text and "__main__" in text:
+                found.append(rel)
+        elif meta["lang"] == "rust":
+            # el nombre de fichero no es fiable (src/bin/*.rs puede llamarse
+            # como sea); la señal real de un binario es un fn main() propio
+            text = read_text(meta["path"], limit=MAX_FILE_BYTES_FOR_LLM)
+            if re.search(r"^\s*(?:pub\s+)?(?:async\s+)?fn\s+main\s*\(", text, re.MULTILINE):
                 found.append(rel)
     return sorted(set(found))
 
@@ -1027,6 +1078,7 @@ def build_test_coverage(stats: dict) -> dict:
         if meta["lang"] == "rust":
             text = read_text(meta["path"], limit=MAX_FILE_BYTES_FOR_LLM)
             if "#[cfg(test)]" in text or "#[test]" in text:
+                test_map[rel] = f"{rel} (mod tests inline)"
                 continue
         if meta["lang"] in ("python", "javascript", "typescript", "go", "rust",
                               "java", "ruby") and meta["loc"] > 5:
@@ -1606,17 +1658,18 @@ def compute_business_logic_report(stats: dict, symbols: list, infra_by_file: dic
     report = []
     for rel, meta in stats.items():
         loc = max(meta["loc"], 1)
+        loc_smoothed = loc + BUSINESS_LOGIC_SMOOTHING_LOC
         tokens = []
         for name in by_file.get(rel, []):
             for part in name.split("_"):
                 tokens.extend(re.findall(r"[A-Z]?[a-z0-9]+|[A-Z]+(?=[A-Z]|$)", part))
         tokens = [t.lower() for t in tokens if len(t) >= 3]
         domain_hits = sum(1 for t in tokens if t in domain_terms)
-        domain_density = round(domain_hits / loc * 100, 2)
+        domain_density = round(domain_hits / loc_smoothed * 100, 2)
 
         infra_counts = infra_by_file.get(rel, {})
         infra_total = sum(infra_counts.values())
-        infra_density = round(infra_total / loc * 100, 2)
+        infra_density = round(infra_total / loc_smoothed * 100, 2)
 
         if infra_counts:
             top_cat, top_count = max(infra_counts.items(), key=lambda x: x[1])
@@ -1653,7 +1706,9 @@ def build_business_logic_text(report: list) -> str:
     lines = ["LOGICA DE NEGOCIO VS INFRAESTRUCTURA (heuristico, por fichero)",
               "=" * 60,
               "Categorias de infraestructura editables en INFRA_CATEGORIES, arriba del script.",
-              "Densidad = coincidencias por cada 100 lineas de codigo (LOC).",
+              f"Densidad = coincidencias por cada 100 lineas, suavizado con "
+              f"+{BUSINESS_LOGIC_SMOOTHING_LOC} LOC para que ficheros muy pequenos no "
+              "dominen el ranking solo por tener denominador chico.",
               "Esto NO es un analisis semantico: es deteccion por vocabulario/patrones.", ""]
     for r in report:
         lines.append(f"\n--- {r['file']} (loc={r['loc']}) ---")
@@ -2552,6 +2607,12 @@ def main():
     else:
         print("  ctags no encontrado, usando extraccion por regex (menos precisa)")
         symbols = run_fallback_symbols(stats, root)
+
+    # 'end' puede venir a 0 tanto del fallback (nunca lo calcula) como de
+    # ctags real en lenguajes cuyo parser no rastrea fin de scope (Rust es
+    # un caso conocido). Se estima de forma centralizada aqui para que
+    # funciones complejas / grafo de llamadas funcionen igual en ambos casos.
+    symbols = estimate_missing_symbol_ends(symbols, stats)
     write(output_dir, "01_indice_simbolos.txt", build_symbol_index_text(symbols))
 
     dep_graph = build_dependency_graph(stats)
