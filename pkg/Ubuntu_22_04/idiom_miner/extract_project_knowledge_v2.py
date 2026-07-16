@@ -557,18 +557,40 @@ def compute_file_stats(files: list, root: Path) -> dict:
 # FASE 1b: indice de simbolos
 # --------------------------------------------------------------------------
 
+# Formatos que ctags sabe "tagear" (cada clave/entrada como si fuera un
+# simbolo) pero que no son codigo real: si los dejamos pasar, contaminan
+# el indice de simbolos -- y en cascada, el glosario de dominio, god-files
+# y logica-de-negocio -- con ficheros de datos/config/documentacion.
+# Notese que esto es una lista de EXCLUSION, no de inclusion: todo lo que
+# ctags reconozca como codigo real (incluyendo formatos de esquema como
+# Protobuf, que no esta en nuestro propio LANGUAGE_BY_EXT) se sigue
+# indexando con normalidad.
+CTAGS_LANGUAGE_DENYLIST = [
+    "JSON", "Yaml", "CSS", "SCSS", "Markdown", "Txt2tags", "Passwd",
+    "Iniconf", "PythonLoggingConfig", "XML", "SVG", "PlistXML", "DTD",
+    "RelaxNG", "HTML", "JavaProperties", "Diff", "Man", "Asciidoc",
+    "ReStructuredText", "BibTeX", "RpmSpec", "RpmMacros", "SystemdUnit",
+    "DosBatch",
+]
+
+
 def run_ctags_symbols(files: list, root: Path) -> list:
     """Usa universal-ctags si esta disponible. Devuelve lista de dicts:
-    {file, name, kind, line, end, scope, signature}"""
+    {file, name, kind, line, end, scope, signature}.
+    Se desactivan explicitamente los lenguajes de CTAGS_LANGUAGE_DENYLIST
+    (JSON, YAML, CSS...): ctags los reconoce y los tagearia igualmente,
+    tratando cada clave/entrada como un simbolo, lo que contamina el
+    indice con ficheros de datos/fixtures que no son codigo."""
     if not has_ctags():
         return []
 
     file_list_path = root / ".ctags_filelist.tmp"
+    lang_flag = ",".join(f"-{lang}" for lang in CTAGS_LANGUAGE_DENYLIST)
     try:
         file_list_path.write_text("\n".join(str(f) for f in files))
         out = sh([
             "ctags", "-L", str(file_list_path), "--output-format=json",
-            "--fields=+n+e+S", "-f", "-",
+            "--fields=+n+e+S", f"--languages={lang_flag}", "-f", "-",
         ], cwd=str(root))
     finally:
         if file_list_path.exists():
