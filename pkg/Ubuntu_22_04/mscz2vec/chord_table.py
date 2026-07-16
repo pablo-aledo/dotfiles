@@ -1104,15 +1104,20 @@ def resolve_numeral(numeral: str, tonic_pc: int) -> tuple:
 
 
 def resolve_entry(entry: dict, tonic_pc: int, bars: int = 8,
-                  beats_per_bar: int = 4) -> list:
+                  beats_per_bar: int = 4, reps: int = None) -> list:
     """
     Expande el patrón de una entrada del catálogo a una lista de acordes
-    concretos repetidos para cubrir `bars` compases.
+    concretos.
+
+    Si `reps` se especifica, la progresión se repite exactamente `reps`
+    veces en su totalidad (sin truncar el último ciclo), ignorando
+    `bars`. Si no, se rellena hasta cubrir `bars` compases (comportamiento
+    original, puede truncar el ciclo final).
     Devuelve lista de dicts compatibles con chord_progression_generator.
     """
     pattern   = entry['pattern']
     beats_pat = sum(d for _, d in pattern)
-    total     = bars * beats_per_bar
+    total     = beats_pat * reps if reps is not None else bars * beats_per_bar
 
     repeated = []
     acc = 0
@@ -2160,6 +2165,9 @@ def main():
     # Resolución y exportación
     parser.add_argument('--key',         type=str, default='C',
                         help='Tónica para resolución concreta (default: C)')
+    parser.add_argument('--reps',        type=int, default=None, metavar='N',
+                        help='Número de repeticiones exactas de la progresión/ciclo '
+                             'a exportar (sustituye a --bars; no trunca el último ciclo)')
     parser.add_argument('--bars',        type=int, default=8,
                         help='Compases a generar (default: 8)')
     parser.add_argument('--beats',       type=int, default=4,
@@ -2266,7 +2274,8 @@ def main():
 
         print(f"  {entry['desc']}\n")
 
-        progression = resolve_entry(entry, tonic_pc, args.bars, args.beats)
+        progression = resolve_entry(entry, tonic_pc, args.bars, args.beats,
+                                    reps=args.reps)
         chord_text  = progression_to_text(progression)
         print(f"  → {COL['cyan']}{chord_text}{COL['reset']}\n")
 
@@ -2280,6 +2289,7 @@ def main():
             'tonic':       PITCH_NAMES[tonic_pc],
             'bars':        args.bars,
             'beats':       args.beats,
+            'reps':        args.reps,
             'tempo':       args.tempo,
             'chord_string': chord_text,
             'progression': progression,
