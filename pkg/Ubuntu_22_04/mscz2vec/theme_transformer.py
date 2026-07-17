@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                        THEME TRANSFORMER  v1.0                               ║
+║                        THEME TRANSFORMER  v2.0                               ║
 ║       Mapeo escalar (scalar mapping) y transformación temática de MIDI       ║
 ║                                                                              ║
 ║  Implementa las técnicas de "thematic transformation via scalar mapping"     ║
 ║  descritas en la serie de tutoriales sobre transformación de temas: toma    ║
 ║  una melodía MIDI y la traslada a otras escalas/modos preservando su        ║
 ║  identidad, con armonización y orquestación acordes a cada estilo.          ║
+║                                                                              ║
+║  NOVEDADES v2.0:                                                             ║
+║    --sections        transformación PROGRESIVA por tramos de la pieza       ║
+║                       (como la cadena de reharmonizaciones de LOTR/GoT,     ║
+║                       no un estilo fijo de principio a fin)                 ║
+║    chromatic_mediant  nuevo estilo: cadena de tríadas por 3ª cromática      ║
+║                       sin función tonal (Zimmer/McCreary)                   ║
+║    --body-tail        distingue cuerpo (identidad protegida) de cola        ║
+║                       (libertad ornamental), como en HTTYD                  ║
+║    --wt-variant / --octatonic-variant   elegir manualmente la variante      ║
+║                       de tonos enteros / octatónica en vez de autodetectar  ║
 ║                                                                              ║
 ║  MÉTODOS DE MAPEO (--method, o definidos por cada --style):                 ║
 ║    degree    — cada nota se re-ancla a su grado de escala más cercano       ║
@@ -208,6 +219,12 @@ STYLE_PRESETS = {
         harmonizer='generic',
         melody_program=24, harmony_program=61, bass_program=42,
         desc='Fragmentación motívica + menor armónica + downbeat (Game of Thrones)',
+    ),
+    'chromatic_mediant': dict(
+        scale='chromatic', method='degree', start_shift=0,
+        harmonizer='chromatic_mediant',
+        melody_program=48, harmony_program=61, bass_program=42,
+        desc='Melodía intacta + cadena de tríadas por 3ª cromática sin función tonal (LOTR)',
     ),
     'custom': dict(
         scale=None, method='degree', start_shift=0,
@@ -458,12 +475,16 @@ def apply_metric_shift(melody, beats_per_bar):
 # CORRECCIÓN DE TONO DE ACORDE (chord-tone override)
 # ═══════════════════════════════════════════════════════════
 
-def snap_strong_beats_to_chords(mapped_notes, chords, beats_per_bar, max_correction=3):
+def snap_strong_beats_to_chords(mapped_notes, chords, beats_per_bar, max_correction=3,
+                                allowed_indices=None):
     """
     Principio de la teoría: cuando un mapeo mecánico de intervalos no aterriza
     en un tono del acorde, suele sonar mejor sacrificar el tamaño exacto del
     intervalo por caer en un chord tone — pero SOLO en tiempos fuertes, y
     solo con una corrección pequeña (<= max_correction semitonos).
+    Si se pasa allowed_indices (set de índices), solo esas notas son
+    candidatas a corrección — usado por --body-tail para proteger la
+    identidad del 'body' sin tocar la 'tail'.
     """
     def chord_at(t):
         for (cs, cd, cp) in chords:
@@ -472,8 +493,8 @@ def snap_strong_beats_to_chords(mapped_notes, chords, beats_per_bar, max_correct
         return None
 
     out = []
-    for (off, p, dur, vel) in mapped_notes:
-        if beat_strength(off, beats_per_bar) >= 1.0:
+    for i, (off, p, dur, vel) in enumerate(mapped_notes):
+        if (allowed_indices is None or i in allowed_indices) and beat_strength(off, beats_per_bar) >= 1.0:
             cp = chord_at(off)
             if cp:
                 pcs = {x % 12 for x in cp}
@@ -646,6 +667,78 @@ def generate_counterpoint_line(mapped_notes, register_offset=-7):
     return out
 
 
+def harmonize_chromatic_mediant(mapped_notes, beats_per_bar, total_beats, seed=42, base_register=52):
+    """
+    Encadenamiento de tríadas por movimiento de 3ª cromática (mayor o menor,
+    ascendente o descendente), SIN función tonal, con calidad mayor/menor
+    alternada libremente — el recurso de reharmonización cromático-mediántica
+    (estilo Bear McCreary / Hans Zimmer) descrito para la cadena de LOTR, en
+    vez de la armonía diatónica de harmonize_generic.
+    """
+    rnd = random.Random(seed + 999)
+    chords, bar, prev_root = [], 0, None
+    while bar * beats_per_bar < total_beats:
+        bstart = bar * beats_per_bar
+        bend = min(bstart + beats_per_bar, total_beats)
+        w = window_pc_weights(mapped_notes, bstart, bend, beats_per_bar)
+        strong_pc = max(w, key=w.get) if w else 0
+        if prev_root is None:
+            root_pc = strong_pc
+        else:
+            step = rnd.choice([3, 4, 8, 9])  # 3ª menor/mayor, ascendente o descendente (mod 12)
+            root_pc = (prev_root + step) % 12
+        quality = rnd.choice(['M', 'm'])
+        root_pitch = nearest_pitch_to_register(root_pc, base_register)
+        third = root_pitch + (4 if quality == 'M' else 3)
+        chords.append((bstart, bend - bstart, [root_pitch, third, root_pitch + 7]))
+        prev_root = root_pc
+        bar += 1
+    return chords
+
+
+def body_tail_tags(melody):
+    """
+    Etiqueta cada nota como 'body' o 'tail' según su posición dentro de su
+    fragmento (separado por silencios, ver split_fragments): primera mitad
+    del fragmento = cuerpo (identidad protegida), segunda mitad = cola (más
+    libertad ornamental). Refleja la estructura 'body/tail' descrita en el
+    análisis del tema de vuelo de How to Train Your Dragon.
+    """
+    frags = split_fragments(melody)
+    tags = ['body'] * len(melody)
+    idx = 0
+    for frag in frags:
+        if not frag:
+            continue
+        start = frag[0][0]
+        end = frag[-1][0] + frag[-1][2]
+        midpoint = start + (end - start) / 2.0
+        for _ in frag:
+            tags[idx] = 'body' if melody[idx][0] < midpoint else 'tail'
+            idx += 1
+    return tags
+
+
+def ornament_tail_notes(mapped_notes, tags, tgt_root_pc, tgt_scale, seed=42):
+    """Añade, con probabilidad moderada, una breve nota vecina de adorno
+    (grado superior de la escala destino) antes de notas etiquetadas 'tail',
+    dándoles más libertad melódica que al 'body' (que --chord-tone-priority
+    protege con --body-tail activo)."""
+    rnd = random.Random(seed + 777)
+    out = []
+    for i, (off, p, dur, vel) in enumerate(mapped_notes):
+        tag = tags[i] if i < len(tags) else 'body'
+        if tag == 'tail' and dur >= 0.4 and rnd.random() < 0.5:
+            deg = pitch_to_abs_degree(p, tgt_root_pc, tgt_scale)
+            neighbor = abs_degree_to_pitch(deg + 1, tgt_root_pc, tgt_scale)
+            grace_dur = min(0.25, dur * 0.3)
+            out.append((off, neighbor, grace_dur, max(40, int(vel) - 15)))
+            out.append((off + grace_dur, p, dur - grace_dur, vel))
+        else:
+            out.append((off, p, dur, vel))
+    return out
+
+
 def harmonize_theme(preset, mapped_notes, root_pc, scale, wt_root_pc, beats_per_bar,
                     total_beats, seed=42):
     random.seed(seed)
@@ -661,6 +754,8 @@ def harmonize_theme(preset, mapped_notes, root_pc, scale, wt_root_pc, beats_per_
         chords = harmonize_whole_tone(mapped_notes, wt_root_pc, scale, beats_per_bar, total_beats)
     elif kind == 'parallel_minor':
         chords = harmonize_parallel_minor(mapped_notes, voice_as='fifth')
+    elif kind == 'chromatic_mediant':
+        chords = harmonize_chromatic_mediant(mapped_notes, beats_per_bar, total_beats, seed)
     elif kind == 'counterpoint':
         counterpoint_notes = generate_counterpoint_line(mapped_notes)
     return chords, counterpoint_notes
@@ -864,6 +959,119 @@ def write_theme_midi(melody_notes, chords, counterpoint_notes, tempo_bpm, beats_
 # PIPELINE PRINCIPAL
 # ═══════════════════════════════════════════════════════════
 
+def _run_style_pipeline(working_melody, preset, src_root_pc, src_scale, src_mode,
+                        beats_per_bar, start_degree_extra=0, chord_tone_priority=False,
+                        fragment_override=False, fragment_order=None, metric_shift_override=False,
+                        body_tail=False, wt_variant='auto', oct_variant='auto',
+                        seed=42, verbose=False):
+    """
+    Núcleo reusable: aplica UN estilo a UNA lista de notas (offsets relativos
+    a 0). Usado tanto por transform_theme (todo el fichero) como por
+    transform_theme_sections (un tramo del fichero por sección). Devuelve
+    None si el segmento no tiene notas.
+    """
+    do_fragment = fragment_override or preset.get('fragment', False)
+    do_metric_shift = metric_shift_override or preset.get('metric_shift', False)
+
+    n_frags = 1
+    if do_fragment:
+        frags = split_fragments(working_melody)
+        n_frags = len(frags)
+        if fragment_order:
+            frags = reorder_fragments(frags, fragment_order)
+        working_melody = flatten_fragments(frags)
+        if verbose:
+            print(f"  Fragmentado en {n_frags} motivos"
+                  + (f", reordenados como {fragment_order}" if fragment_order else ""))
+
+    if do_metric_shift:
+        working_melody = apply_metric_shift(working_melody, beats_per_bar)
+
+    if not working_melody:
+        return None
+
+    tags = body_tail_tags(working_melody) if body_tail else None
+
+    # ── resolver escala destino ──────────────────────────────────────────
+    scale_name = preset['scale']
+    reorient = preset.get('reorient_first_note', False)
+    wt_root_pc = None
+
+    if scale_name == 'octatonic_auto':
+        anchor_pc = working_melody[0][1] % 12
+        if oct_variant in ('wh', 'hw'):
+            chosen = f'octatonic_{oct_variant}'
+        else:
+            err_wh = total_snap_error(working_melody, anchor_pc, SCALES['octatonic_wh'])
+            err_hw = total_snap_error(working_melody, anchor_pc, SCALES['octatonic_hw'])
+            chosen = 'octatonic_wh' if err_wh <= err_hw else 'octatonic_hw'
+        tgt_scale = SCALES[chosen]
+        tgt_root_pc = anchor_pc
+        scale_name = chosen
+        if verbose:
+            print(f"  Octatónica elegida: {chosen} (raíz pc={anchor_pc})")
+    elif scale_name == 'pentatonic_auto':
+        chosen = 'major_pentatonic' if src_mode.lower().startswith('maj') else 'minor_pentatonic'
+        tgt_scale = SCALES[chosen]
+        tgt_root_pc = src_root_pc
+        scale_name = chosen
+        if verbose:
+            print(f"  Pentatónica elegida: {chosen}")
+    elif scale_name == 'whole_tone':
+        if wt_variant in (0, 1):
+            wt_root_pc = (src_root_pc + wt_variant) % 12
+        else:
+            err0 = total_snap_error(working_melody, src_root_pc, SCALES['whole_tone'])
+            err1 = total_snap_error(working_melody, (src_root_pc + 1) % 12, SCALES['whole_tone'])
+            wt_root_pc = src_root_pc if err0 <= err1 else (src_root_pc + 1) % 12
+        tgt_scale = SCALES['whole_tone']
+        tgt_root_pc = wt_root_pc
+        if verbose:
+            print(f"  Colección de tonos enteros: raíz pc={wt_root_pc}")
+    else:
+        tgt_scale = SCALES[scale_name]
+        tgt_root_pc = (working_melody[0][1] % 12) if reorient else src_root_pc
+
+    start_shift = preset.get('start_shift', 0) + start_degree_extra
+    method = preset['method']
+
+    if scale_name == 'chromatic':
+        # La escala cromática contiene todas las alturas: mapear "por grado"
+        # reinterpretando el número de grado con otra cardinalidad distorsionaría
+        # la clase de altura sin necesidad. La transformación real en estos
+        # estilos ocurre en la armonización, no en la melodía (ver video-teoría).
+        mapped = [(off, p + start_shift, dur, vel) for (off, p, dur, vel) in working_melody]
+    elif method == 'degree':
+        mapped = map_degree_method(working_melody, src_root_pc, src_scale,
+                                   tgt_root_pc, tgt_scale, start_shift)
+    else:
+        mapped = map_interval_method(working_melody, src_root_pc, src_scale,
+                                     tgt_root_pc, tgt_scale, start_shift)
+
+    total_beats = melody_total_beats(mapped)
+    total_beats = (math.ceil(total_beats / beats_per_bar) * beats_per_bar
+                  if total_beats > 0 else beats_per_bar)
+
+    chords, counterpoint_notes = harmonize_theme(
+        preset, mapped, tgt_root_pc, tgt_scale, wt_root_pc, beats_per_bar, total_beats, seed
+    )
+
+    if chord_tone_priority and chords:
+        allowed = {i for i, t in enumerate(tags) if t == 'body'} if tags else None
+        mapped = snap_strong_beats_to_chords(mapped, chords, beats_per_bar, allowed_indices=allowed)
+
+    if body_tail and tags:
+        mapped = ornament_tail_notes(mapped, tags, tgt_root_pc, tgt_scale, seed)
+
+    return dict(
+        mapped=mapped, chords=chords, counterpoint_notes=counterpoint_notes,
+        scale_name=scale_name, tgt_scale=tgt_scale, tgt_root_pc=tgt_root_pc,
+        wt_root_pc=wt_root_pc, total_beats=total_beats, method=method,
+        start_shift=start_shift, do_fragment=do_fragment, do_metric_shift=do_metric_shift,
+        n_frags=n_frags,
+    )
+
+
 def transform_theme(midi_path: str,
                     style: str,
                     key_override: str = None,
@@ -874,6 +1082,9 @@ def transform_theme(midi_path: str,
                     fragment: bool = False,
                     fragment_order: list = None,
                     metric_shift: bool = False,
+                    body_tail: bool = False,
+                    wt_variant: str = 'auto',
+                    oct_variant: str = 'auto',
                     custom_scale: str = None,
                     custom_method: str = None,
                     out_dir: str = None,
@@ -907,84 +1118,19 @@ def transform_theme(midi_path: str,
 
     src_scale = SCALES['major'] if src_mode.lower().startswith('maj') else SCALES['natural_minor']
 
-    working_melody = melody
-    do_fragment = fragment or preset.get('fragment', False)
-    do_metric_shift = metric_shift or preset.get('metric_shift', False)
-
-    n_frags = 1
-    if do_fragment:
-        frags = split_fragments(working_melody)
-        n_frags = len(frags)
-        if fragment_order:
-            frags = reorder_fragments(frags, fragment_order)
-        working_melody = flatten_fragments(frags)
-        if verbose:
-            print(f"  Fragmentado en {n_frags} motivos"
-                  + (f", reordenados como {fragment_order}" if fragment_order else ""))
-
-    if do_metric_shift:
-        working_melody = apply_metric_shift(working_melody, beats_per_bar)
-
-    # ── resolver escala destino ──────────────────────────────────────────
-    scale_name = preset['scale']
-    reorient = preset.get('reorient_first_note', False)
-    wt_root_pc = None
-
-    if scale_name == 'octatonic_auto':
-        anchor_pc = working_melody[0][1] % 12
-        err_wh = total_snap_error(working_melody, anchor_pc, SCALES['octatonic_wh'])
-        err_hw = total_snap_error(working_melody, anchor_pc, SCALES['octatonic_hw'])
-        chosen = 'octatonic_wh' if err_wh <= err_hw else 'octatonic_hw'
-        tgt_scale = SCALES[chosen]
-        tgt_root_pc = anchor_pc
-        scale_name = chosen
-        if verbose:
-            print(f"  Octatónica elegida: {chosen} (raíz pc={anchor_pc}, error {min(err_wh, err_hw)})")
-    elif scale_name == 'pentatonic_auto':
-        chosen = 'major_pentatonic' if src_mode.lower().startswith('maj') else 'minor_pentatonic'
-        tgt_scale = SCALES[chosen]
-        tgt_root_pc = src_root_pc
-        scale_name = chosen
-        if verbose:
-            print(f"  Pentatónica elegida: {chosen}")
-    elif scale_name == 'whole_tone':
-        err0 = total_snap_error(working_melody, src_root_pc, SCALES['whole_tone'])
-        err1 = total_snap_error(working_melody, (src_root_pc + 1) % 12, SCALES['whole_tone'])
-        wt_root_pc = src_root_pc if err0 <= err1 else (src_root_pc + 1) % 12
-        tgt_scale = SCALES['whole_tone']
-        tgt_root_pc = wt_root_pc
-        if verbose:
-            print(f"  Colección de tonos enteros: raíz pc={wt_root_pc} (error {min(err0, err1)})")
-    else:
-        tgt_scale = SCALES[scale_name]
-        tgt_root_pc = (working_melody[0][1] % 12) if reorient else src_root_pc
-
-    start_shift = preset.get('start_shift', 0) + start_degree_extra
-    method = preset['method']
-
-    if scale_name == 'chromatic':
-        # La escala cromática contiene todas las alturas: mapear "por grado"
-        # reinterpretando el número de grado con otra cardinalidad distorsionaría
-        # la clase de altura sin necesidad. La transformación real en estos
-        # estilos ocurre en la armonización, no en la melodía (ver video-teoría).
-        mapped = [(off, p + start_shift, dur, vel) for (off, p, dur, vel) in working_melody]
-    elif method == 'degree':
-        mapped = map_degree_method(working_melody, src_root_pc, src_scale,
-                                   tgt_root_pc, tgt_scale, start_shift)
-    else:
-        mapped = map_interval_method(working_melody, src_root_pc, src_scale,
-                                     tgt_root_pc, tgt_scale, start_shift)
-
-    total_beats = melody_total_beats(mapped)
-    total_beats = (math.ceil(total_beats / beats_per_bar) * beats_per_bar
-                  if total_beats > 0 else beats_per_bar)
-
-    chords, counterpoint_notes = harmonize_theme(
-        preset, mapped, tgt_root_pc, tgt_scale, wt_root_pc, beats_per_bar, total_beats, seed
+    res = _run_style_pipeline(
+        melody, preset, src_root_pc, src_scale, src_mode, beats_per_bar,
+        start_degree_extra=start_degree_extra, chord_tone_priority=chord_tone_priority,
+        fragment_override=fragment, fragment_order=fragment_order,
+        metric_shift_override=metric_shift, body_tail=body_tail,
+        wt_variant=wt_variant, oct_variant=oct_variant, seed=seed, verbose=verbose,
     )
+    if res is None:
+        raise RuntimeError(f"{midi_path}: la melodía quedó vacía tras el preprocesado")
 
-    if chord_tone_priority and chords:
-        mapped = snap_strong_beats_to_chords(mapped, chords, beats_per_bar)
+    mapped, chords, counterpoint_notes = res['mapped'], res['chords'], res['counterpoint_notes']
+    scale_name, tgt_scale, total_beats = res['scale_name'], res['tgt_scale'], res['total_beats']
+    method, start_shift = res['method'], res['start_shift']
 
     stem = Path(midi_path).stem
     out_directory = out_dir or os.path.dirname(os.path.abspath(midi_path))
@@ -1013,16 +1159,253 @@ def transform_theme(midi_path: str,
         'start_degree_shift': start_shift,
         'n_notes': len(mapped),
         'n_bars': int(total_beats / beats_per_bar),
-        'n_fragments': n_frags,
-        'fragmented': do_fragment,
-        'metric_shifted': do_metric_shift,
+        'n_fragments': res['n_frags'],
+        'fragmented': res['do_fragment'],
+        'metric_shifted': res['do_metric_shift'],
         'chord_tone_priority': chord_tone_priority,
+        'body_tail': body_tail,
         'has_harmony': bool(chords),
         'has_counterpoint': bool(counterpoint_notes),
     }
 
     if report:
         report_path = os.path.join(out_directory, f"{stem}.{style}_report.json")
+        with open(report_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+        if verbose:
+            print(f"  → {report_path}")
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════
+# MODO SECCIONES: transformación progresiva a lo largo de la pieza
+# ═══════════════════════════════════════════════════════════
+# Refleja cómo los videos de LOTR/GoT NO aplican un estilo fijo a toda la
+# pieza: reharmonizan/cambian de escala por tramos (p.ej. menor → doble
+# armónica → dórico → octatónica → 5º modo de menor melódica en LOTR; o
+# menor durante casi toda la pieza con modulación al clímax en GoT).
+
+def parse_sections_spec(spec):
+    """'0:heroic_minor,16:whole_tone,32:got_fragment' → [(0,'heroic_minor'),...]"""
+    sections = []
+    for part in spec.split(','):
+        if ':' not in part:
+            raise ValueError(f"Formato de --sections inválido en '{part}' (usa compás:estilo)")
+        bar_str, style = part.split(':', 1)
+        sections.append((int(bar_str.strip()), style.strip()))
+    sections.sort(key=lambda x: x[0])
+    if not sections or sections[0][0] != 0:
+        raise ValueError("La primera sección de --sections debe empezar en el compás 0")
+    return sections
+
+
+def write_theme_midi_sectioned(melody_notes, chords, counterpoint_notes, tempo_bpm, beats_per_bar,
+                               output_path, prog_changes_mel, prog_changes_harm, bass_program=32):
+    """Como write_theme_midi, pero admite varios program_change (uno por
+    sección) insertados en el punto de la pieza donde arranca cada tramo."""
+    tpb = 480
+    tempo_us = int(60_000_000 / max(tempo_bpm, 1))
+
+    def to_ticks(beats):
+        return max(0, int(round(beats * tpb)))
+
+    def make_header():
+        trk = mido.MidiTrack()
+        trk.append(mido.MetaMessage('track_name', name='ThemeTransformer:sections', time=0))
+        trk.append(mido.MetaMessage('set_tempo', tempo=tempo_us, time=0))
+        trk.append(mido.MetaMessage('time_signature', numerator=int(round(beats_per_bar)),
+                                    denominator=4, clocks_per_click=24,
+                                    notated_32nd_notes_per_beat=8, time=0))
+        trk.append(mido.MetaMessage('end_of_track', time=0))
+        return trk
+
+    def notes_to_track(notes_list, ch, prog_changes, name):
+        events = []
+        for offset, pitch, dur, vel in notes_list:
+            p = max(0, min(127, int(round(pitch))))
+            v = max(1, min(127, int(round(vel))))
+            t_on = to_ticks(offset)
+            t_off = to_ticks(offset + max(0.05, dur))
+            if t_off <= t_on:
+                t_off = t_on + 1
+            events.append((t_on, 1, 'on', p, v))
+            events.append((t_off, 1, 'off', p, 0))
+        for (start_beat, program) in prog_changes:
+            events.append((to_ticks(start_beat), 0, 'prog', program, 0))
+        events.sort(key=lambda x: (x[0], x[1], 0 if x[2] == 'off' else 1))
+
+        trk = mido.MidiTrack()
+        trk.append(mido.MetaMessage('track_name', name=name, time=0))
+        prev_t = 0
+        for abs_t, _prio, kind, p, v in events:
+            dt = max(0, abs_t - prev_t)
+            if kind == 'prog':
+                trk.append(mido.Message('program_change', channel=ch, program=p, time=dt))
+            else:
+                msg_type = 'note_on' if kind == 'on' else 'note_off'
+                trk.append(mido.Message(msg_type, channel=ch, note=p, velocity=v, time=dt))
+            prev_t = abs_t
+        trk.append(mido.MetaMessage('end_of_track', time=0))
+        return trk
+
+    mid = mido.MidiFile(type=1, ticks_per_beat=tpb)
+    mid.tracks.append(make_header())
+    mid.tracks.append(notes_to_track(melody_notes, 0, prog_changes_mel, 'Melody'))
+
+    if chords:
+        chord_notes, bass_notes = [], []
+        for (cs, cd, pitches) in chords:
+            for p in pitches:
+                chord_notes.append((cs, p, cd * 0.95, 58))
+            if pitches:
+                root = min(pitches)
+                b = root - 24
+                while b < 24:
+                    b += 12
+                bass_notes.append((cs, b, cd * 0.9, 66))
+        mid.tracks.append(notes_to_track(chord_notes, 1, prog_changes_harm, 'Harmony'))
+        if bass_notes:
+            mid.tracks.append(notes_to_track(bass_notes, 2, [(0.0, bass_program)], 'Bass'))
+
+    if counterpoint_notes:
+        mid.tracks.append(notes_to_track(counterpoint_notes, 3, [(0.0, 42)], 'Counterpoint'))
+
+    out_dir = os.path.dirname(output_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    mid.save(output_path)
+
+
+def transform_theme_sections(midi_path: str,
+                             sections: list,
+                             transition_beats: float = 0,
+                             key_override: str = None,
+                             tempo_override: float = None,
+                             beats_per_bar_override: int = None,
+                             start_degree_extra: int = 0,
+                             chord_tone_priority: bool = False,
+                             fragment: bool = False,
+                             fragment_order: list = None,
+                             metric_shift: bool = False,
+                             body_tail: bool = False,
+                             wt_variant: str = 'auto',
+                             oct_variant: str = 'auto',
+                             out_dir: str = None,
+                             report: bool = False,
+                             verbose: bool = False,
+                             seed: int = 42):
+    melody, tempo_bpm, ts, tpb = load_melody(midi_path, verbose=verbose)
+    beats_per_bar = beats_per_bar_override or ts[0]
+    if tempo_override:
+        tempo_bpm = tempo_override
+
+    if key_override:
+        src_root_pc, src_mode = parse_key_string(key_override)
+    else:
+        src_root_pc, src_mode = detect_key(midi_path, melody, verbose=verbose)
+    src_scale = SCALES['major'] if src_mode.lower().startswith('maj') else SCALES['natural_minor']
+
+    total_len = melody_total_beats(melody)
+    bar_starts = [bar * beats_per_bar for bar, _style in sections]
+    boundaries = bar_starts + [max(total_len, bar_starts[-1] + beats_per_bar)]
+    if boundaries[-1] < total_len:
+        boundaries[-1] = math.ceil(total_len / beats_per_bar) * beats_per_bar
+
+    if verbose:
+        print(f"\n═══ {os.path.basename(midi_path)} → SECCIONES ═══")
+        for (bar, style), b0, b1 in zip(sections, boundaries[:-1], boundaries[1:]):
+            print(f"  compás {bar} ({b0:.1f}–{b1:.1f} negras): estilo '{style}'")
+
+    results = []
+    for i, (bar, style) in enumerate(sections):
+        if style not in STYLE_PRESETS or style == 'custom':
+            raise ValueError(f"Estilo de sección no soportado en --sections: '{style}'")
+        preset = dict(STYLE_PRESETS[style])
+        seg_start, seg_end = boundaries[i], boundaries[i + 1]
+        seg_notes = [(o - seg_start, p, d, v) for (o, p, d, v) in melody if seg_start <= o < seg_end]
+        if verbose:
+            print(f"\n  ── sección {i + 1}/{len(sections)}: '{style}' "
+                  f"({len(seg_notes)} notas) ──")
+        res = None
+        if seg_notes:
+            res = _run_style_pipeline(
+                seg_notes, preset, src_root_pc, src_scale, src_mode, beats_per_bar,
+                start_degree_extra=start_degree_extra, chord_tone_priority=chord_tone_priority,
+                fragment_override=fragment, fragment_order=fragment_order,
+                metric_shift_override=metric_shift, body_tail=body_tail,
+                wt_variant=wt_variant, oct_variant=oct_variant, seed=seed, verbose=verbose,
+            )
+        if res is not None:
+            res['style'] = style
+            res['preset'] = preset
+            res['seg_start'] = seg_start
+        results.append(res)
+
+    # ── transición: pivotar el final de cada sección hacia el 1er acorde de la siguiente ──
+    if transition_beats > 0:
+        for i in range(len(results) - 1):
+            cur, nxt = results[i], results[i + 1]
+            if cur is None or nxt is None or not nxt.get('chords'):
+                continue
+            first_chord_pitches = nxt['chords'][0][2]
+            pivot_chord = [(0.0, transition_beats, first_chord_pitches)]
+            window_start = max(0.0, cur['total_beats'] - transition_beats)
+            in_window = [n for n in cur['mapped'] if n[0] >= window_start]
+            rest = [n for n in cur['mapped'] if n[0] < window_start]
+            shifted = [(o - window_start, p, d, v) for (o, p, d, v) in in_window]
+            snapped = snap_strong_beats_to_chords(shifted, pivot_chord, beats_per_bar, max_correction=3)
+            back = [(o + window_start, p, d, v) for (o, p, d, v) in snapped]
+            cur['mapped'] = rest + back
+            if verbose:
+                print(f"  Transición: últimos {transition_beats} tiempos de la sección {i + 1} "
+                      f"pivotan hacia el acorde inicial de la sección {i + 2}")
+
+    # ── concatenar con offsets absolutos ────────────────────────────────
+    all_melody, all_chords, all_cp = [], [], []
+    prog_changes_mel, prog_changes_harm = [], []
+    bass_program = 32
+    for res in results:
+        if res is None:
+            continue
+        base = res['seg_start']
+        prog_changes_mel.append((base, res['preset']['melody_program']))
+        prog_changes_harm.append((base, res['preset']['harmony_program']))
+        bass_program = res['preset']['bass_program']
+        for (o, p, d, v) in res['mapped']:
+            all_melody.append((o + base, p, d, v))
+        if res['chords']:
+            for (cs, cd, pitches) in res['chords']:
+                all_chords.append((cs + base, cd, pitches))
+        if res['counterpoint_notes']:
+            for (o, p, d, v) in res['counterpoint_notes']:
+                all_cp.append((o + base, p, d, v))
+
+    if not all_melody:
+        raise RuntimeError(f"{midi_path}: ninguna sección produjo notas")
+
+    stem = Path(midi_path).stem
+    out_directory = out_dir or os.path.dirname(os.path.abspath(midi_path))
+    tag = "_".join(s for _, s in sections)
+    output_path = os.path.join(out_directory, f"{stem}.sections_{tag}.mid")
+
+    write_theme_midi_sectioned(
+        all_melody, all_chords, all_cp, tempo_bpm, beats_per_bar, output_path,
+        prog_changes_mel, prog_changes_harm, bass_program=bass_program,
+    )
+
+    if verbose:
+        print(f"  → {output_path}")
+
+    result = {
+        'input': midi_path, 'output': output_path,
+        'sections': [{'bar': b, 'style': s} for b, s in sections],
+        'transition_beats': transition_beats, 'body_tail': body_tail,
+        'source_key': f"{PITCH_NAMES[src_root_pc]} {src_mode}",
+        'n_notes': len(all_melody),
+    }
+    if report:
+        report_path = os.path.join(out_directory, f"{stem}.sections_{tag}_report.json")
         with open(report_path, 'w', encoding='utf-8') as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
         if verbose:
@@ -1059,7 +1442,7 @@ def build_parser():
 Estilos disponibles:
   heroic_minor, dorian_heroic, whole_tone, octatonic, chromatic_magical,
   chromatic_counterpoint, pentatonic, double_harmonic, acoustic, elvish,
-  got_fragment, custom
+  got_fragment, chromatic_mediant, custom
 
 Ejemplos:
   python theme_transformer.py tema.mid
@@ -1068,6 +1451,11 @@ Ejemplos:
   python theme_transformer.py tema.mid --style whole_tone --chord-tone-priority
   python theme_transformer.py tema.mid --style custom --scale double_harmonic --method interval
   python theme_transformer.py tema.mid --style elvish --start-degree 2
+  python theme_transformer.py tema.mid --style octatonic --octatonic-variant hw
+  python theme_transformer.py tema.mid --style whole_tone --wt-variant 1
+  python theme_transformer.py tema.mid --style got_fragment --body-tail --chord-tone-priority
+  python theme_transformer.py tema.mid --sections "0:heroic_minor,16:double_harmonic,32:elvish" \\
+      --transition-beats 2 --verbose
   python theme_transformer.py --catalog
         """
     )
@@ -1078,7 +1466,14 @@ Ejemplos:
                    default=['heroic_minor', 'whole_tone', 'octatonic', 'chromatic_magical'],
                    metavar='S',
                    help='Estilos a aplicar (default: heroic_minor whole_tone octatonic '
-                        'chromatic_magical)')
+                        'chromatic_magical). Ignorado si se usa --sections')
+    p.add_argument('--sections', default=None, metavar='"BAR:ESTILO,BAR:ESTILO,..."',
+                   help='Transformación progresiva por tramos, e.g. '
+                        '"0:heroic_minor,16:double_harmonic,32:elvish" (la 1ª sección debe '
+                        'empezar en el compás 0). Sustituye a --style')
+    p.add_argument('--transition-beats', type=float, default=0,
+                   help='(con --sections) Nº de tiempos al final de cada sección que pivotan '
+                        'hacia el acorde inicial de la siguiente (default: 0 = corte seco)')
     p.add_argument('--key', default=None, metavar='KEY',
                    help='Tonalidad origen forzada, e.g. "D minor". Si no se indica, se autodetecta')
     p.add_argument('--tempo', type=float, default=None,
@@ -1097,6 +1492,15 @@ Ejemplos:
                         '--fragment-order 0 0 1 2 1')
     p.add_argument('--metric-shift', action='store_true',
                    help='Desplaza la melodía para que la primera nota caiga en el downbeat')
+    p.add_argument('--body-tail', action='store_true',
+                   help="Distingue 'cuerpo' (1ª mitad de cada motivo, protegido por "
+                        "--chord-tone-priority) de 'cola' (2ª mitad, con adornos melódicos "
+                        "libres) — ver análisis body/tail de How to Train Your Dragon")
+    p.add_argument('--wt-variant', choices=['auto', '0', '1'], default='auto',
+                   help='Forzar la colección de tonos enteros (WT0/WT1) en vez de autodetectar')
+    p.add_argument('--octatonic-variant', choices=['auto', 'wh', 'hw'], default='auto',
+                   help='Forzar la variante octatónica (tono-semitono/semitono-tono) en vez de '
+                        'autodetectar')
     p.add_argument('--scale', default=None,
                    help='(con --style custom) escala destino, ver --catalog')
     p.add_argument('--method', default=None, choices=['degree', 'interval'],
@@ -1124,6 +1528,9 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    wt_variant = int(args.wt_variant) if args.wt_variant in ('0', '1') else 'auto'
+    oct_variant = args.octatonic_variant
+
     import glob
     midi_files = glob.glob(args.input) or [args.input]
     midi_files = [f for f in midi_files if f.endswith(('.mid', '.midi'))]
@@ -1131,6 +1538,40 @@ def main():
     if not midi_files:
         print(f"[ERROR] No se encontraron archivos MIDI: {args.input}")
         sys.exit(1)
+
+    if args.sections:
+        try:
+            sections = parse_sections_spec(args.sections)
+        except ValueError as e:
+            print(f"[ERROR] {e}")
+            sys.exit(1)
+        for midi_path in midi_files:
+            try:
+                transform_theme_sections(
+                    midi_path=midi_path,
+                    sections=sections,
+                    transition_beats=args.transition_beats,
+                    key_override=args.key,
+                    tempo_override=args.tempo,
+                    beats_per_bar_override=args.beats_per_bar,
+                    start_degree_extra=args.start_degree,
+                    chord_tone_priority=args.chord_tone_priority,
+                    fragment=args.fragment,
+                    fragment_order=args.fragment_order,
+                    metric_shift=args.metric_shift,
+                    body_tail=args.body_tail,
+                    wt_variant=wt_variant,
+                    oct_variant=oct_variant,
+                    out_dir=args.out_dir,
+                    report=args.report,
+                    verbose=args.verbose,
+                    seed=args.seed,
+                )
+            except Exception as e:
+                print(f"[ERROR] {midi_path} / --sections: {e}")
+                if args.verbose:
+                    traceback.print_exc()
+        return
 
     for midi_path in midi_files:
         for style in args.style:
@@ -1146,6 +1587,9 @@ def main():
                     fragment=args.fragment,
                     fragment_order=args.fragment_order,
                     metric_shift=args.metric_shift,
+                    body_tail=args.body_tail,
+                    wt_variant=wt_variant,
+                    oct_variant=oct_variant,
                     custom_scale=args.scale,
                     custom_method=args.method,
                     out_dir=args.out_dir,
