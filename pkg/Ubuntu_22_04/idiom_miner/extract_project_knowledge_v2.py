@@ -460,6 +460,16 @@ def is_git_repo(root: str) -> bool:
     return sh(["git", "rev-parse", "--is-inside-work-tree"], cwd=root).strip() == "true"
 
 
+def git_summary_stats(root: Path) -> dict:
+    """Commits totales y meses con actividad; una sola llamada a git log,
+    reutilizada para completar el resumen final con datos de 03 y 14."""
+    if not is_git_repo(str(root)):
+        return {"is_repo": False, "total_commits": 0, "active_months": 0}
+    out = sh(["git", "log", "--format=%ad", "--date=format:%Y-%m"], cwd=str(root))
+    lines = [l for l in out.splitlines() if l.strip()]
+    return {"is_repo": True, "total_commits": len(lines), "active_months": len(set(lines))}
+
+
 def has_ctags() -> bool:
     return sh(["ctags", "--version"]) != ""
 
@@ -2708,6 +2718,10 @@ def main():
     print(f"    tags: {vim_info['tags_path']}")
     print(f"    quickfix/fzf: {vim_info['vim_dir']}")
 
+    git_stats = git_summary_stats(root)
+    top_god_file = (f"{god_files[0]['file']} (score={god_files[0]['score']})"
+                     if god_files else "N/A")
+
     resumen_estatico = (
         "RESUMEN DE LA EXTRACCION ESTATICA\n" + "=" * 60 + "\n\n"
         f"Ficheros analizados: {len(files)}\n"
@@ -2722,16 +2736,20 @@ def main():
         f"Ficheros de config detectados: {len(config_map['config_files'])}\n"
         f"Ficheros con test asociado: {len(test_coverage['tested'])}\n"
         f"Ficheros sin test asociado (candidatos): {len(test_coverage['untested'])}\n"
+        f"Fichero mas complejo (god-file): {top_god_file}\n"
         f"Ficheros con superficie publica/privada detectada: {len(public_surface)}\n"
         f"Dependencias declaradas pero no usadas: {len(deps_check['declared_not_used'])}\n"
         f"Terminos de glosario de dominio detectados: {len(glossary)}\n"
+        f"Commits totales en el repositorio: "
+        f"{git_stats['total_commits'] if git_stats['is_repo'] else 'N/A (no es repo git)'}\n"
+        f"Meses con actividad de commits: {git_stats['active_months']}\n"
         f"Ficheros con senal de infraestructura detectada: {len(infra_by_file)}\n"
         f"Ficheros candidatos a logica de negocio pura: {n_business_candidates}\n"
         f"Acronimos detectados: {len(acronym_entries)} ({n_acronyms_pending} pendientes de definir)\n"
         f"Fichero tags de vim generado en: {vim_info['tags_path']}\n"
         f"Entradas en quickfix combinado (vim/combined.qf): {vim_info['n_entries_combined']}\n"
     )
-    write(output_dir, "04_resumen_extraccion.txt", resumen_estatico)
+    write(output_dir, "18_resumen_extraccion.txt", resumen_estatico)
 
     if args.no_llm:
         print("\n--no-llm activo: fase de sintesis omitida. Listo.")
@@ -2756,46 +2774,46 @@ def main():
 
     print("\n  Generando resumenes por fichero...")
     summaries = phase_file_summaries(stats, cache, model, api_key)
-    write(output_dir, "18_resumenes_por_fichero.txt",
+    write(output_dir, "19_resumenes_por_fichero.txt",
           "\n\n".join(f"### {rel}\n{s}" for rel, s in summaries.items()))
 
     print("  Generando mapa semantico...")
     semantic_map = phase_semantic_map(summaries, model, api_key)
-    write(output_dir, "19_mapa_semantico.md", semantic_map)
+    write(output_dir, "20_mapa_semantico.md", semantic_map)
 
     print("  Generando vision de arquitectura...")
     architecture = phase_architecture(summaries, dep_graph, entrypoints, model, api_key)
-    write(output_dir, "20_arquitectura.md", architecture)
+    write(output_dir, "21_arquitectura.md", architecture)
 
     print("  Detectando convenciones y patrones de diseno...")
     conventions = phase_conventions_and_patterns(
         stats, god_files, entrypoints, business_report, compute_fanin(stats, dep_graph),
         model, api_key)
-    write(output_dir, "21_convenciones_y_patrones.md", conventions)
+    write(output_dir, "22_convenciones_y_patrones.md", conventions)
 
     print("  Explicando algoritmos complejos...")
     algo_explanations = phase_algorithm_explanations(complex_functions, root, model, api_key, cache)
-    write(output_dir, "22_explicacion_algoritmos.md", algo_explanations)
+    write(output_dir, "23_explicacion_algoritmos.md", algo_explanations)
 
     print("  Generando base de conocimiento...")
     kb = phase_knowledge_base(architecture, conventions, semantic_map, model, api_key)
-    write(output_dir, "23_base_conocimiento.md", kb)
+    write(output_dir, "24_base_conocimiento.md", kb)
 
     print("  Generando snippets del proyecto...")
     snippets = phase_snippets(conventions, stats, model, api_key)
-    write(output_dir, "24_snippets.snippets", snippets)
+    write(output_dir, "25_snippets.snippets", snippets)
 
     print("  Generando checklist de revision...")
     checklist = phase_review_checklist(architecture, conventions, model, api_key)
-    write(output_dir, "25_checklist_revision.md", checklist)
+    write(output_dir, "26_checklist_revision.md", checklist)
 
     print("  Generando casos tipicos...")
     typical_cases = phase_typical_cases(architecture, entrypoints, symbols, model, api_key)
-    write(output_dir, "26_casos_tipicos.md", typical_cases)
+    write(output_dir, "27_casos_tipicos.md", typical_cases)
 
     print("  Definiendo acronimos/terminos pendientes del glosario...")
     glossary_defs = phase_glossary_definitions(acronym_entries, domain_entries, model, api_key, cache)
-    write(output_dir, "27_glosario_definiciones.md", glossary_defs)
+    write(output_dir, "28_glosario_definiciones.md", glossary_defs)
 
     if args.semantic_index:
         print("\n[Fase 2 opcional] Indice de busqueda semantica de funciones...")
