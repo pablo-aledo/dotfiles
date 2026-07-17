@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                          METER ADAPTER  v1.0                                 ║
+║                          METER ADAPTER  v1.1                                 ║
 ║        Adaptación métrica de MIDI: reescritura rítmica entre compases        ║
 ║                                                                              ║
 ║  Implementa las guías de "Adapting Music from one Meter to Another" (Active  ║
@@ -37,6 +37,13 @@
 ║              "bajo en el tiempo 1 + un acorde por cada tiempo restante"     ║
 ║              (técnica del Rondo alla Turca → vals)                         ║
 ║    none     — descarta las pistas de acompañamiento, solo adapta la melodía║
+║                                                                              ║
+║  --coordinate-layers: deriva el mapa de tiempo EXACTO de la melodía y lo    ║
+║  aplica igual a todas las capas 'mirror' (incl. percusión), en vez de que   ║
+║  cada una decida qué añadir/quitar por su cuenta. Preserva la relación      ║
+║  temporal relativa entre capas — pensado para patrones entrelazados como    ║
+║  montuno/tumbao/clave/cáscara, donde importa que las capas se mantengan     ║
+║  sincronizadas como conjunto.                                               ║
 ║                                                                              ║
 ║  USO:                                                                        ║
 ║    python meter_adapter.py tema.mid --to 5/4                                ║
@@ -206,21 +213,30 @@ def load_all_layers(midi_path, verbose=False):
 # ADAPTACIÓN DE UNA UNIDAD (compás o grupo de compases)
 # ═══════════════════════════════════════════════════════════
 
-def adapt_unit_add(notes, source_len, target_len, allow_melisma=True, melisma_threshold=1.0):
+def adapt_unit_add(notes, source_len, target_len, allow_melisma=True, melisma_threshold=1.0,
+                   return_warp=False):
     """
     Unidad más larga en el destino. Si ya hay silencio de cola suficiente,
     no se toca ninguna nota (se limita a agrandar el contenedor). Si no,
     se alarga la nota más débil métricamente (nunca la primera, que ancla
     el downbeat/anacrusa) o se le añade una repetición melismática.
+    Si return_warp=True, también devuelve el mapa de tiempo (lista de
+    puntos (old_t, new_t)) que resultó de esta decisión — usado por
+    --coordinate-layers para aplicar EXACTAMENTE la misma deformación
+    temporal a las demás pistas.
     """
     if not notes:
-        return []
+        warp = [(0.0, 0.0), (source_len, target_len)]
+        return ([], warp) if return_warp else []
     notes = sorted(notes, key=lambda n: n[0])
     content_end = max(o + d for o, p, d, v in notes)
     slack = max(0.0, source_len - content_end)
     delta = target_len - source_len
 
     if delta <= slack + 1e-6:
+        if return_warp:
+            warp = [(0.0, 0.0), (content_end, content_end), (source_len, target_len)]
+            return list(notes), warp
         return list(notes)
 
     extra = delta - slack
@@ -230,6 +246,8 @@ def adapt_unit_add(notes, source_len, target_len, allow_melisma=True, melisma_th
         idx = 0
 
     out = []
+    off_idx, p_idx, dur_idx, vel_idx = notes[idx]
+    insertion_point = off_idx + dur_idx
     for i, (off, p, dur, vel) in enumerate(notes):
         if i < idx:
             out.append((off, p, dur, vel))
@@ -242,6 +260,11 @@ def adapt_unit_add(notes, source_len, target_len, allow_melisma=True, melisma_th
                 out.append((off, p, dur + extra, vel))
         else:
             out.append((off + extra, p, dur, vel))
+
+    if return_warp:
+        warp = [(0.0, 0.0), (insertion_point, insertion_point),
+               (insertion_point, insertion_point + extra), (source_len, target_len)]
+        return out, warp
     return out
 
 
@@ -262,43 +285,62 @@ def _removal_score(idx, notes, unit_len):
     return score
 
 
-def adapt_unit_remove(notes, source_len, target_len):
+def adapt_unit_remove(notes, source_len, target_len, return_warp=False):
     """
     Unidad más corta en el destino. Si el margen de silencio de cola ya
     cubre la reducción, no se toca ninguna nota. Si no, se eliminan notas
     (nunca la primera ni la última) por prioridad: repetidas > de paso >
     tiempo débil, cerrando el hueco cada vez (el resto se desliza antes).
     Si aún sobra duración tras vaciar candidatos, se comprime
-    proporcionalmente lo que quede.
+    proporcionalmente lo que quede. return_warp: ver adapt_unit_add.
     """
     if not notes:
-        return []
+        warp = [(0.0, 0.0), (source_len, target_len)]
+        return ([], warp) if return_warp else []
     notes = sorted(notes, key=lambda n: n[0])
     content_end = max(o + d for o, p, d, v in notes)
     needed = content_end - target_len
 
     if needed <= 1e-6:
+        if return_warp:
+            warp = [(0.0, 0.0), (content_end, content_end), (source_len, target_len)]
+            return list(notes), warp
         return list(notes)
 
     working = list(notes)
     removed_total = 0.0
+    deleted_intervals = []  # en coordenadas ORIGINALES de la unidad
     while removed_total < needed - 1e-6 and len(working) > 2:
         idx = max(range(len(working)), key=lambda i: _removal_score(i, working, source_len))
         if _removal_score(idx, working, source_len) <= -50:
             break  # solo quedan la primera/última: no seguir
         off, p, dur, vel = working.pop(idx)
+        orig_start = off + removed_total
+        deleted_intervals.append((orig_start, orig_start + dur))
         for j in range(idx, len(working)):
             o2, p2, d2, v2 = working[j]
             working[j] = (o2 - dur, p2, d2, v2)
         removed_total += dur
 
-    if not working:
-        return []
-    content_end2 = max(o + d for o, p, d, v in working)
-    if content_end2 > target_len + 1e-6:
+    content_end2 = max((o + d for o, p, d, v in working), default=0.0)
+    scale = 1.0
+    if working and content_end2 > target_len + 1e-6:
         scale = target_len / content_end2
         working = [(o * scale, p, d * scale, v) for (o, p, d, v) in working]
-    return working
+
+    if not return_warp:
+        return working
+
+    deleted_intervals.sort(key=lambda iv: iv[0])
+    cum = 0.0
+    pts = [(0.0, 0.0)]
+    for ds, de in deleted_intervals:
+        new_ds = (ds - cum) * scale
+        pts.append((ds, new_ds))
+        cum += (de - ds)
+        pts.append((de, new_ds))
+    pts.append((source_len, target_len))
+    return working, pts
 
 
 def adapt_layer(notes, group, from_bar, to_bar, allow_melisma, melisma_threshold):
@@ -335,6 +377,99 @@ def adapt_layer(notes, group, from_bar, to_bar, allow_melisma, melisma_threshold
             out.append((cursor + o, p, d, v))
         cursor += target_unit
     return out, stats
+
+
+# ═══════════════════════════════════════════════════════════
+# COORDINACIÓN MULTICAPA (--coordinate-layers)
+# ═══════════════════════════════════════════════════════════
+# El ejemplo afrocubano (montuno/tumbao/clave/cáscara) exige que las capas
+# mantengan su relación compuesta (p.ej. "solo hay un punto donde coinciden
+# las cuatro"). adapt_layer() por defecto deja que cada pista decida de
+# forma independiente qué nota añadir/cortar, lo que puede romper esa
+# relación. Aquí se deriva, unidad por unidad, el mapa de tiempo EXACTO que
+# resultó de las decisiones tomadas sobre la MELODÍA, y se aplica ese mismo
+# mapa a todas las demás pistas — así, dos eventos que eran simultáneos en
+# el original siguen siéndolo en el resultado.
+
+def apply_time_warp(notes, warp_pts):
+    """
+    Aplica un mapa de tiempo por tramos (lista de (old_t,new_t) no decreciente
+    en old_t, con posibles saltos: old_t repetido = inserción, new_t repetido
+    = eliminación) a una lista de notas con offsets relativos a la unidad.
+    """
+    def warp_time(t):
+        for i in range(len(warp_pts) - 1):
+            o0, n0 = warp_pts[i]
+            o1, n1 = warp_pts[i + 1]
+            if o0 <= t <= o1:
+                if o1 == o0:
+                    return n1 if t > o0 else n0
+                frac = (t - o0) / (o1 - o0)
+                return n0 + frac * (n1 - n0)
+        return warp_pts[-1][1]
+
+    out = []
+    for (off, p, dur, vel) in notes:
+        new_off = warp_time(off)
+        new_end = warp_time(off + dur)
+        new_dur = max(0.05, new_end - new_off)
+        out.append((new_off, p, new_dur, vel))
+    return out
+
+
+def compute_unit_warps(reference_notes, group, from_bar, to_bar, allow_melisma, melisma_threshold):
+    """Corre el motor de adaptación SOLO sobre la pista de referencia
+    (normalmente la melodía) para derivar, unidad por unidad, el mapa de
+    tiempo resultante de sus decisiones de añadir/quitar contenido."""
+    source_unit = group * from_bar
+    target_unit = to_bar
+    if not reference_notes:
+        return []
+    total_len = max(o + d for o, p, d, v in reference_notes)
+    n_units = max(1, math.ceil(total_len / source_unit))
+
+    warps = []
+    for u in range(n_units):
+        u_start, u_end = u * source_unit, (u + 1) * source_unit
+        unit_notes = [(o - u_start, p, d, v) for (o, p, d, v) in reference_notes
+                     if u_start <= o < u_end]
+        if not unit_notes:
+            warps.append([(0.0, 0.0), (source_unit, target_unit)])
+            continue
+        if target_unit > source_unit + 1e-9:
+            _new, warp = adapt_unit_add(unit_notes, source_unit, target_unit,
+                                        allow_melisma, melisma_threshold, return_warp=True)
+        elif target_unit < source_unit - 1e-9:
+            _new, warp = adapt_unit_remove(unit_notes, source_unit, target_unit, return_warp=True)
+        else:
+            warp = [(0.0, 0.0), (source_unit, target_unit)]
+        warps.append(warp)
+    return warps
+
+
+def adapt_layer_with_warps(notes, group, from_bar, to_bar, warps):
+    """Aplica a esta pista los MISMOS mapas de tiempo por unidad calculados
+    para la pista de referencia (--coordinate-layers), en vez de tomar sus
+    propias decisiones de qué añadir/quitar. Garantiza que la relación
+    temporal relativa entre pistas se preserve como conjunto."""
+    if not notes:
+        return []
+    source_unit = group * from_bar
+    target_unit = to_bar
+    total_len = max(o + d for o, p, d, v in notes)
+    n_units = max(len(warps), math.ceil(total_len / source_unit) if source_unit > 0 else 1)
+
+    out, cursor = [], 0.0
+    for u in range(n_units):
+        u_start, u_end = u * source_unit, (u + 1) * source_unit
+        unit_notes = [(o - u_start, p, d, v) for (o, p, d, v) in notes if u_start <= o < u_end]
+        warp = warps[u] if u < len(warps) else [(0.0, 0.0), (source_unit, target_unit)]
+        if unit_notes:
+            new_unit = apply_time_warp(unit_notes, warp)
+            for (o, p, d, v) in new_unit:
+                out.append((cursor + o, p, d, v))
+        cursor += target_unit
+    return out
 
 
 def waltz_accompaniment(notes, group, from_bar, to_bar, to_beats_count):
@@ -445,6 +580,7 @@ def adapt_meter(midi_path: str,
                 allow_melisma: bool = True,
                 melisma_threshold: float = 1.0,
                 accompaniment_style: str = 'mirror',
+                coordinate_layers: bool = False,
                 melody_track: int = None,
                 out_path: str = None,
                 report: bool = False,
@@ -473,10 +609,21 @@ def adapt_meter(midi_path: str,
     else:
         melody_layer = max(pool, key=lambda l: l['mean_pitch'])
 
+    shared_warps = None
+    if coordinate_layers:
+        shared_warps = compute_unit_warps(melody_layer['notes'], group, from_bar, to_bar,
+                                          allow_melisma, melisma_threshold)
+        if verbose:
+            print(f"  --coordinate-layers: {len(shared_warps)} mapa(s) de tiempo derivados de "
+                  f"la pista {melody_layer['index']} (melodía), compartidos por todas las capas")
+
     out_layers = []
     for layer in layers:
         is_melody = layer is melody_layer
-        if is_melody or accompaniment_style == 'mirror' or layer['is_percussion']:
+        if coordinate_layers and (is_melody or accompaniment_style == 'mirror' or layer['is_percussion']):
+            new_notes = adapt_layer_with_warps(layer['notes'], group, from_bar, to_bar, shared_warps)
+            method_used = 'coordinated'
+        elif is_melody or accompaniment_style == 'mirror' or layer['is_percussion']:
             new_notes, _stats = adapt_layer(layer['notes'], group, from_bar, to_bar,
                                             allow_melisma, melisma_threshold)
             method_used = 'mirror'
@@ -510,6 +657,7 @@ def adapt_meter(midi_path: str,
         'input': midi_path, 'output': output_path,
         'from_meter': f"{from_num}/{from_den}", 'to_meter': f"{to_num}/{to_den}",
         'group': group, 'accompaniment_style': accompaniment_style,
+        'coordinate_layers': coordinate_layers,
         'allow_melisma': allow_melisma, 'melody_track': melody_layer['index'],
         'n_layers_out': len(out_layers),
         'n_layers_total': len(layers),
@@ -540,6 +688,7 @@ Ejemplos:
   python meter_adapter.py rondo.mid --to 3/4 --accompaniment-style waltz
   python meter_adapter.py rondo.mid --preset waltz
   python meter_adapter.py montuno.mid --to 7/4 --group 2
+  python meter_adapter.py montuno.mid --to 7/8 --coordinate-layers --verbose
   python meter_adapter.py tema.mid --to 4/4 --no-melisma --verbose
         """
     )
@@ -557,6 +706,11 @@ Ejemplos:
                    help='Umbral en negras para preferir melisma (default: 1.0)')
     p.add_argument('--accompaniment-style', choices=['mirror', 'waltz', 'none'], default='mirror',
                    help='Estrategia para pistas de acompañamiento (default: mirror)')
+    p.add_argument('--coordinate-layers', action='store_true',
+                   help="Deriva el mapa de tiempo de la melodía y lo aplica IGUAL a todas las "
+                        "capas 'mirror' (incl. percusión), en vez de que cada una decida qué "
+                        "añadir/quitar por su cuenta — preserva la relación temporal entre "
+                        "capas (p.ej. patrones afrocubanos entrelazados). No afecta a 'waltz'")
     p.add_argument('--melody-track', type=int, default=None,
                    help='Forzar qué pista es la melodía (default: autodetecta por pitch medio)')
     p.add_argument('--preset', choices=list(PRESETS.keys()), default=None,
@@ -604,6 +758,7 @@ def main():
                 allow_melisma=args.melisma,
                 melisma_threshold=args.melisma_threshold,
                 accompaniment_style=accompaniment_style,
+                coordinate_layers=args.coordinate_layers,
                 melody_track=args.melody_track,
                 out_path=args.out if len(midi_files) == 1 else None,
                 report=args.report,

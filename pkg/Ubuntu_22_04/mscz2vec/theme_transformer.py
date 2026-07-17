@@ -963,7 +963,7 @@ def _run_style_pipeline(working_melody, preset, src_root_pc, src_scale, src_mode
                         beats_per_bar, start_degree_extra=0, chord_tone_priority=False,
                         fragment_override=False, fragment_order=None, metric_shift_override=False,
                         body_tail=False, wt_variant='auto', oct_variant='auto',
-                        seed=42, verbose=False):
+                        pentatonic_variant='auto', seed=42, verbose=False):
     """
     Núcleo reusable: aplica UN estilo a UNA lista de notas (offsets relativos
     a 0). Usado tanto por transform_theme (todo el fichero) como por
@@ -1011,7 +1011,10 @@ def _run_style_pipeline(working_melody, preset, src_root_pc, src_scale, src_mode
         if verbose:
             print(f"  Octatónica elegida: {chosen} (raíz pc={anchor_pc})")
     elif scale_name == 'pentatonic_auto':
-        chosen = 'major_pentatonic' if src_mode.lower().startswith('maj') else 'minor_pentatonic'
+        if pentatonic_variant in ('major', 'minor'):
+            chosen = f'{pentatonic_variant}_pentatonic'
+        else:
+            chosen = 'major_pentatonic' if src_mode.lower().startswith('maj') else 'minor_pentatonic'
         tgt_scale = SCALES[chosen]
         tgt_root_pc = src_root_pc
         scale_name = chosen
@@ -1085,6 +1088,7 @@ def transform_theme(midi_path: str,
                     body_tail: bool = False,
                     wt_variant: str = 'auto',
                     oct_variant: str = 'auto',
+                    pentatonic_variant: str = 'auto',
                     custom_scale: str = None,
                     custom_method: str = None,
                     out_dir: str = None,
@@ -1123,7 +1127,8 @@ def transform_theme(midi_path: str,
         start_degree_extra=start_degree_extra, chord_tone_priority=chord_tone_priority,
         fragment_override=fragment, fragment_order=fragment_order,
         metric_shift_override=metric_shift, body_tail=body_tail,
-        wt_variant=wt_variant, oct_variant=oct_variant, seed=seed, verbose=verbose,
+        wt_variant=wt_variant, oct_variant=oct_variant,
+        pentatonic_variant=pentatonic_variant, seed=seed, verbose=verbose,
     )
     if res is None:
         raise RuntimeError(f"{midi_path}: la melodía quedó vacía tras el preprocesado")
@@ -1187,13 +1192,28 @@ def transform_theme(midi_path: str,
 # menor durante casi toda la pieza con modulación al clímax en GoT).
 
 def parse_sections_spec(spec):
-    """'0:heroic_minor,16:whole_tone,32:got_fragment' → [(0,'heroic_minor'),...]"""
+    """
+    '0:heroic_minor,16:whole_tone,32:got_fragment'
+        → [(0,'heroic_minor',{}), (16,'whole_tone',{}), (32,'got_fragment',{})]
+    Admite secciones 'custom' con escala/método propios:
+    '0:heroic_minor,16:custom:double_harmonic:interval'
+        → [(0,'heroic_minor',{}), (16,'custom',{'scale':'double_harmonic','method':'interval'})]
+    """
     sections = []
     for part in spec.split(','):
-        if ':' not in part:
+        fields = [f.strip() for f in part.split(':')]
+        if len(fields) < 2:
             raise ValueError(f"Formato de --sections inválido en '{part}' (usa compás:estilo)")
-        bar_str, style = part.split(':', 1)
-        sections.append((int(bar_str.strip()), style.strip()))
+        bar, style = int(fields[0]), fields[1]
+        extra = {}
+        if style == 'custom':
+            if len(fields) < 3:
+                raise ValueError(
+                    f"Una sección 'custom' requiere escala: 'compás:custom:escala[:método]' "
+                    f"(en '{part}')")
+            extra['scale'] = fields[2]
+            extra['method'] = fields[3] if len(fields) > 3 else 'degree'
+        sections.append((bar, style, extra))
     sections.sort(key=lambda x: x[0])
     if not sections or sections[0][0] != 0:
         raise ValueError("La primera sección de --sections debe empezar en el compás 0")
@@ -1291,6 +1311,7 @@ def transform_theme_sections(midi_path: str,
                              body_tail: bool = False,
                              wt_variant: str = 'auto',
                              oct_variant: str = 'auto',
+                             pentatonic_variant: str = 'auto',
                              out_dir: str = None,
                              report: bool = False,
                              verbose: bool = False,
@@ -1307,21 +1328,30 @@ def transform_theme_sections(midi_path: str,
     src_scale = SCALES['major'] if src_mode.lower().startswith('maj') else SCALES['natural_minor']
 
     total_len = melody_total_beats(melody)
-    bar_starts = [bar * beats_per_bar for bar, _style in sections]
+    bar_starts = [bar * beats_per_bar for bar, _style, _extra in sections]
     boundaries = bar_starts + [max(total_len, bar_starts[-1] + beats_per_bar)]
     if boundaries[-1] < total_len:
         boundaries[-1] = math.ceil(total_len / beats_per_bar) * beats_per_bar
 
     if verbose:
         print(f"\n═══ {os.path.basename(midi_path)} → SECCIONES ═══")
-        for (bar, style), b0, b1 in zip(sections, boundaries[:-1], boundaries[1:]):
-            print(f"  compás {bar} ({b0:.1f}–{b1:.1f} negras): estilo '{style}'")
+        for (bar, style, extra), b0, b1 in zip(sections, boundaries[:-1], boundaries[1:]):
+            tag = style if not extra else f"{style}({extra.get('scale')}/{extra.get('method')})"
+            print(f"  compás {bar} ({b0:.1f}–{b1:.1f} negras): estilo '{tag}'")
 
     results = []
-    for i, (bar, style) in enumerate(sections):
-        if style not in STYLE_PRESETS or style == 'custom':
-            raise ValueError(f"Estilo de sección no soportado en --sections: '{style}'")
-        preset = dict(STYLE_PRESETS[style])
+    for i, (bar, style, extra) in enumerate(sections):
+        if style == 'custom':
+            if extra.get('scale') not in SCALES:
+                raise ValueError(f"Escala desconocida en sección 'custom': '{extra.get('scale')}'. "
+                                f"Usa --catalog.")
+            preset = dict(STYLE_PRESETS['custom'])
+            preset['scale'] = extra['scale']
+            preset['method'] = extra.get('method', 'degree')
+        elif style not in STYLE_PRESETS:
+            raise ValueError(f"Estilo de sección desconocido: '{style}'. Usa --catalog.")
+        else:
+            preset = dict(STYLE_PRESETS[style])
         seg_start, seg_end = boundaries[i], boundaries[i + 1]
         seg_notes = [(o - seg_start, p, d, v) for (o, p, d, v) in melody if seg_start <= o < seg_end]
         if verbose:
@@ -1334,7 +1364,8 @@ def transform_theme_sections(midi_path: str,
                 start_degree_extra=start_degree_extra, chord_tone_priority=chord_tone_priority,
                 fragment_override=fragment, fragment_order=fragment_order,
                 metric_shift_override=metric_shift, body_tail=body_tail,
-                wt_variant=wt_variant, oct_variant=oct_variant, seed=seed, verbose=verbose,
+                wt_variant=wt_variant, oct_variant=oct_variant,
+                pentatonic_variant=pentatonic_variant, seed=seed, verbose=verbose,
             )
         if res is not None:
             res['style'] = style
@@ -1386,7 +1417,7 @@ def transform_theme_sections(midi_path: str,
 
     stem = Path(midi_path).stem
     out_directory = out_dir or os.path.dirname(os.path.abspath(midi_path))
-    tag = "_".join(s for _, s in sections)
+    tag = "_".join(s for _, s, _ in sections)
     output_path = os.path.join(out_directory, f"{stem}.sections_{tag}.mid")
 
     write_theme_midi_sectioned(
@@ -1399,7 +1430,7 @@ def transform_theme_sections(midi_path: str,
 
     result = {
         'input': midi_path, 'output': output_path,
-        'sections': [{'bar': b, 'style': s} for b, s in sections],
+        'sections': [{'bar': b, 'style': s, **extra} for b, s, extra in sections],
         'transition_beats': transition_beats, 'body_tail': body_tail,
         'source_key': f"{PITCH_NAMES[src_root_pc]} {src_mode}",
         'n_notes': len(all_melody),
@@ -1501,6 +1532,8 @@ Ejemplos:
     p.add_argument('--octatonic-variant', choices=['auto', 'wh', 'hw'], default='auto',
                    help='Forzar la variante octatónica (tono-semitono/semitono-tono) en vez de '
                         'autodetectar')
+    p.add_argument('--pentatonic-variant', choices=['auto', 'major', 'minor'], default='auto',
+                   help='Forzar pentatónica mayor/menor en vez de deducirla del modo detectado')
     p.add_argument('--scale', default=None,
                    help='(con --style custom) escala destino, ver --catalog')
     p.add_argument('--method', default=None, choices=['degree', 'interval'],
@@ -1562,6 +1595,7 @@ def main():
                     body_tail=args.body_tail,
                     wt_variant=wt_variant,
                     oct_variant=oct_variant,
+                    pentatonic_variant=args.pentatonic_variant,
                     out_dir=args.out_dir,
                     report=args.report,
                     verbose=args.verbose,
@@ -1590,6 +1624,7 @@ def main():
                     body_tail=args.body_tail,
                     wt_variant=wt_variant,
                     oct_variant=oct_variant,
+                    pentatonic_variant=args.pentatonic_variant,
                     custom_scale=args.scale,
                     custom_method=args.method,
                     out_dir=args.out_dir,
