@@ -779,11 +779,111 @@ def _torch_zoo() -> Dict[str, object]:
             x = torch.cat([S_cond, Z_seq], dim=1)
             return self.net(x)
 
+    # ── flow: acoplamiento afín invertible 1-D (RealNVP-lite), biyección ───────
+    # DIRECTA entre el lienzo de espectrograma y el de latente (mismo canvas_h
+    # que pix2pix). A diferencia de pix2pix (dos U-Net por dirección) o de
+    # causal (solo entrena espectrograma→latente, ver CausalGenerator más
+    # arriba), UNA sola red de flujo es invertible por construcción: se
+    # entrena en una dirección y la contraria sale EXACTA invirtiendo las
+    # mismas capas, sin parámetros ni pasada de entrenamiento adicionales.
+    # Al no poder perder información (el jacobiano nunca es cero, es una
+    # biyección real), tampoco puede "promediar" texturas ambiguas como la
+    # regresión L1 pura de pix2pix/causal — cada entrada tiene una única
+    # salida determinada y viceversa, así que se ve forzada a ajustarse a
+    # los datos reales en vez de a un compromiso entre ellos. A cambio,
+    # pierde la capacidad de representar ambigüedad genuina uno-a-muchos
+    # (una biyección, por definición, no puede mapear una entrada a más de
+    # una salida).
+
+    class AffineCoupling1D(nn.Module):
+        """
+        Una capa de acoplamiento afín (RealNVP, Dinh et al. 2016) sobre el
+        eje de canales (componente latente / bin de espectrograma).
+        Condicionada en el tiempo con convoluciones 1-D de contexto
+        completo (NO causales: a diferencia de CausalGenerator, la
+        inversión de un flujo no es secuencial en el tiempo, solo en el
+        canal — no hay generación autorregresiva ni exposure bias).
+
+        Divide los C canales en dos mitades (x_id, x_tr); x_id pasa sin
+        tocar y condiciona una transformación afín (escala log_s +
+        traslación t) de x_tr, calculada por una subred conv1d pequeña.
+        `flip` alterna qué mitad se transforma en capas sucesivas para
+        que, apiladas, todos los canales acaben condicionándose entre sí.
+        """
+        def __init__(self, channels: int, hidden: int = 128, kernel: int = 5,
+                     flip: bool = False):
+            super().__init__()
+            self.flip = flip
+            self.c1 = channels // 2
+            self.c2 = channels - self.c1
+            in_c, out_c = (self.c1, self.c2) if not flip else (self.c2, self.c1)
+            pad = kernel // 2
+            self.net = nn.Sequential(
+                nn.Conv1d(in_c, hidden, kernel, padding=pad), nn.GELU(),
+                nn.Conv1d(hidden, hidden, kernel, padding=pad), nn.GELU(),
+                nn.Conv1d(hidden, out_c * 2, 1),
+            )
+            # arranca cerca de la identidad (log_s≈0, t≈0): entrenamiento estable
+            nn.init.zeros_(self.net[-1].weight)
+            nn.init.zeros_(self.net[-1].bias)
+
+        def _split(self, x):
+            xa, xb = x[:, :self.c1], x[:, self.c1:]
+            return (xb, xa) if self.flip else (xa, xb)     # (x_id, x_tr)
+
+        def _join(self, x_id, x_tr):
+            return (torch.cat([x_tr, x_id], dim=1) if self.flip
+                    else torch.cat([x_id, x_tr], dim=1))
+
+        def forward(self, x):
+            x_id, x_tr = self._split(x)
+            log_s, t = self.net(x_id).chunk(2, dim=1)
+            log_s = torch.tanh(log_s)              # acota el jacobiano, evita explosiones
+            y_tr = x_tr * torch.exp(log_s) + t
+            logdet = log_s.flatten(1).sum(1)        # [B]
+            return self._join(x_id, y_tr), logdet
+
+        def inverse(self, y):
+            y_id, y_tr = self._split(y)
+            log_s, t = self.net(y_id).chunk(2, dim=1)
+            log_s = torch.tanh(log_s)
+            x_tr = (y_tr - t) * torch.exp(-log_s)
+            return self._join(y_id, x_tr)
+
+    class Flow1D(nn.Module):
+        """
+        Biyección completa espectrograma_canvas ↔ latente_canvas: pila de
+        AffineCoupling1D con flip alternante. forward(x) recorre las capas
+        en orden (S_canvas → Z_canvas) y devuelve (y, logdet_total);
+        inverse(y) las recorre al revés, invirtiendo cada una (Z_canvas →
+        S_canvas) — la MISMA red, exacta, sin entrenamiento aparte para la
+        dirección contraria.
+        """
+        def __init__(self, channels: int, n_flows: int = 8,
+                     hidden: int = 128, kernel: int = 5):
+            super().__init__()
+            self.layers = nn.ModuleList([
+                AffineCoupling1D(channels, hidden, kernel, flip=(i % 2 == 1))
+                for i in range(n_flows)])
+
+        def forward(self, x):
+            logdet_total = 0.0
+            for layer in self.layers:
+                x, logdet = layer(x)
+                logdet_total = logdet_total + logdet
+            return x, logdet_total
+
+        def inverse(self, y):
+            for layer in reversed(self.layers):
+                y = layer.inverse(y)
+            return y
+
     _TORCH_ZOO.update(torch=torch, nn=nn, Snake=Snake,
                       Encoder=Encoder, Decoder=Decoder, FrameMapper=FrameMapper,
                       UNetGenerator=UNetGenerator, PatchDiscriminator=PatchDiscriminator,
                       CausalGenerator=CausalGenerator,
                       CausalDiscriminator1D=CausalDiscriminator1D,
+                      AffineCoupling1D=AffineCoupling1D, Flow1D=Flow1D,
                       ResBlock1D=ResBlock1D, LiteVocoder=LiteVocoder)
     return _TORCH_ZOO
 
@@ -2054,6 +2154,120 @@ def _train_step2_causal_adv(args, manifest, pairs, n_bins: int, D: int):
     }, out_path)
     print(f"  ✓  Mapper (causal-adv: scheduled sampling + adversarial) → {out_path}")
 
+def _sample_canvas_tiles(pairs_canvas, n: int, tile: int, canvas_h: int, rng):
+    """
+    Como _sample_causal_tiles, pero sobre pares YA reescalados a canvas_h
+    filas (S y Z comparten canvas_h canales — necesario para que el flujo
+    biyecte directamente entre ambos, ver Flow1D).
+    """
+    S_b = np.zeros((n, canvas_h, tile), dtype=np.float32)
+    Z_b = np.zeros((n, canvas_h, tile), dtype=np.float32)
+    for b in range(n):
+        S_img, Z_img = pairs_canvas[rng.integers(len(pairs_canvas))]
+        w = S_img.shape[1]
+        if w <= tile:
+            S_b[b, :, :w] = S_img
+            Z_b[b, :, :w] = Z_img
+        else:
+            start = rng.integers(w - tile + 1)
+            S_b[b] = S_img[:, start:start + tile]
+            Z_b[b] = Z_img[:, start:start + tile]
+    return S_b, Z_b
+
+
+def _train_step2_flow(args, manifest, pairs, n_bins: int, D: int):
+    """
+    --method flow: biyección afín invertible (RealNVP-lite, Flow1D) entre
+    el lienzo de espectrograma y el de latente (canvas_h filas, igual que
+    pix2pix — ver PIX2PIX_CANVAS_H). UNA sola red: entrenada en una
+    dirección, la otra sale EXACTA invirtiendo las mismas capas — a
+    diferencia de pix2pix (2 redes por dirección) o de causal (1 sola
+    dirección soportada, ver _train_step2_causal).
+
+    --flow-direction controla qué error(es) se minimizan durante el
+    entrenamiento. Esto es una decisión SIN equivalente en el resto de
+    métodos (pix2pix entrena las dos direcciones con redes separadas,
+    así que no hay que elegir; causal solo entrena una porque es la única
+    que soporta) — por eso se expone como opción explícita en vez de fijar
+    un comportamiento implícito:
+      · both  (default) L1 en las dos direcciones a la vez sobre el mismo
+              batch — "gratis" al ser una red invertible, y el mejor
+              compromiso: fuerza a que la biyección sea fiel en ambos
+              sentidos sobre datos reales, no solo por construcción.
+      · s2l   Solo L1(forward(S), Z) — prioriza fidelidad espectrograma→
+              latente; la dirección inversa sigue siendo exactamente
+              invertible, pero sin supervisión directa puede ajustar peor
+              latente→espectrograma real.
+      · l2s   Solo L1(inverse(Z), S) — análogo, prioriza latente→espectro.
+    """
+    zoo = _torch_zoo(); torch, nn = zoo["torch"], zoo["nn"]
+    device = _get_device(args.device)
+    canvas_h = PIX2PIX_CANVAS_H
+
+    pairs_canvas = [(_resize_image(S_img, (canvas_h, S_img.shape[1])),
+                     _resize_image(Z_img, (canvas_h, Z_img.shape[1])))
+                    for S_img, Z_img in pairs]
+
+    flow = zoo["Flow1D"](canvas_h, n_flows=args.n_flows,
+                         hidden=args.flow_hidden, kernel=args.flow_kernel).to(device)
+    n_params = sum(p.numel() for p in flow.parameters())
+    print(f"  [step2] flow (biyección invertible, RealNVP-lite)  "
+          f"{n_params/1e6:.2f}M parámetros  n_flows={args.n_flows}  "
+          f"canvas_h={canvas_h}  direction={args.flow_direction}  "
+          f"tile={args.tile}  batch={args.batch}  epochs={args.epochs}")
+
+    opt = torch.optim.Adam(flow.parameters(), lr=args.lr, betas=(0.9, 0.999))
+    rng = np.random.default_rng(args.seed)
+    total_frames = sum(S.shape[1] for S, _ in pairs)
+    steps_per_epoch = max(1, total_frames // (args.batch * args.tile) + 1)
+    total_steps = args.epochs * steps_per_epoch
+    print(f"  [step2] ~{steps_per_epoch} steps/epoch → {total_steps} steps totales")
+
+    zero = torch.zeros((), device=device)
+    flow.train()
+    for step in range(1, total_steps + 1):
+        S_np, Z_np = _sample_canvas_tiles(pairs_canvas, args.batch, args.tile,
+                                          canvas_h, rng)
+        S = torch.from_numpy(S_np).to(device)
+        Z = torch.from_numpy(Z_np).to(device)
+
+        loss_s2l, loss_l2s = zero, zero
+        if args.flow_direction in ("s2l", "both"):
+            Z_pred, _ = flow(S)
+            loss_s2l = (Z_pred - Z).abs().mean()
+        if args.flow_direction in ("l2s", "both"):
+            S_pred = flow.inverse(Z)
+            loss_l2s = (S_pred - S).abs().mean()
+        loss = loss_s2l + loss_l2s
+
+        opt.zero_grad(); loss.backward(); opt.step()
+        if step == 1 or step % args.log_every == 0:
+            print(f"  [step2] step {step:>6}/{total_steps}  "
+                  f"L1_s2l={loss_s2l.item():.4f}  L1_l2s={loss_l2s.item():.4f}")
+
+    out_path = args.output or "mapper.pt"
+    torch.save({
+        "kind":           "latent_lab_mapper_flow",
+        "sr":             manifest["sr"],
+        "window":         manifest["window"],
+        "hop_ratio":      manifest["hop_ratio"],
+        "db_floor":       manifest["db_floor"],
+        "n_bins":         n_bins,
+        "latent_dim":     D,
+        "coder_hop":      manifest["coder_hop"],
+        "lat_min":        manifest["lat_min"],
+        "lat_max":        manifest["lat_max"],
+        "n_flows":        args.n_flows,
+        "flow_hidden":    args.flow_hidden,
+        "flow_kernel":    args.flow_kernel,
+        "canvas_h":       canvas_h,
+        "tile":           args.tile,
+        "flow_direction": args.flow_direction,
+        "flow":           flow.state_dict(),
+    }, out_path)
+    print(f"  ✓  Mapper (flow, biyección invertible espec↔latente) → {out_path}")
+
+
 def cmd_spec_latent_train_step2(args):
     """
     Directorio de pares (de step1, posiblemente editados a mano) → construye
@@ -2071,6 +2285,10 @@ def cmd_spec_latent_train_step2(args):
       · causal-adv como causal, + scheduled sampling (contra exposure
                     bias) + pérdida adversarial (contra el promedio de
                     texturas ambiguas de la regresión L1 pura).
+      · flow       biyección afín invertible (RealNVP-lite, Flow1D): UNA
+                    sola red cubre las dos direcciones exactamente, sin
+                    entrenar redes/pasadas separadas — ver
+                    _train_step2_flow y --flow-direction.
     """
     pairs_dir = Path(args.pairs_dir)
     manifest, pairs = _load_pairs(pairs_dir)
@@ -2084,6 +2302,9 @@ def cmd_spec_latent_train_step2(args):
         return
     if args.method == "causal-adv":
         _train_step2_causal_adv(args, manifest, pairs, n_bins, D)
+        return
+    if args.method == "flow":
+        _train_step2_flow(args, manifest, pairs, n_bins, D)
         return
 
     zoo   = _torch_zoo()
@@ -2383,6 +2604,79 @@ def _load_mapper(path: str, device_name: str, method: str = "auto",
                      "causales: causal/causal-adv solo entrenan la dirección "
                      "espectrograma→latente (ver conversación de diseño) — "
                      "usa pix2pix o retrieval para latente→espectrograma")
+
+        return _MapperHandle(ckpt, spec_fn, lat_fn)
+
+    elif kind == "latent_lab_mapper_flow":
+        if method not in (None, "auto", "flow"):
+            sys.exit(f"✗  --method {method} no es válido para este checkpoint "
+                     f"(flow) — usa flow o auto")
+        flow = zoo["Flow1D"](ckpt["canvas_h"], n_flows=ckpt["n_flows"],
+                             hidden=ckpt["flow_hidden"], kernel=ckpt["flow_kernel"])
+        flow.load_state_dict(ckpt["flow"]);  flow.to(device).eval()
+        tile     = ckpt["tile"]
+        canvas_h = ckpt["canvas_h"]
+        n_bins_m = ckpt["n_bins"]
+        D_m      = ckpt["latent_dim"]
+        print(f"  [mapper] {path}: (flow, biyección invertible) window={ckpt['window']} "
+              f"hop={ckpt['hop_ratio']} ↔ D={ckpt['latent_dim']} coder_hop={ckpt['coder_hop']} "
+              f"n_flows={ckpt['n_flows']}  canvas_h={canvas_h}  "
+              f"entrenado con direction={ckpt.get('flow_direction', '?')}")
+
+        def _run_flow_tiled(fn, img: np.ndarray) -> np.ndarray:
+            """
+            Igual que _run_generator_tiled (parches con solape del 25% +
+            ventana de Hann para evitar discontinuidades entre parches),
+            pero para fn=flow.forward/flow.inverse, que operan sobre
+            [canvas_h, W] multicanal (no [H,W] de 1 canal como UNetGenerator)
+            y fn=forward devuelve (y, logdet) en vez de solo y.
+            """
+            H, W = img.shape
+            if W <= tile:
+                x = torch.from_numpy(np.ascontiguousarray(img)[None]).to(device)
+                with torch.no_grad():
+                    out = fn(x)
+                    y = out[0] if isinstance(out, tuple) else out
+                return y[0].cpu().numpy()
+            hop = max(1, tile * 3 // 4)
+            out_arr = np.zeros((H, W), dtype=np.float32)
+            wsum = np.zeros((1, W), dtype=np.float32)
+            win  = np.clip(np.hanning(tile).astype(np.float32)[None, :], 0.1, 1.0)
+            pos = 0
+            with torch.no_grad():
+                while True:
+                    start = min(pos, W - tile)
+                    chunk = np.ascontiguousarray(img[:, start:start + tile])
+                    x = torch.from_numpy(chunk[None]).to(device)
+                    res = fn(x)
+                    y = res[0] if isinstance(res, tuple) else res
+                    y = y[0].cpu().numpy()
+                    out_arr[:, start:start + tile]  += y * win
+                    wsum[:, start:start + tile] += win
+                    if start + tile >= W:
+                        break
+                    pos += hop
+            wsum[wsum < 1e-6] = 1.0
+            return out_arr / wsum
+
+        def spec_fn(S_norm):   # S_norm [Fs × bins] → Zn [Fz × D]
+            spec_hop = max(1, int(ckpt["window"] * ckpt["hop_ratio"]))
+            n_lat = max(1, round(S_norm.shape[0] * spec_hop / ckpt["coder_hop"]))
+            S_al  = _resample_frames(S_norm, n_lat).T                    # [bins × F]
+            S_can = _resize_image(S_al, (canvas_h, S_al.shape[1]))       # → lienzo
+            Zn_can = _run_flow_tiled(flow.forward, S_can)
+            Zn = _resize_image(Zn_can, (D_m, Zn_can.shape[1]))           # → D real
+            return np.clip(Zn.T, 0.0, 1.0)                               # [F × D]
+
+        def lat_fn(Z_norm):    # Z_norm [Fz × D] → S_norm [Fs × bins]
+            spec_hop = max(1, int(ckpt["window"] * ckpt["hop_ratio"]))
+            n_spec = max(1, round(Z_norm.shape[0] * ckpt["coder_hop"] / spec_hop))
+            Z_img = Z_norm.T                                             # [D × F]
+            Z_can = _resize_image(Z_img, (canvas_h, Z_img.shape[1]))     # → lienzo
+            S_can = _run_flow_tiled(flow.inverse, Z_can)
+            S_img = _resize_image(S_can, (n_bins_m, S_can.shape[1]))     # → bins reales
+            S = np.clip(S_img.T, 0.0, 1.0)                               # [F × bins]
+            return _resample_frames(S, n_spec)
 
         return _MapperHandle(ckpt, spec_fn, lat_fn)
 
@@ -3298,18 +3592,22 @@ def main():
                             "el traductor espectrograma↔latente → mapper.pt")
     p.add_argument("pairs_dir", help="Carpeta generada por step1 (con manifest.json)")
     p.add_argument("--method", default="pix2pix",
-                   choices=["pix2pix", "retrieval", "causal", "causal-adv"],
+                   choices=["pix2pix", "retrieval", "causal", "causal-adv", "flow"],
                    help="pix2pix: U-Net+PatchGAN, imagen completa de una vez. "
                         "retrieval: indexa un banco de pares frame a frame, "
                         "sin entrenar nada (usable luego con --method greedy/"
                         "viterbi). causal: red autorregresiva (columna t ← "
                         "columnas <t), L1 + teacher forcing fijo. causal-adv: "
-                        "como causal, + scheduled sampling + adversarial "
+                        "como causal, + scheduled sampling + adversarial. "
+                        "flow: biyección afín invertible (RealNVP-lite) — UNA "
+                        "sola red cubre espectrograma→latente y latente→"
+                        "espectrograma exactamente, sin redes/pasadas "
+                        "separadas por dirección (ver --flow-direction) "
                         "(default: pix2pix)")
     p.add_argument("--tile", type=int, default=256,
-                   help="[pix2pix/causal/causal-adv] Anchura temporal (en frames) "
-                        "de los parches de entrenamiento; en pix2pix debe ser "
-                        "múltiplo de 32 (default: 256)")
+                   help="[pix2pix/causal/causal-adv/flow] Anchura temporal (en "
+                        "frames) de los parches de entrenamiento; en pix2pix "
+                        "debe ser múltiplo de 32 (default: 256)")
     p.add_argument("--gen-base", type=int, default=64,
                    help="[pix2pix] Canales base del generador U-Net (default: 64)")
     p.add_argument("--disc-base", type=int, default=64,
@@ -3335,14 +3633,31 @@ def main():
                    help="[causal-adv] Fracción del entrenamiento (0-1) sobre la "
                         "que ss_prob crece linealmente de 0 a --ss-final-prob "
                         "(default: 0.5)")
+    p.add_argument("--n-flows", type=int, default=8,
+                   help="[flow] Nº de capas de acoplamiento afín apiladas "
+                        "(default: 8)")
+    p.add_argument("--flow-hidden", type=int, default=128,
+                   help="[flow] Canales ocultos de la subred de cada capa de "
+                        "acoplamiento (default: 128)")
+    p.add_argument("--flow-kernel", type=int, default=5,
+                   help="[flow] Anchura del kernel conv1d de la subred de "
+                        "acoplamiento, en frames (default: 5)")
+    p.add_argument("--flow-direction", default="both",
+                   choices=["s2l", "l2s", "both"],
+                   help="[flow] Qué dirección(es) supervisar con L1 durante el "
+                        "entrenamiento — sin equivalente en pix2pix (entrena "
+                        "ambas con redes separadas) ni en causal (solo soporta "
+                        "una). both: L1 en las dos direcciones a la vez sobre "
+                        "el mismo batch (recomendado, es 'gratis' al ser "
+                        "invertible). s2l/l2s: solo una dirección (default: both)")
     p.add_argument("--epochs", type=int, default=50,
-                   help="[pix2pix/causal/causal-adv] Epochs sobre el corpus de "
-                        "pares (default: 50)")
+                   help="[pix2pix/causal/causal-adv/flow] Epochs sobre el "
+                        "corpus de pares (default: 50)")
     p.add_argument("--batch", type=int, default=4,
-                   help="[pix2pix/causal/causal-adv] Tamaño de batch de parches "
-                        "(default: 4)")
+                   help="[pix2pix/causal/causal-adv/flow] Tamaño de batch de "
+                        "parches (default: 4)")
     p.add_argument("--lr", type=float, default=2e-4,
-                   help="[pix2pix/causal/causal-adv] Learning rate Adam "
+                   help="[pix2pix/causal/causal-adv/flow] Learning rate Adam "
                         "(default: 2e-4)")
     p.add_argument("--seed", type=int, default=0,
                    help="Semilla RNG (default: 0)")
@@ -3361,10 +3676,10 @@ def main():
                    "(pix2pix o retrieval, ver spectrogram-to-latent-train_step2)")
     p.add_argument("--method", default="auto",
                    choices=["auto", "pix2pix", "greedy", "viterbi",
-                            "causal", "causal-adv"],
+                            "causal", "causal-adv", "flow"],
                    help="Método de traducción. auto: detecta pix2pix/legado/"
-                        "causal del checkpoint, o usa viterbi si es un mapper "
-                        "de retrieval. greedy/viterbi requieren --method "
+                        "causal/flow del checkpoint, o usa viterbi si es un "
+                        "mapper de retrieval. greedy/viterbi requieren --method "
                         "retrieval en step2 (default: auto)")
     p.add_argument("--topk", type=int, default=8,
                    help="[viterbi] Nº de candidatos por frame considerados en la "
@@ -3387,11 +3702,11 @@ def main():
                    "(pix2pix o retrieval, ver spectrogram-to-latent-train_step2)")
     p.add_argument("--method", default="auto",
                    choices=["auto", "pix2pix", "greedy", "viterbi",
-                            "causal", "causal-adv"],
+                            "causal", "causal-adv", "flow"],
                    help="Método de traducción, igual que en spectrogram-to-latent "
                         "(causal/causal-adv no soportan esta dirección — ver "
-                        "--help de spectrogram-to-latent-train_step2) "
-                        "(default: auto)")
+                        "--help de spectrogram-to-latent-train_step2. flow SÍ la "
+                        "soporta: es la misma red invertida) (default: auto)")
     p.add_argument("--topk", type=int, default=8,
                    help="[viterbi] Nº de candidatos por frame (default: 8)")
     p.add_argument("--join-weight", type=float, default=1.0,
