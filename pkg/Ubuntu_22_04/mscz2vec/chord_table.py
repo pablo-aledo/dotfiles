@@ -38,6 +38,13 @@
 ║    # Resolver progresión a acordes concretos en una tónica dada             ║
 ║    python chord_table.py --id 16 --key Am                                   ║
 ║                                                                              ║
+║    # Progresión personalizada por grados (modo custom)                      ║
+║    python chord_table.py --custom "I vi IV V" --key C                      ║
+║                                                                              ║
+║    # Custom con duración por grado (numeral:beats) y export                 ║
+║    python chord_table.py --custom "I:4 V:2 vi:2 IV:4" --key G              ║
+║        --export-midi progresion.mid                                         ║
+║                                                                              ║
 ║    # Exportar tabla filtrada a JSON                                          ║
 ║    python chord_table.py --style flamenco --export-json flamenco.json       ║
 ║                                                                              ║
@@ -1103,6 +1110,158 @@ def resolve_numeral(numeral: str, tonic_pc: int) -> tuple:
     return f"{root_name}{quality}", pitches
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODO CUSTOM — parser genérico de numerales para progresiones introducidas
+# directamente por el usuario (--custom)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Grados diatónicos de referencia (semitonos sobre la tónica, escala mayor)
+DEGREE_SEMITONES = {
+    'VII': 11, 'VI': 9, 'IV': 5, 'V': 7, 'III': 4, 'II': 2, 'I': 0,
+}
+# Orden de intento: numerales más largos primero para no confundir p.ej. 'VI' con 'V'
+_DEGREE_ORDER = sorted(DEGREE_SEMITONES.keys(), key=len, reverse=True)
+
+# Alias de sufijo de calidad → clave válida en CHORD_INTERVALS
+_QUALITY_ALIASES = {
+    '°': 'dim', 'o': 'dim', 'ø7': 'hdim7', 'ø': 'hdim7',
+    '+': 'aug', 'dim': 'dim', 'dim7': 'dim7', 'hdim7': 'hdim7',
+    'aug': 'aug', 'sus4': 'sus4', 'sus2': 'sus2',
+    '7': '7', 'm7': 'm7', 'M7': 'M7', '9': '9', 'M9': 'M9', 'm9': 'm9',
+    '6': '6', 'm6': 'm6', '13': '13', 'b9': 'b9', 'm': 'm', '': '',
+}
+# Sufijos ordenados por longitud (desc) para el matching greedy
+_SUFFIX_ORDER = sorted(_QUALITY_ALIASES.keys(), key=len, reverse=True)
+
+
+def parse_generic_numeral(token: str) -> tuple:
+    """
+    Parser de numerales romanos flexible, más allá de las entradas fijas de
+    NUMERAL_TO_INTERVAL. Soporta:
+      - Alteración opcional delante: b / #  (bVI, #iv...)
+      - Grado diatónico I-VII (mayúscula=tríada mayor, minúscula=tríada menor
+        por defecto)
+      - Sufijo de calidad opcional: 7, M7, dim, dim7, hdim7/ø7, aug/+,
+        sus4, sus2, 9, M9, m9, 6, m6, 13, b9, °
+
+    Devuelve (interval_semitonos, quality) o None si no se reconoce.
+    """
+    s = token.strip()
+    if not s:
+        return None
+
+    accidental = 0
+    if s[0] == 'b':
+        accidental, s = -1, s[1:]
+    elif s[0] == '#':
+        accidental, s = 1, s[1:]
+
+    degree = None
+    for d in _DEGREE_ORDER:
+        if s[:len(d)] == d or s[:len(d)] == d.lower():
+            degree = d
+            break
+    if degree is None:
+        return None
+
+    is_lower = s[:len(degree)] == degree.lower()
+    suffix   = s[len(degree):]
+
+    interval = (DEGREE_SEMITONES[degree] + accidental) % 12
+    default_quality = 'm' if is_lower else ''
+
+    if suffix == '':
+        return (interval, default_quality)
+
+    resolved_suffix = None
+    for suf in _SUFFIX_ORDER:
+        if suf and suf == suffix:
+            resolved_suffix = suf
+            break
+    if resolved_suffix is None:
+        return None
+
+    quality = _QUALITY_ALIASES[resolved_suffix]
+    # 'm7'/'7' explícitos en el sufijo ya determinan la calidad final;
+    # una minúscula + '7' desnudo se interpreta como m7 (ej. 'ii7' -> m7),
+    # una mayúscula + '7' desnudo es dominante (ej. 'V7' -> 7)
+    if quality == '7' and is_lower:
+        quality = 'm7'
+
+    if quality not in CHORD_INTERVALS:
+        return None
+
+    return (interval, quality)
+
+
+def resolve_custom_numeral(numeral: str, tonic_pc: int) -> tuple:
+    """
+    Resuelve un numeral de una progresión --custom. Primero intenta el
+    diccionario fijo NUMERAL_TO_INTERVAL (para casos especiales como
+    dominantes secundarias V/vi, V/V...); si no está, usa el parser
+    genérico. Lanza ValueError con mensaje claro si no se reconoce.
+    """
+    entry = NUMERAL_TO_INTERVAL.get(numeral)
+    if entry is None:
+        entry = parse_generic_numeral(numeral)
+    if entry is None:
+        raise ValueError(f"grado no reconocido: '{numeral}'")
+
+    interval, quality = entry
+    root_pc   = (tonic_pc + interval) % 12
+    root_name = PITCH_NAMES[root_pc]
+    intervals = CHORD_INTERVALS.get(quality, CHORD_INTERVALS[''])
+    pitches   = [(root_pc + iv) % 12 for iv in intervals]
+    return f"{root_name}{quality}", pitches
+
+
+def parse_custom_progression(text: str, default_beats: float) -> list:
+    """
+    Parsea el texto de --custom en una lista de (numeral, duracion_beats),
+    compatible con el formato 'pattern' de las entradas del catálogo.
+    Cada token es un numeral, opcionalmente seguido de ':duracion'
+    (ej. 'I:4 V:2 vi:2 IV:4'). Sin duración explícita se usa default_beats.
+    """
+    pattern = []
+    for raw_tok in text.strip().split():
+        if ':' in raw_tok:
+            numeral, dur_str = raw_tok.rsplit(':', 1)
+            try:
+                dur = float(dur_str)
+            except ValueError:
+                raise ValueError(
+                    f"duración inválida en '{raw_tok}' (debe ser numérica)")
+        else:
+            numeral, dur = raw_tok, default_beats
+        if not numeral:
+            raise ValueError(f"token vacío en la progresión: '{raw_tok}'")
+        pattern.append((numeral, dur))
+    if not pattern:
+        raise ValueError("la progresión --custom está vacía")
+    return pattern
+
+
+def make_custom_entry(text: str, default_beats: float) -> dict:
+    """Construye una 'entry' sintética compatible con resolve_entry() a
+    partir del texto de --custom, validando todos los grados."""
+    pattern = parse_custom_progression(text, default_beats)
+    # Validar cada numeral cuanto antes (tonic_pc=0 es solo para chequear
+    # que resuelve sin error; el resultado real se recalcula en resolve_entry)
+    for numeral, _ in pattern:
+        resolve_custom_numeral(numeral, 0)
+    return {
+        'id':      None,
+        'prog':    text.strip(),
+        'pattern': pattern,
+        'nombre':  'Progresión personalizada',
+        'style':   'custom',
+        'mode':    'custom',
+        'tension': None,
+        'emocion': None,
+        'desc':    'Definida por el usuario mediante --custom',
+    }
+
+
 def resolve_entry(entry: dict, tonic_pc: int, bars: int = 8,
                   beats_per_bar: int = 4, reps: int = None) -> list:
     """
@@ -1133,7 +1292,7 @@ def resolve_entry(entry: dict, tonic_pc: int, bars: int = 8,
         if current >= total:
             break
         dur = min(dur, total - current)
-        chord_name, pitches = resolve_numeral(numeral, tonic_pc)
+        chord_name, pitches = resolve_custom_numeral(numeral, tonic_pc)
         result.append({
             'numeral':        numeral,
             'chord':          chord_name,
@@ -2139,6 +2298,14 @@ def main():
                         help='Listar todas las progresiones')
     parser.add_argument('--stats',     action='store_true',
                         help='Estadísticas del catálogo')
+    parser.add_argument('--custom',    type=str, metavar='GRADOS',
+                        help="Progresión personalizada en numerales romanos, "
+                             "en vez de seleccionar del catálogo. "
+                             "Ej: --custom \"I vi IV V\". "
+                             "Duración opcional por grado con ':beats' "
+                             "(ej: \"I:4 V:2 vi:2 IV:4\"); sin ella se usa "
+                             "--beats por grado. Se resuelve en la tónica "
+                             "dada por --key igual que --id.")
     parser.add_argument('--id',        type=int, metavar='N',
                         help='Seleccionar progresión por id')
     parser.add_argument('--buscar',    type=str, metavar='TEXTO',
@@ -2261,18 +2428,30 @@ def main():
     else:
         tonic_pc = NOTE_PC.get(key_str, 0)
 
-    # ── Selección por id ─────────────────────────────────────────────────────
-    if args.id is not None:
-        entry = TABLE_BY_ID.get(args.id)
-        if not entry:
-            print(f"[ERROR] No existe progresión con id={args.id}")
-            sys.exit(1)
+    # ── Validación: --id y --custom son mutuamente excluyentes ──────────────
+    if args.id is not None and args.custom is not None:
+        print("[ERROR] --id y --custom no se pueden usar a la vez")
+        sys.exit(1)
 
-        print(f"\n  #{entry['id']}  {COL['bold']}{entry['prog']}{COL['reset']}")
-        print(f"  {entry['nombre']}  ·  {entry['style']} / {entry['mode']}")
-        print(f"  Tensión: {entry['tension']}/10  ·  Emoción: {entry['emocion']}")
-
-        print(f"  {entry['desc']}\n")
+    # ── Selección por id o por progresión personalizada ──────────────────────
+    if args.id is not None or args.custom is not None:
+        if args.custom is not None:
+            try:
+                entry = make_custom_entry(args.custom, default_beats=args.beats)
+            except ValueError as e:
+                print(f"[ERROR] {e}")
+                sys.exit(1)
+            print(f"\n  {COL['bold']}{entry['prog']}{COL['reset']}  "
+                  f"{COL['gray']}(custom){COL['reset']}")
+        else:
+            entry = TABLE_BY_ID.get(args.id)
+            if not entry:
+                print(f"[ERROR] No existe progresión con id={args.id}")
+                sys.exit(1)
+            print(f"\n  #{entry['id']}  {COL['bold']}{entry['prog']}{COL['reset']}")
+            print(f"  {entry['nombre']}  ·  {entry['style']} / {entry['mode']}")
+            print(f"  Tensión: {entry['tension']}/10  ·  Emoción: {entry['emocion']}")
+            print(f"  {entry['desc']}\n")
 
         progression = resolve_entry(entry, tonic_pc, args.bars, args.beats,
                                     reps=args.reps)

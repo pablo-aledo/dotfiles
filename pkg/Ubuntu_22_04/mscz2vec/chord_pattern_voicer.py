@@ -28,6 +28,8 @@
 ║    resto/rest/caja   todas las notas salvo la más grave, juntas             ║
 ║    todas/all/block   todas las notas del acorde a la vez                    ║
 ║    0, 1, 2, -1…      índice de nota ordenada de grave a aguda (soporta -1)  ║
+║    [a,b,…]           combina varios roles/índices en un solo paso          ║
+║                        SIMULTÁNEO, p.ej. "[0,1]" o "[bajo,medio]"           ║
 ║                                                                              ║
 ║  VELOCIDAD DE REPETICIÓN (--reps):                                          ║
 ║    Nº de veces que el patrón completo se repite dentro de la duración de    ║
@@ -56,6 +58,9 @@
 ║    python chord_pattern_voicer.py cancion.mid --pattern arpeggio-up --reps 2 --gate 0.6 ║
 ║    python chord_pattern_voicer.py cancion.mid --pattern custom              ║
 ║        --custom-pattern "bajo,agudo,resto,medio"                            ║
+║    python chord_pattern_voicer.py cancion.mid --pattern custom              ║
+║        --custom-pattern "[0,1],1,2,0"   (bajo+medio a la vez, luego medio,  ║
+║                                           agudo, bajo)                       ║
 ║    python chord_pattern_voicer.py cancion.mid --track 2 --verbose           ║
 ║    python chord_pattern_voicer.py cancion.mid --list-patterns               ║
 ║                                                                              ║
@@ -69,7 +74,9 @@
 ║    --track N          Fuerza el índice (0-based) de la pista de armonía.    ║
 ║                        Por defecto se autodetecta la pista más polifónica.  ║
 ║    --pattern P         Patrón rítmico a aplicar por defecto (bombo-caja)     ║
-║    --custom-pattern S  Roles separados por comas (con --pattern custom)     ║
+║    --custom-pattern S  Roles separados por comas (con --pattern custom).    ║
+║                        Usá "[a,b,…]" para tocar varios roles/índices a la  ║
+║                        vez en un mismo paso, p.ej. "[0,1],1,2,0"           ║
 ║    --reps N            Repeticiones del patrón por acorde (default: 1)      ║
 ║    --gate F            Fracción sonante de cada paso, 0-1 (default: 0.85)   ║
 ║                        F bajo = más staccato/separado; F=1 = legato total   ║
@@ -399,9 +406,30 @@ def resolve_role(token, notes):
     """
     Resuelve un token de rol (o índice) a una sublista de notas (pitch,vel,channel)
     dentro del acorde `notes` (ya ordenado grave→agudo).
+
+    Soporta tokens compuestos entre corchetes, p.ej. "[0,1]" o "[bajo,medio]",
+    que combinan varios roles/índices en un único paso simultáneo. Las notas
+    resultantes se deduplican (por pitch+canal) preservando el orden de
+    aparición.
     """
+    token = token.strip()
+    if token.startswith('[') and token.endswith(']'):
+        inner = token[1:-1]
+        combined = []
+        seen = set()
+        for sub in inner.split(','):
+            sub = sub.strip()
+            if not sub:
+                continue
+            for note in resolve_role(sub, notes):
+                key = (note[0], note[2])  # (pitch, channel)
+                if key not in seen:
+                    seen.add(key)
+                    combined.append(note)
+        return combined if combined else [notes[0]]
+
     n = len(notes)
-    t = ROLE_ALIASES.get(token.strip().lower(), token.strip().lower())
+    t = ROLE_ALIASES.get(token.lower(), token.lower())
     if t == 'bass':
         return [notes[0]]
     if t == 'top':
@@ -419,12 +447,38 @@ def resolve_role(token, notes):
         return [notes[0]]  # token desconocido → fallback a la más grave
 
 
+def split_custom_pattern(custom_pattern):
+    """
+    Separa --custom-pattern en tokens por comas, respetando los corchetes
+    "[...]" para que las comas dentro de ellos no partan un token simultáneo
+    (p.ej. "[0,1],1,2,0" → ["[0,1]", "1", "2", "0"]).
+    """
+    tokens = []
+    current = ''
+    depth = 0
+    for ch in custom_pattern:
+        if ch == '[':
+            depth += 1
+            current += ch
+        elif ch == ']':
+            depth = max(0, depth - 1)
+            current += ch
+        elif ch == ',' and depth == 0:
+            tokens.append(current)
+            current = ''
+        else:
+            current += ch
+    if current.strip():
+        tokens.append(current)
+    return [tok.strip() for tok in tokens if tok.strip()]
+
+
 def build_tokens(pattern_name, custom_pattern, n_notes):
     """Devuelve la lista de tokens de rol para un acorde de n_notes notas."""
     if pattern_name == 'custom':
         if not custom_pattern:
             raise ValueError("--pattern custom requiere --custom-pattern \"rol1,rol2,…\"")
-        return [tok for tok in custom_pattern.split(',') if tok.strip()]
+        return split_custom_pattern(custom_pattern)
     if pattern_name == 'arpeggio-up':
         return [str(i) for i in range(n_notes)]
     if pattern_name == 'arpeggio-down':
@@ -724,7 +778,8 @@ Ejemplos:
                         'se usa donde --segments no cubra')
     p.add_argument('--custom-pattern', default=None, metavar='ROLES',
                    help='Roles separados por comas, para --pattern custom '
-                        '(ej: "bajo,agudo,resto,medio")')
+                        '(ej: "bajo,agudo,resto,medio"). Usá "[a,b]" para '
+                        'roles/índices simultáneos (ej: "[0,1],1,2,0")')
     p.add_argument('--reps', type=int, default=1, metavar='N',
                    help='Repeticiones del patrón por acorde/compás (default: 1)')
     p.add_argument('--gate', type=float, default=0.85, metavar='F',
