@@ -43,8 +43,8 @@
 ║        INICIO-FIN:pattern=NOMBRE[,reps=N][,gate=F][,accent=F][,custom=…]   ║
 ║    · INICIO y FIN son compases 1-based; FIN es EXCLUSIVO, así que rangos    ║
 ║      consecutivos como "1-10" y "10-20" no se solapan ni dejan huecos.      ║
-║    · Los campos reps/gate/accent son opcionales: si se omiten se usan los   ║
-║      valores globales (--reps/--gate/--accent).                             ║
+║    · Los campos reps/gate/accent/octave son opcionales: si se omiten se     ║
+║      usan los valores globales (--reps/--gate/--accent/--octave).           ║
 ║    · Para pattern=custom, los roles van en "custom=" separados por "|"      ║
 ║      (no por comas, que ya se usan para separar los campos): p.ej.          ║
 ║      custom=bajo|agudo|resto|medio                                          ║
@@ -82,6 +82,12 @@
 ║                        F bajo = más staccato/separado; F=1 = legato total   ║
 ║    --accent F          Multiplica la velocity del primer golpe de cada      ║
 ║                        repetición (default: 1.0 = sin acento)               ║
+║    --octave N          Transporta TODAS las notas del acorde N octavas      ║
+║                        (default: 0). Positivo = sube, negativo = baja,      ║
+║                        p.ej. --octave -1 baja una octava, --octave 2 sube   ║
+║                        dos. Las notas resultantes se recortan al rango      ║
+║                        MIDI válido (0-127). También se puede fijar por      ║
+║                        tramo con octave=N dentro de --segments.             ║
 ║    --segments S [S…]  Patrón/velocidad distintos por rango de compases      ║
 ║                        (ver "PATRONES POR RANGO DE COMPASES" arriba)        ║
 ║    --min-notes N       Nº mínimo de notas simultáneas para considerar una   ║
@@ -215,6 +221,7 @@ def parse_segment_spec(spec):
         'reps': int(fields['reps']) if 'reps' in fields else None,
         'gate': float(fields['gate']) if 'gate' in fields else None,
         'accent': float(fields['accent']) if 'accent' in fields else None,
+        'octave': int(fields['octave']) if 'octave' in fields else None,
         'raw': spec,
     }
     return seg
@@ -247,6 +254,7 @@ def resolve_segment_for_bar(segments, bar_num, defaults):
                 'reps': seg['reps'] if seg['reps'] is not None else defaults['reps'],
                 'gate': seg['gate'] if seg['gate'] is not None else defaults['gate'],
                 'accent': seg['accent'] if seg['accent'] is not None else defaults['accent'],
+                'octave': seg['octave'] if seg['octave'] is not None else defaults['octave'],
             }
     return dict(defaults)
 
@@ -490,12 +498,27 @@ def build_tokens(pattern_name, custom_pattern, n_notes):
     return list(NAMED_PATTERNS[pattern_name])
 
 
-def render_chord(chord, pattern_name, custom_pattern, reps, gate, accent):
+def transpose_notes(notes, octave):
+    """
+    Transporta una lista de notas (pitch,vel,channel) `octave` octavas
+    (positivo = sube, negativo = baja), recortando el pitch resultante al
+    rango MIDI válido (0-127).
+    """
+    if not octave:
+        return notes
+    shift = octave * 12
+    return [(max(0, min(127, pitch + shift)), vel, channel)
+            for (pitch, vel, channel) in notes]
+
+
+def render_chord(chord, pattern_name, custom_pattern, reps, gate, accent, octave=0):
     """
     Aplica el patrón rítmico a un acorde y devuelve una lista de eventos:
       (start_tick, end_tick, pitch, velocity, channel)
+    `octave` transporta todas las notas del acorde N octavas antes de
+    aplicar el patrón (positivo = sube, negativo = baja).
     """
-    notes = chord['notes']
+    notes = transpose_notes(chord['notes'], octave)
     tokens = build_tokens(pattern_name, custom_pattern, len(notes))
     if not tokens:
         return []
@@ -531,16 +554,18 @@ def render_all_chords(chords, tpb_bar, segments, defaults, verbose=False):
         bar_num = bar_of_tick(chord['start'], tpb_bar)
         cfg = resolve_segment_for_bar(segments, bar_num, defaults)
         events.extend(render_chord(
-            chord, cfg['pattern'], cfg['custom_pattern'], cfg['reps'], cfg['gate'], cfg['accent']
+            chord, cfg['pattern'], cfg['custom_pattern'], cfg['reps'], cfg['gate'], cfg['accent'],
+            cfg['octave']
         ))
         assignment_log.append({
             'bar': bar_num, 'start_tick': chord['start'],
             'pattern': cfg['pattern'], 'reps': cfg['reps'],
-            'gate': cfg['gate'], 'accent': cfg['accent'],
+            'gate': cfg['gate'], 'accent': cfg['accent'], 'octave': cfg['octave'],
         })
         if verbose:
             print(f"      compás {bar_num:<4} → pattern={cfg['pattern']:<12} "
-                  f"reps={cfg['reps']}  gate={cfg['gate']}  accent={cfg['accent']}")
+                  f"reps={cfg['reps']}  gate={cfg['gate']}  accent={cfg['accent']}  "
+                  f"octave={cfg['octave']:+d}")
     return events, assignment_log
 
 
@@ -582,7 +607,7 @@ def build_new_track(other_msgs, note_events):
 # ═══════════════════════════════════════════════════════════
 
 def voice_chords(input_midi, track_override=None, pattern='bombo-caja', custom_pattern=None,
-                  reps=1, gate=0.85, accent=1.0, segments_spec=None, min_notes=2,
+                  reps=1, gate=0.85, accent=1.0, octave=0, segments_spec=None, min_notes=2,
                   out_path=None, out_dir=None, report=False, verbose=False):
 
     print(f"\n{'═'*64}")
@@ -613,17 +638,19 @@ def voice_chords(input_midi, track_override=None, pattern='bombo-caja', custom_p
         print(f"\n  Segmentos configurados ({len(segments)}):")
         for seg in segments:
             extra = f"  custom={seg['custom_pattern']}" if seg['custom_pattern'] else ""
+            octave_str = f"  octave={seg['octave']:+d}" if seg['octave'] is not None else ""
             print(f"    compases {seg['bar_start']}-{seg['bar_end']-1}: "
                   f"pattern={seg['pattern']}"
                   f"{'  reps=' + str(seg['reps']) if seg['reps'] is not None else ''}"
                   f"{'  gate=' + str(seg['gate']) if seg['gate'] is not None else ''}"
                   f"{'  accent=' + str(seg['accent']) if seg['accent'] is not None else ''}"
+                  f"{octave_str}"
                   f"{extra}")
         print(f"    (resto de compases) → pattern={pattern}  reps={reps}  "
-              f"gate={gate}  accent={accent}")
+              f"gate={gate}  accent={accent}  octave={octave:+d}")
 
     defaults = {'pattern': pattern, 'custom_pattern': custom_pattern,
-                'reps': reps, 'gate': gate, 'accent': accent}
+                'reps': reps, 'gate': gate, 'accent': accent, 'octave': octave}
 
     # ── Detección / selección de pista de armonía ─────────────────────────────
     print("\n  [1/3] Detectando pista de armonía…")
@@ -705,6 +732,7 @@ def voice_chords(input_midi, track_override=None, pattern='bombo-caja', custom_p
         'default_reps': reps,
         'default_gate': gate,
         'default_accent': accent,
+        'default_octave': octave,
         'segments': [{k: v for k, v in seg.items()} for seg in segments],
         'n_note_events': len(note_events),
         'chord_assignment': assignment_log,
@@ -759,6 +787,8 @@ Ejemplos:
   python chord_pattern_voicer.py cancion.mid --pattern arpeggio-up --reps 2 --gate 0.6
   python chord_pattern_voicer.py cancion.mid --pattern custom --custom-pattern "bajo,agudo,resto,medio"
   python chord_pattern_voicer.py cancion.mid --track 2 --verbose --report
+  python chord_pattern_voicer.py cancion.mid --pattern arpeggio-up --octave -1
+  python chord_pattern_voicer.py cancion.mid --pattern alberti --octave 2
 
   # Patrón distinto por tramos de la pieza:
   python chord_pattern_voicer.py cancion.mid --segments \\
@@ -787,6 +817,11 @@ Ejemplos:
     p.add_argument('--accent', type=float, default=1.0, metavar='F',
                    help='Multiplicador de velocity del primer golpe de cada '
                         'repetición (default: 1.0 = sin acento)')
+    p.add_argument('--octave', type=int, default=0, metavar='N',
+                   help='Transporta todas las notas del acorde N octavas '
+                        '(default: 0). Positivo sube, negativo baja, '
+                        'ej: --octave -1, --octave 2. También se puede fijar '
+                        'por tramo con octave=N dentro de --segments')
     p.add_argument('--segments', nargs='+', default=None, metavar='SPEC',
                    help='Patrón/velocidad distintos por rango de compases. '
                         'Cada SPEC: "INICIO-FIN:pattern=NOMBRE[,reps=N][,gate=F]'
@@ -844,6 +879,7 @@ def main():
         reps=args.reps,
         gate=args.gate,
         accent=args.accent,
+        octave=args.octave,
         segments_spec=args.segments,
         min_notes=args.min_notes,
         out_path=args.out,
