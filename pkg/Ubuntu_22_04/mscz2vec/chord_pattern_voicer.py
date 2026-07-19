@@ -169,6 +169,31 @@ def bar_of_tick(tick, tpb_bar):
     return tick // tpb_bar + 1
 
 
+def split_top_level(s, sep=','):
+    """
+    Separa `s` por `sep` en el nivel superior, ignorando ocurrencias de `sep`
+    dentro de corchetes "[...]" (para no partir tokens simultáneos como
+    "[1,2,3]" al parsear campos de --segments o --custom-pattern).
+    """
+    tokens = []
+    current = ''
+    depth = 0
+    for ch in s:
+        if ch == '[':
+            depth += 1
+            current += ch
+        elif ch == ']':
+            depth = max(0, depth - 1)
+            current += ch
+        elif ch == sep and depth == 0:
+            tokens.append(current)
+            current = ''
+        else:
+            current += ch
+    tokens.append(current)
+    return tokens
+
+
 def parse_segment_spec(spec):
     """
     Parsea un segmento con formato:
@@ -190,7 +215,7 @@ def parse_segment_spec(spec):
         raise ValueError(f"Rango de compases inválido (FIN debe ser > INICIO >= 1): «{spec}»")
 
     fields = {}
-    for chunk in field_part.split(','):
+    for chunk in split_top_level(field_part, ','):
         chunk = chunk.strip()
         if not chunk:
             continue
