@@ -20,6 +20,14 @@
 ║      pista de un archivo                                                        ║
 ║    · Sin '@', se usan todas las pistas del MIDI, como antes                      ║
 ║                                                                                  ║
+║  SELECCIÓN DE CANAL:                                                            ║
+║    · Algunos MIDIs (p.ej. salidas de midi_merge.py) concentran varias            ║
+║      voces en una única pista física, distinguidas solo por canal MIDI           ║
+║      (0-15). --list-tracks lista pistas, no canales, así que si ves una          ║
+║      sola pista con varios canales en la columna "Canal", usa '!'               ║
+║      para separarlas: archivo.mid!0, archivo.mid!1, archivo.mid!0,2              ║
+║    · Combinable con pistas y compases: archivo.mid@0!1:1-3                       ║
+║                                                                                  ║
 ║  SELECCIÓN DE COMPASES:                                                         ║
 ║    · Cada MIDI de entrada puede llevar, opcionalmente, un selector de            ║
 ║      compases tras ':' → archivo.mid:ESPEC (combinable con @ESPEC de            ║
@@ -63,6 +71,7 @@
 ║    python midi_concat.py a.mid:8-1 --output retro.mid                            ║
 ║    python midi_concat.py a.mid@0 b.mid@1,2 --output solo_pistas.mid              ║
 ║    python midi_concat.py a.mid@0-1:1-3 b.mid@2:5-7 --output mix.mid              ║
+║    python midi_concat.py a.mid!0 a.mid!1 --output separado_por_canal.mid        ║
 ║    python midi_concat.py --list-bars a.mid                                       ║
 ║    python midi_concat.py --list-tracks a.mid                                     ║
 ║                                                                                  ║
@@ -116,6 +125,11 @@ BAR_SPEC_RE = re.compile(r'^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$')
 # comas (0-indexadas), p.ej. "0", "0-2", "0,2,4", "0-2,5", o la palabra
 # "all" para todas las pistas (equivalente a omitir el selector)
 TRACK_SPEC_RE = re.compile(r'^(?i:all)$|^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$')
+
+# archivo.mid!ESPEC  →  igual que TRACK_SPEC_RE pero para canales MIDI
+# (0-15). Útil cuando un MIDI concentra varias voces en una sola pista
+# usando canales distintos (p.ej. salida de midi_merge.py/midi_concat.py)
+CHANNEL_SPEC_RE = re.compile(r'^(?i:all)$|^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -197,28 +211,36 @@ def flatten_events(mid: MidiFile) -> list:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def parse_stem_arg(arg: str):
-    """Separa 'archivo.mid[@TRACKSPEC][:BARSPEC]' en (ruta, trackspec,
-    barspec). Cada selector es opcional e independiente:
-        archivo.mid                 → (archivo.mid, None,  None)
-        archivo.mid:1-3             → (archivo.mid, None,  '1-3')
-        archivo.mid@0,2             → (archivo.mid, '0,2', None)
-        archivo.mid@0,2:1-3         → (archivo.mid, '0,2', '1-3')
+    """Separa 'archivo.mid[@TRACKSPEC][!CHANSPEC][:BARSPEC]' en (ruta,
+    trackspec, chanspec, barspec). Cada selector es opcional e
+    independiente:
+        archivo.mid                 → (archivo.mid, None,  None,  None)
+        archivo.mid:1-3             → (archivo.mid, None,  None,  '1-3')
+        archivo.mid@0,2             → (archivo.mid, '0,2', None,  None)
+        archivo.mid!0               → (archivo.mid, None,  '0',   None)
+        archivo.mid@0!1:1-3         → (archivo.mid, '0',   '1',   '1-3')
     Solo se interpreta como selector si lo que sigue al separador final
     encaja con el patrón correspondiente (para no romper rutas que
-    pudieran contener ':' o '@')."""
+    pudieran contener ':', '@' o '!')."""
     path_part, barspec = arg, None
     if ':' in arg:
         p, spec = arg.rsplit(':', 1)
         if p and BAR_SPEC_RE.match(spec):
             path_part, barspec = p, spec
 
-    path, trackspec = path_part, None
-    if '@' in path_part:
-        p, spec = path_part.rsplit('@', 1)
+    path_part2, chanspec = path_part, None
+    if '!' in path_part:
+        p, spec = path_part.rsplit('!', 1)
+        if p and CHANNEL_SPEC_RE.match(spec):
+            path_part2, chanspec = p, spec
+
+    path, trackspec = path_part2, None
+    if '@' in path_part2:
+        p, spec = path_part2.rsplit('@', 1)
         if p and TRACK_SPEC_RE.match(spec):
             path, trackspec = p, spec
 
-    return path, trackspec, barspec
+    return path, trackspec, chanspec, barspec
 
 
 def parse_track_spec(spec: str, n_tracks: int) -> list:
@@ -257,6 +279,56 @@ def select_tracks(mid: MidiFile, track_indices: list) -> MidiFile:
     out = MidiFile(ticks_per_beat=mid.ticks_per_beat)
     for i in track_indices:
         out.tracks.append(mid.tracks[i])
+    return out
+
+
+def parse_channel_spec(spec: str) -> list:
+    """Convierte un ESPEC de canales ('all', '0', '0,1', '0-3') en una
+    lista de canales MIDI (0-15), en el orden dado. 'all' devuelve
+    los 16 canales."""
+    if spec.strip().lower() == 'all':
+        return list(range(16))
+
+    channels = []
+    for token in spec.split(','):
+        token = token.strip()
+        if not token:
+            continue
+        if '-' in token:
+            a_str, b_str = token.split('-')
+            a, b = int(a_str), int(b_str)
+            step = 1 if a <= b else -1
+            channels.extend(range(a, b + step, step))
+        else:
+            channels.append(int(token))
+
+    for c in channels:
+        if c < 0 or c > 15:
+            raise ValueError(f"canal {c} fuera de rango (0-15)")
+    return channels
+
+
+def select_channels(mid: MidiFile, channels: set) -> MidiFile:
+    """Devuelve una copia del MIDI en la que, de cada pista, solo se
+    conservan los mensajes de canal cuyo canal esté en 'channels' (los
+    metamensajes -tempo, compás, nombre de pista, etc.- no tienen canal
+    y se conservan siempre). Útil cuando varias voces comparten una
+    misma pista física distinguiéndose solo por canal (p.ej. salida de
+    midi_merge.py). Recalcula los delta-times para que el tiempo
+    absoluto de los eventos conservados no cambie."""
+    out = MidiFile(ticks_per_beat=mid.ticks_per_beat)
+    for track in mid.tracks:
+        new_track = MidiTrack()
+        pending = 0
+        for msg in track:
+            keep = msg.is_meta or not hasattr(msg, 'channel') \
+                   or msg.channel in channels
+            if keep:
+                new_track.append(msg.copy(time=msg.time + pending))
+                pending = 0
+            else:
+                pending += msg.time
+        out.tracks.append(new_track)
     return out
 
 
@@ -432,14 +504,13 @@ def build_concat(stems: list, target_tpb: int, gap_beats: float,
     timeline   = []   # (nombre, inicio, fin)
     offset = 0
 
-    for path, mid, barspec, trackspec in stems:
-        # 'mid' llega ya filtrado a las pistas seleccionadas (si las hubo);
-        # a partir de aquí el resto del pipeline no necesita saberlo.
+    for path, mid, barspec, selector_suffix in stems:
+        # 'mid' llega ya filtrado a las pistas/canales seleccionados (si
+        # los hubo); a partir de aquí el resto del pipeline no necesita
+        # saberlo.
         scaled = rescale_ticks(mid, target_tpb)
 
-        base_name = stem_name(path)
-        if trackspec:
-            base_name += f"@{trackspec}"
+        base_name = stem_name(path) + selector_suffix
 
         if barspec:
             bar_numbers = parse_bar_spec(barspec)
@@ -525,9 +596,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="MIDIs de entrada, en el orden en que se concatenan. "
                         "Admite selector de pistas: archivo.mid@0, "
                         "archivo.mid@0,2, archivo.mid@0-2, archivo.mid@all. "
-                        "Admite selector de compases: archivo.mid:1-3, "
-                        "archivo.mid:5,6,7, archivo.mid:1-3,7. Combinables: "
-                        "archivo.mid@0,2:1-3")
+                        "Admite selector de canal (para MIDIs con varias "
+                        "voces en una sola pista): archivo.mid!0, "
+                        "archivo.mid!0,1. Admite selector de compases: "
+                        "archivo.mid:1-3, archivo.mid:5,6,7. Combinables: "
+                        "archivo.mid@0!1:1-3")
     p.add_argument("--output", default="concat.mid",
                    help="MIDI de salida (default: concat.mid)")
     p.add_argument("--tpb", type=int, default=None, metavar="N",
@@ -564,7 +637,7 @@ def main():
     # ── Cargar MIDIs de entrada ─────────────────────────────────────────────
     stems = []
     for raw_arg in args.stems:
-        path, trackspec, barspec = parse_stem_arg(raw_arg)
+        path, trackspec, chanspec, barspec = parse_stem_arg(raw_arg)
         if not os.path.isfile(path):
             print(f"ERROR: no se encuentra el archivo: {path}")
             sys.exit(1)
@@ -589,6 +662,15 @@ def main():
                 sys.exit(1)
             mid = select_tracks(mid, indices)
 
+        if chanspec:
+            try:
+                channels = set(parse_channel_spec(chanspec))
+            except ValueError as e:
+                print(f"ERROR: selector de canales inválido en "
+                      f"'{raw_arg}': {e}")
+                sys.exit(1)
+            mid = select_channels(mid, channels)
+
         if barspec:
             try:
                 nums = parse_bar_spec(barspec)
@@ -598,7 +680,13 @@ def main():
                 print(f"ERROR: selector de compases inválido en "
                       f"'{raw_arg}': {e}")
                 sys.exit(1)
-        stems.append((path, mid, barspec, trackspec))
+
+        selector_suffix = ''
+        if trackspec:
+            selector_suffix += f"@{trackspec}"
+        if chanspec:
+            selector_suffix += f"!{chanspec}"
+        stems.append((path, mid, barspec, selector_suffix))
 
     if args.list_tracks:
         return
