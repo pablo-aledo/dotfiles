@@ -28,6 +28,16 @@
 ║    python midi_merge.py stems/*.mid --preview                               ║
 ║    python midi_merge.py stems/*.mid --verbose                               ║
 ║                                                                              ║
+║  COMPÁS DE ENTRADA:                                                          ║
+║    Cada stem admite sufijo ':N' indicando el compás en el que debe          ║
+║    empezar dentro de la pieza mergeada (compás 1 = inicio). Sin sufijo      ║
+║    se asume compás 1.                                                       ║
+║    Ejemplo:                                                                  ║
+║      python midi_merge.py stem_violin.mid:8 stem_viola.mid:3 stem_cello.mid║
+║    → violin empieza en el compás 8, viola en el 3, cello en el 1           ║
+║    La duración del compás se calcula con el primer time_signature           ║
+║    encontrado entre los stems (por defecto 4/4) y el TPB de salida.        ║
+║                                                                              ║
 ║  OPCIONES:                                                                   ║
 ║    --output FILE        MIDI de salida (default: merged.mid)               ║
 ║    --tpb N              Ticks per beat de salida (default: máximo de       ║
@@ -100,6 +110,23 @@ def get_tpb(mid: MidiFile) -> int:
     return mid.ticks_per_beat
 
 
+def get_time_signature(stems: list) -> tuple:
+    """Devuelve (numerador, denominador) del primer time_signature encontrado
+    entre los stems de entrada. Por defecto 4/4 si no hay ninguno."""
+    for path, mid, compas in stems:
+        for track in mid.tracks:
+            for msg in track:
+                if msg.type == 'time_signature':
+                    return msg.numerator, msg.denominator
+    return 4, 4
+
+
+def ticks_per_bar(target_tpb: int, numerator: int, denominator: int) -> int:
+    """Duración de un compás en ticks, para el TPB de salida indicado."""
+    beats_per_bar = numerator * (4.0 / denominator)
+    return int(round(target_tpb * beats_per_bar))
+
+
 def get_track_name(track: MidiTrack) -> str:
     """Extrae el nombre del track de sus metadatos."""
     for msg in track:
@@ -156,14 +183,14 @@ def build_channel_map(stems: list, manual_map: dict) -> dict:
     """
     # Recopilar todos los canales usados por cada stem
     stem_channels = {}   # path → set de canales usados
-    for path, mid in stems:
+    for path, mid, compas in stems:
         stem_channels[path] = get_channels_used(mid)
 
     channel_map = {}   # (path, canal_src) → canal_dst
     used_dst    = {PERCUSSION_CHANNEL}   # canal 9 siempre reservado
 
     # Aplicar mapeos manuales primero
-    for path, mid in stems:
+    for path, mid, compas in stems:
         key  = stem_key(path)
         name = stem_name(path)
         if key in manual_map or name in manual_map:
@@ -177,7 +204,7 @@ def build_channel_map(stems: list, manual_map: dict) -> dict:
 
     # Asignar el resto automáticamente
     next_ch = 0
-    for path, mid in stems:
+    for path, mid, compas in stems:
         key  = stem_key(path)
         name = stem_name(path)
         if key in manual_map or name in manual_map:
@@ -204,11 +231,12 @@ def build_channel_map(stems: list, manual_map: dict) -> dict:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def merge_stems(stems: list, target_tpb: int, channel_map: dict,
-                verbose: bool) -> MidiFile:
+                verbose: bool, bar_ticks: int) -> MidiFile:
     """Combina los stems en un único MIDI multitracks.
 
     Cada stem de entrada → un track en el MIDI de salida.
     Los tracks de tempo del primer stem se incluyen en el track 0.
+    Cada stem se desplaza al compás indicado (offset = (compás-1) * bar_ticks).
     """
     out = MidiFile(ticks_per_beat=target_tpb)
 
@@ -216,7 +244,7 @@ def merge_stems(stems: list, target_tpb: int, channel_map: dict,
     tempo_track = MidiTrack()
     tempo_track.append(MetaMessage('track_name', name='Master', time=0))
 
-    first_path, first_mid = stems[0]
+    first_path, first_mid, first_compas = stems[0]
     first_scaled = rescale_ticks(first_mid, target_tpb)
     for track in first_scaled.tracks:
         for msg in track:
@@ -235,9 +263,10 @@ def merge_stems(stems: list, target_tpb: int, channel_map: dict,
     out.tracks.append(tempo_track)
 
     # Un track por stem
-    for path, mid in stems:
+    for path, mid, compas in stems:
         scaled = rescale_ticks(mid, target_tpb)
         name   = stem_name(path)
+        offset = (compas - 1) * bar_ticks
 
         # Fusionar todos los tracks del stem en uno solo
         all_events = []   # (tick_abs, msg)
@@ -252,7 +281,7 @@ def merge_stems(stems: list, target_tpb: int, channel_map: dict,
                         continue
                     if msg.type in ('set_tempo', 'time_signature', 'key_signature'):
                         continue   # ya en track 0
-                all_events.append((abs_tick, msg))
+                all_events.append((abs_tick + offset, msg))
 
         # Reasignar canales
         remapped = []
@@ -283,7 +312,7 @@ def merge_stems(stems: list, target_tpb: int, channel_map: dict,
             ch_used = sorted({channel_map.get((path, ch), ch)
                                for ch in get_channels_used(mid)})
             programs = get_program_changes(mid)
-            print(f"  {name:30s}  canales={ch_used}  "
+            print(f"  {name:30s}  compás={compas:<4d}  canales={ch_used}  "
                   f"programas={dict(sorted(programs.items()))}")
 
     return out
@@ -294,24 +323,26 @@ def merge_stems(stems: list, target_tpb: int, channel_map: dict,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def show_preview(stems: list, target_tpb: int, channel_map: dict,
-                 out_path: str):
+                 out_path: str, bar_ticks: int, numerator: int, denominator: int):
     """Muestra el plan de merge sin generar el MIDI."""
     print(f"\n── PREVIEW ──────────────────────────────────────────────────")
     print(f"  Stems de entrada : {len(stems)}")
     print(f"  TPB de salida    : {target_tpb}")
+    print(f"  Compás           : {numerator}/{denominator}  "
+          f"({bar_ticks} ticks/compás)")
     print(f"  Fichero de salida: {out_path}")
     print()
-    print(f"  {'Stem':32s}  {'TPB src':8s}  {'Canales src':14s}  "
+    print(f"  {'Stem':32s}  {'Compás':7s}  {'TPB src':8s}  {'Canales src':14s}  "
           f"{'Canales dst':14s}  {'Programas'}")
-    print(f"  {'─'*32}  {'─'*8}  {'─'*14}  {'─'*14}  {'─'*20}")
-    for path, mid in stems:
+    print(f"  {'─'*32}  {'─'*7}  {'─'*8}  {'─'*14}  {'─'*14}  {'─'*20}")
+    for path, mid, compas in stems:
         name     = stem_name(path)
         src_tpb  = get_tpb(mid)
         channels = sorted(get_channels_used(mid))
         programs = get_program_changes(mid)
         dst_chs  = sorted({channel_map.get((path, ch), ch) for ch in channels})
         prog_str = ' '.join(f"ch{k}→p{v}" for k, v in sorted(programs.items()))
-        print(f"  {name:32s}  {src_tpb:8d}  "
+        print(f"  {name:32s}  {compas:7d}  {src_tpb:8d}  "
               f"{str(channels):14s}  {str(dst_chs):14s}  {prog_str}")
     print()
 
@@ -343,13 +374,36 @@ def parse_channel_map(args_channels: list) -> dict:
     return result
 
 
+def parse_stem_arg(arg: str) -> tuple:
+    """Parsea 'ruta.mid:compás' o 'ruta.mid' → (ruta, compás).
+
+    Compás por defecto: 1 (inicio de la pieza). El sufijo ':N' solo se
+    interpreta como compás si N es un entero válido; si no, se asume que
+    ':' forma parte del nombre del fichero y no hay compás explícito.
+    """
+    if ':' in arg:
+        path_part, _, compas_part = arg.rpartition(':')
+        try:
+            compas = int(compas_part)
+            if compas < 1:
+                print(f"AVISO: compás {compas} inválido en '{arg}' "
+                      f"— usando compás 1")
+                compas = 1
+            return path_part, compas
+        except ValueError:
+            pass   # no era un número de compás, forma parte del nombre
+    return arg, 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Combina varios MIDIs en un único MIDI multitracks",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("stems", nargs="+",
-                   help="MIDIs de entrada (stems)")
+                   help="MIDIs de entrada (stems). Admite sufijo ':N' para "
+                        "indicar el compás de inicio (ej: stem.mid:8). "
+                        "Sin sufijo se asume compás 1")
     p.add_argument("--output", default="merged.mid",
                    help="MIDI de salida (default: merged.mid)")
     p.add_argument("--tpb", type=int, default=None, metavar="N",
@@ -374,13 +428,14 @@ def main():
 
     # ── Cargar stems ─────────────────────────────────────────────────────────
     stems = []
-    for path in args.stems:
+    for raw_arg in args.stems:
+        path, compas = parse_stem_arg(raw_arg)
         if not os.path.isfile(path):
             print(f"ERROR: no se encuentra el archivo: {path}")
             sys.exit(1)
         try:
             mid = MidiFile(path)
-            stems.append((path, mid))
+            stems.append((path, mid, compas))
         except Exception as e:
             print(f"ERROR al leer {path}: {e}")
             sys.exit(1)
@@ -393,11 +448,17 @@ def main():
     if args.tpb:
         target_tpb = args.tpb
     else:
-        target_tpb = max(get_tpb(mid) for _, mid in stems)
+        target_tpb = max(get_tpb(mid) for _, mid, _ in stems)
+
+    # ── Duración del compás (para los offsets de inicio) ────────────────────
+    numerator, denominator = get_time_signature(stems)
+    bar_ticks = ticks_per_bar(target_tpb, numerator, denominator)
 
     if args.verbose:
         print(f"\n[INFO] Stems       : {len(stems)}")
         print(f"[INFO] TPB salida  : {target_tpb}")
+        print(f"[INFO] Compás      : {numerator}/{denominator} "
+              f"({bar_ticks} ticks/compás)")
         print(f"[INFO] Fichero     : {args.output}")
 
     # ── Mapeo de canales ──────────────────────────────────────────────────────
@@ -406,14 +467,16 @@ def main():
 
     # ── Preview ───────────────────────────────────────────────────────────────
     if args.preview:
-        show_preview(stems, target_tpb, channel_map, args.output)
+        show_preview(stems, target_tpb, channel_map, args.output,
+                     bar_ticks, numerator, denominator)
         return
 
     if args.verbose:
-        show_preview(stems, target_tpb, channel_map, args.output)
+        show_preview(stems, target_tpb, channel_map, args.output,
+                     bar_ticks, numerator, denominator)
 
     # ── Merge ────────────────────────────────────────────────────────────────
-    out_mid = merge_stems(stems, target_tpb, channel_map, args.verbose)
+    out_mid = merge_stems(stems, target_tpb, channel_map, args.verbose, bar_ticks)
 
     # ── Guardar ──────────────────────────────────────────────────────────────
     try:
