@@ -671,7 +671,9 @@ ctags_diff_fcg(){
 
 ctags_iterate_clique(){
     vim ~/log2gr/$1/clique
-    (echo flowchart LR; wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | sed 's/ -> / --> /g' | fcdag) | Xclip -i
+    (echo flowchart LR; wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | sed 's/ -> / --> /g' | fcdag) > ~/log2gr/$1/clique_graph
+    cat ~/log2gr/$1/clique_graph | sed 's/ --> /\n/g' | sort -u > ~/log2gr/$1/clique_fns
+    cat ~/log2gr/$1/clique_graph | Xclip -i
 }
 
 ctags_auto_clique(){
