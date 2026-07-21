@@ -3329,6 +3329,7 @@ class InstrumentAssigner:
         prev_note  = None
         cc1_next   = raw_notes[0][0]
         last_cc1   = -1
+        last_cc11  = 100   # estado continuo del swell de expresión (CC11)
         cc1_step   = self.tpb // 2   # cada corchea
 
         # CC inicial
@@ -3387,14 +3388,17 @@ class InstrumentAssigner:
                     last_cc1 = cc1
                 cc1_next = t_on + cc1_step
 
-            # CC11 swell en notas largas
+            # CC11 swell en notas largas — oscilación suave y continua,
+            # sin caer a un suelo fijo (evita el "bombeo" nota a nota)
             if not self.no_cc and self._beats(dur_ticks) >= 1.5:
                 mid_t  = t_on + dur_ticks // 2
                 end_t  = t_on + int(dur_ticks * 0.85)
-                cc11_p = min(127, int(vel * 1.1 + tension * 20))
-                cc11_e = max(40,  int(vel * 0.8))
-                events.append((mid_t, 'cc', 11, cc11_p))
-                events.append((end_t, 'cc', 11, cc11_e))
+                target_peak = int(np.clip(last_cc11 * 0.4 + (vel * 1.1 + tension * 20) * 0.6,
+                                           70, 127))
+                target_end  = int(np.clip(target_peak - (12 + tension * 8), 65, 118))
+                events.append((mid_t, 'cc', 11, target_peak))
+                events.append((end_t, 'cc', 11, target_end))
+                last_cc11 = target_end
 
             # Velocidad efectiva — escalada por vel_scale del perfil emocional
             if family in ('strings', 'brass') and art in ('legato', 'sustain', 'tremolo'):
