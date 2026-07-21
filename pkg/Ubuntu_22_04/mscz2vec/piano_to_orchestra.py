@@ -3090,7 +3090,10 @@ class InstrumentAssigner:
                  no_perc=False, no_ks=False, no_cc=False,
                  humanize=0.1, dynamics_cc1_base=None,
                  forced_texture=None, vel_scale=1.0,
-                 verbose=False):
+                 verbose=False,
+                 trans_ticks=0, sec_start_tick=None, sec_end_tick=None,
+                 prev_dyn_cc1=None, next_dyn_cc1=None,
+                 prev_vel_scale=None, next_vel_scale=None):
         self.tpb               = tpb
         self.tempo             = tempo
         self.template          = ORCH_TEMPLATES.get(template, ORCH_TEMPLATES['chamber'])
@@ -3107,6 +3110,39 @@ class InstrumentAssigner:
         # vel_scale: escala todas las velocidades efectivas (0.5=muy suave, 1.5=muy fuerte)
         self.vel_scale         = float(vel_scale)
         self.verbose           = verbose
+
+        # ── Suavizado opcional de transición entre secciones (--transition-beats) ──
+        # trans_ticks=0 → comportamiento original (corte duro, sin rampa)
+        self.trans_ticks       = trans_ticks
+        self.sec_start_tick    = sec_start_tick
+        self.sec_end_tick      = sec_end_tick
+        self.prev_dyn_cc1      = prev_dyn_cc1     # dynamics_cc1_base de la sección anterior (o None)
+        self.next_dyn_cc1      = next_dyn_cc1     # dynamics_cc1_base de la sección siguiente (o None)
+        self.prev_vel_scale    = prev_vel_scale   # vel_scale de la sección anterior (o None)
+        self.next_vel_scale    = next_vel_scale   # vel_scale de la sección siguiente (o None)
+
+    def _ramped(self, cur, prev, nxt, t_on):
+        """
+        Interpola `cur` hacia `prev` al inicio de la sección y hacia `nxt`
+        al final, dentro de una ventana de self.trans_ticks. Si trans_ticks
+        es 0 o no hay valor vecino, devuelve `cur` sin cambios (comportamiento
+        original / transición dura).
+        """
+        if not self.trans_ticks or cur is None:
+            return cur
+        # Rampa de entrada: mezcla con la sección anterior justo tras el corte
+        if prev is not None and self.sec_start_tick is not None:
+            d_in = t_on - self.sec_start_tick
+            if 0 <= d_in < self.trans_ticks:
+                frac = d_in / self.trans_ticks   # 0 al inicio → 1 tras la rampa
+                return prev + (cur - prev) * frac
+        # Rampa de salida: mezcla con la sección siguiente justo antes del corte
+        if nxt is not None and self.sec_end_tick not in (None, float('inf')):
+            d_out = self.sec_end_tick - t_on
+            if 0 <= d_out < self.trans_ticks:
+                frac = 1.0 - (d_out / self.trans_ticks)  # 0 lejos del borde → 1 en el borde
+                return cur + (nxt - cur) * frac
+        return cur
 
     # ── Utilidades ───────────────────────────────────────────────────────────
 
@@ -3302,7 +3338,8 @@ class InstrumentAssigner:
             # Si hay dynamics_cc1_base del perfil emocional, usarlo como base
             # y modular con la tensión (±15 alrededor del base)
             if self.dynamics_cc1_base is not None:
-                base = self.dynamics_cc1_base
+                base = self._ramped(self.dynamics_cc1_base, self.prev_dyn_cc1,
+                                     self.next_dyn_cc1, raw_notes[0][0])
                 init_cc1 = int(np.clip(base + (init_t - 0.5) * 30, 15, 120))
             else:
                 init_cc1 = int(np.clip(init_t * 100 + 15, 20, 115))
@@ -3338,7 +3375,8 @@ class InstrumentAssigner:
             # CC1 periódico — modulado por tensión alrededor del base dinámico
             if not self.no_cc and t_on >= cc1_next:
                 if self.dynamics_cc1_base is not None:
-                    base = self.dynamics_cc1_base
+                    base = self._ramped(self.dynamics_cc1_base, self.prev_dyn_cc1,
+                                         self.next_dyn_cc1, t_on)
                     cc1 = int(np.clip(base + (tension - 0.5) * 30, 15, 120))
                 else:
                     cc1 = int(np.clip(tension * 100 + 15, 15, 120))
@@ -3363,7 +3401,9 @@ class InstrumentAssigner:
                 eff_vel = 80
             else:
                 eff_vel = int(vel * (0.7 + tension * 0.5))
-            eff_vel = int(np.clip(eff_vel * self.vel_scale, 20, 127))
+            eff_vel_scale = self._ramped(self.vel_scale, self.prev_vel_scale,
+                                          self.next_vel_scale, t_on)
+            eff_vel = int(np.clip(eff_vel * eff_vel_scale, 20, 127))
 
             events.append((t_on, 'note', pitch, eff_vel, dur_ticks))
             prev_note = note
@@ -3627,6 +3667,14 @@ def main():
                             f'Perfiles: {", ".join(EMOTIONAL_PROFILES.keys())}'
                         ))
 
+    parser.add_argument('--transition-beats', type=float, default=0.0,
+                        help=(
+                            'Suaviza el CC1 (expresión) y vel_scale en los bordes de '
+                            'sección con una rampa lineal de N beats hacia/desde el '
+                            'carácter vecino. 0 = corte duro (default, transición '
+                            'fuerte/contrastante). Ej: --transition-beats 4'
+                        ))
+
     # Revisión por escucha
     parser.add_argument('--review-dir', default=None,
                         help='Directorio para MIDIs de revisión (default: ./review_midis)')
@@ -3799,8 +3847,14 @@ def main():
         # Usamos el último que lo haya definido (la última sección manda el nombre)
         ch_to_instr = {}  # ch → (name, prog, display)
 
-        for sec in sections:
-            orch_params = apply_caracter(caracter_map, sec, tempo_bpm)
+        # ── Precalcular parámetros de todas las secciones ──────────────────────
+        # Necesario para conocer los valores de la sección vecina (anterior y
+        # siguiente) y así poder construir una rampa con --transition-beats.
+        all_orch_params = [apply_caracter(caracter_map, s, tempo_bpm) for s in sections]
+        trans_ticks = int(round(getattr(args, 'transition_beats', 0.0) * tpb))
+
+        for i, sec in enumerate(sections):
+            orch_params = all_orch_params[i]
 
             if orch_params:
                 sec_tmpl     = orch_params['template']
@@ -3822,6 +3876,16 @@ def main():
                 sec_no_perc  = args.no_perc
                 sec_mod      = sec
 
+            # Parámetros de la sección anterior/siguiente, para la rampa de
+            # --transition-beats (None si es la primera/última sección o si
+            # esa sección vecina no tiene perfil emocional asignado)
+            prev_params = all_orch_params[i - 1] if i > 0 else None
+            next_params = all_orch_params[i + 1] if i + 1 < len(sections) else None
+            prev_dyn_cc1   = prev_params.get('dynamics_cc1') if prev_params else None
+            next_dyn_cc1   = next_params.get('dynamics_cc1') if next_params else None
+            prev_vel_scale = prev_params.get('vel_scale') if prev_params else None
+            next_vel_scale = next_params.get('vel_scale') if next_params else None
+
             assigner_sec = InstrumentAssigner(
                 tpb=tpb, tempo=tempo,
                 template=args.template,
@@ -3834,6 +3898,11 @@ def main():
                 forced_texture=orch_params.get('forced_texture') if orch_params else None,
                 vel_scale=orch_params.get('vel_scale', 1.0) if orch_params else 1.0,
                 verbose=False,
+                trans_ticks=trans_ticks,
+                sec_start_tick=sec['start_tick'],
+                sec_end_tick=sec.get('end_tick') or float('inf'),
+                prev_dyn_cc1=prev_dyn_cc1, next_dyn_cc1=next_dyn_cc1,
+                prev_vel_scale=prev_vel_scale, next_vel_scale=next_vel_scale,
             )
             assigner_sec.template = sec_tmpl
             last_assigner = assigner_sec
