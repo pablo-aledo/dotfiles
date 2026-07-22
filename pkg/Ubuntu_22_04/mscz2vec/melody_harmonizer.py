@@ -15,6 +15,9 @@
 ║    above       — chord tone más próximo por arriba                          ║
 ║    below       — chord tone más próximo por debajo                          ║
 ║    contour     — preserva el contorno melódico (subidas/bajadas) relativo  ║
+║    reposo      — clasifica notas de reposo (estables) y de paso; las de    ║
+║                  reposo se fijan al chord tone más cercano y las de paso   ║
+║                  se recalculan por grados conjuntos entre ambas            ║
 ║    scale       — proyecta sobre la escala del acorde vigente                ║
 ║                                                                              ║
 ║  ORNAMENTOS (--ornaments):                                                   ║
@@ -485,7 +488,191 @@ def adapt_note_scale(pitch, chord, scale_pcs):
 # ADAPTACIÓN COMPLETA DE MELODÍA
 # ═══════════════════════════════════════════════════════════
 
-def adapt_melody(melody, chords, key_obj, mode='contour', verbose=False):
+def note_metric_strength(offset, beats_per_bar):
+    """
+    Estima la fuerza métrica de una nota según su posición dentro del compás:
+      1.0  → tiempo fuerte (inicio de compás)
+      0.6  → tiempo (pulso) pero no el primero
+      0.25 → subdivisión fuera de pulso (contratiempo / anacrusa corta)
+    """
+    pos = offset % beats_per_bar
+    if abs(pos) < 1e-6:
+        return 1.0
+    if abs(pos - round(pos)) < 1e-6:
+        return 0.6
+    return 0.25
+
+
+def classify_note_roles(melody, time_sig, verbose=False):
+    """
+    Clasifica cada nota de la melodía como:
+      'reposo' — nota estable/estructural: cae en tiempo fuerte y/o tiene
+                 una duración relativamente larga. Son los puntos de anclaje
+                 armónico de la frase.
+      'paso'   — nota de paso/transitoria: breve, en parte débil del compás,
+                 y frecuentemente parte de un movimiento por grados conjuntos
+                 (stepwise) entre dos notas más estables.
+
+    Combina tres señales:
+      - fuerza métrica (posición en el compás)
+      - duración relativa a la mediana de la melodía
+      - si la nota participa en un tramo monótono de grados conjuntos
+        rodeada de notas de mayor duración (patrón típico de nota de paso)
+
+    Devuelve:
+        roles  : list de 'reposo' | 'paso' (uno por nota)
+        scores : list de float (score usado internamente, útil para debug)
+    """
+    beats_per_bar = beats_per_bar_from_ts(time_sig)
+    n = len(melody)
+    durations = [d for _, _, d, _ in melody]
+    median_dur = float(np.median(durations)) if durations else 1.0
+
+    roles, scores = [], []
+    for idx, (offset, pitch, dur, vel) in enumerate(melody):
+        metric = note_metric_strength(offset, beats_per_bar)
+        dur_score = min(1.0, dur / max(median_dur, 1e-6))
+
+        stepwise_transit = False
+        if 0 < idx < n - 1:
+            prev_pitch, prev_dur = melody[idx - 1][1], melody[idx - 1][2]
+            next_pitch, next_dur = melody[idx + 1][1], melody[idx + 1][2]
+            d1 = pitch - prev_pitch
+            d2 = next_pitch - pitch
+            same_dir = (d1 > 0 and d2 > 0) or (d1 < 0 and d2 < 0)
+            small_steps = 0 < abs(d1) <= 2 and 0 < abs(d2) <= 2
+            neighbors_longer = (prev_dur >= dur) and (next_dur >= dur)
+            if same_dir and small_steps and neighbors_longer:
+                stepwise_transit = True
+
+        score = 0.55 * metric + 0.45 * dur_score
+        if stepwise_transit:
+            score -= 0.3
+
+        roles.append('reposo' if score >= 0.5 else 'paso')
+        scores.append(round(score, 3))
+
+    if verbose:
+        n_reposo = roles.count('reposo')
+        print(f"    Clasificación reposo/paso: {n_reposo} reposo / {n - n_reposo} paso")
+
+    return roles, scores
+
+
+def adapt_melody_reposo_paso(melody, chords, key_obj, time_sig, verbose=False):
+    """
+    Estrategia 'reposo': adapta la melodía en dos pasadas.
+
+      1) Clasifica cada nota como 'reposo' o 'paso' (classify_note_roles).
+      2) Las notas de reposo se fijan al chord tone más cercano del acorde
+         vigente: son los anclajes armónicos de la frase.
+      3) Las notas de paso se recalculan interpolando por grados conjuntos
+         (dentro de las notas admisibles del acorde/escala vigente) entre las
+         dos notas de reposo ya fijadas que las rodean, de modo que cumplan
+         su función de enlace melódico entre chord tones.
+
+    Devuelve (adapted, log) con el mismo formato que adapt_melody().
+    """
+    scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
+    roles, scores = classify_note_roles(melody, time_sig, verbose=verbose)
+    n = len(melody)
+    adapted = [None] * n
+    log = [None] * n
+
+    def _log_entry(ridx, offset, pitch, new_pitch, root_pc, quality, role):
+        cat_orig = chord_tone_category(pitch % 12, root_pc, quality) if root_pc is not None else None
+        cat_new = chord_tone_category(new_pitch % 12, root_pc, quality) if root_pc is not None else None
+        return {
+            'idx': ridx,
+            'beat': round(offset, 3),
+            'role': role,
+            'orig': pitch,
+            'new': new_pitch,
+            'moved': (new_pitch != pitch),
+            'semitones': new_pitch - pitch,
+            'chord_root': PITCH_NAMES[root_pc] if root_pc is not None else None,
+            'chord_quality': quality,
+            'cat_orig': cat_orig,
+            'cat_new': cat_new,
+            'score': scores[ridx],
+        }
+
+    # ── Paso 1: fijar notas de reposo sobre chord tones ──────────────────
+    for idx, (offset, pitch, dur, vel) in enumerate(melody):
+        if roles[idx] != 'reposo':
+            continue
+        chord = chord_at_beat(chords, offset)
+        if chord is None:
+            new_pitch, root_pc, quality = pitch, None, None
+        else:
+            root_pc, quality = chord['root_pc'], chord['quality']
+            chord_pcs = chord_tones_for_quality(root_pc, quality)
+            new_pitch = nearest_admissible(pitch, chord_pcs, 'nearest')
+            new_pitch = max(21, min(108, new_pitch))
+
+        adapted[idx] = (offset, new_pitch, dur, vel)
+        log[idx] = _log_entry(idx, offset, pitch, new_pitch, root_pc, quality, 'reposo')
+
+        if verbose and new_pitch != pitch:
+            root_str = f"{PITCH_NAMES[root_pc]}{quality}" if root_pc is not None else "—"
+            print(f"    [reposo] beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
+                  f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}  [{root_str}]")
+
+    # ── Paso 2: rellenar las notas de paso entre anclas de reposo ────────
+    idx = 0
+    while idx < n:
+        if adapted[idx] is not None:
+            idx += 1
+            continue
+
+        start = idx
+        while idx < n and adapted[idx] is None:
+            idx += 1
+        end = idx  # adapted[end] ya fijado, o end == n si es el final de la melodía
+
+        left_pitch = adapted[start - 1][1] if start > 0 else None
+        right_pitch = adapted[end][1] if end < n else None
+        run = list(range(start, end))
+        run_len = len(run)
+
+        for k, ridx in enumerate(run):
+            offset, pitch, dur, vel = melody[ridx]
+            chord = chord_at_beat(chords, offset)
+            root_pc = chord['root_pc'] if chord else None
+            quality = chord['quality'] if chord else None
+            adm = admissible_pcs(root_pc, quality, scale_pcs) if chord else set(scale_pcs)
+
+            if left_pitch is not None and right_pitch is not None:
+                # Interpolación lineal entre las dos notas de reposo vecinas,
+                # proyectada sobre las notas admisibles (grados conjuntos reales)
+                frac = (k + 1) / (run_len + 1)
+                target = left_pitch + frac * (right_pitch - left_pitch)
+                new_pitch = nearest_admissible(int(round(target)), adm, 'nearest')
+            elif left_pitch is not None:
+                # Sin ancla derecha (cola de la melodía): continuar la dirección
+                # original respecto al reposo anterior
+                direction = 'above' if pitch >= left_pitch else 'below'
+                new_pitch = nearest_admissible(pitch, adm, direction)
+            elif right_pitch is not None:
+                # Sin ancla izquierda (inicio de la melodía)
+                direction = 'below' if pitch >= right_pitch else 'above'
+                new_pitch = nearest_admissible(pitch, adm, direction)
+            else:
+                # Melodía sin ninguna nota de reposo detectada
+                new_pitch = nearest_admissible(pitch, adm, 'nearest')
+
+            new_pitch = max(21, min(108, new_pitch))
+            adapted[ridx] = (offset, new_pitch, dur, vel)
+            log[ridx] = _log_entry(ridx, offset, pitch, new_pitch, root_pc, quality, 'paso')
+
+            if verbose and new_pitch != pitch:
+                print(f"    [paso]   beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
+                      f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}")
+
+    return adapted, log
+
+
+def adapt_melody(melody, chords, key_obj, mode='contour', time_sig=(4, 4), verbose=False):
     """
     Adapta cada nota de la melodía al acorde vigente.
 
@@ -493,12 +680,16 @@ def adapt_melody(melody, chords, key_obj, mode='contour', verbose=False):
         melody   : list of (offset, pitch, dur, vel)
         chords   : list de acordes (dicts con root_pc, quality, start, dur)
         key_obj  : tonalidad
-        mode     : 'nearest' | 'above' | 'below' | 'contour' | 'scale'
+        mode     : 'nearest' | 'above' | 'below' | 'contour' | 'scale' | 'reposo'
+        time_sig : (numerador, denominador) — necesario para el modo 'reposo'
 
     Returns:
         adapted  : list of (offset, new_pitch, dur, vel)
         log      : list of dicts con info por nota
     """
+    if mode == 'reposo':
+        return adapt_melody_reposo_paso(melody, chords, key_obj, time_sig, verbose=verbose)
+
     scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
     adapted = []
     log = []
@@ -1024,7 +1215,7 @@ def harmonize_melody(harmony_midi: str,
     print("\n  [3/4] Adaptando melodía…")
     try:
         adapted, adapt_log = adapt_melody(
-            melody, chords, key_obj, mode=adapt_mode, verbose=verbose
+            melody, chords, key_obj, mode=adapt_mode, time_sig=time_sig, verbose=verbose
         )
     except Exception as e:
         print(f"[ERROR] Adaptación: {e}")
@@ -1133,6 +1324,9 @@ Modos de adaptación:
   below     Chord tone más próximo por abajo
   contour   Preserva el contorno melódico (subidas/bajadas) [default]
   scale     Proyecta sobre la escala del acorde vigente
+  reposo    Clasifica notas de reposo (estables) y de paso: las de reposo
+            se fijan al chord tone más cercano, y las de paso se recalculan
+            por grados conjuntos entre las notas de reposo que las rodean
 
 Ornamentos disponibles:
   appoggiatura  Nota disonante en tiempo fuerte que resuelve por semitono
@@ -1151,7 +1345,7 @@ Ejemplos:
     p.add_argument('harmony', help='MIDI con la armonía (acordes)')
     p.add_argument('melody',  help='MIDI con la melodía a adaptar')
     p.add_argument('--adapt-mode', default='contour',
-                   choices=['nearest', 'above', 'below', 'contour', 'scale'],
+                   choices=['nearest', 'above', 'below', 'contour', 'scale', 'reposo'],
                    help='Estrategia de adaptación melódica (default: contour)')
     p.add_argument('--ornaments', nargs='+', default=[],
                    choices=['appoggiatura', 'passing', 'neighbor', 'all'],
