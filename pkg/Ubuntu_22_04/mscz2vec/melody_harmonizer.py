@@ -15,9 +15,11 @@
 ║    above       — chord tone más próximo por arriba                          ║
 ║    below       — chord tone más próximo por debajo                          ║
 ║    contour     — preserva el contorno melódico (subidas/bajadas) relativo  ║
-║    reposo      — clasifica notas de reposo (estables) y de paso; las de    ║
-║                  reposo se fijan al chord tone más cercano y las de paso   ║
-║                  se recalculan por grados conjuntos entre ambas            ║
+║    structural_1— notas estructurales (según duración media o tiempo 1/3)   ║
+║                  → chord tone; resto → escala diatónica (nota independ.)   ║
+║    structural_2— clasifica notas de reposo/paso con score métrico+duración ║
+║                  +detección de grados conjuntos; reposo → chord tone;      ║
+║                  paso → interpola por grados conjuntos entre reposos       ║
 ║    scale       — proyecta sobre la escala del acorde vigente                ║
 ║                                                                              ║
 ║  ORNAMENTOS (--ornaments):                                                   ║
@@ -559,11 +561,14 @@ def classify_note_roles(melody, time_sig, verbose=False):
     return roles, scores
 
 
-def adapt_melody_reposo_paso(melody, chords, key_obj, time_sig, verbose=False):
+def adapt_melody_structural_2(melody, chords, key_obj, time_sig, verbose=False):
     """
-    Estrategia 'reposo': adapta la melodía en dos pasadas.
+    Estrategia 'structural_2' (mi solución): adapta la melodía en dos pasadas.
 
-      1) Clasifica cada nota como 'reposo' o 'paso' (classify_note_roles).
+      1) Clasifica cada nota como 'reposo' o 'paso' (classify_note_roles),
+         combinando fuerza métrica graduada + duración relativa a la mediana
+         + detección de tramos por grados conjuntos rodeados de notas más
+         largas (patrón real de nota de paso).
       2) Las notas de reposo se fijan al chord tone más cercano del acorde
          vigente: son los anclajes armónicos de la frase.
       3) Las notas de paso se recalculan interpolando por grados conjuntos
@@ -672,6 +677,66 @@ def adapt_melody_reposo_paso(melody, chords, key_obj, time_sig, verbose=False):
     return adapted, log
 
 
+def adapt_melody_structural_1(melody, chords, key_obj, time_sig, verbose=False):
+    """
+    Estrategia 'structural_1' (solución alternativa, incluida para comparar):
+    clasificación binaria por nota, sin interpolar entre vecinas.
+
+      - Nota estructural si dur >= duración media de la melodía
+        O si cae en el tiempo 1 o 3 del compás (offset % beats_bar in (0, 2)).
+        → se fuerza al chord tone más cercano (sin tensiones).
+      - En caso contrario, nota de paso → se ajusta a la nota más cercana
+        dentro de la escala diatónica de la tonalidad (independientemente
+        de sus vecinas).
+
+    Devuelve (adapted, log) con el mismo formato que adapt_melody().
+    """
+    beats_bar = time_sig[0] if time_sig else 4
+    scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
+
+    mean_dur = (sum(dur for _, _, dur, _ in melody) / len(melody)) if melody else 0.25
+
+    adapted, log = [], []
+    for idx, (offset, pitch, dur, vel) in enumerate(melody):
+        chord = chord_at_beat(chords, offset)
+        if chord is None:
+            adapted.append((offset, pitch, dur, vel))
+            log.append({'idx': idx, 'orig': pitch, 'new': pitch,
+                        'chord': None, 'category': 'no_chord'})
+            continue
+
+        root_pc, quality = chord['root_pc'], chord['quality']
+        cat_orig = chord_tone_category(pitch % 12, root_pc, quality)
+
+        is_structural = (dur >= mean_dur) or (offset % beats_bar in (0, 2))
+        if is_structural:
+            adm_set = chord_tones_for_quality(root_pc, quality)
+        else:
+            adm_set = set(scale_pcs) if scale_pcs else set(range(12))
+
+        new_pitch = nearest_admissible(pitch, adm_set, 'nearest')
+        new_pitch = max(21, min(108, new_pitch))
+        cat_new = chord_tone_category(new_pitch % 12, root_pc, quality)
+
+        log_entry = {
+            'idx': idx, 'beat': round(offset, 3),
+            'orig': pitch, 'new': new_pitch,
+            'moved': (new_pitch != pitch), 'semitones': new_pitch - pitch,
+            'chord_root': PITCH_NAMES[root_pc], 'chord_quality': quality,
+            'cat_orig': cat_orig, 'cat_new': cat_new,
+            'is_structural': is_structural,
+        }
+        log.append(log_entry)
+        adapted.append((offset, new_pitch, dur, vel))
+
+        if verbose and new_pitch != pitch:
+            print(f"    beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
+                  f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}"
+                  f"  [{PITCH_NAMES[root_pc]}{quality}]  structural={is_structural}")
+
+    return adapted, log
+
+
 def adapt_melody(melody, chords, key_obj, mode='contour', time_sig=(4, 4), verbose=False):
     """
     Adapta cada nota de la melodía al acorde vigente.
@@ -680,15 +745,18 @@ def adapt_melody(melody, chords, key_obj, mode='contour', time_sig=(4, 4), verbo
         melody   : list of (offset, pitch, dur, vel)
         chords   : list de acordes (dicts con root_pc, quality, start, dur)
         key_obj  : tonalidad
-        mode     : 'nearest' | 'above' | 'below' | 'contour' | 'scale' | 'reposo'
-        time_sig : (numerador, denominador) — necesario para el modo 'reposo'
+        mode     : 'nearest' | 'above' | 'below' | 'contour' | 'scale' |
+                   'structural_1' | 'structural_2'
+        time_sig : (numerador, denominador) — necesario para ambos modos structural_*
 
     Returns:
         adapted  : list of (offset, new_pitch, dur, vel)
         log      : list of dicts con info por nota
     """
-    if mode == 'reposo':
-        return adapt_melody_reposo_paso(melody, chords, key_obj, time_sig, verbose=verbose)
+    if mode == 'structural_2':
+        return adapt_melody_structural_2(melody, chords, key_obj, time_sig, verbose=verbose)
+    if mode == 'structural_1':
+        return adapt_melody_structural_1(melody, chords, key_obj, time_sig, verbose=verbose)
 
     scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
     adapted = []
@@ -1324,9 +1392,13 @@ Modos de adaptación:
   below     Chord tone más próximo por abajo
   contour   Preserva el contorno melódico (subidas/bajadas) [default]
   scale     Proyecta sobre la escala del acorde vigente
-  reposo    Clasifica notas de reposo (estables) y de paso: las de reposo
-            se fijan al chord tone más cercano, y las de paso se recalculan
-            por grados conjuntos entre las notas de reposo que las rodean
+  structural_1  Nota estructural si dur >= duración media O cae en tiempo 1/3
+                → chord tone; nota de paso → escala diatónica (ajuste
+                independiente por nota, sin mirar a las vecinas)
+  structural_2  Clasificación reposo/paso por score (fuerza métrica graduada +
+                duración + detección de grados conjuntos); reposo → chord
+                tone; paso → interpola por grados conjuntos entre los
+                reposos que lo rodean
 
 Ornamentos disponibles:
   appoggiatura  Nota disonante en tiempo fuerte que resuelve por semitono
@@ -1345,7 +1417,8 @@ Ejemplos:
     p.add_argument('harmony', help='MIDI con la armonía (acordes)')
     p.add_argument('melody',  help='MIDI con la melodía a adaptar')
     p.add_argument('--adapt-mode', default='contour',
-                   choices=['nearest', 'above', 'below', 'contour', 'scale', 'reposo'],
+                   choices=['nearest', 'above', 'below', 'contour', 'scale',
+                            'structural_1', 'structural_2'],
                    help='Estrategia de adaptación melódica (default: contour)')
     p.add_argument('--ornaments', nargs='+', default=[],
                    choices=['appoggiatura', 'passing', 'neighbor', 'all'],
