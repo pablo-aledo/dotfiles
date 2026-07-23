@@ -1,26 +1,18 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                     MELODY HARMONIZER  v1.0                                  ║
+║                     MELODY HARMONIZER  v2.0                                  ║
 ║      Adaptación de melodía a una armonía dada con ornamentación opcional    ║
 ║                                                                              ║
 ║  Toma un MIDI con armonía (acordes) y otro con una melodía, y reescribe     ║
 ║  la melodía para que sea musicalmente correcta sobre la armonía dada.       ║
-║  Cada nota se ajusta al acorde vigente priorizando chord tones y usando     ║
-║  tensiones admitidas; opcionalmente introduce apoyaturas o notas de paso   ║
-║  en compases concretos.                                                      ║
 ║                                                                              ║
-║  ESTRATEGIAS DE ADAPTACIÓN (--adapt-mode):                                  ║
-║    nearest     — nota más cercana que sea chord_tone o tension permitida    ║
-║    above       — chord tone más próximo por arriba                          ║
-║    below       — chord tone más próximo por debajo                          ║
-║    contour     — preserva el contorno melódico (subidas/bajadas) relativo  ║
-║    structural_1— notas estructurales (según duración media o tiempo 1/3)   ║
-║                  → chord tone; resto → escala diatónica (nota independ.)   ║
-║    structural_2— clasifica notas de reposo/paso con score métrico+duración ║
-║                  +detección de grados conjuntos; reposo → chord tone;      ║
-║                  paso → interpola por grados conjuntos entre reposos       ║
-║    scale       — proyecta sobre la escala del acorde vigente                ║
+║  ARQUITECTURA DE ESTRATEGIAS:                                               ║
+║    Cada estrategia de adaptación (--adapt-mode) es una función registrada  ║
+║    de forma independiente (ver sección STRATEGIES/register_strategy en el  ║
+║    código). Añadir o quitar una estrategia no afecta a las demás.          ║
+║    Ejecuta:  python melody_harmonizer.py --list-strategies                 ║
+║    para ver todas las estrategias disponibles y su descripción.            ║
 ║                                                                              ║
 ║  ORNAMENTOS (--ornaments):                                                   ║
 ║    appoggiatura  — apoyatura: nota disonante en tiempo fuerte → resolución  ║
@@ -30,23 +22,27 @@
 ║                                                                              ║
 ║  USO:                                                                        ║
 ║    python melody_harmonizer.py harmony.mid melody.mid                       ║
-║    python melody_harmonizer.py harmony.mid melody.mid --adapt-mode contour  ║
+║    python melody_harmonizer.py harmony.mid melody.mid --adapt-mode dp_global║
+║    python melody_harmonizer.py harmony.mid melody.mid --adapt-mode limited_leap --strategy-param leap_max=3 ║
 ║    python melody_harmonizer.py harmony.mid melody.mid --ornaments appoggiatura passing --ornament-bars 3 7 11 ║
 ║    python melody_harmonizer.py harmony.mid melody.mid --key "G major"      ║
 ║    python melody_harmonizer.py harmony.mid melody.mid --verbose --report   ║
+║    python melody_harmonizer.py --list-strategies                            ║
 ║                                                                              ║
 ║  OPCIONES:                                                                   ║
-║    --adapt-mode M    Estrategia de adaptación melódica (default: contour)   ║
-║    --ornaments O [O…] Tipos de ornamento a aplicar (default: ninguno)      ║
-║    --ornament-bars N [N…] Compases (1-based) donde insertar ornamentos     ║
-║                           Si no se especifica, se aplican a todos si        ║
-║                           --ornaments está activo                           ║
-║    --ornament-prob F  Probabilidad de ornamentación por nota (0-1, def 0.4) ║
-║    --key "C major"   Tonalidad. Si no se indica, se autodetecta             ║
-║    --tempo BPM       Tempo de salida (default: detectado del MIDI harmonía) ║
-║    --out-dir DIR     Carpeta de salida (default: junto al MIDI melodía)     ║
-║    --report          Guardar reporte JSON con análisis completo             ║
-║    --verbose         Informe detallado por stdout                            ║
+║    --adapt-mode M          Estrategia de adaptación (default: contour)      ║
+║    --strategy-param K=V [K=V…]  Parámetros específicos de la estrategia    ║
+║    --list-strategies       Lista las estrategias disponibles y termina      ║
+║    --ornaments O [O…]      Tipos de ornamento a aplicar (default: ninguno) ║
+║    --ornament-bars N [N…]  Compases (1-based) donde insertar ornamentos    ║
+║                             Si no se especifica, se aplican a todos si      ║
+║                             --ornaments está activo                        ║
+║    --ornament-prob F       Probabilidad de ornamentación por nota (def 0.4)║
+║    --key "C major"         Tonalidad. Si no se indica, se autodetecta      ║
+║    --tempo BPM             Tempo de salida (default: detectado del MIDI)   ║
+║    --out-dir DIR           Carpeta de salida (default: junto al MIDI mel.) ║
+║    --report                Guardar reporte JSON con análisis completo      ║
+║    --verbose               Informe detallado por stdout                    ║
 ║                                                                              ║
 ║  SALIDA:                                                                     ║
 ║    melody.harmonized.mid          (melodía adaptada + armonía original)     ║
@@ -463,21 +459,6 @@ def nearest_admissible(pitch, admissible_pcs_set, direction='nearest'):
     return min(candidates, key=lambda p: abs(p - pitch))
 
 
-def adapt_note_contour(pitch, prev_adapted, chord, admissible, scale_pcs):
-    """
-    Preserva el contorno melódico: si la nota original subió respecto a la
-    anterior, busca la nota admisible más próxima que también suba.
-    Fallback a nearest si no hay candidatos en esa dirección.
-    """
-    if prev_adapted is None:
-        return nearest_admissible(pitch, admissible, 'nearest')
-
-    direction_original = pitch - (pitch - 1)  # placeholder; se calcula fuera
-
-    # Se calcula en adapt_melody(); aquí simplemente llamamos nearest
-    return nearest_admissible(pitch, admissible, 'nearest')
-
-
 def adapt_note_scale(pitch, chord, scale_pcs):
     """
     Proyecta la nota sobre la escala del acorde vigente (chord tones + escala).
@@ -487,12 +468,48 @@ def adapt_note_scale(pitch, chord, scale_pcs):
 
 
 # ═══════════════════════════════════════════════════════════
-# ADAPTACIÓN COMPLETA DE MELODÍA
+# ESTRATEGIAS DE ADAPTACIÓN — REGISTRO
 # ═══════════════════════════════════════════════════════════
+#
+# Cada estrategia es una función independiente con la firma:
+#
+#     def estrategia(melody, chords, key_obj, time_sig, params, verbose=False):
+#         ...
+#         return adapted, log
+#
+# donde `params` es un dict con opciones específicas de la estrategia
+# (viene de --strategy-param clave=valor en la CLI; cada estrategia lee
+# solo las claves que le interesan, con valores por defecto sensatos).
+#
+# Añadir una estrategia nueva = escribir la función + decorarla con
+# @register_strategy('nombre', 'descripción'). Quitar una = borrar su
+# bloque. adapt_melody() nunca necesita tocarse.
+
+STRATEGIES = {}
+
+
+def register_strategy(name, description=""):
+    """Decorador: registra una función de adaptación bajo `name`."""
+    def deco(fn):
+        STRATEGIES[name] = {'fn': fn, 'description': description}
+        return fn
+    return deco
+
+
+def list_strategies():
+    """Devuelve pares (nombre, descripción) ordenados alfabéticamente."""
+    return sorted((name, meta['description']) for name, meta in STRATEGIES.items())
+
+
+# ═══════════════════════════════════════════════════════════
+# UTILIDADES COMPARTIDAS ENTRE ESTRATEGIAS
+# ═══════════════════════════════════════════════════════════
+# Infraestructura genérica reutilizada por varias estrategias. No es
+# estrategia en sí misma: nada aquí decide qué nota final se elige.
 
 def note_metric_strength(offset, beats_per_bar):
     """
-    Estima la fuerza métrica de una nota según su posición dentro del compás:
+    Estima la fuerza métrica de una nota según su posición en el compás:
       1.0  → tiempo fuerte (inicio de compás)
       0.6  → tiempo (pulso) pero no el primero
       0.25 → subdivisión fuera de pulso (contratiempo / anacrusa corta)
@@ -507,23 +524,12 @@ def note_metric_strength(offset, beats_per_bar):
 
 def classify_note_roles(melody, time_sig, verbose=False):
     """
-    Clasifica cada nota de la melodía como:
-      'reposo' — nota estable/estructural: cae en tiempo fuerte y/o tiene
-                 una duración relativamente larga. Son los puntos de anclaje
-                 armónico de la frase.
-      'paso'   — nota de paso/transitoria: breve, en parte débil del compás,
-                 y frecuentemente parte de un movimiento por grados conjuntos
-                 (stepwise) entre dos notas más estables.
+    Clasifica cada nota como 'reposo' (estable/estructural) o 'paso'
+    (transitoria), combinando fuerza métrica + duración relativa a la
+    mediana + detección de tramos por grados conjuntos entre notas más
+    largas. Usada por structural_2 y guide_tones.
 
-    Combina tres señales:
-      - fuerza métrica (posición en el compás)
-      - duración relativa a la mediana de la melodía
-      - si la nota participa en un tramo monótono de grados conjuntos
-        rodeada de notas de mayor duración (patrón típico de nota de paso)
-
-    Devuelve:
-        roles  : list de 'reposo' | 'paso' (uno por nota)
-        scores : list de float (score usado internamente, útil para debug)
+    Devuelve (roles, scores).
     """
     beats_per_bar = beats_per_bar_from_ts(time_sig)
     n = len(melody)
@@ -561,22 +567,215 @@ def classify_note_roles(melody, time_sig, verbose=False):
     return roles, scores
 
 
-def adapt_melody_structural_2(melody, chords, key_obj, time_sig, verbose=False):
+def guide_tone_pcs(root_pc, quality):
     """
-    Estrategia 'structural_2' (mi solución): adapta la melodía en dos pasadas.
+    Devuelve las pitch classes de las «guide tones» del acorde: 3ª y 7ª
+    (las que definen su calidad). Si el acorde no tiene 7ª (tríada),
+    devuelve solo la 3ª; si tampoco tiene 3ª clara (p.ej. sus), cae a
+    los chord tones completos.
+    """
+    ints = CHORD_INTERVALS.get(quality, [0, 4, 7])
+    guide = []
+    if len(ints) >= 2:
+        guide.append((root_pc + ints[1]) % 12)
+    if len(ints) >= 4:
+        guide.append((root_pc + ints[3]) % 12)
+    if not guide:
+        return chord_tones_for_quality(root_pc, quality)
+    return set(guide)
 
-      1) Clasifica cada nota como 'reposo' o 'paso' (classify_note_roles),
-         combinando fuerza métrica graduada + duración relativa a la mediana
-         + detección de tramos por grados conjuntos rodeados de notas más
-         largas (patrón real de nota de paso).
-      2) Las notas de reposo se fijan al chord tone más cercano del acorde
-         vigente: son los anclajes armónicos de la frase.
-      3) Las notas de paso se recalculan interpolando por grados conjuntos
-         (dentro de las notas admisibles del acorde/escala vigente) entre las
-         dos notas de reposo ya fijadas que las rodean, de modo que cumplan
-         su función de enlace melódico entre chord tones.
 
-    Devuelve (adapted, log) con el mismo formato que adapt_melody().
+def _base_log_entry(idx, offset, pitch, new_pitch, root_pc, quality, extra=None):
+    """Construye una entrada de log estándar, reusada por casi todas las estrategias."""
+    entry = {
+        'idx': idx,
+        'beat': round(offset, 3),
+        'orig': pitch,
+        'new': new_pitch,
+        'moved': (new_pitch != pitch),
+        'semitones': new_pitch - pitch,
+        'chord_root': PITCH_NAMES[root_pc] if root_pc is not None else None,
+        'chord_quality': quality,
+        'cat_orig': chord_tone_category(pitch % 12, root_pc, quality) if root_pc is not None else None,
+        'cat_new': chord_tone_category(new_pitch % 12, root_pc, quality) if root_pc is not None else None,
+    }
+    if extra:
+        entry.update(extra)
+    return entry
+
+
+def _note_by_note_adapt(melody, chords, key_obj, choose_pitch, verbose=False, tag=None):
+    """
+    Utilidad compartida para estrategias «nota a nota»: deciden cada nota
+    mirando como mucho a la nota adaptada anterior. Se encarga del bucle,
+    de obtener el acorde vigente, del recorte a rango MIDI y del logging;
+    la estrategia solo aporta `choose_pitch(ctx) -> new_pitch`.
+
+    ctx contiene: idx, offset, pitch, dur, vel, chord, root_pc, quality,
+    adm (pcs admisibles chord_tone+tension), scale_pcs, cat_orig,
+    prev_orig, prev_adapted.
+    """
+    scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
+    adapted, log = [], []
+    prev_orig, prev_adapted = None, None
+
+    for idx, (offset, pitch, dur, vel) in enumerate(melody):
+        chord = chord_at_beat(chords, offset)
+        if chord is None:
+            adapted.append((offset, pitch, dur, vel))
+            log.append({'idx': idx, 'orig': pitch, 'new': pitch,
+                        'chord': None, 'category': 'no_chord'})
+            prev_orig, prev_adapted = pitch, pitch
+            continue
+
+        root_pc, quality = chord['root_pc'], chord['quality']
+        adm = admissible_pcs(root_pc, quality, scale_pcs)
+        cat_orig = chord_tone_category(pitch % 12, root_pc, quality)
+
+        ctx = dict(idx=idx, offset=offset, pitch=pitch, dur=dur, vel=vel,
+                   chord=chord, root_pc=root_pc, quality=quality,
+                   adm=adm, scale_pcs=scale_pcs, cat_orig=cat_orig,
+                   prev_orig=prev_orig, prev_adapted=prev_adapted)
+
+        new_pitch = int(round(choose_pitch(ctx)))
+        new_pitch = max(21, min(108, new_pitch))
+
+        log.append(_base_log_entry(idx, offset, pitch, new_pitch, root_pc, quality))
+
+        if verbose and new_pitch != pitch:
+            label = f"[{tag}] " if tag else ""
+            print(f"    {label}beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
+                  f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}"
+                  f"  [{PITCH_NAMES[root_pc]}{quality}]")
+
+        adapted.append((offset, new_pitch, dur, vel))
+        prev_orig, prev_adapted = pitch, new_pitch
+
+    return adapted, log
+
+
+# ═══════════════════════════════════════════════════════════
+# ESTRATEGIAS SIMPLES (nota a nota, solo tocan las «avoid»)
+# ═══════════════════════════════════════════════════════════
+
+@register_strategy('nearest', 'Nota admisible más cercana (solo si la original es "avoid")')
+def strategy_nearest(melody, chords, key_obj, time_sig, params, verbose=False):
+    def choose(ctx):
+        if ctx['cat_orig'] != 'avoid':
+            return ctx['pitch']
+        return nearest_admissible(ctx['pitch'], ctx['adm'], 'nearest')
+    return _note_by_note_adapt(melody, chords, key_obj, choose, verbose=verbose, tag='nearest')
+
+
+@register_strategy('above', 'Chord tone/tensión admisible más próxima por arriba')
+def strategy_above(melody, chords, key_obj, time_sig, params, verbose=False):
+    def choose(ctx):
+        if ctx['cat_orig'] != 'avoid':
+            return ctx['pitch']
+        return nearest_admissible(ctx['pitch'], ctx['adm'], 'above')
+    return _note_by_note_adapt(melody, chords, key_obj, choose, verbose=verbose, tag='above')
+
+
+@register_strategy('below', 'Chord tone/tensión admisible más próxima por abajo')
+def strategy_below(melody, chords, key_obj, time_sig, params, verbose=False):
+    def choose(ctx):
+        if ctx['cat_orig'] != 'avoid':
+            return ctx['pitch']
+        return nearest_admissible(ctx['pitch'], ctx['adm'], 'below')
+    return _note_by_note_adapt(melody, chords, key_obj, choose, verbose=verbose, tag='below')
+
+
+@register_strategy('scale', 'Proyecta la nota sobre la escala + chord tones del acorde vigente')
+def strategy_scale(melody, chords, key_obj, time_sig, params, verbose=False):
+    def choose(ctx):
+        if ctx['cat_orig'] != 'avoid':
+            return ctx['pitch']
+        return adapt_note_scale(ctx['pitch'], ctx['chord'], ctx['scale_pcs'])
+    return _note_by_note_adapt(melody, chords, key_obj, choose, verbose=verbose, tag='scale')
+
+
+@register_strategy('contour', 'Preserva el contorno melódico (sube/baja igual que el original)')
+def strategy_contour(melody, chords, key_obj, time_sig, params, verbose=False):
+    def choose(ctx):
+        if ctx['cat_orig'] != 'avoid':
+            return ctx['pitch']
+        pitch, adm = ctx['pitch'], ctx['adm']
+        prev_orig, prev_adapted = ctx['prev_orig'], ctx['prev_adapted']
+        if prev_orig is None:
+            return nearest_admissible(pitch, adm, 'nearest')
+        delta = pitch - prev_orig
+        direction = 'above' if delta > 0 else 'below' if delta < 0 else 'nearest'
+        new_pitch = nearest_admissible(pitch, adm, direction)
+        if delta > 0 and new_pitch < prev_adapted:
+            new_pitch = nearest_admissible(pitch, adm, 'nearest')
+        elif delta < 0 and new_pitch > prev_adapted:
+            new_pitch = nearest_admissible(pitch, adm, 'nearest')
+        return new_pitch
+    return _note_by_note_adapt(melody, chords, key_obj, choose, verbose=verbose, tag='contour')
+
+
+# ═══════════════════════════════════════════════════════════
+# ESTRATEGIAS ESTRUCTURALES (reposo / paso)
+# ═══════════════════════════════════════════════════════════
+
+@register_strategy('structural_1',
+    'Estructural si dur>=media o cae en tiempo 1/3 → chord tone; resto → escala (por nota, sin mirar vecinas)')
+def strategy_structural_1(melody, chords, key_obj, time_sig, params, verbose=False):
+    """
+    Clasificación binaria por nota, sin interpolar entre vecinas.
+      - Nota estructural si dur >= duración media de la melodía
+        O si cae en el tiempo 1 o 3 del compás (offset % beats_bar in (0, 2)).
+        → se fuerza al chord tone más cercano (sin tensiones).
+      - En caso contrario, nota de paso → se ajusta a la nota más cercana
+        dentro de la escala diatónica de la tonalidad, independientemente
+        de sus vecinas.
+    """
+    beats_bar = time_sig[0] if time_sig else 4
+    scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
+    mean_dur = (sum(dur for _, _, dur, _ in melody) / len(melody)) if melody else 0.25
+
+    adapted, log = [], []
+    for idx, (offset, pitch, dur, vel) in enumerate(melody):
+        chord = chord_at_beat(chords, offset)
+        if chord is None:
+            adapted.append((offset, pitch, dur, vel))
+            log.append({'idx': idx, 'orig': pitch, 'new': pitch,
+                        'chord': None, 'category': 'no_chord'})
+            continue
+
+        root_pc, quality = chord['root_pc'], chord['quality']
+        is_structural = (dur >= mean_dur) or (offset % beats_bar in (0, 2))
+        if is_structural:
+            adm_set = chord_tones_for_quality(root_pc, quality)
+        else:
+            adm_set = set(scale_pcs) if scale_pcs else set(range(12))
+
+        new_pitch = nearest_admissible(pitch, adm_set, 'nearest')
+        new_pitch = max(21, min(108, new_pitch))
+
+        entry = _base_log_entry(idx, offset, pitch, new_pitch, root_pc, quality,
+                                 {'is_structural': is_structural})
+        log.append(entry)
+        adapted.append((offset, new_pitch, dur, vel))
+
+        if verbose and new_pitch != pitch:
+            print(f"    [structural_1] beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
+                  f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}  structural={is_structural}")
+
+    return adapted, log
+
+
+@register_strategy('structural_2',
+    'Score (métrica+duración+grados conjuntos) → reposo=chord tone; paso interpola entre reposos vecinos')
+def strategy_structural_2(melody, chords, key_obj, time_sig, params, verbose=False):
+    """
+    Dos pasadas:
+      1) classify_note_roles() clasifica cada nota como 'reposo' o 'paso'.
+      2) Las de reposo se fijan al chord tone más cercano del acorde vigente.
+      3) Las de paso se recalculan interpolando por grados conjuntos entre
+         las dos notas de reposo (ya fijadas) que las rodean, dentro del
+         conjunto admisible (chord tones + tensiones + escala) del acorde
+         local, de modo que cumplan su función de enlace melódico.
     """
     scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
     roles, scores = classify_note_roles(melody, time_sig, verbose=verbose)
@@ -584,25 +783,12 @@ def adapt_melody_structural_2(melody, chords, key_obj, time_sig, verbose=False):
     adapted = [None] * n
     log = [None] * n
 
-    def _log_entry(ridx, offset, pitch, new_pitch, root_pc, quality, role):
-        cat_orig = chord_tone_category(pitch % 12, root_pc, quality) if root_pc is not None else None
-        cat_new = chord_tone_category(new_pitch % 12, root_pc, quality) if root_pc is not None else None
-        return {
-            'idx': ridx,
-            'beat': round(offset, 3),
-            'role': role,
-            'orig': pitch,
-            'new': new_pitch,
-            'moved': (new_pitch != pitch),
-            'semitones': new_pitch - pitch,
-            'chord_root': PITCH_NAMES[root_pc] if root_pc is not None else None,
-            'chord_quality': quality,
-            'cat_orig': cat_orig,
-            'cat_new': cat_new,
-            'score': scores[ridx],
-        }
+    def _entry(ridx, offset, pitch, new_pitch, root_pc, quality, role):
+        e = _base_log_entry(ridx, offset, pitch, new_pitch, root_pc, quality,
+                            {'role': role, 'score': scores[ridx]})
+        return e
 
-    # ── Paso 1: fijar notas de reposo sobre chord tones ──────────────────
+    # Paso 1: fijar notas de reposo sobre chord tones
     for idx, (offset, pitch, dur, vel) in enumerate(melody):
         if roles[idx] != 'reposo':
             continue
@@ -612,18 +798,17 @@ def adapt_melody_structural_2(melody, chords, key_obj, time_sig, verbose=False):
         else:
             root_pc, quality = chord['root_pc'], chord['quality']
             chord_pcs = chord_tones_for_quality(root_pc, quality)
-            new_pitch = nearest_admissible(pitch, chord_pcs, 'nearest')
-            new_pitch = max(21, min(108, new_pitch))
+            new_pitch = max(21, min(108, nearest_admissible(pitch, chord_pcs, 'nearest')))
 
         adapted[idx] = (offset, new_pitch, dur, vel)
-        log[idx] = _log_entry(idx, offset, pitch, new_pitch, root_pc, quality, 'reposo')
+        log[idx] = _entry(idx, offset, pitch, new_pitch, root_pc, quality, 'reposo')
 
         if verbose and new_pitch != pitch:
             root_str = f"{PITCH_NAMES[root_pc]}{quality}" if root_pc is not None else "—"
             print(f"    [reposo] beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
                   f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}  [{root_str}]")
 
-    # ── Paso 2: rellenar las notas de paso entre anclas de reposo ────────
+    # Paso 2: rellenar las notas de paso entre anclas de reposo
     idx = 0
     while idx < n:
         if adapted[idx] is not None:
@@ -633,7 +818,7 @@ def adapt_melody_structural_2(melody, chords, key_obj, time_sig, verbose=False):
         start = idx
         while idx < n and adapted[idx] is None:
             idx += 1
-        end = idx  # adapted[end] ya fijado, o end == n si es el final de la melodía
+        end = idx
 
         left_pitch = adapted[start - 1][1] if start > 0 else None
         right_pitch = adapted[end][1] if end < n else None
@@ -648,27 +833,21 @@ def adapt_melody_structural_2(melody, chords, key_obj, time_sig, verbose=False):
             adm = admissible_pcs(root_pc, quality, scale_pcs) if chord else set(scale_pcs)
 
             if left_pitch is not None and right_pitch is not None:
-                # Interpolación lineal entre las dos notas de reposo vecinas,
-                # proyectada sobre las notas admisibles (grados conjuntos reales)
                 frac = (k + 1) / (run_len + 1)
                 target = left_pitch + frac * (right_pitch - left_pitch)
                 new_pitch = nearest_admissible(int(round(target)), adm, 'nearest')
             elif left_pitch is not None:
-                # Sin ancla derecha (cola de la melodía): continuar la dirección
-                # original respecto al reposo anterior
                 direction = 'above' if pitch >= left_pitch else 'below'
                 new_pitch = nearest_admissible(pitch, adm, direction)
             elif right_pitch is not None:
-                # Sin ancla izquierda (inicio de la melodía)
                 direction = 'below' if pitch >= right_pitch else 'above'
                 new_pitch = nearest_admissible(pitch, adm, direction)
             else:
-                # Melodía sin ninguna nota de reposo detectada
                 new_pitch = nearest_admissible(pitch, adm, 'nearest')
 
             new_pitch = max(21, min(108, new_pitch))
             adapted[ridx] = (offset, new_pitch, dur, vel)
-            log[ridx] = _log_entry(ridx, offset, pitch, new_pitch, root_pc, quality, 'paso')
+            log[ridx] = _entry(ridx, offset, pitch, new_pitch, root_pc, quality, 'paso')
 
             if verbose and new_pitch != pitch:
                 print(f"    [paso]   beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
@@ -677,24 +856,131 @@ def adapt_melody_structural_2(melody, chords, key_obj, time_sig, verbose=False):
     return adapted, log
 
 
-def adapt_melody_structural_1(melody, chords, key_obj, time_sig, verbose=False):
+@register_strategy('guide_tones',
+    'Notas de reposo forzadas a 3ª/7ª del acorde (guide tones); notas de paso ajustadas a la escala admisible')
+def strategy_guide_tones(melody, chords, key_obj, time_sig, params, verbose=False):
     """
-    Estrategia 'structural_1' (solución alternativa, incluida para comparar):
-    clasificación binaria por nota, sin interpolar entre vecinas.
-
-      - Nota estructural si dur >= duración media de la melodía
-        O si cae en el tiempo 1 o 3 del compás (offset % beats_bar in (0, 2)).
-        → se fuerza al chord tone más cercano (sin tensiones).
-      - En caso contrario, nota de paso → se ajusta a la nota más cercana
-        dentro de la escala diatónica de la tonalidad (independientemente
-        de sus vecinas).
-
-    Devuelve (adapted, log) con el mismo formato que adapt_melody().
+    Variante «jazz» de structural_2: en vez de forzar el reposo a
+    *cualquier* chord tone, lo restringe a la 3ª o 7ª del acorde vigente
+    (las notas que definen su calidad — mayor/menor, dominante...). Las
+    notas de paso se ajustan de forma independiente (sin interpolación)
+    al conjunto admisible del acorde local.
     """
-    beats_bar = time_sig[0] if time_sig else 4
     scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
+    roles, scores = classify_note_roles(melody, time_sig, verbose=verbose)
 
-    mean_dur = (sum(dur for _, _, dur, _ in melody) / len(melody)) if melody else 0.25
+    adapted, log = [], []
+    for idx, (offset, pitch, dur, vel) in enumerate(melody):
+        chord = chord_at_beat(chords, offset)
+        if chord is None:
+            adapted.append((offset, pitch, dur, vel))
+            log.append({'idx': idx, 'orig': pitch, 'new': pitch,
+                        'chord': None, 'category': 'no_chord'})
+            continue
+
+        root_pc, quality = chord['root_pc'], chord['quality']
+        role = roles[idx]
+
+        if role == 'reposo':
+            guide = guide_tone_pcs(root_pc, quality)
+            new_pitch = nearest_admissible(pitch, guide, 'nearest')
+        else:
+            adm = admissible_pcs(root_pc, quality, scale_pcs)
+            new_pitch = nearest_admissible(pitch, adm, 'nearest')
+
+        new_pitch = max(21, min(108, new_pitch))
+        entry = _base_log_entry(idx, offset, pitch, new_pitch, root_pc, quality,
+                                 {'role': role, 'score': scores[idx]})
+        log.append(entry)
+        adapted.append((offset, new_pitch, dur, vel))
+
+        if verbose and new_pitch != pitch:
+            print(f"    [guide_tones:{role}] beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
+                  f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}")
+
+    return adapted, log
+
+
+# ═══════════════════════════════════════════════════════════
+# ESTRATEGIAS DE EMBELLECIMIENTO ARMÓNICO
+# ═══════════════════════════════════════════════════════════
+
+@register_strategy('chromatic_approach',
+    'Notas "avoid" se convierten en aproximación cromática (semitono) + resolución al chord tone')
+def strategy_chromatic_approach(melody, chords, key_obj, time_sig, params, verbose=False):
+    """
+    En vez de saltar directamente al chord tone más cercano, una nota
+    'avoid' se parte en dos: una breve nota de aproximación cromática
+    (un semitono antes, en el mismo lado del que se viene) y la nota
+    objetivo (chord tone) ocupando el resto de la duración.
+
+    params:
+      chromatic_min_dur (float, beats) — duración mínima de la nota de
+                                          aproximación (default 0.25)
+    """
+    min_dur = float(params.get('chromatic_min_dur', 0.25))
+    adapted, log = [], []
+
+    for idx, (offset, pitch, dur, vel) in enumerate(melody):
+        chord = chord_at_beat(chords, offset)
+        if chord is None:
+            adapted.append((offset, pitch, dur, vel))
+            log.append({'idx': idx, 'orig': pitch, 'new': pitch,
+                        'chord': None, 'category': 'no_chord'})
+            continue
+
+        root_pc, quality = chord['root_pc'], chord['quality']
+        cat_orig = chord_tone_category(pitch % 12, root_pc, quality)
+        chord_pcs = chord_tones_for_quality(root_pc, quality)
+
+        if cat_orig != 'avoid' or dur < min_dur * 2:
+            new_pitch = pitch if cat_orig != 'avoid' else nearest_admissible(pitch, chord_pcs, 'nearest')
+            new_pitch = max(21, min(108, new_pitch))
+            log.append(_base_log_entry(idx, offset, pitch, new_pitch, root_pc, quality,
+                                        {'split': False}))
+            adapted.append((offset, new_pitch, dur, vel))
+            continue
+
+        target = max(21, min(108, nearest_admissible(pitch, chord_pcs, 'nearest')))
+        direction = 1 if target >= pitch else -1
+        approach_pitch = max(21, min(108, target - direction))
+        app_dur = max(min_dur, dur * 0.3)
+        main_dur = dur - app_dur
+
+        adapted.append((offset, approach_pitch, app_dur * 0.95, max(35, vel - 15)))
+        adapted.append((offset + app_dur, target, main_dur * 0.95, vel))
+
+        log.append({
+            'idx': idx, 'beat': round(offset, 3), 'orig': pitch,
+            'new': [approach_pitch, target], 'moved': True,
+            'semitones': target - pitch,
+            'chord_root': PITCH_NAMES[root_pc], 'chord_quality': quality,
+            'cat_orig': cat_orig, 'cat_new': 'chord_tone', 'split': True,
+        })
+
+        if verbose:
+            print(f"    [chromatic] beat={offset:.2f}  {PITCH_NAMES[pitch%12]} (avoid) → "
+                  f"{PITCH_NAMES[approach_pitch%12]}(aprox.) → {PITCH_NAMES[target%12]}")
+
+    return adapted, log
+
+
+@register_strategy('common_tone',
+    'Cerca de un cambio de acorde, prioriza notas comunes (pitch class compartida) entre acorde saliente y entrante')
+def strategy_common_tone(melody, chords, key_obj, time_sig, params, verbose=False):
+    """
+    Si una nota cae cerca del final de un acorde (dentro de
+    `common_tone_window` beats antes del cambio) y su pitch class es un
+    chord tone compartido por el acorde actual y el siguiente, se
+    prioriza fijarla ahí (aunque no fuera necesario moverla). Fuera de
+    esa ventana, se comporta como 'nearest' estándar.
+
+    params:
+      common_tone_window (float, beats) — ventana antes del cambio de
+                                           acorde (default 0.5)
+    """
+    scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
+    window = float(params.get('common_tone_window', 0.5))
 
     adapted, log = [], []
     for idx, (offset, pitch, dur, vel) in enumerate(melody):
@@ -707,63 +993,190 @@ def adapt_melody_structural_1(melody, chords, key_obj, time_sig, verbose=False):
 
         root_pc, quality = chord['root_pc'], chord['quality']
         cat_orig = chord_tone_category(pitch % 12, root_pc, quality)
+        chord_end = chord['start'] + chord['dur']
+        next_chord = chord_at_beat(chords, chord_end + 1e-6)
 
-        is_structural = (dur >= mean_dur) or (offset % beats_bar in (0, 2))
-        if is_structural:
-            adm_set = chord_tones_for_quality(root_pc, quality)
+        common = set()
+        if next_chord is not None and next_chord is not chord and (chord_end - offset) <= window:
+            common = (chord_tones_for_quality(root_pc, quality)
+                      & chord_tones_for_quality(next_chord['root_pc'], next_chord['quality']))
+
+        used_common = False
+        if common and (pitch % 12) in common:
+            new_pitch = pitch
+            used_common = True
+        elif common:
+            new_pitch = nearest_admissible(pitch, common, 'nearest')
+            used_common = True
         else:
-            adm_set = set(scale_pcs) if scale_pcs else set(range(12))
+            adm = admissible_pcs(root_pc, quality, scale_pcs)
+            new_pitch = pitch if cat_orig != 'avoid' else nearest_admissible(pitch, adm, 'nearest')
 
-        new_pitch = nearest_admissible(pitch, adm_set, 'nearest')
         new_pitch = max(21, min(108, new_pitch))
-        cat_new = chord_tone_category(new_pitch % 12, root_pc, quality)
-
-        log_entry = {
-            'idx': idx, 'beat': round(offset, 3),
-            'orig': pitch, 'new': new_pitch,
-            'moved': (new_pitch != pitch), 'semitones': new_pitch - pitch,
-            'chord_root': PITCH_NAMES[root_pc], 'chord_quality': quality,
-            'cat_orig': cat_orig, 'cat_new': cat_new,
-            'is_structural': is_structural,
-        }
-        log.append(log_entry)
+        entry = _base_log_entry(idx, offset, pitch, new_pitch, root_pc, quality,
+                                 {'common_tone': used_common})
+        log.append(entry)
         adapted.append((offset, new_pitch, dur, vel))
 
-        if verbose and new_pitch != pitch:
-            print(f"    beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
-                  f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}"
-                  f"  [{PITCH_NAMES[root_pc]}{quality}]  structural={is_structural}")
+        if verbose and used_common and new_pitch != pitch:
+            print(f"    [common_tone] beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
+                  f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}  (nota común con el siguiente acorde)")
 
     return adapted, log
 
 
-def adapt_melody(melody, chords, key_obj, mode='contour', time_sig=(4, 4), verbose=False):
+@register_strategy('suspension',
+    'Permite tensión en tiempo fuerte si la nota siguiente resuelve por grado conjunto hacia abajo (4-3, 9-8...)')
+def strategy_suspension(melody, chords, key_obj, time_sig, params, verbose=False):
     """
-    Adapta cada nota de la melodía al acorde vigente.
-
-    Args:
-        melody   : list of (offset, pitch, dur, vel)
-        chords   : list de acordes (dicts con root_pc, quality, start, dur)
-        key_obj  : tonalidad
-        mode     : 'nearest' | 'above' | 'below' | 'contour' | 'scale' |
-                   'structural_1' | 'structural_2'
-        time_sig : (numerador, denominador) — necesario para ambos modos structural_*
-
-    Returns:
-        adapted  : list of (offset, new_pitch, dur, vel)
-        log      : list of dicts con info por nota
+    Si una nota es 'tension' (no 'avoid') y cae en tiempo fuerte/pulso, y
+    la nota siguiente está un grado (o semitono) por debajo, se conserva
+    la tensión como suspensión y se fuerza a la nota siguiente a resolver
+    en un chord tone válido de su propio acorde (por grado conjunto hacia
+    abajo si es posible). El resto de notas se comporta como 'nearest'.
     """
-    if mode == 'structural_2':
-        return adapt_melody_structural_2(melody, chords, key_obj, time_sig, verbose=verbose)
-    if mode == 'structural_1':
-        return adapt_melody_structural_1(melody, chords, key_obj, time_sig, verbose=verbose)
-
     scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
-    adapted = []
-    log = []
+    beats_bar = beats_per_bar_from_ts(time_sig)
+    n = len(melody)
+    adapted = [None] * n
+    log = [None] * n
 
-    prev_orig = None
-    prev_adapted_pitch = None
+    def base_note(pitch, chord):
+        root_pc, quality = chord['root_pc'], chord['quality']
+        adm = admissible_pcs(root_pc, quality, scale_pcs)
+        cat_orig = chord_tone_category(pitch % 12, root_pc, quality)
+        new_pitch = pitch if cat_orig != 'avoid' else nearest_admissible(pitch, adm, 'nearest')
+        return max(21, min(108, new_pitch)), cat_orig
+
+    i = 0
+    while i < n:
+        offset, pitch, dur, vel = melody[i]
+        chord = chord_at_beat(chords, offset)
+        if chord is None:
+            adapted[i] = (offset, pitch, dur, vel)
+            log[i] = {'idx': i, 'orig': pitch, 'new': pitch, 'chord': None, 'category': 'no_chord'}
+            i += 1
+            continue
+
+        root_pc, quality = chord['root_pc'], chord['quality']
+        cat_orig = chord_tone_category(pitch % 12, root_pc, quality)
+        metric = note_metric_strength(offset, beats_bar)
+
+        candidate = (cat_orig == 'tension' and metric >= 0.6 and i < n - 1)
+        resolves = False
+        if candidate:
+            next_offset, next_pitch, next_dur, next_vel = melody[i + 1]
+            step = pitch - next_pitch
+            resolves = 0 < step <= 2
+
+        if candidate and resolves:
+            adapted[i] = (offset, pitch, dur, vel)
+            log[i] = _base_log_entry(i, offset, pitch, pitch, root_pc, quality, {'suspension': True})
+
+            next_chord = chord_at_beat(chords, next_offset) or chord
+            n_root, n_quality = next_chord['root_pc'], next_chord['quality']
+            chord_pcs = chord_tones_for_quality(n_root, n_quality)
+            target = nearest_admissible(next_pitch, chord_pcs, 'below')
+            if abs(target - next_pitch) > 2:
+                target = nearest_admissible(next_pitch, chord_pcs, 'nearest')
+            target = max(21, min(108, target))
+
+            adapted[i + 1] = (next_offset, target, next_dur, next_vel)
+            log[i + 1] = _base_log_entry(i + 1, next_offset, next_pitch, target, n_root, n_quality,
+                                          {'suspension_resolution': True})
+
+            if verbose:
+                print(f"    [suspensión] beat={offset:.2f}  {PITCH_NAMES[pitch%12]} (tensión, tiempo fuerte)"
+                      f" → resuelve en beat={next_offset:.2f} a {PITCH_NAMES[target%12]}")
+            i += 2
+            continue
+
+        new_pitch, cat_o = base_note(pitch, chord)
+        log[i] = _base_log_entry(i, offset, pitch, new_pitch, root_pc, quality, {'suspension': False})
+        adapted[i] = (offset, new_pitch, dur, vel)
+        i += 1
+
+    return adapted, log
+
+
+# ═══════════════════════════════════════════════════════════
+# ESTRATEGIAS DE RANGO Y CONTRAPUNTO
+# ═══════════════════════════════════════════════════════════
+
+@register_strategy('limited_leap',
+    'Limita el salto máximo (semitonos) al corregir una nota "avoid"; si no hay opción dentro del límite, usa la más cercana disponible')
+def strategy_limited_leap(melody, chords, key_obj, time_sig, params, verbose=False):
+    """
+    params:
+      leap_max (float, semitonos) — salto máximo permitido (default 4)
+    """
+    scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
+    leap_max = float(params.get('leap_max', 4))
+
+    adapted, log = [], []
+    for idx, (offset, pitch, dur, vel) in enumerate(melody):
+        chord = chord_at_beat(chords, offset)
+        if chord is None:
+            adapted.append((offset, pitch, dur, vel))
+            log.append({'idx': idx, 'orig': pitch, 'new': pitch,
+                        'chord': None, 'category': 'no_chord'})
+            continue
+
+        root_pc, quality = chord['root_pc'], chord['quality']
+        adm = admissible_pcs(root_pc, quality, scale_pcs)
+        cat_orig = chord_tone_category(pitch % 12, root_pc, quality)
+
+        leap_exceeded = False
+        if cat_orig != 'avoid':
+            new_pitch = pitch
+        else:
+            candidates = []
+            for ap in adm:
+                for oct_delta in range(-2, 3):
+                    cand = (pitch // 12 + oct_delta) * 12 + ap
+                    if 21 <= cand <= 108:
+                        candidates.append(cand)
+            within = [c for c in candidates if abs(c - pitch) <= leap_max]
+            if within:
+                new_pitch = min(within, key=lambda c: abs(c - pitch))
+            elif candidates:
+                new_pitch = min(candidates, key=lambda c: abs(c - pitch))
+                leap_exceeded = True
+            else:
+                new_pitch = pitch
+
+        new_pitch = max(21, min(108, new_pitch))
+        entry = _base_log_entry(idx, offset, pitch, new_pitch, root_pc, quality,
+                                 {'leap_max': leap_max, 'leap_exceeded': leap_exceeded})
+        log.append(entry)
+        adapted.append((offset, new_pitch, dur, vel))
+
+        if verbose and new_pitch != pitch:
+            flag = "  [LÍMITE SUPERADO]" if leap_exceeded else ""
+            print(f"    [limited_leap] beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
+                  f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}{flag}")
+
+    return adapted, log
+
+
+@register_strategy('counterpoint_bass',
+    'Evita unísono/8ª/5ª justa con el bajo del acorde vigente; marca posibles paralelas con la nota anterior')
+def strategy_counterpoint_bass(melody, chords, key_obj, time_sig, params, verbose=False):
+    """
+    Regla simplificada de contrapunto: al corregir una nota 'avoid', evita
+    que el intervalo resultante con el bajo del acorde sea unísono/octava
+    (0) o quinta justa (7) siempre que haya alternativa admisible. También
+    marca (sin corregir) el caso de posibles quintas/octavas paralelas
+    reales: mismo intervalo prohibido que la nota anterior.
+
+    Nota: es una heurística vertical nota-a-nota, no un detector completo
+    de movimiento paralelo (no considera voces intermedias).
+    """
+    scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
+    forbidden = {0, 7}
+
+    adapted, log = [], []
+    prev_interval = None
 
     for idx, (offset, pitch, dur, vel) in enumerate(melody):
         chord = chord_at_beat(chords, offset)
@@ -771,77 +1184,319 @@ def adapt_melody(melody, chords, key_obj, mode='contour', time_sig=(4, 4), verbo
             adapted.append((offset, pitch, dur, vel))
             log.append({'idx': idx, 'orig': pitch, 'new': pitch,
                         'chord': None, 'category': 'no_chord'})
-            prev_orig = pitch
-            prev_adapted_pitch = pitch
             continue
 
-        root_pc = chord['root_pc']
-        quality = chord['quality']
-
+        root_pc, quality = chord['root_pc'], chord['quality']
         adm = admissible_pcs(root_pc, quality, scale_pcs)
         cat_orig = chord_tone_category(pitch % 12, root_pc, quality)
+        bass_pc = (min(chord['pitches']) % 12) if chord['pitches'] else root_pc
+
+        def interval_with_bass(pc):
+            return (pc - bass_pc) % 12
 
         if cat_orig != 'avoid':
-            # Ya es admisible: mantener
             new_pitch = pitch
         else:
-            if mode == 'nearest':
-                new_pitch = nearest_admissible(pitch, adm, 'nearest')
-            elif mode == 'above':
-                new_pitch = nearest_admissible(pitch, adm, 'above')
-            elif mode == 'below':
-                new_pitch = nearest_admissible(pitch, adm, 'below')
-            elif mode == 'scale':
-                new_pitch = adapt_note_scale(pitch, chord, scale_pcs)
-            elif mode == 'contour':
-                # Preservar contorno
-                if prev_orig is not None and prev_adapted_pitch is not None:
-                    delta = pitch - prev_orig
-                    if delta > 0:
-                        direction = 'above'
-                    elif delta < 0:
-                        direction = 'below'
-                    else:
-                        direction = 'nearest'
-                    new_pitch = nearest_admissible(pitch, adm, direction)
-                    # Si el resultado invierte el contorno, relajar a nearest
-                    if delta > 0 and new_pitch < prev_adapted_pitch:
-                        new_pitch = nearest_admissible(pitch, adm, 'nearest')
-                    elif delta < 0 and new_pitch > prev_adapted_pitch:
-                        new_pitch = nearest_admissible(pitch, adm, 'nearest')
-                else:
-                    new_pitch = nearest_admissible(pitch, adm, 'nearest')
-            else:
-                new_pitch = nearest_admissible(pitch, adm, 'nearest')
+            cands = set()
+            for ap in adm:
+                base = (pitch // 12) * 12 + ap
+                for oct_delta in (-12, 0, 12):
+                    c = base + oct_delta
+                    if 21 <= c <= 108:
+                        cands.add(c)
+            cands = sorted(cands, key=lambda c: abs(c - pitch))
+            non_forbidden = [c for c in cands if interval_with_bass(c) not in forbidden]
+            pool = non_forbidden if non_forbidden else cands
+            new_pitch = pool[0] if pool else pitch
 
-        new_pitch = max(21, min(108, new_pitch))  # rango MIDI de piano
-        cat_new = chord_tone_category(new_pitch % 12, root_pc, quality)
+        new_pitch = max(21, min(108, new_pitch))
+        cur_interval = interval_with_bass(new_pitch)
+        parallel_flag = (prev_interval is not None and cur_interval in forbidden
+                         and cur_interval == prev_interval)
 
-        log.append({
-            'idx': idx,
-            'beat': round(offset, 3),
-            'orig': pitch,
-            'new': new_pitch,
-            'moved': (new_pitch != pitch),
-            'semitones': new_pitch - pitch,
-            'chord_root': PITCH_NAMES[root_pc],
-            'chord_quality': quality,
-            'cat_orig': cat_orig,
-            'cat_new': cat_new,
-        })
-
-        if verbose and new_pitch != pitch:
-            print(f"    beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
-                  f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}"
-                  f"  [{PITCH_NAMES[root_pc]}{quality}]"
-                  f"  {cat_orig}→{cat_new}")
-
+        entry = _base_log_entry(idx, offset, pitch, new_pitch, root_pc, quality,
+                                 {'bass_interval': cur_interval, 'parallel_with_bass': parallel_flag})
+        log.append(entry)
         adapted.append((offset, new_pitch, dur, vel))
-        prev_orig = pitch
-        prev_adapted_pitch = new_pitch
+        prev_interval = cur_interval
+
+        if verbose and parallel_flag:
+            print(f"    [counterpoint_bass] beat={offset:.2f}: posible 5ª/8ª paralela con el bajo")
 
     return adapted, log
 
+
+# ═══════════════════════════════════════════════════════════
+# ESTRATEGIA GLOBAL (programación dinámica / Viterbi)
+# ═══════════════════════════════════════════════════════════
+
+def _dp_candidates(pitch, chord, scale_pcs, max_candidates=6):
+    """Genera hasta `max_candidates` pitches admisibles cercanos al original."""
+    root_pc, quality = chord['root_pc'], chord['quality']
+    adm = admissible_pcs(root_pc, quality, scale_pcs) or set(range(12))
+    base_oct = pitch // 12
+    cands = set()
+    for ap in adm:
+        for oct_delta in (-1, 0, 1):
+            cands.add((base_oct + oct_delta) * 12 + ap)
+    cands = [c for c in cands if 21 <= c <= 108]
+    cands.sort(key=lambda c: abs(c - pitch))
+    return cands[:max_candidates] or [pitch]
+
+
+def _dp_harmonic_cost(pitch, chord):
+    if chord is None:
+        return 0.0
+    cat = chord_tone_category(pitch % 12, chord['root_pc'], chord['quality'])
+    return {'chord_tone': 0.0, 'tension': 1.0, 'avoid': 4.0}.get(cat, 2.0)
+
+
+@register_strategy('dp_global',
+    'Optimización global (Viterbi): minimiza disonancia + distancia al original + tamaño de salto en toda la frase')
+def strategy_dp_global(melody, chords, key_obj, time_sig, params, verbose=False):
+    """
+    En vez de decidir nota a nota, construye para cada nota un pequeño
+    conjunto de candidatos admisibles cercanos al pitch original y usa
+    programación dinámica (estilo Viterbi) para encontrar la secuencia
+    completa que minimiza:
+
+        coste = Σ [ coste_armónico(nota) + w_dist·|nota - original| ]
+              + Σ w_leap·|nota_i - nota_(i-1)|
+
+    Esto evita quedarse atascado en una decisión local subóptima, a
+    diferencia de las estrategias «nota a nota».
+
+    params:
+      dp_distance_weight (float) — peso de alejarse del pitch original (default 0.4)
+      dp_leap_weight     (float) — peso del tamaño de salto entre notas consecutivas (default 0.6)
+      dp_max_candidates  (int)   — nº de candidatos por nota (default 6)
+    """
+    scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
+    w_dist = float(params.get('dp_distance_weight', 0.4))
+    w_leap = float(params.get('dp_leap_weight', 0.6))
+    max_cands = int(params.get('dp_max_candidates', 6))
+
+    n = len(melody)
+    if n == 0:
+        return [], []
+
+    per_note_chord = [chord_at_beat(chords, melody[i][0]) for i in range(n)]
+    candidates = [
+        (_dp_candidates(melody[i][1], per_note_chord[i], scale_pcs, max_cands)
+         if per_note_chord[i] is not None else [melody[i][1]])
+        for i in range(n)
+    ]
+
+    dp = [dict() for _ in range(n)]
+    back = [dict() for _ in range(n)]
+
+    pitch0 = melody[0][1]
+    for c in candidates[0]:
+        dp[0][c] = _dp_harmonic_cost(c, per_note_chord[0]) + w_dist * abs(c - pitch0)
+        back[0][c] = None
+
+    for i in range(1, n):
+        pitch_i = melody[i][1]
+        for c in candidates[i]:
+            h_cost = _dp_harmonic_cost(c, per_note_chord[i]) + w_dist * abs(c - pitch_i)
+            best_prev, best_cost = None, float('inf')
+            for p, p_cost in dp[i - 1].items():
+                total = p_cost + w_leap * abs(c - p)
+                if total < best_cost:
+                    best_cost, best_prev = total, p
+            dp[i][c] = h_cost + best_cost
+            back[i][c] = best_prev
+
+    last_c = min(dp[n - 1], key=lambda k: dp[n - 1][k])
+    path = [None] * n
+    path[n - 1] = last_c
+    for i in range(n - 1, 0, -1):
+        path[i - 1] = back[i][path[i]]
+
+    adapted, log = [], []
+    for i, (offset, pitch, dur, vel) in enumerate(melody):
+        new_pitch = max(21, min(108, path[i]))
+        chord = per_note_chord[i]
+        root_pc = chord['root_pc'] if chord else None
+        quality = chord['quality'] if chord else None
+        entry = _base_log_entry(i, offset, pitch, new_pitch, root_pc, quality,
+                                 {'dp_cost': round(dp[i][path[i]], 3)})
+        log.append(entry)
+        adapted.append((offset, new_pitch, dur, vel))
+
+        if verbose and new_pitch != pitch:
+            print(f"    [dp_global] beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
+                  f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}  coste={dp[i][path[i]]:.2f}")
+
+    return adapted, log
+
+
+# ═══════════════════════════════════════════════════════════
+# ESTRATEGIA BASADA EN CORPUS (cadena de Markov de intervalos)
+# ═══════════════════════════════════════════════════════════
+
+MARKOV_DEFAULT_INTERVAL_WEIGHTS = {
+    -7: 1, -6: 1, -5: 2, -4: 3, -3: 5, -2: 8, -1: 13,
+    0: 3,
+    1: 13, 2: 8, 3: 5, 4: 3, 5: 2, 6: 1, 7: 1,
+}
+
+
+def _markov_bucket(interval):
+    return max(-7, min(7, interval))
+
+
+def _extract_melodic_intervals(midi_path):
+    """Extrae los intervalos (en semitonos) de la línea con pitch medio más agudo de un MIDI."""
+    try:
+        notes_by_ch, _, _, _, _ = _load_midi_notes(midi_path)
+    except Exception:
+        return []
+    if not notes_by_ch:
+        return []
+
+    def mean_pitch(ns):
+        return np.mean([p for _, p, _, _ in ns]) if ns else 0
+
+    ch = max(notes_by_ch, key=lambda c: mean_pitch(notes_by_ch[c]))
+    notes = sorted(notes_by_ch[ch], key=lambda x: x[0])
+    pitches = [p for _, p, _, _ in notes]
+    return [b - a for a, b in zip(pitches, pitches[1:])]
+
+
+def build_markov_table(corpus_dir=None, max_files=40, verbose=False):
+    """
+    Construye una tabla de transición de orden 1 sobre intervalos
+    melódicos (bucketizados en [-7, 7] semitonos). Si se da un
+    directorio de corpus, cuenta transiciones reales de sus MIDIs; en
+    cualquier caso se suaviza (Laplace) con una distribución por defecto
+    que favorece el movimiento por grados conjuntos.
+    """
+    counts = defaultdict(lambda: defaultdict(float))
+    n_files = 0
+
+    if corpus_dir and os.path.isdir(corpus_dir):
+        midi_files = sorted(Path(corpus_dir).rglob('*.mid'))[:max_files]
+        for mf in midi_files:
+            intervals = _extract_melodic_intervals(str(mf))
+            if len(intervals) < 2:
+                continue
+            buckets = [_markov_bucket(x) for x in intervals]
+            for a, b in zip(buckets, buckets[1:]):
+                counts[a][b] += 1.0
+            n_files += 1
+        if verbose:
+            print(f"    Markov: tabla construida desde {n_files} MIDIs de {corpus_dir}")
+    elif verbose:
+        print("    Markov: sin corpus externo, usando prior por defecto")
+
+    buckets = list(range(-7, 8))
+    table = {}
+    for a in buckets:
+        weights = {b: counts[a].get(b, 0.0) + MARKOV_DEFAULT_INTERVAL_WEIGHTS.get(b, 1) * 0.3
+                   for b in buckets}
+        total = sum(weights.values()) or 1.0
+        table[a] = {b: w / total for b, w in weights.items()}
+    return table
+
+
+def _markov_prob(table, prev_interval, candidate_interval):
+    row = table.get(_markov_bucket(prev_interval))
+    if row is None:
+        return MARKOV_DEFAULT_INTERVAL_WEIGHTS.get(_markov_bucket(candidate_interval), 1)
+    return row.get(_markov_bucket(candidate_interval), 1e-6)
+
+
+@register_strategy('markov',
+    'Elige entre las notas admisibles la que mejor continúa el intervalo previo según una cadena de Markov (opcionalmente entrenada con --strategy-param markov_corpus=DIR)')
+def strategy_markov(melody, chords, key_obj, time_sig, params, verbose=False):
+    """
+    params:
+      markov_corpus       (str)   — carpeta con MIDIs para entrenar la tabla de
+                                     transición (opcional; sin ella usa un prior
+                                     por defecto que favorece grados conjuntos)
+      markov_search_range (int)   — rango de semitonos explorado alrededor de
+                                     la nota adaptada anterior (default 7)
+    """
+    scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
+    corpus_dir = params.get('markov_corpus')
+    table = build_markov_table(corpus_dir, verbose=verbose)
+    search_range = int(params.get('markov_search_range', 7))
+
+    adapted, log = [], []
+    prev_pitch_adapted, prev_interval = None, 0
+
+    for idx, (offset, pitch, dur, vel) in enumerate(melody):
+        chord = chord_at_beat(chords, offset)
+        if chord is None:
+            adapted.append((offset, pitch, dur, vel))
+            log.append({'idx': idx, 'orig': pitch, 'new': pitch,
+                        'chord': None, 'category': 'no_chord'})
+            prev_pitch_adapted = pitch
+            continue
+
+        root_pc, quality = chord['root_pc'], chord['quality']
+        adm = admissible_pcs(root_pc, quality, scale_pcs)
+        cat_orig = chord_tone_category(pitch % 12, root_pc, quality)
+
+        if cat_orig != 'avoid' or prev_pitch_adapted is None:
+            new_pitch = pitch if cat_orig != 'avoid' else nearest_admissible(pitch, adm, 'nearest')
+        else:
+            candidates = [
+                prev_pitch_adapted + d for d in range(-search_range, search_range + 1)
+                if 21 <= prev_pitch_adapted + d <= 108
+                and ((prev_pitch_adapted + d) % 12) in adm
+            ]
+            if not candidates:
+                new_pitch = nearest_admissible(pitch, adm, 'nearest')
+            else:
+                def score(cand):
+                    interval = cand - prev_pitch_adapted
+                    return _markov_prob(table, prev_interval, interval) - abs(cand - pitch) * 0.01
+                new_pitch = max(candidates, key=score)
+
+        new_pitch = max(21, min(108, new_pitch))
+        log.append(_base_log_entry(idx, offset, pitch, new_pitch, root_pc, quality))
+        adapted.append((offset, new_pitch, dur, vel))
+
+        if prev_pitch_adapted is not None:
+            prev_interval = new_pitch - prev_pitch_adapted
+        prev_pitch_adapted = new_pitch
+
+        if verbose and new_pitch != pitch:
+            print(f"    [markov] beat={offset:.2f}  {PITCH_NAMES[pitch%12]}{pitch//12-1}"
+                  f" → {PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}")
+
+    return adapted, log
+
+
+# ═══════════════════════════════════════════════════════════
+# DISPATCHER
+# ═══════════════════════════════════════════════════════════
+
+def adapt_melody(melody, chords, key_obj, mode='contour', time_sig=(4, 4),
+                 params=None, verbose=False):
+    """
+    Adapta cada nota de la melodía al acorde vigente, delegando en la
+    estrategia registrada bajo `mode` (ver STRATEGIES / list_strategies()).
+
+    Args:
+        melody   : list of (offset, pitch, dur, vel)
+        chords   : list de acordes (dicts con root_pc, quality, start, dur, pitches)
+        key_obj  : tonalidad
+        mode     : nombre de una estrategia registrada
+        time_sig : (numerador, denominador)
+        params   : dict con opciones específicas de la estrategia
+
+    Returns:
+        adapted  : list of (offset, new_pitch, dur, vel)
+        log      : list de dicts con info por nota
+    """
+    if mode not in STRATEGIES:
+        disponibles = ', '.join(sorted(STRATEGIES))
+        raise ValueError(f"Estrategia de adaptación desconocida: '{mode}'. Disponibles: {disponibles}")
+    fn = STRATEGIES[mode]['fn']
+    return fn(melody, chords, key_obj, time_sig, params or {}, verbose=verbose)
 
 # ═══════════════════════════════════════════════════════════
 # ORNAMENTACIÓN
@@ -1185,6 +1840,7 @@ def compute_stats(original_melody, adapted_melody, log):
 def harmonize_melody(harmony_midi: str,
                      melody_midi: str,
                      adapt_mode: str = 'contour',
+                     strategy_params: dict = None,
                      ornament_types: list = None,
                      ornament_bars: list = None,
                      ornament_prob: float = 0.4,
@@ -1283,7 +1939,8 @@ def harmonize_melody(harmony_midi: str,
     print("\n  [3/4] Adaptando melodía…")
     try:
         adapted, adapt_log = adapt_melody(
-            melody, chords, key_obj, mode=adapt_mode, time_sig=time_sig, verbose=verbose
+            melody, chords, key_obj, mode=adapt_mode, time_sig=time_sig,
+            params=strategy_params, verbose=verbose
         )
     except Exception as e:
         print(f"[ERROR] Adaptación: {e}")
@@ -1352,6 +2009,7 @@ def harmonize_melody(harmony_midi: str,
         'time_sig': list(time_sig),
         'total_bars': total_bars,
         'adapt_mode': adapt_mode,
+        'strategy_params': strategy_params or {},
         'stats': stats,
         'ornaments': {
             'types': ornament_types,
@@ -1382,23 +2040,22 @@ def harmonize_melody(harmony_midi: str,
 # ═══════════════════════════════════════════════════════════
 
 def build_parser():
+    strategy_lines = "\n".join(
+        f"  {name:<18}{desc}" for name, desc in list_strategies()
+    )
     p = argparse.ArgumentParser(
         description='MELODY HARMONIZER — Adapta una melodía MIDI a una armonía dada',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Modos de adaptación:
-  nearest   Nota admisible más cercana al original
-  above     Chord tone más próximo por arriba
-  below     Chord tone más próximo por abajo
-  contour   Preserva el contorno melódico (subidas/bajadas) [default]
-  scale     Proyecta sobre la escala del acorde vigente
-  structural_1  Nota estructural si dur >= duración media O cae en tiempo 1/3
-                → chord tone; nota de paso → escala diatónica (ajuste
-                independiente por nota, sin mirar a las vecinas)
-  structural_2  Clasificación reposo/paso por score (fuerza métrica graduada +
-                duración + detección de grados conjuntos); reposo → chord
-                tone; paso → interpola por grados conjuntos entre los
-                reposos que lo rodean
+        epilog=f"""
+Estrategias de adaptación disponibles (ver también --list-strategies):
+{strategy_lines}
+
+Parámetros por estrategia (--strategy-param clave=valor, repetible):
+  chromatic_approach : chromatic_min_dur
+  common_tone        : common_tone_window
+  limited_leap       : leap_max
+  dp_global          : dp_distance_weight, dp_leap_weight, dp_max_candidates
+  markov             : markov_corpus, markov_search_range
 
 Ornamentos disponibles:
   appoggiatura  Nota disonante en tiempo fuerte que resuelve por semitono
@@ -1408,18 +2065,25 @@ Ornamentos disponibles:
 
 Ejemplos:
   python melody_harmonizer.py harmony.mid melody.mid
-  python melody_harmonizer.py harmony.mid melody.mid --adapt-mode contour
+  python melody_harmonizer.py harmony.mid melody.mid --adapt-mode dp_global
+  python melody_harmonizer.py harmony.mid melody.mid --adapt-mode limited_leap --strategy-param leap_max=3
+  python melody_harmonizer.py harmony.mid melody.mid --adapt-mode markov --strategy-param markov_corpus=/ruta/corpus
   python melody_harmonizer.py harmony.mid melody.mid --ornaments passing appoggiatura --ornament-bars 3 7 11 15
   python melody_harmonizer.py harmony.mid melody.mid --ornaments all --ornament-prob 0.5
   python melody_harmonizer.py harmony.mid melody.mid --key "D minor" --verbose --report
+  python melody_harmonizer.py --list-strategies
         """
     )
-    p.add_argument('harmony', help='MIDI con la armonía (acordes)')
-    p.add_argument('melody',  help='MIDI con la melodía a adaptar')
+    p.add_argument('harmony', nargs='?', help='MIDI con la armonía (acordes)')
+    p.add_argument('melody',  nargs='?', help='MIDI con la melodía a adaptar')
     p.add_argument('--adapt-mode', default='contour',
-                   choices=['nearest', 'above', 'below', 'contour', 'scale',
-                            'structural_1', 'structural_2'],
+                   choices=sorted(STRATEGIES.keys()),
                    help='Estrategia de adaptación melódica (default: contour)')
+    p.add_argument('--strategy-param', nargs='+', default=[], metavar='KEY=VALUE',
+                   help='Parámetros específicos de la estrategia, formato clave=valor '
+                        '(numérico si es posible). Repetible.')
+    p.add_argument('--list-strategies', action='store_true',
+                   help='Lista las estrategias de adaptación disponibles y su descripción, y termina')
     p.add_argument('--ornaments', nargs='+', default=[],
                    choices=['appoggiatura', 'passing', 'neighbor', 'all'],
                    metavar='ORNAMENT',
@@ -1444,14 +2108,44 @@ Ejemplos:
     return p
 
 
+def _parse_strategy_params(pairs):
+    """Convierte ['leap_max=3', 'markov_corpus=/x'] en {'leap_max': 3.0, 'markov_corpus': '/x'}."""
+    params = {}
+    for item in pairs:
+        if '=' not in item:
+            continue
+        key, _, value = item.partition('=')
+        key = key.strip()
+        value = value.strip()
+        try:
+            value = float(value)
+            if value.is_integer():
+                value = int(value)
+        except ValueError:
+            pass
+        params[key] = value
+    return params
+
+
 def main():
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.list_strategies:
+        print("\nEstrategias de adaptación disponibles:\n")
+        for name, desc in list_strategies():
+            print(f"  {name:<20}{desc}")
+        print()
+        return
+
+    if not args.harmony or not args.melody:
+        parser.error("se requieren los argumentos 'harmony' y 'melody' (o usa --list-strategies)")
 
     harmonize_melody(
         harmony_midi=args.harmony,
         melody_midi=args.melody,
         adapt_mode=args.adapt_mode,
+        strategy_params=_parse_strategy_params(args.strategy_param),
         ornament_types=args.ornaments if args.ornaments else [],
         ornament_bars=args.ornament_bars,
         ornament_prob=args.ornament_prob,
