@@ -16,11 +16,17 @@
 ║  no tienes material de referencia.                                           ║
 ║                                                                              ║
 ║  FLUJO INTERNO:                                                              ║
-║  [1] FUNCIÓN ARMÓNICA — asigna T/S/D a cada compás según curva de tensión  ║
+║  [1] FUNCIÓN ARMÓNICA — asigna T/S/D/AD a cada compás según curva tensión  ║
 ║  [2] SELECCIÓN DE PATRÓN — elige patrones del catálogo según estilo/modo    ║
 ║  [3] RESOLUCIÓN — convierte numerales romanos a acordes concretos           ║
 ║  [4] SCORING — puntúa candidatos por coherencia y variedad                  ║
 ║  [5] EXPORTACIÓN — texto, JSON y MIDI de acordes en bloque                  ║
+║                                                                              ║
+║  DOMINANTES SECUNDARIOS (numerales V/x, p.ej. V/ii, V/vi, V/V):             ║
+║  Resueltos automáticamente (5ª superior de x + 7ª de dominante) y con       ║
+║  función armónica propia (AD, tensión 0.85). Presentes ya en varios         ║
+║  patrones de --style baroque/romantic/jazz; también se pueden usar          ║
+║  a mano vía --from-theorist o construyendo el patrón manualmente.           ║
 ║                                                                              ║
 ║  ESTILOS DISPONIBLES (--style):                                              ║
 ║    diatonic        — progresiones diatónicas clásicas                       ║
@@ -165,23 +171,31 @@ MODES = {
     'phrygian_dominant':[0, 1, 4, 5, 7, 8, 10],
 }
 
-# Función armónica por grado: T=tónica, S=subdominante, D=dominante, P=preparación
+# Función armónica por grado: T=tónica, S=subdominante, D=dominante, P=preparación,
+# AD=dominante aplicado/secundario (tensión de una tonicización, aún mayor que D
+# porque "tensiona hacia una tensión")
 HARMONIC_FUNCTION = {
     'major': {
         'I': 'T', 'ii': 'S', 'iii': 'T', 'IV': 'S',
         'V': 'D', 'V7': 'D', 'vi': 'T', 'vii°': 'D',
         'bII': 'S', 'bVI': 'T', 'bVII': 'S', 'bIII': 'T',
         'IV/I': 'S', 'V/I': 'D', 'ii/I': 'S',
+        # Dominantes secundarios
+        'V/ii': 'AD', 'V/iii': 'AD', 'V/IV': 'AD', 'V/V': 'AD',
+        'V/vi': 'AD', 'V/VII': 'AD', 'V/bVI': 'AD', 'V/bIII': 'AD',
     },
     'minor': {
         'i': 'T', 'ii°': 'S', 'III': 'T', 'iv': 'S',
         'V': 'D', 'V7': 'D', 'VI': 'T', 'VII': 'S',
         'bII': 'S', 'bVI': 'T', 'bIII': 'T',
+        # Dominantes secundarios
+        'V/III': 'AD', 'V/iv': 'AD', 'V/VII': 'AD', 'V/ii': 'AD',
+        'V/vi': 'AD', 'V/V': 'AD', 'V/bVI': 'AD', 'V/bIII': 'AD',
     },
 }
 
 # Tensión asociada a cada función
-FUNCTION_TENSION = {'T': 0.2, 'S': 0.5, 'D': 0.8, 'P': 0.6}
+FUNCTION_TENSION = {'T': 0.2, 'S': 0.5, 'D': 0.8, 'P': 0.6, 'AD': 0.85}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CATÁLOGO DE PATRONES POR ESTILO Y MODO
@@ -218,12 +232,16 @@ PATTERNS = {
             [('I',2),('IV',2),('ii',2),('V',2)],
             [('I',1),('ii',1),('V',1),('vi',1),('IV',2),('V',2)],
             [('I',2),('V',1),('IV',1),('ii',2),('V',2)],
+            # Dominante secundario de la dominante (la "doble dominante")
+            [('I',1),('ii',1),('V/V',1),('V',1),('I',2)],
         ],
         'minor': [
             [('i',1),('V',1),('i',1),('iv',1),('i',1),('V',1),('i',2)],
             [('i',2),('iv',2),('ii°',2),('V',2)],
             [('i',1),('VII',1),('VI',1),('V',1),('i',2)],
             [('i',2),('iv',1),('V',1),('i',2),('V',2)],
+            # Dominante secundario del iv antes de llegar a él
+            [('i',1),('V/iv',1),('iv',1),('V',1),('i',2)],
         ],
     },
 
@@ -236,12 +254,16 @@ PATTERNS = {
             [('IM7',1),('bII7',1),('IM7',2),('IV7',2)],
             [('iii7',2),('bIII7',2),('ii7',2),('V7',2)],
             [('I6',2),('ii7',2),('V7',2),('IM7',2)],
+            # Dominante secundario del vi antes de un ii-V-I ("turnaround" clásico)
+            [('IM7',2),('V/vi',1),('vi7',1),('ii7',2),('V7',2)],
         ],
         'minor': [
             [('im7',2),('iv7',2),('VII7',2),('III7',2)],
             [('im7',2),('bII7',2),('im7',2),('V7',2)],
             [('ii°7',2),('V7',2),('im7',2),('VI7',2)],
             [('im9',2),('iv9',2),('V7',2),('im7',2)],
+            # Dominante secundario del iv antes de resolver a V
+            [('im7',2),('V/iv',1),('iv7',1),('V7',2)],
         ],
     },
 
@@ -289,12 +311,16 @@ PATTERNS = {
             [('I',2),('iv',2),('I',2),('V',2)],
             [('I',2),('bIII',2),('bVI',2),('bVII',2)],
             [('I',1),('bVI',1),('IV',2),('V',2)],
+            # Cadena de dominantes secundarios (tonicización de vi y luego V)
+            [('I',2),('V/vi',2),('vi',2),('V/V',2),('V',2),('I',2)],
         ],
         'minor': [
             [('i',2),('bVI',2),('bVII',2),('i',2)],
             [('i',2),('III',2),('bVI',2),('V',2)],
             [('i',2),('bII',2),('V',2),('i',2)],
             [('i',1),('bVI',1),('bIII',2),('V',2)],
+            # Tonicización del relativo mayor (III) antes de volver a V
+            [('i',2),('V/III',2),('III',2),('V',2)],
         ],
     },
 
@@ -464,11 +490,23 @@ NUMERAL_TO_INTERVAL = {
     'bVII/I':(10,''),
     'I/V':  (0, ''),     'IV/V': (5, ''),    'V/i':  (7, ''),
     'iv/i': (5, 'm'),    'VII/i':(11,''),     'bII/i':(1, ''),
-    # Dominantes secundarios (simplificados al dominante sin resolver)
-    'V/ii': (9,  '7'),   'V/IV': (0,  '7'),  'V/V':  (2,  '7'),
-    'V/vi': (4,  '7'),   'V/III':(11, '7'),  'V/iv': (0,  '7'),
-    'V/VII':(6,  '7'),   'V/bVI':(3,  '7'),  'V/bIII':(8, '7'),
 }
+
+# Dominantes secundarios (tonicizaciones): NO se tipean a mano, se calculan
+# a partir de las tríadas base ya definidas arriba con la regla "V/x = 5ª
+# justa superior de x, con 7ª de dominante". Escribirlos a mano llevó a que
+# quedaran desincronizados entre herramientas del ecosistema (p.ej. V/bIII
+# resolvía a un pitch-class incorrecto). Generándolos aquí, cualquier ajuste
+# futuro a las tríadas base se propaga automáticamente y sin duplicar datos.
+_SECONDARY_DOMINANT_TARGETS = [
+    'ii', 'iii', 'IV', 'V', 'vi', 'VII',      # objetivos del modo mayor
+    'iv', 'III',                               # objetivos típicos del modo menor
+    'bVI', 'bIII',                              # objetivos cromáticos (Coltrane, etc.)
+]
+for _t in _SECONDARY_DOMINANT_TARGETS:
+    _interval, _ = NUMERAL_TO_INTERVAL[_t]
+    NUMERAL_TO_INTERVAL[f'V/{_t}'] = ((_interval + 7) % 12, '7')
+del _t, _interval
 
 
 def resolve_numeral(numeral: str, tonic_pc: int, complexity: float = 0.5) -> tuple[str, list[int]]:

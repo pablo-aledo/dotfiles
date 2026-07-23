@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                     HARMONIC ANALYZER  v1.0                                 ║
+║                     HARMONIC ANALYZER  v1.1                                 ║
 ║        Análisis armónico funcional (números romanos) con explicación        ║
 ║                                                                              ║
 ║  Es el compañero armónico de metric_analyzer (que cubre el eje rítmico):    ║
@@ -13,13 +13,22 @@
 ║  A diferencia de reharmonizer o voice_leader (que TRANSFORMAN la armonía),  ║
 ║  esta herramienta solo ANALIZA y EXPLICA lo que ya escribiste.              ║
 ║                                                                              ║
+║  NOVEDAD v1.1 — DOMINANTES SECUNDARIOS:                                     ║
+║  Detecta tríadas mayores / 7ª de dominante "sorprendentes" (que no          ║
+║  encajarían diatónicamente en ese grado) y comprueba si el acorde           ║
+║  siguiente resuelve una 5ª justa por debajo. Si resuelve, se etiqueta       ║
+║  como V/x o V7/x (dominante secundario / tonicización de x) con función    ║
+║  D, en vez de "diatonizarlo" a un numeral engañoso. Si no resuelve, se      ║
+║  mantiene el etiquetado cromático anterior (mediante, préstamo modal…).    ║
+║                                                                              ║
 ║  PIPELINE:                                                                   ║
 ║  [1] SEGMENTACIÓN — agrupa las notas por compás (o por --window beats)      ║
 ║  [2] ACORDE       — detecta acorde y bajo por plantilla de intervalos        ║
 ║  [3] TONALIDAD    — estima la tonalidad global (Krumhansl-Schmuckler)       ║
 ║  [4] ROMANOS      — numeral + función + inversión respecto a la tonalidad   ║
-║  [5] CADENCIAS    — auténtica / plagal / rota / semicadencia                ║
-║  [6] INFORME      — tabla por compás + explicación + sidecar JSON opcional  ║
+║  [5] SECUNDARIOS  — confirma dominantes secundarios por resolución  [NUEVO] ║
+║  [6] CADENCIAS    — auténtica / plagal / rota / semicadencia                ║
+║  [7] INFORME      — tabla por compás + explicación + sidecar JSON opcional  ║
 ║                                                                              ║
 ║  USO:                                                                        ║
 ║    python harmonic_analyzer.py obra.mid                                      ║
@@ -58,7 +67,7 @@ except ImportError:
     print("ERROR: requiere playability_auditor.py en el mismo directorio (E/S MIDI)")
     sys.exit(1)
 
-VERSION = "1.0"
+VERSION = "1.1"
 _COLORS = {"R": "\033[0m", "B": "\033[1m", "G": "\033[90m",
            "GRN": "\033[92m", "YEL": "\033[93m", "RED": "\033[91m", "CYA": "\033[96m"}
 _USE_COLOR = sys.stdout.isatty()
@@ -167,6 +176,45 @@ def roman_of(root_pc: int, suffix: str, tonic_pc: int, mode: str) -> Tuple[str, 
     return num, func
 
 
+# Calidad de tríada diatónica NATURAL esperada en cada grado (para detectar
+# dominantes secundarios: una tríada mayor o una 7ª de dominante sobre un
+# grado que naturalmente sería menor/disminuido es "sorprendente" y candidata
+# a tonicizar el grado que queda una 5ª justa por debajo).
+_MAJ_DIATONIC_QUALITY = {0: "maj", 2: "min", 4: "min", 5: "maj",
+                         7: "maj", 9: "min", 11: "dim"}
+_MIN_DIATONIC_QUALITY = {0: "min", 2: "dim", 3: "maj", 5: "min",
+                         7: "min", 8: "maj", 10: "maj"}
+
+
+def secondary_dominant_candidate(root_pc: int, suffix: str,
+                                 tonic_pc: int, mode: str) -> Optional[int]:
+    """
+    Evalúa si (root_pc, suffix) tiene pinta de dominante secundario:
+    tríada mayor simple o 7ª de dominante sobre un grado que diatónicamente
+    NO sería mayor (o incluso fuera de la escala).
+    Si es candidato, devuelve el pitch-class del grado que tonicizaría
+    (una 5ª justa por debajo de root_pc). Si no, devuelve None.
+    No confirma resolución real: eso se comprueba después contra el
+    acorde siguiente en analyze_harmony().
+    """
+    if suffix not in ("", "7"):
+        return None
+    deg = (root_pc - tonic_pc) % 12
+    if deg == 7:
+        return None  # es la propia V de la tonalidad, no un secundario
+    table = _MAJ_DEGREES if mode == "maj" else _MIN_DEGREES
+    qual_table = _MAJ_DIATONIC_QUALITY if mode == "maj" else _MIN_DIATONIC_QUALITY
+    expected = qual_table.get(deg)
+    is_plain_diatonic_major = suffix == "" and deg in table and expected == "maj"
+    if is_plain_diatonic_major:
+        return None  # tríada mayor diatónica normal (I/IV en mayor, III/VI/VII en menor)
+    target_pc = (root_pc + 5) % 12          # resolución: baja una 5ª justa
+    target_deg = (target_pc - tonic_pc) % 12
+    if target_deg in table:
+        return target_pc
+    return None
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  API PÚBLICA
 # ══════════════════════════════════════════════════════════════════════════════
@@ -256,6 +304,33 @@ def analyze_harmony(path: str, key: Optional[str] = None,
             "score": round(float(score), 2),
         })
 
+    # ── SEGUNDA PASADA: confirmar dominantes secundarios por resolución ──────
+    # Un acorde candidato (tríada mayor / 7ª de dominante "sorprendente") solo
+    # se reetiqueta como V/x si el SIGUIENTE acorde real resuelve una 5ª justa
+    # por debajo, tal como se espera de una tonicización de verdad. Si no
+    # resuelve, se conserva el numeral cromático que ya calculó roman_of().
+    seq_all = [c for c in chords if c["chord"]]
+    table = _MAJ_DEGREES if mode == "maj" else _MIN_DEGREES
+    for pos, c in enumerate(seq_all):
+        cand_target = secondary_dominant_candidate(c["root_pc"], c["suffix"],
+                                                    tonic_pc, mode)
+        if cand_target is None or pos + 1 >= len(seq_all):
+            continue
+        nxt = seq_all[pos + 1]
+        if nxt["root_pc"] != cand_target:
+            continue
+        target_deg = (cand_target - tonic_pc) % 12
+        target_base = table.get(target_deg, "?")
+        c["roman"] = f"V7/{target_base}" if c["suffix"] == "7" else f"V/{target_base}"
+        c["function"] = "D"
+        c["secondary_dominant_of"] = target_base
+
+    secondary_dominants = [
+        {"bar": c["bar"], "chord": c["chord"], "roman": c["roman"],
+         "of": c["secondary_dominant_of"]}
+        for c in seq_all if c.get("secondary_dominant_of")
+    ]
+
     # cadencias: pares consecutivos con acorde
     seq = [c for c in chords if c["chord"]]
     cadences = []
@@ -281,12 +356,17 @@ def analyze_harmony(path: str, key: Optional[str] = None,
         "n_bars": int(n_bars),
         "chords": chords,
         "cadences": cadences,
+        "secondary_dominants": secondary_dominants,
     }
 
 
 def _explain(c: dict, keyname: str) -> str:
     if not c["chord"]:
         return "silencio / textura no acórdica"
+    if c.get("secondary_dominant_of"):
+        return (f"{c['chord']} = {c['roman']} en {keyname}: dominante secundario, "
+                f"toniciza {c['secondary_dominant_of']} (tensión que resuelve "
+                f"una 5ª justa por debajo, hacia {c['secondary_dominant_of']})")
     func = {"T": "tónica (reposo)", "S": "subdominante (alejamiento)",
             "D": "dominante (tensión que pide resolver)", "–": "función ambigua"}[c["function"]]
     inv = ""
@@ -338,6 +418,12 @@ def main():
               f"{fcol}{c['function']:^4}{R}   {c['bass']}{inv}")
         if args.explain:
             print(f"          {G}{_explain(c, st['key'])}{R}")
+
+    if st["secondary_dominants"]:
+        print(f"\n  {B}Dominantes secundarios (tonicizaciones confirmadas):{R}")
+        for sd in st["secondary_dominants"]:
+            print(f"    c.{sd['bar']}: {sd['chord']} = {_c('CYA')}{sd['roman']}{R}  "
+                  f"→ toniciza {sd['of']}")
 
     if st["cadences"]:
         print(f"\n  {B}Cadencias:{R}")

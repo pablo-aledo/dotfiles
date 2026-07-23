@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                       REHARMONIZER  v1.0                                    ║
+║                       REHARMONIZER  v1.1                                    ║
 ║         Reharmonización guiada de melodías con progresiones alternativas    ║
 ║                                                                              ║
 ║  Toma una melodía fija y genera N versiones con progresiones armónicas      ║
@@ -386,11 +386,16 @@ PROGRESSION_LIBRARY = {
             [('I', 1), ('V/IV', 1), ('IV', 1), ('V', 1), ('I', 2)],
             [('ii', 2), ('V/V', 2), ('V', 2), ('I', 2)],
             [('I', 1), ('V/ii', 1), ('ii', 1), ('V/V', 1), ('V', 2), ('I', 2)],
+            # Encadenamiento por círculo de quintas (cada acorde es el V/x
+            # del siguiente): I → V/vi → V/ii → V/V → V → I
+            [('I', 1), ('V/vi', 1), ('V/ii', 1), ('V/V', 1), ('V', 2), ('I', 2)],
         ],
         'minor': [
             [('i', 2), ('V/III', 2), ('III', 2), ('V', 2)],
             [('i', 1), ('V/iv', 1), ('iv', 2), ('V', 2)],
             [('i', 2), ('V/VII', 2), ('VII', 2), ('i', 2)],
+            # Tonicización de la submediante (VI) antes de la cadencia
+            [('i', 2), ('V/VI', 2), ('VI', 2), ('V', 2), ('i', 2)],
         ],
     },
 
@@ -533,15 +538,17 @@ PROGRESSION_LIBRARY = {
     },
 }
 
-# Numeral → semitono desde tónica (para acordes no estándar)
+# Numeral → semitono desde tónica (para acordes no estándar).
+# NOTA: los dominantes secundarios (V/x) YA NO se tipean aquí a mano — ver
+# figure_to_root_pc(), que los resuelve dinámicamente contra deg_map. Antes
+# había una tabla estática duplicada (con una clave 'V/bIII' repetida dos
+# veces) que además quedaba desincronizada con chord_progression_generator.py
+# (p.ej. 'V/VII' resolvía a un pitch-class distinto en cada herramienta).
 EXTRA_FIGURES = {
     'bV':   6, 'i°': 0, 'II': 2, 'III': 4,
     'V/I':  7, 'IV/I': 5, 'ii/I': 2, 'bVII/I': 10,
     'I/V':  0, 'IV/V': 5, 'V/i': 7, 'iv/i': 5,
     'VII/i':10, 'bII/i':1,
-    'V/bVI': 3, 'V/bIII': 8,  # dominantes secundarios de Coltrane
-    'V/IV':  0, 'V/ii': 9, 'V/vi': 4, 'V/V': 2,
-    'V/III': 11, 'V/VII': 9, 'V/bIII': 8,
     'V7': 7,
 }
 
@@ -555,6 +562,24 @@ def figure_to_root_pc(figure, key_pc, mode):
     base = figure.replace('7','').replace('°','').replace('+','').replace('9','')
     if base in deg_map:
         return (key_pc + deg_map[base][0]) % 12
+
+    # Dominante secundario ("V/X"): se resuelve DINÁMICAMENTE como la 5ª
+    # justa superior de la raíz de X (root_de_X + 7 semitonos), reutilizando
+    # el mismo deg_map mode-aware que el resto del módulo. Esto garantiza
+    # que V/x siempre sea coherente con cómo este fichero define X (sin
+    # tablas duplicadas que puedan desincronizarse). Se excluyen 'V/I' y
+    # 'V/i' porque ya tienen un significado distinto (pedal de dominante
+    # sobre bajo de tónica) definido en EXTRA_FIGURES.
+    if base.startswith('V/') and base not in ('V/I', 'V/i'):
+        target = base[2:]
+        target_pc = None
+        if target in deg_map:
+            target_pc = (key_pc + deg_map[target][0]) % 12
+        elif target in EXTRA_FIGURES:
+            target_pc = (key_pc + EXTRA_FIGURES[target]) % 12
+        if target_pc is not None:
+            return (target_pc + 7) % 12
+
     if figure in EXTRA_FIGURES:
         return (key_pc + EXTRA_FIGURES[figure]) % 12
     # Intentar inferir desde nombre

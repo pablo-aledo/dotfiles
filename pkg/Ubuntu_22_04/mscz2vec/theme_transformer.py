@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                        THEME TRANSFORMER  v2.0                               ║
+║                        THEME TRANSFORMER  v2.1                               ║
 ║       Mapeo escalar (scalar mapping) y transformación temática de MIDI       ║
 ║                                                                              ║
 ║  Implementa las técnicas de "thematic transformation via scalar mapping"     ║
 ║  descritas en la serie de tutoriales sobre transformación de temas: toma    ║
 ║  una melodía MIDI y la traslada a otras escalas/modos preservando su        ║
 ║  identidad, con armonización y orquestación acordes a cada estilo.          ║
+║                                                                              ║
+║  NOVEDADES v2.1:                                                             ║
+║    negative_harmony   nuevo estilo: armonía negativa — refleja melodía Y   ║
+║                        acordes sobre el eje tónica-dominante (Ernst Levy,  ║
+║                        popularizada por Jacob Collier)                     ║
+║    mirror              nuevo método de mapeo (ver abajo): reflexión        ║
+║                        aritmética directa, sin reanclaje por grado         ║
+║    --axis-offset F     controla el eje de reflexión en semitonos desde la ║
+║                        tónica (con --style negative_harmony o custom)     ║
 ║                                                                              ║
 ║  NOVEDADES v2.0:                                                             ║
 ║    --sections        transformación PROGRESIVA por tramos de la pieza       ║
@@ -27,6 +36,12 @@
 ║    interval  — se preservan los intervalos ENTRE notas consecutivas         ║
 ║                medidos en pasos de la escala destino (mejor cuando la       ║
 ║                escala destino tiene distinta cardinalidad que la origen)    ║
+║    mirror    — refleja cada altura ALREDEDOR DE UN EJE fijo (por defecto,   ║
+║                tónica + 3.5 semitonos, el eje tónica-dominante). No hay     ║
+║                reanclaje por grado de escala: es una reflexión aritmética   ║
+║                directa sobre semitonos reales, así que invierte el          ║
+║                contorno melódico (ascendente → descendente). Es el método   ║
+║                de la armonía negativa; ver --style negative_harmony.        ║
 ║                                                                              ║
 ║  ESTILOS DISPONIBLES (--style):                                             ║
 ║    heroic_minor          menor paralela + tríadas mayores (nota fuerte=3ª) ║
@@ -40,6 +55,9 @@
 ║    acoustic                modo acústico (lidio dominante)                ║
 ║    elvish                  5º modo de la menor melódica, reorientado      ║
 ║    got_fragment            fragmentación + menor armónica + desplazo. métrico║
+║    chromatic_mediant       cadena de tríadas por 3ª cromática (Zimmer)    ║
+║    negative_harmony        reflexión especular de melodía y acordes sobre ║
+║                             el eje tónica-dominante (armonía negativa)     ║
 ║    custom                  escala/método libres vía --scale / --method    ║
 ║                                                                              ║
 ║  TÉCNICAS ADICIONALES:                                                      ║
@@ -48,6 +66,11 @@
 ║    --fragment / --fragment-order   fragmentación motívica al estilo GoT   ║
 ║    --metric-shift          alinea la primera nota al downbeat             ║
 ║    --start-degree          desplaza todos los grados de escala destino    ║
+║                             (con --method mirror: desplaza el EJE ese     ║
+║                             nº de semitonos — ver --axis-offset)          ║
+║    --axis-offset           eje de reflexión en semitonos desde la tónica  ║
+║                             (con --method mirror; default: 3.5 = eje      ║
+║                             tónica-dominante, entre 3ª menor y 3ª mayor)  ║
 ║                                                                              ║
 ║  USO:                                                                        ║
 ║    python theme_transformer.py tema.mid                                     ║
@@ -58,6 +81,15 @@
 ║    python theme_transformer.py tema.mid --style custom \\                   ║
 ║        --scale double_harmonic --method interval                            ║
 ║    python theme_transformer.py tema.mid --style elvish --start-degree 2    ║
+║    python theme_transformer.py tema.mid --style negative_harmony           ║
+║    python theme_transformer.py tema.mid --style negative_harmony \\         ║
+║        --chord-tone-priority --verbose                                      ║
+║    python theme_transformer.py tema.mid --style negative_harmony \\         ║
+║        --axis-offset 0    # eje sobre la propia tónica, en vez de T-D      ║
+║    python theme_transformer.py tema.mid \\                                  ║
+║        --sections "0:heroic_minor,16:negative_harmony,32:whole_tone"       ║
+║    python theme_transformer.py tema.mid --style custom \\                   ║
+║        --scale natural_minor --method mirror --axis-offset 3.5             ║
 ║    python theme_transformer.py --catalog                                    ║
 ║                                                                              ║
 ║  OPCIONES:                                                                   ║
@@ -67,10 +99,12 @@
 ║    --tempo BPM        Tempo de salida forzado (default: del MIDI)          ║
 ║    --beats-per-bar N  Beats por compás (default: del MIDI)                 ║
 ║    --start-degree N   Desplazamiento extra de grado (default: 0)           ║
+║    --axis-offset F    Ver arriba (default: 3.5, o el del preset)           ║
 ║    --chord-tone-priority   Ver arriba                                       ║
 ║    --fragment / --fragment-order   Ver arriba                               ║
 ║    --metric-shift     Ver arriba                                            ║
-║    --scale / --method (solo con --style custom)                            ║
+║    --scale / --method (solo con --style custom; --method admite ahora     ║
+║                        'degree' | 'interval' | 'mirror')                    ║
 ║    --out-dir DIR      Carpeta de salida (default: junto al MIDI)           ║
 ║    --report           Guardar reporte JSON por transformación               ║
 ║    --verbose          Informe detallado por stdout                          ║
@@ -78,6 +112,7 @@
 ║  SALIDA:                                                                     ║
 ║    tema.octatonic.mid                                                       ║
 ║    tema.chromatic_magical.mid                                               ║
+║    tema.negative_harmony.mid                                                ║
 ║    tema.octatonic_report.json   (con --report)                              ║
 ║                                                                              ║
 ║  DEPENDENCIAS: mido, music21 (opcional), numpy                              ║
@@ -225,6 +260,14 @@ STYLE_PRESETS = {
         harmonizer='chromatic_mediant',
         melody_program=48, harmony_program=61, bass_program=42,
         desc='Melodía intacta + cadena de tríadas por 3ª cromática sin función tonal (LOTR)',
+    ),
+    'negative_harmony': dict(
+        scale='natural_minor', method='mirror', start_shift=0,
+        axis_offset=3.5,
+        harmonizer='axis_mirror',
+        melody_program=4, harmony_program=48, bass_program=42,
+        desc='Armonía negativa: melodía Y acordes reflejados sobre el eje '
+             'tónica-dominante (Ernst Levy / Jacob Collier)',
     ),
     'custom': dict(
         scale=None, method='degree', start_shift=0,
@@ -385,6 +428,45 @@ def map_interval_method(melody, src_root_pc, src_scale, tgt_root_pc, tgt_scale,
         out.append((off, new_p, dur, vel))
         prev_src_p, prev_new_p = p, new_p
 
+    return out
+
+
+def map_mirror_method(melody, root_pc, axis_offset=3.5, start_shift=0):
+    """
+    Método espejo (armonía negativa): a diferencia de 'degree'/'interval'
+    —que reanclan cada nota a un grado de la escala destino—, este método
+    aplica una reflexión aritmética DIRECTA sobre las alturas reales,
+    alrededor de un eje fijo: axis_pc = root_pc + axis_offset (mod 12).
+
+    Por defecto axis_offset=3.5, el eje tónica-dominante clásico: a medio
+    camino entre la 3ª menor y la 3ª mayor de la tonalidad (equidistante
+    de tónica y dominante). Con ese eje, la escala mayor se refleja
+    exactamente en la menor natural de la misma tónica — por eso el preset
+    'negative_harmony' usa 'natural_minor' como escala destino nominal.
+
+    El resultado invierte el contorno melódico: un salto ascendente de N
+    semitonos en el original se convierte en un salto descendente de N
+    semitonos, y viceversa — la propiedad definitoria de la armonía
+    negativa. El eje se ancla en la octava más cercana al centro de
+    gravedad (pitch medio) de la melodía para que el resultado no se
+    dispare de registro.
+
+    'start_shift' aquí NO son grados de escala: son semitonos que desplazan
+    el propio eje. Mover el eje 's' semitonos desplaza el resultado
+    reflejado en '2s' semitonos (ver --axis-offset / --start-degree).
+    """
+    if not melody:
+        return []
+    center = sum(p for (_, p, _, _) in melody) / len(melody)
+    axis_pc = (root_pc + axis_offset + start_shift) % 12
+    base = center - (center % 12)
+    axis_candidates = [base + axis_pc - 12, base + axis_pc, base + axis_pc + 12]
+    axis_abs = min(axis_candidates, key=lambda x: abs(x - center))
+
+    out = []
+    for (off, p, dur, vel) in melody:
+        newp = int(round(2 * axis_abs - p))
+        out.append((off, newp, dur, vel))
     return out
 
 
@@ -696,6 +778,50 @@ def harmonize_chromatic_mediant(mapped_notes, beats_per_bar, total_beats, seed=4
     return chords
 
 
+def harmonize_axis_mirror(mapped_notes, original_notes, root_pc, axis_offset,
+                          beats_per_bar, total_beats, base_register=48, chord_size=3):
+    """
+    Armonizador de armonía negativa. A diferencia de harmonize_generic
+    (que apila terceras nativas de la escala destino), este refleja
+    INDIVIDUALMENTE, alrededor del mismo eje usado para la melodía, las
+    clases de tono más relevantes de cada compás del material ORIGINAL
+    (antes de espejar). Así se reproduce el resultado canónico de la
+    armonía negativa a nivel de acorde: una tríada mayor se convierte en
+    su tríada menor especular (p.ej. C-E-G → C-Eb-G), en vez de en un
+    acorde genérico de la escala destino.
+
+    'original_notes' debe compartir offsets con 'mapped_notes' (mismo
+    timing, alturas sin espejar) — es la melodía tal como llega a
+    _run_style_pipeline antes de aplicar map_mirror_method.
+    """
+    axis_pc = (root_pc + axis_offset) % 12
+    chords, bar = [], 0
+    while bar * beats_per_bar < total_beats:
+        bstart = bar * beats_per_bar
+        bend = min(bstart + beats_per_bar, total_beats)
+        w = window_pc_weights(original_notes, bstart, bend, beats_per_bar)
+        if w:
+            top_pcs = [pc for pc, _ in sorted(w.items(), key=lambda kv: -kv[1])[:chord_size]]
+        else:
+            top_pcs = [root_pc]
+
+        mirrored_pcs = sorted({int(round(2 * axis_pc - pc)) % 12 for pc in top_pcs})
+
+        pitches, prev = [], None
+        for pc in mirrored_pcs:
+            pitch = nearest_pitch_to_register(pc, base_register)
+            while prev is not None and pitch <= prev:
+                pitch += 12
+            pitches.append(pitch)
+            prev = pitch
+        if not pitches:
+            pitches = [base_register]
+
+        chords.append((bstart, bend - bstart, pitches))
+        bar += 1
+    return chords
+
+
 def body_tail_tags(melody):
     """
     Etiqueta cada nota como 'body' o 'tail' según su posición dentro de su
@@ -740,7 +866,7 @@ def ornament_tail_notes(mapped_notes, tags, tgt_root_pc, tgt_scale, seed=42):
 
 
 def harmonize_theme(preset, mapped_notes, root_pc, scale, wt_root_pc, beats_per_bar,
-                    total_beats, seed=42):
+                    total_beats, seed=42, original_notes=None, axis_offset=None):
     random.seed(seed)
     kind = preset['harmonizer']
     chords, counterpoint_notes = None, None
@@ -756,6 +882,10 @@ def harmonize_theme(preset, mapped_notes, root_pc, scale, wt_root_pc, beats_per_
         chords = harmonize_parallel_minor(mapped_notes, voice_as='fifth')
     elif kind == 'chromatic_mediant':
         chords = harmonize_chromatic_mediant(mapped_notes, beats_per_bar, total_beats, seed)
+    elif kind == 'axis_mirror':
+        ax = axis_offset if axis_offset is not None else preset.get('axis_offset', 3.5)
+        chords = harmonize_axis_mirror(mapped_notes, original_notes or mapped_notes, root_pc,
+                                       ax, beats_per_bar, total_beats)
     elif kind == 'counterpoint':
         counterpoint_notes = generate_counterpoint_line(mapped_notes)
     return chords, counterpoint_notes
@@ -963,7 +1093,8 @@ def _run_style_pipeline(working_melody, preset, src_root_pc, src_scale, src_mode
                         beats_per_bar, start_degree_extra=0, chord_tone_priority=False,
                         fragment_override=False, fragment_order=None, metric_shift_override=False,
                         body_tail=False, wt_variant='auto', oct_variant='auto',
-                        pentatonic_variant='auto', seed=42, verbose=False):
+                        pentatonic_variant='auto', axis_offset_override=None,
+                        seed=42, verbose=False):
     """
     Núcleo reusable: aplica UN estilo a UNA lista de notas (offsets relativos
     a 0). Usado tanto por transform_theme (todo el fichero) como por
@@ -1037,6 +1168,8 @@ def _run_style_pipeline(working_melody, preset, src_root_pc, src_scale, src_mode
 
     start_shift = preset.get('start_shift', 0) + start_degree_extra
     method = preset['method']
+    axis_offset = (axis_offset_override if axis_offset_override is not None
+                  else preset.get('axis_offset', 3.5))
 
     if scale_name == 'chromatic':
         # La escala cromática contiene todas las alturas: mapear "por grado"
@@ -1047,6 +1180,18 @@ def _run_style_pipeline(working_melody, preset, src_root_pc, src_scale, src_mode
     elif method == 'degree':
         mapped = map_degree_method(working_melody, src_root_pc, src_scale,
                                    tgt_root_pc, tgt_scale, start_shift)
+    elif method == 'mirror':
+        # El método 'mirror' no reancla por grado de escala destino: refleja
+        # las alturas reales alrededor del eje tónica-dominante (u otro,
+        # ver --axis-offset). 'start_shift' se reinterpreta aquí como
+        # semitonos de desplazamiento del eje, no grados (ver map_mirror_method).
+        if verbose:
+            axis_pc_disp = (src_root_pc + axis_offset + start_shift) % 12
+            print(f"  Eje de reflexión: {PITCH_NAMES[int(axis_pc_disp)]}"
+                  f"{'~' if axis_pc_disp % 1 else ''} "
+                  f"(tónica {PITCH_NAMES[src_root_pc]} + {axis_offset + start_shift} semitonos)")
+        mapped = map_mirror_method(working_melody, src_root_pc,
+                                   axis_offset=axis_offset, start_shift=start_shift)
     else:
         mapped = map_interval_method(working_melody, src_root_pc, src_scale,
                                      tgt_root_pc, tgt_scale, start_shift)
@@ -1056,7 +1201,8 @@ def _run_style_pipeline(working_melody, preset, src_root_pc, src_scale, src_mode
                   if total_beats > 0 else beats_per_bar)
 
     chords, counterpoint_notes = harmonize_theme(
-        preset, mapped, tgt_root_pc, tgt_scale, wt_root_pc, beats_per_bar, total_beats, seed
+        preset, mapped, tgt_root_pc, tgt_scale, wt_root_pc, beats_per_bar, total_beats, seed,
+        original_notes=working_melody, axis_offset=axis_offset,
     )
 
     if chord_tone_priority and chords:
@@ -1071,7 +1217,7 @@ def _run_style_pipeline(working_melody, preset, src_root_pc, src_scale, src_mode
         scale_name=scale_name, tgt_scale=tgt_scale, tgt_root_pc=tgt_root_pc,
         wt_root_pc=wt_root_pc, total_beats=total_beats, method=method,
         start_shift=start_shift, do_fragment=do_fragment, do_metric_shift=do_metric_shift,
-        n_frags=n_frags,
+        n_frags=n_frags, axis_offset=axis_offset,
     )
 
 
@@ -1091,6 +1237,7 @@ def transform_theme(midi_path: str,
                     pentatonic_variant: str = 'auto',
                     custom_scale: str = None,
                     custom_method: str = None,
+                    axis_offset: float = None,
                     out_dir: str = None,
                     report: bool = False,
                     verbose: bool = False,
@@ -1128,7 +1275,8 @@ def transform_theme(midi_path: str,
         fragment_override=fragment, fragment_order=fragment_order,
         metric_shift_override=metric_shift, body_tail=body_tail,
         wt_variant=wt_variant, oct_variant=oct_variant,
-        pentatonic_variant=pentatonic_variant, seed=seed, verbose=verbose,
+        pentatonic_variant=pentatonic_variant, axis_offset_override=axis_offset,
+        seed=seed, verbose=verbose,
     )
     if res is None:
         raise RuntimeError(f"{midi_path}: la melodía quedó vacía tras el preprocesado")
@@ -1162,6 +1310,7 @@ def transform_theme(midi_path: str,
         'target_scale_cardinality': len(tgt_scale),
         'method': method,
         'start_degree_shift': start_shift,
+        'axis_offset': res.get('axis_offset') if method == 'mirror' else None,
         'n_notes': len(mapped),
         'n_bars': int(total_beats / beats_per_bar),
         'n_fragments': res['n_frags'],
@@ -1312,6 +1461,7 @@ def transform_theme_sections(midi_path: str,
                              wt_variant: str = 'auto',
                              oct_variant: str = 'auto',
                              pentatonic_variant: str = 'auto',
+                             axis_offset: float = None,
                              out_dir: str = None,
                              report: bool = False,
                              verbose: bool = False,
@@ -1365,7 +1515,8 @@ def transform_theme_sections(midi_path: str,
                 fragment_override=fragment, fragment_order=fragment_order,
                 metric_shift_override=metric_shift, body_tail=body_tail,
                 wt_variant=wt_variant, oct_variant=oct_variant,
-                pentatonic_variant=pentatonic_variant, seed=seed, verbose=verbose,
+                pentatonic_variant=pentatonic_variant, axis_offset_override=axis_offset,
+                seed=seed, verbose=verbose,
             )
         if res is not None:
             res['style'] = style
@@ -1457,7 +1608,8 @@ def print_catalog():
 
     print("\n╔══ ESTILOS DISPONIBLES (--style) ════════════════════════════════════╗")
     for name, preset in STYLE_PRESETS.items():
-        print(f"  {name:22s} [{preset['method']:8s}] {preset['desc']}")
+        extra = f" (eje +{preset['axis_offset']}st)" if preset['method'] == 'mirror' else ""
+        print(f"  {name:22s} [{preset['method']:8s}] {preset['desc']}{extra}")
     print("╚══════════════════════════════════════════════════════════════════╝\n")
 
 
@@ -1536,8 +1688,14 @@ Ejemplos:
                    help='Forzar pentatónica mayor/menor en vez de deducirla del modo detectado')
     p.add_argument('--scale', default=None,
                    help='(con --style custom) escala destino, ver --catalog')
-    p.add_argument('--method', default=None, choices=['degree', 'interval'],
-                   help='(con --style custom) método de mapeo')
+    p.add_argument('--method', default=None, choices=['degree', 'interval', 'mirror'],
+                   help="(con --style custom) método de mapeo")
+    p.add_argument('--axis-offset', type=float, default=None, metavar='SEMITONOS',
+                   help="Eje de reflexión, en semitonos desde la tónica (con --method "
+                        "mirror, incluido --style negative_harmony). Default: 3.5 (eje "
+                        "tónica-dominante clásico, entre 3ª menor y 3ª mayor). Acepta "
+                        "valores fraccionarios; p.ej. --axis-offset 0 sitúa el eje sobre "
+                        "la propia tónica")
     p.add_argument('--out-dir', default=None,
                    help='Carpeta de salida (default: junto al MIDI de entrada)')
     p.add_argument('--report', action='store_true',
@@ -1596,6 +1754,7 @@ def main():
                     wt_variant=wt_variant,
                     oct_variant=oct_variant,
                     pentatonic_variant=args.pentatonic_variant,
+                    axis_offset=args.axis_offset,
                     out_dir=args.out_dir,
                     report=args.report,
                     verbose=args.verbose,
@@ -1627,6 +1786,7 @@ def main():
                     pentatonic_variant=args.pentatonic_variant,
                     custom_scale=args.scale,
                     custom_method=args.method,
+                    axis_offset=args.axis_offset,
                     out_dir=args.out_dir,
                     report=args.report,
                     verbose=args.verbose,
