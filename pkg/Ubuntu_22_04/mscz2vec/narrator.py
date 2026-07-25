@@ -817,7 +817,9 @@ def main():
             verbose   = args.verbose,
         )
 
-    out_base = args.output.rstrip('.json').rstrip('.yaml')
+    out_base = args.output
+    if out_base.endswith('.json') or out_base.endswith('.yaml'):
+        out_base = out_base[:-5]
 
     # Siempre guardar JSON
     export_plan_json(plan, out_base + '.json')
