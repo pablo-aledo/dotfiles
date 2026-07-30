@@ -744,8 +744,6 @@ snippet sig-complex "magnitud y fase de un numero complejo"
 	let fase = ${1:c}.arg();
 	${0}
 # Logging e instrumentacion: tracing / metrics / log
-# Formato: snipMate (garbas/vim-snipmate)
-
 snippet trc-subscriber "inicializar tracing_subscriber con EnvFilter (fmt basico)" b
 	fn init_tracing() {
 		tracing_subscriber::fmt()
@@ -951,8 +949,6 @@ snippet log-init "inicializacion simple con env_logger (alternativa ligera a tra
 snippet log-macro "macros basicas del crate log"
 	log::info!("${1:mensaje}: {}", ${0:valor});
 # Patrones de diseno: clasicos (GoF) + idiomaticos de Rust
-# Formato: snipMate (garbas/vim-snipmate)
-
 snippet pat-singleton "singleton perezoso y thread-safe (once_cell/std::sync::OnceLock)" b
 	static ${1:INSTANCIA}: std::sync::OnceLock<${2:Tipo}> = std::sync::OnceLock::new();
 
@@ -1349,3 +1345,300 @@ snippet pat-memento "memento: capturar y restaurar el estado interno de un objet
 			${0:self.estado = memento.estado;}
 		}
 	}
+# Common snippets
+snippet rs-readfile "Leer archivo linea por linea" b
+	use std::fs::File;
+	use std::io::{BufRead, BufReader};
+
+	fn read_lines(filename: &str) -> std::io::Result<Vec<String>> {
+		let file = File::open(filename)?;
+		let reader = BufReader::new(file);
+		let mut lines = Vec::new();
+		for line in reader.lines() {
+			lines.push(line?);
+		}
+		Ok(lines)
+	}
+
+snippet rs-writefile "Escribir string a archivo" b
+	use std::fs::File;
+	use std::io::Write;
+
+	fn write_file(filename: &str, content: &str) -> std::io::Result<()> {
+		let mut file = File::create(filename)?;
+		file.write_all(content.as_bytes())?;
+		Ok(())
+	}
+
+snippet rs-args "Leer argumentos de linea de comandos" b
+	fn main() {
+		let args: Vec<String> = std::env::args().collect();
+		if args.len() < 2 {
+			eprintln!("Usage: {} <argumento>", args[0]);
+			return;
+		}
+		let arg = &args[1];
+		println!("Argumento: {}", arg);
+	}
+
+snippet rs-reqwest "Peticion HTTP GET (async)" b
+	// Dependencia: reqwest = { version = "0.11", features = ["json"] }
+	use reqwest;
+
+	async fn fetch(url: &str) -> Result<String, reqwest::Error> {
+		let response = reqwest::get(url).await?;
+		let body = response.text().await?;
+		Ok(body)
+	}
+
+snippet rs-json-serde "Serializar/deserializar JSON con serde" b
+	// Dependencias: serde = { version = "1.0", features = ["derive"] }, serde_json = "1.0"
+	use serde::{Deserialize, Serialize};
+
+	#[derive(Serialize, Deserialize, Debug)]
+	struct Person {
+		name: String,
+		age: u8,
+	}
+
+	fn main() -> Result<(), serde_json::Error> {
+		let person = Person { name: "Alice".to_string(), age: 30 };
+		let json = serde_json::to_string(&person)?;
+		let deserialized: Person = serde_json::from_str(&json)?;
+		println!("{}", json);
+		println!("{:?}", deserialized);
+		Ok(())
+	}
+
+snippet rs-random "Generar numero aleatorio en un rango" b
+	// Dependencia: rand = "0.8"
+	use rand::Rng;
+
+	fn main() {
+		let mut rng = rand::thread_rng();
+		let n: i32 = rng.gen_range(1..=100);
+		println!("{}", n);
+	}
+
+snippet rs-env-vars "Leer variables de entorno" b
+	use std::env;
+
+	fn main() {
+		let home = env::var("HOME").unwrap_or_else(|_| "no definida".to_string());
+		println!("HOME = {}", home);
+		// Listar todas las variables
+		for (key, value) in env::vars() {
+			println!("{}: {}", key, value);
+		}
+	}
+
+snippet rs-datetime "Obtener fecha/hora actual y formatear" b
+	// Dependencia: chrono = "0.4"
+	use chrono::Local;
+
+	fn main() {
+		let now = Local::now();
+		println!("{}", now.format("%Y-%m-%d %H:%M:%S"));
+	}
+
+snippet rs-thread-spawn "Crear un hilo con std::thread" b
+	use std::thread;
+
+	fn main() {
+		let handle = thread::spawn(|| {
+			for i in 1..5 {
+				println!("hilo: {}", i);
+			}
+		});
+		handle.join().unwrap();
+	}
+
+snippet rs-channel "Comunicacion entre hilos con mpsc" b
+	use std::sync::mpsc;
+	use std::thread;
+
+	fn main() {
+		let (tx, rx) = mpsc::channel();
+
+		thread::spawn(move || {
+			tx.send("mensaje desde el hilo").unwrap();
+		});
+
+		let msg = rx.recv().unwrap();
+		println!("{}", msg);
+	}
+
+snippet rs-http-server "Servidor HTTP basico con std (TCP)" b
+	// Dependencia: tokio = { version = "1", features = ["full"] } (o hyper)
+	use std::io::prelude::*;
+	use std::net::TcpListener;
+
+	fn main() -> std::io::Result<()> {
+		let listener = TcpListener::bind("127.0.0.1:8080")?;
+		for stream in listener.incoming() {
+			let mut stream = stream?;
+			let response = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nHello world!";
+			stream.write_all(response.as_bytes())?;
+		}
+		Ok(())
+	}
+
+snippet rs-csv "Leer CSV con cabeceras" b
+	// Dependencia: csv = "1.1"
+	use std::error::Error;
+	use std::fs::File;
+	use csv::ReaderBuilder;
+
+	fn read_csv(filename: &str) -> Result<(), Box<dyn Error>> {
+		let file = File::open(filename)?;
+		let mut rdr = ReaderBuilder::new().has_headers(true).from_reader(file);
+		for result in rdr.records() {
+			let record = result?;
+			println!("{:?}", record);
+		}
+		Ok(())
+	}
+
+snippet rs-regex "Usar expresiones regulares" b
+	// Dependencia: regex = "1"
+	use regex::Regex;
+
+	fn main() {
+		let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
+		let date = "2023-12-31";
+		if re.is_match(date) {
+			println!("{} es una fecha valida", date);
+		}
+	}
+
+snippet rs-command "Ejecutar comando del sistema y capturar salida" b
+	use std::process::Command;
+
+	fn main() {
+		let output = Command::new("ls")
+			.arg("-la")
+			.output()
+			.expect("fallo al ejecutar comando");
+		let stdout = String::from_utf8_lossy(&output.stdout);
+		println!("{}", stdout);
+	}
+
+snippet rs-file-metadata "Obtener metadatos de un archivo" b
+	use std::fs;
+
+	fn main() -> std::io::Result<()> {
+		let metadata = fs::metadata("archivo.txt")?;
+		println!("Tamaño: {} bytes", metadata.len());
+		println!("Modificado: {:?}", metadata.modified());
+		Ok(())
+	}
+
+snippet rs-walkdir "Recorrer directorios recursivamente" b
+	// Dependencia: walkdir = "2"
+	use walkdir::WalkDir;
+
+	fn main() {
+		for entry in WalkDir::new(".") {
+			let entry = entry.unwrap();
+			println!("{}", entry.path().display());
+		}
+	}
+
+snippet rs-error "Manejo de errores con anyhow y thiserror" b
+	// Dependencias: anyhow = "1.0", thiserror = "1.0"
+	use anyhow::{anyhow, Result};
+	use thiserror::Error;
+
+	#[derive(Error, Debug)]
+	enum MyError {
+		#[error("error de E/S: {0}")]
+		Io(#[from] std::io::Error),
+		#[error("valor inválido: {0}")]
+		Invalid(String),
+	}
+
+	fn do_something() -> Result<()> {
+		Err(anyhow!("falló la operación"))
+	}
+
+	fn main() -> Result<()> {
+		do_something()?;
+		Ok(())
+	}
+
+snippet rs-clap "Parsear argumentos con clap (derived)" b
+	// Dependencia: clap = { version = "4.0", features = ["derive"] }
+	use clap::Parser;
+
+	#[derive(Parser, Debug)]
+	#[command(name = "mi_app")]
+	#[command(about = "Descripción de la aplicación")]
+	struct Args {
+		#[arg(short, long)]
+		nombre: String,
+		#[arg(short, long, default_value_t = 1)]
+		repeticiones: u8,
+	}
+
+	fn main() {
+		let args = Args::parse();
+		for _ in 0..args.repeticiones {
+			println!("Hola {}", args.nombre);
+		}
+	}
+
+snippet rs-reqwest-blocking "Peticion HTTP sincrona" b
+	// Dependencia: reqwest = { version = "0.11", features = ["blocking"] }
+	use reqwest::blocking::Client;
+
+	fn main() -> Result<(), reqwest::Error> {
+		let client = Client::new();
+		let response = client.get("https://httpbin.org/ip").send()?;
+		let body = response.text()?;
+		println!("{}", body);
+		Ok(())
+	}
+
+snippet rs-path "Operaciones con rutas (std::path)" b
+	use std::path::{Path, PathBuf};
+
+	fn main() {
+		let path = Path::new("/home/user/file.txt");
+		println!("Nombre: {:?}", path.file_name());
+		println!("Extensión: {:?}", path.extension());
+		println!("Padre: {:?}", path.parent());
+		let new_path = path.with_extension("bak");
+		println!("Nuevo path: {}", new_path.display());
+	}
+
+snippet rs-signal "Manejo de señales (SIGINT)" b
+	// Dependencia: signal-hook = "0.3"
+	use signal_hook::{consts::SIGINT, iterator::Signals};
+	use std::thread;
+	use std::time::Duration;
+
+	fn main() -> Result<(), Box<dyn std::error::Error>> {
+		let mut signals = Signals::new(&[SIGINT])?;
+		thread::spawn(move || {
+			for sig in signals.forever() {
+				println!("Recibida señal: {}", sig);
+				break;
+			}
+		});
+		thread::sleep(Duration::from_secs(10));
+		Ok(())
+	}
+
+snippet rs-tempfile "Crear archivo temporal" b
+	// Dependencia: tempfile = "3.8"
+	use tempfile::NamedTempFile;
+	use std::io::Write;
+
+	fn main() -> std::io::Result<()> {
+		let mut temp = NamedTempFile::new()?;
+		write!(temp, "contenido temporal")?;
+		println!("Archivo temporal: {}", temp.path().display());
+		// Se elimina automáticamente al salir de scope
+		Ok(())
+	}
+
