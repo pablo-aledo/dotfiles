@@ -3728,6 +3728,32 @@ def write(output_dir: Path, name: str, content: str):
     print(f"  escrito: {path}")
 
 
+class OutputRegistry:
+    """[refactor] Punto unico de escritura de las salidas generadas.
+
+    Sustituye las llamadas dispersas a write(output_dir, "NN_nombre.txt",
+    texto) repartidas por main(). No cambia el ORDEN de calculo (cada
+    salida se sigue calculando donde ya se calculaba, porque muchas
+    dependen del resultado de otras), solo centraliza el paso final de
+    "nombre de fichero -> contenido -> disco" y detecta a la primera
+    colisiones de nombre entre fases (antes podian solaparse en silencio,
+    p.ej. dos fases usando el mismo prefijo NN_ por error).
+    """
+
+    def __init__(self, output_dir: Path):
+        self.output_dir = output_dir
+        self._used_names = set()
+
+    def emit(self, name: str, content: str) -> None:
+        if name in self._used_names:
+            raise ValueError(
+                f"[OutputRegistry] nombre de fichero de salida duplicado: {name!r} "
+                "(dos fases estan intentando escribir el mismo fichero)"
+            )
+        self._used_names.add(name)
+        write(self.output_dir, name, content)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                        formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -3793,6 +3819,7 @@ def main():
     root = Path(args.root).resolve()
     output_dir = root / args.output
     output_dir.mkdir(parents=True, exist_ok=True)
+    out = OutputRegistry(output_dir)  # [refactor] registro central de salidas
     prev_baseline = load_baseline(output_dir)  # [v4] antes de que nada mas toque output_dir
 
     if args.semantic_query:
@@ -3812,7 +3839,7 @@ def main():
     print("\n[Fase 1] Extraccion estatica...")
     stats = compute_file_stats(files, root)
 
-    write(output_dir, "00_arbol_ficheros.txt", build_file_tree_text(files, root))
+    out.emit("00_arbol_ficheros.txt", build_file_tree_text(files, root))
 
     if has_ctags():
         print("  usando ctags para el indice de simbolos")
@@ -3834,58 +3861,58 @@ def main():
     # un caso conocido). Se estima de forma centralizada aqui para que
     # funciones complejas / grafo de llamadas funcionen igual en ambos casos.
     symbols = estimate_missing_symbol_ends(symbols, stats)
-    write(output_dir, "01_indice_simbolos.txt", build_symbol_index_text(symbols))
+    out.emit("01_indice_simbolos.txt", build_symbol_index_text(symbols))
 
     dep_graph = build_dependency_graph(stats)
-    write(output_dir, "02_grafo_dependencias.txt", build_dependency_graph_text(dep_graph))
+    out.emit("02_grafo_dependencias.txt", build_dependency_graph_text(dep_graph))
 
     # [v3] resolucion de imports contra ficheros reales del proyecto,
     # reutilizada tanto por las capas arquitectonicas como por --since
     internal_deps = resolve_internal_dependencies(stats, dep_graph)
 
-    write(output_dir, "03_historial_git.txt", git_file_history_text(files, root))
+    out.emit("03_historial_git.txt", git_file_history_text(files, root))
 
     entrypoints = detect_entrypoints(stats)
     complex_functions = flag_complex_functions(symbols)
 
     print("  Indexando subcomandos CLI...")
     cli_index = index_cli_commands(stats)
-    write(output_dir, "05_indice_cli.txt", build_cli_index_text(cli_index))
+    out.emit("05_indice_cli.txt", build_cli_index_text(cli_index))
 
     print("  Construyendo grafo de llamadas aproximado...")
     call_graph = build_call_graph(symbols, stats)
-    write(output_dir, "06_grafo_llamadas.txt", build_call_graph_text(call_graph))
+    out.emit("06_grafo_llamadas.txt", build_call_graph_text(call_graph))
 
     print("  [v3] Derivando ruta de lectura guiada desde los entrypoints...")
     file_call_edges = build_file_call_edges(call_graph, symbols)
     reading_paths = build_reading_paths(entrypoints, file_call_edges, stats)
     reading_paths_text = build_reading_paths_text(reading_paths)
-    write(output_dir, "18_ruta_lectura_entrypoints.txt", reading_paths_text)
+    out.emit("18_ruta_lectura_entrypoints.txt", reading_paths_text)
 
     print("  [v3] Mapeando superficie de efectos secundarios...")
     side_effects = build_side_effects_surface(stats)
-    write(output_dir, "19_superficie_efectos_secundarios.txt",
+    out.emit("19_superficie_efectos_secundarios.txt",
           build_side_effects_surface_text(side_effects))
 
     print("  Extrayendo TODO/FIXME/HACK/XXX...")
     todos = extract_todos(files, root)
-    write(output_dir, "07_todos_deuda_tecnica.txt", build_todos_text(todos))
+    out.emit("07_todos_deuda_tecnica.txt", build_todos_text(todos))
 
     print("  Construyendo mapa de configuracion...")
     config_map = build_config_map(stats)
-    write(output_dir, "08_mapa_configuracion.txt", build_config_map_text(config_map))
+    out.emit("08_mapa_configuracion.txt", build_config_map_text(config_map))
 
     print("  Calculando cobertura de tests por convencion de nombres...")
     test_coverage = build_test_coverage(stats)
-    write(output_dir, "09_cobertura_tests.txt", build_test_coverage_text(test_coverage))
+    out.emit("09_cobertura_tests.txt", build_test_coverage_text(test_coverage))
 
     print("  [v3] Minando ejemplos de uso reales desde los tests...")
     test_usage = build_test_usage_examples(stats, symbols, test_coverage)
-    write(output_dir, "20_ejemplos_uso_desde_tests.txt", build_test_usage_examples_text(test_usage))
+    out.emit("20_ejemplos_uso_desde_tests.txt", build_test_usage_examples_text(test_usage))
 
     print("  Rankeando 'god files'...")
     god_files = build_god_files(stats, symbols)
-    write(output_dir, "10_god_files.txt", build_god_files_text(god_files))
+    out.emit("10_god_files.txt", build_god_files_text(god_files))
 
     if args.since:
         print(f"  [v3] --since {args.since}: calculando impacto del diff...")
@@ -3894,43 +3921,43 @@ def main():
         diff_text = build_diff_impact_text(args.since, changed_files, impacted, stats,
                                              symbols, todos, god_files)
         safe_ref = re.sub(r"[^\w.\-]+", "_", args.since)
-        write(output_dir, f"impacto_diff_desde_{safe_ref}.txt", diff_text)
+        out.emit(f"impacto_diff_desde_{safe_ref}.txt", diff_text)
 
     print("  Detectando superficie publica/privada...")
     public_surface = build_public_surface(stats, symbols)
-    write(output_dir, "11_superficie_publica.txt", build_public_surface_text(public_surface))
+    out.emit("11_superficie_publica.txt", build_public_surface_text(public_surface))
 
     print("  Comparando dependencias declaradas vs usadas...")
     deps_check = build_deps_check(stats, dep_graph)
-    write(output_dir, "12_dependencias_declaradas_vs_usadas.txt", build_deps_check_text(deps_check))
+    out.emit("12_dependencias_declaradas_vs_usadas.txt", build_deps_check_text(deps_check))
 
     print("  Construyendo glosario de dominio...")
     glossary = build_glossary(symbols)
-    write(output_dir, "13_glosario_dominio.txt", build_glossary_text(glossary))
+    out.emit("13_glosario_dominio.txt", build_glossary_text(glossary))
 
     print("  Agregando linea de tiempo de commits...")
-    write(output_dir, "14_linea_tiempo_commits.txt", build_commit_timeline_text(root))
+    out.emit("14_linea_tiempo_commits.txt", build_commit_timeline_text(root))
 
     print("  Analizando logica de negocio vs infraestructura...")
     infra_by_file = compute_infra_density(stats)
     domain_terms = {t for t, _ in glossary}
     business_report = compute_business_logic_report(stats, symbols, infra_by_file, domain_terms)
-    write(output_dir, "15_logica_negocio_vs_infraestructura.txt", build_business_logic_text(business_report))
-    write(output_dir, "16_infraestructura_por_categoria.txt", build_infra_by_category_text(infra_by_file))
+    out.emit("15_logica_negocio_vs_infraestructura.txt", build_business_logic_text(business_report))
+    out.emit("16_infraestructura_por_categoria.txt", build_infra_by_category_text(infra_by_file))
 
     n_business_candidates = sum(1 for r in business_report if r["tag"] == "logica_de_negocio (candidato)")
 
     print("  Construyendo glosario de acronimos y terminos de dominio...")
     acronym_entries = build_acronym_glossary(stats)
     domain_entries = build_domain_terms_context(glossary, stats)
-    write(output_dir, "17_glosario_acronimos_y_terminos.txt",
+    out.emit("17_glosario_acronimos_y_terminos.txt",
           build_glossary_definitions_text(acronym_entries, domain_entries))
 
     n_acronyms_pending = sum(1 for e in acronym_entries if not e["expansion"])
 
     print("  [v3] Infiriendo capas arquitectonicas (orden topologico aproximado)...")
     architecture_layers = build_architecture_layers(stats, internal_deps)
-    write(output_dir, "21_capas_arquitectonicas.txt",
+    out.emit("21_capas_arquitectonicas.txt",
           build_architecture_layers_text(architecture_layers, internal_deps))
 
     # [v4] baseline de esta pasada (para --drift-report en la PROXIMA
@@ -3939,7 +3966,7 @@ def main():
     if args.drift_report:
         print("  [v4] Generando informe de deriva desde la ultima pasada...")
         drift_text = build_drift_report_text(prev_baseline, curr_baseline, output_dir, symbols)
-        write(output_dir, "00_deriva_desde_ultima_pasada.txt", drift_text)
+        out.emit("00_deriva_desde_ultima_pasada.txt", drift_text)
     save_baseline(output_dir, curr_baseline)
 
     if args.brief:
@@ -3952,12 +3979,9 @@ def main():
                 brief_rel = str(brief_path)
         else:
             brief_rel = str(brief_path)
-        brief_text = build_file_briefing_text(
-            brief_rel, stats, symbols, side_effects, test_usage, test_coverage,
-            business_report, architecture_layers, internal_deps, todos, god_files,
-            reading_paths, entrypoints)
+        brief_text = build_file_briefing_text( brief_rel, stats, symbols, side_effects, test_usage, test_coverage, business_report, architecture_layers, internal_deps, todos, god_files, reading_paths, entrypoints)
         safe_name = re.sub(r"[^\w.\-]+", "_", brief_rel)
-        write(output_dir, f"briefing_{safe_name}.txt", brief_text)
+        out.emit(f"briefing_{safe_name}.txt", brief_text)
         print("\n" + brief_text)
 
     print("  Generando integracion con vim (tags, quickfix, fzf)...")
@@ -4014,7 +4038,7 @@ def main():
         )
     if args.brief:
         resumen_estatico += f"[v4] --brief {args.brief}: ver briefing_*.txt\n"
-    write(output_dir, "22_resumen_extraccion.txt", resumen_estatico)
+    out.emit("22_resumen_extraccion.txt", resumen_estatico)
 
     if args.no_llm:
         print("\n--no-llm activo: fase de sintesis omitida. Listo.")
@@ -4044,56 +4068,56 @@ def main():
 
     print("\n  Generando resumenes por fichero...")
     summaries, changed_rels = phase_file_summaries(stats, cache, model, api_key)
-    write(output_dir, "23_resumenes_por_fichero.txt",
+    out.emit("23_resumenes_por_fichero.txt",
           "\n\n".join(f"### {rel}\n{s}" for rel, s in summaries.items()))
 
     print("  Generando mapa semantico...")
     semantic_map = phase_semantic_map(summaries, cache, changed_rels, model, api_key)
-    write(output_dir, "24_mapa_semantico.md", semantic_map)
+    out.emit("24_mapa_semantico.md", semantic_map)
 
     print("  Generando vision de arquitectura...")
     architecture = phase_architecture(summaries, dep_graph, entrypoints, cache, changed_rels, model, api_key)
-    write(output_dir, "25_arquitectura.md", architecture)
+    out.emit("25_arquitectura.md", architecture)
 
     print("  Detectando convenciones y patrones de diseno...")
     conventions = phase_conventions_and_patterns(
         stats, god_files, entrypoints, business_report, compute_fanin(stats, dep_graph),
         cache, model, api_key)
-    write(output_dir, "26_convenciones_y_patrones.md", conventions)
+    out.emit("26_convenciones_y_patrones.md", conventions)
 
     print("  Explicando algoritmos complejos...")
     algo_explanations = phase_algorithm_explanations(complex_functions, root, model, api_key, cache)
-    write(output_dir, "27_explicacion_algoritmos.md", algo_explanations)
+    out.emit("27_explicacion_algoritmos.md", algo_explanations)
 
     print("  [v4] Infiriendo contratos de las funciones mas usadas del proyecto...")
     contracts = phase_function_contracts(symbols, call_graph, root, model, api_key, cache)
-    write(output_dir, "34_contratos_funciones_clave.md", contracts)
+    out.emit("34_contratos_funciones_clave.md", contracts)
 
     print("  Generando base de conocimiento...")
     kb = phase_knowledge_base(architecture, conventions, semantic_map, cache, model, api_key)
-    write(output_dir, "28_base_conocimiento.md", kb)
+    out.emit("28_base_conocimiento.md", kb)
 
     print("  Generando snippets del proyecto...")
     snippets = phase_snippets(conventions, stats, cache, model, api_key)
-    write(output_dir, "29_snippets.snippets", snippets)
+    out.emit("29_snippets.snippets", snippets)
 
     print("  Generando checklist de revision...")
     checklist = phase_review_checklist(architecture, conventions, cache, model, api_key)
-    write(output_dir, "30_checklist_revision.md", checklist)
+    out.emit("30_checklist_revision.md", checklist)
 
     print("  Generando casos tipicos...")
     typical_cases = phase_typical_cases(architecture, entrypoints, symbols, cache, model, api_key)
-    write(output_dir, "31_casos_tipicos.md", typical_cases)
+    out.emit("31_casos_tipicos.md", typical_cases)
 
     print("  Definiendo acronimos/terminos pendientes del glosario...")
     glossary_defs = phase_glossary_definitions(acronym_entries, domain_entries, model, api_key, cache)
-    write(output_dir, "32_glosario_definiciones.md", glossary_defs)
+    out.emit("32_glosario_definiciones.md", glossary_defs)
 
     print("  [v3] Sintetizando guia de onboarding (primeros 30 minutos)...")
     onboarding = phase_onboarding_summary(entrypoints, architecture, semantic_map,
                                              conventions, config_map, reading_paths_text,
                                              cache, model, api_key)
-    write(output_dir, "33_onboarding_primeros_30_min.md", onboarding)
+    out.emit("33_onboarding_primeros_30_min.md", onboarding)
 
     if args.semantic_index:
         print("\n[Fase 2 opcional] Indice de busqueda semantica de funciones...")
