@@ -379,6 +379,10 @@ convert_rotate(){
     ffmpeg -i $1 -vf "transpose=1" $1.rotated.mp4
 }
 
+convert_vflip(){
+    ffmpeg -i $1 -vf "vflip" -c:a copy $1.flip.mp4
+}
+
 convert_chmod(){
     sudo chmod -R 777 $convert_dir
     sudo chmod -R 777 $converted_dir
