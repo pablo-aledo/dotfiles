@@ -24,6 +24,8 @@
 ║    --curves FILE       JSON de tension_designer (.curves.json)               ║
 ║    --arc TEXT          palabras por sección: "calma tension climax"          ║
 ║    --tension TEXT      shorthand numérico: "0.2,0.6,0.95,0.3"               ║
+║    --climax-arc SPEC   clave=valor: meseta + salto abrupto (no lineal),      ║
+║                        p.ej. "climax_position=0.85,sharpness=10"            ║
 ║    --lexicon FILE      léxico emocional propio (.json)                       ║
 ║                                                                              ║
 ║  UMBRALES:                                                                   ║
@@ -479,6 +481,111 @@ def word_to_vector(word: str, lexicon: dict) -> Optional[Tuple[float, float, flo
         return (t, a, r, h)
 
     return None
+
+
+def climax_density_curve(t: float, climax_position: float = 0.85, sharpness: float = 10.0,
+                         plateau_level: float = 0.2, peak_level: float = 0.95,
+                         release_position: Optional[float] = None,
+                         release_sharpness: Optional[float] = None) -> float:
+    """
+    Curva de densidad para arcos de «clímax explosivo»: meseta sostenida
+    en `plateau_level` seguida de un salto ABRUPTO (sigmoide, no rampa
+    lineal) hacia `peak_level` centrado en `climax_position`. Comparte
+    la misma forma que la usada en melody_harmonizer.py (--adapt-mode
+    climax_arc) para que el arco planificado y la adaptación de melodía
+    puedan modelar el mismo tipo de clímax.
+
+        t                  : posición normalizada (0-1) de la sección
+        climax_position    : centro del salto (0-1)
+        sharpness           : abruptez del salto (mayor = más explosivo)
+        plateau_level        : densidad antes del salto
+        peak_level           : densidad en el pico
+        release_position    : si se da (0-1), la densidad decae tras este punto
+        release_sharpness   : abruptez de la caída (default = sharpness)
+    """
+    x = sharpness * (t - climax_position)
+    x = max(-40.0, min(40.0, x))
+    rise = 1.0 / (1.0 + math.exp(-x))
+    level = plateau_level + (peak_level - plateau_level) * rise
+
+    if release_position is not None:
+        rs = release_sharpness if release_sharpness is not None else sharpness
+        y = rs * (t - release_position)
+        y = max(-40.0, min(40.0, y))
+        fall = 1.0 / (1.0 + math.exp(y))  # 1 antes del release, 0 después
+        level = plateau_level + (level - plateau_level) * fall
+
+    return max(0.0, min(1.0, level))
+
+
+def explosive_climax_plan(n_sections: int,
+                          climax_position: float = 0.85,
+                          sharpness: float = 10.0,
+                          plateau_level: float = 0.2,
+                          peak_level: float = 0.95,
+                          release_position: Optional[float] = None,
+                          release_sharpness: Optional[float] = None,
+                          register_weight: float = 0.5,
+                          harmony_weight: float = 0.9) -> List["PlanVector"]:
+    """
+    Genera un plan de arco de «clímax explosivo» sobre las 4 dimensiones,
+    en vez del crecimiento lineal de --tension: una meseta de tensión
+    sostenida por varias secciones seguida de un salto brusco hacia el
+    pico, justo antes/en climax_position.
+
+    tension y activity siguen la curva completa. harmony se atenúa con
+    `harmony_weight` (la complejidad armónica no necesita saltar tan
+    bruscamente como la tensión). register sube más suavemente desde un
+    registro medio (0.45) con `register_weight`, ya que el "clímax denso"
+    de la referencia también se percibe como un ascenso de registro,
+    pero menos abrupto que la tensión/actividad.
+    """
+    plans = []
+    for i in range(n_sections):
+        t = i / max(1, n_sections - 1)
+        density = climax_density_curve(
+            t, climax_position=climax_position, sharpness=sharpness,
+            plateau_level=plateau_level, peak_level=peak_level,
+            release_position=release_position, release_sharpness=release_sharpness,
+        )
+        tension_v  = density
+        activity_v = density
+        harmony_v  = plateau_level + (density - plateau_level) * harmony_weight
+        register_v = 0.45 + (density - plateau_level) * register_weight
+
+        plans.append(PlanVector(
+            name=f"sec_{i+1}",
+            tension=round(min(1.0, max(0.0, tension_v)), 4),
+            activity=round(min(1.0, max(0.0, activity_v)), 4),
+            register=round(min(1.0, max(0.0, register_v)), 4),
+            harmony=round(min(1.0, max(0.0, harmony_v)), 4),
+            source="climax_shape",
+        ))
+    return plans
+
+
+def parse_climax_arc_shorthand(spec: str, n_sections: int) -> List["PlanVector"]:
+    """
+    Parsea '--climax-arc "climax_position=0.85,sharpness=10,plateau_level=0.2,peak_level=0.95"'
+    en un plan generado por explosive_climax_plan(). Claves no reconocidas
+    se ignoran; claves numéricas ausentes usan los valores por defecto.
+    """
+    kv = {}
+    for item in spec.split(','):
+        if '=' not in item:
+            continue
+        key, _, value = item.partition('=')
+        key = key.strip()
+        try:
+            kv[key] = float(value.strip())
+        except ValueError:
+            continue
+
+    valid_keys = {'climax_position', 'sharpness', 'plateau_level', 'peak_level',
+                  'release_position', 'release_sharpness',
+                  'register_weight', 'harmony_weight'}
+    kv = {k: v for k, v in kv.items() if k in valid_keys}
+    return explosive_climax_plan(n_sections, **kv)
 
 
 def parse_arc_text(arc: str, n_sections: int,
@@ -989,6 +1096,13 @@ def main():
                         help='Palabras por sección: "calma tension climax resolucion"')
     parser.add_argument('--tension', default=None,
                         help='Shorthand numérico para tensión: "0.2,0.6,0.95,0.3"')
+    parser.add_argument('--climax-arc', default=None, metavar='SPEC',
+                        help='Arco de clímax explosivo (meseta + salto abrupto, no lineal) '
+                             'sobre tension/activity/register/harmony. Parámetros clave=valor '
+                             'separados por comas: climax_position, sharpness, plateau_level, '
+                             'peak_level, release_position, release_sharpness, register_weight, '
+                             'harmony_weight. Ej: '
+                             '"climax_position=0.85,sharpness=10,plateau_level=0.2,peak_level=0.95"')
     parser.add_argument('--lexicon', default=None,
                         help='Léxico emocional propio (.json)')
 
@@ -1072,6 +1186,15 @@ def main():
             sys.exit(1)
         plans = load_curves_json(args.curves, n_sections, section_bars)
         plan_source = "curves"
+
+    # Base alternativa/adicional: --climax-arc (meseta + salto abrupto)
+    if args.climax_arc:
+        climax_plans = parse_climax_arc_shorthand(args.climax_arc, n_sections)
+        if plans:
+            plans = merge_plans(plans, climax_plans)
+        else:
+            plans = climax_plans
+        plan_source = "climax_shape" if plan_source == "inferred" else plan_source + "+climax_shape"
 
     # Sobreescribir con --arc si se especifica
     if args.arc:

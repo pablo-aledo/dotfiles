@@ -567,6 +567,41 @@ def classify_note_roles(melody, time_sig, verbose=False):
     return roles, scores
 
 
+def climax_density_curve(t, climax_position=0.85, sharpness=12.0,
+                          plateau_level=0.15, peak_level=1.0,
+                          release_position=None, release_sharpness=None):
+    """
+    Curva de densidad para arcos de «clímax explosivo»: una meseta
+    sostenida en `plateau_level` seguida de un salto ABRUPTO (no
+    gradual) hacia `peak_level` centrado en `climax_position`. Es una
+    sigmoide, no una rampa lineal — eso es lo que produce la sensación
+    de "estallido" en vez de crescendo progresivo.
+
+        t                  : posición normalizada (0-1) a lo largo de la pieza
+        climax_position    : centro del salto (0-1)
+        sharpness           : abruptez del salto (mayor = más explosivo)
+        plateau_level        : densidad antes del salto
+        peak_level           : densidad en el pico
+        release_position    : si se da (0-1), la densidad decae tras este punto
+        release_sharpness   : abruptez de la caída (default = sharpness)
+
+    Devuelve un valor en [0, 1].
+    """
+    x = sharpness * (t - climax_position)
+    x = max(-40.0, min(40.0, x))
+    rise = 1.0 / (1.0 + math.exp(-x))
+    level = plateau_level + (peak_level - plateau_level) * rise
+
+    if release_position is not None:
+        rs = release_sharpness if release_sharpness is not None else sharpness
+        y = rs * (t - release_position)
+        y = max(-40.0, min(40.0, y))
+        fall = 1.0 / (1.0 + math.exp(y))  # 1 antes del release, 0 después
+        level = plateau_level + (level - plateau_level) * fall
+
+    return max(0.0, min(1.0, level))
+
+
 def guide_tone_pcs(root_pc, quality):
     """
     Devuelve las pitch classes de las «guide tones» del acorde: 3ª y 7ª
@@ -1223,6 +1258,129 @@ def strategy_counterpoint_bass(melody, chords, key_obj, time_sig, params, verbos
         if verbose and parallel_flag:
             print(f"    [counterpoint_bass] beat={offset:.2f}: posible 5ª/8ª paralela con el bajo")
 
+    return adapted, log
+
+
+# ═══════════════════════════════════════════════════════════
+# ESTRATEGIA DE ARCO DE CLÍMAX EXPLOSIVO
+# ═══════════════════════════════════════════════════════════
+
+@register_strategy('climax_arc',
+    'Meseta de tensión sostenida + salto ABRUPTO de densidad/disonancia/velocity '
+    'cerca de climax_position, con capas de doblaje cerca del pico (estilo '
+    '"What Could Have Been")')
+def strategy_climax_arc(melody, chords, key_obj, time_sig, params, verbose=False):
+    """
+    Modela un arco de clímax explosivo: no es un crecimiento lineal, sino
+    una meseta de tensión sostenida seguida de un salto brusco justo
+    antes del punto de clímax, con capas que se van sumando en vez de
+    un crescendo progresivo.
+
+    Sobre cada nota, además de reubicar las 'avoid' como las estrategias
+    simples:
+      (a) a mayor densidad, más probable convertir un chord tone en una
+          tensión admitida cercana (más disonancia hacia el clímax);
+      (b) la velocity sigue la curva de densidad (meseta + salto), no el
+          valor original;
+      (c) cerca/después del umbral de doblaje se añaden notas extra
+          (octava u otro intervalo) simulando el engrosamiento de capas
+          típico de un clímax orquestal denso.
+
+    params:
+      climax_position     (0-1)   posición temporal del clímax (default 0.85)
+      plateau_level        (0-1)   densidad base antes del salto (default 0.15)
+      peak_level            (0-1)   densidad máxima en el clímax (default 1.0)
+      sharpness             (float) abruptez del salto de subida (default 12.0)
+      release_position     (0-1|None) si se da, la densidad decae tras este punto
+      release_sharpness    (float|None) abruptez de la caída (default = sharpness)
+      vel_min / vel_max    (int)   rango de velocity mapeado desde la densidad
+                                     (default 50 / 124)
+      tension_bias         (0-1)   prob. máxima de tensionar un chord tone
+                                     cuando la densidad es máxima (default 0.65)
+      doubling_threshold   (0-1)   densidad a partir de la cual se añaden
+                                     dobles (default 0.6)
+      doubling_prob        (0-1)   prob. de añadir un doble por nota sobre
+                                     el umbral (default 0.7)
+      doubling_interval    (int, semitonos) intervalo del doblaje (default 12)
+    """
+    scale_pcs = scale_pcs_for_key(key_obj) if key_obj else list(range(12))
+
+    climax_position    = float(params.get('climax_position', 0.85))
+    plateau_level       = float(params.get('plateau_level', 0.15))
+    peak_level           = float(params.get('peak_level', 1.0))
+    sharpness            = float(params.get('sharpness', 12.0))
+    release_position    = params.get('release_position', None)
+    release_position    = float(release_position) if release_position is not None else None
+    release_sharpness   = params.get('release_sharpness', None)
+    release_sharpness   = float(release_sharpness) if release_sharpness is not None else None
+    vel_min              = int(params.get('vel_min', 50))
+    vel_max              = int(params.get('vel_max', 124))
+    tension_bias         = float(params.get('tension_bias', 0.65))
+    doubling_threshold  = float(params.get('doubling_threshold', 0.6))
+    doubling_prob        = float(params.get('doubling_prob', 0.7))
+    doubling_interval    = int(params.get('doubling_interval', 12))
+
+    if not melody:
+        return [], []
+
+    t0 = melody[0][0]
+    t_end = max(offset + dur for offset, _, dur, _ in melody)
+    total_span = max(t_end - t0, 1e-6)
+
+    adapted, log = [], []
+
+    for idx, (offset, pitch, dur, vel) in enumerate(melody):
+        t = (offset - t0) / total_span
+        density = climax_density_curve(
+            t, climax_position=climax_position, sharpness=sharpness,
+            plateau_level=plateau_level, peak_level=peak_level,
+            release_position=release_position, release_sharpness=release_sharpness,
+        )
+
+        chord = chord_at_beat(chords, offset)
+        root_pc = quality = None
+        new_pitch = pitch
+
+        if chord is not None:
+            root_pc, quality = chord['root_pc'], chord['quality']
+            adm = admissible_pcs(root_pc, quality, scale_pcs)
+            cat_orig = chord_tone_category(pitch % 12, root_pc, quality)
+
+            if cat_orig == 'avoid':
+                new_pitch = nearest_admissible(pitch, adm, 'nearest')
+            elif cat_orig == 'chord_tone' and random.random() < tension_bias * density:
+                tension_pcs = {pc for pc in adm
+                               if chord_tone_category(pc, root_pc, quality) == 'tension'}
+                if tension_pcs:
+                    candidate = nearest_admissible(pitch, tension_pcs, 'nearest')
+                    if candidate is not None:
+                        new_pitch = candidate
+
+        new_pitch = max(21, min(108, int(round(new_pitch))))
+        new_vel = max(1, min(127, int(round(vel_min + (vel_max - vel_min) * density))))
+
+        entry = _base_log_entry(idx, offset, pitch, new_pitch, root_pc, quality,
+                                 {'density': round(density, 3),
+                                  'velocity': new_vel, 'layer': 'main'})
+        log.append(entry)
+        adapted.append((offset, new_pitch, dur, new_vel))
+
+        # Doblaje de capas cerca/en el clímax
+        if density >= doubling_threshold and random.random() < doubling_prob * density:
+            double_pitch = new_pitch + doubling_interval
+            if double_pitch <= 108:
+                double_vel = max(1, min(127, int(round(new_vel * 0.85))))
+                adapted.append((offset, double_pitch, dur, double_vel))
+                log.append({'idx': idx, 'orig': pitch, 'new': double_pitch,
+                            'density': round(density, 3), 'velocity': double_vel,
+                            'layer': 'doubling', 'interval': doubling_interval})
+
+        if verbose and (new_pitch != pitch or new_vel != vel):
+            print(f"    [climax_arc] beat={offset:.2f} dens={density:.2f}  "
+                  f"{PITCH_NAMES[pitch%12]}{pitch//12-1} → "
+                  f"{PITCH_NAMES[new_pitch%12]}{new_pitch//12-1}  vel={vel}→{new_vel}")
+
+    adapted.sort(key=lambda n: n[0])
     return adapted, log
 
 
@@ -2056,6 +2214,10 @@ Parámetros por estrategia (--strategy-param clave=valor, repetible):
   limited_leap       : leap_max
   dp_global          : dp_distance_weight, dp_leap_weight, dp_max_candidates
   markov             : markov_corpus, markov_search_range
+  climax_arc         : climax_position, plateau_level, peak_level, sharpness,
+                       release_position, release_sharpness, vel_min, vel_max,
+                       tension_bias, doubling_threshold, doubling_prob,
+                       doubling_interval
 
 Ornamentos disponibles:
   appoggiatura  Nota disonante en tiempo fuerte que resuelve por semitono
@@ -2071,6 +2233,8 @@ Ejemplos:
   python melody_harmonizer.py harmony.mid melody.mid --ornaments passing appoggiatura --ornament-bars 3 7 11 15
   python melody_harmonizer.py harmony.mid melody.mid --ornaments all --ornament-prob 0.5
   python melody_harmonizer.py harmony.mid melody.mid --key "D minor" --verbose --report
+  python melody_harmonizer.py harmony.mid melody.mid --adapt-mode climax_arc \
+      --strategy-param climax_position=0.85 sharpness=14 plateau_level=0.2 peak_level=1.0
   python melody_harmonizer.py --list-strategies
         """
     )
