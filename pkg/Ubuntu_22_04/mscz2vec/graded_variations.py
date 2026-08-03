@@ -198,17 +198,22 @@ def detect_key(pc_hist):
     return best[0], best[1]
 
 def detect_chord(pcs_weight, bass_pc):
-    present = {pc for pc,w in pcs_weight.items() if w > 0}
-    if not present: return None, ""
-    best = (None,"",-1e9)
+    present = {pc for pc, w in pcs_weight.items() if w > 0}
+    if not present:
+        return None, "", -1e9   # devolvemos también un valor para el score
+    best = (None, "", -1e9)
     for root in range(12):
-        rel = {(pc-root)%12 for pc in present}
+        rel = {(pc - root) % 12 for pc in present}
         for suffix, templ in CHORD_TEMPLATES.items():
-            inter = len(rel & templ); extra = len(rel - templ); missing = len(templ - rel)
-            score = 2.0*inter - 1.0*extra - 0.7*missing
-            if bass_pc is not None and (bass_pc-root)%12 == 0: score += 0.6
-            if score > best[2]: best = (root,suffix,score)
-    return best[0], best[1]
+            inter = len(rel & templ)
+            extra = len(rel - templ)
+            missing = len(templ - rel)
+            score = 2.0 * inter - 1.0 * extra - 0.7 * missing
+            if bass_pc is not None and (bass_pc - root) % 12 == 0:
+                score += 0.6
+            if score > best[2]:
+                best = (root, suffix, score)
+    return best[0], best[1], best[2]   # ahora devuelve tres valores
 
 @dataclass
 class ChordSpan:
