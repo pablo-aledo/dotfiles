@@ -1760,23 +1760,37 @@ def grid_fallback(records: List["NoteRec"], tc: "TimeContext",
 
 
 def apply_grid_fallback_until_target(records: List["NoteRec"], tc: "TimeContext",
-                                      tpb: int, target_grade: int) -> Tuple[List["NoteRec"], int, bool, int]:
+                                      tpb: int, target_grade: int,
+                                      exclude_bars: Optional[Set[int]] = None) -> Tuple[List["NoteRec"], int, bool, int]:
     """Aplica la escala de rejillas progresivamente (cada peldaño parte del
-    resultado del anterior, nunca de las notas originales) hasta que
-    whole_piece_grade <= target_grade o se agote la escala. Devuelve
-    (records, grado_alcanzado, objetivo_cumplido, nº_de_peldaños_usados)."""
+    resultado del anterior, nunca de las notas originales) hasta que el
+    grado <= target_grade o se agote la escala. Devuelve
+    (records, grado_alcanzado, objetivo_cumplido, nº_de_peldaños_usados).
+
+    exclude_bars: si se pasa (compases protegidos/suavizados por
+    --protect-bars/--soften-bars), el criterio de parada de CADA peldaño se
+    mide EXCLUYENDO esos compases del calculo — sin esto, un compas
+    protegido/suavizado que por si solo siga marcando un grado alto impide
+    que el bucle detecte nunca el exito, y agota TODA la escala recortando
+    el resto de la pieza mucho mas de lo necesario (bug real detectado al
+    combinar --protect-bars/--soften-bars con targets exigentes)."""
     cur = records
-    rh = [r.note for r in cur if r.hand == "rh"]
-    lh = [r.note for r in cur if r.hand == "lh"]
-    grade, _ = whole_piece_grade(rh, lh, tc)
+
+    def _grade(recs):
+        if exclude_bars:
+            return grade_excluding_bars(recs, tc, exclude_bars)
+        rh = [r.note for r in recs if r.hand == "rh"]
+        lh = [r.note for r in recs if r.hand == "lh"]
+        g, _ = whole_piece_grade(rh, lh, tc)
+        return g
+
+    grade = _grade(cur)
     steps = 0
     for grid_ticks, max_voices in _grid_ladder(tpb):
         if grade <= target_grade:
             break
         cur = grid_fallback(cur, tc, grid_ticks, max_voices)
-        rh = [r.note for r in cur if r.hand == "rh"]
-        lh = [r.note for r in cur if r.hand == "lh"]
-        grade, _ = whole_piece_grade(rh, lh, tc)
+        grade = _grade(cur)
         steps += 1
     return cur, grade, grade <= target_grade, steps
 
@@ -2341,109 +2355,114 @@ class LevelResult:
 def combined_simplify(midi_path: str, target_grades: List[int], floor_level: str = "ursatz",
                        split: int = 60, use_transforms: bool = True,
                        allow_added_notes: bool = True, max_transform_passes: int = 8,
-                       climax_mode: str = "none", climax_bars: Optional[List[int]] = None,
-                       climax_soften_span: int = 10, climax_soften_leap: int = 7,
-                       climax_soften_stretch: float = 1.25) -> Dict:
-    """climax_mode:
-       "none"      — comportamiento normal, sin excepciones.
-       "exception" — [OPCION A] los compases de climax_bars (o los
-                      auto-detectados si no se especifican) quedan
-                      protegidos byte a byte: floor_protected desde antes
-                      del greedy. El grado por target se decide con
-                      grade_excluding_bars (ignorando el clímax), y se
-                      informa ademas el grado real incluyendolo.
-       "soften"    — [OPCION B] los compases de climax_bars se suavizan con
-                      soften_climax (voicing/saltos mas estrictos + ataques
-                      algo mas espaciados) ANTES de entrar en el pipeline
-                      normal, de modo que el grado que se persigue es el
-                      real de toda la pieza, clímax incluido, sin
-                      excepciones que reportar."""
-    climax_set: Set[int] = set()
-    if climax_mode != "none":
-        if climax_bars:
-            climax_set = set(climax_bars)
-        else:
-            climax_set = set(detect_climax_bars(midi_path, split=split))
+                       protect_bars: Optional[List[int]] = None,
+                       soften_bars: Optional[List[int]] = None,
+                       soften_span: int = 10, soften_leap: int = 7,
+                       soften_stretch: float = 1.25) -> Dict:
+    """Regiones de interes, independientes entre si y combinables en la
+    misma llamada:
+       protect_bars — [OPCION A: excepcion] esos compases quedan
+                       protegidos byte a byte (floor_protected desde antes
+                       del greedy: pre-pasada, greedy, optimizador y rejilla
+                       nunca los tocan). El grado por target se decide
+                       EXCLUYENDO esos compases del calculo; se informa
+                       ademas el grado real incluyendolos.
+       soften_bars  — [OPCION B: suavizado] esos compases se pasan por
+                       soften_climax (voicing/saltos mas estrictos + ataques
+                       algo mas espaciados) y LUEGO quedan protegidos igual
+                       que protect_bars, para que la rejilla no les revierta
+                       el suavizado si el resto de la pieza aun necesita mas
+                       reduccion. El grado SI los incluye (no hay excepcion
+                       que reportar): son una version mas simple pero fiel
+                       de esos compases, no el original sin tocar.
+    Un mismo compas no deberia estar en las dos listas a la vez."""
+    protect_set: Set[int] = set(protect_bars or [])
+    soften_set: Set[int] = set(soften_bars or [])
+    overlap = protect_set & soften_set
+    if overlap:
+        raise ValueError(f"compases en protect_bars y soften_bars a la vez: {sorted(overlap)}")
 
     result = reduce_graded(midi_path, target_grades, floor_level=floor_level, split=split,
                             pre_simplify=use_transforms,
-                            climax_bars=climax_set if climax_mode == "exception" else None)
+                            climax_bars=protect_set if protect_set else None)
     tc, mid = result["tc"], result["mid"]
     n_original = len(result["records"])
 
-    if climax_mode == "soften" and climax_set:
+    if soften_set:
         for t in result["level_snapshots"]:
             softened = soften_climax(
-                result["level_snapshots"][t], tc, climax_set,
-                max_span=climax_soften_span, max_leap=climax_soften_leap,
-                stretch=climax_soften_stretch)
-            # una vez suavizado, se protege (floor_protected) para que la
-            # rejilla/greedy no lo vuelva a tocar si el resto de la pieza
-            # aun necesita mas reduccion: el suavizado ya es la version
-            # final de esos compases, no un punto de partida para seguir
-            # recortando.
-            mark_climax_protected(softened, climax_set)
+                result["level_snapshots"][t], tc, soften_set,
+                max_span=soften_span, max_leap=soften_leap, stretch=soften_stretch)
+            mark_climax_protected(softened, soften_set)
             result["level_snapshots"][t] = softened
+
+    # exclude_for_grade: SOLO protect_set se saca del grado que se reporta
+    #   (soften_set cuenta de verdad, es una version simplificada real, no
+    #   una excepcion).
+    # stop_bars: protect_set + soften_set. Ambos quedan floor_protected en
+    #   este punto -> la rejilla y el optimizador jamas los tocan, asi que
+    #   NINGUNO de los dos puede seguir aportando reduccion. Usar esto (no
+    #   solo protect_set) como criterio de PARADA evita el bug real que
+    #   viste: sin esto, un compas suavizado-y-congelado que por si solo
+    #   siga marcando un grado alto impedia detectar el exito y la rejilla
+    #   agotaba toda la escala recortando el resto de la pieza de mas.
+    exclude_for_grade = protect_set
+    stop_bars = protect_set | soften_set
 
     levels: Dict[int, LevelResult] = {}
     for t in sorted(set(target_grades), reverse=True):
         snap = result["level_snapshots"][t]
+        achieved_stop = (grade_excluding_bars(snap, tc, stop_bars) if stop_bars
+                          else _records_grade(snap, tc))
 
-        if climax_mode == "exception" and climax_set:
-            achieved = grade_excluding_bars(snap, tc, climax_set)
-        else:
-            achieved = _records_grade(snap, tc)
-
-        if achieved <= t:
+        if achieved_stop <= t:
             method = "estructural"
-            chosen, achieved_final = snap, achieved
+            chosen = snap
         elif use_transforms:
             transformed, achieved_t_incl, accepted = apply_musical_transformations(
                 snap, tc, t, mid.tpb, allow_added_notes=allow_added_notes,
                 max_passes=max_transform_passes)
-            achieved_t = (grade_excluding_bars(transformed, tc, climax_set)
-                          if climax_mode == "exception" and climax_set else achieved_t_incl)
+            achieved_t = (grade_excluding_bars(transformed, tc, stop_bars) if stop_bars
+                          else achieved_t_incl)
             if achieved_t <= t:
                 method = "estructural+transformaciones (" + " → ".join(accepted) + ")" if accepted else "estructural+transformaciones"
-                chosen, achieved_final = transformed, achieved_t
+                chosen = transformed
             else:
                 # [hallazgo empirico de v2.0] si las transformaciones no
                 # bastan, la rejilla rinde mas arrancando desde el snapshot
                 # ESTRUCTURAL original, no desde el ya transformado.
-                # NOTA (modo "exception"): apply_grid_fallback_until_target
-                # mide el grado internamente INCLUYENDO el clímax (que nunca
-                # se toca, por floor_protected), asi que su propio criterio
-                # de "ok" nunca se cumple y agota toda la rejilla — puede
-                # sobre-reducir el resto de la pieza mas de lo estrictamente
-                # necesario. Se comprueba el exito real aparte, con
-                # grade_excluding_bars, sobre el resultado que devuelva.
-                reduced, achieved2_incl, ok, gsteps = apply_grid_fallback_until_target(snap, tc, mid.tpb, t)
-                achieved2 = (grade_excluding_bars(reduced, tc, climax_set)
-                             if climax_mode == "exception" and climax_set else achieved2_incl)
-                ok_real = achieved2 <= t
+                reduced, _achieved2, ok_real, gsteps = apply_grid_fallback_until_target(
+                    snap, tc, mid.tpb, t, exclude_bars=stop_bars or None)
                 base = "estructural+rejilla" if ok_real else f"estructural+rejilla (limite tras {gsteps} peldaños)"
                 tag = " (transformaciones intentadas: " + ", ".join(accepted) + ")" if accepted else " (transformaciones sin efecto)"
                 method = base + tag
-                chosen, achieved_final = reduced, achieved2
+                chosen = reduced
         else:
-            reduced, achieved2, ok, gsteps = apply_grid_fallback_until_target(snap, tc, mid.tpb, t)
+            reduced, _achieved2, ok, gsteps = apply_grid_fallback_until_target(
+                snap, tc, mid.tpb, t, exclude_bars=stop_bars or None)
             method = "estructural+rejilla" if ok else f"estructural+rejilla (limite tras {gsteps} peldaños)"
-            chosen, achieved_final = reduced, achieved2
+            chosen = reduced
 
-        if climax_mode == "exception" and climax_set:
-            method += f"  [clímax protegido: compas(es) {sorted(climax_set)}]"
-            achieved_real = _records_grade(chosen, tc)  # grado real, con climax incluido
-        elif climax_mode == "soften" and climax_set:
-            method += f"  [clímax suavizado: compas(es) {sorted(climax_set)}]"
-            achieved_real = achieved_final
-        else:
-            achieved_real = achieved_final
+        # grado OFICIAL reportado: excluye solo protect_set (excepcion de
+        # verdad); soften_set cuenta, porque es contenido real, simplificado
+        # pero real.
+        achieved_final = (grade_excluding_bars(chosen, tc, exclude_for_grade) if exclude_for_grade
+                           else _records_grade(chosen, tc))
+
+        tags = []
+        if protect_set:
+            tags.append(f"protegidos: {sorted(protect_set)}")
+        if soften_set:
+            tags.append(f"suavizados: {sorted(soften_set)}")
+        if tags:
+            method += "  [" + "; ".join(tags) + "]"
+        achieved_real = _records_grade(chosen, tc) if protect_set else achieved_final
 
         levels[t] = LevelResult(t, achieved_final, method, len(chosen), n_original, chosen,
                                  achieved_grade_real=achieved_real)
 
     return {"mid": mid, "tc": tc, "levels": levels, "result": result,
-            "climax_mode": climax_mode, "climax_bars": sorted(climax_set)}
+            "protect_bars": sorted(protect_set), "soften_bars": sorted(soften_set)}
 
 
 def print_combined_report(midi_path: str, out: Dict):
@@ -2456,9 +2475,10 @@ def print_combined_report(midi_path: str, out: Dict):
               f"{pss['armonia_sustituida']} tonos de extension sustituidos, "
               f"{pss['bajo_clarificado']} bajos clarificados, "
               f"{pss['adornos_resueltos']} adornos resueltos")
-    if out.get("climax_mode", "none") != "none" and out.get("climax_bars"):
-        etiqueta = "excepcion (protegido tal cual)" if out["climax_mode"] == "exception" else "suavizado"
-        print(f"  clímax ({etiqueta}): compas(es) {out['climax_bars']}")
+    if out.get("protect_bars"):
+        print(f"  compases protegidos (excepcion, tal cual el original): {out['protect_bars']}")
+    if out.get("soften_bars"):
+        print(f"  compases suavizados (mismo contenido, mas tocable): {out['soften_bars']}")
     for t in sorted(out["levels"], reverse=True):
         lv = out["levels"][t]
         pct = 100.0 * lv.n_notes / max(1, lv.n_notes_original)
@@ -2478,7 +2498,9 @@ def main():
         description="Simplifica un MIDI de piano a un nivel de dificultad pedagogica pedido: "
                      "sustitucion armonica/melodica + optimizador adaptativo de transformaciones "
                      "(registro/textura/ritmica/aditivas) + rejilla garantizada como ultimo recurso, "
-                     "con opcion de proteger o suavizar un pasaje de clímax.")
+                     "con opcion de proteger (tal cual) o suavizar (mas fiel al original, algo mas "
+                     "tocable) compases concretos — util para clímax u otros pasajes densos que la "
+                     "rejilla distorsiona mas de la cuenta.")
     ap.add_argument("midi")
     ap.add_argument("--target-grade", type=int, nargs="+", required=True)
     ap.add_argument("--floor-level", default="ursatz")
@@ -2493,26 +2515,29 @@ def main():
                           "nunca añaden notas)")
     ap.add_argument("--max-transform-passes", type=int, default=8,
                      help="numero maximo de pasadas del bucle de aceptacion adaptativa (def. 8)")
-    ap.add_argument("--climax-mode", choices=["none", "exception", "soften"], default="none",
-                     help="none: sin excepciones (def.). exception: protege el clímax tal cual y "
-                          "excluye esos compases del calculo de grado. soften: suaviza el clímax "
-                          "(voicing/saltos mas estrictos + ataques algo mas espaciados) y persigue "
-                          "el grado real, clímax incluido.")
-    ap.add_argument("--climax-bars", type=int, nargs="+",
-                     help="numero(s) de compas del clímax (numeracion interna, la misma que "
-                          "devuelve --report-bars). Si se omite con --climax-mode distinto de "
-                          "'none', se auto-detecta(n) el/los compas(es) mas dificil(es) de la pieza.")
-    ap.add_argument("--climax-soften-span", type=int, default=10,
-                     help="[solo --climax-mode soften] extension maxima (semitonos) tras "
-                          "close_voicings dentro del clímax (def. 10)")
-    ap.add_argument("--climax-soften-leap", type=int, default=7,
-                     help="[solo --climax-mode soften] salto maximo (semitonos) tras "
-                          "reduce_melodic_leaps dentro del clímax (def. 7)")
-    ap.add_argument("--climax-soften-stretch", type=float, default=1.25,
-                     help="[solo --climax-mode soften] factor de separacion entre ataques "
-                          "consecutivos dentro del clímax (def. 1.25 = 25%% mas espacio)")
+    ap.add_argument("--protect-bars", type=int, nargs="+",
+                     help="[OPCION A: excepcion] compas(es) que se dejan EXACTAMENTE como en el "
+                          "original (numeracion interna, la misma que devuelve --report-bars) y se "
+                          "excluyen del calculo de grado. Combinable con --soften-bars (compases "
+                          "distintos).")
+    ap.add_argument("--soften-bars", type=int, nargs="+",
+                     help="[OPCION B: suavizado] compas(es) que se simplifican con criterio mas "
+                          "estricto que el resto (voicing/saltos/espaciado de ataques) en vez de "
+                          "pasar por la rejilla de respaldo, para sonar mas parecido al original. "
+                          "Cuentan en el calculo de grado (no son una excepcion). Combinable con "
+                          "--protect-bars (compases distintos).")
+    ap.add_argument("--soften-span", type=int, default=10,
+                     help="[solo --soften-bars] extension maxima (semitonos) tras close_voicings "
+                          "dentro de los compases suavizados (def. 10)")
+    ap.add_argument("--soften-leap", type=int, default=7,
+                     help="[solo --soften-bars] salto maximo (semitonos) tras reduce_melodic_leaps "
+                          "dentro de los compases suavizados (def. 7)")
+    ap.add_argument("--soften-stretch", type=float, default=1.25,
+                     help="[solo --soften-bars] factor de separacion entre ataques consecutivos "
+                          "dentro de los compases suavizados (def. 1.25 = 25%% mas espacio)")
     ap.add_argument("--report-bars", action="store_true",
-                     help="solo imprime el grado por compas (util para localizar el clímax) y sale")
+                     help="solo imprime el grado por compas (util para localizar clímax o pasajes "
+                          "problematicos) y sale")
     args = ap.parse_args()
 
     if args.report_bars:
@@ -2529,10 +2554,9 @@ def main():
                              use_transforms=not args.no_transforms,
                              allow_added_notes=not args.no_additive,
                              max_transform_passes=args.max_transform_passes,
-                             climax_mode=args.climax_mode, climax_bars=args.climax_bars,
-                             climax_soften_span=args.climax_soften_span,
-                             climax_soften_leap=args.climax_soften_leap,
-                             climax_soften_stretch=args.climax_soften_stretch)
+                             protect_bars=args.protect_bars, soften_bars=args.soften_bars,
+                             soften_span=args.soften_span, soften_leap=args.soften_leap,
+                             soften_stretch=args.soften_stretch)
     print_combined_report(args.midi, out)
 
     outdir = Path(args.outdir) if args.outdir else Path(args.midi).parent
