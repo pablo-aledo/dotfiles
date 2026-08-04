@@ -1451,3 +1451,9 @@ fns_down(){
 
 ct_procdupli(){echo '-e '"'s|^"$1'\\t.*'$2'|'$(cat ~/log2gr/project/duplifiles | grep "^$2 " | cut -d" " -f2)$1'\\t'$2'|g'"'"' \\'}
 ct_procdupli2(){echo '-e '"'s|\<"$(cat ~/log2gr/project/duplifiles | grep "^$2 " | cut -d" " -f2)$1'\>|'$(cat ~/log2gr/project/duplifiles | grep "^$2 " | cut -d" " -f2).$1'|g'"'"' \\'}
+
+ctags_set(){
+sudo rm -fr /usr/bin/ctags
+[ $1 = "exuberant" ] && sudo ln -s /usr/bin/ctags-exuberant /usr/bin/ctags
+[ $1 = "universal" ] && sudo ln -s /usr/bin/universal-ctags /usr/bin/ctags
+}
