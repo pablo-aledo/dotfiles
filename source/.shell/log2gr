@@ -622,7 +622,10 @@ ctags_review(){
     mkdir functions/input
     cat /tmp/newfunctions | while read line; do mv functions/$line functions/input; done
     find functions -maxdepth 1 -type f -delete
+
     ctags_auto_clique $1
+    # comm -12 <(cat ~/log2gr/$1/clique | sort -u) <(cat ~/log2gr/$1/calls | sort -u) > /tmp/cclique; \cp /tmp/cclique ~/log2gr/$1/clique
+
     (echo flowchart LR; wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | sed 's/ -> / --> /g' | fcdag) | Xclip -i
     ctags_diff_fcg $1
 }
