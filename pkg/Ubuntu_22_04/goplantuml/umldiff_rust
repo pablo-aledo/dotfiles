@@ -71,8 +71,8 @@ awk -F'\t' '
     gsub(/^\/\^/, "", pattern)
     gsub(/\$\/;"$/, "", pattern)
 
-    if (pattern ~ /^impl[[:space:]]+[A-Za-z0-9_:]+[[:space:]]+for[[:space:]]+[A-Za-z0-9_:]+[[:space:]]*\{[[:space:]]*$/) {
-        match(pattern, /^impl[[:space:]]+([A-Za-z0-9_:]+)[[:space:]]+for[[:space:]]+([A-Za-z0-9_:]+)/, m)
+    if (pattern ~ /^[[:space:]]*impl[[:space:]]+[A-Za-z0-9_:]+[[:space:]]+for[[:space:]]+[A-Za-z0-9_:]+[[:space:]]*\{[[:space:]]*$/) {
+        match(pattern, /^[[:space:]]*impl[[:space:]]+([A-Za-z0-9_:]+)[[:space:]]+for[[:space:]]+([A-Za-z0-9_:]+)/, m)
         trait = m[1]
         struct = m[2]
 
