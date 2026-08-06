@@ -158,12 +158,16 @@ USO BASICO
     #   -> guarda la respuesta completa de cada uno como texto plano,
     #      p.ej. respuesta_01.txt, respuesta_02.txt
 
-    # Ronda 2: carga las respuestas de la ronda 1 (una vez por fichero) y
-    # vuelve a ejecutar. Las fases que dependian de lo que acaba de
-    # resolverse (mapa semantico, arquitectura...) generaran su propio
-    # lote nuevo si les toca esta ronda:
+    # Ronda 2: carga las respuestas de la ronda 1 y vuelve a ejecutar. Se
+    # puede repetir --load-batch por fichero, pasar un patron con
+    # comodines (entre comillas, para que lo expanda el script), o un
+    # directorio (se cargan sus *.txt directos):
     python3 extract_project_knowledge.py --root . --provider manual --yes \
         --load-batch respuesta_01.txt --load-batch respuesta_02.txt
+    python3 extract_project_knowledge.py --root . --provider manual --yes \
+        --load-batch "respuestas/*.txt"
+    python3 extract_project_knowledge.py --root . --provider manual --yes \
+        --load-batch respuestas/
 
     # Repite el ciclo carga-respuestas -> reejecuta -> pega el lote nuevo
     # hasta que la salida diga "No quedan peticiones pendientes". El
@@ -200,6 +204,7 @@ SALIDA
 from __future__ import annotations
 
 import argparse
+import glob
 import hashlib
 import json
 import math
@@ -2991,16 +2996,63 @@ def _manual_enqueue(request_id: str, system: str, user: str, max_tokens: int) ->
                             "max_tokens": max_tokens})
 
 
+def _expand_batch_paths(raw_paths: list) -> list:
+    """Expande cada entrada de --load-batch:
+      - si contiene comodines (*, ?, [ ]) se expande con glob (p.ej.
+        "respuestas/*.txt", que conviene pasar entre comillas para que
+        sea el script -y no el shell- quien la expanda, y asi funcione
+        igual en cualquier shell/SO),
+      - si es un directorio, coge todos los *.txt directos dentro (no
+        recursivo),
+      - si es una ruta suelta, se deja tal cual (comportamiento previo).
+    Devuelve rutas unicas en orden estable (alfabetico dentro de cada
+    expansion) para que la carga sea reproducible entre ejecuciones."""
+    expanded = []
+    seen = set()
+
+    def add(m):
+        if m not in seen:
+            seen.add(m)
+            expanded.append(m)
+
+    for raw in raw_paths:
+        if any(ch in raw for ch in "*?["):
+            matches = sorted(glob.glob(raw))
+            if not matches:
+                print(f"[aviso] --load-batch: el patron '{raw}' no encontro ningun fichero.")
+            for m in matches:
+                add(m)
+            continue
+        path = Path(raw)
+        if path.is_dir():
+            matches = sorted(str(f) for f in path.glob("*.txt"))
+            if not matches:
+                print(f"[aviso] --load-batch: el directorio '{raw}' no tiene ningun .txt directo.")
+            for m in matches:
+                add(m)
+            continue
+        add(raw)
+    return expanded
+
+
 def load_manual_batch_files(paths: list) -> int:
     """Parsea uno o mas ficheros de respuesta pegados desde una interfaz web
     (bloques <<<RESPONSE id="...">>> ... <<<FIN_RESPONSE>>>) y rellena
-    _MANUAL_ANSWERS. Devuelve cuantos bloques nuevos se cargaron en total."""
+    _MANUAL_ANSWERS. Cada entrada de `paths` puede ser un fichero suelto,
+    un patron con comodines (p.ej. "respuestas/*.txt") o un directorio
+    (se toman sus *.txt directos). Devuelve cuantos bloques nuevos se
+    cargaron en total."""
     pattern = re.compile(
         r"<<<\s*RESPONSE\s+id\s*=\s*[\"']([^\"']+)[\"']\s*>>>(.*?)<<<\s*FIN_RESPONSE\s*>>>",
         re.DOTALL | re.IGNORECASE,
     )
+    expanded = _expand_batch_paths(paths)
+    if not expanded:
+        print("[aviso] --load-batch: no se resolvio ningun fichero a partir de las "
+              "rutas/patrones dados.")
+        return 0
     loaded = 0
-    for p in paths:
+    for p in expanded:
         path = Path(p)
         if not path.exists():
             print(f"[aviso] --load-batch: no existe {path}, se ignora.")
@@ -4083,11 +4135,13 @@ def main():
                                "Solo se usa con --provider ollama")
     parser.add_argument("--yes", action="store_true", help="no pedir confirmacion antes de llamar al LLM")
     parser.add_argument("--load-batch", metavar="RUTA", action="append", default=None,
-                          help="[v4, solo --provider manual] carga un fichero de texto con la "
-                               "respuesta que pegaste desde una interfaz web (bloques "
+                          help="[v4, solo --provider manual] carga la respuesta que pegaste "
+                               "desde una interfaz web (bloques "
                                "<<<RESPONSE id=\"...\">>>...<<<FIN_RESPONSE>>>) antes de "
-                               "continuar la extraccion. Repite la opcion una vez por fichero "
-                               "si tienes varias respuestas guardadas.")
+                               "continuar la extraccion. Acepta un fichero suelto, un patron "
+                               "con comodines entre comillas (p.ej. --load-batch "
+                               "\"respuestas/*.txt\") o un directorio (se cargan sus *.txt "
+                               "directos). Tambien se puede repetir la opcion varias veces.")
     parser.add_argument("--manual-batch-max-output-tokens", type=int,
                           default=MANUAL_BATCH_MAX_OUTPUT_TOKENS_DEFAULT,
                           help="[v4, solo --provider manual] presupuesto aproximado de tokens "
