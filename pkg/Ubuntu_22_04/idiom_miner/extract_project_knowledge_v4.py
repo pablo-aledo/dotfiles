@@ -958,6 +958,44 @@ def detect_entrypoints(stats: dict) -> list:
     return sorted(set(found))
 
 
+def _entrypoint_reason(rel: str, meta: dict) -> str:
+    """Vuelve a evaluar por que `rel` califica como entrypoint, solo para dar
+    contexto legible en el listado -- detect_entrypoints no guarda el motivo,
+    solo la ruta, asi que se re-deriva aqui con la misma logica."""
+    base = Path(rel).name
+    if base in ENTRYPOINT_HINTS:
+        return f"nombre de fichero habitual de entrypoint ('{base}')"
+    lang = meta.get("lang")
+    if lang == "python":
+        return "contiene 'if __name__ == \"__main__\"'"
+    if lang == "rust":
+        return "define un fn main() propio"
+    return "detectado"
+
+
+def build_entrypoints_text(entrypoints: list, stats: dict) -> str:
+    lines = [
+        "PUNTOS DE ENTRADA DETECTADOS", "=" * 60,
+        "Ficheros que probablemente arrancan la ejecucion: nombre habitual",
+        "(main.py, main.rs, index.js, __main__.py...) o presencia de un bloque",
+        "de arranque propio (if __name__ == '__main__' en Python, fn main()",
+        "en Rust). Heuristico: puede haber falsos negativos en lenguajes sin",
+        "deteccion de arranque implementada mas alla del nombre de fichero, o",
+        "falsos positivos si un test u otro script reutiliza el mismo patron.",
+        "",
+    ]
+    if not entrypoints:
+        lines.append("(No se detecto ningun entrypoint)")
+        return "\n".join(lines) + "\n"
+    for rel in entrypoints:
+        meta = stats.get(rel, {})
+        lang = meta.get("lang", "?")
+        lines.append(f"- {rel}  [{lang}] -- {_entrypoint_reason(rel, meta)}")
+    lines.append("")
+    lines.append(f"Total: {len(entrypoints)} entrypoint(s) detectado(s).")
+    return "\n".join(lines) + "\n"
+
+
 # --------------------------------------------------------------------------
 # [v2] FASE 1f: indice de subcomandos CLI (argparse/click/clap)
 # --------------------------------------------------------------------------
@@ -4256,6 +4294,7 @@ def main():
     out.emit("03_historial_git.txt", git_file_history_text(files, root))
 
     entrypoints = detect_entrypoints(stats)
+    out.emit("04_puntos_entrada.txt", build_entrypoints_text(entrypoints, stats))
     complex_functions = flag_complex_functions(symbols)
 
     print("  Indexando subcomandos CLI...")
