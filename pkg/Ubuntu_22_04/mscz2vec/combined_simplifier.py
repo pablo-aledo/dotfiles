@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""
+r"""
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                      COMBINED SIMPLIFIER  v1.1  (autocontenido)              ║
+║                      COMBINED SIMPLIFIER  v1.2  (autocontenido)              ║
 ║                                                                              ║
 ║  PROPOSITO:                                                                 ║
 ║   Simplifica una partitura de piano en formato MIDI a distintos niveles de  ║
@@ -47,6 +47,40 @@
 ║  --outdir (o junto al fichero de entrada) y un informe por consola con el  ║
 ║  grado realmente alcanzado, el metodo usado ("estructural" o               ║
 ║  "estructural+rejilla") y el porcentaje de notas conservadas.              ║
+║                                                                              ║
+║  MODOS ADICIONALES — SECUENCIA DE PRACTICA SCHENKERIANA:                     ║
+║   --schenker-sequence sustituye la simplificacion por dificultad por una     ║
+║   escalera de practica basada en niveles de reduccion schenkeriana del       ║
+║   skyline (melodia+bajo, sin voces internas): del Ursatz (fondo              ║
+║   estructural) a la superficie completa. No usa la formula de dificultad     ║
+║   ni la rejilla de respaldo; cada peldano es fiel 1:1 a un nivel real de     ║
+║   la reduccion. Dos modos, via --schenker-mode:                              ║
+║                                                                              ║
+║    · collapse (por defecto): los 3 niveles naturales del motor de la         ║
+║      seccion [6] (superficie / recorte por umbral / colapso completo         ║
+║      hasta punto fijo). Rapido, pero el salto entre el Ursatz y el           ║
+║      siguiente peldano puede ser grande.                                     ║
+║    · threshold_sweep: barre --schenker-thresholds (por defecto 0.2 0.35      ║
+║      0.5 0.65 0.8), un peldano por valor, dando una escalera mas             ║
+║      gradual. A diferencia de pedir varios --target-grade (que NO estan      ║
+║      anidados entre si: el greedy y la rejilla de respaldo pueden variar     ║
+║      que notas sobreviven de un grado a otro), los peldanos de               ║
+║      threshold_sweep SI son subconjuntos estrictos unos de otros por         ║
+║      construccion, y nunca alteran el ritmo (solo quitan notas y             ║
+║      extienden las vecinas).                                                 ║
+║                                                                              ║
+║   USO:                                                                       ║
+║     python combined_simplifier.py obra.mid --schenker-sequence               ║
+║     python combined_simplifier.py obra.mid --schenker-sequence \             ║
+║         --schenker-mode threshold_sweep                                      ║
+║     python combined_simplifier.py obra.mid --schenker-sequence \             ║
+║         --schenker-mode threshold_sweep --outdir out/ \                      ║
+║         --schenker-thresholds 0.15 0.3 0.45 0.6 0.75 \                       ║
+║         --schenker-min-diff 0.05                                             ║
+║                                                                              ║
+║   SALIDA: <nombre>_schenker_<NN>_<label>.mid por peldano (label =            ║
+║   'ursatz', 'T<threshold>' o 'surface'), mas un informe por consola con      ║
+║   notas/superficie (%) de cada peldano.                                      ║
 ║                                                                              ║
 ║  DEPENDENCIAS: solo numpy (stdlib para todo lo demas). Es un unico fichero  ║
 ║  sin dependencias externas al proyecto.                                    ║
@@ -864,38 +898,55 @@ class FloorResult:
     reached_ursatz: bool
 
 
+def _build_reduction_levels(scored0: List[ScoredNote], spans: List[ChordSpan],
+                             tonic_pc: int, mode: str, threshold: float,
+                             max_levels: int) -> List[List[ScoredNote]]:
+    """Construye la secuencia completa de niveles de reduccion schenkeriana
+    de una voz (melodia o bajo), cada uno partiendo del anterior: nivel 0 es
+    la superficie completa, y cada nivel siguiente aplica primero el recorte
+    por umbral de peso estructural (_reduce_level1, solo una vez) y luego
+    fusiones sucesivas de prolongaciones sobre el mismo acorde
+    (_collapse_iteration) hasta converger o alcanzar max_levels. Factorizada
+    aparte de compute_structural_floor para que tanto el suelo protegido
+    como una secuencia pedagogica completa (ver schenker_practice_sequence)
+    puedan reutilizar el mismo calculo sin duplicarlo."""
+    levels = [scored0]
+    lvl1, _ = _reduce_level1(scored0, threshold)
+    levels.append(lvl1)
+    cur = lvl1
+    n_iter = 1
+    while n_iter < max_levels:
+        new_cur, _, changed = _collapse_iteration(cur, spans, tonic_pc, mode)
+        if not changed:
+            break
+        cur = new_cur
+        levels.append(cur)
+        n_iter += 1
+    return levels
+
+
 def compute_structural_floor(all_notes: List[Note], tc: TimeContext, spans: List[ChordSpan],
                               tonic_pc: int, mode: str, num: int, subdiv: int,
                               W: np.ndarray, weights_cfg: Dict[str, float],
                               floor_level: str, threshold: float = 0.35,
-                              max_levels: int = 8) -> Tuple[FloorResult, List[ScoredNote], List[ScoredNote]]:
+                              max_levels: int = 8
+                              ) -> Tuple[FloorResult, List[ScoredNote], List[ScoredNote],
+                                         List[List[ScoredNote]], List[List[ScoredNote]]]:
     """Calcula, para melodia y bajo (skyline), la secuencia de niveles de
     reduccion schenkeriana (cada nivel parte del anterior, hasta converger o
     alcanzar max_levels) y devuelve el conjunto de notas (identificadas por
     start_tick+pitch) que sobreviven en el nivel pedido por --floor-level:
     esas notas quedan protegidas de eliminacion para siempre en el greedy
-    de la seccion [9]."""
+    de la seccion [9]. Ademas de FloorResult y los scored0 de cada voz,
+    devuelve tambien mel_levels/bass_levels completos (la secuencia entera
+    calculada, no solo el nivel-suelo) para que llamadas como
+    schenker_practice_sequence puedan reexponerla sin recalcularla."""
     melody_notes, bass_notes = build_skyline(all_notes)
     scored_mel0 = _score_voice(melody_notes, tc, spans, num, subdiv, W, weights_cfg)
     scored_bass0 = _score_voice(bass_notes, tc, spans, num, subdiv, W, weights_cfg)
 
-    def _levels_for(scored0: List[ScoredNote]) -> List[List[ScoredNote]]:
-        levels = [scored0]
-        lvl1, _ = _reduce_level1(scored0, threshold)
-        levels.append(lvl1)
-        cur = lvl1
-        n_iter = 1
-        while n_iter < max_levels:
-            new_cur, _, changed = _collapse_iteration(cur, spans, tonic_pc, mode)
-            if not changed:
-                break
-            cur = new_cur
-            levels.append(cur)
-            n_iter += 1
-        return levels
-
-    mel_levels = _levels_for(scored_mel0)
-    bass_levels = _levels_for(scored_bass0)
+    mel_levels = _build_reduction_levels(scored_mel0, spans, tonic_pc, mode, threshold, max_levels)
+    bass_levels = _build_reduction_levels(scored_bass0, spans, tonic_pc, mode, threshold, max_levels)
     n_levels = max(len(mel_levels), len(bass_levels))
 
     if floor_level == "ursatz":
@@ -927,7 +978,7 @@ def compute_structural_floor(all_notes: List[Note], tc: TimeContext, spans: List
     bass_keys = _orig_keys(bass_floor, scored_bass0)
 
     return (FloorResult(floor_idx, n_levels, mel_keys, bass_keys, reached_ursatz),
-            scored_mel0, scored_bass0)
+            scored_mel0, scored_bass0, mel_levels, bass_levels)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1391,7 +1442,7 @@ def reduce_graded(midi_path: str, target_grades: List[int], floor_level: str = "
     subdiv = 4
     W = metric_weights(num, subdiv)
 
-    floor, scored_mel0, scored_bass0 = compute_structural_floor(
+    floor, scored_mel0, scored_bass0, _mel_levels, _bass_levels = compute_structural_floor(
         all_notes, tc, spans, tonic_pc, mode, num, subdiv, W, weights_cfg,
         floor_level=floor_level, threshold=threshold)
 
@@ -1776,6 +1827,200 @@ def print_combined_report(midi_path: str, out: Dict):
     print(f"{'═'*78}\n")
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  [SECUENCIA SCHENKERIANA] Reexpone los niveles de reduccion schenkeriana ya
+#  calculados por compute_structural_floor (normalmente descartados salvo
+#  el nivel-suelo) como una escalera de practica pianistica: del Ursatz
+#  (fondo estructural) a la superficie completa, cada peldaño una capa mas.
+#  A diferencia de combined_simplify, aqui NO se pasa por el greedy de
+#  dificultad de la seccion [9] ni por la rejilla de respaldo: cada peldaño
+#  es fiel 1:1 a un nivel real de la reduccion (solo melodia+bajo, sin
+#  voces internas), asi que prioriza coherencia teorica sobre control fino
+#  de dificultad pianistica.
+# ══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class SchenkerStep:
+    depth_index: int          # 0 = Ursatz (mas reducido) ... n_steps-1 = superficie completa
+    label: str                # "ursatz" | "L{n}" | "surface"
+    n_notes: int
+    n_notes_surface: int
+    records: List[NoteRec]
+
+
+def _levels_to_records(mel_level: List[ScoredNote], bass_level: List[ScoredNote],
+                        tc: TimeContext) -> List[NoteRec]:
+    """Convierte un nivel (melodia+bajo, cada uno ScoredNote) en NoteRec
+    exportables via export_grade_midi. Se asigna melodia -> mano derecha,
+    bajo -> mano izquierda; sin voces internas, ya que la reduccion
+    schenkeriana trabaja solo sobre el skyline de 2 voces."""
+    records: List[NoteRec] = []
+    for s in mel_level:
+        records.append(NoteRec(note=s.note, hand="rh", bar=tc.bar(s.note.start),
+                                voice_role="mel", function=s.function, weight=s.weight,
+                                floor_protected=True, is_octave_dup=False, candidate=False))
+    for s in bass_level:
+        records.append(NoteRec(note=s.note, hand="lh", bar=tc.bar(s.note.start),
+                                voice_role="bass", function=s.function, weight=s.weight,
+                                floor_protected=True, is_octave_dup=False, candidate=False))
+    return sorted(records, key=lambda r: r.note.start)
+
+
+def _sequence_collapse_mode(scored_mel0: List[ScoredNote], scored_bass0: List[ScoredNote],
+                             mel_levels: List[List[ScoredNote]], bass_levels: List[List[ScoredNote]],
+                             min_diff_ratio: float) -> List[Tuple[str, List[ScoredNote], List[ScoredNote]]]:
+    """Modo original: reexpone tal cual los niveles calculados por
+    compute_structural_floor (tipicamente 3: superficie, recorte por
+    umbral, colapso completo hasta punto fijo). Es el comportamiento por
+    defecto de schenker_practice_sequence, preservado sin cambios."""
+    n_levels_raw = max(len(mel_levels), len(bass_levels))
+    surface_to_ursatz = []
+    for i in range(n_levels_raw):
+        mel_i = mel_levels[min(i, len(mel_levels) - 1)]
+        bass_i = bass_levels[min(i, len(bass_levels) - 1)]
+        surface_to_ursatz.append((mel_i, bass_i))
+    ursatz_to_surface = list(reversed(surface_to_ursatz))
+
+    kept: List[Tuple[int, List[ScoredNote], List[ScoredNote]]] = []
+    for depth_i, (mel_i, bass_i) in enumerate(ursatz_to_surface):
+        total = len(mel_i) + len(bass_i)
+        is_first = depth_i == 0
+        is_last = depth_i == len(ursatz_to_surface) - 1
+        if is_first or is_last:
+            kept.append((depth_i, mel_i, bass_i))
+            continue
+        last_total = len(kept[-1][1]) + len(kept[-1][2])
+        if last_total == 0 or abs(total - last_total) / last_total >= min_diff_ratio:
+            kept.append((depth_i, mel_i, bass_i))
+
+    labeled = []
+    for order_i, (_depth_i, mel_i, bass_i) in enumerate(kept):
+        if order_i == 0:
+            label = "ursatz"
+        elif order_i == len(kept) - 1:
+            label = "surface"
+        else:
+            label = f"L{order_i}"
+        labeled.append((label, mel_i, bass_i))
+    return labeled
+
+
+def _sequence_threshold_sweep_mode(scored_mel0: List[ScoredNote], scored_bass0: List[ScoredNote],
+                                    mel_levels: List[List[ScoredNote]], bass_levels: List[List[ScoredNote]],
+                                    sweep_thresholds: List[float],
+                                    min_diff_ratio: float) -> List[Tuple[str, List[ScoredNote], List[ScoredNote]]]:
+    """Modo alternativo: en vez de depender de _collapse_iteration (que
+    converge a un punto fijo en una sola pasada y por eso solo da 3 niveles
+    utiles), barre varios valores de threshold para _reduce_level1 (que SI
+    varia de forma monotona y suave con el threshold, segun se comprobo
+    empiricamente) y usa cada resultado como un peldaño intermedio propio,
+    sin colapsar prolongaciones. Los extremos siguen siendo el Ursatz real
+    (ultimo nivel colapsado de compute_structural_floor) y la superficie
+    completa (scored0), para que ambos modos compartan los mismos bordes."""
+    ursatz_mel, ursatz_bass = mel_levels[-1], bass_levels[-1]
+
+    candidates: List[Tuple[str, List[ScoredNote], List[ScoredNote]]] = [("ursatz", ursatz_mel, ursatz_bass)]
+    for t in sorted(set(sweep_thresholds)):
+        lvl_mel, _ = _reduce_level1(scored_mel0, t)
+        lvl_bass, _ = _reduce_level1(scored_bass0, t)
+        candidates.append((f"T{t:g}", lvl_mel, lvl_bass))
+    candidates.append(("surface", scored_mel0, scored_bass0))
+
+    # los peldaños intermedios se reordenan por numero de notas ascendente
+    # (un threshold mas alto no garantiza per se menos notas tras aplicarlo
+    # a melodia Y bajo combinados, aunque en la practica suele serlo); los
+    # dos extremos (ursatz/surface) se fijan siempre al principio y al final.
+    mid_candidates = candidates[1:-1]
+    mid_candidates.sort(key=lambda c: len(c[1]) + len(c[2]))
+    ordered = [candidates[0]] + mid_candidates + [candidates[-1]]
+
+    kept = [ordered[0]]
+    for i in range(1, len(ordered)):
+        label, mel_i, bass_i = ordered[i]
+        total = len(mel_i) + len(bass_i)
+        is_last = i == len(ordered) - 1
+        last_total = len(kept[-1][1]) + len(kept[-1][2])
+        if is_last or last_total == 0 or abs(total - last_total) / last_total >= min_diff_ratio:
+            kept.append(ordered[i])
+    return kept
+
+
+def schenker_practice_sequence(midi_path: str, threshold: float = 0.35,
+                                max_levels: int = 8, min_diff_ratio: float = 0.08,
+                                key: Optional[str] = None,
+                                window_beats: Optional[float] = None,
+                                mode: str = "collapse",
+                                sweep_thresholds: Optional[List[float]] = None) -> Dict:
+    """API publica. Calcula la secuencia de niveles schenkerianos y la
+    devuelve como una escalera de practica ordenada del Ursatz a la
+    superficie completa.
+
+    mode="collapse" (por defecto, preserva el comportamiento original):
+        reexpone tal cual los niveles de compute_structural_floor —
+        tipicamente 3 peldaños (ursatz / recorte-por-umbral / superficie),
+        ya que _collapse_iteration converge a un punto fijo en una sola
+        pasada y no produce mas granularidad por si sola.
+
+    mode="threshold_sweep": genera peldaños intermedios adicionales
+    variando el threshold de _reduce_level1 (que si varia con suavidad),
+    mientras conserva el mismo Ursatz y la misma superficie como bordes.
+    sweep_thresholds por defecto: [0.2, 0.35, 0.5, 0.65, 0.8].
+
+    min_diff_ratio filtra peldaños casi-identicos: un nivel intermedio se
+    descarta si el numero total de notas (mel+bass) difiere en menos de ese
+    porcentaje respecto al ultimo peldaño conservado. El primer (Ursatz) y
+    el ultimo (superficie completa) siempre se conservan.
+
+    Devuelve un dict con 'mid', 'tc', 'steps' (List[SchenkerStep], ordenados
+    de Ursatz a superficie), 'n_levels_raw' (niveles antes de filtrar, solo
+    con sentido en mode="collapse") y 'mode'."""
+    mid, tc, all_notes = load_notes(midi_path)
+    tonic_pc, harmony_mode, spans = analyze_harmony_local(all_notes, tc, key=key, window_beats=window_beats)
+
+    num = mid.timesig_map[0][1]
+    subdiv = 4
+    W = metric_weights(num, subdiv)
+    weights_cfg = dict(DEFAULT_WEIGHTS)
+
+    _floor, scored_mel0, scored_bass0, mel_levels, bass_levels = compute_structural_floor(
+        all_notes, tc, spans, tonic_pc, harmony_mode, num, subdiv, W, weights_cfg,
+        floor_level="ursatz", threshold=threshold, max_levels=max_levels)
+
+    n_levels_raw = max(len(mel_levels), len(bass_levels))
+    n_notes_surface = len(scored_mel0) + len(scored_bass0)
+
+    if mode == "collapse":
+        labeled = _sequence_collapse_mode(scored_mel0, scored_bass0, mel_levels, bass_levels, min_diff_ratio)
+    elif mode == "threshold_sweep":
+        sweep = sweep_thresholds if sweep_thresholds else [0.2, 0.35, 0.5, 0.65, 0.8]
+        labeled = _sequence_threshold_sweep_mode(scored_mel0, scored_bass0, mel_levels, bass_levels,
+                                                  sweep, min_diff_ratio)
+    else:
+        raise ValueError(f"mode desconocido: {mode!r} (usar 'collapse' o 'threshold_sweep')")
+
+    steps: List[SchenkerStep] = []
+    for order_i, (label, mel_i, bass_i) in enumerate(labeled):
+        records = _levels_to_records(mel_i, bass_i, tc)
+        steps.append(SchenkerStep(depth_index=order_i, label=label,
+                                   n_notes=len(records), n_notes_surface=n_notes_surface,
+                                   records=records))
+
+    return {"mid": mid, "tc": tc, "steps": steps, "n_levels_raw": n_levels_raw, "mode": mode}
+
+
+def print_schenker_report(midi_path: str, out: Dict):
+    print(f"\n{'═'*78}\n  SCHENKER PRACTICE SEQUENCE — {midi_path}   (modo: {out['mode']})\n{'═'*78}")
+    if out["mode"] == "collapse":
+        print(f"  niveles brutos calculados: {out['n_levels_raw']}   "
+              f"peldaños tras filtrar casi-duplicados: {len(out['steps'])}")
+    else:
+        print(f"  peldaños tras barrido de threshold y filtrado: {len(out['steps'])}")
+    for st in out["steps"]:
+        pct = 100.0 * st.n_notes / max(1, st.n_notes_surface)
+        print(f"  paso {st.depth_index} [{st.label:8s}]  notas={st.n_notes}/{st.n_notes_surface} ({pct:.0f}%)")
+    print(f"{'═'*78}\n")
+
+
 def main():
     ap = argparse.ArgumentParser(
         prog="combined_simplifier.py",
@@ -1783,12 +2028,53 @@ def main():
                      "fidelidad estructural donde alcanza, rejilla garantizada donde el suelo "
                      "estructural bloquea el target.")
     ap.add_argument("midi")
-    ap.add_argument("--target-grade", type=int, nargs="+", required=True)
+    ap.add_argument("--target-grade", type=int, nargs="+",
+                     help="uno o mas grados objetivo (1-8). Requerido salvo con --schenker-sequence.")
     ap.add_argument("--floor-level", default="ursatz")
     ap.add_argument("--split", type=int, default=60)
     ap.add_argument("--outdir")
+    ap.add_argument("--schenker-sequence", action="store_true",
+                     help="en vez de simplificar a grados de dificultad, genera la escalera de "
+                          "practica de niveles schenkerianos (Ursatz -> superficie completa).")
+    ap.add_argument("--schenker-threshold", type=float, default=0.35,
+                     help="umbral de peso estructural para el primer recorte de la reduccion "
+                          "(solo aplica con --schenker-sequence).")
+    ap.add_argument("--schenker-max-levels", type=int, default=8)
+    ap.add_argument("--schenker-min-diff", type=float, default=0.08,
+                     help="fraccion minima de cambio en numero de notas entre peldaños "
+                          "consecutivos para conservar un peldaño intermedio.")
+    ap.add_argument("--schenker-mode", choices=["collapse", "threshold_sweep"], default="collapse",
+                     help="'collapse' (por defecto): los 3 peldaños originales tal cual "
+                          "(ursatz/recorte-por-umbral/superficie). 'threshold_sweep': añade "
+                          "peldaños intermedios barriendo --schenker-thresholds.")
+    ap.add_argument("--schenker-thresholds", type=float, nargs="+", default=None,
+                     help="valores de threshold a barrer en modo threshold_sweep "
+                          "(por defecto: 0.2 0.35 0.5 0.65 0.8).")
     args = ap.parse_args()
 
+    outdir = Path(args.outdir) if args.outdir else Path(args.midi).parent
+    outdir.mkdir(parents=True, exist_ok=True)
+    stem = Path(args.midi).stem
+
+    if args.schenker_sequence:
+        out = schenker_practice_sequence(
+            args.midi, threshold=args.schenker_threshold,
+            max_levels=args.schenker_max_levels, min_diff_ratio=args.schenker_min_diff,
+            mode=args.schenker_mode, sweep_thresholds=args.schenker_thresholds)
+        print_schenker_report(args.midi, out)
+        mid = out["mid"]
+        print("  Ficheros generados:")
+        for st in out["steps"]:
+            out_path = outdir / f"{stem}_schenker_{st.depth_index:02d}_{st.label}.mid"
+            export_grade_midi(st.records, mid.tpb, str(out_path), mid.tempo_map, mid.timesig_map)
+            print(f"    · {out_path}  ({st.n_notes} notas)")
+        print()
+        return 0
+
+    if not args.target_grade:
+        print("[ERROR] --target-grade es requerido salvo que se use --schenker-sequence",
+              file=sys.stderr)
+        return 1
     for g in args.target_grade:
         if not (1 <= g <= 8):
             print(f"[ERROR] --target-grade debe estar entre 1 y 8 (recibido: {g})", file=sys.stderr)
@@ -1797,9 +2083,6 @@ def main():
     out = combined_simplify(args.midi, args.target_grade, floor_level=args.floor_level, split=args.split)
     print_combined_report(args.midi, out)
 
-    outdir = Path(args.outdir) if args.outdir else Path(args.midi).parent
-    outdir.mkdir(parents=True, exist_ok=True)
-    stem = Path(args.midi).stem
     mid = out["mid"]
     print("  Ficheros generados:")
     for t in sorted(out["levels"], reverse=True):
