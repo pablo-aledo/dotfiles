@@ -103,16 +103,33 @@ FASE 2 - SINTESIS CON LLM (una unica pasada, con cache para poder reanudar)
       en ningun sitio. Cacheado por funcion, igual que la explicacion de
       algoritmos.
 
+    - [v4] Proveedor "manual" (--provider manual): sin clave de API y sin
+      red en absoluto. En vez de llamar a un proveedor, agrupa todas las
+      peticiones que harian falta en uno o mas ficheros de texto dentro
+      de <output>/batch/, pensados para copiar y pegar en la interfaz web
+      de cualquier LLM (Claude.ai, ChatGPT...). La respuesta se guarda en
+      un fichero de texto y se recarga con --load-batch, que la vuelca en
+      la misma cache que usan los demas proveedores. Como varias fases de
+      sintesis dependen de otras (mapa semantico/arquitectura dependen de
+      los resumenes por fichero; base de conocimiento/snippets/checklist/
+      casos tipicos/onboarding dependen a su vez de esos), el proceso es
+      iterativo: cada ronda de --load-batch + reejecucion puede destapar
+      un lote nuevo con las peticiones que antes no se podian construir
+      por faltar su material fuente. Se repite hasta que no queda ningun
+      lote pendiente.
+
 REQUISITOS
     - Python 3.8+ (solo libreria estandar, sin dependencias externas)
     - Opcional: `universal-ctags` en PATH para un indice de simbolos mejor
     - Opcional: `git` en PATH para historial por archivo
-    - Para la fase 2: clave de API del proveedor elegido (salvo Ollama,
-      que no necesita clave por ser local)
+    - Para la fase 2: clave de API del proveedor elegido (salvo Ollama y
+      "manual", que no necesitan clave)
         * Anthropic: variable de entorno ANTHROPIC_API_KEY
         * OpenAI:    variable de entorno OPENAI_API_KEY
         * Ollama:    ninguna: usa un servidor local (--ollama-host,
                      por defecto http://localhost:11434)
+        * manual:    ninguna, ni conexion a red: ver "[v4] Proveedor
+                     manual" mas arriba
 
 USO BASICO
     # Solo extraccion estatica, sin llamadas a ningun LLM ni red:
@@ -131,6 +148,32 @@ USO BASICO
 
     # Reanudar tras un corte (usa la cache en .project-knowledge/.cache.json):
     python3 extract_project_knowledge.py --root .
+
+    # [v4] Sin API key ni red: modo manual, para pegar en una interfaz web.
+    # Ronda 1: genera el/los primeros lotes de peticiones pendientes.
+    python3 extract_project_knowledge.py --root . --provider manual --yes
+    #   -> copia .project-knowledge/batch/lote_01_de_N.txt (y los demas
+    #      lotes de esa ronda, si hay mas de uno) y peganlos en tu LLM web
+    #      preferido (Claude.ai, ChatGPT...), uno por conversacion nueva.
+    #   -> guarda la respuesta completa de cada uno como texto plano,
+    #      p.ej. respuesta_01.txt, respuesta_02.txt
+
+    # Ronda 2: carga las respuestas de la ronda 1 (una vez por fichero) y
+    # vuelve a ejecutar. Las fases que dependian de lo que acaba de
+    # resolverse (mapa semantico, arquitectura...) generaran su propio
+    # lote nuevo si les toca esta ronda:
+    python3 extract_project_knowledge.py --root . --provider manual --yes \
+        --load-batch respuesta_01.txt --load-batch respuesta_02.txt
+
+    # Repite el ciclo carga-respuestas -> reejecuta -> pega el lote nuevo
+    # hasta que la salida diga "No quedan peticiones pendientes". El
+    # numero de rondas depende de cuantas fases de sintesis dependian
+    # unas de otras (tipicamente 3-4 rondas de principio a fin).
+
+    # [v4] Modo manual con lotes mas pequenos (si tu interfaz web corta
+    # las respuestas largas, reduce el presupuesto de salida por lote):
+    python3 extract_project_knowledge.py --root . --provider manual --yes \
+        --manual-batch-max-output-tokens 3000 --manual-batch-max-input-chars 30000
 
     # [v3] Informe acotado de impacto de un diff/PR (ademas de la extraccion
     # completa; combina bien con --no-llm si solo quieres revisar el diff):
@@ -503,19 +546,28 @@ EMBEDDING_BATCH_SIZE = 96   # limite prudente por llamada a /v1/embeddings
 OLLAMA_MODEL_DEFAULT = "llama3.1"
 OLLAMA_HOST_DEFAULT = "http://localhost:11434"
 
+# [v4] Proveedor "manual": sin clave de API, sin red. Ver la seccion
+# "Proveedor manual" junto a call_llm() para el detalle del mecanismo.
+MANUAL_MODEL_DEFAULT = "manual"
+MANUAL_BATCH_MAX_OUTPUT_TOKENS_DEFAULT = 6000   # presupuesto de salida por lote
+MANUAL_BATCH_MAX_INPUT_CHARS_DEFAULT = 60_000   # tope de tamano del propio lote
+
 # variable de entorno por defecto donde se busca la clave, segun proveedor.
-# None => el proveedor no necesita clave de API (caso de Ollama, local).
+# None => el proveedor no necesita clave de API (caso de Ollama, local, y
+# de "manual", que no llama a ninguna API).
 DEFAULT_API_KEY_ENV = {
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
     "ollama": None,
+    "manual": None,
 }
 DEFAULT_MODEL_BY_PROVIDER = {
     "anthropic": ANTHROPIC_MODEL_DEFAULT,
     "openai": OPENAI_MODEL_DEFAULT,
     "ollama": OLLAMA_MODEL_DEFAULT,
+    "manual": MANUAL_MODEL_DEFAULT,
 }
-PROVIDERS_WITHOUT_API_KEY = {"ollama"}
+PROVIDERS_WITHOUT_API_KEY = {"ollama", "manual"}
 
 
 # --------------------------------------------------------------------------
@@ -2724,7 +2776,16 @@ def synthesis_call(cache: Cache, doc_id: str, signature: str, model: str, api_ke
         system, user = update_prompt_fn(latest["text"])
     else:
         system, user = build_prompt_fn()
-    result = call_llm(system, user, model, api_key, max_tokens=max_tokens)
+    result = call_llm(system, user, model, api_key, max_tokens=max_tokens,
+                        request_id=exact_key)
+
+    if result == MANUAL_PENDING:
+        # [v4 manual] la peticion ya quedo encolada dentro de call_llm();
+        # no cacheamos un pendiente como si fuera contenido real. Se
+        # devuelve la nota (no el sentinel crudo) para que el fichero de
+        # salida sea legible; sigue conteniendo el marcador MANUAL_PENDING
+        # para que _has_pending() lo siga detectando en fases posteriores.
+        return MANUAL_PENDING_NOTE
 
     cache.set(exact_key, result)
     cache.set(latest_key, {"signature": signature, "text": result})
@@ -2873,12 +2934,214 @@ def set_ollama_host(host: str):
     _OLLAMA_HOST["url"] = host
 
 
+# --------------------------------------------------------------------------
+# [v4] Proveedor "manual": sin API key, sin red.
+#
+# En vez de llamar a una API, cada peticion que haria falta se ENCOLA (con
+# un id determinista: la misma cache_key que usaria la fase que la origino).
+# Al final de la pasada, si quedan peticiones pendientes, se vuelcan en uno
+# o mas ficheros de texto (build_manual_batch_files) pensados para pegar
+# tal cual en la interfaz web de un LLM (Claude.ai, ChatGPT...). La
+# respuesta que el usuario pega de vuelta se carga con --load-batch
+# (load_manual_batch_files), que rellena _MANUAL_ANSWERS por id. A partir
+# de ahi call_llm() devuelve esa respuesta como si hubiera venido de la
+# API, y el resto del pipeline (Cache, synthesis_call, las fases) no
+# distingue de donde vino el texto.
+#
+# Las fases de "sintesis" (mapa semantico, arquitectura, base de
+# conocimiento...) tejen resultados de otras fases. Si esas fuentes
+# todavia contienen huecos sin responder (MANUAL_PENDING), la fase que
+# teje NO debe encolar su propia peticion todavia -- mandaria un prompt a
+# medio construir, y encima quemaria una ronda de ida y vuelta con la
+# interfaz web para nada. Por eso cada fase de sintesis comprueba
+# _has_pending(...) sobre su material fuente antes de llamar a
+# synthesis_call(); si hay huecos, devuelve MANUAL_PENDING_NOTE sin
+# encolar nada. El resultado es que las rondas se resuelven solas, de
+# abajo a arriba, sin necesidad de una maquina de estados explicita:
+#   ronda 1 -> resumenes por fichero, algoritmos, contratos, glosario,
+#              convenciones (no dependen de otras fases de LLM)
+#   ronda 2 -> mapa semantico, arquitectura (dependen de los resumenes)
+#   ronda 3 -> base de conocimiento, snippets, checklist, casos tipicos,
+#              onboarding (dependen de arquitectura/convenciones/mapa)
+# --------------------------------------------------------------------------
+
+MANUAL_PENDING = "[[MANUAL_PENDING]]"
+MANUAL_PENDING_NOTE = (
+    MANUAL_PENDING + " este contenido esta pendiente de una respuesta "
+    "manual (ver el lote de peticiones pendientes en la carpeta batch/; "
+    "cargala con --load-batch y vuelve a ejecutar el script).\n"
+)
+
+_MANUAL_QUEUE: list = []      # [{"id":..., "system":..., "user":..., "max_tokens":...}, ...]
+_MANUAL_QUEUED_IDS: set = set()
+_MANUAL_ANSWERS: dict = {}    # id (== cache_key) -> texto de respuesta ya cargado
+
+
+def _has_pending(*texts) -> bool:
+    """True si alguno de los textos dados contiene un hueco sin responder
+    todavia (proveniente de una fase de LLM en modo manual)."""
+    return any(MANUAL_PENDING in t for t in texts if t)
+
+
+def _manual_enqueue(request_id: str, system: str, user: str, max_tokens: int) -> None:
+    if request_id in _MANUAL_QUEUED_IDS:
+        return
+    _MANUAL_QUEUED_IDS.add(request_id)
+    _MANUAL_QUEUE.append({"id": request_id, "system": system, "user": user,
+                            "max_tokens": max_tokens})
+
+
+def load_manual_batch_files(paths: list) -> int:
+    """Parsea uno o mas ficheros de respuesta pegados desde una interfaz web
+    (bloques <<<RESPONSE id="...">>> ... <<<FIN_RESPONSE>>>) y rellena
+    _MANUAL_ANSWERS. Devuelve cuantos bloques nuevos se cargaron en total."""
+    pattern = re.compile(
+        r"<<<\s*RESPONSE\s+id\s*=\s*[\"']([^\"']+)[\"']\s*>>>(.*?)<<<\s*FIN_RESPONSE\s*>>>",
+        re.DOTALL | re.IGNORECASE,
+    )
+    loaded = 0
+    for p in paths:
+        path = Path(p)
+        if not path.exists():
+            print(f"[aviso] --load-batch: no existe {path}, se ignora.")
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        matches = pattern.findall(text)
+        if not matches:
+            print(f"[aviso] --load-batch: no se encontro ningun bloque "
+                  f"<<<RESPONSE id=\"...\">>> ... <<<FIN_RESPONSE>>> en {path}. "
+                  "¿Es la respuesta completa del LLM, sin editar ni recortar?")
+            continue
+        for req_id, body in matches:
+            _MANUAL_ANSWERS[req_id.strip()] = body.strip()
+            loaded += 1
+        print(f"  [--load-batch] {path}: {len(matches)} respuesta(s) cargada(s)")
+    return loaded
+
+
+def _estimate_tokens(text: str) -> int:
+    # heuristica gruesa (~4 caracteres/token); solo para repartir en lotes,
+    # no necesita ser exacta.
+    return max(1, len(text) // 4)
+
+
+def build_manual_batch_files(queue: list, batch_dir: Path,
+                                max_output_tokens: int = MANUAL_BATCH_MAX_OUTPUT_TOKENS_DEFAULT,
+                                max_input_chars: int = MANUAL_BATCH_MAX_INPUT_CHARS_DEFAULT) -> list:
+    """Agrupa las peticiones pendientes en uno o mas ficheros de texto,
+    respetando un presupuesto aproximado de tokens de SALIDA por lote (para
+    que la respuesta completa quepa, en la medida de lo posible, en un
+    unico mensaje de la interfaz web) y un tope de caracteres de ENTRADA
+    (para que el propio fichero a pegar no sea absurdamente largo).
+    Devuelve la lista de rutas escritas, en orden."""
+    if not queue:
+        return []
+    batch_dir.mkdir(parents=True, exist_ok=True)
+
+    lotes, current, out_budget, in_chars = [], [], 0, 0
+
+    def flush():
+        nonlocal current, out_budget, in_chars
+        if current:
+            lotes.append(current)
+        current, out_budget, in_chars = [], 0, 0
+
+    for req in queue:
+        req_chars = len(req["system"]) + len(req["user"])
+        would_exceed = current and (
+            out_budget + req["max_tokens"] > max_output_tokens
+            or in_chars + req_chars > max_input_chars
+        )
+        if would_exceed:
+            flush()
+        current.append(req)
+        out_budget += req["max_tokens"]
+        in_chars += req_chars
+    flush()
+
+    # limpia lotes de una pasada anterior para no dejar ficheros huerfanos
+    # con ids que ya no aplican (p.ej. si esta pasada resolvio todo lo de
+    # una ronda y solo queda una ronda mas pequena).
+    for old in batch_dir.glob("lote_*.txt"):
+        old.unlink()
+
+    paths = []
+    total = len(lotes)
+    for idx, lote in enumerate(lotes, 1):
+        path = batch_dir / f"lote_{idx:02d}_de_{total:02d}.txt"
+        path.write_text(_render_manual_batch_file(lote, idx, total), encoding="utf-8")
+        paths.append(path)
+    return paths
+
+
+def _render_manual_batch_file(lote: list, idx: int, total: int) -> str:
+    approx_out = sum(r["max_tokens"] for r in lote)
+    header = (
+        "================================================================================\n"
+        f"[extract_project_knowledge.py] LOTE MANUAL DE PETICIONES AL LLM  ({idx}/{total})\n"
+        "================================================================================\n"
+        "Instrucciones:\n"
+        "1. Copia TODO este fichero (incluidas estas instrucciones) y peganlo en\n"
+        "   una interfaz web de un LLM (Claude.ai, ChatGPT...), en una conversacion\n"
+        "   nueva y vacia.\n"
+        "2. Pide que responda a TODAS las peticiones, en el mismo orden, usando\n"
+        "   EXACTAMENTE este formato por cada una -- nada de texto fuera de los\n"
+        "   bloques, ni markdown decorativo en el atributo id:\n"
+        "\n"
+        "   <<<RESPONSE id=\"...\">>>\n"
+        "   (la respuesta a esa peticion, y solo esa respuesta)\n"
+        "   <<<FIN_RESPONSE>>>\n"
+        "\n"
+        "3. Si la respuesta se corta por limite de longitud de la interfaz, pide\n"
+        "   'continua desde el ultimo bloque <<<RESPONSE...>>> que quedo\n"
+        "   incompleto' y pega la continuacion a partir de ahi, en el mismo\n"
+        "   fichero de respuesta (el parser junta todo lo que encuentre).\n"
+        "4. Guarda TODA la respuesta del LLM (todos los bloques RESPONSE) en un\n"
+        f"   fichero de texto, por ejemplo respuesta_lote_{idx:02d}.txt\n"
+        "5. Vuelve a ejecutar el script con:\n"
+        f"     --provider manual --load-batch respuesta_lote_{idx:02d}.txt\n"
+        "   (repite --load-batch, uno por fichero, si tienes varias respuestas)\n"
+        "6. Repite el ciclo hasta que el script no genere mas lotes: las fases\n"
+        "   posteriores (mapa semantico, arquitectura...) dependen de las\n"
+        "   anteriores, asi que apareceran lotes nuevos en varias rondas.\n"
+        f"\nEste lote contiene {len(lote)} peticion(es). "
+        f"Presupuesto de salida aproximado: ~{approx_out} tokens.\n"
+        "================================================================================\n\n"
+    )
+    blocks = []
+    for req in lote:
+        blocks.append(
+            "--------------------------------------------------------------------------------\n"
+            f"<<<REQUEST id=\"{req['id']}\">>>\n"
+            f"--- SYSTEM ---\n{req['system']}\n\n"
+            f"--- USER ---\n{req['user']}\n"
+            "<<<FIN_REQUEST>>>\n\n"
+            "Responde con:\n"
+            f"<<<RESPONSE id=\"{req['id']}\">>>\n"
+            "(tu respuesta aqui)\n"
+            "<<<FIN_RESPONSE>>>\n"
+        )
+    return header + "\n".join(blocks)
+
+
 def call_llm(system: str, user: str, model: str, api_key: str,
-             max_tokens: int = 2000, retries: int = 3, provider: str = None) -> str:
+             max_tokens: int = 2000, retries: int = 3, provider: str = None,
+             request_id: str = None) -> str:
     """Despachador unico usado por todas las fases de sintesis.
     Si no se pasa `provider` explicitamente, usa el fijado en main()
-    via set_active_provider() (--provider anthropic|openai|ollama)."""
+    via set_active_provider() (--provider anthropic|openai|ollama|manual).
+
+    `request_id` deberia ser SIEMPRE la misma cache_key que usaria el
+    llamante para guardar el resultado en Cache: en modo manual es el id
+    que identifica la peticion en el lote y la respuesta pegada de vuelta."""
     provider = provider or _ACTIVE_PROVIDER["name"]
+    if provider == "manual":
+        req_id = request_id or _hash_text(system + "\x00" + user)
+        answer = _MANUAL_ANSWERS.get(req_id)
+        if answer is not None:
+            return answer
+        _manual_enqueue(req_id, system, user, max_tokens)
+        return MANUAL_PENDING
     if provider == "openai":
         return _call_openai(system, user, model, api_key, max_tokens, retries)
     if provider == "anthropic":
@@ -2937,7 +3200,11 @@ def phase_file_summaries(stats: dict, cache: Cache, model: str, api_key: str) ->
             "3) Dependencias/colaboradores notables (que usa o de que depende).\n"
             "4) Notas de complejidad o puntos delicados, si los hay."
         )
-        result = call_llm(system, user, model, api_key, max_tokens=500)
+        result = call_llm(system, user, model, api_key, max_tokens=500,
+                            request_id=cache_key)
+        if result == MANUAL_PENDING:
+            summaries[rel] = MANUAL_PENDING_NOTE
+            continue
         summaries[rel] = result
         changed_rels.add(rel)
         cache.set(cache_key, result)
@@ -2949,6 +3216,11 @@ def phase_semantic_map(summaries: dict, cache: Cache, changed_rels: set,
                          model: str, api_key: str) -> str:
     joined = "\n\n".join(f"### {rel}\n{s}" for rel, s in summaries.items())
     joined = chunk_join(joined.split("\n\n"), "\n\n", 60_000)
+    if _has_pending(joined):
+        # [v4 manual] todavia hay resumenes por fichero sin responder: no
+        # tiene sentido tejer el mapa semantico (ni encolar esa peticion)
+        # con huecos. Se resolvera solo en una ronda posterior.
+        return MANUAL_PENDING_NOTE
     signature = _hash_text(joined)
 
     def build():
@@ -2990,6 +3262,8 @@ def phase_architecture(summaries: dict, dep_graph: dict, entrypoints: list,
         [f"### {rel}\n{s}" for rel, s in summaries.items()], "\n\n", 50_000
     )
     deps_text = "\n".join(f"{k} -> {', '.join(v)}" for k, v in list(dep_graph.items())[:200])
+    if _has_pending(joined):
+        return MANUAL_PENDING_NOTE
     signature = _hash_text(joined + "\n" + deps_text + "\n" + str(sorted(entrypoints)))
 
     def build():
@@ -3162,7 +3436,12 @@ def phase_algorithm_explanations(complex_functions: list, root: Path,
             "Explica: que hace paso a paso, complejidad aproximada (Big-O si "
             "aplica), casos limite que maneja, y posibles puntos fragiles."
         )
-        result = call_llm(system, user, model, api_key, max_tokens=700)
+        result = call_llm(system, user, model, api_key, max_tokens=700,
+                            request_id=cache_key)
+        if result == MANUAL_PENDING:
+            out.append(f"## {s['file']} :: {s['name']} (L{s['line']}-{end})\n\n"
+                        f"{MANUAL_PENDING_NOTE}\n")
+            continue
         cache.set(cache_key, result)
         out.append(f"## {s['file']} :: {s['name']} (L{s['line']}-{end})\n\n{result}\n")
 
@@ -3230,7 +3509,12 @@ def phase_function_contracts(symbols: list, call_graph: dict, root: Path,
             "4) ERRORES ESPERABLES: que puede fallar y en que casos "
             "(excepciones, valores de error, condiciones no manejadas)."
         )
-        result = call_llm(system, user, model, api_key, max_tokens=700)
+        result = call_llm(system, user, model, api_key, max_tokens=700,
+                            request_id=cache_key)
+        if result == MANUAL_PENDING:
+            out.append(f"## {s['file']} :: {s['name']}() (L{s['line']}-{end}, "
+                        f"llamada desde {s['fanin']} sitio(s))\n\n{MANUAL_PENDING_NOTE}\n")
+            continue
         cache.set(cache_key, result)
         out.append(f"## {s['file']} :: {s['name']}() (L{s['line']}-{end}, "
                     f"llamada desde {s['fanin']} sitio(s))\n\n{result}\n")
@@ -3240,6 +3524,8 @@ def phase_function_contracts(symbols: list, call_graph: dict, root: Path,
 
 def phase_knowledge_base(architecture: str, conventions: str, semantic_map: str,
                             cache: Cache, model: str, api_key: str) -> str:
+    if _has_pending(architecture, conventions, semantic_map):
+        return MANUAL_PENDING_NOTE
     signature = _hash_text(architecture + "\n" + conventions + "\n" + semantic_map)
 
     def build():
@@ -3284,6 +3570,8 @@ def phase_snippets(conventions: str, stats: dict, cache: Cache, model: str, api_
     langs = sorted({m["lang"] for m in stats.values() if m["lang"]},
                     key=lambda l: -sum(1 for m in stats.values() if m["lang"] == l))
     main_langs = langs[:3]
+    if _has_pending(conventions):
+        return MANUAL_PENDING_NOTE
     signature = _hash_text(conventions + "\n" + str(main_langs))
 
     def build():
@@ -3325,6 +3613,8 @@ def phase_snippets(conventions: str, stats: dict, cache: Cache, model: str, api_
 
 def phase_review_checklist(architecture: str, conventions: str, cache: Cache,
                               model: str, api_key: str) -> str:
+    if _has_pending(architecture, conventions):
+        return MANUAL_PENDING_NOTE
     signature = _hash_text(architecture + "\n" + conventions)
 
     def build():
@@ -3364,6 +3654,8 @@ def phase_typical_cases(architecture: str, entrypoints: list, symbols: list,
                           cache: Cache, model: str, api_key: str) -> str:
     key_symbols = ", ".join(sorted({s["name"] for s in symbols
                                      if s["kind"] in ("function", "method")})[:150])
+    if _has_pending(architecture):
+        return MANUAL_PENDING_NOTE
     signature = _hash_text(architecture + "\n" + str(entrypoints) + "\n" + key_symbols)
 
     def build():
@@ -3447,7 +3739,10 @@ def phase_glossary_definitions(acronym_entries: list, domain_entries: list,
     )
     user = ("Terminos a definir:\n\n" + "\n".join(lines_in) +
              "\n\nResponde en formato '### termino' seguido de la definicion, uno por uno.")
-    result = call_llm(system, user, model, api_key, max_tokens=2500)
+    result = call_llm(system, user, model, api_key, max_tokens=2500,
+                        request_id=cache_key)
+    if result == MANUAL_PENDING:
+        return MANUAL_PENDING_NOTE
     cache.set(cache_key, result)
     return result
 
@@ -3466,6 +3761,8 @@ def phase_onboarding_summary(entrypoints: list, architecture: str, semantic_map:
     if config_map["env_vars"]:
         config_lines.append("Variables de entorno: " + ", ".join(sorted(config_map["env_vars"])))
     config_summary = "\n".join(config_lines) or "(sin configuracion externa detectada)"
+    if _has_pending(architecture, semantic_map, conventions):
+        return MANUAL_PENDING_NOTE
     signature = _hash_text(str(entrypoints) + "\n" + architecture + "\n" + semantic_map +
                              "\n" + conventions + "\n" + config_summary + "\n" + reading_paths_text)
 
@@ -3570,7 +3867,12 @@ def phase_function_semantic_index(stats: dict, symbols: list, cache: Cache,
                 f"Fichero: {rel}\n\nFunciones a describir: {', '.join(names)}\n\n"
                 "Contenido del fichero:\n```\n" + text + "\n```"
             )
-            raw = call_llm(system, user, model, api_key, max_tokens=1500)
+            raw = call_llm(system, user, model, api_key, max_tokens=1500,
+                             request_id=cache_key)
+            if raw == MANUAL_PENDING:
+                # [v4 manual] se resolvera en una ronda posterior; esta
+                # tanda de funciones simplemente no se indexa todavia.
+                continue
             desc_map = {}
             for line in raw.splitlines():
                 m = re.match(r"\s*[-*]?\s*([A-Za-z_]\w*)\s*:\s*(.+)", line)
@@ -3761,21 +4063,40 @@ def main():
     parser.add_argument("--output", default=DEFAULT_OUTPUT_DIR, help="carpeta de salida")
     parser.add_argument("--no-llm", action="store_true",
                           help="solo extraccion estatica, sin llamadas a ningun LLM ni red")
-    parser.add_argument("--provider", choices=["anthropic", "openai", "ollama"], default="anthropic",
+    parser.add_argument("--provider", choices=["anthropic", "openai", "ollama", "manual"],
+                          default="anthropic",
                           help="proveedor de LLM a usar en la fase 2 (default: anthropic). "
-                               "'ollama' usa un servidor local, sin clave de API")
+                               "'ollama' usa un servidor local, sin clave de API. [v4] "
+                               "'manual' tampoco necesita clave ni red: en vez de llamar a "
+                               "una API, genera lotes de peticiones en <output>/batch/ para "
+                               "pegar en una interfaz web de LLM; ver --load-batch")
     parser.add_argument("--model", default=None,
                           help="modelo a usar. Si se omite, se usa el default del proveedor "
                                "(claude-sonnet-5 para anthropic, gpt-4o para openai, "
-                               "llama3.1 para ollama)")
+                               "llama3.1 para ollama; no aplica a --provider manual)")
     parser.add_argument("--api-key-env", default=None,
                           help="variable de entorno con la clave de API. Si se omite, se usa "
                                "ANTHROPIC_API_KEY o OPENAI_API_KEY segun --provider "
-                               "(no aplica a --provider ollama)")
+                               "(no aplica a --provider ollama/manual)")
     parser.add_argument("--ollama-host", default=OLLAMA_HOST_DEFAULT,
                           help=f"[v4] URL del servidor Ollama (default: {OLLAMA_HOST_DEFAULT}). "
                                "Solo se usa con --provider ollama")
     parser.add_argument("--yes", action="store_true", help="no pedir confirmacion antes de llamar al LLM")
+    parser.add_argument("--load-batch", metavar="RUTA", action="append", default=None,
+                          help="[v4, solo --provider manual] carga un fichero de texto con la "
+                               "respuesta que pegaste desde una interfaz web (bloques "
+                               "<<<RESPONSE id=\"...\">>>...<<<FIN_RESPONSE>>>) antes de "
+                               "continuar la extraccion. Repite la opcion una vez por fichero "
+                               "si tienes varias respuestas guardadas.")
+    parser.add_argument("--manual-batch-max-output-tokens", type=int,
+                          default=MANUAL_BATCH_MAX_OUTPUT_TOKENS_DEFAULT,
+                          help="[v4, solo --provider manual] presupuesto aproximado de tokens "
+                               f"de salida por lote (default: {MANUAL_BATCH_MAX_OUTPUT_TOKENS_DEFAULT}). "
+                               "Bajalo si tu interfaz web corta las respuestas largas.")
+    parser.add_argument("--manual-batch-max-input-chars", type=int,
+                          default=MANUAL_BATCH_MAX_INPUT_CHARS_DEFAULT,
+                          help="[v4, solo --provider manual] tope de caracteres por fichero de "
+                               f"lote a pegar (default: {MANUAL_BATCH_MAX_INPUT_CHARS_DEFAULT})")
     parser.add_argument("--semantic-index", action="store_true",
                           help="ademas de la Fase 2, genera un indice de descripciones "
                                "semanticas por funcion (fzf, Opcion A) y, si --provider "
@@ -3821,6 +4142,14 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     out = OutputRegistry(output_dir)  # [refactor] registro central de salidas
     prev_baseline = load_baseline(output_dir)  # [v4] antes de que nada mas toque output_dir
+
+    if args.load_batch:
+        if args.provider != "manual":
+            print("[aviso] --load-batch solo tiene efecto con --provider manual; se ignora.")
+        else:
+            print(f"\n[--load-batch] Cargando {len(args.load_batch)} fichero(s) de respuesta...")
+            n = load_manual_batch_files(args.load_batch)
+            print(f"  {n} respuesta(s) cargada(s) en total.")
 
     if args.semantic_query:
         api_key = os.environ.get(api_key_env) if provider_needs_key else ""
@@ -4054,15 +4383,28 @@ def main():
     n_calls_estimate = (len(stats) + 8 + min(len(complex_functions), MAX_COMPLEX_FUNCTIONS)
                          + n_key_functions)
     host_note = f", host: {args.ollama_host}" if args.provider == "ollama" else ""
-    print(f"\n[Fase 2] Sintesis con LLM. Llamadas estimadas: ~{n_calls_estimate} "
-          f"(proveedor: {args.provider}, modelo: {model}{host_note}). "
-          f"[v4] las 8 fases de sintesis de nivel superior pueden hacer cache-hit "
-          f"si nada relevante cambio desde la ultima pasada.")
-    if not args.yes:
-        resp = input("¿Continuar con las llamadas al LLM? [s/N]: ").strip().lower()
-        if resp != "s":
-            print("Cancelado. La extraccion estatica ya quedo guardada.")
-            return
+    if args.provider == "manual":
+        print(f"\n[Fase 2] Sintesis con LLM en modo MANUAL (sin red, sin clave de API). "
+              f"Peticiones estimadas: ~{n_calls_estimate}. Las que no esten ya resueltas "
+              f"via --load-batch se agruparan en lotes de texto dentro de "
+              f"{output_dir / 'batch'} para pegar en una interfaz web. [v4] las 8 fases de "
+              f"sintesis de nivel superior pueden hacer cache-hit si nada relevante cambio "
+              f"desde la ultima pasada.")
+        if not args.yes:
+            resp = input("¿Continuar y generar el/los lote(s) pendientes? [s/N]: ").strip().lower()
+            if resp != "s":
+                print("Cancelado. La extraccion estatica ya quedo guardada.")
+                return
+    else:
+        print(f"\n[Fase 2] Sintesis con LLM. Llamadas estimadas: ~{n_calls_estimate} "
+              f"(proveedor: {args.provider}, modelo: {model}{host_note}). "
+              f"[v4] las 8 fases de sintesis de nivel superior pueden hacer cache-hit "
+              f"si nada relevante cambio desde la ultima pasada.")
+        if not args.yes:
+            resp = input("¿Continuar con las llamadas al LLM? [s/N]: ").strip().lower()
+            if resp != "s":
+                print("Cancelado. La extraccion estatica ya quedo guardada.")
+                return
 
     cache = Cache(output_dir / ".cache.json")
 
@@ -4132,6 +4474,44 @@ def main():
             write_embeddings_jsonl(embedding_entries, vim_info["vim_dir"] / "embeddings.jsonl")
             print(f"    embeddings: {vim_info['vim_dir'] / 'embeddings.jsonl'} "
                   f"({len(embedding_entries)} vectores) -> usable con :ProjSemanticVec")
+
+    # [v4] modo manual: si quedaron peticiones sin resolver (todas las de
+    # primera pasada, o las que las fases de sintesis fueron encolando
+    # segun se iban destapando rondas), se vuelcan en lotes de texto. Los
+    # ficheros de salida que dependian de ellas ya se escribieron arriba
+    # con MANUAL_PENDING_NOTE como contenido -- es intencional: asi puedes
+    # ver de un vistazo, en el propio <output>, que documentos siguen
+    # pendientes de una ronda mas.
+    if args.provider == "manual" and _MANUAL_QUEUE:
+        batch_dir = output_dir / "batch"
+        paths = build_manual_batch_files(
+            _MANUAL_QUEUE, batch_dir,
+            max_output_tokens=args.manual_batch_max_output_tokens,
+            max_input_chars=args.manual_batch_max_input_chars,
+        )
+        print(f"\n[Fase 2 manual] {len(_MANUAL_QUEUE)} peticion(es) pendientes, "
+              f"agrupadas en {len(paths)} lote(s):")
+        for p in paths:
+            print(f"    {p}")
+        print(
+            "\nSiguiente paso:\n"
+            "  1. Copia el contenido de cada lote y peganlo en una interfaz web de LLM.\n"
+            "  2. Guarda la respuesta completa en un fichero de texto.\n"
+            "  3. Vuelve a ejecutar este script con:\n"
+            f"       --provider manual --load-batch <respuesta.txt> [--load-batch <otra.txt> ...]\n"
+            "  4. Repite: cada ronda puede destapar peticiones nuevas de fases que "
+            "dependian de las que se acaban de resolver (mapa semantico, arquitectura, "
+            "y luego base de conocimiento/snippets/checklist/casos tipicos/onboarding)."
+        )
+    elif args.provider == "manual":
+        # limpia lotes huerfanos de una ronda anterior que ya quedo resuelta,
+        # para no dejar la falsa impresion de que sigue habiendo trabajo.
+        batch_dir = output_dir / "batch"
+        stale = list(batch_dir.glob("lote_*.txt")) if batch_dir.exists() else []
+        for f in stale:
+            f.unlink()
+        print("\n[Fase 2 manual] No quedan peticiones pendientes: toda la sintesis "
+              "esta resuelta con las respuestas ya cargadas.")
 
     print(f"\nListo. Todo el conocimiento esta en: {output_dir}")
 
