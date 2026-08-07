@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                          AUDIO EFFECTS  v1.0                                 ║
+║                          AUDIO EFFECTS  v1.1                                 ║
 ║  Librería DSP + CLI: aplica una cadena de efectos YA DADA a un WAV           ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  QUÉ HACE                                                                    ║
-║    Aplica una cadena de efectos (EQ paramétrico, compresor, reverb,         ║
-║    limitador) conocida de antemano — de un JSON, de flags de línea de       ║
+║    Aplica una cadena de efectos — EQ paramétrico, compresor, reverb,        ║
+║    limitador, delay, saturación, chorus, trémolo, puerta de ruido,          ║
+║    de-esser — conocida de antemano: de un JSON, de flags de línea de       ║
 ║    comandos, o de una llamada programática desde otro programa (p.ej.       ║
 ║    mix_evolver.py) — a un WAV de entrada. No genera, no evalúa, no busca:   ║
 ║    solo aplica. Ver mix_evolver.py para la búsqueda evolutiva de cadenas.   ║
@@ -19,6 +20,8 @@
 ║    audio_effects.py dry.wav --chain chain.json --out processed.wav          ║
 ║    audio_effects.py dry.wav --eq 1000:3.0:1.2 --compressor -18:3.0:10:120 \\║
 ║                     --out processed.wav                                     ║
+║    audio_effects.py dry.wav --saturation 8:0.5 --delay 250:0.35:0.25 \\    ║
+║                     --de-esser 6500:-22:4:2.5 --out processed.wav           ║
 ║    audio_effects.py dry.wav --chain chain.json --out processed.wav \\      ║
 ║                     --json report.json                                      ║
 ║                                                                              ║
@@ -233,11 +236,156 @@ def limiter(audio: np.ndarray, sr: int, ceiling_db: float, lookahead_ms: float =
     return _per_channel(audio, lambda x: _limiter_mono(x, sr, ceiling_db, lookahead_ms))
 
 
+# ── §1.2b efectos nuevos (Fase 1) ──────────────────────────────────────────────
+# Mismo contrato que los cuatro anteriores: función mono cerrada sobre los
+# coeficientes/parámetros + _per_channel para estéreo. Ninguno de estos toca
+# la arquitectura "cada canal independiente" — eso es Fase 2.
+
+def delay(audio: np.ndarray, sr: int, delay_ms: float, feedback: float, mix: float) -> np.ndarray:
+    """Eco con feedback: línea de retardo realimentada, implementada como
+    filtro IIR de comb (b=[1], a con un único polo en delay_ms con
+    coeficiente -feedback). Determinista, sin estado más allá del propio
+    filtro. `feedback` debe mantenerse < 1 para estabilidad (ver manifest)."""
+    signal = _import_scipy_signal()
+    delay_samples = max(1, int(sr * delay_ms / 1000))
+    b = np.array([1.0])
+    a = np.zeros(delay_samples + 1)
+    a[0] = 1.0
+    a[-1] = -feedback
+
+    def _mono(x):
+        wet = signal.lfilter(b, a, x)
+        return (1 - mix) * x + mix * wet
+
+    return _per_channel(audio, _mono)
+
+
+def saturation(audio: np.ndarray, sr: int, drive_db: float, mix: float) -> np.ndarray:
+    """Saturación armónica: waveshaper tanh con `drive_db` controlando cuánto
+    se empuja la señal hacia la zona no lineal, y normalización de nivel
+    (dividir por tanh(drive)) para que a poco drive el efecto sea ~unitario
+    en vez de simplemente atenuar. `mix` permite saturación paralela."""
+    drive = max(10 ** (drive_db / 20), 1e-6)
+    norm = np.tanh(drive)
+
+    def _mono(x):
+        wet = np.tanh(x * drive) / norm
+        return (1 - mix) * x + mix * wet
+
+    return _per_channel(audio, _mono)
+
+
+def _modulated_delay_mono(x: np.ndarray, sr: int, rate_hz: float, depth_ms: float,
+                           mix: float, center_ms: float) -> np.ndarray:
+    """Línea de retardo de longitud variable (LFO senoidal) con interpolación
+    lineal — núcleo compartido de chorus (y reutilizable por flanger/phaser
+    si se añaden más adelante). No usa lfilter porque el retardo no es fijo."""
+    n = len(x)
+    t = np.arange(n) / sr
+    lfo = np.sin(2 * np.pi * rate_hz * t)
+    delay_samples = (center_ms + depth_ms * lfo) / 1000 * sr
+    src_idx = np.clip(np.arange(n) - delay_samples, 0, n - 1)
+    wet = np.interp(src_idx, np.arange(n), x)
+    return (1 - mix) * x + mix * wet
+
+
+def chorus(audio: np.ndarray, sr: int, rate_hz: float, depth_ms: float, mix: float) -> np.ndarray:
+    """Chorus: retardo modulado por LFO en torno a un centro fijo de 15ms
+    (rango típico de chorus, por debajo de la percepción de eco discreto)."""
+    return _per_channel(audio, lambda x: _modulated_delay_mono(
+        x, sr, rate_hz, depth_ms, mix, center_ms=15.0))
+
+
+def tremolo(audio: np.ndarray, sr: int, rate_hz: float, depth: float, mix: float) -> np.ndarray:
+    """Trémolo: modulación de amplitud por LFO senoidal. `depth` 0=sin efecto,
+    1=silencio total en los valles del LFO."""
+    def _mono(x):
+        n = len(x)
+        t = np.arange(n) / sr
+        lfo = 1 - depth * (0.5 - 0.5 * np.cos(2 * np.pi * rate_hz * t))
+        wet = x * lfo
+        return (1 - mix) * x + mix * wet
+
+    return _per_channel(audio, _mono)
+
+
+def _noise_gate_mono(audio: np.ndarray, sr: int, threshold_db: float, attack_ms: float,
+                      release_ms: float, range_db: float) -> np.ndarray:
+    """Mismo envelope follower que _compressor_mono (bucle secuencial
+    intencional, ver nota de compressor), pero la reducción de ganancia es
+    proporcional a cuánto cae la envolvente POR DEBAJO del threshold, no por
+    encima — es el inverso conceptual del compresor. `range_db` acota la
+    atenuación máxima (gate real, no silencio absoluto salvo range_db alto)."""
+    eps = 1e-8
+    env_db = 20 * np.log10(np.abs(audio) + eps)
+    attack_coef = np.exp(-1.0 / (sr * attack_ms / 1000))
+    release_coef = np.exp(-1.0 / (sr * release_ms / 1000))
+    smoothed = np.zeros_like(env_db)
+    for i in range(1, len(env_db)):
+        coef = attack_coef if env_db[i] > smoothed[i - 1] else release_coef
+        smoothed[i] = coef * smoothed[i - 1] + (1 - coef) * env_db[i]
+    under = np.maximum(threshold_db - smoothed, 0)
+    gain_reduction_db = np.minimum(under, range_db)
+    gain_linear = 10 ** (-gain_reduction_db / 20)
+    return audio * gain_linear
+
+
+def noise_gate(audio: np.ndarray, sr: int, threshold_db: float, attack_ms: float,
+               release_ms: float, range_db: float) -> np.ndarray:
+    """Puerta de ruido / expansor descendente según range_db (bajo = expansor
+    suave, alto ~80dB = gate casi total)."""
+    return _per_channel(audio, lambda x: _noise_gate_mono(
+        x, sr, threshold_db, attack_ms, release_ms, range_db))
+
+
+def de_esser(audio: np.ndarray, sr: int, freq_hz: float, threshold_db: float,
+             ratio: float, q: float) -> np.ndarray:
+    """De-esser: compresor de banda. Filtra la señal a una banda estrecha
+    centrada en freq_hz (biquad bandpass RBJ, ganancia de pico constante 0dB)
+    para aislar la energía de sibilantes, calcula la reducción de ganancia
+    SOLO sobre esa banda (envelope follower con attack/release fijos y
+    rápidos: 5ms/80ms, típico de-esser — no expuestos como parámetro para no
+    inflar el flag CLI) y aplica esa reducción a la señal completa, no solo
+    a la banda filtrada."""
+    signal = _import_scipy_signal()
+    w0 = 2 * np.pi * freq_hz / sr
+    alpha = np.sin(w0) / (2 * q)
+    b0, b1, b2 = alpha, 0.0, -alpha
+    a0 = 1 + alpha
+    a1 = -2 * np.cos(w0)
+    a2 = 1 - alpha
+    b = np.array([b0, b1, b2]) / a0
+    a = np.array([1, a1 / a0, a2 / a0])
+    attack_coef = np.exp(-1.0 / (sr * 5 / 1000))
+    release_coef = np.exp(-1.0 / (sr * 80 / 1000))
+
+    def _mono(x):
+        band = signal.lfilter(b, a, x)
+        eps = 1e-8
+        env_db = 20 * np.log10(np.abs(band) + eps)
+        smoothed = np.zeros_like(env_db)
+        for i in range(1, len(env_db)):
+            coef = attack_coef if env_db[i] > smoothed[i - 1] else release_coef
+            smoothed[i] = coef * smoothed[i - 1] + (1 - coef) * env_db[i]
+        over = np.maximum(smoothed - threshold_db, 0)
+        gain_reduction_db = over * (1 - 1 / ratio)
+        gain_linear = 10 ** (-gain_reduction_db / 20)
+        return x * gain_linear
+
+    return _per_channel(audio, _mono)
+
+
 EFFECT_FUNCTIONS: Dict[str, Callable] = {
     "eq_peaking": eq_peaking,
     "compressor": compressor,
     "reverb": reverb,
     "limiter": limiter,
+    "delay": delay,
+    "saturation": saturation,
+    "chorus": chorus,
+    "tremolo": tremolo,
+    "noise_gate": noise_gate,
+    "de_esser": de_esser,
 }
 
 # Flags CLI de aplicación manual → (nombre de efecto, orden de parámetros
@@ -247,6 +395,12 @@ _CLI_FLAG_TO_EFFECT = {
     "--compressor": ("compressor", ("threshold_db", "ratio", "attack_ms", "release_ms")),
     "--reverb": ("reverb", ("size", "decay", "mix")),
     "--limiter": ("limiter", ("ceiling_db",)),
+    "--delay": ("delay", ("delay_ms", "feedback", "mix")),
+    "--saturation": ("saturation", ("drive_db", "mix")),
+    "--chorus": ("chorus", ("rate_hz", "depth_ms", "mix")),
+    "--tremolo": ("tremolo", ("rate_hz", "depth", "mix")),
+    "--noise-gate": ("noise_gate", ("threshold_db", "attack_ms", "release_ms", "range_db")),
+    "--de-esser": ("de_esser", ("freq_hz", "threshold_db", "ratio", "q")),
 }
 
 
@@ -264,6 +418,20 @@ DEFAULT_MANIFEST: dict = {
         {"name": "reverb", "params": {
             "size": [0.1, 3.0], "decay": [0.5, 8.0], "mix": [0.0, 0.6]}},
         {"name": "limiter", "params": {"ceiling_db": [-3.0, -0.1]}},
+        {"name": "delay", "params": {
+            "delay_ms": [10, 800], "feedback": [0.0, 0.85], "mix": [0.0, 0.7]}},
+        {"name": "saturation", "params": {
+            "drive_db": [0.0, 24.0], "mix": [0.0, 1.0]}},
+        {"name": "chorus", "params": {
+            "rate_hz": [0.1, 5.0], "depth_ms": [1.0, 8.0], "mix": [0.0, 0.6]}},
+        {"name": "tremolo", "params": {
+            "rate_hz": [0.5, 12.0], "depth": [0.0, 1.0], "mix": [0.0, 1.0]}},
+        {"name": "noise_gate", "params": {
+            "threshold_db": [-60, -10], "attack_ms": [0.1, 50], "release_ms": [20, 500],
+            "range_db": [6, 80]}},
+        {"name": "de_esser", "params": {
+            "freq_hz": [3000, 10000], "threshold_db": [-40, -5], "ratio": [1.5, 10.0],
+            "q": [0.7, 6.0]}},
     ],
     "max_chain_length": 5,
     "min_chain_length": 1,
@@ -441,6 +609,14 @@ def _build_arg_parser() -> argparse.ArgumentParser:
                          action=_EffectFlagAction)
     parser.add_argument("--reverb", metavar="SIZE:DECAY:MIX", action=_EffectFlagAction)
     parser.add_argument("--limiter", metavar="CEILING", action=_EffectFlagAction)
+    parser.add_argument("--delay", metavar="DELAY_MS:FEEDBACK:MIX", action=_EffectFlagAction)
+    parser.add_argument("--saturation", metavar="DRIVE_DB:MIX", action=_EffectFlagAction)
+    parser.add_argument("--chorus", metavar="RATE_HZ:DEPTH_MS:MIX", action=_EffectFlagAction)
+    parser.add_argument("--tremolo", metavar="RATE_HZ:DEPTH:MIX", action=_EffectFlagAction)
+    parser.add_argument("--noise-gate", metavar="THRESHOLD_DB:ATTACK_MS:RELEASE_MS:RANGE_DB",
+                         action=_EffectFlagAction)
+    parser.add_argument("--de-esser", metavar="FREQ_HZ:THRESHOLD_DB:RATIO:Q",
+                         action=_EffectFlagAction)
     parser.add_argument("--out", metavar="FILE", required=True,
                          help="WAV procesado de salida")
     parser.add_argument("--json", metavar="FILE", default=None,
