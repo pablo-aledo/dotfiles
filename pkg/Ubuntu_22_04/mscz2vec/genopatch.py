@@ -1,0 +1,1031 @@
+#!/usr/bin/env python3
+"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                            GENOPATCH  v1.1                                   ║
+║  Matching de patches de síntesis por búsqueda evolutiva — fichero único      ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  QUÉ HACE                                                                    ║
+║    Dado un WAV objetivo, busca los parámetros de un motor de síntesis        ║
+║    paramétrico que mejor lo reproducen, mediante un algoritmo genético       ║
+║    (selección por torneo + crossover aritmético + mutación gaussiana +       ║
+║    elitismo). Inspirado en el "Genopatch" de Synplant 2 (Sonic Charge),      ║
+║    pero sin red neuronal: aquí la búsqueda evolutiva ES el modelo, en la     ║
+║    línea de mix_evolver.py (ver audio_effects.py) y del Patch Mutator de     ║
+║    Nord — puro CPU, sin GPU, determinista dado un --seed.                    ║
+║                                                                              ║
+║  MOTOR DE SÍNTESIS — genérico, seleccionable con --engine                    ║
+║    fm2        2 operadores FM (portadora + moduladora), estilo Synplant 1,   ║
+║               autocontenido (solo numpy/scipy).                             ║
+║    additive   síntesis aditiva; envuelve Timbre/EnvelopeADR/synth_note de    ║
+║               audio_lab.py (debe estar en el mismo directorio o PYTHONPATH). ║
+║    Añadir un motor nuevo = registrar un EngineSpec más en ENGINES; ni el     ║
+║    GA ni el CLI necesitan cambios.  Ver subcomando `list-engines`.           ║
+║                                                                              ║
+║    Todos los motores llevan además, automáticamente, un LFO de vibrato      ║
+║    (vibrato_rate/vibrato_depth/vibrato_delay) — es un wrapper genérico que   ║
+║    remuestrea a tasa variable el audio YA renderizado por el motor base, no ║
+║    algo cableado dentro de fm2/additive. depth=0 (default) = sin vibrato,   ║
+║    retrocompatible con patch.json guardados antes de este cambio.           ║
+║                                                                              ║
+║  FITNESS — genérico, seleccionable con --fitness                            ║
+║    spectral   autocontenido: log-magnitud STFT (n_fft=2048, ~21.5Hz/bin —   ║
+║               antes 1024/43Hz), agregada media+std sobre el tiempo          ║
+║               (invariante a duración exacta) + descriptor explícito de      ║
+║               vibrato (profundidad+tasa vía frecuencia instantánea/Hilbert, ║
+║               ponderado). Sin este descriptor, la resolución de la STFT     ║
+║               por sí sola sigue sin distinguir vibratos sutiles — es lo que ║
+║               le da al GA señal real para ajustar vibrato_depth/rate.       ║
+║               El paisaje de vibrato tiene varios óptimos locales: usa       ║
+║               --strands 4+ en `match` si el objetivo tiene vibrato notorio. ║
+║               Rápido — recomendado para el bucle del GA (miles de evals).   ║
+║    reference  reutiliza el extractor de audio_reference_scorer.py           ║
+║               (--fitness-backend spectral|latent) como espacio de           ║
+║               features, con distancia euclídea simple al objetivo. NO usa   ║
+║               la maquinaria de Mahalanobis/corpus de ese script — está      ║
+║               diseñada para comparar contra un corpus de referencia         ║
+║               (media+covarianza, mínimo 2 WAVs), y aquí el objetivo es una  ║
+║               única muestra. Cada evaluación escribe el candidato a un WAV  ║
+║               temporal (extract() lee de disco) — más lento que 'spectral', ║
+║               y mucho más lento aún con --fitness-backend latent (requiere  ║
+║               audiolm.py + checkpoint, inferencia por candidato). No lleva  ║
+║               descriptor de vibrato propio (es ajeno a este script).        ║
+║                                                                              ║
+║  SUBCOMANDOS                                                                 ║
+║    match          target.wav → patch.json [+ --preview .wav] [+ --json]     ║
+║    render         patch.json → WAV (motor + nota + duración del patch,      ║
+║                    todo sobreescribible por flags)                          ║
+║    mutate          patch.json → N variantes (nueva semilla desde un patch,   ║
+║                    igual que "Plant Seed" en Synplant)                      ║
+║    list-engines    lista motores registrados y sus parámetros               ║
+║    info            imprime los parámetros de un patch.json                  ║
+║    pitch           detecta la nota fundamental de un WAV (diagnóstico)      ║
+║                                                                              ║
+║  DETECCIÓN DE PITCH (autocorrelación, autocontenida)                        ║
+║    Si `match` no recibe --note, estima la fundamental del WAV objetivo por  ║
+║    autocorrelación normalizada (salta ~20ms de ataque, ventana central de   ║
+║    hasta 2s, rango [--pitch-fmin, --pitch-fmax] Hz). Si la confianza del    ║
+║    pico de autocorrelación cae por debajo de --pitch-confidence (sonidos   ║
+║    no tonales/percusivos/ruido), cae a --note 60 (C4) con un aviso — nunca  ║
+║    falla silenciosamente con una nota inventada de baja confianza.         ║
+║    `genopatch.py pitch archivo.wav` expone el mismo detector suelto, para  ║
+║    inspeccionar cualquier WAV sin lanzar un match completo.                 ║
+║                                                                              ║
+║                                                                              ║
+║  USO                                                                        ║
+║    genopatch.py match target.wav --engine fm2 --note C4 --out patch.json \\ ║
+║                 --preview preview.wav                                       ║
+║    genopatch.py match target.wav --engine additive --fitness reference \\   ║
+║                 --strands 4 --strand-out-dir strands/ --out patch.json      ║
+║    genopatch.py render patch.json --note E4 --out variant.wav               ║
+║    genopatch.py mutate patch.json -n 8 --amount 0.15 --out-dir variants/    ║
+║    genopatch.py list-engines                                                ║
+║    genopatch.py pitch target.wav                                            ║
+║                                                                              ║
+║  FORMATO patch.json                                                         ║
+║    {"engine": "fm2", "note": 60, "duration": 1.5, "velocity": 1.0,          ║
+║     "params": {"carrier_ratio": 1.0, "mod_ratio": 2.0, ...}}                ║
+║                                                                              ║
+║  DEPENDENCIAS  numpy  scipy  soundfile   (obligatorias)                     ║
+║                audio_lab.py               (solo --engine additive)          ║
+║                audio_reference_scorer.py  (solo --fitness reference)        ║
+║                                                                              ║
+║  LIMITACIONES                                                               ║
+║    · La detección de pitch es monofónica y por autocorrelación (no hay     ║
+║      DNN de pitch): fiable para notas sostenidas de fundamental clara,      ║
+║      menos para acordes, ruido de banda ancha o transitorios muy cortos     ║
+║      (donde de todas formas --note apenas importa para el resultado).       ║
+║    · fm2 usa una semilla de ruido fija (0) para que el fitness sea          ║
+║      determinista entre generaciones — no intenta igualar la realización    ║
+║      de ruido exacta del objetivo, solo su energía/color agregados.         ║
+║    · additive requiere audio_lab.py junto a este fichero; reference         ║
+║      requiere audio_reference_scorer.py (y opcionalmente audiolm.py).       ║
+║                                                                              ║
+║  Módulo importable:                                                        ║
+║    from genopatch import ENGINES, run_ga, Patch, load_patch, save_patch, \\ ║
+║                          detect_pitch, hz_to_midi                           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+"""
+
+import argparse
+import json
+import os
+import random
+import sys
+import tempfile
+import time
+from dataclasses import dataclass, asdict, field
+from pathlib import Path
+from typing import Callable, Dict, List, Optional
+
+import numpy as np
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── lazy imports (mismo patrón que el resto del ecosistema) ───────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _import_scipy_signal():
+    try:
+        from scipy import signal
+        return signal
+    except ImportError:
+        sys.exit("✗  scipy no encontrado. Instala con: pip install scipy")
+
+
+def _import_soundfile():
+    try:
+        import soundfile as sf
+        return sf
+    except ImportError:
+        sys.exit("✗  soundfile no encontrado. Instala con: pip install soundfile")
+
+
+def _script_dir() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def _import_audio_lab():
+    """Requerido solo por --engine additive. audio_lab.py debe vivir junto a
+    este fichero o estar en PYTHONPATH — no se duplica su código aquí."""
+    try:
+        import audio_lab
+        return audio_lab
+    except ImportError:
+        sys.path.insert(0, str(_script_dir()))
+        try:
+            import audio_lab
+            return audio_lab
+        except ImportError:
+            sys.exit(
+                "✗  audio_lab.py no encontrado — el motor 'additive' lo necesita "
+                "en el mismo directorio o en PYTHONPATH.")
+
+
+def _import_audio_reference_scorer():
+    """Requerido solo por --fitness reference."""
+    try:
+        import audio_reference_scorer
+        return audio_reference_scorer
+    except ImportError:
+        sys.path.insert(0, str(_script_dir()))
+        try:
+            import audio_reference_scorer
+            return audio_reference_scorer
+        except ImportError:
+            sys.exit(
+                "✗  audio_reference_scorer.py no encontrado — --fitness reference "
+                "lo necesita en el mismo directorio o en PYTHONPATH.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── §1 motores de síntesis — interfaz genérica ─────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class ParamSpec:
+    name: str
+    lo: float
+    hi: float
+    default: float
+
+
+@dataclass
+class EngineSpec:
+    name: str
+    params: List[ParamSpec]
+    render: Callable[[Dict[str, float], int, float, float, int], np.ndarray]
+    description: str = ""
+
+    def default_params(self) -> Dict[str, float]:
+        return {p.name: p.default for p in self.params}
+
+
+def midi_to_hz(note: int) -> float:
+    return 440.0 * 2 ** ((note - 69) / 12.0)
+
+
+def _adsr_envelope(attack: float, decay: float, sustain: float, release: float,
+                    duration: float, sr: int) -> np.ndarray:
+    """ADSR lineal simple, autocontenida (sin dependencia de audio_lab).
+    sustain es un NIVEL (0-1), no una duración."""
+    n_total = max(1, int(duration * sr))
+    n_a = max(1, int(attack * sr))
+    n_d = max(1, int(decay * sr))
+    n_r = max(1, int(release * sr))
+    n_s = max(0, n_total - n_a - n_d - n_r)
+
+    env = np.zeros(n_total, dtype=np.float64)
+    pos = 0
+    end = min(pos + n_a, n_total)
+    env[pos:end] = np.linspace(0.0, 1.0, end - pos, endpoint=True)
+    pos = end
+    end = min(pos + n_d, n_total)
+    if end > pos:
+        env[pos:end] = np.linspace(1.0, sustain, end - pos, endpoint=True)
+    pos = end
+    end = min(pos + n_s, n_total)
+    env[pos:end] = sustain
+    pos = end
+    end = min(pos + n_r, n_total)
+    if end > pos:
+        env[pos:end] = np.linspace(sustain, 0.0, end - pos, endpoint=True)
+    return env
+
+
+def _biquad_lowpass(audio: np.ndarray, sr: int, freq_hz: float, q: float) -> np.ndarray:
+    """Lowpass resonante, fórmulas RBJ Audio EQ Cookbook (mismo origen que
+    eq_peaking en audio_effects.py)."""
+    signal = _import_scipy_signal()
+    freq_hz = min(max(freq_hz, 20.0), sr / 2 * 0.99)
+    q = max(q, 0.1)
+    w0 = 2 * np.pi * freq_hz / sr
+    alpha = np.sin(w0) / (2 * q)
+    b0 = (1 - np.cos(w0)) / 2
+    b1 = 1 - np.cos(w0)
+    b2 = (1 - np.cos(w0)) / 2
+    a0 = 1 + alpha
+    a1 = -2 * np.cos(w0)
+    a2 = 1 - alpha
+    b = np.array([b0, b1, b2]) / a0
+    a = np.array([1.0, a1 / a0, a2 / a0])
+    return signal.lfilter(b, a, audio)
+
+
+# ── fm2 ─────────────────────────────────────────────────────────────────────
+
+FM2_PARAMS = [
+    ParamSpec("carrier_ratio",    0.25, 8.0,    1.0),
+    ParamSpec("mod_ratio",        0.25, 16.0,   2.0),
+    ParamSpec("mod_index",        0.0,  16.0,   3.0),
+    ParamSpec("mod_index_decay",  0.05, 4.0,    0.3),
+    ParamSpec("amp_attack",       0.001, 1.0,   0.01),
+    ParamSpec("amp_decay",        0.005, 2.0,   0.3),
+    ParamSpec("amp_sustain",      0.0,  1.0,    0.6),
+    ParamSpec("amp_release",      0.005, 2.0,   0.2),
+    ParamSpec("filter_cutoff",    200.0, 12000.0, 6000.0),
+    ParamSpec("filter_q",         0.5,  8.0,    0.71),
+    ParamSpec("noise_mix",        0.0,  0.5,    0.0),
+]
+
+
+def _render_fm2(params: Dict[str, float], note_midi: int, duration: float,
+                 velocity: float, sr: int) -> np.ndarray:
+    n = max(1, int(duration * sr))
+    t = np.arange(n) / sr
+    f0 = midi_to_hz(note_midi)
+    fc = f0 * params["carrier_ratio"]
+    fm = f0 * params["mod_ratio"]
+
+    mod_env = params["mod_index"] * np.exp(-t / max(params["mod_index_decay"], 1e-3))
+    phase = 2 * np.pi * fc * t + mod_env * np.sin(2 * np.pi * fm * t)
+    osc = np.sin(phase)
+
+    if params["noise_mix"] > 1e-6:
+        rng = np.random.default_rng(0)   # semilla fija: fitness determinista
+        noise = rng.standard_normal(n)
+        mix = params["noise_mix"]
+        osc = (1.0 - mix) * osc + mix * noise
+
+    env = _adsr_envelope(params["amp_attack"], params["amp_decay"],
+                          params["amp_sustain"], params["amp_release"], duration, sr)
+    audio = osc * env * velocity
+    audio = _biquad_lowpass(audio, sr, params["filter_cutoff"], params["filter_q"])
+    return audio.astype(np.float32)
+
+
+# ── additive (envuelve audio_lab.py) ─────────────────────────────────────────
+
+N_ADDITIVE_HARMONICS = 8
+
+ADDITIVE_PARAMS = [
+    ParamSpec(f"amp_h{i+1}", 0.0, 1.0, max(0.05, 1.0 / (i + 1)))
+    for i in range(N_ADDITIVE_HARMONICS)
+] + [
+    ParamSpec("attack_time",  0.001, 1.0, 0.01),
+    ParamSpec("decay_time",   0.01,  3.0, 0.3),
+    ParamSpec("decay_level",  0.0,   1.0, 0.5),
+    ParamSpec("release_time", 0.005, 2.0, 0.2),
+]
+
+
+def _render_additive(params: Dict[str, float], note_midi: int, duration: float,
+                       velocity: float, sr: int) -> np.ndarray:
+    al = _import_audio_lab()
+    harmonics = [params[f"amp_h{i+1}"] for i in range(N_ADDITIVE_HARMONICS)]
+    timbre = al.Timbre(name="genopatch", key_frames={0: harmonics, 127: harmonics},
+                        n_harmonics=N_ADDITIVE_HARMONICS, normalize=True)
+    envelope = al.EnvelopeADR(
+        attack_time=params["attack_time"], attack_curve="cosine",
+        decay_time=params["decay_time"], decay_curve="exponential",
+        decay_level=params["decay_level"],
+        release_time=params["release_time"], release_curve="exponential",
+    )
+    audio = al.synth_note(midi_note=note_midi, duration=duration, velocity=velocity,
+                           timbre=timbre, envelope=envelope, sr=sr)
+    return audio.astype(np.float32)
+
+
+ENGINES: Dict[str, EngineSpec] = {
+    "fm2": EngineSpec(
+        "fm2", FM2_PARAMS, _render_fm2,
+        "2 operadores FM (portadora+moduladora) + filtro resonante, estilo Synplant 1"),
+    "additive": EngineSpec(
+        "additive", ADDITIVE_PARAMS, _render_additive,
+        "síntesis aditiva — envuelve Timbre/EnvelopeADR/synth_note de audio_lab.py"),
+}
+
+
+# ── vibrato LFO — wrapper genérico, aplicable a CUALQUIER motor ──────────────
+#
+# En vez de cablear el vibrato dentro de fm2 (que exigiría duplicar la lógica
+# en additive y en cualquier motor futuro), se implementa como un post-proceso
+# de remuestreo de tasa variable sobre el audio YA renderizado por el motor
+# base. Así los tres parámetros nuevos (vibrato_rate/depth/delay) se añaden
+# automáticamente a TODOS los motores registrados, sin tocar el GA ni el CLI
+# — mismo espíritu que el resto de la interfaz EngineSpec/ENGINES.
+
+VIBRATO_PARAMS = [
+    ParamSpec("vibrato_rate",  0.5, 12.0, 5.0),   # Hz del LFO
+    ParamSpec("vibrato_depth", 0.0, 0.08, 0.0),   # profundidad relativa de f0 (0 = sin vibrato)
+    ParamSpec("vibrato_delay", 0.0, 1.0,  0.1),   # retardo antes de que aparezca (rampa de 50ms)
+]
+_VIBRATO_NAMES = {p.name for p in VIBRATO_PARAMS}
+
+
+def _apply_vibrato(audio: np.ndarray, sr: int, rate_hz: float, depth: float,
+                    delay_s: float) -> np.ndarray:
+    """Modula el pitch por remuestreo de tasa variable con interpolación
+    lineal: la posición de lectura avanza más rápido/despacio según un LFO
+    senoidal, en vez de leer muestra a muestra. Funciona sobre CUALQUIER
+    audio ya renderizado, independientemente del motor que lo generó.
+    depth=0 (default) deja el audio intacto — retrocompatible con patches
+    guardados antes de que existiera este wrapper."""
+    if depth <= 1e-6 or audio.size < 4:
+        return audio
+    n = len(audio)
+    t = np.arange(n) / sr
+    onset = np.clip((t - delay_s) / 0.05, 0.0, 1.0)   # rampa de 50ms tras el retardo
+    lfo = onset * depth * np.sin(2 * np.pi * rate_hz * t)
+    # posición de lectura "virtual": integral de la tasa de reproducción (1+lfo)
+    read_pos = np.concatenate(([0.0], np.cumsum(1.0 + lfo)[:-1]))
+    read_pos = np.clip(read_pos, 0.0, n - 1.0001)
+    idx0 = np.floor(read_pos).astype(int)
+    idx1 = np.clip(idx0 + 1, 0, n - 1)
+    frac = read_pos - idx0
+    out = audio[idx0] * (1.0 - frac) + audio[idx1] * frac
+    return out.astype(np.float32)
+
+
+def _make_vibrato_engine(base: EngineSpec) -> EngineSpec:
+    combined_params = base.params + VIBRATO_PARAMS
+
+    def render(params: Dict[str, float], note_midi: int, duration: float,
+               velocity: float, sr: int) -> np.ndarray:
+        base_params = {k: v for k, v in params.items() if k not in _VIBRATO_NAMES}
+        audio = base.render(base_params, note_midi, duration, velocity, sr)
+        return _apply_vibrato(audio, sr,
+                               params.get("vibrato_rate", 5.0),
+                               params.get("vibrato_depth", 0.0),
+                               params.get("vibrato_delay", 0.1))
+
+    return EngineSpec(base.name, combined_params, render, base.description + " · + vibrato LFO")
+
+
+ENGINES = {name: _make_vibrato_engine(spec) for name, spec in ENGINES.items()}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── §2 fitness — interfaz genérica: Callable[[np.ndarray], float] ─────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Cada fábrica cierra sobre las features del objetivo (calculadas UNA vez) y
+# devuelve una función que solo necesita el audio candidato — más bajo es
+# mejor (distancia, no score).
+
+_FEAT_N_FFT = 2048    # antes 1024 — más resolución en frecuencia (era 43Hz/bin, ahora ~21.5Hz/bin)
+_FEAT_HOP = 512
+
+# Aun con más resolución, un bin de ~21.5Hz sigue sin distinguir una
+# profundidad de vibrato típica (unos pocos Hz de pico) — el test exhaustivo
+# anterior mostró que la STFT agregada es prácticamente ciega a eso. Se añade
+# un descriptor EXPLÍCITO de modulación de pitch (profundidad + tasa) vía
+# frecuencia instantánea (transformada de Hilbert), para que el fitness
+# tenga señal real con la que ajustar vibrato_depth/vibrato_rate del wrapper.
+_VIBRATO_DEPTH_WEIGHT = 60.0   # calibrado empíricamente — ver notas de testing;
+                                 # con un solo strand la profundidad recuperada
+                                 # tiene varianza alta entre semillas (paisaje
+                                 # con múltiples óptimos locales) — usar
+                                 # --strands 4+ en `match` cuando el objetivo
+                                 # tenga vibrato notorio.
+_VIBRATO_RATE_WEIGHT = 0.05
+
+
+def _vibrato_descriptor(audio: np.ndarray, sr: int) -> "tuple[float, float]":
+    """Profundidad relativa y tasa dominante de la modulación de pitch, vía
+    frecuencia instantánea (derivada de la fase de la señal analítica de
+    Hilbert). Barato: un FFT de longitud N para el Hilbert, uno pequeño para
+    la tasa dominante — nada de tracking de pitch por ventanas."""
+    signal = _import_scipy_signal()
+    if audio.size < 64 or np.max(np.abs(audio)) < 1e-6:
+        return 0.0, 0.0
+    analytic = signal.hilbert(audio)
+    phase = np.unwrap(np.angle(analytic))
+    inst_freq = np.diff(phase) / (2 * np.pi) * sr
+    inst_freq = np.clip(inst_freq, 0.0, sr / 2.0)
+    if len(inst_freq) > 64:
+        kernel = np.ones(51) / 51.0
+        inst_freq = np.convolve(inst_freq, kernel, mode="valid")   # suaviza el ruido de fase
+    mean_f = float(np.mean(inst_freq))
+    if mean_f < 1e-6 or len(inst_freq) < 8:
+        return 0.0, 0.0
+    deviation = inst_freq - mean_f
+    depth = float(np.std(deviation) / mean_f)
+
+    n = len(deviation)
+    spec = np.abs(np.fft.rfft(deviation * np.hanning(n)))
+    freqs = np.fft.rfftfreq(n, d=1.0 / sr)
+    mask = (freqs >= 1.0) & (freqs <= 12.0)   # rango razonable de vibrato musical
+    if np.any(mask) and spec[mask].sum() > 0:
+        rate_hz = float(freqs[mask][np.argmax(spec[mask])])
+    else:
+        rate_hz = 0.0
+    return depth, rate_hz
+
+
+def _extract_internal_features(audio: np.ndarray, sr: int) -> np.ndarray:
+    """log-magnitud STFT agregada media+std sobre el tiempo (invariante a la
+    duración exacta, mismo truco que extract_spectral_embedding de
+    audio_reference_scorer.py) + descriptor explícito de vibrato al final,
+    ponderado para que sea comparable en magnitud al resto del vector pese a
+    ser solo 2 dimensiones contra ~2000."""
+    signal = _import_scipy_signal()
+    if audio.size < _FEAT_N_FFT:
+        audio = np.pad(audio, (0, _FEAT_N_FFT - audio.size))
+    _, _, Zxx = signal.stft(audio, fs=sr, nperseg=_FEAT_N_FFT,
+                             noverlap=_FEAT_N_FFT - _FEAT_HOP, boundary=None)
+    log_mag = np.log1p(np.abs(Zxx))
+    if log_mag.shape[1] == 0:
+        spectral_feat = np.zeros(2 * log_mag.shape[0], dtype=np.float64)
+    else:
+        mean_v = log_mag.mean(axis=1)
+        std_v = log_mag.std(axis=1)
+        spectral_feat = np.concatenate([mean_v, std_v]).astype(np.float64)
+
+    depth, rate_hz = _vibrato_descriptor(audio, sr)
+    vibrato_feat = np.array([depth * _VIBRATO_DEPTH_WEIGHT, rate_hz * _VIBRATO_RATE_WEIGHT])
+    return np.concatenate([spectral_feat, vibrato_feat])
+
+
+def make_fitness_spectral(target_audio: np.ndarray, sr: int) -> Callable[[np.ndarray], float]:
+    target_feat = _extract_internal_features(target_audio, sr)
+
+    def fitness(candidate_audio: np.ndarray) -> float:
+        cand_feat = _extract_internal_features(candidate_audio, sr)
+        n = min(len(target_feat), len(cand_feat))
+        return float(np.linalg.norm(target_feat[:n] - cand_feat[:n]))
+
+    return fitness
+
+
+def make_fitness_reference(target_wav_path: str, sr: int,
+                             backend_name: str = "spectral") -> Callable[[np.ndarray], float]:
+    ars = _import_audio_reference_scorer()
+    sf = _import_soundfile()
+    backend = ars.get_backend(backend_name)
+    if not backend.is_available():
+        sys.exit(f"✗  Backend {backend_name!r} de audio_reference_scorer.py no disponible.")
+    target_feat = backend.extract(target_wav_path)
+    tmp_dir = tempfile.mkdtemp(prefix="genopatch_")
+    tmp_path = os.path.join(tmp_dir, "candidate.wav")
+
+    def fitness(candidate_audio: np.ndarray) -> float:
+        sf.write(tmp_path, _normalize_peak(candidate_audio), sr, subtype="FLOAT")
+        cand_feat = backend.extract(tmp_path)
+        n = min(len(target_feat), len(cand_feat))
+        return float(np.linalg.norm(target_feat[:n] - cand_feat[:n]))
+
+    return fitness
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── §3 algoritmo genético ───────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class Individual:
+    params: Dict[str, float]
+    fitness: float = field(default=float("inf"))
+
+
+def _clip_params(params: Dict[str, float], specs: List[ParamSpec]) -> Dict[str, float]:
+    by_name = {p.name: p for p in specs}
+    return {k: float(np.clip(v, by_name[k].lo, by_name[k].hi)) for k, v in params.items()}
+
+
+def _random_params(specs: List[ParamSpec]) -> Dict[str, float]:
+    """Inicialización mixta por gen: la mitad de las veces explora el rango
+    completo; la otra mitad muestrea alrededor del default (gaussiana al 15%
+    del rango). Sin esto, parámetros cuyo default representa un estado
+    "neutro" (p.ej. vibrato_depth=0, noise_mix=0) arrancan la mayoría de
+    individuos ya "contaminados" — con vibrato_depth en concreto eso además
+    difumina el espectro vía el remuestreo, quemando presupuesto evolutivo en
+    des-aprenderlo incluso cuando el objetivo no tiene vibrato."""
+    out = {}
+    for p in specs:
+        if random.random() < 0.5:
+            out[p.name] = random.uniform(p.lo, p.hi)
+        else:
+            span = p.hi - p.lo
+            out[p.name] = random.gauss(p.default, 0.15 * span)
+    return out
+
+
+
+def _tournament_select(population: List[Individual], k: int = 3) -> Individual:
+    contestants = random.sample(population, min(k, len(population)))
+    return min(contestants, key=lambda ind: ind.fitness)
+
+
+def _crossover(a: Individual, b: Individual, specs: List[ParamSpec]) -> Dict[str, float]:
+    """Crossover aritmético tipo BLX: interpola (y a veces extrapola un poco,
+    t fuera de [0,1]) entre cada gen de los dos padres."""
+    child = {}
+    for p in specs:
+        t = random.uniform(-0.15, 1.15)
+        child[p.name] = a.params[p.name] + t * (b.params[p.name] - a.params[p.name])
+    return _clip_params(child, specs)
+
+
+def _mutate(params: Dict[str, float], specs: List[ParamSpec],
+            rate: float, amount: float) -> Dict[str, float]:
+    out = dict(params)
+    for p in specs:
+        if random.random() < rate:
+            span = p.hi - p.lo
+            out[p.name] = out[p.name] + random.gauss(0.0, amount * span)
+    return _clip_params(out, specs)
+
+
+def run_ga(engine: EngineSpec, fitness_fn: Callable[[np.ndarray], float],
+           note_midi: int, duration: float, velocity: float, sr: int,
+           generations: int, pop_size: int, elite: int,
+           mutation_rate: float, mutation_amount: float,
+           seed: int, verbose: bool = True) -> List[Individual]:
+    """Devuelve la población final, ordenada de mejor (fitness más bajo) a
+    peor. population[0] es el ganador de esta tanda ('strand')."""
+    random.seed(seed)
+    np.random.seed(seed)
+    specs = engine.params
+
+    population = [Individual(_clip_params(_random_params(specs), specs))
+                  for _ in range(pop_size)]
+    population[0] = Individual(engine.default_params())   # una semilla "de fábrica"
+
+    for gen in range(generations):
+        for ind in population:
+            audio = engine.render(ind.params, note_midi, duration, velocity, sr)
+            ind.fitness = fitness_fn(audio)
+        population.sort(key=lambda ind: ind.fitness)
+        if verbose:
+            print(f"    gen {gen + 1:>3}/{generations}  best={population[0].fitness:.4f}")
+        if gen == generations - 1:
+            break
+        next_pop = population[:elite]
+        while len(next_pop) < pop_size:
+            a = _tournament_select(population)
+            b = _tournament_select(population)
+            child = _crossover(a, b, specs)
+            child = _mutate(child, specs, mutation_rate, mutation_amount)
+            next_pop.append(Individual(child))
+        population = next_pop
+
+    population.sort(key=lambda ind: ind.fitness)
+    return population
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── §4 formato patch.json ──────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class Patch:
+    engine: str
+    note: int
+    duration: float
+    velocity: float
+    params: Dict[str, float]
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Patch":
+        return cls(engine=d["engine"], note=int(d["note"]), duration=float(d["duration"]),
+                    velocity=float(d.get("velocity", 1.0)), params=dict(d["params"]))
+
+
+def load_patch(path: str) -> Patch:
+    if not Path(path).exists():
+        sys.exit(f"✗  patch.json no encontrado: {path}")
+    try:
+        data = json.loads(Path(path).read_text())
+    except json.JSONDecodeError as e:
+        sys.exit(f"✗  {path}: JSON inválido — {e}")
+    try:
+        return Patch.from_dict(data)
+    except KeyError as e:
+        sys.exit(f"✗  {path}: falta la clave {e} en el patch.")
+
+
+def save_patch(patch: Patch, path: str) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(patch.to_dict(), indent=2, ensure_ascii=False))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── notas MIDI (parseo autocontenido, sin depender de audio_lab) ──────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def _midi_to_note_name(n: int) -> str:
+    return _NOTE_NAMES[n % 12] + str(n // 12 - 1)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── §5 detección de pitch (autocorrelación, autocontenida) ────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+def detect_pitch(audio: np.ndarray, sr: int, fmin: float = 40.0, fmax: float = 2000.0,
+                  skip_s: float = 0.02, max_dur_s: float = 2.0) -> "tuple[Optional[float], float]":
+    """Estima la frecuencia fundamental de un fragmento monofónico por
+    autocorrelación normalizada (vía FFT). Salta los primeros `skip_s`
+    segundos (transitorio de ataque, suele confundir al detector) y usa como
+    mucho `max_dur_s` segundos centrales para acotar el coste. Busca el pico
+    de autocorrelación más alto dentro del rango de lags [sr/fmax, sr/fmin].
+
+    Devuelve (freq_hz, confianza 0-1). freq_hz es None si el audio es
+    silencio o demasiado corto — la ausencia de pico claro (percusión,
+    ruido) se señaliza con una confianza baja, no con None, para que quien
+    llama decida el umbral."""
+    n_skip = int(skip_s * sr)
+    seg = audio[n_skip: n_skip + int(max_dur_s * sr)]
+    if len(seg) < int(sr / fmin) * 2:
+        seg = audio[: int(max_dur_s * sr)]   # muy corto tras el skip: usa desde el inicio
+    if len(seg) < 64:
+        return None, 0.0
+
+    seg = seg.astype(np.float64) - np.mean(seg)
+    if np.max(np.abs(seg)) < 1e-6:
+        return None, 0.0
+
+    n = len(seg)
+    n_fft = 1
+    while n_fft < 2 * n:
+        n_fft *= 2
+    spec = np.fft.rfft(seg, n=n_fft)
+    autocorr = np.fft.irfft(spec * np.conj(spec))[:n]
+    if autocorr[0] <= 0:
+        return None, 0.0
+    autocorr = autocorr / autocorr[0]
+
+    lag_min = max(1, int(sr / fmax))
+    lag_max = min(int(sr / fmin), n - 1)
+    if lag_max <= lag_min:
+        return None, 0.0
+
+    window = autocorr[lag_min:lag_max + 1]
+    peak_idx = int(np.argmax(window))
+    lag = lag_min + peak_idx
+    confidence = float(max(0.0, min(1.0, window[peak_idx])))
+    if confidence <= 0.0:
+        return None, 0.0
+    freq_hz = sr / lag
+    return freq_hz, confidence
+
+
+def hz_to_midi(freq_hz: float) -> int:
+    return int(round(69 + 12 * np.log2(freq_hz / 440.0)))
+
+
+def _resolve_note(args_note: Optional[str], target_audio: np.ndarray, target_sr: int,
+                   fmin: float, fmax: float, confidence_threshold: float,
+                   verbose: bool = True) -> int:
+    """Nota MIDI explícita si se dio --note; si no, detección automática con
+    fallback a 60 (C4) cuando la confianza no alcanza el umbral."""
+    if args_note:
+        return _parse_note(args_note)
+    freq_hz, confidence = detect_pitch(target_audio, target_sr, fmin=fmin, fmax=fmax)
+    if freq_hz is not None and confidence >= confidence_threshold:
+        note_midi = hz_to_midi(freq_hz)
+        if verbose:
+            print(f"  ♪  pitch detectado: {freq_hz:.1f}Hz ≈ {_midi_to_note_name(note_midi)} "
+                  f"(nota MIDI {note_midi}, confianza {confidence:.2f})")
+        return note_midi
+    if verbose:
+        conf_str = f"{confidence:.2f}" if freq_hz is not None else "0.00"
+        print(f"  ⚠  sin pitch claro (confianza {conf_str} < {confidence_threshold}) — "
+              f"usando --note por defecto: 60 (C4)")
+    return 60
+
+
+def _parse_note(s: str) -> int:
+    try:
+        return int(s)
+    except ValueError:
+        pass
+    name = s.strip().replace("♭", "b").replace("♯", "#")
+    octave = int(name[-1])
+    pitch = (name[:-1].upper()
+             .replace("BB", "A#").replace("EB", "D#").replace("AB", "G#")
+             .replace("DB", "C#").replace("GB", "F#"))
+    if pitch not in _NOTE_NAMES:
+        raise ValueError(f"Nota no reconocida: {s!r}")
+    return (octave + 1) * 12 + _NOTE_NAMES.index(pitch)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── CLI ─────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _normalize_peak(audio: np.ndarray, headroom: float = 0.95) -> np.ndarray:
+    """Normaliza por ganancia (no recorta) si el pico supera `headroom`.
+    Filtros resonantes (filter_q alto en fm2) pueden dar overshoot >0dB de
+    forma perfectamente física — recortar con np.clip ahí metería distorsión
+    audible real, no un aviso inofensivo."""
+    if audio.size == 0:
+        return audio.astype(np.float32)
+    peak = float(np.max(np.abs(audio)))
+    if peak > headroom:
+        audio = audio * (headroom / peak)
+    return audio.astype(np.float32)
+
+
+def _read_mono_wav(path: str):
+    sf = _import_soundfile()
+    try:
+        audio, sr = sf.read(path, dtype="float64", always_2d=False)
+    except FileNotFoundError:
+        sys.exit(f"✗  Fichero no encontrado: {path}")
+    if audio.ndim == 2:
+        audio = audio.mean(axis=1)
+    return audio, sr
+
+
+def cmd_match(args):
+    engine = ENGINES.get(args.engine)
+    if engine is None:
+        sys.exit(f"✗  Motor desconocido: {args.engine!r} (ver `list-engines`)")
+
+    target_audio, target_sr = _read_mono_wav(args.target_wav)
+    sr = args.sr or target_sr
+    duration = args.duration if args.duration else len(target_audio) / target_sr
+    note_midi = _resolve_note(args.note, target_audio, target_sr,
+                               args.pitch_fmin, args.pitch_fmax, args.pitch_confidence,
+                               verbose=not args.quiet)
+
+    if args.fitness == "spectral":
+        fitness_fn = make_fitness_spectral(target_audio, target_sr)
+    else:
+        fitness_fn = make_fitness_reference(args.target_wav, sr,
+                                             backend_name=args.fitness_backend)
+
+    t0 = time.time()
+    strand_winners: List[Individual] = []
+    for strand in range(args.strands):
+        seed = args.seed + strand
+        print(f"  ── strand {strand + 1}/{args.strands} (seed={seed}) ──")
+        pop = run_ga(engine, fitness_fn, note_midi, duration, args.velocity, sr,
+                     args.generations, args.pop, args.elite,
+                     args.mutation_rate, args.mutation_amount, seed,
+                     verbose=not args.quiet)
+        strand_winners.append(pop[0])
+    strand_winners.sort(key=lambda ind: ind.fitness)
+    best = strand_winners[0]
+    elapsed = time.time() - t0
+
+    patch = Patch(engine=args.engine, note=note_midi, duration=duration,
+                  velocity=args.velocity, params=best.params)
+    save_patch(patch, args.out)
+    print(f"  ✓  mejor patch (fitness={best.fitness:.4f}, {elapsed:.1f}s) → {args.out}")
+
+    if args.preview:
+        audio = engine.render(best.params, note_midi, duration, args.velocity, sr)
+        sf = _import_soundfile()
+        sf.write(args.preview, _normalize_peak(audio), sr, subtype="FLOAT")
+        print(f"  ✓  preview → {args.preview}")
+
+    if args.strand_out_dir and args.strands > 1:
+        out_dir = Path(args.strand_out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for i, ind in enumerate(strand_winners, 1):
+            p = Patch(engine=args.engine, note=note_midi, duration=duration,
+                       velocity=args.velocity, params=ind.params)
+            save_patch(p, str(out_dir / f"strand_{i}.json"))
+        print(f"  ✓  {len(strand_winners)} strand(s) → {out_dir}/")
+
+    if args.json:
+        report = {
+            "target_wav": args.target_wav,
+            "engine": args.engine,
+            "fitness": args.fitness,
+            "note": note_midi,
+            "duration": duration,
+            "generations": args.generations,
+            "pop": args.pop,
+            "strands": args.strands,
+            "best_fitness": best.fitness,
+            "strand_fitness": [ind.fitness for ind in strand_winners],
+            "elapsed_s": elapsed,
+            "params": best.params,
+        }
+        Path(args.json).write_text(json.dumps(report, indent=2, ensure_ascii=False))
+        print(f"  ✓  Informe → {args.json}")
+
+
+def cmd_render(args):
+    patch = load_patch(args.patch_json)
+    engine = ENGINES.get(patch.engine)
+    if engine is None:
+        sys.exit(f"✗  Motor desconocido en patch: {patch.engine!r}")
+    note_midi = _parse_note(args.note) if args.note else patch.note
+    duration = args.duration if args.duration else patch.duration
+    velocity = args.velocity if args.velocity is not None else patch.velocity
+    sr = args.sr
+
+    audio = engine.render(patch.params, note_midi, duration, velocity, sr)
+    sf = _import_soundfile()
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    sf.write(args.out, _normalize_peak(audio), sr, subtype="FLOAT")
+    print(f"  ✓  {patch.engine} · nota {note_midi} · {duration:.2f}s → {args.out}")
+
+
+def cmd_mutate(args):
+    patch = load_patch(args.patch_json)
+    engine = ENGINES.get(patch.engine)
+    if engine is None:
+        sys.exit(f"✗  Motor desconocido en patch: {patch.engine!r}")
+    random.seed(args.seed)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    sf = _import_soundfile() if args.render else None
+
+    for i in range(1, args.n + 1):
+        mutated = _mutate(patch.params, engine.params, rate=1.0, amount=args.amount)
+        variant = Patch(engine=patch.engine, note=patch.note, duration=patch.duration,
+                          velocity=patch.velocity, params=mutated)
+        json_path = out_dir / f"variant_{i:02d}.json"
+        save_patch(variant, str(json_path))
+        if args.render:
+            audio = engine.render(mutated, patch.note, patch.duration, patch.velocity, args.sr)
+            wav_path = out_dir / f"variant_{i:02d}.wav"
+            sf.write(str(wav_path), _normalize_peak(audio), args.sr, subtype="FLOAT")
+
+    suffix = " (+ WAV)" if args.render else ""
+    print(f"  ✓  {args.n} variante(s){suffix} → {out_dir}/")
+
+
+def cmd_list_engines(args):
+    for name, engine in ENGINES.items():
+        print(f"\n{name}  —  {engine.description}")
+        for p in engine.params:
+            print(f"    {p.name:<16} [{p.lo:g} .. {p.hi:g}]  default={p.default:g}")
+
+
+def cmd_info(args):
+    patch = load_patch(args.patch_json)
+    print(f"engine    {patch.engine}")
+    print(f"note      {patch.note}")
+    print(f"duration  {patch.duration:.3f}s")
+    print(f"velocity  {patch.velocity:.3f}")
+    print("params")
+    for k, v in patch.params.items():
+        print(f"    {k:<16} {v:g}")
+
+
+def cmd_pitch(args):
+    audio, sr = _read_mono_wav(args.wav)
+    freq_hz, confidence = detect_pitch(audio, sr, fmin=args.pitch_fmin, fmax=args.pitch_fmax)
+    if freq_hz is None:
+        print("  ⚠  sin señal detectable (silencio o fragmento demasiado corto)")
+        return
+    note_midi = hz_to_midi(freq_hz)
+    print(f"  freq        {freq_hz:.2f} Hz")
+    print(f"  nota MIDI   {note_midi}  ({_midi_to_note_name(note_midi)})")
+    print(f"  confianza   {confidence:.3f}")
+    if confidence < args.pitch_confidence:
+        print(f"  ⚠  por debajo del umbral por defecto de `match` ({args.pitch_confidence}) "
+              f"— probablemente no tonal/percusivo; `match` caería a C4 salvo que uses --note.")
+
+
+def _add_common_synth_args(p, require_out=True):
+    p.add_argument("--sr", type=int, default=44100, help="Sample rate (default: 44100)")
+
+
+def _build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="genopatch",
+        description="Matching de patches de síntesis por búsqueda evolutiva "
+                     "(inspirado en Genopatch de Synplant 2, sin red neuronal).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    # ── match ─────────────────────────────────────────────────────────────
+    p = sub.add_parser("match", help="target.wav → patch.json vía algoritmo genético")
+    p.add_argument("target_wav", help="WAV objetivo a reproducir")
+    p.add_argument("--engine", default="fm2", choices=list(ENGINES.keys()),
+                   help="Motor de síntesis (default: fm2)")
+    p.add_argument("--fitness", default="spectral", choices=["spectral", "reference"],
+                   help="Función de distancia (default: spectral)")
+    p.add_argument("--fitness-backend", default="spectral", choices=["spectral", "latent"],
+                   help="Backend de audio_reference_scorer.py si --fitness reference "
+                        "(default: spectral)")
+    p.add_argument("--note", default=None,
+                   help="Nota MIDI o nombre (p.ej. 60, C4). Default: detección automática "
+                        "de pitch del WAV objetivo (fallback a 60/C4 si no hay pitch claro)")
+    p.add_argument("--pitch-fmin", type=float, default=40.0,
+                   help="Frecuencia mínima buscada en la detección de pitch (default: 40Hz)")
+    p.add_argument("--pitch-fmax", type=float, default=2000.0,
+                   help="Frecuencia máxima buscada en la detección de pitch (default: 2000Hz)")
+    p.add_argument("--pitch-confidence", type=float, default=0.4,
+                   help="Confianza mínima del pico de autocorrelación para aceptar el pitch "
+                        "detectado; por debajo, cae a --note 60/C4 (default: 0.4)")
+    p.add_argument("--duration", type=float, default=None,
+                   help="Duración en segundos (default: duración del WAV objetivo)")
+    p.add_argument("--velocity", type=float, default=1.0, help="Velocity 0-1 (default: 1.0)")
+    p.add_argument("--generations", type=int, default=60, help="Generaciones (default: 60)")
+    p.add_argument("--pop", type=int, default=40, help="Tamaño de población (default: 40)")
+    p.add_argument("--elite", type=int, default=4, help="Individuos élite por generación (default: 4)")
+    p.add_argument("--mutation-rate", type=float, default=0.25,
+                   help="Probabilidad de mutar cada gen (default: 0.25)")
+    p.add_argument("--mutation-amount", type=float, default=0.12,
+                   help="Amplitud de mutación, fracción del rango del parámetro (default: 0.12)")
+    p.add_argument("--strands", type=int, default=1,
+                   help="Nº de poblaciones independientes, cada una con su semilla "
+                        "(default: 1; homenaje a las 4 ramas de Genopatch)")
+    p.add_argument("--strand-out-dir", default=None,
+                   help="Si --strands > 1, guarda el ganador de cada strand aquí")
+    p.add_argument("--seed", type=int, default=0, help="Semilla base (default: 0)")
+    p.add_argument("--sr", type=int, default=None,
+                   help="Sample rate de trabajo (default: el del WAV objetivo)")
+    p.add_argument("--out", required=True, help="patch.json de salida (mejor de todos los strands)")
+    p.add_argument("--preview", default=None, help="WAV de previsualización del mejor patch")
+    p.add_argument("--json", default=None, help="Informe opcional (fitness, params, tiempos)")
+    p.add_argument("--quiet", action="store_true", help="No imprimir progreso por generación")
+    p.set_defaults(func=cmd_match)
+
+    # ── render ────────────────────────────────────────────────────────────
+    p = sub.add_parser("render", help="patch.json → WAV")
+    p.add_argument("patch_json")
+    p.add_argument("--note", default=None, help="Sobreescribe la nota del patch")
+    p.add_argument("--duration", type=float, default=None, help="Sobreescribe la duración")
+    p.add_argument("--velocity", type=float, default=None, help="Sobreescribe la velocity")
+    p.add_argument("--sr", type=int, default=44100, help="Sample rate (default: 44100)")
+    p.add_argument("--out", required=True)
+    p.set_defaults(func=cmd_render)
+
+    # ── mutate ────────────────────────────────────────────────────────────
+    p = sub.add_parser("mutate", help="patch.json → N variantes (nueva semilla desde un patch)")
+    p.add_argument("patch_json")
+    p.add_argument("-n", type=int, default=8, help="Nº de variantes (default: 8)")
+    p.add_argument("--amount", type=float, default=0.15,
+                   help="Amplitud de mutación, fracción del rango (default: 0.15)")
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--render", action="store_true", help="También renderiza cada variante a WAV")
+    p.add_argument("--sr", type=int, default=44100)
+    p.add_argument("--out-dir", required=True)
+    p.set_defaults(func=cmd_mutate)
+
+    # ── list-engines ──────────────────────────────────────────────────────
+    p = sub.add_parser("list-engines", help="Lista motores registrados y sus parámetros")
+    p.set_defaults(func=cmd_list_engines)
+
+    # ── info ──────────────────────────────────────────────────────────────
+    p = sub.add_parser("info", help="Imprime los parámetros de un patch.json")
+    p.add_argument("patch_json")
+    p.set_defaults(func=cmd_info)
+
+    # ── pitch ─────────────────────────────────────────────────────────────
+    p = sub.add_parser("pitch", help="Detecta la nota fundamental de un WAV (diagnóstico)")
+    p.add_argument("wav")
+    p.add_argument("--pitch-fmin", type=float, default=40.0)
+    p.add_argument("--pitch-fmax", type=float, default=2000.0)
+    p.add_argument("--pitch-confidence", type=float, default=0.4,
+                   help="Solo para el aviso de umbral (default: 0.4, igual que en `match`)")
+    p.set_defaults(func=cmd_pitch)
+
+    return parser
+
+
+def main():
+    parser = _build_arg_parser()
+    args = parser.parse_args()
+    if not getattr(args, "func", None):
+        parser.print_help()
+        sys.exit(1)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
