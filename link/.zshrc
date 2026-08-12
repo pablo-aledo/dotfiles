@@ -106,4 +106,3 @@ stty -ixon
 [ -e ~/.shell ] && source ~/.shell
 [ -e ~/.paths ] && source ~/.paths
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-. "/home/pga_gca_3/.deno/env"
