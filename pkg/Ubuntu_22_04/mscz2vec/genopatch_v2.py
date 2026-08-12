@@ -803,6 +803,12 @@ _VIBRATO_DEPTH_WEIGHT = 60.0   # calibrado empíricamente — ver notas de testi
                                  # --strands 4+ en `match` cuando el objetivo
                                  # tenga vibrato notorio.
 _VIBRATO_RATE_WEIGHT = 0.05
+_VIBRATO_DEPTH_CLIP = 0.3   # tope de saturación — ver _extract_internal_features.
+                             # Forma parte del fingerprint de features: un
+                             # checkpoint de genopatch_flow.py entrenado antes
+                             # de este tope calculaba features distintas para
+                             # cualquier audio que saturase, así que debe
+                             # invalidarse, no solo advertir.
 
 
 def _vibrato_descriptor(audio: np.ndarray, sr: int) -> "tuple[float, float]":
@@ -857,6 +863,16 @@ def _extract_internal_features(audio: np.ndarray, sr: int) -> np.ndarray:
         spectral_feat = np.concatenate([mean_v, std_v]).astype(np.float64)
 
     depth, rate_hz = _vibrato_descriptor(audio, sr)
+    # tope de seguridad: contenido ruidoso/muy resonante/con pitch muy
+    # desajustado puede hacer que el estimador de frecuencia instantánea
+    # (Hilbert) se vuelva inestable y devuelva profundidades absurdas
+    # (>1.0 — un vibrato real nunca pasa de ~0.08). Sin este tope, un único
+    # valor saturado (con peso ×60) puede dominar por completo el vector de
+    # ~2050 dimensiones, dejando al GA ciego a las diferencias reales entre
+    # candidatos — confirmado en testing con subtractive a nota desajustada:
+    # dos patches con parámetros radicalmente distintos daban fitness
+    # bit-a-bit idéntico porque solo esta dimensión saturada importaba.
+    depth = min(depth, _VIBRATO_DEPTH_CLIP)
     vibrato_feat = np.array([depth * _VIBRATO_DEPTH_WEIGHT, rate_hz * _VIBRATO_RATE_WEIGHT])
     return np.concatenate([spectral_feat, vibrato_feat])
 
@@ -1152,11 +1168,17 @@ def _normalize_peak(audio: np.ndarray, headroom: float = 0.95) -> np.ndarray:
 
 
 def _read_mono_wav(path: str):
+    if not Path(path).exists():
+        sys.exit(f"✗  Fichero no encontrado: {path}")
     sf = _import_soundfile()
     try:
         audio, sr = sf.read(path, dtype="float64", always_2d=False)
-    except FileNotFoundError:
-        sys.exit(f"✗  Fichero no encontrado: {path}")
+    except Exception as e:
+        # soundfile lanza distintos tipos según la causa (LibsndfileError,
+        # RuntimeError...) — el fichero ya sabemos que existe (arriba), así
+        # que esto es "existe pero no se puede leer" (formato no soportado,
+        # corrupto, etc.), no "no encontrado".
+        sys.exit(f"✗  No se pudo leer {path} como WAV: {e}")
     if audio.ndim == 2:
         audio = audio.mean(axis=1)
     return audio, sr

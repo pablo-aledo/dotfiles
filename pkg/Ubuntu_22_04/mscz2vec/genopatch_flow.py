@@ -317,6 +317,7 @@ def _feature_fingerprint(gp) -> dict:
         "feat_hop": gp._FEAT_HOP,
         "vibrato_depth_weight": gp._VIBRATO_DEPTH_WEIGHT,
         "vibrato_rate_weight": gp._VIBRATO_RATE_WEIGHT,
+        "vibrato_depth_clip": getattr(gp, "_VIBRATO_DEPTH_CLIP", None),
     }
 
 
@@ -335,6 +336,9 @@ def train_from_dataset(gp, torch, nn, engine_name: str, thetas: np.ndarray, feat
     engine = gp.RAW_ENGINES[engine_name]
     specs = engine.params
     n_samples = thetas.shape[0]
+    if n_samples < 20:
+        sys.exit(f"Dataset demasiado pequeño ({n_samples} pares) -- se necesitan al menos "
+                  f"20 para separar un val_fraction razonable.")
 
     theta_norm = _normalize_theta(thetas, specs)
     feat_mean = feats.mean(axis=0)
@@ -421,6 +425,12 @@ def train(engine_name: str, n_samples: int, epochs: int, out_path: str,
     if engine_name not in SUPPORTED_ENGINES:
         sys.exit(f"Motor no soportado por genopatch_flow (fase 1): {engine_name!r} "
                   f"-- usa uno de {SUPPORTED_ENGINES}")
+    if n_samples < 20:
+        sys.exit(f"--n-samples debe ser al menos 20 (recibido: {n_samples}) -- por debajo "
+                  f"de eso no hay ni para separar un val_fraction razonable. En la práctica "
+                  f"se necesitan miles para un flujo útil (ver informe de testing).")
+    if epochs < 1:
+        sys.exit(f"--epochs debe ser al menos 1 (recibido: {epochs})")
     gp = _import_genopatch_v2()
     torch, nn = _import_torch()
 
@@ -439,7 +449,15 @@ def train(engine_name: str, n_samples: int, epochs: int, out_path: str,
 def _load_checkpoint(gp, torch, nn, path: str):
     if not Path(path).exists():
         sys.exit(f"checkpoint no encontrado: {path}")
-    ckpt = torch.load(path, weights_only=False)
+    try:
+        ckpt = torch.load(path, weights_only=False)
+    except Exception as e:
+        sys.exit(f"{path} no es un checkpoint válido de genopatch_flow.py: {e}")
+    for key in ("fingerprint", "engine", "theta_dim", "feat_dim", "model_state",
+                "param_names", "canonical"):
+        if key not in ckpt:
+            sys.exit(f"{path} no tiene la clave {key!r} -- no parece un checkpoint "
+                      f"de genopatch_flow.py (¿fichero de otro proyecto?).")
     current_fp = _feature_fingerprint(gp)
     if ckpt["fingerprint"] != current_fp:
         sys.exit(
