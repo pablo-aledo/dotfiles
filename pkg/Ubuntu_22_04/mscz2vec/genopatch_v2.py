@@ -943,7 +943,11 @@ def _crossover(a: Individual, b: Individual, specs: List[ParamSpec]) -> Dict[str
 
 def _mutate(params: Dict[str, float], specs: List[ParamSpec],
             rate: float, amount: float) -> Dict[str, float]:
-    out = dict(params)
+    """Tolera patches con menos claves que las del motor completo (p.ej.
+    los que produce genopatch_flow.py, solo con los parámetros base, sin
+    FX) — usa el default de cada ParamSpec como punto de partida para
+    cualquier clave ausente, en vez de asumir que ya está en `params`."""
+    out = {p.name: params.get(p.name, p.default) for p in specs}
     for p in specs:
         if random.random() < rate:
             span = p.hi - p.lo
