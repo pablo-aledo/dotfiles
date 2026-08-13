@@ -77,15 +77,22 @@
 ║    info            imprime los parámetros de un patch.json                  ║
 ║    pitch           detecta la nota fundamental de un WAV (diagnóstico)      ║
 ║                                                                              ║
-║  DETECCIÓN DE PITCH (autocorrelación, autocontenida)                        ║
-║    Si `match` no recibe --note, estima la fundamental del WAV objetivo por  ║
-║    autocorrelación normalizada (salta ~20ms de ataque, ventana central de   ║
-║    hasta 2s, rango [--pitch-fmin, --pitch-fmax] Hz). Si la confianza del    ║
-║    pico de autocorrelación cae por debajo de --pitch-confidence (sonidos   ║
-║    no tonales/percusivos/ruido), cae a --note 60 (C4) con un aviso — nunca  ║
-║    falla silenciosamente con una nota inventada de baja confianza.         ║
-║    `genopatch.py pitch archivo.wav` expone el mismo detector suelto, para  ║
-║    inspeccionar cualquier WAV sin lanzar un match completo.                 ║
+║  DETECCIÓN DE PITCH (YIN — De Cheveigné & Kawahara 2002, autocontenido)      ║
+║    Si `match` no recibe --note, estima la fundamental del WAV objetivo con   ║
+║    YIN: función de diferencia normalizada acumulada (más robusta frente a    ║
+║    errores de octava que la autocorrelación simple — confirmado en           ║
+║    testing: un grave profundo que antes se detectaba ~36 armónicos por       ║
+║    encima ahora sale casi exacto; una campana inarmónica que saltaba a un    ║
+║    subarmónico ahora falla por solo 1 semitono). Salta ~20ms de ataque,      ║
+║    ventana de hasta 2s, rango [--pitch-fmin, --pitch-fmax] Hz. Si la         ║
+║    confianza cae por debajo de --pitch-confidence (sonidos no                ║
+║    tonales/percusivos/ruido), cae a --note 60 (C4) con un aviso — nunca      ║
+║    falla silenciosamente con una nota inventada de baja confianza.           ║
+║    Contenido MUY inarmónico (ratios de armónicos no enteros) sigue siendo    ║
+║    ambiguo para cualquier método basado en periodicidad — usa --note         ║
+║    explícito si sabes que el timbre es de ese tipo.                          ║
+║    `genopatch.py pitch archivo.wav` expone el mismo detector suelto, para    ║
+║    inspeccionar cualquier WAV sin lanzar un match completo.                  ║
 ║                                                                              ║
 ║                                                                              ║
 ║  USO                                                                        ║
@@ -1063,17 +1070,29 @@ def _midi_to_note_name(n: int) -> str:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def detect_pitch(audio: np.ndarray, sr: int, fmin: float = 40.0, fmax: float = 2000.0,
-                  skip_s: float = 0.02, max_dur_s: float = 2.0) -> "tuple[Optional[float], float]":
-    """Estima la frecuencia fundamental de un fragmento monofónico por
-    autocorrelación normalizada (vía FFT). Salta los primeros `skip_s`
-    segundos (transitorio de ataque, suele confundir al detector) y usa como
-    mucho `max_dur_s` segundos centrales para acotar el coste. Busca el pico
-    de autocorrelación más alto dentro del rango de lags [sr/fmax, sr/fmin].
+                  skip_s: float = 0.02, max_dur_s: float = 2.0,
+                  threshold: float = 0.15) -> "tuple[Optional[float], float]":
+    """Estima la frecuencia fundamental de un fragmento monofónico con el
+    método YIN (De Cheveigné & Kawahara, 2002): función de diferencia
+    normalizada acumulada (CMNDF), en vez de un pico simple de
+    autocorrelación. Salta los primeros `skip_s` segundos (transitorio de
+    ataque) y usa como mucho `max_dur_s` segundos centrales.
+
+    Por qué YIN y no autocorrelación simple: un pico de autocorrelación
+    puede caer, con más energía que el de la fundamental, en un armónico
+    (período más corto → octava de más) o en un subarmónico (período más
+    largo → octava de menos) — y ambos fallos ocurrían con ALTA confianza
+    en testing (grave profundo: ~36 armónicos hacia arriba; campana
+    inarmónica: bloqueo en 1/8 del período real). La normalización
+    acumulada de YIN penaliza sistemáticamente los lags largos y el umbral
+    de "primer mínimo suficientemente bueno" evita saltar a armónicos
+    cortos — ambos sesgos, actuando junto, corrigen las dos direcciones
+    de error a la vez.
 
     Devuelve (freq_hz, confianza 0-1). freq_hz es None si el audio es
-    silencio o demasiado corto — la ausencia de pico claro (percusión,
-    ruido) se señaliza con una confianza baja, no con None, para que quien
-    llama decida el umbral."""
+    silencio o demasiado corto — la ausencia de un mínimo claro
+    (percusión, ruido) se señaliza con una confianza baja, no con None,
+    para que quien llama decida el umbral."""
     n_skip = int(skip_s * sr)
     seg = audio[n_skip: n_skip + int(max_dur_s * sr)]
     if len(seg) < int(sr / fmin) * 2:
@@ -1086,24 +1105,51 @@ def detect_pitch(audio: np.ndarray, sr: int, fmin: float = 40.0, fmax: float = 2
         return None, 0.0
 
     n = len(seg)
-    n_fft = 1
-    while n_fft < 2 * n:
-        n_fft *= 2
-    spec = np.fft.rfft(seg, n=n_fft)
-    autocorr = np.fft.irfft(spec * np.conj(spec))[:n]
-    if autocorr[0] <= 0:
-        return None, 0.0
-    autocorr = autocorr / autocorr[0]
-
     lag_min = max(1, int(sr / fmax))
     lag_max = min(int(sr / fmin), n - 1)
     if lag_max <= lag_min:
         return None, 0.0
 
-    window = autocorr[lag_min:lag_max + 1]
-    peak_idx = int(np.argmax(window))
-    lag = lag_min + peak_idx
-    confidence = float(max(0.0, min(1.0, window[peak_idx])))
+    # autocorrelación vía FFT (igual que antes) para acelerar el cómputo
+    # de la función de diferencia — d(tau) = E[0:n-tau] + E[tau:n] - 2*autocorr(tau)
+    n_fft = 1
+    while n_fft < 2 * n:
+        n_fft *= 2
+    spec = np.fft.rfft(seg, n=n_fft)
+    autocorr = np.fft.irfft(spec * np.conj(spec))[:n]
+
+    energy = seg * seg
+    cum_energy = np.concatenate(([0.0], np.cumsum(energy)))   # cum_energy[k] = sum(seg[:k]**2)
+    taus = np.arange(0, lag_max + 1)
+    total_energy = cum_energy[n]
+    # sum(seg[:n-tau]**2) + sum(seg[tau:n]**2), válido para tau in [0, n]
+    energy_head = cum_energy[np.clip(n - taus, 0, n)]
+    energy_tail = total_energy - cum_energy[np.clip(taus, 0, n)]
+    d = energy_head + energy_tail - 2.0 * autocorr[:lag_max + 1]
+    d = np.maximum(d, 0.0)   # errores de redondeo pueden dar negativos minúsculos
+
+    # función de diferencia normalizada acumulada (CMNDF); d'(0) := 1 por convención
+    cmndf = np.ones_like(d)
+    running_sum = 0.0
+    for tau in range(1, lag_max + 1):
+        running_sum += d[tau]
+        cmndf[tau] = d[tau] * tau / running_sum if running_sum > 0 else 1.0
+
+    window = cmndf[lag_min:lag_max + 1]
+    below = np.where(window < threshold)[0]
+    if len(below) > 0:
+        # primer mínimo local por debajo del umbral (heurística estándar de
+        # YIN) — evita saltar a un armónico más corto aunque tenga un valor
+        # de CMNDF ligeramente menor
+        idx = below[0]
+        while idx + 1 < len(window) and window[idx + 1] < window[idx]:
+            idx += 1
+    else:
+        idx = int(np.argmin(window))
+
+    lag = lag_min + idx
+    cmndf_val = float(window[idx])
+    confidence = float(max(0.0, min(1.0, 1.0 - cmndf_val)))
     if confidence <= 0.0:
         return None, 0.0
     freq_hz = sr / lag
