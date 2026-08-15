@@ -1,3 +1,4 @@
 # cat s2link | while read line; do title="$(echo $line | sed 's/\(.*\) -> \(.*\)/\1/g')"; link="$(echo $line | sed 's/\(.*\) -> \(.*\)/\2/g')"; md5=$(echo $title | md5sum | awk '{print $1}'); done | tee /tmp/s2md5
 # [ "$(md5sum $(ltr | tail -n1 | tail -n1 | awk '{print $NF}') | awk '{print $1}')" = "$(md5sum $(ltr | tail -n2 | head -n1 | awk '{print $NF}') | awk '{print $1}')" ]
 # [ "$(ps aux G short G kgsummaries.3)" != "" ]
+# cat s2link | grep ycombinator | while read line; do title="$(echo $line | sed 's/\(.*\) -> \(.*\)/\1/g')"; link="$(echo $line | sed 's/\(.*\) -> \(.*\)/\2/g' | sed 's|,|\n|g' | sort -u | grep ycombinator | head -n1)"; md5=$(echo $title | md5sum | awk '{print $1}'); [ -e kgsummaries_hn_hn/$md5 -a -e kgsummaries_hn_nhn/$md5 ] && (wget "$link" -O - | w3m -cols 9999 -dump -T text/html | sed 's/^ *//g' > dump/$md5; sleep $(( $RANDOM % 10 ))); done
