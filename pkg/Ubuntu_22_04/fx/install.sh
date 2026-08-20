@@ -1,1 +1,1 @@
-curl https://fx.wtf/install.sh | sudo sh
+curl -fsSL https://fx.sh/setup.sh | bash
