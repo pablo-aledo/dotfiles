@@ -156,9 +156,17 @@ class TempoMap:
 
     def measure_and_beat(self, t: float) -> tuple[int, float]:
         """(compás 1-based, beat 0-based dentro del compás)."""
-        total_beats  = self.beats_elapsed(t)
-        measure      = int(total_beats / self.beats_per_measure) + 1
-        beat_in_meas = total_beats % self.beats_per_measure
+        total_beats = self.beats_elapsed(t)
+        # `beats_elapsed` acumula tiempo en segundos convertido a beats, lo
+        # que a veces produce un valor ligerísimamente por debajo del límite
+        # exacto de compás (p. ej. 15.999999998 en vez de 16.0) por errores
+        # de redondeo de punto flotante. Sin corrección, eso hacía que una
+        # nota que en realidad empieza en el compás n se asociara al
+        # compás n-1. Con un epsilon muy pequeño "empujamos" ese caso al
+        # lado correcto del límite sin afectar a compases intermedios.
+        eps = 1e-6
+        measure      = int((total_beats + eps) / self.beats_per_measure) + 1
+        beat_in_meas = (total_beats + eps) % self.beats_per_measure
         return measure, beat_in_meas
 
 
