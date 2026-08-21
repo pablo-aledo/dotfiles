@@ -935,13 +935,16 @@ def cmd_train(args):
 
     n_batches = dataset.n_batches(args.batch_size, 'train')
     fields = ('event', 'pitch', 'delta', 'duration', 'velocity')
+    print(f"{n_batches} batches/época (batch-size={args.batch_size}, "
+          f"~{len(dataset.splits['train'])} ficheros)\n")
 
     for epoch in range(start_epoch, args.epochs):
         model.train()
         p = _sched_p(epoch, args.sched_start, args.sched_end, args.sched_max_p)
         epoch_loss, epoch_acc = {f: 0.0 for f in fields}, {f: 0.0 for f in fields}
+        epoch_t0 = time.time()
 
-        for _ in range(n_batches):
+        for bi in range(n_batches):
             items = dataset.batch(args.batch_size, args.max_notes, 'train')
             batch = build_token_batch(items, device)
             out = model.forward_train(batch, sched_p=p)
@@ -960,8 +963,22 @@ def cmd_train(args):
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
 
+            if args.log_every and ((bi + 1) % args.log_every == 0 or bi + 1 == n_batches):
+                elapsed = time.time() - epoch_t0
+                bps = (bi + 1) / elapsed if elapsed > 0 else 0.0
+                eta = (n_batches - bi - 1) / bps if bps > 0 else 0.0
+                running = sum(epoch_loss.values()) / (bi + 1)
+                pct = 100.0 * (bi + 1) / n_batches
+                sys.stdout.write(
+                    f"\r  época {epoch:3d}  batch {bi+1:5d}/{n_batches}  ({pct:5.1f}%)  "
+                    f"loss={running:.4f}  {bps:.2f} batch/s  ETA {eta/60:5.1f} min   "
+                )
+                sys.stdout.flush()
+
+        sys.stdout.write("\r" + " " * 100 + "\r")  # limpia la línea de progreso
         total_loss = sum(epoch_loss.values()) / n_batches
-        print(f"[época {epoch:3d}] sched_p={p:.2f}  loss_total={total_loss:.4f}  " +
+        print(f"[época {epoch:3d}] sched_p={p:.2f}  loss_total={total_loss:.4f}  "
+              f"({time.time()-epoch_t0:.1f}s)  " +
               "  ".join(f"{f}={epoch_loss[f]/n_batches:.3f}/{epoch_acc[f]/n_batches:.2%}"
                         for f in fields))
 
@@ -1430,6 +1447,8 @@ def main():
     p.add_argument('--sched-end', type=int, default=25, metavar='N')
     p.add_argument('--sched-max-p', type=float, default=0.5, metavar='F')
     p.add_argument('--eval-every', type=int, default=5, metavar='N')
+    p.add_argument('--log-every', type=int, default=10, metavar='N',
+                    help='Imprime progreso cada N batches (0 = desactivar)')
     p.add_argument('--resume', action='store_true')
     p.add_argument('--seed', type=int, default=42)
     p.set_defaults(func=cmd_train)
