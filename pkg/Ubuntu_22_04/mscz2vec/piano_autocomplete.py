@@ -984,16 +984,24 @@ def cmd_train(args):
 
         if args.eval_every and dataset.splits['val'] and (epoch + 1) % args.eval_every == 0:
             model.eval()
+            n_val_batches = min(args.eval_batches, dataset.n_batches(args.batch_size, 'val'))
+            val_loss_sum, val_per_field = 0.0, {f: 0.0 for f in fields}
             with torch.no_grad():
-                items = dataset.batch(args.batch_size, args.max_notes, 'val')
-                batch = build_token_batch(items, device)
-                out = model.forward_train(batch, sched_p=0.0)
-                pad_mask = batch['pad_mask'][:, 1:]
-                val_loss = sum(_field_loss(out[f], batch[f][:, 1:], pad_mask).item()
-                                for f in fields)
-                print(f"           val_loss={val_loss:.4f}")
-                if val_loss < best_loss:
-                    best_loss = val_loss
+                for _ in range(n_val_batches):
+                    items = dataset.batch(args.batch_size, args.max_notes, 'val')
+                    batch = build_token_batch(items, device)
+                    out = model.forward_train(batch, sched_p=0.0)
+                    pad_mask = batch['pad_mask'][:, 1:]
+                    for f in fields:
+                        fl = _field_loss(out[f], batch[f][:, 1:], pad_mask).item()
+                        val_per_field[f] += fl
+                        val_loss_sum += fl
+            val_loss = val_loss_sum / n_val_batches
+            print(f"           val_loss={val_loss:.4f}  (media de {n_val_batches} batches, "
+                  f"{n_val_batches * args.batch_size} ficheros)  " +
+                  "  ".join(f"{f}={val_per_field[f]/n_val_batches:.3f}" for f in fields))
+            if val_loss < best_loss:
+                best_loss = val_loss
 
         _save_checkpoint(args.model_dir, model, optimizer, epoch, best_loss, cfg)
 
@@ -1447,6 +1455,9 @@ def main():
     p.add_argument('--sched-end', type=int, default=25, metavar='N')
     p.add_argument('--sched-max-p', type=float, default=0.5, metavar='F')
     p.add_argument('--eval-every', type=int, default=5, metavar='N')
+    p.add_argument('--eval-batches', type=int, default=20, metavar='N',
+                    help='Nº de batches de validación a promediar (default: 20, antes era 1 '
+                         'y daba una estimación ruidosa)')
     p.add_argument('--log-every', type=int, default=10, metavar='N',
                     help='Imprime progreso cada N batches (0 = desactivar)')
     p.add_argument('--resume', action='store_true')
