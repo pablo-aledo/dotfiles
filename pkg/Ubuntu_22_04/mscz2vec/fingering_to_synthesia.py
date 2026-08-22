@@ -37,9 +37,13 @@ Formato Synthesia (gramática oficial, Synthesia-LLC/metadata-editor wiki)
   Por defecto: track 0, compás 1.
 
 Este script asume el convenio más habitual: track 0 = mano derecha,
-track 1 = mano izquierda (así lo hace Synthesia cuando el MIDI tiene un
-track por mano). Si tu archivo usa otra distribución de tracks, ajusta
---track-right / --track-left.
+track 1 = mano izquierda — PERO ese número de track se refiere al índice
+CRUDO del track en el fichero MIDI (0-based, tal cual aparece en el
+fichero), NO al índice entre "solo los tracks que contienen notas". Muchos
+ficheros MIDI tipo 1 tienen un primer track vacío (solo tempo/metadatos);
+si tu archivo es de ese tipo, la mano derecha real está en el track 1 y la
+izquierda en el 2, no en 0/1. Pasa --midi para que el script lo autodetecte
+y te lo confirme en pantalla; si no, verifica los índices a mano.
 
 ────────────────────────────────────────────────────────────────────────────
 Orden físico de notas simultáneas (acordes) — por qué --midi importa
@@ -229,13 +233,27 @@ def _parse_midi_tracks(path: Path) -> list[list[tuple[int, int]]]:
     return tracks
 
 
+def detect_note_tracks(all_tracks: list[list[tuple[int, int]]]) -> list[int]:
+    """Índices CRUDOS (tal cual están en el fichero MIDI, incluyendo tracks
+    vacíos de tempo/meta) de los tracks que contienen al menos una nota."""
+    return [i for i, tr in enumerate(all_tracks) if tr]
+
+
 def load_physical_note_order(midi_path: Path, right_track: int, left_track: int) -> tuple[list[tuple[int, int]], list[tuple[int, int]], int]:
     """
     Lee el MIDI y devuelve (eventos_mano_derecha, eventos_mano_izquierda,
     ticks_per_beat), donde cada lista de eventos son tuplas
-    (tick_absoluto, pitch) en orden físico real, tomadas de los mismos
-    tracks (entre los que SÍ contienen notas) que usaría fingering_v3.py
-    con --right-track/--left-track.
+    (tick_absoluto, pitch) en orden físico real.
+
+    IMPORTANTE: right_track/left_track son índices de track CRUDOS del
+    fichero MIDI (0-based, tal cual aparecen en el fichero), NO índices
+    entre "solo los tracks con notas". Todo apunta a que así es como
+    Synthesia interpreta también el tN: de su propio formato de fingers:
+    como el índice de track crudo, incluyendo tracks vacíos de tempo/meta
+    si los hay. Usar el índice "reindexado sin vacíos" (como hace
+    fingering_v3.py internamente al leer con pretty_midi) es un error
+    fácil de cometer y que produce justo el síntoma de "la digitación
+    aparece en la mano equivocada, o no aparece en absoluto".
     """
     with open(midi_path, "rb") as f:
         header = f.read(14)
@@ -244,14 +262,18 @@ def load_physical_note_order(midi_path: Path, right_track: int, left_track: int)
         raise ValueError("Este fichero usa SMPTE en vez de ticks-per-beat; no soportado")
 
     all_tracks = _parse_midi_tracks(midi_path)
-    note_tracks = [tr for tr in all_tracks if tr]  # descarta tracks sin notas (p.ej. el de tempo)
 
-    if right_track >= len(note_tracks) or left_track >= len(note_tracks):
+    if right_track >= len(all_tracks) or left_track >= len(all_tracks):
         raise ValueError(
-            f"El MIDI solo tiene {len(note_tracks)} track(s) con notas; "
+            f"El MIDI solo tiene {len(all_tracks)} track(s) en total; "
             f"no se puede usar --track-right {right_track} / --track-left {left_track}"
         )
-    return note_tracks[right_track], note_tracks[left_track], ticks_per_beat
+    if not all_tracks[right_track]:
+        cprint(f"  Aviso: el track crudo {right_track} (mano derecha) no tiene ninguna nota en el MIDI.", _C.WARN)
+    if not all_tracks[left_track]:
+        cprint(f"  Aviso: el track crudo {left_track} (mano izquierda) no tiene ninguna nota en el MIDI.", _C.WARN)
+
+    return all_tracks[right_track], all_tracks[left_track], ticks_per_beat
 
 
 def group_physical_events(events: list[tuple[int, int]]) -> list[list[int]]:
@@ -342,14 +364,25 @@ def reorder_by_physical_order(notes: list[dict], physical_events: list[tuple[int
 # Construcción de la cadena "fingers" para una mano
 # ─────────────────────────────────────────────────────────────────────────────
 
-def encode_hand(notes: list[dict], hand: str) -> tuple[str, int, int]:
+def encode_hand(notes: list[dict], hand: str, gap_encoding: str = "jump") -> tuple[str, int, int]:
     """
-    Codifica la secuencia de notas de una mano como tokens Synthesia,
-    insertando marcadores mN: cuando cambia el compás.
+    Codifica la secuencia de notas de una mano como tokens Synthesia.
+
+    gap_encoding controla qué hacer cuando, entre dos notas consecutivas de
+    esta mano, hay uno o más compases sin ninguna nota:
+
+      - "jump" (por defecto, y el único confirmado por la especificación
+        oficial — ver ejemplo "Sevivon, Sov, Sov, Sov" en la wiki de
+        Synthesia-LLC/metadata-editor: "m5: 6 m7: 60 m9: 8--0908" salta
+        directamente sobre los compases vacíos 6 y 8): usa mN: para saltar
+        al compás donde está la siguiente nota real.
+      - "pad": alternativa experimental que rellena cada compás vacío con
+        un '-'. NO está respaldada por la documentación oficial y, en las
+        pruebas con una pieza real, produjo aún más pérdida de datos que
+        "jump" al volver a guardarse desde Synthesia. Se deja solo para
+        comparar/depurar; no usar salvo que estés investigando el problema.
 
     Devuelve (cadena_codificada, n_notas_codificadas, n_notas_sin_digitación).
-    El compás de partida se asume 1 (se resetea tras cada tN:), así que solo
-    se emite un mN: inicial si la primera nota no está en el compás 1.
     """
     if not notes:
         return "", 0, 0
@@ -357,12 +390,25 @@ def encode_hand(notes: list[dict], hand: str) -> tuple[str, int, int]:
     tokens: list[str] = []
     current_measure = 1
     n_skipped = 0
+    first_note = True
 
     for n in notes:
         m = n["measure"]
-        if m != current_measure:
-            tokens.append(f" m{m}: ")
+        if m != current_measure or first_note:
+            if gap_encoding == "pad" and m >= current_measure:
+                # measures realmente vacías entre lo ya colocado y esta nota.
+                # En la primerísima nota, current_measure=1 es solo la posición
+                # de partida por defecto (no se ha colocado nada ahí todavía),
+                # así que las medidas vacías son 1..m-1 (m-1 en total). Para
+                # notas posteriores, current_measure SÍ tuvo ya una nota, así
+                # que las vacías son las estrictamente intermedias (m - current - 1).
+                empty_measures = (m - 1) if first_note else (m - current_measure - 1)
+                if empty_measures > 0:
+                    tokens.append(SKIP * empty_measures)
+            elif gap_encoding != "pad":
+                tokens.append(f" m{m}: ")
             current_measure = m
+            first_note = False
 
         sym = finger_symbol(hand, n.get("fingering", 0))
         if sym == SKIP:
@@ -382,6 +428,7 @@ def build_fingers_string(
     track_right: int,
     track_left: int,
     midi_path: Path | None = None,
+    gap_encoding: str = "jump",
 ) -> str:
     if track_right == track_left:
         raise ValueError("--track-right y --track-left no pueden ser el mismo track")
@@ -410,8 +457,8 @@ def build_fingers_string(
             _C.WARN,
         )
 
-    right_enc, n_right, skip_right = encode_hand(right_notes, "right")
-    left_enc,  n_left,  skip_left  = encode_hand(left_notes,  "left")
+    right_enc, n_right, skip_right = encode_hand(right_notes, "right", gap_encoding)
+    left_enc,  n_left,  skip_left  = encode_hand(left_notes,  "left", gap_encoding)
 
     parts: list[str] = []
 
@@ -540,14 +587,40 @@ def main() -> None:
         help="Fichero .synthesia real existente en el que fusionar/actualizar la entrada "
              "(preserva el resto de canciones guardadas).",
     )
-    ap.add_argument("--track-right", type=int, default=0, help="Track Synthesia para la mano derecha (def. 0)")
-    ap.add_argument("--track-left", type=int, default=1, help="Track Synthesia para la mano izquierda (def. 1)")
+    ap.add_argument(
+        "--track-right",
+        type=int,
+        default=None,
+        help="Índice de track CRUDO del MIDI (0-based, tal cual aparece en el fichero, incluyendo "
+             "tracks vacíos de tempo/meta) para la mano derecha. Si se pasa --midi y no se indica "
+             "esto, se autodetecta como el primer track con notas del fichero.",
+    )
+    ap.add_argument(
+        "--track-left",
+        type=int,
+        default=None,
+        help="Índice de track CRUDO del MIDI para la mano izquierda. Si se pasa --midi y no se "
+             "indica esto, se autodetecta como el segundo track con notas del fichero.",
+    )
     ap.add_argument(
         "--midi",
         default=None,
-        help="Fichero MIDI original. Recomendado: permite reordenar las notas de cada acorde "
-             "según el orden físico real de los eventos note-on, en vez de asumir orden ascendente "
-             "por altura. Sin esto, los acordes con orden físico invertido saldrán mal digitados.",
+        help="Fichero MIDI original. Muy recomendado: permite (1) reordenar las notas de cada "
+             "acorde según el orden físico real de los eventos note-on en vez de asumir orden "
+             "ascendente por altura, y (2) autodetectar los índices de track correctos para "
+             "--track-right/--track-left (incluyendo tracks vacíos de tempo, que Synthesia sí "
+             "cuenta en su numeración y que si se ignoran hacen que la digitación de una mano "
+             "se aplique a la otra, o a ningún sitio).",
+    )
+    ap.add_argument(
+        "--gap-encoding",
+        choices=["pad", "jump"],
+        default="jump",
+        help="Cómo codificar compases sin ninguna nota para una mano (típico con notas sostenidas "
+             "que ocupan varios compases). 'jump' (por defecto, confirmado por la especificación "
+             "oficial de Synthesia) salta directamente con mN: al siguiente compás con nota. "
+             "'pad' rellena con '-' compás a compás; es experimental, no está respaldado por la "
+             "documentación y no se recomienda.",
     )
     args = ap.parse_args()
 
@@ -578,8 +651,50 @@ def main() -> None:
             cprint(f"Error: no existe el fichero --midi '{midi_path}'", _C.ERR)
             sys.exit(1)
 
+    track_right = args.track_right
+    track_left = args.track_left
+
+    if midi_path is not None and (track_right is None or track_left is None):
+        try:
+            all_tracks = _parse_midi_tracks(midi_path)
+        except ValueError as e:
+            cprint(f"Error leyendo tracks del MIDI: {e}", _C.ERR)
+            sys.exit(1)
+        note_track_idx = detect_note_tracks(all_tracks)
+        if len(note_track_idx) < 2:
+            cprint(
+                f"Error: el MIDI solo tiene {len(note_track_idx)} track(s) con notas; "
+                f"no se pueden autodetectar mano derecha/izquierda. Indica --track-right/--track-left a mano.",
+                _C.ERR,
+            )
+            sys.exit(1)
+        auto_right, auto_left = note_track_idx[0], note_track_idx[1]
+        if track_right is None:
+            track_right = auto_right
+        if track_left is None:
+            track_left = auto_left
+        cprint(
+            f"  Tracks del MIDI (crudo, 0-based): {len(all_tracks)} en total; con notas: {note_track_idx}. "
+            f"Usando track {track_right} para mano derecha, track {track_left} para mano izquierda "
+            f"(pasa --track-right/--track-left para forzar otra asignación).",
+            _C.DIM,
+        )
+    else:
+        if track_right is None:
+            track_right = 0
+        if track_left is None:
+            track_left = 1
+        if midi_path is None:
+            cprint(
+                "  Aviso: sin --midi no se puede verificar el índice de track real; se usará "
+                f"--track-right {track_right} / --track-left {track_left} sin comprobar. Si el MIDI "
+                "tiene un track vacío inicial (de tempo, muy habitual), esto es casi seguro incorrecto: "
+                "pasa --midi para autodetectarlo.",
+                _C.WARN,
+            )
+
     try:
-        fingers = build_fingers_string(notes, args.track_right, args.track_left, midi_path)
+        fingers = build_fingers_string(notes, track_right, track_left, midi_path, args.gap_encoding)
     except ValueError as e:
         cprint(f"Error: {e}", _C.ERR)
         sys.exit(1)
