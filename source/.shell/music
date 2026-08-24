@@ -193,3 +193,14 @@ mid2mp3(){
     # timidity -s 44100 -Ow -o - -EFreverb=0 -EFchorus=0 -c soundfont.cfg "$1" | lame -V2 - "$(basename "$1" .mid).mp3"
 }
 
+fl_fingering(){
+lfile=$(ls -tr ${music_bottles_dir}/fl_24/drive_c/users/steamuser/Music/ | grep -e mid -e midi | tail -n1)
+hash=$(cat ${music_bottles_dir}/fl_24/drive_c/users/steamuser/AppData/Roaming/Synthesia/fingers.xml | grep hash | tail -n1 | cut -d'"' -f2)
+
+(
+cd ${music_bottles_dir}/fl_24/drive_c/users/steamuser/Music/
+python ./fingering_v3.py $lfile --json fingering.json
+python ./fingering_to_synthesia.py fingering.json --midi $lfile -o fingering.xml --hash $hash
+cp fingering.xml ${music_bottles_dir}/fl_24/drive_c/users/steamuser/AppData/Roaming/Synthesia/fingers.xml
+)
+}
