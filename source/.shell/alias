@@ -242,8 +242,14 @@ rmone(){
 rm -fr "$1"
 }
 
-rmsafe(){
-    [ "$(pwd | grep usbshare)" != "" ] || [ "$(pwd | grep recycle)" != "" ] && rm -fr "$*"
+rmsafe() {
+    if [[ "$(pwd)" == *usbshare* || "$(pwd)" == *recycle* ]]
+    then
+        rm -fr -- "$@"
+    else
+        echo Unsafe
+        return 1
+    fi
 }
 
 stats() {
