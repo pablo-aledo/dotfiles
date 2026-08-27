@@ -270,3 +270,6 @@ print "std:", sqrt(variance);
 }'
 }
 
+noemoji(){
+sed -E 's/[^\x00-\x7F]//g' $1 > $1.noemoji
+}
