@@ -271,5 +271,5 @@ print "std:", sqrt(variance);
 }
 
 noemoji(){
-sed -E 's/[^\x00-\x7F]//g' $1 > $1.noemoji
+perl -CSD -pe 's/\p{Emoji_Presentation}|\p{Extended_Pictographic}//g' $1.txt > $1-noemoji.txt
 }
