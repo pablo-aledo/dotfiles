@@ -204,3 +204,19 @@ python ./fingering_to_synthesia.py fingering.json --midi $lfile -o fingering.xml
 cp fingering.xml ${music_bottles_dir}/fl_24/drive_c/users/steamuser/AppData/Roaming/Synthesia/fingers.xml
 )
 }
+
+fl_refinger(){
+fl_cd
+lfile=$(ls -tr | grep -e mid -e midi | tail -n1)
+cp $lfile ~/partituras/
+
+lfile=$(ls -tr ~/partituras/ | grep -e mid -e midi | tail -n1)
+cp -i ~/partituras/$lfile ~/.var/app/com.usebottles.bottles/data/bottles/bottles/fl_24/drive_c/users/steamuser/Music/
+fl_fingering
+
+fl_nonetwork
+vim ${music_bottles_dir}/fl_24/drive_c/users/steamuser/AppData/Roaming/Synthesia/fingers.xml
+
+fl_nonetwork
+}
+
