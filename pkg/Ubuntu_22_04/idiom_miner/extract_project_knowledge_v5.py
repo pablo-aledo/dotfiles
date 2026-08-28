@@ -2796,7 +2796,7 @@ def build_drift_report_text(prev: dict, curr: dict, output_dir: Path, symbols: l
         lines.append(f"  + {f}")
 
     lines.append("\nSimbolos nuevos no mencionados en el mapa semantico existente:")
-    semantic_map_path = output_dir / "24_mapa_semantico.md"
+    semantic_map_path = output_dir / "35_mapa_semantico.md"
     if not semantic_map_path.exists():
         lines.append("  (omitido: no hay 24_mapa_semantico.md de una pasada anterior "
                       "con LLM contra la que comprobar)")
@@ -5248,43 +5248,43 @@ def main():
 
     print("  [v5] Catalogando errores y mensajes de fallo...")
     error_catalog = extract_error_catalog(stats, symbols)
-    out.emit("50_catalogo_errores.txt", build_error_catalog_text(error_catalog))
+    out.emit("23_catalogo_errores.txt", build_error_catalog_text(error_catalog))
 
     print("  [v5] Extrayendo supuestos explicitos...")
     assumptions = extract_explicit_assumptions(stats, symbols)
-    out.emit("57_supuestos_explicitos.txt", build_assumptions_text(assumptions))
+    out.emit("24_supuestos_explicitos.txt", build_assumptions_text(assumptions))
 
     print("  [v5] Construyendo guia de debugging...")
     debug_guide = extract_debug_guide(stats, config_map)
-    out.emit("55_guia_debug_por_modulo.txt", build_debug_guide_text(debug_guide))
+    out.emit("25_guia_debug_por_modulo.txt", build_debug_guide_text(debug_guide))
 
     print("  [v5] Detectando deuda de migracion...")
     migration_debt = extract_migration_debt(stats)
-    out.emit("59_migraciones_pendientes.txt", build_migration_debt_text(migration_debt))
+    out.emit("26_migraciones_pendientes.txt", build_migration_debt_text(migration_debt))
 
     print("  [v5] Calculando mapa de fragilidad...")
     fragility = compute_fragility_map(stats, symbols, todos, side_effects, test_coverage, call_graph, root)
-    out.emit("52_mapa_fragilidad.txt", build_fragility_map_text(fragility))
+    out.emit("27_mapa_fragilidad.txt", build_fragility_map_text(fragility))
 
     print("  [v5] Construyendo impacto por simbolo...")
     symbol_impact = build_symbol_impact(stats, symbols, call_graph, entrypoints, test_usage, side_effects, config_map)
-    out.emit("58_impacto_por_simbolo.txt", build_symbol_impact_text(symbol_impact))
+    out.emit("28_impacto_por_simbolo.txt", build_symbol_impact_text(symbol_impact))
 
     print("  [v5] Mapeando caminos criticos desde entrypoints...")
     critical_paths = build_critical_paths(entrypoints, file_call_edges, side_effects, stats)
-    out.emit("56_caminos_criticos_por_entrypoint.txt", build_critical_paths_text(critical_paths))
+    out.emit("29_caminos_criticos_por_entrypoint.txt", build_critical_paths_text(critical_paths))
 
     print("  [v5] Generando perfil de ejecucion...")
     execution_profile = build_execution_profile(stats, symbols, test_coverage, entrypoints, call_graph, test_usage)
-    out.emit("60_perfil_ejecucion.txt", build_execution_profile_text(execution_profile))
+    out.emit("30_perfil_ejecucion.txt", build_execution_profile_text(execution_profile))
 
     print("  [v5] Minando historial de reparaciones...")
     repair_history = build_repair_history(root, stats)
-    out.emit("54_historial_reparaciones.txt", build_repair_history_text(repair_history))
+    out.emit("31_historial_reparaciones.txt", build_repair_history_text(repair_history))
 
     print("  [v5] Generando fichas de diagnostico...")
     diagnostic_cards = build_diagnostic_cards(stats, symbols, call_graph, side_effects, test_usage, config_map, todos, assumptions, error_catalog)
-    out.emit("50_fichas_diagnostico.md", build_diagnostic_cards_text(diagnostic_cards))
+    out.emit("32_fichas_diagnostico.md", build_diagnostic_cards_text(diagnostic_cards))
 
     print("  [v5] Generando contexto comprimido para LLM...")
     llm_ctx = build_llm_context(
@@ -5292,7 +5292,7 @@ def main():
         "(ver 26_convenciones_y_patrones.md)", config_map, reading_paths_text,
         fragility, assumptions, error_catalog, side_effects, repair_history,
         migration_debt, diagnostic_cards, execution_profile, critical_paths, symbol_impact)
-    out.emit("99_contexto_para_llm.md", llm_ctx)
+    out.emit("33_contexto_para_llm.md", llm_ctx)
 
     # [v4] baseline de esta pasada (para --drift-report en la PROXIMA
     # ejecucion) -- se guarda siempre, se pida o no el informe ahora mismo.
@@ -5415,61 +5415,61 @@ def main():
 
     print("\n  Generando resumenes por fichero...")
     summaries, changed_rels = phase_file_summaries(stats, cache, model, api_key)
-    out.emit("23_resumenes_por_fichero.txt",
+    out.emit("34_resumenes_por_fichero.txt",
           "\n\n".join(f"### {rel}\n{s}" for rel, s in summaries.items()))
 
     print("  Generando mapa semantico...")
     semantic_map = phase_semantic_map(summaries, cache, changed_rels, model, api_key)
-    out.emit("24_mapa_semantico.md", semantic_map)
+    out.emit("35_mapa_semantico.md", semantic_map)
 
     print("  Generando vision de arquitectura...")
     architecture = phase_architecture(summaries, dep_graph, entrypoints, cache, changed_rels, model, api_key)
-    out.emit("25_arquitectura.md", architecture)
+    out.emit("36_arquitectura.md", architecture)
 
     print("  Detectando convenciones y patrones de diseno...")
     conventions = phase_conventions_and_patterns(
         stats, god_files, entrypoints, business_report, compute_fanin(stats, dep_graph),
         cache, model, api_key)
-    out.emit("26_convenciones_y_patrones.md", conventions)
+    out.emit("37_convenciones_y_patrones.md", conventions)
 
     print("  Explicando algoritmos complejos...")
     algo_explanations = phase_algorithm_explanations(complex_functions, root, model, api_key, cache)
-    out.emit("27_explicacion_algoritmos.md", algo_explanations)
+    out.emit("38_explicacion_algoritmos.md", algo_explanations)
 
     print("  [v4] Infiriendo contratos de las funciones mas usadas del proyecto...")
     contracts = phase_function_contracts(symbols, call_graph, root, model, api_key, cache)
-    out.emit("34_contratos_funciones_clave.md", contracts)
+    out.emit("39_contratos_funciones_clave.md", contracts)
 
     print("  [v5] Generando escenarios de fallo hipoteticos...")
     key_funcs_for_scenarios = select_key_functions(symbols, call_graph, n=MAX_FAILURE_SCENARIOS)
     failure_scenarios = phase_failure_scenarios(key_funcs_for_scenarios, root, cache, model, api_key)
-    out.emit("53_escenarios_fallo.md", failure_scenarios)
+    out.emit("46_escenarios_fallo.md", failure_scenarios)
 
     print("  Generando base de conocimiento...")
     kb = phase_knowledge_base(architecture, conventions, semantic_map, cache, model, api_key)
-    out.emit("28_base_conocimiento.md", kb)
+    out.emit("40_base_conocimiento.md", kb)
 
     print("  Generando snippets del proyecto...")
     snippets = phase_snippets(conventions, stats, cache, model, api_key)
-    out.emit("29_snippets.snippets", snippets)
+    out.emit("41_snippets.snippets", snippets)
 
     print("  Generando checklist de revision...")
     checklist = phase_review_checklist(architecture, conventions, cache, model, api_key)
-    out.emit("30_checklist_revision.md", checklist)
+    out.emit("42_checklist_revision.md", checklist)
 
     print("  Generando casos tipicos...")
     typical_cases = phase_typical_cases(architecture, entrypoints, symbols, cache, model, api_key)
-    out.emit("31_casos_tipicos.md", typical_cases)
+    out.emit("43_casos_tipicos.md", typical_cases)
 
     print("  Definiendo acronimos/terminos pendientes del glosario...")
     glossary_defs = phase_glossary_definitions(acronym_entries, domain_entries, model, api_key, cache)
-    out.emit("32_glosario_definiciones.md", glossary_defs)
+    out.emit("44_glosario_definiciones.md", glossary_defs)
 
     print("  [v3] Sintetizando guia de onboarding (primeros 30 minutos)...")
     onboarding = phase_onboarding_summary(entrypoints, architecture, semantic_map,
                                              conventions, config_map, reading_paths_text,
                                              cache, model, api_key)
-    out.emit("33_onboarding_primeros_30_min.md", onboarding)
+    out.emit("45_onboarding_primeros_30_min.md", onboarding)
 
     if args.semantic_index:
         print("\n[Fase 2 opcional] Indice de busqueda semantica de funciones...")
