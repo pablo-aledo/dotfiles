@@ -273,3 +273,8 @@ print "std:", sqrt(variance);
 noemoji(){
 perl -CSD -pe 's/\p{Emoji_Presentation}|\p{Extended_Pictographic}//g' $1.txt > $1-noemoji.txt
 }
+
+txt2pdf(){
+perl -CSD -pe 's/[^\p{Latin}\p{Number}\p{Punctuation}\p{Separator}]//g' $1.txt > $1-clean.txt
+pandoc --from=markdown_strict $1-clean.txt -o $1.pdf
+}
