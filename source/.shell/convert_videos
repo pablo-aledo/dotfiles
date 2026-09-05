@@ -260,6 +260,11 @@ convert_15(){
 	echo ffmpeg -i \"$1\" $OPTS \"$1.converted.mp4\" | bash
 }
 
+convert_16(){
+	OPTS="-c:v libx264 -crf 25 -c:a aac -b:a 128k"
+	echo ffmpeg -i \"$1\" $OPTS \"$1.converted.mp4\" | bash
+}
+
 convert_whatsapp() {
     ffmpeg -i "$1" \
         -c:v libx264 -profile:v baseline -level 3.0 \
