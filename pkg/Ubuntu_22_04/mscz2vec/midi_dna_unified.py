@@ -986,7 +986,7 @@ class GrooveMap:
         self.trained = False
 
     def train(self, score, ts_num=4):
-        all_notes = [n for n in score.flat.notes if n.isNote]
+        all_notes = [n for n in score.flatten().notes if n.isNote]
         if len(all_notes) < 8:
             return
         grid_step = 1.0 / self.resolution
@@ -1728,9 +1728,9 @@ class UnifiedDNA:
         sc = self.score
         if sc is None: return
         part = self._get_melody_part(sc)
-        ns = [n for n in part.flat.notes if n.isNote]
+        ns = [n for n in part.flatten().notes if n.isNote]
         if not ns: return
-        total_t = float(part.flat.highestTime) or 1
+        total_t = float(part.flatten().highestTime) or 1
         n_measures = max(1, int(total_t / ts_num))
         fragment_len = 2
         t_curve = self.tension_curve
@@ -1763,6 +1763,223 @@ class UnifiedDNA:
 
     def _train_markov(self):
         self.markov.train(self.intervals, self.durations)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  INTEGRACIÓN CON rhythm_table.py  [Y]
+#  Permite donar ritmo y armonía sin pasar por un fichero MIDI intermedio,
+#  evitando la doble cuantización beat-float → ticks → re-parseo con music21.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _rhythm_accent_weight(offset_in_bar, bpb):
+    """Idéntica a la función interna de UnifiedDNA._extract_rhythm."""
+    beat_pos = offset_in_bar % bpb
+    if beat_pos < 0.05:
+        return 2.0
+    strong_subs = {4: [2.0], 3: [], 2: [], 6: [3.0]}
+    for sb in strong_subs.get(int(round(bpb)), []):
+        if abs(beat_pos - sb) < 0.05:
+            return 1.5
+    sub = offset_in_bar - int(offset_in_bar)
+    if sub < 0.05:
+        return 1.0
+    if abs(sub - 0.5) < 0.05 or abs(sub - 0.75) < 0.05:
+        return 0.7
+    return 0.6
+
+
+def _rhythm_is_syncopated(offset_in_bar, dur, bpb):
+    """Idéntica a la función interna de UnifiedDNA._extract_rhythm."""
+    sub = offset_in_bar - int(offset_in_bar)
+    return sub > 0.1 and dur >= 0.5
+
+
+def load_rhythm_from_json(dna, json_path, verbose=False):
+    """
+    [Y1] Rellena los campos rítmicos de un UnifiedDNA directamente desde el
+    JSON exportado por `rhythm_table.py --export-json` (esquema con
+    'events': [{'voice','beat','bar'}, ...], 'beats_per_char', 'tempo',
+    'meta': {'meter': "N/D", ...}), sin pasar por MIDI ni music21.
+
+    Reproduce exactamente los mismos cálculos que _extract_rhythm() (mismo
+    accent-weight, misma detección de síncopa/swing, mismo histograma de 16
+    subdivisiones) para que el resultado sea equivalente al que se obtendría
+    exportando a MIDI y volviendo a analizar — pero sin el redondeo a ticks
+    ni la re-cuantización musical de music21, y conservando el campo 'voice'
+    de cada onset.
+
+    Lanza ValueError si el JSON no tiene el esquema esperado (p.ej. si es en
+    realidad una salida de --apply-to-chords, que no tiene 'events').
+    """
+    with open(json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    events_raw = data.get('events')
+    if not events_raw:
+        raise ValueError(
+            f"'{json_path}' no contiene 'events' — ¿es una salida de "
+            "--apply-to-chords? En ese caso usa --chords, no --rhythm-json.")
+
+    beats_per_char = float(data.get('beats_per_char', 0.25))
+    meta = data.get('meta', {}) or {}
+    meter_str = meta.get('meter', '4/4')
+    try:
+        num_s, den_s = meter_str.strip().split('/')
+        bpb = int(num_s) * 4.0 / int(den_s)
+    except Exception:
+        bpb = 4.0
+    bpb_int = int(round(bpb)) if bpb > 0 else 4
+    dna.time_sig = (bpb_int, 4)
+
+    tempo_val = data.get('tempo')
+    if tempo_val:
+        dna.tempo_bpm = float(tempo_val)
+
+    # Misma duración de nota que pattern_to_midi() usa para exportar a MIDI,
+    # para que ambas rutas (JSON directo vs MIDI+music21) sean equivalentes.
+    note_dur = min(beats_per_char * 0.9, 0.4)
+    vel = 100.0  # misma velocity por defecto que pattern_to_midi()
+
+    events = []
+    for e in events_raw:
+        beat_abs = float(e['beat'])
+        o_in_bar = beat_abs % bpb
+        events.append((beat_abs, o_in_bar, note_dur, vel))
+
+    if not events:
+        dna.rhythm_pattern = [[(0.0, float(bpb), 2.0, False)]]
+        return
+
+    bar_dict = defaultdict(list)
+    for o_abs, o_in_bar, dur, v in events:
+        bar_idx = int(o_abs / bpb)
+        aw = _rhythm_accent_weight(o_in_bar, bpb)
+        syn = _rhythm_is_syncopated(o_in_bar, dur, bpb)
+        vel_factor = v / 80.0
+        aw_scaled = float(np.clip(aw * vel_factor, 0.4, 3.0))
+        bar_dict[bar_idx].append((round(o_in_bar, 4), round(dur, 4),
+                                  round(aw_scaled, 3), bool(syn)))
+
+    n_bars_src = max(bar_dict.keys()) + 1 if bar_dict else 1
+    dna.rhythm_pattern = []
+    for bi in range(n_bars_src):
+        bar = sorted(bar_dict.get(bi, []), key=lambda x: x[0])
+        if not bar:
+            bar = [(0.0, float(bpb), 2.0, False)]
+        dna.rhythm_pattern.append(bar)
+    if len(dna.rhythm_pattern) < 4:
+        dna.rhythm_pattern = dna.rhythm_pattern * 8
+
+    GRID = 16
+    grid_hits = np.zeros(GRID)
+    grid_vel_sum = np.zeros(GRID)
+    grid_vel_cnt = np.zeros(GRID)
+    for o_abs, o_in_bar, dur, v in events:
+        pos_norm = (o_in_bar % bpb) / bpb
+        bin_idx = int(pos_norm * GRID) % GRID
+        grid_hits[bin_idx] += 1
+        grid_vel_sum[bin_idx] += v
+        grid_vel_cnt[bin_idx] += 1
+    total_hits = grid_hits.sum()
+    dna.rhythm_grid = grid_hits / total_hits if total_hits > 0 else np.ones(GRID) / GRID
+    with np.errstate(divide='ignore', invalid='ignore'):
+        dna.rhythm_accent_grid = np.where(
+            grid_vel_cnt > 0, grid_vel_sum / grid_vel_cnt / 127.0, 0.0)
+
+    all_durs = [e[2] for e in events]
+    dur_counts = Counter([round(d * 4) / 4 for d in all_durs])
+    dna.primary_subdivision = dur_counts.most_common(1)[0][0]
+
+    syn_count = sum(1 for e in events if _rhythm_is_syncopated(e[1], e[2], bpb))
+    dna.syncopation_ratio = syn_count / max(len(events), 1)
+
+    durs_all = [e[2] for e in events]
+    eighth_pairs = [durs_all[i:i + 2] for i in range(0, len(durs_all) - 1, 2)
+                    if 0.25 <= durs_all[i] <= 0.75 and 0.25 <= durs_all[i + 1] <= 0.75]
+    swing_pairs = [p for p in eighth_pairs if p[0] > p[1] * 1.4]
+    dna.swing = len(swing_pairs) / max(len(eighth_pairs), 1) > 0.3
+
+    quantized = [_snap_dur(r) for r in durs_all[:64]]
+    if len(quantized) >= 3:
+        patterns = Counter(tuple(quantized[i:i + 3]) for i in range(len(quantized) - 2))
+        top_cells = patterns.most_common(4)
+        if top_cells:
+            dna.rhythm_cell = list(top_cells[0][0])
+
+    dna.style = _detect_style(dna.tempo_bpm, dna.swing, dna.syncopation_ratio, 0.0)
+
+    if verbose:
+        n_voices = len({e.get('voice') for e in events_raw if e.get('voice')})
+        print(f"    [rhythm-json] {os.path.basename(json_path)}: "
+              f"{len(events_raw)} onsets"
+              f"{f' ({n_voices} voces)' if n_voices else ''} | "
+              f"subdiv={dna.primary_subdivision}♩ | "
+              f"síncopa={dna.syncopation_ratio:.0%} | swing={dna.swing}")
+
+
+def parse_chords_arg(chords_str):
+    """
+    [Y2] Parsea una progresión de acordes en texto a lista de
+    (símbolo, duración_en_beats). Acepta dos formatos:
+      - "Am G F E7"              → cada acorde con duración por defecto (4.0)
+      - "Am:1.50 G:0.75 F:0.75"  → formato que produce rhythm_table.py con
+                                    --apply-to-chords (y chord_table.py /
+                                    melody_adapter.py con --chords)
+    """
+    tokens = chords_str.replace(',', ' ').split()
+    if not tokens:
+        raise ValueError("progresión de acordes vacía")
+    pairs = []
+    for tok in tokens:
+        if ':' in tok:
+            sym, dur_s = tok.rsplit(':', 1)
+            try:
+                dur = float(dur_s)
+            except ValueError:
+                raise ValueError(f"duración inválida en '{tok}'")
+        else:
+            sym, dur = tok, 4.0
+        if not sym:
+            raise ValueError(f"símbolo de acorde vacío en '{tok}'")
+        pairs.append((sym, dur))
+    return pairs
+
+
+def load_harmony_from_chords(dna, chords_str, key_obj, verbose=False):
+    """
+    [Y2] Rellena harmony_prog / harmony_functions / harmony_complexity de un
+    UnifiedDNA a partir de una progresión de acordes en texto (símbolos
+    absolutos, ej. "Am:1.50 G:0.75"), convirtiéndolos a numerales romanos
+    relativos a `key_obj` — el mismo formato interno que produce
+    _extract_harmony() al analizar un donante MIDI.
+
+    Lanza ValueError si algún símbolo no puede interpretarse como acorde.
+    """
+    pairs = parse_chords_arg(chords_str)
+    dna.key_obj = key_obj
+    prog = []
+    for sym, dur in pairs:
+        try:
+            cs = harmony.ChordSymbol(sym)
+            if not cs.pitches:
+                raise ValueError("sin notas resultantes")
+            ch = chord.Chord(cs.pitches)
+            rn = roman.romanNumeralFromChord(ch, key_obj)
+            fig = rn.figure
+        except Exception as e:
+            raise ValueError(f"no se pudo interpretar el acorde '{sym}': {e}")
+        prog.append((fig, float(dur)))
+
+    dna.harmony_prog = prog
+    dna.harmony_functions = [fig for fig, _ in prog]
+    non_diatonic = sum(1 for f in dna.harmony_functions
+                       if _roman_to_func_str(f) in ('Dsec', 'Other'))
+    dna.harmony_complexity = non_diatonic / max(len(dna.harmony_functions), 1)
+
+    if verbose:
+        print(f"    [chords] '{chords_str}' → {key_obj.tonic.name} "
+              f"{key_obj.mode}: {' '.join(dna.harmony_functions)} | "
+              f"complejidad={dna.harmony_complexity:.2f}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -4998,6 +5215,18 @@ def main():
     parser.add_argument('--melody',  help='Fichero MIDI que dona la melodía')
     parser.add_argument('--harmony', help='Fichero MIDI que dona la armonía')
     parser.add_argument('--rhythm',  help='Fichero MIDI que dona el ritmo')
+    # ── Integración con rhythm_table.py [Y] ─────────────────────────────────
+    parser.add_argument('--rhythm-json', dest='rhythm_json', default=None,
+        metavar='FILE',
+        help='[Y1] JSON de ritmo exportado por rhythm_table.py '
+             '(--export-json, esquema con "events"). Dona el ritmo '
+             'directamente, sin pasar por MIDI. Fuerza --mode=custom.')
+    parser.add_argument('--chords', dest='chords', default=None,
+        metavar='"ACORDE[:DUR] ..."',
+        help='[Y2] Progresión de acordes en texto, ej. "Am:1.50 G:0.75" '
+             '(el formato que produce rhythm_table.py --apply-to-chords) '
+             'o "Am G F E7" sin duraciones. Dona la armonía directamente, '
+             'sin pasar por MIDI. Fuerza --mode=custom.')
     # Modo especial: solo fingerprint
     parser.add_argument('--fingerprint-only', action='store_true',
         help='Analizar el/los MIDI(s) dados y exportar solo el fingerprint JSON, '
@@ -5221,6 +5450,41 @@ def main():
     time_sig   = dnas[0].time_sig
     n_bars     = args.bars
     sources    = parse_sources(args.sources)
+
+    # ── [Y] Integración con rhythm_table.py: --rhythm-json / --chords ───────
+    if args.rhythm_json or args.chords:
+        if args.mode not in ('auto', 'custom'):
+            print(f"\n  [AVISO] --rhythm-json/--chords requieren --mode=custom; "
+                  f"se ignora --mode={args.mode} y se fuerza a 'custom'.")
+        args.mode = 'custom'
+        melody_idx  = sources.get('melody',  1 if len(dnas) > 1 else 0)
+        harmony_idx = sources.get('harmony', 0)
+        rhythm_idx  = sources.get('rhythm',  0)
+
+        if args.rhythm_json:
+            if not os.path.exists(args.rhythm_json):
+                print(f"ERROR: no encontrado: {args.rhythm_json}"); sys.exit(1)
+            rhythm_dna = UnifiedDNA(f"rhythm-json:{os.path.basename(args.rhythm_json)}")
+            try:
+                load_rhythm_from_json(rhythm_dna, args.rhythm_json, verbose=args.verbose)
+            except ValueError as e:
+                print(f"ERROR --rhythm-json: {e}"); sys.exit(1)
+            dnas.append(rhythm_dna)
+            rhythm_idx = len(dnas) - 1
+            print(f"\n  ▶ Ritmo donado por JSON: {args.rhythm_json}")
+
+        if args.chords:
+            chords_dna = UnifiedDNA(f"chords:{args.chords[:40]}")
+            try:
+                load_harmony_from_chords(chords_dna, args.chords, target_key,
+                                         verbose=args.verbose)
+            except ValueError as e:
+                print(f"ERROR --chords: {e}"); sys.exit(1)
+            dnas.append(chords_dna)
+            harmony_idx = len(dnas) - 1
+            print(f"  ▶ Armonía donada por texto: {args.chords}")
+
+        sources = {'melody': melody_idx, 'harmony': harmony_idx, 'rhythm': rhythm_idx}
 
     # Parsear voces adicionales
     voice_presets = parse_voices_arg(args.voices) if args.voices else []
