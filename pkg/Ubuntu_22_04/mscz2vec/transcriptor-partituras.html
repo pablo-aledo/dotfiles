@@ -578,6 +578,58 @@ function removeNote(id){
 // con las que tienen una forma más redondeada/compacta, propia de una cabeza de nota.
 // No se intenta reconocer la figura (redonda/negra/corchea...) a partir de la forma: la duración
 // que se aplica es siempre la seleccionada actualmente en el panel lateral.
+//
+// Cuando dos notas están muy juntas verticalmente (p.ej. un acorde con un intervalo pequeño), la
+// tinta de sus dos cabezas puede quedar unida y formar una sola mancha alargada verticalmente.
+// splitBlobIfStacked() detecta esa forma de "8" (mucho más alta que ancha) y busca el "cuello"
+// (la fila con menos píxeles oscuros) para partirla en dos manchas independientes, cada una con
+// su propio centroide. Es recursiva por si hubiera 3 o más cabezas apiladas.
+function splitBlobIfStacked(pixels, x0, y0, depth){
+  depth = depth || 0;
+  const centroidOf = (arr)=>{
+    let sumX=0, sumY=0;
+    arr.forEach(p=>{ sumX+=p.x; sumY+=p.y; });
+    return { x: x0 + sumX/arr.length, y: y0 + sumY/arr.length, size: arr.length };
+  };
+  let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+  pixels.forEach(p=>{
+    if (p.x<minX) minX=p.x; if (p.x>maxX) maxX=p.x;
+    if (p.y<minY) minY=p.y; if (p.y>maxY) maxY=p.y;
+  });
+  const bw = maxX-minX+1, bh = maxY-minY+1;
+  const MIN_SPLIT_SIZE = 5; // no merece la pena partir manchas diminutas
+  // Solo se plantea partir si la mancha es notablemente más alta que ancha
+  // (una cabeza de nota aislada no suele serlo; dos apiladas, sí).
+  if (depth >= 3 || pixels.length < MIN_SPLIT_SIZE*2 || bh < bw*1.5){
+    return [centroidOf(pixels)];
+  }
+  const rowCount = new Array(bh).fill(0);
+  pixels.forEach(p=>{ rowCount[p.y-minY]++; });
+  // Busca el "cuello": la fila con menos tinta, dentro de la banda central
+  // (evita cortar cerca de los extremos, donde cualquier mancha redondeada se afina).
+  const lo = Math.max(1, Math.floor(bh*0.25));
+  const hi = Math.min(bh-2, Math.ceil(bh*0.75));
+  let splitRow = -1, splitVal = Infinity;
+  for (let r=lo; r<=hi; r++){
+    if (rowCount[r] < splitVal){ splitVal = rowCount[r]; splitRow = r; }
+  }
+  const maxRow = Math.max(...rowCount);
+  // Si no hay un cuello claro (la fila más "delgada" sigue casi tan llena como el resto),
+  // probablemente sea una sola cabeza de forma alargada: no partir.
+  if (splitRow === -1 || maxRow === 0 || splitVal > maxRow*0.72){
+    return [centroidOf(pixels)];
+  }
+  const top = pixels.filter(p => (p.y-minY) <= splitRow);
+  const bottom = pixels.filter(p => (p.y-minY) > splitRow);
+  if (top.length < MIN_SPLIT_SIZE || bottom.length < MIN_SPLIT_SIZE){
+    return [centroidOf(pixels)];
+  }
+  return [
+    ...splitBlobIfStacked(top, x0, y0, depth+1),
+    ...splitBlobIfStacked(bottom, x0, y0, depth+1)
+  ];
+}
+
 function analyzeRectForNoteheads(cx, cy, w, h){
   const x0 = Math.max(0, Math.round(cx - w/2));
   const y0 = Math.max(0, Math.round(cy - h/2));
@@ -602,21 +654,21 @@ function analyzeRectForNoteheads(cx, cy, w, h){
   }
 
   const visited = new Uint8Array(rw * rh);
-  const blobs = [];
+  let blobs = [];
   const MIN_BLOB_SIZE = 3;
   for (let y = 0; y < rh; y++){
     for (let x = 0; x < rw; x++){
       const idx = y*rw + x;
       if (!dark[idx] || visited[idx]) continue;
-      // Flood fill (8-conexo) para hallar la mancha completa
+      // Flood fill (8-conexo) para hallar la mancha completa, guardando sus píxeles
       const stack = [idx];
       visited[idx] = 1;
-      let sumX=0, sumY=0, count=0;
+      const pixelList = [];
       let minX=x, maxX=x, minY=y, maxY=y;
       while (stack.length){
         const cur = stack.pop();
         const cx2 = cur % rw, cy2 = Math.floor(cur / rw);
-        sumX += cx2; sumY += cy2; count++;
+        pixelList.push({x: cx2, y: cy2});
         if (cx2<minX) minX=cx2; if (cx2>maxX) maxX=cx2;
         if (cy2<minY) minY=cy2; if (cy2>maxY) maxY=cy2;
         for (let dy=-1; dy<=1; dy++){
@@ -629,12 +681,13 @@ function analyzeRectForNoteheads(cx, cy, w, h){
           }
         }
       }
-      if (count < MIN_BLOB_SIZE) continue;
+      if (pixelList.length < MIN_BLOB_SIZE) continue;
       const bboxW = maxX-minX+1, bboxH = maxY-minY+1;
       const aspect = bboxW / bboxH;
       // Descarta manchas muy alargadas: líneas del pentagrama (muy anchas y bajas) o plicas (muy altas y finas)
-      if (aspect > 2.6 || aspect < 0.38) continue;
-      blobs.push({ x: x0 + sumX/count, y: y0 + sumY/count, size: count });
+      if (aspect > 2.6 || aspect < 0.32) continue;
+      // Puede que esta mancha sea en realidad dos (o más) cabezas de nota unidas verticalmente
+      blobs.push(...splitBlobIfStacked(pixelList, x0, y0));
     }
   }
   // Si hay muchas manchas pequeñas de ruido, nos quedamos como mucho con las más grandes
@@ -642,6 +695,7 @@ function analyzeRectForNoteheads(cx, cy, w, h){
   blobs.sort((a,b)=> b.size - a.size);
   return blobs.slice(0, 6);
 }
+
 
 function handleAutoInsert(x, y){
   const hit = hitTestNote(x, y);
