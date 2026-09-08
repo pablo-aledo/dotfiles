@@ -791,6 +791,19 @@ window.addEventListener('mousemove', (e)=>{
   else { clearGhost(); }
 });
 
+function recalcNotesForClef(staff){
+  const ref = CLEF_REF[staff.clef];
+  notesLog.forEach(n=>{
+    if (n.staffId !== staff.id || n.isRest) return;
+    const note = diatonicToNote(n.step, ref);
+    n.letter = note.letter;
+    n.octave = note.octave;
+    if (!n.explicitAcc){
+      n.alter = keySignatureAlter(n.letter, keyFifths);
+    }
+  });
+}
+
 function repositionNotesForStaff(staff){
   notesLog.forEach(n=>{
     if (n.staffId !== staff.id) return;
@@ -960,7 +973,13 @@ document.getElementById('removeStaff').onclick = ()=>{
 };
 document.getElementById('clefSelect').onchange = (e)=>{
   const s = getActiveStaff();
-  if (s){ s.clef = e.target.value; renderStaves(); renderStaffSelector(); }
+  if (s){
+    s.clef = e.target.value;
+    recalcNotesForClef(s);
+    renderStaves();
+    renderStaffSelector();
+    renderNotes();
+  }
 };
 
 document.querySelectorAll('.durBtn').forEach(b=>{
