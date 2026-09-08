@@ -1,0 +1,31 @@
+notifier(){
+page=$1
+subject=$2
+extension=$3
+
+touch page.old
+while true
+do
+    w3m -dump $page > page.dump
+    diff page.old page.dump
+    if [ $? != 0 ]
+    then
+        (diff page.old page.dump; echo $page) | mutt -F ~/.mutt/muttrc_0 -s $subject -- pablo.aledo@gmail.com
+        echo '====='
+
+        wget $page -O page.html
+        links page.html | grep "\.$extension\$" > links.new
+        prefix=$(echo $page | sed 's|^\([^\/]*//[^\/]*\).*|\1|g')
+        comm -13 <(cat links.old | sort -u) <(cat links.new | sort -u) | sed "s|^|$prefix|g" | while read line
+        do
+            [ -e "$(basename $line)" ] && continue
+            wget "$line" -O "$(basename $line)"
+            echo 'Fichero adjunto' | mutt -a "$(basename $line)" -F ~/.mutt/muttrc_0 -s 'Fichero adjunto' -- pablo.aledo@gmail.com
+        done
+        \cp links.new links.old
+
+    fi
+    \cp page.dump page.old
+    sleep 60
+done
+}
