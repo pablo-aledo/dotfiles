@@ -83,7 +83,7 @@
     cursor:crosshair;
   }
   #canvasWrap.moveMode{cursor:move;}
-  #canvasWrap.autoMode{cursor:none;}
+  #canvasWrap.boxCursorMode{cursor:none;}
   #pageCanvas{display:block;}
   #staffLayer, #noteLayer{
     position:absolute; top:0; left:0; pointer-events:none;
@@ -190,6 +190,7 @@
       <button id="modeRest">𝄽 Colocar silencios</button>
       <button id="modeMove">✋ Mover pentagrama</button>
       <button id="modeAuto">🔲 Auto-insertar</button>
+      <button id="modeDur">🔁 Cambiar duración</button>
     </div>
     <p class="hint" id="modeHint">Haz clic sobre una línea o espacio para añadir una nota. Clic sobre una nota existente la borra. Para un acorde, haz clic justo encima/debajo de la última nota puesta (misma X aprox.): se añade como acorde en vez de avanzar el tiempo.</p>
   </div>
@@ -663,6 +664,20 @@ function eraseNotesInRect(cx, cy, w, h){
   setStatus('Borradas ' + toRemove.length + ' nota(s) dentro del rectángulo.');
 }
 
+function changeDurationInRect(cx, cy, w, h){
+  const x0 = cx - w/2, x1 = cx + w/2;
+  const y0 = cy - h/2, y1 = cy + h/2;
+  const targets = notesLog.filter(n => n.x>=x0 && n.x<=x1 && n.y>=y0 && n.y<=y1);
+  if (targets.length === 0){ setStatus('No hay ninguna nota ni silencio dentro del rectángulo.'); return; }
+  targets.forEach(n=>{
+    n.duration = currentDuration;
+    n.dotted = currentDotted;
+    n.triplet = currentTriplet;
+  });
+  renderNotes();
+  setStatus('Cambiada la duración de ' + targets.length + ' nota(s)/silencio(s).');
+}
+
 function hitTestNote(x,y){
   for (let i=notesLog.length-1;i>=0;i--){
     const n = notesLog[i];
@@ -697,6 +712,8 @@ canvasWrap.addEventListener('mousedown', (e)=>{
   } else if (mode === 'auto'){
     if (e.button === 2){ eraseNotesInRect(pos.x, pos.y, autoRectW, autoRectH); }
     else { handleAutoInsert(pos.x, pos.y); }
+  } else if (mode === 'dur'){
+    changeDurationInRect(pos.x, pos.y, autoRectW, autoRectH);
   } else {
     const hit = hitTestNote(pos.x,pos.y);
     if (hit !== null){ removeNote(hit); }
@@ -716,7 +733,7 @@ window.addEventListener('mousemove', (e)=>{
   if (dragState){ doDrag(e); clearGhost(); return; }
   if (mode === 'note'){ showGhost(pos); }
   else if (mode === 'rest'){ showRestGhost(pos); }
-  else if (mode === 'auto'){ showAutoGhost(pos); }
+  else if (mode === 'auto' || mode === 'dur'){ showRectGhost(pos); }
   else { clearGhost(); }
 });
 
@@ -753,11 +770,11 @@ canvasWrap.addEventListener('wheel', (e)=>{
     repositionNotesForStaff(staff);
     renderStaves();
     renderNotes();
-  } else if (mode === 'auto'){
+  } else if (mode === 'auto' || mode === 'dur'){
     e.preventDefault();
     const delta = e.deltaY > 0 ? -4 : 4; // rueda hacia arriba aumenta el alto, hacia abajo lo reduce
     autoRectH = clamp(autoRectH + delta, 8, 500);
-    if (lastCanvasPos) showAutoGhost(lastCanvasPos);
+    if (lastCanvasPos) showRectGhost(lastCanvasPos);
   }
 }, {passive:false});
 
@@ -783,9 +800,10 @@ function showGhost(pos){
 }
 function clearGhost(){ if (ghostEl){ ghostEl.remove(); ghostEl=null; } }
 
-function showAutoGhost(pos){
+function showRectGhost(pos){
   clearGhost();
-  const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  const varName = (mode === 'dur') ? '--accent2' : '--accent';
+  const accentColor = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
   const g = document.createElementNS('http://www.w3.org/2000/svg','g');
   g.setAttribute('class','ghost');
   const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -828,14 +846,14 @@ function showRestGhost(pos){
 
 // ---- UI wiring ----
 function setActiveModeButton(id){
-  ['modeNote','modeRest','modeMove','modeAuto'].forEach(x=>{
+  ['modeNote','modeRest','modeMove','modeAuto','modeDur'].forEach(x=>{
     document.getElementById(x).classList.toggle('active', x===id);
   });
 }
 function setCanvasModeClass(){
-  canvasWrap.classList.remove('moveMode','autoMode');
+  canvasWrap.classList.remove('moveMode','boxCursorMode');
   if (mode==='move') canvasWrap.classList.add('moveMode');
-  if (mode==='auto') canvasWrap.classList.add('autoMode');
+  if (mode==='auto' || mode==='dur') canvasWrap.classList.add('boxCursorMode');
 }
 document.getElementById('modeNote').onclick = ()=>{
   mode='note';
@@ -864,6 +882,13 @@ document.getElementById('modeAuto').onclick = ()=>{
   setCanvasModeClass();
   clearGhost();
   document.getElementById('modeHint').textContent = 'El cursor es un rectángulo: ajusta su ancho con ← →, y su alto con ↑ ↓ o con la rueda del ratón (arriba/rueda-adelante = más alto; abajo/rueda-atrás = más bajo; mantén Mayús. con las flechas para pasos más grandes). Clic izquierdo: analiza la imagen dentro del rectángulo e inserta una nota (o varias, si forman acorde) en cada concentración de tono negro detectada, con la duración/alteración seleccionadas. Clic derecho: borra todas las notas que caigan dentro del rectángulo. Clic izquierdo sobre una nota existente también la borra.';
+};
+document.getElementById('modeDur').onclick = ()=>{
+  mode='dur';
+  setActiveModeButton('modeDur');
+  setCanvasModeClass();
+  clearGhost();
+  document.getElementById('modeHint').textContent = 'Mismo rectángulo ajustable que en Auto-insertar (← → ancho, ↑ ↓ o rueda del ratón para el alto). Al hacer clic, todas las notas y silencios cuyo centro caiga dentro del rectángulo cambian su duración, puntillo y tresillo a los valores seleccionados actualmente en el panel — no se mueven ni cambian de tono ni de alteración, solo de figura.';
 };
 
 document.getElementById('addStaff').onclick = ()=>{
@@ -928,14 +953,14 @@ window.addEventListener('keydown',(e)=>{
   if (e.key.toLowerCase()==='k'){ currentAccidental='key'; }
   document.querySelectorAll('.accBtn').forEach(x=>x.classList.toggle('active', x.dataset.acc === String(currentAccidental)));
 
-  if (mode === 'auto' && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
+  if ((mode === 'auto' || mode === 'dur') && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
     e.preventDefault();
     const step = e.shiftKey ? 10 : 4;
     if (e.key === 'ArrowRight') autoRectW = clamp(autoRectW + step, 8, 500);
     if (e.key === 'ArrowLeft')  autoRectW = clamp(autoRectW - step, 8, 500);
     if (e.key === 'ArrowUp')    autoRectH = clamp(autoRectH + step, 8, 500);
     if (e.key === 'ArrowDown')  autoRectH = clamp(autoRectH - step, 8, 500);
-    if (lastCanvasPos) showAutoGhost(lastCanvasPos);
+    if (lastCanvasPos) showRectGhost(lastCanvasPos);
   }
 
   if (mode === 'move' && (e.key === '+' || e.key === '=' || e.key === '-')){
