@@ -90,6 +90,7 @@
   }
   .staffline{stroke:currentColor; stroke-width:1.6; opacity:0.62;}
   .staffline.active{opacity:0.85; stroke-width:2;}
+  .barline{stroke:currentColor; stroke-width:1.4; opacity:0.5;}
   .clefLabel{font-size:34px; opacity:0.75;}
   .noteHead{cursor:pointer; pointer-events:all;}
   .noteLabel{font-size:11px; font-family:monospace; pointer-events:none;}
@@ -395,6 +396,59 @@ function renderStaves(){
     g.appendChild(clefText);
     staffLayer.appendChild(g);
   });
+  renderBarlines();
+}
+
+// ---- Líneas divisorias de compás ----
+// Se calculan agrupando las notas/silencios de cada pentagrama en "unidades" (notas sueltas o
+// acordes) ordenadas por X, exactamente igual que al exportar a MusicXML (ver groupIntoUnits /
+// durUnits / measureCap más abajo), para que la barra de compás en pantalla coincida con dónde
+// se cerrará realmente el compás en el archivo exportado. Cada vez que la duración acumulada
+// completa el compás, se anota la X de la última nota de ese grupo; si al añadir la siguiente
+// unidad esta no cabe entera, también se cierra ahí el compás (igual que hace buildMeasuresForStaff).
+const BARLINE_OFFSET = 12; // separación en px a la derecha de la última nota del compás
+function computeBarlineXsForStaff(staffId){
+  const staffNotes = notesLog.filter(n=>n.staffId===staffId);
+  if (staffNotes.length===0) return [];
+  const cap = measureCap();
+  const units = groupIntoUnits(staffNotes);
+  const xs = [];
+  let curDur = 0;
+  let curMaxX = null;
+  units.forEach(unit=>{
+    const d = durUnits(unit[0]);
+    if (curDur + d > cap + 1e-6 && curMaxX !== null){
+      xs.push(curMaxX);
+      curDur = 0; curMaxX = null;
+    }
+    const unitMaxX = Math.max(...unit.map(n=>n.x));
+    curMaxX = (curMaxX===null) ? unitMaxX : Math.max(curMaxX, unitMaxX);
+    curDur += d;
+    if (Math.abs(curDur - cap) < 1e-6){
+      xs.push(curMaxX);
+      curDur = 0; curMaxX = null;
+    }
+  });
+  return xs;
+}
+function renderBarlines(){
+  const old = staffLayer.querySelector('#barlineGroup');
+  if (old) old.remove();
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('id','barlineGroup');
+  staves.forEach(s=>{
+    const xs = computeBarlineXsForStaff(s.id);
+    if (xs.length===0) return;
+    const sg = document.createElementNS('http://www.w3.org/2000/svg','g');
+    sg.setAttribute('color', staffColor(s));
+    const topY = s.bottomY - 4*s.gap;
+    xs.forEach(x=>{
+      const bx = x + BARLINE_OFFSET;
+      sg.appendChild(svgLine(bx, topY, bx, s.bottomY, 'barline'));
+    });
+    g.appendChild(sg);
+  });
+  staffLayer.appendChild(g);
 }
 
 function diatonicToNote(steps, ref){
@@ -474,6 +528,7 @@ function renderNotes(){
   });
   document.getElementById('noteCount').textContent = notesLog.length;
   renderNotesList();
+  renderBarlines();
 }
 
 function renderNotesList(){
@@ -1052,9 +1107,11 @@ window.addEventListener('keydown',(e)=>{
 document.getElementById('timeBeats').onchange = (e)=>{
   timeBeats = Math.max(1, parseInt(e.target.value)||4);
   e.target.value = timeBeats;
+  renderBarlines();
 };
 document.getElementById('timeBeatType').onchange = (e)=>{
   timeBeatType = parseInt(e.target.value);
+  renderBarlines();
 };
 document.querySelectorAll('.tsPreset').forEach(b=>{
   b.onclick = ()=>{
@@ -1062,6 +1119,7 @@ document.querySelectorAll('.tsPreset').forEach(b=>{
     timeBeats = beats; timeBeatType = beatType;
     document.getElementById('timeBeats').value = beats;
     document.getElementById('timeBeatType').value = beatType;
+    renderBarlines();
   };
 });
 
