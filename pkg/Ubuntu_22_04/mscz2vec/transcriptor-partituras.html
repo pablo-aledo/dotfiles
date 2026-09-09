@@ -1293,40 +1293,64 @@ function noteXml(n, staffAttr){
   return '      <note>'+chordXml+'\n        <pitch>\n          <step>'+n.letter+'</step>'+alterXml+'\n          <octave>'+n.octave+'</octave>\n        </pitch>\n        <duration>'+n.duration+'</duration>\n        <type>'+n.type+'</type>'+dotXml+accXml+timeModXml+staffAttr+notationsXml+'\n      </note>\n';
 }
 
-function buildMusicXML(){
-  const staffIds = staves.map(s=>s.id);
-  const perStaffNotes = staffIds.map(id => notesLog.filter(n=>n.staffId===id));
-  const perStaffMeasures = perStaffNotes.map(buildMeasuresForStaff);
-  const numMeasures = Math.max(1, ...perStaffMeasures.map(m=>m.length));
-  const twoStaves = staves.length >= 2;
-
+function buildPartBody(stavesGroup, perStaffMeasuresGroup, numMeasures){
+  const multi = stavesGroup.length > 1;
   let body = '';
   for (let m=0; m<numMeasures; m++){
     body += '    <measure number="'+(m+1)+'">\n';
     if (m===0){
       body += '      <attributes>\n        <divisions>24</divisions>\n        <key><fifths>'+keyFifths+'</fifths></key>\n        <time><beats>'+timeBeats+'</beats><beat-type>'+timeBeatType+'</beat-type></time>\n';
-      body += '        <staves>'+staves.length+'</staves>\n';
-      staves.forEach((s,i)=>{
+      if (multi) body += '        <staves>'+stavesGroup.length+'</staves>\n';
+      stavesGroup.forEach((s,i)=>{
         body += '        <clef number="'+(i+1)+'"><sign>'+(s.clef==='bass'?'F':'G')+'</sign><line>'+(s.clef==='bass'?4:2)+'</line></clef>\n';
       });
       body += '      </attributes>\n';
     }
-    staves.forEach((s,i)=>{
-      const measureNotes = perStaffMeasures[i][m] || [{rest:true, duration:measureCap()}];
-      const staffAttr = staves.length>1 ? '\n        <staff>'+(i+1)+'</staff>' : '';
+    stavesGroup.forEach((s,i)=>{
+      const measureNotes = perStaffMeasuresGroup[i][m] || [{rest:true, duration:measureCap()}];
+      const staffAttr = multi ? '\n        <staff>'+(i+1)+'</staff>' : '';
       measureNotes.forEach(n=>{ body += noteXml(n, staffAttr); });
-      if (i < staves.length-1){
+      if (i < stavesGroup.length-1){
         body += '      <backup>\n        <duration>'+measureCap()+'</duration>\n      </backup>\n';
       }
     });
     body += '    </measure>\n';
   }
+  return body;
+}
+
+function buildMusicXML(){
+  const staffIds = staves.map(s=>s.id);
+  const perStaffNotes = staffIds.map(id => notesLog.filter(n=>n.staffId===id));
+  const perStaffMeasures = perStaffNotes.map(buildMeasuresForStaff);
+  const numMeasures = Math.max(1, ...perStaffMeasures.map(m=>m.length));
+
+  // Convención: 1-2 pentagramas se agrupan en una sola parte (pentagrama doble tipo
+  // piano/órgano, donde de verdad son un único instrumento). Con 3 o más pentagramas,
+  // cada uno se exporta como una parte (instrumento) independiente: la mayoría de programas
+  // de notación no muestran bien más de 2-4 pentagramas apilados dentro de una misma parte,
+  // aunque el MusicXML resultante los contenga todos.
+  const groupAsOnePart = staves.length <= 2;
+
+  let partListXml = '';
+  let partsXml = '';
+
+  if (groupAsOnePart){
+    partListXml = '    <score-part id="P1"><part-name>Transcripción</part-name></score-part>\n';
+    partsXml = '  <part id="P1">\n' + buildPartBody(staves, perStaffMeasures, numMeasures) + '  </part>\n';
+  } else {
+    staves.forEach((s,i)=>{
+      const pid = 'P'+(i+1);
+      partListXml += '    <score-part id="'+pid+'"><part-name>Pentagrama '+(i+1)+'</part-name></score-part>\n';
+      partsXml += '  <part id="'+pid+'">\n' + buildPartBody([s], [perStaffMeasures[i]], numMeasures) + '  </part>\n';
+    });
+  }
 
   return '<?xml version="1.0" encoding="UTF-8"?>\n'+
 '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n'+
 '<score-partwise version="3.1">\n'+
-'  <part-list>\n    <score-part id="P1"><part-name>Transcripción</part-name></score-part>\n  </part-list>\n'+
-'  <part id="P1">\n'+body+'  </part>\n'+
+'  <part-list>\n'+partListXml+'  </part-list>\n'+
+partsXml+
 '</score-partwise>\n';
 }
 
