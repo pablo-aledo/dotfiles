@@ -33,6 +33,24 @@ waiteq2(){
     done
 }
 
+waitgrep(){
+    while true
+    do
+        act=$(echo $1 | source /dev/stdin)
+        [ "$(echo "$act" | grep -i "$2")" != "" ] && break
+        sleep 0.5
+    done
+}
+
+waitngrep(){
+    while true
+    do
+        act=$(echo $1 | source /dev/stdin)
+        [ "$(echo "$act" | grep -i "$2")" = "" ] && break
+        sleep 0.5
+    done
+}
+
 wait_tmux(){
     [ $# -ge 1 ] && target=$1 || target=".1"
     [ $# -ge 2 ] && text=$2   || text="$(hostname)"
