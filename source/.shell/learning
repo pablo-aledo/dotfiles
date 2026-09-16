@@ -1407,7 +1407,7 @@ classifier.evaluate_parallel(){
     do
         echo source ~/.shell\; learning.tmpdir\; $classifier_method.transform $line \> $learning_dir/tmp/classifier_evaluate/$(basename $line)\; rm -fr \$tmp >> $learning_dir/tmp/script
     done
-    cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
+    cat $learning_dir/tmp/script | parallel -j$((`nproc` -2)) zsh -c
 
     rm -fr $learning_dir/tmp/classifier.y_true $learning_dir/tmp/classifier.y_pred
 
@@ -1451,7 +1451,7 @@ then
     do
         echo source ~/.shell\; learning.tmpdir\; $vectorizer_method.txt2vec $line \> $learning_dir/vectors/$(basename $line)\; rm -fr \$tmp >> $learning_dir/tmp/script
     done
-    cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
+    cat $learning_dir/tmp/script | parallel -j$((`nproc` -2)) zsh -c
 
     find $learning_dir/classifier_train/ -type f | sort | while read line
     do
@@ -1859,7 +1859,7 @@ learning.fit_parallel(){
         [ -e $learning_dir/txts/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
         echo source ~/.shell\; learning.tmpdir\; learning.doc2txt $line $learning_dir/txts/$(basename $line)\; rm -fr \$tmp >> $learning_dir/tmp/script
     done
-    cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
+    cat $learning_dir/tmp/script | parallel -j$((`nproc` -2)) zsh -c
 
     [ $( echo $vectorizer_method | grep keywords ) ] || ( rm -fr $learning_dir/features; mkdir -p $learning_dir/features )
     echo "\e[34m get_features \e[0m "
@@ -1873,7 +1873,7 @@ learning.fit_parallel(){
         [ -e $learning_dir/vectors/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
         echo source ~/.shell\; learning.tmpdir\; $vectorizer_method.txt2vec $line \> $learning_dir/vectors/$(basename $line)\; rm -fr \$tmp >> $learning_dir/tmp/script
     done
-    [ -e $learning_dir/tmp/script ] && cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
+    [ -e $learning_dir/tmp/script ] && cat $learning_dir/tmp/script | parallel -j$((`nproc` -2)) zsh -c
 
     rm -fr $learning_dir/pca; mkdir -p $learning_dir/pca
     echo "\e[34m pca \e[0m "
@@ -1888,7 +1888,7 @@ learning.fit_parallel(){
         [ -e $learning_dir/vectors_reduced/$(basename "$line") ] && echo "\e[34m skip \e[0m " $line && continue
         echo source ~/.shell\; learning.tmpdir\; learning.doc2rvect $line \> $learning_dir/vectors_reduced/$(basename $line)\; rm -fr \$tmp >> $learning_dir/tmp/script
     done
-    [ -e $learning_dir/tmp/script ] && cat $learning_dir/tmp/script | parallel -j$((ˋnprocˋ -2)) zsh -c
+    [ -e $learning_dir/tmp/script ] && cat $learning_dir/tmp/script | parallel -j$((`nproc` -2)) zsh -c
 
     rm -fr $learning_dir/classifier; mkdir -p $learning_dir/classifier
     echo "\e[34m classifier \e[0m "
