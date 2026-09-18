@@ -377,6 +377,9 @@ case $1 in
                             codex \
                             codex
                          ;;
+(codecharta)             \docker run --user root -v "$PWD:/mnt/src" codecharta/codecharta-analysis bash -c "git config --global --add safe.directory /mnt/src/$1; cd /mnt/src; simplecc.sh $1";
+                         docker run -p 9000:80 codecharta/codecharta-visualization
+                         ;;
 (kimi)                   docker run -it --rm \
                             -v "$(pwd):/agent-workspace" \
                             -v "$HOME/.kimi:/home/kimi/.kimi" \
