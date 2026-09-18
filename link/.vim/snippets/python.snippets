@@ -3140,3 +3140,460 @@ snippet antlr conditions_visitor
 	    def visitValue(self,ctx):
 	        return int(ctx.NUM().getText())
 
+snippet vscode_vis mermaid_debug
+	"""
+	mermaid_debug.py — Prototipo "logpoint + Mermaid" para VS Code
+
+	Idea: en vez de parar la ejecucion en un breakpoint, VS Code soporta
+	LOGPOINTS: puntos que ejecutan una expresion Python y CONTINUAN solos.
+	Si esa expresion es una llamada a mermaid_dump(variable), cada vez que
+	el programa pasa por ese punto se reescribe un .md con el diagrama
+	Mermaid de la estructura actual. Tienes abierto el Preview de ese .md
+	en un panel al lado del editor (Ctrl+Shift+V), y VS Code lo refresca
+	solo cada vez que el archivo cambia en disco -> "tiempo real" sin
+	servidor, sin websocket, sin extension propia.
+
+	Requisito en VS Code: extension "Markdown Preview Mermaid Support"
+	(bierner.markdown-mermaid) - gratuita, renderiza bloques ```mermaid
+	dentro del Preview nativo de Markdown.
+
+	Este prototipo sabe volcar tres formas de datos MUY comunes al leer
+	codigo ajeno o propio:
+	  - grafos/arboles representados como dict[str, list[str]] (adjacencia)
+	  - objetos con __dict__ (cualquier instancia arbitraria) -> arbol de
+	    atributos, recursivo con limite de profundidad
+	  - listas/tuplas de arrays (numpy) -> nodo con shape/dtype/stats en
+	    vez de volcar los datos crudos (para eso seguirias usando el Data
+	    Viewer nativo de numpy/torch)
+
+	Uso tipico como logpoint (NO como codigo normal del programa):
+	  En VS Code, click derecho junto al numero de linea -> "Add Logpoint"
+	  -> como expresion escribe:
+	      {mermaid_dump(mi_variable, 'debug_view.md')}
+	  (las llaves {} le dicen a VS Code "evalua esto como Python", el
+	  resultado del print del logpoint lo puedes ignorar)
+
+	Ejecuta este archivo directamente para ver una demo con datos falsos.
+	"""
+
+	from __future__ import annotations
+	import itertools
+	from pathlib import Path
+	from typing import Any
+
+
+	_counter = itertools.count()
+
+	# Caracteres que rompen la sintaxis de Mermaid dentro de una label entre
+	# comillas ("..."): comillas dobles, comillas simples (algunas versiones
+	# del parser de Mermaid no toleran bien un apostrofe dentro de una label
+	# entre comillas dobles), corchetes, llaves, pipes y el simbolo de
+	# comentario/direccion (#, %). NO usamos entidades HTML (&quot; etc.)
+	# porque Mermaid las trata como texto literal, no las decodifica.
+	_MERMAID_UNSAFE = {
+	    '"': "",
+	    "'": "",
+	    "[": "(",
+	    "]": ")",
+	    "{": "(",
+	    "}": ")",
+	    "|": "/",
+	    "#": "n.",
+	    "%": "pct",
+	    "\n": " ",
+	    "\r": " ",
+	}
+
+
+	def _mermaid_safe(s: str) -> str:
+	    for bad, good in _MERMAID_UNSAFE.items():
+	        s = s.replace(bad, good)
+	    return s
+
+
+	def _short_repr(value: Any, max_len: int = 40) -> str:
+	    """Representacion corta y segura para un nodo Mermaid (sin caracteres que rompan la sintaxis)."""
+	    try:
+	        # numpy / torch: mostrar shape+dtype, nunca los datos crudos
+	        if hasattr(value, "shape") and hasattr(value, "dtype"):
+	            return f"{type(value).__name__} shape={tuple(value.shape)} dtype={value.dtype}"
+	        # Para strings usamos el texto plano, NO repr(): repr('melody') = "'melody'"
+	        # metería comillas simples dentro de la label entre comillas dobles de Mermaid.
+	        s = value if isinstance(value, str) else repr(value)
+	    except Exception as e:
+	        s = f"<repr error: {e}>"
+	    s = _mermaid_safe(s)
+	    if len(s) > max_len:
+	        s = s[: max_len - 1] + "…"
+	    return s
+
+
+	def _dump_array_png(value: Any, out_path: Path, title: str | None) -> str:
+	    """
+	    Arrays/tensores (numpy, listas de numeros, torch si esta disponible)
+	    -> PNG con matplotlib, en vez de forzar un diagrama de nodos.
+
+	    - 1D -> curva (waveform, envolvente, curva de perdida...)
+	    - 2D -> heatmap (espectrograma, matriz de pesos, piano roll...)
+	    - 3D+ -> se colapsa a 2D mostrando el primer "slice" y se avisa en el titulo
+
+	    Escribe el PNG junto al .md (mismo nombre, extension .png) y devuelve
+	    el nombre de archivo (solo el nombre, no la ruta completa) para
+	    referenciarlo desde el markdown.
+	    """
+	    import matplotlib
+
+	    matplotlib.use("Agg")  # backend sin ventana, obligatorio para correr fuera del hilo principal de UI
+	    import matplotlib.pyplot as plt
+	    import numpy as np
+
+	    arr = np.asarray(value.detach().cpu() if hasattr(value, "detach") else value)  # soporta tensores torch
+	    png_path = out_path.with_suffix(".png")
+
+	    fig, ax = plt.subplots(figsize=(6, 3.5))
+	    note = ""
+	    if arr.ndim == 1:
+	        ax.plot(arr)
+	        ax.set_xlabel("indice")
+	    elif arr.ndim == 2:
+	        im = ax.imshow(arr, aspect="auto", origin="lower", cmap="magma")
+	        fig.colorbar(im, ax=ax)
+	    else:
+	        note = f" (mostrando arr[0] de un array {arr.shape})"
+	        arr2 = arr[0]
+	        if arr2.ndim == 1:
+	            ax.plot(arr2)
+	        else:
+	            im = ax.imshow(arr2, aspect="auto", origin="lower", cmap="magma")
+	            fig.colorbar(im, ax=ax)
+
+	    ax.set_title((title or f"{type(value).__name__} shape={arr.shape}") + note)
+	    fig.tight_layout()
+	    fig.savefig(png_path, dpi=110)
+	    plt.close(fig)
+	    return png_path.name
+
+
+	def _is_array_like(value: Any) -> bool:
+	    """numpy array, torch tensor, o lista/tupla de numeros (no de objetos)."""
+	    if hasattr(value, "shape") and hasattr(value, "dtype"):
+	        return True
+	    if isinstance(value, (list, tuple)) and value:
+	        return all(isinstance(v, (int, float)) for v in value[:5])
+	    return False
+
+
+	def _node_id() -> str:
+	    return f"n{next(_counter)}"
+
+
+	def _dump_adjacency(graph: dict, lines: list[str]) -> None:
+	    """dict[str, list[str]] o dict[str, dict] tipo grafo de llamadas / dependencias.
+
+	    IMPORTANTE: Mermaid no permite usar una cadena entre comillas como ID de
+	    nodo suelto (`"melody" --> "intro"` es invalido). Las comillas solo son
+	    validas dentro de un label con corchetes (`id["texto"]`). Por eso cada
+	    nombre distinto recibe un ID sintetico (n0, n1, ...) reutilizado si el
+	    mismo nombre aparece varias veces, y el texto original va como label.
+	    """
+	    lines.append("graph LR")
+	    node_ids: dict[str, str] = {}  # label -> id sintetico, para no duplicar nodos
+
+	    def get_id(label: str) -> str:
+	        if label not in node_ids:
+	            new_id = _node_id()
+	            node_ids[label] = new_id
+	            lines.append(f'    {new_id}["{label}"];')
+	        return node_ids[label]
+
+	    seen_edges = set()
+	    for src, targets in graph.items():
+	        src_label = _short_repr(src, 30)
+	        src_id = get_id(src_label)
+	        if isinstance(targets, dict):
+	            targets = list(targets.keys())
+	        for dst in targets or []:
+	            dst_label = _short_repr(dst, 30)
+	            dst_id = get_id(dst_label)
+	            edge = (src_id, dst_id)
+	            if edge not in seen_edges:
+	                seen_edges.add(edge)
+	                lines.append(f"    {src_id} --> {dst_id};")
+
+
+	def _dump_object_tree(obj: Any, lines: list[str], max_depth: int = 3) -> None:
+	    """Cualquier instancia arbitraria -> arbol de atributos via __dict__, recursivo."""
+	    lines.append("graph TD")
+	    root_id = _node_id()
+	    lines.append(f'    {root_id}["{_short_repr(obj, 50)}"];')
+
+	    def recurse(o: Any, parent_id: str, depth: int) -> None:
+	        if depth <= 0:
+	            return
+	        attrs = {}
+	        if hasattr(o, "__dict__"):
+	            attrs = vars(o)
+	        elif isinstance(o, dict):
+	            attrs = o
+	        elif isinstance(o, (list, tuple)):
+	            attrs = {f"[{i}]": v for i, v in enumerate(o[:12])}
+
+	        for key, val in attrs.items():
+	            node_id = _node_id()
+	            lines.append(f'    {node_id}["{_mermaid_safe(str(key))} = {_short_repr(val, 35)}"];')
+	            lines.append(f"    {parent_id} --> {node_id};")
+	            if hasattr(val, "__dict__") or isinstance(val, (dict, list, tuple)):
+	                recurse(val, node_id, depth - 1)
+
+	    recurse(obj, root_id, max_depth)
+
+
+	def mermaid_dump(value: Any, path: str = "debug_view.md", title: str | None = None) -> str:
+	    """
+	    Punto de entrada unico para usar desde un logpoint de VS Code.
+
+	    - Si `value` es un array/tensor (numpy, torch, lista de numeros): PNG
+	      via matplotlib (curva si es 1D, heatmap si es 2D+), embebido en el
+	      mismo .md con cache-busting para que el Preview no muestre una
+	      version vieja cacheada de la imagen.
+	    - Si `value` parece un grafo de adjacencia (dict de listas): grafo Mermaid dirigido.
+	    - En cualquier otro caso: arbol de atributos generico en Mermaid.
+
+	    Escribe SIEMPRE el mismo archivo (path), sobreescribiendolo -> el
+	    Preview de VS Code, si esta abierto, se refresca solo.
+	    Devuelve un string corto (util porque los logpoints muestran su
+	    resultado en el panel Debug Console, sirve de confirmacion visual
+	    de que el logpoint disparo).
+	    """
+	    global _counter
+	    _counter = itertools.count()  # reset de ids para que el diagrama no crezca infinito entre llamadas
+
+	    out_path = Path(path)
+	    heading = title or f"Vista en vivo: {type(value).__name__}"
+
+	    if _is_array_like(value):
+	        import time
+
+	        png_name = _dump_array_png(value, out_path, title)
+	        # Cache-busting: sin el "?t=timestamp" el Preview de Markdown puede
+	        # seguir mostrando el PNG viejo cacheado aunque el archivo en disco
+	        # ya haya cambiado, porque los navegadores/webviews cachean
+	        # imagenes de forma agresiva por nombre de archivo.
+	        cache_bust = int(time.time() * 1000)
+	        content = (
+	            f"# {heading}\n\n"
+	            f"_Actualizado automaticamente por mermaid_dump() en cada paso del logpoint._\n\n"
+	            f"![grafico]({png_name}?t={cache_bust})\n"
+	        )
+	        out_path.write_text(content, encoding="utf-8")
+	        return f"[mermaid_dump] PNG -> {png_name}"
+
+	    lines: list[str] = []
+
+	    is_adjacency = (
+	        isinstance(value, dict)
+	        and all(isinstance(v, (list, tuple, dict)) for v in value.values())
+	        and len(value) > 0
+	    )
+
+	    if is_adjacency:
+	        _dump_adjacency(value, lines)
+	    else:
+	        _dump_object_tree(value, lines)
+
+	    content = (
+	        f"# {heading}\n\n"
+	        f"_Actualizado automaticamente por mermaid_dump() en cada paso del logpoint._\n\n"
+	        f"```mermaid\n" + "\n".join(lines) + "\n```\n"
+	    )
+	    out_path.write_text(content, encoding="utf-8")
+	    return f"[mermaid_dump] {len(lines)} lineas -> {out_path.resolve()}"
+
+
+	# ---------------------------------------------------------------------------
+	# Demo ejecutable: simula lo que veria un logpoint en dos puntos distintos
+	# de un programa (por ejemplo, dos iteraciones de un algoritmo que
+	# construye/actualiza una estructura).
+	# ---------------------------------------------------------------------------
+	if __name__ == "__main__":
+	    import time
+
+	    class PianoRollNode:
+	        """Simula algo parecido a una estructura real de tu toolkit: un nodo de un grafo de capas/estados."""
+
+	        def __init__(self, name, role, energy):
+	            self.name = name
+	            self.role = role  # melody / counterpoint / accompaniment / bass / percussion
+	            self.energy = energy
+	            self.children: list["PianoRollNode"] = []
+
+	    print("Demo 1: grafo de adjacencia (por ejemplo, grafo de llamadas o de capas)")
+	    call_graph = {
+	        "layer_graph_composer.build": ["select_layers", "validate_transitions"],
+	        "select_layers": ["quality_scorer.score", "preference_trainer.rank"],
+	        "validate_transitions": ["predicate_dsl.check"],
+	        "quality_scorer.score": [],
+	        "preference_trainer.rank": [],
+	        "predicate_dsl.check": [],
+	    }
+	    print(mermaid_dump(call_graph, "debug_view.md", title="Grafo de llamadas (paso 1)"))
+
+	    time.sleep(0.2)
+
+	    print("\nDemo 2: objeto arbitrario con atributos anidados (lo que verias al inspeccionar 'self' en un breakpoint)")
+	    root = PianoRollNode("intro", "melody", energy=0.3)
+	    child_a = PianoRollNode("intro_counter", "counterpoint", energy=0.2)
+	    child_b = PianoRollNode("intro_bass", "bass", energy=0.4)
+	    root.children = [child_a, child_b]
+
+	    print(mermaid_dump(root, "debug_view.md", title="Estado del nodo raiz (paso 2)"))
+	    print("\n-> Abre debug_view.md (en esta misma carpeta) con Ctrl+Shift+V en VS Code y vuelve a correr este script:")
+	    print("   veras el diagrama cambiar de 'grafo de llamadas' a 'arbol de atributos' sin cerrar el preview.")
+
+	    print("\nDemo 3: array 2D (por ejemplo, un espectrograma o matriz de pesos) -> PNG en vez de diagrama")
+	    import numpy as np
+
+	    fake_spectrogram = np.random.rand(40, 100) * np.linspace(1, 0.2, 100)  # decae en el tiempo, para que se note visualmente
+	    print(mermaid_dump(fake_spectrogram, "debug_view.md", title="Espectrograma simulado"))
+	    print("   -> ahora debug_view.md referencia debug_view.png; el Preview lo muestra igual, sin cambiar de pestaña.")
+
+snippet vscode_vis example
+	"""
+	demo_target.py — Programa de prueba para el prototipo mermaid_debug.py
+
+	Tiene DOS partes independientes:
+
+	1. build_layer_graph(): simula, de forma simplificada, el tipo de estructura
+	   que aparece en cyclegan_composer.py -- un grafo de "capas" de un piano
+	   roll multi-rol (melody, counterpoint, bass, ...) que se va construyendo
+	   paso a paso. mermaid_dump() lo dibuja como diagrama de nodos (Mermaid).
+
+	2. build_spectrogram(): simula un espectrograma que se va "rellenando"
+	   frame a frame, como haria un analisis real de audio_lab.py o
+	   spectro_midi.py. mermaid_dump() lo dibuja como heatmap (PNG via
+	   matplotlib), porque es un array 2D, no un grafo.
+
+	Cada parte tiene su propio punto marcado para logpoint, asi puedes probar
+	las dos ramas de mermaid_dump (diagrama de nodos vs. imagen) sin cambiar
+	de archivo.
+
+	COMO PROBARLO (grafo de capas):
+	1. Abre este archivo en VS Code.
+	2. Ve a la linea marcada con "# <-- LOGPOINT GRAFO AQUI".
+	3. Click en el margen izquierdo -> "Add Logpoint" -> pega como expresion:
+
+	       {mermaid_dump(graph_to_adjacency(graph), 'debug_view.md')}
+
+	4. Abre debug_view.md (se crea en esta misma carpeta) y haz Ctrl+Shift+V (Preview).
+	5. Corre este archivo en modo debug (F5, o "Python: Debug File").
+	6. Veras el grafo de capas crecer en vivo, sin que el programa se detenga.
+
+	COMO PROBARLO (espectrograma / array):
+	1. Ve a la linea marcada con "# <-- LOGPOINT ARRAY AQUI".
+	2. Logpoint con esta expresion:
+
+	       {mermaid_dump(spectrogram, 'debug_view.md', title=f'Frame {frame_idx}')}
+
+	3. Mismo debug_view.md, mismo Preview -- ahora en vez de un diagrama de
+	   nodos veras un heatmap que se va "llenando" columna a columna.
+
+	Tambien puedes correrlo directo (python3 demo_target.py) para ver ambos
+	resultados finales volcados una sola vez, sin usar el depurador.
+	"""
+
+	import time
+	import numpy as np
+	from mermaid_debug import mermaid_dump
+
+
+	class Layer:
+	    """Una capa del piano roll multi-rol (simplificado)."""
+
+	    def __init__(self, role: str, energy: float):
+	        self.role = role
+	        self.energy = energy
+	        self.transitions: list[str] = []  # a que otras capas puede saltar
+
+	    def __repr__(self):
+	        return f"Layer({self.role}, e={self.energy:.2f})"
+
+
+	def build_layer_graph(roles: list[str]) -> dict[str, Layer]:
+	    """
+	    Simula el proceso de layer_graph_composer.py: construye capas una
+	    a una y les va asignando transiciones validas segun una regla
+	    simple (aqui: cada capa puede transicionar a la siguiente y,
+	    si su energia supera un umbral, tambien puede saltar a "climax").
+	    """
+	    graph: dict[str, Layer] = {}
+
+	    for step, role in enumerate(roles):
+	        energy = 0.1 * (step + 1)
+	        layer = Layer(role=role, energy=energy)
+
+	        # Transiciones validas hacia capas ya construidas
+	        if graph:
+	            prev_role = roles[step - 1]
+	            layer.transitions.append(prev_role)
+	        if energy > 0.3:
+	            layer.transitions.append("climax")
+
+	        graph[role] = layer                     # <-- LOGPOINT GRAFO AQUI
+	        # Expresion sugerida para el logpoint:
+	        # {mermaid_dump(graph_to_adjacency(graph), 'debug_view.md')}
+
+	        time.sleep(0.3)  # simula trabajo real (analisis, generacion, etc.)
+
+	    return graph
+
+
+	def graph_to_adjacency(graph: dict[str, Layer]) -> dict[str, list[str]]:
+	    """Convierte el grafo de objetos Layer a dict[str, list[str]] -> formato 'adjacencia' que mermaid_dump dibuja como grafo dirigido."""
+	    return {role: layer.transitions for role, layer in graph.items()}
+
+
+	def build_spectrogram(n_freq_bins: int = 40, n_frames: int = 60) -> np.ndarray:
+	    """
+	    Simula un espectrograma que se va calculando frame a frame (como
+	    haria un STFT real), con energia decayendo en el tiempo para que el
+	    cambio se note claramente en el heatmap.
+	    """
+	    spectrogram = np.zeros((n_freq_bins, n_frames))
+
+	    for frame_idx in range(n_frames):
+	        decay = np.exp(-frame_idx / 25)
+	        frame = np.random.rand(n_freq_bins) * decay
+	        # enfatiza unas cuantas frecuencias, para que se vea una "forma" reconocible
+	        frame[5:12] *= 1.8
+	        spectrogram[:, frame_idx] = frame
+
+	        # <-- LOGPOINT ARRAY AQUI
+	        # Expresion sugerida para el logpoint:
+	        # {mermaid_dump(spectrogram, 'debug_view.md', title=f'Frame {frame_idx}')}
+
+	        time.sleep(0.05)  # simula trabajo real de analisis por frame
+
+	    return spectrogram
+
+
+	if __name__ == "__main__":
+	    roles = ["intro", "melody", "counterpoint", "bass", "climax"]
+
+	    print("Parte 1: construyendo grafo de capas paso a paso...")
+	    graph = build_layer_graph(roles)
+
+	    print("\nEstado final del grafo (objeto por objeto):")
+	    for role, layer in graph.items():
+	        print(f"  {role}: {layer!r} -> transiciones: {layer.transitions}")
+
+	    # Vuelco final como grafo de adjacencia (mas legible que el arbol de atributos para esto)
+	    adjacency = graph_to_adjacency(graph)
+	    result = mermaid_dump(adjacency, "debug_view.md", title="Grafo final de transiciones entre capas")
+	    print(f"\n{result}")
+	    print("Abre debug_view.md (en esta misma carpeta) con Ctrl+Shift+V para verlo.")
+
+	    print("\nParte 2: construyendo espectrograma frame a frame...")
+	    spectrogram = build_spectrogram()
+	    result = mermaid_dump(spectrogram, "debug_view.md", title="Espectrograma final")
+	    print(f"\n{result}")
+	    print("El mismo debug_view.md ahora muestra el heatmap en vez del diagrama de nodos.")
