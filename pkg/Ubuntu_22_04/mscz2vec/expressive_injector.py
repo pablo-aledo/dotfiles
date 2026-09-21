@@ -574,21 +574,27 @@ def inject_sincopa(notes, grid, bar_num, hand, beat=None):
                        "Prueba otra mano con --hand o fija el pulso con --beat.")
     beat_idx, target = picked
     beat_tick = target.start_tick
+    # el ataque puede ser un acorde: hay que mover TODAS las notas
+    # simultáneas, no solo la elegida, o el resto quedaría anclada y
+    # rompería la ligadura sobre el tiempo fuerte
+    group = [m for m in hand_notes if m.start_tick == beat_tick]
     half = max(1, beat_ticks // 2)
     new_start = max(0, beat_tick - half)
 
     for m in hand_notes:
-        if m is target:
+        if m in group:
             continue
         if m.start_tick <= new_start < m.end_tick:
             m.end_tick = new_start
 
     orig_pitch = target.pitch
-    target.start_tick = new_start
-    msg = (f"Compás {bar_num}, mano {hand}: {midi_name(orig_pitch)} adelanta su ataque, "
+    subject, _ = describe_pitches([m.pitch for m in group])
+    for m in group:
+        m.start_tick = new_start
+    msg = (f"Compás {bar_num}, mano {hand}: {subject} adelanta su ataque, "
            f"del tiempo {beat_idx} a una posición débil justo antes, y queda sostenida "
            f"sobre el tiempo {beat_idx} sin nuevo ataque ahí -> síncopa.")
-    return target, msg
+    return group, msg
 
 
 def inject_contratiempo(notes, grid, bar_num, hand, beat=None):
@@ -609,25 +615,31 @@ def inject_contratiempo(notes, grid, bar_num, hand, beat=None):
                        "Prueba otra mano con --hand o fija el pulso con --beat.")
     beat_idx, target = picked
     beat_tick = target.start_tick
+    # el ataque puede ser un acorde: hay que trasladar TODAS las notas
+    # simultáneas, o el resto seguiría sonando en el tiempo fuerte y no
+    # quedaría en silencio
+    group = [m for m in hand_notes if m.start_tick == beat_tick]
     new_start = beat_tick + half
     max_end = beat_tick + beat_ticks
-    new_end = min(target.end_tick, max_end)
-    if new_end <= new_start:
-        new_end = new_start + max(1, half // 2)
 
     for m in hand_notes:
-        if m is target:
+        if m in group:
             continue
         if m.start_tick < beat_tick <= m.end_tick:
             m.end_tick = beat_tick
 
     orig_pitch = target.pitch
-    target.start_tick = new_start
-    target.end_tick = new_end
-    msg = (f"Compás {bar_num}, mano {hand}: {midi_name(orig_pitch)} se traslada del "
+    subject, _ = describe_pitches([m.pitch for m in group])
+    for m in group:
+        new_end = min(m.end_tick, max_end)
+        if new_end <= new_start:
+            new_end = new_start + max(1, half // 2)
+        m.start_tick = new_start
+        m.end_tick = new_end
+    msg = (f"Compás {bar_num}, mano {hand}: {subject} se traslada del "
            f"tiempo {beat_idx} al 'y' de ese tiempo, dejando el pulso fuerte en "
            f"silencio y sin sostenerse sobre el siguiente pulso -> contratiempo.")
-    return target, msg
+    return group, msg
 
 
 def inject_hemiola(notes, grid, bar_num, hand):
@@ -1301,17 +1313,19 @@ def inject_retardo(notes, grid, bar_num, hand, beat=None, max_step=2):
     new_end = max(n.end_tick, change_tick + tie_amount)
 
     # al ligar n sobre el cambio de armonía puede tragarse notas intermedias
-    # de la misma mano: se eliminan, y la resolución pasa a ser la primera
-    # nota de esa mano que quede después del nuevo final de n
+    # de la misma mano: se eliminan (pero nunca notas que compartan el
+    # mismo ataque que n, que son compañeras de acorde, no intermedias), y
+    # la resolución pasa a ser la primera nota de esa mano que quede
+    # después del nuevo final de n
     for m in list(hand_notes):
         if m is n:
             continue
-        if n.start_tick <= m.start_tick < new_end:
+        if n.start_tick < m.start_tick < new_end:
             hand_notes.remove(m)
             notes.remove(m)
     n.end_tick = new_end
 
-    later = [m for m in hand_notes if m.start_tick >= n.end_tick]
+    later = [m for m in hand_notes if m.start_tick > n.start_tick and m.start_tick >= n.end_tick]
     if not later:
         return None, (f"Esa nota de {hand} no tiene, tras ligarla sobre el cambio de "
                        f"armonía, ninguna nota siguiente en la misma mano para resolver.")
@@ -1321,28 +1335,39 @@ def inject_retardo(notes, grid, bar_num, hand, beat=None, max_step=2):
     if not harmony_before:
         return None, f"No suena ninguna nota de {other} en el instante en que empieza esta nota."
     pcs_before = pitch_classes([h.pitch for h in harmony_before])
-    if n.pitch % 12 not in pcs_before:
-        target_pc = min(pcs_before, key=lambda pc: min((pc - n.pitch) % 12, (n.pitch - pc) % 12))
-        n.pitch = n.pitch - ((n.pitch - target_pc) % 12)
 
     pcs_after = pitch_classes(change_pitches)
+    harmony_res = notes_sounding_at(other_notes, nxt.start_tick)
+    pcs_res = pitch_classes([h.pitch for h in harmony_res]) if harmony_res else pcs_after
+
+    # busca conjuntamente una nota de preparación (consonante con pcs_before,
+    # disonante con pcs_after) y un paso de resolución hacia pcs_res; probar
+    # todas las combinaciones da muchas más posibilidades cuando la mano de
+    # apoyo es poco densa (p.ej. una melodía monofónica con una sola clase
+    # de altura sonando en cada instante)
+    orig_pitch = n.pitch
+    solution = None
+    pcs_before_sorted = sorted(pcs_before, key=lambda pc: min((pc - orig_pitch) % 12, (orig_pitch - pc) % 12))
+    for pc_before in pcs_before_sorted:
+        cand_n = orig_pitch - ((orig_pitch - pc_before) % 12)
+        if cand_n % 12 in pcs_after:
+            continue  # seguiría siendo consonante tras el cambio: no hay disonancia que resolver
+        for cand_step in (1, 2, -1, -2):
+            cand_res = cand_n + cand_step
+            if cand_res % 12 in pcs_res:
+                solution = (cand_n, cand_res)
+                break
+        if solution:
+            break
+    if solution is None:
+        return None, "No se encontró una resolución por grado conjunto dentro del acorde siguiente."
+    n.pitch, nxt.pitch = solution
+
     if n.pitch % 12 in pcs_after:
         change_group = [m for m in other_notes if m.start_tick == change_tick]
         clash = next((m for m in change_group if m.pitch % 12 == n.pitch % 12), None)
         if clash is not None:
             clash.pitch += 1
-
-    resolved = False
-    for cand_step in (1, 2, -1, -2):
-        cand_pitch = n.pitch + cand_step
-        harmony_res = notes_sounding_at(other_notes, nxt.start_tick)
-        pcs_res = pitch_classes([h.pitch for h in harmony_res]) if harmony_res else pitch_classes(change_pitches)
-        if cand_pitch % 12 in pcs_res:
-            nxt.pitch = cand_pitch
-            resolved = True
-            break
-    if not resolved:
-        return None, "No se encontró una resolución por grado conjunto dentro del acorde siguiente."
 
     bar_c, _, _, _, _, _ = grid.locate(change_tick)
     direction_txt = "descendente" if nxt.pitch < n.pitch else "ascendente"

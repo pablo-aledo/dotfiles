@@ -208,7 +208,16 @@ def load_notes(path: str):
             elif msg.type == "set_tempo":
                 tempo_changes.append((abs_tick, msg.tempo))
             elif msg.type == "note_on" and msg.velocity > 0:
-                open_notes[(msg.note, msg.channel)] = (abs_tick, msg.velocity)
+                key = (msg.note, msg.channel)
+                if key in open_notes:
+                    # retrigger sin note_off explícito (frecuente en piezas
+                    # reales, p.ej. bajos repetidos con pedal): se cierra la
+                    # nota anterior aquí mismo en vez de perderla en
+                    # silencio, y se abre la nueva
+                    prev_start, prev_vel = open_notes.pop(key)
+                    if abs_tick > prev_start:
+                        notes.append(Note(msg.note, prev_start, abs_tick, prev_vel, "?", track_idx))
+                open_notes[key] = (abs_tick, msg.velocity)
             elif msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0):
                 key = (msg.note, msg.channel)
                 if key in open_notes:
@@ -1154,11 +1163,15 @@ def detect_retardo(notes, grid, ctx, max_step=2):
             if n.pitch % 12 in pcs_after:
                 continue  # sigue siendo consonante: no hay retardo
 
-            if idx + 1 >= len(hand_notes):
+            # la siguiente nota de esta mano cuyo ataque cae en o después del
+            # final (ya extendido) de n; no basta con "el siguiente índice",
+            # porque n puede formar parte de un acorde (varias notas con el
+            # mismo start_tick) y el índice siguiente sería una compañera de
+            # acorde simultánea, no la resolución real
+            later = [m for m in hand_notes if m.start_tick >= n.end_tick]
+            if not later:
                 continue
-            nxt = hand_notes[idx + 1]
-            if nxt.start_tick < n.end_tick:
-                continue
+            nxt = later[0]
             interval = abs(nxt.pitch - n.pitch)
             if not (0 < interval <= max_step):
                 continue
