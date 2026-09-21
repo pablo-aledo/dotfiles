@@ -698,6 +698,9 @@ ctags_auto_clique(){
         fi
     done
     \cp /tmp/ctags_clique_final ~/log2gr/$1/clique
+
+	false && comm -12 <(cat ~/log2gr/$1/clique | sort -u) <(cat ~/log2gr/$1/calls | sort -u) > /tmp/clique_comm
+	false && \cp /tmp/clique_comm ~/log2gr/$1/clique
 }
 
 ctags_compare_fn(){
