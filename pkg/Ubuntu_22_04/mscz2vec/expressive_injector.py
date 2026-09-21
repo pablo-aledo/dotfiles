@@ -793,46 +793,70 @@ def inject_apoyatura(notes, grid, bar_num, hand, beat=None, direccion=None):
         return None, "No hay notas en LH que sirvan de armonía de referencia."
 
     candidates = beat_attacks_in_bar(rh_notes, bar_start, bar_len, qpb, grid.tpb, tol=0.15)
-    picked = pick_candidate(candidates, beat)
-    if not picked:
+    if beat is not None:
+        candidates = [c for c in candidates if c[0] == beat]
+    if not candidates:
         return None, ("No hay ninguna nota RH atacando justo sobre un pulso en ese "
                        "compás. Prueba otro compás o fija el pulso con --beat.")
-    beat_idx, target = picked
 
-    harmony = notes_sounding_at(lh_notes, target.start_tick)
-    if not harmony:
-        return None, ("No suena ninguna nota de LH en el instante de esa nota; no hay "
-                       "armonía contra la que construir la disonancia.")
-    harmony_pcs = pitch_classes([h.pitch for h in harmony])
+    # se prueba cada candidata del compás (no solo la primera): la nota que
+    # va a hacer de "resolución" debe ser realmente consonante con la
+    # armonía de LH en su instante, o el propio detector la rechazaría
+    any_had_harmony = False
+    any_consonant = False
+    for beat_idx, target in sorted(candidates, key=lambda c: c[0]):
+        harmony = notes_sounding_at(lh_notes, target.start_tick)
+        if not harmony:
+            continue
+        any_had_harmony = True
+        harmony_pcs = pitch_classes([h.pitch for h in harmony])
+        if target.pitch % 12 not in harmony_pcs:
+            # esta nota ya sería disonante con LH: no sirve de resolución
+            # de una apoyatura (la disonancia debe estar en la ornamental,
+            # no en la nota "real")
+            continue
+        any_consonant = True
 
-    up, down = target.pitch + 1, target.pitch - 1
-    order = [down, up] if direccion == "abajo" else [up, down]
-    neighbor = next((c for c in order if c % 12 not in harmony_pcs), None)
-    if neighbor is None:
-        order2 = [target.pitch + 2, target.pitch - 2]
-        neighbor = next((c for c in order2 if c % 12 not in harmony_pcs), None)
-    if neighbor is None:
-        return None, ("Todas las notas vecinas de esa nota pertenecen a la armonía de "
-                       "LH en ese instante; no se puede construir una disonancia clara. "
-                       "Prueba otro compás/pulso.")
+        up, down = target.pitch + 1, target.pitch - 1
+        order = [down, up] if direccion == "abajo" else [up, down]
+        neighbor = next((c for c in order if c % 12 not in harmony_pcs), None)
+        if neighbor is None:
+            order2 = [target.pitch + 2, target.pitch - 2]
+            neighbor = next((c for c in order2 if c % 12 not in harmony_pcs), None)
+        if neighbor is None:
+            continue  # todas las vecinas también son del acorde; prueba otra candidata
 
-    dur = target.duration_ticks
-    orn_dur = max(1, min(dur // 2, int(round(qpb * grid.tpb * 0.4))))
-    if orn_dur >= dur:
-        orn_dur = max(1, dur - 1)
+        dur = target.duration_ticks
+        orn_dur = max(1, min(dur // 2, int(round(qpb * grid.tpb * 0.4))))
+        if orn_dur >= dur:
+            orn_dur = max(1, dur - 1)
 
-    orig_pitch = target.pitch
-    appog = Note(pitch=neighbor, start_tick=target.start_tick,
-                 end_tick=target.start_tick + orn_dur, velocity=target.velocity,
-                 channel=target.channel, hand="RH", track_idx=target.track_idx)
-    target.start_tick = target.start_tick + orn_dur
-    notes.append(appog)
+        orig_pitch = target.pitch
+        appog = Note(pitch=neighbor, start_tick=target.start_tick,
+                     end_tick=target.start_tick + orn_dur, velocity=target.velocity,
+                     channel=target.channel, hand="RH", track_idx=target.track_idx)
+        target.start_tick = target.start_tick + orn_dur
+        notes.append(appog)
 
-    direction_txt = "descendente" if orig_pitch < neighbor else "ascendente"
-    msg = (f"Compás {bar_num}, tiempo {beat_idx}: se antepone {midi_name(neighbor)} "
-           f"(ajena a la armonía de LH) que resuelve {direction_txt} por grado "
-           f"conjunto a {midi_name(orig_pitch)} -> apoyatura.")
-    return appog, msg
+        direction_txt = "descendente" if orig_pitch < neighbor else "ascendente"
+        msg = (f"Compás {bar_num}, tiempo {beat_idx}: se antepone {midi_name(neighbor)} "
+               f"(ajena a la armonía de LH) que resuelve {direction_txt} por grado "
+               f"conjunto a {midi_name(orig_pitch)} -> apoyatura.")
+        return appog, msg
+
+    if not any_had_harmony:
+        return None, ("No suena ninguna nota de LH en el instante de las notas RH de ese "
+                       "compás/pulso; no hay armonía contra la que construir la disonancia.")
+    if not any_consonant:
+        return None, (f"Ninguna nota RH atacando sobre un pulso en ese compás"
+                       f"{' (tiempo ' + str(beat) + ')' if beat is not None else ''} "
+                       f"es consonante con la armonía de LH en su instante, así que no "
+                       f"puede servir de resolución de una apoyatura. Prueba otro "
+                       f"compás{'' if beat is not None else ' o --beat'}.")
+    return None, ("Las notas RH consonantes de ese compás/pulso no tienen ninguna nota "
+                   "vecina disponible fuera de la armonía de LH (todas sus vecinas "
+                   "inmediatas también pertenecen al acorde); no se puede construir una "
+                   "disonancia clara. Prueba otro compás/pulso.")
 
 
 def inject_floreo(notes, grid, bar_num, hand, beat=None, tipo="mordente"):
