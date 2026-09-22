@@ -37,21 +37,21 @@ umldiff(){
     )
 }
 
-dbus_uml(){
+dbus_uml () {
     local search_dir="${1:-.}"
     local output="${2:-dbus_interfaces.puml}"
     local tmp_out="${output}.tmp"
 
     {
-        echo "@startuml"
-        echo "skinparam classAttributeIconSize 0"
-        echo "hide empty members"
-        echo ""
+    echo "@startuml"
+    echo "set separator none"
+    echo "skinparam classAttributeIconSize 0"
+    echo "hide empty members"
+    echo ""
     } > "$tmp_out"
 
-    grep -rl -E 'interface[[:space:]]*\([[:space:]]*name[[:space:]]*=' \
-         --include='*.rs' "$search_dir" 2>/dev/null | sort | \
-    while IFS= read -r file; do
+    grep --color -rl -E 'interface[[:space:]]*\([[:space:]]*name[[:space:]]*=' --include='*.rs' "$search_dir" 2> /dev/null | sort | while IFS= read -r file
+    do
         [ -z "$file" ] && continue
         awk '
         function count_char(s, ch,   i, n) {
@@ -113,7 +113,30 @@ dbus_uml(){
             if (opened && depth <= 0) flush()
         }
         ' "$file"
-    done >> "$tmp_out"
+    #done >> "$tmp_out"
+	done | awk '
+        /^interface "/ {
+            name = $0
+            sub(/^interface "/, "", name)
+            sub(/" \{$/, "", name)
+            if (!(name in seen)) { seen[name] = 1; order[++n] = name }
+            cur = name
+            next
+        }
+        /^}/ { cur = ""; next }
+        cur != "" && /^  \+/ {
+            key = cur SUBSEP $0
+            if (!(key in have)) {
+                have[key] = 1
+                body[cur] = body[cur] $0 "\n"
+            }
+            next
+        }
+        END {
+            for (i = 1; i <= n; i++)
+                printf "interface \"%s\" {\n%s}\n\n", order[i], body[order[i]]
+        }
+    ' >> "$tmp_out"
 
     echo "@enduml" >> "$tmp_out"
     \mv "$tmp_out" "$output"
