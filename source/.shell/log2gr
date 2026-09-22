@@ -626,7 +626,7 @@ ctags_review(){
     ctags_auto_clique $1
     # comm -12 <(cat ~/log2gr/$1/clique | sort -u) <(cat ~/log2gr/$1/calls | sort -u) > /tmp/cclique; \cp /tmp/cclique ~/log2gr/$1/clique
 
-    (echo flowchart LR; wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | sed 's/ -> / --> /g' | fcdag) | Xclip -i
+    (mermaid_header; wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | sed 's/ -> / --> /g' | fcdag) | Xclip -i
     ctags_diff_fcg $1
 }
 
@@ -669,13 +669,13 @@ ctags_diff_fcg(){
     cat /tmp/newfunctions | while read line; do echo style $line fill:#AAFFAA; done >> /tmp/linkstyles
     cat /tmp/rmfunctions | while read line; do echo style $line fill:#FFAAAA; done >> /tmp/linkstyles
 
-    (echo flowchart LR; cat /tmp/clique_both | sed 's/ -> / --> /g'; cat /tmp/linkstyles | sed -e 's/green/green,/g' -e 's/red/red,/g') > /tmp/diff_fcg_final
+    (mermaid_header; cat /tmp/clique_both | sed 's/ -> / --> /g'; cat /tmp/linkstyles | sed -e 's/green/green,/g' -e 's/red/red,/g') > /tmp/diff_fcg_final
     cat /tmp/diff_fcg_final | Xclip -i
 }
 
 ctags_iterate_clique(){
     vim ~/log2gr/$1/clique
-    (echo flowchart LR; wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | sed 's/ -> / --> /g' | fcdag) > ~/log2gr/$1/clique_graph
+    (mermaid_header; wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | sed 's/ -> / --> /g' | fcdag) > ~/log2gr/$1/clique_graph
     cat ~/log2gr/$1/clique_graph | sed 's/ --> /\n/g' | sort -u | grep -v 'flowchart LR' > ~/log2gr/$1/clique_fns
     cat ~/log2gr/$1/clique_graph | Xclip -i
 }
@@ -1440,10 +1440,10 @@ cat /tmp/m2dag
 }
 
 ctags_cdag_diff(){
-(echo flowchart LR; cdag auto_plus /tmp/fns_base/$1 | fcdag) > /tmp/dag_dfn_base
+(mermaid_header; cdag auto_plus /tmp/fns_base/$1 | fcdag) > /tmp/dag_dfn_base
 cat /tmp/dag_dfn_base | m2dag > /tmp/dag_dfn_base_2; \mv /tmp/dag_dfn_base_2 /tmp/dag_dfn_base
 
-(echo flowchart LR; cdag auto_plus /tmp/fns_leaf/$1 | fcdag) > /tmp/dag_dfn_leaf
+(mermaid_header; cdag auto_plus /tmp/fns_leaf/$1 | fcdag) > /tmp/dag_dfn_leaf
 cat /tmp/dag_dfn_leaf | m2dag > /tmp/dag_dfn_leaf_2; \mv /tmp/dag_dfn_leaf_2 /tmp/dag_dfn_leaf
 
 dag_diff /tmp/dag_dfn_base /tmp/dag_dfn_leaf | Xclip -i
@@ -1463,4 +1463,12 @@ ctags_set(){
 sudo rm -fr /usr/bin/ctags
 [ $1 = "exuberant" ] && sudo ln -s /usr/bin/ctags-exuberant /usr/bin/ctags
 [ $1 = "universal" ] && sudo ln -s /usr/bin/universal-ctags /usr/bin/ctags
+}
+
+mermaid_header(){
+    echo '---'
+    echo 'config:'
+    echo ' layout: dagre'
+    echo '---'
+    echo 'flowchart LR'
 }
