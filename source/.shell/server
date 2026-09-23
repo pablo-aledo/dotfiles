@@ -63,6 +63,15 @@ server(){
         [ $# -gt 1 ] && port=$2
         touch .htaccess
         docker run --rm -p $port:80 -e LOG_STDOUT=true -e LOG_STDERR=true -e LOG_LEVEL=debug -v $PWD:/var/www/html fauria/lamp
+
+        # docker exec -it $(docker ps | grep lamp | awk '{print $NF}') bash
+        # htpasswd -c /etc/apache2/.htpasswd usuario
+        # exit
+        # echo 'AuthType Basic'                      >  .htaccess
+        # echo 'AuthName "Área privada"'             >> .htaccess
+        # echo 'AuthUserFile /etc/apache2/.htpasswd' >> .htaccess
+        # echo 'Require valid-user'                  >> .htaccess
+
 	fi
 
 	if [ $1 = "ftp" ]
