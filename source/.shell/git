@@ -53,7 +53,7 @@ Git(){
         (diff_branch) \git diff $(Git branch_base) $(\git rev-parse HEAD) ;;
         (difftool_branch) \git difftool $(Git branch_base) $(\git rev-parse HEAD) ;;
         (diff_branch_files) \git diff --name-only $(Git branch_base) $(\git rev-parse HEAD) ;;
-        (diff_with_lines) \git diff $* | gawk '
+        (diff_with_lines) ( [ $# = 0 ] && \git diff --staged || \git diff $* ) | gawk '
               /^\+\+\+ / {
                 file = substr($0, 7)
                 sub(/^b\//, "", file)
