@@ -676,7 +676,7 @@ ctags_diff_fcg(){
 ctags_iterate_clique(){
     vim ~/log2gr/$1/clique
     (mermaid_header; wgrep ~/log2gr/$1/clique ~/log2gr/$1/calls | sed 's/ -> / --> /g' | fcdag) > ~/log2gr/$1/clique_graph
-    cat ~/log2gr/$1/clique_graph | sed 's/ --> /\n/g' | sort -u | grep -v 'flowchart LR' > ~/log2gr/$1/clique_fns
+    cat ~/log2gr/$1/clique_graph | grep ' --> ' | sed 's/ --> /\n/g' | sort -u > ~/log2gr/$1/clique_fns
     cat ~/log2gr/$1/clique_graph | Xclip -i
 }
 
