@@ -145,3 +145,28 @@ chatgpt_multiquery_2 () {
         chatgpt_process_output "$queryfile"
 	done
 }
+
+LLM_URL=${LLM_URL:-http://127.0.0.1:8080/v1/chat/completions}
+LLM_MODEL=${LLM_MODEL:-Qwen2.5-0.5B-Instruct}
+
+local_query () {
+        printf '\e[34m Query \e[0m %s\n' "$1"
+        cat input/prompt input/"$1" | grep -v '^[ \t]*$' \
+        | jq -Rs --arg model "$LLM_MODEL" \
+            '{model:$model, stream:true, temperature:0.2,
+              messages:[{role:"user", content:.}]}' \
+        | curl -sN "$LLM_URL" -H 'Content-Type: application/json' -d @- \
+        | sed -u -n 's/^data: //p' \
+        | grep --line-buffered -v '^\[DONE\]$' \
+        | jq --unbuffered -rj '.choices[0].delta.content // empty' \
+        | tee output/"$1"
+        echo
+        [ -s output/"$1" ] || rm -f output/"$1"
+}
+
+local_multiquery () {
+        comm -13 <(cd output; ls | sort) <(cd input; ls | sort) | grep -v prompt | while read queryfile
+        do
+                local_query "$queryfile" && [ -s output/"$queryfile" ] && chatgpt_process_output "$queryfile"
+        done
+}
