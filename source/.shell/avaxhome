@@ -331,7 +331,7 @@ avhloop(){
     shc stop
 
     echo '\e[34m notify \e[0m'
-    [ -e /tmp/avl_edit_notify ] && vim /tmp/s2files
+    [ -e /tmp/avl_edit_notify ] && vim '+/_files' /tmp/s2files
     [ -e /tmp/avl_notify -a $(cat /tmp/s2files | wc -l) -gt 0 ] && notify 'avhloop' 'cat /tmp/s2files'
 
     ( cd ~/Descargas_aux/ && ls ../Descargas | Xargs touch )
