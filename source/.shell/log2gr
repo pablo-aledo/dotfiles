@@ -1450,7 +1450,7 @@ dag_diff /tmp/dag_dfn_base /tmp/dag_dfn_leaf | Xclip -i
 }
 
 ctags_highlight(){
-    mgrep tags $* | awk '{print $1}' | sort -u | sed -e 's/^/style /g' -e 's/$/ stroke:#8888FF,stroke-width:2px/g' | Xclip -i
+    mgrep tags $* | awk '{print $1}' | sort -u | sed -e 's/^/style /g' -e 's/$/ stroke:#0000FF,stroke-width:10px/g' | Xclip -i
 }
 
 fns_down(){
