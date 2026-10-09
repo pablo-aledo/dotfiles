@@ -200,6 +200,22 @@ hash=$(cat ${music_bottles_dir}/fl_24/drive_c/users/steamuser/AppData/Roaming/Sy
 (
 cd ${music_bottles_dir}/fl_24/drive_c/users/steamuser/Music/
 python ./fingering_v3.py $lfile --json fingering.json
+
+# python fingering_v5.py $lfile \
+#   --chord-mode --chord-weight 0.5 \
+#   --tie-gestures --tie-tol 0.5 \
+#   --bass-prior 0.3 \
+#   --cost-alert 0.3 \
+#   --chord-report \
+#   --json dig.json --xml dig.xml
+# # --chord-mode --chord-weight 0.5: da el mismo peso al coste ergonómico y a la consistencia de patrón. Con 0 sale la solución de v3 y con 1 solo cuenta la consistencia, con lo que se sacrifica comodidad.
+# # --tie-gestures --tie-tol 0.5: es lo que más ayuda a recordar. Los compases con exactamente el mismo gesto en una mano reciben los mismos dedos, salvo que alguno de ellos pase a costar más de un 50 % extra. Así el enlace no fuerza digitaciones incómodas. Evita tolerancias enormes, que fuerzan el enlace siempre.
+# # --bass-prior 0.3: es el valor “suave”. Solo afecta a la mano izquierda y empuja al dedo 5 en el bajo del tiempo 1, algo muy repetible.
+# # --cost-alert 0.3: es más estricto que el 0.5 por defecto y avisa (⚠) si un compás cambiado cuesta más de un 30 % extra frente a la digitación agnóstica.
+# # --chord-report: muestra el acorde de cada compás con su margen y los gestos repetidos con sus dedos.
+# # Sin --chord-runs: las escaladas solo se comparan con compases de las mismas notas, que es lo correcto porque cambian con las teclas negras.
+# # Sin cambios: los tracks por defecto (0 = derecha, 1 = izquierda) y --hand-size M valen para tu MIDI, que tiene 2 tracks, compás 3/4 y 200 bpm. Ajusta --hand-size si tu mano no es mediana.
+
 python ./fingering_to_synthesia.py fingering.json --midi $lfile -o fingering.xml --hash $hash
 cp fingering.xml ${music_bottles_dir}/fl_24/drive_c/users/steamuser/AppData/Roaming/Synthesia/fingers.xml
 )
