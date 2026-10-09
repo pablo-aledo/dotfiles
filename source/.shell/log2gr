@@ -1453,6 +1453,33 @@ ctags_highlight(){
     mgrep tags $* | awk '{print $1}' | sort -u | sed -e 's/^/style /g' -e 's/$/ stroke:#0000FF,stroke-width:10px/g' | tee /tmp/ctags_highlight | Xclip -i
 }
 
+
+string_to_color(){
+	local hash
+	hash=$(printf '%s' "$1" | md5sum | cut -c1-6 | tr 'a-f' 'A-F')
+	echo "#$hash"
+}
+
+ctags_highlight_review(){
+
+	ctags_index .
+    [ -e $LOG2GR_DIR/$1/fix_ctags ] && source $LOG2GR_DIR/$1/fix_ctags
+
+	rm -fr /tmp/ctags_highlight_2
+	Git branch_diff_files | while read line
+	do
+		ctags_highlight $line
+		cat /tmp/ctags_highlight | sed "s/#0000FF/$(string_to_color $line)/g" >> /tmp/ctags_highlight_2
+	done
+
+    cat /tmp/ctags_highlight_2 | while read line
+    do
+        fn=$(echo $line | cut -d' ' -f2)
+        [ "$(cat /tmp/diff_fcg_final | grep $fn)" != "" ] && echo $line | sed 's/10px$/5px/g'
+    done
+
+}
+
 fns_down(){
     cdag auto_plus $1 | fcdag | sed 's/ --> / -> /g' | dag_slice_rev $2 > /tmp/dag_fns_down
     cat /tmp/dag_fns_down | tokenize | sort -u | grep -v '^$' > /tmp/var_toks
