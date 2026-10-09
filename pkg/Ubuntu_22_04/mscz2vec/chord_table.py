@@ -1122,6 +1122,37 @@ DEGREE_SEMITONES = {
 # Orden de intento: numerales más largos primero para no confundir p.ej. 'VI' con 'V'
 _DEGREE_ORDER = sorted(DEGREE_SEMITONES.keys(), key=len, reverse=True)
 
+# Posición (0-6) de cada grado dentro de la escala.
+_DEGREE_INDEX = {'I': 0, 'II': 1, 'III': 2, 'IV': 3, 'V': 4, 'VI': 5, 'VII': 6}
+
+# Escala sobre la que se leen los grados SIN alteración de cada modo del catálogo.
+# Convención de numerales (ver las descripciones de las entradas):
+#   · un grado CON alteración (b/#) se mide siempre sobre la escala mayor
+#     (bVII = 10, bII = 1, #IV = 6…);
+#   · un grado SIN alteración se lee sobre la escala del modo en menor, dórico y
+#     frigio dominante: i – VI – III – VII en La menor es Am F C G ("loop
+#     aeólico"), el VI de la cadencia flamenca I – bVII – VI – bII es el sexto
+#     grado bemol, el ciclo de quintas im7 – iv7 – VII7 – IIIM7 es Cm7 Fm7 B♭7 E♭M7;
+#   · el frigio y el lidio se escriben, como hace el catálogo, con alteraciones
+#     sobre la mayor (bII, bIII, bVII…; la #4 lidia, #IV): su VII sin alterar es
+#     la sensible ("VII natural", entrada 36, distinta de la 88 con bVII) y su IV
+#     sin alterar es el IV justo ("IV diatónico", entrada 87). Por eso su escala
+#     de lectura es la mayor.
+# La calidad (mayor/menor) la da siempre la capitalización del numeral.
+MODE_SCALES = {
+    'major':             [0, 2, 4, 5, 7, 9, 11],
+    'minor':             [0, 2, 3, 5, 7, 8, 10],   # menor natural (eolio)
+    'dorian':            [0, 2, 3, 5, 7, 9, 10],
+    'phrygian':          [0, 2, 4, 5, 7, 9, 11],   # ver nota: se escribe con alteraciones
+    'lydian':            [0, 2, 4, 5, 7, 9, 11],   # ver nota: la #4 se escribe #IV
+    'mixolydian':        [0, 2, 4, 5, 7, 9, 10],
+    'phrygian_dominant': [0, 1, 4, 5, 7, 8, 10],
+}
+
+# vii° / vii°7 son siempre la sensible disminuida (como en menor armónica):
+# no se desplazan con el modo.
+_LEADING_TONE_DIM = {'vii°', 'vii°7'}
+
 # Alias de sufijo de calidad → clave válida en CHORD_INTERVALS
 _QUALITY_ALIASES = {
     '°': 'dim', 'o': 'dim', 'ø7': 'hdim7', 'ø': 'hdim7',
@@ -1194,18 +1225,43 @@ def parse_generic_numeral(token: str) -> tuple:
     return (interval, quality)
 
 
-def resolve_custom_numeral(numeral: str, tonic_pc: int) -> tuple:
+def _mode_degree_interval(numeral: str, mode: str):
     """
-    Resuelve un numeral de una progresión --custom. Primero intenta el
-    diccionario fijo NUMERAL_TO_INTERVAL (para casos especiales como
-    dominantes secundarias V/vi, V/V...); si no está, usa el parser
-    genérico. Lanza ValueError con mensaje claro si no se reconoce.
+    Semitonos del grado `numeral` sobre la escala de `mode` (MODE_SCALES), o
+    None si la lectura "relativa al modo" no aplica: modo mayor/custom, grado
+    alterado (b/#, que se mide sobre la escala mayor), dominantes secundarias
+    (V/vi…) o sensible disminuida (vii°).
+    """
+    if mode == 'major' or mode not in MODE_SCALES:
+        return None
+    if numeral in _LEADING_TONE_DIM or '/' in numeral or numeral[:1] in ('b', '#'):
+        return None
+    for d in _DEGREE_ORDER:
+        if numeral[:len(d)] in (d, d.lower()):
+            return MODE_SCALES[mode][_DEGREE_INDEX[d]]
+    return None
+
+
+def resolve_custom_numeral(numeral: str, tonic_pc: int,
+                           mode: str = 'major') -> tuple:
+    """
+    Resuelve un numeral en (nombre_acorde, [pitch_classes]).
+
+    La CALIDAD sale del diccionario fijo NUMERAL_TO_INTERVAL (casos como
+    V/vi, iv9, V7b9…) o, si no está, del parser genérico. La RAÍZ, en modos
+    distintos del mayor, se lee sobre la escala del modo para los grados sin
+    alteración: 'VI' en La menor es Fa, no Fa♯ (ver MODE_SCALES).
+    Lanza ValueError con mensaje claro si no se reconoce.
     """
     entry = NUMERAL_TO_INTERVAL.get(numeral)
     if entry is None:
         entry = parse_generic_numeral(numeral)
     if entry is None:
         raise ValueError(f"grado no reconocido: '{numeral}'")
+
+    mode_iv = _mode_degree_interval(numeral, mode)
+    if mode_iv is not None:
+        entry = (mode_iv, entry[1])
 
     interval, quality = entry
     root_pc   = (tonic_pc + interval) % 12
@@ -1275,6 +1331,9 @@ def resolve_entry(entry: dict, tonic_pc: int, bars: int = 8,
     Devuelve lista de dicts compatibles con chord_progression_generator.
     """
     pattern   = entry['pattern']
+    mode      = entry.get('mode', 'major')
+    if mode not in MODE_SCALES:          # 'custom' (--custom): grados como en mayor
+        mode = 'major'
     beats_pat = sum(d for _, d in pattern)
     total     = beats_pat * reps if reps is not None else bars * beats_per_bar
 
@@ -1292,7 +1351,7 @@ def resolve_entry(entry: dict, tonic_pc: int, bars: int = 8,
         if current >= total:
             break
         dur = min(dur, total - current)
-        chord_name, pitches = resolve_custom_numeral(numeral, tonic_pc)
+        chord_name, pitches = resolve_custom_numeral(numeral, tonic_pc, mode)
         result.append({
             'numeral':        numeral,
             'chord':          chord_name,
@@ -1856,6 +1915,31 @@ def chord_to_numeral(root_pc: int, quality: str, tonic_pc: int) -> str:
     return base
 
 
+def _matching_pattern(entry: dict) -> list:
+    """
+    Patrón de la entrada con los numerales escritos como los produce
+    chord_to_numeral() al analizar un MIDI (grados alterados sobre la escala
+    mayor: bVI, bIII, bVII…).
+
+    Un grado sin alteración en una entrada menor/dórica/frigia dominante se
+    lee sobre la escala del modo ('VI' en menor = bVI), igual que al resolver
+    la progresión; sin esta traducción el análisis vería distintas dos
+    escrituras del mismo acorde. Solo se reescriben los numerales cuya lectura
+    cambia respecto a la mayor; el resto queda tal cual.
+    """
+    mode = entry.get('mode', 'major')
+    out = []
+    for numeral, dur in entry['pattern']:
+        mode_iv = _mode_degree_interval(numeral, mode)
+        if mode_iv is not None:
+            interval, quality = (NUMERAL_TO_INTERVAL.get(numeral)
+                                 or parse_generic_numeral(numeral))
+            if mode_iv != interval:
+                numeral = chord_to_numeral(mode_iv, quality, 0)
+        out.append((numeral, dur))
+    return out
+
+
 # Tabla de equivalencias entre numerales (distintas grafías del mismo grado)
 _NUMERAL_ALIASES = {
     'I':   {'I','IM7','I6','Isus4','IM9','I7'},
@@ -1988,12 +2072,13 @@ def analyze_midi(midi_path: str, tonic_override: int = None,
     pat_set_cache = {}
 
     for entry in TABLE:
-        hits = match_pattern_in_sequence(midi_numerals, entry['pattern'], tonic_pc)
+        pattern = _matching_pattern(entry)
+        hits = match_pattern_in_sequence(midi_numerals, pattern, tonic_pc)
         if not hits:
             continue
         eid = entry['id']
         pat_set = pat_set_cache.setdefault(
-            eid, set(_canonicalize(n) for n, _ in entry['pattern'])
+            eid, set(_canonicalize(n) for n, _ in pattern)
         )
         midi_unique = set(_canonicalize(n) for n in clean_numerals if n != '?')
         midi_cov  = len(midi_unique & pat_set) / max(len(midi_unique), 1)
