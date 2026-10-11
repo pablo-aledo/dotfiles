@@ -244,14 +244,19 @@ def merge_stems(stems: list, target_tpb: int, channel_map: dict,
     tempo_track = MidiTrack()
     tempo_track.append(MetaMessage('track_name', name='Master', time=0))
 
-    first_path, first_mid, first_compas = stems[0]
-    first_scaled = rescale_ticks(first_mid, target_tpb)
-    for track in first_scaled.tracks:
-        for msg in track:
-            if msg.is_meta and msg.type in ('set_tempo', 'time_signature',
-                                             'key_signature'):
-                tempo_track.append(msg.copy())
-                break   # solo el primero de cada tipo
+    # Primer set_tempo / time_signature / key_signature de cada tipo, buscando
+    # primero en el primer stem y, si falta alguno, en los siguientes.
+    # (Antes el `break` cortaba tras el PRIMER meta de cualquier tipo, así que un
+    # time_signature posterior a set_tempo nunca se copiaba.)
+    seen_meta = set()
+    for _path, _mid, _compas in stems:
+        for track in rescale_ticks(_mid, target_tpb).tracks:
+            for msg in track:
+                if (msg.is_meta and msg.type in ('set_tempo', 'time_signature',
+                                                  'key_signature')
+                        and msg.type not in seen_meta):
+                    seen_meta.add(msg.type)
+                    tempo_track.append(msg.copy(time=0))
 
     # Asegurar tempo por defecto si no hay ninguno
     has_tempo = any(msg.type == 'set_tempo'

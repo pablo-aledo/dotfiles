@@ -965,17 +965,38 @@ def extract_chords_from_midi(midi_path: str, root_pc_key: int,
     mid = mido.MidiFile(midi_path)
     tpb = mid.ticks_per_beat or 480
 
+    def _has_notes(tr) -> bool:
+        return any(m.type == "note_on" and m.velocity > 0 for m in tr)
+
     target_track = None
-    if harmony_track_idx < len(mid.tracks):
+    if harmony_track_idx < len(mid.tracks) and _has_notes(mid.tracks[harmony_track_idx]):
         target_track = mid.tracks[harmony_track_idx]
     else:
+        # 1) pista con notas en el canal indicado
         for tr in mid.tracks:
-            for msg in tr:
-                if hasattr(msg, "channel") and msg.channel == harmony_channel:
-                    target_track = tr
-                    break
-            if target_track:
+            if any(m.type == "note_on" and m.velocity > 0
+                   and getattr(m, "channel", None) == harmony_channel for m in tr):
+                target_track = tr
                 break
+        # 2) autodetección (p. ej. la salida de midi_split_harmony --split-files
+        #    lleva los acordes en la pista 1 / canal 0, no en la 2 / canal 1):
+        #    la pista con notas más polifónica (la de acordes).
+        if target_track is None:
+            cands = [tr for tr in mid.tracks if _has_notes(tr)]
+            if cands:
+                def _poly(tr):
+                    # notas por ataque distinto: alto en pistas de acordes
+                    t, onsets, n = 0, set(), 0
+                    for m in tr:
+                        t += m.time
+                        if m.type == "note_on" and m.velocity > 0:
+                            onsets.add(t)
+                            n += 1
+                    return n / max(1, len(onsets))
+                target_track = max(cands, key=_poly)
+                print(f"[acordes] Aviso: pista {harmony_track_idx}/canal {harmony_channel} "
+                      f"sin notas; se usa la pista de armonía autodetectada "
+                      f"(índice {mid.tracks.index(target_track)}).")
 
     if target_track is None:
         raise ValueError(f"No se encontró track de armonía en {midi_path}")
@@ -1068,6 +1089,44 @@ def chord_note_type(pitch: int, chord: ChordEvent,
 def is_avoid_note(pitch: int, chord: ChordEvent) -> bool:
     """True si la nota es avoid note para el acorde."""
     return pitch % 12 in chord.avoid_pcs
+
+
+def bar_quarters(time_sig: str) -> float:
+    """Duración de un compás N/D en NEGRAS (N*4/D). Todos los offsets del
+    módulo están en negras; usar solo el numerador (bug anterior) duplicaba la
+    duración en compases /8 y la reducía a la mitad en /2."""
+    num, den = str(time_sig).split("/")
+    return float(num) * 4.0 / float(den)
+
+
+def _tempo_arg(s):
+    """--tempo acepta enteros y decimales ('60', '60.0', '72.5'); un valor
+    entero se devuelve como int para no alterar el resto del código."""
+    v = float(s)
+    return int(v) if v == int(v) else v
+
+
+_MIDO_MAJOR_KEYS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
+_MIDO_MINOR_KEYS = ['Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'Bbm', 'Bm']
+
+
+def _meta_msgs(time_sig=None, root_pc=None, mode=None):
+    """Meta-eventos time_signature / key_signature para la pista 0 del MIDI
+    exportado (sin ellos metric_analyzer, harmonic_analyzer y quality_scorer
+    asumen 4/4 y la tonalidad se pierde)."""
+    out = []
+    if time_sig:
+        try:
+            n, d = (int(x) for x in str(time_sig).split("/"))
+            out.append(mido.MetaMessage("time_signature", numerator=n, denominator=d,
+                                        clocks_per_click=24,
+                                        notated_32nd_notes_per_beat=8, time=0))
+        except (ValueError, TypeError):
+            pass
+    if root_pc is not None and mode in ("major", "minor"):
+        names = _MIDO_MAJOR_KEYS if mode == "major" else _MIDO_MINOR_KEYS
+        out.append(mido.MetaMessage("key_signature", key=names[root_pc % 12], time=0))
+    return out
 
 
 def is_strong_beat(beat_offset: float, beats_per_bar: float) -> bool:
@@ -3944,7 +4003,10 @@ def notes_to_midi(notes: List[MelodyNote], chord_events: List[ChordEvent],
                   ticks_per_beat: int = 480,
                   include_chords: bool = False,
                   source_midi_path: Optional[str] = None,
-                  source_chord_track_idx: int = 2):
+                  source_chord_track_idx: int = 2,
+                  time_sig: Optional[str] = None,
+                  root_pc: Optional[int] = None,
+                  mode: Optional[str] = None):
     """
     Exporta la melodía a MIDI (track 0 meta, track 1 melodía, track 2 acordes).
     Si include_chords=True y hay fuente MIDI, copia el track original verbatim.
@@ -3963,6 +4025,8 @@ def notes_to_midi(notes: List[MelodyNote], chord_events: List[ChordEvent],
     meta = mido.MidiTrack()
     mid.tracks.append(meta)
     meta.append(mido.MetaMessage("set_tempo", tempo=tempo, time=0))
+    for _m in _meta_msgs(time_sig, root_pc, mode):
+        meta.append(_m)
 
     # Track 1: melodía
     mel = mido.MidiTrack()
@@ -4416,8 +4480,7 @@ class FormComposer:
             return root_name
 
         # Progresiones características por sección
-        beats_per_bar_int = int(self.time_sig.split("/")[0])
-        b = beats_per_bar_int
+        b = f"{bar_quarters(self.time_sig):g}"   # duración del compás en negras
 
         if base_label in ("A", "V"):
             # I - V - VI - IV  (la progresión más universal)
@@ -4546,7 +4609,7 @@ class FormComposer:
         results_cache: Dict[str, MelodyResult] = {}
         sections: List[Tuple[str, MelodyResult]] = []
         global_offset_beats = 0.0
-        beats_per_bar = float(self.time_sig.split("/")[0])
+        beats_per_bar = bar_quarters(self.time_sig)
         prev_root_pc  = self.root_pc
 
         for (lbl, _, _), bars in zip(template, section_bars):
@@ -4708,7 +4771,7 @@ class FormComposer:
         tpb   = 480
         mid   = mido.MidiFile(ticks_per_beat=tpb)
         tempo = int(60_000_000 / max(self.tempo, 1))
-        bpb   = float(self.time_sig.split("/")[0])
+        bpb   = bar_quarters(self.time_sig)
 
         def q_ticks(q: float) -> int:
             return int(q * tpb)
@@ -4868,8 +4931,7 @@ class ConditionedMelodyGenerator:
         self._interp_alpha     = interp_alpha
         self._phrase_bars      = phrase_bars
 
-        num, den = time_sig.split("/")
-        self.beats_per_bar = float(num)
+        self.beats_per_bar = bar_quarters(time_sig)
         self.rng = random.Random(seed)
         np.random.seed(seed)
 
@@ -5157,7 +5219,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mode",     default="auto",
                    choices=list(SCALE_INTERVALS.keys()) + ["auto"])
     p.add_argument("--bars",     type=int,   default=16)
-    p.add_argument("--tempo",    type=int,   default=120)
+    p.add_argument("--tempo",    type=_tempo_arg, default=120)
     p.add_argument("--time-sig", default="4/4")
 
     p.add_argument("--profile", default="serene",
@@ -5520,6 +5582,7 @@ def main():
             include_chords=args.include_chords,
             source_midi_path=args.chords_midi,
             source_chord_track_idx=args.chords_midi_track,
+            time_sig=args.time_sig, root_pc=gen.root_pc, mode=gen.mode,
         )
         output_paths.append(out_p)
         tag = "★ MEJOR" if i == 0 else f"  v{i+1}"

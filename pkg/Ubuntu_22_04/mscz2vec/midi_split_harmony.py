@@ -225,8 +225,9 @@ class MidiInfo:
         self.tpb: int = 480              # ticks per beat
         self.tempo_us: int = 500_000     # microsegundos por beat (120 BPM)
         self.bpm: float = 120.0
-        self.beats_per_bar: int = 4
+        self.beats_per_bar: float = 4.0  # pulsos por compás EN NEGRAS (N*4/D)
         self.beat_unit: int = 4          # denominador del compás
+        self.meta_msgs: list = []        # time_signature / key_signature del original
         self.total_ticks: int = 0
         self.total_beats: float = 0.0
         self.total_bars: float = 0.0
@@ -251,8 +252,18 @@ def load_midi(path: str) -> MidiInfo:
             info.tempo_us = msg.tempo
             info.bpm = 60_000_000 / msg.tempo
         elif msg.type == 'time_signature':
-            info.beats_per_bar = msg.numerator
+            # Los tiempos internos están en negras: un compás N/D dura N*4/D negras
+            # (antes se usaba solo el numerador: 3/8 → 3 negras en vez de 1.5).
+            info.beats_per_bar = msg.numerator * 4.0 / msg.denominator
             info.beat_unit = msg.denominator
+    # Conservar los metadatos de compás/armadura (primera aparición) para
+    # reinyectarlos en los MIDIs de salida.
+    _seen_meta = set()
+    for _tr in mid.tracks:
+        for _m in _tr:
+            if _m.type in ('time_signature', 'key_signature') and _m.type not in _seen_meta:
+                _seen_meta.add(_m.type)
+                info.meta_msgs.append(_m.copy(time=0))
 
     def ticks_to_beats(t: int) -> float:
         return t / info.tpb
@@ -504,7 +515,61 @@ def classify_channels(notes: List[Tuple]) -> Dict[Tuple[int,int], str]:
         else:
             classification[(tr, ch)] = 'harmony'
 
-    return classification
+    return _fix_inverted_melody(classification, voice_notes)
+
+
+def _fix_inverted_melody(classification: Dict[Tuple[int, int], str],
+                         voice_notes: Dict[Tuple[int, int], List[Tuple]]
+                         ) -> Dict[Tuple[int, int], str]:
+    """
+    Guarda de coherencia de registro (corrige la inversión melodía/armonía).
+
+    La regla `poly_ratio > 0.55 → harmony` descarta la voz aguda cuando lleva
+    dobles cuerdas/terceras, y entonces la voz grave monofónica queda como
+    'melody'. Si una voz clasificada como 'harmony' es (a) claramente más
+    aguda que la melodía elegida (≥ 12 semitonos de mediana) y (b) su
+    *skyline* (nota más aguda de cada ataque) es tan melódico como el de una
+    melodía (verosimilitud > 0.45) y (c) tiene un número de notas comparable,
+    se promueve a 'melody' y la voz grave pasa a 'bass'/'harmony'.
+    """
+    mel_voices = [v for v, c in classification.items() if c == 'melody']
+    if not mel_voices:
+        return classification
+
+    def med(v):
+        return float(np.median([n[1] for n in voice_notes[v]]))
+
+    cur_med = max(med(v) for v in mel_voices)
+    cur_n = sum(len(voice_notes[v]) for v in mel_voices)
+
+    best, best_med = None, -1.0
+    for v, c in classification.items():
+        if c != 'harmony' or v[1] == 9:
+            continue
+        vn = voice_notes[v]
+        if len(vn) < max(8, 0.5 * cur_n):
+            continue
+        m = med(v)
+        if m < cur_med + 12 or m <= best_med:
+            continue
+        # skyline de la voz candidata
+        top: Dict[float, int] = {}
+        for n in vn:
+            k = round(n[0], 2)
+            if k not in top or n[1] > top[k]:
+                top[k] = n[1]
+        sky = [top[k] for k in sorted(top)]
+        if len(sky) >= 8 and melodic_verosimilitude(sky) > 0.45:
+            best, best_med = v, m
+
+    if best is None:
+        return classification
+
+    fixed = dict(classification)
+    fixed[best] = 'melody'
+    for v in mel_voices:
+        fixed[v] = 'bass' if med(v) < 55 else 'harmony'
+    return fixed
 
 
 def extract_skyline(notes: List[Tuple], tonic_pc: int, mode: str,
@@ -1406,13 +1471,16 @@ def export_split_file(melody_notes: List[Tuple],
                        output_path: str,
                        melody_octave: Optional[int],
                        chord_octave: int,
-                       velocity_melody: int, velocity_chords: int) -> None:
+                       velocity_melody: int, velocity_chords: int,
+                       meta_msgs: Optional[List] = None) -> None:
     """Exporta un único MIDI con dos pistas: ch0=melodía, ch1=acordes."""
     mid = mido.MidiFile(ticks_per_beat=tpb)
 
     # Track 0: tempo y firma de tiempo
     meta_track = mido.MidiTrack()
     meta_track.append(mido.MetaMessage('set_tempo', tempo=tempo_us, time=0))
+    for _m in (meta_msgs or []):
+        meta_track.append(_m.copy(time=0))
     mid.tracks.append(meta_track)
 
     melody_track = build_melody_track(melody_notes, tpb,
@@ -1432,12 +1500,15 @@ def export_two_files(melody_notes: List[Tuple],
                       melody_path: str, chords_path: str,
                       melody_octave: Optional[int],
                       chord_octave: int,
-                      velocity_melody: int, velocity_chords: int) -> None:
+                      velocity_melody: int, velocity_chords: int,
+                      meta_msgs: Optional[List] = None) -> None:
     """Exporta dos ficheros MIDI separados: uno para melodía y otro para acordes."""
     # MIDI de melodía
     mid_mel = mido.MidiFile(ticks_per_beat=tpb)
     meta_mel = mido.MidiTrack()
     meta_mel.append(mido.MetaMessage('set_tempo', tempo=tempo_us, time=0))
+    for _m in (meta_msgs or []):
+        meta_mel.append(_m.copy(time=0))
     mid_mel.tracks.append(meta_mel)
     mid_mel.tracks.append(build_melody_track(melody_notes, tpb,
                                               velocity=velocity_melody,
@@ -1448,6 +1519,8 @@ def export_two_files(melody_notes: List[Tuple],
     mid_ch = mido.MidiFile(ticks_per_beat=tpb)
     meta_ch = mido.MidiTrack()
     meta_ch.append(mido.MetaMessage('set_tempo', tempo=tempo_us, time=0))
+    for _m in (meta_msgs or []):
+        meta_ch.append(_m.copy(time=0))
     mid_ch.tracks.append(meta_ch)
     mid_ch.tracks.append(build_chords_track(chords, tpb, channel=0,
                                              octave=chord_octave,
@@ -1531,8 +1604,9 @@ def main():
                         help='Tonalidad, e.g. "A minor" o "C" '
                              '(default: autodetectada; también fija la tónica de '
                              'normalización en --train-corpus)')
-    parser.add_argument('--beats-per-bar',   type=int,   default=None,
-                        help='Pulsos por compás (default: detectado del MIDI)')
+    parser.add_argument('--beats-per-bar',   type=float, default=None,
+                        help='Pulsos (negras) por compás; admite decimales, p.ej. 1.5 '
+                             'para 3/8 (default: detectado del MIDI como N*4/D)')
     parser.add_argument('--tempo',           type=float, default=None,
                         help='Tempo BPM de salida (default: detectado)')
     parser.add_argument('--chord-res',       type=float, default=1.0, metavar='BEATS',
@@ -1641,7 +1715,13 @@ def main():
     info = load_midi(str(input_path))
 
     if args.beats_per_bar:
+        if abs(info.beats_per_bar - args.beats_per_bar) > 1e-6:
+            # El compás forzado ya no coincide con el del original: no reinyectar
+            # el time_signature antiguo (sí la armadura).
+            info.meta_msgs = [m for m in info.meta_msgs if m.type != 'time_signature']
         info.beats_per_bar = args.beats_per_bar
+        if info.total_beats:
+            info.total_bars = info.total_beats / info.beats_per_bar
     if args.tempo:
         info.bpm = args.tempo
         info.tempo_us = int(60_000_000 / args.tempo)
@@ -1649,7 +1729,7 @@ def main():
     if args.verbose:
         print(f"║  Pistas: {info.n_tracks}  |  Canales: {info.n_channels}  "
               f"|  Notas: {len(info.notes)}")
-        print(f"║  Tempo: {info.bpm:.1f} BPM  |  Compás: {info.beats_per_bar}/4  "
+        print(f"║  Tempo: {info.bpm:.1f} BPM  |  Compás: {info.beats_per_bar:g} negras  "
               f"|  Duración: {info.total_bars:.1f} compases")
 
     if not info.notes:
@@ -1780,6 +1860,7 @@ def main():
             chord_octave=args.chord_octave,
             velocity_melody=args.velocity_melody,
             velocity_chords=args.velocity_chords,
+            meta_msgs=info.meta_msgs,
         )
         print(f"  → Melodía: {melody_path}")
         print(f"  → Acordes: {chords_path}")
@@ -1793,6 +1874,7 @@ def main():
             chord_octave=args.chord_octave,
             velocity_melody=args.velocity_melody,
             velocity_chords=args.velocity_chords,
+            meta_msgs=info.meta_msgs,
         )
         print(f"  → Split MIDI: {split_path}")
 

@@ -855,7 +855,7 @@ Ejemplos:
     p.add_argument('--min-notes', type=int, default=2, metavar='N',
                    help='Mínimo de notas simultáneas para considerar polifónica '
                         'una pista en la autodetección (default: 2)')
-    p.add_argument('--out', default=None, metavar='FILE',
+    p.add_argument('--out', '--output', dest='out', default=None, metavar='FILE',
                    help='Ruta del MIDI de salida (default: <input>.voiced.mid)')
     p.add_argument('--out-dir', default=None, metavar='DIR',
                    help='Carpeta de salida (default: junto al MIDI de entrada)')

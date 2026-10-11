@@ -5013,11 +5013,14 @@ def extract_fingerprint(mel, bass, acc, target_key, tempo_bpm, n_bars,
     return fingerprint
 
 
-def export_fingerprint(fingerprint, output_midi_path):
-    """Guarda el fingerprint como JSON junto al MIDI de salida."""
-    json_path = output_midi_path.replace('.mid', '.fingerprint.json')
-    if not json_path.endswith('.json'):
-        json_path += '.fingerprint.json'
+def export_fingerprint(fingerprint, output_midi_path, json_path=None):
+    """Guarda el fingerprint como JSON junto al MIDI de salida
+    (o en `json_path` si se indica)."""
+    if json_path is None:
+        json_path = output_midi_path.replace('.mid', '.fingerprint.json')
+        if not json_path.endswith('.json'):
+            json_path += '.fingerprint.json'
+    os.makedirs(os.path.dirname(os.path.abspath(json_path)), exist_ok=True)
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(fingerprint, f, indent=2, ensure_ascii=False)
     return json_path
@@ -5350,11 +5353,36 @@ def main():
         print("═" * 65)
         print(f"\nAnalizando {len(fp_midi_paths)} fichero(s)…\n")
 
+        # --output en modo --fingerprint-only (antes se ignoraba y el JSON se
+        # escribía junto al MIDI de entrada, contaminando el corpus):
+        #   · acaba en .json  → ese fichero (solo válido con 1 entrada)
+        #   · es un directorio (existente o terminado en /) → <dir>/<stem>.fingerprint.json
+        #   · valor por defecto ('output_unified.mid') / no indicado → comportamiento previo
+        _out = args.output
+        _out_explicit = any(a == '--output' or a.startswith('--output=')
+                            for a in sys.argv[1:])
+
+        def _fp_target(mp):
+            if not _out_explicit:
+                return None
+            if _out.lower().endswith('.json'):
+                if len(fp_midi_paths) > 1:
+                    print("  [aviso] --output es un único .json pero hay varias entradas: "
+                          "se usará <stem>.fingerprint.json en su carpeta.")
+                    return os.path.join(os.path.dirname(os.path.abspath(_out)),
+                                        os.path.splitext(os.path.basename(mp))[0]
+                                        + '.fingerprint.json')
+                return _out
+            if os.path.isdir(_out) or _out.endswith(('/', os.sep)):
+                return os.path.join(_out, os.path.splitext(os.path.basename(mp))[0]
+                                    + '.fingerprint.json')
+            return None
+
         ok_count = 0
         for mp in fp_midi_paths:
             try:
                 fp = fingerprint_from_midi(mp, verbose=args.verbose)
-                json_path = export_fingerprint(fp, mp)
+                json_path = export_fingerprint(fp, mp, _fp_target(mp))
                 print(f"  ✓ {os.path.basename(mp)}")
                 print(f"      → {json_path}")
                 print(f"      Tonalidad : {fp['meta']['key_tonic']} {fp['meta']['key_mode']}")

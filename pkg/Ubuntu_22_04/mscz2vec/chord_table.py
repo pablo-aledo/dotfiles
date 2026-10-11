@@ -84,6 +84,7 @@
 
 import sys
 import os
+import math
 import json
 import argparse
 import re
@@ -2420,8 +2421,11 @@ def main():
     parser.add_argument('--reps',        type=int, default=None, metavar='N',
                         help='Número de repeticiones exactas de la progresión/ciclo '
                              'a exportar (sustituye a --bars; no trunca el último ciclo)')
-    parser.add_argument('--bars',        type=int, default=8,
-                        help='Compases a generar (default: 8)')
+    parser.add_argument('--bars',        type=int, default=None,
+                        help='Compases a generar (default: 8; con --custom y sin '
+                             '--bars/--reps, los que necesite la progresión completa). '
+                             'Si la progresión es más larga que --bars se TRUNCA '
+                             '(se avisa); usa --reps para no truncar')
     parser.add_argument('--beats',       type=int, default=4,
                         help='Pulsos por compás (default: 4)')
     parser.add_argument('--tempo',       type=float, default=120.0,
@@ -2538,6 +2542,23 @@ def main():
             print(f"  Tensión: {entry['tension']}/10  ·  Emoción: {entry['emocion']}")
             print(f"  {entry['desc']}\n")
 
+        bars_explicit = args.bars is not None
+        if args.bars is None:
+            args.bars = 8
+        if args.custom is not None and args.reps is None:
+            pat_beats = sum(d for _, d in entry['pattern'])
+            if pat_beats > args.bars * args.beats + 1e-9:
+                needed = int(math.ceil(pat_beats / args.beats - 1e-9))
+                if not bars_explicit:
+                    print(f"  [aviso] la progresión --custom dura {pat_beats:g} pulsos "
+                          f"({needed} compases): se amplía --bars a {needed} "
+                          f"(por defecto serían 8).")
+                    args.bars = needed
+                else:
+                    print(f"  [AVISO] --bars {args.bars} ({args.bars * args.beats} pulsos) "
+                          f"es menor que la progresión --custom ({pat_beats:g} pulsos): "
+                          f"se TRUNCA el final. Usa --bars {needed} o --reps 1.",
+                          file=sys.stderr)
         progression = resolve_entry(entry, tonic_pc, args.bars, args.beats,
                                     reps=args.reps)
         chord_text  = progression_to_text(progression)

@@ -739,7 +739,7 @@ class WalkingBassGenerator(BassStyleGenerator):
                 techs = ["root", "fifth", "root", "approach"]
 
             # Duración de cada paso
-            n_steps = min(int(self.bpb), len(walk))
+            n_steps = max(1, min(int(self.bpb), len(walk)))
             step_dur = chord.duration / n_steps
 
             for step in range(n_steps):
@@ -1451,11 +1451,44 @@ def analyze_bass_line(result: BassResult) -> Dict[str, Any]:
 #  EXPORT: MIDI
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _tempo_arg(s):
+    """--tempo acepta enteros y decimales ('60', '60.0', '72.5'); un valor
+    entero se devuelve como int para no alterar el resto del código."""
+    v = float(s)
+    return int(v) if v == int(v) else v
+
+
+_MIDO_MAJOR_KEYS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
+_MIDO_MINOR_KEYS = ['Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'Bbm', 'Bm']
+
+
+def _meta_msgs(time_sig=None, root_pc=None, mode=None):
+    """Meta-eventos time_signature / key_signature para la pista 0 del MIDI
+    exportado (sin ellos metric_analyzer, harmonic_analyzer y quality_scorer
+    asumen 4/4 y la tonalidad se pierde)."""
+    out = []
+    if time_sig:
+        try:
+            n, d = (int(x) for x in str(time_sig).split("/"))
+            out.append(mido.MetaMessage("time_signature", numerator=n, denominator=d,
+                                        clocks_per_click=24,
+                                        notated_32nd_notes_per_beat=8, time=0))
+        except (ValueError, TypeError):
+            pass
+    if root_pc is not None and mode in ("major", "minor"):
+        names = _MIDO_MAJOR_KEYS if mode == "major" else _MIDO_MINOR_KEYS
+        out.append(mido.MetaMessage("key_signature", key=names[root_pc % 12], time=0))
+    return out
+
+
 def notes_to_midi(bass_notes: List[BassNote], melody_notes: Optional[List[Tuple]],
                    tempo_bpm: int, output_path: str,
                    ticks_per_beat: int = 480,
                    bass_program: int = 33,
-                   include_melody: bool = False):
+                   include_melody: bool = False,
+                   time_sig: Optional[str] = None,
+                   root_pc: Optional[int] = None,
+                   mode: Optional[str] = None):
     """
     Exporta la línea de bajo a MIDI.
     Canal 0 = bajo; canal 1 = melodía (si include_melody=True).
@@ -1474,6 +1507,8 @@ def notes_to_midi(bass_notes: List[BassNote], melody_notes: Optional[List[Tuple]
     bass_track = mido.MidiTrack()
     mid.tracks.append(bass_track)
     bass_track.append(mido.MetaMessage("set_tempo", tempo=tempo_us, time=0))
+    for _m in _meta_msgs(time_sig, root_pc, mode):
+        bass_track.append(_m)
     bass_track.append(mido.MetaMessage("track_name", name="Bass", time=0))
     bass_track.append(mido.Message("program_change", channel=0,
                                     program=bass_program, time=0))
@@ -1718,8 +1753,10 @@ class BassLineComposer:
 
         # Parsear compás
         num, den        = time_sig.split("/")
-        self.bpb        = float(num)
         self.beat_unit  = int(den)
+        # Los offsets están en negras: un compás N/D dura N*4/D negras
+        # (antes: float(num) → 6/8 duraba 6 negras, 3/8 duraba 3, 2/2 duraba 2).
+        self.bpb        = float(num) * 4.0 / self.beat_unit
 
         # RNG
         self.rng = random.Random(seed)
@@ -1749,7 +1786,7 @@ class BassLineComposer:
         print(f"┌─ BASS LINE COMPOSER ────────────────────────────")
         print(f"│  Tonalidad : {self.key} {self.mode}")
         print(f"│  Estilo    : {self.style}")
-        print(f"│  Compases  : {self.bars} ({int(self.bpb)}/4)")
+        print(f"│  Compases  : {self.bars} ({self.bpb:g} negras/compás)")
         print(f"│  Tempo     : {self.tempo} BPM")
         print(f"│  Rango     : MIDI {self.bass_low}-{self.bass_high}")
         print(f"│  Swing     : {self.swing:.2f}  Approach: {self.approach_prob:.2f}")
@@ -1919,7 +1956,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mode",     default="auto",
                    choices=list(SCALE_INTERVALS.keys()) + ["auto"])
     p.add_argument("--bars",     type=int,   default=16)
-    p.add_argument("--tempo",    type=int,   default=120)
+    p.add_argument("--tempo",    type=_tempo_arg, default=120)
     p.add_argument("--time-sig", default="4/4")
     p.add_argument("--style",    default="auto",
                    choices=["walking", "classical", "baroque", "latin",
@@ -2109,7 +2146,8 @@ def main():
             print(f"[ERROR] No se encuentra: {args.chords_midi}")
             sys.exit(1)
         try:
-            bpb = float(args.time_sig.split("/")[0])
+            _n, _d = args.time_sig.split("/")
+            bpb = float(_n) * 4.0 / float(_d)   # compás en negras (N*4/D)
             chords = extract_chords_from_midi(args.chords_midi, bpb)
             params["bars"] = max(params["bars"],
                                   math.ceil(
@@ -2175,7 +2213,9 @@ def main():
 
         notes_to_midi(res.notes, melody_notes, res.tempo, out_p,
                        bass_program=bass_prog,
-                       include_melody=False)
+                       include_melody=False,
+                       time_sig=args.time_sig, root_pc=composer.root_pc,
+                       mode=composer.mode)
         output_paths.append(out_p)
 
         tag = "★ MEJOR" if i == 0 else f"  v{i+1}"
@@ -2200,7 +2240,9 @@ def main():
         bass_prog = GM_BASS_PROGRAMS.get(
             STYLE_TO_PROGRAM.get(best.style, "fingered"), 33)
         notes_to_midi(best.notes, melody_notes, best.tempo, comb_p,
-                       bass_program=bass_prog, include_melody=True)
+                       bass_program=bass_prog, include_melody=True,
+                       time_sig=args.time_sig, root_pc=composer.root_pc,
+                       mode=composer.mode)
         print(f"[combined] {comb_p}")
 
     # Fingerprint

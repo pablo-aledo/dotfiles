@@ -324,6 +324,7 @@ def perform_midi(path: str, out_path: Optional[str] = None,
                 extra.append(_cc(wt + max(5, tpb // 32), ch, 64, 127))
             extra.append(_cc(warp(total_ticks) + tpb, ch, 64, 0))
             pedal_events_n += len(extra)
+        n_pedal_here = len(extra)   # eventos de pedal de ESTA pista
         if vibrato and fam in ("cuerda_frotada", "viento_madera",
                                "viento_metal", "voz") and len(notes) < 1500:
             for n in notes:
@@ -338,7 +339,7 @@ def perform_midi(path: str, out_path: Optional[str] = None,
                         extra.append(_cc(t, ch, 11, swell))
                         extra.append(_cc(t, ch, 1, vib))
                     extra.append(_cc(n.end, ch, 1, 0))
-            cc_events_n += len(extra) - pedal_events_n
+            cc_events_n += len(extra) - n_pedal_here
 
         # warp del resto de eventos de la pista (CCs previos, programas...)
         for e in trk.events:
