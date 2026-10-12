@@ -298,10 +298,22 @@ class SimpleKey:
         return f"{self.tonic.name} {self.mode}"
 
 
+_FLAT_TO_SHARP = {'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#',
+                  'Cb': 'B', 'Fb': 'E', 'E#': 'F', 'B#': 'C'}
+
+
+def _normalize_tonic(name):
+    """'bb'/'Bb' → 'A#', 'Eb' → 'D#'... (antes replace('b','#') convertía
+    Bb en B# = Do y Eb en E# = Fa, dando una tonalidad equivocada)."""
+    n = name.strip().replace('♯', '#').replace('♭', 'b')
+    n = n[:1].upper() + n[1:]
+    return _FLAT_TO_SHARP.get(n, n)
+
+
 def parse_key_string(key_str):
     """Parsea 'D minor', 'F# major', etc. → key_obj."""
     parts = key_str.strip().split()
-    tonic_name = parts[0].replace('b', '#') if len(parts) > 0 else 'C'
+    tonic_name = _normalize_tonic(parts[0]) if len(parts) > 0 else 'C'
     mode = parts[1].lower() if len(parts) > 1 else 'major'
     if MUSIC21_OK:
         try:
@@ -1155,7 +1167,7 @@ Ejemplos:
                    metavar='S',
                    help='Estrategias a aplicar (default: diatonic tritone secondary modal_interchange)')
     p.add_argument('--key', default=None, metavar='KEY',
-                   help='Tonalidad forzada, e.g. "D minor" o "F# major"')
+                   help='Tonalidad forzada, e.g. "D minor" o "F# major"; "auto" (o sin --key) = detectar')
     p.add_argument('--bars', type=int, default=None,
                    help='Compases de salida (default: auto)')
     p.add_argument('--candidates', type=int, default=3,
@@ -1202,7 +1214,7 @@ def main():
         reharmonize(
             midi_path=midi_path,
             strategies=args.strategy,
-            key_override=args.key,
+            key_override=None if (args.key or '').strip().lower() in ('', 'auto') else args.key,
             n_bars=args.bars,
             n_candidates=args.candidates,
             acc_style=args.acc_style,

@@ -90,6 +90,7 @@ python piano_autocomplete.py continue --model-dir runs/prueba/ \
 """
 
 import sys
+import zlib
 import os
 import bisect
 import math
@@ -848,7 +849,7 @@ def cmd_preprocess(args):
             if args.augment:
                 for semis in (-2, -1, 1, 2):
                     variants.append(augment_transpose(notes, semis))
-                aug_rng = random.Random(hash(path) & 0xffffffff)
+                aug_rng = random.Random((zlib.crc32(str(path).encode('utf-8')) & 0xffffffff))
                 variants.append(augment_tempo(notes, aug_rng.uniform(0.9, 1.1)))
                 variants.append(augment_jitter(notes, 0.05, 6, aug_rng))
 

@@ -140,6 +140,8 @@ except ImportError:
     MIDO_OK = False
     print("[WARN] mido no disponible. Instala con: pip install mido")
 
+import os as _os
+_os.environ.setdefault('PYGAME_HIDE_SUPPORT_PROMPT', '1')  # sin banner de pygame en stdout
 try:
     import pygame
     PYGAME_OK = True

@@ -1131,7 +1131,7 @@ def _auto_output_name(input_path, params, curve):
 def build_parser():
     p = argparse.ArgumentParser(prog="modulator.py",
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("input")
+    p.add_argument("input", nargs="?", help="MIDI de entrada (no necesario con --list-params/--list-curves)")
     grp = p.add_mutually_exclusive_group()
     grp.add_argument("--param",  metavar="P")
     grp.add_argument("--params", metavar="P", nargs="+")
@@ -1195,6 +1195,9 @@ def main():
 
     if args.list_params: print_params(); return
     if args.list_curves: print_curves(); return
+
+    if not args.input:
+        parser.error("falta el MIDI de entrada (solo es opcional con --list-params/--list-curves)")
 
     if not Path(args.input).exists():
         print(f"[ERROR] No se encuentra: {args.input}", file=sys.stderr); sys.exit(1)

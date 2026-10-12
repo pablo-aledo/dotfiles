@@ -100,6 +100,7 @@
 """
 
 import sys
+import zlib
 import os
 import math
 import json
@@ -2039,7 +2040,7 @@ def extract_training_samples(
         phrase_bounds = _detect_phrase_boundaries(all_notes, bpb, n_bars) \
                         if mask_phrase else []
 
-        rng = random.Random(hash(midi_path) % (2**31))
+        rng = random.Random((zlib.crc32(str(midi_path).encode('utf-8')) & 0xffffffff) % (2**31))
         samples = []
 
         def _process_single(notes_by_track: Dict[int, List[RawNote]],

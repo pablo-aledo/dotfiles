@@ -357,6 +357,7 @@
 """
 
 import argparse
+import zlib
 import json
 import math
 import os
@@ -1087,7 +1088,7 @@ def apply_bar_variation(grid: dict, bar: int, style: str,
     if variation_strength < 0.01:
         return grid
 
-    rng = random.Random(bar * 73 + hash(style) % 1000)
+    rng = random.Random(bar * 73 + (zlib.crc32(str(style).encode('utf-8')) & 0xffffffff) % 1000)
     style_weights = STYLE_VARIATION_WEIGHTS.get(style, {})
 
     for name, fn, base_prob in VARIATION_CATALOG:
@@ -2999,7 +3000,7 @@ def transform_syncopate(grids: dict, level: float, total_bars: int) -> dict:
             bar_end   = min(bar_start + steps_per_bar, n)
             bar_slice = list(new_arr[bar_start:bar_end])
 
-            rng = random.Random(bar * 17 + hash(instr) % 100)
+            rng = random.Random(bar * 17 + (zlib.crc32(str(instr).encode('utf-8')) & 0xffffffff) % 100)
             for i, v in enumerate(bar_slice):
                 if v <= 0:
                     continue

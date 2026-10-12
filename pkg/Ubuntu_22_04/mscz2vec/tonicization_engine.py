@@ -330,10 +330,18 @@ def inject_secondary_dominants(notes, selections, tc: SimpleTimeContext, add_sev
         lowest = min(n.pitch for n in chord_notes)
         root_pitch = min((sel["dominant_root_pc"] + 12 * o for o in range(11)),
                          key=lambda p: abs(p - lowest))
+        # El voicing nunca sale del registro del acorde original ni del rango
+        # MIDI: antes apilaba octavas hasta igualar el nº de notas del
+        # compás (36 voces en acordes densos → alturas hasta 153 → ValueError).
+        highest = max(n.pitch for n in chord_notes)
+        while root_pitch + max(intervals) > 127:
+            root_pitch -= 12
+        limit = min(127, max(highest, root_pitch + max(intervals)))
         voicing = []
         octv = 0
-        while len(voicing) < n_voices:
-            voicing.extend(root_pitch + iv + 12 * octv for iv in intervals)
+        while len(voicing) < n_voices and root_pitch + 12 * octv <= limit:
+            voicing.extend(p for p in (root_pitch + iv + 12 * octv for iv in intervals)
+                           if 0 <= p <= limit)
             octv += 1
         voicing = sorted(voicing)[:n_voices]
 

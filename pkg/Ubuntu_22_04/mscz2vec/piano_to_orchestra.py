@@ -3716,6 +3716,10 @@ def main():
         print(f"ERROR: No se encuentra {args.midi}"); sys.exit(1)
 
     base = args.output or Path(args.midi).stem + '_orch'
+    # --output es un nombre BASE (se le añade .mid); si ya trae la extensión
+    # se quita para no producir 'x.mid.mid'.
+    if base.lower().endswith(('.mid', '.midi')):
+        base = os.path.splitext(base)[0]
 
     print(f"  Entrada:   {args.midi}")
     print(f"  Salida:    {base}.mid")

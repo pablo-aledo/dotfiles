@@ -182,6 +182,8 @@ try:
 except ImportError:
     MUSIC21_OK = False
 
+import os as _os
+_os.environ.setdefault('PYGAME_HIDE_SUPPORT_PROMPT', '1')  # sin banner de pygame en stdout
 try:
     import pygame
     PYGAME_OK = True

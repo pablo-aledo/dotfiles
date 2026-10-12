@@ -449,7 +449,7 @@ def per_dim_scalars(vec_dict: dict) -> dict[str, float]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _safe_align(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Trunca o rellena con ceros para igualar longitudes."""
+    """Trunca al tamaño del más corto para igualar longitudes."""
     if len(a) == len(b):
         return a, b
     n = min(len(a), len(b))
@@ -482,6 +482,14 @@ def similarity(a: np.ndarray, b: np.ndarray, metric: str = "euclidean") -> float
         "manhattan": distance_manhattan,
     }
     dist = fns.get(metric, distance_euclidean)(a, b)
+    # Normalizar por la dimensionalidad: la distancia euclídea/manhattan crece
+    # con el nº de componentes, y exp(-dist) sin normalizar daba 0.0000 incluso
+    # entre MIDIs casi idénticos. (coseno ya está en [0, 2].)
+    n = max(1, min(len(a), len(b)))
+    if metric == "manhattan":
+        dist /= n
+    elif metric != "cosine":
+        dist /= math.sqrt(n)
     # Convertir distancia a similitud con decaimiento exponencial
     return float(math.exp(-dist))
 
@@ -1732,7 +1740,7 @@ def mode_path(midi_paths: list[str], args) -> dict:
                     carr_aligned = carr_full[c_idx]
                     n_align = min(len(interp_arr), len(carr_aligned))
                     dist = float(np.linalg.norm(interp_arr[:n_align] - carr_aligned[:n_align]))
-                    sim  = float(math.exp(-dist))
+                    sim  = float(math.exp(-dist / math.sqrt(max(1, n_align))))
                     if sim > best_sim_val:
                         best_sim_val  = sim
                         best_path_val = cpath

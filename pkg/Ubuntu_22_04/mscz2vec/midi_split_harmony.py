@@ -112,6 +112,17 @@ warnings.filterwarnings("ignore")
 PITCH_NAMES       = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 PITCH_NAMES_FLAT  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
 
+# Tonalidades que se escriben con bemoles (tónica en pc, modo): F, Bb, Eb, Ab, Db, Gb mayor;
+# D, G, C, F, Bb, Eb menor.
+_FLAT_KEYS = {('major', pc) for pc in (5, 10, 3, 8, 1, 6)} | {('minor', pc) for pc in (2, 7, 0, 5, 10, 3)}
+
+
+def pc_name(pc: int, tonic_pc: int = 0, mode: str = 'major') -> str:
+    """Nombre de nota con la grafía de la tonalidad (Bb en Si♭ mayor, no A#)."""
+    flat = (mode, tonic_pc % 12) in _FLAT_KEYS
+    return (PITCH_NAMES_FLAT if flat else PITCH_NAMES)[pc % 12]
+
+
 NOTE_PC: Dict[str, int] = {n: i for i, n in enumerate(PITCH_NAMES)}
 NOTE_PC.update({n: i for i, n in enumerate(PITCH_NAMES_FLAT)})
 NOTE_PC.update({'Cb': 11, 'Fb': 4, 'B#': 0, 'E#': 5})
@@ -1062,7 +1073,7 @@ def extract_chords_hmm(harmony_notes: List[Tuple],
             duration = total_beats - start_beat
         if duration <= 0:
             continue
-        name = PITCH_NAMES[root_pc] + quality
+        name = pc_name(root_pc, tonic_pc, mode) + quality
         chroma = slot_chromàs[slot]
         score  = score_chord_template(chroma, root_pc, quality)
         chord_list.append({
@@ -1551,7 +1562,7 @@ def build_report(info: MidiInfo, tonic_pc: int, mode: str,
             'n_notes':       len(info.notes),
         },
         'key': {
-            'tonic':  PITCH_NAMES[tonic_pc],
+            'tonic':  pc_name(tonic_pc, tonic_pc, mode),
             'mode':   mode,
             'tonic_pc': tonic_pc,
         },
@@ -1665,7 +1676,7 @@ def main():
             print(f"\n╔══ MIDI SPLIT HARMONY v1.0 — ENTRENAMIENTO ═════════════════╗")
             print(f"║  Corpus:         {args.train_corpus}")
             print(f"║  Modelo salida:  {args.save_model}")
-            print(f"║  Tónica ref:     {PITCH_NAMES[tonic_pc]} {mode}")
+            print(f"║  Tónica ref:     {pc_name(tonic_pc, tonic_pc, mode)} {mode}")
             print(f"║  Umbral calidad: {args.min_corpus_score}")
             print(f"╠══ Entrenando...")
         else:
@@ -1741,11 +1752,11 @@ def main():
     if args.key:
         tonic_pc, mode = parse_key_string(args.key)
         if args.verbose:
-            print(f"║  Tonalidad (forzada): {PITCH_NAMES[tonic_pc]} {mode}")
+            print(f"║  Tonalidad (forzada): {pc_name(tonic_pc, tonic_pc, mode)} {mode}")
     else:
         tonic_pc, mode = detect_key(info.notes)
         if args.verbose:
-            print(f"║  Tonalidad (detectada): {PITCH_NAMES[tonic_pc]} {mode}")
+            print(f"║  Tonalidad (detectada): {pc_name(tonic_pc, tonic_pc, mode)} {mode}")
 
     # ── [2] SEPARACIÓN MELODÍA / ARMONÍA ─────────────────────────────────────
 

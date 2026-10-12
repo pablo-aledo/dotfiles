@@ -1963,7 +1963,8 @@ def complete(
     if key_override:
         # Parsear "Dm", "G major", etc.
         parts = key_override.strip().split()
-        note_name = parts[0].replace('b', '#')  # simplificación
+        note_name = {'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#','Cb':'B','Fb':'E'}.get(
+            parts[0][:1].upper() + parts[0][1:], parts[0][:1].upper() + parts[0][1:])
         if note_name in CHROMATIC_SCALE:
             dna.key_root = 60 + CHROMATIC_SCALE.index(note_name)
         mode_name = parts[1].lower() if len(parts) > 1 else dna.key_mode

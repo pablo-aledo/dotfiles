@@ -989,6 +989,33 @@ def detect_cadence_pattern(chord1: str, chord2: str) -> Optional[str]:
 # LECTURA DE ARCHIVOS EXTERNOS
 # ──────────────────────────────────────────────────────────────────────────────
 
+def load_plan(path: str) -> CadencePlan:
+    """Carga un plan de cadencias (JSON de `plan`/`strengthen`/`weaken`).
+
+    Falla con un mensaje claro (y salida 2) si el fichero no existe, no es
+    JSON (p.ej. se pasó un .mid) o le faltan campos, en vez de un traceback."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        sys.exit(f"[ERROR] No existe el plan: {path}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        sys.exit(f"[ERROR] '{path}' no es un plan JSON de cadencias válido "
+                 f"(¿has pasado un .mid? genera el plan con el subcomando 'plan').")
+    try:
+        return CadencePlan(
+            total_bars=data["total_bars"],
+            key=data["key"],
+            mode=data["mode"],
+            form=data["form"],
+            cadences=[Cadence(**{k: v for k, v in c.items() if k != "type_name"})
+                      for c in data["cadences"]],
+            tension_curve=data["tension_curve"],
+        )
+    except (KeyError, TypeError, AttributeError) as e:
+        sys.exit(f"[ERROR] El plan '{path}' es inválido o está incompleto ({e!r}).")
+
+
 def load_theorist_plan(path: str) -> Optional[Dict]:
     """Carga un plan de theorist.py."""
     try:
@@ -1207,49 +1234,19 @@ EJEMPLOS:
             print(f"\nAnálisis exportado a: {args.json}")
 
     elif args.command == "realize":
-        with open(args.plan, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        plan = CadencePlan(
-            total_bars=data["total_bars"],
-            key=data["key"],
-            mode=data["mode"],
-            form=data["form"],
-            cadences=[Cadence(**{k: v for k, v in c.items() if k != "type_name"}) for c in data["cadences"]],
-            tension_curve=data["tension_curve"],
-        )
+        plan = load_plan(args.plan)
 
         realize_cadence_plan(plan, args.output)
         print(f"Bajo cifrado realizado en: {args.output}")
 
     elif args.command == "insert":
-        with open(args.plan, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        plan = CadencePlan(
-            total_bars=data["total_bars"],
-            key=data["key"],
-            mode=data["mode"],
-            form=data["form"],
-            cadences=[Cadence(**{k: v for k, v in c.items() if k != "type_name"}) for c in data["cadences"]],
-            tension_curve=data["tension_curve"],
-        )
+        plan = load_plan(args.plan)
 
         insert_cadences_into_midi(args.midi, plan, args.output, args.velocity)
         print(f"Cadencias insertadas en: {args.output}")
 
     elif args.command == "strengthen":
-        with open(args.plan, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        plan = CadencePlan(
-            total_bars=data["total_bars"],
-            key=data["key"],
-            mode=data["mode"],
-            form=data["form"],
-            cadences=[Cadence(**{k: v for k, v in c.items() if k != "type_name"}) for c in data["cadences"]],
-            tension_curve=data["tension_curve"],
-        )
+        plan = load_plan(args.plan)
 
         plan = strengthen_cadences(plan, args.intensity)
         save_plan(plan, args.output)
@@ -1257,17 +1254,7 @@ EJEMPLOS:
         print(f"\nPlan reforzado guardado en: {args.output}")
 
     elif args.command == "weaken":
-        with open(args.plan, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        plan = CadencePlan(
-            total_bars=data["total_bars"],
-            key=data["key"],
-            mode=data["mode"],
-            form=data["form"],
-            cadences=[Cadence(**{k: v for k, v in c.items() if k != "type_name"}) for c in data["cadences"]],
-            tension_curve=data["tension_curve"],
-        )
+        plan = load_plan(args.plan)
 
         plan = weaken_cadences(plan, args.intensity)
         save_plan(plan, args.output)
@@ -1275,17 +1262,7 @@ EJEMPLOS:
         print(f"\nPlan debilitado guardado en: {args.output}")
 
     elif args.command == "sequence":
-        with open(args.plan, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        plan = CadencePlan(
-            total_bars=data["total_bars"],
-            key=data["key"],
-            mode=data["mode"],
-            form=data["form"],
-            cadences=[Cadence(**{k: v for k, v in c.items() if k != "type_name"}) for c in data["cadences"]],
-            tension_curve=data["tension_curve"],
-        )
+        plan = load_plan(args.plan)
 
         plan = sequence_cadences(plan, args.direction)
         save_plan(plan, args.output)

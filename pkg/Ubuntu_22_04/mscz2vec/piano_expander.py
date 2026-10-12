@@ -778,13 +778,44 @@ def build_track(notes,cc_events,channel,name,program):
             track.append(Message('control_change',channel=channel,control=a,value=b,time=delta))
     return track
 
-def build_midi(instr_notes,instr_cc,instruments,tempo,tpb,output_path):
+def read_signature_meta(path):
+    """Compás y armadura del MIDI de entrada, con su tick absoluto
+    (conserva también los cambios de compás/tonalidad). Lista de (tick, msg)."""
+    out = []
+    try:
+        for trk in MidiFile(path).tracks:
+            t = 0
+            for msg in trk:
+                t += msg.time
+                if msg.type in ('time_signature', 'key_signature'):
+                    out.append((t, msg.copy(time=0)))
+    except Exception:
+        return []
+    out.sort(key=lambda e: e[0])
+    return out
+
+
+def conductor_track(meta, tempo=None):
+    """Pista de conductor con tempo + los compases/armaduras recibidos."""
+    trk = MidiTrack()
+    events = [(0, MetaMessage('set_tempo', tempo=int(tempo)))] if tempo else []
+    events += list(meta)
+    events.sort(key=lambda e: e[0])
+    prev = 0
+    for tick, m in events:
+        trk.append(m.copy(time=tick - prev)); prev = tick
+    trk.append(MetaMessage('end_of_track', time=0))
+    return trk
+
+
+def build_midi(instr_notes,instr_cc,instruments,tempo,tpb,output_path,meta=None):
     mid=MidiFile(type=1,ticks_per_beat=tpb)
-    t0=MidiTrack()
-    t0.append(MetaMessage('set_tempo',tempo=tempo,time=0))
-    t0.append(MetaMessage('time_signature',numerator=4,denominator=4,
-                           clocks_per_click=24,notated_32nd_notes_per_beat=8,time=0))
-    mid.tracks.append(t0)
+    # Compás y armadura: se heredan del MIDI de entrada (antes se forzaba 4/4
+    # y se perdía la armadura). Sin meta → 4/4 como antes.
+    if not any(m.type=='time_signature' for _,m in (meta or [])):
+        meta=[(0,MetaMessage('time_signature',numerator=4,denominator=4,
+                             clocks_per_click=24,notated_32nd_notes_per_beat=8))]+list(meta or [])
+    mid.tracks.append(conductor_track(meta,tempo))
     created=[]
     for ch,name in enumerate(instruments):
         notes=instr_notes.get(name,[])
@@ -1074,7 +1105,8 @@ def main():
     instr_notes,instr_cc,report_data=expand(rh,lh,tpb,tempo,instruments,args.style,args)
 
     print(f'\n  Escribiendo: {out_midi}')
-    created=build_midi(instr_notes,instr_cc,instruments,tempo,tpb,out_midi)
+    created=build_midi(instr_notes,instr_cc,instruments,tempo,tpb,out_midi,
+                       meta=read_signature_meta(args.midi))
     print(f"  Pistas: {len(created)}")
 
     if args.export_fingerprint: export_fingerprint(report_data,out_fp)

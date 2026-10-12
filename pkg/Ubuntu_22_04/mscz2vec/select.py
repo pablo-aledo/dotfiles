@@ -59,6 +59,8 @@ import mido
 import numpy as np
 from sklearn.cluster import KMeans
 import random
+import os as _os
+_os.environ.setdefault('PYGAME_HIDE_SUPPORT_PROMPT', '1')  # sin banner de pygame en stdout
 import pygame
 import time
 import tempfile

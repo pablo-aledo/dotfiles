@@ -310,6 +310,7 @@
 """
 
 import sys
+import zlib
 import os
 import json
 import math
@@ -4696,7 +4697,7 @@ class FormComposer:
                     motif_notes   = self.motif_notes,
                     interp_profile_b = self._profile_for_section("B"),
                     interp_alpha  = self.interp_alpha,
-                    seed          = self.seed + hash(lbl) % 1000,
+                    seed          = self.seed + (zlib.crc32(str(lbl).encode('utf-8')) & 0xffffffff) % 1000,
                     verbose       = False,
                 )
 

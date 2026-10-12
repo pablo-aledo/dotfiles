@@ -325,8 +325,33 @@ def _extract_notes(mid: MidiFile,
     return notes
 
 
-def _detect_key_simple(notes: list) -> Tuple[int, str]:
-    """Detección de tonalidad por correlación con perfiles de Krumhansl."""
+_KS_MAJOR = {'Cb': 11, 'Gb': 6, 'Db': 1, 'Ab': 8, 'Eb': 3, 'Bb': 10, 'F': 5, 'C': 0,
+             'G': 7, 'D': 2, 'A': 9, 'E': 4, 'B': 11, 'F#': 6, 'C#': 1}
+
+
+def _signature_hint(mid) -> Optional[Tuple[int, int]]:
+    """(tónica mayor, tónica menor relativa) según el primer key_signature del MIDI."""
+    if mid is None:
+        return None
+    for trk in mid.tracks:
+        for msg in trk:
+            if msg.type == 'key_signature':
+                k = msg.key
+                if k.endswith('m'):
+                    root = _KS_MAJOR.get(k[:-1])
+                    return None if root is None else ((root + 3) % 12, root)
+                root = _KS_MAJOR.get(k)
+                return None if root is None else (root, (root + 9) % 12)
+    return None
+
+
+def _detect_key_simple(notes: list, mid=None) -> Tuple[int, str]:
+    """Detección de tonalidad por correlación con perfiles de Krumhansl.
+
+    Si el MIDI trae `key_signature`, se restringe a esa tonalidad y su relativa
+    (mayor/menor) siempre que la correlación no quede muy por debajo de la
+    mejor global: evita contradecir la armadura (p.ej. A mayor vs D mayor)
+    cuando ambas son casi igual de plausibles por histograma."""
     major_profile = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09,
                      2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
     minor_profile = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53,
@@ -337,14 +362,20 @@ def _detect_key_simple(notes: list) -> Tuple[int, str]:
     for n in notes:
         counts[n[2] % 12] += 1
     counts /= (counts.sum() + 1e-9)
-    best_score, best_root, best_mode = -1.0, 0, 'major'
+    scores = {}
     for root in range(12):
         for mode, prof in [('major', major_profile), ('minor', minor_profile)]:
             rotated = [prof[(i - root) % 12] for i in range(12)]
-            score = float(np.corrcoef(counts, rotated)[0, 1])
-            if score > best_score:
-                best_score, best_root, best_mode = score, root, mode
-    return best_root, best_mode
+            sc = float(np.corrcoef(counts, rotated)[0, 1])
+            scores[(root, mode)] = 0.0 if sc != sc else sc   # NaN (histograma plano) → 0
+    best = max(scores, key=scores.get)
+    hint = _signature_hint(mid)
+    if hint:
+        cands = [(hint[0], 'major'), (hint[1], 'minor')]
+        in_sig = max(cands, key=lambda k: scores[k])
+        if scores[in_sig] >= scores[best] - 0.10:
+            return in_sig
+    return best
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -974,7 +1005,7 @@ class FormalEvaluator:
                 details={},
             )
 
-        key_root, key_mode = _detect_key_simple(notes)
+        key_root, key_mode = _detect_key_simple(notes, mid)
         bar_ticks          = _estimate_bar_ticks(mid)
         tpb                = mid.ticks_per_beat
 
@@ -1907,7 +1938,7 @@ def evaluate_midi(midi_path: str,
     bar_ticks = _estimate_bar_ticks(mid)
     total     = _get_total_ticks(mid)
     n_bars    = max(1, total // bar_ticks)
-    key_root, key_mode = _detect_key_simple(notes)
+    key_root, key_mode = _detect_key_simple(notes, mid)
     key_str   = f"{PITCH_NAMES[key_root]} {key_mode}"
 
     meta = {

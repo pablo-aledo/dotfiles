@@ -831,7 +831,8 @@ def get_tonic_midi(key_tonic, octave=2):
     """Devuelve la nota MIDI de la tónica en la octava dada."""
     pc_map = {'C':0,'C#':1,'D':2,'D#':3,'E':4,'F':5,
               'F#':6,'G':7,'G#':8,'A':9,'A#':10,'B':11}
-    pc = pc_map.get(key_tonic.replace('b', '#'), 0)  # simplificación
+    flats = {'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#','Cb':'B','Fb':'E'}
+    pc = pc_map.get(flats.get(key_tonic, key_tonic), 0)
     return (octave + 1) * 12 + pc
 
 
@@ -1053,8 +1054,38 @@ def events_to_track(events, channel, track_name, program, tempo, tpb):
     return trk
 
 
+def read_signature_meta(path):
+    """Compás y armadura del MIDI de entrada, con su tick absoluto
+    (conserva también los cambios de compás/tonalidad). Lista de (tick, msg)."""
+    out = []
+    try:
+        for trk in MidiFile(path).tracks:
+            t = 0
+            for msg in trk:
+                t += msg.time
+                if msg.type in ('time_signature', 'key_signature'):
+                    out.append((t, msg.copy(time=0)))
+    except Exception:
+        return []
+    out.sort(key=lambda e: e[0])
+    return out
+
+
+def conductor_track(meta, tempo=None):
+    """Pista de conductor con tempo + los compases/armaduras recibidos."""
+    trk = MidiTrack()
+    events = [(0, MetaMessage('set_tempo', tempo=int(tempo)))] if tempo else []
+    events += list(meta)
+    events.sort(key=lambda e: e[0])
+    prev = 0
+    for tick, m in events:
+        trk.append(m.copy(time=tick - prev)); prev = tick
+    trk.append(MetaMessage('end_of_track', time=0))
+    return trk
+
+
 def build_output_midi(instrument_events, timpani_events, gm_perc_events,
-                      template, tempo, tpb, library, output_path):
+                      template, tempo, tpb, library, output_path, meta=None):
     """
     Ensambla todos los eventos en un MIDI tipo 1 multitracks.
     """
@@ -1103,6 +1134,10 @@ def build_output_midi(instrument_events, timpani_events, gm_perc_events,
         if trk:
             mid.tracks.append(trk)
             created_tracks.append('Percusión GM')
+
+    # Compás y armadura del MIDI de entrada (antes no se escribía ninguno).
+    if meta:
+        mid.tracks.insert(0, conductor_track(meta))
 
     mid.save(output_path)
     return created_tracks
@@ -2735,7 +2770,8 @@ def main():
         perc['timpani'],
         perc['perc_gm'],
         template, tempo, tpb,
-        args.library, output_midi
+        args.library, output_midi,
+        meta=read_signature_meta(args.midi)
     )
     print(f"  Pistas creadas: {created}")
 

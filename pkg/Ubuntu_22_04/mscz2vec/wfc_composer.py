@@ -1013,7 +1013,8 @@ def build_and_solve(cfg):
 
     info("Verificando SAT inicial...")
     if solver.check() != z3.sat:
-        info("ERROR: UNSAT."); return False
+        info("ERROR: UNSAT. Los parametros son incompatibles (p.ej. pocas --beats para las --phrases/--nodes pedidas): "
+             "prueba mas --beats o menos --phrases/--nodes."); return False
     info("OK.")
 
     info("WFC Fase 1...")
@@ -1054,6 +1055,22 @@ def build_and_solve(cfg):
 
 
 # ─── CLI ──────────────────────────────────────────────────────────────────────
+_KEY_NAMES = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+
+def _key_arg(text):
+    """--key acepta un entero (clase de altura) o un nombre de nota: C, D#, Bb, f#..."""
+    t = str(text).strip()
+    try:
+        return int(t)
+    except ValueError:
+        pass
+    base = _KEY_NAMES.get(t[:1].upper())
+    acc = t[1:].replace("♯", "#").replace("♭", "b")
+    if base is None or any(ch not in "#b" for ch in acc):
+        raise argparse.ArgumentTypeError(
+            f"tonica no valida: {text!r} (usa 0-11 o un nombre como C, F#, Bb)")
+    return (base + acc.count("#") - acc.count("b")) % 12
+
 def main():
     global VERBOSE
     p = argparse.ArgumentParser(
@@ -1061,7 +1078,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
-    p.add_argument("--key",     type=int, default=2)
+    p.add_argument("--key",     type=_key_arg, default=2,
+                   help="tonica: clase de altura 0-11 o nombre (C, D, F#, Bb...). Defecto 2 (D)")
     p.add_argument("--mode",    type=str, default="minor",
                    choices=["major","minor","harmonic_minor","dorian","phrygian"])
     p.add_argument("--beats",   type=int, default=16)

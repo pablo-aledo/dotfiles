@@ -26,6 +26,7 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 import sys, os, json, math, random, argparse
+import zlib
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Tuple, Literal, Set
@@ -778,7 +779,7 @@ def generate_all_variations(records, tc, mid, tonic_pc, mode, spans, target_grad
         [n for n in base_notes if n.pitch < 60], tc)
     for vtype in types:
         for k in range(n_variations):
-            rng = random.Random(seed + hash(vtype) + k)
+            rng = random.Random(seed + (zlib.crc32(str(vtype).encode('utf-8')) & 0xffffffff) + k)
             try:
                 if vtype == "ornamental":
                     notes, changes = _var_ornamental(records, tc, tonic_pc, mode, spans, rng)
@@ -875,6 +876,10 @@ def print_variation_report(midi_path, target_grade, base_grade, results, outdir,
             print(f"    {_c('G')}... y {len(vr.changes)-12} más{_c('R')}")
     print(f"\n{'─'*78}")
     print(f"  Total: {n_ok} variaciones generadas, {n_skip} descartadas")
+    if n_ok == 0:
+        print(f"  {_c('RED')}AVISO:{_c('R')} no se ha generado ninguna variación (todas descartadas por "
+              f"quedar fuera de grado ±1 o por error). Prueba otro --grade o --types.",
+              file=sys.stderr)
     print(f"{'═'*78}\n")
 
 # ══════════════════════════════════════════════════════════════════════════════
