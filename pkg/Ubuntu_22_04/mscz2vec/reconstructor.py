@@ -1,1100 +1,1796 @@
 #!/usr/bin/env python3
+r"""
+╔════════════════════════════════════════════════════════════════════════════╗
+║                            RECONSTRUCTOR  v2.0                             ║
+║     De un MIDI a su reconstrucción: análisis, plan, ejecución y receta     ║
+║                                                                            ║
+║ Fusiona en una sola herramienta autocontenida tres versiones previas:      ║
+║   reconstruct.py       RECOMPONE una pieza (analiza, captura, regenera,    ║
+║                        critica) y procesa catálogos por lotes.             ║
+║   reconstruct_fiel.py  CONSERVA el material: variantes fieles, métricas de ║
+║                        retención y bucle de selección por calidad.         ║
+║   reconstructor_2.py   plan explícito (plan.json), ejecutor con caché y    ║
+║                        reanudación, gate de melodía y subcomandos.         ║
+║                                                                            ║
+║ Analiza el original, construye el pipeline de herramientas del ecosistema  ║
+║ mutopia, lo ejecuta, elige la mejor versión y deja una receta .sh          ║
+║ reproducible y un informe .md. Es un único fichero: solo necesita `mido` y ║
+║ las herramientas mutopia; midi_doctor (saneado/metadatos) y fidelity_meter ║
+║ (fidelidad) tienen sustituto interno si no están.                          ║
+║                                                                            ║
+║ DOS FILOSOFÍAS (--mode):                                                   ║
+║   faithful   CONSERVA el material: parte del original y solo aplica        ║
+║              transformaciones que lo respetan (performer, reharmonizer,    ║
+║              piano_expander). Genera hasta 3 variantes y elige la de mayor ║
+║              calidad que conserve la melodía (gate de fidelidad).          ║
+║   recompose  RECOMPONE: captura el ADN (tonalidad, compás, progresión,     ║
+║              motivo, clímax) y regenera bajo, acompañamiento y melodía.    ║
+║              Es una pieza nueva sembrada por la antigua (melodía ≈ 25 %).  ║
+║   both       Ejecuta las dos (obra_fiel.mid y obra_final.mid).             ║
+║                                                                            ║
+║ SUBCOMANDOS:                                                               ║
+║   analyze   Muestra el ADN del original (tonalidad, compás, voces, motivo…)║
+║   plan      Escribe el plan (plan.json; --yaml para runner.py) sin ejecutar║
+║   run       Plan + ejecución + selección + receta.sh + RECONSTRUCCION.md   ║
+║   batch     `run` sobre varios MIDIs, una carpeta o un catálogo JSON       ║
+║   choose    Elige entre candidatos: gate de melodía y, luego, calidad      ║
+║   compare   Compara recomposición vs variantes fieles (COMPARACION.md)     ║
+║   report    Regenera el informe .md de una carpeta ya ejecutada            ║
+║                                                                            ║
+║ USO:                                                                       ║
+║   python reconstructor.py analyze original.mid                             ║
+║   python reconstructor.py plan original.mid --mode faithful --out-dir rec/ ║
+║   python reconstructor.py run original.mid --out-dir rec/                  ║
+║   python reconstructor.py run original.mid --mode both --out-dir rec/      ║
+║   python reconstructor.py run original.mid --dry-run      # solo receta    ║
+║   python reconstructor.py run original.mid --out-dir rec/ --resume         ║
+║   python reconstructor.py run original.mid --mode recompose \              ║
+║       --harmony captured --melody-source captured --critique full          ║
+║   python reconstructor.py run original.mid --meta-engine builtin \         ║
+║       --fidelity-engine builtin --clean none    # sin midi_doctor ni meter ║
+║   python reconstructor.py batch midis/ --out-dir recs/ --mode both         ║
+║   python reconstructor.py batch --catalog seleccion.json \                 ║
+║       --midis-dir midis/ --out-dir reconstrucciones/ --start 1 --limit 5 \ ║
+║       --style-source catalog                                               ║
+║   python reconstructor.py batch --catalog seleccion.json --id 003 --force  ║
+║   python reconstructor.py choose original.mid \                            ║
+║       --candidates a.mid b.mid c.mid --min-melody 0.8 --output mejor.mid   ║
+║   python reconstructor.py compare recs/                                    ║
+║   python reconstructor.py report rec/                                      ║
+║                                                                            ║
+║ DECISIONES DE DISEÑO SELECCIONABLES (la 1.ª opción es la predeterminada):  ║
+║   --clean auto|doctor|none                                                 ║
+║       Saneado del original con midi_doctor, o copia literal.               ║
+║   --meta-engine auto|doctor|builtin                                        ║
+║       Quién reinyecta compás/armadura/tempo: midi_doctor o código interno. ║
+║   --meta-policy copy|flatten                                               ║
+║       copy conserva las modulaciones del original; flatten deja una sola   ║
+║       armadura y compás (el comportamiento de fix_meta.py).                ║
+║   --fidelity-engine auto|meter|builtin                                     ║
+║       fidelity_meter.py o métricas internas (alturas, onsets, chroma y     ║
+║       bigramas del skyline).                                               ║
+║   --select quality|fidelity                                                ║
+║       Criterio entre las variantes que pasan el gate: quality_scorer o     ║
+║       la puntuación de fidelidad.                                          ║
+║   --harmony tonicized|captured|generated                                   ║
+║       Base armónica preferida del modo recompose; las otras, de reserva.   ║
+║   --melody-source motif|guided|captured                                    ║
+║       Melodía del modo recompose: sembrada con el motivo real, guiada por  ║
+║       acordes, o la melodía capturada por el HMM.                          ║
+║   --bars-from ticks|metric                                                 ║
+║       Nº de compases: por duración del MIDI o con metric_analyzer.py.      ║
+║   --style-source programs|catalog                                          ║
+║       Estilo de performer y bajo: según los programas GM o según la        ║
+║       familia del catálogo (program_family, solo en batch --catalog).      ║
+║   --critique basic|full                                                    ║
+║       Critica mínima, o la suite completa (armonía, métrica, melodía,      ║
+║       tocabilidad, arco y comparación vectorial).                          ║
+║   --recipe-paths absolute|relative                                         ║
+║       Rutas de receta.sh: absolutas o relativas a su carpeta.              ║
+║   --report-style compact|full                                              ║
+║       Informe breve o informe pedagógico completo.                         ║
+║                                                                            ║
+║ OPCIONES DE plan / run / batch:                                            ║
+║   --mode M             faithful (default) | recompose | both               ║
+║   --out-dir DIR        Carpeta de salida (default: <original>_rec)         ║
+║   --tools DIR          Carpeta con las herramientas mutopia (default: junto║
+║                        a este script o el directorio actual)               ║
+║   --variants LISTA     faithful: base,rehar,orq (default: las tres)        ║
+║   --min-melody F       Umbral de melodía del gate de selección (0.8)       ║
+║   --tol F              Tolerancia temporal de fidelidad, en pulsos (0.25)  ║
+║   --no-original-candidate                                                  ║
+║                        faithful: el original saneado no compite en la      ║
+║                        selección (por defecto sí, y garantiza resultado)   ║
+║   --emotion E          recompose: emoción del colorista (default: deducida)║
+║   --seed N             Semilla base de los generadores (default: 5)        ║
+║   --tonic-density F    recompose: densidad de dominantes secundarias (0.15)║
+║   --bars N             Fuerza el número de compases                        ║
+║   --pattern P          recompose: auto | alberti | arpeggio-up | block     ║
+║   --perf-style S       recompose: auto | clasico | romantico | mecanico    ║
+║   --bass-style S       recompose: auto | classical | pedal                 ║
+║   --skip LISTA         Etapas a omitir: climax,tempo,color,critique        ║
+║   --yaml FILE          (plan) además escribe el plan en formato runner.py  ║
+║                                                                            ║
+║ OPCIONES DE run / batch:                                                   ║
+║   --plan FILE          Ejecutar un plan.json ya generado (y editado)       ║
+║   --dry-run            No ejecuta: escribe plan, receta.sh e informe       ║
+║   --resume             Salta los pasos cuya salida ya existe               ║
+║   --force              Borra la carpeta de trabajo y empieza de cero       ║
+║   --timeout S          Timeout por paso (default 300)                      ║
+║   --strict             Aborta al primer paso obligatorio que falle         ║
+║                                                                            ║
+║ OPCIONES DE batch:                                                         ║
+║   ENTRADAS             MIDIs, carpetas o patrones glob (o --catalog)       ║
+║   --catalog FILE       Catálogo JSON [{id, file, path?, program_family?}]  ║
+║   --midis-dir DIR      Carpeta de los MIDIs del catálogo                   ║
+║   --id ID              Procesa solo la pieza con ese id                    ║
+║   --start N --limit N  Rango (1-based) de piezas a procesar                ║
+║                                                                            ║
+║ OPCIONES DE choose:                                                        ║
+║   --candidates M...    MIDIs candidatos (los que no existan se ignoran)    ║
+║   --output FILE        MIDI ganador                                        ║
+║   --no-quality         Atajo de --select fidelity (sin quality_scorer)     ║
+║   --report FILE        JSON con la puntuación de todos los candidatos      ║
+║                                                                            ║
+║ SALIDAS (en --out-dir; en batch, una subcarpeta NNN_slug por pieza):       ║
+║   obra_fiel.mid / obra_final.mid   resultado por modo                      ║
+║   plan.json · receta.sh · RECONSTRUCCION.md · run_log.json                 ║
+║   work/                            intermedios, logs y JSON de métricas    ║
+║   batch_log.json · COMPARACION.md  (batch / compare)                       ║
+║                                                                            ║
+║ GARANTÍA: en modo faithful siempre hay resultado: si todo falla se entrega ║
+║ el original saneado y se avisa.                                            ║
+║                                                                            ║
+║ CÓDIGOS DE SALIDA: 0 ok · 1 error de uso/entorno · 2 sin resultado ·       ║
+║                    3 resultado por debajo del gate de melodía              ║
+║                                                                            ║
+║ DEPENDENCIAS: mido · herramientas mutopia (performer, reharmonizer,        ║
+║ piano_expander, quality_scorer… según el modo)                             ║
+╚════════════════════════════════════════════════════════════════════════════╝
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        RECONSTRUCTOR  v1.0                                   ║
-║     Reconstrucción pedagógica de una pieza completa con las herramientas     ║
-║                                                                              ║
-║  Dado un MIDI, lo ANALIZA, captura su material (acordes, motivo, clímax) y   ║
-║  lo REGENERA con la suite en vez de copiarlo, dejando como rastro la receta  ║
-║  (.sh), un plan para runner.py (.yaml) y un documento didáctico (.md).       ║
-║  Es el "generador de planes" que le faltaba a runner.py: el flujo            ║
-║  análisis → captura → regeneración → ensamblado → expresión → crítica        ║
-║  deja de orquestarse a mano.                                                 ║
-║                                                                              ║
-║  FLUJO (≈27 pasos, todos invocaciones reales de herramientas):               ║
-║   análisis    harmonic_analyzer · metric_analyzer · melody_critic · dna      ║
-║   captura     midi_split_harmony (acordes reales, melodía separada)          ║
-║   armonía     chord_progression_generator · tonicization_engine              ║
-║   bajo/textura bass_line_composer · chord_pattern_voicer                     ║
-║   melodía     melody_conditioned_v5 (motivo real como semilla, N candidatos) ║
-║               + melody_selector (elige con melody_critic)                    ║
-║   ensamblado  midi_merge · forma: climax_engineer                            ║
-║   expresión   performer · tempo_designer · orchestral_colorist               ║
-║   crítica     harmonic/metric/melody · playability · quality · arc · compare ║
-║                                                                              ║
-║  SUBCOMANDOS:                                                                ║
-║    plan    MIDI   Analiza y escribe plan.yaml + receta.sh (no ejecuta)       ║
-║    run     MIDI   plan + ejecución + documento (todo en uno)                 ║
-║    doc     DIR    (Re)genera RECONSTRUCCION.md desde un directorio ya hecho  ║
-║    batch   ENTRADAS…  run sobre muchos MIDIs (carpeta, ficheros o globs)     ║
-║    profile        Imprime el perfil por defecto (JSON editable, ver abajo)   ║
-║    meta    FILE   Reinyecta compás/tonalidad de otro MIDI (paso de seguridad)║
-║    ensure  A B…   Copia el primer fichero existente a --out (paso interno)   ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python reconstructor.py plan  cancion.mid --out-dir rec/cancion           ║
-║    python reconstructor.py run   cancion.mid --out-dir rec/cancion           ║
-║    python reconstructor.py run   cancion.mid --profile mi_perfil.json        ║
-║    python reconstructor.py run   cancion.mid --resume          # reanuda     ║
-║    python reconstructor.py batch midis/ --out-root rec --limit 20 --jobs 3   ║
-║    python reconstructor.py profile > mi_perfil.json                          ║
-║    python runner.py rec/cancion/plan.yaml          # el plan es de runner    ║
-║    bash rec/cancion/receta.sh                      # y la receta, autónoma   ║
-║                                                                              ║
-║  DECISIONES (todas editables con --profile; se documentan en el .md):        ║
-║    · tonalidad: key_signature del MIDI; si falta, perfiles de Krumhansl      ║
-║    · compás/tempo del original; nº de compases = duración / compás real      ║
-║    · voz melódica = (pista,canal) más aguda con peso suficiente              ║
-║    · estilo de bajo y de performer según la familia tímbrica (GM)            ║
-║    · emoción del colorista según modo y tempo                                ║
-║    · patrón de acompañamiento según nº de pulsos del compás                  ║
-║    · clímax en la posición temporal del punto más agudo del original         ║
-║                                                                              ║
-║  OPCIONES (plan/run):                                                        ║
-║    --out-dir DIR    Carpeta de la pieza (default: ./<nombre>_rec)            ║
-║    --tools-dir DIR  Donde viven las herramientas (default: junto a este .py) ║
-║    --profile FILE   JSON parcial que se fusiona sobre el perfil por defecto  ║
-║    --candidates N   Candidatos de melodía a generar (default: perfil)        ║
-║    --no-critique    Omitir el bloque de crítica final                        ║
-║    --strict         Abortar al primer paso fallido (default: continuar)      ║
-║    --resume         No repetir pasos ya terminados bien (pipeline_log.json)  ║
-║    --from STEP      Empezar en el paso cuyo nombre empieza por STEP          ║
-║    --timeout S      Timeout por paso (default: 900)                          ║
-║    --dry-run        (run) Mostrar los comandos sin ejecutar                  ║
-║                                                                              ║
-║  SALIDA (DIR):                                                               ║
-║    original.mid · obra_base.mid · obra_climax.mid · obra_perf.mid ·          ║
-║    obra_final.mid (resultado) · plan.yaml · receta.sh ·                      ║
-║    reconstruction.json (decisiones) · pipeline_log.json (resultado de cada   ║
-║    paso) · RECONSTRUCCION.md · analisis/*.log · material/ (stems, JSON)      ║
-║                                                                              ║
-║  REQUIERE: herramientas con los arreglos de compás/metadatos (mutopia_fixes) ║
-║  DEPENDENCIAS: mido · stdlib (numpy no hace falta)                           ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-"""
+
 
 import argparse
 import copy
 import glob
 import json
+import math
 import os
 import re
 import shlex
 import shutil
+import statistics
 import subprocess
 import sys
+import tempfile
 import time
+import traceback
 from collections import Counter, OrderedDict
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from pathlib import Path
-from statistics import median
+from struct import error as struct_error
 from typing import Dict, List, Optional, Tuple
 
 try:
     import mido
 except ImportError:  # pragma: no cover
-    print("ERROR: requiere mido (pip install mido)")
+    print("ERROR: pip install mido")
     sys.exit(1)
 
-VERSION = "1.0"
-SELF = os.path.abspath(__file__)
-PY = sys.executable or "python3"
+VERSION = "2.0"
+HERE = os.path.dirname(os.path.abspath(__file__))
+SELF = "reconstructor.py"   # nombre con el que los planes se refieren a este script
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+SKIP_STAGES = ("climax", "tempo", "color", "critique")
 _COLORS = {"R": "\033[0m", "B": "\033[1m", "G": "\033[90m", "GRN": "\033[92m",
            "YEL": "\033[93m", "RED": "\033[91m", "CYA": "\033[96m"}
 _USE_COLOR = sys.stdout.isatty()
-
-NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-_MIDO_MAJOR = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
-_MIDO_MINOR = ['Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'Bbm', 'Bm']
 
 
 def _c(k: str) -> str:
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
 
+def read_json(path: str) -> Optional[Dict]:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def write_json(path: str, obj) -> None:
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(obj, fh, ensure_ascii=False, indent=2)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
-#  PERFIL (todas las reglas de decisión, editables)
+#  ANÁLISIS DEL ORIGINAL (ADN)
 # ══════════════════════════════════════════════════════════════════════════════
 
-DEFAULT_PROFILE: Dict = {
-    "_ayuda": "Fusiona sobre este perfil cualquier subconjunto: solo hay que "
-              "indicar las claves que se quieran cambiar.",
-    # familia tímbrica GM del original → [estilo de performer, estilo de bajo]
-    "family_styles": {
-        "organo": ["mecanico", "pedal"],
-        "ensemble": ["mecanico", "pedal"],
-        "cuerdas": ["romantico", "classical"],
-        "viento_madera": ["romantico", "classical"],
-        "viento": ["romantico", "classical"],
-        "metal": ["romantico", "classical"],
-        "guitarra": ["clasico", "classical"],
-        "piano": ["clasico", "classical"],
-        "default": ["clasico", "classical"],
-    },
-    # emoción para orchestral_colorist
-    "emotion": {"slow_bpm": 90, "minor_slow": "melancolia", "minor_fast": "tension",
-                "major_slow": "serenidad", "major_fast": "triunfo"},
-    # patrón de chord_pattern_voicer según pulsos (negras) por compás
-    "pattern": {"bpb_ge_4": "alberti", "bpb_ge_3": "arpeggio-up", "default": "block"},
-    "melody": {"engine": "motif", "fallback_engine": "chord_guided", "candidates": 4,
-               "seed": 5, "profile_major": "pastoral", "profile_minor": "elegiac",
-               "rhythm": "flowing", "contour": "arch", "range": [60, 84],
-               "motif_notes": 8},
-    "tonicization": {"density": 0.15, "min_gap": 4, "seventh": True, "seed": 3},
-    "bass": {"seed": 11},
-    "climax": {"width": 1, "hollow_bars": 1, "intensity": 0.5},
-    "performer": {"intensity": 0.5},
-    "tempo": {"section_factors": [0.96, 1.04, 0.96], "final_rit": 2,
-              "final_rit_factor": 1.2, "shape": "smooth"},
-    "cpg": {"seed": 7, "tension_profile": "arch"},
-    "max_bars": 200,
-    "min_tempo": 30,
-    "max_tempo": 300,
-    "critique": True,
-}
+def _load(path: str) -> "mido.MidiFile":
+    try:
+        return mido.MidiFile(path)
+    except Exception:  # noqa: BLE001
+        return mido.MidiFile(path, clip=True)
 
 
-def deep_merge(base: Dict, over: Dict) -> Dict:
-    out = copy.deepcopy(base)
-    for k, v in (over or {}).items():
-        if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = deep_merge(out[k], v)
-        else:
-            out[k] = v
+def notes_of(mid, track_index: Optional[int] = None) -> List[Tuple[float, int, int]]:
+    tpb = mid.ticks_per_beat or 480
+    out = []
+    for i, tr in enumerate(mid.tracks):
+        if track_index is not None and i != track_index:
+            continue
+        t = 0
+        for m in tr:
+            t += m.time
+            if m.type == "note_on" and m.velocity > 0 and m.channel != 9:
+                out.append((t / tpb, m.note, m.velocity))
+    out.sort()
     return out
 
 
-def load_profile(path: Optional[str]) -> Dict:
-    if not path:
-        return copy.deepcopy(DEFAULT_PROFILE)
-    with open(path, encoding="utf-8") as fh:
-        return deep_merge(DEFAULT_PROFILE, json.load(fh))
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  ANÁLISIS DEL MIDI DE ENTRADA
-# ══════════════════════════════════════════════════════════════════════════════
-
-_MAJ = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
-_MIN = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
-
-
-def _corr(a, b) -> float:
-    ma, mb = sum(a) / 12, sum(b) / 12
-    num = sum((x - ma) * (y - mb) for x, y in zip(a, b))
-    den = (sum((x - ma) ** 2 for x in a) * sum((y - mb) ** 2 for y in b)) ** 0.5
-    return num / den if den else 0.0
-
-
-def detect_key(pcs: List[int]) -> Tuple[int, str]:
-    """Krumhansl–Schmuckler sobre el histograma de clases de altura."""
-    h = [0.0] * 12
-    for p in pcs:
-        h[p % 12] += 1
-    best = (-2.0, 0, "major")
-    for root in range(12):
-        for mode, prof in (("major", _MAJ), ("minor", _MIN)):
-            rot = [prof[(i - root) % 12] for i in range(12)]
-            s = _corr(h, rot)
-            if s > best[0]:
-                best = (s, root, mode)
-    return best[1], best[2]
-
-
-def key_name(root_pc: int, mode: str) -> str:
-    """Nombre corto compatible con las herramientas (C, Bb, F#m…)."""
-    return (_MIDO_MINOR if mode == "minor" else _MIDO_MAJOR)[root_pc % 12]
-
-
-def parse_mido_key(k: str) -> Tuple[str, str]:
-    minor = k.endswith("m")
-    return (k[:-1] if minor else k), ("minor" if minor else "major")
-
-
-def safe_time_sig(n: int, d: int) -> str:
-    return f"{n}/{d}" if 0 < n <= 64 and d in (1, 2, 4, 8, 16, 32) else "4/4"
-
-
-def program_family(programs: List[int]) -> str:
-    """Familia tímbrica a partir del programa GM predominante."""
-    if not programs:
-        return "piano"
-    p = Counter(programs).most_common(1)[0][0]
-    if p <= 7:
-        return "piano"
-    if p <= 15:
-        return "piano"            # percusión cromática ≈ teclado/mallets
-    if p <= 23:
-        return "organo"
-    if p <= 31:
-        return "guitarra"
-    if p <= 47:
-        return "cuerdas"
-    if p <= 55:
-        return "ensemble"
-    if p <= 63:
-        return "metal"
-    if p <= 71:
-        return "viento_madera"
-    if p <= 79:
-        return "viento"
-    return "piano"
-
-
-def analyze_midi(path: str, profile: Dict) -> Dict:
-    mf = mido.MidiFile(path)
-    tpb = mf.ticks_per_beat or 480
-    tempo, ts, key_sigs = None, None, []
-    ts_all: List[str] = []
-    voices: Dict[Tuple[int, int], Dict] = {}
-    progs: Dict[Tuple[int, int], List[int]] = {}
-    end_ticks = 0
-    for ti, tr in enumerate(mf.tracks):
-        t = 0
-        cur_prog: Dict[int, int] = {}
-        for m in tr:
-            t += m.time
-            if m.type == "set_tempo" and tempo is None:
-                tempo = 60_000_000 / m.tempo
-            elif m.type == "time_signature":
-                if ts is None:
-                    ts = (m.numerator, m.denominator)
-                s_ = f"{m.numerator}/{m.denominator}"
-                if s_ not in ts_all:
-                    ts_all.append(s_)
-            elif m.type == "key_signature":
-                key_sigs.append(m.key)
-            elif m.type == "program_change":
-                cur_prog[m.channel] = m.program
-            elif m.type == "note_on" and m.velocity > 0 and m.channel != 9:
-                v = voices.setdefault((ti, m.channel), {"notes": []})
-                v["notes"].append((t / tpb, m.note))
-                progs.setdefault((ti, m.channel), []).append(cur_prog.get(m.channel, 0))
-        end_ticks = max(end_ticks, t)
-    tempo = tempo or 120.0
-    ts_s = safe_time_sig(*(ts or (4, 4)))
-    n, d = (int(x) for x in ts_s.split("/"))
-    bpb = n * 4.0 / d                          # compás en NEGRAS (N·4/D)
-    total_q = end_ticks / tpb
-    n_bars = max(1, int(round(total_q / bpb)))
-
-    # voces
-    vinfo = []
-    for (ti, ch), v in voices.items():
-        ps = [p for _, p in v["notes"]]
-        vinfo.append({"track": ti, "channel": ch, "n": len(ps),
-                      "median": float(median(ps)), "lo": min(ps), "hi": max(ps)})
-    melody = None
-    if vinfo:
-        nmax = max(v["n"] for v in vinfo)
-        eligible = [v for v in vinfo if v["n"] >= max(8, 0.15 * nmax)] or vinfo
-        melody = max(eligible, key=lambda v: (v["median"], v["n"]))
-
-    all_pcs = [p for v in voices.values() for _, p in v["notes"]]
-    if key_sigs:
-        tonic, mode = parse_mido_key(key_sigs[0])
-        key_src = "key_signature del MIDI"
-    elif all_pcs:
-        r, mode = detect_key(all_pcs)
-        tonic = NOTE_NAMES[r] if "#" not in NOTE_NAMES[r] else _MIDO_MAJOR[r]
-        key_src = "detección Krumhansl (el MIDI no trae armadura)"
-    else:
-        tonic, mode, key_src = "C", "major", "por defecto"
-    key_short = tonic + ("m" if mode == "minor" else "")
-    key_long = f"{tonic} {mode}"
-
-    fam_progs = progs.get((melody["track"], melody["channel"]), []) if melody else []
-    family = program_family([p for ps in progs.values() for p in ps] or fam_progs)
-
-    # motivo + clímax de la voz melódica
-    motif, climax = None, 0.75
-    if melody:
-        mnotes = sorted(voices[(melody["track"], melody["channel"])]["notes"])
-        motif = extract_motif(mnotes, profile["melody"]["motif_notes"],
-                              profile["melody"]["range"])
-        if len(mnotes) > 1:
-            hi = max(p for _, p in mnotes)
-            t_hi = next(t for t, p in mnotes if p == hi)
-            span = max(1e-6, mnotes[-1][0] - mnotes[0][0])
-            climax = round((t_hi - mnotes[0][0]) / span, 2)
-
-    return {
-        "file": os.path.abspath(path), "tpb": tpb, "tempo": round(tempo, 2),
-        "time_sig": ts_s, "time_sigs_all": ts_all, "bpb": bpb, "total_quarters": round(total_q, 2),
-        "n_bars": n_bars, "key_short": key_short, "tonic": tonic, "mode": mode,
-        "key_long": key_long, "key_source": key_src, "family": family,
-        "voices": vinfo, "melody_voice": melody, "motif": motif, "climax": climax,
-        "n_notes": sum(v["n"] for v in vinfo),
-    }
-
-
-def extract_motif(notes: List[Tuple[float, int]], max_notes: int,
-                  rng: List[int]) -> Optional[str]:
-    """Skyline de las primeras notas → 'C4:0.5 E4:1.0 …' (transportado a `rng`)."""
+def extract_motif(mid, track_index: Optional[int], max_notes: int = 8) -> Optional[str]:
+    """Skyline de la melodía → 'C4:0.5 E4:0.5 …' (formato de --motif)."""
+    notes = notes_of(mid, track_index)
+    if len(notes) < 4:
+        notes = notes_of(mid, None)
     if len(notes) < 4:
         return None
     groups: "OrderedDict[float, int]" = OrderedDict()
-    for t, p in notes:
+    for t, p, _ in notes:
         slot = round(t * 2) / 2.0
         if slot not in groups or p > groups[slot]:
             groups[slot] = p
     items = list(groups.items())[:max_notes]
-    if len(items) < 3:
-        return None
-    # transporta por octavas para que la mediana caiga dentro del ámbito pedido
-    med = median(p for _, p in items)
-    centre = (rng[0] + rng[1]) / 2
-    shift = 12 * round((centre - med) / 12)
     parts = []
     for j, (t, p) in enumerate(items):
         nxt = items[j + 1][0] if j + 1 < len(items) else t + 1.0
         dur = max(0.25, min(nxt - t, 4.0))
-        q = max(0, min(127, p + shift))
-        parts.append(f"{NOTE_NAMES[q % 12]}{q // 12 - 1}:{round(dur, 2)}")
+        parts.append(f"{NOTE_NAMES[p % 12]}{p // 12 - 1}:{round(dur, 2)}")
     return " ".join(parts)
 
 
+def climax_position(mid, track_index: Optional[int]) -> float:
+    notes = notes_of(mid, track_index) or notes_of(mid, None)
+    if not notes:
+        return 0.75
+    hi = max(p for _, p, _ in notes)
+    for i, (_, p, _) in enumerate(notes):
+        if p == hi:
+            return round(i / max(1, len(notes) - 1), 2)
+    return 0.75
+
+
+def styles_from_programs(progs) -> Tuple[str, str]:
+    """(estilo de performer, estilo de bajo) según los programas GM del MIDI."""
+    progs = set(progs)
+    if progs and all((16 <= p <= 23) or (48 <= p <= 55) for p in progs):
+        return "mecanico", "pedal"
+    if progs & set(range(40, 48)) or progs & set(range(56, 80)):
+        return "romantico", "classical"
+    return "clasico", "classical"
+
+
+def styles_from_family(fam: Optional[str]) -> Tuple[str, str]:
+    """(performer, bajo) según la familia instrumental del catálogo."""
+    if fam in ("organo", "ensemble"):
+        return "mecanico", "pedal"
+    if fam in ("cuerdas", "viento_madera", "viento", "metal"):
+        return "romantico", "classical"
+    return "clasico", "classical"
+
+
+def metric_bars(path: str, tools: Optional[str]) -> Optional[int]:
+    """Nº de compases según metric_analyzer.py (None si no está o falla)."""
+    mt = os.path.join(tools or "", "metric_analyzer.py")
+    if not tools or not os.path.isfile(mt):
+        return None
+    fd, tmp = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    try:
+        subprocess.run([sys.executable, mt, path, "--json", tmp], cwd=tools,
+                       capture_output=True, text=True, timeout=300)
+        d = read_json(tmp) or {}
+        n = int(d.get("n_bars") or 0)
+        return n if n > 0 else None
+    except Exception:  # noqa: BLE001
+        return None
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def analyze_midi(path: str, opts: Optional[Dict] = None) -> Dict:
+    """ADN del original. opts: bars, bars_from, tools, style_source, family,
+    perf_style, bass_style (todas opcionales)."""
+    o = opts or {}
+    mid = _load(path)
+    tpb = mid.ticks_per_beat or 480
+    info: Dict = {"file": path, "tpb": tpb, "tracks": [], "tempo": None, "ts": [], "ks": []}
+    for i, tr in enumerate(mid.tracks):
+        ns, chans, progs = [], set(), []
+        for m in tr:
+            if m.type == "note_on" and m.velocity > 0:
+                ns.append(m.note)
+                chans.add(m.channel)
+            elif m.type == "program_change":
+                progs.append(m.program)
+            elif m.type == "set_tempo" and info["tempo"] is None:
+                info["tempo"] = round(mido.tempo2bpm(m.tempo), 2)
+            elif m.type == "time_signature":
+                v = f"{m.numerator}/{m.denominator}"
+                if not info["ts"] or info["ts"][-1] != v:
+                    info["ts"].append(v)
+            elif m.type == "key_signature":
+                if not info["ks"] or info["ks"][-1] != m.key:
+                    info["ks"].append(m.key)
+        info["tracks"].append({"index": i, "name": tr.name or f"track{i}", "n_notes": len(ns),
+                               "median": statistics.median(ns) if ns else None,
+                               "lo": min(ns) if ns else None, "hi": max(ns) if ns else None,
+                               "channels": sorted(chans), "programs": progs})
+    info["tempo"] = info["tempo"] or 120.0
+    ts = info["ts"][0] if info["ts"] else "4/4"
+    try:
+        n, d = (int(x) for x in ts.split("/"))
+        if not (0 < n <= 12 and d in (1, 2, 4, 8, 16)):
+            ts = "4/4"
+    except Exception:  # noqa: BLE001
+        ts = "4/4"
+    info["time_sig"] = ts
+    n, d = (int(x) for x in ts.split("/"))
+    info["beats_per_bar"] = n * 4.0 / d
+    # melodía = pista con más notas entre las agudas; el resto, acompañamiento
+    played = [t for t in info["tracks"] if t["n_notes"] >= 8 and t["median"] is not None]
+    played.sort(key=lambda t: (t["median"], t["n_notes"]))
+    melody = played[-1] if played else None
+    info["melody_track"] = melody["index"] if melody else 0
+    info["melody_channel"] = melody["channels"][0] if melody and melody["channels"] else 0
+    ks = info["ks"][0] if info["ks"] else "C"
+    minor = ks.endswith("m")
+    tonic = ks[:-1] if minor else ks
+    info["tonic"], info["mode"] = tonic or "C", "minor" if minor else "major"
+    info["key_short"] = f"{info['tonic']}{'m' if minor else ''}"
+    info["key_long"] = f"{info['tonic']} {info['mode']}"
+    info["key_from_signature"] = bool(info["ks"])
+    end_tick = 0
+    for tr in mid.tracks:
+        t = 0
+        for m in tr:
+            t += m.time
+        end_tick = max(end_tick, t)
+    beats = end_tick / tpb
+    nb = max(1, int(round(beats / info["beats_per_bar"])))
+    info["bars_source"] = "ticks"
+    if o.get("bars"):
+        nb, info["bars_source"] = int(o["bars"]), "manual"
+    elif o.get("bars_from") == "metric":
+        mb = metric_bars(path, o.get("tools"))
+        if mb:
+            nb, info["bars_source"] = mb, "metric"
+    info["n_bars"] = max(1, min(200, nb))
+    info["motif"] = extract_motif(mid, info["melody_track"])
+    info["climax"] = climax_position(mid, info["melody_track"])
+    progs_all = {p for t in info["tracks"] for p in t["programs"]}
+    info["programs"] = sorted(progs_all)
+    tempo = float(max(30, min(300, info["tempo"])))
+    info["tempo_gen"] = tempo
+    slow = tempo < 90
+    info["emotion"] = ("melancolia" if minor and slow else "tension" if minor else
+                       "serenidad" if slow else "triunfo")
+    fam = o.get("family")
+    if o.get("style_source") == "catalog" and fam:
+        info["perf_style"], info["bass_style"] = styles_from_family(fam)
+        info["style_source"] = f"catálogo ({fam})"
+    else:
+        info["perf_style"], info["bass_style"] = styles_from_programs(progs_all)
+        info["style_source"] = "programas GM"
+    if o.get("perf_style") not in (None, "auto"):
+        info["perf_style"], info["style_source"] = o["perf_style"], "manual"
+    if o.get("bass_style") not in (None, "auto"):
+        info["bass_style"] = o["bass_style"]
+    info["n_notes"] = sum(t["n_notes"] for t in info["tracks"])
+    return info
+
+
+def print_analysis(i: Dict) -> None:
+    B, R, G = _c("B"), _c("R"), _c("G")
+    print(f"\n{'═' * 78}\n  {B}RECONSTRUCTOR · ADN de{R} {i['file']}\n{'═' * 78}")
+    print(f"  Tonalidad   {i['key_long']}  {G}({'armadura' if i['key_from_signature'] else 'sin armadura: se asume C'}){R}")
+    print(f"  Compás      {', '.join(i['ts']) or '4/4 (asumido)'}   Tempo {i['tempo']} BPM   "
+          f"{i['n_bars']} compases {G}({i['bars_source']}){R}   {i['n_notes']} notas")
+    print(f"  Programas   {i['programs'] or '—'}")
+    print(f"  Melodía     pista {i['melody_track']} (canal {i['melody_channel']})   "
+          f"clímax al {int(i['climax'] * 100)} %")
+    print(f"  Motivo      {i['motif'] or '—'}")
+    print(f"  Sugerido    emoción={i['emotion']} · interpretación={i['perf_style']} · "
+          f"bajo={i['bass_style']}  {G}[{i['style_source']}]{R}")
+    print(f"\n  {G}{'pista':>5} {'notas':>6} {'mediana':>8} {'rango':>9}  nombre / canales / programas{R}")
+    for t in i["tracks"]:
+        rng = f"{t['lo']}-{t['hi']}" if t["lo"] is not None else "—"
+        mark = " ◀ melodía" if t["index"] == i["melody_track"] and t["n_notes"] else ""
+        print(f"  {t['index']:>5} {t['n_notes']:>6} {t['median'] if t['median'] is not None else '—':>8} "
+              f"{rng:>9}  {t['name']} {t['channels']} {t['programs']}{mark}")
+    print(f"{'═' * 78}\n")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
-#  DECISIONES
+#  MÉTRICAS DE FIDELIDAD INTERNAS (alternativa a fidelity_meter.py)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def decide(info: Dict, prof: Dict, candidates: Optional[int]) -> Dict:
-    d: List[Dict] = []
+def note_list(path: str, tol: float = 0.25) -> List[Tuple[int, int]]:
+    """[(onset cuantizado a `tol` pulsos, altura)] de todas las pistas."""
+    mf = _load(path)
+    tpb = mf.ticks_per_beat or 480
+    out = []
+    for tr in mf.tracks:
+        t = 0
+        for m in tr:
+            t += m.time
+            if m.type == "note_on" and m.velocity > 0:
+                out.append((round(t / tpb / tol), m.note))
+    return out
 
-    def add(what, value, why):
-        d.append({"que": what, "valor": value, "porque": why})
 
-    tempo = max(prof["min_tempo"], min(prof["max_tempo"], info["tempo"]))
-    n_bars = min(info["n_bars"], prof["max_bars"])
-    add("tonalidad", info["key_long"], info["key_source"])
-    add("compás", info["time_sig"],
-        f"del original; un compás dura {info['bpb']:g} negras")
-    add("tempo", f"{round(tempo)} BPM", "del original (acotado a "
-        f"{prof['min_tempo']}–{prof['max_tempo']})")
-    add("compases", n_bars,
-        f"{info['total_quarters']:g} negras de música / {info['bpb']:g} negras por compás")
-    if len(info.get("time_sigs_all", [])) > 1:
-        add("cambios de compás", " → ".join(info["time_sigs_all"]),
-            "el original cambia de compás; se regenera en el primero y se conserva la "
-            "DURACIÓN total (los compases contados por metric_analyzer pueden diferir)")
+def skyline_seq(path: str, tol: float = 0.5) -> List[int]:
+    mf = _load(path)
+    tpb = mf.ticks_per_beat or 480
+    d: Dict[int, int] = {}
+    for tr in mf.tracks:
+        t = 0
+        for m in tr:
+            t += m.time
+            if m.type == "note_on" and m.velocity > 0:
+                k = round(t / tpb / tol)
+                d[k] = max(d.get(k, -1), m.note)
+    return [d[k] for k in sorted(d)]
 
-    fam = info["family"]
-    perf_style, bass_style = prof["family_styles"].get(fam, prof["family_styles"]["default"])
-    add("estilo performer", perf_style, f"familia tímbrica detectada: {fam}")
-    add("estilo bajo", bass_style, f"familia tímbrica detectada: {fam}")
 
-    e = prof["emotion"]
-    slow = tempo < e["slow_bpm"]
-    emotion = e[("minor_" if info["mode"] == "minor" else "major_") +
-                ("slow" if slow else "fast")]
-    add("emoción (colorista)", emotion,
-        f"modo {info['mode']} y tempo {'lento' if slow else 'rápido'} "
-        f"(umbral {e['slow_bpm']} BPM)")
+def midi_meta(path: str) -> Dict:
+    mf = _load(path)
+    ts = sorted({"%d/%d" % (m.numerator, m.denominator) for tr in mf.tracks
+                 for m in tr if m.type == "time_signature"})
+    ks = sorted({m.key for tr in mf.tracks for m in tr if m.type == "key_signature"})
+    progs = sorted({m.program for tr in mf.tracks for m in tr if m.type == "program_change"})
+    n = sum(1 for tr in mf.tracks for m in tr if m.type == "note_on" and m.velocity > 0)
+    try:
+        dur = round(mf.length, 1)
+    except Exception:  # noqa: BLE001
+        dur = 0.0
+    return {"ts": ts, "ks": ks, "progs": progs, "notes": n, "tracks": len(mf.tracks), "dur": dur}
 
-    pt = prof["pattern"]
-    pattern = pt["bpb_ge_4"] if info["bpb"] >= 4 else (
-        pt["bpb_ge_3"] if info["bpb"] >= 3 else pt["default"])
-    add("patrón de acompañamiento", pattern, f"compás de {info['bpb']:g} negras")
 
-    mel = prof["melody"]
-    engine = mel["engine"] if info["motif"] else mel["fallback_engine"]
-    add("motor de melodía", engine,
-        "semilla = motivo real de la voz melódica" if info["motif"]
-        else "no se pudo extraer motivo: melodía guiada por acordes")
-    if info["motif"]:
-        add("motivo semilla", info["motif"], "primeras notas de la voz melódica (skyline)")
-    add("clímax", f"{int(info['climax'] * 100)}%",
-        "posición temporal del punto más agudo del original")
-    n_cand = candidates or mel["candidates"]
-    add("candidatos de melodía", n_cand, "se elige el mejor con melody_selector (melody_critic)")
-
-    return {"tempo": tempo, "tempo_i": int(round(tempo)), "n_bars": n_bars,
-            "perf_style": perf_style, "bass_style": bass_style, "emotion": emotion,
-            "pattern": pattern, "engine": engine, "candidates": n_cand,
-            "decisions": d}
+def fidelity_builtin(orig: str, cand: str, tol: float = 0.25) -> Dict:
+    """Retención de contenido sin herramientas externas. `melody` = coincidencia
+    de bigramas del skyline (la métrica del gate); `score` = media de melody,
+    pitch, onset y chroma."""
+    a, b = note_list(orig, tol), note_list(cand, tol)
+    pitch = sum((Counter(n for _, n in a) & Counter(n for _, n in b)).values()) / max(1, len(a))
+    onset = len(set(a) & set(b)) / max(1, len(set(a)))
+    ca, cb = [0.0] * 12, [0.0] * 12
+    for _, p in a:
+        ca[p % 12] += 1
+    for _, p in b:
+        cb[p % 12] += 1
+    na = math.sqrt(sum(v * v for v in ca)) or 1.0
+    nb = math.sqrt(sum(v * v for v in cb)) or 1.0
+    chroma = sum(x * y for x, y in zip(ca, cb)) / (na * nb)
+    sa, sb = skyline_seq(orig, tol * 2), skyline_seq(cand, tol * 2)
+    A, B = Counter(zip(sa, sa[1:])), Counter(zip(sb, sb[1:]))
+    melody = sum((A & B).values()) / max(1, sum(A.values()))
+    mo, mc = midi_meta(orig), midi_meta(cand)
+    progs_kept = bool(set(mo["progs"]) & set(mc["progs"])) if mo["progs"] else (mc["progs"] == [])
+    ts_kept, ks_kept = set(mo["ts"]) == set(mc["ts"]), set(mo["ks"]) == set(mc["ks"])
+    score = (melody + pitch + onset + chroma) / 4.0
+    verdict = ("conserva la melodía" if melody >= 0.8 else
+               "melodía parcialmente conservada" if melody >= 0.5 else
+               "recomposición: la melodía cambia sustancialmente")
+    return {"engine": "builtin", "tol": tol, "melody": round(melody, 4), "pitch": round(pitch, 4),
+            "onset": round(onset, 4), "chroma": round(chroma, 4),
+            "instr": 1.0 if progs_kept else 0.0, "meta": 1.0 if (ts_kept and ks_kept) else 0.0,
+            "length": round(mc["dur"] / mo["dur"], 3) if mo["dur"] else None,
+            "score": round(score, 4), "verdict": verdict,
+            "progs_kept": progs_kept, "ts_kept": ts_kept, "ks_kept": ks_kept,
+            "notes": mc["notes"], "tracks": mc["tracks"]}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PLAN DE PASOS
+#  METADATOS INTERNOS (alternativa a midi_doctor.py meta / fix_meta.py)
 # ══════════════════════════════════════════════════════════════════════════════
-# Cada paso: dict(name, stage, tool, args, note, informative).
-# En `args`, {D} = carpeta de la pieza y {T} = carpeta de herramientas.
 
-def build_steps(info: Dict, dec: Dict, prof: Dict, critique: bool) -> List[Dict]:
+_META_KINDS = {"ts": "time_signature", "key": "key_signature", "tempo": "set_tempo"}
+
+
+def _meta_value(m):
+    if m.type == "time_signature":
+        return (m.numerator, m.denominator)
+    if m.type == "key_signature":
+        return m.key
+    return m.tempo
+
+
+def apply_meta(src: str, ref: str, out: str, only=("ts", "key", "tempo"), policy: str = "copy",
+               fallback_ts: Optional[str] = None, fallback_key: Optional[str] = None) -> List[str]:
+    """Reinyecta en `src` el compás / armadura / tempo de `ref` y lo guarda en `out`.
+    policy=copy    copia todos los eventos (conserva las modulaciones);
+    policy=flatten deja un único evento inicial por tipo (comportamiento de fix_meta.py).
+    Un tipo ya idéntico en `src` no se toca (no se pierde lo que ya conservaba).
+    Si `ref` no tiene compás/armadura se usan fallback_ts / fallback_key.
+    Devuelve los tipos reescritos."""
+    ms, mr = _load(src), _load(ref)
+    scale = (ms.ticks_per_beat or 480) / (mr.ticks_per_beat or 480)
+    ref_ev: Dict[str, list] = {k: [] for k in only}
+    for tr in mr.tracks:
+        t = 0
+        for m in tr:
+            t += m.time
+            for k in only:
+                if m.type == _META_KINDS[k]:
+                    ref_ev[k].append((int(round(t * scale)), m))
+    for k in only:
+        ref_ev[k].sort(key=lambda x: x[0])
+    try:
+        if "ts" in only and not ref_ev["ts"] and fallback_ts:
+            n, d = (int(x) for x in fallback_ts.split("/"))
+            ref_ev["ts"] = [(0, mido.MetaMessage("time_signature", numerator=n, denominator=d))]
+        if "key" in only and not ref_ev["key"] and fallback_key:
+            ref_ev["key"] = [(0, mido.MetaMessage("key_signature", key=fallback_key))]
+    except ValueError:
+        pass
+    if policy == "flatten":
+        for k in only:
+            if ref_ev[k]:
+                ref_ev[k] = [(0, ref_ev[k][0][1])]
+    redo = []
+    for k in only:
+        if not ref_ev[k]:
+            continue
+        cur = {_meta_value(m) for tr in ms.tracks for m in tr if m.type == _META_KINDS[k]}
+        want = {_meta_value(m) for _, m in ref_ev[k]}
+        if cur != want:
+            redo.append(k)
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    if not redo:
+        if os.path.abspath(src) != os.path.abspath(out):
+            shutil.copyfile(src, out)
+        return []
+    kinds = {_META_KINDS[k] for k in redo}
+    tracks_abs: List[list] = []
+    for tr in ms.tracks:
+        evs, t = [], 0
+        for m in tr:
+            t += m.time
+            if m.is_meta and m.type == "end_of_track":
+                continue
+            if m.type in kinds:
+                continue
+            evs.append((t, m))
+        tracks_abs.append(evs)
+    if not tracks_abs:
+        tracks_abs = [[]]
+    for k in redo:
+        tracks_abs[0] += [(t, m.copy()) for t, m in ref_ev[k]]
+    new_tracks = []
+    for evs in tracks_abs:
+        evs.sort(key=lambda x: (x[0], 0 if x[1].is_meta else 1))
+        tr, last = mido.MidiTrack(), 0
+        for t, m in evs:
+            tr.append(m.copy(time=t - last))
+            last = t
+        tr.append(mido.MetaMessage("end_of_track", time=0))
+        new_tracks.append(tr)
+    ms.tracks = new_tracks
+    ms.save(out)
+    return redo
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  OPCIONES Y PLAN
+# ══════════════════════════════════════════════════════════════════════════════
+# Los pasos usan marcadores que el ejecutor resuelve:
+#   $OUT / $TOOLS / $ORIG        rutas
+#   @track0:F  @chan0:F          pista / canal con más notas de F
+#   @count:A|B|C                 nº de ficheros existentes entre A, B y C (mín. 1)
+#   @quarter:F|N                 cuarta parte del nº de compases de F (JSON de
+#                                metric_analyzer); N = valor si no se puede leer
+#   when: ["exists:RUTA", "missing:RUTA"]   condiciones sobre ficheros
+
+W = "$OUT/work"
+TOKEN = re.compile(r"^@(track0|chan0|count|quarter):(.+)$")
+
+
+def _variants(s: str) -> List[str]:
+    v = [x.strip() for x in s.split(",") if x.strip()]
+    bad = [x for x in v if x not in ("base", "rehar", "orq")]
+    if bad:
+        raise ValueError(f"--variants: valores no válidos {bad} (usa base,rehar,orq)")
+    return v or ["base"]
+
+
+def _skips(s: str) -> List[str]:
+    v = [x.strip() for x in (s or "").split(",") if x.strip()]
+    bad = [x for x in v if x not in SKIP_STAGES]
+    if bad:
+        raise ValueError(f"--skip: valores no válidos {bad} (usa {','.join(SKIP_STAGES)})")
+    return v
+
+
+def find_tools_dir(explicit: Optional[str]) -> str:
+    cands = [explicit] if explicit else [HERE, os.getcwd()]
+    for p in cands:
+        if p and any(os.path.isfile(os.path.join(p, f)) for f in ("midi_doctor.py", "performer.py")):
+            return os.path.abspath(p)
+    return os.path.abspath(explicit or HERE)
+
+
+def plan_options(a, tools: str) -> Dict:
+    """Opciones de diseño del plan, con los 'auto' ya resueltos según las
+    herramientas disponibles (así el plan.json es reproducible)."""
+    def g(k, d=None):
+        v = getattr(a, k, None)
+        return d if v is None else v
+
+    def has(f):
+        return os.path.isfile(os.path.join(tools, f))
+
+    doctor = has("midi_doctor.py")
+    clean = g("clean", "auto")
+    clean = ("doctor" if doctor else "none") if clean == "auto" else clean
+    meta_engine = g("meta_engine", "auto")
+    meta_engine = ("doctor" if doctor else "builtin") if meta_engine == "auto" else meta_engine
+    meta_policy = g("meta_policy", "copy")
+    if meta_policy == "flatten":
+        meta_engine = "builtin"      # midi_doctor meta solo copia: flatten es interno
+    fid = g("fidelity_engine", "auto")
+    fid = ("meter" if has("fidelity_meter.py") else "builtin") if fid == "auto" else fid
+    return {
+        "mode": g("mode", "faithful"), "variants": _variants(g("variants", "base,rehar,orq")),
+        "min_melody": float(g("min_melody", 0.8)), "tol": float(g("tol", 0.25)),
+        "emotion": g("emotion"), "seed": int(g("seed", 5)),
+        "clean": clean, "doctor_available": doctor,
+        "meta_engine": meta_engine, "meta_policy": meta_policy,
+        "fidelity_engine": fid, "select": g("select", "quality"),
+        "original_candidate": not g("no_original_candidate", False),
+        "harmony": g("harmony", "tonicized"), "tonic_density": float(g("tonic_density", 0.15)),
+        "melody_source": g("melody_source", "motif"),
+        "bars": g("bars"), "bars_from": g("bars_from", "ticks"),
+        "style_source": g("style_source", "programs"), "family": g("family"),
+        "perf_style": g("perf_style", "auto"), "bass_style": g("bass_style", "auto"),
+        "pattern": g("pattern", "auto"),
+        "skip": _skips(g("skip", "")), "critique": g("critique", "basic"),
+        "recipe_paths": g("recipe_paths", "absolute"), "report_style": g("report_style", "compact"),
+    }
+
+
+def step(name, tool, args, note="", stage="", optional=False, when=None, output=None) -> Dict:
+    return {"name": name, "tool": tool, "args": [str(a) for a in args], "note": note,
+            "stage": stage, "optional": optional, "when": when or [], "output": output}
+
+
+def _prep_steps(i: Dict, O: Dict) -> List[Dict]:
+    clean = f"{W}/orig.mid"
+    if O["clean"] == "doctor":
+        return [
+            step("f00_clean", "midi_doctor.py",
+                 ["fix", "$ORIG", "-o", clean, "--ensure-meta", "--time-sig", i["time_sig"]]
+                 + (["--key", i["key_short"]] if i["key_from_signature"] else []),
+                 "Saneado del original (notas sin cerrar, duplicadas…); no altera el contenido",
+                 "preparación", True, output=clean),
+            step("f00b_clean_copia", SELF, ["_first", "--files", "$ORIG", "-o", clean],
+                 "(fallback) copia literal del original", "preparación", False,
+                 [f"missing:{clean}"], clean),
+        ]
+    return [step("f00_clean", SELF, ["_first", "--files", "$ORIG", "-o", clean],
+                 "Copia de trabajo del original (sin saneado)", "preparación", False, output=clean)]
+
+
+def _meta_step(name, src, dst, i, O, only=None, note="", when=None) -> Dict:
+    """Reinyecta compás/armadura/tempo del original: midi_doctor o código interno."""
+    clean = f"{W}/orig.mid"
+    if O["meta_engine"] == "doctor":
+        args = ["meta", src, "--copy-from", clean, "--replace", "-o", dst] + (["--only", only] if only else [])
+        return step(name, "midi_doctor.py", args, note, "metadatos", True, when, dst)
+    args = (["_meta", src, "--copy-from", clean, "-o", dst, "--policy", O["meta_policy"],
+             "--time-sig", i["time_sig"]]
+            + (["--key", i["key_short"]] if i["key_from_signature"] else [])
+            + (["--only", only] if only else []))
+    return step(name, SELF, args, note, "metadatos", True, when, dst)
+
+
+def _fidelity_step(name, target, json_out, O, note) -> Dict:
+    clean = f"{W}/orig.mid"
+    if O["fidelity_engine"] == "meter":
+        return step(name, "fidelity_meter.py",
+                    ["compare", clean, target, "--tol", O["tol"], "--timeline", "--json", json_out,
+                     "--no-color"], note, "crítica", True)
+    return step(name, SELF, ["_fidelity", clean, target, "--tol", O["tol"], "--json", json_out],
+                note + " (métricas internas)", "crítica", True)
+
+
+def _doctor_check(name, target, json_out, O) -> List[Dict]:
+    if not O["doctor_available"]:
+        return []
+    return [step(name, "midi_doctor.py", ["check", target, "--json", json_out, "--no-color"],
+                 "Comprobación final del MIDI", "crítica", True)]
+
+
+def critique_steps(i: Dict, O: Dict, kind: str) -> List[Dict]:
+    """Crítica del resultado. basic: calidad, color, fidelidad y comprobación.
+    full: añade armonía, métrica, melodía, tocabilidad, arco y comparación."""
+    if "critique" in O["skip"]:
+        return []
+    rec = kind == "recompose"
+    tgt = "$OUT/obra_final.mid" if rec else "$OUT/obra_fiel.mid"
+    jn = "final" if rec else "fiel"
+    p = "r" if rec else "f"
+    n0 = 19 if rec else 91
     S: List[Dict] = []
-    tonic, mode, ks, kl = info["tonic"], info["mode"], info["key_short"], info["key_long"]
-    ts, T = info["time_sig"], dec["tempo_i"]
-    n_bars, bpb = dec["n_bars"], info["bpb"]
-    mv = info["melody_voice"]
-    mtrack = mv["track"] if mv else 0
-    orig = "{D}/original.mid"
-    mat = "{D}/material"
-
-    def st(name, stage, tool, args, note, informative=False, internal=False):
-        S.append({"name": name, "stage": stage, "tool": tool,
-                  "args": [str(a) for a in args], "note": note,
-                  "informative": informative, "internal": internal})
-
-    # ── análisis ──
-    st("01_armonia_orig", "análisis", "harmonic_analyzer.py",
-       [orig, "--key", ks, "--json", f"{mat}/chords_orig.json", "--max-bars", 24],
-       "Armonía funcional del original en su tonalidad real")
-    st("02_metrica_orig", "análisis", "metric_analyzer.py",
-       [orig, "--json", f"{mat}/metric_orig.json"], "Compás, síncopa, nPVI, hipermetro")
-    st("03_melodia_orig", "análisis", "melody_critic.py",
-       [orig, "--track", mtrack, "--json", f"{mat}/critica_orig.json"],
-       f"Crítica de la voz melódica (pista {mtrack})", informative=True)
-    st("04_dna_orig", "análisis", "midi_dna_unified.py",
-       [orig, "--fingerprint-only", "--output", f"{mat}/original.fingerprint.json"],
-       "Huella vectorial (ADN) del original")
-    # ── captura ──
-    st("05_split", "captura", "midi_split_harmony.py",
-       [orig, "--out-dir", mat, "--split-files", "--key", kl, "--tempo", T, "--report"],
-       "Separación melodía/armonía y extracción de acordes reales (HMM)")
-    chords_split = f"{mat}/original_chords.mid"
-    melody_split = f"{mat}/original_melody.mid"
-    # ── armonía ──
-    intent = (f"pieza en {kl} de carácter {dec['emotion']}, compás {ts}, "
-              f"con arco expresivo hacia un clímax tardío")
-    st("06_cpg", "armonía", "chord_progression_generator.py",
-       [intent, "--key", tonic, "--mode", mode, "--style", "auto", "--bars", n_bars,
-        "--beats", max(1, int(round(bpb))), "--tempo", T,
-        "--tension-profile", prof["cpg"]["tension_profile"], "--seed", prof["cpg"]["seed"],
-        "--export-midi", f"{mat}/cpg.mid", "--export-text", f"{mat}/cpg.chords.txt",
-        "--export-json", f"{mat}/cpg.json"],
-       "Alternativa generativa: progresión desde la intención (exploración)",
-       informative=True)
-    st("07_tonicizacion_report", "armonía", "tonicization_engine.py",
-       [chords_split, "--key", ks, "--report"],
-       "¿Dónde caben dominantes secundarias?", informative=True)
-    tn = prof["tonicization"]
-    targs = [chords_split, "--key", ks, "--density", tn["density"], "--min-gap",
-             tn["min_gap"]] + (["--seventh"] if tn["seventh"] else []) + \
-            ["--seed", tn["seed"], "--output", f"{mat}/chords_ton.mid"]
-    st("08_tonicizacion", "armonía", "tonicization_engine.py", targs,
-       "Inserta V7/x sobre la armonía real extraída", informative=True)
-    st("08b_base_armonica", "armonía", None,
-       ["ensure", f"{mat}/chords_ton.mid", chords_split, f"{mat}/cpg.mid",
-        "--out", f"{mat}/chords_base.mid"],
-       "Base armónica: tonicizada; si falla, la extraída; si no, la generada",
-       internal=True)
-    base = f"{mat}/chords_base.mid"
-    # ── bajo / textura ──
-    st("09_bajo", "bajo", "bass_line_composer.py",
-       ["", "--key", tonic, "--mode", mode, "--bars", n_bars, "--tempo", T,
-        "--time-sig", ts, "--style", dec["bass_style"], "--chords-midi", base,
-        "--seed", prof["bass"]["seed"], "--output", f"{mat}/bajo.mid"],
-       f"Línea de bajo autónoma ({dec['bass_style']}) sobre la armonía")
-    st("10_patron", "textura", "chord_pattern_voicer.py",
-       [base, "--pattern", dec["pattern"], "--out", f"{mat}/acomp.mid", "--report"],
-       f"Refiguración del patrón armónico ({dec['pattern']})", informative=True)
-    st("10b_acomp", "textura", None,
-       ["ensure", f"{mat}/acomp.mid", base, "--out", f"{mat}/acomp_ok.mid"],
-       "Si el voicer falla, se usa la armonía en bloque", internal=True)
-    # ── melodía ──
-    m = prof["melody"]
-    margs = ["--engine", dec["engine"]]
-    if dec["engine"] == "motif" and info["motif"]:
-        margs += ["--motif", info["motif"]]
-    margs += ["--key", tonic, "--mode", mode, "--bars", n_bars, "--time-sig", ts,
-              "--tempo", T,
-              "--profile", m["profile_major"] if mode == "major" else m["profile_minor"],
-              "--rhythm", m["rhythm"], "--contour", m["contour"],
-              "--range", m["range"][0], m["range"][1],
-              "--chords-midi", base, "--chords-midi-window", max(1, int(bpb)),
-              "--candidates", dec["candidates"], "--seed", m["seed"],
-              "--output", f"{mat}/cand/mel.mid"]
-    st("11_melodia", "melodía", "melody_conditioned_v5.py", margs,
-       f"{dec['candidates']} candidatos de melodía "
-       f"({'sembrados con el motivo real' if dec['engine'] == 'motif' else 'guiados por acordes'})")
-    st("12_seleccion", "melodía", "melody_selector.py",
-       ["pick", f"{mat}/cand/*.mid", "--track", 1, "--output", f"{mat}/melodia_sel.mid",
-        "--json", f"{mat}/seleccion_melodia.json"],
-       "Elige el candidato mejor puntuado por melody_critic", informative=True)
-    st("12b_melodia", "melodía", None,
-       ["ensure", f"{mat}/melodia_sel.mid", f"{mat}/cand/mel.mid", melody_split,
-        "--out", f"{mat}/melodia.mid"],
-       "Melodía final: la elegida; si no, el primer candidato; si no, la separada",
-       internal=True)
-    # ── ensamblado / forma / expresión ──
-    stems = [f"{mat}/bajo.mid", f"{mat}/acomp_ok.mid", f"{mat}/melodia.mid"]
-    st("13_merge", "ensamblado", "midi_merge.py",
-       stems + ["--output", "{D}/obra_base.mid", "--channels"] +
-       [f"{p}:{i}" for i, p in enumerate(stems)],
-       "Stems (bajo · acompañamiento · melodía) → MIDI multicanal")
-    cl = prof["climax"]
-    st("14_climax", "forma", "climax_engineer.py",
-       ["{D}/obra_base.mid", "--output", "{D}/obra_climax.mid", "--position",
-        info["climax"], "--width", cl["width"], "--hollow-bars", cl["hollow_bars"],
-        "--intensity", cl["intensity"], "--melody-track", 3],
-       f"Refuerzo del clímax en el {int(info['climax'] * 100)}% (posición real)",
-       informative=True)
-    st("14b_etapa1", "forma", None,
-       ["ensure", "{D}/obra_climax.mid", "{D}/obra_base.mid", "--out", "{D}/obra_etapa1.mid"],
-       "Continúa con el clímax o, si falló, con el ensamblado", internal=True)
-    st("15_performer", "expresión", "performer.py",
-       ["{D}/obra_etapa1.mid", "--output", "{D}/obra_perf.mid", "--style", dec["perf_style"],
-        "--intensity", prof["performer"]["intensity"], "--melody-track", 3],
-       f"Dinámicas, pedal y fraseo ({dec['perf_style']})", informative=True)
-    st("15b_etapa2", "expresión", None,
-       ["ensure", "{D}/obra_perf.mid", "{D}/obra_etapa1.mid", "--out", "{D}/obra_etapa2.mid"],
-       "Continúa con la interpretación o, si falló, con la etapa anterior", internal=True)
-    tp = prof["tempo"]
-    f1, f2, f3 = tp["section_factors"]
-    mid_bar, late_bar = max(1, n_bars // 2), max(1, int(n_bars * 0.8))
-    st("16_tempo", "expresión", "tempo_designer.py",
-       ["{D}/obra_etapa2.mid", "--output", "{D}/obra_final.mid", "--base", dec["tempo"],
-        "--section", f"1:{round(dec['tempo'] * f1)}",
-        "--section", f"{mid_bar}:{round(dec['tempo'] * f2)}",
-        "--section", f"{late_bar}:{round(dec['tempo'] * f3)}",
-        "--final-rit", tp["final_rit"], "--final-rit-factor", tp["final_rit_factor"],
-        "--shape", tp["shape"]],
-       "Arco agógico con ritardando final", informative=True)
-    st("16b_final", "expresión", None,
-       ["ensure", "{D}/obra_final.mid", "{D}/obra_etapa2.mid", "--out", "{D}/obra_final.mid"],
-       "Garantiza obra_final.mid", internal=True)
-    st("17_meta", "expresión", None,
-       ["meta", "{D}/obra_final.mid", "--from", orig, "--out", "{D}/obra_final.mid"],
-       "Red de seguridad: compás y armadura del original en el MIDI final",
-       internal=True)
-    if not critique:
+    if rec:
+        S.append(step("r19_calidad", "quality_scorer.py", [tgt, "--fast", "--no-color"],
+                      "Calidad en 5 dimensiones", "crítica", True))
+        if "color" not in O["skip"]:
+            emo = O["emotion"] or i["emotion"]
+            S.append(step("r20_color", "orchestral_colorist.py", [tgt, "--emotion", emo, "--report"],
+                          f"Reasignación tímbrica propuesta para «{emo}»", "color", True))
+    S.append(_fidelity_step(f"{p}{n0 + (2 if rec else 0)}_fidelity", tgt, f"{W}/fidelidad_{jn}.json", O,
+                            "Fidelidad de la recomposición (esperable: baja)" if rec
+                            else "Fidelidad del resultado frente al original"))
+    S += _doctor_check(f"{p}{n0 + (3 if rec else 1)}_doctor", tgt, f"{W}/doctor_{jn}.json", O)
+    if O["critique"] != "full":
         return S
-    # ── color + crítica ──
-    st("18_color", "color", "orchestral_colorist.py",
-       ["{D}/obra_final.mid", "--emotion", dec["emotion"], "--report"],
-       f"Reasignación tímbrica propuesta para «{dec['emotion']}»", informative=True)
-    st("19_armonia_final", "crítica", "harmonic_analyzer.py",
-       ["{D}/obra_final.mid", "--key", ks, "--json", f"{mat}/chords_final.json",
-        "--max-bars", 24], "Re-análisis armónico del resultado", informative=True)
-    st("20_metrica_final", "crítica", "metric_analyzer.py",
-       ["{D}/obra_final.mid", "--json", f"{mat}/metric_final.json"],
-       "Métrica del resultado", informative=True)
-    st("21_melodia_final", "crítica", "melody_critic.py",
-       ["{D}/obra_final.mid", "--track", 3, "--json", f"{mat}/critica_final.json"],
-       "Crítica de la melodía final", informative=True)
-    st("22_tocabilidad", "crítica", "playability_auditor.py",
-       ["{D}/obra_base.mid", "--quiet"], "Auditoría de tocabilidad", informative=True)
-    st("23_calidad", "crítica", "quality_scorer.py",
-       ["{D}/obra_final.mid", "--fast"], "Calidad en 5 dimensiones", informative=True)
-    q = max(1, n_bars // 4)
-    st("24_arco", "crítica", "arc_supervisor.py",
-       ["{D}/obra_final.mid", "--sections", q, q, q, q, "--tension", "0.3,0.5,0.7,0.9"],
-       "¿Coincide el arco real con el planificado?", informative=True)
-    st("25_export_yaml", "exportación", "midi2yaml.py",
-       [f"{mat}/melodia.mid", "--compas", ts, "--bpm", dec["tempo_i"], "--track", 1],
-       "Serialización didáctica de la melodía a partitura.yaml", informative=True)
-    st("26_compare", "crítica", "analyzer.py",
-       ["compare", orig, "{D}/obra_final.mid"],
-       "Comparación vectorial original ↔ reconstrucción", informative=True)
+    mt = (f"@count:{W}/bajo.mid|{W}/acomp.mid|{W}/melodia.mid" if rec else i["melody_track"])
+    q = f"@quarter:{W}/metric_{jn}.json|{i['n_bars']}"
+    base = f"{W}/obra_base.mid" if rec else tgt
+    k = 23 if rec else 93
+    S += [
+        step(f"{p}{k}_armonia_final", "harmonic_analyzer.py",
+             [tgt, "--key", i["key_short"], "--json", f"{W}/chords_{jn}.json", "--max-bars", "24"],
+             "Re-análisis armónico del resultado", "crítica", True),
+        step(f"{p}{k + 1}_metrica_final", "metric_analyzer.py", [tgt, "--json", f"{W}/metric_{jn}.json"],
+             "Métrica del resultado", "crítica", True),
+        step(f"{p}{k + 2}_melodia_final", "melody_critic.py", [tgt, "--track", mt],
+             "Crítica de la melodía final", "crítica", True),
+        step(f"{p}{k + 3}_tocabilidad", "playability_auditor.py", [base, "--quiet"],
+             "Auditoría de tocabilidad", "crítica", True),
+        step(f"{p}{k + 4}_arco", "arc_supervisor.py",
+             [tgt, "--sections", q, q, q, q, "--tension", "0.3,0.5,0.7,0.9"],
+             "¿Coincide el arco real con el planificado?", "crítica", True,
+             [f"exists:{W}/metric_{jn}.json"]),
+    ]
+    nxt = k + 5
+    if rec:
+        S.append(step(f"r{nxt}_export_yaml", "midi2yaml.py",
+                      [f"{W}/melodia.mid", "--compas", i["time_sig"], "--bpm", i["tempo_gen"], "--track", 1],
+                      "Serialización didáctica de la melodía a partitura.yaml", "exportación", True,
+                      [f"exists:{W}/melodia.mid"]))
+        nxt += 1
+    S.append(step(f"{p}{nxt}_compare", "analyzer.py", ["compare", f"{W}/orig.mid", tgt],
+                  "Comparación vectorial original ↔ resultado", "crítica", True))
     return S
 
 
-# ── render de comandos ───────────────────────────────────────────────────────
+def faithful_steps(i: Dict, O: Dict) -> List[Dict]:
+    S: List[Dict] = _prep_steps(i, O)
+    clean = f"{W}/orig.mid"
+    key_long = i["key_long"]
+    cand = []
+    if "base" in O["variants"]:
+        S += [
+            step("f10_base_perf", "performer.py",
+                 [clean, "--output", f"{W}/base_perf.mid", "--style", "clasico", "--intensity", "0.4"],
+                 "Expresión conservando notas e instrumentos", "interpretación", True,
+                 output=f"{W}/base_perf.mid"),
+            _meta_step("f11_base_meta", f"{W}/base_perf.mid", f"{W}/base.mid", i, O,
+                       note="Compás/armadura/tempo del original (sin aplanar modulaciones)"
+                       if O["meta_policy"] == "copy" else "Compás/armadura/tempo del original (aplanados)",
+                       when=[f"exists:{W}/base_perf.mid"]),
+        ]
+        cand.append(f"{W}/base.mid")
+    if "rehar" in O["variants"]:
+        S += [
+            step("f20_rehar", "reharmonizer.py",
+                 [clean, "--key", key_long, "--out-dir", f"{W}/rehar", "--report"],
+                 "Rearmoniza conservando la melodía", "armonía", True, output=f"{W}/rehar"),
+            step("f21_rehar_pick", SELF, ["_first", "--glob", f"{W}/rehar/*.mid", "-o", f"{W}/rehar_raw.mid"],
+                 "Toma la primera propuesta de rearmonización", "armonía", True,
+                 [f"exists:{W}/rehar"], f"{W}/rehar_raw.mid"),
+            step("f22_rehar_perf", "performer.py",
+                 [f"{W}/rehar_raw.mid", "--output", f"{W}/rehar_perf.mid", "--style", "clasico",
+                  "--intensity", "0.3"], "Expresión de la versión rearmonizada", "interpretación", True,
+                 [f"exists:{W}/rehar_raw.mid"], f"{W}/rehar_perf.mid"),
+            _meta_step("f23_rehar_meta", f"{W}/rehar_perf.mid", f"{W}/rehar.mid", i, O,
+                       note="Metadatos del original", when=[f"exists:{W}/rehar_perf.mid"]),
+        ]
+        cand.append(f"{W}/rehar.mid")
+    if "orq" in O["variants"]:
+        S += [
+            step("f30_orq", "piano_expander.py",
+                 [clean, "--output", f"{W}/orq_raw.mid", "--template", "chamber"],
+                 "Reorquesta conservando las notas", "orquestación", True, output=f"{W}/orq_raw.mid"),
+            step("f31_orq_perf", "performer.py",
+                 [f"{W}/orq_raw.mid", "--output", f"{W}/orq_perf.mid", "--style", "clasico",
+                  "--intensity", "0.3"], "Expresión de la versión orquestada", "interpretación", True,
+                 [f"exists:{W}/orq_raw.mid"], f"{W}/orq_perf.mid"),
+            _meta_step("f32_orq_meta", f"{W}/orq_perf.mid", f"{W}/orq.mid", i, O,
+                       note="Metadatos del original", when=[f"exists:{W}/orq_perf.mid"]),
+        ]
+        cand.append(f"{W}/orq.mid")
+    S.append(step("f90_choose", SELF,
+                  ["choose", clean, "--candidates"] + cand + ([clean] if O["original_candidate"] else [])
+                  + ["--min-melody", O["min_melody"], "--tol", O["tol"],
+                     "--fidelity-engine", O["fidelity_engine"], "--select", O["select"],
+                     "--tools", "$TOOLS", "--output", "$OUT/obra_fiel.mid",
+                     "--report", f"{W}/seleccion.json", "--no-color"],
+                  "Gate de melodía y, entre las que lo superan, "
+                  + ("la de mayor calidad" if O["select"] == "quality" else "la de mayor fidelidad"),
+                  "selección", output="$OUT/obra_fiel.mid"))
+    S += critique_steps(i, O, "faithful")
+    return S
 
-def step_argv(step: Dict, D: str, T: str) -> List[str]:
-    """argv concreto (para ejecutar / plan.yaml)."""
-    rep = lambda s: s.replace("{D}", D).replace("{T}", T)  # noqa: E731
-    args = [rep(a) for a in step["args"]]
-    if step["tool"] is None:                       # subcomando interno
-        return [PY, SELF] + args
-    return [PY, os.path.join(T, step["tool"])] + args
+
+def _harmony_order(O: Dict) -> List[str]:
+    ton, cap, cpg = f"{W}/chords_ton.mid", f"{W}/orig_chords.mid", f"{W}/cpg.mid"
+    return {"tonicized": [ton, cap, cpg], "captured": [cap, ton, cpg],
+            "generated": [cpg, cap, ton]}[O["harmony"]]
 
 
-def step_shell(step: Dict) -> str:
-    """Línea para receta.sh, con $D y $TOOLS (portable)."""
-    def q(tok: str) -> str:
-        if "{D}" in tok:
-            return '"' + tok.replace("{D}", "$D").replace('"', '\\"') + '"'
-        return shlex.quote(tok)
-    toks = [q(a) for a in step["args"]]
-    if step["tool"] is None:
-        return f'python3 "$SELF" ' + " ".join(toks)
-    return f'python3 "$TOOLS/{step["tool"]}" ' + " ".join(toks)
+def recompose_steps(i: Dict, O: Dict) -> List[Dict]:
+    S: List[Dict] = _prep_steps(i, O)
+    clean = f"{W}/orig.mid"
+    tonic, mode, ks, kl = i["tonic"], i["mode"], i["key_short"], i["key_long"]
+    ts, bpb, nb = i["time_sig"], int(round(i["beats_per_bar"])), i["n_bars"]
+    tempo_i = int(round(i["tempo_gen"]))
+    m_idx, seed = i["melody_track"], O["seed"]
+    emo = O["emotion"] or i["emotion"]
+    chords, bajo, acomp, mel = f"{W}/chords_src.mid", f"{W}/bajo.mid", f"{W}/acomp.mid", f"{W}/melodia.mid"
+    S += [
+        step("r01_armonia", "harmonic_analyzer.py",
+             [clean, "--key", ks, "--json", f"{W}/chords_orig.json", "--max-bars", "24"],
+             "Armonía funcional del original", "análisis", True),
+        step("r02_metrica", "metric_analyzer.py", [clean, "--json", f"{W}/metric_orig.json"],
+             "Compás, síncopa, nPVI e hipermetro", "análisis", True),
+        step("r03_melodia", "melody_critic.py", [clean, "--track", m_idx],
+             f"Crítica melódica de la pista {m_idx}", "análisis", True),
+        step("r04_dna", "midi_dna_unified.py",
+             [clean, "--fingerprint-only", "--output", f"{W}/orig.fingerprint.json"],
+             "Huella vectorial (ADN)", "análisis", True),
+        step("r05_split", "midi_split_harmony.py",
+             [clean, "--out-dir", W, "--split-files", "--key", kl, "--beats-per-bar", bpb,
+              "--tempo", tempo_i, "--report"],
+             "Separación melodía/armonía (HMM)", "captura", True, output=f"{W}/orig_chords.mid"),
+        step("r06_cpg", "chord_progression_generator.py",
+             [f"pieza en {kl} de carácter {emo}, compás {ts}, con arco hacia un clímax tardío",
+              "--key", tonic, "--mode", mode, "--style", "auto", "--bars", nb, "--beats", bpb,
+              "--tempo", tempo_i, "--tension-profile", "arch", "--seed", seed + 2,
+              "--export-midi", f"{W}/cpg.mid", "--export-text", f"{W}/cpg.chords.txt",
+              "--export-json", f"{W}/cpg.json"],
+             "Alternativa generativa: progresión desde la intención", "armonía", True,
+             output=f"{W}/cpg.mid"),
+        step("r07_tonic", "tonicization_engine.py",
+             [f"{W}/orig_chords.mid", "--key", ks, "--density", O["tonic_density"], "--min-gap", "4",
+              "--seventh", "--seed", "3", "--output", f"{W}/chords_ton.mid"],
+             "Inserta V7/x sobre la armonía capturada", "armonía", True,
+             [f"exists:{W}/orig_chords.mid"], f"{W}/chords_ton.mid"),
+        step("r08_chords", SELF, ["_first", "--files"] + _harmony_order(O) + ["-o", chords],
+             {"tonicized": "Base armónica: tonicizada › capturada › generada",
+              "captured": "Base armónica: capturada › tonicizada › generada",
+              "generated": "Base armónica: generada › capturada › tonicizada"}[O["harmony"]],
+             "armonía", output=chords),
+        step("r09_bajo", "bass_line_composer.py",
+             ["", "--key", tonic, "--mode", mode, "--bars", nb, "--tempo", tempo_i, "--time-sig", ts,
+              "--style", i["bass_style"], "--chords-midi", chords, "--seed", seed + 6, "--output", bajo],
+             f"Línea de bajo ({i['bass_style']}) sobre la armonía", "bajo", True,
+             [f"exists:{chords}"], bajo),
+        step("r09b_bajo_pedal", "bass_line_composer.py",
+             ["", "--key", tonic, "--mode", mode, "--bars", nb, "--tempo", tempo_i, "--time-sig", ts,
+              "--style", i["bass_style"], "--chords", " ".join(["I:4"] * nb), "--seed", seed + 6,
+              "--output", bajo],
+             "(sin acordes) pedal de tónica", "bajo", True, [f"missing:{bajo}"], bajo),
+    ]
+    pattern = O["pattern"] if O["pattern"] != "auto" else (
+        "alberti" if bpb >= 4 else ("arpeggio-up" if bpb >= 3 else "block"))
+    S += [
+        step("r10_patron", "chord_pattern_voicer.py",
+             [chords, "--track", f"@track0:{chords}", "--pattern", pattern, "--out", acomp, "--report"],
+             f"Refiguración del patrón armónico ({pattern})", "textura", True,
+             [f"exists:{chords}"], acomp),
+        step("r10b_acomp_copia", SELF, ["_first", "--files", chords, "-o", acomp],
+             "(fallback) acordes en bloque", "textura", True,
+             [f"missing:{acomp}", f"exists:{chords}"], acomp),
+    ]
+    # ── melodía: el orden de preferencia lo fija --melody-source ──────────────
+    base = ["--key", tonic, "--mode", mode, "--bars", nb, "--time-sig", ts, "--tempo", tempo_i,
+            "--profile", "pastoral" if mode == "major" else "elegiac", "--rhythm", "flowing",
+            "--contour", "arch", "--range", "60", "84"]
+    chordsargs = ["--chords-midi", chords, "--chords-midi-track", f"@track0:{chords}",
+                  "--chords-midi-channel", f"@chan0:{chords}", "--chords-midi-window", max(1, bpb)]
+    tail = ["--candidates", 3, "--seed", seed, "--output", mel]
+    gens = {
+        "motif": ("r11_melodia", "melody_conditioned_v5.py",
+                  ["--engine", "motif", "--motif", i["motif"] or ""] + base + chordsargs + tail,
+                  "Melodía sembrada con el motivo real", [f"exists:{chords}"], bool(i["motif"])),
+        "guided": ("r11b_melodia_guiada", "melody_conditioned_v5.py",
+                   ["--engine", "chord_guided"] + base + chordsargs + tail,
+                   "Melodía guiada por acordes", [f"exists:{chords}"], True),
+        "free": ("r11c_melodia_libre", "melody_conditioned_v5.py",
+                 ["--engine", "chord_guided"] + base + tail, "Melodía sin acordes", [], True),
+        "captured": ("r11d_melodia_capturada", SELF, ["_first", "--files", f"{W}/orig_melody.mid", "-o", mel],
+                     "Melodía capturada por el HMM (puede venir invertida)",
+                     [f"exists:{W}/orig_melody.mid"], True),
+    }
+    order = {"motif": ["motif", "guided", "free", "captured"],
+             "guided": ["guided", "free", "captured"],
+             "captured": ["captured", "motif", "guided", "free"]}[O["melody_source"]]
+    first = True
+    for g_ in order:
+        name, tool, args, note, conds, usable = gens[g_]
+        if not usable:
+            continue
+        S.append(step(name, tool, args, note if first else "(fallback) " + note.lower(), "melodía", True,
+                      conds + ([] if first else [f"missing:{mel}"]), mel))
+        first = False
+    # ── ensamblado: con los stems que haya (como reconstruct.py) ──────────────
+    stems = [("bajo", bajo, 0), ("acomp", acomp, 1), ("mel", mel, 2)]
+    obra_base = f"{W}/obra_base.mid"
+    subsets = [("r12_merge", [0, 1, 2]), ("r12a_merge_bajo_mel", [0, 2]),
+               ("r12b_merge_acomp_mel", [1, 2]), ("r12c_merge_bajo_acomp", [0, 1])]
+    for name, idx in subsets:
+        conds = [f"{'exists' if k in idx else 'missing'}:{stems[k][1]}" for k in range(3)]
+        S.append(step(name, "midi_merge.py",
+                      [stems[k][1] for k in idx] + ["--output", obra_base, "--channels"]
+                      + [f"{stems[k][1]}:{stems[k][2]}" for k in idx],
+                      "Stems (" + " · ".join(stems[k][0] for k in idx) + ") → MIDI multicanal",
+                      "ensamblado", True, conds, obra_base))
+    S.append(step("r12d_merge_unico", SELF, ["_first", "--files", mel, acomp, bajo, "-o", obra_base],
+                  "(fallback) un único stem disponible", "ensamblado", True,
+                  [f"missing:{obra_base}"], obra_base))
+    mt = f"@count:{bajo}|{acomp}|{mel}"      # pista de la melodía (1-based): bajo=1, acomp=2, mel=3
+    perf_files = [f"{W}/obra_climax.mid", obra_base]
+    if "climax" not in O["skip"]:
+        S.append(step("r13_climax", "climax_engineer.py",
+                      [obra_base, "--output", f"{W}/obra_climax.mid", "--position", i["climax"],
+                       "--width", 1, "--hollow-bars", 1, "--intensity", 0.5, "--melody-track", mt],
+                      f"Clímax en el {int(i['climax'] * 100)} % (posición real del original)", "forma", True,
+                      [f"exists:{obra_base}"], f"{W}/obra_climax.mid"))
+    S += [
+        step("r14a_perf_in", SELF, ["_first", "--files"] + perf_files + ["-o", f"{W}/perf_in.mid"],
+             "Entrada del performer", "interpretación", True, output=f"{W}/perf_in.mid"),
+        step("r14_performer", "performer.py",
+             [f"{W}/perf_in.mid", "--output", f"{W}/obra_perf.mid", "--style", i["perf_style"],
+              "--intensity", 0.5, "--melody-track", mt],
+             f"Dinámicas, pedal y fraseo ({i['perf_style']})", "interpretación", True,
+             [f"exists:{W}/perf_in.mid"], f"{W}/obra_perf.mid"),
+    ]
+    if "tempo" not in O["skip"]:
+        tg = i["tempo_gen"]
+        S.append(step("r15_tempo", "tempo_designer.py",
+                      [f"{W}/obra_perf.mid", "--output", f"{W}/obra_tempo.mid", "--base", tg,
+                       "--section", f"1:{round(tg * 0.96)}", "--section", f"{max(1, nb // 2)}:{round(tg * 1.04)}",
+                       "--section", f"{max(1, int(nb * 0.8))}:{round(tg * 0.96)}",
+                       "--final-rit", 2, "--final-rit-factor", 1.2, "--shape", "smooth"],
+                      "Arco agógico con ritardando final", "interpretación", True,
+                      [f"exists:{W}/obra_perf.mid"], f"{W}/obra_tempo.mid"))
+    S += [
+        step("r16_pick", SELF,
+             ["_first", "--files", f"{W}/obra_tempo.mid", f"{W}/obra_perf.mid", f"{W}/obra_climax.mid",
+              obra_base, "-o", f"{W}/final_raw.mid"],
+             "Última etapa disponible del pipeline", "ensamblado", output=f"{W}/final_raw.mid"),
+        _meta_step("r17_meta", f"{W}/final_raw.mid", f"{W}/final_meta.mid", i, O, only="ts,key",
+                   note="Compás/armadura del original (el tempo lo fija el arco agógico)",
+                   when=[f"exists:{W}/final_raw.mid"]),
+    ]
+    if O["doctor_available"]:
+        S.append(step("r18_final", "midi_doctor.py", ["fix", f"{W}/final_meta.mid", "-o", "$OUT/obra_final.mid"],
+                      "Saneado final", "metadatos", True, [f"exists:{W}/final_meta.mid"], "$OUT/obra_final.mid"))
+    S.append(step("r18b_final_copia", SELF,
+                  ["_first", "--files", f"{W}/final_meta.mid", f"{W}/final_raw.mid", "-o", "$OUT/obra_final.mid"],
+                  "(fallback) entrega de la última etapa" if O["doctor_available"] else "Entrega de la última etapa",
+                  "metadatos", False, ["missing:$OUT/obra_final.mid"], "$OUT/obra_final.mid"))
+    S += critique_steps(i, O, "recompose")
+    return S
 
 
-def write_plan_files(D: str, T: str, steps: List[Dict], info: Dict, dec: Dict) -> None:
-    # plan.yaml (formato "manual" de runner.py: name + cmd)
-    lines = ["# Plan generado por reconstructor.py — ejecutable con runner.py",
-             f"# Pieza: {os.path.basename(info['file'])}", "steps:"]
-    for s in steps:
-        cmd = " ".join(shlex.quote(a) for a in step_argv(s, D, T))
-        lines += [f"  - name: {s['name']}", f"    label: {json.dumps(s['note'], ensure_ascii=False)}",
-                  f"    cmd: {json.dumps(cmd, ensure_ascii=False)}"]
-    Path(D, "plan.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+def build_plan(orig: str, out_dir: str, O: Dict, tools: str) -> Dict:
+    info = analyze_midi(orig, {**O, "tools": tools})
+    steps: List[Dict] = []
+    if O["mode"] in ("faithful", "both"):
+        steps += faithful_steps(info, O)
+    if O["mode"] in ("recompose", "both"):
+        have = {s["name"] for s in steps}
+        steps += [s for s in recompose_steps(info, O) if s["name"] not in have]
+    return {"version": VERSION, "mode": O["mode"], "original": os.path.abspath(orig),
+            "out_dir": os.path.abspath(out_dir), "min_melody": O["min_melody"], "tol": O["tol"],
+            "options": O, "dna": info, "steps": steps}
 
-    # receta.sh (autónoma)
-    sh = ["#!/usr/bin/env bash",
-          "# " + "═" * 74,
-          f"#  RECETA de reconstrucción — {os.path.basename(info['file'])}",
-          "#  Generada por reconstructor.py. Variables sobreescribibles:",
-          "#    TOOLS = carpeta con las herramientas · SELF = ruta de reconstructor.py",
-          "# " + "═" * 74,
-          "set -u",
-          'D="$(cd "$(dirname "$0")" && pwd)"',
-          f'TOOLS="${{TOOLS:-{T}}}"', f'SELF="${{SELF:-{SELF}}}"',
-          'mkdir -p "$D/analisis" "$D/material/cand"', ""]
-    stage = None
-    for s in steps:
-        if s["stage"] != stage:
-            stage = s["stage"]
-            sh += [f"# ── {stage.upper()} " + "─" * (60 - len(stage))]
-        sh += [f"# {s['name']} — {s['note']}", step_shell(s) +
-               ("   || echo \"(aviso: {0} terminó con error)\"".format(s["name"])
-                if s["informative"] or s["internal"] else ""), ""]
-    Path(D, "receta.sh").write_text("\n".join(sh), encoding="utf-8")
-    os.chmod(Path(D, "receta.sh"), 0o755)
+
+def plan_to_runner_yaml(plan: Dict) -> str:
+    """Plan en formato 'manual' de runner.py (ignora when/optional y no resuelve
+    los marcadores @track0/@chan0/@count/@quarter: solo este script los entiende)."""
+    L = [f"# Plan de reconstrucción ({plan['mode']}) — generado por reconstructor.py",
+         "# runner.py no evalúa 'when': los pasos fallback se ejecutarán igualmente.",
+         "# Los marcadores @track0/@chan0/@count/@quarter solo los resuelve reconstructor.py.",
+         f"original: {plan['original']}", "steps:"]
+    for s in plan["steps"]:
+        cmd = " ".join(["python", shlex.quote(s["tool"])] +
+                       [shlex.quote(a.replace("$OUT", plan["out_dir"]).replace("$ORIG", plan["original"]))
+                        for a in s["args"]])
+        L += [f"  - name: {s['name']}", f"    label: \"{s['note']}\"", f"    cmd: {json.dumps(cmd)}"]
+    return "\n".join(L) + "\n"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  EJECUCIÓN
 # ══════════════════════════════════════════════════════════════════════════════
 
-def run_steps(D: str, T: str, steps: List[Dict], timeout: int, strict: bool,
-              resume: bool, start: Optional[str], dry: bool) -> List[Dict]:
-    log_path = os.path.join(D, "pipeline_log.json")
-    prev: Dict[str, Dict] = {}
-    if resume and os.path.exists(log_path):
-        try:
-            prev = {s["name"]: s for s in json.load(open(log_path))["steps"]}
-        except Exception:  # noqa: BLE001
-            prev = {}
-    os.makedirs(os.path.join(D, "analisis"), exist_ok=True)
-    os.makedirs(os.path.join(D, "material", "cand"), exist_ok=True)
+def _first_track(path: str) -> Tuple[int, int]:
+    mid = _load(path)
+    best = (0, 0, -1)
+    for i, tr in enumerate(mid.tracks):
+        n = sum(1 for m in tr if m.type == "note_on" and m.velocity > 0)
+        ch = next((m.channel for m in tr if m.type == "note_on"), 0)
+        if n > best[2]:
+            best = (i, ch, n)
+    return best[0], best[1]
+
+
+def count_existing(paths: List[str]) -> int:
+    return max(1, sum(1 for p in paths if os.path.isfile(p)))
+
+
+def quarter_bars(json_path: str, default: int) -> int:
+    d = read_json(json_path) or {}
+    try:
+        n = int(d.get("n_bars") or default)
+    except (TypeError, ValueError):
+        n = default
+    return max(1, n // 4)
+
+
+class Ctx:
+    def __init__(self, plan: Dict, tools: str):
+        self.out = plan["out_dir"]
+        self.orig = plan["original"]
+        self.tools = tools
+
+    def sub(self, s: str) -> str:
+        return s.replace("$OUT", self.out).replace("$TOOLS", self.tools).replace("$ORIG", self.orig)
+
+    def resolve(self, tok: str) -> str:
+        tok = self.sub(tok)
+        m = TOKEN.match(tok)
+        if m:
+            kind, arg = m.groups()
+            if kind in ("track0", "chan0"):
+                idx, ch = _first_track(arg)
+                return str(idx if kind == "track0" else ch)
+            if kind == "count":
+                return str(count_existing(arg.split("|")))
+            f, _, d = arg.rpartition("|")
+            return str(quarter_bars(f, int(d or 4)))
+        return tok
+
+    def cond_ok(self, cond: str) -> bool:
+        kind, _, path = cond.partition(":")
+        ex = os.path.exists(self.sub(path))
+        return ex if kind == "exists" else (not ex)
+
+
+def tool_path(ctx: Ctx, tool: str) -> str:
+    if tool == SELF:
+        return os.path.abspath(__file__)
+    return os.path.join(ctx.tools, tool)
+
+
+def render_cmd(ctx: Ctx, s: Dict) -> List[str]:
+    return [sys.executable, tool_path(ctx, s["tool"])] + [ctx.resolve(a) for a in s["args"]]
+
+
+def execute(plan: Dict, tools: str, timeout: int, resume: bool, strict: bool, dry: bool) -> List[Dict]:
+    ctx = Ctx(plan, tools)
+    work = os.path.join(ctx.out, "work")
+    logs = os.path.join(work, "logs")
+    os.makedirs(logs, exist_ok=True)
     results: List[Dict] = []
-    started = start is None
-    for s in steps:
-        if not started:
-            if s["name"].startswith(start):
-                started = True
-            else:
-                if s["name"] in prev:
-                    results.append(prev[s["name"]])
-                continue
-        if resume and prev.get(s["name"], {}).get("status") == "ok":
-            results.append(prev[s["name"]])
-            continue
-        argv = step_argv(s, D, T)
-        # globs (p. ej. cand/*.mid) los expande la herramienta; aquí solo si hace falta
-        argv = [a for a in _expand_globs(argv)]
-        if dry:
-            print(f"  {_c('G')}{s['name']}{_c('R')}  " + " ".join(shlex.quote(a) for a in argv))
-            continue
-        tool_missing = s["tool"] and not os.path.exists(os.path.join(T, s["tool"]))
-        t0 = time.time()
-        if tool_missing:
-            status, rc = ("aviso" if s["informative"] else "fallo"), 127
-            out = f"herramienta no encontrada: {s['tool']}"
-        else:
-            try:
-                p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
-                                   cwd=T)
-                rc, out = p.returncode, (p.stdout or "") + (p.stderr or "")
-                status = "ok" if rc == 0 else ("aviso" if s["informative"] else "fallo")
-            except subprocess.TimeoutExpired:
-                status, rc, out = "timeout", 124, f"(timeout {timeout}s)"
-            except Exception as e:  # noqa: BLE001
-                status, rc, out = "error", 1, str(e)
-        dt = round(time.time() - t0, 2)
-        logf = os.path.join(D, "analisis", re.sub(r"[^A-Za-z0-9_.-]", "_", s["name"]) + ".log")
-        Path(logf).write_text("$ " + " ".join(shlex.quote(a) for a in argv) + "\n\n" + out,
-                              encoding="utf-8")
-        rec = {"name": s["name"], "stage": s["stage"], "tool": s["tool"] or "reconstructor.py",
-               "note": s["note"], "status": status, "rc": rc, "seconds": dt,
-               "informative": s["informative"], "internal": s["internal"],
-               "log": os.path.relpath(logf, D),
-               "tail": "\n".join(out.strip().splitlines()[-4:])}
+    total = len(plan["steps"])
+    print(f"\n{'═' * 78}\n  {_c('B')}RECONSTRUCTOR · run{_c('R')}  modo={plan['mode']}  "
+          f"{total} pasos  →  {ctx.out}\n{'═' * 78}")
+    for n, s in enumerate(plan["steps"], 1):
+        rec = {"name": s["name"], "tool": s["tool"], "note": s["note"], "stage": s["stage"],
+               "optional": s["optional"], "status": "pending", "rc": None, "seconds": 0.0,
+               "args": s["args"], "when": s["when"]}
         results.append(rec)
-        col = {"ok": "GRN", "aviso": "YEL"}.get(status, "RED")
-        print(f"  {_c(col)}{status:>7}{_c('R')}  {s['name']:<24} {_c('G')}{dt:>6.1f}s  "
-              f"{s['note'][:46]}{_c('R')}")
-        Path(log_path).write_text(json.dumps({"version": VERSION, "steps": results},
-                                             ensure_ascii=False, indent=2), encoding="utf-8")
-        if strict and status in ("fallo", "timeout", "error"):
-            print(f"  {_c('RED')}--strict: se aborta en {s['name']}{_c('R')}")
+        tag = f"[{n:>2}/{total}] {s['name']:<24}"
+        if not all(ctx.cond_ok(c) for c in s["when"]):
+            rec["status"] = "skipped"
+            print(f"  {_c('G')}{tag} · omitido (condición){_c('R')}")
+            continue
+        out = ctx.sub(s["output"]) if s.get("output") else None
+        if resume and out and os.path.exists(out):
+            rec["status"] = "cached"
+            print(f"  {_c('G')}{tag} · en caché{_c('R')}")
+            continue
+        if dry:
+            rec["status"] = "dry"
+            print(f"  {_c('G')}{tag} · (dry-run){_c('R')}")
+            continue
+        try:
+            cmd = render_cmd(ctx, s)
+        except Exception as e:  # noqa: BLE001
+            rec["status"], rec["error"] = "failed", f"no se pudo resolver el comando: {e}"
+            print(f"  {_c('RED')}{tag} ✗ {rec['error']}{_c('R')}")
+            if strict and not s["optional"]:
+                break
+            continue
+        if not os.path.isfile(cmd[1]):
+            rec["status"], rec["error"] = "missing_tool", f"no existe {os.path.basename(cmd[1])}"
+            print(f"  {_c('YEL') if s['optional'] else _c('RED')}{tag} ✗ herramienta ausente: "
+                  f"{s['tool']}{_c('R')}")
+            if strict and not s["optional"]:
+                break
+            continue
+        t0 = time.time()
+        try:
+            p = subprocess.run(cmd, cwd=ctx.tools, capture_output=True, text=True, timeout=timeout,
+                               env={**os.environ, "PYTHONWARNINGS": "ignore",
+                                    "PYGAME_HIDE_SUPPORT_PROMPT": "1"})
+            text = ANSI.sub("", (p.stdout or "") + (p.stderr or ""))
+            rc = p.returncode
+        except subprocess.TimeoutExpired:
+            text, rc = f"(timeout {timeout}s)", 124
+        except Exception as e:  # noqa: BLE001
+            text, rc = str(e), 1
+        rec["seconds"] = round(time.time() - t0, 2)
+        rec["rc"] = rc
+        out_ok = (out is None) or os.path.exists(out)
+        if rc == 0 and out_ok:
+            rec["status"] = "ok"
+        else:
+            rec["status"] = "warn" if s["optional"] else "failed"
+            rec["error"] = (text.strip().splitlines() or ["sin salida"])[-1][:200] if rc != 0 \
+                else f"no produjo {os.path.basename(out)}"
+        rec["tail"] = "\n".join(text.strip().splitlines()[-3:])
+        logp = os.path.join(logs, f"{s['name']}.log")
+        with open(logp, "w", encoding="utf-8") as fh:
+            fh.write("$ " + " ".join(shlex.quote(x) for x in cmd) + "\n\n" + text)
+        rec["log"] = os.path.relpath(logp, ctx.out)
+        col = {"ok": _c("GRN"), "warn": _c("YEL"), "failed": _c("RED")}[rec["status"]]
+        icon = {"ok": "✓", "warn": "⚠", "failed": "✗"}[rec["status"]]
+        extra = f" {_c('G')}{rec.get('error', '')}{_c('R')}" if rec["status"] != "ok" else ""
+        print(f"  {col}{tag} {icon}{_c('R')} {_c('G')}{rec['seconds']:>5.1f}s  {s['tool']}{_c('R')}{extra}")
+        if rec["status"] == "failed" and strict:
             break
     return results
 
 
-def _expand_globs(argv: List[str]) -> List[str]:
-    out: List[str] = []
-    for a in argv:
-        if any(ch in a for ch in "*?[") and os.sep in a:
-            hits = sorted(glob.glob(a))
-            out += hits if hits else [a]
+# ══════════════════════════════════════════════════════════════════════════════
+#  RECETA E INFORME
+# ══════════════════════════════════════════════════════════════════════════════
+
+def write_recipe(plan: Dict, results: List[Dict], tools: str) -> str:
+    out = plan["out_dir"]
+    O = plan.get("options", {})
+    rel = O.get("recipe_paths") == "relative"
+    L = ["#!/usr/bin/env bash", "# " + "═" * 70,
+         f"# RECETA — reconstructor.py ({plan['mode']}) sobre {os.path.basename(plan['original'])}",
+         "# " + "═" * 70, "set -u", 'OUT="$(cd "$(dirname "$0")" && pwd)"']
+    if rel:
+        def r(p):
+            return os.path.relpath(p, out)
+        L += [f'TOOLS="${{TOOLS:-$(cd "$OUT/{r(tools)}" && pwd)}}"',
+              f'ORIG="${{ORIG:-$OUT/{r(plan["original"])}}}"',
+              f'RECONSTRUCTOR="${{RECONSTRUCTOR:-$OUT/{r(os.path.abspath(__file__))}}}"']
+    else:
+        L += [f'TOOLS="${{TOOLS:-{tools}}}"', f'ORIG="${{ORIG:-{plan["original"]}}}"',
+              f'RECONSTRUCTOR="${{RECONSTRUCTOR:-{os.path.abspath(__file__)}}}"']
+    L += ['mkdir -p "$OUT/work"', 'cd "$TOOLS"', ""]
+
+    helpers = {"track0": "_track0", "chan0": "_chan0", "count": "_count", "quarter": "_quarter"}
+
+    def q(tok: str) -> str:
+        m = TOKEN.match(tok)
+        if m:
+            kind, arg = m.groups()
+            parts = arg.split("|") if kind in ("count", "quarter") else [arg]
+            inner = " ".join('"' + p.replace('"', '\\"') + '"' for p in parts)
+            return f'"$(python3 "$RECONSTRUCTOR" {helpers[kind]} {inner})"'
+        if tok == "" or re.search(r"[$ ]", tok):
+            return '"' + tok.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`") + '"'
+        return shlex.quote(tok) if re.search(r"[^A-Za-z0-9_@%+=:,./-]", tok) else tok
+
+    by_name = {r_["name"]: r_ for r_ in results}
+    cur = None
+    for s in plan["steps"]:
+        rr = by_name.get(s["name"], {})
+        stat = rr.get("status", "?")
+        if s["stage"] != cur:
+            cur = s["stage"]
+            L.append(f"# ── {cur.upper()} " + "─" * max(0, 60 - len(cur)))
+        tool = '"$RECONSTRUCTOR"' if s["tool"] == SELF else f'"$TOOLS/{s["tool"]}"'
+        cmd = f"python3 {tool} " + " ".join(q(a) for a in s["args"])
+        L.append(f"# {s['name']} — {s['note']}" + (f"   [{stat}]" if stat not in ("ok", "?") else ""))
+        guards = []
+        for c in s["when"]:
+            kind, _, path = c.partition(":")
+            guards.append(f'[ -e "{path}" ]' if kind == "exists" else f'[ ! -e "{path}" ]')
+        line = (" && ".join(guards) + " && " if guards else "") + cmd
+        if s["optional"] or guards:
+            line += " || true"
+        L.append(line)
+    L.append('echo "✔ receta completada"')
+    path = os.path.join(out, "receta.sh")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(L) + "\n")
+    os.chmod(path, 0o755)
+    return path
+
+
+def write_report(plan: Dict, results: List[Dict], summary: Dict) -> str:
+    out = plan["out_dir"]
+    i = plan["dna"]
+    O = plan.get("options", {})
+    full = O.get("report_style") == "full"
+    L = [f"# Reconstrucción de `{os.path.basename(plan['original'])}`", "",
+         f"> Generado por `reconstructor.py` · modo **{plan['mode']}**", ""]
+    if plan["mode"] in ("recompose", "both"):
+        L += ["> **Aviso:** el modo `recompose` *recompone*: conserva tonalidad, compás, progresión y un",
+              "> motivo, pero regenera el resto. Es una pieza nueva sembrada por el original (la melodía",
+              "> suele conservarse en torno al 25 %). Para conservar el material usa `--mode faithful`.", ""]
+    L += ["## ADN del original", "",
+          f"- Tonalidad: **{i['key_long']}** · compás **{', '.join(i['ts']) or '4/4'}** · "
+          f"tempo **{i['tempo']}** BPM · **{i['n_bars']}** compases ({i.get('bars_source', 'ticks')}) · "
+          f"{i['n_notes']} notas",
+          f"- Programas GM: {i['programs'] or '—'} · melodía en la pista {i['melody_track']} · "
+          f"clímax al {int(i['climax'] * 100)} %",
+          f"- Motivo semilla: `{i['motif'] or '—'}`",
+          f"- Estilos sugeridos: interpretación `{i['perf_style']}` · bajo `{i['bass_style']}` "
+          f"({i.get('style_source', '—')})", ""]
+    if O:
+        L += ["## Decisiones de diseño", "", "| Opción | Valor |", "|---|---|"]
+        for k in ("mode", "clean", "meta_engine", "meta_policy", "fidelity_engine", "select",
+                  "original_candidate", "harmony", "melody_source", "bars_from", "style_source",
+                  "critique", "skip", "min_melody", "tol", "seed"):
+            if k in O:
+                v = O[k]
+                v = ", ".join(v) if isinstance(v, list) and v else ("—" if isinstance(v, list) else v)
+                if k == "original_candidate":
+                    L.append(f"| `--no-original-candidate` | {'no (el original compite en la selección)' if v else 'sí (el original no compite)'} |")
+                else:
+                    L.append(f"| `--{k.replace('_', '-')}` | {v} |")
+        L.append("")
+    L += ["## Pasos ejecutados", "",
+          "| Paso | Etapa | Herramienta | Estado | s | Qué hace |" if full else
+          "| Paso | Herramienta | Estado | s | Qué hace |",
+          "|---|---|---|---|---:|---|" if full else "|---|---|---|---:|---|"]
+    icon = {"ok": "✓", "warn": "⚠ aviso", "failed": "✗ fallo", "skipped": "· omitido",
+            "cached": "caché", "dry": "dry-run", "missing_tool": "✗ sin herramienta"}
+    for r in results:
+        st = icon.get(r["status"], r["status"])
+        L.append((f"| `{r['name']}` | {r['stage']} | `{r['tool']}` | {st} | {r['seconds']} | {r['note']} |")
+                 if full else f"| `{r['name']}` | `{r['tool']}` | {st} | {r['seconds']} | {r['note']} |")
+    for fn, title in (("fidelidad_fiel.json", "obra_fiel.mid"), ("fidelidad_final.json", "obra_final.mid")):
+        f = read_json(os.path.join(out, "work", fn))
+        if f:
+            L += ["", f"## Fidelidad de `{title}` (tolerancia ±{f.get('tol', plan.get('tol'))} pulso · "
+                      f"motor {f.get('engine', 'fidelity_meter')})", "", "| Métrica | Valor |", "|---|---:|"]
+            for k in ("melody", "pitch", "rhythm", "onset", "chroma", "instr", "meta", "length", "score"):
+                v = f.get(k)
+                if v is not None:
+                    L.append(f"| {k} | {v * 100:.1f} % |" if k != "length" else f"| {k} | {v:.2f}x |")
+            if f.get("verdict"):
+                L += ["", f"**Veredicto:** {f['verdict']}"]
+    sel = read_json(os.path.join(out, "work", "seleccion.json"))
+    if sel:
+        L += ["", "## Selección entre variantes", "",
+              f"Gate de melodía ≥ {sel['min_melody']} · criterio `{sel.get('select', 'quality')}`. "
+              f"Ganadora: `{os.path.basename(sel['winner'] or '—')}` ({sel['reason']}).", "",
+              "| Candidato | melody | calidad | pitch | onset | chroma | elegible |",
+              "|---|---:|---:|---:|---:|---:|:-:|"]
+        pc = lambda v: "—" if v is None else f"{v * 100:.1f} %"  # noqa: E731
+        for c in sel["candidates"]:
+            ql = "—" if c.get("quality") is None else f"{c['quality']:.3f}"
+            mt = c.get("metrics") or {}
+            L.append(f"| `{os.path.basename(c['file'])}` | {pc(c.get('melody'))} | {ql} | {pc(mt.get('pitch'))} | "
+                     f"{pc(mt.get('onset'))} | {pc(mt.get('chroma'))} | {'sí' if c['eligible'] else 'no'} |")
+    if full:
+        bad = [r for r in results if r["status"] in ("failed", "warn", "missing_tool")]
+        L += ["", "## Incidencias de las herramientas en esta pieza", ""]
+        if not bad:
+            L.append("Ninguna: todos los pasos terminaron correctamente.")
         else:
-            out.append(a)
-    return out
+            L += ["| Paso | Estado | Salida (cola) |", "|---|---|---|"]
+            for r in bad:
+                tail = (r.get("tail") or r.get("error") or "").replace("|", "/").replace("\n", " ")[:180]
+                L.append(f"| `{r['name']}` | {icon.get(r['status'], r['status'])} | {tail} |")
+        L += ["", "## Ficheros generados", "", "```", os.path.basename(out)]
+        for fn, desc in (("original (work/orig.mid)", "copia de trabajo del original"),
+                         ("obra_fiel.mid", "← resultado del modo faithful"),
+                         ("obra_final.mid", "← resultado del modo recompose"),
+                         ("plan.json", "plan ejecutado"), ("receta.sh", "todas las invocaciones"),
+                         ("RECONSTRUCCION.md", "este documento"),
+                         ("run_log.json", "registro estructurado"),
+                         ("work/", "intermedios, logs y JSON de métricas")):
+            if fn.startswith("original") or fn.endswith("/") or os.path.exists(os.path.join(out, fn)):
+                L.append(f"├── {fn:<26} {desc}")
+        L.append("```")
+    L += ["", "## Resultado", ""]
+    for k, v in summary.items():
+        L.append(f"- {k}: {v}")
+    L += ["", "Reproducible con `receta.sh` (variables `TOOLS`, `ORIG` y `RECONSTRUCTOR` sobrescribibles)."]
+    path = os.path.join(out, "RECONSTRUCCION.md")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(L) + "\n")
+    return path
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  DOCUMENTO
+#  SELECCIÓN (gate de melodía + calidad / fidelidad)
 # ══════════════════════════════════════════════════════════════════════════════
 
-_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+def fidelity_of(tools: str, orig: str, cand: str, tol: float, engine: str = "auto") -> Dict:
+    """Fidelidad de `cand` frente a `orig`. Con engine auto/meter usa fidelity_meter.py
+    y, si no está o falla, las métricas internas (así el gate siempre funciona)."""
+    if engine in ("auto", "meter"):
+        fm = os.path.join(tools, "fidelity_meter.py")
+        if not os.path.isfile(fm):
+            fm = os.path.join(HERE, "fidelity_meter.py")
+        if os.path.isfile(fm):
+            fd, tmp = tempfile.mkstemp(suffix=".json")
+            os.close(fd)
+            try:
+                p = subprocess.run([sys.executable, fm, "compare", orig, cand, "--tol", str(tol),
+                                    "--json", tmp, "--no-color"], capture_output=True, text=True, timeout=300)
+                d = read_json(tmp) if p.returncode == 0 else None
+                if d and d.get("melody") is not None:
+                    d["engine"] = "meter"
+                    return d
+            except Exception:  # noqa: BLE001
+                pass
+            finally:
+                if os.path.exists(tmp):
+                    os.unlink(tmp)
+    d = fidelity_builtin(orig, cand, tol)
+    if engine == "meter":
+        d["fallback"] = True
+    return d
 
 
-def _jload(p: str):
+def quality_of(tools: str, cand: str) -> Optional[float]:
+    qs = os.path.join(tools, "quality_scorer.py")
+    if not os.path.isfile(qs):
+        return None
     try:
-        return json.load(open(p, encoding="utf-8"))
+        p = subprocess.run([sys.executable, qs, cand, "--fast", "--no-color"], capture_output=True,
+                           text=True, timeout=300, cwd=tools)
+        txt = ANSI.sub("", (p.stdout or "") + (p.stderr or ""))
+        m = re.search(r"(\d\.\d{3})\s+\[", txt)
+        return float(m.group(1)) if m else None
     except Exception:  # noqa: BLE001
         return None
 
 
-def quality_from_log(D: str) -> Optional[float]:
-    p = os.path.join(D, "analisis", "23_calidad.log")
-    if not os.path.exists(p):
+def choose(orig: str, cands: List[str], min_melody: float, tools: str, tol: float,
+           select: str = "quality", engine: str = "auto") -> Dict:
+    """Gate de melodía y, entre las que lo superan, mayor calidad (select=quality)
+    o mayor puntuación de fidelidad (select=fidelity)."""
+    files = [c for c in OrderedDict.fromkeys(cands) if os.path.isfile(c)]
+    rows = []
+    for f in files:
+        fid = fidelity_of(tools, orig, f, tol, engine)
+        met = fid if fid.get("engine") == "builtin" else fidelity_builtin(orig, f, tol)
+        mel = fid.get("melody")
+        rows.append({"file": f, "melody": mel, "score": fid.get("score"), "engine": fid.get("engine"),
+                     "quality": quality_of(tools, f) if select == "quality" else None,
+                     "metrics": {k: met.get(k) for k in ("melody", "pitch", "onset", "chroma", "instr",
+                                                         "meta", "progs_kept", "ts_kept", "ks_kept")},
+                     "eligible": mel is None or mel >= min_melody})
+    for r in rows:
+        # el propio original es siempre perfectamente fiel; se marca como elegible
+        if os.path.abspath(r["file"]) == os.path.abspath(orig):
+            r["eligible"] = True
+    pool = [r for r in rows if r["eligible"]]
+    winner, reason = None, ""
+    if pool:
+        if select == "quality":
+            winner = max(pool, key=lambda r: ((r["quality"] is not None), r["quality"] or -1, r["melody"] or 0))
+            reason = "mayor calidad entre las que superan el gate"
+        else:
+            winner = max(pool, key=lambda r: (r["score"] or 0, r["melody"] or 0))
+            reason = "mayor fidelidad entre las que superan el gate"
+    elif rows:
+        winner = max(rows, key=lambda r: (r["melody"] or 0))
+        reason = "ninguna supera el gate: se elige la de mayor melodía"
+    return {"version": VERSION, "original": orig, "min_melody": min_melody, "tol": tol,
+            "select": select, "engine": engine,
+            "winner": winner["file"] if winner else None, "reason": reason, "candidates": rows}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  COMPARACIÓN: recomposición vs variantes fieles
+# ══════════════════════════════════════════════════════════════════════════════
+
+VARIANT_NAMES = {"base": "conservador", "rehar": "rearmonizado", "orq": "orquestado", "orig": "original"}
+
+
+def _piece_dirs(root: str) -> List[str]:
+    if os.path.isfile(os.path.join(root, "plan.json")):
+        return [root]
+    return [os.path.join(root, d) for d in sorted(os.listdir(root))
+            if os.path.isfile(os.path.join(root, d, "plan.json"))]
+
+
+def build_comparison(root: str) -> Optional[str]:
+    rows = []
+    for d in _piece_dirs(root):
+        plan = read_json(os.path.join(d, "plan.json")) or {}
+        orig = os.path.join(d, "work", "orig.mid")
+        if not os.path.isfile(orig):
+            orig = plan.get("original", "")
+        if not os.path.isfile(orig):
+            continue
+        tol = float(plan.get("tol", 0.25))
+        sel = read_json(os.path.join(d, "work", "seleccion.json")) or {}
+        row = {"id": os.path.basename(d)[:3] if os.path.basename(d)[:3].isdigit() else os.path.basename(d),
+               "dir": os.path.basename(d), "variants": {}, "recomposicion": None, "chosen": "—"}
+        for c in sel.get("candidates", []):
+            nm = VARIANT_NAMES.get(os.path.splitext(os.path.basename(c["file"]))[0])
+            if nm and nm != "original":
+                row["variants"][nm] = c.get("metrics") or {}
+        if sel.get("winner"):
+            row["chosen"] = VARIANT_NAMES.get(os.path.splitext(os.path.basename(sel["winner"]))[0], "—")
+        fin = os.path.join(d, "obra_final.mid")
+        if os.path.isfile(fin):
+            row["recomposicion"] = fidelity_builtin(orig, fin, tol)
+        if row["variants"] or row["recomposicion"]:
+            rows.append(row)
+    if not rows:
         return None
-    txt = _ANSI.sub("", Path(p).read_text(encoding="utf-8", errors="replace"))
-    m = re.search(r"SCORE GLOBAL.*?(\d\.\d{2,3})\s+\[", txt, re.S)
-    return float(m.group(1)) if m else None
+    write_json(os.path.join(root, "comparacion.json"), rows)
 
+    def agg(vals):
+        v = [x for x in vals if x is not None]
+        return (statistics.mean(v), statistics.median(v)) if v else (0.0, 0.0)
 
-def collect_metrics(D: str) -> Dict:
-    mo, mf = _jload(f"{D}/material/metric_orig.json"), _jload(f"{D}/material/metric_final.json")
-    co, cf = _jload(f"{D}/material/critica_orig.json"), _jload(f"{D}/material/critica_final.json")
-    sel = _jload(f"{D}/material/seleccion_melodia.json")
-    return {
-        "bars_orig": (mo or {}).get("n_bars"), "bars_final": (mf or {}).get("n_bars"),
-        "melody_orig": (co or {}).get("overall"), "melody_final": (cf or {}).get("overall"),
-        "melody_selected": (sel or {}).get("winner_score"),
-        "quality": quality_from_log(D),
-    }
+    names = ["recomposicion", "conservador", "rearmonizado", "orquestado"]
 
+    def metrics_of(r, n):
+        return r["recomposicion"] if n == "recomposicion" else r["variants"].get(n)
 
-def write_doc(D: str) -> str:
-    rec = _jload(os.path.join(D, "reconstruction.json"))
-    log = _jload(os.path.join(D, "pipeline_log.json")) or {"steps": []}
-    if not rec:
-        raise FileNotFoundError(f"{D}/reconstruction.json no existe (ejecuta plan/run antes)")
-    info, dec = rec["info"], rec["dec"]
-    steps = {s["name"]: s for s in rec["steps"]}
-    res = {s["name"]: s for s in log["steps"]}
-    met = collect_metrics(D)
-    L: List[str] = []
-    A = L.append
-    name = os.path.basename(info["file"])
-    A(f"# Reconstrucción pedagógica de `{name}`\n")
-    A("> Documento generado por `reconstructor.py`. La pieza no se copia: se **analiza**, "
-      "se **captura su material** (acordes, motivo, clímax) y se **regenera** con las "
-      "herramientas del ecosistema mutopia.\n")
-    A("| | |\n|---|---|")
-    A(f"| **Original** | `{name}` |")
-    A(f"| **Tonalidad** | {info['key_long']} ({info['key_source']}) |")
-    A(f"| **Compás** | {info['time_sig']} ({info['bpb']:g} negras por compás) |")
-    A(f"| **Tempo** | {dec['tempo_i']} BPM |")
-    A(f"| **Compases** | {dec['n_bars']} |")
-    A(f"| **Familia tímbrica** | {info['family']} |")
-    mv = info.get("melody_voice")
-    if mv:
-        A(f"| **Voz melódica** | pista {mv['track']}, canal {mv['channel']} "
-          f"({mv['n']} notas, mediana MIDI {mv['median']:.0f}) |")
-    A("| **MIDI final** | `obra_final.mid` |")
-    A("| **Receta / plan** | `receta.sh` · `plan.yaml` (runner.py) |\n")
-    cnt = Counter(s["status"] for s in log["steps"])
-    if log["steps"]:
-        A(f"**Resumen:** {cnt.get('ok', 0)} pasos correctos, {cnt.get('aviso', 0)} avisos, "
-          f"{sum(cnt.get(k, 0) for k in ('fallo', 'timeout', 'error'))} fallos "
-          f"(ver §6).\n")
+    L = ["# Comparación: recomposición vs. reconstrucción fiel", "",
+         f"Medición sobre **{len(rows)}** piezas con las métricas internas de reconstructor.py. "
+         "La *recomposición* es `obra_final.mid` (`--mode recompose`); las variantes fieles parten del "
+         "original y conservan el material (`--mode faithful`).", "",
+         "## Retención de contenido", "",
+         "| Pipeline | n | Alturas (media) | mediana | Onset+altura | Chroma | Melodía (skyline) |",
+         "|---|---:|---:|---:|---:|---:|---:|"]
+    for n in names:
+        ms = [m for m in (metrics_of(r, n) for r in rows) if m]
+        if not ms:
+            continue
+        p, o_, c_, s_ = (agg([m.get(k) for m in ms]) for k in ("pitch", "onset", "chroma", "melody"))
+        L.append(f"| {n} | {len(ms)} | {p[0] * 100:.1f} % | {p[1] * 100:.1f} % | {o_[0] * 100:.1f} % | "
+                 f"{c_[0] * 100:.1f} % | {s_[0] * 100:.1f} % |")
+    L += ["", "## Conservación de metadatos e instrumentación", "",
+          "| Variante | Instrumentación | Compás | Tonalidad |", "|---|---:|---:|---:|"]
+    for n in names[1:]:
+        ms = [r["variants"][n] for r in rows if n in r["variants"]]
+        if ms:
+            L.append(f"| {n} | {sum(1 for m in ms if m.get('progs_kept'))}/{len(ms)} | "
+                     f"{sum(1 for m in ms if m.get('ts_kept'))}/{len(ms)} | "
+                     f"{sum(1 for m in ms if m.get('ks_kept'))}/{len(ms)} |")
+    L += ["", "## Detalle por pieza (retención de alturas)", "",
+          "| pieza | recomposición | conservador | rearmonizado | orquestado | elegida |",
+          "|---|---:|---:|---:|---:|---|"]
 
-    A("## 1. Decisiones tomadas y por qué\n")
-    A("| Decisión | Valor | Motivo |\n|---|---|---|")
-    for x in dec["decisions"]:
-        A(f"| {x['que']} | `{x['valor']}` | {x['porque']} |")
-    A("\nTodas estas reglas viven en el perfil (`reconstructor.py profile`) y pueden "
-      "cambiarse con `--profile`.\n")
-
-    def block(title: str, names: List[str], intro: str = ""):
-        present = [n for n in names if n in steps]
-        if not present:
-            return
-        A(f"## {title}\n")
-        if intro:
-            A(intro + "\n")
-        A("| Paso | Herramienta | Qué hace | Estado |\n|---|---|---|---|")
-        for n in present:
-            s = steps[n]
-            st = res.get(n, {}).get("status", "—")
-            A(f"| `{n}` | `{s['tool'] or 'reconstructor.py'}` | {s['note']} | {st} |")
-        A("\n```bash")
-        for n in present:
-            if not steps[n]["internal"]:
-                A(step_shell_doc(steps[n]))
-        A("```\n")
-
-    block("2. Diagnóstico del original",
-          ["01_armonia_orig", "02_metrica_orig", "03_melodia_orig", "04_dna_orig"],
-          "Antes de tocar nada, la suite **entiende** la pieza.")
-    mo = _jload(f"{D}/material/metric_orig.json")
-    if mo:
-        A(f"- **Métrica:** {mo.get('time_signature', info['time_sig'])}, "
-          f"{mo.get('n_bars', '?')} compases.")
-    ch = _jload(f"{D}/material/chords_orig.json")
-    if ch and ch.get("chords"):
-        seq = ", ".join((c.get("chord") or "N.C.") for c in ch["chords"][:8])
-        A(f"- **Armonía:** primeros acordes: {seq}…")
-    if met["melody_orig"] is not None:
-        A(f"- **Melodía original (melody_critic):** {met['melody_orig']:.2f}")
-    A("")
-    block("3. Captura del material", ["05_split"],
-          "`midi_split_harmony` separa melodía y armonía y extrae los **acordes reales** "
-          "con un HMM de funciones armónicas. Lo que se conserva es el ADN armónico y temático.")
-    if info.get("motif"):
-        A(f"- **Motivo semilla:** `{info['motif']}`\n")
-    block("4. Regeneración",
-          ["06_cpg", "07_tonicizacion_report", "08_tonicizacion", "08b_base_armonica",
-           "09_bajo", "10_patron", "10b_acomp", "11_melodia", "12_seleccion",
-           "12b_melodia", "13_merge"])
-    sel = _jload(f"{D}/material/seleccion_melodia.json")
-    if sel and sel.get("candidates"):
-        A("**Selección de melodía** (`melody_selector`, criterio: `melody_critic`):\n")
-        A("| Candidato | Score |\n|---|---:|")
-        for c in sel["candidates"]:
-            A(f"| `{os.path.basename(c['file'])}` | "
-              f"{'—' if c.get('overall') is None else format(c['overall'], '.2f')} |")
-        A("")
-    block("5. Forma, expresión y color",
-          ["14_climax", "14b_etapa1", "15_performer", "15b_etapa2", "16_tempo",
-           "16b_final", "17_meta", "18_color"])
-    block("6. Crítica del resultado (el bucle)",
-          ["19_armonia_final", "20_metrica_final", "21_melodia_final", "22_tocabilidad",
-           "23_calidad", "24_arco", "25_export_yaml", "26_compare"])
-    if any(v is not None for v in met.values()):
-        A("**Métricas:**\n")
-        A("| Métrica | Valor |\n|---|---|")
-        if met["bars_orig"] is not None or met["bars_final"] is not None:
-            ok = ""
-            try:
-                if len(info.get("time_sigs_all", [])) > 1:
-                    ok = " (el original cambia de compás: comparar duraciones)"
-                else:
-                    ok = " ✔" if abs(met["bars_final"] - met["bars_orig"]) <= 1 else \
-                        " ⚠ (longitud distinta; el rubato de performer estira el tiempo)"
-            except Exception:  # noqa: BLE001
-                pass
-            A(f"| Compases original → final | {met['bars_orig']} → {met['bars_final']}{ok} |")
-        for k, lab in (("melody_orig", "Melodía original (melody_critic)"),
-                       ("melody_selected", "Melodía elegida por el selector"),
-                       ("melody_final", "Melodía en el MIDI final"),
-                       ("quality", "Calidad global (quality_scorer)")):
-            if met[k] is not None:
-                A(f"| {lab} | {met[k]:.2f} |")
-        A("")
-    A("## 7. Incidencias\n")
-    bad = [s for s in log["steps"] if s["status"] in ("fallo", "timeout", "error", "aviso")]
-    if not bad:
-        A("Ninguna: todos los pasos terminaron correctamente.\n")
-    else:
-        for s in bad:
-            A(f"- `{s['name']}` ({s['tool']}): **{s['status']}** (rc={s['rc']}) — "
-              f"`{s['log']}`")
-        A("")
-    A("## 8. Ficheros\n")
-    A("```\n" + os.path.basename(D) + "/\n  original.mid  obra_base.mid  obra_climax.mid  "
-      "obra_perf.mid  obra_final.mid\n  plan.yaml  receta.sh  reconstruction.json  "
-      "pipeline_log.json  RECONSTRUCCION.md\n  analisis/   (log de cada paso)\n  material/   "
-      "(acordes, bajo, acompañamiento, melodías candidatas, JSON)\n```\n")
-    A("## 9. Cómo reproducirlo\n")
-    A("```bash\nbash receta.sh                      # autónoma\n"
-      "python runner.py plan.yaml           # con el ejecutor de pipelines\n"
-      "python reconstructor.py run ORIGINAL.mid --out-dir DIR --resume\n```\n")
-    out = os.path.join(D, "RECONSTRUCCION.md")
-    Path(out).write_text("\n".join(L), encoding="utf-8")
-    return out
-
-
-def step_shell_doc(step: Dict) -> str:
-    s = step_shell(step)
-    return s.replace('"$D/', '"').replace('"$TOOLS/', '"')
+    def cell(m):
+        return "—" if not m or m.get("pitch") is None else f"{m['pitch'] * 100:.0f}%"
+    for r in rows:
+        L.append(f"| {r['id']} | {cell(r['recomposicion'])} | {cell(r['variants'].get('conservador'))} | "
+                 f"{cell(r['variants'].get('rearmonizado'))} | {cell(r['variants'].get('orquestado'))} | "
+                 f"{r['chosen']} |")
+    path = os.path.join(root, "COMPARACION.md")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(L) + "\n")
+    return path
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  SUBCOMANDOS
+#  SUBCOMANDOS PÚBLICOS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def prepare(a, midi: str, out_dir: Optional[str] = None) -> Tuple[str, str, Dict, Dict, List[Dict], Dict]:
-    if not os.path.isfile(midi):
-        raise FileNotFoundError(f"no existe el MIDI: {midi}")
-    prof = load_profile(a.profile)
-    T = os.path.abspath(a.tools_dir or os.path.dirname(SELF))
-    stem = os.path.splitext(os.path.basename(midi))[0]
-    D = os.path.abspath(out_dir or a.out_dir or f"{stem}_rec")
-    os.makedirs(D, exist_ok=True)
-    shutil.copyfile(midi, os.path.join(D, "original.mid"))
-    info = analyze_midi(midi, prof)
-    dec = decide(info, prof, getattr(a, "candidates", None))
-    crit = prof["critique"] and not getattr(a, "no_critique", False)
-    steps = build_steps(info, dec, prof, crit)
-    write_plan_files(D, T, steps, info, dec)
-    Path(D, "reconstruction.json").write_text(json.dumps(
-        {"version": VERSION, "created": datetime.now().isoformat(timespec="seconds"),
-         "info": info, "dec": dec, "profile": prof, "steps": steps},
-        ensure_ascii=False, indent=2), encoding="utf-8")
-    return D, T, info, dec, steps, prof
+def _outdir(a) -> str:
+    return a.out_dir or (os.path.splitext(os.path.abspath(a.original))[0] + "_rec")
 
 
-def _print_plan(info: Dict, dec: Dict, D: str, n_steps: int) -> None:
-    B, R, G = _c("B"), _c("R"), _c("G")
-    print(f"\n{'═' * 78}\n  {B}RECONSTRUCTOR v{VERSION}{R}  ·  {os.path.basename(info['file'])}\n{'═' * 78}")
-    for x in dec["decisions"]:
-        v = str(x["valor"])
-        print(f"  {x['que']:<24} {B}{v[:40]}{R}  {G}{x['porque'][:40]}{R}")
-    print(f"\n  {n_steps} pasos → {D}\n")
+def _need_file(path: str) -> bool:
+    if not os.path.isfile(path):
+        print(f"[ERROR] no existe {path}", file=sys.stderr)
+        return False
+    return True
+
+
+def cmd_analyze(a) -> int:
+    if not _need_file(a.original):
+        return 1
+    tools = find_tools_dir(a.tools)
+    info = analyze_midi(a.original, {"bars": a.bars, "bars_from": a.bars_from, "tools": tools,
+                                     "style_source": "programs"})
+    print_analysis(info)
+    if a.json:
+        write_json(a.json, info)
+    return 0
 
 
 def cmd_plan(a) -> int:
-    D, T, info, dec, steps, _ = prepare(a, a.midi)
-    _print_plan(info, dec, D, len(steps))
-    print(f"  {_c('CYA')}plan.yaml · receta.sh · reconstruction.json escritos en {D}{_c('R')}\n")
+    if not _need_file(a.original):
+        return 1
+    out = _outdir(a)
+    tools = find_tools_dir(a.tools)
+    plan = build_plan(a.original, out, plan_options(a, tools), tools)
+    pj = os.path.join(out, "plan.json")
+    write_json(pj, plan)
+    print(f"\n  {_c('B')}Plan{_c('R')} ({plan['mode']}, {len(plan['steps'])} pasos) → {pj}")
+    for s in plan["steps"]:
+        flag = "opt" if s["optional"] else "   "
+        cond = f"  {_c('G')}si {' y '.join(s['when'])}{_c('R')}" if s["when"] else ""
+        print(f"   {flag} {s['name']:<24} {s['tool']:<30}{cond}")
+    if a.yaml:
+        with open(a.yaml, "w", encoding="utf-8") as fh:
+            fh.write(plan_to_runner_yaml(plan))
+        print(f"  {_c('CYA')}YAML para runner.py: {a.yaml}{_c('R')}")
+    print()
     return 0
+
+
+def run_one(a) -> int:
+    """Plan + ejecución + receta + informe de un MIDI (lo usan run y batch)."""
+    out = os.path.abspath(_outdir(a))
+    tools = find_tools_dir(a.tools)
+    if a.plan:
+        plan = read_json(a.plan)
+        if not plan:
+            print(f"[ERROR] no se puede leer el plan {a.plan}", file=sys.stderr)
+            return 1
+        plan["out_dir"], plan["original"] = out, os.path.abspath(a.original)
+    else:
+        plan = build_plan(a.original, out, plan_options(a, tools), tools)
+    work = os.path.join(out, "work")
+    if not a.dry_run:
+        if a.force and os.path.isdir(work):
+            shutil.rmtree(work)
+        if a.force or not a.resume:
+            for fn in ("obra_fiel.mid", "obra_final.mid"):
+                if os.path.exists(os.path.join(out, fn)):
+                    os.unlink(os.path.join(out, fn))      # que un resultado viejo no enmascare un fallo
+    os.makedirs(work, exist_ok=True)
+    write_json(os.path.join(out, "plan.json"), plan)
+    results = execute(plan, tools, a.timeout, a.resume and not a.force, a.strict, a.dry_run)
+
+    summary: Dict[str, str] = {}
+    rc = 0
+    if not a.dry_run:
+        by = Counter(r["status"] for r in results)
+        summary["pasos"] = ", ".join(f"{v} {k}" for k, v in by.most_common())
+        if plan["mode"] in ("faithful", "both"):
+            fiel = os.path.join(out, "obra_fiel.mid")
+            if not os.path.exists(fiel):
+                clean = os.path.join(work, "orig.mid")
+                shutil.copyfile(clean if os.path.exists(clean) else plan["original"], fiel)
+                summary["obra_fiel.mid"] = "⚠ el pipeline no produjo resultado: se entrega el original saneado"
+            else:
+                summary["obra_fiel.mid"] = "generado"
+        if plan["mode"] in ("recompose", "both"):
+            if os.path.exists(os.path.join(out, "obra_final.mid")):
+                summary["obra_final.mid"] = "generado"
+            else:
+                summary["obra_final.mid"] = "✗ no se generó"
+                rc = 2
+        if plan["mode"] in ("faithful", "both"):
+            f = read_json(os.path.join(work, "fidelidad_fiel.json"))
+            if f and f.get("melody") is not None and f["melody"] < plan["min_melody"]:
+                summary["gate"] = f"melodía {f['melody'] * 100:.1f} % < {plan['min_melody'] * 100:.0f} %"
+                rc = rc or 3
+    write_json(os.path.join(out, "run_log.json"),
+               {"version": VERSION, "mode": plan["mode"], "generated": datetime.now().isoformat(timespec="seconds"),
+                "steps": results, "summary": summary})
+    recipe = write_recipe(plan, results, tools)
+    md = write_report(plan, results, summary)
+    print(f"\n{'─' * 78}")
+    for k, v in summary.items():
+        print(f"  {k}: {v}")
+    print(f"  {_c('CYA')}receta: {recipe}\n  informe: {md}{_c('R')}\n")
+    return rc
 
 
 def cmd_run(a) -> int:
-    D, T, info, dec, steps, _ = prepare(a, a.midi)
-    _print_plan(info, dec, D, len(steps))
-    res = run_steps(D, T, steps, a.timeout, a.strict, a.resume, a.from_step, a.dry_run)
-    if a.dry_run:
-        return 0
-    final = os.path.join(D, "obra_final.mid")
-    doc = write_doc(D)
-    cnt = Counter(s["status"] for s in res)
-    bad = sum(cnt.get(k, 0) for k in ("fallo", "timeout", "error"))
-    ok = os.path.exists(final)
-    col = "GRN" if ok and not bad else "YEL" if ok else "RED"
-    print(f"\n  {_c(col)}{'✔' if ok else '✘'} {final if ok else 'no se generó obra_final.mid'}{_c('R')}"
-          f"   ok={cnt.get('ok', 0)} avisos={cnt.get('aviso', 0)} fallos={bad}")
-    print(f"  {_c('CYA')}{doc}{_c('R')}\n")
-    return 0 if ok else 2
-
-
-def cmd_doc(a) -> int:
-    print(write_doc(a.dir))
-    return 0
-
-
-def cmd_profile(a) -> int:
-    print(json.dumps(DEFAULT_PROFILE, ensure_ascii=False, indent=2))
-    return 0
-
-
-def _read_meta(path: str) -> List[mido.MetaMessage]:
-    seen, out = set(), []
-    for tr in mido.MidiFile(path).tracks:
-        for m in tr:
-            if m.type in ("time_signature", "key_signature") and m.type not in seen:
-                seen.add(m.type)
-                out.append(m.copy(time=0))
-    return out
-
-
-def cmd_meta(a) -> int:
-    mf = mido.MidiFile(a.file)
-    metas: List = []
-    if a.src:
-        metas += _read_meta(a.src)
-    if a.time_sig:
-        n, d = (int(x) for x in a.time_sig.split("/"))
-        metas = [m for m in metas if m.type != "time_signature"] + [
-            mido.MetaMessage("time_signature", numerator=n, denominator=d, time=0)]
-    if a.key:
-        metas = [m for m in metas if m.type != "key_signature"] + [
-            mido.MetaMessage("key_signature", key=a.key, time=0)]
-    if not metas:
-        print("[ERROR] nada que inyectar (usa --from, --time-sig o --key)", file=sys.stderr)
+    if not _need_file(a.original):
         return 1
-    kinds = {m.type for m in metas}
-    if not mf.tracks:
-        mf.tracks.append(mido.MidiTrack())
-    for tr in mf.tracks:       # quita los existentes del mismo tipo (todas las pistas)
-        for m in [m for m in tr if m.type in kinds]:
-            tr.remove(m)
-    t0 = mf.tracks[0]
-    for m in reversed(metas):
-        t0.insert(0, m)
-    mf.save(a.out or a.file)
-    desc = [m.type + "=" + (m.key if m.type == "key_signature"
-                            else f"{m.numerator}/{m.denominator}") for m in metas]
-    print("meta: " + ", ".join(desc) + f" → {a.out or a.file}")
-    return 0
+    return run_one(a)
 
 
-def cmd_ensure(a) -> int:
-    for c in a.candidates:
-        if os.path.isfile(c) and os.path.getsize(c) > 0:
-            if os.path.abspath(c) != os.path.abspath(a.out):
-                shutil.copyfile(c, a.out)
-            print(f"ensure: {c} → {a.out}")
-            return 0
-    print(f"[ERROR] ninguno de los ficheros existe: {a.candidates}", file=sys.stderr)
-    return 1
+def _entry_src(e: Dict, midis_dir: Optional[str]) -> Optional[str]:
+    cands = ([os.path.join(midis_dir, e["file"])] if midis_dir else []) + \
+            ([e["path"]] if e.get("path") else []) + [e["file"]]
+    return next((c for c in cands if os.path.isfile(c)), None)
+
+
+def _batch_entries(a) -> List[Tuple[str, str, Optional[str]]]:
+    """[(id, ruta del MIDI, familia instrumental)] según --catalog o las entradas."""
+    items: List[Tuple[str, str, Optional[str]]] = []
+    if a.catalog:
+        sel = read_json(a.catalog)
+        if not isinstance(sel, list):
+            raise ValueError(f"--catalog: {a.catalog} no es una lista JSON")
+        for n, e in enumerate(sel, 1):
+            src = _entry_src(e, a.midis_dir)
+            pid = str(e.get("id", n)).zfill(3)
+            if not src:
+                print(f"[{pid}] aviso: no se encuentra {e.get('file')}", file=sys.stderr)
+                continue
+            items.append((pid, src, e.get("program_family")))
+    else:
+        files: List[str] = []
+        for p in a.inputs:
+            if os.path.isdir(p):
+                files += sorted(os.path.join(p, f) for f in os.listdir(p)
+                                if f.lower().endswith((".mid", ".midi")))
+            else:
+                files += sorted(glob.glob(p)) or [p]
+        items = [(f"{n:03d}", f, None) for n, f in enumerate(files, 1) if os.path.isfile(f)]
+    if a.id:
+        return [x for x in items if x[0] == str(a.id).zfill(3)]
+    s = max(1, a.start) - 1
+    return items[s: (s + a.limit) if a.limit else None]
 
 
 def cmd_batch(a) -> int:
-    files: List[str] = []
-    for p in a.inputs:
-        if os.path.isdir(p):
-            files += sorted(glob.glob(os.path.join(p, "*.mid")) + glob.glob(os.path.join(p, "*.midi")))
-        else:
-            files += sorted(glob.glob(p)) or ([p] if os.path.isfile(p) else [])
-    files = list(dict.fromkeys(files))
-    if a.limit:
-        files = files[: a.limit]
-    if not files:
-        print("[ERROR] sin MIDIs de entrada", file=sys.stderr)
+    if not a.catalog and not a.inputs:
+        print("[ERROR] batch necesita MIDIs/carpetas de entrada o --catalog", file=sys.stderr)
         return 1
-    root = os.path.abspath(a.out_root)
+    entries = _batch_entries(a)
+    if not entries:
+        print("[ERROR] ninguna pieza que procesar", file=sys.stderr)
+        return 1
+    root = os.path.abspath(a.out_dir or "reconstrucciones")
     os.makedirs(root, exist_ok=True)
-    print(f"\n  {_c('B')}BATCH{_c('R')}: {len(files)} piezas → {root}  (jobs={a.jobs})\n")
+    need = {"faithful": ["obra_fiel.mid"], "recompose": ["obra_final.mid"],
+            "both": ["obra_fiel.mid", "obra_final.mid"]}[a.mode]
+    t0 = time.time()
+    log, worst = [], 0
+    for pid, src, fam in entries:
+        slug = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.splitext(os.path.basename(src))[0])[:48]
+        piece = os.path.join(root, f"{pid}_{slug}")
+        if not a.force and not a.resume and all(os.path.exists(os.path.join(piece, f)) for f in need):
+            print(f"[{pid}] ya existe, saltando (usa --resume o --force)")
+            log.append({"id": pid, "file": src, "rc": 0, "status": "existente"})
+            continue
+        print(f"\n{'=' * 78}\n[{pid}] {os.path.basename(src)}")
+        b = copy.copy(a)
+        b.original, b.out_dir, b.family, b.plan = src, piece, fam, None
+        try:
+            rc = run_one(b)
+            status = "ok" if rc == 0 else f"rc={rc}"
+        except Exception as e:  # noqa: BLE001
+            traceback.print_exc()
+            rc, status = 2, f"fatal: {e}"
+            write_json(os.path.join(piece, "fatal.json"), {"file": src, "fatal": str(e)})
+        worst = max(worst, rc)
+        log.append({"id": pid, "file": src, "dir": piece, "rc": rc, "status": status})
+    write_json(os.path.join(root, "batch_log.json"),
+               {"version": VERSION, "mode": a.mode, "seconds": round(time.time() - t0, 1), "pieces": log})
+    if a.mode == "both" and not a.dry_run:
+        md = build_comparison(root)
+        if md:
+            print(f"  {_c('CYA')}comparación: {md}{_c('R')}")
+    ok = sum(1 for x in log if x["rc"] == 0)
+    print(f"\nProcesadas {ok}/{len(log)} piezas sin incidencias en {round(time.time() - t0, 1)} s → {root}")
+    return worst
 
-    def one(i_f):
-        i, f = i_f
-        stem = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.splitext(os.path.basename(f))[0])
-        D = os.path.join(root, f"{i:03d}_{stem}")
-        if a.resume and os.path.exists(os.path.join(D, "obra_final.mid")) and \
-                os.path.exists(os.path.join(D, "RECONSTRUCCION.md")):
-            return D, f, 0, 0.0, "reanudada"
-        cmd = [PY, SELF, "run", f, "--out-dir", D, "--timeout", str(a.timeout)]
-        for flag, val in (("--profile", a.profile), ("--tools-dir", a.tools_dir)):
-            if val:
-                cmd += [flag, val]
-        if a.no_critique:
-            cmd.append("--no-critique")
-        if a.resume:
-            cmd.append("--resume")
-        t0 = time.time()
-        p = subprocess.run(cmd, capture_output=True, text=True)
-        os.makedirs(D, exist_ok=True)
-        Path(D, "run.log").write_text((p.stdout or "") + (p.stderr or ""), encoding="utf-8")
-        return D, f, p.returncode, time.time() - t0, "ok" if p.returncode == 0 else "fallo"
 
-    rows = []
-    with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
-        for D, f, rc, dt, st in ex.map(one, list(enumerate(files, 1))):
-            m = collect_metrics(D)
-            lg = _jload(os.path.join(D, "pipeline_log.json")) or {"steps": []}
-            cnt = Counter(s["status"] for s in lg["steps"])
-            rows.append({"dir": os.path.basename(D), "file": os.path.basename(f), "status": st,
-                         "seconds": round(dt, 1), "pasos_ok": cnt.get("ok", 0),
-                         "avisos": cnt.get("aviso", 0),
-                         "fallos": sum(cnt.get(k, 0) for k in ("fallo", "timeout", "error")),
-                         **m})
-            r = rows[-1]
-            print(f"  {r['dir']:<40} {st:<9} ok={r['pasos_ok']:<3} av={r['avisos']:<2} "
-                  f"fa={r['fallos']:<2} bars {r['bars_orig']}→{r['bars_final']}  "
-                  f"{_c('G')}{dt:.0f}s{_c('R')}")
-    Path(root, "RESULTADOS.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2),
-                                             encoding="utf-8")
-    md = ["# Resultados del lote\n",
-          "| pieza | estado | pasos ok | avisos | fallos | compases (orig→final) | melodía final | calidad |",
-          "|---|---|---:|---:|---:|---|---:|---:|"]
-    f2 = lambda v: "—" if v is None else f"{v:.2f}"  # noqa: E731
-    for r in rows:
-        md.append(f"| [{r['dir']}]({r['dir']}/RECONSTRUCCION.md) | {r['status']} | {r['pasos_ok']} | "
-                  f"{r['avisos']} | {r['fallos']} | {r['bars_orig']}→{r['bars_final']} | "
-                  f"{f2(r['melody_final'])} | {f2(r['quality'])} |")
-    Path(root, "RESULTADOS.md").write_text("\n".join(md) + "\n", encoding="utf-8")
-    print(f"\n  {_c('CYA')}{root}/RESULTADOS.md · RESULTADOS.json{_c('R')}\n")
-    return 0 if all(r["status"] != "fallo" for r in rows) else 2
+def cmd_choose(a) -> int:
+    if not _need_file(a.original):
+        return 1
+    tools = find_tools_dir(a.tools)
+    select = "fidelity" if a.no_quality else a.select
+    res = choose(a.original, a.candidates, a.min_melody, tools, a.tol, select, a.fidelity_engine)
+    if not res["winner"]:
+        print("[ERROR] ningún candidato existente", file=sys.stderr)
+        return 2
+    B, R = _c("B"), _c("R")
+    print(f"\n  {B}CHOOSE{R}  gate melodía ≥ {a.min_melody} · criterio {select}")
+    for r in res["candidates"]:
+        ml = "  —  " if r["melody"] is None else f"{r['melody'] * 100:5.1f}%"
+        ql = "  —  " if r["quality"] is None else f"{r['quality']:.3f}"
+        mark = "★" if r["file"] == res["winner"] else " "
+        ok = f"{_c('GRN')}elegible{R}" if r["eligible"] else f"{_c('RED')}bajo el gate{R}"
+        print(f"   {mark} {os.path.basename(r['file']):<24} melodía {ml}  calidad {ql}  {ok}")
+    os.makedirs(os.path.dirname(os.path.abspath(a.output)), exist_ok=True)
+    shutil.copyfile(res["winner"], a.output)
+    print(f"  {_c('GRN')}✔ {os.path.basename(res['winner'])} → {a.output}{R}  ({res['reason']})\n")
+    if a.report:
+        write_json(a.report, res)
+    return 0
+
+
+def cmd_compare(a) -> int:
+    d = os.path.abspath(a.dir)
+    if not os.path.isdir(d):
+        print(f"[ERROR] no existe la carpeta {d}", file=sys.stderr)
+        return 1
+    md = build_comparison(d)
+    if not md:
+        print(f"[ERROR] {d} no contiene piezas con plan.json y resultados "
+              "(¿se ejecutó `run`/`batch` con --mode both o faithful?)", file=sys.stderr)
+        return 1
+    print(f"  {_c('CYA')}comparación escrita: {md}{_c('R')}")
+    return 0
+
+
+def cmd_report(a) -> int:
+    d = os.path.abspath(a.dir)
+    plan = read_json(os.path.join(d, "plan.json"))
+    log = read_json(os.path.join(d, "run_log.json"))
+    if not plan or not log:
+        print(f"[ERROR] {d} no contiene plan.json y run_log.json (¿se ejecutó `run`?)", file=sys.stderr)
+        return 1
+    if a.report_style:
+        plan.setdefault("options", {})["report_style"] = a.report_style
+    md = write_report(plan, log["steps"], log.get("summary", {}))
+    print(f"  {_c('CYA')}informe regenerado: {md}{_c('R')}")
+    return 0
+
+
+# Ayudantes internos (los usan los planes y las recetas)
+def cmd__first(a) -> int:
+    files = list(a.files or [])
+    if a.glob:
+        files += sorted(glob.glob(a.glob))
+    for f in files:
+        if os.path.isfile(f):
+            os.makedirs(os.path.dirname(os.path.abspath(a.output)), exist_ok=True)
+            shutil.copyfile(f, a.output)
+            return 0
+    print("[ERROR] ninguno de los ficheros existe", file=sys.stderr)
+    return 1
+
+
+def cmd__track0(a) -> int:
+    print(_first_track(a.file)[0])
+    return 0
+
+
+def cmd__chan0(a) -> int:
+    print(_first_track(a.file)[1])
+    return 0
+
+
+def cmd__count(a) -> int:
+    print(count_existing(a.files))
+    return 0
+
+
+def cmd__quarter(a) -> int:
+    print(quarter_bars(a.file, a.default))
+    return 0
+
+
+def cmd__meta(a) -> int:
+    only = tuple(x.strip() for x in a.only.split(",") if x.strip())
+    bad = [x for x in only if x not in _META_KINDS]
+    if bad or not only:
+        raise ValueError(f"--only: valores no válidos {bad} (usa ts,key,tempo)")
+    redo = apply_meta(a.src, a.copy_from, a.output, only, a.policy, a.time_sig, a.key)
+    print(f"metadatos reescritos: {', '.join(redo) if redo else 'ninguno (ya coincidían)'} → {a.output}")
+    return 0
+
+
+def cmd__fidelity(a) -> int:
+    d = fidelity_builtin(a.original, a.candidate, a.tol)
+    if a.json:
+        write_json(a.json, d)
+    print("  ".join(f"{k}={d[k] * 100:.1f}%" for k in ("melody", "pitch", "onset", "chroma", "score")))
+    print(d["verdict"])
+    return 0
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1102,67 +1798,146 @@ def cmd_batch(a) -> int:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="reconstructor.py",
-                                 description="Reconstrucción pedagógica de una pieza con mutopia.")
-    sub = ap.add_subparsers(dest="name", required=True)
+    ap = argparse.ArgumentParser(
+        prog="reconstructor.py",
+        description="Reconstruye un MIDI con las herramientas mutopia "
+                    "(analyze / plan / run / batch / choose / compare / report).")
+    sub = ap.add_subparsers(dest="cmd_name", required=True)
 
-    def common(p):
-        p.add_argument("--tools-dir", default=None)
-        p.add_argument("--profile", default=None)
-        p.add_argument("--no-critique", action="store_true")
-        p.add_argument("--timeout", type=int, default=900)
-        p.add_argument("--no-color", action="store_true")
+    def planopts(p):
+        g = p.add_argument_group("general")
+        g.add_argument("--mode", choices=["faithful", "recompose", "both"], default="faithful")
+        g.add_argument("--out-dir", default=None)
+        g.add_argument("--tools", default=None)
+        g.add_argument("--min-melody", type=float, default=0.8)
+        g.add_argument("--tol", type=float, default=0.25)
+        g.add_argument("--seed", type=int, default=5)
+        g.add_argument("--skip", default="", help=f"etapas a omitir: {','.join(SKIP_STAGES)}")
+        g.add_argument("--no-color", action="store_true")
+        f = p.add_argument_group("faithful")
+        f.add_argument("--variants", default="base,rehar,orq")
+        f.add_argument("--no-original-candidate", action="store_true")
+        r = p.add_argument_group("recompose")
+        r.add_argument("--emotion", default=None)
+        r.add_argument("--tonic-density", type=float, default=0.15)
+        r.add_argument("--pattern", default="auto", help="auto | alberti | arpeggio-up | block")
+        r.add_argument("--perf-style", default="auto", help="auto | clasico | romantico | mecanico")
+        r.add_argument("--bass-style", default="auto", help="auto | classical | pedal")
+        r.add_argument("--bars", type=int, default=None)
+        d = p.add_argument_group("decisiones de diseño (la 1.ª opción es la predeterminada)")
+        d.add_argument("--clean", choices=["auto", "doctor", "none"], default="auto")
+        d.add_argument("--meta-engine", choices=["auto", "doctor", "builtin"], default="auto")
+        d.add_argument("--meta-policy", choices=["copy", "flatten"], default="copy")
+        d.add_argument("--fidelity-engine", choices=["auto", "meter", "builtin"], default="auto")
+        d.add_argument("--select", choices=["quality", "fidelity"], default="quality")
+        d.add_argument("--harmony", choices=["tonicized", "captured", "generated"], default="tonicized")
+        d.add_argument("--melody-source", choices=["motif", "guided", "captured"], default="motif")
+        d.add_argument("--bars-from", choices=["ticks", "metric"], default="ticks")
+        d.add_argument("--style-source", choices=["programs", "catalog"], default="programs")
+        d.add_argument("--critique", choices=["basic", "full"], default="basic")
+        d.add_argument("--recipe-paths", choices=["absolute", "relative"], default="absolute")
+        d.add_argument("--report-style", choices=["compact", "full"], default="compact")
 
-    p = sub.add_parser("plan", help="escribe plan.yaml + receta.sh")
-    p.add_argument("midi")
-    p.add_argument("--out-dir", default=None)
-    p.add_argument("--candidates", type=int, default=None)
-    common(p)
-    p.set_defaults(fn=cmd_plan)
+    def runopts(p, with_plan=True):
+        g = p.add_argument_group("ejecución")
+        if with_plan:
+            g.add_argument("--plan", default=None)
+        g.add_argument("--dry-run", action="store_true")
+        g.add_argument("--resume", action="store_true")
+        g.add_argument("--force", action="store_true")
+        g.add_argument("--timeout", type=int, default=300)
+        g.add_argument("--strict", action="store_true")
 
-    p = sub.add_parser("run", help="plan + ejecución + documento")
-    p.add_argument("midi")
-    p.add_argument("--out-dir", default=None)
-    p.add_argument("--candidates", type=int, default=None)
-    p.add_argument("--strict", action="store_true")
-    p.add_argument("--resume", action="store_true")
-    p.add_argument("--from", dest="from_step", default=None)
-    p.add_argument("--dry-run", action="store_true")
-    common(p)
-    p.set_defaults(fn=cmd_run)
+    an = sub.add_parser("analyze", help="ADN del original")
+    an.add_argument("original")
+    an.add_argument("--json", default=None)
+    an.add_argument("--tools", default=None)
+    an.add_argument("--bars", type=int, default=None)
+    an.add_argument("--bars-from", choices=["ticks", "metric"], default="ticks")
+    an.add_argument("--no-color", action="store_true")
+    an.set_defaults(fn=cmd_analyze)
 
-    p = sub.add_parser("doc", help="regenera RECONSTRUCCION.md")
-    p.add_argument("dir")
-    p.add_argument("--no-color", action="store_true")
-    p.set_defaults(fn=cmd_doc)
+    pl = sub.add_parser("plan", help="escribe el plan sin ejecutar")
+    pl.add_argument("original")
+    planopts(pl)
+    pl.add_argument("--yaml", default=None)
+    pl.set_defaults(fn=cmd_plan)
 
-    p = sub.add_parser("batch", help="run sobre muchos MIDIs")
-    p.add_argument("inputs", nargs="+")
-    p.add_argument("--out-root", default="reconstrucciones")
-    p.add_argument("--limit", type=int, default=None)
-    p.add_argument("--jobs", type=int, default=1)
-    p.add_argument("--resume", action="store_true")
-    common(p)
-    p.set_defaults(fn=cmd_batch)
+    ru = sub.add_parser("run", help="plan + ejecución + selección + receta + informe")
+    ru.add_argument("original")
+    planopts(ru)
+    runopts(ru)
+    ru.set_defaults(fn=cmd_run)
 
-    p = sub.add_parser("profile", help="imprime el perfil por defecto (JSON)")
-    p.add_argument("--no-color", action="store_true")
-    p.set_defaults(fn=cmd_profile)
+    ba = sub.add_parser("batch", help="run sobre varios MIDIs, carpetas o un catálogo JSON")
+    ba.add_argument("inputs", nargs="*", help="MIDIs, carpetas o patrones glob")
+    ba.add_argument("--catalog", default=None, help="JSON [{id, file, path?, program_family?}]")
+    ba.add_argument("--midis-dir", default=None)
+    ba.add_argument("--id", default=None)
+    ba.add_argument("--start", type=int, default=1)
+    ba.add_argument("--limit", type=int, default=None)
+    planopts(ba)
+    runopts(ba, with_plan=False)
+    ba.set_defaults(fn=cmd_batch)
 
-    p = sub.add_parser("meta", help="reinyecta compás/tonalidad")
-    p.add_argument("file")
-    p.add_argument("--from", dest="src", default=None, help="MIDI del que copiar compás y armadura")
-    p.add_argument("--time-sig", default=None)
-    p.add_argument("--key", default=None, help="armadura estilo mido: C, Bb, F#m…")
-    p.add_argument("--out", default=None)
-    p.add_argument("--no-color", action="store_true")
-    p.set_defaults(fn=cmd_meta)
+    ch = sub.add_parser("choose", help="elige entre candidatos (gate de melodía, luego calidad)")
+    ch.add_argument("original")
+    ch.add_argument("--candidates", nargs="+", required=True)
+    ch.add_argument("--output", "-o", required=True)
+    ch.add_argument("--min-melody", type=float, default=0.8)
+    ch.add_argument("--tol", type=float, default=0.25)
+    ch.add_argument("--tools", default=None)
+    ch.add_argument("--fidelity-engine", choices=["auto", "meter", "builtin"], default="auto")
+    ch.add_argument("--select", choices=["quality", "fidelity"], default="quality")
+    ch.add_argument("--no-quality", action="store_true", help="atajo de --select fidelity")
+    ch.add_argument("--report", default=None)
+    ch.add_argument("--no-color", action="store_true")
+    ch.set_defaults(fn=cmd_choose)
 
-    p = sub.add_parser("ensure", help="copia el primer fichero existente a --out")
-    p.add_argument("candidates", nargs="+")
-    p.add_argument("--out", required=True)
-    p.add_argument("--no-color", action="store_true")
-    p.set_defaults(fn=cmd_ensure)
+    cp = sub.add_parser("compare", help="compara recomposición vs variantes fieles")
+    cp.add_argument("dir")
+    cp.add_argument("--no-color", action="store_true")
+    cp.set_defaults(fn=cmd_compare)
+
+    rp = sub.add_parser("report", help="regenera RECONSTRUCCION.md")
+    rp.add_argument("dir")
+    rp.add_argument("--report-style", choices=["compact", "full"], default=None)
+    rp.add_argument("--no-color", action="store_true")
+    rp.set_defaults(fn=cmd_report)
+
+    f = sub.add_parser("_first")
+    f.add_argument("--files", nargs="*", default=[])
+    f.add_argument("--glob", default=None)
+    f.add_argument("-o", "--output", required=True)
+    f.set_defaults(fn=cmd__first)
+    t = sub.add_parser("_track0")
+    t.add_argument("file")
+    t.set_defaults(fn=cmd__track0)
+    h = sub.add_parser("_chan0")
+    h.add_argument("file")
+    h.set_defaults(fn=cmd__chan0)
+    n = sub.add_parser("_count")
+    n.add_argument("files", nargs="+")
+    n.set_defaults(fn=cmd__count)
+    qu = sub.add_parser("_quarter")
+    qu.add_argument("file")
+    qu.add_argument("default", type=int)
+    qu.set_defaults(fn=cmd__quarter)
+    me = sub.add_parser("_meta")
+    me.add_argument("src")
+    me.add_argument("--copy-from", required=True)
+    me.add_argument("-o", "--output", required=True)
+    me.add_argument("--only", default="ts,key,tempo")
+    me.add_argument("--policy", choices=["copy", "flatten"], default="copy")
+    me.add_argument("--time-sig", default=None)
+    me.add_argument("--key", default=None)
+    me.set_defaults(fn=cmd__meta)
+    fi = sub.add_parser("_fidelity")
+    fi.add_argument("original")
+    fi.add_argument("candidate")
+    fi.add_argument("--tol", type=float, default=0.25)
+    fi.add_argument("--json", default=None)
+    fi.set_defaults(fn=cmd__fidelity)
     return ap
 
 
@@ -1173,9 +1948,15 @@ def main(argv=None) -> int:
         _USE_COLOR = False
     try:
         return a.fn(a)
-    except FileNotFoundError as e:
+    except ValueError as e:
         print(f"[ERROR] {e}", file=sys.stderr)
         return 1
+    except BrokenPipeError:
+        return 141
+    except (EOFError, OSError, KeyError, IndexError, struct_error) as e:
+        print(f"[ERROR] MIDI ilegible o truncado ({str(e) or type(e).__name__}). "
+              "Prueba: midi_doctor.py check <fichero>", file=sys.stderr)
+        return 2
     except KeyboardInterrupt:
         print("\n[interrumpido]", file=sys.stderr)
         return 130
