@@ -261,6 +261,7 @@ def process_midi(path: str, out_path: Optional[str] = None,
 
     cadences = find_cadences(all_notes, bar_ticks, n_bars, key_pc)
     changed = 0
+    warning = None
     if not report_only and cadences:
         treatable = cadences[:-1] if climax_resolve and len(cadences) > 1 else cadences
         k = max(1, round(len(treatable) * density)) if treatable else 0
@@ -295,10 +296,18 @@ def process_midi(path: str, out_path: Optional[str] = None,
         write_midi(mid, out)
     else:
         out = None
+        if out_path and not report_only:
+            # Se pidió --output pero no hay cadencias V→I que tratar: se escribe
+            # igualmente el MIDI sin cambios (para no romper pipelines) y se avisa.
+            write_midi(mid, out_path)
+            out = out_path
+            warning = ("no se detectaron cadencias V→I: no se aplicó ningún "
+                       "dispositivo; el MIDI de salida es una copia sin cambios")
 
     return {"key": f"{NOTE_NAMES[key_pc]} {mode}", "key_pc": key_pc,
             "melody_track": mel_idx, "bass_track": bass_idx,
-            "cadences": cadences, "changed": changed, "output": out}
+            "cadences": cadences, "changed": changed, "output": out,
+            "warning": warning}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -342,6 +351,8 @@ def main():
         mark = Y + "⚑" if cad.device and cad.device != "resolucion_plena" \
             else G + "✔"
         print(f"    {mark} c.{cad.bar_v}→c.{cad.bar_i}: {dev}{R}")
+    if res.get("warning"):
+        print(f"  {Y}⚠ {res['warning']}{R}")
     if res["output"]:
         print(f"  Notas modificadas/añadidas: {res['changed']}")
         print(f"  {G}MIDI transformado: {res['output']}{R}")

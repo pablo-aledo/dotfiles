@@ -2893,6 +2893,14 @@ def main():
 
     # ── Output ────────────────────────────────────────────────────────────────
     if args.quiet:
+        # --quiet solo acalla stdout: el informe JSON pedido se escribe igualmente
+        if args.out_json:
+            out_q = reports[0].to_dict() if len(reports) == 1 else [rp.to_dict() for rp in reports]
+            try:
+                with open(args.out_json, 'w', encoding='utf-8') as f:
+                    json.dump(out_q, f, indent=2, ensure_ascii=False)
+            except Exception as e:
+                print(f"[ERROR] No se pudo guardar JSON: {e}", file=sys.stderr)
         # Solo stdout limpio — útil para scripts
         for rp in reports:
             if len(reports) == 1:
