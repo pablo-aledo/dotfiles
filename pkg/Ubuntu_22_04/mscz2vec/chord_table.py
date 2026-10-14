@@ -5,7 +5,7 @@
 ║         Catálogo curado de progresiones con tensión y emoción                ║
 ║                                                                              ║
 ║  Complemento de chord_progression_generator.py: en lugar de construir       ║
-║  progresiones algorítmicamente, ofrece un catálogo curado de 70 patrones    ║
+║  progresiones algorítmicamente, ofrece un catálogo curado de 101 patrones   ║
 ║  con etiquetas de tensión (1-10) y emoción, buscables y exportables.        ║
 ║                                                                              ║
 ║  Las progresiones cubren los mismos estilos y modos que el generador,       ║

@@ -140,16 +140,40 @@ def extraer_notas_track(track, tpb: int) -> list:
 
 
 def elegir_track_melodia(mid: MidiFile, track_forzado: int = None) -> int:
-    """Elige el track con más notas como melodía, o usa track_forzado."""
+    """Elige la pista melódica, o usa track_forzado.
+
+    Criterio (por orden): 1) nombre de pista semántico (melody/melodía/lead/vocal/
+    voz); 2) entre las pistas NO percusivas (canal 10), la de más notas; 3) si solo
+    hay percusión, la de más notas. Avisa por stderr cuando la elegida es claramente
+    polifónica (probablemente armonía): usar --track para forzarla.
+    """
     if track_forzado is not None:
         return track_forzado
-    max_notas = -1
-    idx = 0
+    info = []
     for i, track in enumerate(mid.tracks):
-        n = sum(1 for msg in track if msg.type == 'note_on' and msg.velocity > 0)
-        if n > max_notas:
-            max_notas = n
-            idx = i
+        ons = [msg for msg in track if msg.type == 'note_on' and msg.velocity > 0]
+        if not ons:
+            continue
+        perc = any(m.channel == 9 for m in ons)
+        nombre = (track.name or '').casefold()
+        semantico = any(k in nombre for k in ('melod', 'melody', 'lead', 'vocal', 'voz'))
+        info.append((i, len(ons), perc, semantico))
+    if not info:
+        return 0
+    sem = [r for r in info if r[3] and not r[2]]
+    nop = [r for r in info if not r[2]]
+    pool = sem or nop or info
+    idx = max(pool, key=lambda r: r[1])[0]
+    # aviso de polifonía: ataques simultáneos (mismo tick) en >30 % de los ataques
+    ticks, abs_t = {}, 0
+    for msg in mid.tracks[idx]:
+        abs_t += msg.time
+        if msg.type == 'note_on' and msg.velocity > 0:
+            ticks[abs_t] = ticks.get(abs_t, 0) + 1
+    total = sum(ticks.values())
+    if total and sum(v for v in ticks.values() if v > 1) / total > 0.3:
+        print(f"AVISO: la pista {idx} elegida como melodía es muy polifónica "
+              f"(posible armonía); use --track N para forzar otra.", file=sys.stderr)
     return idx
 
 

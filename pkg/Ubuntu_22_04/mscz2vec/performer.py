@@ -216,6 +216,24 @@ def shape_velocities(phrases: List[Phrase], tpb: int, bar_ticks: int,
 #  MOTOR PRINCIPAL
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _resolve_same_pitch_overlaps(notes):
+    """Garantiza que, por (canal, altura), cada nota termina antes de que empiece la
+    siguiente. Recorta la anterior; si ambas empiezan en el mismo tick, retrasa la
+    siguiente 1 tick."""
+    groups = {}
+    for n in notes:
+        groups.setdefault((n.channel, n.pitch), []).append(n)
+    for lst in groups.values():
+        lst.sort(key=lambda n: (n.start, n.end))
+        for a, b in zip(lst, lst[1:]):
+            if a.end > b.start:
+                if b.start <= a.start:
+                    b.start = a.start + 1
+                    if b.end <= b.start:
+                        b.end = b.start + 1
+                a.end = max(a.start + 1, min(a.end, b.start))
+
+
 def _rebuild(trk, notes, extra_events=None):
     others = [e for e in trk.events if e.kind not in ("note_on", "note_off")]
     evs = list(others) + (extra_events or [])
@@ -313,6 +331,11 @@ def perform_midi(path: str, out_path: Optional[str] = None,
                 n.end = n.start + 1
             onset_dev.append(abs(n.start - warp(s0)))
         vel_after.extend(n.vel for n in notes)
+
+        # El jitter/lead mueve los ataques pero no los finales de la nota previa:
+        # una repetición de la misma altura podía quedar atacada antes de cerrarse
+        # la anterior (solape + note_off huérfano). Se recorta la nota previa.
+        _resolve_same_pitch_overlaps(notes)
 
         # [5] controladores
         extra = []

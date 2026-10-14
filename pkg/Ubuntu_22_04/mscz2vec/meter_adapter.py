@@ -150,7 +150,7 @@ def load_all_layers(midi_path, verbose=False):
     A diferencia de theme_transformer.py (que solo necesita LA melodía),
     aquí necesitamos TODAS las pistas con contenido para poder adaptar
     también el acompañamiento. Devuelve una lista de capas:
-      {'index', 'notes', 'program', 'is_percussion', 'mean_pitch'}
+      {'index', 'channel', 'notes', 'program', 'is_percussion', 'mean_pitch'}
     notes: list of (offset_beats, pitch, duration_beats, velocity)
     """
     try:
@@ -163,12 +163,14 @@ def load_all_layers(midi_path, verbose=False):
     ts_num, ts_den = 4, 4
     layers = []
 
+    # Una capa por (pista, canal): un SMF tipo 0 (o una pista con varios canales)
+    # mezcla voces y percusión en una sola pista; si se tratara como una única capa,
+    # la batería acabaría convertida en notas melódicas del canal 0.
     for track_idx, track in enumerate(mid.tracks):
         abs_t = 0
         pending = {}
-        notes = []
-        program = 0
-        has_perc = False
+        notes_by_ch = {}
+        program_by_ch = {}
         for msg in track:
             abs_t += msg.time
             if msg.type == 'set_tempo':
@@ -176,21 +178,21 @@ def load_all_layers(midi_path, verbose=False):
             elif msg.type == 'time_signature':
                 ts_num, ts_den = msg.numerator, msg.denominator
             elif msg.type == 'program_change':
-                program = msg.program
+                program_by_ch.setdefault(msg.channel, msg.program)
             elif msg.type == 'note_on' and msg.velocity > 0:
                 pending[(msg.channel, msg.note)] = (abs_t, msg.velocity)
-                if msg.channel == 9:
-                    has_perc = True
             elif msg.type in ('note_off', 'note_on'):
                 key_ = (msg.channel, msg.note)
                 if key_ in pending:
                     on_t, vel = pending.pop(key_)
-                    notes.append((on_t / tpb, msg.note, max(0.1, (abs_t - on_t) / tpb), vel))
-        if notes:
-            notes.sort(key=lambda n: n[0])
+                    notes_by_ch.setdefault(msg.channel, []).append(
+                        (on_t / tpb, msg.note, max(0.1, (abs_t - on_t) / tpb), vel))
+        for ch in sorted(notes_by_ch):
+            notes = sorted(notes_by_ch[ch], key=lambda n: n[0])
             layers.append({
-                'index': track_idx, 'notes': notes, 'program': program,
-                'is_percussion': has_perc,
+                'index': track_idx, 'channel': ch, 'notes': notes,
+                'program': program_by_ch.get(ch, 0),
+                'is_percussion': ch == 9,
                 'mean_pitch': float(np.mean([p for _, p, _, _ in notes])),
             })
 
@@ -536,7 +538,24 @@ def write_meter_midi(out_layers, tempo_bpm, to_num, to_den, out_path):
     header.append(mido.MetaMessage('end_of_track', time=0))
     mid.tracks.append(header)
 
-    for ch, layer in enumerate(out_layers):
+    # Percusión siempre en el canal 10 (índice 9); el resto conserva su canal
+    # original si no colisiona, o recibe uno libre distinto de 9.
+    chan_of = {}
+    used = {9}
+    for i, layer in enumerate(out_layers):
+        if layer.get('is_percussion'):
+            chan_of[i] = 9
+    for i, layer in enumerate(out_layers):
+        if i in chan_of:
+            continue
+        want = layer.get('channel')
+        if want is None or want == 9 or want in used:
+            free = [c for c in range(16) if c not in used]
+            want = free[0] if free else 15
+        used.add(want)
+        chan_of[i] = want
+
+    for li, layer in enumerate(out_layers):
         events = []
         for off, p, dur, vel in layer['notes']:
             pitch = max(0, min(127, int(round(p))))
@@ -550,10 +569,11 @@ def write_meter_midi(out_layers, tempo_bpm, to_num, to_den, out_path):
         events.sort(key=lambda x: (x[0], 0 if x[1] == 'off' else 1))
 
         trk = mido.MidiTrack()
-        role = 'Melody' if layer['is_melody'] else 'Accompaniment'
+        role = 'Melody' if layer['is_melody'] else ('Drums' if layer.get('is_percussion') else 'Accompaniment')
         trk.append(mido.MetaMessage('track_name', name=f"{role} (pista {layer['index']})", time=0))
-        ch_num = min(ch, 15)
-        trk.append(mido.Message('program_change', channel=ch_num, program=layer['program'], time=0))
+        ch_num = chan_of[li]
+        if ch_num != 9:
+            trk.append(mido.Message('program_change', channel=ch_num, program=layer['program'], time=0))
         prev_t = 0
         for abs_t, kind, p, v in events:
             dt = max(0, abs_t - prev_t)
@@ -634,8 +654,9 @@ def adapt_meter(midi_path: str,
             continue
 
         out_layers.append({
-            'index': layer['index'], 'notes': new_notes, 'program': layer['program'],
-            'is_melody': is_melody, 'method': method_used,
+            'index': layer['index'], 'channel': layer.get('channel'),
+            'is_percussion': layer['is_percussion'], 'notes': new_notes,
+            'program': layer['program'], 'is_melody': is_melody, 'method': method_used,
         })
         if verbose:
             role = 'MELODÍA' if is_melody else 'acompañamiento'
