@@ -575,15 +575,21 @@ def _cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
 
 def _tension_curve(notes: list, bar_ticks: int, total_ticks: int,
                    n_windows: int = 16) -> np.ndarray:
-    """
-    Curva de tensión en n_windows ventanas temporales.
-    Tensión = combinación de disonancia armónica + densidad × velocidad + registro.
+    """Curva de tensión ESTRUCTURAL en n_windows ventanas.
+
+    P6: cada componente (disonancia, densidad, registro) se normaliza de forma
+    relativa a su propia variación a lo largo de la obra. Así una transcripción
+    MIDI con velocidad plana pero con arco real de densidad/registro se mide
+    por su estructura, y no se confunde con "estática". La velocidad se excluye
+    (es interpretación, no estructura).
     """
     if not notes or total_ticks == 0:
         return np.zeros(n_windows)
 
     window_size = total_ticks / n_windows
-    curve = np.zeros(n_windows)
+    diss = np.zeros(n_windows)
+    act  = np.zeros(n_windows)
+    reg  = np.zeros(n_windows)
 
     for w in range(n_windows):
         t_start = w * window_size
@@ -592,8 +598,7 @@ def _tension_curve(notes: list, bar_ticks: int, total_ticks: int,
         if not seg:
             continue
 
-        pitches    = [n[2] for n in seg]
-        velocities = [n[3] for n in seg]
+        pitches = [n[2] for n in seg]
 
         # Disonancia: intervalos simultáneos
         dissonance = 0.0
@@ -607,19 +612,15 @@ def _tension_curve(notes: list, bar_ticks: int, total_ticks: int,
                     pairs += 1
             dissonance = dissonance / max(pairs, 1)
 
-        # Actividad: densidad × velocidad media normalizada
-        duration   = max(t_end - t_start, 1)
-        density    = len(seg) / (duration / max(bar_ticks, 1))
-        vel_mean   = np.mean(velocities) / 127.0
-        activity   = min(density / 10.0, 1.0) * vel_mean
+        duration = max(t_end - t_start, 1)
+        diss[w] = dissonance
+        # P6: densidad en escala logarítmica (no satura en piezas densas) y
+        # SIN multiplicar por velocidad (la velocidad es interpretación).
+        density = len(seg) / (duration / max(bar_ticks, 1))
+        act[w]  = min(math.log1p(density) / math.log1p(24.0), 1.0)
+        reg[w]  = min(1.0, max(0.0, (float(np.mean(pitches)) - 36) / 60.0))
 
-        # Registro: pitch medio normalizado (agudo = más tensión)
-        register = (np.mean(pitches) - 36) / 60.0
-        register = max(0.0, min(1.0, register))
-
-        curve[w] = 0.45 * dissonance + 0.35 * activity + 0.20 * register
-
-    return curve
+    return 0.45 * diss + 0.35 * act + 0.20 * reg
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -690,25 +691,20 @@ class CoherenceEvaluator:
                 if (d - mean_d) / std_d > 1.5:
                     anomalous.append(i + 1)
 
-        # P2: coherencia = identidad + desarrollo.
-        # La fórmula anterior saturaba en ~0.99 para todo el corpus (premiaba
-        # simplemente la homogeneidad). Ahora se premia la banda media: algo
-        # de identidad (cercanía al centroide) PERO también algo de contraste
-        # entre secciones; una obra totalmente constante no es "coherente".
+        # P2/P9: coherencia = identidad temática + retorno + estabilidad.
+        # La identidad (autosimilitud, i.e. distancia pequeña al centroide) es
+        # la que caracteriza a la música tonal real; el contraste bruto no debe
+        # competir con ella. Se premia, pues, identidad y reprisse.
         if consec_dists:
             variance = float(np.var(consec_dists))
             mean_cd  = float(np.mean(consec_dists))
-            def _band(x, opt, w):
-                return float(np.exp(-((x - opt) ** 2) / (2 * w ** 2)))
-            s_identity = _band(mean_d, 0.12, 0.14)      # identidad moderada
-            s_contrast = _band(mean_cd, 0.18, 0.16)     # contraste moderado
-            s_stable   = 1.0 - min(variance / 0.10, 1.0)
-            score = 0.40 * s_identity + 0.35 * s_contrast + 0.25 * s_stable
-            # reprisse: retorno temático del final al principio
+            identity = 1.0 - min(mean_d / 0.30, 1.0)          # autosimilitud
+            s_stable = 1.0 - min(variance / 0.10, 1.0)
+            ret = 0.0
             if len(descriptors) >= 3:
-                ret = 1.0 - _cosine_distance(descriptors[-1], descriptors[0])
-                if ret > 0.9:
-                    score = min(1.0, score + 0.08)
+                ret = max(0.0, 1.0 - _cosine_distance(descriptors[-1], descriptors[0]))
+            s_ret = ret if ret > 0.85 else 0.5 * ret + 0.3   # retorno temático
+            score = 0.55 * identity + 0.25 * s_ret + 0.20 * s_stable
         else:
             score = 0.5
 
@@ -1506,10 +1502,11 @@ class MelodicEvaluator:
         H_max = math.log2(25)          # ~4.64 bits
         H_norm = H / H_max             # 0–1
 
-        # Curva de score: gaussiana centrada en H_norm = 0.55
-        # score = exp(-((H_norm - 0.55)^2) / (2 * 0.20^2))
-        optimal = 0.55
-        width   = 0.16          # P4: antes 0.22 (banda demasiado laxa)
+        # Curva de score: gaussiana centrada en H_norm = 0.65 (P7).
+        # El óptimo 0.55 estaba calibrado a las melodías *generadas* (muy
+        # regulares); la música real tiene más variedad interválica (~0.6–0.8).
+        optimal = 0.62
+        width   = 0.18
         score   = math.exp(-((H_norm - optimal) ** 2) / (2 * width ** 2))
 
         return float(score), {
@@ -1545,10 +1542,10 @@ class MelodicEvaluator:
         n_moves = max(len(directions), 1)
         rate    = inflections / n_moves   # 0=línea recta, 1=zigzag puro
 
-        # Score: gaussiana centrada en rate=0.40 (inflexión cada ~2.5 notas)
-        # Extremos: rate<0.10 → sin variedad, rate>0.75 → zigzag sin estructura
-        optimal = 0.40
-        width   = 0.20
+        # Score: gaussiana centrada en rate=0.55 (P7). El óptimo 0.40 estaba
+        # calibrado a las melodías generadas; la música real inflexiona más.
+        optimal = 0.48
+        width   = 0.18
         score   = math.exp(-((rate - optimal) ** 2) / (2 * width ** 2))
 
         return float(score), {
@@ -1609,9 +1606,11 @@ class MelodicEvaluator:
         H_max   = math.log2(12)   # ~3.58 bits
         H_norm  = H_mean / H_max
 
-        # Score: gaussiana centrada en H_norm=0.50
-        optimal = 0.50
-        width   = 0.25
+        # Score: gaussiana centrada en H_norm=0.68 (P7). El óptimo 0.50
+        # penalizaba la impredecibilidad propia de la música real (más
+        # transiciones posibles entre clases de altura).
+        optimal = 0.62
+        width   = 0.24
         score   = math.exp(-((H_norm - optimal) ** 2) / (2 * width ** 2))
 
         return float(score), {
@@ -2129,6 +2128,8 @@ class HarmonyEvaluator:
         diat_ratio = sum(1 for c in chords if c[2]) / len(chords)
         roots      = {c[0] for c in chords}
         roman_div  = min(len(roots) / 5.0, 1.0)
+        quals      = {(c[0], c[1]) for c in chords}
+        qual_div   = min(len(quals) / 8.0, 1.0)   # P8: riqueza de vocabulario
 
         # funcionalidad T / S / D
         I     = key_root
@@ -2158,8 +2159,11 @@ class HarmonyEvaluator:
         hr = changes / max(len(chords) - 1, 1)
         s_hr = float(math.exp(-((hr - 0.5) ** 2) / (2 * 0.3 ** 2)))
 
-        score = (0.35 * diat_ratio + 0.20 * func_div + 0.15 * roman_div +
-                 0.20 * s_cad + 0.10 * s_hr)
+        # P8: se reparte el peso para premiar la RIQUEZA de vocabulario
+        # (raíces+calidades) y no tanto la diatonicidad bruta, que penalizaba
+        # al material real (más cromático y con extensiones).
+        score = (0.30 * diat_ratio + 0.18 * func_div + 0.14 * roman_div +
+                 0.14 * s_cad + 0.08 * s_hr + 0.16 * qual_div)
         score = max(0.0, min(1.0, float(score)))
 
         reasons = []
@@ -2167,6 +2171,8 @@ class HarmonyEvaluator:
             reasons.append(f"diatonicidad baja: {diat_ratio:.0%} compases")
         if func_div < 0.6:
             reasons.append("poca variedad funcional (T/S/D)")
+        if qual_div > 0.6:
+            reasons.append("vocabulario armónico rico")
         if cad == 0:
             reasons.append("sin cadencia V→I ni IV→I")
         if score > 0.75:
@@ -2181,6 +2187,7 @@ class HarmonyEvaluator:
                 "diatonic_ratio":  round(diat_ratio, 4),
                 "func_div":        round(func_div, 4),
                 "roman_div":       round(roman_div, 4),
+                "qual_div":        round(qual_div, 4),
                 "cadences":        int(cad),
                 "harmonic_rhythm": round(hr, 4),
             },
