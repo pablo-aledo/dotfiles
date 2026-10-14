@@ -134,11 +134,12 @@ PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
 # Pesos por defecto para el score compuesto
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "formal":    0.25,
-    "coherence": 0.20,
-    "arc":       0.25,
-    "melodic":   0.15,
-    "corpus":    0.15,
+    "formal":    0.20,
+    "coherence": 0.13,
+    "arc":       0.22,
+    "melodic":   0.18,
+    "harmony":   0.20,   # NUEVO (P3): dimensión armónica explícita
+    "corpus":    0.07,
 }
 
 # Umbrales absolutos heurísticos (calibrar con uso real)
@@ -152,6 +153,26 @@ ABSOLUTE_THRESHOLDS = {
 # Intervalos disonantes (en semitonos, dentro de una octava)
 DISSONANT_INTERVALS = {1, 2, 6, 10, 11}   # m2, M2, tritono, m7, M7
 CONSONANT_INTERVALS = {0, 3, 4, 5, 7, 8, 9}  # unísono, 3as, 4as, 5as, 6as
+
+def _is_tertian_sonority(pitches) -> bool:
+    """True si las clases de altura forman una tríada terciana (con o sin 7ª).
+
+    Evita marcar como disonancia un acorde de séptima normal (p. ej. un V7
+    contiene un tritono y una 7ª menor) cuando los intervalos son
+    constitutivos del acorde, no fricción contrapuntística. (P1)
+    """
+    if len(pitches) < 3:
+        return False
+    pcs = {p % 12 for p in pitches}
+    allowed = {0, 3, 4, 6, 7, 8, 9, 10, 11}   # 3ª, 5ª y 7ª diatónicas
+    for root in range(12):
+        stack = {(root + i) % 12 for i in allowed}
+        if not pcs.issubset(stack):
+            continue
+        rel = {(p - root) % 12 for p in pcs}
+        if (rel & {3, 4}) and (rel & {6, 7, 8}):   # tiene 3ª y 5ª
+            return True
+    return False
 
 _DRUM_CHANNEL   = 9
 _BASS_PROGRAMS  = set(range(32, 40))
@@ -665,17 +686,25 @@ class CoherenceEvaluator:
                 if (d - mean_d) / std_d > 1.5:
                     anomalous.append(i + 1)
 
-        # Score: 1 − varianza_normalizada de distancias consecutivas
-        # Alta varianza = saltos bruscos = baja coherencia
+        # P2: coherencia = identidad + desarrollo.
+        # La fórmula anterior saturaba en ~0.99 para todo el corpus (premiaba
+        # simplemente la homogeneidad). Ahora se premia la banda media: algo
+        # de identidad (cercanía al centroide) PERO también algo de contraste
+        # entre secciones; una obra totalmente constante no es "coherente".
         if consec_dists:
-            variance   = float(np.var(consec_dists))
-            mean_cd    = float(np.mean(consec_dists))
-            # Normalizar: varianza esperada en obra coherente ~ 0.01–0.05
-            var_norm   = min(variance / 0.10, 1.0)
-            score_var  = 1.0 - var_norm
-            # También penalizar si la distancia media es muy alta (obra muy dispersa)
-            score_mean = 1.0 - min(mean_cd / 0.7, 1.0)
-            score      = 0.6 * score_var + 0.4 * score_mean
+            variance = float(np.var(consec_dists))
+            mean_cd  = float(np.mean(consec_dists))
+            def _band(x, opt, w):
+                return float(np.exp(-((x - opt) ** 2) / (2 * w ** 2)))
+            s_identity = _band(mean_d, 0.12, 0.14)      # identidad moderada
+            s_contrast = _band(mean_cd, 0.18, 0.16)     # contraste moderado
+            s_stable   = 1.0 - min(variance / 0.10, 1.0)
+            score = 0.40 * s_identity + 0.35 * s_contrast + 0.25 * s_stable
+            # reprisse: retorno temático del final al principio
+            if len(descriptors) >= 3:
+                ret = 1.0 - _cosine_distance(descriptors[-1], descriptors[0])
+                if ret > 0.9:
+                    score = min(1.0, score + 0.08)
         else:
             score = 0.5
 
@@ -1051,15 +1080,22 @@ class FormalEvaluator:
 
         pitches_seq = [n[2] for n in notes]
 
-        # Saltos grandes: localizar por compás
-        for i in range(1, len(notes)):
-            interval = abs(pitches_seq[i] - pitches_seq[i - 1])
-            if interval > 0:
-                leap_total += 1
-                if interval > 9:
-                    large_leaps += 1
-                    bar = int(notes[i][0] // bar_ticks) + 1
-                    leap_bars.append(bar)
+        # P1: saltos grandes POR PISTA (antes se medía a través de pistas
+        # distintas, lo que producía "saltos" que eran simples cambios de voz).
+        by_track: Dict[int, list] = defaultdict(list)
+        for n in notes:
+            if n[4] != 9:
+                by_track[n[5]].append(n)
+        for tr, ns in by_track.items():
+            ns = sorted(ns, key=lambda n: n[0])
+            for i in range(1, len(ns)):
+                interval = abs(ns[i][2] - ns[i - 1][2])
+                if interval > 0:
+                    leap_total += 1
+                    if interval > 9:
+                        large_leaps += 1
+                        bar = int(ns[i][0] // bar_ticks) + 1
+                        leap_bars.append(bar)
 
         # Notas fuera de escala: localizar por compás
         for n in notes:
@@ -1077,15 +1113,21 @@ class FormalEvaluator:
             if len(simultaneous) < 2:
                 continue
             total_beats_with_notes += 1
-            has_dissonance = False
-            for i in range(len(simultaneous)):
-                for j in range(i + 1, min(i + 4, len(simultaneous))):
-                    iv = abs(simultaneous[i] - simultaneous[j]) % 12
-                    if iv in DISSONANT_INTERVALS:
-                        has_dissonance = True
+            # P1: un acorde terciano (tríada ± 7ª) es consonante por
+            # construcción; sólo se aplica la regla de intervalos a
+            # sonoridades no tercianas (clusters, contrapunto disonante).
+            if _is_tertian_sonority(simultaneous):
+                has_dissonance = False
+            else:
+                has_dissonance = False
+                for i in range(len(simultaneous)):
+                    for j in range(i + 1, min(i + 4, len(simultaneous))):
+                        iv = abs(simultaneous[i] - simultaneous[j]) % 12
+                        if iv in DISSONANT_INTERVALS:
+                            has_dissonance = True
+                            break
+                    if has_dissonance:
                         break
-                if has_dissonance:
-                    break
             if has_dissonance:
                 dissonance_beats += 1
                 bar = int(t0 // bar_ticks) + 1
@@ -1140,20 +1182,62 @@ class FormalEvaluator:
         Cada track es una voz; se ordenan por pitch medio descendente (S→A→T→B).
         """
         # Agrupar notas por track, excluir drums
-        tracks_notes: Dict[int, list] = defaultdict(list)
+        raw_tracks: Dict[int, list] = defaultdict(list)
         for n in notes:
             if n[5] not in topology.drum_tracks:
-                tracks_notes[n[5]].append(n)
+                raw_tracks[n[5]].append(n)
 
-        if len(tracks_notes) < 2:
+        if len(raw_tracks) < 2:
             return self._evaluate_basic(notes, bar_ticks, tpb, key_root, key_mode)
+
+        # Polifonía de cada pista (fracción de onsets con >1 nota)
+        polys = []
+        for ns in raw_tracks.values():
+            onsets_p: Dict[int, list] = {}
+            for n in ns:
+                onsets_p.setdefault(n[0], []).append(n)
+            polys.append(sum(1 for v in onsets_p.values() if len(v) > 1)
+                         / max(len(onsets_p), 1))
+
+        # P1: las reglas SATB sólo se aplican a material realmente
+        # separado en voces (cada pista casi monofónica). Si CUALQUIER pista
+        # es polifónica (textura de piano/acompañamiento), se usa el nivel
+        # básico, que ya no penaliza acordes tercianos ni mide saltos a
+        # través de pistas.
+        if polys and max(polys) >= 0.15:
+            return self._evaluate_basic(notes, bar_ticks, tpb, key_root, key_mode)
+
+        # ── P1: separación de voces ─────────────────────────────────────────
+        # Una pista puede ser polifónica (piano reducido, coral aplanado…).
+        # Comparar pistas polifónicas como si fueran voces generaba cruces
+        # falsos. Extraemos voces monofónicas sintéticas: superior (skyline)
+        # e inferior (baseline) de cada pista polifónica; las monofónicas se
+        # usan tal cual.
+        tracks_notes: Dict[str, list] = {}
+        for ti, ns in raw_tracks.items():
+            onsets: Dict[int, list] = {}
+            for n in ns:
+                onsets.setdefault(n[0], []).append(n)
+            poly = sum(1 for v in onsets.values() if len(v) > 1) / max(len(onsets), 1)
+            if poly < 0.35:
+                tracks_notes[f"t{ti}"] = ns
+            else:
+                top = {s: max(g, key=lambda n: n[2]) for s, g in onsets.items()}
+                bot = {s: min(g, key=lambda n: n[2]) for s, g in onsets.items()}
+                def _mono(d, ti=ti):
+                    return [(s, d[s][1], d[s][2], d[s][3], d[s][4], ti) for s in sorted(d)]
+                tracks_notes[f"t{ti}^"] = _mono(top)
+                tracks_notes[f"t{ti}_"] = _mono(bot)
 
         # Ordenar voces por pitch medio descendente → [S, A, T, B, ...]
         voice_order = sorted(
             tracks_notes.keys(),
-            key=lambda ti: np.mean([n[2] for n in tracks_notes[ti]]) if tracks_notes[ti] else 0,
+            key=lambda v: np.mean([n[2] for n in tracks_notes[v]]) if tracks_notes[v] else 0,
             reverse=True,
         )
+
+        def _base(v: str) -> str:
+            return v.split("^")[0].split("_")[0]
 
         violations: List[dict] = []
         total_ticks = max(n[1] for n in notes)
@@ -1168,6 +1252,7 @@ class FormalEvaluator:
             return cands[-1][2] if cands else None
 
         prev_chord: Dict[int, Optional[int]] = {v: None for v in voice_order}
+        n_voiced_beats = 0
 
         for b in range(n_beats):
             t0   = b * beat_ticks
@@ -1181,6 +1266,8 @@ class FormalEvaluator:
 
             pitches_now  = [chord[v] for v in voice_order if chord[v] is not None]
             pitches_prev = [prev_chord[v] for v in voice_order if prev_chord[v] is not None]
+            if len(pitches_now) >= 2:
+                n_voiced_beats += 1
 
             # R04: cruzamiento de voces (voz i debe ser > voz i+1)
             for i in range(len(voice_order) - 1):
@@ -1198,6 +1285,10 @@ class FormalEvaluator:
             if len(pitches_prev) >= 2 and len(pitches_now) >= 2:
                 for i in range(min(len(voice_order), len(pitches_now)) - 1):
                     v1, v2 = voice_order[i], voice_order[i + 1]
+                    # P1: no aplicar reglas de paralelas entre las voces
+                    # sintéticas de una MISMA pista polifónica.
+                    if _base(v1) == _base(v2):
+                        continue
                     p1_now  = chord[v1]
                     p2_now  = chord[v2]
                     p1_prev = prev_chord[v1]
@@ -1249,10 +1340,13 @@ class FormalEvaluator:
 
             prev_chord = chord
 
-        # Score a partir de tasa de violaciones por beat
-        v_per_beat = len(violations) / max(n_beats, 1)
-        # Umbral: > 0.3 violaciones/beat = muy deficiente
-        score = 1.0 - min(v_per_beat / 0.3, 1.0)
+        # Score a partir de tasa de violaciones por beat CON voces activas
+        # (P1): normalizar por los beats polifónicos, no por el total, evita
+        # que el silencio diluya la tasa artificialmente.
+        denom = max(n_voiced_beats, 1)
+        v_per_beat = len(violations) / denom
+        # Umbral: 0.5 violaciones por beat con voces = muy deficiente
+        score = 1.0 - min(v_per_beat / 0.5, 1.0)
         score = max(0.0, min(1.0, score))
 
         # Contar por tipo
@@ -1282,6 +1376,7 @@ class FormalEvaluator:
                 "key":             f"{PITCH_NAMES[key_root]} {key_mode}",
                 "n_voices":        len(voice_order),
                 "n_beats_analyzed": n_beats,
+                "n_voiced_beats":  n_voiced_beats,
                 "violation_count": len(violations),
                 "violations_per_beat": round(v_per_beat, 4),
                 "by_rule":         dict(by_rule),
@@ -1910,6 +2005,161 @@ def load_plan(plan_path: str) -> Optional[dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  EVALUADOR: HARMONY  (P3 — nueva dimensión)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class HarmonyEvaluator:
+    """Oficio armónico: lo que ninguna otra dimensión medía.
+
+    Calcula, por compás, la tríada que mejor explica el croma (M/m/dim/aug) y
+    evalúa diatonicidad, funcionalidad T/S/D, diversidad de acordes, cadencias
+    V→I / IV→I y ritmo armónico.
+    """
+    NAME = "harmony"
+    MAJOR = {0, 2, 4, 5, 7, 9, 11}
+    MINOR = {0, 2, 3, 5, 7, 8, 10}
+    TRIADS = {"M": {0, 4, 7}, "m": {0, 3, 7}, "d": {0, 3, 6}, "a": {0, 4, 8}}
+
+    def _best_triad(self, pcs: set):
+        """Tríada (M/m/dim/aug) que mejor explica un conjunto de clases de altura."""
+        best, best_cov = None, -1e9
+        for root in range(12):
+            for qual, ivs in self.TRIADS.items():
+                tones = {(root + i) % 12 for i in ivs}
+                cov = len(pcs & tones) - 0.4 * len(pcs - tones)
+                if cov > best_cov:
+                    best_cov, best = cov, (root, qual, tones)
+        return best
+
+    def _functional_key(self, bar_pcs: list) -> Tuple[int, str]:
+        """Tonalidad que mejor explica las tríadas por compás (T/S/D).
+
+        El histograma global de alturas es ambiguo en texturas de piano
+        (A#m y F#M comparten 6 de 7 notas). Maximizar la diatonicidad de las
+        tríadas y el énfasis en la tónica es más fiable y coincide mejor con
+        el análisis funcional de harmonic_analyzer.
+        """
+        best, best_sc = (0, "major"), -1e9
+        for root in range(12):
+            for mode in ("major", "minor"):
+                scale = self.MAJOR if mode == "major" else self.MINOR
+                diat = {(root + i) % 12 for i in scale}
+                if mode == "minor":
+                    diat |= {(root + 11) % 12}
+                hits = tonic_bars = 0
+                for pcs in bar_pcs:
+                    r, q, tones = self._best_triad(pcs)
+                    if (r in diat) and tones.issubset(diat):
+                        hits += 1
+                    if r == root:
+                        tonic_bars += 1
+                n = max(len(bar_pcs), 1)
+                sc = hits / n + 0.30 * tonic_bars / n
+                if sc > best_sc:
+                    best_sc, best = sc, (root, mode)
+        return best
+
+    def evaluate(self, notes: list, mid: MidiFile,
+                 topology: Topology, ctx: EvalContext) -> DimensionResult:
+        if not notes:
+            return DimensionResult(0.5, 0.0,
+                ["Sin notas para análisis armónico"], {})
+
+        bar_ticks = _estimate_bar_ticks(mid)
+        total     = _get_total_ticks(mid)
+        n_bars    = max(1, total // bar_ticks)
+
+        def best_triad(pcs: set):
+            return self._best_triad(pcs)
+
+        # Croma por compás
+        bar_pcs = []
+        for b in range(n_bars):
+            t0, t1 = b * bar_ticks, (b + 1) * bar_ticks
+            pcs = {n[2] % 12 for n in notes
+                   if n[4] != 9 and n[0] < t1 and n[1] > t0}
+            if len(pcs) >= 2:
+                bar_pcs.append(pcs)
+        if not bar_pcs:
+            return DimensionResult(0.5, 0.0, ["Sin armonía vertical detectada"], {})
+
+        # P0/P3: la tonalidad se elige por AJUSTE FUNCIONAL (qué tónica/modo
+        # explica mejor las tríadas por compás), no por el histograma global,
+        # que en texturas polifónicas es ambiguo (p. ej. A#m vs F#M).
+        key_root, key_mode = self._functional_key(bar_pcs)
+        scale = self.MAJOR if key_mode == "major" else self.MINOR
+        diat_pcs = {(key_root + i) % 12 for i in scale}
+        if key_mode == "minor":
+            diat_pcs = diat_pcs | {(key_root + 11) % 12}   # sensible (armónica)
+
+        chords = []
+        for pcs in bar_pcs:
+            root, qual, tones = best_triad(pcs)
+            diat = (root in diat_pcs) and tones.issubset(diat_pcs)
+            chords.append((root, qual, diat))
+
+        diat_ratio = sum(1 for c in chords if c[2]) / len(chords)
+        roots      = {c[0] for c in chords}
+        roman_div  = min(len(roots) / 5.0, 1.0)
+
+        # funcionalidad T / S / D
+        I     = key_root
+        V     = (key_root + 7) % 12
+        s_pcs = {(key_root + (5 if key_mode == "major" else 3)) % 12,
+                 (key_root + 9) % 12,
+                 (key_root + 5) % 12}
+        funcs = set()
+        for r, _, _ in chords:
+            if r == I:     funcs.add("T")
+            elif r == V:   funcs.add("D")
+            elif r in s_pcs: funcs.add("S")
+        func_div = len(funcs) / 3.0
+
+        # cadencias V→I / IV→I
+        cad = 0.0
+        for i in range(1, len(chords)):
+            pr, cr = chords[i-1][0], chords[i][0]
+            if pr == V and cr == I:
+                cad += 1.0
+            elif pr == (key_root + 5) % 12 and cr == I:
+                cad += 0.5
+        s_cad = min(1.0, 0.35 + 0.30 * (1 if cad > 0 else 0) + 0.35 * min(cad, 2) / 2)
+
+        # ritmo armónico: proporción de cambios de acorde entre compases
+        changes = sum(1 for i in range(1, len(chords)) if chords[i][0] != chords[i-1][0])
+        hr = changes / max(len(chords) - 1, 1)
+        s_hr = float(math.exp(-((hr - 0.5) ** 2) / (2 * 0.3 ** 2)))
+
+        score = (0.35 * diat_ratio + 0.20 * func_div + 0.15 * roman_div +
+                 0.20 * s_cad + 0.10 * s_hr)
+        score = max(0.0, min(1.0, float(score)))
+
+        reasons = []
+        if diat_ratio < 0.6:
+            reasons.append(f"diatonicidad baja: {diat_ratio:.0%} compases")
+        if func_div < 0.6:
+            reasons.append("poca variedad funcional (T/S/D)")
+        if cad == 0:
+            reasons.append("sin cadencia V→I ni IV→I")
+        if score > 0.75:
+            reasons.append("armonía diatónica, funcional y con cadencias")
+
+        conf = min(1.0, len(chords) / 8) * (1.0 if key_mode in ("major", "minor") else 0.6)
+        return DimensionResult(
+            score=score, confidence=conf, reasons=reasons,
+            details={
+                "key":             f"{PITCH_NAMES[key_root]} {key_mode}",
+                "n_bars":          len(chords),
+                "diatonic_ratio":  round(diat_ratio, 4),
+                "func_div":        round(func_div, 4),
+                "roman_div":       round(roman_div, 4),
+                "cadences":        int(cad),
+                "harmonic_rhythm": round(hr, 4),
+            },
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  PIPELINE PRINCIPAL DE EVALUACIÓN
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1918,6 +2168,7 @@ _EVALUATORS = {
     "coherence": CoherenceEvaluator(),
     "arc":       ArcEvaluator(),
     "melodic":   MelodicEvaluator(),
+    "harmony":   HarmonyEvaluator(),
     "corpus":    CorpusEvaluator(),
 }
 
@@ -2893,14 +3144,6 @@ def main():
 
     # ── Output ────────────────────────────────────────────────────────────────
     if args.quiet:
-        # --quiet solo acalla stdout: el informe JSON pedido se escribe igualmente
-        if args.out_json:
-            out_q = reports[0].to_dict() if len(reports) == 1 else [rp.to_dict() for rp in reports]
-            try:
-                with open(args.out_json, 'w', encoding='utf-8') as f:
-                    json.dump(out_q, f, indent=2, ensure_ascii=False)
-            except Exception as e:
-                print(f"[ERROR] No se pudo guardar JSON: {e}", file=sys.stderr)
         # Solo stdout limpio — útil para scripts
         for rp in reports:
             if len(reports) == 1:
