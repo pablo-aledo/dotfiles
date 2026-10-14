@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                       QUALITY SCORER  v1.2                                  ║
+║                       QUALITY SCORER  v1.3                                  ║
 ║         Evaluación multidimensional de calidad musical para MIDIs            ║
 ║                                                                              ║
 ║  Evalúa una o más obras MIDI en cinco dimensiones:                          ║
@@ -30,6 +30,16 @@
 ║    python quality_scorer.py cand*.mid --mode rank                           ║
 ║    python quality_scorer.py cand*.mid --mode rank --quiet                   ║
 ║                                                                              ║
+║  ROLES Y CONTEXTO (v1.3):                                                    ║
+║  python quality_scorer.py obra.mid --roles '1=melody,ch10=drums'             ║
+║  python quality_scorer.py obra.mid --scale whole_tone   # colección          ║
+║    python quality_scorer.py obra.mid --context obra.whole_tone_report.json   ║
+║  python quality_scorer.py obra.mid --voices satb        # forzar SATB        ║
+║  python quality_scorer.py obra.mid --compat             # como v1.2          ║
+║    La percusión (canal 10) se excluye de formal/melodic/harmony; los nombres ║
+║    de pista (Melody, Bass, Harmony, Drums…) son evidencia de rol si no       ║
+║    contradicen canal/programa. El informe lista roles, fuente y avisos.      ║
+║                                                                              ║
 ║  CONTROL DE DIMENSIONES:                                                     ║
 ║    python quality_scorer.py obra.mid --skip corpus formal                   ║
 ║    python quality_scorer.py obra.mid --only arc coherence                   ║
@@ -55,6 +65,11 @@
 ║                                                                              ║
 ║  OPCIONES PRINCIPALES:                                                       ║
 ║    --plan FILE             theorist.json o narrator_plan.json (dim. arc)    ║
+║    --roles MAP              N=rol|chN=rol (melody|bass|harmony|drums)        ║
+║    --scale [RAÍZ:]NOMBRE    Colección declarada (whole_tone, D:dorian…)      ║
+║    --context JSON           Informe de theme_transformer (un fichero)        ║
+║    --voices auto|satb|texture  Reglas de voces (auto: solo si declaradas)    ║
+║    --compat                 Reproduce v1.2                                   ║
 ║    --corpus DIR            Directorio de MIDIs de referencia                ║
 ║    --mode eval|rank        Modo de operación (default: eval)                ║
 ║    --fast                  Modo rápido: omite cálculos pesados              ║
@@ -128,7 +143,7 @@ except ImportError:
 #  CONSTANTES Y CONFIGURACIÓN
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION = "1.2"
+VERSION = "1.3"
 
 PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
@@ -174,6 +189,40 @@ def _is_tertian_sonority(pitches) -> bool:
         if (rel & {3, 4}) and (rel & {6, 7, 8}):   # tiene 3ª y 5ª
             return True
     return False
+
+# Colecciones declarables (--scale / --context). Misma tabla que theme_transformer.
+DECLARABLE_SCALES = {
+    'major':             (0, 2, 4, 5, 7, 9, 11),
+    'natural_minor':     (0, 2, 3, 5, 7, 8, 10),
+    'harmonic_minor':    (0, 2, 3, 5, 7, 8, 11),
+    'melodic_minor':     (0, 2, 3, 5, 7, 9, 11),
+    'dorian':            (0, 2, 3, 5, 7, 9, 10),
+    'phrygian':          (0, 1, 3, 5, 7, 8, 10),
+    'lydian':            (0, 2, 4, 6, 7, 9, 11),
+    'mixolydian':        (0, 2, 4, 5, 7, 9, 10),
+    'locrian':           (0, 1, 3, 5, 6, 8, 10),
+    'acoustic':          (0, 2, 4, 6, 7, 9, 10),
+    'melodic_minor_m5':  (0, 2, 4, 5, 7, 8, 10),
+    'double_harmonic':   (0, 1, 4, 5, 7, 8, 11),
+    'whole_tone':        (0, 2, 4, 6, 8, 10),
+    'octatonic_wh':      (0, 2, 3, 5, 6, 8, 9, 11),
+    'octatonic_hw':      (0, 1, 3, 4, 6, 7, 9, 10),
+    'major_pentatonic':  (0, 2, 4, 7, 9),
+    'minor_pentatonic':  (0, 3, 5, 7, 10),
+    'blues':             (0, 3, 5, 6, 7, 10),
+}
+# Colecciones para las que la lectura funcional T/S/D + cadencia V→I tiene sentido
+_FUNCTIONAL_SCALES = {'major', 'natural_minor', 'harmonic_minor', 'melodic_minor'}
+
+# Evidencia de rol por nombre de pista (v1.3). Orden = prioridad.
+_NAME_ROLES = [
+    ('drums',   ('drum', 'perc', 'bater', 'kit')),
+    ('melody',  ('melod', 'melody', 'lead', 'vocal', 'voz', 'tune')),
+    ('bass',    ('bass', 'bajo')),
+    ('harmony', ('harmon', 'armon', 'chord', 'acord', 'accomp', 'acomp')),
+]
+_VOICE_NAMES = ('soprano', 'contralto', 'alto', 'tenor')
+_VALID_ROLES = {'melody', 'bass', 'harmony', 'drums'}
 
 _DRUM_CHANNEL   = 9
 _BASS_PROGRAMS  = set(range(32, 40))
@@ -235,10 +284,12 @@ class QualityReport:
     score:       ScoreSummary
     dimensions:  Dict[str, DimensionResult]
     meta:        Dict
+    name:        str = ""      # v1.3: nombre legible (basename); `file` guarda la ruta dada
 
     def to_dict(self) -> dict:
         return {
             "file":        self.file,
+            "name":        self.name or Path(self.file).name,
             "mode":        self.mode,
             "plan_used":   self.plan_used,
             "corpus_used": self.corpus_used,
@@ -263,6 +314,10 @@ class Topology:
     bass_tracks:   List[int]
     drum_tracks:   List[int]
     all_tracks:    List[int]
+    # v1.3: trazabilidad de roles
+    roles:          Dict[int, Dict] = field(default_factory=dict)   # ti → {role, source, name}
+    warnings:       List[str]       = field(default_factory=list)
+    declared_voices: bool           = False   # nombres soprano/alto/tenor… presentes
 
 
 @dataclass
@@ -275,6 +330,14 @@ class EvalContext:
     fast:            bool
     verbose:         bool
     arc_weight_mode: str = "dynamic"             # dynamic | static | off
+    # ── v1.3 ──────────────────────────────────────────────────────────────
+    compat:          bool = False                # True = comportamiento v1.2
+    roles:           Optional[Dict] = None       # {'track': {ti: rol}, 'channel': {ch: rol}}
+    scale_name:      Optional[str] = None        # colección declarada (--scale/--context)
+    scale_root:      Optional[int] = None        # tónica declarada (None = detectada)
+    scale_pcs:       Optional[set] = None        # se calcula por fichero
+    scale_source:    str = ""
+    voices:          str = "auto"                # auto | satb | texture
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -407,13 +470,29 @@ def _detect_key_simple(notes: list, mid=None) -> Tuple[int, str]:
 #  DETECCIÓN DE TOPOLOGÍA
 # ══════════════════════════════════════════════════════════════════════════════
 
-def detect_topology(mid: MidiFile) -> Topology:
-    """Clasifica la estructura de tracks y asigna roles."""
-    n = len(mid.tracks)
+def _role_from_name(name: str) -> Optional[str]:
+    n = (name or '').casefold()
+    for role, keys in _NAME_ROLES:
+        if any(k in n for k in keys):
+            return role
+    return None
+
+
+def detect_topology(mid: MidiFile, ctx: Optional["EvalContext"] = None) -> Topology:
+    """Clasifica la estructura de tracks y asigna roles.
+
+    Precedencia (v1.3): 1) --roles explícito; 2) nombre de pista SI es compatible
+    con canal/programa; 3) heurística (batería por canal/programa, bajo por
+    programa/registro, melodía = pitch medio más alto). Si nombre y canal se
+    contradicen se emite un aviso y se decide por canal/programa. Con
+    ctx.compat=True se reproduce el comportamiento v1.2."""
+    compat = bool(ctx and ctx.compat)
+    override = (ctx.roles if ctx else None) or {}
+    warnings: List[str] = []
     track_info = {}
 
     for ti, track in enumerate(mid.tracks):
-        program, channels, pitches = 0, set(), []
+        program, channels, pitches, n_drum = 0, set(), [], 0
         for msg in track:
             if msg.type == 'program_change':
                 program = msg.program
@@ -421,48 +500,124 @@ def detect_topology(mid: MidiFile) -> Topology:
             elif msg.type == 'note_on' and msg.velocity > 0:
                 channels.add(msg.channel)
                 pitches.append(msg.note)
+                if msg.channel == _DRUM_CHANNEL:
+                    n_drum += 1
+        if compat:
+            is_drum = _DRUM_CHANNEL in channels
+        else:
+            # pista de batería = mayoría de sus notas en el canal 10 (una pista
+            # tipo 0 con voces + batería no es "batería")
+            is_drum = bool(pitches) and n_drum / len(pitches) > 0.5
         track_info[ti] = {
             'program':    program,
             'channels':   channels,
-            'is_drum':    _DRUM_CHANNEL in channels,
+            'is_drum':    is_drum,
             'n_notes':    len(pitches),
             'mean_pitch': float(np.mean(pitches)) if pitches else 0.0,
+            'name':       (track.name or '').strip(),
         }
 
     active = [ti for ti, info in track_info.items() if info['n_notes'] > 0]
+    ttype = "single" if len(active) <= 1 else "multi_unlabeled"
 
-    if len(active) <= 1:
-        ttype = "single"
-    else:
-        ttype = "multi_unlabeled"
-
-    voice_map = {}
+    voice_map, roles = {}, {}
     melody_tracks, bass_tracks, drum_tracks = [], [], []
+
+    def _set(ti, role, source):
+        voice_map[ti] = role
+        roles[ti] = {'role': role, 'source': source, 'name': track_info[ti]['name'],
+                     'channels': sorted(track_info[ti]['channels'])}
+
+    def _heur_class(info):
+        if info['is_drum'] or info['program'] in _DRUM_PROGRAMS:
+            return 'drums'
+        if info['program'] in _BASS_PROGRAMS or info['mean_pitch'] < 48:
+            return 'bass'
+        return 'unknown'
 
     for ti in active:
         info = track_info[ti]
-        if info['is_drum'] or info['program'] in _DRUM_PROGRAMS:
-            voice_map[ti] = 'drums'
-            drum_tracks.append(ti)
-        elif info['program'] in _BASS_PROGRAMS or info['mean_pitch'] < 48:
-            voice_map[ti] = 'bass'
-            bass_tracks.append(ti)
+        heur = _heur_class(info)
+        explicit = None if compat else (
+            override.get('track', {}).get(ti)
+            or next((r for ch, r in override.get('channel', {}).items()
+                     if (ch - 1) in info['channels']), None))
+        named = None if compat else _role_from_name(info['name'])
+        if explicit:
+            _set(ti, explicit, 'roles')
+        elif named:
+            is_perc_like = info['is_drum'] or info['program'] in _DRUM_PROGRAMS
+            compatible = (named == 'drums') == is_perc_like
+            if compatible:
+                _set(ti, named, 'name')
+                if heur != 'unknown' and heur != named and named != 'harmony' and named != 'melody':
+                    warnings.append(f"pista {ti} «{info['name']}»: el nombre dice {named} "
+                                    f"pero la heurística de registro/programa dice {heur}")
+            else:
+                warnings.append(
+                    f"pista {ti} «{info['name']}»: el nombre sugiere {named} pero "
+                    f"{'es percusión (canal 10)' if is_perc_like else 'no es percusión'}; "
+                    f"se decide por canal/programa ({heur if heur != 'unknown' else 'sin rol fijo'}) "
+                    f"")
+                if heur != 'unknown':
+                    _set(ti, heur, 'heuristic')
+                else:
+                    voice_map[ti] = 'unknown'
         else:
-            voice_map[ti] = 'unknown'
+            if heur != 'unknown':
+                _set(ti, heur, 'heuristic')
+            else:
+                voice_map[ti] = 'unknown'
 
-    # El track con pitch más alto entre los no asignados → melodía
+    # melodía: primero las pistas con rol melody ya asignado (roles/nombre);
+    # si no hay, el pitch medio más alto entre las no asignadas (heurística v1.2)
+    declared_mel = [ti for ti in active if voice_map.get(ti) == 'melody']
     unknowns = [ti for ti in active if voice_map.get(ti) == 'unknown']
-    if unknowns:
-        melody_ti = max(unknowns, key=lambda ti: track_info[ti]['mean_pitch'])
-        voice_map[melody_ti] = 'melody'
-        melody_tracks.append(melody_ti)
-        # El resto → harmony
-        for ti in unknowns:
+    if declared_mel:
+        melody_ti = max(declared_mel, key=lambda ti: track_info[ti]['mean_pitch'])
+        for ti in declared_mel:
             if ti != melody_ti:
                 voice_map[ti] = 'harmony'
+                roles[ti]['role'] = 'harmony'
+        heur_ti = max(unknowns, key=lambda ti: track_info[ti]['mean_pitch']) if unknowns else None
+        if heur_ti is not None and track_info[heur_ti]['mean_pitch'] > track_info[melody_ti]['mean_pitch'] + 12:
+            warnings.append(f"melodía = pista {melody_ti} por {roles[melody_ti]['source']}; la heurística "
+                            f"de registro habría elegido la pista {heur_ti}")
+        melody_tracks.append(melody_ti)
+    elif unknowns:
+        melody_ti = max(unknowns, key=lambda ti: track_info[ti]['mean_pitch'])
+        _set(melody_ti, 'melody', 'heuristic')
+        melody_tracks.append(melody_ti)
+    for ti in unknowns:
+        if voice_map.get(ti) == 'unknown':
+            _set(ti, 'harmony', 'heuristic')
+
+    # ninguna pista quedó como melodía (p.ej. todas llevan nombre «Accompaniment» o la
+    # pista «Melody» está en el canal 10): se promociona la de pitch medio más alto
+    # entre las armónicas no fijadas por --roles, avisando de que es un respaldo.
+    if not melody_tracks and not compat:
+        cand = [ti for ti in active
+                if voice_map.get(ti) == 'harmony' and roles.get(ti, {}).get('source') != 'roles']
+        if cand:
+            melody_ti = max(cand, key=lambda ti: track_info[ti]['mean_pitch'])
+            _set(melody_ti, 'melody', 'fallback')
+            melody_tracks.append(melody_ti)
+            warnings.append(f"ninguna pista identificada como melodía: se usa la pista {melody_ti} "
+                            f"(pitch medio más alto) como respaldo; use --roles para fijarla")
+
+    for ti in active:
+        r = voice_map.get(ti)
+        if r == 'drums':
+            drum_tracks.append(ti)
+        elif r == 'bass':
+            bass_tracks.append(ti)
 
     if melody_tracks or bass_tracks:
         ttype = "multi_labeled"
+
+    n_voice = sum(1 for ti in active
+                  if any(k in track_info[ti]['name'].casefold() for k in _VOICE_NAMES))
+    declared_voices = (not compat) and n_voice >= 2
 
     return Topology(
         type          = ttype,
@@ -471,6 +626,9 @@ def detect_topology(mid: MidiFile) -> Topology:
         bass_tracks   = bass_tracks,
         drum_tracks   = drum_tracks,
         all_tracks    = active,
+        roles         = roles,
+        warnings      = warnings,
+        declared_voices = declared_voices,
     )
 
 
@@ -1039,20 +1197,28 @@ class FormalEvaluator:
         tpb                = mid.ticks_per_beat
 
         # En modo fast siempre usamos nivel básico (evita el bucle por-beat)
+        sp = ctx.scale_pcs
         if ctx.fast:
-            return self._evaluate_basic(notes, bar_ticks, tpb, key_root, key_mode)
+            return self._evaluate_basic(notes, bar_ticks, tpb, key_root, key_mode, sp)
 
-        if topology.type == "multi_labeled" and len(topology.melody_tracks) > 0:
+        # v1.3: las reglas SATB (cruces, paralelas) solo se aplican si las voces
+        # están DECLARADAS (nombres soprano/alto/tenor…, o --voices satb); un
+        # arpegio o un acompañamiento monofónico no son partes de un coral.
+        # --compat reproduce v1.2 (SATB siempre que la topología sea multi_labeled).
+        use_voiced = (topology.type == "multi_labeled" and len(topology.melody_tracks) > 0
+                      and sp is None
+                      and (ctx.compat or ctx.voices == "satb"
+                           or (ctx.voices == "auto" and topology.declared_voices)))
+        if use_voiced:
             return self._evaluate_voiced(notes, topology, bar_ticks, tpb,
                                          key_root, key_mode)
-        else:
-            return self._evaluate_basic(notes, bar_ticks, tpb,
-                                        key_root, key_mode)
+        return self._evaluate_basic(notes, bar_ticks, tpb, key_root, key_mode, sp)
 
     # ── Nivel básico ──────────────────────────────────────────────────────────
 
     def _evaluate_basic(self, notes: list, bar_ticks: int, tpb: int,
-                        key_root: int, key_mode: str) -> DimensionResult:
+                        key_root: int, key_mode: str,
+                        scale_pcs: Optional[set] = None) -> DimensionResult:
         """
         Analiza intervalos simultáneos en ventanas de 1 beat.
         Métricas: densidad de disonancia, saltos grandes, notas fuera de escala.
@@ -1061,7 +1227,8 @@ class FormalEvaluator:
         MAJOR_SCALE = {0, 2, 4, 5, 7, 9, 11}
         MINOR_SCALE = {0, 2, 3, 5, 7, 8, 10}
         scale_ints  = MAJOR_SCALE if key_mode == 'major' else MINOR_SCALE
-        scale_pcs   = {(key_root + i) % 12 for i in scale_ints}
+        declared    = scale_pcs is not None
+        scale_pcs   = scale_pcs if declared else {(key_root + i) % 12 for i in scale_ints}
 
         total_ticks = max(n[1] for n in notes)
         beat_ticks  = tpb
@@ -1162,6 +1329,7 @@ class FormalEvaluator:
             reasons    = reasons,
             details    = {
                 "level":              "basic",
+                "scale_declared":     declared,
                 "key":                f"{PITCH_NAMES[key_root]} {key_mode}",
                 "dissonance_ratio":   round(diss_ratio, 4),
                 "large_leap_ratio":   round(leap_ratio, 4),
@@ -2118,6 +2286,12 @@ class HarmonyEvaluator:
         diat_pcs = {(key_root + i) % 12 for i in scale}
         if key_mode == "minor":
             diat_pcs = diat_pcs | {(key_root + 11) % 12}   # sensible (armónica)
+        # v1.3: colección declarada → diatonicidad respecto a ella; si no es
+        # funcional (whole-tone, octatónica…) no se exigen T/S/D ni cadencia V→I.
+        functional = True
+        if ctx.scale_pcs is not None:
+            diat_pcs = set(ctx.scale_pcs)
+            functional = ctx.scale_name in _FUNCTIONAL_SCALES
 
         chords = []
         for pcs in bar_pcs:
@@ -2162,27 +2336,38 @@ class HarmonyEvaluator:
         # P8: se reparte el peso para premiar la RIQUEZA de vocabulario
         # (raíces+calidades) y no tanto la diatonicidad bruta, que penalizaba
         # al material real (más cromático y con extensiones).
-        score = (0.30 * diat_ratio + 0.18 * func_div + 0.14 * roman_div +
-                 0.14 * s_cad + 0.08 * s_hr + 0.16 * qual_div)
+        if functional:
+            score = (0.30 * diat_ratio + 0.18 * func_div + 0.14 * roman_div +
+                     0.14 * s_cad + 0.08 * s_hr + 0.16 * qual_div)
+        else:
+            # sin función tonal ni cadencia: se renormalizan los demás pesos
+            score = (0.30 * diat_ratio + 0.14 * roman_div +
+                     0.08 * s_hr + 0.16 * qual_div) / 0.68
         score = max(0.0, min(1.0, float(score)))
 
         reasons = []
         if diat_ratio < 0.6:
             reasons.append(f"diatonicidad baja: {diat_ratio:.0%} compases")
-        if func_div < 0.6:
+        if not functional:
+            reasons.append(f"colección declarada «{ctx.scale_name}»: no se evalúan T/S/D ni cadencia V→I")
+        elif func_div < 0.6:
             reasons.append("poca variedad funcional (T/S/D)")
         if qual_div > 0.6:
             reasons.append("vocabulario armónico rico")
-        if cad == 0:
+        if functional and cad == 0:
             reasons.append("sin cadencia V→I ni IV→I")
         if score > 0.75:
             reasons.append("armonía diatónica, funcional y con cadencias")
 
         conf = min(1.0, len(chords) / 8) * (1.0 if key_mode in ("major", "minor") else 0.6)
+        if not functional:
+            conf *= 0.8   # menos reglas aplicables → menos confianza
         return DimensionResult(
             score=score, confidence=conf, reasons=reasons,
             details={
                 "key":             f"{PITCH_NAMES[key_root]} {key_mode}",
+                "scale_declared":  ctx.scale_name if ctx.scale_pcs is not None else None,
+                "functional":      functional,
                 "n_bars":          len(chords),
                 "diatonic_ratio":  round(diat_ratio, 4),
                 "func_div":        round(func_div, 4),
@@ -2197,6 +2382,63 @@ class HarmonyEvaluator:
 # ══════════════════════════════════════════════════════════════════════════════
 #  PIPELINE PRINCIPAL DE EVALUACIÓN
 # ══════════════════════════════════════════════════════════════════════════════
+
+def _parse_roles_arg(txt: str) -> Dict:
+    """'1=melody,2=harmony,ch10=drums' → {'track': {1:'melody',2:'harmony'}, 'channel': {10:'drums'}}"""
+    out = {'track': {}, 'channel': {}}
+    for part in txt.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        if '=' not in part:
+            raise ValueError(f"--roles: «{part}» no tiene la forma N=rol")
+        k, v = (x.strip() for x in part.split('=', 1))
+        v = v.casefold()
+        if v not in _VALID_ROLES:
+            raise ValueError(f"--roles: rol «{v}» desconocido (válidos: {sorted(_VALID_ROLES)})")
+        if k.casefold().startswith('ch'):
+            ch = int(k[2:])
+            if not 1 <= ch <= 16:
+                raise ValueError("--roles: el canal debe estar entre 1 y 16")
+            out['channel'][ch] = v
+        else:
+            out['track'][int(k)] = v
+    return out
+
+
+def _parse_scale_arg(txt: str) -> Tuple[str, Optional[int]]:
+    root = None
+    name = txt.strip()
+    if ':' in name:
+        r, name = name.split(':', 1)
+        r = r.strip()
+        if r not in PITCH_NAMES:
+            raise ValueError(f"--scale: raíz «{r}» desconocida (use {', '.join(PITCH_NAMES)})")
+        root = PITCH_NAMES.index(r)
+    name = name.strip()
+    if name not in DECLARABLE_SCALES:
+        raise ValueError(f"--scale: colección «{name}» desconocida. Válidas: "
+                         f"{', '.join(sorted(DECLARABLE_SCALES))}")
+    return name, root
+
+
+def _load_context_report(path: str) -> Tuple[str, Optional[int]]:
+    """Lee un informe de theme_transformer: target_scale + tónica de source_key."""
+    try:
+        with open(path, encoding='utf-8') as f:
+            d = json.load(f)
+    except Exception as e:
+        raise ValueError(f"--context: no se pudo leer {path}: {e}")
+    name = d.get('target_scale')
+    if name not in DECLARABLE_SCALES:
+        raise ValueError(f"--context: target_scale «{name}» no es una colección declarable "
+                         f"(¿escala dinámica 'octatonic_auto'/'pentatonic_auto'? use --scale)")
+    root = None
+    sk = str(d.get('source_key', '')).split(' ')[0]
+    if sk in PITCH_NAMES:
+        root = PITCH_NAMES.index(sk)
+    return name, root
+
 
 _EVALUATORS = {
     "formal":    FormalEvaluator(),
@@ -2216,7 +2458,25 @@ def evaluate_midi(midi_path: str,
 
     mid   = MidiFile(midi_path)
     notes = _extract_notes(mid)
-    topo  = detect_topology(mid)
+    topo  = detect_topology(mid, ctx)
+
+    # v1.3: filtro ÚNICO de percusión para los análisis tonales (formal, melodic,
+    # harmony): las alturas GM del canal 10 no son notas armónicas. coherence/arc/
+    # corpus siguen usando todas las notas (densidad y energía sí incluyen la batería).
+    if ctx.compat:
+        tonal_notes = notes
+    else:
+        tonal_notes = [n for n in notes if n[4] != _DRUM_CHANNEL] or notes
+    n_drum_excl = len(notes) - len(tonal_notes)
+
+    # colección declarada: tónica explícita o la tonalidad detectada
+    ctx.scale_pcs = None
+    if ctx.scale_name:
+        root = ctx.scale_root
+        if root is None:
+            root = _detect_key_simple(tonal_notes, mid)[0]
+        ctx.scale_pcs = {(root + i) % 12 for i in DECLARABLE_SCALES[ctx.scale_name]}
+        ctx._scale_root_used = root
 
     # Metadatos básicos
     tempo_us  = _get_tempo(mid)
@@ -2224,7 +2484,7 @@ def evaluate_midi(midi_path: str,
     bar_ticks = _estimate_bar_ticks(mid)
     total     = _get_total_ticks(mid)
     n_bars    = max(1, total // bar_ticks)
-    key_root, key_mode = _detect_key_simple(notes, mid)
+    key_root, key_mode = _detect_key_simple(tonal_notes, mid)
     key_str   = f"{PITCH_NAMES[key_root]} {key_mode}"
 
     meta = {
@@ -2236,6 +2496,17 @@ def evaluate_midi(midi_path: str,
         "fast_mode":            ctx.fast,
         "arc_weight_mode":      ctx.arc_weight_mode,
         "quality_scorer_version": VERSION,
+        # v1.3: trazabilidad
+        "roles":                {str(k): v for k, v in topo.roles.items()},
+        "role_warnings":        list(topo.warnings),
+        "notes_total":          len(notes),
+        "notes_tonal_used":     len(tonal_notes),
+        "drum_notes_excluded":  n_drum_excl,
+        "declared_scale":       ({"name": ctx.scale_name,
+                                  "root": PITCH_NAMES[getattr(ctx, '_scale_root_used', 0)],
+                                  "source": ctx.scale_source}
+                                 if ctx.scale_pcs is not None else None),
+        "compat":               ctx.compat,
     }
 
     # Ejecutar evaluadores activos
@@ -2245,7 +2516,8 @@ def evaluate_midi(midi_path: str,
         if evaluator is None:
             continue
         try:
-            results[dim] = evaluator.evaluate(notes, mid, topo, ctx)
+            dim_notes = tonal_notes if dim in ("formal", "melodic", "harmony") else notes
+            results[dim] = evaluator.evaluate(dim_notes, mid, topo, ctx)
         except Exception as e:
             results[dim] = DimensionResult(
                 score=0.5, confidence=0.0,
@@ -2275,7 +2547,8 @@ def evaluate_midi(midi_path: str,
     )
 
     return QualityReport(
-        file        = str(Path(midi_path).name),
+        file        = str(midi_path),
+        name        = Path(midi_path).name,
         mode        = "fast" if ctx.fast else "full",
         plan_used   = ctx.plan is not None,
         corpus_used = ctx.corpus_vectors is not None,
@@ -2430,6 +2703,16 @@ def render_terminal(report: QualityReport, verbose: bool = False):
           f"Tempo: {m['tempo_bpm']} BPM   "
           f"Compases: {m['duration_bars']}   "
           f"Tracks: {m['n_tracks']} ({m['topology']})")
+    if m.get('roles'):
+        _rs = ", ".join(f"{k}:{v['role']}({v['source'][0]})" for k, v in m['roles'].items())
+        print(f"  Roles     : {_rs}   (r=roles n=nombre h=heurística f=respaldo)")
+    if m.get('drum_notes_excluded'):
+        print(f"  Percusión : {m['drum_notes_excluded']} notas excluidas del análisis tonal")
+    if m.get('declared_scale'):
+        _d = m['declared_scale']
+        print(f"  Colección : {_d['root']} {_d['name']} (declarada: {_d['source']})")
+    for _w in m.get('role_warnings', []):
+        print(f"  {Y}AVISO{R}     : {_w}")
     if report.plan_used:
         print(f"  Plan      : {G}sí{R}")
     if report.corpus_used:
@@ -3036,6 +3319,23 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Guardar caché de vectores de corpus (.qcache).")
     p.add_argument("--mode", choices=["eval", "rank"], default="eval",
                    help="Modo de operación: eval (default) | rank.")
+    p.add_argument("--roles", metavar="MAP", default=None,
+                   help="roles explícitos: '1=melody,2=harmony,ch10=drums' "
+                        "(N = índice de pista; chN = canal MIDI 1-16). Roles: "
+                        "melody|bass|harmony|drums. Tiene precedencia sobre nombres y heurística")
+    p.add_argument("--scale", metavar="[RAÍZ:]NOMBRE", default=None,
+                   help="colección declarada, p.ej. whole_tone, D:dorian, C:double_harmonic. "
+                        "Sin raíz usa la tonalidad detectada. Sustituye mayor/menor en formal "
+                        "y harmony; si no es funcional no se exige V→I")
+    p.add_argument("--context", metavar="JSON", default=None,
+                   help="informe de theme_transformer (--report): toma target_scale y la "
+                        "tónica de source_key. Pensado para UN fichero (en lote, un informe por pieza)")
+    p.add_argument("--voices", choices=["auto", "satb", "texture"], default="auto",
+                   help="reglas de voces: auto = SATB solo si las pistas se llaman "
+                        "soprano/alto/tenor…; satb = forzar; texture = nunca")
+    p.add_argument("--compat", action="store_true",
+                   help="comportamiento de v1.2 (sin filtro de percusión, sin nombres, "
+                        "SATB heurístico)")
     p.add_argument("--fast", action="store_true",
                    help="Modo rápido: omite cálculos pesados (music21).")
     p.add_argument("--arc-weight-mode",
@@ -3163,7 +3463,27 @@ def main():
         fast             = args.fast,
         verbose          = args.verbose,
         arc_weight_mode  = args.arc_weight_mode,
+        compat           = args.compat,
+        voices           = args.voices,
     )
+    try:
+        _roles = _parse_roles_arg(args.roles) if args.roles else None
+        if _roles:
+            ctx.roles = _roles
+        if args.scale:
+            ctx.scale_name, ctx.scale_root = _parse_scale_arg(args.scale)
+            ctx.scale_source = "--scale"
+        if args.context:
+            _n, _r = _load_context_report(args.context)
+            if args.scale and _n != ctx.scale_name:
+                print(f"[AVISO] --scale ({ctx.scale_name}) y --context ({_n}) difieren; "
+                      f"se usa --scale")
+            elif not args.scale:
+                ctx.scale_name, ctx.scale_root = _n, _r
+                ctx.scale_source = f"--context {Path(args.context).name}"
+    except ValueError as e:
+        print(f"[ERROR] {e}")
+        sys.exit(2)
 
     # ── Validar ficheros de entrada ───────────────────────────────────────────
     midi_paths = []
