@@ -142,11 +142,12 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
     "corpus":    0.07,
 }
 
-# Umbrales absolutos heurísticos (calibrar con uso real)
+# Umbrales absolutos heurísticos (recalibrados en P5 a la nueva composición
+# del score tras añadir `harmony` y corregir `formal`/`coherence`)
 ABSOLUTE_THRESHOLDS = {
-    "bajo":    0.40,
-    "medio":   0.60,
-    "alto":    0.75,
+    "bajo":    0.47,
+    "medio":   0.58,
+    "alto":    0.66,
     "muy_alto": 1.01,
 }
 
@@ -379,9 +380,12 @@ def _detect_key_simple(notes: list, mid=None) -> Tuple[int, str]:
                      2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
     if not notes:
         return 0, 'major'
+    # P0: histograma PONDERADO POR DURACIÓN (como harmonic_analyzer).
+    # Contar notas hacía que la percusión (muchos eventos de duración corta)
+    # dominara el histograma y colapsara la detección a F#M/D#m.
     counts = np.zeros(12)
     for n in notes:
-        counts[n[2] % 12] += 1
+        counts[n[2] % 12] += max(1, n[1] - n[0])
     counts /= (counts.sum() + 1e-9)
     scores = {}
     for root in range(12):
@@ -394,7 +398,7 @@ def _detect_key_simple(notes: list, mid=None) -> Tuple[int, str]:
     if hint:
         cands = [(hint[0], 'major'), (hint[1], 'minor')]
         in_sig = max(cands, key=lambda k: scores[k])
-        if scores[in_sig] >= scores[best] - 0.10:
+        if scores[in_sig] >= scores[best] - 0.05:
             return in_sig
     return best
 
@@ -866,7 +870,7 @@ class ArcEvaluator:
             # → tensión constante por diseño (ostinato, canon, himno)
             if chaos_raw < 0.08:
                 reasons.append("arco estático — tensión constante por diseño (ostinato/forma estrófica)")
-                return 0.62, "static", 0.45   # score moderado, confianza baja
+                return 0.40, "static", 0.35   # P4: antes 0.62/0.45 (premiaba lo plano)   # score moderado, confianza baja
             else:
                 reasons.append("curva de tensión prácticamente plana")
                 return 0.25, "flat", 0.70
@@ -1424,14 +1428,23 @@ class MelodicEvaluator:
         s1, d1 = self._interval_entropy(pitches)
         s2, d2 = self._contour_structure(pitches)
 
+        # P4: ámbito de la línea melódica mono (skyline)
+        onsets: Dict[int, int] = {}
+        for n in mel_notes:
+            if n[0] not in onsets or n[2] > onsets[n[0]]:
+                onsets[n[0]] = n[2]
+        mono = [onsets[k] for k in sorted(onsets)]
+        s5, d5 = self._range_score(mono)
+
         if ctx.fast:
-            score = 0.55 * s1 + 0.45 * s2
+            score = 0.45 * s1 + 0.30 * s2 + 0.25 * s5
             s3, d3 = 0.5, {"markov_entropy_norm": None, "markov_entropy_bits": None}
             s4, d4 = 0.5, {"repetition_ratio": None, "window_size": None}
         else:
             s3, d3 = self._markov_entropy(pitches)
             s4, d4 = self._repetition_variation(pitches)
-            score = 0.30 * s1 + 0.25 * s2 + 0.25 * s3 + 0.20 * s4
+            score = (0.25 * s1 + 0.20 * s2 + 0.20 * s3 +
+                     0.15 * s4 + 0.20 * s5)
         score = max(0.0, min(1.0, float(score)))
 
         reasons = []
@@ -1452,7 +1465,7 @@ class MelodicEvaluator:
         details = {
             "n_melody_notes":  len(mel_notes),
             "problem_windows": problem_windows,
-            **d1, **d2, **d3, **d4,
+            **d1, **d2, **d3, **d4, **d5,
         }
 
         # Confianza: sube con el número de notas
@@ -1496,7 +1509,7 @@ class MelodicEvaluator:
         # Curva de score: gaussiana centrada en H_norm = 0.55
         # score = exp(-((H_norm - 0.55)^2) / (2 * 0.20^2))
         optimal = 0.55
-        width   = 0.22
+        width   = 0.16          # P4: antes 0.22 (banda demasiado laxa)
         score   = math.exp(-((H_norm - optimal) ** 2) / (2 * width ** 2))
 
         return float(score), {
@@ -1542,6 +1555,21 @@ class MelodicEvaluator:
             "contour_inflections":  inflections,
             "inflection_rate":      round(rate, 4),
         }
+
+    # ── Submétrica 2b: Ámbito melódico (P4) ────────────────────────────────
+
+    def _range_score(self, pitches: list) -> Tuple[float, dict]:
+        """Premia un ámbito idiomatic (≈12–22 semitonos) y penaliza líneas
+        planas (pocos semitonos) o desmesuradas (más de ~2'5 octavas, señal
+        de que se está midiendo acompañamiento y no melodía)."""
+        if len(pitches) < 4:
+            return 0.5, {"melodic_range": None}
+        rng = max(pitches) - min(pitches)
+        optimal, width = 16.0, 7.0
+        score = math.exp(-((rng - optimal) ** 2) / (2 * width ** 2))
+        if rng < 7 or rng > 34:
+            score *= 0.4
+        return float(score), {"melodic_range": int(rng)}
 
     # ── Submétrica 3: Entropía de Markov orden 1 ─────────────────────────────
 
@@ -2083,10 +2111,10 @@ class HarmonyEvaluator:
         if not bar_pcs:
             return DimensionResult(0.5, 0.0, ["Sin armonía vertical detectada"], {})
 
-        # P0/P3: la tonalidad se elige por AJUSTE FUNCIONAL (qué tónica/modo
-        # explica mejor las tríadas por compás), no por el histograma global,
-        # que en texturas polifónicas es ambiguo (p. ej. A#m vs F#M).
-        key_root, key_mode = self._functional_key(bar_pcs)
+        # P0: tonalidad del detector global (ponderado por duración), que
+        # coincide con harmonic_analyzer en ~3/4 de las piezas. El ajuste
+        # funcional sesgaba la tonalidad en texturas polifónicas.
+        key_root, key_mode = _detect_key_simple(notes, mid)
         scale = self.MAJOR if key_mode == "major" else self.MINOR
         diat_pcs = {(key_root + i) % 12 for i in scale}
         if key_mode == "minor":
@@ -2428,6 +2456,24 @@ def render_terminal(report: QualityReport, verbose: bool = False):
                     print(f"  {'':>16}  {_c('gray')}· {r}{R}")
             if verbose:
                 _render_localization(res, indent=18)
+
+    # ── P5: avisos de interpretabilidad ────────────────────────────────────
+    warns = []
+    cohe = report.dimensions.get("coherence")
+    if cohe is not None and cohe.score > 0.97:
+        warns.append("coherence saturada (>0.97): no discrimina entre obras")
+    fm = report.dimensions.get("formal")
+    if fm is not None and fm.details.get("level") == "basic" and \
+            report.meta.get("topology") != "single":
+        warns.append("formal evaluado en nivel básico (textura polifónica): "
+                     "las reglas SATB no se aplican")
+    arc = report.dimensions.get("arc")
+    if arc is not None and arc.details.get("arc_detected") == "static":
+        warns.append("arco estático: tensión constante (score penalizado)")
+    if warns:
+        print(f"  {_c('yellow')}Avisos:{R}")
+        for w in warns:
+            print(f"    {_c('yellow')}· {w}{R}")
 
     print(f"\n{'═' * 64}\n")
 
