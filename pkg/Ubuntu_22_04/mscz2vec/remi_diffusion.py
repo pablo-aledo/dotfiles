@@ -454,6 +454,22 @@ def load_vocab(path):
     return event2word, word2event
 
 
+
+def _resolve_vocab_path(cfg, model_dir):
+    """Ruta del vocabulario de un modelo entrenado, robusta al cwd (ver v2)."""
+    v = cfg['vocab']
+    if os.path.isabs(v) and os.path.exists(v):
+        return v
+    cand = Path(model_dir) / Path(v).name
+    if cand.exists():
+        return str(cand)
+    if os.path.exists(v):
+        return v
+    raise FileNotFoundError(
+        f"No se encuentra el vocabulario '{v}' (ni {cand}). "
+        f"Copia vocab_chord.json a {model_dir}/ o reentrena.")
+
+
 def _sp(word2event, name):
     """Índice de un token especial dado su nombre corto, ej. 'PAD' → id."""
     return {v: k for k, v in word2event.items()}[f'{name}_None']
@@ -896,7 +912,7 @@ def cmd_train(args):
     cfg = {
         'n_token': n_token, 'd_model': d_model, 'n_layer': n_layer, 'n_head': n_head,
         'canvas_len': args.canvas_len, 'history_bars': args.history_bars,
-        'vocab': vocab_path, 'max_seq': max_seq,
+        'vocab': os.path.abspath(vocab_path), 'max_seq': max_seq,
     }
     with open(model_dir / 'model_config.json', 'w') as f:
         json.dump(cfg, f, indent=2)
@@ -1116,7 +1132,7 @@ def _generate_common(args, prompt_blocks=None):
     torch.manual_seed(args.seed)  # sample_block usa torch.multinomial (RNG global)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model, cfg = _load_model_for_inference(args.model_dir, device)
-    event2word, word2event = load_vocab(cfg['vocab'])
+    event2word, word2event = load_vocab(_resolve_vocab_path(cfg, args.model_dir))
     pad_id, mask_id = _sp(word2event, 'PAD'), _sp(word2event, 'MASK')
     null_cond_id = _sp(word2event, 'NULL_COND')
     canvas_len   = cfg['canvas_len']
@@ -1188,7 +1204,7 @@ def cmd_continue(args):
     import torch
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model, cfg = _load_model_for_inference(args.model_dir, device)
-    event2word, word2event = load_vocab(cfg['vocab'])
+    event2word, word2event = load_vocab(_resolve_vocab_path(cfg, args.model_dir))
 
     print(f"  Tokenizando prompt: {args.prompt}")
     words = midi_to_words(args.prompt, event2word, verbose=args.verbose)

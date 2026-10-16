@@ -584,6 +584,9 @@ def cmd_prepare(args):
 
     print(f"  Encontrados {len(midi_files)} MIDIs  |  "
           f"pitch [{pitch_lo}, {pitch_hi})  →  {n_pitch} clases")
+    # Persistir el rango para que 'train' no tenga que inferirlo
+    (output_dir / 'prepare_meta.json').write_text(
+        json.dumps({'pitch_lo': pitch_lo, 'pitch_hi': pitch_hi}, indent=2))
 
     saved = skipped = corrupt = total_bars = 0
     for midi_path in midi_files:
@@ -653,13 +656,19 @@ def cmd_train(args):
     print(f"  Muestras    : {len(ds.dataset)}  |  n_pitch = {n_pitch}")
 
     # Inferir pitch_lo desde el argumento opcional o deducirlo del corpus
+    _src = 'argumento'
+    _pm = Path(args.data_dir) / 'prepare_meta.json'
     if getattr(args, 'pitch_lo', None) is not None:
         _pitch_lo = args.pitch_lo
+    elif _pm.exists():
+        _pitch_lo = int(json.loads(_pm.read_text())['pitch_lo'])
+        _src = 'prepare_meta.json'
     else:
-        # n_pitch = pitch_hi - pitch_lo; asumimos pitch_hi=128
+        # Corpus preparado con una versión antigua: asumir pitch_hi=128
         _pitch_lo = 128 - n_pitch if n_pitch < 128 else 0
+        _src = 'inferido (asume pitch_hi=128; pasa --pitch-lo si no es así)'
     _pitch_hi = _pitch_lo + n_pitch
-    print(f"  pitch_lo    : {_pitch_lo}  pitch_hi: {_pitch_hi}  (inferido del corpus)")
+    print(f"  pitch_lo    : {_pitch_lo}  pitch_hi: {_pitch_hi}  ({_src})")
 
     # ── Modelos ───────────────────────────────────────────────────────────────
     netG, netD = _build_models(n_pitch, nz=args.nz, base_ch=args.base_ch)

@@ -358,7 +358,10 @@ class Discriminator(object):
 
         # ── Merge final ───────────────────────────────────────────────────────
         # concat: 256 (shared) + 64 (chroma) + 64 (onset) = 384
-        self.merge_final = _build_conv_block(384, 512, (2, 1, 1), (1, 1, 1))
+        # FIX (reconstruccion): el kernel temporal debe colapsar los N_BARS
+        # compases a 1; con (2,1,1) sobre 4 compases quedaban 3 y el dense
+        # (512,1) recibia (N, 512*3) -> RuntimeError de shapes.
+        self.merge_final = _build_conv_block(384, 512, (N_BARS, 1, 1), (1, 1, 1))
 
         # Dense de salida
         self.dense = nn.Linear(512, 1)
@@ -491,7 +494,7 @@ class Discriminator(object):
 
         # ── Merge ──────────────────────────────────────────────────────────────
         merged = torch.cat([main, c, o], dim=1)  # (N, 384, 4, 1, 1)
-        merged = self.merge_final(merged)        # (N, 512, 3, 1, 1)
+        merged = self.merge_final(merged)        # (N, 512, 1, 1, 1)
 
         out = merged.view(N, -1)
         return self.dense(out)                   # (N, 1)

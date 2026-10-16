@@ -1710,7 +1710,7 @@ class Trainer:
                   f"  │{bar}│  {_fmt_time(epoch_elapsed)}/época"
                   f"{best_marker}{stop_str}")
 
-            if self.no_improve >= self.patience:
+            if self.patience > 0 and self.no_improve >= self.patience:  # patience=0: sin early stopping
                 print(f"\n  Early stopping tras {epoch+1} épocas.")
                 break
 
@@ -2139,6 +2139,14 @@ def _load_palette(palette_path: str, cfg: dict) -> dict:
     with open(palette_path) as f:
         user = json.load(f)
     palette = {**DEFAULT_PALETTE}
+    bad = [k for k, v in user.items() if not isinstance(v, dict)]
+    if bad:
+        sys.exit(
+            f"ERROR: '{palette_path}' no es una paleta de roles "
+            f"({{rol: {{program, channel, velocity}}}}); la clave '{bad[0]}' "
+            f"no es un objeto. Si es la salida de 'style-corpus' o 'encode' "
+            f"(centroide de estilo), úsala con 'transfer --style-from/--style-to', "
+            f"no con --palette.")
     for role, params in user.items():
         palette[role] = {**DEFAULT_PALETTE.get(role, {}), **params}
     return palette

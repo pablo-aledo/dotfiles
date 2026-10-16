@@ -39,7 +39,7 @@
 ║                   --top N (def 5)  --key K  --mood M  --json                ║
 ║                   --min-support N (def 5)                                   ║
 ║    render:        --context S  --next S  --out F.mid  --tempo N (def 100)   ║
-║                    [--roman] [--key K] [--model F] [--style chorale]        ║
+║                    [--roman] [--key K] [--model F (sin --next)] [--mood M]  ║
 ║                                                                              ║
 ║  REPRESENTACIÓN DE ACORDES                                                   ║
 ║    Absolutos:  "C", "Am", "G7", "F#m7", "Bbdim", ...                        ║
@@ -1168,11 +1168,26 @@ def render_progression_midi(chord_seq: List[Tuple[int, str]], out_path: str,
 
 
 def cmd_render(args) -> int:
+    if not args.next and not args.model:
+        print("ERROR: render necesita --next o --model (con --model se toma "
+              "la sugerencia nº 1 del modelo como acorde siguiente).",
+              file=sys.stderr)
+        return 1
     try:
         ctx_roman, tonic_pc, mode, key_source, warnings = context_to_roman(
             args.context, args.roman, args.key)
-        next_roman, _, _, _, next_warnings = context_to_roman(
-            args.next, args.roman, args.key or f"{pc_name(tonic_pc)}{'m' if mode == 'min' else ''}")
+        if args.next:
+            next_roman, _, _, _, next_warnings = context_to_roman(
+                args.next, args.roman, args.key or f"{pc_name(tonic_pc)}{'m' if mode == 'min' else ''}")
+        else:
+            model = load_model(args.model)
+            res = suggest_next(model, ctx_roman, args.mood, 1, args.min_support)
+            if not res["results"]:
+                print("ERROR: el modelo no devuelve sugerencias para este contexto.",
+                      file=sys.stderr)
+                return 1
+            next_roman = [res["results"][0]["chord"]]
+            print(f"  [modelo] acorde siguiente sugerido: {next_roman[0]}")
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
@@ -1564,7 +1579,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("render", help="Contexto + siguiente(s) acorde(s) -> preview MIDI")
     p.add_argument("--context", required=True)
-    p.add_argument("--next", required=True)
+    p.add_argument("--next", default=None,
+                   help="Acorde(s) siguiente(s); si se omite se usa --model")
+    p.add_argument("--model", default=None,
+                   help="Modelo (build-model); sin --next toma su sugerencia nº 1")
+    p.add_argument("--mood", default=None)
+    p.add_argument("--min-support", type=int, default=5)
     p.add_argument("--roman", action="store_true")
     p.add_argument("--key", default=None)
     p.add_argument("--out", default="preview.mid")

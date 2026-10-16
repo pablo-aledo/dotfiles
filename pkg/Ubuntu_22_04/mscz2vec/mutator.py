@@ -202,7 +202,9 @@ SEMANTIC_MAP = {
     # ── ENERGÍA / TEMPO ───────────────────────────────────────────────────────
     "urgente": {
         "aliases": ["urgent", "apremiante", "angustioso", "ansioso",
-                    "nervioso", "frenético", "frenetico"],
+                    "nervioso", "frenético", "frenetico",
+                    "urgencia", "apremio", "angustia", "ansiedad",
+                    "nerviosismo", "frenesí", "frenesi"],
         "tempo_delta": 1.15,
         "density_delta": +0.3,
         "tension_delta": +0.25,

@@ -1073,6 +1073,9 @@ def roll_vector_dim(n_roles, resolution, n_pitch):
 #  DISCRIMINADORES SIMBÓLICOS (Mahalanobis)
 # ══════════════════════════════════════════════════════════════════════════════
 
+MAX_FULL_COV_DIM = 4096   # por encima, covarianza diagonal (evita OOM)
+
+
 class SymbolicDiscriminator:
     def __init__(self, name):
         self.name = name; self.centroid = None
@@ -1085,6 +1088,16 @@ class SymbolicDiscriminator:
         else:
             fs = features
         self.centroid = np.mean(fs, axis=0)
+        D = fs.shape[1]
+        if D > MAX_FULL_COV_DIM:
+            # np.cov + pinv son O(D^2) en memoria (D=61440 -> ~30 GB por matriz,
+            # OOM con los valores por defecto). Con características ya
+            # estandarizadas, la norma euclídea equivale a Mahalanobis diagonal.
+            print(f"  AVISO: dimensión {D} > {MAX_FULL_COV_DIM}: se usa covarianza "
+                  f"diagonal en {self.name} (usa --pca-dim, --resolution o "
+                  f"--pitch-range para reducirla).")
+            self.inv_cov = None
+            return
         try:
             self.inv_cov = np.linalg.pinv(np.cov(fs.T))
         except Exception:
@@ -1213,6 +1226,15 @@ class CycleGANSymbolic:
         if len(feats_a) == 0 or len(feats_b) == 0:
             raise ValueError("Se necesitan MIDIs en ambos dominios.")
 
+        if (self.pca_dim == 0 and HAS_SKLEARN
+                and feats_a.shape[1] > MAX_FULL_COV_DIM):
+            # Ridge guarda una matriz D×D: con D=61440 (valores por defecto) son
+            # ~14 GB y el entrenamiento muere por OOM. Se activa PCA automática.
+            self.pca_dim = 64
+            print(f"  AVISO: dimensión {feats_a.shape[1]} > {MAX_FULL_COV_DIM}: "
+                  f"se activa PCA automática de {self.pca_dim} componentes "
+                  f"(usa --pca-dim/--resolution/--pitch-range para controlarlo).")
+
         if self.pca_dim > 0 and HAS_SKLEARN:
             all_vecs     = np.vstack([feats_a, feats_b])
             n_components = min(self.pca_dim, all_vecs.shape[0], all_vecs.shape[1])
@@ -1294,6 +1316,9 @@ class CycleGANSymbolic:
 
     @staticmethod
     def load(path):
+        if not path:
+            sys.exit("ERROR: falta --model (ruta del .pkl del modelo simbólico "
+                     "entrenado con 'train').")
         with open(path, 'rb') as f:
             obj = pickle.load(f)
         if not isinstance(obj, CycleGANSymbolic):
@@ -2268,6 +2293,8 @@ def _cmd_transform_neural(args):
     if not HAS_TORCH:
         print("ERROR: torch no disponible."); sys.exit(1)
 
+    if not args.model_dir:
+        sys.exit("ERROR: el backend neural requiere --model-dir.")
     model_dir = Path(args.model_dir)
     G_A2B, G_B2A, cfg = _load_neural_models(model_dir)
     generator  = G_A2B if args.direction == 'AtoB' else G_B2A
@@ -2453,6 +2480,8 @@ def cmd_style_corpus(args):
     if backend == 'neural':
         if not HAS_TORCH:
             print("ERROR: torch no disponible."); sys.exit(1)
+        if not args.model_dir:
+            sys.exit("ERROR: el backend neural requiere --model-dir.")
         G_A2B, G_B2A, cfg = _load_neural_models(Path(args.model_dir))
         generator = G_A2B if direction == 'a2b' else G_B2A
         device    = 'cuda' if torch.cuda.is_available() else 'cpu'
