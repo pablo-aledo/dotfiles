@@ -1,4 +1,4 @@
-"""
+r"""
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║           ORCHESTRATOR  v1.0                                                 ║
 ║   Orquestación automática + percusión para mocks orquestales                 ║

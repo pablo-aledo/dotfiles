@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                       STYLE BLENDER  v1.0                                    ║
 ║       Fusión dinámica de dos estilos a lo largo de una obra                  ║

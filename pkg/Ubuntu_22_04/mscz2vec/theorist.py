@@ -1727,7 +1727,7 @@ def export_narrator_plan(plan: dict, output_base: str) -> str:
 
 
 def export_pipeline_yaml(plan: dict, output_base: str,
-                          ref_midi: str | None = None) -> str:
+                          ref_midi: str | None = None, description: str = "") -> str:
     """Exporta un plan.yaml para runner.py."""
     pp = plan.get("pipeline_params", {})
     narrator_params = pp.get("narrator", {})
@@ -1793,7 +1793,7 @@ def export_pipeline_yaml(plan: dict, output_base: str,
 
     yaml_lines = [
         f"# Plan de pipeline generado por theorist.py v{VERSION}",
-        f"# Descripción: {plan.get('description_original', '(sin descripción)')}",
+        f"# Descripción: {description or plan.get('description_original') or '(sin descripción)'}",
         f"# Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
     ]
     if ref_midi:
@@ -2431,7 +2431,7 @@ def _run_export_and_execute(plan: dict, description: str, args, description_args
     path_curves     = export_curves_json(plan, output_base)
     path_instruments = export_instruments_json(plan, output_base)
     path_narrator   = export_narrator_plan(plan, output_base)
-    path_yaml       = export_pipeline_yaml(plan, output_base, ref_midi=args.ref_midi)
+    path_yaml       = export_pipeline_yaml(plan, output_base, ref_midi=args.ref_midi, description=description)
 
     # Exportar sugerencias de leitmotifs si el LLM las generó
     suggested_lm = plan.get("suggested_leitmotifs", [])

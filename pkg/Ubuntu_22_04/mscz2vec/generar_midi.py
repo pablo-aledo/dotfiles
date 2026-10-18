@@ -492,7 +492,7 @@ def _build_meter_map(seccion, obra=None):
     cambios = [(c_ini_sec, num0, den0)]
 
     # Cambios explícitos en la sección
-    for entry in seccion.get('cambios_de_compas', []):
+    for entry in (seccion.get('cambios_de_compas') or []):
         c_abs = int(entry['compas'])
         raw   = entry.get('nuevo_compas') or entry.get('compas_nuevo', '4/4')
         try:
@@ -502,7 +502,7 @@ def _build_meter_map(seccion, obra=None):
             print(f"  ⚠ cambios_de_compas: formato inválido '{raw}' en c.{c_abs}")
 
     # Override por frase (campo 'compas' en la frase)
-    for frase in seccion.get('frases', []):
+    for frase in (seccion.get('frases') or []):
         compas_frase = frase.get('compas')
         if compas_frase and '/' in str(compas_frase):
             try:
@@ -535,7 +535,7 @@ def _build_key_map_for_section(seccion, obra=None):
     result = [(c_ini, key_sec)]
 
     # Cambios explícitos dentro de la sección
-    for entry in seccion.get('cambios_de_tonalidad', []):
+    for entry in (seccion.get('cambios_de_tonalidad') or []):
         c_abs = int(entry['compas'])
         nueva = entry.get('nueva_tonalidad') or entry.get('tonalidad')
         if nueva:
@@ -544,7 +544,7 @@ def _build_key_map_for_section(seccion, obra=None):
             print(f"  ⚠ cambios_de_tonalidad: falta 'nueva_tonalidad' en c.{c_abs}")
 
     # Override por frase
-    for frase in seccion.get('frases', []):
+    for frase in (seccion.get('frases') or []):
         ton_frase = frase.get('tonalidad')
         if ton_frase:
             result.append((int(frase['compases'][0]), str(ton_frase)))
@@ -1191,7 +1191,7 @@ def expand_tremolo_trino(events, frases, bar1):
     """
     extra = []
     for frase in frases:
-        for entrada in frase.get('melodia',[]):
+        for entrada in (frase.get('melodia') or []):
             if not isinstance(entrada, dict):
                 continue
             bar=int(entrada['compas']); beat=float(entrada['beat'])
@@ -1323,7 +1323,7 @@ FUNCION_VEL = {
 # ══════════════════════════════════════════════════════════════════════════════
 def _build_leitmotiv_index(obra):
     """Devuelve {lm_id: lm_dict} para búsqueda rápida."""
-    return {lm['id']: lm for lm in obra.get('leitmotivs', [])}
+    return {lm['id']: lm for lm in (obra.get('leitmotivs') or [])}
 
 def resolve_leitmotiv_melody(frase, bar1, lm_index, legato=0.91):
     """Construye eventos de melodía combinando alturas del leitmotiv canónico
@@ -1372,7 +1372,7 @@ def resolve_leitmotiv_melody(frase, bar1, lm_index, legato=0.91):
 
     # Posiciones rítmicas
     posiciones = []
-    for entrada in frase.get('melodia', []):
+    for entrada in (frase.get('melodia') or []):
         if isinstance(entrada, dict):
             posiciones.append((int(entrada.get('compas', frase['compases'][0])),
                                float(entrada.get('beat', 0.0)),
@@ -1434,7 +1434,7 @@ def process_melody(frases, bar1, legato=0.91, lm_index=None, seccion=None, obra=
 
         # ── Melodía normal ─────────────────────────────────────────────────
         fe = []
-        for nota in frase.get('melodia',[]):
+        for nota in (frase.get('melodia') or []):
             if isinstance(nota, dict):
                 # Las notas dict con tremolo/trino se procesan en expand_tremolo_trino
                 # pero aquí gestionamos las que tienen articulación por nota
@@ -1563,7 +1563,7 @@ def process_harmony(frases, bar1, seccion=None, obra=None):
         pedal_events = []
         bajo_ind = frase.get('bajo_independiente', [])  # línea de bajo de la frase
 
-        for idx, item in enumerate(frase.get('armonia', [])):
+        for idx, item in enumerate((frase.get('armonia') or [])):
             bar       = int(item['compas'])
             # ── Resolución modal de grados ────────────────────────────────
             # Si el item tiene 'grado' (y no 'acorde' explícito), calcular
@@ -1626,7 +1626,7 @@ def process_marcato(frases, bar1, patrones_extra=None):
     patrones = {**MARCATO_PATTERNS, **(patrones_extra or {})}
     events = []
     for frase in frases:
-        marc=frase.get('marcato',{})
+        marc=(frase.get('marcato') or {})
         if not marc or not marc.get('activo',False): continue
         c_ini,c_fin=frase['compases']; n_bars=c_fin-c_ini+1
         int_ini=float(marc.get('intensidad_inicio',marc.get('intensidad',0.5)))
@@ -1809,10 +1809,10 @@ def validate_yaml(obra):
     print(f"\n{'─'*60}\n  VALIDANDO YAML…\n{'─'*60}")
     if 'obra' not in obra: err("Falta la clave 'obra'"); return errors
     if 'titulo' not in obra['obra']: err("obra.titulo es obligatorio")
-    lm_ids={lm['id'] for lm in obra.get('leitmotivs',[])}
+    lm_ids={lm['id'] for lm in (obra.get('leitmotivs') or [])}
     # Patrones válidos = los del script + los definidos en el YAML
     patrones_validos = set(MARCATO_PATTERNS.keys()) | set(obra.get('patrones_ritmicos', {}).keys())
-    secciones=obra.get('secciones',[])
+    secciones=(obra.get('secciones') or [])
     if not secciones: warn("No hay secciones definidas")
     prev_fin=None
     for sec in secciones:
@@ -1826,7 +1826,7 @@ def validate_yaml(obra):
                 warn(f"{prefix}: c.{c_ini} no contiguo (anterior termina en c.{prev_fin})")
             prev_fin=c_fin
         # Validar cambios de compás
-        for cc_entry in sec.get('cambios_de_compas', []):
+        for cc_entry in (sec.get('cambios_de_compas') or []):
             raw = cc_entry.get('nuevo_compas') or cc_entry.get('compas_nuevo', '')
             if '/' not in str(raw):
                 err(f"{prefix}: cambios_de_compas: formato inválido '{raw}' (usar 'N/D')")
@@ -1835,7 +1835,7 @@ def validate_yaml(obra):
                 if not (sec['compases'][0] <= int(c_abs) <= sec['compases'][1]):
                     err(f"{prefix}: cambios_de_compas: c.{c_abs} fuera de la sección")
         # Validar cambios de tonalidad
-        for ct_entry in sec.get('cambios_de_tonalidad', []):
+        for ct_entry in (sec.get('cambios_de_tonalidad') or []):
             nueva = ct_entry.get('nueva_tonalidad') or ct_entry.get('tonalidad')
             if not nueva:
                 err(f"{prefix}: cambios_de_tonalidad: falta 'nueva_tonalidad'")
@@ -1848,7 +1848,7 @@ def validate_yaml(obra):
             if 'bpm_inicio' not in t: err(f"{prefix}: falta tempo.bpm_inicio")
             if t.get('tipo','fijo') not in ('fijo','accelerando','rallentando','rubato'):
                 err(f"{prefix}: tempo.tipo '{t.get('tipo')}' no reconocido")
-        for frase in sec.get('frases',[]):
+        for frase in (sec.get('frases') or []):
             fid=frase.get('id','?'); fp=f"{prefix} F.{fid}"
             for campo in ('id','nombre','compases'):
                 if campo not in frase: err(f"{fp}: falta '{campo}'")
@@ -1863,10 +1863,10 @@ def validate_yaml(obra):
                 if not lm or lm in ('null','None',None):
                     err(f"{fp}: origen_leitmotiv=true pero falta campo leitmotiv:")
                 elif lm in lm_ids:
-                    lm_obj=next((l for l in obra.get('leitmotivs',[]) if l['id']==lm),None)
+                    lm_obj=next((l for l in (obra.get('leitmotivs') or []) if l['id']==lm),None)
                     if lm_obj and not lm_obj.get('notas_canonicas'):
                         err(f"{fp}: origen_leitmotiv=true pero '{lm}' sin notas_canonicas")
-            for item in frase.get('armonia',[]):
+            for item in (frase.get('armonia') or []):
                 ac=item.get('acorde')
                 if ac and ac not in ('null','None',None,'—','-') and ac not in CHORD_VOICINGS:
                     # tolerar si hay 'grado' que lo reemplaza
@@ -1896,7 +1896,7 @@ def validate_yaml(obra):
                 warn(f"{fp}: articulacion '{art}' desconocida")
             modo_s, tonica_s = _get_seccion_modo(sec, obra)
             notas_mel_midi = []
-            for nota in frase.get('melodia',[]):
+            for nota in (frase.get('melodia') or []):
                 nn=(nota.get('nota') if isinstance(nota,dict) else nota[3] if len(nota)>3 else None)
                 if nn and str(nn) not in ('-','—','null','None'):
                     try:
@@ -1915,7 +1915,7 @@ def validate_yaml(obra):
                     art_n = nota.get('art') or nota.get('articulacion')
                     if art_n and art_n not in ARTICULATIONS:
                         warn(f"{fp}: articulacion por nota '{art_n}' desconocida")
-            marc=frase.get('marcato',{})
+            marc=(frase.get('marcato') or {})
             if marc and marc.get('activo'):
                 patron=marc.get('patron_ritmico','default')
                 if patron not in patrones_validos: err(f"{fp}: patron_ritmico '{patron}' no definido")
@@ -1929,7 +1929,7 @@ def validate_yaml(obra):
 # ══════════════════════════════════════════════════════════════════════════════
 def estadisticas(obra):
     print(f"\n{'═'*60}\n  ESTADÍSTICAS — {obra['obra']['titulo']}\n{'═'*60}")
-    secciones=obra.get('secciones',[])
+    secciones=(obra.get('secciones') or [])
     total_bars=sum(s['compases'][1]-s['compases'][0]+1 for s in secciones)
     avg_bpm=sum((s['tempo']['bpm_inicio']+s['tempo'].get('bpm_fin',s['tempo']['bpm_inicio']))/2
                 for s in secciones)/max(len(secciones),1)
@@ -1941,14 +1941,14 @@ def estadisticas(obra):
     for sec in secciones:
         n_bars=sec['compases'][1]-sec['compases'][0]+1; t=sec['tempo']
         bpm_str=f"{t['bpm_inicio']}→{t.get('bpm_fin',t['bpm_inicio'])} ({t['tipo'][:5]})"
-        frases=sec.get('frases',[]); n_notas=sum(len(f.get('melodia',[])) for f in frases)
+        frases=(sec.get('frases') or []); n_notas=sum(len((f.get('melodia') or [])) for f in frases)
         print(f"  {sec['id']:5s} {sec['nombre'][:30]:30s} {n_bars:5d} {bpm_str:16s} {len(frases):7d} {n_notas:6d}")
         for frase in frases:
-            for nota in frase.get('melodia',[]):
+            for nota in (frase.get('melodia') or []):
                 if isinstance(nota,list) and len(nota)>=5:
                     try: all_notes.append(note_to_midi(str(nota[3]))%12); all_vels.append(int(nota[4]))
                     except Exception: pass
-            for item in frase.get('armonia',[]):
+            for item in (frase.get('armonia') or []):
                 if item.get('acorde'): all_chords[item['acorde']]+=1
     if all_notes:
         pc_count=Counter(all_notes)
@@ -1973,8 +1973,8 @@ def diff_obras(path_a, path_b):
     with open(path_a,'r',encoding='utf-8') as f: obra_a=yaml.safe_load(f)
     with open(path_b,'r',encoding='utf-8') as f: obra_b=yaml.safe_load(f)
     print(f"\n{'═'*60}\n  DIFF: {os.path.basename(path_a)}  →  {os.path.basename(path_b)}\n{'═'*60}")
-    def frases_map(o): return {fr['id']:fr for s in o.get('secciones',[]) for fr in s.get('frases',[])}
-    def secs_map(o):   return {s['id']:s for s in o.get('secciones',[])}
+    def frases_map(o): return {fr['id']:fr for s in (o.get('secciones') or []) for fr in (s.get('frases') or [])}
+    def secs_map(o):   return {s['id']:s for s in (o.get('secciones') or [])}
     secs_a=secs_map(obra_a); secs_b=secs_map(obra_b)
     frases_a=frases_map(obra_a); frases_b=frases_map(obra_b)
     cambios=0
@@ -1995,12 +1995,12 @@ def diff_obras(path_a, path_b):
         if fid not in frases_a: fb=frases_b[fid]; print(f"\n  [+] Frase {fid} AÑADIDA: '{fb['nombre']}' cc.{fb['compases'][0]}–{fb['compases'][1]}"); cambios+=1; continue
         if fid not in frases_b: print(f"\n  [-] Frase {fid} ELIMINADA: '{frases_a[fid]['nombre']}'"); cambios+=1; continue
         fa,fb=frases_a[fid],frases_b[fid]; diffs=[]
-        na_mel=len(fa.get('melodia',[])); nb_mel=len(fb.get('melodia',[]))
+        na_mel=len((fa.get('melodia') or [])); nb_mel=len((fb.get('melodia') or []))
         if na_mel!=nb_mel: diffs.append(f"melodía: {na_mel} → {nb_mel} notas ({'+' if nb_mel>na_mel else ''}{nb_mel-na_mel})")
-        na_arm=len(fa.get('armonia',[])); nb_arm=len(fb.get('armonia',[]))
+        na_arm=len((fa.get('armonia') or [])); nb_arm=len((fb.get('armonia') or []))
         if na_arm!=nb_arm: diffs.append(f"armonía: {na_arm} → {nb_arm} acordes")
-        arm_a={item['compas']:item.get('acorde') for item in fa.get('armonia',[])}
-        arm_b={item['compas']:item.get('acorde') for item in fb.get('armonia',[])}
+        arm_a={item['compas']:item.get('acorde') for item in (fa.get('armonia') or [])}
+        arm_b={item['compas']:item.get('acorde') for item in (fb.get('armonia') or [])}
         for c,ac_a in arm_a.items():
             ac_b=arm_b.get(c)
             if ac_b and ac_b!=ac_a: diffs.append(f"c.{c}: acorde {ac_a} → {ac_b}")
@@ -2101,11 +2101,11 @@ def nueva_frase_template(frase_id, compases, leitmotiv=None, yaml_path='partitur
 def export_csv(obra, output_dir):
     import csv
     rows=[]
-    for sec in obra.get('secciones',[]):
+    for sec in (obra.get('secciones') or []):
         sid=sec['id']
-        for frase in sec.get('frases',[]):
+        for frase in (sec.get('frases') or []):
             fid=frase['id']
-            for nota in frase.get('melodia',[]):
+            for nota in (frase.get('melodia') or []):
                 if isinstance(nota,dict):
                     row={'seccion':sid,'frase':fid,'instrumento':'melodia',
                          'compas':nota.get('compas','?'),'beat':nota.get('beat','?'),
@@ -2183,8 +2183,8 @@ def export_html(obra: dict, output_dir: str):
     import json
 
     # ── datos calculados ──────────────────────────────────────────────────────
-    secciones   = obra.get('secciones', [])
-    leitmotivs  = obra.get('leitmotivs', [])
+    secciones   = (obra.get('secciones') or [])
+    leitmotivs  = (obra.get('leitmotivs') or [])
     tracks      = obra.get('tracks', DEFAULT_TRACKS)
     obra_meta   = obra.get('obra', {})
 
@@ -2220,7 +2220,7 @@ def export_html(obra: dict, output_dir: str):
 
     all_notes = []; all_chords = Counter(); all_vels = []
     for sec in secciones:
-        for frase in sec.get('frases', []):
+        for frase in (sec.get('frases') or []):
             # Buscar notas en claves de instrumento conocidas o en cualquier
             # clave que no sea metadata conocida
             for key, val in frase.items():
@@ -2236,7 +2236,7 @@ def export_html(obra: dict, output_dir: str):
                             all_vels.append(vel)
                         except Exception:
                             pass
-            for item in frase.get('armonia', []):
+            for item in (frase.get('armonia') or []):
                 if isinstance(item, dict) and item.get('acorde'):
                     all_chords[item['acorde']] += 1
 
@@ -2260,7 +2260,7 @@ def export_html(obra: dict, output_dir: str):
         n_bars = c_fin - c_ini + 1
         t = sec['tempo']
         frases_data = []
-        for frase in sec.get('frases', []):
+        for frase in (sec.get('frases') or []):
             # Contar notas en todas las claves de instrumento (no solo 'melodia')
             n_mel = 0
             for key, val in frase.items():
@@ -2271,7 +2271,7 @@ def export_html(obra: dict, output_dir: str):
                         nota_str, _ = _extract_note_vel(entrada)
                         if nota_str:
                             n_mel += 1
-            n_arm  = len(frase.get('armonia', []))
+            n_arm  = len((frase.get('armonia') or []))
             badges = []
             if frase.get('transformaciones'):
                 badges.append('⟳ transf.')
@@ -2283,11 +2283,11 @@ def export_html(obra: dict, output_dir: str):
                 badges.append('〜 bend')
             if frase.get('control'):
                 badges.append('CC')
-            marc = frase.get('marcato', {})
+            marc = (frase.get('marcato') or {})
             if marc and marc.get('activo'):
                 badges.append(f"♩ {marc.get('patron_ritmico','?')}")
             # Acordes de la frase
-            acordes = [item.get('acorde','') for item in frase.get('armonia', [])
+            acordes = [item.get('acorde','') for item in (frase.get('armonia') or [])
                        if item.get('acorde')]
             frases_data.append({
                 'id':      frase.get('id',''),
@@ -3087,7 +3087,7 @@ def _load_patrones(obra: dict) -> dict:
 # ══════════════════════════════════════════════════════════════════════════════
 def generate_section(seccion, output_dir, obra=None):
     obra=obra or {}; sid=seccion['id']; c_ini=seccion['compases'][0]
-    frases=seccion.get('frases',[])
+    frases=(seccion.get('frases') or [])
     patrones_extra=_load_patrones(obra)
     lm_index=_build_leitmotiv_index(obra)
     print(f"\n  Generando Sección {sid}: {seccion['nombre']}")
@@ -3157,7 +3157,7 @@ def generate_harmony(secciones, output_dir, obra):
     for sec in secciones:
         sid    = sec['id']
         c_ini  = sec['compases'][0]
-        frases = sec.get('frases', [])
+        frases = (sec.get('frases') or [])
 
         events = process_harmony(frases, c_ini, seccion=sec, obra=obra)
         if not events:
@@ -3212,7 +3212,7 @@ def generate_melody(secciones, output_dir, obra):
     for sec in secciones:
         sid    = sec['id']
         c_ini  = sec['compases'][0]
-        frases = sec.get('frases', [])
+        frases = (sec.get('frases') or [])
 
         events = get_capa_events('melodia', frases, c_ini, patrones_extra,
                                  lm_index, seccion=sec, obra=obra)
@@ -3279,7 +3279,7 @@ def generate_rhythm(secciones, output_dir, obra):
     for sec in secciones:
         sid    = sec['id']
         c_ini  = sec['compases'][0]
-        frases = sec.get('frases', [])
+        frases = (sec.get('frases') or [])
 
         marc_events = get_capa_events('marcato',   frases, c_ini, patrones_extra)
         perc_events = get_capa_events('percusion', frases, c_ini, patrones_extra)
@@ -3341,7 +3341,7 @@ def generate_stems(secciones, output_dir, obra):
     for sec in secciones:
         sid    = sec['id']
         c_ini  = sec['compases'][0]
-        frases = sec.get('frases', [])
+        frases = (sec.get('frases') or [])
         sec_dir= os.path.join(stems_root, f"Seccion{_safe_filename(str(sid))}")
         os.makedirs(sec_dir, exist_ok=True)
         print(f"\n  Sección {sid}: {sec['nombre']}")
@@ -3391,7 +3391,7 @@ def generate_stems_completa(obra, output_dir):
     track_defs     = obra.get('tracks', DEFAULT_TRACKS)
     patrones_extra = _load_patrones(obra)
     lm_index       = _build_leitmotiv_index(obra)
-    secciones      = obra.get('secciones', [])
+    secciones      = (obra.get('secciones') or [])
     stems_root     = os.path.join(output_dir, 'stems', 'COMPLETA')
     os.makedirs(stems_root, exist_ok=True)
     generated      = []
@@ -3426,7 +3426,7 @@ def generate_stems_completa(obra, output_dir):
 
         all_events = []
         for sec, offset in zip(secciones, tick_offsets):
-            c_ini  = sec['compases'][0]; frases = sec.get('frases', [])
+            c_ini  = sec['compases'][0]; frases = (sec.get('frases') or [])
             if tdef.get('contrapunto'):
                 cfg    = tdef['contrapunto']
                 mel_ev = get_capa_events('melodia', frases, c_ini, patrones_extra,
@@ -3484,8 +3484,8 @@ def generate_leitmotiv_midis(obra, output_dir):
       - Importar en el DAW como una capa sobre el MIDI completo
       - Analizar la evolución armónica/melódica de cada célula temática
     """
-    leitmotivs = obra.get('leitmotivs', [])
-    secciones  = obra.get('secciones', [])
+    leitmotivs = (obra.get('leitmotivs') or [])
+    secciones  = (obra.get('secciones') or [])
     track_defs = obra.get('tracks', DEFAULT_TRACKS)
     patrones_extra = _load_patrones(obra)
     lm_index   = _build_leitmotiv_index(obra)
@@ -3521,7 +3521,7 @@ def generate_leitmotiv_midis(obra, output_dir):
     for sec in secciones:
         offset = tick_offsets[sec['id']]
         c_ini  = sec['compases'][0]
-        for frase in sec.get('frases', []):
+        for frase in (sec.get('frases') or []):
             lm = frase.get('leitmotiv') or '_sin_leitmotiv'
             if lm in ('null', 'None', None, '-', '—'):
                 lm = '_sin_leitmotiv'
@@ -3598,7 +3598,7 @@ def generate_leitmotiv_midis(obra, output_dir):
 # ══════════════════════════════════════════════════════════════════════════════
 def generate_full_obra(obra, output_dir):
     titulo    = obra['obra']['titulo']
-    secciones = obra.get('secciones', [])
+    secciones = (obra.get('secciones') or [])
     track_defs = obra.get('tracks', DEFAULT_TRACKS)
     print(f"\n  Generando obra completa: {titulo}")
 
@@ -3627,7 +3627,7 @@ def generate_full_obra(obra, output_dir):
 
     for sec, tick_offset in zip(secciones, tick_offsets):
         c_ini  = sec['compases'][0]
-        frases = sec.get('frases', [])
+        frases = (sec.get('frases') or [])
         for tdef in track_defs:
             tid  = tdef['id']
             capa = tdef.get('capa', tid)
@@ -3642,7 +3642,7 @@ def generate_full_obra(obra, output_dir):
                                        lm_index, seccion=sec, obra=obra)
             for (tick, on_off, note, vel) in evs:
                 all_events[tid].append((tick + tick_offset, on_off, note, vel))
-        n_mel = sum(1 for e in all_events.get('melodia', [])
+        n_mel = sum(1 for e in (all_events.get('melodia') or [])
                     if e[1] == 'on' and e[0] >= tick_offset)
         print(f"    Sec.{sec['id']:3s}  mel:{n_mel:3d}  offset:{tick_offset}")
 
@@ -3684,17 +3684,17 @@ def preview(obra):
     if obra['obra'].get('subtitulo'): print(f"  {obra['obra']['subtitulo']}")
     print(f"  {obra['obra'].get('compas','?')} · {obra['obra'].get('tonalidad','?')} · {obra['obra'].get('compases_totales','?')} cc.")
     print(f"{'─'*60}")
-    lms=obra.get('leitmotivs',[])
+    lms=(obra.get('leitmotivs') or [])
     if lms:
         print(f"\n  LEITMOTIVS ({len(lms)}):")
         for lm in lms: print(f"    [{lm['id']:20s}] {lm['nombre']}")
-    for sec in obra.get('secciones',[]):
+    for sec in (obra.get('secciones') or []):
         c=sec['compases']; t=sec['tempo']
         print(f"\n  SECCIÓN {sec['id']}: {sec['nombre']}")
         print(f"  Cc.{c[0]}–{c[1]} · {sec.get('duracion_aprox','?')} · {t['bpm_inicio']}→{t.get('bpm_fin',t['bpm_inicio'])} BPM ({t['tipo']})")
-        for frase in sec.get('frases',[]):
+        for frase in (sec.get('frases') or []):
             fc=frase['compases']
-            print(f"    {frase['id']:8s} cc.{fc[0]:3d}–{fc[1]:3d}  {frase['nombre'][:35]:35s} mel:{len(frase.get('melodia',[])):3d}  arm:{len(frase.get('armonia',[])):2d}  lm:{frase.get('leitmotiv','—')}")
+            print(f"    {frase['id']:8s} cc.{fc[0]:3d}–{fc[1]:3d}  {frase['nombre'][:35]:35s} mel:{len((frase.get('melodia') or [])):3d}  arm:{len((frase.get('armonia') or [])):2d}  lm:{frase.get('leitmotiv','—')}")
     print(f"\n{'═'*60}")
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3757,14 +3757,14 @@ def main():
     os.makedirs(args.output, exist_ok=True)
     if args.csv: export_csv(obra, args.output)
 
-    secciones=obra.get('secciones',[])
+    secciones=(obra.get('secciones') or [])
     if args.seccion:
         secciones=[s for s in secciones if s['id']==args.seccion]
         if not secciones: print(f"✗ Sección '{args.seccion}' no encontrada"); sys.exit(1)
     if args.frase:
         sec_id=args.frase.split('.')[0]
         secciones=[s for s in secciones if s['id']==sec_id]
-        for sec in secciones: sec['frases']=[f for f in sec.get('frases',[]) if f['id']==args.frase]
+        for sec in secciones: sec['frases']=[f for f in (sec.get('frases') or []) if f['id']==args.frase]
         if not any(s.get('frases') for s in secciones): print(f"✗ Frase '{args.frase}' no encontrada"); sys.exit(1)
 
     print(f"\n{'═'*60}\n  {obra['obra']['titulo']}\n  Generando MIDIs desde {args.yaml}\n{'═'*60}")

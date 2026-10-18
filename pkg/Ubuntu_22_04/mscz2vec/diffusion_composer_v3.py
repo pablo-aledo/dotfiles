@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                     DIFFUSION COMPOSER  v3                                   ║
 ║         Composición end-to-end mediante Difusión Directa multi-rol           ║

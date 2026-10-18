@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                       COUNTERPOINT  v1.1                                     ║
 ║         Motor de contrapunto por especies para MIDIs melódicos               ║

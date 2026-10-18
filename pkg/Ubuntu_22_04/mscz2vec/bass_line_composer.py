@@ -1957,7 +1957,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Tonalidad (C, Am, F#, Bb…)")
     p.add_argument("--mode",     default="auto",
                    choices=list(SCALE_INTERVALS.keys()) + ["auto"])
-    p.add_argument("--bars",     type=int,   default=16)
+    p.add_argument("--bars",     type=int,   default=None,
+                   help="Compases (por omisión: los que cubra --chords; 16 si no se dan)")
     p.add_argument("--tempo",    type=_tempo_arg, default=120)
     p.add_argument("--time-sig", default="4/4")
     p.add_argument("--style",    default="auto",
@@ -2012,6 +2013,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main():
     parser = build_parser()
     args   = parser.parse_args()
+
+    if args.bars is None:   # antes 16 fijo: truncaba en silencio progresiones más largas
+        args.bars = 16
+        if args.chords:
+            try:
+                _n, _d = (int(x) for x in str(args.time_sig).split("/"))
+                _tot = sum(b for _, b in parse_chords_text(args.chords))
+                args.bars = max(1, math.ceil(_tot / (_n * 4.0 / _d)))
+            except Exception:
+                pass
 
     # ── Parámetros base ──────────────────────────────────────────────────────
     params = {

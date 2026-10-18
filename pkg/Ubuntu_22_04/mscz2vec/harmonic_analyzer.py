@@ -53,6 +53,7 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
+import re
 import sys
 import json
 import argparse
@@ -337,9 +338,14 @@ def analyze_harmony(path: str, key: Optional[str] = None,
     for a, b in zip(seq[:-1], seq[1:]):
         fa, fb = a["function"], b["function"]
         label = None
-        if fa == "D" and fb == "T" and b["roman"].upper().startswith("I"):
+        # Grado exacto: antes `startswith("I")` aceptaba II/III/IV como tónica y
+        # cualquier función S (p.ej. ii7) se rotulaba «plagal (IV→I)».
+        _rb, _ra = b["roman"], a["roman"]
+        _is_I = re.match(r"^[b#]?[Ii](?![IiVv])", _rb) is not None
+        _is_IV = re.match(r"^[b#]?(IV|iv)", _ra) is not None
+        if fa == "D" and fb == "T" and _is_I:
             label = "auténtica (V→I)"
-        elif fa == "S" and fb == "T":
+        elif fa == "S" and fb == "T" and _is_IV and _is_I:
             label = "plagal (IV→I)"
         elif fa == "D" and b["roman"].lower().startswith("vi"):
             label = "rota (V→vi)"

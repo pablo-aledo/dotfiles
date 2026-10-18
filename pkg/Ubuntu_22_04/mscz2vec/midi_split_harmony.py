@@ -237,6 +237,8 @@ class MidiInfo:
         self.tempo_us: int = 500_000     # microsegundos por beat (120 BPM)
         self.bpm: float = 120.0
         self.beats_per_bar: float = 4.0  # pulsos por compás EN NEGRAS (N*4/D)
+        self.n_tempo_events: int = 0
+        self.n_ts_events: int = 0
         self.beat_unit: int = 4          # denominador del compás
         self.meta_msgs: list = []        # time_signature / key_signature del original
         self.total_ticks: int = 0
@@ -257,16 +259,27 @@ def load_midi(path: str) -> MidiInfo:
     info.tpb = mid.ticks_per_beat
     info.n_tracks = len(mid.tracks)
 
-    # Recolectar tempo y compás del track 0
+    # Recolectar tempo y compás del track 0. Se usa la PRIMERA aparición de cada
+    # uno (antes se sobrescribía con cada evento y se quedaba con el ÚLTIMO: un
+    # ritardando final daba 29 bpm en una pieza de ≈55 bpm).
+    _got_tempo = _got_ts = False
+    info.n_tempo_events = 0
+    info.n_ts_events = 0
     for msg in mid.tracks[0]:
         if msg.type == 'set_tempo':
-            info.tempo_us = msg.tempo
-            info.bpm = 60_000_000 / msg.tempo
+            info.n_tempo_events += 1
+            if not _got_tempo:
+                info.tempo_us = msg.tempo
+                info.bpm = 60_000_000 / msg.tempo
+                _got_tempo = True
         elif msg.type == 'time_signature':
-            # Los tiempos internos están en negras: un compás N/D dura N*4/D negras
-            # (antes se usaba solo el numerador: 3/8 → 3 negras en vez de 1.5).
-            info.beats_per_bar = msg.numerator * 4.0 / msg.denominator
-            info.beat_unit = msg.denominator
+            info.n_ts_events += 1
+            if not _got_ts:
+                # Los tiempos internos están en negras: un compás N/D dura N*4/D negras
+                # (antes se usaba solo el numerador: 3/8 → 3 negras en vez de 1.5).
+                info.beats_per_bar = msg.numerator * 4.0 / msg.denominator
+                info.beat_unit = msg.denominator
+                _got_ts = True
     # Conservar los metadatos de compás/armadura (primera aparición) para
     # reinyectarlos en los MIDIs de salida.
     _seen_meta = set()
@@ -1736,6 +1749,11 @@ def main():
     if args.tempo:
         info.bpm = args.tempo
         info.tempo_us = int(60_000_000 / args.tempo)
+
+    if info.n_tempo_events > 1 or info.n_ts_events > 1:
+        print(f"[AVISO] El MIDI tiene {info.n_tempo_events} cambios de tempo y {info.n_ts_events} de compás: "
+              f"se usan los PRIMEROS ({info.bpm:.1f} bpm, {info.beats_per_bar:g} negras/compás); "
+              f"fuerce otros con --tempo / --beats-per-bar.", file=sys.stderr)
 
     if args.verbose:
         print(f"║  Pistas: {info.n_tracks}  |  Canales: {info.n_channels}  "

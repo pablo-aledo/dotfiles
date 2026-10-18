@@ -262,6 +262,15 @@ class CadencePlan:
 # ANÁLISIS DE MIDI
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _ticks_per_bar(mid) -> int:
+    """Ticks por compás según el primer `time_signature` del MIDI (4/4 por omisión)."""
+    for tr in mid.tracks:
+        for msg in tr:
+            if msg.type == "time_signature":
+                return max(1, int(round(mid.ticks_per_beat * 4.0 * msg.numerator / msg.denominator)))
+    return mid.ticks_per_beat * 4
+
+
 def extract_chords_from_midi(midi_path: str, window_beats: float = 1.0) -> List[Tuple[int, str, List[int]]]:
     """
     Extrae acordes de un MIDI por ventanas temporales.
@@ -297,10 +306,8 @@ def extract_chords_from_midi(midi_path: str, window_beats: float = 1.0) -> List[
     if not notes:
         return []
 
-    # Agrupar por ventanas de compás
-    # Asumimos 4/4 por defecto
-    beats_per_bar = 4
-    ticks_per_bar = ticks_per_beat * beats_per_bar
+    # Agrupar por ventanas de compás (compás real del MIDI; 4/4 si no declara ninguno)
+    ticks_per_bar = _ticks_per_bar(mid)
 
     max_tick = max(n[0] for n in notes)
     num_bars = int(max_tick / ticks_per_bar) + 1
@@ -831,31 +838,32 @@ def insert_cadences_into_midi(
         mid.tracks.append(track)
 
     ticks_per_beat = mid.ticks_per_beat
-    ticks_per_bar = ticks_per_beat * 4
+    ticks_per_bar = _ticks_per_bar(mid)
 
-    # Crear track de cadencias
+    # Crear track de cadencias. Los eventos se acumulan con tiempo ABSOLUTO y
+    # se convierten a deltas al final (mido espera `time` relativo al evento
+    # anterior; escribir offsets absolutos como delta alargaba la obra ×4-7).
     cad_track = MidiTrack()
     cad_track.append(MetaMessage("track_name", name="Cadences", time=0))
+    events = []  # (tick_absoluto, orden, mensaje)
 
     for cad in plan.cadences:
         bar_start = (cad.position - 1) * ticks_per_bar
-
-        # Insertar acordes de la cadencia
         duration_per_chord = ticks_per_bar // max(len(cad.progression), 1)
 
         for i, chord_name in enumerate(cad.progression):
-            # Convertir nombre de acorde a notas MIDI
             notes = chord_name_to_midi(chord_name, plan.key, plan.mode)
+            t_on = bar_start + i * duration_per_chord
+            for note in notes:
+                events.append((t_on, 1, Message("note_on", note=note, velocity=velocity, time=0)))
+                events.append((t_on + duration_per_chord, 0, Message("note_off", note=note, velocity=0, time=0)))
 
-            offset = bar_start + i * duration_per_chord
-
-            # Notas on
-            for j, note in enumerate(notes):
-                cad_track.append(Message("note_on", note=note, velocity=velocity, time=offset if j == 0 else 0))
-
-            # Notas off
-            for j, note in enumerate(notes):
-                cad_track.append(Message("note_off", note=note, velocity=0, time=duration_per_chord if j == 0 else 0))
+    events.sort(key=lambda e: (e[0], e[1]))   # note_off (0) antes que note_on (1) en el mismo tick
+    prev = 0
+    for t, _, msg in events:
+        msg.time = t - prev
+        prev = t
+        cad_track.append(msg)
 
     mid.tracks.append(cad_track)
     mid.save(output_path)
@@ -921,32 +929,77 @@ def chord_name_to_midi(chord_name: str, key: str, mode: str) -> List[int]:
 # ANÁLISIS DE CADENCIAS EXISTENTES
 # ──────────────────────────────────────────────────────────────────────────────
 
-def analyze_existing_cadences(midi_path: str) -> Dict:
-    """Analiza un MIDI y detecta cadencias ya presentes."""
+_PC = {"C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5, "F#": 6, "Gb": 6,
+       "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11, "Cb": 11}
+_NAMES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+_KS_MAJ = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
+_KS_MIN = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
+
+
+def _parse_chord(name: str):
+    """'C#m7' -> (1, 'm7'); None si no es un nombre de acorde."""
+    import re
+    m = re.match(r"^([A-G][#b]?)(.*)$", name or "")
+    return (_PC[m.group(1)], m.group(2)) if m else None
+
+
+def _estimate_key(chords) -> Tuple[int, str]:
+    """Tonalidad por Krumhansl-Schmuckler sobre las notas de todos los compases."""
+    hist = [0.0] * 12
+    for _, _, notes in chords:
+        for n in notes:
+            hist[n % 12] += 1
+    best, best_r = (0, "major"), -2.0
+    for tonic in range(12):
+        for mode, prof in (("major", _KS_MAJ), ("minor", _KS_MIN)):
+            rot = [prof[(i - tonic) % 12] for i in range(12)]
+            mh, mp = sum(hist) / 12, sum(rot) / 12
+            num = sum((h - mh) * (p - mp) for h, p in zip(hist, rot))
+            den = (sum((h - mh) ** 2 for h in hist) * sum((p - mp) ** 2 for p in rot)) ** 0.5
+            r = num / den if den else -1
+            if r > best_r:
+                best, best_r = (tonic, mode), r
+    return best
+
+
+def analyze_existing_cadences(midi_path: str, key: Optional[str] = None) -> Dict:
+    """Analiza un MIDI y detecta cadencias ya presentes (en cualquier tonalidad).
+
+    `key` opcional ('G', 'F#m'…); si no se da se estima con Krumhansl-Schmuckler."""
     chords = extract_chords_from_midi(midi_path)
     if not chords:
-        return {"error": "No se pudieron extraer acordes"}
+        return {"error": "No se pudieron extraer acordes", "file": midi_path, "total_bars": 0,
+                "detected_cadences": [], "summary": {"count": 0, "average_strength": 0.0, "final_cadence": None}}
+
+    if key:
+        tonic = _PC.get(key.rstrip("mM"), 0)
+        mode = "minor" if key.endswith("m") else "major"
+    else:
+        tonic, mode = _estimate_key(chords)
 
     detected = []
-    for i in range(len(chords) - 1):
-        bar1, chord1, _ = chords[i]
-        bar2, chord2, _ = chords[i + 1]
-
-        # Detectar patrones de cadencia
-        cad_type = detect_cadence_pattern(chord1, chord2)
-        if cad_type:
-            info = CADENCE_TYPES.get(cad_type, {})
-            detected.append({
-                "position": bar1,
-                "cadence_type": cad_type,
-                "name": info.get("name", "Desconocida"),
-                "progression": [chord1, chord2],
-                "strength": info.get("strength", 0),
-            })
+    prev = None
+    for bar, name, _ in chords:
+        cur = _parse_chord(name)
+        if cur is None:
+            continue
+        if prev is not None and (cur != prev[1]):
+            cad_type = detect_cadence_pattern(prev[2], name, tonic, mode)
+            if cad_type:
+                info = CADENCE_TYPES.get(cad_type, {})
+                detected.append({
+                    "position": prev[0],
+                    "cadence_type": cad_type,
+                    "name": info.get("name", "Desconocida"),
+                    "progression": [prev[2], name],
+                    "strength": info.get("strength", 0),
+                })
+        prev = (bar, cur, name)
 
     return {
         "file": midi_path,
         "total_bars": len(chords),
+        "key": f"{_NAMES[tonic]} {mode}",
         "detected_cadences": detected,
         "summary": {
             "count": len(detected),
@@ -956,33 +1009,35 @@ def analyze_existing_cadences(midi_path: str) -> Dict:
     }
 
 
-def detect_cadence_pattern(chord1: str, chord2: str) -> Optional[str]:
-    """Detecta si dos acordes consecutivos forman una cadencia conocida."""
-    # Simplificación: detectar por funciones armónicas básicas
-    # En una implementación completa, usaría análisis más sofisticado
+def detect_cadence_pattern(chord1: str, chord2: str, tonic: int = 0, mode: str = "major") -> Optional[str]:
+    """Detecta si dos acordes consecutivos forman una cadencia, relativa a la tonalidad.
 
-    # Normalizar nombres
-    def normalize(c):
-        c = c.replace("maj", "").replace("min", "m").replace("7", "").replace("m", "").replace("dim", "").replace("aug", "")
-        return c
+    Antes solo reconocía nombres literales de Do mayor ('G'→'C', 'F'→'C'…)."""
+    a, b = _parse_chord(chord1), _parse_chord(chord2)
+    if a is None or b is None:
+        return None
+    da, db = (a[0] - tonic) % 12, (b[0] - tonic) % 12
 
-    c1 = normalize(chord1)
-    c2 = normalize(chord2)
+    def is_minor(q):
+        return q.startswith("m") and not q.startswith("maj")
 
-    # V→I = auténtica
-    if c1 in ["V", "G"] and c2 in ["I", "C"]:
+    def dominantish(q):   # mayor o de séptima de dominante (no menor ni disminuido)
+        return not is_minor(q) and not q.startswith("dim") and not q.startswith("hdim") and "maj7" not in q
+
+    tonic_ok = (db == 0)
+    if da == 7 and dominantish(a[1]) and tonic_ok:
         return "authentic_perfect"
-    # V→vi = engaño
-    if c1 in ["V", "G"] and c2 in ["vi", "Am"]:
+    if da == 7 and dominantish(a[1]) and db == (9 if mode == "major" else 8):
         return "authentic_deceptive"
-    # IV→I = plagal
-    if c1 in ["IV", "F"] and c2 in ["I", "C"]:
+    if da == 5 and tonic_ok and not q_is_dim(a[1]):
         return "plagal"
-    # I→V = semicadencia
-    if c1 in ["I", "C"] and c2 in ["V", "G"]:
+    if da in (0, 2, 5) and db == 7 and dominantish(b[1]):
         return "half"
-
     return None
+
+
+def q_is_dim(q: str) -> bool:
+    return q.startswith("dim") or q.startswith("hdim")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1131,6 +1186,7 @@ EJEMPLOS:
     # ── ANALYZE ──
     cmd_analyze = subparsers.add_parser("analyze", help="Analiza cadencias existentes en un MIDI")
     cmd_analyze.add_argument("midi", help="Archivo MIDI de entrada")
+    cmd_analyze.add_argument("--key", type=str, default=None, help="Tonalidad (p.ej. G, F#m); por omisión se estima")
     cmd_analyze.add_argument("--json", type=str, help="Exportar análisis a JSON")
     cmd_analyze.add_argument("--verbose", action="store_true", help="Detalle completo")
 
@@ -1215,10 +1271,10 @@ EJEMPLOS:
             print(f"Bajo cifrado guardado en: {args.realize}")
 
     elif args.command == "analyze":
-        result = analyze_existing_cadences(args.midi)
+        result = analyze_existing_cadences(args.midi, args.key)
 
         print(f"\033[1mANÁLISIS DE CADENCIAS: {args.midi}\033[0m")
-        print(f"Compases totales: {result.get('total_bars', '?')}")
+        print(f"Compases totales: {result.get('total_bars', '?')}  ·  tonalidad: {result.get('key', 'n/d')}")
         print(f"Cadencias detectadas: {result['summary']['count']}")
         print(f"Fuerza media: {result['summary']['average_strength']:.2f}")
 

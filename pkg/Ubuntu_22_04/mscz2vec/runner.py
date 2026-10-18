@@ -258,7 +258,7 @@ class PipelineStep:
 
 
 def _tokenize_cmd(cmd_str: str) -> list[str]:
-    """
+    r"""
     Convierte un comando CLI string en lista de tokens.
     Respeta comillas dobles y simples.
     Elimina artefactos de continuacion YAML (\ solitarios).

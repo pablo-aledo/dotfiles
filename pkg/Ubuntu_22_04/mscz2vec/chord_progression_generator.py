@@ -961,7 +961,7 @@ def main():
                         help='Estilo armónico (default: auto)')
     parser.add_argument('--bars', type=int, default=16,
                         help='Número de compases (default: 16)')
-    parser.add_argument('--beats', type=int, default=4,
+    parser.add_argument('--beats', type=float, default=4,
                         help='Pulsos por compás (default: 4)')
     parser.add_argument('--tempo', type=float, default=120.0,
                         help='Tempo en BPM (default: 120)')

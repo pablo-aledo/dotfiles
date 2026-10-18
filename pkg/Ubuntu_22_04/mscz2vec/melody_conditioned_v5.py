@@ -916,7 +916,7 @@ def parse_chords_json(path: str, root_pc_key: int,
             dur = float(dur)
         elif isinstance(item, dict):
             name = item.get("name", item.get("chord", "C"))
-            dur  = float(item.get("duration", item.get("beats", 4.0)))
+            dur  = float(item.get("duration", item.get("beats", item.get("duration_beats", 4.0))))
         else:
             continue
         ev = build_chord_event(name.strip(), dur, offset, root_pc_key, mode)

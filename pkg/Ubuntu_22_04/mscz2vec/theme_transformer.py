@@ -1792,6 +1792,8 @@ def main():
                     verbose=args.verbose,
                     seed=args.seed,
                 )
+                if not args.verbose:   # antes: salida totalmente silenciosa
+                    print(f"[OK] {midi_path} / estilo '{style}' → {args.out_dir or 'directorio por omisión'}")
             except Exception as e:
                 print(f"[ERROR] {midi_path} / estilo '{style}': {e}")
                 if args.verbose:

@@ -785,6 +785,9 @@ def main():
                 report=args.report,
                 verbose=args.verbose,
             )
+            if not args.verbose:   # antes: salida totalmente silenciosa
+                print(f"[OK] {midi_path} → {args.to_meter if hasattr(args, 'to_meter') else args.to}"
+                      f" ({args.out if len(midi_files) == 1 and args.out else 'ruta por omisión junto al original'})")
         except Exception as e:
             print(f"[ERROR] {midi_path}: {e}")
             if args.verbose:

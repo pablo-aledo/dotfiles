@@ -3429,7 +3429,7 @@ def write_midi_with_drums(original_mid: mido.MidiFile,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="DRUMMER v0.2 — Motor de percusión rítmica para MIDIs",
+        description="DRUMMER v0.3 — Motor de percusión rítmica para MIDIs",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command", required=True)

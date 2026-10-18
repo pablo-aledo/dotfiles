@@ -830,8 +830,11 @@ def load_soprano_hints_from_midi(
     for bar in range(n_bars):
         beat_start = bar * beats_per_bar
         pitches = []
-        for b in range(beats_per_bar):
-            pitches.extend(notes_by_beat.get(beat_start + b, []))
+        # beats_per_bar puede ser fraccionario (3/8 → 1.5): se recogen las notas
+        # cuyo pulso cae dentro del compás en vez de iterar sobre enteros.
+        for k, v in notes_by_beat.items():
+            if beat_start <= k < beat_start + beats_per_bar:
+                pitches.extend(v)
         hint = max(pitches) if pitches else None  # nota más aguda = soprano
         soprano_hints.append(hint)
         dummy_chords.append(("C", float(beats_per_bar)))  # placeholder
@@ -881,7 +884,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Generar una versión por cada estilo")
     p.add_argument("--tempo", type=int, default=90,
                    help="Tempo BPM (default: 90)")
-    p.add_argument("--beats", type=int, default=4,
+    p.add_argument("--beats", type=float, default=4,
                    help="Beats por compás (default: 4)")
     p.add_argument("--voices", nargs="+", choices=["S", "A", "T", "B"],
                    default=["S", "A", "T", "B"],

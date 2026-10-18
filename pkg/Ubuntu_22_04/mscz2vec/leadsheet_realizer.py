@@ -97,7 +97,7 @@ def parse_chord(sym: str) -> dict:
     if not m:
         raise ValueError(f"cifrado no reconocido: '{sym}'")
     letter, acc, qual, bass = m.groups()
-    root = _PC[letter] + (1 if acc in "#♯" else -1 if acc in "b♭" else 0)
+    root = _PC[letter] + (1 if acc in ("#", "♯") else -1 if acc in ("b", "♭") else 0)
     root %= 12
     if qual not in QUALITIES:
         raise ValueError(f"calidad no reconocida en '{sym}' (sufijo '{qual}')")
@@ -106,7 +106,7 @@ def parse_chord(sym: str) -> dict:
     if bass:
         bl = bass[0]
         ba = bass[1:] if len(bass) > 1 else ""
-        bass_pc = (_PC[bl] + (1 if ba in "#♯" else -1 if ba in "b♭" else 0)) % 12
+        bass_pc = (_PC[bl] + (1 if ba in ("#", "♯") else -1 if ba in ("b", "♭") else 0)) % 12
     return {"symbol": sym, "root": root, "intervals": intervals, "bass_pc": bass_pc}
 
 
