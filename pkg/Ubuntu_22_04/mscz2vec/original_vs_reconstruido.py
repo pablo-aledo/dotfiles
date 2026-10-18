@@ -1206,7 +1206,7 @@ def _fmt(m):
 def cmd_eval(a):
     ds, names = build_dataset(a)
     npair = len({d["gid"] for d in ds if d["paired"]})
-    print(f"Datos: {sum(1 for d in ds if _is_real(d))} ficheros (+{sum(1 for d in ds if d["aug"])} copias perturbadas, +{sum(1 for d in ds if d["kind"])} sintéticos) ({npair} piezas emparejadas) · {len(names)} rasgos · CV agrupada k={a.cv} × {a.repeats}")
+    print(f"Datos: {sum(1 for d in ds if _is_real(d))} ficheros (+{sum(1 for d in ds if d['aug'])} copias perturbadas, +{sum(1 for d in ds if d['kind'])} sintéticos) ({npair} piezas emparejadas) · {len(names)} rasgos · CV agrupada k={a.cv} × {a.repeats}")
     if a.loro:
         r = run_loro(ds, names, a, log=a.verbose)
         print(f"\n▶ LEAVE-ONE-RECIPE-OUT (generador desconocido) · {len(r['per'])} familias · features={a.features}")
@@ -1285,7 +1285,7 @@ def cmd_predict(a):
 def cmd_info(a):
     det = Detector.load(a.model)
     print(f"Modelo {a.model} · versión {VERSION}")
-    print(f"  Rasgos usados: {len(det.keep)}/{len(det.names)} · ventana {det.window:g} {"compases" if det.features == "musical" else "negras"} · modo {det.features} · máx {det.max_windows} ventanas/fichero")
+    print(f"  Rasgos usados: {len(det.keep)}/{len(det.names)} · ventana {det.window:g} {'compases' if det.features == 'musical' else 'negras'} · modo {det.features} · máx {det.max_windows} ventanas/fichero")
     gs = {}
     for k in det.keep: gs[_group_of(det.names[k])] = gs.get(_group_of(det.names[k]), 0) + 1
     print("  Por grupo: " + ", ".join(f"{g}={c}" for g, c in gs.items()))
