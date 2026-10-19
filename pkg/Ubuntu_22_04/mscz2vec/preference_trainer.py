@@ -325,6 +325,17 @@ except ImportError:
 
 USE_COLOR = sys.stdout.isatty()
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 def _c(text, code):
     return f"\033[{code}m{text}\033[0m" if USE_COLOR else text
 
@@ -1099,7 +1110,7 @@ class PreferenceModel(_BaseModel):
             "annotated_paths":  self.annotated_paths,
             "feature_stats":    self.feature_stats,
         }
-        with open(path, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(path), "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     @classmethod
@@ -1162,7 +1173,7 @@ def _clone_model(model) -> "_BaseModel":
     # Usar serialización JSON temporal en memoria
     try:
         tmp = {}
-        model.save("/tmp/_clone_tmp.json")
+        model.save(_ensure_parent("/tmp/_clone_tmp.json"))
         m = model.__class__.load("/tmp/_clone_tmp.json")
         m.history = []
         m.n_train = model.n_train
@@ -1589,7 +1600,7 @@ class NeuralModel(_BaseModel):
         self.n_train+=1
         if wp: self.history.append({"type":"contrast","winner":wp,"loser":lp})
     def save(self,path):
-        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"n_dims":self.n_dims,"h1":self.h1,"h2":self.h2,"W1":self.W1,"b1":self.b1,"W2":self.W2,"b2":self.b2,"W3":self.W3,"b3":self.b3,"lr":self.lr,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(path,"w",encoding="utf-8"),indent=2,ensure_ascii=False)
+        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"n_dims":self.n_dims,"h1":self.h1,"h2":self.h2,"W1":self.W1,"b1":self.b1,"W2":self.W2,"b2":self.b2,"W3":self.W3,"b3":self.b3,"lr":self.lr,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(_ensure_parent(path),"w",encoding="utf-8"),indent=2,ensure_ascii=False)
     @classmethod
     def load(cls,path):
         d=json.load(open(path,encoding="utf-8")); m=cls(d.get("n_dims",N_DIMS),d.get("h1",16),d.get("h2",8))
@@ -1646,7 +1657,7 @@ class KernelModel(_BaseModel):
         self.n_train+=1
         if wp: self.history.append({"type":"contrast","winner":wp,"loser":lp})
     def save(self,path):
-        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"gamma":self.gamma,"max_support":self.max_support,"support_X":self.support_X,"alpha":self.alpha,"bias":self.bias,"lr":self.lr,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(path,"w",encoding="utf-8"),indent=2,ensure_ascii=False)
+        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"gamma":self.gamma,"max_support":self.max_support,"support_X":self.support_X,"alpha":self.alpha,"bias":self.bias,"lr":self.lr,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(_ensure_parent(path),"w",encoding="utf-8"),indent=2,ensure_ascii=False)
     @classmethod
     def load(cls,path):
         d=json.load(open(path,encoding="utf-8")); m=cls(d.get("gamma",1.0),d.get("max_support",200))
@@ -1728,7 +1739,7 @@ class GPModel(_BaseModel):
         self.n_train+=1; self._dirty=True
         if wp: self.history.append({"type":"contrast","winner":wp,"loser":lp})
     def save(self,path):
-        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"gamma":self.gamma,"noise":self.noise,"max_inducing":self.max_inducing,"X_ind":self.X_ind,"y_ind":self.y_ind,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(path,"w",encoding="utf-8"),indent=2,ensure_ascii=False)
+        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"gamma":self.gamma,"noise":self.noise,"max_inducing":self.max_inducing,"X_ind":self.X_ind,"y_ind":self.y_ind,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(_ensure_parent(path),"w",encoding="utf-8"),indent=2,ensure_ascii=False)
     @classmethod
     def load(cls,path):
         d=json.load(open(path,encoding="utf-8")); m=cls(d.get("gamma",1.0),d.get("noise",0.1),d.get("max_inducing",150))
@@ -1774,7 +1785,7 @@ class SVMModel(_BaseModel):
         self._sgd_pair(wv,lv); self.n_train+=1
         if wp: self.history.append({"type":"contrast","winner":wp,"loser":lp})
     def save(self,path):
-        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"n_dims":self.n_dims,"C":self.C,"weights":self.weights,"bias":self.bias,"lr":self.lr,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(path,"w",encoding="utf-8"),indent=2,ensure_ascii=False)
+        json.dump({"model_type":self.MODEL_TYPE,"version":self.VERSION,"n_dims":self.n_dims,"C":self.C,"weights":self.weights,"bias":self.bias,"lr":self.lr,"n_train":self.n_train,"history":self.history[-200:],"annotated_paths":self.annotated_paths},open(_ensure_parent(path),"w",encoding="utf-8"),indent=2,ensure_ascii=False)
     @classmethod
     def load(cls,path):
         d=json.load(open(path,encoding="utf-8")); m=cls(d.get("n_dims",N_DIMS),d.get("C",1.0))
@@ -1834,7 +1845,7 @@ def load_model(base: str, model_type: str) -> "_BaseModel":
 def save_model(model: "_BaseModel", base: str) -> str:
     """Guarda el modelo en el archivo tipado. Devuelve la ruta."""
     path = _model_path_typed(base, model.MODEL_TYPE)
-    model.save(path)
+    model.save(_ensure_parent(path))
     return path
 
 
@@ -3328,7 +3339,7 @@ def cmd_index(args):
     else:
         actual_dim_names = DIM_NAMES_BASE
     np.savez_compressed(
-        str(output),
+        _ensure_parent(str(output)),
         vectors   = arr_vectors,
         paths     = arr_paths,
         meta      = arr_meta,
@@ -3641,7 +3652,7 @@ def cmd_rank(args):
     if args.csv:
         import csv
         out_path = args.csv
-        with open(out_path, "w", newline="", encoding="utf-8") as f:
+        with open(_ensure_parent(out_path), "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             header = ["rank_pref", "score", "uncertainty", "n_seen",
                       "duration_s", "bpm", "name", "path"]

@@ -967,7 +967,7 @@ def build_parser():
     p = argparse.ArgumentParser(
         description='TONICIZER — motor de modulación tonal entre tonalidades',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=("""
 Técnicas disponibles:
   pivot, common_tone, diatonic, chromatic, enharmonic, direct, sequential, dominant, all
 
@@ -978,7 +978,7 @@ Ejemplos:
   python tonicizer.py analyze obra.mid --window 2
   python tonicizer.py catalog
   python tonicizer.py selftest
-        """
+        """ + '\n\n' + 'Códigos de salida (contrato de la suite): 0 = ejecución correcta, aunque haya hallazgos; 1 = error de ejecución o de entrada; 2 = uso incorrecto o entrada ilegible; 3 = hallazgos o puerta no superada (con --strict, o en los modos cuyo fin es validar).')
     )
     sub = p.add_subparsers(dest='mode', required=True)
 

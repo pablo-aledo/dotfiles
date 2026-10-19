@@ -84,6 +84,17 @@ except ImportError:
           file=sys.stderr)
     sys.exit(1)
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ── Colores ANSI ─────────────────────────────────────────────────────────
 
 class C:
@@ -1584,7 +1595,7 @@ def rebuild_and_save(mid, tpb, notes, other_events, out_path):
         track.append(mido.MetaMessage("end_of_track", time=0))
         new_mid.tracks.append(track)
 
-    new_mid.save(out_path)
+    new_mid.save(_ensure_parent(out_path))
 
 
 def default_output_name(path, recurso, compas):

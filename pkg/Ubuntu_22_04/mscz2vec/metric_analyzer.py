@@ -70,6 +70,17 @@ _USE_COLOR = sys.stdout.isatty()
 _SPARK = "▁▂▃▄▅▆▇█"
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(k):
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
@@ -279,7 +290,7 @@ def _write_csv(st: dict, path: str):
     for i in range(st["n_bars"]):
         rows.append(f"{i+1},{pb['density'][i]},{pb['syncopation'][i]:.4f},"
                     f"{pb['downbeat'][i]}")
-    Path(path).write_text("\n".join(rows) + "\n", encoding="utf-8")
+    _ensure_parent(Path(path)).write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -351,7 +362,7 @@ def main():
         print(f"  … ({st['n_bars'] - nb} compases más; usa --csv para la tabla completa)")
 
     if args.json:
-        Path(args.json).write_text(
+        _ensure_parent(Path(args.json)).write_text(
             json.dumps({"version": VERSION, **st}, ensure_ascii=False, indent=2),
             encoding="utf-8")
         print(f"\n  {C}JSON: {args.json}{R}")

@@ -137,6 +137,17 @@ VARIATION_CODES = {
     "presage":        None,   # pp + fragmento inicial
 }
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ANÁLISIS MIDI: EXTRACCIÓN DE HUELLA
 # ══════════════════════════════════════════════════════════════════════════════
@@ -300,7 +311,7 @@ def load_bank(bank_path: str) -> dict:
 def save_bank(bank: dict, bank_path: str):
     """Guarda el banco de leitmotifs en JSON."""
     bank["last_modified"] = datetime.now().isoformat()
-    with open(bank_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(bank_path), "w", encoding="utf-8") as f:
         json.dump(bank, f, indent=2, ensure_ascii=False)
 
 
@@ -1038,7 +1049,7 @@ def _handle_special_transform(motif_midi: str, transform: str,
                     new_track.append(msg)
             out.tracks.append(new_track)
 
-        out.save(out_path)
+        out.save(_ensure_parent(out_path))
         return True
     except Exception as e:
         if verbose:
@@ -1049,7 +1060,7 @@ def _handle_special_transform(motif_midi: str, transform: str,
 def _copy_midi(src: str, dst: str) -> bool:
     """Copia un archivo MIDI como fallback."""
     try:
-        shutil.copy2(src, dst)
+        shutil.copy2(src, _ensure_parent(dst))
         return True
     except Exception:
         return False
@@ -1443,7 +1454,7 @@ def export_schedule_for_stitcher(schedule: dict, output_path: str):
         ],
     }
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(output_path), "w", encoding="utf-8") as f:
         json.dump(stitcher_schedule, f, indent=2, ensure_ascii=False)
 
     print(f"  Schedule para stitcher.py exportado: {output_path}")
@@ -1476,7 +1487,7 @@ def export_orchestrator_hints(bank: dict, output_path: str):
         }
     }
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(output_path), "w", encoding="utf-8") as f:
         json.dump(hints, f, indent=2, ensure_ascii=False)
 
     print(f"  Hints para orchestrator.py exportados: {output_path}")
@@ -1585,7 +1596,7 @@ def save_schedule(schedule: dict, path: str):
         schedule = {"injections": [], "gaps": []}
     schedule.setdefault("injections", [])
     schedule.setdefault("gaps", [])
-    with open(path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(path), "w", encoding="utf-8") as f:
         json.dump(schedule, f, indent=2, ensure_ascii=False)
     n = len(schedule.get("injections", []))
     print(f"  Schedule guardado: {path}  ({n} inyecciones)")
@@ -1846,7 +1857,7 @@ def main():
         if result["gaps"]:
             print(f"  Huecos: {len(result['gaps'])} tramos sin leitmotif")
         if args.output:
-            with open(args.output, "w", encoding="utf-8") as f:
+            with open(_ensure_parent(args.output), "w", encoding="utf-8") as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
             print(f"  Resultado guardado: {args.output}")
 
@@ -1859,7 +1870,7 @@ def main():
                                     verbose=args.verbose)
         print_report(result, bank)
         if args.output:
-            with open(args.output, "w", encoding="utf-8") as f:
+            with open(_ensure_parent(args.output), "w", encoding="utf-8") as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
             print(f"  Resultado guardado: {args.output}")
 

@@ -156,6 +156,17 @@ BUILTIN_TAGS = [
 ]
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _resolve_model_dir(args_model_dir: str | None) -> Path:
     """Resuelve la ruta de modelos por orden de prioridad."""
     if args_model_dir:
@@ -425,7 +436,7 @@ def _import_yue_modules(xcodec_dir: Path, model_dir: Path):
                     _pl.append("# [yue_composer patched] " + _ln)
                 else:
                     _pl.append(_ln)
-            _utils_py.write_text("\n".join(_pl), encoding="utf-8")
+            _ensure_parent(_utils_py).write_text("\n".join(_pl), encoding="utf-8")
             print("  [import] utils/utils.py parcheado")
 
     # ══ PASO 3: revertir parches de disco de descriptaudiocodec/soundstream ═
@@ -443,7 +454,7 @@ def _import_yue_modules(xcodec_dir: Path, model_dir: Path):
                     else _ln
                     for _ln in _src.splitlines()
                 )
-                _f.write_text(_reverted, encoding="utf-8")
+                _ensure_parent(_f).write_text(_reverted, encoding="utf-8")
                 print(f"  [import] {_f.name} revertido")
 
     try:
@@ -605,7 +616,7 @@ def _run_pipeline(
                     "torch.load(inst_decoder_path)",
                     'torch.load(inst_decoder_path, map_location="cpu", weights_only=False)'
                 )
-                _vocoder_py.write_text(_vsrc, encoding="utf-8")
+                _ensure_parent(_vocoder_py).write_text(_vsrc, encoding="utf-8")
                 print("  [import] vocoder.py parcheado (map_location=cpu)")
                 # Recargar módulo con parche
                 for _k in list(sys.modules.keys()):

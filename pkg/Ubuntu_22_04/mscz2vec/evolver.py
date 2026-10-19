@@ -80,6 +80,17 @@ except ImportError:
 import mido
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  REPRESENTACIÓN DE UN INDIVIDUO
 # ══════════════════════════════════════════════════════════════════════════════
@@ -449,7 +460,7 @@ def _write_dna_as_midi(dna, output_path):
     trk.append(mido.MetaMessage('end_of_track', time=0))
 
     try:
-        mid.save(output_path)
+        mid.save(_ensure_parent(output_path))
     except Exception as e:
         print(f"    ⚠ No se pudo guardar MIDI temporal: {e}")
 
@@ -652,7 +663,7 @@ def export_top_results(evolver, top_n, output_dir):
         if not ind.midi_path or not os.path.exists(ind.midi_path):
             continue
         dest = os.path.join(output_dir, f"evolved_top{rank:02d}_fit{fitness:.3f}.mid")
-        shutil.copy2(ind.midi_path, dest)
+        shutil.copy2(ind.midi_path, _ensure_parent(dest))
         exported.append(dest)
         print(f"  #{rank}  fitness={fitness:.4f}  gen={ind.generation}")
         print(f"       modo={ind.params.get('mode','?')}  "
@@ -684,7 +695,7 @@ def save_evolution_report(evolver, output_dir):
         ]
     }
     rpt_path = os.path.join(output_dir, 'evolution_report.json')
-    with open(rpt_path, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(rpt_path), 'w', encoding='utf-8') as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
     print(f"\n  → Informe guardado: {rpt_path}")
     return rpt_path

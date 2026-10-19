@@ -153,6 +153,17 @@ TEMPLATES = {
 
 OUT_TPB = 480  # ticks por negra del MIDI de salida
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Modelos de datos
 # ─────────────────────────────────────────────────────────────────────────────
@@ -329,7 +340,7 @@ def save_midi(path: str, notes: List[Note], tempo_map: List[Tuple[float,float,Tu
                                       velocity=e[3], time=delta))
     # end of track
     track.append(mido.MetaMessage('end_of_track', time=0))
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1743,7 +1754,7 @@ def main():
             "coherence_after": after,
         }
         rep_path = os.path.splitext(args.output)[0] + ".report.json"
-        with open(rep_path, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(rep_path), "w", encoding="utf-8") as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
         print(f"  Reporte JSON: {rep_path}")
 

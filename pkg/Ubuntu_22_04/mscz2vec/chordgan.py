@@ -135,6 +135,17 @@ FS        = 8     # steps por segundo (igual que el paper original)
 
 NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONVERSIÓN MIDI ↔ PIANO ROLL
 # ══════════════════════════════════════════════════════════════════════════════
@@ -247,7 +258,7 @@ def roll_to_midi(roll: np.ndarray, output_path: str,
 
     # Silencio final de 1 compás
     track.append(mido.MetaMessage('end_of_track', time=tpb * 4))
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -476,7 +487,7 @@ class ChordGANModel:
     # ── Serialización ─────────────────────────────────────────────────────────
 
     def save(self, path: str) -> None:
-        with open(path, 'wb') as f:
+        with open(_ensure_parent(path), 'wb') as f:
             pickle.dump(self, f)
         print(f"  Modelo guardado: {path}")
 
@@ -536,7 +547,7 @@ def cmd_train(args):
     model.fit(X_roll, X_chroma, verbose=args.verbose)
 
     print(f"\n[3/3] Guardando modelo…")
-    model.save(args.model)
+    model.save(_ensure_parent(args.model))
 
     if model.losses_history:
         last = model.losses_history[-1]

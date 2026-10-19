@@ -87,6 +87,17 @@ _COLORS = {"reset": "\033[0m", "bold": "\033[1m", "dim": "\033[2m",
            "magenta": "\033[35m", "red": "\033[31m"}
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(k):
     """Color ANSI si stdout es un TTY (mismo criterio que el resto del pipeline)."""
     return _COLORS.get(k, "") if sys.stdout.isatty() else ""
@@ -1396,7 +1407,7 @@ def write_midi(role_notes, tempo_events, palette, out_path):
                                velocity=int(vel), time=max(0, t_abs - prev)))
             prev = t_abs
         trk.append(MetaMessage("end_of_track", time=0))
-    mid.save(out_path)
+    mid.save(_ensure_parent(out_path))
     return out_path
 
 
@@ -1841,7 +1852,7 @@ def main():
             "coherence_before": before, "coherence_after": after,
             "total_bars": total_bars,
         }
-        with open(args.json, "w", encoding="utf-8") as fh:
+        with open(_ensure_parent(args.json), "w", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2, ensure_ascii=False)
         print(f"\n    plan exportado → {args.json}")
 

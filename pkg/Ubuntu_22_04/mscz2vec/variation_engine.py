@@ -118,6 +118,17 @@ import mido
 
 VARIATIONS = {}  # id → (nombre, descripción, función)
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 def register_variation(var_id, name, description):
     """Decorador para registrar variaciones."""
     def decorator(fn):
@@ -765,7 +776,7 @@ def build_catalog_midi(variation_results, output_path, tempo_bpm, time_sig):
     for trk in [mel_trk, acc_trk, bass_trk, cp_trk]:
         trk.append(mido.MetaMessage('end_of_track', time=0))
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
     print(f"  → Catálogo MIDI: {output_path}  ({cursor_bar} compases totales)")
     return output_path
 

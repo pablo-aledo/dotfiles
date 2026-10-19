@@ -92,6 +92,17 @@ TICKS = 480  # ticks per beat
 
 # Nota MIDI → nombre
 NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
 def midi_to_name(n):
     return f"{NOTE_NAMES[n % 12]}{n // 12 - 1}"
 
@@ -1139,7 +1150,7 @@ def build_output_midi(instrument_events, timpani_events, gm_perc_events,
     if meta:
         mid.tracks.insert(0, conductor_track(meta))
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
     return created_tracks
 
 
@@ -2493,7 +2504,7 @@ def main():
     # ── Dump KS ─────────────────────────────────────────────────────────────
     if args.dump_ks:
         out_path = 'keyswitch_defaults.json'
-        with open(out_path, 'w', encoding='utf-8') as f:
+        with open(_ensure_parent(out_path), 'w', encoding='utf-8') as f:
             json.dump(KEYSWITCH_TABLES, f, indent=2, ensure_ascii=False)
         print(f"  Tabla de keyswitches exportada a: {out_path}")
         print("  Edítala y pásala con --ks-config para personalizar.")
@@ -2701,7 +2712,7 @@ def main():
         report = generate_session_report(sections, template, args.library,
                                          base_name + '.mid', [], ks_table, fps)
         report += format_suggestions_report(suggestions, sections, tracks_raw, tpb)
-        with open(report_path, 'w', encoding='utf-8') as f:
+        with open(_ensure_parent(report_path), 'w', encoding='utf-8') as f:
             f.write(report)
         print(f"\n  Informe guardado: {report_path}")
         print(f"  Sugerencias generadas: {len(suggestions)}")
@@ -2780,7 +2791,7 @@ def main():
     report = generate_session_report(sections, template, args.library,
                                      output_midi, created, ks_table, fps)
     report += format_suggestions_report(suggestions, sections, tracks_raw, tpb)
-    with open(report_path, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(report_path), 'w', encoding='utf-8') as f:
         f.write(report)
 
     # ── Resumen ──────────────────────────────────────────────────────────────

@@ -74,6 +74,17 @@ SPECIAL_TOKENS = [PAD, BOS, EOS]
 PAD_ID, BOS_ID, EOS_ID = 0, 1, 2  # garantizado por el orden de SPECIAL_TOKENS
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  NOTA + E/S DE MIDI  (idéntico a miditok_algoritmos.py)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -146,7 +157,7 @@ def notes_to_midi(notes, tpb: int, path: str):
             else:
                 track.append(mido.Message("note_off", note=pitch, velocity=0, time=delta, channel=chan))
             last = t
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 
 def ticks_per_position(tpb: int) -> int:
@@ -867,10 +878,10 @@ class Trainer:
                   "optimizer_state": self.optimizer.state_dict(),
                   "best_val_loss": self.best_val_loss, "no_improve": self.no_improve,
                   "history": self.history}
-        torch.save(state, self.model_dir / self.CHECKPOINT_NAME)
+        torch.save(_ensure_parent(state), self.model_dir / self.CHECKPOINT_NAME)
         if is_best:
-            torch.save(state, self.model_dir / self.BEST_NAME)
-        with open(self.model_dir / self.HISTORY_NAME, "w") as f:
+            torch.save(_ensure_parent(state), self.model_dir / self.BEST_NAME)
+        with open(_ensure_parent(self.model_dir / self.HISTORY_NAME), "w") as f:
             json.dump(self.history, f, indent=2)
 
     def load_checkpoint(self):

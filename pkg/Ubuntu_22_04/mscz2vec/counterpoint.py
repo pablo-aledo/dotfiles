@@ -173,6 +173,17 @@ VOICE_PROGRAMS = {
 _MIDI_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#',
                     'G', 'G#', 'A', 'A#', 'B']
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 def _m2n(midi_pitch: int) -> str:
     """Convierte una altura MIDI en nombre científico (p.ej. 60 -> 'C4')."""
     if midi_pitch is None:
@@ -457,7 +468,7 @@ def save_two_voice_midi(
 
     mid.tracks.append(_make_track(melody_notes, 0, mel_program, "Melody"))
     mid.tracks.append(_make_track(cp_notes,     cp_channel, cp_program, "Counterpoint"))
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
     if verbose:
         print(f"    ✓ Guardado: {output_path}  ({len(cp_notes)} notas de contrapunto)")
     return output_path
@@ -1702,7 +1713,7 @@ def export_fingerprint(
             "bpm_tolerance": 10,
         },
     }
-    with open(output_path, 'w') as f:
+    with open(_ensure_parent(output_path), 'w') as f:
         json.dump(fp, f, indent=2)
     return fp
 

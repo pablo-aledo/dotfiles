@@ -468,6 +468,17 @@ V10=Variación rítmica, V11=Reharmonización, V12=Variación textural,
 V13=Arco emocional distinto, V14=Estocástica, V15=Contrapunto.
 """
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 def build_llm_prompt(instruction: str, current_state: dict) -> str:
     """Construye el prompt de usuario con contexto del MIDI actual."""
     state_lines = []
@@ -522,7 +533,7 @@ class MutationState:
         }
 
     def save_history(self):
-        with open(self.history_path, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(self.history_path), "w", encoding="utf-8") as f:
             json.dump(self.history, f, indent=2, ensure_ascii=False)
 
     def add_mutation(self, instruction: str, params: dict, result_path: str,
@@ -1236,12 +1247,12 @@ def _run_variation_engine(resolved: dict, source_midi: str,
         var_label = var_name_map.get(vtype, vtype)
         generated = Path(out_dir) / f"{stem}_{var_label}.mid"
         if generated.exists():
-            shutil.copy(str(generated), output)
+            shutil.copy(str(generated), _ensure_parent(output))
             return True
         # Buscar cualquier .mid recién generado
         candidates = sorted(Path(out_dir).glob("*.mid"), key=lambda p: p.stat().st_mtime, reverse=True)
         if candidates:
-            shutil.copy(str(candidates[0]), output)
+            shutil.copy(str(candidates[0]), _ensure_parent(output))
             return True
         return False
     except subprocess.TimeoutExpired:
@@ -1432,7 +1443,7 @@ def _apply_mido_transforms(resolved: dict, source_midi: str,
                     new_track.append(msg.copy())
             new_mid.tracks.append(new_track)
 
-        new_mid.save(output)
+        new_mid.save(_ensure_parent(output))
         return True
 
     except Exception as e:

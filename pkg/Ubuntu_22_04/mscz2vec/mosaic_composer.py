@@ -290,6 +290,17 @@ import numpy as np
 import mido
 from mido import MidiFile, MidiTrack, Message, MetaMessage
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ─── Importaciones opcionales del ecosistema ───────────────────────────────
 # Todos los scripts del ecosistema se invocan via subprocess — sin imports directos.
 
@@ -890,7 +901,7 @@ def stitch_midi_pair(
         mid_b = new_mid
 
     out_path = os.path.join(out_dir, f"stitched_{frag_b.id}.mid")
-    mid_b.save(out_path)
+    mid_b.save(_ensure_parent(out_path))
     return out_path
 
 
@@ -1349,7 +1360,7 @@ def blend_slot(
     # Guardar resultado intermedio para midi_dna_unified
     intermediate = os.path.join(out_dir, f"slot_{slot.id}_intermediate.mid")
     try:
-        mid_grafted.save(intermediate)
+        mid_grafted.save(_ensure_parent(intermediate))
     except Exception as e:
         if verbose:
             print(f"    [WARN] no se pudo guardar intermedio: {e}")
@@ -1400,10 +1411,10 @@ def blend_slot(
 
     # ── Fallback: usar el resultado del graft directamente ───────────────────
     try:
-        mid_grafted.save(slot_path)
+        mid_grafted.save(_ensure_parent(slot_path))
     except Exception:
         import shutil
-        shutil.copy(frag_a.file, slot_path)
+        shutil.copy(frag_a.file, _ensure_parent(slot_path))
 
     # ── [4] Restructurar en forma de frase (phrase_builder) ──────────────────
     slot_path = _phrase_build_slot(
@@ -1576,7 +1587,7 @@ def assemble_sequence(
     output_track.append(MetaMessage("end_of_track", time=0))
 
     assembled_path = os.path.join(out_dir, "mosaic_assembled.mid")
-    output_mid.save(assembled_path)
+    output_mid.save(_ensure_parent(assembled_path))
     if verbose:
         print(f"\n  ✓ Ensamblaje guardado: {assembled_path}")
     return assembled_path
@@ -1782,7 +1793,7 @@ def _split_midi_into_fragments(mid_path: str, bank_dir: str,
         if bars_total <= min_bars:
             import shutil
             dest = str(Path(bank_dir) / f"{stem}.mid")
-            shutil.copy(mid_path, dest)
+            shutil.copy(mid_path, _ensure_parent(dest))
             return [dest]
 
         # Detectar fronteras: silencios >= 2 beats entre notas
@@ -1793,7 +1804,7 @@ def _split_midi_into_fragments(mid_path: str, bank_dir: str,
         if not note_ticks:
             import shutil
             dest = str(Path(bank_dir) / f"{stem}.mid")
-            shutil.copy(mid_path, dest)
+            shutil.copy(mid_path, _ensure_parent(dest))
             return [dest]
 
         silence_threshold = tpb * 2   # 2 beats
@@ -1823,7 +1834,7 @@ def _split_midi_into_fragments(mid_path: str, bank_dir: str,
         if not windows:
             import shutil
             dest = str(Path(bank_dir) / f"{stem}.mid")
-            shutil.copy(mid_path, dest)
+            shutil.copy(mid_path, _ensure_parent(dest))
             return [dest]
 
         # Exportar cada ventana como MIDI independiente
@@ -1869,7 +1880,7 @@ def _split_midi_into_fragments(mid_path: str, bank_dir: str,
             )
             if has_notes:
                 dest = str(Path(bank_dir) / f"{stem}_frag{idx:03d}.mid")
-                new_mid.save(dest)
+                new_mid.save(_ensure_parent(dest))
                 saved.append(dest)
 
         return saved

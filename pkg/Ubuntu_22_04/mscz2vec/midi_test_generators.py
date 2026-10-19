@@ -53,6 +53,17 @@ except ImportError:
     sys.exit("ERROR: instala mido  →  pip install mido")
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # BATCH TEST MIDI GENERATOR
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -128,7 +139,7 @@ def gen_midi_01_rondo(path):
             acc.append((p,50,b*4+i,0.9))
     mid.tracks += [_make_track("Melodía",1,mel,True,132),_make_track("Contramelodía",2,ctr),
                    _make_track("Armonía",3,har),_make_track("Bajo",4,bas),_make_track("Acomp.",5,acc)]
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 def gen_midi_02_blues(path):
     """Blues 12-compases en A, forma AAB, 3 choruses"""
@@ -161,7 +172,7 @@ def gen_midi_02_blues(path):
             acc.append((p,52,b*4+i*0.5,0.45))
     mid.tracks += [_make_track("Guitar",1,mel,True,96),_make_track("Keys",2,ctr),
                    _make_track("Piano",3,har),_make_track("Bass",4,bas),_make_track("Rhythm",5,acc)]
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 def gen_midi_03_waltz(path):
     """Vals en 3/4, La bemol mayor, forma A-B-A'-Coda"""
@@ -212,7 +223,7 @@ def gen_midi_03_waltz(path):
         acc+=[(56,50,base,1),(60,50,base+1,1),(63,50,base+2,1)]
     mid.tracks+=[waltz_track("Violín",1,mel,True,160),waltz_track("Viola",2,ctr),
                  waltz_track("Piano",3,har),waltz_track("Cello",4,bas),waltz_track("Arpa",5,acc)]
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 def gen_midi_04_fugue(path):
     """Fuga a 4 voces en Re menor, sujeto + respuesta + episodios"""
@@ -245,7 +256,7 @@ def gen_midi_04_fugue(path):
     mid.tracks+=[_make_track("Soprano",1,mel,True,80),_make_track("Alto",2,ctr),
                  _make_track("Tenor",3,har+har_chords),_make_track("Bajo",4,bas),
                  _make_track("Continuo",5,acc)]
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 def gen_midi_05_tango(path):
     """Tango en La menor, forma A-B-A con habanera y bandoneón"""
@@ -284,7 +295,7 @@ def gen_midi_05_tango(path):
     mid.tracks+=[_make_track("Bandoneón",1,mel,True,92),_make_track("Violín",2,ctr),
                  _make_track("Piano",3,har),_make_track("Contrabajo",4,bas),
                  _make_track("Guitarra",5,acc)]
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 def gen_midi_06_modal(path):
     """Modal jazz en Dorian (D Dorian), forma AABA 32 bars × 3 choruses"""
@@ -326,7 +337,7 @@ def gen_midi_06_modal(path):
     mid.tracks+=[_make_track("Sax",1,mel,True,120),_make_track("Trompeta",2,ctr),
                  _make_track("Piano",3,har),_make_track("Contrabajo",4,bas),
                  _make_track("Batería",5,acc)]
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 def gen_midi_07_minimalist(path):
     """Minimalismo (estilo Reich), Do mayor, adición de fases"""
@@ -358,7 +369,7 @@ def gen_midi_07_minimalist(path):
     mid.tracks+=[_make_track("Voz1",1,mel,True,132),_make_track("Voz2",2,ctr),
                  _make_track("Pad",3,har),_make_track("Bajo",4,bas),
                  _make_track("Pulse",5,acc)]
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 def gen_midi_08_flamenco(path):
     """Flamenco (Phrygian, Mi), forma A-B-A con falseta y compás por 12"""
@@ -400,7 +411,7 @@ def gen_midi_08_flamenco(path):
     mid.tracks+=[_make_track("Guitarra",1,mel,True,88),_make_track("Cante",2,ctr),
                  _make_track("Armonía",3,har),_make_track("Bajo",4,bas),
                  _make_track("Palmas",5,acc)]
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 def gen_midi_09_march(path):
     """Marcha en Sol mayor, forma intro-A-B-Trio-A-B-Coda"""
@@ -439,7 +450,7 @@ def gen_midi_09_march(path):
     mid.tracks+=[_make_track("Trompeta",1,mel,True,120),_make_track("Trombón",2,ctr),
                  _make_track("Armonía",3,har),_make_track("Tuba",4,bas),
                  _make_track("Tambor",5,acc)]
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 def gen_midi_10_sonata(path):
     """Forma sonata: Expo(P-T-S-K) - Desarrollo - Recapitulación, Do mayor"""
@@ -480,7 +491,7 @@ def gen_midi_10_sonata(path):
     mid.tracks+=[_make_track("Piano",1,mel,True,116),_make_track("Violín",2,ctr),
                  _make_track("Armonía",3,har),_make_track("Cello",4,bas),
                  _make_track("Continuo",5,acc)]
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 
 BATCH_GENERATORS = [

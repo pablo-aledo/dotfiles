@@ -67,6 +67,17 @@ CONFIG_PATH = os.path.join(SCRIPT_DIR, 'piano_synth_config.json')
 _CONFIG_CACHE = None
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _load_config():
     """Read piano_synth_config.json (cached). Returns {} if it doesn't exist yet."""
     global _CONFIG_CACHE
@@ -83,7 +94,7 @@ def _save_config(updates):
     """Merge `updates` into piano_synth_config.json and write it back."""
     cfg = _load_config()
     cfg.update(updates)
-    with open(CONFIG_PATH, 'w') as f:
+    with open(_ensure_parent(CONFIG_PATH), 'w') as f:
         json.dump(cfg, f, indent=2)
     return cfg
 
@@ -4330,7 +4341,7 @@ def cmd_extract_soundboard_ir(args):
             print(f"    {f_check:5d} Hz: {db:+.1f} dB")
 
     out_path = os.path.join(SCRIPT_DIR, 'soundboard_tf.npz')
-    np.savez(out_path, midi_points=midi_points, freqs=freqs,
+    np.savez(_ensure_parent(out_path), midi_points=midi_points, freqs=freqs,
               transfer_functions=detrended_tfs, ir_length=IR_LENGTH)
     print(f"\nSaved {len(midi_points)} per-note transfer functions to {out_path}")
 
@@ -4427,7 +4438,7 @@ def cmd_extract_rhodes_tf(args):
             print(f"    {f_check:5d} Hz: {db:+.1f} dB")
 
     out_path = os.path.join(SCRIPT_DIR, 'rhodes_tf.npz')
-    np.savez(out_path, midi_points=midi_points, freqs=freqs,
+    np.savez(_ensure_parent(out_path), midi_points=midi_points, freqs=freqs,
               transfer_functions=detrended_tfs, ir_length=IR_LENGTH)
     print(f"\nSaved {len(midi_points)} per-note transfer functions to {out_path}")
 

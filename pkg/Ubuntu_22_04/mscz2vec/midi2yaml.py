@@ -391,6 +391,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Cuantizar beats a múltiplo de F (default: 0.25)")
     p.add_argument("--preview", action="store_true",
                    help="Mostrar estructura sin generar YAML")
+    p.add_argument("-o", "--output", default=None, metavar="FILE",
+                   help="Escribe el YAML generado en FILE (crea el directorio si "
+                        "no existe) en lugar de imprimirlo por stdout")
     p.add_argument("--verbose", action="store_true",
                    help="Informe detallado del análisis")
     return p
@@ -490,11 +493,19 @@ def main():
 
     # ── Cabecera informativa ─────────────────────────────────────
     nombre = os.path.basename(args.midi)
-    print(f"        # ── generado por midi2yaml.py desde {nombre} ──")
-    print(f"        # compas-inicio: {args.compas_inicio}  "
-          f"bpm: {bpm:.1f}  modo: {args.modo}")
-    print()
-    print("\n\n".join(bloques))
+    texto = (f"        # ── generado por midi2yaml.py desde {nombre} ──\n"
+             f"        # compas-inicio: {args.compas_inicio}  "
+             f"bpm: {bpm:.1f}  modo: {args.modo}\n\n"
+             + "\n\n".join(bloques) + "\n")
+    if args.output:
+        # Contrato de la suite: la salida crea su directorio padre.
+        d = os.path.dirname(os.path.abspath(args.output))
+        os.makedirs(d, exist_ok=True)
+        with open(args.output, "w", encoding="utf-8") as fh:
+            fh.write(texto)
+        print(f"[OK] YAML → {args.output}", file=sys.stderr)
+    else:
+        sys.stdout.write(texto)
 
 
 if __name__ == "__main__":

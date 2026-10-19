@@ -154,6 +154,17 @@ CANVAS_LEN_DEFAULT   = 48
 HISTORY_BARS_DEFAULT = 8
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ITEM / EVENT  (idéntico a remi.py)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -431,7 +442,7 @@ def build_vocab():
 
 
 def save_vocab(event2word, path):
-    with open(path, 'w') as f:
+    with open(_ensure_parent(path), 'w') as f:
         json.dump(event2word, f, indent=2, ensure_ascii=False)
     print(f"  → Vocabulario guardado: {path}  ({len(event2word)} tokens)")
 
@@ -636,7 +647,7 @@ def write_midi(words, word2event, output_path, prompt_path=None):
             note_track.append(mido.Message('note_off', note=entry[2], velocity=0, time=delta))
     note_track.append(mido.MetaMessage('end_of_track', time=0))
     tempo_track.append(mido.MetaMessage('end_of_track', time=0))
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 def repair_canvas_grammar(canvas, word2event, pad_id):
@@ -850,7 +861,7 @@ def cmd_convert(args):
         except Exception as e:
             print(f"    {f.name}: OMITIDO ({e})")
     if args.output:
-        with open(args.output, 'w') as fh:
+        with open(_ensure_parent(args.output), 'w') as fh:
             json.dump(out, fh)
         print(f"  → Tokens guardados en {args.output}")
     print("═" * 65)

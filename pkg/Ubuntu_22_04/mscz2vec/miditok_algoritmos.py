@@ -44,6 +44,17 @@ except ImportError:
     mido = None
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 class C:
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -143,7 +154,7 @@ def notes_to_midi(notes, tpb: int, path: str):
             else:
                 track.append(mido.Message("note_off", note=pitch, velocity=0, time=delta, channel=chan))
             last = t
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 
 # --------------------------------------------------------------------------- #
@@ -623,7 +634,7 @@ def cmd_tokenize(args):
     tokens = scheme.tokenize(notes, tpb)
     out = {"scheme": args.scheme, "source": str(src), "ticks_per_beat": tpb, "tokens": tokens}
     dest = Path(args.output) if args.output else src.with_suffix(f".{args.scheme}.tokens.json")
-    dest.write_text(json.dumps(out, ensure_ascii=False, indent=2))
+    _ensure_parent(dest).write_text(json.dumps(out, ensure_ascii=False, indent=2))
     ok(f"{len(tokens)} tokens ({args.scheme}) -> {dest}")
 
 

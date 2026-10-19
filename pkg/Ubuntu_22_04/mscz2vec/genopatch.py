@@ -119,6 +119,17 @@ from typing import Callable, Dict, List, Optional
 
 import numpy as np
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ── lazy imports (mismo patrón que el resto del ecosistema) ───────────────────
 # ══════════════════════════════════════════════════════════════════════════════
@@ -498,7 +509,7 @@ def make_fitness_reference(target_wav_path: str, sr: int,
     tmp_path = os.path.join(tmp_dir, "candidate.wav")
 
     def fitness(candidate_audio: np.ndarray) -> float:
-        sf.write(tmp_path, _normalize_peak(candidate_audio), sr, subtype="FLOAT")
+        sf.write(_ensure_parent(tmp_path), _normalize_peak(candidate_audio), sr, subtype="FLOAT")
         cand_feat = backend.extract(tmp_path)
         n = min(len(target_feat), len(cand_feat))
         return float(np.linalg.norm(target_feat[:n] - cand_feat[:n]))

@@ -107,6 +107,17 @@ CHORD_PRESETS = {
 CHORD_ROOTS = {'C':0,'C#':1,'Db':1,'D':2,'D#':3,'Eb':3,'E':4,'F':5,
                'F#':6,'Gb':6,'G':7,'G#':8,'Ab':8,'A':9,'A#':10,'Bb':10,'B':11}
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  HELPERS MIDI / PIANO ROLL
 # ══════════════════════════════════════════════════════════════════════════════
@@ -901,7 +912,7 @@ def cmd_round_trip(args):
     arrays  = [b.reshape(STEPS_PER_BAR, pitch_hi - pitch_lo) for b in bars]
     mid_out = _bars_to_midi(arrays, bpm=args.bpm, pitch_lo=pitch_lo)
     out     = Path(args.output)
-    mid_out.save(str(out))
+    mid_out.save(_ensure_parent(str(out)))
     print(f"  MIDI reconstruido: {out}")
 
     # Estadísticas

@@ -352,6 +352,17 @@ MIN_SPACING = {
 }
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  MIDI LOADER
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1787,7 +1798,7 @@ class HumanReviewLoop:
             else:
                 trk.append(Message('note_off', channel=0, note=pitch,
                                    velocity=0, time=delta))
-        mid.save(path)
+        mid.save(_ensure_parent(path))
 
     def _write_section_midi(self, voices, section, tracks_dict,
                              tpb, tempo, library, path,
@@ -1999,7 +2010,7 @@ class HumanReviewLoop:
             'orchestrations': orch_summary,
             'timestamp':      datetime.now().isoformat(),
         }
-        with open(self.prefs_path, 'a', encoding='utf-8') as f:
+        with open(_ensure_parent(self.prefs_path), 'a', encoding='utf-8') as f:
             f.write(json.dumps(entry) + '\n')
 
 
@@ -2072,7 +2083,7 @@ class PreferenceTrainer:
                                            random_state=42)
         model.fit(X_scaled, y)
 
-        with open(self.model_path, 'wb') as f:
+        with open(_ensure_parent(self.model_path), 'wb') as f:
             pickle.dump({'model': model, 'scaler': scaler}, f)
 
         pos_rate = y.mean()
@@ -2176,7 +2187,7 @@ class MIDIWriter:
                     track.append(Message('note_off', channel=ch,
                                          note=pitch, velocity=0,  time=delta))
 
-        mid.save(output_path)
+        mid.save(_ensure_parent(output_path))
         return output_path
 
     def write_fingerprints(self, fps_data, base_path):
@@ -2184,7 +2195,7 @@ class MIDIWriter:
         paths = []
         for fp, label in fps_data:
             p = f"{base_path}.sec{label}.fingerprint.json"
-            with open(p, 'w', encoding='utf-8') as f:
+            with open(_ensure_parent(p), 'w', encoding='utf-8') as f:
                 json.dump(fp, f, indent=2, ensure_ascii=False)
             paths.append(p)
         return paths
@@ -3600,7 +3611,7 @@ class InstrumentAssigner:
                 9, 'Percusión', 0)
             if trk: mid.tracks.append(trk)
 
-        mid.save(output_path)
+        mid.save(_ensure_parent(output_path))
         return n_notes
 
 
@@ -3956,7 +3967,7 @@ def main():
                     mid_out.tracks.append(trk)
 
         out_orch = base + '.mid'
-        mid_out.save(out_orch)
+        mid_out.save(_ensure_parent(out_orch))
         n_notes = n_notes_total
 
     else:

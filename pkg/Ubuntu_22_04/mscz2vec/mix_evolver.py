@@ -59,6 +59,17 @@ from audio_effects import (
     chain_to_dicts, save_chain,
 )
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ── lazy imports ────────────────────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
@@ -255,7 +266,7 @@ def write_temp_wav(audio: np.ndarray, sr: int, tmp_dir: str) -> str:
     fd, path = tempfile.mkstemp(suffix=".wav", dir=tmp_dir)
     import os
     os.close(fd)
-    sf.write(path, audio, sr, subtype="FLOAT")
+    sf.write(_ensure_parent(path), audio, sr, subtype="FLOAT")
     return path
 
 

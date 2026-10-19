@@ -127,6 +127,17 @@ DEGREE_RE = re.compile(r"^(b|#)?([1-8])([',]*)$")
 REST_TOKEN = 'r'
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def is_rest(token: str) -> bool:
     return token.strip().lower() == REST_TOKEN
 
@@ -1163,7 +1174,7 @@ def motif_to_midi(notes: list, ticks_per_beat: int, tempo_bpm: float,
         pending_delay = 0
         track.append(mido.Message('note_off', channel=0, note=n['midi'],
                                   velocity=0, time=dur_ticks))
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1464,6 +1475,34 @@ def print_stats() -> None:
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# ── Contrato de la suite: --style acepta el vocabulario común ──────────────────
+_STYLE_COMMON = ("auto", "baroque", "blues", "diatonic", "flamenco", "folk",
+                 "impressionist", "jazz", "modal", "pop", "romantic")
+
+
+def _resolve_style(value, native, default, aliases=None):
+    """Acepta el vocabulario común de la suite en --style. Lo que esta herramienta
+    no tiene de forma nativa se traduce con `aliases` o cae a `default`, avisando
+    por stderr (nunca falla ni cambia el valor en silencio)."""
+    if value is None or value in native:
+        return value
+    if value == "auto":
+        return default
+    target = (aliases or {}).get(value, default)
+    import sys as _sys
+    if value in (aliases or {}):
+        msg = f"equivale a {target!r} en esta herramienta"
+    else:
+        msg = ("sin equivalente nativo en esta herramienta; se usa "
+               + (repr(target) if target is not None else "el valor por defecto"))
+    print(f"[AVISO] --style {value}: {msg}", file=_sys.stderr)
+    return target
+
+
+_STYLE_NATIVE = ['diatonic', 'baroque', 'jazz', 'modal', 'romantic', 'impressionist', 'pop', 'flamenco', 'blues', 'folk']
+_STYLE_ALIASES = {}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Catálogo curado de motivos y frases melódicas con tensión y emoción.',
@@ -1507,8 +1546,7 @@ def main():
 
     # Filtros
     parser.add_argument('--style',    type=str,
-                        choices=['diatonic', 'baroque', 'jazz', 'modal', 'romantic',
-                                 'impressionist', 'pop', 'flamenco', 'blues', 'folk'],
+                        choices=_STYLE_NATIVE + [s for s in _STYLE_COMMON if s not in _STYLE_NATIVE],
                         help='Filtrar por estilo')
     parser.add_argument('--mode',     type=str, choices=MODES,
                         help='Filtrar por modo (también usado como modo de '
@@ -1553,6 +1591,7 @@ def main():
                         help='Mostrar nombre y descripción de cada entrada')
 
     args = parser.parse_args()
+    args.style = _resolve_style(args.style, _STYLE_NATIVE, None, _STYLE_ALIASES)
 
     # ── Análisis MIDI ────────────────────────────────────────────────────────
     if args.analyze_midi:
@@ -1578,7 +1617,7 @@ def main():
                 'note_index':  m['note_index'],
                 'start_beat':  m['start_beat'],
             } for m in matches]
-            with open(args.export_json, 'w') as f:
+            with open(_ensure_parent(args.export_json), 'w') as f:
                 json.dump(exportable, f, indent=2, ensure_ascii=False)
             print(f"  → JSON: {args.export_json}\n")
         return
@@ -1646,11 +1685,11 @@ def main():
             'notes':       notes,
             'generator':   'motif_table.py v2.0',
         }
-        with open(json_path, 'w') as f:
+        with open(_ensure_parent(json_path), 'w') as f:
             json.dump(out, f, indent=2, ensure_ascii=False)
         print(f"  → JSON:  {json_path}")
 
-        with open(txt_path, 'w') as f:
+        with open(_ensure_parent(txt_path), 'w') as f:
             f.write(motif_text + '\n')
         print(f"  → Texto: {txt_path}")
 
@@ -1683,7 +1722,7 @@ def main():
             exportable = [{k: v for k, v in e.items()
                           if k not in ('pattern', 'intervals', 'dur_ratios')}
                          for e in entries]
-            with open(args.export_json, 'w') as f:
+            with open(_ensure_parent(args.export_json), 'w') as f:
                 json.dump(exportable, f, indent=2, ensure_ascii=False)
             print(f"  → JSON: {args.export_json}")
         return
@@ -1711,7 +1750,7 @@ def main():
         exportable = [{k: v for k, v in e.items()
                       if k not in ('pattern', 'intervals', 'dur_ratios')}
                      for e in data]
-        with open(args.export_json, 'w') as f:
+        with open(_ensure_parent(args.export_json), 'w') as f:
             json.dump(exportable, f, indent=2, ensure_ascii=False)
         print(f"  → JSON: {args.export_json}\n")
 

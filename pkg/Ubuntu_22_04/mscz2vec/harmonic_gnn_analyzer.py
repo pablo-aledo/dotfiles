@@ -104,6 +104,17 @@ from typing import Optional
 import numpy as np
 import mido
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ─────────────────────────────────────────────────────────────────────────
 #  Colores ANSI (desactivables con --no-color)
 # ─────────────────────────────────────────────────────────────────────────
@@ -626,7 +637,7 @@ def cmd_graph(args):
             "edges_simultaneity": [{"a": i, "b": j, "w": w} for i, j, w in g.edges_simul if i < j],
             "edges_succession": [{"a": i, "b": j, "w": w} for i, j, w in g.edges_succ if i < j],
         }
-        with open(args.export_graph, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(args.export_graph), "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
         if not args.quiet:
             print(f"\nGrafo exportado a {args.export_graph}")
@@ -643,7 +654,7 @@ def cmd_analyze(args):
     if not args.quiet:
         print_analyze(analysis, args.explain, args.max_bars)
     if args.json:
-        with open(args.json, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(args.json), "w", encoding="utf-8") as f:
             json.dump(analysis, f, indent=2, ensure_ascii=False)
         if not args.quiet:
             print(f"\nJSON escrito en {args.json}")
@@ -664,7 +675,7 @@ def cmd_classify_notes(args):
         print(f"\nEstructurales: {n_struct}/{len(rows)}  ·  "
               f"Ornamentales: {len(rows)-n_struct}/{len(rows)}")
     if args.json:
-        with open(args.json, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(args.json), "w", encoding="utf-8") as f:
             json.dump(rows, f, indent=2, ensure_ascii=False)
         if not args.quiet:
             print(f"\nJSON escrito en {args.json}")
@@ -687,7 +698,7 @@ def cmd_compare(args):
         print_compare(base_analysis["bars"], gnn_analysis["bars"], args.only_changed)
     if args.json:
         payload = {"baseline": base_analysis, "gnn": gnn_analysis}
-        with open(args.json, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(args.json), "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
         if not args.quiet:
             print(f"\nJSON escrito en {args.json}")

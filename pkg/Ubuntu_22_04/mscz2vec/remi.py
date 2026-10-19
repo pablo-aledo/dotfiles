@@ -127,6 +127,17 @@ CHORD_OUTSIDERS2 = {'maj': [1, 3, 6, 8, 10],  'min': [1, 4, 6, 9, 11],
                     'dom': [1, 3, 6, 8, 11]}
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ITEM  (almacenamiento intermedio unificado)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -503,7 +514,7 @@ def build_vocab(use_chord: bool = False) -> tuple[dict, dict]:
 
 
 def save_vocab(event2word: dict, path: str):
-    with open(path, 'w') as f:
+    with open(_ensure_parent(path), 'w') as f:
         json.dump(event2word, f, indent=2, ensure_ascii=False)
     print(f"  → Vocabulario guardado: {path}  ({len(event2word)} tokens)")
 
@@ -658,7 +669,7 @@ def write_midi(words: list, word2event: dict,
     note_track.append(mido.MetaMessage('end_of_track', time=0))
     tempo_track.append(mido.MetaMessage('end_of_track', time=0))
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -887,10 +898,10 @@ class Trainer:
             'no_improve': self.no_improve,
             'history':    self.history,
         }
-        torch.save(state, self.model_dir / self.CHECKPOINT)
+        torch.save(_ensure_parent(state), self.model_dir / self.CHECKPOINT)
         if is_best:
-            torch.save(state, self.model_dir / self.BEST)
-        with open(self.model_dir / self.HISTORY, 'w') as f:
+            torch.save(_ensure_parent(state), self.model_dir / self.BEST)
+        with open(_ensure_parent(self.model_dir / self.HISTORY), 'w') as f:
             json.dump(self.history, f, indent=2)
 
     def resume(self):
@@ -1188,7 +1199,7 @@ def cmd_convert(args):
 
     if args.output and results:
         out = {str(p): w for p, w in results.items()}
-        with open(args.output, 'w') as f:
+        with open(_ensure_parent(args.output), 'w') as f:
             json.dump(out, f)
         print(f"\n  → Tokens guardados: {args.output}")
 

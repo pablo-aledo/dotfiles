@@ -124,6 +124,17 @@ KNOWN_MODELS = {
 }
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  UTILIDADES COMUNES
 # ══════════════════════════════════════════════════════════════════════════════
@@ -167,7 +178,7 @@ def _save_audio(audio, sample_rate: int, path: str):
     import numpy as np
     try:
         import soundfile as sf
-        sf.write(path, audio, sample_rate)
+        sf.write(_ensure_parent(path), audio, sample_rate)
     except ImportError:
         # Fallback: scipy
         try:
@@ -522,7 +533,7 @@ def cmd_encode(args):
         'noise_shape': list(noise.shape),
         'noise':       noise.cpu().numpy().tolist(),
     }
-    with open(out_path, 'w') as f:
+    with open(_ensure_parent(out_path), 'w') as f:
         json.dump(payload, f, indent=2)
 
     print(f'[encode] Ruido latente guardado en {out_path}')

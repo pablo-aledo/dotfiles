@@ -68,6 +68,17 @@
 
 DEBUG = True
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 def debug(*args):
     if DEBUG:
         print("[DEBUG]", *args)
@@ -7463,7 +7474,7 @@ def main():
             "source": args.input,
             "vectors": results
         }
-        with open(args.output, 'w', encoding='utf-8') as f:
+        with open(_ensure_parent(args.output), 'w', encoding='utf-8') as f:
             json.dump(output_data, f, indent=2, ensure_ascii=False)
         print(f"\n  ✓ Vectores guardados en: {args.output}")
 

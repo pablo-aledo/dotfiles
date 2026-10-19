@@ -79,6 +79,17 @@ VERSION = "1.0"
 _USE_COLOR = sys.stdout.isatty()
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(code):
     if not _USE_COLOR:
         return ""
@@ -800,7 +811,7 @@ def _write_midi(path, events, tpb=480, sig=(4, 4)):
         tr += _vlq_w(t - last) + bytes([0x90 if on else 0x80, p, v if on else 0])
         last = t
     tr += b"\x00\xff\x2f\x00"
-    Path(path).write_bytes(b"MThd" + (6).to_bytes(4, "big") + (0).to_bytes(2, "big") + (1).to_bytes(2, "big")
+    _ensure_parent(Path(path)).write_bytes(b"MThd" + (6).to_bytes(4, "big") + (0).to_bytes(2, "big") + (1).to_bytes(2, "big")
                            + tpb.to_bytes(2, "big") + b"MTrk" + len(tr).to_bytes(4, "big") + bytes(tr))
 
 
@@ -920,7 +931,7 @@ def main(argv=None):
             print_report(r, show_ssm=args.ssm)
             if args.json:
                 d = {k: v for k, v in r.items() if k != "_S"}
-                Path(args.json).write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+                _ensure_parent(Path(args.json)).write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
                 print(f"  JSON: {args.json}")
             return 0
         if args.cmd == "plan":
@@ -928,7 +939,7 @@ def main(argv=None):
             plan = build_plan(r, args.target)
             txt = json.dumps(plan, ensure_ascii=False, indent=1)
             if args.output:
-                Path(args.output).write_text(txt, encoding="utf-8")
+                _ensure_parent(Path(args.output)).write_text(txt, encoding="utf-8")
                 print(f"  Estructura escrita en {args.output}   forma: {r['form']}")
             else:
                 print(txt)
@@ -945,7 +956,7 @@ def main(argv=None):
             for k, v in res["components"].items():
                 print(f"    {k:<22} {v:.2f}")
             if args.json:
-                Path(args.json).write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+                _ensure_parent(Path(args.json)).write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
             print()
             return 0
     except (ValueError, OSError, IndexError) as e:

@@ -132,6 +132,17 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ── lazy imports ──────────────────────────────────────────────────────────────
 def _import_soundfile():
     try:
@@ -232,7 +243,7 @@ def read_wav(path: str) -> Tuple[np.ndarray, int]:
 def write_wav(path: str, audio: np.ndarray, sr: int = SAMPLE_RATE) -> None:
     sf = _import_soundfile()
     audio = np.clip(audio, -1.0, 1.0).astype(np.float32)
-    sf.write(path, audio, sr, subtype="PCM_24")
+    sf.write(_ensure_parent(path), audio, sr, subtype="PCM_24")
     print(f"  ✓  WAV escrito → {path}  ({len(audio)/sr:.2f}s, {sr}Hz)")
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -931,7 +942,7 @@ def cmd_analyse(args):
         "bins": bins,
     }
     out_path = args.output or path.stem + "_spectrum.json"
-    with open(out_path, "w") as f:
+    with open(_ensure_parent(out_path), "w") as f:
         json.dump(out, f, indent=2)
     print(f"  ✓  Espectro → {out_path}  ({len(bins)} bins)")
 
@@ -946,7 +957,7 @@ def cmd_spectrogram(args):
     mags, phases, freqs = stft_analyse(audio, sr, window_size=window, hop_ratio=hop)
 
     out_path = args.output or Path(args.input).stem + "_stft.npz"
-    np.savez_compressed(out_path,
+    np.savez_compressed(_ensure_parent(out_path),
                         magnitudes=mags, phases=phases, freqs=freqs,
                         sample_rate=np.array(sr),
                         window_size=np.array(window),
@@ -971,7 +982,7 @@ def cmd_spectrogram(args):
         plt.colorbar(ax.images[0], ax=ax, label="dB")
         png_path = str(Path(out_path).with_suffix(".png"))
         plt.tight_layout()
-        plt.savefig(png_path, dpi=150)
+        plt.savefig(_ensure_parent(png_path), dpi=150)
         plt.close()
         print(f"  ✓  PNG → {png_path}")
 
@@ -1145,7 +1156,7 @@ def cmd_edit_spectrum(args):
 
     # ── guardar NPZ editado ──────────────────────────────────────────────────
     out_npz = args.output or src.stem + "_edited.npz"
-    np.savez_compressed(out_npz,
+    np.savez_compressed(_ensure_parent(out_npz),
                         magnitudes=mags.astype(np.float32),
                         phases=phases.astype(np.float32),
                         freqs=freqs,
@@ -1250,7 +1261,7 @@ def cmd_npz_to_png(args):
         "audio_lab_n_bins":   n_bins,
         "audio_lab_mag_max":  float(mags.max()),
     }
-    with open(sidecar, "w") as f:
+    with open(_ensure_parent(sidecar), "w") as f:
         json.dump(sidecar_data, f, indent=2)
 
     img.save(out_path, format="PNG", pnginfo=meta)
@@ -1373,7 +1384,7 @@ def cmd_png_to_npz(args):
               f"frecuencias interpoladas linealmente")
 
     out_path = args.output or Path(args.input).stem + ".npz"
-    np.savez_compressed(out_path,
+    np.savez_compressed(_ensure_parent(out_path),
                         magnitudes=mags,
                         phases=phases,
                         freqs=freqs.astype(np.float32),

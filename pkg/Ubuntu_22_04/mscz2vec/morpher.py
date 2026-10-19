@@ -105,6 +105,17 @@ try:
 except ImportError:
     DNA_OK = False
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  FUNCIONES DE INTERPOLACIÓN
 # ══════════════════════════════════════════════════════════════════════════════
@@ -342,7 +353,7 @@ class MorphedDNA:
             prev_tick = tick
 
         try:
-            mid.save(path)
+            mid.save(_ensure_parent(path))
             return True
         except Exception as e:
             print(f"  ERROR guardando {path}: {e}")
@@ -423,7 +434,7 @@ class MorphedDNA:
             track.append(Message('note_off', note=note, velocity=0,   time=dur_t))
 
         try:
-            mid.save(path)
+            mid.save(_ensure_parent(path))
             return True
         except Exception as e:
             print(f"  ERROR write_from_sequence: {e}")
@@ -592,7 +603,7 @@ def _build_catalog(midi_paths: list, output_path: str):
                 print(f"  [catalog] Error con {midi_path}: {e}")
 
         track.append(MetaMessage('end_of_track', time=0))
-        catalog.save(output_path)
+        catalog.save(_ensure_parent(output_path))
     except Exception as e:
         print(f"  ERROR construyendo catálogo: {e}")
 

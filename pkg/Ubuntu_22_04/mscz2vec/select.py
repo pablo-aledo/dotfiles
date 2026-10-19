@@ -69,6 +69,17 @@ import umap
 import matplotlib.pyplot as plt
 from mido import MidiFile, MidiTrack
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  PARSER
 # ══════════════════════════════════════════════════════════════════════════════
@@ -185,7 +196,7 @@ def play_midi(file_path, duration=10, random_offset=False):
             temp_mid.tracks.append(new_track)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mid") as tmpfile:
-            temp_mid.save(tmpfile.name)
+            temp_mid.save(_ensure_parent(tmpfile.name))
             pygame.mixer.music.load(tmpfile.name)
             pygame.mixer.music.play()
         start_time = time.time()
@@ -349,10 +360,10 @@ def run_selection(
     comments = {}
 
     def save_and_exit():
-        with open(output_file, "w") as f:
+        with open(_ensure_parent(output_file), "w") as f:
             for mf in selected_files:
                 f.write(f"{mf}\n")
-        with open(comments_file, "w") as f:
+        with open(_ensure_parent(comments_file), "w") as f:
             for midi_file, comment in comments.items():
                 f.write(f"{os.path.basename(midi_file)}: {comment}\n")
         print(f"{len(selected_files)} MIDIs seleccionados. Guardado en {output_file}.")

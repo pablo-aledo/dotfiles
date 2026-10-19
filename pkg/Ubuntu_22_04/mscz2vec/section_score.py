@@ -121,6 +121,17 @@ except ImportError:
 
 _SCRIPT_DIR = Path(__file__).parent
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 def _load_module(name: str):
     """Carga un módulo del ecosistema situado en el mismo directorio."""
     path = _SCRIPT_DIR / f"{name}.py"
@@ -810,7 +821,7 @@ def _score_rhythmic(midi_path: str, seg_start_tick: int, seg_end_tick: int,
         import tempfile, os as _os
         with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as tmp:
             tmp_path = tmp.name
-        seg_mid.save(tmp_path)
+        seg_mid.save(_ensure_parent(tmp_path))
 
         score_seg = m21converter.parse(tmp_path)
         seg_rhythmic = _mscz2vec.rhythmic_features(score_seg)
@@ -985,7 +996,7 @@ def write_json(results: List[dict], global_profile: dict,
         'tempo_bpm':     round(global_profile['tempo_bpm'], 1),
         'segments':      results,
     }
-    with open(out_path, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(out_path), 'w', encoding='utf-8') as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
     print(f"  → JSON guardado en: {out_path}")
 
@@ -1050,7 +1061,7 @@ def write_text(results: List[dict], global_profile: dict,
     text = "\n".join(lines)
 
     if out_path:
-        with open(out_path, 'w', encoding='utf-8') as f:
+        with open(_ensure_parent(out_path), 'w', encoding='utf-8') as f:
             f.write(text)
         print(f"  → Informe de texto guardado en: {out_path}")
 
@@ -1135,7 +1146,7 @@ def write_midi_annotated(mid: MidiFile, results: List[dict],
         break
 
     try:
-        out_mid.save(out_path)
+        out_mid.save(_ensure_parent(out_path))
         print(f"  → MIDI anotado guardado en: {out_path}")
     except Exception as e:
         print(f"  [ERROR] No se pudo guardar el MIDI anotado: {e}")
@@ -1366,7 +1377,7 @@ def write_midi_pruned(mid: MidiFile, results: List[dict], n_remove: int,
 
     # ── 5. Guardar ────────────────────────────────────────────────────────────
     try:
-        out_mid.save(out_path)
+        out_mid.save(_ensure_parent(out_path))
         removed_bars = [(r['bar_start'], r['bar_end']) for r in to_remove]
         print(f"  → MIDI podado guardado en: {out_path}")
         print(f"    Segmentos eliminados: "

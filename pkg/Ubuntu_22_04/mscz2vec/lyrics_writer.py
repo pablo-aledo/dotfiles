@@ -115,6 +115,17 @@ VOWELS_ALL = (VOWELS_STRONG | VOWELS_WEAK_UNACC | VOWELS_WEAK_ACC
                | VOWELS_STRONG_ACC | set("üÜ"))
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _is_vowel(c):
     return c in VOWELS_ALL
 
@@ -809,7 +820,7 @@ def write_abc_with_lyrics(songs, out_path):
             out_lines.append("w: " + " | ".join(w_bars))
         out_lines.append("")  # separador entre canciones
 
-    with open(out_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(out_path), "w", encoding="utf-8") as f:
         f.write("\n".join(out_lines).rstrip("\n") + "\n")
 
 

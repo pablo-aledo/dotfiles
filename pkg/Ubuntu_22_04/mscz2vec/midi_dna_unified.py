@@ -409,6 +409,17 @@ ACC_PATTERNS = {
 }
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  MUTATION TIMELINE — curvas de mutación temporal definidas por el usuario
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3629,7 +3640,7 @@ def build_midi(melody_notes, acc_notes, bass_notes, cp_notes,
         mid.tracks.append(perc_trk)
         print(f"  → Percusión ({len(percussion_notes)} golpes, ch=9)")
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
     print(f"  → MIDI guardado: {output_path}")
 
     # Exportar pistas separadas [split_tracks]
@@ -3653,7 +3664,7 @@ def build_midi(melody_notes, acc_notes, bass_notes, cp_notes,
             mid_s.tracks.append(notes_to_track(tnotes, tch, tname, tprog,
                                                expression_curve=expr_curve))
             sname = f"{base}_{tname.lower()}.mid"
-            mid_s.save(sname)
+            mid_s.save(_ensure_parent(sname))
             print(f"  → Split: {sname}")
 
 
@@ -5211,7 +5222,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='MIDI DNA UNIFIED MIXER — Fusión de tres generaciones',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        epilog=(__doc__ + '\n\n' + 'Códigos de salida (contrato de la suite): 0 = ejecución correcta, aunque haya hallazgos; 1 = error de ejecución o de entrada; 2 = uso incorrecto o entrada ilegible; 3 = hallazgos o puerta no superada (con --strict, o en los modos cuyo fin es validar).')
     )
     # Ficheros de entrada
     parser.add_argument('inputs', nargs='*', help='Ficheros MIDI de entrada')

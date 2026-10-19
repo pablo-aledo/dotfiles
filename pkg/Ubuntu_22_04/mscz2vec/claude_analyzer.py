@@ -179,6 +179,17 @@ VA_BASE = {
     ('mixolydian','slow'):(0.2,-0.3),('mixolydian','medium'):(0.4,0.3),('mixolydian','fast'):(0.5,0.7),
 }
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ═══════════════════════════════════════════════════════════════
 #  DATA STRUCTURES
 # ═══════════════════════════════════════════════════════════════
@@ -11115,7 +11126,7 @@ def main():
             essay = report[start:end if end > 0 else len(report)]
             print('\n' + essay)
             if getattr(args, 'essay_output', None):
-                with open(args.essay_output, 'w', encoding='utf-8') as f:
+                with open(_ensure_parent(args.essay_output), 'w', encoding='utf-8') as f:
                     f.write(essay)
                 print(f"\n✅  Ensayo guardado en: {args.essay_output}")
         else:
@@ -11124,7 +11135,7 @@ def main():
         print('\n' + report)
 
     if args.output:
-        with open(args.output, 'w', encoding='utf-8') as f:
+        with open(_ensure_parent(args.output), 'w', encoding='utf-8') as f:
             f.write(report)
         print(f"\n✅  Informe guardado en: {args.output}")
 
@@ -11133,7 +11144,7 @@ def main():
             start = report.index('╔══ 71.')
             end   = report.find('╔══ 58.', start)
             essay = report[start:end if end > 0 else len(report)]
-            with open(args.essay_output, 'w', encoding='utf-8') as f:
+            with open(_ensure_parent(args.essay_output), 'w', encoding='utf-8') as f:
                 f.write(essay)
             print(f"✅  Ensayo guardado en: {args.essay_output}")
 

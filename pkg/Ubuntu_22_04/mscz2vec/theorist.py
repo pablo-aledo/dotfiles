@@ -322,6 +322,17 @@ for _pk, _pd in MOOD_INSTRUMENT_PALETTES.items():
         MOOD_TO_PALETTE[_mw] = _pk
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def select_instrument_palette(description: str, core_emotion: str = "",
                                arc: str = "hero") -> tuple[str, dict]:
     """
@@ -1630,7 +1641,7 @@ def export_theorist_json(plan: dict, description: str, output_base: str,
         **plan,
     }
     path = f"{output_base}.theorist.json"
-    with open(path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(path), "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
     return path
 
@@ -1639,7 +1650,7 @@ def export_curves_json(plan: dict, output_base: str) -> str:
     """Exporta las curvas en el formato exacto de tension_designer.py."""
     curves = plan.get("tension_curves", {})
     path = f"{output_base}.curves.json"
-    with open(path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(path), "w", encoding="utf-8") as f:
         json.dump(curves, f, indent=2, ensure_ascii=False)
     return path
 
@@ -1661,7 +1672,7 @@ def export_instruments_json(plan: dict, output_base: str) -> str | None:
     }
     palette_key = palette.get("key", "custom")
     path = f"{output_base}.instruments.json"
-    with open(path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(path), "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
     return path
 
@@ -1721,7 +1732,7 @@ def export_narrator_plan(plan: dict, output_base: str) -> str:
     }
 
     path = f"{output_base}_plan.json"
-    with open(path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(path), "w", encoding="utf-8") as f:
         json.dump(narrator_plan, f, indent=2, ensure_ascii=False)
     return path
 
@@ -1886,7 +1897,7 @@ def export_pipeline_yaml(plan: dict, output_base: str,
     ]
 
     path = f"{output_base}_plan.yaml"
-    with open(path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(path), "w", encoding="utf-8") as f:
         f.write("\n".join(yaml_lines))
     return path
 
@@ -2437,7 +2448,7 @@ def _run_export_and_execute(plan: dict, description: str, args, description_args
     suggested_lm = plan.get("suggested_leitmotifs", [])
     if suggested_lm:
         lm_suggestions_path = f"{output_base}.leitmotifs_suggested.json"
-        with open(lm_suggestions_path, "w", encoding="utf-8") as _f:
+        with open(_ensure_parent(lm_suggestions_path), "w", encoding="utf-8") as _f:
             json.dump({"suggested_leitmotifs": suggested_lm}, _f,
                       indent=2, ensure_ascii=False)
 

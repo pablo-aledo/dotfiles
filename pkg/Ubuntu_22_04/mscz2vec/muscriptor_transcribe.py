@@ -93,6 +93,17 @@ YELLOW = "" if _NO_COLOR else "\033[33m"
 RED = "" if _NO_COLOR else "\033[31m"
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(text: str, color: str) -> str:
     return f"{color}{text}{RESET}" if color else text
 
@@ -2007,7 +2018,7 @@ def note_event2midi(
         )
 
     if output_file is not None:
-        midi.save(output_file)
+        midi.save(_ensure_parent(output_file))
     return midi
 
 
@@ -3855,7 +3866,7 @@ class TranscriptionModel:
             notes, program_names=program_names, beat_grid=beat_grid, quantize=quantize
         )
         buf = io.BytesIO()
-        midi.save(file=buf)
+        midi.save(file=_ensure_parent(buf))
         return buf.getvalue()
 
     def _program_for_instrument(self, instrument: str) -> int:
@@ -4030,7 +4041,7 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
             sys.stdout.buffer.write(midi_bytes)
             sys.stdout.buffer.flush()
         else:
-            output.write_bytes(midi_bytes)
+            _ensure_parent(output).write_bytes(midi_bytes)
             _err(_c(f"✓ Saved MIDI to {output}", GREEN))
         if args.notes:
             _err("Re-run with --format json to inspect the event stream.")
@@ -4063,7 +4074,7 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
             sys.stdout.write(payload + "\n")
             sys.stdout.flush()
         else:
-            output.write_text(payload)
+            _ensure_parent(output).write_text(payload)
             _err(_c(f"✓ Saved JSON to {output}", GREEN))
         if args.notes:
             for e in events:

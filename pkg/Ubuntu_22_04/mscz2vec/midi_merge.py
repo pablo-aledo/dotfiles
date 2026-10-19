@@ -71,6 +71,17 @@ except ImportError:
 PERCUSSION_CHANNEL = 9
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ANÁLISIS DE STEMS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -485,7 +496,7 @@ def main():
 
     # ── Guardar ──────────────────────────────────────────────────────────────
     try:
-        out_mid.save(args.output)
+        out_mid.save(_ensure_parent(args.output))
         n_tracks = len(out_mid.tracks) - 1   # sin contar el track de tempo
         print(f"MIDI merged guardado en: {args.output}  "
               f"({n_tracks} stems, TPB={target_tpb})")

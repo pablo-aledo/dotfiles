@@ -55,6 +55,17 @@ from pathlib import Path
 
 import numpy as np
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ------------------------------------------------------------------------------
 # Lazy imports
 # ------------------------------------------------------------------------------
@@ -118,7 +129,7 @@ def save_wav(path, audio, sample_rate=DEFAULT_SR):
     peak = np.max(np.abs(audio)) if audio.size else 0.0
     if peak > 1.0:
         audio = audio / peak * 0.98
-    sf.write(str(path), audio, sample_rate)
+    sf.write(_ensure_parent(str(path)), audio, sample_rate)
 
 
 def resample_numpy(audio, sr_in, sr_out):
@@ -726,7 +737,7 @@ def cmd_analyze(args):
     audio = load_wav(args.inp, args.sample_rate)
     f0 = extract_f0(audio, args.sample_rate, args.frame_size, args.hop)
     loudness = extract_loudness(audio, args.sample_rate, args.frame_size, args.hop)
-    np.savez(args.out, f0=f0, loudness=loudness, sample_rate=args.sample_rate,
+    np.savez(_ensure_parent(args.out), f0=f0, loudness=loudness, sample_rate=args.sample_rate,
              frame_size=args.frame_size, hop=args.hop)
     voiced = f0 > 0
     f0_mean = float(f0[voiced].mean()) if voiced.any() else 0.0
@@ -798,8 +809,8 @@ def cmd_train(args):
                     n_noise_bands=args.n_noise_bands, z_dim=args.z_dim,
                     hidden=args.hidden, n_mels=40, segment_samples=segment_samples,
                     frame_size=DEFAULT_FRAME_SIZE, hop=DEFAULT_FRAME_HOP)
-    torch.save({"state_dict": model.state_dict(), "hparams": hparams}, args.out)
-    with open(str(args.out) + ".json", "w") as f:
+    torch.save(_ensure_parent({"state_dict": model.state_dict(), "hparams": hparams}), args.out)
+    with open(_ensure_parent(str(args.out) + ".json"), "w") as f:
         json.dump({"hparams": hparams, "loss_curve": losses}, f, indent=2)
     print(f"train: wrote checkpoint {args.out} (final loss={losses[-1]:.4f})")
     return losses

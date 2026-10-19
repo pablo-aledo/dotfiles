@@ -126,6 +126,17 @@ PARAM_META = {
 }
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  [1] ANÁLISIS ARMÓNICO + [2] VOCES + [6] ESTRUCTURA + [8] GROOVE MAP
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1050,7 +1061,7 @@ def modulate_midi(
         APPLY[param](curve=curves[param], intensity=intensity, s=s_eff, e=e_eff)
 
     out_path = output or _auto_output_name(input_path, params, curve)
-    mid.save(out_path)
+    mid.save(_ensure_parent(out_path))
     print(f"\n  ✓ Guardado en: {out_path}")
 
     if plot: _plot_curves(curves, n_bars, scope_start, scope_end, A)

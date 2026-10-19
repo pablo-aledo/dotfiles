@@ -163,6 +163,17 @@ _CHROMATIC_MAP   = {"none":0.0,"light":0.05,"medium":0.12,"heavy":0.25}
 _CADENCE_MAP     = {"weak":0.3,"medium":0.6,"strong":0.9}
 _CHORD_CHG_MAP   = {"very_slow":4,"slow":2,"medium":1,"fast":1}
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  MUSICCONFIG — interfaz pública (strings legibles)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -218,7 +229,7 @@ class MusicConfig:
             return cls.from_dict(json.load(f))
 
     def to_json(self, path: str) -> None:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(path), "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
 
     def apply_patch(self, patch: dict) -> "MusicConfig":
@@ -3465,7 +3476,7 @@ def _sintetizar(mc: MusicConfig, duracion: float, sr: int = DEFAULT_SR,
 def _guardar_wav(audio: np.ndarray, path: str, sr: int = DEFAULT_SR) -> None:
     try:
         import soundfile as sf  # type: ignore
-        sf.write(path, audio, sr)
+        sf.write(_ensure_parent(path), audio, sr)
         return
     except ImportError:
         pass

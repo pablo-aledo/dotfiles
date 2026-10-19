@@ -113,6 +113,17 @@ VARIATION_NAMES = {
     "V09":         "Modal",
 }
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  EXTRACCIÓN DE NOTAS DESDE MIDI
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1334,7 +1345,7 @@ def analyse(midi_path: str,
     if report:
         stem = Path(midi_path).stem
         report_path = Path(midi_path).parent / f"{stem}.leitmotif_analysis.json"
-        with open(report_path, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(report_path), "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
         print(f"  Reporte JSON guardado: {report_path}")
 
@@ -1402,7 +1413,7 @@ def build_parser():
     p = argparse.ArgumentParser(
         description="LEITMOTIF ANALYST — Identifica leitmotifs y sus variaciones en una obra MIDI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=("""
 Ejemplos:
   # Detección automática
   python leitmotif_analyst.py beethoven.mid
@@ -1427,7 +1438,7 @@ Ejemplos:
   # Controlar la resolución del mapa:
   python leitmotif_analyst.py obra.mid --map-cols 1   # una columna por compás (default)
   python leitmotif_analyst.py obra.mid --map-cols 4   # agrupar de 4 en 4
-        """
+        """ + '\n\n' + 'Códigos de salida (contrato de la suite): 0 = ejecución correcta, aunque haya hallazgos; 1 = error de ejecución o de entrada; 2 = uso incorrecto o entrada ilegible; 3 = hallazgos o puerta no superada (con --strict, o en los modos cuyo fin es validar).')
     )
     p.add_argument("midi",             help="Archivo MIDI de la obra a analizar")
     p.add_argument("--leitmotif",      default=None, metavar="FILE",

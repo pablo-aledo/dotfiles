@@ -78,6 +78,17 @@ _USE_COLOR = sys.stdout.isatty()
 _SPARK = "▁▂▃▄▅▆▇█"
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(k):
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
@@ -303,7 +314,7 @@ def design_tempo(path: str, out_path: Optional[str] = None,
 
     if write_json:
         sidecar = str(Path(path).with_suffix("")) + ".tempo.json"
-        with open(sidecar, "w", encoding="utf-8") as fh:
+        with open(_ensure_parent(sidecar), "w", encoding="utf-8") as fh:
             json.dump({"version": VERSION, "n_bars": int(n_bars),
                        "shape": shape, "base_bpm": round(base_bpm, 2),
                        "points": [[b, v] for b, v in points],

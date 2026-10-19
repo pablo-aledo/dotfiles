@@ -81,6 +81,17 @@ _LEVELS = ["principiante", "elemental", "elemental-medio", "intermedio",
            "intermedio-alto", "avanzado", "avanzado-alto", "virtuoso"]
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(k):
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
@@ -415,7 +426,7 @@ def main():
             st = grade_piece(args.midi, split=args.split)
             _print_grade(st)
             if args.json:
-                Path(args.json).write_text(
+                _ensure_parent(Path(args.json)).write_text(
                     json.dumps({"version": VERSION, **st}, ensure_ascii=False, indent=2),
                     encoding="utf-8")
                 print(f"\n  {C}JSON: {args.json}{R}")

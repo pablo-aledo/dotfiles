@@ -119,6 +119,17 @@ DEFAULT_PALETTE = {
 }
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  UTILIDADES DE PITCH
 # ══════════════════════════════════════════════════════════════════════════════
@@ -890,10 +901,10 @@ class CycleGANTrainer:
             'no_improve': self.no_improve,
             'history':    self.history,
         }
-        torch.save(state, self.model_dir / self.CHECKPOINT_NAME)
+        torch.save(_ensure_parent(state), self.model_dir / self.CHECKPOINT_NAME)
         if is_best:
-            torch.save(state, self.model_dir / self.BEST_NAME)
-        with open(self.model_dir / self.HISTORY_NAME, 'w') as f:
+            torch.save(_ensure_parent(state), self.model_dir / self.BEST_NAME)
+        with open(_ensure_parent(self.model_dir / self.HISTORY_NAME), 'w') as f:
             json.dump(self.history, f, indent=2)
 
     def load_checkpoint(self, path=None):
@@ -1210,7 +1221,7 @@ def _rolls_to_midi(bars_per_role, cfg, palette, output_path,
         if remaining > 0:
             track.append(mido.MetaMessage('end_of_track', time=remaining))
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
     return n_notes_total
 
 
@@ -1319,7 +1330,7 @@ def _prepare_one_midi(args_tuple):
         'n_pitch':  n_pitch,
     }
     save_dict['meta_json'] = np.array([json.dumps(meta)])
-    np.savez_compressed(str(Path(output_dir) / f"{stem}.npz"), **save_dict)
+    np.savez_compressed(_ensure_parent(str(Path(output_dir) / f"{stem}.npz")), **save_dict)
 
     stats_partial['files_ok']      = 1
     stats_partial['total_windows'] = min_windows
@@ -1626,7 +1637,7 @@ def cmd_encode(args):
 
     z = acts['z'].mean(dim=(2, 3))[0].numpy()
     out_path = args.output or 'z_style.json'
-    with open(out_path, 'w') as f:
+    with open(_ensure_parent(out_path), 'w') as f:
         json.dump({'z': z.tolist(), 'source': str(args.input),
                    'direction': 'A2B', 'dim': len(z)}, f, indent=2)
     print(f"[encode] Vector de estilo guardado en {out_path}  (dim={len(z)})")
@@ -1679,7 +1690,7 @@ def cmd_style_corpus(args):
 
     centroid = np.stack(zs).mean(axis=0)
     out_path = args.output or 'z_corpus_centroid.json'
-    with open(out_path, 'w') as f:
+    with open(_ensure_parent(out_path), 'w') as f:
         json.dump({'z': centroid.tolist(), 'n_files': len(zs),
                    'dim': len(centroid)}, f, indent=2)
     print(f"\n[style-corpus] Centroide guardado en {out_path}  "

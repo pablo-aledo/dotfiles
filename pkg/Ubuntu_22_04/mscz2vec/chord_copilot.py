@@ -172,6 +172,17 @@ _MIN_DIATONIC_QUALITY = {0: "min", 2: "dim", 3: "maj", 5: "min", 7: "min", 8: "m
 VOICE_RANGES = {"S": (60, 81), "A": (53, 74), "T": (48, 69), "B": (36, 60)}
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def pc_name(pc: int) -> str:
     return NOTE_NAMES[pc % 12]
 
@@ -773,7 +784,7 @@ def build_model(corpus_arg: str, order: int = 3, k: float = 0.5,
 
 def save_model(model: Dict, out_path: str) -> None:
     tmp_path = out_path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(tmp_path), "w", encoding="utf-8") as f:
         json.dump(model, f, ensure_ascii=False, indent=1)
     os.replace(tmp_path, out_path)  # evita dejar un JSON parcial si algo falla a mitad
 
@@ -1163,7 +1174,7 @@ def render_progression_midi(chord_seq: List[Tuple[int, str]], out_path: str,
         for i, p in enumerate(pitches):
             track.append(mido.Message("note_off", note=p, velocity=64,
                                        time=(dur_ticks if i == 0 else 0)))
-    mid.save(out_path)
+    mid.save(_ensure_parent(out_path))
     return blocks
 
 
@@ -1261,7 +1272,7 @@ def _write_progression_midi(path: str, degree_chords: List[Tuple[int, str]],
         for i, p in enumerate(block):
             track.append(mido.Message("note_off", note=p, velocity=64,
                                        time=(dur_ticks if i == 0 else 0)))
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 
 def make_test_corpus(out_dir: str, seed: int = 42) -> Dict[str, int]:

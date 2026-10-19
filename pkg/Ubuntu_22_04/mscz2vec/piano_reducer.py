@@ -139,6 +139,17 @@ MAX_VOICES_RH = 4
 MAX_VOICES_LH = 3
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  UTILIDADES DE NOTAS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -979,7 +990,7 @@ def build_piano_midi(rh_notes: List[dict], lh_notes: List[dict],
                                track_name='Piano MI', program=0)
     mid.tracks.append(lh_track)
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 def build_combined_midi(rh_notes: List[dict], lh_notes: List[dict],
@@ -1000,7 +1011,7 @@ def build_combined_midi(rh_notes: List[dict], lh_notes: List[dict],
                                track_name='[REDUCCION] Piano MI', program=0)
     combined.tracks.append(rh_track)
     combined.tracks.append(lh_track)
-    combined.save(output_path)
+    combined.save(_ensure_parent(output_path))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1038,7 +1049,7 @@ def export_yaml(rh_notes: List[dict], lh_notes: List[dict],
             'mano_izquierda': notes_to_yaml_section(lh_notes, tpb, 'MI'),
         }
     }
-    with open(output_path, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(output_path), 'w', encoding='utf-8') as f:
         yaml.dump(data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
     print(f"  YAML exportado: {output_path}")
 
@@ -1270,7 +1281,7 @@ def main():
 
     # ── Informe ───────────────────────────────────────────────────────────────
     report_text = generate_report(report_data, tracks, tpb, args.midi, output_midi)
-    with open(output_report, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(output_report), 'w', encoding='utf-8') as f:
         f.write(report_text)
     print(f"  Informe: {output_report}")
 

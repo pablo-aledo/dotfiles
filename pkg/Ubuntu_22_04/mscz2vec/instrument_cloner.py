@@ -98,6 +98,17 @@ from typing import Optional, List, Dict, Tuple, Any
 import numpy as np
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # =============================================================================
 # §0  imports perezosos (torch/soundfile/scipy solo se cargan si hacen falta)
 # =============================================================================
@@ -464,7 +475,7 @@ def prepare_dataset(input_dir: str, out_path: str, sample_rate: int = DEFAULTS["
             loudness_db=torch.tensor(np.stack([r["loudness_db"] for r in rows])),
             instrument_idx=torch.tensor(np.array(splits_idx[split], dtype=np.int64)),
         )
-    torch.save(out, out_path)
+    torch.save(_ensure_parent(out), out_path)
     n_train = 0 if out["train"] is None else len(out["train"]["instrument_idx"])
     n_val = 0 if out["val"] is None else len(out["val"]["instrument_idx"])
     n_test = 0 if out["test"] is None else len(out["test"]["instrument_idx"])
@@ -782,7 +793,7 @@ def save_checkpoint(path: str, model: "SynthModel", instrument_names: List[str],
         final_train_loss=final_train_loss,
         final_val_loss=final_val_loss,
     )
-    torch.save(out, path)
+    torch.save(_ensure_parent(out), path)
 
 
 def _load_raw(path: str) -> Dict[str, Any]:
@@ -817,7 +828,7 @@ def save_voice(path: str, name: str, checkpoint_fingerprint: Dict[str, Any],
         steps_trained=steps_trained, final_loss=final_loss,
         source_wav=source_wav, source_duration_s=source_duration_s,
     )
-    torch.save(out, path)
+    torch.save(_ensure_parent(out), path)
 
 
 def load_voice(path: str) -> Dict[str, Any]:
@@ -1098,7 +1109,7 @@ def synthesize(checkpoint_path: str, out_path: str, voice_path: Optional[str] = 
     if peak > 0.999:
         audio_out = audio_out / peak * 0.999
     sf = _import_soundfile()
-    sf.write(out_path, audio_out, hp["sample_rate"], subtype="FLOAT")
+    sf.write(_ensure_parent(out_path), audio_out, hp["sample_rate"], subtype="FLOAT")
     print(f"  OK voz '{label}' -> {out_path} ({len(audio_out) / hp['sample_rate']:.2f}s)")
 
 

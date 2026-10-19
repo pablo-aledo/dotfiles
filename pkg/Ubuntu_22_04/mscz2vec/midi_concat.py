@@ -132,6 +132,17 @@ TRACK_SPEC_RE = re.compile(r'^(?i:all)$|^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$')
 CHANNEL_SPEC_RE = re.compile(r'^(?i:all)$|^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$')
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ANÁLISIS DE ENTRADA
 # ══════════════════════════════════════════════════════════════════════════════
@@ -733,7 +744,7 @@ def main():
 
     # ── Guardar ──────────────────────────────────────────────────────────────
     try:
-        out_mid.save(args.output)
+        out_mid.save(_ensure_parent(args.output))
         total_beats = timeline[-1][2] / target_tpb if timeline else 0
         print(f"MIDI concatenado guardado en: {args.output}  "
               f"({len(stems)} MIDIs, TPB={target_tpb}, "

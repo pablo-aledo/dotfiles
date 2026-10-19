@@ -45,6 +45,8 @@
 ║    output-flag   Herramientas con entrada y sin ninguna opción de salida     ║
 ║    style-vocab   Vocabularios --style distintos entre herramientas           ║
 ║    exit-findings Herramientas que devuelven rc!=0 al encontrar hallazgos     ║
+║    exit-contract Herramientas con rc=1 por resultado sin documentar 0/1/2/3 ║
+║    output-dir    Herramientas que escriben ficheros sin crear el directorio  ║
 ║    doc-vs-code   Flags citados en la cabecera que el argparse no define      ║
 ║    undocumented  Flags definidos que la cabecera no menciona                 ║
 ║    versions      Familias de versiones (x, x_v2, x_v3 ...) y su última       ║
@@ -78,6 +80,17 @@ VERSION = "1.1"
 INDEX_SCHEMA = 2
 
 _USE_COLOR = sys.stdout.isatty()
+
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
 
 
 def _c(code):
@@ -373,6 +386,9 @@ def parse_tool(path: Path):
         "usage": usage[:14], "flags": flags, "subcommands": subs,
         "dynamic_cli": dynamic, "has_argparse": bool(flags or "argparse" in imports),
         "exit_patterns": _exit_patterns(src),
+        "exit_documented": "contrato de la suite" in src,
+        "writes_files": bool(re.search(r"\.save\(|open\([^)]*[\"'][wax]b?[\"']|write_text\(|write_bytes\(", src)),
+        "outdir_ok": bool(re.search(r"_ensure_parent|makedirs|\.mkdir\(", src)),
         "local_deps": local, "third_party": third,
         "category": _categorize(name, title + " " + purpose_txt),
         "doc_flags": sorted(set(re.findall(r"(?<![\w-])(--[a-z][a-z0-9\-]*)", doc))),
@@ -409,7 +425,7 @@ def load_index(root: Path, index_path: Path, rebuild=False, quiet=True):
     idx = {"schema": INDEX_SCHEMA, "dir": str(root), "n_tools": len(tools), "tools": tools}
     if n_new or not index_path.exists():
         try:
-            index_path.write_text(json.dumps(idx, ensure_ascii=False), encoding="utf-8")
+            _ensure_parent(index_path).write_text(json.dumps(idx, ensure_ascii=False), encoding="utf-8")
         except OSError:
             pass          # directorio de solo lectura: se trabaja en memoria
     return idx
@@ -437,7 +453,7 @@ def _short(s, n=100):
 def cmd_build(args, idx):
     out = Path(args.out) if args.out else None
     if out:
-        out.write_text(json.dumps(idx, ensure_ascii=False, indent=1), encoding="utf-8")
+        _ensure_parent(out).write_text(json.dumps(idx, ensure_ascii=False, indent=1), encoding="utf-8")
     errs = [t for t in idx["tools"] if t.get("error")]
     if args.json:
         print(json.dumps({"n_tools": idx["n_tools"], "errors": [t["file"] for t in errs],
@@ -721,12 +737,37 @@ def lint(idx, checks):
 
     if "exit-findings" in checks:
         for t in tools:
+            if t.get("exit_documented"):
+                continue            # ya documenta el contrato de códigos de salida
             for p in t.get("exit_patterns", []):
                 if p.startswith("rc=1 si hay hallazgos"):
                     add("exit-findings", t["name"], "info",
                         "devuelve rc=1 cuando encuentra hallazgos (no solo en errores): en pipelines con "
                         "`set -e` o runner --strict la herramienta 'falla' haciendo su trabajo; "
                         "conviene documentarlo en la cabecera")
+
+    if "output-dir" in checks:
+        # Contrato: toda herramienta que escribe ficheros crea el directorio padre
+        # (helper _ensure_parent o makedirs/mkdir); si no, falla con FileNotFoundError.
+        for t in tools:
+            if t.get("error") or not t.get("writes_files"):
+                continue
+            if not t.get("outdir_ok"):
+                add("output-dir", t["name"], "warn",
+                    "escribe ficheros pero no crea el directorio de salida "
+                    "(usa _ensure_parent(ruta) o os.makedirs(..., exist_ok=True))")
+
+    if "exit-contract" in checks:
+        # Contrato: los hallazgos no son un fallo. Quien termina con rc!=0 según un
+        # booleano de resultado debe documentar los códigos 0/1/2/3 en su --help.
+        for t in tools:
+            if t.get("error") or t.get("exit_documented"):
+                continue
+            if t.get("exit_patterns") and any(p.startswith("rc=1 si hay hallazgos")
+                                              for p in t["exit_patterns"]):
+                add("exit-contract", t["name"], "warn",
+                    "termina con rc=1 según un resultado y no documenta los códigos de "
+                    "salida del contrato (0 ok · 1 error · 2 uso · 3 hallazgos con --strict)")
 
     if "doc-vs-code" in checks:
         everywhere = {o for tt in tools for f in tt.get("flags", []) for o in f["opts"]}
@@ -775,7 +816,8 @@ def lint(idx, checks):
     return findings
 
 
-ALL_CHECKS = ["syntax", "output-flag", "style-vocab", "exit-findings", "doc-vs-code",
+ALL_CHECKS = ["syntax", "output-flag", "output-dir", "style-vocab", "exit-findings",
+              "exit-contract", "doc-vs-code",
               "undocumented", "versions", "doc-vs-sub", "example-args", "missing-refs", "counts"]
 
 
@@ -1610,7 +1652,7 @@ def cmd_weights(args, idx):
 
 def build_parser():
     ap = argparse.ArgumentParser(prog="suite_index.py",
-                                 description="Catálogo y linter de las herramientas de la suite.")
+                                 description="Catálogo y linter de las herramientas de la suite.", epilog='Códigos de salida (contrato de la suite): 0 = ejecución correcta, aunque haya hallazgos; 1 = error de ejecución o de entrada; 2 = uso incorrecto o entrada ilegible; 3 = hallazgos o puerta no superada (con --strict, o en los modos cuyo fin es validar).')
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--dir", default=None, help="Directorio de la suite (default: el de este script)")
     common.add_argument("--index", default=None, help="Caché del índice (default: <dir>/.suite_index.json)")

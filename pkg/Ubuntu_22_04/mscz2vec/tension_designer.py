@@ -136,6 +136,17 @@ CURVE_COLORS = {
 
 CURVE_KEYS = list(CURVE_COLORS.keys())
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  DISEÑADOR DE CURVAS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -383,7 +394,7 @@ class CurveDesigner:
         """Exporta las curvas a JSON."""
         curves_dict = self._get_curves_dict()
         path = 'tension_curves.json'
-        with open(path, 'w') as f:
+        with open(_ensure_parent(path), 'w') as f:
             json.dump(curves_dict, f, indent=2)
         self._update_status(f"✓ Curvas exportadas: {path}")
 
@@ -547,7 +558,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='TENSION DESIGNER — Diseñador visual de curvas de tensión',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        epilog=(__doc__ + '\n\n' + 'Códigos de salida (contrato de la suite): 0 = ejecución correcta, aunque haya hallazgos; 1 = error de ejecución o de entrada; 2 = uso incorrecto o entrada ilegible; 3 = hallazgos o puerta no superada (con --strict, o en los modos cuyo fin es validar).')
     )
     parser.add_argument('inputs', nargs='*', help='MIDIs fuente')
     parser.add_argument('--bars',    type=int, default=16, help='Número de compases (default: 16)')
@@ -674,7 +685,7 @@ def main():
     curves_path = args.output.replace('.mid', '_curves.json')
     if not curves_path.endswith('.json'):
         curves_path += '_curves.json'
-    with open(curves_path, 'w') as f:
+    with open(_ensure_parent(curves_path), 'w') as f:
         json.dump(final_curves, f, indent=2)
     print(f"  ✓ Curvas guardadas: {curves_path}")
     print("  Puedes recargarlas con: --load " + curves_path)

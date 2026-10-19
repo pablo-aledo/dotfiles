@@ -721,6 +721,17 @@ PR_CHORD_DIM       = 16         # 12 pitch-classes + 4 harm_func one-hot
 PR_MAX_TRANSP      = 5          # transposición máxima en semitonos (±5)
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ESTRUCTURAS DE DATOS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2301,7 +2312,7 @@ def preprocess_corpus(corpus_dir: str,
     rolls_arr  = np.stack(all_rolls,  axis=0).astype(np.int16)
     chords_arr = np.stack(all_chords, axis=0).astype(np.float32)
 
-    np.savez_compressed(output_path,
+    np.savez_compressed(_ensure_parent(output_path),
                         rolls=rolls_arr,
                         chords=chords_arr)
 
@@ -2380,8 +2391,8 @@ class MelodyLSTM(nn.Module if TORCH_OK else object):
 def save_lstm(model: "MelodyLSTM", path: str,
               hparams: Dict[str, Any]):
     """Guarda el modelo y sus hiperparámetros."""
-    torch.save({"state_dict": model.state_dict(),
-                "hparams": hparams}, path)
+    torch.save(_ensure_parent({"state_dict": model.state_dict(),
+                "hparams": hparams}), path)
 
 
 def load_lstm(path: str) -> "MelodyLSTM":
@@ -3020,7 +3031,7 @@ def notes_to_midi(notes: List[MelodyNote], chord_events: List[ChordEvent],
                                         velocity=vel, time=delta))
                 cur = abs_t
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 def motif_to_midi(motif: List[MelodyNote], tempo_bpm: int,
@@ -3556,7 +3567,7 @@ def main():
 
     # ── JSON ──────────────────────────────────────────────────────────────────
     json_path = f"{base}.melody.json"
-    with open(json_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(json_path), "w", encoding="utf-8") as f:
         json.dump(best.to_dict(), f, indent=2, ensure_ascii=False)
     print(f"[json]   {json_path}")
 

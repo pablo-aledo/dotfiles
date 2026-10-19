@@ -98,6 +98,17 @@ TONALITY_GRAPH = {
     'Gm': {'relative': 'Bb', 'dominant': 'Dm', 'subdominant': 'Cm', 'parallel': 'G',   'mediant': 'Bb'},
 }
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ARCOS NARRATIVOS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -516,7 +527,7 @@ def _print_plan_summary(plan: dict):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def export_plan_json(plan: dict, path: str):
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(path), 'w', encoding='utf-8') as f:
         json.dump(plan, f, indent=2, ensure_ascii=False)
     print(f"[narrator] Plan guardado en: {path}")
 
@@ -529,7 +540,7 @@ def export_curves_json(plan: dict, path: str):
         'base_key': plan['base_key'],
         **plan['curves']
     }
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(path), 'w', encoding='utf-8') as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
     print(f"[narrator] Curvas exportadas en: {path}")
 
@@ -562,7 +573,7 @@ def export_yaml(plan: dict, path: str):
             f"    tool: {step['tool']}",
             f"    label: {step['label']}",
         ]
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(path), 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
     print(f"[narrator] YAML exportado en: {path}")
 

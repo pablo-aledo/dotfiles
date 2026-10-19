@@ -171,6 +171,17 @@ MIDI_CENTER    = 60   # Do central
 TICKS_PER_BAR  = 48   # resolución por defecto
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  UTILIDADES DE RANGO DE PITCH  (de diffusion_composer_v4.py)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -803,7 +814,7 @@ class CycleGANModel:
     # ── Serialización ────────────────────────────────────────────────────────
 
     def save(self, path: str):
-        with open(path, 'wb') as f:
+        with open(_ensure_parent(path), 'wb') as f:
             pickle.dump(self, f)
         print(f"  Modelo guardado → {path}")
 
@@ -1221,7 +1232,7 @@ def cmd_train(args):
     model.domain_b_name = os.path.basename(args.domain_b.rstrip('/'))
     model.fit(feats_a, feats_b, iters=args.iters, verbose=args.verbose)
 
-    model.save(args.model)
+    model.save(_ensure_parent(args.model))
 
     if model.losses_history:
         last = model.losses_history[-1]

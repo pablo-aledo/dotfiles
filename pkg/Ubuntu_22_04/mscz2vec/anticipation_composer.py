@@ -55,6 +55,17 @@ import mido
 import numpy as np
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Color de terminal (ANSI), al estilo del resto de herramientas mutopia
 # ──────────────────────────────────────────────────────────────────────────
@@ -609,7 +620,7 @@ def interarrival_to_midi(tokens, debug=False):
 # ──────────────────────────────────────────────────────────────────────────
 
 def save_tokens(path, tokens, fmt):
-    with open(path, 'w') as f:
+    with open(_ensure_parent(path), 'w') as f:
         json.dump({'format': fmt, 'tokens': tokens}, f)
 
 
@@ -876,7 +887,7 @@ def cmd_render(args):
         mid = events_to_midi(tokens, debug=args.debug)
     else:
         mid = interarrival_to_midi(tokens, debug=args.debug)
-    mid.save(args.output)
+    mid.save(_ensure_parent(args.output))
     ok_msg(f'MIDI escrito en {args.output}')
 
 

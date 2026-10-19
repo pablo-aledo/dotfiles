@@ -155,6 +155,17 @@ DEFAULT_TRAIN = dict(
 ROOT_NOTE_LIST = [' C', 'C#', ' D', 'D#', ' E', ' F', 'F#', ' G', 'G#', ' A', 'A#', ' B']
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  DETECCIÓN DE MELODÍA (para convert)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1322,7 +1333,7 @@ def cmd_encode(args):
         print(f"[encode] Error: {args.input} no superó los filtros de calidad"); sys.exit(1)
 
     out = args.output or (Path(args.input).stem + '.pkl')
-    with open(out, 'wb') as f:
+    with open(_ensure_parent(out), 'wb') as f:
         pickle.dump(inst, f)
 
     from scipy.sparse import issparse

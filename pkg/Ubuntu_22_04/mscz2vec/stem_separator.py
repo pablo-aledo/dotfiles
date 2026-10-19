@@ -94,6 +94,17 @@ DEFAULT_CACHE_DIR = Path(os.environ.get("STEM_SEPARATOR_HOME", Path.home() / ".s
 DEFAULT_MODEL_PATH = DEFAULT_CACHE_DIR / "htdemucs.th"
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ============================================================================
 # 1. BLOQUES DE RED — mirroring exacto de la jerarquía de módulos original
 #    (nombres de atributo idénticos a demucs/htdemucs.py, hdemucs.py,
@@ -1089,7 +1100,7 @@ def _resample_linear(wav, sr_in, sr_out):
 def save_wav(path, wav, sr=SAMPLERATE):
     import soundfile as sf
     data = wav.detach().cpu().clamp(-1, 1).numpy().T  # (frames, ch)
-    sf.write(str(path), data, sr)
+    sf.write(_ensure_parent(str(path)), data, sr)
 
 
 # ============================================================================

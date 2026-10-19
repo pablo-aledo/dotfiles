@@ -85,6 +85,17 @@ MAGENTA = "\033[35m"
 CYAN = "\033[36m"
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def info(msg: str) -> None:
     print(f"{CYAN}[info]{RESET} {msg}")
 
@@ -643,7 +654,7 @@ def save_note_events(
     note_events: List[Tuple[float, float, int, float, Optional[List[int]]]],
     save_path: Union[pathlib.Path, str],
 ) -> None:
-    with open(save_path, "w", newline="") as fhandle:
+    with open(_ensure_parent(save_path), "w", newline="") as fhandle:
         writer = csv.writer(fhandle, delimiter=",")
         writer.writerow(["start_time_s", "end_time_s", "pitch_midi", "velocity", "pitch_bend"])
         for start_time, end_time, note_number, amplitude, pitch_bend in note_events:
@@ -747,7 +758,7 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
 
         if args.save_model_outputs:
             npz_path = build_output_path(audio_path, output_dir, "npz")
-            np.savez(npz_path, **model_output)
+            np.savez(_ensure_parent(npz_path), **model_output)
             ok(f"Posteriogramas guardados en {npz_path}")
 
         if args.save_notes:

@@ -111,6 +111,17 @@ from typing import Callable, Dict, List, Optional
 
 import numpy as np
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ── lazy imports (mismo patrón que el resto del ecosistema) ───────────────────
 # ══════════════════════════════════════════════════════════════════════════════
@@ -533,7 +544,7 @@ def load_chain(path: str) -> Chain:
 def save_chain(chain: Chain, path: str) -> None:
     """Escribe una Chain a JSON en el formato de §1.4/1.6 — el mismo que
     espera `--chain` de la CLI de este programa."""
-    Path(path).write_text(json.dumps(chain_to_dicts(chain), indent=2, ensure_ascii=False))
+    _ensure_parent(Path(path)).write_text(json.dumps(chain_to_dicts(chain), indent=2, ensure_ascii=False))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

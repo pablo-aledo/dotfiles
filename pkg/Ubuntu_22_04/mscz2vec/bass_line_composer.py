@@ -258,6 +258,17 @@ STYLE_KEYWORDS = {
 }
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ESTRUCTURAS DE DATOS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1539,7 +1550,7 @@ def notes_to_midi(bass_notes: List[BassNote], melody_notes: Optional[List[Tuple]
                                         note=note, velocity=vel, time=delta))
         cur_tick = abs_tick
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1614,7 +1625,7 @@ def export_fingerprint(fp: dict, output_path: str) -> str:
     json_path = output_path.replace(".mid", ".fingerprint.json")
     if not json_path.endswith(".fingerprint.json"):
         json_path += ".fingerprint.json"
-    with open(json_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(json_path), "w", encoding="utf-8") as f:
         json.dump(fp, f, indent=2, ensure_ascii=False)
     print(f"[fingerprint] {json_path}")
     return json_path
@@ -1944,6 +1955,34 @@ def play_midi(path: str, seconds: float = 15.0):
 #  CLI
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── Contrato de la suite: --style acepta el vocabulario común ──────────────────
+_STYLE_COMMON = ("auto", "baroque", "blues", "diatonic", "flamenco", "folk",
+                 "impressionist", "jazz", "modal", "pop", "romantic")
+
+
+def _resolve_style(value, native, default, aliases=None):
+    """Acepta el vocabulario común de la suite en --style. Lo que esta herramienta
+    no tiene de forma nativa se traduce con `aliases` o cae a `default`, avisando
+    por stderr (nunca falla ni cambia el valor en silencio)."""
+    if value is None or value in native:
+        return value
+    if value == "auto":
+        return default
+    target = (aliases or {}).get(value, default)
+    import sys as _sys
+    if value in (aliases or {}):
+        msg = f"equivale a {target!r} en esta herramienta"
+    else:
+        msg = ("sin equivalente nativo en esta herramienta; se usa "
+               + (repr(target) if target is not None else "el valor por defecto"))
+    print(f"[AVISO] --style {value}: {msg}", file=_sys.stderr)
+    return target
+
+
+_STYLE_NATIVE = ["walking", "classical", "baroque", "latin", "blues", "pop", "pedal", "ostinato", "auto"]
+_STYLE_ALIASES = {"jazz": "walking", "romantic": "classical"}
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="BASS LINE COMPOSER — Línea de bajo como voz compositiva autónoma",
@@ -1962,8 +2001,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tempo",    type=_tempo_arg, default=120)
     p.add_argument("--time-sig", default="4/4")
     p.add_argument("--style",    default="auto",
-                   choices=["walking", "classical", "baroque", "latin",
-                            "blues", "pop", "pedal", "ostinato", "auto"])
+                   choices=_STYLE_NATIVE + [s for s in _STYLE_COMMON if s not in _STYLE_NATIVE])
 
     # Entrada armónica
     p.add_argument("--chords",       type=str, default=None,
@@ -2013,6 +2051,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main():
     parser = build_parser()
     args   = parser.parse_args()
+    args.style = _resolve_style(args.style, _STYLE_NATIVE, "auto", _STYLE_ALIASES)
 
     if args.bars is None:   # antes 16 fijo: truncaba en silencio progresiones más largas
         args.bars = 16
@@ -2243,7 +2282,7 @@ def main():
     analysis  = analyze_bass_line(best)
     out_data  = best.to_dict()
     out_data["analysis"] = analysis
-    with open(json_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(json_path), "w", encoding="utf-8") as f:
         json.dump(out_data, f, indent=2, ensure_ascii=False)
     print(f"[json]    {json_path}")
 

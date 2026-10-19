@@ -109,6 +109,17 @@ try:
 except ImportError:
     HAS_NP = False
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # MIDI PARSING
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1856,7 +1867,7 @@ def generate_test_midi(path: str):
     mid.tracks.append(make_track("Contrabajo", 3, bass,         add_meta=False))
     mid.tracks.append(make_track("Piano izq.", 4, acc,          add_meta=False))
 
-    mid.save(path)
+    mid.save(_ensure_parent(path))
     print(f"✓ MIDI sintético guardado: {path}  (estructura A-B-C-A', 5 pistas)")
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1950,7 +1961,7 @@ def main():
     print(f"{'═'*50}")
     html = analyze(mid_path, cfg)
 
-    with open(out_path, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(out_path), 'w', encoding='utf-8') as f:
         f.write(html)
     print(f"\n  ✓ Informe HTML generado: {out_path}")
     print(f"{'═'*50}\n")

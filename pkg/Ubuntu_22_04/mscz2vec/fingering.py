@@ -548,7 +548,28 @@ def main() -> None:
     )
     parser.add_argument("--right-only", action="store_true", help="Solo mano derecha")
     parser.add_argument("--left-only",  action="store_true", help="Solo mano izquierda")
+    parser.add_argument(
+        "-o", "--output", default=None, metavar="FILE",
+        help="Escribe el informe de digitación en FILE (crea el directorio si no "
+             "existe) en lugar de imprimirlo por stdout"
+    )
     args = parser.parse_args()
+
+    if args.output:
+        # Contrato de la suite: la salida crea su directorio padre y el informe
+        # se escribe en el fichero; stdout queda libre para mensajes de estado.
+        import os as _os
+        _os.makedirs(_os.path.dirname(_os.path.abspath(args.output)), exist_ok=True)
+        _fh = open(args.output, "w", encoding="utf-8")
+        _stdout = sys.stdout
+        sys.stdout = _fh
+        import atexit as _atexit
+
+        def _cerrar_informe():
+            sys.stdout = _stdout
+            _fh.close()
+            print(f"[OK] informe → {args.output}", file=sys.stderr)
+        _atexit.register(_cerrar_informe)
 
     # Carga del MIDI
     try:

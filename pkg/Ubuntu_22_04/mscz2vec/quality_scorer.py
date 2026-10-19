@@ -170,6 +170,17 @@ ABSOLUTE_THRESHOLDS = {
 DISSONANT_INTERVALS = {1, 2, 6, 10, 11}   # m2, M2, tritono, m7, M7
 CONSONANT_INTERVALS = {0, 3, 4, 5, 7, 8, 9}  # unísono, 3as, 4as, 5as, 6as
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 def _is_tertian_sonority(pitches) -> bool:
     """True si las clases de altura forman una tríada terciana (con o sin 7ª).
 
@@ -3263,7 +3274,7 @@ def _save_explain(text: str, path: str):
         # Guardar sin códigos ANSI
         import re
         clean = re.sub(r"\033\[[0-9;]*m", "", text)
-        with open(path, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(path), "w", encoding="utf-8") as f:
             f.write(clean)
         print(f"  Explicación guardada: {path}")
     except Exception as e:
@@ -3543,7 +3554,7 @@ def main():
         else:
             output = [rp.to_dict() for rp in reports]
         try:
-            with open(args.out_json, 'w', encoding='utf-8') as f:
+            with open(_ensure_parent(args.out_json), 'w', encoding='utf-8') as f:
                 json.dump(output, f, indent=2, ensure_ascii=False)
             print(f"  Informe guardado: {args.out_json}")
         except Exception as e:

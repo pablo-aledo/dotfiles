@@ -392,13 +392,42 @@ def perform_midi(path: str, out_path: Optional[str] = None,
 #  CLI
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── Contrato de la suite: --style acepta el vocabulario común ──────────────────
+_STYLE_COMMON = ("auto", "baroque", "blues", "diatonic", "flamenco", "folk",
+                 "impressionist", "jazz", "modal", "pop", "romantic")
+
+
+def _resolve_style(value, native, default, aliases=None):
+    """Acepta el vocabulario común de la suite en --style. Lo que esta herramienta
+    no tiene de forma nativa se traduce con `aliases` o cae a `default`, avisando
+    por stderr (nunca falla ni cambia el valor en silencio)."""
+    if value is None or value in native:
+        return value
+    if value == "auto":
+        return default
+    target = (aliases or {}).get(value, default)
+    import sys as _sys
+    if value in (aliases or {}):
+        msg = f"equivale a {target!r} en esta herramienta"
+    else:
+        msg = ("sin equivalente nativo en esta herramienta; se usa "
+               + (repr(target) if target is not None else "el valor por defecto"))
+    print(f"[AVISO] --style {value}: {msg}", file=_sys.stderr)
+    return target
+
+
+_STYLE_NATIVE = sorted(STYLE_INTENSITY)
+_STYLE_ALIASES = {"romantic": "romantico", "baroque": "clasico"}
+
+
 def main():
     global _USE_COLOR
     ap = argparse.ArgumentParser(prog="performer.py",
                                  description="Renderizado expresivo de interpretación.")
     ap.add_argument("midi")
     ap.add_argument("--output")
-    ap.add_argument("--style", choices=sorted(STYLE_INTENSITY), default="romantico")
+    ap.add_argument("--style", choices=_STYLE_NATIVE + [s for s in _STYLE_COMMON if s not in _STYLE_NATIVE],
+                    default="romantico")
     ap.add_argument("--intensity", type=float)
     ap.add_argument("--melody-track", type=int)
     ap.add_argument("--no-rubato", action="store_true")
@@ -412,6 +441,7 @@ def main():
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument("--no-color", action="store_true")
     args = ap.parse_args()
+    args.style = _resolve_style(args.style, _STYLE_NATIVE, "romantico", _STYLE_ALIASES)
     if args.no_color:
         _USE_COLOR = False
 

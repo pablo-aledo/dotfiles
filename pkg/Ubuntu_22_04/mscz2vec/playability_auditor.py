@@ -101,6 +101,17 @@ _COLORS = {
 _USE_COLOR = sys.stdout.isatty()
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(key: str) -> str:
     return _COLORS.get(key, "") if _USE_COLOR else ""
 
@@ -263,7 +274,7 @@ def write_midi(mid: MidiData, path: str):
         chunks.append(b"MTrk" + len(body).to_bytes(4, "big") + bytes(body))
     header = (b"MThd" + (6).to_bytes(4, "big") + mid.fmt.to_bytes(2, "big")
               + len(mid.tracks).to_bytes(2, "big") + mid.tpb.to_bytes(2, "big"))
-    Path(path).write_bytes(header + b"".join(chunks))
+    _ensure_parent(Path(path)).write_bytes(header + b"".join(chunks))
 
 
 # ── Conversión ticks → segundos / compases ───────────────────────────────────
@@ -1090,7 +1101,7 @@ def main():
     global _USE_COLOR
     ap = argparse.ArgumentParser(
         prog="playability_auditor.py",
-        description="Auditoría de tocabilidad e idiomática instrumental para MIDIs.")
+        description="Auditoría de tocabilidad e idiomática instrumental para MIDIs.", epilog='Códigos de salida (contrato de la suite): 0 = ejecución correcta, aunque haya hallazgos; 1 = error de ejecución o de entrada; 2 = uso incorrecto o entrada ilegible; 3 = hallazgos o puerta no superada (con --strict, o en los modos cuyo fin es validar).')
     ap.add_argument("midi", nargs="*", help="Archivo(s) MIDI a auditar")
     ap.add_argument("--tracks", type=int, nargs="+", help="Auditar solo estas pistas")
     ap.add_argument("--scope", type=_parse_scope, help="Limitar a compases S:E")
@@ -1110,6 +1121,9 @@ def main():
     ap.add_argument("--quiet", action="store_true", help="Solo resumen por pista")
     ap.add_argument("--verbose", action="store_true", help="Mostrar todas las incidencias")
     ap.add_argument("--no-color", action="store_true", help="Desactivar colores ANSI")
+    ap.add_argument("--strict", action="store_true",
+                    help="rc=3 si la auditoría encuentra errores de tocabilidad "
+                         "(sin --strict, los hallazgos no son un fallo: rc=0)")
     ap.add_argument("--list-instruments", action="store_true",
                     help="Mostrar el catálogo de perfiles y salir")
     args = ap.parse_args()
@@ -1125,12 +1139,13 @@ def main():
     checks = args.only if args.only else [c for c in ALL_CHECKS if c not in args.skip]
     overrides = dict(args.instrument)
 
-    any_error = False
+    any_error = False        # hallazgos de severidad ERROR en la auditoría
+    runtime_error = False    # fallo real: fichero inexistente o excepción
     json_reports = []
     for path in args.midi:
         if not Path(path).exists():
             print(f"[ERROR] no existe: {path}", file=sys.stderr)
-            any_error = True
+            runtime_error = True
             continue
         try:
             report = audit_midi(path, profile=args.profile, tracks=args.tracks,
@@ -1138,7 +1153,7 @@ def main():
                                 instrument_overrides=overrides)
         except Exception as e:
             print(f"[ERROR] {path}: {e}", file=sys.stderr)
-            any_error = True
+            runtime_error = True
             continue
 
         if args.fix:
@@ -1160,12 +1175,15 @@ def main():
 
     if args.json_path and json_reports:
         payload = json_reports[0] if len(json_reports) == 1 else json_reports
-        Path(args.json_path).write_text(
+        _ensure_parent(Path(args.json_path)).write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         if not args.quiet:
             print(f"  Informe JSON: {args.json_path}\n")
 
-    return 1 if any_error else 0
+    # Contrato de la suite: los hallazgos no son un fallo de la herramienta.
+    if runtime_error:
+        return 1
+    return 3 if (args.strict and any_error) else 0
 
 
 if __name__ == "__main__":

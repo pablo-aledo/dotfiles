@@ -171,6 +171,17 @@ SA_ROLE_MAP = {
 }
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ESTRUCTURAS DE DATOS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3513,7 +3524,7 @@ def cmd_segment(args) -> None:
         data={"source":args.midi,"form":"".join(s.label for s in sections),
               "sections":[{"label":s.label,"bar_start":s.bar_start,"bar_end":s.bar_end,
                            "n_notes":len(s.notes),"symbol":s.symbol} for s in sections]}
-        Path(args.output).write_text(json.dumps(data,indent=2,ensure_ascii=False))
+        _ensure_parent(Path(args.output)).write_text(json.dumps(data,indent=2,ensure_ascii=False))
         print(f"\n  Informe: {args.output}")
     print()
 

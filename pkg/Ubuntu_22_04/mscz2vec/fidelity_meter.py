@@ -95,6 +95,17 @@ _USE_COLOR = sys.stdout.isatty()
 WEIGHTS = {"melody": 0.50, "rhythm": 0.20, "chroma": 0.10, "instr": 0.10, "meta": 0.10}
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(k: str) -> str:
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
@@ -395,7 +406,7 @@ def _need(path: str) -> None:
 
 
 def _dump(path: str, doc: Dict) -> None:
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(_ensure_parent(path), "w", encoding="utf-8") as fh:
         json.dump(doc, fh, ensure_ascii=False, indent=2, default=str)
     print(f"  {_c('CYA')}JSON: {path}{_c('R')}")
 
@@ -472,7 +483,7 @@ def cmd_batch(a) -> int:
     if a.csv:
         cols = ["label", "score", "melody", "rhythm", "onset", "onset_tight", "onset_loose",
                 "pitch", "chroma", "instr", "meta", "length", "verdict"]
-        with open(a.csv, "w", newline="", encoding="utf-8") as fh:
+        with open(_ensure_parent(a.csv), "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
             w.writerow(cols)
             for r in rows:
@@ -493,7 +504,7 @@ def cmd_batch(a) -> int:
         for r in rows:
             L.append(f"| {os.path.basename(r['dir'])} | `{r['cand_name']}` | {pct(r['score']).strip()} | "
                      f"{pct(r['melody']).strip()} | {pct(r['onset']).strip()} | {r['verdict']} |")
-        with open(a.md, "w", encoding="utf-8") as fh:
+        with open(_ensure_parent(a.md), "w", encoding="utf-8") as fh:
             fh.write("\n".join(L) + "\n")
         print(f"  {_c('CYA')}Markdown: {a.md}{_c('R')}")
     return 0

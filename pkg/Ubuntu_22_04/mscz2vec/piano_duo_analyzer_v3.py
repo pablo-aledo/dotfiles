@@ -150,6 +150,17 @@ CHORD_TEMPLATES = {
 _KS_MAJOR = [6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88]
 _KS_MINOR = [6.33,2.68,3.52,5.38,2.60,3.53,2.54,4.75,3.98,2.69,3.34,3.17]
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # MIDI PARSING
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2047,7 +2058,7 @@ def generate_test_midi(path: str):
     mid.tracks.append(make_track('Mano Derecha',   0, right, add_meta=True, bpm=96))
     mid.tracks.append(make_track('Mano Izquierda', 1, left,  add_meta=False))
 
-    mid.save(path)
+    mid.save(_ensure_parent(path))
     print(f"✓ MIDI de prueba v2 guardado: {path}")
     print(f"  A (Do mayor, arpegios) | B (La menor) | A' (Do mayor, inv.)")
     print(f"  Pista 0: Mano Derecha  |  Pista 1: Mano Izquierda")
@@ -2097,7 +2108,7 @@ def main():
                    key_window_bars=args.key_window,
                    harmony_source_spec=args.harmony_source)
 
-    with open(out_path, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(out_path), 'w', encoding='utf-8') as f:
         f.write(html)
     print(f"\n  ✓ Informe HTML generado: {out_path}")
     print(f"{'═'*58}\n")

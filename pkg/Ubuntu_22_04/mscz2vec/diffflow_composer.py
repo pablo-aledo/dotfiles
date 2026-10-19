@@ -131,6 +131,17 @@ PITCH_CLASSES         = 128
 MIDI_CENTER           = 60   # Do central
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _pitch_range(n):
     if n is None:
         return None
@@ -523,7 +534,7 @@ def _prepare_one_midi(args_tuple):
     }
     save_dict['meta_json'] = np.array([json.dumps(meta)])
     out_path = Path(output_dir) / f"{stem}.npz"
-    np.savez_compressed(str(out_path), **save_dict)
+    np.savez_compressed(_ensure_parent(str(out_path)), **save_dict)
 
     stats_partial['files_ok']      = 1
     stats_partial['total_windows'] = min_windows
@@ -1006,10 +1017,10 @@ class Trainer:
             'best_val_loss': self.best_val_loss, 'no_improve': self.no_improve,
             'history': self.history,
         }
-        torch.save(state, self.model_dir / self.CHECKPOINT_NAME)
+        torch.save(_ensure_parent(state), self.model_dir / self.CHECKPOINT_NAME)
         if is_best:
-            torch.save(state, self.model_dir / self.BEST_NAME)
-        with open(self.model_dir / self.HISTORY_NAME, 'w') as f:
+            torch.save(_ensure_parent(state), self.model_dir / self.BEST_NAME)
+        with open(_ensure_parent(self.model_dir / self.HISTORY_NAME), 'w') as f:
             json.dump(self.history, f, indent=2)
 
     def load_checkpoint(self):
@@ -1429,7 +1440,7 @@ def cmd_encode(args):
         'tension_mean': tension_mean,
         'roles_found': list(rolls.keys()),
     }
-    with open(out_path, 'w') as f:
+    with open(_ensure_parent(out_path), 'w') as f:
         json.dump(payload, f, indent=2)
     print(f"[encode] Guardado en {out_path}")
 
@@ -1470,7 +1481,7 @@ def cmd_style_corpus(args):
         'n_files': len(z_styles), 'style_dim': cfg['style_dim'],
         'z_style': z_centroid.tolist(),
     }
-    with open(out_path, 'w') as f:
+    with open(_ensure_parent(out_path), 'w') as f:
         json.dump(payload, f, indent=2)
     print(f"[style-corpus] Centroide de {len(z_styles)} MIDIs guardado en {out_path}")
 
@@ -1613,7 +1624,7 @@ def _rolls_to_midi(bars_per_role: dict, cfg: dict, palette: dict,
         if remaining > 0:
             track.append(mido.MetaMessage('end_of_track', time=remaining))
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
     return n_notes_total
 
 

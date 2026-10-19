@@ -84,6 +84,17 @@ CHORD_INTERVALS = {
 
 VOICE_PROGRAMS = [0, 40, 41, 42, 73, 68, 56, 48]
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CARGA DE MIDI
 # ══════════════════════════════════════════════════════════════════════════════
@@ -935,7 +946,7 @@ def write_voice_midi(notes, tempo_bpm, time_sig, path, tpb=480, vi=0):
     mid.tracks.append(notes_to_track(notes, vi%16,
                       VOICE_PROGRAMS[vi%len(VOICE_PROGRAMS)],
                       f'Voice_{vi}', tpb))
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 def write_combined_midi(all_notes, tempo_bpm, time_sig, path, tpb=480, names=None):
     mid=mido.MidiFile(type=1,ticks_per_beat=tpb)
@@ -944,7 +955,7 @@ def write_combined_midi(all_notes, tempo_bpm, time_sig, path, tpb=480, names=Non
         nm = names[vi] if names and vi<len(names) else f'Voice_{vi}'
         mid.tracks.append(notes_to_track(notes, vi%16,
                           VOICE_PROGRAMS[vi%len(VOICE_PROGRAMS)], nm, tpb))
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  MAIN PIPELINE

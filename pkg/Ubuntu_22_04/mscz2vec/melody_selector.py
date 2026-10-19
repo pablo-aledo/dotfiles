@@ -76,6 +76,17 @@ _COLORS = {"R": "\033[0m", "B": "\033[1m", "G": "\033[90m", "GRN": "\033[92m",
 _USE_COLOR = sys.stdout.isatty()
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(k: str) -> str:
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
@@ -179,7 +190,7 @@ def write_report(path: str, results: List[Dict], winner: Optional[Dict],
     }
     if extra:
         doc.update(extra)
-    Path(path).write_text(json.dumps(doc, ensure_ascii=False, indent=2),
+    _ensure_parent(Path(path)).write_text(json.dumps(doc, ensure_ascii=False, indent=2),
                           encoding="utf-8")
     print(f"  {_c('CYA')}JSON: {path}{_c('R')}")
 

@@ -173,6 +173,17 @@ MELODY_MIN_DUR = 0.25
 # Rol de pista por registro (para coordinación multi-pista)
 ROLE_ORDER = ['melody', 'inner', 'harmony', 'bass_melodic', 'bass_root', 'unknown']
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ESTRUCTURAS DE DATOS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1577,7 +1588,7 @@ def write_filled_midi(ctx: PieceContext, fills: Dict[int, Dict[int, List[RawNote
                                           velocity=0, channel=ch, time=delta))
             current_tick = tick
 
-    mid_out.save(output_path)
+    mid_out.save(_ensure_parent(output_path))
 
 
 def write_original_with_gap_info(ctx: PieceContext, output_path: str):
@@ -2322,7 +2333,7 @@ def mode_scan(args):
     print('\n' + report)
 
     if args.report:
-        Path(args.report).write_text(report, encoding='utf-8')
+        _ensure_parent(Path(args.report)).write_text(report, encoding='utf-8')
         print(f'\n  Reporte guardado en: {args.report}')
 
     if not gaps:
@@ -2342,7 +2353,7 @@ def mode_fill(args):
     if not gaps:
         print('  No se detectaron huecos. Salida = entrada.')
         out = args.output or _default_output(args.input, 'filled')
-        import shutil; shutil.copy(args.input, out)
+        import shutil; shutil.copy(args.input, _ensure_parent(out))
         print(f'  Guardado: {out}')
         return
 

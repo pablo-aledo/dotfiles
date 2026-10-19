@@ -1076,7 +1076,7 @@ def main():
     p = argparse.ArgumentParser(
         description="WFC_COMPOSER v3.0 -- Wave Function Collapse + Z3",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        epilog=(__doc__ + '\n\n' + 'Códigos de salida (contrato de la suite): 0 = ejecución correcta, aunque haya hallazgos; 1 = error de ejecución o de entrada; 2 = uso incorrecto o entrada ilegible; 3 = hallazgos o puerta no superada (con --strict, o en los modos cuyo fin es validar).')
     )
     p.add_argument("--key",     type=_key_arg, default=2,
                    help="tonica: clase de altura 0-11 o nombre (C, D, F#, Bb...). Defecto 2 (D)")

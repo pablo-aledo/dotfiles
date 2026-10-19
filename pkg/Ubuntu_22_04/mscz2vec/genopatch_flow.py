@@ -133,6 +133,17 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _script_dir() -> Path:
     return Path(__file__).resolve().parent
 
@@ -413,7 +424,7 @@ def train_from_dataset(gp, torch, nn, engine_name: str, thetas: np.ndarray, feat
         "final_val_nll": best_val_nll,
         "model_state": model.state_dict(),
     }
-    torch.save(checkpoint, out_path)
+    torch.save(_ensure_parent(checkpoint), out_path)
     if verbose:
         print(f"  OK checkpoint -> {out_path}")
     return {"history": history, "checkpoint_path": out_path}

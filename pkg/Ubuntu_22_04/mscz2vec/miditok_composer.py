@@ -38,6 +38,17 @@ import sys
 from pathlib import Path
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 class C:
     """Códigos ANSI para salida coloreada."""
 
@@ -203,7 +214,7 @@ def cmd_tokenize(args: argparse.Namespace) -> None:
     }
 
     dest = Path(args.output) if args.output else src.with_suffix(".tokens.json")
-    dest.write_text(json.dumps(out, ensure_ascii=False, indent=2))
+    _ensure_parent(dest).write_text(json.dumps(out, ensure_ascii=False, indent=2))
     n_tok = sum(len(s.tokens) for s in seqs)
     ok(f"{n_tok} tokens ({len(seqs)} pista(s)) -> {dest}")
 
@@ -260,7 +271,7 @@ def cmd_train(args: argparse.Namespace) -> None:
     )
 
     dest = Path(args.output)
-    tokenizer.save(dest)
+    tokenizer.save(_ensure_parent(dest))
     ok(f"vocabulario entrenado ({len(tokenizer.vocab)} tokens) -> {dest}")
 
 

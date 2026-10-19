@@ -139,6 +139,17 @@ FAMILY_THRESHOLDS = {
 }
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ARQUITECTURA DEL MODELO
 # ══════════════════════════════════════════════════════════════════════════════
@@ -681,7 +692,7 @@ def pianoroll_to_midi(pianoroll, path, tempo=TEMPO,
             track.append(mido.Message("note_on", note=pitch, velocity=vel,
                                       channel=ch, time=delta))
 
-    mid.save(path)
+    mid.save(_ensure_parent(path))
 
 
 def midi_to_pianoroll(path, beat_resolution=BEAT_RES,
@@ -770,7 +781,7 @@ def load_npz(path):
 def save_pianoroll_npz(path, pianoroll):
     """Guarda un pianoroll bool en formato sparse compatible con MuseGAN."""
     pr = pianoroll.astype(bool)
-    np.savez_compressed(path, shape=pr.shape, nonzero=np.array(pr.nonzero()))
+    np.savez_compressed(_ensure_parent(path), shape=pr.shape, nonzero=np.array(pr.nonzero()))
 
 
 def save_pianoroll_image(path, pianoroll, colormap=None):

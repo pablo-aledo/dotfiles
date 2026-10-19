@@ -93,6 +93,17 @@ _COLORS = {"R": "\033[0m", "B": "\033[1m", "G": "\033[90m",
 _USE_COLOR = sys.stdout.isatty()
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(k):
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
@@ -405,7 +416,7 @@ def process_midi(path, output=None, key=None, targets=None, density=0.5,
         if not report_only and injected:
             out_path = output or f"{Path(path).with_suffix('')}_tonic.mid"
             new_mid = _rebuild_midi(mid, new_notes, mid.ticks_per_beat)
-            new_mid.save(out_path)
+            new_mid.save(_ensure_parent(out_path))
             result["output"] = out_path
 
     return result

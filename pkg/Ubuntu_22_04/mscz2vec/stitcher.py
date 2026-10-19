@@ -118,6 +118,17 @@ HARMONIC_COMPATIBILITY = {
     ('vi', 'ii'): 0.55,
 }
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # Ciclo de quintas: distancia entre notas de bajo (semitones)
 # Distancia 0 = misma nota, 5 o 7 = quinta, 12 = octava
 def _fifth_distance(pc_a, pc_b):
@@ -804,7 +815,7 @@ def assemble_midi(sequence, output_path, verbose=False):
         out.tracks.append(track)
 
     # ── Guardar ───────────────────────────────────────────────────────────────
-    out.save(output_path)
+    out.save(_ensure_parent(output_path))
 
     total_beats = cursor_ticks / ref_tpb
     total_bars  = total_beats / 4
@@ -1131,7 +1142,7 @@ def main():
                         )
                     else:
                         print(f"  ⚠ Fragmento de leitmotif no encontrado: {midi_frag}")
-                assembled.save(args.output)
+                assembled.save(_ensure_parent(args.output))
                 print(f"  ✓ {len(injections)} leitmotifs inyectados en {args.output}")
             else:
                 print("  ℹ Schedule vacío, sin inyecciones.")

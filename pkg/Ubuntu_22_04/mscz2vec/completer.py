@@ -124,6 +124,17 @@ except ImportError:
 # ── Importaciones del ecosistema (opcionales, con fallback) ──────────────────
 _SCRIPT_DIR = Path(__file__).parent
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 def _import_ecosystem(module_name: str):
     """Importa un módulo del ecosistema si está en el mismo directorio."""
     path = _SCRIPT_DIR / f"{module_name}.py"
@@ -1645,7 +1656,7 @@ def save_midi(notes: List[Note], output_path: str, tempo_bpm: float,
               time_sig: Tuple[int, int] = (4, 4)):
     """Guarda notas como archivo MIDI."""
     mid = notes_to_midi(notes, tempo_bpm, time_sig=time_sig)
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 def concatenate_midis(source_path: str, continuation_path: str,
@@ -1669,9 +1680,9 @@ def concatenate_midis(source_path: str, continuation_path: str,
                 fp_src_path = source_path.replace('.mid', '.fingerprint.json')
                 fp_cont_path = continuation_path.replace('.mid', '.fingerprint.json')
 
-                with open(fp_src_path, 'w') as f:
+                with open(_ensure_parent(fp_src_path), 'w') as f:
                     json.dump(fp_src, f)
-                with open(fp_cont_path, 'w') as f:
+                with open(_ensure_parent(fp_cont_path), 'w') as f:
                     json.dump(fp_cont, f)
 
                 # Llamar a stitcher
@@ -1701,7 +1712,7 @@ def _concatenate_direct(src_path: str, cont_path: str, out_path: str, verbose: b
         if verbose:
             print("  [Concat] mido no disponible; copiando continuación")
         import shutil
-        shutil.copy2(cont_path, out_path)
+        shutil.copy2(cont_path, _ensure_parent(out_path))
         return
 
     src_mid = mido.MidiFile(src_path)
@@ -1747,7 +1758,7 @@ def _concatenate_direct(src_path: str, cont_path: str, out_path: str, verbose: b
                     first = False
                 out_track.append(msg)
 
-    out_mid.save(out_path)
+    out_mid.save(_ensure_parent(out_path))
     if verbose:
         print(f"  [Concat] Concatenación directa: {out_path}")
 
@@ -2228,8 +2239,7 @@ def complete_fill(source_a: str, source_b: str,
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description='Completer v1.0 — Continuación inteligente de obras MIDI',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+        formatter_class=argparse.RawDescriptionHelpFormatter, epilog='Códigos de salida (contrato de la suite): 0 = ejecución correcta, aunque haya hallazgos; 1 = error de ejecución o de entrada; 2 = uso incorrecto o entrada ilegible; 3 = hallazgos o puerta no superada (con --strict, o en los modos cuyo fin es validar).')
 
     p.add_argument('source', help='MIDI de entrada (fragmento a completar)')
 

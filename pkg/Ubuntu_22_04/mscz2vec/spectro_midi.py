@@ -108,6 +108,17 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ── lazy imports ──────────────────────────────────────────────────────────────
 
 def _import_torch():
@@ -258,7 +269,7 @@ def generate_single_notes(out_dir: Path, humanize: float = 0.0,
     for note in range(MIDI_MIN, MIDI_MAX + 1):
         mid  = _make_midi_notes([note], dur, 80, tpb, humanize)
         path = out_dir / f"note_{note:03d}.mid"
-        mid.save(str(path))
+        mid.save(_ensure_parent(str(path)))
         paths.append(path)
     return paths
 
@@ -277,14 +288,14 @@ def generate_chords(out_dir: Path, humanize: float = 0.0,
             # Posición fundamental
             mid  = _make_midi_notes(notes, dur, 75, tpb, humanize)
             path = out_dir / f"chord_{root}_{cname}_root.mid"
-            mid.save(str(path))
+            mid.save(_ensure_parent(str(path)))
             paths.append(path)
             # Primera inversión
             inv1  = notes[1:] + [notes[0] + 12]
             inv1  = [n for n in inv1 if n <= MIDI_MAX]
             mid   = _make_midi_notes(inv1, dur, 72, tpb, humanize)
             path  = out_dir / f"chord_{root}_{cname}_inv1.mid"
-            mid.save(str(path))
+            mid.save(_ensure_parent(str(path)))
             paths.append(path)
     return paths
 
@@ -323,7 +334,7 @@ def generate_phrases(out_dir: Path, humanize: float = 0.0,
                                               velocity=0, time=d if i == 0 else 0))
 
             path = out_dir / f"phrase_{prog_idx}_{root}.mid"
-            mid.save(str(path))
+            mid.save(_ensure_parent(str(path)))
             paths.append(path)
     return paths
 
@@ -470,7 +481,7 @@ class PhraseCorpus:
         if not self._keys:
             return
         idx_path = self.dir / "index.npz"
-        np.savez_compressed(str(idx_path),
+        np.savez_compressed(_ensure_parent(str(idx_path)),
                             keys=np.stack(self._keys),
                             values=np.stack(self._values))
 
@@ -1087,7 +1098,7 @@ class CurriculumState:
     patience: int   = 0
 
     def save(self, path: Path):
-        with open(path, "w") as f:
+        with open(_ensure_parent(path), "w") as f:
             json.dump({"level": self.level, "best_f1": self.best_f1,
                        "patience": self.patience}, f)
 
@@ -1382,7 +1393,7 @@ def cmd_transcribe(args):
     )
 
     out_path = args.output or src.stem + "_transcribed.mid"
-    mid.save(out_path)
+    mid.save(_ensure_parent(out_path))
 
     n_notes = sum(1 for t in mid.tracks for m in t if m.type == "note_on"
                   and m.velocity > 0)
@@ -1427,7 +1438,7 @@ def _cmd_peak_track(args, n_voices: int, mode_name: str):
     )
 
     out_path = args.output or f"{src.stem}_{mode_name}.mid"
-    mid.save(out_path)
+    mid.save(_ensure_parent(out_path))
 
     n_notes = sum(1 for t in mid.tracks for m in t if m.type == "note_on"
                   and m.velocity > 0)
@@ -1619,7 +1630,7 @@ def cmd_eval(args):
     print(f"    F1        : {metrics['frame_f1']:.4f}")
 
     if args.output:
-        with open(args.output, "w") as f:
+        with open(_ensure_parent(args.output), "w") as f:
             json.dump(metrics, f, indent=2)
         print(f"\n  ✓  Métricas → {args.output}")
 

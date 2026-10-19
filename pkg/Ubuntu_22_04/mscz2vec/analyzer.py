@@ -157,6 +157,17 @@ C = {
 USE_COLOR = True
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def c(key: str) -> str:
     return C[key] if USE_COLOR else ""
 
@@ -377,7 +388,7 @@ class VectorCache:
 
     def save(self):
         if self.path:
-            with open(self.path, "w") as f:
+            with open(_ensure_parent(self.path), "w") as f:
                 json.dump(self._data, f, indent=2)
 
     def __len__(self):
@@ -1271,7 +1282,7 @@ def _split_midi_by_ticks(midi_path: str, boundaries: list[int]) -> list[str]:
 
         if has_notes:
             tf = tempfile.NamedTemporaryFile(suffix=".mid", delete=False)
-            new_mid.save(tf.name)
+            new_mid.save(_ensure_parent(tf.name))
             temp_paths.append(tf.name)
         else:
             temp_paths.append(None)  # segmento vacío
@@ -1983,7 +1994,7 @@ def _maybe_save(result: dict, args):
             return int(obj)
         raise TypeError(f"No serializable: {type(obj)}")
 
-    with open(args.output, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(args.output), "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False, default=_convert)
     print(f"\n  ✓ Resultado guardado en: {args.output}")
 

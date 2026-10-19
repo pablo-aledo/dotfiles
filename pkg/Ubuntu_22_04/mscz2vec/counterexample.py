@@ -155,6 +155,17 @@ DIM_NAMES = [
 N_DIMS = len(DIM_NAMES)
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _tension_of_interval(semitones):
     """Tensión perceptual aproximada de un intervalo (0=unísono, 1=muy tenso)."""
     TENSION = {0: 0.0, 1: 0.9, 2: 0.5, 3: 0.3, 4: 0.2, 5: 0.15,
@@ -699,7 +710,7 @@ def export_results(evolver_obj, top_n, output_dir):
         if not ind.midi_path or not os.path.exists(ind.midi_path):
             continue
         dest = os.path.join(output_dir, f"contra_top{rank:02d}_fit{fitness:.3f}.mid")
-        shutil.copy2(ind.midi_path, dest)
+        shutil.copy2(ind.midi_path, _ensure_parent(dest))
         exported.append((dest, fitness, sim_d, sim_r))
         print(f"  #{rank}  fitness={fitness:.4f}  "
               f"sim_deseado={sim_d:.3f}  sim_rechazado={sim_r:.3f}")
@@ -754,7 +765,7 @@ def save_report(args, vec_desired, vec_rejected, vec_ref, delta, significant_mas
         ],
     }
     rpt_path = os.path.join(output_dir, 'contra_analysis.json')
-    with open(rpt_path, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(rpt_path), 'w', encoding='utf-8') as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
     print(f"\n  → Informe guardado: {rpt_path}")
     return rpt_path
@@ -826,7 +837,7 @@ def plot_umap(vec_desired, vec_rejected, vec_ref, evolver_obj, output_dir):
     ax.legend(handles=legend_patches, facecolor='#222222', labelcolor='white')
 
     out_path = os.path.join(output_dir, 'contra_umap.png')
-    plt.savefig(out_path, dpi=140, bbox_inches='tight', facecolor='#111111')
+    plt.savefig(_ensure_parent(out_path), dpi=140, bbox_inches='tight', facecolor='#111111')
     plt.close()
     print(f"\n  → Visualización guardada: {out_path}")
 

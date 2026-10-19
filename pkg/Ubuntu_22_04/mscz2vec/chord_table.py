@@ -1092,6 +1092,17 @@ INTENT_TO_TENSION = {
     'media tensión':   (4, 6),
 }
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # RESOLUCIÓN DE NUMERALES → ACORDES CONCRETOS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1409,7 +1420,7 @@ def progression_to_midi(progression: list, tonic_pc: int, ticks_per_beat: int,
             track.append(mido.Message('note_off', channel=0, note=note,
                                       velocity=0,
                                       time=(dur_ticks if i == 0 else 0)))
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2365,6 +2376,34 @@ def print_stats() -> None:
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# ── Contrato de la suite: --style acepta el vocabulario común ──────────────────
+_STYLE_COMMON = ("auto", "baroque", "blues", "diatonic", "flamenco", "folk",
+                 "impressionist", "jazz", "modal", "pop", "romantic")
+
+
+def _resolve_style(value, native, default, aliases=None):
+    """Acepta el vocabulario común de la suite en --style. Lo que esta herramienta
+    no tiene de forma nativa se traduce con `aliases` o cae a `default`, avisando
+    por stderr (nunca falla ni cambia el valor en silencio)."""
+    if value is None or value in native:
+        return value
+    if value == "auto":
+        return default
+    target = (aliases or {}).get(value, default)
+    import sys as _sys
+    if value in (aliases or {}):
+        msg = f"equivale a {target!r} en esta herramienta"
+    else:
+        msg = ("sin equivalente nativo en esta herramienta; se usa "
+               + (repr(target) if target is not None else "el valor por defecto"))
+    print(f"[AVISO] --style {value}: {msg}", file=_sys.stderr)
+    return target
+
+
+_STYLE_NATIVE = ['diatonic','baroque','jazz','modal','romantic','impressionist','pop','flamenco','blues']
+_STYLE_ALIASES = {}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Catálogo curado de progresiones de acordes con tensión y emoción.',
@@ -2401,8 +2440,7 @@ def main():
 
     # Filtros
     parser.add_argument('--style',       type=str,
-                        choices=['diatonic','baroque','jazz','modal','romantic',
-                                 'impressionist','pop','flamenco','blues'],
+                        choices=_STYLE_NATIVE + [s for s in _STYLE_COMMON if s not in _STYLE_NATIVE],
                         help='Filtrar por estilo')
     parser.add_argument('--mode',        type=str,
                         choices=['major','minor','dorian','phrygian',
@@ -2454,6 +2492,7 @@ def main():
                         help='Mostrar nombre y descripción de cada progresión')
 
     args = parser.parse_args()
+    args.style = _resolve_style(args.style, _STYLE_NATIVE, None, _STYLE_ALIASES)
 
     # ── Análisis MIDI ────────────────────────────────────────────────────────
     if args.analyze_midi:
@@ -2500,7 +2539,7 @@ def main():
                         'catalog':  {k: v for k, v in m['entry'].items()
                                      if k != 'pattern'},
                     })
-            with open(args.export_json, 'w') as f:
+            with open(_ensure_parent(args.export_json), 'w') as f:
                 json.dump(exportable, f, indent=2, ensure_ascii=False)
             print(f"  → JSON: {args.export_json}\n")
         return
@@ -2580,11 +2619,11 @@ def main():
             'progression': progression,
             'generator':   'chord_table.py v1.0',
         }
-        with open(json_path, 'w') as f:
+        with open(_ensure_parent(json_path), 'w') as f:
             json.dump(out, f, indent=2, ensure_ascii=False)
         print(f"  → JSON:  {json_path}")
 
-        with open(txt_path, 'w') as f:
+        with open(_ensure_parent(txt_path), 'w') as f:
             f.write(chord_text + '\n')
         print(f"  → Texto: {txt_path}")
 
@@ -2613,7 +2652,7 @@ def main():
         print(f"\n  Resultados para: \"{args.intencion}\"")
         print_table(entries, args.verbose)
         if args.export_json:
-            with open(args.export_json, 'w') as f:
+            with open(_ensure_parent(args.export_json), 'w') as f:
                 json.dump(entries, f, indent=2, ensure_ascii=False, default=str)
             print(f"  → JSON: {args.export_json}")
         return
@@ -2638,7 +2677,7 @@ def main():
         data = entries if entries else TABLE
         exportable = [{k: v for k, v in e.items() if k != 'pattern'}
                       for e in data]
-        with open(args.export_json, 'w') as f:
+        with open(_ensure_parent(args.export_json), 'w') as f:
             json.dump(exportable, f, indent=2, ensure_ascii=False)
         print(f"  → JSON: {args.export_json}\n")
 

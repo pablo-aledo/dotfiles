@@ -282,6 +282,17 @@ DESCRIPTION_KEYWORDS: Dict[str, List[str]] = {
 }
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ESTRUCTURAS DE DATOS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1464,7 +1475,7 @@ def notes_to_midi(notes: List[MelodyNote], tempo_bpm: int,
                                    velocity=vel, time=delta))
         current_tick = abs_tick
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1555,7 +1566,7 @@ def export_fingerprint(fingerprint: dict, output_midi_path: str):
     json_path = output_midi_path.replace(".mid", ".fingerprint.json")
     if not json_path.endswith(".fingerprint.json"):
         json_path += ".fingerprint.json"
-    with open(json_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(json_path), "w", encoding="utf-8") as f:
         json.dump(fingerprint, f, indent=2, ensure_ascii=False)
     print(f"[fingerprint] Exportado: {json_path}")
     return json_path
@@ -2202,7 +2213,7 @@ def main():
 
         # JSON de la melodía
         json_path = best_path.replace(".mid", ".melody.json")
-        with open(json_path, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(json_path), "w", encoding="utf-8") as f:
             json.dump(best.to_dict(), f, indent=2, ensure_ascii=False)
         print(f"[json]    {json_path}")
 

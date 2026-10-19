@@ -214,6 +214,17 @@ ROMAN_TO_PITCH = {
     "i": 0, "ii": 2, "iii": 4, "iv": 5, "v": 7, "vi": 9, "vii": 11,
 }
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ──────────────────────────────────────────────────────────────────────────────
 # ESTRUCTURAS DE DATOS
 # ──────────────────────────────────────────────────────────────────────────────
@@ -810,7 +821,7 @@ def realize_cadence_plan(plan: CadencePlan, output_path: str):
 
     realization["bass_line"] = bass_line
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(output_path), "w", encoding="utf-8") as f:
         json.dump(realization, f, indent=2, ensure_ascii=False)
 
     return realization
@@ -866,7 +877,7 @@ def insert_cadences_into_midi(
         cad_track.append(msg)
 
     mid.tracks.append(cad_track)
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
     return output_path
 
 
@@ -1136,7 +1147,7 @@ def print_report(plan: CadencePlan, verbose: bool = False):
 
 def save_plan(plan: CadencePlan, path: str):
     """Guarda el plan en JSON."""
-    with open(path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(path), "w", encoding="utf-8") as f:
         json.dump(plan.to_dict(), f, indent=2, ensure_ascii=False)
 
 
@@ -1285,7 +1296,7 @@ EJEMPLOS:
             print(f"  Compás {cad['position']:>3}: {cad['name']} (fuerza {cad['strength']:.2f})")
 
         if args.json:
-            with open(args.json, "w", encoding="utf-8") as f:
+            with open(_ensure_parent(args.json), "w", encoding="utf-8") as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
             print(f"\nAnálisis exportado a: {args.json}")
 

@@ -297,6 +297,17 @@ C = {
     "magenta":"\033[95m",
 }
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 def c(key: str) -> str:
     return C.get(key, "")
 
@@ -1355,7 +1366,7 @@ def apply_transforms(midi_path: str, params: dict,
         new_mid.tracks.append(setup)
 
     try:
-        new_mid.save(output_path)
+        new_mid.save(_ensure_parent(output_path))
         return (True, event_log) if collect_log else True
     except Exception as e:
         print(f"  [ERROR] No se pudo guardar {output_path}: {e}")
@@ -1563,7 +1574,7 @@ def apply_transforms_segmented(midi_path: str,
         new_mid.tracks.append(setup)
 
     try:
-        new_mid.save(output_path)
+        new_mid.save(_ensure_parent(output_path))
         return True
     except Exception as e:
         print(f"  [ERROR] {e}")
@@ -2026,7 +2037,7 @@ class StyleTransferModel:
         return result
 
     def save(self, path: str):
-        with open(path, "wb") as f:
+        with open(_ensure_parent(path), "wb") as f:
             pickle.dump(self, f)
         print(f"  ✓ Modelo guardado en: {path}  (tipo: {self.model_type})")
 
@@ -2216,7 +2227,7 @@ def mode_train(args):
     print(f"  MSE en datos reales (normalizado): {train_mse:.5f}")
 
     model_path = args.model if args.model.endswith(".pkl") else args.model + ".pkl"
-    model.save(model_path)
+    model.save(_ensure_parent(model_path))
 
     log_path = model_path.replace(".pkl", "_training_log.json")
     def _ser(obj):
@@ -2225,7 +2236,7 @@ def mode_train(args):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         raise TypeError(type(obj))
-    with open(log_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(log_path), "w", encoding="utf-8") as f:
         json.dump(results_log, f, indent=2, default=_ser, ensure_ascii=False)
     print(f"  ✓ Log guardado en: {log_path}")
 
@@ -2549,7 +2560,7 @@ def mode_verbose(args):
 
     # ── Exportar JSON si se pide ──────────────────────────────────────────
     if args.log_json:
-        with open(args.log_json, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(args.log_json), "w", encoding="utf-8") as f:
             json.dump(event_log, f, indent=2, ensure_ascii=False)
         print(f"  Log JSON guardado en: {args.log_json}")
 

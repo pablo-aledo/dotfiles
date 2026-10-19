@@ -861,6 +861,34 @@ def _parse_key(key_str: str) -> Tuple[int, bool]:
 #  CLI
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── Contrato de la suite: --style acepta el vocabulario común ──────────────────
+_STYLE_COMMON = ("auto", "baroque", "blues", "diatonic", "flamenco", "folk",
+                 "impressionist", "jazz", "modal", "pop", "romantic")
+
+
+def _resolve_style(value, native, default, aliases=None):
+    """Acepta el vocabulario común de la suite en --style. Lo que esta herramienta
+    no tiene de forma nativa se traduce con `aliases` o cae a `default`, avisando
+    por stderr (nunca falla ni cambia el valor en silencio)."""
+    if value is None or value in native:
+        return value
+    if value == "auto":
+        return default
+    target = (aliases or {}).get(value, default)
+    import sys as _sys
+    if value in (aliases or {}):
+        msg = f"equivale a {target!r} en esta herramienta"
+    else:
+        msg = ("sin equivalente nativo en esta herramienta; se usa "
+               + (repr(target) if target is not None else "el valor por defecto"))
+    print(f"[AVISO] --style {value}: {msg}", file=_sys.stderr)
+    return target
+
+
+_STYLE_NATIVE = ["chorale", "open", "close", "jazz", "keyboard"]
+_STYLE_ALIASES = {"baroque": "chorale"}
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="voice_leader.py",
@@ -878,7 +906,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--key", type=str, default="C major",
                    help='Tonalidad (default: "C major")')
     p.add_argument("--style", type=str, default="chorale",
-                   choices=["chorale", "open", "close", "jazz", "keyboard"],
+                   choices=_STYLE_NATIVE + [s for s in _STYLE_COMMON if s not in _STYLE_NATIVE],
                    help="Estilo de voicing (default: chorale)")
     p.add_argument("--all-styles", action="store_true",
                    help="Generar una versión por cada estilo")
@@ -929,6 +957,7 @@ def _print_report(report: VLReport, blocks: List[ChordBlock]) -> None:
 def main():
     parser = build_parser()
     args   = parser.parse_args()
+    args.style = _resolve_style(args.style, _STYLE_NATIVE, "chorale", _STYLE_ALIASES)
 
     # ── Obtener progresión ────────────────────────────────────────────────────
     soprano_hints = None

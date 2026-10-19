@@ -138,6 +138,17 @@ _LEVELS = ["principiante", "elemental", "elemental-medio", "intermedio",
            "intermedio-alto", "avanzado", "avanzado-alto", "virtuoso"]
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(k):
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
@@ -285,7 +296,7 @@ def write_midi(mid: MidiData, path: str):
         chunks.append(b"MTrk" + len(body).to_bytes(4, "big") + bytes(body))
     header = (b"MThd" + (6).to_bytes(4, "big") + mid.fmt.to_bytes(2, "big")
               + len(mid.tracks).to_bytes(2, "big") + mid.tpb.to_bytes(2, "big"))
-    Path(path).write_bytes(header + b"".join(chunks))
+    _ensure_parent(Path(path)).write_bytes(header + b"".join(chunks))
 
 
 class TimeContext:

@@ -75,6 +75,17 @@ except ImportError:
 TPB_REF = 480  # ticks per beat de referencia para modo linear
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  PARSEO DE TIEMPOS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -623,7 +634,7 @@ def main():
         out_path = f"{base}.aligned.mid"
 
     try:
-        out_mid.save(out_path)
+        out_mid.save(_ensure_parent(out_path))
         print(f"MIDI alineado guardado en: {out_path}")
     except Exception as e:
         print(f"ERROR al guardar el MIDI: {e}")

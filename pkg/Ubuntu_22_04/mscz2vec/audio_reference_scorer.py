@@ -73,6 +73,17 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ── lazy imports (mismo patrón que el resto del ecosistema) ───────────────────
 # ══════════════════════════════════════════════════════════════════════════════
@@ -507,7 +518,7 @@ def build_reference_cache(corpus_dir: str, backend, domain_tag: str,
     mean, cov = compute_reference_stats(embeddings)
     cov_inv = np.linalg.pinv(cov)
     mu, sigma = calibrate_scale(embeddings)
-    np.savez(cache_path, mean=mean, cov=cov, cov_inv=cov_inv,
+    np.savez(_ensure_parent(cache_path), mean=mean, cov=cov, cov_inv=cov_inv,
               mu=np.float64(mu), sigma=np.float64(sigma),
               backend=backend.name, domain_tag=domain_tag,
               n_files=len(wavs), dim=embeddings.shape[1],
@@ -570,7 +581,7 @@ def build_floor_cache(floor_corpus_dir: str, ref: ReferenceCorpusStats, backend,
     mu, sigma, n = compute_floor_baseline(floor_corpus_dir, ref.mean, ref.cov_inv, backend, verbose)
     floor = FloorBaseline(mu=mu, sigma=sigma, n_files=n)
     if floor_cache_path:
-        np.savez(floor_cache_path, mu=np.float64(mu), sigma=np.float64(sigma),
+        np.savez(_ensure_parent(floor_cache_path), mu=np.float64(mu), sigma=np.float64(sigma),
                   n_files=n, backend=backend.name, timestamp=time.time(),
                   version=CACHE_FORMAT_VERSION)
     return floor
@@ -743,7 +754,7 @@ def _render_midi_neutral(midi_path: str, out_wav_path: str, sr: int = TARGET_SR)
                 events.append((t_s, "off", msg.note, 0))
     if not events:
         # MIDI vacío o ilegible: escribe un WAV de silencio corto para no romper el pipeline.
-        sf.write(out_wav_path, np.zeros(int(0.5 * sr)), sr)
+        sf.write(_ensure_parent(out_wav_path), np.zeros(int(0.5 * sr)), sr)
         return
 
     events.sort(key=lambda e: e[0])
@@ -788,7 +799,7 @@ def _render_midi_neutral(midi_path: str, out_wav_path: str, sr: int = TARGET_SR)
     peak = np.max(np.abs(buf)) + 1e-9
     if peak > 0.95:
         buf = buf * (0.95 / peak)
-    sf.write(out_wav_path, buf, sr)
+    sf.write(_ensure_parent(out_wav_path), buf, sr)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -893,7 +904,7 @@ def _plot_corpus(corpus_dir: str, backend, out_png: str) -> None:
         plt.annotate(w.stem, proj[i], fontsize=6)
     plt.title("Corpus de referencia — proyección PCA 2D")
     plt.tight_layout()
-    plt.savefig(out_png, dpi=150)
+    plt.savefig(_ensure_parent(out_png), dpi=150)
     print(f"  ✓  Proyección PCA → {out_png}")
 
 
@@ -922,7 +933,7 @@ def _cmd_score(args) -> None:
             # para que score_against_corpus/rank_candidates (que trabajan por ruta de
             # fichero, no por objeto en memoria) puedan cargarlo igualmente.
             tmp_floor = str(Path(args.cache).with_suffix("")) + ".floor_tmp.npz"
-            np.savez(tmp_floor, mu=np.float64(floor.mu), sigma=np.float64(floor.sigma),
+            np.savez(_ensure_parent(tmp_floor), mu=np.float64(floor.mu), sigma=np.float64(floor.sigma),
                       n_files=floor.n_files, backend=args.backend, timestamp=time.time(),
                       version=CACHE_FORMAT_VERSION)
             args.floor_cache = tmp_floor
@@ -937,7 +948,7 @@ def _cmd_score(args) -> None:
         else:
             print(f"{result['frechet_distance']:.4f}")
         if args.json:
-            Path(args.json).write_text(json.dumps(result, indent=2, ensure_ascii=False))
+            _ensure_parent(Path(args.json)).write_text(json.dumps(result, indent=2, ensure_ascii=False))
         return
 
     if args.mode == "rank":
@@ -952,7 +963,7 @@ def _cmd_score(args) -> None:
                 key = r.score_relative_to_floor if r.score_relative_to_floor is not None else r.score_absolute
                 print(f"{key:.4f}  {r.candidate_path}")
         if args.json:
-            Path(args.json).write_text(json.dumps([r.to_json_dict() for r in results],
+            _ensure_parent(Path(args.json)).write_text(json.dumps([r.to_json_dict() for r in results],
                                                     indent=2, ensure_ascii=False))
         return
 
@@ -969,7 +980,7 @@ def _cmd_score(args) -> None:
         print_single_report(result, args.cache, ref_meta.embedding_dim, ref_meta.n_files,
                              no_color=args.no_color)
     if args.json:
-        Path(args.json).write_text(json.dumps(result.to_json_dict(), indent=2, ensure_ascii=False))
+        _ensure_parent(Path(args.json)).write_text(json.dumps(result.to_json_dict(), indent=2, ensure_ascii=False))
 
 
 def main():

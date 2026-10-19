@@ -453,6 +453,17 @@ DEFAULT_PALETTE = {
 }
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  UTILIDADES DE PITCH Y TIEMPO
 # ══════════════════════════════════════════════════════════════════════════════
@@ -739,7 +750,7 @@ def _rolls_to_midi(bars_per_role, cfg, palette, output_path,
                                           channel=ch, time=delta))
             prev_t = abs_t
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
     return n_notes_total
 
 
@@ -1310,7 +1321,7 @@ class CycleGANSymbolic:
     # ── Serialización ─────────────────────────────────────────────────────
 
     def save(self, path):
-        with open(path, 'wb') as f:
+        with open(_ensure_parent(path), 'wb') as f:
             pickle.dump(self, f)
         print(f"  Modelo simbólico guardado → {path}")
 
@@ -1460,10 +1471,10 @@ class CycleTrainer:
             'best_loss': self.best_loss, 'no_improve': self.no_improve,
             'history': self.history,
         }
-        torch.save(state, self.model_dir / self.CHECKPOINT_NAME)
+        torch.save(_ensure_parent(state), self.model_dir / self.CHECKPOINT_NAME)
         if is_best:
-            torch.save(state, self.model_dir / self.BEST_NAME)
-        with open(self.model_dir / self.HISTORY_NAME, 'w') as f:
+            torch.save(_ensure_parent(state), self.model_dir / self.BEST_NAME)
+        with open(_ensure_parent(self.model_dir / self.HISTORY_NAME), 'w') as f:
             json.dump(self.history, f, indent=2)
 
     def load_checkpoint(self):
@@ -1950,7 +1961,7 @@ def _prepare_one_midi(args_tuple):
         'n_pitch':  n_pitch,
     }
     save_dict['meta_json'] = np.array([json.dumps(meta)])
-    np.savez_compressed(str(Path(output_dir) / f"{stem}.npz"), **save_dict)
+    np.savez_compressed(_ensure_parent(str(Path(output_dir) / f"{stem}.npz")), **save_dict)
 
     stats['files_ok'] = 1; stats['total_windows'] = min_windows
     return (stem,
@@ -2064,7 +2075,7 @@ def _cmd_train_symbolic(args):
     model.domain_a_name = os.path.basename(args.domain_a.rstrip('/'))
     model.domain_b_name = os.path.basename(args.domain_b.rstrip('/'))
     model.fit(feats_a, feats_b, iters=args.iters, verbose=args.verbose)
-    model.save(args.model)
+    model.save(_ensure_parent(args.model))
 
     if model.losses_history:
         last = model.losses_history[-1]
@@ -2525,7 +2536,7 @@ def cmd_style_corpus(args):
 
     mean_d = float(np.mean(densities)); std_d = float(np.std(densities))
     out_path = args.output or f"corpus_stats_{input_dir.stem}_{direction}.json"
-    with open(out_path, 'w') as f:
+    with open(_ensure_parent(out_path), 'w') as f:
         json.dump({'n_files': len(densities), 'n_skipped': skipped,
                    'density_mean': mean_d, 'density_std': std_d,
                    'densities': densities, 'direction': direction}, f, indent=2)

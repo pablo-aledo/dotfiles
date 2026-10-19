@@ -99,6 +99,17 @@ WINDOW_BARS_DEFAULT   = 4
 PITCH_CLASSES         = 128
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  UTILIDADES MIDI COMUNES
 # ══════════════════════════════════════════════════════════════════════════════
@@ -716,7 +727,7 @@ def _prepare_one_midi(args_tuple):
     save_dict['meta_json'] = np.array([json.dumps(meta)])
 
     out_path = Path(output_dir) / f"{stem}.npz"
-    np.savez_compressed(str(out_path), **save_dict)
+    np.savez_compressed(_ensure_parent(str(out_path)), **save_dict)
 
     stats_partial['files_ok']      = 1
     stats_partial['total_windows'] = min_windows
@@ -1639,11 +1650,11 @@ class Trainer:
             'freeze_done':        (epoch >= self.freeze_decoder_epochs
                                   if self.freeze_decoder_epochs > 0 else True),
         }
-        torch.save(state, self.model_dir / self.CHECKPOINT_NAME)
+        torch.save(_ensure_parent(state), self.model_dir / self.CHECKPOINT_NAME)
         if is_best:
-            torch.save(state, self.model_dir / self.BEST_NAME)
+            torch.save(_ensure_parent(state), self.model_dir / self.BEST_NAME)
         # Guardar historial en JSON legible
-        with open(self.model_dir / self.HISTORY_NAME, 'w') as f:
+        with open(_ensure_parent(self.model_dir / self.HISTORY_NAME), 'w') as f:
             json.dump(self.history, f, indent=2)
 
     def load_checkpoint(self):
@@ -2275,7 +2286,7 @@ def cmd_encode(args):
         'tension_mean': tension_mean,
         'roles_found':  list(rolls.keys()),
     }
-    with open(out_path, 'w') as f:
+    with open(_ensure_parent(out_path), 'w') as f:
         json.dump(payload, f, indent=2)
 
     print(f"[encode] Guardado en {out_path}")
@@ -2580,7 +2591,7 @@ def _rolls_to_midi(bars_per_role: dict, cfg: dict,
                     note=pitch, velocity=0, time=delta))
             prev_tick = abs_tick
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 def _load_palette(palette_path: str, cfg: dict) -> dict:

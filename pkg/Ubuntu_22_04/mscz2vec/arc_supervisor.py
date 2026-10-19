@@ -105,6 +105,17 @@ DEFAULT_LEXICON: Dict[str, Tuple[float, float, float, float]] = {
 DIMS = ["tension", "activity", "register", "harmony"]
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ESTRUCTURAS DE DATOS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1079,7 +1090,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='ARC SUPERVISOR — Supervisor de arco emocional para obras MIDI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
+        epilog=(__doc__ + '\n\n' + 'Códigos de salida (contrato de la suite): 0 = ejecución correcta, aunque haya hallazgos; 1 = error de ejecución o de entrada; 2 = uso incorrecto o entrada ilegible; 3 = hallazgos o puerta no superada (con --strict, o en los modos cuyo fin es validar).'),
     )
 
     # Entradas MIDI
@@ -1121,6 +1132,9 @@ def main():
                         help='Visualizar arco real vs esperado (requiere matplotlib)')
     parser.add_argument('--verbose', action='store_true',
                         help='Detalle por dimensión')
+    parser.add_argument('--strict', action='store_true',
+                        help='rc=3 si alguna sección incumple el arco '
+                             '(sin --strict, los hallazgos no son un fallo: rc=0)')
 
     args = parser.parse_args()
 
@@ -1148,7 +1162,7 @@ def main():
         sections = []
         for i, (part, name) in enumerate(zip(midi_parts, section_names)):
             with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as tmp:
-                part.save(tmp.name)
+                part.save(_ensure_parent(tmp.name))
                 sv = analyze_midi_file(tmp.name, name)
                 os.unlink(tmp.name)
             sections.append(sv)
@@ -1246,15 +1260,15 @@ def main():
 
     if args.report:
         report_data = build_json_report(diagnoses, mode, plan_source)
-        with open(args.report, 'w') as f:
+        with open(_ensure_parent(args.report), 'w') as f:
             json.dump(report_data, f, indent=2, ensure_ascii=False)
         print(f"  ✓ Reporte guardado: {args.report}\n")
 
     if args.plot:
         plot_arc(diagnoses, plan_source)
 
-    # Código de salida: 0 si todo OK, 1 si hay problemas
-    sys.exit(0 if all(d.ok for d in diagnoses) else 1)
+    # Contrato de la suite: los hallazgos no son un fallo (rc=0); --strict → rc=3
+    sys.exit(3 if (args.strict and not all(d.ok for d in diagnoses)) else 0)
 
 
 if __name__ == '__main__':

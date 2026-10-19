@@ -142,6 +142,17 @@ DEFAULT_TARGET_SAMPLE_HZ    = 16000
 DEFAULT_DIM                 = 1024
 DEFAULT_DEPTH               = 6
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -291,7 +302,7 @@ def cmd_train_codec(args):
                         key=lambda p: int(p.stem.split(".")[-1]))
     if candidates:
         ckpt_src = candidates[-1]
-        shutil.copy(ckpt_src, args.checkpoint)
+        shutil.copy(ckpt_src, _ensure_parent(args.checkpoint))
         print(f"\n[train-codec] Checkpoint guardado en: {args.checkpoint}  (desde {ckpt_src.name})")
     else:
         print(f"\n[train-codec] Entrenamiento completado. Checkpoints en: {args.results_dir}/")

@@ -75,6 +75,17 @@ NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 _PC = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def pc_name(pc: int) -> str:
     return NOTE_NAMES[pc % 12]
 
@@ -209,7 +220,7 @@ def write_midi(mid: MidiData, path: str):
         chunks.append(b"MTrk" + len(body).to_bytes(4, "big") + bytes(body))
     header = (b"MThd" + (6).to_bytes(4, "big") + mid.fmt.to_bytes(2, "big")
               + len(mid.tracks).to_bytes(2, "big") + mid.tpb.to_bytes(2, "big"))
-    Path(path).write_bytes(header + b"".join(chunks))
+    _ensure_parent(Path(path)).write_bytes(header + b"".join(chunks))
 
 
 def make_tempo_track(tpb: int, bpm: float = 100.0, num: int = 4, den: int = 4) -> MidiTrackData:
@@ -922,7 +933,7 @@ def prepare_dataset(corpus_dir: str, out_path: str, n_levels: int = DEFAULT_N_LE
         "n_pairs": len(all_src), "n_files_ok": n_ok, "n_files_failed": n_fail,
         "n_val_pairs": int(split_arr.sum()), "n_train_pairs": int((split_arr == 0).sum()),
     }
-    np.savez_compressed(out_path, src=src_arr, tgt=tgt_arr, split=split_arr,
+    np.savez_compressed(_ensure_parent(out_path), src=src_arr, tgt=tgt_arr, split=split_arr,
                          meta=json.dumps(meta))
     if verbose:
         print(f"\nDataset guardado en {out_path}")
@@ -1010,10 +1021,10 @@ class Trainer:
                   "optimizer_state": self.optimizer.state_dict(),
                   "best_val_loss": self.best_val_loss, "no_improve": self.no_improve,
                   "history": self.history}
-        torch.save(state, self.model_dir / self.CHECKPOINT_NAME)
+        torch.save(_ensure_parent(state), self.model_dir / self.CHECKPOINT_NAME)
         if is_best:
-            torch.save(state, self.model_dir / self.BEST_NAME)
-        with open(self.model_dir / self.HISTORY_NAME, "w") as f:
+            torch.save(_ensure_parent(state), self.model_dir / self.BEST_NAME)
+        with open(_ensure_parent(self.model_dir / self.HISTORY_NAME), "w") as f:
             json.dump(self.history, f, indent=2)
 
     def load_checkpoint(self):

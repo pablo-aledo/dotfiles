@@ -69,6 +69,17 @@ _KS_MIN = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 
 _MAJ_SC = {0, 2, 4, 5, 7, 9, 11}
 _MIN_SC = {0, 2, 3, 5, 7, 8, 10}
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ═════════════════════════ colores ═════════════════════════
 class _C:
     on = sys.stdout.isatty()
@@ -908,7 +919,7 @@ class Detector:
         arr = {"meta": np.array(json.dumps(meta)), "mu": self.mu, "sd": self.sd}
         for i, n in enumerate(self.nets):
             arr.update({f"n{i}_{k}": v for k, v in n.state().items()})
-        np.savez_compressed(path, **arr)
+        np.savez_compressed(_ensure_parent(path), **arr)
 
     @classmethod
     def load(cls, path):
@@ -1164,7 +1175,7 @@ def cmd_features(a):
     print("rasgos por grupo:", ", ".join(f"{g}={c}" for g, c in cnt.items()))
     if a.json:
         json.dump(dict(names=names, files=[dict(path=d["path"], y=d["y"], gid=d["gid"], windows=len(d["X"]),
-                                                 mean=d["X"].mean(0).round(5).tolist()) for d in ds]), open(a.json, "w"))
+                                                 mean=d["X"].mean(0).round(5).tolist()) for d in ds]), open(_ensure_parent(a.json), "w"))
         print("→", a.json)
 
 def cmd_train(a):
@@ -1191,7 +1202,7 @@ def cmd_train(a):
         platt = det.platt if det else (1.0, 0.0)
     det = train_detector(ds, names, a, det=det, verbose=a.verbose)
     det.platt = platt
-    det.save(a.out)
+    det.save(_ensure_parent(a.out))
     idx = list(range(len(ds)))
     idx = [i for i, d in enumerate(ds) if _is_real(d)]
     s = predict_files(det, ds, idx); y = np.array([ds[i]["y"] for i in idx]); p = _sig(platt[0] * s + platt[1])
@@ -1213,7 +1224,7 @@ def cmd_eval(a):
         print("   " + _fmt(r["m"]).replace(f"AUC {r['m']['auc']:.3f}", f"AUC {r['auc']:.3f}"))
         print(f"   especificidad: originales emparejados {r['spec_paired']:.3f} · originales sin pareja ({r['n_unpaired']}) {r['spec_unpaired']:.3f}")
         print("   sensibilidad por familia no vista:  " + "  ".join(f"{k} {v[0]:.2f}(n={v[1]})" for k, v in r["per"].items()))
-        if a.json: json.dump(dict(loro=r), open(a.json, "w"), indent=1, default=float)
+        if a.json: json.dump(dict(loro=r), open(_ensure_parent(a.json), "w"), indent=1, default=float)
         return
     configs = [("principal", dict())]
     if a.compare:
@@ -1252,7 +1263,7 @@ def cmd_eval(a):
         if name in ("principal", "MLP principal"):
             res_last = last
     if a.json:
-        json.dump(out, open(a.json, "w"), indent=1); print("\n→", a.json)
+        json.dump(out, open(_ensure_parent(a.json), "w"), indent=1); print("\n→", a.json)
     if a.errors and 'res_last' in locals():
         print("\nErrores del modelo principal (puntuación OOF, >0 ⇒ «reconstructed»):")
         for pth, s in res_last["oof"].items():

@@ -187,6 +187,17 @@ _COLORS = {"R": "\033[0m", "B": "\033[1m", "G": "\033[90m", "GRN": "\033[92m",
 _USE_COLOR = sys.stdout.isatty()
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(k: str) -> str:
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
@@ -1219,7 +1230,7 @@ def write_recipe(plan: Dict, results: List[Dict], tools: str) -> str:
         L.append(line)
     L.append('echo "✔ receta completada"')
     path = os.path.join(out, "receta.sh")
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(_ensure_parent(path), "w", encoding="utf-8") as fh:
         fh.write("\n".join(L) + "\n")
     os.chmod(path, 0o755)
     return path
@@ -1318,7 +1329,7 @@ def write_report(plan: Dict, results: List[Dict], summary: Dict) -> str:
         L.append(f"- {k}: {v}")
     L += ["", "Reproducible con `receta.sh` (variables `TOOLS`, `ORIG` y `RECONSTRUCTOR` sobrescribibles)."]
     path = os.path.join(out, "RECONSTRUCCION.md")
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(_ensure_parent(path), "w", encoding="utf-8") as fh:
         fh.write("\n".join(L) + "\n")
     return path
 
@@ -1489,7 +1500,7 @@ def build_comparison(root: str) -> Optional[str]:
                  f"{cell(r['variants'].get('rearmonizado'))} | {cell(r['variants'].get('orquestado'))} | "
                  f"{r['chosen']} |")
     path = os.path.join(root, "COMPARACION.md")
-    with open(path, "w", encoding="utf-8") as fh:
+    with open(_ensure_parent(path), "w", encoding="utf-8") as fh:
         fh.write("\n".join(L) + "\n")
     return path
 
@@ -1535,7 +1546,7 @@ def cmd_plan(a) -> int:
         cond = f"  {_c('G')}si {' y '.join(s['when'])}{_c('R')}" if s["when"] else ""
         print(f"   {flag} {s['name']:<24} {s['tool']:<30}{cond}")
     if a.yaml:
-        with open(a.yaml, "w", encoding="utf-8") as fh:
+        with open(_ensure_parent(a.yaml), "w", encoding="utf-8") as fh:
             fh.write(plan_to_runner_yaml(plan))
         print(f"  {_c('CYA')}YAML para runner.py: {a.yaml}{_c('R')}")
     print()

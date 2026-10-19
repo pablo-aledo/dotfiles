@@ -111,6 +111,17 @@ NUMBER_RE  = re.compile(r'^\d+$')            # e.g.  5
 LABEL_RE   = re.compile(r'^\[([^\]]+)\]$')  # e.g.  [verso]
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ESTRUCTURAS DE DATOS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -717,7 +728,7 @@ def notes_to_midi(
     trk = MidiTrack()
     mid.tracks.append(trk)
     _notes_list_to_track(notes, trk, tempo=tempo, name='GrammarComposer')
-    mid.save(str(out_path))
+    mid.save(_ensure_parent(str(out_path)))
 
 
 def multitrack_to_midi(
@@ -746,7 +757,7 @@ def multitrack_to_midi(
             name  = f'Track{orig_idx}',
         )
 
-    mid.save(str(out_path))
+    mid.save(_ensure_parent(str(out_path)))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1641,7 +1652,7 @@ def main() -> None:
 
         print(f"[3/4] Guardando gramática: {out_path} …")
         try:
-            out_path.write_text(grammar_text, encoding='utf-8')
+            _ensure_parent(out_path).write_text(grammar_text, encoding='utf-8')
         except Exception as e:
             sys.exit(f"  Error al escribir la gramática: {e}")
         print(f"  → Fichero guardado: {out_path}")

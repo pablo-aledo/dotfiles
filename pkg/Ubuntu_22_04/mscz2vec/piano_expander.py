@@ -71,6 +71,17 @@ NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
 TICKS = 480
 PERC_CH = 9
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 def midi_to_name(n):
     return f"{NOTE_NAMES[n%12]}{n//12-1}"
 
@@ -826,7 +837,7 @@ def build_midi(instr_notes,instr_cc,instruments,tempo,tpb,output_path,meta=None)
         track=build_track(notes,cc,ch%16,disp,prog)
         mid.tracks.append(track)
         created.append(disp)
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
     return created
 
 
@@ -984,7 +995,7 @@ def export_fingerprint(report,path):
         'sections':[{'bars':s['bars'],'archetype':s['archetype'],
                      'label':s['label'],'density':s['density']}
                     for s in report.get('sections',[])]}
-    with open(path,'w',encoding='utf-8') as f: json.dump(fp,f,indent=2,ensure_ascii=False)
+    with open(_ensure_parent(path),'w',encoding='utf-8') as f: json.dump(fp,f,indent=2,ensure_ascii=False)
     print(f"  Fingerprint: {path}")
 
 
@@ -1019,6 +1030,34 @@ def load_template(arg):
 #  CLI
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── Contrato de la suite: --style acepta el vocabulario común ──────────────────
+_STYLE_COMMON = ("auto", "baroque", "blues", "diatonic", "flamenco", "folk",
+                 "impressionist", "jazz", "modal", "pop", "romantic")
+
+
+def _resolve_style(value, native, default, aliases=None):
+    """Acepta el vocabulario común de la suite en --style. Lo que esta herramienta
+    no tiene de forma nativa se traduce con `aliases` o cae a `default`, avisando
+    por stderr (nunca falla ni cambia el valor en silencio)."""
+    if value is None or value in native:
+        return value
+    if value == "auto":
+        return default
+    target = (aliases or {}).get(value, default)
+    import sys as _sys
+    if value in (aliases or {}):
+        msg = f"equivale a {target!r} en esta herramienta"
+    else:
+        msg = ("sin equivalente nativo en esta herramienta; se usa "
+               + (repr(target) if target is not None else "el valor por defecto"))
+    print(f"[AVISO] --style {value}: {msg}", file=_sys.stderr)
+    return target
+
+
+_STYLE_NATIVE = ['auto', 'romantic', 'baroque', 'impressionist', 'cinematic', 'chamber']
+_STYLE_ALIASES = {}
+
+
 def build_parser():
     p=argparse.ArgumentParser(
         description='Piano Expander v2.0 — Expansión orquestal de bocetos pianísticos',
@@ -1027,7 +1066,7 @@ def build_parser():
     p.add_argument('--template',default='chamber',
                    help='chamber|strings|full|<archivo.json> (def: chamber)')
     p.add_argument('--style',
-                   choices=['auto','romantic','baroque','impressionist','cinematic','chamber'],
+                   choices=_STYLE_NATIVE + [s for s in _STYLE_COMMON if s not in _STYLE_NATIVE],
                    default='auto')
     p.add_argument('--split',default='G4',help='Split si pista única (def: G4)')
     p.add_argument('--no-counter',action='store_true')
@@ -1045,6 +1084,7 @@ def build_parser():
 
 def main():
     parser=build_parser(); args=parser.parse_args()
+    args.style = _resolve_style(args.style, _STYLE_NATIVE, 'auto', _STYLE_ALIASES)
     args.counter_density=clamp(args.counter_density,0.0,1.0)
     args.texture_sensitivity=clamp(args.texture_sensitivity,0.0,1.0)
     try: split_note=name_to_midi(args.split)
@@ -1116,12 +1156,12 @@ def main():
             'tonalidad':report_data.get('key','?'),
             'estilo':report_data.get('style','?'),
             'instrumentos':[INSTR_DISPLAY.get(i,i) for i in instruments]}
-        with open(base+'.yaml','w',encoding='utf-8') as f:
+        with open(_ensure_parent(base+'.yaml'),'w',encoding='utf-8') as f:
             yaml.dump(ya,f,allow_unicode=True,default_flow_style=False)
         print(f"  YAML: {base+'.yaml'}")
 
     report_text=generate_report(report_data,args.midi,out_midi,created)
-    with open(out_rep,'w',encoding='utf-8') as f: f.write(report_text)
+    with open(_ensure_parent(out_rep),'w',encoding='utf-8') as f: f.write(report_text)
     print(f"  Informe: {out_rep}")
 
     print('\n'+'═'*65); print('  RESUMEN'); print('═'*65)

@@ -509,6 +509,17 @@ for _t in _SECONDARY_DOMINANT_TARGETS:
 del _t, _interval
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def resolve_numeral(numeral: str, tonic_pc: int, complexity: float = 0.5) -> tuple[str, list[int]]:
     """
     Convierte un numeral romano en (nombre_acorde, [pitch_classes]).
@@ -784,7 +795,7 @@ def progression_to_midi(progression: list, tonic_pc: int, ticks_per_beat: int,
             track.append(mido.Message('note_off', channel=0, note=note,
                                        velocity=0, time=(dur_ticks if i == 0 else 0)))
 
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -940,6 +951,34 @@ def print_report(candidates: list, tonic_pc: int, params: dict) -> None:
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# ── Contrato de la suite: --style acepta el vocabulario común ──────────────────
+_STYLE_COMMON = ("auto", "baroque", "blues", "diatonic", "flamenco", "folk",
+                 "impressionist", "jazz", "modal", "pop", "romantic")
+
+
+def _resolve_style(value, native, default, aliases=None):
+    """Acepta el vocabulario común de la suite en --style. Lo que esta herramienta
+    no tiene de forma nativa se traduce con `aliases` o cae a `default`, avisando
+    por stderr (nunca falla ni cambia el valor en silencio)."""
+    if value is None or value in native:
+        return value
+    if value == "auto":
+        return default
+    target = (aliases or {}).get(value, default)
+    import sys as _sys
+    if value in (aliases or {}):
+        msg = f"equivale a {target!r} en esta herramienta"
+    else:
+        msg = ("sin equivalente nativo en esta herramienta; se usa "
+               + (repr(target) if target is not None else "el valor por defecto"))
+    print(f"[AVISO] --style {value}: {msg}", file=_sys.stderr)
+    return target
+
+
+_STYLE_NATIVE = list(PATTERNS.keys()) + ['auto']
+_STYLE_ALIASES = {}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Genera progresiones de acordes desde una intención musical.',
@@ -957,7 +996,7 @@ def main():
                         choices=list(MODES.keys()),
                         help='Modo musical (default: auto desde intención)')
     parser.add_argument('--style', type=str, default=None,
-                        choices=list(PATTERNS.keys()) + ['auto'],
+                        choices=_STYLE_NATIVE + [s for s in _STYLE_COMMON if s not in _STYLE_NATIVE],
                         help='Estilo armónico (default: auto)')
     parser.add_argument('--bars', type=int, default=16,
                         help='Número de compases (default: 16)')
@@ -1003,6 +1042,7 @@ def main():
                         help='Mostrar análisis de calidad de los candidatos')
 
     args = parser.parse_args()
+    args.style = _resolve_style(args.style, _STYLE_NATIVE, 'auto', _STYLE_ALIASES)
     random.seed(args.seed)
     np.random.seed(args.seed)
 
@@ -1221,13 +1261,13 @@ def main():
             for s, p, prog in candidates_full
         ],
     }
-    with open(json_path, 'w') as f:
+    with open(_ensure_parent(json_path), 'w') as f:
         json.dump(out_data, f, indent=2, ensure_ascii=False)
     print(f"  → JSON:  {json_path}")
 
     # — Texto para --chords
     txt_path = args.export_text or f"{base}.chords.txt"
-    with open(txt_path, 'w') as f:
+    with open(_ensure_parent(txt_path), 'w') as f:
         f.write(chord_text + '\n')
     print(f"  → Texto: {txt_path}  (compatible con --chords)")
 

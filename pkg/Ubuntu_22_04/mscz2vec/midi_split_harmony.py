@@ -117,6 +117,17 @@ PITCH_NAMES_FLAT  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb',
 _FLAT_KEYS = {('major', pc) for pc in (5, 10, 3, 8, 1, 6)} | {('minor', pc) for pc in (2, 7, 0, 5, 10, 3)}
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def pc_name(pc: int, tonic_pc: int = 0, mode: str = 'major') -> str:
     """Nombre de nota con la grafía de la tonalidad (Bb en Si♭ mayor, no A#)."""
     flat = (mode, tonic_pc % 12) in _FLAT_KEYS
@@ -1330,7 +1341,7 @@ def save_model(path: str, transition: np.ndarray, emission: np.ndarray,
         'transition': transition.tolist(),
         'emission': emission.tolist(),
     }
-    with open(path, 'w') as f:
+    with open(_ensure_parent(path), 'w') as f:
         json.dump(data, f, indent=2)
 
 
@@ -1515,7 +1526,7 @@ def export_split_file(melody_notes: List[Tuple],
                                         velocity=velocity_chords)
     mid.tracks.append(melody_track)
     mid.tracks.append(chords_track)
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 def export_two_files(melody_notes: List[Tuple],
@@ -1537,7 +1548,7 @@ def export_two_files(melody_notes: List[Tuple],
     mid_mel.tracks.append(build_melody_track(melody_notes, tpb,
                                               velocity=velocity_melody,
                                               target_octave=melody_octave))
-    mid_mel.save(melody_path)
+    mid_mel.save(_ensure_parent(melody_path))
 
     # MIDI de acordes
     mid_ch = mido.MidiFile(ticks_per_beat=tpb)
@@ -1549,7 +1560,7 @@ def export_two_files(melody_notes: List[Tuple],
     mid_ch.tracks.append(build_chords_track(chords, tpb, channel=0,
                                              octave=chord_octave,
                                              velocity=velocity_chords))
-    mid_ch.save(chords_path)
+    mid_ch.save(_ensure_parent(chords_path))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

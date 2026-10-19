@@ -93,6 +93,17 @@ PRESETS = {
 }
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ═══════════════════════════════════════════════════════════
 # UTILIDADES MÉTRICAS
 # ═══════════════════════════════════════════════════════════
@@ -686,7 +697,7 @@ def adapt_meter(midi_path: str,
 
     if report:
         report_path = os.path.splitext(output_path)[0] + '_report.json'
-        with open(report_path, 'w', encoding='utf-8') as f:
+        with open(_ensure_parent(report_path), 'w', encoding='utf-8') as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
         if verbose:
             print(f"  → {report_path}")

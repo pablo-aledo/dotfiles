@@ -294,6 +294,17 @@ NOTE_RE = re.compile(
 REST_RE = re.compile(r"(?P<rest>[zZxX])(?P<dur>\d+/\d+|\d+|/\d+|/+)?")
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def parse_key(key_field):
     """Extrae la tonica (pitch class 0-11) de un campo K: de ABC."""
     m = re.match(r"\s*([A-G])([#b]?)", key_field)
@@ -1208,7 +1219,7 @@ def cmd_train(args):
         "n_sequences": len(sequences),
         "n_source_files": len(abc_files),
     }
-    torch.save(checkpoint_out, args.model_out)
+    torch.save(_ensure_parent(checkpoint_out), args.model_out)
     print(f"[train] Modelo guardado en {args.model_out}")
 
 # ==============================================================================
@@ -1354,7 +1365,7 @@ def write_midi(phrases_events, out_path, key_pc=0, tempo_bpm=100, unit_len_beats
             track.append(mido.Message("note_on", note=pitch, velocity=80, time=0))
             track.append(mido.Message("note_off", note=pitch, velocity=0, time=dur_ticks))
 
-    mid.save(out_path)
+    mid.save(_ensure_parent(out_path))
 
 
 DUR_TO_ABC = {0.5: "/2", 1.0: "", 1.5: "3/2", 2.0: "2", 3.0: "3", 4.0: "4"}
@@ -1384,7 +1395,7 @@ def write_abc(phrases_events, out_path, line_texts=None, key_name="C", meter="4/
         if line_texts:
             lines.append("w: " + line_texts[li])
 
-    with open(out_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(out_path), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
 

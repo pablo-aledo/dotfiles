@@ -640,6 +640,17 @@ VOICE_FROM_GM_NOTE = {
     56: 'cowbell', 75: 'claves', 76: 'click', 63: 'perc',
 }
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # UTILIDADES DE MÉTRICA / TIEMPO
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -886,7 +897,7 @@ def pattern_to_midi(entry: dict, events: list, beats_per_char: float,
         else:
             track.append(mido.Message('note_off', channel=9, note=note,
                                       velocity=0, time=delta))
-    mid.save(output_path)
+    mid.save(_ensure_parent(output_path))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1413,7 +1424,7 @@ def main():
                 'id': m['entry']['id'], 'nombre': m['entry']['nombre'],
                 'score': m['score'], 'detail': m['detail'],
             } for m in matches]
-            with open(args.export_json, 'w') as f:
+            with open(_ensure_parent(args.export_json), 'w') as f:
                 json.dump(exportable, f, indent=2, ensure_ascii=False)
             print(f"  → JSON: {args.export_json}\n")
         return
@@ -1478,7 +1489,7 @@ def main():
 
             json_path = args.export_json or f"{args.output}.chords.json"
             txt_path = args.export_text or f"{args.output}.chords.txt"
-            with open(json_path, 'w') as f:
+            with open(_ensure_parent(json_path), 'w') as f:
                 json.dump({
                     'meta': {k: v for k, v in entry.items() if k != 'pattern'},
                     'change_voice': args.change_voice,
@@ -1487,7 +1498,7 @@ def main():
                     'generator': 'rhythm_table.py v1.0',
                 }, f, indent=2, ensure_ascii=False)
             print(f"  → JSON:  {json_path}")
-            with open(txt_path, 'w') as f:
+            with open(_ensure_parent(txt_path), 'w') as f:
                 f.write(chord_text + '\n')
             print(f"  → Texto: {txt_path}")
             return
@@ -1497,7 +1508,7 @@ def main():
         txt_path = args.export_text or f"{args.output}.rhythm.txt"
         mid_path = args.export_midi or f"{args.output}.rhythm.mid"
 
-        with open(json_path, 'w') as f:
+        with open(_ensure_parent(json_path), 'w') as f:
             json.dump({
                 'meta': {k: v for k, v in entry.items() if k != 'pattern'},
                 'bars': args.bars, 'reps': args.reps, 'tempo': args.tempo,
@@ -1508,7 +1519,7 @@ def main():
             }, f, indent=2, ensure_ascii=False)
         print(f"  → JSON:  {json_path}")
 
-        with open(txt_path, 'w') as f:
+        with open(_ensure_parent(txt_path), 'w') as f:
             f.write(text + '\n')
         print(f"  → Texto: {txt_path}")
 
@@ -1538,7 +1549,7 @@ def main():
         print_table(entries, args.verbose)
         if args.export_json:
             exportable = [{k: v for k, v in e.items()} for e in entries]
-            with open(args.export_json, 'w') as f:
+            with open(_ensure_parent(args.export_json), 'w') as f:
                 json.dump(exportable, f, indent=2, ensure_ascii=False)
             print(f"  → JSON: {args.export_json}")
         return
@@ -1559,7 +1570,7 @@ def main():
 
     if args.export_json:
         data = entries if entries else TABLE
-        with open(args.export_json, 'w') as f:
+        with open(_ensure_parent(args.export_json), 'w') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         print(f"  → JSON: {args.export_json}\n")
 

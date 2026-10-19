@@ -212,6 +212,17 @@ CHORD_INTERVALS = {
 MIN_NOTE_DURATION = 0.125
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  ESTRUCTURAS DE DATOS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1287,7 +1298,7 @@ def export_musicxml(plan: SongPlan, output_path: str):
 
     lines.append('</score-partwise>')
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(output_path), "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
 
@@ -1364,13 +1375,41 @@ def export_plan_json(plan: SongPlan, output_path: str, input_files: List[str]):
             "progression": [[n, d] for n, d in sec.progression],
         } for sec in plan.sections],
     }
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(_ensure_parent(output_path), "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CLI
 # ══════════════════════════════════════════════════════════════════════════════
+
+# ── Contrato de la suite: --style acepta el vocabulario común ──────────────────
+_STYLE_COMMON = ("auto", "baroque", "blues", "diatonic", "flamenco", "folk",
+                 "impressionist", "jazz", "modal", "pop", "romantic")
+
+
+def _resolve_style(value, native, default, aliases=None):
+    """Acepta el vocabulario común de la suite en --style. Lo que esta herramienta
+    no tiene de forma nativa se traduce con `aliases` o cae a `default`, avisando
+    por stderr (nunca falla ni cambia el valor en silencio)."""
+    if value is None or value in native:
+        return value
+    if value == "auto":
+        return default
+    target = (aliases or {}).get(value, default)
+    import sys as _sys
+    if value in (aliases or {}):
+        msg = f"equivale a {target!r} en esta herramienta"
+    else:
+        msg = ("sin equivalente nativo en esta herramienta; se usa "
+               + (repr(target) if target is not None else "el valor por defecto"))
+    print(f"[AVISO] --style {value}: {msg}", file=_sys.stderr)
+    return target
+
+
+_STYLE_NATIVE = ["pop", "rock", "ballad", "jazz", "folk", "rnb"]
+_STYLE_ALIASES = {"romantic": "ballad"}
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -1396,7 +1435,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tempo", type=int, default=None,
                    help="Tempo BPM (default: detectado del MIDI o 120)")
     p.add_argument("--style", type=str, default="pop",
-                   choices=["pop", "rock", "ballad", "jazz", "folk", "rnb"],
+                   choices=_STYLE_NATIVE + [s for s in _STYLE_COMMON if s not in _STYLE_NATIVE],
                    help="Estilo armónico (default: pop)")
     p.add_argument("--beats-per-bar", type=int, default=None,
                    help="Pulsos por compás (default: auto-detección desde el MIDI)")
@@ -1449,6 +1488,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main():
     parser = build_parser()
     args = parser.parse_args()
+    args.style = _resolve_style(args.style, _STYLE_NATIVE, "pop", _STYLE_ALIASES)
 
     rng = random.Random(args.seed)
     np.random.seed(args.seed)

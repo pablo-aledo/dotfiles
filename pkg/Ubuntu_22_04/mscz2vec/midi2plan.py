@@ -82,6 +82,17 @@ VERSION = "1.0"
 _USE_COLOR = sys.stdout.isatty()
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(code):
     if not _USE_COLOR:
         return ""
@@ -745,7 +756,7 @@ def write_plan_yaml(path, brief, steps, meta):
             L.append("    optional: true")
         if s["note"]:
             L.append(f"    note: {_q(s['note'])}")
-    Path(path).write_text("\n".join(L) + "\n", encoding="utf-8")
+    _ensure_parent(Path(path)).write_text("\n".join(L) + "\n", encoding="utf-8")
 
 
 def slugify(name):
@@ -887,13 +898,41 @@ def cmd_selftest(a):
 #  CLI
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── Contrato de la suite: --style acepta el vocabulario común ──────────────────
+_STYLE_COMMON = ("auto", "baroque", "blues", "diatonic", "flamenco", "folk",
+                 "impressionist", "jazz", "modal", "pop", "romantic")
+
+
+def _resolve_style(value, native, default, aliases=None):
+    """Acepta el vocabulario común de la suite en --style. Lo que esta herramienta
+    no tiene de forma nativa se traduce con `aliases` o cae a `default`, avisando
+    por stderr (nunca falla ni cambia el valor en silencio)."""
+    if value is None or value in native:
+        return value
+    if value == "auto":
+        return default
+    target = (aliases or {}).get(value, default)
+    import sys as _sys
+    if value in (aliases or {}):
+        msg = f"equivale a {target!r} en esta herramienta"
+    else:
+        msg = ("sin equivalente nativo en esta herramienta; se usa "
+               + (repr(target) if target is not None else "el valor por defecto"))
+    print(f"[AVISO] --style {value}: {msg}", file=_sys.stderr)
+    return target
+
+
+_STYLE_NATIVE = STYLES + ["flamenco", "auto"]
+_STYLE_ALIASES = {}
+
+
 def _plan_args(p):
     p.add_argument("--profile", choices=["reconstruct", "analyze"], default="reconstruct")
     p.add_argument("--bars", default="auto", help="N o 'auto'")
     p.add_argument("--max-bars", type=int, default=32)
     p.add_argument("--variant", type=int, default=0)
     p.add_argument("--seed", type=int, default=100)
-    p.add_argument("--style", default=None, choices=STYLES + ["flamenco", "auto"])
+    p.add_argument("--style", default=None, choices=_STYLE_NATIVE + [s for s in _STYLE_COMMON if s not in _STYLE_NATIVE])
     p.add_argument("--key", default=None)
     p.add_argument("--tempo", type=int, default=None)
     p.add_argument("--chords-from", choices=["generator", "template"], default="generator")
@@ -930,6 +969,7 @@ def main(argv=None):
     p.add_argument("--suite-dir", default=str(HERE))
     p.add_argument("--no-color", action="store_true")
     a = ap.parse_args(argv)
+    a.style = _resolve_style(a.style, _STYLE_NATIVE, None, _STYLE_ALIASES)
     if getattr(a, "no_color", False):
         _USE_COLOR = False
     try:
@@ -942,7 +982,7 @@ def main(argv=None):
                 return 0
             print_brief(b)
             if a.json:
-                Path(a.json).write_text(json.dumps(b, ensure_ascii=False, indent=1), encoding="utf-8")
+                _ensure_parent(Path(a.json)).write_text(json.dumps(b, ensure_ascii=False, indent=1), encoding="utf-8")
                 print(f"  JSON: {a.json}")
             return 0
         if a.cmd == "plan":

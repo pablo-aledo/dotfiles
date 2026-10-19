@@ -453,6 +453,17 @@ GENRE_SWING_PROFILE = {
     "generic":     (0.50, None),
 }
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CATÁLOGO DE ARQUETIPOS DE SEMILLA  (v0.3)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1796,7 +1807,7 @@ def cmd_learn(args):
     }
 
     out = args.output or "drum_library.json"
-    with open(out, "w") as f:
+    with open(_ensure_parent(out), "w") as f:
         json.dump(library, f, indent=2)
 
     print(f"[learn] Biblioteca guardada en: {out}")
@@ -1919,7 +1930,7 @@ def cmd_analyze(args):
             "grid_first_bar": {k: v[:16] for k, v in grids.items()},
         }
         out = args.export
-        with open(out, "w") as f:
+        with open(_ensure_parent(out), "w") as f:
             json.dump(result, f, indent=2)
         print(f"[analyze] Informe exportado: {out}")
 
@@ -2619,7 +2630,7 @@ def cmd_extract(args):
     library["clusters"].append(entry)
     library["total_patterns"] = len(library["clusters"])
 
-    with open(lib_path, "w") as f:
+    with open(_ensure_parent(lib_path), "w") as f:
         json.dump(library, f, indent=2)
 
     # ── Informe ───────────────────────────────────────────────────────────
@@ -2661,7 +2672,7 @@ def cmd_extract(args):
             prev = t
         track.append(mido.MetaMessage("end_of_track", time=0))
         midi_out = args.export_midi
-        out_mid.save(midi_out)
+        out_mid.save(_ensure_parent(midi_out))
         print(f"[extract] Patrón base exportado como MIDI: {midi_out}")
 
 
@@ -3420,7 +3431,7 @@ def write_midi_with_drums(original_mid: mido.MidiFile,
     drum_track.append(mido.MetaMessage("end_of_track", time=0))
     new_mid.tracks.append(drum_track)
 
-    new_mid.save(out_path)
+    new_mid.save(_ensure_parent(out_path))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

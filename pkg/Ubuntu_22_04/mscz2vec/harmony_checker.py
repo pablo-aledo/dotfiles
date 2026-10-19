@@ -61,6 +61,17 @@ _PC = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 VOICES = ["S", "A", "T", "B"]
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(k):
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
@@ -336,7 +347,7 @@ def main():
         print(f"\n  {_c('GRN')}Sin errores de conducción de voces. ¡Buen trabajo!{R}")
 
     if args.json:
-        Path(args.json).write_text(
+        _ensure_parent(Path(args.json)).write_text(
             json.dumps({"version": VERSION, **st}, ensure_ascii=False, indent=2),
             encoding="utf-8")
         print(f"\n  {C}JSON: {args.json}{R}")

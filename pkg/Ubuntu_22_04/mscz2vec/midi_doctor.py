@@ -93,6 +93,17 @@ _COLORS = {"R": "\033[0m", "B": "\033[1m", "G": "\033[90m", "GRN": "\033[92m",
 _USE_COLOR = sys.stdout.isatty()
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _c(k: str) -> str:
     return _COLORS.get(k, "") if _USE_COLOR else ""
 
@@ -672,7 +683,7 @@ def cmd_check(a) -> int:
     print(f"\n{'─' * 78}\n  {len(results)} ficheros: {_c('GRN')}{clean} limpios{R} · "
           f"{n_warn} con avisos · {_c('RED')}{n_err} con errores{R}\n")
     if a.json:
-        with open(a.json, "w", encoding="utf-8") as fh:
+        with open(_ensure_parent(a.json), "w", encoding="utf-8") as fh:
             json.dump({"version": VERSION, "results": results}, fh, ensure_ascii=False, indent=2)
         print(f"  {_c('CYA')}JSON: {a.json}{R}")
     unreadable = any(any(i["code"] == "E_PARSE" for i in r["issues"]) for r in results)
@@ -704,7 +715,7 @@ def cmd_fix(a) -> int:
             log.insert(0, "bytes de dato fuera de 0..127 recortados al leer")
         out = f if a.inplace else (a.output or default_out(f, "_fixed"))
         if a.inplace:
-            shutil.copyfile(f, f + ".bak")
+            shutil.copyfile(f, _ensure_parent(f + ".bak"))
         save_atomic(new, out)
         after = check_file(out)
         left = [i for i in after["issues"] if i["severity"] != "info"]

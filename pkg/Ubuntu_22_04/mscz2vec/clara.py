@@ -84,6 +84,17 @@ from functools import partial
 import numpy as np
 from tqdm import tqdm
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ── Imports opcionales (se comprueban en cada subcomando) ─────────────────────
 def _require(pkg, pip_name=None):
     """Importa un paquete y aborta con mensaje claro si no está instalado."""
@@ -307,11 +318,11 @@ def _encode_piece(fpath, composer, chamber, sample_freqs, note_ranges,
             cw_arr = _add_modulations(cw_arr)
 
             cw_dir = _encoding_dir(cw_base, "chordwise", nr, sf, chamber, composer)
-            (cw_dir / fname_stem).write_text(" ".join(cw_arr))
+            (_ensure_parent(cw_dir / fname_stem)).write_text(" ".join(cw_arr))
 
             nw_str = _chord_to_notewise(cw_arr, sf)
             nw_dir = _encoding_dir(nw_base, "notewise", nr, sf, chamber, composer)
-            (nw_dir / fname_stem).write_text(nw_str)
+            (_ensure_parent(nw_dir / fname_stem)).write_text(nw_str)
 
     print("  OK")
 
@@ -379,7 +390,7 @@ def _remove_duration(directory):
         piece = len(tokens) // 12
         for i in range(12):
             out = directory / f"{fpath.stem}___{i}.txt"
-            out.write_text(" ".join(tokens[i * piece:(i + 1) * piece]))
+            _ensure_parent(out).write_text(" ".join(tokens[i * piece:(i + 1) * piece]))
 
 
 def _remove_wait(directory):
@@ -401,7 +412,7 @@ def _remove_wait(directory):
         piece = len(tokens) // 12
         for k in range(12):
             out = directory / f"{fpath.stem}___{k}.txt"
-            out.write_text(" ".join(tokens[k * piece:(k + 1) * piece]))
+            _ensure_parent(out).write_text(" ".join(tokens[k * piece:(k + 1) * piece]))
 
 
 def cmd_split(args):
@@ -483,8 +494,8 @@ def _save_params(P, TEXT, md, bs, bptt, em_sz, nh, nl, prefix):
     import pickle
     d = dict(n_tok=md.nt, pad=md.pad_idx, bs=bs, bptt=bptt,
              em_sz=em_sz, nh=nh, nl=nl)
-    (P["generator"] / f"{prefix}_params.pkl").write_bytes(pickle.dumps(d))
-    (P["generator"] / f"{prefix}_text.pkl").write_bytes(pickle.dumps(TEXT))
+    (_ensure_parent(P["generator"] / f"{prefix}_params.pkl")).write_bytes(pickle.dumps(d))
+    (_ensure_parent(P["generator"] / f"{prefix}_text.pkl")).write_bytes(pickle.dumps(TEXT))
 
 
 def _load_params(P, model_name):
@@ -498,7 +509,7 @@ def _train_and_save(learner, lr, epochs, fpath):
     print(f"\n  Entrenando → {fpath.name}  (lr={lr})")
     learner.fit_one_cycle(epochs, lr, wd=1e-6)
     import torch
-    torch.save(learner.model.state_dict(), fpath)
+    torch.save(_ensure_parent(learner.model.state_dict()), fpath)
     print(f"  Guardado → {fpath}")
 
 

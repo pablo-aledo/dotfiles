@@ -113,6 +113,17 @@ from pathlib import Path
 from functools import wraps, partial
 from datetime import datetime
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  IMPORTS OPCIONALES — se comprueban en cada comando que los necesita
 # ══════════════════════════════════════════════════════════════════════════════
@@ -980,7 +991,7 @@ def _save_checkpoint(path: str, model_state: dict, meta: dict):
     torch = _require("torch")
     pkg = {'state_dict': model_state, 'meta': meta,
            'version': VERSION, 'saved': datetime.now().isoformat()}
-    torch.save(pkg, path)
+    torch.save(_ensure_parent(pkg), path)
 
 def _load_checkpoint(path: str, verbose: bool = False):
     torch = _require("torch")
@@ -1036,7 +1047,7 @@ def cmd_prepare(args):
                 f"/ generados del nombre: {missing_text}")
 
     out = args.manifest or str(audio_dir / 'manifest.csv')
-    with open(out, 'w', newline='', encoding='utf-8') as f:
+    with open(_ensure_parent(out), 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['path', 'text'])
         writer.writerows(rows)
@@ -1377,7 +1388,7 @@ def cmd_embed(args):
         'generated': datetime.now().isoformat(),
     }
     out = args.output or 'embed.json'
-    with open(out, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(out), 'w', encoding='utf-8') as f:
         json.dump(out_data, f, indent=2)
     _ok(f"Embedding guardado: {out}  (dim={len(vec)})")
     if args.verbose:

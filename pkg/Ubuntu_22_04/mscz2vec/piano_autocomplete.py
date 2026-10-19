@@ -159,6 +159,17 @@ CHECKPOINT_FNAME = 'checkpoint.pt'
 CONFIG_FNAME     = 'config.json'
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def _nearest_bucket_idx(value: float, table: list) -> int:
     """Índice (0-based) del valor más cercano en una tabla ordenada."""
     pos = bisect.bisect_left(table, value)
@@ -343,7 +354,7 @@ def decode_midi(notes: list, file_path: str, ticks_per_beat: int = 480,
         else:
             track.append(mido.Message('note_off', note=pitch, velocity=0, time=delta))
 
-    mid.save(file_path)
+    mid.save(_ensure_parent(file_path))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1240,7 +1251,7 @@ def cmd_make_pairs(args):
             continue
         pairs.append({'prompt': args.prompt, 'chosen': chosen[0], 'rejected': rejected[0]})
 
-    with open(args.output, 'w') as f:
+    with open(_ensure_parent(args.output), 'w') as f:
         json.dump(pairs, f, indent=2)
     print(f"\n{len(pairs)} par(es) escrito(s) en {args.output}")
 

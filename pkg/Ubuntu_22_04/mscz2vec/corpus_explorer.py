@@ -257,6 +257,17 @@ except ImportError:
     HAS_PYGAME = False
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ─── Abstracción LLM ────────────────────────────────────────────────
 
 def _has_llm(provider: str = "auto") -> bool:
@@ -819,7 +830,7 @@ def cmd_index(args):
     arr_meta     = np.array([json.dumps(m) for m in clean_meta])
 
     np.savez_compressed(
-        str(output),
+        _ensure_parent(str(output)),
         vectors  = arr_vectors,
         paths    = arr_paths,
         metadata = arr_meta,
@@ -998,7 +1009,7 @@ def cmd_cluster(args):
             "center":   centers[ci["id"]].tolist(),
         })
 
-    with open(out_path, "w") as f:
+    with open(_ensure_parent(out_path), "w") as f:
         json.dump({"k": k, "n_total": n, "clusters": cluster_data}, f, indent=2)
 
     print(f"\n  Clusters guardados: {cyan(str(out_path))}")
@@ -2815,7 +2826,7 @@ def _generation_loop(seed_state: dict, vectors, paths_arr, args):
         print(f"  {dim(f'Generando ({iteration})...')}", end=" ", flush=True)
         try:
             mid = _build_midi(profile, instrument_grp, seed=gen_seed)
-            mid.save(str(output_path))
+            mid.save(_ensure_parent(str(output_path)))
             print(green("✓"))
         except Exception as e:
             print(red(f"Error: {e}"))
@@ -2976,7 +2987,7 @@ def _save_final(midi_path: Path, seed_state: dict,
         "chosen_files":    [str(seed_state.get("chosen_indices", []))],
     }
     meta_path = final_path.with_suffix(".seed.json")
-    with open(meta_path, "w") as f:
+    with open(_ensure_parent(meta_path), "w") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
 
     return final_path
@@ -3014,7 +3025,7 @@ def _save_seed_state(seed_state: dict, index_path: Path):
     if seed_state["weights"] is not None:
         state_to_save["weights"] = seed_state["weights"].tolist()
 
-    with open(out, "w") as f:
+    with open(_ensure_parent(out), "w") as f:
         json.dump(state_to_save, f, indent=2, ensure_ascii=False)
 
     print(f"  {green(f'Estado guardado: {out}')}")

@@ -78,6 +78,17 @@ from collections import OrderedDict
 
 VERSION = "1.0"
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 # Colores ANSI (desactivados si no hay terminal)
 def _supports_color() -> bool:
     return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
@@ -634,7 +645,7 @@ class Checkpoint:
             "last_saved": datetime.now().isoformat(),
             "steps": [s.to_dict() for s in steps],
         }
-        with open(self.path, "w", encoding="utf-8") as f:
+        with open(_ensure_parent(self.path), "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=2, ensure_ascii=False)
 
     def restore_into(self, steps: list[PipelineStep]) -> int:
@@ -675,7 +686,7 @@ class RunLogger:
         self._file    = None
         if log_path:
             try:
-                self._file = open(log_path, "w", encoding="utf-8")
+                self._file = open(_ensure_parent(log_path), "w", encoding="utf-8")
             except Exception as e:
                 print(f"  [warn] No se pudo abrir log {log_path}: {e}")
 
@@ -1269,8 +1280,7 @@ def main():
               python runner.py obra_plan.yaml --pause-all
               python runner.py obra_plan.yaml --resume
               python runner.py --status obra_plan.yaml
-        """),
-    )
+        """), epilog='Códigos de salida (contrato de la suite): 0 = ejecución correcta, aunque haya hallazgos; 1 = error de ejecución o de entrada; 2 = uso incorrecto o entrada ilegible; 3 = hallazgos o puerta no superada (con --strict, o en los modos cuyo fin es validar).')
 
     parser.add_argument("plan", nargs="?", default=None,
                         help="Archivo .yaml o _plan.json del pipeline")

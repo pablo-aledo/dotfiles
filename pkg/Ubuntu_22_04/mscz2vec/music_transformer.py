@@ -153,6 +153,17 @@ _OFF_VELOCITY = 256
 _OFF_TIME     = 288
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 def encode_midi(path: str) -> list:
     """
     MIDI file → lista de enteros en [0, 387].
@@ -252,7 +263,7 @@ def decode_midi(events: list, file_path: str, tempo: int = 500_000,
                                       velocity=0, time=pending_ticks))
             pending_ticks = 0
 
-    mid.save(file_path)
+    mid.save(_ensure_parent(file_path))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

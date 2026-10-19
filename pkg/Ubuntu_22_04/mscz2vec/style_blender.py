@@ -144,6 +144,17 @@ except ImportError as e:
 import mido
 
 
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CURVAS DE BLEND
 #  Todas las curvas devuelven un array de longitud n_bars con valores [0.0, 1.0]
@@ -992,7 +1003,7 @@ def main():
             "alpha_min":   float(np.min(blend_curve)),
             "alpha_max":   float(np.max(blend_curve)),
         }
-        with open(curve_path, "w") as f:
+        with open(_ensure_parent(curve_path), "w") as f:
             json.dump(curve_data, f, indent=2)
         print(f"  → Curva de blend: {curve_path}")
 

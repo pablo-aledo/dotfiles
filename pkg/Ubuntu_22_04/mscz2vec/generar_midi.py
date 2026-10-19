@@ -60,6 +60,17 @@ NOTE_BASE  = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
 ACCIDENTAL = {'s': 1, '#': 1, 'b': -1, 'f': -1}
 NOTE_NAMES = ['C','Cs','D','Eb','E','F','Fs','G','Ab','A','Bb','B']
 
+
+def _ensure_parent(path):
+    """Contrato de la suite: toda salida crea su directorio padre.
+    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
+    import os as _os
+    if isinstance(path, (str, bytes, _os.PathLike)):
+        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
+        if d:
+            _os.makedirs(d, exist_ok=True)
+    return path
+
 def note_to_midi(name):
     if not name or name in ('null','None',None,'-','—'):
         return None
@@ -2092,7 +2103,7 @@ def nueva_frase_template(frase_id, compases, leitmotiv=None, yaml_path='partitur
     print(f"\n{'═'*60}\n  PLANTILLA — Frase {frase_id}  (insertar en Sección {sec_id})\n{'═'*60}")
     print(template)
     out=f"plantilla_{frase_id.replace('.','_')}.yaml"
-    with open(out,'w',encoding='utf-8') as f: f.write(template)
+    with open(_ensure_parent(out),'w',encoding='utf-8') as f: f.write(template)
     print(f"  → Guardado: {out}")
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2127,7 +2138,7 @@ def export_csv(obra, output_dir):
     if not rows: print("  ⚠ No hay datos de melodía para exportar"); return
     out_path=os.path.join(output_dir,'analisis_notas.csv')
     campos=['seccion','frase','instrumento','compas','beat','duracion','nota','nota_midi','velocidad','leitmotiv']
-    with open(out_path,'w',newline='',encoding='utf-8') as f:
+    with open(_ensure_parent(out_path),'w',newline='',encoding='utf-8') as f:
         w=csv.DictWriter(f,fieldnames=campos); w.writeheader(); w.writerows(rows)
     print(f"  → CSV exportado: {out_path}  ({len(rows)} notas)")
 
@@ -3027,7 +3038,7 @@ TRACKS.forEach(t => {{
 
     safe = _safe_filename(titulo)
     out_path = os.path.join(output_dir, f"{safe}_esquema.html")
-    with open(out_path, 'w', encoding='utf-8') as f:
+    with open(_ensure_parent(out_path), 'w', encoding='utf-8') as f:
         f.write(html)
     print(f"  → HTML generado: {out_path}")
     return out_path
@@ -3124,7 +3135,7 @@ def generate_section(seccion, output_dir, obra=None):
     if total_overlaps: print(f"  ⚠ {total_overlaps} solapamiento(s) detectado(s)")
     filename=f"Seccion{_safe_filename(str(sid))}_{_safe_filename(seccion['nombre'])[:40]}.mid"
     out_path=os.path.join(output_dir,filename)
-    mid.save(out_path); print(f"  → Guardado: {out_path}"); return out_path
+    mid.save(_ensure_parent(out_path)); print(f"  → Guardado: {out_path}"); return out_path
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3660,7 +3671,7 @@ def generate_full_obra(obra, output_dir):
                      for s in secciones) / max(len(secciones), 1)
     dur_sec    = total_bars * 4 / avg_bpm * 60
     out_path   = os.path.join(output_dir, f"{_safe_filename(titulo)}_COMPLETA.mid")
-    mid.save(out_path)
+    mid.save(_ensure_parent(out_path))
     print(f"\n  Obra completa: {total_bars} cc · ~{int(dur_sec//60)}'{int(dur_sec%60):02d}\" · {len(mid.tracks)} tracks")
     print(f"  → Guardado: {out_path}")
     return out_path
@@ -3702,7 +3713,7 @@ def preview(obra):
 # ══════════════════════════════════════════════════════════════════════════════
 def main():
     parser=argparse.ArgumentParser(description='Genera MIDIs desde un fichero YAML de partitura.',
-                                    formatter_class=argparse.RawDescriptionHelpFormatter,epilog=__doc__)
+                                    formatter_class=argparse.RawDescriptionHelpFormatter,epilog=(__doc__ + '\n\n' + 'Códigos de salida (contrato de la suite): 0 = ejecución correcta, aunque haya hallazgos; 1 = error de ejecución o de entrada; 2 = uso incorrecto o entrada ilegible; 3 = hallazgos o puerta no superada (con --strict, o en los modos cuyo fin es validar).'))
     parser.add_argument('--yaml',         default='partitura.yaml')
     parser.add_argument('--output',       default='output')
     parser.add_argument('--seccion',      help='Solo esta sección (ej: I, II)')
@@ -3743,7 +3754,7 @@ def main():
     if args.html:
         os.makedirs(args.output, exist_ok=True)
         export_html(obra, args.output); return
-    if args.validar:      n=validate_yaml(obra); sys.exit(0 if n==0 else 1)
+    if args.validar:      n=validate_yaml(obra); sys.exit(0 if n==0 else 3)  # modo validar: rc=3 si hay hallazgos
     if args.nueva_frase:
         if not args.compases: print("✗ --nueva-frase requiere --compases INI-FIN"); sys.exit(1)
         nueva_frase_template(args.nueva_frase, args.compases, args.leitmotiv, args.yaml); return
