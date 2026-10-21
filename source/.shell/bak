@@ -14,6 +14,24 @@ bak(){
 	tar -cvzf "$name".backup.`date +%y%m%d-%H%M%S`.tgz $*
 }
 
+bak_long(){
+    local name="$1"
+    [ "$name" = "default" ] && name="$BAK_FOLDER/$(basename "$2")"
+    if [ -e "$name" ]; then
+        :   # el primer argumento es también un archivo a incluir
+    else
+        shift
+    fi
+    local out="$name.backup.$(date +%y%m%d-%H%M%S).tgz"
+
+    # Si queda un solo argumento con comodín (entre comillas), usar find
+    if [ $# -eq 1 ] && [[ "$1" == *[\*\?]* ]]; then
+        find . -maxdepth 1 -name "$1" -print0 | tar -cvzf "$out" --null -T -
+    else
+        tar -cvzf "$out" "$@"
+    fi
+}
+
 mergebak(){
 	last=`ls $* | sort | tail -n1`
 	lastname=`ls $* | sort | tail -n1 | sed 's/\.backup\..*//g'`
