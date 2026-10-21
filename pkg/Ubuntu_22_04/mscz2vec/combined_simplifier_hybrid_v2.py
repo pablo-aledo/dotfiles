@@ -2805,7 +2805,8 @@ def combined_simplify(midi_path: str, target_grades: List[int], floor_level: str
                        soften_stretch: float = 1.25,
                        auto_meter: bool = True, auto_transpose: bool = True,
                        protect_melody: bool = True, retexture: bool = True,
-                       retexture_max_grade: int = 6) -> Dict:
+                       retexture_max_grade: int = 6,
+                       max_voices_per_chord: Optional[int] = None) -> Dict:
     """Regiones de interes, independientes entre si y combinables en la
     misma llamada:
        protect_bars — [OPCION A: excepcion] esos compases quedan
@@ -2833,7 +2834,8 @@ def combined_simplify(midi_path: str, target_grades: List[int], floor_level: str
                             pre_simplify=use_transforms,
                             climax_bars=protect_set if protect_set else None,
                             auto_meter=auto_meter, auto_transpose=auto_transpose,
-                            protect_melody=protect_melody)
+                            protect_melody=protect_melody,
+                            max_voices_per_chord=max_voices_per_chord)
     tc, mid = result["tc"], result["mid"]
     n_original = len(result["records"])
 
@@ -3044,6 +3046,10 @@ def main():
     ap.add_argument("--retexture-max-grade", type=int, default=6,
                      help="[v4] target-grade maximo al que se aplica el retexturizado (def. 6; "
                           "por encima se respeta la textura original)")
+    ap.add_argument("--max-voices-per-chord", type=int, default=None, metavar="N",
+                     help="adelgaza cada bloque de acorde de una mano a N voces como paso previo al "
+                          "greedy (uniforme para todos los --target-grade). Util cuando la dificultad "
+                          "viene de acordes en bloque densos y el grado pedido no se alcanza")
     ap.add_argument("--report-bars", action="store_true",
                      help="solo imprime el grado por compas (util para localizar clímax o pasajes "
                           "problematicos) y sale")
@@ -3070,7 +3076,8 @@ def main():
                              auto_transpose=not args.no_transpose,
                              protect_melody=not args.no_protect_melody,
                              retexture=not args.no_retexture,
-                             retexture_max_grade=args.retexture_max_grade)
+                             retexture_max_grade=args.retexture_max_grade,
+                             max_voices_per_chord=args.max_voices_per_chord)
     print_combined_report(args.midi, out)
 
     outdir = Path(args.outdir) if args.outdir else Path(args.midi).parent

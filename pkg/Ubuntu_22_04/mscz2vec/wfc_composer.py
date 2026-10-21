@@ -590,6 +590,29 @@ def likelyhood(model, G, nd, cfg, beat_counts=None):
 
     return max(0, min(100, score))
 
+def _pin_validated(solver, node, wanted):
+    """Ancla `wanted` ({atributo: valor}) en `node` solo si el solver sigue SAT.
+    Si el valor deseado lo vuelve UNSAT, ancla los valores del modelo vigente
+    (siempre consistentes). Evita que el anclaje de 'restantes' (sin validar)
+    convierta un problema SAT en UNSAT. Devuelve los valores finalmente anclados."""
+    solver.push()
+    for a, v in wanted.items():
+        solver.add(node[a] == v)
+    ok = solver.check() == z3.sat
+    solver.pop()
+    if ok:
+        for a, v in wanted.items():
+            solver.add(node[a] == v)
+        return dict(wanted)
+    if solver.check() == z3.sat:
+        m = solver.model()
+        fin = {a: m.eval(node[a], model_completion=True).as_long() for a in wanted}
+        for a, v in fin.items():
+            solver.add(node[a] == v)
+        return fin
+    return dict(wanted)
+
+
 # ─── COLAPSO WFC ─────────────────────────────────────────────────────────────
 def collapse_phase(G, solver, cfg, phase, N):
     """
@@ -822,10 +845,9 @@ def collapse_phase(G, solver, cfg, phase, N):
                 cb = random.choice(pool)
                 cp = cb // pl
                 ce = model[n["etype"]].as_long()
-                solver.add(n["beat"]  == cb)
-                solver.add(n["voice"] == cv)
-                solver.add(n["etype"] == ce)
-                solver.add(n["phr"]   == cp)
+                fin = _pin_validated(solver, n, {"beat": cb, "voice": cv,
+                                                 "etype": ce, "phr": cp})
+                cb, cv = fin["beat"], fin["voice"]
                 used_vb.add((cv, cb))
                 beat_counts[cb] += 1
             else:
@@ -851,9 +873,7 @@ def collapse_phase(G, solver, cfg, phase, N):
                     pp = random.choices(cands, weights=[w/sum(p_weights) for w in p_weights])[0]
                     pd = random.choice([1,1,2,2,4]) if beat_val%4==0 else random.choice([1,1,1,2])
                     pt = tension_val(pp, cfg["tonic"], cfg["mode"])
-                solver.add(n["pitch"] == pp)
-                solver.add(n["dur"]   == pd)
-                solver.add(n["ten"]   == pt)
+                _pin_validated(solver, n, {"pitch": pp, "dur": pd, "ten": pt})
             anchored.add(nd)
 
     info(f"Fase {phase}: {len(anchored)}/{N} anclados.")

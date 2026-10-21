@@ -722,9 +722,18 @@ def _expand(patterns):
         out += g
     return out
 
-def _piece_id(path, label):
+def _piece_id(path, label, orig_ids=None):
+    """ID de pieza. Original: su nombre sin extensión. Reconstrucción `NN_ID_receta.mid`:
+    ID = el nombre de un original conocido (admite IDs alfanuméricos y con '_');
+    si no hay originales conocidos, ID numérico (`^\\d+_(\\d+)_`)."""
     b = os.path.splitext(os.path.basename(path))[0]
     if label == 1:
+        m = re.match(r"^\d+_(.+)$", b)
+        if m and orig_ids:
+            rest = m.group(1)
+            best = max((o for o in orig_ids if rest.startswith(o + "_")), key=len, default=None)
+            if best is not None:
+                return best
         m = re.match(r"^\d+_(\d+)_", b)
         return m.group(1) if m else b
     return b
@@ -742,6 +751,7 @@ def build_dataset(args, need_labels=True):
     if SK and args.features != "musical":
         print("  [AVISO] --synth solo aplica a --features musical; se ignora.", file=sys.stderr); SK = 0
     kinds = getattr(args, "synth_kinds", None) or SYNTH_KINDS; n_skip = 0
+    orig_ids = {os.path.splitext(os.path.basename(p))[0] for p, lab in items if lab == 0}
     for i, (p, lab) in enumerate(items):
         for ag in range(K + 1):
             try:
@@ -753,7 +763,7 @@ def build_dataset(args, need_labels=True):
                 if ag == 0: print(f"  [AVISO] {p}: sin ventanas útiles", file=sys.stderr)
                 continue
             names = names or nm
-            ds.append(dict(path=p, y=lab, gid=_piece_id(p, lab), X=X, aug=ag, kind=""))
+            ds.append(dict(path=p, y=lab, gid=_piece_id(p, lab, orig_ids), X=X, aug=ag, kind=""))
         if lab == 0 and SK:      # K negativos sintéticos por original, repartiendo los tipos en rotación
             for j in range(SK):
                 kind = kinds[j % len(kinds)]
@@ -769,6 +779,11 @@ def build_dataset(args, need_labels=True):
     if n_skip: print(f"  [AVISO] {n_skip} negativos sintéticos omitidos (pieza demasiado corta/simple para esa corrupción)", file=sys.stderr)
     ids_o = {d["gid"] for d in ds if d["y"] == 0}; ids_r = {d["gid"] for d in ds if d["y"] == 1 and not d["kind"]}
     for d in ds: d["paired"] = d["gid"] in ids_o and d["gid"] in ids_r
+    _unp = sorted(g for g in ids_r if g not in ids_o)
+    if _unp:
+        print(f"  [AVISO] {len(_unp)} reconstruccion(es) sin original emparejado (p. ej. {_unp[0]!r}): "
+              "el nombre debe ser NN_<ID>_<receta>.mid con <ID> = nombre del original sin .mid. "
+              "Sin pareja no se agrupan en la CV.", file=sys.stderr)
     return ds, names
 
 def groups_in(names):
@@ -1047,6 +1062,7 @@ def metrics(y, p):
 def grouped_folds(ds, k, seed, paired_only=False):
     paired = sorted({d["gid"] for d in ds if (d["paired"] or not paired_only)})
     rs = np.random.RandomState(seed); rs.shuffle(paired)
+    k = len(paired) if k <= 0 else min(k, len(paired))     # k<=0 → leave-one-piece-out
     return [set(paired[i::k]) for i in range(k)]
 
 def run_cv(ds, names, args, groups_imp=False, log=True):
@@ -1137,7 +1153,7 @@ def run_loro(ds, names, args, log=True):
 # ═════════════════════════ subcomandos ═════════════════════════
 def _common_data_args(p):
     p.add_argument("--orig", nargs="*", default=[], help="MIDIs originales (rutas/globs/dirs)")
-    p.add_argument("--recon", nargs="*", default=[], help="MIDIs reconstruidos (nombre NN_ID_receta.mid → agrupa con ID.mid)")
+    p.add_argument("--recon", nargs="*", default=[], help="MIDIs reconstruidos (nombre NN_ID_receta.mid → agrupa con el original ID.mid; ID = nombre del original sin extensión)")
     p.add_argument("--features", choices=["musical", "forense"], default="musical",
                    help="musical (def): rasgos canonicalizados, independientes del origen · forense: huella del pipeline (metadatos, expresión)")
     p.add_argument("--window-bars", type=int, default=8, help="[musical] Ventana en compases")
@@ -1281,7 +1297,7 @@ def cmd_predict(a):
             if len(X) == 0: raise ValueError("sin ventanas útiles (¿pocas notas?)")
             if nm != det.names: raise ValueError("rasgos incompatibles con el modelo")
             wl = det.window_logits(X); s = det.file_score(X); pr = det.prob(s)
-            res.append(dict(file=p, label=LABELS[int(pr >= 0.5)], p_reconstructed=round(pr, 4), p_original=round(1 - pr, 4),
+            res.append(dict(file=p, label=LABELS[int(pr >= 0.5)], p_reconstructed=round(pr, 4), p_original=round(1 - pr, 4), calibrated=bool(tuple(det.platt) != (1.0, 0.0)),
                             score=round(s, 3), score_mean=round(float(wl.mean()), 3), windows=int(len(X)), window_agreement=round(float(np.mean((wl > 0) == (s > 0))), 3)))
         except Exception as e:
             res.append(dict(file=p, error=str(e)))
@@ -1322,6 +1338,7 @@ def main():
     p.set_defaults(f=cmd_train)
     p = sp.add_parser("eval", help="Validación cruzada agrupada por pieza"); _common_data_args(p); _common_model_args(p)
     p.add_argument("--cv", type=int, default=5); p.add_argument("--repeats", type=int, default=1)
+    p.add_argument("--loo-piece", dest="cv", action="store_const", const=0, help="Leave-one-piece-out: un pliegue por pieza (equivale a --cv <nº de piezas>); puntuaciones OOF por fichero en --json ('oof')")
     p.add_argument("--paired-only", action="store_true", help="Solo evalúa las piezas con original+reconstrucción")
     p.add_argument("--loro", action="store_true", help="Leave-one-recipe-out: deja fuera cada familia de generador (origen desconocido)")
     p.add_argument("--compare", action="store_true", help="Compara logística / MLP pequeña / principal / grande")

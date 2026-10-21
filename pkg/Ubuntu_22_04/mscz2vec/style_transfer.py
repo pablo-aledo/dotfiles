@@ -25,7 +25,7 @@
 ║  USO:                                                                        ║
 ║    python style_transfer.py contenido.mid estilo.mid                        ║
 ║    python style_transfer.py mi_melodia.mid bach.mid --strength 0.8          ║
-║    python style_transfer.py mi_melodia.mid jazz.mid --no-key-transfer        ║
+║    python style_transfer.py mi_melodia.mid jazz.mid --no-key                 ║
 ║    python style_transfer.py mi_melodia.mid estilo.mid \\                    ║
 ║        --transfer rhythm harmony --preserve contour motif                   ║
 ║    python style_transfer.py mi_melodia.mid estilo.mid \\                    ║

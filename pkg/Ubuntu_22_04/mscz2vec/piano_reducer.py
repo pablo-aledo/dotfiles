@@ -12,7 +12,7 @@
 ║    smart      Asignación inteligente por rol musical detectado (default)    ║
 ║    register   MD = notas > umbral, MI = notas <= umbral (--split C4)        ║
 ║    layer      Capas impares → MD, capas pares → MI                         ║
-║    priority   Lista de pistas prioritarias explícita (--rh-tracks / --lh)  ║
+║    priority   Pistas prioritarias explícitas (--rh-tracks / --lh-tracks)   ║
 ║    melody+bass  Melodía principal en MD, bajo+armonía en MI                 ║
 ║                                                                              ║
 ║  TÉCNICAS PIANÍSTICAS APLICADAS:                                             ║
@@ -44,7 +44,7 @@
 ║    python piano_reducer.py obra.mid --strategy melody+bass --verbose        ║
 ║    python piano_reducer.py obra.mid --split C4 --strategy register          ║
 ║    python piano_reducer.py obra.mid --rh-tracks "Violin I,Flute"            ║
-║    python piano_reducer.py obra.mid --no-alberti --no-passing-notes         ║
+║    python piano_reducer.py obra.mid --no-alberti --no-passing               ║
 ║    python piano_reducer.py obra.mid --from-yaml partitura.yaml              ║
 ║    python piano_reducer.py obra.mid --output reduccion --combine-output     ║
 ║    python piano_reducer.py obra.mid --report-only                           ║

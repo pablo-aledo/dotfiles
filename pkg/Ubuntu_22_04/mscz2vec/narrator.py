@@ -27,7 +27,7 @@
 ║    python narrator.py                        # GUI interactivo               ║
 ║    python narrator.py --arc hero --bars 64   # desde arco predefinido        ║
 ║    python narrator.py --arc sonata --bars 96 --key Dm --output plan.json    ║
-║    python narrator.py --load plan.json --edit                                ║
+║    python narrator.py --load plan.json                                       ║
 ║    python narrator.py --arc custom --sections "A:16,B:8,A:16,C:12,A:8"     ║
 ║    python narrator.py --arc hero --bars 48 --no-gui --export-curves         ║
 ║                                                                              ║

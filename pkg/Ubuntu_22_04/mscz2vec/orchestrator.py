@@ -29,7 +29,7 @@ r"""
 ║        --template chamber                                                    ║
 ║                                                                              ║
 ║    # Auto-detecta fingerprints en el mismo directorio:                      ║
-║    python orchestrator.py obra_final.mid --auto-fingerprints                ║
+║    python orchestrator.py obra_final.mid --auto-fp                          ║
 ║                                                                              ║
 ║    # Con plantilla orquestal y library target:                              ║
 ║    python orchestrator.py obra_final.mid *.fingerprint.json             \   ║
