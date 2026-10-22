@@ -24,10 +24,20 @@
 ║                                                                              ║
 ║  TIPOS DE ELEMENTOS en una regla:                                            ║
 ║    · Nota ABC  — nota individual con duración: C4:1  E4:0.5  G#4:2         ║
-║                  (nombre+octava:duración_en_negras)                          ║
+║                  (nombre+octava:duración_en_negras). La duración admite     ║
+║                  enteros, decimales y fracciones exactas: G4:1/3 es una     ║
+║                  corchea de tresillo (3 seguidas = 1 negra, sin deriva).    ║
 ║    · Número    — compás N del MIDI de entrada (base 1)                      ║
 ║    · M-N       — rango de compases M a N del MIDI de entrada (inclusivos)  ║
 ║    · [label]   — referencia recursiva a otra regla de la gramática          ║
+║    · +N / -N   — modifica el OFFSET GLOBAL de transposición en N semitonos  ║
+║                  (acumulativo). Afecta a todas las notas posteriores en el  ║
+║                  orden de expansión (compases del MIDI y notas ABC), también║
+║                  fuera de la regla donde aparece. Empieza en 0. Se puede    ║
+║                  usar también en la raíz. No afecta al canal 10 (batería).  ║
+║                  Ej:  motivo: 1-2 +2 1-2 -2     (2.ª vez dos semitonos más) ║
+║    · 0         — resetea el offset global a 0 (no es un compás: los        ║
+║                  compases empiezan en 1).                                    ║
 ║                                                                              ║
 ║  EJEMPLO DE GRAMÁTICA (generada o escrita a mano):                          ║
 ║    intro verse chorus verse chorus outro                                     ║
@@ -87,6 +97,7 @@ import sys
 import argparse
 from pathlib import Path
 from dataclasses import dataclass, field
+from fractions import Fraction
 from typing import Optional
 
 import mido
@@ -104,22 +115,15 @@ NOTE_NAMES = {
 }
 
 ABC_NOTE_RE = re.compile(
-    r'^([A-Ga-g])([#b]?)(\d):([\d.]+)$'   # e.g.  C#4:0.5  eb3:2
+    r'^([A-Ga-g])([#b]?)(\d):(\d+/\d+|[\d.]+)$'   # e.g.  C#4:0.5  eb3:2  G4:1/3
 )
 RANGE_RE   = re.compile(r'^(\d+)-(\d+)$')   # e.g.  3-7
 NUMBER_RE  = re.compile(r'^\d+$')            # e.g.  5
 LABEL_RE   = re.compile(r'^\[([^\]]+)\]$')  # e.g.  [verso]
+SHIFT_RE   = re.compile(r'^([+-])(\d+)$')    # e.g.  +2  -12  (offset global)
 
-
-def _ensure_parent(path):
-    """Contrato de la suite: toda salida crea su directorio padre.
-    Devuelve `path` sin modificar (solo actúa sobre rutas, no sobre ficheros)."""
-    import os as _os
-    if isinstance(path, (str, bytes, _os.PathLike)):
-        d = _os.path.dirname(_os.path.abspath(_os.fsdecode(path)))
-        if d:
-            _os.makedirs(d, exist_ok=True)
-    return path
+PERCUSSION_CHANNEL = 9   # canal 10 GM: no se transpone
+RESET_TOKEN = "0"        # token que resetea el offset global a 0 (no es un compás)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -179,8 +183,8 @@ def parse_grammar(text: str) -> tuple[list[str], dict[str, list[str]]]:
 
     # Verificar que las etiquetas de la raíz que no son números/rangos tienen regla
     for r in root:
-        if RANGE_RE.match(r) or NUMBER_RE.match(r):
-            continue   # compás o rango: válidos en la raíz
+        if RANGE_RE.match(r) or NUMBER_RE.match(r) or SHIFT_RE.match(r):
+            continue   # compás, rango u offset global: válidos en la raíz
         if LABEL_RE.match(r):
             # Token entre corchetes en la raíz: extraer nombre
             label_name = LABEL_RE.match(r).group(1)
@@ -193,6 +197,21 @@ def parse_grammar(text: str) -> tuple[list[str], dict[str, list[str]]]:
     return root, rules
 
 
+def _parse_duration(text: str, tok: str) -> Fraction:
+    """
+    Duración en negras como Fraction exacta. Acepta enteros (2), decimales
+    (0.5) y fracciones (1/3, 2/3, 3/2). Con fracciones los tresillos y otros
+    grupos irregulares no acumulan error de redondeo.
+    """
+    try:
+        dur = Fraction(text)
+    except (ValueError, ZeroDivisionError):
+        raise ValueError(f"Duración inválida en nota ABC: {tok!r}")
+    if dur <= 0:
+        raise ValueError(f"La duración debe ser positiva: {tok!r}")
+    return dur
+
+
 def tokenize_rule(tokens: list[str]) -> list[dict]:
     """
     Clasifica cada token de una regla en su tipo:
@@ -200,9 +219,19 @@ def tokenize_rule(tokens: list[str]) -> list[dict]:
         {'type': 'bar',   'n': int}
         {'type': 'range', 'm': int, 'n': int}
         {'type': 'ref',   'label': str}
+        {'type': 'shift', 'n': int}      # offset global, con signo
     """
     parsed = []
     for tok in tokens:
+        if tok == RESET_TOKEN:
+            parsed.append({'type': 'reset'})
+            continue
+        m = SHIFT_RE.match(tok)
+        if m:
+            n = int(m.group(2))
+            parsed.append({'type': 'shift', 'n': -n if m.group(1) == '-' else n})
+            continue
+
         m = ABC_NOTE_RE.match(tok)
         if m:
             parsed.append({
@@ -210,7 +239,7 @@ def tokenize_rule(tokens: list[str]) -> list[dict]:
                 'name':   m.group(1).upper(),
                 'alter':  m.group(2),
                 'octave': int(m.group(3)),
-                'dur':    float(m.group(4)),
+                'dur':    _parse_duration(m.group(4), tok),
             })
             continue
 
@@ -465,6 +494,7 @@ class GrammarExpander:
         self.velocity       = velocity
         self.verbose        = verbose
         self.report         = ExpansionReport()
+        self.pitch_offset   = 0   # offset global en semitonos (token +N / -N)
 
     # ──────────────────────────────────────────────────────────────────────────
     # API pública
@@ -485,12 +515,20 @@ class GrammarExpander:
         all_notes: list[tuple[int, MidiNote]] = []
         cursor = 0
 
+        self.pitch_offset = 0
         for token in root:
             # Determinar tipo de token de la raíz
+            m_shift = SHIFT_RE.match(token)
             m_range = RANGE_RE.match(token)
             m_num   = NUMBER_RE.match(token)
             m_label = LABEL_RE.match(token)
 
+            if token == RESET_TOKEN:
+                self._reset_shift()
+                continue   # no produce notas ni consume tiempo
+            if m_shift:
+                self._apply_shift(int(m_shift.group(2)) * (-1 if m_shift.group(1) == '-' else 1))
+                continue   # no produce notas ni consume tiempo
             if m_range:
                 lo, hi = int(m_range.group(1)), int(m_range.group(2))
                 if lo > hi:
@@ -505,7 +543,9 @@ class GrammarExpander:
                 notes = self._expand_label(token, depth=0)
 
             for (off, note) in notes:
-                all_notes.append((cursor + off, note))
+                # El cursor puede ser una Fraction (notas ABC con fracciones):
+                # se redondea una sola vez al tick final, sin acumular error.
+                all_notes.append((round(cursor + off), note))
             cursor += self._token_duration(token)
 
         self.report.total_notes = len(all_notes)
@@ -547,6 +587,14 @@ class GrammarExpander:
             elif elem['type'] == 'ref':
                 notes = self._expand_label(elem['label'], depth + 1)
                 tipo  = f"ref-{elem['label']}"
+            elif elem['type'] == 'reset':
+                self._reset_shift()
+                notes = []
+                tipo  = 'offset-reset'
+            elif elem['type'] == 'shift':
+                self._apply_shift(elem['n'])
+                notes = []
+                tipo  = f"offset{elem['n']:+d}"
             else:
                 notes = []
                 tipo  = 'desconocido'
@@ -567,9 +615,37 @@ class GrammarExpander:
     # Nota ABC → MidiNote
     # ──────────────────────────────────────────────────────────────────────────
 
+    def _apply_shift(self, n: int) -> None:
+        """Acumula n semitonos en el offset global."""
+        self.pitch_offset += n
+        if self.verbose:
+            print(f"  [offset] {n:+d} → offset global = {self.pitch_offset:+d}")
+
+    def _reset_shift(self) -> None:
+        """Vuelve el offset global a 0 (token '0')."""
+        self.pitch_offset = 0
+        if self.verbose:
+            print("  [offset] reset → offset global = +0")
+
+    def _transpose(self, note: MidiNote) -> MidiNote:
+        """
+        Devuelve la nota con el offset global aplicado (copia; nunca muta la
+        nota original, que puede reutilizarse en otros compases). La batería
+        (canal 10) no se transpone.
+        """
+        if self.pitch_offset == 0 or note.channel == PERCUSSION_CHANNEL:
+            return note
+        return MidiNote(
+            pitch          = max(0, min(127, note.pitch + self.pitch_offset)),
+            velocity       = note.velocity,
+            duration_ticks = note.duration_ticks,
+            channel        = note.channel,
+        )
+
     def _make_abc_note(self, elem: dict) -> list[tuple[int, MidiNote]]:
         pitch = abc_to_pitch(elem['name'], elem['alter'], elem['octave'])
-        dur   = int(self.tpb * elem['dur'])
+        pitch += self.pitch_offset
+        dur   = round(self.tpb * elem['dur'])
         note  = MidiNote(
             pitch          = max(0, min(127, pitch)),
             velocity       = self.velocity,
@@ -617,7 +693,7 @@ class GrammarExpander:
         if elem['type'] in ('ref',):
             return self._rule_duration(elem['label'])
         if elem['type'] == 'note':
-            return int(self.tpb * elem['dur'])
+            return self.tpb * elem['dur']   # Fraction exacta: sin deriva
         return 0
 
     def _rule_duration(self, label: str, _seen: frozenset = frozenset()) -> int:
@@ -638,7 +714,7 @@ class GrammarExpander:
         if elem['type'] == 'ref':
             return self._rule_duration(elem['label'], seen)
         if elem['type'] == 'note':
-            return int(self.tpb * elem['dur'])
+            return self.tpb * elem['dur']   # Fraction exacta: sin deriva
         return 0
 
     def _get_bars(self, bar_from: int, bar_to: int) -> list[tuple[int, MidiNote]]:
@@ -665,7 +741,7 @@ class GrammarExpander:
             bar_notes = self.bars[bar_n]
 
             for (off, note) in bar_notes:
-                result.append((cursor + off, note))
+                result.append((cursor + off, self._transpose(note)))
 
             # Avanzar siempre por la duración métrica del compás, no por la
             # última nota. Esto garantiza que todos los tracks avanzan igual.
@@ -728,7 +804,7 @@ def notes_to_midi(
     trk = MidiTrack()
     mid.tracks.append(trk)
     _notes_list_to_track(notes, trk, tempo=tempo, name='GrammarComposer')
-    mid.save(_ensure_parent(str(out_path)))
+    mid.save(str(out_path))
 
 
 def multitrack_to_midi(
@@ -757,7 +833,7 @@ def multitrack_to_midi(
             name  = f'Track{orig_idx}',
         )
 
-    mid.save(_ensure_parent(str(out_path)))
+    mid.save(str(out_path))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1652,7 +1728,7 @@ def main() -> None:
 
         print(f"[3/4] Guardando gramática: {out_path} …")
         try:
-            _ensure_parent(out_path).write_text(grammar_text, encoding='utf-8')
+            out_path.write_text(grammar_text, encoding='utf-8')
         except Exception as e:
             sys.exit(f"  Error al escribir la gramática: {e}")
         print(f"  → Fichero guardado: {out_path}")
