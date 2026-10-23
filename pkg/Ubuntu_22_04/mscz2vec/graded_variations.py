@@ -934,6 +934,10 @@ def main():
     # informe
     base_grade, _ = whole_piece_grade(rh, lh, tc)
     print_variation_report(args.midi, args.grade, base_grade, results, outdir, stem)
+    # Contrato de la suite: 1 = error de ejecución. Pedir variaciones y no obtener
+    # ninguna (todas descartadas o con error) no es un éxito silencioso.
+    if not any(vr.records for vr in results):
+        return 1
     return 0
 
 if __name__ == "__main__":

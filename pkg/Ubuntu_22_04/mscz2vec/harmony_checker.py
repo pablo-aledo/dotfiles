@@ -82,7 +82,11 @@ def _parse_key(s: str) -> Tuple[int, str]:
     while i < len(s) and s[i] in "#b♯♭sf":
         pc += 1 if s[i] in "#♯s" else -1
         i += 1
-    mode = "min" if s[i:].lower() in ("m", "min", "minor", "menor") else "maj"
+    raw = s[i:].strip()          # admite "F minor": el espacio hacía caer a mayor
+    if raw == "M":
+        mode = "maj"
+    else:
+        mode = "min" if raw.lower() in ("m", "min", "minor", "menor") else "maj"
     return pc % 12, mode
 
 

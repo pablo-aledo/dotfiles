@@ -1436,8 +1436,13 @@ def _apply_mido_transforms(resolved: dict, source_midi: str,
                 elif msg.type in ("note_on", "note_off"):
                     new_note = msg.note + semitone_shift
                     new_note = max(0, min(127, new_note))
-                    new_vel  = int(msg.velocity * vel_delta_mult)
-                    new_vel  = max(1, min(127, new_vel))
+                    if msg.type == "note_on" and msg.velocity > 0:
+                        new_vel = int(msg.velocity * vel_delta_mult)
+                        new_vel = max(1, min(127, new_vel))
+                    else:
+                        # note_off y note_on con velocity 0 (= note_off) conservan su
+                        # velocity: forzarla a ≥1 convertía los cierres en re-ataques.
+                        new_vel = msg.velocity
                     new_track.append(msg.copy(note=new_note, velocity=new_vel))
                 else:
                     new_track.append(msg.copy())

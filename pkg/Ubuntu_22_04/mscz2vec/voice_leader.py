@@ -728,16 +728,36 @@ def voice_lead_progression(
 #  EXPORTACIÓN MIDI
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _add_time_signature(track, beats_per_bar: Optional[float]) -> None:
+    """Añade un time_signature a la pista a partir de pulsos de negra por compás
+    (3 → 3/4, 4 → 4/4, 1.5 → 3/8). Valores no representables se omiten."""
+    if not beats_per_bar or beats_per_bar <= 0:
+        return
+    eighths = round(beats_per_bar * 2)
+    if abs(eighths - beats_per_bar * 2) > 1e-6:
+        return
+    if eighths % 2 == 0:
+        num, den = eighths // 2, 4
+    else:
+        num, den = eighths, 8
+    track.append(mido.MetaMessage("time_signature", numerator=num, denominator=den,
+                                  clocks_per_click=24, notated_32nd_notes_per_beat=8,
+                                  time=0))
+
+
 def blocks_to_midi(
     blocks: List[ChordBlock],
     tempo_bpm: int = 90,
     ticks_per_beat: int = 480,
     split_tracks: bool = False,
     voices: Optional[List[str]] = None,
+    beats_per_bar: Optional[float] = None,
 ) -> mido.MidiFile:
     """
     Convierte una lista de ChordBlocks a un MidiFile.
     Si split_tracks=True, una pista por voz.
+    Si beats_per_bar (en negras) es entero o múltiplo de 0.5, se escribe el
+    meta-evento time_signature para que las herramientas siguientes hereden el compás.
     """
     mid = mido.MidiFile(ticks_per_beat=ticks_per_beat)
     tempo_us = mido.bpm2tempo(tempo_bpm)
@@ -750,6 +770,7 @@ def blocks_to_midi(
             tr.name = {"S": "Soprano", "A": "Alto", "T": "Tenor", "B": "Bass"}[vk]
             mid.tracks.append(tr)
             tr.append(mido.MetaMessage("set_tempo", tempo=tempo_us, time=0))
+            _add_time_signature(tr, beats_per_bar)
             tr.append(mido.Message("program_change",
                                    channel=VOICE_CHANNELS[vk],
                                    program=VOICE_PROGRAMS[vk], time=0))
@@ -770,6 +791,7 @@ def blocks_to_midi(
         tr = mido.MidiTrack()
         mid.tracks.append(tr)
         tr.append(mido.MetaMessage("set_tempo", tempo=tempo_us, time=0))
+        _add_time_signature(tr, beats_per_bar)
         for vk in voice_keys:
             ch = VOICE_CHANNELS[vk]
             tr.append(mido.Message("program_change", channel=ch,
@@ -843,6 +865,124 @@ def load_soprano_hints_from_midi(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  LECTURA DE ACORDES DESDE MIDI  (--chords-midi)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# sufijo de nombre de acorde para cada calidad de CHORD_INTERVALS
+_QUALITY_SUFFIX = {"M": "", "m": "m", "d": "dim", "aug": "aug", "M7": "maj7",
+                   "m7": "m7", "7": "7", "dim7": "dim7", "m7b5": "m7b5",
+                   "mM7": "mM7", "sus2": "sus2", "sus4": "sus4"}
+# orden de preferencia ante empates (tríadas antes que séptimas)
+_DETECT_ORDER = ["M", "m", "d", "aug", "7", "m7", "M7", "m7b5", "dim7", "mM7",
+                 "sus4", "sus2"]
+
+
+def detect_chord_name(pitches: List[int]) -> Optional[str]:
+    """Identifica un acorde ('Cm', 'G7', 'Bdim'…) a partir de las alturas MIDI que
+    suenan a la vez. Elige la raíz y la calidad que mejor cubren las clases de altura
+    (penaliza notas ajenas al acorde y notas del acorde que faltan; bonus si la
+    raíz es el bajo). Devuelve None si no hay notas."""
+    if not pitches:
+        return None
+    pcs = {p % 12 for p in pitches}
+    bass_pc = min(pitches) % 12
+    best, best_score = None, None
+    for root in range(12):
+        for qi, q in enumerate(_DETECT_ORDER):
+            tones = {(root + i) % 12 for i in CHORD_INTERVALS[q][:4]}
+            covered = len(pcs & tones)
+            extra = len(pcs - tones)
+            missing = len(tones - pcs)
+            if covered < 2:
+                continue
+            # La 5ª es la nota más prescindible: faltar pesa menos
+            fifth = (root + CHORD_INTERVALS[q][2]) % 12
+            miss_pen = sum(0.5 if t == fifth and len(tones) > 3 else 1.0
+                           for t in tones - pcs)
+            score = 2.0 * covered - miss_pen - 2.5 * extra
+            if root == bass_pc:
+                score += 0.75
+            score -= 0.01 * qi              # desempate: tríadas primero
+            if best_score is None or score > best_score:
+                best, best_score = (root, q), score
+    if best is None:
+        return None
+    return f"{NOTE_NAMES[best[0]]}{_QUALITY_SUFFIX[best[1]]}"
+
+
+def _midi_notes_beats(mid: "mido.MidiFile"):
+    """Notas (onset, fin, altura) en pulsos de negra + (compás en negras, bpm).
+    Ignora el canal 9 (percusión). Trata note_on vel=0 como note_off."""
+    tpb = mid.ticks_per_beat
+    t = 0
+    active: Dict[Tuple[int, int], List[int]] = {}
+    notes = []
+    beats_per_bar, bpm = None, None
+    for msg in mido.merge_tracks(mid.tracks):
+        t += msg.time
+        if msg.type == "time_signature" and beats_per_bar is None:
+            beats_per_bar = msg.numerator * 4.0 / msg.denominator
+        elif msg.type == "set_tempo" and bpm is None:
+            bpm = mido.tempo2bpm(msg.tempo)
+        elif msg.type == "note_on" and msg.velocity > 0 and msg.channel != 9:
+            active.setdefault((msg.channel, msg.note), []).append(t)
+        elif msg.type in ("note_off", "note_on") and msg.channel != 9:
+            stack = active.get((msg.channel, msg.note))
+            if stack:
+                s = stack.pop(0)
+                notes.append((s / tpb, t / tpb, msg.note))
+    return notes, beats_per_bar, bpm
+
+
+def load_chords_from_midi(midi_path: str):
+    """Lee un MIDI de acordes en bloque y devuelve
+    (chords, segments, beats_per_bar, bpm):
+      chords   = [(nombre, duración_en_pulsos), …] con los acordes idénticos
+                 consecutivos fusionados en uno solo (misma armonía = mismo acorde),
+      segments = [(inicio, fin), …] en pulsos, uno por acorde,
+      beats_per_bar / bpm = los del MIDI (None si no los declara)."""
+    mid = mido.MidiFile(midi_path)
+    notes, beats_per_bar, bpm = _midi_notes_beats(mid)
+    if not notes:
+        raise ValueError(f"{midi_path}: no contiene notas")
+    eps = 1e-6
+    onsets = sorted({round(n[0], 4) for n in notes})
+    end_all = max(n[1] for n in notes)
+    chords: List[Tuple[str, float]] = []
+    segments: List[Tuple[float, float]] = []
+    for i, on in enumerate(onsets):
+        off = onsets[i + 1] if i + 1 < len(onsets) else end_all
+        sounding = [p for (s, e, p) in notes if s <= on + eps and e > on + eps]
+        name = detect_chord_name(sounding)
+        if name is None or off - on <= eps:
+            continue
+        if chords and chords[-1][0] == name and abs(segments[-1][1] - on) < 1e-3:
+            chords[-1] = (name, chords[-1][1] + (off - on))
+            segments[-1] = (segments[-1][0], off)
+        else:
+            chords.append((name, off - on))
+            segments.append((on, off))
+    if not chords:
+        raise ValueError(f"{midi_path}: no se pudo identificar ningún acorde")
+    return chords, segments, beats_per_bar, bpm
+
+
+def soprano_hints_for_segments(midi_path: str,
+                               segments: List[Tuple[float, float]]) -> List[Optional[int]]:
+    """Una altura de soprano por segmento de acorde: la más aguda de las notas de la
+    melodía que atacan dentro del segmento (o, si ninguna ataca, la que suena en su
+    inicio). None si la melodía calla en ese segmento."""
+    notes, _, _ = _midi_notes_beats(mido.MidiFile(midi_path))
+    hints: List[Optional[int]] = []
+    for (a, b) in segments:
+        ons = [p for (s, e, p) in notes if a - 1e-6 <= s < b - 1e-6]
+        if not ons:
+            ons = [p for (s, e, p) in notes if s <= a + 1e-6 < e]
+        hints.append(max(ons) if ons else None)
+    return hints
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  PARSEO DE TONALIDAD
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -910,10 +1050,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Estilo de voicing (default: chorale)")
     p.add_argument("--all-styles", action="store_true",
                    help="Generar una versión por cada estilo")
-    p.add_argument("--tempo", type=int, default=90,
-                   help="Tempo BPM (default: 90)")
-    p.add_argument("--beats", type=float, default=4,
-                   help="Beats por compás (default: 4)")
+    p.add_argument("--tempo", type=int, default=None,
+                   help="Tempo BPM (default: el del MIDI de entrada, o 90)")
+    p.add_argument("--beats", type=float, default=None,
+                   help="Pulsos (negras) por compás (default: el compás del MIDI de "
+                        "entrada, o 4)")
     p.add_argument("--voices", nargs="+", choices=["S", "A", "T", "B"],
                    default=["S", "A", "T", "B"],
                    help="Voces a exportar (default: S A T B)")
@@ -961,22 +1102,42 @@ def main():
 
     # ── Obtener progresión ────────────────────────────────────────────────────
     soprano_hints = None
+    midi_bpb, midi_bpm = None, None      # compás y tempo declarados en los MIDI de entrada
 
-    if args.soprano:
+    # Compás/tempo heredados del MIDI de entrada si no se pasan por línea de comandos
+    for _src in (args.chords_midi, args.soprano):
+        if _src and (midi_bpb is None or midi_bpm is None):
+            try:
+                _n, _b, _t = _midi_notes_beats(mido.MidiFile(_src))
+                midi_bpb = midi_bpb or _b
+                midi_bpm = midi_bpm or _t
+            except Exception:
+                pass
+    if args.beats is None:
+        args.beats = midi_bpb if midi_bpb else 4
+    if args.tempo is None:
+        args.tempo = int(round(midi_bpm)) if midi_bpm else 90
+
+    if args.chords_midi:
+        # Acordes reales desde el MIDI (identificados por clases de altura)
+        print(f"[INFO] Leyendo acordes desde MIDI: {args.chords_midi}")
+        chords, segments, _b, _t = load_chords_from_midi(args.chords_midi)
+        if args.soprano:
+            print(f"[INFO] Leyendo melodía soprano desde: {args.soprano}")
+            soprano_hints = soprano_hints_for_segments(args.soprano, segments)
+    elif args.soprano:
         print(f"[INFO] Leyendo melodía soprano desde: {args.soprano}")
         soprano_hints, chords = load_soprano_hints_from_midi(args.soprano, args.beats)
         if args.chords:
             # Si también hay --chords, úsalos como armónico pero respetando soprano
             chords = parse_chord_string(args.chords, args.beats)
             soprano_hints = soprano_hints[:len(chords)]
+        else:
+            print("[AVISO] --soprano sin --chords ni --chords-midi: no hay armonía; "
+                  "se usan acordes de Do mayor como marcador. Indica la progresión "
+                  "con --chords o --chords-midi.", file=sys.stderr)
     elif args.chords:
         chords = parse_chord_string(args.chords, args.beats)
-    elif args.chords_midi:
-        # Parsear acordes desde MIDI (canal 0 como bloque de acordes)
-        print(f"[INFO] Leyendo acordes desde MIDI: {args.chords_midi}")
-        # Implementación simplificada: extraer pitch más grave = raíz
-        soprano_hints, chords = load_soprano_hints_from_midi(args.chords_midi, args.beats)
-        soprano_hints = None  # no hay soprano, solo acordes
     else:
         parser.error("Especifica --chords, --chords-midi o --soprano")
 
@@ -1009,6 +1170,7 @@ def main():
             tempo_bpm=args.tempo,
             split_tracks=args.split_tracks,
             voices=args.voices,
+            beats_per_bar=args.beats,
         )
 
         if args.all_styles:

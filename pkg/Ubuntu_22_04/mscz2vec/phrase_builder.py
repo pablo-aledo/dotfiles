@@ -233,6 +233,7 @@ class PhraseResult:
     tempo:      int
     sections:   List[PhraseSection] = field(default_factory=list)
     motif_used: List[MotifNote] = field(default_factory=list)
+    beats_per_bar: float = 4          # pulsos (negras) por compás usados al construir
 
     @property
     def all_notes(self) -> List[MotifNote]:
@@ -1132,6 +1133,7 @@ def build_phrase(
         form=form, phrase_type=phrase_type,
         key=key, bars=bars, tempo=tempo,
         sections=sections, motif_used=deepcopy(motif),
+        beats_per_bar=beats_per_bar,
     )
 
 
@@ -1152,6 +1154,12 @@ def phrase_to_midi(
 
     tempo_us = mido.bpm2tempo(result.tempo)
     track.append(mido.MetaMessage("set_tempo", tempo=tempo_us, time=0))
+    # time_signature: sin él, las herramientas siguientes asumen 4/4 aunque --beats fuera 3
+    _eighths = round(result.beats_per_bar * 2)
+    if _eighths > 0 and abs(_eighths - result.beats_per_bar * 2) < 1e-6:
+        _num, _den = (_eighths // 2, 4) if _eighths % 2 == 0 else (_eighths, 8)
+        track.append(mido.MetaMessage("time_signature", numerator=_num,
+                                      denominator=_den, time=0))
     track.append(mido.Message("program_change", channel=channel,
                                program=program, time=0))
 
@@ -1239,7 +1247,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _print_phrase_summary(result: PhraseResult) -> None:
     total_notes = len(result.all_notes)
-    total_beats = result.bars * 4
+    total_beats = result.bars * result.beats_per_bar
     print(f"\n╔══════════════════════════════════════════╗")
     print(f"║        PHRASE SUMMARY                    ║")
     print(f"╚══════════════════════════════════════════╝")

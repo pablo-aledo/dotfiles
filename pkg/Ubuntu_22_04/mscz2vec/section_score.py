@@ -139,10 +139,18 @@ def _load_module(name: str):
         return None
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
+    # Python ≥3.12: los @dataclass buscan sys.modules[__module__] al definirse; sin este
+    # registro, módulos como completer.py fallaban con "'NoneType' ... '__dict__'".
+    _prev = sys.modules.get(name)
+    sys.modules[name] = mod
     try:
         spec.loader.exec_module(mod)
         return mod
     except Exception as e:
+        if _prev is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = _prev
         print(f"  [AVISO] No se pudo cargar {name}.py: {e}")
         return None
 

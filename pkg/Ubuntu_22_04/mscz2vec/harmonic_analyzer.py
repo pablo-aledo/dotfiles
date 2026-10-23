@@ -242,8 +242,20 @@ def _parse_key(s: str) -> Tuple[int, str]:
         else:
             pc -= 1
         i += 1
-    rest = s[i:].lower()
-    mode = "min" if rest in ("m", "min", "minor", "menor") else "maj"
+    # Admite espacios ("F minor", "Bb  min"). Antes " minor" no coincidía con ninguna
+    # variante y la tonalidad menor se leía en silencio como mayor.
+    raw = s[i:].strip()
+    rest = raw.lower()
+    if raw == "M":                       # "FM" = Fa mayor (la 'M' mayúscula no es menor)
+        mode = "maj"
+    elif rest in ("m", "min", "minor", "menor"):
+        mode = "min"
+    elif rest in ("", "maj", "major", "mayor"):
+        mode = "maj"
+    else:
+        print(f"[AVISO] modo desconocido '{raw}' en tonalidad '{s}': se asume mayor",
+              file=sys.stderr)
+        mode = "maj"
     return pc % 12, mode
 
 

@@ -1484,13 +1484,16 @@ def _append_midi(output_track, mid_path, ticks_per_beat, verbose=False):
             print(f"  [ERROR] no se puede leer {mid_path}: {e}")
         return
     ratio = ticks_per_beat / (mid.ticks_per_beat or 480)
-    for track in mid.tracks:
-        for msg in track:
-            if msg.is_meta:
-                if msg.type not in ("track_name", "end_of_track"):
-                    output_track.append(msg)
-            else:
-                output_track.append(msg.copy(time=round(msg.time * ratio)))
+    # Las pistas del MIDI suenan a la vez: hay que fusionarlas en un único flujo de
+    # deltas. Recorrerlas una tras otra (cada una con su reloj desde 0) las encadenaba
+    # en el tiempo y multiplicaba la duración del fragmento por el nº de pistas.
+    for msg in mido.merge_tracks(mid.tracks):
+        if msg.is_meta:
+            if msg.type in ("track_name", "end_of_track"):
+                continue
+            output_track.append(msg.copy(time=round(msg.time * ratio)))
+        else:
+            output_track.append(msg.copy(time=round(msg.time * ratio)))
 
 
 def assemble_sequence(

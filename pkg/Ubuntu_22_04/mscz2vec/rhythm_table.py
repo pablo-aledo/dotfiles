@@ -1324,6 +1324,17 @@ def print_stats() -> None:
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _warn_export_ignored(args, n_results):
+    """En modo búsqueda/listado no se exporta MIDI/texto (solo con --id o --custom).
+    Antes se ignoraba en silencio; ahora se avisa para no perder la salida sin saberlo."""
+    ign = [f for f, v in (("--export-midi", getattr(args, "export_midi", None)),
+                          ("--export-text", getattr(args, "export_text", None))) if v]
+    if ign:
+        print(f"[AVISO] {' y '.join(ign)} se ignora en modo búsqueda/listado "
+              f"({n_results} resultado(s)): elige una entrada con --id N "
+              f"(o define una con --custom) para exportarla.", file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Catálogo curado de patrones rítmicos con tensión y emoción.',
@@ -1547,6 +1558,7 @@ def main():
             sys.exit(0)
         print(f"\n  Resultados para: \"{args.intencion}\"")
         print_table(entries, args.verbose)
+        _warn_export_ignored(args, len(entries))
         if args.export_json:
             exportable = [{k: v for k, v in e.items()} for e in entries]
             with open(_ensure_parent(args.export_json), 'w') as f:
@@ -1567,6 +1579,7 @@ def main():
         return
 
     print_table(entries if entries else TABLE, args.verbose)
+    _warn_export_ignored(args, len(entries if entries else TABLE))
 
     if args.export_json:
         data = entries if entries else TABLE

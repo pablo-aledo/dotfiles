@@ -1554,7 +1554,9 @@ def midi_to_chord_sequence(midi_path: str, bass_only: bool = False) -> tuple:
                 continue
             pc      = note % 12
             w_start = int(start / WINDOW)
-            w_end   = int(end   / WINDOW)
+            # `end` es exclusivo: una nota que acaba justo en la frontera de una ventana
+            # no suena en ella (si no, los acordes se mezclan en cada cambio).
+            w_end   = max(w_start, int((end - 1) / WINDOW))
             for w in range(max(0, w_start), min(n_windows, w_end + 1)):
                 window_bass_pcs[w] = window_bass_pcs[w] | {pc}
                 if window_bass_midi[w] is None or note < window_bass_midi[w]:
@@ -1614,7 +1616,9 @@ def midi_to_chord_sequence(midi_path: str, bass_only: bool = False) -> tuple:
         if bass_only and note >= BASS_THRESHOLD:
             continue
         w_start = int(start / WINDOW)
-        w_end   = int(end   / WINDOW)
+        # `end` es exclusivo: una nota que acaba justo en la frontera de una ventana
+        # no suena en ella (si no, los acordes se mezclan en cada cambio).
+        w_end   = max(w_start, int((end - 1) / WINDOW))
         for w in range(max(0, w_start), min(n_windows, w_end + 1)):
             window_pcs[w]  = window_pcs[w] | {pc}
             if window_bass[w] is None or note < window_bass[w]:
@@ -2404,6 +2408,17 @@ _STYLE_NATIVE = ['diatonic','baroque','jazz','modal','romantic','impressionist',
 _STYLE_ALIASES = {}
 
 
+def _warn_export_ignored(args, n_results):
+    """En modo búsqueda/listado no se exporta MIDI/texto (solo con --id o --custom).
+    Antes se ignoraba en silencio; ahora se avisa para no perder la salida sin saberlo."""
+    ign = [f for f, v in (("--export-midi", getattr(args, "export_midi", None)),
+                          ("--export-text", getattr(args, "export_text", None))) if v]
+    if ign:
+        print(f"[AVISO] {' y '.join(ign)} se ignora en modo búsqueda/listado "
+              f"({n_results} resultado(s)): elige una entrada con --id N "
+              f"(o define una con --custom) para exportarla.", file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Catálogo curado de progresiones de acordes con tensión y emoción.',
@@ -2651,6 +2666,7 @@ def main():
             sys.exit(0)
         print(f"\n  Resultados para: \"{args.intencion}\"")
         print_table(entries, args.verbose)
+        _warn_export_ignored(args, len(entries))
         if args.export_json:
             with open(_ensure_parent(args.export_json), 'w') as f:
                 json.dump(entries, f, indent=2, ensure_ascii=False, default=str)
@@ -2672,6 +2688,7 @@ def main():
         return
 
     print_table(entries if entries else TABLE, args.verbose)
+    _warn_export_ignored(args, len(entries if entries else TABLE))
 
     if args.export_json:
         data = entries if entries else TABLE
