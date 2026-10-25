@@ -138,6 +138,14 @@ chatgpt_query_2 () {
 	done | gpt-ai | tee output/$1
 }
 
+chatgpt_query_3 () {
+	echo "\e[34m Query \e[0m $1"
+	cat input/prompt input/"$1" | grep -v '^$' | grep -v '^[ \t]*$' | while read line
+	do
+        echo $line
+	done | GPT_CHROME_VERSION=155 python3 ~/.dotfiles/pkg/Ubuntu_22_04/cgpt_web/cgpt_web.py | tee output/$1
+}
+
 chatgpt_multiquery_2 () {
 	comm -13 <(cd output; ls | sort) <(cd input; ls | sort) | grep -v prompt | while read queryfile
 	do
