@@ -340,13 +340,17 @@ def parse_plain(path):
 
 
 def parse_listing(path, args, strip_ext, skip_ext):
+    """Devuelve una LISTA de carpetas (normalmente una).
+    Si el listado mezcla varias carpetas hermanas (p. ej. generado con un glob por prefijo),
+    se separa una carpeta por cada subcarpeta de primer nivel bajo el padre común."""
     if args.plain:
-        return parse_plain(path)
+        L = parse_plain(path)
+        return [L] if L else []
     with open(path, 'r', encoding='utf-8', errors='replace') as f:
         lines = [l.rstrip('\r\n').rstrip('/') for l in f]
     lines = [l for l in lines if l.strip()]
     if not lines:
-        return None
+        return []
     parents = set()
     for l in lines:
         p = os.path.dirname(l)
@@ -355,14 +359,38 @@ def parse_listing(path, args, strip_ext, skip_ext):
             p = os.path.dirname(p)
     files = [l for l in lines if l not in parents]
     if not files:
-        return None
+        return []
+    groups = {}
     if lines[0] in parents and all(f.startswith(lines[0] + '/') for f in files):
-        root = lines[0]
+        groups[lines[0]] = files
     else:
         try:
-            root = os.path.commonpath([os.path.dirname(f) for f in files])
+            P = os.path.commonpath([os.path.dirname(f) for f in files])
         except ValueError:
-            root = os.path.dirname(files[0])
+            P = os.path.dirname(files[0])
+        pre = P.rstrip('/') + '/'
+        loose = 0
+        for f in files:
+            rest = f[len(pre):] if f.startswith(pre) else f
+            if '/' not in rest:
+                loose += 1
+                continue
+            groups.setdefault(pre + rest.split('/', 1)[0], []).append(f)
+        if not groups:
+            groups[P] = files
+        elif loose:
+            log('AVISO: %s: %d ficheros sueltos fuera de subcarpetas, ignorados' % (os.path.basename(path), loose))
+        if len(groups) > 1:
+            log('AVISO: %s contiene %d carpetas distintas: se separan' % (os.path.basename(path), len(groups)))
+    out = []
+    for root, fl in groups.items():
+        L = build_folder(root, fl, os.path.basename(path), args, strip_ext, skip_ext)
+        if L:
+            out.append(L)
+    return out
+
+
+def build_folder(root, files, listing, args, strip_ext, skip_ext):
     fname_norm = simple_norm(os.path.basename(root))
     entries = []
     for f in files:
@@ -385,7 +413,7 @@ def parse_listing(path, args, strip_ext, skip_ext):
     if not entries:
         return None
     return dict(root=root, name=os.path.basename(root) or root,
-                listing=os.path.basename(path), entries=entries)
+                listing=listing, entries=entries)
 
 
 # ----------------------------------------------------------------------------
@@ -636,14 +664,27 @@ def main():
 
     key2id, keys = {}, []
     folders = []
+    parsed, by_root_p, n_merged = [], {}, 0
     for nm in names:
         try:
-            L = parse_listing(os.path.join(args.dir, nm), args, strip_ext, skip_ext)
+            Ls = parse_listing(os.path.join(args.dir, nm), args, strip_ext, skip_ext)
         except Exception as e:
             log('AVISO: no se pudo leer %s: %s' % (nm, e))
             continue
-        if L is None:
-            continue
+        for L in Ls:
+            prev = by_root_p.get(L['root'])
+            if prev is None:
+                by_root_p[L['root']] = L
+                parsed.append(L)
+            else:   # la misma carpeta de disco aparece en varios listados: se usa el más completo
+                n_merged += 1
+                if len(L['entries']) > len(prev['entries']):
+                    prev['entries'] = L['entries']
+                if L['listing'] not in prev['listing'].split(' + '):
+                    prev['listing'] += ' + ' + L['listing']
+    if n_merged:
+        log('AVISO: %d carpetas aparecen en más de un listado (misma ruta): se usa la versión más completa' % n_merged)
+    for L in parsed:
         ids, orig, nums = set(), {}, []
         for key, name, num in L['entries']:
             kid = key2id.get(key)
