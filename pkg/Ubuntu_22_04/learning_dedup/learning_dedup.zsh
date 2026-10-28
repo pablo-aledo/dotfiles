@@ -32,7 +32,7 @@ dedup_digit_cap=0.60           # tope de similitud si los números del título d
 dedup_use_subdirs=false        # true: los subdirectorios forman parte del título
 dedup_plain=false              # true: cada línea es un texto libre (p. ej. un tema), no una ruta;
                                #       el nombre del fichero es el nombre de la carpeta
-dedup_base_dir=""              # con dedup_plain: directorio donde están las carpetas reales
+dedup_base_dir=""              # directorio que contiene las carpetas reales (vacío: autodetectado; con dedup_plain hay que indicarlo)
 dedup_dest=""                  # vacío: <padre>/_to_delete junto a cada carpeta
 dedup_debug=false
 dedup_strip_ext=""             # vacío: lista por defecto del Python
@@ -229,7 +229,7 @@ así el conjunto de carpetas conservadas es definitivo cuando se evalúa A y no
 hay cascadas (A cubierta por B, B borrada después por C).
 """
 import argparse, glob, math, os, random, re, shlex, sys, time, unicodedata, zlib
-from collections import defaultdict
+from collections import Counter, defaultdict
 import numpy as np
 
 DEFAULT_STRIP = ("mp4 mkv avi mov wmv flv webm m4v mpg mpeg ts mp3 flac wav ogg m4a aac wma "
@@ -267,7 +267,7 @@ def parse_args():
                    help='cada fichero = una carpeta, cada línea = un ítem de texto libre (p. ej. temas); '
                         'el nombre del fichero es el nombre de la carpeta')
     p.add_argument('--base-dir', default='',
-                   help='con --plain: directorio donde están las carpetas reales (se antepone en remove_script.sh)')
+                   help='directorio que contiene las carpetas reales (vacío: se detecta a partir de las rutas; en --plain no se puede detectar)')
     p.add_argument('--no-embed', action='store_true', help='solo n-gramas de caracteres (sklearn), sin modelo')
     p.add_argument('--no-lex', action='store_true', help='no rescatar pares por similitud léxica')
     p.add_argument('--faiss', action='store_true', help='kNN con faiss HNSW (aproximado) en vez de numpy exacto')
@@ -339,63 +339,49 @@ def parse_plain(path):
     return dict(root=nm, name=nm, listing=nm, entries=entries)
 
 
-def parse_listing(path, args, strip_ext, skip_ext):
-    """Devuelve una LISTA de carpetas (normalmente una).
-    Si el listado mezcla varias carpetas hermanas (p. ej. generado con un glob por prefijo),
-    se separa una carpeta por cada subcarpeta de primer nivel bajo el padre común."""
-    if args.plain:
-        L = parse_plain(path)
-        return [L] if L else []
+def read_listing(path):
+    """Rutas de FICHERO de un listado (se descartan las líneas que son directorios, es decir,
+    prefijo de otra línea). TODAS las líneas pertenecen a una sola carpeta: la que da nombre
+    al fichero de listado."""
     with open(path, 'r', encoding='utf-8', errors='replace') as f:
         lines = [l.rstrip('\r\n').rstrip('/') for l in f]
     lines = [l for l in lines if l.strip()]
-    if not lines:
-        return []
     parents = set()
     for l in lines:
         p = os.path.dirname(l)
         while p and p != '/' and p not in parents:
             parents.add(p)
             p = os.path.dirname(p)
-    files = [l for l in lines if l not in parents]
-    if not files:
-        return []
-    groups = {}
-    if lines[0] in parents and all(f.startswith(lines[0] + '/') for f in files):
-        groups[lines[0]] = files
-    else:
-        try:
-            P = os.path.commonpath([os.path.dirname(f) for f in files])
-        except ValueError:
-            P = os.path.dirname(files[0])
-        pre = P.rstrip('/') + '/'
-        loose = 0
+    return [l for l in lines if l not in parents]
+
+
+def detect_base(listings):
+    """Directorio que contiene las carpetas: prefijo anterior a '/<nombre del listado>/'
+    (el más frecuente entre todos los listados)."""
+    c = Counter()
+    for nm, files in listings:
+        needle = '/' + nm + '/'
         for f in files:
-            rest = f[len(pre):] if f.startswith(pre) else f
-            if '/' not in rest:
-                loose += 1
-                continue
-            groups.setdefault(pre + rest.split('/', 1)[0], []).append(f)
-        if not groups:
-            groups[P] = files
-        elif loose:
-            log('AVISO: %s: %d ficheros sueltos fuera de subcarpetas, ignorados' % (os.path.basename(path), loose))
-        if len(groups) > 1:
-            log('AVISO: %s contiene %d carpetas distintas: se separan' % (os.path.basename(path), len(groups)))
-    out = []
-    for root, fl in groups.items():
-        L = build_folder(root, fl, os.path.basename(path), args, strip_ext, skip_ext)
-        if L:
-            out.append(L)
-    return out
+            i = f.find(needle)
+            if i >= 0:
+                c[f[:i]] += 1
+                break
+    return c.most_common(1)[0][0] if c else ''
 
 
-def build_folder(root, files, listing, args, strip_ext, skip_ext):
-    fname_norm = simple_norm(os.path.basename(root))
+def build_folder(nm, files, base, args, strip_ext, skip_ext):
+    """Una carpeta = un listado. Todas sus líneas son ítems de la carpeta."""
+    fname_norm = simple_norm(nm)
+    pre = base + '/' if base else ''
+    tops = Counter()
     entries = []
     for f in files:
-        rel = f[len(root) + 1:] if f.startswith(root + '/') else f
-        parts = rel.split('/')
+        if pre and f.startswith(pre):
+            rel = f[len(pre):].split('/')
+            tops[rel[0]] += 1
+            parts = rel[1:] or rel[-1:]
+        else:
+            parts = [os.path.basename(f)]
         name = parts[-1]
         if last_ext(name) in skip_ext:
             continue
@@ -412,8 +398,11 @@ def build_folder(root, files, listing, args, strip_ext, skip_ext):
         entries.append((key, name, num))
     if not entries:
         return None
-    return dict(root=root, name=os.path.basename(root) or root,
-                listing=listing, entries=entries)
+    # carpeta real en disco: la que se llama como el listado; si no existe (nombre de listado
+    # truncado), la de primer nivel con más ficheros
+    top = nm if (not tops or nm in tops) else tops.most_common(1)[0][0]
+    foreign = sum(v for k, v in tops.items() if k != top)
+    return dict(root=(pre + top) if pre else nm, name=nm, listing=nm, entries=entries, foreign=foreign)
 
 
 # ----------------------------------------------------------------------------
@@ -664,26 +653,38 @@ def main():
 
     key2id, keys = {}, []
     folders = []
-    parsed, by_root_p, n_merged = [], {}, 0
-    for nm in names:
-        try:
-            Ls = parse_listing(os.path.join(args.dir, nm), args, strip_ext, skip_ext)
-        except Exception as e:
-            log('AVISO: no se pudo leer %s: %s' % (nm, e))
-            continue
-        for L in Ls:
-            prev = by_root_p.get(L['root'])
-            if prev is None:
-                by_root_p[L['root']] = L
+    parsed = []
+    if args.plain:
+        base = args.base_dir.rstrip('/')
+        for nm in names:
+            try:
+                L = parse_plain(os.path.join(args.dir, nm))
+            except Exception as e:
+                log('AVISO: no se pudo leer %s: %s' % (nm, e))
+                continue
+            if L:
+                L['root'] = (base + '/' + nm) if base else nm
                 parsed.append(L)
-            else:   # la misma carpeta de disco aparece en varios listados: se usa el más completo
-                n_merged += 1
-                if len(L['entries']) > len(prev['entries']):
-                    prev['entries'] = L['entries']
-                if L['listing'] not in prev['listing'].split(' + '):
-                    prev['listing'] += ' + ' + L['listing']
-    if n_merged:
-        log('AVISO: %d carpetas aparecen en más de un listado (misma ruta): se usa la versión más completa' % n_merged)
+    else:
+        listings = []
+        for nm in names:
+            try:
+                files = read_listing(os.path.join(args.dir, nm))
+            except Exception as e:
+                log('AVISO: no se pudo leer %s: %s' % (nm, e))
+                continue
+            if files:
+                listings.append((nm, files))
+        base = args.base_dir.rstrip('/') or detect_base(listings)
+        log('directorio base: %s' % (base or '(no detectado: las rutas de remove_script.sh serán solo nombres)'))
+        for nm, files in listings:
+            L = build_folder(nm, files, base, args, strip_ext, skip_ext)
+            if L:
+                parsed.append(L)
+        n_foreign = sum(1 for L in parsed if L['foreign'])
+        if n_foreign:
+            log('NOTA: %d listados incluyen líneas de otras carpetas de primer nivel (p. ej. coincidencia de prefijo); '
+                'se tratan como parte de su carpeta' % n_foreign)
     for L in parsed:
         ids, orig, nums = set(), {}, []
         for key, name, num in L['entries']:
@@ -756,34 +757,13 @@ def main():
         n_edges = len(keep)
     log('aristas de equivalencia (sim >= %.2f): %d' % (args.tau, n_edges))
 
-    # 4. Carpetas anidadas (no tocar si una contiene a otra) ------------------
-    by_root = defaultdict(list)
-    for f in folders:
-        by_root[f['root']].append(f['id'])
-    nested = [set() for _ in range(N)]
-    for r, ids in ([] if args.plain else by_root.items()):
-        if len(ids) > 1:
-            for i in ids:
-                nested[i] |= set(ids) - {i}
-        p = os.path.dirname(r)
-        while p and p != '/':
-            if p in by_root:
-                for x in ids:
-                    for y in by_root[p]:
-                        nested[x].add(y)
-                        nested[y].add(x)
-            p = os.path.dirname(p)
-    n_nested = sum(1 for s in nested if s)
-    if n_nested:
-        log('AVISO: %d carpetas anidadas o con raíz repetida: no se proponen' % n_nested)
-
-    # 5. Selección voraz de mayor a menor ------------------------------------
+    # 4. Selección voraz de mayor a menor ------------------------------------
     order = sorted(range(N), key=lambda i: (-folders[i]['n_files'], -len(folders[i]['items']),
                                             folders[i]['name'].lower(), i))
     kept = [False] * N
     removed = {}
     for pos, A in enumerate(order):
-        res = None if nested[A] else evaluate(A, kept, folders, folders_of, nbr, w, args)
+        res = evaluate(A, kept, folders, folders_of, nbr, w, args)
         if res is not None and res['chosen'] and res['cov'] >= args.theta:
             removed[A] = res
         else:
@@ -794,7 +774,7 @@ def main():
     log('candidatas a eliminar: %d de %d carpetas (%d de %d ficheros, %.1f%%)' %
         (len(removed), N, n_rm_files, total_files, 100.0 * n_rm_files / max(total_files, 1)))
 
-    # 6. Salidas --------------------------------------------------------------
+    # 5. Salidas --------------------------------------------------------------
     cands = sorted(removed.items(),
                    key=lambda kv: (tier_of(kv[1]), -kv[1]['cov'], -folders[kv[0]]['n_files']))
     rep = open(os.path.join(args.out, 'report.txt'), 'w', encoding='utf-8')
@@ -836,10 +816,7 @@ def main():
                 fa['n_nums'], fa['max_num'], 100.0 * fa['n_nums'] / fa['max_num'])
         rep.write('\n[T%d] %s  (%d ficheros)  cobertura %.1f%%  (%d ítems con peso)\n' %
                   (t, fa['name'], fa['n_files'], 100 * res['cov'], len(res['items'])))
-        if args.plain:
-            rep.write('   carpeta: %s\n' % (os.path.join(args.base_dir, fa['root']) if args.base_dir else fa['root']))
-        else:
-            rep.write('   ruta   : %s\n   listado: %s\n' % (fa['root'], fa['listing']))
+        rep.write('   ruta   : %s\n   listado: %s\n' % (fa['root'], fa['listing']))
         if compl:
             rep.write(compl + '\n')
         rep.write('   cubierta por:\n')
@@ -859,8 +836,7 @@ def main():
             ' ; '.join(folders[B]['name'] for B in res['chosen']), len(resid)))
         scr.write('# %s | cob %.1f%% | cubierta por: %s | no cubiertos: %d\n' % (
             fa['name'], 100 * res['cov'], ' + '.join(folders[B]['name'] for B in res['chosen']), len(resid)))
-        target = os.path.join(args.base_dir, fa['root']) if (args.plain and args.base_dir) else fa['root']
-        scr.write('%smvd %s\n' % ('' if t == 1 else '# ', shlex.quote(target)))
+        scr.write('%smvd %s\n' % ('' if t == 1 else '# ', shlex.quote(fa['root'])))
     rep.close(); tsv.close(); scr.close()
     log('salida en %s: report.txt, candidates.tsv, remove_script.sh' % args.out)
 
