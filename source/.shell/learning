@@ -3544,3 +3544,8 @@ print(x_proj)
     -e 's/^\[ /[/g' -e 's/ \]$/]/g' -e 's/ /, /g' | paste -d' ' -s
 }
 
+learning.contains_dedup(){
+    source ~/.dotfiles/pkg/Ubuntu_22_04/learning_dedup/learning_dedup.zsh
+    dedup_embed=false; learning.dedup
+    cat /home/pabloaledo/learning/dedup/report.txt
+}
