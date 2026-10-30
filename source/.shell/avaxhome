@@ -488,3 +488,7 @@ avl_progress_dunst(){
     touch /tmp/avl_progress; shc; dunst; rm -fr /tmp/avl_progress
 }
 
+avxrecover(){
+for a in $(seq 1 30); do wget https://avxhome.st/ebooks/pages/$a ; done
+for a in $(seq 1 8); do cat $a | grep --color title-link | sed 's/^[^"]*"\([^"]*\)"[^>]*>\([^<]*\)<.*/\1|\2/g' | grep --color '|' > $a.links; done
+}
