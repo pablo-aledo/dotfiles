@@ -295,7 +295,9 @@ def main():
     ap.add_argument("--keep", type=int, nargs="+", default=[])
     ap.add_argument("--no-register", action="store_true")
     ap.add_argument("--no-dynamics", action="store_true")
-    ap.add_argument("--report", action="store_true")
+    ap.add_argument("--report", action="store_true",
+                    help="SOLO informe de roles y paleta: no escribe MIDI "
+                         "(ignora --output)")
     ap.add_argument("--list-emotions", action="store_true")
     ap.add_argument("--no-color", action="store_true")
     args = ap.parse_args()
@@ -306,6 +308,9 @@ def main():
         return 0
     if not args.midi or not args.emotion:
         ap.error("indica MIDI y --emotion (o usa --list-emotions)")
+    if args.report and args.output:
+        print("[AVISO] --report es solo informe: se ignora --output y no se escribe MIDI "
+              "(quita --report para generar el fichero)", file=sys.stderr)
 
     B, R, G = _c("B"), _c("R"), _c("G")
     print(f"\n{'═' * 78}")

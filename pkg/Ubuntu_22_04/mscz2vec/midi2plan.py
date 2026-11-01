@@ -969,7 +969,7 @@ def main(argv=None):
     p.add_argument("--suite-dir", default=str(HERE))
     p.add_argument("--no-color", action="store_true")
     a = ap.parse_args(argv)
-    a.style = _resolve_style(a.style, _STYLE_NATIVE, None, _STYLE_ALIASES)
+    a.style = _resolve_style(getattr(a, "style", None), _STYLE_NATIVE, None, _STYLE_ALIASES)
     if getattr(a, "no_color", False):
         _USE_COLOR = False
     try:

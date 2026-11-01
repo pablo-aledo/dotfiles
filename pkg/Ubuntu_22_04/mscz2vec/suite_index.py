@@ -168,8 +168,22 @@ def _lit(node, env):
             return list(d.keys())
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
         a, b = _lit(node.left, env), _lit(node.right, env)
-        if isinstance(a, list) and isinstance(b, list):
-            return a + b
+        if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+            return list(a) + list(b)
+    if isinstance(node, ast.ListComp):
+        # [s for s in NOMBRE if s not in OTRO]: se evalúa solo si TODOS los nombres
+        # libres son constantes de módulo ya resueltas (sin builtins ni llamadas).
+        bound = {t.id for g in node.generators for t in ast.walk(g.target)
+                 if isinstance(t, ast.Name)}
+        free = {n.id for n in ast.walk(node)
+                if isinstance(n, ast.Name) and n.id not in bound}
+        if all(not isinstance(n, ast.Call) for n in ast.walk(node)) \
+                and all(name in env for name in free):
+            try:
+                return list(eval(compile(ast.Expression(node), "<choices>", "eval"),
+                                 {"__builtins__": {}}, dict(env)))
+            except Exception:
+                return _UNKNOWN
     return _UNKNOWN
 
 

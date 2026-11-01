@@ -804,6 +804,7 @@ def notes_to_midi(
     trk = MidiTrack()
     mid.tracks.append(trk)
     _notes_list_to_track(notes, trk, tempo=tempo, name='GrammarComposer')
+    Path(out_path).resolve().parent.mkdir(parents=True, exist_ok=True)
     mid.save(str(out_path))
 
 
@@ -833,6 +834,7 @@ def multitrack_to_midi(
             name  = f'Track{orig_idx}',
         )
 
+    Path(out_path).resolve().parent.mkdir(parents=True, exist_ok=True)
     mid.save(str(out_path))
 
 
@@ -1728,6 +1730,7 @@ def main() -> None:
 
         print(f"[3/4] Guardando gramática: {out_path} …")
         try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(grammar_text, encoding='utf-8')
         except Exception as e:
             sys.exit(f"  Error al escribir la gramática: {e}")

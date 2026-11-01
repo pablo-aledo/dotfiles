@@ -324,12 +324,17 @@ def main():
     ap.add_argument("--density", type=float, default=0.7)
     ap.add_argument("--climax-resolve", action="store_true")
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--report", action="store_true")
+    ap.add_argument("--report", action="store_true",
+                    help="SOLO informe de cadencias: no escribe MIDI "
+                         "(ignora --output)")
     ap.add_argument("--no-color", action="store_true")
     args = ap.parse_args()
     if args.no_color:
         _USE_COLOR = False
 
+    if args.report and args.output:
+        print("[AVISO] --report es solo informe: se ignora --output y no se escribe MIDI "
+              "(quita --report para generar el fichero)", file=sys.stderr)
     B, R, G, Y = _c("B"), _c("R"), _c("GRN"), _c("YEL")
     print(f"\n{'═' * 78}")
     print(f"  {B}EXPECTATION ENGINE v{VERSION}  ·  {args.midi}{R}")

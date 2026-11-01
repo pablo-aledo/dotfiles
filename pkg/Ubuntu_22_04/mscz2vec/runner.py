@@ -586,6 +586,14 @@ def load_narrator_json(json_path: str) -> tuple[list[PipelineStep], dict, str]:
 #  LOCALIZACIÓN DE SCRIPTS
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _in_workdir(path, work_dir) -> Path:
+    """Ruta de un fichero declarado en el plan, interpretada respecto al
+    directorio de trabajo de los pasos (los comandos se ejecutan con
+    cwd=work_dir), no respecto al CWD del proceso que invoca a runner.py."""
+    p = Path(path)
+    return p if p.is_absolute() else Path(work_dir) / p
+
+
 def _find_script(name: str, plan_dir: Path) -> str | None:
     """Busca un script en plan_dir, CWD y PATH."""
     candidates = [
@@ -595,7 +603,7 @@ def _find_script(name: str, plan_dir: Path) -> str | None:
     ]
     for c in candidates:
         if c.exists():
-            return str(c)
+            return str(c.resolve())  # absoluta: los pasos se ejecutan con otro cwd
     found = shutil.which(name)
     return found
 
@@ -611,7 +619,7 @@ def _resolve_script_tokens(tokens: list[str], plan_dir: Path) -> list[str]:
             resolved.append(script if script else t)
         elif t.endswith(".py") and (t.startswith("./") or not t.startswith("/")):
             candidate = plan_dir / t
-            resolved.append(str(candidate) if candidate.exists() else t)
+            resolved.append(str(candidate.resolve()) if candidate.exists() else t)
         else:
             resolved.append(t)
     return resolved
@@ -839,7 +847,7 @@ def execute_step(step: PipelineStep, timeout: int, verbose: bool,
     missing_outputs = []
     if ok and step.output_files:
         for out in step.output_files:
-            if not Path(out).exists():
+            if not _in_workdir(out, work_dir).exists():
                 missing_outputs.append(out)
         if missing_outputs:
             ok = False
@@ -931,8 +939,8 @@ class PipelineRunner:
         print(f"  Paso completado: {_c('green', step.label)}")
         if step.output_files:
             for f in step.output_files:
-                if Path(f).exists():
-                    size = Path(f).stat().st_size
+                if _in_workdir(f, self.work_dir).exists():
+                    size = _in_workdir(f, self.work_dir).stat().st_size
                     print(f"    ✓ {Path(f).name}  ({size//1024} KB)")
         print(f"  {'─'*58}")
         try:
@@ -1028,7 +1036,7 @@ class PipelineRunner:
             )
 
             # Verificar inputs declarados
-            missing = [f for f in step.input_files if not Path(f).exists()]
+            missing = [f for f in step.input_files if not _in_workdir(f, self.work_dir).exists()]
             if missing:
                 missing_names = ', '.join(Path(f).name for f in missing)
                 self.logger.write(
@@ -1080,8 +1088,8 @@ class PipelineRunner:
                     f"  {_c('gray', dur)}"
                 )
                 for out in step.output_files:
-                    if Path(out).exists():
-                        size = Path(out).stat().st_size
+                    if _in_workdir(out, self.work_dir).exists():
+                        size = _in_workdir(out, self.work_dir).stat().st_size
                         self.logger.write(
                             f"    {_c('gray', '→')} {Path(out).name}"
                             f"  {_c('gray', f'({size//1024} KB)')}"
@@ -1159,12 +1167,12 @@ class PipelineRunner:
         for s in self.steps:
             if s.status == ST_OK:
                 for f in s.output_files:
-                    if Path(f).exists():
+                    if _in_workdir(f, self.work_dir).exists():
                         generated.append(f)
         if generated:
             self.logger.write(f"\n  Archivos generados:")
             for f in generated:
-                size = Path(f).stat().st_size
+                size = _in_workdir(f, self.work_dir).stat().st_size
                 self.logger.write(
                     f"    ◆ {Path(f).name}  {_c('gray', f'({size//1024} KB)')}"
                 )

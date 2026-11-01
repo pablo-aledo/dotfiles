@@ -3501,8 +3501,12 @@ def main():
                         metavar="0-1",
                         help="Intensidad de variaciones estructurales compás a compás "
                              "(default: 0.3)")
-    p_add.add_argument("--no-layers", action="store_true",
-                        help="Desactivar capas independientes (comportamiento v0.2)")
+    _lay = p_add.add_mutually_exclusive_group()
+    _lay.add_argument("--layers", action="store_true",
+                      help="Capas independientes activadas (es el comportamiento "
+                           "por defecto; se acepta por claridad)")
+    _lay.add_argument("--no-layers", action="store_true",
+                      help="Desactivar capas independientes (comportamiento v0.2)")
     p_add.add_argument("--fill-style",
                         choices=["auto"] + list(FILL_CATALOG.keys()),
                         default="auto",
