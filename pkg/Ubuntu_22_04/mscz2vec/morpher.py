@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                         MORPHER  v1.0                                        ║
+║                         MORPHER  v1.1                                        ║
 ║         Morphing gradual entre dos obras MIDI                                ║
 ║                                                                              ║
 ║  Dado A.mid y B.mid, genera N pasos intermedios donde el ADN de A           ║
@@ -39,6 +39,8 @@
 ║    --dims DIMS     Dimensiones a interpolar (default: todas)                ║
 ║    --bars N        Compases por paso (default: auto desde A)                ║
 ║    --catalog       Generar un MIDI único que concatena todos los pasos      ║
+║    --engine E      notes (default, morphing real) | dna (v1.0, legacy)      ║
+║    --window-align start | end-start (puentes)   --no-ends   --full-ends     ║
 ║    --plot          Visualizar curvas de morphing                             ║
 ║    --listen        Reproducir secuencia al terminar (requiere pygame)       ║
 ║    --play-seconds N Segundos por paso en reproducción (default: 8)         ║
@@ -578,6 +580,223 @@ def run_morph(path_a: str, path_b: str, args) -> list:
     return output_paths
 
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  MOTOR POR NOTAS (v1.1) — morphing gradual real
+# ══════════════════════════════════════════════════════════════════════════════
+# El motor «dna» original regeneraba cada paso intermedio desde el ADN
+# interpolado y producía ~32 notas por paso frente a cientos/miles de A y B
+# (no había gradualidad: salto A → casi vacío → B). El motor «notes» trabaja
+# sobre las notas reales de ventanas alineadas de A y B:
+#   · tonalidad: A se transpone hacia la tonalidad de B (alpha·d) y B hacia la
+#     de A (-(1-alpha)·d); ambas coinciden en la tonalidad intermedia;
+#   · densidad: cada nota de A se conserva con prob. (1-alpha) y cada nota de B
+#     con prob. alpha (rangos estables, agrupados por compás), de modo que el
+#     nº de notas pasa gradualmente de nA a nB;
+#   · dinámica y tempo se interpolan; instrumentos/canales de cada fuente se
+#     conservan (A se desvanece, B aparece).
+
+_KMAJ = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
+_KMIN = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
+
+
+def _read_notes(path: str) -> dict:
+    """Notas (en negras), programas por canal, tempo, compás y tónica estimada."""
+    mid = MidiFile(path)
+    tpb = mid.ticks_per_beat or 480
+    tempo, bar_beats = 500000, 4.0
+    got_tempo = got_ts = False
+    notes, programs, pending = [], {}, {}
+    for tr in mid.tracks:
+        t = 0
+        for msg in tr:
+            t += msg.time
+            if msg.type == 'set_tempo' and not got_tempo:
+                tempo, got_tempo = msg.tempo, True
+            elif msg.type == 'time_signature' and not got_ts:
+                bb = msg.numerator * 4.0 / msg.denominator
+                # compases declarados absurdos (1/4, 1/8…) se tratan como 4/4
+                bar_beats = bb if 2 <= bb <= 7 else 4.0
+                got_ts = True
+            elif msg.type == 'program_change':
+                programs.setdefault(msg.channel, msg.program)
+            elif msg.type == 'note_on' and msg.velocity > 0:
+                pending.setdefault((msg.channel, msg.note), []).append((t, msg.velocity))
+            elif msg.type in ('note_off', 'note_on'):
+                lst = pending.get((msg.channel, msg.note))
+                if lst:
+                    t0, v = lst.pop(0)
+                    notes.append((t0 / tpb, max(t - t0, 1) / tpb, msg.note, v, msg.channel))
+    notes.sort()
+    total = max((n[0] + n[1] for n in notes), default=0.0)
+    h = np.zeros(12)
+    for st, du, p, v, ch in notes:
+        if ch != 9:
+            h[p % 12] += du
+    tonic, mode, best = 0, 'major', -2.0
+    if h.sum() > 0:
+        for r in range(12):
+            for md, prof in (('major', _KMAJ), ('minor', _KMIN)):
+                c = np.corrcoef(h, np.roll(prof, r))[0, 1]
+                if c == c and c > best:
+                    best, tonic, mode = c, r, md
+    return dict(path=path, notes=notes, programs=programs, tempo=tempo,
+                bar_beats=bar_beats, total_beats=total, tonic=tonic, mode=mode)
+
+
+def _window_notes(info: dict, n_bars: int, align: str) -> dict:
+    """Ventana de n_bars compases (al inicio, o al final si align='end')."""
+    bb = info['bar_beats']
+    tot_bars = max(1, int(np.ceil(info['total_beats'] / bb - 1e-9)))
+    n = max(1, min(n_bars, tot_bars))
+    start_bar = (tot_bars - n) if align == 'end' else 0
+    s, e = start_bar * bb, (start_bar + n) * bb
+    ws = []
+    for st, du, p, v, ch in info['notes']:
+        if s <= st < e:
+            ws.append((st - s, min(du, e - st), p, v, ch))
+    out = dict(info)
+    out['notes'] = ws
+    out['win_beats'] = e - s
+    out['n_bars'] = n
+    return out
+
+
+def _stable_ranks(notes: list, bar_beats: float, seed: int) -> np.ndarray:
+    """Rango uniforme en (0,1) por nota, agrupado por compás (60 % compás,
+    40 % nota) para que A y B se alternen en bloques musicales."""
+    rng = np.random.default_rng(seed)
+    n = len(notes)
+    if n == 0:
+        return np.zeros(0)
+    bar_idx = np.array([int(nt[0] // bar_beats) for nt in notes])
+    bar_rand = {b: rng.random() for b in set(bar_idx.tolist())}
+    raw = 0.6 * np.array([bar_rand[b] for b in bar_idx]) + 0.4 * rng.random(n)
+    order = np.argsort(np.argsort(raw))
+    return (order + 0.5) / n
+
+
+def _write_notes_state(wa: dict, wb: dict, alpha: float, dims: list,
+                       path: str, seed: int = 7) -> int:
+    """Escribe el paso intermedio de alpha y devuelve el nº de notas."""
+    tpb = 480
+    bb = wa['bar_beats']
+    win = max(wa['win_beats'], wb['win_beats'])
+    d = (wb['tonic'] - wa['tonic'] + 6) % 12 - 6
+    do_p = 'pitch' in dims
+    shift_a = int(round(alpha * d)) if do_p else 0
+    shift_b = int(round(-(1 - alpha) * d)) if do_p else 0
+    do_d = 'dynamics' in dims
+    va = np.mean([n[3] for n in wa['notes']]) if wa['notes'] else 64
+    vb = np.mean([n[3] for n in wb['notes']]) if wb['notes'] else 64
+    vt = (1 - alpha) * va + alpha * vb
+    tempo = int(round((1 - alpha) * wa['tempo'] + alpha * wb['tempo'])) \
+        if 'tempo' in dims else wa['tempo']
+
+    ra = _stable_ranks(wa['notes'], bb, seed)
+    rb = _stable_ranks(wb['notes'], bb, seed + 1)
+    ev = {}   # (tag, canal) -> [(start, end, pitch, vel)]
+    count = 0
+    for tag, w, rk, keep, shift, vsrc in (
+            ('A', wa, ra, lambda r: r >= alpha, shift_a, va),
+            ('B', wb, rb, lambda r: r < alpha, shift_b, vb)):
+        for (st, du, p, v, ch), r in zip(w['notes'], rk):
+            if not keep(r):
+                continue
+            pp = p if ch == 9 else int(np.clip(p + shift, 0, 127))
+            vv = int(np.clip(v * (vt / max(vsrc, 1)), 1, 127)) if do_d else v
+            ev.setdefault((tag, ch), []).append(
+                (int(round(st * tpb)), int(round((st + du) * tpb)), pp, vv))
+            count += 1
+
+    mid = MidiFile(ticks_per_beat=tpb)
+    master = MidiTrack()
+    master.append(MetaMessage('track_name', name='Morph', time=0))
+    master.append(MetaMessage('set_tempo', tempo=tempo, time=0))
+    num = int(round(bb))
+    if abs(bb - num) < 1e-6:
+        master.append(MetaMessage('time_signature', numerator=num, denominator=4, time=0))
+    master.append(MetaMessage('end_of_track', time=int(win * tpb)))
+    mid.tracks.append(master)
+    for (tag, ch), lst in sorted(ev.items()):
+        tr = MidiTrack()
+        tr.append(MetaMessage('track_name', name=f'{tag}.ch{ch + 1}', time=0))
+        src = wa if tag == 'A' else wb
+        if ch != 9 and ch in src['programs']:
+            tr.append(Message('program_change', channel=ch, program=src['programs'][ch], time=0))
+        evs = []
+        for a, b_, p, v in lst:
+            evs.append((a, 1, p, v))
+            evs.append((max(b_, a + 1), 0, p, 0))
+        evs.sort(key=lambda e: (e[0], e[1]))   # note_off antes que note_on
+        prev = 0
+        for tk, on, p, v in evs:
+            tr.append(Message('note_on' if on else 'note_off', channel=ch, note=p,
+                              velocity=v, time=tk - prev))
+            prev = tk
+        mid.tracks.append(tr)
+    mid.save(_ensure_parent(path))
+    return count
+
+
+def run_morph_notes(path_a: str, path_b: str, args) -> list:
+    steps, mode = args.steps, args.mode
+    dims = args.dims or ALL_DIMS
+    n_bars = args.bars or 8
+    os.makedirs(args.output_dir, exist_ok=True)
+    print(f"\n  MORPHER v1.1 (motor notes) — {steps} pasos | modo {mode} | {n_bars} compases/paso")
+    ia, ib = _read_notes(path_a), _read_notes(path_b)
+    if not ia['notes'] or not ib['notes']:
+        print("  ERROR: alguna fuente no tiene notas.")
+        return []
+    align = getattr(args, 'window_align', 'start')
+    wa = _window_notes(ia, n_bars, 'end' if align == 'end-start' else 'start')
+    wb = _window_notes(ib, n_bars, 'start')
+    print(f"  A: {PITCH_NAMES_M[ia['tonic']]} {ia['mode']} · {len(wa['notes'])} notas en ventana "
+          f"({len(ia['notes'])} totales)")
+    print(f"  B: {PITCH_NAMES_M[ib['tonic']]} {ib['mode']} · {len(wb['notes'])} notas en ventana "
+          f"({len(ib['notes'])} totales)")
+    t_values = np.linspace(0, 1, steps)
+    alphas = [_interp_alpha(t, mode) for t in t_values]
+    alphas[0], alphas[-1] = 0.0, 1.0      # extremos exactos (la sigmoide no llega a 0/1)
+    seed = getattr(args, 'seed', 7)
+    paths, data, counts = [], [], []
+    for i, (t, alpha) in enumerate(zip(t_values, alphas)):
+        if i == 0 and getattr(args, 'full_ends', False):
+            fname = os.path.join(args.output_dir, f"{args.prefix}_{i:03d}_A.mid")
+            shutil.copy(path_a, fname); cnt = len(ia['notes']); label = "A (original completo)"
+        elif i == steps - 1 and getattr(args, 'full_ends', False):
+            fname = os.path.join(args.output_dir, f"{args.prefix}_{i:03d}_B.mid")
+            shutil.copy(path_b, fname); cnt = len(ib['notes']); label = "B (original completo)"
+        else:
+            tag = 'A' if i == 0 else ('B' if i == steps - 1 else f"t{alpha:.2f}")
+            fname = os.path.join(args.output_dir, f"{args.prefix}_{i:03d}_{tag}.mid")
+            cnt = _write_notes_state(wa, wb, float(alpha), dims, fname, seed)
+            label = f"t={t:.2f} α={alpha:.2f}"
+        expected = (1 - alpha) * len(wa['notes']) + alpha * len(wb['notes'])
+        flag = ""
+        if 0 < i < steps - 1 and expected > 0 and cnt < 0.5 * expected:
+            flag = "  [AVISO: el paso pierde >50 % de las notas esperadas]"
+        paths.append(fname); counts.append(cnt)
+        data.append({'step': i, 't': float(t), 'alpha': float(alpha), 'file': fname,
+                     'label': label, 'notes': cnt})
+        print(f"  [{i+1:02d}/{steps}] {label} → {os.path.basename(fname)}  ({cnt} notas){flag}")
+    curves = os.path.join(args.output_dir, f"{args.prefix}_curves.json")
+    with open(curves, 'w') as f:
+        json.dump({'steps': data, 'dims': dims, 'mode': mode, 'engine': 'notes',
+                   'n_bars': n_bars, 'source_a': path_a, 'source_b': path_b}, f, indent=2)
+    print(f"\n  Datos guardados: {curves}")
+    if args.catalog:
+        cat = os.path.join(args.output_dir, f"{args.prefix}_catalog.mid")
+        sel = paths[1:-1] if getattr(args, 'no_ends', False) and len(paths) > 2 else paths
+        _build_catalog(sel, cat)
+        print(f"  Catálogo MIDI: {cat}")
+    return paths
+
+
+PITCH_NAMES_M = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+
+
 def _build_catalog(midi_paths: list, output_path: str):
     """Concatena todos los MIDIs en uno."""
     if not MIDO_OK or not midi_paths:
@@ -592,11 +811,11 @@ def _build_catalog(midi_paths: list, output_path: str):
         for midi_path in midi_paths:
             try:
                 mid = MidiFile(midi_path)
+                # v1.1: reescalar los ticks si la resolución difiere de 480
+                ratio = tpb / (mid.ticks_per_beat or tpb)
                 for msg in mido.merge_tracks(mid.tracks):
-                    if not msg.is_meta:
-                        track.append(msg.copy())
-                    elif msg.type == 'set_tempo':
-                        track.append(msg.copy())
+                    if not msg.is_meta or msg.type == 'set_tempo':
+                        track.append(msg.copy(time=int(round(msg.time * ratio))))
                 # Silencio breve entre secciones
                 track.append(Message('note_off', note=60, velocity=0, time=tpb))
             except Exception as e:
@@ -699,6 +918,17 @@ def parse_args():
     p.add_argument('--output-dir',   default='./morph_out', dest='output_dir')
     p.add_argument('--prefix',       default='morph')
     p.add_argument('--verbose',      action='store_true')
+    p.add_argument('--engine',       choices=['notes', 'dna'], default='notes',
+                   help="notes (default): morphing real sobre notas; dna: motor v1.0 "
+                        "(regenera desde el ADN; los pasos intermedios quedan casi vacíos)")
+    p.add_argument('--window-align', choices=['start', 'end-start'], default='start',
+                   dest='window_align',
+                   help="ventana de A: inicio (default) o final (puentes: final de A → inicio de B)")
+    p.add_argument('--full-ends', action='store_true', dest='full_ends',
+                   help="A y B se copian completos (motor notes; por defecto son la ventana)")
+    p.add_argument('--no-ends', action='store_true', dest='no_ends',
+                   help="--catalog sin los extremos A y B (solo transición)")
+    p.add_argument('--seed', type=int, default=7)
     return p.parse_args()
 
 
@@ -715,7 +945,8 @@ def main():
         print("ERROR: --steps debe ser al menos 2.")
         sys.exit(1)
 
-    output_paths = run_morph(args.source_a, args.source_b, args)
+    output_paths = (run_morph_notes if args.engine == 'notes' else run_morph)(
+        args.source_a, args.source_b, args)
     print(f"\n  ✓ Morphing completado. {len(output_paths)} archivos en: {args.output_dir}")
 
 

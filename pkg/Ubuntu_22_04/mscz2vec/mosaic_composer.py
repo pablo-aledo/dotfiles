@@ -1436,7 +1436,10 @@ def _morph_transition(frag_a, frag_b, bridge_bars, out_dir, target_key, verbose=
     if os.path.exists(bridge_path):
         return bridge_path
 
-    morph_dir = os.path.join(out_dir, "morph_tmp")
+    # Un directorio por puente: con uno compartido, los ficheros de un puente
+    # anterior (mismo prefijo) se tomaban por los del actual.
+    morph_dir = os.path.join(out_dir, "morph_tmp",
+                             os.path.splitext(os.path.basename(bridge_path))[0])
     os.makedirs(morph_dir, exist_ok=True)
 
     # Tomar nota de los archivos presentes antes de llamar
@@ -1447,6 +1450,8 @@ def _morph_transition(frag_a, frag_b, bridge_bars, out_dir, target_key, verbose=
         "--steps", "3",
         "--mode", "sigmoid",
         "--catalog",
+        "--no-ends",                      # el puente es solo la transición,
+        "--window-align", "end-start",    # del final de A al inicio de B
         "--output-dir", morph_dir,
         "--prefix", "bridge",
     ]
@@ -1605,7 +1610,9 @@ def _run_script(script_name: str, args_list: list,
                 timeout: int = 120) -> bool:
     """
     Llama a un script del ecosistema via subprocess.
-    Devuelve True si tuvo éxito y out_path existe.
+    Devuelve True si tuvo éxito y out_path existe. Con out_path vacío no se
+    comprueba ningún fichero de salida (el llamador lo busca después): antes
+    se avisaba en falso «no generó » aunque el script hubiera funcionado.
     Nunca usa import — todos los scripts tienen código de nivel superior.
     """
     import subprocess, sys as _sys
@@ -1627,7 +1634,7 @@ def _run_script(script_name: str, args_list: list,
             if res.stderr:
                 print(f"         {res.stderr.strip()[:200]}")
             return False
-        if not os.path.exists(out_path):
+        if out_path and not os.path.exists(out_path):
             print(f"  [WARN] {script_name} no generó {out_path}")
             return False
         return True
@@ -2496,7 +2503,12 @@ def cmd_stitch(args) -> str:
         verbose=verbose,
     )
 
-    final_path = out_dir / output_name
+    # --output con separadores (o absoluto) se respeta tal cual; solo un
+    # nombre simple se resuelve dentro de --out-dir. Antes se unía siempre a
+    # out_dir («mosaic_out/sub/dir/x.mid») y no se creaba el directorio padre.
+    out_p = Path(output_name)
+    final_path = out_p if (out_p.is_absolute() or len(out_p.parts) > 1) else out_dir / out_p
+    final_path.parent.mkdir(parents=True, exist_ok=True)
     import shutil
     shutil.copy(assembled, str(final_path))
     print(f"\n✓ COSTURA FINAL: {final_path}")

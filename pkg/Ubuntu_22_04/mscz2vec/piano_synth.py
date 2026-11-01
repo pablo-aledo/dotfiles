@@ -4203,22 +4203,45 @@ def cmd_render_midi(args):
     generate_note = getattr(ns, gen_attr)
     SAMPLE_RATE = 44100
 
-    print(f"Rendering {len(events)} notes with '{args.instrument}'...")
+    # Cada nota cuesta ~1 s de síntesis modal, así que un MIDI de 1400 notas
+    # tardaba >20 min. Se cuantiza la velocidad en N capas y se sintetiza una
+    # sola vez cada par (altura, capa), reutilizando la señal (solo cambia el
+    # instante de mezcla).
+    import time as _time
+    nl = max(0, int(getattr(args, 'vel_layers', 6)))
+    def _q(v):
+        if nl <= 0:
+            return v
+        k = min(nl - 1, int(v * nl)) if v < 1.0 else nl - 1
+        return (k + 0.5) / nl
+    uniq = {(n, _q(max(0.05, min(1.0, v * args.velocity_scale)))) for _, n, v in events}
+    print(f"Rendering {len(events)} notes with '{args.instrument}' "
+          f"({len(uniq)} distinct pitch/velocity samples to synthesise)...")
+    if len(uniq) > 150:
+        print(f"  warning: ~{len(uniq)} s expected; use --vel-layers to reduce.")
+    cache = {}
+    t_start = _time.time()
     rendered = []
     max_end_sample = 0
     skipped = 0
     for i, (onset, note, vel) in enumerate(events):
-        vel = max(0.05, min(1.0, vel * args.velocity_scale))
-        try:
-            signal, _ = generate_note(note, velocity=vel)
-        except Exception as e:
+        vel = _q(max(0.05, min(1.0, vel * args.velocity_scale)))
+        key = (note, vel)
+        if key not in cache:
+            try:
+                cache[key] = generate_note(note, velocity=vel)[0]
+            except Exception as e:
+                cache[key] = None
+        signal = cache[key]
+        if signal is None:
             skipped += 1
             continue
         offset_sample = int(onset / args.speed * SAMPLE_RATE)
         rendered.append((offset_sample, signal))
         max_end_sample = max(max_end_sample, offset_sample + len(signal))
         if (i + 1) % 25 == 0 or i == len(events) - 1:
-            print(f"\r  {i + 1}/{len(events)} notes synthesized", end='', flush=True)
+            print(f"\r  {i + 1}/{len(events)} notes mixed ({len(cache)} synthesised, "
+                  f"{_time.time() - t_start:.0f}s)", end='', flush=True)
     print()
     if skipped:
         print(f"  ({skipped} notes failed to synthesize and were skipped)")
@@ -4236,7 +4259,11 @@ def cmd_render_midi(args):
     stem = args.output or os.path.splitext(os.path.basename(args.midi_path))[0] + f'_{args.instrument}'
     if not stem.endswith('.mp3'):
         stem += '.mp3'
-    out_path = stem if os.path.isabs(stem) else os.path.join(SCRIPT_DIR, stem)
+    # Las rutas relativas se resuelven contra el directorio ACTUAL (antes contra
+    # el del script, de modo que «-o out.mp3» dejaba el fichero junto a
+    # piano_synth.py y parecía que no había salida).
+    out_path = os.path.abspath(stem)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     wav_path = out_path[:-4] + '.wav'
     ns.write_wav(wav_path, master)
     ns.wav_to_mp3(wav_path, out_path)
@@ -5045,9 +5072,13 @@ def build_parser():
     p = sub.add_parser('render-midi', help='Render a .mid file to audio with grand/rhodes/prism synthesis')
     p.add_argument('midi_path', help='Path to the .mid file')
     p.add_argument('--instrument', choices=['grand', 'rhodes', 'prism'], default='grand')
-    p.add_argument('--output', help='Output filename (.mp3); default derived from the MIDI filename')
+    p.add_argument('--output', '-o', help='Output filename (.mp3); default derived from the MIDI filename '
+                   '(relative paths resolve against the current directory)')
     p.add_argument('--speed', type=float, default=1.0, help='Playback speed multiplier (2.0 = twice as fast)')
     p.add_argument('--velocity-scale', type=float, default=1.0, help='Multiply all MIDI velocities before synthesis')
+    p.add_argument('--vel-layers', type=int, default=6,
+                   help='Quantise velocities to N layers so each (pitch, layer) is synthesised once and '
+                        'reused (default 6; 0 = exact velocity per note, very slow on long files)')
     p.set_defaults(func=cmd_render_midi)
 
     p = sub.add_parser('fetch-references', help='Download the reference recordings the other commands expect in ../audio/')

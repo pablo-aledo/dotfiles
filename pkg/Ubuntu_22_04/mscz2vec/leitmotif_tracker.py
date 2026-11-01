@@ -1657,10 +1657,18 @@ def main():
                         help=f"Banco de leitmotifs (default: {DEFAULT_BANK})")
     parser.add_argument("--verbose", "-v", action="store_true")
 
+    # --bank y --verbose también tras el subcomando («register x.mid --bank b.json»);
+    # SUPPRESS evita que el valor por defecto del subparser pise el del global.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--bank", default=argparse.SUPPRESS,
+                        help=f"Banco de leitmotifs (default: {DEFAULT_BANK})")
+    common.add_argument("--verbose", "-v", action="store_const", const=True,
+                        default=argparse.SUPPRESS)
+
     sub = parser.add_subparsers(dest="command", required=True)
 
     # ── register ──────────────────────────────────────────────────────────────
-    p_reg = sub.add_parser("register", help="Añadir un motivo al banco")
+    p_reg = sub.add_parser("register", parents=[common], help="Añadir un motivo al banco")
     p_reg.add_argument("midi", help="Archivo MIDI del motivo")
     p_reg.add_argument("--name", required=True, help="Nombre semántico del leitmotif")
     p_reg.add_argument("--tags", nargs="+", default=[],
@@ -1673,14 +1681,14 @@ def main():
                         help="Afinidad de tensión (default: mid)")
 
     # ── list ──────────────────────────────────────────────────────────────────
-    sub.add_parser("list", help="Listar todos los motivos del banco")
+    sub.add_parser("list", parents=[common], help="Listar todos los motivos del banco")
 
     # ── show ──────────────────────────────────────────────────────────────────
-    p_show = sub.add_parser("show", help="Detalle de un motivo")
+    p_show = sub.add_parser("show", parents=[common], help="Detalle de un motivo")
     p_show.add_argument("name", help="Nombre del motivo")
 
     # ── plan ──────────────────────────────────────────────────────────────────
-    p_plan = sub.add_parser("plan", help="Planificar siembra sobre obra_plan.json")
+    p_plan = sub.add_parser("plan", parents=[common], help="Planificar siembra sobre obra_plan.json")
     p_plan.add_argument("narrator_plan", help="Archivo obra_plan.json de narrator")
     p_plan.add_argument("--motifs", nargs="+", default=None,
                          help="Motivos a sembrar (default: todos)")
@@ -1690,12 +1698,12 @@ def main():
                          help="Archivo de salida (default: leitmotif_schedule.json)")
 
     # ── suggest ───────────────────────────────────────────────────────────────
-    p_sug = sub.add_parser("suggest", help="Modo exploratorio: propone inyecciones")
+    p_sug = sub.add_parser("suggest", parents=[common], help="Modo exploratorio: propone inyecciones")
     p_sug.add_argument("midi", help="MIDI de la sección a analizar")
     p_sug.add_argument("--output", default="leitmotif_schedule.json")
 
     # ── inject ────────────────────────────────────────────────────────────────
-    p_inj = sub.add_parser("inject", help="Ejecutar inyecciones del schedule")
+    p_inj = sub.add_parser("inject", parents=[common], help="Ejecutar inyecciones del schedule")
     p_inj.add_argument("midi", help="MIDI destino (informativo)")
     p_inj.add_argument("schedule", help="Schedule JSON (de plan o suggest)")
     p_inj.add_argument("--output-dir", default="leitmotifs_out",
@@ -1708,7 +1716,7 @@ def main():
                         help="Exportar hints para orchestrator.py")
 
     # ── trace ─────────────────────────────────────────────────────────────────
-    p_trace = sub.add_parser("trace", help="Detectar apariciones en obra existente")
+    p_trace = sub.add_parser("trace", parents=[common], help="Detectar apariciones en obra existente")
     p_trace.add_argument("midi", help="MIDI de la obra completa")
     p_trace.add_argument("--threshold", type=float, default=0.55,
                           help="Umbral de similitud 0-1 (default: 0.55)")
@@ -1716,13 +1724,13 @@ def main():
                           help="Guardar resultado en JSON")
 
     # ── report ────────────────────────────────────────────────────────────────
-    p_rep = sub.add_parser("report", help="Mapa visual de apariciones")
+    p_rep = sub.add_parser("report", parents=[common], help="Mapa visual de apariciones")
     p_rep.add_argument("midi", help="MIDI de la obra completa")
     p_rep.add_argument("--threshold", type=float, default=0.55)
     p_rep.add_argument("--output", default=None, help="Guardar resultado en JSON")
 
     # ── propagate ─────────────────────────────────────────────────────────────
-    p_prop = sub.add_parser("propagate",
+    p_prop = sub.add_parser("propagate", parents=[common],
                               help="Propagar mutación semántica a todos los motivos")
     p_prop.add_argument("--instruction", required=True,
                          help="Instrucción semántica (ej: 'más oscuro')")
@@ -1732,12 +1740,12 @@ def main():
                          help="Ruta a mutator.py")
 
     # ── from-theorist ─────────────────────────────────────────────────────────
-    p_ft = sub.add_parser("from-theorist",
+    p_ft = sub.add_parser("from-theorist", parents=[common],
                             help="Importar sugerencias desde .theorist.json")
     p_ft.add_argument("theorist_json", help="Archivo .theorist.json")
 
     # ── from-harvest ──────────────────────────────────────────────────────────
-    p_fh = sub.add_parser("from-harvest",
+    p_fh = sub.add_parser("from-harvest", parents=[common],
                             help="Importar motivo extraído por harvester.py")
     p_fh.add_argument("midi", help="Archivo .motif_NN.mid de harvester")
     p_fh.add_argument("--name", required=True, help="Nombre del leitmotif")
