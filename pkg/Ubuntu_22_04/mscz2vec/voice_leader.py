@@ -1,110 +1,129 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       VOICE LEADER  v1.0                                     ║
-║         Motor de voice leading para bloques de acordes SATB                  ║
-║                                                                              ║
-║  Toma una progresión de acordes (texto o MIDI de acordes) y genera el        ║
-║  voicing SATB óptimo compás a compás, aplicando las reglas clásicas de       ║
-║  conducción de voces: movimiento mínimo, sin paralelas de 5ª/8ª, sin        ║
-║  cruzamientos, rangos vocales idiomáticos y resolución de tensiones.         ║
-║                                                                              ║
-║  A diferencia de counterpoint.py (una voz vs. cantus firmus) y              ║
-║  midi_dna_unified (voicing interno de acompañamiento), este módulo           ║
-║  razona sobre los CUATRO bloques vocales simultáneos como sistema.           ║
-║                                                                              ║
-║  VOCES GENERADAS:                                                            ║
-║    Soprano  (S)  — voz aguda, normalmente lleva la melodía principal         ║
-║    Alto     (A)  — voz media-aguda (contralto)                               ║
-║    Tenor    (T)  — voz media-grave                                           ║
-║    Bajo     (B)  — voz grave, define la función armónica                     ║
-║                                                                              ║
-║  MODOS DE ENTRADA:                                                           ║
-║    --chords "Cm G7 Fm Bb7"          — un acorde por compás                  ║
-║    --chords "Cm:2 G7:2 Fm:1 Bb7:1" — duración en beats tras ':'             ║
-║    --chords-midi acordes.mid        — pista de acordes en MIDI               ║
-║    --soprano melodia.mid            — fija la voz Soprano y genera S/A/T/B  ║
-║                                                                              ║
-║  ESTILOS DE VOICING (--style):                                               ║
-║    chorale    — coral clásico (Bach). Movimiento mínimo, voz leading         ║
-║                 riguroso. Saltos de bajo resueltos. Sin cruzamientos.       ║
-║    open       — voicing abierto: S y T en octavas extremas, A y B           ║
-║                 rellenando. Sonido "orquestal" espacioso.                   ║
-║    close      — voicing cerrado: S/A/T en el espacio de una octava.        ║
-║                 Sonido íntimo, cuarteto vocal/madrigal.                     ║
-║    jazz       — voicings de jazz: 7ª y 9ª en el bloque, bajo                ║
-║                 independiente, tensiones permitidas en voces internas.      ║
-║    keyboard   — dos manos: bajo en mano izquierda, tres voces en            ║
-║                 mano derecha. Registración de piano/órgano.                 ║
-║                                                                              ║
-║  REGLAS IMPLEMENTADAS:                                                       ║
-║  [R01] Sin paralelas de 5ª perfecta entre cualquier par de voces            ║
-║  [R02] Sin paralelas de 8ª (unísono) entre cualquier par de voces           ║
-║  [R03] Sin quintas/octavas directas hacia tiempo fuerte                     ║
-║  [R04] Sin cruzamientos de voz (S > A > T > B siempre)                     ║
-║  [R05] Sin solapamientos de voz (overlap)                                   ║
-║  [R06] Rangos vocales idiomáticos respetados (SATB estándar)                ║
-║  [R07] Saltos grandes (> 6ª) en cualquier voz penalizados                  ║
-║  [R08] Saltos de 7ª resuelven en dirección contraria                       ║
-║  [R09] Sensible (grado VII) resuelve hacia arriba (a la tónica)            ║
-║  [R10] La 7ª de un acorde dominante resuelve hacia abajo                   ║
-║  [R11] Bajo debe completar el tríada o séptima del acorde                  ║
-║  [R12] No duplicar nota sensible ni 7ª del acorde                          ║
-║  [R13] Preferir movimiento contrario o oblicuo sobre movimiento similar     ║
-║  [R14] En modulaciones, la voz pivote se mantiene en su altura             ║
-║                                                                              ║
-║  USO STANDALONE:                                                             ║
-║    python voice_leader.py --chords "C Am F G7"                              ║
-║    python voice_leader.py --chords "Dm:2 G7:2 CM7:4" --key Dm              ║
-║    python voice_leader.py --chords "C Am F G" --style jazz --tempo 120      ║
-║    python voice_leader.py --soprano melodia.mid --chords "C F G C"          ║
-║    python voice_leader.py --chords-midi acordes.mid --style chorale         ║
-║    python voice_leader.py --chords "C Am F G" --all-styles                  ║
-║    python voice_leader.py --chords "C Am F G" --report --verbose            ║
-║                                                                              ║
-║  USO COMO MÓDULO:                                                            ║
-║    from voice_leader import voice_lead_progression, ChordBlock              ║
-║                                                                              ║
-║    chords = [("C", 4), ("Am", 4), ("F", 4), ("G7", 4)]  # (nombre, beats)  ║
-║    result = voice_lead_progression(                                          ║
-║        chords,                                                               ║
-║        key="C major",                                                        ║
-║        style="chorale",                                                      ║
-║        soprano_hint=None,   # lista de MIDI pitches para fijar soprano      ║
-║        seed=42,                                                              ║
-║    )                                                                         ║
-║    # result → lista de ChordBlock(soprano, alto, tenor, bass, duration)     ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --chords S          Progresión de acordes en texto                        ║
-║    --chords-midi FILE  Progresión desde MIDI                                 ║
-║    --soprano FILE      MIDI de melodía soprano (fija la voz S)              ║
-║    --key KEY           Tonalidad: "C", "Am", "Bb major" (default: auto)     ║
-║    --style S           chorale|open|close|jazz|keyboard (default: chorale)  ║
-║    --all-styles        Generar una versión por cada estilo                   ║
-║    --tempo BPM         Tempo de salida (default: 90)                        ║
-║    --beats N           Beats por compás (default: 4)                        ║
-║    --voices S [S…]     Voces a exportar: S A T B (default: todas)           ║
-║    --split-tracks      Una pista MIDI por voz (para DAW)                    ║
-║    --report            Guardar análisis de voice leading en JSON             ║
-║    --score-report      Mostrar score de cada transición (reglas violadas)   ║
-║    --output FILE       Fichero de salida (default: voice_led.mid)           ║
-║    --output-dir DIR    Directorio con --all-styles                           ║
-║    --listen            Reproducir al terminar (requiere pygame)              ║
-║    --verbose           Informe regla a regla por stdout                      ║
-║    --seed N            Semilla aleatoria (default: 42)                       ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    voice_led.mid                  — MIDI de 4 pistas (S/A/T/B)              ║
-║    voice_led_S.mid…               — con --split-tracks                      ║
-║    voice_led.report.json          — con --report                             ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:  mido, numpy                                                     ║
-║    --key auto / análisis tonal:  music21 (opcional, fallback si no)         ║
-║    --listen: pygame                                                          ║
-║    Integración:  midi_dna_unified en el mismo directorio                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+voice_leader.py — Voice Leader: motor de voice leading para bloques de acordes
+SATB
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Toma una progresión de acordes (texto o MIDI de acordes) y genera el
+voicing SATB óptimo compás a compás, aplicando las reglas clásicas de
+conducción de voces: movimiento mínimo, sin paralelas de 5ª/8ª, sin
+cruzamientos, rangos vocales idiomáticos y resolución de tensiones.
+
+A diferencia de counterpoint.py (una voz vs. cantus firmus) y
+midi_dna_unified (voicing interno de acompañamiento), este módulo
+razona sobre los CUATRO bloques vocales simultáneos como sistema.
+
+VOCES GENERADAS:
+  Soprano  (S)  — voz aguda, normalmente lleva la melodía principal
+  Alto     (A)  — voz media-aguda (contralto)
+  Tenor    (T)  — voz media-grave
+  Bajo     (B)  — voz grave, define la función armónica
+
+REGLAS IMPLEMENTADAS:
+[R01] Sin paralelas de 5ª perfecta entre cualquier par de voces
+[R02] Sin paralelas de 8ª (unísono) entre cualquier par de voces
+[R03] Sin quintas/octavas directas hacia tiempo fuerte
+[R04] Sin cruzamientos de voz (S > A > T > B siempre)
+[R05] Sin solapamientos de voz (overlap)
+[R06] Rangos vocales idiomáticos respetados (SATB estándar)
+[R07] Saltos grandes (> 6ª) en cualquier voz penalizados
+[R08] Saltos de 7ª resuelven en dirección contraria
+[R09] Sensible (grado VII) resuelve hacia arriba (a la tónica)
+[R10] La 7ª de un acorde dominante resuelve hacia abajo
+[R11] Bajo debe completar el tríada o séptima del acorde
+[R12] No duplicar nota sensible ni 7ª del acorde
+[R13] Preferir movimiento contrario o oblicuo sobre movimiento similar
+[R14] En modulaciones, la voz pivote se mantiene en su altura
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+MODOS DE ENTRADA:
+    --chords "Cm G7 Fm Bb7"          — un acorde por compás
+    --chords "Cm:2 G7:2 Fm:1 Bb7:1" — duración en beats tras ':'
+    --chords-midi acordes.mid        — pista de acordes en MIDI
+    --soprano melodia.mid            — fija la voz Soprano y genera S/A/T/B
+
+  ESTILOS DE VOICING (--style):
+    chorale    — coral clásico (Bach). Movimiento mínimo, voz leading
+                 riguroso. Saltos de bajo resueltos. Sin cruzamientos.
+    open       — voicing abierto: S y T en octavas extremas, A y B
+                 rellenando. Sonido "orquestal" espacioso.
+    close      — voicing cerrado: S/A/T en el espacio de una octava.
+                 Sonido íntimo, cuarteto vocal/madrigal.
+    jazz       — voicings de jazz: 7ª y 9ª en el bloque, bajo
+                 independiente, tensiones permitidas en voces internas.
+    keyboard   — dos manos: bajo en mano izquierda, tres voces en
+                 mano derecha. Registración de piano/órgano.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  voice_led.mid                  — MIDI de 4 pistas (S/A/T/B)
+  voice_led_S.mid…               — con --split-tracks
+  voice_led.report.json          — con --report
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --chords S          Progresión de acordes en texto
+  --chords-midi FILE  Progresión desde MIDI
+  --soprano FILE      MIDI de melodía soprano (fija la voz S)
+  --key KEY           Tonalidad: "C", "Am", "Bb major" (default: auto)
+  --style S           chorale|open|close|jazz|keyboard (default: chorale)
+  --all-styles        Generar una versión por cada estilo
+  --tempo BPM         Tempo de salida (default: 90)
+  --beats N           Beats por compás (default: 4)
+  --voices S [S…]     Voces a exportar: S A T B (default: todas)
+  --split-tracks      Una pista MIDI por voz (para DAW)
+  --report            Guardar análisis de voice leading en JSON
+  --score-report      Mostrar score de cada transición (reglas violadas)
+  --output FILE       Fichero de salida (default: voice_led.mid)
+  --output-dir DIR    Directorio con --all-styles
+  --listen            Reproducir al terminar (requiere pygame)
+  --verbose           Informe regla a regla por stdout
+  --seed N            Semilla aleatoria (default: 42)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USO STANDALONE ──
+  python voice_leader.py --chords "C Am F G7"
+  python voice_leader.py --chords "Dm:2 G7:2 CM7:4" --key Dm
+  python voice_leader.py --chords "C Am F G" --style jazz --tempo 120
+  python voice_leader.py --soprano melodia.mid --chords "C F G C"
+  python voice_leader.py --chords-midi acordes.mid --style chorale
+  python voice_leader.py --chords "C Am F G" --all-styles
+  python voice_leader.py --chords "C Am F G" --report --verbose
+
+── USO COMO MÓDULO ──
+  from voice_leader import voice_lead_progression, ChordBlock
+
+  chords = [("C", 4), ("Am", 4), ("F", 4), ("G7", 4)]  # (nombre, beats)
+  result = voice_lead_progression(
+      chords,
+      key="C major",
+      style="chorale",
+      soprano_hint=None,   # lista de MIDI pitches para fijar soprano
+      seed=42,
+  )
+  # result → lista de ChordBlock(soprano, alto, tenor, bass, duration)
+
+── Más modos ──
+
+  # Mostrar score de cada transición
+  python voice_leader.py --score-report
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  Siempre:  mido, numpy
+  --key auto / análisis tonal:  music21 (opcional, fallback si no)
+  --listen: pygame
+  Integración:  midi_dna_unified en el mismo directorio
 """
 
 import sys

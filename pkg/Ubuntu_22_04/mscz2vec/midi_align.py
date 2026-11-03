@@ -1,63 +1,75 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          MIDI ALIGN  v1.0                                    ║
-║         Alineación temporal de MIDIs mediante puntos de anclaje             ║
-║                                                                              ║
-║  Recibe un MIDI y una lista de pares de tiempos (origen → destino) y        ║
-║  reescala cada segmento para que sus bordes temporales coincidan con los    ║
-║  tiempos de destino. Útil para alinear stems exportados de Suno con el     ║
-║  MIDI original de referencia.                                                ║
-║                                                                              ║
-║  FORMATO DE ANCLAJES:                                                        ║
-║    Cada anclaje es un par: ORIGEN DESTINO                                   ║
-║    Formato de tiempo: M:SS.mmm  (minutos:segundos.milisegundos)             ║
-║    El primer anclaje debe ser 0:00.000 0:00.000                             ║
-║    El último segmento se estira hasta el final del MIDI de referencia       ║
-║                                                                              ║
-║  MODOS DE ALINEACIÓN (--mode):                                              ║
-║    tempo   — cambia el BPM de cada segmento (default)                       ║
-║              el ritmo interno se preserva, solo cambia la velocidad         ║
-║    linear  — redistribuye las notas proporcionalmente en el tiempo          ║
-║              útil cuando los desajustes son irregulares dentro del segmento ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python midi_align.py stem.mid --anchors "0:00.000 0:00.000"             ║
-║                                            "0:15.200 0:14.800"             ║
-║                                            "0:32.400 0:31.000"             ║
-║                                                                              ║
-║    python midi_align.py stem.mid --ref original.mid                         ║
-║                          --anchors "0:00.000 0:00.000"                     ║
-║                                    "0:15.200 0:14.800"                     ║
-║                                                                              ║
-║    python midi_align.py stem.mid --anchors-file anclajes.txt               ║
-║    python midi_align.py stem.mid --anchors ... --mode linear               ║
-║    python midi_align.py stem.mid --anchors ... --preview                   ║
-║                                                                              ║
-║  ARCHIVO DE ANCLAJES (--anchors-file):                                      ║
-║    Una línea por anclaje: ORIGEN DESTINO                                    ║
-║    Las líneas que empiezan por # se ignoran.                               ║
-║    Ejemplo:                                                                  ║
-║      # Alineación stem_violin.mid                                           ║
-║      0:00.000  0:00.000                                                     ║
-║      0:15.200  0:14.800                                                     ║
-║      0:32.400  0:31.000                                                     ║
-║      1:05.000  1:04.200                                                     ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --anchors T T [T T ...]  Pares de tiempos origen→destino                ║
-║    --anchors-file FILE      Leer anclajes desde archivo de texto            ║
-║    --ref MIDI               MIDI de referencia (define la duración total)   ║
-║    --mode MODE              tempo | linear (default: tempo)                 ║
-║    --output FILE            MIDI de salida (default: <input>.aligned.mid)  ║
-║    --preview                Mostrar segmentos sin generar MIDI              ║
-║    --verbose                Informe detallado                               ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    <input>.aligned.mid  — MIDI alineado temporalmente                       ║
-║                                                                              ║
-║  DEPENDENCIAS: mido                                                         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+midi_align.py — Midi Align: alineación temporal de MIDIs mediante puntos de
+anclaje
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Recibe un MIDI y una lista de pares de tiempos (origen → destino) y
+reescala cada segmento para que sus bordes temporales coincidan con los
+tiempos de destino. Útil para alinear stems exportados de Suno con el
+MIDI original de referencia.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+FORMATO DE ANCLAJES:
+    Cada anclaje es un par: ORIGEN DESTINO
+    Formato de tiempo: M:SS.mmm  (minutos:segundos.milisegundos)
+    El primer anclaje debe ser 0:00.000 0:00.000
+    El último segmento se estira hasta el final del MIDI de referencia
+
+  MODOS DE ALINEACIÓN (--mode):
+    tempo   — cambia el BPM de cada segmento (default)
+              el ritmo interno se preserva, solo cambia la velocidad
+    linear  — redistribuye las notas proporcionalmente en el tiempo
+              útil cuando los desajustes son irregulares dentro del segmento
+
+── SALIDA ──
+  <input>.aligned.mid  — MIDI alineado temporalmente
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --anchors T T [T T ...]  Pares de tiempos origen→destino
+  --anchors-file FILE      Leer anclajes desde archivo de texto
+  --ref MIDI               MIDI de referencia (define la duración total)
+  --mode MODE              tempo | linear (default: tempo)
+  --output FILE            MIDI de salida (default: <input>.aligned.mid)
+  --preview                Mostrar segmentos sin generar MIDI
+  --verbose                Informe detallado
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python midi_align.py stem.mid --anchors "0:00.000 0:00.000" \
+                                            "0:15.200 0:14.800" \
+                                            "0:32.400 0:31.000"
+
+    python midi_align.py stem.mid --ref original.mid \
+                          --anchors "0:00.000 0:00.000" \
+                                    "0:15.200 0:14.800"
+
+    python midi_align.py stem.mid --anchors-file anclajes.txt
+    python midi_align.py stem.mid --anchors ... --mode linear
+    python midi_align.py stem.mid --anchors ... --preview
+
+  ARCHIVO DE ANCLAJES (--anchors-file):
+    Una línea por anclaje: ORIGEN DESTINO
+    Las líneas que empiezan por # se ignoran.
+    Ejemplo:
+      # Alineación stem_violin.mid
+      0:00.000  0:00.000
+      0:15.200  0:14.800
+      0:32.400  0:31.000
+      1:05.000  1:04.200
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido
 """
 
 import os

@@ -1,16 +1,54 @@
 #!/usr/bin/env python3
 """
-fingering.py — Generador automático de digitación pianística a partir de MIDI.
+fingering.py — Generador automático de digitación pianística a partir de MIDI
+(versión 1: línea base de la familia fingering*).
 
-Algoritmo: búsqueda combinatoria con ventana deslizante de 9 notas.
-Basado en pianoplayer (Marco Musy, MIT License).
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Búsqueda combinatoria con ventana deslizante de 9 notas: para cada ventana se
+enumeran las asignaciones de dedos 1-5 y se elige la de menor coste ergonómico
+(distancia física sobre el teclado frente al alcance natural de cada par de
+dedos, cambios de posición, teclas negras con pulgar/meñique, etc.). El tamaño
+de la mano escala los alcances. Basado en pianoplayer (Marco Musy, MIT License).
 
-Uso:
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Entrada : un fichero MIDI con la mano derecha en un track y la izquierda en
+            otro (por defecto, tracks 0 y 1).
+  Salida  : informe de texto con la digitación por compás, por stdout o, con
+            -o/--output, en un fichero (se crea el directorio padre si falta).
+  Esta versión no exporta JSON ni MusicXML y no separa manos automáticamente:
+  para eso usa fingering_v2.py o posteriores.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+    midi                 Fichero MIDI (obligatorio, posicional).
+    --hand-size SIZE     XXS, XS, S, M, L, XL o XXL (defecto M ≈ 17 cm de
+                         pulgar a meñique).
+    --right-track N      Índice del track de la mano derecha (defecto 0).
+    --left-track N       Índice del track de la mano izquierda (defecto 1).
+    --measures N         Procesa como máximo N compases (0 = todos; defecto 0).
+    --right-only         Digita solo la mano derecha.
+    --left-only          Digita solo la mano izquierda.
+    -o, --output FILE    Escribe el informe en FILE en vez de imprimirlo.
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
     python fingering.py archivo.mid
     python fingering.py archivo.mid --hand-size L
     python fingering.py archivo.mid --measures 8
     python fingering.py archivo.mid --right-only
     python fingering.py archivo.mid --left-only
+    python fingering.py archivo.mid --right-track 1 --left-track 2   # MIDI con track 0 vacío (solo tempo)
+    python fingering.py archivo.mid -o informes/digitacion.txt
+
+Dependencias: pretty_midi (pip install pretty_midi).
+Véase también: fingering_v2.py … fingering_v6.py (versiones posteriores) y
+fingering_to_synthesia.py (convierte el JSON de v3+ a Synthesia).
 """
 
 from __future__ import annotations

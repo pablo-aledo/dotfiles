@@ -1,196 +1,202 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════╗
-║                     CORPUS EXPLORER  v1.1                           ║
-║         De la intención musical a la música — sin fricción          ║
-╠══════════════════════════════════════════════════════════════════════╣
-║                                                                      ║
-║  Un flujo de trabajo en cinco pasos que parte de un corpus MIDI     ║
-║  sin etiquetar y termina en audio reproducible. Cada paso es        ║
-║  independiente: puedes entrar en cualquier punto.                   ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  PASO 1 — HEALTH: ¿qué hay en el corpus?                           ║
-║                                                                      ║
-║    python corpus_explorer.py health ./midis/                        ║
-║    python corpus_explorer.py health ./midis/ --sample 1000         ║
-║                                                                      ║
-║  Analiza una muestra del corpus y reporta:                          ║
-║    · Porcentaje de archivos utilizables                             ║
-║    · Distribución de duraciones (histograma)                        ║
-║    · Distribución de pistas, tempo, densidad de notas              ║
-║    · Estimación del tiempo de indexado                              ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --sample N     Tamaño de muestra (default: 500)                  ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  PASO 2 — INDEX: vectorizar el corpus (una sola vez)               ║
-║                                                                      ║
-║    python corpus_explorer.py index ./midis/                         ║
-║    python corpus_explorer.py index ./midis/ --output mi_corpus.npz ║
-║                                                                      ║
-║  Procesa todos los MIDIs y guarda un índice vectorial de            ║
-║  10 dimensiones musicales (sin dependencias pesadas):               ║
-║    pitch_center · pitch_range · interval_mean · contour            ║
-║    density · rhythm_variance · polyphony                           ║
-║    velocity_mean · velocity_variance · silence_ratio               ║
-║                                                                      ║
-║  El índice se guarda como .npz (numpy comprimido).                  ║
-║  100.000 MIDIs ≈ 1-3 horas. Solo hay que correrlo una vez.         ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --output FILE   Nombre del índice (default: corpus.npz)          ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  PASO 3 — CLUSTER: entender la estructura del corpus               ║
-║                                                                      ║
-║    python corpus_explorer.py cluster corpus.npz                     ║
-║    python corpus_explorer.py cluster corpus.npz --k 15             ║
-║                                                                      ║
-║  Agrupa los MIDIs por similitud musical y describe cada grupo:      ║
-║    "grave, muy sparse, descendente, con silencios"                  ║
-║    "agudo, denso, polifónico, dinámica muy variable"                ║
-║                                                                      ║
-║  Útil para entender qué estilos y caracteres hay disponibles        ║
-║  antes de buscar por intención.                                     ║
-║  Guarda los grupos en corpus.clusters.json.                         ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --k N     Número de clusters (default: automático, ≈n/500)      ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  PASO 4 — SEARCH: buscar por intención                             ║
-║                                                                      ║
-║    python corpus_explorer.py search corpus.npz "algo melancólico"  ║
-║    python corpus_explorer.py search corpus.npz "denso y agitado"   ║
-║    python corpus_explorer.py search corpus.npz                      ║
-║                                                                      ║
-║  Traduce una descripción en lenguaje natural a un vector de         ║
-║  búsqueda y devuelve los N MIDIs más cercanos del corpus.           ║
-║                                                                      ║
-║  Palabras clave reconocidas (ejemplos):                             ║
-║    grave · agudo · denso · sparse · silencioso · continuo          ║
-║    descendente · ascendente · plano · oscilante · irregular        ║
-║    melancólico · tenso · oscuro · calmo · etéreo · fragmentado     ║
-║    lento · rápido · polifónico · monofónico · expresivo            ║
-║                                                                      ║
-║  Con LLM (requiere anthropic o openai): comprensión semántica enriquecida   ║
-║  Sin LLM: mapa local de ~50 palabras clave en español                       ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --top N            Número de resultados (default: 5)             ║
-║    --no-llm           Usar solo el mapa semántico local             ║
-║    --llm-provider P   anthropic | openai | auto (default: auto)     ║
-║    --play             Reproducir resultados con timidity            ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  PASO 5 — SEED: de la intención a la música                        ║
-║                                                                      ║
-║    python corpus_explorer.py seed corpus.npz                        ║
-║    python corpus_explorer.py seed corpus.npz --no-llm              ║
-║    python corpus_explorer.py seed corpus.npz --soundfont ~/sf2/... ║
-║                                                                      ║
-║  Flujo interactivo completo en tres fases:                          ║
-║                                                                      ║
-║  [1] EXPLORACIÓN — búsqueda iterativa por intención                 ║
-║      · Describes lo que quieres en lenguaje libre                   ║
-║      · El sistema encuentra fragmentos del corpus que resuenan      ║
-║      · Eliges, rechazas, o refinas ("más oscuro", "algo entre      ║
-║        el 2 y el 3")                                                ║
-║      · El vector de búsqueda se desplaza gradualmente hacia         ║
-║        tus elecciones (con inercia — no salta de golpe)            ║
-║                                                                      ║
-║  [2] CRISTALIZACIÓN — preguntas contextuales                        ║
-║      · Tras cada elección, el sistema hace UNA sola pregunta        ║
-║      · Las preguntas se seleccionan según lo que aún es ambiguo    ║
-║        en tus elecciones: si elegiste consistentemente fragmentos   ║
-║        con silencios, te pregunta sobre el silencio — no sobre     ║
-║        el contorno, que ya es evidente                              ║
-║      · Sin LLM: banco de 15 preguntas con selección contextual     ║
-║      · Con LLM: el modelo lee el historial y elige o adapta        ║
-║      · Dimensiones cristalizables:                                  ║
-║          contorno · densidad · silencio · polifonía · registro     ║
-║          ritmo · dinámica · evolución · resolución · duración      ║
-║          función · emoción · instrumentación                        ║
-║                                                                      ║
-║  [3] GENERACIÓN Y REFINAMIENTO — audio real                         ║
-║      · Extrae el perfil generativo de los fragmentos elegidos       ║
-║        (escala implícita, tempo, densidad, contorno, dinámica)     ║
-║      · Genera un MIDI original inspirado en ese perfil             ║
-║      · Reproduce con timidity (audio con soundfont orquestal)      ║
-║      · Refinas en lenguaje natural:                                 ║
-║          "más oscuro"    → baja registro, escala más oscura        ║
-║          "más sparse"    → menos notas, más silencios              ║
-║          "más lento"     → reduce tempo                            ║
-║          "más tenso"     → ritmo irregular, escala armónica        ║
-║          "cambiar sonido"→ elige otra instrumentación              ║
-║          "otra"          → variante con nueva semilla aleatoria    ║
-║          "guardar"       → guarda y termina                        ║
-║                                                                      ║
-║  Grupos de instrumentación disponibles:                             ║
-║    cuerdas_solas      — cuarteto (Vl I, Vl II, Va, Vc)            ║
-║    cuerdas_orquesta   — sección de cuerdas completa               ║
-║    viento_madera      — cuarteto (Fl, Ob, Cl, Fg)                 ║
-║    piano_solo         — piano solo                                  ║
-║    camara_mixta       — piano + cuerdas                            ║
-║    voz_cuerdas        — voz + cuarteto                             ║
-║    electroacustico    — pads y texturas sintéticas                 ║
-║    solo_melodico      — una voz (Vl/Fl/Vc según registro)         ║
-║                                                                      ║
-║  Salida:                                                             ║
-║    seed_<intención>_<tónica>_<escala>.mid   — MIDI generado        ║
-║    seed_<intención>_<tónica>_<escala>.seed.json — perfil y metadata║
-║                                                                      ║
-║    --no-llm            Usar solo lógica local (sin API)            ║
-║    --llm-provider P    anthropic | openai | clipboard | auto       ║
-║                        auto      → usa API si disponible           ║
-║                        clipboard → muestra el prompt para copiarlo ║
-║                                    en cualquier LLM manualmente    ║
-║    --soundfont FILE    Soundfont .sf2 para timidity                 ║
-║    --preview-seconds N Duración del preview de corpus (def: 20)    ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS                                                        ║
-║                                                                      ║
-║    pip install mido numpy          # obligatorio                    ║
-║    pip install anthropic           # opcional: LLM (Anthropic API) ║
-║    pip install openai              # opcional: LLM (OpenAI API)    ║
-║    pip install scipy               # opcional: clustering mejorado  ║
-║                                                                      ║
-║    timidity                        # reproducción de audio          ║
-║      sudo apt install timidity     # Ubuntu/Debian                  ║
-║      brew install timidity         # macOS                          ║
-║                                                                      ║
-║  Variables de entorno para API keys:                                ║
-║    ANTHROPIC_API_KEY               # para --llm-provider anthropic  ║
-║    OPENAI_API_KEY                  # para --llm-provider openai     ║
-║                                                                      ║
-║  Modo clipboard (sin API key, cualquier LLM):                       ║
-║    python corpus_explorer.py seed corpus.npz --llm-provider clipboard║
-║    → el programa muestra el prompt formateado, tú lo copias a      ║
-║      ChatGPT / Claude.ai / Gemini / modelo local / lo que sea,     ║
-║      pegas la respuesta de vuelta, y el flujo continúa             ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  FLUJO TÍPICO DE PRIMERA VEZ                                        ║
-║                                                                      ║
-║    # 1. Ver qué hay (minutos)                                       ║
-║    python corpus_explorer.py health ./midis/                        ║
-║                                                                      ║
-║    # 2. Indexar (horas, solo una vez)                               ║
-║    python corpus_explorer.py index ./midis/ --output corpus.npz    ║
-║                                                                      ║
-║    # 3. Explorar estructura (opcional pero útil)                    ║
-║    python corpus_explorer.py cluster corpus.npz                     ║
-║                                                                      ║
-║    # 4. Buscar material de referencia                               ║
-║    python corpus_explorer.py search corpus.npz "algo melancólico"  ║
-║                                                                      ║
-║    # 5. Componer desde una intención                                ║
-║    python corpus_explorer.py seed corpus.npz                        ║
-║                                                                      ║
-╚══════════════════════════════════════════════════════════════════════╝
+corpus_explorer.py — Corpus Explorer: de la intención musical a la música —
+sin fricción
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Un flujo de trabajo en cinco pasos que parte de un corpus MIDI
+sin etiquetar y termina en audio reproducible. Cada paso es
+independiente: puedes entrar en cualquier punto.
+
+PASO 1 — HEALTH: ¿qué hay en el corpus?
+
+  python corpus_explorer.py health ./midis/
+  python corpus_explorer.py health ./midis/ --sample 1000
+
+Analiza una muestra del corpus y reporta:
+  · Porcentaje de archivos utilizables
+  · Distribución de duraciones (histograma)
+  · Distribución de pistas, tempo, densidad de notas
+  · Estimación del tiempo de indexado
+
+FLUJO TÍPICO DE PRIMERA VEZ:
+  # 1. Ver qué hay (minutos)
+  python corpus_explorer.py health ./midis/
+
+  # 2. Indexar (horas, solo una vez)
+  python corpus_explorer.py index ./midis/ --output corpus.npz
+
+  # 3. Explorar estructura (opcional pero útil)
+  python corpus_explorer.py cluster corpus.npz
+
+  # 4. Buscar material de referencia
+  python corpus_explorer.py search corpus.npz "algo melancólico"
+
+  # 5. Componer desde una intención
+  python corpus_explorer.py seed corpus.npz
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  health      Diagnóstico del corpus
+  index       Vectorizar corpus
+  cluster     Agrupar por similitud
+  search      Búsqueda por intención
+  seed        Flujo interactivo completo
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  seed_<intención>_<tónica>_<escala>.mid   — MIDI generado
+  seed_<intención>_<tónica>_<escala>.seed.json — perfil y metadata
+
+  --no-llm            Usar solo lógica local (sin API)
+  --llm-provider P    anthropic | openai | clipboard | auto
+                      auto      → usa API si disponible
+                      clipboard → muestra el prompt para copiarlo
+                                  en cualquier LLM manualmente
+  --soundfont FILE    Soundfont .sf2 para timidity
+  --preview-seconds N Duración del preview de corpus (def: 20)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+    --sample N     Tamaño de muestra (default: 500)
+
+  PASO 2 — INDEX: vectorizar el corpus (una sola vez)
+
+    python corpus_explorer.py index ./midis/
+    python corpus_explorer.py index ./midis/ --output mi_corpus.npz
+
+  Procesa todos los MIDIs y guarda un índice vectorial de
+  10 dimensiones musicales (sin dependencias pesadas):
+    pitch_center · pitch_range · interval_mean · contour
+    density · rhythm_variance · polyphony
+    velocity_mean · velocity_variance · silence_ratio
+
+  El índice se guarda como .npz (numpy comprimido).
+  100.000 MIDIs ≈ 1-3 horas. Solo hay que correrlo una vez.
+
+── Opciones ──
+    --output FILE   Nombre del índice (default: corpus.npz)
+
+  PASO 3 — CLUSTER: entender la estructura del corpus
+
+    python corpus_explorer.py cluster corpus.npz
+    python corpus_explorer.py cluster corpus.npz --k 15
+
+  Agrupa los MIDIs por similitud musical y describe cada grupo:
+    "grave, muy sparse, descendente, con silencios"
+    "agudo, denso, polifónico, dinámica muy variable"
+
+  Útil para entender qué estilos y caracteres hay disponibles
+  antes de buscar por intención.
+  Guarda los grupos en corpus.clusters.json.
+
+── Opciones ──
+    --k N     Número de clusters (default: automático, ≈n/500)
+
+  PASO 4 — SEARCH: buscar por intención
+
+    python corpus_explorer.py search corpus.npz "algo melancólico"
+    python corpus_explorer.py search corpus.npz "denso y agitado"
+    python corpus_explorer.py search corpus.npz
+
+  Traduce una descripción en lenguaje natural a un vector de
+  búsqueda y devuelve los N MIDIs más cercanos del corpus.
+
+  Palabras clave reconocidas (ejemplos):
+    grave · agudo · denso · sparse · silencioso · continuo
+    descendente · ascendente · plano · oscilante · irregular
+    melancólico · tenso · oscuro · calmo · etéreo · fragmentado
+    lento · rápido · polifónico · monofónico · expresivo
+
+  Con LLM (requiere anthropic o openai): comprensión semántica enriquecida
+  Sin LLM: mapa local de ~50 palabras clave en español
+
+── Opciones ──
+    --top N            Número de resultados (default: 5)
+    --no-llm           Usar solo el mapa semántico local
+    --llm-provider P   anthropic | openai | auto (default: auto)
+    --play             Reproducir resultados con timidity
+
+  PASO 5 — SEED: de la intención a la música
+
+    python corpus_explorer.py seed corpus.npz
+    python corpus_explorer.py seed corpus.npz --no-llm
+    python corpus_explorer.py seed corpus.npz --soundfont ~/sf2/...
+
+  Flujo interactivo completo en tres fases:
+
+  [1] EXPLORACIÓN — búsqueda iterativa por intención
+      · Describes lo que quieres en lenguaje libre
+      · El sistema encuentra fragmentos del corpus que resuenan
+      · Eliges, rechazas, o refinas ("más oscuro", "algo entre
+        el 2 y el 3")
+      · El vector de búsqueda se desplaza gradualmente hacia
+        tus elecciones (con inercia — no salta de golpe)
+
+  [2] CRISTALIZACIÓN — preguntas contextuales
+      · Tras cada elección, el sistema hace UNA sola pregunta
+      · Las preguntas se seleccionan según lo que aún es ambiguo
+        en tus elecciones: si elegiste consistentemente fragmentos
+        con silencios, te pregunta sobre el silencio — no sobre
+        el contorno, que ya es evidente
+      · Sin LLM: banco de 15 preguntas con selección contextual
+      · Con LLM: el modelo lee el historial y elige o adapta
+      · Dimensiones cristalizables:
+          contorno · densidad · silencio · polifonía · registro
+          ritmo · dinámica · evolución · resolución · duración
+          función · emoción · instrumentación
+
+  [3] GENERACIÓN Y REFINAMIENTO — audio real
+      · Extrae el perfil generativo de los fragmentos elegidos
+        (escala implícita, tempo, densidad, contorno, dinámica)
+      · Genera un MIDI original inspirado en ese perfil
+      · Reproduce con timidity (audio con soundfont orquestal)
+      · Refinas en lenguaje natural:
+          "más oscuro"    → baja registro, escala más oscura
+          "más sparse"    → menos notas, más silencios
+          "más lento"     → reduce tempo
+          "más tenso"     → ritmo irregular, escala armónica
+          "cambiar sonido"→ elige otra instrumentación
+          "otra"          → variante con nueva semilla aleatoria
+          "guardar"       → guarda y termina
+
+  Grupos de instrumentación disponibles:
+    cuerdas_solas      — cuarteto (Vl I, Vl II, Va, Vc)
+    cuerdas_orquesta   — sección de cuerdas completa
+    viento_madera      — cuarteto (Fl, Ob, Cl, Fg)
+    piano_solo         — piano solo
+    camara_mixta       — piano + cuerdas
+    voz_cuerdas        — voz + cuarteto
+    electroacustico    — pads y texturas sintéticas
+    solo_melodico      — una voz (Vl/Fl/Vc según registro)
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+    pip install mido numpy          # obligatorio
+    pip install anthropic           # opcional: LLM (Anthropic API)
+    pip install openai              # opcional: LLM (OpenAI API)
+    pip install scipy               # opcional: clustering mejorado
+
+    timidity                        # reproducción de audio
+      sudo apt install timidity     # Ubuntu/Debian
+      brew install timidity         # macOS
+
+  Variables de entorno para API keys:
+    ANTHROPIC_API_KEY               # para --llm-provider anthropic
+    OPENAI_API_KEY                  # para --llm-provider openai
+
+  Modo clipboard (sin API key, cualquier LLM):
+    python corpus_explorer.py seed corpus.npz --llm-provider clipboard
+    → el programa muestra el prompt formateado, tú lo copias a
+      ChatGPT / Claude.ai / Gemini / modelo local / lo que sea,
+      pegas la respuesta de vuelta, y el flujo continúa
 """
 
 import sys

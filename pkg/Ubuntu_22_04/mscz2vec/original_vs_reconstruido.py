@@ -1,54 +1,168 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║  ORIGINAL_VS_RECONSTRUIDO v2.0 — Modelo de decisión «original / reconstructed»║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  Dado un MIDI devuelve la etiqueta («original» | «reconstructed») y la       ║
-║  probabilidad P(reconstructed). Pensado como DISCRIMINADOR de un flujo       ║
-║  antagónico: las herramientas de la suite reconstruyen, éste las delata.     ║
-║                                                                              ║
-║  SUBCOMANDOS                                                                 ║
-║    features   Extrae y cachea el vector de rasgos de uno o varios MIDIs      ║
-║    train      Entrena desde cero o continúa un modelo (--init MODELO)        ║
-║    eval       Validación cruzada AGRUPADA por pieza (+ ablación/importancia) ║
-║    predict    Clasifica MIDIs con un modelo entrenado                        ║
-║    info       Resumen de un modelo (arquitectura, rasgos, historial)         ║
-║                                                                              ║
-║  EJEMPLOS                                                                    ║
-║    python3 original_vs_reconstruido.py train --orig 'midis/*.mid' \\          ║
-║        --recon 'out/midis_finales/*.mid' --out modelo.npz                    ║
-║    python3 original_vs_reconstruido.py train --init modelo.npz --epochs 200  ║
-║        --orig ... --recon ... --out modelo2.npz        # continuar/mejorar   ║
-║    python3 original_vs_reconstruido.py eval  --orig ... --recon ... --cv 5   ║
-║        --compare --importance                                                ║
-║    python3 original_vs_reconstruido.py predict cancion.mid --model modelo.npz║
-║                                                                              ║
-║  DISEÑO (v2.0: criterios MUSICALES, independientes del origen)               ║
-║   • Modo por defecto  --features musical. Canonicalización: solo se ven      ║
-║     (inicio, fin, altura) de notas no percusivas, en rejilla de semicorchea. ║
-║     Se ignoran metadatos, pistas, canales, programas, controladores, tempo,  ║
-║     velocidades y percusión → no puede delatar «qué herramienta lo escribió».║
-║   • Rasgos (84): ritmo (síncopa, repetición de patrones de compás), melodía  ║
-║     (saltos y su recuperación, clímax, entropía condicional), bajo (movim.   ║
-║     fundamental), armonía (estabilidad tonal, disonancia fuerte/débil,       ║
-║     ajuste a tríadas/séptimas, cadencia y tónica final), conducción de voces ║
-║     (paralelas, directo/contrario), textura y forma (autosimilitud por       ║
-║     compás a distintos retardos, repetición de bloques, compresibilidad).    ║
-║   • Invariancia por ENTRENAMIENTO: --augment K añade K copias de cada        ║
-║     fichero con humanización sintética (jitter, rubato, duraciones) para     ║
-║     que el modelo no use el «toque» del intérprete ni la cuantización.       ║
-║   • --features forense: modo antiguo (huella del pipeline: metadatos,        ║
-║     expresión). Útil para saber SI un MIDI salió de un flujo conocido, NO    ║
-║     para juzgar música.                                                      ║
-║   • Decisión por fichero = media de logits de sus ventanas (8 compases).     ║
-║   • Modelo: conjunto de MLP (numpy, Adam, dropout, L2, pesos por fichero y   ║
-║     clase). --layers vacío = logística. Escala con --layers/--epochs/        ║
-║     --batch/--ensemble/--window-bars/--augment sin tocar código.             ║
-║   • Calibración de Platt OOF. Evaluación: CV agrupada por pieza y           ║
-║     --loro (deja fuera cada familia de generador = origen desconocido).      ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy, mido (las de la suite). Sin torch ni scikit-learn.     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+original_vs_reconstruido.py — ORIGINAL_VS_RECONSTRUIDO — Modelo de decisión
+«original / reconstructed»
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un MIDI devuelve la etiqueta («original» | «reconstructed») y la
+probabilidad P(reconstructed). Pensado como DISCRIMINADOR de un flujo
+antagónico: las herramientas de la suite reconstruyen, éste las delata.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  features   Extrae y cachea el vector de rasgos de uno o varios MIDIs
+  train      Entrena desde cero o continúa un modelo (--init MODELO)
+  eval       Validación cruzada AGRUPADA por pieza (+ ablación/importancia)
+  predict    Clasifica MIDIs con un modelo entrenado
+  info       Resumen de un modelo (arquitectura, rasgos, historial)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  features
+    --json JSON
+
+  train
+    --out OUT                   Modelo de salida (.npz) (obligatorio)
+    --init INIT                 Modelo previo desde el que continuar
+    --cv CV                     Pliegues para la calibración OOF (defecto 5)
+    --no-oof-calibration
+    --recalibrate               Recalibrar Platt (OOF desde cero) al continuar
+
+  eval
+    --cv CV                     (defecto 5)
+    --repeats REPEATS           (defecto 1)
+    --loo-piece LOO_PIECE       Leave-one-piece-out: un pliegue por pieza
+                                (equivale a --cv <nº de piezas>); puntuaciones
+                                OOF por fichero en --json ('oof')
+    --paired-only               Solo evalúa las piezas con
+                                original+reconstrucción
+    --loro                      Leave-one-recipe-out: deja fuera cada familia
+                                de generador (origen desconocido)
+    --compare                   Compara logística / MLP pequeña / principal /
+                                grande
+    --ablate                    Ablación por grupo de rasgos
+    --importance                Importancia por permutación de grupos
+    --errors                    Lista los ficheros mal clasificados
+    --json JSON
+
+  predict
+    files FILES […]
+    --model MODEL               (obligatorio)
+    --cache CACHE               (defecto .cache_ovr)
+    --json
+
+  info
+    --model MODEL               (obligatorio)
+
+  (común)
+    --orig ORIG […]             MIDIs originales (rutas/globs/dirs) (defecto
+                                [])
+    --recon RECON […]           MIDIs reconstruidos (nombre NN_ID_receta.mid →
+                                agrupa con el original ID.mid; ID = nombre del
+                                original sin extensión) (defecto [])
+    --features FEATURES         musical (def): rasgos canonicalizados,
+                                independientes del origen · forense: huella
+                                del pipeline (metadatos, expresión) (defecto
+                                musical; valores: musical|forense)
+    --window-bars WINDOW_BARS   [musical] Ventana en compases (defecto 8)
+    --augment AUGMENT           [musical] Copias perturbadas (humanización
+                                sintética) por fichero para entrenar
+                                invariancia (defecto 0)
+    --synth SYNTH               [musical] Negativos sintéticos por original
+                                (corrupciones, tipos en rotación). 0 =
+                                desactivado (defecto 0)
+    --synth-kinds SYNTH_KINDS […]
+                                Tipos de corrupción a usar (def: todos)
+    --window WINDOW             [forense] Ventana en negras (def 32) (defecto
+                                32.0)
+    --stride STRIDE             Salto entre ventanas (def = window)
+    --max-windows MAX_WINDOWS   Máx. ventanas por fichero (defecto 40)
+    --cache CACHE               Directorio de caché de rasgos ('' = sin caché)
+                                (defecto .cache_ovr)
+    --drop-groups DROP_GROUPS […]
+                                Excluir grupos de rasgos (ablación) (defecto
+                                [])
+    --verbose, -v
+    --layers LAYERS […]         Capas ocultas (vacío = logística). Def: 96 48
+                                (defecto [96, 48])
+    --epochs EPOCHS             (defecto 60)
+    --batch BATCH               (defecto 64)
+    --lr LR                     (defecto 0.002)
+    --dropout DROPOUT           (defecto 0.25)
+    --l2 L2                     (defecto 0.001)
+    --ensemble ENSEMBLE         Nº de redes del conjunto (defecto 5)
+    --bootstrap                 Cada red entrena con un remuestreo de ficheros
+    --seed SEED                 (defecto 0)
+    --synth-weight SYNTH_WEIGHT
+                                Peso de los negativos sintéticos dentro de la
+                                clase «reconstructed» (repartido por tipo)
+                                (defecto 0.35)
+    --agg AGG                   Agregación de ventanas por pieza: worst =
+                                media de la cola peor (def) · lse = soft-max ·
+                                mean (defecto worst; valores: mean|worst|lse)
+    --agg-q AGG_Q               [worst] Fracción de ventanas peores que
+                                cuentan (defecto 0.25)
+    --agg-temp AGG_TEMP         [lse] Temperatura del soft-max (defecto 1.0)
+    --unc-nets UNC_NETS         Penalización por desacuerdo entre redes del
+                                conjunto (defecto 0.0)
+    --unc-win UNC_WIN           Penalización por dispersión entre ventanas
+                                (defecto 0.0)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python3 original_vs_reconstruido.py train --orig 'midis/*.mid' \
+        --recon 'out/midis_finales/*.mid' --out modelo.npz
+    python3 original_vs_reconstruido.py train --init modelo.npz --epochs 200 \
+        --orig ... --recon ... --out modelo2.npz        # continuar/mejorar
+    python3 original_vs_reconstruido.py eval  --orig ... --recon ... --cv 5 \
+        --compare --importance
+    python3 original_vs_reconstruido.py predict cancion.mid --model modelo.npz
+
+  DISEÑO (v2.0: criterios MUSICALES, independientes del origen)
+   • Modo por defecto  --features musical. Canonicalización: solo se ven
+     (inicio, fin, altura) de notas no percusivas, en rejilla de semicorchea.
+     Se ignoran metadatos, pistas, canales, programas, controladores, tempo,
+     velocidades y percusión → no puede delatar «qué herramienta lo escribió».
+   • Rasgos (84): ritmo (síncopa, repetición de patrones de compás), melodía
+     (saltos y su recuperación, clímax, entropía condicional), bajo (movim.
+     fundamental), armonía (estabilidad tonal, disonancia fuerte/débil,
+     ajuste a tríadas/séptimas, cadencia y tónica final), conducción de voces
+     (paralelas, directo/contrario), textura y forma (autosimilitud por
+     compás a distintos retardos, repetición de bloques, compresibilidad).
+   • Invariancia por ENTRENAMIENTO: --augment K añade K copias de cada
+     fichero con humanización sintética (jitter, rubato, duraciones) para
+     que el modelo no use el «toque» del intérprete ni la cuantización.
+   • --features forense: modo antiguo (huella del pipeline: metadatos,
+     expresión). Útil para saber SI un MIDI salió de un flujo conocido, NO
+     para juzgar música.
+   • Decisión por fichero = media de logits de sus ventanas (8 compases).
+   • Modelo: conjunto de MLP (numpy, Adam, dropout, L2, pesos por fichero y
+     clase). --layers vacío = logística. Escala con --layers/--epochs/
+     --batch/--ensemble/--window-bars/--augment sin tocar código.
+   • Calibración de Platt OOF. Evaluación: CV agrupada por pieza y
+     --loro (deja fuera cada familia de generador = origen desconocido).
+
+── Más modos ──
+
+  # Extrae y cachea rasgos
+  python original_vs_reconstruido.py features
+
+  # Compara logística / MLP pequeña / principal / grande
+  python original_vs_reconstruido.py eval --compare
+
+  # Resumen del modelo
+  python original_vs_reconstruido.py info --model modelo.pt
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  numpy, mido (las de la suite). Sin torch ni scikit-learn.
 """
 import argparse, glob, hashlib, json, math, os, re, sys, time, warnings
 import numpy as np

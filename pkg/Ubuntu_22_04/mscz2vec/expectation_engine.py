@@ -1,57 +1,64 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      EXPECTATION ENGINE  v1.0                                ║
-║       Manipulación de expectativas armónicas para intensificar emoción      ║
-║                                                                              ║
-║  Según Meyer/Huron, la emoción musical nace de generar expectativas y       ║
-║  retrasarlas, negarlas o cumplirlas en el momento justo. Esta herramienta   ║
-║  localiza los puntos de resolución previstos (cadencias V→I) e inyecta      ║
-║  dispositivos emotivos, reservando la resolución plena para el final.       ║
-║  Complementa a reharmonizer y voice_leader, que optimizan corrección,       ║
-║  no sorpresa.                                                                ║
-║                                                                              ║
-║  DISPOSITIVOS:                                                               ║
-║    cadencia_rota — V→I se convierte en V→vi (la dominante del acorde de     ║
-║                    llegada sube a la submediante; el bajo tónica baja a     ║
-║                    la sexta) — la resolución esperada se niega              ║
-║    suspension    — la nota melódica previa se prolonga sobre el cambio      ║
-║                    de acorde y la resolución llega tarde (retardo 4–3)      ║
-║    appoggiatura  — nota extraña acentuada sobre la meta melódica, que       ║
-║                    resuelve descendiendo (anhelo)                            ║
-║    evasion       — el bajo de la resolución se mueve a la tercera           ║
-║                    (I en primera inversión): llegada debilitada              ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] ANÁLISIS   — tonalidad (Krumhansl) + acorde por compás (plantillas)    ║
-║  [2] CADENCIAS  — detección de movimientos V→I                              ║
-║  [3] SELECCIÓN  — qué cadencias tratar (densidad + semilla); la última      ║
-║                   se preserva intacta (o reforzada) con --climax-resolve    ║
-║  [4] INYECCIÓN  — aplicación de dispositivos sobre las notas                ║
-║  [5] ESCRITURA  — MIDI transformado + informe de cadencias                  ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python expectation_engine.py obra.mid                                     ║
-║    python expectation_engine.py obra.mid --devices cadencia_rota suspension ║
-║    python expectation_engine.py obra.mid --density 0.5 --seed 7             ║
-║    python expectation_engine.py obra.mid --climax-resolve                   ║
-║    python expectation_engine.py obra.mid --report                           ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi               MIDI de entrada                                        ║
-║    --output FILE      MIDI de salida (default: <obra>_expect.mid)           ║
-║    --devices D...     Dispositivos a usar (default: todos)                  ║
-║    --density F        Fracción de cadencias tratadas 0–1 (default: 0.7)    ║
-║    --climax-resolve   Negar todas menos la última, que se refuerza          ║
-║    --seed N           Semilla aleatoria (default: 42)                       ║
-║    --report           Solo informe de cadencias, sin escribir MIDI          ║
-║    --no-color         Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from expectation_engine import process_midi, find_cadences               ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+expectation_engine.py — Expectation Engine: manipulación de expectativas
+armónicas para intensificar emoción
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Según Meyer/Huron, la emoción musical nace de generar expectativas y
+retrasarlas, negarlas o cumplirlas en el momento justo. Esta herramienta
+localiza los puntos de resolución previstos (cadencias V→I) e inyecta
+dispositivos emotivos, reservando la resolución plena para el final.
+Complementa a reharmonizer y voice_leader, que optimizan corrección,
+no sorpresa.
+
+DISPOSITIVOS:
+  cadencia_rota — V→I se convierte en V→vi (la dominante del acorde de
+                  llegada sube a la submediante; el bajo tónica baja a
+                  la sexta) — la resolución esperada se niega
+  suspension    — la nota melódica previa se prolonga sobre el cambio
+                  de acorde y la resolución llega tarde (retardo 4–3)
+  appoggiatura  — nota extraña acentuada sobre la meta melódica, que
+                  resuelve descendiendo (anhelo)
+  evasion       — el bajo de la resolución se mueve a la tercera
+                  (I en primera inversión): llegada debilitada
+
+FLUJO:
+[1] ANÁLISIS   — tonalidad (Krumhansl) + acorde por compás (plantillas)
+[2] CADENCIAS  — detección de movimientos V→I
+[3] SELECCIÓN  — qué cadencias tratar (densidad + semilla); la última
+                 se preserva intacta (o reforzada) con --climax-resolve
+[4] INYECCIÓN  — aplicación de dispositivos sobre las notas
+[5] ESCRITURA  — MIDI transformado + informe de cadencias
+
+COMO MÓDULO:
+  from expectation_engine import process_midi, find_cadences
+
+DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi               MIDI de entrada
+  --output FILE      MIDI de salida (default: <obra>_expect.mid)
+  --devices D...     Dispositivos a usar (default: todos)
+  --density F        Fracción de cadencias tratadas 0–1 (default: 0.7)
+  --climax-resolve   Negar todas menos la última, que se refuerza
+  --seed N           Semilla aleatoria (default: 42)
+  --report           SOLO informe de cadencias: no escribe MIDI (si se da también
+                     --output se ignora y se avisa por stderr)
+  --no-color         Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python expectation_engine.py obra.mid
+  python expectation_engine.py obra.mid --devices cadencia_rota suspension
+  python expectation_engine.py obra.mid --density 0.5 --seed 7
+  python expectation_engine.py obra.mid --climax-resolve
+  python expectation_engine.py obra.mid --report
 """
 
 import sys

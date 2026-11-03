@@ -1,102 +1,189 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        ML INPAINTER  v2.0                                    ║
-║     Relleno inteligente de compases vacíos en obras MIDI multi-pista         ║
-║                                                                              ║
-║  Detecta compases vacíos o de baja densidad y los rellena usando una         ║
-║  combinación de análisis de estilo por pista, cadenas de Markov              ║
-║  bidireccionales y (opcionalmente) un modelo PyTorch autoregresivo           ║
-║  entrenado sobre corpus. Coordina múltiples pistas con constraint            ║
-║  armónico entre ellas.                                                       ║
-║                                                                              ║
-║  MODOS:                                                                      ║
-║    scan     — detecta huecos y genera reporte detallado                     ║
-║    fill     — rellena huecos con la mejor estrategia (una salida)           ║
-║    variants — genera N versiones completas de la pieza para comparar        ║
-║    train    — entrena modelo ML sobre corpus de MIDIs                       ║
-║    inspect  — inspecciona un modelo entrenado                               ║
-║                                                                              ║
-║  ── SCAN ─────────────────────────────────────────────────────────────────  ║
-║    python ml_inpainter.py scan obra.mid                                     ║
-║    python ml_inpainter.py scan obra.mid --min-density 0.1                  ║
-║    python ml_inpainter.py scan obra.mid --report gaps.txt                  ║
-║                                                                              ║
-║  ── FILL ─────────────────────────────────────────────────────────────────  ║
-║    python ml_inpainter.py fill obra.mid                                     ║
-║    python ml_inpainter.py fill obra.mid --gaps 1 3                         ║
-║    python ml_inpainter.py fill obra.mid --strategy contour_blend            ║
-║    python ml_inpainter.py fill obra.mid --length keep|auto|N               ║
-║    python ml_inpainter.py fill obra.mid --checkpoint-dir ./ckpt/            ║
-║    python ml_inpainter.py fill obra.mid --no-chord-conditioning             ║
-║    python ml_inpainter.py fill obra.mid --context-bars 12                  ║
-║    python ml_inpainter.py fill obra.mid -o salida.mid                      ║
-║                                                                              ║
-║  ── VARIANTS ─────────────────────────────────────────────────────────────  ║
-║    python ml_inpainter.py variants obra.mid --n 8                           ║
-║    python ml_inpainter.py variants obra.mid --n 6 --out-dir ./variantes/   ║
-║    python ml_inpainter.py variants obra.mid --strategies markov interpolate ║
-║    python ml_inpainter.py variants obra.mid --gaps 2 --seeds 0 1 2 3       ║
-║    python ml_inpainter.py variants obra.mid --score-weights                 ║
-║        tonal=0.4 boundary=0.3 tension=0.2 rhythm=0.1                       ║
-║                                                                              ║
-║  ── TRAIN ────────────────────────────────────────────────────────────────  ║
-║    python ml_inpainter.py train corpus/                                     ║
-║    python ml_inpainter.py train corpus/ --epochs 80 --lr 5e-4              ║
-║    python ml_inpainter.py train corpus/ --hidden-dim 256                   ║
-║    python ml_inpainter.py train corpus/ --mask-ratio 0.25                  ║
-║    python ml_inpainter.py train corpus/ --mask-phrase                      ║
-║    python ml_inpainter.py train corpus/ --augment-transpose 5              ║
-║    python ml_inpainter.py train corpus/ --augment-reverse                  ║
-║    python ml_inpainter.py train corpus/ --role melody                      ║
-║    python ml_inpainter.py train corpus/ --role bass                        ║
-║    python ml_inpainter.py train corpus/ --checkpoint-dir ./mis_modelos/    ║
-║                                                                              ║
-║  ── INSPECT ──────────────────────────────────────────────────────────────  ║
-║    python ml_inpainter.py inspect ./ckpt/inpainter.pkl                     ║
-║                                                                              ║
-║  ESTRATEGIAS (--strategy):                                                  ║
-║    auto          — elige según estilo detectado de la pista                 ║
-║    markov_bi     — Markov bidireccional con análisis de estilo              ║
-║    interpolate   — interpolación de contorno entre bordes del hueco         ║
-║    contour_blend — combinación ponderada de markov_bi e interpolate         ║
-║    ml_guided     — guiado por modelo PyTorch (requiere --checkpoint-dir)    ║
-║                                                                              ║
-║  SCORING AUTOMÁTICO (variants):                                             ║
-║    Pesos por defecto (configurables con --score-weights):                   ║
-║    tonal_coherence    35% — notas dentro de la escala del contexto         ║
-║    boundary_smooth    30% — suavidad de las uniones en los bordes          ║
-║    tension_continuity 20% — continuidad de la curva de tensión             ║
-║    rhythm_consistency 15% — consistencia rítmica respecto al estilo        ║
-║    El criterio rhythm_consistency es sensible al rol de la pista:           ║
-║    para melody favorece la diversidad; para bass/inner, la regularidad.     ║
-║                                                                              ║
-║  MEJORAS v2.0 (respecto a v1.0):                                            ║
-║  [M1] Features de estilo rítmico en el vector ML: IOI modal, regularidad,  ║
-║       notas/compás, polifonía y rol de pista (8 dims extra → FEAT_DIM=56). ║
-║  [M2] Enmascaramiento basado en límites de frase (--mask-phrase): los       ║
-║       huecos sintéticos de entrenamiento se colocan en transiciones de       ║
-║       densidad real, no de forma aleatoria.                                  ║
-║  [M3] Scoring de ritmo sensible al rol: rhythm_consistency premia la        ║
-║       regularidad en bajo/acompañamiento y la variedad en melodía.          ║
-║  [M4] Modelo autoregresivo: el forward recibe el pitch y duración de la     ║
-║       nota anterior, eliminando saltos incoherentes entre eventos.          ║
-║  [M5] Contexto derecho enriquecido: el vector de features incluye IOI       ║
-║       del lado derecho y los pitches absolutos de borde izq./dcho.         ║
-║  [M6] Encoders duales con atención: contextos izq./dcho. codificados por   ║
-║       separado y combinados mediante una capa de atención aditiva simple.   ║
-║  [M7] Modelos por rol (--role melody|inner|bass|all): entrena modelos       ║
-║       especializados por función orquestal. En inferencia se selecciona     ║
-║       automáticamente el modelo más adecuado para cada pista.               ║
-║  [M8] Condicionamiento armónico explícito: los chord_pcs del compás se      ║
-║       añaden como one-hot de 12 dims al vector de features (desactivable    ║
-║       con --no-chord-conditioning).                                          ║
-║  [M9] Augmentation de corpus: transposición cromática (--augment-transpose  ║
-║       N genera ±N copias en semitonos aleatorios) e inversión temporal      ║
-║       dentro de compás (--augment-reverse).                                  ║
-║                                                                              ║
-║  DEPENDENCIAS: pip install mido numpy (+ torch para ml_guided/train)        ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+ml_inpainter.py — Ml Inpainter: relleno inteligente de compases vacíos en
+obras MIDI multi-pista
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Detecta compases vacíos o de baja densidad y los rellena usando una
+combinación de análisis de estilo por pista, cadenas de Markov
+bidireccionales y (opcionalmente) un modelo PyTorch autoregresivo
+entrenado sobre corpus. Coordina múltiples pistas con constraint
+armónico entre ellas.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+    scan     — detecta huecos y genera reporte detallado
+    fill     — rellena huecos con la mejor estrategia (una salida)
+    variants — genera N versiones completas de la pieza para comparar
+    train    — entrena modelo ML sobre corpus de MIDIs
+    inspect  — inspecciona un modelo entrenado
+
+  ── SCAN ─────────────────────────────────────────────────────────────────
+    python ml_inpainter.py scan obra.mid
+    python ml_inpainter.py scan obra.mid --min-density 0.1
+    python ml_inpainter.py scan obra.mid --report gaps.txt
+
+  ── FILL ─────────────────────────────────────────────────────────────────
+    python ml_inpainter.py fill obra.mid
+    python ml_inpainter.py fill obra.mid --gaps 1 3
+    python ml_inpainter.py fill obra.mid --strategy contour_blend
+    python ml_inpainter.py fill obra.mid --length keep|auto|N
+    python ml_inpainter.py fill obra.mid --checkpoint-dir ./ckpt/
+    python ml_inpainter.py fill obra.mid --no-chord-conditioning
+    python ml_inpainter.py fill obra.mid --context-bars 12
+    python ml_inpainter.py fill obra.mid -o salida.mid
+
+  ── VARIANTS ─────────────────────────────────────────────────────────────
+    python ml_inpainter.py variants obra.mid --n 8
+    python ml_inpainter.py variants obra.mid --n 6 --out-dir ./variantes/
+    python ml_inpainter.py variants obra.mid --strategies markov_bi interpolate
+    python ml_inpainter.py variants obra.mid --gaps 2 --seeds 0 1 2 3
+    python ml_inpainter.py variants obra.mid --score-weights \
+        tonal=0.4 boundary=0.3 tension=0.2 rhythm=0.1
+
+  ── TRAIN ────────────────────────────────────────────────────────────────
+    python ml_inpainter.py train corpus/
+    python ml_inpainter.py train corpus/ --epochs 80 --lr 5e-4
+    python ml_inpainter.py train corpus/ --hidden-dim 256
+    python ml_inpainter.py train corpus/ --mask-ratio 0.25
+    python ml_inpainter.py train corpus/ --mask-phrase
+    python ml_inpainter.py train corpus/ --augment-transpose 5
+    python ml_inpainter.py train corpus/ --augment-reverse
+    python ml_inpainter.py train corpus/ --role melody
+    python ml_inpainter.py train corpus/ --role bass
+    python ml_inpainter.py train corpus/ --checkpoint-dir ./mis_modelos/
+
+  ── INSPECT ──────────────────────────────────────────────────────────────
+    python ml_inpainter.py inspect ./ckpt/inpainter.pkl
+
+  ESTRATEGIAS (--strategy):
+    auto          — elige según estilo detectado de la pista
+    markov_bi     — Markov bidireccional con análisis de estilo
+    interpolate   — interpolación de contorno entre bordes del hueco
+    contour_blend — combinación ponderada de markov_bi e interpolate
+    ml_guided     — guiado por modelo PyTorch (requiere --checkpoint-dir)
+
+  SCORING AUTOMÁTICO (variants):
+    Pesos por defecto (configurables con --score-weights):
+    tonal_coherence    35% — notas dentro de la escala del contexto
+    boundary_smooth    30% — suavidad de las uniones en los bordes
+    tension_continuity 20% — continuidad de la curva de tensión
+    rhythm_consistency 15% — consistencia rítmica respecto al estilo
+    El criterio rhythm_consistency es sensible al rol de la pista:
+    para melody favorece la diversidad; para bass/inner, la regularidad.
+
+  MEJORAS v2.0 (respecto a v1.0):
+  [M1] Features de estilo rítmico en el vector ML: IOI modal, regularidad,
+       notas/compás, polifonía y rol de pista (8 dims extra → FEAT_DIM=56).
+  [M2] Enmascaramiento basado en límites de frase (--mask-phrase): los
+       huecos sintéticos de entrenamiento se colocan en transiciones de
+       densidad real, no de forma aleatoria.
+  [M3] Scoring de ritmo sensible al rol: rhythm_consistency premia la
+       regularidad en bajo/acompañamiento y la variedad en melodía.
+  [M4] Modelo autoregresivo: el forward recibe el pitch y duración de la
+       nota anterior, eliminando saltos incoherentes entre eventos.
+  [M5] Contexto derecho enriquecido: el vector de features incluye IOI
+       del lado derecho y los pitches absolutos de borde izq./dcho.
+  [M6] Encoders duales con atención: contextos izq./dcho. codificados por
+       separado y combinados mediante una capa de atención aditiva simple.
+  [M7] Modelos por rol (--role melody|inner|bass|all): entrena modelos
+       especializados por función orquestal. En inferencia se selecciona
+       automáticamente el modelo más adecuado para cada pista.
+  [M8] Condicionamiento armónico explícito: los chord_pcs del compás se
+       añaden como one-hot de 12 dims al vector de features (desactivable
+       con --no-chord-conditioning).
+  [M9] Augmentation de corpus: transposición cromática (--augment-transpose
+       N genera ±N copias en semitonos aleatorios) e inversión temporal
+       dentro de compás (--augment-reverse).
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  scan
+    input INPUT                 MIDI de entrada
+    --min-density MIN_DENSITY   Umbral de densidad mínima (def: 0.0 = solo
+                                vacíos) (defecto 0.0)
+    --report REPORT             Guardar reporte en fichero .txt
+
+  fill
+    input INPUT                 MIDI de entrada
+    --gaps GAPS […]             IDs de huecos a rellenar (default: todos)
+    --strategy STRATEGY         Estrategia de generación (def: auto) (defecto
+                                auto; valores:
+                                auto|markov_bi|interpolate|contour_blend|ml_guided)
+    --length LENGTH             Longitud: keep | auto | N (nº compases)
+                                (defecto keep)
+    --min-density MIN_DENSITY   (defecto 0.0)
+    --checkpoint-dir CHECKPOINT_DIR
+                                Directorio con modelo entrenado
+    --seed SEED                 (defecto 42)
+    --no-chord-conditioning     M8: desactiva el condicionamiento armónico
+                                explícito
+    --context-bars CONTEXT_BARS
+                                M1: compases de contexto para análisis de
+                                estilo (def: 8) (defecto 8)
+    -o, --output OUTPUT         MIDI de salida (def: <entrada>_filled.mid)
+
+  variants
+    input INPUT                 MIDI de entrada
+    --n N                       Número de variantes (def: 6) (defecto 6)
+    --gaps GAPS […]
+    --strategies STRATEGIES […]
+                                Estrategias a usar (def: all) (defecto
+                                ['all']; valores:
+                                all|markov_bi|interpolate|contour_blend|ml_guided)
+    --seeds SEEDS […]
+    --length LENGTH             (defecto keep)
+    --min-density MIN_DENSITY   (defecto 0.0)
+    --checkpoint-dir CHECKPOINT_DIR
+    --no-chord-conditioning     M8: desactiva el condicionamiento armónico
+                                explícito
+    --context-bars CONTEXT_BARS
+                                M1: compases de contexto para análisis de
+                                estilo (def: 8) (defecto 8)
+    --score-weights KEY=VAL […]
+                                M3: pesos del scoring, ej: tonal=0.4
+                                boundary=0.3 tension=0.2 rhythm=0.1
+    --out-dir OUT_DIR           Directorio de salida (def:
+                                ./inpainter_variants) (defecto
+                                ./inpainter_variants)
+
+  train
+    corpus CORPUS               Directorio con MIDIs de entrenamiento
+    --epochs EPOCHS             (defecto 60)
+    --lr LR                     (defecto 0.001)
+    --batch-size BATCH_SIZE     (defecto 64)
+    --hidden-dim HIDDEN_DIM     (defecto HIDDEN_DIM)
+    --mask-ratio MASK_RATIO     Fracción de compases a enmascarar por MIDI
+                                (def: 0.2) (defecto 0.2)
+    --mask-phrase               M2: coloca huecos en límites de frase
+                                detectados automáticamente (más musical que
+                                aleatorio)
+    --augment-transpose N       M9: genera ±N copias transpuestas por semitono
+                                (def: 0 = sin augmentación) (defecto 0)
+    --augment-reverse           M9: añade versión con inversión temporal
+                                intra-compás
+    --role ROLE                 M7: entrena solo para el rol indicado. Con
+                                "all" entrena un modelo genérico. Ejecutar
+                                varias veces con roles distintos añade modelos
+                                especializados al checkpoint principal.
+                                (defecto all; valores: all|melody|inner|bass)
+    --no-chord-conditioning     M8: desactiva el one-hot de acorde en el
+                                vector de features
+    --checkpoint-dir CHECKPOINT_DIR
+                                (defecto ./inpainter_ckpt)
+
+  inspect
+    model MODEL                 Ruta al fichero .pkl del modelo
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  pip install mido numpy (+ torch para ml_guided/train)
 """
 
 import sys

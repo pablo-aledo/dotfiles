@@ -1,51 +1,125 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        TOKEN COMPOSER  v1                                    ║
-║     Transformer autoregresivo sobre las 9 tokenizaciones de miditok_algoritmos║
-║                                                                                ║
-║  Un único modelo GPT-style (bloques causales pre-LN, posición aprendida) que  ║
-║  se adapta a la forma del esquema elegido con --scheme:                      ║
-║                                                                                ║
-║    ESCALARES  (MIDILike, TSD, REMI, Structured, PerTok, MMM)                 ║
-║      secuencia plana de tokens → un embedding, una cabeza de salida.         ║
-║                                                                                ║
-║    COMPUESTOS (CPWord, Octuple, MuMIDI)                                      ║
-║      cada paso es un vector de varios campos (Bar/Position/Pitch/...) →      ║
-║      un embedding y una cabeza POR CAMPO sobre un backbone compartido.       ║
-║      Simplificación respecto al paper CP-Word: los campos se predicen en     ║
-║      paralelo (no Family condicionando al resto) -- suficiente para          ║
-║      explorar el esquema, no para igualar el estado del arte.                ║
-║                                                                                ║
-║  COMANDOS:                                                                    ║
-║    prepare   — corpus MIDI → tokens + vocab.json + pickles de ids            ║
-║    train     — entrena el Transformer (arquitectura según el esquema)        ║
-║    compose   — genera un MIDI nuevo desde un checkpoint (con --prime         ║
-║                opcional para "priming"/transferencia de estilo aproximada)   ║
-║    infill    — regenera o añade una pista completa de un MIDI existente,     ║
-║                condicionando en las demás pistas (solo --scheme MMM)         ║
-║    inspect   — diagnóstico de dataset y/o checkpoint                          ║
-║                                                                                ║
-║  DEPENDENCIAS: mido, numpy, torch                                            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+token_composer.py — Token Composer: transformer autoregresivo sobre las 9
+tokenizaciones de miditok_algoritmos
+(versión 1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  Un único modelo GPT-style (bloques causales pre-LN, posición aprendida) que
+  se adapta a la forma del esquema elegido con --scheme:
+
+    ESCALARES  (MIDILike, TSD, REMI, Structured, PerTok, MMM)
+      secuencia plana de tokens → un embedding, una cabeza de salida.
+
+    COMPUESTOS (CPWord, Octuple, MuMIDI)
+      cada paso es un vector de varios campos (Bar/Position/Pitch/...) →
+      un embedding y una cabeza POR CAMPO sobre un backbone compartido.
+      Simplificación respecto al paper CP-Word: los campos se predicen en
+      paralelo (no Family condicionando al resto) -- suficiente para
+      explorar el esquema, no para igualar el estado del arte.
+
+  COMANDOS:
+    prepare   — corpus MIDI → tokens + vocab.json + pickles de ids
+    train     — entrena el Transformer (arquitectura según el esquema)
+    compose   — genera un MIDI nuevo desde un checkpoint (con --prime
+                opcional para "priming"/transferencia de estilo aproximada)
+    infill    — regenera o añade una pista completa de un MIDI existente,
+                condicionando en las demás pistas (solo --scheme MMM)
+    inspect   — diagnóstico de dataset y/o checkpoint
+
+  DEPENDENCIAS: mido, numpy, torch
 
 python token_composer.py prepare --input-dir midis/ --output-dir data_remi/ --scheme REMI
 
 python token_composer.py train \
-    --data-dir data_remi/ --model-dir runs/remi1/ \
-    --dim 256 --layers 6 --heads 4 --max-seq 512 \
-    --batch-size 8 --epochs 100
+      --data-dir data_remi/ --model-dir runs/remi1/ \
+      --dim 256 --layers 6 --heads 4 --max-seq 512 \
+      --batch-size 8 --epochs 100
 
 python token_composer.py compose --model-dir runs/remi1/ \
-    --output generado.mid --length 512 --temperature 0.9
+      --output generado.mid --length 512 --temperature 0.9
 
 python token_composer.py compose --model-dir runs/remi1/ --output continuacion.mid \
-    --prime referencia.mid --prime-length 128 --length 512
+      --prime referencia.mid --prime-length 128 --length 512
 
 python token_composer.py infill --model-dir runs/mmm1/ --input pieza.mid \
-    --track 1 --output pieza_bajo_nuevo.mid
+      --track 1 --output pieza_bajo_nuevo.mid
 
 python token_composer.py inspect --data-dir data_remi/ --model-dir runs/remi1/
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  prepare     corpus MIDI → tokens + vocab.json + pickles de ids
+  train       entrena el Transformer
+  compose     genera un MIDI nuevo desde un checkpoint
+  infill      regenera o añade una pista completa (solo modelos --scheme MMM)
+  inspect     diagnóstico de dataset y/o checkpoint
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare
+    --input-dir DIR             (obligatorio)
+    --output-dir DIR            (obligatorio)
+    --scheme SCHEME             (obligatorio)
+
+  train
+    --data-dir DIR              (obligatorio)
+    --model-dir DIR             (obligatorio)
+    --dim DIM                   (defecto 256)
+    --layers LAYERS             (defecto 6)
+    --heads HEADS               (defecto 4)
+    --max-seq MAX_SEQ           (defecto 512)
+    --dropout DROPOUT           (defecto 0.1)
+    --batch-size BATCH_SIZE     (defecto 8)
+    --epochs EPOCHS             (defecto 100)
+    --lr LR                     (defecto 0.0003)
+    --label-smooth LABEL_SMOOTH
+                                (defecto 0.1)
+    --patience PATIENCE         early stopping (0 = desactivado) (defecto 20)
+    --seed SEED                 (defecto 42)
+    --resume
+
+  compose
+    --model-dir DIR             (obligatorio)
+    --output FILE               (obligatorio)
+    --length LENGTH             tokens a generar tras el prime (si lo hay)
+                                (defecto 512)
+    --temperature TEMPERATURE   (defecto 1.0)
+    --ticks-per-beat TICKS_PER_BEAT
+                                (defecto 480)
+    --seed SEED                 (defecto 42)
+    --prime FILE.mid            MIDI de referencia: tokeniza sus primeros
+                                tokens y continúa desde ahí (transferencia de
+                                estilo aproximada por 'priming')
+    --prime-length PRIME_LENGTH
+                                nº máx. de tokens del --prime a usar (por
+                                defecto, todos los que quepan en max_seq)
+
+  infill
+    --model-dir DIR             (obligatorio)
+    --input FILE.mid            (obligatorio)
+    --track TRACK               índice de pista (0-based, según el orden de
+                                pistas del --input) a regenerar o añadir
+                                (obligatorio)
+    --program PROGRAM           programa MIDI para una pista nueva (solo si
+                                --track no existe ya en --input)
+    --drums                     la pista nueva es de batería
+    --output FILE               (obligatorio)
+    --max-length MAX_LENGTH     tope de tokens generados antes de forzar el
+                                corte si el modelo no emite Track_End (defecto
+                                256)
+    --temperature TEMPERATURE   (defecto 1.0)
+    --ticks-per-beat TICKS_PER_BEAT
+                                (defecto 480)
+    --seed SEED                 (defecto 42)
+
+  inspect
+    --data-dir DIR
+    --model-dir DIR
 """
 
 import argparse

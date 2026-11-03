@@ -1,54 +1,89 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                   PIANO DUO ANALYZER  v2.0                                   ║
-║         Visualizador de piano (mano izq. + mano der.) con análisis armónico  ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  DESCRIPCIÓN:                                                                ║
-║    Toma un MIDI de dos pistas (mano izquierda y mano derecha del piano) y   ║
-║    genera un informe HTML interactivo con tres filas:                        ║
-║                                                                              ║
-║    · Fila 1 — Piano Roll mano DERECHA                                        ║
-║      Cada nota se colorea según su posición en el acorde de la mano         ║
-║      izquierda en ese instante:                                               ║
-║        Azul     → 1ª nota del acorde (la más grave / fundamental)            ║
-║        Amarillo → 2ª nota del acorde                                          ║
-║        Verde    → 3ª nota del acorde                                          ║
-║        Blanco   → 4ª nota del acorde                                          ║
-║        Rojo     → no pertenece al acorde                                      ║
-║                                                                              ║
-║    · Fila 2 — Piano Roll mano IZQUIERDA                                       ║
-║      Notas del acorde coloreadas por la nota raíz detectada:                 ║
-║        Do → Rojo        Re → Naranja     Mi → Amarillo                       ║
-║        Fa → Verde       Sol → Azul claro La → Azul                           ║
-║        Si → Violeta                                                           ║
-║                                                                              ║
-║    · Fila 3 — Acordes detectados (por compás)                                 ║
-║      Nombre del acorde + función armónica (T/PD/D/Dsec)                      ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  USO                                                                         ║
-║                                                                              ║
-║    python3 piano_duo_analyzer.py archivo.mid                                 ║
-║    python3 piano_duo_analyzer.py archivo.mid -o informe.html                 ║
-║    python3 piano_duo_analyzer.py archivo.mid --right 0 --left 1             ║
-║    python3 piano_duo_analyzer.py --test                                      ║
-║                                                                              ║
-║  OPCIONES                                                                    ║
-║    midi             Ruta al archivo MIDI de entrada                          ║
-║    -o / --output    Ruta del HTML de salida (default: <midi>_piano.html)    ║
-║    --right N        Índice de pista (0-based) para mano derecha (default 0) ║
-║    --left  N        Índice de pista (0-based) para mano izquierda (default 1)║
-║    --arp-window B   Ventana en tiempos para agrupar arpegios (default 1.0)  ║
-║                     Aumentar para arpegios lentos; 0 = sin agrupación        ║
-║    --key-window N   Compases para detección local de tonalidad (default 8)  ║
-║                     0 = solo tonalidad global                                 ║
-║    --test           Genera un MIDI sintético de prueba y lo analiza          ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS:  mido  (pip install mido)                                     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+piano_duo_analyzer_v3.py — Visualizador HTML de piano a dos manos con análisis
+armónico y estructural (MIDI de dos pistas → informe HTML interactivo)
+(versión 3 de la familia piano_duo_analyzer*; el banner imprime «v2.0»).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Mismo núcleo que piano_duo_analyzer.py (tonalidad global y local por
+Krumhansl-Schmuckler, acordes por compás con inversiones, colores por posición
+en el acorde y por raíz, fuente armónica por mano y compás) más una capa de
+análisis estructural que se dibuja en el mismo informe:
+
+  - Curva de TENSIÓN armónica por compás según la función (T = 0.0, PD = 0.4,
+    Dsec = 0.7, D = 1.0, otras = 0.5), junto a la DENSIDAD de notas por tiempo y
+    la DINÁMICA (velocidad media), todas normalizadas a [0, 1].
+  - CADENCIAS sobre la línea de acordes: perfecta (V→I), plagal (IV→I), rota
+    (V→vi) y semicadencia (I→V).
+  - MOTIVOS melódicos repetidos (secuencia de intervalos + ritmo, ventana
+    deslizante) y SECCIONES (A, B, C…) cuyas fronteras se colocan donde
+    recurren los motivos; sin motivos, el reparto es en partes iguales.
+  - Piano roll con teclado lateral, filas «Secciones» y «Fuente armonía»,
+    vista general (minimapa), zoom y tooltip al pasar sobre los acordes.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  Análisis de un MIDI (defecto)   python piano_duo_analyzer_v3.py archivo.mid
+  Fuente armónica fija o por tramos   --harmony-source left | right |
+                                  "1-4:right,5-12:left" (compases desde 1).
+  Modo de prueba (--test)         MIDI sintético (A / B / A') generado y
+                                  analizado; también si no se da ningún MIDI.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Entrada : MIDI con mano derecha (--right, defecto 0) e izquierda (--left,
+            defecto 1) en pistas distintas (índices desde 0).
+  Salida  : HTML autocontenido en -o/--output (defecto <midi>_piano.html) y
+            resumen por consola (tonalidad, modulaciones, fuente armónica,
+            nº de motivos y cadencias). En --test el MIDI de prueba se escribe
+            en /home/claude/test_piano_duo_v2.mid (ruta fija).
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+    midi                 Fichero MIDI de entrada (opcional con --test).
+    -o, --output FILE    HTML de salida (defecto <midi>_piano.html).
+    --right N            Pista de la mano derecha (defecto 0).
+    --left N             Pista de la mano izquierda (defecto 1).
+    --arp-window B       Ventana en tiempos para agrupar arpegios (defecto 1.0;
+                         0 = sin agrupación).
+    --key-window N       Compases de la ventana de tonalidad local (defecto 8;
+                         0 = solo global).
+    --harmony-source S   "left", "right" o por tramos "1-4:right,5-12:left".
+                         Sin indicar: automática (la mano más densa por compás).
+    --test               Genera un MIDI sintético y lo analiza.
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Informe completo con los valores por defecto:
+  python piano_duo_analyzer_v3.py archivo.mid
+
+  # Elegir el HTML de salida y las pistas de cada mano:
+  python piano_duo_analyzer_v3.py archivo.mid -o informe.html --right 1 --left 2
+
+  # Arpegios lentos, tonalidad local en ventanas de 4 compases:
+  python piano_duo_analyzer_v3.py archivo.mid --arp-window 2.0 --key-window 4
+
+  # Solo tonalidad global y sin agrupar arpegios:
+  python piano_duo_analyzer_v3.py archivo.mid --key-window 0 --arp-window 0
+
+  # La armonía sale de la mano derecha en toda la obra, o por tramos:
+  python piano_duo_analyzer_v3.py archivo.mid --harmony-source right
+  python piano_duo_analyzer_v3.py archivo.mid --harmony-source "1-8:right,9-24:left"
+
+  # Prueba con el MIDI sintético:
+  python piano_duo_analyzer_v3.py --test
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+mido (pip install mido). Siguientes versiones: piano_duo_analyzer_v4.py
+(gramática Re-Pair, fusión de arpegios, modos de color) y v5 (ambas manos).
 """
 
 from __future__ import annotations

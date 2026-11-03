@@ -1,96 +1,232 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        SPECTRO MIDI  v1.0                                    ║
-║  Transcripción automática de espectrogramas NPZ → MIDI                       ║
-║  CNN + Transformer · agnóstico de instrumento · bucle autónomo               ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  SUBCOMANDOS                                                                 ║
-║    prepare      MIDI corpus / generación procedimental → NPZ de entrenamiento║
-║    train        Entrena el modelo sobre el corpus preparado                  ║
-║    transcribe   NPZ / WAV → MIDI  (inferencia)                               ║
-║    autotrain    Bucle autónomo: genera → entrena → evalúa → itera            ║
-║    eval         Evalúa MIDI predicho vs referencia (F1, precisión, recall)   ║
-║    inspect      Diagnóstico del modelo y del corpus                          ║
-║    melody       NPZ/WAV → MIDI monofónico  (pico espectral, SIN ML)         ║
-║    harmony      NPZ/WAV → MIDI de n voces  (picos espectrales, SIN ML)      ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  ARQUITECTURA                                                                ║
-║    Input  : espectrograma STFT  [frames × bins]  (NPZ de audio_lab.py)      ║
-║    CNN    : extrae patrones armónicos locales por frame                      ║
-║    Transformer encoder: captura contexto temporal (onsets, duraciones)       ║
-║    Salida : activación sigmoid  [frames × 128]  (una celda por nota MIDI)   ║
-║                                                                              ║
-║  TAMAÑOS DE MODELO  (--model-size)                                           ║
-║    small  : CNN-2 + 2 capas TR   ~2M params  CPU viable (~30min/epoch)      ║
-║    medium : CNN-3 + 4 capas TR  ~15M params  GPU recomendada                ║
-║    large  : CNN-4 + 8 capas TR  ~50M params  GPU necesaria                  ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  COHERENCIA DE FRASE  (--use-phrase-prior)                                   ║
-║    Durante la inferencia, el sistema detecta segmentos espectralmente        ║
-║    similares en la misma pieza (similitud coseno sobre frames STFT).         ║
-║    Ante notas con probabilidad similar, se favorece la de frases conocidas.  ║
-║    El corpus de frases se acumula en phrase_corpus/ y crece con autotrain.   ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  GENERACIÓN PROCEDIMENTAL DE MIDIS  (prepare --procedural)                  ║
-║    --proc-mode  notes   notas individuales (todas las MIDI 21-108)           ║
-║                 chords  tríadas y séptimas con inversiones                   ║
-║                 phrases progresiones de 4-8 acordes (I-IV-V-I, ii-V-I…)    ║
-║                 all     los tres modos combinados                            ║
-║    --humanize   0.0-1.0 variación de velocidad y timing (0=perfecto)        ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  CURRICULUM LEARNING  (autotrain --curriculum)                               ║
-║    Nivel 1: notas individuales, síntesis pura                                ║
-║    Nivel 2: acordes de 2 notas, timbre simple                               ║
-║    Nivel 3: acordes de 3-4 notas, timbre con armónicos                      ║
-║    Nivel 4: frases con progresiones, humanización ligera                     ║
-║    Nivel 5: frases complejas, humanización completa, audio real              ║
-║    Sube de nivel cuando F1 ≥ --curriculum-threshold (default: 0.80)         ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  MODOS SIN ML  (melody / harmony)                                           ║
-║    No usan modelo ni entrenamiento: en cada frame localizan el/los bin(s)   ║
-║    de mayor intensidad del espectrograma dentro del rango de piano y        ║
-║    sostienen la(s) nota(s) resultante(s) mientras sigan siendo dominantes.   ║
-║    melody   → 1 bin dominante  → línea monofónica                           ║
-║    harmony  → n bins dominantes (--notes, típ. 3=tríada / 4=acorde 4 notas) ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS  numpy  torch  mido  soundfile  Pillow                        ║
-║                audio_lab.py  (en el mismo directorio o en PATH)             ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  EJEMPLOS                                                                    ║
-║    # Preparar corpus desde MIDIs existentes                                  ║
-║    python spectro_midi.py prepare --midi-dir midis/ --out-dir corpus/       ║
-║                                                                              ║
-║    # Preparar corpus procedimental (acordes con humanización)                ║
-║    python spectro_midi.py prepare --procedural --proc-mode chords \         ║
-║        --humanize 0.3 --out-dir corpus/                                      ║
-║                                                                              ║
-║    # Entrenar modelo pequeño en CPU                                          ║
-║    python spectro_midi.py train --corpus corpus/ --model-size small \       ║
-║        --epochs 50 --model-dir model/                                        ║
-║                                                                              ║
-║    # Entrenar modelo grande en GPU                                           ║
-║    python spectro_midi.py train --corpus corpus/ --model-size large \       ║
-║        --epochs 200 --batch-size 16 --model-dir model_large/                ║
-║                                                                              ║
-║    # Transcribir un NPZ                                                      ║
-║    python spectro_midi.py transcribe audio.npz --model-dir model/ \         ║
-║        --use-phrase-prior --output audio.mid                                 ║
-║                                                                              ║
-║    # Bucle autónomo con curriculum                                           ║
-║    python spectro_midi.py autotrain --model-dir model/ \                    ║
-║        --midi-dir midis/ --cycles 20 --curriculum                            ║
-║        --use-phrase-prior                                                    ║
-║                                                                              ║
-║    # Evaluar transcripción                                                   ║
-║    python spectro_midi.py eval --predicted out.mid --reference orig.mid     ║
-║                                                                              ║
-║    # Melodía monofónica sin ML (pico espectral dominante)                    ║
-║    python spectro_midi.py melody audio.npz --output melodia.mid            ║
-║                                                                              ║
-║    # Acompañamiento en tríadas sin ML (3 bins dominantes por frame)          ║
-║    python spectro_midi.py harmony audio.wav --notes 3 -o acordes.mid       ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+spectro_midi.py — Spectro Midi: transcripción automática de espectrogramas NPZ
+→ MIDI CNN + Transformer · agnóstico de instrumento · bucle autónomo
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+ARQUITECTURA:
+  Input  : espectrograma STFT  [frames × bins]  (NPZ de audio_lab.py)
+  CNN    : extrae patrones armónicos locales por frame
+  Transformer encoder: captura contexto temporal (onsets, duraciones)
+  Salida : activación sigmoid  [frames × 128]  (una celda por nota MIDI)
+
+TAMAÑOS DE MODELO  (--model-size)
+  small  : CNN-2 + 2 capas TR   ~2M params  CPU viable (~30min/epoch)
+  medium : CNN-3 + 4 capas TR  ~15M params  GPU recomendada
+  large  : CNN-4 + 8 capas TR  ~50M params  GPU necesaria
+
+COHERENCIA DE FRASE  (--use-phrase-prior)
+  Durante la inferencia, el sistema detecta segmentos espectralmente
+  similares en la misma pieza (similitud coseno sobre frames STFT).
+  Ante notas con probabilidad similar, se favorece la de frases conocidas.
+  El corpus de frases se acumula en phrase_corpus/ y crece con autotrain.
+
+GENERACIÓN PROCEDIMENTAL DE MIDIS  (prepare --procedural)
+  --proc-mode  notes   notas individuales (todas las MIDI 21-108)
+               chords  tríadas y séptimas con inversiones
+               phrases progresiones de 4-8 acordes (I-IV-V-I, ii-V-I…)
+               all     los tres modos combinados
+  --humanize   0.0-1.0 variación de velocidad y timing (0=perfecto)
+
+CURRICULUM LEARNING  (autotrain --curriculum)
+  Nivel 1: notas individuales, síntesis pura
+  Nivel 2: acordes de 2 notas, timbre simple
+  Nivel 3: acordes de 3-4 notas, timbre con armónicos
+  Nivel 4: frases con progresiones, humanización ligera
+  Nivel 5: frases complejas, humanización completa, audio real
+  Sube de nivel cuando F1 ≥ --curriculum-threshold (default: 0.80)
+
+MODOS SIN ML  (melody / harmony)
+  No usan modelo ni entrenamiento: en cada frame localizan el/los bin(s)
+  de mayor intensidad del espectrograma dentro del rango de piano y
+  sostienen la(s) nota(s) resultante(s) mientras sigan siendo dominantes.
+  melody   → 1 bin dominante  → línea monofónica
+  harmony  → n bins dominantes (--notes, típ. 3=tríada / 4=acorde 4 notas)
+
+DEPENDENCIAS  numpy  torch  mido  soundfile  Pillow
+              audio_lab.py  (en el mismo directorio o en PATH)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  prepare      MIDI corpus / generación procedimental → NPZ de entrenamiento
+  train        Entrena el modelo sobre el corpus preparado
+  transcribe   NPZ / WAV → MIDI  (inferencia)
+  autotrain    Bucle autónomo: genera → entrena → evalúa → itera
+  eval         Evalúa MIDI predicho vs referencia (F1, precisión, recall)
+  inspect      Diagnóstico del modelo y del corpus
+  melody       NPZ/WAV → MIDI monofónico  (pico espectral, SIN ML)
+  harmony      NPZ/WAV → MIDI de n voces  (picos espectrales, SIN ML)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare
+    --midi-dir MIDI_DIR         Directorio con ficheros MIDI de entrenamiento
+    --out-dir OUT_DIR           Directorio de salida (defecto corpus)
+    --procedural                Generar MIDIs proceduralmente (notas, acordes,
+                                frases)
+    --proc-mode PROC_MODE       Tipo de MIDIs procedurales (default: all)
+                                (valores: notes|chords|phrases|all)
+    --humanize HUMANIZE         Variación de velocidad/timing ∈ [0,1]
+                                (default: 0)
+    --instrument-map INSTRUMENT_MAP
+                                JSON de instrumentos para audio_lab.py play-
+                                midi
+    --window WINDOW             (defecto STFT_WINDOW)
+    --hop HOP                   (defecto STFT_HOP)
+    --force                     Regenerar aunque ya existan los NPZ
+    --use-phrase-prior          Poblar corpus de frases tras preparar
+    --phrase-corpus-dir PHRASE_CORPUS_DIR
+                                (defecto phrase_corpus)
+
+  train
+    --corpus CORPUS             Directorio del corpus (obligatorio)
+    --model-dir MODEL_DIR       (defecto model)
+    --model-size MODEL_SIZE     (defecto small; valores: small|medium|large)
+    --epochs EPOCHS             (defecto 50)
+    --batch-size BATCH_SIZE     (defecto 8)
+    --lr LR                     (defecto 0.0003)
+    --patience PATIENCE         Early stopping (0 = desactivado) (defecto 20)
+    --pos-weight POS_WEIGHT     Peso de las celdas activas en el BCE (default:
+                                10)
+    --max-frames MAX_FRAMES     Longitud de segmento de entrenamiento en
+                                frames (default: 256)
+    --no-augment                Desactivar augmentación por transposición
+    --reset                     Ignorar checkpoint existente y entrenar desde
+                                cero
+    --cpu                       Forzar CPU aunque haya GPU disponible
+    --window WINDOW             (defecto STFT_WINDOW)
+    --hop HOP                   (defecto STFT_HOP)
+
+  transcribe
+    input INPUT                 Fichero NPZ o WAV/FLAC/OGG
+    --model-dir MODEL_DIR       (defecto model)
+    --output, -o OUTPUT
+    --threshold THRESHOLD       Umbral de activación ∈ [0,1] (default: 0.5)
+    --min-frames MIN_FRAMES     Duración mínima de nota en frames (default: 2)
+    --use-phrase-prior
+    --phrase-corpus-dir PHRASE_CORPUS_DIR
+                                (defecto phrase_corpus)
+    --prior-weight PRIOR_WEIGHT
+                                Peso del prior de frase ∈ [0,1] (default: 0.3)
+    --cpu
+
+  melody
+    input INPUT                 Fichero NPZ o WAV/FLAC/OGG
+    --output, -o OUTPUT
+    --note-min NOTE_MIN         Nota MIDI mínima a considerar (default: …, A0)
+    --note-max NOTE_MAX         Nota MIDI máxima a considerar (default: …, C8)
+    --min-frames MIN_FRAMES     Duración mínima de nota en frames (default: 2)
+    --smooth SMOOTH             Ventana del filtro de moda para suavizar
+                                saltos de bin (default: 1 = sin suavizado)
+    --silence-thresh SILENCE_THRESH
+                                Umbral de silencio relativo al pico global ∈
+                                [0,1] (default: 0 = desactivado)
+    --velocity VELOCITY         Velocidad MIDI fija (default: auto,
+                                proporcional a la intensidad)
+    --window WINDOW             (defecto STFT_WINDOW)
+    --hop HOP                   (defecto STFT_HOP)
+
+  harmony
+    input INPUT                 Fichero NPZ o WAV/FLAC/OGG
+    --notes NOTES               Número de voces/notas simultáneas: 3=tríada,
+                                4=acorde de 4 notas... (default: 3)
+    --output, -o OUTPUT
+    --note-min NOTE_MIN         Nota MIDI mínima a considerar (default: …, A0)
+    --note-max NOTE_MAX         Nota MIDI máxima a considerar (default: …, C8)
+    --min-frames MIN_FRAMES     Duración mínima de nota en frames (default: 2)
+    --smooth SMOOTH             Ventana del filtro de moda para suavizar
+                                saltos de bin (default: 1 = sin suavizado)
+    --silence-thresh SILENCE_THRESH
+                                Umbral de silencio relativo al pico global ∈
+                                [0,1] (default: 0 = desactivado)
+    --velocity VELOCITY         Velocidad MIDI fija (default: auto,
+                                proporcional a la intensidad)
+    --window WINDOW             (defecto STFT_WINDOW)
+    --hop HOP                   (defecto STFT_HOP)
+
+  autotrain
+    --model-dir MODEL_DIR       (defecto model)
+    --midi-dir MIDI_DIR         MIDIs de referencia adicionales al
+                                procedimental
+    --cycles CYCLES             (defecto 10)
+    --model-size MODEL_SIZE     (defecto small; valores: small|medium|large)
+    --batch-size BATCH_SIZE     (defecto 8)
+    --lr LR                     (defecto 0.0003)
+    --patience PATIENCE         (defecto 10)
+    --epochs-per-cycle EPOCHS_PER_CYCLE
+                                (defecto 20)
+    --proc-mode PROC_MODE       (defecto all; valores:
+                                notes|chords|phrases|all)
+    --humanize HUMANIZE         (defecto 0.0)
+    --max-per-cycle MAX_PER_CYCLE
+                                MIDIs máximos por ciclo (default: 500)
+    --curriculum                Activar curriculum learning (complejidad
+                                progresiva)
+    --curriculum-threshold CURRICULUM_THRESHOLD
+                                F1 mínimo para subir de nivel (default: 0.80)
+    --curriculum-patience CURRICULUM_PATIENCE
+                                Ciclos sin mejora antes de bajar nivel
+                                (default: 3)
+    --use-phrase-prior
+    --phrase-corpus-dir PHRASE_CORPUS_DIR
+                                (defecto phrase_corpus)
+    --cpu
+
+  eval
+    --predicted PREDICTED       (obligatorio)
+    --reference REFERENCE       (obligatorio)
+    --onset-tol ONSET_TOL       Tolerancia de onset en ms (default: 50)
+    --output, -o OUTPUT         Guardar métricas en JSON
+
+  inspect
+    --model-dir MODEL_DIR       (defecto model)
+    --corpus CORPUS
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Preparar corpus desde MIDIs existentes
+  python spectro_midi.py prepare --midi-dir midis/ --out-dir corpus/
+
+  # Preparar corpus procedimental (acordes con humanización)
+  python spectro_midi.py prepare --procedural --proc-mode chords \
+      --humanize 0.3 --out-dir corpus/
+
+  # Entrenar modelo pequeño en CPU
+  python spectro_midi.py train --corpus corpus/ --model-size small \
+      --epochs 50 --model-dir model/
+
+  # Entrenar modelo grande en GPU
+  python spectro_midi.py train --corpus corpus/ --model-size large \
+      --epochs 200 --batch-size 16 --model-dir model_large/
+
+  # Transcribir un NPZ
+  python spectro_midi.py transcribe audio.npz --model-dir model/ \
+      --use-phrase-prior --output audio.mid
+
+  # Bucle autónomo con curriculum
+  python spectro_midi.py autotrain --model-dir model/ \
+      --midi-dir midis/ --cycles 20 --curriculum
+      --use-phrase-prior
+
+  # Evaluar transcripción
+  python spectro_midi.py eval --predicted out.mid --reference orig.mid
+
+  # Melodía monofónica sin ML (pico espectral dominante)
+  python spectro_midi.py melody audio.npz --output melodia.mid
+
+  # Acompañamiento en tríadas sin ML (3 bins dominantes por frame)
+  python spectro_midi.py harmony audio.wav --notes 3 -o acordes.mid
+
+── Más modos ──
+
+  # Diagnóstico del modelo y corpus
+  python spectro_midi.py inspect
 """
 
 import argparse

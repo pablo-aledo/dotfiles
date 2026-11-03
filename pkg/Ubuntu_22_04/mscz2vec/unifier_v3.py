@@ -1,64 +1,123 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         UNIFIER  v3.0                                        ║
-║      Fusión coherente de secciones-ancla MIDI en una obra unificada         ║
-║                                                                              ║
-║  v3.0 = v2.0 + dos capacidades recuperadas de v1.1:                          ║
-║    · MODO RECOMBINE  — usa las secciones como donantes de ADN y regenera     ║
-║      una obra nueva coherente (progresión + motivo transplantado + bajo +    ║
-║      contrapunto + patrones por emoción), en vez de solo pegar con pegamento.║
-║    · PLAN TONAL POR EMOCIÓN — cada sección viaja a una tónica sesgada por    ║
-║      su emoción (subdominante/dominante/mediante/relativa) en vez de una     ║
-║      sola tonalidad global. Más viaje de color, menos unidad (opcional).     ║
-║                                                                              ║
-║  v3.0 hereda de v2.0: ancla explícita, tempo global con rampas, groove del   ║
-║    ancla (16 subdivisiones), protección del canal 9, salida tipo 1 por      ║
-║    roles, arco áureo informado por energía, score honesto (sin puntos        ║
-║    regalados), Krumhansl propio (sin music21), crossfade en costuras.       ║
-║  v3.0 hereda de v1.1: n-gramas de motivo, transformaciones, puntos         ║
-║    estructurales, nudge armónico con voice leading, puentes con pivote,     ║
-║    dosificación --glue, patrones de acompañamiento por emoción.             ║
-║                                                                              ║
-║  MODOS (--mode):                                                             ║
-║  [glue]      Conserva el MIDI de cada ancla y le añade hilos comunes +       ║
-║              puentes + reorquestación ligera. Fiel a tus secciones.          ║
-║  [recombine] Usa las secciones como donantes de ADN y regenera una obra       ║
-║              nueva coherente (progresión + motivo transplantado + bajo +     ║
-║              contrapunto). Más unificado, menos fiel.                         ║
-║  [auto]      Elige según lo diferentes que sean las tonalidades de origen.    ║
-║                                                                              ║
-║  PLAN TONAL (--tonal-plan):                                                  ║
-║  [global]   Una sola tonalidad hogar; secciones en modo opuesto van a la     ║
-║             RELATIVA (misma armadura). Máxima unidad.                        ║
-║  [emotion]  Cada sección viaja a una tónica sesgada por su emoción            ║
-║             (serenidad→subdom, triunfo→dom, angustia→mediante, etc.).        ║
-║             Más viaje de color emocional.                                   ║
-║  [auto]     global si no hay emociones indicadas; emotion si las hay.        ║
-║                                                                              ║
-║  DIMENSIONES DE UNIFICACIÓN (dosificables con --glue / --glue-preset):       ║
-║  [M] motif    — motivo ancla sembrado transformado en puntos estructurales  ║
-║  [H] harmony  — re-armonización diatónica con conducción de voces           ║
-║  [R] rhythm   — imantación de ataques hacia el groove del ANCLA              ║
-║  [D] dynamics — nivelación entre secciones + arco global con clímax único   ║
-║  [K] tonal    — siempre activo: plan tonal (global o por emoción)           ║
-║  [T] tempo    — siempre activo: tempo diana + --tempo-blend + rampas        ║
-║  [I] instr    — siempre activo: un instrumento GM por rol en toda la obra    ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python unifier_v3.py intro.mid nudo.mid climax.mid final.mid              ║
-║    python unifier_v3.py a.mid b.mid c.mid --key Dm --anchor 1                ║
-║    python unifier_v3.py a.mid b.mid --glue motif=0.8,harmony=0.7,rhythm=0.3 ║
-║    python unifier_v3.py a.mid b.mid c.mid --glue-preset fuerte               ║
-║    python unifier_v3.py a.mid b.mid c.mid --mode recombine                   ║
-║    python unifier_v3.py a.mid b.mid --tonal-plan emotion --emotions calidez,angustia ║
-║    python unifier_v3.py a.mid b.mid --motif-seed mi_motivo.mid               ║
-║    python unifier_v3.py a.mid b.mid c.mid --report            # solo plan    ║
-║                                                                              ║
-║  AUTOCONTENIDO: solo mido y numpy. Funciones copiadas/adaptadas de           ║
-║  mosaic_composer, stitcher, leitmotif_tracker, climax_engineer,              ║
-║  unifier_external v1.1 (voice leading, pivotes, n-gramas, score, patrones).  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+unifier_v3.py — Unifier: fusión coherente de secciones-ancla MIDI en una obra
+unificada
+(versión 3.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+v3.0 = v2.0 + dos capacidades recuperadas de v1.1:
+  · MODO RECOMBINE  — usa las secciones como donantes de ADN y regenera
+    una obra nueva coherente (progresión + motivo transplantado + bajo +
+    contrapunto + patrones por emoción), en vez de solo pegar con pegamento.
+  · PLAN TONAL POR EMOCIÓN — cada sección viaja a una tónica sesgada por
+    su emoción (subdominante/dominante/mediante/relativa) en vez de una
+    sola tonalidad global. Más viaje de color, menos unidad (opcional).
+
+v3.0 hereda de v2.0: ancla explícita, tempo global con rampas, groove del
+  ancla (16 subdivisiones), protección del canal 9, salida tipo 1 por
+  roles, arco áureo informado por energía, score honesto (sin puntos
+  regalados), Krumhansl propio (sin music21), crossfade en costuras.
+v3.0 hereda de v1.1: n-gramas de motivo, transformaciones, puntos
+  estructurales, nudge armónico con voice leading, puentes con pivote,
+  dosificación --glue, patrones de acompañamiento por emoción.
+
+MODOS (--mode):
+[glue]      Conserva el MIDI de cada ancla y le añade hilos comunes +
+            puentes + reorquestación ligera. Fiel a tus secciones.
+[recombine] Usa las secciones como donantes de ADN y regenera una obra
+            nueva coherente (progresión + motivo transplantado + bajo +
+            contrapunto). Más unificado, menos fiel.
+[auto]      Elige según lo diferentes que sean las tonalidades de origen.
+
+PLAN TONAL (--tonal-plan):
+[global]   Una sola tonalidad hogar; secciones en modo opuesto van a la
+           RELATIVA (misma armadura). Máxima unidad.
+[emotion]  Cada sección viaja a una tónica sesgada por su emoción
+           (serenidad→subdom, triunfo→dom, angustia→mediante, etc.).
+           Más viaje de color emocional.
+[auto]     global si no hay emociones indicadas; emotion si las hay.
+
+DIMENSIONES DE UNIFICACIÓN (dosificables con --glue / --glue-preset):
+[M] motif    — motivo ancla sembrado transformado en puntos estructurales
+[H] harmony  — re-armonización diatónica con conducción de voces
+[R] rhythm   — imantación de ataques hacia el groove del ANCLA
+[D] dynamics — nivelación entre secciones + arco global con clímax único
+[K] tonal    — siempre activo: plan tonal (global o por emoción)
+[T] tempo    — siempre activo: tempo diana + --tempo-blend + rampas
+[I] instr    — siempre activo: un instrumento GM por rol en toda la obra
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midis MIDIS […]             Fragmentos MIDI en el orden emocional deseado
+  --output OUTPUT             (defecto obra_unificada.mid)
+  --anchor ANCHOR             Índice del fragmento ancla (default: 0)
+  --key KEY                   Tonalidad global, p.ej. C, Am, Eb, F#m
+  --tempo TEMPO
+  --tempo-blend TEMPO_BLEND   (defecto 0.25)
+  --bridge-bars BRIDGE_BARS   (defecto 2)
+  --mode MODE                 glue=conserva MIDIs; recombine=obra nueva desde
+                              ADN; auto (defecto glue; valores:
+                              glue|recombine|auto)
+  --tonal-plan TONAL_PLAN     global=una tonalidad; emotion=viaje por emoción;
+                              auto (defecto auto; valores:
+                              global|emotion|auto)
+  --emotions EMOTIONS         Emociones por orden, separadas por coma (para
+                              MIDIs posicionales)
+  --recombine-bars RECOMBINE_BARS
+                              Compases por sección en modo recombine (defecto
+                              8)
+  --glue GLUE                 Dosificación:
+                              motif=0.7,harmony=0.6,rhythm=0.4,dynamics=0.6
+                              (ejes omitidos → preset)
+  --glue-preset GLUE_PRESET   (defecto medio; valores: sutil|medio|fuerte)
+  --motif-seed MOTIF_SEED     MIDI externo con el motivo semilla (anula el
+                              ancla)
+  --snap-strength SNAP_STRENGTH
+                              0=respetar cromatismo, 1=ajustar todo a la
+                              escala (defecto 0.0)
+  --climax-pos CLIMAX_POS     (defecto 0.618)
+  --arc-intensity ARC_INTENSITY
+                              (defecto 0.6)
+  --no-motif
+  --no-rhythm
+  --no-harmony
+  --no-humanize
+  --no-rit
+  --score                     Imprimir score de coherencia antes→después
+  --no-instr                  Ignorar instrumentos del ancla (paleta de
+                              cuerdas)
+  --no-bridges
+  --no-arc
+  --no-levels
+  --seed SEED                 (defecto 42)
+  --report                    Solo análisis y plan, sin transformar ni
+                              escribir
+  --json JSON                 Exportar decisiones y mapa a JSON
+  --dry-run
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python unifier_v3.py intro.mid nudo.mid climax.mid final.mid
+    python unifier_v3.py a.mid b.mid c.mid --key Dm --anchor 1
+    python unifier_v3.py a.mid b.mid --glue motif=0.8,harmony=0.7,rhythm=0.3
+    python unifier_v3.py a.mid b.mid c.mid --glue-preset fuerte
+    python unifier_v3.py a.mid b.mid c.mid --mode recombine
+    python unifier_v3.py a.mid b.mid --tonal-plan emotion --emotions calidez,angustia
+    python unifier_v3.py a.mid b.mid --motif-seed mi_motivo.mid
+    python unifier_v3.py a.mid b.mid c.mid --report            # solo plan
+
+  AUTOCONTENIDO: solo mido y numpy. Funciones copiadas/adaptadas de
+  mosaic_composer, stitcher, leitmotif_tracker, climax_engineer,
+  unifier_external v1.1 (voice leading, pivotes, n-gramas, score, patrones).
+
+── Más modos ──
+
+  # --dry-run
+  python unifier_v3.py entrada.mid entrada2.mid --dry-run
 """
 
 import argparse

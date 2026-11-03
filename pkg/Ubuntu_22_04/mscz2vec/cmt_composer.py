@@ -1,33 +1,35 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       CMT COMPOSER  v1.1                                     ║
-║         Generación de melodía condicionada por acordes (Transformer)         ║
-║                                                                              ║
-║  ARQUITECTURA:                                                               ║
-║    Chord Encoder (BiLSTM) → Rhythm Decoder (Transformer causal) →           ║
-║    Pitch Decoder (Transformer causal)                                        ║
-║    Atención relativa multi-cabeza · Entrenamiento en 2 fases                 ║
-║                                                                              ║
-║  FLUJO COMPLETO:                                                             ║
-║    inspect  → convert → prepare → train (rhythm) →                          ║
-║    prepare  → train (pitch) → sample                                         ║
-║                                                                              ║
-║  COMANDOS — PREPARACIÓN DE CORPUS:                                           ║
-║    inspect     — muestra pistas de un MIDI y elige melodía automáticamente  ║
-║    convert     — MIDIs orquestales → MIDIs de 2 pistas (melodía + acordes)  ║
-║    prepare     — MIDIs de 2 pistas → instancias .pkl para entrenar          ║
-║                                                                              ║
-║  COMANDOS — MODELO:                                                          ║
-║    train       — entrena el modelo (fase: rhythm | pitch)                   ║
-║    sample      — genera un fragmento de melodía (4 compases)                ║
-║    compose     — genera N fragmentos encadenados en un MIDI largo           ║
-║    encode      — MIDI → representación pitch/rhythm/chord (.pkl)            ║
-║    round-trip  — MIDI → pkl → MIDI sin modelo (diagnóstico)                 ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    pretty_midi, numpy, torch, scipy                                          ║
-╠══════════════════════════════════════════════════════════════════════════════╣
+r"""
+cmt_composer.py — Cmt Composer: generación de melodía condicionada por acordes
+(Transformer)
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  ARQUITECTURA:
+    Chord Encoder (BiLSTM) → Rhythm Decoder (Transformer causal) →
+    Pitch Decoder (Transformer causal)
+    Atención relativa multi-cabeza · Entrenamiento en 2 fases
+
+  FLUJO COMPLETO:
+    inspect  → convert → prepare → train (rhythm) →
+    prepare  → train (pitch) → sample
+
+  COMANDOS — PREPARACIÓN DE CORPUS:
+    inspect     — muestra pistas de un MIDI y elige melodía automáticamente
+    convert     — MIDIs orquestales → MIDIs de 2 pistas (melodía + acordes)
+    prepare     — MIDIs de 2 pistas → instancias .pkl para entrenar
+
+  COMANDOS — MODELO:
+    train       — entrena el modelo (fase: rhythm | pitch)
+    sample      — genera un fragmento de melodía (4 compases)
+    compose     — genera N fragmentos encadenados en un MIDI largo
+    encode      — MIDI → representación pitch/rhythm/chord (.pkl)
+    round-trip  — MIDI → pkl → MIDI sin modelo (diagnóstico)
+
+  DEPENDENCIAS:
+    pretty_midi, numpy, torch, scipy
 
 # ── 1. Inspeccionar un MIDI orquestal ────────────────────────────────────────
 python cmt_composer.py inspect --input cancion.mid
@@ -35,68 +37,175 @@ python cmt_composer.py inspect --input cancion.mid
 # ── 2. Convertir carpeta de MIDIs orquestales a 2 pistas ─────────────────────
 # Detección automática de melodía:
 python cmt_composer.py convert \
-    --input-dir midis_orquestales/ --output-dir midis_2pistas/
+      --input-dir midis_orquestales/ --output-dir midis_2pistas/
 
 # Especificar pista de melodía manualmente (ver índice en inspect):
 python cmt_composer.py convert \
-    --input-dir midis_orquestales/ --output-dir midis_2pistas/ \
-    --melody-track 0
+      --input-dir midis_orquestales/ --output-dir midis_2pistas/ \
+      --melody-track 0
 
 # Con filtros de bajo y percusión, y 3 voces en el acorde:
 python cmt_composer.py convert \
-    --input-dir midis_orquestales/ --output-dir midis_2pistas/ \
-    --exclude-drums --exclude-bass --chord-voices 3
+      --input-dir midis_orquestales/ --output-dir midis_2pistas/ \
+      --exclude-drums --exclude-bass --chord-voices 3
 
 # ── 3. Preparar corpus ────────────────────────────────────────────────────────
 # Con transposición a 12 tonalidades (necesario para fase 1):
 python cmt_composer.py prepare \
-    --input-dir midis_2pistas/ --output-dir data_12keys/ --shift --report
+      --input-dir midis_2pistas/ --output-dir data_12keys/ --shift --report
 
 # En clave original (necesario para fase 2):
 python cmt_composer.py prepare \
-    --input-dir midis_2pistas/ --output-dir data_ckey/ --report
+      --input-dir midis_2pistas/ --output-dir data_ckey/ --report
 
 # Con rango de pitch ampliado (128 notas):
 python cmt_composer.py prepare \
-    --input-dir midis_2pistas/ --output-dir data_full/ --pitch-range 128
+      --input-dir midis_2pistas/ --output-dir data_full/ --pitch-range 128
 
 # ── 4. Entrenar fase 1: Rhythm Decoder ───────────────────────────────────────
 python cmt_composer.py train \
-    --data-dir data_12keys/ --model-dir model/ \
-    --phase rhythm --epochs 100 --batch-size 64 --lr 1e-4
+      --data-dir data_12keys/ --model-dir model/ \
+      --phase rhythm --epochs 100 --batch-size 64 --lr 1e-4
 
 # ── 5. Entrenar fase 2: Pitch Decoder (RD congelado) ─────────────────────────
 python cmt_composer.py train \
-    --data-dir data_ckey/ --model-dir model/ \
-    --phase pitch --restore-rhythm-epoch 100 \
-    --epochs 100 --batch-size 64 --lr 1e-4
+      --data-dir data_ckey/ --model-dir model/ \
+      --phase pitch --restore-rhythm-epoch 100 \
+      --epochs 100 --batch-size 64 --lr 1e-4
 
 # Continuar un entrenamiento interrumpido:
 python cmt_composer.py train \
-    --data-dir data_ckey/ --model-dir model/ \
-    --phase pitch --restore-epoch 50
+      --data-dir data_ckey/ --model-dir model/ \
+      --phase pitch --restore-epoch 50
 
 # ── 6. Generar melodía ────────────────────────────────────────────────────────
 python cmt_composer.py sample \
-    --model-dir model/ --chord-midi midis_2pistas/cancion_2track.mid \
-    --output melodia.mid --topk 5 --bars 8
+      --model-dir model/ --chord-midi midis_2pistas/cancion_2track.mid \
+      --output melodia.mid --topk 5 --bars 8
 
 # Con prime (seed desde un MIDI de referencia):
 python cmt_composer.py sample \
-    --model-dir model/ --chord-midi midis_2pistas/cancion_2track.mid \
-    --prime-midi referencia.mid --prime-bars 2 \
-    --output melodia.mid
+      --model-dir model/ --chord-midi midis_2pistas/cancion_2track.mid \
+      --prime-midi referencia.mid --prime-bars 2 \
+      --output melodia.mid
 
 # ── Componer una pieza larga (N fragmentos encadenados) ──────────────────────
-python cmt_composer.py compose     --model-dir model/ --chord-midi midis_2pistas/cancion_2track.mid     --fragments 16 --output pieza.mid --topk 5
+python cmt_composer.py compose \
+      --model-dir model/ --chord-midi midis_2pistas/cancion_2track.mid \
+      --fragments 16 --output pieza.mid --topk 5
 
 # Con instrumento específico (40=violín, 73=flauta, 0=piano):
-python cmt_composer.py compose     --model-dir model/ --chord-midi midis_2pistas/cancion_2track.mid     --fragments 8 --program 40 --output pieza_violin.mid
+python cmt_composer.py compose \
+      --model-dir model/ --chord-midi midis_2pistas/cancion_2track.mid \
+      --fragments 8 --program 40 --output pieza_violin.mid
 
 # ── Diagnóstico ───────────────────────────────────────────────────────────────
 python cmt_composer.py encode --input cancion.mid --output instancia.pkl
 python cmt_composer.py round-trip --input cancion.mid --output vuelta.mid
 
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  inspect     Muestra pistas de un MIDI y detecta la melodía automáticamente
+  convert     MIDIs orquestales → MIDIs de 2 pistas (melodía + acordes)
+  prepare     MIDIs de 2 pistas → instancias .pkl para entrenar
+  train       Entrena el modelo (fase rhythm o pitch)
+  sample      Genera melodía dado un MIDI de acordes
+  encode      MIDI → representación pitch/rhythm/chord (.pkl)
+  round-trip  MIDI → pkl → MIDI sin modelo (diagnóstico de preprocesado)
+  compose     Genera N fragmentos encadenados en un único MIDI largo
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  inspect
+    --input FILE                (obligatorio)
+
+  convert
+    --input-dir DIR             (obligatorio)
+    --output-dir DIR            (obligatorio)
+    --melody-track N            Índice de la pista melódica (-1 = detección
+                                automática) (defecto -1)
+    --chord-voices N            Máximo de notas simultáneas en el acorde
+                                (defecto 4)
+    --bpm BPM                   BPM forzado (0 = estimar desde el MIDI)
+                                (defecto 0.0)
+    --exclude-drums             Excluir pistas de percusión del acompañamiento
+    --exclude-bass              Excluir pistas con pitch medio < 48 (bajo)
+
+  prepare
+    --input-dir DIR             (obligatorio)
+    --output-dir DIR            (obligatorio)
+    --num-bars N                (defecto 8)
+    --frame-per-bar N           Frames por compás (16 = corchea en 4/4)
+                                (defecto 16)
+    --pitch-range N             Rango de alturas (48=4 octavas, 128=todo el
+                                teclado) (defecto 48)
+    --bpm BPM                   (defecto 120.0)
+    --shift                     Transponer a las 12 tonalidades (necesario
+                                para fase 1)
+    --report
+
+  train
+    --data-dir DIR              (obligatorio)
+    --model-dir DIR             (obligatorio)
+    --phase PHASE               rhythm: fase 1 (RD solo) | pitch: fase 2 (PD +
+                                RD congelado) (valores: rhythm|pitch;
+                                obligatorio)
+    --epochs EPOCHS             (defecto 100)
+    --batch-size BATCH_SIZE     (defecto 64)
+    --lr LR                     (defecto 0.0001)
+    --num-bars N                (defecto 8)
+    --frame-per-bar N           (defecto 16)
+    --restore-epoch N           Continuar desde este checkpoint (cualquier
+                                fase) (defecto -1)
+    --restore-rhythm-epoch N    Cargar solo el RD desde este checkpoint
+                                (inicio fase 2) (defecto -1)
+    --patience N                Early stopping: parar si eval no mejora en N
+                                epochs (0=desactivado) (defecto 20)
+
+  sample
+    --model-dir DIR             (obligatorio)
+    --chord-midi FILE           MIDI con 2 pistas; los acordes se leen de la
+                                pista 1 (obligatorio)
+    --output FILE               (defecto sample_out.mid)
+    --topk TOPK                 Top-k muestreo (None = greedy) (defecto 5)
+    --bars N                    (defecto 8)
+    --bpm BPM                   (defecto 120.0)
+    --prime-midi FILE           MIDI de referencia para usar como seed inicial
+    --prime-bars N              (defecto 2)
+    --checkpoint N              Época concreta del checkpoint (default:
+                                best_model.pt)
+
+  encode
+    --input FILE                (obligatorio)
+    --output FILE
+    --num-bars N                (defecto 8)
+    --frame-per-bar N           (defecto 16)
+    --pitch-range N             (defecto 48)
+    --bpm BPM                   (defecto 120.0)
+
+  round-trip
+    --input FILE                (obligatorio)
+    --output FILE               (defecto round_trip_out.mid)
+    --num-bars N                (defecto 8)
+    --frame-per-bar N           (defecto 16)
+    --pitch-range N             (defecto 48)
+    --bpm BPM                   (defecto 120.0)
+
+  compose
+    --model-dir DIR             (obligatorio)
+    --chord-midi FILE           MIDI de acordes de referencia (se rota si es
+                                necesario) (obligatorio)
+    --output FILE               (defecto composition.mid)
+    --fragments N               Número de fragmentos a generar y encadenar
+                                (defecto 8)
+    --prime-bars N              Compases del fragmento anterior usados como
+                                seed (defecto 2)
+    --topk TOPK                 (defecto 5)
+    --program N                 Programa MIDI para la melodía (0=piano,
+                                40=violín, 73=flauta...) (defecto 0)
+    --checkpoint N
 """
 
 import argparse

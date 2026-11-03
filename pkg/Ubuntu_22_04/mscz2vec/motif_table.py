@@ -1,88 +1,143 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        MOTIF TABLE  v2.0                                     ║
-║      Catálogo curado de motivos y frases melódicas con tensión y emoción    ║
-║                                                                              ║
-║  Complemento de chord_table.py y rhythm_table.py: en lugar de acordes o     ║
-║  ritmos, ofrece un catálogo curado de 100 gestos melódicos —motivos cortos  ║
-║  (2-5 notas) y frases más largas (6-9 notas, con arco antecedente-          ║
-║  consecuente)— descritos por grados de escala, con etiquetas de tensión     ║
-║  (1-10), contorno y emoción, buscables y exportables.                       ║
-║                                                                              ║
-║    · Tipos:    motivo (célula corta), frase (gesto largo con arco,         ║
-║                lista para insertar), escala (recorrido modal completo,     ║
-║                material de referencia/estudio, no una frase con forma)     ║
-║    · Modos:    mayor, menor, dórico, frigio, frigio dominante, lidio,       ║
-║                mixolidio, armónico menor                                    ║
-║    · Estilos:  diatónico, barroco, jazz, modal, romántico, impresionista,   ║
-║                pop, flamenco, blues, folk                                   ║
-║    · Contorno: ascendente, descendente, arco, ondulante, zigzag, salto,     ║
-║                estático                                                     ║
-║    · Emociones: reposo, alegría, tristeza, melancolía, nostalgia,           ║
-║                  misterio, ambigüedad, drama, angustia, esperanza,          ║
-║                  euforia, flotación, solemnidad, exotismo                   ║
-║                                                                              ║
-║  NOTACIÓN DE GRADOS (relativa a la tónica, no a acordes):                  ║
-║    1-8      grado de escala según el modo de la entrada (8 = octava de 1)  ║
-║    b / #    altera el grado un semitono (nota cromática fuera del modo)    ║
-║    '        sube una octava el grado (puede repetirse)                     ║
-║    ,        baja una octava el grado (puede repetirse)                     ║
-║    r        silencio (ocupa tiempo, no suena)                              ║
-║    Ej: "1 3 5 8" = tríada ascendente. "7," = sensible una octava abajo.   ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    # Listar todos                                                           ║
-║    python motif_table.py --list                                            ║
-║                                                                              ║
-║    # Filtrar por emoción / estilo / tipo / contorno                        ║
-║    python motif_table.py --emocion angustia                                ║
-║    python motif_table.py --style flamenco --tipo frase                    ║
-║    python motif_table.py --contorno ascendente --mode dorian              ║
-║                                                                              ║
-║    # Filtrar por rango de tensión                                           ║
-║    python motif_table.py --tension-min 7 --tension-max 10                  ║
-║                                                                              ║
-║    # Buscar por texto libre / por intención en lenguaje natural             ║
-║    python motif_table.py --buscar "cromático"                              ║
-║    python motif_table.py --intencion "misterioso y flotante"               ║
-║                                                                              ║
-║    # Resolver un motivo del catálogo en una tónica dada y exportar         ║
-║    python motif_table.py --id 4 --key Cm --octave 5 --export-midi m.mid   ║
-║                                                                              ║
-║    # Motivo personalizado por grados (modo custom)                         ║
-║    python motif_table.py --custom "1 3 5 8" --mode major --key D          ║
-║                                                                              ║
-║    # Custom con duración por grado (grado:beats)                           ║
-║    python motif_table.py --custom "1:0.5 3:0.5 5:1 8:2" --key G           ║
-║                                                                              ║
-║    # Exportar tabla filtrada a JSON                                        ║
-║    python motif_table.py --style baroque --export-json barroco.json       ║
-║                                                                              ║
-║    # Mostrar estadísticas del catálogo                                     ║
-║    python motif_table.py --stats                                           ║
-║                                                                              ║
-║    # Analizar un MIDI y detectar motivos del catálogo en la melodía       ║
-║    python motif_table.py --analyze-midi cancion.mid                        ║
-║                                                                              ║
-║    # Análisis con canal forzado, umbral alto y exportación JSON            ║
-║    python motif_table.py --analyze-midi song.mid --channel 0               ║
-║        --min-score 0.75 --export-json matches.json --verbose               ║
-║                                                                              ║
-║  INTEGRACIÓN CON EL ECOSISTEMA:                                            ║
-║    chord_table.py       → complementario: acordes vs. línea melódica       ║
-║    rhythm_table.py      → --apply-to-chords puede dar la temporización     ║
-║                            que aquí se resuelve como línea de grados        ║
-║    melody_adapter.py    → el texto exportado (nota:beats) es una línea     ║
-║                            melódica lista para adaptar sobre acordes        ║
-║                                                                              ║
-║  SALIDAS:                                                                    ║
-║    <base>.motif.txt    — línea melódica en texto ("C5:1 E5:1 G5:1 C6:1")  ║
-║    <base>.motif.json   — motivo resuelto con metadatos                     ║
-║    <base>.motif.mid    — MIDI de línea melódica monofónica                 ║
-║                                                                              ║
-║  DEPENDENCIAS: mido (opcional, solo para exportación / análisis MIDI)      ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+motif_table.py — Motif Table: catálogo curado de motivos y frases melódicas
+con tensión y emoción
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Complemento de chord_table.py y rhythm_table.py: en lugar de acordes o
+ritmos, ofrece un catálogo curado de 100 gestos melódicos —motivos cortos
+(2-5 notas) y frases más largas (6-9 notas, con arco antecedente-
+consecuente)— descritos por grados de escala, con etiquetas de tensión
+(1-10), contorno y emoción, buscables y exportables.
+
+  · Tipos:    motivo (célula corta), frase (gesto largo con arco,
+              lista para insertar), escala (recorrido modal completo,
+              material de referencia/estudio, no una frase con forma)
+  · Modos:    mayor, menor, dórico, frigio, frigio dominante, lidio,
+              mixolidio, armónico menor
+  · Estilos:  diatónico, barroco, jazz, modal, romántico, impresionista,
+              pop, flamenco, blues, folk
+  · Contorno: ascendente, descendente, arco, ondulante, zigzag, salto,
+              estático
+  · Emociones: reposo, alegría, tristeza, melancolía, nostalgia,
+                misterio, ambigüedad, drama, angustia, esperanza,
+                euforia, flotación, solemnidad, exotismo
+
+NOTACIÓN DE GRADOS (relativa a la tónica, no a acordes):
+  1-8      grado de escala según el modo de la entrada (8 = octava de 1)
+  b / #    altera el grado un semitono (nota cromática fuera del modo)
+  '        sube una octava el grado (puede repetirse)
+  ,        baja una octava el grado (puede repetirse)
+  r        silencio (ocupa tiempo, no suena)
+  Ej: "1 3 5 8" = tríada ascendente. "7," = sensible una octava abajo.
+
+INTEGRACIÓN CON EL ECOSISTEMA:
+  chord_table.py       → complementario: acordes vs. línea melódica
+  rhythm_table.py      → --apply-to-chords puede dar la temporización
+                          que aquí se resuelve como línea de grados
+  melody_adapter.py    → el texto exportado (nota:beats) es una línea
+                          melódica lista para adaptar sobre acordes
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  <base>.motif.txt    — línea melódica en texto ("C5:1 E5:1 G5:1 C6:1")
+  <base>.motif.json   — motivo resuelto con metadatos
+  <base>.motif.mid    — MIDI de línea melódica monofónica
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --analyze-midi MIDI_FILE    Analizar un MIDI y mostrar los motivos del
+                              catálogo que contiene su melodía
+  --min-score F               Score mínimo de coincidencia 0-1 (default: 0.7)
+  --channel N                 Restringir el análisis a un canal MIDI concreto
+  --min-dur BEATS             Duración mínima en beats para considerar una
+                              nota (default: 0, sin filtro). Útil para ignorar
+                              notas de adorno u ornamentos
+  --list                      Listar todos los motivos y frases
+  --stats                     Estadísticas del catálogo
+  --custom GRADOS             Motivo personalizado por grados de escala, en
+                              vez de seleccionar del catálogo. Ej: --custom "1
+                              3 5 8". Duración opcional por grado con ':beats'
+                              (ej: "1:0.5 3:0.5 5:1 8:2"); sin ella se usa
+                              --beats por grado. Se interpreta con el modo
+                              dado por --mode y se resuelve en la tónica de
+                              --key igual que --id.
+  --id N                      Seleccionar motivo/frase por id
+  --buscar TEXTO              Búsqueda por texto libre
+  --intencion DESC            Buscar por intención en lenguaje natural
+  --style STYLE               Filtrar por estilo
+  --mode MODE                 Filtrar por modo (también usado como modo de
+                              interpretación para --custom, default: major)
+  --tipo TIPO                 Filtrar por tipo (valores: motivo|frase|escala)
+  --contorno CONTORNO         Filtrar por contorno melódico (valores:
+                              ascendente|descendente|arco|ondulante|zigzag|salto|estatico)
+  --emocion EMOCION           Filtrar por emoción (reposo, alegría, tristeza…)
+  --tension-min N             Tensión mínima (1-10)
+  --tension-max N             Tensión máxima (1-10)
+  --key KEY                   Tónica para resolución concreta (default: C)
+  --octave OCTAVE             Octava base de la tónica (default: 5, ~C5=60)
+  --reps N                    Número de repeticiones exactas del motivo a
+                              exportar (sustituye a --bars; no trunca el
+                              último ciclo)
+  --bars BARS                 Compases a generar (default: 4)
+  --beats BEATS               Pulsos por compás, y duración por defecto en
+                              --custom sin duración explícita (default: 4)
+  --tempo TEMPO               Tempo BPM para exportación MIDI (default: 100)
+  --export-json FILE          Exportar tabla filtrada o motivo resuelto a JSON
+  --export-text FILE          Exportar motivo resuelto a texto (nota:beats)
+  --export-midi FILE          Exportar motivo resuelto a MIDI
+  --output OUTPUT             Nombre base para salidas (default: obra)
+  --verbose                   Mostrar nombre y descripción de cada entrada
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Listar todos
+  python motif_table.py --list
+
+  # Filtrar por emoción / estilo / tipo / contorno
+  python motif_table.py --emocion angustia
+  python motif_table.py --style flamenco --tipo frase
+  python motif_table.py --contorno ascendente --mode dorian
+
+  # Filtrar por rango de tensión
+  python motif_table.py --tension-min 7 --tension-max 10
+
+  # Buscar por texto libre / por intención en lenguaje natural
+  python motif_table.py --buscar "cromático"
+  python motif_table.py --intencion "misterioso y flotante"
+
+  # Resolver un motivo del catálogo en una tónica dada y exportar
+  python motif_table.py --id 4 --key Cm --octave 5 --export-midi m.mid
+
+  # Motivo personalizado por grados (modo custom)
+  python motif_table.py --custom "1 3 5 8" --mode major --key D
+
+  # Custom con duración por grado (grado:beats)
+  python motif_table.py --custom "1:0.5 3:0.5 5:1 8:2" --key G
+
+  # Exportar tabla filtrada a JSON
+  python motif_table.py --style baroque --export-json barroco.json
+
+  # Mostrar estadísticas del catálogo
+  python motif_table.py --stats
+
+  # Analizar un MIDI y detectar motivos del catálogo en la melodía
+  python motif_table.py --analyze-midi cancion.mid
+
+  # Análisis con canal forzado, umbral alto y exportación JSON
+  python motif_table.py --analyze-midi song.mid --channel 0 \
+      --min-score 0.75 --export-json matches.json --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido (opcional, solo para exportación / análisis MIDI)
 """
 
 import sys

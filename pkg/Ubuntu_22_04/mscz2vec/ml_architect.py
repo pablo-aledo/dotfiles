@@ -1,84 +1,189 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       ML ARCHITECT  v8.0                                     ║
-║     Composición estructural dirigida por gramáticas aprendidas de corpus     ║
-║                                                                              ║
-║  SUBCOMANDOS:                                                                ║
-║    segment   — detecta secciones de un MIDI                                 ║
-║    train     — entrena modelo sobre corpus                                   ║
-║    update    — añade MIDIs a un modelo existente (incremental)               ║
-║    generate  — genera una obra completa                                      ║
-║    variants  — genera N variantes, las puntúa y ordena por score  [v8]      ║
-║    explore   — barrido arc × variety con ranking automático        [v8]      ║
-║    inspect   — inspecciona un modelo entrenado                               ║
-║                                                                              ║
-║  ── SEGMENT ──────────────────────────────────────────────────────────────  ║
-║    python ml_architect_v8.py segment cancion.mid                            ║
-║    python ml_architect_v8.py segment cancion.mid --verbose                  ║
-║    python ml_architect_v8.py segment cancion.mid --num-sections 4           ║
-║                                                                              ║
-║  ── TRAIN / UPDATE ───────────────────────────────────────────────────────  ║
-║    python ml_architect_v8.py train corpus/ -o model.pkl --n-roles 5        ║
-║    python ml_architect_v8.py update model.pkl nuevos/ -o model2.pkl        ║
-║                                                                              ║
-║  ── GENERATE ─────────────────────────────────────────────────────────────  ║
-║    python ml_architect_v8.py generate frase.mid --model m.pkl               ║
-║    python ml_architect_v8.py generate frase.mid --model m.pkl --arc arch   ║
-║    python ml_architect_v8.py generate frase.mid --model m.pkl --arc wave   ║
-║        --variety 0.8 --n-sections 5 --out-dir salida/                       ║
-║    python ml_architect_v8.py generate frase.mid --model m.pkl               ║
-║        --no-strict-pc --register-margin 24   # sin restricciones estrictas  ║
-║    python ml_architect_v8.py generate frase.mid --model m.pkl --dry-run    ║
-║                                                                              ║
-║  ── VARIANTS ─────────────────────────────────────────────────────────────  ║
-║    # 5 variantes con la configuración por defecto                            ║
-║    python ml_architect_v8.py variants frase.mid --model m.pkl               ║
-║                                                                              ║
-║    # 8 variantes explorando dos arcos y dos valores de variety               ║
-║    python ml_architect_v8.py variants frase.mid --model m.pkl               ║
-║        --n 8 --arcs arch wave --variety-list 0.5 0.8                        ║
-║        --out-dir mis_variantes/                                              ║
-║                                                                              ║
-║    # Semilla base personalizada (útil para explorar distintos espacios)      ║
-║    python ml_architect_v8.py variants frase.mid --model m.pkl               ║
-║        --n 10 --base-seed 100                                                ║
-║                                                                              ║
-║  ── EXPLORE ──────────────────────────────────────────────────────────────  ║
-║    # Barrido por defecto: flat/arch/wave × 0.3/0.7/1.0 (9 variantes)       ║
-║    python ml_architect_v8.py explore frase.mid --model m.pkl                ║
-║                                                                              ║
-║    # Barrido personalizado                                                   ║
-║    python ml_architect_v8.py explore frase.mid --model m.pkl                ║
-║        --arcs flat arch inverse_arch wave                                    ║
-║        --variety-list 0.2 0.5 0.8 1.0                                       ║
-║        --out-dir exploración/                                                ║
-║                                                                              ║
-║    # Barrido rápido con un solo arco                                         ║
-║    python ml_architect_v8.py explore frase.mid --model m.pkl                ║
-║        --arcs arch --variety-list 0.3 0.5 0.7 0.9 1.0                      ║
-║                                                                              ║
-║  ── INSPECT ──────────────────────────────────────────────────────────────  ║
-║    python ml_architect_v8.py inspect model.pkl                              ║
-║    python ml_architect_v8.py inspect model.pkl --progressions               ║
-║                                                                              ║
-║  ── ARCOS (--arc / --arcs) ───────────────────────────────────────────────  ║
-║    flat         — tensión uniforme (adecuado para música ambiente)          ║
-║    rise         — crescendo continuo hasta el final                         ║
-║    fall         — decrescendo continuo desde el inicio                      ║
-║    arch         — clímax en el centro (forma clásica)           [default]   ║
-║    inverse_arch — valle en el centro (tensión en los extremos)              ║
-║    wave         — dos crestas de tensión (forma de canción pop)             ║
-║                                                                              ║
-║  ── SCORING AUTOMÁTICO (variants / explore) ──────────────────────────────  ║
-║    tonal_coherence  30% — % de notas dentro de las PC de la fuente         ║
-║    sec_variety      25% — variedad de pitch medio entre secciones           ║
-║    rhythm_diversity 15% — diversidad de IOI (ritmo no mecánico)            ║
-║    dynamic_contrast 15% — contraste dinámico (std de velocity)             ║
-║    dramatic_fit     15% — correlación tensión real vs arco esperado         ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy, scikit-learn, scipy                             ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+ml_architect.py — Ml Architect: composición estructural dirigida por
+gramáticas aprendidas de corpus
+(versión 8.0).
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+    segment   — detecta secciones de un MIDI
+    train     — entrena modelo sobre corpus
+    update    — añade MIDIs a un modelo existente (incremental)
+    generate  — genera una obra completa
+    variants  — genera N variantes, las puntúa y ordena por score  [v8]
+    explore   — barrido arc × variety con ranking automático        [v8]
+    inspect   — inspecciona un modelo entrenado
+
+  ── SEGMENT ──────────────────────────────────────────────────────────────
+    python ml_architect.py segment cancion.mid
+    python ml_architect.py segment cancion.mid --verbose
+    python ml_architect.py segment cancion.mid --num-sections 4
+
+  ── TRAIN / UPDATE ───────────────────────────────────────────────────────
+    python ml_architect.py train corpus/ -o model.pkl --n-roles 5
+    python ml_architect.py update nuevos/ --model model.pkl -o model2.pkl
+
+  ── GENERATE ─────────────────────────────────────────────────────────────
+    python ml_architect.py generate frase.mid --model m.pkl
+    python ml_architect.py generate frase.mid --model m.pkl --arc arch
+    python ml_architect.py generate frase.mid --model m.pkl --arc wave \
+        --variety 0.8 --n-sections 5 --out-dir salida/
+    python ml_architect.py generate frase.mid --model m.pkl \
+        --no-strict-pc --register-margin 24   # sin restricciones estrictas
+    python ml_architect.py generate frase.mid --model m.pkl --dry-run
+
+  ── VARIANTS ─────────────────────────────────────────────────────────────
+    # 5 variantes con la configuración por defecto
+    python ml_architect.py variants frase.mid --model m.pkl
+
+    # 8 variantes explorando dos arcos y dos valores de variety
+    python ml_architect.py variants frase.mid --model m.pkl \
+        --n 8 --arcs arch wave --variety-list 0.5 0.8 \
+        --out-dir mis_variantes/
+
+    # Semilla base personalizada (útil para explorar distintos espacios)
+    python ml_architect.py variants frase.mid --model m.pkl \
+        --n 10 --base-seed 100
+
+  ── EXPLORE ──────────────────────────────────────────────────────────────
+    # Barrido por defecto: flat/arch/wave × 0.3/0.7/1.0 (9 variantes)
+    python ml_architect.py explore frase.mid --model m.pkl
+
+    # Barrido personalizado
+    python ml_architect.py explore frase.mid --model m.pkl \
+        --arcs flat arch inverse_arch wave \
+        --variety-list 0.2 0.5 0.8 1.0 \
+        --out-dir exploración/
+
+    # Barrido rápido con un solo arco
+    python ml_architect.py explore frase.mid --model m.pkl \
+        --arcs arch --variety-list 0.3 0.5 0.7 0.9 1.0
+
+  ── INSPECT ──────────────────────────────────────────────────────────────
+    python ml_architect.py inspect model.pkl
+    python ml_architect.py inspect model.pkl --progressions
+
+  ── ARCOS (--arc / --arcs) ───────────────────────────────────────────────
+    flat         — tensión uniforme (adecuado para música ambiente)
+    rise         — crescendo continuo hasta el final
+    fall         — decrescendo continuo desde el inicio
+    arch         — clímax en el centro (forma clásica)           [default]
+    inverse_arch — valle en el centro (tensión en los extremos)
+    wave         — dos crestas de tensión (forma de canción pop)
+
+  ── SCORING AUTOMÁTICO (variants / explore) ──────────────────────────────
+    tonal_coherence  30% — % de notas dentro de las PC de la fuente
+    sec_variety      25% — variedad de pitch medio entre secciones
+    rhythm_diversity 15% — diversidad de IOI (ritmo no mecánico)
+    dynamic_contrast 15% — contraste dinámico (std de velocity)
+    dramatic_fit     15% — correlación tensión real vs arco esperado
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  (globales)
+    --version VERSION
+    --model, -m MODEL           (obligatorio)
+    --assignment ASSIGNMENT     (valores: similarity|position|hybrid)
+    --n-sections N_SECTIONS
+    --bars-per-section BARS_PER_SECTION
+    --tempo TEMPO
+    --sa-compat
+    --no-markov
+    --no-forms
+    --no-strict-pc
+    --no-strict-register
+    --no-strict-velocity
+    --register-margin REGISTER_MARGIN
+                                (defecto 12)
+
+  segment
+    midi MIDI
+    --num-sections, -n NUM_SECTIONS
+    --track TRACK
+    --all-tracks
+    --similarity SIMILARITY     (defecto 0.85)
+    --output, -o OUTPUT
+    --verbose
+
+  train
+    corpus CORPUS
+    --output, -o OUTPUT         (defecto model_v3.pkl)
+    --n-roles N_ROLES           (defecto 4)
+    --assignment ASSIGNMENT     (defecto hybrid; valores:
+                                similarity|position|hybrid)
+    --num-sections, -n NUM_SECTIONS
+    --verbose
+
+  update
+    new_corpus NEW_CORPUS       Directorio con los MIDIs nuevos
+    --model, -m MODEL           Modelo base a actualizar (obligatorio)
+    --output, -o OUTPUT         (defecto model_v3_updated.pkl)
+    --n-roles N_ROLES           (defecto 4)
+    --assignment ASSIGNMENT     (defecto hybrid; valores:
+                                similarity|position|hybrid)
+    --num-sections, -n NUM_SECTIONS
+    --verbose
+
+  generate
+    input INPUT […]
+    --model, -m MODEL           (obligatorio)
+    --assignment ASSIGNMENT     (valores: similarity|position|hybrid)
+    --n-sections N_SECTIONS
+    --role-order ROLE_ORDER […]
+    --arc ARC                   Arco dramático (default: arch). Opciones: …
+    --bars-per-section BARS_PER_SECTION
+                                Compases por sección (default: inferido del
+                                corpus)
+    --out-dir OUT_DIR           (defecto output)
+    --output-name OUTPUT_NAME   (defecto song)
+    --tempo TEMPO
+    --sa-compat                 [K] Nombres de sección compatibles con
+                                song_architect.py
+    --dry-run
+    --variety V                 Intensidad de variedad musical [0-1] (default:
+                                0.7)
+    --no-markov                 [v6] Desactivar generación Markov (usar
+                                transform v5)
+    --no-forms                  [v6] Desactivar uso de formas aprendidas
+    --no-strict-pc              [v7-S1] Desactivar restricción de pitch
+                                classes al material fuente
+    --no-strict-register        [v7-S2] Desactivar restricción de registro al
+                                rango de la fuente
+    --no-strict-velocity        [v7-S3] Desactivar calibración de velocity al
+                                perfil de la fuente
+    --register-margin ST        [v7-S2] Margen de registro en semitonos
+                                (default: 12 = ±1 octava)
+    --seed SEED                 (defecto 42)
+    --verbose
+
+  inspect
+    model MODEL                 Fichero .pkl del modelo
+    --progressions              Mostrar progresiones por rol
+
+  variants
+    input INPUT […]             MIDIs de entrada
+    --n, -n N                   Numero de variantes (default: 5)
+    --arcs ARCS […]             Arcos a usar (default: arch)
+    --variety-list VARIETY_LIST […]
+                                Valores de variety (default: 0.7)
+    --base-seed BASE_SEED       Semilla base, variantes usan base_seed+i
+                                (default: 1)
+    --out-dir OUT_DIR           (defecto variants)
+
+  explore
+    input INPUT […]             MIDIs de entrada
+    --arcs ARCS […]             Arcos a explorar (default: flat arch wave)
+    --variety-list VARIETY_LIST […]
+                                Valores de variety (default: 0.3 0.7 1.0)
+    --seed SEED                 (defecto 42)
+    --out-dir OUT_DIR           (defecto explore)
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy, scikit-learn, scipy
 """
 
 import sys, os, math, copy, json, random, pickle, argparse

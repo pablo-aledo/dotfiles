@@ -1,71 +1,87 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        FIDELITY METER  v1.0                                  ║
-║        ¿Cuánto se parece una versión a su original? (y por qué)              ║
-║                                                                              ║
-║  quality_scorer y melody_critic puntúan la CALIDAD de una pieza, no su       ║
-║  PARECIDO con otra: un bucle que solo optimice calidad puede alejarse del    ║
-║  original sin darse cuenta. Esta herramienta mide fidelidad con métricas     ║
-║  robustas al rubato y al acompañamiento añadido, y declara siempre la        ║
-║  tolerancia temporal que usa (para no confundir expresividad con pérdida).   ║
-║                                                                              ║
-║  SUBCOMANDOS:                                                                ║
-║    compare   Compara un original con una versión (tabla + veredicto)         ║
-║    batch     Compara muchas carpetas (original.mid vs obra_final.mid…)       ║
-║    rank      Ordena varias versiones de un mismo original por fidelidad      ║
-║    gate      Puerta de calidad: rc=0 si cumple los umbrales, rc=3 si no      ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python fidelity_meter.py compare original.mid version.mid                 ║
-║    python fidelity_meter.py compare o.mid v.mid --tol 0.5 --timeline         ║
-║    python fidelity_meter.py batch reconstrucciones/*/ --cand obra_final.mid  ║
-║    python fidelity_meter.py batch pieza_*/ --cand obra_final.mid \\           ║
-║        --cand obra_fiel.mid --md comparacion.md --json comparacion.json      ║
-║    python fidelity_meter.py rank original.mid cand_*.mid                     ║
-║    python fidelity_meter.py gate original.mid version.mid --min-melody 0.8   ║
-║                                                                              ║
-║  MÉTRICAS (0-1, mayor = más parecido):                                       ║
-║    melody   n-gramas de la línea superior ("skyline": nota más aguda por     ║
-║             ventana de 0.5 pulso, sin percusión). Insensible al rubato y al  ║
-║             acompañamiento. ES LA MÉTRICA PRINCIPAL DE IDENTIDAD.            ║
-║    onset    notas del original (inicio+altura) presentes en la versión       ║
-║             dentro de ±TOL pulsos. Se imprime a 3 tolerancias                ║
-║             (0.1 / TOL / 0.5) para ver cuánto es rubato y cuánto pérdida.    ║
-║    rhythm   posiciones de ataque del original presentes en la versión        ║
-║             (ignora la altura) dentro de ±TOL pulsos.                        ║
-║    pitch    recall del multiconjunto de alturas (DÉBIL: las escalas se       ║
-║             solapan; solo informativo).                                      ║
-║    chroma   similitud coseno del perfil de clases de altura (tonalidad).     ║
-║    length   cociente de duración versión/original (1.0 = misma longitud).    ║
-║    instr    instrumentos GM del original presentes en la versión (0-1).      ║
-║    meta     compás y armadura conservados (secuencias iguales).              ║
-║    score    0.50·melody + 0.20·rhythm + 0.10·chroma + 0.10·instr + 0.10·meta ║
-║                                                                              ║
-║  VEREDICTO (según melody): ≥0.85 fiel · ≥0.50 variación · ≥0.20 inspirada ·  ║
-║  <0.20 otra pieza                                                            ║
-║                                                                              ║
-║  OPCIONES COMUNES:                                                           ║
-║    --tol F        Tolerancia temporal en pulsos (default 0.25)               ║
-║    --window F     Ventana del skyline en pulsos (default 0.5)                ║
-║    --ngram N      Tamaño de n-grama de la melodía (default 2)                ║
-║    --json FILE    Informe JSON                                               ║
-║    --no-color     Sin colores ANSI                                           ║
-║                                                                              ║
-║  OPCIONES DE compare: --timeline  (fidelidad melódica compás a compás)       ║
-║  OPCIONES DE batch:   --cand NOMBRE (repetible; default obra_final.mid)      ║
-║                       --orig NOMBRE (default original.mid)  --md FILE        ║
-║                       --csv FILE                                             ║
-║  OPCIONES DE gate:    --min-melody F  --min-rhythm F  --min-score F          ║
-║                       --min-chroma F  --require-meta  --require-instr        ║
-║                       --length-range LO HI  (default sin comprobar)          ║
-║                                                                              ║
-║  CÓDIGOS DE SALIDA: 0 ok · 1 error de uso/ficheros · 3 gate no superado      ║
-║                                                                              ║
-║  API:  from fidelity_meter import measure   # measure(orig, cand) -> dict    ║
-║                                                                              ║
-║  DEPENDENCIAS: mido                                                          ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+fidelity_meter.py — Fidelity Meter: ¿Cuánto se parece una versión a su
+original? (y por qué)
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+quality_scorer y melody_critic puntúan la CALIDAD de una pieza, no su
+PARECIDO con otra: un bucle que solo optimice calidad puede alejarse del
+original sin darse cuenta. Esta herramienta mide fidelidad con métricas
+robustas al rubato y al acompañamiento añadido, y declara siempre la
+tolerancia temporal que usa (para no confundir expresividad con pérdida).
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  compare   Compara un original con una versión (tabla + veredicto)
+  batch     Compara muchas carpetas (original.mid vs obra_final.mid…)
+  rank      Ordena varias versiones de un mismo original por fidelidad
+  gate      Puerta de calidad: rc=0 si cumple los umbrales, rc=3 si no
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES COMUNES:
+    --tol F        Tolerancia temporal en pulsos (default 0.25)
+    --window F     Ventana del skyline en pulsos (default 0.5)
+    --ngram N      Tamaño de n-grama de la melodía (default 2)
+    --json FILE    Informe JSON
+    --no-color     Sin colores ANSI
+
+  OPCIONES DE compare: --timeline  (fidelidad melódica compás a compás)
+  OPCIONES DE batch:   --cand NOMBRE (repetible; default obra_final.mid)
+                       --orig NOMBRE (default original.mid)  --md FILE
+                       --csv FILE
+  OPCIONES DE gate:    --min-melody F  --min-rhythm F  --min-score F
+                       --min-chroma F  --require-meta  --require-instr
+                       --length-range LO HI  (default sin comprobar)
+
+  CÓDIGOS DE SALIDA: 0 ok · 1 error de uso/ficheros · 3 gate no superado
+
+  API:  from fidelity_meter import measure   # measure(orig, cand) -> dict
+
+── Otras opciones del parser ──
+  batch
+    --top TOP                   filas a mostrar (las peores si hay más)
+                                (defecto 25)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python fidelity_meter.py compare original.mid version.mid
+    python fidelity_meter.py compare o.mid v.mid --tol 0.5 --timeline
+    python fidelity_meter.py batch reconstrucciones/*/ --cand obra_final.mid
+    python fidelity_meter.py batch pieza_*/ --cand obra_final.mid \
+        --cand obra_fiel.mid --md comparacion.md --json comparacion.json
+    python fidelity_meter.py rank original.mid cand_*.mid
+    python fidelity_meter.py gate original.mid version.mid --min-melody 0.8
+
+  MÉTRICAS (0-1, mayor = más parecido):
+    melody   n-gramas de la línea superior ("skyline": nota más aguda por
+             ventana de 0.5 pulso, sin percusión). Insensible al rubato y al
+             acompañamiento. ES LA MÉTRICA PRINCIPAL DE IDENTIDAD.
+    onset    notas del original (inicio+altura) presentes en la versión
+             dentro de ±TOL pulsos. Se imprime a 3 tolerancias
+             (0.1 / TOL / 0.5) para ver cuánto es rubato y cuánto pérdida.
+    rhythm   posiciones de ataque del original presentes en la versión
+             (ignora la altura) dentro de ±TOL pulsos.
+    pitch    recall del multiconjunto de alturas (DÉBIL: las escalas se
+             solapan; solo informativo).
+    chroma   similitud coseno del perfil de clases de altura (tonalidad).
+    length   cociente de duración versión/original (1.0 = misma longitud).
+    instr    instrumentos GM del original presentes en la versión (0-1).
+    meta     compás y armadura conservados (secuencias iguales).
+    score    0.50·melody + 0.20·rhythm + 0.10·chroma + 0.10·instr + 0.10·meta
+
+  VEREDICTO (según melody): ≥0.85 fiel · ≥0.50 variación · ≥0.20 inspirada ·
+  <0.20 otra pieza
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido
 """
 
 import argparse

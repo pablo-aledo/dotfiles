@@ -1,48 +1,50 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          AUDIO EFFECTS  v1.1                                 ║
-║  Librería DSP + CLI: aplica una cadena de efectos YA DADA a un WAV           ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  QUÉ HACE                                                                    ║
-║    Aplica una cadena de efectos — EQ paramétrico, compresor, reverb,        ║
-║    limitador, delay, saturación, chorus, trémolo, puerta de ruido,          ║
-║    de-esser — conocida de antemano: de un JSON, de flags de línea de       ║
-║    comandos, o de una llamada programática desde otro programa (p.ej.       ║
-║    mix_evolver.py) — a un WAV de entrada. No genera, no evalúa, no busca:   ║
-║    solo aplica. Ver mix_evolver.py para la búsqueda evolutiva de cadenas.   ║
-║                                                                              ║
-║  ALCANCE                                                                     ║
-║    Opera sobre la mezcla completa ya renderizada (mono o estéreo,           ║
-║    post-render), no sobre pistas individuales por instrumento.              ║
-║                                                                              ║
-║  USO                                                                        ║
-║    audio_effects.py dry.wav --chain chain.json --out processed.wav          ║
-║    audio_effects.py dry.wav --eq 1000:3.0:1.2 --compressor -18:3.0:10:120 \\║
-║                     --out processed.wav                                     ║
-║    audio_effects.py dry.wav --saturation 8:0.5 --delay 250:0.35:0.25 \\    ║
-║                     --de-esser 6500:-22:4:2.5 --out processed.wav           ║
-║    audio_effects.py dry.wav --chain chain.json --out processed.wav \\      ║
-║                     --json report.json                                      ║
-║                                                                              ║
-║  DEPENDENCIAS  numpy  scipy  soundfile   (obligatorias)                     ║
-║                                                                              ║
-║  LIMITACIONES (ver especificación §5)                                       ║
-║    · Solo opera sobre la mezcla ya renderizada, nunca a nivel de pista.     ║
-║    · Los cuatro efectos son implementaciones simples y funcionales, no de   ║
-║      calidad de producción profesional — suficientes para dar a un GA un    ║
-║      espacio de búsqueda razonable, no pensadas como reemplazo de un DAW.   ║
-║    · Estéreo: cada canal se procesa de forma independiente (sin linking     ║
-║      de compresor/limitador entre canales); el reverb usa la misma IR       ║
-║      (misma semilla) en ambos canales.                                      ║
-║                                                                              ║
-║  Módulo importable:                                                         ║
-║    from audio_effects import apply_chain, EFFECT_FUNCTIONS, load_manifest, \\║
-║                               EffectGene, Chain                             ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+audio_effects.py — Audio Effects: librería DSP + CLI: aplica una cadena de
+efectos YA DADA a un WAV
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  QUÉ HACE
+    Aplica una cadena de efectos — EQ paramétrico, compresor, reverb,
+    limitador, delay, saturación, chorus, trémolo, puerta de ruido,
+    de-esser — conocida de antemano: de un JSON, de flags de línea de
+    comandos, o de una llamada programática desde otro programa (p.ej.
+    mix_evolver.py) — a un WAV de entrada. No genera, no evalúa, no busca:
+    solo aplica. Ver mix_evolver.py para la búsqueda evolutiva de cadenas.
+
+  ALCANCE
+    Opera sobre la mezcla completa ya renderizada (mono o estéreo,
+    post-render), no sobre pistas individuales por instrumento.
+
+  USO
+    audio_effects.py dry.wav --chain chain.json --out processed.wav
+    audio_effects.py dry.wav --eq 1000:3.0:1.2 --compressor=-18:3.0:10:120 \
+                     --out processed.wav
+    audio_effects.py dry.wav --saturation 8:0.5 --delay 250:0.35:0.25 \
+                     --de-esser 6500:-22:4:2.5 --out processed.wav
+    audio_effects.py dry.wav --chain chain.json --out processed.wav \
+                     --json report.json
+
+  DEPENDENCIAS  numpy  scipy  soundfile   (obligatorias)
+
+  LIMITACIONES (ver especificación §5)
+    · Solo opera sobre la mezcla ya renderizada, nunca a nivel de pista.
+    · Los cuatro efectos son implementaciones simples y funcionales, no de
+      calidad de producción profesional — suficientes para dar a un GA un
+      espacio de búsqueda razonable, no pensadas como reemplazo de un DAW.
+    · Estéreo: cada canal se procesa de forma independiente (sin linking
+      de compresor/limitador entre canales); el reverb usa la misma IR
+      (misma semilla) en ambos canales.
+
+  Módulo importable:
+    from audio_effects import apply_chain, EFFECT_FUNCTIONS, load_manifest, \
+                               EffectGene, Chain
 
 EJEMPLOS DE chain.json PARA SITUACIONES HABITUALES
-────────────────────────────────────────────────────
+
 Cada bloque es un chain.json completo, listo para `--chain FILE`. Todos los
 parámetros están dentro de los rangos del manifest por defecto (§1.3), así
 que también son puntos de partida razonables para inicializar/acotar una
@@ -99,6 +101,26 @@ partida, no verdad revelada — ajustar oído en mano.
 6) Identidad (control/baseline) — cadena vacía, útil como referencia de
    "sin procesar" al comparar contra cualquiera de las anteriores:
    []
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  input_wav INPUT_WAV         WAV de entrada (dry, sin procesar)
+  --chain FILE                JSON con una lista de EffectGene (§1.4) a
+                              aplicar en orden
+  --eq FREQ:GAIN:Q
+  --compressor THRESH:RATIO:ATTACK:RELEASE
+  --reverb SIZE:DECAY:MIX
+  --limiter CEILING
+  --delay DELAY_MS:FEEDBACK:MIX
+  --saturation DRIVE_DB:MIX
+  --chorus RATE_HZ:DEPTH_MS:MIX
+  --tremolo RATE_HZ:DEPTH:MIX
+  --noise-gate THRESHOLD_DB:ATTACK_MS:RELEASE_MS:RANGE_DB
+  --de-esser FREQ_HZ:THRESHOLD_DB:RATIO:Q
+  --out FILE                  WAV procesado de salida (obligatorio)
+  --json FILE                 Informe opcional (cadena aplicada, duración,
+                              picos antes/después)
 """
 
 import argparse

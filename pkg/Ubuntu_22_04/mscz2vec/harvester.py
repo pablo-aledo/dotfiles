@@ -1,44 +1,50 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          HARVESTER  v1.0                                    ║
-║              Extracción de fragmentos musicales desde MIDIs                 ║
-║                                                                              ║
-║  Segmenta MIDIs en fragmentos reutilizables usando criterios musicales:     ║
-║    · Detección de fronteras por curva de novedad (SSM checkerboard)         ║
-║    · Detección de cadencias (auténtica, plagal, semicadencia, engañosa)     ║
-║    · Repeticiones de motivos vía algoritmo Re-Pair (Sequitur simplificado)  ║
-║    · Silencio / pausa larga como frontera natural                           ║
-║    · Combinación ponderada de todos los criterios                           ║
-║                                                                              ║
-║  Sufijos de salida:                                                          ║
-║    .frag_A.mid, .frag_B.mid …  — secciones formales (forma detectada)      ║
-║    .motif_01.mid, .motif_02.mid — motivos repetidos (Sequitur)             ║
-║    .cadence_auth.mid            — fragmento antes de cadencia auténtica     ║
-║    .cadence_plag.mid            — fragmento antes de cadencia plagal        ║
-║    .cadence_half.mid            — fragmento antes de semicadencia           ║
-║    .cadence_dec.mid             — fragmento antes de cadencia engañosa      ║
-║    .phrase_01.mid …             — frases (entre cadencias)                 ║
-║    .texture_01.mid …            — segmentos por textura rítmica            ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python harvester.py archivo.mid                                           ║
-║    python harvester.py *.mid --out-dir fragmentos/                          ║
-║    python harvester.py archivo.mid --mode all                               ║
-║    python harvester.py archivo.mid --mode form cadence motif               ║
-║    python harvester.py archivo.mid --min-bars 2 --max-bars 16              ║
-║    python harvester.py archivo.mid --novelty-threshold 0.2                  ║
-║    python harvester.py archivo.mid --report                                 ║
-║                                                                              ║
-║  MODOS (--mode):                                                             ║
-║    form      — secciones formales por curva de novedad                      ║
-║    cadence   — frases entre cadencias y contextos de cadencia               ║
-║    motif     — motivos repetidos (Sequitur)                                 ║
-║    texture   — segmentos por densidad y textura rítmica                     ║
-║    all       — todos los modos (por defecto)                                ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, music21, numpy, scipy, sklearn                         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+harvester.py — Harvester: extracción de fragmentos musicales desde MIDIs
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Segmenta MIDIs en fragmentos reutilizables usando criterios musicales:
+  · Detección de fronteras por curva de novedad (SSM checkerboard)
+  · Detección de cadencias (auténtica, plagal, semicadencia, engañosa)
+  · Repeticiones de motivos vía algoritmo Re-Pair (Sequitur simplificado)
+  · Silencio / pausa larga como frontera natural
+  · Combinación ponderada de todos los criterios
+
+Sufijos de salida:
+  .frag_A.mid, .frag_B.mid …  — secciones formales (forma detectada)
+  .motif_01.mid, .motif_02.mid — motivos repetidos (Sequitur)
+  .cadence_auth.mid            — fragmento antes de cadencia auténtica
+  .cadence_plag.mid            — fragmento antes de cadencia plagal
+  .cadence_half.mid            — fragmento antes de semicadencia
+  .cadence_dec.mid             — fragmento antes de cadencia engañosa
+  .phrase_01.mid …             — frases (entre cadencias)
+  .texture_01.mid …            — segmentos por textura rítmica
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python harvester.py archivo.mid
+    python harvester.py *.mid --out-dir fragmentos/
+    python harvester.py archivo.mid --mode all
+    python harvester.py archivo.mid --mode form cadence motif
+    python harvester.py archivo.mid --min-bars 2 --max-bars 16
+    python harvester.py archivo.mid --novelty-threshold 0.2
+    python harvester.py archivo.mid --report
+
+  MODOS (--mode):
+    form      — secciones formales por curva de novedad
+    cadence   — frases entre cadencias y contextos de cadencia
+    motif     — motivos repetidos (Sequitur)
+    texture   — segmentos por densidad y textura rítmica
+    all       — todos los modos (por defecto)
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, music21, numpy, scipy, sklearn
 """
 
 import os

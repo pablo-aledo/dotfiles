@@ -1,89 +1,95 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    SCHENKERIAN REDUCER  v1.0                                 ║
-║        Reducción analítica inversa: de la superficie al Ursatz              ║
-║                                                                              ║
-║  El ecosistema ya tiene elaboración schenkeriana como motor GENERATIVO       ║
-║  (melody_conditioned.py --engine grammar: parte de un esqueleto de acordes  ║
-║  y añade capas de ornamentación). Esta herramienta hace el proceso           ║
-║  INVERSO: dado un MIDI ya compuesto (superficie / Vordergrund), produce      ║
-║  automáticamente sus reducciones progresivas hasta llegar a una estructura   ║
-║  fundamental candidata (Ursatz) — una línea melódica descendente por grados ║
-║  conjuntos (Urlinie, 3̂/5̂/8̂ → 1̂) sobre un bajo I-V-I (Bassbrechung).         ║
-║                                                                              ║
-║  HONESTIDAD EPISTEMOLÓGICA (leer antes de confiar en la salida):             ║
-║  El análisis schenkeriano tradicional NO es un algoritmo determinista —      ║
-║  distintos analistas humanos proponen reducciones distintas y razonables    ║
-║  de la misma pieza, y Schenker nunca formalizó reglas computables            ║
-║  completas. Esta herramienta NO pretende dar "la verdad": genera N          ║
-║  candidatos puntuados por un score de bondad de forma y muestra el mejor    ║
-║  junto con las alternativas, igual que melody_conditioned.py --engine       ║
-║  genetic puntúa una población por fitness. El respaldo teórico-             ║
-║  computacional real usado aquí no es el Schenker informal, sino su          ║
-║  formalización más tratable: la Generative Theory of Tonal Music            ║
-║  (Lerdahl & Jackendoff, 1983) — time-span reduction y prolongational        ║
-║  reduction mediante reglas de preferencia explícitas y puntuables (peso     ║
-║  métrico, proximidad armónica, registro). Inspiración adicional: los        ║
-║  trabajos de Alan Marsden sobre análisis schenkeriano computacional         ║
-║  (búsqueda sobre reducciones puntuadas por reglas de prolongación).         ║
-║                                                                              ║
-║  PIPELINE:                                                                   ║
-║  [1] PREPROCESADO   — segmentación métrica + armónica, extracción de voces ║
-║  [2] CLASIFICACIÓN  — cada nota: CT/PT/NT/APP/SUS/ANT/ESC/UNCLASSIFIED      ║
-║  [3] PESO           — peso estructural por nota (armonía+métrica+duración) ║
-║  [4] NIVEL 1        — elimina ornamentación local de superficie             ║
-║  [5] ÁRBOL          — árbol de prolongación (time-span tree) por acorde     ║
-║  [6] NIVELES 2..N   — colapso recursivo de subárboles de bajo peso          ║
-║  [7] URSATZ         — 3 hipótesis de Urlinie (3̂/5̂/8̂) puntuadas             ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python schenkerian_reducer.py obra.mid                                    ║
-║    python schenkerian_reducer.py obra.mid --key Cmaj --window 1              ║
-║    python schenkerian_reducer.py obra.mid --max-levels 4 --threshold 0.35   ║
-║    python schenkerian_reducer.py obra.mid --export-levels reduced/ \\        ║
-║           --json obra.schenker.json                                         ║
-║    python schenkerian_reducer.py obra.mid --candidates 3 --explain          ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi                  MIDI de entrada                                     ║
-║    --key KEY              Fuerza tonalidad (p.ej. Cmaj, Am), si no se        ║
-║                           detecta bien automáticamente                       ║
-║    --window BEATS         Resolución del análisis armónico (default: 1      ║
-║                           compás)                                            ║
-║    --max-levels N         Tope de iteraciones de reducción (default: 5)     ║
-║    --threshold F          Umbral de structural_weight para nivel 1          ║
-║                           (default: 0.35)                                    ║
-║    --weights-config FILE  JSON opcional con coeficientes de §4.3            ║
-║    --candidates N         Nº de hipótesis de Ursatz a devolver (default: 3) ║
-║    --export-levels DIR    Escribe un .mid por nivel de reducción            ║
-║    --json FILE            Sidecar JSON con el análisis completo             ║
-║    --explain              Explicación en lenguaje llano de cada colapso     ║
-║    --no-color             Desactivar colores ANSI                            ║
-║                                                                              ║
-║  COMO MÓDULO:                                                               ║
-║    from schenkerian_reducer import reduce_piece                             ║
-║    levels, ursatz_candidates = reduce_piece(midi_path, **options)           ║
-║                                                                              ║
-║  LIMITACIONES CONOCIDAS (v1):                                               ║
-║    · Asume tonalidad funcional razonablemente clara; música muy cromática  ║
-║      o post-tonal produce numerales/Ursatz poco fiables.                    ║
-║    · Si UNCLASSIFIED supera ~30% de las notas, el informe lo advierte en    ║
-║      vez de ofrecer una reducción con falsa confianza (texturas densas o    ║
-║      muy contrapuntísticas caen aquí con frecuencia).                       ║
-║    · El repertorio de Ursatz se limita a las 3 formas canónicas simples     ║
-║      (3̂/5̂/8̂); variantes con interrupción, mixtura, etc. quedan fuera.       ║
-║    · El "bajo" se deriva por skyline (nota más grave sonando en cada        ║
-║      instante); en piezas monofónicas coincide con la melodía y la          ║
-║      confianza de Bassbrechung se apoya entonces solo en la secuencia       ║
-║      armónica de números romanos, no en una voz de bajo real.               ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy (stdlib para todo lo demás — E/S MIDI, teoría armónica ║
-║  y peso métrico están reimplementados aquí de forma autocontenida; NO       ║
-║  importa playability_auditor.py / harmonic_analyzer.py / metric_analyzer.py ║
-║  ni ninguna otra herramienta del ecosistema como dependencia final, aunque  ║
-║  reutiliza sus ideas de diseño).                                            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+schenkerian_reducer.py — Schenkerian Reducer: reducción analítica inversa: de
+la superficie al Ursatz
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+El ecosistema ya tiene elaboración schenkeriana como motor GENERATIVO
+(melody_conditioned.py --engine grammar: parte de un esqueleto de acordes
+y añade capas de ornamentación). Esta herramienta hace el proceso
+INVERSO: dado un MIDI ya compuesto (superficie / Vordergrund), produce
+automáticamente sus reducciones progresivas hasta llegar a una estructura
+fundamental candidata (Ursatz) — una línea melódica descendente por grados
+conjuntos (Urlinie, 3̂/5̂/8̂ → 1̂) sobre un bajo I-V-I (Bassbrechung).
+
+HONESTIDAD EPISTEMOLÓGICA (leer antes de confiar en la salida):
+El análisis schenkeriano tradicional NO es un algoritmo determinista —
+distintos analistas humanos proponen reducciones distintas y razonables
+de la misma pieza, y Schenker nunca formalizó reglas computables
+completas. Esta herramienta NO pretende dar "la verdad": genera N
+candidatos puntuados por un score de bondad de forma y muestra el mejor
+junto con las alternativas, igual que melody_conditioned.py --engine
+genetic puntúa una población por fitness. El respaldo teórico-
+computacional real usado aquí no es el Schenker informal, sino su
+formalización más tratable: la Generative Theory of Tonal Music
+(Lerdahl & Jackendoff, 1983) — time-span reduction y prolongational
+reduction mediante reglas de preferencia explícitas y puntuables (peso
+métrico, proximidad armónica, registro). Inspiración adicional: los
+trabajos de Alan Marsden sobre análisis schenkeriano computacional
+(búsqueda sobre reducciones puntuadas por reglas de prolongación).
+
+PIPELINE:
+[1] PREPROCESADO   — segmentación métrica + armónica, extracción de voces
+[2] CLASIFICACIÓN  — cada nota: CT/PT/NT/APP/SUS/ANT/ESC/UNCLASSIFIED
+[3] PESO           — peso estructural por nota (armonía+métrica+duración)
+[4] NIVEL 1        — elimina ornamentación local de superficie
+[5] ÁRBOL          — árbol de prolongación (time-span tree) por acorde
+[6] NIVELES 2..N   — colapso recursivo de subárboles de bajo peso
+[7] URSATZ         — 3 hipótesis de Urlinie (3̂/5̂/8̂) puntuadas
+
+COMO MÓDULO:
+  from schenkerian_reducer import reduce_piece
+  levels, ursatz_candidates = reduce_piece(midi_path, **options)
+
+LIMITACIONES CONOCIDAS (v1):
+  · Asume tonalidad funcional razonablemente clara; música muy cromática
+    o post-tonal produce numerales/Ursatz poco fiables.
+  · Si UNCLASSIFIED supera ~30% de las notas, el informe lo advierte en
+    vez de ofrecer una reducción con falsa confianza (texturas densas o
+    muy contrapuntísticas caen aquí con frecuencia).
+  · El repertorio de Ursatz se limita a las 3 formas canónicas simples
+    (3̂/5̂/8̂); variantes con interrupción, mixtura, etc. quedan fuera.
+  · El "bajo" se deriva por skyline (nota más grave sonando en cada
+    instante); en piezas monofónicas coincide con la melodía y la
+    confianza de Bassbrechung se apoya entonces solo en la secuencia
+    armónica de números romanos, no en una voz de bajo real.
+
+DEPENDENCIAS: numpy (stdlib para todo lo demás — E/S MIDI, teoría armónica
+y peso métrico están reimplementados aquí de forma autocontenida; NO
+importa playability_auditor.py / harmonic_analyzer.py / metric_analyzer.py
+ni ninguna otra herramienta del ecosistema como dependencia final, aunque
+reutiliza sus ideas de diseño).
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi                  MIDI de entrada
+  --key KEY              Fuerza tonalidad (p.ej. Cmaj, Am), si no se
+                         detecta bien automáticamente
+  --window BEATS         Resolución del análisis armónico (default: 1
+                         compás)
+  --max-levels N         Tope de iteraciones de reducción (default: 5)
+  --threshold F          Umbral de structural_weight para nivel 1
+                         (default: 0.35)
+  --weights-config FILE  JSON opcional con coeficientes de §4.3
+  --candidates N         Nº de hipótesis de Ursatz a devolver (default: 3)
+  --export-levels DIR    Escribe un .mid por nivel de reducción
+  --json FILE            Sidecar JSON con el análisis completo
+  --explain              Explicación en lenguaje llano de cada colapso
+  --no-color             Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python schenkerian_reducer.py obra.mid
+  python schenkerian_reducer.py obra.mid --key Cmaj --window 1
+  python schenkerian_reducer.py obra.mid --max-levels 4 --threshold 0.35
+  python schenkerian_reducer.py obra.mid --export-levels reduced/ \
+         --json obra.schenker.json
+  python schenkerian_reducer.py obra.mid --candidates 3 --explain
 """
 
 import sys

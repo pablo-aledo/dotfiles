@@ -1,31 +1,11 @@
 #!/usr/bin/env python3
 """
-generar_midi.py
-═══════════════
-Lee un fichero YAML de partitura y genera ficheros MIDI por sección.
+generar_midi.py — Lee un fichero YAML de partitura y genera ficheros MIDI por
+sección
 
-Uso:
-    python generar_midi.py                         # genera todas las secciones
-    python generar_midi.py --seccion I             # solo Sección I
-    python generar_midi.py --frase I.2             # solo la frase I.2
-    python generar_midi.py --preview               # muestra estructura
-    python generar_midi.py --completa              # obra completa en un único MIDI
-    python generar_midi.py --diff v1.yaml v2.yaml  # compara dos versiones
-    python generar_midi.py --estadisticas          # análisis de la obra
-    python generar_midi.py --nueva-frase I.4 --compases 15-18 --leitmotiv TEMA_A
-    python generar_midi.py --stems                 # un MIDI por instrumento en output/stems/
-    python generar_midi.py --stems --completa      # stems de la obra completa concatenada
-    python generar_midi.py --stems --seccion I     # stems solo de la sección I
-    python generar_midi.py --leitmotivs            # un MIDI por leitmotiv en output/leitmotivs/
-    python generar_midi.py --harmony               # un MIDI de armonía por sección en output/harmony/
-    python generar_midi.py --melody                # un MIDI de melodía por sección en output/melody/
-    python generar_midi.py --rhythm                # un MIDI de ritmo por sección en output/rhythm/
-    python generar_midi.py --html                  # esquema visual HTML de la obra
-    python generar_midi.py --render-audio          # genera MIDI y lo convierte a WAV
-    python generar_midi.py --csv                   # exporta CSV de análisis
-    python generar_midi.py --validar               # valida sin generar
-    python generar_midi.py --yaml mi_obra.yaml --output carpeta/
-
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
 ESTRUCTURA DEL YAML:
     obra:       título, subtítulo, compás, tonalidad, modo, tonica, compases_totales
                 modo y tonica opcionales; activan el sistema modal.
@@ -37,6 +17,60 @@ ESTRUCTURA DEL YAML:
     secciones:  bloques de compases con frases, armonía, melodía, etc.
 
     Ver partitura.yaml para la estructura completa con todos los campos.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --yaml YAML                 (defecto partitura.yaml)
+  --output OUTPUT             (defecto output)
+  --seccion SECCION           Solo esta sección (ej: I, II)
+  --frase FRASE               Solo esta frase (ej: I.2)
+  --preview
+  --completa
+  --validar
+  --estadisticas
+  --diff DIFF ×2
+  --nueva-frase ID
+  --compases INI-FIN
+  --leitmotiv LEITMOTIV
+  --render-audio
+  --soundfont SOUNDFONT
+  --csv
+  --sin-validar
+  --html                      Genera esquema visual HTML de la obra
+  --stems                     Exporta un MIDI por instrumento en output/stems/
+  --leitmotivs                Exporta un MIDI por leitmotiv en
+                              output/leitmotivs/
+  --harmony                   Exporta un MIDI de armonía por sección en
+                              output/harmony/
+  --melody                    Exporta un MIDI de melodía por sección en
+                              output/melody/
+  --rhythm                    Exporta un MIDI de ritmo (marcato+percusión) por
+                              sección en output/rhythm/
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python generar_midi.py                         # genera todas las secciones
+  python generar_midi.py --seccion I             # solo Sección I
+  python generar_midi.py --frase I.2             # solo la frase I.2
+  python generar_midi.py --preview               # muestra estructura
+  python generar_midi.py --completa              # obra completa en un único MIDI
+  python generar_midi.py --diff v1.yaml v2.yaml  # compara dos versiones
+  python generar_midi.py --estadisticas          # análisis de la obra
+  python generar_midi.py --nueva-frase I.4 --compases 15-18 --leitmotiv TEMA_A
+  python generar_midi.py --stems                 # un MIDI por instrumento en output/stems/
+  python generar_midi.py --stems --completa      # stems de la obra completa concatenada
+  python generar_midi.py --stems --seccion I     # stems solo de la sección I
+  python generar_midi.py --leitmotivs            # un MIDI por leitmotiv en output/leitmotivs/
+  python generar_midi.py --harmony               # un MIDI de armonía por sección en output/harmony/
+  python generar_midi.py --melody                # un MIDI de melodía por sección en output/melody/
+  python generar_midi.py --rhythm                # un MIDI de ritmo por sección en output/rhythm/
+  python generar_midi.py --html                  # esquema visual HTML de la obra
+  python generar_midi.py --render-audio          # genera MIDI y lo convierte a WAV
+  python generar_midi.py --csv                   # exporta CSV de análisis
+  python generar_midi.py --validar               # valida sin generar
+  python generar_midi.py --yaml mi_obra.yaml --output carpeta/
 """
 
 import yaml

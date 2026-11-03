@@ -1,48 +1,60 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    LEADSHEET REALIZER  v1.0                                 ║
-║        Cifrado de acordes → acompañamiento pianístico tocable               ║
-║                                                                              ║
-║  chord_progression_generator y reharmonizer trabajan la ARMONÍA en          ║
-║  abstracto; voice_leader produce el coral SATB. Falta el puente práctico    ║
-║  para quien toca: convertir un cifrado (C  Am7  F  G) en un acompañamiento  ║
-║  de piano que una persona pueda LEER Y TOCAR, con patrones de comping        ║
-║  idiomáticos y un voicing cómodo para las manos.                             ║
-║                                                                              ║
-║  ENTRADA: cifrados separados por espacios (un acorde por compás), con        ║
-║  duración opcional 'C:2' (compases). Símbolos admitidos:                     ║
-║    C  Cm  C7  Cmaj7  Cm7  Cdim  Caug  Csus2  Csus4  Cm7b5  Cdim7             ║
-║    C6  Cm6  C9  Cadd9  y bajo invertido con barra:  C/E  G/B                 ║
-║                                                                              ║
-║  PATRONES (--pattern):                                                       ║
-║    block     — acorde sostenido + bajo (sencillo, para empezar)             ║
-║    ballad    — acorde en tiempos 1 y 3, bajo raíz-quinta                     ║
-║    arpeggio  — arpegio ascendente de las notas del acorde                    ║
-║    alberti   — bajo Alberti (grave-agudo-medio-agudo)                        ║
-║    waltz     — vals 3/4: bajo en 1, acorde en 2 y 3                          ║
-║    pop       — raíz en la mano izq., acordes a contratiempo en la derecha    ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python leadsheet_realizer.py --chords \"C Am F G\"                          ║
-║    python leadsheet_realizer.py --chords \"Cmaj7 A7 Dm7 G7\" --pattern arpeggio║
-║    python leadsheet_realizer.py --chords \"C G/B Am F\" --pattern ballad       ║
-║    python leadsheet_realizer.py --file cancion.txt --pattern pop --tempo 100 ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --chords TEXT     Cifrados separados por espacios (un acorde/compás)      ║
-║    --file FILE       Lee los cifrados de un fichero de texto                 ║
-║    --pattern P       block|ballad|arpeggio|alberti|waltz|pop (def: block)   ║
-║    --tempo BPM       Tempo del MIDI (default: 96)                           ║
-║    --octave N        Octava central del voicing MD (default: 4)             ║
-║    --output FILE     MIDI de salida (default: leadsheet.mid)                ║
-║    --no-color        Desactivar colores ANSI                               ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from leadsheet_realizer import realize_leadsheet                          ║
-║                                                                              ║
-║  DEPENDENCIAS: playability_auditor.py (mismo directorio, E/S MIDI)           ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+leadsheet_realizer.py — Leadsheet Realizer: cifrado de acordes →
+acompañamiento pianístico tocable
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+chord_progression_generator y reharmonizer trabajan la ARMONÍA en
+abstracto; voice_leader produce el coral SATB. Falta el puente práctico
+para quien toca: convertir un cifrado (C  Am7  F  G) en un acompañamiento
+de piano que una persona pueda LEER Y TOCAR, con patrones de comping
+idiomáticos y un voicing cómodo para las manos.
+
+COMO MÓDULO:
+  from leadsheet_realizer import realize_leadsheet
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  cifrados separados por espacios (un acorde por compás), con
+  duración opcional 'C:2' (compases). Símbolos admitidos:
+    C  Cm  C7  Cmaj7  Cm7  Cdim  Caug  Csus2  Csus4  Cm7b5  Cdim7
+    C6  Cm6  C9  Cadd9  y bajo invertido con barra:  C/E  G/B
+
+  PATRONES (--pattern):
+    block     — acorde sostenido + bajo (sencillo, para empezar)
+    ballad    — acorde en tiempos 1 y 3, bajo raíz-quinta
+    arpeggio  — arpegio ascendente de las notas del acorde
+    alberti   — bajo Alberti (grave-agudo-medio-agudo)
+    waltz     — vals 3/4: bajo en 1, acorde en 2 y 3
+    pop       — raíz en la mano izq., acordes a contratiempo en la derecha
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --chords TEXT     Cifrados separados por espacios (un acorde/compás)
+  --file FILE       Lee los cifrados de un fichero de texto
+  --pattern P       block|ballad|arpeggio|alberti|waltz|pop (def: block)
+  --tempo BPM       Tempo del MIDI (default: 96)
+  --octave N        Octava central del voicing MD (default: 4)
+  --output FILE     MIDI de salida (default: leadsheet.mid)
+  --no-color        Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python leadsheet_realizer.py --chords "C Am F G"
+  python leadsheet_realizer.py --chords "Cmaj7 A7 Dm7 G7" --pattern arpeggio
+  python leadsheet_realizer.py --chords "C G/B Am F" --pattern ballad
+  python leadsheet_realizer.py --file cancion.txt --pattern pop --tempo 100
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  playability_auditor.py (mismo directorio, E/S MIDI)
 """
 
 import sys

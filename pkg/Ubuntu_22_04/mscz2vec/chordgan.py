@@ -1,98 +1,107 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         CHORDGAN  v1.0                                       ║
-║       Transferencia de estilo MIDI condicionada por chroma (sin TF)          ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  CONCEPTO                                                                    ║
-║    Reimplementación del paper «ChordGAN» (Lu & Dubnov, UCSD 2021) sin       ║
-║    TensorFlow. Sustituye la GAN original por un generador condicional        ║
-║    basado en Ridge/KNN que aprende a mapear vectores chroma → piano rolls.  ║
-║                                                                              ║
-║    El condicionamiento es idéntico al original:                              ║
-║      • El generador recibe el chroma del MIDI a transformar (12D por paso)  ║
-║      • Produce un piano roll con el «estilo» aprendido del corpus A          ║
-║    Además se añade pérdida de ciclo (F(G(x)) ≈ x) mediante un segundo       ║
-║    mapper inverso, igual que cycle_gan_style_transfer.py.                   ║
-║                                                                              ║
-║  REPRESENTACIÓN                                                              ║
-║    Piano roll: notas MIDI 24-101 (78 notas, C1–D#7), binarizado             ║
-║    Canal de ritmo: onset detection (78D extra) → vector de 156D             ║
-║    Segmentación: ventanas de num_steps pasos a fs=8 step/s                 ║
-║    Chroma: 12 clases por ventana, extraído del propio piano roll            ║
-║                                                                              ║
-║  COMANDOS                                                                    ║
-║    train      — Aprende el mapeo chroma→roll de un corpus de MIDIs          ║
-║    transfer   — Aplica el estilo aprendido a un MIDI nuevo                   ║
-║    analyze    — Estadísticas de chroma de un corpus o MIDI concreto         ║
-║    info       — Muestra los metadatos de un modelo .cgan.pkl                ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  USO — TRAIN                                                                 ║
-║                                                                              ║
-║    python chordgan.py train --corpus midis_pop/ --model pop.cgan.pkl        ║
-║                                                                              ║
-║    python chordgan.py train                                                  ║
-║        --corpus  midis_pop/                                                  ║
-║        --model   pop.cgan.pkl                                                ║
-║        --steps   4                                                           ║
-║        --solver  ridge                                                       ║
-║        --alpha   1.0                                                         ║
-║        --lambda-cycle 10.0                                                   ║
-║        --iters   50                                                          ║
-║        --verbose                                                             ║
-║                                                                              ║
-║    Opciones de train:                                                        ║
-║      --corpus DIR       Carpeta con MIDIs del corpus a aprender             ║
-║      --model  FILE      Ruta del modelo a guardar [default: chordgan.pkl]   ║
-║      --steps  N         Pasos por ventana de entrenamiento [default: 4]     ║
-║      --solver STR       ridge | knn [default: ridge]                        ║
-║      --alpha  F         Regularización Ridge [default: 1.0]                 ║
-║      --k      N         Vecinos para KNN [default: 5]                       ║
-║      --lambda-cycle F   Peso de la pérdida de ciclo [default: 10.0]        ║
-║      --iters  N         Iteraciones de refinamiento [default: 50]           ║
-║      --seed   N         Semilla aleatoria [default: 42]                     ║
-║      --verbose          Mostrar pérdidas por iteración                      ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  USO — TRANSFER                                                              ║
-║                                                                              ║
-║    python chordgan.py transfer entrada.mid                                   ║
-║        --model pop.cgan.pkl --output resultado.mid                           ║
-║                                                                              ║
-║    python chordgan.py transfer entrada.mid                                   ║
-║        --model pop.cgan.pkl                                                  ║
-║        --intensity 0.7                                                       ║
-║        --bpm 120                                                             ║
-║        --output resultado.mid                                                ║
-║        --verbose                                                             ║
-║                                                                              ║
-║    Opciones de transfer:                                                     ║
-║      --model     FILE   Modelo entrenado (.cgan.pkl)                        ║
-║      --output    FILE   MIDI de salida [default: chordgan_out.mid]          ║
-║      --intensity F      0=sin cambio, 1=transformación total [default: 1.0] ║
-║      --bpm       F      Tempo del MIDI de salida [default: 120.0]           ║
-║      --program   N      Programa GM del instrumento [default: 0 = piano]    ║
-║      --threshold F      Umbral de activación del roll [default: 0.35]       ║
-║      --seed      N      Semilla [default: 42]                               ║
-║      --verbose          Detalle del proceso                                 ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  USO — ANALYZE                                                               ║
-║                                                                              ║
-║    python chordgan.py analyze --input midis_pop/           # corpus          ║
-║    python chordgan.py analyze --input cancion.mid          # fichero         ║
-║    python chordgan.py analyze --input midis_pop/ --plot    # con ASCII plot  ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  USO — INFO                                                                  ║
-║                                                                              ║
-║    python chordgan.py info --model pop.cgan.pkl                              ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS: mido, numpy, scikit-learn                                     ║
-║  OPCIONALES:   pretty_midi (para info extendida de corpus)                  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+chordgan.py — Chordgan: transferencia de estilo MIDI condicionada por chroma
+(sin TF)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+CONCEPTO:
+  Reimplementación del paper «ChordGAN» (Lu & Dubnov, UCSD 2021) sin
+  TensorFlow. Sustituye la GAN original por un generador condicional
+  basado en Ridge/KNN que aprende a mapear vectores chroma → piano rolls.
+
+  El condicionamiento es idéntico al original:
+    • El generador recibe el chroma del MIDI a transformar (12D por paso)
+    • Produce un piano roll con el «estilo» aprendido del corpus A
+  Además se añade pérdida de ciclo (F(G(x)) ≈ x) mediante un segundo
+  mapper inverso, igual que cycle_gan_style_transfer.py.
+
+REPRESENTACIÓN:
+  Piano roll: notas MIDI 24-101 (78 notas, C1–D#7), binarizado
+  Canal de ritmo: onset detection (78D extra) → vector de 156D
+  Segmentación: ventanas de num_steps pasos a fs=8 step/s
+  Chroma: 12 clases por ventana, extraído del propio piano roll
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  train      — Aprende el mapeo chroma→roll de un corpus de MIDIs
+  transfer   — Aplica el estilo aprendido a un MIDI nuevo
+  analyze    — Estadísticas de chroma de un corpus o MIDI concreto
+  info       — Muestra los metadatos de un modelo .cgan.pkl
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USO — TRAIN ──
+  python chordgan.py train --corpus midis_pop/ --model pop.cgan.pkl
+
+  python chordgan.py train \
+      --corpus  midis_pop/ \
+      --model   pop.cgan.pkl \
+      --steps   4 \
+      --solver  ridge \
+      --alpha   1.0 \
+      --lambda-cycle 10.0 \
+      --iters   50 \
+      --verbose
+
+  Opciones de train:
+    --corpus DIR       Carpeta con MIDIs del corpus a aprender
+    --model  FILE      Ruta del modelo a guardar [default: chordgan.pkl]
+    --steps  N         Pasos por ventana de entrenamiento [default: 4]
+    --solver STR       ridge | knn [default: ridge]
+    --alpha  F         Regularización Ridge [default: 1.0]
+    --k      N         Vecinos para KNN [default: 5]
+    --lambda-cycle F   Peso de la pérdida de ciclo [default: 10.0]
+    --iters  N         Iteraciones de refinamiento [default: 50]
+    --seed   N         Semilla aleatoria [default: 42]
+    --verbose          Mostrar pérdidas por iteración
+
+── USO — TRANSFER ──
+  python chordgan.py transfer entrada.mid \
+      --model pop.cgan.pkl --output resultado.mid
+
+  python chordgan.py transfer entrada.mid \
+      --model pop.cgan.pkl \
+      --intensity 0.7 \
+      --bpm 120 \
+      --output resultado.mid \
+      --verbose
+
+  Opciones de transfer:
+    --model     FILE   Modelo entrenado (.cgan.pkl)
+    --output    FILE   MIDI de salida [default: chordgan_out.mid]
+    --intensity F      0=sin cambio, 1=transformación total [default: 1.0]
+    --bpm       F      Tempo del MIDI de salida [default: 120.0]
+    --program   N      Programa GM del instrumento [default: 0 = piano]
+    --threshold F      Umbral de activación del roll [default: 0.35]
+    --seed      N      Semilla [default: 42]
+    --verbose          Detalle del proceso
+
+── USO — ANALYZE ──
+  python chordgan.py analyze --input midis_pop/           # corpus
+  python chordgan.py analyze --input cancion.mid          # fichero
+  python chordgan.py analyze --input midis_pop/ --plot    # con ASCII plot
+
+── USO — INFO ──
+  python chordgan.py info --model pop.cgan.pkl
+
+── Más modos ──
+
+  # --solver ridge — Regresor base [default: ridge]
+  python chordgan.py train --corpus valor --solver ridge
+
+  # --solver knn — Regresor base [default: ridge]
+  python chordgan.py train --corpus valor --solver knn
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy, scikit-learn
+  OPCIONALES:   pretty_midi (para info extendida de corpus)
 """
 
 import argparse

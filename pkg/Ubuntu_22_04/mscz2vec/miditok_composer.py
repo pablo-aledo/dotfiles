@@ -1,32 +1,79 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════╗
-║ miditok_composer.py                                                       ║
-║                                                                            ║
-║ Tokenizador de música para modelos de secuencias (Transformer, etc).      ║
-║ Convierte MIDI <-> tokens usando cualquiera de los esquemas clásicos      ║
-║ (REMI, TSD, MIDI-Like, Structured, CPWord, Octuple, MuMIDI, MMM, PerTok), ║
-║ entrena vocabularios sub-token (BPE / Unigram / WordPiece) sobre un       ║
-║ corpus, e inspecciona MIDIs o tokenizadores ya entrenados.                ║
-║                                                                            ║
-║ Adaptación al estilo mutopia de MidiTok (Nathan Fradet, MIT License).     ║
-║ Backend real: paquetes `miditok` + `symusic` (no se reimplementa la       ║
-║ lógica de tokenización -- sería reinventar 9 papers distintos --, este    ║
-║ fichero es una fachada CLI de fichero único sobre esa librería).          ║
-║                                                                            ║
-║ Uso:                                                                      ║
-║   miditok_composer.py list-schemes                                       ║
-║   miditok_composer.py info song.mid                                      ║
-║   miditok_composer.py info tokenizer.json                                ║
-║   miditok_composer.py tokenize song.mid -s REMI -o tokens.json           ║
-║   miditok_composer.py tokenize song.mid -s REMI --tokenizer tok.json     ║
-║   miditok_composer.py detokenize tokens.json --tokenizer tok.json \      ║
-║       -o song_back.mid                                                   ║
-║   miditok_composer.py train corpus/*.mid -s REMI --vocab-size 8000 \     ║
-║       --model bpe -o tokenizer.json                                      ║
-║                                                                            ║
-║ Deps: pip install miditok symusic                                        ║
-╚══════════════════════════════════════════════════════════════════════════╝
+miditok_composer.py — Tokenizador de música para modelos de secuencias
+(Transformer, etc)
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Tokenizador de música para modelos de secuencias (Transformer, etc).
+Convierte MIDI <-> tokens usando cualquiera de los esquemas clásicos
+(REMI, TSD, MIDI-Like, Structured, CPWord, Octuple, MuMIDI, MMM, PerTok),
+entrena vocabularios sub-token (BPE / Unigram / WordPiece) sobre un
+corpus, e inspecciona MIDIs o tokenizadores ya entrenados.
+
+Adaptación al estilo mutopia de MidiTok (Nathan Fradet, MIT License).
+Backend real: paquetes `miditok` + `symusic` (no se reimplementa la
+lógica de tokenización -- sería reinventar 9 papers distintos --, este
+fichero es una fachada CLI de fichero único sobre esa librería).
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  list-schemes  lista los esquemas de tokenización disponibles
+  info          inspecciona un MIDI o un tokenizador (.json)
+  tokenize      convierte un MIDI en tokens
+  detokenize    reconstruye un MIDI a partir de tokens
+  train         entrena un vocabulario sub-token (BPE/Unigram/WordPiece)
+                sobre un corpus
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  info
+    path PATH
+
+  tokenize
+    midi MIDI
+    -s, --scheme SCHEME         (defecto REMI)
+    --tokenizer TOKENIZER       tokenizador ya entrenado (.json); si no,
+                                config por defecto
+    -o, --output OUTPUT         fichero de salida (.json); por defecto
+                                <midi>.tokens.json
+    --num-velocities NUM_VELOCITIES
+    --use-chords
+    --use-programs
+
+  detokenize
+    tokens TOKENS
+    --scheme SCHEME             solo si el .json de tokens no lo indica
+    --tokenizer TOKENIZER       tokenizador usado al generar los tokens
+                                (.json)
+    -o, --output OUTPUT         fichero .mid de salida
+
+  train
+    midis MIDIS […]             ficheros o patrones glob, p.ej.
+                                corpus/**/*.mid
+    -s, --scheme SCHEME         (defecto REMI)
+    --vocab-size VOCAB_SIZE     (defecto 8000)
+    --model MODEL               (defecto BPE; valores: BPE|Unigram|WordPiece)
+    --num-velocities NUM_VELOCITIES
+    -o, --output OUTPUT         (defecto tokenizer.json)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    miditok_composer.py list-schemes
+    miditok_composer.py info song.mid
+    miditok_composer.py info tokenizer.json
+    miditok_composer.py tokenize song.mid -s REMI -o tokens.json
+    miditok_composer.py tokenize song.mid -s REMI --tokenizer tok.json
+    miditok_composer.py detokenize tokens.json --tokenizer tok.json \
+        -o song_back.mid
+    miditok_composer.py train corpus/*.mid -s REMI --vocab-size 8000 \
+        --model BPE -o tokenizer.json
+
+  Deps: pip install miditok symusic
 """
 
 from __future__ import annotations

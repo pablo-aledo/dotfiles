@@ -1,278 +1,292 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════╗
-║                   PREFERENCE TRAINER  v1.2                          ║
-║         Aprende tus preferencias musicales. Evalúa MIDIs.          ║
-╠══════════════════════════════════════════════════════════════════════╣
-║                                                                      ║
-║  7 comandos — pipeline completo autónomo:                           ║
-║  index · train · eval · rank · set · validate · info               ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  INDEX — vectoriza un corpus de MIDIs y genera el índice .npz      ║
-║                                                                      ║
-║    python preference_trainer.py index ./midis/                      ║
-║    python preference_trainer.py index ./midis/ --output corpus.npz ║
-║    python preference_trainer.py index ./midis/ --extended-features  ║
-║    python preference_trainer.py index ./melodias/ --melodic-features║
-║                                                                      ║
-║  Procesa todos los .mid/.midi del directorio (recursivo). Solo      ║
-║  hay que ejecutarlo una vez (100 000 MIDIs ≈ 1-3 h).               ║
-║                                                                      ║
-║  Modos de features (elige uno; incompatibles entre sí):            ║
-║                                                                      ║
-║  · Base (10 dims, defecto)                                          ║
-║      pitch_center · pitch_range · interval_mean · contour          ║
-║      density · rhythm_variance · polyphony                         ║
-║      velocity_mean · velocity_variance · silence_ratio             ║
-║                                                                      ║
-║  · --extended-features (20 dims)                                    ║
-║      Las 10 base + tension_arc · density_arc · pitch_entropy       ║
-║      interval_entropy · repetition · harmonic_tension              ║
-║      rhythmic_complexity · note_duration_mean                      ║
-║      climax_position · dynamic_arc                                  ║
-║      Captura estructura temporal y armonía; mejor discriminación.  ║
-║                                                                      ║
-║  · --melodic-features (16 dims, solo melodía monofónica)           ║
-║      pitch_center · pitch_range · interval_mean · contour          ║
-║      density · rhythm_variance · velocity_mean · silence_ratio     ║
-║      melodic_peak_ratio · step_ratio · leap_ratio · phrase_arch    ║
-║      climax_position · note_duration_mean · pitch_entropy          ║
-║      interval_entropy                                               ║
-║                                                                      ║
-║  El modelo detecta el modo automáticamente por el nº de pesos      ║
-║  (10=base · 16=melódico · 20=extendido). Modelos de distintos      ║
-║  modos son incompatibles — usa archivos .prefs.json separados.     ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --output FILE           Archivo .npz de salida (def: corpus.npz) ║
-║    --extended-features     Vectores de 20 dimensiones               ║
-║    --melodic-features      Vectores de 16 dims para melodía mono    ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  TRAIN — sesión interactiva de anotación                            ║
-║                                                                      ║
-║    # Modo rating: puntúa MIDIs de 1 a 5 (defecto)                  ║
-║    python preference_trainer.py train corpus.npz                    ║
-║    python preference_trainer.py train corpus.npz --rounds 30       ║
-║                                                                      ║
-║    # Modo contraste: elige entre dos MIDIs                          ║
-║    python preference_trainer.py train corpus.npz --mode contrast   ║
-║                                                                      ║
-║    # Con soundfont y modelo específico                              ║
-║    python preference_trainer.py train corpus.npz                   ║
-║        --model mis_prefs --soundfont ./gm.sf2 --rounds 20          ║
-║                                                                      ║
-║  Controles durante la sesión:                                        ║
-║    Rating:    1-5=puntuar · p=reproducir · x=parar · q=guardar     ║
-║    Contraste: A/B=elegir · pa/pb=reproducir A o B · x=parar        ║
-║                                                                      ║
-║  Selección activa de muestras (no aleatoria):                       ║
-║    Rating:    muestra la pieza con mayor incertidumbre del modelo   ║
-║    Contraste: muestra el par con mayor desacuerdo esperado          ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --mode rating|contrast  Modalidad de anotación (def: rating)     ║
-║    --model FILE            Nombre base del modelo (def: prefs)      ║
-║    --model-type TYPE       Tipo de modelo (def: linear):            ║
-║                            linear  regresión logística SGD          ║
-║                            neural  red neuronal 2 capas ocultas     ║
-║                            kernel  regresión kernelizada RBF        ║
-║                            gp      Gaussian Process sparse          ║
-║                            svm     Ranking SVM pairwise             ║
-║                            Cada tipo guarda archivo separado:       ║
-║                            prefs.linear.json / prefs.neural.json…  ║
-║    --rounds N              Número de rondas (def: 20)               ║
-║    --soundfont FILE        Soundfont .sf2 para timidity o pygame    ║
-║    --no-autoplay           No reproducir automáticamente            ║
-║    --candidate-pool N      Pool para selección activa (def: 50)     ║
-║                            Mayor valor = mejor selección, más lento ║
-║    --strategy NOMBRE       Estrategia de selección activa:          ║
-║                            uncertainty  incertidumbre × novedad     ║
-║                                         (defecto, rápida)           ║
-║                            density      × densidad en corpus        ║
-║                                         (prefiere zonas densas)     ║
-║                            emc          expected model change        ║
-║                                         (señal alta, coste bajo)    ║
-║                            eer          expected error reduction     ║
-║                                         (óptima formal, lenta)      ║
-║                            qbc          query by committee K=5      ║
-║                                         (robusta al sobreajuste)    ║
-║                            hybrid       combina las tres anteriores  ║
-║                                         (recomendada en general)    ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  EVAL — evalúa uno o varios MIDIs con el modelo entrenado           ║
-║                                                                      ║
-║    # Evaluación básica                                               ║
-║    python preference_trainer.py eval pieza.mid --model mis_prefs   ║
-║                                                                      ║
-║    # Con percentil, histograma y vecinos del corpus                 ║
-║    python preference_trainer.py eval pieza.mid                      ║
-║        --model mis_prefs --corpus corpus.npz                        ║
-║                                                                      ║
-║    # Preferencia + afinidad a obras de referencia                   ║
-║    python preference_trainer.py eval pieza.mid                      ║
-║        --model mis_prefs --affinity ./obras_afines/ --weight 0.4   ║
-║                                                                      ║
-║    # Múltiples MIDIs + desglose de dimensiones + salida JSON        ║
-║    python preference_trainer.py eval *.mid                          ║
-║        --model mis_prefs --corpus corpus.npz --verbose --json       ║
-║                                                                      ║
-║  Salida con --corpus (opcional pero recomendado):                   ║
-║    · Score final y score de preferencia/afinidad por separado       ║
-║    · Percentil sobre el corpus completo                             ║
-║    · Histograma ASCII con posición marcada                          ║
-║    · Dimensiones que favorecen / perjudican el score (--verbose)    ║
-║    · Vecinos más cercanos con rating conocido                       ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --model FILE    Nombre base del modelo (def: prefs)              ║
-║    --corpus FILE   .npz para percentil, histograma y vecinos        ║
-║    --affinity DIR  Carpeta de obras afines                          ║
-║    --weight W      Peso afinidad 0-1 (def: 0.5)                     ║
-║                    0 = solo preferencia · 1 = solo afinidad         ║
-║    --verbose       Desglose completo por dimensión                  ║
-║    --json          Salida JSON machine-readable al final            ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  RANK — escanear y clasificar el corpus completo                    ║
-║                                                                      ║
-║    python preference_trainer.py rank corpus.npz --model prefs      ║
-║                                                                      ║
-║    # Con afinidad y exportación CSV                                 ║
-║    python preference_trainer.py rank corpus.npz                     ║
-║        --model prefs --affinity ./referencias/ --weight 0.4        ║
-║        --top 30 --csv ranking.csv                                   ║
-║                                                                      ║
-║    # Solo MIDIs no anotados, con anotación interactiva              ║
-║    python preference_trainer.py rank corpus.npz --model prefs      ║
-║        --exclude-annotated --interactive --soundfont ./gm.sf2      ║
-║                                                                      ║
-║  Muestra:                                                            ║
-║    · Histograma global de preferencia sobre el corpus               ║
-║    · TOP N — las más preferidas según el modelo                     ║
-║    · BOTTOM N — las menos preferidas                                ║
-║    · INCIERTAS N — donde el modelo duda más (candidatas a train)    ║
-║    · Exportación opcional a CSV con ranking completo                ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --model FILE          Nombre base del modelo (def: prefs)        ║
-║    --top N               Entradas por lista (def: 20)               ║
-║    --affinity DIR        Carpeta de obras afines                    ║
-║    --weight W            Peso afinidad 0-1 (def: 0.5)               ║
-║    --exclude-annotated   Excluir MIDIs ya anotados en train         ║
-║    --interactive         Anotar MIDIs directamente desde el ranking ║
-║    --soundfont FILE      Soundfont .sf2 para modo interactivo       ║
-║    --csv FILE            Exportar ranking completo a CSV            ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  SET — anotar preferencia directamente sin sesión interactiva       ║
-║                                                                      ║
-║    python preference_trainer.py set cancion.mid --score 5           ║
-║    python preference_trainer.py set *.mid --score 3 --model prefs  ║
-║    python preference_trainer.py set ./carpeta/ --score 4            ║
-║                                                                      ║
-║    # Con fuerza de ajuste personalizada                             ║
-║    python preference_trainer.py set pieza.mid --score 5            ║
-║        --model mis_prefs --repetitions 20                           ║
-║                                                                      ║
-║  Asigna un rating directamente y actualiza el modelo               ║
-║  inmediatamente. Muestra el cambio de score antes/después.          ║
-║  --repetitions controla la fuerza del ajuste (se aplica N veces).  ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --score N         Preferencia a asignar, obligatorio (1-5)       ║
-║    --model FILE      Nombre base del modelo (def: prefs)            ║
-║    --repetitions N   Fuerza del ajuste, nº de aplicaciones (def:10) ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  VALIDATE — validación cruzada del modelo                           ║
-║                                                                      ║
-║    python preference_trainer.py validate --model prefs              ║
-║    python preference_trainer.py validate --model prefs              ║
-║        --corpus corpus.npz --folds 10                               ║
-║                                                                      ║
-║  Mide con k-fold cross-validation:                                  ║
-║    · MAE — error absoluto medio en predicción de rating             ║
-║    · Pair accuracy — % de pares ordenados correctamente             ║
-║    · Correlación de Spearman entre predicciones y ratings reales    ║
-║  Incluye interpretación automática y recomendaciones de mejora.     ║
-║  Requiere al menos 10 ejemplos anotados para resultados fiables.    ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --model FILE    Nombre base del modelo (def: prefs)              ║
-║    --corpus FILE   .npz para recuperar vectores del historial       ║
-║    --folds N       Número de folds (def: 5)                         ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  INFO — inspeccionar el modelo guardado                             ║
-║                                                                      ║
-║    python preference_trainer.py info                                ║
-║    python preference_trainer.py info --model mis_prefs             ║
-║                                                                      ║
-║  Muestra los pesos aprendidos por dimensión, número de ejemplos    ║
-║  anotados, historial de sesiones y estadísticas del modelo.         ║
-║                                                                      ║
-║  Opciones:                                                           ║
-║    --model FILE    Nombre base del modelo (def: prefs)              ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  REPRODUCCIÓN INTEGRADA                                              ║
-║                                                                      ║
-║  Cada MIDI se reproduce automáticamente al presentarse.             ║
-║  La música continúa mientras el usuario decide; se para al votar.  ║
-║                                                                      ║
-║  Backends de audio (se detectan automáticamente):                   ║
-║    pygame    pip install pygame          (recomendado, sin externo) ║
-║    timidity  sudo apt install timidity   (mejor calidad con sf2)    ║
-║                                                                      ║
-║  Para usar soundfont con timidity:                                  ║
-║    python preference_trainer.py train corpus.npz                   ║
-║        --soundfont /usr/share/sounds/sf2/FluidR3_GM.sf2            ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  FLUJO TÍPICO                                                        ║
-║                                                                      ║
-║    # 1. Indexar el corpus (una sola vez)                            ║
-║    python preference_trainer.py index ./midis/                      ║
-║    python preference_trainer.py index ./midis/ --extended-features  ║
-║                                                                      ║
-║    # 2. Entrenar el modelo (repetir hasta tener ≥30 ejemplos)       ║
-║    python preference_trainer.py train corpus.npz --rounds 20       ║
-║    python preference_trainer.py train corpus.npz --mode contrast   ║
-║                                                                      ║
-║    # 3. Validar la calidad del modelo                               ║
-║    python preference_trainer.py validate --model prefs             ║
-║                                                                      ║
-║    # 4. Evaluar una pieza propia                                    ║
-║    python preference_trainer.py eval mi_pieza.mid                  ║
-║        --model prefs --corpus corpus.npz --verbose                 ║
-║                                                                      ║
-║    # 5. Clasificar el corpus entero y exportar                      ║
-║    python preference_trainer.py rank corpus.npz                    ║
-║        --model prefs --top 50 --csv ranking.csv                    ║
-║                                                                      ║
-║    # 6. Anotar manualmente sin sesión interactiva                   ║
-║    python preference_trainer.py set favorita.mid --score 5         ║
-║                                                                      ║
-║    # 7. Inspeccionar el modelo                                      ║
-║    python preference_trainer.py info --model prefs                 ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  MODELO DE PREFERENCIAS                                              ║
-║                                                                      ║
-║  Regresión lineal sobre los vectores musicales del corpus.          ║
-║  Entrenamiento incremental con SGD. Se guarda como JSON             ║
-║  entre sesiones y acumula ejemplos de forma indefinida.             ║
-║  Nombre del archivo: <model>.prefs.json  (def: prefs.prefs.json)   ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS                                                        ║
-║    pip install mido numpy          # obligatorio                    ║
-║    pip install pygame              # opcional: audio (recomendado)  ║
-║    sudo apt install timidity       # opcional: audio alternativo    ║
-╚══════════════════════════════════════════════════════════════════════╝
+r"""
+preference_trainer.py — Preference Trainer: aprende tus preferencias
+musicales. Evalúa MIDIs.
+(versión 1.2).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+7 comandos — pipeline completo autónomo:
+index · train · eval · rank · set · validate · info
+
+INDEX — vectoriza un corpus de MIDIs y genera el índice .npz
+
+  python preference_trainer.py index ./midis/
+  python preference_trainer.py index ./midis/ --output corpus.npz
+  python preference_trainer.py index ./midis/ --extended-features
+  python preference_trainer.py index ./melodias/ --melodic-features
+
+Procesa todos los .mid/.midi del directorio (recursivo). Solo
+hay que ejecutarlo una vez (100 000 MIDIs ≈ 1-3 h).
+
+Modos de features (elige uno; incompatibles entre sí):
+
+· Base (10 dims, defecto)
+    pitch_center · pitch_range · interval_mean · contour
+    density · rhythm_variance · polyphony
+    velocity_mean · velocity_variance · silence_ratio
+
+· --extended-features (20 dims)
+    Las 10 base + tension_arc · density_arc · pitch_entropy
+    interval_entropy · repetition · harmonic_tension
+    rhythmic_complexity · note_duration_mean
+    climax_position · dynamic_arc
+    Captura estructura temporal y armonía; mejor discriminación.
+
+· --melodic-features (16 dims, solo melodía monofónica)
+    pitch_center · pitch_range · interval_mean · contour
+    density · rhythm_variance · velocity_mean · silence_ratio
+    melodic_peak_ratio · step_ratio · leap_ratio · phrase_arch
+    climax_position · note_duration_mean · pitch_entropy
+    interval_entropy
+
+El modelo detecta el modo automáticamente por el nº de pesos
+(10=base · 16=melódico · 20=extendido). Modelos de distintos
+modos son incompatibles — usa archivos .prefs.json separados.
+
+REPRODUCCIÓN INTEGRADA:
+Cada MIDI se reproduce automáticamente al presentarse.
+La música continúa mientras el usuario decide; se para al votar.
+
+Backends de audio (se detectan automáticamente):
+  pygame    pip install pygame          (recomendado, sin externo)
+  timidity  sudo apt install timidity   (mejor calidad con sf2)
+
+Para usar soundfont con timidity:
+  python preference_trainer.py train corpus.npz \
+      --soundfont /usr/share/sounds/sf2/FluidR3_GM.sf2
+
+FLUJO TÍPICO:
+  # 1. Indexar el corpus (una sola vez)
+  python preference_trainer.py index ./midis/
+  python preference_trainer.py index ./midis/ --extended-features
+
+  # 2. Entrenar el modelo (repetir hasta tener ≥30 ejemplos)
+  python preference_trainer.py train corpus.npz --rounds 20
+  python preference_trainer.py train corpus.npz --mode contrast
+
+  # 3. Validar la calidad del modelo
+  python preference_trainer.py validate --model prefs
+
+  # 4. Evaluar una pieza propia
+  python preference_trainer.py eval mi_pieza.mid \
+      --model prefs --corpus corpus.npz --verbose
+
+  # 5. Clasificar el corpus entero y exportar
+  python preference_trainer.py rank corpus.npz \
+      --model prefs --top 50 --csv ranking.csv
+
+  # 6. Anotar manualmente sin sesión interactiva
+  python preference_trainer.py set favorita.mid --score 5
+
+  # 7. Inspeccionar el modelo
+  python preference_trainer.py info --model prefs
+
+MODELO DE PREFERENCIAS:
+Regresión lineal sobre los vectores musicales del corpus.
+Entrenamiento incremental con SGD. Se guarda como JSON
+entre sesiones y acumula ejemplos de forma indefinida.
+Nombre del archivo: <model>.prefs.json  (def: prefs.prefs.json)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  index       Vectorizar corpus de MIDIs → .npz
+  train       Sesión de entrenamiento interactiva
+  eval        Evaluar uno o varios MIDIs
+  rank        Escanear corpus → top/bottom/inciertas
+  set         Asignar preferencia directamente a un MIDI
+  validate    Validación cruzada del modelo
+  info        Inspeccionar modelo guardado
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+    --output FILE           Archivo .npz de salida (def: corpus.npz)
+    --extended-features     Vectores de 20 dimensiones
+    --melodic-features      Vectores de 16 dims para melodía mono
+
+  TRAIN — sesión interactiva de anotación
+
+    # Modo rating: puntúa MIDIs de 1 a 5 (defecto)
+    python preference_trainer.py train corpus.npz
+    python preference_trainer.py train corpus.npz --rounds 30
+
+    # Modo contraste: elige entre dos MIDIs
+    python preference_trainer.py train corpus.npz --mode contrast
+
+    # Con soundfont y modelo específico
+    python preference_trainer.py train corpus.npz \
+        --model mis_prefs --soundfont ./gm.sf2 --rounds 20
+
+  Controles durante la sesión:
+    Rating:    1-5=puntuar · p=reproducir · x=parar · q=guardar
+    Contraste: A/B=elegir · pa/pb=reproducir A o B · x=parar
+
+  Selección activa de muestras (no aleatoria):
+    Rating:    muestra la pieza con mayor incertidumbre del modelo
+    Contraste: muestra el par con mayor desacuerdo esperado
+
+── Opciones ──
+    --mode rating|contrast  Modalidad de anotación (def: rating)
+    --model FILE            Nombre base del modelo (def: prefs)
+    --model-type TYPE       Tipo de modelo (def: linear):
+                            linear  regresión logística SGD
+                            neural  red neuronal 2 capas ocultas
+                            kernel  regresión kernelizada RBF
+                            gp      Gaussian Process sparse
+                            svm     Ranking SVM pairwise
+                            Cada tipo guarda archivo separado:
+                            prefs.linear.json / prefs.neural.json…
+    --rounds N              Número de rondas (def: 20)
+    --soundfont FILE        Soundfont .sf2 para timidity o pygame
+    --no-autoplay           No reproducir automáticamente
+    --candidate-pool N      Pool para selección activa (def: 50)
+                            Mayor valor = mejor selección, más lento
+    --strategy NOMBRE       Estrategia de selección activa:
+                            uncertainty  incertidumbre × novedad
+                                         (defecto, rápida)
+                            density      × densidad en corpus
+                                         (prefiere zonas densas)
+                            emc          expected model change
+                                         (señal alta, coste bajo)
+                            eer          expected error reduction
+                                         (óptima formal, lenta)
+                            qbc          query by committee K=5
+                                         (robusta al sobreajuste)
+                            hybrid       combina las tres anteriores
+                                         (recomendada en general)
+
+  EVAL — evalúa uno o varios MIDIs con el modelo entrenado
+
+    # Evaluación básica
+    python preference_trainer.py eval pieza.mid --model mis_prefs
+
+    # Con percentil, histograma y vecinos del corpus
+    python preference_trainer.py eval pieza.mid \
+        --model mis_prefs --corpus corpus.npz
+
+    # Preferencia + afinidad a obras de referencia
+    python preference_trainer.py eval pieza.mid \
+        --model mis_prefs --affinity ./obras_afines/ --weight 0.4
+
+    # Múltiples MIDIs + desglose de dimensiones + salida JSON
+    python preference_trainer.py eval *.mid \
+        --model mis_prefs --corpus corpus.npz --verbose --json
+
+  Salida con --corpus (opcional pero recomendado):
+    · Score final y score de preferencia/afinidad por separado
+    · Percentil sobre el corpus completo
+    · Histograma ASCII con posición marcada
+    · Dimensiones que favorecen / perjudican el score (--verbose)
+    · Vecinos más cercanos con rating conocido
+
+── Opciones ──
+    --model FILE    Nombre base del modelo (def: prefs)
+    --corpus FILE   .npz para percentil, histograma y vecinos
+    --affinity DIR  Carpeta de obras afines
+    --weight W      Peso afinidad 0-1 (def: 0.5)
+                    0 = solo preferencia · 1 = solo afinidad
+    --verbose       Desglose completo por dimensión
+    --json          Salida JSON machine-readable al final
+
+  RANK — escanear y clasificar el corpus completo
+
+    python preference_trainer.py rank corpus.npz --model prefs
+
+    # Con afinidad y exportación CSV
+    python preference_trainer.py rank corpus.npz \
+        --model prefs --affinity ./referencias/ --weight 0.4 \
+        --top 30 --csv ranking.csv
+
+    # Solo MIDIs no anotados, con anotación interactiva
+    python preference_trainer.py rank corpus.npz --model prefs \
+        --exclude-annotated --interactive --soundfont ./gm.sf2
+
+  Muestra:
+    · Histograma global de preferencia sobre el corpus
+    · TOP N — las más preferidas según el modelo
+    · BOTTOM N — las menos preferidas
+    · INCIERTAS N — donde el modelo duda más (candidatas a train)
+    · Exportación opcional a CSV con ranking completo
+
+── Opciones ──
+    --model FILE          Nombre base del modelo (def: prefs)
+    --top N               Entradas por lista (def: 20)
+    --affinity DIR        Carpeta de obras afines
+    --weight W            Peso afinidad 0-1 (def: 0.5)
+    --exclude-annotated   Excluir MIDIs ya anotados en train
+    --interactive         Anotar MIDIs directamente desde el ranking
+    --soundfont FILE      Soundfont .sf2 para modo interactivo
+    --csv FILE            Exportar ranking completo a CSV
+
+  SET — anotar preferencia directamente sin sesión interactiva
+
+    python preference_trainer.py set cancion.mid --score 5
+    python preference_trainer.py set *.mid --score 3 --model prefs
+    python preference_trainer.py set ./carpeta/ --score 4
+
+    # Con fuerza de ajuste personalizada
+    python preference_trainer.py set pieza.mid --score 5 \
+        --model mis_prefs --repetitions 20
+
+  Asigna un rating directamente y actualiza el modelo
+  inmediatamente. Muestra el cambio de score antes/después.
+  --repetitions controla la fuerza del ajuste (se aplica N veces).
+
+── Opciones ──
+    --score N         Preferencia a asignar, obligatorio (1-5)
+    --model FILE      Nombre base del modelo (def: prefs)
+    --repetitions N   Fuerza del ajuste, nº de aplicaciones (def:10)
+
+  VALIDATE — validación cruzada del modelo
+
+    python preference_trainer.py validate --model prefs
+    python preference_trainer.py validate --model prefs \
+        --corpus corpus.npz --folds 10
+
+  Mide con k-fold cross-validation:
+    · MAE — error absoluto medio en predicción de rating
+    · Pair accuracy — % de pares ordenados correctamente
+    · Correlación de Spearman entre predicciones y ratings reales
+  Incluye interpretación automática y recomendaciones de mejora.
+  Requiere al menos 10 ejemplos anotados para resultados fiables.
+
+── Opciones ──
+    --model FILE    Nombre base del modelo (def: prefs)
+    --corpus FILE   .npz para recuperar vectores del historial
+    --folds N       Número de folds (def: 5)
+
+  INFO — inspeccionar el modelo guardado
+
+    python preference_trainer.py info
+    python preference_trainer.py info --model mis_prefs
+
+  Muestra los pesos aprendidos por dimensión, número de ejemplos
+  anotados, historial de sesiones y estadísticas del modelo.
+
+── Opciones ──
+  --model FILE    Nombre base del modelo (def: prefs)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # --strategy uncertainty — Estrategia de selección activa (default: uncertainty).
+  python preference_trainer.py train entrada.mid --strategy uncertainty
+
+  # --strategy density — Estrategia de selección activa (default: uncertainty).
+  python preference_trainer.py train entrada.mid --strategy density
+
+  # --strategy hybrid — Estrategia de selección activa (default: uncertainty).
+  python preference_trainer.py train entrada.mid --strategy hybrid
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  pip install mido numpy          # obligatorio
+  pip install pygame              # opcional: audio (recomendado)
+  sudo apt install timidity       # opcional: audio alternativo
 """
 
 

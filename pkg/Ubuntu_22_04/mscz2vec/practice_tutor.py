@@ -1,52 +1,61 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       PRACTICE TUTOR  v1.0                                  ║
-║        Graduador de dificultad y generador de plan de estudio (piano)       ║
-║                                                                              ║
-║  playability_auditor dice SI una parte es tocable y fingering la digita,    ║
-║  pero nadie GRADÚA la dificultad ni PLANIFICA la práctica. Esta herramienta ║
-║  estima el nivel de una pieza de piano, localiza los compases difíciles y   ║
-║  genera material de estudio: manos separadas, versión lenta (usando         ║
-║  tempo_designer) y bucles de los compases más duros. Es la pieza que más    ║
-║  echa en falta quien está aprendiendo a tocar.                              ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    grade   — estima nivel (≈1–8), factores de dificultad y compases duros   ║
-║    plan    — genera material de práctica (manos separadas, lento, bucles)   ║
-║                                                                              ║
-║  FACTORES DE DIFICULTAD:                                                     ║
-║    velocidad     — notas por segundo exigidas (tempo × densidad)            ║
-║    extensión     — acordes/intervalos amplios dentro de una mano            ║
-║    polifonía     — nº de notas simultáneas por mano                         ║
-║    saltos        — saltos melódicos grandes dentro de una mano              ║
-║    independencia — divergencia rítmica entre las dos manos                  ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python practice_tutor.py grade pieza.mid                                 ║
-║    python practice_tutor.py grade pieza.mid --split 60                      ║
-║    python practice_tutor.py plan pieza.mid --slow-factor 0.6 --hard 3       ║
-║    python practice_tutor.py plan pieza.mid --outdir estudio/                ║
-║                                                                              ║
-║  OPCIONES (grade):                                                           ║
-║    midi              MIDI de piano de entrada                               ║
-║    --split N         Nota MIDI de corte MD/MI si hay 1 sola pista (def: 60) ║
-║    --json FILE       Escribe un sidecar JSON con el diagnóstico              ║
-║  OPCIONES (plan):                                                            ║
-║    midi              MIDI de piano de entrada                               ║
-║    --outdir DIR      Carpeta de salida (default: junto al MIDI)             ║
-║    --slow-factor F   Fracción del tempo original para la versión lenta      ║
-║                      (default: 0.6)                                          ║
-║    --hard N          Nº de compases difíciles a extraer en bucle (def: 3)   ║
-║    --loops N         Repeticiones por compás difícil (default: 4)           ║
-║    --split N         Corte MD/MI si hay 1 sola pista (default: 60)          ║
-║    --no-color        Desactivar colores ANSI                               ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from practice_tutor import grade_piece, make_plan                         ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy · playability_auditor.py · tempo_designer.py            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+practice_tutor.py — Practice Tutor: graduador de dificultad y generador de
+plan de estudio (piano)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+playability_auditor dice SI una parte es tocable y fingering la digita,
+pero nadie GRADÚA la dificultad ni PLANIFICA la práctica. Esta herramienta
+estima el nivel de una pieza de piano, localiza los compases difíciles y
+genera material de estudio: manos separadas, versión lenta (usando
+tempo_designer) y bucles de los compases más duros. Es la pieza que más
+echa en falta quien está aprendiendo a tocar.
+
+FACTORES DE DIFICULTAD:
+  velocidad     — notas por segundo exigidas (tempo × densidad)
+  extensión     — acordes/intervalos amplios dentro de una mano
+  polifonía     — nº de notas simultáneas por mano
+  saltos        — saltos melódicos grandes dentro de una mano
+  independencia — divergencia rítmica entre las dos manos
+
+COMO MÓDULO:
+  from practice_tutor import grade_piece, make_plan
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  grade   — estima nivel (≈1–8), factores de dificultad y compases duros
+  plan    — genera material de práctica (manos separadas, lento, bucles)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python practice_tutor.py grade pieza.mid
+    python practice_tutor.py grade pieza.mid --split 60
+    python practice_tutor.py plan pieza.mid --slow-factor 0.6 --hard 3
+    python practice_tutor.py plan pieza.mid --outdir estudio/
+
+  OPCIONES (grade):
+    midi              MIDI de piano de entrada
+    --split N         Nota MIDI de corte MD/MI si hay 1 sola pista (def: 60)
+    --json FILE       Escribe un sidecar JSON con el diagnóstico
+  OPCIONES (plan):
+    midi              MIDI de piano de entrada
+    --outdir DIR      Carpeta de salida (default: junto al MIDI)
+    --slow-factor F   Fracción del tempo original para la versión lenta
+                      (default: 0.6)
+    --hard N          Nº de compases difíciles a extraer en bucle (def: 3)
+    --loops N         Repeticiones por compás difícil (default: 4)
+    --split N         Corte MD/MI si hay 1 sola pista (default: 60)
+    --no-color        Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  numpy · playability_auditor.py · tempo_designer.py
 """
 
 import sys

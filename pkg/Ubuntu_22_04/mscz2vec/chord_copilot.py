@@ -1,102 +1,121 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          CHORD COPILOT  v1.0                                 ║
-║      Autocompletado de progresiones basado en estadística de corpus          ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  QUÉ HACE                                                                    ║
-║    Copiloto de progresiones al estilo Hookpad Aria / ChordChord: dado un     ║
-║    contexto de acordes recientes, sugiere qué acorde viene a continuación,   ║
-║    entrenado con n-gramas (orden 2 y 3, suavizado add-k) extraídos de un     ║
-║    corpus MIDI real -- no con reglas de teoría hardcodeadas. Complementa a   ║
-║    chord_progression_generator.py (que genera progresiones completas desde   ║
-║    reglas): esto es autocompletado estadístico, no generación desde cero.    ║
-║                                                                              ║
-║  SUBCOMANDOS                                                                 ║
-║    build-model       corpus MIDI -> modelo de n-gramas (JSON)                ║
-║    suggest            contexto de acordes -> top-N sugerencias               ║
-║    info               inspecciona metadata de un modelo                     ║
-║    render             contexto + siguiente(s) acorde(s) -> preview MIDI      ║
-║    make-test-corpus   genera un corpus sintético determinista para pruebas   ║
-║    selftest           pipeline de integración completo (9.5 del plan)        ║
-║                                                                              ║
-║  USO                                                                         ║
-║    chord_copilot.py build-model --corpus corpus/*.mid --order 3 \\          ║
-║                      --out model.json                                       ║
-║    chord_copilot.py suggest --context "Am F C" --model model.json --top 5   ║
-║    chord_copilot.py suggest --context "vi IV I" --roman --top 5             ║
-║    chord_copilot.py suggest --context "C G Am F" --mood mayor_rapido        ║
-║    chord_copilot.py info --model model.json                                 ║
-║    chord_copilot.py render --context "Am F C" --next "G" --out preview.mid  ║
-║    chord_copilot.py make-test-corpus --out corpus_test/                     ║
-║    chord_copilot.py selftest                                                ║
-║                                                                              ║
-║  OPCIONES PRINCIPALES                                                        ║
-║    build-model:  --corpus DIR_O_GLOB  --order {2,3} (def 3)  --out F        ║
-║                   --k F (def 0.5, suavizado add-k)                          ║
-║                   --skip-threshold F (def 0.3)  --progress-every N (def 1000)║
-║    suggest:       --context S  [--roman]  --model F (def model.json)        ║
-║                   --top N (def 5)  --key K  --mood M  --json                ║
-║                   --min-support N (def 5)                                   ║
-║    render:        --context S  --next S  --out F.mid  --tempo N (def 100)   ║
-║                    [--roman] [--key K] [--model F (sin --next)] [--mood M]  ║
-║                                                                              ║
-║  REPRESENTACIÓN DE ACORDES                                                   ║
-║    Absolutos:  "C", "Am", "G7", "F#m7", "Bbdim", ...                        ║
-║    Romanos (relativos a tonalidad, independientes de transposición):        ║
-║      "I", "ii", "V7", "vi", "bVII", "V/vi" (dominante secundario) ...       ║
-║    Cada progresión extraída guarda también la tonalidad absoluta detectada  ║
-║    para poder revertir romano -> absoluto al mostrar resultados.            ║
-║                                                                              ║
-║  DETECCIÓN DE TONALIDAD                                                      ║
-║    Camino primario (siempre disponible, sin dependencias): perfiles de      ║
-║    Krumhansl-Schmuckler sobre el histograma de pitch-class ponderado por    ║
-║    duración -- misma técnica que harmonic_analyzer.py.                      ║
-║    Camino alternativo con music21 (si está instalado): construye un Stream  ║
-║    real y usa music21.analysis.discrete.KrumhanslSchmuckler; se usa sólo    ║
-║    en build-model vía --use-music21 (por defecto NO se usa, para que el     ║
-║    comportamiento por defecto sea 100% reproducible y no dependa de una     ║
-║    librería externa). Ambos caminos están implementados y probados          ║
-║    (selftest fuerza un ImportError simulado de music21 y verifica que el    ║
-║    camino propio sigue funcionando igual de bien sobre el fixture).         ║
-║                                                                              ║
-║  MOOD BUCKETS                                                                ║
-║    modo (mayor/menor) x tempo (lento<80 / medio 80-130 / rápido>130) BPM,   ║
-║    ej. "mayor_rapido", "menor_lento". Densidad y registro se calculan y      ║
-║    guardan como metadata por pieza pero NO forman parte de la clave del     ║
-║    bucket (mantener el espacio combinatorio pequeño para que cada bucket    ║
-║    tenga masa estadística suficiente -- ver sección 7 del plan).            ║
-║                                                                              ║
-║  BACKOFF DE `suggest`                                                        ║
-║    Con --mood: mood-orden3 -> global-orden3 -> mood-orden2 -> global-orden2 ║
-║    -> marginal global. Se hace backoff en cuanto el soporte (suma de        ║
-║    conteos del contexto) cae por debajo de --min-support en ese nivel.      ║
-║    Sin --mood: global-orden3 -> global-orden2 -> marginal global.           ║
-║                                                                              ║
-║  DEPENDENCIAS  numpy · mido · music21 (opcional, sólo build-model)          ║
-║  (lazy imports: nada de esto se importa a nivel de módulo)                  ║
-║                                                                              ║
-║  LIMITACIONES CONOCIDAS (documentadas explícitamente, no omitidas)          ║
-║    · El acorde aumentado no se distingue de mayor en la conversión romano   ║
-║      -> absoluto (sólo se distingue mayor/menor/disminuido por casing del   ║
-║      numeral); un "V" en modo mayor con --roman siempre vuelve como tríada  ║
-║      mayor simple, nunca como aumentada. Poco frecuente en la práctica.     ║
-║    · Las séptimas de sensible sobre grados disminuidos vuelven siempre      ║
-║      como semidisminuida (m7b5), nunca como disminuida plena (dim7), al     ║
-║      revertir de romano a absoluto.                                        ║
-║    · La detección de cambios de acorde usa una tolerancia fija (20% de un   ║
-║      tiempo) para agrupar onsets casi simultáneos; en piezas con mucho      ║
-║      rubato o florituras rápidas puede sub-segmentar u over-segmentar.      ║
-║    · `render` asume acorde en posición fundamental salvo que ningún voicing ║
-║      con el bajo en la fundamental quede dentro de rango vocal (entonces    ║
-║      permite cualquier nota del acorde en el bajo).                        ║
-║    · El bucket de densidad/registro es sólo metadata informativa; el modelo ║
-║      de n-gramas no se particiona por esos ejes (ver sección 7 del plan).   ║
-║                                                                              ║
-║  Módulo importable:                                                          ║
-║    from chord_copilot import (build_model, suggest, extract_progression,    ║
-║                                roman_of, roman_to_absolute, detect_key)      ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+chord_copilot.py — Chord Copilot: autocompletado de progresiones basado en
+estadística de corpus
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+QUÉ HACE:
+  Copiloto de progresiones al estilo Hookpad Aria / ChordChord: dado un
+  contexto de acordes recientes, sugiere qué acorde viene a continuación,
+  entrenado con n-gramas (orden 2 y 3, suavizado add-k) extraídos de un
+  corpus MIDI real -- no con reglas de teoría hardcodeadas. Complementa a
+  chord_progression_generator.py (que genera progresiones completas desde
+  reglas): esto es autocompletado estadístico, no generación desde cero.
+
+REPRESENTACIÓN DE ACORDES:
+  Absolutos:  "C", "Am", "G7", "F#m7", "Bbdim", ...
+  Romanos (relativos a tonalidad, independientes de transposición):
+    "I", "ii", "V7", "vi", "bVII", "V/vi" (dominante secundario) ...
+  Cada progresión extraída guarda también la tonalidad absoluta detectada
+  para poder revertir romano -> absoluto al mostrar resultados.
+
+DETECCIÓN DE TONALIDAD:
+  Camino primario (siempre disponible, sin dependencias): perfiles de
+  Krumhansl-Schmuckler sobre el histograma de pitch-class ponderado por
+  duración -- misma técnica que harmonic_analyzer.py.
+  Camino alternativo con music21 (si está instalado): construye un Stream
+  real y usa music21.analysis.discrete.KrumhanslSchmuckler; se usa sólo
+  en build-model vía --use-music21 (por defecto NO se usa, para que el
+  comportamiento por defecto sea 100% reproducible y no dependa de una
+  librería externa). Ambos caminos están implementados y probados
+  (selftest fuerza un ImportError simulado de music21 y verifica que el
+  camino propio sigue funcionando igual de bien sobre el fixture).
+
+MOOD BUCKETS:
+  modo (mayor/menor) x tempo (lento<80 / medio 80-130 / rápido>130) BPM,
+  ej. "mayor_rapido", "menor_lento". Densidad y registro se calculan y
+  guardan como metadata por pieza pero NO forman parte de la clave del
+  bucket (mantener el espacio combinatorio pequeño para que cada bucket
+  tenga masa estadística suficiente -- ver sección 7 del plan).
+
+BACKOFF DE `suggest`
+  Con --mood: mood-orden3 -> global-orden3 -> mood-orden2 -> global-orden2
+  -> marginal global. Se hace backoff en cuanto el soporte (suma de
+  conteos del contexto) cae por debajo de --min-support en ese nivel.
+  Sin --mood: global-orden3 -> global-orden2 -> marginal global.
+
+DEPENDENCIAS  numpy · mido · music21 (opcional, sólo build-model)
+(lazy imports: nada de esto se importa a nivel de módulo)
+
+LIMITACIONES CONOCIDAS (documentadas explícitamente, no omitidas)
+  · El acorde aumentado no se distingue de mayor en la conversión romano
+    -> absoluto (sólo se distingue mayor/menor/disminuido por casing del
+    numeral); un "V" en modo mayor con --roman siempre vuelve como tríada
+    mayor simple, nunca como aumentada. Poco frecuente en la práctica.
+  · Las séptimas de sensible sobre grados disminuidos vuelven siempre
+    como semidisminuida (m7b5), nunca como disminuida plena (dim7), al
+    revertir de romano a absoluto.
+  · La detección de cambios de acorde usa una tolerancia fija (20% de un
+    tiempo) para agrupar onsets casi simultáneos; en piezas con mucho
+    rubato o florituras rápidas puede sub-segmentar u over-segmentar.
+  · `render` asume acorde en posición fundamental salvo que ningún voicing
+    con el bajo en la fundamental quede dentro de rango vocal (entonces
+    permite cualquier nota del acorde en el bajo).
+  · El bucket de densidad/registro es sólo metadata informativa; el modelo
+    de n-gramas no se particiona por esos ejes (ver sección 7 del plan).
+
+Módulo importable:
+  from chord_copilot import (build_model, suggest, extract_progression,
+                              roman_of, roman_to_absolute, detect_key)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  build-model       corpus MIDI -> modelo de n-gramas (JSON)
+  suggest            contexto de acordes -> top-N sugerencias
+  info               inspecciona metadata de un modelo
+  render             contexto + siguiente(s) acorde(s) -> preview MIDI
+  make-test-corpus   genera un corpus sintético determinista para pruebas
+  selftest           pipeline de integración completo (9.5 del plan)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES PRINCIPALES:
+  build-model:  --corpus DIR_O_GLOB  --order {2,3} (def 3)  --out F
+                 --k F (def 0.5, suavizado add-k)
+                 --skip-threshold F (def 0.3)  --progress-every N (def 1000)
+  suggest:       --context S  [--roman]  --model F (def model.json)
+                 --top N (def 5)  --key K  --mood M  --json
+                 --min-support N (def 5)
+  render:        --context S  --next S  --out F.mid  --tempo N (def 100)
+                  [--roman] [--key K] [--model F (sin --next)] [--mood M]
+
+── Otras opciones del parser ──
+  render
+    --beats BEATS               Beats por acorde (default: 4)
+
+  make-test-corpus
+    --seed SEED                 (defecto 42)
+
+  selftest
+    --quiet
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  chord_copilot.py build-model --corpus corpus/*.mid --order 3 \
+                    --out model.json
+  chord_copilot.py suggest --context "Am F C" --model model.json --top 5
+  chord_copilot.py suggest --context "vi IV I" --roman --top 5
+  chord_copilot.py suggest --context "C G Am F" --mood mayor_rapido
+  chord_copilot.py info --model model.json
+  chord_copilot.py render --context "Am F C" --next "G" --out preview.mid
+  chord_copilot.py make-test-corpus --out corpus_test/
+  chord_copilot.py selftest
 """
 
 import sys

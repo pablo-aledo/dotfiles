@@ -1,51 +1,137 @@
 #!/usr/bin/env python3
-# ==============================================================================
-#  ddsp_synth.py
-# ------------------------------------------------------------------------------
-#  Self-contained port of Google Magenta's DDSP (Differentiable Digital Signal
-#  Processing) library: harmonic + filtered-noise synthesis, a learnable
-#  reverb, a full trainable autoencoder (encoder -> latent z -> decoder ->
-#  synths -> reverb), and the CLI glue to drive all of it from one file.
-#
-#  USAGE
-#  -----
-#    ddsp_synth.py synth-harmonic  --f0 220 --duration 2.0 --out tone.wav
-#    ddsp_synth.py synth-noise     --duration 2.0 --out noise.wav
-#    ddsp_synth.py reverb          --in tone.wav --out tone_verb.wav
-#    ddsp_synth.py analyze         --in voice.wav --out voice_features.npz
-#    ddsp_synth.py train           --data ./corpus_dir --out model.pt --epochs 200
-#    ddsp_synth.py resynth         --model model.pt --in voice.wav --out recon.wav
-#    ddsp_synth.py infer           --model model.pt --f0 440 --duration 3.0 --out gen.wav
-#    ddsp_synth.py selftest        --tmp /tmp/ddsp_selftest
-#
-#  Every subcommand works on plain WAV files (mono, resampled internally to
-#  --sample-rate, default 16000 Hz, matching the original DDSP examples).
-#
-#  DEPENDENCIES
-#  ------------
-#    Baseline (always required): numpy, scipy, soundfile
-#    Only for train/resynth/infer/selftest: torch  (imported lazily)
-#
-#  DESIGN NOTES (differences from the upstream TensorFlow/Gin codebase)
-#  ----------------------------------------------------------------------------
-#   * Harmonic synth: sample-wise phase accumulation (cumsum of angular
-#     frequency), identical algorithm to core.oscillator_bank, reimplemented
-#     in torch/numpy.
-#   * Filtered-noise synth: reimplemented as frequency-domain filtering of
-#     white noise via STFT/ISTFT (multiply each noise STFT frame by the
-#     target magnitude envelope, upsampled to match frame count/bin count),
-#     rather than the frame-wise FIR overlap-add convolution used upstream.
-#     Same idea (time-varying spectral shaping of noise), simpler code.
-#   * Reverb: FFT convolution with either a loaded/synthesized impulse
-#     response (DSP-only `reverb` subcommand) or a learnable IR parameter
-#     trained jointly with the autoencoder.
-#   * f0/loudness extraction: lightweight autocorrelation pitch tracker +
-#     A-weighted log-power loudness, no CREPE/external pretrained model
-#     dependency (kept self-contained).
-#   * Multi-scale spectral loss: L1 on magnitude + log-magnitude STFTs at
-#     several FFT sizes, largest scale defaults to 4096 (the window size
-#     that fixed spectral leakage in spectro_midi.py/audio_lab.py).
-# ==============================================================================
+"""
+ddsp_synth.py — Self-contained port of Google Magenta's DDSP (Differentiable
+Digital Signal Processing) library
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Self-contained port of Google Magenta's DDSP (Differentiable Digital Signal
+Processing) library: harmonic + filtered-noise synthesis, a learnable
+reverb, a full trainable autoencoder (encoder -> latent z -> decoder ->
+synths -> reverb), and the CLI glue to drive all of it from one file.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  synth-harmonic  Synthesize a harmonic tone.
+  synth-noise     Synthesize filtered noise.
+  reverb          Apply reverb to a WAV file.
+  analyze         Extract f0 + loudness from a WAV.
+  train           Train the DDSP autoencoder on a WAV corpus.
+  resynth         Autoencode (analysis-resynthesis) a WAV file.
+  infer           Generate audio from f0/loudness only (decoder path).
+  selftest        Run an internal end-to-end sanity check.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  synth-harmonic
+    --f0 F0                     (defecto 220.0)
+    --amplitude AMPLITUDE       (defecto 0.5)
+    --duration DURATION         (defecto 2.0)
+    --n-harmonics N_HARMONICS   (defecto DEFAULT_N_HARMONICS)
+    --vibrato VIBRATO           relative depth, e.g. 0.01 (defecto 0.0)
+    --sample-rate SAMPLE_RATE   (defecto DEFAULT_SR)
+    --out OUT                   (obligatorio)
+
+  synth-noise
+    --duration DURATION         (defecto 2.0)
+    --n-bands N_BANDS           (defecto DEFAULT_N_NOISE_BANDS)
+    --shape SHAPE               (defecto white; valores:
+                                white|lowpass|highpass)
+    --sample-rate SAMPLE_RATE   (defecto DEFAULT_SR)
+    --out OUT                   (obligatorio)
+
+  reverb
+    --in IN                     (obligatorio)
+    --ir IR                     Optional WAV impulse response.
+    --ir-duration IR_DURATION   (defecto 2.0)
+    --decay DECAY               (defecto 4.0)
+    --wet WET                   (defecto 0.4)
+    --sample-rate SAMPLE_RATE   (defecto DEFAULT_SR)
+    --out OUT                   (obligatorio)
+
+  analyze
+    --in IN                     (obligatorio)
+    --frame-size FRAME_SIZE     (defecto DEFAULT_FRAME_SIZE)
+    --hop HOP                   (defecto DEFAULT_FRAME_HOP)
+    --sample-rate SAMPLE_RATE   (defecto DEFAULT_SR)
+    --out OUT                   (obligatorio)
+
+  train
+    --data DATA                 Directory of .wav files. (obligatorio)
+    --epochs EPOCHS             (defecto 200)
+    --batch-size BATCH_SIZE     (defecto 4)
+    --lr LR                     (defecto 0.0003)
+    --n-harmonics N_HARMONICS   (defecto DEFAULT_N_HARMONICS)
+    --n-noise-bands N_NOISE_BANDS
+                                (defecto DEFAULT_N_NOISE_BANDS)
+    --z-dim Z_DIM               (defecto DEFAULT_Z_DIM)
+    --hidden HIDDEN             (defecto DEFAULT_HIDDEN)
+    --sample-rate SAMPLE_RATE   (defecto DEFAULT_SR)
+    --device DEVICE             (defecto auto)
+    --out OUT                   (obligatorio)
+
+  resynth
+    --model MODEL               (obligatorio)
+    --in IN                     (obligatorio)
+    --out OUT                   (obligatorio)
+
+  infer
+    --model MODEL               (obligatorio)
+    --f0 F0                     (defecto 440.0)
+    --loudness LOUDNESS         (defecto -20.0)
+    --duration DURATION         (defecto 2.0)
+    --z-file Z_FILE             Optional .npz with a 'z' array.
+    --out OUT                   (obligatorio)
+
+  selftest
+    --tmp TMP                   (defecto /tmp/ddsp_synth_selftest)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USAGE ──
+    ddsp_synth.py synth-harmonic  --f0 220 --duration 2.0 --out tone.wav
+    ddsp_synth.py synth-noise     --duration 2.0 --out noise.wav
+    ddsp_synth.py reverb          --in tone.wav --out tone_verb.wav
+    ddsp_synth.py analyze         --in voice.wav --out voice_features.npz
+    ddsp_synth.py train           --data ./corpus_dir --out model.pt --epochs 200
+    ddsp_synth.py resynth         --model model.pt --in voice.wav --out recon.wav
+    ddsp_synth.py infer           --model model.pt --f0 440 --duration 3.0 --out gen.wav
+    ddsp_synth.py selftest        --tmp /tmp/ddsp_selftest
+
+  Every subcommand works on plain WAV files (mono, resampled internally to
+  --sample-rate, default 16000 Hz, matching the original DDSP examples).
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+DEPENDENCIES:
+    Baseline (always required): numpy, scipy, soundfile
+    Only for train/resynth/infer/selftest: torch  (imported lazily)
+
+  DESIGN NOTES (differences from the upstream TensorFlow/Gin codebase)
+
+   * Harmonic synth: sample-wise phase accumulation (cumsum of angular
+     frequency), identical algorithm to core.oscillator_bank, reimplemented
+     in torch/numpy.
+   * Filtered-noise synth: reimplemented as frequency-domain filtering of
+     white noise via STFT/ISTFT (multiply each noise STFT frame by the
+     target magnitude envelope, upsampled to match frame count/bin count),
+     rather than the frame-wise FIR overlap-add convolution used upstream.
+     Same idea (time-varying spectral shaping of noise), simpler code.
+   * Reverb: FFT convolution with either a loaded/synthesized impulse
+     response (DSP-only `reverb` subcommand) or a learnable IR parameter
+     trained jointly with the autoencoder.
+   * f0/loudness extraction: lightweight autocorrelation pitch tracker +
+     A-weighted log-power loudness, no CREPE/external pretrained model
+     dependency (kept self-contained).
+   * Multi-scale spectral loss: L1 on magnitude + log-magnitude STFTs at
+     several FFT sizes, largest scale defaults to 4096 (the window size
+     that fixed spectral leakage in spectro_midi.py/audio_lab.py).
+"""
 
 import argparse
 import json

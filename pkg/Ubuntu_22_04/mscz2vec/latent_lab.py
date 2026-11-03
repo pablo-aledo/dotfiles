@@ -1,212 +1,571 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         LATENT LAB  v1.0                                     ║
-║  Codec neuronal de audio y puentes espectrograma↔latente — fichero único     ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  SUBCOMANDOS                                                                 ║
-║    train-coder                  WAVs → entrena codec wav↔latente → coder.pt  ║
-║    wav-to-latent                WAV → latentes .npz [+ --png]                ║
-║    latent-to-wav                .npz / PNG latente → WAV (decoder)           ║
-║    latent-to-png                .npz latente → PNG escala de grises          ║
-║    png-to-latent                PNG → .npz latente                           ║
-║    spectrogram-to-latent-train_step1  WAVs + coder.pt → pares PNG editables  ║
-║                                        espectrograma/latente (sin entrenar)  ║
-║    spectrogram-to-latent-train_step2  pares PNG → mapper.pt, --method        ║
-║                                        {pix2pix,retrieval,causal,            ║
-║                                        causal-adv} (ver ARQUITECTURA)        ║
-║    spectrogram-to-latent        .npz STFT (audio_lab) → .npz latente,        ║
-║                                  --method {auto,pix2pix,greedy,viterbi,      ║
-║                                  causal,causal-adv}                          ║
-║    latent-to-spectrogram        .npz/PNG latente → .npz STFT [+ --wav],      ║
-║                                  mismo --method que spectrogram-to-latent    ║
-║    spectrogram-to-png            NPZ STFT (audio_lab) → PNG escala de grises ║
-║    png-to-spectrogram            PNG → NPZ STFT (audio_lab)                  ║
-║    train-pca                    NPZ latente(s)/espectrograma(s) → pca.npz    ║
-║    intermediate-to-pca          NPZ intermedio + pca.npz → coords PCA .npz   ║
-║    pca-to-intermediate          coords PCA .npz/PNG → NPZ intermedio         ║
-║    info                         Diagnóstico de WAV, NPZ, PNG o .pt           ║
-║    download-pretrained          Descarga y verifica un DAC oficial pre-      ║
-║                                  entrenado, listo para usar como --coder     ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS  numpy  soundfile  torch  Pillow                               ║
-║                descript-audio-codec (opcional, solo para --coder *.pth)      ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  ARQUITECTURA                                                                ║
-║                                                                              ║
-║  El codec es un autoencoder convolucional 1-D inspirado en el Descript       ║
-║  Audio Codec (DAC): encoder con convoluciones con stride (activación         ║
-║  Snake), espacio latente CONTINUO de D componentes por frame, y decoder      ║
-║  espejo con convoluciones transpuestas. Sin cuantización RVQ: el latente     ║
-║  continuo se presta a ser editado como imagen en escala de grises.           ║
-║                                                                              ║
-║  hop = producto de los strides (default 2·4·8·8 = 512 muestras/frame).       ║
-║  A 44100 Hz eso son ~86 frames latentes por segundo.                         ║
-║                                                                              ║
-║  MODELOS PRE-ENTRENADOS (recomendado en vez de train-coder desde cero)       ║
-║  wav-to-latent y latent-to-wav aceptan como --coder un checkpoint OFICIAL    ║
-║  de Descript Audio Codec (fichero .pth, p.ej. el weights.pth publicado en    ║
-║  github.com/descriptinc/descript-audio-codec/releases). Se detecta por la    ║
-║  extensión y se usa el encoder/decoder continuos de DAC (D=1024, hop=512,    ║
-║  76.7M parámetros, 44.1kHz) sin necesitar entrenar nada. Requiere el         ║
-║  paquete opcional: pip install descript-audio-codec                          ║
-║    python latent_lab.py wav-to-latent cancion.wav \\                         ║
-║           --coder dac_weights.pth --png -o cancion_latent.npz                ║
-║    python latent_lab.py latent-to-wav cancion_latent.png \\                  ║
-║           --coder dac_weights.pth -o resultado.wav                           ║
-║  El binario TSAC (Bellard) con sus modelos .bin es otra alternativa          ║
-║  pre-entrenada independiente, usable directamente por su cuenta (no se       ║
-║  integra en este script, ver tsac-*/readme.txt).                             ║
-║                                                                              ║
-║  El mapper espectrograma↔latente se construye en DOS PASOS, y el paso 2      ║
-║  admite TRES MÉTODOS alternativos, seleccionables por línea de comandos:     ║
-║                                                                              ║
-║  step1: por cada WAV, calcula el espectrograma STFT (audio_lab) y el         ║
-║  latente del coder, los ALINEA en el tiempo y los vuelca como PNG en         ║
-║  escala de grises (uno por representación) + manifest.json con los           ║
-║  metadatos (sr, window, hop, D, lat_min/max). NO entrena nada. Un humano     ║
-║  puede editar esos PNG a mano (limpiar ruido, recortar, corregir) antes      ║
-║  de continuar. Es COMÚN a los tres métodos del paso 2.                       ║
-║                                                                              ║
-║  step2 --method pix2pix (default, compatible con versiones anteriores)       ║
-║  Entrena DOS redes con el enfoque pix2pix (Isola et al. 2017): un            ║
-║  generador U-Net con skip-connections + un discriminador PatchGAN, para      ║
-║  cada dirección (espectrograma→latente y latente→espectrograma), con         ║
-║  pérdida L1 + adversarial. Las imágenes se trocean en parches temporales     ║
-║  de anchura --tile para el entrenamiento; en inferencia se recomponen        ║
-║  con solape y ventana de Hann. Generaliza a entradas nunca vistas, pero      ║
-║  tiende al promedio de las texturas plausibles (blur) cuando el sketch       ║
-║  de entrada es ambiguo — ver más abajo, MÉTODOS DE RECUPERACIÓN.             ║
-║                                                                              ║
-║  step2 --method retrieval (sin red neuronal — indexa, no entrena)            ║
-║  Concatena todos los pares frame a frame en un banco de búsqueda             ║
-║  (S_bank/Z_bank). No hay optimización: el corpus ES el modelo. El            ║
-║  mismo banco sirve para los dos métodos de búsqueda siguientes —             ║
-║  greedy y viterbi eligen el ALGORITMO de búsqueda en INFERENCIA              ║
-║  (spectrogram-to-latent --method), no en este paso.                          ║
-║                                                                              ║
-║  MÉTODOS DE RECUPERACIÓN (spectrogram-to-latent --method greedy|viterbi)     ║
-║                                                                              ║
-║  Frente a pix2pix (regresión → tiende al promedio de casos ambiguos),        ║
-║  greedy y viterbi seleccionan frames REALES del corpus, sin promediar        ║
-║  nunca — a costa de generalizar peor que una red a sketches muy              ║
-║  distintos de lo visto en entrenamiento (sobreajuste consciente).            ║
-║                                                                              ║
-║  greedy: para cada frame de entrada, el vecino más cercano del banco         ║
-║  (target cost = distancia euclídea), de forma independiente. Rápido,         ║
-║  pero sin garantía de continuidad entre frames consecutivos.                 ║
-║                                                                              ║
-║  viterbi: programación dinámica sobre los --topk candidatos por frame,       ║
-║  minimizando target cost + --join-weight · join cost (continuidad en         ║
-║  el espacio de salida entre frames consecutivos). Es la técnica de           ║
-║  unit-selection clásica de síntesis concatenativa de voz (Hunt &             ║
-║  Black 1996) aplicada a frames latentes. greedy es el caso particular        ║
-║  topk=1 (sin coste de unión).                                                ║
-║                                                                              ║
-║  MÉTODOS AUTORREGRESIVOS (spectrogram-to-latent --method causal|causal-adv)  ║
-║                                                                              ║
-║  step2 --method causal: entrena CausalGenerator (WaveNet-lite), que          ║
-║  predice la columna latente t a partir de las columnas latentes              ║
-║  ANTERIORES (convoluciones causales dilatadas, campo receptivo =             ║
-║  2**n_layers ≥ --context frames) más un condicionamiento del                 ║
-║  espectrograma COMPLETO (no causal — en generación offline el                ║
-║  espectrograma entero ya está disponible). L1 puro + teacher forcing         ║
-║  FIJO (siempre se alimenta el latente real desplazado, nunca la              ║
-║  propia predicción, durante el entrenamiento). En INFERENCIA sí es           ║
-║  autorregresivo de verdad, frame a frame, alimentado de sus propias          ║
-║  predicciones (no hay latente real disponible fuera de entrenamiento)        ║
-║  — expuesto por tanto al exposure bias clásico de los modelos                ║
-║  autorregresivos, y al mismo promedio de texturas ambiguas que               ║
-║  pix2pix, al ser también regresión L1 pura.                                  ║
-║                                                                              ║
-║  step2 --method causal-adv: añade dos mitigaciones sobre lo anterior:        ║
-║    · scheduled sampling (Bengio et al. 2015): con probabilidad               ║
-║      creciente --ss-final-prob a lo largo del entrenamiento, la              ║
-║      historia se sustituye por la propia predicción del modelo (de           ║
-║      una primera pasada, sin gradiente) en vez del latente real —            ║
-║      simplificación en DOS pasadas paralelas, no rollout secuencial          ║
-║      completo (ver docstring de _train_step2_causal_adv).                    ║
-║    · pérdida adversarial (CausalDiscriminator1D, PatchGAN 1-D                ║
-║      condicionado al espectrograma): penaliza que la secuencia               ║
-║      generada no tenga la estadística de una secuencia real,                 ║
-║      empujando hacia UNA textura plausible en vez del promedio.              ║
-║                                                                              ║
-║  Ambos métodos SOLO entrenan la dirección espectrograma→latente              ║
-║  (latent-to-spectrogram --method causal falla con error explícito) —         ║
-║  ver conversación de diseño: esta dirección no hacía falta aquí.             ║
-║  Generación con ventana acotada al campo receptivo del modelo                ║
-║  (O(T·campo_receptivo), no O(T²) con toda la historia completa).             ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  PIPELINE NPZ ↔ PNG (latentes)                                               ║
-║                                                                              ║
-║  El PNG es una imagen en escala de grises donde:                             ║
-║    · Eje X  = tiempo  (frame 0 a N-1, izquierda → derecha)                   ║
-║    · Eje Y  = componente latente  (componente 0 abajo, D-1 arriba)           ║
-║    · Valor  = valor del latente, normalizado por componente al rango         ║
-║               [lat_min, lat_max] calculado sobre el corpus de entrenamiento  ║
-║                                                                              ║
-║  Los metadatos necesarios para la reconversión (sr, hop, lat_min, lat_max,   ║
-║  orientación) se guardan en chunks tEXt del PNG y en un sidecar .ll.json     ║
-║  (fallback si el editor de imagen elimina los metadatos al exportar).        ║
-║                                                                              ║
-║  Flujo típico de edición creativa:                                           ║
-║    train-coder corpus/*.wav -o coder.pt                                      ║
-║    wav-to-latent cancion.wav --coder coder.pt --png -o cancion.npz           ║
-║    [editar cancion.png en GIMP/Photoshop: borrar, pintar, clonar…]           ║
-║    latent-to-wav cancion_editada.png --coder coder.pt -o resultado.wav       ║
-║                                                                              ║
-║  Interoperabilidad con audio_lab.py: los NPZ de espectrograma que consume    ║
-║  y produce este programa (claves magnitudes/phases/freqs/sample_rate/        ║
-║  window_size/hop_ratio) son 100% compatibles con audio_lab spectrogram,      ║
-║  reconstruct, edit-spectrum y npz-to-png.                                    ║
-║                                                                              ║
-║  PIPELINE NPZ ↔ PNG (espectrogramas) — par gemelo del anterior               ║
-║                                                                              ║
-║  spectrogram-to-png / png-to-spectrogram hacen para el espectrograma STFT    ║
-║  lo mismo que latent-to-png / png-to-latent para el latente: mismo esquema   ║
-║  de PNG editable (bin 0 abajo), pero con la normalización propia de          ║
-║  magnitudes STFT (mags_to_norm/norm_to_mags: pico del fichero + rango dB     ║
-║  con --db-floor), NO min/max por componente como en el latente. Metadatos    ║
-║  (sr, window, hop_ratio, db_floor, orientación) en chunks tEXt + sidecar     ║
-║  .ll.json, igual que en el par de latentes. El NPZ de salida es 100%         ║
-║  compatible con audio_lab y con spectrogram-to-latent.                       ║
-║                                                                              ║
-║  EJEMPLOS                                                                    ║
-║    python latent_lab.py train-coder corpus/*.wav --steps 4000 -o coder.pt    ║
-║    python latent_lab.py wav-to-latent voz.wav --coder coder.pt --png         ║
-║    python latent_lab.py latent-to-wav voz.png --coder coder.pt -o out.wav    ║
-║    python latent_lab.py spectrogram-to-latent-train_step1 corpus/*.wav \\    ║
-║           --coder coder.pt -o pairs/                                         ║
-║    [editar los PNG en pairs/ a mano, opcional]                               ║
-║    python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \\          ║
-║           -o mapper.pt                                                       ║
-║    python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \\          ║
-║           --method retrieval -o mapper_retrieval.pt                          ║
-║    python latent_lab.py spectrogram-to-latent voz_stft.npz \\                ║
-║           --mapper mapper_retrieval.pt --method greedy -o voz_lat.npz        ║
-║    python latent_lab.py spectrogram-to-latent voz_stft.npz \\                ║
-║           --mapper mapper_retrieval.pt --method viterbi --topk 8 \\          ║
-║           --join-weight 1.0 -o voz_lat.npz                                   ║
-║    python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \\          ║
-║           --method causal --context 32 -o mapper_causal.pt                   ║
-║    python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \\          ║
-║           --method causal-adv --context 32 --ss-final-prob 0.5 \\            ║
-║           -o mapper_causal_adv.pt                                            ║
-║    python latent_lab.py spectrogram-to-latent voz_stft.npz \\                ║
-║           --mapper mapper_causal_adv.pt -o voz_lat.npz                       ║
-║    python latent_lab.py spectrogram-to-latent voz_stft.npz \\                ║
-║           --mapper mapper.pt -o voz_lat.npz                                  ║
-║    python latent_lab.py latent-to-spectrogram voz_lat.npz \\                 ║
-║           --mapper mapper.pt --wav voz_gl.wav                                ║
-║    python latent_lab.py train-pca corpus_latents/*.npz -o pca.npz            ║
-║    python latent_lab.py intermediate-to-pca voz_lat.npz --pca pca.npz        ║
-║           --png -o voz_pca.npz                                               ║
-║    python latent_lab.py pca-to-intermediate voz_pca.npz -o voz_lat2.npz      ║
-║    python latent_lab.py info coder.pt                                        ║
-║    python latent_lab.py spectrogram-to-png voz_stft.npz -o voz_spec.png      ║
-║    [editar voz_spec.png en GIMP/Photoshop]                                   ║
-║    python latent_lab.py png-to-spectrogram voz_spec.png -o voz_stft2.npz     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+latent_lab.py — Latent Lab: codec neuronal de audio y puentes
+espectrograma↔latente — fichero único
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+ARQUITECTURA:
+El codec es un autoencoder convolucional 1-D inspirado en el Descript
+Audio Codec (DAC): encoder con convoluciones con stride (activación
+Snake), espacio latente CONTINUO de D componentes por frame, y decoder
+espejo con convoluciones transpuestas. Sin cuantización RVQ: el latente
+continuo se presta a ser editado como imagen en escala de grises.
+
+hop = producto de los strides (default 2·4·8·8 = 512 muestras/frame).
+A 44100 Hz eso son ~86 frames latentes por segundo.
+
+MODELOS PRE-ENTRENADOS (recomendado en vez de train-coder desde cero)
+wav-to-latent y latent-to-wav aceptan como --coder un checkpoint OFICIAL
+de Descript Audio Codec (fichero .pth, p.ej. el weights.pth publicado en
+github.com/descriptinc/descript-audio-codec/releases). Se detecta por la
+extensión y se usa el encoder/decoder continuos de DAC (D=1024, hop=512,
+76.7M parámetros, 44.1kHz) sin necesitar entrenar nada. Requiere el
+paquete opcional: pip install descript-audio-codec
+  python latent_lab.py wav-to-latent cancion.wav \
+         --coder dac_weights.pth --png -o cancion_latent.npz
+  python latent_lab.py latent-to-wav cancion_latent.png \
+         --coder dac_weights.pth -o resultado.wav
+El binario TSAC (Bellard) con sus modelos .bin es otra alternativa
+pre-entrenada independiente, usable directamente por su cuenta (no se
+integra en este script, ver tsac-*/readme.txt).
+
+El mapper espectrograma↔latente se construye en DOS PASOS, y el paso 2
+admite TRES MÉTODOS alternativos, seleccionables por línea de comandos:
+
+step1: por cada WAV, calcula el espectrograma STFT (audio_lab) y el
+latente del coder, los ALINEA en el tiempo y los vuelca como PNG en
+escala de grises (uno por representación) + manifest.json con los
+metadatos (sr, window, hop, D, lat_min/max). NO entrena nada. Un humano
+puede editar esos PNG a mano (limpiar ruido, recortar, corregir) antes
+de continuar. Es COMÚN a los tres métodos del paso 2.
+
+step2 --method pix2pix (default, compatible con versiones anteriores)
+Entrena DOS redes con el enfoque pix2pix (Isola et al. 2017): un
+generador U-Net con skip-connections + un discriminador PatchGAN, para
+cada dirección (espectrograma→latente y latente→espectrograma), con
+pérdida L1 + adversarial. Las imágenes se trocean en parches temporales
+de anchura --tile para el entrenamiento; en inferencia se recomponen
+con solape y ventana de Hann. Generaliza a entradas nunca vistas, pero
+tiende al promedio de las texturas plausibles (blur) cuando el sketch
+de entrada es ambiguo — ver más abajo, MÉTODOS DE RECUPERACIÓN.
+
+step2 --method retrieval (sin red neuronal — indexa, no entrena)
+Concatena todos los pares frame a frame en un banco de búsqueda
+(S_bank/Z_bank). No hay optimización: el corpus ES el modelo. El
+mismo banco sirve para los dos métodos de búsqueda siguientes —
+greedy y viterbi eligen el ALGORITMO de búsqueda en INFERENCIA
+(spectrogram-to-latent --method), no en este paso.
+
+MÉTODOS DE RECUPERACIÓN (spectrogram-to-latent --method greedy|viterbi)
+
+Frente a pix2pix (regresión → tiende al promedio de casos ambiguos),
+greedy y viterbi seleccionan frames REALES del corpus, sin promediar
+nunca — a costa de generalizar peor que una red a sketches muy
+distintos de lo visto en entrenamiento (sobreajuste consciente).
+
+greedy: para cada frame de entrada, el vecino más cercano del banco
+(target cost = distancia euclídea), de forma independiente. Rápido,
+pero sin garantía de continuidad entre frames consecutivos.
+
+viterbi: programación dinámica sobre los --topk candidatos por frame,
+minimizando target cost + --join-weight · join cost (continuidad en
+el espacio de salida entre frames consecutivos). Es la técnica de
+unit-selection clásica de síntesis concatenativa de voz (Hunt &
+Black 1996) aplicada a frames latentes. greedy es el caso particular
+topk=1 (sin coste de unión).
+
+MÉTODOS AUTORREGRESIVOS (spectrogram-to-latent --method causal|causal-adv)
+
+step2 --method causal: entrena CausalGenerator (WaveNet-lite), que
+predice la columna latente t a partir de las columnas latentes
+ANTERIORES (convoluciones causales dilatadas, campo receptivo =
+2**n_layers ≥ --context frames) más un condicionamiento del
+espectrograma COMPLETO (no causal — en generación offline el
+espectrograma entero ya está disponible). L1 puro + teacher forcing
+FIJO (siempre se alimenta el latente real desplazado, nunca la
+propia predicción, durante el entrenamiento). En INFERENCIA sí es
+autorregresivo de verdad, frame a frame, alimentado de sus propias
+predicciones (no hay latente real disponible fuera de entrenamiento)
+— expuesto por tanto al exposure bias clásico de los modelos
+autorregresivos, y al mismo promedio de texturas ambiguas que
+pix2pix, al ser también regresión L1 pura.
+
+step2 --method causal-adv: añade dos mitigaciones sobre lo anterior:
+  · scheduled sampling (Bengio et al. 2015): con probabilidad
+    creciente --ss-final-prob a lo largo del entrenamiento, la
+    historia se sustituye por la propia predicción del modelo (de
+    una primera pasada, sin gradiente) en vez del latente real —
+    simplificación en DOS pasadas paralelas, no rollout secuencial
+    completo (ver docstring de _train_step2_causal_adv).
+  · pérdida adversarial (CausalDiscriminator1D, PatchGAN 1-D
+    condicionado al espectrograma): penaliza que la secuencia
+    generada no tenga la estadística de una secuencia real,
+    empujando hacia UNA textura plausible en vez del promedio.
+
+Ambos métodos SOLO entrenan la dirección espectrograma→latente
+(latent-to-spectrogram --method causal falla con error explícito) —
+ver conversación de diseño: esta dirección no hacía falta aquí.
+Generación con ventana acotada al campo receptivo del modelo
+(O(T·campo_receptivo), no O(T²) con toda la historia completa).
+
+PIPELINE NPZ ↔ PNG (latentes)
+
+El PNG es una imagen en escala de grises donde:
+  · Eje X  = tiempo  (frame 0 a N-1, izquierda → derecha)
+  · Eje Y  = componente latente  (componente 0 abajo, D-1 arriba)
+  · Valor  = valor del latente, normalizado por componente al rango
+             [lat_min, lat_max] calculado sobre el corpus de entrenamiento
+
+Los metadatos necesarios para la reconversión (sr, hop, lat_min, lat_max,
+orientación) se guardan en chunks tEXt del PNG y en un sidecar .ll.json
+(fallback si el editor de imagen elimina los metadatos al exportar).
+
+Flujo típico de edición creativa:
+  train-coder corpus/*.wav -o coder.pt
+  wav-to-latent cancion.wav --coder coder.pt --png -o cancion.npz
+  [editar cancion.png en GIMP/Photoshop: borrar, pintar, clonar…]
+  latent-to-wav cancion_editada.png --coder coder.pt -o resultado.wav
+
+Interoperabilidad con audio_lab.py: los NPZ de espectrograma que consume
+y produce este programa (claves magnitudes/phases/freqs/sample_rate/
+window_size/hop_ratio) son 100% compatibles con audio_lab spectrogram,
+reconstruct, edit-spectrum y npz-to-png.
+
+PIPELINE NPZ ↔ PNG (espectrogramas) — par gemelo del anterior
+
+spectrogram-to-png / png-to-spectrogram hacen para el espectrograma STFT
+lo mismo que latent-to-png / png-to-latent para el latente: mismo esquema
+de PNG editable (bin 0 abajo), pero con la normalización propia de
+magnitudes STFT (mags_to_norm/norm_to_mags: pico del fichero + rango dB
+con --db-floor), NO min/max por componente como en el latente. Metadatos
+(sr, window, hop_ratio, db_floor, orientación) en chunks tEXt + sidecar
+.ll.json, igual que en el par de latentes. El NPZ de salida es 100%
+compatible con audio_lab y con spectrogram-to-latent.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+    train-coder                  WAVs → entrena codec wav↔latente → coder.pt
+    wav-to-latent                WAV → latentes .npz [+ --png]
+    latent-to-wav                .npz / PNG latente → WAV (decoder)
+    latent-to-png                .npz latente → PNG escala de grises
+    png-to-latent                PNG → .npz latente
+    spectrogram-to-latent-train_step1  WAVs + coder.pt → pares PNG editables
+                                        espectrograma/latente (sin entrenar)
+    spectrogram-to-latent-train_step2  pares PNG → mapper.pt, --method
+                                        {pix2pix,retrieval,causal,
+                                        causal-adv} (ver ARQUITECTURA)
+    spectrogram-to-latent        .npz STFT (audio_lab) → .npz latente,
+                                  --method {auto,pix2pix,greedy,viterbi,
+                                  causal,causal-adv}
+    latent-to-spectrogram        .npz/PNG latente → .npz STFT [+ --wav],
+                                  mismo --method que spectrogram-to-latent
+    spectrogram-to-png            NPZ STFT (audio_lab) → PNG escala de grises
+    png-to-spectrogram            PNG → NPZ STFT (audio_lab)
+    train-pca                    NPZ latente(s)/espectrograma(s) → pca.npz
+    intermediate-to-pca          NPZ intermedio + pca.npz → coords PCA .npz
+    pca-to-intermediate          coords PCA .npz/PNG → NPZ intermedio
+    info                         Diagnóstico de WAV, NPZ, PNG o .pt
+    download-pretrained          Descarga y verifica un DAC oficial pre-
+                                  entrenado, listo para usar como --coder
+
+  DEPENDENCIAS  numpy  soundfile  torch  Pillow
+                descript-audio-codec (opcional, solo para --coder *.pth)
+
+  train-vocoder       WAVs → entrena un vocoder neuronal ligero (alternativa
+                      opcional a Griffin-Lim) → vocoder.pt
+  wav-to-spectrogram  WAV → NPZ STFT compatible audio_lab (sin coder ni
+                      mapper — STFT real)
+  spectrogram-to-wav  NPZ STFT → WAV (Griffin-Lim o vocoder neuronal) — sin
+                      coder ni mapper
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  train-coder
+    inputs INPUTS […]           Ficheros WAV de entrenamiento
+    --latent-dim LATENT_DIM     Componentes del espacio latente (default: …)
+    --strides STRIDES […]       Strides del encoder; su producto es el hop
+                                (default: … → hop 512)
+    --base-channels BASE_CHANNELS
+                                Canales de la primera conv (default: …)
+    --sr SR                     Sample rate de trabajo (default: …)
+    --steps STEPS               Pasos de entrenamiento (default: 2000)
+    --batch BATCH               Tamaño de batch (default: 16)
+    --segment SEGMENT           Muestras por recorte, múltiplo del hop
+                                (default: 32768)
+    --lr LR                     Learning rate Adam (default: 1e-4)
+    --seed SEED                 Semilla RNG (default: 0)
+    --log-every LOG_EVERY       Imprimir pérdida cada N pasos (default: 50)
+    --output, -o OUTPUT         Checkpoint de salida (default: coder.pt)
+
+  train-vocoder
+    inputs INPUTS […]           Ficheros WAV de entrenamiento
+    --sr SR                     Sample rate de trabajo (default: …)
+    --window WINDOW             Tamaño de ventana STFT, debe coincidir con el
+                                usado para generar los espectrogramas que
+                                luego alimentarás al vocoder (default: 4096)
+    --hop HOP                   hop_ratio STFT, ídem (default: 0.25 → hop=1024
+                                con --window 4096)
+    --db-floor DB_FLOOR         Piso dB de normalización (default: …)
+    --upsample-rates UPSAMPLE_RATES […]
+                                Factores de sobremuestreo del vocoder; su
+                                producto debe ser igual al hop STFT
+                                (window×hop-ratio). Si se omite, se calculan
+                                automáticamente (default: auto)
+    --hidden HIDDEN             Canales ocultos iniciales (default: 256)
+    --steps STEPS               Pasos de entrenamiento (default: 2000)
+    --batch BATCH               Tamaño de batch (default: 8)
+    --frames FRAMES             Frames STFT por recorte de entrenamiento. Debe
+                                ser suficiente para que frames×hop supere
+                                ~2048 muestras (lo que exige la pérdida STFT
+                                multi-escala interna); con los valores por
+                                defecto 32 ya cumple de sobra (default: 32)
+    --lr LR                     Learning rate Adam (default: 2e-4)
+    --seed SEED                 Semilla RNG (default: 0)
+    --log-every LOG_EVERY       Imprimir pérdida cada N pasos (default: 50)
+    --output, -o OUTPUT         Checkpoint de salida (default: vocoder.pt)
+
+  wav-to-latent
+    input INPUT                 Fichero WAV
+    --coder CODER               Checkpoint coder.pt (obligatorio)
+    --png                       Genera también PNG editable (mismo nombre,
+                                .png)
+    --no-flip-y                 No invertir eje Y del PNG (componente 0 queda
+                                arriba)
+    --output, -o OUTPUT         NPZ de salida
+
+  latent-to-wav
+    input INPUT                 Fichero .npz o .png de latentes
+    --coder CODER               Checkpoint coder.pt (obligatorio)
+    --normalize                 Normalizar el WAV de salida a 0.85 peak
+    --output, -o OUTPUT         WAV de salida
+
+  wav-to-spectrogram
+    input INPUT                 Fichero WAV
+    --sr SR                     Sample rate de trabajo (default: …)
+    --window WINDOW             Tamaño de ventana STFT (default: 4096)
+    --hop HOP                   hop_ratio STFT (default: 0.25)
+    --keep-phase                Conserva la fase real en el NPZ en vez de
+                                ponerla a cero (por defecto se pone a cero,
+                                igual que el resto del programa/audio_lab;
+                                útil solo para comparar contra la fase real
+                                fuera de este pipeline)
+    --output, -o OUTPUT         NPZ STFT de salida
+
+  spectrogram-to-wav
+    input INPUT                 Fichero .npz de espectrograma STFT
+    --gl-iters GL_ITERS         Iteraciones de Griffin-Lim (default: 32)
+    --gl-phase-init GL_PHASE_INIT
+                                Inicialización de fase de Griffin-Lim
+                                (default: random, comportamiento histórico;
+                                'propagate' usa fase de phase-vocoder como
+                                punto de partida) (valores: random|propagate)
+    --vocoder VOCODER           Checkpoint de train-vocoder: si se indica,
+                                reemplaza Griffin-Lim por un vocoder neuronal
+                                ligero (default: ninguno, se usa Griffin-Lim)
+    --wav, -o WAV               WAV de salida
+
+  latent-to-png
+    input INPUT                 Fichero .npz de latentes
+    --no-flip-y                 No invertir eje Y (componente 0 queda arriba)
+    --output, -o OUTPUT         PNG de salida
+
+  png-to-latent
+    input INPUT                 Fichero PNG (idealmente de wav-to-latent
+                                --png)
+    --coder CODER               coder.pt para deducir metadatos si el PNG no
+                                los tiene
+    --output, -o OUTPUT         NPZ de salida
+
+  spectrogram-to-latent-train_step1
+    inputs INPUTS […]           Ficheros WAV de entrenamiento
+    --coder CODER               Checkpoint coder.pt (obligatorio)
+    --window WINDOW             Ventana STFT en muestras, como audio_lab
+                                (default: 4096)
+    --hop HOP                   Hop ratio STFT ∈ (0,1] (default: 0.25)
+    --db-floor DB_FLOOR         Piso dB al normalizar magnitudes (default: …)
+    --output-dir, -o OUTPUT_DIR
+                                Carpeta donde escribir los pares PNG +
+                                manifest.json (default: pairs/)
+
+  spectrogram-to-latent-train_step2
+    pairs_dir PAIRS_DIR         Carpeta generada por step1 (con manifest.json)
+    --method METHOD             pix2pix: U-Net+PatchGAN, imagen completa de
+                                una vez. retrieval: indexa un banco de pares
+                                frame a frame, sin entrenar nada (usable luego
+                                con --method greedy/viterbi). causal: red
+                                autorregresiva (columna t ← columnas <t), L1 +
+                                teacher forcing fijo. causal-adv: como causal,
+                                + scheduled sampling + adversarial. flow:
+                                biyección afín invertible (RealNVP-lite) — UNA
+                                sola red cubre espectrograma→latente y
+                                latente→espectrograma exactamente, sin
+                                redes/pasadas separadas por dirección (ver
+                                --flow-direction) (default: pix2pix) (valores:
+                                pix2pix|retrieval|causal|causal-adv|flow)
+    --tile TILE                 [pix2pix/causal/causal-adv/flow] Anchura
+                                temporal (en frames) de los parches de
+                                entrenamiento; en pix2pix debe ser múltiplo de
+                                32 (default: 256)
+    --gen-base GEN_BASE         [pix2pix] Canales base del generador U-Net
+                                (default: 64)
+    --disc-base DISC_BASE       [pix2pix/causal-adv] Canales base del
+                                discriminador PatchGAN (default: 64)
+    --l1-weight L1_WEIGHT       [pix2pix/causal-adv] Peso de la pérdida L1
+                                frente a la adversarial, como en el paper
+                                pix2pix (default: 100.0)
+    --hidden HIDDEN             [causal/causal-adv] Canales ocultos de
+                                CausalGenerator (default: 64)
+    --context CONTEXT           [causal/causal-adv] Nº de frames latentes
+                                anteriores a tener en cuenta; determina el nº
+                                de capas causales dilatadas (campo receptivo =
+                                2**n_layers ≥ context) (default: 32)
+    --ss-final-prob SS_FINAL_PROB
+                                [causal-adv] Probabilidad final de scheduled
+                                sampling (sustituir historia real por la
+                                propia predicción del modelo); 0 = equivalente
+                                a teacher forcing fijo (default: 0.5)
+    --ss-warmup SS_WARMUP       [causal-adv] Fracción del entrenamiento (0-1)
+                                sobre la que ss_prob crece linealmente de 0 a
+                                --ss-final-prob (default: 0.5)
+    --n-flows N_FLOWS           [flow] Nº de capas de acoplamiento afín
+                                apiladas (default: 8)
+    --flow-hidden FLOW_HIDDEN   [flow] Canales ocultos de la subred de cada
+                                capa de acoplamiento (default: 128)
+    --flow-kernel FLOW_KERNEL   [flow] Anchura del kernel conv1d de la subred
+                                de acoplamiento, en frames (default: 5)
+    --flow-direction FLOW_DIRECTION
+                                [flow] Qué dirección(es) supervisar con L1
+                                durante el entrenamiento — sin equivalente en
+                                pix2pix (entrena ambas con redes separadas) ni
+                                en causal (solo soporta una). both: L1 en las
+                                dos direcciones a la vez sobre el mismo batch
+                                (recomendado, es 'gratis' al ser invertible).
+                                s2l/l2s: solo una dirección (default: both)
+                                (valores: s2l|l2s|both)
+    --epochs EPOCHS             [pix2pix/causal/causal-adv/flow] Epochs sobre
+                                el corpus de pares (default: 50)
+    --batch BATCH               [pix2pix/causal/causal-adv/flow] Tamaño de
+                                batch de parches (default: 4)
+    --lr LR                     [pix2pix/causal/causal-adv/flow] Learning rate
+                                Adam (default: 2e-4)
+    --seed SEED                 Semilla RNG (default: 0)
+    --log-every LOG_EVERY       Imprimir pérdida cada N pasos (default: 50)
+    --output, -o OUTPUT         Checkpoint de salida (default: mapper.pt)
+
+  spectrogram-to-latent
+    input INPUT                 Fichero .npz de espectrograma (audio_lab
+                                spectrogram)
+    --mapper MAPPER             Checkpoint mapper.pt (pix2pix o retrieval, ver
+                                spectrogram-to-latent-train_step2)
+                                (obligatorio)
+    --method METHOD             Método de traducción. auto: detecta
+                                pix2pix/legado/causal/flow del checkpoint, o
+                                usa viterbi si es un mapper de retrieval.
+                                greedy/viterbi requieren --method retrieval en
+                                step2 (default: auto) (valores:
+                                auto|pix2pix|greedy|viterbi|causal|causal-
+                                adv|flow)
+    --topk TOPK                 [viterbi] Nº de candidatos por frame
+                                considerados en la búsqueda (default: 8)
+    --join-weight JOIN_WEIGHT   [viterbi] Peso del coste de unión/continuidad
+                                frente al de coincidencia con el query
+                                (default: 1.0; 0 = greedy de facto, ignora
+                                continuidad)
+    --png                       Genera también PNG editable del latente
+    --output, -o OUTPUT         NPZ latente de salida
+
+  latent-to-spectrogram
+    input INPUT                 Fichero .npz o .png de latentes
+    --mapper MAPPER             Checkpoint mapper.pt (pix2pix o retrieval, ver
+                                spectrogram-to-latent-train_step2)
+                                (obligatorio)
+    --method METHOD             Método de traducción, igual que en
+                                spectrogram-to-latent (causal/causal-adv no
+                                soportan esta dirección — ver --help de
+                                spectrogram-to-latent-train_step2. flow SÍ la
+                                soporta: es la misma red invertida) (default:
+                                auto) (valores:
+                                auto|pix2pix|greedy|viterbi|causal|causal-
+                                adv|flow)
+    --topk TOPK                 [viterbi] Nº de candidatos por frame (default:
+                                8)
+    --join-weight JOIN_WEIGHT   [viterbi] Peso del coste de unión/continuidad
+                                (default: 1.0)
+    --mag-max MAG_MAX           Escala absoluta de las magnitudes de salida
+                                (default: 1.0; reconstruct de audio_lab
+                                normaliza automáticamente)
+    --wav WAV                   Si se especifica, reconstruye también un WAV
+                                (Griffin-Lim por defecto, o --vocoder)
+    --gl-iters GL_ITERS         Iteraciones de Griffin-Lim para --wav
+                                (default: 32)
+    --gl-phase-init GL_PHASE_INIT
+                                Inicialización de fase de Griffin-Lim
+                                (default: random, comportamiento histórico;
+                                'propagate' usa fase de phase-vocoder como
+                                punto de partida — ver train-vocoder --help
+                                para la alternativa neuronal completa)
+                                (valores: random|propagate)
+    --vocoder VOCODER           Checkpoint de train-vocoder: si se indica,
+                                reemplaza Griffin-Lim por un vocoder neuronal
+                                ligero para --wav (default: ninguno, se usa
+                                Griffin-Lim como hasta ahora)
+    --output, -o OUTPUT         NPZ STFT de salida
+
+  spectrogram-to-png
+    input INPUT                 Fichero .npz de espectrograma (audio_lab
+                                spectrogram)
+    --db-floor DB_FLOOR         Piso dB al normalizar magnitudes (default: …)
+    --no-flip-y                 No invertir eje Y del PNG (bin 0 queda arriba)
+    --output, -o OUTPUT         PNG de salida
+
+  png-to-spectrogram
+    input INPUT                 Fichero PNG (idealmente de spectrogram-to-png,
+                                o editado a mano)
+    --sr SR                     Sample rate, si el PNG no trae metadatos
+    --window WINDOW             Ventana STFT en muestras, si el PNG no trae
+                                metadatos
+    --hop HOP                   Hop ratio STFT, si el PNG no trae metadatos
+    --db-floor DB_FLOOR         Piso dB, si el PNG no trae metadatos
+    --mag-max MAG_MAX           Escala absoluta de las magnitudes de salida
+                                (default: 1.0)
+    --output, -o OUTPUT         NPZ de salida
+
+  train-pca
+    inputs INPUTS […]           Ficheros .npz o .png (todos latentes o todos
+                                espectrogramas, misma dimensión)
+    --n-components N_COMPONENTS
+                                Número de componentes principales a conservar
+                                (default: todos los posibles, min(n_muestras,
+                                dim))
+    --output, -o OUTPUT         Modelo PCA de salida (default: pca.npz)
+
+  intermediate-to-pca
+    input INPUT                 Fichero .npz o .png de representación
+                                intermedia
+    --pca PCA                   Modelo PCA (de train-pca) (obligatorio)
+    --png                       Genera también PNG editable de las coordenadas
+                                PCA
+    --shared-scale              Normaliza el PNG con un único rango [min,max]
+                                compartido por todas las componentes, en vez
+                                de uno independiente por componente (default).
+                                Preserva visualmente la caída de varianza
+                                entre componentes (las de menor varianza salen
+                                más oscuras/uniformes) en vez de que cada fila
+                                se estire por igual.
+    --output, -o OUTPUT         NPZ de coordenadas PCA de salida
+
+  pca-to-intermediate
+    input INPUT                 Fichero .npz (o .png, con --pca) de
+                                coordenadas PCA
+    --pca PCA                   Modelo PCA (obligatorio si input es .png;
+                                opcional para .npz)
+    --png                       Si la salida es un latente, genera también su
+                                PNG
+    --wav WAV                   Si la salida es un espectrograma, reconstruye
+                                también un WAV (Griffin-Lim por defecto, o
+                                --vocoder)
+    --gl-iters GL_ITERS         Iteraciones de Griffin-Lim para --wav
+                                (default: 32)
+    --gl-phase-init GL_PHASE_INIT
+                                Inicialización de fase de Griffin-Lim
+                                (default: random, comportamiento histórico;
+                                'propagate' usa fase de phase-vocoder como
+                                punto de partida) (valores: random|propagate)
+    --vocoder VOCODER           Checkpoint de train-vocoder: si se indica,
+                                reemplaza Griffin-Lim por un vocoder neuronal
+                                para --wav (default: ninguno, se usa Griffin-
+                                Lim como hasta ahora)
+    --output, -o OUTPUT         NPZ de salida
+
+  info
+    input INPUT                 Fichero a inspeccionar
+
+  download-pretrained
+    --variant VARIANT           Variante a descargar (default: 44khz-8kbps, la
+                                usada en los ejemplos de este programa)
+    --output-dir OUTPUT_DIR     Carpeta de destino (default: pretrained/)
+    --force                     Re-descargar aunque ya exista el fichero
+    --no-verify                 No cargar el checkpoint tras descargarlo (más
+                                rápido, pero sin garantía de que funcione)
+
+  (común)
+    --device DEVICE             Dispositivo torch (default: auto) (valores:
+                                auto|cpu|cuda)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python latent_lab.py train-coder corpus/*.wav --steps 4000 -o coder.pt
+  python latent_lab.py wav-to-latent voz.wav --coder coder.pt --png
+  python latent_lab.py latent-to-wav voz.png --coder coder.pt -o out.wav
+  python latent_lab.py spectrogram-to-latent-train_step1 corpus/*.wav \
+         --coder coder.pt -o pairs/
+  [editar los PNG en pairs/ a mano, opcional]
+  python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \
+         -o mapper.pt
+  python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \
+         --method retrieval -o mapper_retrieval.pt
+  python latent_lab.py spectrogram-to-latent voz_stft.npz \
+         --mapper mapper_retrieval.pt --method greedy -o voz_lat.npz
+  python latent_lab.py spectrogram-to-latent voz_stft.npz \
+         --mapper mapper_retrieval.pt --method viterbi --topk 8 \
+         --join-weight 1.0 -o voz_lat.npz
+  python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \
+         --method causal --context 32 -o mapper_causal.pt
+  python latent_lab.py spectrogram-to-latent-train_step2 pairs/ \
+         --method causal-adv --context 32 --ss-final-prob 0.5 \
+         -o mapper_causal_adv.pt
+  python latent_lab.py spectrogram-to-latent voz_stft.npz \
+         --mapper mapper_causal_adv.pt -o voz_lat.npz
+  python latent_lab.py spectrogram-to-latent voz_stft.npz \
+         --mapper mapper.pt -o voz_lat.npz
+  python latent_lab.py latent-to-spectrogram voz_lat.npz \
+         --mapper mapper.pt --wav voz_gl.wav
+  python latent_lab.py train-pca corpus_latents/*.npz -o pca.npz
+  python latent_lab.py intermediate-to-pca voz_lat.npz --pca pca.npz \
+         --png -o voz_pca.npz
+  python latent_lab.py pca-to-intermediate voz_pca.npz -o voz_lat2.npz
+  python latent_lab.py info coder.pt
+  python latent_lab.py spectrogram-to-png voz_stft.npz -o voz_spec.png
+  [editar voz_spec.png en GIMP/Photoshop]
+  python latent_lab.py png-to-spectrogram voz_spec.png -o voz_stft2.npz
+
+── Más modos ──
+
+  # WAVs → entrena un vocoder neuronal ligero (alternativa opcional a Griffin-Lim) → vocoder.pt
+  python latent_lab.py train-vocoder entrada.wav entrada2.wav
+
+  # WAV → NPZ STFT compatible audio_lab (sin coder ni mapper — STFT real)
+  python latent_lab.py wav-to-spectrogram entrada.wav
+
+  # NPZ STFT → WAV (Griffin-Lim o vocoder neuronal) — sin coder ni mapper
+  python latent_lab.py spectrogram-to-wav entrada.mid
+
+  # NPZ latente → PNG escala de grises
+  python latent_lab.py latent-to-png entrada.mid
+
+  # PNG escala de grises → NPZ latente
+  python latent_lab.py png-to-latent entrada.wav
+
+  # --method auto — Método de traducción, igual que en spectrogram-to-laten
+  python latent_lab.py latent-to-spectrogram entrada.mid --mapper entrada.mid \
+        --method auto
+
+  # --method pix2pix — Método de traducción, igual que en spectrogram-to-laten
+  python latent_lab.py latent-to-spectrogram entrada.mid --mapper entrada.mid \
+        --method pix2pix
+
+  # --method flow — Método de traducción, igual que en spectrogram-to-laten
+  python latent_lab.py latent-to-spectrogram entrada.mid --mapper entrada.mid \
+        --method flow
+
+  # Descarga un DAC oficial pre-entrenado y lo verifica
+  python latent_lab.py download-pretrained
 """
 
 import argparse

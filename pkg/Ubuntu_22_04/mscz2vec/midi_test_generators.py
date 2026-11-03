@@ -1,49 +1,51 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    MIDI TEST GENERATORS  v1.0                                ║
-║       Generadores de MIDIs sintéticos multi-pista para pruebas              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  DESCRIPCIÓN:                                                                ║
-║    Genera 10 MIDIs sintéticos de 5 pistas cada uno, cubriendo distintos     ║
-║    estilos y formas musicales, para probar y evaluar midi_pianoroll_analyzer.║
-║    Cada MIDI tiene roles asignados: melodía, contra-melodía, armonía,       ║
-║    bajo y acompañamiento.                                                    ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  MIDIs INCLUIDOS                                                             ║
-║                                                                              ║
-║    01_rondo_Dm      Rondo A-B-A-C-A, Re menor, allegro                      ║
-║    02_blues_Am      Blues 12 compases × 3 choruses, La menor                ║
-║    03_waltz_Ab      Vals 3/4, La bemol mayor, A-B-A'-Coda                   ║
-║    04_fugue_Dm      Fuga a 4 voces, Re menor, sujeto + respuesta            ║
-║    05_tango_Am      Tango con habanera, La menor, A-B-A                     ║
-║    06_modal_Dorian  Modal jazz D Dorian, forma AABA × 3 choruses            ║
-║    07_minimalist_C  Minimalismo en fase (estilo Reich), Do mayor            ║
-║    08_flamenco_E    Flamenco frigio Mi, falseta-B-falseta                   ║
-║    09_march_G       Marcha, Sol mayor, Intro-A-B-Trio                       ║
-║    10_sonata_C      Forma sonata, Do mayor, Expo-Desarrollo-Recapitulación  ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  USO                                                                         ║
-║                                                                              ║
-║    python3 midi_test_generators.py                  # genera MIDIs + HTML   ║
-║    python3 midi_test_generators.py -o ./salida      # directorio de salida  ║
-║    python3 midi_test_generators.py --no-report      # solo MIDIs, sin HTML  ║
-║    python3 midi_test_generators.py --list           # lista los MIDIs       ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  OPCIONES                                                                    ║
-║                                                                              ║
-║    -o / --output   Directorio de salida (default: ./batch)                  ║
-║    --no-report     Solo genera los MIDIs, sin invocar el analyzer           ║
-║    --list          Muestra la lista de MIDIs disponibles y sale             ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS:  mido  (pip install mido)                                     ║
-║                 midi_pianoroll_analyzer.py  (mismo directorio, para HTML)   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+midi_test_generators.py — Midi Test Generators: generadores de MIDIs
+sintéticos multi-pista para pruebas
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+DESCRIPCIÓN:
+  Genera 10 MIDIs sintéticos de 5 pistas cada uno, cubriendo distintos
+  estilos y formas musicales, para probar y evaluar midi_pianoroll_analyzer.
+  Cada MIDI tiene roles asignados: melodía, contra-melodía, armonía,
+  bajo y acompañamiento.
+
+MIDIs INCLUIDOS
+
+  01_rondo_Dm      Rondo A-B-A-C-A, Re menor, allegro
+  02_blues_Am      Blues 12 compases × 3 choruses, La menor
+  03_waltz_Ab      Vals 3/4, La bemol mayor, A-B-A'-Coda
+  04_fugue_Dm      Fuga a 4 voces, Re menor, sujeto + respuesta
+  05_tango_Am      Tango con habanera, La menor, A-B-A
+  06_modal_Dorian  Modal jazz D Dorian, forma AABA × 3 choruses
+  07_minimalist_C  Minimalismo en fase (estilo Reich), Do mayor
+  08_flamenco_E    Flamenco frigio Mi, falseta-B-falseta
+  09_march_G       Marcha, Sol mayor, Intro-A-B-Trio
+  10_sonata_C      Forma sonata, Do mayor, Expo-Desarrollo-Recapitulación
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  -o / --output   Directorio de salida (default: ./batch)
+  --no-report     Solo genera los MIDIs, sin invocar el analyzer
+  --list          Muestra la lista de MIDIs disponibles y sale
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python3 midi_test_generators.py                  # genera MIDIs + HTML
+  python3 midi_test_generators.py -o ./salida      # directorio de salida
+  python3 midi_test_generators.py --no-report      # solo MIDIs, sin HTML
+  python3 midi_test_generators.py --list           # lista los MIDIs
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido  (pip install mido)
+                 midi_pianoroll_analyzer.py  (mismo directorio, para HTML)
 """
 import sys, os, argparse
 

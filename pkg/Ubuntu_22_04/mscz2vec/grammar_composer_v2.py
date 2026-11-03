@@ -1,110 +1,146 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      GRAMMAR COMPOSER  v1.1                                  ║
-║         Motor de composición dirigido por gramáticas formales                ║
-║                                                                              ║
-║  DOS MODOS DE USO:                                                           ║
-║                                                                              ║
-║  ── MODO COMPOSE (por defecto) ────────────────────────────────────────────║
-║  Combina un MIDI de entrada con una gramática textual para generar un       ║
-║  nuevo MIDI. La gramática define una estructura jerárquica que puede        ║
-║  referenciar compases del MIDI original o notas ABC directas.               ║
-║                                                                              ║
-║  ── MODO LEARN ─────────────────────────────────────────────────────────── ║
-║  Analiza un MIDI y extrae automáticamente su gramática usando el            ║
-║  algoritmo Re-Pair (simplificación de Sequitur). El resultado se guarda     ║
-║  como fichero de gramática listo para usarse con el modo compose.           ║
-║  Cada regla generada referencia compases del MIDI original, de modo que     ║
-║  la gramática aprendida es directamente reproducible.                       ║
-║                                                                              ║
-║  FORMATO DE GRAMÁTICA:                                                       ║
-║    · La primera línea es la raíz: lista de etiquetas separadas por espacio  ║
-║    · Cada línea posterior: <label> : <elementos...>                          ║
-║                                                                              ║
-║  TIPOS DE ELEMENTOS en una regla:                                            ║
-║    · Nota ABC  — nota individual con duración: C4:1  E4:0.5  G#4:2         ║
-║                  (nombre+octava:duración_en_negras). La duración admite     ║
-║                  enteros, decimales y fracciones exactas: G4:1/3 es una     ║
-║                  corchea de tresillo (3 seguidas = 1 negra, sin deriva).    ║
-║                  Sufijo & (C4:2&): suena a la vez que el siguiente elemento y║
-║                  no avanza el cursor → acordes y polifonía: C4:2& E4:2& G4:2 ║
-║    · z:D      — silencio de D negras (avanza el cursor sin sonar): z:1  z:1/3║
-║    · Número    — compás N del MIDI de entrada (base 1)                      ║
-║    · M-N       — rango de compases M a N del MIDI de entrada (inclusivos)  ║
-║    · [label]   — referencia recursiva a otra regla de la gramática          ║
-║    · +N / -N   — modifica el OFFSET GLOBAL de transposición en N semitonos  ║
-║                  (acumulativo). Afecta a todas las notas posteriores en el  ║
-║                  orden de expansión (compases del MIDI y notas ABC), también║
-║                  fuera de la regla donde aparece. Empieza en 0. Se puede    ║
-║                  usar también en la raíz. No afecta al canal 10 (batería).  ║
-║                  Ej:  motivo: 1-2 +2 1-2 -2     (2.ª vez dos semitonos más) ║
-║    · 0         — resetea el offset global a 0 (no es un compás: los        ║
-║                  compases empiezan en 1).                                    ║
-║                                                                              ║
-║  EJEMPLO DE GRAMÁTICA (generada o escrita a mano):                          ║
-║    intro verse chorus verse chorus outro                                     ║
-║    intro: 1-4                                                                ║
-║    verse: [motivo_a] [motivo_b] [motivo_a] 9                                ║
-║    chorus: C4:1 E4:1 G4:1 C5:2 [cadencia]                                  ║
-║    motivo_a: 5-6                                                             ║
-║    motivo_b: G3:0.5 A3:0.5 B3:0.5 C4:0.5                                   ║
-║    cadencia: 10-12                                                           ║
-║    outro: [cadencia] C4:4                                                    ║
-║                                                                              ║
-║  USO — MODO COMPOSE:                                                         ║
-║    python grammar_composer.py entrada.mid gramatica.txt                     ║
-║    python grammar_composer.py entrada.mid gramatica.txt -o salida.mid       ║
-║    python grammar_composer.py entrada.mid gramatica.txt --tempo 120         ║
-║    python grammar_composer.py entrada.mid gramatica.txt --channel 0         ║
-║    python grammar_composer.py entrada.mid gramatica.txt --report            ║
-║    python grammar_composer.py entrada.mid gramatica.txt --verbose           ║
-║                                                                              ║
-║  USO — MODO LEARN:                                                           ║
-║    python grammar_composer.py --learn entrada.mid                           ║
-║    python grammar_composer.py --learn entrada.mid -o gramatica.txt         ║
-║    python grammar_composer.py --learn entrada.mid --min-pair 3              ║
-║    python grammar_composer.py --learn entrada.mid --max-rules 20            ║
-║    python grammar_composer.py --learn entrada.mid --report --verbose        ║
-║                                                                              ║
-║  USO — MODO LEARN-GESTURES (codebook de gestos transponibles):               ║
-║    python grammar_composer.py --learn-gestures entrada.mid                   ║
-║    python grammar_composer.py --learn-gestures entrada.mid -o gestos.txt     ║
-║    python grammar_composer.py --learn-gestures entrada.mid --quantize 1/12   ║
-║    python grammar_composer.py entrada.mid gestos.txt   (recompone la obra)   ║
-║    Aprende grupos de notas (con su ritmo) que se repiten a distinta altura y ║
-║    escribe una gramática autocontenida: un gesto gN por grupo y una regla    ║
-║    `song` que los coloca con el offset global (+n / -n / 0). Al terminar     ║
-║    recompone la gramática y comprueba que coincide con el original.          ║
-║    No aprende velocidades (usa --velocity). Usa --min-pair y --max-rules.    ║
-║    --quantize FRAC  Rejilla en negras (1/4, 1/12…) para MIDIs interpretados. ║
-║                                                                              ║
-║  OPCIONES COMUNES:                                                           ║
-║    --track N          Track del MIDI de entrada a usar (default: auto)      ║
-║    --report           Mostrar informe detallado                              ║
-║    --verbose          Traza paso a paso                                      ║
-║                                                                              ║
-║  OPCIONES MODO COMPOSE:                                                      ║
-║    --out / -o FILE    Fichero MIDI de salida (default: entrada.grammar.mid) ║
-║    --tempo BPM        Tempo de salida (default: detectado del MIDI)         ║
-║    --channel N        Canal MIDI para notas ABC (default: 0)                ║
-║    --velocity N       Velocidad para notas ABC (default: 80)                ║
-║    --tpb N            Ticks por negra en salida (default: como entrada)     ║
-║                                                                              ║
-║  OPCIONES MODO LEARN:                                                        ║
-║    --learn            Activar modo de aprendizaje de gramática               ║
-║    --out / -o FILE    Fichero de gramática de salida (default: midi.grammar.txt)║
-║    --min-pair N       Frecuencia mínima de un par para crear regla (def: 2) ║
-║    --max-rules N      Número máximo de reglas a generar (def: ilimitado)    ║
-║    --merge-bars       Fusionar compases consecutivos repetidos en rangos     ║
-║                                                                              ║
-║  NOTAS ABC MIDI soportadas:                                                  ║
-║    Nombre: C D E F G A B  (con # o b para alteraciones: C#, Eb)             ║
-║  Octava:  -1 a 9 (octava MIDI estándar: C4 = nota 60, C-1 = nota 0)          ║
-║    Duración: número decimal en negras (1 = negra, 0.5 = corchea, 4 = redonda)║
-║                                                                              ║
-║  DEPENDENCIAS: mido                                                          ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+grammar_composer_v2.py — Grammar Composer: motor de composición dirigido por
+gramáticas formales
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+DOS MODOS DE USO:
+── MODO COMPOSE (por defecto) ────────────────────────────────────────────
+Combina un MIDI de entrada con una gramática textual para generar un
+nuevo MIDI. La gramática define una estructura jerárquica que puede
+referenciar compases del MIDI original o notas ABC directas.
+
+── MODO LEARN ───────────────────────────────────────────────────────────
+Analiza un MIDI y extrae automáticamente su gramática usando el
+algoritmo Re-Pair (simplificación de Sequitur). El resultado se guarda
+como fichero de gramática listo para usarse con el modo compose.
+Cada regla generada referencia compases del MIDI original, de modo que
+la gramática aprendida es directamente reproducible.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+FORMATO DE GRAMÁTICA:
+    · La primera línea es la raíz: lista de etiquetas separadas por espacio
+    · Cada línea posterior: <label> : <elementos...>
+
+  TIPOS DE ELEMENTOS en una regla:
+    · Nota ABC  — nota individual con duración: C4:1  E4:0.5  G#4:2
+                  (nombre+octava:duración_en_negras). La duración admite
+                  enteros, decimales y fracciones exactas: G4:1/3 es una
+                  corchea de tresillo (3 seguidas = 1 negra, sin deriva).
+                  Sufijo & (C4:2&): suena a la vez que el siguiente elemento y
+                  no avanza el cursor → acordes y polifonía: C4:2& E4:2& G4:2
+    · z:D      — silencio de D negras (avanza el cursor sin sonar): z:1  z:1/3
+    · Número    — compás N del MIDI de entrada (base 1)
+    · M-N       — rango de compases M a N del MIDI de entrada (inclusivos)
+    · [label]   — referencia recursiva a otra regla de la gramática
+    · +N / -N   — modifica el OFFSET GLOBAL de transposición en N semitonos
+                  (acumulativo). Afecta a todas las notas posteriores en el
+                  orden de expansión (compases del MIDI y notas ABC), también
+                  fuera de la regla donde aparece. Empieza en 0. Se puede
+                  usar también en la raíz. No afecta al canal 10 (batería).
+                  Ej:  motivo: 1-2 +2 1-2 -2     (2.ª vez dos semitonos más)
+    · 0         — resetea el offset global a 0 (no es un compás: los
+                  compases empiezan en 1).
+
+  EJEMPLO DE GRAMÁTICA (generada o escrita a mano):
+    intro verse chorus verse chorus outro
+    intro: 1-4
+    verse: [motivo_a] [motivo_b] [motivo_a] 9
+    chorus: C4:1 E4:1 G4:1 C5:2 [cadencia]
+    motivo_a: 5-6
+    motivo_b: G3:0.5 A3:0.5 B3:0.5 C4:0.5
+    cadencia: 10-12
+    outro: [cadencia] C4:4
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES COMUNES:
+  --track N          Track del MIDI de entrada a usar (default: auto)
+  --report           Mostrar informe detallado
+  --verbose          Traza paso a paso
+
+── OPCIONES MODO COMPOSE ──
+  --out / -o FILE    Fichero MIDI de salida (default: entrada.grammar.mid;
+                       se crea el directorio padre si no existe)
+  --tempo BPM        Tempo de salida (default: detectado del MIDI)
+  --channel N        Canal MIDI para notas ABC (default: 0)
+  --velocity N       Velocidad para notas ABC (default: 80)
+  --tpb N            Ticks por negra en salida (default: como entrada)
+
+── OPCIONES MODO LEARN ──
+    --learn            Activar modo de aprendizaje de gramática
+    --out / -o FILE    Fichero de gramática de salida (default: midi.grammar.txt;
+                       se crea el directorio padre si no existe)
+    --min-pair N       Frecuencia mínima de un par para crear regla (def: 2)
+    --max-rules N      Número máximo de reglas a generar (def: ilimitado)
+    --merge-bars       Fusionar compases consecutivos repetidos en rangos
+
+  NOTAS ABC MIDI soportadas:
+    Nombre: C D E F G A B  (con # o b para alteraciones: C#, Eb)
+  Octava:  -1 a 9 (octava MIDI estándar: C4 = nota 60, C-1 = nota 0)
+    Duración: número decimal en negras (1 = negra, 0.5 = corchea, 4 = redonda)
+
+── Otras opciones del parser ──
+  --seed-grammar FILE         Gramática semilla (.txt) cuyas reglas se aplican
+                              antes de Re-Pair. Las reglas definidas en el
+                              fichero se sustituyen en la secuencia de
+                              compases aprendida; Re-Pair solo aprende la
+                              estructura restante. La raíz de la gramática
+                              semilla se ignora.
+  --fuzzy THRESHOLD           Activar comparación difusa de compases.
+                              THRESHOLD es la similitud mínima (0.0–1.0) para
+                              considerar dos compases equivalentes. Valores
+                              típicos: 0.85–0.95. Sin esta opción se usa
+                              comparación exacta (equivalente a 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USO — MODO COMPOSE ──
+  python grammar_composer.py entrada.mid gramatica.txt
+  python grammar_composer.py entrada.mid gramatica.txt -o salida.mid
+  python grammar_composer.py entrada.mid gramatica.txt --tempo 120
+  python grammar_composer.py entrada.mid gramatica.txt --channel 0
+  python grammar_composer.py entrada.mid gramatica.txt --report
+  python grammar_composer.py entrada.mid gramatica.txt --verbose
+
+── USO — MODO LEARN ──
+    python grammar_composer.py --learn entrada.mid
+    python grammar_composer.py --learn entrada.mid -o gramatica.txt
+    python grammar_composer.py --learn entrada.mid --min-pair 3
+    python grammar_composer.py --learn entrada.mid --max-rules 20
+    python grammar_composer.py --learn entrada.mid --report --verbose
+
+  USO — MODO LEARN-GESTURES (codebook de gestos transponibles):
+    python grammar_composer.py --learn-gestures entrada.mid
+    python grammar_composer.py --learn-gestures entrada.mid -o gestos.txt
+    python grammar_composer.py --learn-gestures entrada.mid --quantize 1/12
+    python grammar_composer.py entrada.mid gestos.txt   (recompone la obra)
+    Aprende grupos de notas (con su ritmo) que se repiten a distinta altura y
+    escribe una gramática autocontenida: un gesto gN por grupo y una regla
+    `song` que los coloca con el offset global (+n / -n / 0). Al terminar
+    recompone la gramática y comprueba que coincide con el original.
+    No aprende velocidades (usa --velocity). Usa --min-pair y --max-rules.
+    --quantize FRAC  Rejilla en negras (1/4, 1/12…) para MIDIs interpretados.
+
+── Más modos ──
+
+  # Invocación básica
+  python grammar_composer_v2.py entrada.mid
+
+  # Mostrar informe detallado
+  python grammar_composer_v2.py entrada.mid --report
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido
 """
 
 import re

@@ -1,85 +1,109 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     MIDI SPLIT HARMONY  v1.0                                 ║
-║     Separación automática de melodía y acordes desde un MIDI de entrada     ║
-║                                                                              ║
-║  Dado un MIDI de entrada (monofónico o polifónico, con armonía limpia       ║
-║  o mal transcrita), produce:                                                 ║
-║    · Un MIDI de melodía  — voz principal, limpia y continua                 ║
-║    · Un MIDI de acordes  — progresión armónica cuantizada y correcta        ║
-║                                                                              ║
-║  PIPELINE INTERNO:                                                           ║
-║  [1] PRE-ANÁLISIS     — tempo, compás, tonalidad, canales, pistas           ║
-║  [2] SEPARACIÓN       — skyline mejorado + continuidad + verosimilitud      ║
-║                         interválica → extrae voz melódica principal          ║
-║  [3] EXTRACCIÓN       — chroma por ventanas solapadas + template matching   ║
-║                         + HMM de funciones armónicas → acordes coherentes   ║
-║  [4] POST-LIMPIEZA    — quantización al beat, fusión de acordes cortos,     ║
-║                         corrección por voz-leading, coherencia tonal        ║
-║  [5] EXPORTACIÓN      — MIDI separado o fichero de dos pistas               ║
-║                                                                              ║
-║  MODOS DE ANÁLISIS:                                                          ║
-║    deterministic  — algoritmos puramente basados en teoría musical (default)║
-║    corpus         — aprende matrices de transición y emisión desde un       ║
-║                     directorio de MIDIs de referencia; combina con reglas   ║
-║                                                                              ║
-║  USO BÁSICO:                                                                 ║
-║    python midi_split_harmony.py entrada.mid                                  ║
-║    python midi_split_harmony.py entrada.mid --out-dir salidas/              ║
-║    python midi_split_harmony.py entrada.mid --split-files                   ║
-║    python midi_split_harmony.py entrada.mid --key "A minor" --verbose       ║
-║                                                                              ║
-║  MODO CORPUS:                                                                ║
-║    # Entrenar el modelo desde corpus (sin analizar ninguna canción)          ║
-║    python midi_split_harmony.py --train-corpus ./mis_midis/                 ║
-║        --save-model modelo.json                                              ║
-║                                                                              ║
-║    # Entrenar con tónica de referencia explícita                             ║
-║    python midi_split_harmony.py --train-corpus ./mis_midis/                 ║
-║        --key "C minor" --save-model modelo_menor.json --verbose             ║
-║                                                                              ║
-║    # Entrenar y analizar en un solo paso (guarda el modelo de paso)         ║
-║    python midi_split_harmony.py entrada.mid --corpus ./mis_midis/           ║
-║        --save-model modelo.json                                              ║
-║                                                                              ║
-║    # Usar un modelo ya entrenado                                             ║
-║    python midi_split_harmony.py entrada.mid --load-model modelo.json        ║
-║                                                                              ║
-║  OPCIONES COMPLETAS:                                                         ║
-║    input              Ruta al MIDI de entrada                               ║
-║    --out-dir DIR       Carpeta de salida (default: junto al MIDI de entrada) ║
-║    --output BASE       Nombre base de salida (default: <stem>)              ║
-║    --split-files       Genera dos ficheros separados en vez de uno          ║
-║                        con dos pistas (default: fichero único)              ║
-║    --key "C major"     Tonalidad forzada (default: autodetectada)           ║
-║    --beats-per-bar N   Pulsos por compás (default: detectado del MIDI)      ║
-║    --tempo BPM         Tempo de salida (default: detectado)                 ║
-║    --chord-res BEATS   Resolución mínima de acorde en beats (default: 1.0) ║
-║    --melody-ch N       Canal MIDI a forzar como melodía (0-15)              ║
-║    --harmony-ch N      Canal MIDI a forzar como armonía (0-15)             ║
-║    --chord-octave N    Octava base de los acordes de salida (default: 4)   ║
-║    --melody-octave N   Octava de transposición de melodía (default: 5)     ║
-║    --velocity-melody N Velocity de las notas de melodía (default: 90)      ║
-║    --velocity-chords N Velocity de los acordes (default: 70)               ║
-║    --corpus DIR        Directorio de MIDIs de referencia para modo corpus   ║
-║    --save-model FILE   Guardar el modelo HMM aprendido en JSON              ║
-║    --load-model FILE   Cargar un modelo HMM previo                          ║
-║    --min-corpus-score  Umbral de calidad para incluir un MIDI del corpus    ║
-║                        en el entrenamiento (default: 0.55)                  ║
-║    --report            Guardar reporte JSON con análisis detallado          ║
-║    --verbose           Información detallada del proceso                    ║
-║                                                                              ║
-║  SALIDA (modo --split-files):                                               ║
-║    <base>_melody.mid   — pista de melodía                                   ║
-║    <base>_chords.mid   — pista de acordes                                   ║
-║                                                                              ║
-║  SALIDA (modo por defecto):                                                  ║
-║    <base>_split.mid    — MIDI con dos pistas: ch0=melodía, ch1=acordes     ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy                                                  ║
-║  OPCIONALES:   music21 (mejora detección de tonalidad)                      ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+midi_split_harmony.py — Midi Split Harmony: separación automática de melodía y
+acordes desde un MIDI de entrada
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un MIDI de entrada (monofónico o polifónico, con armonía limpia
+o mal transcrita), produce:
+  · Un MIDI de melodía  — voz principal, limpia y continua
+  · Un MIDI de acordes  — progresión armónica cuantizada y correcta
+
+PIPELINE INTERNO:
+[1] PRE-ANÁLISIS     — tempo, compás, tonalidad, canales, pistas
+[2] SEPARACIÓN       — skyline mejorado + continuidad + verosimilitud
+                       interválica → extrae voz melódica principal
+[3] EXTRACCIÓN       — chroma por ventanas solapadas + template matching
+                       + HMM de funciones armónicas → acordes coherentes
+[4] POST-LIMPIEZA    — quantización al beat, fusión de acordes cortos,
+                       corrección por voz-leading, coherencia tonal
+[5] EXPORTACIÓN      — MIDI separado o fichero de dos pistas
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+MODOS DE ANÁLISIS:
+  deterministic  — algoritmos puramente basados en teoría musical (default)
+  corpus         — aprende matrices de transición y emisión desde un
+                   directorio de MIDIs de referencia; combina con reglas
+
+── MODO CORPUS ──
+  # Entrenar el modelo desde corpus (sin analizar ninguna canción)
+  python midi_split_harmony.py --train-corpus ./mis_midis/ \
+      --save-model modelo.json
+
+  # Entrenar con tónica de referencia explícita
+  python midi_split_harmony.py --train-corpus ./mis_midis/ \
+      --key "C minor" --save-model modelo_menor.json --verbose
+
+  # Entrenar y analizar en un solo paso (guarda el modelo de paso)
+  python midi_split_harmony.py entrada.mid --corpus ./mis_midis/ \
+      --save-model modelo.json
+
+  # Usar un modelo ya entrenado
+  python midi_split_harmony.py entrada.mid --load-model modelo.json
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES COMPLETAS:
+    input              Ruta al MIDI de entrada
+    --out-dir DIR       Carpeta de salida (default: junto al MIDI de entrada)
+    --output BASE       Nombre base de salida (default: <stem>)
+    --split-files       Genera dos ficheros separados en vez de uno
+                        con dos pistas (default: fichero único)
+    --key "C major"     Tonalidad forzada (default: autodetectada)
+    --beats-per-bar N   Pulsos por compás (default: detectado del MIDI)
+    --tempo BPM         Tempo de salida (default: detectado)
+    --chord-res BEATS   Resolución mínima de acorde en beats (default: 1.0)
+    --melody-ch N       Canal MIDI a forzar como melodía (0-15)
+    --harmony-ch N      Canal MIDI a forzar como armonía (0-15)
+    --chord-octave N    Octava base de los acordes de salida (default: 4)
+    --melody-octave N   Octava de transposición de melodía (default: 5)
+    --velocity-melody N Velocity de las notas de melodía (default: 90)
+    --velocity-chords N Velocity de los acordes (default: 70)
+    --corpus DIR        Directorio de MIDIs de referencia para modo corpus
+    --save-model FILE   Guardar el modelo HMM aprendido en JSON
+    --load-model FILE   Cargar un modelo HMM previo
+    --min-corpus-score  Umbral de calidad para incluir un MIDI del corpus
+                        en el entrenamiento (default: 0.55)
+    --report            Guardar reporte JSON con análisis detallado
+    --verbose           Información detallada del proceso
+
+  SALIDA (modo --split-files):
+    <base>_melody.mid   — pista de melodía
+    <base>_chords.mid   — pista de acordes
+
+  SALIDA (modo por defecto):
+    <base>_split.mid    — MIDI con dos pistas: ch0=melodía, ch1=acordes
+
+── Otras opciones del parser ──
+  --mono-melody               Reducir la melodía a monofónica estricta: en
+                              cada instante con varias notas simultáneas
+                              conserva solo la más aguda
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USO BÁSICO ──
+  python midi_split_harmony.py entrada.mid
+  python midi_split_harmony.py entrada.mid --out-dir salidas/
+  python midi_split_harmony.py entrada.mid --split-files
+  python midi_split_harmony.py entrada.mid --key "A minor" --verbose
+
+── Más modos ──
+
+  # Guardar reporte JSON con análisis detallado
+  python midi_split_harmony.py --report
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
+  OPCIONALES:   music21 (mejora detección de tonalidad)
 """
 
 import sys

@@ -1,59 +1,70 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          MIDI MERGE  v1.0                                    ║
-║         Combina varios MIDIs en un único MIDI multitracks                   ║
-║                                                                              ║
-║  Toma N MIDIs (stems) y los combina en un único archivo MIDI donde cada     ║
-║  stem de entrada se convierte en un track separado. Útil para combinar      ║
-║  stems exportados y compararlos entre sí o con un MIDI de                 ║
-║  referencia usando analyzer.py.                                              ║
-║                                                                              ║
-║  GESTIÓN DE CANALES:                                                         ║
-║    · Por defecto: reasigna canales automáticamente para evitar colisiones   ║
-║    · Canal 9 reservado para percusión (no se reasigna)                     ║
-║    · Los program_change originales de cada stem se preservan               ║
-║    · Con --channels: fuerza canales concretos para stems específicos        ║
-║                                                                              ║
-║  GESTIÓN DE TPB:                                                             ║
-║    · Por defecto: usa el TPB máximo de todos los stems de entrada           ║
-║    · Con --tpb N: usa el valor indicado                                     ║
-║    · Todos los stems se reescalan al TPB de salida                         ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python midi_merge.py stem_violin.mid stem_viola.mid stem_cello.mid      ║
-║    python midi_merge.py stems/*.mid --output merged.mid                     ║
-║    python midi_merge.py stems/*.mid --tpb 480                               ║
-║    python midi_merge.py stems/*.mid --channels violin:0 viola:1 cello:2    ║
-║    python midi_merge.py stems/*.mid --preview                               ║
-║    python midi_merge.py stems/*.mid --verbose                               ║
-║                                                                              ║
-║  COMPÁS DE ENTRADA:                                                          ║
-║    Cada stem admite sufijo ':N' indicando el compás en el que debe          ║
-║    empezar dentro de la pieza mergeada (compás 1 = inicio). Sin sufijo      ║
-║    se asume compás 1.                                                       ║
-║    Ejemplo:                                                                  ║
-║      python midi_merge.py stem_violin.mid:8 stem_viola.mid:3 stem_cello.mid║
-║    → violin empieza en el compás 8, viola en el 3, cello en el 1           ║
-║    La duración del compás se calcula con el primer time_signature           ║
-║    encontrado entre los stems (por defecto 4/4) y el TPB de salida.        ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --output FILE        MIDI de salida (default: merged.mid)               ║
-║    --tpb N              Ticks per beat de salida (default: máximo de       ║
-║                         los stems de entrada)                               ║
-║    --channels S:N [...] Mapeo manual de canal: nombre_stem:canal           ║
-║                         El nombre puede ser el fichero completo o solo     ║
-║                         la parte antes del primer punto                    ║
-║                         Ejemplo: violin:0 viola:1 cello:2                  ║
-║    --preview            Mostrar plan de merge sin generar MIDI             ║
-║    --verbose            Informe detallado                                   ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    merged.mid  — MIDI multitracks con un track por stem de entrada         ║
-║                                                                              ║
-║  DEPENDENCIAS: mido                                                         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+midi_merge.py — Midi Merge: combina varios MIDIs en un único MIDI multitracks
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Toma N MIDIs (stems) y los combina en un único archivo MIDI donde cada
+stem de entrada se convierte en un track separado. Útil para combinar
+stems exportados y compararlos entre sí o con un MIDI de
+referencia usando analyzer.py.
+
+GESTIÓN DE CANALES:
+  · Por defecto: reasigna canales automáticamente para evitar colisiones
+  · Canal 9 reservado para percusión (no se reasigna)
+  · Los program_change originales de cada stem se preservan
+  · Con --channels: fuerza canales concretos para stems específicos
+
+GESTIÓN DE TPB:
+  · Por defecto: usa el TPB máximo de todos los stems de entrada
+  · Con --tpb N: usa el valor indicado
+  · Todos los stems se reescalan al TPB de salida
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+COMPÁS DE ENTRADA:
+  Cada stem admite sufijo ':N' indicando el compás en el que debe
+  empezar dentro de la pieza mergeada (compás 1 = inicio). Sin sufijo
+  se asume compás 1.
+  Ejemplo:
+    python midi_merge.py stem_violin.mid:8 stem_viola.mid:3 stem_cello.mid
+  → violin empieza en el compás 8, viola en el 3, cello en el 1
+  La duración del compás se calcula con el primer time_signature
+  encontrado entre los stems (por defecto 4/4) y el TPB de salida.
+
+── SALIDA ──
+  merged.mid  — MIDI multitracks con un track por stem de entrada
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --output FILE        MIDI de salida (default: merged.mid)
+  --tpb N              Ticks per beat de salida (default: máximo de
+                       los stems de entrada)
+  --channels S:N [...] Mapeo manual de canal: nombre_stem:canal
+                       El nombre puede ser el fichero completo o solo
+                       la parte antes del primer punto
+                       Ejemplo: violin:0 viola:1 cello:2
+  --preview            Mostrar plan de merge sin generar MIDI
+  --verbose            Informe detallado
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python midi_merge.py stem_violin.mid stem_viola.mid stem_cello.mid
+  python midi_merge.py stems/*.mid --output merged.mid
+  python midi_merge.py stems/*.mid --tpb 480
+  python midi_merge.py stems/*.mid --channels violin:0 viola:1 cello:2
+  python midi_merge.py stems/*.mid --preview
+  python midi_merge.py stems/*.mid --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido
 """
 
 import os

@@ -1,38 +1,80 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        VOICE ALIGNER  v2.0                                   ║
-║      Alineación de consonancia entre múltiples voces MIDI independientes     ║
-║                                                                              ║
-║  MEJORAS v2.0 respecto a v1.0:                                               ║
-║    · Índice de importancia por nota (notas estructurales protegidas)         ║
-║    · Métrica ponderada por duración del choque (no solo por presencia)       ║
-║    · Score combinado vertical + coste melódico (preservación de contorno)   ║
-║    · Detección de tonalidad por ventana deslizante + consenso entre voces   ║
-║    · Nudge conjunto: optimización cartesiana de todos los pitches a la vez  ║
-║    · Desplazamiento de zona para segmentos desalineados                      ║
-║    · Ornamentación como estrategia de resolución (apoyatura, nota de paso)  ║
-║    · Refinamiento iterativo hasta convergencia                               ║
-║                                                                              ║
-║  ESTRATEGIAS (cascada):                                                      ║
-║    1. Shift global de voz                                                    ║
-║    2. Shift local de nota individual                                         ║
-║    3. Shift de zona (--allow-zone-shift)                                     ║
-║    4. Nudge conjunto con optimización cartesiana                             ║
-║    5. Sustitución por chord-tone                                             ║
-║    6. Ornamentación (--allow-ornament)                                       ║
-║    → Refinamiento iterativo (--max-iter)                                     ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python voice_aligner.py voz1.mid voz2.mid [voz3.mid ...]                 ║
-║    python voice_aligner.py *.mid --freeze-voice 0 --verbose --report        ║
-║    python voice_aligner.py *.mid --melody-weight 0.4 --max-iter 5           ║
-║    python voice_aligner.py *.mid --allow-zone-shift --allow-ornament        ║
-║    python voice_aligner.py *.mid --key "D minor" --threshold 0.80           ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy                                                   ║
-║  OPCIONALES:   music21 (mejora detección de tonalidad)                      ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+voice_aligner.py — Voice Aligner: alineación de consonancia entre múltiples
+voces MIDI independientes
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+MEJORAS v2.0 respecto a v1.0:
+  · Índice de importancia por nota (notas estructurales protegidas)
+  · Métrica ponderada por duración del choque (no solo por presencia)
+  · Score combinado vertical + coste melódico (preservación de contorno)
+  · Detección de tonalidad por ventana deslizante + consenso entre voces
+  · Nudge conjunto: optimización cartesiana de todos los pitches a la vez
+  · Desplazamiento de zona para segmentos desalineados
+  · Ornamentación como estrategia de resolución (apoyatura, nota de paso)
+  · Refinamiento iterativo hasta convergencia
+
+ESTRATEGIAS (cascada):
+  1. Shift global de voz
+  2. Shift local de nota individual
+  3. Shift de zona (--allow-zone-shift)
+  4. Nudge conjunto con optimización cartesiana
+  5. Sustitución por chord-tone
+  6. Ornamentación (--allow-ornament)
+  → Refinamiento iterativo (--max-iter)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  voices VOICES […]
+  --threshold THRESHOLD       (defecto 0.72)
+  --strategy STRATEGY         (defecto auto; valores:
+                              auto|time|pitch|chord|ornament)
+  --freeze-voice N […]
+  --max-pitch-shift N         (defecto 2)
+  --max-time-shift F          (defecto 0.5)
+  --melody-weight F           Peso del coste melódico 0-1 (default: 0.25)
+  --max-iter N                Máx. iteraciones de refinamiento (default: 3)
+  --window-beats F            Ventana de detección de tonalidad en beats
+                              (default: 4.0)
+  --allow-zone-shift
+  --allow-ornament
+  --protect-threshold F       Umbral de importancia para proteger notas
+                              (default: 0.7)
+  --key KEY
+  --tempo TEMPO
+  --out-dir OUT_DIR
+  --report
+  --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python voice_aligner.py voz1.mid voz2.mid [voz3.mid ...]
+  python voice_aligner.py *.mid --freeze-voice 0 --verbose --report
+  python voice_aligner.py *.mid --melody-weight 0.4 --max-iter 5
+  python voice_aligner.py *.mid --allow-zone-shift --allow-ornament
+  python voice_aligner.py *.mid --key "D minor" --threshold 0.80
+
+── Más modos ──
+
+  # --strategy auto
+  python voice_aligner.py entrada.mid entrada2.mid --strategy auto
+
+  # --strategy time
+  python voice_aligner.py entrada.mid entrada2.mid --strategy time
+
+  # --strategy ornament
+  python voice_aligner.py entrada.mid entrada2.mid --strategy ornament
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
+  OPCIONALES:   music21 (mejora detección de tonalidad)
 """
 
 import os, sys, json, math, copy, argparse, traceback

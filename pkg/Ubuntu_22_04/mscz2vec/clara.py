@@ -1,72 +1,190 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                           CLARA  v2.0                                        ║
-║              Generador de música con red neuronal AWD-LSTM                   ║
-║                       (PyTorch 2.x + FastAI v2)                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  COMANDOS                                                                    ║
-║                                                                              ║
-║    encode      — MIDI corpus → archivos de texto codificados                 ║
-║    split       — Distribuye los .txt codificados en train / test             ║
-║    train       — Entrena el modelo AWD-LSTM generador                        ║
-║    generate    — Genera piezas nuevas con un modelo entrenado                ║
-║    critic-data — Crea datos para el crítico (real vs. generado)              ║
-║    critic      — Entrena el clasificador real/generado (crítico)             ║
-║    composer-data — Crea datos para el clasificador de compositores           ║
-║    composer    — Entrena el clasificador de compositores                     ║
-║    serve       — Lanza un servidor HTTP con playlist interactiva             ║
-║                                                                              ║
-║  DEPENDENCIAS                                                                ║
-║    pip install torch fastai music21 mido numpy tqdm                         ║
-║    sudo apt install fluidsynth mpg321 twolame                                ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  FLUJO BÁSICO (datos de ejemplo incluidos)                                   ║
-║                                                                              ║
-║    # 1. Usar datos de ejemplo (ya codificados)                               ║
-║    python clara.py split --example                                           ║
-║                                                                              ║
-║    # 2. Entrenar                                                             ║
-║    python clara.py train --prefix mi_modelo                                  ║
-║                                                                              ║
-║    # 3. Generar                                                              ║
-║    python clara.py generate --model mi_modelo --output mis_piezas            ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  FLUJO COMPLETO (MIDIs propios)                                              ║
-║                                                                              ║
-║    # 1. Codificar MIDIs                                                      ║
-║    python clara.py encode                                                    ║
-║    python clara.py encode --chamber                                          ║
-║    python clara.py encode --composers bach,beethoven                         ║
-║                                                                              ║
-║    # 2. Construir train/test (notewise, piano solo, 62 notas, freq 12)       ║
-║    python clara.py split                                                     ║
-║    python clara.py split --chordwise                                         ║
-║    python clara.py split --composers bach,mozart --sample 0.5                ║
-║                                                                              ║
-║    # 3. Entrenar generador                                                   ║
-║    python clara.py train --prefix mi_modelo --epochs 5 --nl 4 --nh 600      ║
-║    python clara.py train --prefix mi_modelo --load mi_modelo --level light   ║
-║                                                                              ║
-║    # 4. Generar piezas                                                       ║
-║    python clara.py generate --model mi_modelo --output mis_piezas            ║
-║    python clara.py generate --model notewise_generator --output demo \       ║
-║        --size 2000 --random-freq 0.8 --trunc 3 --bs 8                       ║
-║                                                                              ║
-║    # 5. (Opcional) Entrenar crítico                                          ║
-║    python clara.py critic-data --model mi_modelo                             ║
-║    python clara.py critic --model mi_modelo                                  ║
-║                                                                              ║
-║    # 6. (Opcional) Entrenar clasificador de compositores                     ║
-║    python clara.py composer-data --model mi_modelo                           ║
-║    python clara.py composer --model mi_modelo                                ║
-║                                                                              ║
-║    # 7. Servidor de escucha                                                  ║
-║    python clara.py serve --model mi_modelo                                   ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+clara.py — Clara: generador de música con red neuronal AWD-LSTM (PyTorch 2.x +
+FastAI v2)
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  encode      — MIDI corpus → archivos de texto codificados
+  split       — Distribuye los .txt codificados en train / test
+  train       — Entrena el modelo AWD-LSTM generador
+  generate    — Genera piezas nuevas con un modelo entrenado
+  critic-data — Crea datos para el crítico (real vs. generado)
+  critic      — Entrena el clasificador real/generado (crítico)
+  composer-data — Crea datos para el clasificador de compositores
+  composer    — Entrena el clasificador de compositores
+  serve       — Lanza un servidor HTTP con playlist interactiva
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  encode
+    --chamber                   Música de cámara (piano+violín). Default:
+                                piano solo.
+    --composers COMPOSERS       Lista separada por comas. Default: todos.
+    --replace                   Recodificar aunque ya existan los .txt.
+
+  split
+    --example                   Usar los datos de ejemplo incluidos (ignora el
+                                resto de opciones).
+    --chordwise                 Codificación chordwise (default: notewise).
+    --chamber                   Música de cámara.
+    --small-note-range          38 notas (default: 62).
+    --sample-freq SAMPLE_FREQ   Frecuencia de muestreo (default: 4 chordwise /
+                                12 notewise).
+    --composers COMPOSERS       Compositores a incluir (default: todos).
+    --tt-split TT_SPLIT         Fracción para test (default: 0.1).
+    --sample SAMPLE             Fracción del corpus a usar (default: 1.0).
+    --no-wait                   Recodificar marcas wait (notewise).
+
+  train
+    --prefix PREFIX             Prefijo para los archivos del modelo (default:
+                                mod).
+    --load LOAD                 Nombre de modelo preentrenado desde el que
+                                continuar.
+    --level LEVEL               Nivel del modelo cargado (default: light).
+                                (valores: light|med|full|extra)
+    --train-folder TRAIN_FOLDER
+                                Subcarpeta de data/ con los datos de
+                                entrenamiento. (defecto train)
+    --test-folder TEST_FOLDER   Subcarpeta de data/ con los datos de
+                                validación. (defecto test)
+    --bs BS                     Batch size (default: 32).
+    --bptt BPTT                 Back-prop through time (default: 200).
+    --em-sz EM_SZ               Tamaño de embedding (default: 400).
+    --nh NH                     Neuronas ocultas por capa (default: 600).
+    --nl NL                     Número de capas LSTM (default: 4).
+    --min-freq MIN_FREQ         Frecuencia mínima de token (default: 1).
+    --dropout DROPOUT           Multiplicador de dropout (default: 1.0).
+    --epochs EPOCHS             Épocas por nivel de entrenamiento (default:
+                                3).
+
+  generate
+    --model MODEL               Nombre del modelo (sin sufijo _light.pth,
+                                etc.). (obligatorio)
+    --output OUTPUT             Carpeta de salida dentro de data/output/.
+                                (obligatorio)
+    --level LEVEL               Nivel del modelo (default: light). (valores:
+                                light|med|full|extra)
+    --size SIZE                 Tokens a generar (default: 2000).
+    --bs BS                     Número de piezas a generar en paralelo
+                                (default: 16).
+    --trunc TRUNC               Top-k para el muestreo (default: 5).
+    --random-freq RANDOM_FREQ   Fracción de pasos con muestreo aleatorio
+                                (default: 0.5).
+    --sample-freq SAMPLE_FREQ   Override de frecuencia de muestreo MIDI.
+    --chordwise                 Usar codificación chordwise.
+    --small-note-range          Rango de 38 notas.
+    --use-test-prompt           Usar prompts del conjunto de test.
+    --prompt-size PROMPT_SIZE   Tamaño del prompt (default: bptt del modelo).
+    --train-folder TRAIN_FOLDER
+                                (defecto train)
+    --test-folder TEST_FOLDER   (defecto test)
+
+  critic-data
+    --model MODEL               (obligatorio)
+    --level LEVEL               (defecto light; valores: light|med|full|extra)
+    --num NUM                   Número de fragmentos falsos a generar
+                                (default: 1000).
+    --size SIZE                 (defecto 2000)
+    --bs BS                     (defecto 64)
+    --prefix PREFIX             Prefijo para los nombres de archivo. (defecto
+                                )
+    --replace                   Borrar y reemplazar datos existentes.
+    --use-test-prompt
+    --tt-split TT_SPLIT         (defecto 0.1)
+
+  critic
+    --model MODEL               (obligatorio)
+    --level LEVEL               (defecto light; valores: light|med|full|extra)
+    --pretrain                  Inicializar con los pesos del generador.
+    --epochs EPOCHS             (defecto 3)
+    --bs BS                     (defecto 32)
+
+  composer-data
+    --model MODEL               Modelo generador del que tomar bptt y
+                                vocabulario. (obligatorio)
+    --composers COMPOSERS
+    --chordwise
+    --chamber
+    --small-note-range
+    --sample-freq SAMPLE_FREQ
+    --tt-split TT_SPLIT         (defecto 0.05)
+    --sample SAMPLE             (defecto 1.0)
+
+  composer
+    --model MODEL               (obligatorio)
+    --level LEVEL               (defecto light; valores: light|med|full|extra)
+    --epochs EPOCHS             (defecto 3)
+    --bs BS                     (defecto 32)
+
+  serve
+    --model MODEL               (defecto mod)
+    --level LEVEL               (defecto light; valores: light|med|full|extra)
+    --random-freq RANDOM_FREQ   (defecto 0.8)
+    --trunc TRUNC               (defecto 2)
+    --port PORT                 (defecto 8000)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Usar prompts del conjunto de test.
+  python clara.py generate --model modelo.pt --output salida.mid \
+        --use-test-prompt
+
+  # --use-test-prompt
+  python clara.py critic-data --model modelo.pt --use-test-prompt
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+    pip install torch fastai music21 mido numpy tqdm
+    sudo apt install fluidsynth mpg321 twolame
+
+  FLUJO BÁSICO (datos de ejemplo incluidos)
+
+    # 1. Usar datos de ejemplo (ya codificados)
+    python clara.py split --example
+
+    # 2. Entrenar
+    python clara.py train --prefix mi_modelo
+
+    # 3. Generar
+    python clara.py generate --model mi_modelo --output mis_piezas
+
+  FLUJO COMPLETO (MIDIs propios)
+
+    # 1. Codificar MIDIs
+    python clara.py encode
+    python clara.py encode --chamber
+    python clara.py encode --composers bach,beethoven
+
+    # 2. Construir train/test (notewise, piano solo, 62 notas, freq 12)
+    python clara.py split
+    python clara.py split --chordwise
+    python clara.py split --composers bach,mozart --sample 0.5
+
+    # 3. Entrenar generador
+    python clara.py train --prefix mi_modelo --epochs 5 --nl 4 --nh 600
+    python clara.py train --prefix mi_modelo --load mi_modelo --level light
+
+    # 4. Generar piezas
+    python clara.py generate --model mi_modelo --output mis_piezas
+    python clara.py generate --model notewise_generator --output demo \
+        --size 2000 --random-freq 0.8 --trunc 3 --bs 8
+
+    # 5. (Opcional) Entrenar crítico
+    python clara.py critic-data --model mi_modelo
+    python clara.py critic --model mi_modelo
+
+    # 6. (Opcional) Entrenar clasificador de compositores
+    python clara.py composer-data --model mi_modelo
+    python clara.py composer --model mi_modelo
+
+    # 7. Servidor de escucha
+    python clara.py serve --model mi_modelo
 """
 
 # ── Imports estándar ──────────────────────────────────────────────────────────

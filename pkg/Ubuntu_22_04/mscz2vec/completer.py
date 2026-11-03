@@ -1,89 +1,109 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         COMPLETER  v1.0                                      ║
-║         Continuación inteligente de obras musicales incompletas              ║
-║                                                                              ║
-║  Dado un fragmento MIDI (boceto, intro, frase suelta), genera una           ║
-║  continuación coherente que respeta el ADN musical del original:             ║
-║  tonalidad, ritmo, contorno melódico, curvas emocionales, densidad,         ║
-║  registro, carácter y posición narrativa dentro de una forma mayor.         ║
-║                                                                              ║
-║  ESTRATEGIAS DE COMPLETADO:                                                  ║
-║  [S1] markov      — Cadena de Markov entrenada sobre el fragmento fuente    ║
-║                     Continuación estilísticamente fiel, orgánica            ║
-║  [S2] contour     — Extrapola el contorno melódico (arco, dirección)        ║
-║                     Continuación que sigue la "inercia" del fragmento       ║
-║  [S3] phrase      — Sintaxis antecedente/consecuente (phrase_builder)       ║
-║                     Completa la frase con la respuesta gramatical correcta  ║
-║  [S4] variation   — Genera variaciones del material existente               ║
-║                     (variation_engine) y las encadena como continuación     ║
-║  [S5] harvest     — Busca en una colección de MIDIs fragmentos compatibles  ║
-║                     y los ensambla con coherencia (harvester + stitcher)    ║
-║  [S6] narrative   — Infiere la posición narrativa del fragmento y diseña   ║
-║                     la continuación según el arco dramático (narrator)      ║
-║  [S7] evolve      — Evolución genética guiada por similitud al fragmento   ║
-║                     fuente (evolver) — resultados más creativos/sorpresa    ║
-║  [S8] blend       — Combina todas las estrategias y elige la mejor por     ║
-║                     score de coherencia, compatibilidad y calidad           ║
-║                                                                              ║
-║  MODOS DE COMPLETADO:                                                        ║
-║  [M1] extend      — Continúa la obra a partir del último compás             ║
-║  [M2] fill        — Rellena un hueco entre dos fragmentos (A → ? → B)      ║
-║  [M3] develop     — Desarrolla el material en una sección de desarrollo     ║
-║  [M4] recapitulate— Genera una reexposición modificada del material inicial ║
-║  [M5] coda        — Compone una coda/final desde el estado armónico actual  ║
-║                                                                              ║
-║  INTEGRACIÓN CON EL ECOSISTEMA:                                             ║
-║  ┌─────────────────────────────────────────────────────────────────────┐    ║
-║  │ midi_dna_unified  → ADN completo del fragmento fuente              │    ║
-║  │ harvester         → extrae motivos del fragmento fuente            │    ║
-║  │ phrase_builder    → expande motivos en frases completas            │    ║
-║  │ variation_engine  → genera variaciones del material                │    ║
-║  │ evolver           → evolución genética guiada                      │    ║
-║  │ analyzer          → vectorización y similitud para elegir mejor    │    ║
-║  │ stitcher          → ensamblaje coherente de fragmentos             │    ║
-║  │ narrator          → posición narrativa y arco dramático            │    ║
-║  │ tension_designer  → curvas emocionales para la continuación        │    ║
-║  └─────────────────────────────────────────────────────────────────────┘    ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python completer.py fragmento.mid                                         ║
-║    python completer.py fragmento.mid --bars 16                               ║
-║    python completer.py fragmento.mid --strategy markov --bars 8             ║
-║    python completer.py fragmento.mid --strategy phrase --mode develop       ║
-║    python completer.py fragmento.mid --strategy blend --candidates 5        ║
-║    python completer.py fragmento.mid --end-with coda                        ║
-║    python completer.py fragmento.mid --fill-to final.mid                    ║
-║    python completer.py fragmento.mid --collection ./midis/ --strategy harvest║
-║    python completer.py fragmento.mid --arc hero --position 0.3              ║
-║    python completer.py fragmento.mid --strategy blend --verbose             ║
-║    python completer.py fragmento.mid --no-stitch  (solo genera, no pega)   ║
-║    python completer.py fragmento.mid --append (pega continuación al fuente) ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    fragmento.mid          MIDI de entrada (fragmento a completar)           ║
-║    --bars N               Compases de continuación a generar (default: auto)║
-║    --strategy S           Estrategia: markov|contour|phrase|variation|      ║
-║                           harvest|narrative|evolve|blend (default: blend)   ║
-║    --mode M               Modo: extend|fill|develop|recapitulate|coda       ║
-║                           (default: extend)                                  ║
-║    --candidates N         Candidatos a generar y evaluar (default: 3)       ║
-║    --fill-to FILE         MIDI destino para modo fill (A → ? → B)          ║
-║    --collection DIR       Carpeta de MIDIs para estrategia harvest          ║
-║    --arc NAME             Arco narrativo: hero|tragedy|romance|sonata|…     ║
-║    --position F           Posición en la obra 0.0-1.0 (default: auto)      ║
-║    --end-with TYPE        Terminar la continuación con: coda|cadence|fade   ║
-║    --key KEY              Forzar tonalidad destino (default: auto)          ║
-║    --tempo BPM            Forzar tempo (default: heredado del fuente)       ║
-║    --append               Concatenar resultado al MIDI fuente               ║
-║    --no-stitch            No usar stitcher: exportar solo la continuación   ║
-║    --export-fingerprint   Exportar fingerprint de la continuación           ║
-║    --output FILE          Archivo de salida (default: <fuente>_completed)   ║
-║    --seed N               Semilla aleatoria (default: 42)                   ║
-║    --verbose              Informe detallado del proceso                      ║
-║    --report               Informe de decisiones + score de calidad          ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+completer.py — Completer: continuación inteligente de obras musicales
+incompletas
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un fragmento MIDI (boceto, intro, frase suelta), genera una
+continuación coherente que respeta el ADN musical del original:
+tonalidad, ritmo, contorno melódico, curvas emocionales, densidad,
+registro, carácter y posición narrativa dentro de una forma mayor.
+
+ESTRATEGIAS DE COMPLETADO:
+[S1] markov      — Cadena de Markov entrenada sobre el fragmento fuente
+                   Continuación estilísticamente fiel, orgánica
+[S2] contour     — Extrapola el contorno melódico (arco, dirección)
+                   Continuación que sigue la "inercia" del fragmento
+[S3] phrase      — Sintaxis antecedente/consecuente (phrase_builder)
+                   Completa la frase con la respuesta gramatical correcta
+[S4] variation   — Genera variaciones del material existente
+                   (variation_engine) y las encadena como continuación
+[S5] harvest     — Busca en una colección de MIDIs fragmentos compatibles
+                   y los ensambla con coherencia (harvester + stitcher)
+[S6] narrative   — Infiere la posición narrativa del fragmento y diseña
+                   la continuación según el arco dramático (narrator)
+[S7] evolve      — Evolución genética guiada por similitud al fragmento
+                   fuente (evolver) — resultados más creativos/sorpresa
+[S8] blend       — Combina todas las estrategias y elige la mejor por
+                   score de coherencia, compatibilidad y calidad
+
+INTEGRACIÓN CON EL ECOSISTEMA:
+┌─────────────────────────────────────────────────────────────────────┐
+│ midi_dna_unified  → ADN completo del fragmento fuente              │
+│ harvester         → extrae motivos del fragmento fuente            │
+│ phrase_builder    → expande motivos en frases completas            │
+│ variation_engine  → genera variaciones del material                │
+│ evolver           → evolución genética guiada                      │
+│ analyzer          → vectorización y similitud para elegir mejor    │
+│ stitcher          → ensamblaje coherente de fragmentos             │
+│ narrator          → posición narrativa y arco dramático            │
+│ tension_designer  → curvas emocionales para la continuación        │
+└─────────────────────────────────────────────────────────────────────┘
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+MODOS DE COMPLETADO:
+  [M1] extend      — Continúa la obra a partir del último compás
+  [M2] fill        — Rellena un hueco entre dos fragmentos (A → ? → B)
+  [M3] develop     — Desarrolla el material en una sección de desarrollo
+  [M4] recapitulate— Genera una reexposición modificada del material inicial
+  [M5] coda        — Compone una coda/final desde el estado armónico actual
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  fragmento.mid          MIDI de entrada (fragmento a completar)
+  --bars N               Compases de continuación a generar (default: auto)
+  --strategy S           Estrategia: markov|contour|phrase|variation|
+                         harvest|narrative|evolve|blend (default: blend)
+  --mode M               Modo: extend|fill|develop|recapitulate|coda
+                         (default: extend)
+  --candidates N         Candidatos a generar y evaluar (default: 3)
+  --fill-to FILE         MIDI destino para modo fill (A → ? → B)
+  --collection DIR       Carpeta de MIDIs para estrategia harvest
+  --arc NAME             Arco narrativo: hero|tragedy|romance|sonata|…
+  --position F           Posición en la obra 0.0-1.0 (default: auto)
+  --end-with TYPE        Terminar la continuación con: coda|cadence|fade
+  --key KEY              Forzar tonalidad destino (default: auto)
+  --tempo BPM            Forzar tempo (default: heredado del fuente)
+  --append               Concatenar resultado al MIDI fuente
+  --no-stitch            No usar stitcher: exportar solo la continuación
+  --export-fingerprint   Exportar fingerprint de la continuación
+  --output FILE          Archivo de salida (default: <fuente>_completed)
+  --seed N               Semilla aleatoria (default: 42)
+  --verbose              Informe detallado del proceso
+  --report               Informe de decisiones + score de calidad
+
+── Otras opciones del parser ──
+  --no-append                 No concatenar: exportar solo la continuación
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python completer.py fragmento.mid
+  python completer.py fragmento.mid --bars 16
+  python completer.py fragmento.mid --strategy markov --bars 8
+  python completer.py fragmento.mid --strategy phrase --mode develop
+  python completer.py fragmento.mid --strategy blend --candidates 5
+  python completer.py fragmento.mid --end-with coda
+  python completer.py fragmento.mid --fill-to final.mid
+  python completer.py fragmento.mid --collection ./midis/ --strategy harvest
+  python completer.py fragmento.mid --arc hero --position 0.3
+  python completer.py fragmento.mid --strategy blend --verbose
+  python completer.py fragmento.mid --no-stitch   # solo genera, no pega
+  python completer.py fragmento.mid --append   # pega la continuación al fuente
+
+── Más modos ──
+
+  # Exportar fingerprint de la continuación
+  python completer.py entrada.mid --export-fingerprint
+
+  # Informe completo de decisiones y score
+  python completer.py entrada.mid --report
 """
 
 from __future__ import annotations

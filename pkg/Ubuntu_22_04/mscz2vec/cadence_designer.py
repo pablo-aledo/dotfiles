@@ -1,74 +1,155 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      CADENCE DESIGNER  v1.0                                  ║
-║         Diseñador de arquitectura de cadencias para obras MIDI              ║
-║                                                                              ║
-║  Dado un esquema formal, una progresión armónica, o un MIDI incompleto,     ║
-║  diseña la ubicación, tipo y fuerza de cada cadencia a lo largo de la obra. ║
-║  Asegura coherencia narrativa: las cadencias se organizan en una jerarquía  ║
-║  de cierres donde la última es la más fuerte, con variedad y tensión       ║
-║  progresiva.                                                                ║
-║                                                                              ║
-║  A diferencia de expectation_engine (que manipula cadencias EXISTENTES),   ║
-║  esta herramienta las DISEÑA desde cero o las PLANIFICA sobre un esqueleto.║
-║  A diferencia de chord_progression_generator (que genera acordes),         ║
-║  esta se enfoca exclusivamente en los PUNTOS DE CIERRE y sus tipos.         ║
-║                                                                              ║
-║  CATÁLOGO DE CADENCIAS:                                                      ║
-║    authentic_perfect    — V→I, bajo en fundamental. Cierre más fuerte       ║
-║    authentic_imperfect  — V→I, bajo en tercera. Cierre fuerte               ║
-║    authentic_deceptive  — V→vi. Niega la resolución, sorpresa               ║
-║    authentic_interrupted— V→vi, bajo sube. Decepción dramática              ║
-║    plagal               — IV→I. Efecto "Amén", suave                         ║
-║    plagal_minor         — iv→I en mayor. Color modal                       ║
-║    half                 — I→V o cualquier acorde→V. Suspendida              ║
-║    phrygian_half        — iv6→V. Descenso cromático en bajo                 ║
-║    evaded               — V→I6. Bajo no llega a tónica                      ║
-║    imperfect_with_64    — I64→V→I. 6/4 ornamental prepara dominante       ║
-║    deceptive_extended   — V7→vi→ii6→V→I. Engaño que se resuelve           ║
-║    picardy              — V→I en menor, pero I es mayor. Luz al final       ║
-║                                                                              ║
-║  SUBCOMANDOS                                                                 ║
-║    plan        — Diseña el mapa de cadencias para una forma dada            ║
-║    analyze     — Detecta cadencias ya presentes en un MIDI                  ║
-║    realize     — Convierte plan en bajo cifrado JSON (voice_leader)        ║
-║    insert      — Inserta acordes de cadencia en un MIDI existente           ║
-║    strengthen  — Escalona progresivamente la fuerza hacia el final          ║
-║    weaken      — Introduce inestabilidad: más engaños y semicadencias       ║
-║    sequence    — Organiza cadencias en progresión armónica ascendente/desc.   ║
-║                                                                              ║
-║  EJEMPLO DE USO COMPLETO (flujo recomendado):                                ║
-║  ─────────────────────────────────────────────────────────────────────────  ║
-║                                                                              ║
-║  # 1. Diseñar arquitectura de cierres para una sonata en La menor          ║
-║    python cadence_designer.py plan --bars 64 --key Am --form sonata         ║
-║        --tension late_climax -o plan.json --verbose                         ║
-║                                                                              ║
-║  # 2. Reforzar cadencias intermedias hacia el clímax                        ║
-║    python cadence_designer.py strengthen plan.json --intensity 0.6          ║
-║        -o plan_ref.json                                                     ║
-║                                                                              ║
-║  # 3. Convertir a bajo cifrado para voice_leader                            ║
-║    python cadence_designer.py realize plan_ref.json -o bajo_cifrado.json    ║
-║                                                                              ║
-║  # 4. (Opcional) Insertar como pista guía en un MIDI existente              ║
-║    python cadence_designer.py insert esqueleto.mid --plan plan_ref.json     ║
-║        -o obra_con_cadencias.mid                                            ║
-║                                                                              ║
-║  INTEGRACIÓN CON EL ECOSISTEMA:                                             ║
-║    theorist.py         → --from-theorist lee .theorist.json                 ║
-║    tension_designer    → --from-curves lee .curves.json                     ║
-║    voice_leader.py     → realize genera bajo cifrado compatible             ║
-║    bass_line_composer  → realize genera progresión para bajo                  ║
-║    expectation_engine  → insert prepara cadencias para manipulación         ║
-║    chord_progression_generator → plan coordina con progresión generada      ║
-║    arc_supervisor      → plan exporta tensión_release por cadencia          ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy                                                  ║
-║  OPCIONAL: music21 (análisis tonal avanzado)                                ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+cadence_designer.py — Cadence Designer: diseñador de arquitectura de cadencias
+para obras MIDI
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un esquema formal, una progresión armónica, o un MIDI incompleto,
+diseña la ubicación, tipo y fuerza de cada cadencia a lo largo de la obra.
+Asegura coherencia narrativa: las cadencias se organizan en una jerarquía
+de cierres donde la última es la más fuerte, con variedad y tensión
+progresiva.
+
+A diferencia de expectation_engine (que manipula cadencias EXISTENTES),
+esta herramienta las DISEÑA desde cero o las PLANIFICA sobre un esqueleto.
+A diferencia de chord_progression_generator (que genera acordes),
+esta se enfoca exclusivamente en los PUNTOS DE CIERRE y sus tipos.
+
+CATÁLOGO DE CADENCIAS:
+  authentic_perfect    — V→I, bajo en fundamental. Cierre más fuerte
+  authentic_imperfect  — V→I, bajo en tercera. Cierre fuerte
+  authentic_deceptive  — V→vi. Niega la resolución, sorpresa
+  authentic_interrupted— V→vi, bajo sube. Decepción dramática
+  plagal               — IV→I. Efecto "Amén", suave
+  plagal_minor         — iv→I en mayor. Color modal
+  half                 — I→V o cualquier acorde→V. Suspendida
+  phrygian_half        — iv6→V. Descenso cromático en bajo
+  evaded               — V→I6. Bajo no llega a tónica
+  imperfect_with_64    — I64→V→I. 6/4 ornamental prepara dominante
+  deceptive_extended   — V7→vi→ii6→V→I. Engaño que se resuelve
+  picardy              — V→I en menor, pero I es mayor. Luz al final
+
+INTEGRACIÓN CON EL ECOSISTEMA:
+  theorist.py         → --from-theorist lee .theorist.json
+  tension_designer    → --from-curves lee .curves.json
+  voice_leader.py     → realize genera bajo cifrado compatible
+  bass_line_composer  → realize genera progresión para bajo
+  expectation_engine  → insert prepara cadencias para manipulación
+  chord_progression_generator → plan coordina con progresión generada
+  arc_supervisor      → plan exporta tensión_release por cadencia
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+    plan        — Diseña el mapa de cadencias para una forma dada
+    analyze     — Detecta cadencias ya presentes en un MIDI
+    realize     — Convierte plan en bajo cifrado JSON (voice_leader)
+    insert      — Inserta acordes de cadencia en un MIDI existente
+    strengthen  — Escalona progresivamente la fuerza hacia el final
+    weaken      — Introduce inestabilidad: más engaños y semicadencias
+    sequence    — Organiza cadencias en progresión armónica ascendente/desc.
+
+  EJEMPLO DE USO COMPLETO (flujo recomendado):
+  ─────────────────────────────────────────────────────────────────────────
+
+  # 1. Diseñar arquitectura de cierres para una sonata en La menor
+    python cadence_designer.py plan --bars 64 --key Am --form sonata \
+        --tension late_climax -o plan.json --verbose
+
+  # 2. Reforzar cadencias intermedias hacia el clímax
+    python cadence_designer.py strengthen plan.json --intensity 0.6 \
+        -o plan_ref.json
+
+  # 3. Convertir a bajo cifrado para voice_leader
+    python cadence_designer.py realize plan_ref.json -o bajo_cifrado.json
+
+  # 4. (Opcional) Insertar como pista guía en un MIDI existente
+    python cadence_designer.py insert esqueleto.mid --plan plan_ref.json \
+        -o obra_con_cadencias.mid
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  plan
+    --bars BARS                 Compases totales (obligatorio)
+    --key KEY                   Tónica (C, Am, F#...) (defecto C)
+    --mode MODE                 Modo (defecto major; valores: major|minor)
+    --form FORM                 Forma musical (defecto through_composed;
+                                valores:
+                                ABA|ABAB|AABA|ABACABA|verse_chorus|sonata|binary|ternary|rondo|through_composed)
+    --tension TENSION           Perfil de tensión (defecto arch; valores:
+                                arch|crescendo|decrescendo|wave|late_climax|neutral)
+    --tension-curve TENSION_CURVE
+                                Curva explícita: 0.2,0.5,0.8,...
+    --n-cadences N_CADENCES     Número de cadencias (auto por defecto)
+    --from-theorist FROM_THEORIST
+                                Leer plan de theorist.py
+    --from-curves FROM_CURVES   Leer curvas de tension_designer
+    --output, -o OUTPUT         Guardar plan en JSON
+    --realize REALIZE           También realizar como bajo cifrado
+    --seed SEED                 Semilla aleatoria (defecto 42)
+    --verbose                   Informe detallado
+
+  analyze
+    midi MIDI                   Archivo MIDI de entrada
+    --key KEY                   Tonalidad (p.ej. G, F#m); por omisión se
+                                estima
+    --json JSON                 Exportar análisis a JSON
+    --verbose                   Detalle completo
+
+  realize
+    plan PLAN                   Plan de cadencias JSON
+    --output, -o OUTPUT         Archivo de salida JSON (obligatorio)
+
+  insert
+    midi MIDI                   Archivo MIDI de entrada
+    --plan PLAN                 Plan de cadencias JSON (obligatorio)
+    --output, -o OUTPUT         MIDI de salida (obligatorio)
+    --velocity VELOCITY         Velocity de los acordes (defecto 80)
+
+  strengthen
+    plan PLAN                   Plan de cadencias JSON
+    --intensity INTENSITY       Intensidad del refuerzo 0-1 (defecto 0.5)
+    --output, -o OUTPUT         Plan modificado (obligatorio)
+
+  weaken
+    plan PLAN                   Plan de cadencias JSON
+    --intensity INTENSITY       Intensidad 0-1 (defecto 0.5)
+    --output, -o OUTPUT         Plan modificado (obligatorio)
+
+  sequence
+    plan PLAN                   Plan de cadencias JSON
+    --direction DIRECTION       Dirección (defecto ascending; valores:
+                                ascending|descending)
+    --output, -o OUTPUT         Plan modificado (obligatorio)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # --mode major — Modo
+  python cadence_designer.py plan --bars 1 --mode major
+
+  # --mode minor — Modo
+  python cadence_designer.py plan --bars 1 --mode minor
+
+  # Analiza cadencias existentes en un MIDI
+  python cadence_designer.py analyze entrada.mid
+
+  # Introduce inestabilidad en cadencias
+  python cadence_designer.py weaken plan.json --output salida.mid
+
+  # Secuencia de cadencias en progresión
+  python cadence_designer.py sequence plan.json --output salida.mid
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
+  OPCIONAL: music21 (análisis tonal avanzado)
 """
 import sys
 import json

@@ -1,83 +1,142 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        RHYTHM TABLE  v1.0                                    ║
-║         Catálogo curado de patrones rítmicos con tensión y emoción           ║
-║                                                                              ║
-║  Complemento de chord_table.py: en lugar de acordes, ofrece un catálogo     ║
-║  curado de patrones rítmicos —células de una sola línea y grooves          ║
-║  multi-voz— con etiquetas de tensión (1-10) y emoción, buscables y          ║
-║  exportables. Un patrón puede usarse como base percusiva independiente o    ║
-║  como "ritmo armónico" (puntos de cambio de acorde) aplicado sobre una      ║
-║  progresión de chord_table.py.                                              ║
-║                                                                              ║
-║    · Tipos:    célula (una línea de onsets), groove (varias voces)         ║
-║    · Estilos:  afrocubano, tango, habanera, balcánico, flamenco, jazz,      ║
-║                blues, bossa, baião, rock, hip_hop, reggaeton, drum_and_bass ║
-║    · Usos:     percusión, ritmo_armonico                                    ║
-║    · Emociones: reposo, alegría, tristeza, melancolía, nostalgia,           ║
-║                 misterio, ambigüedad, drama, angustia, esperanza,           ║
-║                 euforia, flotación, solemnidad, exotismo                    ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    # Listar todos                                                           ║
-║    python rhythm_table.py --list                                            ║
-║                                                                              ║
-║    # Filtrar por emoción / estilo / tipo / uso                              ║
-║    python rhythm_table.py --emocion euforia                                 ║
-║    python rhythm_table.py --style flamenco --tipo celula                    ║
-║    python rhythm_table.py --uso ritmo_armonico                              ║
-║                                                                              ║
-║    # Filtrar por rango de tensión                                           ║
-║    python rhythm_table.py --tension-min 7 --tension-max 10                  ║
-║                                                                              ║
-║    # Buscar por texto libre / por intención en lenguaje natural             ║
-║    python rhythm_table.py --buscar "clave"                                  ║
-║    python rhythm_table.py --intencion "urgente y denso"                     ║
-║                                                                              ║
-║    # Resolver un patrón del catálogo a tiempo real y exportar               ║
-║    python rhythm_table.py --id 1 --tempo 100 --bars 4 --export-midi c.mid   ║
-║                                                                              ║
-║    # Patrón personalizado — célula (onsets 'x'/'.')                        ║
-║    python rhythm_table.py --custom "x..x..x." --meter 4/4 --bars 2          ║
-║                                                                              ║
-║    # Patrón personalizado — groove multi-voz                                ║
-║    python rhythm_table.py --custom "kick:x...x... snare:....x..." \\        ║
-║        --tipo groove --meter 4/4 --export-midi groove.mid                   ║
-║                                                                              ║
-║    # Ritmo armónico: aplicar los puntos de cambio de un patrón a acordes   ║
-║    python rhythm_table.py --id 5 --apply-to-chords "Am G F E7" --bars 2     ║
-║        --export-text cambios.chords.txt                                     ║
-║                                                                              ║
-║    # Exportar tabla filtrada a JSON                                         ║
-║    python rhythm_table.py --style bossa --export-json bossa.json            ║
-║                                                                              ║
-║    # Mostrar estadísticas del catálogo                                      ║
-║    python rhythm_table.py --stats                                           ║
-║                                                                              ║
-║    # Analizar un MIDI y detectar patrones del catálogo                      ║
-║    python rhythm_table.py --analyze-midi cancion.mid                        ║
-║                                                                              ║
-║    # Análisis con resolución fina, compás forzado y exportación JSON        ║
-║    python rhythm_table.py --analyze-midi song.mid --meter 4/4 --bars 4 \\   ║
-║        --resolution 4 --min-score 0.6 --export-json matches.json --verbose  ║
-║                                                                              ║
-║  INTEGRACIÓN CON EL ECOSISTEMA:                                              ║
-║    chord_table.py       → --apply-to-chords toma una progresión suya y le  ║
-║                            impone la temporización del patrón rítmico       ║
-║    melody_adapter.py    → el texto de --apply-to-chords es compatible      ║
-║                            con su entrada --chords                          ║
-║    layer_graph_composer.py / adaptive_playback_runtime.py → --export-midi  ║
-║                            genera groove de percusión fuente                ║
-║                                                                              ║
-║  SALIDAS:                                                                    ║
-║    <base>.rhythm.txt    — patrón en notación de onsets (grid legible)      ║
-║    <base>.rhythm.json   — patrón resuelto con metadatos                     ║
-║    <base>.rhythm.mid    — MIDI de percusión (canal 10 GM)                   ║
-║    <base>.chords.txt/.json — con --apply-to-chords, progresión resultante  ║
-║                                                                              ║
-║  DEPENDENCIAS: mido (opcional, solo para exportación MIDI)                  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+rhythm_table.py — Rhythm Table: catálogo curado de patrones rítmicos con
+tensión y emoción
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Complemento de chord_table.py: en lugar de acordes, ofrece un catálogo
+curado de patrones rítmicos —células de una sola línea y grooves
+multi-voz— con etiquetas de tensión (1-10) y emoción, buscables y
+exportables. Un patrón puede usarse como base percusiva independiente o
+como "ritmo armónico" (puntos de cambio de acorde) aplicado sobre una
+progresión de chord_table.py.
+
+  · Tipos:    célula (una línea de onsets), groove (varias voces)
+  · Estilos:  afrocubano, tango, habanera, balcánico, flamenco, jazz,
+              blues, bossa, baião, rock, hip_hop, reggaeton, drum_and_bass
+  · Usos:     percusión, ritmo_armonico
+  · Emociones: reposo, alegría, tristeza, melancolía, nostalgia,
+               misterio, ambigüedad, drama, angustia, esperanza,
+               euforia, flotación, solemnidad, exotismo
+
+INTEGRACIÓN CON EL ECOSISTEMA:
+  chord_table.py       → --apply-to-chords toma una progresión suya y le
+                          impone la temporización del patrón rítmico
+  melody_adapter.py    → el texto de --apply-to-chords es compatible
+                          con su entrada --chords
+  layer_graph_composer.py / adaptive_playback_runtime.py → --export-midi
+                          genera groove de percusión fuente
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  <base>.rhythm.txt    — patrón en notación de onsets (grid legible)
+  <base>.rhythm.json   — patrón resuelto con metadatos
+  <base>.rhythm.mid    — MIDI de percusión (canal 10 GM)
+  <base>.chords.txt/.json — con --apply-to-chords, progresión resultante
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --analyze-midi MIDI_FILE    Analizar un MIDI y mostrar los patrones del
+                              catálogo que contiene
+  --min-score F               Score mínimo de coincidencia 0-1 (default: 0.5)
+  --resolution N              Subdivisiones por pulso para la rejilla de
+                              análisis (default: 4 = semicorcheas)
+  --list                      Listar todos los patrones
+  --stats                     Estadísticas del catálogo
+  --custom ONSETS             Patrón personalizado en vez de seleccionar del
+                              catálogo. Célula: --custom "x..x..x.". Groove:
+                              --custom "kick:x...x... snare:....x..." (auto-
+                              detecta tipo groove si contiene ':').
+  --tipo TIPO                 Tipo de patrón (filtro, o fuerza el tipo de
+                              --custom) (valores: celula|groove)
+  --id N                      Seleccionar patrón por id
+  --buscar TEXTO              Búsqueda por texto libre
+  --intencion DESC            Buscar por intención en lenguaje natural
+  --style STYLE               Filtrar por estilo
+  --uso USO                   Filtrar por uso (valores:
+                              percusion|ritmo_armonico)
+  --meter METER               Filtrar por compás (ej. 4/4), o compás para
+                              --custom/análisis
+  --feel FEEL                 Filtrar por feel (valores:
+                              straight|swing|shuffle)
+  --emocion EMOCION           Filtrar por emoción (euforia, angustia, reposo…)
+  --tension-min N             Tensión mínima (1-10)
+  --tension-max N             Tensión máxima (1-10)
+  --bars BARS                 Compases a generar (default: los del propio
+                              patrón)
+  --reps N                    Repeticiones exactas del patrón (sustituye a
+                              --bars)
+  --tempo TEMPO               Tempo BPM para exportación MIDI (default: 120)
+  --note N                    Nota MIDI GM para células sin voz (default: 75,
+                              claves)
+  --apply-to-chords ACORDES   Aplica los onsets del patrón como puntos de
+                              cambio a una lista de acordes, ej. "Am G F E7".
+                              Compatible con el texto --chords de
+                              chord_table.py / melody_adapter.py
+  --change-voice VOZ          Voz del groove cuyos onsets marcan los cambios
+                              de acorde (requerido si --apply-to-chords se usa
+                              sobre un groove)
+  --export-json FILE          Exportar tabla filtrada o patrón resuelto a JSON
+  --export-text FILE          Exportar patrón resuelto (o progresión de
+                              --apply-to-chords) a texto
+  --export-midi FILE          Exportar patrón resuelto a MIDI de percusión
+  --output OUTPUT             Nombre base para salidas (default: ritmo)
+  --verbose                   Mostrar nombre y descripción de cada patrón
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Listar todos
+  python rhythm_table.py --list
+
+  # Filtrar por emoción / estilo / tipo / uso
+  python rhythm_table.py --emocion euforia
+  python rhythm_table.py --style flamenco --tipo celula
+  python rhythm_table.py --uso ritmo_armonico
+
+  # Filtrar por rango de tensión
+  python rhythm_table.py --tension-min 7 --tension-max 10
+
+  # Buscar por texto libre / por intención en lenguaje natural
+  python rhythm_table.py --buscar "clave"
+  python rhythm_table.py --intencion "urgente y denso"
+
+  # Resolver un patrón del catálogo a tiempo real y exportar
+  python rhythm_table.py --id 1 --tempo 100 --bars 4 --export-midi c.mid
+
+  # Patrón personalizado — célula (onsets 'x'/'.')
+  python rhythm_table.py --custom "x..x..x." --meter 4/4 --bars 2
+
+  # Patrón personalizado — groove multi-voz
+  python rhythm_table.py --custom "kick:x...x... snare:....x..." \
+      --tipo groove --meter 4/4 --export-midi groove.mid
+
+  # Ritmo armónico: aplicar los puntos de cambio de un patrón a acordes
+  python rhythm_table.py --id 5 --apply-to-chords "Am G F E7" --bars 2 \
+      --export-text cambios.chords.txt
+
+  # Exportar tabla filtrada a JSON
+  python rhythm_table.py --style bossa --export-json bossa.json
+
+  # Mostrar estadísticas del catálogo
+  python rhythm_table.py --stats
+
+  # Analizar un MIDI y detectar patrones del catálogo
+  python rhythm_table.py --analyze-midi cancion.mid
+
+  # Análisis con resolución fina, compás forzado y exportación JSON
+  python rhythm_table.py --analyze-midi song.mid --meter 4/4 --bars 4 \
+      --resolution 4 --min-score 0.6 --export-json matches.json --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido (opcional, solo para exportación MIDI)
 """
 
 import sys

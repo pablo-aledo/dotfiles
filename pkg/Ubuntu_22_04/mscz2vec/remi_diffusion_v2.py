@@ -1,58 +1,147 @@
 #!/usr/bin/env python3
 r"""
-================================================================================
-                      REMI DIFFUSION  v2
-   Masked/Uniform Diffusion LM aplicado a composicion de piano pop
+remi_diffusion_v2.py — Remi Diffusion: masked/Uniform Diffusion LM aplicado a
+composicion de piano pop
+(versión 2).
 
-  NOVEDADES RESPECTO A v1 (remi_diffusion.py):
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+NOVEDADES RESPECTO A v1 (remi_diffusion.py):
 
-  1. ARQUITECTURA ENCODER-DECODER (antes: un unico Transformer bidireccional)
-     Un encoder pesado procesa la historia (compases ya generados, siempre
-     limpios) con atencion BLOCK-CAUSAL: bidireccional dentro de cada
-     compas, causal entre compases. Un decoder ligero hace cross-attention
-     a esa memoria para denoisar el compas actual (canvas). Como en Gemma
-     Diffusion: "heavy encoder... lightweight decoder".
+1. ARQUITECTURA ENCODER-DECODER (antes: un unico Transformer bidireccional)
+   Un encoder pesado procesa la historia (compases ya generados, siempre
+   limpios) con atencion BLOCK-CAUSAL: bidireccional dentro de cada
+   compas, causal entre compases. Un decoder ligero hace cross-attention
+   a esa memoria para denoisar el compas actual (canvas). Como en Gemma
+   Diffusion: "heavy encoder... lightweight decoder".
 
-  2. KV-CACHE REAL entre compases (antes: se reprocesaba toda la historia
-     en CADA paso de denoising de CADA compas -- muy ineficiente). Ahora:
-       - El encoder cachea claves/valores por capa; al anadir un compas
-         nuevo solo se calculan SUS tokens, nunca se recalculan los
-         compases anteriores (igual que el KV-cache autorregresivo, pero
-         por bloques en vez de por token).
-       - La memoria para cross-attention del decoder se recalcula UNA VEZ
-         por compas (no en cada paso de denoising).
-       - Ventana deslizante (--history-bars) con expulsion de los
-         compases mas antiguos del cache cuando se supera el limite.
+2. KV-CACHE REAL entre compases (antes: se reprocesaba toda la historia
+   en CADA paso de denoising de CADA compas -- muy ineficiente). Ahora:
+     - El encoder cachea claves/valores por capa; al anadir un compas
+       nuevo solo se calculan SUS tokens, nunca se recalculan los
+       compases anteriores (igual que el KV-cache autorregresivo, pero
+       por bloques en vez de por token).
+     - La memoria para cross-attention del decoder se recalcula UNA VEZ
+       por compas (no en cada paso de denoising).
+     - Ventana deslizante (--history-bars) con expulsion de los
+       compases mas antiguos del cache cuando se supera el limite.
 
-  3. UNIFORM-STATE DIFFUSION (UDLM), seleccionable con --noise-type:
-       - 'mask'    (MDLM, como v1): el forward process reemplaza tokens por
-         [MASK]; el sampler des-enmascara + remasking (ReMDM).
-       - 'uniform' (UDLM, default en v2): el forward process reemplaza
-         tokens por tokens ALEATORIOS del vocabulario (nunca hay [MASK]);
-         el sampler mantiene un estado "comprometido/no comprometido" por
-         posicion y puede "renoisar" (re-aleatorizar) posiciones ya
-         comprometidas para corregir errores -- segun el articulo, esto da
-         MEJOR CONTROLABILIDAD que MDLM, relevante para el guidance por
-         acordes que es el objetivo central de esta herramienta.
+3. UNIFORM-STATE DIFFUSION (UDLM), seleccionable con --noise-type:
+     - 'mask'    (MDLM, como v1): el forward process reemplaza tokens por
+       [MASK]; el sampler des-enmascara + remasking (ReMDM).
+     - 'uniform' (UDLM, default en v2): el forward process reemplaza
+       tokens por tokens ALEATORIOS del vocabulario (nunca hay [MASK]);
+       el sampler mantiene un estado "comprometido/no comprometido" por
+       posicion y puede "renoisar" (re-aleatorizar) posiciones ya
+       comprometidas para corregir errores -- segun el articulo, esto da
+       MEJOR CONTROLABILIDAD que MDLM, relevante para el guidance por
+       acordes que es el objetivo central de esta herramienta.
 
-    Referencia: Kuleshov Group, "How to Build a Diffusion Language Model"
-    (2026) -- https://kuleshov-group.github.io/blog/blog/2026/
-               how-to-build-a-diffusion-language-model/
-    Secciones: "Architectures: Encoder, Decoder, and Encoder-Decoder",
-    "Block Diffusion for Flexible-Length Generation", "Uniform State
-    Diffusion".
+  Referencia: Kuleshov Group, "How to Build a Diffusion Language Model"
+  (2026) -- https://kuleshov-group.github.io/blog/blog/2026/
+             how-to-build-a-diffusion-language-model/
+  Secciones: "Architectures: Encoder, Decoder, and Encoder-Decoder",
+  "Block Diffusion for Flexible-Length Generation", "Uniform State
+  Diffusion".
 
-  LO QUE v2 NO CAMBIA: mismo esquema de tokens REMI, mismo vocabulario
-  (compatible con vocab_chord.json de remi.py y v1), mismo canvas de
-  longitud fija por compas, misma guidance D-CFG por acordes, misma
-  reparacion gramatical greedy tras el sampler.
+LO QUE v2 NO CAMBIA: mismo esquema de tokens REMI, mismo vocabulario
+(compatible con vocab_chord.json de remi.py y v1), mismo canvas de
+longitud fija por compas, misma guidance D-CFG por acordes, misma
+reparacion gramatical greedy tras el sampler.
 
-  COMANDOS: convert, train, generate, continue, inspect  (identicos a v1)
-  DEPENDENCIAS: mido, numpy, torch
-================================================================================
-  EJEMPLOS
-================================================================================
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  convert, train, generate, continue, inspect  (identicos a v1)
 
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  convert
+    input INPUT                 MIDI o directorio de MIDIs
+    --vocab VOCAB               Ruta del vocabulario JSON
+    --output OUTPUT             Guardar tokens en JSON
+    --verbose
+
+  train
+    data_dir DATA_DIR           Directorio con MIDIs de entrenamiento
+    --model-dir MODEL_DIR       (obligatorio)
+    --vocab VOCAB
+    --canvas-len CANVAS_LEN     (defecto CANVAS_LEN_DEFAULT)
+    --history-bars HISTORY_BARS
+                                (defecto HISTORY_BARS_DEFAULT)
+    --d-model D_MODEL           (defecto 512)
+    --n-layer-enc N_LAYER_ENC   Capas del encoder (pesado, procesa la
+                                historia) [6] (defecto 6)
+    --n-layer-dec N_LAYER_DEC   Capas del decoder (ligero, denoisa el compás
+                                actual) [2] (defecto 2)
+    --n-head N_HEAD             (defecto 8)
+    --noise-type NOISE_TYPE     'mask'=MDLM (como v1), 'uniform'=UDLM (mejor
+                                controlabilidad según el artículo) [uniform]
+                                (defecto uniform; valores: mask|uniform)
+    --cond-dropout COND_DROPOUT
+                                Prob. de sustituir el acorde por NULL_COND
+                                (CFG training) [0.15] (defecto 0.15)
+    --epochs EPOCHS             (defecto 300)
+    --batch-size BATCH_SIZE     (defecto 8)
+    --lr LR                     (defecto 0.0002)
+    --patience PATIENCE         (defecto 30)
+    --resume
+    --small                     Modelo reducido: enc=3/dec=1 capas, d=256
+                                (CPU-friendly)
+    --seed SEED                 (defecto 42)
+    --verbose
+
+  generate
+    --model-dir MODEL_DIR       (obligatorio)
+    --chords CHORDS             Progresión objetivo, ej. "C:maj G:maj A:min
+                                F:maj" (se cicla para cubrir --bars; sin este
+                                flag, sin guidance)
+    --bars BARS                 (defecto 16)
+    --steps STEPS               Pasos de denoising por compás (defecto 20)
+    --guidance-scale GUIDANCE_SCALE
+                                (defecto 3.0)
+    --remask-max REMASK_MAX     (defecto 0.15)
+    --temperature TEMPERATURE   (defecto 1.0)
+    --topk TOPK                 (defecto 0)
+    --repair-grammar            Reparar gramática REMI del canvas generado
+                                [on]
+    --no-repair-grammar         Desactivar la reparación gramatical (para
+                                depuración)
+    --output OUTPUT
+    --seed SEED                 (defecto 42)
+    --verbose
+
+  continue
+    prompt PROMPT               MIDI de prompt
+    --model-dir MODEL_DIR       (obligatorio)
+    --chords CHORDS
+    --bars BARS                 (defecto 16)
+    --steps STEPS               (defecto 20)
+    --guidance-scale GUIDANCE_SCALE
+                                (defecto 3.0)
+    --remask-max REMASK_MAX     (defecto 0.15)
+    --temperature TEMPERATURE   (defecto 1.0)
+    --topk TOPK                 (defecto 0)
+    --repair-grammar            Reparar gramática REMI del canvas generado
+                                [on]
+    --no-repair-grammar         Desactivar la reparación gramatical (para
+                                depuración)
+    --output OUTPUT
+    --seed SEED                 (defecto 42)
+    --verbose
+
+  inspect
+    --input INPUT               (obligatorio)
+    --vocab VOCAB
+    --canvas-len CANVAS_LEN     (defecto CANVAS_LEN_DEFAULT)
+    --bars-show BARS_SHOW       (defecto 8)
+    --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
   python remi_diffusion_v2.py convert corpus/ --vocab vocab_chord.json
 
   python remi_diffusion_v2.py train corpus/ --model-dir diff_v2/ \
@@ -63,7 +152,6 @@ r"""
 
   python remi_diffusion_v2.py continue prompt.mid --model-dir diff_v2/ \
       --chords "D:min G:dom C:maj" --bars 8
-================================================================================
 
   OPCIONES NUEVAS EN v2 (respecto a v1):
     --noise-type {mask,uniform}   Tipo de proceso de difusion [uniform]
@@ -77,6 +165,16 @@ r"""
     --resume, --small, --chords, --bars N, --steps N, --guidance-scale F,
     --remask-max F, --temperature F, --topk N,
     --repair-grammar/--no-repair-grammar, --seed N
+
+── Más modos ──
+
+  # Diagnóstico de bloques/canvas de un MIDI
+  python remi_diffusion_v2.py inspect --input entrada.mid
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy, torch
 """
 
 import sys

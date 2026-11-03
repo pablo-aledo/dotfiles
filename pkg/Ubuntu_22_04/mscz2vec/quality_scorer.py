@@ -1,109 +1,125 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       QUALITY SCORER  v1.4                                  ║
-║         Evaluación multidimensional de calidad musical para MIDIs            ║
-║                                                                              ║
-║  Evalúa una o más obras MIDI en cinco dimensiones:                          ║
-║    · formal    — corrección de voice leading e intervalos                   ║
-║    · coherence — homogeneidad interna entre secciones                       ║
-║    · arc       — estructura del arco emocional/tensión                      ║
-║    · melodic   — interés melódico y variedad                                ║
-║    · corpus    — similitud estilística a una colección de referencia        ║
-║                                                                              ║
-║  El score final es relativo (percentil en el corpus) con fallback           ║
-║  absoluto (0.0–1.0) cuando no hay corpus disponible. Los pesos efectivos    ║
-║  se modulan automáticamente por la confianza de cada dimensión.             ║
-║                                                                              ║
-║  MODOS DE OPERACIÓN:                                                         ║
-║    (defecto)  Evaluación completa de un MIDI                                ║
-║    rank       Comparación y ranking de varios MIDIs                         ║
-║                                                                              ║
-║  USO BÁSICO:                                                                 ║
-║    python quality_scorer.py obra.mid                                         ║
-║    python quality_scorer.py obra.mid --plan obra.theorist.json              ║
-║    python quality_scorer.py obra.mid --corpus ./midis/                      ║
-║    python quality_scorer.py obra.mid --corpus ./midis/ --save-cache c.qcache║
-║    python quality_scorer.py obra.mid --corpus ./midis/ --use-cache c.qcache ║
-║    python quality_scorer.py obra.mid --fast                                  ║
-║    python quality_scorer.py obra.mid --quiet          # solo imprime score  ║
-║    python quality_scorer.py cand*.mid --mode rank                           ║
-║    python quality_scorer.py cand*.mid --mode rank --quiet                   ║
-║                                                                              ║
-║  CAMBIOS v1.4 (calibración frente a validez por barajado/azar):             ║
-║    · formal: saltos por voz (pista+canal, skyline/bajo), disonancia en       ║
-║      el tiempo fuerte y graduada, sensible/6ª elevada en menor               ║
-║    · coherence: + coherencia tonal (claridad, consistencia, continuidad PCP) ║
-║    · harmony: + ajuste a tríada y calidad de progresión                      ║
-║    · arc sin plan: confianza 0.75→0.35; compás implausible (<2 o >7 negras) ║
-║      → 4 negras                                                              ║
-║                                                                              ║
-║  ROLES Y CONTEXTO (v1.3):                                                    ║
-║  python quality_scorer.py obra.mid --roles '1=melody,ch10=drums'             ║
-║  python quality_scorer.py obra.mid --scale whole_tone   # colección          ║
-║    python quality_scorer.py obra.mid --context obra.whole_tone_report.json   ║
-║  python quality_scorer.py obra.mid --voices satb        # forzar SATB        ║
-║  python quality_scorer.py obra.mid --compat             # como v1.2          ║
-║    La percusión (canal 10) se excluye de formal/melodic/harmony; los nombres ║
-║    de pista (Melody, Bass, Harmony, Drums…) son evidencia de rol si no       ║
-║    contradicen canal/programa. El informe lista roles, fuente y avisos.      ║
-║                                                                              ║
-║  CONTROL DE DIMENSIONES:                                                     ║
-║    python quality_scorer.py obra.mid --skip corpus formal                   ║
-║    python quality_scorer.py obra.mid --only arc coherence                   ║
-║    python quality_scorer.py obra.mid --weights formal=0.4 coherence=0.3    ║
-║    python quality_scorer.py obra.mid --arc-weight-mode static               ║
-║    python quality_scorer.py obra.mid --arc-weight-mode off                  ║
-║                                                                              ║
-║  EXPLICACIÓN EN LENGUAJE NATURAL (--explain):                               ║
-║    python quality_scorer.py obra.mid --explain                               ║
-║    python quality_scorer.py obra.mid --explain --explain-provider local     ║
-║    python quality_scorer.py obra.mid --explain --explain-provider anthropic ║
-║    python quality_scorer.py obra.mid --explain --explain-provider openai    ║
-║    python quality_scorer.py obra.mid --explain --explain-provider clipboard ║
-║    python quality_scorer.py obra.mid --explain --explain-out guia.txt       ║
-║                                                                              ║
-║  SALIDAS:                                                                    ║
-║    python quality_scorer.py obra.mid --out-json report.json                 ║
-║    python quality_scorer.py obra.mid --out-json report.json --verbose       ║
-║                                                                              ║
-║  CACHÉ DE CORPUS:                                                            ║
-║    --save-cache FILE   Guardar vectores del corpus en .qcache               ║
-║    --use-cache FILE    Cargar caché previo (solo recalcula ficheros nuevos) ║
-║                                                                              ║
-║  OPCIONES PRINCIPALES:                                                       ║
-║    --plan FILE             theorist.json o narrator_plan.json (dim. arc)    ║
-║    --roles MAP              N=rol|chN=rol (melody|bass|harmony|drums)        ║
-║    --scale [RAÍZ:]NOMBRE    Colección declarada (whole_tone, D:dorian…)      ║
-║    --context JSON           Informe de theme_transformer (un fichero)        ║
-║    --voices auto|satb|texture  Reglas de voces (auto: solo si declaradas)    ║
-║    --compat                 Reproduce v1.2                                   ║
-║    --corpus DIR            Directorio de MIDIs de referencia                ║
-║    --mode eval|rank        Modo de operación (default: eval)                ║
-║    --fast                  Modo rápido: omite cálculos pesados              ║
-║    --arc-weight-mode MODE  dynamic (default) | static | off                 ║
-║    --skip DIM...           Dimensiones a omitir                             ║
-║    --only DIM...           Solo estas dimensiones                           ║
-║    --weights K=V...        Pesos custom por dimensión (se renormalizan)     ║
-║    --out-json FILE         Guardar informe completo en JSON                 ║
-║    --quiet                 Solo imprime score numérico (útil en scripts)    ║
-║    --verbose               Detalle completo en terminal                     ║
-║    --no-color              Sin colores ANSI                                 ║
-║                                                                              ║
-║  OPCIONES DE EXPLICACIÓN:                                                    ║
-║    --explain                    Añadir guía de mejora en lenguaje natural   ║
-║    --explain-provider PROV      local|anthropic|openai|clipboard            ║
-║    --explain-model MODEL        Modelo LLM (default: claude-opus-4-5/gpt-4o)║
-║    --api-key KEY                API key (o ANTHROPIC_API_KEY/OPENAI_API_KEY)║
-║    --explain-out FILE           Guardar la explicación en fichero de texto  ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:    mido, numpy                                                  ║
-║    Opcional:   music21           (mejora formal y arc)                      ║
-║    Opcional:   scipy             (mejora melodic)                           ║
-║    --explain anthropic:  pip install anthropic                              ║
-║    --explain openai:     pip install openai                                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+quality_scorer.py — Quality Scorer: evaluación multidimensional de calidad
+musical para MIDIs
+(versión 1.4).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Evalúa una o más obras MIDI en seis dimensiones:
+  · formal    — corrección de voice leading e intervalos
+  · coherence — homogeneidad interna entre secciones
+  · arc       — estructura del arco emocional/tensión
+  · melodic   — interés melódico y variedad
+  · harmony   — ajuste a tríada y calidad de la progresión
+  · corpus    — similitud estilística a una colección de referencia
+
+El score final es relativo (percentil en el corpus) con fallback
+absoluto (0.0–1.0) cuando no hay corpus disponible. Los pesos efectivos
+se modulan automáticamente por la confianza de cada dimensión.
+
+CONTROL DE DIMENSIONES:
+  python quality_scorer.py obra.mid --skip corpus formal
+  python quality_scorer.py obra.mid --only arc coherence
+  python quality_scorer.py obra.mid --weights formal=0.4 coherence=0.3
+  python quality_scorer.py obra.mid --arc-weight-mode static
+  python quality_scorer.py obra.mid --arc-weight-mode off
+
+EXPLICACIÓN EN LENGUAJE NATURAL (--explain):
+  python quality_scorer.py obra.mid --explain
+  python quality_scorer.py obra.mid --explain --explain-provider local
+  python quality_scorer.py obra.mid --explain --explain-provider anthropic
+  python quality_scorer.py obra.mid --explain --explain-provider openai
+  python quality_scorer.py obra.mid --explain --explain-provider clipboard
+  python quality_scorer.py obra.mid --explain --explain-out guia.txt
+
+CACHÉ DE CORPUS:
+  --save-cache FILE   Guardar vectores del corpus en .qcache
+  --use-cache FILE    Cargar caché previo (solo recalcula ficheros nuevos)
+
+CAMBIOS v1.4 (calibración frente a validez por barajado/azar):
+  · formal: saltos por voz (pista+canal, skyline/bajo), disonancia en el tiempo
+    fuerte y graduada, sensible/6ª elevada en menor
+  · coherence: + coherencia tonal (claridad, consistencia, continuidad PCP)
+  · harmony: + ajuste a tríada y calidad de progresión
+  · arc sin plan: confianza 0.75 → 0.35; compás implausible (< 2 o > 7 negras)
+    → 4 negras
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+MODOS DE OPERACIÓN:
+  (defecto)  Evaluación completa de un MIDI
+  rank       Comparación y ranking de varios MIDIs
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  python quality_scorer.py obra.mid --out-json report.json
+  python quality_scorer.py obra.mid --out-json report.json --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES PRINCIPALES:
+  --plan FILE             theorist.json o narrator_plan.json (dim. arc)
+  --roles MAP              N=rol|chN=rol (melody|bass|harmony|drums)
+  --scale [RAÍZ:]NOMBRE    Colección declarada (whole_tone, D:dorian…)
+  --context JSON           Informe de theme_transformer (un fichero)
+  --voices auto|satb|texture  Reglas de voces (auto: solo si declaradas)
+  --compat                 Reproduce v1.2
+  --corpus DIR            Directorio de MIDIs de referencia
+  --mode eval|rank        Modo de operación (default: eval)
+  --fast                  Modo rápido: omite cálculos pesados
+  --arc-weight-mode MODE  dynamic (default) | static | off
+  --skip DIM...           Dimensiones a omitir
+  --only DIM...           Solo estas dimensiones
+  --weights K=V...        Pesos custom por dimensión (se renormalizan)
+  --out-json FILE         Guardar informe completo en JSON
+  --quiet                 Solo imprime score numérico (útil en scripts)
+  --verbose               Detalle completo en terminal
+  --no-color              Sin colores ANSI
+
+── OPCIONES DE EXPLICACIÓN ──
+  --explain                    Añadir guía de mejora en lenguaje natural
+  --explain-provider PROV      local|anthropic|openai|clipboard
+  --explain-model MODEL        Modelo LLM (default: claude-opus-4-5/gpt-4o)
+  --api-key KEY                API key (o ANTHROPIC_API_KEY/OPENAI_API_KEY)
+  --explain-out FILE           Guardar la explicación en fichero de texto
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USO BÁSICO ──
+    python quality_scorer.py obra.mid
+    python quality_scorer.py obra.mid --plan obra.theorist.json
+    python quality_scorer.py obra.mid --corpus ./midis/
+    python quality_scorer.py obra.mid --corpus ./midis/ --save-cache c.qcache
+    python quality_scorer.py obra.mid --corpus ./midis/ --use-cache c.qcache
+    python quality_scorer.py obra.mid --fast
+    python quality_scorer.py obra.mid --quiet          # solo imprime score
+    python quality_scorer.py cand*.mid --mode rank
+    python quality_scorer.py cand*.mid --mode rank --quiet
+
+  ROLES Y CONTEXTO (v1.3):
+  python quality_scorer.py obra.mid --roles '1=melody,ch10=drums'
+  python quality_scorer.py obra.mid --scale whole_tone   # colección
+    python quality_scorer.py obra.mid --context obra.whole_tone_report.json
+  python quality_scorer.py obra.mid --voices satb        # forzar SATB
+  python quality_scorer.py obra.mid --compat             # como v1.2
+    La percusión (canal 10) se excluye de formal/melodic/harmony; los nombres
+    de pista (Melody, Bass, Harmony, Drums…) son evidencia de rol si no
+    contradicen canal/programa. El informe lista roles, fuente y avisos.
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  Siempre:    mido, numpy
+  Opcional:   music21           (mejora formal y arc)
+  Opcional:   scipy             (mejora melodic)
+  --explain anthropic:  pip install anthropic
+  --explain openai:     pip install openai
 """
 
 from __future__ import annotations

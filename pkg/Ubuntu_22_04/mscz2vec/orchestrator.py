@@ -1,63 +1,88 @@
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║           ORCHESTRATOR  v1.0                                                 ║
-║   Orquestación automática + percusión para mocks orquestales                 ║
-║                                                                              ║
-║  Lee el MIDI de stitcher.py + los fingerprints JSON y genera un MIDI        ║
-║  multitracks listo para importar en FL Studio con:                           ║
-║                                                                              ║
-║  [A] Distribución de material a instrumentos reales por sección             ║
-║  [B] Keyswitches automáticos según duración y contexto de cada nota         ║
-║  [C] CC1 (dynamics xfade) interpolado desde la tension_curve del FP         ║
-║  [D] CC11 (expression) con inflexiones de frase automáticas                 ║
-║  [E] Percusión orquestal completa: timbal, bombo, platos, tam-tam           ║
-║  [F] Registro idiomático: transpone líneas fuera de rango al rango real     ║
-║  [G] Informe de sesión: mapa de FL Studio con canales, libraries, CCs       ║
-║                                                                              ║
-║  PLANTILLA ORQUESTAL GENERADA:                                               ║
-║    Cuerdas   — Violin I, Violin II, Viola, Cello, Contrabajo                ║
-║    Maderas   — Flauta, Oboe, Clarinete, Fagot                               ║
-║    Metales   — Trompa, Trompeta, Trombón                                    ║
-║    Percusión — Timbal, Bombo, Platos, Tam-tam, Caja                        ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python orchestrator.py obra_final.mid [fingerprints...] [opciones]       ║
-║                                                                              ║
-║    # Con fingerprints explícitos:                                            ║
-║    python orchestrator.py obra_final.mid                                \   ║
-║        secA.fingerprint.json secB.fingerprint.json secC.fingerprint.json \  ║
-║        --template chamber                                                    ║
-║                                                                              ║
-║    # Auto-detecta fingerprints en el mismo directorio:                      ║
-║    python orchestrator.py obra_final.mid --auto-fp                          ║
-║                                                                              ║
-║    # Con plantilla orquestal y library target:                              ║
-║    python orchestrator.py obra_final.mid *.fingerprint.json             \   ║
-║        --template full --library nucleus                                     ║
-║                                                                              ║
-║    # Solo generar informe sin MIDI (para planificar):                       ║
-║    python orchestrator.py obra_final.mid --report-only                      ║
-║                                                                              ║
-║    # Personalizar keyswitches para tu patch específico:                     ║
-║    python orchestrator.py obra_final.mid --ks-config my_ks.json             ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --template     chamber | full | strings-only   (default: chamber)        ║
-║    --library      nucleus | metropolis | generic  (default: nucleus)        ║
-║    --ks-config    JSON con keyswitches personalizados (ver --dump-ks)       ║
-║    --dump-ks      Exportar tabla de KS defaults a JSON y salir              ║
-║    --auto-fp      Buscar .fingerprint.json en el mismo dir que el MIDI      ║
-║    --report-only  Solo generar informe .txt, sin producir MIDI              ║
-║    --output       Nombre base del MIDI de salida (default: orquestado)      ║
-║    --no-perc      No generar percusión orquestal                            ║
-║    --no-ks        No insertar keyswitches                                   ║
-║    --no-cc        No insertar CC1/CC11                                      ║
-║    --tempo-humanize F  Microvariación de tempo 0.0-1.0 (default: 0.15)     ║
-║    --verbose      Informe detallado de decisiones                           ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    pip install mido numpy                                                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+orchestrator.py — Orchestrator: orquestación automática + percusión para mocks
+orquestales
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Lee el MIDI de stitcher.py + los fingerprints JSON y genera un MIDI
+multitracks listo para importar en FL Studio con:
+
+[A] Distribución de material a instrumentos reales por sección
+[B] Keyswitches automáticos según duración y contexto de cada nota
+[C] CC1 (dynamics xfade) interpolado desde la tension_curve del FP
+[D] CC11 (expression) con inflexiones de frase automáticas
+[E] Percusión orquestal completa: timbal, bombo, platos, tam-tam
+[F] Registro idiomático: transpone líneas fuera de rango al rango real
+[G] Informe de sesión: mapa de FL Studio con canales, libraries, CCs
+
+PLANTILLA ORQUESTAL GENERADA:
+  Cuerdas   — Violin I, Violin II, Viola, Cello, Contrabajo
+  Maderas   — Flauta, Oboe, Clarinete, Fagot
+  Metales   — Trompa, Trompeta, Trombón
+  Percusión — Timbal, Bombo, Platos, Tam-tam, Caja
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --template     chamber | full | strings-only   (default: chamber)
+  --library      nucleus | metropolis | generic  (default: nucleus)
+  --ks-config    JSON con keyswitches personalizados (ver --dump-ks)
+  --dump-ks      Exportar tabla de KS defaults a JSON y salir
+  --auto-fp      Buscar .fingerprint.json en el mismo dir que el MIDI
+  --report-only  Solo generar informe .txt, sin producir MIDI
+  --output       Nombre base del MIDI de salida (default: orquestado)
+  --no-perc      No generar percusión orquestal
+  --no-ks        No insertar keyswitches
+  --no-cc        No insertar CC1/CC11
+  --tempo-humanize F  Microvariación de tempo 0.0-1.0 (default: 0.15)
+  --verbose      Informe detallado de decisiones
+
+── Otras opciones del parser ──
+  --instruments-json INSTRUMENTS_JSON
+                              JSON de paleta de instrumentos generado por
+                              theorist.py. Si se provee, reemplaza la
+                              plantilla --template con la selección de
+                              instrumentos específica al mood de la pieza.
+  --leitmotif-hints JSON      JSON de preferred_instruments por leitmotif
+                              generado por leitmotif_tracker.py inject
+                              --export-orchestrator. Informa al orquestador de
+                              qué instrumento debe sonar cada leitmotif en
+                              cada sección.
+  --map PISTA=ROL […]         Reasignar pistas del MIDI a roles. Ej: --map
+                              Piano=Melody Piano=Bass Roles válidos: Melody,
+                              Counterpoint, Accompaniment, Bass. Una misma
+                              pista puede mapearse a varios roles. (defecto
+                              [])
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python orchestrator.py obra_final.mid [fingerprints...] [opciones]
+
+  # Con fingerprints explícitos:
+  python orchestrator.py obra_final.mid                                \
+      secA.fingerprint.json secB.fingerprint.json secC.fingerprint.json \
+      --template chamber
+
+  # Auto-detecta fingerprints en el mismo directorio:
+  python orchestrator.py obra_final.mid --auto-fp
+
+  # Con plantilla orquestal y library target:
+  python orchestrator.py obra_final.mid *.fingerprint.json             \
+      --template full --library nucleus
+
+  # Solo generar informe sin MIDI (para planificar):
+  python orchestrator.py obra_final.mid --report-only
+
+  # Personalizar keyswitches para tu patch específico:
+  python orchestrator.py obra_final.mid --ks-config my_ks.json
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  pip install mido numpy
 """
 
 import sys

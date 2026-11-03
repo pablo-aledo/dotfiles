@@ -1,58 +1,83 @@
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    TENSION DESIGNER  v1.0                                    ║
-║         Diseñador visual interactivo de curvas de tensión                    ║
-║                                                                              ║
-║  Permite dibujar a mano la curva de tensión (y otras curvas emocionales)    ║
-║  de una obra completa antes de generar el MIDI. Las curvas diseñadas se     ║
-║  convierten en flags --mt-* para midi_dna_unified.py y se pasan             ║
-║  directamente al pipeline.                                                   ║
-║                                                                              ║
-║  CURVAS EDITABLES:                                                           ║
-║  [T] Tensión          — curva principal de tensión armónica 0-1             ║
-║  [A] Actividad/Densidad — densidad rítmica 0-1 (→ --mt-density)            ║
-║  [R] Registro         — registro melódico 0-1 (→ --mt-register)            ║
-║  [H] Armonía          — complejidad armónica 0-1 (→ --mt-harmony-complexity)║
-║  [S] Swing            — intensidad de swing 0-1 (→ --mt-swing)             ║
-║                                                                              ║
-║  CONTROLES DE TECLADO:                                                       ║
-║    T/A/R/H/S    — seleccionar curva activa                                   ║
-║    Click+drag   — dibujar / editar curva activa                              ║
-║    C            — limpiar curva activa                                       ║
-║    P            — añadir preset a la curva activa                            ║
-║    G            — generar MIDI con las curvas actuales                       ║
-║    E            — exportar curvas a JSON                                     ║
-║    L            — cargar curvas desde JSON                                   ║
-║    Z            — deshacer último cambio                                     ║
-║    Q / Esc      — salir                                                      ║
-║                                                                              ║
-║  PRESETS DE TENSIÓN:                                                         ║
-║    arch         — sube al centro y baja (arco)                               ║
-║    crescendo    — sube progresivamente                                       ║
-║    decrescendo  — baja progresivamente                                       ║
-║    plateau      — plano en el centro, puntas bajas                           ║
-║    late_climax  — clímax en el último tercio                                 ║
-║    wave         — forma de ola (sube-baja-sube-baja)                        ║
-║    neutral      — curva plana en 0.5                                         ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python tension_designer.py fuente.mid [fuente2.mid]                      ║
-║    python tension_designer.py a.mid b.mid --bars 32                         ║
-║    python tension_designer.py a.mid --load curvas.json                      ║
-║    python tension_designer.py a.mid --preset arch --auto-generate           ║
-║    python tension_designer.py a.mid --no-gui --preset arch --bars 24        ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --bars N       Número de compases de la obra (default: 16)               ║
-║    --load FILE    Cargar curvas desde JSON al inicio                         ║
-║    --preset NAME  Aplicar preset de tensión al inicio                       ║
-║    --no-gui       Modo sin interfaz: genera directamente con el preset       ║
-║    --output FILE  MIDI de salida (default: tension_out.mid)                  ║
-║    --mode MODE    Modo de midi_dna_unified (default: auto)                  ║
-║    --verbose      Informe detallado                                          ║
-║                                                                              ║
-║  DEPENDENCIAS: matplotlib, pygame (solo para GUI), midi_dna_unified.py      ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+tension_designer.py — Tension Designer: diseñador visual interactivo de curvas
+de tensión
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Permite dibujar a mano la curva de tensión (y otras curvas emocionales)
+de una obra completa antes de generar el MIDI. Las curvas diseñadas se
+convierten en flags --mt-* para midi_dna_unified.py y se pasan
+directamente al pipeline.
+
+CURVAS EDITABLES:
+[T] Tensión          — curva principal de tensión armónica 0-1
+[A] Actividad/Densidad — densidad rítmica 0-1 (→ --mt-density)
+[R] Registro         — registro melódico 0-1 (→ --mt-register)
+[H] Armonía          — complejidad armónica 0-1 (→ --mt-harmony-complexity)
+[S] Swing            — intensidad de swing 0-1 (→ --mt-swing)
+
+CONTROLES DE TECLADO:
+  T/A/R/H/S    — seleccionar curva activa
+  Click+drag   — dibujar / editar curva activa
+  C            — limpiar curva activa
+  P            — añadir preset a la curva activa
+  G            — generar MIDI con las curvas actuales
+  E            — exportar curvas a JSON
+  L            — cargar curvas desde JSON
+  Z            — deshacer último cambio
+  Q / Esc      — salir
+
+PRESETS DE TENSIÓN:
+  arch         — sube al centro y baja (arco)
+  crescendo    — sube progresivamente
+  decrescendo  — baja progresivamente
+  plateau      — plano en el centro, puntas bajas
+  late_climax  — clímax en el último tercio
+  wave         — forma de ola (sube-baja-sube-baja)
+  neutral      — curva plana en 0.5
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --bars N       Número de compases de la obra (default: 16)
+  --load FILE    Cargar curvas desde JSON al inicio
+  --preset NAME  Aplicar preset de tensión al inicio
+  --no-gui       Modo sin interfaz: genera directamente con el preset
+  --output FILE  MIDI de salida (default: tension_out.mid)
+  --mode MODE    Modo de midi_dna_unified (default: auto)
+  --verbose      Informe detallado
+
+── Otras opciones del parser ──
+  --key KEY                   Tonalidad (ej: C, D, Fm).
+  --tempo TEMPO               Tempo en BPM.
+  --mixer MIXER               Ruta a midi_dna_unified.py
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python tension_designer.py fuente.mid [fuente2.mid]
+  python tension_designer.py a.mid b.mid --bars 32
+  python tension_designer.py a.mid --load curvas.json
+  python tension_designer.py a.mid --preset arch --auto-generate
+  python tension_designer.py a.mid --no-gui --preset arch --bars 24
+
+── Más modos ──
+
+  # --mode auto
+  python tension_designer.py --mode auto
+
+  # --mode rhythm_melody
+  python tension_designer.py --mode rhythm_melody
+
+  # --mode emotion
+  python tension_designer.py --mode emotion
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  matplotlib, pygame (solo para GUI), midi_dna_unified.py
 """
 
 import sys

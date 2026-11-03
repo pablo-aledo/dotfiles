@@ -1,63 +1,114 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         MORPHER  v1.1                                        ║
-║         Morphing gradual entre dos obras MIDI                                ║
-║                                                                              ║
-║  Dado A.mid y B.mid, genera N pasos intermedios donde el ADN de A           ║
-║  se transforma gradualmente en B. A diferencia de style_transfer            ║
-║  (transferencia puntual), el morpher produce una secuencia continua          ║
-║  que va de A a B a través de estados intermedios.                            ║
-║                                                                              ║
-║  DIMENSIONES DE MORPHING (todas controlables individualmente):               ║
-║    [P] Pitch/Melodía  — contorno melódico y secuencia de notas              ║
-║    [R] Ritmo          — patrón rítmico y groove                             ║
-║    [H] Armonía        — progresión y complejidad armónica                   ║
-║    [E] Emoción        — curvas de tensión/arousal/valencia                  ║
-║    [D] Dinámica       — envolvente de velocidades                           ║
-║    [T] Tempo          — velocidad de la pieza                               ║
-║                                                                              ║
-║  MODOS DE INTERPOLACIÓN:                                                     ║
-║    linear    — interpolación lineal A→B                                     ║
-║    sigmoid   — aceleración en el centro, suave en extremos                 ║
-║    exponential — cambio lento al principio, rápido al final                ║
-║    sinusoidal — A→B→A (ida y vuelta)                                       ║
-║    step      — cambio abrupto en el centro                                  ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python morpher.py A.mid B.mid                                            ║
-║    python morpher.py A.mid B.mid --steps 8                                  ║
-║    python morpher.py A.mid B.mid --steps 10 --mode sigmoid                  ║
-║    python morpher.py A.mid B.mid --steps 6 --dims pitch rhythm              ║
-║    python morpher.py A.mid B.mid --steps 5 --catalog                        ║
-║    python morpher.py A.mid B.mid --steps 8 --plot                           ║
-║    python morpher.py A.mid B.mid --steps 6 --listen                        ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --steps N       Número de MIDIs intermedios (default: 6; incluye A y B) ║
-║    --mode MODE     Modo de interpolación (default: sigmoid)                 ║
-║    --dims DIMS     Dimensiones a interpolar (default: todas)                ║
-║    --bars N        Compases por paso (default: auto desde A)                ║
-║    --catalog       Generar un MIDI único que concatena todos los pasos      ║
-║    --engine E      notes (default, morphing real) | dna (v1.0, legacy)      ║
-║    --window-align start | end-start (puentes)   --no-ends   --full-ends     ║
-║    --plot          Visualizar curvas de morphing                             ║
-║    --listen        Reproducir secuencia al terminar (requiere pygame)       ║
-║    --play-seconds N Segundos por paso en reproducción (default: 8)         ║
-║    --output-dir DIR Carpeta de salida (default: ./morph_out)               ║
-║    --prefix NAME   Prefijo de los archivos de salida (default: morph)      ║
-║    --verbose       Informe detallado                                        ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    morph_000_A.mid          — copia del original A                          ║
-║    morph_001_t0.17.mid      — paso intermedio (alpha=0.17)                  ║
-║    ...                                                                      ║
-║    morph_00N_B.mid          — copia del original B                          ║
-║    morph_catalog.mid        — concatenación (con --catalog)                 ║
-║    morph_curves.json        — datos de las curvas de morphing               ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy, midi_dna_unified.py                             ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+morpher.py — Morpher: morphing gradual entre dos obras MIDI
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dados A.mid y B.mid, genera N pasos intermedios en los que A se transforma
+gradualmente en B. A diferencia de style_transfer (transferencia puntual), el
+morpher produce una secuencia continua que va de A a B a través de estados
+intermedios. Hay dos motores (--engine):
+
+  notes  (defecto, v1.1) — morphing REAL sobre las notas. Toma una ventana de
+         --bars compases de A y de B, asigna a cada nota un rango estable
+         (agrupado por compás, para que A y B se alternen en bloques musicales)
+         y, en cada paso de alfa, conserva de A las notas con rango ≥ alfa y de
+         B las de rango < alfa. A se transporta hacia la tónica de B (y B hacia
+         la de A) en proporción a alfa, la velocidad media y el tempo se
+         interpolan, y se conservan los programas y la percusión (canal 10).
+         Los extremos son exactos (alfa 0 y 1). Avisa si un paso pierde más de
+         la mitad de las notas esperadas.
+  dna    — motor v1.0 (heredado): extrae el ADN de A y de B y regenera cada
+         paso desde el ADN interpolado. Sus pasos intermedios quedan casi
+         vacíos; se conserva por compatibilidad.
+
+DIMENSIONES DE MORPHING (--dims; todas por defecto):
+  pitch · rhythm · harmony · emotion · dynamics · tempo
+  El motor notes actúa sobre pitch (transporte), dynamics (velocidad) y tempo;
+  el motor dna usa las seis (Pitch/Melodía, Ritmo, Armonía, Emoción
+  —tensión/arousal/valencia—, Dinámica y Tempo).
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  Modos de interpolación (--mode):
+    linear       — interpolación lineal A→B
+    sigmoid      — aceleración en el centro, suave en los extremos (defecto)
+    exponential  — cambio lento al principio, rápido al final
+    sinusoidal   — A→B→A (ida y vuelta)
+    step         — cambio abrupto en el centro
+  Motor (--engine): notes (defecto) | dna.
+  Ventana de A (--window-align): start (defecto) | end-start. Con end-start se
+    toma el FINAL de A y el INICIO de B: pensado para puentes de transición
+    entre dos secciones (así lo usa mosaic_composer.py).
+  Extremos: por defecto A y B son la ventana de --bars compases; --full-ends
+    los copia completos (motor notes); --no-ends hace que --catalog deje fuera
+    A y B y contenga solo la transición.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Entrada : source_a y source_b (MIDIs).
+  Salida  : en --output-dir (defecto ./morph_out), con prefijo --prefix:
+    morph_000_A.mid          — extremo A (ventana, o copia completa con --full-ends)
+    morph_001_t0.17.mid      — paso intermedio (alfa = 0.17)
+    ...
+    morph_00N_B.mid          — extremo B
+    morph_catalog.mid        — concatenación de los pasos (con --catalog)
+    morph_curves.json        — datos de las curvas de morphing (incluye el motor)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  source_a source_b        MIDIs de origen (posicionales).
+  --steps N               Número total de pasos, incluidos A y B (defecto 6; mínimo 2).
+  --mode MODE             linear | sigmoid (defecto) | exponential | sinusoidal | step.
+  --dims DIM […]          Dimensiones a interpolar (defecto: todas).
+  --bars N                Compases por paso (defecto: 8 con el motor notes; con el
+                          motor dna, automático desde A y B).
+  --engine E              notes (defecto) | dna.
+  --window-align A        start (defecto) | end-start (puentes: final de A → inicio de B).
+  --full-ends             A y B se copian completos (motor notes).
+  --no-ends               --catalog sin los extremos A y B (solo la transición).
+  --seed N                Semilla del reparto de notas entre A y B (defecto 7).
+  --catalog               Genera además un MIDI único que concatena los pasos.
+  --plot                  Visualiza las curvas de morphing (requiere matplotlib).
+  --listen                Reproduce la secuencia al terminar (requiere pygame).
+  --play-seconds N        Segundos por paso en la reproducción (defecto 8).
+  --output-dir DIR        Carpeta de salida (defecto ./morph_out).
+  --prefix NAME           Prefijo de los ficheros de salida (defecto morph).
+  --verbose               Informe detallado.
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python morpher.py A.mid B.mid
+  python morpher.py A.mid B.mid --steps 8
+  python morpher.py A.mid B.mid --steps 10 --mode sigmoid
+  python morpher.py A.mid B.mid --steps 6 --dims pitch dynamics
+  python morpher.py A.mid B.mid --steps 5 --catalog
+  python morpher.py A.mid B.mid --steps 8 --plot
+  python morpher.py A.mid B.mid --steps 6 --listen
+
+  # Más compases por paso, otra semilla y carpeta/prefijo propios:
+  python morpher.py A.mid B.mid --bars 16 --seed 11 --output-dir morph_ab --prefix ab
+
+  # Extremos completos (A y B enteros, no solo la ventana):
+  python morpher.py A.mid B.mid --steps 6 --full-ends
+
+  # Puente entre dos secciones: final de A → inicio de B, solo la transición:
+  python morpher.py A.mid B.mid --steps 6 --window-align end-start --catalog --no-ends
+
+  # Motor heredado v1.0 (regenera desde el ADN):
+  python morpher.py A.mid B.mid --engine dna --steps 6
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+mido, numpy. midi_dna_unified.py (solo el motor dna). matplotlib para --plot y
+pygame para --listen (opcionales).
 """
 
 import sys

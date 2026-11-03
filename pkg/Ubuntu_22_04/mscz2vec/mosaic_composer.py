@@ -1,118 +1,121 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     MOSAIC COMPOSER  v2.0                                    ║
-║         Collage y ensamblaje dramático de fragmentos musicales               ║
-║                                                                              ║
-║  Segmenta un corpus de MIDIs en fragmentos etiquetados, los indexa por      ║
-║  función dramática, tensión, estilo y compatibilidad de costura, y los      ║
-║  reensambla creativamente siguiendo un arco narrativo explícito.             ║
-║                                                                              ║
-║  El material resultante no es una concatenación: cada sección se genera     ║
-║  fusionando el ADN de dos fragmentos distintos (melodía de uno, ritmo del   ║
-║  otro) y aplicando transformaciones diatónicas que hacen irreconocibles     ║
-║  las fuentes originales.                                                     ║
-║                                                                              ║
-║  PIPELINE INTERNO:                                                           ║
-║  [1] HARVEST   — Segmenta corpus con harvester.py (o internamente)          ║
-║  [2] INDEX     — Etiqueta cada fragmento: tensión, rol, cadencia, estilo    ║
-║  [3] PLAN      — Diseña el arco dramático (slots con función y tensión)     ║
-║  [4] SELECT    — Para cada slot elige DOS fragmentos de fuentes distintas   ║
-║  [5] BLEND     — Fusiona sus ADNs (deidentify + graft + midi_dna_unified)   ║
-║  [6] STITCH    — Une los slots con puentes morpher o transiciones tonales   ║
-║  [7] POLISH    — Reharmoniza y/o unifica estilo con style_transfer          ║
-║                                                                              ║
-║  MODOS DE OPERACIÓN:                                                         ║
-║    build       — Pipeline completo [1]→[7] desde corpus hasta MIDI final   ║
-║    harvest     — Sólo [1+2]: segmentar corpus y exportar banco etiquetado   ║
-║    plan        — Sólo [3]: diseñar y exportar arco dramático (JSON)         ║
-║    assemble    — [4]→[7]: ensamblar desde banco+plan ya existentes          ║
-║    inspect     — Analizar el banco de fragmentos                            ║
-║    stitch      — Coser una lista manual de MIDIs con transiciones           ║
-║                                                                              ║
-║  ARCOS DRAMÁTICOS (--arc):                                                   ║
-║    sonata      — Exposición A → Exposición B → Desarrollo → Recapitulación ║
-║    rondo       — A-B-A-C-A-D-A (refrán + episodios alternados)             ║
-║    arch        — Tensión creciente → Clímax → Descenso espejo (default)    ║
-║    journey     — Llamada → Partida → Prueba → Noche oscura →               ║
-║                  Clímax → Regreso → Retorno                                 ║
-║    wave        — Ciclos tensión/reposo (ambient, minimalismo)               ║
-║    mosaic      — Collage puro por contraste máximo entre bloques            ║
-║                                                                              ║
-║  ESTRATEGIAS DE COSTURA (--stitch):                                          ║
-║    auto        — Detecta la técnica óptima por compatibilidad tonal        ║
-║    bridge      — Puente de morphing con morpher.py (más orgánico)          ║
-║    pivot       — Transposición al acorde pivote entre tonalidades           ║
-║    silence     — Silencio de 1 compás entre secciones                      ║
-║    overlap     — Superposición temporal de compases finales/iniciales       ║
-║    direct      — Corte directo sin transición                               ║
-║                                                                              ║
-║  TRANSFORMACIONES DE BLEND (automáticas, por función del slot):             ║
-║    introduction/coda     — Aumentación ×1.5 + transporte ±3-4 grados      ║
-║    theme_a/recapitulation— Inversión diatónica + transporte ±2-3 grados   ║
-║    development           — Retrógrado + inversión + transporte ±4-5 grados ║
-║    climax                — Diminución ×0.65 + inversión + octava alta      ║
-║    theme_b/episode       — Permutación de frases + transporte ±3-4 grados  ║
-║                                                                              ║
-║  INTEGRACIONES CON EL ECOSISTEMA:                                            ║
-║  ┌──────────────────────────────────────────────────────────────────────┐   ║
-║  │  harvester.py      → [1] segmentación y etiquetado del corpus        │   ║
-║  │  midi_dna_unified  → [5] blend DNA entre pares de fragmentos         │   ║
-║  │  morpher.py        → [6] puentes de transición entre slots           │   ║
-║  │  variation_engine  → [4] variantes si no hay fragmento adecuado      │   ║
-║  │                         o en harvest --variations para enriquecer     │   ║
-║  │  reharmonizer.py   → [7] reharmonización diatónica del resultado     │   ║
-║  │  style_transfer.py → [7] unificar timbre/textura de la obra final    │   ║
-║  │  phrase_builder.py → [6] costura sintáctica ant/cons entre frases    │   ║
-║  │  completer.py      → [4] rellenar huecos no cubiertos por el banco   │   ║
-║  └──────────────────────────────────────────────────────────────────────┘   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+mosaic_composer.py — Mosaic Composer: collage y ensamblaje dramático de
+fragmentos musicales
+(versión 2.0).
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  Segmenta un corpus de MIDIs en fragmentos etiquetados, los indexa por
+  función dramática, tensión, estilo y compatibilidad de costura, y los
+  reensambla creativamente siguiendo un arco narrativo explícito.
+
+  El material resultante no es una concatenación: cada sección se genera
+  fusionando el ADN de dos fragmentos distintos (melodía de uno, ritmo del
+  otro) y aplicando transformaciones diatónicas que hacen irreconocibles
+  las fuentes originales.
+
+  PIPELINE INTERNO:
+  [1] HARVEST   — Segmenta corpus con harvester.py (o internamente)
+  [2] INDEX     — Etiqueta cada fragmento: tensión, rol, cadencia, estilo
+  [3] PLAN      — Diseña el arco dramático (slots con función y tensión)
+  [4] SELECT    — Para cada slot elige DOS fragmentos de fuentes distintas
+  [5] BLEND     — Fusiona sus ADNs (deidentify + graft + midi_dna_unified)
+  [6] STITCH    — Une los slots con puentes morpher o transiciones tonales
+  [7] POLISH    — Reharmoniza y/o unifica estilo con style_transfer
+
+  MODOS DE OPERACIÓN:
+    build       — Pipeline completo [1]→[7] desde corpus hasta MIDI final
+    harvest     — Sólo [1+2]: segmentar corpus y exportar banco etiquetado
+    plan        — Sólo [3]: diseñar y exportar arco dramático (JSON)
+    assemble    — [4]→[7]: ensamblar desde banco+plan ya existentes
+    inspect     — Analizar el banco de fragmentos
+    stitch      — Coser una lista manual de MIDIs con transiciones
+
+  ARCOS DRAMÁTICOS (--arc):
+    sonata      — Exposición A → Exposición B → Desarrollo → Recapitulación
+    rondo       — A-B-A-C-A-D-A (refrán + episodios alternados)
+    arch        — Tensión creciente → Clímax → Descenso espejo (default)
+    journey     — Llamada → Partida → Prueba → Noche oscura →
+                  Clímax → Regreso → Retorno
+    wave        — Ciclos tensión/reposo (ambient, minimalismo)
+    mosaic      — Collage puro por contraste máximo entre bloques
+
+  ESTRATEGIAS DE COSTURA (--stitch):
+    auto        — Detecta la técnica óptima por compatibilidad tonal
+    bridge      — Puente de morphing con morpher.py (más orgánico; usa
+                  --no-ends --window-align end-start: solo la transición del
+                  final de A al inicio de B)
+    pivot       — Transposición al acorde pivote entre tonalidades
+    silence     — Silencio de 1 compás entre secciones
+    overlap     — Superposición temporal de compases finales/iniciales
+    direct      — Corte directo sin transición
+
+  TRANSFORMACIONES DE BLEND (automáticas, por función del slot):
+    introduction/coda     — Aumentación ×1.5 + transporte ±3-4 grados
+    theme_a/recapitulation— Inversión diatónica + transporte ±2-3 grados
+    development           — Retrógrado + inversión + transporte ±4-5 grados
+    climax                — Diminución ×0.65 + inversión + octava alta
+    theme_b/episode       — Permutación de frases + transporte ±3-4 grados
+
+  INTEGRACIONES CON EL ECOSISTEMA:
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  harvester.py      → [1] segmentación y etiquetado del corpus        │
+  │  midi_dna_unified  → [5] blend DNA entre pares de fragmentos         │
+  │  morpher.py        → [6] puentes de transición entre slots           │
+  │  variation_engine  → [4] variantes si no hay fragmento adecuado      │
+  │                         o en harvest --variations para enriquecer     │
+  │  reharmonizer.py   → [7] reharmonización diatónica del resultado     │
+  │  style_transfer.py → [7] unificar timbre/textura de la obra final    │
+  │  phrase_builder.py → [6] costura sintáctica ant/cons entre frases    │
+  │  completer.py      → [4] rellenar huecos no cubiertos por el banco   │
+  └──────────────────────────────────────────────────────────────────────┘
+
  EJEMPLOS DE USO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ── BUILD: pipeline completo en un solo comando ──────────────────────────────
 
   # Mínimo — detecta tonalidad y tempo del corpus
-  python mosaic_composer.py build \\
+  python mosaic_composer.py build \
       --corpus midis/ --arc arch --bars 64 --output obra.mid
 
   # Completo con todas las herramientas activas
-  python mosaic_composer.py build \\
-      --corpus midis/ \\
-      --arc journey \\
-      --bars 64 \\
-      --key "D minor" \\
-      --stitch bridge --bridge-bars 2 \\
-      --candidates 10 --diversity 0.7 \\
-      --allow-variations \\
-      --variations V01 V04 V10 \\
-      --reharmonize \\
-      --style-unify midis/referencia.mid \\
-      --no-percussion \\
-      --out-dir salida/ --output obra_final.mid \\
+  python mosaic_composer.py build \
+      --corpus midis/ \
+      --arc journey \
+      --bars 64 \
+      --key "D minor" \
+      --stitch bridge --bridge-bars 2 \
+      --candidates 10 --diversity 0.7 \
+      --allow-variations \
+      --variations V01 V04 V10 \
+      --reharmonize \
+      --style-unify midis/referencia.mid \
+      --no-percussion \
+      --out-dir salida/ --output obra_final.mid \
       --report --verbose --seed 42
 
   # Arcos disponibles: arch | journey | sonata | rondo | wave | mosaic
   python mosaic_composer.py build --corpus midis/ --arc sonata --bars 80
   python mosaic_composer.py build --corpus midis/ --arc rondo  --bars 96
-  python mosaic_composer.py build --corpus midis/ --arc wave   --bars 48
+  python mosaic_composer.py build --corpus midis/ --arc wave \
+        --bars 48
 
 ── HARVEST: segmentar corpus y enriquecer banco con variaciones ─────────────
 
   # Segmentación básica (2-5 compases por fragmento)
-  python mosaic_composer.py harvest \\
+  python mosaic_composer.py harvest \
       --corpus midis/ --out-dir banco/ --min-bars 2 --max-bars 5
 
   # Con variaciones específicas (multiplica el banco x4)
-  python mosaic_composer.py harvest \\
-      --corpus midis/ --out-dir banco/ \\
-      --min-bars 2 --max-bars 8 \\
+  python mosaic_composer.py harvest \
+      --corpus midis/ --out-dir banco/ \
+      --min-bars 2 --max-bars 8 \
       --variations V01 V04 V10     # inversión, aumentación, variación rítmica
 
   # Con todas las variaciones disponibles
-  python mosaic_composer.py harvest \\
+  python mosaic_composer.py harvest \
       --corpus midis/ --out-dir banco/ --variations all
 
   # Variaciones disponibles:
@@ -130,70 +133,70 @@
 ── PLAN: diseñar y exportar el arco dramático ───────────────────────────────
 
   # Exportar plan para editarlo manualmente antes de ensamblar
-  python mosaic_composer.py plan \\
+  python mosaic_composer.py plan \
       --arc journey --bars 48 --key "A minor" --out-dir salida/
 
   # Usar --stdout para encadenar con assemble via sustitución de proceso
-  python mosaic_composer.py assemble \\
-      --bank banco/.mosaic_bank.json \\
-      --plan <(python mosaic_composer.py plan --arc arch --bars 32 --stdout) \\
+  python mosaic_composer.py assemble \
+      --bank banco/.mosaic_bank.json \
+      --plan <(python mosaic_composer.py plan --arc arch --bars 32 --stdout) \
       --output obra.mid
 
 ── ASSEMBLE: ensamblar desde banco y plan existentes ────────────────────────
 
   # Básico
-  python mosaic_composer.py assemble \\
+  python mosaic_composer.py assemble \
       --bank banco/.mosaic_bank.json --plan plan.json --output obra.mid
 
   # Con todas las herramientas activas
-  python mosaic_composer.py assemble \\
-      --bank banco/.mosaic_bank.json \\
-      --plan plan.json \\
-      --stitch bridge --bridge-bars 2 \\
-      --candidates 10 --diversity 0.7 \\
-      --allow-variations \\
-      --reharmonize \\
-      --style-unify midis/referencia.mid \\
-      --no-percussion \\
-      --out-dir salida/ --output obra.mid \\
+  python mosaic_composer.py assemble \
+      --bank banco/.mosaic_bank.json \
+      --plan plan.json \
+      --stitch bridge --bridge-bars 2 \
+      --candidates 10 --diversity 0.7 \
+      --allow-variations \
+      --reharmonize \
+      --style-unify midis/referencia.mid \
+      --no-percussion \
+      --out-dir salida/ --output obra.mid \
       --verbose --report --seed 42
 
   # Generar múltiples variaciones con distintas semillas (una por seed)
-  python mosaic_composer.py assemble \\
-      --bank banco/.mosaic_bank.json --plan plan.json \\
-      --stitch bridge --candidates 10 --diversity 0.7 \\
-      --allow-variations --reharmonize --no-percussion \\
-      --output viaje.mid \\
+  python mosaic_composer.py assemble \
+      --bank banco/.mosaic_bank.json --plan plan.json \
+      --stitch bridge --candidates 10 --diversity 0.7 \
+      --allow-variations --reharmonize --no-percussion \
+      --output viaje.mid \
       --seeds 42 123 999 777 555
   # → produce: viaje_s000042.mid  viaje_s000123.mid  viaje_s000999.mid ...
 
   # Costura bridge máxima diversidad
-  python mosaic_composer.py assemble \\
-      --bank banco/.mosaic_bank.json --plan plan.json \\
-      --stitch bridge --bridge-bars 4 \\
-      --candidates 15 --diversity 0.9 \\
-      --allow-variations --fill-gaps \\
+  python mosaic_composer.py assemble \
+      --bank banco/.mosaic_bank.json --plan plan.json \
+      --stitch bridge --bridge-bars 4 \
+      --candidates 15 --diversity 0.9 \
+      --allow-variations --fill-gaps \
       --output obra_maxima_diversidad.mid
 
 ── INDEX: indexar / re-indexar un directorio de MIDIs ───────────────────────
 
   # Indexar banco/bank/ y crear (o sobreescribir) el banco
   python mosaic_composer.py index banco/bank/ \
-      --bank banco/.mosaic_bank.json
+        --bank banco/.mosaic_bank.json
 
   # Re-indexar añadiendo MIDIs nuevos sin perder los ya indexados
   python mosaic_composer.py index banco/bank/ \
-      --bank banco/.mosaic_bank.json --merge
+        --bank banco/.mosaic_bank.json --merge
 
   # Indexar en subdirectorios (corpus jerárquico) con detalle por fragmento
   python mosaic_composer.py index banco/bank/ \
-      --bank banco/.mosaic_bank.json --recursive --verbose
+        --bank banco/.mosaic_bank.json --recursive --verbose
 
   # Fusionar dos directorios en un banco único
   python mosaic_composer.py index banco_a/bank/ \
-      --bank banco_combinado/.mosaic_bank.json
+        --bank banco_combinado/.mosaic_bank.json
   python mosaic_composer.py index banco_b/bank/ \
-      --bank banco_combinado/.mosaic_bank.json --merge
+        --bank banco_combinado/.mosaic_bank.json --merge
 
   # Qué calcula por cada MIDI:
   #   tonalidad  →  detect_key_simple()
@@ -225,46 +228,42 @@
 
 ── STITCH: coser una lista manual de MIDIs ──────────────────────────────────
 
-  python mosaic_composer.py stitch \\
-      intro.mid desarrollo.mid climax.mid coda.mid \\
+  python mosaic_composer.py stitch \
+      intro.mid desarrollo.mid climax.mid coda.mid \
       --stitch auto --output obra_manual.mid
 
-  python mosaic_composer.py stitch \\
-      frag_a.mid frag_b.mid frag_c.mid \\
+  python mosaic_composer.py stitch \
+      frag_a.mid frag_b.mid frag_c.mid \
       --stitch bridge --bridge-bars 2 --key "G minor" --output costura.mid
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  FLUJOS RECOMENDADOS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   # A) Exploración rápida: un comando, múltiples variaciones
-  python mosaic_composer.py build \\
+  python mosaic_composer.py build \
       --corpus midis/ --arc arch --bars 48 --output prueba.mid --seed 42
   # luego probar semillas distintas: --seed 123, --seed 999, etc.
 
   # B) Control total: harvest → plan → múltiples assemble
-  python mosaic_composer.py harvest \\
+  python mosaic_composer.py harvest \
       --corpus midis/ --out-dir banco/ --variations V01 V04 V10
 
   python mosaic_composer.py plan --arc journey --bars 64 --out-dir banco/
   # (editar banco/mosaic_plan.json si se desea ajustar tensiones/roles)
 
-  python mosaic_composer.py assemble \\
-      --bank banco/.mosaic_bank.json \\
-      --plan banco/mosaic_plan.json \\
-      --stitch bridge --candidates 10 --diversity 0.7 \\
-      --allow-variations --reharmonize --no-percussion \\
+  python mosaic_composer.py assemble \
+      --bank banco/.mosaic_bank.json \
+      --plan banco/mosaic_plan.json \
+      --stitch bridge --candidates 10 --diversity 0.7 \
+      --allow-variations --reharmonize --no-percussion \
       --output obra.mid --seeds 1 2 3 4 5
 
   # C) Rehacer solo el ensamblaje con otro arco (reutilizar banco)
-  python mosaic_composer.py assemble \\
-      --bank banco/.mosaic_bank.json \\
-      --plan <(python mosaic_composer.py plan --arc sonata --bars 80 --stdout) \\
+  python mosaic_composer.py assemble \
+      --bank banco/.mosaic_bank.json \
+      --plan <(python mosaic_composer.py plan --arc sonata --bars 80 --stdout) \
       --stitch auto --reharmonize --output sonata.mid
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  DEPENDENCIAS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Requeridas:   mido  numpy
   Opcionales:   scipy  music21
@@ -272,6 +271,134 @@
                 reharmonizer.py  style_transfer.py  variation_engine.py
                 phrase_builder.py  completer.py
                 (todos deben estar en el mismo directorio que mosaic_composer.py)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  build       Pipeline completo (harvest+plan+assemble)
+  harvest     Segmentar corpus y construir banco
+  plan        Diseñar y exportar arco dramático
+  assemble    Ensamblar desde banco y plan existentes
+  stitch      Coser lista manual de MIDIs
+  index       Indexar/re-indexar un directorio de MIDIs y crear o actualizar
+              el banco
+  inspect     Analizar banco de fragmentos
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  build
+    --corpus CORPUS             Directorio de MIDIs fuente (obligatorio)
+    --arc ARC                   Arco dramático (defecto arch)
+    --bars BARS                 Compases totales (defecto 64)
+    --key KEY                   Tonalidad destino (defecto C major)
+    --tempo TEMPO               (defecto 120.0)
+    --stitch STITCH             (defecto auto; valores:
+                                auto|pivot|fade|overlap|silence|bridge|direct)
+    --bridge-bars BRIDGE_BARS   (defecto 2)
+    --candidates CANDIDATES     (defecto 5)
+    --diversity DIVERSITY       (defecto 0.4)
+    --allow-variations
+    --fill-gaps
+    --reharmonize
+    --style-unify FILE
+    --out-dir OUT_DIR           (defecto ./mosaic_out)
+    --output OUTPUT             (defecto mosaic_output.mid)
+                                (nombre simple: dentro de --out-dir; con directorios
+                                o ruta absoluta se respeta tal cual y se crea el
+                                directorio padre)
+    --report
+    --no-percussion             Eliminar canal 9 (percusión) del resultado
+                                final
+    --verbose
+    --seed SEED                 (defecto 42)
+    --min-bars MIN_BARS         (defecto 2)
+    --max-bars MAX_BARS         (defecto 16)
+    --variations V […]          Variaciones por fragmento: V01 V02 V04 ... o
+                                all. V01=inversion V02=retrogrado
+                                V04=aumentacion V05=diminucion
+                                V06=ornamentacion V08=transposicion
+                                V10=ritmica V14=estocastica. Ejemplo:
+                                --variations V01 V04 V10
+
+  harvest
+    --corpus CORPUS             (obligatorio)
+    --out-dir OUT_DIR           (defecto ./mosaic_out)
+    --min-bars MIN_BARS         (defecto 2)
+    --max-bars MAX_BARS         (defecto 16)
+    --variations V […]          Variaciones por fragmento: V01 V02 V04 ... o
+                                all. V01=inversion V02=retrogrado
+                                V04=aumentacion V05=diminucion
+                                V06=ornamentacion V08=transposicion
+                                V10=ritmica V14=estocastica. Ejemplo:
+                                --variations V01 V04 V10
+    --verbose
+
+  plan
+    --arc ARC                   (defecto arch)
+    --bars BARS                 (defecto 64)
+    --key KEY                   (defecto C major)
+    --tempo TEMPO               (defecto 120.0)
+    --out-dir OUT_DIR           (defecto ./mosaic_out)
+    --stdout                    Escribir JSON en stdout (para uso con bash
+                                <(...)). Los mensajes informativos van a
+                                stderr.
+
+  assemble
+    --bank BANK                 (obligatorio)
+    --plan PLAN                 (obligatorio)
+    --stitch STITCH             (defecto auto)
+    --bridge-bars BRIDGE_BARS   (defecto 2)
+    --candidates CANDIDATES     (defecto 5)
+    --diversity DIVERSITY       (defecto 0.4)
+    --allow-variations
+    --fill-gaps                 Usar completer.py para extender fragmentos
+                                cortos
+    --reharmonize
+    --style-unify FILE
+    --out-dir OUT_DIR           (defecto ./mosaic_out)
+    --output OUTPUT             (defecto mosaic_output.mid)
+                                (nombre simple: dentro de --out-dir; con directorios
+                                o ruta absoluta se respeta tal cual y se crea el
+                                directorio padre)
+    --report
+    --verbose
+    --seed SEED                 Semilla aleatoria (una sola variación)
+                                (defecto 42)
+    --seeds S […]               Lista de semillas para generar múltiples
+                                variaciones. Ejemplo: --seeds 42 123 999
+                                genera 3 variaciones. Incompatible con --seed
+                                (--seeds tiene prioridad).
+    --no-percussion             Eliminar canal 9 (percusión) del resultado
+                                final
+
+  stitch
+    midis MIDIS […]             Archivos MIDI a coser en orden
+    --stitch STITCH             (defecto auto)
+    --key KEY
+    --bridge-bars BRIDGE_BARS   (defecto 2)
+    --out-dir OUT_DIR           (defecto ./mosaic_out)
+    --output OUTPUT             (defecto mosaic_stitch.mid)
+                                (nombre simple: dentro de --out-dir; con directorios
+                                o ruta absoluta se respeta tal cual y se crea el
+                                directorio padre)
+    --verbose
+
+  index
+    dir DIR                     Directorio con los MIDIs a indexar (p.ej.
+                                banco/bank/)
+    --bank BANK                 Ruta del banco de salida (por defecto:
+                                <dir>/../.mosaic_bank.json)
+    --out-dir OUT_DIR           Directorio donde guardar el banco (ignorado si
+                                --bank es absoluto)
+    --recursive                 Buscar MIDIs en subdirectorios recursivamente
+    --merge                     Añadir al banco existente en lugar de
+                                sobreescribirlo. Los fragmentos ya indexados
+                                (misma ruta) se conservan sin re-calcular.
+    --verbose                   Mostrar detalles de cada fragmento indexado
+
+  inspect
+    --bank BANK                 (obligatorio)
 """
 
 import os

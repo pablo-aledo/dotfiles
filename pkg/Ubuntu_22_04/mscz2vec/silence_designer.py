@@ -1,57 +1,63 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      SILENCE DESIGNER  v1.0                                  ║
-║            Diseño del silencio como recurso dramático en MIDIs              ║
-║                                                                              ║
-║  Los compositores automáticos del ecosistema tienden a rellenar: textura    ║
-║  continua, sin aire. El recurso emotivo más barato y menos usado es el      ║
-║  silencio. Esta herramienta AUDITA la saturación de la obra y ABRE espacio  ║
-║  donde la narrativa lo pide, sin alterar la métrica (los huecos se crean    ║
-║  acortando notas, nunca insertando tiempo).                                  ║
-║                                                                              ║
-║  OPERACIONES:                                                                ║
-║    luftpause    — respiraciones en las fronteras de sección (detectadas     ║
-║                   por novedad armónica + cambio de densidad)                 ║
-║    pausa        — silencio dramático general antes de un compás clave       ║
-║                   (--pause-before N, o automático antes del pico de        ║
-║                   energía con --auto)                                        ║
-║    reduccion    — adelgazamiento a una sola voz (melodía) en los compases   ║
-║                   previos al pico: intimidad antes del golpe                ║
-║    fermata      — calderón final: el último acorde se prolonga y se deja    ║
-║                   resonar (única operación que extiende la duración)        ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] AUDITORÍA  — saturación por compás (fracción de tiempo con sonido)     ║
-║  [2] FRONTERAS  — novedad por croma + densidad → candidatas a luftpause     ║
-║  [3] APERTURA   — truncado de notas para crear los huecos                   ║
-║  [4] INFORME    — sparkline de saturación antes/después + escritura         ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python silence_designer.py obra.mid --report                              ║
-║    python silence_designer.py obra.mid                                       ║
-║    python silence_designer.py obra.mid --pause-before 21 --gap 1.0          ║
-║    python silence_designer.py obra.mid --auto --thin --fermata              ║
-║    python silence_designer.py obra.mid --luftpauses 3 --gap 0.5             ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi               MIDI de entrada                                        ║
-║    --output FILE      MIDI de salida (default: <obra>_silence.mid)          ║
-║    --luftpauses N     Nº de respiraciones en fronteras (default: 3)         ║
-║    --gap F            Tamaño del hueco en pulsos (default: 0.5)             ║
-║    --pause-before N   Pausa dramática antes del compás N (gap doble)        ║
-║    --auto             Situar la pausa dramática antes del pico de energía   ║
-║    --thin             Reducción a una voz en los 2 compases pre-pausa       ║
-║    --fermata          Calderón final (×1.8 el último acorde)                ║
-║    --melody-track N   Pista a conservar en la reducción (default: auto)     ║
-║    --report           Solo auditoría de saturación, sin escribir MIDI        ║
-║    --no-color         Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from silence_designer import design_silence, saturation_curve            ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+silence_designer.py — Silence Designer: diseño del silencio como recurso
+dramático en MIDIs
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Los compositores automáticos del ecosistema tienden a rellenar: textura
+continua, sin aire. El recurso emotivo más barato y menos usado es el
+silencio. Esta herramienta AUDITA la saturación de la obra y ABRE espacio
+donde la narrativa lo pide, sin alterar la métrica (los huecos se crean
+acortando notas, nunca insertando tiempo).
+
+OPERACIONES:
+  luftpause    — respiraciones en las fronteras de sección (detectadas
+                 por novedad armónica + cambio de densidad)
+  pausa        — silencio dramático general antes de un compás clave
+                 (--pause-before N, o automático antes del pico de
+                 energía con --auto)
+  reduccion    — adelgazamiento a una sola voz (melodía) en los compases
+                 previos al pico: intimidad antes del golpe
+  fermata      — calderón final: el último acorde se prolonga y se deja
+                 resonar (única operación que extiende la duración)
+
+FLUJO:
+[1] AUDITORÍA  — saturación por compás (fracción de tiempo con sonido)
+[2] FRONTERAS  — novedad por croma + densidad → candidatas a luftpause
+[3] APERTURA   — truncado de notas para crear los huecos
+[4] INFORME    — sparkline de saturación antes/después + escritura
+
+COMO MÓDULO:
+  from silence_designer import design_silence, saturation_curve
+
+DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi               MIDI de entrada
+  --output FILE      MIDI de salida (default: <obra>_silence.mid)
+  --luftpauses N     Nº de respiraciones en fronteras (default: 3)
+  --gap F            Tamaño del hueco en pulsos (default: 0.5)
+  --pause-before N   Pausa dramática antes del compás N (gap doble)
+  --auto             Situar la pausa dramática antes del pico de energía
+  --thin             Reducción a una voz en los 2 compases pre-pausa
+  --fermata          Calderón final (×1.8 el último acorde)
+  --melody-track N   Pista a conservar en la reducción (default: auto)
+  --report           Solo auditoría de saturación, sin escribir MIDI
+  --no-color         Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python silence_designer.py obra.mid --report
+  python silence_designer.py obra.mid
+  python silence_designer.py obra.mid --pause-before 21 --gap 1.0
+  python silence_designer.py obra.mid --auto --thin --fermata
+  python silence_designer.py obra.mid --luftpauses 3 --gap 0.5
 """
 
 import sys

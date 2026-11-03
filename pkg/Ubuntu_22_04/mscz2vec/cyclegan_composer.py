@@ -1,86 +1,165 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     CYCLE-GAN COMPOSER  v2                                   ║
-║       Transferencia de estilo musical mediante CycleGAN sobre piano rolls    ║
-║                                                                              ║
-║  ARQUITECTURA:                                                               ║
-║    Dos generadores ResNet + dos discriminadores PatchGAN                     ║
-║    Pérdidas: adversarial (LSGAN) + cycle-consistency + identity              ║
-║    Representación: piano roll multi-rol (melody/counterpoint/bass/etc.)      ║
-║    Condicionamiento: tensión armónica (8D) inyectada vía AdaIN               ║
-║    Dropout2d(0.05) en cada ResBlock (regularización corpus pequeños)         ║
-║    Logging desglosado por rama: adv_A2B/B2A, cyc_A/B, idt_A/B, D_A/D_B     ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    prepare      — MIDI corpus → piano rolls segmentados por rol (.npz)       ║
-║    train        — Entrena el modelo CycleGAN (dominio A ↔ dominio B)         ║
-║    transfer     — Transfiere el estilo de B a un MIDI concreto del dominio A ║
-║    encode       — MIDI → vector de estilo latente (.json)                    ║
-║    style-corpus — Centroide de estilo de una carpeta de MIDIs                ║
-║    inspect      — Diagnóstico del modelo y los datos                         ║
-║    round-trip   — MIDI → piano roll → MIDI (sin modelo, diagnóstico)         ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    mido, numpy, torch                                                        ║
-╠══════════════════════════════════════════════════════════════════════════════╣
+r"""
+cyclegan_composer.py — Transferencia de estilo musical con CycleGAN neuronal
+sobre piano rolls multi-rol (MIDI → MIDI, requiere PyTorch)
+(versión 2).
 
-# ── Preparar dos corpus ───────────────────────────────────────────────────────
-python cycle_gan_composer.py prepare \
-    --input-dir midis_tango/  --output-dir data_A/ --report
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Arquitectura: dos generadores ResNet (G_A2B y G_B2A) y dos discriminadores
+PatchGAN (D_A y D_B). Pérdidas: adversarial LSGAN + consistencia de ciclo +
+identidad. Representación: piano roll multi-rol (melody, counterpoint,
+accompaniment, bass, percussion) segmentado en ventanas. Condicionamiento: un
+vector de tensión armónica de 8 dimensiones inyectado en los generadores vía
+AdaIN. Cada ResBlock lleva Dropout2d(0.05) (regularización para corpus
+pequeños). El entrenamiento registra por separado cada rama (adv_A2B/B2A,
+cyc_A/B, idt_A/B, D_A/D_B), con parada temprana y checkpoint del mejor modelo.
 
-python cycle_gan_composer.py prepare \
-    --input-dir midis_jazz/   --output-dir data_B/ --report
+Flujo típico: prepare (corpus A y B → .npz) → train (modelo A ↔ B) → transfer
+(aplicar el generador a un MIDI). Los vectores de estilo latente (encode,
+style-corpus) son la activación media del último ResBlock de G_A2B.
 
-# Con rango de pitch reducido (CPU / GPU modesta):
-python cycle_gan_composer.py prepare \
-    --input-dir midis_tango/  --output-dir data_A_small/ \
-    --pitch-range 48 --disable-roles percussion counterpoint
+────────────────────────────────────────────────────────────────────────────
+Modos de uso (subcomandos)
+────────────────────────────────────────────────────────────────────────────
+  prepare       MIDI corpus → piano rolls segmentados por rol (.npz), en
+                paralelo (hasta 8 procesos).
+  train         Entrena el modelo CycleGAN (dominio A ↔ dominio B).
+  transfer      Aplica el generador entrenado a un MIDI concreto (A2B o B2A).
+  encode        MIDI → vector de estilo latente (.json).
+  style-corpus  Centroide de estilo de una carpeta de MIDIs (.json).
+  inspect       Diagnóstico del modelo (configuración, historial de pérdidas,
+                parámetros) y/o de los .npz de datos.
+  round-trip    MIDI → piano roll → MIDI sin modelo: comprueba que la
+                extracción y la reconstrucción funcionan antes de entrenar.
 
-# ── Entrenar ──────────────────────────────────────────────────────────────────
-python cycle_gan_composer.py train \
-    --data-dir-a data_A/ --data-dir-b data_B/ \
-    --model-dir model_cyclegan/ \
-    --epochs 200 --batch-size 8 --lr 2e-4 \
-    --lambda-cycle 10.0 --lambda-identity 5.0 \
-    --patience 40
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  prepare       Entrada: carpeta de .mid/.midi. Salida: un .npz por MIDI en
+                --output-dir (con metadatos de resolución, ventana y rango de
+                pitch); con --report, además prepare_report.json.
+  train         Entrada: carpetas de .npz de A y B (preparadas con el mismo
+                --pitch-range). Salida en --model-dir: model_config.json,
+                checkpoint.pt (último), best_model.pt (mejor validación) y
+                history.json (pérdidas por época).
+  transfer      Entrada: --model-dir y un MIDI. Salida: --output (defecto
+                output_transfer.mid).
+  encode        Salida: JSON con el vector z (defecto z_style.json).
+  style-corpus  Salida: JSON con el centroide y nº de ficheros (defecto
+                z_corpus_centroid.json).
+  round-trip    Salida: MIDI reconstruido (defecto round_trip_output.mid).
+  Se crea el directorio padre de toda salida si no existe.
 
-# GPU modesta (menos canales, menos bloques):
-python cycle_gan_composer.py train \
-    --data-dir-a data_A_small/ --data-dir-b data_B_small/ \
-    --model-dir model_small/ \
-    --base-ch 32 --n-res-blocks 4 \
-    --epochs 200 --batch-size 16
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare
+    --input-dir DIR        Carpeta con MIDIs (obligatorio).
+    --output-dir DIR       Carpeta destino de .npz (obligatorio).
+    --resolution N         Ticks por compás (defecto 48).
+    --window-bars N        Compases por ventana (defecto 4).
+    --pitch-range N        Limita el roll a N notas centradas en Do central.
+    --disable-roles ROL…   Roles a excluir.
+    --report               Escribe prepare_report.json con estadísticas.
+  train
+    --data-dir-a DIR       .npz del dominio A (obligatorio).
+    --data-dir-b DIR       .npz del dominio B (obligatorio).
+    --model-dir DIR        Directorio del modelo (obligatorio).
+    --epochs N             Épocas (defecto 200).   --batch-size N   (defecto 8).
+    --lr F                 Learning rate (defecto 2e-4).
+    --lambda-cycle F       Peso de ciclo (defecto 10).
+    --lambda-identity F    Peso de identidad (defecto 5).
+    --base-ch N            Canales base del generador (defecto 64).
+    --n-res-blocks N       Bloques ResNet (defecto 9; 4-6 en GPU modesta).
+    --n-downsamples N      Niveles de downsampling (defecto 2).
+    --patience N           Parada temprana (defecto 40).
+    --disable-roles ROL…   Roles a excluir.
+    --resume               Reanuda desde el checkpoint de --model-dir.
+  transfer
+    --model-dir DIR        Modelo entrenado (obligatorio).
+    --input FILE           MIDI de entrada (obligatorio).
+    --direction D          A2B (defecto, estilo de A → estilo de B) | B2A.
+    --palette FILE         JSON con la paleta de instrumentos por rol
+                           ({"melody": {"program": 73, "channel": 0,
+                           "velocity": 90}, …}); lo no indicado usa el defecto.
+    --output FILE          MIDI de salida (defecto output_transfer.mid).
+    --bpm F                Tempo del MIDI de salida (defecto 120).
+    --threshold F          Umbral fijo de binarización del roll generado.
+    --threshold-pct F      Percentil del umbral adaptativo (defecto 99.0).
+    --adaptive-per-bar     Calcula el umbral adaptativo compás a compás.
+  encode
+    --input FILE  --model-dir DIR   (obligatorios)   --output FILE (z_style.json)
+  style-corpus
+    --input-dir DIR  --model-dir DIR   (obligatorios)
+    --output FILE          (defecto z_corpus_centroid.json)
+  inspect
+    --model-dir DIR        Modelo a inspeccionar.
+    --data-dir DIR         Carpeta de .npz a inspeccionar.
+    --what W               "model" (defecto), "npz" o "model npz".
+    --npz-file STEM        Solo el .npz con ese nombre (sin extensión).
+    --no-roll              Con npz: lista todos los ficheros solo con metadatos
+                           (sin ello: los 5 primeros con forma y densidad por rol).
+  round-trip
+    --input FILE           MIDI de entrada (obligatorio).
+    --output FILE          MIDI reconstruido (defecto round_trip_output.mid).
+    --resolution N         Ticks por compás (defecto 48).
+    --window-bars N        Compases por ventana (defecto 4).
+    --bpm F                Tempo de salida (defecto 120).
 
-# ── Transferir estilo B a un MIDI del dominio A ───────────────────────────────
-python cycle_gan_composer.py transfer \
-    --model-dir model_cyclegan/ --palette palette.json \
-    --input midis_tango/cancion.mid \
-    --direction A2B \
-    --output resultado_jazz.mid \
-    --threshold-pct 99.0
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Preparar dos corpus:
+  python cyclegan_composer.py prepare --input-dir midis_tango/ --output-dir data_A/ --report
+  python cyclegan_composer.py prepare --input-dir midis_jazz/ --output-dir data_B/ --report
 
-# Dirección inversa (B → A):
-python cycle_gan_composer.py transfer \
-    --model-dir model_cyclegan/ \
-    --input midis_jazz/tema.mid \
-    --direction B2A \
-    --output resultado_tango.mid
+  # Rango de pitch reducido y sin ciertos roles (CPU / GPU modesta):
+  python cyclegan_composer.py prepare --input-dir midis_tango/ --output-dir data_A_small/ \
+      --pitch-range 48 --disable-roles percussion counterpoint
 
-# ── Encode / style-corpus ─────────────────────────────────────────────────────
-python cycle_gan_composer.py encode \
-    --input midis_tango/cancion.mid --model-dir model_cyclegan/ \
-    --output z_tango.json
+  # Entrenar:
+  python cyclegan_composer.py train --data-dir-a data_A/ --data-dir-b data_B/ \
+      --model-dir model_cyclegan/ --epochs 200 --batch-size 8 --lr 2e-4 \
+      --lambda-cycle 10.0 --lambda-identity 5.0 --patience 40
 
-python cycle_gan_composer.py style-corpus \
-    --input-dir midis_jazz/ --model-dir model_cyclegan/ \
-    --output z_jazz_centroide.json
+  # GPU modesta (menos canales y bloques) y reanudar un entrenamiento:
+  python cyclegan_composer.py train --data-dir-a data_A_small/ --data-dir-b data_B_small/ \
+      --model-dir model_small/ --base-ch 32 --n-res-blocks 4 --epochs 200 --batch-size 16
+  python cyclegan_composer.py train --data-dir-a data_A/ --data-dir-b data_B/ \
+      --model-dir model_cyclegan/ --resume
 
-# ── Diagnóstico ───────────────────────────────────────────────────────────────
-python cycle_gan_composer.py round-trip --input midis_tango/cancion.mid
-python cycle_gan_composer.py inspect --model-dir model_cyclegan/
-python cycle_gan_composer.py inspect --what npz --data-dir data_A/
+  # Transferir el estilo de B a un MIDI del dominio A:
+  python cyclegan_composer.py transfer --model-dir model_cyclegan/ \
+      --input midis_tango/cancion.mid --direction A2B \
+      --output resultado_jazz.mid --palette palette.json --threshold-pct 99.0
 
+  # Dirección inversa, con umbral fijo, tempo y umbral por compás:
+  python cyclegan_composer.py transfer --model-dir model_cyclegan/ \
+      --input midis_jazz/tema.mid --direction B2A --output resultado_tango.mid \
+      --threshold 0.3 --bpm 100 --adaptive-per-bar
+
+  # Vector de estilo de una pieza y centroide de un corpus:
+  python cyclegan_composer.py encode --input midis_tango/cancion.mid \
+      --model-dir model_cyclegan/ --output z_tango.json
+  python cyclegan_composer.py style-corpus --input-dir midis_jazz/ \
+      --model-dir model_cyclegan/ --output z_jazz_centroide.json
+
+  # Diagnóstico:
+  python cyclegan_composer.py round-trip --input midis_tango/cancion.mid --output rt.mid
+  python cyclegan_composer.py inspect --model-dir model_cyclegan/
+  python cyclegan_composer.py inspect --what npz --data-dir data_A/ --no-roll
+  python cyclegan_composer.py inspect --what "model npz" --model-dir model_cyclegan/ \
+      --data-dir data_A/ --npz-file cancion
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+mido, numpy, torch (la mayoría de subcomandos importa torch al ejecutarse;
+prepare, round-trip e inspect de .npz solo necesitan numpy y mido). Alternativa
+sin redes neuronales: cycle_gan_style_transfer.py; versión con ambos backends:
+cycle_gan_style_transfer_v3.py.
 """
 
 import argparse

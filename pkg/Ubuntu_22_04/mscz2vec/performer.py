@@ -1,61 +1,67 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          PERFORMER  v1.0                                     ║
-║         Renderizado expresivo de interpretación para MIDIs cuantizados      ║
-║                                                                              ║
-║  Los compositores del ecosistema producen MIDI cuantizado y de velocidad    ║
-║  uniforme. Gran parte de la emoción percibida no está en QUÉ notas suenan   ║
-║  sino en CÓMO: esta herramienta aplica reglas interpretativas locales       ║
-║  (inspiradas en las reglas KTH / Director Musices) conscientes de la        ║
-║  estructura de frase, como último paso del pipeline antes del render.       ║
-║                                                                              ║
-║  REGLAS APLICADAS:                                                           ║
-║    rubato       — arco agógico por frase: arranque contenido, aceleración   ║
-║                   hacia el pico, ritardando en el cierre; ritardando final  ║
-║    agogica      — alargamiento del pico melódico de cada frase              ║
-║    dinamica     — crescendo hacia el pico de frase + jerarquía métrica      ║
-║                   (parte fuerte +, contratiempos −) + jitter humano         ║
-║    lead         — la melodía se adelanta ~15 ms al acompañamiento           ║
-║    humanize     — micro-desincronización aleatoria de ataques               ║
-║    pedal        — CC64 con retoma en cada cambio de armonía (teclados)      ║
-║    swell        — CC11 (expresión) en arco dentro de notas largas y CC1     ║
-║                   (vibrato) creciente en cuerdas/vientos/voz                ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] LECTURA    — MIDI + mapa de tempo/compás (vía playability_auditor)     ║
-║  [2] FRASEO     — segmentación de frases por silencios y notas largas       ║
-║  [3] WARP       — mapa de deformación temporal por pulso (rubato+agógica)   ║
-║  [4] DINÁMICA   — remodelado de velocidades nota a nota                     ║
-║  [5] CONTROL    — inserción de CC64 / CC11 / CC1                            ║
-║  [6] ESCRITURA  — MIDI expresivo + informe de desviaciones                  ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python performer.py obra.mid                                              ║
-║    python performer.py obra.mid --style romantico --intensity 0.8           ║
-║    python performer.py obra.mid --no-pedal --no-vibrato                     ║
-║    python performer.py obra.mid --melody-track 1 --seed 7                   ║
-║    python performer.py obra.mid --dry-run --verbose                         ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi               MIDI de entrada                                        ║
-║    --output FILE      MIDI de salida (default: <obra>_perf.mid)             ║
-║    --style S          romantico | clasico | mecanico (preset de intensidad) ║
-║    --intensity F      Intensidad expresiva 0–1 (anula el preset)            ║
-║    --melody-track N   Pista de melodía (default: autodetección)             ║
-║    --no-rubato / --no-dynamics / --no-pedal / --no-vibrato / --no-humanize  ║
-║    --lead MS          Adelanto de la melodía en ms (default: 15)            ║
-║    --seed N           Semilla aleatoria (default: 42)                       ║
-║    --dry-run          Solo informe, sin escribir MIDI                        ║
-║    --verbose          Detalle de frases y curvas                             ║
-║    --no-color         Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from performer import perform_midi                                        ║
-║    stats = perform_midi("obra.mid", "obra_perf.mid", intensity=0.7)         ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+performer.py — Performer: renderizado expresivo de interpretación para MIDIs
+cuantizados
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Los compositores del ecosistema producen MIDI cuantizado y de velocidad
+uniforme. Gran parte de la emoción percibida no está en QUÉ notas suenan
+sino en CÓMO: esta herramienta aplica reglas interpretativas locales
+(inspiradas en las reglas KTH / Director Musices) conscientes de la
+estructura de frase, como último paso del pipeline antes del render.
+
+REGLAS APLICADAS:
+  rubato       — arco agógico por frase: arranque contenido, aceleración
+                 hacia el pico, ritardando en el cierre; ritardando final
+  agogica      — alargamiento del pico melódico de cada frase
+  dinamica     — crescendo hacia el pico de frase + jerarquía métrica
+                 (parte fuerte +, contratiempos −) + jitter humano
+  lead         — la melodía se adelanta ~15 ms al acompañamiento
+  humanize     — micro-desincronización aleatoria de ataques
+  pedal        — CC64 con retoma en cada cambio de armonía (teclados)
+  swell        — CC11 (expresión) en arco dentro de notas largas y CC1
+                 (vibrato) creciente en cuerdas/vientos/voz
+
+FLUJO:
+[1] LECTURA    — MIDI + mapa de tempo/compás (vía playability_auditor)
+[2] FRASEO     — segmentación de frases por silencios y notas largas
+[3] WARP       — mapa de deformación temporal por pulso (rubato+agógica)
+[4] DINÁMICA   — remodelado de velocidades nota a nota
+[5] CONTROL    — inserción de CC64 / CC11 / CC1
+[6] ESCRITURA  — MIDI expresivo + informe de desviaciones
+
+COMO MÓDULO:
+  from performer import perform_midi
+  stats = perform_midi("obra.mid", "obra_perf.mid", intensity=0.7)
+
+DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi               MIDI de entrada
+  --output FILE      MIDI de salida (default: <obra>_perf.mid)
+  --style S          romantico | clasico | mecanico (preset de intensidad)
+  --intensity F      Intensidad expresiva 0–1 (anula el preset)
+  --melody-track N   Pista de melodía (default: autodetección)
+  --no-rubato / --no-dynamics / --no-pedal / --no-vibrato / --no-humanize
+  --lead MS          Adelanto de la melodía en ms (default: 15)
+  --seed N           Semilla aleatoria (default: 42)
+  --dry-run          Solo informe, sin escribir MIDI
+  --verbose          Detalle de frases y curvas
+  --no-color         Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python performer.py obra.mid
+  python performer.py obra.mid --style romantico --intensity 0.8
+  python performer.py obra.mid --no-pedal --no-vibrato
+  python performer.py obra.mid --melody-track 1 --seed 7
+  python performer.py obra.mid --dry-run --verbose
 """
 
 import sys

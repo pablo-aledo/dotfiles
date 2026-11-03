@@ -1,55 +1,66 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     MELODY HARMONIZER  v2.0                                  ║
-║      Adaptación de melodía a una armonía dada con ornamentación opcional    ║
-║                                                                              ║
-║  Toma un MIDI con armonía (acordes) y otro con una melodía, y reescribe     ║
-║  la melodía para que sea musicalmente correcta sobre la armonía dada.       ║
-║                                                                              ║
-║  ARQUITECTURA DE ESTRATEGIAS:                                               ║
-║    Cada estrategia de adaptación (--adapt-mode) es una función registrada  ║
-║    de forma independiente (ver sección STRATEGIES/register_strategy en el  ║
-║    código). Añadir o quitar una estrategia no afecta a las demás.          ║
-║    Ejecuta:  python melody_harmonizer.py --list-strategies                 ║
-║    para ver todas las estrategias disponibles y su descripción.            ║
-║                                                                              ║
-║  ORNAMENTOS (--ornaments):                                                   ║
-║    appoggiatura  — apoyatura: nota disonante en tiempo fuerte → resolución  ║
-║    passing       — nota de paso entre dos chord tones                       ║
-║    neighbor      — bordadura (nota auxiliar superior o inferior)            ║
-║    all           — aplica todos los ornamentos según contexto               ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python melody_harmonizer.py harmony.mid melody.mid                       ║
-║    python melody_harmonizer.py harmony.mid melody.mid --adapt-mode dp_global║
-║    python melody_harmonizer.py harmony.mid melody.mid --adapt-mode limited_leap --strategy-param leap_max=3 ║
-║    python melody_harmonizer.py harmony.mid melody.mid --ornaments appoggiatura passing --ornament-bars 3 7 11 ║
-║    python melody_harmonizer.py harmony.mid melody.mid --key "G major"      ║
-║    python melody_harmonizer.py harmony.mid melody.mid --verbose --report   ║
-║    python melody_harmonizer.py --list-strategies                            ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --adapt-mode M          Estrategia de adaptación (default: contour)      ║
-║    --strategy-param K=V [K=V…]  Parámetros específicos de la estrategia    ║
-║    --list-strategies       Lista las estrategias disponibles y termina      ║
-║    --ornaments O [O…]      Tipos de ornamento a aplicar (default: ninguno) ║
-║    --ornament-bars N [N…]  Compases (1-based) donde insertar ornamentos    ║
-║                             Si no se especifica, se aplican a todos si      ║
-║                             --ornaments está activo                        ║
-║    --ornament-prob F       Probabilidad de ornamentación por nota (def 0.4)║
-║    --key "C major"         Tonalidad. Si no se indica, se autodetecta      ║
-║    --tempo BPM             Tempo de salida (default: detectado del MIDI)   ║
-║    --out-dir DIR           Carpeta de salida (default: junto al MIDI mel.) ║
-║    --report                Guardar reporte JSON con análisis completo      ║
-║    --verbose               Informe detallado por stdout                    ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    melody.harmonized.mid          (melodía adaptada + armonía original)     ║
-║    melody.harmonized_report.json  (con --report)                            ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, music21, numpy                                         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+melody_harmonizer.py — Melody Harmonizer: adaptación de melodía a una armonía
+dada con ornamentación opcional
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Toma un MIDI con armonía (acordes) y otro con una melodía, y reescribe
+la melodía para que sea musicalmente correcta sobre la armonía dada.
+
+ARQUITECTURA DE ESTRATEGIAS:
+  Cada estrategia de adaptación (--adapt-mode) es una función registrada
+  de forma independiente (ver sección STRATEGIES/register_strategy en el
+  código). Añadir o quitar una estrategia no afecta a las demás.
+  Ejecuta:  python melody_harmonizer.py --list-strategies
+  para ver todas las estrategias disponibles y su descripción.
+
+ORNAMENTOS (--ornaments):
+  appoggiatura  — apoyatura: nota disonante en tiempo fuerte → resolución
+  passing       — nota de paso entre dos chord tones
+  neighbor      — bordadura (nota auxiliar superior o inferior)
+  all           — aplica todos los ornamentos según contexto
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  melody.harmonized.mid          (melodía adaptada + armonía original)
+  melody.harmonized_report.json  (con --report)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --adapt-mode M          Estrategia de adaptación (default: contour)
+  --strategy-param K=V [K=V…]  Parámetros específicos de la estrategia
+  --list-strategies       Lista las estrategias disponibles y termina
+  --ornaments O [O…]      Tipos de ornamento a aplicar (default: ninguno)
+  --ornament-bars N [N…]  Compases (1-based) donde insertar ornamentos
+                           Si no se especifica, se aplican a todos si
+                           --ornaments está activo
+  --ornament-prob F       Probabilidad de ornamentación por nota (def 0.4)
+  --key "C major"         Tonalidad. Si no se indica, se autodetecta
+  --tempo BPM             Tempo de salida (default: detectado del MIDI)
+  --out-dir DIR           Carpeta de salida (default: junto al MIDI mel.)
+  --report                Guardar reporte JSON con análisis completo
+  --verbose               Informe detallado por stdout
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python melody_harmonizer.py harmony.mid melody.mid
+  python melody_harmonizer.py harmony.mid melody.mid --adapt-mode dp_global
+  python melody_harmonizer.py harmony.mid melody.mid --adapt-mode limited_leap --strategy-param leap_max=3
+  python melody_harmonizer.py harmony.mid melody.mid --ornaments appoggiatura passing --ornament-bars 3 7 11
+  python melody_harmonizer.py harmony.mid melody.mid --key "G major"
+  python melody_harmonizer.py harmony.mid melody.mid --verbose --report
+  python melody_harmonizer.py --list-strategies
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, music21, numpy
 """
 
 import os

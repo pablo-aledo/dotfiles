@@ -1,105 +1,148 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         MUSICLM  v1.0                                        ║
-║         Generación de música a partir de texto — pipeline completo           ║
-║                                                                              ║
-║  Implementación de MusicLM (Agostinelli et al., 2023) en PyTorch.           ║
-║  Combina MuLaN (aprendizaje contrastivo audio-texto, estilo CLIP) con        ║
-║  AudioLM para generar música a partir de descripciones en lenguaje natural.  ║
-║                                                                              ║
-║  FLUJO COMPLETO:                                                             ║
-║  [1] TRAIN-MULAN  — entrena el modelo de embedding audio↔texto              ║
-║  [2] QUANTIZE     — crea el cuantizador residual sobre MuLaN entrenado       ║
-║  [3] EMBED        — extrae embeddings de audio o texto a .json               ║
-║  [4] GENERATE     — genera música a partir de una descripción de texto       ║
-║  [5] INSPECT      — diagnóstico de un checkpoint guardado                    ║
-║  [6] ROUND-TRIP   — audio → embed → similitud (diagnóstico, sin generar)     ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    prepare        — construye un dataset de pares (wav, texto) desde carpeta ║
-║    train-mulan    — entrena MuLaN con aprendizaje contrastivo                ║
-║    quantize       — ajusta el cuantizador vectorial residual sobre MuLaN     ║
-║    embed          — extrae embeddings de un fichero de audio o texto         ║
-║    generate       — genera música a partir de texto (requiere AudioLM)       ║
-║    inspect        — muestra arquitectura y estado de un checkpoint           ║
-║    round-trip     — diagnóstico: audio → embedding → similitud con texto     ║
-║                                                                              ║
-║  USO RÁPIDO:                                                                 ║
-║    # 1. Preparar dataset                                                     ║
-║    python musiclm.py prepare --audio-dir ./wavs --manifest manifest.csv     ║
-║                                                                              ║
-║    # 2. Entrenar MuLaN                                                       ║
-║    python musiclm.py train-mulan --manifest manifest.csv --steps 50000      ║
-║                                                                              ║
-║    # 3. Ajustar cuantizador                                                  ║
-║    python musiclm.py quantize --mulan mulan.pt --manifest manifest.csv      ║
-║                                                                              ║
-║    # 4. Generar música                                                       ║
-║    python musiclm.py generate "una pieza de piano melancólica"               ║
-║        --mulan mulan.pt --quantizer quantizer.pt                             ║
-║                                                                              ║
-║    # 5. Diagnóstico                                                          ║
-║    python musiclm.py round-trip audio.wav "lluvia suave"                    ║
-║        --mulan mulan.pt                                                      ║
-║                                                                              ║
-║  OPCIONES COMUNES:                                                           ║
-║    --mulan FILE        Checkpoint de MuLaN (.pt)                             ║
-║    --quantizer FILE    Checkpoint del cuantizador residual (.pt)             ║
-║    --audio-lm FILE     Checkpoint de AudioLM (.pt) — solo para generate      ║
-║    --output FILE       Fichero de salida (wav, json, o pt según comando)     ║
-║    --device DEVICE     cpu | cuda | mps (default: auto)                      ║
-║    --dim N             Dimensión del transformer (default: 512)              ║
-║    --depth N           Capas del transformer (default: 6)                    ║
-║    --heads N           Cabezas de atención (default: 8)                      ║
-║    --dim-latent N      Dimensión del espacio latente MuLaN (default: 128)    ║
-║    --batch-size N      Tamaño de lote (default: 16)                          ║
-║    --lr F              Learning rate (default: 3e-4)                         ║
-║    --steps N           Pasos de entrenamiento (default: 100000)              ║
-║    --seed N            Semilla aleatoria (default: 42)                       ║
-║    --verbose           Informe detallado de operaciones                       ║
-║                                                                              ║
-║  OPCIONES DE train-mulan:                                                    ║
-║    --manifest FILE     CSV con columnas: path,text (requerido)               ║
-║    --valid-frac F      Fracción de validación (default: 0.05)               ║
-║    --save-every N      Guardar checkpoint cada N pasos (default: 1000)       ║
-║    --results-dir DIR   Carpeta de checkpoints (default: ./results_mulan)     ║
-║    --use-lion          Usar optimizador Lion en lugar de Adam                ║
-║    --decoupled-cl      Usar decoupled contrastive learning                   ║
-║    --sigmoid-cl        Usar sigmoid contrastive loss (SigLIP)                ║
-║    --hierarchical-cl   Añadir pérdida contrastiva jerárquica multi-capa     ║
-║                                                                              ║
-║  OPCIONES DE quantize:                                                       ║
-║    --rq-quantizers N   Número de cuantizadores residuales (default: 8)      ║
-║    --codebook-size N   Tamaño del codebook (default: 1024)                   ║
-║    --namespaces S      Namespaces separados por coma (default:               ║
-║                        semantic,coarse,fine)                                  ║
-║    --conditioning-dims D  Dimensiones de condicionamiento por namespace      ║
-║                           (default: 1024,1024,1024)                          ║
-║                                                                              ║
-║  OPCIONES DE generate:                                                       ║
-║    --num-samples N     Candidatos a generar (elige el más similar, default:4)║
-║    --output FILE       Fichero wav de salida (default: generated.wav)        ║
-║    --stub              Usar AudioLM stub (no requiere audiolm-pytorch)       ║
-║                                                                              ║
-║  OPCIONES DE embed:                                                          ║
-║    --mode audio|text   Qué modalidad embeber (default: auto desde extensión) ║
-║    --output FILE       JSON con el vector de embedding (default: embed.json) ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    pip install torch torchaudio einops beartype vector-quantize-pytorch      ║
-║                                                                              ║
-║  DEPENDENCIAS OPCIONALES:                                                    ║
-║    pip install x-clip          → tokenizador de texto (alternativa: basic)  ║
-║    pip install lion-pytorch    → optimizador Lion para train-mulan           ║
-║    pip install accelerate      → entrenamiento multi-GPU para train-mulan    ║
-║    pip install audiolm-pytorch → comando generate en modo completo           ║
-║                                                                              ║
-║  REFERENCIAS:                                                                ║
-║    Agostinelli et al. (2023) — MusicLM: Generating Music From Text          ║
-║    Huang et al. (2022)       — MuLan: A Joint Embedding of Music and NL     ║
-║    Zhai et al. (2023)        — Sigmoid Loss for Language Image Pre-Training  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+musiclm.py — Musiclm: generación de música a partir de texto — pipeline
+completo
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Implementación de MusicLM (Agostinelli et al., 2023) en PyTorch.
+Combina MuLaN (aprendizaje contrastivo audio-texto, estilo CLIP) con
+AudioLM para generar música a partir de descripciones en lenguaje natural.
+
+FLUJO COMPLETO:
+[1] TRAIN-MULAN  — entrena el modelo de embedding audio↔texto
+[2] QUANTIZE     — crea el cuantizador residual sobre MuLaN entrenado
+[3] EMBED        — extrae embeddings de audio o texto a .json
+[4] GENERATE     — genera música a partir de una descripción de texto
+[5] INSPECT      — diagnóstico de un checkpoint guardado
+[6] ROUND-TRIP   — audio → embed → similitud (diagnóstico, sin generar)
+
+REFERENCIAS:
+  Agostinelli et al. (2023) — MusicLM: Generating Music From Text
+  Huang et al. (2022)       — MuLan: A Joint Embedding of Music and NL
+  Zhai et al. (2023)        — Sigmoid Loss for Language Image Pre-Training
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  prepare        — construye un dataset de pares (wav, texto) desde carpeta
+  train-mulan    — entrena MuLaN con aprendizaje contrastivo
+  quantize       — ajusta el cuantizador vectorial residual sobre MuLaN
+  embed          — extrae embeddings de un fichero de audio o texto
+  generate       — genera música a partir de texto (requiere AudioLM)
+  inspect        — muestra arquitectura y estado de un checkpoint
+  round-trip     — diagnóstico: audio → embedding → similitud con texto
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES COMUNES:
+    --mulan FILE        Checkpoint de MuLaN (.pt)
+    --quantizer FILE    Checkpoint del cuantizador residual (.pt)
+    --audio-lm FILE     Checkpoint de AudioLM (.pt) — solo para generate
+    --output FILE       Fichero de salida (wav, json, o pt según comando)
+    --device DEVICE     cpu | cuda | mps (default: auto)
+    --dim N             Dimensión del transformer (default: 512)
+    --depth N           Capas del transformer (default: 6)
+    --heads N           Cabezas de atención (default: 8)
+    --dim-latent N      Dimensión del espacio latente MuLaN (default: 128)
+    --batch-size N      Tamaño de lote (default: 16)
+    --lr F              Learning rate (default: 3e-4)
+    --steps N           Pasos de entrenamiento (default: 100000)
+    --seed N            Semilla aleatoria (default: 42)
+    --verbose           Informe detallado de operaciones
+
+  OPCIONES DE train-mulan:
+    --manifest FILE     CSV con columnas: path,text (requerido)
+    --valid-frac F      Fracción de validación (default: 0.05)
+    --save-every N      Guardar checkpoint cada N pasos (default: 1000)
+    --results-dir DIR   Carpeta de checkpoints (default: ./results_mulan)
+    --use-lion          Usar optimizador Lion en lugar de Adam
+    --decoupled-cl      Usar decoupled contrastive learning
+    --sigmoid-cl        Usar sigmoid contrastive loss (SigLIP)
+    --hierarchical-cl   Añadir pérdida contrastiva jerárquica multi-capa
+
+  OPCIONES DE quantize:
+    --rq-quantizers N   Número de cuantizadores residuales (default: 8)
+    --codebook-size N   Tamaño del codebook (default: 1024)
+    --namespaces S      Namespaces separados por coma (default:
+                        semantic,coarse,fine)
+    --conditioning-dims D  Dimensiones de condicionamiento por namespace
+                           (default: 1024,1024,1024)
+
+  OPCIONES DE generate:
+    --num-samples N     Candidatos a generar (elige el más similar, default:4)
+    --output FILE       Fichero wav de salida (default: generated.wav)
+    --stub              Usar AudioLM stub (no requiere audiolm-pytorch)
+
+  OPCIONES DE embed:
+    --mode audio|text   Qué modalidad embeber (default: auto desde extensión)
+    --output FILE       JSON con el vector de embedding (default: embed.json)
+
+── Otras opciones del parser ──
+  train-mulan
+    --data-max-length DATA_MAX_LENGTH
+                                Longitud máxima del audio en muestras
+                                (default: sin límite)
+
+  quantize
+    --quantize-batches QUANTIZE_BATCHES
+                                Batches para inicializar k-means (default: 50)
+
+  round-trip
+    --extra-texts EXTRA_TEXTS   Textos adicionales separados por | para
+                                comparar
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USO RÁPIDO ──
+  # 1. Preparar dataset
+  python musiclm.py prepare --audio-dir ./wavs --manifest manifest.csv
+
+  # 2. Entrenar MuLaN
+  python musiclm.py train-mulan --manifest manifest.csv --steps 50000
+
+  # 3. Ajustar cuantizador
+  python musiclm.py quantize --mulan mulan.pt --manifest manifest.csv
+
+  # 4. Generar música
+  python musiclm.py generate "una pieza de piano melancólica" \
+      --mulan mulan.pt --quantizer quantizer.pt
+
+  # 5. Diagnóstico
+  python musiclm.py round-trip audio.wav "lluvia suave" \
+      --mulan mulan.pt
+
+── Más modos ──
+
+  # Extrae el embedding de un audio o texto
+  python musiclm.py embed entrada.wav
+
+  # --mode audio — Modalidad (default: auto, detectada por extensión)
+  python musiclm.py embed entrada.wav --mode audio
+
+  # --mode text — Modalidad (default: auto, detectada por extensión)
+  python musiclm.py embed entrada.wav --mode text
+
+  # --mode auto — Modalidad (default: auto, detectada por extensión)
+  python musiclm.py embed entrada.wav --mode auto
+
+  # Diagnóstico de un checkpoint guardado
+  python musiclm.py inspect modelo.pt
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  pip install torch torchaudio einops beartype vector-quantize-pytorch
+
+── DEPENDENCIAS OPCIONALES ──
+  pip install x-clip          → tokenizador de texto (alternativa: basic)
+  pip install lion-pytorch    → optimizador Lion para train-mulan
+  pip install accelerate      → entrenamiento multi-GPU para train-mulan
+  pip install audiolm-pytorch → comando generate en modo completo
 """
 
 import sys

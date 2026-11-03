@@ -1,131 +1,181 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     DIFFUSION COMPOSER  v0.1                                 ║
-║         Composición end-to-end mediante Difusión Latente multi-rol           ║
-║                                                                              ║
-║  ARQUITECTURA:                                                               ║
-║    Encoder CNN  →  espacio latente continuo                                  ║
-║    DDPM (Denoising Diffusion Probabilistic Model)                            ║
-║       condicionado en tensión + estilo                                       ║
-║    Decoder CNN  →  piano roll multi-rol                                      ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    prepare   — MIDI corpus → piano rolls segmentados por rol (.npz)          ║
-║    train     — Entrena el modelo de difusión latente                         ║
-║    encode    — MIDI referencia → z_style (.json)                             ║
-║    compose   — Genera obra nueva (modos: sample/denoise/blend/sweep)        ║
-║    inspect   — Diagnóstico del modelo y espacio latente                      ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    mido, numpy, torch, scipy (opcional para sweep --smooth)                  ║
-║                                                                              ║
-║  USO RÁPIDO:                                                                 ║
-║    python diffusion_composer.py prepare --input-dir midis/ --output-dir data/║
-║    python diffusion_composer.py train   --data-dir data/  --model-dir model/ ║
-║    python diffusion_composer.py encode  --input ref.mid   --model-dir model/ ║
-║    python diffusion_composer.py compose --mode sample --model-dir model/     ║
-║                                         --palette palette.json               ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+diffusion_composer.py — Composición end-to-end mediante difusión LATENTE
+multi-rol (MIDI → MIDI, requiere PyTorch)
+(versión 0.1: encoder/decoder CNN + DDPM condicionado en tensión y estilo).
 
-python diffusion_composer.py prepare --input-dir midis/ --output-dir data/ --report
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Arquitectura: un encoder CNN lleva cada ventana de piano roll multi-rol
+(melody, counterpoint, accompaniment, bass, percussion) a un espacio latente
+continuo; sobre ese espacio se entrena un DDPM (Denoising Diffusion
+Probabilistic Model) condicionado en la tensión armónica por compás y en un
+vector de estilo; un decoder CNN devuelve el latente a piano roll. La generación
+es compás a compás, con un contexto de los compases anteriores, muestreo DDIM y
+binarización por umbral (percentil adaptativo o fijo) antes de escribir el MIDI.
 
-python diffusion_composer.py train \
-    --data-dir data/ \
-    --model-dir model_diff/ \
-    --epochs 300 \
-    --batch-size 16 \
-    --lr 1e-4 \
-    --latent-dim 128 \
-    --style-dim 16 \
-    --diffusion-steps 1000 \
-    --pos-weight 5.0 \
-    --decoder-dropout 0.2 \
-    --patience 50
+Familia: es la línea LATENTE (con --latent-dim, --pos-weight y
+--decoder-dropout activos). Las versiones diffusion_composer_v3.py y _v4.py
+difunden directamente sobre el piano roll con una U-Net, sin VAE.
 
-python diffusion_composer.py compose \
-    --model-dir model_diff/ \
-    --palette palette.json \
-    --mode denoise \
-    --input ref.mid \
-    --strength 0.2 \
-    --ddim-steps 200 \
-    --eta 0.0 \
-    --temperature 0.5 \
-    --bars 16 \
-    --threshold-pct 99
+────────────────────────────────────────────────────────────────────────────
+Modos de uso (subcomandos)
+────────────────────────────────────────────────────────────────────────────
+  prepare       MIDI corpus → piano rolls segmentados por rol (.npz).
+  train         Entrena el modelo de difusión latente.
+  encode        MIDI de referencia → vector de estilo z_style (.json).
+  compose       Genera una obra nueva. Modos (--mode):
+                  sample    parte de ruido, condicionada en el estilo de --input.
+                  denoise   parte del propio MIDI --input con ruido de fuerza
+                            --strength (0 = copia, 1 = libre).
+                  blend     mezcla el estilo de varios --inputs según --weights.
+                  sweep     interpola el estilo de 2 o más --inputs a lo largo de
+                            los compases (morphing gradual).
+                Todos los modos exigen --input o --inputs (sweep, al menos dos).
+  style-corpus  Centroide de estilo de una carpeta de MIDIs (.json compatible con
+                encode).
+  transfer      Traslada el estilo de un corpus A a un corpus B sobre una canción:
+                z_nuevo = z_canción + strength · (z_B − z_A); con --progressive
+                la fuerza crece de 0 a --strength a lo largo de la obra.
+  round-trip    Diagnóstico: MIDI → piano roll → MIDI sin modelo (aísla fallos
+                del parser).
+  reconstruct   Diagnóstico: encode → decode sin difusión (comprueba el codec).
+  inspect       Diagnóstico del modelo (curvas de pérdida) y de los datos (.npz).
+  Orden de diagnóstico: si round-trip suena mal, falla el parseo MIDI; si
+  reconstruct suena mal, el codec; si solo compose suena mal, el denoiser.
 
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  prepare       Salida: un .npz por MIDI en --output-dir (y prepare_report.json
+                con --report).
+  train         Salida en --model-dir: model_config.json, checkpoints e historial
+                de pérdidas.
+  encode        Salida: --output (defecto <entrada>.style.json) con z_style,
+                z_context y la tensión media.
+  style-corpus  Salida: --output (defecto z_corpus_<carpeta>.json) con el
+                centroide, nº de ficheros y cohesión del corpus.
+  compose       Salida: --output (defecto output.mid). Necesita una paleta JSON
+                (--palette) con programa, canal y velocidad por rol.
+  transfer      Salida: --output (defecto transfer_output.mid).
+  round-trip / reconstruct   Salida: output_roundtrip.mid / output_recon.mid.
 
-python diffusion_composer.py style-corpus \
-    --input-dir midis_A/ --model-dir model/ --output z_A.json
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare
+    --input-dir DIR  --output-dir DIR   (obligatorios)
+    --resolution N     Ticks por compás (defecto 48).
+    --window-bars N    Compases por ventana (defecto 4).
+    --report           Estadísticas de la preparación.
+  train
+    --data-dir DIR  --model-dir DIR     (obligatorios)
+    --epochs N (300)   --batch-size N (16)   --lr F (1e-4)   --patience N (50)
+    --latent-dim N     Dimensión del espacio latente (defecto 128).
+    --style-dim N      Dimensión del vector de estilo (defecto 16).
+    --diffusion-steps N  Pasos T del proceso de difusión (defecto 1000).
+    --pos-weight F     Peso de las notas activas en la BCE (defecto 5.0).
+    --decoder-dropout F  Dropout entre bloques del decoder (defecto 0.1; subir a
+                       0.2-0.3 si val_recon sube mientras train baja).
+    --resume           Reanuda desde el último checkpoint.
+  encode
+    --input FILE  --model-dir DIR (obligatorios)   --output FILE
+  compose
+    --model-dir DIR  --palette FILE     (obligatorios)
+    --mode M           sample (defecto) | denoise | blend | sweep.
+    --input FILE       MIDI de referencia (sample, denoise, blend).
+    --inputs FILE…     Varios MIDIs (blend, sweep).
+    --weights W…       Pesos de la mezcla en blend (se normalizan; defecto
+                       iguales).
+    --strength F       [denoise] 0 = copia … 1 = libre (defecto 0.7).
+    --bars N           Compases a generar (defecto 32).
+    --tension T        Perfil de tensión: flat | arch (defecto) | rise | fall, o
+                       un .json con una curva (se interpola a --bars).
+    --output FILE      MIDI de salida (defecto output.mid).
+    --bpm F            Tempo (defecto 120).
+    --temperature F    Temperatura del muestreo (defecto 1.0).
+    --ddim-steps N     Pasos DDIM (defecto 50; más = mejor calidad).
+    --eta F            Estocasticidad DDIM: 0 determinista … 1 DDPM (defecto 0.0).
+    --threshold-pct F  Percentil del umbral adaptativo de binarización (defecto
+                       85; bajarlo si el MIDI sale vacío, subirlo si sale denso).
+  style-corpus
+    --input-dir DIR  --model-dir DIR    (obligatorios)   --output FILE
+  transfer
+    --input FILE  --model-dir DIR  --palette FILE  --style-from FILE
+    --style-to FILE                     (obligatorios; los .json vienen de
+                                        style-corpus o encode)
+    --strength F       Desplazamiento de estilo 0 … 1 (defecto 0.8).
+    --progressive      Interpola A → B a lo largo de los compases.
+    --denoise-strength F  Lejanía respecto al MIDI de referencia (defecto 0.6).
+    --ddim-steps N (50)   --eta F (0.0)   --bpm F (120)
+    --threshold-pct F  Umbral adaptativo (defecto 85).
+    --output FILE      MIDI de salida (defecto transfer_output.mid).
+  round-trip
+    --input FILE       (obligatorio)
+    --model-dir DIR    Lee resolución y roles de model_config.json.
+    --resolution N     Ticks por compás si no se da --model-dir (defecto 48).
+    --palette FILE  --output FILE  --bpm F
+  reconstruct
+    --model-dir DIR  --input FILE       (obligatorios)
+    --palette FILE  --output FILE  --bpm F  --threshold F
+  inspect
+    --what W [W…]      npz (defecto) | loss_curve.
+    --data-dir DIR     Carpeta de .npz (para npz).
+    --model-dir DIR    Directorio del modelo (para loss_curve).
+    --file STEM        Solo el .npz con ese nombre (sin extensión).
+    --window N         Ventana a mostrar (defecto 0; negativo = desde el final).
+    --bars-show N      Compases a dibujar por rol (defecto 4).
+    --roles ROL…       Roles a dibujar (defecto: todos).
+    --no-roll          Lista todos los .npz solo con metadatos y densidad
+                       (marca ⚠ DENSO si > 15 %).
 
-python diffusion_composer.py style-corpus \
-    --input-dir midis_B/ --model-dir model/ --output z_B.json
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Preparar y entrenar:
+  python diffusion_composer.py prepare --input-dir midis/ --output-dir data/ --report
+  python diffusion_composer.py train --data-dir data/ --model-dir model_diff/ \
+      --epochs 300 --batch-size 16 --lr 1e-4 --latent-dim 128 --style-dim 16 \
+      --diffusion-steps 1000 --pos-weight 5.0 --decoder-dropout 0.2 --patience 50
+  python diffusion_composer.py train --data-dir data/ --model-dir model_diff/ --resume
 
-python diffusion_composer.py transfer \
-    --input cancion.mid --model-dir model/ --palette palette.json \
-    --style-from z_A.json --style-to z_B.json \
-    --strength 0.8 --output resultado.mid
+  # Estilo de una referencia:
+  python diffusion_composer.py encode --input ref.mid --model-dir model_diff/ --output ref.style.json
 
-python diffusion_composer.py transfer ... --progressive
+  # Componer: desde ruido condicionado en una referencia, o variando una obra:
+  python diffusion_composer.py compose --mode sample --input ref.mid \
+      --model-dir model_diff/ --palette palette.json --bars 32 --tension arch
+  python diffusion_composer.py compose --model-dir model_diff/ --palette palette.json \
+      --mode denoise --input ref.mid --strength 0.2 --ddim-steps 200 --eta 0.0 \
+      --temperature 0.5 --bars 16 --threshold-pct 99
 
+  # Mezclar dos estilos, o hacer un morphing gradual entre tres obras:
+  python diffusion_composer.py compose --mode blend --inputs a.mid b.mid \
+      --weights 0.7 0.3 --model-dir model_diff/ --palette palette.json
+  python diffusion_composer.py compose --mode sweep --inputs a.mid b.mid c.mid \
+      --bars 48 --tension rise --model-dir model_diff/ --palette palette.json
 
-train
------
+  # Transferencia de estilo de un corpus A a uno B sobre una canción:
+  python diffusion_composer.py style-corpus --input-dir midis_A/ --model-dir model_diff/ --output z_A.json
+  python diffusion_composer.py style-corpus --input-dir midis_B/ --model-dir model_diff/ --output z_B.json
+  python diffusion_composer.py transfer --input cancion.mid --model-dir model_diff/ \
+      --palette palette.json --style-from z_A.json --style-to z_B.json \
+      --strength 0.8 --output resultado.mid
+  python diffusion_composer.py transfer --input cancion.mid --model-dir model_diff/ \
+      --palette palette.json --style-from z_A.json --style-to z_B.json --progressive
 
-**`val_recon` sube mientras `train_recon` baja (sobreajuste del decoder)**
+  # Diagnóstico (en este orden):
+  python diffusion_composer.py round-trip --input ref.mid --model-dir model_diff/
+  python diffusion_composer.py reconstruct --model-dir model_diff/ --input ref.mid --palette palette.json
+  python diffusion_composer.py inspect --what loss_curve --model-dir model_diff/
+  python diffusion_composer.py inspect --what npz --data-dir data/ --no-roll
 
-- Brecha < 0.005 → normal, ignorar
-- Brecha 0.005–0.010 → vigilar
-- Brecha > 0.010 sostenida 5+ épocas → subir `--decoder-dropout` en 0.05 y reiniciar
-
----
-
-**`loss=nan` en los primeros batches**
-
-- Pocos batches NaN → se saltan automáticamente, ignorar
-- Mayoría de batches NaN → bajar `--lr` a la mitad y reiniciar
-
----
-
-**Spikes periódicos en `val_loss`**
-
-- `recon` y `sparse` suben juntos → batch de validación atípico, ignorar
-- Ocurren cada 5–8 épocas regularmente → varianza estadística, ignorar
-- `val_diff` también sube en el spike → problema real, vigilar tendencia
-
----
-
-**Generación ruidosa (`p90 < 0.01` en el diagnóstico)**
-
-- `reconstruct` también ruidoso → decoder no ha convergido, esperar más épocas
-- `reconstruct` limpio pero `compose` ruidoso → denoiser no ha convergido, esperar más épocas
-- `round-trip` ruidoso → problema en el parser MIDI, revisar los datos
-
----
-
-**Convergencia lenta (val_loss apenas baja)**
-
-- `val_diff` estancado → el denoiser ha llegado a su límite con esta arquitectura
-- `val_recon` estancado alto → el decoder necesita más capacidad (`H_FEAT`) o menos regularización
-- Ambos estancados → considerar aumentar `--latent-dim` o cambiar arquitectura
-
----
-
-**Early stopping activo (sin mejora X/50)**
-
-- < 25/50 → normal
-- 25–40/50 → valorar si `val_diff` sigue bajando; si sí, el modelo mejora aunque `val_loss` no baje
-- > 40/50 → prepararse para usar el `best_model.pt` y parar
-
----
-
-**Referencia de valores objetivo para generación usable**
-
-- `val_diff` < 0.004 → generación probablemente usable
-- `p90` > 0.05 en `compose` → separación ruido/notas aceptable
-- `p90` > 0.01 → mejora respecto a versiones anteriores pero aún ruidoso
-
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+mido, numpy, torch.
+Versiones posteriores: diffusion_composer_v3.py (U-Net directa) y _v4.py.
 """
 
 import argparse

@@ -1,44 +1,77 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          MIX EVOLVER  v1.0                                   ║
-║  Algoritmo genético: busca la mejor cadena de efectos para un WAV dado       ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  QUÉ HACE                                                                    ║
-║    Busca, mediante un algoritmo genético, la mejor `Chain` de efectos        ║
-║    (tal como la define audio_effects.py) para un WAV concreto, puntuada      ║
-║    por audio_reference_scorer.py contra un corpus de referencia. No          ║
-║    implementa ningún efecto DSP propio: importa apply_chain de               ║
-║    audio_effects.py para renderizar cada candidato, y load_manifest de ese   ║
-║    mismo módulo para saber qué genes son válidos al mutar/inicializar.       ║
-║                                                                              ║
-║  ALCANCE                                                                     ║
-║    Igual que audio_effects.py: opera sobre la mezcla completa ya             ║
-║    renderizada (mono o estéreo, post-render), no sobre pistas individuales.  ║
-║                                                                              ║
-║  USO                                                                        ║
-║    mix_evolver.py dry.wav --ref-cache ref.npz --out-dir results/            ║
-║    mix_evolver.py dry.wav --ref-cache ref.npz --floor-cache floor.npz \\   ║
-║                   --generations 60 --population 40                          ║
-║    mix_evolver.py dry.wav --ref-cache ref.npz --top-n 5 --json log.json    ║
-║    mix_evolver.py dry.wav --ref-cache ref.npz \\                           ║
-║                   --effects-manifest custom_effects.json --fast             ║
-║                                                                              ║
-║  DEPENDENCIAS  numpy  (+ todas las de audio_effects.py y                    ║
-║                 audio_reference_scorer.py, que se importan como             ║
-║                 dependencias — este programa no las reimplementa)           ║
-║                                                                              ║
-║  LIMITACIONES (ver especificación §5)                                       ║
-║    · No opera a nivel de pista individual — solo sobre la mezcla ya         ║
-║      renderizada.                                                           ║
-║    · Cada evaluación de fitness incluye una llamada real a                  ║
-║      audio_reference_scorer.py; con poblaciones/generaciones grandes puede  ║
-║      ser lento — --fast ayuda para iteración. Paralelizar la evaluación de  ║
-║      la población es una mejora futura razonable, no implementada aquí.     ║
-║                                                                              ║
-║  Módulo importable:                                                         ║
-║    from mix_evolver import evolve                                           ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+mix_evolver.py — Mix Evolver: algoritmo genético: busca la mejor cadena de
+efectos para un WAV dado
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+QUÉ HACE:
+  Busca, mediante un algoritmo genético, la mejor `Chain` de efectos
+  (tal como la define audio_effects.py) para un WAV concreto, puntuada
+  por audio_reference_scorer.py contra un corpus de referencia. No
+  implementa ningún efecto DSP propio: importa apply_chain de
+  audio_effects.py para renderizar cada candidato, y load_manifest de ese
+  mismo módulo para saber qué genes son válidos al mutar/inicializar.
+
+ALCANCE:
+  Igual que audio_effects.py: opera sobre la mezcla completa ya
+  renderizada (mono o estéreo, post-render), no sobre pistas individuales.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  dry_wav DRY_WAV             Audio de entrada sin procesar
+  --ref-cache FILE            Caché de corpus de audio_reference_scorer.py
+                              (obligatorio) (obligatorio)
+  --floor-cache FILE          Calibración por suelo opcional
+  --effects-manifest FILE     Pasa a audio_effects.load_manifest; default el
+                              manifest de §1.3
+  --population POPULATION     (defecto 30)
+  --generations GENERATIONS   (defecto 40)
+  --mutation-rate MUTATION_RATE
+                              (defecto 0.3)
+  --elite-count ELITE_COUNT   (defecto 2)
+  --patience PATIENCE         (defecto 8)
+  --tournament-size TOURNAMENT_SIZE
+                              (defecto 3)
+  --top-n TOP_N               Cuántos genomas finales exportar además del
+                              mejor (default 3)
+  --out-dir DIR               (defecto results/)
+  --json FILE                 Log completo (EvolveResult serializado)
+  --fast                      Reduce población/generaciones para iteración
+                              rápida
+  --quiet                     Solo imprime el score final del mejor genoma
+  --seed SEED                 Semilla del propio GA
+                              (selección/mutación/cruce); no confundir con la
+                              semilla del reverb, que gestiona
+                              audio_effects.py
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    mix_evolver.py dry.wav --ref-cache ref.npz --out-dir results/
+    mix_evolver.py dry.wav --ref-cache ref.npz --floor-cache floor.npz \
+                   --generations 60 --population 40
+    mix_evolver.py dry.wav --ref-cache ref.npz --top-n 5 --json log.json
+    mix_evolver.py dry.wav --ref-cache ref.npz \
+                   --effects-manifest custom_effects.json --fast
+
+  DEPENDENCIAS  numpy  (+ todas las de audio_effects.py y
+                 audio_reference_scorer.py, que se importan como
+                 dependencias — este programa no las reimplementa)
+
+  LIMITACIONES (ver especificación §5)
+    · No opera a nivel de pista individual — solo sobre la mezcla ya
+      renderizada.
+    · Cada evaluación de fitness incluye una llamada real a
+      audio_reference_scorer.py; con poblaciones/generaciones grandes puede
+      ser lento — --fast ayuda para iteración. Paralelizar la evaluación de
+      la población es una mejora futura razonable, no implementada aquí.
+
+  Módulo importable:
+    from mix_evolver import evolve
 """
 
 import argparse

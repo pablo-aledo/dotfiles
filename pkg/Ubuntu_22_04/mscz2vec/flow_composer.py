@@ -1,90 +1,168 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      FLOW COMPOSER  v1                                       ║
-║      Composición end-to-end mediante Normalizing Flows condicionales         ║
-║                                                                              ║
-║  ARQUITECTURA:                                                               ║
-║    RealNVP/Glow condicional sobre el piano roll (sin VAE, sin difusión)      ║
-║    ActNorm → Conv1x1 invertible → Acoplamiento afín (máscara checkerboard)   ║
-║    apilados en K pasos de flujo, condicionados vía FiLM en cada subred.      ║
-║                                                                              ║
-║    A diferencia de VAE (pérdida por reconstrucción aproximada) o difusión    ║
-║    (proceso iterativo estocástico), el flujo es una biyección EXACTA:        ║
-║    x → z → x es una reconstrucción perfecta salvo el ruido de dequantización.║
-║    Esto se explota en el modo 'reconstruct' de compose.                     ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    prepare      — MIDI corpus → piano rolls segmentados por rol (.npz)       ║
-║    train        — Entrena el flujo (maximiza log-verosimilitud exacta)       ║
-║    encode       — MIDI referencia → z_style + z_context (.json)              ║
-║    style-corpus — Centroide de estilo (z_style) de una carpeta de MIDIs      ║
-║    compose      — Genera obra nueva                                         ║
-║                    modos: sample / blend / sweep / transfer / reconstruct    ║
-║    round-trip   — Diagnóstico: MIDI → piano roll → MIDI sin modelo           ║
-║    inspect      — Diagnóstico del modelo y los datos                         ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    mido, numpy, torch                                                        ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+flow_composer.py — Flow Composer: composición end-to-end mediante Normalizing
+Flows condicionales
+(versión 1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  ARQUITECTURA:
+    RealNVP/Glow condicional sobre el piano roll (sin VAE, sin difusión)
+    ActNorm → Conv1x1 invertible → Acoplamiento afín (máscara checkerboard)
+    apilados en K pasos de flujo, condicionados vía FiLM en cada subred.
+
+    A diferencia de VAE (pérdida por reconstrucción aproximada) o difusión
+    (proceso iterativo estocástico), el flujo es una biyección EXACTA:
+    x → z → x es una reconstrucción perfecta salvo el ruido de dequantización.
+    Esto se explota en el modo 'reconstruct' de compose.
+
+  COMANDOS:
+    prepare      — MIDI corpus → piano rolls segmentados por rol (.npz)
+    train        — Entrena el flujo (maximiza log-verosimilitud exacta)
+    encode       — MIDI referencia → z_style + z_context (.json)
+    style-corpus — Centroide de estilo (z_style) de una carpeta de MIDIs
+    compose      — Genera obra nueva
+                    modos: sample / blend / sweep / transfer / reconstruct
+    round-trip   — Diagnóstico: MIDI → piano roll → MIDI sin modelo
+    inspect      — Diagnóstico del modelo y los datos
+
+  DEPENDENCIAS:
+    mido, numpy, torch
 
 # ── Preparar datos ────────────────────────────────────────────────────────────
 python flow_composer.py prepare --input-dir midis/ --output-dir data/ --report
 
 python flow_composer.py prepare \
-    --input-dir midis/ --output-dir data_small/ \
-    --disable-roles percussion counterpoint \
-    --pitch-range 48
+      --input-dir midis/ --output-dir data_small/ \
+      --disable-roles percussion counterpoint \
+      --pitch-range 48
 
 # ── Entrenar ──────────────────────────────────────────────────────────────────
 python flow_composer.py train \
-    --data-dir data/ --model-dir model_flow/ \
-    --epochs 300 --batch-size 8 --lr 1e-4 \
-    --style-dim 16 --flow-steps 8 --hidden-channels 64 --patience 50
+      --data-dir data/ --model-dir model_flow/ \
+      --epochs 300 --batch-size 8 --lr 1e-4 \
+      --style-dim 16 --flow-steps 8 --hidden-channels 64 --patience 50
 
 # ── Codificar un MIDI de referencia → estilo ──────────────────────────────────
 python flow_composer.py encode --input midis/005505b_.mid \
-    --model-dir model_flow/ --output z_estilo_A.json
+      --model-dir model_flow/ --output z_estilo_A.json
 
 python flow_composer.py style-corpus --input-dir midis_A/ \
-    --model-dir model_flow/ --output z_estilo_A.json
+      --model-dir model_flow/ --output z_estilo_A.json
 
 # ── Generar (sample libre condicionado en estilo+tensión) ─────────────────────
 python flow_composer.py compose \
-    --model-dir model_flow/ --palette palette.json \
-    --mode sample --input midis/005505b_.mid \
-    --temperature 0.8 --bars 16 --tension arch \
-    --threshold-pct 99.0
+      --model-dir model_flow/ --palette palette.json \
+      --mode sample --input midis/005505b_.mid \
+      --temperature 0.8 --bars 16 --tension arch \
+      --threshold-pct 99.0 --output obra.mid
 
 # ── Morphing gradual entre dos canciones (sweep) ──────────────────────────────
 python flow_composer.py compose \
-    --model-dir model_flow/ --palette palette.json \
-    --mode sweep --inputs midis/005505b_.mid midis/008906b_.mid \
-    --bars 32 --temperature 0.8 --threshold-pct 99.0
+      --model-dir model_flow/ --palette palette.json \
+      --mode sweep --inputs midis/005505b_.mid midis/008906b_.mid \
+      --bars 32 --temperature 0.8 --threshold-pct 99.0 --output obra.mid
 
 # ── Mezcla estática entre dos estilos (blend) ─────────────────────────────────
 python flow_composer.py compose \
-    --model-dir model_flow/ --palette palette.json \
-    --mode blend --inputs midis/005505b_.mid midis/008906b_.mid \
-    --weights 0.5 0.5 --bars 16 --threshold-pct 99.0
+      --model-dir model_flow/ --palette palette.json \
+      --mode blend --inputs midis/005505b_.mid midis/008906b_.mid \
+      --weights 0.5 0.5 --bars 16 --threshold-pct 99.0 --output obra.mid
 
 # ── Transferencia de estilo ────────────────────────────────────────────────────
 python flow_composer.py compose \
-    --model-dir model_flow/ --palette palette.json \
-    --mode transfer --input midis/005505b_.mid \
-    --style-from z_estilo_A.json --output resultado.mid \
-    --threshold-pct 99.0
+      --model-dir model_flow/ --palette palette.json \
+      --mode transfer --input midis/005505b_.mid \
+      --style-from z_estilo_A.json --output resultado.mid \
+      --threshold-pct 99.0
 
 # ── Reconstrucción exacta (biyección del flujo) ───────────────────────────────
 python flow_composer.py compose \
-    --model-dir model_flow/ --palette palette.json \
-    --mode reconstruct --input midis/005505b_.mid \
-    --output recon.mid
+      --model-dir model_flow/ --palette palette.json \
+      --mode reconstruct --input midis/005505b_.mid \
+      --output recon.mid
 
 # ── Diagnóstico ────────────────────────────────────────────────────────────────
 python flow_composer.py round-trip --input midis/005505b_.mid
 python flow_composer.py inspect --model-dir model_flow/ --data-dir data/
 
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  prepare       MIDI corpus → piano rolls segmentados (.npz)
+  train         Entrena el Normalizing Flow
+  encode        MIDI referencia → z_style (.json)
+  style-corpus  Centroide de estilo de una carpeta de MIDIs
+  compose       Genera una obra nueva
+  round-trip    Diagnóstico: MIDI → piano roll → MIDI (sin modelo)
+  inspect       Diagnóstico del modelo y/o los datos
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare
+    --input-dir INPUT_DIR       (obligatorio)
+    --output-dir OUTPUT_DIR     (obligatorio)
+    --resolution RESOLUTION     (defecto TICKS_PER_BAR_DEFAULT)
+    --window-bars WINDOW_BARS   (defecto WINDOW_BARS_DEFAULT)
+    --disable-roles DISABLE_ROLES […]
+    --pitch-range PITCH_RANGE
+    --report
+
+  train
+    --data-dir DATA_DIR         (obligatorio)
+    --model-dir MODEL_DIR       (obligatorio)
+    --epochs EPOCHS             (defecto 300)
+    --batch-size BATCH_SIZE     (defecto 8)
+    --lr LR                     (defecto 0.0001)
+    --style-dim STYLE_DIM       (defecto 16)
+    --cond-dim COND_DIM         (defecto 128)
+    --flow-steps FLOW_STEPS     (defecto 8)
+    --hidden-channels HIDDEN_CHANNELS
+                                (defecto 64)
+    --patience PATIENCE         (defecto 50)
+    --disable-roles DISABLE_ROLES […]
+    --resume
+
+  encode
+    --input INPUT               (obligatorio)
+    --model-dir MODEL_DIR       (obligatorio)
+    --output OUTPUT
+
+  style-corpus
+    --input-dir INPUT_DIR       (obligatorio)
+    --model-dir MODEL_DIR       (obligatorio)
+    --output OUTPUT
+
+  compose
+    --model-dir MODEL_DIR       (obligatorio)
+    --palette PALETTE
+    --mode MODE                 (valores:
+                                sample|blend|sweep|transfer|reconstruct;
+                                obligatorio)
+    --input INPUT
+    --inputs INPUTS […]
+    --weights WEIGHTS […]
+    --style-from STYLE_FROM
+    --bars BARS                 (defecto 16)
+    --tension TENSION           (defecto arch)
+    --temperature TEMPERATURE   (defecto 1.0)
+    --threshold THRESHOLD
+    --threshold-pct THRESHOLD_PCT
+                                (defecto 99.0)
+    --bpm BPM                   (defecto 120.0)
+    --output OUTPUT             (obligatorio)
+
+  round-trip
+    --input INPUT               (obligatorio)
+    --output OUTPUT             (defecto round_trip.mid)
+    --resolution RESOLUTION     (defecto TICKS_PER_BAR_DEFAULT)
+    --bpm BPM                   (defecto 120.0)
+
+  inspect
+    --model-dir MODEL_DIR
+    --data-dir DATA_DIR
 """
 
 import argparse

@@ -1,63 +1,106 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    AUDIO REFERENCE SCORER  v1.0                              ║
-║  Score 0-1 de un WAV candidato contra un corpus de referencia — fichero único║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  QUÉ HACE                                                                    ║
-║    Compara un WAV candidato contra un corpus de WAV de referencia (obras     ║
-║    que le gustan al usuario) usando distancia de Mahalanobis en un espacio   ║
-║    de features de audio, y devuelve un score 0-1 de afinidad/calidad.        ║
-║                                                                              ║
-║  AVISO DE DOMINIO (leer antes de usar en serio, no es opcional)             ║
-║    Si el corpus de referencia son grabaciones reales y los candidatos son    ║
-║    renders de soundfont, la distancia mide sobre todo "¿esto es un          ║
-║    soundfont o una grabación real?", no "¿esto es buena música?". Esta      ║
-║    herramienta lo mitiga con --domain-tag (avisa en el informe) y con       ║
-║    --floor-corpus (calibración por suelo, ver §4.5 de la especificación):   ║
-║    separa "qué tan lejos de mis referencias" de "qué tan lejos comparado    ║
-║    con mis propios renders anteriores" — la segunda es la que sirve para    ║
-║    guiar RL cuando el corpus es de dominio distinto ('cross').              ║
-║                                                                              ║
-║  USO                                                                        ║
-║    --build-cache DIR --cache F --domain-tag {same,cross}  construye caché  ║
-║    candidato.wav --cache F                                 puntúa 1 WAV    ║
-║    cand1.wav cand2.wav ... --cache F --mode rank            rankea varios  ║
-║    cand1.wav cand2.wav ... --cache F --mode fad-batch        FAD de lote   ║
-║                                                                              ║
-║  BACKENDS DE FEATURES (--backend)                                           ║
-║    spectral (default)  mel-espectrograma + descriptores, 100% numpy/scipy, ║
-║                         sin modelo entrenado, sensible a timbre/producción ║
-║    latent               tokens semánticos de audiolm.py (requiere codec ya  ║
-║                         entrenado), reduce (no elimina) el hueco de dominio ║
-║                                                                              ║
-║  DEPENDENCIAS  numpy  scipy  soundfile        (obligatorias, backend       ║
-║                                                 spectral, el del default)   ║
-║                audiolm.py (mismo ecosistema)   solo si --backend latent    ║
-║                mido                            solo para EvalProvider,     ║
-║                                                 al puntuar MIDI intermedio  ║
-║                matplotlib                      solo si --plot             ║
-║                                                                              ║
-║  LIMITACIONES DE FONDO (no son bugs, ver especificación §10)               ║
-║    · El backend spectral no distingue "peor música" de "instrumento/mezcla ║
-║      distinta" — mide distancia tímbrica/de producción, no calidad per se. ║
-║    · La calibración por suelo mitiga, no elimina, el hueco de dominio.     ║
-║    · El backend latent depende de qué vio el codec de audiolm.py en su     ║
-║      propio entrenamiento — no asumir que resuelve el hueco de dominio sin ║
-║      verificarlo empíricamente.                                            ║
-║                                                                              ║
-║  EJEMPLOS                                                                    ║
-║    python audio_reference_scorer.py --build-cache refs/ --cache ref.npz \\ ║
-║           --domain-tag cross                                                ║
-║    python audio_reference_scorer.py mi_obra.wav --cache ref.npz            ║
-║    python audio_reference_scorer.py mi_obra.wav --cache ref.npz \\         ║
-║           --floor-corpus mis_renders/ --floor-cache floor.npz              ║
-║    python audio_reference_scorer.py a.wav b.wav c.wav --cache ref.npz \\   ║
-║           --mode rank                                                       ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+audio_reference_scorer.py — Audio Reference Scorer: score 0-1 de un WAV
+candidato contra un corpus de referencia — fichero único
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  QUÉ HACE
+    Compara un WAV candidato contra un corpus de WAV de referencia (obras
+    que le gustan al usuario) usando distancia de Mahalanobis en un espacio
+    de features de audio, y devuelve un score 0-1 de afinidad/calidad.
+
+  AVISO DE DOMINIO (leer antes de usar en serio, no es opcional)
+    Si el corpus de referencia son grabaciones reales y los candidatos son
+    renders de soundfont, la distancia mide sobre todo "¿esto es un
+    soundfont o una grabación real?", no "¿esto es buena música?". Esta
+    herramienta lo mitiga con --domain-tag (avisa en el informe) y con
+    --floor-corpus (calibración por suelo, ver §4.5 de la especificación):
+    separa "qué tan lejos de mis referencias" de "qué tan lejos comparado
+    con mis propios renders anteriores" — la segunda es la que sirve para
+    guiar RL cuando el corpus es de dominio distinto ('cross').
+
+  USO
+    --build-cache DIR --cache F --domain-tag {same,cross}  construye caché
+    candidato.wav --cache F                                 puntúa 1 WAV
+    cand1.wav cand2.wav ... --cache F --mode rank            rankea varios
+    cand1.wav cand2.wav ... --cache F --mode fad-batch        FAD de lote
+
+  BACKENDS DE FEATURES (--backend)
+    spectral (default)  mel-espectrograma + descriptores, 100% numpy/scipy,
+                         sin modelo entrenado, sensible a timbre/producción
+    latent               tokens semánticos de audiolm.py (requiere codec ya
+                         entrenado), reduce (no elimina) el hueco de dominio
+
+  DEPENDENCIAS  numpy  scipy  soundfile        (obligatorias, backend
+                                                 spectral, el del default)
+                audiolm.py (mismo ecosistema)   solo si --backend latent
+                mido                            solo para EvalProvider,
+                                                 al puntuar MIDI intermedio
+                matplotlib                      solo si --plot
+
+  LIMITACIONES DE FONDO (no son bugs, ver especificación §10)
+    · El backend spectral no distingue "peor música" de "instrumento/mezcla
+      distinta" — mide distancia tímbrica/de producción, no calidad per se.
+    · La calibración por suelo mitiga, no elimina, el hueco de dominio.
+    · El backend latent depende de qué vio el codec de audiolm.py en su
+      propio entrenamiento — no asumir que resuelve el hueco de dominio sin
+      verificarlo empíricamente.
+
+  EJEMPLOS
+    python audio_reference_scorer.py --build-cache refs/ --cache ref.npz \
+           --domain-tag cross
+    python audio_reference_scorer.py mi_obra.wav --cache ref.npz
+    python audio_reference_scorer.py mi_obra.wav --cache ref.npz \
+           --floor-corpus mis_renders/ --floor-cache floor.npz
+    python audio_reference_scorer.py a.wav b.wav c.wav --cache ref.npz \
+           --mode rank
 
 Módulo importable:
     from audio_reference_scorer import score_against_corpus, build_reference_cache
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  candidates CANDIDATES […]   WAV(s) candidato(s) a puntuar (modo scoring)
+  --build-cache DIR           Construye el caché de corpus de referencia desde
+                              todos los .wav en DIR (modo separado, no
+                              requiere candidate)
+  --cache FILE                Ruta al caché de corpus de referencia (.npz)
+  --backend BACKEND           Backend de features (default: spectral)
+                              (valores: spectral|latent)
+  --audiolm-codec FILE        Checkpoint de audiolm.py, requerido solo si
+                              --backend latent
+  --domain-tag DOMAIN_TAG     Obligatorio en --build-cache: relación de
+                              dominio entre el corpus de referencia y los
+                              candidatos futuros (valores: same|cross)
+  --floor-corpus DIR          Directorio de renders propios pasados para
+                              calibración por suelo (§4.5, mitigación del
+                              hueco de dominio)
+  --floor-cache FILE          Caché de la calibración por suelo — se construye
+                              o se reutiliza según exista o no
+  --mode MODE                 single: 1 candidato, 1 score. rank: varios
+                              candidatos ordenados. fad-batch: Fréchet
+                              Distance real entre la distribución de
+                              candidatos y la referencia (defecto single;
+                              valores: single|rank|fad-batch)
+  --json FILE                 Sidecar JSON con el/los ScoreResult completo(s)
+  --quiet                     Solo imprime el/los score(s) final(es) (consumo
+                              por script/RL)
+  --no-color                  Desactiva colores ANSI en el informe de texto
+  --plot                      (solo con --build-cache) guarda una proyección
+                              PCA 2D del corpus como PNG — requiere matplotlib
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # --backend spectral — Backend de features (default: spectral)
+  python audio_reference_scorer.py --backend spectral
+
+  # --backend latent — Backend de features (default: spectral)
+  python audio_reference_scorer.py --backend latent
 """
 
 import argparse

@@ -1,61 +1,76 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          RUNNER  v1.0                                        ║
-║         Ejecutor de pipelines de composición                                 ║
-║                                                                              ║
-║  Lee un plan .yaml (de theorist.py o narrator.py) y ejecuta cada paso       ║
-║  del pipeline en orden, con logging, gestión de errores, puntos de pausa    ║
-║  interactivos y capacidad de reanudar pipelines interrumpidos.               ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] CARGA     — lee el .yaml y detecta su formato (theorist / narrator)    ║
-║  [2] VALIDACIÓN— verifica que los scripts existen y los inputs están listos ║
-║  [3] EJECUCIÓN — lanza cada paso, registra stdout/stderr, mide duración     ║
-║  [4] CHECKPOINT— guarda estado tras cada paso para poder reanudar           ║
-║  [5] INFORME   — resumen de lo ejecutado con tiempos y archivos generados   ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python runner.py obra_plan.yaml                                           ║
-║    python runner.py obra_plan.yaml --pause-after tension_designer           ║
-║    python runner.py obra_plan.yaml --from midi_dna_unified                  ║
-║    python runner.py obra_plan.yaml --only midi_dna_unified reharmonizer     ║
-║    python runner.py obra_plan.yaml --until orchestrator                     ║
-║    python runner.py obra_plan.yaml --dry-run                                ║
-║    python runner.py obra_plan.yaml --resume                                 ║
-║    python runner.py --status obra_plan.yaml                                 ║
-║    python runner.py --list-steps obra_plan.yaml                             ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    plan              Archivo .yaml del pipeline (theorist o narrator)        ║
-║    --from STEP       Empezar desde este paso (saltar anteriores)             ║
-║    --until STEP      Ejecutar hasta este paso (inclusive)                    ║
-║    --only STEP...    Ejecutar solo estos pasos específicos                   ║
-║    --pause-after S   Pausar y pedir confirmación tras cada paso S            ║
-║    --pause-all       Pausar tras cada paso                                   ║
-║    --resume          Reanudar desde el último checkpoint guardado            ║
-║    --retry-failed    Reintentar solo los pasos que fallaron                  ║
-║    --dry-run         Mostrar los comandos sin ejecutar nada                  ║
-║    --status          Mostrar el estado del último run de este plan           ║
-║    --list-steps      Listar los pasos del plan sin ejecutar                  ║
-║    --output-dir DIR  Directorio de salida (default: junto al plan)           ║
-║    --log FILE        Archivo de log adicional (default: <plan>.runner.log)   ║
-║    --no-log          No escribir archivo de log                              ║
-║    --timeout N       Timeout por paso en segundos (default: 300)            ║
-║    --verbose         Mostrar stdout/stderr de cada script en tiempo real     ║
-║    --strict          Abortar al primer fallo (default: continuar y reportar) ║
-║                                                                              ║
-║  FORMATOS DE PLAN SOPORTADOS:                                                ║
-║    theorist  — plan con steps.cmd (comandos CLI directos)                   ║
-║    narrator  — plan con sections + pipeline_steps estructurados             ║
-║    manual    — lista de steps con name+cmd libres                            ║
-║                                                                              ║
-║  ARCHIVOS GENERADOS:                                                         ║
-║    <plan>.runner.log      — log completo de la ejecución                    ║
-║    <plan>.runner.json     — checkpoint de estado (para --resume)            ║
-║                                                                              ║
-║  DEPENDENCIAS: ninguna (solo stdlib)                                         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+runner.py — Runner: ejecutor de pipelines de composición
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Lee un plan .yaml (de theorist.py o narrator.py) y ejecuta cada paso
+del pipeline en orden, con logging, gestión de errores, puntos de pausa
+interactivos y capacidad de reanudar pipelines interrumpidos.
+
+FLUJO:
+[1] CARGA     — lee el .yaml y detecta su formato (theorist / narrator)
+[2] VALIDACIÓN— verifica que los scripts existen y los inputs están listos
+[3] EJECUCIÓN — lanza cada paso, registra stdout/stderr, mide duración
+[4] CHECKPOINT— guarda estado tras cada paso para poder reanudar
+[5] INFORME   — resumen de lo ejecutado con tiempos y archivos generados
+
+ARCHIVOS GENERADOS:
+  <plan>.runner.log      — log completo de la ejecución
+  <plan>.runner.json     — checkpoint de estado (para --resume)
+
+Rutas del plan: los ficheros declarados en el plan (entradas y salidas de cada
+paso) se interpretan respecto al directorio de trabajo de los pasos (la carpeta
+del plan), no respecto al directorio desde el que se invoca runner.py.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+FORMATOS DE PLAN SOPORTADOS:
+  theorist  — plan con steps.cmd (comandos CLI directos)
+  narrator  — plan con sections + pipeline_steps estructurados
+  manual    — lista de steps con name+cmd libres
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  plan              Archivo .yaml del pipeline (theorist o narrator)
+  --from STEP       Empezar desde este paso (saltar anteriores)
+  --until STEP      Ejecutar hasta este paso (inclusive)
+  --only STEP...    Ejecutar solo estos pasos específicos
+  --pause-after S   Pausar y pedir confirmación tras cada paso S
+  --pause-all       Pausar tras cada paso
+  --resume          Reanudar desde el último checkpoint guardado
+  --retry-failed    Reintentar solo los pasos que fallaron
+  --dry-run         Mostrar los comandos sin ejecutar nada
+  --status          Mostrar el estado del último run de este plan
+  --list-steps      Listar los pasos del plan sin ejecutar
+  --output-dir DIR  Directorio de salida (default: junto al plan)
+  --log FILE        Archivo de log adicional (default: <plan>.runner.log)
+  --no-log          No escribir archivo de log
+  --timeout N       Timeout por paso en segundos (default: 300)
+  --verbose         Mostrar stdout/stderr de cada script en tiempo real
+  --strict          Abortar al primer fallo (default: continuar y reportar)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python runner.py obra_plan.yaml
+  python runner.py obra_plan.yaml --pause-after tension_designer
+  python runner.py obra_plan.yaml --from midi_dna_unified
+  python runner.py obra_plan.yaml --only midi_dna_unified reharmonizer
+  python runner.py obra_plan.yaml --until orchestrator
+  python runner.py obra_plan.yaml --dry-run
+  python runner.py obra_plan.yaml --resume
+  python runner.py --status obra_plan.yaml
+  python runner.py --list-steps obra_plan.yaml
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  ninguna (solo stdlib)
 """
 
 import sys

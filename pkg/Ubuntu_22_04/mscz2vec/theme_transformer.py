@@ -1,122 +1,149 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        THEME TRANSFORMER  v2.1                               ║
-║       Mapeo escalar (scalar mapping) y transformación temática de MIDI       ║
-║                                                                              ║
-║  Implementa las técnicas de "thematic transformation via scalar mapping"     ║
-║  descritas en la serie de tutoriales sobre transformación de temas: toma    ║
-║  una melodía MIDI y la traslada a otras escalas/modos preservando su        ║
-║  identidad, con armonización y orquestación acordes a cada estilo.          ║
-║                                                                              ║
-║  NOVEDADES v2.1:                                                             ║
-║    negative_harmony   nuevo estilo: armonía negativa — refleja melodía Y   ║
-║                        acordes sobre el eje tónica-dominante (Ernst Levy,  ║
-║                        popularizada por Jacob Collier)                     ║
-║    mirror              nuevo método de mapeo (ver abajo): reflexión        ║
-║                        aritmética directa, sin reanclaje por grado         ║
-║    --axis-offset F     controla el eje de reflexión en semitonos desde la ║
-║                        tónica (con --style negative_harmony o custom)     ║
-║                                                                              ║
-║  NOVEDADES v2.0:                                                             ║
-║    --sections        transformación PROGRESIVA por tramos de la pieza       ║
-║                       (como la cadena de reharmonizaciones de LOTR/GoT,     ║
-║                       no un estilo fijo de principio a fin)                 ║
-║    chromatic_mediant  nuevo estilo: cadena de tríadas por 3ª cromática      ║
-║                       sin función tonal (Zimmer/McCreary)                   ║
-║    --body-tail        distingue cuerpo (identidad protegida) de cola        ║
-║                       (libertad ornamental), como en HTTYD                  ║
-║    --wt-variant / --octatonic-variant   elegir manualmente la variante      ║
-║                       de tonos enteros / octatónica en vez de autodetectar  ║
-║                                                                              ║
-║  MÉTODOS DE MAPEO (--method, o definidos por cada --style):                 ║
-║    degree    — cada nota se re-ancla a su grado de escala más cercano       ║
-║                (independiente por nota; ideal para transposición/cambio     ║
-║                de modo simple)                                              ║
-║    interval  — se preservan los intervalos ENTRE notas consecutivas         ║
-║                medidos en pasos de la escala destino (mejor cuando la       ║
-║                escala destino tiene distinta cardinalidad que la origen)    ║
-║    mirror    — refleja cada altura ALREDEDOR DE UN EJE fijo (por defecto,   ║
-║                tónica + 3.5 semitonos, el eje tónica-dominante). No hay     ║
-║                reanclaje por grado de escala: es una reflexión aritmética   ║
-║                directa sobre semitonos reales, así que invierte el          ║
-║                contorno melódico (ascendente → descendente). Es el método   ║
-║                de la armonía negativa; ver --style negative_harmony.        ║
-║                                                                              ║
-║  ESTILOS DISPONIBLES (--style):                                             ║
-║    heroic_minor          menor paralela + tríadas mayores (nota fuerte=3ª) ║
-║    dorian_heroic         dórico + tríadas mayores (estilo Fellowship)      ║
-║    whole_tone            tonos enteros + dominantes 7/9 sin 5ª (Debussy)   ║
-║    octatonic             colección octatónica + acordes nativos (Shapiro) ║
-║    chromatic_magical     cromática + tríadas menores paralelas (Hedwig)   ║
-║    chromatic_counterpoint cromática + contrapunto independiente (Bartók)  ║
-║    pentatonic             pentatónica mayor/menor + armonía dispersa      ║
-║    double_harmonic        doble armónica / mayamalavagowla                ║
-║    acoustic                modo acústico (lidio dominante)                ║
-║    elvish                  5º modo de la menor melódica, reorientado      ║
-║    got_fragment            fragmentación + menor armónica + desplazo. métrico║
-║    chromatic_mediant       cadena de tríadas por 3ª cromática (Zimmer)    ║
-║    negative_harmony        reflexión especular de melodía y acordes sobre ║
-║                             el eje tónica-dominante (armonía negativa)     ║
-║    custom                  escala/método libres vía --scale / --method    ║
-║                                                                              ║
-║  TÉCNICAS ADICIONALES:                                                      ║
-║    --chord-tone-priority   fuerza notas en tiempo fuerte a un tono         ║
-║                             del acorde vigente (corrección ≤3 semitonos)   ║
-║    --fragment / --fragment-order   fragmentación motívica al estilo GoT   ║
-║    --metric-shift          alinea la primera nota al downbeat             ║
-║    --start-degree          desplaza todos los grados de escala destino    ║
-║                             (con --method mirror: desplaza el EJE ese     ║
-║                             nº de semitonos — ver --axis-offset)          ║
-║    --axis-offset           eje de reflexión en semitonos desde la tónica  ║
-║                             (con --method mirror; default: 3.5 = eje      ║
-║                             tónica-dominante, entre 3ª menor y 3ª mayor)  ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python theme_transformer.py tema.mid                                     ║
-║    python theme_transformer.py tema.mid --style octatonic chromatic_magical ║
-║    python theme_transformer.py tema.mid --style got_fragment --verbose     ║
-║    python theme_transformer.py tema.mid --style whole_tone \\               ║
-║        --chord-tone-priority                                                ║
-║    python theme_transformer.py tema.mid --style custom \\                   ║
-║        --scale double_harmonic --method interval                            ║
-║    python theme_transformer.py tema.mid --style elvish --start-degree 2    ║
-║    python theme_transformer.py tema.mid --style negative_harmony           ║
-║    python theme_transformer.py tema.mid --style negative_harmony \\         ║
-║        --chord-tone-priority --verbose                                      ║
-║    python theme_transformer.py tema.mid --style negative_harmony \\         ║
-║        --axis-offset 0    # eje sobre la propia tónica, en vez de T-D      ║
-║    python theme_transformer.py tema.mid \\                                  ║
-║        --sections "0:heroic_minor,16:negative_harmony,32:whole_tone"       ║
-║    python theme_transformer.py tema.mid --style custom \\                   ║
-║        --scale natural_minor --method mirror --axis-offset 3.5             ║
-║    python theme_transformer.py --catalog                                    ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --style S [S…]     Estilos a aplicar (default: heroic_minor whole_tone  ║
-║                       octatonic chromatic_magical)                         ║
-║    --key "D minor"    Tonalidad origen forzada (default: autodetecta)      ║
-║    --tempo BPM        Tempo de salida forzado (default: del MIDI)          ║
-║    --beats-per-bar N  Beats por compás (default: del MIDI)                 ║
-║    --start-degree N   Desplazamiento extra de grado (default: 0)           ║
-║    --axis-offset F    Ver arriba (default: 3.5, o el del preset)           ║
-║    --chord-tone-priority   Ver arriba                                       ║
-║    --fragment / --fragment-order   Ver arriba                               ║
-║    --metric-shift     Ver arriba                                            ║
-║    --scale / --method (solo con --style custom; --method admite ahora     ║
-║                        'degree' | 'interval' | 'mirror')                    ║
-║    --out-dir DIR      Carpeta de salida (default: junto al MIDI)           ║
-║    --report           Guardar reporte JSON por transformación               ║
-║    --verbose          Informe detallado por stdout                          ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    tema.octatonic.mid                                                       ║
-║    tema.chromatic_magical.mid                                               ║
-║    tema.negative_harmony.mid                                                ║
-║    tema.octatonic_report.json   (con --report)                              ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, music21 (opcional), numpy                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+theme_transformer.py — Theme Transformer: mapeo escalar (scalar mapping) y
+transformación temática de MIDI
+(versión 2.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Implementa las técnicas de "thematic transformation via scalar mapping"
+descritas en la serie de tutoriales sobre transformación de temas: toma
+una melodía MIDI y la traslada a otras escalas/modos preservando su
+identidad, con armonización y orquestación acordes a cada estilo.
+
+NOVEDADES v2.1:
+  negative_harmony   nuevo estilo: armonía negativa — refleja melodía Y
+                      acordes sobre el eje tónica-dominante (Ernst Levy,
+                      popularizada por Jacob Collier)
+  mirror              nuevo método de mapeo (ver abajo): reflexión
+                      aritmética directa, sin reanclaje por grado
+  --axis-offset F     controla el eje de reflexión en semitonos desde la
+                      tónica (con --style negative_harmony o custom)
+
+NOVEDADES v2.0:
+  --sections        transformación PROGRESIVA por tramos de la pieza
+                     (como la cadena de reharmonizaciones de LOTR/GoT,
+                     no un estilo fijo de principio a fin)
+  chromatic_mediant  nuevo estilo: cadena de tríadas por 3ª cromática
+                     sin función tonal (Zimmer/McCreary)
+  --body-tail        distingue cuerpo (identidad protegida) de cola
+                     (libertad ornamental), como en HTTYD
+  --wt-variant / --octatonic-variant   elegir manualmente la variante
+                     de tonos enteros / octatónica en vez de autodetectar
+
+MÉTODOS DE MAPEO (--method, o definidos por cada --style):
+  degree    — cada nota se re-ancla a su grado de escala más cercano
+              (independiente por nota; ideal para transposición/cambio
+              de modo simple)
+  interval  — se preservan los intervalos ENTRE notas consecutivas
+              medidos en pasos de la escala destino (mejor cuando la
+              escala destino tiene distinta cardinalidad que la origen)
+  mirror    — refleja cada altura ALREDEDOR DE UN EJE fijo (por defecto,
+              tónica + 3.5 semitonos, el eje tónica-dominante). No hay
+              reanclaje por grado de escala: es una reflexión aritmética
+              directa sobre semitonos reales, así que invierte el
+              contorno melódico (ascendente → descendente). Es el método
+              de la armonía negativa; ver --style negative_harmony.
+
+ESTILOS DISPONIBLES (--style):
+  heroic_minor          menor paralela + tríadas mayores (nota fuerte=3ª)
+  dorian_heroic         dórico + tríadas mayores (estilo Fellowship)
+  whole_tone            tonos enteros + dominantes 7/9 sin 5ª (Debussy)
+  octatonic             colección octatónica + acordes nativos (Shapiro)
+  chromatic_magical     cromática + tríadas menores paralelas (Hedwig)
+  chromatic_counterpoint cromática + contrapunto independiente (Bartók)
+  pentatonic             pentatónica mayor/menor + armonía dispersa
+  double_harmonic        doble armónica / mayamalavagowla
+  acoustic                modo acústico (lidio dominante)
+  elvish                  5º modo de la menor melódica, reorientado
+  got_fragment            fragmentación + menor armónica + desplazo. métrico
+  chromatic_mediant       cadena de tríadas por 3ª cromática (Zimmer)
+  negative_harmony        reflexión especular de melodía y acordes sobre
+                           el eje tónica-dominante (armonía negativa)
+  custom                  escala/método libres vía --scale / --method
+
+TÉCNICAS ADICIONALES:
+  --chord-tone-priority   fuerza notas en tiempo fuerte a un tono
+                           del acorde vigente (corrección ≤3 semitonos)
+  --fragment / --fragment-order   fragmentación motívica al estilo GoT
+  --metric-shift          alinea la primera nota al downbeat
+  --start-degree          desplaza todos los grados de escala destino
+                           (con --method mirror: desplaza el EJE ese
+                           nº de semitonos — ver --axis-offset)
+  --axis-offset           eje de reflexión en semitonos desde la tónica
+                           (con --method mirror; default: 3.5 = eje
+                           tónica-dominante, entre 3ª menor y 3ª mayor)
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  tema.octatonic.mid
+  tema.chromatic_magical.mid
+  tema.negative_harmony.mid
+  tema.octatonic_report.json   (con --report)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --style S [S…]     Estilos a aplicar (default: heroic_minor whole_tone
+                     octatonic chromatic_magical)
+  --key "D minor"    Tonalidad origen forzada (default: autodetecta)
+  --tempo BPM        Tempo de salida forzado (default: del MIDI)
+  --beats-per-bar N  Beats por compás (default: del MIDI)
+  --start-degree N   Desplazamiento extra de grado (default: 0)
+  --axis-offset F    Ver arriba (default: 3.5, o el del preset)
+  --chord-tone-priority   Ver arriba
+  --fragment / --fragment-order   Ver arriba
+  --metric-shift     Ver arriba
+  --scale / --method (solo con --style custom; --method admite ahora
+                      'degree' | 'interval' | 'mirror')
+  --out-dir DIR      Carpeta de salida (default: junto al MIDI)
+  --report           Guardar reporte JSON por transformación
+  --verbose          Informe detallado por stdout
+
+── Otras opciones del parser ──
+  --transition-beats TRANSITION_BEATS
+                              (con --sections) Nº de tiempos al final de cada
+                              sección que pivotan hacia el acorde inicial de
+                              la siguiente (default: 0 = corte seco)
+  --pentatonic-variant PENTATONIC_VARIANT
+                              Forzar pentatónica mayor/menor en vez de
+                              deducirla del modo detectado (defecto auto;
+                              valores: auto|major|minor)
+  --seed SEED                 Semilla aleatoria (default: 42)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python theme_transformer.py tema.mid
+  python theme_transformer.py tema.mid --style octatonic chromatic_magical
+  python theme_transformer.py tema.mid --style got_fragment --verbose
+  python theme_transformer.py tema.mid --style whole_tone \
+      --chord-tone-priority
+  python theme_transformer.py tema.mid --style custom \
+      --scale double_harmonic --method interval
+  python theme_transformer.py tema.mid --style elvish --start-degree 2
+  python theme_transformer.py tema.mid --style negative_harmony
+  python theme_transformer.py tema.mid --style negative_harmony \
+      --chord-tone-priority --verbose
+  python theme_transformer.py tema.mid --style negative_harmony \
+      --axis-offset 0    # eje sobre la propia tónica, en vez de T-D
+  python theme_transformer.py tema.mid \
+      --sections "0:heroic_minor,16:negative_harmony,32:whole_tone"
+  python theme_transformer.py tema.mid --style custom \
+      --scale natural_minor --method mirror --axis-offset 3.5
+  python theme_transformer.py --catalog
+
+── Más modos ──
+
+  # Guardar reporte JSON por cada transformación
+  python theme_transformer.py --report
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, music21 (opcional), numpy
 """
 
 import os

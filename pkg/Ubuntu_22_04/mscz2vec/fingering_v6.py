@@ -1,71 +1,143 @@
 #!/usr/bin/env python3
 """
-fingering_v4.py — Generador automático de digitación pianística a partir de MIDI.
+fingering_v6.py — Generador automático de digitación pianística a partir de MIDI
+(versión 6: modo acordes con consistencia por forma y armonía).
 
-Novedades respecto a v3:
-  - NUEVO modo acordes (opcional, --chord-mode): calcula el acorde (armonía) de cada
-    compás y mantiene la digitación consistente entre acordes de la misma calidad
-    (p. ej. el mismo arpegio sobre C, F y G usa los mismos dedos cuando es cómodo).
-    El peso --chord-weight (λ) pondera entre la solución agnóstica (λ=0, = v3) y
-    la uniformidad total de patrones (λ=1).
-  - Corrección: los compases se calculan con la firma de tiempo completa (num/den).
-    En v3 un 6/8 se interpretaba como 6 negras por compás.
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Mismo núcleo que fingering_v3.py (ventana deslizante de 9 notas con coste
+ergonómico; basado en pianoplayer, Marco Musy, MIT License) más un modo de
+acordes opcional (--chord-mode) que fomenta digitaciones consistentes:
+  - Calcula el acorde (armonía) de cada compás y mantiene la digitación
+    consistente entre acordes de la misma calidad (p. ej. el mismo arpegio sobre
+    C, F y G usa los mismos dedos cuando es cómodo). El peso --chord-weight (λ)
+    pondera entre la solución agnóstica (λ=0, = v3) y la uniformidad total (λ=1).
   - Claves de consistencia por FORMA (--chord-keys shape|harmony|both): gestos
-    idénticos (misma posición en el compás e intervalos con las notas vecinas) reciben
-    los mismos dedos aunque la armonía detectada difiera. Defecto: both.
-  - Prior de bajo en la mano izquierda (--bass-prior B): favorece el dedo 5 en la nota
-    más grave de cada compás cuando cae en el tiempo 1. Independiente de --chord-mode.
-  - Enlace de gestos repetidos (--tie-gestures [--tie-tol T]): los compases de una mano
-    con exactamente el mismo gesto (mismas posiciones e intervalos, en cualquier altura)
-    reciben una digitación común, elegida por menor coste conjunto entre las candidatas,
-    siempre que ningún compás empeore más de T (relativo; defecto 0.5).
-  - Escaladas (≥3 notas sucesivas estrictamente ascendentes o descendentes): no se
-    comparan por su forma entre alturas distintas, solo con las mismas notas exactas
-    (una escala en otra posición cambia con las teclas negras). --chord-runs lo desactiva.
-  - Informe (--chord-report): acorde por compás con su margen (marca los empates) y tabla
-    de gestos repetidos por mano con las digitaciones y si coinciden. Por sí solo no
-    cambia ningún dedo respecto a v3.
-  - Coste ergonómico sin penalizaciones (cost_pure): permite comparar, compás a compás,
-    cuánto cuesta la digitación final frente a la agnóstica y avisa (⚠) cuando un compás
-    cambiado cuesta más de --cost-alert (relativo; defecto 0.5 = +50%) y, además, al menos
-    un 25% del coste típico de ventana. Mide el coste según el modelo de v3: no detecta
-    digitaciones que ese modelo considera baratas aunque sean incómodas (p. ej. 5-4-4).
+    idénticos (misma posición en el compás e intervalos con las notas vecinas)
+    reciben los mismos dedos aunque la armonía detectada difiera.
+  - Prior de bajo en la mano izquierda (--bass-prior B): favorece el dedo 5 en
+    la nota más grave de cada compás cuando cae en el tiempo 1. Independiente
+    de --chord-mode.
+  - Enlace de gestos repetidos (--tie-gestures [--tie-tol T]): los compases de
+    una mano con exactamente el mismo gesto (mismas posiciones e intervalos, en
+    cualquier altura) reciben una digitación común, elegida por menor coste
+    conjunto entre las candidatas, siempre que ningún compás empeore más de T.
+  - Escaladas (≥3 notas sucesivas estrictamente ascendentes o descendentes): no
+    se comparan por su forma entre alturas distintas, solo con las mismas notas
+    exactas (una escala en otra posición cambia con las teclas negras).
+    --chord-runs lo desactiva.
+  - Informe (--chord-report): acorde por compás con su margen (marca los
+    empates) y tabla de gestos repetidos por mano con las digitaciones y si
+    coinciden. Por sí solo no cambia ningún dedo respecto a v3.
+  - Coste ergonómico sin penalizaciones (cost_pure): permite comparar, compás a
+    compás, cuánto cuesta la digitación final frente a la agnóstica y avisa (⚠)
+    cuando un compás cambiado cuesta más de --cost-alert y, además, al menos un
+    25% del coste típico de ventana. Mide el coste según el modelo de v3: no
+    detecta digitaciones que ese modelo considera baratas aunque sean incómodas
+    (p. ej. 5-4-4).
   - El informe y el JSON muestran el bajo del compás con barra (p. ej. Fm/Ab).
-  - Sin --chord-mode, --bass-prior, --tie-gestures ni --chord-report el comportamiento
-    es el de v3.
+  - Corrección frente a v3: los compases se calculan con la firma de tiempo
+    completa (num/den); en v3 un 6/8 se interpretaba como 6 negras por compás.
+  - Sin --chord-mode, --bass-prior, --tie-gestures ni --chord-report el
+    comportamiento es el de v3.
 
-Rendimiento: optimize_seq usa ramificación y poda con coste incremental (cotas exactas,
-  todos los términos del coste son >= 0). Resultado idéntico a la enumeración exhaustiva,
-  órdenes de magnitud más rápido.
+Rendimiento (novedad de v6 respecto a v5): optimize_seq usa ramificación y poda
+con coste incremental (cotas exactas, todos los términos del coste son >= 0).
+El resultado es idéntico a la enumeración exhaustiva de v5 y órdenes de
+magnitud más rápido.
 
-Mejoras heredadas de v3:
-  - Memoria de postura activada (relocation_alpha=0.3)
-  - Separación inteligente de manos (un solo track) minimizando cruces
-  - Tempo variable: cálculo de compás correcto con múltiples cambios de tempo
-  - Optimización de acordes en bloque con módulo específico (span real de mano)
-  - Puntuación de confianza por nota (marca notas con digitación alternativa válida con '(alt)')
-  - Salida estructurada como lista de dicts (API usable por otros módulos)
-  - Separación de voces dentro de un track (notas largas vs corcheas)
-  - Digitación de voz sostenida independiente de la melodía
-  - Exportación a MusicXML con marcas de digitación estándar (opcional)
+Heredado de v3: memoria de postura (relocation_alpha=0.3), separación inteligente
+de manos con un solo track, tempo variable, optimización de acordes en bloque
+con el span real de la mano, puntuación de confianza ('(alt)'), salida
+estructurada como lista de dicts, separación de voces dentro de un track, voz
+sostenida independiente de la melodía y exportación a MusicXML.
 
-Uso:
-    python fingering_v4.py archivo.mid
-    python fingering_v4.py archivo.mid --chord-mode                      # λ=0.5
-    python fingering_v4.py archivo.mid --chord-mode --chord-weight 0.8   # más uniforme
-    python fingering_v4.py archivo.mid --chord-mode --chord-weight 0     # solo análisis armónico
-    python fingering_v4.py archivo.mid --chord-mode --chord-keys shape   # solo claves de forma
-    python fingering_v4.py archivo.mid --bass-prior 0.3                  # bajo de MI → dedo 5
-    python fingering_v4.py archivo.mid --tie-gestures --tie-tol 0.5      # gestos repetidos → mismos dedos
-    python fingering_v4.py archivo.mid --chord-report                    # solo diagnóstico (dedos = v3)
-    python fingering_v4.py archivo.mid --tie-gestures --cost-alert 0.3   # avisa si un compás cuesta +30%
-    python fingering_v4.py archivo.mid --hand-size L
-    python fingering_v4.py archivo.mid --measures 8
-    python fingering_v4.py archivo.mid --right-only
-    python fingering_v4.py archivo.mid --left-only
-    python fingering_v4.py archivo.mid --xml salida.xml
-    python fingering_v4.py archivo.mid --json salida.json
-    python fingering_v4.py archivo.mid --confidence      # muestra puntuación de confianza
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Entrada : MIDI de 1 o 2 tracks. Salida: informe de texto por stdout,
+  --json (consumible por fingering_to_synthesia.py; con modo acordes añade por
+  nota "chord", "chord_role" y "fingering_agnostic", y la lista "chords" por
+  compás) y --xml (MusicXML con digitación).
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  Entrada y selección de manos
+    midi                 Fichero MIDI (obligatorio, posicional).
+    --right-track N      Índice del track para la mano derecha (defecto 0).
+    --left-track N       Índice del track para la mano izquierda (defecto 1).
+    --auto-split         Reparte las notas entre manos con una ventana deslizante
+                         aunque el MIDI ya tenga 2 tracks; con un solo track el
+                         reparto es automático de todos modos (minimiza cruces).
+    --right-only         Digita solo la mano derecha.
+    --left-only          Digita solo la mano izquierda.
+    --measures N         Procesa como máximo N compases (0 = todos; defecto 0).
+  Ergonomía
+    --hand-size SIZE     XXS, XS, S, M, L, XL o XXL (defecto M ≈ 17 cm de
+                         pulgar a meñique). Condiciona los saltos admisibles.
+  Salidas
+    --confidence         Imprime la puntuación de confianza por nota; las notas
+                         con una digitación alternativa igual de válida se
+                         marcan con '(alt)'.
+    --json FICHERO       Exporta el resultado (lista de dicts por nota) a JSON.
+    --xml FICHERO        Exporta a MusicXML con marcas de digitación estándar.
+  Modo acordes (todas opcionales; sin ellas el resultado es el de v3)
+    --chord-mode         Activa el modo acordes: acorde por compás y digitación
+                         consistente entre acordes.
+    --chord-weight W     λ ∈ [0,1] de la consistencia frente al coste ergonómico
+                         (0 = agnóstico como v3, 1 = solo consistencia; defecto 0.5).
+    --chord-iters N      Pasadas máximas de refinamiento por consistencia (defecto 2).
+    --chord-keys K       harmony (acorde + rol), shape (forma del gesto,
+                         independiente de la armonía) o both (defecto).
+    --chord-runs         Compara también las escaladas por su forma entre alturas
+                         distintas (por defecto solo con las mismas notas).
+    --bass-prior B       Prior de bajo (solo mano izquierda): penaliza no usar el 5
+                         en la nota más grave de cada compás (si cae en el tiempo 1).
+                         B es una fracción del coste típico de ventana: 0 =
+                         desactivado (defecto), 0.3 = suave, ≥1 = casi obligatorio.
+    --tie-gestures       Enlaza la digitación de los compases con exactamente el
+                         mismo gesto en una mano (patrón común de menor coste conjunto).
+    --tie-tol T          Con --tie-gestures: máximo aumento relativo de coste en
+                         cualquier compás del grupo (defecto 0.5 = 50%; un valor
+                         enorme fuerza el enlace siempre).
+    --chord-report       Informe: acorde por compás con margen y gestos repetidos
+                         por mano con sus digitaciones. Por sí solo no cambia dedos.
+    --cost-alert X       Umbral relativo (0.5 = +50%) a partir del cual se avisa
+                         (⚠) de que un compás cambiado cuesta más que con la
+                         digitación agnóstica; además debe superar el 25% del
+                         coste típico de ventana (defecto 0.5).
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python fingering_v6.py archivo.mid
+    python fingering_v6.py archivo.mid --chord-mode                      # λ=0.5
+    python fingering_v6.py archivo.mid --chord-mode --chord-weight 0.8   # más uniforme
+    python fingering_v6.py archivo.mid --chord-mode --chord-weight 0     # solo análisis armónico
+    python fingering_v6.py archivo.mid --chord-mode --chord-iters 4      # más refinamiento
+    python fingering_v6.py archivo.mid --chord-mode --chord-keys shape   # solo claves de forma
+    python fingering_v6.py archivo.mid --chord-mode --chord-keys harmony # solo claves armónicas
+    python fingering_v6.py archivo.mid --chord-mode --chord-runs         # compara escalas por forma
+    python fingering_v6.py archivo.mid --bass-prior 0.3                  # bajo de MI → dedo 5
+    python fingering_v6.py archivo.mid --tie-gestures --tie-tol 0.5      # gestos repetidos → mismos dedos
+    python fingering_v6.py archivo.mid --chord-report                    # solo diagnóstico (dedos = v3)
+    python fingering_v6.py archivo.mid --tie-gestures --cost-alert 0.3   # avisa si un compás cuesta +30%
+    python fingering_v6.py archivo.mid --chord-mode --tie-gestures --bass-prior 0.3 --chord-report --json d.json
+    python fingering_v6.py archivo.mid --hand-size L
+    python fingering_v6.py archivo.mid --measures 8
+    python fingering_v6.py archivo.mid --right-only
+    python fingering_v6.py archivo.mid --left-only
+    python fingering_v6.py archivo.mid --right-track 1 --left-track 2
+    python fingering_v6.py archivo.mid --auto-split
+    python fingering_v6.py archivo.mid --xml salida.xml
+    python fingering_v6.py archivo.mid --json salida.json
+    python fingering_v6.py archivo.mid --confidence      # muestra puntuación de confianza
+
+Dependencias: pretty_midi (pip install pretty_midi).
+Véase también: fingering_v5.py (misma funcionalidad, enumeración exhaustiva)
+y fingering_to_synthesia.py.
 """
 
 from __future__ import annotations

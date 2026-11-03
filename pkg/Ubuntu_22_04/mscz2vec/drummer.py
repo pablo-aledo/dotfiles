@@ -1,359 +1,434 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          DRUMMER  v0.3                                       ║
-║         Motor de percusión rítmica para obras MIDI                           ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  FLUJO DE TRABAJO TÍPICO                                                     ║
-║  ─────────────────────────────────────────────────────────────────────────  ║
-║  1. learn    → construir biblioteca desde tu colección                       ║
-║  2. extract  → añadir grooves favoritos con nombre propio                    ║
-║  3. add      → poner percusión a una obra nueva                              ║
-║  4. transform / morph → editar y evolucionar                                 ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  NOVEDADES v0.3 — VARIEDAD DE MOTIVOS Y RITMOS                              ║
-║  ──────────────────────────────────────────────────────────────────────────  ║
-║                                                                              ║
-║  1. CATÁLOGO DE ARQUETIPOS (--style)                                        ║
-║     14 estilos de semilla con carácter rítmico distinto. Cada uno tiene     ║
-║     su propia plantilla de kick/snare/hihat/color, fill propio y reglas     ║
-║     de variación. Se selecciona con --style en el comando add.              ║
-║                                                                              ║
-║     Estilos disponibles:                                                     ║
-║       rock_straight   — 4tos en hihat, backbeat seco (default si sin lib)  ║
-║       funk_16th       — 16avos en hihat, ghost notes de caja, synco fuerte ║
-║       jazz_ride       — ride en negras con triplillo, hi-hat pedal en 2/4  ║
-║       bossa_nova      — clave 3-2, maracas en negras, bombo suave          ║
-║       reggae_one_drop — kick en tiempo 3, snare en 3 y 4                   ║
-║       afrobeat        — clave yoruba, doble bombo en contratiempo          ║
-║       latin_clave     — clave 2-3 en maracas, bombo sincopado              ║
-║       waltz           — 3/4 sintético, bombo en 1, caja en 2-3            ║
-║       tango           — patrón habanera en bombo, clave tango             ║
-║       flamenco        — ciclo de 12 con acentos en 3,6,8,10,11,12        ║
-║       half_time       — snare en tiempo 3 (feel de la mitad de tempo)     ║
-║       shuffle         — shuffle de blues, corcheas de triplillo           ║
-║       brushes         — jazz de escobillas, ride suave, hi-hat fantasma   ║
-║       trap            — hi-hat de 32avos, bombo sincopado, claps          ║
-║                                                                              ║
-║    # Usar arquetipo específico                                               ║
-║    python drummer.py add melodia.mid --style jazz_ride                      ║
-║    python drummer.py add melodia.mid --style flamenco                       ║
-║                                                                              ║
-║    # Arquetipo + biblioteca (el arquetipo define el carácter base,          ║
-║    # la biblioteca selecciona el groove concreto dentro de ese estilo)      ║
-║    python drummer.py add melodia.mid --style funk_16th --library lib.json  ║
-║                                                                              ║
-║    # Listar estilos disponibles                                              ║
-║    python drummer.py add --list-styles                                      ║
-║                                                                              ║
-║  2. SELECCIÓN PROBABILÍSTICA DE GROOVES (--groove-diversity)                ║
-║     En lugar de elegir siempre el groove más parecido a la tensión,        ║
-║     elige entre los N mejores candidatos con peso inversamente              ║
-║     proporcional al error. Aumenta la variedad entre secciones.             ║
-║                                                                              ║
-║    # Sin diversidad (determinista, comportamiento v0.2)                     ║
-║    python drummer.py add melodia.mid --groove-diversity 0                   ║
-║                                                                              ║
-║    # Diversidad media (default: 0.4 — mezcla coherencia y variedad)        ║
-║    python drummer.py add melodia.mid --groove-diversity 0.4                 ║
-║                                                                              ║
-║    # Máxima diversidad (elige aleatoriamente entre los 5 mejores)           ║
-║    python drummer.py add melodia.mid --groove-diversity 1.0                 ║
-║                                                                              ║
-║  3. VARIACIONES ESTRUCTURALES COMPÁS A COMPÁS (--variation)                ║
-║     Cada N compases el patrón muta ligeramente: el hihat puede abrir,      ║
-║     el kick añade una anticipación, el snare agrega ghost notes.           ║
-║     Las variaciones son coherentes con el estilo elegido.                   ║
-║                                                                              ║
-║    # Sin variaciones (loop perfecto)                                        ║
-║    python drummer.py add melodia.mid --variation 0.0                        ║
-║                                                                              ║
-║    # Variación suave cada ~4 compases (default: 0.3)                       ║
-║    python drummer.py add melodia.mid --variation 0.3                        ║
-║                                                                              ║
-║    # Variación alta — el patrón evoluciona compás a compás                 ║
-║    python drummer.py add melodia.mid --variation 0.8                        ║
-║                                                                              ║
-║  4. CAPAS INDEPENDIENTES (--layers)                                         ║
-║     Genera kick+snare, hihat/ride y color (clave, maracas) con lógicas     ║
-║     independientes. Permite que el hihat cambie de 8vos a 16vos al        ║
-║     entrar en el desarrollo sin afectar al kick.                            ║
-║                                                                              ║
-║    # Capas independientes activadas (default)                               ║
-║    python drummer.py add melodia.mid --layers                               ║
-║                                                                              ║
-║    # Sin capas (comportamiento monolítico v0.2)                             ║
-║    python drummer.py add melodia.mid --no-layers                            ║
-║                                                                              ║
-║  5. CATÁLOGO DE FILLS DIVERSIFICADO (--fill-style)                         ║
-║     8 tipos de fill con carácter propio. El fill se elige según el         ║
-║     estilo del groove, la tensión de la sección y si se especifica         ║
-║     manualmente.                                                             ║
-║                                                                              ║
-║    Tipos: descending, ascending, snare_roll, cross_stick,                   ║
-║           half_drop, flam, sparse, buildup                                  ║
-║                                                                              ║
-║    # Fill específico para todas las transiciones                             ║
-║    python drummer.py add melodia.mid --fill-style snare_roll                ║
-║                                                                              ║
-║    # Fill automático según estilo (default)                                  ║
-║    python drummer.py add melodia.mid --fill-style auto                      ║
-║                                                                              ║
-║  COMBINACIONES DE EJEMPLO v0.3                                              ║
-║  ──────────────────────────────────────────────────────────────────────────  ║
-║                                                                              ║
-║    # Flamenco con variación alta y capas                                    ║
-║    python drummer.py add obra.mid --style flamenco --variation 0.6         ║
-║                                                                              ║
-║    # Jazz con grooves de biblioteca, selección diversa                      ║
-║    python drummer.py add obra.mid --style jazz_ride                         ║
-║                       --library drum_library.json --groove-diversity 0.6   ║
-║                                                                              ║
-║    # Funk completo con curva de tensión                                     ║
-║    python drummer.py add obra.mid --style funk_16th                         ║
-║                       --tension-curve curves.json --variation 0.5          ║
-║                       --fill-style snare_roll                               ║
-║                                                                              ║
-║    # Tango con fills de cross_stick                                         ║
-║    python drummer.py add obra.mid --style tango --fill-style cross_stick   ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  learn — Aprende grooves desde una carpeta de MIDIs mixtos                  ║
-║  ──────────────────────────────────────────────────────────────────────────  ║
-║  Extrae el canal 10 de cada MIDI, vectoriza los patrones y los agrupa        ║
-║  por similitud con KMeans. Genera drum_library.json con prototipos           ║
-║  etiquetables manualmente.                                                   ║
-║                                                                              ║
-║    # Básico: aprende de todos los MIDIs de la carpeta                        ║
-║    python drummer.py learn ./midis/                                          ║
-║                                                                              ║
-║    # Con más clusters y salida personalizada                                 ║
-║    python drummer.py learn ./midis/ --clusters 32 --output mi_lib.json      ║
-║                                                                              ║
-║    # Ver qué se omite durante el proceso                                     ║
-║    python drummer.py learn ./midis/ --verbose                                ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  analyze — Analiza la percusión de un MIDI                                  ║
-║  ──────────────────────────────────────────────────────────────────────────  ║
-║  Muestra síncopa, densidad, feel, fills detectados y grid ASCII.             ║
-║                                                                              ║
-║    # Informe en pantalla                                                     ║
-║    python drummer.py analyze cancion.mid                                     ║
-║                                                                              ║
-║    # Exportar análisis a JSON (útil para scripts externos)                   ║
-║    python drummer.py analyze cancion.mid --export analisis.json              ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  extract — Extrae un groove concreto y lo añade a la biblioteca             ║
-║  ──────────────────────────────────────────────────────────────────────────  ║
-║  A diferencia de learn (automático), extract es curatorial: tú eliges       ║
-║  qué MIDI y qué nombre. Separa el patrón base de los fills detectados        ║
-║  estadísticamente. Si el patrón no es repetitivo, extrae y avisa.           ║
-║                                                                              ║
-║    # Añadir groove a la biblioteca por defecto                               ║
-║    python drummer.py extract bossa_nova.mid --name "bossa_suave"            ║
-║                                                                              ║
-║    # Añadir a una biblioteca concreta                                        ║
-║    python drummer.py extract jazz_trio.mid --name "jazz_brush" --library mi_lib.json ║
-║                                                                              ║
-║    # Exportar también el patrón base como MIDI independiente                 ║
-║    python drummer.py extract funk_jam.mid --name "funk_16th" --export-midi base.mid  ║
-║                                                                              ║
-║    # Sobreescribir si ya existe ese nombre                                   ║
-║    python drummer.py extract nuevo.mid --name "funk_16th" --force           ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  add — Añade percusión a una obra que no la tiene                           ║
-║  ──────────────────────────────────────────────────────────────────────────  ║
-║  Detecta la duración real de la obra (ticks absolutos, no deltas),          ║
-║  divide en secciones con tensión variable y elige grooves de la             ║
-║  biblioteca para cada una. Genera fills en las transiciones.                ║
-║                                                                              ║
-║    # Básico: usa grooves sintéticos de semilla                               ║
-║    python drummer.py add melodia.mid                                         ║
-║                                                                              ║
-║    # Con biblioteca aprendida (grooves reales)                               ║
-║    python drummer.py add melodia.mid --library drum_library.json            ║
-║                                                                              ║
-║    # Con curvas de tension_designer (5 dimensiones dinámicas)                ║
-║    python drummer.py add melodia.mid --tension-curve curves.json            ║
-║                                                                              ║
-║    # Con fingerprint de midi_dna_unified (secciones A/B/C automáticas)      ║
-║    python drummer.py add melodia.mid --fingerprint melodia.fingerprint.json ║
-║                                                                              ║
-║    # Todo junto + salida personalizada                                       ║
-║    python drummer.py add melodia.mid --library drum_library.json            ║
-║                       --tension-curve curves.json --output con_bateria.mid   ║
-║                                                                              ║
-║    # Sin humanización (grid perfecto, útil para comparar)                   ║
-║    python drummer.py add melodia.mid --no-humanize                          ║
-║                                                                              ║
-║    # Forzar aunque ya tenga percusión                                        ║
-║    python drummer.py add obra.mid --force                                    ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  transform — Transforma la percusión existente                              ║
-║  ──────────────────────────────────────────────────────────────────────────  ║
-║  Todas las opciones son combinables. Las curvas de tension_designer          ║
-║  activan automáticamente síncopa, densidad, swing y polirritmo dinámicos    ║
-║  salvo que se sobrescriban con flags estáticos.                              ║
-║                                                                              ║
-║  · SÍNCOPA                                                                   ║
-║    # Estática: 0=cuadrado, 1=máxima síncopa                                 ║
-║    python drummer.py transform obra.mid --syncopate 0.6                     ║
-║                                                                              ║
-║    # Dinámica desde curva tension (varía compás a compás)                   ║
-║    python drummer.py transform obra.mid --tension-curve curves.json         ║
-║                                                                              ║
-║  · SWING                                                                     ║
-║    # Estático: 0=straight, 0.34≈jazz (ratio 0.67), 1=hard swing            ║
-║    python drummer.py transform obra.mid --swing 0.34                        ║
-║                                                                              ║
-║    # Dinámico: incluir clave "swing" en curves.json                         ║
-║    python drummer.py transform obra.mid --tension-curve curves.json         ║
-║    # (el hihat swingea al 100%, kick al 60%, snare siempre straight)        ║
-║                                                                              ║
-║  · DENSIDAD                                                                  ║
-║    # Reducir golpes (0=sin cambio, 1=eliminar casi todo)                    ║
-║    python drummer.py transform obra.mid --thin 0.4                          ║
-║                                                                              ║
-║    # Añadir ghost notes (0=sin cambio, 1=máximas ghost notes)               ║
-║    python drummer.py transform obra.mid --thicken 0.5                       ║
-║                                                                              ║
-║    # Dinámica desde curva activity (thin en partes bajas, thicken en altas) ║
-║    python drummer.py transform obra.mid --tension-curve curves.json         ║
-║                                                                              ║
-║  · POLIRRITMO                                                                ║
-║    # Añadir capa de 3 golpes por compás (3:4) en clave/maracas              ║
-║    python drummer.py transform obra.mid --polyrhythm 3                      ║
-║                                                                              ║
-║    # 5:4 (quintillo sobre cuatro)                                            ║
-║    python drummer.py transform obra.mid --polyrhythm 5                      ║
-║                                                                              ║
-║    # Dinámico: se activa sólo donde harmony > 0.7 en curves.json            ║
-║    python drummer.py transform obra.mid --tension-curve curves.json         ║
-║                                                                              ║
-║  · PHASE SHIFT (Steve Reich)                                                 ║
-║    # Desplazar 1 paso de grid por compás                                     ║
-║    python drummer.py transform obra.mid --phase-shift 1                     ║
-║                                                                              ║
-║    # Desplazar 2 pasos por compás (más rápido)                               ║
-║    python drummer.py transform obra.mid --phase-shift 2                     ║
-║                                                                              ║
-║  · HUMANIZACIÓN                                                              ║
-║    # 0=mecánico, 1=máxima variación de timing y velocity                    ║
-║    python drummer.py transform obra.mid --humanize 0.7                      ║
-║                                                                              ║
-║  · TARGET EMOCIONAL (lenguaje natural)                                       ║
-║    python drummer.py transform obra.mid --emotion "más urgente"             ║
-║    python drummer.py transform obra.mid --emotion "relajado"                ║
-║    python drummer.py transform obra.mid --emotion "groovy"                  ║
-║    python drummer.py transform obra.mid --emotion "minimalista"             ║
-║    python drummer.py transform obra.mid --emotion "denso"                   ║
-║                                                                              ║
-║  · COMBINACIONES TÍPICAS                                                     ║
-║    # Jazz: swing de triplillo + humanización alta                            ║
-║    python drummer.py transform obra.mid --swing 0.34 --humanize 0.8        ║
-║                                                                              ║
-║    # Funk: síncopa alta + ghost notes + humanización                         ║
-║    python drummer.py transform obra.mid --syncopate 0.65 --thicken 0.4 --humanize 0.6 ║
-║                                                                              ║
-║    # Todo dinámico desde tension_designer                                    ║
-║    python drummer.py transform obra.mid --tension-curve curves.json --humanize 0.6    ║
-║                       --output obra_transformed.mid                                  ║
-║                                                                              ║
-║    # Reich: phase shift + sin humanizar (el efecto requiere precisión)      ║
-║    python drummer.py transform obra.mid --phase-shift 1 --no-humanize       ║
-║    # (nota: --no-humanize no existe en transform, simplemente omitir        ║
-║    #  --humanize ya deja el timing perfecto)                                 ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  morph — Morphing gradual entre dos grooves en N pasos                      ║
-║  ──────────────────────────────────────────────────────────────────────────  ║
-║  Genera N MIDIs intermedios interpolando estructura (kick/snare),            ║
-║  subdivisión (hihat + swing ratio) y color (toms/clave) como capas          ║
-║  independientes. También interpola tempo entre A y B.                        ║
-║  Exporta un manifiesto JSON con la lista de archivos en orden.               ║
-║                                                                              ║
-║    # Básico: 8 pasos lineales entre dos grooves                              ║
-║    python drummer.py morph rock.mid jazz.mid                                 ║
-║                                                                              ║
-║    # 6 pasos, interpolación sigmoide (suave en extremos, rápida en centro)  ║
-║    python drummer.py morph rock.mid jazz.mid --steps 6 --mode sigmoid       ║
-║                                                                              ║
-║    # Normalizar ambos a 2 compases (si tienen distinta longitud)             ║
-║    python drummer.py morph rock.mid jazz.mid --steps 8 --bars 2             ║
-║                                                                              ║
-║    # Guardar en carpeta específica                                            ║
-║    python drummer.py morph grooveA.mid grooveB.mid --steps 10 --output-dir ./morphs/ ║
-║                                                                              ║
-║    # Sin humanización (útil para escuchar el morphing puro)                 ║
-║    python drummer.py morph grooveA.mid grooveB.mid --no-humanize            ║
-║                                                                              ║
-║    # Modos de interpolación disponibles:                                     ║
-║    #   linear      — cambio constante (default)                              ║
-║    #   sigmoid     — suave en extremos, rápido en el centro                 ║
-║    #   exponential — lento al principio, acelerado al final                 ║
-║    #   sinusoidal  — suavizado coseno, muy fluido                           ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  SWING DINÁMICO — cómo funciona                                              ║
-║  ──────────────────────────────────────────────────────────────────────────  ║
-║  El ratio (0.50=straight … 0.75=hard swing) se aplica por instrumento        ║
-║  según su función, no de forma uniforme:                                     ║
-║    hihat / ride  (subdivision) → 100% del ratio                             ║
-║    kick          (pulse)       →  60% del ratio                             ║
-║    snare         (backbeat)    →   0% (siempre straight)                    ║
-║    toms / color                →  50–70%                                    ║
-║  A tempos > 120bpm el swing se reduce automáticamente (feel físico real).   ║
-║                                                                              ║
-║  El flag --swing N normaliza así:  0 → ratio 0.50 (straight)               ║
-║                                   0.34 → ratio 0.59 (funk suave)           ║
-║                                   0.67 → ratio 0.67 (jazz, triplillo)      ║
-║                                    1.0 → ratio 0.75 (hard swing)           ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  INTEGRACIÓN CON TENSION_DESIGNER (curves.json)                              ║
-║  ──────────────────────────────────────────────────────────────────────────  ║
-║  Pasar --tension-curve curves.json activa todos los parámetros              ║
-║  dinámicos a la vez. Formato esperado:                                       ║
-║                                                                              ║
-║    {                                                                         ║
-║      "tension":  [0.1, 0.3, 0.7, 0.9, 0.6, 0.2],  → síncopa kick/snare   ║
-║      "activity": [0.2, 0.4, 0.8, 1.0, 0.7, 0.3],  → densidad (thin/thick)║
-║      "swing":    [0.0, 0.0, 0.4, 0.8, 0.5, 0.0],  → ratio swing hihat    ║
-║      "harmony":  [0.2, 0.3, 0.5, 0.8, 0.6, 0.2],  → polirritmo dinámico  ║
-║      "register": [0.4, 0.5, 0.7, 1.0, 0.8, 0.4]   → velocity media       ║
-║    }                                                                         ║
-║                                                                              ║
-║  Los arrays pueden tener cualquier longitud; se interpolan al número        ║
-║  de compases real de la obra.                                                ║
-║  Build-up automático: si activity sube > 0.3 en 2 compases → fill.         ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  INSTRUMENTOS GM (canal 10, MIDI note)                                       ║
-║    36 Kick   38 Snare  40 Snare-e  42 HH-closed  44 HH-pedal               ║
-║    46 HH-open  49 Crash  51 Ride  57 Crash2                                 ║
-║    41 Tom-lo  45 Tom-mid  48 Tom-hi  70 Maracas  75 Clave                  ║
-║                                                                              ║
-║  DEPENDENCIAS                                                                ║
-║    mido, numpy                    (requeridas)                               ║
-║    scikit-learn                   (opcional — clustering en learn)           ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+drummer.py — Drummer: motor de percusión rítmica para obras MIDI
+(versión 0.3).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+FLUJO DE TRABAJO TÍPICO:
+─────────────────────────────────────────────────────────────────────────
+1. learn    → construir biblioteca desde tu colección
+2. extract  → añadir grooves favoritos con nombre propio
+3. add      → poner percusión a una obra nueva
+4. transform / morph → editar y evolucionar
+
+NOVEDADES v0.3 — VARIEDAD DE MOTIVOS Y RITMOS
+──────────────────────────────────────────────────────────────────────────
+
+1. CATÁLOGO DE ARQUETIPOS (--style)
+   14 estilos de semilla con carácter rítmico distinto. Cada uno tiene
+   su propia plantilla de kick/snare/hihat/color, fill propio y reglas
+   de variación. Se selecciona con --style en el comando add.
+
+   Estilos disponibles:
+     rock_straight   — 4tos en hihat, backbeat seco (default si sin lib)
+     funk_16th       — 16avos en hihat, ghost notes de caja, synco fuerte
+     jazz_ride       — ride en negras con triplillo, hi-hat pedal en 2/4
+     bossa_nova      — clave 3-2, maracas en negras, bombo suave
+     reggae_one_drop — kick en tiempo 3, snare en 3 y 4
+     afrobeat        — clave yoruba, doble bombo en contratiempo
+     latin_clave     — clave 2-3 en maracas, bombo sincopado
+     waltz           — 3/4 sintético, bombo en 1, caja en 2-3
+     tango           — patrón habanera en bombo, clave tango
+     flamenco        — ciclo de 12 con acentos en 3,6,8,10,11,12
+     half_time       — snare en tiempo 3 (feel de la mitad de tempo)
+     shuffle         — shuffle de blues, corcheas de triplillo
+     brushes         — jazz de escobillas, ride suave, hi-hat fantasma
+     trap            — hi-hat de 32avos, bombo sincopado, claps
+
+  # Usar arquetipo específico
+  python drummer.py add melodia.mid --style jazz_ride
+  python drummer.py add melodia.mid --style flamenco
+
+  # Arquetipo + biblioteca (el arquetipo define el carácter base,
+  # la biblioteca selecciona el groove concreto dentro de ese estilo)
+  python drummer.py add melodia.mid --style funk_16th --library lib.json
+
+  # Listar estilos disponibles
+  python drummer.py add --list-styles
+
+2. SELECCIÓN PROBABILÍSTICA DE GROOVES (--groove-diversity)
+   En lugar de elegir siempre el groove más parecido a la tensión,
+   elige entre los N mejores candidatos con peso inversamente
+   proporcional al error. Aumenta la variedad entre secciones.
+
+  # Sin diversidad (determinista, comportamiento v0.2)
+  python drummer.py add melodia.mid --groove-diversity 0
+
+  # Diversidad media (default: 0.4 — mezcla coherencia y variedad)
+  python drummer.py add melodia.mid --groove-diversity 0.4
+
+  # Máxima diversidad (elige aleatoriamente entre los 5 mejores)
+  python drummer.py add melodia.mid --groove-diversity 1.0
+
+3. VARIACIONES ESTRUCTURALES COMPÁS A COMPÁS (--variation)
+   Cada N compases el patrón muta ligeramente: el hihat puede abrir,
+   el kick añade una anticipación, el snare agrega ghost notes.
+   Las variaciones son coherentes con el estilo elegido.
+
+  # Sin variaciones (loop perfecto)
+  python drummer.py add melodia.mid --variation 0.0
+
+  # Variación suave cada ~4 compases (default: 0.3)
+  python drummer.py add melodia.mid --variation 0.3
+
+  # Variación alta — el patrón evoluciona compás a compás
+  python drummer.py add melodia.mid --variation 0.8
+
+4. CAPAS INDEPENDIENTES (activas por defecto; --layers las pide expresamente y
+   --no-layers las desactiva)
+   Genera kick+snare, hihat/ride y color (clave, maracas) con lógicas
+   independientes. Permite que el hihat cambie de 8vos a 16vos al
+   entrar en el desarrollo sin afectar al kick.
+
+  # Capas independientes activadas (default)
+  python drummer.py add melodia.mid            # capas independientes (defecto)
+  python drummer.py add melodia.mid --layers   # lo mismo, explícito
+  python drummer.py add melodia.mid --no-layers  # sin capas (comportamiento v0.2)
+
+  # Sin capas (comportamiento monolítico v0.2)
+  python drummer.py add melodia.mid --no-layers
+
+5. CATÁLOGO DE FILLS DIVERSIFICADO (--fill-style)
+   8 tipos de fill con carácter propio. El fill se elige según el
+   estilo del groove, la tensión de la sección y si se especifica
+   manualmente.
+
+  Tipos: descending, ascending, snare_roll, cross_stick,
+         half_drop, flam, sparse, buildup
+
+  # Fill específico para todas las transiciones
+  python drummer.py add melodia.mid --fill-style snare_roll
+
+  # Fill automático según estilo (default)
+  python drummer.py add melodia.mid --fill-style auto
+
+COMBINACIONES DE EJEMPLO v0.3
+──────────────────────────────────────────────────────────────────────────
+
+  # Flamenco con variación alta y capas
+  python drummer.py add obra.mid --style flamenco --variation 0.6
+
+  # Jazz con grooves de biblioteca, selección diversa
+  python drummer.py add obra.mid --style jazz_ride \
+                     --library drum_library.json --groove-diversity 0.6
+
+  # Funk completo con curva de tensión
+  python drummer.py add obra.mid --style funk_16th \
+                     --tension-curve curves.json --variation 0.5 \
+                     --fill-style snare_roll
+
+  # Tango con fills de cross_stick
+  python drummer.py add obra.mid --style tango --fill-style cross_stick
+
+learn — Aprende grooves desde una carpeta de MIDIs mixtos
+──────────────────────────────────────────────────────────────────────────
+Extrae el canal 10 de cada MIDI, vectoriza los patrones y los agrupa
+por similitud con KMeans. Genera drum_library.json con prototipos
+etiquetables manualmente.
+
+  # Básico: aprende de todos los MIDIs de la carpeta
+  python drummer.py learn ./midis/
+
+  # Con más clusters y salida personalizada
+  python drummer.py learn ./midis/ --clusters 32 --output mi_lib.json
+
+  # Ver qué se omite durante el proceso
+  python drummer.py learn ./midis/ --verbose
+
+analyze — Analiza la percusión de un MIDI
+──────────────────────────────────────────────────────────────────────────
+Muestra síncopa, densidad, feel, fills detectados y grid ASCII.
+
+  # Informe en pantalla
+  python drummer.py analyze cancion.mid
+
+  # Exportar análisis a JSON (útil para scripts externos)
+  python drummer.py analyze cancion.mid --export analisis.json
+
+extract — Extrae un groove concreto y lo añade a la biblioteca
+──────────────────────────────────────────────────────────────────────────
+A diferencia de learn (automático), extract es curatorial: tú eliges
+qué MIDI y qué nombre. Separa el patrón base de los fills detectados
+estadísticamente. Si el patrón no es repetitivo, extrae y avisa.
+
+  # Añadir groove a la biblioteca por defecto
+  python drummer.py extract bossa_nova.mid --name "bossa_suave"
+
+  # Añadir a una biblioteca concreta
+  python drummer.py extract jazz_trio.mid --name "jazz_brush" --library mi_lib.json
+
+  # Exportar también el patrón base como MIDI independiente
+  python drummer.py extract funk_jam.mid --name "funk_16th" --export-midi base.mid
+
+  # Sobreescribir si ya existe ese nombre
+  python drummer.py extract nuevo.mid --name "funk_16th" --force
+
+add — Añade percusión a una obra que no la tiene
+──────────────────────────────────────────────────────────────────────────
+Detecta la duración real de la obra (ticks absolutos, no deltas),
+divide en secciones con tensión variable y elige grooves de la
+biblioteca para cada una. Genera fills en las transiciones.
+
+  # Básico: usa grooves sintéticos de semilla
+  python drummer.py add melodia.mid
+
+  # Con biblioteca aprendida (grooves reales)
+  python drummer.py add melodia.mid --library drum_library.json
+
+  # Con curvas de tension_designer (5 dimensiones dinámicas)
+  python drummer.py add melodia.mid --tension-curve curves.json
+
+  # Con fingerprint de midi_dna_unified (secciones A/B/C automáticas)
+  python drummer.py add melodia.mid --fingerprint melodia.fingerprint.json
+
+  # Todo junto + salida personalizada
+  python drummer.py add melodia.mid --library drum_library.json \
+                     --tension-curve curves.json --output con_bateria.mid
+
+  # Sin humanización (grid perfecto, útil para comparar)
+  python drummer.py add melodia.mid --no-humanize
+
+  # Forzar aunque ya tenga percusión
+  python drummer.py add obra.mid --force
+
+transform — Transforma la percusión existente
+──────────────────────────────────────────────────────────────────────────
+Todas las opciones son combinables. Las curvas de tension_designer
+activan automáticamente síncopa, densidad, swing y polirritmo dinámicos
+salvo que se sobrescriban con flags estáticos.
+
+· SÍNCOPA
+  # Estática: 0=cuadrado, 1=máxima síncopa
+  python drummer.py transform obra.mid --syncopate 0.6
+
+  # Dinámica desde curva tension (varía compás a compás)
+  python drummer.py transform obra.mid --tension-curve curves.json
+
+· SWING
+  # Estático: 0=straight, 0.34≈jazz (ratio 0.67), 1=hard swing
+  python drummer.py transform obra.mid --swing 0.34
+
+  # Dinámico: incluir clave "swing" en curves.json
+  python drummer.py transform obra.mid --tension-curve curves.json
+  # (el hihat swingea al 100%, kick al 60%, snare siempre straight)
+
+· DENSIDAD
+  # Reducir golpes (0=sin cambio, 1=eliminar casi todo)
+  python drummer.py transform obra.mid --thin 0.4
+
+  # Añadir ghost notes (0=sin cambio, 1=máximas ghost notes)
+  python drummer.py transform obra.mid --thicken 0.5
+
+  # Dinámica desde curva activity (thin en partes bajas, thicken en altas)
+  python drummer.py transform obra.mid --tension-curve curves.json
+
+· POLIRRITMO
+  # Añadir capa de 3 golpes por compás (3:4) en clave/maracas
+  python drummer.py transform obra.mid --polyrhythm 3
+
+  # 5:4 (quintillo sobre cuatro)
+  python drummer.py transform obra.mid --polyrhythm 5
+
+  # Dinámico: se activa sólo donde harmony > 0.7 en curves.json
+  python drummer.py transform obra.mid --tension-curve curves.json
+
+· PHASE SHIFT (Steve Reich)
+  # Desplazar 1 paso de grid por compás
+  python drummer.py transform obra.mid --phase-shift 1
+
+  # Desplazar 2 pasos por compás (más rápido)
+  python drummer.py transform obra.mid --phase-shift 2
+
+· HUMANIZACIÓN
+  # 0=mecánico, 1=máxima variación de timing y velocity
+  python drummer.py transform obra.mid --humanize 0.7
+
+· TARGET EMOCIONAL (lenguaje natural)
+  python drummer.py transform obra.mid --emotion "más urgente"
+  python drummer.py transform obra.mid --emotion "relajado"
+  python drummer.py transform obra.mid --emotion "groovy"
+  python drummer.py transform obra.mid --emotion "minimalista"
+  python drummer.py transform obra.mid --emotion "denso"
+
+· COMBINACIONES TÍPICAS
+  # Jazz: swing de triplillo + humanización alta
+  python drummer.py transform obra.mid --swing 0.34 --humanize 0.8
+
+  # Funk: síncopa alta + ghost notes + humanización
+  python drummer.py transform obra.mid --syncopate 0.65 --thicken 0.4 --humanize 0.6
+
+  # Todo dinámico desde tension_designer
+  python drummer.py transform obra.mid --tension-curve curves.json --humanize 0.6 \
+                     --output obra_transformed.mid
+
+  # Reich: phase shift + sin humanizar (el efecto requiere precisión)
+  python drummer.py transform obra.mid --phase-shift 1
+  # (nota: --no-humanize no existe en transform, simplemente omitir
+  #  --humanize ya deja el timing perfecto)
+
+morph — Morphing gradual entre dos grooves en N pasos
+──────────────────────────────────────────────────────────────────────────
+Genera N MIDIs intermedios interpolando estructura (kick/snare),
+subdivisión (hihat + swing ratio) y color (toms/clave) como capas
+independientes. También interpola tempo entre A y B.
+Exporta un manifiesto JSON con la lista de archivos en orden.
+
+  # Básico: 8 pasos lineales entre dos grooves
+  python drummer.py morph rock.mid jazz.mid
+
+  # 6 pasos, interpolación sigmoide (suave en extremos, rápida en centro)
+  python drummer.py morph rock.mid jazz.mid --steps 6 --mode sigmoid
+
+  # Normalizar ambos a 2 compases (si tienen distinta longitud)
+  python drummer.py morph rock.mid jazz.mid --steps 8 --bars 2
+
+  # Guardar en carpeta específica
+  python drummer.py morph grooveA.mid grooveB.mid --steps 10 --output-dir ./morphs/
+
+  # Sin humanización (útil para escuchar el morphing puro)
+  python drummer.py morph grooveA.mid grooveB.mid --no-humanize
+
+  # Modos de interpolación disponibles:
+  #   linear      — cambio constante (default)
+  #   sigmoid     — suave en extremos, rápido en el centro
+  #   exponential — lento al principio, acelerado al final
+  #   sinusoidal  — suavizado coseno, muy fluido
+
+SWING DINÁMICO — cómo funciona
+──────────────────────────────────────────────────────────────────────────
+El ratio (0.50=straight … 0.75=hard swing) se aplica por instrumento
+según su función, no de forma uniforme:
+  hihat / ride  (subdivision) → 100% del ratio
+  kick          (pulse)       →  60% del ratio
+  snare         (backbeat)    →   0% (siempre straight)
+  toms / color                →  50–70%
+A tempos > 120bpm el swing se reduce automáticamente (feel físico real).
+
+El flag --swing N normaliza así:  0 → ratio 0.50 (straight)
+                                 0.34 → ratio 0.59 (funk suave)
+                                 0.67 → ratio 0.67 (jazz, triplillo)
+                                  1.0 → ratio 0.75 (hard swing)
+
+INTEGRACIÓN CON TENSION_DESIGNER (curves.json)
+──────────────────────────────────────────────────────────────────────────
+Pasar --tension-curve curves.json activa todos los parámetros
+dinámicos a la vez. Formato esperado:
+
+  {
+    "tension":  [0.1, 0.3, 0.7, 0.9, 0.6, 0.2],  → síncopa kick/snare
+    "activity": [0.2, 0.4, 0.8, 1.0, 0.7, 0.3],  → densidad (thin/thick)
+    "swing":    [0.0, 0.0, 0.4, 0.8, 0.5, 0.0],  → ratio swing hihat
+    "harmony":  [0.2, 0.3, 0.5, 0.8, 0.6, 0.2],  → polirritmo dinámico
+    "register": [0.4, 0.5, 0.7, 1.0, 0.8, 0.4]   → velocity media
+  }
+
+Los arrays pueden tener cualquier longitud; se interpolan al número
+de compases real de la obra.
+Build-up automático: si activity sube > 0.3 en 2 compases → fill.
+
+INSTRUMENTOS GM (canal 10, MIDI note)
+  36 Kick   38 Snare  40 Snare-e  42 HH-closed  44 HH-pedal
+  46 HH-open  49 Crash  51 Ride  57 Crash2
+  41 Tom-lo  45 Tom-mid  48 Tom-hi  70 Maracas  75 Clave
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  learn       Aprende grooves desde una carpeta de MIDIs
+  analyze     Analiza la percusión de un MIDI
+  extract     Extrae el groove de un MIDI y lo añade a la biblioteca
+  add         Añade percusión a un MIDI sin ella
+  transform   Transforma la percusión existente
+  morph       Morphing gradual entre dos grooves en N pasos
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  learn
+    folder FOLDER               Carpeta con MIDIs (mixtos)
+    --output, -o OUTPUT         (defecto drum_library.json)
+    --clusters, -k CLUSTERS     Número de clusters (default: 16)
+    --verbose, -v
+
+  analyze
+    input INPUT                 Archivo MIDI
+    --export EXPORT             Exportar análisis a JSON
+
+  extract
+    input INPUT                 MIDI del que extraer el groove
+    --name, -n NAME             Nombre del groove en la biblioteca (ej:
+                                'mi_groove_funk') (obligatorio)
+    --library, -l LIBRARY       Biblioteca destino (default:
+                                drum_library.json)
+    --export-midi FILE          Exportar el patrón base como MIDI
+                                independiente
+    --force                     Sobreescribir si ya existe un groove con ese
+                                nombre
+
+  add
+    input [INPUT]               MIDI sin percusión
+    --output, -o OUTPUT
+    --library, -l LIBRARY       drum_library.json
+    --fingerprint, -f FINGERPRINT
+                                .fingerprint.json
+    --tension-curve TENSION_CURVE
+                                curves.json de tension_designer
+    --feel FEEL                 (defecto supportive; valores:
+                                supportive|contrasting|independent)
+    --no-humanize
+    --force                     Añadir aunque ya tenga percusión
+    --style, -s STYLE           Arquetipo de groove (…). Default: …
+    --list-styles               Mostrar todos los estilos disponibles y salir
+    --groove-diversity 0-1      Diversidad en selección de grooves:
+                                0=determinista, 1=máxima variedad (default:
+                                0.4)
+    --variation 0-1             Intensidad de variaciones estructurales compás
+                                a compás (default: 0.3)
+    --layers                    Capas independientes activadas (es el
+                                comportamiento por defecto; se acepta por
+                                claridad; excluyente con --no-layers)
+    --no-layers                 Desactivar capas independientes
+                                (comportamiento v0.2; excluyente con --layers)
+    --fill-style FILL           Tipo de fill: auto o uno de … (default: auto)
+
+  transform
+    input INPUT                 MIDI con percusión
+    --output, -o OUTPUT
+    --tension-curve TENSION_CURVE
+                                curves.json de tension_designer (activa
+                                sinc+densidad+swing+polirritmo dinámicos)
+    --syncopate 0-1             Síncopa estática (sobrescribe curva tension)
+    --swing 0-1                 Swing estático: 0=straight, 0.34=jazz, 1=hard
+                                (sobrescribe curva swing)
+    --polyrhythm N              Capa polirrítmica N:4 en todos los compases
+    --phase-shift STEPS         Phase shift: N pasos/compás (Steve Reich)
+    --humanize 0-1              Humanización: micro-timing + velocity
+    --thin 0-1                  Eliminar fracción de golpes (sobrescribe curva
+                                activity)
+    --thicken 0-1               Añadir ghost notes (sobrescribe curva
+                                activity)
+    --emotion TARGET            Target emocional: 'más urgente', 'relajado',
+                                etc.
+
+  morph
+    input_a INPUT_A             MIDI fuente A
+    input_b INPUT_B             MIDI fuente B
+    --steps, -n STEPS           Número de pasos intermedios (default: 8)
+    --bars BARS                 Normalizar ambos patrones a N compases
+    --mode MODE                 Curva de interpolación (default: linear)
+                                (valores:
+                                linear|sigmoid|exponential|sinusoidal)
+    --output-dir, -o OUTPUT_DIR
+                                Carpeta de salida (default: directorio actual)
+    --no-humanize               Desactivar humanización en los pasos
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy                    (requeridas)
+  scikit-learn                   (opcional — clustering en learn)
 """
 
 import argparse

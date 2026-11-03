@@ -1,109 +1,125 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       CHORD PATTERN VOICER  v1.0                             ║
-║      Reescribe el patrón rítmico de la pista de armonía de un MIDI          ║
-║                                                                              ║
-║  Toma un MIDI con varias pistas, detecta automáticamente cuál es la         ║
-║  pista de armonía (la más polifónica, por acordes) y reescribe SOLO esa     ║
-║  pista alterando la forma de "tocar" cada acorde: en vez de bloques         ║
-║  simultáneos, distribuye las mismas notas en el tiempo según un patrón      ║
-║  configurable (bombo-caja, bajo-alberti, arpegios, bloque, o uno propio).   ║
-║  El resto de pistas (melodía, bajo, batería…) se conservan intactas.        ║
-║                                                                              ║
-║  PATRONES DISPONIBLES (--pattern):                                          ║
-║    block            — todas las notas del acorde a la vez (sin alterar)     ║
-║    bombo-caja        — 1º la nota más grave (tónica/bajo), 2º el resto      ║
-║                        del acorde junto (imita bombo→caja)                  ║
-║    alberti           — bajo, agudo, medio, agudo (bajo-alberti clásico)     ║
-║    arpeggio-up        — arpegio ascendente, nota a nota                     ║
-║    arpeggio-down       — arpegio descendente, nota a nota                    ║
-║    arpeggio-updown     — arpegio ascendente y luego descendente             ║
-║    custom            — patrón definido a mano con --custom-pattern         ║
-║                                                                              ║
-║  ROLES para --custom-pattern (lista separada por comas):                    ║
-║    bajo/bass/root    nota más grave del acorde                              ║
-║    agudo/top/alto    nota más aguda del acorde                              ║
-║    medio/mid         nota central del acorde                                ║
-║    resto/rest/caja   todas las notas salvo la más grave, juntas             ║
-║    todas/all/block   todas las notas del acorde a la vez                    ║
-║    0, 1, 2, -1…      índice de nota ordenada de grave a aguda (soporta -1)  ║
-║    [a,b,…]           combina varios roles/índices en un solo paso          ║
-║                        SIMULTÁNEO, p.ej. "[0,1]" o "[bajo,medio]"           ║
-║                                                                              ║
-║  VELOCIDAD DE REPETICIÓN (--reps):                                          ║
-║    Nº de veces que el patrón completo se repite dentro de la duración de    ║
-║    cada acorde detectado (típicamente un compás). --reps 1 = una vez por    ║
-║    compás; --reps 2 = dos veces por compás (el doble de rápido).           ║
-║                                                                              ║
-║  PATRONES POR RANGO DE COMPASES (--segments):                               ║
-║    Permite usar un patrón/velocidad distintos en distintas zonas de la      ║
-║    pieza. Cada segmento se pasa como un argumento independiente con el      ║
-║    formato:                                                                  ║
-║        INICIO-FIN:pattern=NOMBRE[,reps=N][,gate=F][,accent=F][,custom=…]   ║
-║    · INICIO y FIN son compases 1-based; FIN es EXCLUSIVO, así que rangos    ║
-║      consecutivos como "1-10" y "10-20" no se solapan ni dejan huecos.      ║
-║    · Los campos reps/gate/accent/octave son opcionales: si se omiten se     ║
-║      usan los valores globales (--reps/--gate/--accent/--octave).           ║
-║    · Para pattern=custom, los roles van en "custom=" separados por "|"      ║
-║      (no por comas, que ya se usan para separar los campos): p.ej.          ║
-║      custom=bajo|agudo|resto|medio                                          ║
-║    · Los compases no cubiertos por ningún segmento usan --pattern/--reps/   ║
-║      --gate/--accent globales como valores por defecto.                     ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python chord_pattern_voicer.py cancion.mid                               ║
-║    python chord_pattern_voicer.py cancion.mid --pattern bombo-caja          ║
-║    python chord_pattern_voicer.py cancion.mid --pattern alberti --reps 2    ║
-║    python chord_pattern_voicer.py cancion.mid --pattern arpeggio-up --reps 2 --gate 0.6 ║
-║    python chord_pattern_voicer.py cancion.mid --pattern custom              ║
-║        --custom-pattern "bajo,agudo,resto,medio"                            ║
-║    python chord_pattern_voicer.py cancion.mid --pattern custom              ║
-║        --custom-pattern "[0,1],1,2,0"   (bajo+medio a la vez, luego medio,  ║
-║                                           agudo, bajo)                       ║
-║    python chord_pattern_voicer.py cancion.mid --track 2 --verbose           ║
-║    python chord_pattern_voicer.py cancion.mid --list-patterns               ║
-║                                                                              ║
-║    # Patrón distinto por tramos de la pieza (el ejemplo del usuario):       ║
-║    python chord_pattern_voicer.py cancion.mid --segments                    ║
-║        "1-10:pattern=bombo-caja,reps=1"                                     ║
-║        "10-20:pattern=alberti,reps=2"                                       ║
-║        "20-30:pattern=custom,reps=2,custom=bajo|agudo|resto|medio"          ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --track N          Fuerza el índice (0-based) de la pista de armonía.    ║
-║                        Por defecto se autodetecta la pista más polifónica.  ║
-║    --pattern P         Patrón rítmico a aplicar por defecto (bombo-caja)     ║
-║    --custom-pattern S  Roles separados por comas (con --pattern custom).    ║
-║                        Usá "[a,b,…]" para tocar varios roles/índices a la  ║
-║                        vez en un mismo paso, p.ej. "[0,1],1,2,0"           ║
-║    --reps N            Repeticiones del patrón por acorde (default: 1)      ║
-║    --gate F            Fracción sonante de cada paso, 0-1 (default: 0.85)   ║
-║                        F bajo = más staccato/separado; F=1 = legato total   ║
-║    --accent F          Multiplica la velocity del primer golpe de cada      ║
-║                        repetición (default: 1.0 = sin acento)               ║
-║    --octave N          Transporta TODAS las notas del acorde N octavas      ║
-║                        (default: 0). Positivo = sube, negativo = baja,      ║
-║                        p.ej. --octave -1 baja una octava, --octave 2 sube   ║
-║                        dos. Las notas resultantes se recortan al rango      ║
-║                        MIDI válido (0-127). También se puede fijar por      ║
-║                        tramo con octave=N dentro de --segments.             ║
-║    --segments S [S…]  Patrón/velocidad distintos por rango de compases      ║
-║                        (ver "PATRONES POR RANGO DE COMPASES" arriba)        ║
-║    --min-notes N       Nº mínimo de notas simultáneas para considerar una   ║
-║                        pista polifónica en la autodetección (default: 2)    ║
-║    --out FILE          Ruta del MIDI de salida                              ║
-║    --out-dir DIR       Carpeta de salida (default: junto al MIDI de entrada)║
-║    --list-patterns     Lista los patrones disponibles y sale                ║
-║    --report            Guarda un JSON con el análisis completo              ║
-║    --verbose           Informe detallado por stdout                         ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    <base>.voiced.mid          MIDI con la pista de armonía reescrita       ║
-║    <base>.voiced_report.json  con --report                                 ║
-║                                                                              ║
-║  DEPENDENCIAS: mido                                                          ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+chord_pattern_voicer.py — Chord Pattern Voicer: reescribe el patrón rítmico de
+la pista de armonía de un MIDI
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Toma un MIDI con varias pistas, detecta automáticamente cuál es la
+pista de armonía (la más polifónica, por acordes) y reescribe SOLO esa
+pista alterando la forma de "tocar" cada acorde: en vez de bloques
+simultáneos, distribuye las mismas notas en el tiempo según un patrón
+configurable (bombo-caja, bajo-alberti, arpegios, bloque, o uno propio).
+El resto de pistas (melodía, bajo, batería…) se conservan intactas.
+
+PATRONES DISPONIBLES (--pattern):
+  block            — todas las notas del acorde a la vez (sin alterar)
+  bombo-caja        — 1º la nota más grave (tónica/bajo), 2º el resto
+                      del acorde junto (imita bombo→caja)
+  alberti           — bajo, agudo, medio, agudo (bajo-alberti clásico)
+  arpeggio-up        — arpegio ascendente, nota a nota
+  arpeggio-down       — arpegio descendente, nota a nota
+  arpeggio-updown     — arpegio ascendente y luego descendente
+  custom            — patrón definido a mano con --custom-pattern
+
+ROLES para --custom-pattern (lista separada por comas):
+  bajo/bass/root    nota más grave del acorde
+  agudo/top/alto    nota más aguda del acorde
+  medio/mid         nota central del acorde
+  resto/rest/caja   todas las notas salvo la más grave, juntas
+  todas/all/block   todas las notas del acorde a la vez
+  0, 1, 2, -1…      índice de nota ordenada de grave a aguda (soporta -1)
+  [a,b,…]           combina varios roles/índices en un solo paso
+                      SIMULTÁNEO, p.ej. "[0,1]" o "[bajo,medio]"
+
+VELOCIDAD DE REPETICIÓN (--reps):
+  Nº de veces que el patrón completo se repite dentro de la duración de
+  cada acorde detectado (típicamente un compás). --reps 1 = una vez por
+  compás; --reps 2 = dos veces por compás (el doble de rápido).
+
+PATRONES POR RANGO DE COMPASES (--segments):
+  Permite usar un patrón/velocidad distintos en distintas zonas de la
+  pieza. Cada segmento se pasa como un argumento independiente con el
+  formato:
+      INICIO-FIN:pattern=NOMBRE[,reps=N][,gate=F][,accent=F][,custom=…]
+  · INICIO y FIN son compases 1-based; FIN es EXCLUSIVO, así que rangos
+    consecutivos como "1-10" y "10-20" no se solapan ni dejan huecos.
+  · Los campos reps/gate/accent/octave son opcionales: si se omiten se
+    usan los valores globales (--reps/--gate/--accent/--octave).
+  · Para pattern=custom, los roles van en "custom=" separados por "|"
+    (no por comas, que ya se usan para separar los campos): p.ej.
+    custom=bajo|agudo|resto|medio
+  · Los compases no cubiertos por ningún segmento usan --pattern/--reps/
+    --gate/--accent globales como valores por defecto.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  <base>.voiced.mid          MIDI con la pista de armonía reescrita
+  <base>.voiced_report.json  con --report
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --track N          Fuerza el índice (0-based) de la pista de armonía.
+                      Por defecto se autodetecta la pista más polifónica.
+  --pattern P         Patrón rítmico a aplicar por defecto (bombo-caja)
+  --custom-pattern S  Roles separados por comas (con --pattern custom).
+                      Usá "[a,b,…]" para tocar varios roles/índices a la
+                      vez en un mismo paso, p.ej. "[0,1],1,2,0"
+  --reps N            Repeticiones del patrón por acorde (default: 1)
+  --gate F            Fracción sonante de cada paso, 0-1 (default: 0.85)
+                      F bajo = más staccato/separado; F=1 = legato total
+  --accent F          Multiplica la velocity del primer golpe de cada
+                      repetición (default: 1.0 = sin acento)
+  --octave N          Transporta TODAS las notas del acorde N octavas
+                      (default: 0). Positivo = sube, negativo = baja,
+                      p.ej. --octave -1 baja una octava, --octave 2 sube
+                      dos. Las notas resultantes se recortan al rango
+                      MIDI válido (0-127). También se puede fijar por
+                      tramo con octave=N dentro de --segments.
+  --segments S [S…]  Patrón/velocidad distintos por rango de compases
+                      (ver "PATRONES POR RANGO DE COMPASES" arriba)
+  --min-notes N       Nº mínimo de notas simultáneas para considerar una
+                      pista polifónica en la autodetección (default: 2)
+  --out FILE          Ruta del MIDI de salida
+  --out-dir DIR       Carpeta de salida (default: junto al MIDI de entrada)
+  --list-patterns     Lista los patrones disponibles y sale
+  --report            Guarda un JSON con el análisis completo
+  --verbose           Informe detallado por stdout
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python chord_pattern_voicer.py cancion.mid
+  python chord_pattern_voicer.py cancion.mid --pattern bombo-caja
+  python chord_pattern_voicer.py cancion.mid --pattern alberti --reps 2
+  python chord_pattern_voicer.py cancion.mid --pattern arpeggio-up --reps 2 --gate 0.6
+  python chord_pattern_voicer.py cancion.mid --pattern custom \
+      --custom-pattern "bajo,agudo,resto,medio"
+  python chord_pattern_voicer.py cancion.mid --pattern custom \
+      --custom-pattern "[0,1],1,2,0"
+      # bajo+medio a la vez, luego medio, agudo, bajo
+  python chord_pattern_voicer.py cancion.mid --track 2 --verbose
+  python chord_pattern_voicer.py cancion.mid --list-patterns
+
+  # Patrón distinto por tramos de la pieza (el ejemplo del usuario):
+  python chord_pattern_voicer.py cancion.mid --segments \
+      "1-10:pattern=bombo-caja,reps=1" \
+      "10-20:pattern=alberti,reps=2" \
+      "20-30:pattern=custom,reps=2,custom=bajo|agudo|resto|medio"
+
+── Más modos ──
+
+  # Guarda un JSON con el análisis completo
+  python chord_pattern_voicer.py --report
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido
 """
 
 import os

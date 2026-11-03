@@ -1,56 +1,133 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    SCHENKER COMPOSER  v1.0                                    ║
-║   Recomposición neuronal por niveles de reducción schenkeriana               ║
-║                                                                              ║
-║  Entrena una red que aprende a "elaborar" un nivel schenkeriano n hacia el   ║
-║  nivel n+1 (más cercano a la superficie). El corpus de entrenamiento se      ║
-║  construye reduciendo automáticamente MIDIs reales con un analizador        ║
-║  schenkeriano interno (inspirado en schenkerian_reducer.py / GTTM de        ║
-║  Lerdahl & Jackendoff, pero reimplementado aquí de forma autocontenida y    ║
-║  simplificada — sin depender de ningún fichero externo del ecosistema).     ║
-║                                                                              ║
-║  CONVENCIÓN DE NIVELES (importante, es la INVERSA de un reductor clásico):  ║
-║    nivel 0        = Ursatz / estructura más reducida (fondo)                ║
-║    nivel D_max     = superficie original (primer plano, el MIDI tal cual)   ║
-║  Es decir "nivel n → n+1" = ELABORACIÓN (añadir ornamentación), no          ║
-║  reducción. El modelo aprende ese paso hacia adelante.                      ║
-║                                                                              ║
-║  HONESTIDAD EPISTEMOLÓGICA: igual que en schenkerian_reducer.py, el         ║
-║  análisis schenkeriano automático NO es determinista ni "la verdad" — es   ║
-║  una heurística de puntuación (peso métrico + armónico + duración) que      ║
-║  aproxima el proceso de reducción de forma tratable computacionalmente.     ║
-║  La red neuronal aprende el ESTILO de elaboración presente en el corpus     ║
-║  de entrenamiento, no reglas schenkerianas universales.                     ║
-║                                                                              ║
-║  PIPELINE:                                                                   ║
-║    [1] synth-corpus  — (opcional) genera MIDIs sintéticos para pruebas      ║
-║    [2] prepare        — corpus de MIDIs → niveles de reducción → pares      ║
-║                         (nivel n, nivel n+1) tokenizados → dataset .npz     ║
-║    [3] train          — entrena el Transformer encoder-decoder             ║
-║    [4] generate       — MIDI de un nivel arbitrario → nivel n+1 generado   ║
-║    [5] inspect        — muestra la reducción schenkeriana de un MIDI       ║
-║                         (equivalente ligero de schenkerian_reducer.py,      ║
-║                         útil para depurar el paso [2])                     ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python schenker_composer.py synth-corpus corpus/ --n 40                  ║
-║    python schenker_composer.py prepare corpus/ --out dataset.npz            ║
-║    python schenker_composer.py train dataset.npz --model-dir modelo/        ║
-║    python schenker_composer.py generate entrada.mid --model-dir modelo/ \\   ║
-║           --output salida.mid --level 0                                     ║
-║    python schenker_composer.py inspect obra.mid                             ║
-║                                                                              ║
-║  COMO MÓDULO:                                                               ║
-║    from schenker_composer import reduce_piece_depths, prepare_dataset       ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy siempre; torch SOLO para train/generate (import        ║
-║  perezoso, no hace falta para prepare/inspect/synth-corpus). E/S MIDI,      ║
-║  teoría armónica y tokenización están reimplementadas aquí sin importar     ║
-║  schenkerian_reducer.py ni ningún otro fichero del ecosistema — el         ║
-║  programa es autocontenido en un solo fichero.                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+schenker_composer.py — Schenker Composer: recomposición neuronal por niveles
+de reducción schenkeriana
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Entrena una red que aprende a "elaborar" un nivel schenkeriano n hacia el
+nivel n+1 (más cercano a la superficie). El corpus de entrenamiento se
+construye reduciendo automáticamente MIDIs reales con un analizador
+schenkeriano interno (inspirado en schenkerian_reducer.py / GTTM de
+Lerdahl & Jackendoff, pero reimplementado aquí de forma autocontenida y
+simplificada — sin depender de ningún fichero externo del ecosistema).
+
+CONVENCIÓN DE NIVELES (importante, es la INVERSA de un reductor clásico):
+  nivel 0        = Ursatz / estructura más reducida (fondo)
+  nivel D_max     = superficie original (primer plano, el MIDI tal cual)
+Es decir "nivel n → n+1" = ELABORACIÓN (añadir ornamentación), no
+reducción. El modelo aprende ese paso hacia adelante.
+
+HONESTIDAD EPISTEMOLÓGICA: igual que en schenkerian_reducer.py, el
+análisis schenkeriano automático NO es determinista ni "la verdad" — es
+una heurística de puntuación (peso métrico + armónico + duración) que
+aproxima el proceso de reducción de forma tratable computacionalmente.
+La red neuronal aprende el ESTILO de elaboración presente en el corpus
+de entrenamiento, no reglas schenkerianas universales.
+
+PIPELINE:
+  [1] synth-corpus  — (opcional) genera MIDIs sintéticos para pruebas
+  [2] prepare        — corpus de MIDIs → niveles de reducción → pares
+                       (nivel n, nivel n+1) tokenizados → dataset .npz
+  [3] train          — entrena el Transformer encoder-decoder
+  [4] generate       — MIDI de un nivel arbitrario → nivel n+1 generado
+  [5] inspect        — muestra la reducción schenkeriana de un MIDI
+                       (equivalente ligero de schenkerian_reducer.py,
+                       útil para depurar el paso [2])
+
+COMO MÓDULO:
+  from schenker_composer import reduce_piece_depths, prepare_dataset
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  synth-corpus  Genera MIDIs sintéticos para probar el pipeline
+  inspect       Muestra la reducción schenkeriana interna de un MIDI
+  prepare       Corpus de MIDIs → dataset de pares (nivel n, nivel n+1)
+  train         Entrena el Transformer encoder-decoder
+  generate      Eleva un MIDI de un nivel n al nivel n+1 (elaboración)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  synth-corpus
+    out_dir OUT_DIR
+    --n N                       (defecto 30)
+    --seed SEED                 (defecto 42)
+
+  inspect
+    midi MIDI
+    --key KEY
+    --window WINDOW
+    --max-reduction-depth MAX_REDUCTION_DEPTH
+                                (defecto 500)
+    --n-levels N_LEVELS         (defecto DEFAULT_N_LEVELS)
+    --export-levels EXPORT_LEVELS
+
+  prepare
+    corpus CORPUS
+    --out OUT                   (defecto dataset.npz)
+    --key KEY
+    --window WINDOW
+    --max-reduction-depth MAX_REDUCTION_DEPTH
+                                (defecto 500)
+    --n-levels N_LEVELS         (defecto DEFAULT_N_LEVELS)
+    --max-src-notes MAX_SRC_NOTES
+                                (defecto 4)
+    --max-src-len MAX_SRC_LEN   (defecto 24)
+    --max-tgt-len MAX_TGT_LEN   (defecto 64)
+    --val-frac VAL_FRAC         (defecto 0.15)
+    --seed SEED                 (defecto 42)
+
+  train
+    dataset DATASET
+    --model-dir MODEL_DIR       (defecto modelo_schenker/)
+    --epochs EPOCHS             (defecto 100)
+    --batch-size BATCH_SIZE     (defecto 32)
+    --lr LR                     (defecto 0.0003)
+    --patience PATIENCE         (defecto 20)
+    --d-model D_MODEL           (defecto 128)
+    --nhead NHEAD               (defecto 4)
+    --num-layers NUM_LAYERS     (defecto 3)
+    --dim-ff DIM_FF             (defecto 256)
+    --dropout DROPOUT           (defecto 0.1)
+    --resume
+
+  generate
+    midi MIDI
+    --model-dir MODEL_DIR       (defecto modelo_schenker/)
+    --output OUTPUT             (defecto salida_elaborada.mid)
+    --level LEVEL               0=nivel más reducido/Ursatz-like ...
+                                10=superficie (default: 5)
+    --iterations ITERATIONS     aplica la elaboración N veces seguidas,
+                                subiendo de nivel cada vez (defecto 1)
+    --voices VOICES             mel | bass | mel,bass (defecto mel,bass)
+    --key KEY
+    --window WINDOW
+    --temperature TEMPERATURE   (defecto 0.9)
+    --top-k TOP_K               (defecto 0)
+    --seed SEED                 (defecto 42)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python schenker_composer.py synth-corpus corpus/ --n 40
+  python schenker_composer.py prepare corpus/ --out dataset.npz
+  python schenker_composer.py train dataset.npz --model-dir modelo/
+  python schenker_composer.py generate entrada.mid --model-dir modelo/ \
+         --output salida.mid --level 0
+  python schenker_composer.py inspect obra.mid
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  numpy siempre; torch SOLO para train/generate (import
+  perezoso, no hace falta para prepare/inspect/synth-corpus). E/S MIDI,
+  teoría armónica y tokenización están reimplementadas aquí sin importar
+  schenkerian_reducer.py ni ningún otro fichero del ecosistema — el
+  programa es autocontenido en un solo fichero.
 """
 
 import sys

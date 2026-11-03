@@ -1,48 +1,130 @@
 #!/usr/bin/env python3
-# ╔══════════════════════════════════════════════════════════════════════════╗
-# ║  anticipation_composer.py                                                ║
-# ║  Anticipatory Music Transformer — herramienta de fichero unico           ║
-# ╟──────────────────────────────────────────────────────────────────────────╢
-# ║  Adaptacion al estilo mutopia del repo "anticipation" (Stanford CRFM,    ║
-# ║  Thickstun / Hall / Donahue / Liang, arXiv:2306.08620). Convierte MIDI   ║
-# ║  a la tokenizacion "arrival-time" (la que usa el modelo generativo) o    ║
-# ║  a la tokenizacion "interarrival" (estilo MIDI-like), manipula esas      ║
-# ║  secuencias, y genera musica muestreando de un checkpoint preentrenado   ║
-# ║  de HuggingFace (p.ej. stanford-crfm/music-medium-800k).                 ║
-# ║                                                                          ║
-# ║  Subcomandos:                                                            ║
-# ║    tokenize        MIDI -> tokens (.json)                                ║
-# ║    render          tokens (.json) -> MIDI                                ║
-# ║    info            estadisticas de un MIDI o de un fichero de tokens     ║
-# ║    clip            recorta una ventana temporal de un fichero de tokens  ║
-# ║    extract-melody  separa instrumentos (melodia) del resto (acomp.)      ║
-# ║    list-models     lista los checkpoints publicados por Stanford CRFM    ║
-# ║    download-model  descarga y cachea un checkpoint de HuggingFace        ║
-# ║    generate        genera musica desde cero o como continuacion         ║
-# ║    accompany       genera un acompanamiento condicionado a una melodia   ║
-# ║                                                                          ║
-# ║  Ejemplos:                                                                ║
-# ║    ./anticipation_composer.py tokenize in.mid tokens.json                ║
-# ║    ./anticipation_composer.py info tokens.json                           ║
-# ║    ./anticipation_composer.py render tokens.json out.mid                 ║
-# ║    ./anticipation_composer.py clip tokens.json clipped.json --start 10 --end 30 ║
-# ║    ./anticipation_composer.py extract-melody tokens.json --instruments 0 \ ║
-# ║        --melody-out mel.json --accomp-out acc.json                       ║
-# ║    ./anticipation_composer.py list-models                                ║
-# ║    ./anticipation_composer.py download-model --model stanford-crfm/music-small-800k ║
-# ║    ./anticipation_composer.py generate --model stanford-crfm/music-small-800k \ ║
-# ║        --length 20 --output generated.json --top-p .98                  ║
-# ║    ./anticipation_composer.py accompany --model stanford-crfm/music-medium-800k \ ║
-# ║        --melody mel.json --length 20 --output accomp.json                ║
-# ║                                                                          ║
-# ║  Dependencias: mido, numpy (siempre). torch + transformers +             ║
-# ║  huggingface_hub solo se importan bajo demanda para generate/accompany/  ║
-# ║  download-model.                                                         ║
-# ╚══════════════════════════════════════════════════════════════════════════╝
-"""
-anticipation_composer.py -- herramientas de linea de comandos para trabajar
-con el formato de tokens del Anticipatory Music Transformer y para muestrear
-musica de modelos entrenados con ese formato.
+r"""
+anticipation_composer.py — Anticipatory Music Transformer: herramienta de
+fichero único para tokenizar MIDI, manipular las secuencias y generar música
+(MIDI ↔ tokens .json; checkpoints de HuggingFace).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Adaptación al estilo mutopia del repo «anticipation» (Stanford CRFM; Thickstun,
+Hall, Donahue y Liang, arXiv:2306.08620). Convierte un MIDI a la tokenización
+«arrival-time» (la que usa el modelo generativo) o a la «interarrival» (estilo
+MIDI-like), manipula esas secuencias y genera música muestreando de un
+checkpoint preentrenado de HuggingFace (p. ej. stanford-crfm/music-medium-800k).
+La generación puede ser anticipatoria (modo aar: usa los controles futuros de
+--input) o autorregresiva pura (ar).
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  tokenize        MIDI -> tokens (.json)
+  render          tokens (.json) -> MIDI
+  info            estadisticas de un MIDI o de un fichero de tokens
+  clip            recorta una ventana temporal de un fichero de tokens
+                  (arrival-time)
+  extract-melody  separa instrumentos (melodia) del resto (arrival-time)
+  list-models     lista los checkpoints publicados por Stanford CRFM
+  download-model  descarga y cachea localmente un checkpoint de HuggingFace
+  generate        genera musica desde cero o como continuacion de un input
+  accompany       genera un acompanamiento condicionado a una melodia
+                  (arrival-time)
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Entrada : un MIDI (tokenize, info) o un fichero de tokens .json (render, info,
+            clip, extract-melody, generate, accompany).
+  Salida  : tokens .json (tokenize, clip, extract-melody, generate, accompany) o
+            MIDI (render); info imprime estadísticas; list-models y
+            download-model trabajan contra HuggingFace (los checkpoints se
+            cachean localmente).
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  tokenize
+    input INPUT                 fichero MIDI de entrada
+    output OUTPUT               fichero de tokens (.json) de salida
+    --format FORMAT             (defecto arrival; valores:
+                                arrival|interarrival)
+    --debug
+
+  render
+    input INPUT                 fichero de tokens (.json) de entrada
+    output OUTPUT               fichero MIDI de salida
+    --debug
+
+  info
+    input INPUT                 fichero .mid o .json de tokens
+
+  clip
+    input INPUT
+    output OUTPUT
+    --start START               inicio en segundos (obligatorio)
+    --end END                   fin en segundos (obligatorio)
+    --no-clip-duration          no truncar la duracion de notas que cruzan el
+                                limite
+
+  extract-melody
+    input INPUT
+    --instruments INSTRUMENTS   lista de programas MIDI separados por coma,
+                                p.ej. "0,1" (128 = percusion) (obligatorio)
+    --melody-out MELODY_OUT     (obligatorio)
+    --accomp-out ACCOMP_OUT     (obligatorio)
+
+  download-model
+    --model MODEL               nombre del checkpoint, p.ej. stanford-
+                                crfm/music-medium-800k (obligatorio)
+    --revision REVISION         revision/commit concreto (opcional)
+
+  generate
+    --model MODEL               nombre o ruta de un checkpoint HuggingFace
+                                (obligatorio)
+    --input INPUT               tokens (arrival-time) a continuar; opcional
+    --start START               instante en el que empieza la generacion
+                                (defecto 0.0)
+    --length LENGTH             segundos a generar (defecto 20.0)
+    --top-p TOP_P               (defecto 1.0)
+    --mode MODE                 aar = anticipatorio (usa --input como
+                                controles futuros), ar = autoregresivo puro
+                                (defecto aar; valores: aar|ar)
+    --device DEVICE             cuda|cpu; por defecto detecta automaticamente
+    --output OUTPUT             (obligatorio)
+
+  accompany
+    --model MODEL               (obligatorio)
+    --melody MELODY             tokens de la melodia (usar extract-melody
+                                antes) (obligatorio)
+    --start START               (defecto 0.0)
+    --length LENGTH             (defecto 20.0)
+    --top-p TOP_P               (defecto 1.0)
+    --combine                   incluir la melodia en la salida, ya combinada
+    --device DEVICE
+    --output OUTPUT             (obligatorio)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python anticipation_composer.py tokenize in.mid tokens.json
+  python anticipation_composer.py tokenize in.mid tokens_ia.json --format interarrival
+  python anticipation_composer.py info tokens.json
+  python anticipation_composer.py render tokens.json out.mid
+  python anticipation_composer.py clip tokens.json clipped.json --start 10 --end 30
+  python anticipation_composer.py extract-melody tokens.json --instruments 0 \
+      --melody-out mel.json --accomp-out acc.json
+  python anticipation_composer.py list-models
+  python anticipation_composer.py download-model --model stanford-crfm/music-small-800k
+  python anticipation_composer.py generate --model stanford-crfm/music-small-800k \
+      --length 20 --output generated.json --top-p .98
+  python anticipation_composer.py accompany --model stanford-crfm/music-medium-800k \
+      --melody mel.json --length 20 --output accomp.json
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+mido y numpy (siempre). torch, transformers y huggingface_hub solo se importan
+bajo demanda para generate, accompany y download-model.
 """
 
 import argparse

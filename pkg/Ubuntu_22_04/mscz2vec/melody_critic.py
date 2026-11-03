@@ -1,40 +1,46 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       MELODY CRITIC  v1.0                                   ║
-║        Crítica constructiva de una melodía propia (didáctica)               ║
-║                                                                              ║
-║  quality_scorer PUNTÚA una obra pero no ENSEÑA; esta herramienta analiza    ║
-║  una melodía tuya y devuelve comentario pedagógico: qué está bien y qué      ║
-║  mejorar (contorno, ámbito, saltos, motion por grados, notas repetidas,     ║
-║  colocación del clímax, equilibrio de frases antecedente/consecuente).      ║
-║  Pensada para quien está aprendiendo a componer, no para rankear.           ║
-║                                                                              ║
-║  MÉTRICAS:                                                                   ║
-║    ámbito        — distancia tónica-aguda; ideal cantábile ≈ 8ª–10ª         ║
-║    grados vs saltos — proporción de segundas frente a saltos (>3st)         ║
-║    saltos sueltos — saltos grandes NO compensados por grado contrario       ║
-║    clímax        — dónde cae la nota más alta (ideal ≈ 60–75% de la frase)  ║
-║    cambios de dirección — sinuosidad del contorno (ni recto ni errático)    ║
-║    notas repetidas — proporción de repeticiones (estatismo)                 ║
-║    frases         — nº y equilibrio de frases (separadas por silencios)     ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python melody_critic.py melodia.mid                                       ║
-║    python melody_critic.py obra.mid --track 0                               ║
-║    python melody_critic.py melodia.mid --json critica.json                  ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi              MIDI de entrada (melodía)                              ║
-║    --track N         Pista a analizar (default: la más aguda con notas)     ║
-║    --json FILE       Escribe un sidecar JSON con métricas y comentarios      ║
-║    --no-color        Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from melody_critic import critique_melody                                 ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+melody_critic.py — Melody Critic: crítica constructiva de una melodía propia
+(didáctica)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+quality_scorer PUNTÚA una obra pero no ENSEÑA; esta herramienta analiza
+una melodía tuya y devuelve comentario pedagógico: qué está bien y qué
+mejorar (contorno, ámbito, saltos, motion por grados, notas repetidas,
+colocación del clímax, equilibrio de frases antecedente/consecuente).
+Pensada para quien está aprendiendo a componer, no para rankear.
+
+MÉTRICAS:
+  ámbito        — distancia tónica-aguda; ideal cantábile ≈ 8ª–10ª
+  grados vs saltos — proporción de segundas frente a saltos (>3st)
+  saltos sueltos — saltos grandes NO compensados por grado contrario
+  clímax        — dónde cae la nota más alta (ideal ≈ 60–75% de la frase)
+  cambios de dirección — sinuosidad del contorno (ni recto ni errático)
+  notas repetidas — proporción de repeticiones (estatismo)
+  frases         — nº y equilibrio de frases (separadas por silencios)
+
+COMO MÓDULO:
+  from melody_critic import critique_melody
+
+DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi              MIDI de entrada (melodía)
+  --track N         Pista a analizar (default: la más aguda con notas)
+  --json FILE       Escribe un sidecar JSON con métricas y comentarios
+  --no-color        Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python melody_critic.py melodia.mid
+  python melody_critic.py obra.mid --track 0
+  python melody_critic.py melodia.mid --json critica.json
 """
 
 import sys

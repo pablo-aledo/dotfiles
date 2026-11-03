@@ -1,49 +1,58 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      ETUDE GENERATOR  v1.0                                  ║
-║        Generador de ejercicios técnicos de piano (escalas, arpegios…)       ║
-║                                                                              ║
-║  El ecosistema compone obras, pero un estudiante necesita material TÉCNICO  ║
-║  diario. Esta herramienta genera escalas, arpegios, patrones tipo Hanon y   ║
-║  cadencias en cualquier tonalidad, a manos juntas o separadas, con la        ║
-║  digitación estándar anotada. Complementa a fingering.py (que digita una    ║
-║  pieza dada) generando el material desde cero.                               ║
-║                                                                              ║
-║  TIPOS (--type):                                                             ║
-║    scale      — escala ascendente y descendente en N octavas                ║
-║    arpeggio   — arpegio de tríada (fundamental) en N octavas                ║
-║    broken     — acorde quebrado / patrón Alberti                            ║
-║    hanon      — figura de 5 dedos que sube y baja por la escala (Hanon nº1) ║
-║    cadence    — cadencia I–IV–I6/4–V–I con enlace de voces                   ║
-║                                                                              ║
-║  MODOS (--mode): major · minor · harmonic_minor · melodic_minor ·           ║
-║                  dorian · mixolydian · phrygian · lydian                     ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python etude_generator.py --type scale --key C --octaves 2               ║
-║    python etude_generator.py --type scale --key A --mode harmonic_minor     ║
-║    python etude_generator.py --type arpeggio --key G --hands right          ║
-║    python etude_generator.py --type hanon --key C --tempo 100               ║
-║    python etude_generator.py --type cadence --key F --output cadencia.mid   ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --type T          scale | arpeggio | broken | hanon | cadence            ║
-║    --key K           Tónica (C, G, F#, Bb…)  (default: C)                    ║
-║    --mode M          Modo/escala (default: major)                           ║
-║    --octaves N       Octavas (scale/arpeggio/broken)  (default: 2)          ║
-║    --hands H         both | right | left  (default: both)                   ║
-║    --tempo BPM       Tempo del MIDI  (default: 90)                          ║
-║    --note-value V    Valor por nota en negras (default: 0.25 = semicorchea) ║
-║    --start-octave N  Octava de inicio de la mano derecha (default: 4)       ║
-║    --output FILE     MIDI de salida (default: <tipo>_<tónica><modo>.mid)     ║
-║    --no-color        Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from etude_generator import generate_etude                                ║
-║                                                                              ║
-║  DEPENDENCIAS: playability_auditor.py (mismo directorio, E/S MIDI)           ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+etude_generator.py — Etude Generator: generador de ejercicios técnicos de
+piano (escalas, arpegios…)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+El ecosistema compone obras, pero un estudiante necesita material TÉCNICO
+diario. Esta herramienta genera escalas, arpegios, patrones tipo Hanon y
+cadencias en cualquier tonalidad, a manos juntas o separadas, con la
+digitación estándar anotada. Complementa a fingering.py (que digita una
+pieza dada) generando el material desde cero.
+
+TIPOS (--type):
+  scale      — escala ascendente y descendente en N octavas
+  arpeggio   — arpegio de tríada (fundamental) en N octavas
+  broken     — acorde quebrado / patrón Alberti
+  hanon      — figura de 5 dedos que sube y baja por la escala (Hanon nº1)
+  cadence    — cadencia I–IV–I6/4–V–I con enlace de voces
+
+MODOS (--mode): major · minor · harmonic_minor · melodic_minor ·
+                dorian · mixolydian · phrygian · lydian
+
+COMO MÓDULO:
+  from etude_generator import generate_etude
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --type T          scale | arpeggio | broken | hanon | cadence
+  --key K           Tónica (C, G, F#, Bb…)  (default: C)
+  --mode M          Modo/escala (default: major)
+  --octaves N       Octavas (scale/arpeggio/broken)  (default: 2)
+  --hands H         both | right | left  (default: both)
+  --tempo BPM       Tempo del MIDI  (default: 90)
+  --note-value V    Valor por nota en negras (default: 0.25 = semicorchea)
+  --start-octave N  Octava de inicio de la mano derecha (default: 4)
+  --output FILE     MIDI de salida (default: <tipo>_<tónica><modo>.mid)
+  --no-color        Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python etude_generator.py --type scale --key C --octaves 2
+  python etude_generator.py --type scale --key A --mode harmonic_minor
+  python etude_generator.py --type arpeggio --key G --hands right
+  python etude_generator.py --type hanon --key C --tempo 100
+  python etude_generator.py --type cadence --key F --output cadencia.mid
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  playability_auditor.py (mismo directorio, E/S MIDI)
 """
 
 import sys

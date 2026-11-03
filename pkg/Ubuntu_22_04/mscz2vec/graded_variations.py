@@ -1,29 +1,50 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    GRADED VARIATIONS  v1.0  (autocontenido)                  ║
-║                                                                              ║
-║  Genera variaciones musicales de una pieza de piano simplificada a un grado ║
-║  de dificultad pedagógica. Cada variación aísla una dimensión musical       ║
-║  (ornamentación, ritmo, textura, registro, armonía, modo, articulación)     ║
-║  y produce una versión alternativa de la misma pieza simplificada.          ║
-║                                                                              ║
-║  El grado de cada variación puede variar ±1 respecto al objetivo para       ║
-║  aislar mejor la técnica modificada. Se exporta también la versión           ║
-║  simplificada limpia como referencia.                                       ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python graded_variations.py obra.mid --grade 3 --variations 2            ║
-║    python graded_variations.py obra.mid --grade 5 --types ornamental ritmica║
-║    python graded_variations.py obra.mid --grade 2 --seed 42 --outdir out/   ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    <nombre>_grade<N>_base.mid              versión simplificada limpia      ║
-║    <nombre>_grade<N>_<tipo>_<k>.mid        variación k del tipo             ║
-║    + informe por consola con los cambios de cada variación                  ║
-║                                                                              ║
-║  DEPENDENCIAS: solo numpy (stdlib para todo lo demás). Un único fichero.    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+graded_variations.py — Variaciones musicales graduadas de una pieza de piano
+simplificada a un grado de dificultad (autocontenido)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Genera variaciones musicales de una pieza de piano simplificada a un grado
+de dificultad pedagógica. Cada variación aísla una dimensión musical
+(ornamentación, ritmo, textura, registro, armonía, modo, articulación)
+y produce una versión alternativa de la misma pieza simplificada.
+
+El grado de cada variación puede variar ±1 respecto al objetivo para
+aislar mejor la técnica modificada. Se exporta también la versión
+simplificada limpia como referencia.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  <nombre>_grade<N>_base.mid              versión simplificada limpia
+  <nombre>_grade<N>_<tipo>_<k>.mid        variación k del tipo
+  + informe por consola con los cambios de cada variación
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi MIDI
+  --grade GRADE               Grado objetivo (1-8) (obligatorio)
+  --variations VARIATIONS     Variaciones por tipo (def. 2) (defecto 2)
+  --types TYPES […]           Tipos de variación (def. todos)
+  --seed SEED                 (defecto 42)
+  --split SPLIT               (defecto 60)
+  --outdir OUTDIR
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python graded_variations.py obra.mid --grade 3 --variations 2
+  python graded_variations.py obra.mid --grade 5 --types ornamental ritmica
+  python graded_variations.py obra.mid --grade 2 --seed 42 --outdir out/
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  solo numpy (stdlib para todo lo demás). Un único fichero.
 """
 import sys, os, json, math, random, argparse
 import zlib

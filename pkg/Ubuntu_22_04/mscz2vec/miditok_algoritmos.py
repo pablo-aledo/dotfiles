@@ -1,33 +1,69 @@
 #!/usr/bin/env python3
-r"""
-╔══════════════════════════════════════════════════════════════════════════╗
-║ miditok_algoritmos.py                                                     ║
-║                                                                            ║
-║ Los 9 algoritmos de tokenización de MIDI (MIDI-Like, TSD, REMI,           ║
-║ Structured, CPWord, Octuple, MuMIDI, MMM, PerTok) REIMPLEMENTADOS DESDE   ║
-║ CERO, en Python puro sobre `mido`, para poder leer y entender el          ║
-║ algoritmo real de cada uno -- sin la caja negra de la librería miditok.   ║
-║                                                                            ║
-║ Este fichero es la versión "para entender cómo funciona"; para uso        ║
-║ productivo (fidelidad exacta, BPE, etc.) usa miditok_composer.py, que      ║
-║ envuelve la librería original.                                            ║
-║                                                                            ║
-║ Simplificaciones deliberadas (documentadas también en --explain):         ║
-║   - se asume compás 4/4 para la rejilla de Bar/Position                   ║
-║   - velocity se cuantiza a 32 bins, duración/time-shift a una rejilla      ║
-║     de semicorcheas (configurable con --resolution)                       ║
-║   - sin BPE/entrenamiento de vocabulario (eso ya lo cubre miditok_composer)║
-║                                                                            ║
-║ Uso:                                                                      ║
-║   miditok_algoritmos.py list-schemes                                     ║
-║   miditok_algoritmos.py explain REMI                                     ║
-║   miditok_algoritmos.py tokenize song.mid -s REMI -o tokens.json         ║
-║   miditok_algoritmos.py detokenize tokens.json -o song_back.mid          ║
-║   miditok_algoritmos.py compare song.mid          (los 9 a la vez)       ║
-║   miditok_algoritmos.py info song.mid                                    ║
-║                                                                            ║
-║ Deps: pip install mido                                                   ║
-╚══════════════════════════════════════════════════════════════════════════╝
+"""
+miditok_algoritmos.py — Los 9 algoritmos de tokenización de MIDI (MIDI-Like,
+TSD, REMI, Structured, CPWord, Octuple, MuMIDI, MMM,…
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Los 9 algoritmos de tokenización de MIDI (MIDI-Like, TSD, REMI,
+Structured, CPWord, Octuple, MuMIDI, MMM, PerTok) REIMPLEMENTADOS DESDE
+CERO, en Python puro sobre `mido`, para poder leer y entender el
+algoritmo real de cada uno -- sin la caja negra de la librería miditok.
+
+Este fichero es la versión "para entender cómo funciona"; para uso
+productivo (fidelidad exacta, BPE, etc.) usa miditok_composer.py, que
+envuelve la librería original.
+
+Simplificaciones deliberadas (documentadas también en --explain):
+  - se asume compás 4/4 para la rejilla de Bar/Position
+  - velocity se cuantiza a 32 bins, duración/time-shift a una rejilla
+    de semicorcheas (configurable con --resolution)
+  - sin BPE/entrenamiento de vocabulario (eso ya lo cubre miditok_composer)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  list-schemes  (véase Opciones)
+  explain       explica el algoritmo de un esquema
+  tokenize      (véase Opciones)
+  detokenize    (véase Opciones)
+  compare       tokeniza el mismo MIDI con los 9 esquemas y compara
+  info          (véase Opciones)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  explain
+    scheme SCHEME
+
+  tokenize
+    midi MIDI
+    -s, --scheme SCHEME         (defecto REMI)
+    -o, --output OUTPUT
+
+  detokenize
+    tokens TOKENS
+    --scheme SCHEME
+    -o, --output OUTPUT
+
+  compare
+    midi MIDI
+
+  info
+    path PATH
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    miditok_algoritmos.py list-schemes
+    miditok_algoritmos.py explain REMI
+    miditok_algoritmos.py tokenize song.mid -s REMI -o tokens.json
+    miditok_algoritmos.py detokenize tokens.json -o song_back.mid
+    miditok_algoritmos.py compare song.mid          # los 9 a la vez
+    miditok_algoritmos.py info song.mid
+
+  Deps: pip install mido
 """
 
 from __future__ import annotations

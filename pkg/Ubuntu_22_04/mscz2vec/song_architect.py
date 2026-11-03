@@ -1,47 +1,91 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       SONG ARCHITECT  v2.0                                   ║
-║         Frases musicales → estructura de canción completa y coherente        ║
-║                                                                               ║
-║  Toma un número reducido de frases musicales (MIDI) y genera una obra        ║
-║  completa con estructura de canción popular:                                  ║
-║                                                                               ║
-║    Intro → Verso → Pre-estribillo → Estribillo → Verso 2 →                  ║
-║    Puente → Solo → Outro                                                      ║
-║                                                                               ║
-║  Las secciones se generan con coherencia musical entre ellas:                ║
-║  • Tonalidad y modo unificados                                                ║
-║  • Voice leading entre secciones y entre acordes                             ║
-║  • Curvas de tensión dramática por sección                                    ║
-║  • Transformaciones motívicas coherentes (variación, inversión, aumentación) ║
-║  • Progresiones armónicas adaptadas al rol de cada sección                   ║
-║  • Selección inteligente de fragmentos por interés melódico                  ║
-║  • Manejo correcto de MIDIs multi-track                                      ║
-║  • Deduplicación de notas superpuestas                                       ║
-║  • Detección automática de compás                                            ║
-║  • Repeticiones con micro-variaciones                                        ║
-║  • Exportación MusicXML (MuseScore/Sibelius)                                 ║
-║                                                                               ║
-║  USO:                                                                         ║
-║    python song_architect.py frase1.mid frase2.mid frase3.mid                 ║
-║    python song_architect.py *.mid --key Am --tempo 120                       ║
-║    python song_architect.py frases/*.mid --style pop --out-dir cancion/      ║
-║    python song_architect.py *.mid --no-solo --no-bridge --bars-per-section 8 ║
-║    python song_architect.py *.mid --dry-run                                  ║
-║    python song_architect.py *.mid --split-tracks --melody-track 1           ║
-║    python song_architect.py *.mid --fragment-start 8 --fragment-end 24      ║
-║    python song_architect.py *.mid --export-musicxml                          ║
-║                                                                               ║
-║  OPCIONES NUEVAS (v2.0):                                                      ║
-║    --split-tracks       Tratar cada track MIDI como frase independiente      ║
-║    --melody-track N     Índice del track melódico (default: auto)            ║
-║    --fragment-start C   Compás de inicio del fragmento (1-based)             ║
-║    --fragment-end C     Compás de fin del fragmento (1-based, inclusivo)     ║
-║    --export-musicxml    Exportar también en MusicXML (.musicxml)             ║
-║                                                                               ║
-║  DEPENDENCIAS: mido, numpy                                                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+song_architect.py — Song Architect: frases musicales → estructura de canción
+completa y coherente
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Toma un número reducido de frases musicales (MIDI) y genera una obra
+completa con estructura de canción popular:
+
+  Intro → Verso → Pre-estribillo → Estribillo → Verso 2 →
+  Puente → Solo → Outro
+
+Las secciones se generan con coherencia musical entre ellas:
+• Tonalidad y modo unificados
+• Voice leading entre secciones y entre acordes
+• Curvas de tensión dramática por sección
+• Transformaciones motívicas coherentes (variación, inversión, aumentación)
+• Progresiones armónicas adaptadas al rol de cada sección
+• Selección inteligente de fragmentos por interés melódico
+• Manejo correcto de MIDIs multi-track
+• Deduplicación de notas superpuestas
+• Detección automática de compás
+• Repeticiones con micro-variaciones
+• Exportación MusicXML (MuseScore/Sibelius)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  inputs MIDI […]             Archivos MIDI de frases de entrada
+  --key KEY                   Tonalidad base (ej. C, Am, F# minor). Default:
+                              auto
+  --tempo TEMPO               Tempo BPM (default: detectado del MIDI o 120)
+  --style STYLE               Estilo armónico (default: pop)
+  --beats-per-bar BEATS_PER_BAR
+                              Pulsos por compás (default: auto-detección desde
+                              el MIDI)
+  --bars-per-section BARS_PER_SECTION
+                              Compases por sección, igual para todas (default:
+                              auto)
+  --split-tracks              Tratar cada track MIDI como frase independiente
+  --melody-track MELODY_TRACK
+                              Índice del track melódico a usar (default: auto)
+  --fragment-start BAR        Compás de inicio del fragmento (1-based)
+  --fragment-end BAR          Compás de fin del fragmento (1-based, inclusivo)
+  --sections SEC […]          Secciones a generar (default: todas)
+  --no-intro
+  --no-prechorus
+  --no-bridge
+  --no-solo
+  --out-dir OUT_DIR           Directorio de salida (default: song_output)
+  --output-name OUTPUT_NAME   Nombre base de archivos (default: song)
+  --export-plan               Exportar plan JSON
+  --export-musicxml           Exportar también en formato MusicXML (v2.0)
+  --dry-run                   Mostrar plan sin generar archivos MIDI
+  --seed SEED                 Semilla aleatoria (default: 42)
+  --verbose, -v               Informe detallado de decisiones
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python song_architect.py frase1.mid frase2.mid frase3.mid
+    python song_architect.py *.mid --key Am --tempo 120
+    python song_architect.py frases/*.mid --style pop --out-dir cancion/
+    python song_architect.py *.mid --no-solo --no-bridge --bars-per-section 8
+    python song_architect.py *.mid --dry-run
+    python song_architect.py *.mid --split-tracks --melody-track 1
+    python song_architect.py *.mid --fragment-start 8 --fragment-end 24
+    python song_architect.py *.mid --export-musicxml
+
+  OPCIONES NUEVAS (v2.0):
+    --split-tracks       Tratar cada track MIDI como frase independiente
+    --melody-track N     Índice del track melódico (default: auto)
+    --fragment-start C   Compás de inicio del fragmento (1-based)
+    --fragment-end C     Compás de fin del fragmento (1-based, inclusivo)
+    --export-musicxml    Exportar también en MusicXML (.musicxml)
+
+── Más modos ──
+
+  # Exportar plan JSON
+  python song_architect.py entrada.mid entrada2.mid --export-plan
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
 """
 
 import sys

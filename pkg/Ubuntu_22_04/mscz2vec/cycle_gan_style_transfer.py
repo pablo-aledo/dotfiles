@@ -1,103 +1,158 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║              CYCLE-GAN STYLE TRANSFER  v2.0  (piano-roll)                    ║
-║        Transferencia de estilo bidireccional inspirada en CycleGAN          ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  CAMBIO RESPECTO A v1                                                        ║
-║    v1: feature space = vector de 22 estadísticas (DNA comprimido)           ║
-║    v2: feature space = piano roll multi-rol aplanado + PCA opcional         ║
-║                                                                              ║
-║    El piano roll preserva estructura temporal concreta (qué notas suenan    ║
-║    en qué posición dentro del compás) en lugar de promedios globales.       ║
-║    La dimensión efectiva depende de resolution × n_pitch × n_roles,        ║
-║    reducida opcionalmente con PCA para entrenar G y F.                      ║
-║                                                                              ║
-║  CONCEPTO                                                                    ║
-║    CycleGAN original aprende dos mappings: G: A→B y F: B→A, más dos        ║
-║    discriminadores D_A y D_B, entrenados con pérdida de ciclo:             ║
-║        F(G(a)) ≈ a   y   G(F(b)) ≈ b                                       ║
-║                                                                              ║
-║    Aquí adaptamos ese framework al dominio MIDI sin redes neuronales:       ║
-║                                                                              ║
-║    • G  (style_A → style_B): Ridge/KNN sobre piano rolls aplanados+PCA     ║
-║    • F  (style_B → style_A): la inversa aprendida del mismo modo.           ║
-║    • D_B: distancia Mahalanobis al centroide del dominio B (en piano roll)  ║
-║    • D_A: ídem para dominio A.                                              ║
-║    • Pérdida de ciclo: ||F(G(roll_a)) - roll_a||₂ + viceversa.            ║
-║    • Pérdida de identidad: ||G(roll_b) - roll_b||₂                        ║
-║                                                                              ║
-║  REPRESENTACIÓN MUSICAL                                                      ║
-║    Cada MIDI se convierte a rolls por rol:                                  ║
-║        (n_bars, resolution, n_pitch)  para cada rol activo                  ║
-║    Luego se computa el centroide temporal (media sobre compases):            ║
-║        (resolution, n_pitch)  por rol                                        ║
-║    y se concatenan todos los roles y se aplana a un vector 1D:              ║
-║        n_roles × resolution × n_pitch  dimensiones                          ║
-║    Opcionalmente reducido con PCA a --pca-dim dimensiones.                  ║
-║                                                                              ║
-║    Roles: melody, counterpoint, accompaniment, bass, percussion             ║
-║    Resolución por defecto: 48 ticks/compás                                  ║
-║    Rango de pitch por defecto: 128 (completo)                               ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  USO — TRAIN                                                                 ║
-║                                                                              ║
-║    python cycle_gan_style_transfer.py train                                  ║
-║        --domain-a  corpus_tango/                                             ║
-║        --domain-b  corpus_epico/                                             ║
-║        --model     tango2epico.cgan.pkl                                      ║
-║                                                                              ║
-║    # Con PCA y resolución reducida:                                         ║
-║    python cycle_gan_style_transfer.py train                                  ║
-║        --domain-a  tango/  --domain-b  epico/                               ║
-║        --model     t2e.cgan.pkl                                              ║
-║        --resolution 16  --pitch-range 48  --pca-dim 64                     ║
-║        --lambda-cycle 10.0  --lambda-identity 5.0  --iters 200  --verbose  ║
-║                                                                              ║
-║    Opciones de train:                                                        ║
-║      --domain-a DIR       Carpeta con MIDIs del dominio A                   ║
-║      --domain-b DIR       Carpeta con MIDIs del dominio B                   ║
-║      --model FILE         Ruta del modelo a guardar [default: cycle_gan.pkl]║
-║      --resolution N       Ticks por compás [default: 48]                    ║
-║      --pitch-range N      Notas MIDI activas centradas en C4 [default: 128] ║
-║      --disable-roles ROL  Roles a ignorar (melody/bass/accompaniment/…)    ║
-║      --pca-dim N          Reducir con PCA a N dims (0 = sin PCA)            ║
-║      --solver STR         ridge|knn [default: ridge]                        ║
-║      --lambda-cycle F     Peso de la pérdida de ciclo [default: 10.0]      ║
-║      --lambda-identity F  Peso de la pérdida de identidad [default: 5.0]   ║
-║      --iters N            Iteraciones de refinamiento [default: 100]        ║
-║      --alpha F            Regularización ridge [default: 1.0]              ║
-║      --k-neighbors N      Vecinos para solver KNN [default: 5]             ║
-║      --verbose            Mostrar pérdidas por iteración                    ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  USO — TRANSFORM                                                             ║
-║                                                                              ║
-║    python cycle_gan_style_transfer.py transform entrada.mid                  ║
-║        --model t2e.cgan.pkl  --direction AtoB  --output salida.mid          ║
-║                                                                              ║
-║    python cycle_gan_style_transfer.py transform entrada.mid                  ║
-║        --model t2e.cgan.pkl  --intensity 0.6  --output salida.mid           ║
-║                                                                              ║
-║    Opciones de transform:                                                    ║
-║      --model FILE         Modelo entrenado (.cgan.pkl)                      ║
-║      --direction STR      AtoB | BtoA [default: AtoB]                       ║
-║      --intensity F        0.0=sin cambio, 1.0=transformación total [1.0]   ║
-║      --output FILE        MIDI de salida                                    ║
-║      --bars N             Compases de salida [default: auto]                ║
-║      --candidates N       Candidatos a evaluar [default: 3]                 ║
-║      --no-percussion      No generar percusión                              ║
-║      --export-fingerprint Exportar fingerprint del resultado                ║
-║      --seed N             Semilla aleatoria [default: 42]                   ║
-║      --verbose            Detalle de la transformación                      ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  USO — CYCLE / ANALYZE                                                       ║
-║    (mismos flags que v1)                                                     ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS: midi_dna_unified.py, mido, numpy, scikit-learn               ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+cycle_gan_style_transfer.py — Transferencia de estilo bidireccional entre dos
+corpus MIDI, inspirada en CycleGAN y sin redes neuronales
+(versión 2.0: espacio de rasgos = piano roll multi-rol aplanado + PCA opcional).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+CycleGAN aprende dos mapeos, G: A→B y F: B→A, y dos discriminadores D_A y D_B,
+con una pérdida de ciclo que obliga a F(G(a)) ≈ a y G(F(b)) ≈ b. Aquí ese
+marco se adapta al dominio MIDI sin redes neuronales:
+
+  · G (estilo A → estilo B) y F (B → A): regresión Ridge o KNN sobre piano
+    rolls aplanados (con PCA opcional), aprendidas por iteraciones alternadas.
+  · D_A y D_B: distancia de Mahalanobis al centroide de cada dominio.
+  · Pérdida de ciclo   ‖F(G(a)) − a‖₂ (y la simétrica en B).
+  · Pérdida de identidad ‖G(b) − b‖₂ (y ‖F(a) − a‖₂), que evita que el mapeo
+    altere lo que ya pertenece al dominio destino.
+
+Cambio respecto a v1: en v1 el espacio de rasgos era un vector de 22
+estadísticas (DNA comprimido); en v2 es el piano roll, que conserva la
+estructura temporal concreta (qué suena en qué posición del compás) en vez de
+promedios globales.
+
+Representación: cada MIDI se convierte a un roll (n_compases, resolución,
+n_pitch) por rol (melody, counterpoint, accompaniment, bass, percussion). Se
+promedia sobre los compases (centroide temporal, por rol), se concatenan los
+roles y se aplana a un vector de n_roles × resolución × n_pitch dimensiones,
+reducible con PCA a --pca-dim. Resolución por defecto 48 ticks por compás;
+rango de pitch por defecto 128 (completo), o N notas centradas en Do central.
+
+Generación: el vector transformado se proyecta de vuelta a parámetros DNA
+(densidad rítmica, registro, complejidad armónica…) y con ellos se regenera una
+pieza completa a partir de la melodía original, mezclada según --intensity.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso (subcomandos)
+────────────────────────────────────────────────────────────────────────────
+  train      Aprende G y F desde dos carpetas de MIDIs y guarda el modelo (.pkl).
+  transform  Aplica G (AtoB) o F (BtoA) a un MIDI y genera un MIDI nuevo, con
+             el vector interpolado entre original y transformado según
+             --intensity (0 = sin cambio, 1 = transformación total).
+  cycle      Aplica G y luego F al mismo MIDI, escribe ambos MIDIs
+             intermedios e informa de la pérdida de ciclo en el espacio de rasgos.
+  analyze    Sitúa un MIDI entre los dos dominios: distancia y probabilidad de
+             pertenencia a A y B, posición relativa (% A / % B), los 10
+             primeros componentes del vector (original, A→B y B→A) y la pérdida
+             de ciclo puntual.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  train      Entrada: --domain-a y --domain-b (carpetas de MIDIs).
+             Salida : modelo .pkl en --model (defecto cycle_gan.pkl) y pérdidas
+             finales de ciclo e identidad de ambos mapeos.
+  transform  Entrada: un MIDI y --model. Salida: --output (defecto
+             <entrada>_cgan_<dirección>.mid); con --export-fingerprint, además
+             el fingerprint JSON del resultado. Informa de D_A/D_B del resultado.
+  cycle      Entrada: un MIDI y --model. Salida: --output-ab (defecto
+             <entrada>_ab.mid) y --output-aba (defecto <entrada>_aba.mid).
+  analyze    Entrada: un MIDI y --model. Salida: informe por consola.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  train
+    --domain-a DIR         Carpeta con MIDIs del dominio A (obligatorio).
+    --domain-b DIR         Carpeta con MIDIs del dominio B (obligatorio).
+    --model FILE           Modelo a guardar (defecto cycle_gan.pkl).
+    --resolution N         Ticks por compás (defecto 48).
+    --pitch-range N        Notas MIDI activas centradas en Do central (defecto
+                           128 = completo).
+    --disable-roles ROL…   Roles a ignorar: melody, counterpoint, accompaniment,
+                           bass, percussion.
+    --pca-dim N            Reducir con PCA a N dimensiones (0 = sin PCA).
+    --solver S             ridge (defecto) | knn.
+    --alpha F              Regularización de Ridge (defecto 1.0).
+    --k-neighbors N        Vecinos del solver KNN (defecto 5).
+    --lambda-cycle F       Peso de la pérdida de ciclo (defecto 10.0).
+    --lambda-identity F    Peso de la pérdida de identidad (defecto 5.0).
+    --iters N              Iteraciones de refinamiento alternado (defecto 100).
+    --verbose              Muestra las pérdidas por iteración.
+  transform
+    input                  MIDI de entrada.
+    --model FILE           Modelo entrenado (.pkl; obligatorio).
+    --direction D          AtoB (defecto) | BtoA.
+    --intensity F          0.0 = sin cambio … 1.0 = total (defecto 1.0).
+    --output FILE          MIDI de salida.
+    --bars N               Compases de salida (defecto: automático).
+    --candidates N         Candidatos a evaluar (defecto 3).
+    --no-percussion        No genera percusión.
+    --export-fingerprint   Exporta el fingerprint del resultado.
+    --seed N               Semilla aleatoria (defecto 42).
+    --verbose              Detalle de la transformación.
+  cycle
+    input                  MIDI de entrada.
+    --model FILE           Modelo entrenado (obligatorio).
+    --direction D          Primera dirección: AtoB (defecto) | BtoA.
+    --intensity F          Intensidad (defecto 1.0).
+    --output-ab FILE       Salida tras G.     --output-aba FILE   Salida tras F∘G.
+    --bars N               Compases de salida (defecto: automático).
+    --candidates N         Candidatos a evaluar (defecto 2).
+    --no-percussion        Sin percusión.
+    --seed N               Semilla (defecto 42; la segunda pasada usa seed + 100).
+    --verbose              Detalle.
+  analyze
+    input                  MIDI a analizar.
+    --model FILE           Modelo entrenado (obligatorio).
+    --verbose              Detalle de la extracción.
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Entrenar con dos corpus:
+  python cycle_gan_style_transfer.py train \
+      --domain-a corpus_tango/ --domain-b corpus_epico/ \
+      --model tango2epico.cgan.pkl
+
+  # Con PCA y resolución reducida (menos memoria):
+  python cycle_gan_style_transfer.py train \
+      --domain-a tango/ --domain-b epico/ --model t2e.cgan.pkl \
+      --resolution 16 --pitch-range 48 --pca-dim 64 \
+      --lambda-cycle 10.0 --lambda-identity 5.0 --iters 200 --verbose
+
+  # Solo melodía y bajo, con el solver KNN:
+  python cycle_gan_style_transfer.py train \
+      --domain-a tango/ --domain-b epico/ --model t2e_knn.cgan.pkl \
+      --solver knn --k-neighbors 7 \
+      --disable-roles counterpoint accompaniment percussion
+
+  # Transformar A→B con intensidad total, y parcial:
+  python cycle_gan_style_transfer.py transform entrada.mid \
+      --model t2e.cgan.pkl --direction AtoB --output salida.mid
+  python cycle_gan_style_transfer.py transform entrada.mid \
+      --model t2e.cgan.pkl --intensity 0.6 --output salida.mid
+
+  # Dirección inversa, más candidatos, sin percusión y con fingerprint:
+  python cycle_gan_style_transfer.py transform entrada.mid \
+      --model t2e.cgan.pkl --direction BtoA --candidates 5 --bars 32 \
+      --no-percussion --export-fingerprint --seed 7
+
+  # Comprobar la consistencia de ciclo A→B→A:
+  python cycle_gan_style_transfer.py cycle entrada.mid --model t2e.cgan.pkl \
+      --output-ab ab.mid --output-aba aba.mid --verbose
+
+  # Ver dónde cae un MIDI entre los dos dominios:
+  python cycle_gan_style_transfer.py analyze entrada.mid --model t2e.cgan.pkl
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias y relación con otras versiones
+────────────────────────────────────────────────────────────────────────────
+midi_dna_unified.py (mismo directorio), mido, numpy, scikit-learn. Sucesor con
+backend neural opcional: cycle_gan_style_transfer_v3.py. Versión neural
+independiente: cyclegan_composer.py.
 """
 
 import sys

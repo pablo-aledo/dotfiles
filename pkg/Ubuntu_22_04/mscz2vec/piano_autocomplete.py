@@ -1,92 +1,197 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     PIANO AUTOCOMPLETE  v1.0                                 ║
-║   Autocompletado de interpretaciones de piano en tiempo real                 ║
-║   (inspirado en "Training a 125M-parameter Model to Autocomplete Piano")     ║
-║                                                                              ║
-║  Transformer decoder-only pequeño (RMSNorm + atención causal + SwiGLU)       ║
-║  con una representación NOTE(pitch, delta_onset, duration, velocity):        ║
-║  una nota = un paso autoregresivo (no un token por campo). Cada nota tiene   ║
-║  cinco campos categóricos [event_type, pitch, delta, duration, velocity]     ║
-║  con su propio embedding; el token de la nota es la SUMA de los cinco.       ║
-║  Un pequeño "nested decoder" predice los campos en cadena (event→pitch→      ║
-║  delta→duration→velocity), condicionando cada campo en los anteriores.       ║
-║                                                                              ║
-║  El pedal de sustain NO se modela como evento aparte: se "hornea" en la      ║
-║  duración de la nota durante el preprocesado (nota se extiende hasta que     ║
-║  se suelta el pedal o se retriggerea el mismo pitch).                        ║
-║                                                                              ║
-║  Incluye post-entrenamiento por preferencias (DPO) usando comparaciones      ║
-║  por pares de continuaciones, con métricas heurísticas locales como juez     ║
-║  automático (sustituto sin conexión externa del "Gemini pairwise judge"      ║
-║  del post original).                                                         ║
-║                                                                              ║
-║  Nota de diseño: usa embeddings posicionales sinusoidales (no RoPE) y        ║
-║  atención causal estándar (no relativa) para mantener el fichero simple y    ║
-║  autocontenido — una simplificación deliberada frente al post original.      ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    preprocess   — MIDI corpus → pickles de notas (pedal horneado, splits)    ║
-║    train        — Entrenar el modelo (cross-entropy + scheduled sampling)    ║
-║    continue     — Autocompletar un MIDI dado (el caso de uso real)           ║
-║    score        — Métricas heurísticas de una o dos continuaciones           ║
-║    make-pairs   — Generar manifest chosen/rejected para DPO                  ║
-║    dpo          — Ajuste por preferencias (Direct Preference Optimization)   ║
-║    bench        — Medir velocidad de generación (notas/seg)                  ║
-║    inspect      — Diagnóstico de dataset y/o checkpoint                      ║
-║                                                                              ║
-║  FLUJO TÍPICO:                                                               ║
-║    # 1. Preparar datos (pedal horneado, split train/val)                     ║
-║    python piano_autocomplete.py preprocess --input midis/ --output data/     ║
-║                                                                              ║
-║    # 2. Entrenar                                                              ║
-║    python piano_autocomplete.py train --data data/ --model-dir runs/exp1/    ║
-║                                                                              ║
-║    # 3. Autocompletar en vivo                                                 ║
-║    python piano_autocomplete.py continue --model-dir runs/exp1/ \            ║
-║        --prompt fragmento.mid --notes 64 --output continuado.mid             ║
-║                                                                              ║
-║    # 4. Preferencias: generar candidatos, puntuarlos, hacer DPO              ║
-║    python piano_autocomplete.py continue --model-dir runs/exp1/ \            ║
-║        --prompt fragmento.mid --notes 32 --temperature 1.1 \                 ║
-║        --output cand_a.mid --seed 1                                          ║
-║    python piano_autocomplete.py continue --model-dir runs/exp1/ \            ║
-║        --prompt fragmento.mid --notes 32 --temperature 1.1 \                 ║
-║        --output cand_b.mid --seed 2                                          ║
-║    python piano_autocomplete.py make-pairs --prompt fragmento.mid \          ║
-║        --candidates cand_a.mid cand_b.mid --output pairs.json                ║
-║    python piano_autocomplete.py dpo --model-dir runs/exp1/ \                 ║
-║        --pairs pairs.json --beta 0.03 --output-dir runs/exp1_dpo/            ║
-║                                                                              ║
-║  OPCIONES PRINCIPALES (train):                                               ║
-║    --epochs N          Épocas de entrenamiento (default: 50)                 ║
-║    --batch-size N      Tamaño de batch (default: 8)                         ║
-║    --max-notes N       Notas por secuencia de entrenamiento (default: 256)   ║
-║    --layers N          Capas del transformer (default: 4)                    ║
-║    --dim N             Dimensión de embeddings (default: 128)                ║
-║    --heads N           Cabezas de atención (default: 4)                      ║
-║    --sched-start N     Época en que empieza el scheduled sampling (def: 5)   ║
-║    --sched-end N       Época en que alcanza el máximo (default: 25)          ║
-║    --sched-max-p F     Probabilidad máxima de auto-alimentación (def: 0.5)   ║
-║    --resume            Retomar desde el último checkpoint                    ║
-║                                                                              ║
-║  OPCIONES PRINCIPALES (continue):                                            ║
-║    --notes N            Notas nuevas a generar (default: 64)                 ║
-║    --temperature F      Temperatura de muestreo (default: 1.0)               ║
-║    --top-k N            Muestreo top-k (default: 0 = desactivado)            ║
-║    --top-p F            Muestreo nucleus (default: 0.0 = desactivado)        ║
-║    --max-context N      Ventana máx. de notas de contexto (default: 512)     ║
-║    --keep-notes N       Notas recientes al reconstruir contexto (def: 384)   ║
-║    --allow-random-init  Generar con pesos aleatorios (pruebas de fontanería) ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+piano_autocomplete.py — Piano Autocomplete: autocompletado de interpretaciones
+de piano en tiempo real (inspirado en "Training a 125M-parameter Model to
+Autocomplete Piano")
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  Transformer decoder-only pequeño (RMSNorm + atención causal + SwiGLU)
+  con una representación NOTE(pitch, delta_onset, duration, velocity):
+  una nota = un paso autoregresivo (no un token por campo). Cada nota tiene
+  cinco campos categóricos [event_type, pitch, delta, duration, velocity]
+  con su propio embedding; el token de la nota es la SUMA de los cinco.
+  Un pequeño "nested decoder" predice los campos en cadena (event→pitch→
+  delta→duration→velocity), condicionando cada campo en los anteriores.
+
+  El pedal de sustain NO se modela como evento aparte: se "hornea" en la
+  duración de la nota durante el preprocesado (nota se extiende hasta que
+  se suelta el pedal o se retriggerea el mismo pitch).
+
+  Incluye post-entrenamiento por preferencias (DPO) usando comparaciones
+  por pares de continuaciones, con métricas heurísticas locales como juez
+  automático (sustituto sin conexión externa del "Gemini pairwise judge"
+  del post original).
+
+  Nota de diseño: usa embeddings posicionales sinusoidales (no RoPE) y
+  atención causal estándar (no relativa) para mantener el fichero simple y
+  autocontenido — una simplificación deliberada frente al post original.
+
+  COMANDOS:
+    preprocess   — MIDI corpus → pickles de notas (pedal horneado, splits)
+    train        — Entrenar el modelo (cross-entropy + scheduled sampling)
+    continue     — Autocompletar un MIDI dado (el caso de uso real)
+    score        — Métricas heurísticas de una o dos continuaciones
+    make-pairs   — Generar manifest chosen/rejected para DPO
+    dpo          — Ajuste por preferencias (Direct Preference Optimization)
+    bench        — Medir velocidad de generación (notas/seg)
+    inspect      — Diagnóstico de dataset y/o checkpoint
+
+  FLUJO TÍPICO:
+    # 1. Preparar datos (pedal horneado, split train/val)
+    python piano_autocomplete.py preprocess --input midis/ --output data/
+
+    # 2. Entrenar
+    python piano_autocomplete.py train --data data/ --model-dir runs/exp1/
+
+    # 3. Autocompletar en vivo
+    python piano_autocomplete.py continue --model-dir runs/exp1/ \
+        --prompt fragmento.mid --notes 64 --output continuado.mid
+
+    # 4. Preferencias: generar candidatos, puntuarlos, hacer DPO
+    python piano_autocomplete.py continue --model-dir runs/exp1/ \
+        --prompt fragmento.mid --notes 32 --temperature 1.1 \
+        --output cand_a.mid --seed 1
+    python piano_autocomplete.py continue --model-dir runs/exp1/ \
+        --prompt fragmento.mid --notes 32 --temperature 1.1 \
+        --output cand_b.mid --seed 2
+    python piano_autocomplete.py make-pairs --prompt fragmento.mid \
+        --candidates cand_a.mid cand_b.mid --output pairs.json
+    python piano_autocomplete.py dpo --model-dir runs/exp1/ \
+        --pairs pairs.json --beta 0.03 --output-dir runs/exp1_dpo/
+
+  OPCIONES PRINCIPALES (train):
+    --epochs N          Épocas de entrenamiento (default: 50)
+    --batch-size N      Tamaño de batch (default: 8)
+    --max-notes N       Notas por secuencia de entrenamiento (default: 256)
+    --layers N          Capas del transformer (default: 4)
+    --dim N             Dimensión de embeddings (default: 128)
+    --heads N           Cabezas de atención (default: 4)
+    --sched-start N     Época en que empieza el scheduled sampling (def: 5)
+    --sched-end N       Época en que alcanza el máximo (default: 25)
+    --sched-max-p F     Probabilidad máxima de auto-alimentación (def: 0.5)
+    --resume            Retomar desde el último checkpoint
+
+  OPCIONES PRINCIPALES (continue):
+    --notes N            Notas nuevas a generar (default: 64)
+    --temperature F      Temperatura de muestreo (default: 1.0)
+    --top-k N            Muestreo top-k (default: 0 = desactivado)
+    --top-p F            Muestreo nucleus (default: 0.0 = desactivado)
+    --max-context N      Ventana máx. de notas de contexto (default: 512)
+    --keep-notes N       Notas recientes al reconstruir contexto (def: 384)
+    --allow-random-init  Generar con pesos aleatorios (pruebas de fontanería)
+
 python piano_autocomplete.py preprocess --input midis_sinteticos/ --output data/
 python piano_autocomplete.py inspect --data data/
 python piano_autocomplete.py train --data data/ --model-dir runs/prueba/ \
     --dim 64 --layers 2 --epochs 3 --batch-size 4 --max-notes 64
 python piano_autocomplete.py continue --model-dir runs/prueba/ \
     --prompt fragmento.mid --notes 32 --output continuado.mid
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  preprocess  MIDI corpus → pickles de notas
+  train       Entrenar el modelo
+  continue    Autocompletar un MIDI dado
+  score       Métricas heurísticas de una o varias continuaciones
+  make-pairs  Generar manifest chosen/rejected para DPO
+  dpo         Ajuste por preferencias (DPO)
+  bench       Medir velocidad de generación (notas/seg)
+  inspect     Diagnóstico de dataset y/o checkpoint
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  preprocess
+    --input DIR                 (obligatorio)
+    --output DIR                (obligatorio)
+    --val-split VAL_SPLIT       (defecto 0.15)
+    --min-notes MIN_NOTES       (defecto 8)
+    --augment                   Añade transposición/tempo/jitter (5x ficheros)
+    --seed SEED                 (defecto 42)
+    --verbose
+
+  train
+    --data DIR                  (obligatorio)
+    --model-dir DIR             (obligatorio)
+    --epochs EPOCHS             (defecto 50)
+    --batch-size BATCH_SIZE     (defecto 8)
+    --max-notes MAX_NOTES       (defecto 256)
+    --layers LAYERS             (defecto 4)
+    --dim DIM                   (defecto 128)
+    --heads HEADS               (defecto 4)
+    --dropout DROPOUT           (defecto 0.1)
+    --lr LR                     (defecto 0.0003)
+    --sched-start N             (defecto 5)
+    --sched-end N               (defecto 25)
+    --sched-max-p F             (defecto 0.5)
+    --eval-every N              (defecto 5)
+    --eval-batches N            Nº de batches de validación a promediar
+                                (default: 20, antes era 1 y daba una
+                                estimación ruidosa)
+    --log-every N               Imprime progreso cada N batches (0 =
+                                desactivar) (defecto 10)
+    --resume
+    --seed SEED                 (defecto 42)
+
+  continue
+    --prompt FILE               (obligatorio)
+    --model-dir DIR
+    --allow-random-init         Generar con pesos aleatorios si no hay
+                                --model-dir
+    --dim DIM                   (defecto 128)
+    --layers LAYERS             (defecto 4)
+    --heads HEADS               (defecto 4)
+    --output FILE               (defecto continuado.mid)
+    --notes NOTES               (defecto 64)
+    --temperature TEMPERATURE   (defecto 1.0)
+    --top-k TOP_K               (defecto 0)
+    --top-p TOP_P               (defecto 0.0)
+    --max-context MAX_CONTEXT   (defecto 512)
+    --keep-notes KEEP_NOTES     (defecto 384)
+    --seed SEED                 (defecto 42)
+
+  score
+    file FILE
+    --compare FILE […]          Ficheros adicionales para comparar
+
+  make-pairs
+    --prompt FILE               (obligatorio)
+    --candidates FILE […]       (obligatorio)
+    --top-k-pairs N             (defecto 1)
+    --output FILE               (defecto pairs.json)
+
+  dpo
+    --model-dir DIR             (obligatorio)
+    --pairs FILE                (obligatorio)
+    --output-dir DIR
+    --beta BETA                 (defecto 0.03)
+    --lr LR                     (defecto 1e-05)
+    --epochs EPOCHS             (defecto 3)
+
+  bench
+    --model-dir DIR
+    --dim DIM                   (defecto 128)
+    --layers LAYERS             (defecto 4)
+    --heads HEADS               (defecto 4)
+    --notes NOTES               (defecto 200)
+    --seed SEED                 (defecto 42)
+
+  inspect
+    --data DIR
+    --model-dir DIR
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Métricas heurísticas de una o varias continuaciones
+  python piano_autocomplete.py score entrada.mid
+
+  # Medir velocidad de generación (notas/seg)
+  python piano_autocomplete.py bench
 """
 
 import sys

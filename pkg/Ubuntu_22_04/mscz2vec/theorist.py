@@ -1,71 +1,95 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         THEORIST  v1.0                                       ║
-║         Intención musical → teoría fundamentada → parámetros de pipeline    ║
-║                                                                              ║
-║  Traduce descripciones vagas de intención musical en planes de composición  ║
-║  completos, justificados paso a paso en lenguaje teórico musical.           ║
-║  Actúa como teórico/compositor que razona en voz alta antes de producir     ║
-║  ningún número: primero semántica, luego teoría, luego parámetros.          ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] SEMÁNTICA    — interpreta la descripción libre, detecta contradicciones ║
-║  [2] MARCO TEÓRICO— elige escuela compositiva, referencias, reglas          ║
-║  [3] DECISIONES   — cada parámetro con su justificación teórica explícita   ║
-║  [4] CURVAS       — genera curvas emocionales para tension_designer          ║
-║  [5] PIPELINE     — traduce a argumentos CLI exactos para cada script        ║
-║  [6] EXPORTACIÓN  — .theorist.json, .curves.json, plan.yaml, plan.json      ║
-║                                                                              ║
-║  MODOS DE ENTRADA:                                                           ║
-║    Descripción libre:                                                        ║
-║      python theorist.py "una pieza que suene a esperar algo que nunca llega"║
-║    Con restricciones duras:                                                  ║
-║      python theorist.py "melancolía urbana" --key Dm --bars 32 --tempo 72   ║
-║    Anclado a un MIDI de referencia:                                          ║
-║      python theorist.py "hazlo más oscuro" --from obra.mid                  ║
-║    Modo conversacional iterativo:                                            ║
-║      python theorist.py --interactive                                        ║
-║    Refinar un plan existente:                                                ║
-║      python theorist.py --load plan.theorist.json --refine "clímax más ambiguo"║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    description     Descripción libre de la intención (entre comillas)       ║
-║    --from MIDI     Anclar interpretación a un MIDI de referencia             ║
-║    --key KEY       Tonalidad forzada, ej. Dm, G, Bb (default: auto)         ║
-║    --bars N        Compases totales (default: 32)                            ║
-║    --tempo N       Tempo base BPM (default: auto)                            ║
-║    --arc NAME      Arco narrativo base: hero|tragedy|romance|mystery|        ║
-║                    meditation|rondo|sonata|custom (default: auto)            ║
-║    --persona NAME  Persona teórica: schenker|fux|ravel|jazz|spectral|       ║
-║                    baroque|romantic|modal (default: auto)                    ║
-║    --dialectical   Generar 3 lecturas alternativas de la misma intención    ║
-║    --interactive   Modo conversacional con compromisos teóricos por turno   ║
-║    --load FILE     Cargar y refinar un plan .theorist.json existente         ║
-║    --refine TEXT   Refinar el plan cargado con una nueva instrucción         ║
-║    --dry-run       Solo mostrar el razonamiento, no generar archivos         ║
-║    --execute       Ejecutar el pipeline completo tras generar el plan        ║
-║    --until SCRIPT  Ejecutar hasta un script concreto (ej: midi_dna_unified) ║
-║    --output BASE   Nombre base para archivos de salida (default: obra)      ║
-║    --no-llm        Usar solo el motor local (sin API)                        ║
-║    --llm-provider  anthropic (default) | openai                              ║
-║    --llm-model     Modelo específico (default: auto)                         ║
-║    --api-key KEY   API key (o ANTHROPIC_API_KEY / OPENAI_API_KEY)           ║
-║    --verbose       Mostrar razonamiento completo durante el proceso          ║
-║    --list-personas Listar personas teóricas disponibles                      ║
-║                                                                              ║
-║  SALIDAS:                                                                    ║
-║    <base>.theorist.json  — Plan narrativo completo con justificaciones       ║
-║    <base>.curves.json    — Curvas para tension_designer                      ║
-║    <base>_plan.json      — Plan de narrator (editable en su GUI)             ║
-║    <base>_plan.yaml      — Pipeline para runner.py                           ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy                                                         ║
-║  LLM (opcional): anthropic  →  pip install anthropic                        ║
-║                  openai     →  pip install openai                            ║
-║  SCRIPTS DEL PIPELINE: narrator.py, tension_designer.py,                    ║
-║                         midi_dna_unified.py, reharmonizer.py, orchestrator  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+theorist.py — Theorist: intención musical → teoría fundamentada → parámetros
+de pipeline
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Traduce descripciones vagas de intención musical en planes de composición
+completos, justificados paso a paso en lenguaje teórico musical.
+Actúa como teórico/compositor que razona en voz alta antes de producir
+ningún número: primero semántica, luego teoría, luego parámetros.
+
+FLUJO:
+[1] SEMÁNTICA    — interpreta la descripción libre, detecta contradicciones
+[2] MARCO TEÓRICO— elige escuela compositiva, referencias, reglas
+[3] DECISIONES   — cada parámetro con su justificación teórica explícita
+[4] CURVAS       — genera curvas emocionales para tension_designer
+[5] PIPELINE     — traduce a argumentos CLI exactos para cada script
+[6] EXPORTACIÓN  — .theorist.json, .curves.json, plan.yaml, plan.json
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+MODOS DE ENTRADA:
+  Descripción libre:
+    python theorist.py "una pieza que suene a esperar algo que nunca llega"
+  Con restricciones duras:
+    python theorist.py "melancolía urbana" --key Dm --bars 32 --tempo 72
+  Anclado a un MIDI de referencia:
+    python theorist.py "hazlo más oscuro" --from obra.mid
+  Modo conversacional iterativo:
+    python theorist.py --interactive
+  Refinar un plan existente:
+    python theorist.py --load plan.theorist.json --refine "clímax más ambiguo"
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  <base>.theorist.json  — Plan narrativo completo con justificaciones
+  <base>.curves.json    — Curvas para tension_designer
+  <base>_plan.json      — Plan de narrator (editable en su GUI)
+  <base>_plan.yaml      — Pipeline para runner.py
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  description     Descripción libre de la intención (entre comillas)
+  --from MIDI     Anclar interpretación a un MIDI de referencia
+  --key KEY       Tonalidad forzada, ej. Dm, G, Bb (default: auto)
+  --bars N        Compases totales (default: 32)
+  --tempo N       Tempo base BPM (default: auto)
+  --arc NAME      Arco narrativo base: hero|tragedy|romance|mystery|
+                  meditation|rondo|sonata|custom (default: auto)
+  --persona NAME  Persona teórica: schenker|fux|ravel|jazz|spectral|
+                  baroque|romantic|modal (default: auto)
+  --dialectical   Generar 3 lecturas alternativas de la misma intención
+  --interactive   Modo conversacional con compromisos teóricos por turno
+  --load FILE     Cargar y refinar un plan .theorist.json existente
+  --refine TEXT   Refinar el plan cargado con una nueva instrucción
+  --dry-run       Solo mostrar el razonamiento, no generar archivos
+  --execute       Ejecutar el pipeline completo tras generar el plan
+  --until SCRIPT  Ejecutar hasta un script concreto (ej: midi_dna_unified)
+  --output BASE   Nombre base para archivos de salida (default: obra)
+  --no-llm        Usar solo el motor local (sin API)
+  --llm-provider  anthropic (default) | openai
+  --llm-model     Modelo específico (default: auto)
+  --api-key KEY   API key (o ANTHROPIC_API_KEY / OPENAI_API_KEY)
+  --verbose       Mostrar razonamiento completo durante el proceso
+  --list-personas Listar personas teóricas disponibles
+
+── Otras opciones del parser ──
+  --llm-debug                 Mostrar prompt enviado y respuesta raw del LLM
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Solo mostrar el razonamiento, no generar archivos
+  python theorist.py --dry-run
+
+  # Listar personas teóricas disponibles
+  python theorist.py --list-personas
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  numpy
+  LLM (opcional): anthropic  →  pip install anthropic
+                  openai     →  pip install openai
+  SCRIPTS DEL PIPELINE: narrator.py, tension_designer.py,
+                         midi_dna_unified.py, reharmonizer.py, orchestrator
 """
 
 import sys

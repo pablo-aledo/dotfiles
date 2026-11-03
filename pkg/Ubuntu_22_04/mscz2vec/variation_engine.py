@@ -1,48 +1,58 @@
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    VARIATION ENGINE  v1.0                                    ║
-║         Motor de variaciones musicales automáticas                           ║
-║                                                                              ║
-║  Dado un MIDI fuente (tu idea), genera un catálogo de variaciones            ║
-║  clásicas y contemporáneas manteniendo la identidad temática.                ║
-║                                                                              ║
-║  VARIACIONES IMPLEMENTADAS:                                                  ║
-║  [V01] Inversión          — refleja el contorno melódico                    ║
-║  [V02] Retrógrado         — invierte el orden temporal                      ║
-║  [V03] Inversión retrógrada — combina inversión + retrógrado                ║
-║  [V04] Aumentación rítmica — duplica duraciones (va más lento)              ║
-║  [V05] Diminución rítmica  — reduce duraciones a la mitad (más rápido)     ║
-║  [V06] Ornamentación       — añade notas de paso, apoyaturas, mordentes     ║
-║  [V07] Acompañamiento      — cambia el patrón de acompañamiento             ║
-║  [V08] Transportada        — transpone a otra tonalidad                     ║
-║  [V09] Modal               — cambia mayor ↔ menor (u otros modos)           ║
-║  [V10] Rítmica             — reinterpreta con nuevo patrón rítmico          ║
-║  [V11] Armónica            — reharmonización con progresión alternativa     ║
-║  [V12] Textural            — cambia el número de voces y densidad           ║
-║  [V13] Emocional           — aplica un arco emocional distinto              ║
-║  [V14] Estocástica         — variación aleatoria controlada (por semilla)   ║
-║  [V15] Contrapuntística    — añade contrapunto elaborado                    ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python variation_engine.py fuente.mid                                    ║
-║    python variation_engine.py fuente.mid --variations V01 V02 V04          ║
-║    python variation_engine.py fuente.mid --all                              ║
-║    python variation_engine.py fuente.mid --list                             ║
-║    python variation_engine.py fuente.mid --bars 32 --output-dir ./vars      ║
-║    python variation_engine.py fuente.mid --catalog --listen                 ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --variations V..  Lista de variaciones a generar (default: V01-V08)      ║
-║    --all             Generar todas las variaciones disponibles              ║
-║    --list            Listar variaciones disponibles y salir                  ║
-║    --bars N          Compases por variación (default: auto)                  ║
-║    --output-dir DIR  Directorio de salida (default: ./variations)           ║
-║    --catalog         Generar un MIDI concatenado con todas las variaciones  ║
-║    --listen          Reproducir las variaciones al final (requiere pygame)  ║
-║    --play-seconds N  Segundos de reproducción por variación (default: 10)  ║
-║    --seed N          Semilla aleatoria (default: 42)                         ║
-║    --verbose         Informe detallado                                       ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+variation_engine.py — Variation Engine: motor de variaciones musicales
+automáticas
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un MIDI fuente (tu idea), genera un catálogo de variaciones
+clásicas y contemporáneas manteniendo la identidad temática.
+
+VARIACIONES IMPLEMENTADAS:
+[V01] Inversión          — refleja el contorno melódico
+[V02] Retrógrado         — invierte el orden temporal
+[V03] Inversión retrógrada — combina inversión + retrógrado
+[V04] Aumentación rítmica — duplica duraciones (va más lento)
+[V05] Diminución rítmica  — reduce duraciones a la mitad (más rápido)
+[V06] Ornamentación       — añade notas de paso, apoyaturas, mordentes
+[V07] Acompañamiento      — cambia el patrón de acompañamiento
+[V08] Transportada        — transpone a otra tonalidad
+[V09] Modal               — cambia mayor ↔ menor (u otros modos)
+[V10] Rítmica             — reinterpreta con nuevo patrón rítmico
+[V11] Armónica            — reharmonización con progresión alternativa
+[V12] Textural            — cambia el número de voces y densidad
+[V13] Emocional           — aplica un arco emocional distinto
+[V14] Estocástica         — variación aleatoria controlada (por semilla)
+[V15] Contrapuntística    — añade contrapunto elaborado
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --variations V..  Lista de variaciones a generar (default: V01-V08)
+  --all             Generar todas las variaciones disponibles
+  --list            Listar variaciones disponibles y salir
+  --bars N          Compases por variación (default: auto)
+  --output-dir DIR  Directorio de salida (default: ./variations)
+  --catalog         Generar un MIDI concatenado con todas las variaciones
+  --listen          Reproducir las variaciones al final (requiere pygame)
+  --play-seconds N  Segundos de reproducción por variación (default: 10)
+  --seed N          Semilla aleatoria (default: 42)
+  --verbose         Informe detallado
+
+── Otras opciones del parser ──
+  --no-percussion             Desactivar generación de percusión en todas las
+                              variaciones
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python variation_engine.py fuente.mid
+  python variation_engine.py fuente.mid --variations V01 V02 V04
+  python variation_engine.py fuente.mid --all
+  python variation_engine.py fuente.mid --list
+  python variation_engine.py fuente.mid --bars 32 --output-dir ./vars
+  python variation_engine.py fuente.mid --catalog --listen
 """
 
 import sys

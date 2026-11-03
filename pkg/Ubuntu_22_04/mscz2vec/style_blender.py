@@ -1,94 +1,109 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       STYLE BLENDER  v1.0                                    ║
-║       Fusión dinámica de dos estilos a lo largo de una obra                  ║
-║                                                                              ║
-║  A diferencia de style_transfer.py (un estilo → toda la obra con strength   ║
-║  fija), este módulo mezcla DOS fuentes de estilo usando una curva de blend   ║
-║  que cambia compás a compás. Permite fusiones como épico→tango, clásico→    ║
-║  jazz, o cualquier viaje entre dos mundos sonoros.                           ║
-║                                                                              ║
-║  MODELO DE BLEND:                                                             ║
-║    blend=0.0  →  estilo A puro   (épico, clásico, etc.)                     ║
-║    blend=0.5  →  fusión equitativa                                           ║
-║    blend=1.0  →  estilo B puro   (tango, jazz, etc.)                        ║
-║                                                                              ║
-║  La curva puede definirse de tres formas:                                    ║
-║    [1] --blend-curve "0:0.0, 16:0.5, 32:1.0"   puntos compás:valor         ║
-║    [2] --blend-from-curves obra.curves.json      desde tension_designer      ║
-║    [3] --blend-preset NAME                       forma predefinida           ║
-║                                                                              ║
-║  PRESETS DE BLEND:                                                            ║
-║    gradual      — sube linealmente de 0.0 a 1.0 (A→B progresivo)           ║
-║    inverse      — baja linealmente de 1.0 a 0.0 (B→A progresivo)           ║
-║    arch         — A en extremos, B en el centro (A→B→A)                     ║
-║    inverse_arch — B en extremos, A en el centro (B→A→B)                    ║
-║    late_blend   — A dominante hasta el último tercio, luego B               ║
-║    early_blend  — B irrumpe al principio, luego retorna A                   ║
-║    wave         — oscila entre A y B repetidamente                          ║
-║    sudden       — A durante la primera mitad, B de golpe en la segunda      ║
-║                                                                              ║
-║  DIMENSIONES CONTROLABLES (--blend-dims):                                    ║
-║    rhythm    — patrón rítmico y groove                                       ║
-║    harmony   — progresión de acordes y complejidad armónica                 ║
-║    emotion   — curvas de tensión/arousal/valencia                           ║
-║    texture   — estilo de acompañamiento                                     ║
-║    dynamics  — envolvente de velocidades                                    ║
-║    melody    — mezcla de las líneas melódicas generadas por cada estilo     ║
-║                                                                              ║
-║  INTEGRACIÓN CON EL ECOSISTEMA:                                              ║
-║    theorist.py   → el plan .theorist.json puede guiar --blend-from-curves   ║
-║    narrator.py   → las secciones del plan definen bloques de blend           ║
-║    tension_designer.py → curvas exportadas como proxy directo del blend     ║
-║    harvester.py  → motivos extraídos como contenido de entrada              ║
-║    orchestrator.py → el MIDI resultante se orquesta normalmente             ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    # Blend gradual style1→style2 en 32 compases                               ║
-║    python style_blender.py contenido.mid style1.mid style2.mid \              ║
-║        --blend-preset gradual --bars 32                                      ║
-║                                                                              ║
-║    # Curva manual: style1 al inicio, style2 en el clímax, style1 al final      ║
-║    python style_blender.py contenido.mid style1.mid style2.mid \              ║
-║        --blend-curve "0:0.0, 8:0.1, 24:0.9, 32:0.1, 40:0.0"               ║
-║                                                                              ║
-║    # Usar la curva de tensión de la obra como proxy del blend               ║
-║    python style_blender.py contenido.mid style1.mid style2.mid \              ║
-║        --blend-from-curves obra.curves.json                                 ║
-║                                                                              ║
-║    # Control por secciones del narrator                                      ║
-║    python style_blender.py contenido.mid style1.mid style2.mid \              ║
-║        --blend-from-narrator obra_plan.json \                               ║
-║        --section-blend "A:0.0, B:0.8, C:0.4, A2:0.1"                      ║
-║                                                                              ║
-║    # Solo ciertas dimensiones                                                ║
-║    python style_blender.py contenido.mid style1.mid style2.mid \              ║
-║        --blend-dims rhythm texture --blend-preset arch                      ║
-║                                                                              ║
-║    # Exportar la curva de blend usada (para inspeccionarla)                 ║
-║    python style_blender.py contenido.mid style1.mid style2.mid \              ║
-║        --blend-preset wave --export-blend-curve                             ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --blend-curve STR   Puntos de la curva "bar:value, ..."                  ║
-║    --blend-preset NAME Forma predefinida de la curva (ver presets arriba)   ║
-║    --blend-from-curves Leer curva de tensión de un .curves.json             ║
-║    --blend-from-narrator Leer secciones de un obra_plan.json               ║
-║    --section-blend STR Valor de blend por sección "A:0.0, B:0.8, ..."      ║
-║    --blend-dims DIMS   Dimensiones a mezclar (default: todas)               ║
-║    --preserve STRATS   Preservación melódica: contour motif scale intervals ║
-║    --bars N            Compases de salida (default: auto desde contenido)   ║
-║    --candidates N      Candidatos por segmento (default: 2)                 ║
-║    --output FILE       MIDI de salida (default: blend_out.mid)              ║
-║    --export-blend-curve Guardar la curva de blend usada en JSON             ║
-║    --export-fingerprint Exportar fingerprint del resultado                  ║
-║    --no-percussion     No generar percusión                                 ║
-║    --seed N            Semilla aleatoria (default: 42)                      ║
-║    --verbose           Informe detallado compás a compás                    ║
-║                                                                              ║
-║  DEPENDENCIAS: midi_dna_unified.py, style_transfer.py, mido, numpy         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+style_blender.py — Style Blender: fusión dinámica de dos estilos a lo largo de
+una obra
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+A diferencia de style_transfer.py (un estilo → toda la obra con strength
+fija), este módulo mezcla DOS fuentes de estilo usando una curva de blend
+que cambia compás a compás. Permite fusiones como épico→tango, clásico→
+jazz, o cualquier viaje entre dos mundos sonoros.
+
+MODELO DE BLEND:
+  blend=0.0  →  estilo A puro   (épico, clásico, etc.)
+  blend=0.5  →  fusión equitativa
+  blend=1.0  →  estilo B puro   (tango, jazz, etc.)
+
+La curva puede definirse de tres formas:
+  [1] --blend-curve "0:0.0, 16:0.5, 32:1.0"   puntos compás:valor
+  [2] --blend-from-curves obra.curves.json      desde tension_designer
+  [3] --blend-preset NAME                       forma predefinida
+
+PRESETS DE BLEND:
+  gradual      — sube linealmente de 0.0 a 1.0 (A→B progresivo)
+  inverse      — baja linealmente de 1.0 a 0.0 (B→A progresivo)
+  arch         — A en extremos, B en el centro (A→B→A)
+  inverse_arch — B en extremos, A en el centro (B→A→B)
+  late_blend   — A dominante hasta el último tercio, luego B
+  early_blend  — B irrumpe al principio, luego retorna A
+  wave         — oscila entre A y B repetidamente
+  sudden       — A durante la primera mitad, B de golpe en la segunda
+
+DIMENSIONES CONTROLABLES (--blend-dims):
+  rhythm    — patrón rítmico y groove
+  harmony   — progresión de acordes y complejidad armónica
+  emotion   — curvas de tensión/arousal/valencia
+  texture   — estilo de acompañamiento
+  dynamics  — envolvente de velocidades
+  melody    — mezcla de las líneas melódicas generadas por cada estilo
+
+INTEGRACIÓN CON EL ECOSISTEMA:
+  theorist.py   → el plan .theorist.json puede guiar --blend-from-curves
+  narrator.py   → las secciones del plan definen bloques de blend
+  tension_designer.py → curvas exportadas como proxy directo del blend
+  harvester.py  → motivos extraídos como contenido de entrada
+  orchestrator.py → el MIDI resultante se orquesta normalmente
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --blend-curve STR   Puntos de la curva "bar:value, ..."
+  --blend-preset NAME Forma predefinida de la curva (ver presets arriba)
+  --blend-from-curves Leer curva de tensión de un .curves.json
+  --blend-from-narrator Leer secciones de un obra_plan.json
+  --section-blend STR Valor de blend por sección "A:0.0, B:0.8, ..."
+  --blend-dims DIMS   Dimensiones a mezclar (default: todas)
+  --preserve STRATS   Preservación melódica: contour motif scale intervals
+  --bars N            Compases de salida (default: auto desde contenido)
+  --candidates N      Candidatos por segmento (default: 2)
+  --output FILE       MIDI de salida (default: blend_out.mid)
+  --export-blend-curve Guardar la curva de blend usada en JSON
+  --export-fingerprint Exportar fingerprint del resultado
+  --no-percussion     No generar percusión
+  --seed N            Semilla aleatoria (default: 42)
+  --verbose           Informe detallado compás a compás
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Blend gradual style1→style2 en 32 compases
+  python style_blender.py contenido.mid style1.mid style2.mid \
+      --blend-preset gradual --bars 32
+
+  # Curva manual: style1 al inicio, style2 en el clímax, style1 al final
+  python style_blender.py contenido.mid style1.mid style2.mid \
+      --blend-curve "0:0.0, 8:0.1, 24:0.9, 32:0.1, 40:0.0"
+
+  # Usar la curva de tensión de la obra como proxy del blend
+  python style_blender.py contenido.mid style1.mid style2.mid \
+      --blend-from-curves obra.curves.json
+
+  # Control por secciones del narrator
+  python style_blender.py contenido.mid style1.mid style2.mid \
+      --blend-from-narrator obra_plan.json \
+      --section-blend "A:0.0, B:0.8, C:0.4, A2:0.1"
+
+  # Solo ciertas dimensiones
+  python style_blender.py contenido.mid style1.mid style2.mid \
+      --blend-dims rhythm texture --blend-preset arch
+
+  # Exportar la curva de blend usada (para inspeccionarla)
+  python style_blender.py contenido.mid style1.mid style2.mid \
+      --blend-preset wave --export-blend-curve
+
+── Más modos ──
+
+  # --export-fingerprint
+  python style_blender.py entrada.mid entrada.mid entrada.mid \
+        --export-fingerprint
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  midi_dna_unified.py, style_transfer.py, mido, numpy
 """
 
 import sys

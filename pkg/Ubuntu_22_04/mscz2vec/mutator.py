@@ -1,61 +1,87 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         MUTATOR  v1.0                                        ║
-║         Mutación semántica de MIDIs guiada por lenguaje natural              ║
-║                                                                              ║
-║  Transforma instrucciones en lenguaje natural ("más oscuro", "añade         ║
-║  urgencia en el clímax", "que suene como lluvia") en parámetros concretos   ║
-║  del pipeline midi_dna_unified y los aplica sobre un MIDI existente.        ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] Lee el MIDI fuente y su fingerprint (estado actual)                     ║
-║  [2] Parsea la instrucción: diccionario semántico + LLM (fallback/enriquece) ║
-║  [3] Resuelve deltas relativos sobre el estado actual                        ║
-║  [4] Aplica parámetros llamando a variation_engine / morpher / tension       ║
-║  [5] Verifica con mscz2vec que el resultado se movió en la dirección pedida  ║
-║  [6] Guarda historial de mutaciones (árbol, revertible)                      ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python mutator.py obra.mid "más oscuro"                                   ║
-║    python mutator.py obra.mid "añade urgencia en los últimos 8 compases"    ║
-║    python mutator.py obra.mid "hazlo más lento y melancólico"               ║
-║    python mutator.py obra.mid "quiero que suene como si lloviera"           ║
-║    python mutator.py obra.mid --interactive                                  ║
-║    python mutator.py obra.mid --history                                      ║
-║    python mutator.py obra.mid --revert 2                                     ║
-║    python mutator.py obra.mid --tree                                         ║
-║    python mutator.py obra.mid --branch mut_003.mid "más luminoso"           ║
-║    python mutator.py obra.mid --no-llm "oscuro"                             ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    instruction     Instrucción en lenguaje natural (entre comillas)          ║
-║    --interactive   Modo conversacional: itera hasta que estés satisfecho     ║
-║    --intensity F   Intensidad global de la mutación 0-1 (default: 0.7)      ║
-║    --bars N        Compases de salida (default: auto desde fuente)           ║
-║    --scope S:E     Aplicar solo entre compases S y E (ej: --scope 8:16)     ║
-║    --output FILE   MIDI de salida (default: auto desde historial)            ║
-║    --history       Mostrar historial de mutaciones de esta obra              ║
-║    --revert N      Revertir a la mutación N del historial                    ║
-║    --tree          Visualizar el árbol de mutaciones                         ║
-║    --branch MIDI   Partir desde un MIDI específico del historial             ║
-║    --no-llm        Usar solo el diccionario semántico (sin API)              ║
-║    --llm-provider  Proveedor LLM: anthropic (default) | openai               ║
-║    --llm-model     Modelo específico a usar (default: auto según proveedor)  ║
-║    --api-key KEY   API key del proveedor (o vars de entorno)                 ║
-║                    Anthropic: ANTHROPIC_API_KEY                              ║
-║                    OpenAI:    OPENAI_API_KEY                                 ║
-║    --dry-run       Mostrar parámetros resueltos sin generar MIDI             ║
-║    --verbose       Informe detallado de decisiones                           ║
-║    --listen        Reproducir el resultado (requiere pygame)                 ║
-║    --verify        Verificar con mscz2vec que la mutación fue en la          ║
-║                    dirección correcta (requiere music21)                     ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy                                                   ║
-║  LLM (opcional): anthropic  →  pip install anthropic                        ║
-║                  openai     →  pip install openai                            ║
-║  SCRIPTS DEL PIPELINE: variation_engine.py, morpher.py, tension_designer.py ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+mutator.py — Mutator: mutación semántica de MIDIs guiada por lenguaje natural
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Transforma instrucciones en lenguaje natural ("más oscuro", "añade
+urgencia en el clímax", "que suene como lluvia") en parámetros concretos
+del pipeline midi_dna_unified y los aplica sobre un MIDI existente.
+
+FLUJO:
+[1] Lee el MIDI fuente y su fingerprint (estado actual)
+[2] Parsea la instrucción: diccionario semántico + LLM (fallback/enriquece)
+[3] Resuelve deltas relativos sobre el estado actual
+[4] Aplica parámetros llamando a variation_engine / morpher / tension
+[5] Verifica con mscz2vec que el resultado se movió en la dirección pedida
+[6] Guarda historial de mutaciones (árbol, revertible)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  instruction     Instrucción en lenguaje natural (entre comillas)
+  --interactive   Modo conversacional: itera hasta que estés satisfecho
+  --intensity F   Intensidad global de la mutación 0-1 (default: 0.7)
+  --bars N        Compases de salida (default: auto desde fuente)
+  --scope S:E     Aplicar solo entre compases S y E (ej: --scope 8:16)
+  --output FILE   MIDI de salida (default: auto desde historial)
+  --history       Mostrar historial de mutaciones de esta obra
+  --revert N      Revertir a la mutación N del historial
+  --tree          Visualizar el árbol de mutaciones
+  --branch MIDI   Partir desde un MIDI específico del historial
+  --no-llm        Usar solo el diccionario semántico (sin API)
+  --llm-provider  Proveedor LLM: anthropic (default) | openai
+  --llm-model     Modelo específico a usar (default: auto según proveedor)
+  --api-key KEY   API key del proveedor (o vars de entorno)
+                  Anthropic: ANTHROPIC_API_KEY
+                  OpenAI:    OPENAI_API_KEY
+  --dry-run       Mostrar parámetros resueltos sin generar MIDI
+  --verbose       Informe detallado de decisiones
+  --listen        Reproducir el resultado (requiere pygame)
+  --verify        Verificar con mscz2vec que la mutación fue en la
+                  dirección correcta (requiere music21)
+
+── Otras opciones del parser ──
+  --list-concepts             Listar conceptos semánticos disponibles
+  --output-dir OUTPUT_DIR     Directorio para archivos de salida
+  --llm-debug                 Mostrar prompt enviado y respuesta raw del LLM
+  --batch-mode                Modo silencioso para llamadas en lote desde
+                              leitmotif_tracker.py. Suprime confirmaciones y
+                              usa --no-llm automáticamente.
+  --play-seconds PLAY_SECONDS
+                              Segundos de reproducción (default: 15)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python mutator.py obra.mid "más oscuro"
+  python mutator.py obra.mid "añade urgencia en los últimos 8 compases"
+  python mutator.py obra.mid "hazlo más lento y melancólico"
+  python mutator.py obra.mid "quiero que suene como si lloviera"
+  python mutator.py obra.mid --interactive
+  python mutator.py obra.mid --history
+  python mutator.py obra.mid --revert 2
+  python mutator.py obra.mid --tree
+  python mutator.py obra.mid "más luminoso" --branch mut_003.mid
+  python mutator.py obra.mid "oscuro" --no-llm
+
+── Más modos ──
+
+  # Listar conceptos semánticos disponibles
+  python mutator.py --list-concepts
+
+  # Mostrar parámetros sin generar MIDI
+  python mutator.py --dry-run
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
+  LLM (opcional): anthropic  →  pip install anthropic
+                  openai     →  pip install openai
+  SCRIPTS DEL PIPELINE: variation_engine.py, morpher.py, tension_designer.py
 """
 
 import sys

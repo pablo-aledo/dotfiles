@@ -1,58 +1,106 @@
 #!/usr/bin/env python3
 # encoding: utf-8
-# ╔══════════════════════════════════════════════════════════════════════════╗
-# ║                                                                          ║
-# ║   P I T C H   T R A N S C R I B E R                                     ║
-# ║   ─────────────────────────────────                                    ║
-# ║                                                                          ║
-# ║   Transcriptor automatico de audio a MIDI (Automatic Music              ║
-# ║   Transcription). Toma un fichero de audio (wav/mp3/flac/ogg/...) y     ║
-# ║   produce un fichero MIDI polifonico con pitch bends, usando la red     ║
-# ║   neuronal ligera "Basic Pitch" (Spotify Audio Intelligence Lab,        ║
-# ║   ICASSP 2022) ya entrenada y exportada a ONNX.                         ║
-# ║                                                                          ║
-# ║   Adaptacion de github.com/spotify/basic-pitch al estilo "mutopia":     ║
-# ║   un unico fichero autocontenido, sin imports cruzados a otros          ║
-# ║   scripts, con subcomandos argparse sencillos. El pipeline de           ║
-# ║   entrenamiento, la abstraccion multi-runtime (TF/CoreML/TFLite) y      ║
-# ║   los cargadores de datasets del proyecto original se han descartado:   ║
-# ║   aqui solo se hace inferencia, con onnxruntime como unico backend.     ║
-# ║                                                                          ║
-# ║   USO                                                                   ║
-# ║   ───                                                                   ║
-# ║     transcribir un fichero de audio a MIDI:                            ║
-# ║       $ python pitch_transcriber.py transcribe entrada.wav salida/     ║
-# ║                                                                          ║
-# ║     ademas del MIDI, guardar posteriogramas crudos, notas en CSV y      ║
-# ║     una version renderizada a wav del MIDI resultante:                 ║
-# ║       $ python pitch_transcriber.py transcribe entrada.wav salida/ \   ║
-# ║             --save-model-outputs --save-notes --sonify                 ║
-# ║                                                                          ║
-# ║     renderizar a wav un MIDI ya existente (sin pasar por el modelo):   ║
-# ║       $ python pitch_transcriber.py sonify cancion.mid cancion.wav     ║
-# ║                                                                          ║
-# ║     comprobar que el modelo carga y ver sus dimensiones de E/S:        ║
-# ║       $ python pitch_transcriber.py info                               ║
-# ║                                                                          ║
-# ║   DEPENDENCIAS                                                          ║
-# ║   ────────────                                                         ║
-# ║     numpy, scipy, librosa, pretty_midi, onnxruntime                    ║
-# ║                                                                          ║
-# ║   MODELO                                                                ║
-# ║   ──────                                                                ║
-# ║     Este script espera encontrar el fichero de pesos "nmp.onnx"        ║
-# ║     (el modelo ICASSP-2022 de Basic Pitch, ~228 KB) en el mismo         ║
-# ║     directorio que este script. Alternativamente, indica su ruta       ║
-# ║     con --model o la variable de entorno PITCH_TRANSCRIBER_MODEL.      ║
-# ║     El fichero puede obtenerse de:                                     ║
-# ║       github.com/spotify/basic-pitch/tree/main/basic_pitch/            ║
-# ║             saved_models/icassp_2022/nmp.onnx                          ║
-# ║                                                                          ║
-# ║   Basado en Basic Pitch (c) 2022 Spotify AB, licencia Apache 2.0.       ║
-# ║   Paper: "A Lightweight Instrument-Agnostic Model for Polyphonic        ║
-# ║   Note Transcription and Multipitch Estimation" (ICASSP 2022).          ║
-# ║                                                                          ║
-# ╚══════════════════════════════════════════════════════════════════════════╝
+r"""
+pitch_transcriber.py — Transcriptor automático de audio a MIDI polifónico con
+pitch bends (red «Basic Pitch» exportada a ONNX).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Transcriptor automatico de audio a MIDI (Automatic Music
+Transcription). Toma un fichero de audio (wav/mp3/flac/ogg/...) y
+produce un fichero MIDI polifonico con pitch bends, usando la red
+neuronal ligera "Basic Pitch" (Spotify Audio Intelligence Lab,
+ICASSP 2022) ya entrenada y exportada a ONNX.
+
+Adaptacion de github.com/spotify/basic-pitch al estilo "mutopia":
+un unico fichero autocontenido, sin imports cruzados a otros
+scripts, con subcomandos argparse sencillos. El pipeline de
+entrenamiento, la abstraccion multi-runtime (TF/CoreML/TFLite) y
+los cargadores de datasets del proyecto original se han descartado:
+aqui solo se hace inferencia, con onnxruntime como unico backend.
+
+MODELO:
+──────
+  Este script espera encontrar el fichero de pesos "nmp.onnx"
+  (el modelo ICASSP-2022 de Basic Pitch, ~228 KB) en el mismo
+  directorio que este script. Alternativamente, indica su ruta
+  con --model o la variable de entorno PITCH_TRANSCRIBER_MODEL.
+  El fichero puede obtenerse de:
+    github.com/spotify/basic-pitch/tree/main/basic_pitch/
+          saved_models/icassp_2022/nmp.onnx
+
+Basado en Basic Pitch (c) 2022 Spotify AB, licencia Apache 2.0.
+Paper: "A Lightweight Instrument-Agnostic Model for Polyphonic
+Note Transcription and Multipitch Estimation" (ICASSP 2022).
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  transcribe  Transcribe uno o mas ficheros de audio a MIDI
+  sonify      Renderiza un MIDI existente a wav (sin pasar por el modelo)
+  info        Comprueba que el modelo carga y muestra sus dimensiones de E/S
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  transcribe
+    audio_files AUDIO_FILES […]
+                                Ficheros de audio de entrada (wav, mp3, flac,
+                                ...)
+    output_dir OUTPUT_DIR       Directorio donde guardar los resultados
+    --model MODEL               Ruta al fichero .onnx del modelo
+    --onset-threshold ONSET_THRESHOLD
+                                (defecto DEFAULT_ONSET_THRESHOLD)
+    --frame-threshold FRAME_THRESHOLD
+                                (defecto DEFAULT_FRAME_THRESHOLD)
+    --min-note-length MIN_NOTE_LENGTH
+                                Duracion minima de nota en milisegundos
+                                (defecto DEFAULT_MINIMUM_NOTE_LENGTH_MS)
+    --min-freq MIN_FREQ         Frecuencia minima en Hz
+    --max-freq MAX_FREQ         Frecuencia maxima en Hz
+    --multiple-pitch-bends      Permite pitch bends en notas superpuestas (un
+                                instrumento MIDI por altura)
+    --no-melodia-trick          Desactiva el post-procesado 'melodia trick'
+    --midi-tempo MIDI_TEMPO     (defecto DEFAULT_MIDI_TEMPO)
+    --save-model-outputs        Guarda tambien los posteriogramas en .npz
+    --save-notes                Guarda tambien los eventos de nota en .csv
+    --sonify                    Renderiza tambien el MIDI resultante a .wav
+    --sonification-samplerate SONIFICATION_SAMPLERATE
+                                (defecto DEFAULT_SONIFICATION_SAMPLERATE)
+
+  sonify
+    midi_file MIDI_FILE         Fichero MIDI de entrada
+    output_wav OUTPUT_WAV       Fichero wav de salida
+    --samplerate SAMPLERATE     (defecto DEFAULT_SONIFICATION_SAMPLERATE)
+
+  info
+    --model MODEL               Ruta al fichero .onnx del modelo
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  ───
+    transcribir un fichero de audio a MIDI:
+      $ python pitch_transcriber.py transcribe entrada.wav salida/
+
+    ademas del MIDI, guardar posteriogramas crudos, notas en CSV y
+    una version renderizada a wav del MIDI resultante:
+      $ python pitch_transcriber.py transcribe entrada.wav salida/ \
+            --save-model-outputs --save-notes --sonify
+
+    renderizar a wav un MIDI ya existente (sin pasar por el modelo):
+      $ python pitch_transcriber.py sonify cancion.mid cancion.wav
+
+    comprobar que el modelo carga y ver sus dimensiones de E/S:
+      $ python pitch_transcriber.py info
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  ────────────
+    numpy, scipy, librosa, pretty_midi, onnxruntime
+"""
 
 from __future__ import annotations
 

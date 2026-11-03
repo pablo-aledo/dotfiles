@@ -1,55 +1,203 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       LATENT COMPOSER  v0.1                                  ║
-║         Composición end-to-end mediante VAE multi-rol                        ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    prepare   — MIDI corpus → piano rolls segmentados por rol (.npz)          ║
-║    train     — Entrena el VAE multi-rol                                      ║
-║    encode    — MIDI referencia → z_style (.json)                             ║
-║    compose   — Genera obra nueva (modos: reconstruct/z-noise/blend/sweep)   ║
-║               Recuperación: --retrieval decoder (VAE) | nnr (vecino latente)║
-║    inspect   — Diagnóstico del modelo y espacio latente                      ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    mido, numpy, torch, scipy                                                 ║
-║    (scipy opcional: solo para sweep con --smooth)                            ║
-║                                                                              ║
-║  USO RÁPIDO:                                                                 ║
-║    python latent_composer.py prepare --input-dir midis/ --output-dir data/  ║
-║    python latent_composer.py train   --data-dir data/  --model-dir model/   ║
-║    python latent_composer.py encode  --input ref.mid   --model-dir model/   ║
-║    python latent_composer.py compose --mode z-noise --input ref.mid         ║
-║                               --model-dir model/ --palette palette.json     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+latent_composer.py — Latent Composer: composición end-to-end mediante VAE
+multi-rol
+(versión 0.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  COMANDOS:
+    prepare   — MIDI corpus → piano rolls segmentados por rol (.npz)
+    train     — Entrena el VAE multi-rol
+    encode    — MIDI referencia → z_style (.json)
+    compose   — Genera obra nueva (modos: reconstruct/z-noise/blend/sweep)
+               Recuperación: --retrieval decoder (VAE) | nnr (vecino latente)
+    inspect   — Diagnóstico del modelo y espacio latente
+
+  DEPENDENCIAS:
+    mido, numpy, torch, scipy
+    (scipy opcional: solo para sweep con --smooth)
+
+  USO RÁPIDO:
+    python latent_composer.py prepare --input-dir midis/ --output-dir data/
+    python latent_composer.py train \
+          --data-dir data/  --model-dir model/
+    python latent_composer.py encode  --input ref.mid \
+          --model-dir model/
+    python latent_composer.py compose --mode z-noise --input ref.mid \
+                               --model-dir model/ --palette palette.json
 
 python latent_composer.py prepare --input-dir midis/ --output-dir data/ --report
 
 python latent_composer.py train \
-    --data-dir data/ \
-    --model-dir model_small2/ \
-    --epochs 300 \
-    --batch-size 16 \
-    --lr 1e-3 \
-    --beta 1.0 \
-    --beta-warmup 40 \
-    --latent-dim 32 \
-    --style-dim 16 \
-    --pos-weight 5.0 \
-    --patience 50 \
-    --spatial-reg interval \
-    --lambda-spatial 0.03 \
-    --kl-threshold 1.0 \
-    --kl-warmup-window 2 \
-    --decoder-lr-factor 0.5 \
-    --free-bits 0.5
+      --data-dir data/ \
+      --model-dir model_small2/ \
+      --epochs 300 \
+      --batch-size 16 \
+      --lr 1e-3 \
+      --beta 1.0 \
+      --beta-warmup 40 \
+      --latent-dim 32 \
+      --style-dim 16 \
+      --pos-weight 5.0 \
+      --patience 50 \
+      --spatial-reg interval \
+      --lambda-spatial 0.03 \
+      --kl-threshold 1.0 \
+      --kl-warmup-window 2 \
+      --decoder-lr-factor 0.5 \
+      --free-bits 0.5
 
-python latent_composer.py compose --model-dir model/ --palette palette.json --mode z-noise --input ref.mid --temperature 0.5 --noise 0.1 
+python latent_composer.py compose --model-dir model/ --palette palette.json --mode z-noise --input ref.mid --temperature 0.5 --noise 0.1
 
-python latent_composer.py compose --model-dir model/ --palette palette.json --mode sweep --inputs ref.mid ref.mid --bars 64 --tension arch --retrieval nnr --data-dir data/ --nnr-temperature 0.5 
+python latent_composer.py compose --model-dir model/ --palette palette.json --mode sweep --inputs ref.mid ref.mid --bars 64 --tension arch --retrieval nnr --data-dir data/ --nnr-temperature 0.5
 python latent_composer.py compose --model-dir model/ --palette palette.json --mode z-noise --input ref.mid --retrieval nnr --data-dir data/ --nnr-temperature 0.5
 
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  prepare     Convierte corpus MIDI en piano rolls segmentados por rol
+  train       Entrena el VAE multi-rol
+  encode      Codifica un MIDI de referencia como z_style (.json)
+  compose     Genera una obra nueva a partir del espacio latente
+  inspect     Diagnóstico del modelo, espacio latente y datos preparados
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare
+    --input-dir DIR             Directorio con archivos .mid / .midi
+                                (obligatorio)
+    --output-dir DIR            Directorio de salida para archivos .npz
+                                (obligatorio)
+    --resolution INT            Ticks internos por compás (default: …)
+    --window-bars INT           Compases por ventana (default: …)
+    --report                    Muestra estadísticas detalladas del corpus
+                                procesado
+
+  train
+    --data-dir DIR              Directorio con .npz de prepare (obligatorio)
+    --model-dir DIR             Directorio de salida para checkpoints y modelo
+                                final (obligatorio)
+    --epochs EPOCHS             Épocas máximas (default: 100)
+    --batch-size INT            Tamaño de batch (default: 16)
+    --latent-dim INT            Dimensión del espacio latente z (default: 128)
+    --style-dim INT             Dimensión del vector de estilo z_style
+                                (default: 64)
+    --lr LR                     Learning rate Adam (default: 1e-3)
+    --beta BETA                 Peso final del término KL — beta-VAE (default:
+                                1.0)
+    --beta-warmup INT           Épocas de warm-up lineal de beta, 0→beta
+                                (default: 20)
+    --patience INT              Early stopping: épocas sin mejora antes de
+                                parar (default: 15)
+    --pos-weight W              Peso de píxeles positivos en BCE (default:
+                                10.0)
+    --no-augment                Desactivar augmentación por transposición
+    --spatial-reg SPATIAL_REG   Regularización espacial del piano roll: none |
+                                smoothness | pitch | interval (default: none)
+    --lambda-spatial FLOAT      Peso del término de regularización espacial
+                                (default: 0.05)
+    --decoder-lr-factor FLOAT   Factor de lr del decoder al descongelarse:
+                                lr_dec = lr * factor (default: 0.1 — decoder
+                                aprende 10x más lento que encoder)
+    --freeze-decoder-epochs INT
+                                Congelar el decoder durante N épocas iniciales
+                                para forzar al encoder a usar z (default: 0 =
+                                desactivado)
+    --kl-threshold FLOAT        KL mínimo para arrancar el warmup de beta
+                                (default: 5.0)
+    --kl-warmup-window INT      Épocas consecutivas con KL>threshold para
+                                disparar warmup (default: 3)
+    --free-bits FLOAT           Bits libres por dimensión latente para evitar
+                                colapso (default: 0.1)
+    --resume                    Reanudar desde el último checkpoint
+    --report                    Mostrar curvas de loss al finalizar
+
+  encode
+    --input FILE                MIDI de referencia (obligatorio)
+    --model-dir DIR             Directorio con el modelo entrenado
+                                (obligatorio)
+    --output FILE               Archivo .json de salida (default:
+                                <input>.style.json)
+    --report                    Mostrar distribución de z_style y tensión
+                                media
+
+  compose
+    --model-dir DIR             Directorio con el modelo entrenado
+                                (obligatorio)
+    --palette FILE              JSON con mapeo rol → … (obligatorio)
+    --mode MODE                 Modo de generación (default: z-noise)
+                                (valores: reconstruct|z-noise|blend|sweep)
+    --bars INT                  Compases a generar (default: 32)
+    --tension PERFIL            Perfil de tensión:
+                                flat|arch|rise|fall|<archivo.json> (default:
+                                arch)
+    --output FILE               Archivo MIDI de salida (default: output.mid)
+    --temperature FLOAT         Temperatura de muestreo: >1 más aleatorio, <1
+                                más determinista (default: 1.0)
+    --bpm FLOAT                 Tempo en BPM (default: 120)
+    --input FILE                [reconstruct, z-noise] MIDI de referencia
+    --inputs FILE […]           [blend, sweep] 2 o más MIDIs de referencia
+    --weights W […]             [blend] Pesos de mezcla (uno por --inputs, se
+                                normalizan)
+    --noise FLOAT               [z-noise] Magnitud del ruido gaussiano
+                                (default: 0.3)
+    --smooth FLOAT              [sweep] Suavizado: 0=lineal, >0=spline cúbico
+                                (default: 0.5)
+    --retrieval RETRIEVAL       Método de generación: decoder (VAE clásico) |
+                                nnr (vecino más cercano en el espacio latente
+                                del corpus). (default: decoder) (valores:
+                                decoder|nnr)
+    --data-dir DIR              [nnr] Directorio con los .npz del corpus
+                                (requerido para --retrieval nnr)
+    --nnr-distance NNR_DISTANCE
+                                [nnr] Métrica de distancia en el espacio
+                                latente (default: euclidean) (valores:
+                                euclidean|cosine)
+    --nnr-tension-weight FLOAT  [nnr] Peso del término de tensión en la
+                                distancia compuesta: 0.0=solo latente,
+                                1.0=latente y tensión a partes iguales
+                                (default: 0.0)
+    --nnr-temperature FLOAT     [nnr] Temperatura del muestreo ponderado por
+                                distancia. 0.0=determinista (vecino exacto);
+                                valores mayores aumentan la variedad
+                                muestreando entre los candidatos cercanos con
+                                prob proporcional a exp(-dist/T). Rango
+                                típico: 0.1-1.0 (default: 0.0)
+
+  inspect
+    --what WHAT […]             Qué inspeccionar (default: npz) (valores:
+                                npz|loss_curve|role_quality|latent_projection|tension_response)
+    --data-dir DIR              Directorio con .npz (requerido para --what
+                                npz)
+    --file NAME                 Inspeccionar solo este fichero (sin extensión
+                                .npz)
+    --window INT                Índice de ventana a mostrar (default: 0,
+                                soporta negativos)
+    --bars-show INT             Compases de la ventana a renderizar (default:
+                                todos)
+    --roles ROL […]             Mostrar solo estos roles (default: todos)
+    --tension-curve             Mostrar curvas de tensión completas
+    --no-roll                   Omitir piano roll (solo metadatos y tensión)
+    --model-dir DIR             Modelo entrenado (requerido para loss_curve,
+                                etc.)
+    --midi FILE                 MIDI a analizar (para latent_projection)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Mostrar curvas de loss al finalizar
+  python latent_composer.py train --data-dir carpeta/ --model-dir carpeta/ \
+        --report
+
+  # Mostrar distribución de z_style y tensión media
+  python latent_composer.py encode --input entrada.mid --model-dir carpeta/ \
+        --report
+
+  # Diagnóstico del modelo, espacio latente y datos preparados
+  python latent_composer.py inspect
 """
 
 import argparse

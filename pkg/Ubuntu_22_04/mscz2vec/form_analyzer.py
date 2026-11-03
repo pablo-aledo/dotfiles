@@ -1,67 +1,83 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        FORM ANALYZER  v1.0                                   ║
-║          Forma musical de un MIDI: secciones, repeticiones y etiquetas       ║
-║                                                                              ║
-║  harvester segmenta por novedad y section_score puntúa coherencia, pero      ║
-║  ninguna herramienta dice QUÉ FORMA tiene una pieza (A A' B A'), qué         ║
-║  compases son repetición literal o variada de otros, ni permite comparar     ║
-║  la forma de una reconstrucción con la del original. Esta herramienta lo     ║
-║  hace con una matriz de autosimilitud por compás.                            ║
-║                                                                              ║
-║  MÉTODO:                                                                     ║
-║  [1] COMPASES  — divide el MIDI en compases reales (respeta cambios de       ║
-║                  compás; 6/8 y 12/8 se cuentan bien)                         ║
-║  [2] RASGOS    — por compás: clases de altura, bajo, rejilla rítmica y       ║
-║                  contorno de la voz superior                                 ║
-║  [3] SIMILITUD — matriz compás×compás (0-1)                                  ║
-║  [4] REPETICIONES — diagonales de alta similitud = material que vuelve       ║
-║  [5] FRONTERAS — curva de novedad (kernel de Foote) + bordes de repetición   ║
-║  [6] ETIQUETAS — A, A', B ...: misma letra = misma sección; prima = variada  ║
-║  [7] FORMA     — clasifica (binaria, ternaria, AABA, rondó, estrófica ...)   ║
-║                                                                              ║
-║  SUBCOMANDOS:                                                                ║
-║    detect    Analiza un MIDI e imprime/exporta la forma                      ║
-║    plan      Convierte la forma en una estructura reutilizable por otras     ║
-║              herramientas (JSON, o comando de song_architect)                ║
-║    compare   Compara la forma de dos MIDIs (fidelidad estructural 0-1)       ║
-║    selftest  Genera MIDIs sintéticos con forma conocida y verifica           ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python form_analyzer.py detect obra.mid                                   ║
-║    python form_analyzer.py detect obra.mid --json forma.json --ssm           ║
-║    python form_analyzer.py detect obra.mid --min-bars 8 --sens 0.7           ║
-║    python form_analyzer.py detect obra.mid --timesig 6/8 --track 1 2         ║
-║    python form_analyzer.py plan obra.mid --target song_architect             ║
-║    python form_analyzer.py plan obra.mid --target json --output plan.json    ║
-║    python form_analyzer.py compare original.mid reconstruccion.mid           ║
-║    python form_analyzer.py selftest                                          ║
-║                                                                              ║
-║  OPCIONES DE ANÁLISIS (detect, plan, compare):                               ║
-║    --min-bars N      Longitud mínima de sección (default: según longitud, 2-8) ║
-║    --sens X          Sensibilidad de fronteras 0-1 (default: 0.5; mayor =    ║
-║                      más secciones)                                          ║
-║    --same-thr X     Similitud para "misma sección" (default: 0.86)           ║
-║    --var-thr X      Similitud para "sección variada" A' (default: 0.70)      ║
-║    --snap N          Ajusta fronteras a múltiplos de N compases (default: 0) ║
-║    --timesig N/D     Fuerza el compás (si el MIDI lo declara mal)            ║
-║    --track N [N..]   Usa solo estas pistas (default: todas salvo percusión)  ║
-║                                                                              ║
-║  OPCIONES DE SALIDA:                                                         ║
-║    --json FILE       (detect) Escribe el análisis completo ('-' = stdout)    ║
-║    --ssm             (detect) Dibuja la matriz de autosimilitud en ASCII     ║
-║    --output FILE     (plan) Escribe la estructura                            ║
-║    --target T        (plan) json | song_architect                            ║
-║                                                                              ║
-║  LIMITACIONES: heurístico. Funciona mejor con MIDIs cuantizados y de forma   ║
-║  clara; con material homogéneo (preludios de arpegios) devuelve pocas        ║
-║  secciones. Las etiquetas son relativas (A es la primera sección, no "el     ║
-║  tema"). Un MIDI con compás mal declarado da compases erróneos: usar         ║
-║  --timesig. No distingue repetición escrita de repetición con signos.        ║
-║                                                                              ║
-║  DEPENDENCIAS: ninguna (solo stdlib)                                         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+form_analyzer.py — Form Analyzer: forma musical de un MIDI: secciones,
+repeticiones y etiquetas
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+harvester segmenta por novedad y section_score puntúa coherencia, pero
+ninguna herramienta dice QUÉ FORMA tiene una pieza (A A' B A'), qué
+compases son repetición literal o variada de otros, ni permite comparar
+la forma de una reconstrucción con la del original. Esta herramienta lo
+hace con una matriz de autosimilitud por compás.
+
+MÉTODO:
+[1] COMPASES  — divide el MIDI en compases reales (respeta cambios de
+                compás; 6/8 y 12/8 se cuentan bien)
+[2] RASGOS    — por compás: clases de altura, bajo, rejilla rítmica y
+                contorno de la voz superior
+[3] SIMILITUD — matriz compás×compás (0-1)
+[4] REPETICIONES — diagonales de alta similitud = material que vuelve
+[5] FRONTERAS — curva de novedad (kernel de Foote) + bordes de repetición
+[6] ETIQUETAS — A, A', B ...: misma letra = misma sección; prima = variada
+[7] FORMA     — clasifica (binaria, ternaria, AABA, rondó, estrófica ...)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  detect    Analiza un MIDI e imprime/exporta la forma
+  plan      Convierte la forma en una estructura reutilizable por otras
+            herramientas (JSON, o comando de song_architect)
+  compare   Compara la forma de dos MIDIs (fidelidad estructural 0-1)
+  selftest  Genera MIDIs sintéticos con forma conocida y verifica
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES DE SALIDA:
+    --json FILE       (detect) Escribe el análisis completo ('-' = stdout)
+    --ssm             (detect) Dibuja la matriz de autosimilitud en ASCII
+    --output FILE     (plan) Escribe la estructura
+    --target T        (plan) json | song_architect
+
+  LIMITACIONES: heurístico. Funciona mejor con MIDIs cuantizados y de forma
+  clara; con material homogéneo (preludios de arpegios) devuelve pocas
+  secciones. Las etiquetas son relativas (A es la primera sección, no "el
+  tema"). Un MIDI con compás mal declarado da compases erróneos: usar
+  --timesig. No distingue repetición escrita de repetición con signos.
+
+── Otras opciones del parser ──
+  (común)
+    --no-color
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python form_analyzer.py detect obra.mid
+    python form_analyzer.py detect obra.mid --json forma.json --ssm
+    python form_analyzer.py detect obra.mid --min-bars 8 --sens 0.7
+    python form_analyzer.py detect obra.mid --timesig 6/8 --track 1 2
+    python form_analyzer.py plan obra.mid --target song_architect
+    python form_analyzer.py plan obra.mid --target json --output plan.json
+    python form_analyzer.py compare original.mid reconstruccion.mid
+    python form_analyzer.py selftest
+
+  OPCIONES DE ANÁLISIS (detect, plan, compare):
+    --min-bars N      Longitud mínima de sección (default: según longitud, 2-8)
+    --sens X          Sensibilidad de fronteras 0-1 (default: 0.5; mayor =
+                      más secciones)
+    --same-thr X     Similitud para "misma sección" (default: 0.86)
+    --var-thr X      Similitud para "sección variada" A' (default: 0.70)
+    --snap N          Ajusta fronteras a múltiplos de N compases (default: 0)
+    --timesig N/D     Fuerza el compás (si el MIDI lo declara mal)
+    --track N [N..]   Usa solo estas pistas (default: todas salvo percusión)
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  ninguna (solo stdlib)
 """
 
 import sys

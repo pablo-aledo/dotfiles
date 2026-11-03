@@ -1,57 +1,63 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       CLIMAX ENGINEER  v1.0                                  ║
-║          Ingeniería deliberada del punto culminante de una obra MIDI        ║
-║                                                                              ║
-║  arc_supervisor DETECTA si el arco emocional se cumple; esta herramienta    ║
-║  lo CONSTRUYE: localiza el clímax (por defecto en la proporción áurea),     ║
-║  coordina todas las dimensiones hacia él y elimina falsos clímax que        ║
-║  roben energía al principal.                                                 ║
-║                                                                              ║
-║  OPERACIONES:                                                                ║
-║    remodelado   — la curva de energía (densidad + dinámica + registro +     ║
-║                   polifonía) se reescala compás a compás hacia una curva    ║
-║                   objetivo con un único pico asimétrico                      ║
-║    vaciado      — los compases previos al pico bajan en dinámica y se       ║
-║                   adelgaza la textura, para que el golpe destaque            ║
-║    refuerzo     — duplicación a la octava de la melodía en la zona de pico  ║
-║    anti-falsos  — picos secundarios > umbral relativo se atenúan            ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] CURVA      — energía por compás, suavizada                             ║
-║  [2] OBJETIVO   — curva diana con pico en --position y anchura --width      ║
-║  [3] ESCALADO   — velocidades por compás hacia la diana (limitado)          ║
-║  [4] VACIADO    — hueco dramático en los --hollow-bars previos              ║
-║  [5] REFUERZO   — octavas de melodía en ±width/2 compases del pico          ║
-║  [6] INFORME    — sparkline antes/después + escritura                       ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python climax_engineer.py obra.mid                                        ║
-║    python climax_engineer.py obra.mid --position 0.618 --width 4            ║
-║    python climax_engineer.py obra.mid --hollow-bars 2 --intensity 0.8       ║
-║    python climax_engineer.py obra.mid --no-double --no-hollow               ║
-║    python climax_engineer.py obra.mid --dry-run                             ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi               MIDI de entrada                                        ║
-║    --output FILE      MIDI de salida (default: <obra>_climax.mid)           ║
-║    --position F       Posición del clímax 0–1 (default: 0.618, áurea)      ║
-║    --width N          Anchura de la zona de pico en compases (default: 4)   ║
-║    --hollow-bars N    Compases de vaciado previo (default: 2)               ║
-║    --intensity F      Cuánto acercarse a la diana 0–1 (default: 0.7)        ║
-║    --melody-track N   Pista a duplicar en octavas (default: autodetección)  ║
-║    --no-double        Sin duplicación de octavas                             ║
-║    --no-hollow        Sin vaciado previo                                     ║
-║    --no-antifalse     No atenuar falsos clímax                               ║
-║    --dry-run          Solo informe y curvas, sin escribir MIDI               ║
-║    --no-color         Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from climax_engineer import engineer_climax                               ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+climax_engineer.py — Climax Engineer: ingeniería deliberada del punto
+culminante de una obra MIDI
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+arc_supervisor DETECTA si el arco emocional se cumple; esta herramienta
+lo CONSTRUYE: localiza el clímax (por defecto en la proporción áurea),
+coordina todas las dimensiones hacia él y elimina falsos clímax que
+roben energía al principal.
+
+OPERACIONES:
+  remodelado   — la curva de energía (densidad + dinámica + registro +
+                 polifonía) se reescala compás a compás hacia una curva
+                 objetivo con un único pico asimétrico
+  vaciado      — los compases previos al pico bajan en dinámica y se
+                 adelgaza la textura, para que el golpe destaque
+  refuerzo     — duplicación a la octava de la melodía en la zona de pico
+  anti-falsos  — picos secundarios > umbral relativo se atenúan
+
+FLUJO:
+[1] CURVA      — energía por compás, suavizada
+[2] OBJETIVO   — curva diana con pico en --position y anchura --width
+[3] ESCALADO   — velocidades por compás hacia la diana (limitado)
+[4] VACIADO    — hueco dramático en los --hollow-bars previos
+[5] REFUERZO   — octavas de melodía en ±width/2 compases del pico
+[6] INFORME    — sparkline antes/después + escritura
+
+COMO MÓDULO:
+  from climax_engineer import engineer_climax
+
+DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi               MIDI de entrada
+  --output FILE      MIDI de salida (default: <obra>_climax.mid)
+  --position F       Posición del clímax 0–1 (default: 0.618, áurea)
+  --width N          Anchura de la zona de pico en compases (default: 4)
+  --hollow-bars N    Compases de vaciado previo (default: 2)
+  --intensity F      Cuánto acercarse a la diana 0–1 (default: 0.7)
+  --melody-track N   Pista a duplicar en octavas (default: autodetección)
+  --no-double        Sin duplicación de octavas
+  --no-hollow        Sin vaciado previo
+  --no-antifalse     No atenuar falsos clímax
+  --dry-run          Solo informe y curvas, sin escribir MIDI
+  --no-color         Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python climax_engineer.py obra.mid
+  python climax_engineer.py obra.mid --position 0.618 --width 4
+  python climax_engineer.py obra.mid --hollow-bars 2 --intensity 0.8
+  python climax_engineer.py obra.mid --no-double --no-hollow
+  python climax_engineer.py obra.mid --dry-run
 """
 
 import sys

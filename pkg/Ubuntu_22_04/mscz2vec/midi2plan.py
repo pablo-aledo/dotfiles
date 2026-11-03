@@ -1,67 +1,120 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          MIDI2PLAN  v1.0                                     ║
-║        De un MIDI existente a un plan ejecutable por runner.py               ║
-║                                                                              ║
-║  runner.py ejecuta planes que salen de theorist.py o narrator.py (desde      ║
-║  lenguaje natural). Falta el camino inverso: PARTIR DE UN MIDI, extraer su   ║
-║  "brief" (tonalidad, tempo, compás real, forma, estilo) y convertirlo en un  ║
-║  pipeline listo para ejecutar. Esta herramienta lo hace, y centraliza los    ║
-║  cálculos que cada script de lote acababa reimplementando (y a veces mal):   ║
-║  compases compuestos (6/8, 12/8, 3/8), pulsos por compás en negras, tempo,   ║
-║  estilo inferido DEL CONTENIDO (no del nombre del fichero).                  ║
-║                                                                              ║
-║  SUBCOMANDOS:                                                                ║
-║    brief     Extrae el brief de un MIDI (tonalidad, compás, tempo, forma,    ║
-║              estilo sugerido y parámetros recomendados por herramienta)      ║
-║    plan      Genera un plan .yaml para runner.py (formato theorist)          ║
-║    batch     Aplica brief+plan a una carpeta de MIDIs (y opcionalmente       ║
-║              los ejecuta con runner.py); escribe una tabla resumen           ║
-║    selftest  Comprueba la aritmética de compases y que el plan es válido     ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python midi2plan.py brief obra.mid                                        ║
-║    python midi2plan.py brief obra.mid --json brief.json                      ║
-║    python midi2plan.py plan obra.mid --out-dir plan_obra/                    ║
-║    python midi2plan.py plan obra.mid --profile analyze                       ║
-║    python midi2plan.py plan obra.mid --bars 16 --variant 3 --style jazz      ║
-║    python runner.py plan_obra/plan.yaml                                      ║
-║    python midi2plan.py batch midis/ --out-dir lote/ --limit 10               ║
-║    python midi2plan.py batch midis/ --out-dir lote/ --run --md resumen.md    ║
-║    python midi2plan.py selftest                                              ║
-║                                                                              ║
-║  PERFILES DE PLAN (--profile):                                               ║
-║    reconstruct  (default) analiza el original, regenera armonía, melodía,    ║
-║                 bajo, batería y coral con las herramientas de la suite,      ║
-║                 interpreta, puntúa y mide fidelidad (incl. forma)            ║
-║    analyze      solo análisis del original (armonía, métrica, forma,         ║
-║                 catálogos, leitmotivs, calidad)                              ║
-║                                                                              ║
-║  OPCIONES DE PLAN (plan y batch):                                            ║
-║    --out-dir DIR     Carpeta de salida (orig.mid, brief.json, plan.yaml)     ║
-║    --bars N|auto     Compases a generar (default: auto = real, acotado)      ║
-║    --max-bars N      Tope de compases en modo auto (default: 32)             ║
-║    --variant N       Rota motor de melodía, bajo y batería (default: 0)      ║
-║    --seed N          Semilla base (default: 100)                             ║
-║    --style S         Fuerza el estilo en lugar de inferirlo                  ║
-║    --key K           Fuerza la tonalidad (p. ej. "A minor", "F# major")      ║
-║    --tempo T         Fuerza el tempo BPM                                     ║
-║    --chords-from M   generator (default) | template: cómo fijar la           ║
-║                      progresión escrita en el plan                           ║
-║    --no-form         No analiza la forma (más rápido; sin pasos de forma)    ║
-║    --suite-dir DIR   Directorio de las herramientas (default: este script)   ║
-║                                                                              ║
-║  NOTAS:                                                                      ║
-║    · Los pasos que devuelven rc≠0 al "encontrar hallazgos" (arc_supervisor)  ║
-║      se marcan con optional: true; runner.py sin --strict continúa.          ║
-║    · midi2yaml.py solo escribe por stdout y no puede ser un paso de runner;  ║
-║      el plan usa form_analyzer/harmonic_analyzer en su lugar.                ║
-║    · El estilo inferido es HEURÍSTICO (ver "razones" en el brief).           ║
-║                                                                              ║
-║  DEPENDENCIAS: ninguna (solo stdlib). Usa form_analyzer.py y                 ║
-║  chord_progression_generator.py si están junto a este script (opcional).     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+midi2plan.py — Midi2Plan: de un MIDI existente a un plan ejecutable por
+runner.py
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+runner.py ejecuta planes que salen de theorist.py o narrator.py (desde
+lenguaje natural). Falta el camino inverso: PARTIR DE UN MIDI, extraer su
+"brief" (tonalidad, tempo, compás real, forma, estilo) y convertirlo en un
+pipeline listo para ejecutar. Esta herramienta lo hace, y centraliza los
+cálculos que cada script de lote acababa reimplementando (y a veces mal):
+compases compuestos (6/8, 12/8, 3/8), pulsos por compás en negras, tempo,
+estilo inferido DEL CONTENIDO (no del nombre del fichero).
+
+NOTAS:
+  · Los pasos que devuelven rc≠0 al "encontrar hallazgos" (arc_supervisor)
+    se marcan con optional: true; runner.py sin --strict continúa.
+  · midi2yaml.py solo escribe por stdout y no puede ser un paso de runner;
+    el plan usa form_analyzer/harmonic_analyzer en su lugar.
+  · El estilo inferido es HEURÍSTICO (ver "razones" en el brief).
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  brief     Extrae el brief de un MIDI (tonalidad, compás, tempo, forma,
+            estilo sugerido y parámetros recomendados por herramienta)
+  plan      Genera un plan .yaml para runner.py (formato theorist)
+  batch     Aplica brief+plan a una carpeta de MIDIs (y opcionalmente
+            los ejecuta con runner.py); escribe una tabla resumen
+  selftest  Comprueba la aritmética de compases y que el plan es válido
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  brief
+    midi MIDI
+    --json JSON                 Escribe el brief ('-' = stdout)
+    --no-form
+    --suite-dir SUITE_DIR       (defecto str(HERE))
+    --variant VARIANT           (defecto 0)
+    --no-color
+
+  plan
+    midi MIDI
+    --out-dir OUT_DIR
+
+  batch
+    dir DIR
+    --glob GLOB                 (defecto *.mid)
+    --out-dir OUT_DIR
+    --limit LIMIT               (defecto 0)
+    --run                       Ejecuta cada plan con runner.py
+    --timeout TIMEOUT           Timeout por paso (default 120 s)
+    --md MD                     Escribe una tabla resumen en Markdown
+
+  selftest
+    --suite-dir SUITE_DIR       (defecto str(HERE))
+    --no-color
+
+  (común)
+    --profile PROFILE           (defecto reconstruct; valores:
+                                reconstruct|analyze)
+    --bars BARS                 N o 'auto' (defecto auto)
+    --max-bars MAX_BARS         (defecto 32)
+    --variant VARIANT           (defecto 0)
+    --seed SEED                 (defecto 100)
+    --style STYLE
+    --key KEY
+    --tempo TEMPO
+    --chords-from CHORDS_FROM   (defecto generator; valores:
+                                generator|template)
+    --no-form
+    --suite-dir SUITE_DIR       (defecto str(HERE))
+    --no-color
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python midi2plan.py brief obra.mid
+    python midi2plan.py brief obra.mid --json brief.json
+    python midi2plan.py plan obra.mid --out-dir plan_obra/
+    python midi2plan.py plan obra.mid --profile analyze
+    python midi2plan.py plan obra.mid --bars 16 --variant 3 --style jazz
+    python runner.py plan_obra/plan.yaml
+    python midi2plan.py batch midis/ --out-dir lote/ --limit 10
+    python midi2plan.py batch midis/ --out-dir lote/ --run --md resumen.md
+    python midi2plan.py selftest
+
+  PERFILES DE PLAN (--profile):
+    reconstruct  (default) analiza el original, regenera armonía, melodía,
+                 bajo, batería y coral con las herramientas de la suite,
+                 interpreta, puntúa y mide fidelidad (incl. forma)
+    analyze      solo análisis del original (armonía, métrica, forma,
+                 catálogos, leitmotivs, calidad)
+
+  OPCIONES DE PLAN (plan y batch):
+    --out-dir DIR     Carpeta de salida (orig.mid, brief.json, plan.yaml)
+    --bars N|auto     Compases a generar (default: auto = real, acotado)
+    --max-bars N      Tope de compases en modo auto (default: 32)
+    --variant N       Rota motor de melodía, bajo y batería (default: 0)
+    --seed N          Semilla base (default: 100)
+    --style S         Fuerza el estilo en lugar de inferirlo
+    --key K           Fuerza la tonalidad (p. ej. "A minor", "F# major")
+    --tempo T         Fuerza el tempo BPM
+    --chords-from M   generator (default) | template: cómo fijar la
+                      progresión escrita en el plan
+    --no-form         No analiza la forma (más rápido; sin pasos de forma)
+    --suite-dir DIR   Directorio de las herramientas (default: este script)
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  ninguna (solo stdlib). Usa form_analyzer.py y
+  chord_progression_generator.py si están junto a este script (opcional).
 """
 
 import sys

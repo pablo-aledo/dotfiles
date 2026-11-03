@@ -1,125 +1,157 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        GENOPATCH_FLOW  v0.2                                  ║
-║  Inferencia amortizada de parámetros de síntesis vía flujos normalizadores   ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  QUÉ HACE                                                                    ║
-║    Alternativa a la búsqueda evolutiva de genopatch_v2.py: en vez de         ║
-║    resolver el problema inverso (sonido → parámetros) desde cero en cada     ║
-║    `match`, entrena UNA VEZ un flujo condicional p(θ|x) sobre pares          ║
-║    sintéticos (θ~prior, x=render(θ)), y luego la inferencia es un solo       ║
-║    forward pass — sin bucle evolutivo. Es "simulation-based inference"       ║
-║    (SBI/neural posterior estimation) aplicado al simulador que ya es         ║
-║    genopatch_v2.ENGINES.                                                     ║
-║                                                                              ║
-║    A diferencia del GA, que colapsa a UN punto arbitrario cuando el          ║
-║    problema no es identificable (ver informe de refit: add_bright_brass,     ║
-║    fundamental casi muda pero buen fitness), el flujo modela la              ║
-║    distribución p(θ|x) completa — puede representar la cresta de             ║
-║    soluciones equivalentes en vez de esconderla. Confirmado empíricamente    ║
-║    en additive: 6 muestras del mismo objetivo recuperan la misma forma       ║
-║    armónica normalizada con escala bruta libre, en vez de colapsar a una     ║
-║    forma incorrecta como hacía el GA.                                        ║
-║                                                                              ║
-║  ARQUITECTURA                                                                ║
-║    RealNVP condicional: una red pequeña ("embedder") reduce el vector de     ║
-║    features de audio (~2052 dims, el mismo que usa --fitness spectral en     ║
-║    genopatch_v2) a un embedding compacto (64 dims); 6 capas de               ║
-║    acoplamiento afín (checkerboard mask) transforman θ normalizado           ║
-║    (min-max a [-1,1] por parámetro) ↔ ruido base N(0,I), condicionadas en    ║
-║    ese embedding. Entrenamiento por máxima verosimilitud (NLL), CPU-only,    ║
-║    red pequeña (~450K parámetros) — nada que necesite GPU.                   ║
-║                                                                              ║
-║  ALCANCE — los 6 motores base de genopatch_v2.py (RAW_ENGINES)               ║
-║    Entrenado SOLO sobre los parámetros base de cada motor (sin el wrapper    ║
-║    de FX vibrato/unison/drive de genopatch_v2) — el patch resultante trae    ║
-║    esos parámetros en su valor neutro (sin efecto). Entrenado a NOTA y       ║
-║    DURACIÓN fijas por motor (ver CANONICAL / `info` del checkpoint):         ║
-║                                                                              ║
-║    karplus       nota 60, 1.5s  — calidad excelente (3 parámetros)           ║
-║    additive      nota 60, 1.2s  — calidad excelente (mapeo casi lineal)      ║
-║    wavetable     nota 60, 1.5s  — buena, el único caso donde el GA es        ║
-║                  realmente competitivo con el flujo                          ║
-║    noise         nota 60, 0.6s  — aceptable, alta varianza esperable         ║
-║    subtractive   nota 60, 1.5s  — aceptable, ni flujo ni GA brillan          ║
-║    fm2           nota 60, 1.5s  — NOTABLEMENTE PEOR que el resto —           ║
-║                  paisaje θ→espectro no lineal, 6000 pares no bastan.         ║
-║                  Usar con expectativas bajas, o como semilla del GA (el      ║
-║                  híbrido ayuda algo pero no supera a la mejor muestra del    ║
-║                  flujo sola — ver informe de testing).                       ║
-║                                                                              ║
-║    layered_fm_add NO tiene flujo propio — pendiente de una composición       ║
-║    explícita desde los flujos de fm2+additive (fuera de alcance).            ║
-║                                                                              ║
-║  COLAPSO DE MODO SILENCIOSO — nota distinta a la canónica                    ║
-║    Si el WAV objetivo tiene una nota distinta a la del checkpoint, el        ║
-║    flujo puede fallar SIN avisar: en vez de degradar con gracia, todas       ║
-║    las muestras colapsan al mismo punto exacto en los límites del rango      ║
-║    (confirmado en karplus: la nota determina la longitud de su línea de      ║
-║    retardo, así que cambia la estructura del motor por completo). `sample`   ║
-║    detecta el patrón (muestras casi idénticas + pegadas a los límites) y     ║
-║    avisa — pero NO es universal: en subtractive, la misma nota incorrecta    ║
-║    degrada con diversidad real, sin disparar el aviso. Su silencio no es     ║
-║    garantía de que el resultado sea bueno.                                   ║
-║                                                                              ║
-║  SUBCOMANDOS                                                                 ║
-║    train    genera N pares sintéticos (prior de genopatch_v2._random_params, ║
-║             mismo sesgo hacia el default que usa el GA) y entrena el flujo   ║
-║    sample   WAV objetivo + checkpoint → N muestras de p(θ|x), como           ║
-║             patch.json (mismo formato que genopatch_v2, cero fricción con    ║
-║             `render`/`mutate`/`info` de ese script). Avisa si detecta        ║
-║             colapso de modo.                                                 ║
-║    info     inspecciona un checkpoint (motor, nota/duración de               ║
-║             entrenamiento, dimensiones, nº de pares usados, val_nll)         ║
-║                                                                              ║
-║  USO                                                                         ║
-║    genopatch_flow.py train --engine additive --n-samples 3200 \\             ║
-║                       --epochs 150 --out flow_additive.pt                    ║
-║    genopatch_flow.py sample target.wav --checkpoint flow_additive.pt \\      ║
-║                       -n 8 --render --out-dir samples/                       ║
-║    genopatch_flow.py sample target.wav --checkpoint flow_fm2.pt -n 20 \\     ║
-║                       --out-dir samples/   # fm2: pide más muestras y        ║
-║                                            # quédate con la mejor            ║
-║    genopatch_flow.py info flow_additive.pt                                   ║
-║                                                                              ║
-║    # patch.json del flujo → seguir explorando con genopatch_v2.py:           ║
-║    genopatch_v2.py render samples/sample_01.json --note E4 --out e4.wav      ║
-║    genopatch_v2.py mutate samples/sample_01.json -n 8 --render \\            ║
-║                    --out-dir variantes/                                      ║
-║                                                                              ║
-║  FORMATO patch.json — idéntico al de genopatch_v2.py, solo parámetros base   ║
-║    {"engine": "additive", "note": 60, "duration": 1.2, "velocity": 0.85,     ║
-║     "params": {"amp_h1": 1.0, "amp_h2": 0.62, ...}}                          ║
-║                                                                              ║
-║  DEPENDENCIAS  numpy  scipy  soundfile  torch (CPU)  genopatch_v2.py         ║
-║                (debe estar en el mismo directorio o PYTHONPATH)              ║
-║                                                                              ║
-║  FINGERPRINT DE FEATURES                                                     ║
-║    El checkpoint guarda _FEAT_N_FFT/_FEAT_HOP/pesos de vibrato de            ║
-║    genopatch_v2 vigentes al entrenar. `sample` verifica que coincidan con    ║
-║    los actuales antes de usar el checkpoint — si genopatch_v2.py cambia      ║
-║    esos parámetros (ya ha pasado una vez, 1024→2048), un checkpoint viejo    ║
-║    falla alto y claro en vez de dar muestras basura calladamente.            ║
-║                                                                              ║
-║  LIMITACIONES                                                                ║
-║    · Nota/duración de entrenamiento fijas por motor — usar `sample` con      ║
-║      un WAV de otra nota puede colapsar silenciosamente (ver arriba); con    ║
-║      otra duración degrada más suave pero tampoco es gratis.                 ║
-║    · No modela el wrapper de FX (vibrato/unison/drive) — los patches         ║
-║      salen con esos parámetros en su default neutro.                         ║
-║    · fm2 es notablemente peor que el resto — no lo trates como sustituto     ║
-║      fiable de `genopatch_v2.py match` con ese motor todavía.                ║
-║    · layered_fm_add no tiene checkpoint — no está en SUPPORTED_ENGINES.      ║
-║    · El aviso de colapso de modo es una heurística (varianza casi nula +     ║
-║      valor en el límite) — puede haber falsos negativos (colapso a un        ║
-║      punto NO extremo) o falsos positivos (posterior genuinamente muy        ║
-║      concentrada, p.ej. karplus con nota correcta y target limpio).          ║
-║                                                                              ║
-║  Módulo importable:                                                          ║
-║    from genopatch_flow import train, train_from_dataset, \\                  ║
-║                              sample_from_target, generate_dataset            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+genopatch_flow.py — Genopatch_Flow: inferencia amortizada de parámetros de
+síntesis vía flujos normalizadores
+(versión 0.2).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+QUÉ HACE:
+  Alternativa a la búsqueda evolutiva de genopatch_v2.py: en vez de
+  resolver el problema inverso (sonido → parámetros) desde cero en cada
+  `match`, entrena UNA VEZ un flujo condicional p(θ|x) sobre pares
+  sintéticos (θ~prior, x=render(θ)), y luego la inferencia es un solo
+  forward pass — sin bucle evolutivo. Es "simulation-based inference"
+  (SBI/neural posterior estimation) aplicado al simulador que ya es
+  genopatch_v2.ENGINES.
+
+  A diferencia del GA, que colapsa a UN punto arbitrario cuando el
+  problema no es identificable (ver informe de refit: add_bright_brass,
+  fundamental casi muda pero buen fitness), el flujo modela la
+  distribución p(θ|x) completa — puede representar la cresta de
+  soluciones equivalentes en vez de esconderla. Confirmado empíricamente
+  en additive: 6 muestras del mismo objetivo recuperan la misma forma
+  armónica normalizada con escala bruta libre, en vez de colapsar a una
+  forma incorrecta como hacía el GA.
+
+ARQUITECTURA:
+  RealNVP condicional: una red pequeña ("embedder") reduce el vector de
+  features de audio (~2052 dims, el mismo que usa --fitness spectral en
+  genopatch_v2) a un embedding compacto (64 dims); 6 capas de
+  acoplamiento afín (checkerboard mask) transforman θ normalizado
+  (min-max a [-1,1] por parámetro) ↔ ruido base N(0,I), condicionadas en
+  ese embedding. Entrenamiento por máxima verosimilitud (NLL), CPU-only,
+  red pequeña (~450K parámetros) — nada que necesite GPU.
+
+ALCANCE — los 6 motores base de genopatch_v2.py (RAW_ENGINES)
+  Entrenado SOLO sobre los parámetros base de cada motor (sin el wrapper
+  de FX vibrato/unison/drive de genopatch_v2) — el patch resultante trae
+  esos parámetros en su valor neutro (sin efecto). Entrenado a NOTA y
+  DURACIÓN fijas por motor (ver CANONICAL / `info` del checkpoint):
+
+  karplus       nota 60, 1.5s  — calidad excelente (3 parámetros)
+  additive      nota 60, 1.2s  — calidad excelente (mapeo casi lineal)
+  wavetable     nota 60, 1.5s  — buena, el único caso donde el GA es
+                realmente competitivo con el flujo
+  noise         nota 60, 0.6s  — aceptable, alta varianza esperable
+  subtractive   nota 60, 1.5s  — aceptable, ni flujo ni GA brillan
+  fm2           nota 60, 1.5s  — NOTABLEMENTE PEOR que el resto —
+                paisaje θ→espectro no lineal, 6000 pares no bastan.
+                Usar con expectativas bajas, o como semilla del GA (el
+                híbrido ayuda algo pero no supera a la mejor muestra del
+                flujo sola — ver informe de testing).
+
+  layered_fm_add NO tiene flujo propio — pendiente de una composición
+  explícita desde los flujos de fm2+additive (fuera de alcance).
+
+COLAPSO DE MODO SILENCIOSO — nota distinta a la canónica
+  Si el WAV objetivo tiene una nota distinta a la del checkpoint, el
+  flujo puede fallar SIN avisar: en vez de degradar con gracia, todas
+  las muestras colapsan al mismo punto exacto en los límites del rango
+  (confirmado en karplus: la nota determina la longitud de su línea de
+  retardo, así que cambia la estructura del motor por completo). `sample`
+  detecta el patrón (muestras casi idénticas + pegadas a los límites) y
+  avisa — pero NO es universal: en subtractive, la misma nota incorrecta
+  degrada con diversidad real, sin disparar el aviso. Su silencio no es
+  garantía de que el resultado sea bueno.
+
+FINGERPRINT DE FEATURES:
+  El checkpoint guarda _FEAT_N_FFT/_FEAT_HOP/pesos de vibrato de
+  genopatch_v2 vigentes al entrenar. `sample` verifica que coincidan con
+  los actuales antes de usar el checkpoint — si genopatch_v2.py cambia
+  esos parámetros (ya ha pasado una vez, 1024→2048), un checkpoint viejo
+  falla alto y claro en vez de dar muestras basura calladamente.
+
+LIMITACIONES:
+  · Nota/duración de entrenamiento fijas por motor — usar `sample` con
+    un WAV de otra nota puede colapsar silenciosamente (ver arriba); con
+    otra duración degrada más suave pero tampoco es gratis.
+  · No modela el wrapper de FX (vibrato/unison/drive) — los patches
+    salen con esos parámetros en su default neutro.
+  · fm2 es notablemente peor que el resto — no lo trates como sustituto
+    fiable de `genopatch_v2.py match` con ese motor todavía.
+  · layered_fm_add no tiene checkpoint — no está en SUPPORTED_ENGINES.
+  · El aviso de colapso de modo es una heurística (varianza casi nula +
+    valor en el límite) — puede haber falsos negativos (colapso a un
+    punto NO extremo) o falsos positivos (posterior genuinamente muy
+    concentrada, p.ej. karplus con nota correcta y target limpio).
+
+Módulo importable:
+  from genopatch_flow import train, train_from_dataset, \
+                            sample_from_target, generate_dataset
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  train    genera N pares sintéticos (prior de genopatch_v2._random_params,
+           mismo sesgo hacia el default que usa el GA) y entrena el flujo
+  sample   WAV objetivo + checkpoint → N muestras de p(θ|x), como
+           patch.json (mismo formato que genopatch_v2, cero fricción con
+           `render`/`mutate`/`info` de ese script). Avisa si detecta
+           colapso de modo.
+  info     inspecciona un checkpoint (motor, nota/duración de
+           entrenamiento, dimensiones, nº de pares usados, val_nll)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  train
+    --engine ENGINE             (obligatorio)
+    --n-samples N_SAMPLES       (defecto 4000)
+    --epochs EPOCHS             (defecto 200)
+    --val-fraction VAL_FRACTION
+                                (defecto 0.15)
+    --batch-size BATCH_SIZE     (defecto 128)
+    --lr LR                     (defecto 0.001)
+    --seed SEED                 (defecto 0)
+    --out OUT                   (obligatorio)
+    --quiet
+
+  sample
+    target_wav TARGET_WAV
+    --checkpoint CHECKPOINT     (obligatorio)
+    -n N                        (defecto 8)
+    --seed SEED                 (defecto 0)
+    --render
+    --out-dir OUT_DIR           (obligatorio)
+
+  info
+    checkpoint CHECKPOINT
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    genopatch_flow.py train --engine additive --n-samples 3200 \
+                       --epochs 150 --out flow_additive.pt
+    genopatch_flow.py sample target.wav --checkpoint flow_additive.pt \
+                       -n 8 --render --out-dir samples/
+    genopatch_flow.py sample target.wav --checkpoint flow_fm2.pt -n 20 \
+                       --out-dir samples/   # fm2: pide más muestras y
+                                            # quédate con la mejor
+    genopatch_flow.py info flow_additive.pt
+
+    # patch.json del flujo → seguir explorando con genopatch_v2.py:
+    genopatch_v2.py render samples/sample_01.json --note E4 --out e4.wav
+    genopatch_v2.py mutate samples/sample_01.json -n 8 --render \
+                    --out-dir variantes/
+
+  FORMATO patch.json — idéntico al de genopatch_v2.py, solo parámetros base
+    {"engine": "additive", "note": 60, "duration": 1.2, "velocity": 0.85,
+     "params": {"amp_h1": 1.0, "amp_h2": 0.62, ...}}
+
+  DEPENDENCIAS  numpy  scipy  soundfile  torch (CPU)  genopatch_v2.py
+                (debe estar en el mismo directorio o PYTHONPATH)
 """
 
 

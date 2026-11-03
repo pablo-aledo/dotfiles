@@ -1,85 +1,144 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        CHORD TABLE  v1.0                                     ║
-║         Catálogo curado de progresiones con tensión y emoción                ║
-║                                                                              ║
-║  Complemento de chord_progression_generator.py: en lugar de construir       ║
-║  progresiones algorítmicamente, ofrece un catálogo curado de 101 patrones   ║
-║  con etiquetas de tensión (1-10) y emoción, buscables y exportables.        ║
-║                                                                              ║
-║  Las progresiones cubren los mismos estilos y modos que el generador,       ║
-║  añadiendo etiquetas emocionales explícitas ausentes en aquel:               ║
-║    · Modos: mayor, menor, dórico, frigio, frigio dominante, lidio,          ║
-║             mixolidio, armónico menor                                        ║
-║    · Estilos: diatónico, barroco, jazz, modal, romántico,                   ║
-║               impresionista, pop, flamenco, blues                            ║
-║    · Emociones: reposo, alegría, tristeza, melancolía, nostalgia,            ║
-║                 misterio, ambigüedad, drama, angustia, esperanza,            ║
-║                 euforia, flotación, solemnidad, exotismo                     ║
-║                                                                              ║
+r"""
+chord_table.py — Chord Table: catálogo curado de progresiones con tensión y
+emoción
+(versión 1.0).
 
-║  USO:                                                                        ║
-║    # Listar todas                                                            ║
-║    python chord_table.py --list                                              ║
-║                                                                              ║
-║    # Filtrar por emoción                                                     ║
-║    python chord_table.py --emocion angustia                                  ║
-║                                                                              ║
-║    # Filtrar por estilo y modo                                               ║
-║    python chord_table.py --style jazz --mode minor                           ║
-║                                                                              ║
-║    # Filtrar por rango de tensión                                            ║
-║    python chord_table.py --tension-min 7 --tension-max 10                   ║
-║                                                                              ║
-║    # Buscar por texto libre                                                  ║
-║    python chord_table.py --buscar "blues"                                    ║
-║                                                                              ║
-║    # Resolver progresión a acordes concretos en una tónica dada             ║
-║    python chord_table.py --id 16 --key Am                                   ║
-║                                                                              ║
-║    # Progresión personalizada por grados (modo custom)                      ║
-║    python chord_table.py --custom "I vi IV V" --key C                      ║
-║                                                                              ║
-║    # Custom con duración por grado (numeral:beats) y export                 ║
-║    python chord_table.py --custom "I:4 V:2 vi:2 IV:4" --key G              ║
-║        --export-midi progresion.mid                                         ║
-║                                                                              ║
-║    # Exportar tabla filtrada a JSON                                          ║
-║    python chord_table.py --style flamenco --export-json flamenco.json       ║
-║                                                                              ║
-║    # Exportar progresión concreta a texto compatible con --chords            ║
-║    python chord_table.py --id 5 --key C --export-text ii_V_I.txt           ║
-║                                                                              ║
-║    # Exportar progresión concreta a MIDI                                     ║
-║    python chord_table.py --id 5 --key C --export-midi ii_V_I.mid           ║
-║                                                                              ║
-║    # Mostrar estadísticas del catálogo                                       ║
-║    python chord_table.py --stats                                             ║
-║                                                                              ║
-║    # Buscar la progresión más adecuada para una intención                    ║
-║    python chord_table.py --intencion "melancólico y tenso"                  ║
-║                                                                              ║
-║    # Analizar un MIDI y detectar progresiones del catálogo                  ║
-║    python chord_table.py --analyze-midi cancion.mid                         ║
-║                                                                              ║
-║    # Análisis con tónica forzada, umbral alto y exportación JSON            ║
-║    python chord_table.py --analyze-midi song.mid --key Am                   ║
-║        --min-score 0.75 --export-json matches.json --verbose                ║
-║                                                                              ║
-║  INTEGRACIÓN CON EL ECOSISTEMA:                                              ║
-║    chord_progression_generator.py → complementario (algorítmico vs curado)  ║
-║    voice_leader.py      → --export-midi genera acordes.mid compatible       ║
-║    melody_adapter.py    → --export-text genera string compatible --chords   ║
-║    reharmonizer.py      → --export-midi genera fuente para reharmonización  ║
-║                                                                              ║
-║  SALIDAS:                                                                    ║
-║    <base>.chords.txt   — progresión en texto ("Am:2 G:2 F:2 E7:2")         ║
-║    <base>.chords.json  — progresión completa con metadatos                  ║
-║    <base>.chords.mid   — MIDI de acordes en bloque                          ║
-║                                                                              ║
-║  DEPENDENCIAS: mido (opcional, solo para exportación MIDI)                  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Complemento de chord_progression_generator.py: en lugar de construir
+progresiones algorítmicamente, ofrece un catálogo curado de 101 patrones
+con etiquetas de tensión (1-10) y emoción, buscables y exportables.
+
+Las progresiones cubren los mismos estilos y modos que el generador,
+añadiendo etiquetas emocionales explícitas ausentes en aquel:
+  · Modos: mayor, menor, dórico, frigio, frigio dominante, lidio,
+           mixolidio, armónico menor
+  · Estilos: diatónico, barroco, jazz, modal, romántico,
+             impresionista, pop, flamenco, blues
+  · Emociones: reposo, alegría, tristeza, melancolía, nostalgia,
+               misterio, ambigüedad, drama, angustia, esperanza,
+               euforia, flotación, solemnidad, exotismo
+
+INTEGRACIÓN CON EL ECOSISTEMA:
+  chord_progression_generator.py → complementario (algorítmico vs curado)
+  voice_leader.py      → --export-midi genera acordes.mid compatible
+  melody_adapter.py    → --export-text genera string compatible --chords
+  reharmonizer.py      → --export-midi genera fuente para reharmonización
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  <base>.chords.txt   — progresión en texto ("Am:2 G:2 F:2 E7:2")
+  <base>.chords.json  — progresión completa con metadatos
+  <base>.chords.mid   — MIDI de acordes en bloque
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --analyze-midi MIDI_FILE    Analizar un MIDI y mostrar las progresiones del
+                              catálogo que contiene
+  --min-score F               Score mínimo de coincidencia 0-1 (default: 0.6)
+  --list                      Listar todas las progresiones
+  --stats                     Estadísticas del catálogo
+  --custom GRADOS             Progresión personalizada en numerales romanos,
+                              en vez de seleccionar del catálogo. Ej: --custom
+                              "I vi IV V". Duración opcional por grado con
+                              ':beats' (ej: "I:4 V:2 vi:2 IV:4"); sin ella se
+                              usa --beats por grado. Se resuelve en la tónica
+                              dada por --key igual que --id.
+  --id N                      Seleccionar progresión por id
+  --buscar TEXTO              Búsqueda por texto libre
+  --intencion DESC            Buscar por intención en lenguaje natural
+  --style STYLE               Filtrar por estilo
+  --mode MODE                 Filtrar por modo (valores:
+                              major|minor|dorian|phrygian|phrygian_dominant|lydian|mixolydian)
+  --emocion EMOCION           Filtrar por emoción (reposo, alegría, tristeza…)
+  --tension-min N             Tensión mínima (1-10)
+  --tension-max N             Tensión máxima (1-10)
+  --key KEY                   Tónica para resolución concreta (default: C)
+  --reps N                    Número de repeticiones exactas de la
+                              progresión/ciclo a exportar (sustituye a --bars;
+                              no trunca el último ciclo)
+  --bars BARS                 Compases a generar (default: 8; con --custom y
+                              sin --bars/--reps, los que necesite la
+                              progresión completa). Si la progresión es más
+                              larga que --bars se TRUNCA (se avisa); usa
+                              --reps para no truncar
+  --beats BEATS               Pulsos por compás (default: 4)
+  --tempo TEMPO               Tempo BPM para exportación MIDI (default: 120)
+  --export-json FILE          Exportar tabla filtrada o progresión a JSON
+  --export-text FILE          Exportar progresión concreta a texto --chords
+  --export-midi FILE          Exportar progresión concreta a MIDI
+  --output OUTPUT             Nombre base para salidas (default: obra)
+  --bass-only                 Analizar solo notas graves (≤ C4) para la
+                              detección de acordes — útil para aislar la línea
+                              de bajo
+  --min-dur BEATS             Duración mínima en beats para considerar un
+                              acorde (default: 0, sin filtro). Útil para
+                              ignorar notas de paso y acordes fugaces. Ej:
+                              --min-dur 2
+  --sort-compas               Ordenar resultados por compás de aparición;
+                              cuando una progresión aparece varias veces se
+                              muestra una fila por aparición en lugar de
+                              agruparlas
+  --verbose                   Mostrar nombre y descripción de cada progresión
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Listar todas
+  python chord_table.py --list
+
+  # Filtrar por emoción
+  python chord_table.py --emocion angustia
+
+  # Filtrar por estilo y modo
+  python chord_table.py --style jazz --mode minor
+
+  # Filtrar por rango de tensión
+  python chord_table.py --tension-min 7 --tension-max 10
+
+  # Buscar por texto libre
+  python chord_table.py --buscar "blues"
+
+  # Resolver progresión a acordes concretos en una tónica dada
+  python chord_table.py --id 16 --key Am
+
+  # Progresión personalizada por grados (modo custom)
+  python chord_table.py --custom "I vi IV V" --key C
+
+  # Custom con duración por grado (numeral:beats) y export
+  python chord_table.py --custom "I:4 V:2 vi:2 IV:4" --key G \
+      --export-midi progresion.mid
+
+  # Exportar tabla filtrada a JSON
+  python chord_table.py --style flamenco --export-json flamenco.json
+
+  # Exportar progresión concreta a texto compatible con --chords
+  python chord_table.py --id 5 --key C --export-text ii_V_I.txt
+
+  # Exportar progresión concreta a MIDI
+  python chord_table.py --id 5 --key C --export-midi ii_V_I.mid
+
+  # Mostrar estadísticas del catálogo
+  python chord_table.py --stats
+
+  # Buscar la progresión más adecuada para una intención
+  python chord_table.py --intencion "melancólico y tenso"
+
+  # Analizar un MIDI y detectar progresiones del catálogo
+  python chord_table.py --analyze-midi cancion.mid
+
+  # Análisis con tónica forzada, umbral alto y exportación JSON
+  python chord_table.py --analyze-midi song.mid --key Am \
+      --min-score 0.75 --export-json matches.json --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido (opcional, solo para exportación MIDI)
 """
 
 import sys

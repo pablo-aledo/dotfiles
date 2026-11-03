@@ -1,68 +1,103 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          SUITE INDEX  v1.1                                   ║
-║        Catálogo consultable y linter de las herramientas del ecosistema      ║
-║                                                                              ║
-║  La suite tiene más de 150 ficheros .py autocontenidos. Quien los usa (una   ║
-║  persona o un agente) tiene que adivinar qué herramienta hace qué, con qué   ║
-║  flags y qué produce, y los errores típicos son afirmar que una opción no    ║
-║  existe cuando sí existe, o confundir versiones (fingering_v3 ... v6).       ║
-║  Esta herramienta lee las cabeceras y los argparse SIN EJECUTAR nada (solo   ║
-║  análisis estático con ast) y construye un índice buscable. Además detecta   ║
-║  inconsistencias entre herramientas (lint).                                  ║
-║                                                                              ║
-║  SUBCOMANDOS:                                                                ║
-║    build   Escanea el directorio y escribe el índice JSON                    ║
-║    list    Lista las herramientas (filtro por categoría o texto)             ║
-║    find    Busca herramientas por intención ("rearmonizar", "bajo")          ║
-║    show    Ficha completa de una herramienta (flags, subcomandos, usos)      ║
-║    lint    Detecta inconsistencias entre herramientas y entre doc y código   ║
-║    stats   Resumen global del ecosistema                                     ║
-║    examples Valida los ejemplos de las cabeceras (--run: los ejecuta)        ║
-║    smoke    --help de cada herramienta y flujos mínimos con asserts (--deep) ║
-║    weights  Pesos, módulos, programas y red que necesita cada herramienta    ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python suite_index.py build [--dir DIR] [--out suite_index.json]          ║
-║    python suite_index.py list [--category harmony] [--grep texto]            ║
-║    python suite_index.py find rearmonizar acordes [--top 8]                  ║
-║    python suite_index.py show drummer [--json]                               ║
-║    python suite_index.py show drummer --flag style                           ║
-║    python suite_index.py lint [--check output-flag style-vocab] [--json]     ║
-║    python suite_index.py stats                                               ║
-║    python suite_index.py examples [tool ...] [--run] [--all] [--timeout 20]  ║
-║    python suite_index.py smoke [tool ...] [--subs] [--deep | --deep-only]    ║
-║    python suite_index.py weights [tool ...] [--all] [--network]              ║
-║                                                                              ║
-║  OPCIONES COMUNES:                                                           ║
-║    --dir DIR       Directorio de la suite (default: el de este script)       ║
-║    --index FILE    Caché del índice (default: <dir>/.suite_index.json)       ║
-║    --rebuild       Ignorar la caché y volver a escanear                      ║
-║    --json          Salida en JSON (build/list/find/show/lint/stats)          ║
-║                                                                              ║
-║  CHECKS DE LINT:                                                             ║
-║    output-flag   Herramientas con entrada y sin ninguna opción de salida     ║
-║    style-vocab   Vocabularios --style distintos entre herramientas           ║
-║    exit-findings Herramientas que devuelven rc!=0 al encontrar hallazgos     ║
-║    exit-contract Herramientas con rc=1 por resultado sin documentar 0/1/2/3 ║
-║    output-dir    Herramientas que escriben ficheros sin crear el directorio  ║
-║    doc-vs-code   Flags citados en la cabecera que el argparse no define      ║
-║    undocumented  Flags definidos que la cabecera no menciona                 ║
-║    versions      Familias de versiones (x, x_v2, x_v3 ...) y su última       ║
-║    syntax        Ficheros que no se pueden analizar                          ║
-║    doc-vs-sub    Flags citados para un subcomando que este no define         ║
-║    example-args  Ejemplos de cabecera con subcomando/flag/valor inválido     ║
-║    missing-refs  Ficheros .py citados en cabeceras que no existen            ║
-║    counts        Documentos que afirman otro nº de herramientas              ║
-║                                                                              ║
-║  LIMITACIONES: build/list/find/show/lint son análisis estático (ast): no ven ║
-║  flags dinámicos (bucles, sys.argv a mano) ni choices calculadas al ejecutar.║
-║  examples --run, smoke y weights sí ejecutan código de las herramientas      ║
-║  (siempre en directorios temporales). Las categorías son orientativas.       ║
-║                                                                              ║
-║  DEPENDENCIAS: ninguna (solo stdlib)                                         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+suite_index.py — Suite Index: catálogo consultable y linter de las
+herramientas del ecosistema
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+La suite tiene más de 150 ficheros .py autocontenidos. Quien los usa (una
+persona o un agente) tiene que adivinar qué herramienta hace qué, con qué
+flags y qué produce, y los errores típicos son afirmar que una opción no
+existe cuando sí existe, o confundir versiones (fingering_v3 ... v6).
+Esta herramienta lee las cabeceras y los argparse SIN EJECUTAR nada (solo
+análisis estático con ast) y construye un índice buscable. Además detecta
+inconsistencias entre herramientas (lint).
+
+CHECKS DE LINT:
+  output-flag   Herramientas con entrada y sin ninguna opción de salida
+  style-vocab   Vocabularios --style distintos entre herramientas
+  exit-findings Herramientas que devuelven rc!=0 al encontrar hallazgos
+  exit-contract Herramientas con rc=1 por resultado sin documentar 0/1/2/3
+  output-dir    Herramientas que escriben ficheros sin crear el directorio
+  doc-vs-code   Flags citados en la cabecera que el argparse no define
+  undocumented  Flags definidos que la cabecera no menciona
+  versions      Familias de versiones (x, x_v2, x_v3 ...) y su última
+  syntax        Ficheros que no se pueden analizar
+  doc-vs-sub    Flags citados para un subcomando que este no define
+  example-args  Ejemplos de cabecera con subcomando/flag/valor inválido
+  missing-refs  Ficheros .py citados en cabeceras que no existen
+  counts        Documentos que afirman otro nº de herramientas
+
+LIMITACIONES: build/list/find/show/lint son análisis estático (ast): no ven
+flags dinámicos (bucles, sys.argv a mano) ni choices calculadas al ejecutar (salvo listas por comprensión y
+concatenaciones de constantes de módulo, que sí resuelve).
+examples --run, smoke y weights sí ejecutan código de las herramientas
+(siempre en directorios temporales). Las categorías son orientativas.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  build   Escanea el directorio y escribe el índice JSON
+  list    Lista las herramientas (filtro por categoría o texto)
+  find    Busca herramientas por intención ("rearmonizar", "bajo")
+  show    Ficha completa de una herramienta (flags, subcomandos, usos)
+  lint    Detecta inconsistencias entre herramientas y entre doc y código
+  stats   Resumen global del ecosistema
+  examples Valida los ejemplos de las cabeceras (--run: los ejecuta)
+  smoke    --help de cada herramienta y flujos mínimos con asserts (--deep)
+  weights  Pesos, módulos, programas y red que necesita cada herramienta
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES COMUNES:
+  --dir DIR       Directorio de la suite (default: el de este script)
+  --index FILE    Caché del índice (default: <dir>/.suite_index.json)
+  --rebuild       Ignorar la caché y volver a escanear
+  --json          Salida en JSON (build/list/find/show/lint/stats)
+
+── Otras opciones del parser ──
+  (globales)
+    --no-color
+
+  lint
+    --severity SEVERITY         Severidad mínima a mostrar (valores:
+                                error|warn|info)
+    --strict                    rc=1 si hay errores o avisos
+
+  examples
+    --jobs JOBS                 Ejemplos en paralelo con --run (default: 4)
+    --strict                    rc=1 si hay ejemplos inválidos o que revientan
+
+  smoke
+    --keep                      Conserva los directorios temporales de los
+                                flujos deep
+    --jobs JOBS                 Comprobaciones en paralelo (default: 4)
+    --strict                    rc=1 si algo revienta o falla
+
+  weights
+    --strict                    rc=1 si falta algo obligatorio
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python suite_index.py build --dir . --out suite_index.json
+  python suite_index.py list --category harmony --grep texto
+  python suite_index.py find rearmonizar acordes --top 8
+  python suite_index.py show drummer --json
+  python suite_index.py show drummer --flag style
+  python suite_index.py lint --check output-flag style-vocab --json
+  python suite_index.py stats
+  python suite_index.py examples [tool ...] [--run] [--all] [--timeout 20]
+  python suite_index.py smoke [tool ...] [--subs] [--deep | --deep-only]
+  python suite_index.py weights [tool ...] [--all] [--network]
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  ninguna (solo stdlib)
 """
 
 import ast

@@ -1,44 +1,77 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      PIANO EXPANDER  v2.0                                    ║
-║     Expansión orquestal de bocetos pianísticos / reducciones MIDI           ║
-║                                                                              ║
-║  Lee un MIDI de piano y genera un MIDI multitracks con orquestación         ║
-║  idiomática. Cada instrumento genera su propia línea independiente —        ║
-║  no una copia transpuesta del piano.                                         ║
-║                                                                              ║
-║  MEJORAS v2.0:                                                               ║
-║  [A] Arquitectura línea-por-línea: cada instrumento genera su propio        ║
-║      material de principio a fin, con coherencia interna                    ║
-║  [B] Generadores rítmicos por familia y arquetipo: cuerdas hacen arpegios, ║
-║      maderas hacen colchones, metales entran en clímax, etc.               ║
-║  [C] Contrapunto real con mirada hacia adelante: la contramelodía tiene     ║
-║      su propio arco y clímax, evita paralelas de 5ª/8ª                    ║
-║  [D] Curva de tensión global: controla qué instrumentos entran y cuándo,   ║
-║      reservando metales para el clímax formal                              ║
-║                                                                              ║
-║  PIPELINE:                                                                   ║
-║  [1] Análisis       — melodía, bajo, acordes, forma, tonalidad              ║
-║  [2] Curva tensión  — arco global sobre toda la obra                        ║
-║  [3] Textura        — 5 arquetipos por sección                             ║
-║  [4] Líneas instr.  — generador dedicado por rol de instrumento             ║
-║  [5] Articulación   — duración/dinámica por arquetipo y familia             ║
-║  [6] CC envelopes   — CC1/CC11 desde curva de tensión global               ║
-║  [7] Salida         — MIDI multitracks + informe + fingerprint              ║
-║                                                                              ║
-║  PLANTILLAS: chamber | strings | full | <archivo.json>                      ║
-║  ESTILOS:    auto | romantic | baroque | impressionist | cinematic | chamber ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python piano_expander.py boceto.mid                                       ║
-║    python piano_expander.py boceto.mid --template full --style romantic     ║
-║    python piano_expander.py boceto.mid --split G4 --counter-density 0.5   ║
-║    python piano_expander.py boceto.mid --export-fingerprint --verbose      ║
-║    python piano_expander.py boceto.mid --report-only                       ║
-║                                                                              ║
-║  DEPENDENCIAS: pip install mido numpy                                        ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+piano_expander.py — Piano Expander: expansión orquestal de bocetos pianísticos
+/ reducciones MIDI
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Lee un MIDI de piano y genera un MIDI multitracks con orquestación
+idiomática. Cada instrumento genera su propia línea independiente —
+no una copia transpuesta del piano.
+
+MEJORAS v2.0:
+[A] Arquitectura línea-por-línea: cada instrumento genera su propio
+    material de principio a fin, con coherencia interna
+[B] Generadores rítmicos por familia y arquetipo: cuerdas hacen arpegios,
+    maderas hacen colchones, metales entran en clímax, etc.
+[C] Contrapunto real con mirada hacia adelante: la contramelodía tiene
+    su propio arco y clímax, evita paralelas de 5ª/8ª
+[D] Curva de tensión global: controla qué instrumentos entran y cuándo,
+    reservando metales para el clímax formal
+
+PIPELINE:
+[1] Análisis       — melodía, bajo, acordes, forma, tonalidad
+[2] Curva tensión  — arco global sobre toda la obra
+[3] Textura        — 5 arquetipos por sección
+[4] Líneas instr.  — generador dedicado por rol de instrumento
+[5] Articulación   — duración/dinámica por arquetipo y familia
+[6] CC envelopes   — CC1/CC11 desde curva de tensión global
+[7] Salida         — MIDI multitracks + informe + fingerprint
+
+PLANTILLAS: chamber | strings | full | <archivo.json>
+ESTILOS:    auto | romantic | baroque | impressionist | cinematic | chamber
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi MIDI
+  --template TEMPLATE         chamber|strings|full|<archivo.json> (def:
+                              chamber) (defecto chamber)
+  --style STYLE               (defecto auto)
+  --split SPLIT               Split si pista única (def: G4) (defecto G4)
+  --no-counter
+  --counter-density COUNTER_DENSITY
+                              (defecto 0.4)
+  --texture-sensitivity TEXTURE_SENSITIVITY
+                              (defecto 0.5)
+  --no-ornaments
+  --no-cc
+  --export-fingerprint
+  --export-yaml
+  --output OUTPUT
+  --report-only
+  --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python piano_expander.py boceto.mid
+  python piano_expander.py boceto.mid --template full --style romantic
+  python piano_expander.py boceto.mid --split G4 --counter-density 0.5
+  python piano_expander.py boceto.mid --export-fingerprint --verbose
+  python piano_expander.py boceto.mid --report-only
+
+── Más modos ──
+
+  # --export-yaml
+  python piano_expander.py entrada.mid --export-yaml
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  pip install mido numpy
 """
 
 import sys, os, json, math, argparse, random

@@ -1,59 +1,71 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       MELODY SELECTOR  v1.0                                  ║
-║        Cierra el bucle generar → criticar → elegir para melodías             ║
-║                                                                              ║
-║  Los generadores (melody_conditioned_v5 --candidates, bass_line_composer,    ║
-║  melody_generator…) eligen "el mejor" con su PROPIO score interno. Esta      ║
-║  herramienta puntúa los candidatos con el crítico oficial del ecosistema     ║
-║  (melody_critic.py) y se queda con el mejor; con `loop` automatiza todo el   ║
-║  ciclo (generar N candidatos con semillas distintas, criticar, elegir).      ║
-║                                                                              ║
-║  SUBCOMANDOS:                                                                ║
-║    rank   Puntúa varios MIDIs y los ordena (tabla + JSON opcional)           ║
-║    pick   rank + copia el mejor MIDI a --output                              ║
-║    loop   Ejecuta un comando generador N veces (una semilla por vuelta),     ║
-║           critica todo lo que produce y se queda con el mejor                ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python melody_selector.py rank cand_*.mid                                 ║
-║    python melody_selector.py rank cand_*.mid --track 1 --json ranking.json   ║
-║    python melody_selector.py pick mel.mid mel_v2.mid mel_v3.mid \\            ║
-║        --output mejor.mid                                                    ║
-║    python melody_selector.py loop --n 12 --stop-at 0.55 --output mejor.mid \\ ║
-║        --cmd "python melody_conditioned_v5.py --engine motif --key C \\       ║
-║               --bars 16 --seed {seed} --candidates 3 --output {out}"         ║
-║                                                                              ║
-║  OPCIONES COMUNES:                                                           ║
-║    --track N        Pista a criticar (default: la más aguda con notas)       ║
-║    --critic FILE    melody_critic.py (default: junto a este script / cwd)    ║
-║    --min-notes N    Descarta candidatos con menos de N notas (default: 4)    ║
-║    --jobs N         Críticas en paralelo (default: 4)                        ║
-║    --json FILE      Informe JSON (métricas de cada candidato + ganador)      ║
-║    --no-color       Sin colores ANSI                                         ║
-║                                                                              ║
-║  OPCIONES DE loop:                                                           ║
-║    --cmd TEXTO      Comando generador. Marcadores: {seed} {out} {i}.         ║
-║                     {out} es un .mid dentro de una carpeta propia por        ║
-║                     vuelta; se critican TODOS los .mid que esa carpeta       ║
-║                     contenga (p. ej. out.mid, out_v2.mid, out_v3.mid)        ║
-║    --n N            Nº de vueltas (default: 8)                               ║
-║    --seed-start S   Primera semilla (default: 1; vuelta i usa S+i)           ║
-║    --stop-at F      Parar en cuanto un candidato llegue a F (0-1)            ║
-║    --workdir DIR    Carpeta de trabajo (default: ./selector_work)            ║
-║    --keep           No borrar los candidatos descartados                     ║
-║    --cwd DIR        Directorio desde el que se ejecuta --cmd (default: .)    ║
-║    --timeout S      Timeout por vuelta (default: 300)                        ║
-║                                                                              ║
-║  PUNTUACIÓN:                                                                 ║
-║    score = "overall" de melody_critic (0-1). Los empates se deshacen por     ║
-║    menos saltos sin compensar y, luego, por más notas.                       ║
-║                                                                              ║
-║  CÓDIGOS DE SALIDA: 0 ok · 1 error de uso/entorno · 2 ningún candidato válido║
-║                                                                              ║
-║  DEPENDENCIAS: stdlib · melody_critic.py (se invoca por subprocess)          ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+melody_selector.py — Melody Selector: cierra el bucle generar → criticar →
+elegir para melodías
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Los generadores (melody_conditioned_v5 --candidates, bass_line_composer,
+melody_generator…) eligen "el mejor" con su PROPIO score interno. Esta
+herramienta puntúa los candidatos con el crítico oficial del ecosistema
+(melody_critic.py) y se queda con el mejor; con `loop` automatiza todo el
+ciclo (generar N candidatos con semillas distintas, criticar, elegir).
+
+PUNTUACIÓN:
+  score = "overall" de melody_critic (0-1). Los empates se deshacen por
+  menos saltos sin compensar y, luego, por más notas.
+
+CÓDIGOS DE SALIDA: 0 ok · 1 error de uso/entorno · 2 ningún candidato válido
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  rank   Puntúa varios MIDIs y los ordena (tabla + JSON opcional)
+  pick   rank + copia el mejor MIDI a --output
+  loop   Ejecuta un comando generador N veces (una semilla por vuelta),
+         critica todo lo que produce y se queda con el mejor
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES COMUNES:
+    --track N        Pista a criticar (default: la más aguda con notas)
+    --critic FILE    melody_critic.py (default: junto a este script / cwd)
+    --min-notes N    Descarta candidatos con menos de N notas (default: 4)
+    --jobs N         Críticas en paralelo (default: 4)
+    --json FILE      Informe JSON (métricas de cada candidato + ganador)
+    --no-color       Sin colores ANSI
+
+  OPCIONES DE loop:
+    --cmd TEXTO      Comando generador. Marcadores: {seed} {out} {i}.
+                     {out} es un .mid dentro de una carpeta propia por
+                     vuelta; se critican TODOS los .mid que esa carpeta
+                     contenga (p. ej. out.mid, out_v2.mid, out_v3.mid)
+    --n N            Nº de vueltas (default: 8)
+    --seed-start S   Primera semilla (default: 1; vuelta i usa S+i)
+    --stop-at F      Parar en cuanto un candidato llegue a F (0-1)
+    --workdir DIR    Carpeta de trabajo (default: ./selector_work)
+    --keep           No borrar los candidatos descartados
+    --cwd DIR        Directorio desde el que se ejecuta --cmd (default: .)
+    --timeout S      Timeout por vuelta (default: 300)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python melody_selector.py rank cand_*.mid
+  python melody_selector.py rank cand_*.mid --track 1 --json ranking.json
+  python melody_selector.py pick mel.mid mel_v2.mid mel_v3.mid \
+      --output mejor.mid
+  python melody_selector.py loop --n 12 --stop-at 0.55 --output mejor.mid \
+      --cmd "python melody_conditioned_v5.py --engine motif --key C \
+             --bars 16 --seed {seed} --candidates 3 --output {out}"
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  stdlib · melody_critic.py (se invoca por subprocess)
 """
 
 import argparse

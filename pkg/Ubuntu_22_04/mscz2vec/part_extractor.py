@@ -1,53 +1,62 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       PART EXTRACTOR  v1.0                                  ║
-║        Extracción de partes instrumentales individuales (con transposición) ║
-║                                                                              ║
-║  El ecosistema genera MIDIs orquestales multipista (orchestrator,           ║
-║  piano_to_orchestra, piano_expander, ml_expander) y audita su tocabilidad   ║
-║  (playability_auditor), pero ninguna herramienta produce las PARTES         ║
-║  individuales que necesita cada intérprete. Esta cubre ese hueco: separa    ║
-║  cada pista en su propio MIDI autónomo (con el tempo/compás copiados),      ║
-║  aplica la transposición del instrumento transpositor (clarinete/trompeta   ║
-║  en Sib, trompa/corno inglés en Fa, flautín 8ª, contrabajo 8ª…) para que    ║
-║  el intérprete lea su parte escrita, y reporta rango y compases de tacet.   ║
-║                                                                              ║
-║  A diferencia de piano_reducer (que fusiona voces en dos pentagramas) y de  ║
-║  midi_merge (que combina stems en uno), esta herramienta hace lo inverso:   ║
-║  DIVIDE una partitura en partes y las prepara para lectura instrumental.    ║
-║                                                                              ║
-║  TRANSPOSICIONES POR DEFECTO (escrito = sonante + semitonos):               ║
-║    trompeta +2  ·  clarinete +2  ·  saxofón +2  (Sib)                        ║
-║    trompa +7  ·  corno inglés +7  (Fa)                                       ║
-║    flautín −12  (escrito 8ª baja)  ·  contrabajo +12  (escrito 8ª alta)     ║
-║    resto (flauta, oboe, cuerdas, piano, trombón, tuba…) → 0 (en Do)         ║
-║  Se pueden anular con --transpose o forzar partitura en Do con --concert.   ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python part_extractor.py orquesta.mid                                     ║
-║    python part_extractor.py orquesta.mid --list                             ║
-║    python part_extractor.py orquesta.mid --concert                          ║
-║    python part_extractor.py orquesta.mid --transpose 3:9 --as 5:trompeta     ║
-║    python part_extractor.py orquesta.mid --outdir partes/ --json p.json      ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi              MIDI multipista de entrada                             ║
-║    --outdir DIR      Carpeta de salida (default: junto al MIDI de entrada)  ║
-║    --list            Solo detecta y lista partes, sin escribir MIDI         ║
-║    --concert         No transponer (partitura en Do, sonante = escrito)     ║
-║    --transpose T:S   Anula la transposición de la pista T a S semitonos     ║
-║                      (repetible; escrito = sonante + S)                     ║
-║    --as T:INSTR      Fuerza el instrumento de la pista T (clave del catálogo)║
-║    --min-notes N     Ignora pistas con menos de N notas (default: 1)        ║
-║    --json FILE       Escribe un sidecar JSON con el resumen de partes        ║
-║    --no-color        Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from part_extractor import extract_parts                                  ║
-║                                                                              ║
-║  DEPENDENCIAS: playability_auditor.py (mismo directorio, E/S + catálogo)     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+part_extractor.py — Part Extractor: extracción de partes instrumentales
+individuales (con transposición)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+El ecosistema genera MIDIs orquestales multipista (orchestrator,
+piano_to_orchestra, piano_expander, ml_expander) y audita su tocabilidad
+(playability_auditor), pero ninguna herramienta produce las PARTES
+individuales que necesita cada intérprete. Esta cubre ese hueco: separa
+cada pista en su propio MIDI autónomo (con el tempo/compás copiados),
+aplica la transposición del instrumento transpositor (clarinete/trompeta
+en Sib, trompa/corno inglés en Fa, flautín 8ª, contrabajo 8ª…) para que
+el intérprete lea su parte escrita, y reporta rango y compases de tacet.
+
+A diferencia de piano_reducer (que fusiona voces en dos pentagramas) y de
+midi_merge (que combina stems en uno), esta herramienta hace lo inverso:
+DIVIDE una partitura en partes y las prepara para lectura instrumental.
+
+TRANSPOSICIONES POR DEFECTO (escrito = sonante + semitonos):
+  trompeta +2  ·  clarinete +2  ·  saxofón +2  (Sib)
+  trompa +7  ·  corno inglés +7  (Fa)
+  flautín −12  (escrito 8ª baja)  ·  contrabajo +12  (escrito 8ª alta)
+  resto (flauta, oboe, cuerdas, piano, trombón, tuba…) → 0 (en Do)
+Se pueden anular con --transpose o forzar partitura en Do con --concert.
+
+COMO MÓDULO:
+  from part_extractor import extract_parts
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi              MIDI multipista de entrada
+  --outdir DIR      Carpeta de salida (default: junto al MIDI de entrada)
+  --list            Solo detecta y lista partes, sin escribir MIDI
+  --concert         No transponer (partitura en Do, sonante = escrito)
+  --transpose T:S   Anula la transposición de la pista T a S semitonos
+                    (repetible; escrito = sonante + S)
+  --as T:INSTR      Fuerza el instrumento de la pista T (clave del catálogo)
+  --min-notes N     Ignora pistas con menos de N notas (default: 1)
+  --json FILE       Escribe un sidecar JSON con el resumen de partes
+  --no-color        Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python part_extractor.py orquesta.mid
+  python part_extractor.py orquesta.mid --list
+  python part_extractor.py orquesta.mid --concert
+  python part_extractor.py orquesta.mid --transpose 3:9 --as 5:trompeta
+  python part_extractor.py orquesta.mid --outdir partes/ --json p.json
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  playability_auditor.py (mismo directorio, E/S + catálogo)
 """
 
 import sys

@@ -1,96 +1,115 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         YUE COMPOSER  v1.0                                   ║
-║         Generación de canciones completas con letra mediante YuE (乐)        ║
-║                                                                              ║
-║  YuE es un modelo open-source de música generativa (lyrics → canción).      ║
-║  Dado un texto de letra y tags de género, genera una canción completa con   ║
-║  voz y acompañamiento separados, de varios minutos de duración.              ║
-║                                                                              ║
-║  ARQUITECTURA INTERNA:                                                       ║
-║    Stage 1 (7B)  — LM que genera tokens de audio comprimidos (1 codebook)   ║
-║    Stage 2 (1B)  — Upsampler: expande a 8 codebooks (mayor fidelidad)       ║
-║    XCodec Mini   — Codec neuronal que convierte tokens ↔ audio              ║
-║    Decoders      — Dos decoders separados: voz e instrumental               ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    install      — Descarga modelos de HuggingFace y dependencias            ║
-║    generate     — Letras + género → canción completa (modo CoT)             ║
-║    icl          — Como generate pero con audio de referencia (ICL)          ║
-║    tags         — Busca tags válidos en el vocabulario de YuE               ║
-║    check        — Verifica entorno: CUDA, modelos, dependencias             ║
-║                                                                              ║
-║  USO RÁPIDO:                                                                 ║
-║    # 1. Instalar modelos (una sola vez):                                     ║
-║    python yue_composer.py install                                            ║
-║    python yue_composer.py install --model-dir ~/mis_modelos/yue/            ║
-║                                                                              ║
-║    # 2. Generar una canción:                                                 ║
-║    python yue_composer.py generate --genre genre.txt --lyrics lyrics.txt    ║
-║    python yue_composer.py generate --genre genre.txt --lyrics lyrics.txt \  ║
-║        --segments 4 --output cancion.wav --listen                           ║
-║                                                                              ║
-║    # 3. Generar con referencia de estilo (ICL):                             ║
-║    python yue_composer.py icl --genre genre.txt --lyrics lyrics.txt \       ║
-║        --vocal ref_voz.mp3 --instrumental ref_inst.mp3                      ║
-║    python yue_composer.py icl --genre genre.txt --lyrics lyrics.txt \       ║
-║        --audio ref.mp3 --start 0 --end 30                                   ║
-║                                                                              ║
-║    # 4. Buscar tags de género:                                               ║
-║    python yue_composer.py tags tango                                         ║
-║    python yue_composer.py tags --list-all                                    ║
-║                                                                              ║
-║    # 5. Verificar instalación:                                               ║
-║    python yue_composer.py check                                              ║
-║                                                                              ║
-║  OPCIONES GENERATE / ICL:                                                   ║
-║    --genre FILE        Fichero de texto con tags de género (requerido)      ║
-║    --lyrics FILE       Fichero de texto con la letra (requerido)            ║
-║    --segments N        Número de segmentos ~30s a generar (default: 2)      ║
-║    --output FILE       Fichero de salida WAV (default: yue_output.wav)      ║
-║    --keep-stems        Conservar pistas vocal e instrumental separadas      ║
-║    --language LANG     Idioma: en | zh | jp-kr (default: en)                ║
-║    --mode cot|icl      Checkpoint a usar (default: cot en generate)         ║
-║    --max-tokens N      Tokens máximos por segmento (default: 3000)          ║
-║    --rep-penalty F     Penalización de repetición 1.0–2.0 (default: 1.1)   ║
-║    --seed N            Semilla aleatoria (default: 42)                      ║
-║    --batch-size N      Batch size del stage 2 (default: 4)                  ║
-║    --cuda N            Índice de GPU a usar (default: 0)                    ║
-║    --listen            Reproducir el resultado al terminar                  ║
-║    --verbose           Informe detallado de progreso                        ║
-║                                                                              ║
-║  OPCIONES ICL (adicionales):                                                ║
-║    --vocal FILE        Pista vocal de referencia (~30s, modo dual-track)    ║
-║    --instrumental FILE Pista instrumental de referencia (modo dual-track)   ║
-║    --audio FILE        Audio de referencia unificado (modo single-track)    ║
-║    --start F           Tiempo inicio del fragmento de referencia (def: 0)   ║
-║    --end F             Tiempo fin del fragmento de referencia (def: 30)     ║
-║                                                                              ║
-║  OPCIONES INSTALL:                                                           ║
-║    --model-dir DIR     Directorio donde instalar modelos (def: ~/.yue/)     ║
-║    --language LANG     Solo descargar modelos de un idioma: en|zh|jp-kr     ║
-║    --no-flash-attn     No instalar flash-attention (más lento, menos VRAM) ║
-║                                                                              ║
-║  CONFIGURACIÓN DE RUTA DE MODELOS:                                          ║
-║    Por orden de prioridad:                                                   ║
-║      1. Flag --model-dir en la línea de comandos                            ║
-║      2. Variable de entorno YUE_MODEL_DIR                                   ║
-║      3. Ruta por defecto: ~/.yue/                                            ║
-║                                                                              ║
-║  REQUISITOS DE HARDWARE:                                                     ║
-║    GPU ≥ 24 GB VRAM  →  hasta 2 segmentos (~1 min de canción)               ║
-║    GPU ≥ 80 GB VRAM  →  canciones largas (4+ segmentos)                     ║
-║    H800: 30s audio ≈ 150s cómputo  |  RTX 4090: 30s ≈ 360s                 ║
-║    Flash Attention 2 muy recomendado para evitar OOM en secuencias largas   ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    pip install torch torchaudio transformers sentencepiece                   ║
-║    pip install omegaconf einops soundfile numpy tqdm accelerate             ║
-║    pip install huggingface_hub                                               ║
-║    pip install flash-attn --no-build-isolation   (opcional, recomendado)    ║
-║    pip install python-audio-separator             (opcional, para --split)  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+yue_composer.py — Yue Composer: generación de canciones completas con letra
+mediante YuE (乐)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+YuE es un modelo open-source de música generativa (lyrics → canción).
+Dado un texto de letra y tags de género, genera una canción completa con
+voz y acompañamiento separados, de varios minutos de duración.
+
+ARQUITECTURA INTERNA:
+  Stage 1 (7B)  — LM que genera tokens de audio comprimidos (1 codebook)
+  Stage 2 (1B)  — Upsampler: expande a 8 codebooks (mayor fidelidad)
+  XCodec Mini   — Codec neuronal que convierte tokens ↔ audio
+  Decoders      — Dos decoders separados: voz e instrumental
+
+CONFIGURACIÓN DE RUTA DE MODELOS:
+  Por orden de prioridad:
+    1. Flag --model-dir en la línea de comandos
+    2. Variable de entorno YUE_MODEL_DIR
+    3. Ruta por defecto: ~/.yue/
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  install      — Descarga modelos de HuggingFace y dependencias
+  generate     — Letras + género → canción completa (modo CoT)
+  icl          — Como generate pero con audio de referencia (ICL)
+  tags         — Busca tags válidos en el vocabulario de YuE
+  check        — Verifica entorno: CUDA, modelos, dependencias
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES GENERATE / ICL:
+    --genre FILE        Fichero de texto con tags de género (requerido)
+    --lyrics FILE       Fichero de texto con la letra (requerido)
+    --segments N        Número de segmentos ~30s a generar (default: 2)
+    --output FILE       Fichero de salida WAV (default: yue_output.wav)
+    --keep-stems        Conservar pistas vocal e instrumental separadas
+    --language LANG     Idioma: en | zh | jp-kr (default: en)
+    --mode cot|icl      Checkpoint a usar (default: cot en generate)
+    --max-tokens N      Tokens máximos por segmento (default: 3000)
+    --rep-penalty F     Penalización de repetición 1.0–2.0 (default: 1.1)
+    --seed N            Semilla aleatoria (default: 42)
+    --batch-size N      Batch size del stage 2 (default: 4)
+    --cuda N            Índice de GPU a usar (default: 0)
+    --listen            Reproducir el resultado al terminar
+    --verbose           Informe detallado de progreso
+
+  OPCIONES ICL (adicionales):
+    --vocal FILE        Pista vocal de referencia (~30s, modo dual-track)
+    --instrumental FILE Pista instrumental de referencia (modo dual-track)
+    --audio FILE        Audio de referencia unificado (modo single-track)
+    --start F           Tiempo inicio del fragmento de referencia (def: 0)
+    --end F             Tiempo fin del fragmento de referencia (def: 30)
+
+── OPCIONES INSTALL ──
+  --model-dir DIR     Directorio donde instalar modelos (def: ~/.yue/)
+  --language LANG     Solo descargar modelos de un idioma: en|zh|jp-kr
+  --no-flash-attn     No instalar flash-attention (más lento, menos VRAM)
+
+── Otras opciones del parser ──
+  (común)
+    --disable-offload           No mover Stage 1 a CPU tras la generación
+    --stage1-cpu                Forzar Stage 1 en CPU aunque haya GPU (útil
+                                con VRAM < 14GB)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USO RÁPIDO ──
+  # 1. Instalar modelos (una sola vez):
+  python yue_composer.py install
+  python yue_composer.py install --model-dir ~/mis_modelos/yue/
+
+  # 2. Generar una canción:
+  python yue_composer.py generate --genre genre.txt --lyrics lyrics.txt
+  python yue_composer.py generate --genre genre.txt --lyrics lyrics.txt \
+      --segments 4 --output cancion.wav --listen
+
+  # 3. Generar con referencia de estilo (ICL):
+  python yue_composer.py icl --genre genre.txt --lyrics lyrics.txt \
+      --vocal ref_voz.mp3 --instrumental ref_inst.mp3
+  python yue_composer.py icl --genre genre.txt --lyrics lyrics.txt \
+      --audio ref.mp3 --start 0 --end 30
+
+  # 4. Buscar tags de género:
+  python yue_composer.py tags tango
+  python yue_composer.py tags --list-all
+
+  # 5. Verificar instalación:
+  python yue_composer.py check
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+REQUISITOS DE HARDWARE:
+  GPU ≥ 24 GB VRAM  →  hasta 2 segmentos (~1 min de canción)
+  GPU ≥ 80 GB VRAM  →  canciones largas (4+ segmentos)
+  H800: 30s audio ≈ 150s cómputo  |  RTX 4090: 30s ≈ 360s
+  Flash Attention 2 muy recomendado para evitar OOM en secuencias largas
+
+── DEPENDENCIAS ──
+  pip install torch torchaudio transformers sentencepiece
+  pip install omegaconf einops soundfile numpy tqdm accelerate
+  pip install huggingface_hub
+  pip install flash-attn --no-build-isolation   (opcional, recomendado)
+  pip install python-audio-separator             (opcional, para --split)
 """
 
 import sys

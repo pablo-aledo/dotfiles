@@ -1,70 +1,96 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         MODULATOR  v2.0                                      ║
-║         Modulación continua y musicalmente informada de parámetros MIDI     ║
-║                                                                              ║
-║  MEJORAS v2.0 sobre v1.0:                                                   ║
-║  [1] Análisis armónico por compás — tonalidad local, perfiles Krumhansl     ║
-║  [2] Separación de voces — melodía / bajo / armonía tratadas individualmente║
-║  [3] Density con grid rítmica — notas de paso en subdivisiones coherentes   ║
-║  [4] Tension con voice-leading — séptimas/novenas con resolución planificada║
-║  [5] Scope por voz con offset configurable (stagger entre voces)            ║
-║  [6] Detección de estructura formal — respeta cadencias y cierres de frase  ║
-║  [7] Smoothing entre compases — crossfade en boundaries de parámetros       ║
-║  [8] Rhythm con groove map real — amplifica micro-timings del propio MIDI   ║
-║  [9] Preview mode — piano roll ASCII + curva antes de generar               ║
-║  [10] API pública modulate_midi() para integración con mutator y otros      ║
-║                                                                              ║
-║  PARÁMETROS:                                                                 ║
-║    density · tension · dynamics · rhythm · register · articulation          ║
-║    spread · contour · tempo · brightness                                     ║
-║                                                                              ║
-║  CURVAS:                                                                     ║
-║    linear · exponential · logarithmic · sigmoid · arc · arc_down            ║
-║    s_curve · pulse · plateau · wave · random_walk · custom                  ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python modulator.py obra.mid --param density --curve arc                 ║
-║    python modulator.py obra.mid --params dynamics tension --curve sigmoid   ║
-║    python modulator.py obra.mid --param tension --voice melody              ║
-║    python modulator.py obra.mid --param all --curve s_curve --preview       ║
-║    python modulator.py obra.mid --param density --voice-stagger 2           ║
-║    python modulator.py obra.mid --param rhythm --use-groove-map             ║
-║    python modulator.py obra.mid --param all --smooth-boundary 2             ║
-║    python modulator.py obra.mid --param density --curve custom              ║
-║                      --control-points "0:0.1, 4:0.9, 8:0.5, 16:0.8"       ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --param / --params    Parámetro(s) a modular (o 'all')                   ║
-║    --direction           increasing | decreasing | none                      ║
-║    --curve               Forma de curva (default: linear)                   ║
-║    --from / --to         Rango de la curva 0-1                              ║
-║    --intensity           Intensidad global 0-1 (default: 1.0)              ║
-║    --scope               Compases S:E (ej: --scope 8:24)                    ║
-║    --voice               all | melody | bass | harmony (default: all)       ║
-║    --voice-stagger N     Offset de compases entre voces (default: 0)       ║
-║    --use-groove-map      Usar groove map real del MIDI (rhythm)             ║
-║    --smooth-boundary N   Beats de crossfade en boundaries (default: 0)     ║
-║    --respect-cadences    No modular notas en cadencias finales de frase     ║
-║    --periods N           Para curvas wave/pulse: número de períodos         ║
-║    --steepness F         Para sigmoid/exponential: pendiente 1-20           ║
-║    --control-points STR  Para --curve custom: "BAR:VAL, BAR:VAL, ..."      ║
-║    --output FILE         MIDI de salida                                      ║
-║    --seed N              Semilla aleatoria (default: 42)                    ║
-║    --dry-run             Mostrar curvas sin generar MIDI                    ║
-║    --preview             Piano roll ASCII + curvas antes de generar         ║
-║    --plot                Visualizar curvas con matplotlib                   ║
-║    --verbose             Informe detallado                                  ║
-║                                                                              ║
-║  COMO MÓDULO (para mutator u otros scripts):                                ║
-║    from modulator import modulate_midi, generate_curve, MusicAnalysis       ║
-║    result = modulate_midi("obra.mid", params=["tension","dynamics"],        ║
-║                           curve="arc", intensity=0.8, voice="melody")       ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy                                                   ║
-║  OPCIONAL:    matplotlib (--plot)                                            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+modulator.py — Modulator: modulación continua y musicalmente informada de
+parámetros MIDI
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+MEJORAS v2.0 sobre v1.0:
+[1] Análisis armónico por compás — tonalidad local, perfiles Krumhansl
+[2] Separación de voces — melodía / bajo / armonía tratadas individualmente
+[3] Density con grid rítmica — notas de paso en subdivisiones coherentes
+[4] Tension con voice-leading — séptimas/novenas con resolución planificada
+[5] Scope por voz con offset configurable (stagger entre voces)
+[6] Detección de estructura formal — respeta cadencias y cierres de frase
+[7] Smoothing entre compases — crossfade en boundaries de parámetros
+[8] Rhythm con groove map real — amplifica micro-timings del propio MIDI
+[9] Preview mode — piano roll ASCII + curva antes de generar
+[10] API pública modulate_midi() para integración con mutator y otros
+
+CURVAS:
+  linear · exponential · logarithmic · sigmoid · arc · arc_down
+  s_curve · pulse · plateau · wave · random_walk · custom
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+PARÁMETROS:
+  density · tension · dynamics · rhythm · register · articulation
+  spread · contour · tempo · brightness
+
+── OPCIONES ──
+    --param / --params    Parámetro(s) a modular (o 'all')
+    --direction           increasing | decreasing | none
+    --curve               Forma de curva (default: linear)
+    --from / --to         Rango de la curva 0-1
+    --intensity           Intensidad global 0-1 (default: 1.0)
+    --scope               Compases S:E (ej: --scope 8:24)
+    --voice               all | melody | bass | harmony (default: all)
+    --voice-stagger N     Offset de compases entre voces (default: 0)
+    --use-groove-map      Usar groove map real del MIDI (rhythm)
+    --smooth-boundary N   Beats de crossfade en boundaries (default: 0)
+    --respect-cadences    No modular notas en cadencias finales de frase
+    --periods N           Para curvas wave/pulse: número de períodos
+    --steepness F         Para sigmoid/exponential: pendiente 1-20
+    --control-points STR  Para --curve custom: "BAR:VAL, BAR:VAL, ..."
+    --output FILE         MIDI de salida
+    --seed N              Semilla aleatoria (default: 42)
+    --dry-run             Mostrar curvas sin generar MIDI
+    --preview             Piano roll ASCII + curvas antes de generar
+    --plot                Visualizar curvas con matplotlib
+    --verbose             Informe detallado
+
+  COMO MÓDULO (para mutator u otros scripts):
+    from modulator import modulate_midi, generate_curve, MusicAnalysis
+    result = modulate_midi("obra.mid", params=["tension","dynamics"],
+                           curve="arc", intensity=0.8, voice="melody")
+
+── Otras opciones del parser ──
+  --list-params
+  --list-curves
+  --version VERSION
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python modulator.py obra.mid --param density --curve arc
+  python modulator.py obra.mid --params dynamics tension --curve sigmoid
+  python modulator.py obra.mid --param tension --voice melody
+  python modulator.py obra.mid --param all --curve s_curve --preview
+  python modulator.py obra.mid --param density --voice-stagger 2
+  python modulator.py obra.mid --param rhythm --use-groove-map
+  python modulator.py obra.mid --param all --smooth-boundary 2
+  python modulator.py obra.mid --param density --curve custom \
+                    --control-points "0:0.1, 4:0.9, 8:0.5, 16:0.8"
+
+── Más modos ──
+
+  # --dry-run
+  python modulator.py --dry-run
+
+  # --list-params
+  python modulator.py --list-params
+
+  # --list-curves
+  python modulator.py --list-curves
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
+  OPCIONAL:    matplotlib (--plot)
 """
 
 import sys

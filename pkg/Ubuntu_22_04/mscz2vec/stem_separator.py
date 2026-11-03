@@ -1,68 +1,107 @@
 #!/usr/bin/env python3
 """
-===== stem_separator.py =====
-║                      STEM SEPARATOR  v1.0                                   ║
-║      Separación de fuentes de audio (voz/batería/bajo/resto) — HTDemucs     ║
-║                                                                              ║
-║  Reimplementación autocontenida (un solo fichero, dependencias mínimas)     ║
-║  de Hybrid Transformer Demucs v4 (Rouard et al. / Meta AI, MIT license).    ║
-║  Separa un WAV en 4 stems (drums, bass, other, vocals) cargando el          ║
-║  checkpoint preentrenado oficial "htdemucs" — sin depender del paquete      ║
-║  `demucs` ni de su cadena de dependencias (dora, omegaconf, einops...).     ║
-║                                                                              ║
-║  CÓMO FUNCIONA (resumen):                                                    ║
-║    mezcla → STFT (representación complex-as-channels) + forma de onda      ║
-║    cruda → dos ramas U-Net paralelas (frecuencia / tiempo) → Transformer    ║
-║    cross-dominio en el cuello de botella → decodificación dual → máscara    ║
-║    + iSTFT (rama freq) + onda directa (rama tiempo) → suma → 4 stems.       ║
-║    Ver spec_stem_separator.md para el análisis arquitectónico completo.     ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    install     — descarga el checkpoint preentrenado oficial (~80 MB)       ║
-║    separate    — WAV → hasta 4 stems (drums, bass, other, vocals)           ║
-║    info        — inspecciona un checkpoint o la arquitectura por defecto    ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python stem_separator.py install                                         ║
-║    python stem_separator.py install --output ~/mis_modelos/htdemucs.th      ║
-║                                                                              ║
-║    python stem_separator.py separate cancion.wav                            ║
-║    python stem_separator.py separate cancion.wav --output-dir stems/        ║
-║    python stem_separator.py separate cancion.wav --stems vocals drums       ║
-║    python stem_separator.py separate cancion.wav --two-stems vocals         ║
-║    python stem_separator.py separate cancion.wav --shifts 2 --overlap 0.25  ║
-║    python stem_separator.py separate cancion.wav --model-path mi_ckpt.th    ║
-║    python stem_separator.py separate cancion.wav --device cpu               ║
-║                                                                              ║
-║    python stem_separator.py info                                            ║
-║    python stem_separator.py info --model-path htdemucs.th                   ║
-║                                                                              ║
-║  OPCIONES (separate):                                                       ║
-║    --stems S...       subconjunto de {drums,bass,other,vocals} a exportar   ║
-║    --two-stems S      modo karaoke: exporta S y "no_S" (suma del resto)     ║
-║    --shifts N         nº de desplazamientos aleatorios promediados (def:1)  ║
-║    --overlap F        solape entre segmentos, 0-1 (default: 0.25)           ║
-║    --segment F        duración de segmento en segundos (default: del ckpt)  ║
-║    --model-path FILE  ruta al checkpoint .th (default: caché de `install`)  ║
-║    --device cpu|cuda  dispositivo de inferencia (default: cpu)              ║
-║    --output-dir DIR   carpeta de salida (default: junto al WAV de entrada)  ║
-║    --random-weights   NO cargar checkpoint; pesos aleatorios (solo pruebas) ║
-║                                                                              ║
-║  SALIDA (convención de nombres del ecosistema, sufijo con punto):           ║
-║    cancion.stem_vocals.wav   cancion.stem_drums.wav                         ║
-║    cancion.stem_bass.wav     cancion.stem_other.wav                         ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:  torch, numpy, soundfile                                        ║
-║    (nada de demucs, dora, omegaconf, einops, torchaudio, ffmpeg)            ║
-║                                                                              ║
-║  NOTAS:                                                                      ║
-║    · El resampling a 44100 Hz usa interpolación lineal (no sinc de alta     ║
-║      calidad como `julius`), por simplicidad y mínimas dependencias. Si tu  ║
-║      WAV ya está a 44100 Hz estéreo esto no importa.                        ║
-║    · Solo soporta el modelo base "htdemucs" (un checkpoint). El modo        ║
-║      "htdemucs_ft" (ensemble de 4 checkpoints especializados) queda fuera   ║
-║      de esta v1 — ver spec_stem_separator.md §7.                            ║
+stem_separator.py — Separación de fuentes de audio (voz, batería, bajo, resto)
+con HTDemucs: reimplementación autocontenida
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+      Separación de fuentes de audio (voz/batería/bajo/resto) — HTDemucs
+
+  Reimplementación autocontenida (un solo fichero, dependencias mínimas)
+  de Hybrid Transformer Demucs v4 (Rouard et al. / Meta AI, MIT license).
+  Separa un WAV en 4 stems (drums, bass, other, vocals) cargando el
+  checkpoint preentrenado oficial "htdemucs" — sin depender del paquete
+  `demucs` ni de su cadena de dependencias (dora, omegaconf, einops...).
+
+  CÓMO FUNCIONA (resumen):
+    mezcla → STFT (representación complex-as-channels) + forma de onda
+    cruda → dos ramas U-Net paralelas (frecuencia / tiempo) → Transformer
+    cross-dominio en el cuello de botella → decodificación dual → máscara
+    + iSTFT (rama freq) + onda directa (rama tiempo) → suma → 4 stems.
+    Ver spec_stem_separator.md para el análisis arquitectónico completo.
+
+  COMANDOS:
+    install     — descarga el checkpoint preentrenado oficial (~80 MB)
+    separate    — WAV → hasta 4 stems (drums, bass, other, vocals)
+    info        — inspecciona un checkpoint o la arquitectura por defecto
+
+  USO:
+    python stem_separator.py install
+    python stem_separator.py install --output ~/mis_modelos/htdemucs.th
+
+    python stem_separator.py separate cancion.wav
+    python stem_separator.py separate cancion.wav --output-dir stems/
+    python stem_separator.py separate cancion.wav --stems vocals drums
+    python stem_separator.py separate cancion.wav --two-stems vocals
+    python stem_separator.py separate cancion.wav --shifts 2 --overlap 0.25
+    python stem_separator.py separate cancion.wav --model-path mi_ckpt.th
+    python stem_separator.py separate cancion.wav --device cpu
+
+    python stem_separator.py info
+    python stem_separator.py info --model-path htdemucs.th
+
+  OPCIONES (separate):
+    --stems S...       subconjunto de {drums,bass,other,vocals} a exportar
+    --two-stems S      modo karaoke: exporta S y "no_S" (suma del resto)
+    --shifts N         nº de desplazamientos aleatorios promediados (def:1)
+    --overlap F        solape entre segmentos, 0-1 (default: 0.25)
+    --segment F        duración de segmento en segundos (default: del ckpt)
+    --model-path FILE  ruta al checkpoint .th (default: caché de `install`)
+    --device cpu|cuda  dispositivo de inferencia (default: cpu)
+    --output-dir DIR   carpeta de salida (default: junto al WAV de entrada)
+    --random-weights   NO cargar checkpoint; pesos aleatorios (solo pruebas)
+
+  SALIDA (convención de nombres del ecosistema, sufijo con punto):
+    cancion.stem_vocals.wav   cancion.stem_drums.wav
+    cancion.stem_bass.wav     cancion.stem_other.wav
+
+  DEPENDENCIAS:
+    Siempre:  torch, numpy, soundfile
+    (nada de demucs, dora, omegaconf, einops, torchaudio, ffmpeg)
+
+  NOTAS:
+    · El resampling a 44100 Hz usa interpolación lineal (no sinc de alta
+      calidad como `julius`), por simplicidad y mínimas dependencias. Si tu
+      WAV ya está a 44100 Hz estéreo esto no importa.
+    · Solo soporta el modelo base "htdemucs" (un checkpoint). El modo
+      "htdemucs_ft" (ensemble de 4 checkpoints especializados) queda fuera
+      de esta v1 — ver spec_stem_separator.md §7.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  install     descarga el checkpoint preentrenado oficial
+  separate    separa un WAV en stems
+  info        inspecciona un checkpoint o la arquitectura por defecto
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  install
+    --output OUTPUT             ruta de destino del .th
+    --force                     volver a descargar aunque ya exista
+
+  separate
+    input INPUT                 fichero WAV de entrada
+    --stems STEMS […]           subconjunto de fuentes a exportar (default:
+                                las 4)
+    --two-stems TWO_STEMS       modo karaoke: exporta esta fuente y
+                                'no_<fuente>' (suma del resto)
+    --shifts SHIFTS             nº de desplazamientos promediados (default: 1)
+    --overlap OVERLAP           solape entre segmentos, 0-1 (default: 0.25)
+    --segment SEGMENT           duración de segmento en segundos
+    --model-path MODEL_PATH     ruta al checkpoint .th
+    --device DEVICE             (defecto cpu; valores: cpu|cuda)
+    --output-dir OUTPUT_DIR
+    --random-weights            no cargar checkpoint; pesos aleatorios (solo
+                                para pruebas del motor)
+    --quiet                     no mostrar barra de progreso
+
+  info
+    --model-path MODEL_PATH
+    --random-weights
 """
 
 import argparse

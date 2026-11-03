@@ -1,56 +1,62 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     HARMONIC ANALYZER  v1.1                                 ║
-║        Análisis armónico funcional (números romanos) con explicación        ║
-║                                                                              ║
-║  Es el compañero armónico de metric_analyzer (que cubre el eje rítmico):    ║
-║  toma TU MIDI y devuelve, compás a compás, el acorde detectado, su cifrado, ║
-║  su número romano, su función (T/S/D) y las cadencias, con una explicación  ║
-║  en lenguaje llano de POR QUÉ. La misma información existe enterrada en el   ║
-║  HTML de piano_duo_analyzer; aquí es una herramienta didáctica standalone.  ║
-║                                                                              ║
-║  A diferencia de reharmonizer o voice_leader (que TRANSFORMAN la armonía),  ║
-║  esta herramienta solo ANALIZA y EXPLICA lo que ya escribiste.              ║
-║                                                                              ║
-║  NOVEDAD v1.1 — DOMINANTES SECUNDARIOS:                                     ║
-║  Detecta tríadas mayores / 7ª de dominante "sorprendentes" (que no          ║
-║  encajarían diatónicamente en ese grado) y comprueba si el acorde           ║
-║  siguiente resuelve una 5ª justa por debajo. Si resuelve, se etiqueta       ║
-║  como V/x o V7/x (dominante secundario / tonicización de x) con función    ║
-║  D, en vez de "diatonizarlo" a un numeral engañoso. Si no resuelve, se      ║
-║  mantiene el etiquetado cromático anterior (mediante, préstamo modal…).    ║
-║                                                                              ║
-║  PIPELINE:                                                                   ║
-║  [1] SEGMENTACIÓN — agrupa las notas por compás (o por --window beats)      ║
-║  [2] ACORDE       — detecta acorde y bajo por plantilla de intervalos        ║
-║  [3] TONALIDAD    — estima la tonalidad global (Krumhansl-Schmuckler)       ║
-║  [4] ROMANOS      — numeral + función + inversión respecto a la tonalidad   ║
-║  [5] SECUNDARIOS  — confirma dominantes secundarios por resolución  [NUEVO] ║
-║  [6] CADENCIAS    — auténtica / plagal / rota / semicadencia                ║
-║  [7] INFORME      — tabla por compás + explicación + sidecar JSON opcional  ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python harmonic_analyzer.py obra.mid                                      ║
-║    python harmonic_analyzer.py obra.mid --key Cmaj                          ║
-║    python harmonic_analyzer.py obra.mid --window 2                          ║
-║    python harmonic_analyzer.py obra.mid --explain --json obra.harm.json     ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi              MIDI de entrada                                         ║
-║    --key KEY         Fuerza la tonalidad (p.ej. Cmaj, Am, F#min, Bbmaj)     ║
-║    --window BEATS    Ventana de análisis en tiempos (default: 1 compás)     ║
-║    --track N         Analiza solo la pista N (default: todas)               ║
-║    --explain         Añade una explicación por compás                        ║
-║    --json FILE       Escribe un sidecar JSON con el análisis completo        ║
-║    --max-bars N      Limita la tabla impresa (default: 48)                   ║
-║    --no-color        Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from harmonic_analyzer import analyze_harmony                             ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+harmonic_analyzer.py — Harmonic Analyzer: análisis armónico funcional (números
+romanos) con explicación
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Es el compañero armónico de metric_analyzer (que cubre el eje rítmico):
+toma TU MIDI y devuelve, compás a compás, el acorde detectado, su cifrado,
+su número romano, su función (T/S/D) y las cadencias, con una explicación
+en lenguaje llano de POR QUÉ. La misma información existe enterrada en el
+HTML de piano_duo_analyzer; aquí es una herramienta didáctica standalone.
+
+A diferencia de reharmonizer o voice_leader (que TRANSFORMAN la armonía),
+esta herramienta solo ANALIZA y EXPLICA lo que ya escribiste.
+
+NOVEDAD v1.1 — DOMINANTES SECUNDARIOS:
+Detecta tríadas mayores / 7ª de dominante "sorprendentes" (que no
+encajarían diatónicamente en ese grado) y comprueba si el acorde
+siguiente resuelve una 5ª justa por debajo. Si resuelve, se etiqueta
+como V/x o V7/x (dominante secundario / tonicización de x) con función
+D, en vez de "diatonizarlo" a un numeral engañoso. Si no resuelve, se
+mantiene el etiquetado cromático anterior (mediante, préstamo modal…).
+
+PIPELINE:
+[1] SEGMENTACIÓN — agrupa las notas por compás (o por --window beats)
+[2] ACORDE       — detecta acorde y bajo por plantilla de intervalos
+[3] TONALIDAD    — estima la tonalidad global (Krumhansl-Schmuckler)
+[4] ROMANOS      — numeral + función + inversión respecto a la tonalidad
+[5] SECUNDARIOS  — confirma dominantes secundarios por resolución  [NUEVO]
+[6] CADENCIAS    — auténtica / plagal / rota / semicadencia
+[7] INFORME      — tabla por compás + explicación + sidecar JSON opcional
+
+COMO MÓDULO:
+  from harmonic_analyzer import analyze_harmony
+
+DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi              MIDI de entrada
+  --key KEY         Fuerza la tonalidad (p.ej. Cmaj, Am, F#min, Bbmaj)
+  --window BEATS    Ventana de análisis en tiempos (default: 1 compás)
+  --track N         Analiza solo la pista N (default: todas)
+  --explain         Añade una explicación por compás
+  --json FILE       Escribe un sidecar JSON con el análisis completo
+  --max-bars N      Limita la tabla impresa (default: 48)
+  --no-color        Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python harmonic_analyzer.py obra.mid
+  python harmonic_analyzer.py obra.mid --key Cmaj
+  python harmonic_analyzer.py obra.mid --window 2
+  python harmonic_analyzer.py obra.mid --explain --json obra.harm.json
 """
 
 import re

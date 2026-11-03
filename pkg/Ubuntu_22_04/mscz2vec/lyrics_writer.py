@@ -1,83 +1,113 @@
 #!/usr/bin/env python3
-"""
-================================================================================
-                       LYRICS WRITER  v1.0
-       Generacion automatica de lyrics para melodias ABC mediante un
-               modelo de lenguaje (Anthropic API u OpenAI API)
+r"""
+lyrics_writer.py — Lyrics Writer: generacion automatica de lyrics para
+melodias ABC mediante un modelo de lenguaje (Anthropic API u OpenAI API)
+(versión 1.0).
 
-  Recibe un fichero ABC SIN lineas w: y una TEMATICA general de la cancion,
-  y produce un nuevo fichero ABC con lineas w: anadidas, generadas por un
-  LLM para que:
-    - El numero de silabas de cada linea w: coincida con el numero de notas
-      del compas correspondiente (una silaba por nota, igual que en el
-      formato esperado por lyrics_melody.py).
-    - El contenido tematico sea coherente con la TEMATICA indicada por el
-      usuario.
-    - Cada verso mantenga coherencia narrativa con los versos anteriores
-      (se pasa el historial completo al LLM en cada llamada).
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Recibe un fichero ABC SIN lineas w: y una TEMATICA general de la cancion,
+y produce un nuevo fichero ABC con lineas w: anadidas, generadas por un
+LLM para que:
+  - El numero de silabas de cada linea w: coincida con el numero de notas
+    del compas correspondiente (una silaba por nota, igual que en el
+    formato esperado por lyrics_melody.py).
+  - El contenido tematico sea coherente con la TEMATICA indicada por el
+    usuario.
+  - Cada verso mantenga coherencia narrativa con los versos anteriores
+    (se pasa el historial completo al LLM en cada llamada).
 
-  COMANDOS:
-    write   - Genera lyrics para todos los compases de un fichero ABC
+FLUJO:
+1. Parsea el ABC y extrae, para cada cancion (bloque X:) y cada compas
+   (separado por '|'), el numero de notas (= numero de silabas objetivo).
+2. Para cada compas, en orden, llama a la API de Anthropic pidiendo un
+   fragmento de letra en espanol con EXACTAMENTE ese numero de silabas,
+   coherente con la tematica y con los versos generados previamente.
+3. Cuenta las silabas del fragmento devuelto (heuristica para espanol).
+   Si no coincide, reintenta (hasta --max-retries) pidiendo al modelo que
+   ajuste la longitud, indicandole el numero de silabas obtenido.
+4. Convierte el fragmento aceptado a formato w: (silabas separadas por
+   '-' dentro de cada palabra, palabras separadas por espacio, una
+   silaba por nota).
+5. Inserta las lineas w: en el ABC, una por linea de melodia (los
+   fragmentos de varios compases de una misma linea se concatenan con
+   '|' en la linea w:, igual que puede escribirse en ABC estandar).
 
-  FLUJO
-  -----
-  1. Parsea el ABC y extrae, para cada cancion (bloque X:) y cada compas
-     (separado por '|'), el numero de notas (= numero de silabas objetivo).
-  2. Para cada compas, en orden, llama a la API de Anthropic pidiendo un
-     fragmento de letra en espanol con EXACTAMENTE ese numero de silabas,
-     coherente con la tematica y con los versos generados previamente.
-  3. Cuenta las silabas del fragmento devuelto (heuristica para espanol).
-     Si no coincide, reintenta (hasta --max-retries) pidiendo al modelo que
-     ajuste la longitud, indicandole el numero de silabas obtenido.
-  4. Convierte el fragmento aceptado a formato w: (silabas separadas por
-     '-' dentro de cada palabra, palabras separadas por espacio, una
-     silaba por nota).
-  5. Inserta las lineas w: en el ABC, una por linea de melodia (los
-     fragmentos de varios compases de una misma linea se concatenan con
-     '|' en la linea w:, igual que puede escribirse en ABC estandar).
+NOTAS DE DISENO:
+- El conteo de silabas es una heuristica para espanol (vocales fuertes,
+  diptongos, triptongos, 'h' muda, agrupaciones consonanticas). No es
+  perfecto para casos ambiguos (hiatos vs diptongos segun acentuacion),
+  pero es suficientemente fiable para alinear letra y melodia de forma
+  automatica con reintentos.
+- El LLM recibe en cada llamada: la tematica, el numero de silabas
+  objetivo, el contexto musical del compas (tonalidad, posicion en la
+  cancion, si es inicio/fin de frase), y el texto generado hasta el
+  momento (para coherencia narrativa).
+- Si tras --max-retries intentos no se logra el numero exacto de
+  silabas, se acepta el ultimo intento y se ajusta automaticamente
+  (recortando o repitiendo la ultima silaba) para no romper la
+  alineacion con la melodia, avisando por stderr.
 
-  EJEMPLOS DE USO
-  ----------------
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  write   - Genera lyrics para todos los compases de un fichero ABC
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  (globales)
+    --version VERSION
+
+  write
+    --abc-in ABC_IN             Fichero ABC de entrada (sin lineas w:, o con
+                                lineas w: que se sobrescribiran) (obligatorio)
+    --abc-out ABC_OUT           Fichero ABC de salida con lineas w: anadidas
+                                (obligatorio)
+    --tema TEMA                 Tematica general de la cancion (en lenguaje
+                                natural) (obligatorio)
+    --provider PROVIDER         Proveedor del LLM a usar (default: anthropic)
+                                (valores: anthropic|openai)
+    --model MODEL               Modelo a usar. Por defecto: '…' (anthropic) o
+                                '…' (openai)
+    --api-key API_KEY           API key del proveedor (por defecto, variable
+                                de entorno ANTHROPIC_API_KEY u OPENAI_API_KEY
+                                segun --provider)
+    --max-retries MAX_RETRIES   Maximo de reintentos por compas si el numero
+                                de silabas no coincide (default: 3)
+    --delay DELAY               Pausa en segundos entre llamadas a la API
+                                (util para limites de tasa) (defecto 0.0)
+    --verbose                   Mostrar cada intento de generacion por compas
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
   # Generar lyrics para un ABC sin letra, tematica libre (Anthropic, default)
   python3 lyrics_writer.py write --abc-in melodia.abc --tema "amor de verano" \
-      --abc-out melodia_con_letra.abc
+        --abc-out melodia_con_letra.abc
 
   # Usando OpenAI en vez de Anthropic
   python3 lyrics_writer.py write --abc-in melodia.abc --tema "amor de verano" \
-      --abc-out melodia_con_letra.abc --provider openai
+        --abc-out melodia_con_letra.abc --provider openai
 
   # Especificando modelo y maximo de reintentos por compas
   python3 lyrics_writer.py write --abc-in melodia.abc \
-      --tema "soledad en la ciudad" --abc-out salida.abc \
-      --provider anthropic --model claude-sonnet-4-6 --max-retries 4
+        --tema "soledad en la ciudad" --abc-out salida.abc \
+        --provider anthropic --model claude-sonnet-4-6 --max-retries 4
 
   # Modo verboso: muestra cada compas, intento y resultado
   python3 lyrics_writer.py write --abc-in melodia.abc --tema "tango triste" \
-      --abc-out salida.abc --verbose
+        --abc-out salida.abc --verbose
 
-  DEPENDENCIAS
-    --provider anthropic (default): anthropic -> pip install anthropic
-        Requiere variable de entorno ANTHROPIC_API_KEY (o --api-key).
-    --provider openai: openai -> pip install openai
-        Requiere variable de entorno OPENAI_API_KEY (o --api-key).
-    Solo es necesario instalar el SDK del proveedor que se vaya a usar.
-
-  NOTAS DE DISENO
-  ----------------
-  - El conteo de silabas es una heuristica para espanol (vocales fuertes,
-    diptongos, triptongos, 'h' muda, agrupaciones consonanticas). No es
-    perfecto para casos ambiguos (hiatos vs diptongos segun acentuacion),
-    pero es suficientemente fiable para alinear letra y melodia de forma
-    automatica con reintentos.
-  - El LLM recibe en cada llamada: la tematica, el numero de silabas
-    objetivo, el contexto musical del compas (tonalidad, posicion en la
-    cancion, si es inicio/fin de frase), y el texto generado hasta el
-    momento (para coherencia narrativa).
-  - Si tras --max-retries intentos no se logra el numero exacto de
-    silabas, se acepta el ultimo intento y se ajusta automaticamente
-    (recortando o repitiendo la ultima silaba) para no romper la
-    alineacion con la melodia, avisando por stderr.
-================================================================================
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  --provider anthropic (default): anthropic -> pip install anthropic
+      Requiere variable de entorno ANTHROPIC_API_KEY (o --api-key).
+  --provider openai: openai -> pip install openai
+      Requiere variable de entorno OPENAI_API_KEY (o --api-key).
+  Solo es necesario instalar el SDK del proveedor que se vaya a usar.
 """
 
 import argparse

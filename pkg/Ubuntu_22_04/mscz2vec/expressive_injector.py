@@ -1,74 +1,90 @@
 #!/usr/bin/env python3
-# ╔══════════════════════════════════════════════════════════════════════╗
-# ║ expressive_injector.py                                               ║
-# ║                                                                      ║
-# ║ Complementario a expressive_resources.py: introduce un recurso       ║
-# ║ expresivo (rítmico, melódico, armónico o dinámico) en un compás      ║
-# ║ concreto de un MIDI de piano con manos separadas (RH/LH), modificando║
-# ║ las notas (o el tempo) existentes para materializarlo, y escribe un  ║
-# ║ nuevo fichero .mid con el resultado.                                 ║
-# ║                                                                      ║
-# ║ Recursos soportados (usa 'list-resources' para el detalle):          ║
-# ║   Rítmicos:   sincopa, contratiempo, hemiola, rubato*, agogica*,     ║
-# ║               polirritmia                                            ║
-# ║   Melódicos:  apoyatura, floreo, anticipacion, escapada,             ║
-# ║               nota_de_paso_cromatica                                 ║
-# ║   Armónicos:  acorde_disminuido, dominante_secundaria,               ║
-# ║               acorde_prestado, sexta_napolitana, pedal_armonico,     ║
-# ║               retardo                                                ║
-# ║   Dinámicos:  sforzando, silencio_expresivo, crescendo_dirigido      ║
-# ║   (* rubato y agogica no tocan notas: insertan una curva de          ║
-# ║   mensajes set_tempo en el compás indicado)                          ║
-# ║                                                                      ║
-# ║ USO:                                                                 ║
-# ║   python3 expressive_injector.py list-resources                     ║
-# ║   python3 expressive_injector.py info pieza.mid                     ║
-# ║   python3 expressive_injector.py inject pieza.mid <compas> <recurso> ║
-# ║       [opciones]                                                     ║
-# ║                                                                      ║
-# ║ Ejemplos:                                                             ║
-# ║   ... 12 sincopa --beat 2                                            ║
-# ║   ... 12 contratiempo --hand LH --beat 2 --out salida.mid            ║
-# ║   ... 8 hemiola                                                      ║
-# ║   ... 4 apoyatura --beat 1 --direccion arriba                        ║
-# ║   ... 6 floreo --tipo grupeto                                        ║
-# ║   ... 5 anticipacion                                                  ║
-# ║   ... 7 escapada                                                     ║
-# ║   ... 3 nota_de_paso_cromatica                                       ║
-# ║   ... 2 acorde_disminuido --septima                                  ║
-# ║   ... 9 dominante_secundaria                                         ║
-# ║   ... 9 acorde_prestado                                              ║
-# ║   ... 4 sexta_napolitana                                             ║
-# ║   ... 6 pedal_armonico --run 4                                       ║
-# ║   ... 10 retardo --hand RH                                           ║
-# ║   ... 2 sforzando --beat 3                                           ║
-# ║   ... 5 silencio_expresivo                                           ║
-# ║   ... 3 crescendo_dirigido --run 5                                   ║
-# ║   ... 4 polirritmia --patron 3:2                                     ║
-# ║   ... 6 rubato --direccion-tempo ritardando                          ║
-# ║   ... 6 agogica --direccion-tempo alargamiento                       ║
-# ║                                                                      ║
-# ║ Opciones de "inject" (según el recurso):                             ║
-# ║   --hand RH|LH        mano objetivo (por defecto RH; varios recursos ║
-# ║                        fuerzan una mano concreta, ver list-resources)║
-# ║   --beat N            pulso objetivo dentro del compás (1-indexado); ║
-# ║                        si se omite, se usa el primer candidato       ║
-# ║   --tipo T            solo floreo: mordente|grupeto|trino            ║
-# ║   --direccion D       solo apoyatura: arriba|abajo (auto si se omite)║
-# ║   --direccion-tempo D solo rubato/agogica: acelerando|ritardando     ║
-# ║   --septima           solo acorde_disminuido: séptima en vez de tríada║
-# ║   --patron A:B        solo polirritmia: proporción RH:LH (p.ej. 3:2) ║
-# ║   --run N             solo pedal_armonico / crescendo_dirigido       ║
-# ║   --out FICHERO       ruta de salida (por defecto se deriva del      ║
-# ║                        nombre de entrada, el recurso y el compás)    ║
-# ║                                                                      ║
-# ║ Cada inyector toma notas ya existentes en el compás (y mano) como    ║
-# ║ punto de partida y las transforma para materializar el recurso; no   ║
-# ║ compone música desde cero. Si no encuentra una candidata adecuada,   ║
-# ║ informa por qué y sugiere ajustar --beat, --hand o el compás.        ║
-# ║                                                                      ║
-# ║ Dependencias: mido, numpy                                            ║
-# ╚══════════════════════════════════════════════════════════════════════╝
+"""
+expressive_injector.py — Inyecta un recurso expresivo (rítmico, melódico, armónico o
+dinámico) en un compás de un MIDI de piano con manos separadas
+(complementario de expressive_resources.py).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Complementario a expressive_resources.py: introduce un recurso
+expresivo (rítmico, melódico, armónico o dinámico) en un compás
+concreto de un MIDI de piano con manos separadas (RH/LH), modificando
+las notas (o el tempo) existentes para materializarlo, y escribe un
+nuevo fichero .mid con el resultado.
+
+Recursos soportados (usa 'list-resources' para el detalle):
+  Rítmicos:   sincopa, contratiempo, hemiola, rubato*, agogica*,
+              polirritmia
+  Melódicos:  apoyatura, floreo, anticipacion, escapada,
+              nota_de_paso_cromatica
+  Armónicos:  acorde_disminuido, dominante_secundaria,
+              acorde_prestado, sexta_napolitana, pedal_armonico,
+              retardo
+  Dinámicos:  sforzando, silencio_expresivo, crescendo_dirigido
+  (* rubato y agogica no tocan notas: insertan una curva de
+  mensajes set_tempo en el compás indicado)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  info            Muestra metadatos básicos del MIDI
+  list-resources  Lista los recursos disponibles
+  inject          Inyecta un recurso en un compás y guarda un nuevo MIDI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python3 expressive_injector.py list-resources
+  python3 expressive_injector.py info pieza.mid
+  python3 expressive_injector.py inject pieza.mid 12 sincopa --out pieza_sincopa.mid
+
+── Ejemplos ──
+    ... 12 sincopa --beat 2
+    ... 12 contratiempo --hand LH --beat 2 --out salida.mid
+    ... 8 hemiola
+    ... 4 apoyatura --beat 1 --direccion arriba
+    ... 6 floreo --tipo grupeto
+    ... 5 anticipacion
+    ... 7 escapada
+    ... 3 nota_de_paso_cromatica
+    ... 2 acorde_disminuido --septima
+    ... 9 dominante_secundaria
+    ... 9 acorde_prestado
+    ... 4 sexta_napolitana
+    ... 6 pedal_armonico --run 4
+    ... 10 retardo --hand RH
+    ... 2 sforzando --beat 3
+    ... 5 silencio_expresivo
+    ... 3 crescendo_dirigido --run 5
+    ... 4 polirritmia --patron 3:2
+    ... 6 rubato --direccion-tempo ritardando
+    ... 6 agogica --direccion-tempo alargamiento
+
+  Opciones de "inject" (según el recurso):
+    --hand RH|LH        mano objetivo (por defecto RH; varios recursos
+                         fuerzan una mano concreta, ver list-resources)
+    --beat N            pulso objetivo dentro del compás (1-indexado);
+                         si se omite, se usa el primer candidato
+    --tipo T            solo floreo: mordente|grupeto|trino
+    --direccion D       solo apoyatura: arriba|abajo (auto si se omite)
+    --direccion-tempo D solo rubato/agogica: acelerando|ritardando
+    --septima           solo acorde_disminuido: séptima en vez de tríada
+    --patron A:B        solo polirritmia: proporción RH:LH (p.ej. 3:2)
+    --run N             solo pedal_armonico / crescendo_dirigido
+    --out FICHERO       ruta de salida (por defecto se deriva del
+                         nombre de entrada, el recurso y el compás)
+
+  Cada inyector toma notas ya existentes en el compás (y mano) como
+  punto de partida y las transforma para materializar el recurso; no
+  compone música desde cero. Si no encuentra una candidata adecuada,
+  informa por qué y sugiere ajustar --beat, --hand o el compás.
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
+"""
 
 import argparse
 import bisect

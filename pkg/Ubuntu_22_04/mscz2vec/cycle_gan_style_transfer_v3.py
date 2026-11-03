@@ -1,370 +1,320 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║              CYCLE-GAN STYLE TRANSFER  v3.1                                 ║
-║       Transferencia de estilo bidireccional MIDI — arquitectura híbrida     ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  CORRECCIONES v3.1 (sobre v3.0)                                             ║
-║                                                                              ║
-║  Bug 1  — _ticks_per_bar eliminada. Devolvía tpb*4 (4/4 hardcodeado) y    ║
-║           no se usaba en ningún sitio; fuente potencial de bugs futuros.   ║
-║                                                                              ║
-║  Bug 2  — _rolls_to_midi asumía 4/4. ticks_tick calculaba (tpb*4)/res en  ║
-║           lugar de (tpb*ts_num)/res. Ahora lee cfg['ts_num'] (default 4). ║
-║           _midi_to_rolls devuelve (rolls, ts_num) y todos los llamadores  ║
-║           inyectan ts_num en el cfg antes de llamar a _rolls_to_midi.     ║
-║           cmd_round_trip también lee ts_num desde _infer_time_sig_from_midi║
-║           Afectaba directamente a piezas en 3/4 (vals criollo).            ║
-║                                                                              ║
-║  Bug 3  — cmd_cycle sin guarda HAS_DNA. Llamaba a UnifiedDNA, build_midi  ║
-║           y run_cycle_gan_transform sin comprobar si el ecosistema DNA      ║
-║           estaba disponible. Ahora tiene fallback que mide la pérdida de   ║
-║           ciclo en feature space y reporta posiciones D_A/D_B sin MIDI.   ║
-║                                                                              ║
-║  Bug 4  — threshold_pct=99.0 en fallback simbólico. El default del CLI es ║
-║           99.0 (pensado para backend neural con rolls continuos). El        ║
-║           fallback simbólico usa rolls binarizados donde 97.0 es más        ║
-║           apropiado. Comentario explícito añadido.                          ║
-║                                                                              ║
-║  Bug 5  — MidiRollDataset cargaba todos los .npz en RAM en __init__. Con  ║
-║           corpus grandes agotaba memoria. Ahora es lazy: solo lee           ║
-║           metadatos en __init__ y carga arrays en __getitem__ con          ║
-║           context manager (np.load como ctx manager libera memoria).        ║
-║                                                                              ║
-║  Bug 6  — _nearest_neighbor_pairs era O(n²) en Python puro. Sustituido    ║
-║           por sklearn.metrics.pairwise_distances cuando sklearn está         ║
-║           disponible (vectorizado, 10-100× más rápido con corpus grandes). ║
-║           Fallback Python puro mantenido para el caso sin sklearn.          ║
-║                                                                              ║
-║  Bug 7  — _extract_palette_from_midi podía asignar canal 9 a roles no-    ║
-║           percusión. used_channels ahora inicializa con {9} reservado y    ║
-║           el contador ch_counter salta el 9 implícitamente al no estar     ║
-║           disponible. La percusión GM siempre obtiene el canal 9.          ║
-║                                                                              ║
-║  Bug 8  — cmd_round_trip ignoraba --resolution del usuario al cargar cfg  ║
-║           desde model_dir. Ahora hace update() del cfg cargado y luego    ║
-║           restaura la resolución del usuario (tiene prioridad).             ║
-║                                                                              ║
-║  Bug 9  — _prepare_one_midi no guardaba ts_num en los metadatos del .npz. ║
-║           MidiRollDataset.__getitem__ no tenía acceso al compás real.      ║
-║           Ahora ts_num se serializa en meta y está disponible para uso     ║
-║           futuro en el DataLoader neural.                                   ║
-║                                                                              ║
-║  Bug 10 — _cmd_transform_neural procesaba barra a barra (n_bars forward   ║
-║           passes). Ahora construye un batch completo (n_bars, n_roles,     ║
-║           res, n_pitch) y hace un único forward pass. Para 32 compases     ║
-║           con GPU esto es ~32× más rápido; en CPU también mejora por       ║
-║           reducir overhead de llamadas.                                     ║
-║                                                                              ║
-║  Bug 11 — extract_raw_melody seleccionaba el canal con pitch_mean más alto ║
-║           (sesgo hacia soprano en SATB). Nuevo criterio combinado:         ║
-║           0.5×pitch_medio + 0.3×rango_pitch + 0.2×(1−densidad_relativa).  ║
-║           La melodía tiende a estar en el registro agudo, tener buen        ║
-║           rango interválico y no ser el stream más denso.                  ║
-║                                                                              ║
-║  Bug 12 — PCA silenciosamente recortaba n_components sin avisar. Con       ║
-║           corpus de 5 muestras y --pca-dim 32 el recorte era a 9 sin       ║
-║           ningún mensaje. Ahora emite un AVISO explícito con la causa.     ║
-║                                                                              ║
-║  Bug 13 — torch.load sin weights_only emite DeprecationWarning en          ║
-║           PyTorch >= 2.0. Añadido weights_only=False explícito en          ║
-║           _load_neural_models y CycleTrainer.load_checkpoint.              ║
-║                                                                              ║
-║                                                                              ║
-║  CONCEPTO                                                                    ║
-║    Implementa el framework CycleGAN (Zhu et al. 2017) sobre MIDI en dos    ║
-║    modos seleccionables en tiempo de ejecución mediante --backend:          ║
-║                                                                              ║
-║    SIMBÓLICO (default, sin GPU)                                             ║
-║      G, F : Ridge regression o KNN en el espacio de piano roll centroide   ║
-║             (centroide temporal por rol, opcionalmente reducido con PCA).   ║
-║      D_A, D_B : distancia de Mahalanobis al centroide del corpus.          ║
-║      Entrenamiento iterativo alternado con pares de vecinos más cercanos    ║
-║      y refinamiento con datos pseudo-ciclados.                              ║
-║      Modelo serializado en un único .pkl.                                   ║
-║                                                                              ║
-║    NEURAL (requiere torch)                                                   ║
-║      G_A2B, G_B2A : ResNet de N bloques (default 9).                       ║
-║        Stem(conv7+IN+ReLU) → Down×2 → ResBlock×N → Up×2 → Head(conv7+σ)  ║
-║        ResBlock: ReflectionPad + Conv + IN + ReLU + Dropout(0.05) + skip   ║
-║      D_A, D_B : PatchGAN 4 capas (~70×70 campo receptivo).                 ║
-║      Loss: LSGAN (MSE vs 1/0) + λ_cycle×L1 + λ_identity×L1               ║
-║      Estabilización: ReplayBuffer 50 muestras para el discriminador.        ║
-║      LR scheduling: decay lineal en la segunda mitad del entrenamiento.     ║
-║      Early stopping por val_cycle. Checkpoint del mejor val_cycle.         ║
-║      Modelo serializado en model_config.json + checkpoint.pt/best_model.pt ║
-║                                                                              ║
-║    DATOS (ambos backends)                                                    ║
-║      MIDI → RoleAssigner → PianoRollConverter → rolls por rol              ║
-║      5 roles: melody, counterpoint, accompaniment, bass, percussion         ║
-║      Resolución configurable (default 96 ticks/compás).                    ║
-║      Rango de pitch recortable centrado en Do central (MIDI 60).           ║
-║                                                                              ║
-║    GENERACIÓN (backend simbólico)                                            ║
-║      El vector transformado se proyecta de vuelta a parámetros DNA via     ║
-║      roll_vector_to_dna_overrides (densidad rítmica, registro de pitch,    ║
-║      complejidad armónica, tensión por pitch-classes disonantes).           ║
-║      La melodía original se escala, se snapa a la nueva tonalidad y se     ║
-║      mezcla con melodía generada según --intensity.                         ║
-║      Pipeline completo: melodía + acompañamiento + bajo + contrapunto +    ║
-║      percusión + ornamentación + humanización.                              ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  COMANDOS                                                                    ║
-║                                                                              ║
-║  prepare    MIDI corpus → archivos .npz (solo necesario para --backend      ║
-║             neural). Procesa en paralelo con ThreadPoolExecutor.            ║
-║                                                                              ║
-║  train      Aprende G y F desde dos corpus. Acepta MIDIs directamente      ║
-║             (simbólico) o carpetas de .npz (neural).                       ║
-║                                                                              ║
-║  transform  Aplica G (AtoB) o F (BtoA) a un MIDI. El simbólico genera     ║
-║             un MIDI completo vía DNA; el neural devuelve un roll directo.  ║
-║                                                                              ║
-║  cycle      Aplica G y luego F al mismo MIDI, genera ambos MIDIs           ║
-║             intermedios y reporta ‖F(G(a)) − a‖₂ en feature space.        ║
-║                                                                              ║
-║  analyze    Posición de un MIDI en el espacio A/B: distancias D_A/D_B,    ║
-║             probabilidades de pertenencia, pérdida de ciclo puntual y      ║
-║             los primeros 10 componentes del vector transformado.            ║
-║                                                                              ║
-║  style-corpus  Aplica el generador a todo un corpus y reporta densidad     ║
-║             media de activación. Detecta colapso de modo (>0.3) o falta   ║
-║             de convergencia (<0.005). Guarda JSON con estadísticas.        ║
-║                                                                              ║
-║  round-trip MIDI → piano roll → MIDI sin modelo. Diagnóstico del parser:   ║
-║             verifica que la extracción y conversión son correctas antes de  ║
-║             entrenar. Acepta config de model_dir si existe.                 ║
-║                                                                              ║
-║  inspect    Inspecciona archivos .npz (shapes, densidad por rol) y/o       ║
-║             el historial de pérdida de un entrenamiento neural             ║
-║             (history.json) y su model_config.json.                         ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  REFERENCIA DE OPCIONES                                                      ║
-║                                                                              ║
-║  prepare                                                                     ║
-║    --input-dir  DIR     Carpeta con MIDIs fuente            [requerido]     ║
-║    --output-dir DIR     Carpeta destino de .npz             [requerido]     ║
-║    --resolution N       Ticks por compás              [default: 96]         ║
-║    --window-bars N      Compases por ventana           [default: 4]         ║
-║    --disable-roles ROL+ Excluir roles del roll                              ║
-║    --pitch-range N      Notas centradas en MIDI 60 (e.g. 48, 64, 128)     ║
-║                                                                              ║
-║  train  (simbólico)                                                          ║
-║    --backend symbolic   [default]                                            ║
-║    --domain-a DIR       Carpeta MIDIs dominio A             [requerido]     ║
-║    --domain-b DIR       Carpeta MIDIs dominio B             [requerido]     ║
-║    --model FILE         Salida .pkl                  [default: cycle_gan_v3.pkl]║
-║    --resolution N       Ticks/compás                  [default: 96]         ║
-║    --pitch-range N      Notas en el roll              [default: 128]        ║
-║    --disable-roles ROL+ Excluir roles                                       ║
-║    --pca-dim N          Reducción PCA (0=sin PCA)     [default: 0]         ║
-║    --solver STR         ridge | knn                   [default: ridge]      ║
-║    --alpha F            Regularización Ridge          [default: 1.0]        ║
-║    --k-neighbors N      Vecinos para KNN              [default: 5]          ║
-║    --lambda-cycle F     Peso pérdida de ciclo         [default: 10.0]       ║
-║    --lambda-identity F  Peso pérdida de identidad     [default: 5.0]        ║
-║    --iters N            Iteraciones alternadas        [default: 100]        ║
-║    --verbose            Mostrar pérdidas por iteración                      ║
-║                                                                              ║
-║  train  (neural)                                                             ║
-║    --backend neural                                                          ║
-║    --domain-a DIR       Carpeta .npz dominio A              [requerido]     ║
-║    --domain-b DIR       Carpeta .npz dominio B              [requerido]     ║
-║    --model-dir DIR      Directorio del modelo        [default: model_neural] ║
-║    --epochs N           Épocas de entrenamiento       [default: 200]        ║
-║    --batch-size N       Batch size                    [default: 4]          ║
-║    --lr F               Learning rate Adam            [default: 2e-4]       ║
-║    --n-res-blocks N     Bloques ResNet en G           [default: 9]          ║
-║    --base-ch N          Canales base G y D            [default: 64]         ║
-║    --lambda-cycle F     Peso L1 ciclo                 [default: 10.0]       ║
-║    --lambda-identity F  Peso L1 identidad             [default: 5.0]        ║
-║    --patience N         Early stopping                [default: 40]         ║
-║    --resume             Reanudar desde checkpoint                           ║
-║                                                                              ║
-║  transform                                                                   ║
-║    input                MIDI de entrada                     [requerido]     ║
-║    --backend STR        symbolic | neural              [default: symbolic]  ║
-║    --model FILE         Modelo simbólico .pkl   (symbolic)                  ║
-║    --model-dir DIR      Directorio modelo        (neural)                   ║
-║    --direction STR      AtoB | BtoA                   [default: AtoB]       ║
-║    --intensity F        0.0=sin cambio, 1.0=total     [default: 1.0]       ║
-║    --output FILE        MIDI de salida          [default: <input>_cganv3_*] ║
-║    --bars N             Compases de salida      [default: auto desde input] ║
-║    --candidates N       Candidatos a evaluar (simbólico) [default: 3]      ║
-║    --no-percussion      No generar percusión (simbólico)                    ║
-║    --export-fingerprint Exportar fingerprint DNA (simbólico)                ║
-║    --seed N             Semilla aleatoria              [default: 42]        ║
-║    --bpm F              BPM del MIDI de salida (neural) [default: 120.0]   ║
-║    --threshold F        Umbral de binarización fijo (neural)                ║
-║    --threshold-pct F    Percentil para umbral adaptativo [default: 99.0]   ║
-║    --palette FILE       JSON con paleta de instrumentos (neural)            ║
-║    --verbose            Detalle del proceso                                 ║
-║                                                                              ║
-║  cycle                                                                       ║
-║    input                MIDI de entrada                     [requerido]     ║
-║    --model FILE         Modelo simbólico .pkl               [requerido]     ║
-║    --direction STR      Primera dirección AtoB | BtoA  [default: AtoB]     ║
-║    --intensity F        Intensidad de la transformación [default: 1.0]     ║
-║    --output-ab FILE     Salida tras G              [default: <input>_ab.mid]║
-║    --output-aba FILE    Salida tras F∘G            [default: <input>_aba.mid]║
-║    --bars N             Compases de salida                                  ║
-║    --candidates N       Candidatos a evaluar          [default: 2]          ║
-║    --no-percussion      Sin percusión                                       ║
-║    --seed N             Semilla aleatoria              [default: 42]        ║
-║    --verbose                                                                 ║
-║                                                                              ║
-║  analyze                                                                     ║
-║    input                MIDI a analizar                     [requerido]     ║
-║    --model FILE         Modelo simbólico .pkl               [requerido]     ║
-║    --verbose                                                                 ║
-║                                                                              ║
-║  style-corpus                                                                ║
-║    --input-dir DIR      Carpeta con MIDIs a analizar        [requerido]     ║
-║    --backend STR        symbolic | neural              [default: symbolic]  ║
-║    --model FILE         Modelo simbólico .pkl   (symbolic)                  ║
-║    --model-dir DIR      Directorio modelo        (neural)                   ║
-║    --direction STR      a2b | b2a                      [default: a2b]       ║
-║    --output FILE        JSON de estadísticas    [default: corpus_stats_*.json]║
-║                                                                              ║
-║  round-trip                                                                  ║
-║    --input FILE         MIDI de entrada                     [requerido]     ║
-║    --model-dir DIR      Config opcional desde model_dir                     ║
-║    --resolution N       Ticks/compás                  [default: 48]         ║
-║    --disable-roles ROL+ Excluir roles                                       ║
-║    --output FILE        MIDI de salida           [default: roundtrip.mid]   ║
-║    --bpm F              BPM de salida             [default: 120.0]          ║
-║                                                                              ║
-║  inspect                                                                     ║
-║    --what npz|loss_curve [+]  Qué inspeccionar    [default: npz]            ║
-║    --data-dir DIR       Carpeta con .npz          (para --what npz)         ║
-║    --model-dir DIR      Directorio del modelo     (para --what loss_curve)  ║
-║    --file FILE          .npz específico a inspeccionar                      ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  FLUJOS DE USO COMPLETOS                                                     ║
-║                                                                              ║
-║  ── Backend simbólico (CPU, rápido) ──────────────────────────────────────  ║
-║                                                                              ║
-║  # Entrenamiento mínimo (corpus de MIDIs directamente)                      ║
-║  python cycle_gan_style_transfer_v3.py train                                ║
-║      --domain-a corpus/tango/  --domain-b corpus/epico/                    ║
-║      --model tango2epico.pkl                                                ║
-║                                                                              ║
-║  # Con reducción de dimensión y solo melodía+bajo                           ║
-║  python cycle_gan_style_transfer_v3.py train                                ║
-║      --domain-a corpus/tango/  --domain-b corpus/epico/                    ║
-║      --model tango2epico.pkl  --resolution 16  --pitch-range 48            ║
-║      --pca-dim 64  --disable-roles counterpoint accompaniment percussion   ║
-║      --lambda-cycle 10  --lambda-identity 0.5  --iters 200  --verbose      ║
-║                                                                              ║
-║  # Transferir con intensidad parcial                                         ║
-║  python cycle_gan_style_transfer_v3.py transform entrada.mid                ║
-║      --model tango2epico.pkl  --direction AtoB  --intensity 0.7            ║
-║      --output resultado.mid  --candidates 5  --seed 123                    ║
-║                                                                              ║
-║  # Dirección inversa (épico → tango)                                        ║
-║  python cycle_gan_style_transfer_v3.py transform entrada.mid                ║
-║      --model tango2epico.pkl  --direction BtoA  --output inverso.mid       ║
-║                                                                              ║
-║  # Verificar consistencia de ciclo                                           ║
-║  python cycle_gan_style_transfer_v3.py cycle entrada.mid                    ║
-║      --model tango2epico.pkl  --direction AtoB                              ║
-║      --output-ab ab.mid  --output-aba aba.mid  --verbose                   ║
-║                                                                              ║
-║  # Analizar posición de un MIDI en el espacio A/B                           ║
-║  python cycle_gan_style_transfer_v3.py analyze entrada.mid                  ║
-║      --model tango2epico.pkl                                                ║
-║                                                                              ║
-║  # Estadísticas del generador sobre un corpus                               ║
-║  python cycle_gan_style_transfer_v3.py style-corpus                         ║
-║      --input-dir corpus/test/  --model tango2epico.pkl  --direction a2b    ║
-║      --output stats.json                                                    ║
-║                                                                              ║
-║  ── Backend neural (CPU lento / GPU recomendada) ─────────────────────────  ║
-║                                                                              ║
-║  # 1. Preparar corpus (una vez)                                             ║
-║  python cycle_gan_style_transfer_v3.py prepare                              ║
-║      --input-dir corpus/tango/  --output-dir data/tango/                   ║
-║      --resolution 48  --pitch-range 64  --window-bars 4                    ║
-║  python cycle_gan_style_transfer_v3.py prepare                              ║
-║      --input-dir corpus/epico/  --output-dir data/epico/                   ║
-║      --resolution 48  --pitch-range 64  --window-bars 4                    ║
-║                                                                              ║
-║  # 2. Diagnosticar el parser antes de entrenar                              ║
-║  python cycle_gan_style_transfer_v3.py round-trip                           ║
-║      --input corpus/tango/pieza.mid  --output prueba_rt.mid  --bpm 120     ║
-║                                                                              ║
-║  # 3. Inspeccionar .npz generados                                           ║
-║  python cycle_gan_style_transfer_v3.py inspect                              ║
-║      --what npz  --data-dir data/tango/  --file pieza.npz                  ║
-║                                                                              ║
-║  # 4. Entrenar neural (n-res-blocks 6 = más rápido en CPU)                 ║
-║  python cycle_gan_style_transfer_v3.py train  --backend neural              ║
-║      --domain-a data/tango/  --domain-b data/epico/                        ║
-║      --model-dir model_t2e/  --epochs 200  --batch-size 4                  ║
-║      --n-res-blocks 6  --base-ch 32  --lr 2e-4  --patience 40              ║
-║      --lambda-cycle 10  --lambda-identity 0.5                               ║
-║                                                                              ║
-║  # 4b. Reanudar entrenamiento interrumpido                                  ║
-║  python cycle_gan_style_transfer_v3.py train  --backend neural              ║
-║      --domain-a data/tango/  --domain-b data/epico/                        ║
-║      --model-dir model_t2e/  --epochs 200  --resume                        ║
-║                                                                              ║
-║  # 5. Inspeccionar curva de pérdida                                         ║
-║  python cycle_gan_style_transfer_v3.py inspect                              ║
-║      --what loss_curve  --model-dir model_t2e/                              ║
-║                                                                              ║
-║  # 6. Transferir (neural)                                                   ║
-║  python cycle_gan_style_transfer_v3.py transform entrada.mid                ║
-║      --backend neural  --model-dir model_t2e/  --direction AtoB            ║
-║      --output resultado_neural.mid  --bpm 120  --threshold-pct 97          ║
-║                                                                              ║
-║  # 7. Verificar densidad de salida sobre corpus                             ║
-║  python cycle_gan_style_transfer_v3.py style-corpus                         ║
-║      --backend neural  --model-dir model_t2e/                               ║
-║      --input-dir corpus/test/  --direction a2b  --output stats.json        ║
-║                                                                              ║
-║  ── Diagnóstico de MIDI vacío (neural) ───────────────────────────────────  ║
-║                                                                              ║
-║  Si transform neural devuelve un MIDI vacío, el diag del compás 0 muestra  ║
-║  mean/max/umbral/notas_activas. Soluciones en orden de preferencia:        ║
-║    1. Bajar --threshold-pct (99 → 97 → 95)                                 ║
-║    2. Fijar --threshold 0.3  (umbral absoluto)                              ║
-║    3. Entrenar más épocas o con más datos                                   ║
-║    4. Ejecutar round-trip para verificar que el corpus no está vacío        ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  CLASES PRINCIPALES                                                          ║
-║    RoleAssigner         Asigna roles (melody/cp/acc/bass/perc) por perfil   ║
-║    PianoRollConverter   MIDI notes → (n_bars, resolution, 128)              ║
-║    MidiRollDataset      Dataset de ventanas .npz para DataLoader neural     ║
-║    SymbolicDiscriminator Distancia Mahalanobis al centroide del corpus      ║
-║    FeatureMapper        G o F simbólico: Ridge/KNN en feature space        ║
-║    CycleGANSymbolic     Modelo simbólico completo (G,F,D_A,D_B,PCA)       ║
-║    ReplayBuffer         Buffer de 50 muestras para estabilizar D neural    ║
-║    CycleTrainer         Bucle entrenamiento neural completo con callbacks   ║
-║                                                                              ║
-║  ARCHIVOS DEL MODELO NEURAL                                                  ║
-║    model_config.json    Hiperparámetros y config de datos                   ║
-║    checkpoint.pt        Último checkpoint (para --resume)                   ║
-║    best_model.pt        Mejor checkpoint según val_cycle                    ║
-║    history.json         Historial de pérdidas por época                    ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  DEPENDENCIAS                                                                ║
-║    Obligatorias : mido, numpy, midi_dna_unified.py (mismo directorio)      ║
-║    Simbólico    : scikit-learn  (sklearn.linear_model, .decomposition)     ║
-║    Neural       : torch  (torch.nn, torch.nn.functional, torch.nn.utils)   ║
-║    Opcional DNA : music21  (para _snap_to_scale, key handling)             ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+cycle_gan_style_transfer_v3.py — Transferencia de estilo bidireccional entre dos
+corpus MIDI con CycleGAN: backend simbólico (sin GPU) y backend neural (torch)
+(versión 3.1; la descripción del parser aún dice «v3.0»).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Implementa el marco CycleGAN (Zhu et al., 2017) sobre MIDI en dos modos que se
+eligen en tiempo de ejecución con --backend:
+
+SIMBÓLICO (defecto, sin GPU)
+  G, F    Regresión Ridge o KNN en el espacio de piano roll centroide (centroide
+          temporal por rol, opcionalmente reducido con PCA).
+  D_A, D_B  Distancia de Mahalanobis al centroide de cada corpus.
+  Entrenamiento iterativo alternado con pares de vecinos más cercanos y
+  refinamiento con datos pseudo-ciclados. Modelo en un único .pkl.
+
+NEURAL (requiere torch)
+  G_A2B, G_B2A  ResNet de N bloques (defecto 9):
+                Stem(conv7+IN+ReLU) → Down×2 → ResBlock×N → Up×2 → Head(conv7+σ);
+                ResBlock = ReflectionPad + Conv + IN + ReLU + Dropout(0.05) + skip.
+  D_A, D_B      PatchGAN de 4 capas (campo receptivo ~70×70).
+  Pérdida       LSGAN (MSE contra 1/0) + λ_cycle·L1 + λ_identity·L1.
+  Estabilización: ReplayBuffer de 50 muestras para el discriminador; LR con
+  decaimiento lineal en la segunda mitad; parada temprana y checkpoint del mejor
+  val_cycle. Modelo en model_config.json + checkpoint.pt / best_model.pt.
+
+DATOS (ambos backends)
+  MIDI → RoleAssigner → PianoRollConverter → rolls por rol. Cinco roles:
+  melody, counterpoint, accompaniment, bass, percussion. Resolución configurable
+  (defecto 96 ticks por compás). Rango de pitch recortable, centrado en Do
+  central (MIDI 60).
+
+GENERACIÓN (simbólico)
+  El vector transformado se proyecta de vuelta a parámetros DNA mediante
+  roll_vector_to_dna_overrides (densidad rítmica, registro, complejidad
+  armónica, tensión por pitch-classes disonantes). La melodía original se
+  escala, se ajusta a la nueva tonalidad y se mezcla con melodía generada según
+  --intensity. Pipeline completo: melodía + acompañamiento + bajo + contrapunto
+  + percusión + ornamentación + humanización. El neural devuelve directamente
+  el roll generado, binarizado por umbral y convertido a MIDI.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso (subcomandos)
+────────────────────────────────────────────────────────────────────────────
+  prepare       MIDI corpus → .npz (solo para --backend neural), en paralelo con
+                ThreadPoolExecutor.
+  train         Aprende G y F desde dos corpus: MIDIs directos (simbólico) o
+                carpetas de .npz (neural).
+  transform     Aplica G (AtoB) o F (BtoA) a un MIDI. El simbólico genera un MIDI
+                completo vía DNA; el neural devuelve un roll directo.
+  cycle         Aplica G y luego F al mismo MIDI, genera ambos MIDIs
+                intermedios y reporta ‖F(G(a)) − a‖₂ en el espacio de rasgos.
+                Sin midi_dna_unified solo mide la pérdida de ciclo y las
+                posiciones D_A/D_B, sin generar MIDI.
+  analyze       Posición de un MIDI en el espacio A/B: distancias D_A/D_B,
+                probabilidades de pertenencia, pérdida de ciclo puntual y los
+                10 primeros componentes del vector transformado.
+  style-corpus  Aplica el generador a todo un corpus y reporta la densidad media
+                de activación; detecta colapso de modo (> 0.3) o falta de
+                convergencia (< 0.005). Guarda un JSON con estadísticas.
+  round-trip    MIDI → piano roll → MIDI sin modelo: diagnóstico del parser
+                antes de entrenar. Acepta la config de un model_dir si existe.
+  inspect       Inspecciona .npz (formas, densidad por rol) y/o el historial de
+                pérdidas (history.json) y la config (model_config.json) de un
+                entrenamiento neural.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Simbólico : train escribe el modelo en --model (defecto cycle_gan_v3.pkl);
+              transform, cycle, analyze y style-corpus lo leen con --model.
+  Neural    : train escribe en --model-dir (defecto model_neural) los ficheros
+              model_config.json (hiperparámetros y config de datos),
+              checkpoint.pt (último, para --resume), best_model.pt (mejor
+              val_cycle) e history.json (pérdidas por época); transform y
+              style-corpus lo leen con --model-dir.
+  transform : MIDI de salida en --output (defecto <entrada>_cganv3_…); con
+              --export-fingerprint (simbólico), además el fingerprint DNA.
+  cycle     : <entrada>_ab.mid y <entrada>_aba.mid (o --output-ab / --output-aba).
+  style-corpus : JSON de estadísticas (defecto corpus_stats_….json).
+  round-trip: MIDI reconstruido (defecto roundtrip.mid).
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare
+    --input-dir DIR        Carpeta con MIDIs fuente (obligatorio).
+    --output-dir DIR       Carpeta destino de .npz (obligatorio).
+    --resolution N         Ticks por compás (defecto 96).
+    --window-bars N        Compases por ventana (defecto 4).
+    --disable-roles ROL…   Excluir roles del roll.
+    --pitch-range N        Notas centradas en MIDI 60 (p. ej. 48, 64, 128).
+  train — comunes
+    --backend B            symbolic (defecto) | neural.
+    --domain-a DIR         Dominio A: carpeta de MIDIs (simbólico) o de .npz
+                           (neural).     --domain-b DIR   Ídem para el dominio B.
+    --lambda-cycle F       Peso de ciclo (defecto 10.0).
+    --lambda-identity F    Peso de identidad (defecto 5.0).
+    --verbose              Muestra las pérdidas por iteración.
+  train — simbólico
+    --model FILE           Salida .pkl (defecto cycle_gan_v3.pkl).
+    --resolution N         Ticks por compás (defecto 96).
+    --pitch-range N        Notas en el roll (defecto 128).
+    --disable-roles ROL…   Excluir roles.
+    --pca-dim N            Reducción PCA (0 = sin PCA, defecto). Si hay menos
+                           muestras que componentes se recorta con un AVISO.
+    --solver S             ridge (defecto) | knn.
+    --alpha F              Regularización Ridge (defecto 1.0).
+    --k-neighbors N        Vecinos para KNN (defecto 5).
+    --iters N              Iteraciones alternadas (defecto 100).
+  train — neural
+    --model-dir DIR        Directorio del modelo (defecto model_neural).
+    --epochs N             Épocas (defecto 200).    --batch-size N   (defecto 4).
+    --lr F                 Learning rate de Adam (defecto 2e-4).
+    --n-res-blocks N       Bloques ResNet en G (defecto 9).
+    --base-ch N            Canales base de G y D (defecto 64).
+    --patience N           Parada temprana (defecto 40).
+    --resume               Reanuda desde el checkpoint.
+  transform
+    input                  MIDI de entrada (obligatorio).
+    --backend B            symbolic (defecto) | neural.
+    --model FILE           Modelo .pkl (simbólico).
+    --model-dir DIR        Directorio del modelo (neural).
+    --direction D          AtoB (defecto) | BtoA.
+    --intensity F          0.0 = sin cambio … 1.0 = total (defecto 1.0).
+    --output FILE          MIDI de salida.
+    --bars N               Compases de salida (defecto: automático desde la entrada).
+    --candidates N         Candidatos a evaluar, simbólico (defecto 3).
+    --no-percussion        Sin percusión (simbólico).
+    --export-fingerprint   Exporta el fingerprint DNA (simbólico).
+    --seed N               Semilla aleatoria (defecto 42).
+    --bpm F                Tempo del MIDI de salida, neural (defecto 120).
+    --threshold F          Umbral fijo de binarización, neural.
+    --threshold-pct F      Percentil del umbral adaptativo (defecto 99.0).
+    --palette FILE         JSON con la paleta de instrumentos, neural.
+    --verbose              Detalle del proceso.
+  cycle
+    input                  MIDI de entrada.
+    --model FILE           Modelo simbólico .pkl (obligatorio).
+    --backend B            Aceptado pero ignorado: cycle es siempre simbólico.
+    --direction D          Primera dirección: AtoB (defecto) | BtoA.
+    --intensity F          Intensidad (defecto 1.0).
+    --output-ab FILE       Salida tras G.     --output-aba FILE   Salida tras F∘G.
+    --bars N               Compases de salida.
+    --candidates N         Candidatos a evaluar (defecto 2).
+    --no-percussion        Sin percusión.     --seed N   Semilla (defecto 42).
+    --verbose              Detalle.
+  analyze
+    input                  MIDI a analizar.
+    --model FILE           Modelo simbólico .pkl (obligatorio).
+    --backend B            Aceptado pero ignorado: analyze es siempre simbólico.
+    --verbose              Detalle.
+  style-corpus
+    --input-dir DIR        Carpeta con MIDIs a analizar (obligatorio).
+    --backend B            symbolic (defecto) | neural.
+    --model FILE           Modelo .pkl (simbólico).
+    --model-dir DIR        Directorio del modelo (neural; obligatorio con neural).
+    --direction D          a2b (defecto) | b2a.
+    --output FILE          JSON de estadísticas.
+  round-trip
+    --input FILE           MIDI de entrada (obligatorio).
+    --model-dir DIR        Toma la config del modelo si existe (la resolución
+                           indicada por el usuario tiene prioridad).
+    --resolution N         Ticks por compás (defecto 96).
+    --disable-roles ROL…   Excluir roles.
+    --output FILE          MIDI de salida (defecto roundtrip.mid).
+    --bpm F                Tempo de salida (defecto 120).
+  inspect
+    --what W [W …]         npz (defecto) | loss_curve.
+    --data-dir DIR         Carpeta de .npz (para npz).
+    --model-dir DIR        Directorio del modelo (para loss_curve y su config).
+    --file NOMBRE.npz      Fichero .npz dentro de --data-dir (defecto: el primero,
+                           por orden alfabético; se inspecciona solo uno).
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  ── Backend simbólico (CPU, rápido) ──────────────────────────────────────────
+
+  # Entrenamiento mínimo (carpetas de MIDIs):
+  python cycle_gan_style_transfer_v3.py train \
+      --domain-a corpus/tango/ --domain-b corpus/epico/ --model tango2epico.pkl
+
+  # Con reducción de dimensión y solo melodía + bajo:
+  python cycle_gan_style_transfer_v3.py train \
+      --domain-a corpus/tango/ --domain-b corpus/epico/ --model tango2epico.pkl \
+      --resolution 16 --pitch-range 48 --pca-dim 64 \
+      --disable-roles counterpoint accompaniment percussion \
+      --lambda-cycle 10 --lambda-identity 0.5 --iters 200 --verbose
+
+  # Solver KNN:
+  python cycle_gan_style_transfer_v3.py train \
+      --domain-a corpus/tango/ --domain-b corpus/epico/ --model t2e_knn.pkl \
+      --solver knn --k-neighbors 7
+
+  # Transferir con intensidad parcial:
+  python cycle_gan_style_transfer_v3.py transform entrada.mid \
+      --model tango2epico.pkl --direction AtoB --intensity 0.7 \
+      --output resultado.mid --candidates 5 --seed 123
+
+  # Dirección inversa (épico → tango), sin percusión y con fingerprint:
+  python cycle_gan_style_transfer_v3.py transform entrada.mid \
+      --model tango2epico.pkl --direction BtoA --output inverso.mid \
+      --no-percussion --export-fingerprint
+
+  # Verificar la consistencia de ciclo:
+  python cycle_gan_style_transfer_v3.py cycle entrada.mid --model tango2epico.pkl \
+      --direction AtoB --output-ab ab.mid --output-aba aba.mid --verbose
+
+  # Posición de un MIDI en el espacio A/B:
+  python cycle_gan_style_transfer_v3.py analyze entrada.mid --model tango2epico.pkl
+
+  # Estadísticas del generador sobre un corpus:
+  python cycle_gan_style_transfer_v3.py style-corpus \
+      --input-dir corpus/test/ --model tango2epico.pkl --direction a2b --output stats.json
+
+  ── Backend neural (CPU lento / GPU recomendada) ─────────────────────────────
+
+  # 1. Preparar corpus (una vez por corpus):
+  python cycle_gan_style_transfer_v3.py prepare \
+      --input-dir corpus/tango/ --output-dir data/tango/ \
+      --resolution 48 --pitch-range 64 --window-bars 4
+  python cycle_gan_style_transfer_v3.py prepare \
+      --input-dir corpus/epico/ --output-dir data/epico/ \
+      --resolution 48 --pitch-range 64 --window-bars 4
+
+  # 2. Diagnosticar el parser antes de entrenar:
+  python cycle_gan_style_transfer_v3.py round-trip \
+      --input corpus/tango/pieza.mid --output prueba_rt.mid --bpm 120
+
+  # 3. Inspeccionar los .npz generados:
+  python cycle_gan_style_transfer_v3.py inspect \
+      --what npz --data-dir data/tango/ --file pieza.npz
+
+  # 4. Entrenar (n-res-blocks 6 = más rápido en CPU):
+  python cycle_gan_style_transfer_v3.py train --backend neural \
+      --domain-a data/tango/ --domain-b data/epico/ --model-dir model_t2e/ \
+      --epochs 200 --batch-size 4 --n-res-blocks 6 --base-ch 32 --lr 2e-4 \
+      --patience 40 --lambda-cycle 10 --lambda-identity 0.5
+
+  # 4b. Reanudar un entrenamiento interrumpido:
+  python cycle_gan_style_transfer_v3.py train --backend neural \
+      --domain-a data/tango/ --domain-b data/epico/ --model-dir model_t2e/ \
+      --epochs 200 --resume
+
+  # 5. Curva de pérdida y configuración del modelo:
+  python cycle_gan_style_transfer_v3.py inspect --what loss_curve --model-dir model_t2e/
+
+  # 6. Transferir (neural):
+  python cycle_gan_style_transfer_v3.py transform entrada.mid \
+      --backend neural --model-dir model_t2e/ --direction AtoB \
+      --output resultado_neural.mid --bpm 120 --threshold-pct 97
+
+  # 7. Densidad de salida sobre un corpus:
+  python cycle_gan_style_transfer_v3.py style-corpus --backend neural \
+      --model-dir model_t2e/ --input-dir corpus/test/ --direction a2b --output stats.json
+
+  ── MIDI vacío con transform neural ──────────────────────────────────────────
+  El diagnóstico del compás 0 muestra mean / max / umbral / notas activas.
+  Soluciones, por orden de preferencia: (1) bajar --threshold-pct (99 → 97 → 95);
+  (2) fijar --threshold 0.3 (umbral absoluto); (3) entrenar más épocas o con más
+  datos; (4) ejecutar round-trip para comprobar que el corpus no está vacío.
+  El fallback simbólico trabaja con rolls binarizados, donde 97.0 es más
+  apropiado que el 99.0 del CLI (pensado para rolls continuos del neural).
+
+────────────────────────────────────────────────────────────────────────────
+Clases principales
+────────────────────────────────────────────────────────────────────────────
+  RoleAssigner            Asigna roles (melody/cp/acc/bass/perc) por perfil.
+  PianoRollConverter      Notas MIDI → (n_bars, resolution, 128).
+  MidiRollDataset         Dataset de ventanas .npz (carga perezosa) para DataLoader.
+  SymbolicDiscriminator   Distancia de Mahalanobis al centroide del corpus.
+  FeatureMapper           G o F simbólico: Ridge/KNN en el espacio de rasgos.
+  CycleGANSymbolic        Modelo simbólico completo (G, F, D_A, D_B, PCA).
+  ReplayBuffer            Buffer de 50 muestras para estabilizar D neural.
+  CycleTrainer            Bucle de entrenamiento neural con callbacks.
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  Obligatorias : mido, numpy, midi_dna_unified.py (mismo directorio; sin él, cycle
+                 solo mide en el espacio de rasgos).
+  Simbólico    : scikit-learn (sklearn.linear_model, .decomposition).
+  Neural       : torch (torch.nn, torch.nn.functional, torch.nn.utils).
+  Opcional     : music21 (ajuste a escala y tonalidad en el DNA).
+  Otras versiones: cycle_gan_style_transfer.py (v2, solo simbólico) y
+  cyclegan_composer.py (neural independiente).
+
+────────────────────────────────────────────────────────────────────────────
+Historial de correcciones (v3.1 sobre v3.0)
+────────────────────────────────────────────────────────────────────────────
+   1  Eliminada _ticks_per_bar (devolvía tpb·4, 4/4 fijo y sin uso).
+   2  _rolls_to_midi asumía 4/4: ahora usa cfg['ts_num'] (defecto 4), que
+      _midi_to_rolls devuelve y los llamadores inyectan; cmd_round_trip lo lee
+      de _infer_time_sig_from_midi. Afectaba a piezas en 3/4 (vals criollo).
+   3  cmd_cycle sin guarda HAS_DNA: ahora tiene fallback en feature space.
+   4  threshold_pct 99.0 (backend neural, rolls continuos); en el fallback
+      simbólico, con rolls binarizados, 97.0 es más apropiado (comentado).
+   5  MidiRollDataset cargaba todos los .npz en RAM: ahora es perezoso (solo
+      metadatos en __init__, arrays en __getitem__).
+   6  _nearest_neighbor_pairs era O(n²) en Python: usa sklearn pairwise_distances
+      si está disponible (10-100× más rápido), con fallback en Python puro.
+   7  _extract_palette_from_midi podía asignar el canal 9 a no-percusión: ahora
+      está reservado y la percusión GM siempre lo obtiene.
+   8  cmd_round_trip ignoraba --resolution al cargar la config de model_dir: ahora
+      la del usuario tiene prioridad.
+   9  _prepare_one_midi no guardaba ts_num en los metadatos del .npz: ahora sí.
+  10  _cmd_transform_neural procesaba compás a compás: ahora un único forward pass
+      con el batch completo (~32× más rápido en GPU con 32 compases).
+  11  extract_raw_melody sesgaba hacia soprano: nuevo criterio 0.5·pitch_medio +
+      0.3·rango_pitch + 0.2·(1 − densidad_relativa).
+  12  El recorte silencioso de n_components en PCA emite ahora un AVISO.
+  13  torch.load con weights_only=False explícito (DeprecationWarning en PyTorch
+      ≥ 2.0) en _load_neural_models y CycleTrainer.load_checkpoint.
 """
 
 import sys

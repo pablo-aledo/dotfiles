@@ -1,76 +1,90 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          METER ADAPTER  v1.1                                 ║
-║        Adaptación métrica de MIDI: reescritura rítmica entre compases        ║
-║                                                                              ║
-║  Implementa las guías de "Adapting Music from one Meter to Another" (Active  ║
-║  Analysis): tomar una pieza y reescribirla en OTRO compás añadiendo o        ║
-║  quitando pulsos, preservando en la medida de lo posible:                   ║
-║    1. El material asociado a tiempos fuertes/downbeats (incl. anacrusas)    ║
-║    2. La textura rítmica (sin exceder la subdivisión más rápida original)   ║
-║    3. La forma melódica / contorno                                          ║
-║                                                                              ║
-║  ESTRATEGIA:                                                                 ║
-║    Al AÑADIR pulsos (compás destino más largo):                             ║
-║      · si ya hay silencio de cola en la unidad → se usa ese margen          ║
-║        (equivale a "separar más los motivos", sin tocar ninguna nota)       ║
-║      · si la unidad está saturada → se alarga la nota de tiempo más débil,  ║
-║        o se le añade una repetición melismática (--melisma) si el hueco     ║
-║        es grande, en vez de un único valor larguísimo                      ║
-║    Al QUITAR pulsos (compás destino más corto):                             ║
-║      · si ya hay silencio de cola suficiente → simplemente se acorta el     ║
-║        contenedor, sin tocar ninguna nota                                   ║
-║      · si la unidad está saturada → se eliminan notas por orden de         ║
-║        prioridad: repetidas > de paso (stepwise) > tiempo débil, siempre   ║
-║        preservando la primera y última nota de la unidad (anclas de        ║
-║        tiempo fuerte); si aún sobra duración, se comprime proporcionalmente ║
-║                                                                              ║
-║  AGRUPACIÓN (--group N): permite reproducir ejemplos como "cada dos         ║
-║  compases de origen se convierten en un compás de destino" (p.ej. 2×4/4 →   ║
-║  1×7/4, o 2×3/4 → 1×5/4 de la charla sobre My Favorite Things / montuno).   ║
-║                                                                              ║
-║  ACOMPAÑAMIENTO (--accompaniment-style):                                    ║
-║    mirror   (default) — cada pista se adapta con el mismo motor que la      ║
-║              melodía (independientemente, según su propio contenido)       ║
-║    waltz    — colapsa las pistas de acompañamiento a un patrón de           ║
-║              "bajo en el tiempo 1 + un acorde por cada tiempo restante"     ║
-║              (técnica del Rondo alla Turca → vals)                         ║
-║    none     — descarta las pistas de acompañamiento, solo adapta la melodía║
-║                                                                              ║
-║  --coordinate-layers: deriva el mapa de tiempo EXACTO de la melodía y lo    ║
-║  aplica igual a todas las capas 'mirror' (incl. percusión), en vez de que   ║
-║  cada una decida qué añadir/quitar por su cuenta. Preserva la relación      ║
-║  temporal relativa entre capas — pensado para patrones entrelazados como    ║
-║  montuno/tumbao/clave/cáscara, donde importa que las capas se mantengan     ║
-║  sincronizadas como conjunto.                                               ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python meter_adapter.py tema.mid --to 5/4                                ║
-║    python meter_adapter.py tema.mid --to 5/8 --from 6/8                    ║
-║    python meter_adapter.py rondo.mid --to 3/4 --accompaniment-style waltz  ║
-║    python meter_adapter.py montuno.mid --to 7/4 --group 2                  ║
-║    python meter_adapter.py tema.mid --preset waltz                          ║
-║    python meter_adapter.py tema.mid --to 4/4 --no-melisma --verbose        ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --to N/D            Compás destino (obligatorio), e.g. "5/4", "7/8"     ║
-║    --from N/D          Compás origen (default: detectado del MIDI)         ║
-║    --group N           Compases origen agrupados por cada compás destino    ║
-║                        (default: 1)                                         ║
-║    --melisma/--no-melisma   Permitir subdivisión melismática al añadir     ║
-║                        pulsos grandes (default: activado)                   ║
-║    --melisma-threshold B    Umbral en negras para preferir melisma sobre    ║
-║                        una sola nota larga (default: 1.0)                   ║
-║    --accompaniment-style {mirror,waltz,none}   (default: mirror)            ║
-║    --melody-track N    Forzar qué pista es la melodía (default: autodetecta)║
-║    --preset {waltz}    Atajo: --to 3/4 --accompaniment-style waltz          ║
-║    --out PATH          Fichero de salida (default: <nombre>.meter_N-D.mid) ║
-║    --report            Guardar reporte JSON                                 ║
-║    --verbose           Informe detallado por stdout                        ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy                                                   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+meter_adapter.py — Meter Adapter: adaptación métrica de MIDI: reescritura
+rítmica entre compases
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Implementa las guías de "Adapting Music from one Meter to Another" (Active
+Analysis): tomar una pieza y reescribirla en OTRO compás añadiendo o
+quitando pulsos, preservando en la medida de lo posible:
+  1. El material asociado a tiempos fuertes/downbeats (incl. anacrusas)
+  2. La textura rítmica (sin exceder la subdivisión más rápida original)
+  3. La forma melódica / contorno
+
+ESTRATEGIA:
+  Al AÑADIR pulsos (compás destino más largo):
+    · si ya hay silencio de cola en la unidad → se usa ese margen
+      (equivale a "separar más los motivos", sin tocar ninguna nota)
+    · si la unidad está saturada → se alarga la nota de tiempo más débil,
+      o se le añade una repetición melismática (--melisma) si el hueco
+      es grande, en vez de un único valor larguísimo
+  Al QUITAR pulsos (compás destino más corto):
+    · si ya hay silencio de cola suficiente → simplemente se acorta el
+      contenedor, sin tocar ninguna nota
+    · si la unidad está saturada → se eliminan notas por orden de
+      prioridad: repetidas > de paso (stepwise) > tiempo débil, siempre
+      preservando la primera y última nota de la unidad (anclas de
+      tiempo fuerte); si aún sobra duración, se comprime proporcionalmente
+
+AGRUPACIÓN (--group N): permite reproducir ejemplos como "cada dos
+compases de origen se convierten en un compás de destino" (p.ej. 2×4/4 →
+1×7/4, o 2×3/4 → 1×5/4 de la charla sobre My Favorite Things / montuno).
+
+ACOMPAÑAMIENTO (--accompaniment-style):
+  mirror   (default) — cada pista se adapta con el mismo motor que la
+            melodía (independientemente, según su propio contenido)
+  waltz    — colapsa las pistas de acompañamiento a un patrón de
+            "bajo en el tiempo 1 + un acorde por cada tiempo restante"
+            (técnica del Rondo alla Turca → vals)
+  none     — descarta las pistas de acompañamiento, solo adapta la melodía
+
+--coordinate-layers: deriva el mapa de tiempo EXACTO de la melodía y lo
+aplica igual a todas las capas 'mirror' (incl. percusión), en vez de que
+cada una decida qué añadir/quitar por su cuenta. Preserva la relación
+temporal relativa entre capas — pensado para patrones entrelazados como
+montuno/tumbao/clave/cáscara, donde importa que las capas se mantengan
+sincronizadas como conjunto.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --to N/D            Compás destino (obligatorio), e.g. "5/4", "7/8"
+  --from N/D          Compás origen (default: detectado del MIDI)
+  --group N           Compases origen agrupados por cada compás destino
+                      (default: 1)
+  --melisma/--no-melisma   Permitir subdivisión melismática al añadir
+                      pulsos grandes (default: activado)
+  --melisma-threshold B    Umbral en negras para preferir melisma sobre
+                      una sola nota larga (default: 1.0)
+  --accompaniment-style {mirror,waltz,none}   (default: mirror)
+  --melody-track N    Forzar qué pista es la melodía (default: autodetecta)
+  --preset {waltz}    Atajo: --to 3/4 --accompaniment-style waltz
+  --out PATH          Fichero de salida (default: <nombre>.meter_N-D.mid)
+  --report            Guardar reporte JSON
+  --verbose           Informe detallado por stdout
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python meter_adapter.py tema.mid --to 5/4
+  python meter_adapter.py tema.mid --to 5/8 --from 6/8
+  python meter_adapter.py rondo.mid --to 3/4 --accompaniment-style waltz
+  python meter_adapter.py montuno.mid --to 7/4 --group 2
+  python meter_adapter.py tema.mid --preset waltz
+  python meter_adapter.py tema.mid --to 4/4 --no-melisma --verbose
+
+── Más modos ──
+
+  # Guardar reporte JSON
+  python meter_adapter.py --report
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
 """
 
 import os

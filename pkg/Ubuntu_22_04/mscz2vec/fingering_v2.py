@@ -1,25 +1,72 @@
 #!/usr/bin/env python3
 """
-fingering_v2.py — Generador automático de digitación pianística a partir de MIDI.
+fingering_v2.py — Generador automático de digitación pianística a partir de MIDI
+(versión 2: separación de manos, confianza y exportación estructurada).
 
-Mejoras respecto a v1:
-  - Memoria de postura activada (relocation_alpha=0.3)
-  - Separación inteligente de manos (un solo track) minimizando cruces
-  - Tempo variable: cálculo de compás correcto con múltiples cambios de tempo
-  - Optimización de acordes con módulo específico (span real de mano)
-  - Puntuación de confianza por nota (marca notas con digitación alternativa válida con '(alt)')
-  - Salida estructurada como lista de dicts (API usable por otros módulos)
-  - Exportación a MusicXML con marcas de digitación estándar (opcional)
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Mismo núcleo que fingering.py (ventana deslizante de 9 notas con minimización
+del coste ergonómico; basado en pianoplayer, Marco Musy, MIT License), más:
+  - Memoria de postura activada (relocation_alpha=0.3): penaliza los cambios
+    bruscos de posición de la mano entre ventanas consecutivas.
+  - Separación inteligente de manos (un solo track), minimizando cruces.
+  - Tempo variable: el cálculo de compás es correcto con varios cambios de tempo.
+  - Optimización de acordes con módulo específico (span real de mano).
+  - Puntuación de confianza por nota: marca con '(alt)' las notas que admiten
+    una digitación alternativa igualmente válida.
+  - Salida estructurada como lista de dicts (API reutilizable por otros módulos).
+  - Exportación opcional a MusicXML con marcas de digitación estándar.
 
-Uso:
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Entrada : MIDI de 1 track (se separan las manos) o de 2 tracks (derecha e
+            izquierda).
+  Salida  : informe de texto por stdout; con --json una lista de notas con su
+            dedo (consumible por fingering_to_synthesia.py); con --xml una
+            partitura MusicXML con la digitación anotada.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  Entrada y selección de manos
+    midi                 Fichero MIDI (obligatorio, posicional).
+    --right-track N      Índice del track para la mano derecha (defecto 0).
+    --left-track N       Índice del track para la mano izquierda (defecto 1).
+    --auto-split         Reparte las notas entre manos con una ventana deslizante
+                         aunque el MIDI ya tenga 2 tracks; con un solo track el
+                         reparto es automático de todos modos (minimiza cruces).
+    --right-only         Digita solo la mano derecha.
+    --left-only          Digita solo la mano izquierda.
+    --measures N         Procesa como máximo N compases (0 = todos; defecto 0).
+  Ergonomía
+    --hand-size SIZE     XXS, XS, S, M, L, XL o XXL (defecto M ≈ 17 cm de
+                         pulgar a meñique). Condiciona los saltos admisibles.
+  Salidas
+    --confidence         Imprime la puntuación de confianza por nota; las notas
+                         con una digitación alternativa igual de válida se
+                         marcan con '(alt)'.
+    --json FICHERO       Exporta el resultado (lista de dicts por nota) a JSON.
+    --xml FICHERO        Exporta a MusicXML con marcas de digitación estándar.
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
     python fingering_v2.py archivo.mid
     python fingering_v2.py archivo.mid --hand-size L
     python fingering_v2.py archivo.mid --measures 8
     python fingering_v2.py archivo.mid --right-only
     python fingering_v2.py archivo.mid --left-only
+    python fingering_v2.py archivo.mid --right-track 1 --left-track 2   # MIDI con track 0 vacío
+    python fingering_v2.py archivo.mid --auto-split                     # reparto automático de manos
+    python fingering_v2.py archivo.mid --confidence                     # muestra confianza y '(alt)'
     python fingering_v2.py archivo.mid --xml salida.xml
     python fingering_v2.py archivo.mid --json salida.json
-    python fingering_v2.py archivo.mid --confidence      # muestra puntuación de confianza
+    python fingering_v2.py archivo.mid --hand-size S --measures 16 --confidence --json salida.json
+
+Dependencias: pretty_midi (pip install pretty_midi).
+Véase también: fingering_v3.py (voces) y fingering_v6.py (modo acordes).
 """
 
 from __future__ import annotations

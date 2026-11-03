@@ -1,70 +1,94 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    COHERENCE STITCHER  v1.0                                  ║
-║         Orquestador de fragmentos MIDI con coherencia armónica               ║
-║                                                                              ║
-║  Usa los fingerprints (.fingerprint.json) generados por midi_dna_unified    ║
-║  v1.4 para:                                                                  ║
-║                                                                              ║
-║  [1] ANALIZAR los fragmentos disponibles y sus bordes                        ║
-║  [2] ORDENAR los fragmentos en la secuencia más coherente                    ║
-║      (o respetar el orden manual que elijas)                                 ║
-║  [3] PUNTUAR cada transición posible con un score de compatibilidad          ║
-║      armónica, de registro, de tempo y de tensión                            ║
-║  [4] GENERAR puentes automáticos entre fragmentos incompatibles              ║
-║      llamando a midi_dna_unified.py con los parámetros correctos             ║
-║  [5] ENSAMBLAR el MIDI final concatenando fragmentos + puentes               ║
-║                                                                              ║
-║  FLUJO TÍPICO:                                                               ║
-║    1. Genera fragmentos con midi_dna_unified.py --export-fingerprint         ║
-║    2. Corre este script con los fingerprints (o los MIDIs directamente)      ║
-║    3. El script analiza, ordena, genera puentes y produce obra_final.mid     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+stitcher.py — Coherence Stitcher: orquestador de fragmentos MIDI con
+coherencia armónica
+(versión 1.0).
 
-USO:
-    # Modo automático: pasa los fingerprints (o los MIDIs, detecta los JSON)
-    python stitcher.py seccion_A.fingerprint.json seccion_B.fingerprint.json seccion_C.fingerprint.json
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  Usa los fingerprints (.fingerprint.json) generados por midi_dna_unified
+  v1.4 para:
 
-    # También acepta los MIDIs directamente (busca el .fingerprint.json junto a ellos)
-    python stitcher.py seccion_A.mid seccion_B.mid seccion_C.mid
+  [1] ANALIZAR los fragmentos disponibles y sus bordes
+  [2] ORDENAR los fragmentos en la secuencia más coherente
+      (o respetar el orden manual que elijas)
+  [3] PUNTUAR cada transición posible con un score de compatibilidad
+      armónica, de registro, de tempo y de tensión
+  [4] GENERAR puentes automáticos entre fragmentos incompatibles
+      llamando a midi_dna_unified.py con los parámetros correctos
+  [5] ENSAMBLAR el MIDI final concatenando fragmentos + puentes
 
-    # Con orden manual (no reordena, solo genera puentes donde hagan falta)
-    python stitcher.py *.fingerprint.json --fixed-order
+  FLUJO TÍPICO:
+    1. Genera fragmentos con midi_dna_unified.py --export-fingerprint
+    2. Corre este script con los fingerprints (o los MIDIs directamente)
+    3. El script analiza, ordena, genera puentes y produce obra_final.mid
 
-    # Sólo analizar y mostrar la matriz de compatibilidad (sin generar nada)
-    python stitcher.py *.fingerprint.json --analyze-only
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --fixed-order       No reordenar fragmentos; solo generar puentes
+  --analyze-only      Mostrar análisis y matriz de compatibilidad, salir
+  --mixer PATH        Ruta a midi_dna_unified.py (default: ./midi_dna_unified.py)
+  --bridge-sources    MIDIs fuente para generar los puentes (1 o más)
+  --bridge-bars N     Compases de cada puente (default: 4)
+  --bridge-mode MODE  Modo del mixer para los puentes (default: emotion)
+  --min-score F       Score mínimo para NO generar puente (default: 0.55)
+  --tempo-map         Overrides de tempo por fragmento: "file.mid:BPM, ..."
+  --output FILE       MIDI final ensamblado (default: obra_final.mid)
+  --no-bridge         Ensamblar sin generar puentes (solo concatenar)
+  --verbose           Informe detallado de scores y decisiones
+  --dry-run           Mostrar comandos de puentes sin ejecutarlos
 
-    # Especificar el script mixer y las fuentes MIDI para los puentes
-    python stitcher.py *.fingerprint.json \\
-        --mixer midi_dna_unified.py \\
-        --bridge-sources style1.mid style2.mid \\
-        --output obra_epica.mid
+── Otras opciones del parser ──
+  --force-first FORCE_FIRST   Índice del fragmento que debe ir primero
+                              (0-based)
+  --force-last FORCE_LAST     Índice del fragmento que debe ir último
+                              (0-based)
+  --leitmotif-schedule JSON   Schedule de leitmotifs generado por
+                              leitmotif_tracker.py inject
+                              (leitmotif_stitcher.json). Inserta fragmentos de
+                              leitmotif en los compases indicados del MIDI
+                              final.
 
-    # Con fuentes separadas para puentes de "mundo style1" y "mundo style2"
-    python stitcher.py *.fingerprint.json \\
-        --bridge-sources style1.mid style2.mid \\
-        --bridge-bars 8 \\
-        --tempo-map "seccion_A.mid:112, seccion_B.mid:96" \\
-        --output obra_final.mid --verbose
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Modo automático: pasa los fingerprints (o los MIDIs, detecta los JSON)
+  python stitcher.py seccion_A.fingerprint.json seccion_B.fingerprint.json seccion_C.fingerprint.json
 
-OPCIONES:
-    --fixed-order       No reordenar fragmentos; solo generar puentes
-    --analyze-only      Mostrar análisis y matriz de compatibilidad, salir
-    --mixer PATH        Ruta a midi_dna_unified.py (default: ./midi_dna_unified.py)
-    --bridge-sources    MIDIs fuente para generar los puentes (1 o más)
-    --bridge-bars N     Compases de cada puente (default: 4)
-    --bridge-mode MODE  Modo del mixer para los puentes (default: emotion)
-    --min-score F       Score mínimo para NO generar puente (default: 0.55)
-    --tempo-map         Overrides de tempo por fragmento: "file.mid:BPM, ..."
-    --output FILE       MIDI final ensamblado (default: obra_final.mid)
-    --no-bridge         Ensamblar sin generar puentes (solo concatenar)
-    --verbose           Informe detallado de scores y decisiones
-    --dry-run           Mostrar comandos de puentes sin ejecutarlos
+  # También acepta los MIDIs directamente (busca el .fingerprint.json junto a ellos)
+  python stitcher.py seccion_A.mid seccion_B.mid seccion_C.mid
 
-DEPENDENCIAS:
-    pip install mido
-    (midi_dna_unified.py v1.4 para generación de puentes)
+  # Con orden manual (no reordena, solo genera puentes donde hagan falta)
+  python stitcher.py *.fingerprint.json --fixed-order
+
+  # Sólo analizar y mostrar la matriz de compatibilidad (sin generar nada)
+  python stitcher.py *.fingerprint.json --analyze-only
+
+  # Especificar el script mixer y las fuentes MIDI para los puentes
+  python stitcher.py *.fingerprint.json \
+      --mixer midi_dna_unified.py \
+      --bridge-sources style1.mid style2.mid \
+      --output obra_epica.mid
+
+  # Con fuentes separadas para puentes de "mundo style1" y "mundo style2"
+  python stitcher.py *.fingerprint.json \
+      --bridge-sources style1.mid style2.mid \
+      --bridge-bars 8 \
+      --tempo-map "seccion_A.mid:112, seccion_B.mid:96" \
+      --output obra_final.mid --verbose
+
+── Más modos ──
+
+  # Mostrar comandos de puentes sin ejecutarlos
+  python stitcher.py inputs.json inputs.json --dry-run
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  pip install mido
+  (midi_dna_unified.py v1.4 para generación de puentes)
 """
 
 import sys

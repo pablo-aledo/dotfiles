@@ -1,66 +1,81 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      MELODY ADAPTER  v1.0                                   ║
-║         Adaptación de melodías a progresiones de acordes externas           ║
-║                                                                              ║
-║  Dado un MIDI de melodía y una progresión de acordes (en texto o en MIDI),  ║
-║  ajusta las notas de la melodía para que sean compatibles con cada acorde,  ║
-║  respetando el contorno melódico original y distinguiendo entre notas        ║
-║  estructurales y notas de paso/ornamentales.                                 ║
-║                                                                              ║
-║  MODOS DE ADAPTACIÓN (--mode):                                               ║
-║    strict    — solo mueve avoid notes en tiempos fuertes; mínima           ║
-║               intervención. Ideal para preservar la melodía casi intacta.   ║
-║    smooth    — strict + añade notas de paso para suavizar saltos            ║
-║               introducidos por la adaptación. Sonido más cantábile.         ║
-║    jazz      — trata 9ª, 11ª y 13ª como tensiones válidas; solo mueve      ║
-║               las avoid notes más disonantes (b9, b13, ♮11 sobre maj).     ║
-║    rewrite   — reescribe el ritmo y las alturas manteniendo el contorno     ║
-║               general. Máxima compatibilidad armónica.                      ║
-║                                                                              ║
-║  FORMATOS DE PROGRESIÓN:                                                     ║
-║    --chords "Cm G7 Fm Bb7"           un acorde por compás                  ║
-║    --chords "Cm:2 G7:2 Fm:1 Bb7:1"  duración en beats tras ':'             ║
-║    --chords-midi acordes.mid         pista de acordes en MIDI               ║
-║                                                                              ║
-║  MÉTRICAS DE COMPATIBILIDAD (--report):                                      ║
-║    · notas desplazadas / total                                               ║
-║    · score de compatibilidad antes y después (como reharmonizer.py)         ║
-║    · lista de colisiones resueltas y sin resolver                            ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python melody_adapter.py melodia.mid --chords "C Am F G"                ║
-║    python melody_adapter.py melodia.mid --chords "C:2 F:2 G:4" --mode smooth║
-║    python melody_adapter.py melodia.mid --chords-midi acomp.mid            ║
-║    python melody_adapter.py melodia.mid --chords "Dm7 G7 Cmaj7" --mode jazz║
-║    python melody_adapter.py melodia.mid --chords "C Am F G" --mode rewrite ║
-║    python melody_adapter.py melodia.mid --chords "C Am F G" --report       ║
-║    python melody_adapter.py melodia.mid --chords "C Am F G" --acc-style arpeggio║
-║    python melody_adapter.py melodia.mid --chords "C Am F G" --bars 8       ║
-║    python melody_adapter.py melodia.mid --chords "C Am F G" --key "D major"║
-║    python melody_adapter.py melodia.mid --chords "C Am F G" --strength 0.7 ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --chords PROG       Progresión en texto (ver formato arriba)              ║
-║    --chords-midi FILE  Pista de acordes en MIDI                              ║
-║    --mode MODE         Modo de adaptación (default: smooth)                 ║
-║    --strength F        Agresividad 0-1 (default: 0.8; 0=mínimo, 1=máximo)  ║
-║    --bars N            Compases de salida (default: auto)                   ║
-║    --key KEY           Tonalidad forzada, e.g. "D minor" (default: auto)    ║
-║    --beats-per-bar N   Pulsos por compás (default: detectado del MIDI)      ║
-║    --acc-style S       Acompañamiento: block|arpeggio|alberti|waltz|auto    ║
-║    --no-acc            No generar acompañamiento, solo la melodía adaptada  ║
-║    --out-dir DIR       Carpeta de salida (default: misma que el MIDI)       ║
-║    --report            Guardar JSON con análisis de compatibilidad          ║
-║    --verbose           Informe detallado por stdout                          ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    melodia.adapted_smooth.mid                                                ║
-║    melodia.adapted_report.json  (con --report)                              ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, music21, numpy  (+ midi_dna_unified en mismo dir)     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+melody_adapter.py — Melody Adapter: adaptación de melodías a progresiones de
+acordes externas
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un MIDI de melodía y una progresión de acordes (en texto o en MIDI),
+ajusta las notas de la melodía para que sean compatibles con cada acorde,
+respetando el contorno melódico original y distinguiendo entre notas
+estructurales y notas de paso/ornamentales.
+
+MODOS DE ADAPTACIÓN (--mode):
+  strict    — solo mueve avoid notes en tiempos fuertes; mínima
+             intervención. Ideal para preservar la melodía casi intacta.
+  smooth    — strict + añade notas de paso para suavizar saltos
+             introducidos por la adaptación. Sonido más cantábile.
+  jazz      — trata 9ª, 11ª y 13ª como tensiones válidas; solo mueve
+             las avoid notes más disonantes (b9, b13, ♮11 sobre maj).
+  rewrite   — reescribe el ritmo y las alturas manteniendo el contorno
+             general. Máxima compatibilidad armónica.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+FORMATOS DE PROGRESIÓN:
+    --chords "Cm G7 Fm Bb7"           un acorde por compás
+    --chords "Cm:2 G7:2 Fm:1 Bb7:1"  duración en beats tras ':'
+    --chords-midi acordes.mid         pista de acordes en MIDI
+
+  MÉTRICAS DE COMPATIBILIDAD (--report):
+    · notas desplazadas / total
+    · score de compatibilidad antes y después (como reharmonizer.py)
+    · lista de colisiones resueltas y sin resolver
+
+── SALIDA ──
+  melodia.adapted_smooth.mid
+  melodia.adapted_report.json  (con --report)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --chords PROG       Progresión en texto (ver formato arriba)
+  --chords-midi FILE  Pista de acordes en MIDI
+  --mode MODE         Modo de adaptación (default: smooth)
+  --strength F        Agresividad 0-1 (default: 0.8; 0=mínimo, 1=máximo)
+  --bars N            Compases de salida (default: auto)
+  --key KEY           Tonalidad forzada, e.g. "D minor" (default: auto)
+  --beats-per-bar N   Pulsos por compás (default: detectado del MIDI)
+  --acc-style S       Acompañamiento: block|arpeggio|alberti|waltz|auto
+  --no-acc            No generar acompañamiento, solo la melodía adaptada
+  --out-dir DIR       Carpeta de salida (default: misma que el MIDI)
+  --report            Guardar JSON con análisis de compatibilidad
+  --verbose           Informe detallado por stdout
+
+── Otras opciones del parser ──
+  --seed SEED                 Semilla aleatoria (default: 42)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python melody_adapter.py melodia.mid --chords "C Am F G"
+  python melody_adapter.py melodia.mid --chords "C:2 F:2 G:4" --mode smooth
+  python melody_adapter.py melodia.mid --chords-midi acomp.mid
+  python melody_adapter.py melodia.mid --chords "Dm7 G7 Cmaj7" --mode jazz
+  python melody_adapter.py melodia.mid --chords "C Am F G" --mode rewrite
+  python melody_adapter.py melodia.mid --chords "C Am F G" --report
+  python melody_adapter.py melodia.mid --chords "C Am F G" --acc-style arpeggio
+  python melody_adapter.py melodia.mid --chords "C Am F G" --bars 8
+  python melody_adapter.py melodia.mid --chords "C Am F G" --key "D major"
+  python melody_adapter.py melodia.mid --chords "C Am F G" --strength 0.7
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, music21, numpy  (+ midi_dna_unified en mismo dir)
 """
 
 import os

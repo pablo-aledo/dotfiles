@@ -1,56 +1,68 @@
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        EVOLVER  v1.0                                         ║
-║          Motor de evolución genética de secciones MIDI                       ║
-║                                                                              ║
-║  Toma N MIDIs como «genes», genera una población de variantes por            ║
-║  cruce y mutación, las puntúa automáticamente con el scoring de              ║
-║  midi_dna_unified y selecciona las mejores generación a generación.          ║
-║                                                                              ║
-║  OPERADORES GENÉTICOS:                                                       ║
-║  [X1] Cruce de contorno melódico entre dos padres                            ║
-║  [X2] Cruce de progresión armónica                                           ║
-║  [X3] Cruce de patrón rítmico                                                ║
-║  [M1] Mutación de intervalo: desplaza notas aleatorias ±1-3 semitonos        ║
-║  [M2] Mutación rítmica: escala duraciones de notas aleatorias                ║
-║  [M3] Mutación de tempo: ±5-15 BPM                                           ║
-║  [M4] Mutación de tonalidad: transpone al relativo o dominante               ║
-║  [M5] Mutación emocional: sesgos en las curvas de tensión/arousal            ║
-║                                                                              ║
-║  FITNESS:                                                                    ║
-║  - score_candidate() de midi_dna_unified (consonancia, variedad, arco)      ║
-║  - Penalización de clones (diversidad de población)                          ║
-║  - Bonus por coherencia motívica entre generaciones                          ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python evolver.py fuente1.mid fuente2.mid [más MIDIs]                    ║
-║    python evolver.py *.mid --generations 10 --population 20                 ║
-║    python evolver.py a.mid b.mid --generations 5 --elite 3                  ║
-║    python evolver.py a.mid b.mid --mode full_blend --bars 32                ║
-║    python evolver.py a.mid b.mid --generations 8 --output-dir ./evolved     ║
-║    python evolver.py a.mid b.mid --listen --play-seconds 8                  ║
-║    python evolver.py a.mid b.mid --seed 99 --verbose                        ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --generations N   Número de generaciones (default: 5)                     ║
-║    --population N    Tamaño de la población por generación (default: 10)     ║
-║    --elite N         Individuos de élite que pasan directamente (default: 2) ║
-║    --mutation-rate F Probabilidad de mutación por individuo 0-1 (default:   ║
-║                      0.3)                                                    ║
-║    --crossover-rate F Probabilidad de cruce 0-1 (default: 0.6)              ║
-║    --bars N          Compases de cada individuo (default: 16)                ║
-║    --mode MODE       Modo de mezcla de midi_dna_unified (default: auto)      ║
-║    --output-dir DIR  Carpeta de salida (default: ./evolver_out)              ║
-║    --save-all        Guardar todos los individuos, no solo los mejores       ║
-║    --top N           Cuántos mejores individuos exportar (default: 3)        ║
-║    --listen          Reproducir los mejores al final (requiere pygame)       ║
-║    --play-seconds N  Segundos de reproducción por MIDI (default: 10)        ║
-║    --no-percussion   No generar pista de percusión                           ║
-║    --seed N          Semilla aleatoria (default: 42)                         ║
-║    --verbose         Informe detallado de cada generación                    ║
-║                                                                              ║
-║  DEPENDENCIAS: las mismas que midi_dna_unified.py                            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+evolver.py — Evolver: motor de evolución genética de secciones MIDI
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Toma N MIDIs como «genes», genera una población de variantes por
+cruce y mutación, las puntúa automáticamente con el scoring de
+midi_dna_unified y selecciona las mejores generación a generación.
+
+OPERADORES GENÉTICOS:
+[X1] Cruce de contorno melódico entre dos padres
+[X2] Cruce de progresión armónica
+[X3] Cruce de patrón rítmico
+[M1] Mutación de intervalo: desplaza notas aleatorias ±1-3 semitonos
+[M2] Mutación rítmica: escala duraciones de notas aleatorias
+[M3] Mutación de tempo: ±5-15 BPM
+[M4] Mutación de tonalidad: transpone al relativo o dominante
+[M5] Mutación emocional: sesgos en las curvas de tensión/arousal
+
+FITNESS:
+- score_candidate() de midi_dna_unified (consonancia, variedad, arco)
+- Penalización de clones (diversidad de población)
+- Bonus por coherencia motívica entre generaciones
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --generations N   Número de generaciones (default: 5)
+  --population N    Tamaño de la población por generación (default: 10)
+  --elite N         Individuos de élite que pasan directamente (default: 2)
+  --mutation-rate F Probabilidad de mutación por individuo 0-1 (default:
+                    0.3)
+  --crossover-rate F Probabilidad de cruce 0-1 (default: 0.6)
+  --bars N          Compases de cada individuo (default: 16)
+  --mode MODE       Modo de mezcla de midi_dna_unified (default: auto)
+  --output-dir DIR  Carpeta de salida (default: ./evolver_out)
+  --save-all        Guardar todos los individuos, no solo los mejores
+  --top N           Cuántos mejores individuos exportar (default: 3)
+  --listen          Reproducir los mejores al final (requiere pygame)
+  --play-seconds N  Segundos de reproducción por MIDI (default: 10)
+  --no-percussion   No generar pista de percusión
+  --seed N          Semilla aleatoria (default: 42)
+  --verbose         Informe detallado de cada generación
+
+── Otras opciones del parser ──
+  --mixer MIXER               Ruta al script midi_dna_unified.py (default:
+                              detecta automáticamente)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python evolver.py fuente1.mid fuente2.mid [más MIDIs]
+  python evolver.py *.mid --generations 10 --population 20
+  python evolver.py a.mid b.mid --generations 5 --elite 3
+  python evolver.py a.mid b.mid --mode full_blend --bars 32
+  python evolver.py a.mid b.mid --generations 8 --output-dir ./evolved
+  python evolver.py a.mid b.mid --listen --play-seconds 8
+  python evolver.py a.mid b.mid --seed 99 --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  las mismas que midi_dna_unified.py
 """
 
 import sys

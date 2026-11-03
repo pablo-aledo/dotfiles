@@ -1,93 +1,102 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     LATENTSCORE COMPOSER  v1.1                               ║
-║         Síntesis procedimental de audio ambiente desde texto o config        ║
-║                                                                              ║
-║  Motor de síntesis 100% numpy/scipy, integrado directamente desde           ║
-║  latentscore (github.com/beatsbyprabal/latentscore).                         ║
-║  Sin dependencias externas salvo: numpy  scipy  soundfile                   ║
-║                                                                              ║
-║  SUBCOMANDOS:                                                                ║
-║                                                                              ║
-║    render   Texto o config → WAV                                             ║
-║               python latentscore_composer.py render "lluvia en ciudad"       ║
-║               python latentscore_composer.py render "jazz cafe" --dur 30     ║
-║               python latentscore_composer.py render --config cfg.json        ║
-║               python latentscore_composer.py render "calma"                  ║
-║                   --patch tempo=slow brightness=dark                         ║
-║                                                                              ║
-║    morph    Transición suave entre dos textos/configs → WAV                  ║
-║               python latentscore_composer.py morph "amanecer" "noche"        ║
-║               python latentscore_composer.py morph a.json b.json --dur 60   ║
-║               python latentscore_composer.py morph "calma" "tormenta"        ║
-║                   --steps 8 --dur 40                                         ║
-║                                                                              ║
-║    chain    Secuencia de vibes → WAV concatenado con transiciones            ║
-║               python latentscore_composer.py chain vibes.txt                 ║
-║               python latentscore_composer.py chain "alba" "día" "ocaso"      ║
-║                   --dur-each 30 --fade 4                                     ║
-║               python latentscore_composer.py chain playlist.json             ║
-║                                                                              ║
-║    config   Mostrar / editar / exportar un MusicConfig                       ║
-║               python latentscore_composer.py config show cfg.json            ║
-║               python latentscore_composer.py config from-vibe "lluvia"       ║
-║               python latentscore_composer.py config patch cfg.json           ║
-║                   tempo=slow brightness=dark --output out.json               ║
-║               python latentscore_composer.py config list-styles              ║
-║                                                                              ║
-║    inspect  Diagnóstico del entorno y del motor de síntesis                  ║
-║               python latentscore_composer.py inspect synth                   ║
-║               python latentscore_composer.py inspect wav salida.wav          ║
-║                                                                              ║
-║  PARÁMETROS (--patch / config patch):                                        ║
-║    root            c c# d d# e f f# g g# a a# b                             ║
-║    mode            major minor dorian mixolydian                             ║
-║    tempo           very_slow slow medium fast very_fast                      ║
-║    brightness      very_dark dark medium bright very_bright                  ║
-║    space           dry small medium large vast                               ║
-║    motion          static slow medium fast chaotic                           ║
-║    stereo          mono narrow medium wide ultra_wide                        ║
-║    echo            none subtle medium heavy infinite                         ║
-║    human           robotic tight natural loose drunk                         ║
-║    grain           clean warm gritty                                         ║
-║    attack          soft medium sharp                                         ║
-║    density         2 3 4 5 6                                                 ║
-║    bass            drone sustained pulsing walking fifth_drone               ║
-║                    sub_pulse octave arp_bass                                 ║
-║    pad             warm_slow dark_sustained cinematic thin_high              ║
-║                    ambient_drift stacked_fifths bright_open                  ║
-║    melody          procedural contemplative rising falling minimal           ║
-║                    ornamental arp_melody contemplative_minor                 ║
-║                    call_response heroic                                      ║
-║    rhythm          none minimal heartbeat soft_four hats_only                ║
-║                    electronic kit_light kit_medium military brush            ║
-║    texture         none shimmer shimmer_slow vinyl_crackle breath            ║
-║                    stars glitch noise_wash crystal pad_whisper               ║
-║    accent          none bells pluck chime bells_dense blip                   ║
-║                    blip_random brass_hit wind arp_accent piano_note          ║
-║    melody_density  very_sparse sparse medium busy very_busy                  ║
-║    syncopation     straight light medium heavy                               ║
-║    swing           none light medium heavy                                   ║
-║    motif_repeat_prob rare sometimes often                                    ║
-║    step_bias       step balanced leapy                                       ║
-║    chromatic_prob  none light medium heavy                                   ║
-║    cadence_strength weak medium strong                                       ║
-║    tension_curve   arc ramp waves                                            ║
-║    harmony_style   auto pop jazz cinematic ambient                           ║
-║    chord_change_bars very_slow slow medium fast                              ║
-║    chord_extensions triads sevenths lush                                     ║
-║    phrase_len_bars 2 4 8                                                     ║
-║    depth           true false                                                ║
-║                                                                              ║
-║  OPCIONES GLOBALES:                                                          ║
-║    --output FILE   Ruta del WAV de salida (default: auto)                   ║
-║    --dur N         Duración en segundos (default: 16)                        ║
-║    --sr N          Sample rate (default: 44100)                              ║
-║    --verbose       Mostrar parámetros resueltos                              ║
-║                                                                              ║
-║  DEPENDENCIAS:  pip install numpy scipy soundfile                            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+latentscore_composer.py — Latentscore Composer: síntesis procedimental de
+audio ambiente desde texto o config
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Motor de síntesis 100% numpy/scipy, integrado directamente desde
+latentscore (github.com/beatsbyprabal/latentscore).
+Sin dependencias externas salvo: numpy  scipy  soundfile
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+    render   Texto o config → WAV
+               python latentscore_composer.py render "lluvia en ciudad"
+               python latentscore_composer.py render "jazz cafe" --dur 30
+               python latentscore_composer.py render --config cfg.json
+               python latentscore_composer.py render "calma" \
+                   --patch tempo=slow brightness=dark
+
+    morph    Transición suave entre dos textos/configs → WAV
+               python latentscore_composer.py morph "amanecer" "noche"
+               python latentscore_composer.py morph a.json b.json --dur 60
+               python latentscore_composer.py morph "calma" "tormenta" \
+                   --steps 8 --dur 40
+
+    chain    Secuencia de vibes → WAV concatenado con transiciones
+               python latentscore_composer.py chain vibes.txt
+               python latentscore_composer.py chain "alba" "día" "ocaso" \
+                   --dur-each 30 --fade 4
+               python latentscore_composer.py chain playlist.json
+
+    config   Mostrar / editar / exportar un MusicConfig
+               python latentscore_composer.py config show cfg.json
+               python latentscore_composer.py config from-vibe "lluvia"
+               python latentscore_composer.py config patch cfg.json \
+                   tempo=slow brightness=dark --output out.json
+               python latentscore_composer.py config list-styles
+
+    inspect  Diagnóstico del entorno y del motor de síntesis
+               python latentscore_composer.py inspect synth
+               python latentscore_composer.py inspect wav salida.wav
+
+  PARÁMETROS (--patch / config patch):
+    root            c c# d d# e f f# g g# a a# b
+    mode            major minor dorian mixolydian
+    tempo           very_slow slow medium fast very_fast
+    brightness      very_dark dark medium bright very_bright
+    space           dry small medium large vast
+    motion          static slow medium fast chaotic
+    stereo          mono narrow medium wide ultra_wide
+    echo            none subtle medium heavy infinite
+    human           robotic tight natural loose drunk
+    grain           clean warm gritty
+    attack          soft medium sharp
+    density         2 3 4 5 6
+    bass            drone sustained pulsing walking fifth_drone
+                    sub_pulse octave arp_bass
+    pad             warm_slow dark_sustained cinematic thin_high
+                    ambient_drift stacked_fifths bright_open
+    melody          procedural contemplative rising falling minimal
+                    ornamental arp_melody contemplative_minor
+                    call_response heroic
+    rhythm          none minimal heartbeat soft_four hats_only
+                    electronic kit_light kit_medium military brush
+    texture         none shimmer shimmer_slow vinyl_crackle breath
+                    stars glitch noise_wash crystal pad_whisper
+    accent          none bells pluck chime bells_dense blip
+                    blip_random brass_hit wind arp_accent piano_note
+    melody_density  very_sparse sparse medium busy very_busy
+    syncopation     straight light medium heavy
+    swing           none light medium heavy
+    motif_repeat_prob rare sometimes often
+    step_bias       step balanced leapy
+    chromatic_prob  none light medium heavy
+    cadence_strength weak medium strong
+    tension_curve   arc ramp waves
+    harmony_style   auto pop jazz cinematic ambient
+    chord_change_bars very_slow slow medium fast
+    chord_extensions triads sevenths lush
+    phrase_len_bars 2 4 8
+    depth           true false
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES GLOBALES:
+  --output FILE   Ruta del WAV de salida (default: auto)
+  --dur N         Duración en segundos (default: 16)
+  --sr N          Sample rate (default: 44100)
+  --verbose       Mostrar parámetros resueltos
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  pip install numpy scipy soundfile
 """
 
 import sys

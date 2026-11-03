@@ -1,68 +1,77 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        SECTION SCORE  v1.0                                  ║
-║     Detección de secciones musicalmente incoherentes en ficheros MIDI       ║
-║                                                                              ║
-║  Dado un MIDI de entrada, segmenta la obra, construye un perfil global      ║
-║  y puntúa cada segmento en cuatro ejes de coherencia musical:               ║
-║    · Tonal     — compatibilidad melodía/armonía con la tonalidad global     ║
-║    · Estructural — distancia del segmento al perfil medio de la obra        ║
-║    · Vecinal    — incompatibilidad con los segmentos adyacentes             ║
-║    · Rítmico   — desviación del patrón rítmico dominante                   ║
-║                                                                              ║
-║  SEGMENTACIÓN (--granularity):                                               ║
-║    fixed N    Ventanas fijas de N compases (default: fixed 4)               ║
-║    form       Fronteras detectadas por SSM + novelty (harvester)            ║
-║    texture    Fronteras por cambios de textura (harvester)                  ║
-║    cadence    Fronteras en cadencias detectadas con music21                 ║
-║    hybrid     Unión de fronteras form + texture                             ║
-║                                                                              ║
-║  PESOS (--weights):                                                          ║
-║    balanced   Tonal 0.30 · Estructural 0.25 · Vecinal 0.25 · Rítmico 0.20 ║
-║    harmonic   Tonal 0.50 · Estructural 0.20 · Vecinal 0.20 · Rítmico 0.10 ║
-║    neighbor   Tonal 0.20 · Estructural 0.15 · Vecinal 0.50 · Rítmico 0.15 ║
-║    structural Tonal 0.15 · Estructural 0.50 · Vecinal 0.20 · Rítmico 0.15 ║
-║    rhythmic   Tonal 0.15 · Estructural 0.20 · Vecinal 0.20 · Rítmico 0.45 ║
-║    custom W1,W2,W3,W4   (cuatro floats que suman 1.0)                      ║
-║                                                                              ║
-║  TRACKS (--track-mode):                                                      ║
-║    all        Todas las pistas combinadas (default)                         ║
-║    melody     Solo la pista con más notas / pitch más agudo                 ║
-║    auto       Detección por programa MIDI (excluye percusión/bajo)          ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    --out-json FILE    JSON detallado por segmento                           ║
-║    --out-text FILE    Informe legible (también por stdout si --verbose)     ║
-║    --out-midi FILE    MIDI original con markers en segmentos anómalos       ║
-║    --remove N         Genera un MIDI con los N segmentos más anómalos       ║
-║                       eliminados; los segmentos restantes se concatenan     ║
-║                       sin huecos. El fichero se guarda junto al MIDI de    ║
-║                       entrada con sufijo _pruned_<N>.mid (o en la ruta     ║
-║                       indicada con --remove-out FILE)                       ║
-║    --remove-out FILE  Ruta de salida del MIDI podado (opcional)            ║
-║    --top N            Nº de segmentos a reportar (default: 5)               ║
-║    --threshold F      Score mínimo de anomalía 0-1 (default: 0.40)         ║
-║                                                                              ║
-║  OTROS:                                                                      ║
-║    --chords FILE      Fichero JSON/MIDI de acordes (opcional; si no se      ║
-║                       indica, se infieren automáticamente del MIDI)         ║
-║    --novelty-threshold F  Sensibilidad de detección de fronteras (0-1)     ║
-║    --verbose          Detalle completo por criterio                          ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python section_score.py obra.mid                                          ║
-║    python section_score.py obra.mid --granularity form --weights harmonic   ║
-║    python section_score.py obra.mid --granularity fixed 8 --top 3          ║
-║    python section_score.py obra.mid --granularity hybrid --weights custom 0.4,0.2,0.3,0.1
-║    python section_score.py obra.mid --out-json r.json --out-midi r.mid     ║
-║    python section_score.py obra.mid --track-mode melody --verbose           ║
-║    python section_score.py obra.mid --chords acordes.json                  ║
-║    python section_score.py obra.mid --remove 3                              ║
-║    python section_score.py obra.mid --remove 2 --remove-out limpia.mid     ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, music21, numpy, scipy, sklearn                         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+section_score.py — Section Score: detección de secciones musicalmente
+incoherentes en ficheros MIDI
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un MIDI de entrada, segmenta la obra, construye un perfil global
+y puntúa cada segmento en cuatro ejes de coherencia musical:
+  · Tonal     — compatibilidad melodía/armonía con la tonalidad global
+  · Estructural — distancia del segmento al perfil medio de la obra
+  · Vecinal    — incompatibilidad con los segmentos adyacentes
+  · Rítmico   — desviación del patrón rítmico dominante
+
+SEGMENTACIÓN (--granularity):
+  fixed N    Ventanas fijas de N compases (default: fixed 4)
+  form       Fronteras detectadas por SSM + novelty (harvester)
+  texture    Fronteras por cambios de textura (harvester)
+  cadence    Fronteras en cadencias detectadas con music21
+  hybrid     Unión de fronteras form + texture
+
+PESOS (--weights):
+  balanced   Tonal 0.30 · Estructural 0.25 · Vecinal 0.25 · Rítmico 0.20
+  harmonic   Tonal 0.50 · Estructural 0.20 · Vecinal 0.20 · Rítmico 0.10
+  neighbor   Tonal 0.20 · Estructural 0.15 · Vecinal 0.50 · Rítmico 0.15
+  structural Tonal 0.15 · Estructural 0.50 · Vecinal 0.20 · Rítmico 0.15
+  rhythmic   Tonal 0.15 · Estructural 0.20 · Vecinal 0.20 · Rítmico 0.45
+  custom W1,W2,W3,W4   (cuatro floats que suman 1.0)
+
+TRACKS (--track-mode):
+  all        Todas las pistas combinadas (default)
+  melody     Solo la pista con más notas / pitch más agudo
+  auto       Detección por programa MIDI (excluye percusión/bajo)
+
+OTROS:
+  --chords FILE      Fichero JSON/MIDI de acordes (opcional; si no se
+                     indica, se infieren automáticamente del MIDI)
+  --novelty-threshold F  Sensibilidad de detección de fronteras (0-1)
+  --verbose          Detalle completo por criterio
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  --out-json FILE    JSON detallado por segmento
+  --out-text FILE    Informe legible (también por stdout si --verbose)
+  --out-midi FILE    MIDI original con markers en segmentos anómalos
+  --remove N         Genera un MIDI con los N segmentos más anómalos
+                     eliminados; los segmentos restantes se concatenan
+                     sin huecos. El fichero se guarda junto al MIDI de
+                     entrada con sufijo _pruned_<N>.mid (o en la ruta
+                     indicada con --remove-out FILE)
+  --remove-out FILE  Ruta de salida del MIDI podado (opcional)
+  --top N            Nº de segmentos a reportar (default: 5)
+  --threshold F      Score mínimo de anomalía 0-1 (default: 0.40)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python section_score.py obra.mid
+  python section_score.py obra.mid --granularity form --weights harmonic
+  python section_score.py obra.mid --granularity fixed 8 --top 3
+  python section_score.py obra.mid --granularity hybrid --weights custom 0.4,0.2,0.3,0.1
+  python section_score.py obra.mid --out-json r.json --out-midi r.mid
+  python section_score.py obra.mid --track-mode melody --verbose
+  python section_score.py obra.mid --chords acordes.json
+  python section_score.py obra.mid --remove 3
+  python section_score.py obra.mid --remove 2 --remove-out limpia.mid
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, music21, numpy, scipy, sklearn
 """
 
 from __future__ import annotations

@@ -1,286 +1,311 @@
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║               MIDI DNA UNIFIED MIXER  v1.4                                  ║
-║   Fusión de lo mejor de tres generaciones de mezcladores MIDI               ║
-║                                                                              ║
-║  CARACTERÍSTICAS CORE:                                                       ║
-║  [A] Extracción rítmica avanzada: histograma 16 subdivisiones, síncopa,     ║
-║      accent weights, subdivisión primaria                                    ║
-║  [B] Curvas emocionales completas: Lerdahl, Tonnetz, Valencia, Arousal,     ║
-║      Actividad, Estabilidad, Entropía, clasificación de arco                ║
-║  [C] Estructura formal automática: segmentación A/B/C, frases, cadencias   ║
-║  [D] Markov de 2º orden (intervalo × duración) para melodía estilística    ║
-║  [E] Mosaic splicing: fragmentos reales transpuestos                        ║
-║  [F] Ornamentación idiomática: mordentes, apoyaturas, notas de paso        ║
-║  [G] Contrapunto multi-especie: 1ª/2ª/3ª según densidad emocional          ║
-║  [H] Groove map: timing humanizado extraído del MIDI fuente                ║
-║  [I] Patrón de acompañamiento detectado del MIDI fuente                    ║
-║  [J] Sequitur grammar: frases clasificadas por calidad musical              ║
-║  [K] Voice-leading riguroso: sin paralelas, movimiento mínimo              ║
-║  [L] Acompañamiento Alberti/arpegio/bloque por energía y tensión           ║
-║  [M] Puentes pivot-chord entre secciones                                    ║
-║  [N] Candidatos múltiples con scoring de calidad extendido                  ║
-║  [O] EmotionalController: parámetros compás-a-compás desde curvas          ║
-║  [P] FormGenerator: estructura formal heredada y escalada                   ║
-║  [Q] Modulación real por sección: relativo en B, dominante en C            ║
-║  [R] Export MusicXML opcional                                               ║
-║  [S] Silencios de frase + CC#64 sustain pedal + CC#11 expression           ║
-║  [T] Walking bass melódico con notas de paso y aproximación cromática       ║
-║  [U] Percusión generada desde rhythm_grid                                   ║
-║  [V] Export split-tracks: una pista por fichero para DAW                    ║
-║  [W] Fingerprint de bordes: JSON con entrada/salida para coherence          ║
-║      stitching entre fragmentos (--export-fingerprint)                      ║
-║  [X] Phrase stitch: concatenación inteligente de un banco de frases MIDI   ║
-║      externas. En cada ventana elige la frase más adecuada según las        ║
-║      curvas de tensión/arousal y la cohesión de altura entre frases.        ║
-║                                                                              ║
-║  MEJORAS EMOCIONALES v1.2 (activas por defecto, desactivables con --no-*): ║
-║  [1] Markov condicionado por tensión: sesga intervalos según arco           ║
-║  [2] Envolvente dinámica: crescendo → fortissimo → piano súbito             ║
-║  [3] Coherencia motívica: reutiliza el motivo de la primera sección A       ║
-║  [4] Disonancia presupuestada: cromatismo planificado con resolución        ║
-║  [5] Cambios de textura por sección + sparse en el clímax                  ║
-║                                                                              ║
-║  MUTACIÓN TEMPORAL v1.3 (todas opcionales, activadas con --mt-*):           ║
-║  [MT1] Curva de densidad rítmica: de sparse a full a lo largo de la pieza   ║
-║  [MT2] Curva de complejidad armónica: de tríadas a acordes de 9ª           ║
-║  [MT3] Curva de estilo de acompañamiento: alberti → arpeggio → block        ║
-║  [MT4] Curva de registro melódico: de grave a agudo o viceversa             ║
-║  [MT5] Curva de swing gradual: de tiempo exacto a groove completo           ║
-║  [MT6] Morphing rítmico entre dos fuentes MIDI                              ║
-║  [MT7] Morphing emocional entre dos arcos de tensión/arousal               ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+midi_dna_unified.py — Midi Dna Unified Mixer: fusión de lo mejor de tres
+generaciones de mezcladores MIDI
+(versión 1.4).
 
-USO:
-    python midi_dna_unified.py midi1.mid midi2.mid [midi3.mid ...] [opciones]
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  CARACTERÍSTICAS CORE:
+  [A] Extracción rítmica avanzada: histograma 16 subdivisiones, síncopa,
+      accent weights, subdivisión primaria
+  [B] Curvas emocionales completas: Lerdahl, Tonnetz, Valencia, Arousal,
+      Actividad, Estabilidad, Entropía, clasificación de arco
+  [C] Estructura formal automática: segmentación A/B/C, frases, cadencias
+  [D] Markov de 2º orden (intervalo × duración) para melodía estilística
+  [E] Mosaic splicing: fragmentos reales transpuestos
+  [F] Ornamentación idiomática: mordentes, apoyaturas, notas de paso
+  [G] Contrapunto multi-especie: 1ª/2ª/3ª según densidad emocional
+  [H] Groove map: timing humanizado extraído del MIDI fuente
+  [I] Patrón de acompañamiento detectado del MIDI fuente
+  [J] Sequitur grammar: frases clasificadas por calidad musical
+  [K] Voice-leading riguroso: sin paralelas, movimiento mínimo
+  [L] Acompañamiento Alberti/arpegio/bloque por energía y tensión
+  [M] Puentes pivot-chord entre secciones
+  [N] Candidatos múltiples con scoring de calidad extendido
+  [O] EmotionalController: parámetros compás-a-compás desde curvas
+  [P] FormGenerator: estructura formal heredada y escalada
+  [Q] Modulación real por sección: relativo en B, dominante en C
+  [R] Export MusicXML opcional
+  [S] Silencios de frase + CC#64 sustain pedal + CC#11 expression
+  [T] Walking bass melódico con notas de paso y aproximación cromática
+  [U] Percusión generada desde rhythm_grid
+  [V] Export split-tracks: una pista por fichero para DAW
+  [W] Fingerprint de bordes: JSON con entrada/salida para coherence
+      stitching entre fragmentos (--export-fingerprint)
+  [X] Phrase stitch: concatenación inteligente de un banco de frases MIDI
+      externas. En cada ventana elige la frase más adecuada según las
+      curvas de tensión/arousal y la cohesión de altura entre frases.
 
-    También con roles explícitos:
-    python midi_dna_unified.py --melody a.mid --harmony b.mid --rhythm c.mid
+  MEJORAS EMOCIONALES v1.2 (activas por defecto, desactivables con --no-*):
+  [1] Markov condicionado por tensión: sesga intervalos según arco
+  [2] Envolvente dinámica: crescendo → fortissimo → piano súbito
+  [3] Coherencia motívica: reutiliza el motivo de la primera sección A
+  [4] Disonancia presupuestada: cromatismo planificado con resolución
+  [5] Cambios de textura por sección + sparse en el clímax
 
+  MUTACIÓN TEMPORAL v1.3 (todas opcionales, activadas con --mt-*):
+  [MT1] Curva de densidad rítmica: de sparse a full a lo largo de la pieza
+  [MT2] Curva de complejidad armónica: de tríadas a acordes de 9ª
+  [MT3] Curva de estilo de acompañamiento: alberti → arpeggio → block
+  [MT4] Curva de registro melódico: de grave a agudo o viceversa
+  [MT5] Curva de swing gradual: de tiempo exacto a groove completo
+  [MT6] Morphing rítmico entre dos fuentes MIDI
+  [MT7] Morphing emocional entre dos arcos de tensión/arousal
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
 OPCIONES PRINCIPALES:
-    --mode          auto | rhythm_melody | harmony_melody | full_blend |
-                    custom | mosaic | energy | emotion | phrase_stitch
-    --phrases-dir DIR   [X] Directorio con MIDIs de frases (requerido para
-                    phrase_stitch). Cada .mid = una frase independiente.
-    --phrase-seed N Semilla para la elección estocástica de frases (default: --seed)
-    --emotion_src N Índice del MIDI que dona el arco emocional (default: 0)
-    --form_src N    Índice del MIDI que dona la estructura formal (default: 0)
-    --sources       Para modo custom: rhythm=N,melody=N,harmony=N
-    --key           Tonalidad destino ("C major", "A minor", …)
-    --bars N        Número de compases a generar (default: 16)
-    --tempo BPM     BPM (default: detectado del primer MIDI)
-    --form FORM     Forma musical: AABA, ABAC, ABAB… (default: auto)
-    --surprise R    Tasa de cromatismo sorpresa 0-1 (default: 0.08)
-    --rhythm_strength F  Fuerza del groove 0-2 (default: 1.0)
-    --candidates N  Generar N candidatos y elegir el mejor (default: 1)
-    --acc-style     alberti | arpeggio | block | waltz  (estilo fijo global)
-    --voices        Voces extra: "violin,viola:inner,horn:pedal:0.7"
-    --no-humanize   Desactivar humanización de groove
-    --no-percussion Desactivar percusión automática
-    --split-tracks  Exportar cada pista como fichero MIDI independiente
-    --export-xml    Exportar en MusicXML
-    --export-fingerprint  Exportar JSON con huella de bordes para coherence
-                    stitching. Genera <output>.fingerprint.json con:
-                    entry (acorde, bajo, registro, tensión al inicio),
-                    exit  (acorde, bajo, última nota, tensión al final),
-                    tension_curve (stats: media, pico, dirección),
-                    stitching_hints (tipo de cadencia, apertura, tolerancia BPM)
-    --fingerprint-only    Analizar MIDI(s) y exportar solo el fingerprint JSON,
-                    sin generar música. Para secciones externas (DAW, MuseScore…).
-                    Ej: python midi_dna_unified.py seccion_daw.mid --fingerprint-only
-    --verbose       Informe detallado del ADN
-    --output FILE   Archivo de salida (default: output_unified.mid)
-    --seed N        Semilla aleatoria (default: 42)
+      --mode          auto | rhythm_melody | harmony_melody | full_blend |
+                      custom | mosaic | energy | emotion | phrase_stitch
+      --phrases-dir DIR   [X] Directorio con MIDIs de frases (requerido para
+                      phrase_stitch). Cada .mid = una frase independiente.
+      --phrase-seed N Semilla para la elección estocástica de frases (default: --seed)
+      --emotion_src N Índice del MIDI que dona el arco emocional (default: 0)
+      --form_src N    Índice del MIDI que dona la estructura formal (default: 0)
+      --sources       Para modo custom: rhythm=N,melody=N,harmony=N
+      --key           Tonalidad destino ("C major", "A minor", …)
+      --bars N        Número de compases a generar (default: 16)
+      --tempo BPM     BPM (default: detectado del primer MIDI)
+      --form FORM     Forma musical: AABA, ABAC, ABAB… (default: auto)
+      --surprise R    Tasa de cromatismo sorpresa 0-1 (default: 0.08)
+      --rhythm_strength F  Fuerza del groove 0-2 (default: 1.0)
+      --candidates N  Generar N candidatos y elegir el mejor (default: 1)
+      --acc-style     alberti | arpeggio | block | waltz  (estilo fijo global)
+      --voices        Voces extra: "violin,viola:inner,horn:pedal:0.7"
+      --no-humanize   Desactivar humanización de groove
+      --no-percussion Desactivar percusión automática
+      --split-tracks  Exportar cada pista como fichero MIDI independiente
+      --export-xml    Exportar en MusicXML
+      --export-fingerprint  Exportar JSON con huella de bordes para coherence
+                      stitching. Genera <output>.fingerprint.json con:
+                      entry (acorde, bajo, registro, tensión al inicio),
+                      exit  (acorde, bajo, última nota, tensión al final),
+                      tension_curve (stats: media, pico, dirección),
+                      stitching_hints (tipo de cadencia, apertura, tolerancia BPM)
+      --fingerprint-only    Analizar MIDI(s) y exportar solo el fingerprint JSON,
+                      sin generar música. Para secciones externas (DAW, MuseScore…).
+                      Ej: python midi_dna_unified.py seccion_daw.mid --fingerprint-only
+      --verbose       Informe detallado del ADN
+      --output FILE   Archivo de salida (default: output_unified.mid)
+      --seed N        Semilla aleatoria (default: 42)
 
-MEJORAS EMOCIONALES v1.2 (activas por defecto):
-    --no-tension-markov       [1] Desactivar sesgo de tensión en Markov
-    --no-dynamic-swells       [2] Desactivar crescendos y piano súbito
-    --no-motif-coherence      [3] Desactivar siembra del motivo en retornos A
-    --no-budgeted-dissonance  [4] Desactivar disonancia presupuestada
-    --no-texture-changes      [5] Desactivar cambios de textura por sección
+  MEJORAS EMOCIONALES v1.2 (activas por defecto):
+      --no-tension-markov       [1] Desactivar sesgo de tensión en Markov
+      --no-dynamic-swells       [2] Desactivar crescendos y piano súbito
+      --no-motif-coherence      [3] Desactivar siembra del motivo en retornos A
+      --no-budgeted-dissonance  [4] Desactivar disonancia presupuestada
+      --no-texture-changes      [5] Desactivar cambios de textura por sección
 
-MUTACIÓN TEMPORAL v1.3 (todas opcionales):
+  MUTACIÓN TEMPORAL v1.3 (todas opcionales):
 
-  Formato de curvas: "BAR:VALOR, BAR:VALOR, …"
-    - BAR   : número de compás (0-based)
-    - VALOR : número 0-1, o palabra clave según el parámetro
-    - La curva se interpola linealmente entre los puntos de control
-    - Los extremos se extienden automáticamente si no cubren toda la pieza
+    Formato de curvas: "BAR:VALOR, BAR:VALOR, …"
+      - BAR   : número de compás (0-based)
+      - VALOR : número 0-1, o palabra clave según el parámetro
+      - La curva se interpola linealmente entre los puntos de control
+      - Los extremos se extienden automáticamente si no cubren toda la pieza
 
-    --mt-density "0:sparse, 8:dense, 24:medium"
-        [MT1] Densidad rítmica de la melodía compás a compás.
-        Palabras: silent(0) · sparse(0.25) · light(0.45) · medium(0.65)
-                  dense(0.85) · full(1.0)
-        Efecto: controla cuántas notas se generan por beat (0.3–2.5×)
+      --mt-density "0:sparse, 8:dense, 24:medium"
+          [MT1] Densidad rítmica de la melodía compás a compás.
+          Palabras: silent(0) · sparse(0.25) · light(0.45) · medium(0.65)
+                    dense(0.85) · full(1.0)
+          Efecto: controla cuántas notas se generan por beat (0.3–2.5×)
 
-    --mt-harmony-complexity "0:simple, 16:extended, 32:chromatic"
-        [MT2] Complejidad armónica por compás.
-        Palabras: simple(0) · diatonic(0.2) · moderate(0.4)
-                  extended(0.65) · chromatic(1.0)
-        Efecto: añade séptimas y novenas progresivamente a los acordes
+      --mt-harmony-complexity "0:simple, 16:extended, 32:chromatic"
+          [MT2] Complejidad armónica por compás.
+          Palabras: simple(0) · diatonic(0.2) · moderate(0.4)
+                    extended(0.65) · chromatic(1.0)
+          Efecto: añade séptimas y novenas progresivamente a los acordes
 
-    --mt-acc-style "0:alberti, 8:arpeggio, 16:block"
-        [MT3] Estilo de acompañamiento por compás.
-        Palabras: alberti · arpeggio · waltz · block
-        Efecto: el acompañamiento muta gradualmente entre estilos
-        Nota: anula --no-texture-changes y la selección emocional
+      --mt-acc-style "0:alberti, 8:arpeggio, 16:block"
+          [MT3] Estilo de acompañamiento por compás.
+          Palabras: alberti · arpeggio · waltz · block
+          Efecto: el acompañamiento muta gradualmente entre estilos
+          Nota: anula --no-texture-changes y la selección emocional
 
-    --mt-register "0:low, 8:mid, 24:high"
-        [MT4] Registro melódico por compás.
-        Palabras: low(0) · mid-low(0.25) · mid(0.5) · mid-high(0.75) · high(1.0)
-        Efecto: desplaza el rango objetivo de la melodía ±12 semitonos
+      --mt-register "0:low, 8:mid, 24:high"
+          [MT4] Registro melódico por compás.
+          Palabras: low(0) · mid-low(0.25) · mid(0.5) · mid-high(0.75) · high(1.0)
+          Efecto: desplaza el rango objetivo de la melodía ±12 semitonos
 
-    --mt-swing "0:0.0, 8:0.5, 16:1.0"
-        [MT5] Intensidad del swing (groove) por compás.
-        Valores: 0.0=sin groove (tempo mecánico) · 1.0=groove completo del fuente
-        Efecto: escala los desvíos de timing y velocidad del groove_map
+      --mt-swing "0:0.0, 8:0.5, 16:1.0"
+          [MT5] Intensidad del swing (groove) por compás.
+          Valores: 0.0=sin groove (tempo mecánico) · 1.0=groove completo del fuente
+          Efecto: escala los desvíos de timing y velocidad del groove_map
 
-    --mt-rhythm-morph "0:0.0, 16:1.0"
-        [MT6] Morphing del patrón rítmico entre fuente A (primer MIDI) y
-        fuente B (segundo MIDI). Requiere al menos 2 ficheros de entrada.
-        0.0=ritmo puro de A · 1.0=ritmo puro de B
-        Efecto: interpola los eventos de cada compás entre ambos patrones
+      --mt-rhythm-morph "0:0.0, 16:1.0"
+          [MT6] Morphing del patrón rítmico entre fuente A (primer MIDI) y
+          fuente B (segundo MIDI). Requiere al menos 2 ficheros de entrada.
+          0.0=ritmo puro de A · 1.0=ritmo puro de B
+          Efecto: interpola los eventos de cada compás entre ambos patrones
 
-    --mt-emotion-morph "0:0.0, 8:0.5, 16:1.0"
-        [MT7] Morphing del arco emocional entre fuente A y fuente B.
-        Requiere al menos 2 ficheros de entrada.
-        0.0=tensión/arousal de A · 1.0=tensión/arousal de B
-        Efecto: blends las curvas de tensión, arousal, valencia y actividad
+      --mt-emotion-morph "0:0.0, 8:0.5, 16:1.0"
+          [MT7] Morphing del arco emocional entre fuente A y fuente B.
+          Requiere al menos 2 ficheros de entrada.
+          0.0=tensión/arousal de A · 1.0=tensión/arousal de B
+          Efecto: blends las curvas de tensión, arousal, valencia y actividad
 
-EJEMPLOS:
+── Otras opciones del parser ──
+  --rhythm-json FILE          [Y1] JSON de ritmo exportado por rhythm_table.py
+                              (--export-json, esquema con "events"). Dona el
+                              ritmo directamente, sin pasar por MIDI. Fuerza
+                              --mode=custom.
+  --chords "ACORDE[:DUR] ..."
+                              [Y2] Progresión de acordes en texto, ej.
+                              "Am:1.50 G:0.75" (el formato que produce
+                              rhythm_table.py --apply-to-chords) o "Am G F E7"
+                              sin duraciones. Dona la armonía directamente,
+                              sin pasar por MIDI. Fuerza --mode=custom.
 
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python midi_dna_unified.py midi1.mid midi2.mid [midi3.mid ...] [opciones]
+
+  También con roles explícitos:
+  python midi_dna_unified.py --melody a.mid --harmony b.mid --rhythm c.mid
+
+── EJEMPLOS ──
   ── Uso básico ──────────────────────────────────────────────────────────────
     python midi_dna_unified.py bach.mid jazz.mid
     python midi_dna_unified.py bach.mid jazz.mid --mode mosaic --verbose
     python midi_dna_unified.py a.mid b.mid c.mid --mode harmony_melody --bars 32
     python midi_dna_unified.py a.mid b.mid --mode emotion \
-        --key "A minor" --form AABA --emotion_src 1
+          --key "A minor" --form AABA --emotion_src 1
     python midi_dna_unified.py \
-        --melody a.mid --harmony b.mid --rhythm c.mid --form ABAB
+          --melody a.mid --harmony b.mid --rhythm c.mid --form ABAB
 
   ── Mutación de densidad rítmica [MT1] ──────────────────────────────────────
     # Pieza que arranca muy esparsa y va ganando densidad hasta el clímax
     python midi_dna_unified.py a.mid b.mid --bars 32 \
-        --mt-density "0:sparse, 20:dense, 32:medium"
+          --mt-density "0:sparse, 20:dense, 32:medium"
 
     # Introducción lenta, desarrollo denso, coda tranquila
     python midi_dna_unified.py a.mid b.mid --bars 40 \
-        --mt-density "0:light, 8:medium, 16:full, 32:medium, 40:sparse"
+          --mt-density "0:light, 8:medium, 16:full, 32:medium, 40:sparse"
 
   ── Evolución armónica [MT2] ────────────────────────────────────────────────
     # Empieza con tríadas simples, añade extensiones progresivamente
     python midi_dna_unified.py a.mid b.mid --bars 32 \
-        --mt-harmony-complexity "0:simple, 16:moderate, 32:chromatic"
+          --mt-harmony-complexity "0:simple, 16:moderate, 32:chromatic"
 
     # Jazz: complejidad alta desde el principio, plateau en el bridge
     python midi_dna_unified.py jazz.mid bossa.mid --bars 32 \
-        --mt-harmony-complexity "0:extended, 8:chromatic, 24:extended"
+          --mt-harmony-complexity "0:extended, 8:chromatic, 24:extended"
 
   ── Morphing de estilo de acompañamiento [MT3] ──────────────────────────────
     # De Alberti clásico a bloque dramático
     python midi_dna_unified.py a.mid b.mid --bars 24 \
-        --mt-acc-style "0:alberti, 12:arpeggio, 24:block"
+          --mt-acc-style "0:alberti, 12:arpeggio, 24:block"
 
     # Vals que se convierte en arpegio lírico
     python midi_dna_unified.py valse.mid nocturno.mid --bars 32 \
-        --mt-acc-style "0:waltz, 16:arpeggio"
+          --mt-acc-style "0:waltz, 16:arpeggio"
 
   ── Arco de registro [MT4] ──────────────────────────────────────────────────
     # Melodía que asciende hacia el clímax y desciende en la resolución
     python midi_dna_unified.py a.mid b.mid --bars 32 \
-        --mt-register "0:low, 20:high, 32:mid"
+          --mt-register "0:low, 20:high, 32:mid"
 
     # Coda que desciende progresivamente
     python midi_dna_unified.py a.mid b.mid --bars 24 \
-        --mt-register "0:mid-high, 24:low"
+          --mt-register "0:mid-high, 24:low"
 
   ── Swing gradual [MT5] ─────────────────────────────────────────────────────
     # Banda de jazz que "calienta": empieza cuadrado y va soltando el swing
     python midi_dna_unified.py jazz_a.mid jazz_b.mid --bars 32 \
-        --mt-swing "0:0.0, 8:0.3, 16:0.8, 32:1.0"
+          --mt-swing "0:0.0, 8:0.3, 16:0.8, 32:1.0"
 
     # Dejar que el groove aparezca y desaparezca (intro y coda sin swing)
     python midi_dna_unified.py a.mid b.mid --bars 32 \
-        --mt-swing "0:0.0, 4:1.0, 28:1.0, 32:0.0"
+          --mt-swing "0:0.0, 4:1.0, 28:1.0, 32:0.0"
 
   ── Morphing rítmico entre dos fuentes [MT6] ────────────────────────────────
     # La obra comienza con el ritmo de bach.mid y termina con el de jazz.mid
     python midi_dna_unified.py bach.mid jazz.mid --bars 32 \
-        --mt-rhythm-morph "0:0.0, 32:1.0"
+          --mt-rhythm-morph "0:0.0, 32:1.0"
 
     # Morfosis en la parte central, secciones inicial y final estables
     python midi_dna_unified.py a.mid b.mid --bars 40 \
-        --mt-rhythm-morph "0:0.0, 8:0.0, 24:1.0, 40:1.0"
+          --mt-rhythm-morph "0:0.0, 8:0.0, 24:1.0, 40:1.0"
 
   ── Morphing emocional entre dos arcos [MT7] ────────────────────────────────
     # Empieza con la emoción de nocturno.mid, termina con la de jazz.mid
     python midi_dna_unified.py nocturno.mid jazz.mid --bars 32 \
-        --mt-emotion-morph "0:0.0, 32:1.0"
+          --mt-emotion-morph "0:0.0, 32:1.0"
 
     # Bridge emocional: secciones externas en A, bridge en B
     python midi_dna_unified.py a.mid b.mid --bars 32 --form AABA \
-        --mt-emotion-morph "0:0.0, 8:0.0, 16:1.0, 24:0.0, 32:0.0"
+          --mt-emotion-morph "0:0.0, 8:0.0, 16:1.0, 24:0.0, 32:0.0"
 
   ── Combinaciones avanzadas ─────────────────────────────────────────────────
     # Narrativa completa: introduce → desarrolla → climax → resuelve
     python midi_dna_unified.py a.mid b.mid --bars 48 \
-        --mt-density "0:sparse, 16:dense, 36:full, 48:sparse" \
-        --mt-register "0:mid-low, 24:high, 48:mid" \
-        --mt-harmony-complexity "0:simple, 16:extended, 32:chromatic, 48:diatonic" \
-        --mt-swing "0:0.0, 12:0.8, 36:0.8, 48:0.0"
+          --mt-density "0:sparse, 16:dense, 36:full, 48:sparse" \
+          --mt-register "0:mid-low, 24:high, 48:mid" \
+          --mt-harmony-complexity "0:simple, 16:extended, 32:chromatic, 48:diatonic" \
+          --mt-swing "0:0.0, 12:0.8, 36:0.8, 48:0.0"
 
     # Fusión estilística total: ritmo de A → B, emoción de B → A
     python midi_dna_unified.py clasico.mid jazz.mid --bars 32 \
-        --mt-rhythm-morph "0:0.0, 32:1.0" \
-        --mt-emotion-morph "0:1.0, 32:0.0" \
-        --mt-acc-style "0:alberti, 32:block"
+          --mt-rhythm-morph "0:0.0, 32:1.0" \
+          --mt-emotion-morph "0:1.0, 32:0.0" \
+          --mt-acc-style "0:alberti, 32:block"
 
     # Transformación de bolero a jazz (cambio de todo simultáneo)
     python midi_dna_unified.py bolero.mid jazz.mid --bars 40 \
-        --mt-rhythm-morph "0:0.0, 40:1.0" \
-        --mt-swing "0:0.0, 40:1.0" \
-        --mt-harmony-complexity "0:diatonic, 40:chromatic" \
-        --mt-acc-style "0:waltz, 20:arpeggio, 40:block"
+          --mt-rhythm-morph "0:0.0, 40:1.0" \
+          --mt-swing "0:0.0, 40:1.0" \
+          --mt-harmony-complexity "0:diatonic, 40:chromatic" \
+          --mt-acc-style "0:waltz, 20:arpeggio, 40:block"
 
   ── Phrase stitch [X] ───────────────────────────────────────────────────────
     # Uso básico: banco de frases + fuente de armonía/ritmo
     python midi_dna_unified.py bach.mid --mode phrase_stitch \
-        --phrases-dir ./mis_frases/ --bars 16 --key "C major"
+          --phrases-dir ./mis_frases/ --bars 16 --key "C major"
 
     # Con varias fuentes y curva de tensión
     python midi_dna_unified.py armonía.mid ritmo.mid \
-        --mode phrase_stitch --phrases-dir ./phrases/ \
-        --bars 32 --key "A minor" --form AABA
+          --mode phrase_stitch --phrases-dir ./phrases/ \
+          --bars 32 --key "A minor" --form AABA
 
     # Controlar la selección de frases + ornamentación + contrapunto
     python midi_dna_unified.py base.mid \
-        --mode phrase_stitch --phrases-dir ./phrases/ \
-        --bars 24 --phrase-seed 7 --verbose \
-        --mt-density "0:sparse, 12:dense, 24:medium"
+          --mode phrase_stitch --phrases-dir ./phrases/ \
+          --bars 24 --phrase-seed 7 --verbose \
+          --mt-density "0:sparse, 12:dense, 24:medium"
 
     # Combinar con mutación temporal: frases adaptadas a una narrativa
     python midi_dna_unified.py bach.mid jazz.mid \
-        --mode phrase_stitch --phrases-dir ./phrases/ \
-        --bars 32 --key "D minor" --form AABA \
-        --mt-density "0:light, 16:dense, 32:sparse" \
-        --mt-register "0:mid, 20:high, 32:mid-low" \
-        --output pieza_phrases.mid
+          --mode phrase_stitch --phrases-dir ./phrases/ \
+          --bars 32 --key "D minor" --form AABA \
+          --mt-density "0:light, 16:dense, 32:sparse" \
+          --mt-register "0:mid, 20:high, 32:mid-low" \
+          --output pieza_phrases.mid
 
   ── Pipeline completo v1.3 ──────────────────────────────────────────────────
     # Máxima expresividad: todas las mejoras + mutación temporal completa
     python midi_dna_unified.py bach.mid jazz.mid salsa.mid \
-        --mode full_blend --bars 40 --tempo 112 --key "D major" \
-        --form AABA --candidates 3 --rhythm_strength 1.2 --surprise 0.05 \
-        --voices "violin:melody_double:0.8,cello:inner:0.75,horn:pedal:0.6" \
-        --mt-density "0:light, 16:dense, 32:medium, 40:sparse" \
-        --mt-register "0:mid-low, 20:high, 40:mid" \
-        --mt-harmony-complexity "0:simple, 20:extended, 40:diatonic" \
-        --mt-swing "0:0.0, 8:0.6, 32:0.6, 40:0.0" \
-        --mt-emotion-morph "0:0.0, 20:0.5, 40:1.0" \
-        --export-xml --split-tracks --verbose --seed 42 --output obra_v13.mid
+          --mode full_blend --bars 40 --tempo 112 --key "D major" \
+          --form AABA --candidates 3 --rhythm_strength 1.2 --surprise 0.05 \
+          --voices "violin:melody_double:0.8,cello:inner:0.75,horn:pedal:0.6" \
+          --mt-density "0:light, 16:dense, 32:medium, 40:sparse" \
+          --mt-register "0:mid-low, 20:high, 40:mid" \
+          --mt-harmony-complexity "0:simple, 20:extended, 40:diatonic" \
+          --mt-swing "0:0.0, 8:0.6, 32:0.6, 40:0.0" \
+          --mt-emotion-morph "0:0.0, 20:0.5, 40:1.0" \
+          --export-xml --split-tracks --verbose --seed 42 --output obra_v13.mid
 
-DEPENDENCIAS:
-    pip install music21 mido numpy scipy scikit-learn
+── Más modos ──
+
+  # Exportar JSON con huella de bordes (entrada/salida) para coherence sti
+  python midi_dna_unified.py --export-fingerprint
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  pip install music21 mido numpy scipy scikit-learn
 """
 
 import sys

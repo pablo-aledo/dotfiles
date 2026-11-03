@@ -1,95 +1,109 @@
 #!/usr/bin/env python3
 """
-║                    HARMONIC GNN ANALYZER  v1.0                              ║
-║   Análisis armónico por grafo de notas (simultaneidad + sucesión)           ║
-║                                                                              ║
-║  Complementa a harmonic_analyzer.py. Ese analiza compás a compás con        ║
-║  plantillas de acordes sobre un histograma de alturas "plano" (una sola     ║
-║  secuencia lineal). Esta herramienta, en cambio, modela la pieza como un    ║
-║  GRAFO DE NOTAS con dos tipos de arista — como describe la Parte III.10     ║
-║  de la teoría de GNNs aplicada a música:                                    ║
-║                                                                              ║
-║    · arista de SIMULTANEIDAD — dos notas suenan a la vez (verticalidad,     ║
-║      "esto es un acorde")                                                   ║
-║    · arista de SUCESIÓN       — una nota sigue a otra en la misma voz       ║
-║      (horizontalidad, "esto es una línea melódica")                         ║
-║                                                                              ║
-║  Un histograma plano por compás no distingue "cuatro notas simultáneas      ║
-║  = un acorde" de "cuatro notas en sucesión rápida = un arpegio o una        ║
-║  floritura melódica que pasa por esas alturas sin ser ellas el acorde".     ║
-║  El grafo sí: al propagar información entre vecinos (varias rondas de       ║
-║  "message passing", igual que una capa de convolución de grafo) el         ║
-║  contexto armónico de cada nota emerge de mezclar lo que sueña con ella     ║
-║  Y lo que la rodea en el tiempo, no solo lo que cae dentro de una ventana   ║
-║  temporal arbitraria.                                                       ║
-║                                                                              ║
-║  Efecto práctico: mejor desambiguación de compases con notas de adorno,     ║
-║  arpegios o texturas no-en-bloque, y una nueva capacidad que                ║
-║  harmonic_analyzer.py no ofrece — clasificar CADA NOTA individual como      ║
-║  "estructural" (nota del acorde) u "ornamental" (nota de paso/bordadura/    ║
-║  apoyatura), útil como entrada previa a schenkerian_reducer.py.             ║
-║                                                                              ║
-║  MODOS:                                                                     ║
-║    graph           — construye el grafo de notas y lo exporta (JSON)       ║
-║    analyze          — análisis armónico compás a compás vía GNN            ║
-║    classify-notes   — nota a nota: estructural vs. ornamental              ║
-║    compare          — GNN (con contexto) vs. baseline (solo el compás)     ║
-║                                                                              ║
-║  PIPELINE (analyze):                                                        ║
-║  [1] NOTAS        — extrae notas del MIDI (pitch, inicio/fin en tiempos)    ║
-║  [2] GRAFO         — construye aristas de simultaneidad y de sucesión       ║
-║  [3] PROPAGACIÓN   — K rondas de message passing sobre croma 12-dim         ║
-║  [4] AGREGACIÓN    — combina los vectores de nota por compás                ║
-║  [5] TONALIDAD     — Krumhansl-Schmuckler sobre el croma global             ║
-║  [6] PLANTILLAS    — empareja cada compás con la plantilla de acorde más    ║
-║                      cercana (tríadas y tétradas, 12 raíces)                 ║
-║  [7] ROMANOS       — numeral + función (T/S/D) respecto a la tonalidad      ║
-║  [8] INFORME       — tabla por compás + JSON opcional                       ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python harmonic_gnn_analyzer.py analyze obra.mid                         ║
-║    python harmonic_gnn_analyzer.py analyze obra.mid --key Cmaj              ║
-║    python harmonic_gnn_analyzer.py analyze obra.mid --layers 3 --explain    ║
-║    python harmonic_gnn_analyzer.py analyze obra.mid --json obra.gnn.json    ║
-║    python harmonic_gnn_analyzer.py graph obra.mid --export-graph obra.g.json║
-║    python harmonic_gnn_analyzer.py classify-notes obra.mid                  ║
-║    python harmonic_gnn_analyzer.py classify-notes obra.mid --explain        ║
-║    python harmonic_gnn_analyzer.py compare obra.mid                         ║
-║    python harmonic_gnn_analyzer.py compare obra.mid --only-changed          ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi                 MIDI de entrada                                     ║
-║    --key KEY             Fuerza la tonalidad (p.ej. Cmaj, Am, F#min)        ║
-║    --beats-per-bar N     Pulsos por compás (default: 4)                     ║
-║    --window N            Compases por ventana de análisis (default: 1)      ║
-║    --layers K            Rondas de propagación en el grafo (default: 2)     ║
-║    --w-self F            Peso del propio nodo en cada ronda (default: 0.34) ║
-║    --w-simul F           Peso de vecinos por simultaneidad (default: 0.44)  ║
-║    --w-succ F            Peso de vecinos por sucesión (default: 0.22)       ║
-║    --track N             Analiza solo la pista N (default: todas)           ║
-║    --explain             Añade una explicación por compás/nota              ║
-║    --json FILE           Escribe un sidecar JSON con el análisis completo   ║
-║    --export-graph FILE   (modo graph) Escribe el grafo en JSON              ║
-║    --only-changed        (modo compare) Solo muestra compases en desacuerdo ║
-║    --max-bars N          Limita la tabla impresa (default: 64)              ║
-║    --no-color            Desactivar colores ANSI                            ║
-║    --quiet               Salida mínima (útil en scripts)                    ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from harmonic_gnn_analyzer import (                                      ║
-║        extract_notes, build_graph, propagate, analyze_harmony_gnn,          ║
-║        classify_notes,                                                      ║
-║    )                                                                        ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    (stdout)                 tabla por compás/nota + informe                 ║
-║    --json FILE              análisis completo en JSON                       ║
-║    --export-graph FILE      nodos + aristas del grafo en JSON               ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:   mido, numpy                                                    ║
-║    Integración conceptual: harmonic_analyzer.py (mismo repertorio de         ║
-║    plantillas/numerales), schenkerian_reducer.py (consume classify-notes)    ║
+harmonic_gnn_analyzer.py — Harmonic Gnn Analyzer: análisis armónico por grafo
+de notas (simultaneidad + sucesión)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Complementa a harmonic_analyzer.py. Ese analiza compás a compás con
+plantillas de acordes sobre un histograma de alturas "plano" (una sola
+secuencia lineal). Esta herramienta, en cambio, modela la pieza como un
+GRAFO DE NOTAS con dos tipos de arista — como describe la Parte III.10
+de la teoría de GNNs aplicada a música:
+
+  · arista de SIMULTANEIDAD — dos notas suenan a la vez (verticalidad,
+    "esto es un acorde")
+  · arista de SUCESIÓN       — una nota sigue a otra en la misma voz
+    (horizontalidad, "esto es una línea melódica")
+
+Un histograma plano por compás no distingue "cuatro notas simultáneas
+= un acorde" de "cuatro notas en sucesión rápida = un arpegio o una
+floritura melódica que pasa por esas alturas sin ser ellas el acorde".
+El grafo sí: al propagar información entre vecinos (varias rondas de
+"message passing", igual que una capa de convolución de grafo) el
+contexto armónico de cada nota emerge de mezclar lo que sueña con ella
+Y lo que la rodea en el tiempo, no solo lo que cae dentro de una ventana
+temporal arbitraria.
+
+Efecto práctico: mejor desambiguación de compases con notas de adorno,
+arpegios o texturas no-en-bloque, y una nueva capacidad que
+harmonic_analyzer.py no ofrece — clasificar CADA NOTA individual como
+"estructural" (nota del acorde) u "ornamental" (nota de paso/bordadura/
+apoyatura), útil como entrada previa a schenkerian_reducer.py.
+
+COMO MÓDULO:
+  from harmonic_gnn_analyzer import (
+      extract_notes, build_graph, propagate, analyze_harmony_gnn,
+      classify_notes,
+  )
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+    graph           — construye el grafo de notas y lo exporta (JSON)
+    analyze          — análisis armónico compás a compás vía GNN
+    classify-notes   — nota a nota: estructural vs. ornamental
+    compare          — GNN (con contexto) vs. baseline (solo el compás)
+
+  PIPELINE (analyze):
+  [1] NOTAS        — extrae notas del MIDI (pitch, inicio/fin en tiempos)
+  [2] GRAFO         — construye aristas de simultaneidad y de sucesión
+  [3] PROPAGACIÓN   — K rondas de message passing sobre croma 12-dim
+  [4] AGREGACIÓN    — combina los vectores de nota por compás
+  [5] TONALIDAD     — Krumhansl-Schmuckler sobre el croma global
+  [6] PLANTILLAS    — empareja cada compás con la plantilla de acorde más
+                      cercana (tríadas y tétradas, 12 raíces)
+  [7] ROMANOS       — numeral + función (T/S/D) respecto a la tonalidad
+  [8] INFORME       — tabla por compás + JSON opcional
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  (stdout)                 tabla por compás/nota + informe
+  --json FILE              análisis completo en JSON
+  --export-graph FILE      nodos + aristas del grafo en JSON
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi                 MIDI de entrada
+  --key KEY             Fuerza la tonalidad (p.ej. Cmaj, Am, F#min)
+  --beats-per-bar N     Pulsos por compás (default: 4)
+  --window N            Compases por ventana de análisis (default: 1)
+  --layers K            Rondas de propagación en el grafo (default: 2)
+  --w-self F            Peso del propio nodo en cada ronda (default: 0.34)
+  --w-simul F           Peso de vecinos por simultaneidad (default: 0.44)
+  --w-succ F            Peso de vecinos por sucesión (default: 0.22)
+  --track N             Analiza solo la pista N (default: todas)
+  --explain             Añade una explicación por compás/nota
+  --json FILE           Escribe un sidecar JSON con el análisis completo
+  --export-graph FILE   (modo graph) Escribe el grafo en JSON
+  --only-changed        (modo compare) Solo muestra compases en desacuerdo
+  --max-bars N          Limita la tabla impresa (default: 64)
+  --no-color            Desactivar colores ANSI
+  --quiet               Salida mínima (útil en scripts)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python harmonic_gnn_analyzer.py analyze obra.mid
+  python harmonic_gnn_analyzer.py analyze obra.mid --key Cmaj
+  python harmonic_gnn_analyzer.py analyze obra.mid --layers 3 --explain
+  python harmonic_gnn_analyzer.py analyze obra.mid --json obra.gnn.json
+  python harmonic_gnn_analyzer.py graph obra.mid --export-graph obra.g.json
+  python harmonic_gnn_analyzer.py classify-notes obra.mid
+  python harmonic_gnn_analyzer.py classify-notes obra.mid --explain
+  python harmonic_gnn_analyzer.py compare obra.mid
+  python harmonic_gnn_analyzer.py compare obra.mid --only-changed
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  Siempre:   mido, numpy
+  Integración conceptual: harmonic_analyzer.py (mismo repertorio de
+  plantillas/numerales), schenkerian_reducer.py (consume classify-notes)
 """
 
 from __future__ import annotations

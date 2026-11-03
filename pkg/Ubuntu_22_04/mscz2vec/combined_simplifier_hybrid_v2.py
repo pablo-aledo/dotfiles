@@ -1,88 +1,143 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║              COMBINED SIMPLIFIER HYBRID  v3.0  (autocontenido)               ║
-║                                                                              ║
-║  PROPOSITO:                                                                 ║
-║   Fichero INDEPENDIENTE (no importa combined_simplifier.py ni ningun otro   ║
-║   modulo del proyecto) que simplifica una partitura de piano en formato     ║
-║   MIDI a distintos niveles de dificultad pedagogica (--target-grade 1..8,   ║
-║   de principiante a virtuoso). Es la fusion de dos lineas de trabajo        ║
-║   previas sobre el mismo problema:                                         ║
-║                                                                              ║
-║     · combined_simplifier.py (v1.1/v2.0): motor estructural (suelo         ║
-║       schenkeriano + greedy por compas + rejilla de respaldo) y una capa   ║
-║       de sustitucion armonica/melodica genuina (no elimina notas).         ║
-║     · combined_simplifier_transformed.py (v1.2): un OPTIMIZADOR adaptativo ║
-║       de transformaciones musicales (prueba varias tecnicas por pasada y   ║
-║       solo acepta la que de verdad mejora el grado medido).                ║
-║                                                                              ║
-║   Este fichero se queda con lo mejor validado empiricamente de cada uno    ║
-║   (ver informe de comparacion en la conversacion que lo origino):          ║
-║     - la sustitucion armonica real de v2.0 (simplify_harmony/clarify_bass, ║
-║       cambia pitches, NUNCA reduce el numero de notas),                    ║
-║     - el bucle de aceptacion adaptativa de v1.2 (prueba-y-acepta-si-       ║
-║       mejora, varias pasadas) en vez de la escalera fija de v2.0,          ║
-║     - align_hands y merge_repeated_notes de v1.2 (huecos reales de v2.0),  ║
-║     - trim_overlaps de v1.2 como red de seguridad tras cualquier tecnica   ║
-║       que mueva onsets (huella de un riesgo real detectado en v2.0),       ║
-║     - el hallazgo empirico de v2.0 de que, si las transformaciones no      ║
-║       bastan, la rejilla de respaldo rinde mas arrancando desde el         ║
-║       snapshot ESTRUCTURAL original y no desde el ya transformado.         ║
-║   Deliberadamente NO incluye _simplify_chords de v1.2 (recorta voces por   ║
-║   posicion): es una eliminacion de notas reempaquetada como "armonica",    ║
-║   y esa funcion ya la cubre el adelgazado de voicings del motor            ║
-║   estructural (--max-voices-per-chord), con criterio funcional en vez de   ║
-║   posicional.                                                              ║
-║                                                                              ║
-║  TECNICAS (misma taxonomia de 6 categorias usada en todo el proyecto):     ║
-║   [ESTRUCTURAL] suelo schenkeriano + greedy por compas (motor original).   ║
-║   [REJILLA]     rejilla de respaldo, garantiza alcanzar cualquier grado.   ║
-║   [ARMONICA]    simplify_harmony (sustituir extension por tono de acorde   ║
-║                 mas cercano), clarify_bass (fundamental en cada cambio     ║
-║                 armonico). Pre-pasada, uniforme para todos los grados,     ║
-║                 SIEMPRE antes del greedy: nunca cambia el nº de notas.     ║
-║   [MELODICA]    resolve_ornaments (funde adornos muy breves en su vecina), ║
-║                 reduce_melodic_leaps (saltos grandes -> reubicacion de     ║
-║                 octava).                                                   ║
-║   [REGISTRO]    close_voicings (comprime voces internas de un bloque       ║
-║                 ancho, sin tocar los extremos que definen el contorno).    ║
-║   [TEXTURA]     arpeggiate_dense_chords, collapse_octave_doubles.          ║
-║   [RITMICA]     merge_repeated_notes, quantize_light, align_hands.         ║
-║   [ADITIVA]     add_connective_notes — candidata, no permanente: solo      ║
-║                 sobrevive si de verdad mejora el grado medido.             ║
-║                                                                              ║
-║  OPTIMIZADOR: para cada --target-grade, las tecnicas de REGISTRO/         ║
-║  TEXTURA/RITMICA/ADITIVA (la pre-pasada ARMONICA/MELODICA ya corrio antes  ║
-║  del greedy) se aplican con un bucle de aceptacion adaptativa: en cada     ║
-║  pasada se prueban todas sobre un clon del estado actual y se acepta solo  ║
-║  la primera que reduce estrictamente el grado medido (whole_piece_grade);  ║
-║  se repite hasta --max-transform-passes o hasta que ninguna mejora ya.     ║
-║  Si al final no se alcanzo el target, se recurre a la rejilla de respaldo  ║
-║  arrancando desde el snapshot ESTRUCTURAL original (no desde el ya         ║
-║  transformado).                                                            ║
-║                                                                              ║
-║  USO:                                                                       ║
-║    python combined_simplifier_hybrid.py obra.mid --target-grade 1 3 5 7    ║
-║    python combined_simplifier_hybrid.py obra.mid --target-grade 2 \\        ║
-║        --outdir out/ --max-transform-passes 12                             ║
-║    python combined_simplifier_hybrid.py obra.mid --target-grade 4 \\        ║
-║        --split 60 --no-additive                                            ║
-║        (--split: pitch MIDI que separa mano derecha/izquierda, def. 60=C4) ║
-║    python combined_simplifier_hybrid.py obra.mid --target-grade 6 \\        ║
-║        --no-transforms                                                     ║
-║        (desactiva TODA la capa hibrida: replica el motor estructural       ║
-║        v1.1 puro, suelo+greedy+rejilla, sin sustituciones ni optimizador)  ║
-║                                                                              ║
-║  SALIDA: por cada --target-grade se genera <nombre>_grade<N>.mid en        ║
-║  --outdir (o junto al fichero de entrada) y un informe por consola con el  ║
-║  grado realmente alcanzado, el metodo usado y el porcentaje de notas       ║
-║  conservadas.                                                              ║
-║                                                                              ║
-║  DEPENDENCIAS: solo numpy (stdlib para todo lo demas). Fichero unico y     ║
-║  autocontenido: no importa combined_simplifier.py ni                       ║
-║  combined_simplifier_transformed.py.                                       ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+combined_simplifier_hybrid_v2.py — Simplificador de piano por grados: sustitución
+armónica/melódica + optimizador adaptativo + rejilla + preparación automática
+(MIDI → MIDI, autocontenido)
+(versión 4.0 «arreglo»: sucesor de combined_simplifier_hybrid.py v3.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Mismo núcleo que combined_simplifier_hybrid.py (sustitución armónica/melódica
+que nunca reduce el nº de notas, optimizador de aceptación adaptativa por
+pasadas y rejilla de respaldo desde el snapshot estructural; fichero único que
+no importa otros módulos del proyecto), más una capa de preparación y de
+arreglo pensada para que la salida suene a arreglo pianístico y no solo a
+partitura «vaciada». Reduce a un grado --target-grade 1..8.
+
+Novedades de v4 respecto a v3 (son independientes de --no-transforms):
+  - Detección y corrección del compás: si el perfil de acentos indica otro
+    metro que el declarado (p. ej. un vals en 3/4 exportado como 4/4), se
+    corrige. Desactivable con --no-meter-detect.
+  - Transposición automática a la tonalidad con menos teclas negras (se
+    conserva la tonalidad original con --no-transpose).
+  - Protección de la melodía: greedy y rejilla no eliminan notas de la línea
+    melódica (comportamiento v3 con --no-protect-melody; necesario si se piden
+    grados muy bajos a toda costa).
+  - Retexturizado: la mano izquierda se regenera como patrón de acompañamiento
+    regular y la derecha se adelgaza a la melodía, hasta --retexture-max-grade
+    (defecto 6; por encima se respeta la textura original) y solo si la mano
+    izquierda es lo bastante irregular. Desactivable con --no-retexture.
+  - --max-voices-per-chord N: adelgaza cada bloque de acorde de una mano a N
+    voces antes del greedy, uniforme para todos los grados; útil cuando la
+    dificultad viene de acordes en bloque densos y el grado no se alcanza.
+
+Técnicas heredadas de v3 (taxonomía de 6 categorías): [ESTRUCTURAL] suelo
+schenkeriano + greedy por compás; [REJILLA] garantía de alcanzar el grado;
+[ARMÓNICA] simplify_harmony y clarify_bass; [MELÓDICA] resolve_ornaments y
+reduce_melodic_leaps; [REGISTRO] close_voicings; [TEXTURA]
+arpeggiate_dense_chords y collapse_octave_doubles; [RÍTMICA]
+merge_repeated_notes, quantize_light y align_hands; [ADITIVA]
+add_connective_notes (solo si mejora el grado medido). trim_overlaps actúa como
+red de seguridad tras toda técnica que mueva onsets.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  Arreglo completo (defecto)   Preparación v4 (metro, transposición, melodía
+                               protegida, retexturizado) + capa híbrida +
+                               rejilla.
+  --no-transforms              Desactiva la capa híbrida (pre-pasada
+                               armónica/melódica y optimizador): motor
+                               estructural puro (suelo + greedy + rejilla).
+  --no-additive                El optimizador no añade notas (add_connective_notes).
+  --protect-bars / --soften-bars
+                               Compases que se dejan EXACTAMENTE como el
+                               original (excluidos del grado; el informe da
+                               además el grado real incluyéndolos) / se
+                               simplifican con criterio más estricto (cuentan
+                               para el grado y quedan protegidos de la rejilla).
+                               Combinables, pero un mismo compás en ambas
+                               listas produce un error.
+  --report-bars                Solo imprime el grado por compás y termina.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Entrada : un MIDI de piano (posicional).
+  Salida  : <nombre>_grade<N>.mid por cada --target-grade en --outdir (o junto
+            al MIDI) e informe por consola con el grado alcanzado y el método
+            por grado (p. ej. con "+rejilla" si hubo que recurrir a ella).
+            Con --report-bars solo imprime "compás N: grado G/8".
+  Códigos de salida: 0 correcto; 1 si algún --target-grade queda fuera de 1-8.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  Selección y salida
+    midi                       Fichero MIDI de entrada (posicional).
+    --target-grade N [N …]     Uno o más grados objetivo, 1-8 (obligatorio).
+    --floor-level L            Suelo estructural: 'ursatz' (defecto) o índice.
+    --split PITCH              Pitch MIDI que separa las manos (defecto 60 = C4).
+    --outdir DIR               Carpeta de salida (defecto: la del MIDI).
+    --report-bars              Solo grado por compás (numeración interna).
+  Capa híbrida (heredada de v3)
+    --no-transforms            Desactiva toda la capa híbrida.
+    --no-additive              Sin notas añadidas.
+    --max-transform-passes N   Pasadas máximas del optimizador (defecto 8).
+    --max-voices-per-chord N   Adelgaza cada bloque de acorde a N voces (previo
+                               al greedy; defecto: sin límite).
+  Compases especiales
+    --protect-bars B [B …]     Compases intactos (excluidos del cálculo).
+    --soften-bars B [B …]      Compases con simplificación más fiel.
+    --soften-span N            Extensión máxima en semitonos (defecto 10).
+    --soften-leap N            Salto máximo en semitonos (defecto 7).
+    --soften-stretch F         Separación entre ataques, factor (defecto 1.25).
+  Preparación v4
+    --no-meter-detect          No corregir el compás declarado en el MIDI.
+    --no-transpose             No transportar a la tonalidad con menos negras.
+    --no-protect-melody        Permitir eliminar notas de la melodía.
+    --no-retexture             No regenerar la mano izquierda ni adelgazar la MD.
+    --retexture-max-grade N    Grado máximo al que se retexturiza (defecto 6).
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Cuatro grados con todo activado:
+  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 1 3 5 7
+
+  # Carpeta de salida, más pasadas y corte de manos explícito:
+  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 2 \
+      --outdir out/ --max-transform-passes 12 --split 60
+
+  # Acordes en bloque densos: limitar a 3 voces por mano y acordes:
+  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 4 --max-voices-per-chord 3
+
+  # Grado muy bajo permitiendo tocar la melodía, sin notas añadidas:
+  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 1 \
+      --no-protect-melody --no-additive
+
+  # Conservar tonalidad y compás originales:
+  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 3 --no-transpose --no-meter-detect
+
+  # Respetar la textura original (sin retexturizar) o retexturizar hasta el grado 4:
+  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 3 --no-retexture
+  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 3 --retexture-max-grade 4
+
+  # Solo motor estructural + rejilla:
+  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 6 --no-transforms
+
+  # Localizar pasajes densos (grado por compás) y luego tratarlos:
+  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 3 --report-bars
+  python combined_simplifier_hybrid_v2.py obra.mid --target-grade 3 \
+      --protect-bars 45 46 47 48 --soften-bars 60 61 62 63 64 \
+      --soften-span 9 --soften-leap 5 --soften-stretch 1.4
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias y relación con otras versiones
+────────────────────────────────────────────────────────────────────────────
+Solo numpy; fichero único y autocontenido. Predecesor: combined_simplifier_hybrid.py
+(v3.0). Motor base y escalera schenkeriana: combined_simplifier.py.
 """
 
 # ──────────────────────────────────────────────────────────────────────────────

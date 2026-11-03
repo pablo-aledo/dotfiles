@@ -1,84 +1,94 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     COUNTEREXAMPLE  v1.0                                     ║
-║         Composición paramétrica por contraejemplo                            ║
-║                                                                              ║
-║  Dado un MIDI deseado (lo que te gusta), un MIDI rechazado (lo que no te    ║
-║  gusta) y un MIDI de referencia (material genético de base), calcula el     ║
-║  vector diferencial musical entre deseo y rechazo y usa ese diferencial     ║
-║  como función de fitness dirigida en un algoritmo genético: los candidatos  ║
-║  que se acercan al deseado y se alejan del rechazado son seleccionados.     ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] Vectorización de los tres MIDIs (17 dimensiones perceptuales)          ║
-║  [2] Cálculo del vector diferencial: Δ = deseado − rechazado                ║
-║  [3] Proyección del vector diferencial sobre el MIDI de referencia          ║
-║  [4] Construcción de la función de fitness dirigida:                         ║
-║        fitness = sim(candidato, deseado) − λ·sim(candidato, rechazado)      ║
-║        + α·score_musical(candidato)                                          ║
-║  [5] Evolución genética de la referencia guiada por ese fitness             ║
-║  [6] Exportación de los mejores candidatos con informe de distancias        ║
-║                                                                              ║
-║  DIMENSIONES VECTORIALES (17D):                                              ║
-║    [0]  pitch_mean        — altura media de las notas                        ║
-║    [1]  pitch_std         — variabilidad de altura                           ║
-║    [2]  pitch_range       — rango melódico total                             ║
-║    [3]  interval_mean     — salto medio entre notas (abs)                    ║
-║    [4]  interval_std      — variabilidad de los saltos                       ║
-║    [5]  density           — notas por beat                                   ║
-║    [6]  rhythm_variety    — diversidad de duraciones                         ║
-║    [7]  syncopation       — ratio de síncopa                                 ║
-║    [8]  velocity_mean     — dinámica media                                   ║
-║    [9]  velocity_std      — variabilidad dinámica                            ║
-║    [10] tension_mean      — tensión armónica media                           ║
-║    [11] tension_peak      — pico de tensión                                  ║
-║    [12] contour_asc       — proporción de intervalos ascendentes             ║
-║    [13] large_leaps       — proporción de saltos > 5 semitonos              ║
-║    [14] n_tracks          — número de pistas (textura)                       ║
-║    [15] n_instruments     — riqueza instrumental                             ║
-║    [16] climax_position   — posición relativa del clímax dinámico            ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python counterexample.py deseado.mid rechazado.mid referencia.mid        ║
-║    python counterexample.py good.mid bad.mid ref.mid --generations 8        ║
-║    python counterexample.py good.mid bad.mid ref.mid --repulsion 1.5        ║
-║    python counterexample.py good.mid bad.mid ref.mid --top 5 --listen       ║
-║    python counterexample.py good.mid bad.mid ref.mid --report               ║
-║    python counterexample.py good.mid bad.mid ref.mid --dry-run              ║
-║    python counterexample.py good.mid bad.mid ref.mid \\                     ║
-║        --generations 10 --population 20 --output-dir ./contra_out           ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --generations N     Generaciones del algoritmo genético (default: 6)     ║
-║    --population N      Tamaño de la población (default: 12)                 ║
-║    --elite N           Individuos de élite (default: 2)                     ║
-║    --mutation-rate F   Tasa de mutación 0-1 (default: 0.35)                ║
-║    --repulsion F       Peso λ de la repulsión del rechazado (default: 1.2)  ║
-║    --attraction F      Peso de la atracción al deseado (default: 1.0)      ║
-║    --musical-weight F  Peso α del score musical base (default: 0.3)         ║
-║    --bars N            Compases por individuo (default: desde referencia)   ║
-║    --top N             Mejores candidatos a exportar (default: 3)           ║
-║    --output-dir DIR    Carpeta de salida (default: ./contra_out)            ║
-║    --mixer PATH        Ruta a midi_dna_unified.py (default: auto)           ║
-║    --report            Exportar informe JSON con análisis vectorial         ║
-║    --plot              Visualizar espacio vectorial UMAP (requiere umap)    ║
-║    --listen             Reproducir los mejores al final (requiere pygame)   ║
-║    --play-seconds N    Segundos de reproducción por MIDI (default: 10)     ║
-║    --seed N            Semilla aleatoria (default: 42)                      ║
-║    --verbose           Informe detallado de cada generación                 ║
-║    --dry-run           Solo calcular y mostrar el diferencial, sin generar  ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    contra_top01_fit0.832.mid  — mejor candidato                             ║
-║    contra_top02_fit0.791.mid  — segundo mejor                               ║
-║    contra_analysis.json       — análisis vectorial completo (con --report)  ║
-║    contra_umap.png            — visualización (con --plot)                  ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy + evolver.py + midi_dna_unified.py               ║
-║  Opcional: umap-learn, matplotlib (para --plot)                             ║
-║            pygame (para --listen)                                           ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+counterexample.py — Counterexample: composición paramétrica por contraejemplo
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un MIDI deseado (lo que te gusta), un MIDI rechazado (lo que no te
+gusta) y un MIDI de referencia (material genético de base), calcula el
+vector diferencial musical entre deseo y rechazo y usa ese diferencial
+como función de fitness dirigida en un algoritmo genético: los candidatos
+que se acercan al deseado y se alejan del rechazado son seleccionados.
+
+FLUJO:
+[1] Vectorización de los tres MIDIs (17 dimensiones perceptuales)
+[2] Cálculo del vector diferencial: Δ = deseado − rechazado
+[3] Proyección del vector diferencial sobre el MIDI de referencia
+[4] Construcción de la función de fitness dirigida:
+      fitness = sim(candidato, deseado) − λ·sim(candidato, rechazado)
+      + α·score_musical(candidato)
+[5] Evolución genética de la referencia guiada por ese fitness
+[6] Exportación de los mejores candidatos con informe de distancias
+
+DIMENSIONES VECTORIALES (17D):
+  [0]  pitch_mean        — altura media de las notas
+  [1]  pitch_std         — variabilidad de altura
+  [2]  pitch_range       — rango melódico total
+  [3]  interval_mean     — salto medio entre notas (abs)
+  [4]  interval_std      — variabilidad de los saltos
+  [5]  density           — notas por beat
+  [6]  rhythm_variety    — diversidad de duraciones
+  [7]  syncopation       — ratio de síncopa
+  [8]  velocity_mean     — dinámica media
+  [9]  velocity_std      — variabilidad dinámica
+  [10] tension_mean      — tensión armónica media
+  [11] tension_peak      — pico de tensión
+  [12] contour_asc       — proporción de intervalos ascendentes
+  [13] large_leaps       — proporción de saltos > 5 semitonos
+  [14] n_tracks          — número de pistas (textura)
+  [15] n_instruments     — riqueza instrumental
+  [16] climax_position   — posición relativa del clímax dinámico
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  contra_top01_fit0.832.mid  — mejor candidato
+  contra_top02_fit0.791.mid  — segundo mejor
+  contra_analysis.json       — análisis vectorial completo (con --report)
+  contra_umap.png            — visualización (con --plot)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --generations N     Generaciones del algoritmo genético (default: 6)
+  --population N      Tamaño de la población (default: 12)
+  --elite N           Individuos de élite (default: 2)
+  --mutation-rate F   Tasa de mutación 0-1 (default: 0.35)
+  --repulsion F       Peso λ de la repulsión del rechazado (default: 1.2)
+  --attraction F      Peso de la atracción al deseado (default: 1.0)
+  --musical-weight F  Peso α del score musical base (default: 0.3)
+  --bars N            Compases por individuo (default: desde referencia)
+  --top N             Mejores candidatos a exportar (default: 3)
+  --output-dir DIR    Carpeta de salida (default: ./contra_out)
+  --mixer PATH        Ruta a midi_dna_unified.py (default: auto)
+  --report            Exportar informe JSON con análisis vectorial
+  --plot              Visualizar espacio vectorial UMAP (requiere umap)
+  --listen             Reproducir los mejores al final (requiere pygame)
+  --play-seconds N    Segundos de reproducción por MIDI (default: 10)
+  --seed N            Semilla aleatoria (default: 42)
+  --verbose           Informe detallado de cada generación
+  --dry-run           Solo calcular y mostrar el diferencial, sin generar
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python counterexample.py deseado.mid rechazado.mid referencia.mid
+  python counterexample.py good.mid bad.mid ref.mid --generations 8
+  python counterexample.py good.mid bad.mid ref.mid --repulsion 1.5
+  python counterexample.py good.mid bad.mid ref.mid --top 5 --listen
+  python counterexample.py good.mid bad.mid ref.mid --report
+  python counterexample.py good.mid bad.mid ref.mid --dry-run
+  python counterexample.py good.mid bad.mid ref.mid \
+      --generations 10 --population 20 --output-dir ./contra_out
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy + evolver.py + midi_dna_unified.py
+  Opcional: umap-learn, matplotlib (para --plot)
+            pygame (para --listen)
 """
 
 import sys

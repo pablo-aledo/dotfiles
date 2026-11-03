@@ -1,55 +1,66 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                           SELECT  v1.0                                       ║
-║         Selección interactiva de MIDIs por clustering UMAP + KMeans         ║
-║                                                                              ║
-║  Vectoriza una colección de MIDIs, agrupa por similitud musical y           ║
-║  presenta muestras de cada cluster para escucha y selección manual.         ║
-║  Exporta la lista seleccionada y comentarios opcionales por archivo.        ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║    [1] Vectoriza todos los MIDIs de midi_folder                             ║
-║    [2] Clustering KMeans → n_clusters grupos                                ║
-║    [3] Proyección UMAP 2D con color por cluster o score emocional           ║
-║    [4] Reproducción de muestras por cluster (pygame)                        ║
-║    [5] Selección interactiva: S=mantener, N=descartar, C=continuar          ║
-║    [6] Exporta lista seleccionada y comentarios                              ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python select.py                          (usa carpeta actual)           ║
-║    python select.py --folder ./midis/        (carpeta específica)           ║
-║    python select.py --clusters 30 --samples 5                               ║
-║    python select.py --ref ref1.mid ref2.mid  (ordenar por referencia)      ║
-║    python select.py --color score --extended                                ║
-║                                                                              ║
-║  CONTROLES:                                                                  ║
-║    S        — Mantener todos los MIDIs del cluster actual                   ║
-║    N        — Descartar el cluster actual                                   ║
-║    C        — Continuar (escuchar más muestras del cluster)                 ║
-║    Esc      — Saltar la reproducción actual                                 ║
-║    C (durante reproducción) — Añadir comentario al MIDI en curso           ║
-║    Q        — Guardar y salir                                               ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --folder DIR         Carpeta con los MIDIs a explorar (default: .)      ║
-║    --ref MIDI [...]     MIDIs de referencia para ordenar clusters           ║
-║    --clusters N         Número de clusters KMeans (default: 20)            ║
-║    --samples N          MIDIs a reproducir por cluster (default: 3)        ║
-║    --seconds N          Duración máxima por reproducción (default: 10)     ║
-║    --output FILE        Archivo de salida seleccionados (default: auto)    ║
-║    --comments FILE      Archivo de comentarios (default: auto)             ║
-║    --color MODE         Color UMAP: cluster|score (default: cluster)       ║
-║    --order MODE         Orden reproducción: extreme|original (default: extreme)║
-║    --random-offset      Reproducir desde punto aleatorio del MIDI          ║
-║    --extended           Vectorización emocional completa (default: básica) ║
-║                                                                              ║
-║  SALIDAS:                                                                    ║
-║    <folder>_seleccionados.txt  — Rutas de los MIDIs seleccionados          ║
-║    <folder>_comentarios.txt    — Comentarios por MIDI                      ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy, scikit-learn, umap-learn, pygame, matplotlib   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+select.py — Select: selección interactiva de MIDIs por clustering UMAP +
+KMeans
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Vectoriza una colección de MIDIs, agrupa por similitud musical y
+presenta muestras de cada cluster para escucha y selección manual.
+Exporta la lista seleccionada y comentarios opcionales por archivo.
+
+FLUJO:
+  [1] Vectoriza todos los MIDIs de midi_folder
+  [2] Clustering KMeans → n_clusters grupos
+  [3] Proyección UMAP 2D con color por cluster o score emocional
+  [4] Reproducción de muestras por cluster (pygame)
+  [5] Selección interactiva: S=mantener, N=descartar, C=continuar
+  [6] Exporta lista seleccionada y comentarios
+
+CONTROLES:
+  S        — Mantener todos los MIDIs del cluster actual
+  N        — Descartar el cluster actual
+  C        — Continuar (escuchar más muestras del cluster)
+  Esc      — Saltar la reproducción actual
+  C (durante reproducción) — Añadir comentario al MIDI en curso
+  Q        — Guardar y salir
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  <folder>_seleccionados.txt  — Rutas de los MIDIs seleccionados
+  <folder>_comentarios.txt    — Comentarios por MIDI
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --folder DIR         Carpeta con los MIDIs a explorar (default: .)
+  --ref MIDI [...]     MIDIs de referencia para ordenar clusters
+  --clusters N         Número de clusters KMeans (default: 20)
+  --samples N          MIDIs a reproducir por cluster (default: 3)
+  --seconds N          Duración máxima por reproducción (default: 10)
+  --output FILE        Archivo de salida seleccionados (default: auto)
+  --comments FILE      Archivo de comentarios (default: auto)
+  --color MODE         Color UMAP: cluster|score (default: cluster)
+  --order MODE         Orden reproducción: extreme|original (default: extreme)
+  --random-offset      Reproducir desde punto aleatorio del MIDI
+  --extended           Vectorización emocional completa (default: básica)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python select.py                          (usa carpeta actual)
+  python select.py --folder ./midis/        (carpeta específica)
+  python select.py --clusters 30 --samples 5
+  python select.py --ref ref1.mid ref2.mid  (ordenar por referencia)
+  python select.py --color score --extended
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy, scikit-learn, umap-learn, pygame, matplotlib
 """
 
 import os

@@ -1,68 +1,117 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      LEITMOTIF TRACKER  v1.0                                ║
-║         Gestión, siembra y rastreo de leitmotifs en obras MIDI              ║
-║                                                                              ║
-║  Un leitmotif es una célula musical corta asociada a una idea semántica     ║
-║  (personaje, emoción, concepto). Este módulo gestiona un banco de           ║
-║  leitmotifs y los siembra estratégicamente a lo largo de una obra,          ║
-║  transformándolos según el contexto emocional de cada sección.              ║
-║                                                                              ║
-║  COMANDOS PRINCIPALES:                                                       ║
-║    register   — Añadir un motivo al banco                                   ║
-║    list        — Ver todos los motivos registrados                           ║
-║    show        — Detalle de un motivo (fingerprint, apariciones)            ║
-║    plan        — Planificar siembra sobre obra_plan.json de narrator        ║
-║    suggest     — Modo exploratorio: propone dónde inyectar en un MIDI      ║
-║    inject      — Inyectar motivos según un schedule JSON                   ║
-║    trace       — Detectar apariciones en una obra ya compuesta             ║
-║    report      — Mapa ASCII/JSON de todas las apariciones                  ║
-║    propagate   — Propagar mutación semántica a todos los motivos           ║
-║    from-theorist — Importar sugerencias de theorist.json                   ║
-║    from-harvest  — Importar motivos extraídos por harvester.py             ║
-║                                                                              ║
-║  INTEGRACIONES:                                                              ║
-║    theorist.py    → from-theorist importa suggested_leitmotifs              ║
-║    narrator.py    → plan lee leitmotif_hints por sección                   ║
-║    harvester.py   → from-harvest importa motivos extraídos                 ║
-║    variation_engine.py → transforma motivos para cada contexto             ║
-║    mscz2vec.py    → vectoriza motivos para reconocimiento por similitud     ║
-║    analyzer.py    → trace usa sliding-window sobre vectores                ║
-║    mutator.py     → propagate delega transformaciones semánticas            ║
-║    stitcher.py    → inject genera leitmotif_schedule.json compatible       ║
-║    orchestrator.py → preferred_instruments guía asignación de timbres      ║
-║                                                                              ║
-║  IDENTIFICACIÓN DE MOTIVOS (3 capas):                                       ║
-║    [1] Huella de contorno: deltas relativos de pitch (invariante a transp.) ║
-║    [2] Huella rítmica: duraciones normalizadas                              ║
-║    [3] Vector mscz2vec: similitud coseno si music21 disponible             ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python leitmotif_tracker.py register motivo.mid --name "destino"        ║
-║    python leitmotif_tracker.py register motivo.mid --name "luz" \\         ║
-║        --tags esperanza redención --instruments violin1 flute              ║
-║    python leitmotif_tracker.py list                                         ║
-║    python leitmotif_tracker.py show destino                                 ║
-║    python leitmotif_tracker.py plan obra_plan.json                         ║
-║    python leitmotif_tracker.py plan obra_plan.json --motifs destino luz    ║
-║    python leitmotif_tracker.py plan obra_plan.json --auto                  ║
-║    python leitmotif_tracker.py suggest seccion_B.mid                       ║
-║    python leitmotif_tracker.py inject obra.mid schedule.json               ║
-║    python leitmotif_tracker.py trace obra_final.mid                        ║
-║    python leitmotif_tracker.py report obra_final.mid                       ║
-║    python leitmotif_tracker.py propagate --instruction "más oscuro"        ║
-║    python leitmotif_tracker.py from-theorist plan.theorist.json            ║
-║    python leitmotif_tracker.py from-harvest obra.motif_01.mid \\           ║
-║        --name "destino" --tags fatalidad                                    ║
-║                                                                              ║
-║  OPCIONES GLOBALES:                                                          ║
-║    --bank FILE      Banco de leitmotifs (default: leitmotif_bank.json)     ║
-║    --verbose        Salida detallada                                        ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy                                                  ║
-║  OPCIONALES:   music21 (vectorización completa), scipy (similitud coseno)  ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+leitmotif_tracker.py — Leitmotif Tracker: gestión, siembra y rastreo de
+leitmotifs en obras MIDI
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Un leitmotif es una célula musical corta asociada a una idea semántica
+(personaje, emoción, concepto). Este módulo gestiona un banco de
+leitmotifs y los siembra estratégicamente a lo largo de una obra,
+transformándolos según el contexto emocional de cada sección.
+
+INTEGRACIONES:
+  theorist.py    → from-theorist importa suggested_leitmotifs
+  narrator.py    → plan lee leitmotif_hints por sección
+  harvester.py   → from-harvest importa motivos extraídos
+  variation_engine.py → transforma motivos para cada contexto
+  mscz2vec.py    → vectoriza motivos para reconocimiento por similitud
+  analyzer.py    → trace usa sliding-window sobre vectores
+  mutator.py     → propagate delega transformaciones semánticas
+  stitcher.py    → inject genera leitmotif_schedule.json compatible
+  orchestrator.py → preferred_instruments guía asignación de timbres
+
+IDENTIFICACIÓN DE MOTIVOS (3 capas):
+  [1] Huella de contorno: deltas relativos de pitch (invariante a transp.)
+  [2] Huella rítmica: duraciones normalizadas
+  [3] Vector mscz2vec: similitud coseno si music21 disponible
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+COMANDOS PRINCIPALES:
+  register   — Añadir un motivo al banco
+  list        — Ver todos los motivos registrados
+  show        — Detalle de un motivo (fingerprint, apariciones)
+  plan        — Planificar siembra sobre obra_plan.json de narrator
+  suggest     — Modo exploratorio: propone dónde inyectar en un MIDI
+  inject      — Inyectar motivos según un schedule JSON
+  trace       — Detectar apariciones en una obra ya compuesta
+  report      — Mapa ASCII/JSON de todas las apariciones
+  propagate   — Propagar mutación semántica a todos los motivos
+  from-theorist — Importar sugerencias de theorist.json
+  from-harvest  — Importar motivos extraídos por harvester.py
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES GLOBALES:
+  --bank FILE      Banco de leitmotifs (default: leitmotif_bank.json); se acepta
+                   antes o después del subcomando
+  --verbose, -v    Salida detallada (también antes o después del subcomando)
+
+── Otras opciones del parser ──
+  register
+    --description DESCRIPTION   Descripción libre (defecto )
+    --tension-affinity TENSION_AFFINITY
+                                Afinidad de tensión (default: mid) (valores:
+                                low|mid|high)
+
+  plan
+    --output OUTPUT             Archivo de salida (default:
+                                leitmotif_schedule.json)
+
+  suggest
+    --output OUTPUT             (defecto leitmotif_schedule.json)
+
+  inject
+    --output-dir OUTPUT_DIR     Directorio de salida (default: leitmotifs_out)
+    --variation-engine VARIATION_ENGINE
+                                Ruta a variation_engine.py
+    --export-stitcher EXPORT_STITCHER
+                                Exportar schedule para stitcher.py
+    --export-orchestrator EXPORT_ORCHESTRATOR
+                                Exportar hints para orchestrator.py
+
+  trace
+    --threshold THRESHOLD       Umbral de similitud 0-1 (default: 0.55)
+    --output OUTPUT             Guardar resultado en JSON
+
+  report
+    --threshold THRESHOLD       (defecto 0.55)
+    --output OUTPUT             Guardar resultado en JSON
+
+  propagate
+    --mutator MUTATOR           Ruta a mutator.py
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python leitmotif_tracker.py register motivo.mid --name "destino"
+  python leitmotif_tracker.py register motivo.mid --name "destino" --bank mi_banco.json -v
+  python leitmotif_tracker.py register motivo.mid --name "luz" \
+      --tags esperanza redención --instruments violin1 flute
+  python leitmotif_tracker.py list
+  python leitmotif_tracker.py show destino
+  python leitmotif_tracker.py plan obra_plan.json
+  python leitmotif_tracker.py plan obra_plan.json --motifs destino luz
+  python leitmotif_tracker.py plan obra_plan.json --auto
+  python leitmotif_tracker.py suggest seccion_B.mid
+  python leitmotif_tracker.py inject obra.mid schedule.json
+  python leitmotif_tracker.py trace obra_final.mid
+  python leitmotif_tracker.py report obra_final.mid
+  python leitmotif_tracker.py propagate --instruction "más oscuro"
+  python leitmotif_tracker.py from-theorist plan.theorist.json
+  python leitmotif_tracker.py from-harvest obra.motif_01.mid \
+      --name "destino" --tags fatalidad
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
+  OPCIONALES:   music21 (vectorización completa), scipy (similitud coseno)
 """
 
 import sys

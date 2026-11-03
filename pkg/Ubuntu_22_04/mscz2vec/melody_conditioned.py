@@ -1,93 +1,142 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                   MELODY CONDITIONED  v1.1                                  ║
-║       Generación de melodías condicionadas a progresión de acordes          ║
-║                                                                              ║
-║  Este módulo condiciona la generación a una progresión de acordes dada,    ║
-║  mediante reglas armónicas determinísticas o mediante un LLM.               ║
-║                                                                              ║
-║  MOTORES DE GENERACIÓN (--engine):                                           ║
-║    chord_guided — Condicionamiento determinístico: filtra y pondera las     ║
-║                   notas según chord tones, tensiones y notas de paso del    ║
-║                   acorde activo. Combina Markov condicionado por tensión,   ║
-║                   contorno melódico emocional y tabla EMOTIONAL_CHORD_      ║
-║                   WEIGHTS. No requiere entrenamiento previo.                ║
-║    llm          — Usa Claude o ChatGPT como motor generativo mediante       ║
-║                   prompting estructurado. Modos: direct (descripción        ║
-║                   simbólica) y fewshot (ejemplos reales del corpus).        ║
-║                                                                              ║
-║  FUENTES DE ACORDES:                                                         ║
-║    --chords "Am:2 G:2 F:2 E7:2"  texto directo (beats por acorde)          ║
-║    --chords-json  prog.chords.json  JSON del ecosistema                     ║
-║    --chords-midi  fichero.mid       extrae acordes del track de armonía     ║
-║                                                                              ║
-║  CONDICIONAMIENTO EMOCIONAL (sin LLM):                                       ║
-║    1. Perfil de intervalos por estado, sesgado por grado del acorde         ║
-║    2. Curvas tensión/valencia/arousal → densidad, saltos, disonancia        ║
-║    3. Tabla EMOTIONAL_CHORD_WEIGHTS: estado × acorde → pesos de notas       ║
-║    4. Contorno melódico inferido desde el estado emocional                  ║
-║    5. Markov condicionado por tensión en tiempo real                        ║
-║                                                                              ║
-║  FORMATO DEL CORPUS:                                                         ║
-║    Track 0 — metadatos (tempo, time signature)                              ║
-║    Track 1 — melodía  (canal 0)                                             ║
-║    Track 2 — acordes  (canal 1)                                             ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    # Modo chord_guided (sin entrenamiento):                                  ║
-║    python melody_conditioned.py --engine chord_guided                        ║
-║        --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8                      ║
-║        --profile melancholic --contour descending                           ║
-║                                                                              ║
-║    # Con acordes desde MIDI (incluir acordes en la salida):                 ║
-║    python melody_conditioned.py --engine chord_guided                        ║
-║        --chords-midi harmony.mid --key Am --bars 8 --include-chords         ║
-║                                                                              ║
-║    # Generar con LLM (Claude):                                              ║
-║    python melody_conditioned.py --engine llm                                 ║
-║        --llm-provider claude --llm-mode fewshot                             ║
-║        --llm-fewshot-bank ./midis/ --llm-fewshot-n 3                        ║
-║        --chords "Dm:2 C:2 Bb:2 A7:2" --key Dm --bars 8                    ║
-║                                                                              ║
-║    # Generar con LLM (OpenAI):                                              ║
-║    python melody_conditioned.py --engine llm                                 ║
-║        --llm-provider openai --llm-mode direct                              ║
-║        --chords "C:4 Am:4 F:4 G:4" --key C --bars 8 --profile serene       ║
-║                                                                              ║
-║  OPCIONES PRINCIPALES:                                                       ║
-║    --engine E          Motor: chord_guided | llm                            ║
-║    --key KEY           Tonalidad: C, Am, F#, Bb… (default: C)              ║
-║    --mode MODE         Modo de escala (default: auto)                       ║
-║    --bars N            Compases (default: 16)                               ║
-║    --tempo BPM         Tempo (default: 120)                                 ║
-║    --time-sig S        Compás: 4/4, 3/4, 6/8… (default: 4/4)             ║
-║    --profile P         Estado emocional (default: serene)                   ║
-║    --contour C         Contorno: arch|ascending|descending|wave|…          ║
-║    --tension-curve V   Curva de tensión: "0.2,0.5,0.8,0.5,…"             ║
-║    --range LOW HIGH    Rango MIDI (default: 60 84)                          ║
-║    --candidates N      Generar N candidatos, exportar el mejor (default: 3) ║
-║    --chords TEXT       Progresión en texto: "Am:2 G:2 F:2 E7:2"           ║
-║    --chords-json FILE  Progresión desde .chords.json                        ║
-║    --chords-midi FILE  Progresión desde MIDI (extrae track de armonía)      ║
-║    --llm-provider P    Proveedor LLM: claude | openai                       ║
-║    --llm-mode M        Modo LLM: direct | fewshot                           ║
-║    --llm-fewshot-bank DIR  Corpus para ejemplos few-shot                    ║
-║    --llm-fewshot-n N   Número de ejemplos en el prompt (default: 3)         ║
-║    --llm-model M       Modelo concreto (default: claude-sonnet-4-20250514 / ║
-║                        gpt-4o)                                              ║
-║    --output FILE       Fichero de salida (default: melody_out.mid)          ║
-║    --include-chords    Incluir track de acordes en el MIDI de salida        ║
-║    --seed N            Semilla aleatoria (default: 42)                      ║
-║    --verbose           Informe detallado                                    ║
-║    --dry-run           Mostrar parámetros sin generar                       ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:    mido, numpy                                                   ║
-║    LLM Claude: anthropic                                                     ║
-║    LLM OpenAI: openai                                                        ║
-║    Opcional:   music21 (detección de acordes mejorada desde MIDI)           ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+melody_conditioned.py — Generación de melodías condicionadas a progresión de acordes
+(versión 1.1: motores chord_guided y llm).
+
+Se ejecuta desde línea de comandos; todos los parámetros son opcionales salvo
+la fuente de acordes (--chords, --chords-json o --chords-midi).
+
+Este módulo condiciona la generación a una progresión de acordes dada,
+mediante reglas armónicas determinísticas o mediante un LLM.
+
+────────────────────────────────────────────────────────────────────────────
+MOTORES DE GENERACIÓN (--engine)
+────────────────────────────────────────────────────────────────────────────
+  chord_guided — Condicionamiento determinístico: filtra y pondera las
+                 notas según chord tones, tensiones y notas de paso del
+                 acorde activo. Combina Markov condicionado por tensión,
+                 contorno melódico emocional y tabla EMOTIONAL_CHORD_
+                 WEIGHTS. No requiere entrenamiento previo.
+  llm          — Usa Claude o ChatGPT como motor generativo mediante
+                 prompting estructurado. Modos: direct (descripción
+                 simbólica) y fewshot (ejemplos reales del corpus).
+
+────────────────────────────────────────────────────────────────────────────
+FUENTES DE ACORDES
+────────────────────────────────────────────────────────────────────────────
+  --chords "Am:2 G:2 F:2 E7:2"  texto directo (beats por acorde)
+  --chords-json  prog.chords.json  JSON del ecosistema
+  --chords-midi  fichero.mid       extrae acordes del track de armonía
+
+────────────────────────────────────────────────────────────────────────────
+CONDICIONAMIENTO EMOCIONAL (sin LLM)
+────────────────────────────────────────────────────────────────────────────
+  1. Perfil de intervalos por estado, sesgado por grado del acorde
+  2. Curvas tensión/valencia/arousal → densidad, saltos, disonancia
+  3. Tabla EMOTIONAL_CHORD_WEIGHTS: estado × acorde → pesos de notas
+  4. Contorno melódico inferido desde el estado emocional
+  5. Markov condicionado por tensión en tiempo real
+
+────────────────────────────────────────────────────────────────────────────
+FORMATO DEL CORPUS
+────────────────────────────────────────────────────────────────────────────
+  Track 0 — metadatos (tempo, time signature)
+  Track 1 — melodía  (canal 0)
+  Track 2 — acordes  (canal 1)
+
+────────────────────────────────────────────────────────────────────────────
+EJEMPLOS DE USO
+────────────────────────────────────────────────────────────────────────────
+  # Modo chord_guided (sin entrenamiento):
+  python melody_conditioned.py --engine chord_guided
+      --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8
+      --profile melancholic --contour descending
+
+  # Con acordes desde MIDI (incluir acordes en la salida):
+  python melody_conditioned.py --engine chord_guided
+      --chords-midi harmony.mid --key Am --bars 8 --include-chords
+
+  # Generar con LLM (Claude):
+  python melody_conditioned.py --engine llm
+      --llm-provider claude --llm-mode fewshot
+      --llm-fewshot-bank ./midis/ --llm-fewshot-n 3
+      --chords "Dm:2 C:2 Bb:2 A7:2" --key Dm --bars 8
+
+  # Generar con LLM (OpenAI):
+  python melody_conditioned.py --engine llm
+      --llm-provider openai --llm-mode direct
+      --chords "C:4 Am:4 F:4 G:4" --key C --bars 8 --profile serene
+
+  # Perfil rítmico, curva de tensión y contorno personalizado:
+  python melody_conditioned.py --chords "Em:4 C:4 G:4 D:4" --key Em --bars 16
+      --rhythm syncopated --tension-curve "0.2,0.5,0.9,0.5"
+      --contour custom --contour-values "0,0.3,0.8,1,0.5"
+
+  # Acordes desde un .chords.json, 5 candidatos reproducibles y salida con nombre propio:
+  python melody_conditioned.py --chords-json prog.chords.json --key C
+      --candidates 5 --seed 7 --output melodia.mid
+
+  # Acordes desde un MIDI cuya armonía está en otro track/canal:
+  python melody_conditioned.py --chords-midi cancion.mid --key Am --bars 8
+      --chords-midi-track 3 --chords-midi-channel 2 --chords-midi-window 1.0
+
+  # Tempo, compás, modo y rango (aquí un vals en Re dórico):
+  python melody_conditioned.py --chords "Dm:3 Gm:3 A7:3 Dm:3" --key Dm
+      --mode dorian --tempo 96 --time-sig 3/4 --bars 8 --range 55 79
+
+  # Ver los parámetros resueltos sin generar, o con informe detallado:
+  python melody_conditioned.py --chords "Am:2 G:2 F:2 E7:2" --key Am --dry-run
+  python melody_conditioned.py --chords "Am:2 G:2 F:2 E7:2" --key Am --verbose
+
+  # LLM con modelo concreto:
+  python melody_conditioned.py --engine llm --llm-provider claude
+      --llm-model claude-sonnet-4-20250514 --llm-mode direct
+      --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8
+
+────────────────────────────────────────────────────────────────────────────
+OPCIONES
+────────────────────────────────────────────────────────────────────────────
+  --engine E          Motor: chord_guided | llm
+  --key KEY           Tonalidad: C, Am, F#, Bb… (default: C)
+  --mode MODE         Modo de escala (default: auto)
+  --bars N            Compases (default: 16)
+  --tempo BPM         Tempo (default: 120)
+  --time-sig S        Compás: 4/4, 3/4, 6/8… (default: 4/4)
+  --profile P         Estado emocional (default: serene)
+  --rhythm R          Perfil rítmico: flowing|march|syncopated|baroque|
+                      jazz|sparse|dense (default: flowing)
+  --contour C         Contorno: arch|ascending|descending|wave|…
+  --contour-values V  Con --contour custom: puntos 0-1 del contorno separados
+                      por comas, p. ej. "0,0.3,0.8,1,0.5" (si no es válido usa arch)
+  --tension-curve V   Curva de tensión: "0.2,0.5,0.8,0.5,…"
+  --range LOW HIGH    Rango MIDI (default: 60 84)
+  --candidates N      Generar N candidatos, exportar el mejor (default: 3)
+  --chords TEXT       Progresión en texto: "Am:2 G:2 F:2 E7:2"
+                      (un acorde sin ":beats" dura 4 beats)
+  --chords-json FILE  Progresión desde .chords.json
+  --chords-midi FILE  Progresión desde MIDI (extrae track de armonía)
+  --chords-midi-track N    Índice del track de armonía (default: 2)
+  --chords-midi-channel N  Canal MIDI de armonía (default: 1)
+  --chords-midi-window F   Ventana mínima de agrupación en beats (default: 0.5)
+  --llm-provider P    Proveedor LLM: claude | openai
+  --llm-mode M        Modo LLM: direct | fewshot
+  --llm-fewshot-bank DIR  Corpus para ejemplos few-shot
+  --llm-fewshot-n N   Número de ejemplos en el prompt (default: 3)
+  --llm-model M       Modelo concreto (default: claude-sonnet-4-20250514 /
+                      gpt-4o)
+  --output FILE       Fichero de salida (default: melody_conditioned.mid)
+  --include-chords    Incluir track de acordes en el MIDI de salida
+  --seed N            Semilla aleatoria (default: 42)
+  --verbose           Informe detallado
+  --dry-run           Mostrar parámetros sin generar
+
+────────────────────────────────────────────────────────────────────────────
+DEPENDENCIAS
+────────────────────────────────────────────────────────────────────────────
+  Siempre:    mido, numpy
+  LLM Claude: anthropic
+  LLM OpenAI: openai
+  Opcional:   music21 (detección de acordes mejorada desde MIDI)
 """
 
 import sys

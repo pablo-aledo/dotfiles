@@ -1,65 +1,67 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     MUSIC TRANSFORMER  v1.1                                  ║
-║   Generación de música con estructura a largo plazo (Huang et al., 2019)     ║
-║                                                                              ║
-║  Transformer autoregresivo decoder-only con atención relativa (Srel).        ║
-║  Reduce la complejidad espacial de O(N²D) a O(ND) mediante el truco          ║
-║  de skewing, permitiendo secuencias de hasta 2048 eventos MIDI.              ║
-║                                                                              ║
-║  REPRESENTACIÓN (event-based, compatible con Music Transformer paper):       ║
-║    388 eventos: note-on(128) + note-off(128) + velocity(32) + time(100)      ║
-║    + 3 tokens especiales: PAD=388, SOS=389, EOS=390  → vocab=391             ║
-║    Encoder/decoder MIDI nativo — solo requiere mido (pip install mido)       ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    preprocess   — MIDI corpus → pickles de eventos                           ║
-║    train        — Entrenar el modelo (desde cero o retomando)                ║
-║    generate     — Generar MIDI desde un checkpoint                           ║
-║    inspect      — Diagnóstico: dataset, checkpoint, config                   ║
-║                                                                              ║
-║  FLUJO TÍPICO:                                                               ║
-║    # 1. Preparar datos                                                       ║
-║    python music_transformer.py preprocess --input midis/ --output data/      ║
-║                                                                              ║
-║    # 2. Entrenar                                                              ║
-║    python music_transformer.py train --data data/ --model-dir runs/exp1/     ║
-║                                                                              ║
-║    # 3. Generar                                                               ║
-║    python music_transformer.py generate --model-dir runs/exp1/ \             ║
-║        --output generated.mid --length 1024                                  ║
-║                                                                              ║
-║    # Retomar entrenamiento                                                    ║
-║    python music_transformer.py train --data data/ --model-dir runs/exp1/ \   ║
-║        --resume                                                              ║
-║                                                                              ║
-║    # Generar con prime (primeros 200 eventos de un MIDI existente)           ║
-║    python music_transformer.py generate --model-dir runs/exp1/ \             ║
-║        --prime midis/tema.mid --prime-events 200 --length 1024               ║
-║                                                                              ║
-║  OPCIONES PRINCIPALES (train):                                               ║
-║    --epochs N        Épocas de entrenamiento (default: 300)                  ║
-║    --batch-size N    Tamaño de batch (default: 4)                            ║
-║    --max-seq N       Longitud máxima de secuencia (default: 2048)            ║
-║    --layers N        Número de capas Transformer (default: 6)                ║
-║    --dim N           Dimensión de embeddings (default: 256)                  ║
-║    --heads N         Cabezas de atención (default: 4)                        ║
-║    --dropout F       Dropout (default: 0.1)                                  ║
-║    --label-smooth F  Label smoothing (default: 0.1)                          ║
-║    --warmup N        Pasos de warmup del scheduler (default: 4000)           ║
-║    --eval-every N    Evaluar cada N batches (default: 100)                   ║
-║    --resume          Retomar desde último checkpoint                         ║
-║                                                                              ║
-║  OPCIONES PRINCIPALES (generate):                                            ║
-║    --length N        Eventos a generar (default: 1024)                       ║
-║    --prime FILE      MIDI de arranque (prime)                                ║
-║    --prime-events N  Eventos del prime a usar (default: 100)                 ║
-║    --temperature F   Temperatura de muestreo (default: 1.0)                  ║
-║    --threshold-len N Ventana deslizante en generación (default: 512)         ║
-║    --seed N          Semilla aleatoria (default: 42)                         ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+music_transformer.py — Music Transformer: generación de música con estructura
+a largo plazo (Huang et al., 2019)
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  Transformer autoregresivo decoder-only con atención relativa (Srel).
+  Reduce la complejidad espacial de O(N²D) a O(ND) mediante el truco
+  de skewing, permitiendo secuencias de hasta 2048 eventos MIDI.
+
+  REPRESENTACIÓN (event-based, compatible con Music Transformer paper):
+    388 eventos: note-on(128) + note-off(128) + velocity(32) + time(100)
+    + 3 tokens especiales: PAD=388, SOS=389, EOS=390  → vocab=391
+    Encoder/decoder MIDI nativo — solo requiere mido (pip install mido)
+
+  COMANDOS:
+    preprocess   — MIDI corpus → pickles de eventos
+    train        — Entrenar el modelo (desde cero o retomando)
+    generate     — Generar MIDI desde un checkpoint
+    inspect      — Diagnóstico: dataset, checkpoint, config
+
+  FLUJO TÍPICO:
+    # 1. Preparar datos
+    python music_transformer.py preprocess --input midis/ --output data/
+
+    # 2. Entrenar
+    python music_transformer.py train --data data/ --model-dir runs/exp1/
+
+    # 3. Generar
+    python music_transformer.py generate --model-dir runs/exp1/ \
+        --output generated.mid --length 1024
+
+    # Retomar entrenamiento
+    python music_transformer.py train --data data/ --model-dir runs/exp1/ \
+        --resume
+
+    # Generar con prime (primeros 200 eventos de un MIDI existente)
+    python music_transformer.py generate --model-dir runs/exp1/ \
+        --prime midis/tema.mid --prime-events 200 --length 1024
+
+  OPCIONES PRINCIPALES (train):
+    --epochs N        Épocas de entrenamiento (default: 300)
+    --batch-size N    Tamaño de batch (default: 4)
+    --max-seq N       Longitud máxima de secuencia (default: 2048)
+    --layers N        Número de capas Transformer (default: 6)
+    --dim N           Dimensión de embeddings (default: 256)
+    --heads N         Cabezas de atención (default: 4)
+    --dropout F       Dropout (default: 0.1)
+    --label-smooth F  Label smoothing (default: 0.1)
+    --warmup N        Pasos de warmup del scheduler (default: 4000)
+    --eval-every N    Evaluar cada N batches (default: 100)
+    --resume          Retomar desde último checkpoint
+
+  OPCIONES PRINCIPALES (generate):
+    --length N        Eventos a generar (default: 1024)
+    --prime FILE      MIDI de arranque (prime)
+    --prime-events N  Eventos del prime a usar (default: 100)
+    --temperature F   Temperatura de muestreo (default: 1.0)
+    --threshold-len N Ventana deslizante en generación (default: 512)
+    --seed N          Semilla aleatoria (default: 42)
+
 python music_transformer.py preprocess --input . --output data_mt/ --verbose
 python music_transformer.py inspect --data data_mt/
 python music_transformer.py train --data data_mt/ --model-dir runs/prueba/ \
@@ -70,6 +72,14 @@ python music_transformer.py generate \
   --length 512 \
   --output test_gen.mid \
   --temperature 0.9
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  preprocess  MIDI corpus → pickles de eventos
+  train       Entrenar el modelo
+  generate    Generar MIDI desde un checkpoint
+  inspect     Diagnóstico de dataset y/o checkpoint
 """
 
 import sys

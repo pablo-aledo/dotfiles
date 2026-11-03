@@ -1,164 +1,227 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    GRAMMAR TRANSFORMER  v2.0                                 ║
-║         Transformación estructural de MIDI mediante gramática Re-Pair        ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  DESCRIPCIÓN:                                                                ║
-║    Analiza un MIDI de entrada y extrae su gramática intrínseca a nivel de   ║
-║    nota mediante el algoritmo Re-Pair (cada token hoja es una nota con su   ║
-║    duración en beats). Calcula matrices de compatibilidad musical entre      ║
-║    los elementos de la gramática y genera un nuevo MIDI sustituyendo los    ║
-║    elementos de la longitud indicada por otros compatibles, sampleados con  ║
-║    una temperatura configurable.                                             ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  PIPELINE                                                                    ║
-║    1. Extrae notas del MIDI → secuencia de tokens (pitch, duración)         ║
-║    2. Re-Pair aprende reglas jerárquicas N1, N2 … sobre esa secuencia       ║
-║    3. Cada regla se expande a sus notas y se vectoriza (47 dims)            ║
-║    4. Se construye una matriz de compatibilidad coseno por longitud          ║
-║    5. Los elementos de la longitud objetivo se sustituyen por sampling       ║
-║    6. Se reconstruye la secuencia plana y se escribe el MIDI de salida      ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  MODOS                                                                       ║
-║                                                                              ║
-║  ── TRANSFORM (por defecto) ───────────────────────────────────────────── ║
-║    Requiere --length. Sustituye los elementos de esa duración por otros     ║
-║    compatibles sampleados con temperatura T.                                 ║
-║      T=0   → greedy: siempre el más compatible (mínima variación)          ║
-║      T=0.5 → equilibrio entre fidelidad y variedad (recomendado)            ║
-║      T=1   → softmax uniforme: máxima variedad respetando compatibilidad   ║
-║      T>1   → distribución más plana que uniforme (exploración extrema)      ║
-║                                                                              ║
-║  ── BINS ──────────────────────────────────────────────────────────────── ║
-║    Requiere --bin-size. Agrupa todos los elementos en intervalos de ese     ║
-║    ancho (en beats) y para cada elemento elige un reemplazo de su mismo    ║
-║    bin, independientemente de la longitud exacta. La diferencia de         ║
-║    duración entre el elemento elegido y el hueco destino se resuelve con   ║
-║    --fit:                                                                    ║
-║      scale  — escala proporcional todas las duraciones al hueco destino    ║
-║      pad    — añade notas de paso cromáticas para completar el hueco        ║
-║      trim   — recorta el elemento al final para ajustar al hueco            ║
-║                                                                              ║
-║  ── REPORT ────────────────────────────────────────────────────────────── ║
-║    Muestra estadísticas de la gramática sin transformar el MIDI.            ║
-║    Con --report-format html genera un visor interactivo en el navegador.    ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  EJEMPLOS DE USO                                                             ║
-║                                                                              ║
-║  · Exploración inicial — ver la gramática antes de transformar:             ║
-║      python grammar_transformer.py obra.mid --report                        ║
-║      python grammar_transformer.py obra.mid --report --report-format html   ║
-║      python grammar_transformer.py obra.mid --report --report-format both   ║
-║                                                                              ║
-║  · Ver la gramática y la matriz de compatibilidad para 1 beat:              ║
-║      python grammar_transformer.py obra.mid --report --length 1.0           ║
-║                                                                              ║
-║  · Transformación básica — sustituir motivos de 1 beat, T moderada:        ║
-║      python grammar_transformer.py obra.mid --length 1.0                    ║
-║      python grammar_transformer.py obra.mid --length 1.0 -o variacion.mid  ║
-║                                                                              ║
-║  · Modo bins — agrupar por intervalos de 2 beats y escalar al insertar:    ║
-║      python grammar_transformer.py obra.mid --bin-size 2.0                  ║
-║      python grammar_transformer.py obra.mid --bin-size 2.0 --fit scale     ║
-║        # escala proporcional (default)                                       ║
-║      python grammar_transformer.py obra.mid --bin-size 2.0 --fit pad       ║
-║        # rellena con notas de paso cromáticas                               ║
-║      python grammar_transformer.py obra.mid --bin-size 2.0 --fit trim      ║
-║        # recorta el final del elemento insertado                            ║
-║      python grammar_transformer.py obra.mid --bin-size 1.0 --fit pad       ║
-║        --temp 0.8 --pitch-norm -o variacion.mid                            ║
-║      python grammar_transformer.py obra.mid --bin-size 2.0                 ║
-║        --bin-length 1.0 4.0  # solo transforma elementos entre 1 y 4 beats ║
-║      python grammar_transformer.py obra.mid --bin-size 1.0 --fit scale     ║
-║        --bin-length 0.5 2.0 --temp 0.5 -o variacion.mid                   ║
-║                                                                              ║
-║  · Controlar la variación con temperatura:                                  ║
-║      python grammar_transformer.py obra.mid --length 1.0 --temp 0.0        ║
-║        # greedy: solo intercambia si hay algo más compatible                ║
-║      python grammar_transformer.py obra.mid --length 1.0 --temp 0.5        ║
-║        # equilibrado (default)                                               ║
-║      python grammar_transformer.py obra.mid --length 1.0 --temp 1.0        ║
-║        # máxima variedad dentro de los candidatos compatibles               ║
-║                                                                              ║
-║  · Transformación invariante a tonalidad (normaliza pitch al comparar       ║
-║    y retranspone el elemento insertado al registro original):               ║
-║      python grammar_transformer.py obra.mid --length 2.0 --pitch-norm      ║
-║                                                                              ║
-║  · Gramática más granular con --max-rules (más candidatos por longitud,     ║
-║    transformaciones más ricas):                                              ║
-║      python grammar_transformer.py obra.mid --length 0.5 --max-rules 20    ║
-║                                                                              ║
-║  · Resultado reproducible con semilla fija:                                 ║
-║      python grammar_transformer.py obra.mid --length 1.0 --seed 42         ║
-║                                                                              ║
-║  · Exportar los fragmentos de la gramática para editarlos o reutilizarlos  ║
-║    en otras obras:                                                           ║
-║      python grammar_transformer.py obra.mid --export-elements ./frags/      ║
-║        # genera un JSON por elemento en ./frags/ (default)                  ║
-║      python grammar_transformer.py obra.mid --export-elements ./frags/      ║
-║        --export-format midi   # solo MIDIs, uno por elemento                ║
-║      python grammar_transformer.py obra.mid --export-elements ./frags/      ║
-║        --export-format both   # JSON + MIDI por elemento                    ║
-║                                                                              ║
-║  · Importar fragmentos externos (de otra obra o variantes manuales)         ║
-║    para ampliar el pool de candidatos antes de transformar:                 ║
-║      python grammar_transformer.py obra.mid --length 2.0                   ║
-║        --import-elements ./frags_otra_obra/                                 ║
-║        # acepta *.json, *.mid o mezcla de ambos en el mismo directorio     ║
-║                                                                              ║
-║  · Flujo completo — exportar, enriquecer e importar:                        ║
-║      python grammar_transformer.py obraA.mid --export-elements ./pool/      ║
-║      python grammar_transformer.py obraB.mid --export-elements ./pool/      ║
-║        # editar JSONs en ./pool/ si se desean variantes manuales            ║
-║      python grammar_transformer.py obraA.mid --length 1.0 --temp 0.5       ║
-║        --import-elements ./pool/ -o obraA_enriquecida.mid                  ║
-║                                                                              ║
-║  · Combinar reporte + transformación en un solo paso:                       ║
-║      python grammar_transformer.py obra.mid --length 1.0 --temp 0.5        ║
-║        --report --report-format both -o salida.mid                          ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  OPCIONES                                                                    ║
-║    --length / -l BEATS    Longitud en beats de los elementos a transformar  ║
-║    --bin-size BEATS       Ancho del bin (activa modo bins)                  ║
-║    --bin-length MIN MAX   Rango de duraciones a transformar en modo bins    ║
-║                           (beats). Elementos fuera quedan intactos.         ║
-║    --fit MODE             Ajuste al insertar: scale | pad | trim (def: scale)║
-║    --temp / -t FLOAT      Temperatura de sampling (default: 0.5)            ║
-║    --pitch-norm           Normalizar pitch al comparar y transponer al      ║
-║                           insertar (compatibilidad invariante a tonalidad)  ║
-║    --report               Activar modo informe                              ║
-║    --report-format FMT    text | html | both  (default: text)              ║
-║    --export-elements DIR  Exportar elementos de la gramática a directorio   ║
-║    --export-format FMT    Formato de exportación: json, midi, both (def: json)║
-║    --import-elements DIR  Importar elementos adicionales desde directorio   ║
-║                           Acepta *.json y *.mid (se pueden mezclar).        ║
-║                           Si hay JSON y MIDI con el mismo nombre, el JSON   ║
-║                           tiene prioridad (evita duplicados).               ║
-║    --min-pair N           Frecuencia mínima para crear regla (default: 2)   ║
-║    --max-rules N          Máximo de reglas a generar (default: ilimitado)   ║
-║    --track N              Track del MIDI a usar (default: auto)             ║
-║    --out / -o FILE        Fichero MIDI de salida                            ║
-║    --seed FLOAT           Semilla aleatoria para reproducibilidad           ║
-║    --verbose              Traza detallada del proceso                       ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  VECTOR DE COMPATIBILIDAD (47 dimensiones)                                   ║
-║    · Clases de pitch — histograma de las 12 notas cromáticas (12 dims)     ║
-║    · Intervalos melódicos — histograma [-12, +12] semítonos  (25 dims)     ║
-║    · Contorno melódico — pendiente, varianza, rango, ratio↑  ( 4 dims)     ║
-║    · Perfil rítmico — densidad, dur. media/std, ratio ♪/♩/♩♩ ( 6 dims)     ║
-║    Similitud = coseno entre vectores. Con --pitch-norm los pitches se       ║
-║    normalizan al Do central antes de calcular el vector.                    ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS: mido, numpy, scipy                                            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+grammar_transformer_v3.py — Grammar Transformer: transformación estructural de
+MIDI mediante gramática Re-Pair
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+DESCRIPCIÓN:
+  Analiza un MIDI de entrada y extrae su gramática intrínseca a nivel de
+  nota mediante el algoritmo Re-Pair (cada token hoja es una nota con su
+  duración en beats). Calcula matrices de compatibilidad musical entre
+  los elementos de la gramática y genera un nuevo MIDI sustituyendo los
+  elementos de la longitud indicada por otros compatibles, sampleados con
+  una temperatura configurable.
+
+PIPELINE:
+  1. Extrae notas del MIDI → secuencia de tokens (pitch, duración)
+  2. Re-Pair aprende reglas jerárquicas N1, N2 … sobre esa secuencia
+  3. Cada regla se expande a sus notas y se vectoriza (47 dims)
+  4. Se construye una matriz de compatibilidad coseno por longitud
+  5. Los elementos de la longitud objetivo se sustituyen por sampling
+  6. Se reconstruye la secuencia plana y se escribe el MIDI de salida
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  ── TRANSFORM (por defecto) ─────────────────────────────────────────────
+    Requiere --length. Sustituye los elementos de esa duración por otros
+    compatibles sampleados con temperatura T.
+      T=0   → greedy: siempre el más compatible (mínima variación)
+      T=0.5 → equilibrio entre fidelidad y variedad (recomendado)
+      T=1   → softmax uniforme: máxima variedad respetando compatibilidad
+      T>1   → distribución más plana que uniforme (exploración extrema)
+
+  ── BINS ────────────────────────────────────────────────────────────────
+    Requiere --bin-size. Agrupa todos los elementos en intervalos de ese
+    ancho (en beats) y para cada elemento elige un reemplazo de su mismo
+    bin, independientemente de la longitud exacta. La diferencia de
+    duración entre el elemento elegido y el hueco destino se resuelve con
+    --fit:
+      scale  — escala proporcional todas las duraciones al hueco destino
+      pad    — añade notas de paso cromáticas para completar el hueco
+      trim   — recorta el elemento al final para ajustar al hueco
+
+  ── REPORT ──────────────────────────────────────────────────────────────
+    Muestra estadísticas de la gramática sin transformar el MIDI.
+    Con --report-format html genera un visor interactivo en el navegador.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+    --length / -l BEATS    Longitud en beats de los elementos a transformar
+    --bin-size BEATS       Ancho del bin (activa modo bins)
+    --bin-length MIN MAX   Rango de duraciones a transformar en modo bins
+                           (beats). Elementos fuera quedan intactos.
+    --fit MODE             Ajuste al insertar: scale | pad | trim (def: scale)
+    --temp / -t FLOAT      Temperatura de sampling (default: 0.5)
+    --pitch-norm           Normalizar pitch al comparar y transponer al
+                           insertar (compatibilidad invariante a tonalidad)
+    --report               Activar modo informe
+    --report-format FMT    text | html | both  (default: text)
+    --export-elements DIR  Exportar elementos de la gramática a directorio
+    --export-format FMT    Formato de exportación: json, midi, both (def: json)
+    --import-elements DIR  Importar elementos adicionales desde directorio
+                           Acepta *.json y *.mid (se pueden mezclar).
+                           Si hay JSON y MIDI con el mismo nombre, el JSON
+                           tiene prioridad (evita duplicados).
+    --min-pair N           Frecuencia mínima para crear regla (default: 2)
+    --max-rules N          Máximo de reglas a generar (default: ilimitado)
+    --track N              Track del MIDI a usar (default: auto)
+    --out / -o FILE        Fichero MIDI de salida
+    --seed FLOAT           Semilla aleatoria para reproducibilidad
+    --verbose              Traza detallada del proceso
+
+  VECTOR DE COMPATIBILIDAD (47 dimensiones)
+    · Clases de pitch — histograma de las 12 notas cromáticas (12 dims)
+    · Intervalos melódicos — histograma [-12, +12] semítonos  (25 dims)
+    · Contorno melódico — pendiente, varianza, rango, ratio↑  ( 4 dims)
+    · Perfil rítmico — densidad, dur. media/std, ratio ♪/♩/♩♩ ( 6 dims)
+    Similitud = coseno entre vectores. Con --pitch-norm los pitches se
+    normalizan al Do central antes de calcular el vector.
+
+── Otras opciones del parser ──
+  --bar-tokens                Re-Pair a nivel de compas en lugar de nota
+  --multitrack                Procesar todos los tracks coordinadamente
+  --continuity W              Peso penalizacion de frontera [0,1]
+                              (0=desactivado, rec: 0.3-0.8) (defecto 0.0)
+  --target-key KEY            Transponer insercion a tonalidad (ej: C, Dm, F#,
+                              Bbm, Am)
+  --entropy-report            Imprime entropías por dimensión, gap de orden 1
+                              y perfil de sorpresa
+  --boundary-model W          Continuidad de frontera con sorpresa APRENDIDA
+                              de la pieza, P(intervalo | intervalo previo)
+                              (0=off, rec: 1-2; con W>=4 la pieza casi no
+                              cambia). Sustituye a --continuity (semitonos) y
+                              puede combinarse con él. (defecto 0.0)
+  --boundary-scope BOUNDARY_SCOPE
+                              Fronteras evaluadas: solo salida del candidato o
+                              entrada+salida (def: both) (defecto both;
+                              valores: exit|both)
+  --surprise-prior L          Prior de sorpresa del candidato: L>0 favorece
+                              material idiomático, L<0 material
+                              raro/contrastante (rec: -0.5..0.5) (defecto 0.0)
+  --surprise-curve SPEC       Curva de sorpresa objetivo:
+                              original|invert|rising|falling|arch|calm|tense|wave|lista
+                              "0.2,0.5,0.9" (activa --per-occurrence)
+  --curve-strength K          Fuerza de seguimiento de la curva (def: 2.0; k<1
+                              apenas se nota, k>=4 satura). Controla la forma,
+                              no el nivel absoluto de sorpresa. (defecto 2.0)
+  --surprise-window BEATS     Ventana del perfil de sorpresa en beats (def: 4)
+                              (defecto 4.0)
+  --per-occurrence [PER_OCCURRENCE]
+                              Sustituir cada ocurrencia de forma independiente
+                              en vez de por nombre: root = solo la raíz; deep
+                              = a cualquier profundidad (def. si se da sin
+                              valor). Se activa solo con --surprise-curve.
+                              (valores: root|deep)
+  --auto-tune                 Bucle cerrado: prueba temperaturas/semillas y
+                              elige la salida cuya entropía se acerca a la del
+                              original (+margen) sin degenerar
+  --tune-temps LIST           Temperaturas a probar, separadas por comas (def:
+                              0.1,0.3,0.5,0.8,1.0,1.5)
+  --tune-seeds N              Semillas por temperatura (def: 3) (defecto 3)
+  --tune-margin BITS          Margen de entropía conjunta (intervalo,duración)
+                              sobre el original (def: 0.1) (defecto 0.1)
+  --tune-min-change F         Cambio mínimo respecto al original, rechaza
+                              salidas casi idénticas (def: 0.05) (defecto
+                              0.05)
+  --tune-max-change F         Cambio máximo (def: 0.85) (defecto 0.85)
+  --tune-max-novel F          Máx. fracción de intervalos ausentes del
+                              original (def: 0.05) (defecto 0.05)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  · Exploración inicial — ver la gramática antes de transformar:
+      python grammar_transformer.py obra.mid --report
+      python grammar_transformer.py obra.mid --report --report-format html
+      python grammar_transformer.py obra.mid --report --report-format both
+
+  · Ver la gramática y la matriz de compatibilidad para 1 beat:
+      python grammar_transformer.py obra.mid --report --length 1.0
+
+  · Transformación básica — sustituir motivos de 1 beat, T moderada:
+      python grammar_transformer.py obra.mid --length 1.0
+      python grammar_transformer.py obra.mid --length 1.0 -o variacion.mid
+
+  · Modo bins — agrupar por intervalos de 2 beats y escalar al insertar:
+      python grammar_transformer.py obra.mid --bin-size 2.0
+      python grammar_transformer.py obra.mid --bin-size 2.0 --fit scale
+        # escala proporcional (default)
+      python grammar_transformer.py obra.mid --bin-size 2.0 --fit pad
+        # rellena con notas de paso cromáticas
+      python grammar_transformer.py obra.mid --bin-size 2.0 --fit trim
+        # recorta el final del elemento insertado
+      python grammar_transformer.py obra.mid --bin-size 1.0 --fit pad \
+        --temp 0.8 --pitch-norm -o variacion.mid
+      python grammar_transformer.py obra.mid --bin-size 2.0 \
+        --bin-length 1.0 4.0  # solo transforma elementos entre 1 y 4 beats
+      python grammar_transformer.py obra.mid --bin-size 1.0 --fit scale \
+        --bin-length 0.5 2.0 --temp 0.5 -o variacion.mid
+
+  · Controlar la variación con temperatura:
+      python grammar_transformer.py obra.mid --length 1.0 --temp 0.0
+        # greedy: solo intercambia si hay algo más compatible
+      python grammar_transformer.py obra.mid --length 1.0 --temp 0.5
+        # equilibrado (default)
+      python grammar_transformer.py obra.mid --length 1.0 --temp 1.0
+        # máxima variedad dentro de los candidatos compatibles
+
+  · Transformación invariante a tonalidad (normaliza pitch al comparar
+    y retranspone el elemento insertado al registro original):
+      python grammar_transformer.py obra.mid --length 2.0 --pitch-norm
+
+  · Gramática más granular con --max-rules (más candidatos por longitud,
+    transformaciones más ricas):
+      python grammar_transformer.py obra.mid --length 0.5 --max-rules 20
+
+  · Resultado reproducible con semilla fija:
+      python grammar_transformer.py obra.mid --length 1.0 --seed 42
+
+  · Exportar los fragmentos de la gramática para editarlos o reutilizarlos
+    en otras obras:
+      python grammar_transformer.py obra.mid --export-elements ./frags/
+        # genera un JSON por elemento en ./frags/ (default)
+      python grammar_transformer.py obra.mid --export-elements ./frags/ \
+        --export-format midi   # solo MIDIs, uno por elemento
+      python grammar_transformer.py obra.mid --export-elements ./frags/ \
+        --export-format both   # JSON + MIDI por elemento
+
+  · Importar fragmentos externos (de otra obra o variantes manuales)
+    para ampliar el pool de candidatos antes de transformar:
+      python grammar_transformer.py obra.mid --length 2.0 \
+        --import-elements ./frags_otra_obra/
+        # acepta *.json, *.mid o mezcla de ambos en el mismo directorio
+
+  · Flujo completo — exportar, enriquecer e importar:
+      python grammar_transformer.py obraA.mid --export-elements ./pool/
+      python grammar_transformer.py obraB.mid --export-elements ./pool/
+        # editar JSONs en ./pool/ si se desean variantes manuales
+      python grammar_transformer.py obraA.mid --length 1.0 --temp 0.5 \
+        --import-elements ./pool/ -o obraA_enriquecida.mid
+
+  · Combinar reporte + transformación en un solo paso:
+      python grammar_transformer.py obra.mid --length 1.0 --temp 0.5 \
+        --report --report-format both -o salida.mid
+
+── Más modos ──
+
+  # Invocación básica
+  python grammar_transformer_v3.py entrada.mid
+
+  # Mostrar informe de gramática y estadísticas
+  python grammar_transformer_v3.py entrada.mid --report
+
+  # Imprime entropías por dimensión, gap de orden 1 y perfil de sorpresa
+  python grammar_transformer_v3.py entrada.mid --entropy-report
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy, scipy
 """
 
 import sys

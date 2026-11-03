@@ -1,59 +1,65 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       TEMPO DESIGNER  v1.0                                  ║
-║          Diseño de la arquitectura de tempo (agógica) de una obra MIDI      ║
-║                                                                              ║
-║  performer aplica rubato LOCAL por frase con reglas automáticas; esta        ║
-║  herramienta DISEÑA la agógica GLOBAL de la obra y la hornea en el mapa de   ║
-║  tempo del MIDI (meta 0x51): terrazas de tempo por sección, rampas de        ║
-║  accelerando / ritardando entre compases, calderones (fermate) puntuales    ║
-║  y ritardando final. Es el equivalente temporal de tension_designer         ║
-║  (que diseña la curva de tensión) y de climax_engineer (que diseña la        ║
-║  arquitectura de energía): aquí se diseña la arquitectura del TIEMPO.        ║
-║                                                                              ║
-║  MODELO DE TEMPO:                                                            ║
-║    puntos de control  — pares compás:BPM que definen la curva               ║
-║    forma (--shape)    — step (terrazas) | linear (rampas) | smooth (coseno) ║
-║    calderón (--fermata) — alarga un instante concreto (tempo local lento)   ║
-║    ritardando final   — desaceleración progresiva en los últimos compases   ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] LECTURA    — lee el MIDI y su compás/tempo base                        ║
-║  [2] CURVA      — construye BPM por compás desde los puntos de control      ║
-║  [3] CALDERONES — inserta ralentizaciones locales en los compases pedidos   ║
-║  [4] HORNEADO   — reemplaza los eventos meta 0x51 por la curva diseñada      ║
-║  [5] INFORME    — sparkline de BPM + duración antes/después + sidecar JSON   ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python tempo_designer.py obra.mid --point 1:60 --point 8:96 --shape linear║
-║    python tempo_designer.py obra.mid --section 1:72 --section 9:120          ║
-║    python tempo_designer.py obra.mid --fermata 16 --final-rit 4              ║
-║    python tempo_designer.py obra.mid --plan agogica.tempo.json               ║
-║    python tempo_designer.py obra.mid --point 1:120 --point 16:60 --dry-run   ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi                MIDI de entrada                                        ║
-║    --output FILE       MIDI de salida (default: <obra>_tempo.mid)           ║
-║    --point BAR:BPM     Punto de control (repetible). BAR es 1-based.        ║
-║    --section BAR:BPM   Alias de --point con forma 'step' implícita          ║
-║    --shape S           step | linear | smooth  (default: linear)            ║
-║    --base BPM          Tempo base si no hay puntos (default: el del MIDI)   ║
-║    --fermata SPEC      BAR[:beat][:factor]  (repetible). factor def. 2.5    ║
-║    --final-rit BARS    Ritardando en los últimos BARS compases              ║
-║    --final-rit-factor F  Factor de frenado final (default: 1.6)             ║
-║    --min-bpm F         Límite inferior de seguridad (default: 20)           ║
-║    --max-bpm F         Límite superior de seguridad (default: 300)          ║
-║    --plan FILE         Carga un plan .tempo.json (anula --point/--section)  ║
-║    --dry-run           Solo informe y sidecar, sin escribir MIDI             ║
-║    --no-json           No escribir el sidecar .tempo.json                    ║
-║    --no-color          Desactivar colores ANSI                              ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from tempo_designer import design_tempo                                   ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+tempo_designer.py — Tempo Designer: diseño de la arquitectura de tempo
+(agógica) de una obra MIDI
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+performer aplica rubato LOCAL por frase con reglas automáticas; esta
+herramienta DISEÑA la agógica GLOBAL de la obra y la hornea en el mapa de
+tempo del MIDI (meta 0x51): terrazas de tempo por sección, rampas de
+accelerando / ritardando entre compases, calderones (fermate) puntuales
+y ritardando final. Es el equivalente temporal de tension_designer
+(que diseña la curva de tensión) y de climax_engineer (que diseña la
+arquitectura de energía): aquí se diseña la arquitectura del TIEMPO.
+
+MODELO DE TEMPO:
+  puntos de control  — pares compás:BPM que definen la curva
+  forma (--shape)    — step (terrazas) | linear (rampas) | smooth (coseno)
+  calderón (--fermata) — alarga un instante concreto (tempo local lento)
+  ritardando final   — desaceleración progresiva en los últimos compases
+
+FLUJO:
+[1] LECTURA    — lee el MIDI y su compás/tempo base
+[2] CURVA      — construye BPM por compás desde los puntos de control
+[3] CALDERONES — inserta ralentizaciones locales en los compases pedidos
+[4] HORNEADO   — reemplaza los eventos meta 0x51 por la curva diseñada
+[5] INFORME    — sparkline de BPM + duración antes/después + sidecar JSON
+
+COMO MÓDULO:
+  from tempo_designer import design_tempo
+
+DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi                MIDI de entrada
+  --output FILE       MIDI de salida (default: <obra>_tempo.mid)
+  --point BAR:BPM     Punto de control (repetible). BAR es 1-based.
+  --section BAR:BPM   Alias de --point con forma 'step' implícita
+  --shape S           step | linear | smooth  (default: linear)
+  --base BPM          Tempo base si no hay puntos (default: el del MIDI)
+  --fermata SPEC      BAR[:beat][:factor]  (repetible). factor def. 2.5
+  --final-rit BARS    Ritardando en los últimos BARS compases
+  --final-rit-factor F  Factor de frenado final (default: 1.6)
+  --min-bpm F         Límite inferior de seguridad (default: 20)
+  --max-bpm F         Límite superior de seguridad (default: 300)
+  --plan FILE         Carga un plan .tempo.json (anula --point/--section)
+  --dry-run           Solo informe y sidecar, sin escribir MIDI
+  --no-json           No escribir el sidecar .tempo.json
+  --no-color          Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python tempo_designer.py obra.mid --point 1:60 --point 8:96 --shape linear
+  python tempo_designer.py obra.mid --section 1:72 --section 9:120
+  python tempo_designer.py obra.mid --fermata 16 --final-rit 4
+  python tempo_designer.py obra.mid --plan agogica.tempo.json
+  python tempo_designer.py obra.mid --point 1:120 --point 16:60 --dry-run
 """
 
 import sys

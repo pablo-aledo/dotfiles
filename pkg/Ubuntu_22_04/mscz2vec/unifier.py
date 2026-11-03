@@ -1,94 +1,115 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         UNIFIER  v1.1                                       ║
-║   Unificador de secciones MIDI en una composición coherente                  ║
-║                                                                              ║
-║  Cuando compones pegando secciones de obras distintas como anclas           ║
-║  emocionales, la unión suele sonar a collage: faltan motivos comunes,        ║
-║  la armonía no encaja, cambia el pulso y la instrumentación es inconexa.     ║
-║  UNIFIER establece un ADN musical compartido y lo inyecta de forma           ║
-║  dosificada en cada sección, cosiéndolas con transiciones coherentes para    ║
-║  que el resultado suene como una obra unificada.                             ║
-║                                                                              ║
-║  ADN COMPARTIDO (deducido si no se indica):                                  ║
-║  [A1] Motivo semilla  — el más saliente entre las secciones (o MIDI dado)    ║
-║  [A2] Plan tonal      — tonalidad hogar + modulaciones lógicas por emoción   ║
-║  [A3] Plantilla orch. — piano / cuarteto / cuerdas / cámara / full           ║
-║  [A4] Arco de tensión — curva tipo 'arch' sobre las secciones                ║
-║                                                                              ║
-║  EJES DE UNIFICACIÓN (dosificables con --glue, 0=intacto … 1=total):         ║
-║  [M] Motivo           — siembra motivo (orig/invers/retrogr/aument)          ║
-║  [H] Armonía          — transp. al plan + nudge de acordes no diatónicos     ║
-║  [R] Ritmo            — alineación suave con el groove de referencia         ║
-║  [I] Instrumentación  — remapeo al template común por rol (mel/bass/harm)    ║
-║                                                                              ║
-║  MODOS:                                                                      ║
-║  [glue]      Conserva el MIDI de cada ancla y le añade hilos comunes        ║
-║              + puentes + reorquestación ligera. Fiel a tus secciones.        ║
-║  [recombine] Usa las secciones como donantes de ADN y regenera una obra      ║
-║              nueva coherente (progresión + motivo transplantado + bajo).     ║
-║  [auto]      Elige glue/recombine según lo diferentes que sean las secciones.║
-║                                                                              ║
-║  TRANSICIONES entre secciones: cadencia V7→I en la tonalidad destino +       ║
-║  declaración del motivo semilla (modo morph) o pivote de nota común.        ║
-║                                                                              ║
-║  AUTOCONTENIDO: no importa ni llama por subprocess a ningún otro script      ║
-║  del ecosistema. Toda la lógica (carga, análisis, transformación, salida)    ║
-║  vive en este fichero. Solo depende de mido, numpy y music21 (pip).          ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    # 3 secciones con emoción indicada, tonalidad y plantilla fijas           ║
-║    python unifier.py \\                                                       ║
-║        --section "intro:serenidad:a.mid" \\                                  ║
-║        --section "mid:melancolia:b.mid" \\                                   ║
-║        --section "out:triunfo:c.mid" \\                                      ║
-║        --mode glue --key D --template chamber \\                             ║
-║        --glue motif=0.7,harmony=0.8,rhythm=0.3,instrumentation=1.0 \\        ║
-║        --output obra_unificada.mid --report                                  ║
-║                                                                              ║
-║    # MIDIs posicionales + emociones por orden                                ║
-║    python unifier.py a.mid b.mid c.mid --emotions serenidad,angustia,triunfo ║
-║                                                                              ║
-║    # Deducción total: tonalidad, motivo, emoción e instrumentación se deducen ║
-║    python unifier.py a.mid b.mid c.mid --mode auto                           ║
-║                                                                              ║
-║    # Motivo semilla propio + 2 secciones, plantilla piano                    ║
-║    python unifier.py \\                                                       ║
-║        --section "a:serenidad:vals.mid" \\                                   ║
-║        --section "b:melancolia:blues.mid" \\                                 ║
-║        --motif-seed mi_motivo.mid --key C --template piano \\                ║
-║        --output obra.mid --report                                            ║
-║                                                                              ║
-║    # Recombine: obra nueva de 8 compases por sección                         ║
-║    python unifier.py a.mid b.mid c.mid --mode recombine --recombine-bars 8   ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --section SPEC     Sección: "label:emotion:path" (repetible, orden fijo)   ║
-║    midis              MIDIs posicionales (orden fijo, 2–10 secciones)        ║
-║    --emotions LIST    Emociones por orden, separadas por coma                ║
-║    --mode MODE        glue | recombine | auto (default: glue)               ║
-║    --motif-seed FILE  MIDI con el motivo semilla (default: deduce)           ║
-║    --key KEY          Tonalidad hogar, ej: D, F# minor (default: deduce)     ║
-║    --template T       piano|string_quartet|strings|chamber|full|auto        ║
-║  --glue SPEC        motif=,harmony=,rhythm=,instrumentation= (0–1)         ║
-║    --glue-preset P   sutil | medio | fuerte (atajo de pegamento)           ║
-║    --bridge-bars N    Compases de cada puente (default: 2)                   ║
-║    --bridge MODE      morph | pivot | auto (default: auto)                   ║
-║    --recombine-bars N Compases por sección en modo recombine (default: 8)   ║
-║    --output FILE      MIDI de salida (default: obra_unificada.mid)           ║
-║    --seed N           Semilla aleatoria (default: 1)                         ║
-║    --report           Score de coherencia antes→después + JSON              ║
-║    --dry-run          Mostrar el plan (ADN, tonal, motivo) sin generar MIDI  ║
-║    --verbose          Informe detallado del análisis y el ADN                ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    obra_unificada.mid          — MIDI unificado (un track, multicanal)       ║
-║    obra_unificada.report.json  — plan, ADN y score (con --report)            ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy, music21 (todas pip, ya instaladas)              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+unifier.py — Unifier: unificador de secciones MIDI en una composición
+coherente
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Cuando compones pegando secciones de obras distintas como anclas
+emocionales, la unión suele sonar a collage: faltan motivos comunes,
+la armonía no encaja, cambia el pulso y la instrumentación es inconexa.
+UNIFIER establece un ADN musical compartido y lo inyecta de forma
+dosificada en cada sección, cosiéndolas con transiciones coherentes para
+que el resultado suene como una obra unificada.
+
+ADN COMPARTIDO (deducido si no se indica):
+[A1] Motivo semilla  — el más saliente entre las secciones (o MIDI dado)
+[A2] Plan tonal      — tonalidad hogar + modulaciones lógicas por emoción
+[A3] Plantilla orch. — piano / cuarteto / cuerdas / cámara / full
+[A4] Arco de tensión — curva tipo 'arch' sobre las secciones
+
+EJES DE UNIFICACIÓN (dosificables con --glue, 0=intacto … 1=total):
+[M] Motivo           — siembra motivo (orig/invers/retrogr/aument)
+[H] Armonía          — transp. al plan + nudge de acordes no diatónicos
+[R] Ritmo            — alineación suave con el groove de referencia
+[I] Instrumentación  — remapeo al template común por rol (mel/bass/harm)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  [glue]      Conserva el MIDI de cada ancla y le añade hilos comunes
+              + puentes + reorquestación ligera. Fiel a tus secciones.
+  [recombine] Usa las secciones como donantes de ADN y regenera una obra
+              nueva coherente (progresión + motivo transplantado + bajo).
+  [auto]      Elige glue/recombine según lo diferentes que sean las secciones.
+
+  TRANSICIONES entre secciones: cadencia V7→I en la tonalidad destino +
+  declaración del motivo semilla (modo morph) o pivote de nota común.
+
+  AUTOCONTENIDO: no importa ni llama por subprocess a ningún otro script
+  del ecosistema. Toda la lógica (carga, análisis, transformación, salida)
+  vive en este fichero. Solo depende de mido, numpy y music21 (pip).
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  obra_unificada.mid          — MIDI unificado (un track, multicanal)
+  obra_unificada.report.json  — plan, ADN y score (con --report)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+    --section SPEC     Sección: "label:emotion:path" (repetible, orden fijo)
+    midis              MIDIs posicionales (orden fijo, 2–10 secciones)
+    --emotions LIST    Emociones por orden, separadas por coma
+    --mode MODE        glue | recombine | auto (default: glue)
+    --motif-seed FILE  MIDI con el motivo semilla (default: deduce)
+    --key KEY          Tonalidad hogar, ej: D, F# minor (default: deduce)
+    --template T       piano|string_quartet|strings|chamber|full|auto
+  --glue SPEC        motif=,harmony=,rhythm=,instrumentation= (0–1)
+    --glue-preset P   sutil | medio | fuerte (atajo de pegamento)
+    --bridge-bars N    Compases de cada puente (default: 2)
+    --bridge MODE      morph | pivot | auto (default: auto)
+    --recombine-bars N Compases por sección en modo recombine (default: 8)
+    --output FILE      MIDI de salida (default: obra_unificada.mid)
+    --seed N           Semilla aleatoria (default: 1)
+    --report           Score de coherencia antes→después + JSON
+    --dry-run          Mostrar el plan (ADN, tonal, motivo) sin generar MIDI
+    --verbose          Informe detallado del análisis y el ADN
+
+── Otras opciones del parser ──
+  --no-color
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # 3 secciones con emoción indicada, tonalidad y plantilla fijas
+  python unifier.py \
+      --section "intro:serenidad:a.mid" \
+      --section "mid:melancolia:b.mid" \
+      --section "out:triunfo:c.mid" \
+      --mode glue --key D --template chamber \
+      --glue motif=0.7,harmony=0.8,rhythm=0.3,instrumentation=1.0 \
+      --output obra_unificada.mid --report
+
+  # MIDIs posicionales + emociones por orden
+  python unifier.py a.mid b.mid c.mid --emotions serenidad,angustia,triunfo
+
+  # Deducción total: tonalidad, motivo, emoción e instrumentación se deducen
+  python unifier.py a.mid b.mid c.mid --mode auto
+
+  # Motivo semilla propio + 2 secciones, plantilla piano
+  python unifier.py \
+      --section "a:serenidad:vals.mid" \
+      --section "b:melancolia:blues.mid" \
+      --motif-seed mi_motivo.mid --key C --template piano \
+      --output obra.mid --report
+
+  # Recombine: obra nueva de 8 compases por sección
+  python unifier.py a.mid b.mid c.mid --mode recombine --recombine-bars 8
+
+── Más modos ──
+
+  # Mostrar el plan (ADN, tonal, motivo) sin generar MIDI
+  python unifier.py --dry-run
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy, music21 (todas pip, ya instaladas)
 """
 
 import os, sys, json, math, random, argparse

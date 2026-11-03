@@ -1,76 +1,89 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      LEITMOTIF ANALYST  v1.1                                 ║
-║     Identificación de leitmotifs y sus transformaciones en una obra MIDI     ║
-║                                                                              ║
-║  Dado un archivo MIDI, el programa:                                          ║
-║    1. Extrae motivos candidatos usando Re-Pair (como harvester.py)           ║
-║    2. Agrupa los más significativos como «leitmotifs» de la obra             ║
-║    3. Rastrea cada leitmotif y sus variaciones a lo largo de la pieza        ║
-║       detectando las siguientes transformaciones (según variation_engine):   ║
-║         V01 — Inversión del contorno melódico                                ║
-║         V02 — Retrógrado (orden temporal invertido)                          ║
-║         V03 — Inversión retrógrada                                           ║
-║         V04 — Aumentación rítmica (duraciones duplicadas)                    ║
-║         V05 — Diminución rítmica (duraciones reducidas)                      ║
-║         V08 — Transposición (mismo contorno, otra altura)                    ║
-║         V09 — Modal (cambio mayor ↔ menor)                                   ║
-║    4. Presenta el resultado como:                                            ║
-║         · Tabla de leitmotifs con sus apariciones por compás                 ║
-║         · Tipo de aparición (original / transformación)                      ║
-║         · Mapa ASCII de presencia a lo largo de la obra                      ║
-║         · Reporte JSON opcional (--report)                                   ║
-║    5. Exporta los leitmotifs como archivos MIDI independientes               ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python leitmotif_analyst.py obra.mid                                      ║
-║    python leitmotif_analyst.py obra.mid --min-bars 2 --max-bars 8           ║
-║    python leitmotif_analyst.py obra.mid --threshold 0.60                    ║
-║    python leitmotif_analyst.py obra.mid --top 5                             ║
-║    python leitmotif_analyst.py obra.mid --report                            ║
-║    python leitmotif_analyst.py obra.mid --verbose                           ║
-║                                                                              ║
-║  MODO LEITMOTIF EXTERNO (--leitmotif):                                       ║
-║    Si se proporciona un MIDI con el leitmotif de referencia, el programa    ║
-║    omite la detección automática y busca únicamente ese motivo (y sus       ║
-║    variaciones) a lo largo de la obra. La salida es idéntica al modo        ║
-║    automático. Con --save-leitmotifs o --save-all se exporta además un      ║
-║    MIDI por cada variación del motivo dado (forma fundamental + V01–V09).   ║
-║                                                                              ║
-║    python leitmotif_analyst.py obra.mid --leitmotif motivo.mid              ║
-║    python leitmotif_analyst.py obra.mid --leitmotif motivo.mid --save-all   ║
-║                                                                              ║
-║    --save-leitmotifs   Guarda un MIDI por leitmotif (forma fundamental,     ║
-║                        extraída de su primera aparición en la obra)         ║
-║    --save-all          Guarda además un MIDI por cada aparición encontrada  ║
-║                        (incluye originales y todas las variaciones)         ║
-║    --save-dir DIR      Carpeta de destino (default: <stem>_leitmotifs/)     ║
-║                                                                              ║
-║  Nomenclatura de archivos generados:                                        ║
-║    <stem>.LM-01.mid                   — forma fundamental del leitmotif 1  ║
-║    <stem>.LM-01.bar042.original.mid   — aparición original en compás 42    ║
-║    <stem>.LM-01.bar067.V01.mid        — inversión en compás 67             ║
-║    <stem>.LM-01.bar089.V04.mid        — aumentación en compás 89           ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --leitmotif FILE    MIDI con el leitmotif de referencia (omite           ║
-║                        detección automática y busca solo ese motivo)        ║
-║    --min-bars N        Longitud mínima de leitmotif en compases (def: 1)    ║
-║    --max-bars N        Longitud máxima de leitmotif en compases (def: 8)    ║
-║    --threshold F       Umbral de similitud para detectar apariciones        ║
-║                        (0-1, default: 0.55)                                  ║
-║    --var-threshold F   Umbral para reconocer una variación (def: 0.50)      ║
-║    --top N             Número máximo de leitmotifs a identificar (def: 8)   ║
-║    --report            Guardar reporte JSON                                  ║
-║    --save-leitmotifs   Guardar forma fundamental de cada leitmotif como MIDI║
-║    --save-all          Guardar forma fundamental + todas las apariciones     ║
-║    --save-dir DIR      Carpeta de destino para los MIDIs exportados         ║
-║    --verbose           Salida detallada                                      ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy                                                   ║
-║  OPCIONALES:   scipy (similitud coseno mejorada)                            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+leitmotif_analyst.py — Leitmotif Analyst: identificación de leitmotifs y sus
+transformaciones en una obra MIDI
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un archivo MIDI, el programa:
+  1. Extrae motivos candidatos usando Re-Pair (como harvester.py)
+  2. Agrupa los más significativos como «leitmotifs» de la obra
+  3. Rastrea cada leitmotif y sus variaciones a lo largo de la pieza
+     detectando las siguientes transformaciones (según variation_engine):
+       V01 — Inversión del contorno melódico
+       V02 — Retrógrado (orden temporal invertido)
+       V03 — Inversión retrógrada
+       V04 — Aumentación rítmica (duraciones duplicadas)
+       V05 — Diminución rítmica (duraciones reducidas)
+       V08 — Transposición (mismo contorno, otra altura)
+       V09 — Modal (cambio mayor ↔ menor)
+  4. Presenta el resultado como:
+       · Tabla de leitmotifs con sus apariciones por compás
+       · Tipo de aparición (original / transformación)
+       · Mapa ASCII de presencia a lo largo de la obra
+       · Reporte JSON opcional (--report)
+  5. Exporta los leitmotifs como archivos MIDI independientes
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --leitmotif FILE    MIDI con el leitmotif de referencia (omite
+                      detección automática y busca solo ese motivo)
+  --min-bars N        Longitud mínima de leitmotif en compases (def: 1)
+  --max-bars N        Longitud máxima de leitmotif en compases (def: 8)
+  --threshold F       Umbral de similitud para detectar apariciones
+                      (0-1, default: 0.55)
+  --var-threshold F   Umbral para reconocer una variación (def: 0.50)
+  --top N             Número máximo de leitmotifs a identificar (def: 8)
+  --report            Guardar reporte JSON
+  --save-leitmotifs   Guardar forma fundamental de cada leitmotif como MIDI
+  --save-all          Guardar forma fundamental + todas las apariciones
+  --save-dir DIR      Carpeta de destino para los MIDIs exportados
+  --verbose           Salida detallada
+
+── Otras opciones del parser ──
+  --map-cols N                Compases por columna en el mapa de apariciones
+                              (default: 1 — una columna por compás)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python leitmotif_analyst.py obra.mid
+    python leitmotif_analyst.py obra.mid --min-bars 2 --max-bars 8
+    python leitmotif_analyst.py obra.mid --threshold 0.60
+    python leitmotif_analyst.py obra.mid --top 5
+    python leitmotif_analyst.py obra.mid --report
+    python leitmotif_analyst.py obra.mid --verbose
+
+  MODO LEITMOTIF EXTERNO (--leitmotif):
+    Si se proporciona un MIDI con el leitmotif de referencia, el programa
+    omite la detección automática y busca únicamente ese motivo (y sus
+    variaciones) a lo largo de la obra. La salida es idéntica al modo
+    automático. Con --save-leitmotifs o --save-all se exporta además un
+    MIDI por cada variación del motivo dado (forma fundamental + V01–V09).
+
+    python leitmotif_analyst.py obra.mid --leitmotif motivo.mid
+    python leitmotif_analyst.py obra.mid --leitmotif motivo.mid --save-all
+
+    --save-leitmotifs   Guarda un MIDI por leitmotif (forma fundamental,
+                        extraída de su primera aparición en la obra)
+    --save-all          Guarda además un MIDI por cada aparición encontrada
+                        (incluye originales y todas las variaciones)
+    --save-dir DIR      Carpeta de destino (default: <stem>_leitmotifs/)
+
+  Nomenclatura de archivos generados:
+    <stem>.LM-01.mid                   — forma fundamental del leitmotif 1
+    <stem>.LM-01.bar042.original.mid   — aparición original en compás 42
+    <stem>.LM-01.bar067.V01.mid        — inversión en compás 67
+    <stem>.LM-01.bar089.V04.mid        — aumentación en compás 89
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
+  OPCIONALES:   scipy (similitud coseno mejorada)
 """
 
 import sys

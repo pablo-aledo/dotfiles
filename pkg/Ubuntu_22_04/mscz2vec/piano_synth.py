@@ -1,29 +1,28 @@
 #!/usr/bin/env python3
 """
-╔════════════════════════════════════════════════════════════════════════╗
-║  piano_synth.py — physics-based piano & keyboard synthesis toolkit      ║
-╠════════════════════════════════════════════════════════════════════════╣
-║  Grand Piano (modal synthesis) · Rhodes FM · Prism · DDSP comparison    ║
-║  Reference-IR extraction · gradient/DE optimizers · spectral compare    ║
-╚════════════════════════════════════════════════════════════════════════╝
+piano_synth.py — Síntesis física de piano y teclados: piano de cola (síntesis
+modal), Rhodes FM, Prism y comparación DDSP (physics-based piano & keyboard
+synthesis toolkit).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  Grand Piano (modal synthesis) · Rhodes FM · Prism · DDSP comparison
+  Reference-IR extraction · gradient/DE optimizers · spectral compare
 
 Single self-contained tool consolidating the former generators/*.py scripts.
 All synthesis and optimization logic is unchanged from the original scripts;
 only the invocation surface, phase-table persistence, and dry-synthesis
 toggle (formerly a monkeypatch) were adapted for a single-file CLI.
 
-USAGE
-    python3 piano_synth.py <command> [options]
-
-GENERATE SAMPLES  (write MP3s to ../audio/<instrument>/)
-    generate-grand    [--velocity-layers] [--no-ir]
-    generate-rhodes   [--velocity-layers]
-    generate-prism    [--velocity-layers]
-    generate-ddsp     [--epochs N] [--generate-only]
-
-RENDER A MIDI FILE
-    render-midi <file.mid>  [--instrument {grand,rhodes,prism}] [--output PATH]
-                            [--speed F] [--velocity-scale F]
+RENDER A MIDI FILE:
+    render-midi <file.mid>  [--instrument {grand,rhodes,prism}] [--output PATH | -o PATH]
+                            [--speed F] [--velocity-scale F] [--vel-layers N]
+                            (las rutas relativas de salida se resuelven contra el
+                            directorio actual; --vel-layers cuantiza las
+                            velocidades en N capas y sintetiza una sola vez cada
+                            par altura/capa: por defecto 6; 0 = exacto por nota,
+                            muy lento en MIDIs largos)
 
 FETCH REFERENCE RECORDINGS  (populates ../audio/piano|rhodes|salamander/)
     fetch-references  [--piano-only] [--rhodes-only] [--force]
@@ -33,7 +32,7 @@ EXTRACT REFERENCE TRANSFER FUNCTIONS  (from ../audio/piano|rhodes/*.mp3)
     extract-soundboard-ir             grand piano soundboard IR (Salamander refs)
     extract-rhodes-tf                 Rhodes pickup/amp IR (jRhodes3d refs)
 
-OPTIMIZE PARAMETERS
+OPTIMIZE PARAMETERS:
     optimize-phases   [--iters N]     grand piano phase table (gradient descent)
                                        writes straight to piano_synth_config.json —
                                        generate-grand picks it up on next run
@@ -44,16 +43,100 @@ OPTIMIZE PARAMETERS
     tune-warmth       {rolloff,bridge} [--rolloff-base F] [--rolloff-linear F]
                        [--rolloff-cubic F]   grand piano warmth/brightness sweep
 
-COMPARE / ANALYZE
+COMPARE / ANALYZE:
     compare-grand                     recorded vs generated grand piano (envelope+spectrum)
     compare-rhodes                    sampled vs FM Rhodes (spectral peaks)
     analyze-comparison                grand piano vs Salamander, full metric suite
     deep-compare                      sampled vs FM Rhodes (MFCC + envelope, needs librosa)
 
-Examples:
-    python3 piano_synth.py generate-grand --velocity-layers
-    python3 piano_synth.py optimize-phases --iters 400
-    python3 piano_synth.py compare-grand
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  generate-grand         Generate grand piano samples (modal synthesis)
+  generate-rhodes        Generate Rhodes FM samples
+  generate-prism         Generate Prism Keys samples
+  generate-ddsp          Train (or reload) and generate DDSP piano samples
+  render-midi            Render a .mid file to audio with grand/rhodes/prism
+                         synthesis
+  fetch-references       Download the reference recordings the other
+                         commands expect in ../audio/
+  extract-soundboard-ir  Extract grand piano soundboard IR from reference
+                         recordings
+  extract-rhodes-tf      Extract Rhodes pickup/amp transfer function from
+                         reference recordings
+  optimize-phases        Gradient-descent grand piano phase table; writes to
+                         piano_synth_config.json
+  optimize-grand         Differential-evolution search over grand piano
+                         physical params (prints paste-ready block)
+  optimize-rhodes        Differential-evolution search over FM Rhodes params
+                         (prints paste-ready block)
+  tune-warmth            Grid-sweep grand piano rolloff/bridge params
+                         against references
+  compare-grand          Compare recorded vs generated grand piano
+  compare-rhodes         Compare sampled vs FM Rhodes (spectral peaks)
+  analyze-comparison     Full metric comparison: grand piano vs Salamander
+  deep-compare           MFCC + envelope comparison: sampled vs FM Rhodes
+                         (needs librosa)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USAGE ──
+      python3 piano_synth.py <command> [options]
+
+  GENERATE SAMPLES  (write MP3s to ../audio/<instrument>/)
+      generate-grand    [--velocity-layers] [--no-ir]
+      generate-rhodes   [--velocity-layers]
+      generate-prism    [--velocity-layers]
+      generate-ddsp     [--epochs N] [--generate-only]
+
+── Examples ──
+  python3 piano_synth.py generate-grand --velocity-layers
+  python3 piano_synth.py optimize-phases --iters 400
+  python3 piano_synth.py compare-grand
+
+── Más modos ──
+
+  # Generate Rhodes FM samples
+  python piano_synth.py generate-rhodes
+
+  # Generate Prism Keys samples
+  python piano_synth.py generate-prism
+
+  # Train (or reload) and generate DDSP piano samples
+  python piano_synth.py generate-ddsp
+
+  # Render a .mid file to audio with grand/rhodes/prism synthesis
+  python piano_synth.py render-midi entrada.mid
+  python piano_synth.py render-midi entrada.mid -o salida/obra.mp3 --vel-layers 4
+  python piano_synth.py render-midi entrada.mid --instrument rhodes --vel-layers 0
+
+  # Download the reference recordings the other commands expect in ../audio/
+  python piano_synth.py fetch-references
+
+  # Extract grand piano soundboard IR from reference recordings
+  python piano_synth.py extract-soundboard-ir
+
+  # Extract Rhodes pickup/amp transfer function from reference recordings
+  python piano_synth.py extract-rhodes-tf
+
+  # Differential-evolution search over grand piano physical params (prints paste-ready block)
+  python piano_synth.py optimize-grand
+
+  # Differential-evolution search over FM Rhodes params (prints paste-ready block)
+  python piano_synth.py optimize-rhodes
+
+  # Grid-sweep grand piano rolloff/bridge params against references
+  python piano_synth.py tune-warmth rolloff
+
+  # Compare sampled vs FM Rhodes (spectral peaks)
+  python piano_synth.py compare-rhodes
+
+  # Full metric comparison: grand piano vs Salamander
+  python piano_synth.py analyze-comparison
+
+  # MFCC + envelope comparison: sampled vs FM Rhodes (needs librosa)
+  python piano_synth.py deep-compare
 """
 
 import argparse

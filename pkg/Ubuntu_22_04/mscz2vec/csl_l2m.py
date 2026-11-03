@@ -1,138 +1,283 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        CSL-L2M  v1.2                                         ║
-║         Generación controlable de melodía a partir de letra (Lyric-to-Melody)║
-║                                                                              ║
-║  Adaptación de CSL-L2M (AAAI-2025) al estilo single-file del ecosistema.    ║
-║  Encoder Transformer sobre letras → Decoder Transformer autorregresivo       ║
-║  condicionado en 14 controles musicales por frase (pitch, duración, ritmo,   ║
-║  tonalidad, emoción, estructura). Representación: REMI-Aligned.              ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    prepare      — MIDI/ABC + letras → eventos REMI-Aligned (.pkl)            ║
-║    vocab        — eventos .pkl → diccionarios melody + lyric                 ║
-║    splits       — carpeta de .pkl → train/val/test splits                    ║
-║    attributes   — extrae 12 atributos estadísticos por frase                 ║
-║    train-vqvae  — entrena VQ-VAE para extraer features melódicas             ║
-║    extract-feats— VQ-VAE checkpoint → features latentes por canción          ║
-║    train        — entrena el modelo CSL-L2M completo                         ║
-║    generate     — genera MIDI dado un .pkl con letra alineada                ║
-║    new-lyrics   — sustituye las letras de un .pkl sin cambiar la melodía     ║
-║    round-trip   — REMI-Aligned → MIDI (diagnóstico sin modelo)               ║
-║    inspect      — diagnóstico de datos y checkpoints                          ║
-║                                                                              ║
-║  FLUJO TÍPICO:                                                               ║
-║    1. Preparar corpus (.mid con Lyric markers o .abc con w:):                ║
-║       python csl_l2m.py prepare --input-dir canciones/                      ║
-║                                  --output-dir data/events/                   ║
-║    2. Construir vocabulario:                                                  ║
-║       python csl_l2m.py vocab --events-dir data/events/                     ║
-║                                --output-dir data/                            ║
-║    3. Crear splits:                                                           ║
-║       python csl_l2m.py splits --events-dir data/events/                    ║
-║                                 --output-dir data/                           ║
-║    4. Calcular atributos:                                                     ║
-║       python csl_l2m.py attributes --events-dir data/events/                ║
-║                                     --output-dir data/attributes/            ║
-║    5. (Opcional) VQ-VAE para features aprendidas:                            ║
-║       python csl_l2m.py train-vqvae --events-dir data/events/               ║
-║                         --vocab data/dictionary_melody.pkl                   ║
-║                         --model-dir model_vqvae/                             ║
-║       python csl_l2m.py extract-feats --events-dir data/events/             ║
-║                         --vocab-melody data/dictionary_melody.pkl            ║
-║                         --model-dir model_vqvae/                             ║
-║                         --output-dir data/feats/                             ║
-║    6. Entrenar:                                                               ║
-║       python csl_l2m.py train                                                ║
-║                         --events-dir data/events/                            ║
-║                         --vocab-melody data/dictionary_melody.pkl            ║
-║                         --vocab-lyric  data/dictionary_lyric.pkl             ║
-║                         --train-split  data/train.pkl                        ║
-║                         --val-split    data/val.pkl                          ║
-║                         --attr-dir     data/attributes/                      ║
-║                         --model-dir    model_csll2m/                         ║
-║                         [--feats-dir   data/feats/]                          ║
-║    7. Generar:                                                                ║
-║       python csl_l2m.py generate                                             ║
-║                         --events    data/events/cancion.pkl                  ║
-║                         --model-dir model_csll2m/                            ║
-║                         --attr-dir  data/attributes/                         ║
-║                         --output    salida.mid                               ║
-║    8. (Opcional) Generar con letras distintas:                               ║
-║       python csl_l2m.py new-lyrics                                           ║
-║                         --events    data/events/cancion.pkl                  ║
-║                         --lyrics    mis_letras.txt                           ║
-║                         --output    data/events/nueva.pkl                    ║
-║       python csl_l2m.py generate --events data/events/nueva.pkl …           ║
-║                                                                              ║
-║  NOTAS SOBRE EL FICHERO .pkl:                                                ║
-║    Cada .pkl contiene (seq_lyrics, pos_seq, melody_events):                  ║
-║      seq_lyrics    — lista de frases, cada una lista de sílabas              ║
-║      pos_seq       — índices de los tokens SEQ en melody_events              ║
-║      melody_events — secuencia REMI-Aligned completa                         ║
-║    Las letras van embebidas en el .pkl desde prepare — no hace falta         ║
-║    pasarlas por separado en generate. Para usar letras distintas sobre       ║
-║    la misma estructura rítmica usar el subcmando new-lyrics.                 ║
-║                                                                              ║
-║  FORMATO MIDI DE ENTRADA:                                                    ║
-║    - Un único instrumento (pista 0), velocity=126 en todas las notas         ║
-║    - Letras en MIDI Lyric markers, una por nota                              ║
-║    - Convención de letras:                                                    ║
-║        "hola"   → sílaba normal (una nota)                                   ║
-║        "ho*"    → extensión de la sílaba anterior (melisma)                  ║
-║        "hola."  → última sílaba de la frase (marca fin de SEQ)               ║
-║        "*."     → extensión + fin de frase                                   ║
-║                                                                              ║
-║  FORMATO ABC DE ENTRADA (sin dependencias externas):                         ║
-║    - Cabeceras estándar: X: T: M: L: Q: K:                                   ║
-║    - Las 15 tonalidades mayores/menores soportadas                           ║
-║    - Letras bajo cada voz con w: (una sílaba por nota)                       ║
-║    - Convención w: estándar:                                                  ║
-║        síla-    → guión: la palabra continúa en la nota siguiente            ║
-║        *  _     → melisma: extiende la sílaba anterior                       ║
-║        |        → barra de compás en la letra (se ignora)                    ║
-║    - Cada línea musical + su w: equivale a una frase (SEQ)                   ║
-║    - Ejemplo:                                                                 ║
-║        X:1  T:Prueba  M:4/4  L:1/8  Q:90  K:C                              ║
-║        |G2 A2 B2 c2|d4 c4|                                                   ║
-║        w:ho- la mun- do bue- nas no- ches                                    ║
-║                                                                              ║
-║  FORMATO FICHERO DE LETRAS (new-lyrics):                                     ║
-║    - Una frase por línea, sílabas separadas por espacios                     ║
-║    - Guiones al final de sílaba opcionales (ho- → ho)                        ║
-║    - Líneas vacías y líneas con # se ignoran                                 ║
-║    - Si hay menos frases que SEQs en el .pkl, se reciclan                   ║
-║    - Ejemplo:                                                                 ║
-║        hoy es un buen día                                                    ║
-║        pa- ra can- tar                                                       ║
-║        sin pen- sar en na- da                                                ║
-║        so- lo dis- fru- tar                                                  ║
-║                                                                              ║
-║  CONTROLES EN GENERACIÓN:                                                    ║
-║    --key KEY         Tonalidad: C, Dm, F#m, Bb… (default: auto)             ║
-║    --emotion E       Emoción: Positive | Neutral | Negative                  ║
-║    --temperature F   Temperatura de muestreo (default: 1.2)                 ║
-║    --nucleus-p F     Probabilidad acumulada nucleus (default: 0.9)           ║
-║    --n-samples N     Número de melodías a generar (default: 1)              ║
-║    --n-repeats N     Repetir frases N veces → salida más larga               ║
-║    --free            Modo libre: ignora restricciones de alineación          ║
-║                      (recomendado con modelos poco entrenados)               ║
-║    --shift-pm N      Desplazar pitch-mean ±N clases (default: 0)            ║
-║    --shift-nd N      Desplazar note-density ±N clases (default: 0)          ║
-║    --shift-X N       Disponible para los 12 atributos: pm pv pr dm dv dr    ║
-║                      nd mcd aa cm dmm align                                  ║
-║                                                                              ║
-║  DEFAULTS DE ARQUITECTURA (CPU-friendly, ~1M params):                       ║
-║    enc/dec layers=2, heads=4, dim=128, d_latent=64, d_embed=128             ║
-║    Para GPU (RTX 1000 Ada): --enc-layers 12 --enc-dim 512 --enc-heads 8     ║
-║                              --dec-layers 12 --dec-dim 512 --dec-heads 8    ║
-║                              --d-latent 128 --d-embed 512 --batch-size 8    ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    miditoolkit  numpy  torch  PyYAML                                         ║
-║    (ABC no requiere dependencias externas)                                   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+csl_l2m.py — Csl-L2M: generación controlable de melodía a partir de letra
+(Lyric-to-Melody)
+(versión 1.2).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Adaptación de CSL-L2M (AAAI-2025) al estilo single-file del ecosistema.
+Encoder Transformer sobre letras → Decoder Transformer autorregresivo
+condicionado en 14 controles musicales por frase (pitch, duración, ritmo,
+tonalidad, emoción, estructura). Representación: REMI-Aligned.
+
+FLUJO TÍPICO:
+  1. Preparar corpus (.mid con Lyric markers o .abc con w:):
+     python csl_l2m.py prepare --input-dir canciones/ \
+                                --output-dir data/events/
+  2. Construir vocabulario:
+     python csl_l2m.py vocab --events-dir data/events/ \
+                              --output-dir data/
+  3. Crear splits:
+     python csl_l2m.py splits --events-dir data/events/ \
+                               --output-dir data/
+  4. Calcular atributos:
+     python csl_l2m.py attributes --events-dir data/events/ \
+                                   --output-dir data/attributes/
+  5. (Opcional) VQ-VAE para features aprendidas:
+     python csl_l2m.py train-vqvae --events-dir data/events/ \
+                       --vocab data/dictionary_melody.pkl \
+                       --model-dir model_vqvae/
+     python csl_l2m.py extract-feats --events-dir data/events/ \
+                       --vocab-melody data/dictionary_melody.pkl \
+                       --model-dir model_vqvae/ \
+                       --output-dir data/feats/
+  6. Entrenar:
+     python csl_l2m.py train \
+                       --events-dir data/events/ \
+                       --vocab-melody data/dictionary_melody.pkl \
+                       --vocab-lyric  data/dictionary_lyric.pkl \
+                       --train-split  data/train.pkl \
+                       --val-split    data/val.pkl \
+                       --attr-dir     data/attributes/ \
+                       --model-dir    model_csll2m/
+                       [--feats-dir   data/feats/]
+  7. Generar:
+     python csl_l2m.py generate \
+                       --events    data/events/cancion.pkl \
+                       --model-dir model_csll2m/ \
+                       --attr-dir  data/attributes/ \
+                       --output    salida.mid
+  8. (Opcional) Generar con letras distintas:
+     python csl_l2m.py new-lyrics \
+                       --events    data/events/cancion.pkl \
+                       --lyrics    mis_letras.txt \
+                       --output    data/events/nueva.pkl
+     python csl_l2m.py generate --events data/events/nueva.pkl --model-dir model/ --output salida.mid
+
+NOTAS SOBRE EL FICHERO .pkl:
+  Cada .pkl contiene (seq_lyrics, pos_seq, melody_events):
+    seq_lyrics    — lista de frases, cada una lista de sílabas
+    pos_seq       — índices de los tokens SEQ en melody_events
+    melody_events — secuencia REMI-Aligned completa
+  Las letras van embebidas en el .pkl desde prepare — no hace falta
+  pasarlas por separado en generate. Para usar letras distintas sobre
+  la misma estructura rítmica usar el subcmando new-lyrics.
+
+CONTROLES EN GENERACIÓN:
+  --key KEY         Tonalidad: C, Dm, F#m, Bb… (default: auto)
+  --emotion E       Emoción: Positive | Neutral | Negative
+  --temperature F   Temperatura de muestreo (default: 1.2)
+  --nucleus-p F     Probabilidad acumulada nucleus (default: 0.9)
+  --n-samples N     Número de melodías a generar (default: 1)
+  --n-repeats N     Repetir frases N veces → salida más larga
+  --free            Modo libre: ignora restricciones de alineación
+                    (recomendado con modelos poco entrenados)
+  --shift-pm N      Desplazar pitch-mean ±N clases (default: 0)
+  --shift-nd N      Desplazar note-density ±N clases (default: 0)
+  --shift-X N       Disponible para los 12 atributos: pm pv pr dm dv dr
+                    nd mcd aa cm dmm align
+
+DEFAULTS DE ARQUITECTURA (CPU-friendly, ~1M params):
+  enc/dec layers=2, heads=4, dim=128, d_latent=64, d_embed=128
+  Para GPU (RTX 1000 Ada): --enc-layers 12 --enc-dim 512 --enc-heads 8
+                            --dec-layers 12 --dec-dim 512 --dec-heads 8
+                            --d-latent 128 --d-embed 512 --batch-size 8
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  prepare      — MIDI/ABC + letras → eventos REMI-Aligned (.pkl)
+  vocab        — eventos .pkl → diccionarios melody + lyric
+  splits       — carpeta de .pkl → train/val/test splits
+  attributes   — extrae 12 atributos estadísticos por frase
+  train-vqvae  — entrena VQ-VAE para extraer features melódicas
+  extract-feats— VQ-VAE checkpoint → features latentes por canción
+  train        — entrena el modelo CSL-L2M completo
+  generate     — genera MIDI dado un .pkl con letra alineada
+  new-lyrics   — sustituye las letras de un .pkl sin cambiar la melodía
+  round-trip   — REMI-Aligned → MIDI (diagnóstico sin modelo)
+  inspect      — diagnóstico de datos y checkpoints
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+FORMATO MIDI DE ENTRADA:
+    - Un único instrumento (pista 0), velocity=126 en todas las notas
+    - Letras en MIDI Lyric markers, una por nota
+    - Convención de letras:
+        "hola"   → sílaba normal (una nota)
+        "ho*"    → extensión de la sílaba anterior (melisma)
+        "hola."  → última sílaba de la frase (marca fin de SEQ)
+        "*."     → extensión + fin de frase
+
+  FORMATO ABC DE ENTRADA (sin dependencias externas):
+    - Cabeceras estándar: X: T: M: L: Q: K:
+    - Las 15 tonalidades mayores/menores soportadas
+    - Letras bajo cada voz con w: (una sílaba por nota)
+    - Convención w: estándar:
+        síla-    → guión: la palabra continúa en la nota siguiente
+        *  _     → melisma: extiende la sílaba anterior
+        |        → barra de compás en la letra (se ignora)
+    - Cada línea musical + su w: equivale a una frase (SEQ)
+    - Ejemplo:
+        X:1  T:Prueba  M:4/4  L:1/8  Q:90  K:C
+        |G2 A2 B2 c2|d4 c4|
+        w:ho- la mun- do bue- nas no- ches
+
+  FORMATO FICHERO DE LETRAS (new-lyrics):
+    - Una frase por línea, sílabas separadas por espacios
+    - Guiones al final de sílaba opcionales (ho- → ho)
+    - Líneas vacías y líneas con # se ignoran
+    - Si hay menos frases que SEQs en el .pkl, se reciclan
+    - Ejemplo:
+        hoy es un buen día
+        pa- ra can- tar
+        sin pen- sar en na- da
+        so- lo dis- fru- tar
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare
+    --input-dir DIR             Carpeta con archivos .mid, .midi y/o .abc
+                                (obligatorio)
+    --output-dir DIR            Carpeta de salida para los .pkl (obligatorio)
+    --default-tempo BPM         Tempo por defecto para ABC sin cabecera Q:
+                                (default: 90)
+
+  vocab
+    --events-dir DIR            (obligatorio)
+    --output-dir DIR            (obligatorio)
+
+  splits
+    --events-dir DIR            (obligatorio)
+    --output-dir DIR            (obligatorio)
+    --val-ratio F               (defecto 0.05)
+    --test-ratio F              (defecto 0.05)
+    --seed SEED                 (defecto 42)
+
+  attributes
+    --events-dir DIR            (obligatorio)
+    --output-dir DIR            (obligatorio)
+
+  train-vqvae
+    --events-dir DIR            (obligatorio)
+    --vocab FILE                dictionary_melody.pkl (obligatorio)
+    --model-dir DIR             (obligatorio)
+    --epochs EPOCHS             (defecto 12)
+    --batch-size BATCH_SIZE     (defecto 2)
+    --lr LR                     (defecto 3e-05)
+    --enc-layers ENC_LAYERS     (defecto 2)
+    --enc-heads ENC_HEADS       (defecto 4)
+    --enc-dim ENC_DIM           (defecto 128)
+    --dec-layers DEC_LAYERS     (defecto 2)
+    --dec-heads DEC_HEADS       (defecto 4)
+    --dec-dim DEC_DIM           (defecto 128)
+    --d-latent D_LATENT         (defecto 64)
+    --d-embed D_EMBED           (defecto 128)
+    --n-codes N_CODES           (defecto 512)
+    --n-groups N_GROUPS         (defecto 16)
+    --device DEVICE             (defecto cpu)
+
+  extract-feats
+    --events-dir DIR            (obligatorio)
+    --vocab-melody FILE         (obligatorio)
+    --model-dir DIR             (obligatorio)
+    --output-dir DIR            (obligatorio)
+
+  train
+    --events-dir DIR            (obligatorio)
+    --vocab-melody FILE         (obligatorio)
+    --vocab-lyric FILE          (obligatorio)
+    --train-split FILE          (obligatorio)
+    --val-split FILE            (obligatorio)
+    --attr-dir DIR              (obligatorio)
+    --model-dir DIR             (obligatorio)
+    --struct-dir DIR            Carpeta con etiquetas de estructura A/B/C…
+                                (.pkl por canción)
+    --key-dir DIR               Carpeta con tonalidades (.pkl por canción, ej:
+                                "Dm")
+    --emotion-dir DIR           Carpeta con emociones (.pkl por canción, ej:
+                                "Positive")
+    --feats-dir DIR             Carpeta con features VQ-VAE (opcional)
+    --epochs EPOCHS             (defecto 12)
+    --batch-size BATCH_SIZE     (defecto 2)
+    --max-lr MAX_LR             (defecto 0.0001)
+    --min-lr MIN_LR             (defecto 5e-06)
+    --enc-layers ENC_LAYERS     (defecto 2)
+    --enc-heads ENC_HEADS       (defecto 4)
+    --enc-dim ENC_DIM           (defecto 128)
+    --dec-layers DEC_LAYERS     (defecto 2)
+    --dec-heads DEC_HEADS       (defecto 4)
+    --dec-dim DEC_DIM           (defecto 128)
+    --d-latent D_LATENT         (defecto 64)
+    --d-embed D_EMBED           (defecto 128)
+    --enc-seqlen ENC_SEQLEN     (defecto 128)
+    --dec-seqlen DEC_SEQLEN     (defecto 512)
+    --max-seqs MAX_SEQS         (defecto 16)
+    --device DEVICE             (defecto cpu)
+    f'--no-{ctrl.lower()}'      Desactivar control …
+
+  generate
+    --events FILE               Archivo .pkl con REMI-Aligned (output de
+                                prepare) (obligatorio)
+    --vocab-melody FILE
+    --vocab-lyric FILE
+    --attr-dir DIR
+    --model-dir DIR             (obligatorio)
+    --output FILE               (defecto salida.mid)
+    --key STR                   Tonalidad: C, Dm, F#m… (default: auto)
+    --emotion EMOTION           (valores: Positive|Neutral|Negative)
+    --temperature TEMPERATURE   (defecto 1.2)
+    --nucleus-p NUCLEUS_P       (defecto 0.9)
+    --tempo TEMPO               (defecto 90.0)
+    --n-samples N_SAMPLES       Número de melodías a generar (default: 1)
+    --n-repeats N_REPEATS       Repetir las frases N veces para generar
+                                salidas más largas (default: 1)
+    --free                      Modo libre: ignora restricciones de alineación
+                                (útil con modelos poco entrenados)
+    --dec-seqlen DEC_SEQLEN     (defecto 2048)
+    f'--shift-{a.lower()}' N    Desplazar atributo … ±N clases
+
+  round-trip
+    --events FILE               (obligatorio)
+    --output FILE               (defecto round_trip.mid)
+    --tempo TEMPO               (defecto 90.0)
+
+  new-lyrics
+    --events FILE               .pkl original (de prepare) (obligatorio)
+    --lyrics FILE               Fichero de texto con las letras nuevas (una
+                                frase por línea, sílabas separadas por
+                                espacios) (obligatorio)
+    --output FILE               .pkl de salida listo para usar en generate
+                                (obligatorio)
+    --vocab-lyric FILE          dictionary_lyric.pkl (opcional, para verificar
+                                cobertura)
+
+  inspect
+    --events-dir DIR
+    --vocab-melody FILE
+    --vocab-lyric FILE
+    --attr-dir DIR
+    --model-dir DIR
+    --max-show MAX_SHOW         Máximo de archivos a listar (default: 20)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # REMI-Aligned .pkl → MIDI (diagnóstico)
+  python csl_l2m.py round-trip --events valor
+
+  # Diagnóstico de datos y checkpoints
+  python csl_l2m.py inspect
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  miditoolkit  numpy  torch  PyYAML
+  (ABC no requiere dependencias externas)
 """
 
 import argparse

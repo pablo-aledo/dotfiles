@@ -1,41 +1,92 @@
 #!/usr/bin/env python3
 """
-fingering_v4.py — Generador automático de digitación pianística a partir de MIDI.
+fingering_v4.py — Generador automático de digitación pianística a partir de MIDI
+(versión 4: primer modo de acordes, activado con --chords).
 
-Novedad de v4 (modo opcional --chords):
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Mismo núcleo que fingering_v3.py (ventana deslizante de 9 notas con coste
+ergonómico; basado en pianoplayer, Marco Musy, MIT License). La novedad es la
+noción de ACORDE, opcional (--chords):
   - Calcula los compases, detecta el acorde de cada compás (plantillas de
-    clases de altura + nota del bajo) y asigna a cada nota su función (R,3,5,7…).
+    clases de altura + nota del bajo) y asigna a cada nota su función (R, 3, 5, 7…).
   - Agrupa los compases de cada mano en "clases de voicing" (mismo acorde y
     mismas notas / misma función transportada / misma forma melódica) y busca
     una digitación de consenso por clase.
-  - Esa digitación de consenso entra en el optimizador como una penalización
-    blanda controlada por --chord-weight (λ):
+  - Ese consenso entra en el optimizador como una penalización blanda
+    controlada por --chord-weight (λ):
         λ = 0    → solución agnóstica (idéntica a v3)
         λ ~ 1    → una nota que rompe la plantilla cuesta como una nota media
         λ → ∞    → uniformidad forzada entre compases de la misma clase
   - Sin --chords el comportamiento es exactamente el de v3.
+Heredado de v3: memoria de postura (relocation_alpha=0.3), separación de manos
+con un solo track, tempo variable, optimización de acordes con el span real de
+la mano, puntuación de confianza ('(alt)'), salida estructurada, separación de
+voces y voz sostenida independiente, exportación a MusicXML.
+Nota: el modo de acordes de v5/v6 (--chord-mode, claves de forma, prior de bajo,
+enlace de gestos) es un rediseño con otras opciones; v4 usa --chords.
 
-Mejoras de v3 respecto a v2:
-  - Memoria de postura activada (relocation_alpha=0.3)
-  - Separación inteligente de manos (un solo track) minimizando cruces
-  - Tempo variable: cálculo de compás correcto con múltiples cambios de tempo
-  - Optimización de acordes con módulo específico (span real de mano)
-  - Puntuación de confianza por nota (marca notas con digitación alternativa válida con '(alt)')
-  - Salida estructurada como lista de dicts (API usable por otros módulos)
-  - Separación de voces dentro de un track (notas largas vs corcheas)
-  - Digitación de voz sostenida independiente de la melodía
-  - Exportación a MusicXML con marcas de digitación estándar (opcional)
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Entrada : MIDI de 1 o 2 tracks. Salida: informe de texto, --json, --xml.
+  Con --chord-report se añade el acorde de cada compás y los voicings
+  repetidos con sus digitaciones.
 
-Uso:
-    python fingering_v4.py archivo.mid --chords --chord-weight 1.0 --chord-report
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  Entrada y selección de manos
+    midi                 Fichero MIDI (obligatorio, posicional).
+    --right-track N      Índice del track para la mano derecha (defecto 0).
+    --left-track N       Índice del track para la mano izquierda (defecto 1).
+    --auto-split         Reparte las notas entre manos con una ventana deslizante
+                         aunque el MIDI ya tenga 2 tracks; con un solo track el
+                         reparto es automático de todos modos (minimiza cruces).
+    --right-only         Digita solo la mano derecha.
+    --left-only          Digita solo la mano izquierda.
+    --measures N         Procesa como máximo N compases (0 = todos; defecto 0).
+  Ergonomía
+    --hand-size SIZE     XXS, XS, S, M, L, XL o XXL (defecto M ≈ 17 cm de
+                         pulgar a meñique). Condiciona los saltos admisibles.
+  Salidas
+    --confidence         Imprime la puntuación de confianza por nota; las notas
+                         con una digitación alternativa igual de válida se
+                         marcan con '(alt)'.
+    --json FICHERO       Exporta el resultado (lista de dicts por nota) a JSON.
+    --xml FICHERO        Exporta a MusicXML con marcas de digitación estándar.
+  Modo acordes (v4)
+    --chords             Activa el modo acordes (acorde por compás + consistencia
+                         entre compases). Sin él, el resultado es el de v3.
+    --chord-weight W     λ de la consistencia (defecto 1.0): 0 = agnóstico (v3),
+                         ~1 equilibrado, ≥5 uniformidad casi forzada.
+    --chord-runs         Con --chords: compara también las escaladas estrictas por
+                         su forma (nivel "shape").
+    --chord-report       Con --chords: informe del acorde por compás y de los
+                         voicings repetidos con sus digitaciones.
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
     python fingering_v4.py archivo.mid
-    python fingering_v2.py archivo.mid --hand-size L
-    python fingering_v2.py archivo.mid --measures 8
-    python fingering_v2.py archivo.mid --right-only
-    python fingering_v2.py archivo.mid --left-only
-    python fingering_v2.py archivo.mid --xml salida.xml
-    python fingering_v2.py archivo.mid --json salida.json
-    python fingering_v3.py archivo.mid --confidence      # muestra puntuación de confianza
+    python fingering_v4.py archivo.mid --chords                                   # λ=1.0
+    python fingering_v4.py archivo.mid --chords --chord-weight 0.5                # más flexible
+    python fingering_v4.py archivo.mid --chords --chord-weight 5                  # casi uniforme
+    python fingering_v4.py archivo.mid --chords --chord-weight 1.0 --chord-report
+    python fingering_v4.py archivo.mid --chords --chord-runs                      # compara escalas por forma
+    python fingering_v4.py archivo.mid --hand-size L
+    python fingering_v4.py archivo.mid --measures 8
+    python fingering_v4.py archivo.mid --right-only
+    python fingering_v4.py archivo.mid --left-only
+    python fingering_v4.py archivo.mid --right-track 1 --left-track 2
+    python fingering_v4.py archivo.mid --auto-split
+    python fingering_v4.py archivo.mid --xml salida.xml
+    python fingering_v4.py archivo.mid --json salida.json
+    python fingering_v4.py archivo.mid --confidence      # muestra puntuación de confianza
+
+Dependencias: pretty_midi (pip install pretty_midi).
+Véase también: fingering_v6.py (modo acordes actual), fingering_to_synthesia.py.
 """
 
 from __future__ import annotations

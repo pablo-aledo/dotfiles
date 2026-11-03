@@ -1,52 +1,71 @@
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     STYLE TRANSFER  v1.0                                     ║
-║       Transferencia de estilo: aplica el ADN de un MIDI a otro               ║
-║                                                                              ║
-║  Dado un MIDI de «contenido» (tu idea melódica) y un MIDI de «estilo»,       ║
-║  preserva la esencia melódica del primero mientras aplica el ADN rítmico,    ║
-║  armónico, emocional y de textura del segundo. Es un «filtro de estilo»      ║
-║  musical que mantiene tu voz creativa.                                       ║
-║                                                                              ║
-║  DIMENSIONES DE TRANSFERENCIA (controlables individualmente):                ║
-║  [R] Ritmo/Groove     — patrón rítmico y timing humanizado del estilo        ║
-║  [H] Armonía          — progresión armónica y complejidad del estilo         ║
-║  [E] Emoción          — curvas de tensión/arousal/valencia del estilo        ║
-║  [T] Timbre/Textura   — estilo de acompañamiento (alberti/arpeggio/bloque)   ║
-║  [D] Dinámica         — envolvente de velocidades del estilo                 ║
-║  [K] Tonalidad        — transponer contenido a la tonalidad del estilo       ║
-║                                                                              ║
-║  ESTRATEGIAS DE PRESERVACIÓN MELÓDICA:                                      ║
-║  [P1] Preservar contorno: mantiene las subidas/bajadas del original          ║
-║  [P2] Preservar intervalos: mantiene los saltos exactos                      ║
-║  [P3] Preservar motivo: extrae y re-siembra el motivo del contenido          ║
-║  [P4] Pitch-snapping: ajusta notas a la escala del estilo                   ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python style_transfer.py contenido.mid estilo.mid                        ║
-║    python style_transfer.py mi_melodia.mid bach.mid --strength 0.8          ║
-║    python style_transfer.py mi_melodia.mid jazz.mid --no-key                 ║
-║    python style_transfer.py mi_melodia.mid estilo.mid \\                    ║
-║        --transfer rhythm harmony --preserve contour motif                   ║
-║    python style_transfer.py mi_melodia.mid estilo.mid \\                    ║
-║        --strength 0.5 --blend-melody 0.6 --bars 32                         ║
-║    python style_transfer.py mi_melodia.mid estilo.mid --verbose             ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --strength F       Intensidad global de transferencia 0-1 (default: 0.7) ║
-║    --transfer DIMS    Dimensiones a transferir (default: todas)              ║
-║                       rhythm harmony emotion texture dynamics key            ║
-║    --no-KEY-transfer  Atajo para desactivar dimensiones individuales         ║
-║    --preserve STRATS  Estrategias de preservación melódica (default: todas) ║
-║                       contour intervals motif scale                         ║
-║    --blend-melody F   Mezcla melodía original vs generada 0-1 (default: 0.5)║
-║    --bars N           Compases de salida (default: auto desde contenido)     ║
-║    --candidates N     Candidatos a evaluar (default: 3)                      ║
-║    --output FILE      Fichero de salida (default: transfer_out.mid)          ║
-║    --export-fingerprint  Exportar fingerprint del resultado                  ║
-║    --seed N           Semilla (default: 42)                                  ║
-║    --verbose          Informe detallado                                       ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+style_transfer.py — Style Transfer: transferencia de estilo: aplica el ADN de
+un MIDI a otro
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un MIDI de «contenido» (tu idea melódica) y un MIDI de «estilo»,
+preserva la esencia melódica del primero mientras aplica el ADN rítmico,
+armónico, emocional y de textura del segundo. Es un «filtro de estilo»
+musical que mantiene tu voz creativa.
+
+DIMENSIONES DE TRANSFERENCIA (controlables individualmente):
+[R] Ritmo/Groove     — patrón rítmico y timing humanizado del estilo
+[H] Armonía          — progresión armónica y complejidad del estilo
+[E] Emoción          — curvas de tensión/arousal/valencia del estilo
+[T] Timbre/Textura   — estilo de acompañamiento (alberti/arpeggio/bloque)
+[D] Dinámica         — envolvente de velocidades del estilo
+[K] Tonalidad        — transponer contenido a la tonalidad del estilo
+
+ESTRATEGIAS DE PRESERVACIÓN MELÓDICA:
+[P1] Preservar contorno: mantiene las subidas/bajadas del original
+[P2] Preservar intervalos: mantiene los saltos exactos
+[P3] Preservar motivo: extrae y re-siembra el motivo del contenido
+[P4] Pitch-snapping: ajusta notas a la escala del estilo
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --strength F       Intensidad global de transferencia 0-1 (default: 0.7)
+  --transfer DIMS    Dimensiones a transferir (default: todas)
+                     rhythm harmony emotion texture dynamics key
+  --no-KEY-transfer  Atajo para desactivar dimensiones individuales
+  --preserve STRATS  Estrategias de preservación melódica (default: todas)
+                     contour intervals motif scale
+  --blend-melody F   Mezcla melodía original vs generada 0-1 (default: 0.5)
+  --bars N           Compases de salida (default: auto desde contenido)
+  --candidates N     Candidatos a evaluar (default: 3)
+  --output FILE      Fichero de salida (default: transfer_out.mid)
+  --export-fingerprint  Exportar fingerprint del resultado
+  --seed N           Semilla (default: 42)
+  --verbose          Informe detallado
+
+── Otras opciones del parser ──
+  --no-rhythm                 No transferir ritmo
+  --no-harmony                No transferir armonía
+  --no-emotion                No transferir emoción
+  --no-texture                No transferir textura
+  --no-dynamics               No transferir dinámica
+  --no-percussion             No generar pista de percusión
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python style_transfer.py contenido.mid estilo.mid
+  python style_transfer.py mi_melodia.mid bach.mid --strength 0.8
+  python style_transfer.py mi_melodia.mid jazz.mid --no-key
+  python style_transfer.py mi_melodia.mid estilo.mid \
+      --transfer rhythm harmony --preserve contour motif
+  python style_transfer.py mi_melodia.mid estilo.mid \
+      --strength 0.5 --blend-melody 0.6 --bars 32
+  python style_transfer.py mi_melodia.mid estilo.mid --verbose
+
+── Más modos ──
+
+  # --export-fingerprint
+  python style_transfer.py entrada.mid entrada.mid --export-fingerprint
 """
 
 import sys

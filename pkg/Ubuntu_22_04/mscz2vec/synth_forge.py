@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-╔══════════════════════════════════════════════════════════════════════╗
-║  synth_forge.py — Motor de síntesis multi-paradigma                   ║
-╚══════════════════════════════════════════════════════════════════════╝
+synth_forge.py — Motor de síntesis multi-paradigma: muestras, guía de onda,
+aditiva, FM, metales y granular.
 
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
 Implementa en Python puro (numpy + stdlib, sin Csound/SuperCollider/Faust
 externos) seis paradigmas clásicos de síntesis sonora:
 
@@ -17,27 +19,100 @@ externos) seis paradigmas clásicos de síntesis sonora:
                 resonante (excitador no lineal + resonadores tipo Klank)
     granular    Síntesis granular (nube de granos con ventana de Hann)
 
-USO
-    synth_forge.py sample     --keymap kb/keymap.json --midi tema.mid --out out.wav
-    synth_forge.py sample     --make-demo-bank kb/          # crea un banco de prueba
-    synth_forge.py waveguide  --mode bowed --midi tema.mid --out out.wav
-    synth_forge.py waveguide  --mode plucked --notes "60:0:1.0:100" --out out.wav
-    synth_forge.py additive   --harmonics 1,0,0.6,0,0.3,0,0.15 --midi tema.mid --out out.wav
-    synth_forge.py fm         --ratio 2:1 --index-attack 3.2 --midi tema.mid --out out.wav
-    synth_forge.py brass      --brightness 0.5 --fm-attack --midi tema.mid --out out.wav
-    synth_forge.py granular   --source ruido --center-freq 900 --duration 6 --out out.wav
-    synth_forge.py demo       --outdir demo/
-    synth_forge.py info
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  sample      Síntesis por muestras (sampler SFZ-lite)
+  waveguide   Modelado físico por guía de onda
+  additive    Síntesis aditiva
+  fm          Síntesis FM de 2 operadores
+  brass       Metales: tubo no lineal + banco modal
+  granular    Síntesis granular
+  demo        Renderiza una frase de ejemplo con todas las técnicas melódicas
+  info        Resumen de las técnicas de síntesis implementadas
 
-ENTRADA DE NOTAS (compartida por sample/waveguide/additive/fm/brass)
-    --midi FICHERO.mid     lee notas de un MIDI (requiere 'mido')
-    --notes "n:ini:dur:vel,n:ini:dur:vel,..."
-                            lista manual, ej: "62:0.0:0.75:90,65:0.75:0.375:95"
-                            (nota MIDI, inicio en s, duración en s, velocity 0-127)
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  sample
+    --out OUT                   Fichero WAV de salida (no aplica con --make-
+                                demo-bank)
+    --sr SR                     (defecto SR_DEFAULT)
+    --keymap KEYMAP             keymap.json con las regiones
+    --make-demo-bank DIR        Genera un banco de muestras de prueba en DIR y
+                                termina
 
-DEPENDENCIAS
-    numpy (obligatorio)
-    mido  (opcional; solo si se usa --midi — pip install mido)
+  waveguide
+    --mode MODE                 (defecto plucked; valores: plucked|bowed)
+    --brightness BRIGHTNESS     [plucked] filtro de pérdidas (defecto 0.5)
+    --bow-pressure BOW_PRESSURE
+                                (defecto 0.5)
+    --bow-velocity BOW_VELOCITY
+                                (defecto 0.5)
+    --vibrato VIBRATO           Profundidad de vibrato (defecto 0.007)
+
+  additive
+    --harmonics HARMONICS       Pesos separados por comas (posición=armónico)
+                                (defecto 1,0,0.6,0,0.3,0,0.15)
+
+  fm
+    --ratio RATIO               portadora:moduladora, ej. '2:1' o '1:1.41'
+                                (defecto 2:1)
+    --index-attack INDEX_ATTACK
+                                (defecto 3.2)
+    --index-sustain INDEX_SUSTAIN
+                                (defecto 1.8)
+
+  brass
+    --brightness BRIGHTNESS     (defecto 0.4)
+    --fm-attack                 Añade chasquido FM inarmónico
+
+  granular
+    --source SOURCE             'ruido' o ruta a un WAV (defecto ruido)
+    --center-freq CENTER_FREQ   [fuente ruido] (defecto 900.0)
+    --duration DURATION         (defecto 4.0)
+    --density DENSITY           Granos por segundo (defecto 40.0)
+    --grain-dur GRAIN_DUR       (defecto 0.04)
+    --pos-spread POS_SPREAD     (defecto 0.3)
+    --pitch-spread PITCH_SPREAD
+                                (defecto 0.15)
+
+  demo
+    --outdir OUTDIR             Carpeta de salida (defecto demo)
+    --sr SR                     (defecto SR_DEFAULT)
+
+  (común)
+    --midi MIDI                 Fichero MIDI de entrada
+    --notes NOTES               Notas manuales 'n:ini:dur:vel,...'
+    --channel CHANNEL           Filtrar por canal MIDI
+    --out OUT                   Fichero WAV de salida (obligatorio)
+    --sr SR                     Frecuencia de muestreo (defecto SR_DEFAULT)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+      synth_forge.py sample     --keymap kb/keymap.json --midi tema.mid --out out.wav
+      synth_forge.py sample     --make-demo-bank kb/          # crea un banco de prueba
+      synth_forge.py waveguide  --mode bowed --midi tema.mid --out out.wav
+      synth_forge.py waveguide  --mode plucked --notes "60:0:1.0:100" --out out.wav
+      synth_forge.py additive   --harmonics 1,0,0.6,0,0.3,0,0.15 --midi tema.mid --out out.wav
+      synth_forge.py fm         --ratio 2:1 --index-attack 3.2 --midi tema.mid --out out.wav
+      synth_forge.py brass      --brightness 0.5 --fm-attack --midi tema.mid --out out.wav
+      synth_forge.py granular   --source ruido --center-freq 900 --duration 6 --out out.wav
+      synth_forge.py demo       --outdir demo/
+      synth_forge.py info
+
+  ENTRADA DE NOTAS (compartida por sample/waveguide/additive/fm/brass)
+      --midi FICHERO.mid     lee notas de un MIDI (requiere 'mido')
+      --notes "n:ini:dur:vel,n:ini:dur:vel,..."
+                              lista manual, ej: "62:0.0:0.75:90,65:0.75:0.375:95"
+                              (nota MIDI, inicio en s, duración en s, velocity 0-127)
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  numpy (obligatorio)
+  mido  (opcional; solo si se usa --midi — pip install mido)
 """
 
 import argparse

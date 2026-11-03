@@ -1,95 +1,152 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        ML EXPANDER  v1.0                                     ║
-║     Expansión orquestal de bocetos pianísticos mediante machine learning     ║
-║                                                                              ║
-║  Aprende la transformación piano→orquesta desde partituras reales usando    ║
-║  reducción sintética: colapsa obras orquestales a piano para generar pares  ║
-║  de entrenamiento (piano_reducido, orquesta_original).                       ║
-║                                                                              ║
-║  TRES MODELOS PyTorch (MLP, entrenables en CPU):                            ║
-║  [M1] TextureNet     — features de sección → arquetipo + tensión            ║
-║  [M2] InstrumentNet  — features + rol → secuencia de eventos MIDI           ║
-║  [M3] ExpressionNet  — tensión + instrumento → curvas CC1/CC11              ║
-║                                                                              ║
-║  PIPELINE DE FEATURES (31 dimensiones con semántica musical real):          ║
-║  · analyze_bars (orchestrator.py) — 16 métricas por compás con gradientes  ║
-║  · score_bass_line (bass_line_composer.py) — 6 criterios de calidad         ║
-║  · detect_key (piano_expander.py) — tónica + modo                          ║
-║  · posición relativa, gap_ratio, histograma de intervalos comprimido        ║
-║                                                                              ║
-║  CORRECCIÓN IDIOMÁTICA POST-ML (reglas, sin ML):                            ║
-║  · chord_tone_category / admissible_pcs (melody_harmonizer.py)             ║
-║  · _best_candidate / _motion_type (counterpoint.py)                        ║
-║  · classify_articulation (orchestrator.py)                                  ║
-║  · RANGES / SWEET idiomáticos (piano_expander.py)                          ║
-║                                                                              ║
-║  MODOS:                                                                      ║
-║    train    <dir>        Entrena M1/M2/M3 desde MIDIs orquestales reales   ║
-║    expand   <midi>       Expande un boceto de piano (una salida)            ║
-║    variants <midi>       Genera N variantes para seleccionar la mejor       ║
-║    reduce   <midi>       Ejecuta solo el SyntheticReducer (inspección)      ║
-║                                                                              ║
-║  ── train ────────────────────────────────────────────────────────────────  ║
-║    python ml_expander.py train /datos/maestro/                              ║
-║    python ml_expander.py train /datos/maestro/ --epochs 80 --lr 5e-4       ║
-║    python ml_expander.py train /datos/ --hidden-dim 256 --batch-size 64    ║
-║    python ml_expander.py train /datos/ --delta-bins 16 --pitch-bins 48     ║
-║    python ml_expander.py train /datos/ --checkpoint-dir ./mis_modelos/     ║
-║                                                                              ║
-║  ── expand ───────────────────────────────────────────────────────────────  ║
-║    python ml_expander.py expand boceto.mid                                  ║
-║    python ml_expander.py expand boceto.mid --template full                  ║
-║    python ml_expander.py expand boceto.mid --template strings --verbose     ║
-║    python ml_expander.py expand boceto.mid --split C4                       ║
-║    python ml_expander.py expand boceto.mid --output mi_orquestacion.mid    ║
-║    python ml_expander.py expand boceto.mid --checkpoint-dir ./mis_modelos/ ║
-║                                                                              ║
-║  ── variants ─────────────────────────────────────────────────────────────  ║
-║    # Selección automática de 8 variantes (arquetipos + plantillas + seeds)  ║
-║    python ml_expander.py variants boceto.mid                                ║
-║    python ml_expander.py variants boceto.mid --n 6                          ║
-║    python ml_expander.py variants boceto.mid --n 10 --out-dir ./variantes/ ║
-║                                                                              ║
-║    # Forzar arquetipos por sección (formato: arq_sec1-arq_sec2-arq_sec3)   ║
-║    python ml_expander.py variants boceto.mid --archetypes A-B-D             ║
-║    python ml_expander.py variants boceto.mid --archetypes A-C-E B-B-D      ║
-║                                                                              ║
-║    # Limitar plantillas y seeds                                              ║
-║    python ml_expander.py variants boceto.mid --templates chamber strings    ║
-║    python ml_expander.py variants boceto.mid --seeds 0 1 2                  ║
-║                                                                              ║
-║    # Combinación manual completa                                             ║
-║    python ml_expander.py variants boceto.mid                                ║
-║        --archetypes A-B-D B-C-E C-C-C                                      ║
-║        --templates chamber full --seeds 0 1                                 ║
-║                                                                              ║
-║    Nombres de salida: boceto_vNN_tmpl_figuracion_sN.mid                     ║
-║      vNN         — número de variante                                        ║
-║      ch/str/full — plantilla (chamber / strings / full)                     ║
-║      figuracion  — tutti · colchon · arpegios · contrapunto · sparse        ║
-║                    o combinación por sección: tutti-colchon-arpegios        ║
-║      sN          — seed de M2 (pitches del acompañamiento)                  ║
-║                                                                              ║
-║  ── reduce ───────────────────────────────────────────────────────────────  ║
-║    python ml_expander.py reduce orquesta.mid                                ║
-║    python ml_expander.py reduce orquesta.mid --output piano_reducido.mid   ║
-║    python ml_expander.py reduce orquesta.mid --split 60 --verbose          ║
-║                                                                              ║
-║  ARQUETIPOS DE TEXTURA (A–E):                                               ║
-║    A  tutti       — ataque homofónico, dinámica alta, tutti                 ║
-║    B  colchón     — melodía + voces largas sostenidas                       ║
-║    C  arpegios    — figuración activa en tresillos de corchea               ║
-║    D  contrapunto — líneas independientes con movimiento contrario          ║
-║    E  sparse      — pocas notas, mucho espacio, pocos instrumentos          ║
-║                                                                              ║
-║  DATOS: Descargar MIDIs orquestales manualmente desde:                      ║
-║    MAESTRO  → https://magenta.tensorflow.org/datasets/maestro               ║
-║    MuseScore → https://musescore.com (filtrar por orquesta, CC0/public)    ║
-║                                                                              ║
-║  DEPENDENCIAS: pip install mido numpy torch                                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+ml_expander.py — Ml Expander: expansión orquestal de bocetos pianísticos
+mediante machine learning
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Aprende la transformación piano→orquesta desde partituras reales usando
+reducción sintética: colapsa obras orquestales a piano para generar pares
+de entrenamiento (piano_reducido, orquesta_original).
+
+TRES MODELOS PyTorch (MLP, entrenables en CPU):
+[M1] TextureNet     — features de sección → arquetipo + tensión
+[M2] InstrumentNet  — features + rol → secuencia de eventos MIDI
+[M3] ExpressionNet  — tensión + instrumento → curvas CC1/CC11
+
+PIPELINE DE FEATURES (31 dimensiones con semántica musical real):
+· analyze_bars (orchestrator.py) — 16 métricas por compás con gradientes
+· score_bass_line (bass_line_composer.py) — 6 criterios de calidad
+· detect_key (piano_expander.py) — tónica + modo
+· posición relativa, gap_ratio, histograma de intervalos comprimido
+
+CORRECCIÓN IDIOMÁTICA POST-ML (reglas, sin ML):
+· chord_tone_category / admissible_pcs (melody_harmonizer.py)
+· _best_candidate / _motion_type (counterpoint.py)
+· classify_articulation (orchestrator.py)
+· RANGES / SWEET idiomáticos (piano_expander.py)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+    train    <dir>        Entrena M1/M2/M3 desde MIDIs orquestales reales
+    expand   <midi>       Expande un boceto de piano (una salida)
+    variants <midi>       Genera N variantes para seleccionar la mejor
+    reduce   <midi>       Ejecuta solo el SyntheticReducer (inspección)
+
+  ── train ────────────────────────────────────────────────────────────────
+    python ml_expander.py train /datos/maestro/
+    python ml_expander.py train /datos/maestro/ --epochs 80 --lr 5e-4
+    python ml_expander.py train /datos/ --hidden-dim 256 --batch-size 64
+    python ml_expander.py train /datos/ --delta-bins 16 --pitch-bins 48
+    python ml_expander.py train /datos/ --checkpoint-dir ./mis_modelos/
+
+  ── expand ───────────────────────────────────────────────────────────────
+    python ml_expander.py expand boceto.mid
+    python ml_expander.py expand boceto.mid --template full
+    python ml_expander.py expand boceto.mid --template strings --verbose
+    python ml_expander.py expand boceto.mid --split C4
+    python ml_expander.py expand boceto.mid --output mi_orquestacion.mid
+    python ml_expander.py expand boceto.mid --checkpoint-dir ./mis_modelos/
+
+  ── variants ─────────────────────────────────────────────────────────────
+    # Selección automática de 8 variantes (arquetipos + plantillas + seeds)
+    python ml_expander.py variants boceto.mid
+    python ml_expander.py variants boceto.mid --n 6
+    python ml_expander.py variants boceto.mid --n 10 --out-dir ./variantes/
+
+    # Forzar arquetipos por sección (formato: arq_sec1-arq_sec2-arq_sec3)
+    python ml_expander.py variants boceto.mid --archetypes A-B-D
+    python ml_expander.py variants boceto.mid --archetypes A-C-E B-B-D
+
+    # Limitar plantillas y seeds
+    python ml_expander.py variants boceto.mid --templates chamber strings
+    python ml_expander.py variants boceto.mid --seeds 0 1 2
+
+    # Combinación manual completa
+    python ml_expander.py variants boceto.mid \
+        --archetypes A-B-D B-C-E C-C-C \
+        --templates chamber full --seeds 0 1
+
+    Nombres de salida: boceto_vNN_tmpl_figuracion_sN.mid
+      vNN         — número de variante
+      ch/str/full — plantilla (chamber / strings / full)
+      figuracion  — tutti · colchon · arpegios · contrapunto · sparse
+                    o combinación por sección: tutti-colchon-arpegios
+      sN          — seed de M2 (pitches del acompañamiento)
+
+  ── reduce ───────────────────────────────────────────────────────────────
+    python ml_expander.py reduce orquesta.mid
+    python ml_expander.py reduce orquesta.mid --output piano_reducido.mid
+    python ml_expander.py reduce orquesta.mid --split 60 --verbose
+
+  ARQUETIPOS DE TEXTURA (A–E):
+    A  tutti       — ataque homofónico, dinámica alta, tutti
+    B  colchón     — melodía + voces largas sostenidas
+    C  arpegios    — figuración activa en tresillos de corchea
+    D  contrapunto — líneas independientes con movimiento contrario
+    E  sparse      — pocas notas, mucho espacio, pocos instrumentos
+
+  DATOS: Descargar MIDIs orquestales manualmente desde:
+    MAESTRO  → https://magenta.tensorflow.org/datasets/maestro
+    MuseScore → https://musescore.com (filtrar por orquesta, CC0/public)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  train
+    midi_dir MIDI_DIR           Directorio con MIDIs orquestales
+    --epochs EPOCHS             (defecto DEFAULT_EPOCHS)
+    --lr LR                     (defecto DEFAULT_LR)
+    --batch-size BATCH_SIZE     (defecto DEFAULT_BATCH_SIZE)
+    --hidden-dim HIDDEN_DIM     (defecto DEFAULT_HIDDEN_DIM)
+    --delta-bins DELTA_BINS     (defecto DEFAULT_DELTA_BINS)
+    --pitch-bins PITCH_BINS     (defecto DEFAULT_PITCH_BINS)
+    --vel-bins VEL_BINS         (defecto DEFAULT_VEL_BINS)
+    --dur-bins DUR_BINS         (defecto DEFAULT_DUR_BINS)
+    --checkpoint-dir CHECKPOINT_DIR
+                                (defecto DEFAULT_CHECKPOINT)
+    --verbose
+
+  expand
+    midi MIDI                   Boceto MIDI de piano
+    --template TEMPLATE         (defecto chamber; valores:
+                                chamber|strings|full)
+    --split SPLIT               Nota de split para separar manos (default: G4)
+    --output OUTPUT
+    --checkpoint-dir CHECKPOINT_DIR
+                                (defecto DEFAULT_CHECKPOINT)
+    --verbose
+
+  variants
+    midi MIDI                   Boceto MIDI de piano
+    --n N                       Número de variantes a generar (default: 8)
+    --out-dir OUT_DIR           Directorio de salida (default: junto al MIDI
+                                de entrada)
+    --split SPLIT               (defecto G4)
+    --checkpoint-dir CHECKPOINT_DIR
+                                (defecto DEFAULT_CHECKPOINT)
+    --archetypes ARCHETYPES […]
+                                Combinaciones de arquetipos forzadas, formato
+                                A-B-D (una por argumento). Ej: --archetypes
+                                A-B-D B-C-E
+    --templates TEMPLATES […]   Plantillas a usar (default: las tres)
+                                (valores: chamber|strings|full)
+    --seeds SEEDS […]           Seeds de M2 (default: 0 1 2)
+    --verbose
+
+  reduce
+    midi MIDI                   MIDI orquestal de entrada
+    --output OUTPUT
+    --split SPLIT               Pitch de split MD/MI (default: 60 = C4)
+    --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  pip install mido numpy torch
 """
 
 import sys

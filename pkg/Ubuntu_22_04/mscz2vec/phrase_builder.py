@@ -1,114 +1,128 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      PHRASE BUILDER  v1.0                                    ║
-║         Motor de sintaxis melódica: antecedente / consecuente                ║
-║                                                                              ║
-║  Toma un motivo corto (2-4 compases, idealmente extraído por harvester.py)   ║
-║  y lo expande en frases de 4/8/16 compases aplicando la lógica sintáctica   ║
-║  clásica: antecedente → consecuente, pregunta → respuesta, semi-cadencia    ║
-║  → cadencia auténtica. El resultado suena inevitablemente "correcto" porque  ║
-║  sigue la gramática con la que el oído occidental está entrenado.            ║
-║                                                                              ║
-║  CONCEPTO CENTRAL:                                                           ║
-║  Una frase musical es un par:                                                ║
-║    Antecedente (A): presenta la idea, termina con tensión (semicadencia)    ║
-║    Consecuente (C): responde la idea, termina con reposo (cadencia auténtica)║
-║                                                                              ║
-║  Tipos de par A→C:                                                           ║
-║    parallel    — C es casi igual a A pero con cadencia diferente (Bach)     ║
-║    contrasting — C tiene material nuevo pero mismo final (Haydn/Mozart)     ║
-║    sequential  — C transpone el material de A (secuencia)                   ║
-║    developmental — C desarrolla un motivo de A (Beethoven)                  ║
-║    call_response — A y C alternan frases cortas (call & response)           ║
-║                                                                              ║
-║  FORMAS COMPLETAS GENERABLES:                                                ║
-║    period       — [A: ant + cons]                          (8 compases)     ║
-║    double_period — [A: ant + cons] [B: ant + cons]         (16 compases)   ║
-║    sentence     — [Básica: 2c] [Repetición: 2c] [Liquidación: 4c]          ║
-║    bar_form     — [Stollen: 2c] [Stollen: 2c] [Abgesang: 4c] (AAB)        ║
-║    binary       — [A: 8c cadencia dom] [B: 8c cadencia tónica]             ║
-║    ternary      — [A: 8c] [B: 8c] [A': 8c]                                 ║
-║    rondo_kernel — [A: 8c] [B: 4c] [A: 4c]                                  ║
-║                                                                              ║
-║  TIPOS DE CADENCIA:                                                          ║
-║    AC   — auténtica perfecta   V→I  (reposo total)                          ║
-║    IAC  — auténtica imperfecta V→I  (reposo parcial, soprano no en tónica) ║
-║    HC   — semicadencia         I→V  o ii→V (tensión abierta)               ║
-║    DC   — engañosa             V→vi (sorpresa)                              ║
-║    PC   — plagal               IV→I (postscript, "amén")                   ║
-║    modal — final modal (en modo dórico/frigio: acorde característico)       ║
-║                                                                              ║
-║  FUENTES DE MOTIVO:                                                          ║
-║    --motif FILE      — MIDI de motivo base (extraído por harvester.py)       ║
-║    --motif-text S    — secuencia en texto: "C4:1 E4:0.5 G4:0.5 F4:1"       ║
-║    --generate        — genera motivo interno aleatorio (para explorar)       ║
-║                                                                              ║
-║  USO STANDALONE:                                                             ║
-║    python phrase_builder.py --motif motivo.mid                               ║
-║    python phrase_builder.py --motif motivo.mid --form period --type parallel ║
-║    python phrase_builder.py --motif motivo.mid --form sentence --key Am     ║
-║    python phrase_builder.py --motif motivo.mid --form binary --tempo 120    ║
-║    python phrase_builder.py --motif motivo.mid --all-forms                  ║
-║    python phrase_builder.py --generate --key Dm --form period               ║
-║    python phrase_builder.py --motif motivo.mid --cadences HC AC --report    ║
-║                                                                              ║
-║  USO COMO MÓDULO:                                                            ║
-║    from phrase_builder import build_phrase, PhraseResult, MotifNote         ║
-║                                                                              ║
-║    motif = [MotifNote(pitch=60, duration=1.0), MotifNote(pitch=64, dur=0.5)]║
-║    result = build_phrase(                                                    ║
-║        motif=motif,                                                          ║
-║        key="C major",                                                        ║
-║        form="period",                                                        ║
-║        phrase_type="parallel",                                               ║
-║        cadence_ant="HC",        # cadencia del antecedente                  ║
-║        cadence_cons="AC",       # cadencia del consecuente                  ║
-║        bars=8,                                                               ║
-║        tempo=90,                                                             ║
-║        seed=42,                                                              ║
-║    )                                                                         ║
-║    # result.notes → lista de (beat_offset, pitch, duration, velocity)       ║
-║    # result.sections → {"antecedent": [...], "consequent": [...]}           ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --motif FILE        MIDI de motivo de entrada                             ║
-║    --motif-text S      Motivo en formato texto                               ║
-║    --generate          Generar motivo interno                                ║
-║    --key KEY           Tonalidad (default: C major)                         ║
-║    --form S            period|double_period|sentence|bar_form|binary|       ║
-║                        ternary|rondo_kernel (default: period)               ║
-║    --type S            parallel|contrasting|sequential|developmental|       ║
-║                        call_response (default: parallel)                    ║
-║    --cadences S S      Cadencias: antecedente consecuente (default: HC AC)  ║
-║    --bars N            Compases totales (default: 8)                        ║
-║    --tempo BPM         Tempo (default: 90)                                  ║
-║    --all-forms         Generar una versión por cada forma                   ║
-║    --all-types         Generar una versión por cada tipo de frase           ║
-║    --report            Exportar análisis de la frase en JSON                ║
-║    --output FILE       Fichero de salida (default: phrase_out.mid)          ║
-║    --output-dir DIR    Directorio de salida con --all-forms                 ║
-║    --annotate          Exportar también MusicXML con anotaciones (requiere  ║
-║                        music21)                                              ║
-║    --listen            Reproducir al terminar (requiere pygame)             ║
-║    --verbose           Imprimir decisiones de construcción                  ║
-║    --seed N            Semilla aleatoria (default: 42)                      ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    phrase_out.mid              — MIDI con la frase completa                  ║
-║    phrase_out.report.json      — con --report                               ║
-║    phrase_out.musicxml         — con --annotate (secciones marcadas)        ║
-║                                                                              ║
-║  INTEGRACIÓN CON EL PIPELINE:                                                ║
-║    harvester.py → phrase_builder.py → stitcher.py → orchestrator.py        ║
-║    narrator.py define la forma; phrase_builder la instancia en notas.       ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:  mido, numpy                                                     ║
-║    --annotate / análisis tonal: music21 (opcional)                          ║
-║    --listen: pygame                                                          ║
-║    Integración: midi_dna_unified en el mismo directorio                     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+phrase_builder.py — Phrase Builder: motor de sintaxis melódica: antecedente /
+consecuente
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Toma un motivo corto (2-4 compases, idealmente extraído por harvester.py)
+y lo expande en frases de 4/8/16 compases aplicando la lógica sintáctica
+clásica: antecedente → consecuente, pregunta → respuesta, semi-cadencia
+→ cadencia auténtica. El resultado suena inevitablemente "correcto" porque
+sigue la gramática con la que el oído occidental está entrenado.
+
+CONCEPTO CENTRAL:
+Una frase musical es un par:
+  Antecedente (A): presenta la idea, termina con tensión (semicadencia)
+  Consecuente (C): responde la idea, termina con reposo (cadencia auténtica)
+
+Tipos de par A→C:
+  parallel    — C es casi igual a A pero con cadencia diferente (Bach)
+  contrasting — C tiene material nuevo pero mismo final (Haydn/Mozart)
+  sequential  — C transpone el material de A (secuencia)
+  developmental — C desarrolla un motivo de A (Beethoven)
+  call_response — A y C alternan frases cortas (call & response)
+
+FORMAS COMPLETAS GENERABLES:
+  period       — [A: ant + cons]                          (8 compases)
+  double_period — [A: ant + cons] [B: ant + cons]         (16 compases)
+  sentence     — [Básica: 2c] [Repetición: 2c] [Liquidación: 4c]
+  bar_form     — [Stollen: 2c] [Stollen: 2c] [Abgesang: 4c] (AAB)
+  binary       — [A: 8c cadencia dom] [B: 8c cadencia tónica]
+  ternary      — [A: 8c] [B: 8c] [A': 8c]
+  rondo_kernel — [A: 8c] [B: 4c] [A: 4c]
+
+TIPOS DE CADENCIA:
+  AC   — auténtica perfecta   V→I  (reposo total)
+  IAC  — auténtica imperfecta V→I  (reposo parcial, soprano no en tónica)
+  HC   — semicadencia         I→V  o ii→V (tensión abierta)
+  DC   — engañosa             V→vi (sorpresa)
+  PC   — plagal               IV→I (postscript, "amén")
+  modal — final modal (en modo dórico/frigio: acorde característico)
+
+FUENTES DE MOTIVO:
+  --motif FILE      — MIDI de motivo base (extraído por harvester.py)
+  --motif-text S    — secuencia en texto: "C4:1 E4:0.5 G4:0.5 F4:1"
+  --generate        — genera motivo interno aleatorio (para explorar)
+
+INTEGRACIÓN CON EL PIPELINE:
+  harvester.py → phrase_builder.py → stitcher.py → orchestrator.py
+  narrator.py define la forma; phrase_builder la instancia en notas.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  phrase_out.mid              — MIDI con la frase completa
+  phrase_out.report.json      — con --report
+  phrase_out.musicxml         — con --annotate (secciones marcadas)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --motif FILE        MIDI de motivo de entrada
+  --motif-text S      Motivo en formato texto
+  --generate          Generar motivo interno
+  --key KEY           Tonalidad (default: C major)
+  --form S            period|double_period|sentence|bar_form|binary|
+                      ternary|rondo_kernel (default: period)
+  --type S            parallel|contrasting|sequential|developmental|
+                      call_response (default: parallel)
+  --cadences S S      Cadencias: antecedente consecuente (default: HC AC)
+  --bars N            Compases totales (default: 8)
+  --tempo BPM         Tempo (default: 90)
+  --all-forms         Generar una versión por cada forma
+  --all-types         Generar una versión por cada tipo de frase
+  --report            Exportar análisis de la frase en JSON
+  --output FILE       Fichero de salida (default: phrase_out.mid)
+  --output-dir DIR    Directorio de salida con --all-forms
+  --annotate          Exportar también MusicXML con anotaciones (requiere
+                      music21)
+  --listen            Reproducir al terminar (requiere pygame)
+  --verbose           Imprimir decisiones de construcción
+  --seed N            Semilla aleatoria (default: 42)
+
+── Otras opciones del parser ──
+  --beats BEATS               Beats por compás (default: 4)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USO STANDALONE ──
+  python phrase_builder.py --motif motivo.mid
+  python phrase_builder.py --motif motivo.mid --form period --type parallel
+  python phrase_builder.py --motif motivo.mid --form sentence --key Am
+  python phrase_builder.py --motif motivo.mid --form binary --tempo 120
+  python phrase_builder.py --motif motivo.mid --all-forms
+  python phrase_builder.py --generate --key Dm --form period
+  python phrase_builder.py --motif motivo.mid --cadences HC AC --report
+
+── USO COMO MÓDULO ──
+  from phrase_builder import build_phrase, PhraseResult, MotifNote
+
+  motif = [MotifNote(pitch=60, duration=1.0), MotifNote(pitch=64, dur=0.5)]
+  result = build_phrase(
+      motif=motif,
+      key="C major",
+      form="period",
+      phrase_type="parallel",
+      cadence_ant="HC",        # cadencia del antecedente
+      cadence_cons="AC",       # cadencia del consecuente
+      bars=8,
+      tempo=90,
+      seed=42,
+  )
+  # result.notes → lista de (beat_offset, pitch, duration, velocity)
+  # result.sections → {"antecedent": [...], "consequent": [...]}
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  Siempre:  mido, numpy
+  --annotate / análisis tonal: music21 (opcional)
+  --listen: pygame
+  Integración: midi_dna_unified en el mismo directorio
 """
 
 import sys

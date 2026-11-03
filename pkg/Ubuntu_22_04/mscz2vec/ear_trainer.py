@@ -1,44 +1,53 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        EAR TRAINER  v1.0                                    ║
-║        Generador de dictados de entrenamiento auditivo (con solucionario)   ║
-║                                                                              ║
-║  El oído es la mitad de aprender a componer y a tocar, y el ecosistema no   ║
-║  tenía nada para entrenarlo. Esta herramienta genera ejercicios de          ║
-║  dictado como MIDI reproducible + un solucionario aparte: intervalos,        ║
-║  calidades de acorde y progresiones cortas. Reproduce el MIDI, apunta tu    ║
-║  respuesta y comprueba con el solucionario.                                  ║
-║                                                                              ║
-║  TIPOS (--type):                                                             ║
-║    intervals      — dos notas (melódicas u armónicas); nombra el intervalo  ║
-║    chords         — un acorde; nombra la calidad (M, m, dim, aug, 7…)       ║
-║    progressions   — 2–4 acordes en una tonalidad; nombra los grados          ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python ear_trainer.py --type intervals --count 12                        ║
-║    python ear_trainer.py --type intervals --harmonic --seed 7               ║
-║    python ear_trainer.py --type chords --count 10                           ║
-║    python ear_trainer.py --type progressions --key G --count 8              ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --type T          intervals | chords | progressions                      ║
-║    --count N         Número de ejercicios (default: 10)                     ║
-║    --key K           Tonalidad de las progresiones (default: C)             ║
-║    --harmonic        Intervalos/acordes simultáneos (default: melódicos)    ║
-║    --level L         easy | medium | hard  (amplía el repertorio)           ║
-║    --seed N          Semilla aleatoria para reproducir el mismo dictado      ║
-║    --tempo BPM       Tempo del MIDI (default: 80)                           ║
-║    --output FILE     MIDI de salida (default: eartrain_<tipo>.mid)          ║
-║    --answers FILE    Guarda el solucionario en un fichero de texto           ║
-║    --json FILE       Guarda el solucionario en JSON                          ║
-║    --no-color        Desactivar colores ANSI                               ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from ear_trainer import generate_dictation                                ║
-║                                                                              ║
-║  DEPENDENCIAS: playability_auditor.py (mismo directorio, E/S MIDI)           ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+ear_trainer.py — Ear Trainer: generador de dictados de entrenamiento auditivo
+(con solucionario)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+El oído es la mitad de aprender a componer y a tocar, y el ecosistema no
+tenía nada para entrenarlo. Esta herramienta genera ejercicios de
+dictado como MIDI reproducible + un solucionario aparte: intervalos,
+calidades de acorde y progresiones cortas. Reproduce el MIDI, apunta tu
+respuesta y comprueba con el solucionario.
+
+TIPOS (--type):
+  intervals      — dos notas (melódicas u armónicas); nombra el intervalo
+  chords         — un acorde; nombra la calidad (M, m, dim, aug, 7…)
+  progressions   — 2–4 acordes en una tonalidad; nombra los grados
+
+COMO MÓDULO:
+  from ear_trainer import generate_dictation
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --type T          intervals | chords | progressions
+  --count N         Número de ejercicios (default: 10)
+  --key K           Tonalidad de las progresiones (default: C)
+  --harmonic        Intervalos/acordes simultáneos (default: melódicos)
+  --level L         easy | medium | hard  (amplía el repertorio)
+  --seed N          Semilla aleatoria para reproducir el mismo dictado
+  --tempo BPM       Tempo del MIDI (default: 80)
+  --output FILE     MIDI de salida (default: eartrain_<tipo>.mid)
+  --answers FILE    Guarda el solucionario en un fichero de texto
+  --json FILE       Guarda el solucionario en JSON
+  --no-color        Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python ear_trainer.py --type intervals --count 12
+  python ear_trainer.py --type intervals --harmonic --seed 7
+  python ear_trainer.py --type chords --count 10
+  python ear_trainer.py --type progressions --key G --count 8
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  playability_auditor.py (mismo directorio, E/S MIDI)
 """
 
 import sys

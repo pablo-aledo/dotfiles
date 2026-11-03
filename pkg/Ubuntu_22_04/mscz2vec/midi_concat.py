@@ -1,106 +1,115 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════════╗
-║                                                                                  ║
-║                          MIDI CONCAT  v2.0                                       ║
-║         Concatena varios MIDIs (o secciones de ellos) uno detrás de otro         ║
-║                                                                                  ║
-║  Toma N MIDIs de entrada y genera un único MIDI en el que el contenido           ║
-║  de cada uno se reproduce a continuación del anterior (no simultáneo,            ║
-║  como hace midi_merge.py, sino en serie). Útil para encadenar frases,            ║
-║  variaciones o secciones generadas por separado en una sola pieza.               ║
-║                                                                                  ║
-║  SELECCIÓN DE PISTAS:                                                           ║
-║    · Cada MIDI de entrada puede llevar, opcionalmente, un selector de            ║
-║      pistas tras '@' → archivo.mid@ESPEC                                         ║
-║    · ESPEC admite pista suelta "0", rango "0-2", lista "0,2,4" o                 ║
-║      combinaciones "0-2,5", o la palabra "all" (todas, valor por defecto)        ║
-║    · Las pistas se numeran desde 0, en el orden en que aparecen en el            ║
-║      MIDI; usa --list-tracks para ver índice, nombre y contenido de cada         ║
-║      pista de un archivo                                                        ║
-║    · Sin '@', se usan todas las pistas del MIDI, como antes                      ║
-║                                                                                  ║
-║  SELECCIÓN DE CANAL:                                                            ║
-║    · Algunos MIDIs (p.ej. salidas de midi_merge.py) concentran varias            ║
-║      voces en una única pista física, distinguidas solo por canal MIDI           ║
-║      (0-15). --list-tracks lista pistas, no canales, así que si ves una          ║
-║      sola pista con varios canales en la columna "Canal", usa '!'               ║
-║      para separarlas: archivo.mid!0, archivo.mid!1, archivo.mid!0,2              ║
-║    · Combinable con pistas y compases: archivo.mid@0!1:1-3                       ║
-║                                                                                  ║
-║  SELECCIÓN DE COMPASES:                                                         ║
-║    · Cada MIDI de entrada puede llevar, opcionalmente, un selector de            ║
-║      compases tras ':' → archivo.mid:ESPEC (combinable con @ESPEC de            ║
-║      pistas: archivo.mid@0,2:1-3)                                                ║
-║    · ESPEC admite compás suelto "3", rango "1-3", lista "5,6,7" o                ║
-║      combinaciones "1-3,7,9-10" (compases 1-indexados)                           ║
-║    · Un rango invertido "7-5" toma los compases 7,6,5 en ese orden               ║
-║      (útil para invertir una frase)                                              ║
-║    · Los compases se detectan a partir de los eventos time_signature de          ║
-║      las pistas seleccionadas (4/4 por defecto si no hay ninguno); los           ║
-║      cambios de compás dentro de un mismo MIDI se respetan al calcular           ║
-║      los límites                                                                 ║
-║    · Sin ':', se usa el MIDI completo (o la pista completa), como antes          ║
-║                                                                                  ║
-║  ORDEN:                                                                          ║
-║    · Los MIDIs (o compases seleccionados) se concatenan en el orden en           ║
-║      que se pasan por línea de comandos                                         ║
-║                                                                                  ║
-║  GESTIÓN DE TIEMPO:                                                              ║
-║    · Por defecto: usa el TPB máximo de todos los MIDIs de entrada                ║
-║    · Con --tpb N: usa el valor indicado                                          ║
-║    · Todos los MIDIs se reescalan al TPB de salida                               ║
-║    · Con --gap N: inserta N pulsos (beats) de silencio entre cada MIDI           ║
-║      (default: 0)                                                                ║
-║                                                                                  ║
-║  METADATOS:                                                                      ║
-║    · Cada MIDI conserva sus propios cambios de tempo, compás y                   ║
-║      program_change en el punto en que ocurren dentro de la secuencia            ║
-║    · Si ningún MIDI define tempo al principio, se añade 120 BPM por              ║
-║      defecto                                                                     ║
-║                                                                                  ║
-║  USO:                                                                            ║
-║    python midi_concat.py frase1.mid frase2.mid frase3.mid                        ║
-║    python midi_concat.py partes/*.mid --output cancion.mid                       ║
-║    python midi_concat.py partes/*.mid --gap 2                                    ║
-║    python midi_concat.py partes/*.mid --tpb 480                                  ║
-║    python midi_concat.py partes/*.mid --preview                                  ║
-║    python midi_concat.py partes/*.mid --verbose                                  ║
-║    python midi_concat.py a.mid:1-3 b.mid:5,6,7                                   ║
-║    python midi_concat.py a.mid:1-3 b.mid:5-7 --output frase.mid                  ║
-║    python midi_concat.py a.mid:8-1 --output retro.mid                            ║
-║    python midi_concat.py a.mid@0 b.mid@1,2 --output solo_pistas.mid              ║
-║    python midi_concat.py a.mid@0-1:1-3 b.mid@2:5-7 --output mix.mid              ║
-║    python midi_concat.py a.mid!0 a.mid!1 --output separado_por_canal.mid        ║
-║    python midi_concat.py --list-bars a.mid                                       ║
-║    python midi_concat.py --list-tracks a.mid                                     ║
-║                                                                                  ║
-║  OPCIONES:                                                                       ║
-║    --output FILE     MIDI de salida (default: concat.mid)                        ║
-║    --tpb N           Ticks per beat de salida (default: máximo de                ║
-║                      los MIDIs de entrada)                                       ║
-║    --gap N           Beats de silencio entre cada MIDI concatenado               ║
-║                      (default: 0)                                                ║
-║    --preview         Mostrar plan de concatenación sin generar MIDI              ║
-║    --list-bars       Para cada MIDI dado (sin generar nada), listar sus          ║
-║                      compases detectados con su posición en beats, para          ║
-║                      saber qué números usar en archivo.mid:N-M (si se            ║
-║                      combina con @ESPEC, calcula los compases solo sobre         ║
-║                      las pistas seleccionadas)                                   ║
-║    --list-tracks     Para cada MIDI dado (sin generar nada), listar sus          ║
-║                      pistas con índice, nombre, nº de notas, canal y             ║
-║                      programa, para saber qué números usar en                    ║
-║                      archivo.mid@N                                               ║
-║    --verbose         Informe detallado                                           ║
-║                                                                                  ║
-║  SALIDA:                                                                         ║
-║    concat.mid  — MIDI de un único track con todos los MIDIs (o                   ║
-║                  fragmentos de compases) de entrada reproducidos en              ║
-║                  serie, uno detrás de otro                                       ║
-║                                                                                  ║
-║  DEPENDENCIAS: mido                                                              ║
-║                                                                                  ║
-╚══════════════════════════════════════════════════════════════════════════════════╝
+midi_concat.py — Midi Concat: concatena varios MIDIs (o secciones de ellos)
+uno detrás de otro
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Toma N MIDIs de entrada y genera un único MIDI en el que el contenido
+de cada uno se reproduce a continuación del anterior (no simultáneo,
+como hace midi_merge.py, sino en serie). Útil para encadenar frases,
+variaciones o secciones generadas por separado en una sola pieza.
+
+SELECCIÓN DE PISTAS:
+  · Cada MIDI de entrada puede llevar, opcionalmente, un selector de
+    pistas tras '@' → archivo.mid@ESPEC
+  · ESPEC admite pista suelta "0", rango "0-2", lista "0,2,4" o
+    combinaciones "0-2,5", o la palabra "all" (todas, valor por defecto)
+  · Las pistas se numeran desde 0, en el orden en que aparecen en el
+    MIDI; usa --list-tracks para ver índice, nombre y contenido de cada
+    pista de un archivo
+  · Sin '@', se usan todas las pistas del MIDI, como antes
+
+SELECCIÓN DE CANAL:
+  · Algunos MIDIs (p.ej. salidas de midi_merge.py) concentran varias
+    voces en una única pista física, distinguidas solo por canal MIDI
+    (0-15). --list-tracks lista pistas, no canales, así que si ves una
+    sola pista con varios canales en la columna "Canal", usa '!'
+    para separarlas: archivo.mid!0, archivo.mid!1, archivo.mid!0,2
+  · Combinable con pistas y compases: archivo.mid@0!1:1-3
+
+SELECCIÓN DE COMPASES:
+  · Cada MIDI de entrada puede llevar, opcionalmente, un selector de
+    compases tras ':' → archivo.mid:ESPEC (combinable con @ESPEC de
+    pistas: archivo.mid@0,2:1-3)
+  · ESPEC admite compás suelto "3", rango "1-3", lista "5,6,7" o
+    combinaciones "1-3,7,9-10" (compases 1-indexados)
+  · Un rango invertido "7-5" toma los compases 7,6,5 en ese orden
+    (útil para invertir una frase)
+  · Los compases se detectan a partir de los eventos time_signature de
+    las pistas seleccionadas (4/4 por defecto si no hay ninguno); los
+    cambios de compás dentro de un mismo MIDI se respetan al calcular
+    los límites
+  · Sin ':', se usa el MIDI completo (o la pista completa), como antes
+
+ORDEN:
+  · Los MIDIs (o compases seleccionados) se concatenan en el orden en
+    que se pasan por línea de comandos
+
+GESTIÓN DE TIEMPO:
+  · Por defecto: usa el TPB máximo de todos los MIDIs de entrada
+  · Con --tpb N: usa el valor indicado
+  · Todos los MIDIs se reescalan al TPB de salida
+  · Con --gap N: inserta N pulsos (beats) de silencio entre cada MIDI
+    (default: 0)
+
+METADATOS:
+  · Cada MIDI conserva sus propios cambios de tempo, compás y
+    program_change en el punto en que ocurren dentro de la secuencia
+  · Si ningún MIDI define tempo al principio, se añade 120 BPM por
+    defecto
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  concat.mid  — MIDI de un único track con todos los MIDIs (o
+                fragmentos de compases) de entrada reproducidos en
+                serie, uno detrás de otro
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --output FILE     MIDI de salida (default: concat.mid)
+  --tpb N           Ticks per beat de salida (default: máximo de
+                    los MIDIs de entrada)
+  --gap N           Beats de silencio entre cada MIDI concatenado
+                    (default: 0)
+  --preview         Mostrar plan de concatenación sin generar MIDI
+  --list-bars       Para cada MIDI dado (sin generar nada), listar sus
+                    compases detectados con su posición en beats, para
+                    saber qué números usar en archivo.mid:N-M (si se
+                    combina con @ESPEC, calcula los compases solo sobre
+                    las pistas seleccionadas)
+  --list-tracks     Para cada MIDI dado (sin generar nada), listar sus
+                    pistas con índice, nombre, nº de notas, canal y
+                    programa, para saber qué números usar en
+                    archivo.mid@N
+  --verbose         Informe detallado
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python midi_concat.py frase1.mid frase2.mid frase3.mid
+  python midi_concat.py partes/*.mid --output cancion.mid
+  python midi_concat.py partes/*.mid --gap 2
+  python midi_concat.py partes/*.mid --tpb 480
+  python midi_concat.py partes/*.mid --preview
+  python midi_concat.py partes/*.mid --verbose
+  python midi_concat.py a.mid:1-3 b.mid:5,6,7
+  python midi_concat.py a.mid:1-3 b.mid:5-7 --output frase.mid
+  python midi_concat.py a.mid:8-1 --output retro.mid
+  python midi_concat.py a.mid@0 b.mid@1,2 --output solo_pistas.mid
+  python midi_concat.py a.mid@0-1:1-3 b.mid@2:5-7 --output mix.mid
+  python midi_concat.py a.mid!0 a.mid!1 --output separado_por_canal.mid
+  python midi_concat.py --list-bars a.mid
+  python midi_concat.py --list-tracks a.mid
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido
 """
 
 import os

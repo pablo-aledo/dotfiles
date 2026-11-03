@@ -1,107 +1,141 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      REMI DIFFUSION  v1                                      ║
-║   Masked Diffusion Language Model aplicado a composición de piano pop        ║
-║                                                                              ║
-║  IDEA:                                                                       ║
-║    remi.py genera con un Transformer-XL AUTORREGRESIVO (izq→der, sin        ║
-║    corrección de errores). Este módulo usa el MISMO esquema de tokens       ║
-║    REMI, pero sustituye la generación autorregresiva por DIFUSIÓN            ║
-║    ENMASCARADA (MDLM) sobre bloques de un compás cada uno ("block           ║
-║    diffusion"), con guidance sin clasificador (D-CFG) sobre progresiones    ║
-║    de acordes/tonalidad y un sampler con remasking (ReMDM) para corregir    ║
-║    errores durante el muestreo.                                             ║
-║                                                                              ║
-║    Referencia: Kuleshov Group, "How to Build a Diffusion Language Model"    ║
-║    (2026) — https://kuleshov-group.github.io/blog/blog/2026/               ║
-║               how-to-build-a-diffusion-language-model/                      ║
-║                                                                              ║
-║  ARQUITECTURA (v1, simplificada respecto al artículo):                      ║
-║    • Un único Transformer bidireccional (no encoder-decoder separado)       ║
-║      procesa  [historia clara] + [token de condición] + [canvas ruidoso]    ║
-║      con atención bidireccional completa; la pérdida solo se calcula        ║
-║      sobre las posiciones del canvas. El split encoder/decoder pesado/      ║
-║      ligero de Gemma Diffusion queda como optimización futura (v2) —        ║
-║      aquí se prioriza corrección y legibilidad sobre velocidad.             ║
-║    • Block diffusion: unidad de bloque = 1 compás (frontera natural         ║
-║      marcada por el token Bar de REMI). Cada bloque se difunde              ║
-║      condicionado en los compases ya generados (historia, sin ruido).       ║
-║    • Canvas de longitud fija: cada compás se aplana a --canvas-len          ║
-║      tokens REMI (Position/Velocity/NoteOn/Duration/Chord), rellenando      ║
-║      con PAD si sobra espacio y truncando (con aviso) si falta.             ║
-║    • Guidance D-CFG: el primer token del bloque es el token de acorde       ║
-║      objetivo (Chord_X:Y, ya definido en remi.py). Durante entrenamiento    ║
-║      se sustituye por NULL_COND con probabilidad --cond-dropout, así el     ║
-║      mismo modelo aprende la rama condicional y la no-condicional.          ║
-║    • Forward process: enmascara tokens del canvas con schedule             ║
-║      α_t = 1 − t (lineal, como en el ELBO simplificado del artículo).       ║
-║    • Sampler: infilling + remasking (ReMDM) iterativo, con CFG combinando   ║
-║      logits condicionados y no condicionados vía --guidance-scale.          ║
-║                                                                              ║
-║  COMPATIBILIDAD:                                                             ║
-║    Usa el mismo vocab_chord.json que remi.py (--chord), extendido con       ║
-║    3 tokens especiales (PAD_None, MASK_None, NULL_COND_None) añadidos al    ║
-║    final. Si cargas un vocab.json de remi.py sin esos tokens, se extiende   ║
-║    automáticamente (y se re-guarda) la primera vez.                        ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    convert   — MIDI(s) → tokens REMI+chord (idéntico a remi.py --chord)     ║
-║    train     — Entrena el Transformer de difusión enmascarada por bloques   ║
-║    generate  — Genera piano pop desde cero guiado por una progresión        ║
-║    continue  — Continúa un MIDI de prompt con una progresión objetivo       ║
-║    inspect   — Diagnóstico: bloques/canvas de un MIDI o corpus              ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy, torch                                            ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  EJEMPLOS                                                                    ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  # Preparar corpus (idéntico esquema que remi.py, con acordes obligatorio)  ║
-║  python remi_diffusion.py convert corpus/ --vocab vocab_chord.json          ║
-║                                                                              ║
-║  # Entrenar                                                                 ║
-║  python remi_diffusion.py train corpus/ --model-dir diff_model/ \           ║
-║      --epochs 300 --batch-size 8 --canvas-len 48 --lr 2e-4                  ║
-║                                                                              ║
-║  # Generar desde cero con progresión de acordes objetivo                    ║
-║  python remi_diffusion.py generate --model-dir diff_model/ \                ║
-║      --chords "C:maj G:maj A:min F:maj" --bars 16 \                        ║
-║      --guidance-scale 3.0 --steps 20 --output nueva.mid                     ║
-║                                                                              ║
-║  # Continuar un MIDI existente con nueva progresión                        ║
-║  python remi_diffusion.py continue prompt.mid --model-dir diff_model/ \     ║
-║      --chords "D:min G:dom C:maj" --bars 8 --guidance-scale 4.0             ║
-║                                                                              ║
-║  # Diagnóstico: ver cómo quedan los bloques/canvas de un MIDI               ║
-║  python remi_diffusion.py inspect --input prompt.mid --canvas-len 48        ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+remi_diffusion.py — Remi Diffusion: masked Diffusion Language Model aplicado a
+composición de piano pop
+(versión 1).
 
-  OPCIONES COMUNES DE TRAIN:
-    --canvas-len N        Tokens por compás en el canvas [default: 48]
-    --history-bars N      Compases de historia máx. que ve el modelo [default: 8]
-    --d-model N           Dimensión del modelo [default: 512]
-    --n-layer N           Capas del Transformer [default: 8]
-    --n-head N            Cabezas de atención [default: 8]
-    --cond-dropout F      Prob. de sustituir el acorde por NULL_COND [default: 0.15]
-    --epochs N            Épocas máximas [default: 300]
-    --batch-size N        Tamaño de batch [default: 8]
-    --lr F                Learning rate [default: 2e-4]
-    --patience N          Early stopping [default: 30]
-    --resume              Reanudar desde checkpoint
-    --small               Modelo reducido: 4 capas, d=256 (~CPU-friendly)
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+IDEA:
+  remi.py genera con un Transformer-XL AUTORREGRESIVO (izq→der, sin
+  corrección de errores). Este módulo usa el MISMO esquema de tokens
+  REMI, pero sustituye la generación autorregresiva por DIFUSIÓN
+  ENMASCARADA (MDLM) sobre bloques de un compás cada uno ("block
+  diffusion"), con guidance sin clasificador (D-CFG) sobre progresiones
+  de acordes/tonalidad y un sampler con remasking (ReMDM) para corregir
+  errores durante el muestreo.
 
-  OPCIONES COMUNES DE GENERATE / CONTINUE:
-    --chords "X:q Y:q …"  Progresión objetivo (se repite/cicla para cubrir --bars)
-    --bars N               Compases a generar [default: 16]
-    --steps N               Pasos de denoising por compás [default: 20]
-    --guidance-scale F      Fuerza de D-CFG, 0=sin guidance [default: 3.0]
-    --remask-max F          Fracción máx. de tokens ya rellenados que se
-                             re-enmascaran por paso (ReMDM) [default: 0.15]
-    --temperature F         Temperatura de muestreo [default: 1.0]
-    --topk N                Top-k al muestrear cada posición [default: 0 (off)]
-    --seed N                Semilla [default: 42]
+  Referencia: Kuleshov Group, "How to Build a Diffusion Language Model"
+  (2026) — https://kuleshov-group.github.io/blog/blog/2026/
+             how-to-build-a-diffusion-language-model/
+
+ARQUITECTURA (v1, simplificada respecto al artículo):
+  • Un único Transformer bidireccional (no encoder-decoder separado)
+    procesa  [historia clara] + [token de condición] + [canvas ruidoso]
+    con atención bidireccional completa; la pérdida solo se calcula
+    sobre las posiciones del canvas. El split encoder/decoder pesado/
+    ligero de Gemma Diffusion queda como optimización futura (v2) —
+    aquí se prioriza corrección y legibilidad sobre velocidad.
+  • Block diffusion: unidad de bloque = 1 compás (frontera natural
+    marcada por el token Bar de REMI). Cada bloque se difunde
+    condicionado en los compases ya generados (historia, sin ruido).
+  • Canvas de longitud fija: cada compás se aplana a --canvas-len
+    tokens REMI (Position/Velocity/NoteOn/Duration/Chord), rellenando
+    con PAD si sobra espacio y truncando (con aviso) si falta.
+  • Guidance D-CFG: el primer token del bloque es el token de acorde
+    objetivo (Chord_X:Y, ya definido en remi.py). Durante entrenamiento
+    se sustituye por NULL_COND con probabilidad --cond-dropout, así el
+    mismo modelo aprende la rama condicional y la no-condicional.
+  • Forward process: enmascara tokens del canvas con schedule
+    α_t = 1 − t (lineal, como en el ELBO simplificado del artículo).
+  • Sampler: infilling + remasking (ReMDM) iterativo, con CFG combinando
+    logits condicionados y no condicionados vía --guidance-scale.
+
+COMPATIBILIDAD:
+  Usa el mismo vocab_chord.json que remi.py (--chord), extendido con
+  3 tokens especiales (PAD_None, MASK_None, NULL_COND_None) añadidos al
+  final. Si cargas un vocab.json de remi.py sin esos tokens, se extiende
+  automáticamente (y se re-guarda) la primera vez.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  convert   — MIDI(s) → tokens REMI+chord (idéntico a remi.py --chord)
+  train     — Entrena el Transformer de difusión enmascarada por bloques
+  generate  — Genera piano pop desde cero guiado por una progresión
+  continue  — Continúa un MIDI de prompt con una progresión objetivo
+  inspect   — Diagnóstico: bloques/canvas de un MIDI o corpus
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES COMUNES DE TRAIN:
+  --canvas-len N        Tokens por compás en el canvas [default: 48]
+  --history-bars N      Compases de historia máx. que ve el modelo [default: 8]
+  --d-model N           Dimensión del modelo [default: 512]
+  --n-layer N           Capas del Transformer [default: 8]
+  --n-head N            Cabezas de atención [default: 8]
+  --cond-dropout F      Prob. de sustituir el acorde por NULL_COND [default: 0.15]
+  --epochs N            Épocas máximas [default: 300]
+  --batch-size N        Tamaño de batch [default: 8]
+  --lr F                Learning rate [default: 2e-4]
+  --patience N          Early stopping [default: 30]
+  --resume              Reanudar desde checkpoint
+  --small               Modelo reducido: 4 capas, d=256 (~CPU-friendly)
+
+── OPCIONES COMUNES DE GENERATE / CONTINUE ──
+  --chords "X:q Y:q …"  Progresión objetivo (se repite/cicla para cubrir --bars)
+  --bars N               Compases a generar [default: 16]
+  --steps N               Pasos de denoising por compás [default: 20]
+  --guidance-scale F      Fuerza de D-CFG, 0=sin guidance [default: 3.0]
+  --remask-max F          Fracción máx. de tokens ya rellenados que se
+                           re-enmascaran por paso (ReMDM) [default: 0.15]
+  --temperature F         Temperatura de muestreo [default: 1.0]
+  --topk N                Top-k al muestrear cada posición [default: 0 (off)]
+  --seed N                Semilla [default: 42]
+
+── Otras opciones del parser ──
+  convert
+    --verbose
+
+  train
+    --verbose
+
+  generate
+    --repair-grammar            Reparar gramática REMI del canvas generado
+                                [on]
+    --no-repair-grammar         Desactivar la reparación gramatical (para
+                                depuración)
+    --verbose
+
+  continue
+    --repair-grammar            Reparar gramática REMI del canvas generado
+                                [on]
+    --no-repair-grammar         Desactivar la reparación gramatical (para
+                                depuración)
+    --verbose
+
+  inspect
+    --bars-show BARS_SHOW       (defecto 8)
+    --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Preparar corpus (idéntico esquema que remi.py, con acordes obligatorio)
+  python remi_diffusion.py convert corpus/ --vocab vocab_chord.json
+
+  # Entrenar
+  python remi_diffusion.py train corpus/ --model-dir diff_model/ \
+      --epochs 300 --batch-size 8 --canvas-len 48 --lr 2e-4
+
+  # Generar desde cero con progresión de acordes objetivo
+  python remi_diffusion.py generate --model-dir diff_model/ \
+      --chords "C:maj G:maj A:min F:maj" --bars 16 \
+      --guidance-scale 3.0 --steps 20 --output nueva.mid
+
+  # Continuar un MIDI existente con nueva progresión
+  python remi_diffusion.py continue prompt.mid --model-dir diff_model/ \
+      --chords "D:min G:dom C:maj" --bars 8 --guidance-scale 4.0
+
+  # Diagnóstico: ver cómo quedan los bloques/canvas de un MIDI
+  python remi_diffusion.py inspect --input prompt.mid --canvas-len 48
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy, torch
 """
 
 import sys

@@ -1,64 +1,83 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       REHARMONIZER  v1.1                                    ║
-║         Reharmonización guiada de melodías con progresiones alternativas    ║
-║                                                                              ║
-║  Toma una melodía fija y genera N versiones con progresiones armónicas      ║
-║  alternativas, aplicando técnicas de reharmonización clásica, jazzística    ║
-║  y modal mientras valida la compatibilidad de cada nota melódica.           ║
-║                                                                              ║
-║  ESTRATEGIAS DISPONIBLES (--strategy):                                      ║
-║    diatonic       — progresiones diatónicas de la tonalidad detectada       ║
-║    tritone        — sustitución de tritono (bII7 en lugar de V7)            ║
-║    secondary      — dominantes secundarios (V/ii, V/IV, V/V…)              ║
-║    modal_interchange — préstamos del modo paralelo (bVII, bIII, iv…)       ║
-║    chromatic_med  — mediante cromática (III, bVI, bII como mediantes)       ║
-║    coltrane       — ciclos de Coltrane (terceras mayores equidistantes)     ║
-║    neapolitan     — acorde napolitano y submediante                         ║
-║    pedal          — pedal de tónica o dominante con armonías sobre él       ║
-║    minor_modal    — reharmonización en modos menores (dorico, frigio, etc.) ║
-║    baroque        — progresiones funcionales barrocas                       ║
-║    impressionist  — progresiones por tonos enteros y cuartas                ║
-║    all            — prueba todas las estrategias                             ║
-║                                                                              ║
-║  COMPATIBILIDAD MELÓDICA:                                                   ║
-║  Cada acorde se valida contra las notas melódicas que lo acompañan.        ║
-║  Categorías: chord_tone, tension, avoid_note. Los acordes con 'avoid'      ║
-║  se penalizan o se voicea-lideran hacia alternativas más compatibles.      ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python reharmonizer.py melodia.mid                                        ║
-║    python reharmonizer.py melodia.mid --strategy tritone secondary          ║
-║    python reharmonizer.py melodia.mid --strategy all --out-dir salidas/     ║
-║    python reharmonizer.py melodia.mid --key "D minor" --bars 16            ║
-║    python reharmonizer.py melodia.mid --strategy coltrane --candidates 5   ║
-║    python reharmonizer.py melodia.mid --acc-style block --tempo 90         ║
-║    python reharmonizer.py melodia.mid --strategy all --score-threshold 0.4 ║
-║    python reharmonizer.py melodia.mid --report                              ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --strategy S [S…]  Estrategias a aplicar (default: diatonic tritone      ║
-║                       secondary modal_interchange)                          ║
-║    --key "C major"    Tonalidad origen. Si no se especifica, se autodetecta ║
-║    --bars N           Compases de salida (default: auto desde melodía)      ║
-║    --candidates N     Candidatos por estrategia (default: 3)                ║
-║    --acc-style S      Estilo de acompañamiento: block | arpeggio | alberti  ║
-║                       waltz | jazz_voicing (default: auto)                  ║
-║    --tempo BPM        Tempo de salida (default: detectado del MIDI)         ║
-║    --complexity F     Complejidad armónica 0-1 (default: 0.5)              ║
-║    --score-threshold  Umbral mínimo de score para guardar (default: 0.25)  ║
-║    --out-dir DIR      Carpeta de salida (default: junto al MIDI de entrada) ║
-║    --report           Guardar reporte JSON con análisis completo            ║
-║    --verbose          Informe detallado por stdout                           ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    melodia.rehar_tritone_01.mid                                              ║
-║    melodia.rehar_coltrane_01.mid                                             ║
-║    melodia.rehar_report.json  (con --report)                                ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, music21, numpy  (+ midi_dna_unified en mismo dir)     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+reharmonizer.py — Reharmonizer: reharmonización guiada de melodías con
+progresiones alternativas
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Toma una melodía fija y genera N versiones con progresiones armónicas
+alternativas, aplicando técnicas de reharmonización clásica, jazzística
+y modal mientras valida la compatibilidad de cada nota melódica.
+
+ESTRATEGIAS DISPONIBLES (--strategy):
+  diatonic       — progresiones diatónicas de la tonalidad detectada
+  tritone        — sustitución de tritono (bII7 en lugar de V7)
+  secondary      — dominantes secundarios (V/ii, V/IV, V/V…)
+  modal_interchange — préstamos del modo paralelo (bVII, bIII, iv…)
+  chromatic_med  — mediante cromática (III, bVI, bII como mediantes)
+  coltrane       — ciclos de Coltrane (terceras mayores equidistantes)
+  neapolitan     — acorde napolitano y submediante
+  pedal          — pedal de tónica o dominante con armonías sobre él
+  minor_modal    — reharmonización en modos menores (dorico, frigio, etc.)
+  baroque        — progresiones funcionales barrocas
+  impressionist  — progresiones por tonos enteros y cuartas
+  all            — prueba todas las estrategias
+
+COMPATIBILIDAD MELÓDICA:
+Cada acorde se valida contra las notas melódicas que lo acompañan.
+Categorías: chord_tone, tension, avoid_note. Los acordes con 'avoid'
+se penalizan o se voicea-lideran hacia alternativas más compatibles.
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  melodia.rehar_tritone_01.mid
+  melodia.rehar_coltrane_01.mid
+  melodia.rehar_report.json  (con --report)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --strategy S [S…]  Estrategias a aplicar (default: diatonic tritone
+                     secondary modal_interchange)
+  --key "C major"    Tonalidad origen. Si no se especifica, se autodetecta
+  --bars N           Compases de salida (default: auto desde melodía)
+  --candidates N     Candidatos por estrategia (default: 3)
+  --acc-style S      Estilo de acompañamiento: block | arpeggio | alberti
+                     waltz | jazz_voicing (default: auto)
+  --tempo BPM        Tempo de salida (default: detectado del MIDI)
+  --complexity F     Complejidad armónica 0-1 (default: 0.5)
+  --score-threshold  Umbral mínimo de score para guardar (default: 0.25)
+  --out-dir DIR      Carpeta de salida (default: junto al MIDI de entrada)
+  --report           Guardar reporte JSON con análisis completo
+  --verbose          Informe detallado por stdout
+
+── Otras opciones del parser ──
+  --catalog                   Mostrar catálogo de estrategias y salir
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python reharmonizer.py melodia.mid
+  python reharmonizer.py melodia.mid --strategy tritone secondary
+  python reharmonizer.py melodia.mid --strategy all --out-dir salidas/
+  python reharmonizer.py melodia.mid --key "D minor" --bars 16
+  python reharmonizer.py melodia.mid --strategy coltrane --candidates 5
+  python reharmonizer.py melodia.mid --acc-style block --tempo 90
+  python reharmonizer.py melodia.mid --strategy all --score-threshold 0.4
+  python reharmonizer.py melodia.mid --report
+
+── Más modos ──
+
+  # Mostrar catálogo de estrategias y salir
+  python reharmonizer.py --catalog
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, music21, numpy  (+ midi_dna_unified en mismo dir)
 """
 
 import os

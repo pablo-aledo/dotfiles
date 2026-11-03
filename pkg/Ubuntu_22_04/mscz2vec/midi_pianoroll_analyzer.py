@@ -1,96 +1,95 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                   MIDI PIANOROLL ANALYZER  v1.0                              ║
-║         Análisis multi-pista MIDI con visualización HTML interactiva         ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  DESCRIPCIÓN:                                                                ║
-║    Toma un MIDI multi-pista y un fichero de configuración opcional,          ║
-║    identifica los roles de cada pista (melodía, contra-melodía, armonía,    ║
-║    bajo, acompañamiento), ejecuta los algoritmos de análisis indicados y    ║
-║    genera un informe HTML interactivo con la siguiente información,          ║
-║    alineada en el mismo eje temporal (con indicaciones de compás):           ║
-║                                                                              ║
-║      · Piano roll por instrumento, con notas coloreadas por frase           ║
-║        según la gramática Re-Pair individual de cada pista                  ║
-║      · Fila de acordes detectados con función armónica (T/PD/D/Dsec)       ║
-║      · Fila de sección global (A, B, C…) por SSM + curva de novedad        ║
-║      · Fila de métricas por compás: tensión, densidad, velocidad, contorno  ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  ALGORITMOS                                                                  ║
-║                                                                              ║
-║  ── Re-Pair / Sequitur (por pista) ────────────────────────────────────── ║
-║    Comprime la secuencia de alturas de cada pista con Re-Pair. Las notas   ║
-║    que pertenecen a la misma regla de la gramática comparten color.         ║
-║    Detecta automáticamente repeticiones (período mínimo de la expansión)   ║
-║    de modo que R11, R12=R11×2, R13=R12×2 reciben el mismo color.           ║
-║                                                                              ║
-║  ── Segmentación global (SSM + Foote novelty) ─────────────────────────── ║
-║    Construye un vector de 30 features por compás (histograma de clases de  ║
-║    nota, registro, dinámica, ritmo, textura, contorno, disonancia…),       ║
-║    calcula la Self-Similarity Matrix y la curva de novedad de Foote para   ║
-║    detectar fronteras de sección. Agrupa segmentos similares en etiquetas  ║
-║    A, B, C… mediante clustering adaptativo (gap-detection en similitudes). ║
-║                                                                              ║
-║  ── Detección de acordes + función armónica ───────────────────────────── ║
-║    Detecta la tonalidad global (Krumhansl-Schmuckler) y clasifica cada     ║
-║    acorde de la pista de armonía en T / PD / D / Dsec / Other.             ║
-║                                                                              ║
-║  ── Métricas por compás ────────────────────────────────────────────────── ║
-║    Tensión armónica (Plomp-Levelt), densidad de notas, velocidad media     ║
-║    y contorno melódico, normalizados y representados como gráfica de línea. ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  USO                                                                         ║
-║                                                                              ║
-║    python3 midi_pianoroll_analyzer.py archivo.mid                            ║
-║    python3 midi_pianoroll_analyzer.py archivo.mid config.yaml               ║
-║    python3 midi_pianoroll_analyzer.py archivo.mid -o informe.html           ║
-║    python3 midi_pianoroll_analyzer.py --test                                 ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  OPCIONES                                                                    ║
-║                                                                              ║
-║    midi            Ruta al archivo MIDI de entrada                          ║
-║    config          Config YAML o JSON (opcional)                             ║
-║    -o / --output   Ruta del HTML de salida (default: <midi>_report.html)    ║
-║    --test          Genera un MIDI sintético de prueba y lo analiza          ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  CONFIGURACIÓN YAML                                                          ║
-║                                                                              ║
-║    tracks:                                                                   ║
-║      0: {role: melody,        name: "Violín"}                               ║
-║      1: {role: counter,       name: "Viola"}                                ║
-║      2: {role: harmony,       name: "Piano der."}                           ║
-║      3: {role: bass,          name: "Contrabajo"}                           ║
-║      4: {role: accompaniment, name: "Piano izq."}                           ║
-║                                                                              ║
-║    algorithms:                                                               ║
-║      sequitur:                                                               ║
-║        n_phrases: 6        # colapsar a N frases (simplificación iterativa) ║
-║        token: pitch        # pitch | pitch_class | pitch_dur                ║
-║        custom_rules:                                                         ║
-║          - name: motivo_A                                                    ║
-║            bars: [0, 1, 2, 3]   # compases que definen el patrón           ║
-║          - name: intro                                                       ║
-║            pitches: [60, 62, 64] # secuencia MIDI directa                  ║
-║      segmentation:                                                           ║
-║        threshold: 0.4      # umbral de novedad para fronteras de sección    ║
-║        min_gap: 3          # compases mínimos entre secciones               ║
-║        kernel: 4           # tamaño del kernel checkerboard                 ║
-║        feature_weights:    # pesos opcionales por grupo de features         ║
-║          rhythm: 2.0                                                         ║
-║          pitch_class: 0.5                                                    ║
-║                                                                              ║
-║  ROLES DISPONIBLES:  melody · counter · harmony · bass · accompaniment      ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS:  mido  (pip install mido)                                     ║
-║                 numpy  opcional (no requerido)                               ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+midi_pianoroll_analyzer.py — Midi Pianoroll Analyzer: análisis multi-pista
+MIDI con visualización HTML interactiva
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+DESCRIPCIÓN:
+  Toma un MIDI multi-pista y un fichero de configuración opcional,
+  identifica los roles de cada pista (melodía, contra-melodía, armonía,
+  bajo, acompañamiento), ejecuta los algoritmos de análisis indicados y
+  genera un informe HTML interactivo con la siguiente información,
+  alineada en el mismo eje temporal (con indicaciones de compás):
+
+    · Piano roll por instrumento, con notas coloreadas por frase
+      según la gramática Re-Pair individual de cada pista
+    · Fila de acordes detectados con función armónica (T/PD/D/Dsec)
+    · Fila de sección global (A, B, C…) por SSM + curva de novedad
+    · Fila de métricas por compás: tensión, densidad, velocidad, contorno
+
+ALGORITMOS:
+── Re-Pair / Sequitur (por pista) ──────────────────────────────────────
+  Comprime la secuencia de alturas de cada pista con Re-Pair. Las notas
+  que pertenecen a la misma regla de la gramática comparten color.
+  Detecta automáticamente repeticiones (período mínimo de la expansión)
+  de modo que R11, R12=R11×2, R13=R12×2 reciben el mismo color.
+
+── Segmentación global (SSM + Foote novelty) ───────────────────────────
+  Construye un vector de 30 features por compás (histograma de clases de
+  nota, registro, dinámica, ritmo, textura, contorno, disonancia…),
+  calcula la Self-Similarity Matrix y la curva de novedad de Foote para
+  detectar fronteras de sección. Agrupa segmentos similares en etiquetas
+  A, B, C… mediante clustering adaptativo (gap-detection en similitudes).
+
+── Detección de acordes + función armónica ─────────────────────────────
+  Detecta la tonalidad global (Krumhansl-Schmuckler) y clasifica cada
+  acorde de la pista de armonía en T / PD / D / Dsec / Other.
+
+── Métricas por compás ──────────────────────────────────────────────────
+  Tensión armónica (Plomp-Levelt), densidad de notas, velocidad media
+  y contorno melódico, normalizados y representados como gráfica de línea.
+
+CONFIGURACIÓN YAML:
+  tracks:
+    0: {role: melody,        name: "Violín"}
+    1: {role: counter,       name: "Viola"}
+    2: {role: harmony,       name: "Piano der."}
+    3: {role: bass,          name: "Contrabajo"}
+    4: {role: accompaniment, name: "Piano izq."}
+
+  algorithms:
+    sequitur:
+      n_phrases: 6        # colapsar a N frases (simplificación iterativa)
+      token: pitch        # pitch | pitch_class | pitch_dur
+      custom_rules:
+        - name: motivo_A
+          bars: [0, 1, 2, 3]   # compases que definen el patrón
+        - name: intro
+          pitches: [60, 62, 64] # secuencia MIDI directa
+    segmentation:
+      threshold: 0.4      # umbral de novedad para fronteras de sección
+      min_gap: 3          # compases mínimos entre secciones
+      kernel: 4           # tamaño del kernel checkerboard
+      feature_weights:    # pesos opcionales por grupo de features
+        rhythm: 2.0
+        pitch_class: 0.5
+
+ROLES DISPONIBLES:  melody · counter · harmony · bass · accompaniment
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi            Ruta al archivo MIDI de entrada
+  config          Config YAML o JSON (opcional)
+  -o / --output   Ruta del HTML de salida (default: <midi>_report.html)
+  --test          Genera un MIDI sintético de prueba y lo analiza
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python3 midi_pianoroll_analyzer.py archivo.mid
+  python3 midi_pianoroll_analyzer.py archivo.mid config.yaml
+  python3 midi_pianoroll_analyzer.py archivo.mid -o informe.html
+  python3 midi_pianoroll_analyzer.py --test
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido  (pip install mido)
+                 numpy  opcional (no requerido)
 """
 
 from __future__ import annotations

@@ -1,40 +1,72 @@
 #!/usr/bin/env python3
-# ╔══════════════════════════════════════════════════════════════════════╗
-# ║ expressive_resources.py                                              ║
-# ║                                                                      ║
-# ║ Detecta recursos expresivos (rítmicos, melódicos, armónicos y        ║
-# ║ dinámicos) en un MIDI de piano con separación estándar de mano       ║
-# ║ derecha (RH) / mano izquierda (LH), e indica por cada hallazgo:      ║
-# ║ recurso, compás, intención expresiva y explicación en lenguaje       ║
-# ║ natural.                                                              ║
-# ║                                                                      ║
-# ║ Recursos soportados (usa 'list-resources' para el detalle):          ║
-# ║   Rítmicos:   sincopa, contratiempo, hemiola, rubato*, agogica*,     ║
-# ║               polirritmia                                            ║
-# ║   Melódicos:  apoyatura, floreo, anticipacion, escapada,             ║
-# ║               nota_de_paso_cromatica                                 ║
-# ║   Armónicos:  acorde_disminuido, dominante_secundaria,               ║
-# ║               acorde_prestado, sexta_napolitana, pedal_armonico,     ║
-# ║               retardo                                                ║
-# ║   Dinámicos:  sforzando, silencio_expresivo, crescendo_dirigido      ║
-# ║   (* rubato y agogica requieren una curva de tempo codificada en     ║
-# ║   el MIDI; sin mensajes set_tempo no detectarán nada)                ║
-# ║                                                                      ║
-# ║ USO:                                                                 ║
-# ║   python3 expressive_resources.py info pieza.mid                    ║
-# ║   python3 expressive_resources.py list-resources                    ║
-# ║   python3 expressive_resources.py analyze pieza.mid                 ║
-# ║   python3 expressive_resources.py analyze pieza.mid --resources      ║
-# ║       hemiola,sincopa --json                                        ║
-# ║                                                                      ║
-# ║ Entrada: un .mid de piano a 2 pistas (o 2 canales) con mano          ║
-# ║ derecha e izquierda separadas. Si no puede identificarlas por el     ║
-# ║ nombre de pista, separa por registro (mediana de altura). La         ║
-# ║ tonalidad (para los recursos armónicos) se estima automáticamente    ║
-# ║ mediante correlación de Krumhansl-Schmuckler.                        ║
-# ║                                                                      ║
-# ║ Dependencias: mido, numpy                                           ║
-# ╚══════════════════════════════════════════════════════════════════════╝
+"""
+expressive_resources.py — Detecta recursos expresivos (rítmicos, melódicos,
+armónicos y dinámicos) en un MIDI de piano con manos separadas (RH/LH).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Detecta recursos expresivos (rítmicos, melódicos, armónicos y
+dinámicos) en un MIDI de piano con separación estándar de mano
+derecha (RH) / mano izquierda (LH), e indica por cada hallazgo:
+recurso, compás, intención expresiva y explicación en lenguaje
+natural.
+
+Recursos soportados (usa 'list-resources' para el detalle):
+  Rítmicos:   sincopa, contratiempo, hemiola, rubato*, agogica*,
+              polirritmia
+  Melódicos:  apoyatura, floreo, anticipacion, escapada,
+              nota_de_paso_cromatica
+  Armónicos:  acorde_disminuido, dominante_secundaria,
+              acorde_prestado, sexta_napolitana, pedal_armonico,
+              retardo
+  Dinámicos:  sforzando, silencio_expresivo, crescendo_dirigido
+  (* rubato y agogica requieren una curva de tempo codificada en
+  el MIDI; sin mensajes set_tempo no detectarán nada)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  info            Muestra metadatos básicos del MIDI
+  list-resources  Lista los recursos detectables
+  analyze         Analiza el MIDI y reporta hallazgos
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  un .mid de piano a 2 pistas (o 2 canales) con mano
+  derecha e izquierda separadas. Si no puede identificarlas por el
+  nombre de pista, separa por registro (mediana de altura). La
+  tonalidad (para los recursos armónicos) se estima automáticamente
+  mediante correlación de Krumhansl-Schmuckler.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  info
+    midi MIDI
+
+  analyze
+    midi MIDI
+    --resources RESOURCES       Lista separada por comas de: … (por defecto,
+                                todos)
+    --json                      Salida en JSON
+    --no-color                  Desactiva color ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python3 expressive_resources.py info pieza.mid
+  python3 expressive_resources.py list-resources
+  python3 expressive_resources.py analyze pieza.mid
+  python3 expressive_resources.py analyze pieza.mid --resources sincopa,hemiola
+      hemiola,sincopa --json
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
+"""
 
 import argparse
 import bisect

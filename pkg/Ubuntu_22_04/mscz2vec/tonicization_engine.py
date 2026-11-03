@@ -1,75 +1,84 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     TONICIZATION ENGINE  v1.0                               ║
-║   Inserción decidida de dominantes secundarios en una progresión existente  ║
-║                                                                              ║
-║  Toma una progresión de acordes ya escrita (MIDI de acordes en bloque, del  ║
-║  tipo que exportan chord_progression_generator.py / reharmonizer.py) y      ║
-║  decide EN QUÉ compases y DE QUÉ MANERA introducir dominantes secundarios   ║
-║  (V/x) que tonicen sus acordes diatónicos, sin tocar el resto de la obra.   ║
-║                                                                              ║
-║  Es el análogo de expectation_engine.py (que manipula expectativas en       ║
-║  cadencias V→I) pero para tonicización: en vez de negar/retrasar una        ║
-║  resolución esperada, INTRODUCE una tensión nueva y localizada — la 5ª de   ║
-║  un grado diatónico — que resuelve de inmediato dentro del mismo compás.    ║
-║  Complementa a chord_progression_generator (que ya puede generar V/x desde  ║
-║  cero) y a reharmonizer (que sustituye la progresión entera): esta          ║
-║  herramienta opera quirúrgicamente sobre UNA progresión ya fijada.          ║
-║                                                                              ║
-║  MECÁNICA:                                                                   ║
-║  Un compás objetivo (acorde diatónico X: ii, IV, V, vi…) se parte en dos:   ║
-║  la 1ª mitad se sustituye por una tríada mayor (o 7ª de dominante) sobre    ║
-║  la raíz de V/x, en el registro más cercano al original —NUNCA se          ║
-║  transporta literalmente el voicing de X, porque conservaría su calidad    ║
-║  (p.ej. menor, si X es ii o vi) y un dominante secundario es siempre       ║
-║  mayor/dominante—. La 2ª mitad conserva el acorde X original intacto.      ║
-║  Solo tonicíza grados donde ya hay sitio (nunca inserta compases nuevos).  ║
-║                                                                              ║
-║  ALCANCE: pensada para progresiones de UN acorde por compás (la salida      ║
-║  por defecto de chord_progression_generator/reharmonizer). Si tu MIDI       ║
-║  cambia de acorde varias veces por compás, cuantízalo antes a 1/compás.    ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] ANÁLISIS    — reutiliza harmonic_analyzer.py (tonalidad + numeral +    ║
-║                    función por compás; ya reconoce tonicizaciones           ║
-║                    existentes para no duplicarlas sobre sí mismas)          ║
-║  [2] CANDIDATOS  — compases con acorde diatónico tonicizable (--targets)    ║
-║  [3] SELECCIÓN   — --density (fracción) + --curve (sigue una curva de       ║
-║                    tensión de tension_designer) + --min-gap + --seed        ║
-║  [4] INYECCIÓN   — parte cada nota del compás, escribe V/x transportando    ║
-║                    el voicing original; añade la 7ª si --seventh           ║
-║  [5] ESCRITURA   — MIDI transformado + informe de qué se tonicizó y por qué ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python tonicization_engine.py progresion.mid                              ║
-║    python tonicization_engine.py progresion.mid --targets ii IV V vi        ║
-║    python tonicization_engine.py progresion.mid --density 0.6 --seed 7      ║
-║    python tonicization_engine.py progresion.mid --curve obra.curves.json    ║
-║    python tonicization_engine.py progresion.mid --seventh                    ║
-║    python tonicization_engine.py progresion.mid --report                     ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi               MIDI de entrada (progresión de acordes)                ║
-║    --output FILE      MIDI de salida (default: <obra>_tonic.mid)            ║
-║    --key KEY          Fuerza la tonalidad (p.ej. Cmaj, Am). Si no,          ║
-║                       autodetecta vía harmonic_analyzer                     ║
-║    --targets T [T…]   Grados a considerar tonicizables (default: según el   ║
-║                       modo — mayor: ii iii IV V vi · menor: III iv VI VII)  ║
-║    --density F        Fracción de candidatos tratados 0–1 (default: 0.5)   ║
-║    --min-gap N        Compases mínimos entre tonicizaciones (default: 1)    ║
-║    --seventh          Usa 7ª de dominante en vez de tríada simple            ║
-║    --curve FILE       .curves.json de tension_designer: prioriza los        ║
-║                       compases de mayor tensión en vez de elegir a la par   ║
-║    --seed N           Semilla aleatoria (default: 42)                       ║
-║    --report           Solo informe, sin escribir MIDI                        ║
-║    --no-color         Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from tonicization_engine import process_midi, find_tonicizable_bars      ║
-║                                                                              ║
-║  DEPENDENCIAS: mido · harmonic_analyzer.py (mismo directorio, análisis)     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+tonicization_engine.py — Tonicization Engine: inserción decidida de dominantes
+secundarios en una progresión existente
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Toma una progresión de acordes ya escrita (MIDI de acordes en bloque, del
+tipo que exportan chord_progression_generator.py / reharmonizer.py) y
+decide EN QUÉ compases y DE QUÉ MANERA introducir dominantes secundarios
+(V/x) que tonicen sus acordes diatónicos, sin tocar el resto de la obra.
+
+Es el análogo de expectation_engine.py (que manipula expectativas en
+cadencias V→I) pero para tonicización: en vez de negar/retrasar una
+resolución esperada, INTRODUCE una tensión nueva y localizada — la 5ª de
+un grado diatónico — que resuelve de inmediato dentro del mismo compás.
+Complementa a chord_progression_generator (que ya puede generar V/x desde
+cero) y a reharmonizer (que sustituye la progresión entera): esta
+herramienta opera quirúrgicamente sobre UNA progresión ya fijada.
+
+MECÁNICA:
+Un compás objetivo (acorde diatónico X: ii, IV, V, vi…) se parte en dos:
+la 1ª mitad se sustituye por una tríada mayor (o 7ª de dominante) sobre
+la raíz de V/x, en el registro más cercano al original —NUNCA se
+transporta literalmente el voicing de X, porque conservaría su calidad
+(p.ej. menor, si X es ii o vi) y un dominante secundario es siempre
+mayor/dominante—. La 2ª mitad conserva el acorde X original intacto.
+Solo tonicíza grados donde ya hay sitio (nunca inserta compases nuevos).
+
+ALCANCE: pensada para progresiones de UN acorde por compás (la salida
+por defecto de chord_progression_generator/reharmonizer). Si tu MIDI
+cambia de acorde varias veces por compás, cuantízalo antes a 1/compás.
+
+FLUJO:
+[1] ANÁLISIS    — reutiliza harmonic_analyzer.py (tonalidad + numeral +
+                  función por compás; ya reconoce tonicizaciones
+                  existentes para no duplicarlas sobre sí mismas)
+[2] CANDIDATOS  — compases con acorde diatónico tonicizable (--targets)
+[3] SELECCIÓN   — --density (fracción) + --curve (sigue una curva de
+                  tensión de tension_designer) + --min-gap + --seed
+[4] INYECCIÓN   — parte cada nota del compás, escribe V/x transportando
+                  el voicing original; añade la 7ª si --seventh
+[5] ESCRITURA   — MIDI transformado + informe de qué se tonicizó y por qué
+
+COMO MÓDULO:
+  from tonicization_engine import process_midi, find_tonicizable_bars
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi               MIDI de entrada (progresión de acordes)
+  --output FILE      MIDI de salida (default: <obra>_tonic.mid)
+  --key KEY          Fuerza la tonalidad (p.ej. Cmaj, Am). Si no,
+                     autodetecta vía harmonic_analyzer
+  --targets T [T…]   Grados a considerar tonicizables (default: según el
+                     modo — mayor: ii iii IV V vi · menor: III iv VI VII)
+  --density F        Fracción de candidatos tratados 0–1 (default: 0.5)
+  --min-gap N        Compases mínimos entre tonicizaciones (default: 1)
+  --seventh          Usa 7ª de dominante en vez de tríada simple
+  --curve FILE       .curves.json de tension_designer: prioriza los
+                     compases de mayor tensión en vez de elegir a la par
+  --seed N           Semilla aleatoria (default: 42)
+  --report           Solo informe, sin escribir MIDI
+  --no-color         Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python tonicization_engine.py progresion.mid
+  python tonicization_engine.py progresion.mid --targets ii IV V vi
+  python tonicization_engine.py progresion.mid --density 0.6 --seed 7
+  python tonicization_engine.py progresion.mid --curve obra.curves.json
+  python tonicization_engine.py progresion.mid --seventh
+  python tonicization_engine.py progresion.mid --report
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido · harmonic_analyzer.py (mismo directorio, análisis)
 """
 
 import os

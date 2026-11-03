@@ -1,130 +1,235 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     DIFFUSION COMPOSER  v3                                   ║
-║         Composición end-to-end mediante Difusión Directa multi-rol           ║
-║                                                                              ║
-║  ARQUITECTURA:                                                               ║
-║    U-Net 2D → difusión directa sobre el piano roll (sin VAE)                 ║
-║    DDPM (x0-parametrization) condicionado en tensión + estilo                ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    prepare      — MIDI corpus → piano rolls segmentados por rol (.npz)       ║
-║    train        — Entrena el modelo de difusión                              ║
-║    encode       — MIDI referencia → z_style (.json)                          ║
-║    compose      — Genera obra nueva (modos: sample/denoise/blend/sweep)      ║
-║    transfer     — Transfiere el estilo de un corpus a una canción            ║
-║    style-corpus — Calcula el centroide de estilo de una carpeta de MIDIs     ║
-║    reconstruct  — Diagnóstico: denoising leve sobre el input                 ║
-║    round-trip   — Diagnóstico: MIDI → piano roll → MIDI sin modelo           ║
-║    inspect      — Diagnóstico del modelo y los datos                         ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    mido, numpy, torch                                                        ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+diffusion_composer_v4.py — Composición end-to-end mediante difusión DIRECTA
+multi-rol sobre el piano roll (MIDI → MIDI, requiere PyTorch)
+(versión 4: la v3 con roles y rango de pitch reducibles; U-Net 2D sin VAE,
+DDPM con parametrización x0; el banner aún imprime «v3»).
 
-# ── Preparar datos ────────────────────────────────────────────────────────────
-python diffusion_composer.py prepare --input-dir midis/ --output-dir data/ --report
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Arquitectura: una U-Net 2D difunde directamente sobre el piano roll multi-rol
+(melody, counterpoint, accompaniment, bass, percussion), sin encoder/decoder
+latente. DDPM con parametrización x0, condicionado en la tensión armónica por
+compás y en un vector de estilo que se extrae del contexto. La generación es
+compás a compás con muestreo DDIM; el contexto son los compases ya generados
+(o los del MIDI original con --fixed-context) y el roll se binariza por umbral
+antes de escribir el MIDI. El inpainting usa RePaint: en cada paso los compases
+conocidos se sustituyen por su versión ruidificada al nivel correspondiente y
+los vacíos se generan condicionados en ese contexto.
 
-# Preparar con roles reducidos y rango de pitch limitado (alivia carga computacional):
-python diffusion_composer_v3.py prepare \
-    --input-dir midis/ --output-dir data_small/ \
-    --disable-roles percussion counterpoint \
-    --pitch-range 48
+Respecto a diffusion_composer_v3.py: nuevos --disable-roles y --pitch-range en
+prepare, train y round-trip, para reducir la carga computacional (menos roles
+activos y piano roll de N notas centrado en Do central, MIDI 60); el modelo
+guarda el rango en model_config.json y los demás subcomandos lo leen de ahí.
 
-# ── Entrenar ──────────────────────────────────────────────────────────────────
-python diffusion_composer_v3.py train \
-    --data-dir data/ \
-    --model-dir model_diff_v3/ \
-    --epochs 300 \
-    --batch-size 8 \
-    --lr 1e-4 \
-    --style-dim 16 \
-    --diffusion-steps 1000 \
-    --patience 50
+Respecto a diffusion_composer.py (v0.1, latente): --latent-dim, --pos-weight y
+--decoder-dropout siguen aceptándose por compatibilidad pero se ignoran (el
+primero solo se guarda como informativo en model_config.json); el umbral
+adaptativo por defecto pasa de percentil 85 a 99 (distribuciones bimodales);
+nuevos --threshold, --adaptive-per-bar y --fixed-context; subcomando inpaint;
+enriquecimiento opcional del condicionamiento con mscz2vec en prepare.
 
-# Entrenar con roles reducidos (debe coincidir con el prepare):
-python diffusion_composer_v3.py train \
-    --data-dir data_small/ \
-    --model-dir model_small/ \
-    --disable-roles percussion counterpoint \
-    --epochs 300 --batch-size 16
+────────────────────────────────────────────────────────────────────────────
+Modos de uso (subcomandos)
+────────────────────────────────────────────────────────────────────────────
+  prepare       MIDI corpus → piano rolls segmentados por rol (.npz). Con
+                --enrich el vector de condicionamiento crece de 8D (tensión
+                básica) a 23D (8D + 15D de tensión armónica, estabilidad tonal
+                y tonalidad según mscz2vec); con --enrich-external lee un
+                vector .vec junto a cada MIDI (mismo nombre, extensión .vec) y
+                lo replica en todos los compases.
+  train         Entrena el modelo de difusión.
+  encode        MIDI de referencia → z_style (.json).
+  compose       Genera una obra nueva. Modos (--mode):
+                  sample    condicionada en el estilo de --input.
+                  denoise   parte del propio --input con ruido de fuerza
+                            --strength (0 = copia, 1 = libre).
+                  blend     mezcla el estilo de varios --inputs según --weights.
+                  sweep     interpola el estilo de 2 o más --inputs a lo largo de
+                            los compases (morphing gradual).
+                sample, denoise y blend exigen --input o --inputs; sweep, al
+                menos dos --inputs.
+  transfer      Transfiere el estilo de un corpus A → B a una canción:
+                z_nuevo = z_canción + strength · (z_B − z_A); con --progressive
+                la fuerza crece de 0 a --strength a lo largo de la obra.
+  style-corpus  Centroide de estilo de una carpeta de MIDIs (.json).
+  inpaint       Rellena los compases vacíos de un MIDI conservando los que
+                tienen notas (RePaint). Sin compases vacíos no hace nada (sale
+                con 0); si todos están vacíos, usa compose (sale con 1).
+  reconstruct   Diagnóstico: denoising muy leve (fuerza 0.05, 20 pasos DDIM)
+                sobre el input. p90 > 0.3 → U-Net correcta; p90 < 0.05 → aún no
+                ha convergido, esperar más épocas.
+  round-trip    Diagnóstico: MIDI → piano roll → MIDI sin modelo.
+  inspect       Diagnóstico del modelo (curvas de pérdida) y de los datos (.npz).
+  Orden de diagnóstico: si round-trip suena mal, falla el parseo; si round-trip
+  suena bien pero reconstruct mal, el modelo; si reconstruct bien y compose mal,
+  los parámetros de muestreo.
 
-# ── Generar (denoising desde referencia) ─────────────────────────────────────
-python diffusion_composer_v3.py compose \
-    --model-dir model_diff_v3/ --palette palette.json \
-    --mode denoise --input midis/005505b_.mid \
-    --strength 0.1 --ddim-steps 50 --eta 0.0 \
-    --temperature 1.0 --bars 16 \
-    --threshold 0.3
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  prepare       Un .npz por MIDI en --output-dir (y prepare_report.json con
+                --report).
+  train         En --model-dir: model_config.json (con model_version
+                "v3_direct"), checkpoints e historial de pérdidas.
+  encode        --output (defecto <entrada>.style.json): z_style, z_context y
+                tensión media.
+  style-corpus  --output (defecto z_corpus_<carpeta>.json): centroide, nº de
+                ficheros y cohesión.
+  compose       --output (defecto output.mid); requiere --palette (JSON con
+                programa, canal y velocidad por rol).
+  transfer      --output (defecto transfer_output.mid).
+  inpaint       --output (defecto output_inpaint.mid), con un mapa de compases
+                (█ con notas, ░ vacíos) por consola.
+  reconstruct / round-trip   output_recon.mid / output_roundtrip.mid.
 
-python diffusion_composer_v3.py compose \
-    --model-dir model_diff_v3/ --palette palette.json \
-    --mode denoise --input midis/005505b_.mid \
-    --strength 0.3 --ddim-steps 50 --eta 0.0 \
-    --temperature 1.0 --bars 16 \
-    --threshold-pct 99.0
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare
+    --input-dir DIR  --output-dir DIR   (obligatorios)
+    --resolution N     Ticks por compás (defecto 48).
+    --window-bars N    Compases por ventana (defecto 4).
+    --report           Estadísticas de la preparación.
+    --disable-roles ROL…  Roles a excluir del preprocesado (melody, counterpoint,
+                       accompaniment, bass, percussion).
+    --pitch-range N    Limita el piano roll a N valores MIDI centrados en Do
+                       central (reduce tamaño del modelo y memoria).
+    --enrich           Condicionamiento enriquecido con mscz2vec (23D).
+    --mscz2vec-path F  Ruta a mscz2vec.py (si no está en el PATH ni junto a este
+                       fichero).
+    --enrich-external  Carga un .vec por MIDI (mismo nombre).
+  train
+    --data-dir DIR  --model-dir DIR     (obligatorios)
+    --epochs N (300)   --batch-size N (16)   --lr F (1e-4)   --patience N (50)
+    --style-dim N      Dimensión del vector de estilo (defecto 16).
+    --diffusion-steps N  Pasos T de difusión (defecto 1000).
+    --latent-dim N  --pos-weight F  --decoder-dropout F
+                       Heredados de v0.1: aceptados e ignorados.
+    --disable-roles ROL…  Roles a excluir; debe coincidir con el usado en prepare.
+    --resume           Reanuda desde el último checkpoint.
+  encode
+    --input FILE  --model-dir DIR (obligatorios)   --output FILE
+  compose
+    --model-dir DIR  --palette FILE     (obligatorios)
+    --mode M           sample (defecto) | denoise | blend | sweep.
+    --input FILE       MIDI de referencia.      --inputs FILE…   Varios MIDIs.
+    --weights W…       Pesos de la mezcla en blend (se normalizan).
+    --strength F       [denoise] 0 = copia … 1 = libre (defecto 0.7).
+    --bars N           Compases a generar (defecto 32).
+    --tension T        flat | arch (defecto) | rise | fall, o un .json con una
+                       curva (se interpola a --bars).
+    --output FILE (output.mid)   --bpm F (120)   --temperature F (1.0)
+    --ddim-steps N    Pasos DDIM (defecto 50; más = mejor calidad).
+    --eta F           0 = determinista … 1 = DDPM completo (defecto 0.0).
+    --threshold-pct F  Percentil del umbral adaptativo (defecto 99.0; si sale
+                       vacío, bajarlo; si sale denso, subirlo).
+    --threshold F     Umbral fijo 0.0-1.0; tiene prioridad sobre --threshold-pct.
+    --adaptive-per-bar  Umbral adaptativo por compás: los compases cuyo máximo
+                       no alcanza el global usan max × 0.5 como umbral local.
+    --fixed-context   Usa como contexto el MIDI original y no lo generado, lo
+                       que evita la degradación progresiva en piezas largas.
+  style-corpus
+    --input-dir DIR  --model-dir DIR    (obligatorios)   --output FILE
+  transfer
+    --input FILE  --model-dir DIR  --palette FILE  --style-from FILE
+    --style-to FILE                     (obligatorios)
+    --strength F (0.8)   --progressive   --denoise-strength F (0.6)
+    --ddim-steps N (50)   --eta F (0.0)   --bpm F (120)
+    --threshold-pct F (85.0)   --output FILE
+  inpaint
+    --model-dir DIR  --input FILE       (obligatorios; el MIDI con huecos)
+    --palette FILE  --output FILE (output_inpaint.mid)  --bpm F (120)
+    --ddim-steps N (50)
+    --resample N      Re-muestreos RePaint por paso (defecto 1; 3-5 mejoran la
+                       coherencia a costa de velocidad).
+    --threshold F     Umbral de binarización (defecto 0.5).
+  reconstruct
+    --model-dir DIR  --input FILE       (obligatorios)
+    --palette FILE  --output FILE  --bpm F
+    --threshold F     Umbral fijo (sin valor: automático p99 × 0.5).
+  round-trip
+    --input FILE (obligatorio)   --model-dir DIR (lee resolución y roles)
+    --resolution N (48)   --palette FILE   --output FILE   --bpm F
+    --disable-roles ROL…  --pitch-range N   (solo si no se usa --model-dir)
+  inspect
+    --what W [W…]     npz (defecto) | loss_curve.
+    --data-dir DIR  --model-dir DIR  --file STEM
+    --window N (0; negativo = desde el final)   --bars-show N (4)
+    --roles ROL…      Roles a dibujar.
+    --no-roll         Lista todos los .npz con metadatos y densidad (⚠ DENSO si
+                      > 15 %).
 
-# ── Morphing gradual entre dos canciones (sweep) ─────────────────────────────
-python diffusion_composer_v3.py compose \
-    --model-dir model_diff_v3/ --palette palette.json \
-    --mode sweep \
-    --inputs midis/005505b_.mid midis/008906b_.mid \
-    --bars 32 \
-    --ddim-steps 50 --eta 0.0 \
-    --temperature 1.0 \
-    --threshold-pct 99.0
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Preparar con roles reducidos y rango de pitch limitado (menos carga):
+  python diffusion_composer_v4.py prepare --input-dir midis/ --output-dir data_small/ \
+      --disable-roles percussion counterpoint --pitch-range 48
 
-# ── Mezcla estática entre dos estilos (blend) ────────────────────────────────
-python diffusion_composer_v3.py compose \
-    --model-dir model_diff_v3/ --palette palette.json \
-    --mode blend \
-    --inputs midis/005505b_.mid midis/008906b_.mid \
-    --weights 0.5 0.5 \
-    --bars 16 \
-    --ddim-steps 50 --eta 0.0 \
-    --threshold-pct 99.0
+  # Preparar los datos (con la tensión enriquecida opcional):
+  python diffusion_composer_v4.py prepare --input-dir midis/ --output-dir data/ --report
+  python diffusion_composer_v4.py prepare --input-dir midis/ --output-dir data_enr/ \
+      --enrich --mscz2vec-path ./mscz2vec.py
+  python diffusion_composer_v4.py prepare --input-dir midis/ --output-dir data_ext/ --enrich-external
 
-# ── Style transfer ────────────────────────────────────────────────────────────
-# Estilo A: carpeta con MIDIs del estilo origen
-python diffusion_composer_v3.py style-corpus \
-    --input-dir midis_A/ \
-    --model-dir model_diff_v3/ \
-    --output z_estilo_A.json
+  # Entrenar con los mismos roles que en prepare:
+  python diffusion_composer_v4.py train --data-dir data_small/ --model-dir model_small/ \
+      --disable-roles percussion counterpoint --epochs 300 --batch-size 16
 
-# Estilo B: carpeta con MIDIs del estilo destino
-python diffusion_composer_v3.py style-corpus \
-    --input-dir midis_B/ \
-    --model-dir model_diff_v3/ \
-    --output z_estilo_B.json
+  # Entrenar, y reanudar:
+  python diffusion_composer_v4.py train --data-dir data/ --model-dir model_diff_v4/ \
+      --epochs 300 --batch-size 8 --lr 1e-4 --style-dim 16 --diffusion-steps 1000 --patience 50
+  python diffusion_composer_v4.py train --data-dir data/ --model-dir model_diff_v4/ --resume
 
-python diffusion_composer_v3.py encode \
-    --input midis/005505b_.mid \
-    --model-dir model_diff_v3/ \
-    --output z_estilo_A.json
+  # Estilo de una referencia:
+  python diffusion_composer_v4.py encode --input ref.mid --model-dir model_diff_v4/
 
-python diffusion_composer_v3.py transfer \
-    --input midis/005505b_.mid \
-    --model-dir model_diff_v3/ \
-    --palette palette.json \
-    --style-from z_estilo_A.json \
-    --style-to z_estilo_B.json \
-    --strength 0.8 \
-    --output resultado.mid \
-    --threshold-pct 99.0
+  # Variar una obra (denoising desde una referencia):
+  python diffusion_composer_v4.py compose --model-dir model_diff_v4/ --palette palette.json \
+      --mode denoise --input ref.mid --strength 0.1 --ddim-steps 50 --eta 0.0 \
+      --temperature 1.0 --bars 16 --threshold 0.3
+  python diffusion_composer_v4.py compose --model-dir model_diff_v4/ --palette palette.json \
+      --mode denoise --input ref.mid --strength 0.3 --ddim-steps 50 --eta 0.0 \
+      --temperature 1.0 --bars 16 --threshold-pct 99.0 --adaptive-per-bar --fixed-context
 
-# ── Inpaint ────────────────────────────────────────────────────────────
+  # Obra nueva condicionada en el estilo de una referencia:
+  python diffusion_composer_v4.py compose --mode sample --input ref.mid \
+      --model-dir model_diff_v4/ --palette palette.json --bars 32 --tension arch
 
-python diffusion_composer_v3.py inpaint \
-    --model-dir model_diff_v3/ --palette palette.json \
-    --input con_huecos.mid \
-    --ddim-steps 50 --resample 3 \
-    --output rellenado.mid
+  # Morphing gradual entre dos canciones (sweep) y mezcla estática (blend):
+  python diffusion_composer_v4.py compose --model-dir model_diff_v4/ --palette palette.json \
+      --mode sweep --inputs a.mid b.mid --bars 32 --ddim-steps 50 --eta 0.0 \
+      --temperature 1.0 --threshold-pct 99.0
+  python diffusion_composer_v4.py compose --model-dir model_diff_v4/ --palette palette.json \
+      --mode blend --inputs a.mid b.mid --weights 0.7 0.3 --bars 32
 
-# ── Diagnóstico ───────────────────────────────────────────────────────────────
-python diffusion_composer_v3.py round-trip --input midis/005505b_.mid
-python diffusion_composer_v3.py reconstruct --model-dir model_diff_v3/ --input midis/005505b_.mid
+  # Transferencia de estilo de un corpus A a un corpus B:
+  python diffusion_composer_v4.py style-corpus --input-dir midis_A/ --model-dir model_diff_v4/ --output z_A.json
+  python diffusion_composer_v4.py style-corpus --input-dir midis_B/ --model-dir model_diff_v4/ --output z_B.json
+  python diffusion_composer_v4.py transfer --input cancion.mid --model-dir model_diff_v4/ \
+      --palette palette.json --style-from z_A.json --style-to z_B.json --strength 0.8 \
+      --output resultado.mid
+  python diffusion_composer_v4.py transfer --input cancion.mid --model-dir model_diff_v4/ \
+      --palette palette.json --style-from z_A.json --style-to z_B.json --progressive
 
+  # Rellenar compases vacíos:
+  python diffusion_composer_v4.py inpaint --model-dir model_diff_v4/ --input con_huecos.mid \
+      --palette palette.json --ddim-steps 50 --resample 3 --output relleno.mid
+
+  # Diagnóstico:
+  python diffusion_composer_v4.py round-trip --input ref.mid --model-dir model_diff_v4/
+  python diffusion_composer_v4.py round-trip --input ref.mid --disable-roles percussion --pitch-range 48
+  python diffusion_composer_v4.py reconstruct --model-dir model_diff_v4/ --input ref.mid
+  python diffusion_composer_v4.py inspect --what loss_curve --model-dir model_diff_v4/
+  python diffusion_composer_v4.py inspect --what npz --data-dir data/ --no-roll
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+mido, numpy, torch. mscz2vec.py solo para prepare --enrich. Anteriores:
+diffusion_composer.py (latente) y diffusion_composer_v3.py.
 """
 
 import argparse

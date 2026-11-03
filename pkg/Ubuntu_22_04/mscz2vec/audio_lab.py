@@ -1,123 +1,265 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         AUDIO LAB  v1.1                                      ║
-║  Síntesis aditiva, análisis DSP y renderizado MIDI — fichero único           ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  SUBCOMANDOS                                                                 ║
-║    analyse       WAV/MIDI → espectro FFT/DFT  (amplitudes, fases, freqs)    ║
-║    spectrogram   WAV → STFT → .npz [+ --plot PNG]                           ║
-║    edit-spectrum .npz → filtros/stretch/pitch/reverse → .npz [+ --wav]      ║
-║    npz-to-png    .npz → PNG escala de grises (metadatos embebidos en tEXt)  ║
-║    png-to-npz    PNG → .npz con fase cero  (editar espectrograma en imagen) ║
-║    reconstruct   .npz / espectro.json → WAV  (síntesis inversa)             ║
-║    synth         Síntesis aditiva: nota(s) + timbre.json + env.json → WAV   ║
-║    play-midi     MIDI + instrument-map.json → WAV  (sin soundfont externo)  ║
-║    roundtrip     WAV → FFT → síntesis → WAV  (diagnóstico del pipeline)     ║
-║    info          Diagnóstico rápido de WAV, MIDI, NPZ o JSON                ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  DEPENDENCIAS  numpy  soundfile  mido  Pillow                               ║
-║                scipy (opcional, --plot)   matplotlib (opcional, --plot)     ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  PIPELINE NPZ ↔ PNG                                                          ║
-║                                                                              ║
-║  El PNG es una imagen en escala de grises donde:                            ║
-║    · Eje X  = tiempo  (frame 0 a N-1, izquierda → derecha)                 ║
-║    · Eje Y  = frecuencia  (0 Hz abajo, Nyquist arriba)                      ║
-║    · Valor  = magnitud STFT  (lineal o log según --log)                     ║
-║    · Fase   NO se guarda — al reconvertir se usa fase cero                  ║
-║                                                                              ║
-║  Los metadatos necesarios para la reconversión (sr, window_size, hop_ratio, ║
-║  escala, piso dB, orientación) se guardan en chunks tEXt del PNG y se       ║
-║  recuperan automáticamente con png-to-npz. Si el PNG viene de un editor     ║
-║  externo (GIMP, Photoshop…) que elimina los metadatos, pasa sr/window/hop   ║
-║  manualmente con --sr --window --hop.                                        ║
-║                                                                              ║
-║  Flujo típico de edición creativa:                                           ║
-║    spectrogram audio.wav --window 4096 -o audio.npz                         ║
-║    npz-to-png audio.npz --log -o audio.png                                  ║
-║    [editar audio.png en GIMP/Photoshop: borrar, pintar, filtrar…]           ║
-║    png-to-npz audio_editado.png -o audio_editado.npz                        ║
-║    reconstruct audio_editado.npz -o resultado.wav                           ║
-║                                                                              ║
-║  Nota: la reconstrucción desde PNG usa Griffin-Lim iterativo (32 iter por   ║
-║  defecto) para estimar fases coherentes. Produce audio limpio y con las      ║
-║  frecuencias correctas. Ajusta con reconstruct --gl-iters N (más=mejor).    ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  JSON DE REFERENCIA — TIMBRE  (--timbre timbre.json)                        ║
-║  Define el perfil espectral de un instrumento: amplitud relativa de cada    ║
-║  armónico (1=fundamental) en distintos registros (key frames por nota MIDI).║
-║  Se interpola linealmente entre key frames.                                  ║
-║                                                                              ║
-║  {                                                                           ║
-║    "name": "piano_approx",                                                   ║
-║    "key_frames": {                                                           ║
-║      "36": [1.0, 0.6, 0.4, 0.25, 0.15, 0.10, 0.06, 0.04],  // C2         ║
-║      "60": [1.0, 0.5, 0.3, 0.18, 0.10, 0.06, 0.03, 0.01],  // C4         ║
-║      "84": [1.0, 0.3, 0.1, 0.04, 0.01, 0.00, 0.00, 0.00]   // C6         ║
-║    },                                                                        ║
-║    "n_harmonics": 8,                                                         ║
-║    "normalize": true                                                         ║
-║  }                                                                           ║
-║                                                                              ║
-║  JSON DE REFERENCIA — ENVOLVENTE  (--envelope env.json)                     ║
-║  Parámetros completos ADR con tipo de curva independiente por segmento.      ║
-║  Tipos de curva: "linear" | "exponential" | "logarithmic" | "cosine"        ║
-║                                                                              ║
-║  {                                                                           ║
-║    "attack_time":   0.010,                                                   ║
-║    "attack_curve":  "cosine",                                                ║
-║    "decay_time":    1.800,                                                   ║
-║    "decay_curve":   "exponential",                                           ║
-║    "decay_level":   0.30,                                                    ║
-║    "release_time":  0.250,                                                   ║
-║    "release_curve": "exponential",                                           ║
-║    "harmonic_decay": [1.0, 1.8, 2.5, 3.2, 4.0, 5.0, 6.0, 7.0]            ║
-║  }                                                                           ║
-║                                                                              ║
-║  harmonic_decay: factor de decay relativo por armónico (>1 = decae antes).  ║
-║                                                                              ║
-║  JSON DE REFERENCIA — INSTRUMENT MAP  (--instrument-map map.json)           ║
-║  Asignación de canales MIDI → instrumento. Cada canal puede usar síntesis   ║
-║  aditiva (timbre+envelope JSONs) o samples WAV externos con pitch shift.    ║
-║                                                                              ║
-║  {                                                                           ║
-║    "default": {                                                              ║
-║      "mode": "additive",                                                     ║
-║      "timbre": "timbres/piano.json",                                         ║
-║      "envelope": "envelopes/piano.json"                                      ║
-║    },                                                                        ║
-║    "channels": {                                                             ║
-║      "0": {                                                                  ║
-║        "mode": "additive",                                                   ║
-║        "timbre": "timbres/piano.json",                                       ║
-║        "envelope": "envelopes/piano.json"                                    ║
-║      },                                                                      ║
-║      "1": {                                                                  ║
-║        "mode": "sample",                                                     ║
-║        "sample": "samples/flute_c4.wav",                                     ║
-║        "root_note": 60,                                                      ║
-║        "envelope": "envelopes/flute.json"                                    ║
-║      },                                                                      ║
-║      "9": {                                                                  ║
-║        "mode": "additive",                                                   ║
-║        "timbre": "timbres/marimba.json",                                     ║
-║        "envelope": "envelopes/perc.json"                                     ║
-║      }                                                                       ║
-║    }                                                                         ║
-║  }                                                                           ║
-║                                                                              ║
-║  EJEMPLOS                                                                    ║
-║    python audio_lab.py analyse piano.wav --method fft --output spec.json   ║
-║    python audio_lab.py spectrogram piano.wav --window 4096 --log           ║
-║    python audio_lab.py npz-to-png piano.npz --log -o piano.png             ║
-║    python audio_lab.py png-to-npz piano_edited.png -o piano_edited.npz     ║
-║    python audio_lab.py reconstruct piano_edited.npz -o resultado.wav       ║
-║    python audio_lab.py synth --notes C4 E4 G4 --timbre timbres/piano.json  ║
-║    python audio_lab.py play-midi song.mid --instrument-map map.json         ║
-║    python audio_lab.py roundtrip input.wav --method stft                   ║
-║    python audio_lab.py info piano.wav                                       ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+audio_lab.py — Audio Lab: síntesis aditiva, análisis DSP y renderizado MIDI —
+fichero único
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Nota:
+la reconstrucción desde PNG usa Griffin-Lim iterativo (32 iter por
+defecto) para estimar fases coherentes. Produce audio limpio y con las
+frecuencias correctas. Ajusta con reconstruct --gl-iters N (más=mejor).
+
+JSON DE REFERENCIA — TIMBRE  (--timbre timbre.json)
+Define el perfil espectral de un instrumento: amplitud relativa de cada
+armónico (1=fundamental) en distintos registros (key frames por nota MIDI).
+Se interpola linealmente entre key frames.
+
+{
+  "name": "piano_approx",
+  "key_frames": {
+    "36": [1.0, 0.6, 0.4, 0.25, 0.15, 0.10, 0.06, 0.04],  // C2
+    "60": [1.0, 0.5, 0.3, 0.18, 0.10, 0.06, 0.03, 0.01],  // C4
+    "84": [1.0, 0.3, 0.1, 0.04, 0.01, 0.00, 0.00, 0.00]   // C6
+  },
+  "n_harmonics": 8,
+  "normalize": true
+}
+
+JSON DE REFERENCIA — ENVOLVENTE  (--envelope env.json)
+Parámetros completos ADR con tipo de curva independiente por segmento.
+Tipos de curva: "linear" | "exponential" | "logarithmic" | "cosine"
+
+{
+  "attack_time":   0.010,
+  "attack_curve":  "cosine",
+  "decay_time":    1.800,
+  "decay_curve":   "exponential",
+  "decay_level":   0.30,
+  "release_time":  0.250,
+  "release_curve": "exponential",
+  "harmonic_decay": [1.0, 1.8, 2.5, 3.2, 4.0, 5.0, 6.0, 7.0]
+}
+
+harmonic_decay: factor de decay relativo por armónico (>1 = decae antes).
+
+JSON DE REFERENCIA — INSTRUMENT MAP  (--instrument-map map.json)
+Asignación de canales MIDI → instrumento. Cada canal puede usar síntesis
+aditiva (timbre+envelope JSONs) o samples WAV externos con pitch shift.
+
+{
+  "default": {
+    "mode": "additive",
+    "timbre": "timbres/piano.json",
+    "envelope": "envelopes/piano.json"
+  },
+  "channels": {
+    "0": {
+      "mode": "additive",
+      "timbre": "timbres/piano.json",
+      "envelope": "envelopes/piano.json"
+    },
+    "1": {
+      "mode": "sample",
+      "sample": "samples/flute_c4.wav",
+      "root_note": 60,
+      "envelope": "envelopes/flute.json"
+    },
+    "9": {
+      "mode": "additive",
+      "timbre": "timbres/marimba.json",
+      "envelope": "envelopes/perc.json"
+    }
+  }
+}
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+    analyse       WAV/MIDI → espectro FFT/DFT  (amplitudes, fases, freqs)
+    spectrogram   WAV → STFT → .npz [+ --plot PNG]
+    edit-spectrum .npz → filtros/stretch/pitch/reverse → .npz [+ --wav]
+    npz-to-png    .npz → PNG escala de grises (metadatos embebidos en tEXt)
+    png-to-npz    PNG → .npz con fase cero  (editar espectrograma en imagen)
+    reconstruct   .npz / espectro.json → WAV  (síntesis inversa)
+    synth         Síntesis aditiva: nota(s) + timbre.json + env.json → WAV
+    play-midi     MIDI + instrument-map.json → WAV  (sin soundfont externo)
+    roundtrip     WAV → FFT → síntesis → WAV  (diagnóstico del pipeline)
+    info          Diagnóstico rápido de WAV, MIDI, NPZ o JSON
+
+  DEPENDENCIAS  numpy  soundfile  mido  Pillow
+                scipy (opcional, --plot)   matplotlib (opcional, --plot)
+
+  PIPELINE NPZ ↔ PNG
+
+  El PNG es una imagen en escala de grises donde:
+    · Eje X  = tiempo  (frame 0 a N-1, izquierda → derecha)
+    · Eje Y  = frecuencia  (0 Hz abajo, Nyquist arriba)
+    · Valor  = magnitud STFT  (lineal o log según --log)
+    · Fase   NO se guarda — al reconvertir se usa fase cero
+
+  Los metadatos necesarios para la reconversión (sr, window_size, hop_ratio,
+  escala, piso dB, orientación) se guardan en chunks tEXt del PNG y se
+  recuperan automáticamente con png-to-npz. Si el PNG viene de un editor
+  externo (GIMP, Photoshop…) que elimina los metadatos, pasa sr/window/hop
+  manualmente con --sr --window --hop.
+
+  Flujo típico de edición creativa:
+    spectrogram audio.wav --window 4096 -o audio.npz
+    npz-to-png audio.npz --log -o audio.png
+    [editar audio.png en GIMP/Photoshop: borrar, pintar, filtrar…]
+    png-to-npz audio_editado.png -o audio_editado.npz
+    reconstruct audio_editado.npz -o resultado.wav
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  analyse
+    input INPUT                 Fichero WAV o MIDI
+    --method METHOD             Método de análisis (default: fft) (valores:
+                                fft|dft)
+    --threshold THRESHOLD       Amplitud mínima para incluir un bin (default:
+                                0.001)
+    --top-n TOP_N               Mantener solo los N bins de mayor amplitud
+    --max-bins MAX_BINS         Muestras máximas para DFT (default: 2048)
+    --output, -o OUTPUT         Fichero JSON de salida
+
+  spectrogram
+    input INPUT                 Fichero WAV
+    --window WINDOW             Tamaño de ventana STFT en muestras (default:
+                                4096)
+    --hop HOP                   Hop ratio ∈ (0,1] (default: 0.25)
+    --plot                      Genera también imagen PNG (requiere
+                                matplotlib+scipy)
+    --output, -o OUTPUT         Fichero NPZ de salida
+
+  reconstruct
+    input INPUT                 Fichero .npz (STFT) o .json (espectro FFT/DFT)
+    --duration DURATION         Duración en segundos (solo para JSON, default:
+                                2.0)
+    --normalize                 Normalizar el WAV de salida a 0.85 peak
+                                (automático para NPZ con fase cero)
+    --gl-iters GL_ITERS         Iteraciones de Griffin-Lim para NPZ con fase
+                                cero (default: 32)
+    --output, -o OUTPUT         WAV de salida
+
+  npz-to-png
+    input INPUT                 Fichero .npz (de spectrogram o edit-spectrum)
+    --log                       Escala logarítmica en dB en vez de lineal (más
+                                perceptivo)
+    --db-floor DB_FLOOR         Piso en dB para escala log (default: -80)
+    --no-flip-y                 No invertir eje Y (bin 0=DC queda arriba; por
+                                defecto va abajo)
+    --output, -o OUTPUT         Fichero PNG de salida
+
+  png-to-npz
+    input INPUT                 Fichero PNG (idealmente generado con npz-to-
+                                png)
+    --sr SR                     Sample rate si el PNG no tiene metadatos
+                                (default: …)
+    --window WINDOW             Tamaño de ventana STFT si el PNG no tiene
+                                metadatos (default: 4096)
+    --hop HOP                   Hop ratio si el PNG no tiene metadatos
+                                (default: 0.25)
+    --mag-max MAG_MAX           Factor de escala de magnitudes (recupera nivel
+                                original). Valor típico: 50-200. Si no se
+                                pasa, reconstruct normaliza automáticamente.
+    --output, -o OUTPUT         Fichero NPZ de salida
+
+  edit-spectrum
+    input INPUT                 Fichero .npz de entrada (de spectrogram)
+    --highpass HIGHPASS         Frecuencia de corte paso-alto en Hz (elimina <
+                                valor)
+    --lowpass LOWPASS           Frecuencia de corte paso-bajo en Hz (elimina >
+                                valor)
+    --isolate ISOLATE […]       Mantener solo estas frecuencias Hz (ej: 261.6
+                                329.6 392)
+    --isolate-margin ISOLATE_MARGIN
+                                Margen en Hz a cada lado de --isolate
+                                (default: 30)
+    --suppress SUPPRESS […]     Atenuar estas frecuencias Hz (ej: 50 100 150)
+    --suppress-margin SUPPRESS_MARGIN
+                                Margen en Hz a cada lado de --suppress
+                                (default: 20)
+    --suppress-gain SUPPRESS_GAIN
+                                Ganancia residual en zona suprimida ∈ [0,1]
+                                (default: 0)
+    --gain GAIN                 Ganancia global en dB aplicada a magnitudes
+                                (ej: +6, -3)
+    --denoise DENOISE           Zeroing de bins bajo el percentil N de
+                                magnitud (ej: 60)
+    --timestretch TIMESTRETCH   Factor de estiramiento temporal >1=más lento
+                                (ej: 1.5, 0.75)
+    --pitchshift PITCHSHIFT     Transposición en semitones enteros (ej: +3,
+                                -5)
+    --reverse                   Invertir el espectrograma en el tiempo
+    --output, -o OUTPUT         NPZ de salida (default: <input>_edited.npz)
+    --wav WAV                   Si se especifica, reconstruye también un WAV
+                                con este nombre
+
+  synth
+    --notes NOTES […]           Notas: nombre (C4, F#3) o número MIDI (60)
+                                (obligatorio)
+    --timbre TIMBRE             JSON de timbre (default: sinusoide pura)
+    --envelope ENVELOPE         JSON de envolvente ADR (default: built-in)
+    --duration DURATION         Duración de cada nota en segundos (default:
+                                2.0)
+    --velocity VELOCITY         Velocidad/dinámica global ∈ [0,1] (default:
+                                0.8)
+    --velocities VELOCITIES […]
+                                Velocidad por nota (ej: 0.7 0.6 0.9).
+                                Sobreescribe --velocity
+    --detune DETUNE             Detuning total en cents distribuido entre
+                                notas (ej: 8.0). Separa las notas del acorde
+                                ±detune/2 ¢ para evitar fusión tímbrica
+                                (defecto 0.0)
+    --strum STRUM               Retraso en ms entre notas del acorde (ej: 20).
+                                0=simultáneo, >0=arpeggiato. Solo en modo
+                                chord (defecto 0.0)
+    --chord-mode CHORD_MODE     chord=simultáneo/strum, sequence=en secuencia
+                                (default: chord) (valores: chord|sequence)
+    --gap GAP                   Silencio entre notas en modo sequence
+                                (default: 0.1)
+    --output, -o OUTPUT         (defecto synth_out.wav)
+
+  play-midi
+    input INPUT                 Fichero MIDI (.mid)
+    --instrument-map INSTRUMENT_MAP
+                                JSON de asignación de instrumentos por canal
+    --bpm BPM                   Override de tempo en BPM
+    --transpose TRANSPOSE       Transposición en semitones (default: 0)
+    --output, -o OUTPUT         WAV de salida
+
+  roundtrip
+    input INPUT                 Fichero WAV de entrada
+    --method METHOD             Pipeline de análisis/síntesis (default: stft)
+                                (valores: stft|fft)
+    --window WINDOW             Tamaño de ventana STFT (default: 4096)
+    --hop HOP                   Hop ratio STFT (default: 0.25)
+    --output, -o OUTPUT         WAV de salida
+
+  info
+    input INPUT                 Fichero a inspeccionar
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python audio_lab.py analyse piano.wav --method fft --output spec.json
+  python audio_lab.py spectrogram piano.wav --window 4096 --plot
+  python audio_lab.py npz-to-png piano.npz --log -o piano.png
+  python audio_lab.py png-to-npz piano_edited.png -o piano_edited.npz
+  python audio_lab.py reconstruct piano_edited.npz -o resultado.wav
+  python audio_lab.py synth --notes C4 E4 G4 --timbre timbres/piano.json
+  python audio_lab.py play-midi song.mid --instrument-map map.json
+  python audio_lab.py roundtrip input.wav --method stft
+  python audio_lab.py info piano.wav
+
+── Más modos ──
+
+  # Edita un NPZ de espectrograma → NPZ [+ WAV]
+  python audio_lab.py edit-spectrum entrada.mid
 """
 
 import argparse

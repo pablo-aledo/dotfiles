@@ -1,56 +1,86 @@
 #!/usr/bin/env python3
-"""
-================================================================================
-                       LYRICS MELODY  v3.1
-       Generacion de melodias condicionadas por el contenido emocional
-              del texto (lyrics), con fluidez entre frases
+r"""
+lyrics_melody.py — Lyrics Melody: generacion de melodias condicionadas por el
+contenido emocional del texto (lyrics), con fluidez entre frases
+(versión 3.1).
 
-  Aprende la relacion entre el contenido SEMANTICO/EMOCIONAL de cada verso
-  de una cancion y la melodia completa que la acompana, a partir de un
-  corpus de ficheros ABC con lineas de letra (campo "w:" alineado con la
-  melodia).
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Aprende la relacion entre el contenido SEMANTICO/EMOCIONAL de cada verso
+de una cancion y la melodia completa que la acompana, a partir de un
+corpus de ficheros ABC con lineas de letra (campo "w:" alineado con la
+melodia).
 
-  Modela dos cosas a la vez:
-    [1] EMBEDDING EMOCIONAL de cada verso, mediante un modelo de
-        sentence-embeddings preentrenado y multilingue (MiniLM), inyectado
-        como "segment embedding": cada posicion de la melodia recibe el
-        embedding del verso al que pertenece (acoplamiento texto-melodia).
-    [2] MODELO DE LENGUAJE MELODICO (Transformer causal con atencion
-        relativa, estilo Music Transformer) sobre la SECUENCIA COMPLETA de
-        la cancion (todas las frases concatenadas, separadas por un token
-        especial <phrase>), de forma que cada nota se condiciona en TODO el
-        historial melodico anterior, dando fluidez en las uniones entre
-        versos.
+Modela dos cosas a la vez:
+  [1] EMBEDDING EMOCIONAL de cada verso, mediante un modelo de
+      sentence-embeddings preentrenado y multilingue (MiniLM), inyectado
+      como "segment embedding": cada posicion de la melodia recibe el
+      embedding del verso al que pertenece (acoplamiento texto-melodia).
+  [2] MODELO DE LENGUAJE MELODICO (Transformer causal con atencion
+      relativa, estilo Music Transformer) sobre la SECUENCIA COMPLETA de
+      la cancion (todas las frases concatenadas, separadas por un token
+      especial <phrase>), de forma que cada nota se condiciona en TODO el
+      historial melodico anterior, dando fluidez en las uniones entre
+      versos.
 
-  NOVEDADES v3.1
-  ---------------
-  Se incorporan tres mejoras de consistencia melodica en el motor transformer,
-  sin necesidad de reentrenar el modelo:
+NOVEDADES v3.1
 
-  [A] SUAVIZADO DE OCTAVA (_smooth_octave):
-      Tras decodificar cada token, la octava se corrige eligiendo la mas
-      proxima a la nota anterior (minimizando el salto en semitonos). Elimina
-      los grandes saltos de registro que aparecian cuando el modelo saltaba
-      de octava de forma abrupta entre notas consecutivas o entre versos.
+Se incorporan tres mejoras de consistencia melodica en el motor transformer,
+sin necesidad de reentrenar el modelo:
 
-  [B] MASCARA DE ESCALA (--mode, _build_scale_mask):
-      Antes de muestrear, los tokens N_* cuyo pitch class no pertenece a la
-      escala (--key, --mode) se ponen a -inf en los logits. La melodia
-      resultante queda estrictamente dentro de la tonalidad pedida sin
-      alterar el modelo entrenado.
-      Modos disponibles: major, minor, harmonic_minor, dorian, phrygian,
-      mixolydian, pentatonic_major, pentatonic_minor, blues, chromatic.
+[A] SUAVIZADO DE OCTAVA (_smooth_octave):
+    Tras decodificar cada token, la octava se corrige eligiendo la mas
+    proxima a la nota anterior (minimizando el salto en semitonos). Elimina
+    los grandes saltos de registro que aparecian cuando el modelo saltaba
+    de octava de forma abrupta entre notas consecutivas o entre versos.
 
-  [C] SESGO DE INTERVALO POR PERFIL (--interval-bias-strength,
-      _build_interval_bias):
-      En cada paso se calcula un sesgo aditivo en log-space sobre los logits,
-      proporcional a los pesos de INTERVAL_WEIGHTS[profile]. Los intervalos
-      tipicos del perfil emocional (p. ej. semitonos para melancholic, quintas
-      para heroic) se refuerzan sin forzar; los ajenos se penalizan
-      suavemente. La intensidad es regulable con --interval-bias-strength
-      (0.0 = desactivado, 1.0 = sesgo fuerte; default: 0.4).
+[B] MASCARA DE ESCALA (--mode, _build_scale_mask):
+    Antes de muestrear, los tokens N_* cuyo pitch class no pertenece a la
+    escala (--key, --mode) se ponen a -inf en los logits. La melodia
+    resultante queda estrictamente dentro de la tonalidad pedida sin
+    alterar el modelo entrenado.
+    Modos disponibles: major, minor, harmonic_minor, dorian, phrygian,
+    mixolydian, pentatonic_major, pentatonic_minor, blues, chromatic.
 
-  COMANDOS:
+[C] SESGO DE INTERVALO POR PERFIL (--interval-bias-strength,
+    _build_interval_bias):
+    En cada paso se calcula un sesgo aditivo en log-space sobre los logits,
+    proporcional a los pesos de INTERVAL_WEIGHTS[profile]. Los intervalos
+    tipicos del perfil emocional (p. ej. semitonos para melancholic, quintas
+    para heroic) se refuerzan sin forzar; los ajenos se penalizan
+    suavemente. La intensidad es regulable con --interval-bias-strength
+    (0.0 = desactivado, 1.0 = sesgo fuerte; default: 0.4).
+
+NOTAS DE DISENO:
+- Las notas se representan RELATIVAS a la tonica (K:) del fragmento ABC,
+  como (grado_cromatico 0-11, octava_relativa, duracion cuantizada en
+  fracciones de L:). Permite generar en cualquier tonalidad sin reentrenar.
+- FLUIDEZ ENTRE FRASES: cada melodia (X:) se entrena/genera como UNA SOLA
+  secuencia continua. Las frases se separan con el token especial
+  <phrase>, pero la atencion causal ve todo el historial anterior, por lo
+  que la nota inicial de un verso se condiciona en la nota final del
+  verso previo. El "segment embedding" emocional cambia por posicion
+  segun a que verso pertenece, permitiendo que el contenido emocional
+  module la melodia verso a verso sin romper la continuidad musical.
+- El acoplamiento texto-melodia se modela proyectando el embedding de
+  384 dims del modelo de sentence-embeddings a d_model y sumandolo en
+  cada posicion (segment embedding), junto a note_embed + pos_embed.
+- Atencion relativa de posicion (truco de skewing, Music Transformer,
+  Huang et al. 2019) para capturar motivos recurrentes independientemente
+  de su posicion dentro de la secuencia.
+- ORDEN DE APLICACION en el muestreo (v3.1):
+    logits del modelo
+      -> mascara de escala (-inf a notas fuera de tonalidad)
+      -> sesgo de intervalo (log-space, proporcional a INTERVAL_WEIGHTS)
+      -> division por temperatura
+      -> top-k (opcional)
+      -> softmax + multinomial
+      -> _smooth_octave (correccion de octava por proximidad)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
     train     - Entrena el modelo conjunto a partir de un corpus .abc
     generate  - Genera una melodia MIDI/ABC a partir de un fichero de letra
     inspect   - Diagnostico: vocabularios, dataset y config de un checkpoint
@@ -85,8 +115,10 @@
     blues            - pentatonica menor + V# (blue note)
     chromatic        - sin restriccion de escala (12 notas)
 
-  FORMATO ESPERADO DE LOS FICHEROS ABC DE ENTRENAMIENTO
-  ------------------------------------------------------
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+FORMATO ESPERADO DE LOS FICHEROS ABC DE ENTRENAMIENTO:
   Cabecera ABC estandar (X:, T:, M:, L:, K:) + linea(s) "w:" justo despues
   de la linea de melodia. Cada linea w: se trata como UN VERSO; su texto
   completo (ignorando '-' y '*') se usa para calcular el embedding
@@ -101,108 +133,103 @@
     C D E F | G2 A2 |
     w:Ho-la_ mun-do mu-si-cal a-qui
 
-  EJEMPLOS DE USO
-  ----------------
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES DE GENERATE:
+  --lyrics FILE          Fichero de texto (una linea = un verso = una frase)
+  --out FILE             MIDI de salida
+  --abc-out FILE         ABC de salida (opcional)
+  --engine               transformer (default) | markov
+  --model FILE           Checkpoint .pt (motor transformer)
+  --corpus DIR           Carpeta .abc (motor markov)
+  --key KEY              Tonalidad: C, Am, F#, Bb... (default: C)
+  --mode MODE            Modo de escala para mascara tonal (default: major)
+  --profile PROFILE      Perfil emocional (default: neutral)
+  --interval-bias-strength S  Intensidad del sesgo de intervalo 0.0-1.0
+                              (default: 0.4; 0.0 = desactivado)
+  --tempo BPM            Tempo en BPM (default: 100)
+  --meter M/N            Compas (default: 4/4)
+  --temperature T        Temperatura de muestreo (default: 1.0)
+  --top-k K              Top-k sampling; 0 = desactivado (default: 0)
+  --notes-per-line N     Notas fijas por verso; 0 = estimar (default: 0)
+  --unit-beats F         Duracion de una unidad L: en negras (default: 0.5)
+  --seed N               Semilla aleatoria (motor markov; default: 42)
+  --n-clusters N         Clusters emocionales (motor markov; default: 6)
+  --cpu                  Forzar CPU
+
+── Otras opciones del parser ──
+  (globales)
+    --version VERSION
+
+  train
+    --batch-size BATCH_SIZE     (defecto 16)
+    --lr LR                     (defecto 0.0003)
+    --d-model D_MODEL           (defecto 128)
+    --n-heads N_HEADS           (defecto 4)
+    --n-layers N_LAYERS         (defecto 3)
+    --max-seq-len MAX_SEQ_LEN   Longitud maxima de secuencia (cancion
+                                completa). Aumentar si tus canciones tienen
+                                muchas frases. (defecto 128)
+    --dropout DROPOUT           (defecto 0.1)
+    --label-smooth LABEL_SMOOTH
+                                Label smoothing en la cross-entropy (default:
+                                0.1)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
   # Entrenar un modelo a partir de una carpeta de .abc con lyrics
   python3 lyrics_melody.py train --corpus ./canciones_abc/ \
-      --epochs 60 --model-out lyrics_melody.pt
+        --epochs 60 --model-out lyrics_melody.pt
 
   # Retomar entrenamiento desde un checkpoint existente
   python3 lyrics_melody.py train --corpus ./canciones_abc/ \
-      --model-out lyrics_melody.pt --resume --epochs 30
+        --model-out lyrics_melody.pt --resume --epochs 30
 
   # Generacion basica: tonalidad y perfil
   python3 lyrics_melody.py generate --model lyrics_melody.pt \
-      --lyrics letra.txt --key C --mode major --profile melancholic \
-      --tempo 96 --out melodia.mid --abc-out melodia.abc
+        --lyrics letra.txt --key C --mode major --profile melancholic \
+        --tempo 96 --out melodia.mid --abc-out melodia.abc
 
   # Generacion con escala menor y sesgo de intervalo moderado
   python3 lyrics_melody.py generate --model lyrics_melody.pt \
-      --lyrics letra.txt --key Am --mode minor --profile melancholic \
-      --interval-bias-strength 0.4 --out melodia.mid --abc-out melodia.abc
+        --lyrics letra.txt --key Am --mode minor --profile melancholic \
+        --interval-bias-strength 0.4 --out melodia.mid --abc-out melodia.abc
 
   # Generacion con modo frigio (flamenco) y sesgo fuerte
   python3 lyrics_melody.py generate --model lyrics_melody.pt \
-      --lyrics letra.txt --key E --mode phrygian --profile flamenco \
-      --interval-bias-strength 0.7 --temperature 0.9 \
-      --out melodia.mid --abc-out melodia.abc
+        --lyrics letra.txt --key E --mode phrygian --profile flamenco \
+        --interval-bias-strength 0.7 --temperature 0.9 \
+        --out melodia.mid --abc-out melodia.abc
 
   # Solo mascara de escala, sin sesgo de intervalo (0.0 = desactivado)
   python3 lyrics_melody.py generate --model lyrics_melody.pt \
-      --lyrics letra.txt --key G --mode major --profile neutral \
-      --interval-bias-strength 0.0 --out melodia.mid
+        --lyrics letra.txt --key G --mode major --profile neutral \
+        --interval-bias-strength 0.0 --out melodia.mid
 
   # Generacion sin modelo entrenado, con el motor markov de respaldo
   python3 lyrics_melody.py generate --engine markov --corpus ./canciones_abc/ \
-      --lyrics letra.txt --out melodia.mid
+        --lyrics letra.txt --out melodia.mid
 
   # Inspeccionar vocabulario, dataset y config de un modelo entrenado
   python3 lyrics_melody.py inspect --model lyrics_melody.pt
   python3 lyrics_melody.py inspect --corpus ./canciones_abc/
 
-  OPCIONES DE GENERATE
-  ---------------------
-    --lyrics FILE          Fichero de texto (una linea = un verso = una frase)
-    --out FILE             MIDI de salida
-    --abc-out FILE         ABC de salida (opcional)
-    --engine               transformer (default) | markov
-    --model FILE           Checkpoint .pt (motor transformer)
-    --corpus DIR           Carpeta .abc (motor markov)
-    --key KEY              Tonalidad: C, Am, F#, Bb... (default: C)
-    --mode MODE            Modo de escala para mascara tonal (default: major)
-    --profile PROFILE      Perfil emocional (default: neutral)
-    --interval-bias-strength S  Intensidad del sesgo de intervalo 0.0-1.0
-                                (default: 0.4; 0.0 = desactivado)
-    --tempo BPM            Tempo en BPM (default: 100)
-    --meter M/N            Compas (default: 4/4)
-    --temperature T        Temperatura de muestreo (default: 1.0)
-    --top-k K              Top-k sampling; 0 = desactivado (default: 0)
-    --notes-per-line N     Notas fijas por verso; 0 = estimar (default: 0)
-    --unit-beats F         Duracion de una unidad L: en negras (default: 0.5)
-    --seed N               Semilla aleatoria (motor markov; default: 42)
-    --n-clusters N         Clusters emocionales (motor markov; default: 6)
-    --cpu                  Forzar CPU
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  Siempre:  mido                  -> pip install mido
+            sentence-transformers -> pip install sentence-transformers
+            (instala torch como dependencia transitiva si no esta)
 
-  DEPENDENCIAS
-    Siempre:  mido                  -> pip install mido
-              sentence-transformers -> pip install sentence-transformers
-              (instala torch como dependencia transitiva si no esta)
-
-    El modelo de embeddings (paraphrase-multilingual-MiniLM-L12-v2, ~470MB)
-    se descarga automaticamente la primera vez y se cachea localmente en
-    ~/.cache/torch/sentence_transformers/. Corre comodamente en CPU
-    (decenas de ms por verso) o en una GPU pequena (p.ej. 6GB VRAM).
-    Sin conexion y sin cache previa, train/generate (motores transformer y
-    markov) no podran calcular embeddings; 'inspect --corpus' sigue
-    funcionando sin el modelo de embeddings.
-
-  NOTAS DE DISENO
-  ----------------
-  - Las notas se representan RELATIVAS a la tonica (K:) del fragmento ABC,
-    como (grado_cromatico 0-11, octava_relativa, duracion cuantizada en
-    fracciones de L:). Permite generar en cualquier tonalidad sin reentrenar.
-  - FLUIDEZ ENTRE FRASES: cada melodia (X:) se entrena/genera como UNA SOLA
-    secuencia continua. Las frases se separan con el token especial
-    <phrase>, pero la atencion causal ve todo el historial anterior, por lo
-    que la nota inicial de un verso se condiciona en la nota final del
-    verso previo. El "segment embedding" emocional cambia por posicion
-    segun a que verso pertenece, permitiendo que el contenido emocional
-    module la melodia verso a verso sin romper la continuidad musical.
-  - El acoplamiento texto-melodia se modela proyectando el embedding de
-    384 dims del modelo de sentence-embeddings a d_model y sumandolo en
-    cada posicion (segment embedding), junto a note_embed + pos_embed.
-  - Atencion relativa de posicion (truco de skewing, Music Transformer,
-    Huang et al. 2019) para capturar motivos recurrentes independientemente
-    de su posicion dentro de la secuencia.
-  - ORDEN DE APLICACION en el muestreo (v3.1):
-      logits del modelo
-        -> mascara de escala (-inf a notas fuera de tonalidad)
-        -> sesgo de intervalo (log-space, proporcional a INTERVAL_WEIGHTS)
-        -> division por temperatura
-        -> top-k (opcional)
-        -> softmax + multinomial
-        -> _smooth_octave (correccion de octava por proximidad)
-================================================================================
+  El modelo de embeddings (paraphrase-multilingual-MiniLM-L12-v2, ~470MB)
+  se descarga automaticamente la primera vez y se cachea localmente en
+  ~/.cache/torch/sentence_transformers/. Corre comodamente en CPU
+  (decenas de ms por verso) o en una GPU pequena (p.ej. 6GB VRAM).
+  Sin conexion y sin cache previa, train/generate (motores transformer y
+  markov) no podran calcular embeddings; 'inspect --corpus' sigue
+  funcionando sin el modelo de embeddings.
 """
 
 import argparse

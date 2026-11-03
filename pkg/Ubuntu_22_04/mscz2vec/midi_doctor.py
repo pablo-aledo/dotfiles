@@ -1,73 +1,117 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          MIDI DOCTOR  v1.0                                   ║
-║     Diagnóstico y reparación de MIDIs: red de seguridad del ecosistema       ║
-║                                                                              ║
-║  Las herramientas generativas pueden dejar un MIDI "casi bien": notas sin    ║
-║  cerrar, solapes de la misma altura, notas fuera del registro del            ║
-║  instrumento, compás o armadura perdidos al encadenar herramientas…          ║
-║  Esta herramienta DETECTA esos problemas, los REPARA sin destruir nada y     ║
-║  reinyecta metadatos (compás, armadura, tempo) copiándolos de un original.   ║
-║                                                                              ║
-║  SUBCOMANDOS:                                                                ║
-║    check   Diagnostica uno o varios MIDIs (ficheros, globs o carpetas)       ║
-║    fix     Repara lo reparable y guarda un MIDI nuevo (nunca pisa el origen) ║
-║    meta    Muestra, añade o copia compás / armadura / tempo                  ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python midi_doctor.py check obra.mid                                      ║
-║    python midi_doctor.py check reconstrucciones/*/obra_final.mid --json r.json║
-║    python midi_doctor.py check carpeta/ --strict          # rc=3 si hay hallazgos
-║    python midi_doctor.py fix obra.mid --output obra_ok.mid                   ║
-║    python midi_doctor.py fix obra.mid --instrument-range fold --ensure-meta  ║
-║    python midi_doctor.py meta obra.mid                    # solo mostrar     ║
-║    python midi_doctor.py meta salida.mid --copy-from original.mid -o ok.mid  ║
-║    python midi_doctor.py meta obra.mid --time-sig 6/8 --key Gm -o ok.mid     ║
-║                                                                              ║
-║  QUÉ DETECTA (código · gravedad):                                            ║
-║    E_PARSE     fichero ilegible o truncado                         error     ║
-║    E_BYTES     bytes de dato >127 (se recortan al leer)            error     ║
-║    W_STUCK     note_on que nunca se cierra                         aviso     ║
-║    W_ORPHAN    note_off sin note_on                                aviso     ║
-║    W_ZERO      nota de duración 0                                  aviso     ║
-║    W_DUP_NOTE  misma nota duplicada en el mismo tick               aviso     ║
-║    W_OVERLAP   misma altura y canal re-atacada sin cerrar          aviso     ║
-║    W_RANGE     nota fuera del registro del instrumento (GM)        aviso     ║
-║    W_MONO      acordes en un instrumento monofónico (viento/metal) aviso     ║
-║    W_NO_EOT    pista sin end_of_track                              aviso     ║
-║    W_DUP_META  meta idéntico repetido en el mismo tick             aviso     ║
-║    W_NO_TS / W_NO_KS / W_NO_TEMPO   falta compás / armadura / tempo aviso    ║
-║    W_TS_ALIGN  cambio de compás que no cae en barra de compás      aviso     ║
-║    W_EMPTY     pista sin notas ni metadatos útiles                 info      ║
-║                                                                              ║
-║  OPCIONES DE fix:                                                            ║
-║    --output FILE            Salida (default: <entrada>_fixed.mid)            ║
-║    --inplace                Sobrescribe la entrada (atómico, deja .bak)      ║
-║    --min-dur F              Duración mínima en pulsos para notas de duración 0 ║
-║                             (default: 0.0625 = 1/16 de pulso)                ║
-║    --drop-zero              Elimina las notas de duración 0 en vez de alargarlas║
-║    --instrument-range M     none (default) | fold (plega octavas al registro)║
-║                             | drop (elimina lo que cae fuera)                ║
-║    --ensure-meta            Añade compás 4/4 y tempo 120 si faltan           ║
-║    --time-sig N/D --key K --tempo BPM   Valores a usar con --ensure-meta     ║
-║                                                                              ║
-║  OPCIONES DE meta:                                                           ║
-║    --copy-from ORIG         Copia compás/armadura/tempo (con todos sus       ║
-║                             cambios) de ORIG; reescala si cambia el tpb      ║
-║    --only LISTA             Qué copiar/tocar: ts,key,tempo (default: los tres)║
-║    --time-sig N/D --key K --tempo BPM   Fija valores a mano                  ║
-║    --replace                Sustituye los existentes (por defecto NO destruye:║
-║                             solo añade lo que falta)                         ║
-║                                                                              ║
-║  CÓDIGOS DE SALIDA: 0 ok · 1 error de uso · 2 fichero ilegible ·             ║
-║                     3 hallazgos con --strict                                 ║
-║  (Los hallazgos son informativos: sin --strict `check` devuelve 0.)          ║
-║                                                                              ║
-║  API:  from midi_doctor import check_file, fix_midi, clamp_pitch             ║
-║                                                                              ║
-║  DEPENDENCIAS: mido                                                          ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+midi_doctor.py — Midi Doctor: diagnóstico y reparación de MIDIs: red de
+seguridad del ecosistema
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Las herramientas generativas pueden dejar un MIDI "casi bien": notas sin
+cerrar, solapes de la misma altura, notas fuera del registro del
+instrumento, compás o armadura perdidos al encadenar herramientas…
+Esta herramienta DETECTA esos problemas, los REPARA sin destruir nada y
+reinyecta metadatos (compás, armadura, tempo) copiándolos de un original.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  check   Diagnostica uno o varios MIDIs (ficheros, globs o carpetas)
+  fix     Repara lo reparable y guarda un MIDI nuevo (nunca pisa el origen)
+  meta    Muestra, añade o copia compás / armadura / tempo
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  check
+    midis MIDIS […]
+    --json JSON
+    --strict                    rc=3 si hay hallazgos
+    --verbose, -v
+    --no-color
+
+  fix
+    midis MIDIS […]
+    --output, -o OUTPUT
+    --inplace
+    --min-dur MIN_DUR           (defecto 0.0625)
+    --drop-zero
+    --instrument-range INSTRUMENT_RANGE
+                                (defecto none; valores: none|fold|drop)
+    --ensure-meta
+    --time-sig TIME_SIG         (defecto 4/4)
+    --key KEY
+    --tempo TEMPO               (defecto 120.0)
+    --no-color
+
+  meta
+    midi MIDI
+    --output, -o OUTPUT
+    --copy-from COPY_FROM
+    --only ONLY                 ts,key,tempo
+    --time-sig TIME_SIG
+    --key KEY
+    --tempo TEMPO
+    --replace
+    --no-color
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python midi_doctor.py check obra.mid
+    python midi_doctor.py check reconstrucciones/*/obra_final.mid --json r.json
+    python midi_doctor.py check carpeta/ --strict          # rc=3 si hay hallazgos
+    python midi_doctor.py fix obra.mid --output obra_ok.mid
+    python midi_doctor.py fix obra.mid --instrument-range fold --ensure-meta
+    python midi_doctor.py meta obra.mid                    # solo mostrar
+    python midi_doctor.py meta salida.mid --copy-from original.mid -o ok.mid
+    python midi_doctor.py meta obra.mid --time-sig 6/8 --key Gm -o ok.mid
+
+  QUÉ DETECTA (código · gravedad):
+    E_PARSE     fichero ilegible o truncado                         error
+    E_BYTES     bytes de dato >127 (se recortan al leer)            error
+    W_STUCK     note_on que nunca se cierra                         aviso
+    W_ORPHAN    note_off sin note_on                                aviso
+    W_ZERO      nota de duración 0                                  aviso
+    W_DUP_NOTE  misma nota duplicada en el mismo tick               aviso
+    W_OVERLAP   misma altura y canal re-atacada sin cerrar          aviso
+    W_RANGE     nota fuera del registro del instrumento (GM)        aviso
+    W_MONO      acordes en un instrumento monofónico (viento/metal) aviso
+    W_NO_EOT    pista sin end_of_track                              aviso
+    W_DUP_META  meta idéntico repetido en el mismo tick             aviso
+    W_NO_TS / W_NO_KS / W_NO_TEMPO   falta compás / armadura / tempo aviso
+    W_TS_ALIGN  cambio de compás que no cae en barra de compás      aviso
+    W_EMPTY     pista sin notas ni metadatos útiles                 info
+
+  OPCIONES DE fix:
+    --output FILE            Salida (default: <entrada>_fixed.mid)
+    --inplace                Sobrescribe la entrada (atómico, deja .bak)
+    --min-dur F              Duración mínima en pulsos para notas de duración 0
+                             (default: 0.0625 = 1/16 de pulso)
+    --drop-zero              Elimina las notas de duración 0 en vez de alargarlas
+    --instrument-range M     none (default) | fold (plega octavas al registro)
+                             | drop (elimina lo que cae fuera)
+    --ensure-meta            Añade compás 4/4 y tempo 120 si faltan
+    --time-sig N/D --key K --tempo BPM   Valores a usar con --ensure-meta
+
+  OPCIONES DE meta:
+    --copy-from ORIG         Copia compás/armadura/tempo (con todos sus
+                             cambios) de ORIG; reescala si cambia el tpb
+    --only LISTA             Qué copiar/tocar: ts,key,tempo (default: los tres)
+    --time-sig N/D --key K --tempo BPM   Fija valores a mano
+    --replace                Sustituye los existentes (por defecto NO destruye:
+                             solo añade lo que falta)
+
+  CÓDIGOS DE SALIDA: 0 ok · 1 error de uso · 2 fichero ilegible ·
+                     3 hallazgos con --strict
+  (Los hallazgos son informativos: sin --strict `check` devuelve 0.)
+
+  API:  from midi_doctor import check_file, fix_midi, clamp_pitch
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido
 """
 
 import argparse

@@ -1,56 +1,72 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         NARRATOR  v1.0                                       ║
-║         Diseñador de arquitectura narrativa para obras musicales             ║
-║                                                                              ║
-║  Define la estructura dramática completa de una obra ANTES de generar        ║
-║  ningún MIDI. Actúa como "director de orquesta" del pipeline:                ║
-║                                                                              ║
-║  [1] NARRATIVA — Define la historia emocional en lenguaje natural o GUI      ║
-║  [2] ESTRUCTURA — Genera forma musical (A/B/C), duraciones, cadencias        ║
-║  [3] CURVAS — Exporta curvas para tension_designer.py                        ║
-║  [4] PLAN DE PIPELINE — Genera el plan.yaml que runner.py ejecuta           ║
-║  [5] TONALIDAD — Define el mapa tonal (qué tonalidades, cuándo, cómo)       ║
-║                                                                              ║
-║  ARCOS NARRATIVOS PREDEFINIDOS:                                              ║
-║    hero       — Llamada → Prueba → Clímax → Resolución (arco de héroe)      ║
-║    tragedy    — Ascenso → Clímax → Caída abrupta                            ║
-║    romance    — Presentación → Tensión → Unión → Reafirmación               ║
-║    mystery    — Ambigüedad → Revelaciones → Crisis → Resolución              ║
-║    meditation — Plano → Ondulaciones sutiles → Retorno al reposo             ║
-║    rondo      — Tema A reiterado con episodios contrastantes                 ║
-║    sonata     — Exposición → Desarrollo → Reexposición                      ║
-║    custom     — Diseño libre sección a sección                               ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python narrator.py                        # GUI interactivo               ║
-║    python narrator.py --arc hero --bars 64   # desde arco predefinido        ║
-║    python narrator.py --arc sonata --bars 96 --key Dm --output plan.json    ║
-║    python narrator.py --load plan.json                                       ║
-║    python narrator.py --arc custom --sections "A:16,B:8,A:16,C:12,A:8"     ║
-║    python narrator.py --arc hero --bars 48 --no-gui --export-curves         ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --arc NAME      Arco narrativo (default: hero)                            ║
-║    --bars N        Compases totales de la obra (default: 64)                 ║
-║    --key KEY       Tonalidad base, p.ej. Cm, G, Bb (default: C)             ║
-║    --tempo N       Tempo base en BPM (default: 120)                          ║
-║    --sections S    Override manual de secciones "A:16,B:8,C:24"             ║
-║    --output FILE   Archivo de salida (default: obra_plan.json)               ║
-║    --export-curves Exportar JSON de curvas para tension_designer             ║
-║    --export-yaml   Exportar plan.yaml para runner.py                         ║
-║    --no-gui        Modo headless: genera plan sin GUI                        ║
-║    --load FILE     Cargar y editar un plan existente                         ║
-║    --verbose       Informe detallado de decisiones                           ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    obra_plan.json         — Plan narrativo completo                          ║
-║    obra_plan.curves.json  — Curvas para tension_designer (con --export-curves)║
-║    obra_plan.yaml         — Pipeline para runner.py (con --export-yaml)      ║
-║                                                                              ║
-║  DEPENDENCIAS: matplotlib, numpy                                             ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+narrator.py — Narrator: diseñador de arquitectura narrativa para obras
+musicales
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Define la estructura dramática completa de una obra ANTES de generar
+ningún MIDI. Actúa como "director de orquesta" del pipeline:
+
+[1] NARRATIVA — Define la historia emocional en lenguaje natural o GUI
+[2] ESTRUCTURA — Genera forma musical (A/B/C), duraciones, cadencias
+[3] CURVAS — Exporta curvas para tension_designer.py
+[4] PLAN DE PIPELINE — Genera el plan.yaml que runner.py ejecuta
+[5] TONALIDAD — Define el mapa tonal (qué tonalidades, cuándo, cómo)
+
+ARCOS NARRATIVOS PREDEFINIDOS:
+  hero       — Llamada → Prueba → Clímax → Resolución (arco de héroe)
+  tragedy    — Ascenso → Clímax → Caída abrupta
+  romance    — Presentación → Tensión → Unión → Reafirmación
+  mystery    — Ambigüedad → Revelaciones → Crisis → Resolución
+  meditation — Plano → Ondulaciones sutiles → Retorno al reposo
+  rondo      — Tema A reiterado con episodios contrastantes
+  sonata     — Exposición → Desarrollo → Reexposición
+  custom     — Diseño libre sección a sección
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  obra_plan.json         — Plan narrativo completo
+  obra_plan.curves.json  — Curvas para tension_designer (con --export-curves)
+  obra_plan.yaml         — Pipeline para runner.py (con --export-yaml)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --arc NAME      Arco narrativo (default: hero)
+  --bars N        Compases totales de la obra (default: 64)
+  --key KEY       Tonalidad base, p.ej. Cm, G, Bb (default: C)
+  --tempo N       Tempo base en BPM (default: 120)
+  --sections S    Override manual de secciones "A:16,B:8,C:24"
+  --output FILE   Archivo de salida (default: obra_plan.json)
+  --export-curves Exportar JSON de curvas para tension_designer
+  --export-yaml   Exportar plan.yaml para runner.py
+  --no-gui        Modo headless: genera plan sin GUI
+  --load FILE     Cargar y editar un plan existente
+  --verbose       Informe detallado de decisiones
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python narrator.py                        # GUI interactivo
+  python narrator.py --arc hero --bars 64   # desde arco predefinido
+  python narrator.py --arc sonata --bars 96 --key Dm --output plan.json
+  python narrator.py --load plan.json
+  python narrator.py --arc custom --sections "A:16,B:8,A:16,C:12,A:8"
+  python narrator.py --arc hero --bars 48 --no-gui --export-curves
+
+── Más modos ──
+
+  # Exportar plan.yaml para runner.py
+  python narrator.py --export-yaml
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  matplotlib, numpy
 """
 
 import sys

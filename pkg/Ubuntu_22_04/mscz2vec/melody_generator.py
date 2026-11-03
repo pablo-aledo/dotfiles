@@ -1,143 +1,164 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      MELODY GENERATOR  v1.0                                  ║
-║         Generación de melodías originales desde cero                         ║
-║                                                                              ║
-║  Construye una melodía completa ex nihilo a partir de parámetros            ║
-║  musicales o de lenguaje natural. Es el «Bloque 0» melódico del             ║
-║  pipeline: el equivalente a chord_progression_generator pero para la        ║
-║  voz principal. No necesita ningún MIDI de entrada.                          ║
-║                                                                              ║
-║  MOTORES DE GENERACIÓN (--engine):                                           ║
-║    markov     — Cadena de Markov de 2º orden (intervalo × duración).        ║
-║                 Aprende estadísticas del corpus MIDI si se proporciona      ║
-║                 (--corpus), o usa tablas estilísticas internas.             ║
-║    grammar    — Gramática generativa basada en reglas de Schenkerian:       ║
-║                 elabora progresivamente una estructura de capa profunda      ║
-║                 (arpegio tónica) añadiendo notas de paso y ornamentos.      ║
-║    search     — Búsqueda heurística A*: explora el espacio de alturas       ║
-║                 guiada por una función de coste (consonancia, contorno,     ║
-║                 tensión objetivo). Garantiza propiedades locales y globales. ║
-║    genetic    — Algoritmo genético: población de frases evaluadas por       ║
-║                 fitness multicriterio y evolucionadas por cruce/mutación.   ║
-║    hybrid     — Combina grammar (estructura) + markov (ornamentación).      ║
-║                 Produce los resultados más «musicales» por defecto.         ║
-║                                                                              ║
-║  PERFILES EMOCIONALES (--profile):                                           ║
-║    heroic      — ascenso agresivo, saltos de 5ª/8ª, forte, major           ║
-║    melancholic — descenso lento, semítonos, piano, minor/dorian             ║
-║    playful     — ritmo irregular, saltos cortos, staccato implícito         ║
-║    tense       — cromatismo, ritmo denso, disonancia controlada             ║
-║    serene      — movimiento por grados, dinámicas suaves, arcos largos      ║
-║    mysterious  — modo frigio/locrio, silencios, saltos inesperados          ║
-║    triumphant  — ritmo marcado, forte, major, clímax en el último tercio    ║
-║    custom      — usa directamente --tension-curve / --contour               ║
-║                                                                              ║
-║  PERFILES RÍTMICOS (--rhythm):                                               ║
-║    flowing     — mezcla de negras y corcheas, legato                        ║
-║    march       — pulso regular, negras dominantes, acentos en 1 y 3        ║
-║    syncopated  — desplazamientos de acento, corcheas con puntillo           ║
-║    baroque     — valores rítmicos variados, ornamentos, sin silencios       ║
-║    jazz        — swing implícito, tresillos, síncopas                       ║
-║    sparse      — notas largas (blancas/redondas), mucho espacio             ║
-║    dense       — semicorcheas y fusas, texturas rápidas                     ║
-║                                                                              ║
-║  CONTROL DEL CONTORNO (--contour):                                           ║
-║    arch        — sube al centro, baja al final (el más «natural»)           ║
-║    ascending   — tendencia ascendente continua                               ║
-║    descending  — tendencia descendente continua                              ║
-║    wave        — ondulación suave, sube y baja periódicamente               ║
-║    plateau     — plano en el centro, puntas bajas                           ║
-║    inverted    — baja al centro, sube al final                              ║
-║    erratic     — sin tendencia clara (útil para música experimental)        ║
-║    custom      — lista de valores 0-1 separados por comas                   ║
-║                                                                              ║
-║  MODOS DE ESCALA (--mode):                                                   ║
-║    major, minor, harmonic_minor, melodic_minor,                             ║
-║    dorian, phrygian, lydian, mixolydian, locrian,                           ║
-║    phrygian_dominant, whole_tone, pentatonic_major, pentatonic_minor,       ║
-║    blues, chromatic                                                          ║
-║                                                                              ║
-║  INTEGRACIONES (--from-*):                                                   ║
-║    theorist.py    → --from-theorist lee .theorist.json                      ║
-║    narrator.py    → --from-narrator lee obra_plan.json                      ║
-║    tension_designer → --curves lee .curves.json                             ║
-║    chord_progression_generator → --chords lee .chords.json / texto         ║
-║    harvester.py   → --corpus carpeta con MIDIs para entrenamiento Markov    ║
-║                                                                              ║
-║  EXPORTACIÓN:                                                                ║
-║    .mid                   — MIDI de la melodía generada                     ║
-║    .melody.json           — Partitura en JSON (notas, duraciones, offsets)  ║
-║    .fingerprint.json      — Huella compatible con stitcher.py               ║
-║    .motif.mid             — Solo el motivo semilla (primeros 2-4 compases)  ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    # Desde lenguaje natural                                                  ║
-║    python melody_generator.py "una melodía melancólica en La menor"         ║
-║                                                                              ║
-║    # Con parámetros directos                                                 ║
-║    python melody_generator.py --key Am --mode minor --bars 16               ║
-║        --engine hybrid --profile melancholic --contour arch                 ║
-║                                                                              ║
-║    # Desde plan de theorist                                                  ║
-║    python melody_generator.py --from-theorist obra.theorist.json            ║
-║                                                                              ║
-║    # Desde plan de narrator (genera melodía para cada sección)               ║
-║    python melody_generator.py --from-narrator obra_plan.json --per-section  ║
-║                                                                              ║
-║    # Con curvas de tensión explícitas                                        ║
-║    python melody_generator.py --key C --curves mis_curvas.json --bars 32    ║
-║                                                                              ║
-║    # Aprendiendo de corpus propio                                            ║
-║    python melody_generator.py --key Dm --corpus ./mis_midis/ --engine markov║
-║                                                                              ║
-║    # Generar varios candidatos y exportar el mejor                          ║
-║    python melody_generator.py --key G --candidates 5 --bars 16              ║
-║                                                                              ║
-║    # Con acordes como guía armónica                                          ║
-║    python melody_generator.py --key C --chords "C Am F G" --bars 8         ║
-║                                                                              ║
-║    # Generar motivo semilla solo (para usar en phrase_builder / harvester)  ║
-║    python melody_generator.py --key Dm --bars 4 --motif-only               ║
-║                                                                              ║
-║    # Modo interactivo: genera, escucha, acepta o regenera                   ║
-║    python melody_generator.py --key C --interactive                         ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    description        Descripción libre (entre comillas)                    ║
-║    --key KEY           Tonalidad base: C, Am, F#, Bb… (default: C)         ║
-║    --mode MODE         Modo de escala (default: major o minor según clave)  ║
-║    --bars N            Compases a generar (default: 16)                     ║
-║    --tempo BPM         Tempo en BPM (default: 120)                          ║
-║    --time-sig S        Compás: 4/4, 3/4, 6/8… (default: 4/4)              ║
-║    --engine E          Motor generativo (default: hybrid)                   ║
-║    --profile P         Perfil emocional (default: serene)                   ║
-║    --rhythm R          Perfil rítmico (default: flowing)                    ║
-║    --contour C         Forma del contorno (default: arch)                   ║
-║    --range LOW HIGH    Rango MIDI de la melodía (default: 60 84, C4-C6)    ║
-║    --candidates N      Generar N candidatos y exportar el mejor (default: 3)║
-║    --chords PROG       Acordes guía en texto: "C Am F G" o "Cm:2 G7:2"    ║
-║    --chords-json FILE  Acordes guía desde .chords.json                      ║
-║    --curves FILE       Curvas emocionales .curves.json                      ║
-║    --from-theorist F   Leer parámetros de .theorist.json                   ║
-║    --from-narrator F   Leer plan de obra_plan.json                          ║
-║    --per-section       Con --from-narrator, genera una melodía por sección  ║
-║    --corpus DIR        Carpeta con MIDIs para entrenar Markov               ║
-║    --motif-only        Exportar solo el motivo semilla (2-4 compases)       ║
-║    --export-fingerprint Exportar .fingerprint.json para stitcher.py        ║
-║    --output FILE       Fichero de salida (default: melody_out.mid)          ║
-║    --seed N            Semilla aleatoria (default: 42)                      ║
-║    --interactive       Modo interactivo: escucha, acepta o regenera         ║
-║    --listen            Reproducir al final (requiere pygame)                ║
-║    --verbose           Informe detallado de decisiones                      ║
-║    --dry-run           Mostrar parámetros sin generar MIDI                  ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:   mido, numpy                                                    ║
-║    Opcionales: music21, pygame, scipy, sklearn                               ║
-║    Pipeline:  midi_dna_unified.py en el mismo directorio                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+melody_generator.py — Melody Generator: generación de melodías originales
+desde cero
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Construye una melodía completa ex nihilo a partir de parámetros
+musicales o de lenguaje natural. Es el «Bloque 0» melódico del
+pipeline: el equivalente a chord_progression_generator pero para la
+voz principal. No necesita ningún MIDI de entrada.
+
+MOTORES DE GENERACIÓN (--engine):
+  markov     — Cadena de Markov de 2º orden (intervalo × duración).
+               Aprende estadísticas del corpus MIDI si se proporciona
+               (--corpus), o usa tablas estilísticas internas.
+  grammar    — Gramática generativa basada en reglas de Schenkerian:
+               elabora progresivamente una estructura de capa profunda
+               (arpegio tónica) añadiendo notas de paso y ornamentos.
+  search     — Búsqueda heurística A*: explora el espacio de alturas
+               guiada por una función de coste (consonancia, contorno,
+               tensión objetivo). Garantiza propiedades locales y globales.
+  genetic    — Algoritmo genético: población de frases evaluadas por
+               fitness multicriterio y evolucionadas por cruce/mutación.
+  hybrid     — Combina grammar (estructura) + markov (ornamentación).
+               Produce los resultados más «musicales» por defecto.
+
+PERFILES EMOCIONALES (--profile):
+  heroic      — ascenso agresivo, saltos de 5ª/8ª, forte, major
+  melancholic — descenso lento, semítonos, piano, minor/dorian
+  playful     — ritmo irregular, saltos cortos, staccato implícito
+  tense       — cromatismo, ritmo denso, disonancia controlada
+  serene      — movimiento por grados, dinámicas suaves, arcos largos
+  mysterious  — modo frigio/locrio, silencios, saltos inesperados
+  triumphant  — ritmo marcado, forte, major, clímax en el último tercio
+  custom      — usa --contour custom con --contour-values
+
+PERFILES RÍTMICOS (--rhythm):
+  flowing     — mezcla de negras y corcheas, legato
+  march       — pulso regular, negras dominantes, acentos en 1 y 3
+  syncopated  — desplazamientos de acento, corcheas con puntillo
+  baroque     — valores rítmicos variados, ornamentos, sin silencios
+  jazz        — swing implícito, tresillos, síncopas
+  sparse      — notas largas (blancas/redondas), mucho espacio
+  dense       — semicorcheas y fusas, texturas rápidas
+
+CONTROL DEL CONTORNO (--contour):
+  arch        — sube al centro, baja al final (el más «natural»)
+  ascending   — tendencia ascendente continua
+  descending  — tendencia descendente continua
+  wave        — ondulación suave, sube y baja periódicamente
+  plateau     — plano en el centro, puntas bajas
+  inverted    — baja al centro, sube al final
+  erratic     — sin tendencia clara (útil para música experimental)
+  custom      — lista de valores 0-1 separados por comas
+
+MODOS DE ESCALA (--mode):
+  major, minor, harmonic_minor, melodic_minor,
+  dorian, phrygian, lydian, mixolydian, locrian,
+  phrygian_dominant, whole_tone, pentatonic_major, pentatonic_minor,
+  blues, chromatic
+
+INTEGRACIONES (--from-*):
+  theorist.py    → --from-theorist lee .theorist.json
+  narrator.py    → --from-narrator lee obra_plan.json
+  tension_designer → --curves lee .curves.json
+  chord_progression_generator → --chords lee .chords.json / texto
+  harvester.py   → --corpus carpeta con MIDIs para entrenamiento Markov
+
+EXPORTACIÓN:
+  .mid                   — MIDI de la melodía generada
+  .melody.json           — Partitura en JSON (notas, duraciones, offsets)
+  .fingerprint.json      — Huella compatible con stitcher.py
+  .motif.mid             — Solo el motivo semilla (primeros 2-4 compases)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  description        Descripción libre (entre comillas)
+  --key KEY           Tonalidad base: C, Am, F#, Bb… (default: C)
+  --mode MODE         Modo de escala (default: major o minor según clave)
+  --bars N            Compases a generar (default: 16)
+  --tempo BPM         Tempo en BPM (default: 120)
+  --time-sig S        Compás: 4/4, 3/4, 6/8… (default: 4/4)
+  --engine E          Motor generativo (default: hybrid)
+  --profile P         Perfil emocional (default: serene)
+  --rhythm R          Perfil rítmico (default: flowing)
+  --contour C         Forma del contorno (default: arch)
+  --range LOW HIGH    Rango MIDI de la melodía (default: 60 84, C4-C6)
+  --candidates N      Generar N candidatos y exportar el mejor (default: 3)
+  --chords PROG       Acordes guía en texto: "C Am F G" o "Cm:2 G7:2"
+  --chords-json FILE  Acordes guía desde .chords.json
+  --curves FILE       Curvas emocionales .curves.json
+  --from-theorist F   Leer parámetros de .theorist.json
+  --from-narrator F   Leer plan de obra_plan.json
+  --per-section       Con --from-narrator, genera una melodía por sección
+  --corpus DIR        Carpeta con MIDIs para entrenar Markov
+  --motif-only        Exportar solo el motivo semilla (2-4 compases)
+  --export-fingerprint Exportar .fingerprint.json para stitcher.py
+  --output FILE       Fichero de salida (default: melody_out.mid)
+  --seed N            Semilla aleatoria (default: 42)
+  --interactive       Modo interactivo: escucha, acepta o regenera
+  --listen            Reproducir al final (requiere pygame)
+  --verbose           Informe detallado de decisiones
+  --dry-run           Mostrar parámetros sin generar MIDI
+
+── Otras opciones del parser ──
+  --contour-values CONTOUR_VALUES
+                              Valores custom para --contour custom:
+                              '0.2,0.5,0.8,0.5'
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Desde lenguaje natural
+  python melody_generator.py "una melodía melancólica en La menor"
+
+  # Con parámetros directos
+  python melody_generator.py --key Am --mode minor --bars 16 \
+      --engine hybrid --profile melancholic --contour arch
+
+  # Desde plan de theorist
+  python melody_generator.py --from-theorist obra.theorist.json
+
+  # Desde plan de narrator (genera melodía para cada sección)
+  python melody_generator.py --from-narrator obra_plan.json --per-section
+
+  # Con curvas de tensión explícitas
+  python melody_generator.py --key C --curves mis_curvas.json --bars 32
+
+  # Aprendiendo de corpus propio
+  python melody_generator.py --key Dm --corpus ./mis_midis/ --engine markov
+
+  # Generar varios candidatos y exportar el mejor
+  python melody_generator.py --key G --candidates 5 --bars 16
+
+  # Con acordes como guía armónica
+  python melody_generator.py --key C --chords "C Am F G" --bars 8
+
+  # Generar motivo semilla solo (para usar en phrase_builder / harvester)
+  python melody_generator.py --key Dm --bars 4 --motif-only
+
+  # Modo interactivo: genera, escucha, acepta o regenera
+  python melody_generator.py --key C --interactive
+
+── Más modos ──
+
+  # Exportar .fingerprint.json para stitcher.py
+  python melody_generator.py --export-fingerprint
+
+  # Mostrar parámetros sin generar MIDI
+  python melody_generator.py --dry-run
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  Siempre:   mido, numpy
+  Opcionales: music21, pygame, scipy, sklearn
+  Pipeline:  midi_dna_unified.py en el mismo directorio
 """
 
 import sys

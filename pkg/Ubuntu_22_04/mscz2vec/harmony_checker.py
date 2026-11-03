@@ -1,44 +1,52 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      HARMONY CHECKER  v1.0                                  ║
-║        Corrector de conducción de voces a cuatro voces (SATB)               ║
-║                                                                              ║
-║  voice_leader GENERA el voicing SATB correcto; esta herramienta hace lo      ║
-║  contrario: toma TU intento de armonización a cuatro voces y marca los       ║
-║  errores con explicación pedagógica, como un profesor corrigiendo deberes   ║
-║  de armonía. No reescribe nada: señala y explica.                            ║
-║                                                                              ║
-║  ENTRADA:                                                                    ║
-║    · 4 pistas (Soprano/Alto/Tenor/Bajo, se ordenan por altura), o           ║
-║    · 1 pista con acordes de 4 notas por tiempo (se separan las voces)       ║
-║                                                                              ║
-║  ERRORES DETECTADOS:                                                         ║
-║    5ª/8ª paralelas   — dos voces se mueven en paralelo a 5ª justa u 8ª      ║
-║    5ª/8ª directas    — llegada a 5ª/8ª por movimiento directo en extremos    ║
-║    cruce de voces    — una voz inferior sube por encima de la superior      ║
-║    solapamiento      — una voz invade el registro que dejó su vecina        ║
-║    espaciado         — hueco > 8ª entre voces superiores adyacentes         ║
-║    sensible sin resolver — la sensible en el bajo/soprano no sube a tónica  ║
-║    salto excesivo    — salto melódico > 6ª en una voz (aviso)               ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python harmony_checker.py coral.mid                                       ║
-║    python harmony_checker.py coral.mid --key Cmaj                           ║
-║    python harmony_checker.py coral.mid --grid 1 --json errores.json         ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi              MIDI SATB de entrada                                    ║
-║    --key KEY         Tonalidad para comprobar la sensible (p.ej. Cmaj, Am)  ║
-║    --grid BEATS      Rejilla de agrupación de acordes en tiempos (default:1)║
-║    --json FILE       Escribe un sidecar JSON con la lista de errores         ║
-║    --no-color        Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from harmony_checker import check_harmony                                 ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+harmony_checker.py — Harmony Checker: corrector de conducción de voces a
+cuatro voces (SATB)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+voice_leader GENERA el voicing SATB correcto; esta herramienta hace lo
+contrario: toma TU intento de armonización a cuatro voces y marca los
+errores con explicación pedagógica, como un profesor corrigiendo deberes
+de armonía. No reescribe nada: señala y explica.
+
+ERRORES DETECTADOS:
+  5ª/8ª paralelas   — dos voces se mueven en paralelo a 5ª justa u 8ª
+  5ª/8ª directas    — llegada a 5ª/8ª por movimiento directo en extremos
+  cruce de voces    — una voz inferior sube por encima de la superior
+  solapamiento      — una voz invade el registro que dejó su vecina
+  espaciado         — hueco > 8ª entre voces superiores adyacentes
+  sensible sin resolver — la sensible en el bajo/soprano no sube a tónica
+  salto excesivo    — salto melódico > 6ª en una voz (aviso)
+
+COMO MÓDULO:
+  from harmony_checker import check_harmony
+
+DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  · 4 pistas (Soprano/Alto/Tenor/Bajo, se ordenan por altura), o
+  · 1 pista con acordes de 4 notas por tiempo (se separan las voces)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi              MIDI SATB de entrada
+  --key KEY         Tonalidad para comprobar la sensible (p.ej. Cmaj, Am)
+  --grid BEATS      Rejilla de agrupación de acordes en tiempos (default:1)
+  --json FILE       Escribe un sidecar JSON con la lista de errores
+  --no-color        Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python harmony_checker.py coral.mid
+  python harmony_checker.py coral.mid --key Cmaj
+  python harmony_checker.py coral.mid --grid 1 --json errores.json
 """
 
 import sys

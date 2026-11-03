@@ -1,70 +1,95 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      COMBINED SIMPLIFIER  v1.1  (autocontenido)              ║
-║                                                                              ║
-║  PROPOSITO:                                                                 ║
-║   Simplifica una partitura de piano en formato MIDI a distintos niveles de  ║
-║   dificultad pedagogica (--target-grade 1..8, de principiante a virtuoso),  ║
-║   reduciendo el numero de notas y la complejidad de la textura mientras se  ║
-║   preserva en la medida de lo posible la identidad armonica y melodica de   ║
-║   la obra original. Para cada grado pedido genera un fichero .mid nuevo con ║
-║   la version simplificada.                                                  ║
-║                                                                              ║
-║  TECNICAS:                                                                  ║
-║   1. Analisis estructural (motor principal): separa la textura en voces de ║
-║      melodia y bajo (skyline), detecta la armonia por compas, clasifica    ║
-║      cada nota segun su funcion tonal (tono del acorde, nota de paso, nota ║
-║      de bordado, apoyatura, suspension, anticipacion, escapada...) y le    ║
-║      asigna un peso estructural. A partir de ese peso calcula un "suelo"   ║
-║      de notas protegidas mediante reduccion schenkeriana progresiva (nunca ║
-║      se eliminan) y aplica despues un algoritmo greedy que va retirando,   ║
-║      compas a compas, las notas menos importantes hasta alcanzar el grado  ║
-║      de dificultad pedido (medido con una formula de 5 factores: velocidad ║
-║      de notas por segundo, extension de la mano, polifonia simultanea,     ║
-║      saltos melodicos e independencia entre manos).                        ║
-║   2. Rejilla de respaldo (mecanismo de garantia): en piezas muy densas en   ║
-║      acordes en bloque, el suelo estructural puede impedir que el greedy   ║
-║      llegue al grado pedido. Cuando esto ocurre, se aplica una segunda     ║
-║      tecnica independiente: cuantizar los onsets a una rejilla temporal    ║
-║      cada vez mas gruesa y limitar la polifonia a un numero maximo de      ║
-║      voces por mano (agudo-primero en la mano derecha, grave-primero en la ║
-║      izquierda), estirando las notas resultantes en legato. Las notas      ║
-║      protegidas por el suelo estructural nunca entran en esta rejilla; la  ║
-║      nota que sobrevive en cada casilla se elige segun el peso estructural ║
-║      ya calculado en el paso 1. Esta rejilla se aplica de forma progresiva ║
-║      (peldaño a peldaño, cada uno partiendo del resultado del anterior)    ║
-║      solo hasta que se alcanza el grado pedido, para minimizar cuanto se   ║
-║      aleja el resultado de la pieza original.                              ║
-║   3. Transformaciones sin eliminacion (nuevo en v2.0): ademas de retirar   ║
-║      notas, se aplican tecnicas que SUSTITUYEN, REDISTRIBUYEN o incluso    ║
-║      AÑADEN notas -- armonicas (sustituir extensiones por el tono de       ║
-║      acorde mas cercano, clarificar el bajo), melodicas (resolver          ║
-║      adornos breves, reducir saltos grandes por reubicacion de octava),    ║
-║      de registro (cerrar voicings abiertos), de textura (arpegiar         ║
-║      bloques de acorde densos, colapsar dobles de octava), ritmicas       ║
-║      (cuantizado suave sin recorte de polifonia) y aditivas controladas   ║
-║      (rellenar huecos grandes dejados por una reduccion agresiva con una  ║
-║      nota de paso/apoyo). Las armonicas/melodicas se aplican como pre-    ║
-║      pasada uniforme antes del greedy; las de registro/textura/ritmica    ║
-║      forman una escalera intermedia entre el greedy estructural y la      ║
-║      rejilla de respaldo; las aditivas son una pasada de acabado final.   ║
-║      Desactivable con --no-transforms / --no-additive.                    ║
-║                                                                              ║
-║  USO:                                                                       ║
-║    python combined_simplifier.py obra.mid --target-grade 1 3 5 7           ║
-║    python combined_simplifier.py obra.mid --target-grade 2 --outdir out/   ║
-║    python combined_simplifier.py obra.mid --target-grade 4 --split 60      ║
-║        (--split: pitch MIDI que separa mano derecha/izquierda, def. 60=C4) ║
-║                                                                              ║
-║  SALIDA: por cada --target-grade se genera <nombre>_grade<N>.mid en        ║
-║  --outdir (o junto al fichero de entrada) y un informe por consola con el  ║
-║  grado realmente alcanzado, el metodo usado ("estructural" o               ║
-║  "estructural+rejilla") y el porcentaje de notas conservadas.              ║
-║                                                                              ║
-║  DEPENDENCIAS: solo numpy (stdlib para todo lo demas). Es un unico fichero  ║
-║  sin dependencias externas al proyecto.                                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+combined_simplifier_transformed_2.py — Simplificador de piano por grados con
+transformaciones sin eliminación (MIDI → MIDI, autocontenido)
+(versión 2.0: motor estructural + rejilla + capa de sustitución/redistribución).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Reduce un MIDI de piano a un grado de dificultad pedido (--target-grade 1..8,
+de principiante a virtuoso) preservando la identidad armónica y melódica. Para
+cada grado genera un .mid nuevo. Combina tres técnicas:
+
+  1. Análisis estructural (motor principal). Separa melodía y bajo (skyline),
+     detecta la armonía por compás, clasifica cada nota por su función tonal y
+     le da un peso estructural. Con él calcula un «suelo» de notas protegidas
+     por reducción schenkeriana progresiva y aplica un greedy que retira, compás
+     a compás, las notas menos importantes hasta alcanzar el grado (medido con
+     una fórmula de 5 factores: notas por segundo, extensión de la mano,
+     polifonía simultánea, saltos melódicos e independencia entre manos).
+
+  2. Rejilla de respaldo (garantía). Si el suelo impide llegar al grado en
+     piezas densas en acordes en bloque, se cuantizan los onsets a una rejilla
+     cada vez más gruesa y se limita la polifonía por mano, peldaño a peldaño y
+     solo hasta alcanzar el grado. Las notas del suelo nunca entran en ella.
+
+  3. Transformaciones sin eliminación (novedad de v2.0). Técnicas que
+     SUSTITUYEN, REDISTRIBUYEN o incluso AÑADEN notas: armónicas (extensión →
+     tono de acorde más cercano; clarificar el bajo), melódicas (resolver
+     adornos breves; reducir saltos grandes por reubicación de octava), de
+     registro (cerrar voicings abiertos), de textura (arpegiar bloques densos;
+     colapsar dobles de octava), rítmicas (cuantizado suave sin recortar
+     polifonía) y aditivas controladas (rellenar huecos grandes tras una
+     reducción agresiva con una nota de paso/apoyo). Las armónicas/melódicas
+     son una pre-pasada uniforme antes del greedy; las de registro/textura/
+     ritmo forman una escalera entre el greedy y la rejilla; las aditivas son
+     una pasada final de acabado.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  Completo (defecto)    Estructural + transformaciones + rejilla de respaldo.
+  --no-transforms       Desactiva las técnicas de sustitución/redistribución y
+                        vuelve al comportamiento v1.1 (suelo + greedy + rejilla).
+  --no-additive         Mantiene las transformaciones pero sin la pasada final
+                        que añade notas de paso/apoyo (nunca se añaden notas).
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Entrada : un MIDI de piano (posicional).
+  Salida  : <nombre>_grade<N>.mid por cada --target-grade, en --outdir (o junto
+            al MIDI), e informe por consola con el grado alcanzado, el método
+            usado y el porcentaje de notas conservadas.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+    midi                       Fichero MIDI de entrada (posicional).
+    --target-grade N [N …]     Uno o más grados objetivo (obligatorio).
+    --floor-level L            Suelo estructural: 'ursatz' (defecto) o índice de
+                               nivel de reducción (véase combined_simplifier.py).
+    --split PITCH              Pitch MIDI que separa las manos (defecto 60 = C4).
+    --outdir DIR               Carpeta de salida (defecto: la del MIDI).
+    --no-transforms            Desactiva sustituciones/redistribuciones.
+    --no-additive              Desactiva la pasada final de notas añadidas.
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Varios grados con todas las técnicas:
+  python combined_simplifier_transformed_2.py obra.mid --target-grade 1 3 5 7
+
+  # Un grado, carpeta de salida y punto de corte entre manos:
+  python combined_simplifier_transformed_2.py obra.mid --target-grade 4 --split 60 --outdir out/
+
+  # Transformaciones sin añadir ninguna nota:
+  python combined_simplifier_transformed_2.py obra.mid --target-grade 3 --no-additive
+
+  # Solo motor estructural + rejilla (comportamiento v1.1):
+  python combined_simplifier_transformed_2.py obra.mid --target-grade 2 --no-transforms
+
+  # Suelo estructural intermedio en vez del Ursatz:
+  python combined_simplifier_transformed_2.py obra.mid --target-grade 5 --floor-level 1
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias y relación con otras versiones
+────────────────────────────────────────────────────────────────────────────
+Solo numpy; fichero único y autocontenido (no importa combined_simplifier.py).
+Véase también: combined_simplifier.py (motor base y escalera schenkeriana),
+combined_simplifier_transformed.py (v1.2, optimizador por modos) y
+combined_simplifier_hybrid*.py (fusión con optimizador adaptativo).
 """
 
 # ══════════════════════════════════════════════════════════════════════════════

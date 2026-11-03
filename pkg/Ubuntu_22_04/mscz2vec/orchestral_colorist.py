@@ -1,51 +1,66 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     ORCHESTRAL COLORIST  v1.0                                ║
-║              Color tímbrico emocional para obras MIDI                       ║
-║                                                                              ║
-║  orchestrator asigna instrumentos de forma mecánica/idiomática; esta        ║
-║  herramienta lo hace por SEMÁNTICA EMOCIONAL: cada emoción define una       ║
-║  paleta (instrumento por rol, registro diana y rango dinámico) extraída     ║
-║  de la práctica orquestal — melancolía → violonchelo en registro medio,     ║
-║  fragilidad → flauta sola pp con arpa, angustia → registros extremos y      ║
-║  trémolo de cuerda, triunfo → metales ff...                                 ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] ROLES      — detección por pista: melodía / bajo / armonía /           ║
-║                   contrapunto / percusión (canal 10)                         ║
-║  [2] PALETA     — instrumento GM + registro + dinámica según --emotion      ║
-║  [3] APLICACIÓN — program change, transposición de octavas hacia el         ║
-║                   registro diana DENTRO del rango físico (catálogo de       ║
-║                   playability_auditor) y reescalado de velocidades          ║
-║  [4] INFORME    — tabla de asignaciones + escritura                          ║
-║                                                                              ║
-║  EMOCIONES: melancolia · calidez · fragilidad · angustia · esperanza        ║
-║             serenidad · tension · triunfo                                    ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python orchestral_colorist.py obra.mid --emotion melancolia              ║
-║    python orchestral_colorist.py obra.mid --emotion triunfo --output t.mid  ║
-║    python orchestral_colorist.py obra.mid --emotion angustia --keep 0       ║
-║    python orchestral_colorist.py --list-emotions                            ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi               MIDI de entrada                                        ║
-║    --emotion E        Emoción diana (obligatoria salvo --list-emotions)     ║
-║    --output FILE      MIDI de salida (default: <obra>_<emocion>.mid)        ║
-║    --keep N...        Pistas a no tocar (índices)                            ║
-║    --no-register      No transponer hacia el registro diana                  ║
-║    --no-dynamics      No reescalar velocidades                               ║
-║    --report           Solo informe de roles y paleta, sin escribir MIDI      ║
-║    --list-emotions    Catálogo de paletas y salir                            ║
-║    --no-color         Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from orchestral_colorist import colorize_midi, EMOTION_PALETTES          ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio,             ║
-║                E/S MIDI + catálogo de rangos)                                ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+orchestral_colorist.py — Orchestral Colorist: color tímbrico emocional para
+obras MIDI
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+orchestrator asigna instrumentos de forma mecánica/idiomática; esta
+herramienta lo hace por SEMÁNTICA EMOCIONAL: cada emoción define una
+paleta (instrumento por rol, registro diana y rango dinámico) extraída
+de la práctica orquestal — melancolía → violonchelo en registro medio,
+fragilidad → flauta sola pp con arpa, angustia → registros extremos y
+trémolo de cuerda, triunfo → metales ff...
+
+FLUJO:
+[1] ROLES      — detección por pista: melodía / bajo / armonía /
+                 contrapunto / percusión (canal 10)
+[2] PALETA     — instrumento GM + registro + dinámica según --emotion
+[3] APLICACIÓN — program change, transposición de octavas hacia el
+                 registro diana DENTRO del rango físico (catálogo de
+                 playability_auditor) y reescalado de velocidades
+[4] INFORME    — tabla de asignaciones + escritura
+
+EMOCIONES: melancolia · calidez · fragilidad · angustia · esperanza
+           serenidad · tension · triunfo
+
+COMO MÓDULO:
+  from orchestral_colorist import colorize_midi, EMOTION_PALETTES
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi               MIDI de entrada
+  --emotion E        Emoción diana (obligatoria salvo --list-emotions)
+  --output FILE      MIDI de salida (default: <obra>_<emocion>.mid)
+  --keep N...        Pistas a no tocar (índices)
+  --no-register      No transponer hacia el registro diana
+  --no-dynamics      No reescalar velocidades
+  --report           SOLO informe de roles y paleta: no escribe MIDI (si se da
+                     también --output se ignora y se avisa por stderr)
+  --list-emotions    Catálogo de paletas y salir
+  --no-color         Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python orchestral_colorist.py obra.mid --emotion melancolia
+  python orchestral_colorist.py obra.mid --emotion triunfo --output t.mid
+  python orchestral_colorist.py obra.mid --emotion angustia --keep 0
+  python orchestral_colorist.py --list-emotions
+
+── Más modos ──
+
+  # --report
+  python orchestral_colorist.py --report
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  numpy · playability_auditor.py (mismo directorio,
+                E/S MIDI + catálogo de rangos)
 """
 
 import sys

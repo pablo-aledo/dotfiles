@@ -1,76 +1,91 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         ANALYZER  v1.1                                       ║
-║         Análisis comparativo y de trayectoria entre MIDIs                   ║
-║                                                                              ║
-║  Responde preguntas del tipo:                                                ║
-║    • ¿En qué dimensiones se parecen A y B?                                  ║
-║    • ¿Qué tiene A que no tenga B?                                           ║
-║    • ¿Cuáles son los 5 MIDIs de mi colección más cercanos a este?           ║
-║    • ¿Cómo se agrupan estos MIDIs entre sí?                                 ║
-║    • ¿Cómo evoluciona esta obra a lo largo de sus secciones?  [NUEVO]       ║
-║    • ¿Cuál es el camino vectorial de A a B?                   [NUEVO]       ║
-║                                                                              ║
-║  MODOS:                                                                      ║
-║    compare    — Compara dos MIDIs dimensión a dimensión                      ║
-║    nearest    — Busca los N más cercanos a un MIDI en una colección         ║
-║    diff       — Qué tiene A que no tenga B (perfil de diferencias)          ║
-║    matrix     — Matriz de similitud entre todos los MIDIs dados             ║
-║    profile    — Perfil vectorial de un MIDI individual                      ║
-║    trajectory — Evolución interna de un MIDI en ventanas temporales [NUEVO] ║
-║    path       — Camino vectorial entre dos MIDIs (o una secuencia)  [NUEVO] ║
-║                                                                              ║
-║  NIVELES DE VECTORIZACIÓN:                                                   ║
-║    fast    — Sólo mido: notas, velocidades, densidad (sin dependencias)     ║
-║    full    — mscz2vec completo: 17 dimensiones musicales (requiere music21) ║
-║    auto    — full si music21 disponible, fast si no (default)               ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python analyzer.py compare A.mid B.mid                                   ║
-║    python analyzer.py compare A.mid B.mid --dimensions melodic harmonic     ║
-║    python analyzer.py nearest query.mid coleccion/*.mid                     ║
-║    python analyzer.py nearest query.mid coleccion/*.mid --top 5             ║
-║    python analyzer.py diff A.mid B.mid                                      ║
-║    python analyzer.py diff A.mid B.mid --threshold 0.2                      ║
-║    python analyzer.py matrix A.mid B.mid C.mid D.mid                        ║
-║    python analyzer.py matrix coleccion/*.mid --plot                         ║
-║    python analyzer.py profile obra.mid                                       ║
-║    python analyzer.py nearest query.mid *.mid --use-cache cache.json       ║
-║    python analyzer.py trajectory obra.mid                                    ║
-║    python analyzer.py trajectory obra.mid --windows 8 --plot                ║
-║    python analyzer.py trajectory obra.mid --highlight pitch_mean density    ║
-║    python analyzer.py path A.mid B.mid                                      ║
-║    python analyzer.py path A.mid B.mid --steps 5 --plot                     ║
-║    python analyzer.py path A.mid B.mid C.mid D.mid                          ║
-║                                                                              ║
-║  OPCIONES GLOBALES:                                                          ║
-║    --level      fast | full | auto   (default: auto)                        ║
-║    --dimensions Dimensiones a analizar (default: según nivel)               ║
-║    --output     Guardar resultado en JSON                                    ║
-║    --plot       Visualización matplotlib (heatmap / radar / scatter)        ║
-║    --no-color   Sin colores ANSI en la salida                               ║
-║    --verbose    Informe detallado                                            ║
-║                                                                              ║
-║  OPCIONES POR MODO:                                                          ║
-║    compare:    --no-radar                                                    ║
-║    nearest:    --top N (default: 5) · --metric euclidean|cosine|manhattan   ║
-║    diff:       --threshold F (default: 0.15) · --show-similar               ║
-║    matrix:     --sort · --plot                                               ║
-║    trajectory: --windows N (default: 8) · --highlight dim1 dim2...         ║
-║                --boundary silence|beat|equal (default: equal)               ║
-║    path:       --steps N (default: 4) · --collection *.mid                  ║
-║                (si se pasa colección, muestra los vecinos reales de la ruta)║
-║                                                                              ║
-║  CACHÉ:                                                                      ║
-║    --save-cache FILE   Guardar vectores calculados en JSON                  ║
-║    --use-cache FILE    Cargar vectores previos (evita recalcular)           ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:   mido, numpy                                                    ║
-║    --level full: mscz2vec.py en el mismo directorio + music21               ║
-║    --plot:   matplotlib                                                      ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+analyzer.py — Analyzer: análisis comparativo y de trayectoria entre MIDIs
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Responde preguntas del tipo:
+  • ¿En qué dimensiones se parecen A y B?
+  • ¿Qué tiene A que no tenga B?
+  • ¿Cuáles son los 5 MIDIs de mi colección más cercanos a este?
+  • ¿Cómo se agrupan estos MIDIs entre sí?
+  • ¿Cómo evoluciona esta obra a lo largo de sus secciones?  [NUEVO]
+  • ¿Cuál es el camino vectorial de A a B?                   [NUEVO]
+
+NIVELES DE VECTORIZACIÓN:
+  fast    — Sólo mido: notas, velocidades, densidad (sin dependencias)
+  full    — mscz2vec completo: 17 dimensiones musicales (requiere music21)
+  auto    — full si music21 disponible, fast si no (default)
+
+CACHÉ:
+  --save-cache FILE   Guardar vectores calculados en JSON
+  --use-cache FILE    Cargar vectores previos (evita recalcular)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  compare    — Compara dos MIDIs dimensión a dimensión
+  nearest    — Busca los N más cercanos a un MIDI en una colección
+  diff       — Qué tiene A que no tenga B (perfil de diferencias)
+  matrix     — Matriz de similitud entre todos los MIDIs dados
+  profile    — Perfil vectorial de un MIDI individual
+  trajectory — Evolución interna de un MIDI en ventanas temporales [NUEVO]
+  path       — Camino vectorial entre dos MIDIs (o una secuencia)  [NUEVO]
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES GLOBALES:
+  --level      fast | full | auto   (default: auto)
+  --dimensions Dimensiones a analizar (default: según nivel)
+  --output     Guardar resultado en JSON
+  --plot       Visualización matplotlib (heatmap / radar / scatter)
+  --no-color   Sin colores ANSI en la salida
+  --verbose    Informe detallado
+
+── OPCIONES POR MODO ──
+  compare:    --no-radar
+  nearest:    --top N (default: 5) · --metric euclidean|cosine|manhattan
+  diff:       --threshold F (default: 0.15) · --show-similar
+  matrix:     --sort · --plot
+  trajectory: --windows N (default: 8) · --highlight dim1 dim2...
+              --boundary silence|beat|equal (default: equal)
+  path:       --steps N (default: 4) · --collection *.mid
+              (si se pasa colección, muestra los vecinos reales de la ruta)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python analyzer.py compare A.mid B.mid
+  python analyzer.py compare A.mid B.mid --dimensions melodic harmonic
+  python analyzer.py nearest query.mid coleccion/*.mid
+  python analyzer.py nearest query.mid coleccion/*.mid --top 5
+  python analyzer.py diff A.mid B.mid
+  python analyzer.py diff A.mid B.mid --threshold 0.2
+  python analyzer.py matrix A.mid B.mid C.mid D.mid
+  python analyzer.py matrix coleccion/*.mid --plot
+  python analyzer.py profile obra.mid
+  python analyzer.py nearest query.mid *.mid --use-cache cache.json
+  python analyzer.py trajectory obra.mid
+  python analyzer.py trajectory obra.mid --windows 8 --plot
+  python analyzer.py trajectory obra.mid --highlight pitch_mean density
+  python analyzer.py path A.mid B.mid
+  python analyzer.py path A.mid B.mid --steps 5 --plot
+  python analyzer.py path A.mid B.mid C.mid D.mid
+
+── Más modos ──
+
+  # Mostrar también dimensiones similares
+  python analyzer.py diff entrada.mid entrada.mid --show-similar
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  Siempre:   mido, numpy
+  --level full: mscz2vec.py en el mismo directorio + music21
+  --plot:   matplotlib
 """
 
 import sys

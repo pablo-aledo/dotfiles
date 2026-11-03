@@ -1,45 +1,90 @@
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         ARC SUPERVISOR  v1.0                                 ║
-║         Supervisor de arco emocional para obras MIDI multi-sección           ║
-║                                                                              ║
-║  Dado un conjunto de secciones MIDI ya generadas y un plan emocional         ║
-║  opcional, mide si el arco emocional real coincide con el planificado,       ║
-║  diagnostica los problemas y sugiere valores concretos para corregirlos.     ║
-║                                                                              ║
-║  DIMENSIONES ANALIZADAS:                                                     ║
-║    tension   — tensión armónica (intervalos disonantes)                      ║
-║    activity  — densidad rítmica (notas/beat × velocity)                      ║
-║    register  — registro melódico (pitch medio ponderado)                     ║
-║    harmony   — complejidad armónica (pitch-classes distintos + cromatismo)   ║
-║    contrast  — meta-métrica: distancia entre secciones consecutivas          ║
-║                                                                              ║
-║  MODOS DE ENTRADA DE MIDIS:                                                  ║
-║    Modo A — secciones separadas:                                             ║
-║      python arc_supervisor.py sec_A.mid sec_B.mid sec_C.mid                 ║
-║    Modo B — MIDI único con cortes:                                           ║
-║      python arc_supervisor.py obra.mid --sections 8 8 8 8                   ║
-║                                                                              ║
-║  PLAN EMOCIONAL (combinables):                                               ║
-║    --curves FILE       JSON de tension_designer (.curves.json)               ║
-║    --arc TEXT          palabras por sección: "calma tension climax"          ║
-║    --tension TEXT      shorthand numérico: "0.2,0.6,0.95,0.3"               ║
-║    --climax-arc SPEC   clave=valor: meseta + salto abrupto (no lineal),      ║
-║                        p.ej. "climax_position=0.85,sharpness=10"            ║
-║    --lexicon FILE      léxico emocional propio (.json)                       ║
-║                                                                              ║
-║  UMBRALES:                                                                   ║
-║    --contrast-min F    contraste mínimo entre secciones (default: 0.25)     ║
-║    --contrast-max F    contraste máximo tolerable       (default: 0.80)     ║
-║    --jump-threshold F  salto abrupto en una dimensión   (default: 0.60)     ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    --report FILE       guardar diagnóstico en JSON                           ║
-║    --plot              visualizar arco real vs esperado (matplotlib)         ║
-║    --verbose           detalle por dimensión y por compás                   ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy                                                   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+arc_supervisor.py — Arc Supervisor: supervisor de arco emocional para obras
+MIDI multi-sección
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un conjunto de secciones MIDI ya generadas y un plan emocional
+opcional, mide si el arco emocional real coincide con el planificado,
+diagnostica los problemas y sugiere valores concretos para corregirlos.
+
+DIMENSIONES ANALIZADAS:
+  tension   — tensión armónica (intervalos disonantes)
+  activity  — densidad rítmica (notas/beat × velocity)
+  register  — registro melódico (pitch medio ponderado)
+  harmony   — complejidad armónica (pitch-classes distintos + cromatismo)
+  contrast  — meta-métrica: distancia entre secciones consecutivas
+
+UMBRALES:
+  --contrast-min F    contraste mínimo entre secciones (default: 0.25)
+  --contrast-max F    contraste máximo tolerable       (default: 0.80)
+  --jump-threshold F  salto abrupto en una dimensión   (default: 0.60)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+MODOS DE ENTRADA DE MIDIS:
+    Modo A — secciones separadas:
+      python arc_supervisor.py sec_A.mid sec_B.mid sec_C.mid
+    Modo B — MIDI único con cortes:
+      python arc_supervisor.py obra.mid --sections 8 8 8 8
+
+  PLAN EMOCIONAL (combinables):
+    --curves FILE       JSON de tension_designer (.curves.json)
+    --arc TEXT          palabras por sección: "calma tension climax"
+    --tension TEXT      shorthand numérico: "0.2,0.6,0.95,0.3"
+    --climax-arc SPEC   clave=valor: meseta + salto abrupto (no lineal),
+                        p.ej. "climax_position=0.85,sharpness=10"
+    --lexicon FILE      léxico emocional propio (.json)
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  --report FILE       guardar diagnóstico en JSON
+  --plot              visualizar arco real vs esperado (matplotlib)
+  --verbose           detalle por dimensión y por compás
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  inputs INPUTS […]           MIDIs de sección (uno por sección) o un único
+                              MIDI con --sections
+  --sections N […]            Compases por sección (solo con un único MIDI de
+                              entrada)
+  --curves CURVES             JSON de tension_designer (.curves.json)
+  --arc ARC                   Palabras por sección: "calma tension climax
+                              resolucion"
+  --tension TENSION           Shorthand numérico para tensión:
+                              "0.2,0.6,0.95,0.3"
+  --climax-arc SPEC           Arco de clímax explosivo (meseta + salto
+                              abrupto, no lineal) sobre
+                              tension/activity/register/harmony. Parámetros
+                              clave=valor separados por comas:
+                              climax_position, sharpness, plateau_level,
+                              peak_level, release_position, release_sharpness,
+                              register_weight, harmony_weight. Ej:
+                              "climax_position=0.85,sharpness=10,plateau_level=0.2,peak_level=0.95"
+  --lexicon LEXICON           Léxico emocional propio (.json)
+  --contrast-min CONTRAST_MIN
+                              Contraste mínimo entre secciones (default: 0.25)
+  --contrast-max CONTRAST_MAX
+                              Contraste máximo tolerable (default: 0.80)
+  --jump-threshold JUMP_THRESHOLD
+                              Umbral de salto abrupto en una dimensión
+                              (default: 0.60)
+  --report REPORT             Guardar diagnóstico en JSON
+  --plot                      Visualizar arco real vs esperado (requiere
+                              matplotlib)
+  --verbose                   Detalle por dimensión
+  --strict                    rc=3 si alguna sección incumple el arco (sin
+                              --strict, los hallazgos no son un fallo: rc=0)
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy
 """
 
 import sys

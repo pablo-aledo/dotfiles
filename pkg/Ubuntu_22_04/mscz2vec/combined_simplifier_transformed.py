@@ -1,26 +1,94 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                COMBINED SIMPLIFIER TRANSFORMED v1.2                         ║
-║                                                                              ║
-║  Extensión del programa original combined_simplifier.py.                    ║
-║                                                                              ║
-║  Añade una capa de transformaciones musicales que no se limita a eliminar   ║
-║  notas:                                                                      ║
-║   - fusión de notas repetidas                                                 ║
-║   - cuantización rítmica suave                                                ║
-║   - alineación de manos para reducir independencia                            ║
-║   - reducción de extensión de acordes                                         ║
-║   - reducción de saltos                                                       ║
-║   - arpegiado de acordes densos                                               ║
-║   - simplificación de acordes                                                 ║
-║   - adición opcional de notas de paso                                         ║
-║                                                                              ║
-║  Uso:                                                                        ║
-║    python combined_simplifier_transformed.py obra.mid --target-grade 1 3 5  ║
-║    python combined_simplifier_transformed.py obra.mid --target-grade 2      ║
-║           --transform-mode rewrite --allow-added-notes                      ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+combined_simplifier_transformed.py — Simplificador de piano por grados con capa
+de transformaciones musicales (MIDI → MIDI)
+(versión 1.2: extensión de combined_simplifier.py).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Parte del motor estructural de combined_simplifier.py (suelo schenkeriano +
+greedy por compás; se importa de él, así que ambos ficheros deben estar en la
+misma carpeta) y le añade una capa de transformaciones que no se limita a
+eliminar notas. Para cada --target-grade se toma el resultado estructural y se
+aplican transformaciones en pasadas sucesivas, aceptando solo una que reduzca
+estrictamente el grado global medido (prueba-y-acepta-si-mejora; hasta
+--max-transform-passes pasadas o hasta que ninguna mejore). Si aun así no se
+alcanza el grado, se recurre a la rejilla de respaldo de combined_simplifier.py.
+
+Transformaciones disponibles:
+  - fusión de notas repetidas
+  - cuantización rítmica suave
+  - alineación de manos (menos independencia entre ellas)
+  - reducción de la extensión de los acordes
+  - reducción de saltos
+  - arpegiado de acordes densos
+  - simplificación de acordes (recorte de voces)
+  - adición opcional de notas de paso
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso (--transform-mode)
+────────────────────────────────────────────────────────────────────────────
+  off           Sin transformaciones: equivale al motor estructural puro
+                (método "estructural", más rejilla si hace falta).
+  conservative  Solo fusión de repetidas, cuantización suave y alineación de
+                manos.
+  balanced      (defecto) conservative + reducción de extensión (≤ 14
+                semitonos), reducción de saltos (≤ 9) y arpegiado de acordes
+                densos (bloques de 2 notas si el grado ≤ 2, de 3 si mayor).
+  rewrite       balanced + simplificación de acordes (1 voz si el grado ≤ 1,
+                2 si mayor) + cuantización más gruesa + notas de paso (el modo
+                implica --allow-added-notes).
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Entrada : un MIDI de piano (posicional).
+  Salida  : <nombre>_grade<N>.mid por cada --target-grade en --outdir (o junto
+            al MIDI) e informe por consola con el grado alcanzado y el método
+            (p. ej. "estructural+transformaciones(balanced)", con
+            "+rejilla" si hubo que recurrir a ella).
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+    midi                       Fichero MIDI de entrada (posicional).
+    --target-grade N [N …]     Uno o más grados objetivo (obligatorio).
+    --floor-level L            Nivel del suelo estructural: 'ursatz' (defecto) o
+                               un índice entero (véase combined_simplifier.py).
+    --split PITCH              Pitch MIDI que separa las manos (defecto 60).
+    --outdir DIR               Carpeta de salida (defecto: la del MIDI).
+    --transform-mode M         off | conservative | balanced (defecto) | rewrite.
+    --allow-added-notes        Permite transformaciones que añaden notas de paso
+                               (en rewrite ya vienen incluidas).
+    --max-transform-passes N   Máximo de pasadas de transformaciones (defecto 8).
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Tres grados con el modo por defecto (balanced):
+  python combined_simplifier_transformed.py obra.mid --target-grade 1 3 5
+
+  # Reescritura completa (incluye notas de paso añadidas):
+  python combined_simplifier_transformed.py obra.mid --target-grade 2 \
+      --transform-mode rewrite --allow-added-notes
+
+  # Transformaciones prudentes, solo ritmo y manos:
+  python combined_simplifier_transformed.py obra.mid --target-grade 4 --transform-mode conservative
+
+  # Sin transformaciones (comparar con el motor estructural puro):
+  python combined_simplifier_transformed.py obra.mid --target-grade 4 --transform-mode off
+
+  # Balanced con notas de paso, más pasadas y carpeta de salida:
+  python combined_simplifier_transformed.py obra.mid --target-grade 3 \
+      --allow-added-notes --max-transform-passes 12 --outdir out/ --split 60
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias y relación con otras versiones
+────────────────────────────────────────────────────────────────────────────
+numpy y combined_simplifier.py (importado). Las versiones autocontenidas que
+integran estas ideas son combined_simplifier_transformed_2.py (v2.0) y
+combined_simplifier_hybrid.py / combined_simplifier_hybrid_v2.py.
 """
 
 import sys

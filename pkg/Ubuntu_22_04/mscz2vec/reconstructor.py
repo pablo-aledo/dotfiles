@@ -1,152 +1,292 @@
 #!/usr/bin/env python3
 r"""
-╔════════════════════════════════════════════════════════════════════════════╗
-║                            RECONSTRUCTOR  v2.0                             ║
-║     De un MIDI a su reconstrucción: análisis, plan, ejecución y receta     ║
-║                                                                            ║
-║ Fusiona en una sola herramienta autocontenida tres versiones previas:      ║
-║   reconstruct.py       RECOMPONE una pieza (analiza, captura, regenera,    ║
-║                        critica) y procesa catálogos por lotes.             ║
-║   reconstruct_fiel.py  CONSERVA el material: variantes fieles, métricas de ║
-║                        retención y bucle de selección por calidad.         ║
-║   reconstructor_2.py   plan explícito (plan.json), ejecutor con caché y    ║
-║                        reanudación, gate de melodía y subcomandos.         ║
-║                                                                            ║
-║ Analiza el original, construye el pipeline de herramientas del ecosistema  ║
-║ mutopia, lo ejecuta, elige la mejor versión y deja una receta .sh          ║
-║ reproducible y un informe .md. Es un único fichero: solo necesita `mido` y ║
-║ las herramientas mutopia; midi_doctor (saneado/metadatos) y fidelity_meter ║
-║ (fidelidad) tienen sustituto interno si no están.                          ║
-║                                                                            ║
-║ DOS FILOSOFÍAS (--mode):                                                   ║
-║   faithful   CONSERVA el material: parte del original y solo aplica        ║
-║              transformaciones que lo respetan (performer, reharmonizer,    ║
-║              piano_expander). Genera hasta 3 variantes y elige la de mayor ║
-║              calidad que conserve la melodía (gate de fidelidad).          ║
-║   recompose  RECOMPONE: captura el ADN (tonalidad, compás, progresión,     ║
-║              motivo, clímax) y regenera bajo, acompañamiento y melodía.    ║
-║              Es una pieza nueva sembrada por la antigua (melodía ≈ 25 %).  ║
-║   both       Ejecuta las dos (obra_fiel.mid y obra_final.mid).             ║
-║                                                                            ║
-║ SUBCOMANDOS:                                                               ║
-║   analyze   Muestra el ADN del original (tonalidad, compás, voces, motivo…)║
-║   plan      Escribe el plan (plan.json; --yaml para runner.py) sin ejecutar║
-║   run       Plan + ejecución + selección + receta.sh + RECONSTRUCCION.md   ║
-║   batch     `run` sobre varios MIDIs, una carpeta o un catálogo JSON       ║
-║   choose    Elige entre candidatos: gate de melodía y, luego, calidad      ║
-║   compare   Compara recomposición vs variantes fieles (COMPARACION.md)     ║
-║   report    Regenera el informe .md de una carpeta ya ejecutada            ║
-║                                                                            ║
-║ USO:                                                                       ║
-║   python reconstructor.py analyze original.mid                             ║
-║   python reconstructor.py plan original.mid --mode faithful --out-dir rec/ ║
-║   python reconstructor.py run original.mid --out-dir rec/                  ║
-║   python reconstructor.py run original.mid --mode both --out-dir rec/      ║
-║   python reconstructor.py run original.mid --dry-run      # solo receta    ║
-║   python reconstructor.py run original.mid --out-dir rec/ --resume         ║
-║   python reconstructor.py run original.mid --mode recompose \              ║
-║       --harmony captured --melody-source captured --critique full          ║
-║   python reconstructor.py run original.mid --meta-engine builtin \         ║
-║       --fidelity-engine builtin --clean none    # sin midi_doctor ni meter ║
-║   python reconstructor.py batch midis/ --out-dir recs/ --mode both         ║
-║   python reconstructor.py batch --catalog seleccion.json \                 ║
-║       --midis-dir midis/ --out-dir reconstrucciones/ --start 1 --limit 5 \ ║
-║       --style-source catalog                                               ║
-║   python reconstructor.py batch --catalog seleccion.json --id 003 --force  ║
-║   python reconstructor.py choose original.mid \                            ║
-║       --candidates a.mid b.mid c.mid --min-melody 0.8 --output mejor.mid   ║
-║   python reconstructor.py compare recs/                                    ║
-║   python reconstructor.py report rec/                                      ║
-║                                                                            ║
-║ DECISIONES DE DISEÑO SELECCIONABLES (la 1.ª opción es la predeterminada):  ║
-║   --clean auto|doctor|none                                                 ║
-║       Saneado del original con midi_doctor, o copia literal.               ║
-║   --meta-engine auto|doctor|builtin                                        ║
-║       Quién reinyecta compás/armadura/tempo: midi_doctor o código interno. ║
-║   --meta-policy copy|flatten                                               ║
-║       copy conserva las modulaciones del original; flatten deja una sola   ║
-║       armadura y compás (el comportamiento de fix_meta.py).                ║
-║   --fidelity-engine auto|meter|builtin                                     ║
-║       fidelity_meter.py o métricas internas (alturas, onsets, chroma y     ║
-║       bigramas del skyline).                                               ║
-║   --select quality|fidelity                                                ║
-║       Criterio entre las variantes que pasan el gate: quality_scorer o     ║
-║       la puntuación de fidelidad.                                          ║
-║   --harmony tonicized|captured|generated                                   ║
-║       Base armónica preferida del modo recompose; las otras, de reserva.   ║
-║   --melody-source motif|guided|captured                                    ║
-║       Melodía del modo recompose: sembrada con el motivo real, guiada por  ║
-║       acordes, o la melodía capturada por el HMM.                          ║
-║   --bars-from ticks|metric                                                 ║
-║       Nº de compases: por duración del MIDI o con metric_analyzer.py.      ║
-║   --style-source programs|catalog                                          ║
-║       Estilo de performer y bajo: según los programas GM o según la        ║
-║       familia del catálogo (program_family, solo en batch --catalog).      ║
-║   --critique basic|full                                                    ║
-║       Critica mínima, o la suite completa (armonía, métrica, melodía,      ║
-║       tocabilidad, arco y comparación vectorial).                          ║
-║   --recipe-paths absolute|relative                                         ║
-║       Rutas de receta.sh: absolutas o relativas a su carpeta.              ║
-║   --report-style compact|full                                              ║
-║       Informe breve o informe pedagógico completo.                         ║
-║                                                                            ║
-║ OPCIONES DE plan / run / batch:                                            ║
-║   --mode M             faithful (default) | recompose | both               ║
-║   --out-dir DIR        Carpeta de salida (default: <original>_rec)         ║
-║   --tools DIR          Carpeta con las herramientas mutopia (default: junto║
-║                        a este script o el directorio actual)               ║
-║   --variants LISTA     faithful: base,rehar,orq (default: las tres)        ║
-║   --min-melody F       Umbral de melodía del gate de selección (0.8)       ║
-║   --tol F              Tolerancia temporal de fidelidad, en pulsos (0.25)  ║
-║   --no-original-candidate                                                  ║
-║                        faithful: el original saneado no compite en la      ║
-║                        selección (por defecto sí, y garantiza resultado)   ║
-║   --emotion E          recompose: emoción del colorista (default: deducida)║
-║   --seed N             Semilla base de los generadores (default: 5)        ║
-║   --tonic-density F    recompose: densidad de dominantes secundarias (0.15)║
-║   --bars N             Fuerza el número de compases                        ║
-║   --pattern P          recompose: auto | alberti | arpeggio-up | block     ║
-║   --perf-style S       recompose: auto | clasico | romantico | mecanico    ║
-║   --bass-style S       recompose: auto | classical | pedal                 ║
-║   --skip LISTA         Etapas a omitir: climax,tempo,color,critique        ║
-║   --yaml FILE          (plan) además escribe el plan en formato runner.py  ║
-║                                                                            ║
-║ OPCIONES DE run / batch:                                                   ║
-║   --plan FILE          Ejecutar un plan.json ya generado (y editado)       ║
-║   --dry-run            No ejecuta: escribe plan, receta.sh e informe       ║
-║   --resume             Salta los pasos cuya salida ya existe               ║
-║   --force              Borra la carpeta de trabajo y empieza de cero       ║
-║   --timeout S          Timeout por paso (default 300)                      ║
-║   --strict             Aborta al primer paso obligatorio que falle         ║
-║                                                                            ║
-║ OPCIONES DE batch:                                                         ║
-║   ENTRADAS             MIDIs, carpetas o patrones glob (o --catalog)       ║
-║   --catalog FILE       Catálogo JSON [{id, file, path?, program_family?}]  ║
-║   --midis-dir DIR      Carpeta de los MIDIs del catálogo                   ║
-║   --id ID              Procesa solo la pieza con ese id                    ║
-║   --start N --limit N  Rango (1-based) de piezas a procesar                ║
-║                                                                            ║
-║ OPCIONES DE choose:                                                        ║
-║   --candidates M...    MIDIs candidatos (los que no existan se ignoran)    ║
-║   --output FILE        MIDI ganador                                        ║
-║   --no-quality         Atajo de --select fidelity (sin quality_scorer)     ║
-║   --report FILE        JSON con la puntuación de todos los candidatos      ║
-║                                                                            ║
-║ SALIDAS (en --out-dir; en batch, una subcarpeta NNN_slug por pieza):       ║
-║   obra_fiel.mid / obra_final.mid   resultado por modo                      ║
-║   plan.json · receta.sh · RECONSTRUCCION.md · run_log.json                 ║
-║   work/                            intermedios, logs y JSON de métricas    ║
-║   batch_log.json · COMPARACION.md  (batch / compare)                       ║
-║                                                                            ║
-║ GARANTÍA: en modo faithful siempre hay resultado: si todo falla se entrega ║
-║ el original saneado y se avisa.                                            ║
-║                                                                            ║
-║ CÓDIGOS DE SALIDA: 0 ok · 1 error de uso/entorno · 2 sin resultado ·       ║
-║                    3 resultado por debajo del gate de melodía              ║
-║                                                                            ║
-║ DEPENDENCIAS: mido · herramientas mutopia (performer, reharmonizer,        ║
-║ piano_expander, quality_scorer… según el modo)                             ║
-╚════════════════════════════════════════════════════════════════════════════╝
+reconstructor.py — Reconstructor: de un MIDI a su reconstrucción: análisis,
+plan, ejecución y receta
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Fusiona en una sola herramienta autocontenida tres versiones previas:
+  reconstruct.py       RECOMPONE una pieza (analiza, captura, regenera,
+                       critica) y procesa catálogos por lotes.
+  reconstruct_fiel.py  CONSERVA el material: variantes fieles, métricas de
+                       retención y bucle de selección por calidad.
+  reconstructor_2.py   plan explícito (plan.json), ejecutor con caché y
+                       reanudación, gate de melodía y subcomandos.
+
+Analiza el original, construye el pipeline de herramientas del ecosistema
+mutopia, lo ejecuta, elige la mejor versión y deja una receta .sh
+reproducible y un informe .md. Es un único fichero: solo necesita `mido` y
+las herramientas mutopia; midi_doctor (saneado/metadatos) y fidelity_meter
+(fidelidad) tienen sustituto interno si no están.
+
+DOS FILOSOFÍAS (--mode):
+  faithful   CONSERVA el material: parte del original y solo aplica
+             transformaciones que lo respetan (performer, reharmonizer,
+             piano_expander). Genera hasta 3 variantes y elige la de mayor
+             calidad que conserve la melodía (gate de fidelidad).
+  recompose  RECOMPONE: captura el ADN (tonalidad, compás, progresión,
+             motivo, clímax) y regenera bajo, acompañamiento y melodía.
+             Es una pieza nueva sembrada por la antigua (melodía ≈ 25 %).
+  both       Ejecuta las dos (obra_fiel.mid y obra_final.mid).
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  analyze   Muestra el ADN del original (tonalidad, compás, voces, motivo…)
+  plan      Escribe el plan (plan.json; --yaml para runner.py) sin ejecutar
+  run       Plan + ejecución + selección + receta.sh + RECONSTRUCCION.md
+  batch     `run` sobre varios MIDIs, una carpeta o un catálogo JSON
+  choose    Elige entre candidatos: gate de melodía y, luego, calidad
+  compare   Compara recomposición vs variantes fieles (COMPARACION.md)
+  report    Regenera el informe .md de una carpeta ya ejecutada
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  analyze
+    original ORIGINAL
+    --json JSON
+    --tools TOOLS
+    --bars BARS
+    --bars-from BARS_FROM       (defecto ticks; valores: ticks|metric)
+    --no-color
+
+  plan
+    original ORIGINAL
+    --yaml YAML
+
+  run
+    original ORIGINAL
+
+  batch
+    inputs INPUTS […]           MIDIs, carpetas o patrones glob
+    --catalog CATALOG           JSON […]
+    --midis-dir MIDIS_DIR
+    --id ID
+    --start START               (defecto 1)
+    --limit LIMIT
+
+  choose
+    original ORIGINAL
+    --candidates CANDIDATES […]
+                                (obligatorio)
+    --output, -o OUTPUT         (obligatorio)
+    --min-melody MIN_MELODY     (defecto 0.8)
+    --tol TOL                   (defecto 0.25)
+    --tools TOOLS
+    --fidelity-engine FIDELITY_ENGINE
+                                (defecto auto; valores: auto|meter|builtin)
+    --select SELECT             (defecto quality; valores: quality|fidelity)
+    --no-quality                atajo de --select fidelity
+    --report REPORT
+    --no-color
+
+  compare
+    dir DIR
+    --no-color
+
+  report
+    dir DIR
+    --report-style REPORT_STYLE
+                                (valores: compact|full)
+    --no-color
+
+  _first
+    --files FILES […]           (defecto [])
+    --glob GLOB
+    -o, --output OUTPUT         (obligatorio)
+
+  _track0
+    file FILE
+
+  _chan0
+    file FILE
+
+  _count
+    files FILES […]
+
+  _quarter
+    file FILE
+    default DEFAULT
+
+  _meta
+    src SRC
+    --copy-from COPY_FROM       (obligatorio)
+    -o, --output OUTPUT         (obligatorio)
+    --only ONLY                 (defecto ts,key,tempo)
+    --policy POLICY             (defecto copy; valores: copy|flatten)
+    --time-sig TIME_SIG
+    --key KEY
+
+  _fidelity
+    original ORIGINAL
+    candidate CANDIDATE
+    --tol TOL                   (defecto 0.25)
+    --json JSON
+
+  (común)
+    --mode MODE                 (defecto faithful; valores:
+                                faithful|recompose|both)
+    --out-dir OUT_DIR
+    --tools TOOLS
+    --min-melody MIN_MELODY     (defecto 0.8)
+    --tol TOL                   (defecto 0.25)
+    --seed SEED                 (defecto 5)
+    --skip SKIP                 etapas a omitir: … (defecto )
+    --no-color
+    --variants VARIANTS         (defecto base,rehar,orq)
+    --no-original-candidate
+    --emotion EMOTION
+    --tonic-density TONIC_DENSITY
+                                (defecto 0.15)
+    --pattern PATTERN           auto | alberti | arpeggio-up | block (defecto
+                                auto)
+    --perf-style PERF_STYLE     auto | clasico | romantico | mecanico (defecto
+                                auto)
+    --bass-style BASS_STYLE     auto | classical | pedal (defecto auto)
+    --bars BARS
+    --clean CLEAN               (defecto auto; valores: auto|doctor|none)
+    --meta-engine META_ENGINE   (defecto auto; valores: auto|doctor|builtin)
+    --meta-policy META_POLICY   (defecto copy; valores: copy|flatten)
+    --fidelity-engine FIDELITY_ENGINE
+                                (defecto auto; valores: auto|meter|builtin)
+    --select SELECT             (defecto quality; valores: quality|fidelity)
+    --harmony HARMONY           (defecto tonicized; valores:
+                                tonicized|captured|generated)
+    --melody-source MELODY_SOURCE
+                                (defecto motif; valores:
+                                motif|guided|captured)
+    --bars-from BARS_FROM       (defecto ticks; valores: ticks|metric)
+    --style-source STYLE_SOURCE
+                                (defecto programs; valores: programs|catalog)
+    --critique CRITIQUE         (defecto basic; valores: basic|full)
+    --recipe-paths RECIPE_PATHS
+                                (defecto absolute; valores: absolute|relative)
+    --report-style REPORT_STYLE
+                                (defecto compact; valores: compact|full)
+    --plan PLAN
+    --dry-run
+    --resume
+    --force
+    --timeout TIMEOUT           (defecto 300)
+    --strict
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python reconstructor.py analyze original.mid
+    python reconstructor.py plan original.mid --mode faithful --out-dir rec/
+    python reconstructor.py run original.mid --out-dir rec/
+    python reconstructor.py run original.mid --mode both --out-dir rec/
+    python reconstructor.py run original.mid --dry-run      # solo receta
+    python reconstructor.py run original.mid --out-dir rec/ --resume
+    python reconstructor.py run original.mid --mode recompose \
+        --harmony captured --melody-source captured --critique full
+    python reconstructor.py run original.mid --meta-engine builtin \
+        --fidelity-engine builtin --clean none    # sin midi_doctor ni meter
+    python reconstructor.py batch midis/ --out-dir recs/ --mode both
+    python reconstructor.py batch --catalog seleccion.json \
+        --midis-dir midis/ --out-dir reconstrucciones/ --start 1 --limit 5 \
+        --style-source catalog
+    python reconstructor.py batch --catalog seleccion.json --id 003 --force
+    python reconstructor.py choose original.mid \
+        --candidates a.mid b.mid c.mid --min-melody 0.8 --output mejor.mid
+    python reconstructor.py compare recs/
+    python reconstructor.py report rec/
+
+  DECISIONES DE DISEÑO SELECCIONABLES (la 1.ª opción es la predeterminada):
+    --clean auto|doctor|none
+        Saneado del original con midi_doctor, o copia literal.
+    --meta-engine auto|doctor|builtin
+        Quién reinyecta compás/armadura/tempo: midi_doctor o código interno.
+    --meta-policy copy|flatten
+        copy conserva las modulaciones del original; flatten deja una sola
+        armadura y compás (el comportamiento de fix_meta.py).
+    --fidelity-engine auto|meter|builtin
+        fidelity_meter.py o métricas internas (alturas, onsets, chroma y
+        bigramas del skyline).
+    --select quality|fidelity
+        Criterio entre las variantes que pasan el gate: quality_scorer o
+        la puntuación de fidelidad.
+    --harmony tonicized|captured|generated
+        Base armónica preferida del modo recompose; las otras, de reserva.
+    --melody-source motif|guided|captured
+        Melodía del modo recompose: sembrada con el motivo real, guiada por
+        acordes, o la melodía capturada por el HMM.
+    --bars-from ticks|metric
+        Nº de compases: por duración del MIDI o con metric_analyzer.py.
+    --style-source programs|catalog
+        Estilo de performer y bajo: según los programas GM o según la
+        familia del catálogo (program_family, solo en batch --catalog).
+    --critique basic|full
+        Critica mínima, o la suite completa (armonía, métrica, melodía,
+        tocabilidad, arco y comparación vectorial).
+    --recipe-paths absolute|relative
+        Rutas de receta.sh: absolutas o relativas a su carpeta.
+    --report-style compact|full
+        Informe breve o informe pedagógico completo.
+
+  OPCIONES DE plan / run / batch:
+    --mode M             faithful (default) | recompose | both
+    --out-dir DIR        Carpeta de salida (default: <original>_rec)
+    --tools DIR          Carpeta con las herramientas mutopia (default: junto
+                         a este script o el directorio actual)
+    --variants LISTA     faithful: base,rehar,orq (default: las tres)
+    --min-melody F       Umbral de melodía del gate de selección (0.8)
+    --tol F              Tolerancia temporal de fidelidad, en pulsos (0.25)
+    --no-original-candidate
+                         faithful: el original saneado no compite en la
+                         selección (por defecto sí, y garantiza resultado)
+    --emotion E          recompose: emoción del colorista (default: deducida)
+    --seed N             Semilla base de los generadores (default: 5)
+    --tonic-density F    recompose: densidad de dominantes secundarias (0.15)
+    --bars N             Fuerza el número de compases
+    --pattern P          recompose: auto | alberti | arpeggio-up | block
+    --perf-style S       recompose: auto | clasico | romantico | mecanico
+    --bass-style S       recompose: auto | classical | pedal
+    --skip LISTA         Etapas a omitir: climax,tempo,color,critique
+    --yaml FILE          (plan) además escribe el plan en formato runner.py
+
+  OPCIONES DE run / batch:
+    --plan FILE          Ejecutar un plan.json ya generado (y editado)
+    --dry-run            No ejecuta: escribe plan, receta.sh e informe
+    --resume             Salta los pasos cuya salida ya existe
+    --force              Borra la carpeta de trabajo y empieza de cero
+    --timeout S          Timeout por paso (default 300)
+    --strict             Aborta al primer paso obligatorio que falle
+
+  OPCIONES DE batch:
+    ENTRADAS             MIDIs, carpetas o patrones glob (o --catalog)
+    --catalog FILE       Catálogo JSON [{id, file, path?, program_family?}]
+    --midis-dir DIR      Carpeta de los MIDIs del catálogo
+    --id ID              Procesa solo la pieza con ese id
+    --start N --limit N  Rango (1-based) de piezas a procesar
+
+  OPCIONES DE choose:
+    --candidates M...    MIDIs candidatos (los que no existan se ignoran)
+    --output FILE        MIDI ganador
+    --no-quality         Atajo de --select fidelity (sin quality_scorer)
+    --report FILE        JSON con la puntuación de todos los candidatos
+
+  SALIDAS (en --out-dir; en batch, una subcarpeta NNN_slug por pieza):
+    obra_fiel.mid / obra_final.mid   resultado por modo
+    plan.json · receta.sh · RECONSTRUCCION.md · run_log.json
+    work/                            intermedios, logs y JSON de métricas
+    batch_log.json · COMPARACION.md  (batch / compare)
+
+  GARANTÍA: en modo faithful siempre hay resultado: si todo falla se entrega
+  el original saneado y se avisa.
+
+  CÓDIGOS DE SALIDA: 0 ok · 1 error de uso/entorno · 2 sin resultado ·
+                     3 resultado por debajo del gate de melodía
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido · herramientas mutopia (performer, reharmonizer,
+  piano_expander, quality_scorer… según el modo)
 """
 
 

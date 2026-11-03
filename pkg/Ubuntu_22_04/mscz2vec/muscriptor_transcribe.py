@@ -4,10 +4,12 @@
 # ║  Transcripción polifónica multi-instrumento: audio → MIDI / JSON      ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 """
-muscriptor_transcribe.py — transcripción de audio a MIDI/eventos con un
-transformer decoder-only (arquitectura y pesos: MuScriptor, Kyutai x Mirelo,
-CC BY-NC 4.0 — https://github.com/kyutai-labs/muscriptor).
+muscriptor_transcribe.py — Transcripción de audio a MIDI/eventos con Muscriptor
+(Kyutai; pesos CC BY-NC 4.0, https://github.com/kyutai-labs/muscriptor).
 
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
 Toma una grabación (wav/mp3/flac/…) y decodifica un stream de tokens estilo
 MT3 en notas por instrumento, chunk a chunk, con soporte de streaming
 (tie-prologue entre chunks) y detección opcional de tempo/compás para
@@ -17,17 +19,7 @@ Requiere autenticarse una vez en HuggingFace para descargar los pesos:
     uvx hf auth login
     (o) export HF_TOKEN=hf_...
 
-USO
----
-    muscriptor_transcribe.py transcribe audio.wav
-    muscriptor_transcribe.py transcribe audio.wav -f json -o eventos.json
-    muscriptor_transcribe.py transcribe audio.wav -f jsonl -o - > eventos.jsonl
-    muscriptor_transcribe.py transcribe audio.wav -m large -d cuda
-    muscriptor_transcribe.py transcribe audio.wav --instruments "piano,cello"
-    muscriptor_transcribe.py list-instruments
-
-MODELOS
--------
+MODELOS:
     small   103M params · 14 capas · dim 768   — el más rápido en CPU
     medium  307M params · 24 capas · dim 1024  — por defecto
     large   1.4B params · 48 capas · dim 1536  — el más preciso, pide GPU
@@ -37,6 +29,75 @@ El repo original de MuScriptor añade además exportación a partitura vía
 MuseScore y un servidor FastAPI + web con piano roll en vivo; ambos se
 dejaron fuera aquí a propósito por no encajar con el estilo mutopia (un
 único fichero, CLI simple, sin servidor).
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  transcribe        Transcribe an audio file to MIDI/JSON/JSONL
+  list-instruments  List instrument group names accepted by --instruments
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  transcribe
+    audio_file AUDIO_FILE       Input audio file (wav, mp3, flac, …)
+    -o, --output OUTPUT         Output path ('-' for stdout, all progress goes
+                                to stderr). Default: <audio_file>.<ext>
+                                matching --format.
+    -f, --format FORMAT         midi (default): quantized MIDI file. json: one
+                                array of events. jsonl: one event per line,
+                                streamed live.
+    --notes                     Print decoded events to stderr
+    --sampling                  Temperature sampling instead of greedy
+                                decoding
+    -t, --temperature TEMPERATURE
+                                Sampling temperature (only with --sampling)
+                                (defecto 1.0)
+    --cfg-coef CFG_COEF         Classifier-free guidance coefficient (defecto
+                                1.0)
+    -m, --model MODEL           Model size ('small', 'medium', 'large';
+                                default: medium), a local safetensors path, or
+                                an hf:// / http(s):// URL
+    -d, --device DEVICE         'auto', 'cpu', 'cuda', 'cuda:0', 'mps', …
+                                (defecto auto)
+    --dtype DTYPE               Transformer dtype: 'float32', 'float16' or
+                                'bfloat16'. Default: float16 on MPS, float32
+                                elsewhere.
+    -b, --batch-size BATCH_SIZE
+                                Chunks generated per forward pass (default: 1;
+                                with --no-prelude-forcing: 4 on GPU, 1 on
+                                CPU). Values > 1 lower quality at chunk
+                                boundaries and require --no-prelude-forcing.
+    --strict-eos                Raise an error if a chunk fails to emit EOS
+                                within budget (default: downgrade to a
+                                warning)
+    --beam-size BEAM_SIZE       Beam search width (1 = greedy/sampling, ≥2
+                                enables beam search) (defecto 1)
+    --prelude-forcing           Teacher-force each chunk's tie prologue
+                                (default: on, needs --batch-size 1)
+    --no-prelude-forcing
+    --instruments INSTRUMENTS   Comma-separated expected instrument group
+                                names (unambiguous abbreviations accepted,
+                                e.g. 'timp,cello,dist'). Run '… list-
+                                instruments' for the full list.
+    --detect-tempo DETECT_TEMPO
+                                Detect tempo/time-signature and write them
+                                into the MIDI. 'true' fails if no steady tempo
+                                is found, 'best-effort' warns and falls back
+                                to a placeholder 120 BPM, 'false' skips
+                                detection. (defecto best-effort; valores:
+                                true|false|best-effort)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  ---
+      muscriptor_transcribe.py transcribe audio.wav
+      muscriptor_transcribe.py transcribe audio.wav -f json -o eventos.json
+      muscriptor_transcribe.py transcribe audio.wav -f jsonl -o - > eventos.jsonl
+      muscriptor_transcribe.py transcribe audio.wav -m large -d cuda
+      muscriptor_transcribe.py transcribe audio.wav --instruments "piano,cello"
+      muscriptor_transcribe.py list-instruments
 """
 
 import argparse

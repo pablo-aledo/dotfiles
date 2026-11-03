@@ -1,110 +1,132 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       COUNTERPOINT  v1.1                                     ║
-║         Motor de contrapunto por especies para MIDIs melódicos               ║
-║                                                                              ║
-║  Dado un MIDI de melodía, genera una segunda voz (contrapunto) aplicando     ║
-║  las reglas clásicas de contrapunto por especies de Fux/Gradus ad Parnassum. ║
-║  Funciona como herramienta standalone y como módulo importable por           ║
-║  variation_engine (V15), orchestrator y el propio pipeline.                  ║
-║                                                                              ║
-║  MODO STRICT (CSP)  —  novedad v1.1                                          ║
-║  Por defecto las reglas de Fux son PENALIZACIONES BLANDAS: el motor elige    ║
-║  el candidato «menos malo» y puede emitir paralelas de 5ª/8ª si ninguno es   ║
-║  limpio. Con --strict se convierten en RESTRICCIONES DURAS: nunca se emite   ║
-║  un contrapunto que las viole; si no existe solución, se lanza               ║
-║  CounterpointStrictError con diagnóstico y NO se genera el MIDI.             ║
-║                                                                              ║
-║  Especie 1:  CSP por backtracking con H1–H6 GARANTIZADAS                     ║
-║    [H1] solo consonancias en cada momento                                    ║
-║    [H2] sin paralelas de 5ª justa u 8ª entre instantes consecutivos          ║
-║    [H3] sin movimiento directo a consonancia perfecta (5ª/8ª)                ║
-║    [H4] sin cruce de voces (respeta voice_position)                          ║
-║    [H5] sin repetir el mismo intervalo armónico 3 veces seguidas             ║
-║    [H6] cadencia: la sensible del cp resuelve ASCENDIENDO a la tónica        ║
-║    [P1] preferencia: clímax del cp en el 50–85 % de la frase (se relaja)     ║
-║  Especies 2–5:  greedy + validación del ESQUELETO de tiempos fuertes         ║
-║    (H1 en downbeats de S2/S3; H2/H3 entre downbeats; H4 en todo instante)    ║
-║    Si el esqueleto rompe reglas duras, la especie se descarta con aviso.     ║
-║                                                                              ║
-║  ESPECIES IMPLEMENTADAS (generación):                                        ║
-║  [S1] Primera especie  — nota contra nota (1:1)                              ║
-║  [S2] Segunda especie  — dos notas por nota cantus firmus (2:1)              ║
-║  [S3] Tercera especie  — cuatro notas por nota cantus firmus (4:1)           ║
-║  [S4] Cuarta especie   — ligaduras y retardos (sincopado)                    ║
-║  [S5] Quinta especie   — contrapunto florido (mezcla de las anteriores)      ║
-║                                                                              ║
-║  MODOS DE VOZ:                                                               ║
-║    above / below / auto   (posición relativa a la melodía)                   ║
-║  VOCES: soprano, alto, tenor, bass, violin, viola, cello                     ║
-║                                                                              ║
-║  USO STANDALONE — ejemplos:                                                  ║
-║    # Especie 1 con CSP estricto (garantiza H1–H6):                           ║
-║    python counterpoint.py melodia.mid --species 1 --strict                   ║
-║    python counterpoint.py melodia.mid --species 1 --strict --voice viola     ║
-║    python counterpoint.py melodia.mid --species 1 --strict \                 ║
-║        --voice-position above --key Dm --verbose                             ║
-║                                                                              ║
-║    # Especie 2 con validación de esqueleto en strict:                        ║
-║    python counterpoint.py melodia.mid --species 2 --strict                   ║
-║                                                                              ║
-║    # Las 5 especies en strict; las que rompan reglas se descartan:           ║
-║    python counterpoint.py melodia.mid --all-species --strict --key C         ║
-║                                                                              ║
-║    # Sin strict (penalizaciones blandas, siempre emite salida):              ║
-║    python counterpoint.py melodia.mid --species 5 --tension-curve            ║
-║        "0:0.2, 8:0.8, 16:0.3"                                                ║
-║    python counterpoint.py melodia.mid --verbose --output cp_out.mid          ║
-║    python counterpoint.py melodia.mid --all-species --listen                 ║
-║                                                                              ║
-║  USO COMO MÓDULO:                                                            ║
-║    from counterpoint import (generate_counterpoint_voice,                    ║
-║                              load_melody_midi, CounterpointStrictError)      ║
-║                                                                              ║
-║    notes = load_melody_midi("melodia.mid")                                   ║
-║    try:                                                                      ║
-║        cp = generate_counterpoint_voice(                                     ║
-║            melody_notes=notes, key="C major", species=1,                     ║
-║            voice="viola", voice_position="above", strict=True,               ║
-║        )                                                                     ║
-║    except CounterpointStrictError as e:                                      ║
-║        print("sin solución limpia:", e)                                      ║
-║    # cp → list of (offset, pitch, dur, vel)                                  ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --species N        Especie 1-5 (default: 5)                               ║
-║    --strict           CSP con reglas de Fux DURAS (ver arriba). Aborta con   ║
-║                       exit 2 si no hay solución limpia; con --all-species    ║
-║                       descarta la especie y continúa con la siguiente.       ║
-║    --voice NAME       soprano|alto|tenor|bass|violin|viola|cello (def: auto) ║
-║    --voice-position   above|below|auto (default: auto)                       ║
-║    --key KEY          Tonalidad: "C", "Am", "Bb major" … (default: auto)     ║
-║    --bars N           Compases a generar (default: auto desde MIDI)          ║
-║    --beats N          Beats por compás (default: 4)                          ║
-║    --tension-curve S  Curva de tensión compás a compás "0:0.2, 8:0.8"        ║
-║    --all-species      Generar una versión por cada especie (1-5)             ║
-║    --catalog          Si --all-species, concatenar todo en un único MIDI     ║
-║    --output FILE      Fichero de salida (default: counterpoint_out.mid)      ║
-║    --output-dir DIR   Directorio de salida con --all-species                 ║
-║    --channel N        Canal MIDI para el contrapunto (default: 1)            ║
-║    --program N        Program change (instrumento GM) (default: auto)        ║
-║    --listen           Reproducir resultado al terminar (requiere pygame)     ║
-║    --play-seconds N   Segundos de reproducción (default: 30)                 ║
-║    --export-fingerprint  Exportar fingerprint JSON (para stitcher)           ║
-║    --verbose          Informe detallado de decisiones regla a regla          ║
-║    --seed N           Semilla aleatoria (default: 42)                        ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    counterpoint_out.mid  — MIDI de dos pistas: melodía + contrapunto         ║
-║    counterpoint_out_s{N}.mid — con --all-species                             ║
-║    counterpoint_out.fingerprint.json — con --export-fingerprint              ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:   mido, numpy                                                    ║
-║    --key auto / análisis tonal:  music21  (opcional, fallback si no)         ║
-║    --listen:  pygame                                                         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+counterpoint.py — Counterpoint: motor de contrapunto por especies para MIDIs
+melódicos
+(versión 1.1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Dado un MIDI de melodía, genera una segunda voz (contrapunto) aplicando
+las reglas clásicas de contrapunto por especies de Fux/Gradus ad Parnassum.
+Funciona como herramienta standalone y como módulo importable por
+variation_engine (V15), orchestrator y el propio pipeline.
+
+MODO STRICT (CSP)  —  novedad v1.1
+Por defecto las reglas de Fux son PENALIZACIONES BLANDAS: el motor elige
+el candidato «menos malo» y puede emitir paralelas de 5ª/8ª si ninguno es
+limpio. Con --strict se convierten en RESTRICCIONES DURAS: nunca se emite
+un contrapunto que las viole; si no existe solución, se lanza
+CounterpointStrictError con diagnóstico y NO se genera el MIDI.
+
+Especie 1:  CSP por backtracking con H1–H6 GARANTIZADAS
+  [H1] solo consonancias en cada momento
+  [H2] sin paralelas de 5ª justa u 8ª entre instantes consecutivos
+  [H3] sin movimiento directo a consonancia perfecta (5ª/8ª)
+  [H4] sin cruce de voces (respeta voice_position)
+  [H5] sin repetir el mismo intervalo armónico 3 veces seguidas
+  [H6] cadencia: la sensible del cp resuelve ASCENDIENDO a la tónica
+  [P1] preferencia: clímax del cp en el 50–85 % de la frase (se relaja)
+Especies 2–5:  greedy + validación del ESQUELETO de tiempos fuertes
+  (H1 en downbeats de S2/S3; H2/H3 entre downbeats; H4 en todo instante)
+  Si el esqueleto rompe reglas duras, la especie se descarta con aviso.
+
+ESPECIES IMPLEMENTADAS (generación):
+[S1] Primera especie  — nota contra nota (1:1)
+[S2] Segunda especie  — dos notas por nota cantus firmus (2:1)
+[S3] Tercera especie  — cuatro notas por nota cantus firmus (4:1)
+[S4] Cuarta especie   — ligaduras y retardos (sincopado)
+[S5] Quinta especie   — contrapunto florido (mezcla de las anteriores)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+MODOS DE VOZ:
+    above / below / auto   (posición relativa a la melodía)
+  VOCES: soprano, alto, tenor, bass, violin, viola, cello
+
+  USO STANDALONE — ejemplos:
+    # Especie 1 con CSP estricto (garantiza H1–H6):
+    python counterpoint.py melodia.mid --species 1 --strict
+    python counterpoint.py melodia.mid --species 1 --strict --voice viola
+    python counterpoint.py melodia.mid --species 1 --strict \
+        --voice-position above --key Dm --verbose
+
+    # Especie 2 con validación de esqueleto en strict:
+    python counterpoint.py melodia.mid --species 2 --strict
+
+    # Las 5 especies en strict; las que rompan reglas se descartan:
+    python counterpoint.py melodia.mid --all-species --strict --key C
+
+    # Sin strict (penalizaciones blandas, siempre emite salida):
+    python counterpoint.py melodia.mid --species 5 --tension-curve \
+        "0:0.2, 8:0.8, 16:0.3"
+    python counterpoint.py melodia.mid --verbose --output cp_out.mid
+    python counterpoint.py melodia.mid --all-species --listen
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  counterpoint_out.mid  — MIDI de dos pistas: melodía + contrapunto
+  counterpoint_out_s{N}.mid — con --all-species
+  counterpoint_out.fingerprint.json — con --export-fingerprint
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --species N        Especie 1-5 (default: 5)
+  --strict           CSP con reglas de Fux DURAS (ver arriba). Aborta con
+                     exit 2 si no hay solución limpia; con --all-species
+                     descarta la especie y continúa con la siguiente.
+  --voice NAME       soprano|alto|tenor|bass|violin|viola|cello (def: auto)
+  --voice-position   above|below|auto (default: auto)
+  --key KEY          Tonalidad: "C", "Am", "Bb major" … (default: auto)
+  --bars N           Compases a generar (default: auto desde MIDI)
+  --beats N          Beats por compás (default: 4)
+  --tension-curve S  Curva de tensión compás a compás "0:0.2, 8:0.8"
+  --all-species      Generar una versión por cada especie (1-5)
+  --catalog          Si --all-species, concatenar todo en un único MIDI
+  --output FILE      Fichero de salida (default: counterpoint_out.mid)
+  --output-dir DIR   Directorio de salida con --all-species
+  --channel N        Canal MIDI para el contrapunto (default: 1)
+  --program N        Program change (instrumento GM) (default: auto)
+  --listen           Reproducir resultado al terminar (requiere pygame)
+  --play-seconds N   Segundos de reproducción (default: 30)
+  --export-fingerprint  Exportar fingerprint JSON (para stitcher)
+  --verbose          Informe detallado de decisiones regla a regla
+  --seed N           Semilla aleatoria (default: 42)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USO COMO MÓDULO ──
+  from counterpoint import (generate_counterpoint_voice,
+                            load_melody_midi, CounterpointStrictError)
+
+  notes = load_melody_midi("melodia.mid")
+  try:
+      cp = generate_counterpoint_voice(
+          melody_notes=notes, key="C major", species=1,
+          voice="viola", voice_position="above", strict=True,
+      )
+  except CounterpointStrictError as e:
+      print("sin solución limpia:", e)
+  # cp → list of (offset, pitch, dur, vel)
+
+── Más modos ──
+
+  # Con --all-species, concatenar en un único MIDI
+  python counterpoint.py entrada.mid --catalog
+
+  # Exportar .fingerprint.json para stitcher
+  python counterpoint.py entrada.mid --export-fingerprint
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  Siempre:   mido, numpy
+  --key auto / análisis tonal:  music21  (opcional, fallback si no)
+  --listen:  pygame
 """
 
 import sys

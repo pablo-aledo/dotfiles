@@ -1,66 +1,75 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          TONICIZER  v1.0                                     ║
-║      Motor de modulación tonal — puentes armónicos entre dos tonalidades    ║
-║                                                                                ║
-║  Construye (y, sobre melodías reales, inserta) el "puente" armónico que      ║
-║  lleva de una tonalidad A a una tonalidad B usando una técnica de            ║
-║  modulación clásica concreta. Cada técnica se modela con su lógica propia    ║
-║  (no son variaciones cosméticas de la misma plantilla).                      ║
-║                                                                                ║
-║  TÉCNICAS (--technique):                                                     ║
-║    pivot        — acorde pivote diatónico común a ambas tonalidades         ║
-║    common_tone   — modulación por nota común (mediante cromática)            ║
-║    diatonic      — modulación diatónica a tonalidad(es) cercana(s)          ║
-║                    (encadena saltos de 5ª/relativa si B no es cercana)      ║
-║    chromatic     — acorde de aproximación cromática (fuera de la tonalidad)  ║
-║    enharmonic    — 7ª disminuida reinterpretada enarmónicamente              ║
-║    direct        — modulación directa/abrupta, sin transición                ║
-║    sequential    — secuencia armónica transportada en pasos hasta B          ║
-║    dominant      — dominante secundario (V7 de B) como bisagra funcional     ║
-║    all           — las ocho técnicas                                         ║
-║                                                                                ║
-║  MODOS:                                                                       ║
-║    demo          — genera un MIDI sintético A → puente → B por técnica       ║
-║    modulate      — inserta la modulación dentro de una melodía MIDI real     ║
-║    analyze       — detecta puntos de cambio de tonalidad en un MIDI          ║
-║    catalog       — imprime el catálogo teórico de las 8 técnicas             ║
-║    selftest      — valida las 8 técnicas con ejemplos sintéticos y asserts   ║
-║                                                                                ║
-║  USO:                                                                         ║
-║    python tonicizer.py demo --from-key "C major" --to-key "G major" \\       ║
-║                        --technique pivot                                     ║
-║    python tonicizer.py demo --from-key "A minor" --to-key "F major" \\       ║
-║                        --technique all --out-dir salidas/                    ║
-║    python tonicizer.py demo --from-key "C major" --to-key "F# major" \\      ║
-║                        --technique enharmonic --verbose                      ║
-║    python tonicizer.py modulate melodia.mid --to-key "E major" \\            ║
-║                        --technique dominant --at 8                          ║
-║    python tonicizer.py analyze obra_modulante.mid --window 2                ║
-║    python tonicizer.py catalog                                               ║
-║    python tonicizer.py selftest                                              ║
-║                                                                                ║
-║  OPCIONES COMUNES:                                                            ║
-║    --from-key "T modo"   Tonalidad de origen, ej. "D minor", "Ab major"      ║
-║    --to-key "T modo"     Tonalidad de destino                                ║
-║    --technique T [T…]    Técnica(s) (default: pivot)                        ║
-║    --bpb N               Pulsos por compás (default: 4)                      ║
-║    --tempo BPM           Tempo (default: 100)                                ║
-║    --bars-pre N          Compases estableciendo A (default: 4)               ║
-║    --bars-post N         Compases estableciendo B (default: 4)               ║
-║    --at BAR              (modulate) compás donde ocurre el cambio            ║
-║    --window N            (analyze) tamaño de ventana en compases             ║
-║    --out-dir DIR         Carpeta de salida (default: ./tonicizer_out)        ║
-║    --seed N              Semilla para desambiguar candidatos (default: 42)   ║
-║    --verbose             Muestra el análisis armónico del puente             ║
-║                                                                                ║
-║  COMO MÓDULO:                                                                 ║
-║    from tonicizer import Key, build_modulation, modulation_to_midi           ║
-║    events, meta = build_modulation(Key(0,'major'), Key(7,'major'), 'pivot')  ║
-║                                                                                ║
-║  DEPENDENCIAS: mido, numpy   (sin dependencias externas de teoría musical)   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+tonicizer.py — Tonicizer: motor de modulación tonal — puentes armónicos entre
+dos tonalidades
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Construye (y, sobre melodías reales, inserta) el "puente" armónico que
+lleva de una tonalidad A a una tonalidad B usando una técnica de
+modulación clásica concreta. Cada técnica se modela con su lógica propia
+(no son variaciones cosméticas de la misma plantilla).
+
+TÉCNICAS (--technique):
+  pivot        — acorde pivote diatónico común a ambas tonalidades
+  common_tone   — modulación por nota común (mediante cromática)
+  diatonic      — modulación diatónica a tonalidad(es) cercana(s)
+                  (encadena saltos de 5ª/relativa si B no es cercana)
+  chromatic     — acorde de aproximación cromática (fuera de la tonalidad)
+  enharmonic    — 7ª disminuida reinterpretada enarmónicamente
+  direct        — modulación directa/abrupta, sin transición
+  sequential    — secuencia armónica transportada en pasos hasta B
+  dominant      — dominante secundario (V7 de B) como bisagra funcional
+  all           — las ocho técnicas
+
+COMO MÓDULO:
+  from tonicizer import Key, build_modulation, modulation_to_midi
+  events, meta = build_modulation(Key(0,'major'), Key(7,'major'), 'pivot')
+
+DEPENDENCIAS: mido, numpy   (sin dependencias externas de teoría musical)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  demo          — genera un MIDI sintético A → puente → B por técnica
+  modulate      — inserta la modulación dentro de una melodía MIDI real
+  analyze       — detecta puntos de cambio de tonalidad en un MIDI
+  catalog       — imprime el catálogo teórico de las 8 técnicas
+  selftest      — valida las 8 técnicas con ejemplos sintéticos y asserts
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES COMUNES:
+  --from-key "T modo"   Tonalidad de origen, ej. "D minor", "Ab major"
+  --to-key "T modo"     Tonalidad de destino
+  --technique T [T…]    Técnica(s) (default: pivot)
+  --bpb N               Pulsos por compás (default: 4)
+  --tempo BPM           Tempo (default: 100)
+  --bars-pre N          Compases estableciendo A (default: 4)
+  --bars-post N         Compases estableciendo B (default: 4)
+  --at BAR              (modulate) compás donde ocurre el cambio
+  --window N            (analyze) tamaño de ventana en compases
+  --out-dir DIR         Carpeta de salida (default: ./tonicizer_out)
+  --seed N              Semilla para desambiguar candidatos (default: 42)
+  --verbose             Muestra el análisis armónico del puente
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python tonicizer.py demo --from-key "C major" --to-key "G major" \
+                      --technique pivot
+  python tonicizer.py demo --from-key "A minor" --to-key "F major" \
+                      --technique all --out-dir salidas/
+  python tonicizer.py demo --from-key "C major" --to-key "F# major" \
+                      --technique enharmonic --verbose
+  python tonicizer.py modulate melodia.mid --to-key "E major" \
+                      --technique dominant --at 8
+  python tonicizer.py analyze obra_modulante.mid --window 2
+  python tonicizer.py catalog
+  python tonicizer.py selftest
 """
 
 import os

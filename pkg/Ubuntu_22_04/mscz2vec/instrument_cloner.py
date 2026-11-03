@@ -1,90 +1,163 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        INSTRUMENT_CLONER  v1.0                               ║
-║  Clonación neuronal de timbres instrumentales a partir de ~16s de audio      ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  QUÉ HACE                                                                    ║
-║    Puerto autocontenido, en un único fichero, de "Neural Instrument          ║
-║    Cloning" (Jonason/Erlj, DAFx 2022 · magenta/ddsp). Reimplementa la idea   ║
-║    original en PyTorch puro -- sin depender de tensorflow ni de la          ║
-║    librería ddsp -- conservando la arquitectura central: un decoder GRU     ║
-║    COMPARTIDO entre todos los instrumentos de entrenamiento, más un         ║
-║    embedding "z" pequeño y libre POR INSTRUMENTO. Clonar un instrumento     ║
-║    nuevo no reentrena la red: solo se ajustan sus pocos parámetros libres   ║
-║    (z + respuesta de reverb + mezcla wet/dry) sobre unos segundos de        ║
-║    audio, con el decoder compartido congelado.                              ║
-║                                                                              ║
-║  ARQUITECTURA                                                               ║
-║    f0 (Hz) + loudness (dB) + z[instrumento] --(GRU + MLPs)--> distribución  ║
-║    armónica + amplitud + magnitudes de ruido --(síntesis armónico+ruido,    ║
-║    estilo DDSP)--> audio seco --(reverb con IR aprendida por instrumento,   ║
-║    mezcla wet/dry aprendida)--> audio final. Extracción de f0 y loudness    ║
-║    100% propia (YIN + ponderación A), sin CREPE ni librosa.                 ║
-║                                                                              ║
-║  SUBCOMANDOS                                                                ║
-║    prepare-data   carpeta de audio (una subcarpeta por instrumento) ->      ║
-║                    dataset de ventanas con f0/loudness ya extraídos         ║
-║    train           dataset -> entrena el decoder COMPARTIDO + un banco de   ║
-║                    z/reverb/gain por cada instrumento del dataset           ║
-║    clone           wav objetivo (10-20s) + checkpoint compartido -> voz     ║
-║                    clonada (decoder congelado, solo se ajusta esa voz)      ║
-║    synthesize       checkpoint + voz clonada + (wav de control | nota fija) ║
-║                    -> audio renderizado con ese timbre                      ║
-║    info             inspecciona un dataset / checkpoint / voz clonada       ║
-║    list-instruments lista los instrumentos de entrenamiento de un checkpoint║
-║                                                                              ║
-║  USO                                                                        ║
-║    instrument_cloner.py prepare-data data/instrumentos --out dataset.pt     ║
-║    instrument_cloner.py train dataset.pt --out shared.pt --epochs 60        ║
-║    instrument_cloner.py clone violin_16s.wav --checkpoint shared.pt \\      ║
-║                          --out voces/violin.pt --name "mi violín"           ║
-║    instrument_cloner.py synthesize --checkpoint shared.pt \\                ║
-║                          --voice voces/violin.pt --control-wav melodia.wav \\║
-║                          --out violin_clonado.wav                           ║
-║    instrument_cloner.py synthesize --checkpoint shared.pt \\                ║
-║                          --voice voces/violin.pt --note 69 --duration 2.0 \\ ║
-║                          --out la_central.wav                               ║
-║    instrument_cloner.py info shared.pt                                      ║
-║    instrument_cloner.py list-instruments shared.pt                          ║
-║                                                                              ║
-║  FORMATOS (todos son diccionarios guardados con torch.save)                 ║
-║    dataset.pt   ventanas de audio + f0_hz/f0_confidence/loudness_db ya      ║
-║                 extraídas, separadas en train/val/test, más el              ║
-║                 "fingerprint" de los parámetros de extracción usados.       ║
-║    shared.pt    pesos del decoder compartido + banco de z/ir/gain de cada   ║
-║                 instrumento visto en entrenamiento + hiperparámetros +      ║
-║                 "fingerprint" de arquitectura (para detectar checkpoints    ║
-║                 incompatibles con una voz clonada o viceversa).             ║
-║    voice.pt     z + ir + dry_gain + wet_gain de UN instrumento clonado,     ║
-║                 más el fingerprint del checkpoint compartido con el que se  ║
-║                 clonó -- `synthesize` verifica que coincidan antes de usar  ║
-║                 la voz sobre un checkpoint distinto.                        ║
-║                                                                              ║
-║  DEPENDENCIAS  numpy  scipy  soundfile  torch (CPU, no requiere GPU)        ║
-║                                                                              ║
-║  LIMITACIONES                                                               ║
-║    · No es el código del paper: la extracción de f0/loudness (YIN propio   ║
-║      en vez de CRePE) y el ruido filtrado (conformado en dominio STFT en   ║
-║      vez del banco de filtros FIR de ddsp) son reimplementaciones          ║
-║      funcionalmente equivalentes, no bit-exactas.                          ║
-║    · `prepare-data` carga TODAS las ventanas en un único fichero en RAM;   ║
-║      para datasets grandes (NSynth completo, AIR completo) esto puede      ║
-║      agotar la memoria -- pensado para colecciones de tamaño moderado, no  ║
-║      para reproducir el dataset íntegro del paper original.                ║
-║    · `clone` funciona mejor entre ~10 y ~30s de audio limpio y             ║
-║      monofónico de un único instrumento; con menos de ~5s el ajuste de z   ║
-║      tiende a sobreajustar el timbre a muy pocas notas.                    ║
-║    · El decoder compartido necesita haberse entrenado sobre varios         ║
-║      instrumentos variados para que clonar generalice bien -- clonar       ║
-║      sobre un checkpoint entrenado con 1-2 instrumentos apenas mejora un   ║
-║      ajuste desde cero.                                                    ║
-║                                                                              ║
-║  Módulo importable:                                                        ║
-║    from instrument_cloner import (SynthModel, train, clone, synthesize,    ║
-║        prepare_dataset, estimate_f0_contour, estimate_loudness_contour,    ║
-║        multiscale_spectral_loss, harmonic_synth, filtered_noise_synth)      ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+instrument_cloner.py — Instrument_Cloner: clonación neuronal de timbres
+instrumentales a partir de ~16s de audio
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+QUÉ HACE:
+  Puerto autocontenido, en un único fichero, de "Neural Instrument
+  Cloning" (Jonason/Erlj, DAFx 2022 · magenta/ddsp). Reimplementa la idea
+  original en PyTorch puro -- sin depender de tensorflow ni de la
+  librería ddsp -- conservando la arquitectura central: un decoder GRU
+  COMPARTIDO entre todos los instrumentos de entrenamiento, más un
+  embedding "z" pequeño y libre POR INSTRUMENTO. Clonar un instrumento
+  nuevo no reentrena la red: solo se ajustan sus pocos parámetros libres
+  (z + respuesta de reverb + mezcla wet/dry) sobre unos segundos de
+  audio, con el decoder compartido congelado.
+
+ARQUITECTURA:
+  f0 (Hz) + loudness (dB) + z[instrumento] --(GRU + MLPs)--> distribución
+  armónica + amplitud + magnitudes de ruido --(síntesis armónico+ruido,
+  estilo DDSP)--> audio seco --(reverb con IR aprendida por instrumento,
+  mezcla wet/dry aprendida)--> audio final. Extracción de f0 y loudness
+  100% propia (YIN + ponderación A), sin CREPE ni librosa.
+
+LIMITACIONES:
+  · No es el código del paper: la extracción de f0/loudness (YIN propio
+    en vez de CRePE) y el ruido filtrado (conformado en dominio STFT en
+    vez del banco de filtros FIR de ddsp) son reimplementaciones
+    funcionalmente equivalentes, no bit-exactas.
+  · `prepare-data` carga TODAS las ventanas en un único fichero en RAM;
+    para datasets grandes (NSynth completo, AIR completo) esto puede
+    agotar la memoria -- pensado para colecciones de tamaño moderado, no
+    para reproducir el dataset íntegro del paper original.
+  · `clone` funciona mejor entre ~10 y ~30s de audio limpio y
+    monofónico de un único instrumento; con menos de ~5s el ajuste de z
+    tiende a sobreajustar el timbre a muy pocas notas.
+  · El decoder compartido necesita haberse entrenado sobre varios
+    instrumentos variados para que clonar generalice bien -- clonar
+    sobre un checkpoint entrenado con 1-2 instrumentos apenas mejora un
+    ajuste desde cero.
+
+Módulo importable:
+  from instrument_cloner import (SynthModel, train, clone, synthesize,
+      prepare_dataset, estimate_f0_contour, estimate_loudness_contour,
+      multiscale_spectral_loss, harmonic_synth, filtered_noise_synth)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  prepare-data   carpeta de audio (una subcarpeta por instrumento) ->
+                  dataset de ventanas con f0/loudness ya extraídos
+  train           dataset -> entrena el decoder COMPARTIDO + un banco de
+                  z/reverb/gain por cada instrumento del dataset
+  clone           wav objetivo (10-20s) + checkpoint compartido -> voz
+                  clonada (decoder congelado, solo se ajusta esa voz)
+  synthesize       checkpoint + voz clonada + (wav de control | nota fija)
+                  -> audio renderizado con ese timbre
+  info             inspecciona un dataset / checkpoint / voz clonada
+  list-instruments lista los instrumentos de entrenamiento de un checkpoint
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare-data
+    input_dir INPUT_DIR         una subcarpeta por instrumento, wavs dentro
+    --out OUT                   (obligatorio)
+    --sample-rate SAMPLE_RATE   (defecto DEFAULTS['sample_rate'])
+    --frame-rate FRAME_RATE     (defecto DEFAULTS['frame_rate'])
+    --window-s WINDOW_S         (defecto DEFAULTS['window_s'])
+    --hop-s HOP_S               solape entre ventanas de train (defecto 1.0)
+    --val-fraction VAL_FRACTION
+                                (defecto 0.1)
+    --test-fraction TEST_FRACTION
+                                (defecto 0.1)
+    --fmin FMIN                 (defecto DEFAULTS['f0_min_hz'])
+    --fmax FMAX                 (defecto DEFAULTS['f0_max_hz'])
+    --yin-threshold YIN_THRESHOLD
+                                (defecto DEFAULTS['yin_threshold'])
+    --min-confidence MIN_CONFIDENCE
+                                descarta ventanas con confianza de f0 media
+                                por debajo de esto (defecto 0.5)
+    --seed SEED                 (defecto 0)
+    --quiet
+
+  train
+    dataset DATASET
+    --out OUT                   (obligatorio)
+    --epochs EPOCHS             (defecto 60)
+    --batch-size BATCH_SIZE     (defecto 16)
+    --lr LR                     (defecto 0.0003)
+    --seed SEED                 (defecto 0)
+    --resume RESUME             continuar el entrenamiento de un checkpoint
+    --save-every SAVE_EVERY     guardar cada N epocas (ademas del final)
+    --quiet
+
+  clone
+    target_wav TARGET_WAV
+    --checkpoint CHECKPOINT     (obligatorio)
+    --out OUT                   (obligatorio)
+    --name NAME
+    --steps STEPS               (defecto 1500)
+    --lr LR                     (defecto 0.005)
+    --batch-size BATCH_SIZE     (defecto 8)
+    --hop-s HOP_S               (defecto 1.0)
+    --seed SEED                 (defecto 0)
+    --quiet
+
+  synthesize
+    --checkpoint CHECKPOINT     (obligatorio)
+    --voice VOICE               fichero de voz clonada (ver `clone`)
+    --instrument-idx INSTRUMENT_IDX
+                                alternativa a --voice: usar un instrumento del
+                                propio checkpoint
+    --control-wav CONTROL_WAV   extrae f0/loudness de este wav y los toca con
+                                la voz elegida
+    --note NOTE                 nota MIDI (alternativa a --control-wav)
+    --duration DURATION         segundos (con --note)
+    --velocity VELOCITY         0-1, con --note (defecto 0.8)
+    --out OUT                   (obligatorio)
+    --seed SEED                 (defecto 0)
+
+  info
+    path PATH
+
+  list-instruments
+    checkpoint CHECKPOINT
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    instrument_cloner.py prepare-data data/instrumentos --out dataset.pt
+    instrument_cloner.py train dataset.pt --out shared.pt --epochs 60
+    instrument_cloner.py clone violin_16s.wav --checkpoint shared.pt \
+                          --out voces/violin.pt --name "mi violín"
+    instrument_cloner.py synthesize --checkpoint shared.pt \
+                          --voice voces/violin.pt --control-wav melodia.wav \
+                          --out violin_clonado.wav
+    instrument_cloner.py synthesize --checkpoint shared.pt \
+                          --voice voces/violin.pt --note 69 --duration 2.0 \
+                          --out la_central.wav
+    instrument_cloner.py info shared.pt
+    instrument_cloner.py list-instruments shared.pt
+
+  FORMATOS (todos son diccionarios guardados con torch.save)
+    dataset.pt   ventanas de audio + f0_hz/f0_confidence/loudness_db ya
+                 extraídas, separadas en train/val/test, más el
+                 "fingerprint" de los parámetros de extracción usados.
+    shared.pt    pesos del decoder compartido + banco de z/ir/gain de cada
+                 instrumento visto en entrenamiento + hiperparámetros +
+                 "fingerprint" de arquitectura (para detectar checkpoints
+                 incompatibles con una voz clonada o viceversa).
+    voice.pt     z + ir + dry_gain + wet_gain de UN instrumento clonado,
+                 más el fingerprint del checkpoint compartido con el que se
+                 clonó -- `synthesize` verifica que coincidan antes de usar
+                 la voz sobre un checkpoint distinto.
+
+  DEPENDENCIAS  numpy  scipy  soundfile  torch (CPU, no requiere GPU)
 """
 
 import argparse

@@ -1,120 +1,141 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     BASS LINE COMPOSER  v1.0                                 ║
-║         Línea de bajo como voz compositiva autónoma                          ║
-║                                                                              ║
-║  A diferencia del walking bass auxiliar de midi_dna_unified (que acompaña   ║
-║  sin mayor protagonismo) y de la voz B del voice_leader (que solo asegura   ║
-║  las reglas de coral SATB), este módulo trata el bajo como una VOZ           ║
-║  INDEPENDIENTE con su propio contrapunto contra la melodía, su propio        ║
-║  arco expresivo y su propia lógica estilística.                              ║
-║                                                                              ║
-║  ESTILOS DISPONIBLES (--style):                                              ║
-║    walking      — Jazz walking bass: negra en cada tiempo, notas de paso    ║
-║                   cromáticas, aproximaciones diatónicas y cromáticas        ║
-║    classical    — Bajo clásico/romántico: raíz en tiempo fuerte, 5ª/8ª      ║
-║                   en tiempos débiles; soporte armónico Alberti opcional     ║
-║    baroque      — Bajo continuo barroco: realización del bajo cifrado,      ║
-║                   movimiento por grados, notas de paso, sin saltos bruscos  ║
-║    latin        — Tumbao (son cubano): figura sincopada característica,     ║
-║                   anticipaciones, dos y tres clave                           ║
-║    blues        — Blues shuffle: root-5th-6th-7th, swung, boogie pattern   ║
-║    pop          — Root en 1 y 5, octavas, fills en el 4º tiempo            ║
-║    pedal        — Pedal de tónica o dominante bajo armonías cambiantes      ║
-║    ostinato     — Figura rítmica repetida (ciaccona / passacaglia)          ║
-║    auto         — Detecta el estilo más apropiado según la armonía          ║
-║                                                                              ║
-║  TÉCNICAS COMPOSITIVAS IMPLEMENTADAS:                                        ║
-║  [T1]  Approach notes cromáticas: semitono ↑↓ al siguiente acorde          ║
-║  [T2]  Approach notes diatónicas: grado de escala al siguiente acorde       ║
-║  [T3]  Notas de enclosure: aproximación desde arriba Y abajo                ║
-║  [T4]  Arpegio descendente: raíz→7ª→5ª→3ª                                 ║
-║  [T5]  Notas de paso escalares entre dos raíces                             ║
-║  [T6]  Anticipación: ataque de la siguiente raíz en el último corchea       ║
-║  [T7]  Repetición rítmica: figuras de 2 o 4 notas que se repiten           ║
-║  [T8]  Salto de octava con resolución                                       ║
-║  [T9]  Pedal: nota sostenida bajo armonías cambiantes                       ║
-║  [T10] Contrapunto melódico contra soprano: movimiento contrario            ║
-║                                                                              ║
-║  MODOS DE ENTRADA:                                                           ║
-║    --chords "Cm G7 Fm Bb7"          — un acorde por compás                  ║
-║    --chords "Cm:2 G7:2 Fm:1 Bb7:1" — duración en beats tras ':'            ║
-║    --chords-midi  acordes.mid       — pista de acordes en MIDI              ║
-║    --chords-json  prog.chords.json  — desde chord_progression_generator     ║
-║    --melody-midi  melodia.mid       — melodía para contrapunto automático   ║
-║    --from-theorist obra.theorist.json                                        ║
-║    --from-narrator obra_plan.json                                            ║
-║    --curves       curvas.curves.json                                         ║
-║                                                                              ║
-║  EXPORTACIÓN:                                                                ║
-║    .mid                — MIDI de la línea de bajo (canal 2, program 32)     ║
-║    .combined.mid       — Bajo + melodía combinados (si --melody-midi)       ║
-║    .bass.json          — Partitura en JSON (notas, técnicas, análisis)      ║
-║    .fingerprint.json   — Huella compatible con stitcher.py                  ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    # Desde descripción libre                                                 ║
-║    python bass_line_composer.py "bajo de jazz oscuro en Re menor"           ║
-║                                                                              ║
-║    # Parámetros directos                                                     ║
-║    python bass_line_composer.py --key Dm --style walking --bars 16          ║
-║                                                                              ║
-║    # Con progresión de acordes                                               ║
-║    python bass_line_composer.py --key Am --chords "Am F C G" --bars 8      ║
-║                                                                              ║
-║    # Con melodía para contrapunto                                            ║
-║    python bass_line_composer.py --key C --chords "C Am F G"                 ║
-║        --melody-midi melody_out.mid --style classical                        ║
-║                                                                              ║
-║    # Desde chord_progression_generator                                       ║
-║    python bass_line_composer.py --chords-json obra.chords.json              ║
-║                                                                              ║
-║    # Desde theorist                                                          ║
-║    python bass_line_composer.py --from-theorist obra.theorist.json          ║
-║                                                                              ║
-║    # Con ostinato (passacaglia)                                              ║
-║    python bass_line_composer.py --key Dm --style ostinato                   ║
-║        --ostinato-pattern "D3:2 C3:1 Bb2:1" --bars 32                      ║
-║                                                                              ║
-║    # Múltiples candidatos                                                    ║
-║    python bass_line_composer.py --key G --style auto --candidates 4         ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    description          Descripción libre (entre comillas)                  ║
-║    --key KEY             Tonalidad: C, Am, F#, Bb… (default: C)            ║
-║    --mode MODE           Escala (default: auto desde key)                   ║
-║    --bars N              Compases (default: 16)                             ║
-║    --tempo BPM           Tempo (default: 120)                               ║
-║    --time-sig S          Compás: 4/4, 3/4, 6/8 (default: 4/4)             ║
-║    --style S             Estilo de bajo (default: auto)                     ║
-║    --chords PROG         Progresión en texto                                ║
-║    --chords-midi FILE    Pista de acordes en MIDI                           ║
-║    --chords-json FILE    Acordes desde .chords.json                         ║
-║    --melody-midi FILE    Melodía para contrapunto                           ║
-║    --range LOW HIGH      Rango MIDI (default: 28 55 = E1-G3)               ║
-║    --tension F           Tensión global 0-1 (default: auto)                 ║
-║    --swing F             Swing 0-1 (0=straight, 1=full swing, default: auto)║
-║    --approach-prob F     Probabilidad de approach notes 0-1 (default: 0.6) ║
-║    --ostinato-pattern S  Patrón para style=ostinato ("D3:2 C3:1 Bb2:1")   ║
-║    --pedal-note NOTE     Nota de pedal para style=pedal (ej: "D2")         ║
-║    --candidates N        Generar N candidatos (default: 1)                  ║
-║    --curves FILE         Curvas .curves.json de tension_designer            ║
-║    --from-theorist FILE  Leer .theorist.json                                ║
-║    --from-narrator FILE  Leer obra_plan.json                                ║
-║    --export-fingerprint  Exportar .fingerprint.json                         ║
-║    --export-combined     Exportar MIDI con bajo + melodía juntos            ║
-║    --output FILE         Salida (default: bass_out.mid)                     ║
-║    --seed N              Semilla (default: 42)                              ║
-║    --verbose             Informe detallado                                   ║
-║    --dry-run             Mostrar parámetros sin generar                     ║
-║    --listen              Reproducir al final (requiere pygame)              ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:   mido, numpy                                                    ║
-║    Opcionales: music21, scipy, pygame                                        ║
-║    Pipeline:  midi_dna_unified.py en el mismo directorio                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+bass_line_composer.py — Bass Line Composer: línea de bajo como voz compositiva
+autónoma
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+A diferencia del walking bass auxiliar de midi_dna_unified (que acompaña
+sin mayor protagonismo) y de la voz B del voice_leader (que solo asegura
+las reglas de coral SATB), este módulo trata el bajo como una VOZ
+INDEPENDIENTE con su propio contrapunto contra la melodía, su propio
+arco expresivo y su propia lógica estilística.
+
+ESTILOS DISPONIBLES (--style):
+  walking      — Jazz walking bass: negra en cada tiempo, notas de paso
+                 cromáticas, aproximaciones diatónicas y cromáticas
+  classical    — Bajo clásico/romántico: raíz en tiempo fuerte, 5ª/8ª
+                 en tiempos débiles; soporte armónico Alberti opcional
+  baroque      — Bajo continuo barroco: realización del bajo cifrado,
+                 movimiento por grados, notas de paso, sin saltos bruscos
+  latin        — Tumbao (son cubano): figura sincopada característica,
+                 anticipaciones, dos y tres clave
+  blues        — Blues shuffle: root-5th-6th-7th, swung, boogie pattern
+  pop          — Root en 1 y 5, octavas, fills en el 4º tiempo
+  pedal        — Pedal de tónica o dominante bajo armonías cambiantes
+  ostinato     — Figura rítmica repetida (ciaccona / passacaglia)
+  auto         — Detecta el estilo más apropiado según la armonía
+
+TÉCNICAS COMPOSITIVAS IMPLEMENTADAS:
+[T1]  Approach notes cromáticas: semitono ↑↓ al siguiente acorde
+[T2]  Approach notes diatónicas: grado de escala al siguiente acorde
+[T3]  Notas de enclosure: aproximación desde arriba Y abajo
+[T4]  Arpegio descendente: raíz→7ª→5ª→3ª
+[T5]  Notas de paso escalares entre dos raíces
+[T6]  Anticipación: ataque de la siguiente raíz en el último corchea
+[T7]  Repetición rítmica: figuras de 2 o 4 notas que se repiten
+[T8]  Salto de octava con resolución
+[T9]  Pedal: nota sostenida bajo armonías cambiantes
+[T10] Contrapunto melódico contra soprano: movimiento contrario
+
+EXPORTACIÓN:
+  .mid                — MIDI de la línea de bajo (canal 2, program 32)
+  .combined.mid       — Bajo + melodía combinados (si --melody-midi)
+  .bass.json          — Partitura en JSON (notas, técnicas, análisis)
+  .fingerprint.json   — Huella compatible con stitcher.py
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+MODOS DE ENTRADA:
+  --chords "Cm G7 Fm Bb7"          — un acorde por compás
+  --chords "Cm:2 G7:2 Fm:1 Bb7:1" — duración en beats tras ':'
+  --chords-midi  acordes.mid       — pista de acordes en MIDI
+  --chords-json  prog.chords.json  — desde chord_progression_generator
+  --melody-midi  melodia.mid       — melodía para contrapunto automático
+  --from-theorist obra.theorist.json
+  --from-narrator obra_plan.json
+  --curves       curvas.curves.json
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  description          Descripción libre (entre comillas)
+  --key KEY             Tonalidad: C, Am, F#, Bb… (default: C)
+  --mode MODE           Escala (default: auto desde key)
+  --bars N              Compases (default: 16)
+  --tempo BPM           Tempo (default: 120)
+  --time-sig S          Compás: 4/4, 3/4, 6/8 (default: 4/4)
+  --style S             Estilo de bajo (default: auto)
+  --chords PROG         Progresión en texto
+  --chords-midi FILE    Pista de acordes en MIDI
+  --chords-json FILE    Acordes desde .chords.json
+  --melody-midi FILE    Melodía para contrapunto
+  --range LOW HIGH      Rango MIDI (default: 28 55 = E1-G3)
+  --swing F             Swing 0-1 (0=straight, 1=full swing, default: auto)
+  --approach-prob F     Probabilidad de approach notes 0-1 (default: 0.6)
+  --ostinato-pattern S  Patrón para style=ostinato ("D3:2 C3:1 Bb2:1")
+  --pedal-note NOTE     Nota de pedal para style=pedal (ej: "D2")
+  --candidates N        Generar N candidatos (default: 1)
+  --curves FILE         Curvas .curves.json de tension_designer
+  --from-theorist FILE  Leer .theorist.json
+  --from-narrator FILE  Leer obra_plan.json
+  --export-fingerprint  Exportar .fingerprint.json
+  --export-combined     Exportar MIDI con bajo + melodía juntos
+  --output FILE         Salida (default: bass_out.mid)
+  --seed N              Semilla (default: 42)
+  --verbose             Informe detallado
+  --dry-run             Mostrar parámetros sin generar
+  --listen              Reproducir al final (requiere pygame)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Desde descripción libre
+  python bass_line_composer.py "bajo de jazz oscuro en Re menor"
+
+  # Parámetros directos
+  python bass_line_composer.py --key Dm --style walking --bars 16
+
+  # Con progresión de acordes
+  python bass_line_composer.py --key Am --chords "Am F C G" --bars 8
+
+  # Con melodía para contrapunto
+  python bass_line_composer.py --key C --chords "C Am F G" \
+      --melody-midi melody_out.mid --style classical
+
+  # Desde chord_progression_generator
+  python bass_line_composer.py --chords-json obra.chords.json
+
+  # Desde theorist
+  python bass_line_composer.py --from-theorist obra.theorist.json
+
+  # Con ostinato (passacaglia)
+  python bass_line_composer.py --key Dm --style ostinato \
+      --ostinato-pattern "D3:2 C3:1 Bb2:1" --bars 32
+
+  # Múltiples candidatos
+  python bass_line_composer.py --key G --style auto --candidates 4
+
+── Más modos ──
+
+  # --export-fingerprint
+  python bass_line_composer.py --export-fingerprint
+
+  # Exportar MIDI con bajo + melodía juntos
+  python bass_line_composer.py --export-combined
+
+  # --dry-run
+  python bass_line_composer.py --dry-run
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  Siempre:   mido, numpy
+  Opcionales: music21, scipy, pygame
+  Pipeline:  midi_dna_unified.py en el mismo directorio
 """
 
 import sys

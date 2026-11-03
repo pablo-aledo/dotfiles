@@ -1,77 +1,88 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    PLAYABILITY AUDITOR  v1.0                                 ║
-║      Auditoría de tocabilidad e idiomática instrumental para MIDIs          ║
-║                                                                              ║
-║  El ecosistema genera MIDIs orquestales (orchestrator, piano_to_orchestra,  ║
-║  piano_expander, ml_expander, stitcher...) y evalúa su calidad musical      ║
-║  (quality_scorer, section_score, voice_aligner), pero ninguna herramienta   ║
-║  verifica si un intérprete HUMANO podría tocar cada parte. Esta herramienta ║
-║  cubre ese hueco: audita cada pista contra el perfil físico y técnico del   ║
-║  instrumento que la toca, y opcionalmente corrige lo corregible.            ║
-║                                                                              ║
-║  COMPROBACIONES:                                                             ║
-║    rango        — notas fuera del rango físico (ERROR) o de la zona         ║
-║                   cómoda / tesitura idiomática (AVISO)                       ║
-║    polifonia    — acordes en instrumentos monofónicos; dobles/triples       ║
-║                   cuerdas no idiomáticas en cuerda frotada                   ║
-║    respiracion  — frases continuas sin pausa para respirar (vientos/voz)    ║
-║    velocidad    — densidad de notas/segundo por encima del límite técnico   ║
-║    repeticion   — repetición de la misma nota más rápida que la             ║
-║                   articulación posible (picado/staccato)                     ║
-║    saltos       — saltos interválicos grandes a gran velocidad              ║
-║    dinamica     — combinaciones dinámica×registro poco realistas            ║
-║                   (ff en flauta grave, pp en metal sobreagudo...)            ║
-║    percusion    — más golpes simultáneos de los que permiten dos manos      ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] LECTURA    — parser MIDI propio (formato 0/1, mapa de tempo y compás)  ║
-║  [2] DETECCIÓN  — instrumento por pista: program change + nombre + canal 10 ║
-║  [3] AUDITORÍA  — cada comprobación emite incidencias ERROR/AVISO/INFO      ║
-║  [4] INFORME    — por pista y global, con score de tocabilidad 0.0–1.0     ║
-║  [5] FIX (opc.) — transpone octavas fuera de rango, recorta solapes en      ║
-║                   monofónicos e inserta respiraciones acortando notas       ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python playability_auditor.py obra.mid                                    ║
-║    python playability_auditor.py obra.mid --verbose                          ║
-║    python playability_auditor.py obra.mid --fix --output obra_fixed.mid     ║
-║    python playability_auditor.py obra.mid --json informe.json               ║
-║    python playability_auditor.py obra.mid --tracks 1 3                      ║
-║    python playability_auditor.py obra.mid --scope 8:24                      ║
-║    python playability_auditor.py obra.mid --skip respiracion saltos         ║
-║    python playability_auditor.py obra.mid --only rango polifonia            ║
-║    python playability_auditor.py obra.mid --profile estricto               ║
-║    python playability_auditor.py obra.mid --quiet                           ║
-║    python playability_auditor.py --list-instruments                         ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi               Archivo(s) MIDI a auditar                              ║
-║    --tracks N...      Auditar solo estas pistas (índices)                    ║
-║    --scope S:E        Limitar a compases S:E (ej: --scope 8:24)             ║
-║    --skip CHECK...    Omitir comprobaciones                                  ║
-║    --only CHECK...    Ejecutar solo estas comprobaciones                     ║
-║    --profile P        estricto | estandar | tolerante (default: estandar)   ║
-║    --instrument T=I   Forzar instrumento de la pista T (ej: 2=violin)       ║
-║    --fix              Generar MIDI corregido                                 ║
-║    --output FILE      Ruta del MIDI corregido (default: <obra>_fixed.mid)   ║
-║    --json FILE        Exportar informe estructurado a JSON                   ║
-║    --max-issues N     Máx. incidencias detalladas por pista (default: 12)   ║
-║    --quiet            Solo resumen de una línea por pista + exit code        ║
-║    --verbose          Mostrar todas las incidencias con compás y detalle     ║
-║    --no-color         Desactivar colores ANSI                                ║
-║    --list-instruments Mostrar el catálogo de perfiles y salir                ║
-║                                                                              ║
-║  EXIT CODE: 0 = sin errores · 1 = hay ERRORes (integrable en runner.py)     ║
-║                                                                              ║
-║  COMO MÓDULO (para runner, quality_scorer u otros scripts):                  ║
-║    from playability_auditor import audit_midi, fix_midi                      ║
-║    report = audit_midi("obra.mid", profile="estandar")                       ║
-║    print(report.global_score, len(report.errors()))                          ║
-║                                                                              ║
-║  DEPENDENCIAS: ninguna (solo stdlib) — incluye lector/escritor MIDI propio   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+playability_auditor.py — Playability Auditor: auditoría de tocabilidad e
+idiomática instrumental para MIDIs
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+El ecosistema genera MIDIs orquestales (orchestrator, piano_to_orchestra,
+piano_expander, ml_expander, stitcher...) y evalúa su calidad musical
+(quality_scorer, section_score, voice_aligner), pero ninguna herramienta
+verifica si un intérprete HUMANO podría tocar cada parte. Esta herramienta
+cubre ese hueco: audita cada pista contra el perfil físico y técnico del
+instrumento que la toca, y opcionalmente corrige lo corregible.
+
+COMPROBACIONES:
+  rango        — notas fuera del rango físico (ERROR) o de la zona
+                 cómoda / tesitura idiomática (AVISO)
+  polifonia    — acordes en instrumentos monofónicos; dobles/triples
+                 cuerdas no idiomáticas en cuerda frotada
+  respiracion  — frases continuas sin pausa para respirar (vientos/voz)
+  velocidad    — densidad de notas/segundo por encima del límite técnico
+  repeticion   — repetición de la misma nota más rápida que la
+                 articulación posible (picado/staccato)
+  saltos       — saltos interválicos grandes a gran velocidad
+  dinamica     — combinaciones dinámica×registro poco realistas
+                 (ff en flauta grave, pp en metal sobreagudo...)
+  percusion    — más golpes simultáneos de los que permiten dos manos
+
+FLUJO:
+[1] LECTURA    — parser MIDI propio (formato 0/1, mapa de tempo y compás)
+[2] DETECCIÓN  — instrumento por pista: program change + nombre + canal 10
+[3] AUDITORÍA  — cada comprobación emite incidencias ERROR/AVISO/INFO
+[4] INFORME    — por pista y global, con score de tocabilidad 0.0–1.0
+[5] FIX (opc.) — transpone octavas fuera de rango, recorta solapes en
+                 monofónicos e inserta respiraciones acortando notas
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+    midi               Archivo(s) MIDI a auditar
+    --tracks N...      Auditar solo estas pistas (índices)
+    --scope S:E        Limitar a compases S:E (ej: --scope 8:24)
+    --skip CHECK...    Omitir comprobaciones
+    --only CHECK...    Ejecutar solo estas comprobaciones
+    --profile P        estricto | estandar | tolerante (default: estandar)
+    --instrument T=I   Forzar instrumento de la pista T (ej: 2=violin)
+    --fix              Generar MIDI corregido
+    --output FILE      Ruta del MIDI corregido (default: <obra>_fixed.mid)
+    --json FILE        Exportar informe estructurado a JSON
+    --max-issues N     Máx. incidencias detalladas por pista (default: 12)
+    --quiet            Solo resumen de una línea por pista + exit code
+    --verbose          Mostrar todas las incidencias con compás y detalle
+    --no-color         Desactivar colores ANSI
+    --list-instruments Mostrar el catálogo de perfiles y salir
+
+  EXIT CODE: 0 = sin errores · 1 = hay ERRORes (integrable en runner.py)
+
+  COMO MÓDULO (para runner, quality_scorer u otros scripts):
+    from playability_auditor import audit_midi, fix_midi
+    report = audit_midi("obra.mid", profile="estandar")
+    print(report.global_score, len(report.errors()))
+
+  DEPENDENCIAS: ninguna (solo stdlib) — incluye lector/escritor MIDI propio
+
+── Otras opciones del parser ──
+  --strict                    rc=3 si la auditoría encuentra errores de
+                              tocabilidad (sin --strict, los hallazgos no son
+                              un fallo: rc=0)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python playability_auditor.py obra.mid
+  python playability_auditor.py obra.mid --verbose
+  python playability_auditor.py obra.mid --fix --output obra_fixed.mid
+  python playability_auditor.py obra.mid --json informe.json
+  python playability_auditor.py obra.mid --tracks 1 3
+  python playability_auditor.py obra.mid --scope 8:24
+  python playability_auditor.py obra.mid --skip respiracion saltos
+  python playability_auditor.py obra.mid --only rango polifonia
+  python playability_auditor.py obra.mid --profile estricto
+  python playability_auditor.py obra.mid --quiet
+  python playability_auditor.py --list-instruments
 """
 
 import sys

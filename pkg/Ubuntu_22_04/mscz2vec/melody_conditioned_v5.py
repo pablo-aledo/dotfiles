@@ -1,312 +1,323 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                   MELODY CONDITIONED  v5.0                                  ║
-║       Generación de melodías condicionadas a progresión de acordes          ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  RESUMEN                                                                     ║
-║  ───────                                                                     ║
-║  Genera una melodía MIDI a partir de una progresión de acordes dada.        ║
-║  Cada nota se condiciona al acorde activo en ese momento: el motor sabe     ║
-║  en todo instante qué acorde suena y toma decisiones en consecuencia.       ║
-║                                                                              ║
-║  Nueve motores de generación, 16 perfiles emocionales, post-procesado       ║
-║  armónico, y un compositor de estructuras formales completas.                ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  MOTORES (--engine)                                                          ║
-║  ──────────────────                                                          ║
-║  chord_guided  Markov de 2º orden condicionado nota a nota al acorde.       ║
-║                Pesos = función_armónica × perfil × tensión_actual.          ║
-║                Sin entrenamiento. Con --corpus usa MIDIs reales.            ║
-║                                                                              ║
-║  grammar       Elaboración Schenkerian en tres capas: chord tones           ║
-║                estructurales → notas de paso → bordaduras/appoggiaturas.    ║
-║                Determinista. Melodías cantables y bien formadas.            ║
-║                                                                              ║
-║  search        Beam search A* (beam=5). Coste local: penaliza avoid notes   ║
-║                en tiempo fuerte (+5), fuera de escala (+2.5), saltos >12;  ║
-║                premia chord tones (-1.5). Garantías locales por nota.       ║
-║                                                                              ║
-║  genetic       Algoritmo genético (pop=20, gen=30). Fitness: armonía por   ║
-║                acorde (30%), contorno (20%), suavidad (20%), variedad       ║
-║                rítmica (10%), rango (10%), clímax ajustado al perfil (10%). ║
-║                                                                              ║
-║  lstm          LSTM (~114K params) entrenada sobre corpus propio.           ║
-║                Piano roll cuantizado a semicorchea. Condicionamiento        ║
-║                beat-a-beat via chord_vector[16]. Diseñado para CPU.         ║
-║                Requiere --train previo o --model.                           ║
-║                                                                              ║
-║  motif         Construye por transformaciones de un motivo semilla:         ║
-║                identity, sequence_up/down, inversion, retrograde,           ║
-║                augmentation, diminution, variation. Motivo del usuario      ║
-║                (--motif) o generado automáticamente. Coherencia temática.  ║
-║                                                                              ║
-║  bayes         N-gram orden 3 con suavizado Kneser-Ney sobre corpus.       ║
-║                Vocabulario: (pitch_class, dur_bucket, chord_func).          ║
-║                Estimación razonada para transiciones no vistas.             ║
-║                Sin torch. Con --corpus real; sin él usa fallback sintético. ║
-║                                                                              ║
-║  tension_arc   Planifica de atrás hacia adelante por frase (--phrase-bars). ║
-║                Nota de resolución → nota de clímax → relleno del camino.   ║
-║                Clímax posicionado según PROFILE_CLIMAX_POS del perfil.     ║
-║                Narrativa armónica explícita con destino audible.            ║
-║                                                                              ║
-║  interpolate   Interpolación lineal entre dos perfiles en cinco             ║
-║                dimensiones: velocidades, pesos Markov, pesos CT/T/PT/NT,   ║
-║                posición del clímax, curva de tensión.                       ║
-║                --alpha 0.0 = perfil A puro, 1.0 = perfil B puro.          ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  FORM — COMPOSITOR DE ESTRUCTURAS FORMALES (--form)                          ║
-║  ──────────────────────────────────────────────────                          ║
-║  Genera una obra completa con arquitectura formal. Orquesta múltiples       ║
-║  instancias del generador (una por sección) y ensambla en un único MIDI     ║
-║  con marcadores de sección visibles en cualquier DAW.                       ║
-║                                                                              ║
-║  Formas predefinidas:                                                        ║
-║    ABA          ternaria clásica (40% + 30% + 30%)                          ║
-║    ABAB         binaria repetida                                             ║
-║    AABA         forma canción de jazz/pop (32 compases)                     ║
-║    ABACABA      rondó con dos episodios                                     ║
-║    verse_chorus V C V C B C (pop/rock con puente)                           ║
-║    sonata       E T D R C (exposición, transición, desarrollo,              ║
-║                 recapitulación, coda)                                        ║
-║                                                                              ║
-║  Formas libres: "A B A' C A" o "ABACA" (A' = variación de A)               ║
-║                                                                              ║
-║  Por sección:                                                                ║
-║    A / A'  Tonalidad y perfil base. A' varía el penúltimo acorde.          ║
-║    B       Perfil complementario. Tonalidad: --form-key-b                   ║
-║    C / D   Contraste máximo. Tonalidad: --form-key-c                        ║
-║    Repeticiones exactas reutilizan el resultado cacheado.                   ║
-║                                                                              ║
-║  Tonalidades: same · relative · dominant · subdominant ·                    ║
-║               parallel · mediant · submediant                               ║
-║                                                                              ║
-║  --form-bridge-bars N  Puentes modulantes entre secciones con distinta      ║
-║  tonalidad (tension_arc + perfil tense sobre el acorde pivot).              ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  PERFILES EMOCIONALES (--profile)                                            ║
-║  ─────────────────────────────────                                           ║
-║  Cada perfil configura 7 capas: modo de escala, curva de tensión, pesos    ║
-║  de intervalo Markov, multiplicadores CT/T/PT/NT, contorno global,          ║
-║  rango de velocidades y posición del clímax.                                ║
-║                                                                              ║
-║  Perfil       Escala              Dinámica    Característica principal       ║
-║  ──────────── ─────────────────── ─────────── ──────────────────────────    ║
-║  heroic       major               f–ff        quintas y octavas, arco       ║
-║  melancholic  minor               p–mf        descenso por semitono         ║
-║  playful      major               mf–f        saltos cortos, ondulación     ║
-║  tense        phrygian            mf–f        semitonos y tritono, ascend.  ║
-║  serene       major               p–mf        grados conjuntos, arco suave  ║
-║  mysterious   phrygian_dominant   pp–mp       tritonos, evita chord tones   ║
-║  triumphant   major               f–ff        quintas, clímax al 85%        ║
-║  elegiac      melodic_minor       pp–mf       6ª desc., luto contenido      ║
-║  ecstatic     lydian              f–fff       #11, euforia desde el inicio  ║
-║  brooding     locrian             ppp–mp      semitono orbita, peso oscuro  ║
-║  pastoral     mixolydian          p–mf        grados conjuntos, sin drama   ║
-║  agitated     chromatic           mf–f        caos, dinámica extrema        ║
-║  hypnotic     pentatonic_minor    p–mp        repetición, tensión plana     ║
-║  flamenco     phrygian_dominant   pp–fff      cadencia andaluza b2→1        ║
-║  tanguero     minor               mf–f        4ª desc., micro-arcos frase   ║
-║  custom       major               mf–f        sin sesgo, para uso manual    ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  POST-PROCESADO                                                              ║
-║  ──────────────                                                              ║
-║  --fix-avoid    Corrige avoid notes en tiempos fuertes con nearest_         ║
-║                 admissible, preservando contorno. Respeta notas de paso     ║
-║                 y bordaduras legítimas.                                     ║
-║                                                                              ║
-║  --ornaments O  appoggiatura (25%+75%) | passing (60%+20%+20%) |           ║
-║                 neighbor (50%+25%+25%) | all                                ║
-║  --ornament-prob F  Probabilidad por nota (default: 0.35)                   ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  SCORING (selección del mejor candidato)                                     ║
-║  ────────────────────────────────────────                                    ║
-║    15%  Consonancia con la escala                                            ║
-║    20%  Armonía por acorde activo (CT=1.0 T=0.7 PT=0.5 NT=0.1)             ║
-║         Avoid notes en tiempo fuerte penalizadas ×0.2                       ║
-║    15%  Suavidad de movimiento                                               ║
-║    15%  Conformidad con el contorno del perfil                              ║
-║    10%  Rango melódico razonable (óptimo: 12 semitonos)                     ║
-║    10%  Variedad rítmica                                                     ║
-║     8%  Arco dinámico (desv. estándar de velocidades)                       ║
-║     7%  Posición del clímax (ajustada al perfil)                            ║
-║  Con --verbose: score por acorde + lista de colisiones.                     ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  LSTM — DESCRIPCIÓN TÉCNICA                                                  ║
-║  ──────────────────────────                                                  ║
-║  Piano roll: 16 pasos/compás (4/4). Token: 0–108 pitch, 109 sil, 110 hold. ║
-║  chord_vector[16]: [0:12] pitch classes, [12:16] harm_func one-hot.        ║
-║  Arquitectura: Embedding(111,32)→concat→LSTM(48→128)→Linear(128→111)       ║
-║  Entrenamiento: truncated BPTT, chunks 32, batch 16, ~1MB RAM/chunk.       ║
-║  Augmentación: ±5 st transposición (×11) + ventanas solapadas stride 16.   ║
-║  Generación: bias de contorno + escala + sin hold en tiempo fuerte.        ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  EJEMPLOS DE USO                                                             ║
-║  ───────────────                                                             ║
-║                                                                              ║
-║  ── chord_guided ────────────────────────────────────────────────────────   ║
-║  python melody_conditioned_v5.py                                             ║
-║      --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8 --profile melancholic  ║
-║                                                                              ║
-║  python melody_conditioned_v5.py --corpus ./midis/                           ║
-║      --chords "C:4 Am:4 F:4 G:4" --key C --bars 16 --profile serene        ║
-║      --fix-avoid --ornaments all --candidates 5                              ║
-║                                                                              ║
-║  ── grammar ─────────────────────────────────────────────────────────────   ║
-║  python melody_conditioned_v5.py --engine grammar                            ║
-║      --chords "Am:4 G:4 F:4 E:4" --key Am --mode phrygian                  ║
-║      --profile mysterious --contour descending --bars 8                     ║
-║                                                                              ║
-║  ── search ──────────────────────────────────────────────────────────────   ║
-║  python melody_conditioned_v5.py --engine search                             ║
-║      --chords "Cm:2 Ab:2 Eb:2 Bb:2" --key Cm --profile brooding --fix-avoid║
-║                                                                              ║
-║  ── genetic ─────────────────────────────────────────────────────────────   ║
-║  python melody_conditioned_v5.py --engine genetic                            ║
-║      --chords "D:4 A:4 Bm:4 G:4" --key D --profile triumphant --candidates 5║
-║                                                                              ║
-║  ── lstm ────────────────────────────────────────────────────────────────   ║
-║  # Preprocesar (una vez)                                                     ║
-║  python melody_conditioned_v5.py --preprocess --corpus ./midis/              ║
-║  # Entrenar                                                                  ║
-║  python melody_conditioned_v5.py --train --dataset corpus.npz --epochs 30   ║
-║  # Generar                                                                   ║
-║  python melody_conditioned_v5.py --engine lstm --model lstm.pt              ║
-║      --chords "Am:2 G:2 F:2 E7:2" --key Am --profile melancholic            ║
-║  # Todo en uno                                                               ║
-║  python melody_conditioned_v5.py --engine lstm --train --corpus ./midis/    ║
-║      --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8                        ║
-║                                                                              ║
-║  ── motif ───────────────────────────────────────────────────────────────   ║
-║  python melody_conditioned_v5.py --engine motif                              ║
-║      --motif "D4:0.5 F#4:0.5 A4:1 F#4:0.5 D4:0.5"                         ║
-║      --chords "D:4 A:4 Bm:4 G:4" --key D --bars 16 --profile heroic        ║
-║                                                                              ║
-║  ── bayes ───────────────────────────────────────────────────────────────   ║
-║  python melody_conditioned_v5.py --engine bayes --corpus ./midis/           ║
-║      --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 16 --profile melancholic ║
-║                                                                              ║
-║  ── tension_arc ─────────────────────────────────────────────────────────   ║
-║  python melody_conditioned_v5.py --engine tension_arc                        ║
-║      --chords "Cm:4 Ab:4 Eb:4 Bb:4" --key Cm --profile tense --phrase-bars 4║
-║                                                                              ║
-║  ── interpolate ─────────────────────────────────────────────────────────   ║
-║  python melody_conditioned_v5.py --engine interpolate                        ║
-║      --profile flamenco --profile-b tanguero --alpha 0.5                    ║
-║      --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 16                       ║
-║                                                                              ║
-║  ── form ────────────────────────────────────────────────────────────────   ║
-║  # ABA básico                                                                ║
-║  python melody_conditioned_v5.py --form ABA --key Am --profile melancholic  ║
-║      --form-chords-a "Am:2 G:2 F:2 E7:2" --form-key-b relative             ║
-║      --form-total-bars 48                                                    ║
-║                                                                              ║
-║  # ABA con puente modulante                                                  ║
-║  python melody_conditioned_v5.py --form ABA --key Am --profile flamenco     ║
-║      --form-chords-a "Am:2 G:2 F:2 E:2" --form-key-b dominant              ║
-║      --form-bridge-bars 2 --form-total-bars 48                              ║
-║                                                                              ║
-║  # Sonata heroica con motor motif                                            ║
-║  python melody_conditioned_v5.py --form sonata --key D --profile heroic     ║
-║      --form-chords-a "D:4 A:4 Bm:4 G:4"                                    ║
-║      --form-key-b dominant --form-key-c relative                            ║
-║      --engine motif --motif "D4:0.5 F#4:0.5 A4:1"                          ║
-║      --form-bridge-bars 2 --include-chords --form-total-bars 64             ║
-║                                                                              ║
-║  # Forma libre flamenco-tango                                                ║
-║  python melody_conditioned_v5.py --form "A B A' C A" --key Am              ║
-║      --profile flamenco --profile-b tanguero --engine interpolate           ║
-║      --alpha 0.5 --form-total-bars 80                                       ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  OPCIONES COMPLETAS                                                          ║
-║  ──────────────────                                                          ║
-║  General:                                                                    ║
-║    --engine E     chord_guided|grammar|search|genetic|lstm|                 ║
-║                   motif|bayes|tension_arc|interpolate                        ║
-║    --key / --mode / --bars / --tempo / --time-sig / --profile               ║
-║    --rhythm       flowing|march|syncopated|baroque|jazz|sparse|dense        ║
-║    --contour      auto|arch|ascending|descending|wave|plateau|              ║
-║                   inverted|erratic|custom                                   ║
-║    --contour-values V   Para --contour custom: "0,0.3,0.8,1,0.5"           ║
-║    --tension-curve V    Por compás: "0.2,0.5,0.8,…"                        ║
-║    --range L H   Rango MIDI (default: 60 84)                                ║
-║    --candidates N / --seed N / --verbose / --dry-run                        ║
-║                                                                              ║
-║  Acordes:                                                                    ║
-║    --chords / --chords-json / --chords-midi                                  ║
-║    --chords-midi-track N (def:2) / --chords-midi-channel N (def:1)         ║
-║    --chords-midi-window F (def:0.5)                                         ║
-║                                                                              ║
-║  Corpus: --corpus DIR / --max-files N                                        ║
-║                                                                              ║
-║  LSTM: --train / --preprocess / --dataset / --model-out / --model           ║
-║        --epochs / --hidden / --d-embed / --num-layers / --batch-size        ║
-║        --chunk-size / --lr / --temperature / --top-k                        ║
-║                                                                              ║
-║  Motif:       --motif "C4:0.5 E4:1 G4:0.5"                                  ║
-║  Interpolate: --profile-b P / --alpha F (0.0–1.0)                           ║
-║  Tension arc: --phrase-bars N (default: 4)                                   ║
-║                                                                              ║
-║  Form:                                                                       ║
-║    --form STR              ABA|ABAB|AABA|ABACABA|verse_chorus|sonata        ║
-║                            o libre: "A B A' C A"                            ║
-║    --form-total-bars N     Total de compases (default: 64)                  ║
-║    --form-engine E         Motor base para las secciones                    ║
-║    --form-chords-a/b/c     Progresiones específicas por sección             ║
-║    --form-key-b/c SCHEME   same|relative|dominant|subdominant|              ║
-║                            parallel|mediant|submediant                      ║
-║    --form-bridge-bars N    Compases de puente modulante (default: 0)        ║
-║    --form-contour-a/b STR  Contorno por sección                             ║
-║    --form-markers          Marcadores de sección en el MIDI                 ║
-║                                                                              ║
-║  Post-procesado: --ornaments / --ornament-prob / --fix-avoid                ║
-║  Exportación:    --output / --include-chords / --export-motif               ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  SALIDAS                                                                     ║
-║  ───────                                                                     ║
-║  Modo normal:                                                                ║
-║    melody_conditioned.mid          Mejor candidato                          ║
-║    melody_conditioned_v2.mid       Segundo candidato                        ║
-║    melody_conditioned.melody.json  Notas + score + detalle por criterio     ║
-║    melody_conditioned.motif.mid    Motivo semilla (con --export-motif)      ║
-║                                                                              ║
-║  Modo form (--form):                                                         ║
-║    output.mid          Obra completa con marcadores de sección              ║
-║    output.form.json    label, bars, key, profile, engine, score,            ║
-║                        offset_beats por sección                             ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  DEPENDENCIAS                                                                ║
-║  ────────────                                                                ║
-║    pip install mido numpy      (siempre requerido)                           ║
-║    pip install torch           (solo para --engine lstm)                     ║
-║    pip install music21         (opcional: detección de acordes mejorada)    ║
-║                                                                              ║
-║  Formato del corpus MIDI para LSTM:                                          ║
-║    Track 0: metadatos | Track 1: melodía (canal 0) | Track 2: acordes (1)  ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+melody_conditioned_v5.py — Generación de melodías condicionadas a progresión de acordes
+(versión 5.0: nueve motores y compositor de estructuras formales con --form).
+
+Novedades respecto a v4: modo --form (obras completas con secciones A/B/C,
+puentes modulantes y marcadores de sección) y las opciones --form-*.
+
+────────────────────────────────────────────────────────────────────────────
+RESUMEN
+────────────────────────────────────────────────────────────────────────────
+Genera una melodía MIDI a partir de una progresión de acordes dada.
+Cada nota se condiciona al acorde activo en ese momento: el motor sabe
+en todo instante qué acorde suena y toma decisiones en consecuencia.
+
+Nueve motores de generación, 16 perfiles emocionales, post-procesado
+armónico, y un compositor de estructuras formales completas.
+
+────────────────────────────────────────────────────────────────────────────
+MOTORES (--engine)
+────────────────────────────────────────────────────────────────────────────
+chord_guided  Markov de 2º orden condicionado nota a nota al acorde.
+              Pesos = función_armónica × perfil × tensión_actual.
+              Sin entrenamiento. Con --corpus usa MIDIs reales.
+
+grammar       Elaboración Schenkerian en tres capas: chord tones
+              estructurales → notas de paso → bordaduras/appoggiaturas.
+              Determinista. Melodías cantables y bien formadas.
+
+search        Beam search A* (beam=5). Coste local: penaliza avoid notes
+              en tiempo fuerte (+5), fuera de escala (+2.5), saltos >12;
+              premia chord tones (-1.5). Garantías locales por nota.
+
+genetic       Algoritmo genético (pop=20, gen=30). Fitness: armonía por
+              acorde (30%), contorno (20%), suavidad (20%), variedad
+              rítmica (10%), rango (10%), clímax ajustado al perfil (10%).
+
+lstm          LSTM (~114K params) entrenada sobre corpus propio.
+              Piano roll cuantizado a semicorchea. Condicionamiento
+              beat-a-beat via chord_vector[16]. Diseñado para CPU.
+              Requiere --train previo o --model.
+
+motif         Construye por transformaciones de un motivo semilla:
+              identity, sequence_up/down, inversion, retrograde,
+              augmentation, diminution, variation. Motivo del usuario
+              (--motif) o generado automáticamente. Coherencia temática.
+
+bayes         N-gram orden 3 con suavizado Kneser-Ney sobre corpus.
+              Vocabulario: (pitch_class, dur_bucket, chord_func).
+              Estimación razonada para transiciones no vistas.
+              Sin torch. Con --corpus real; sin él usa fallback sintético.
+
+tension_arc   Planifica de atrás hacia adelante por frase (--phrase-bars).
+              Nota de resolución → nota de clímax → relleno del camino.
+              Clímax posicionado según PROFILE_CLIMAX_POS del perfil.
+              Narrativa armónica explícita con destino audible.
+
+interpolate   Interpolación lineal entre dos perfiles en cinco
+              dimensiones: velocidades, pesos Markov, pesos CT/T/PT/NT,
+              posición del clímax, curva de tensión.
+              --alpha 0.0 = perfil A puro, 1.0 = perfil B puro.
+
+────────────────────────────────────────────────────────────────────────────
+FORM — COMPOSITOR DE ESTRUCTURAS FORMALES (--form)
+────────────────────────────────────────────────────────────────────────────
+Genera una obra completa con arquitectura formal. Orquesta múltiples
+instancias del generador (una por sección) y ensambla en un único MIDI
+con marcadores de sección visibles en cualquier DAW.
+
+Formas predefinidas:
+  ABA          ternaria clásica (40% + 30% + 30%)
+  ABAB         binaria repetida
+  AABA         forma canción de jazz/pop (32 compases)
+  ABACABA      rondó con dos episodios
+  verse_chorus V C V C B C (pop/rock con puente)
+  sonata       E T D R C (exposición, transición, desarrollo,
+               recapitulación, coda)
+
+Formas libres: "A B A' C A" o "ABACA" (A' = variación de A)
+
+Por sección:
+  A / A'  Tonalidad y perfil base. A' varía el penúltimo acorde.
+  B       Perfil complementario. Tonalidad: --form-key-b
+  C / D   Contraste máximo. Tonalidad: --form-key-c
+  Repeticiones exactas reutilizan el resultado cacheado.
+
+Tonalidades: same · relative · dominant · subdominant ·
+             parallel · mediant · submediant
+
+--form-bridge-bars N  Puentes modulantes entre secciones con distinta
+tonalidad (tension_arc + perfil tense sobre el acorde pivot).
+
+────────────────────────────────────────────────────────────────────────────
+PERFILES EMOCIONALES (--profile)
+────────────────────────────────────────────────────────────────────────────
+Cada perfil configura 7 capas: modo de escala, curva de tensión, pesos
+de intervalo Markov, multiplicadores CT/T/PT/NT, contorno global,
+rango de velocidades y posición del clímax.
+
+Perfil       Escala              Dinámica    Característica principal
+──────────── ─────────────────── ─────────── ──────────────────────────
+heroic       major               f–ff        quintas y octavas, arco
+melancholic  minor               p–mf        descenso por semitono
+playful      major               mf–f        saltos cortos, ondulación
+tense        phrygian            mf–f        semitonos y tritono, ascend.
+serene       major               p–mf        grados conjuntos, arco suave
+mysterious   phrygian_dominant   pp–mp       tritonos, evita chord tones
+triumphant   major               f–ff        quintas, clímax al 85%
+elegiac      melodic_minor       pp–mf       6ª desc., luto contenido
+ecstatic     lydian              f–fff       #11, euforia desde el inicio
+brooding     locrian             ppp–mp      semitono orbita, peso oscuro
+pastoral     mixolydian          p–mf        grados conjuntos, sin drama
+agitated     chromatic           mf–f        caos, dinámica extrema
+hypnotic     pentatonic_minor    p–mp        repetición, tensión plana
+flamenco     phrygian_dominant   pp–fff      cadencia andaluza b2→1
+tanguero     minor               mf–f        4ª desc., micro-arcos frase
+custom       major               mf–f        sin sesgo, para uso manual
+
+────────────────────────────────────────────────────────────────────────────
+POST-PROCESADO
+────────────────────────────────────────────────────────────────────────────
+--fix-avoid    Corrige avoid notes en tiempos fuertes con nearest_
+               admissible, preservando contorno. Respeta notas de paso
+               y bordaduras legítimas.
+
+--ornaments O  appoggiatura (25%+75%) | passing (60%+20%+20%) |
+               neighbor (50%+25%+25%) | all
+--ornament-prob F  Probabilidad por nota (default: 0.35)
+
+────────────────────────────────────────────────────────────────────────────
+SCORING (selección del mejor candidato)
+────────────────────────────────────────────────────────────────────────────
+  15%  Consonancia con la escala
+  20%  Armonía por acorde activo (CT=1.0 T=0.7 PT=0.5 NT=0.1)
+       Avoid notes en tiempo fuerte penalizadas ×0.2
+  15%  Suavidad de movimiento
+  15%  Conformidad con el contorno del perfil
+  10%  Rango melódico razonable (óptimo: 12 semitonos)
+  10%  Variedad rítmica
+   8%  Arco dinámico (desv. estándar de velocidades)
+   7%  Posición del clímax (ajustada al perfil)
+Con --verbose: score por acorde + lista de colisiones.
+
+────────────────────────────────────────────────────────────────────────────
+LSTM — DESCRIPCIÓN TÉCNICA
+────────────────────────────────────────────────────────────────────────────
+Piano roll: 16 pasos/compás (4/4). Token: 0–108 pitch, 109 sil, 110 hold.
+chord_vector[16]: [0:12] pitch classes, [12:16] harm_func one-hot.
+Arquitectura: Embedding(111,32)→concat→LSTM(48→128)→Linear(128→111)
+Entrenamiento: truncated BPTT, chunks 32, batch 16, ~1MB RAM/chunk.
+Augmentación: ±5 st transposición (×11) + ventanas solapadas stride 16.
+Generación: bias de contorno + escala + sin hold en tiempo fuerte.
+
+────────────────────────────────────────────────────────────────────────────
+EJEMPLOS DE USO
+────────────────────────────────────────────────────────────────────────────
+
+── chord_guided ────────────────────────────────────────────────────────
+python melody_conditioned_v5.py
+    --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8 --profile melancholic
+
+python melody_conditioned_v5.py --corpus ./midis/
+    --chords "C:4 Am:4 F:4 G:4" --key C --bars 16 --profile serene
+    --fix-avoid --ornaments all --candidates 5
+
+── grammar ─────────────────────────────────────────────────────────────
+python melody_conditioned_v5.py --engine grammar
+    --chords "Am:4 G:4 F:4 E:4" --key Am --mode phrygian
+    --profile mysterious --contour descending --bars 8
+
+── search ──────────────────────────────────────────────────────────────
+python melody_conditioned_v5.py --engine search
+    --chords "Cm:2 Ab:2 Eb:2 Bb:2" --key Cm --profile brooding --fix-avoid
+
+── genetic ─────────────────────────────────────────────────────────────
+python melody_conditioned_v5.py --engine genetic
+    --chords "D:4 A:4 Bm:4 G:4" --key D --profile triumphant --candidates 5
+
+── lstm ────────────────────────────────────────────────────────────────
+# Preprocesar (una vez)
+python melody_conditioned_v5.py --preprocess --corpus ./midis/
+# Entrenar
+python melody_conditioned_v5.py --train --dataset corpus.npz --epochs 30
+# Generar
+python melody_conditioned_v5.py --engine lstm --model lstm.pt
+    --chords "Am:2 G:2 F:2 E7:2" --key Am --profile melancholic
+# Todo en uno
+python melody_conditioned_v5.py --engine lstm --train --corpus ./midis/
+    --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8
+
+── motif ───────────────────────────────────────────────────────────────
+python melody_conditioned_v5.py --engine motif
+    --motif "D4:0.5 F#4:0.5 A4:1 F#4:0.5 D4:0.5"
+    --chords "D:4 A:4 Bm:4 G:4" --key D --bars 16 --profile heroic
+
+── bayes ───────────────────────────────────────────────────────────────
+python melody_conditioned_v5.py --engine bayes --corpus ./midis/
+    --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 16 --profile melancholic
+
+── tension_arc ─────────────────────────────────────────────────────────
+python melody_conditioned_v5.py --engine tension_arc
+    --chords "Cm:4 Ab:4 Eb:4 Bb:4" --key Cm --profile tense --phrase-bars 4
+
+── interpolate ─────────────────────────────────────────────────────────
+python melody_conditioned_v5.py --engine interpolate
+    --profile flamenco --profile-b tanguero --alpha 0.5
+    --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 16
+
+── form ────────────────────────────────────────────────────────────────
+# ABA básico
+python melody_conditioned_v5.py --form ABA --key Am --profile melancholic
+    --form-chords-a "Am:2 G:2 F:2 E7:2" --form-key-b relative
+    --form-total-bars 48
+
+# ABA con puente modulante
+python melody_conditioned_v5.py --form ABA --key Am --profile flamenco
+    --form-chords-a "Am:2 G:2 F:2 E:2" --form-key-b dominant
+    --form-bridge-bars 2 --form-total-bars 48
+
+# Sonata heroica con motor motif
+python melody_conditioned_v5.py --form sonata --key D --profile heroic
+    --form-chords-a "D:4 A:4 Bm:4 G:4"
+    --form-key-b dominant --form-key-c relative
+    --engine motif --motif "D4:0.5 F#4:0.5 A4:1"
+    --form-bridge-bars 2 --include-chords --form-total-bars 64
+
+# Forma libre flamenco-tango
+python melody_conditioned_v5.py --form "A B A' C A" --key Am
+    --profile flamenco --profile-b tanguero --engine interpolate
+    --alpha 0.5 --form-total-bars 80
+
+# Forma con motor distinto del global, contornos por sección y tonalidades relativas
+python melody_conditioned_v5.py --form AABA --key C --profile serene
+    --form-engine grammar --form-chords-a "C:4 Am:4 F:4 G:4"
+    --form-chords-b "Dm:4 G:4 Em:4 A:4" --form-contour-a arch
+    --form-contour-b descending --form-key-b subdominant
+    --form-total-bars 32 --output cancion.mid
+
+# Rondó con tres progresiones (A, B y C) y tonalidades de contraste
+python melody_conditioned_v5.py --form ABACABA --key Am --profile melancholic
+    --form-chords-a "Am:2 G:2 F:2 E7:2" --form-chords-b "C:2 G:2 Am:2 F:2"
+    --form-chords-c "Dm:4 E:4" --form-key-b relative --form-key-c dominant
+    --form-total-bars 56
+
+# Forma verse_chorus con marcadores de sección y acompañamiento incluido
+python melody_conditioned_v5.py --form verse_chorus --key G --profile playful
+    --form-markers --include-chords --form-total-bars 48
+
+────────────────────────────────────────────────────────────────────────────
+OPCIONES
+────────────────────────────────────────────────────────────────────────────
+General:
+  --engine E     chord_guided|grammar|search|genetic|lstm|
+                 motif|bayes|tension_arc|interpolate
+  --key / --mode / --bars / --tempo / --time-sig / --profile
+  --rhythm       flowing|march|syncopated|baroque|jazz|sparse|dense
+  --contour      auto|arch|ascending|descending|wave|plateau|
+                 inverted|erratic|custom
+  --contour-values V   Para --contour custom: "0,0.3,0.8,1,0.5"
+  --tension-curve V    Por compás: "0.2,0.5,0.8,…"
+  --range L H   Rango MIDI (default: 60 84)
+  --candidates N / --seed N / --verbose / --dry-run
+
+Acordes:
+  --chords / --chords-json / --chords-midi
+  --chords-midi-track N (def:2) / --chords-midi-channel N (def:1)
+  --chords-midi-window F (def:0.5)
+
+Corpus: --corpus DIR / --max-files N
+
+LSTM: --train / --preprocess / --dataset / --model-out / --model
+      --epochs / --hidden / --d-embed / --num-layers / --batch-size
+      --chunk-size / --lr / --temperature / --top-k
+
+Motif:       --motif "C4:0.5 E4:1 G4:0.5"
+Interpolate: --profile-b P / --alpha F (0.0–1.0)
+Tension arc: --phrase-bars N (default: 4)
+
+Form:
+  --form STR              ABA|ABAB|AABA|ABACABA|verse_chorus|sonata
+                          o libre: "A B A' C A"
+  --form-total-bars N     Total de compases (default: 64)
+  --form-engine E         Motor base de las secciones (default: el de --engine)
+  --form-chords-a STR     Progresión de la sección A
+  --form-chords-b STR     Progresión de la sección B
+  --form-chords-c STR     Progresión de la sección C
+  --form-key-b/c SCHEME   same|relative|dominant|subdominant|
+                          parallel|mediant|submediant
+  --form-bridge-bars N    Compases de puente modulante (default: 0)
+  --form-contour-a STR    Contorno de la sección A (default: auto)
+  --form-contour-b STR    Contorno de la sección B (default: auto)
+  --form-markers          Marcadores de sección en el MIDI (siempre activo; el flag no
+                          puede desactivarse)
+
+Post-procesado: --ornaments / --ornament-prob / --fix-avoid
+Exportación:    --output / --include-chords / --export-motif
+
+────────────────────────────────────────────────────────────────────────────
+SALIDAS
+────────────────────────────────────────────────────────────────────────────
+Modo normal:
+  melody_conditioned.mid          Mejor candidato
+  melody_conditioned_v2.mid       Segundo candidato
+  melody_conditioned.melody.json  Notas + score + detalle por criterio
+  melody_conditioned.motif.mid    Motivo semilla (con --export-motif)
+
+Modo form (--form):
+  output.mid          Obra completa con marcadores de sección
+  output.form.json    label, bars, key, profile, engine, score,
+                      offset_beats por sección
+
+────────────────────────────────────────────────────────────────────────────
+DEPENDENCIAS
+────────────────────────────────────────────────────────────────────────────
+  pip install mido numpy      (siempre requerido)
+  pip install torch           (solo para --engine lstm)
+  pip install music21         (opcional: detección de acordes mejorada)
+
+Formato del corpus MIDI para LSTM:
+  Track 0: metadatos | Track 1: melodía (canal 0) | Track 2: acordes (1)
 """
 
 import sys

@@ -1,254 +1,259 @@
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                     PIANO TO ORCHESTRA  v2.3                                 ║
-║     Piano MIDI → MIDI orquestal completo, autónomo, sin dependencias        ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  PROPÓSITO                                                                   ║
-║  ─────────                                                                   ║
-║  Recibe un MIDI de piano (melodía + armonía, 1 o 2 pistas) y genera         ║
-║  directamente un MIDI orquestal completo con instrumentos reales,            ║
-║  keyswitches, CC1/CC11 y percusión. No requiere orchestrator.py.            ║
-║                                                                              ║
-║  PIPELINE INTERNO                                                            ║
-║  ────────────────                                                            ║
-║  piano.mid                                                                   ║
-║    → MIDILoader                Carga notas, tempo, ticks_per_beat; hash MD5  ║
-║    → MelodyExtractor           Separa melodía / bajo / voces interiores      ║
-║    → HarmonicAnalyzer          Tonalidad, secciones, acordes, tensión        ║
-║    → VoicingEngine             4 voces SATB por sección (3 backends)         ║
-║    → CounterpointEngine        Contrapunto real nota-a-nota                  ║
-║    → TrackSplitter             Pistas Melody / Counterpoint / Acc / Bass     ║
-║    → EmotionalProfile          Perfil emocional por sección (--caracter)     ║
-║    → InstrumentAssigner        Instrumentos, KS, CC1/CC11, percusión         ║
-║    → build_contrasting_orchs   Orquestaciones contrastantes (--review)       ║
-║    → (HumanReviewLoop)         Exporta MIDIs por candidato, pide elección    ║
-║    → FingerprintGenerator      JSON por sección (orchestrator.py compatible) ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  MÓDULOS                                                                     ║
-║  ────────                                                                    ║
-║                                                                              ║
-║  MelodyExtractor                                                             ║
-║    · Notas solas: decisión puramente posicional (encima/debajo de mediana)   ║
-║      sin umbral de score — evita pérdida de corcheas en beats débiles       ║
-║    · Notas simultáneas: puntuación por 5 factores:                          ║
-║        continuidad de contorno, peso métrico, velocidad relativa,            ║
-║        duración (pedal ≠ melodía), posición en el cluster                   ║
-║    · Bajo: siempre la nota más grave de cada instante                       ║
-║    · Inner: resto → pista Accompaniment                                      ║
-║                                                                              ║
-║  HarmonicAnalyzer                                                            ║
-║    · Tonalidad: Krumhansl-Schmuckler (perfiles mayor/menor)                 ║
-║    · Secciones: distancia coseno entre vectores chroma, suavizado            ║
-║      gaussiano + find_peaks; --sections N; --min-bars N;                    ║
-║      cortes alineados al compás más cercano                                  ║
-║    · Acorde: template matching, 13 tipos                                     ║
-║    · Tensión: 16 puntos — grado funcional + disonancia + registro + densidad ║
-║    · Arco emocional: neutral / rise / fall / arch / high                    ║
-║                                                                              ║
-║  VoicingEngine — tres backends + modo contrastante                           ║
-║    rules    Rimski-Kórsakov: bajo-tenor ≥ 8ª, tenor-alto ≥ 4ª,            ║
-║             alto-soprano ≥ 2ª; scoring por consonancias                     ║
-║    greedy   Construcción voraz voz a voz; tensión alta → registro agudo     ║
-║    ml       Candidatos rankeados por GradientBoostingClassifier              ║
-║    generate_contrasting()  N voicings perceptualmente distintos por          ║
-║             registro, apertura y textura                                     ║
-║                                                                              ║
-║  CounterpointEngine — primera especie adaptada                               ║
-║    · Movimiento contrario (prioridad máxima), sin quintas/octavas paralelas  ║
-║    · Resolución de la sensible → tónica                                     ║
-║    · Preferencia por terceras y sextas; rango F3–D5 (MIDI 53–74)           ║
-║                                                                              ║
-║  EmotionalProfile — sistema de caracteres emocionales                        ║
-║    12 perfiles cubriendo los 4 cuadrantes energía×valencia:                 ║
-║      Energía alta / Valencia positiva:  épico, heroico, festivo             ║
-║      Energía alta / Valencia negativa:  agresivo, tenso, urgente            ║
-║      Energía baja / Valencia positiva:  romántico, lírico, sereno           ║
-║      Energía baja / Valencia negativa:  nostálgico, melancólico, lúgubre    ║
-║    Cada perfil es un vector de 10 dimensiones:                              ║
-║      register, density, texture, dynamics, melody_family, percussion,       ║
-║      spread, humanize, mode_sens, tempo_sens                                 ║
-║    Operaciones:                                                              ║
-║      blend(other, weight)   Interpola dimensiones continuas;                ║
-║                             tabla TEXTURE_BLEND para dimensiones categóricas ║
-║      adapt(section, bpm)    Modula según modo (mayor/menor via mode_sens),  ║
-║                             tempo (via tempo_sens), tensión y arco           ║
-║      to_orchestration()     Convierte a template + texture + CC1 + humanize  ║
-║    Especificación en CLI (--caracter):                                       ║
-║      nostálgico                           → toda la pieza                   ║
-║      nostálgico:0.7,épico:0.3            → mezcla ponderada                ║
-║      A:nostálgico,B:épico,C:romántico    → por sección                     ║
-║      A:nostálgico:0.6+épico:0.4,B:sereno → sección + mezcla                ║
-║                                                                              ║
-║  InstrumentAssigner — orquestación autónoma                                  ║
-║    · Plantillas: strings_only / chamber / full                               ║
-║    · Rangos idiomáticos + sweet spot; fit_to_range transpone por octavas    ║
-║    · Filtros de sección semánticos: first/last/outer/middle/                 ║
-║      high_tension/peak — resueltos dinámicamente                            ║
-║    · Articulación por duración/tensión/rol/familia:                         ║
-║        strings: legato/sustain/spiccato/pizzicato/tremolo/portato            ║
-║        winds:   legato/sustain/portato/staccato                              ║
-║        brass:   legato/marcato_l/marcato_s/sustain/staccato                  ║
-║    · KS libraries: nucleus / metropolis / generic                            ║
-║    · CC1: modulado desde tension_curve ± dynamics_cc1_base del perfil       ║
-║      emocional; suavizado ±15/step; actualización cada corchea              ║
-║    · CC11: swell en notas ≥ 1.5 beats                                       ║
-║    · Percusión: timbal en tónica/dominante, bombo, platos, tam-tam          ║
-║      según arco emocional; openness activa tam-tam                          ║
-║    · Humanize: micro-jitter configurable (default 0.1)                       ║
-║    · dynamics_cc1_base: override de dinámica base desde EmotionalProfile    ║
-║                                                                              ║
-║  build_contrasting_orchestrations() — modo revisión                          ║
-║    N orquestaciones genuinamente distintas variando: plantilla,              ║
-║    instrumento de melodía, textura de acompañamiento, registro.             ║
-║    Decisiones contextuales: strings_only cuando tensión < 0.50 o            ║
-║    sección corta; acompañamiento cuando un viento conduce (pizzicato en     ║
-║    baja tensión → portato → legato/tremolo en tensión alta).                ║
-║    section_index rota el pool para variedad entre secciones similares.      ║
-║                                                                              ║
-║  HumanReviewLoop — revisión por escucha                                      ║
-║    · Exporta por candidato: acorde arpegiado y sección orquestada           ║
-║    · Cada candidato tiene su propia orquestación contrastante               ║
-║    · Opciones: 1/2/= empate/s saltar                                        ║
-║    · Guarda en preferences.jsonl con contexto completo                      ║
-║                                                                              ║
-║  PreferenceTrainer                                                           ║
-║    · GradientBoostingClassifier + StandardScaler → voicing_ranker.pkl       ║
-║    · --stats: distribución de tonalidades, arcos, índices elegidos          ║
-║                                                                              ║
-║  FingerprintGenerator — orchestrator.py compatible                           ║
-║    meta, tension_curve, tension_curve_full, entry, exit, stitching_hints    ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  EJEMPLOS DE USO                                                             ║
-║  ───────────────                                                             ║
-║                                                                              ║
-║  ① Básico:                                                                  ║
-║       python piano_to_orchestra.py pieza.mid                                 ║
-║                                                                              ║
-║  ② Con perfil emocional — toda la pieza:                                    ║
-║       python piano_to_orchestra.py pieza.mid --caracter romántico            ║
-║       python piano_to_orchestra.py pieza.mid --caracter épico                ║
-║       python piano_to_orchestra.py pieza.mid --caracter lúgubre              ║
-║                                                                              ║
-║  ③ Mezcla de perfiles (coma o + como separador):                            ║
-║       python piano_to_orchestra.py pieza.mid                                 ║
-║           --caracter "nostálgico:0.7,épico:0.3"                             ║
-║                                                                              ║
-║  ④ Perfil distinto por sección:                                              ║
-║       python piano_to_orchestra.py pieza.mid                                 ║
-║           --caracter "A:nostálgico,B:épico,C:romántico"                     ║
-║                                                                              ║
-║  ⑤ Sección con mezcla + sección simple:                                     ║
-║       python piano_to_orchestra.py pieza.mid                                 ║
-║           --caracter "A:nostálgico:0.6+épico:0.4,B:sereno"                  ║
-║                                                                              ║
-║  ⑥ Experimentar comparando perfiles:                                         ║
-║       for c in épico romántico nostálgico agresivo lúgubre festivo; do      ║
-║           python piano_to_orchestra.py pieza.mid --caracter $c -o $c        ║
-║       done                                                                   ║
-║                                                                              ║
-║  ⑦ Revisión por escucha — candidatos contrastantes:                         ║
-║       python piano_to_orchestra.py pieza.mid --review --candidates 2        ║
-║           --soundfont ~/sf2/timbres_of_heaven.sf2                           ║
-║                                                                              ║
-║  ⑧ Perfil emocional + revisión combinados:                                  ║
-║       python piano_to_orchestra.py pieza.mid --caracter romántico            ║
-║           --review --candidates 2                                            ║
-║                                                                              ║
-║  ⑨ Orquesta completa, greedy, 5 secciones:                                  ║
-║       python piano_to_orchestra.py pieza.mid                                 ║
-║           --template full --voicing greedy --sections 5                     ║
-║                                                                              ║
-║  ⑩ Debug: inspeccionar análisis armónico:                                   ║
-║       python piano_to_orchestra.py pieza.mid --debug --verbose               ║
-║                                                                              ║
-║  ⑪ Exportar voces separadas y fingerprints:                                 ║
-║       python piano_to_orchestra.py pieza.mid --split --fingerprints          ║
-║                                                                              ║
-║  ⑫ Entrenar ranker ML, usarlo, ver estadísticas:                            ║
-║       python piano_to_orchestra.py --train                                   ║
-║       python piano_to_orchestra.py pieza.mid --voicing ml                   ║
-║       python piano_to_orchestra.py --stats                                   ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  OPCIONES COMPLETAS                                                          ║
-║  ──────────────────                                                          ║
-║                                                                              ║
-║  Entrada / salida                                                            ║
-║    midi                  MIDI de piano de entrada (posicional)               ║
-║    --output  BASE        Nombre base de salida (default: <input>_orch)       ║
-║    --split               Exportar MIDI de voces separadas                    ║
-║    --fingerprints        Exportar fingerprints JSON por sección              ║
-║                                                                              ║
-║  Análisis                                                                    ║
-║    --sections  N|auto    Número exacto de secciones (default: auto)          ║
-║    --min-bars  N         Mínimo de compases por sección (default: 2)         ║
-║    --debug               Análisis armónico detallado por sección             ║
-║    --verbose             Voicings, conteos de notas, transposiciones         ║
-║                                                                              ║
-║  Voicing                                                                     ║
-║    --voicing  rules|greedy|ml   Backend (default: rules)                    ║
-║    --candidates  N       Candidatos en revisión (default: 2)                 ║
-║    --model    FILE        Modelo ML (default: voicing_ranker.pkl)            ║
-║    --prefs    FILE        Preferencias (default: preferences.jsonl)          ║
-║                                                                              ║
-║  Orquestación                                                                ║
-║    --template  X         strings_only | chamber | full (default: chamber)   ║
-║    --library   X         nucleus | metropolis | generic (default: nucleus)   ║
-║    --no-perc             Sin percusión orquestal                             ║
-║    --no-ks               Sin keyswitches                                     ║
-║    --no-cc               Sin CC1/CC11                                        ║
-║    --humanize  F         Micro-jitter 0.0–1.0 (default: 0.1)                ║
-║                                                                              ║
-║  Perfil emocional                                                            ║
-║    --caracter  SPEC      Perfil emocional de orquestación. Formatos:        ║
-║                          nostálgico                  (toda la pieza)         ║
-║                          nostálgico:0.7,épico:0.3   (mezcla ponderada)      ║
-║                          A:nostálgico,B:épico        (por sección)           ║
-║                          A:nos:0.6+épi:0.4,B:sereno (sección + mezcla)      ║
-║                Perfiles: épico heroico festivo agresivo tenso urgente        ║
-║                          romántico lírico sereno nostálgico melancólico      ║
-║                          lúgubre                                             ║
-║                                                                              ║
-║  Revisión por escucha                                                        ║
-║    --review              Activar revisión por escucha                        ║
-║    --review-dir  DIR     Directorio de MIDIs (default: ./review_midis)       ║
-║    --soundfont   FILE    .sf2 para mostrar comandos timidity                 ║
-║    --no-chord            No exportar acorde solo                             ║
-║    --no-orch-preview     No exportar sección orquestada                      ║
-║    --no-strings-only     Excluir strings_only de candidatos                  ║
-║                                                                              ║
-║  ML y preferencias                                                           ║
-║    --train               Entrenar ranker ML y salir                          ║
-║    --stats               Estadísticas de preferencias y salir                ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  ARCHIVOS GENERADOS                                                          ║
-║  ──────────────────                                                          ║
-║    BASE.mid                            MIDI orquestal final                  ║
-║    BASE_voices.mid                     Voces separadas (con --split)         ║
-║    BASE.secA.fingerprint.json          Fingerprint por sección               ║
-║    review_midis/sec{L}_{N}_acorde.mid      Acorde para escucha              ║
-║    review_midis/sec{L}_{N}_orquestado.mid  Sección orquestada               ║
-║    preferences.jsonl                   Preferencias acumuladas               ║
-║    voicing_ranker.pkl                  Modelo ML (model + scaler)            ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  DEPENDENCIAS                                                                ║
-║    pip install mido numpy scipy scikit-learn                                 ║
-║      mido          lectura/escritura MIDI (obligatoria)                      ║
-║      numpy         álgebra lineal, estadística (obligatoria)                 ║
-║      scipy         detección de secciones (opcional)                         ║
-║      scikit-learn  backend ml (opcional)                                     ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+piano_to_orchestra.py — Piano To Orchestra: piano MIDI → MIDI orquestal
+completo, autónomo, sin dependencias
+(versión 2.3).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+PROPÓSITO:
+─────────
+Recibe un MIDI de piano (melodía + armonía, 1 o 2 pistas) y genera
+directamente un MIDI orquestal completo con instrumentos reales,
+keyswitches, CC1/CC11 y percusión. No requiere orchestrator.py.
+
+PIPELINE INTERNO:
+────────────────
+piano.mid
+  → MIDILoader                Carga notas, tempo, ticks_per_beat; hash MD5
+  → MelodyExtractor           Separa melodía / bajo / voces interiores
+  → HarmonicAnalyzer          Tonalidad, secciones, acordes, tensión
+  → VoicingEngine             4 voces SATB por sección (3 backends)
+  → CounterpointEngine        Contrapunto real nota-a-nota
+  → TrackSplitter             Pistas Melody / Counterpoint / Acc / Bass
+  → EmotionalProfile          Perfil emocional por sección (--caracter)
+  → InstrumentAssigner        Instrumentos, KS, CC1/CC11, percusión
+  → build_contrasting_orchs   Orquestaciones contrastantes (--review)
+  → (HumanReviewLoop)         Exporta MIDIs por candidato, pide elección
+  → FingerprintGenerator      JSON por sección (orchestrator.py compatible)
+
+MÓDULOS:
+────────
+
+MelodyExtractor
+  · Notas solas: decisión puramente posicional (encima/debajo de mediana)
+    sin umbral de score — evita pérdida de corcheas en beats débiles
+  · Notas simultáneas: puntuación por 5 factores:
+      continuidad de contorno, peso métrico, velocidad relativa,
+      duración (pedal ≠ melodía), posición en el cluster
+  · Bajo: siempre la nota más grave de cada instante
+  · Inner: resto → pista Accompaniment
+
+HarmonicAnalyzer
+  · Tonalidad: Krumhansl-Schmuckler (perfiles mayor/menor)
+  · Secciones: distancia coseno entre vectores chroma, suavizado
+    gaussiano + find_peaks; --sections N; --min-bars N;
+    cortes alineados al compás más cercano
+  · Acorde: template matching, 13 tipos
+  · Tensión: 16 puntos — grado funcional + disonancia + registro + densidad
+  · Arco emocional: neutral / rise / fall / arch / high
+
+VoicingEngine — tres backends + modo contrastante
+  rules    Rimski-Kórsakov: bajo-tenor ≥ 8ª, tenor-alto ≥ 4ª,
+           alto-soprano ≥ 2ª; scoring por consonancias
+  greedy   Construcción voraz voz a voz; tensión alta → registro agudo
+  ml       Candidatos rankeados por GradientBoostingClassifier
+  generate_contrasting()  N voicings perceptualmente distintos por
+           registro, apertura y textura
+
+CounterpointEngine — primera especie adaptada
+  · Movimiento contrario (prioridad máxima), sin quintas/octavas paralelas
+  · Resolución de la sensible → tónica
+  · Preferencia por terceras y sextas; rango F3–D5 (MIDI 53–74)
+
+EmotionalProfile — sistema de caracteres emocionales
+  12 perfiles cubriendo los 4 cuadrantes energía×valencia:
+    Energía alta / Valencia positiva:  épico, heroico, festivo
+    Energía alta / Valencia negativa:  agresivo, tenso, urgente
+    Energía baja / Valencia positiva:  romántico, lírico, sereno
+    Energía baja / Valencia negativa:  nostálgico, melancólico, lúgubre
+  Cada perfil es un vector de 10 dimensiones:
+    register, density, texture, dynamics, melody_family, percussion,
+    spread, humanize, mode_sens, tempo_sens
+  Operaciones:
+    blend(other, weight)   Interpola dimensiones continuas;
+                           tabla TEXTURE_BLEND para dimensiones categóricas
+    adapt(section, bpm)    Modula según modo (mayor/menor via mode_sens),
+                           tempo (via tempo_sens), tensión y arco
+    to_orchestration()     Convierte a template + texture + CC1 + humanize
+  Especificación en CLI (--caracter):
+    nostálgico                           → toda la pieza
+    nostálgico:0.7,épico:0.3            → mezcla ponderada
+    A:nostálgico,B:épico,C:romántico    → por sección
+    A:nostálgico:0.6+épico:0.4,B:sereno → sección + mezcla
+
+InstrumentAssigner — orquestación autónoma
+  · Plantillas: strings_only / chamber / full
+  · Rangos idiomáticos + sweet spot; fit_to_range transpone por octavas
+  · Filtros de sección semánticos: first/last/outer/middle/
+    high_tension/peak — resueltos dinámicamente
+  · Articulación por duración/tensión/rol/familia:
+      strings: legato/sustain/spiccato/pizzicato/tremolo/portato
+      winds:   legato/sustain/portato/staccato
+      brass:   legato/marcato_l/marcato_s/sustain/staccato
+  · KS libraries: nucleus / metropolis / generic
+  · CC1: modulado desde tension_curve ± dynamics_cc1_base del perfil
+    emocional; suavizado ±15/step; actualización cada corchea
+  · CC11: swell en notas ≥ 1.5 beats
+  · Percusión: timbal en tónica/dominante, bombo, platos, tam-tam
+    según arco emocional; openness activa tam-tam
+  · Humanize: micro-jitter configurable (default 0.1)
+  · dynamics_cc1_base: override de dinámica base desde EmotionalProfile
+
+build_contrasting_orchestrations() — modo revisión
+  N orquestaciones genuinamente distintas variando: plantilla,
+  instrumento de melodía, textura de acompañamiento, registro.
+  Decisiones contextuales: strings_only cuando tensión < 0.50 o
+  sección corta; acompañamiento cuando un viento conduce (pizzicato en
+  baja tensión → portato → legato/tremolo en tensión alta).
+  section_index rota el pool para variedad entre secciones similares.
+
+HumanReviewLoop — revisión por escucha
+  · Exporta por candidato: acorde arpegiado y sección orquestada
+  · Cada candidato tiene su propia orquestación contrastante
+  · Opciones: 1/2/= empate/s saltar
+  · Guarda en preferences.jsonl con contexto completo
+
+PreferenceTrainer
+  · GradientBoostingClassifier + StandardScaler → voicing_ranker.pkl
+  · --stats: distribución de tonalidades, arcos, índices elegidos
+
+FingerprintGenerator — orchestrator.py compatible
+  meta, tension_curve, tension_curve_full, entry, exit, stitching_hints
+
+ARCHIVOS GENERADOS:
+──────────────────
+  BASE.mid                            MIDI orquestal final
+  BASE_voices.mid                     Voces separadas (con --split)
+  BASE.secA.fingerprint.json          Fingerprint por sección
+  review_midis/sec{L}_{N}_acorde.mid      Acorde para escucha
+  review_midis/sec{L}_{N}_orquestado.mid  Sección orquestada
+  preferences.jsonl                   Preferencias acumuladas
+  voicing_ranker.pkl                  Modelo ML (model + scaler)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES COMPLETAS:
+  ──────────────────
+
+  Entrada / salida
+    midi                  MIDI de piano de entrada (posicional)
+    --output  BASE        Nombre base de salida (default: <input>_orch)
+    --split               Exportar MIDI de voces separadas
+    --fingerprints        Exportar fingerprints JSON por sección
+
+  Análisis
+    --sections  N|auto    Número exacto de secciones (default: auto)
+    --min-bars  N         Mínimo de compases por sección (default: 2)
+    --debug               Análisis armónico detallado por sección
+    --verbose             Voicings, conteos de notas, transposiciones
+
+  Voicing
+    --voicing  rules|greedy|ml   Backend (default: rules)
+    --candidates  N       Candidatos en revisión (default: 2)
+    --model    FILE        Modelo ML (default: voicing_ranker.pkl)
+    --prefs    FILE        Preferencias (default: preferences.jsonl)
+
+  Orquestación
+    --template  X         strings_only | chamber | full (default: chamber)
+    --library   X         nucleus | metropolis | generic (default: nucleus)
+    --no-perc             Sin percusión orquestal
+    --no-ks               Sin keyswitches
+    --no-cc               Sin CC1/CC11
+    --humanize  F         Micro-jitter 0.0–1.0 (default: 0.1)
+
+  Perfil emocional
+    --caracter  SPEC      Perfil emocional de orquestación. Formatos:
+                          nostálgico                  (toda la pieza)
+                          nostálgico:0.7,épico:0.3   (mezcla ponderada)
+                          A:nostálgico,B:épico        (por sección)
+                          A:nos:0.6+épi:0.4,B:sereno (sección + mezcla)
+                Perfiles: épico heroico festivo agresivo tenso urgente
+                          romántico lírico sereno nostálgico melancólico
+                          lúgubre
+
+  Revisión por escucha
+    --review              Activar revisión por escucha
+    --review-dir  DIR     Directorio de MIDIs (default: ./review_midis)
+    --soundfont   FILE    .sf2 para mostrar comandos timidity
+    --no-chord            No exportar acorde solo
+    --no-orch-preview     No exportar sección orquestada
+    --no-strings-only     Excluir strings_only de candidatos
+
+  ML y preferencias
+    --train               Entrenar ranker ML y salir
+    --stats               Estadísticas de preferencias y salir
+
+── Otras opciones del parser ──
+  --transition-beats TRANSITION_BEATS
+                              Suaviza el CC1 (expresión) y vel_scale en los
+                              bordes de sección con una rampa lineal de N
+                              beats hacia/desde el carácter vecino. 0 = corte
+                              duro (default, transición fuerte/contrastante).
+                              Ej: --transition-beats 4
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  ───────────────
+
+  ① Básico:
+       python piano_to_orchestra.py pieza.mid
+
+  ② Con perfil emocional — toda la pieza:
+       python piano_to_orchestra.py pieza.mid --caracter romántico
+       python piano_to_orchestra.py pieza.mid --caracter épico
+       python piano_to_orchestra.py pieza.mid --caracter lúgubre
+
+  ③ Mezcla de perfiles (coma o + como separador):
+       python piano_to_orchestra.py pieza.mid \
+           --caracter "nostálgico:0.7,épico:0.3"
+
+  ④ Perfil distinto por sección:
+       python piano_to_orchestra.py pieza.mid \
+           --caracter "A:nostálgico,B:épico,C:romántico"
+
+  ⑤ Sección con mezcla + sección simple:
+       python piano_to_orchestra.py pieza.mid \
+           --caracter "A:nostálgico:0.6+épico:0.4,B:sereno"
+
+  ⑥ Experimentar comparando perfiles:
+       for c in épico romántico nostálgico agresivo lúgubre festivo; do
+           python piano_to_orchestra.py pieza.mid --caracter $c --output $c
+       done
+
+  ⑦ Revisión por escucha — candidatos contrastantes:
+       python piano_to_orchestra.py pieza.mid --review --candidates 2 \
+           --soundfont ~/sf2/timbres_of_heaven.sf2
+
+  ⑧ Perfil emocional + revisión combinados:
+       python piano_to_orchestra.py pieza.mid --caracter romántico \
+           --review --candidates 2
+
+  ⑨ Orquesta completa, greedy, 5 secciones:
+       python piano_to_orchestra.py pieza.mid \
+           --template full --voicing greedy --sections 5
+
+  ⑩ Debug: inspeccionar análisis armónico:
+       python piano_to_orchestra.py pieza.mid --debug --verbose
+
+  ⑪ Exportar voces separadas y fingerprints:
+       python piano_to_orchestra.py pieza.mid --split --fingerprints
+
+  ⑫ Entrenar ranker ML, usarlo, ver estadísticas:
+       python piano_to_orchestra.py --train
+       python piano_to_orchestra.py pieza.mid --voicing ml
+       python piano_to_orchestra.py --stats
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  pip install mido numpy scipy scikit-learn
+    mido          lectura/escritura MIDI (obligatoria)
+    numpy         álgebra lineal, estadística (obligatoria)
+    scipy         detección de secciones (opcional)
+    scikit-learn  backend ml (opcional)
 """
 
 import sys

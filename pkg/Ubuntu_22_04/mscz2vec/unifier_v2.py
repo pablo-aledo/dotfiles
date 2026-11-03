@@ -1,71 +1,125 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         UNIFIER  v2.0                                        ║
-║      Fusión coherente de secciones-ancla MIDI en una obra unificada         ║
-║                                                                              ║
-║  v2.0 = merge de las dos implementaciones v1:                                ║
-║    · de la v1 "interna": ancla explícita, tempo global con rampas,          ║
-║      groove del ancla (16 subdivisiones), protección del canal 9,           ║
-║      tonalidad única con relativas, salida tipo 1 por roles, arco áureo     ║
-║    · de la v1 "externa": extracción de motivo por n-gramas con saliencia,   ║
-║      transformaciones del motivo (inversión/retrógrado/aumentación),        ║
-║      puntos estructurales de siembra, nudge armónico con conducción de      ║
-║      voces, puentes con acorde pivote + V7→I, dosificación --glue,          ║
-║      score de coherencia antes→después, humanización y ritardando final     ║
-║                                                                              ║
-║  DIMENSIONES DE UNIFICACIÓN (dosificables con --glue / --glue-preset):      ║
-║  [M] motif    — motivo ancla sembrado transformado en puntos estructurales  ║
-║                 de las demás secciones (pista propia "motivo")              ║
-║  [H] harmony  — compases con acorde no diatónico se re-armonizan a un       ║
-║                 acorde diatónico compatible con la melodía, con conducción  ║
-║                 de voces (tonos comunes entre compases)                     ║
-║  [R] rhythm   — los ataques se imantan a las casillas fuertes del groove    ║
-║                 del ANCLA (no a una rejilla genérica)                       ║
-║  [D] dynamics — nivelación entre secciones + arco global con clímax único  ║
-║  [K] tonal    — siempre activo: tonalidad global única; secciones en modo   ║
-║                 opuesto van a la RELATIVA (misma armadura, mismo color)     ║
-║  [T] tempo    — siempre activo: tempo diana + --tempo-blend + rampas        ║
-║  [I] instr    — siempre activo: un instrumento GM por rol en toda la obra   ║
-║                 (paleta del ancla; --no-instr fuerza paleta de cuerdas)     ║
-║                                                                              ║
-║  PUENTES (v2): último acorde de A → acorde PIVOTE común → V7 de la          ║
-║  tonalidad global → primer acorde de B, con conducción de voces, bajo por   ║
-║  raíces y declaración del motivo ancla encima, en crescendo.                ║
-║                                                                              ║
-║  FLUJO:                                                                      ║
-║  [1] ANÁLISIS   — tonalidad, tempo, tensión, roles, acordes por compás      ║
-║  [2] PLAN TONAL — tonalidad global + transposición mínima (relativas)       ║
-║  [3] PLAN TEMPO — tempo diana + rampas en puentes                           ║
-║  [4] MOTIVO     — n-gramas de intervalos repetidos con saliencia            ║
-║                   (reps × longitud × distintividad) o --motif-seed          ║
-║  [5] UNIFICAR   — niveles + nudge armónico + siembra + imantación rítmica   ║
-║  [6] PUENTES    — pivote + V7 + motivo + crossfade                          ║
-║  [7] ENSAMBLAR  — pistas por rol (melodía/motivo/contrapunto/armonía/bajo)  ║
-║  [8] ARCO       — clímax único (áureo) + humanización + ritardando final    ║
-║  [9] SCORE      — coherencia antes→después + informe + escritura            ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python unifier2.py intro.mid nudo.mid climax.mid final.mid               ║
-║    python unifier2.py a.mid b.mid c.mid --key Dm --anchor 1                 ║
-║    python unifier2.py a.mid b.mid --glue motif=0.8,harmony=0.7,rhythm=0.3   ║
-║    python unifier2.py a.mid b.mid c.mid --glue-preset fuerte                ║
-║    python unifier2.py a.mid b.mid --motif-seed mi_motivo.mid                ║
-║    python unifier2.py a.mid b.mid c.mid --report            # solo plan     ║
-║                                                                              ║
-║  OPCIONES NUEVAS EN v2 (el resto, como en v1):                              ║
-║    --glue SPEC        motif=,harmony=,rhythm=,dynamics=  (0–1 cada eje)     ║
-║    --glue-preset P    sutil | medio | fuerte  (default: medio)              ║
-║    --motif-seed FILE  MIDI externo con el motivo semilla (anula el ancla)   ║
-║    --no-harmony       Atajo: harmony=0                                       ║
-║    --no-humanize      Sin micro-timing ni variación de velocity              ║
-║    --no-rit           Sin ritardando final                                   ║
-║    --score            Imprime el score de coherencia antes→después          ║
-║                                                                              ║
-║  AUTOCONTENIDO: solo mido y numpy. Funciones copiadas/adaptadas de           ║
-║  mosaic_composer, stitcher, leitmotif_tracker, climax_engineer y de la      ║
-║  implementación externa v1.1 (voice leading, pivotes, n-gramas, score).     ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+unifier_v2.py — Unifier: fusión coherente de secciones-ancla MIDI en una obra
+unificada
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+v2.0 = merge de las dos implementaciones v1:
+  · de la v1 "interna": ancla explícita, tempo global con rampas,
+    groove del ancla (16 subdivisiones), protección del canal 9,
+    tonalidad única con relativas, salida tipo 1 por roles, arco áureo
+  · de la v1 "externa": extracción de motivo por n-gramas con saliencia,
+    transformaciones del motivo (inversión/retrógrado/aumentación),
+    puntos estructurales de siembra, nudge armónico con conducción de
+    voces, puentes con acorde pivote + V7→I, dosificación --glue,
+    score de coherencia antes→después, humanización y ritardando final
+
+DIMENSIONES DE UNIFICACIÓN (dosificables con --glue / --glue-preset):
+[M] motif    — motivo ancla sembrado transformado en puntos estructurales
+               de las demás secciones (pista propia "motivo")
+[H] harmony  — compases con acorde no diatónico se re-armonizan a un
+               acorde diatónico compatible con la melodía, con conducción
+               de voces (tonos comunes entre compases)
+[R] rhythm   — los ataques se imantan a las casillas fuertes del groove
+               del ANCLA (no a una rejilla genérica)
+[D] dynamics — nivelación entre secciones + arco global con clímax único
+[K] tonal    — siempre activo: tonalidad global única; secciones en modo
+               opuesto van a la RELATIVA (misma armadura, mismo color)
+[T] tempo    — siempre activo: tempo diana + --tempo-blend + rampas
+[I] instr    — siempre activo: un instrumento GM por rol en toda la obra
+               (paleta del ancla; --no-instr fuerza paleta de cuerdas)
+
+PUENTES (v2): último acorde de A → acorde PIVOTE común → V7 de la
+tonalidad global → primer acorde de B, con conducción de voces, bajo por
+raíces y declaración del motivo ancla encima, en crescendo.
+
+FLUJO:
+[1] ANÁLISIS   — tonalidad, tempo, tensión, roles, acordes por compás
+[2] PLAN TONAL — tonalidad global + transposición mínima (relativas)
+[3] PLAN TEMPO — tempo diana + rampas en puentes
+[4] MOTIVO     — n-gramas de intervalos repetidos con saliencia
+                 (reps × longitud × distintividad) o --motif-seed
+[5] UNIFICAR   — niveles + nudge armónico + siembra + imantación rítmica
+[6] PUENTES    — pivote + V7 + motivo + crossfade
+[7] ENSAMBLAR  — pistas por rol (melodía/motivo/contrapunto/armonía/bajo)
+[8] ARCO       — clímax único (áureo) + humanización + ritardando final
+[9] SCORE      — coherencia antes→después + informe + escritura
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midis MIDIS […]             Fragmentos MIDI en el orden emocional deseado
+  --output OUTPUT             (defecto obra_unificada.mid)
+  --anchor ANCHOR             Índice del fragmento ancla (default: 0)
+  --key KEY                   Tonalidad global, p.ej. C, Am, Eb, F#m
+  --tempo TEMPO
+  --tempo-blend TEMPO_BLEND   (defecto 0.25)
+  --bridge-bars BRIDGE_BARS   (defecto 2)
+  --glue GLUE                 Dosificación:
+                              motif=0.7,harmony=0.6,rhythm=0.4,dynamics=0.6
+                              (ejes omitidos → preset)
+  --glue-preset GLUE_PRESET   (defecto medio; valores: sutil|medio|fuerte)
+  --motif-seed MOTIF_SEED     MIDI externo con el motivo semilla (anula el
+                              ancla)
+  --snap-strength SNAP_STRENGTH
+                              0=respetar cromatismo, 1=ajustar todo a la
+                              escala (defecto 0.0)
+  --climax-pos CLIMAX_POS     (defecto 0.618)
+  --arc-intensity ARC_INTENSITY
+                              (defecto 0.6)
+  --no-motif
+  --no-rhythm
+  --no-harmony
+  --no-humanize
+  --no-rit
+  --score                     Imprimir score de coherencia antes→después
+  --no-instr                  Ignorar instrumentos del ancla (paleta de
+                              cuerdas)
+  --no-bridges
+  --no-arc
+  --no-levels
+  --seed SEED                 (defecto 42)
+  --report                    Solo análisis y plan, sin transformar ni
+                              escribir
+  --json JSON                 Exportar decisiones y mapa a JSON
+  --dry-run
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    python unifier2.py intro.mid nudo.mid climax.mid final.mid
+    python unifier2.py a.mid b.mid c.mid --key Dm --anchor 1
+    python unifier2.py a.mid b.mid --glue motif=0.8,harmony=0.7,rhythm=0.3
+    python unifier2.py a.mid b.mid c.mid --glue-preset fuerte
+    python unifier2.py a.mid b.mid --motif-seed mi_motivo.mid
+    python unifier2.py a.mid b.mid c.mid --report            # solo plan
+
+  OPCIONES NUEVAS EN v2 (el resto, como en v1):
+    --glue SPEC        motif=,harmony=,rhythm=,dynamics=  (0–1 cada eje)
+    --glue-preset P    sutil | medio | fuerte  (default: medio)
+    --motif-seed FILE  MIDI externo con el motivo semilla (anula el ancla)
+    --no-harmony       Atajo: harmony=0
+    --no-humanize      Sin micro-timing ni variación de velocity
+    --no-rit           Sin ritardando final
+    --score            Imprime el score de coherencia antes→después
+
+  AUTOCONTENIDO: solo mido y numpy. Funciones copiadas/adaptadas de
+  mosaic_composer, stitcher, leitmotif_tracker, climax_engineer y de la
+  implementación externa v1.1 (voice leading, pivotes, n-gramas, score).
+
+── Más modos ──
+
+  # Invocación básica
+  python unifier_v2.py entrada.mid entrada2.mid
+
+  # Solo análisis y plan, sin transformar ni escribir
+  python unifier_v2.py entrada.mid entrada2.mid --report
+
+  # --dry-run
+  python unifier_v2.py entrada.mid entrada2.mid --dry-run
 """
 
 import argparse

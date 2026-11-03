@@ -1,65 +1,79 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        MSCZ2VEC  v1.0                                        ║
-║          Vectorización perceptual de partituras musicales                    ║
-║                                                                              ║
-║  Analiza una partitura (MusicXML, MSCZ, MIDI, etc.) y extrae vectores       ║
-║  de características musicales a múltiples niveles: melódico, armónico,      ║
-║  rítmico, tímbrico, formal y de percepción emocional unificada.              ║
-║                                                                              ║
-║  VECTORES DISPONIBLES:                                                       ║
-║    unified       — Vector 6D perceptual unificado (por defecto)              ║
-║    melodic       — Histograma de intervalos + estadísticas de pitch          ║
-║    harmonic      — Funciones armónicas y progresiones                        ║
-║    rhythmic      — Densidad, patrones y n-gramas rítmicos                    ║
-║    instrumental  — Familias de instrumentos y orquestación                   ║
-║    motif         — Motivos y estructura formal (Sequitur)                    ║
-║    form          — Vector de estructura formal                               ║
-║    emotion       — Vector semántico-emocional completo                       ║
-║    tension       — Perfil de tensión armónica                               ║
-║    stability     — Perfil de estabilidad tonal                               ║
-║    novelty       — Vector de novedad estructural                             ║
-║    entropy       — Entropía y sorpresa                                       ║
-║    lerdahl       — Energía según teoría de Lerdahl                          ║
-║    tonnetz       — Distancias en el Tonnetz                                  ║
-║    psychoacoustic — Características psicoamácusticas                         ║
-║    modal         — Intercambio modal                                         ║
-║    brightness    — Luminosidad tímbrica                                      ║
-║    all           — Todos los vectores anteriores                             ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python mscz2vec.py partitura.musicxml                                     ║
-║    python mscz2vec.py partitura.mscz --vector melodic                       ║
-║    python mscz2vec.py partitura.xml --vector harmonic rhythmic              ║
-║    python mscz2vec.py partitura.xml --vector all --output vec.json          ║
-║    python mscz2vec.py partitura.xml --vector unified harmonic --verbose     ║
-║    python mscz2vec.py partitura.xml --vector emotion tension stability      ║
-║    python mscz2vec.py partitura.xml --vector motif form --output motif.json ║
-║    python mscz2vec.py partitura.xml --custom-rules "intro:measure:1"        ║
-║      "motivo_a:notes:60,62,64,65" "estrib:recursive:intro,intro"           ║
-║    python mscz2vec.py partitura.xml --no-debug --vector unified             ║
-║    python mscz2vec.py partitura.xml --vector all --verbose                  ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    input           Ruta a la partitura (MusicXML, MSCZ, MIDI, etc.)         ║
-║    --vector V [V…] Vectores a extraer (default: unified)                    ║
-║    --output FILE   Guardar resultado en JSON (default: solo imprime)         ║
-║    --custom-rules  Reglas para Sequitur: "nombre:tipo:valor" por argumento  ║
-║                    tipos: measure (nº compás), notes (lista MIDI),           ║
-║                           recursive (lista de nombres de reglas)            ║
-║    --no-debug      Desactivar mensajes de depuración (default: debug activo) ║
-║    --verbose       Informe detallado de cada análisis                        ║
-║                                                                              ║
-║  EJEMPLOS DE CUSTOM RULES:                                                   ║
-║    --custom-rules "intro:measure:1" "motivo_a:notes:60,62,64,65"           ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    Imprime los vectores solicitados por stdout.                              ║
-║    Con --output: guarda un JSON con todos los vectores solicitados.         ║
-║                                                                              ║
-║  DEPENDENCIAS: music21, numpy, scipy, sklearn                                ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+mscz2vec.py — Mscz2Vec: vectorización perceptual de partituras musicales
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Analiza una partitura (MusicXML, MSCZ, MIDI, etc.) y extrae vectores
+de características musicales a múltiples niveles: melódico, armónico,
+rítmico, tímbrico, formal y de percepción emocional unificada.
+
+VECTORES DISPONIBLES:
+  unified       — Vector 6D perceptual unificado (por defecto)
+  melodic       — Histograma de intervalos + estadísticas de pitch
+  harmonic      — Funciones armónicas y progresiones
+  rhythmic      — Densidad, patrones y n-gramas rítmicos
+  instrumental  — Familias de instrumentos y orquestación
+  motif         — Motivos y estructura formal (Sequitur)
+  form          — Vector de estructura formal
+  emotion       — Vector semántico-emocional completo
+  tension       — Perfil de tensión armónica
+  stability     — Perfil de estabilidad tonal
+  novelty       — Vector de novedad estructural
+  entropy       — Entropía y sorpresa
+  lerdahl       — Energía según teoría de Lerdahl
+  tonnetz       — Distancias en el Tonnetz
+  psychoacoustic — Características psicoamácusticas
+  modal         — Intercambio modal
+  brightness    — Luminosidad tímbrica
+  all           — Todos los vectores anteriores
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Imprime los vectores solicitados por stdout.
+  Con --output: guarda un JSON con todos los vectores solicitados.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  input           Ruta a la partitura (MusicXML, MSCZ, MIDI, etc.)
+  --vector V [V…] Vectores a extraer (default: unified)
+  --output FILE   Guardar resultado en JSON (default: solo imprime)
+  --custom-rules  Reglas para Sequitur: "nombre:tipo:valor" por argumento
+                  tipos: measure (nº compás), notes (lista MIDI),
+                         recursive (lista de nombres de reglas)
+  --no-debug      Desactivar mensajes de depuración (default: debug activo)
+  --verbose       Informe detallado de cada análisis
+
+── Otras opciones del parser ──
+  --bass-only                 Analizar solo el pentagrama en clave de fa (mano
+                              izquierda) para el análisis armónico
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python mscz2vec.py partitura.musicxml
+  python mscz2vec.py partitura.mscz --vector melodic
+  python mscz2vec.py partitura.xml --vector harmonic rhythmic
+  python mscz2vec.py partitura.xml --vector all --output vec.json
+  python mscz2vec.py partitura.xml --vector unified harmonic --verbose
+  python mscz2vec.py partitura.xml --vector emotion tension stability
+  python mscz2vec.py partitura.xml --vector motif form --output motif.json
+  python mscz2vec.py partitura.xml --custom-rules "intro:measure:1" \
+    "motivo_a:notes:60,62,64,65" "estrib:recursive:intro,intro"
+  python mscz2vec.py partitura.xml --no-debug --vector unified
+  python mscz2vec.py partitura.xml --vector all --verbose
+
+── EJEMPLOS DE CUSTOM RULES ──
+  --custom-rules "intro:measure:1" "motivo_a:notes:60,62,64,65"
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  music21, numpy, scipy, sklearn
 """
 
 # =========================

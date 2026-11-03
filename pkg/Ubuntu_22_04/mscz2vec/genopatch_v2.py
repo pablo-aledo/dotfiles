@@ -1,145 +1,275 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                            GENOPATCH  v2.0                                   ║
-║  Matching de patches de síntesis por búsqueda evolutiva — fichero único      ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  QUÉ HACE                                                                    ║
-║    Dado un WAV objetivo, busca los parámetros de un motor de síntesis        ║
-║    paramétrico que mejor lo reproducen, mediante un algoritmo genético       ║
-║    (selección por torneo + crossover aritmético + mutación gaussiana +       ║
-║    elitismo). Inspirado en el "Genopatch" de Synplant 2 (Sonic Charge),      ║
-║    pero sin red neuronal: aquí la búsqueda evolutiva ES el modelo, en la     ║
-║    línea de mix_evolver.py (ver audio_effects.py) y del Patch Mutator de     ║
-║    Nord — puro CPU, sin GPU, determinista dado un --seed.                    ║
-║                                                                              ║
-║  MOTORES DE SÍNTESIS — genéricos, seleccionables con --engine                ║
-║    fm2           2 op. FM + filtro resonante CON envolvente propia.         ║
-║    additive      envuelve Timbre/EnvelopeADR/synth_note de audio_lab.py.    ║
-║    subtractive   2 osc (saw/pulso+PWM) + sub-osc + ruido + filtro           ║
-║                  resonante con envolvente — el "analógico" clásico.         ║
-║    karplus       cuerda pulsada (Karplus-Strong), comb filter vectorizado   ║
-║                  vía scipy.lfilter — plucks/percusión afinada.              ║
-║    wavetable     4 tablas de un ciclo (seno/triángulo/sierra/formante)      ║
-║                  escaneadas a lo largo de la nota + filtro.                 ║
-║    noise         ruido coloreado + resonancia de "cuerpo" (bandpass) —      ║
-║                  percusión/texturas no tonales.                             ║
-║    layered_fm_add  fm2 + additive mezclados (layer_mix) — wrapper genérico  ║
-║                  de "capas", demuestra que EngineSpec compone sin tocar     ║
-║                  GA/fitness/CLI. Prefijos a_*/b_* en sus parámetros.        ║
-║    Añadir un motor nuevo = registrar un EngineSpec más en RAW_ENGINES; ni   ║
-║    el GA ni el CLI necesitan cambios.  Ver subcomando `list-engines`.       ║
-║                                                                              ║
-║    TODOS los motores llevan además, automáticamente, un wrapper de FX       ║
-║    genérico (post-proceso sobre el audio YA renderizado, no cableado en    ║
-║    ningún motor):                                                          ║
-║      vibrato_rate/depth/delay   LFO de pitch (remuestreo a tasa variable)   ║
-║      unison_voices/detune       hasta 7 voces desafinadas sumadas (mono)    ║
-║      drive_amount/mix           waveshaping tanh mezclado con la señal seca ║
-║    Todos con default = sin efecto → retrocompatible con patch.json          ║
-║    guardados en versiones anteriores.                                      ║
-║                                                                              ║
-║  FITNESS — genérico, seleccionable con --fitness                            ║
-║    spectral   autocontenido: log-magnitud STFT (n_fft=2048, ~21.5Hz/bin —   ║
-║               antes 1024/43Hz), agregada media+std sobre el tiempo          ║
-║               (invariante a duración exacta) + descriptor explícito de      ║
-║               vibrato (profundidad+tasa vía frecuencia instantánea/Hilbert, ║
-║               ponderado). Sin este descriptor, la resolución de la STFT     ║
-║               por sí sola sigue sin distinguir vibratos sutiles — es lo que ║
-║               le da al GA señal real para ajustar vibrato_depth/rate.       ║
-║               El paisaje de vibrato tiene varios óptimos locales: usa       ║
-║               --strands 4+ en `match` si el objetivo tiene vibrato notorio. ║
-║               Rápido — recomendado para el bucle del GA (miles de evals).   ║
-║    reference  reutiliza el extractor de audio_reference_scorer.py           ║
-║               (--fitness-backend spectral|latent) como espacio de           ║
-║               features, con distancia euclídea simple al objetivo. NO usa   ║
-║               la maquinaria de Mahalanobis/corpus de ese script — está      ║
-║               diseñada para comparar contra un corpus de referencia         ║
-║               (media+covarianza, mínimo 2 WAVs), y aquí el objetivo es una  ║
-║               única muestra. Cada evaluación escribe el candidato a un WAV  ║
-║               temporal (extract() lee de disco) — más lento que 'spectral', ║
-║               y mucho más lento aún con --fitness-backend latent (requiere  ║
-║               audiolm.py + checkpoint, inferencia por candidato). No lleva  ║
-║               descriptor de vibrato propio (es ajeno a este script).        ║
-║                                                                              ║
-║  SUBCOMANDOS                                                                 ║
-║    match          target.wav → patch.json [+ --preview .wav] [+ --json]     ║
-║    render         patch.json → WAV (motor + nota + duración del patch,      ║
-║                    todo sobreescribible por flags)                          ║
-║    mutate          patch.json → N variantes (nueva semilla desde un patch,   ║
-║                    igual que "Plant Seed" en Synplant)                      ║
-║    explore         N patches ALEATORIOS por motor, renderizados sin GA —     ║
-║                    para descubrir sonidos por accidente, no por matching.   ║
-║    morph           interpola linealmente entre dos patch.json en N pasos —   ║
-║                    viajar deliberadamente por el espacio de un timbre a     ║
-║                    otro, en vez de mutar al azar.                           ║
-║    list-engines    lista motores registrados y sus parámetros               ║
-║    info            imprime los parámetros de un patch.json                  ║
-║    pitch           detecta la nota fundamental de un WAV (diagnóstico)      ║
-║                                                                              ║
-║  DETECCIÓN DE PITCH (YIN — De Cheveigné & Kawahara 2002, autocontenido)      ║
-║    Si `match` no recibe --note, estima la fundamental del WAV objetivo con   ║
-║    YIN: función de diferencia normalizada acumulada (más robusta frente a    ║
-║    errores de octava que la autocorrelación simple — confirmado en           ║
-║    testing: un grave profundo que antes se detectaba ~36 armónicos por       ║
-║    encima ahora sale casi exacto; una campana inarmónica que saltaba a un    ║
-║    subarmónico ahora falla por solo 1 semitono). Salta ~20ms de ataque,      ║
-║    ventana de hasta 2s, rango [--pitch-fmin, --pitch-fmax] Hz. Si la         ║
-║    confianza cae por debajo de --pitch-confidence (sonidos no                ║
-║    tonales/percusivos/ruido), cae a --note 60 (C4) con un aviso — nunca      ║
-║    falla silenciosamente con una nota inventada de baja confianza.           ║
-║    Contenido MUY inarmónico (ratios de armónicos no enteros) sigue siendo    ║
-║    ambiguo para cualquier método basado en periodicidad — usa --note         ║
-║    explícito si sabes que el timbre es de ese tipo.                          ║
-║    `genopatch.py pitch archivo.wav` expone el mismo detector suelto, para    ║
-║    inspeccionar cualquier WAV sin lanzar un match completo.                  ║
-║                                                                              ║
-║                                                                              ║
-║  USO                                                                        ║
-║    genopatch.py match target.wav --engine fm2 --note C4 --out patch.json \\ ║
-║                 --preview preview.wav                                       ║
-║    genopatch.py match target.wav --engine subtractive --strands 4 \\        ║
-║                 --out patch.json                                            ║
-║    genopatch.py render patch.json --note E4 --out variant.wav               ║
-║    genopatch.py mutate patch.json -n 8 --amount 0.15 --out-dir variants/    ║
-║    genopatch.py explore --engine karplus -n 12 --out-dir explore/           ║
-║    genopatch.py morph a.json b.json --steps 8 --render --out-dir morph/     ║
-║    genopatch.py list-engines                                                ║
-║    genopatch.py pitch target.wav                                            ║
-║                                                                              ║
-║  FORMATO patch.json                                                         ║
-║    {"engine": "fm2", "note": 60, "duration": 1.5, "velocity": 1.0,          ║
-║     "params": {"carrier_ratio": 1.0, "mod_ratio": 2.0, ...}}                ║
-║                                                                              ║
-║  DEPENDENCIAS  numpy  scipy  soundfile   (obligatorias)                     ║
-║                audio_lab.py               (solo --engine additive/layered)  ║
-║                audio_reference_scorer.py  (solo --fitness reference)        ║
-║                                                                              ║
-║  LIMITACIONES                                                               ║
-║    · Más parámetros = espacio de búsqueda más grande: con el mismo          ║
-║      presupuesto de --generations/--pop, motores con más parámetros         ║
-║      (fm2/subtractive/layered_fm_add, con FX incluido, rondan 20-34         ║
-║      dimensiones) convergen más despacio que motores simples (karplus,      ║
-║      10). Subir --strands ayuda más que subir --pop a igual coste.          ║
-║    · wavetable/subtractive no son banda-limitados con precisión (saw/       ║
-║      square vía scipy.signal / suma de armónicos truncada) — puede haber    ║
-║      aliasing leve en notas muy agudas.                                     ║
-║    · unison/vibrato son efectos MONO (remuestreo, no líneas estéreo) —      ║
-║      dan grosor, no anchura estéreo real.                                   ║
-║    · La detección de pitch es monofónica y por autocorrelación (no hay     ║
-║      DNN de pitch): fiable para notas sostenidas de fundamental clara,      ║
-║      menos para acordes, ruido de banda ancha o transitorios muy cortos     ║
-║      (donde de todas formas --note apenas importa para el resultado).       ║
-║    · fm2/subtractive/noise usan semilla de ruido fija (0) para que el       ║
-║      fitness sea determinista entre generaciones.                          ║
-║    · additive y layered_fm_add requieren audio_lab.py junto a este          ║
-║      fichero; reference requiere audio_reference_scorer.py (y               ║
-║      opcionalmente audiolm.py).                                             ║
-║                                                                              ║
-║  Módulo importable:                                                        ║
-║    from genopatch_v2 import ENGINES, run_ga, Patch, load_patch, \\          ║
-║                             save_patch, detect_pitch, hz_to_midi            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+genopatch_v2.py — Genopatch: matching de patches de síntesis por búsqueda
+evolutiva — fichero único
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+QUÉ HACE:
+  Dado un WAV objetivo, busca los parámetros de un motor de síntesis
+  paramétrico que mejor lo reproducen, mediante un algoritmo genético
+  (selección por torneo + crossover aritmético + mutación gaussiana +
+  elitismo). Inspirado en el "Genopatch" de Synplant 2 (Sonic Charge),
+  pero sin red neuronal: aquí la búsqueda evolutiva ES el modelo, en la
+  línea de mix_evolver.py (ver audio_effects.py) y del Patch Mutator de
+  Nord — puro CPU, sin GPU, determinista dado un --seed.
+
+MOTORES DE SÍNTESIS — genéricos, seleccionables con --engine
+  fm2           2 op. FM + filtro resonante CON envolvente propia.
+  additive      envuelve Timbre/EnvelopeADR/synth_note de audio_lab.py.
+  subtractive   2 osc (saw/pulso+PWM) + sub-osc + ruido + filtro
+                resonante con envolvente — el "analógico" clásico.
+  karplus       cuerda pulsada (Karplus-Strong), comb filter vectorizado
+                vía scipy.lfilter — plucks/percusión afinada.
+  wavetable     4 tablas de un ciclo (seno/triángulo/sierra/formante)
+                escaneadas a lo largo de la nota + filtro.
+  noise         ruido coloreado + resonancia de "cuerpo" (bandpass) —
+                percusión/texturas no tonales.
+  layered_fm_add  fm2 + additive mezclados (layer_mix) — wrapper genérico
+                de "capas", demuestra que EngineSpec compone sin tocar
+                GA/fitness/CLI. Prefijos a_*/b_* en sus parámetros.
+  Añadir un motor nuevo = registrar un EngineSpec más en RAW_ENGINES; ni
+  el GA ni el CLI necesitan cambios.  Ver subcomando `list-engines`.
+
+  TODOS los motores llevan además, automáticamente, un wrapper de FX
+  genérico (post-proceso sobre el audio YA renderizado, no cableado en
+  ningún motor):
+    vibrato_rate/depth/delay   LFO de pitch (remuestreo a tasa variable)
+    unison_voices/detune       hasta 7 voces desafinadas sumadas (mono)
+    drive_amount/mix           waveshaping tanh mezclado con la señal seca
+  Todos con default = sin efecto → retrocompatible con patch.json
+  guardados en versiones anteriores.
+
+FITNESS — genérico, seleccionable con --fitness
+  spectral   autocontenido: log-magnitud STFT (n_fft=2048, ~21.5Hz/bin —
+             antes 1024/43Hz), agregada media+std sobre el tiempo
+             (invariante a duración exacta) + descriptor explícito de
+             vibrato (profundidad+tasa vía frecuencia instantánea/Hilbert,
+             ponderado). Sin este descriptor, la resolución de la STFT
+             por sí sola sigue sin distinguir vibratos sutiles — es lo que
+             le da al GA señal real para ajustar vibrato_depth/rate.
+             El paisaje de vibrato tiene varios óptimos locales: usa
+             --strands 4+ en `match` si el objetivo tiene vibrato notorio.
+             Rápido — recomendado para el bucle del GA (miles de evals).
+  reference  reutiliza el extractor de audio_reference_scorer.py
+             (--fitness-backend spectral|latent) como espacio de
+             features, con distancia euclídea simple al objetivo. NO usa
+             la maquinaria de Mahalanobis/corpus de ese script — está
+             diseñada para comparar contra un corpus de referencia
+             (media+covarianza, mínimo 2 WAVs), y aquí el objetivo es una
+             única muestra. Cada evaluación escribe el candidato a un WAV
+             temporal (extract() lee de disco) — más lento que 'spectral',
+             y mucho más lento aún con --fitness-backend latent (requiere
+             audiolm.py + checkpoint, inferencia por candidato). No lleva
+             descriptor de vibrato propio (es ajeno a este script).
+
+LIMITACIONES:
+  · Más parámetros = espacio de búsqueda más grande: con el mismo
+    presupuesto de --generations/--pop, motores con más parámetros
+    (fm2/subtractive/layered_fm_add, con FX incluido, rondan 20-34
+    dimensiones) convergen más despacio que motores simples (karplus,
+    10). Subir --strands ayuda más que subir --pop a igual coste.
+  · wavetable/subtractive no son banda-limitados con precisión (saw/
+    square vía scipy.signal / suma de armónicos truncada) — puede haber
+    aliasing leve en notas muy agudas.
+  · unison/vibrato son efectos MONO (remuestreo, no líneas estéreo) —
+    dan grosor, no anchura estéreo real.
+  · La detección de pitch es monofónica y por autocorrelación (no hay
+    DNN de pitch): fiable para notas sostenidas de fundamental clara,
+    menos para acordes, ruido de banda ancha o transitorios muy cortos
+    (donde de todas formas --note apenas importa para el resultado).
+  · fm2/subtractive/noise usan semilla de ruido fija (0) para que el
+    fitness sea determinista entre generaciones.
+  · additive y layered_fm_add requieren audio_lab.py junto a este
+    fichero; reference requiere audio_reference_scorer.py (y
+    opcionalmente audiolm.py).
+
+Módulo importable:
+  from genopatch_v2 import ENGINES, run_ga, Patch, load_patch, \
+                           save_patch, detect_pitch, hz_to_midi
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+    match          target.wav → patch.json [+ --preview .wav] [+ --json]
+    render         patch.json → WAV (motor + nota + duración del patch,
+                    todo sobreescribible por flags)
+    mutate          patch.json → N variantes (nueva semilla desde un patch,
+                    igual que "Plant Seed" en Synplant)
+    explore         N patches ALEATORIOS por motor, renderizados sin GA —
+                    para descubrir sonidos por accidente, no por matching.
+    morph           interpola linealmente entre dos patch.json en N pasos —
+                    viajar deliberadamente por el espacio de un timbre a
+                    otro, en vez de mutar al azar.
+    list-engines    lista motores registrados y sus parámetros
+    info            imprime los parámetros de un patch.json
+    pitch           detecta la nota fundamental de un WAV (diagnóstico)
+
+  DETECCIÓN DE PITCH (YIN — De Cheveigné & Kawahara 2002, autocontenido)
+    Si `match` no recibe --note, estima la fundamental del WAV objetivo con
+    YIN: función de diferencia normalizada acumulada (más robusta frente a
+    errores de octava que la autocorrelación simple — confirmado en
+    testing: un grave profundo que antes se detectaba ~36 armónicos por
+    encima ahora sale casi exacto; una campana inarmónica que saltaba a un
+    subarmónico ahora falla por solo 1 semitono). Salta ~20ms de ataque,
+    ventana de hasta 2s, rango [--pitch-fmin, --pitch-fmax] Hz. Si la
+    confianza cae por debajo de --pitch-confidence (sonidos no
+    tonales/percusivos/ruido), cae a --note 60 (C4) con un aviso — nunca
+    falla silenciosamente con una nota inventada de baja confianza.
+    Contenido MUY inarmónico (ratios de armónicos no enteros) sigue siendo
+    ambiguo para cualquier método basado en periodicidad — usa --note
+    explícito si sabes que el timbre es de ese tipo.
+    `genopatch.py pitch archivo.wav` expone el mismo detector suelto, para
+    inspeccionar cualquier WAV sin lanzar un match completo.
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  match
+    target_wav TARGET_WAV       WAV objetivo a reproducir
+    --engine ENGINE             Motor de síntesis (default: fm2)
+    --fitness FITNESS           Función de distancia (default: spectral)
+                                (valores: spectral|reference)
+    --fitness-backend FITNESS_BACKEND
+                                Backend de audio_reference_scorer.py si
+                                --fitness reference (default: spectral)
+                                (valores: spectral|latent)
+    --note NOTE                 Nota MIDI o nombre (p.ej. 60, C4). Default:
+                                detección automática de pitch del WAV objetivo
+                                (fallback a 60/C4 si no hay pitch claro)
+    --pitch-fmin PITCH_FMIN     Frecuencia mínima buscada en la detección de
+                                pitch (default: 40Hz)
+    --pitch-fmax PITCH_FMAX     Frecuencia máxima buscada en la detección de
+                                pitch (default: 2000Hz)
+    --pitch-confidence PITCH_CONFIDENCE
+                                Confianza mínima del pico de autocorrelación
+                                para aceptar el pitch detectado; por debajo,
+                                cae a --note 60/C4 (default: 0.4)
+    --duration DURATION         Duración en segundos (default: duración del
+                                WAV objetivo)
+    --velocity VELOCITY         Velocity 0-1 (default: 1.0)
+    --generations GENERATIONS   Generaciones (default: 60)
+    --pop POP                   Tamaño de población (default: 40)
+    --elite ELITE               Individuos élite por generación (default: 4)
+    --mutation-rate MUTATION_RATE
+                                Probabilidad de mutar cada gen (default: 0.25)
+    --mutation-amount MUTATION_AMOUNT
+                                Amplitud de mutación, fracción del rango del
+                                parámetro (default: 0.12)
+    --strands STRANDS           Nº de poblaciones independientes, cada una con
+                                su semilla (default: 1; homenaje a las 4 ramas
+                                de Genopatch)
+    --strand-out-dir STRAND_OUT_DIR
+                                Si --strands > 1, guarda el ganador de cada
+                                strand aquí
+    --seed SEED                 Semilla base (default: 0)
+    --sr SR                     Sample rate de trabajo (default: el del WAV
+                                objetivo)
+    --out OUT                   patch.json de salida (mejor de todos los
+                                strands) (obligatorio)
+    --preview PREVIEW           WAV de previsualización del mejor patch
+    --json JSON                 Informe opcional (fitness, params, tiempos)
+    --quiet                     No imprimir progreso por generación
+
+  render
+    patch_json PATCH_JSON
+    --note NOTE                 Sobreescribe la nota del patch
+    --duration DURATION         Sobreescribe la duración
+    --velocity VELOCITY         Sobreescribe la velocity
+    --sr SR                     Sample rate (default: 44100)
+    --out OUT                   (obligatorio)
+
+  mutate
+    patch_json PATCH_JSON
+    -n N                        Nº de variantes (default: 8)
+    --amount AMOUNT             Amplitud de mutación, fracción del rango
+                                (default: 0.15)
+    --seed SEED                 (defecto 0)
+    --render                    También renderiza cada variante a WAV
+    --sr SR                     (defecto 44100)
+    --out-dir OUT_DIR           (obligatorio)
+
+  info
+    patch_json PATCH_JSON
+
+  pitch
+    wav WAV
+    --pitch-fmin PITCH_FMIN     (defecto 40.0)
+    --pitch-fmax PITCH_FMAX     (defecto 2000.0)
+    --pitch-confidence PITCH_CONFIDENCE
+                                Solo para el aviso de umbral (default: 0.4,
+                                igual que en `match`)
+
+  explore
+    --engine ENGINE             Motor a explorar (default: todos)
+    -n N                        Patches por motor (default: 8)
+    --note NOTE                 Nota MIDI o nombre (default: 60/C4)
+    --duration DURATION         Duración en segundos (default: 1.5)
+    --velocity VELOCITY         Velocity 0-1 (default: 0.85)
+    --seed SEED                 (defecto 0)
+    --sr SR                     (defecto 44100)
+    --out-dir OUT_DIR           (obligatorio)
+
+  morph
+    patch_a PATCH_A
+    patch_b PATCH_B
+    --steps STEPS               Nº de pasos, incluyendo extremos (default: 8)
+    --render                    También renderiza cada paso a WAV
+    --sr SR                     (defecto 44100)
+    --out-dir OUT_DIR           (obligatorio)
+
+  (común)
+    --sr SR                     Sample rate (default: 44100)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    genopatch.py match target.wav --engine fm2 --note C4 --out patch.json \
+                 --preview preview.wav
+    genopatch.py match target.wav --engine subtractive --strands 4 \
+                 --out patch.json
+    genopatch.py render patch.json --note E4 --out variant.wav
+    genopatch.py mutate patch.json -n 8 --amount 0.15 --out-dir variants/
+    genopatch.py explore --engine karplus -n 12 --out-dir explore/
+    genopatch.py morph a.json b.json --steps 8 --render --out-dir morph/
+    genopatch.py list-engines
+    genopatch.py pitch target.wav
+
+  FORMATO patch.json
+    {"engine": "fm2", "note": 60, "duration": 1.5, "velocity": 1.0,
+     "params": {"carrier_ratio": 1.0, "mod_ratio": 2.0, ...}}
+
+  DEPENDENCIAS  numpy  scipy  soundfile   (obligatorias)
+                audio_lab.py               (solo --engine additive/layered)
+                audio_reference_scorer.py  (solo --fitness reference)
+
+── Más modos ──
+
+  # target.wav → patch.json vía algoritmo genético
+  python genopatch_v2.py match entrada.wav --out out.json
+
+  # patch.json → WAV
+  python genopatch_v2.py render patch_json.json --out salida.mid
+
+  # patch.json → N variantes (nueva semilla desde un patch)
+  python genopatch_v2.py mutate patch_json.json --out-dir salida/
+
+  # Lista motores registrados y sus parámetros
+  python genopatch_v2.py list-engines
+
+  # Imprime los parámetros de un patch.json
+  python genopatch_v2.py info patch_json.json
+
+  # Detecta la nota fundamental de un WAV (diagnóstico)
+  python genopatch_v2.py pitch entrada.wav
+
+  # Samplea N patches aleatorios por motor (sin GA) para navegar
+  python genopatch_v2.py explore --out-dir salida/
+
+  # Interpola linealmente entre dos patch.json en N pasos
+  python genopatch_v2.py morph entrada.mid entrada.mid --out-dir salida/
 """
 
 import argparse

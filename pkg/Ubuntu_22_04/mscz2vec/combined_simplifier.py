@@ -1,90 +1,137 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      COMBINED SIMPLIFIER  v1.2  (autocontenido)              ║
-║                                                                              ║
-║  PROPOSITO:                                                                 ║
-║   Simplifica una partitura de piano en formato MIDI a distintos niveles de  ║
-║   dificultad pedagogica (--target-grade 1..8, de principiante a virtuoso),  ║
-║   reduciendo el numero de notas y la complejidad de la textura mientras se  ║
-║   preserva en la medida de lo posible la identidad armonica y melodica de   ║
-║   la obra original. Para cada grado pedido genera un fichero .mid nuevo con ║
-║   la version simplificada.                                                  ║
-║                                                                              ║
-║  TECNICAS:                                                                  ║
-║   1. Analisis estructural (motor principal): separa la textura en voces de ║
-║      melodia y bajo (skyline), detecta la armonia por compas, clasifica    ║
-║      cada nota segun su funcion tonal (tono del acorde, nota de paso, nota ║
-║      de bordado, apoyatura, suspension, anticipacion, escapada...) y le    ║
-║      asigna un peso estructural. A partir de ese peso calcula un "suelo"   ║
-║      de notas protegidas mediante reduccion schenkeriana progresiva (nunca ║
-║      se eliminan) y aplica despues un algoritmo greedy que va retirando,   ║
-║      compas a compas, las notas menos importantes hasta alcanzar el grado  ║
-║      de dificultad pedido (medido con una formula de 5 factores: velocidad ║
-║      de notas por segundo, extension de la mano, polifonia simultanea,     ║
-║      saltos melodicos e independencia entre manos).                        ║
-║   2. Rejilla de respaldo (mecanismo de garantia): en piezas muy densas en   ║
-║      acordes en bloque, el suelo estructural puede impedir que el greedy   ║
-║      llegue al grado pedido. Cuando esto ocurre, se aplica una segunda     ║
-║      tecnica independiente: cuantizar los onsets a una rejilla temporal    ║
-║      cada vez mas gruesa y limitar la polifonia a un numero maximo de      ║
-║      voces por mano (agudo-primero en la mano derecha, grave-primero en la ║
-║      izquierda), estirando las notas resultantes en legato. Las notas      ║
-║      protegidas por el suelo estructural nunca entran en esta rejilla; la  ║
-║      nota que sobrevive en cada casilla se elige segun el peso estructural ║
-║      ya calculado en el paso 1. Esta rejilla se aplica de forma progresiva ║
-║      (peldaño a peldaño, cada uno partiendo del resultado del anterior)    ║
-║      solo hasta que se alcanza el grado pedido, para minimizar cuanto se   ║
-║      aleja el resultado de la pieza original.                              ║
-║                                                                              ║
-║  USO:                                                                       ║
-║    python combined_simplifier.py obra.mid --target-grade 1 3 5 7           ║
-║    python combined_simplifier.py obra.mid --target-grade 2 --outdir out/   ║
-║    python combined_simplifier.py obra.mid --target-grade 4 --split 60      ║
-║        (--split: pitch MIDI que separa mano derecha/izquierda, def. 60=C4) ║
-║                                                                              ║
-║  SALIDA: por cada --target-grade se genera <nombre>_grade<N>.mid en        ║
-║  --outdir (o junto al fichero de entrada) y un informe por consola con el  ║
-║  grado realmente alcanzado, el metodo usado ("estructural" o               ║
-║  "estructural+rejilla") y el porcentaje de notas conservadas.              ║
-║                                                                              ║
-║  MODOS ADICIONALES — SECUENCIA DE PRACTICA SCHENKERIANA:                     ║
-║   --schenker-sequence sustituye la simplificacion por dificultad por una     ║
-║   escalera de practica basada en niveles de reduccion schenkeriana del       ║
-║   skyline (melodia+bajo, sin voces internas): del Ursatz (fondo              ║
-║   estructural) a la superficie completa. No usa la formula de dificultad     ║
-║   ni la rejilla de respaldo; cada peldano es fiel 1:1 a un nivel real de     ║
-║   la reduccion. Dos modos, via --schenker-mode:                              ║
-║                                                                              ║
-║    · collapse (por defecto): los 3 niveles naturales del motor de la         ║
-║      seccion [6] (superficie / recorte por umbral / colapso completo         ║
-║      hasta punto fijo). Rapido, pero el salto entre el Ursatz y el           ║
-║      siguiente peldano puede ser grande.                                     ║
-║    · threshold_sweep: barre --schenker-thresholds (por defecto 0.2 0.35      ║
-║      0.5 0.65 0.8), un peldano por valor, dando una escalera mas             ║
-║      gradual. A diferencia de pedir varios --target-grade (que NO estan      ║
-║      anidados entre si: el greedy y la rejilla de respaldo pueden variar     ║
-║      que notas sobreviven de un grado a otro), los peldanos de               ║
-║      threshold_sweep SI son subconjuntos estrictos unos de otros por         ║
-║      construccion, y nunca alteran el ritmo (solo quitan notas y             ║
-║      extienden las vecinas).                                                 ║
-║                                                                              ║
-║   USO:                                                                       ║
-║     python combined_simplifier.py obra.mid --schenker-sequence               ║
-║     python combined_simplifier.py obra.mid --schenker-sequence \             ║
-║         --schenker-mode threshold_sweep                                      ║
-║     python combined_simplifier.py obra.mid --schenker-sequence \             ║
-║         --schenker-mode threshold_sweep --outdir out/ \                      ║
-║         --schenker-thresholds 0.15 0.3 0.45 0.6 0.75 \                       ║
-║         --schenker-min-diff 0.05                                             ║
-║                                                                              ║
-║   SALIDA: <nombre>_schenker_<NN>_<label>.mid por peldano (label =            ║
-║   'ursatz', 'T<threshold>' o 'surface'), mas un informe por consola con      ║
-║   notas/superficie (%) de cada peldano.                                      ║
-║                                                                              ║
-║  DEPENDENCIAS: solo numpy (stdlib para todo lo demas). Es un unico fichero  ║
-║  sin dependencias externas al proyecto.                                    ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+combined_simplifier.py — Simplificador de partituras de piano por grados de
+dificultad pedagógica (MIDI → MIDI)
+(versión 1.2: motor estructural + rejilla de respaldo + escalera schenkeriana).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Reduce un MIDI de piano a un grado de dificultad pedido (--target-grade 1..8,
+de principiante a virtuoso) conservando en lo posible la identidad armónica y
+melódica de la obra. Para cada grado genera un .mid nuevo. Dos técnicas:
+
+  1. Análisis estructural (motor principal). Separa la textura en melodía y
+     bajo (skyline), detecta la armonía por compás, clasifica cada nota por su
+     función tonal (nota del acorde, de paso, bordadura, apoyatura, suspensión,
+     anticipación, escapada…) y le asigna un peso estructural. Con ese peso
+     calcula un «suelo» de notas protegidas mediante reducción schenkeriana
+     progresiva (nunca se eliminan) y aplica un algoritmo greedy que retira,
+     compás a compás, las notas menos importantes hasta alcanzar el grado. La
+     dificultad se mide con una fórmula de 5 factores: notas por segundo,
+     extensión de la mano, polifonía simultánea, saltos melódicos e
+     independencia entre manos.
+
+  2. Rejilla de respaldo (garantía). En piezas muy densas en acordes en bloque
+     el suelo puede impedir que el greedy llegue al grado. Entonces se cuantizan
+     los onsets a una rejilla cada vez más gruesa y se limita la polifonía a un
+     máximo de voces por mano (agudo primero en la derecha, grave primero en la
+     izquierda), alargando las notas en legato. Las notas del suelo nunca entran
+     en la rejilla y la que sobrevive en cada casilla se elige por peso
+     estructural. Se aplica peldaño a peldaño, solo hasta alcanzar el grado,
+     para alejarse lo mínimo del original.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  Simplificar por grados (modo por defecto)
+      --target-grade N [N …]: un fichero por grado. Los grados pedidos NO están
+      anidados entre sí (el greedy y la rejilla pueden variar qué notas
+      sobreviven de un grado a otro).
+  Escalera de práctica schenkeriana (--schenker-sequence)
+      Sustituye la simplificación por dificultad por una escalera basada en los
+      niveles de reducción schenkeriana del skyline (melodía + bajo, sin voces
+      internas), del Ursatz (fondo estructural) a la superficie completa. No usa
+      la fórmula de dificultad ni la rejilla; cada peldaño es fiel 1:1 a un
+      nivel real de la reducción. Dos variantes (--schenker-mode):
+        collapse (defecto)  Los 3 niveles naturales del motor: superficie /
+                            recorte por umbral / colapso completo hasta punto
+                            fijo. Rápido, pero el salto desde el Ursatz al
+                            siguiente peldaño puede ser grande.
+        threshold_sweep     Barre --schenker-thresholds (defecto 0.2 0.35 0.5
+                            0.65 0.8), un peldaño por valor: escalera más
+                            gradual. Los peldaños SÍ son subconjuntos estrictos
+                            unos de otros y nunca alteran el ritmo (solo quitan
+                            notas y extienden las vecinas).
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Entrada : un MIDI de piano (posicional). La mano se decide por --split.
+  Salida  : por cada --target-grade, <nombre>_grade<N>.mid en --outdir (o junto
+            al MIDI de entrada), y un informe por consola con el grado
+            realmente alcanzado, el método usado ("estructural" o
+            "estructural+rejilla") y el porcentaje de notas conservadas.
+            Con --schenker-sequence: <nombre>_schenker_<NN>_<label>.mid por
+            peldaño (label = 'ursatz', 'T<umbral>' o 'surface') y un informe
+            con notas/superficie (%) de cada peldaño.
+  Códigos de salida: 0 correcto; 1 error de uso (p. ej. grado fuera de 1-8 o
+  falta --target-grade fuera del modo schenkeriano).
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  Comunes
+    midi                       Fichero MIDI de entrada (posicional).
+    --target-grade N [N …]     Uno o más grados objetivo (1-8). Obligatorio salvo
+                               con --schenker-sequence.
+    --floor-level L            Nivel de reducción que fija el suelo protegido:
+                               'ursatz' (defecto, el nivel más profundo) o un
+                               entero (índice de nivel: 0 = primer recorte por
+                               umbral; el último nivel es el Ursatz).
+    --split PITCH              Pitch MIDI que separa mano derecha/izquierda
+                               (defecto 60 = C4).
+    --outdir DIR               Carpeta de salida (se crea; defecto: la del MIDI).
+  Escalera schenkeriana (solo con --schenker-sequence)
+    --schenker-sequence        Activa el modo de escalera de práctica.
+    --schenker-mode M          collapse (defecto) | threshold_sweep.
+    --schenker-threshold T     Umbral de peso estructural del primer recorte de
+                               la reducción (defecto 0.35).
+    --schenker-thresholds T…   Umbrales a barrer en threshold_sweep (defecto
+                               0.2 0.35 0.5 0.65 0.8).
+    --schenker-max-levels N    Máximo de niveles de reducción a generar (def. 8).
+    --schenker-min-diff F      Cambio mínimo, como fracción del nº de notas, entre
+                               peldaños consecutivos para conservar uno
+                               intermedio (defecto 0.08).
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Cuatro versiones del mismo MIDI, de grado 1 a grado 7:
+  python combined_simplifier.py obra.mid --target-grade 1 3 5 7
+
+  # Un solo grado, con carpeta de salida:
+  python combined_simplifier.py obra.mid --target-grade 2 --outdir out/
+
+  # Cambiar el punto de corte entre manos (aquí 60 = C4, el defecto):
+  python combined_simplifier.py obra.mid --target-grade 4 --split 60
+
+  # Fijar el suelo estructural en un nivel intermedio en vez del Ursatz:
+  python combined_simplifier.py obra.mid --target-grade 3 --floor-level 1
+
+  # Escalera schenkeriana rápida (3 peldaños: ursatz / umbral / superficie):
+  python combined_simplifier.py obra.mid --schenker-sequence
+
+  # Escalera gradual, un peldaño por umbral:
+  python combined_simplifier.py obra.mid --schenker-sequence --schenker-mode threshold_sweep
+
+  # Escalera gradual con umbrales propios, carpeta y salto mínimo entre peldaños:
+  python combined_simplifier.py obra.mid --schenker-sequence \
+      --schenker-mode threshold_sweep --outdir out/ \
+      --schenker-thresholds 0.15 0.3 0.45 0.6 0.75 --schenker-min-diff 0.05
+
+  # Primer recorte más agresivo y menos niveles:
+  python combined_simplifier.py obra.mid --schenker-sequence \
+      --schenker-threshold 0.5 --schenker-max-levels 5
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias y relación con otras versiones
+────────────────────────────────────────────────────────────────────────────
+Solo numpy (el resto es biblioteca estándar); fichero único y autocontenido.
+Véase también: combined_simplifier_transformed.py (añade transformaciones
+musicales sobre este motor), combined_simplifier_transformed_2.py y
+combined_simplifier_hybrid*.py (versiones autocontenidas que lo fusionan con el
+optimizador adaptativo).
 """
 
 # ══════════════════════════════════════════════════════════════════════════════

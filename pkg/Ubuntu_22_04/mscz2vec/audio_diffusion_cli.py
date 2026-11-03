@@ -1,97 +1,184 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       AUDIO DIFFUSION CLI  v1                                ║
-║         Generación y transformación de audio mediante difusión               ║
-║         sobre espectrogramas Mel (wrapper sobre audio-diffusion)             ║
-║                                                                              ║
-║  ARQUITECTURA:                                                               ║
-║    Audio → Espectrograma Mel (imagen) → DDPM/DDIM → Audio                   ║
-║    Modelos pre-entrenados en HuggingFace Hub (teticio/audio-diffusion-*)     ║
-║    Latent Audio Diffusion opcional (VAE + DDIM, más rápido)                  ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    generate     — Genera audio nuevo desde ruido                             ║
-║    variate      — Genera variación de un audio existente                     ║
-║    interpolate  — Morphing esférico entre dos audios en espacio latente      ║
-║    outpaint     — Extiende un audio preservando inicio y/o final             ║
-║    encode       — Audio → z_latent.json (vector de ruido latente)            ║
-║    info         — Muestra información del modelo y parámetros Mel            ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    torch, diffusers>=0.12.0, librosa, soundfile, numpy, Pillow              ║
-║    Instalar: pip install audiodiffusion diffusers librosa soundfile          ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+audio_diffusion_cli.py — Audio Diffusion Cli: generación y transformación de
+audio mediante difusión sobre espectrogramas Mel (wrapper sobre audio-
+diffusion)
+(versión 1).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  ARQUITECTURA:
+    Audio → Espectrograma Mel (imagen) → DDPM/DDIM → Audio
+    Modelos pre-entrenados en HuggingFace Hub (teticio/audio-diffusion-*)
+    Latent Audio Diffusion opcional (VAE + DDIM, más rápido)
+
+  COMANDOS:
+    generate     — Genera audio nuevo desde ruido
+    variate      — Genera variación de un audio existente
+    interpolate  — Morphing esférico entre dos audios en espacio latente
+    outpaint     — Extiende un audio preservando inicio y/o final
+    encode       — Audio → z_latent.json (vector de ruido latente)
+    info         — Muestra información del modelo y parámetros Mel
+
+  DEPENDENCIAS:
+    torch, diffusers>=0.12.0, librosa, soundfile, numpy, Pillow
+    Instalar: pip install audiodiffusion diffusers librosa soundfile
 
 # ── Generar audio desde ruido (modelo por defecto) ────────────────────────────
 python audio_diffusion_cli.py generate --output salida.wav
 
 # Generar con modelo específico y más pasos (más calidad):
-python audio_diffusion_cli.py generate \\
-    --model teticio/audio-diffusion-breaks-256 \\
-    --steps 100 --seed 42 \\
+python audio_diffusion_cli.py generate \
+    --model teticio/audio-diffusion-breaks-256 \
+    --steps 100 --seed 42 \
     --output breaks_nuevo.wav
 
 # Generar con modelo latente (mucho más rápido, ~50 pasos):
-python audio_diffusion_cli.py generate \\
-    --model teticio/latent-audio-diffusion-ddim-256 \\
-    --steps 50 --eta 0.0 \\
+python audio_diffusion_cli.py generate \
+    --model teticio/latent-audio-diffusion-ddim-256 \
+    --steps 50 --eta 0.0 \
     --output latente.wav
 
 # ── Variar un audio existente ─────────────────────────────────────────────────
 # strength=0.0 → copia exacta   strength=1.0 → completamente libre
-python audio_diffusion_cli.py variate \\
-    --input original.wav \\
-    --strength 0.5 --steps 50 \\
+python audio_diffusion_cli.py variate \
+    --input original.wav \
+    --strength 0.5 --steps 50 \
     --output variacion.wav
 
 # Varias variaciones del mismo archivo:
-python audio_diffusion_cli.py variate \\
-    --input original.wav --strength 0.3 \\
+python audio_diffusion_cli.py variate \
+    --input original.wav --strength 0.3 \
     --count 4 --output-dir variaciones/
 
 # ── Interpolar entre dos audios ───────────────────────────────────────────────
 # Genera N pasos de morphing esférico (slerp) entre A y B:
-python audio_diffusion_cli.py interpolate \\
-    --input-a audio_a.wav --input-b audio_b.wav \\
-    --steps 8 \\
+python audio_diffusion_cli.py interpolate \
+    --input-a audio_a.wav --input-b audio_b.wav \
+    --steps 8 \
     --output-dir morphing/
 
 # Interpolación con alpha fijo (un único punto intermedio):
-python audio_diffusion_cli.py interpolate \\
-    --input-a audio_a.wav --input-b audio_b.wav \\
-    --alpha 0.5 \\
+python audio_diffusion_cli.py interpolate \
+    --input-a audio_a.wav --input-b audio_b.wav \
+    --alpha 0.5 \
     --output mezcla.wav
 
 # ── Extender un audio (out-painting) ─────────────────────────────────────────
 # Preservar los primeros 2 segundos y generar el resto:
-python audio_diffusion_cli.py outpaint \\
-    --input original.wav \\
-    --mask-start 2.0 \\
+python audio_diffusion_cli.py outpaint \
+    --input original.wav \
+    --mask-start 2.0 \
     --output extendido.wav
 
 # Preservar inicio y final, generar la parte central:
-python audio_diffusion_cli.py outpaint \\
-    --input original.wav \\
-    --mask-start 1.0 --mask-end 1.0 \\
+python audio_diffusion_cli.py outpaint \
+    --input original.wav \
+    --mask-start 1.0 --mask-end 1.0 \
     --output relleno.wav
 
 # ── Encode: audio → z_latent.json ────────────────────────────────────────────
 # Requiere modelo DDIM (el encode es una inversión determinista):
-python audio_diffusion_cli.py encode \\
-    --model teticio/audio-diffusion-ddim-256 \\
-    --input original.wav \\
+python audio_diffusion_cli.py encode \
+    --model teticio/audio-diffusion-ddim-256 \
+    --input original.wav \
     --output z_original.json
 
 # Usar el vector guardado para generar variaciones reproducibles:
-python audio_diffusion_cli.py variate \\
-    --input original.wav --latent z_original.json \\
+python audio_diffusion_cli.py variate \
+    --input original.wav --latent z_original.json \
     --strength 0.4 --output variacion_reproducible.wav
 
 # ── Información del modelo ────────────────────────────────────────────────────
 python audio_diffusion_cli.py info --model teticio/audio-diffusion-256
 python audio_diffusion_cli.py info --model teticio/latent-audio-diffusion-ddim-256
 
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  generate     Genera audio nuevo desde ruido gaussiano
+  variate      Genera una variación de un audio existente
+  interpolate  Morphing esférico (slerp) entre dos audios en espacio latente
+  outpaint     Extiende un audio preservando inicio y/o final
+  encode       Audio → z_latent.json mediante inversión DDIM
+  info         Información del modelo: scheduler, parámetros Mel, comandos
+               recomendados
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  generate
+    --model ID_O_DIR            Modelo HuggingFace Hub o directorio local
+                                (default: …)
+    --steps INT                 Pasos de denoising (default: 50 DDIM / 1000
+                                DDPM según modelo)
+    --eta FLOAT                 Estocasticidad DDIM: 0.0=determinista,
+                                1.0=DDPM completo (default: 0.0)
+    --seed INT                  Semilla aleatoria para reproducibilidad
+    --latent FILE               Fichero .json con vector de ruido latente (de
+                                encode)
+    --count INT                 Número de audios a generar (default: 1)
+    --output FILE               (defecto output.wav)
+    --output-dir DIR            Directorio de salida cuando --count > 1
+
+  variate
+    --input FILE                Audio de referencia (.wav, .mp3, .flac)
+                                (obligatorio)
+    --model ID_O_DIR            (defecto DEFAULT_MODEL)
+    --strength FLOAT            Distancia respecto al input: 0.0=copia,
+                                1.0=libre (default: 0.5)
+    --steps INT                 Pasos de denoising (default: según modelo)
+    --eta FLOAT                 Estocasticidad DDIM: 0.0=determinista,
+                                1.0=DDPM (default: 0.0)
+    --slice INT                 Slice del audio a procesar cuando el archivo
+                                es más largo (default: 0)
+    --seed INT
+    --latent FILE               Fichero .json de ruido latente para
+                                variaciones reproducibles
+    --count INT                 Número de variaciones a generar (default: 1)
+    --output FILE               (defecto output_variate.wav)
+    --output-dir DIR            Directorio de salida cuando --count > 1
+
+  interpolate
+    --input-a FILE              Audio origen A (obligatorio)
+    --input-b FILE              Audio destino B (obligatorio)
+    --model ID_O_DIR            Modelo DDIM (default: teticio/audio-diffusion-
+                                ddim-256)
+    --steps INT                 Pasos DDIM para encode y decode (default: 50)
+    --eta FLOAT                 (defecto 0.0)
+    --alpha FLOAT               Alpha fijo [0,1]: 0.0=A, 1.0=B. Si se indica,
+                                genera un único punto.
+    --steps-interp INT          Número de pasos de interpolación A→B (default:
+                                8). Ignorado si --alpha está presente.
+    --output FILE               Archivo de salida cuando se usa --alpha
+                                (defecto output_interp.wav)
+    --output-dir DIR            Directorio de salida para la secuencia de
+                                interpolación
+
+  outpaint
+    --input FILE                (obligatorio)
+    --model ID_O_DIR            (defecto DEFAULT_MODEL)
+    --mask-start SECS           Segundos de audio a preservar al inicio
+                                (default: 0.0)
+    --mask-end SECS             Segundos de audio a preservar al final
+                                (default: 0.0)
+    --steps INT
+    --eta FLOAT                 (defecto DEFAULT_ETA)
+    --slice INT                 (defecto 0)
+    --seed INT
+    --output FILE               (defecto output_outpaint.wav)
+
+  encode
+    --input FILE                (obligatorio)
+    --model ID_O_DIR            (defecto teticio/audio-diffusion-ddim-256)
+    --steps INT                 Pasos DDIM de inversión (default: 50)
+    --slice INT                 Slice del audio a codificar (default: 0)
+    --output FILE               Ruta del .json de salida (default:
+                                <stem>.latent.json)
+
+  info
+    --model ID_O_DIR            (defecto DEFAULT_MODEL)
 """
 
 import argparse

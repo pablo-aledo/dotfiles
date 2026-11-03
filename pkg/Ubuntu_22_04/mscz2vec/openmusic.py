@@ -1,50 +1,51 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         OPENMUSIC  v1.0                                      ║
-║              Text-to-Music con QA-MDT  (Quality-Aware MDT)                   ║
-║                                                                              ║
-║  Genera música de alta calidad a partir de texto. Un único fichero           ║
-║  autocontenido: no depende de ningún otro script del proyecto.               ║
-║                                                                              ║
-║  ARQUITECTURA (QA-MDT):                                                      ║
-║    VAE mel ─► Latent Diffusion (MDT/DiT 28L) ─► HiFi-GAN vocoder            ║
-║    Condición: Flan-T5-large (cross-attention) + token de calidad MOS         ║
-║                                                                              ║
-║  SUBCOMANDOS:                                                                 ║
-║    setup        — Verifica entorno y guía descarga de checkpoints            ║
-║    prepare      — Audio corpus → dataset LMDB listo para entrenar            ║
-║    train        — Entrena o fine-tunea el modelo                             ║
-║    compose      — Genera audio desde un prompt de texto                      ║
-║    describe     — LLM/heurísticas: intención libre → prompt técnico          ║
-║    inspect      — Diagnóstico: config, checkpoint, dataset LMDB              ║
-║                                                                              ║
-║  DEPENDENCIAS (para compose):                                                 ║
-║    pip install torch torchaudio transformers librosa soundfile               ║
-║             einops omegaconf pytorch_lightning laion-clap pyyaml            ║
-║                                                                              ║
-║  DEPENDENCIAS ADICIONALES (para prepare/train):                              ║
-║    pip install lmdb "protobuf==3.20"                                         ║
-║                                                                              ║
-║  LLM OPCIONAL (para describe):                                               ║
-║    pip install anthropic   →  ANTHROPIC_API_KEY                             ║
-║    pip install openai      →  OPENAI_API_KEY                                ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+openmusic.py — Openmusic: text-to-Music con QA-MDT (Quality-Aware MDT)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+  Genera música de alta calidad a partir de texto. Un único fichero
+  autocontenido: no depende de ningún otro script del proyecto.
+
+  ARQUITECTURA (QA-MDT):
+    VAE mel ─► Latent Diffusion (MDT/DiT 28L) ─► HiFi-GAN vocoder
+    Condición: Flan-T5-large (cross-attention) + token de calidad MOS
+
+  SUBCOMANDOS:
+    setup        — Verifica entorno y guía descarga de checkpoints
+    prepare      — Audio corpus → dataset LMDB listo para entrenar
+    train        — Entrena o fine-tunea el modelo
+    compose      — Genera audio desde un prompt de texto
+    describe     — LLM/heurísticas: intención libre → prompt técnico
+    inspect      — Diagnóstico: config, checkpoint, dataset LMDB
+
+  DEPENDENCIAS (para compose):
+    pip install torch torchaudio transformers librosa soundfile
+             einops omegaconf pytorch_lightning laion-clap pyyaml
+
+  DEPENDENCIAS ADICIONALES (para prepare/train):
+    pip install lmdb "protobuf==3.20"
+
+  LLM OPCIONAL (para describe):
+    pip install anthropic   →  ANTHROPIC_API_KEY
+    pip install openai      →  OPENAI_API_KEY
 
 # ── Configuración inicial ──────────────────────────────────────────────────────
 python openmusic.py setup --ckpt-dir checkpoints/
 
 # ── Generar música desde un prompt ────────────────────────────────────────────
-python openmusic.py compose \\
-    --prompt "calm jazz piano trio, late night, melancholic, 90 BPM" \\
-    --ckpt  checkpoints/model.ckpt \\
-    --config audioldm_train/config/mos_as_token/qa_mdt.yaml \\
+python openmusic.py compose \
+    --prompt "calm jazz piano trio, late night, melancholic, 90 BPM" \
+    --ckpt  checkpoints/model.ckpt \
+    --config audioldm_train/config/mos_as_token/qa_mdt.yaml \
     --quality 5 --duration 10 --output salida.wav
 
 # Calidad 3 (más variedad, menos restricción):
-python openmusic.py compose \\
-    --prompt "dark ambient drone, slow evolving textures" \\
-    --ckpt  checkpoints/model.ckpt \\
+python openmusic.py compose \
+    --prompt "dark ambient drone, slow evolving textures" \
+    --ckpt  checkpoints/model.ckpt \
     --quality 3 --duration 20 --output ambient.wav
 
 # ── Traducir intención libre a prompt técnico ──────────────────────────────────
@@ -53,32 +54,117 @@ python openmusic.py describe "jazz nocturno relajado" --llm-provider openai
 python openmusic.py describe "batalla épica medieval" --no-llm
 
 # Encadenar describe → compose:
-python openmusic.py describe "lluvia melancólica" --pipe | \\
+python openmusic.py describe "lluvia melancólica" --pipe | \
     python openmusic.py compose --ckpt checkpoints/model.ckpt --from-stdin
 
 # ── Preparar dataset propio ────────────────────────────────────────────────────
-python openmusic.py prepare \\
-    --audio-dir  corpus/audios/ \\
-    --lmdb-dir   data/mi_corpus/ \\
+python openmusic.py prepare \
+    --audio-dir  corpus/audios/ \
+    --lmdb-dir   data/mi_corpus/ \
     --captions   corpus/captions.json  # {nombre_archivo: "descripción"}
 
 # ── Entrenar / Fine-tune ───────────────────────────────────────────────────────
-python openmusic.py train \\
-    --config   audioldm_train/config/mos_as_token/qa_mdt.yaml \\
-    --lmdb-dir data/mi_corpus/ \\
-    --ckpt-dir checkpoints/ \\
+python openmusic.py train \
+    --config   audioldm_train/config/mos_as_token/qa_mdt.yaml \
+    --lmdb-dir data/mi_corpus/ \
+    --ckpt-dir checkpoints/ \
     --batch-size 8 --epochs 200
 
 # Fine-tune desde checkpoint existente:
-python openmusic.py train \\
-    --config   audioldm_train/config/mos_as_token/qa_mdt.yaml \\
-    --lmdb-dir data/mi_corpus/ \\
+python openmusic.py train \
+    --config   audioldm_train/config/mos_as_token/qa_mdt.yaml \
+    --lmdb-dir data/mi_corpus/ \
     --resume   checkpoints/model.ckpt --epochs 50
 
 # ── Diagnóstico ───────────────────────────────────────────────────────────────
 python openmusic.py inspect --ckpt checkpoints/model.ckpt
 python openmusic.py inspect --config audioldm_train/config/mos_as_token/qa_mdt.yaml
 python openmusic.py inspect --lmdb-dir data/mi_corpus/
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  setup       Verifica entorno y guía descarga de checkpoints
+  describe    Intención musical libre → prompt técnico (LLM o local)
+  compose     Genera audio desde un prompt de texto
+  prepare     Audio corpus → dataset LMDB listo para entrenar
+  train       Entrena o fine-tunea el modelo QA-MDT
+  inspect     Diagnóstico: config, checkpoint, dataset LMDB
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  setup
+    --ckpt-dir DIR              Directorio de checkpoints (default:
+                                checkpoints/)
+    --force                     Regenerar offset_pretrained_checkpoints.json
+                                aunque exista
+
+  describe
+    description DESCRIPTION     Descripción musical en lenguaje libre
+    --duration N                Duración deseada en segundos (default: 10)
+    --output-json FILE          Guardar resultado en JSON
+    --pipe                      Emitir JSON para encadenar con compose --from-
+                                stdin
+    --no-llm                    Usar solo heurísticas locales (sin API)
+    --llm-provider LLM_PROVIDER
+                                Proveedor LLM: anthropic (default) | openai
+    --llm-model LLM_MODEL       Modelo concreto (default: auto). Anthropic:
+                                claude-sonnet-4-6, claude-opus-4-6 | OpenAI:
+                                gpt-4o, gpt-4o-mini
+    --api-key API_KEY           API key (o ANTHROPIC_API_KEY / OPENAI_API_KEY
+                                en entorno)
+    --llm-debug                 Mostrar prompt enviado y respuesta raw del LLM
+    --verbose, -v
+
+  compose
+    --prompt TEXT               Prompt descriptivo en inglés
+    --from-stdin                Leer prompt desde stdin (salida de describe
+                                --pipe)
+    --ckpt FILE                 Checkpoint del modelo (.ckpt)
+    --config FILE               Config YAML del modelo (default: …)
+    --quality QUALITY           Nivel de calidad MOS 1-5 (default: 5)
+                                (valores: 1|2|3|4|5)
+    --duration N                Duración aproximada en segundos (default: 10)
+    --output FILE               Ruta del .wav de salida (default:
+                                openmusic_<ts>.wav)
+    --guidance-scale F          Guidance scale CFG (default: valor del config,
+                                típico 3.5)
+    --ddim-steps N              Pasos DDIM (default: valor del config, típico
+                                200)
+    --n-candidates N            Candidatos generados; se guarda el mejor
+                                (default: 3)
+    --seed SEED                 Semilla aleatoria (default: 0)
+    --verbose, -v
+
+  prepare
+    --audio-dir DIR             Directorio con archivos de audio (.wav .mp3
+                                .flac ...) (obligatorio)
+    --lmdb-dir DIR              Directorio de salida del LMDB (obligatorio)
+    --sample-rate N             Sample rate de resampleo (default: 16000)
+    --captions FILE             JSON … o lista txt archivo|caption
+    --default-caption TEXT      Caption por defecto para archivos sin
+                                descripción
+    --mos F                     Puntuación MOS asignada al corpus (-1 =
+                                desconocida) (defecto -1.0)
+    --verbose, -v
+
+  train
+    --config FILE               Config YAML (default: …)
+    --lmdb-dir DIR              Dataset LMDB (salida de prepare) (obligatorio)
+    --ckpt-dir DIR              Directorio para guardar checkpoints (default:
+                                checkpoints/)
+    --resume FILE               Continuar desde este checkpoint
+    --epochs N                  Épocas aproximadas (se convierte a max_steps
+                                ×1000)
+    --batch-size N              Batch size (sobreescribe el config)
+    --lr F                      Learning rate (sobreescribe el config)
+    --verbose, -v
+
+  inspect
+    --config FILE               Config YAML a inspeccionar
+    --ckpt FILE                 Checkpoint a inspeccionar
+    --lmdb-dir DIR              Directorio LMDB a inspeccionar
 """
 
 import sys

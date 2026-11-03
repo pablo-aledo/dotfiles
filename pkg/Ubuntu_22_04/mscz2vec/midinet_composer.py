@@ -1,79 +1,152 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       MIDINET COMPOSER  v1.0                                 ║
-║         Generación de melodías condicionada en acordes (GAN bar-a-bar)      ║
-║                                                                              ║
-║  ARQUITECTURA:                                                               ║
-║    Generador convolucional + Discriminador condicional (cGAN)                ║
-║    Entrada:  ruido z (100d) + acorde y (13d) + compás anterior prev_x       ║
-║    Salida:   piano roll binario (1, 16, 128) — un compás de melodía         ║
-║    Acorde:   12 clases cromáticas + 1 bit mayor/menor = 13 dimensiones      ║
-║    Pérdida G: adversarial + feature matching discriminador + matching medio  ║
-║    Pérdida D: BCE con label smoothing (0.9) en ejemplos reales              ║
-║    Referencia: MidiNet (Yang et al., 2017) https://arxiv.org/abs/1703.10847 ║
-║                                                                              ║
-║  COMANDOS:                                                                   ║
-║    prepare    — MIDIs → piano rolls segmentados + vectores de acorde (.npz) ║
-║    train      — Entrena el cGAN sobre los datos preparados                   ║
-║    generate   — Genera una melodía bar-a-bar desde ruido + acordes           ║
-║    inspect    — Diagnóstico del modelo y los datos                           ║
-║    round-trip — MIDI → piano roll → MIDI (sin modelo, diagnóstico)          ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    mido, numpy, torch                                                        ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  # ── Preparar corpus ───────────────────────────────────────────────────── ║
-║  python midinet_composer.py prepare                                          ║
-║      --input-dir  midis/                                                     ║
-║      --output-dir data/                                                      ║
-║      --report                                                                ║
-║                                                                              ║
-║  # Limitar rango de pitch (alivia carga en GPU modesta):                    ║
-║  python midinet_composer.py prepare                                          ║
-║      --input-dir midis/ --output-dir data_small/                            ║
-║      --pitch-lo 48 --pitch-hi 96                                            ║
-║                                                                              ║
-║  # ── Entrenar ──────────────────────────────────────────────────────────── ║
-║  python midinet_composer.py train                                            ║
-║      --data-dir data/                                                        ║
-║      --model-dir model_midinet/                                              ║
-║      --epochs 300 --batch-size 72 --lr 2e-4                                 ║
-║                                                                              ║
-║  # GPU modesta (menos z, menos canales):                                    ║
-║  python midinet_composer.py train                                            ║
-║      --data-dir data_small/ --model-dir model_small/                        ║
-║      --epochs 200 --batch-size 32 --nz 64 --base-ch 32                     ║
-║                                                                              ║
-║  # ── Generar melodía ───────────────────────────────────────────────────── ║
-║  # Con acordes inferidos automáticamente de un MIDI de referencia:          ║
-║  python midinet_composer.py generate                                         ║
-║      --model-dir model_midinet/                                              ║
-║      --chord-ref referencia.mid                                              ║
-║      --bars 8                                                                ║
-║      --output melodia_generada.mid                                           ║
-║                                                                              ║
-║  # Con progresión de acordes explícita (notación: raíz:tipo,...):           ║
-║  python midinet_composer.py generate                                         ║
-║      --model-dir model_midinet/                                              ║
-║      --chords "C:maj,F:maj,G:maj,C:maj"                                     ║
-║      --bars 8 --bpm 120                                                      ║
-║      --output resultado.mid                                                  ║
-║      --seed 42                                                               ║
-║                                                                              ║
-║  # Temperatura alta = más variación armónica, temperatura baja = más fiel:  ║
-║  python midinet_composer.py generate                                         ║
-║      --model-dir model_midinet/                                              ║
-║      --chords "Am:min,F:maj,C:maj,G:maj"                                    ║
-║      --bars 16 --temperature 1.4 --output variado.mid                       ║
-║                                                                              ║
-║  # ── Diagnóstico ───────────────────────────────────────────────────────── ║
-║  python midinet_composer.py round-trip --input midis/cancion.mid            ║
-║  python midinet_composer.py inspect --model-dir model_midinet/              ║
-║  python midinet_composer.py inspect --data-dir data/ --what data            ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+midinet_composer.py — Midinet Composer: generación de melodías condicionada en
+acordes (GAN bar-a-bar)
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+ARQUITECTURA:
+  Generador convolucional + Discriminador condicional (cGAN)
+  Entrada:  ruido z (100d) + acorde y (13d) + compás anterior prev_x
+  Salida:   piano roll binario (1, 16, 128) — un compás de melodía
+  Acorde:   12 clases cromáticas + 1 bit mayor/menor = 13 dimensiones
+  Pérdida G: adversarial + feature matching discriminador + matching medio
+  Pérdida D: BCE con label smoothing (0.9) en ejemplos reales
+  Referencia: MidiNet (Yang et al., 2017) https://arxiv.org/abs/1703.10847
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  prepare    — MIDIs → piano rolls segmentados + vectores de acorde (.npz)
+  train      — Entrena el cGAN sobre los datos preparados
+  generate   — Genera una melodía bar-a-bar desde ruido + acordes
+  inspect    — Diagnóstico del modelo y los datos
+  round-trip — MIDI → piano roll → MIDI (sin modelo, diagnóstico)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare
+    --input-dir DIR             Carpeta con ficheros .mid / .midi
+                                (obligatorio)
+    --output-dir DIR            Carpeta de salida para los .npz (obligatorio)
+    --pitch-lo N                MIDI pitch mínimo incluido (default: 0)
+    --pitch-hi N                MIDI pitch máximo excluido (default: …)
+    --report                    Mostrar muestra de los ficheros generados
+
+  train
+    --data-dir DIR              Carpeta con .npz generados por prepare
+                                (obligatorio)
+    --model-dir DIR             Carpeta donde guardar el modelo (obligatorio)
+    --epochs EPOCHS             Épocas de entrenamiento (default: 300)
+    --batch-size BATCH_SIZE     Tamaño de batch (default: 72)
+    --lr LR                     Learning rate Adam (default: 2e-4)
+    --nz NZ                     Dimensión del ruido latente (default: …)
+    --base-ch BASE_CH           Canales base del generador (default: …)
+    --save-every N              Guardar checkpoint cada N épocas (default: 50)
+    --pitch-lo N                Pitch mínimo usado en prepare (se infiere si
+                                no se indica)
+    --resume                    Reanudar desde el último checkpoint
+    --cpu                       Forzar CPU aunque haya GPU disponible
+
+  generate
+    --model-dir DIR             Carpeta del modelo entrenado (obligatorio)
+    --bars BARS                 Número de compases a generar (default: 8)
+    --chords PROG               Progresión de acordes:
+                                "C:maj,F:maj,G:maj,C:maj" o nombre de preset:
+                                I-IV-V-I | I-V-vi-IV | ii-V-I | andaluza |
+                                12bar
+    --chord-ref FILE            MIDI de referencia del que extraer la
+                                progresión de acordes
+    --bpm BPM                   Tempo BPM del MIDI de salida (default: 120)
+    --temperature TEMPERATURE   Temperatura del muestreo (default: 1.0; >1 =
+                                más variación)
+    --program PROGRAM           Programa MIDI General (instrumento, 0-127;
+                                default: 0 = piano)
+    --velocity VELOCITY         Velocidad MIDI de las notas (default: 80)
+    --output FILE               Fichero MIDI de salida (default:
+                                midinet_out.mid)
+    --seed SEED                 Semilla aleatoria para reproducibilidad
+    --cpu                       Forzar CPU aunque haya GPU disponible
+    --verbose                   Mostrar densidad de notas por compás
+
+  round-trip
+    --input FILE                (obligatorio)
+    --output FILE               (defecto round_trip_out.mid)
+    --bpm BPM                   (defecto 120.0)
+    --pitch-lo PITCH_LO         (defecto 0)
+    --pitch-hi PITCH_HI         (defecto PITCH_CLASSES)
+
+  inspect
+    --model-dir DIR             Carpeta del modelo a inspeccionar
+    --data-dir DIR              Carpeta de datos .npz a inspeccionar
+    --what WHAT                 Qué inspeccionar: model | data | all | presets
+                                (defecto all; valores: model|data|all|presets)
+    --verbose                   Mostrar detalle por fichero en el caso de
+                                datos
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Mostrar muestra de los ficheros generados
+  python midinet_composer.py prepare --input-dir carpeta/ --output-dir salida/ \
+        --report
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+    mido, numpy, torch
+
+  # ── Preparar corpus ─────────────────────────────────────────────────────
+  python midinet_composer.py prepare \
+      --input-dir  midis/ \
+      --output-dir data/ \
+      --report
+
+  # Limitar rango de pitch (alivia carga en GPU modesta):
+  python midinet_composer.py prepare \
+      --input-dir midis/ --output-dir data_small/ \
+      --pitch-lo 48 --pitch-hi 96
+
+  # ── Entrenar ────────────────────────────────────────────────────────────
+  python midinet_composer.py train \
+      --data-dir data/ \
+      --model-dir model_midinet/ \
+      --epochs 300 --batch-size 72 --lr 2e-4
+
+  # GPU modesta (menos z, menos canales):
+  python midinet_composer.py train \
+      --data-dir data_small/ --model-dir model_small/ \
+      --epochs 200 --batch-size 32 --nz 64 --base-ch 32
+
+  # ── Generar melodía ─────────────────────────────────────────────────────
+  # Con acordes inferidos automáticamente de un MIDI de referencia:
+  python midinet_composer.py generate \
+      --model-dir model_midinet/ \
+      --chord-ref referencia.mid \
+      --bars 8 \
+      --output melodia_generada.mid
+
+  # Con progresión de acordes explícita (notación: raíz:tipo,...):
+  python midinet_composer.py generate \
+      --model-dir model_midinet/ \
+      --chords "C:maj,F:maj,G:maj,C:maj" \
+      --bars 8 --bpm 120 \
+      --output resultado.mid \
+      --seed 42
+
+  # Temperatura alta = más variación armónica, temperatura baja = más fiel:
+  python midinet_composer.py generate \
+      --model-dir model_midinet/ \
+      --chords "Am:min,F:maj,C:maj,G:maj" \
+      --bars 16 --temperature 1.4 --output variado.mid
+
+  # ── Diagnóstico ─────────────────────────────────────────────────────────
+  python midinet_composer.py round-trip --input midis/cancion.mid
+  python midinet_composer.py inspect --model-dir model_midinet/
+  python midinet_composer.py inspect --data-dir data/ --what data
 """
 
 import argparse

@@ -1,52 +1,61 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      METRIC ANALYZER  v1.0                                  ║
-║        Análisis de la estructura métrica y la síncopa de una obra MIDI      ║
-║                                                                              ║
-║  La suite de análisis del ecosistema mide altura, armonía, emoción, forma   ║
-║  y tocabilidad (analyzer, quality_scorer, section_score, arc_supervisor,    ║
-║  playability_auditor), pero ninguna herramienta standalone diagnostica el   ║
-║  eje RÍTMICO-MÉTRICO: cuánto sincopa la obra, dónde pelea contra el pulso,   ║
-║  cómo se agrupa en hipercompases y si su ritmo es plano o variado. Esta      ║
-║  herramienta cubre ese hueco. midi_pianoroll_analyzer muestra densidad y    ║
-║  tensión por compás pero no la jerarquía métrica ni la síncopa.             ║
-║                                                                              ║
-║  MÉTRICAS CALCULADAS:                                                        ║
-║    síncopa (LHL)   — nota en posición débil sostenida sobre una fuerte      ║
-║                      (Longuet-Higgins & Lee), ponderada por peso métrico    ║
-║    densidad        — onsets por compás                                       ║
-║    fuerza downbeat — proporción de onsets sobre el tiempo 1                 ║
-║    nPVI            — variabilidad rítmica de los IOI (plano ↔ irregular)    ║
-║    perfil métrico  — histograma de onsets por posición dentro del compás    ║
-║    hipermetro      — periodicidad de la acentuación (grupos de 2/4/8)       ║
-║    estabilidad     — cambios de compás/tempo a lo largo de la obra          ║
-║                                                                              ║
-║  MODOS DE SALIDA:                                                            ║
-║    (por defecto)   — informe de texto con sparklines por compás             ║
-║    --json FILE     — vuelca todas las métricas a un sidecar JSON            ║
-║    --csv FILE      — tabla por compás (compás, densidad, síncopa, downbeat) ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python metric_analyzer.py obra.mid                                        ║
-║    python metric_analyzer.py obra.mid --subdiv 4                            ║
-║    python metric_analyzer.py obra.mid --track 0                             ║
-║    python metric_analyzer.py obra.mid --json obra.metric.json --csv m.csv   ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    midi              MIDI de entrada                                         ║
-║    --track N         Analizar solo la pista N (default: todas agregadas)    ║
-║    --subdiv N        Subdivisiones por tiempo para la rejilla (default: 4)  ║
-║    --json FILE       Escribe un sidecar JSON con todas las métricas         ║
-║    --csv FILE        Escribe una tabla CSV por compás                        ║
-║    --max-bars N      Limita la tabla impresa a N compases (default: 32)     ║
-║    --no-color        Desactivar colores ANSI                                ║
-║                                                                              ║
-║  COMO MÓDULO:                                                                ║
-║    from metric_analyzer import analyze_meter                                 ║
-║                                                                              ║
-║  DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)   ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+metric_analyzer.py — Metric Analyzer: análisis de la estructura métrica y la
+síncopa de una obra MIDI
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+La suite de análisis del ecosistema mide altura, armonía, emoción, forma
+y tocabilidad (analyzer, quality_scorer, section_score, arc_supervisor,
+playability_auditor), pero ninguna herramienta standalone diagnostica el
+eje RÍTMICO-MÉTRICO: cuánto sincopa la obra, dónde pelea contra el pulso,
+cómo se agrupa en hipercompases y si su ritmo es plano o variado. Esta
+herramienta cubre ese hueco. midi_pianoroll_analyzer muestra densidad y
+tensión por compás pero no la jerarquía métrica ni la síncopa.
+
+MÉTRICAS CALCULADAS:
+  síncopa (LHL)   — nota en posición débil sostenida sobre una fuerte
+                    (Longuet-Higgins & Lee), ponderada por peso métrico
+  densidad        — onsets por compás
+  fuerza downbeat — proporción de onsets sobre el tiempo 1
+  nPVI            — variabilidad rítmica de los IOI (plano ↔ irregular)
+  perfil métrico  — histograma de onsets por posición dentro del compás
+  hipermetro      — periodicidad de la acentuación (grupos de 2/4/8)
+  estabilidad     — cambios de compás/tempo a lo largo de la obra
+
+COMO MÓDULO:
+  from metric_analyzer import analyze_meter
+
+DEPENDENCIAS: numpy · playability_auditor.py (mismo directorio, E/S MIDI)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+MODOS DE SALIDA:
+  (por defecto)   — informe de texto con sparklines por compás
+  --json FILE     — vuelca todas las métricas a un sidecar JSON
+  --csv FILE      — tabla por compás (compás, densidad, síncopa, downbeat)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  midi              MIDI de entrada
+  --track N         Analizar solo la pista N (default: todas agregadas)
+  --subdiv N        Subdivisiones por tiempo para la rejilla (default: 4)
+  --json FILE       Escribe un sidecar JSON con todas las métricas
+  --csv FILE        Escribe una tabla CSV por compás
+  --max-bars N      Limita la tabla impresa a N compases (default: 32)
+  --no-color        Desactivar colores ANSI
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python metric_analyzer.py obra.mid
+  python metric_analyzer.py obra.mid --subdiv 4
+  python metric_analyzer.py obra.mid --track 0
+  python metric_analyzer.py obra.mid --json obra.metric.json --csv m.csv
 """
 
 import sys

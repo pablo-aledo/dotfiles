@@ -1,87 +1,92 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                         REMI  v1.0  (PyTorch)                                ║
-║       Pop Music Transformer — generación y continuación de piano pop        ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  Implementación del paper:                                                   ║
-║    "Pop Music Transformer: Beat-Based Modeling and Generation of             ║
-║     Expressive Pop Piano Compositions"  (Huang & Yang, ACM MM 2020)         ║
-║  Original TF1: https://github.com/YatingMusic/remi                          ║
-║                                                                              ║
-║  REPRESENTACIÓN REMI:                                                        ║
-║    Cada MIDI se convierte a una secuencia de tokens con estructura métrica:  ║
-║    Bar → Position → [Chord] → Tempo Class → Tempo Value →                  ║
-║           Note Velocity → Note On → Note Duration → …                      ║
-║    Los tokens se numeran en un vocabulario JSON (legible, sin pickle).       ║
-║                                                                              ║
-║  ARQUITECTURA:                                                                ║
-║    Transformer-XL: 12 capas, d_model=512, 8 cabezas, d_ff=2048             ║
-║    Memoria recurrente de 512 tokens entre segmentos (Transformer-XL)        ║
-║    Dos modos: sin acordes (REMI-tempo) y con acordes (REMI-tempo-chord)     ║
-║                                                                              ║
-║  LIMITACIONES CONOCIDAS:                                                     ║
-║    • Piano solo / track 0 (multi-track no soportado)                        ║
-║    • Compás 4/4 implícito (otros compases generarán advertencia)            ║
-║    • Tempo fuera de 30-210 BPM → se fuerza al extremo del rango             ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  COMANDOS                                                                    ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  convert  — MIDI → tokens REMI (construye vocabulario si no existe)         ║
-║    python remi.py convert entrada.mid                                        ║
-║    python remi.py convert entrada.mid --chord --output tokens.json          ║
-║    python remi.py convert corpus/ --chord --vocab vocab_chord.json          ║
-║                                                                              ║
-║  inspect  — Muestra los tokens REMI de un MIDI (diagnóstico)                ║
-║    python remi.py inspect entrada.mid                                        ║
-║    python remi.py inspect entrada.mid --chord --max-tokens 200              ║
-║                                                                              ║
-║  train    — Entrena el Transformer-XL sobre un corpus de MIDIs              ║
-║    python remi.py train corpus/ --model-dir remi_model/ --epochs 200        ║
-║    python remi.py train corpus/ --model-dir remi_model/ --chord             ║
-║    python remi.py train corpus/ --model-dir remi_model/ \                   ║
-║        --epochs 300 --batch-size 2 --lr 2e-4 --patience 30                 ║
-║    python remi.py train corpus/ --model-dir remi_model/ --resume            ║
-║                                                                              ║
-║    # Modelo pequeño para CPU (~5M params, 8x más rápido):                   ║
-║    python remi.py train corpus/ --model-dir remi_small/ --small             ║
-║                                                                              ║
-║  generate — Genera piano pop desde cero                                      ║
-║    python remi.py generate --model-dir remi_model/                          ║
-║    python remi.py generate --model-dir remi_model/ \                        ║
-║        --bars 32 --temperature 1.2 --topk 5 --output from_scratch.mid      ║
-║                                                                              ║
-║  continue — Continúa un MIDI de prompt                                       ║
-║    python remi.py continue prompt.mid --model-dir remi_model/               ║
-║    python remi.py continue prompt.mid --model-dir remi_model/ \             ║
-║        --bars 16 --temperature 1.0 --topk 5 --output continuado.mid        ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  OPCIONES COMUNES:                                                           ║
-║    --chord          Activar tokens de acorde (Chord_X:Y)                    ║
-║    --vocab FILE     Ruta del vocabulario JSON [default: vocab[_chord].json] ║
-║    --model-dir DIR  Directorio del modelo [default: remi_model/]            ║
-║    --output FILE    Fichero de salida                                        ║
-║    --bars N         Compases a generar [default: 16]                        ║
-║    --temperature F  Temperatura de muestreo [default: 1.2]                  ║
-║    --topk N         Top-K para muestreo [default: 5]                        ║
-║    --seed N         Semilla aleatoria [default: 42]                         ║
-║    --verbose        Detalle de la ejecución                                  ║
-║                                                                              ║
-║  OPCIONES DE TRAIN:                                                          ║
-║    --epochs N       Épocas máximas [default: 200]                           ║
-║    --batch-size N   Tamaño de batch [default: 4]                            ║
-║    --lr F           Learning rate [default: 2e-4]                           ║
-║    --x-len N        Longitud de secuencia [default: 512]                    ║
-║    --mem-len N      Longitud de memoria XL [default: 512]                   ║
-║    --patience N     Early stopping [default: 30]                            ║
-║    --resume         Reanudar desde checkpoint                                ║
-║    --small          Modelo reducido: 6 capas, d=256 (~5M params, CPU)      ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy, torch                                            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+remi.py — Pop Music Transformer — generación y continuación de piano pop
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Implementación del paper:
+  "Pop Music Transformer: Beat-Based Modeling and Generation of
+   Expressive Pop Piano Compositions"  (Huang & Yang, ACM MM 2020)
+Original TF1: https://github.com/YatingMusic/remi
+
+REPRESENTACIÓN REMI:
+  Cada MIDI se convierte a una secuencia de tokens con estructura métrica:
+  Bar → Position → [Chord] → Tempo Class → Tempo Value →
+         Note Velocity → Note On → Note Duration → …
+  Los tokens se numeran en un vocabulario JSON (legible, sin pickle).
+
+ARQUITECTURA:
+  Transformer-XL: 12 capas, d_model=512, 8 cabezas, d_ff=2048
+  Memoria recurrente de 512 tokens entre segmentos (Transformer-XL)
+  Dos modos: sin acordes (REMI-tempo) y con acordes (REMI-tempo-chord)
+
+LIMITACIONES CONOCIDAS:
+  • Piano solo / track 0 (multi-track no soportado)
+  • Compás 4/4 implícito (otros compases generarán advertencia)
+  • Tempo fuera de 30-210 BPM → se fuerza al extremo del rango
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  convert  — MIDI → tokens REMI (construye vocabulario si no existe)
+    python remi.py convert entrada.mid
+    python remi.py convert entrada.mid --chord --output tokens.json
+    python remi.py convert corpus/ --chord --vocab vocab_chord.json
+
+  inspect  — Muestra los tokens REMI de un MIDI (diagnóstico)
+    python remi.py inspect entrada.mid
+    python remi.py inspect entrada.mid --chord --max-tokens 200
+
+  train    — Entrena el Transformer-XL sobre un corpus de MIDIs
+    python remi.py train corpus/ --model-dir remi_model/ --epochs 200
+    python remi.py train corpus/ --model-dir remi_model/ --chord
+    python remi.py train corpus/ --model-dir remi_model/ \
+        --epochs 300 --batch-size 2 --lr 2e-4 --patience 30
+    python remi.py train corpus/ --model-dir remi_model/ --resume
+
+    # Modelo pequeño para CPU (~5M params, 8x más rápido):
+    python remi.py train corpus/ --model-dir remi_small/ --small
+
+  generate — Genera piano pop desde cero
+    python remi.py generate --model-dir remi_model/
+    python remi.py generate --model-dir remi_model/ \
+        --bars 32 --temperature 1.2 --topk 5 --output from_scratch.mid
+
+  continue — Continúa un MIDI de prompt
+    python remi.py continue prompt.mid --model-dir remi_model/
+    python remi.py continue prompt.mid --model-dir remi_model/ \
+        --bars 16 --temperature 1.0 --topk 5 --output continuado.mid
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+OPCIONES COMUNES:
+  --chord          Activar tokens de acorde (Chord_X:Y)
+  --vocab FILE     Ruta del vocabulario JSON [default: vocab[_chord].json]
+  --model-dir DIR  Directorio del modelo [default: remi_model/]
+  --output FILE    Fichero de salida
+  --bars N         Compases a generar [default: 16]
+  --temperature F  Temperatura de muestreo [default: 1.2]
+  --topk N         Top-K para muestreo [default: 5]
+  --seed N         Semilla aleatoria [default: 42]
+  --verbose        Detalle de la ejecución
+
+── OPCIONES DE TRAIN ──
+  --epochs N       Épocas máximas [default: 200]
+  --batch-size N   Tamaño de batch [default: 4]
+  --lr F           Learning rate [default: 2e-4]
+  --x-len N        Longitud de secuencia [default: 512]
+  --mem-len N      Longitud de memoria XL [default: 512]
+  --patience N     Early stopping [default: 30]
+  --resume         Reanudar desde checkpoint
+  --small          Modelo reducido: 6 capas, d=256 (~5M params, CPU)
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy, torch
 """
 
 import sys

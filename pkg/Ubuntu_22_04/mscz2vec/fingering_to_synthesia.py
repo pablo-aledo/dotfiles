@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-fingering_to_synthesia.py — Convierte la digitación generada por fingering_v3.py
+fingering_to_synthesia.py — Convierte la digitación generada por fingering_v3.py o posterior (v4–v6)
 a formato .synthesia (LocalFingerInfoList / FingerInfo), el sistema de "finger
 hints" que usa Synthesia.
 
 ────────────────────────────────────────────────────────────────────────────
 Entrada
 ────────────────────────────────────────────────────────────────────────────
-Espera el JSON producido por:
+Espera el JSON producido por cualquier versión de la familia con --json (v3 a v6):
 
     python fingering_v3.py archivo.mid --json digitacion.json
 
-es decir, un objeto con la forma:
+es decir, un objeto con la forma (solo se leen midi_file, measure, beat,
+hand, pitch y fingering; los campos extra de v4–v6 se ignoran):
 
     {
       "midi_file": "...",
@@ -87,13 +88,54 @@ script no puede recalcular ese hash. Tienes dos opciones:
      que sustituirlo a mano por el real antes de usarlo.
 
 ────────────────────────────────────────────────────────────────────────────
-Uso
+Opciones
 ────────────────────────────────────────────────────────────────────────────
+    json_file            JSON de digitación (obligatorio, posicional).
+    -o, --output FILE    Fichero .synthesia a generar (obligatorio).
+    --hash HASH          Hash real de la canción en Synthesia (recomendado). Sin
+                         él se genera un placeholder que casi seguro habrá que
+                         sustituir a mano.
+    --existing FILE      .synthesia/XML real en el que fusionar o actualizar la
+                         entrada (conserva el resto de canciones). Úsalo con --hash.
+    --midi FILE          MIDI original (muy recomendado): reordena las notas de
+                         cada acorde según el orden físico de los note-on y
+                         autodetecta los índices de track.
+    --track-right N      Índice CRUDO del track de la mano derecha (0-based,
+                         incluye tracks vacíos de tempo/meta). Con --midi, si se
+                         omite, es el primer track con notas.
+    --track-left N       Índice CRUDO del track de la mano izquierda. Con --midi,
+                         si se omite, es el segundo track con notas.
+    --gap-encoding MODE  Compases vacíos de una mano: "jump" (defecto, confirmado
+                         por la especificación oficial) salta con mN: al siguiente
+                         compás con nota; "pad" rellena con '-' compás a compás
+                         (experimental, no recomendado).
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+    # Flujo completo: MIDI → digitación → Synthesia
+    python fingering_v6.py archivo.mid --json digitacion.json
+    python fingering_to_synthesia.py digitacion.json -o salida.synthesia --midi archivo.mid
+
+    # Básico (hash placeholder; hay que sustituirlo a mano)
     python fingering_to_synthesia.py digitacion.json -o salida.synthesia
+
+    # Con el hash real de la canción
     python fingering_to_synthesia.py digitacion.json -o salida.synthesia --hash a48d1b2c62fc908118333dee270986a3
-    python fingering_to_synthesia.py digitacion.json -o merged.synthesia \
-        --existing LocalFingerInfo.xml --hash a48d1b2c62fc908118333dee270986a3
+
+    # Fusionar en un fichero de Synthesia existente (conserva el resto de canciones)
+    python fingering_to_synthesia.py digitacion.json -o merged.synthesia --existing LocalFingerInfo.xml --hash a48d1b2c62fc908118333dee270986a3
+
+    # Índices de track explícitos (crudos, contando tracks vacíos de tempo)
     python fingering_to_synthesia.py digitacion.json -o salida.synthesia --track-right 0 --track-left 1
+    python fingering_to_synthesia.py digitacion.json -o salida.synthesia --midi archivo.mid --track-right 1 --track-left 2
+
+    # Codificación de compases vacíos
+    python fingering_to_synthesia.py digitacion.json -o salida.synthesia --midi archivo.mid --gap-encoding jump
+    python fingering_to_synthesia.py digitacion.json -o salida.synthesia --midi archivo.mid --gap-encoding pad   # experimental
+
+Dependencias: solo biblioteca estándar (lee el MIDI con un parser propio).
+Véase también: fingering_v3.py … fingering_v6.py (generan el JSON de entrada).
 """
 
 from __future__ import annotations

@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
-WFC_COMPOSER v3.0 — Wave Function Collapse + Z3
-Grafo de ventana temporal con aristas tipadas: MELODIC / HARMONIC / CADENTIAL
+wfc_composer.py — Composición por Wave Function Collapse sobre un grafo de
+ventana temporal con aristas tipadas (MELODIC / HARMONIC / CADENTIAL)
+(versión 3.0).
 
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
 FIXES v3 vs v2:
   1. c_no_voice_overlap GLOBAL (no solo aristas HARMONIC)
   2. Distribucion temporal ponderada por hueco disponible
@@ -10,12 +14,33 @@ FIXES v3 vs v2:
   4. Arco de tension en likelyhood (parabolico por posicion en frase)
   5. Duraciones con no-solapamiento real entre nodos de misma voz
 
-USO:
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --key KEY                   tonica: clase de altura 0-11 o nombre (C, D, F#,
+                              Bb...). Defecto 2 (D)
+  --mode MODE                 (defecto minor; valores:
+                              major|minor|harmonic_minor|dorian|phrygian)
+  --beats BEATS               (defecto 16)
+  --phrases PHRASES           (defecto 2)
+  --nodes NODES               (defecto 20)
+  --tempo TEMPO               (defecto 96)
+  --window WINDOW             (defecto DEFAULT_WINDOW)
+  --output OUTPUT             (defecto output.mid)
+  --seed SEED
+  --verbose
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
   python wfc_composer.py
   python wfc_composer.py --key 2 --mode minor --beats 32 --nodes 32 --window 2
   python wfc_composer.py --tempo 80 --seed 42 --verbose
 
-DEPENDENCIAS: z3-solver  pretty_midi  networkx
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  z3-solver  pretty_midi  networkx
 """
 
 import z3, random, sys, argparse

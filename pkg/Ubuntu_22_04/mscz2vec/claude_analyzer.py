@@ -1,9 +1,30 @@
 #!/usr/bin/env python3
 """
-MIDI Musical & Emotional Analyzer v3.0
-Uso:   python3 midi_analyzer_v3.py archivo.mid
-       python3 midi_analyzer_v3.py archivo.mid --sections 8 --output informe.txt
-Deps:  pip install mido
+claude_analyzer.py — MIDI Musical & Emotional Analyzer
+(versión 3.0).
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  filepath FILEPATH           Ruta al archivo .mid o .midi
+  --sections SECTIONS         Número de secciones para el análisis (default:
+                              6)
+  --output OUTPUT             Guardar informe en un archivo .txt
+  --essay-only                Generar solo el ensayo narrativo (sin métricas)
+  --essay-output ESSAY_OUTPUT
+                              Guardar el ensayo en un archivo separado
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python3 midi_analyzer_v3.py archivo.mid
+         python3 midi_analyzer_v3.py archivo.mid --sections 8 --output informe.txt
+  Deps:  pip install mido
+
+── Más modos ──
+
+  # Invocación básica
+  python claude_analyzer.py entrada.mid
 """
 import sys, os, math, argparse, collections
 from dataclasses import dataclass, field

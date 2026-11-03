@@ -1,52 +1,68 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          MIDI2YAML  v1.0                                     ║
-║         Convierte fragmentos MIDI a sintaxis de partitura.yaml              ║
-║                                                                              ║
-║  Lee un MIDI generado por cualquier herramienta del ecosistema y produce    ║
-║  bloques YAML listos para insertar en partitura.yaml: melodia, armonia      ║
-║  y/o marcato, en la sintaxis [compas, beat, duracion, nota, velocidad].     ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python midi2yaml.py fragmento.mid                                         ║
-║    python midi2yaml.py fragmento.mid --compas-inicio 15                     ║
-║    python midi2yaml.py fragmento.mid --modo melodia                         ║
-║    python midi2yaml.py fragmento.mid --modo armonia                         ║
-║    python midi2yaml.py fragmento.mid --modo todos                           ║
-║    python midi2yaml.py fragmento.mid --compas-inicio 9 --bpm 72            ║
-║    python midi2yaml.py fragmento.mid --track 0                              ║
-║    python midi2yaml.py fragmento.mid --umbral-silencio 0.25                ║
-║    python midi2yaml.py fragmento.mid --redondear 0.125                      ║
-║    python midi2yaml.py fragmento.mid --compas-inicio 15 --preview          ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --compas-inicio N   Compás real de inicio en la partitura (default: 1)  ║
-║    --bpm N             Tempo en BPM (default: detectado del MIDI)           ║
-║    --compas 4/4        Compás de la obra (default: 4/4)                    ║
-║    --modo M            Qué extraer: melodia | armonia | marcato | todos     ║
-║                        (default: melodia)                                   ║
-║    --track N           Track MIDI a usar como melodía (default: auto)      ║
-║    --umbral-silencio F Duración mínima de nota en beats (default: 0.0625)  ║
-║    --redondear F       Cuantizar beats a múltiplo de F (default: 0.25)     ║
-║    --preview           Mostrar estructura sin generar YAML                  ║
-║    --verbose           Informe detallado del análisis                       ║
-║                                                                              ║
-║  SALIDA:                                                                     ║
-║    Imprime por stdout el bloque YAML listo para pegar en partitura.yaml.   ║
-║    Formato melodia:  [compas, beat, duracion, nota, velocidad]              ║
-║    Formato armonia:  {compas: N, acorde: X, grado: "?", funcion: auto}     ║
-║    Formato marcato:  notas_bajo: [nota, ...]  (una por compás)             ║
-║                                                                              ║
-║  NOTAS DE USO:                                                               ║
-║    · Los nombres de nota usan la convención del ecosistema:                 ║
-║      C4, Cs4 (Do#4), Ds3 (Re#3), Bb3 (Sib3), Fs4 (Fa#4)                  ║
-║    · Con --modo todos genera los tres bloques: melodia + armonia + marcato ║
-║    · El track con más notas se usa como melodía; el resto como armonía     ║
-║    · Usa --track para forzar un track concreto como melodía                ║
-║                                                                              ║
-║  DEPENDENCIAS: mido                                                         ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+midi2yaml.py — Midi2Yaml: convierte fragmentos MIDI a sintaxis de
+partitura.yaml
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Lee un MIDI generado por cualquier herramienta del ecosistema y produce
+bloques YAML listos para insertar en partitura.yaml: melodia, armonia
+y/o marcato, en la sintaxis [compas, beat, duracion, nota, velocidad].
+
+NOTAS DE USO:
+  · Los nombres de nota usan la convención del ecosistema:
+    C4, Cs4 (Do#4), Ds3 (Re#3), Bb3 (Sib3), Fs4 (Fa#4)
+  · Con --modo todos genera los tres bloques: melodia + armonia + marcato
+  · El track con más notas se usa como melodía; el resto como armonía
+  · Usa --track para forzar un track concreto como melodía
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  Imprime por stdout el bloque YAML listo para pegar en partitura.yaml.
+  Formato melodia:  [compas, beat, duracion, nota, velocidad]
+  Formato armonia:  {compas: N, acorde: X, grado: "?", funcion: auto}
+  Formato marcato:  notas_bajo: [nota, ...]  (una por compás)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --compas-inicio N   Compás real de inicio en la partitura (default: 1)
+  --bpm N             Tempo en BPM (default: detectado del MIDI)
+  --compas 4/4        Compás de la obra (default: 4/4)
+  --modo M            Qué extraer: melodia | armonia | marcato | todos
+                      (default: melodia)
+  --track N           Track MIDI a usar como melodía (default: auto)
+  --umbral-silencio F Duración mínima de nota en beats (default: 0.0625)
+  --redondear F       Cuantizar beats a múltiplo de F (default: 0.25)
+  --preview           Mostrar estructura sin generar YAML
+  --verbose           Informe detallado del análisis
+
+── Otras opciones del parser ──
+  -o, --output FILE           Escribe el YAML generado en FILE (crea el
+                              directorio si no existe) en lugar de imprimirlo
+                              por stdout
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python midi2yaml.py fragmento.mid
+  python midi2yaml.py fragmento.mid --compas-inicio 15
+  python midi2yaml.py fragmento.mid --modo melodia
+  python midi2yaml.py fragmento.mid --modo armonia
+  python midi2yaml.py fragmento.mid --modo todos
+  python midi2yaml.py fragmento.mid --compas-inicio 9 --bpm 72
+  python midi2yaml.py fragmento.mid --track 0
+  python midi2yaml.py fragmento.mid --umbral-silencio 0.25
+  python midi2yaml.py fragmento.mid --redondear 0.125
+  python midi2yaml.py fragmento.mid --compas-inicio 15 --preview
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido
 """
 
 import os

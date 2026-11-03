@@ -1,99 +1,195 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                          MUSEGAN  v2.0  (PyTorch)                            ║
-║       Generación de música multi-pista mediante GAN sobre piano-rolls        ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  REPRESENTACIÓN                                                               ║
-║    Piano-roll 5D:  (N, n_bars, n_timesteps, n_pitches, n_tracks)             ║
-║    Por defecto:    n_bars=4, n_timesteps=48, n_pitches=84, n_tracks=5        ║
-║    Tracks:         drums · bass · guitar · strings · piano                   ║
-║    Rango MIDI:     pitches 24-107  (C1-B7)                                   ║
-║                                                                              ║
-║  ARQUITECTURA (BinaryMuseGAN, ISMIR 2018)                                    ║
-║    Generador  — shared 3D-tconv + ramas pitch-time / time-pitch por pista    ║
-║    Discriminador — ramas simétricas + stream chroma + stream onset/offset    ║
-║    Loss          — Wasserstein + penalización de gradiente (WGAN-GP)         ║
-║                                                                              ║
-║  COMANDOS                                                                    ║
-║    prepare     — MIDI corpus → piano-rolls .npz                              ║
-║    train       — Entrenar el modelo GAN                                      ║
-║    generate    — Generar MIDIs desde ruido latente                           ║
-║    accompany   — Generar acompañamiento dado un track de referencia          ║
-║    interpolate — Interpolar entre dos puntos del espacio latente             ║
-║    inspect     — Diagnóstico del modelo y los datos                          ║
-║                                                                              ║
-║  DEPENDENCIAS                                                                ║
-║    torch, numpy                                                              ║
-║    mido        →  pip install mido          (prepare / generate / accompany) ║
-║    imageio     →  pip install imageio       (--save-images)                  ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  USO — PREPARE                                                               ║
-║    python musegan.py prepare                                                  ║
-║        --input-dir  midis/                                                   ║
-║        --output     data/train.npz                                           ║
-║        --bars 4  --resolution 12  --recursive                                ║
-║                                                                              ║
-║  USO — TRAIN                                                                 ║
-║    python musegan.py train                                                    ║
-║        --data       data/train.npz                                           ║
-║        --model-dir  model/                                                   ║
-║        --steps 50000  --batch-size 64  --latent-dim 128                      ║
-║        --gan-loss wasserstein  --gp  --lr 1e-3                               ║
-║        --save-steps 10000  --sample-steps 1000                               ║
-║                                                                              ║
-║    # Reanudar entrenamiento:                                                  ║
-║    python musegan.py train  --data data/train.npz  --model-dir model/        ║
-║        --resume                                                              ║
-║                                                                              ║
-║  USO — GENERATE                                                              ║
-║    python musegan.py generate                                                 ║
-║        --model-dir  model/                                                   ║
-║        --output-dir results/                                                 ║
-║        --n 16  --threshold hard                                              ║
-║        --save-images  --save-arrays                                          ║
-║                                                                              ║
-║  USO — ACCOMPANY                                                             ║
-║    python musegan.py accompany                                                ║
-║        --model-dir  model/                                                   ║
-║        --input      melody.mid                                               ║
-║        --condition-track 4                                                   ║
-║        --output     output.mid                                               ║
-║                                                                              ║
-║  USO — INTERPOLATE                                                           ║
-║    python musegan.py interpolate                                              ║
-║        --model-dir  model/                                                   ║
-║        --output-dir interpolation/                                           ║
-║        --steps 8  --mode slerp                                               ║
-║                                                                              ║
-║  USO — INSPECT                                                               ║
-║    python musegan.py inspect --model-dir model/                              ║
-║    python musegan.py inspect --data data/train.npz                           ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  DATOS PREENTRENADOS (Lakh Pianoroll Dataset)                                ║
-║                                                                              ║
-║  Los checkpoints originales son TF1 y no son compatibles. Sin embargo, los  ║
-║  datos de entrenamiento .npz sí lo son y permiten reentrenar desde cero:    ║
-║                                                                              ║
-║    # 1. Instalar gdown                                                       ║
-║    pip install gdown                                                         ║
-║                                                                              ║
-║    # 2. Descargar piano-rolls LPD-5 (~1.5 GB comprimido)                    ║
-║    gdown --id 14rrC5bSQkB9VYWrvt2IhsCjOKYrguk3S                             ║
-║          -O data/train_x_lpd_5_phr.npz                                      ║
-║                                                                              ║
-║    # 3. Entrenar con los datos descargados                                   ║
-║    python musegan.py train                                                    ║
-║        --data      data/train_x_lpd_5_phr.npz                               ║
-║        --model-dir model/                                                    ║
-║        --steps 50000  --batch-size 64  --gp                                 ║
-║                                                                              ║
-║  El .npz usa el formato sparse nativo de MuseGAN (shape + nonzero)          ║
-║  y es compatible directamente con el comando train sin preprocesado.         ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+musegan.py — Generación de música multi-pista mediante GAN sobre piano-rolls
+(versión 2.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+REPRESENTACIÓN:
+  Piano-roll 5D:  (N, n_bars, n_timesteps, n_pitches, n_tracks)
+  Por defecto:    n_bars=4, n_timesteps=48, n_pitches=84, n_tracks=5
+  Tracks:         drums · bass · guitar · strings · piano
+  Rango MIDI:     pitches 24-107  (C1-B7)
+
+ARQUITECTURA (BinaryMuseGAN, ISMIR 2018)
+  Generador  — shared 3D-tconv + ramas pitch-time / time-pitch por pista
+  Discriminador — ramas simétricas + stream chroma + stream onset/offset
+  Loss          — Wasserstein + penalización de gradiente (WGAN-GP)
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  prepare     — MIDI corpus → piano-rolls .npz
+  train       — Entrenar el modelo GAN
+  generate    — Generar MIDIs desde ruido latente
+  accompany   — Generar acompañamiento dado un track de referencia
+  interpolate — Interpolar entre dos puntos del espacio latente
+  inspect     — Diagnóstico del modelo y los datos
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  prepare
+    --input-dir DIR             Carpeta con ficheros MIDI (obligatorio)
+    --output FILE               Fichero de salida (.npy o .npz) (obligatorio)
+    --bars N                    Compases por segmento (default: …)
+    --resolution N              Ticks por beat (default: …)
+    --down-sample N             Factor de downsampling temporal (default: 1,
+                                sin downsampling)
+    --recursive                 Buscar MIDIs recursivamente
+
+  train
+    --data FILE                 Piano-rolls de entrenamiento (.npy o .npz)
+                                (obligatorio)
+    --model-dir DIR             Directorio para guardar checkpoints
+                                (obligatorio)
+    --steps STEPS               Número de steps (default: 50000)
+    --batch-size BATCH_SIZE     Batch size (default: 64)
+    --latent-dim LATENT_DIM     Dimensión del espacio latente (default: 128)
+    --n-dis N                   Actualizaciones del discriminador por paso gen
+                                (default: 5)
+    --lr LR                     Learning rate (default: 1e-3)
+    --beta1 BETA1               Adam β1 (default: 0.5)
+    --beta2 BETA2               Adam β2 (default: 0.9)
+    --gan-loss GAN_LOSS         Tipo de loss GAN (default: wasserstein)
+                                (valores:
+                                wasserstein|hinge|nonsaturating|classic)
+    --gp                        Usar gradient penalty (WGAN-GP)
+    --save-steps N              Guardar checkpoint cada N steps (default:
+                                10000)
+    --sample-steps N            Generar muestras cada N steps (default: 1000)
+    --log-steps N               Log cada N steps (default: 100)
+    --save-images               Guardar imágenes PNG junto a los .npz de
+                                muestra
+    --resume                    Reanudar entrenamiento desde el último
+                                checkpoint
+    --cpu                       Forzar uso de CPU aunque haya GPU
+
+  generate
+    --model-dir DIR             Directorio con el checkpoint entrenado
+                                (obligatorio)
+    --output-dir DIR            Directorio de salida (default: generated/)
+    --n N                       Número de muestras a generar (default: 16)
+    --latent-dim LATENT_DIM     Latent dim fallback si no hay config en
+                                checkpoint (defecto 128)
+    --threshold THRESHOLD       Método de binarización (default: hard > 0)
+                                (valores: hard|bernoulli)
+    --truncation F              Truncation trick: recortar z a [-2t, 2t]
+                                (default: 1.0, sin recorte)
+    --tempo TEMPO               BPM del MIDI de salida (default: …)
+    --save-images               Guardar imágenes PNG
+    --save-arrays               Guardar piano-rolls .npz
+    --metrics                   Mostrar métricas sobre los resultados
+    --cpu
+
+  accompany
+    --model-dir DIR             (obligatorio)
+    --input FILE                MIDI de referencia (track de condición)
+                                (obligatorio)
+    --condition-track N         Índice del track de condición 0-4 (default:
+                                4=piano)
+    --output FILE               MIDI de salida (default: accompaniment.mid)
+    --latent-dim LATENT_DIM     (defecto 128)
+    --tempo TEMPO               (defecto TEMPO)
+    --cpu
+
+  interpolate
+    --model-dir DIR             (obligatorio)
+    --output-dir DIR            Directorio de salida (default: interpolation/)
+    --pairs N                   Número de pares a interpolar (default: 1)
+    --steps N                   Pasos de interpolación por par (default: 8)
+    --mode MODE                 Método de interpolación (default: slerp)
+                                (valores: slerp|lerp)
+    --latent-dim LATENT_DIM     (defecto 128)
+    --tempo TEMPO               (defecto TEMPO)
+    --save-images               Guardar imagen resumen de la interpolación
+    --cpu
+
+  inspect
+    --model-dir DIR             Directorio con checkpoint
+    --data FILE                 Fichero de datos .npz
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── USO — PREPARE ──
+  python musegan.py prepare \
+      --input-dir  midis/ \
+      --output     data/train.npz \
+      --bars 4  --resolution 12  --recursive
+
+── USO — TRAIN ──
+  python musegan.py train \
+      --data       data/train.npz \
+      --model-dir  model/ \
+      --steps 50000  --batch-size 64  --latent-dim 128 \
+      --gan-loss wasserstein  --gp  --lr 1e-3 \
+      --save-steps 10000  --sample-steps 1000
+
+  # Reanudar entrenamiento:
+  python musegan.py train  --data data/train.npz  --model-dir model/ \
+      --resume
+
+── USO — GENERATE ──
+  python musegan.py generate \
+      --model-dir  model/ \
+      --output-dir results/ \
+      --n 16  --threshold hard \
+      --save-images  --save-arrays
+
+── USO — ACCOMPANY ──
+  python musegan.py accompany \
+      --model-dir  model/ \
+      --input      melody.mid \
+      --condition-track 4 \
+      --output     output.mid
+
+── USO — INTERPOLATE ──
+  python musegan.py interpolate \
+      --model-dir  model/ \
+      --output-dir interpolation/ \
+      --steps 8  --mode slerp
+
+── USO — INSPECT ──
+    python musegan.py inspect --model-dir model/
+    python musegan.py inspect --data data/train.npz
+
+  DATOS PREENTRENADOS (Lakh Pianoroll Dataset)
+
+  Los checkpoints originales son TF1 y no son compatibles. Sin embargo, los
+  datos de entrenamiento .npz sí lo son y permiten reentrenar desde cero:
+
+    # 1. Instalar gdown
+    pip install gdown
+
+    # 2. Descargar piano-rolls LPD-5 (~1.5 GB comprimido)
+    gdown --id 14rrC5bSQkB9VYWrvt2IhsCjOKYrguk3S
+          -O data/train_x_lpd_5_phr.npz
+
+    # 3. Entrenar con los datos descargados
+    python musegan.py train \
+        --data      data/train_x_lpd_5_phr.npz \
+        --model-dir model/ \
+        --steps 50000  --batch-size 64  --gp
+
+  El .npz usa el formato sparse nativo de MuseGAN (shape + nonzero)
+  y es compatible directamente con el comando train sin preprocesado.
+
+── Más modos ──
+
+  # --mode slerp — Método de interpolación (default: slerp)
+  python musegan.py interpolate --model-dir carpeta/ --mode slerp
+
+  # --mode lerp — Método de interpolación (default: slerp)
+  python musegan.py interpolate --model-dir carpeta/ --mode lerp
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  torch, numpy
+  mido        →  pip install mido          (prepare / generate / accompany)
+  imageio     →  pip install imageio       (--save-images)
 """
 
 import argparse

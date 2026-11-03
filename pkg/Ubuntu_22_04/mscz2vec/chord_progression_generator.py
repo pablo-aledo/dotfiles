@@ -1,108 +1,126 @@
 #!/usr/bin/env python3
-"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                  CHORD PROGRESSION GENERATOR  v1.0                          ║
-║         Intención musical → progresión de acordes fundamentada              ║
-║                                                                              ║
-║  Genera progresiones de acordes desde cero a partir de:                     ║
-║    · Descripción libre en lenguaje natural ("melancólico y tenso")          ║
-║    · Parámetros directos (tonalidad, modo, estilo, complejidad)             ║
-║    · Plan de theorist.py (.theorist.json)                                   ║
-║    · Curvas de tensión de tension_designer.py (.curves.json)                ║
-║                                                                              ║
-║  A diferencia de reharmonizer.py (que transforma una melodía existente),    ║
-║  este módulo construye la progresión desde reglas teóricas puras, sin       ║
-║  necesitar ningún MIDI previo. Es el eslabón inicial de la cadena cuando    ║
-║  no tienes material de referencia.                                           ║
-║                                                                              ║
-║  FLUJO INTERNO:                                                              ║
-║  [1] FUNCIÓN ARMÓNICA — asigna T/S/D/AD a cada compás según curva tensión  ║
-║  [2] SELECCIÓN DE PATRÓN — elige patrones del catálogo según estilo/modo    ║
-║  [3] RESOLUCIÓN — convierte numerales romanos a acordes concretos           ║
-║  [4] SCORING — puntúa candidatos por coherencia y variedad                  ║
-║  [5] EXPORTACIÓN — texto, JSON y MIDI de acordes en bloque                  ║
-║                                                                              ║
-║  DOMINANTES SECUNDARIOS (numerales V/x, p.ej. V/ii, V/vi, V/V):             ║
-║  Resueltos automáticamente (5ª superior de x + 7ª de dominante) y con       ║
-║  función armónica propia (AD, tensión 0.85). Presentes ya en varios         ║
-║  patrones de --style baroque/romantic/jazz; también se pueden usar          ║
-║  a mano vía --from-theorist o construyendo el patrón manualmente.           ║
-║                                                                              ║
-║  ESTILOS DISPONIBLES (--style):                                              ║
-║    diatonic        — progresiones diatónicas clásicas                       ║
-║    baroque         — funcionalidad barroca (I-V-vi-iii-IV-I-V)             ║
-║    jazz            — ii-V-I, tensiones extendidas, tritono                  ║
-║    modal           — movimiento modal, évita cadencias V-I                  ║
-║    romantic        — mediantes cromáticas, préstamos modales                ║
-║    impressionist   — paralelismo, tonos enteros, cuartas                    ║
-║    pop             — loops de 4 acordes, vi-IV-I-V, I-V-vi-IV              ║
-║    flamenco        — frigio dominante, cadencia andaluza                    ║
-║    auto            — elige el más adecuado según intención (default)        ║
-║                                                                              ║
-║  MODOS DISPONIBLES (--mode):                                                 ║
-║    major, minor, dorian, phrygian, lydian, mixolydian, locrian,             ║
-║    harmonic_minor, melodic_minor, phrygian_dominant                         ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    # Desde intención libre                                                   ║
-║    python chord_progression_generator.py "melancolía urbana bajo la lluvia" ║
-║                                                                              ║
-║    # Con parámetros directos                                                 ║
-║    python chord_progression_generator.py --key Am --mode minor --style jazz ║
-║        --bars 16 --complexity 0.7                                            ║
-║                                                                              ║
-║    # Desde plan de theorist                                                  ║
-║    python chord_progression_generator.py --from-theorist obra.theorist.json ║
-║                                                                              ║
-║    # Desde curvas de tensión                                                 ║
-║    python chord_progression_generator.py --key Dm --curves curvas.json      ║
-║                                                                              ║
-║    # Generar múltiples candidatos y elegir                                   ║
-║    python chord_progression_generator.py "épico y ascendente" --candidates 5║
-║                                                                              ║
-║    # Exportar directamente como fuente para otros módulos                   ║
-║    python chord_progression_generator.py "jazz nocturno" --key Cm           ║
-║        --export-midi acordes.mid --export-json progresion.json              ║
-║                                                                              ║
-║  INTEGRACIÓN CON EL ECOSISTEMA:                                              ║
-║    theorist.py      → --from-theorist lee .theorist.json                    ║
-║    tension_designer → --curves lee .curves.json                             ║
-║    narrator.py      → --from-narrator lee obra_plan.json                    ║
-║    voice_leader.py  → --export-midi genera acordes.mid compatible           ║
-║    melody_adapter.py→ --export-text genera string compatible con --chords   ║
-║    reharmonizer.py  → --export-midi genera fuente para reharmonización      ║
-║    midi_dna_unified → --export-midi genera fuente de armonía                ║
-║                                                                              ║
-║  SALIDAS:                                                                    ║
-║    <base>.chords.txt   — progresión en texto ("Am:2 G:2 F:2 E7:2")         ║
-║    <base>.chords.json  — progresión completa con metadatos                  ║
-║    <base>.chords.mid   — MIDI de acordes en bloque (compatible --chords-midi)║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    description         Intención en lenguaje natural (entre comillas)       ║
-║    --key KEY           Tónica: C, Dm, F#, Bb… (default: auto)              ║
-║    --mode MODE         Modo (default: auto desde intención)                 ║
-║    --style STYLE       Estilo armónico (default: auto)                      ║
-║    --bars N            Compases totales (default: 16)                       ║
-║    --beats N           Pulsos por compás (default: 4)                       ║
-║    --tempo N           BPM (default: 120)                                   ║
-║    --complexity F      Complejidad 0-1: 0=tríadas simples, 1=9ª/13ª (0.5) ║
-║    --tension-profile S Perfil de tensión: arch|crescendo|decrescendo|wave  ║
-║                        |late_climax|neutral (default: arch)                 ║
-║    --candidates N      Candidatos a evaluar (default: 3)                    ║
-║    --from-theorist F   Leer plan de theorist.py (.theorist.json)            ║
-║    --from-narrator F   Leer plan de narrator.py (obra_plan.json)            ║
-║    --curves F          Leer curvas de tension_designer (.curves.json)       ║
-║    --export-midi F     Exportar MIDI de acordes                             ║
-║    --export-json F     Exportar JSON de progresión                          ║
-║    --export-text F     Exportar texto compatible con --chords               ║
-║    --output BASE       Nombre base para todas las salidas (default: obra)   ║
-║    --per-section       Generar progresión distinta por sección narrativa    ║
-║    --verbose           Informe detallado con justificaciones teóricas       ║
-║    --report            Mostrar análisis de calidad de los candidatos        ║
-║                                                                              ║
-║  DEPENDENCIAS: mido, numpy (music21 opcional para detección avanzada)       ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+r"""
+chord_progression_generator.py — Chord Progression Generator: intención
+musical → progresión de acordes fundamentada
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Genera progresiones de acordes desde cero a partir de:
+  · Descripción libre en lenguaje natural ("melancólico y tenso")
+  · Parámetros directos (tonalidad, modo, estilo, complejidad)
+  · Plan de theorist.py (.theorist.json)
+  · Curvas de tensión de tension_designer.py (.curves.json)
+
+A diferencia de reharmonizer.py (que transforma una melodía existente),
+este módulo construye la progresión desde reglas teóricas puras, sin
+necesitar ningún MIDI previo. Es el eslabón inicial de la cadena cuando
+no tienes material de referencia.
+
+FLUJO INTERNO:
+[1] FUNCIÓN ARMÓNICA — asigna T/S/D/AD a cada compás según curva tensión
+[2] SELECCIÓN DE PATRÓN — elige patrones del catálogo según estilo/modo
+[3] RESOLUCIÓN — convierte numerales romanos a acordes concretos
+[4] SCORING — puntúa candidatos por coherencia y variedad
+[5] EXPORTACIÓN — texto, JSON y MIDI de acordes en bloque
+
+DOMINANTES SECUNDARIOS (numerales V/x, p.ej. V/ii, V/vi, V/V):
+Resueltos automáticamente (5ª superior de x + 7ª de dominante) y con
+función armónica propia (AD, tensión 0.85). Presentes ya en varios
+patrones de --style baroque/romantic/jazz; también se pueden usar
+a mano vía --from-theorist o construyendo el patrón manualmente.
+
+ESTILOS DISPONIBLES (--style):
+  diatonic        — progresiones diatónicas clásicas
+  baroque         — funcionalidad barroca (I-V-vi-iii-IV-I-V)
+  jazz            — ii-V-I, tensiones extendidas, tritono
+  modal           — movimiento modal, évita cadencias V-I
+  romantic        — mediantes cromáticas, préstamos modales
+  impressionist   — paralelismo, tonos enteros, cuartas
+  pop             — loops de 4 acordes, vi-IV-I-V, I-V-vi-IV
+  flamenco        — frigio dominante, cadencia andaluza
+  auto            — elige el más adecuado según intención (default)
+
+MODOS DISPONIBLES (--mode):
+  major, minor, dorian, phrygian, lydian, mixolydian, locrian,
+  harmonic_minor, melodic_minor, phrygian_dominant
+
+INTEGRACIÓN CON EL ECOSISTEMA:
+  theorist.py      → --from-theorist lee .theorist.json
+  tension_designer → --curves lee .curves.json
+  narrator.py      → --from-narrator lee obra_plan.json
+  voice_leader.py  → --export-midi genera acordes.mid compatible
+  melody_adapter.py→ --export-text genera string compatible con --chords
+  reharmonizer.py  → --export-midi genera fuente para reharmonización
+  midi_dna_unified → --export-midi genera fuente de armonía
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  <base>.chords.txt   — progresión en texto ("Am:2 G:2 F:2 E7:2")
+  <base>.chords.json  — progresión completa con metadatos
+  <base>.chords.mid   — MIDI de acordes en bloque (compatible --chords-midi)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  description         Intención en lenguaje natural (entre comillas)
+  --key KEY           Tónica: C, Dm, F#, Bb… (default: auto)
+  --mode MODE         Modo (default: auto desde intención)
+  --style STYLE       Estilo armónico (default: auto)
+  --bars N            Compases totales (default: 16)
+  --beats N           Pulsos por compás (default: 4)
+  --tempo N           BPM (default: 120)
+  --complexity F      Complejidad 0-1: 0=tríadas simples, 1=9ª/13ª (0.5)
+  --tension-profile S Perfil de tensión: arch|crescendo|decrescendo|wave
+                      |late_climax|neutral (default: arch)
+  --candidates N      Candidatos a evaluar (default: 3)
+  --from-theorist F   Leer plan de theorist.py (.theorist.json)
+  --from-narrator F   Leer plan de narrator.py (obra_plan.json)
+  --curves F          Leer curvas de tension_designer (.curves.json)
+  --export-midi F     Exportar MIDI de acordes
+  --export-json F     Exportar JSON de progresión
+  --export-text F     Exportar texto compatible con --chords
+  --output BASE       Nombre base para todas las salidas (default: obra)
+  --verbose           Informe detallado con justificaciones teóricas
+  --report            Mostrar análisis de calidad de los candidatos
+
+── Otras opciones del parser ──
+  --seed SEED                 Semilla aleatoria (default: 42)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  # Desde intención libre
+  python chord_progression_generator.py "melancolía urbana bajo la lluvia"
+
+  # Con parámetros directos
+  python chord_progression_generator.py --key Am --mode minor --style jazz \
+      --bars 16 --complexity 0.7
+
+  # Desde plan de theorist
+  python chord_progression_generator.py --from-theorist obra.theorist.json
+
+  # Desde curvas de tensión
+  python chord_progression_generator.py --key Dm --curves curvas.json
+
+  # Generar múltiples candidatos y elegir
+  python chord_progression_generator.py "épico y ascendente" --candidates 5
+
+  # Exportar directamente como fuente para otros módulos
+  python chord_progression_generator.py "jazz nocturno" --key Cm \
+      --export-midi acordes.mid --export-json progresion.json
+
+── Más modos ──
+
+  # Mostrar análisis de calidad de los candidatos
+  python chord_progression_generator.py --report
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  mido, numpy (music21 opcional para detección avanzada)
 """
 
 import sys

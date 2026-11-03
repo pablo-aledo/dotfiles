@@ -1,111 +1,158 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                   MELODY CONDITIONED  v2.0                                  ║
-║       Generación de melodías condicionadas a progresión de acordes          ║
-║                                                                              ║
-║  MOTORES DE GENERACIÓN (--engine):                                           ║
-║    chord_guided — Markov de 2º orden condicionado por tensión y acorde.    ║
-║                   Opcionalmente entrenado desde corpus MIDI real            ║
-║                   (--corpus).                                               ║
-║    grammar      — Elaboración Schenkerian en tres capas ancladas al        ║
-║                   acorde activo: chord tones estructurales → notas de       ║
-║                   paso → ornamentos. Determinista y muy "musical".          ║
-║    search       — Beam search A* con función de coste que combina           ║
-║                   compatibilidad armónica, contorno y suavidad.             ║
-║                   Garantías locales por nota.                               ║
-║    genetic      — Algoritmo genético: población de melodías evaluadas       ║
-║                   por fitness que incluye armonía por acorde, clímax en     ║
-║                   proporción áurea y variedad rítmica.                      ║
-║                                                                              ║
-║  PERFILES EMOCIONALES (--profile):                                           ║
-║    Originales:  heroic | melancholic | playful | tense | serene |           ║
-║                 mysterious | triumphant                                      ║
-║    Nuevos:      elegiac   — melodic_minor, luto contenido, clímax 35%       ║
-║                 ecstatic  — lydian, euforia alta desde el inicio            ║
-║                 brooding  — locrian, ensombrecido, peso sin volumen         ║
-║                 pastoral  — mixolydian, abierto y estático                  ║
-║                 agitated  — chromatic, caos controlado, dinámica extrema    ║
-║                 hypnotic  — pentatonic_minor, tensión plana, repetición     ║
-║                 flamenco  — phrygian_dominant, cadencia andaluza, duende    ║
-║                 tanguero  — minor, micro-arcos de frase, 4ª descendente     ║
-║                                                                              ║
-║  POST-PROCESADO:                                                             ║
-║    --ornaments O  Ornamentación post-generación: appoggiatura | passing |   ║
-║                   neighbor | all. Probabilidad ajustable (--ornament-prob). ║
-║    --fix-avoid    Corrige notas 'avoid' en tiempos fuertes via nearest_     ║
-║                   admissible con preservación de contorno.                  ║
-║                                                                              ║
-║  CONDICIONAMIENTO ARMÓNICO:                                                  ║
-║    · is_strong_beat: pesos más altos para CT en tiempo fuerte               ║
-║    · is_passing_note / is_neighbor_note: clasificación contextual           ║
-║    · score_melody_vs_progression: desglose por acorde + colisiones          ║
-║                                                                              ║
-║  SCORING EXTENDIDO (8 criterios):                                            ║
-║    1. Consonancia con la escala (15%)                                        ║
-║    2. Armonía por acorde activo (20%)                                        ║
-║    3. Suavidad de movimiento (15%)                                           ║
-║    4. Conformidad con el contorno (15%)                                      ║
-║    5. Rango melódico (10%)                                                   ║
-║    6. Variedad rítmica (10%)                                                 ║
-║    7. Arco dinámico – desv. estándar de velocidades (8%)                    ║
-║    8. Posición del clímax – proporción áurea 0.618 (7%)                     ║
-║                                                                              ║
-║  FUENTES DE ACORDES:                                                         ║
-║    --chords "Am:2 G:2 F:2 E7:2"  texto directo                             ║
-║    --chords-json  prog.chords.json                                           ║
-║    --chords-midi  fichero.mid   extrae acordes del track de armonía         ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    # Motor grammar con ornamentación:                                        ║
-║    python melody_conditioned_v2.py --engine grammar                          ║
-║        --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8                      ║
-║        --profile melancholic --ornaments all --ornament-prob 0.4            ║
-║                                                                              ║
-║    # Motor chord_guided con corpus real:                                     ║
-║    python melody_conditioned_v2.py --engine chord_guided                     ║
-║        --corpus ./midis/ --chords "Dm:2 G7:2 C:4" --key C --bars 16        ║
-║                                                                              ║
-║    # Motor search con corrección de avoid notes:                             ║
-║    python melody_conditioned_v2.py --engine search                           ║
-║        --chords "C:4 Am:4 F:4 G:4" --key C --bars 8 --fix-avoid            ║
-║                                                                              ║
-║    # Motor genético:                                                         ║
-║    python melody_conditioned_v2.py --engine genetic                          ║
-║        --chords "Cm:2 Ab:2 Eb:2 Bb:2" --key Cm --bars 8                   ║
-║        --profile tense --candidates 5                                        ║
-║                                                                              ║
-║  OPCIONES PRINCIPALES:                                                       ║
-║    --engine E          Motor: chord_guided|grammar|search|genetic           ║
-║    --key KEY           Tonalidad (default: C)                               ║
-║    --mode MODE         Modo de escala (default: auto)                       ║
-║    --bars N            Compases (default: 16)                               ║
-║    --tempo BPM         Tempo (default: 120)                                 ║
-║    --time-sig S        Compás (default: 4/4)                                ║
-║    --profile P         Estado emocional (default: serene)                   ║
-║    --rhythm R          Perfil rítmico (default: flowing)                    ║
-║    --contour C         Contorno melódico (default: auto)                    ║
-║    --tension-curve V   Curva de tensión: "0.2,0.5,0.8,0.5"                ║
-║    --range LOW HIGH    Rango MIDI (default: 60 84)                          ║
-║    --candidates N      Candidatos a generar (default: 3)                    ║
-║    --chords TEXT       Progresión en texto                                  ║
-║    --chords-json FILE  Progresión desde JSON                                ║
-║    --chords-midi FILE  Progresión desde MIDI                                ║
-║    --corpus DIR        MIDIs para entrenar Markov (chord_guided)            ║
-║    --ornaments O       Post-procesado: appoggiatura|passing|neighbor|all    ║
-║    --ornament-prob F   Probabilidad de ornamentación (default: 0.35)        ║
-║    --fix-avoid         Corregir avoid notes en tiempos fuertes              ║
-║    --include-chords    Incluir track de acordes en el MIDI de salida        ║
-║    --export-motif      Exportar motivo semilla (.motif.mid)                 ║
-║    --output FILE       Fichero de salida (default: melody_conditioned.mid)  ║
-║    --seed N            Semilla aleatoria (default: 42)                      ║
-║    --verbose           Informe detallado                                    ║
-║    --dry-run           Mostrar parámetros sin generar                       ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    Siempre:    mido, numpy                                                   ║
-║    Opcional:   music21 (detección de acordes mejorada desde MIDI)           ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+melody_conditioned_v2.py — Generación de melodías condicionadas a progresión de acordes
+(versión 2.0: motores chord_guided, grammar, search y genetic).
+
+Novedades respecto a v1: sin motor llm; añade tres motores (grammar, search,
+genetic), 8 perfiles emocionales nuevos, ornamentación, corrección de avoid
+notes, entrenamiento del Markov desde corpus y scoring de 8 criterios.
+
+────────────────────────────────────────────────────────────────────────────
+MOTORES DE GENERACIÓN (--engine)
+────────────────────────────────────────────────────────────────────────────
+  chord_guided — Markov de 2º orden condicionado por tensión y acorde.
+                 Opcionalmente entrenado desde corpus MIDI real
+                 (--corpus).
+  grammar      — Elaboración Schenkerian en tres capas ancladas al
+                 acorde activo: chord tones estructurales → notas de
+                 paso → ornamentos. Determinista y muy "musical".
+  search       — Beam search A* con función de coste que combina
+                 compatibilidad armónica, contorno y suavidad.
+                 Garantías locales por nota.
+  genetic      — Algoritmo genético: población de melodías evaluadas
+                 por fitness que incluye armonía por acorde, clímax en
+                 proporción áurea y variedad rítmica.
+
+────────────────────────────────────────────────────────────────────────────
+PERFILES EMOCIONALES (--profile)
+────────────────────────────────────────────────────────────────────────────
+  Originales:  heroic | melancholic | playful | tense | serene |
+               mysterious | triumphant
+  Nuevos:      elegiac   — melodic_minor, luto contenido, clímax 35%
+               ecstatic  — lydian, euforia alta desde el inicio
+               brooding  — locrian, ensombrecido, peso sin volumen
+               pastoral  — mixolydian, abierto y estático
+               agitated  — chromatic, caos controlado, dinámica extrema
+               hypnotic  — pentatonic_minor, tensión plana, repetición
+               flamenco  — phrygian_dominant, cadencia andaluza, duende
+               tanguero  — minor, micro-arcos de frase, 4ª descendente
+
+────────────────────────────────────────────────────────────────────────────
+POST-PROCESADO
+────────────────────────────────────────────────────────────────────────────
+  --ornaments O  Ornamentación post-generación: appoggiatura | passing |
+                 neighbor | all. Probabilidad ajustable (--ornament-prob).
+  --fix-avoid    Corrige notas 'avoid' en tiempos fuertes via nearest_
+                 admissible con preservación de contorno.
+
+────────────────────────────────────────────────────────────────────────────
+CONDICIONAMIENTO ARMÓNICO
+────────────────────────────────────────────────────────────────────────────
+  · is_strong_beat: pesos más altos para CT en tiempo fuerte
+  · is_passing_note / is_neighbor_note: clasificación contextual
+  · score_melody_vs_progression: desglose por acorde + colisiones
+
+────────────────────────────────────────────────────────────────────────────
+SCORING EXTENDIDO (8 criterios)
+────────────────────────────────────────────────────────────────────────────
+  1. Consonancia con la escala (15%)
+  2. Armonía por acorde activo (20%)
+  3. Suavidad de movimiento (15%)
+  4. Conformidad con el contorno (15%)
+  5. Rango melódico (10%)
+  6. Variedad rítmica (10%)
+  7. Arco dinámico – desv. estándar de velocidades (8%)
+  8. Posición del clímax – proporción áurea 0.618 (7%)
+
+────────────────────────────────────────────────────────────────────────────
+FUENTES DE ACORDES
+────────────────────────────────────────────────────────────────────────────
+  --chords "Am:2 G:2 F:2 E7:2"  texto directo
+  --chords-json  prog.chords.json
+  --chords-midi  fichero.mid   extrae acordes del track de armonía
+
+────────────────────────────────────────────────────────────────────────────
+EJEMPLOS DE USO
+────────────────────────────────────────────────────────────────────────────
+  # Motor grammar con ornamentación:
+  python melody_conditioned_v2.py --engine grammar
+      --chords "Am:2 G:2 F:2 E7:2" --key Am --bars 8
+      --profile melancholic --ornaments all --ornament-prob 0.4
+
+  # Motor chord_guided con corpus real:
+  python melody_conditioned_v2.py --engine chord_guided
+      --corpus ./midis/ --chords "Dm:2 G7:2 C:4" --key C --bars 16
+
+  # Motor search con corrección de avoid notes:
+  python melody_conditioned_v2.py --engine search
+      --chords "C:4 Am:4 F:4 G:4" --key C --bars 8 --fix-avoid
+
+  # Motor genético:
+  python melody_conditioned_v2.py --engine genetic
+      --chords "Cm:2 Ab:2 Eb:2 Bb:2" --key Cm --bars 8
+      --profile tense --candidates 5
+
+  # Varios ornamentos a la vez y probabilidad alta:
+  python melody_conditioned_v2.py --engine grammar --chords "C:4 Am:4 F:4 G:4"
+      --key C --bars 8 --ornaments passing neighbor --ornament-prob 0.6
+
+  # Perfil rítmico y contorno personalizado:
+  python melody_conditioned_v2.py --chords "Em:4 C:4 G:4 D:4" --key Em --bars 16
+      --rhythm syncopated --contour custom --contour-values "0,0.3,0.8,1,0.5"
+
+  # Acordes desde .chords.json o desde un MIDI con la armonía en otro track:
+  python melody_conditioned_v2.py --chords-json prog.chords.json --key C
+  python melody_conditioned_v2.py --chords-midi cancion.mid --key Am --bars 8
+      --chords-midi-track 3 --chords-midi-channel 2 --chords-midi-window 1.0
+
+  # Exportar también el motivo semilla (.motif.mid) y el acompañamiento:
+  python melody_conditioned_v2.py --engine grammar --chords "Am:2 G:2 F:2 E7:2"
+      --key Am --export-motif --include-chords --output melodia.mid
+
+  # Tempo, compás, modo y rango; informe detallado o simulación:
+  python melody_conditioned_v2.py --chords "Dm:3 Gm:3 A7:3 Dm:3" --key Dm
+      --mode dorian --tempo 96 --time-sig 3/4 --bars 8 --range 55 79 --seed 7 --verbose
+  python melody_conditioned_v2.py --chords "Am:2 G:2 F:2 E7:2" --key Am --dry-run
+
+────────────────────────────────────────────────────────────────────────────
+OPCIONES
+────────────────────────────────────────────────────────────────────────────
+  --engine E          Motor: chord_guided|grammar|search|genetic
+  --key KEY           Tonalidad (default: C)
+  --mode MODE         Modo de escala (default: auto)
+  --bars N            Compases (default: 16)
+  --tempo BPM         Tempo (default: 120)
+  --time-sig S        Compás (default: 4/4)
+  --profile P         Estado emocional (default: serene)
+  --rhythm R          Perfil rítmico (default: flowing)
+  --contour C         Contorno melódico (default: auto)
+  --contour-values V  Con --contour custom: puntos 0-1 separados por comas,
+                      p. ej. "0,0.3,0.8,1,0.5" (si no es válido usa arch)
+  --tension-curve V   Curva de tensión: "0.2,0.5,0.8,0.5"
+  --range LOW HIGH    Rango MIDI (default: 60 84)
+  --candidates N      Candidatos a generar (default: 3)
+  --chords TEXT       Progresión en texto
+  --chords-json FILE  Progresión desde JSON
+  --chords-midi FILE  Progresión desde MIDI
+  --chords-midi-track N    Índice del track de armonía (default: 2)
+  --chords-midi-channel N  Canal MIDI de armonía (default: 1)
+  --chords-midi-window F   Ventana mínima de agrupación en beats (default: 0.5)
+  --corpus DIR        MIDIs para entrenar Markov (chord_guided)
+  --ornaments O [O…] Post-procesado: appoggiatura|passing|neighbor|all (admite varios)
+  --ornament-prob F   Probabilidad de ornamentación (default: 0.35)
+  --fix-avoid         Corregir avoid notes en tiempos fuertes
+  --include-chords    Incluir track de acordes en el MIDI de salida
+  --export-motif      Exportar motivo semilla (.motif.mid)
+  --output FILE       Fichero de salida (default: melody_conditioned.mid)
+  --seed N            Semilla aleatoria (default: 42)
+  --verbose           Informe detallado
+  --dry-run           Mostrar parámetros sin generar
+
+────────────────────────────────────────────────────────────────────────────
+DEPENDENCIAS
+────────────────────────────────────────────────────────────────────────────
+  Siempre:    mido, numpy
+  Opcional:   music21 (detección de acordes mejorada desde MIDI)
 """
 
 import sys

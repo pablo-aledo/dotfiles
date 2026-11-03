@@ -1,124 +1,248 @@
 #!/usr/bin/env python3
 r"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                           AUDIOLM  v1.0                                      ║
-║         Modelado de lenguaje sobre audio — wrapper CLI para audiolm-pytorch  ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  CONCEPTO                                                                    ║
-║    AudioLM (Google Research, 2022) trata la generación de audio como un     ║
-║    problema de predicción de tokens, igual que un LLM con texto.            ║
-║    El pipeline tiene tres etapas encadenadas:                               ║
-║                                                                              ║
-║    Audio bruto                                                               ║
-║      │                                                                       ║
-║      ├─[1] SemanticTransformer  ← tokens semánticos (HuBERT/vq-wav2vec)    ║
-║      │       captura estructura de alto nivel: prosodia, contenido          ║
-║      │                                                                       ║
-║      ├─[2] CoarseTransformer   ← tokens acústicos gruesos (SoundStream)    ║
-║      │       captura timbre, envolvente, estructura armónica                ║
-║      │                                                                       ║
-║      └─[3] FineTransformer     ← tokens acústicos finos                    ║
-║              captura detalles de alta frecuencia                            ║
-║                                                                              ║
-║    Cada transformer se entrena por separado; la generación los encadena.   ║
-║    El codec (SoundStream o EnCodec) actúa como tokenizador de audio.       ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  SUBCOMANDOS                                                                 ║
-║                                                                              ║
-║    train-codec      Entrenar SoundStream sobre un corpus de audio           ║
-║    train-semantic   Entrenar el SemanticTransformer (etapa 1)               ║
-║    train-coarse     Entrenar el CoarseTransformer (etapa 2)                 ║
-║    train-fine       Entrenar el FineTransformer (etapa 3)                   ║
-║    generate         Generar audio con los 3 modelos entrenados              ║
-║    continue         Continuar audio desde un fichero de referencia (prompt) ║
-║    info             Inspeccionar un checkpoint guardado                     ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  FLUJO TÍPICO DE USO                                                         ║
-║                                                                              ║
-║  # 1. Entrenar el codec neuronal (tokenizador de audio)                     ║
-║  python audiolm.py train-codec                                               ║
-║      --audio-dir ./corpus/                                                   ║
-║      --checkpoint codec.pt                                                   ║
-║      --steps 100000                                                          ║
-║                                                                              ║
-║  # 2. Etapa semántica (requiere HuBERT preentrenado)                        ║
-║  python audiolm.py train-semantic                                            ║
-║      --audio-dir ./corpus/                                                   ║
-║      --hubert-ckpt hubert_base_ls960.pt                                     ║
-║      --hubert-quantizer hubert_base_ls960_L9_km500.bin                      ║
-║      --checkpoint semantic.pt                                                ║
-║      --steps 100000                                                          ║
-║                                                                              ║
-║  # 3. Transformer grueso                                                    ║
-║  python audiolm.py train-coarse                                              ║
-║      --audio-dir ./corpus/                                                   ║
-║      --codec-ckpt codec.pt                                                  ║
-║      --hubert-ckpt hubert_base_ls960.pt                                     ║
-║      --hubert-quantizer hubert_base_ls960_L9_km500.bin                      ║
-║      --checkpoint coarse.pt                                                  ║
-║      --steps 100000                                                          ║
-║                                                                              ║
-║  # 4. Transformer fino                                                      ║
-║  python audiolm.py train-fine                                                ║
-║      --audio-dir ./corpus/                                                   ║
-║      --codec-ckpt codec.pt                                                  ║
-║      --checkpoint fine.pt                                                    ║
-║      --steps 100000                                                          ║
-║                                                                              ║
-║  # 5. Generar audio                                                         ║
-║  python audiolm.py generate                                                  ║
-║      --codec-ckpt codec.pt                                                  ║
-║      --semantic-ckpt semantic.pt                                             ║
-║      --coarse-ckpt coarse.pt                                                 ║
-║      --fine-ckpt fine.pt                                                     ║
-║      --hubert-ckpt hubert_base_ls960.pt                                     ║
-║      --hubert-quantizer hubert_base_ls960_L9_km500.bin                      ║
-║      --output generado.wav                                                   ║
-║                                                                              ║
-║  # 5b. Generar con texto (si los transformers fueron entrenados con T5)     ║
-║  python audiolm.py generate  [mismos flags]  --text "lluvia sobre el mar"  ║
-║                                                                              ║
-║  # 5c. Continuar desde un audio de referencia (audio prompting)             ║
-║  python audiolm.py continue referencia.wav  [mismos flags]                  ║
-║                                                                              ║
-║  # 6. Inspeccionar un checkpoint                                             ║
-║  python audiolm.py info codec.pt                                             ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  OPCIONES COMUNES (disponibles en todos los subcomandos de entrenamiento)    ║
-║    --audio-dir DIR        Carpeta con ficheros .wav/.flac/.mp3              ║
-║    --checkpoint FILE      Dónde guardar / desde dónde cargar el modelo      ║
-║    --results-dir DIR      Carpeta para samples y checkpoints [./results]    ║
-║    --steps N              Pasos de entrenamiento [100000]                   ║
-║    --batch-size N         Tamaño de batch [4]                               ║
-║    --grad-accum N         Pasos de acumulación de gradiente [8]             ║
-║    --lr F                 Learning rate [3e-4]                              ║
-║    --seconds F            Duración máxima de cada clip en segundos [2.0]   ║
-║    --save-every N         Guardar checkpoint cada N pasos [1000]           ║
-║    --sample-every N       Generar muestra cada N pasos [500]               ║
-║    --wandb                Activar logging con Weights & Biases              ║
-║    --seed N               Semilla aleatoria [42]                            ║
-║    --verbose              Mostrar configuración completa antes de lanzar    ║
-║    --dry-run              Construir modelos y mostrar config sin entrenar   ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  ARQUITECTURA POR DEFECTO (compatible entre las 4 etapas de entrenamiento)  ║
-║    codec:    codebook_size=4096, rq_num_quantizers=12, target_sample_hz=16k ║
-║              num_coarse_quantizers=3  (→ fine usa los 9 restantes)          ║
-║    semantic: dim=1024, depth=6, num_semantic_tokens=500                     ║
-║    coarse:   dim=1024, depth=6, num_coarse_quantizers=3                    ║
-║    fine:     dim=1024, depth=6, num_fine_quantizers=9                      ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    pip install audiolm-pytorch                                               ║
-║    pip install fairseq   # para HuBERT / vq-wav2vec                         ║
-║                                                                              ║
-║  DESCARGA DE PESOS HuBERT:                                                  ║
-║    wget https://dl.fbaipublicfiles.com/hubert/hubert_base_ls960.pt          ║
-║    wget https://dl.fbaipublicfiles.com/hubert/hubert_base_ls960_L9_km500.bin║
-╚══════════════════════════════════════════════════════════════════════════════╝
+audiolm.py — Audiolm: modelado de lenguaje sobre audio — wrapper CLI para
+audiolm-pytorch
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+CONCEPTO:
+  AudioLM (Google Research, 2022) trata la generación de audio como un
+  problema de predicción de tokens, igual que un LLM con texto.
+  El pipeline tiene tres etapas encadenadas:
+
+  Audio bruto
+    │
+    ├─[1] SemanticTransformer  ← tokens semánticos (HuBERT/vq-wav2vec)
+    │       captura estructura de alto nivel: prosodia, contenido
+    │
+    ├─[2] CoarseTransformer   ← tokens acústicos gruesos (SoundStream)
+    │       captura timbre, envolvente, estructura armónica
+    │
+    └─[3] FineTransformer     ← tokens acústicos finos
+            captura detalles de alta frecuencia
+
+  Cada transformer se entrena por separado; la generación los encadena.
+  El codec (SoundStream o EnCodec) actúa como tokenizador de audio.
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+  train-codec      Entrenar SoundStream sobre un corpus de audio
+  train-semantic   Entrenar el SemanticTransformer (etapa 1)
+  train-coarse     Entrenar el CoarseTransformer (etapa 2)
+  train-fine       Entrenar el FineTransformer (etapa 3)
+  generate         Generar audio con los 3 modelos entrenados
+  continue         Continuar audio desde un fichero de referencia (prompt)
+  info             Inspeccionar un checkpoint guardado
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  train-coarse
+    --codec-ckpt CODEC_CKPT     Checkpoint del codec (de train-codec)
+                                (obligatorio)
+
+  train-fine
+    --codec-ckpt CODEC_CKPT     Checkpoint del codec (de train-codec)
+                                (obligatorio)
+
+  generate
+    --codec-ckpt CODEC_CKPT     Checkpoint de SoundStream (omitir si --use-
+                                encodec)
+    --semantic-ckpt SEMANTIC_CKPT
+                                Checkpoint del SemanticTransformer
+                                (obligatorio)
+    --coarse-ckpt COARSE_CKPT   Checkpoint del CoarseTransformer (obligatorio)
+    --fine-ckpt FINE_CKPT       Checkpoint del FineTransformer (obligatorio)
+    --text TEXT                 Descripción textual del audio a generar
+                                (requiere --has-condition)
+    --prompt AUDIO              Fichero de audio de referencia para continuar
+                                (audio prompting)
+    --output OUTPUT             Fichero WAV de salida [generated.wav] (defecto
+                                generated.wav)
+    --batch-size BATCH_SIZE     Número de muestras a generar en paralelo [1]
+                                (defecto 1)
+    --max-length MAX_LENGTH     Longitud máxima de la secuencia generada en
+                                tokens [2048] (defecto 2048)
+    --use-encodec               Usar EnCodec preentrenado (24 kHz) en lugar de
+                                SoundStream
+    --seed SEED                 Semilla aleatoria [42] (defecto 42)
+    --verbose
+    --dry-run                   Mostrar configuración sin generar audio
+
+  continue
+    input INPUT                 Fichero de audio de referencia (.wav)
+    --codec-ckpt CODEC_CKPT
+    --semantic-ckpt SEMANTIC_CKPT
+                                (obligatorio)
+    --coarse-ckpt COARSE_CKPT   (obligatorio)
+    --fine-ckpt FINE_CKPT       (obligatorio)
+    --text TEXT
+    --output OUTPUT             (defecto continued.wav)
+    --batch-size BATCH_SIZE     (defecto 1)
+    --max-length MAX_LENGTH     (defecto 2048)
+    --use-encodec
+    --seed SEED                 (defecto 42)
+    --verbose
+    --dry-run
+
+  info
+    checkpoint CHECKPOINT       Ruta al fichero .pt a inspeccionar
+    --verbose                   Listar todos los tensores del state_dict
+
+  (común)
+    --audio-dir AUDIO_DIR       Carpeta con ficheros .wav / .flac / .mp3
+                                (obligatorio)
+    --checkpoint CHECKPOINT     Ruta del checkpoint a guardar [model.pt]
+                                (defecto model.pt)
+    --results-dir RESULTS_DIR   Carpeta para samples y checkpoints periódicos
+                                [./results] (defecto ./results)
+    --steps STEPS               Pasos de entrenamiento [100000] (defecto
+                                100000)
+    --batch-size BATCH_SIZE     Tamaño de batch [4] (defecto 4)
+    --grad-accum GRAD_ACCUM     Pasos de acumulación de gradiente (batch
+                                efectivo = batch×accum) [8] (defecto 8)
+    --lr LR                     Learning rate [3e-4] (defecto 0.0003)
+    --seconds SECONDS           Duración máxima de cada clip de entrenamiento
+                                en segundos [2.0] (defecto 2.0)
+    --save-every SAVE_EVERY     Guardar checkpoint cada N pasos [1000]
+                                (defecto 1000)
+    --sample-every SAMPLE_EVERY
+                                Generar muestra de validación cada N pasos
+                                [500] (defecto 500)
+    --wandb                     Activar logging con Weights & Biases
+    --seed SEED                 Semilla aleatoria [42] (defecto 42)
+    --verbose                   Mostrar configuración completa antes de
+                                entrenar
+    --dry-run                   Construir modelos y mostrar config sin
+                                entrenar
+    --codebook-size CODEBOOK_SIZE
+                                Tamaño del codebook […] (defecto
+                                DEFAULT_CODEBOOK_SIZE)
+    --rq-num-quantizers RQ_NUM_QUANTIZERS
+                                Número total de cuantizadores residuales […]
+                                (defecto DEFAULT_RQ_NUM_QUANTIZERS)
+    --num-coarse-q NUM_COARSE_Q
+                                Cuantizadores gruesos (fine usa el resto) […]
+                                (defecto DEFAULT_NUM_COARSE_Q)
+    --rq-groups RQ_GROUPS       Grupos para multi-head RVQ [1] (defecto 1)
+    --use-lfq                   Usar Lookup-Free Quantizer en vez de RVQ
+                                estándar
+    --sample-hz SAMPLE_HZ       Frecuencia de muestreo objetivo [Hz] […]
+                                (defecto DEFAULT_TARGET_SAMPLE_HZ)
+    --attn-window ATTN_WINDOW   Ventana de atención local en el bottleneck
+                                [128] (defecto 128)
+    --attn-depth ATTN_DEPTH     Capas de atención local en el bottleneck [2]
+                                (defecto 2)
+    --dim DIM                   Dimensión del transformer […] (defecto
+                                DEFAULT_DIM)
+    --depth DEPTH               Número de capas del transformer […] (defecto
+                                DEFAULT_DEPTH)
+    --heads HEADS               Número de cabezas de atención [8] (defecto 8)
+    --flash-attn                Usar Flash Attention (requiere GPU Ampere+)
+    --has-condition             Entrenar con conditioning de texto (T5)
+    --num-semantic-tokens NUM_SEMANTIC_TOKENS
+                                Número de tokens semánticos (= clusters KMeans
+                                de HuBERT) […] (defecto
+                                DEFAULT_NUM_SEMANTIC_TOKENS)
+    --hubert-ckpt HUBERT_CKPT   Ruta al checkpoint de HuBERT
+                                (hubert_base_ls960.pt) (obligatorio)
+    --hubert-quantizer HUBERT_QUANTIZER
+                                Ruta al quantizador KMeans
+                                (hubert_base_ls960_L9_km500.bin) (obligatorio)
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+── FLUJO TÍPICO DE USO ──
+  # 1. Entrenar el codec neuronal (tokenizador de audio)
+  python audiolm.py train-codec \
+      --audio-dir ./corpus/ \
+      --checkpoint codec.pt \
+      --steps 100000
+
+  # 2. Etapa semántica (requiere HuBERT preentrenado)
+  python audiolm.py train-semantic \
+      --audio-dir ./corpus/ \
+      --hubert-ckpt hubert_base_ls960.pt \
+      --hubert-quantizer hubert_base_ls960_L9_km500.bin \
+      --checkpoint semantic.pt \
+      --steps 100000
+
+  # 3. Transformer grueso
+  python audiolm.py train-coarse \
+      --audio-dir ./corpus/ \
+      --codec-ckpt codec.pt \
+      --hubert-ckpt hubert_base_ls960.pt \
+      --hubert-quantizer hubert_base_ls960_L9_km500.bin \
+      --checkpoint coarse.pt \
+      --steps 100000
+
+  # 4. Transformer fino
+  python audiolm.py train-fine \
+      --audio-dir ./corpus/ \
+      --codec-ckpt codec.pt \
+      --checkpoint fine.pt \
+      --steps 100000
+
+  # 5. Generar audio
+  python audiolm.py generate \
+      --codec-ckpt codec.pt \
+      --semantic-ckpt semantic.pt \
+      --coarse-ckpt coarse.pt \
+      --fine-ckpt fine.pt \
+      --hubert-ckpt hubert_base_ls960.pt \
+      --hubert-quantizer hubert_base_ls960_L9_km500.bin \
+      --output generado.wav
+
+  # 5b. Generar con texto (si los transformers fueron entrenados con T5)
+  python audiolm.py generate --codec-ckpt codec.pt --semantic-ckpt semantic.pt \
+    --coarse-ckpt coarse.pt --fine-ckpt fine.pt --hubert-ckpt hubert_base_ls960.pt \
+    --hubert-quantizer hubert_base_ls960_L9_km500.bin --output generado.wav \
+    --text "lluvia sobre el mar"
+
+  # 5c. Continuar desde un audio de referencia (audio prompting)
+  python audiolm.py continue referencia.wav --codec-ckpt codec.pt --semantic-ckpt semantic.pt \
+    --coarse-ckpt coarse.pt --fine-ckpt fine.pt --hubert-ckpt hubert_base_ls960.pt \
+    --hubert-quantizer hubert_base_ls960_L9_km500.bin --output continuacion.wav
+
+  # 6. Inspeccionar un checkpoint
+  python audiolm.py info codec.pt
+
+  OPCIONES COMUNES (disponibles en todos los subcomandos de entrenamiento)
+    --audio-dir DIR        Carpeta con ficheros .wav/.flac/.mp3
+    --checkpoint FILE      Dónde guardar / desde dónde cargar el modelo
+    --results-dir DIR      Carpeta para samples y checkpoints [./results]
+    --steps N              Pasos de entrenamiento [100000]
+    --batch-size N         Tamaño de batch [4]
+    --grad-accum N         Pasos de acumulación de gradiente [8]
+    --lr F                 Learning rate [3e-4]
+    --seconds F            Duración máxima de cada clip en segundos [2.0]
+    --save-every N         Guardar checkpoint cada N pasos [1000]
+    --sample-every N       Generar muestra cada N pasos [500]
+    --wandb                Activar logging con Weights & Biases
+    --seed N               Semilla aleatoria [42]
+    --verbose              Mostrar configuración completa antes de lanzar
+    --dry-run              Construir modelos y mostrar config sin entrenar
+
+  ARQUITECTURA POR DEFECTO (compatible entre las 4 etapas de entrenamiento)
+    codec:    codebook_size=4096, rq_num_quantizers=12, target_sample_hz=16k
+              num_coarse_quantizers=3  (→ fine usa los 9 restantes)
+    semantic: dim=1024, depth=6, num_semantic_tokens=500
+    coarse:   dim=1024, depth=6, num_coarse_quantizers=3
+    fine:     dim=1024, depth=6, num_fine_quantizers=9
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+    pip install audiolm-pytorch
+    pip install fairseq   # para HuBERT / vq-wav2vec
+
+  DESCARGA DE PESOS HuBERT:
+    wget https://dl.fbaipublicfiles.com/hubert/hubert_base_ls960.pt
+    wget https://dl.fbaipublicfiles.com/hubert/hubert_base_ls960_L9_km500.bin
 """
 
 import sys

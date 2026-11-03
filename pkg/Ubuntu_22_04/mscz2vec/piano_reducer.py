@@ -1,79 +1,92 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       PIANO REDUCER  v1.0                                    ║
-║     Reducción para piano de obras orquestales / multitracks MIDI            ║
-║                                                                              ║
-║  Lee un MIDI multitracks (o una partitura.yaml) y genera una reducción      ║
-║  pianística idiomática en dos pentagramas (mano derecha / mano izquierda)   ║
-║  lista para evaluar en FL Studio o imprimir con MuseScore/LilyPond.         ║
-║                                                                              ║
-║  ESTRATEGIAS DE REDUCCIÓN (--strategy):                                      ║
-║    smart      Asignación inteligente por rol musical detectado (default)    ║
-║    register   MD = notas > umbral, MI = notas <= umbral (--split C4)        ║
-║    layer      Capas impares → MD, capas pares → MI                         ║
-║    priority   Pistas prioritarias explícitas (--rh-tracks / --lh-tracks)   ║
-║    melody+bass  Melodía principal en MD, bajo+armonía en MI                 ║
-║                                                                              ║
-║  TÉCNICAS PIANÍSTICAS APLICADAS:                                             ║
-║  [P1]  Reducción de notas simultáneas al límite polifónico por mano         ║
-║  [P2]  Octavación idiomática: notas fuera de rango transpuestas ±1 oct      ║
-║  [P3]  Bajo de Alberti / arpegios en MI para acordes bloques > 3 voces     ║
-║  [P4]  Compresión armónica: acordes de ≥5 notas → tétradas representativas  ║
-║  [P5]  Notas de paso melódicas inferidas entre saltos de 3ª/4ª              ║
-║  [P6]  Cruce de manos detectado y resuelto                                  ║
-║  [P7]  Unificación de duplicaciones: misma nota en ambas manos → una sola  ║
-║  [P8]  Humanización dinámica por voz: melodía ff, acomp. mp, bajo mf       ║
-║                                                                              ║
-║  MODOS DE ENTRADA:                                                           ║
-║    piano_reducer.py obra.mid                  — MIDI multitracks           ║
-║    piano_reducer.py obra.mid --strategy smart                               ║
-║    piano_reducer.py obra.mid --rh-tracks "Violin I,Oboe" --lh-tracks "Cello,Bass"
-║    piano_reducer.py obra.mid --from-yaml partitura.yaml                     ║
-║    piano_reducer.py obra.mid --split C4 --strategy register                 ║
-║    piano_reducer.py obra.mid --max-voices-rh 4 --max-voices-lh 3           ║
-║                                                                              ║
-║  SALIDAS:                                                                    ║
-║    <stem>_piano.mid          — MIDI de dos pistas: MD (ch1) y MI (ch2)     ║
-║    <stem>_piano_report.txt   — Informe de reducción: decisiones, análisis  ║
-║    <stem>_piano.yaml         — Partitura reducida en formato yaml (opt.)   ║
-║    <stem>_piano_combined.mid — Reducción + original combinados (opt.)      ║
-║                                                                              ║
-║  USO:                                                                        ║
-║    python piano_reducer.py obra.mid                                          ║
-║    python piano_reducer.py obra.mid --strategy melody+bass --verbose        ║
-║    python piano_reducer.py obra.mid --split C4 --strategy register          ║
-║    python piano_reducer.py obra.mid --rh-tracks "Violin I,Flute"            ║
-║    python piano_reducer.py obra.mid --no-alberti --no-passing               ║
-║    python piano_reducer.py obra.mid --from-yaml partitura.yaml              ║
-║    python piano_reducer.py obra.mid --output reduccion --combine-output     ║
-║    python piano_reducer.py obra.mid --report-only                           ║
-║    python piano_reducer.py obra.mid --export-yaml                           ║
-║    python piano_reducer.py obra.mid --max-polyphony 5                       ║
-║                                                                              ║
-║  OPCIONES:                                                                   ║
-║    --strategy      smart | register | layer | priority | melody+bass        ║
-║    --split         Nota de split register (default: C4 = 60)                ║
-║    --rh-tracks     Nombres de pistas → mano derecha (coma-separados)        ║
-║    --lh-tracks     Nombres de pistas → mano izquierda (coma-separados)      ║
-║    --max-polyphony Límite de voces simultáneas total (default: 7)           ║
-║    --max-voices-rh Límite de voces MD (default: 4)                          ║
-║    --max-voices-lh Límite de voces MI (default: 3)                          ║
-║    --no-alberti    No aplicar bajo de Alberti en MI                         ║
-║    --no-compress   No comprimir acordes > 4 notas                           ║
-║    --no-octave     No corregir notas fuera de rango idiomático               ║
-║    --no-passing    No añadir notas de paso inferidas                        ║
-║    --from-yaml     Leer también la partitura.yaml para metadatos            ║
-║    --export-yaml   Exportar reducción en formato yaml                       ║
-║    --combine-output  Generar MIDI combinado (original + reducción)          ║
-║    --report-only   Solo análisis, sin generar MIDI                          ║
-║    --output        Nombre base de salida (default: <stem>_piano)            ║
-║    --verbose       Decisiones detalladas por compás                         ║
-║                                                                              ║
-║  DEPENDENCIAS:                                                               ║
-║    pip install mido numpy                                                    ║
-║    (opcional) pip install PyYAML   ← para --from-yaml y --export-yaml      ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+piano_reducer.py — Piano Reducer: reducción para piano de obras orquestales /
+multitracks MIDI
+(versión 1.0).
+
+────────────────────────────────────────────────────────────────────────────
+Fundamento
+────────────────────────────────────────────────────────────────────────────
+Lee un MIDI multitracks (o una partitura.yaml) y genera una reducción
+pianística idiomática en dos pentagramas (mano derecha / mano izquierda)
+lista para evaluar en FL Studio o imprimir con MuseScore/LilyPond.
+
+ESTRATEGIAS DE REDUCCIÓN (--strategy):
+  smart      Asignación inteligente por rol musical detectado (default)
+  register   MD = notas > umbral, MI = notas <= umbral (--split C4)
+  layer      Capas impares → MD, capas pares → MI
+  priority   Pistas prioritarias explícitas (--rh-tracks / --lh-tracks)
+  melody+bass  Melodía principal en MD, bajo+armonía en MI
+
+TÉCNICAS PIANÍSTICAS APLICADAS:
+[P1]  Reducción de notas simultáneas al límite polifónico por mano
+[P2]  Octavación idiomática: notas fuera de rango transpuestas ±1 oct
+[P3]  Bajo de Alberti / arpegios en MI para acordes bloques > 3 voces
+[P4]  Compresión armónica: acordes de ≥5 notas → tétradas representativas
+[P5]  Notas de paso melódicas inferidas entre saltos de 3ª/4ª
+[P6]  Cruce de manos detectado y resuelto
+[P7]  Unificación de duplicaciones: misma nota en ambas manos → una sola
+[P8]  Humanización dinámica por voz: melodía ff, acomp. mp, bajo mf
+
+────────────────────────────────────────────────────────────────────────────
+Modos de uso
+────────────────────────────────────────────────────────────────────────────
+MODOS DE ENTRADA:
+  piano_reducer.py obra.mid                  # MIDI multitracks
+  piano_reducer.py obra.mid --strategy smart
+  piano_reducer.py obra.mid --rh-tracks "Violin I,Oboe" --lh-tracks "Cello,Bass"
+  piano_reducer.py obra.mid --from-yaml partitura.yaml
+  piano_reducer.py obra.mid --split C4 --strategy register
+  piano_reducer.py obra.mid --max-voices-rh 4 --max-voices-lh 3
+
+────────────────────────────────────────────────────────────────────────────
+Entradas y salidas
+────────────────────────────────────────────────────────────────────────────
+  <stem>_piano.mid          — MIDI de dos pistas: MD (ch1) y MI (ch2)
+  <stem>_piano_report.txt   — Informe de reducción: decisiones, análisis
+  <stem>_piano.yaml         — Partitura reducida en formato yaml (opt.)
+  <stem>_piano_combined.mid — Reducción + original combinados (opt.)
+
+────────────────────────────────────────────────────────────────────────────
+Opciones
+────────────────────────────────────────────────────────────────────────────
+  --strategy      smart | register | layer | priority | melody+bass
+  --split         Nota de split register (default: C4 = 60)
+  --rh-tracks     Nombres de pistas → mano derecha (coma-separados)
+  --lh-tracks     Nombres de pistas → mano izquierda (coma-separados)
+  --max-polyphony Límite de voces simultáneas total (default: 7)
+  --max-voices-rh Límite de voces MD (default: 4)
+  --max-voices-lh Límite de voces MI (default: 3)
+  --no-alberti    No aplicar bajo de Alberti en MI
+  --no-compress   No comprimir acordes > 4 notas
+  --no-octave     No corregir notas fuera de rango idiomático
+  --no-passing    No añadir notas de paso inferidas
+  --from-yaml     Leer también la partitura.yaml para metadatos
+  --export-yaml   Exportar reducción en formato yaml
+  --combine-output  Generar MIDI combinado (original + reducción)
+  --report-only   Solo análisis, sin generar MIDI
+  --output        Nombre base de salida (default: <stem>_piano)
+  --verbose       Decisiones detalladas por compás
+
+────────────────────────────────────────────────────────────────────────────
+Ejemplos de uso
+────────────────────────────────────────────────────────────────────────────
+  python piano_reducer.py obra.mid
+  python piano_reducer.py obra.mid --strategy melody+bass --verbose
+  python piano_reducer.py obra.mid --split C4 --strategy register
+  python piano_reducer.py obra.mid --rh-tracks "Violin I,Flute"
+  python piano_reducer.py obra.mid --no-alberti --no-passing
+  python piano_reducer.py obra.mid --from-yaml partitura.yaml
+  python piano_reducer.py obra.mid --output reduccion --combine-output
+  python piano_reducer.py obra.mid --report-only
+  python piano_reducer.py obra.mid --export-yaml
+  python piano_reducer.py obra.mid --max-polyphony 5
+
+────────────────────────────────────────────────────────────────────────────
+Dependencias
+────────────────────────────────────────────────────────────────────────────
+  pip install mido numpy
+  (opcional) pip install PyYAML   ← para --from-yaml y --export-yaml
 """
 
 import sys
