@@ -42,10 +42,8 @@ mismo que usa el prototipo jev_classifier.zsh):
   INDICACIONES POR COMPÁS (--notes / --notes-file): información extra en
   texto libre para compases concretos. Cuando la generación está en esos
   compases, el texto se añade al estado y a la instrucción de las consultas a
-  Jev (acorde o nota), tanto en el modo normal como con --chords-midi. Las
-  consultas con indicaciones también se guardan en la cache (el texto forma
-  parte de la clave y se registra en el campo 'extra'), así que con --rng fijo
-  y las mismas indicaciones la obra completa se reproduce desde la cache.
+  Jev (acorde o nota), tanto en el modo normal como con --chords-midi. En los
+  demás compases las consultas no cambian (y siguen sirviéndose de la cache).
   Formato: una indicación por línea (en fichero) o separadas por ';' (en la
   línea de comandos); los compases se numeran desde 1, como en la salida:
       compás 29: intensidad creciente, densidad creciente
@@ -346,8 +344,7 @@ class Jev:
         self.log        = []
 
     # ── API ──────────────────────────────────────────────────────────────────
-    def ask(self, kind: str, state: str, instructions: str, criteria: dict,
-            extra: str = ''):
+    def ask(self, kind: str, state: str, instructions: str, criteria: dict):
         if len(criteria) > MAX_OPTIONS:
             fail(f"la pregunta '{kind}' tiene {len(criteria)} opciones (máx. {MAX_OPTIONS})")
         if len(criteria) == 1:                       # nada que preguntar
@@ -371,7 +368,7 @@ class Jev:
             ans = self._request(state, instructions, criteria)
             self.stats['api'] += 1
             if self.use_cache:
-                self._store(ckey, kind, instructions, ans, extra)
+                self._store(ckey, kind, instructions, ans)
 
         choice = ans['choice']
         if choice not in criteria:
@@ -379,11 +376,8 @@ class Jev:
         probs = _normalize_probs(ans, criteria)
         if len(probs) == 1:
             self.stats['sin_probs'] += 1
-        entry = {'kind': kind, 'choice': choice,
-                 'p': round(probs.get(choice, 1.0), 4), 'cached': cached}
-        if extra:
-            entry['extra'] = extra
-        self.log.append(entry)
+        self.log.append({'kind': kind, 'choice': choice,
+                         'p': round(probs.get(choice, 1.0), 4), 'cached': cached})
         return choice, probs
 
     def _request(self, state, instructions, criteria):
@@ -426,14 +420,12 @@ class Jev:
             fail(f"respuesta inesperada de Jev: {json.dumps(resp)[:300]}")
         return {'choice': ans['choice'], 'probabilities': ans.get('probabilities') or {}}
 
-    def _store(self, ckey, kind, instructions, ans, extra=''):
+    def _store(self, ckey, kind, instructions, ans):
         self.cache[ckey] = ans
         with open(_ensure_parent(self.path), 'a', encoding='utf-8') as f:
-            rec = {'key': ckey, 'kind': kind, 'model': self.model,
-                   'instructions': instructions[:160], 'answer': ans}
-            if extra:                  # indicaciones por compás de esta consulta
-                rec['extra'] = extra
-            f.write(json.dumps(rec, ensure_ascii=False) + '\n')
+            f.write(json.dumps({'key': ckey, 'kind': kind, 'model': self.model,
+                                'instructions': instructions[:160], 'answer': ans},
+                               ensure_ascii=False) + '\n')
 
     def summary(self) -> str:
         api, hit = self.stats['api'], self.stats['cache']
@@ -980,7 +972,7 @@ class Composer:
             f"Which chord should come next? It starts at {self.pos(t)} and lasts "
             f"{fmt(dur)} beat(s). Choose the single best fit for the description, "
             f"the seeds and the harmonic flow." + (EXTRA_HINT if extra else ''),
-            criteria, extra)
+            criteria)
         label = pick(probs, self.args.temperature, self.rng)
         if self.args.verbose:
             print(f"    {COL['gray']}acorde {self.pos(t)}: {label}  "
@@ -1052,7 +1044,7 @@ class Composer:
                     f"the chord {c['chord']}. Choose the single best fit for the "
                     f"description, the motif seed and the harmony."
                     + (EXTRA_HINT if extra else ''),
-                    {k: v[1] for k, v in cands.items()}, extra)
+                    {k: v[1] for k, v in cands.items()})
                 name = pick(probs, self.args.temperature, self.rng)
                 if self.args.verbose:
                     print(f"    {COL['gray']}nota  {self.pos(self.mel_t)}: {name}  "
