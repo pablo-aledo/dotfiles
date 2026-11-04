@@ -39,6 +39,21 @@ mismo que usa el prototipo jev_classifier.zsh):
   acordes (o --mode); la tónica se infiere del MIDI (o --key). Solo se elige
   el motivo semilla.
 
+  INDICACIONES POR COMPÁS (--notes / --notes-file): información extra en
+  texto libre para compases concretos. Cuando la generación está en esos
+  compases, el texto se añade al estado y a la instrucción de las consultas a
+  Jev (acorde o nota), tanto en el modo normal como con --chords-midi. En los
+  demás compases las consultas no cambian (y siguen sirviéndose de la cache).
+  Formato: una indicación por línea (en fichero) o separadas por ';' (en la
+  línea de comandos); los compases se numeran desde 1, como en la salida:
+      compás 29: intensidad creciente, densidad creciente
+      compases 30-32: mood calma
+      c.31: explosión súbita
+      28, 33: respirar
+  El prefijo (compás, compases, c., m., bar, bars) es opcional. Varias
+  indicaciones sobre el mismo compás se acumulan. En un fichero, las líneas
+  vacías y las que empiezan por # se ignoran.
+
   Todas las consultas pueden guardarse en una cache local (--cache): una
   consulta idéntica (mismo modelo, estado, pregunta y opciones) no vuelve a
   gastar créditos. Con --rng fijo, una composición repetida se resuelve
@@ -109,6 +124,9 @@ Opciones de componer:
   --leap N            Salto melódico máximo en semitonos entre notas
                       consecutivas (default: 9)
   --output OUTPUT     Nombre base para salidas (default: obra)
+  --notes TEXTO       Indicaciones por compás (ver formato arriba); se puede
+                      repetir. Ej: --notes "29: intensidad creciente; 30: calma"
+  --notes-file FILE   Leer indicaciones por compás de un fichero
   --chords-midi FILE  Usar los acordes de este MIDI en vez de generarlos
   --bass-only         (con --chords-midi) detectar acordes solo con las notas
                       graves (≤ C4), como chord_table.py
@@ -142,6 +160,12 @@ Ejemplos de uso
   python jev_composer.py componer "Balada íntima y esperanzada" \
       --chords-midi acordes.mid --cache --temperature 0.8 --rng 3
 
+  # Indicaciones por compás (en línea de comandos y/o en fichero)
+  python jev_composer.py componer "Obra para cuerdas con clímax" --bars 40 --cache \
+      --notes "compás 29: intensidad creciente, densidad creciente" \
+      --notes "compás 30: mood calma; compás 31: explosión súbita" \
+      --notes-file indicaciones.txt
+
   # Estado de la cache
   python jev_composer.py cache
   python jev_composer.py cache --clear
@@ -162,6 +186,7 @@ import time
 import random
 import hashlib
 import argparse
+import re
 import tempfile
 import importlib.util
 import subprocess
@@ -663,6 +688,69 @@ def choose_seeds(jev, desc, tonic, mode, args, fixed_chords=None):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# INDICACIONES POR COMPÁS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+EXTRA_HINT = " Take into account the extra information given for this position."
+
+BAR_NOTE_RE = re.compile(
+    r"^(?:(?:compases|compás|compas|bars|bar|c|m)\.?\s*)?"
+    r"([\d\s,\-–]+?)\s*[:=]\s*(.+)$", re.IGNORECASE)
+
+
+def parse_bar_spec(spec: str, line: str) -> list:
+    """'29' | '30-32' | '28, 33' | '1-4, 9' → lista de compases (desde 1)."""
+    bars = []
+    for part in spec.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        m = re.fullmatch(r"(\d+)(?:\s*[-–]\s*(\d+))?", part)
+        if not m:
+            fail(f"indicación de compás no válida: '{line}'")
+        a = int(m.group(1))
+        b = int(m.group(2)) if m.group(2) else a
+        if a < 1 or b < a:
+            fail(f"rango de compases no válido ({part}) en: '{line}'")
+        bars.extend(range(a, b + 1))
+    if not bars:
+        fail(f"indicación sin compás: '{line}'")
+    return bars
+
+
+def parse_bar_notes(args) -> dict:
+    """Une --notes (repetible, entradas separadas por ';') y --notes-file (una
+    por línea) en {compás: [textos]}. Los compases se numeran desde 1."""
+    raw = []
+    for text in (getattr(args, 'notes', None) or []):
+        raw.extend(text.split(';'))
+    nf = getattr(args, 'notes_file', None)
+    if nf:
+        if not os.path.isfile(nf):
+            fail(f"No se encuentra el archivo: {nf}")
+        with open(nf, encoding='utf-8') as f:
+            raw.extend(l for l in f.read().splitlines() if not l.lstrip().startswith('#'))
+    notes = {}
+    for line in raw:
+        line = line.strip()
+        if not line:
+            continue
+        m = BAR_NOTE_RE.match(line)
+        if not m:
+            fail(f"indicación no válida (formato 'compás N: texto'): '{line}'")
+        text = m.group(2).strip()
+        for b in parse_bar_spec(m.group(1), line):
+            notes.setdefault(b, []).append(text)
+    out_of_range = sorted(b for b in notes if args.bars and b > args.bars)
+    if out_of_range:
+        warn(f"indicaciones fuera de la obra ({args.bars} compases), se ignoran: "
+             f"{', '.join(map(str, out_of_range))}")
+        for b in out_of_range:
+            del notes[b]
+    return notes
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MODO ACORDES FIJOS: LECTURA DE LOS ACORDES DE UN MIDI
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -785,6 +873,7 @@ class Composer:
         self.seeds, self.args = seeds, args
         self.rng = args.rng_obj
         self.fixed = bool(getattr(args, 'chords_midi', None))
+        self.bar_notes = getattr(args, 'bar_notes_map', None) or {}
         self.beats = args.beats
         self.total = float(args.bars * args.beats)
         self.depth = max(1, args.depth)
@@ -809,7 +898,14 @@ class Composer:
         end = chord['start'] + chord['dur']
         return [m for m in self.melody if chord['start'] - EPS <= m['start'] < end - EPS]
 
-    def state(self) -> str:
+    def extra(self, t0: float, t1: float) -> str:
+        """Indicaciones de los compases que cubre [t0, t1) (vacío si no hay)."""
+        b0 = int(t0 // self.beats) + 1
+        b1 = int((max(t1, t0 + EPS) - EPS) // self.beats) + 1
+        return '\n'.join(f"bar {b}: {'; '.join(self.bar_notes[b])}"
+                         for b in range(b0, b1 + 1) if b in self.bar_notes)
+
+    def state(self, extra: str = '') -> str:
         scale = ' '.join(PITCH_NAMES[(self.tonic + iv) % 12]
                          for iv in MODE_INTERVALS[self.mode])
         lines = []
@@ -837,7 +933,8 @@ class Composer:
                 f"{chord_line}"
                 f"MOTIF SEED: {melody_text(self.seeds['notes'])}\n\n"
                 f"MUSIC SO FAR (last {min(self.depth, len(visible))} chord(s), "
-                f"melody as note(beats)):\n" + '\n'.join(lines) + '\n' + upcoming)
+                f"melody as note(beats)):\n" + '\n'.join(lines) + '\n' + upcoming
+                + (f"\nEXTRA INFORMATION FOR THIS POSITION:\n{extra}\n" if extra else ''))
 
     # ── semilla ──────────────────────────────────────────────────────────────
     def place_seed(self) -> float:
@@ -869,11 +966,13 @@ class Composer:
         dur = min(self.chord_durs[len(self.chords) % len(self.chord_durs)],
                   self.total - t)
         criteria = {k: v['desc'] for k, v in self.candidates.items()}
+        extra = self.extra(t, t + dur)
         choice, probs = self.jev.ask(
-            'acorde', self.state(),
+            'acorde', self.state(extra),
             f"Which chord should come next? It starts at {self.pos(t)} and lasts "
             f"{fmt(dur)} beat(s). Choose the single best fit for the description, "
-            f"the seeds and the harmonic flow.", criteria)
+            f"the seeds and the harmonic flow." + (EXTRA_HINT if extra else ''),
+            criteria)
         label = pick(probs, self.args.temperature, self.rng)
         if self.args.verbose:
             print(f"    {COL['gray']}acorde {self.pos(t)}: {label}  "
@@ -937,12 +1036,14 @@ class Composer:
                                     'dur': dur, 'source': 'jev'})
             else:
                 cands = self.pitch_candidates(c)
+                extra = self.extra(self.mel_t, self.mel_t + dur)
                 choice, probs = self.jev.ask(
-                    'nota', self.state(),
+                    'nota', self.state(extra),
                     f"Which note should the melody play next? It starts at "
                     f"{self.pos(self.mel_t)}, lasts {fmt(dur)} beat(s) and sounds over "
                     f"the chord {c['chord']}. Choose the single best fit for the "
-                    f"description, the motif seed and the harmony.",
+                    f"description, the motif seed and the harmony."
+                    + (EXTRA_HINT if extra else ''),
                     {k: v[1] for k, v in cands.items()})
                 name = pick(probs, self.args.temperature, self.rng)
                 if self.args.verbose:
@@ -962,7 +1063,9 @@ class Composer:
         print(f"  {COL['gray']}c.{int(c['start'] // self.beats) + 1:<3}{COL['reset']} "
               f"{tag} {COL['bold']}{c['chord']:<7}{COL['reset']}"
               f"{COL['gray']}{fmt(c['dur']):>3}b{COL['reset']}  "
-              f"{COL['cyan']}{ns}{COL['reset']}")
+              f"{COL['cyan']}{ns}{COL['reset']}"
+              + (f"  {COL['yellow']}◂ indicaciones{COL['reset']}"
+                 if self.extra(c['start'], c['start'] + c['dur']) else ''))
 
     def compose(self) -> None:
         seed_end = self.place_seed()
@@ -1119,8 +1222,12 @@ def cmd_componer(args) -> None:
         fixed = fit_progression(fixed, float(args.bars * args.beats))
     elif args.bars is None:
         args.bars = 16
+    args.bar_notes_map = parse_bar_notes(args)
     jev = setup(args)
     banner('JEV COMPOSER — Composición')
+    if args.bar_notes_map:
+        print(f"  {COL['gray']}indicaciones en {len(args.bar_notes_map)} compás(es): "
+              f"{', '.join(map(str, sorted(args.bar_notes_map)))}{COL['reset']}\n")
     tonic, mode = choose_key_mode(jev, desc, args, args.rng_obj, fixed, inferred)
     seeds = choose_seeds(jev, desc, tonic, mode, args, fixed)
 
@@ -1142,7 +1249,8 @@ def cmd_componer(args) -> None:
                  'depth': args.depth, 'temperature': args.temperature,
                  'seed_temp': args.seed_temp, 'rng': args.rng, 'octave': args.octave,
                  'leap': args.leap, 'model': args.model,
-                 'chords_midi': args.chords_midi},
+                 'chords_midi': args.chords_midi,
+                 'bar_notes': {str(b): v for b, v in sorted(args.bar_notes_map.items())}},
         'seeds':        seeds_json(seeds),
         'chord_string': chord_text,
         'melody_string': mel_text,
@@ -1289,6 +1397,11 @@ def build_parser():
                    help='Salto melódico máximo en semitonos (default: 9)')
     p.add_argument('--output', type=str, default='obra',
                    help='Nombre base para salidas (default: obra)')
+    p.add_argument('--notes', type=str, action='append', metavar='TEXTO',
+                   help="Indicaciones por compás: 'compás 29: texto; 30-32: texto' "
+                        "(repetible)")
+    p.add_argument('--notes-file', type=str, dest='notes_file', metavar='FILE',
+                   help='Leer indicaciones por compás de un fichero (una por línea)')
     p.add_argument('--chords-midi', type=str, dest='chords_midi', metavar='FILE',
                    help='Usar los acordes de este MIDI en vez de generarlos')
     p.add_argument('--bass-only', action='store_true', dest='bass_only',
