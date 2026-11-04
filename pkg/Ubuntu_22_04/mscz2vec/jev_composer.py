@@ -32,6 +32,13 @@ mismo que usa el prototipo jev_classifier.zsh):
   suena, la semilla decide CUÁNDO. Cada consulta pide una sola pregunta
   (acorde o nota), igual que el prototipo.
 
+  MODO ACORDES FIJOS (--chords-midi FILE): en vez de elegir y generar acordes,
+  se leen de un MIDI (con el detector de acordes de chord_table.py). Jev solo
+  genera la melodía sobre esos acordes: ve el acorde actual, los anteriores
+  (ventana) y los dos siguientes. El modo lo sigue eligiendo Jev, ya viendo los
+  acordes (o --mode); la tónica se infiere del MIDI (o --key). Solo se elige
+  el motivo semilla.
+
   Todas las consultas pueden guardarse en una cache local (--cache): una
   consulta idéntica (mismo modelo, estado, pregunta y opciones) no vuelve a
   gastar créditos. Con --rng fijo, una composición repetida se resuelve
@@ -90,7 +97,8 @@ Opciones de semillas / componer:
   --export-json FILE  (semillas) Exportar las semillas elegidas a JSON
 
 Opciones de componer:
-  --bars N            Compases a generar (default: 16)
+  --bars N            Compases a generar (default: 16; con --chords-midi, los
+                      que dure el MIDI; si pides más se recorta a su duración)
   --beats N           Pulsos por compás (default: 4)
   --tempo BPM         Tempo para el MIDI (default: 100)
   --depth N           Profundidad de la ventana: acordes previos (con su
@@ -101,6 +109,10 @@ Opciones de componer:
   --leap N            Salto melódico máximo en semitonos entre notas
                       consecutivas (default: 9)
   --output OUTPUT     Nombre base para salidas (default: obra)
+  --chords-midi FILE  Usar los acordes de este MIDI en vez de generarlos
+  --bass-only         (con --chords-midi) detectar acordes solo con las notas
+                      graves (≤ C4), como chord_table.py
+  --min-dur BEATS     (con --chords-midi) ignorar acordes más cortos que esto
 
 ────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
@@ -126,6 +138,10 @@ Ejemplos de uso
   python jev_composer.py componer --file encargo.txt --key Am \
       --bars 32 --beats 3 --cache --output nocturno
 
+  # Melodía sobre los acordes de un MIDI propio (no se generan acordes)
+  python jev_composer.py componer "Balada íntima y esperanzada" \
+      --chords-midi acordes.mid --cache --temperature 0.8 --rng 3
+
   # Estado de la cache
   python jev_composer.py cache
   python jev_composer.py cache --clear
@@ -147,6 +163,7 @@ import random
 import hashlib
 import argparse
 import tempfile
+import importlib.util
 import subprocess
 import urllib.request
 import urllib.error
@@ -516,14 +533,20 @@ def resolve_motif_seed(script: str, entry_id: int, tonic: int, octave: int) -> l
 # FASES 1 Y 2: TONALIDAD Y SEMILLAS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def description_state(desc: str, tonic=None, mode=None, chord_seed=None) -> str:
+def description_state(desc: str, tonic=None, mode=None, chord_seed=None,
+                      chord_label='CHORD SEED', tonic_hint=None) -> str:
     s = f"PIECE DESCRIPTION:\n{desc.strip()}\n"
     if mode is not None:
         s += f"\nMODE: {mode}\n"
     if tonic is not None:
         s += f"KEY: {PITCH_NAMES[tonic]} {mode}\n"
+    elif tonic_hint is not None:
+        s += f"\nTONIC: {PITCH_NAMES[tonic_hint]}\n"
     if chord_seed:
-        s += f"CHORD SEED: {progression_text(chord_seed)}\n"
+        text = progression_text(chord_seed[:16])
+        if len(chord_seed) > 16:
+            text += f" ... ({len(chord_seed)} chords in total)"
+        s += f"{chord_label}: {text}\n"
     return s
 
 
@@ -534,14 +557,24 @@ def show_choice(title: str, chosen: str, probs: dict, verbose: bool) -> None:
     print(line)
 
 
-def choose_key_mode(jev, desc, args, rng):
-    """Jev elige el modo y después la tónica (salvo --mode / --key)."""
+def choose_key_mode(jev, desc, args, rng, fixed_chords=None, inferred_tonic=None):
+    """Jev elige el modo y después la tónica (salvo --mode / --key).
+    Con acordes fijos (--chords-midi) el modo se elige viendo esos acordes y la
+    tónica se infiere del MIDI en lugar de preguntarla."""
     forced_tonic, hint = (parse_key(args.key) if args.key else (None, None))
     mode = args.mode or hint
+    if fixed_chords and forced_tonic is None:
+        forced_tonic = inferred_tonic
+    fixed_label = {'chord_label': 'CHORDS (fixed)'}
 
     if mode is None:
+        if fixed_chords:
+            mode_state = description_state(desc, chord_seed=fixed_chords,
+                                           tonic_hint=forced_tonic, **fixed_label)
+        else:
+            mode_state = description_state(desc)
         choice, probs = jev.ask(
-            'modo', description_state(desc),
+            'modo', mode_state,
             'Which musical mode best suits the piece described in this document? '
             'Choose the single best fit.', dict(MODE_INFO))
         mode = pick(probs, args.seed_temp, args.rng_obj)
@@ -563,11 +596,12 @@ def choose_key_mode(jev, desc, args, rng):
         show_choice('tónica', label, probs, args.verbose)
     else:
         tonic = forced_tonic
-        show_choice('tónica', f"{PITCH_NAMES[tonic]} (fijada)", {}, False)
+        src = 'inferida del MIDI' if (fixed_chords and not args.key) else 'fijada'
+        show_choice('tónica', f"{PITCH_NAMES[tonic]} ({src})", {}, False)
     return tonic, mode
 
 
-def choose_seeds(jev, desc, tonic, mode, args):
+def choose_seeds(jev, desc, tonic, mode, args, fixed_chords=None):
     """Jev elige la progresión y el motivo semilla entre los del catálogo
     (obtenido por invocación de comandos) para el modo elegido."""
     rng = args.rng_obj
@@ -575,20 +609,26 @@ def choose_seeds(jev, desc, tonic, mode, args):
     motif_script = args.motif_table
 
     # ── Progresión de acordes ────────────────────────────────────────────────
-    entries, chord_mode = tool_catalog(chord_script, mode)
-    by_label = {}
-    for e in entries:
-        label = f"#{e['id']} {e['prog']}"
-        by_label[label] = (e, (f"{e['nombre']}: {e['style']}/{e['mode']}, tension "
-                               f"{e['tension']}/10, emotion {e['emocion']}. {e['desc']}"))
-    choice, probs = jev.ask(
-        'semilla_acordes', description_state(desc, tonic, mode),
-        'Which chord progression best suits the piece described in this document? '
-        'Choose the single best fit.', {k: v[1] for k, v in by_label.items()})
-    label = pick(probs, args.seed_temp, rng)
-    chord_entry = by_label[label][0]
-    show_choice('acordes', label, probs, args.verbose)
-    progression = resolve_chord_seed(chord_script, chord_entry['id'], tonic)
+    if fixed_chords:                      # --chords-midi: no se elige ni se genera
+        chord_entry, chord_mode, progression = None, None, fixed_chords
+        chord_label = 'CHORDS (fixed)'
+        show_choice('acordes', f"{len(progression)} del MIDI", {}, False)
+    else:
+        chord_label = 'CHORD SEED'
+        entries, chord_mode = tool_catalog(chord_script, mode)
+        by_label = {}
+        for e in entries:
+            label = f"#{e['id']} {e['prog']}"
+            by_label[label] = (e, (f"{e['nombre']}: {e['style']}/{e['mode']}, tension "
+                                   f"{e['tension']}/10, emotion {e['emocion']}. {e['desc']}"))
+        choice, probs = jev.ask(
+            'semilla_acordes', description_state(desc, tonic, mode),
+            'Which chord progression best suits the piece described in this document? '
+            'Choose the single best fit.', {k: v[1] for k, v in by_label.items()})
+        label = pick(probs, args.seed_temp, rng)
+        chord_entry = by_label[label][0]
+        show_choice('acordes', label, probs, args.verbose)
+        progression = resolve_chord_seed(chord_script, chord_entry['id'], tonic)
 
     # ── Motivo melódico (ve ya la progresión elegida) ────────────────────────
     entries, motif_mode = tool_catalog(motif_script, mode)
@@ -599,20 +639,91 @@ def choose_seeds(jev, desc, tonic, mode, args):
                                f"{e['mode']}, tension {e['tension']}/10, emotion "
                                f"{e['emocion']}. {e['desc']}"))
     choice, probs = jev.ask(
-        'semilla_motivo', description_state(desc, tonic, mode, progression),
+        'semilla_motivo',
+        description_state(desc, tonic, mode, progression, chord_label=chord_label),
         'Which melodic motif best suits the piece described in this document, '
-        'played over the chord seed? Choose the single best fit.',
+        'played over the chord seed? Choose the single best fit.'
+        if not fixed_chords else
+        'Which melodic motif best suits the piece described in this document, '
+        'played over the fixed chords? Choose the single best fit.',
         {k: v[1] for k, v in by_label.items()})
     label = pick(probs, args.seed_temp, rng)
     motif_entry = by_label[label][0]
     show_choice('motivo', label, probs, args.verbose)
     notes = resolve_motif_seed(motif_script, motif_entry['id'], tonic, args.octave)
 
-    print(f"\n  {COL['cyan']}{progression_text(progression)}{COL['reset']}")
+    if not fixed_chords:
+        print(f"\n  {COL['cyan']}{progression_text(progression)}{COL['reset']}")
+    else:
+        print()
     print(f"  {COL['cyan']}{melody_text(notes)}{COL['reset']}\n")
     return {'chord_entry': chord_entry, 'chord_mode': chord_mode,
             'progression': progression,
             'motif_entry': motif_entry, 'motif_mode': motif_mode, 'notes': notes}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODO ACORDES FIJOS: LECTURA DE LOS ACORDES DE UN MIDI
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def load_chords_midi(args) -> tuple:
+    """Lee los acordes de un MIDI con el detector de chord_table.py (importado
+    como módulo: ningún comando suyo devuelve la secuencia detectada).
+    Devuelve (progresión, tónica_inferida) con la progresión contigua desde el
+    pulso 0: cada acorde dura hasta el inicio del siguiente."""
+    path = args.chords_midi
+    if not os.path.isfile(path):
+        fail(f"No se encuentra el archivo: {path}")
+    if not os.path.isfile(args.chord_table):
+        fail(f"no se encuentra {args.chord_table} (usa --chord-table)")
+    spec = importlib.util.spec_from_file_location('chord_table_mod', args.chord_table)
+    ct = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ct)
+
+    try:
+        events, tpb = ct.midi_to_chord_sequence(path, bass_only=args.bass_only)
+        recognized = ct.chord_sequence_to_numerals(events, tpb)
+    except Exception as e:                      # MIDI corrupto o no estándar
+        fail(f"no se pudo leer {path}: {e}")
+    recognized = [c for c in recognized
+                  if c['root_pc'] is not None and c['dur_beats'] >= args.min_dur]
+    if not recognized:
+        fail(f"no se detectó ningún acorde en {path}")
+    recognized.sort(key=lambda c: c['start'])
+
+    inferred = ct.infer_tonic(recognized)
+    tonic = parse_key(args.key)[0] if args.key else inferred
+    progression = []
+    for i, c in enumerate(recognized):
+        start = 0.0 if i == 0 else c['start']
+        end = (recognized[i + 1]['start'] if i + 1 < len(recognized)
+               else c['start'] + c['dur_beats'])
+        dur = end - start
+        if dur <= EPS:
+            continue
+        quality = c['quality'] or ''
+        root = c['root_pc']
+        progression.append({
+            'numeral': ct.chord_to_numeral(root, quality, tonic),
+            'chord': f"{PITCH_NAMES[root]}{quality}",
+            'pitches': [(root + iv) % 12 for iv in ct.CHORD_INTERVALS.get(quality, [0, 4, 7])],
+            'duration_beats': round(dur, 6),
+        })
+    return progression, inferred
+
+
+def fit_progression(progression: list, total: float) -> list:
+    """Recorta la progresión a `total` pulsos o alarga el último acorde hasta él."""
+    out, t = [], 0.0
+    for c in progression:
+        d = min(c['duration_beats'], total - t)
+        if d <= EPS:
+            break
+        out.append(dict(c, duration_beats=d))
+        t += d
+    if out and t < total - EPS:
+        out[-1]['duration_beats'] += total - t
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -673,6 +784,7 @@ class Composer:
         self.jev, self.desc, self.tonic, self.mode = jev, desc, tonic, mode
         self.seeds, self.args = seeds, args
         self.rng = args.rng_obj
+        self.fixed = bool(getattr(args, 'chords_midi', None))
         self.beats = args.beats
         self.total = float(args.bars * args.beats)
         self.depth = max(1, args.depth)
@@ -701,17 +813,31 @@ class Composer:
         scale = ' '.join(PITCH_NAMES[(self.tonic + iv) % 12]
                          for iv in MODE_INTERVALS[self.mode])
         lines = []
-        for c in self.chords[-self.depth:]:
+        visible = self.chords
+        upcoming = ''
+        if self.fixed:        # acordes fijos: ventana hasta el actual + 2 siguientes
+            cur = self.chords.index(self.chord_at(self.mel_t))
+            visible = self.chords[:cur + 1]
+            nxt = self.chords[cur + 1:cur + 3]
+            if nxt:
+                upcoming = ('UPCOMING CHORDS: ' + ' '.join(
+                    f"{c['chord']}({fmt(c['dur'])})" for c in nxt) + '\n')
+        for c in visible[-self.depth:]:
             ns = ' '.join(f"{m['note']}({fmt(m['dur'])})" for m in self.notes_of(c))
             lines.append(f"{self.pos(c['start'])} | {c['chord']} ({fmt(c['dur'])} beats): "
                          f"{ns or '(no melody yet)'}")
+        if self.fixed:
+            chord_line = (f"CHORDS: fixed, {len(self.chords)} chords in total "
+                          f"(supplied, not generated)\n")
+        else:
+            chord_line = f"CHORD SEED: {progression_text(self.seeds['progression'])}\n"
         return (f"PIECE DESCRIPTION:\n{self.desc.strip()}\n\n"
                 f"KEY: {PITCH_NAMES[self.tonic]} {self.mode} (scale: {scale})\n"
                 f"METER: {self.beats} beats per bar, {self.args.bars} bars in total\n"
-                f"CHORD SEED: {progression_text(self.seeds['progression'])}\n"
+                f"{chord_line}"
                 f"MOTIF SEED: {melody_text(self.seeds['notes'])}\n\n"
-                f"MUSIC SO FAR (last {min(self.depth, len(self.chords))} chord(s), "
-                f"melody as note(beats)):\n" + '\n'.join(lines) + '\n')
+                f"MUSIC SO FAR (last {min(self.depth, len(visible))} chord(s), "
+                f"melody as note(beats)):\n" + '\n'.join(lines) + '\n' + upcoming)
 
     # ── semilla ──────────────────────────────────────────────────────────────
     def place_seed(self) -> float:
@@ -722,7 +848,7 @@ class Composer:
                 break
             self.chords.append({'chord': c['chord'], 'numeral': c.get('numeral', ''),
                                 'pitches': c['pitches'], 'start': t, 'dur': d,
-                                'source': 'seed'})
+                                'source': 'midi' if self.fixed else 'seed'})
             t = round(t + d, 6)
         seed_end = t
         t = 0.0
@@ -831,7 +957,8 @@ class Composer:
     # ── bucle principal ──────────────────────────────────────────────────────
     def report(self, c: dict) -> None:
         ns = ' '.join(f"{m['note']}:{fmt(m['dur'])}" for m in self.notes_of(c))
-        tag = COL['gray'] + ('semilla' if c['source'] == 'seed' else 'jev    ') + COL['reset']
+        tag = COL['gray'] + {'seed': 'semilla', 'midi': 'midi   '}.get(
+            c['source'], 'jev    ') + COL['reset']
         print(f"  {COL['gray']}c.{int(c['start'] // self.beats) + 1:<3}{COL['reset']} "
               f"{tag} {COL['bold']}{c['chord']:<7}{COL['reset']}"
               f"{COL['gray']}{fmt(c['dur']):>3}b{COL['reset']}  "
@@ -841,6 +968,11 @@ class Composer:
         seed_end = self.place_seed()
         if not self.chords:
             fail("la progresión semilla está vacía")
+        if self.fixed:        # acordes fijos: solo se genera la melodía
+            for c in list(self.chords):
+                self.fill_melody(c['start'] + c['dur'])
+                self.report(c)
+            return
         self.fill_melody(seed_end)
         for c in list(self.chords):
             self.report(c)
@@ -905,7 +1037,7 @@ def piece_to_midi(chords: list, melody: list, ticks_per_beat: int,
 
 def seeds_json(seeds: dict) -> dict:
     return {
-        'chords': {k: v for k, v in seeds['chord_entry'].items()},
+        'chords': (dict(seeds['chord_entry']) if seeds['chord_entry'] else None),
         'chords_mode_used': seeds['chord_mode'],
         'progression': seeds['progression'],
         'motif': {k: v for k, v in seeds['motif_entry'].items()},
@@ -971,12 +1103,26 @@ def cmd_semillas(args) -> None:
 
 def cmd_componer(args) -> None:
     desc = read_description(args)
-    if args.bars < 1 or args.beats < 1:
+    if args.beats < 1 or (args.bars is not None and args.bars < 1):
         fail("--bars y --beats deben ser >= 1")
+    fixed, inferred = None, None
+    if args.chords_midi:
+        fixed, inferred = load_chords_midi(args)
+        midi_beats = sum(c['duration_beats'] for c in fixed)
+        max_bars = max(1, int(math.ceil(midi_beats / args.beats - EPS)))
+        if args.bars is None:
+            args.bars = max_bars
+        elif args.bars > max_bars:
+            warn(f"--bars {args.bars} supera la duración del MIDI ({midi_beats:g} "
+                 f"pulsos): se recorta a {max_bars} compases")
+            args.bars = max_bars
+        fixed = fit_progression(fixed, float(args.bars * args.beats))
+    elif args.bars is None:
+        args.bars = 16
     jev = setup(args)
     banner('JEV COMPOSER — Composición')
-    tonic, mode = choose_key_mode(jev, desc, args, args.rng_obj)
-    seeds = choose_seeds(jev, desc, tonic, mode, args)
+    tonic, mode = choose_key_mode(jev, desc, args, args.rng_obj, fixed, inferred)
+    seeds = choose_seeds(jev, desc, tonic, mode, args, fixed)
 
     print(f"  {COL['gray']}{'c.':<5} {'origen':<8} {'acorde':<7}{'dur':>4}  melodía{COL['reset']}")
     print(f"  {'─' * 68}")
@@ -995,7 +1141,8 @@ def cmd_componer(args) -> None:
                  'bars': args.bars, 'beats': args.beats, 'tempo': args.tempo,
                  'depth': args.depth, 'temperature': args.temperature,
                  'seed_temp': args.seed_temp, 'rng': args.rng, 'octave': args.octave,
-                 'leap': args.leap, 'model': args.model},
+                 'leap': args.leap, 'model': args.model,
+                 'chords_midi': args.chords_midi},
         'seeds':        seeds_json(seeds),
         'chord_string': chord_text,
         'melody_string': mel_text,
@@ -1128,7 +1275,9 @@ def build_parser():
     p = sub.add_parser('componer', parents=[jev_opts, seed_opts],
                        help='Pipeline completo: tonalidad + semillas + ventana',
                        formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--bars', type=int, default=16, help='Compases a generar (default: 16)')
+    p.add_argument('--bars', type=int, default=None,
+                   help='Compases a generar (default: 16; con --chords-midi, los '
+                        'del MIDI)')
     p.add_argument('--beats', type=int, default=4, help='Pulsos por compás (default: 4)')
     p.add_argument('--tempo', type=float, default=100.0,
                    help='Tempo BPM para exportación MIDI (default: 100)')
@@ -1140,6 +1289,12 @@ def build_parser():
                    help='Salto melódico máximo en semitonos (default: 9)')
     p.add_argument('--output', type=str, default='obra',
                    help='Nombre base para salidas (default: obra)')
+    p.add_argument('--chords-midi', type=str, dest='chords_midi', metavar='FILE',
+                   help='Usar los acordes de este MIDI en vez de generarlos')
+    p.add_argument('--bass-only', action='store_true', dest='bass_only',
+                   help='(con --chords-midi) detectar acordes solo con notas graves')
+    p.add_argument('--min-dur', type=float, default=0.0, dest='min_dur', metavar='BEATS',
+                   help='(con --chords-midi) ignorar acordes más cortos que esto')
     p.set_defaults(func=cmd_componer)
 
     p = sub.add_parser('cache', help='Estadísticas de la cache de consultas',
