@@ -236,6 +236,7 @@ alias SortG='sed "s/\([^0-9]*\([0-9]*\).*\)/\2 \1/g" | sort -g | sed "s/^[^[:spa
 alias getnum='sed "s/[^0-9\.-]*\([0-9\.-]*\).*/\1/g"'
 alias Aria2c='aria2c --seed-time=0 --max-upload-limit=100K'
 alias Strace='strace -fintrCDTYyy -o strace.log -v -s128'
+alias Nl='nl -ba'
 
 rmone(){
 [ $# -gt 1 ] && return
