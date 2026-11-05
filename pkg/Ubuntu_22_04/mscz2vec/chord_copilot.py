@@ -105,6 +105,53 @@ OPCIONES PRINCIPALES:
     --quiet
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[build-model]
+--corpus         dir   io=in required  # Directorio o patrón glob de ficheros MIDI
+--order          enum  default=3 values=2|3
+--k              float default=0.5  # Suavizado add-k
+--skip-threshold float default=0.3  # Umbral de segmentos sin acorde para descartar una pieza
+--progress-every int   default=1000
+--use-music21    bool  default=false  # Usa music21 para detección de tonalidad si está instalado
+--out            file  default=model.json io=out ext=json
+[suggest]
+--context     str   required
+--roman       bool  default=false  # El contexto ya está en números romanos
+--model       file  default=model.json io=in ext=json
+--top         int   default=5 min=0
+--key         str
+--mood        str
+--min-support int   default=5 min=0
+--json        bool  default=false
+[info]
+--model file  default=model.json io=in ext=json
+[render]
+--context     str   required
+--next        str    # Acorde(s) siguiente(s); si se omite se usa --model
+--model       file  io=in  # Modelo (build-model); sin --next toma su sugerencia nº 1
+--mood        str
+--min-support int   default=5 min=0
+--roman       bool  default=false
+--key         str
+--out         file  default=preview.mid io=out ext=mid
+--tempo       int   default=100
+--beats       float default=4.0 unit=tiempos  # Beats por acorde
+[make-test-corpus]
+--out  file  io=out required
+--seed int   default=42
+[selftest]
+--quiet bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   chord_copilot.py build-model --corpus corpus/*.mid --order 3 \

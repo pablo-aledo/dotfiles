@@ -87,6 +87,38 @@ Opciones
   --beats BEATS               Beats por compás (default: 4)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--motif      file  io=in ext=mid excludes=--motif-text,--generate  # MIDI de motivo de entrada…
+--motif-text str   excludes=--motif,--generate  # Motivo en texto: "C4:1 E4:0.5 G4:0.5"
+--generate   bool  default=false excludes=--motif,--motif-text  # Generar motivo interno aleatorio
+--key        str   default="C major"  # Tonalidad
+--form       str   default=period  # Forma musical
+--type       enum  default=parallel values=parallel|contrasting|sequential|developmental|call_response
+--cadences   list  of=str  # Cadencias antecedente y consecuente
+--bars       int   default=8 min=0 unit=compases  # Compases totales
+--beats      int   default=4 unit=tiempos  # Beats por compás
+--tempo      int   default=90  # Tempo BPM
+--all-forms  bool  default=false  # Generar una versión por cada forma
+--all-types  bool  default=false  # Generar una versión por cada tipo
+--report     bool  default=false  # Exportar análisis JSON
+--output     file  default=phrase_out.mid io=out ext=mid  # Fichero de salida
+--output-dir dir   default=. io=out  # Directorio de salida con --all-forms/--all-types
+--annotate   bool  default=false  # Exportar MusicXML con anotaciones (requiere music21)
+--listen     bool  default=false  # Reproducir al terminar (requiere pygame)
+--verbose    bool  default=false  # Imprimir decisiones de construcción
+--seed       int   default=42  # Semilla aleatoria
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO STANDALONE ──

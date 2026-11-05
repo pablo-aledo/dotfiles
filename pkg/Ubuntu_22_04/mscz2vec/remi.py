@@ -84,6 +84,63 @@ OPCIONES COMUNES:
   --small          Modelo reducido: 6 capas, d=256 (~5M params, CPU)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[convert]
+input     file  io=in ext=mid required  # MIDI o directorio de MIDIs
+--chord   bool  default=false  # Incluir tokens de acorde
+--vocab   file  io=in ext=json  # Ruta del fichero de vocabulario JSON
+--output  file  io=out ext=json  # Guardar tokens en JSON
+--verbose bool  default=false
+[inspect]
+input        file  io=in ext=mid required  # MIDI a inspeccionar
+--chord      bool  default=false
+--max-tokens int   default=100 min=0  # Máximo de tokens a mostrar [100]
+--verbose    bool  default=false
+[train]
+corpus       dir   io=in required  # Directorio (o fichero) de MIDIs
+--model-dir  dir   default=remi_model io=out  # Directorio de salida del modelo [remi_model/]
+--chord      bool  default=false
+--vocab      str
+--epochs     int   default=200 min=0 unit=épocas
+--batch-size int   default=4 min=0
+--lr         float default=0.0002
+--x-len      int   default=512
+--mem-len    int   default=512
+--patience   int   default=30
+--resume     bool  default=false
+--small      bool  default=false  # Modelo reducido: 6 capas, d_model=256 (~5M params)
+--seed       int   default=42
+--verbose    bool  default=false
+[generate]
+--model-dir   dir   io=in required
+--bars        int   default=16 min=0 unit=compases
+--temperature float default=1.2
+--topk        int   default=5
+--mem-len     int    # Memoria XL en inferencia (menor = más rápido) [default: igual que train]
+--output      file  io=out
+--seed        int   default=42
+--verbose     bool  default=false
+[continue]
+prompt        file  io=in ext=mid required  # MIDI de prompt
+--model-dir   dir   io=in required
+--bars        int   default=16 min=0 unit=compases
+--temperature float default=1.2
+--topk        int   default=5
+--mem-len     int    # Memoria XL en inferencia (menor = más rápido) [default: igual que train]
+--output      file  io=out
+--seed        int   default=42
+--verbose     bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Dependencias
 ────────────────────────────────────────────────────────────────────────────
   mido, numpy, torch

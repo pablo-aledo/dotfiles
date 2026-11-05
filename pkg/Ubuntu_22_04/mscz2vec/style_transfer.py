@@ -51,6 +51,38 @@ Opciones
   --no-percussion             No generar pista de percusión
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+content              file  io=in ext=mid required  # MIDI de contenido (tu idea melódica)
+style                file  io=in ext=mid required  # MIDI de estilo (el ADN a transferir)
+--strength           float default=0.7 min=0 max=1 typical=0..1  # Intensidad global de…
+--transfer           list  of=enum values=rhythm|harmony|emotion|texture|dynamics|key
+--no-rhythm          bool  default=false  # No transferir ritmo
+--no-harmony         bool  default=false  # No transferir armonía
+--no-emotion         bool  default=false  # No transferir emoción
+--no-texture         bool  default=false  # No transferir textura
+--no-dynamics        bool  default=false  # No transferir dinámica
+--no-key             bool  default=false  # No transferir tonalidad
+--preserve           list  of=enum values=contour|intervals|motif|scale  # Estrategias de…
+--blend-melody       float default=0.5 min=0 max=1  # Mezcla melodía original vs generada 0-1
+--bars               int   min=0 unit=compases  # Compases de salida
+--candidates         int   default=3 min=0  # Candidatos a evaluar
+--output             file  default=transfer_out.mid io=out ext=mid
+--export-fingerprint bool  default=false
+--no-percussion      bool  default=false  # No generar pista de percusión
+--seed               int   default=42
+--verbose            bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python style_transfer.py contenido.mid estilo.mid

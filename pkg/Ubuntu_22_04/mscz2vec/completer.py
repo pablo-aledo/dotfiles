@@ -82,6 +82,39 @@ Opciones
   --no-append                 No concatenar: exportar solo la continuación
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+source               file  io=in ext=mid required  # MIDI de entrada (fragmento a completar)
+--bars               int   min=0 unit=compases alias=-b  # Compases a generar
+--strategy           enum  default=blend values=markov|contour|phrase|variation|harvest|narrative|evolve|blend alias=-s
+--mode               enum  default=extend values=extend|fill|develop|recapitulate|coda alias=-m
+--candidates         int   default=3 min=0 alias=-c  # Candidatos a evaluar en modo blend
+--fill-to            file  io=in ext=mid  # MIDI destino para modo fill (A → ? → B)
+--collection         dir   io=in  # Directorio de MIDIs para estrategia harvest
+--arc                enum  default=hero values=hero|tragedy|romance|mystery|meditation|rondo|sonata|custom
+--position           float min=0.0 max=1.0  # Posición en la obra 0.0-1.0
+--end-with           enum  values=coda|cadence|fade  # Tipo de final a añadir
+--key                str    # Tonalidad forzada, ej: "Dm" "G major"
+--tempo              float unit=BPM advanced  # Tempo forzado en BPM
+--append             bool  default=false  # Concatenar continuación al fuente
+--no-append          bool  default=false  # No concatenar: exportar solo la continuación
+--no-stitch          bool  default=false  # No usar stitcher para la concatenación
+--export-fingerprint bool  default=false  # Exportar fingerprint de la continuación
+--output             file  io=out ext=mid alias=-o  # Archivo de salida
+--seed               int   default=42  # Semilla aleatoria
+--verbose            bool  default=false alias=-v  # Informe detallado del proceso
+--report             bool  default=false alias=-r  # Informe completo de decisiones y score
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python completer.py fragmento.mid

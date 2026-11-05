@@ -162,6 +162,118 @@ Opciones
                       > 15 %).
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[prepare]
+--input-dir       dir   io=in required
+--output-dir      dir   io=out required
+--resolution      int   default=48 min=0
+--window-bars     int   default=4 min=0 unit=compases
+--report          bool  default=false
+--enrich          bool  default=false  # Enriquecer el vector de condicionamiento con mscz2vec…
+--mscz2vec-path   file  io=in  # Ruta al script mscz2vec.py (opcional si está en el PATH o en el…
+--enrich-external bool  default=false  # Cargar vector externo .vec junto a cada MIDI (mismo nombre…
+--disable-roles   list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--pitch-range     int   typical=36..83  # Limitar el piano roll a N valores MIDI centrados en Do…
+[train]
+--data-dir        dir   io=in required
+--model-dir       dir   io=in required
+--epochs          int   default=300 min=0 unit=épocas
+--batch-size      int   default=16 min=0
+--lr              float default=0.0001
+--latent-dim      int   default=128  # Dimensión del espacio latente
+--style-dim       int   default=16
+--diffusion-steps int   default=1000 min=0  # Pasos T del proceso de difusión
+--pos-weight      float default=5.0  # Peso de notas activas en BCE
+--decoder-dropout float default=0.1 typical=0.2..0.3  # Dropout entre bloques del decoder. Aumenta…
+--patience        int   default=50
+--resume          bool  default=false  # Reanudar entrenamiento desde el último checkpoint
+--disable-roles   list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+[encode]
+--input     file  io=in required
+--model-dir dir   io=in required
+--output    file  io=out
+[compose]
+--model-dir        dir   io=in required
+--palette          file  io=in required
+--mode             enum  default=sample values=sample|denoise|blend|sweep
+--bars             int   default=32 min=0 unit=compases
+--tension          str   default=arch
+--output           file  default=output.mid io=out ext=mid
+--bpm              float default=120.0 unit=BPM
+--temperature      float default=1.0 typical=0..1
+--ddim-steps       int   default=50 min=0  # Pasos de inferencia DDIM
+--eta              float default=0.0  # Estocasticidad DDIM: 0=determinista, 1=DDPM completo
+--strength         float default=0.7 typical=0..1  # [denoise] Fuerza de variación respecto a ref…
+--input            file  io=in
+--inputs           list  of=file io=in
+--weights          list  of=float
+--threshold-pct    float default=99.0 unit=%  # Percentil para umbral adaptativo. Bájalo (ej.…
+--adaptive-per-bar bool  default=false  # Umbral adaptativo por compás: los compases cuyo máximo no…
+--fixed-context    bool  default=false  # Usar el contexto del MIDI original en lugar del output…
+--threshold        float typical=0.0..1.0  # Umbral fijo de binarización (0.0–1.0). Tiene prioridad…
+[style-corpus]
+--input-dir dir   io=in required  # Carpeta con los MIDIs del corpus
+--model-dir dir   io=in required
+--output    file  io=out ext=json  # Ruta del .json de salida
+[transfer]
+--input            file  io=in ext=mid required  # MIDI de entrada (estilo A)
+--model-dir        dir   io=in required
+--palette          file  io=in required
+--style-from       file  io=in ext=json required  # Centroide del corpus origen A (.json de…
+--style-to         file  io=in ext=json required  # Centroide del corpus destino B (.json de…
+--strength         float default=0.8 typical=0..1  # Intensidad del desplazamiento de estilo: 0=sin…
+--progressive      bool  default=false  # Interpolar progresivamente A→B a lo largo de los compases
+--denoise-strength float default=0.6 typical=0..1  # Cuánto alejarse del MIDI de referencia en el…
+--ddim-steps       int   default=50 min=0
+--eta              float default=0.0
+--bpm              float default=120.0 unit=BPM
+--threshold-pct    float default=85.0 unit=%
+--output           file  default=transfer_output.mid io=out ext=mid
+[round-trip]
+--input         file  io=in required
+--model-dir     dir   io=in  # Si se indica, lee resolución, roles y rango de pitch desde…
+--resolution    int   default=48 min=0
+--disable-roles list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--pitch-range   int    # Limitar a N valores MIDI centrados en Do central (solo si no se usa…
+--palette       file  io=in  # Paleta de instrumentos (opcional)
+--output        file  default=output_roundtrip.mid io=out ext=mid
+--bpm           float default=120.0 unit=BPM
+[inpaint]
+--model-dir  dir   io=in required
+--input      file  io=in ext=mid required  # MIDI con compases vacíos a rellenar
+--palette    file  io=in
+--output     file  default=output_inpaint.mid io=out ext=mid
+--ddim-steps int   default=50 min=0  # Pasos DDIM
+--resample   int   default=1 typical=3..5  # Número de re-muestreos RePaint por paso
+--threshold  float  # Umbral de binarización
+--bpm        float default=120.0 unit=BPM
+[reconstruct]
+--model-dir dir   io=in required
+--input     file  io=in required
+--palette   file  io=in  # Paleta de instrumentos (opcional)
+--output    file  default=output_recon.mid io=out ext=mid
+--bpm       float default=120.0 unit=BPM
+--threshold float  # Umbral fijo de binarización. Sin valor: automático p99×0.5
+[inspect]
+--what      list  of=enum values=npz|loss_curve
+--data-dir  dir   io=in
+--model-dir dir   io=in
+--file      file  io=in ext=npz
+--window    int   default=0
+--bars-show int   default=4 min=0 unit=compases
+--roles     list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--no-roll   bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Preparar con roles reducidos y rango de pitch limitado (menos carga):

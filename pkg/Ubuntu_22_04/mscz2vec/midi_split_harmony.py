@@ -86,6 +86,41 @@ OPCIONES COMPLETAS:
                               conserva solo la más aguda
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+input              file  io=in ext=mid  # MIDI de entrada a separar
+--out-dir          dir   io=out  # Carpeta de salida
+--output           file  io=out  # Nombre base de salida
+--mono-melody      bool  default=false  # Reducir la melodía a monofónica estricta: en cada…
+--split-files      bool  default=false  # Genera dos ficheros separados en vez de uno con dos pistas
+--key              str    # Tonalidad, e.g. "A minor" o "C"
+--beats-per-bar    float typical=1.5 unit=tiempos  # Pulsos (negras) por compás; admite decimales…
+--tempo            float  # Tempo BPM de salida
+--chord-res        float default=1.0 unit=tiempos  # Resolución mínima de acorde en beats
+--melody-ch        int   min=0 max=15  # Canal MIDI forzado para melodía (0-15)
+--harmony-ch       int   min=0 max=15  # Canal MIDI forzado para armonía (0-15)
+--chord-octave     int   default=4  # Octava base de acordes de salida
+--melody-octave    int    # Octava de transposición de melodía
+--velocity-melody  int   default=90 min=1 max=127  # Velocity de notas de melodía
+--velocity-chords  int   default=70 min=1 max=127  # Velocity de acordes
+--train-corpus     dir   io=in  # Entrenar el modelo HMM desde este directorio de MIDIs y guardarlo…
+--save-model       file  io=out ext=json  # Guardar el modelo HMM entrenado en este fichero JSON
+--load-model       file  io=in ext=json  # Usar este modelo HMM (JSON) en lugar del determinista
+--corpus           dir   io=in  # Entrenar y aplicar en un solo paso: aprende desde este directorio…
+--min-corpus-score float default=0.55  # Umbral de calidad armónica para incluir un MIDI del corpus…
+--report           bool  default=false  # Guardar reporte JSON con análisis detallado
+--verbose          bool  default=false  # Información detallada del proceso
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO BÁSICO ──

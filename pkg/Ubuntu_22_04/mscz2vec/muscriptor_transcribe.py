@@ -89,6 +89,36 @@ Opciones
                                 true|false|best-effort)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[transcribe]
+audio_file           file  io=in ext=wav required  # Input audio file (wav, mp3, flac, …)
+--output             file  io=out ext=wav alias=-o  # Output path ('-' for stdout, all progress…
+--format             file  io=in ext=mid alias=-f  # midi: quantized MIDI file. json: one array of…
+--notes              bool  default=false  # Print decoded events to stderr
+--sampling           bool  default=false  # Temperature sampling instead of greedy decoding
+--temperature        float default=1.0 typical=0..1 alias=-t  # Sampling temperature (only with…
+--cfg-coef           float default=1.0  # Classifier-free guidance coefficient
+--model              file  io=in alias=-m  # Model size ('small', 'medium', 'large'; default…
+--device             str   default=auto alias=-d  # 'auto', 'cpu', 'cuda', 'cuda:0', 'mps', …
+--dtype              str    # Transformer dtype: 'float32', 'float16' or 'bfloat16'. Default…
+--batch-size         int   min=0 alias=-b  # Chunks generated per forward pass. Values > 1 lower…
+--strict-eos         bool  default=false  # Raise an error if a chunk fails to emit EOS within budget
+--beam-size          int   default=1  # Beam search width (1 = greedy/sampling, ≥2 enables beam…
+--prelude-forcing    bool  default=false  # Teacher-force each chunk's tie prologue
+--no-prelude-forcing bool  default=true
+--instruments        str
+--detect-tempo       enum  default=best-effort values=true|false|best-effort  # Detect tempo/time-si…
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   ---

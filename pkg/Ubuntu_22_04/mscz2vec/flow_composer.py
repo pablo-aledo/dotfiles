@@ -163,6 +163,70 @@ Opciones
   inspect
     --model-dir MODEL_DIR
     --data-dir DATA_DIR
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[prepare]
+--input-dir     dir   io=in required
+--output-dir    dir   io=out required
+--resolution    int   default=48 min=0
+--window-bars   int   default=4 min=0 unit=compases
+--disable-roles list  of=str
+--pitch-range   int
+--report        bool  default=false
+[train]
+--data-dir        dir   io=in required
+--model-dir       dir   io=in required
+--epochs          int   default=300 min=0 unit=épocas
+--batch-size      int   default=8 min=0
+--lr              float default=0.0001
+--style-dim       int   default=16
+--cond-dim        int   default=128
+--flow-steps      int   default=8 min=0
+--hidden-channels int   default=64
+--patience        int   default=50
+--disable-roles   list  of=str
+--resume          bool  default=false
+[encode]
+--input     file  io=in required
+--model-dir dir   io=in required
+--output    file  io=out
+[style-corpus]
+--input-dir dir   io=in required
+--model-dir dir   io=in required
+--output    file  io=out
+[compose]
+--model-dir     dir   io=in required
+--palette       file  io=in
+--mode          enum  values=sample|blend|sweep|transfer|reconstruct required
+--input         file  io=in
+--inputs        list  of=str
+--weights       list  of=float
+--style-from    str
+--bars          int   default=16 min=0 unit=compases
+--tension       str   default=arch
+--temperature   float default=1.0 typical=0..1
+--threshold     float
+--threshold-pct float default=99.0 unit=%
+--bpm           float default=120.0 unit=BPM
+--output        file  io=out required
+[round-trip]
+--input      file  io=in required
+--output     file  default=round_trip.mid io=out ext=mid
+--resolution int   default=48 min=0
+--bpm        float default=120.0 unit=BPM
+[inspect]
+--model-dir dir   io=in
+--data-dir  dir   io=in
+@end
 """
 
 import argparse

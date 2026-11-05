@@ -61,6 +61,40 @@ Opciones
     -o, --output OUTPUT         (defecto tokenizer.json)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[info]
+path file  io=in required
+[tokenize]
+midi             file  io=in ext=mid required
+--scheme         enum  default=REMI values=REMI|TSD|MIDILike|Structured|CPWord|Octuple|MuMIDI|MMM|PerTok alias=-s
+--tokenizer      str    # tokenizador ya entrenado (.json); si no, config por defecto
+--output         file  io=out ext=mid alias=-o  # fichero de salida (.json); por defecto…
+--num-velocities int   min=0
+--use-chords     bool  default=false
+--use-programs   bool  default=false
+[detokenize]
+tokens      str   required
+--scheme    enum  values=REMI|TSD|MIDILike|Structured|CPWord|Octuple|MuMIDI|MMM|PerTok
+--tokenizer str    # tokenizador usado al generar los tokens (.json)
+--output    file  io=out ext=mid alias=-o  # fichero .mid de salida
+[train]
+midis            list  of=file io=in ext=mid required  # ficheros o patrones glob, p.ej.…
+--scheme         enum  default=REMI values=REMI|TSD|MIDILike|Structured|CPWord|Octuple|MuMIDI|MMM|PerTok alias=-s
+--vocab-size     int   default=8000
+--model          enum  default=BPE values=BPE|Unigram|WordPiece
+--num-velocities int   min=0
+--output         file  default=tokenizer.json io=out ext=json alias=-o
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     miditok_composer.py list-schemes

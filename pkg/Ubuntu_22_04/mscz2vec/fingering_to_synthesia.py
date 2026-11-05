@@ -111,6 +111,27 @@ Opciones
                          (experimental, no recomendado).
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+json_file      file  io=out ext=json required  # JSON exportado por fingering_v3.py (--json)
+--output       file  io=out required alias=-o  # Ruta del fichero .synthesia a generar
+--hash         str    # Hash real de la canción en Synthesia (recomendado). Si se omite, se genera…
+--existing     file  io=in  # Fichero .synthesia real existente en el que fusionar/actualizar la…
+--track-right  int    # Índice de track CRUDO del MIDI (0-based, tal cual aparece en el fichero…
+--track-left   int    # Índice de track CRUDO del MIDI para la mano izquierda. Si se pasa --midi y…
+--midi         file  io=in ext=mid  # Fichero MIDI original. Muy recomendado: permite (1) reordenar…
+--gap-encoding enum  default=jump values=pad|jump advanced  # Cómo codificar compases sin ninguna…
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     # Flujo completo: MIDI → digitación → Synthesia

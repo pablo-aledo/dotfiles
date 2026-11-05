@@ -110,6 +110,40 @@ Opciones
                          coste típico de ventana (defecto 0.5).
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi           file  io=in ext=mid required  # Ruta al fichero MIDI
+--hand-size    enum  default=M values=XXS|XS|S|M|L|XL|XXL  # Tamaño de mano: XXS XS S M L XL XXL
+--right-track  int   default=0
+--left-track   int   default=1
+--auto-split   bool  default=false  # Separar manos automáticamente aunque haya 2 tracks (usa…
+--measures     int   default=0  # Número máximo de compases (0 = todos)
+--right-only   bool  default=false
+--left-only    bool  default=false
+--confidence   bool  default=false  # Mostrar puntuación de confianza por nota
+--chord-mode   bool  default=false  # Modo acordes: calcula el acorde de cada compás y mantiene la…
+--chord-weight float default=0.5 min=0.0 max=1.0  # Peso λ∈[0,1] de la consistencia frente al coste…
+--chord-iters  int   default=2 min=1  # Pasadas máximas de refinamiento por consistencia
+--chord-keys   enum  default=both values=harmony|shape|both  # Claves de consistencia: harmony…
+--bass-prior   float default=0.0 min=0  # Prior de bajo (solo mano izquierda): penaliza no usar el…
+--chord-runs   bool  default=false  # Compara también las escaladas (≥3 notas estrictamente…
+--chord-report bool  default=false  # Informe: acorde por compás con margen y gestos repetidos por…
+--cost-alert   float default=0.5 min=0  # Umbral relativo (0.5 = +50%) a partir del cual se avisa…
+--tie-gestures bool  default=false  # Enlaza la digitación de los compases con exactamente el mismo…
+--tie-tol      float default=0.5 min=0  # Con --tie-gestures: máximo aumento relativo de coste…
+--json         file  io=out ext=json  # Exportar resultado a JSON
+--xml          file  io=out  # Exportar resultado a MusicXML
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python fingering_v6.py archivo.mid

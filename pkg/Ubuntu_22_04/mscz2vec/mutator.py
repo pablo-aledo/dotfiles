@@ -54,6 +54,43 @@ Opciones
                               Segundos de reproducción (default: 15)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi            file  io=in ext=mid  # MIDI fuente
+instruction     str    # Instrucción en lenguaje natural
+--interactive   bool  default=false alias=-i  # Modo conversacional iterativo
+--history       bool  default=false  # Mostrar historial de mutaciones
+--tree          bool  default=false  # Visualizar árbol de mutaciones
+--revert        int    # Revertir a la mutación N
+--branch        str    # Partir desde un MIDI del historial
+--list-concepts bool  default=false  # Listar conceptos semánticos disponibles
+--intensity     float default=0.7 min=0 max=1 typical=0..1  # Intensidad global 0-1
+--bars          int   min=0 unit=compases  # Compases de salida
+--scope         str    # Aplicar solo en compases S a E (ej: 8:16)
+--output        file  io=out  # Archivo de salida
+--output-dir    dir   io=out  # Directorio para archivos de salida
+--no-llm        bool  default=false  # Usar solo diccionario semántico, sin LLM
+--llm-provider  str   default=anthropic  # Proveedor LLM: anthropic | openai
+--llm-model     file  io=in  # Modelo específico. Anthropic: claude-sonnet-4-6, claude-opus-4-6…
+--api-key       str    # API key del proveedor elegido (o vars de entorno: ANTHROPIC_API_KEY /…
+--llm-debug     bool  default=false  # Mostrar prompt enviado y respuesta raw del LLM
+--dry-run       bool  default=false  # Mostrar parámetros sin generar MIDI
+--batch-mode    bool  default=false  # Modo silencioso para llamadas en lote desde…
+--verify        bool  default=false  # Verificar que la mutación fue en la dirección correcta
+--listen        bool  default=false  # Reproducir el resultado (requiere pygame)
+--play-seconds  int   default=15 unit=s  # Segundos de reproducción
+--verbose       bool  default=false alias=-v  # Informe detallado de decisiones
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python mutator.py obra.mid "más oscuro"

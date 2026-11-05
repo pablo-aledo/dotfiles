@@ -109,6 +109,71 @@ Opciones
     --bpm F                Tempo de salida (defecto 120).
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[prepare]
+--input-dir     dir   io=in required
+--output-dir    dir   io=out required
+--resolution    int   default=48 min=0
+--window-bars   int   default=4 min=0 unit=compases
+--pitch-range   int    # Limitar a N notas centradas en Do central (ej: 48)
+--disable-roles list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--report        bool  default=false
+[train]
+--data-dir-a      dir   io=in required
+--data-dir-b      dir   io=in required
+--model-dir       dir   io=in required
+--epochs          int   default=200 min=0 unit=épocas
+--batch-size      int   default=8 min=0
+--lr              float default=0.0002
+--lambda-cycle    float default=10.0  # Peso cycle-consistency
+--lambda-identity float default=5.0  # Peso identity
+--base-ch         int   default=64  # Canales base del generador
+--n-res-blocks    int   default=9 min=0 typical=4..6  # Bloques ResNet en bottleneck
+--n-downsamples   int   default=2 min=0  # Niveles de downsampling
+--patience        int   default=40
+--disable-roles   list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--resume          bool  default=false
+[transfer]
+--model-dir        dir   io=in required
+--input            file  io=in required
+--direction        enum  default=A2B values=A2B|B2A  # A2B: estilo de A → estilo de B
+--palette          file  io=in
+--output           file  default=output_transfer.mid io=out ext=mid
+--bpm              float default=120.0 unit=BPM
+--threshold        float
+--threshold-pct    float default=99.0 unit=%  # Percentil para umbral adaptativo
+--adaptive-per-bar bool  default=false
+[encode]
+--input     file  io=in required
+--model-dir dir   io=in required
+--output    file  default=z_style.json io=out ext=json
+[style-corpus]
+--input-dir dir   io=in required
+--model-dir dir   io=in required
+--output    file  default=z_corpus_centroid.json io=out ext=json
+[inspect]
+--model-dir dir   io=in
+--data-dir  dir   io=in
+--what      str   default=model  # "model", "npz", o "model npz"
+--npz-file  file  io=in ext=npz
+--no-roll   bool  default=false
+[round-trip]
+--input       file  io=in required
+--output      file  default=round_trip_output.mid io=out ext=mid
+--resolution  int   default=48 min=0
+--window-bars int   default=4 min=0 unit=compases
+--bpm         float default=120.0 unit=BPM
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Preparar dos corpus:

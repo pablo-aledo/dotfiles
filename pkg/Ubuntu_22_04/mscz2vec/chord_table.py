@@ -86,6 +86,45 @@ Opciones
   --verbose                   Mostrar nombre y descripción de cada progresión
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--analyze-midi file  io=in ext=mid  # Analizar un MIDI y mostrar las progresiones del catálogo que…
+--min-score    float default=0.65 min=0 max=1  # Score mínimo de coincidencia 0-1
+--list         bool  default=false  # Listar todas las progresiones
+--stats        bool  default=false  # Estadísticas del catálogo
+--custom       str    # Progresión personalizada en numerales romanos, en vez de seleccionar del…
+--id           int    # Seleccionar progresión por id
+--buscar       str    # Búsqueda por texto libre
+--intencion    str    # Buscar por intención en lenguaje natural
+--style        enum  values=diatonic|baroque|jazz|modal|romantic|impressionist|pop|flamenco|blues|auto|folk
+--mode         enum  values=major|minor|dorian|phrygian|phrygian_dominant|lydian|mixolydian
+--emocion      str    # Filtrar por emoción (reposo, alegría, tristeza…)
+--tension-min  int   min=1 max=10  # Tensión mínima (1-10)
+--tension-max  int   min=1 max=10  # Tensión máxima (1-10)
+--key          str   default=C  # Tónica para resolución concreta
+--reps         int    # Número de repeticiones exactas de la progresión/ciclo a exportar (sustituye…
+--bars         int   min=0 unit=compases  # Compases a generar. Si la progresión es más larga que…
+--beats        int   default=4 unit=tiempos  # Pulsos por compás
+--tempo        float default=120.0  # Tempo BPM para exportación MIDI
+--export-json  file  io=out ext=json  # Exportar tabla filtrada o progresión a JSON
+--export-text  file  io=out ext=txt  # Exportar progresión concreta a texto --chords
+--export-midi  file  io=out ext=mid  # Exportar progresión concreta a MIDI
+--output       file  default=obra io=out  # Nombre base para salidas
+--bass-only    bool  default=false  # Analizar solo notas graves (≤ C4) para la detección de…
+--min-dur      float default=0.0 unit=s  # Duración mínima en beats para considerar un acorde. Útil…
+--sort-compas  bool  default=false  # Ordenar resultados por compás de aparición; cuando una…
+--verbose      bool  default=false  # Mostrar nombre y descripción de cada progresión
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Listar todas

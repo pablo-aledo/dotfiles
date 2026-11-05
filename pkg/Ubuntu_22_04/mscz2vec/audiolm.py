@@ -154,6 +154,84 @@ Opciones
                                 (hubert_base_ls960_L9_km500.bin) (obligatorio)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--audio-dir           dir   io=in required  # Carpeta con ficheros .wav / .flac / .mp3
+--checkpoint          file  default=model.pt io=out ext=pt  # Ruta del checkpoint a guardar…
+--results-dir         dir   default=./results io=in  # Carpeta para samples y checkpoints…
+--steps               int   default=100000 min=0  # Pasos de entrenamiento [100000]
+--batch-size          int   default=4 min=0  # Tamaño de batch [4]
+--grad-accum          int   default=8  # Pasos de acumulación de gradiente (batch efectivo =…
+--lr                  float default=0.0003  # Learning rate [3e-4]
+--seconds             float default=2.0 unit=s  # Duración máxima de cada clip de entrenamiento en…
+--save-every          int   default=1000  # Guardar checkpoint cada N pasos [1000]
+--sample-every        int   default=500  # Generar muestra de validación cada N pasos [500]
+--wandb               bool  default=false  # Activar logging con Weights & Biases
+--seed                int   default=42  # Semilla aleatoria [42]
+--verbose             bool  default=false  # Mostrar configuración completa antes de entrenar
+--dry-run             bool  default=false  # Construir modelos y mostrar config sin entrenar
+--codebook-size       int   default=4096
+--rq-num-quantizers   int   default=12 min=0
+--num-coarse-q        int   default=3 min=0
+--rq-groups           int   default=1  # Grupos para multi-head RVQ [1]
+--use-lfq             bool  default=false  # Usar Lookup-Free Quantizer en vez de RVQ estándar
+--sample-hz           int   default=16000 unit=Hz
+--attn-window         int   default=128  # Ventana de atención local en el bottleneck [128]
+--attn-depth          int   default=2  # Capas de atención local en el bottleneck [2]
+--dim                 int   default=1024
+--depth               int   default=6
+--heads               int   default=8  # Número de cabezas de atención [8]
+--flash-attn          bool  default=false  # Usar Flash Attention (requiere GPU Ampere+)
+--has-condition       bool  default=false  # Entrenar con conditioning de texto (T5)
+--num-semantic-tokens int   default=500 min=0
+--hubert-ckpt         file  io=in ext=pt,pth  # Ruta al checkpoint de HuBERT (hubert_base_ls960.pt)
+--hubert-quantizer    file  io=in  # Ruta al quantizador KMeans (hubert_base_ls960_L9_km500.bin)
+[train-coarse]
+--codec-ckpt file  io=in ext=pt,pth required  # Checkpoint del codec (de train-codec)
+[train-fine]
+--codec-ckpt file  io=in ext=pt,pth required  # Checkpoint del codec (de train-codec)
+[generate]
+--codec-ckpt    file  io=in ext=pt,pth  # Checkpoint de SoundStream (omitir si --use-encodec)
+--semantic-ckpt file  io=in ext=pt,pth required  # Checkpoint del SemanticTransformer
+--coarse-ckpt   file  io=in ext=pt,pth required  # Checkpoint del CoarseTransformer
+--fine-ckpt     file  io=in ext=pt,pth required  # Checkpoint del FineTransformer
+--text          str    # Descripción textual del audio a generar (requiere --has-condition)
+--prompt        file  io=in ext=wav  # Fichero de audio de referencia para continuar (audio…
+--output        file  default=generated.wav io=out ext=wav  # Fichero WAV de salida [generated.wav]
+--batch-size    int   default=1 min=0  # Número de muestras a generar en paralelo [1]
+--max-length    int   default=2048 min=0  # Longitud máxima de la secuencia generada en tokens [2048]
+--use-encodec   bool  default=false  # Usar EnCodec preentrenado (24 kHz) en lugar de SoundStream
+--seed          int   default=42  # Semilla aleatoria [42]
+--verbose       bool  default=false
+--dry-run       bool  default=false  # Mostrar configuración sin generar audio
+[continue]
+input           file  io=in ext=wav required  # Fichero de audio de referencia (.wav)
+--codec-ckpt    file  io=in ext=pt,pth
+--semantic-ckpt file  io=in ext=pt,pth required
+--coarse-ckpt   file  io=in ext=pt,pth required
+--fine-ckpt     file  io=in ext=pt,pth required
+--text          str
+--output        file  default=continued.wav io=out ext=wav
+--batch-size    int   default=1 min=0
+--max-length    int   default=2048 min=0
+--use-encodec   bool  default=false
+--seed          int   default=42
+--verbose       bool  default=false
+--dry-run       bool  default=false
+[info]
+checkpoint file  io=in ext=pt,pth required  # Ruta al fichero .pt a inspeccionar
+--verbose  bool  default=false  # Listar todos los tensores del state_dict
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── FLUJO TÍPICO DE USO ──

@@ -49,6 +49,41 @@ Opciones
                               sección en output/rhythm/
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--yaml         file  default=partitura.yaml io=in ext=yaml
+--output       file  default=output io=out
+--seccion      str    # Solo esta sección (ej: I, II)
+--frase        str    # Solo esta frase (ej: I.2)
+--preview      bool  default=false
+--completa     bool  default=false
+--validar      bool  default=false
+--estadisticas bool  default=false
+--diff         list  of=str
+--nueva-frase  str
+--compases     str
+--leitmotiv    str
+--render-audio bool  default=false
+--soundfont    file  io=in
+--csv          bool  default=false
+--sin-validar  bool  default=false
+--html         bool  default=false  # Genera esquema visual HTML de la obra
+--stems        bool  default=false  # Exporta un MIDI por instrumento en output/stems/
+--leitmotivs   bool  default=false  # Exporta un MIDI por leitmotiv en output/leitmotivs/
+--harmony      bool  default=false  # Exporta un MIDI de armonía por sección en output/harmony/
+--melody       bool  default=false  # Exporta un MIDI de melodía por sección en output/melody/
+--rhythm       bool  default=false  # Exporta un MIDI de ritmo (marcato+percusión) por sección en…
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python generar_midi.py                         # genera todas las secciones

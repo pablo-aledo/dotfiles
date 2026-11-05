@@ -128,6 +128,97 @@ Opciones
     --port PORT                 (defecto 8000)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[encode]
+--chamber   bool  default=false  # Música de cámara (piano+violín). Default: piano solo
+--composers str    # Lista separada por comas. Default: todos
+--replace   bool  default=false  # Recodificar aunque ya existan los .txt
+[split]
+--example          bool  default=false  # Usar los datos de ejemplo incluidos (ignora el resto de…
+--chordwise        bool  default=false  # Codificación chordwise
+--chamber          bool  default=false  # Música de cámara
+--small-note-range bool  default=false  # 38 notas
+--sample-freq      int   unit=Hz  # Frecuencia de muestreo
+--composers        str    # Compositores a incluir
+--tt-split         float default=0.1  # Fracción para test
+--sample           float default=1.0  # Fracción del corpus a usar
+--no-wait          bool  default=false  # Recodificar marcas wait (notewise)
+[train]
+--prefix       str   default=mod  # Prefijo para los archivos del modelo
+--load         str    # Nombre de modelo preentrenado desde el que continuar
+--level        enum  default=light values=light|med|full|extra  # Nivel del modelo cargado
+--train-folder dir   default=train io=in  # Subcarpeta de data/ con los datos de entrenamiento
+--test-folder  dir   default=test io=in  # Subcarpeta de data/ con los datos de validación
+--bs           int   default=32  # Batch size
+--bptt         int   default=200  # Back-prop through time
+--em-sz        int   default=400  # Tamaño de embedding
+--nh           int   default=600  # Neuronas ocultas por capa
+--nl           int   default=4  # Número de capas LSTM
+--min-freq     int   default=1 min=0 unit=Hz  # Frecuencia mínima de token
+--dropout      float default=1.0  # Multiplicador de dropout
+--epochs       int   default=3 min=0 unit=épocas  # Épocas por nivel de entrenamiento
+[generate]
+--model            file  io=in required  # Nombre del modelo (sin sufijo _light.pth, etc.)
+--output           file  io=out required  # Carpeta de salida dentro de data/output/
+--level            enum  default=light values=light|med|full|extra  # Nivel del modelo
+--size             int   default=2000  # Tokens a generar
+--bs               int   default=16  # Número de piezas a generar en paralelo
+--trunc            int   default=5  # Top-k para el muestreo
+--random-freq      float default=0.5 unit=Hz  # Fracción de pasos con muestreo aleatorio
+--sample-freq      int   unit=Hz  # Override de frecuencia de muestreo MIDI
+--chordwise        bool  default=false  # Usar codificación chordwise
+--small-note-range bool  default=false  # Rango de 38 notas
+--use-test-prompt  bool  default=false  # Usar prompts del conjunto de test
+--prompt-size      int    # Tamaño del prompt
+--train-folder     dir   default=train io=in
+--test-folder      dir   default=test io=in
+[critic-data]
+--model           file  io=in required
+--level           enum  default=light values=light|med|full|extra
+--num             int   default=1000  # Número de fragmentos falsos a generar
+--size            int   default=2000
+--bs              int   default=64
+--prefix          str   default=""  # Prefijo para los nombres de archivo
+--replace         bool  default=false  # Borrar y reemplazar datos existentes
+--use-test-prompt bool  default=false
+--tt-split        float default=0.1
+[critic]
+--model    file  io=in required
+--level    enum  default=light values=light|med|full|extra
+--pretrain bool  default=false  # Inicializar con los pesos del generador
+--epochs   int   default=3 min=0 unit=épocas
+--bs       int   default=32
+[composer-data]
+--model            file  io=in required  # Modelo generador del que tomar bptt y vocabulario
+--composers        str
+--chordwise        bool  default=false
+--chamber          bool  default=false
+--small-note-range bool  default=false
+--sample-freq      int   unit=Hz
+--tt-split         float default=0.05
+--sample           float default=1.0
+[composer]
+--model  file  io=in required
+--level  enum  default=light values=light|med|full|extra
+--epochs int   default=3 min=0 unit=épocas
+--bs     int   default=32
+[serve]
+--model       file  default=mod io=in
+--level       enum  default=light values=light|med|full|extra
+--random-freq float default=0.8 unit=Hz
+--trunc       int   default=2
+--port        int   default=8000
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Usar prompts del conjunto de test.

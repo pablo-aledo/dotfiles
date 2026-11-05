@@ -194,6 +194,47 @@ OPCIONES COMPLETAS:
                               Ej: --transition-beats 4
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi               file  io=in ext=mid  # MIDI de piano de entrada
+--voicing          enum  default=rules values=rules|greedy|ml  # Backend de voicing
+--candidates       int   default=1 min=0  # Candidatos por sección para revisión
+--review           bool  default=false  # Revisión humana interactiva de candidatos
+--sections         str   default=auto  # Número exacto de secciones
+--min-bars         int   default=2 min=0 unit=compases  # Mínimo de compases por sección
+--template         enum  default=chamber values=strings_only|chamber|full  # Plantilla orquestal
+--library          enum  default=nucleus values=nucleus|metropolis|generic  # Library de samples /…
+--no-perc          bool  default=false  # Sin percusión orquestal
+--no-ks            bool  default=false  # Sin keyswitches
+--no-cc            bool  default=false  # Sin CC1/CC11
+--humanize         float default=0.1 min=0.0 max=1.0 typical=0..1  # Micro-jitter de timing 0.0–1.0
+--output           file  io=out  # Nombre base de salida
+--split            bool  default=false  # Exportar también el MIDI de voces (Melody/CP/Acc/Bass)
+--fingerprints     bool  default=false  # Exportar fingerprints JSON por sección
+--prefs            str   default=preferences.jsonl
+--model            file  default=voicing_ranker.pkl io=in ext=pkl
+--train            bool  default=false  # Entrenar ranker ML y salir
+--stats            bool  default=false  # Mostrar estadísticas de preferencias y salir
+--caracter         str
+--transition-beats float default=0.0 unit=tiempos  # Suaviza el CC1 (expresión) y vel_scale en los…
+--review-dir       dir   io=in  # Directorio para MIDIs de revisión
+--soundfont        file  io=in  # Ruta al .sf2 para mostrar comandos timidity
+--no-chord         bool  default=false  # No exportar MIDI del acorde solo en revisión
+--no-orch-preview  bool  default=false  # No exportar MIDI orquestado por sección en revisión
+--no-strings-only  bool  default=false  # Excluir strings_only de los candidatos de revisión
+--debug            bool  default=false
+--verbose          bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   ───────────────

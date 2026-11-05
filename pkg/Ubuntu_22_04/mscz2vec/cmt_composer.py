@@ -206,6 +206,82 @@ Opciones
     --program N                 Programa MIDI para la melodía (0=piano,
                                 40=violín, 73=flauta...) (defecto 0)
     --checkpoint N
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[inspect]
+--input file  io=in required
+[convert]
+--input-dir     dir   io=in required
+--output-dir    dir   io=out required
+--melody-track  int   default=-1  # Índice de la pista melódica (-1 = detección automática)
+--chord-voices  int   default=4  # Máximo de notas simultáneas en el acorde
+--bpm           float default=0.0 unit=BPM  # BPM forzado (0 = estimar desde el MIDI)
+--exclude-drums bool  default=false  # Excluir pistas de percusión del acompañamiento
+--exclude-bass  bool  default=false  # Excluir pistas con pitch medio < 48 (bajo)
+[prepare]
+--input-dir     dir   io=in required
+--output-dir    dir   io=out required
+--num-bars      int   default=8 min=0 unit=compases
+--frame-per-bar int   default=16  # Frames por compás (16 = corchea en 4/4)
+--pitch-range   int   default=48  # Rango de alturas (48=4 octavas, 128=todo el teclado)
+--bpm           float default=120.0 unit=BPM
+--shift         bool  default=false  # Transponer a las 12 tonalidades (necesario para fase 1)
+--report        bool  default=false
+[train]
+--data-dir             dir   io=in required
+--model-dir            dir   io=in required
+--phase                enum  values=rhythm|pitch required  # rhythm: fase 1 (RD solo) | pitch: fase…
+--epochs               int   default=100 min=0 unit=épocas
+--batch-size           int   default=64 min=0
+--lr                   float default=0.0001
+--num-bars             int   default=8 min=0 unit=compases
+--frame-per-bar        int   default=16
+--restore-epoch        int   default=-1  # Continuar desde este checkpoint (cualquier fase)
+--restore-rhythm-epoch int   default=-1  # Cargar solo el RD desde este checkpoint (inicio fase 2)
+--patience             int   default=20  # Early stopping: parar si eval no mejora en N epochs…
+[sample]
+--model-dir  dir   io=in required
+--chord-midi file  io=in ext=mid required  # MIDI con 2 pistas; los acordes se leen de la pista 1
+--output     file  default=sample_out.mid io=out ext=mid
+--topk       int   default=5  # Top-k muestreo (None = greedy)
+--bars       int   default=8 min=0 unit=compases
+--bpm        float default=120.0 unit=BPM
+--prime-midi file  io=in ext=mid  # MIDI de referencia para usar como seed inicial
+--prime-bars int   default=2 min=0 unit=compases
+--checkpoint int    # Época concreta del checkpoint
+[encode]
+--input         file  io=in required
+--output        file  io=out
+--num-bars      int   default=8 min=0 unit=compases
+--frame-per-bar int   default=16
+--pitch-range   int   default=48
+--bpm           float default=120.0 unit=BPM
+[round-trip]
+--input         file  io=in required
+--output        file  default=round_trip_out.mid io=out ext=mid
+--num-bars      int   default=8 min=0 unit=compases
+--frame-per-bar int   default=16
+--pitch-range   int   default=48
+--bpm           float default=120.0 unit=BPM
+[compose]
+--model-dir  dir   io=in required
+--chord-midi file  io=in ext=mid required  # MIDI de acordes de referencia (se rota si es necesario)
+--output     file  default=composition.mid io=out ext=mid
+--fragments  int   default=8  # Número de fragmentos a generar y encadenar
+--prime-bars int   default=2 min=0 unit=compases  # Compases del fragmento anterior usados como seed
+--topk       int   default=5
+--program    int   default=0 min=0 max=127  # Programa MIDI para la melodía (0=piano, 40=violín…
+--checkpoint int
+@end
 """
 
 import argparse

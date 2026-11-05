@@ -120,6 +120,60 @@ Opciones
   inspect
     --data-dir DIR
     --model-dir DIR
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[prepare]
+--input-dir  dir   io=in required
+--output-dir dir   io=out required
+--scheme     str   required
+[train]
+--data-dir     dir   io=in required
+--model-dir    dir   io=in required
+--dim          int   default=256
+--layers       int   default=6
+--heads        int   default=4
+--max-seq      int   default=512 min=0
+--dropout      float default=0.1
+--batch-size   int   default=8 min=0
+--epochs       int   default=100 min=0 unit=épocas
+--lr           float default=0.0003
+--label-smooth float default=0.1
+--patience     int   default=20  # early stopping (0 = desactivado)
+--seed         int   default=42
+--resume       bool  default=false
+[compose]
+--model-dir      dir   io=in required
+--output         file  io=out required
+--length         int   default=512  # tokens a generar tras el prime (si lo hay)
+--temperature    float default=1.0 min=1e-08 typical=0..1
+--ticks-per-beat int   default=480 unit=ticks
+--seed           int   default=42
+--prime          file  io=in ext=mid  # MIDI de referencia: tokeniza sus primeros tokens y continúa…
+--prime-length   int    # nº máx. de tokens del --prime a usar (por defecto, todos los que quepan…
+[infill]
+--model-dir      dir   io=in required
+--input          file  io=in ext=mid required
+--track          int   required  # índice de pista (0-based, según el orden de pistas del --input)…
+--program        int   min=0 max=127  # programa MIDI para una pista nueva (solo si --track no…
+--drums          bool  default=false  # la pista nueva es de batería
+--output         file  io=out required
+--max-length     int   default=256 min=0  # tope de tokens generados antes de forzar el corte si el…
+--temperature    float default=1.0 min=1e-08 typical=0..1
+--ticks-per-beat int   default=480 unit=ticks
+--seed           int   default=42
+[inspect]
+--data-dir  dir   io=in
+--model-dir dir   io=in
+@end
 """
 
 import argparse

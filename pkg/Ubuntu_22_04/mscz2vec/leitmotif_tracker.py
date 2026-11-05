@@ -87,6 +87,65 @@ OPCIONES GLOBALES:
     --mutator MUTATOR           Ruta a mutator.py
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--bank    str   default=leitmotif_bank.json
+--verbose bool  default=false alias=-v
+--bank    str
+--verbose str   alias=-v
+[register]
+midi               file  io=in ext=mid required  # Archivo MIDI del motivo
+--name             str   required  # Nombre semántico del leitmotif
+--tags             list  of=str  # Etiquetas semánticas (ej: pérdida tristeza)
+--instruments      list  of=str  # Instrumentos preferidos (ej: cello viola)
+--description      str   default=""  # Descripción libre
+--tension-affinity enum  default=mid values=low|mid|high  # Afinidad de tensión
+[show]
+name str   required  # Nombre del motivo
+[plan]
+narrator_plan file  io=in ext=json required  # Archivo obra_plan.json de narrator
+--motifs      list  of=str  # Motivos a sembrar
+--auto        bool  default=false  # Planificación automática sin confirmación
+--output      file  default=leitmotif_schedule.json io=out ext=json  # Archivo de salida
+[suggest]
+midi     file  io=in ext=mid required  # MIDI de la sección a analizar
+--output file  default=leitmotif_schedule.json io=out ext=json
+[inject]
+midi                  file  io=in ext=mid required  # MIDI destino (informativo)
+schedule              str   required  # Schedule JSON (de plan o suggest)
+--output-dir          dir   default=leitmotifs_out io=out  # Directorio de salida
+--variation-engine    file  io=in  # Ruta a variation_engine.py
+--export-stitcher     str    # Exportar schedule para stitcher.py
+--export-orchestrator str    # Exportar hints para orchestrator.py
+[trace]
+midi        file  io=in ext=mid required  # MIDI de la obra completa
+--threshold float default=0.55 min=0 max=1  # Umbral de similitud 0-1
+--output    file  io=out ext=json  # Guardar resultado en JSON
+[report]
+midi        file  io=in ext=mid required  # MIDI de la obra completa
+--threshold float default=0.55
+--output    file  io=out ext=json  # Guardar resultado en JSON
+[propagate]
+--instruction str   required  # Instrucción semántica (ej: 'más oscuro')
+--motifs      list  of=str  # Motivos a mutar
+--mutator     file  io=in  # Ruta a mutator.py
+[from-theorist]
+theorist_json file  io=out ext=json required  # Archivo .theorist.json
+[from-harvest]
+midi   file  io=in ext=mid required  # Archivo .motif_NN.mid de harvester
+--name str   required  # Nombre del leitmotif
+--tags list  of=str
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python leitmotif_tracker.py register motivo.mid --name "destino"

@@ -74,6 +74,37 @@ Opciones
   --no-color
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midis            list  of=file io=in  # MIDIs de sección (orden fijo)
+--section        str    # Sección: "label:emotion:path" (repetible)
+--emotions       str    # Emociones separadas por coma (para MIDIs posicionales)
+--mode           enum  default=glue values=glue|recombine|auto
+--motif-seed     file  io=in ext=mid  # MIDI con el motivo semilla
+--key            str    # Tonalidad hogar, ej: D, F# minor
+--template       enum  default=auto values=piano|string_quartet|strings|chamber|full|auto
+--glue           str   default=""  # motif=,harmony=,rhythm=,instrumentation=
+--glue-preset    enum  values=sutil|medio|fuerte  # Preset de pegamento: sutil|medio|fuerte
+--bridge-bars    int   default=2 min=0 unit=compases
+--bridge         enum  default=auto values=morph|pivot|auto
+--recombine-bars int   default=8 min=0 unit=compases  # compases por sección en modo recombine
+--output         file  default=obra_unificada.mid io=out ext=mid
+--seed           int   default=1
+--report         bool  default=false
+--dry-run        bool  default=false  # Mostrar el plan (ADN, tonal, motivo) sin generar MIDI
+--verbose        bool  default=false
+--no-color       bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # 3 secciones con emoción indicada, tonalidad y plantilla fijas

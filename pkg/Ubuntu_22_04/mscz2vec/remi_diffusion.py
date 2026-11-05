@@ -111,6 +111,76 @@ OPCIONES COMUNES DE TRAIN:
     --verbose
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[convert]
+input     file  io=in ext=mid required  # MIDI o directorio de MIDIs
+--vocab   file  io=in ext=json  # Ruta del vocabulario JSON
+--output  file  io=out ext=json  # Guardar tokens en JSON
+--verbose bool  default=false
+[train]
+data_dir       dir   io=in required  # Directorio con MIDIs de entrenamiento
+--model-dir    dir   io=in required
+--vocab        str
+--canvas-len   int   default=48
+--history-bars int   default=8 min=0 unit=compases
+--d-model      int   default=512
+--n-layer      int   default=8 min=0
+--n-head       int   default=8 min=0
+--cond-dropout float default=0.15  # Prob. de sustituir el acorde por NULL_COND (CFG training) [0.15]
+--epochs       int   default=300 min=0 unit=épocas
+--batch-size   int   default=8 min=0
+--lr           float default=0.0002
+--patience     int   default=30
+--resume       bool  default=false
+--small        bool  default=false  # Modelo reducido: 4 capas, d=256 (CPU-friendly)
+--seed         int   default=42
+--verbose      bool  default=false
+[generate]
+--model-dir         dir   io=in required
+--chords            str    # Progresión objetivo, ej. "C:maj G:maj A:min F:maj" (se cicla para…
+--bars              int   default=16 min=0 unit=compases
+--steps             int   default=20 min=0  # Pasos de denoising por compás
+--guidance-scale    float default=3.0
+--remask-max        float default=0.15
+--temperature       float default=1.0 typical=0..1
+--topk              int   default=0
+--repair-grammar    bool  default=false  # Reparar gramática REMI del canvas generado [on]
+--no-repair-grammar bool  default=true  # Desactivar la reparación gramatical (para depuración)
+--output            file  io=out
+--seed              int   default=42
+--verbose           bool  default=false
+[continue]
+prompt              file  io=in ext=mid required  # MIDI de prompt
+--model-dir         dir   io=in required
+--chords            str
+--bars              int   default=16 min=0 unit=compases
+--steps             int   default=20 min=0
+--guidance-scale    float default=3.0
+--remask-max        float default=0.15
+--temperature       float default=1.0 typical=0..1
+--topk              int   default=0
+--repair-grammar    bool  default=false  # Reparar gramática REMI del canvas generado [on]
+--no-repair-grammar bool  default=true  # Desactivar la reparación gramatical (para depuración)
+--output            file  io=out
+--seed              int   default=42
+--verbose           bool  default=false
+[inspect]
+--input      file  io=in required
+--vocab      str
+--canvas-len int   default=48
+--bars-show  int   default=8 min=0 unit=compases
+--verbose    bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Preparar corpus (idéntico esquema que remi.py, con acordes obligatorio)

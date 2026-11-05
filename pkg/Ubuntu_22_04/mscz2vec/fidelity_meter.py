@@ -48,6 +48,48 @@ OPCIONES COMUNES:
                                 (defecto 25)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--tol      float default=0.25
+--window   float default=0.5
+--ngram    int   default=2
+--json     file  io=out ext=json
+--no-color bool  default=false
+[compare]
+original   file  io=in required
+candidate  str   required
+--timeline bool  default=false
+[batch]
+dirs   list  of=dir io=in required
+--cand str
+--orig str   default=original.mid
+--md   str
+--csv  file  io=out ext=csv
+--top  int   default=25 min=0  # filas a mostrar (las peores si hay más)
+[rank]
+original   file  io=in required
+candidates list  of=str required
+[gate]
+original        file  io=in required
+candidate       str   required
+--min-melody    float
+--min-rhythm    float
+--min-chroma    float
+--min-score     float
+--require-meta  bool  default=false
+--require-instr bool  default=false
+--length-range  list  of=float
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python fidelity_meter.py compare original.mid version.mid

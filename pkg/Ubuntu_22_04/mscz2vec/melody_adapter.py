@@ -59,6 +59,33 @@ Opciones
   --seed SEED                 Semilla aleatoria (default: 42)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+input           file  io=in ext=mid required  # MIDI de melodía a adaptar
+--chords        str    # Progresión de acordes en texto (ver formato arriba)
+--chords-midi   file  io=in ext=mid  # Pista de acordes en MIDI
+--mode          enum  default=smooth values=strict|smooth|jazz|rewrite  # Modo de adaptación
+--strength      float default=0.8 min=0 max=1 typical=0..1  # Agresividad de la adaptación 0-1
+--bars          int   min=0 unit=compases  # Compases de salida
+--key           str    # Tonalidad forzada, e.g. "D minor" o "F# major"
+--beats-per-bar int   unit=tiempos  # Pulsos por compás
+--acc-style     enum  default=auto values=auto|block|arpeggio|alberti|waltz|jazz_voicing
+--no-acc        bool  default=false  # No generar acompañamiento, solo la melodía adaptada
+--out-dir       dir   io=out  # Carpeta de salida
+--report        bool  default=false  # Guardar JSON con análisis de compatibilidad
+--seed          int   default=42  # Semilla aleatoria
+--verbose       bool  default=false  # Informe detallado por stdout
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python melody_adapter.py melodia.mid --chords "C Am F G"

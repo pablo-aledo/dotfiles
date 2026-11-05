@@ -137,6 +137,48 @@ DEPENDENCIAS
   LLM Claude: anthropic
   LLM OpenAI: openai
   Opcional:   music21 (detección de acordes mejorada desde MIDI)
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--engine              enum  default=chord_guided values=chord_guided|llm  # Motor de generación
+--key                 str   default=C
+--mode                str   default=auto
+--bars                int   default=16 min=0 unit=compases
+--tempo               int   default=120
+--time-sig            str   default=4/4
+--profile             str   default=serene
+--rhythm              str   default=flowing
+--contour             enum  default=auto values=auto|arch|ascending|descending|wave|plateau|inverted|erratic|custom
+--contour-values      str
+--tension-curve       str    # Curva de tensión: '0.2,0.5,0.8,0.5'
+--range               list  of=int
+--chords              str    # Progresión en texto: 'Am:2 G:2 F:2 E7:2'
+--chords-json         file  io=out ext=json  # Progresión desde .chords.json
+--chords-midi         file  io=in ext=mid  # Extraer acordes del track de armonía de un MIDI
+--chords-midi-track   int   default=2  # Índice del track de armonía
+--chords-midi-channel int   default=1  # Canal MIDI de armonía
+--chords-midi-window  float default=0.5 unit=tiempos  # Ventana mínima de agrupación en beats
+--llm-provider        enum  default=claude values=claude|openai
+--llm-mode            enum  default=direct values=direct|fewshot
+--llm-model           file  io=in  # Modelo LLM concreto
+--llm-fewshot-bank    str    # Corpus para ejemplos few-shot (carpeta de MIDIs)
+--llm-fewshot-n       int   default=3  # Número de ejemplos few-shot en el prompt
+--output              file  default=melody_conditioned.mid io=out ext=mid
+--include-chords      bool  default=false  # Incluir track de acordes en el MIDI de salida
+--candidates          int   default=3 min=0
+--seed                int   default=42
+--verbose             bool  default=false
+--dry-run             bool  default=false
+@end
 """
 
 import sys

@@ -110,6 +110,61 @@ Opciones
     --verbose              Detalle de la extracción.
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[train]
+--domain-a        str   required
+--domain-b        str   required
+--model           file  default=cycle_gan.pkl io=in ext=pkl
+--resolution      int   default=48 min=0
+--pitch-range     int    # Notas MIDI centradas en C4 (None = 128 completo)
+--disable-roles   list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--pca-dim         int   default=0  # Reducir con PCA (0 = sin PCA)
+--solver          enum  default=ridge values=ridge|knn
+--alpha           float default=1.0 typical=0..1
+--k-neighbors     int   default=5
+--lambda-cycle    float default=10.0
+--lambda-identity float default=5.0
+--iters           int   default=100 min=0
+--verbose         bool  default=false
+[transform]
+input                file  io=in ext=mid required  # MIDI de entrada
+--model              file  io=in required
+--direction          enum  default=AtoB values=AtoB|BtoA
+--intensity          float default=1.0 typical=0..1
+--output             file  io=out
+--bars               int   min=0 unit=compases
+--candidates         int   default=3 min=0
+--no-percussion      bool  default=false
+--export-fingerprint bool  default=false
+--seed               int   default=42
+--verbose            bool  default=false
+[cycle]
+input           file  io=in ext=mid required  # MIDI de entrada
+--model         file  io=in required
+--direction     enum  default=AtoB values=AtoB|BtoA
+--intensity     float default=1.0 typical=0..1
+--output-ab     file  io=out
+--output-aba    file  io=out
+--bars          int   min=0 unit=compases
+--candidates    int   default=2 min=0
+--no-percussion bool  default=false
+--seed          int   default=42
+--verbose       bool  default=false
+[analyze]
+input     file  io=in ext=mid required  # MIDI a analizar
+--model   file  io=in required
+--verbose bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Entrenar con dos corpus:

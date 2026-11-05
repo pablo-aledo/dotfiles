@@ -172,6 +172,66 @@ Opciones
     --sr SR                     Sample rate (default: 44100)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--sr int   default=44100  # Sample rate
+[match]
+target_wav         file  io=in ext=wav required  # WAV objetivo a reproducir
+--engine           str   default=fm2  # Motor de síntesis
+--fitness          enum  default=spectral values=spectral|reference  # Función de distancia
+--fitness-backend  enum  default=spectral values=spectral|latent  # Backend de audio_reference_score…
+--note             str    # Nota MIDI o nombre (p.ej. 60, C4). Default: detección automática de…
+--pitch-fmin       float default=40.0 unit=Hz  # Frecuencia mínima buscada en la detección de pitch
+--pitch-fmax       float default=2000.0 unit=Hz  # Frecuencia máxima buscada en la detección de pitch
+--pitch-confidence float default=0.4  # Confianza mínima del pico de autocorrelación para aceptar…
+--duration         float unit=s  # Duración en segundos
+--velocity         float default=1.0 min=0 max=1  # Velocity 0-1
+--generations      int   default=60 min=0  # Generaciones
+--pop              int   default=40 min=0  # Tamaño de población
+--elite            int   default=4  # Individuos élite por generación
+--mutation-rate    float default=0.25  # Probabilidad de mutar cada gen
+--mutation-amount  float default=0.12 typical=0..1  # Amplitud de mutación, fracción del rango del…
+--strands          int   default=1  # Nº de poblaciones independientes, cada una con su semilla
+--strand-out-dir   dir   io=out  # Si --strands > 1, guarda el ganador de cada strand aquí
+--seed             int   default=0  # Semilla base
+--sr               int    # Sample rate de trabajo
+--out              file  io=out ext=json required  # patch.json de salida (mejor de todos los…
+--preview          file  io=in ext=wav  # WAV de previsualización del mejor patch
+--json             file  io=out ext=json  # Informe opcional (fitness, params, tiempos)
+--quiet            bool  default=false  # No imprimir progreso por generación
+[render]
+patch_json file  io=out ext=json required
+--note     str    # Sobreescribe la nota del patch
+--duration float unit=s  # Sobreescribe la duración
+--velocity float  # Sobreescribe la velocity
+--sr       int   default=44100  # Sample rate
+--out      file  io=out required
+[mutate]
+patch_json file  io=out ext=json required
+-n         int   default=8  # Nº de variantes
+--amount   float default=0.15 typical=0..1  # Amplitud de mutación, fracción del rango
+--seed     int   default=0
+--render   bool  default=false  # También renderiza cada variante a WAV
+--sr       int   default=44100
+--out-dir  dir   io=out required
+[info]
+patch_json file  io=out ext=json required
+[pitch]
+wav                file  io=in ext=wav required
+--pitch-fmin       float default=40.0
+--pitch-fmax       float default=2000.0
+--pitch-confidence float default=0.4  # Solo para el aviso de umbral
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     genopatch.py match target.wav --engine fm2 --note C4 --out patch.json \

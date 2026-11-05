@@ -100,6 +100,37 @@ OPCIONES COMUNES:
                               comparación exacta (equivalente a 1.0).
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi             file  io=in ext=mid required  # Fichero MIDI de entrada
+grammar          str    # [modo compose] Fichero de gramática (.txt)
+--learn          bool  default=false  # Activar modo learn: extrae la gramática del MIDI dado
+--learn-gestures bool  default=false  # Activar modo learn-gestures: aprende un codebook de gestos…
+--out            file  io=out ext=mid alias=-o  # Fichero de salida: MIDI (compose) o gramática…
+--tempo          int    # Tempo BPM
+--channel        int   default=0  # Canal MIDI para notas ABC
+--velocity       int   default=80 min=1 max=127  # Velocidad para notas ABC
+--tpb            int    # Ticks por negra en salida
+--min-pair       int   default=2 min=0  # Frecuencia mínima de un par para crear regla
+--max-rules      int   min=0  # Número máximo de reglas a generar
+--merge-bars     bool  default=false  # Fusionar compases consecutivos en rangos (en la raíz)
+--seed-grammar   file  io=in ext=txt  # Gramática semilla (.txt) cuyas reglas se aplican antes de…
+--fuzzy          float typical=0.85..0.95  # Activar comparación difusa de compases. THRESHOLD es…
+--quantize       str    # Cuantizar onsets y duraciones a una rejilla (en negras) antes de…
+--track          int    # Índice del track del MIDI a usar
+--report         bool  default=false  # Mostrar informe detallado
+--verbose        bool  default=false  # Traza paso a paso
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO — MODO COMPOSE ──

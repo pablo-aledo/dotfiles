@@ -46,6 +46,30 @@ Opciones
                               por stdout
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi              file  io=in ext=mid required  # Ruta al archivo MIDI de entrada
+--compas-inicio   int   default=1  # Compás real de inicio en la partitura
+--bpm             float unit=BPM  # Tempo en BPM
+--compas          str   default=4/4  # Compás de la obra, ej: 4/4 3/4
+--modo            enum  default=melodia values=melodia|armonia|marcato|todos  # Qué extraer
+--track           int    # Índice del track a usar como melodía
+--umbral-silencio float default=0.0625 unit=tiempos  # Duración mínima de nota en beats
+--redondear       float default=0.25  # Cuantizar beats a múltiplo de F
+--preview         bool  default=false  # Mostrar estructura sin generar YAML
+--output          file  io=out ext=yaml,yml alias=-o  # Escribe el YAML generado en FILE (crea el…
+--verbose         bool  default=false  # Informe detallado del análisis
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python midi2yaml.py fragmento.mid

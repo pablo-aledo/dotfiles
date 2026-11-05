@@ -29,6 +29,9 @@ CHECKS DE LINT:
   example-args  Ejemplos de cabecera con subcomando/flag/valor inválido
   missing-refs  Ficheros .py citados en cabeceras que no existen
   counts        Documentos que afirman otro nº de herramientas
+  spec-vs-code  Líneas de @params que contradicen al argparse (tipo, default,
+                values, required, rangos incoherentes, parámetros inexistentes)
+  spec-missing  Flags sin línea en @params; herramientas sin bloque @params
 
 LIMITACIONES: build/list/find/show/lint son análisis estático (ast): no ven
 flags dinámicos (bucles, sys.argv a mano) ni choices calculadas al ejecutar (salvo listas por comprensión y
@@ -48,6 +51,37 @@ Modos de uso
   examples Valida los ejemplos de las cabeceras (--run: los ejecuta)
   smoke    --help de cada herramienta y flujos mínimos con asserts (--deep)
   weights  Pesos, módulos, programas y red que necesita cada herramienta
+  params   Parámetros normalizados de una herramienta (spec @params + argparse):
+           tipo, default, rango, enumerados, unidades… para interfaces y agentes
+
+────────────────────────────────────────────────────────────────────────────
+Spec de parámetros (@params v1)
+────────────────────────────────────────────────────────────────────────────
+Cada herramienta puede llevar en su cabecera un bloque delimitado por las líneas
+«@params v1» y «@end», con una línea por parámetro y secciones por subcomando:
+
+  [*]                      globales (o script sin subcomandos); [generate] = ese subcomando
+  <nombre> <tipo> [clave=valor …] [# descripción]
+
+  nombre   --flag (el primero largo) o el nombre del argumento posicional
+  tipo     int float str bool enum file dir list kv
+  claves   of=T          tipo de los elementos si type=list
+           default=V     valor por defecto (bool: true|false)
+           min=N max=N   cotas inclusivas; ausentes = sin límite conocido
+           typical=a..b  rango cómodo, o lista a,b,c, para sliders y sugerencias
+           unit=U        compases, tiempos, semitonos, s, ms, BPM, Hz, dB, ticks…
+           values=a|b|c  enumerados (type=enum)
+           io=in|out  ext=mid,json   para file/dir: lectura/escritura y extensiones
+           format="…"    microsintaxis de un str (p. ej. "1-4:right,5-12:left", "K=V")
+           required      obligatorio        advanced   oculto por defecto en la GUI
+           when=--x:v    solo relevante si --x vale v
+           excludes=--a,--b   mutuamente excluyente con esos flags
+           alias=-o,--out     otros nombres del mismo parámetro
+  Los valores con espacios o «#» van entre comillas. «#» abre la
+  descripción. Tipo, default, values y required se verifican contra el argparse
+  con «lint --check spec-vs-code»; el resto es información que el código no tiene.
+  «params TOOL --json» devuelve la fusión spec + argparse (incluso sin bloque,
+  con los tipos que implica el parser) en un formato estable.
 
 ────────────────────────────────────────────────────────────────────────────
 Opciones
@@ -81,6 +115,63 @@ OPCIONES COMUNES:
     --strict                    rc=1 si falta algo obligatorio
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--dir      dir   io=in  # Directorio de la suite
+--index    str    # Caché del índice
+--rebuild  bool  default=false  # Ignorar la caché
+--json     bool  default=false  # Salida en JSON
+--no-color bool  default=false
+[build]
+--out file  io=out  # Escribe además el índice (indentado) en este fichero
+[list]
+--category enum  values=analysis|harmony|melody|rhythm|generation|transform|expression|evaluation|orchestration|structure|education|other
+--grep     str    # Filtra por texto en nombre/título/propósito
+[find]
+query list  of=str required
+--top int   default=8 min=0
+[show]
+tool   str   required
+--flag str    # Comprueba si define este flag (rc=2 si no existe)
+[lint]
+--check    list  of=str
+--severity enum  values=error|warn|info  # Severidad mínima a mostrar
+--strict   bool  default=false  # rc=1 si hay errores o avisos
+[params]
+tool  str   required
+--sub str    # Solo este subcomando ('*' = globales)
+[examples]
+tool      list  of=str  # Herramientas a revisar
+--run     bool  default=false  # Ejecuta los ejemplos en un directorio temporal con MIDIs sintéticos
+--all     bool  default=false  # Muestra también los ejemplos correctos
+--timeout int   default=20  # Segundos por ejemplo con --run
+--jobs    int   default=4  # Ejemplos en paralelo con --run
+--strict  bool  default=false  # rc=1 si hay ejemplos inválidos o que revientan
+[smoke]
+tool        list  of=str  # Herramientas a revisar
+--subs      bool  default=false  # Prueba también `<sub> --help` de cada subcomando
+--deep      bool  default=false  # Añade los flujos mínimos con asserts (entrenan 1-2 épocas)
+--deep-only bool  default=false  # Solo los flujos deep
+--keep      bool  default=false  # Conserva los directorios temporales de los flujos deep
+--timeout   int   default=30  # Segundos por --help
+--jobs      int   default=4  # Comprobaciones en paralelo
+--strict    bool  default=false  # rc=1 si algo revienta o falla
+[weights]
+tool      list  of=str  # Herramientas a revisar
+--all     bool  default=false  # Muestra también lo que sí está disponible
+--network bool  default=false  # Incluye las herramientas que usan red/tokens/APIs
+--strict  bool  default=false  # rc=1 si falta algo obligatorio
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python suite_index.py build --dir . --out suite_index.json
@@ -93,6 +184,10 @@ Ejemplos de uso
   python suite_index.py examples [tool ...] [--run] [--all] [--timeout 20]
   python suite_index.py smoke [tool ...] [--subs] [--deep | --deep-only]
   python suite_index.py weights [tool ...] [--all] [--network]
+  python suite_index.py params morpher
+  python suite_index.py params morpher --json
+  python suite_index.py params leitmotif_tracker --sub register --json
+  python suite_index.py lint --check spec-vs-code spec-missing
 
 ────────────────────────────────────────────────────────────────────────────
 Dependencias
@@ -112,7 +207,7 @@ from pathlib import Path
 from collections import defaultdict, OrderedDict
 
 VERSION = "1.1"
-INDEX_SCHEMA = 2
+INDEX_SCHEMA = 3
 
 _USE_COLOR = sys.stdout.isatty()
 
@@ -372,6 +467,315 @@ def _is_output_opt(opt: str) -> bool:
     return bool(_OUT_RE.match(opt))
 
 
+SPEC_TYPES = ("int", "float", "str", "bool", "enum", "file", "dir", "list", "kv")
+SPEC_KEYS = ("default", "min", "max", "typical", "unit", "values", "of", "io", "ext",
+             "format", "required", "advanced", "when", "excludes", "alias")
+_SPEC_FLAGS = ("required", "advanced")
+
+
+def _spec_split_desc(line):
+    """Separa «cuerpo # descripción» respetando comillas."""
+    q = None
+    for i, ch in enumerate(line):
+        if q:
+            if ch == q:
+                q = None
+        elif ch in "\"'":
+            q = ch
+        elif ch == "#" and (i == 0 or line[i - 1] in " \t") and (i + 1 == len(line) or line[i + 1] in " \t"):
+            return line[:i].rstrip(), line[i + 1:].strip()
+    return line.rstrip(), ""
+
+
+def _spec_tokens(body):
+    import shlex
+    return shlex.split(body, comments=False, posix=True)
+
+
+def _spec_num(s):
+    try:
+        return int(s)
+    except (TypeError, ValueError):
+        try:
+            return float(s)
+        except (TypeError, ValueError):
+            return None
+
+
+def parse_spec(doc):
+    """Extrae el bloque @params de un docstring. Devuelve
+    {'version': 1, 'params': [...], 'errors': [(linea, msg)], 'present': bool}."""
+    import re
+    out = {"version": None, "params": [], "errors": [], "present": False}
+    lines = (doc or "").splitlines()
+    start = None
+    for i, l in enumerate(lines):
+        m = re.match(r"^\s*@params(?:\s+v(\d+))?\s*$", l)
+        if m:
+            start, out["version"] = i, int(m.group(1) or 1)
+            out["present"] = True
+            break
+    if start is None:
+        return out
+    sub = "*"
+    ended = False
+    for j in range(start + 1, len(lines)):
+        raw = lines[j].strip()
+        if not raw or raw.startswith("#"):
+            continue
+        if raw == "@end":
+            ended = True
+            break
+        m = re.match(r"^\[(.*)\]\s*(?:#.*)?$", raw)
+        if m:
+            sub = m.group(1).strip() or "*"
+            continue
+        body, desc = _spec_split_desc(raw)
+        try:
+            tok = _spec_tokens(body)
+        except ValueError as e:
+            out["errors"].append((j - start, f"comillas sin cerrar ({e})"))
+            continue
+        if len(tok) < 2:
+            out["errors"].append((j - start, "línea incompleta (falta nombre o tipo)"))
+            continue
+        p = {"sub": "" if sub == "*" else sub, "name": tok[0], "type": tok[1], "desc": desc, "line": j - start}
+        if p["type"] not in SPEC_TYPES:
+            out["errors"].append((j - start, f"tipo desconocido «{p['type']}»"))
+        for t in tok[2:]:
+            if "=" in t:
+                k, v = t.split("=", 1)
+                if k not in SPEC_KEYS:
+                    out["errors"].append((j - start, f"clave desconocida «{k}»"))
+                    continue
+                p[k] = v
+            elif t in _SPEC_FLAGS:
+                p[t] = True
+            else:
+                out["errors"].append((j - start, f"token no válido «{t}»"))
+        for k in ("min", "max"):
+            if k in p:
+                n = _spec_num(p[k])
+                if n is None:
+                    out["errors"].append((j - start, f"{k}={p[k]} no es numérico"))
+                    del p[k]
+                else:
+                    p[k] = n
+        if "values" in p:
+            p["values"] = p["values"].split("|")
+        for k in ("ext", "excludes", "alias"):
+            if k in p:
+                p[k] = [x for x in p[k].split(",") if x]
+        out["params"].append(p)
+    if not ended:
+        out["errors"].append((0, "falta la línea @end"))
+    return out
+
+
+def _attach_spec(flags, spec):
+    """Asocia a cada flag su línea de spec (misma sección y mismo nombre/alias)."""
+    for f in flags:
+        for p in spec["params"]:
+            if p.get("matched") or p["sub"] != f["sub"]:
+                continue
+            names = {p["name"]} | set(p.get("alias", []))
+            if names & set(f["opts"]):
+                p["matched"] = True
+                f["spec"] = {k: v for k, v in p.items() if k not in ("sub", "line", "matched", "desc")}
+                break
+
+
+def _spec_code_type(f):
+    """Tipo base y «lista» que implica el argparse de un flag."""
+    act, ch, nargs, ty = f.get("action"), f.get("choices"), f.get("nargs"), f.get("type")
+    listy = nargs in ("+", "*") or (isinstance(nargs, int) and not isinstance(nargs, bool) and nargs > 1)
+    if act in ("store_true", "store_false"):
+        return "bool", False
+    if act == "count":
+        return "int", False
+    if isinstance(ch, (list, tuple)) and ch:
+        return "enum", listy
+    if ty in ("int", "float"):
+        return ty, listy
+    return "str", listy
+
+
+def _spec_typed(v, t):
+    if v is None:
+        return None
+    if t == "bool":
+        return {"true": True, "false": False}.get(str(v).lower(), v)
+    if t in ("int", "float"):
+        n = _spec_num(v)
+        return n if n is not None else v
+    return v
+
+
+def _param_view(f):
+    """Vista normalizada de un flag (spec + código) para interfaces y agentes."""
+    sp = f.get("spec") or {}
+    base, listy = _spec_code_type(f)
+    longs = [o for o in f["opts"] if o.startswith("--")]
+    name = sp.get("name") or (f["opts"][0] if f["positional"] else (longs[0] if longs else f["opts"][0]))
+    t = sp.get("type") or ("list" if listy else base)
+    d = {"sub": f["sub"], "name": name, "opts": f["opts"], "positional": f["positional"],
+         "type": t, "source": "spec" if sp else "code"}
+    if t == "list":
+        d["of"] = sp.get("of") or base
+    df = sp["default"] if "default" in sp else f.get("default")
+    if df is not None:
+        d["default"] = _spec_typed(df, d.get("of") or t) if "default" in sp else df
+    elif f.get("action") in ("store_true", "store_false"):
+        d["default"] = f["action"] == "store_false"
+    req = bool(sp.get("required")) or bool(f.get("required")) or \
+        (f["positional"] and f.get("nargs") not in ("?", "*"))
+    if req:
+        d["required"] = True
+    vals = sp.get("values") or ([str(x) for x in f["choices"]] if isinstance(f.get("choices"), (list, tuple)) else None)
+    if vals:
+        d["values"] = vals
+    for k in ("min", "max", "typical", "unit", "io", "ext", "format", "when", "excludes"):
+        if k in sp:
+            d[k] = sp[k]
+    if sp.get("advanced"):
+        d["advanced"] = True
+    d["help"] = f.get("help") or ""
+    return d
+
+
+def cmd_params(args, idx):
+    t = _find_tool(idx, args.tool)
+    if not t:
+        print(f"[ERROR] herramienta '{args.tool}' no encontrada.", file=sys.stderr)
+        return 1
+    sp = t.get("spec") or {}
+    params = [_param_view(f) for f in t.get("flags", [])
+              if not set(f["opts"]) <= {"-h", "--help"}]
+    if args.sub is not None:
+        params = [p for p in params if p["sub"] == ("" if args.sub == "*" else args.sub)]
+    if args.json:
+        print(json.dumps({"tool": t["name"], "has_spec": bool(sp.get("present")),
+                          "spec_version": sp.get("version"),
+                          "subcommands": [n for n, _ in t.get("subcommands", [])],
+                          "params": params}, ensure_ascii=False, indent=1))
+        return 0
+    print(f"\n{_c('B')}{t['name']}{_c('R')}  ·  "
+          + ("spec @params v%s" % sp.get("version") if sp.get("present") else "sin bloque @params (tipos derivados del argparse)"))
+    cur = None
+    for p in params:
+        if p["sub"] != cur:
+            cur = p["sub"]
+            print(f"\n  [{cur or '*'}]")
+        bits = []
+        for k in ("default", "min", "max", "typical", "unit", "io", "ext", "format"):
+            if k in p:
+                v = p[k]
+                v = ("true" if v else "false") if isinstance(v, bool) else (",".join(map(str, v)) if isinstance(v, list) else v)
+                bits.append(f"{k}={v}")
+        if p.get("values"):
+            bits.append("values=" + "|".join(p["values"]))
+        if p.get("required"):
+            bits.append("required")
+        if p.get("advanced"):
+            bits.append("advanced")
+        ty = p["type"] + ("<" + p["of"] + ">" if p.get("of") else "")
+        print(f"    {p['name']:<24} {ty:<12} {'  '.join(bits)}")
+    print()
+    return 0
+
+
+def lint_spec(idx, checks):
+    out = []
+
+    def add(check, tool, sev, msg):
+        out.append({"check": check, "tool": tool, "severity": sev, "message": msg})
+
+    for t in idx["tools"]:
+        if t.get("error") or not t.get("flags") and not (t.get("spec") or {}).get("present"):
+            continue
+        sp = t.get("spec") or {}
+        name = t["name"]
+        if "spec-missing" in checks:
+            if not sp.get("present"):
+                if t.get("flags"):
+                    add("spec-missing", name, "info", "sin bloque @params en la cabecera")
+            else:
+                for f in t["flags"]:
+                    if set(f["opts"]) <= {"-h", "--help"} or f.get("spec"):
+                        continue
+                    add("spec-missing", name, "info",
+                        f"{f['opts'][0]}" + (f" [{f['sub']}]" if f["sub"] else "") + " no tiene línea en @params")
+        if "spec-vs-code" not in checks or not sp.get("present"):
+            continue
+        for ln, msg in sp.get("errors", []):
+            add("spec-vs-code", name, "warn", f"@params línea {ln}: {msg}")
+        for p in sp.get("params", []):
+            if not p.get("matched"):
+                add("spec-vs-code", name, "info" if t.get("dynamic_cli") else "warn",
+                    f"@params define {p['name']}" + (f" [{p['sub']}]" if p["sub"] else "") + " pero el parser no lo tiene")
+        for f in t["flags"]:
+            s = f.get("spec")
+            if not s:
+                continue
+            label = s["name"] + (f" [{f['sub']}]" if f["sub"] else "")
+            base, listy = _spec_code_type(f)
+            st = s.get("type")
+            ok = True
+            if st == "list":
+                of = s.get("of")
+                if not listy:
+                    ok = False
+                elif of in ("int", "float", "bool") and of != base:
+                    ok = False
+                elif of in ("file", "dir", "kv", "str") and base not in ("str",):
+                    ok = False
+            elif listy:
+                ok = False
+            elif st in ("file", "dir", "kv", "str"):
+                ok = base == "str"
+            elif st == "enum":
+                ok = base == "enum" or (base == "str" and "choices" in (f.get("dynamic") or []))
+            elif st in ("int", "float", "bool"):
+                ok = base == st
+            if not ok:
+                add("spec-vs-code", name, "warn",
+                    f"{label}: la spec dice {st}" + (f"<{s.get('of')}>" if st == "list" else "")
+                    + f" y el parser implica {base}{' (varios valores)' if listy else ''}")
+            # valores enumerados
+            ch = f.get("choices")
+            if isinstance(ch, (list, tuple)) and ch and s.get("values") is not None:
+                if {str(x) for x in ch} != set(s["values"]):
+                    add("spec-vs-code", name, "warn",
+                        f"{label}: values={'|'.join(s['values'])} ≠ choices del parser {'|'.join(map(str, ch))}")
+            elif st == "enum" and not s.get("values"):
+                add("spec-vs-code", name, "info", f"{label}: enum sin values=")
+            # valor por defecto
+            if "default" in s and not listy and f.get("action") not in ("count",):
+                cd = f.get("default")
+                if f.get("action") in ("store_true", "store_false"):
+                    cd = f["action"] == "store_false"
+                if cd is not None and "default" not in (f.get("dynamic") or []):
+                    sd = _spec_typed(s["default"], "bool" if isinstance(cd, bool) else ("float" if isinstance(cd, (int, float)) else "str"))
+                    same = (sd == cd) if not isinstance(cd, (int, float)) or isinstance(cd, bool) else \
+                        (isinstance(sd, (int, float)) and abs(float(sd) - float(cd)) < 1e-9)
+                    if not same:
+                        add("spec-vs-code", name, "warn", f"{label}: default={s['default']} ≠ default del parser {cd}")
+            # obligatoriedad
+            code_req = bool(f.get("required")) or (f["positional"] and f.get("nargs") not in ("?", "*"))
+            if bool(s.get("required")) != code_req:
+                add("spec-vs-code", name, "warn",
+                    f"{label}: " + ("la spec marca required pero el parser no lo exige" if s.get("required")
+                                    else "el parser lo exige y la spec no marca required"))
+            # coherencia de rangos
+            mn, mx = s.get("min"), s.get("max")
+            if mn is not None and mx is not None and mn > mx:
+                add("spec-vs-code", name, "warn", f"{label}: min={mn} > max={mx}")
+            dv = _spec_num(s.get("default")) if "default" in s else None
+            if dv is not None and ((mn is not None and dv < mn) or (mx is not None and dv > mx)):
+                add("spec-vs-code", name, "warn", f"{label}: default={s['default']} fuera de [{mn}, {mx}]")
+    return out
+
+
 def parse_tool(path: Path):
     """Analiza un fichero .py y devuelve su ficha."""
     src = path.read_text(encoding="utf-8", errors="replace")
@@ -417,6 +821,9 @@ def parse_tool(path: Path):
 
     env = _module_env(tree)
     flags, subs, dynamic = _extract_cli(tree, env)
+    spec = parse_spec(doc)
+    if spec["present"]:
+        _attach_spec(flags, spec)
 
     imports = set()
     for node in ast.walk(tree):
@@ -442,6 +849,7 @@ def parse_tool(path: Path):
         "category": _categorize(name, title + " " + purpose_txt),
         "doc_flags": sorted(set(re.findall(r"(?<![\w-])(--[a-z][a-z0-9\-]*)", doc))),
         "doc_text": " ".join(lines)[:2500],
+        "spec": {k: spec[k] for k in ("present", "version", "errors", "params")},
     })
     return rec
 
@@ -615,6 +1023,13 @@ def _fmt_flag(f):
         extra.append(f["action"])
     if f.get("nargs"):
         extra.append(f"nargs={f['nargs']}")
+    sp = f.get("spec")
+    if sp:
+        if sp.get("min") is not None or sp.get("max") is not None:
+            extra.append(f"rango={sp.get('min', '…')}..{sp.get('max', '…')}")
+        for k in ("typical", "unit", "io", "format"):
+            if sp.get(k):
+                extra.append(f"{k}={sp[k]}")
     if f.get("dynamic"):
         extra.append("(" + ",".join(f["dynamic"]) + " dinámico)")
     return opts, "  ".join(extra), _short(f.get("help") or "", 90)
@@ -859,6 +1274,7 @@ def lint(idx, checks):
                     "familia de versiones: " + " → ".join(fam["members"]) + f"  (última: {fam['latest']})")
 
     findings.extend(lint_docs_extra(idx, checks))
+    findings.extend(lint_spec(idx, checks))
 
     sev_order = {"error": 0, "warn": 1, "info": 2}
     findings.sort(key=lambda f: (sev_order[f["severity"]], f["check"], f["tool"]))
@@ -867,7 +1283,8 @@ def lint(idx, checks):
 
 ALL_CHECKS = ["syntax", "output-flag", "output-dir", "style-vocab", "exit-findings",
               "exit-contract", "doc-vs-code",
-              "undocumented", "versions", "doc-vs-sub", "example-args", "missing-refs", "counts"]
+              "undocumented", "versions", "doc-vs-sub", "example-args", "missing-refs", "counts",
+              "spec-vs-code", "spec-missing"]
 
 
 def cmd_lint(args, idx):
@@ -1726,6 +2143,9 @@ def build_parser():
     p.add_argument("--severity", choices=["error", "warn", "info"], help="Severidad mínima a mostrar")
     p.add_argument("--strict", action="store_true", help="rc=1 si hay errores o avisos")
     sp.add_parser("stats", parents=[common], help="Resumen del ecosistema")
+    p = sp.add_parser("params", parents=[common], help="Parámetros de una herramienta (spec @params + argparse), para interfaces y agentes")
+    p.add_argument("tool")
+    p.add_argument("--sub", default=None, help="Solo este subcomando ('*' = globales)")
     p = sp.add_parser("examples", parents=[common], help="Valida (y con --run ejecuta) los ejemplos de las cabeceras")
     p.add_argument("tool", nargs="*", help="Herramientas a revisar (default: todas)")
     p.add_argument("--run", action="store_true", help="Ejecuta los ejemplos en un directorio temporal con MIDIs sintéticos")
@@ -1763,7 +2183,8 @@ def main(argv=None):
     idx = load_index(root, index_path, rebuild=args.rebuild)
     fn = {"build": cmd_build, "list": cmd_list, "find": cmd_find,
           "show": cmd_show, "lint": cmd_lint, "stats": cmd_stats,
-          "examples": cmd_examples, "smoke": cmd_smoke, "weights": cmd_weights}[args.cmd]
+          "examples": cmd_examples, "smoke": cmd_smoke, "weights": cmd_weights,
+          "params": cmd_params}[args.cmd]
     try:
         return fn(args, idx)
     except BrokenPipeError:

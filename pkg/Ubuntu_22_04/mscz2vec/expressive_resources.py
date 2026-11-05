@@ -54,6 +54,25 @@ Opciones
     --no-color                  Desactiva color ANSI
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[info]
+midi file  io=in ext=mid required
+[analyze]
+midi        file  io=in ext=mid required
+--resources str
+--json      bool  default=false  # Salida en JSON
+--no-color  bool  default=false  # Desactiva color ANSI
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python3 expressive_resources.py info pieza.mid

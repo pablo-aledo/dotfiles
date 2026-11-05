@@ -102,6 +102,36 @@ Opciones
   info
     --model-path MODEL_PATH
     --random-weights
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[install]
+--output file  io=out  # ruta de destino del .th
+--force  bool  default=false  # volver a descargar aunque ya exista
+[separate]
+input            file  io=in ext=wav required  # fichero WAV de entrada
+--stems          list  of=enum values=drums|bass|other|vocals  # subconjunto de fuentes a exportar
+--two-stems      enum  values=drums|bass|other|vocals  # modo karaoke: exporta esta fuente y…
+--shifts         int   default=1  # nº de desplazamientos promediados
+--overlap        float default=0.25 min=0 max=1  # solape entre segmentos, 0-1
+--segment        float unit=s  # duración de segmento en segundos
+--model-path     file  io=in ext=pt,pth  # ruta al checkpoint .th
+--device         enum  default=cpu values=cpu|cuda
+--output-dir     dir   io=out
+--random-weights bool  default=false  # no cargar checkpoint; pesos aleatorios (solo para pruebas…
+--quiet          bool  default=false  # no mostrar barra de progreso
+[info]
+--model-path     file  io=in
+--random-weights bool  default=false
+@end
 """
 
 import argparse

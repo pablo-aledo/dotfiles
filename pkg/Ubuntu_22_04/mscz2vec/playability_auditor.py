@@ -70,6 +70,35 @@ Opciones
                               un fallo: rc=0)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi               list  of=file io=in ext=mid  # Archivo(s) MIDI a auditar
+--tracks           list  of=int  # Auditar solo estas pistas
+--scope            str    # Limitar a compases S:E
+--skip             list  of=enum values=rango|polifonia|respiracion|velocidad|repeticion|saltos|dinamica|percusion
+--only             list  of=enum values=rango|polifonia|respiracion|velocidad|repeticion|saltos|dinamica|percusion
+--profile          enum  default=estandar values=estandar|estricto|tolerante  # Perfil de exigencia
+--instrument       list  of=str  # Forzar instrumento de una pista (ej: 2=violin)
+--fix              bool  default=false  # Generar MIDI corregido
+--output           file  io=out ext=mid  # Ruta del MIDI corregido
+--json             file  io=out ext=json  # Exportar informe a JSON
+--max-issues       int   default=12 min=0  # Máx. incidencias detalladas por pista
+--quiet            bool  default=false  # Solo resumen por pista
+--verbose          bool  default=false  # Mostrar todas las incidencias
+--no-color         bool  default=false  # Desactivar colores ANSI
+--strict           bool  default=false  # rc=3 si la auditoría encuentra errores de tocabilidad…
+--list-instruments bool  default=false  # Mostrar el catálogo de perfiles y salir
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python playability_auditor.py obra.mid

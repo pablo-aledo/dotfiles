@@ -176,6 +176,104 @@ Opciones
                            por orden alfabético; se inspecciona solo uno).
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[prepare]
+--input-dir     dir   io=in required
+--output-dir    dir   io=out required
+--resolution    int   default=96 min=0
+--window-bars   int   default=4 min=0 unit=compases
+--disable-roles list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--pitch-range   int
+[train]
+--backend         enum  default=symbolic values=symbolic|neural
+--domain-a        str
+--domain-b        str
+--model           file  default=cycle_gan_v3.pkl io=in ext=pkl
+--resolution      int   default=96 min=0
+--pitch-range     int
+--disable-roles   list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--pca-dim         int   default=0
+--solver          enum  default=ridge values=ridge|knn
+--alpha           float default=1.0 typical=0..1
+--k-neighbors     int   default=5
+--lambda-cycle    float default=10.0
+--lambda-identity float default=5.0
+--iters           int   default=100 min=0
+--model-dir       dir   default=model_neural io=in
+--epochs          int   default=200 min=0 unit=épocas
+--batch-size      int   default=4 min=0
+--lr              float default=0.0002
+--n-res-blocks    int   default=9 min=0
+--base-ch         int   default=64
+--patience        int   default=40
+--resume          bool  default=false
+--verbose         bool  default=false
+[transform]
+input                file  io=in required
+--backend            enum  default=symbolic values=symbolic|neural
+--model              file  io=in
+--model-dir          dir   io=in
+--direction          enum  default=AtoB values=AtoB|BtoA
+--intensity          float default=1.0 typical=0..1
+--output             file  io=out
+--bars               int   min=0 unit=compases
+--candidates         int   default=3 min=0
+--no-percussion      bool  default=false
+--export-fingerprint bool  default=false
+--seed               int   default=42
+--bpm                float default=120.0 unit=BPM
+--threshold          float
+--threshold-pct      float default=99.0 unit=%
+--palette            file  io=in
+--verbose            bool  default=false
+[cycle]
+input           file  io=in required
+--model         file  io=in required
+--backend       enum  default=symbolic values=symbolic|neural
+--direction     enum  default=AtoB values=AtoB|BtoA
+--intensity     float default=1.0 typical=0..1
+--output-ab     file  io=out
+--output-aba    file  io=out
+--bars          int   min=0 unit=compases
+--candidates    int   default=2 min=0
+--no-percussion bool  default=false
+--seed          int   default=42
+--verbose       bool  default=false
+[analyze]
+input     file  io=in required
+--model   file  io=in required
+--backend enum  default=symbolic values=symbolic|neural
+--verbose bool  default=false
+[style-corpus]
+--input-dir dir   io=in required
+--backend   enum  default=symbolic values=symbolic|neural
+--model     file  io=in
+--model-dir dir   io=in
+--direction enum  default=a2b values=a2b|b2a
+--output    file  io=out
+[round-trip]
+--input         file  io=in required
+--model-dir     dir   io=in
+--resolution    int   default=96 min=0
+--disable-roles list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--output        file  default=roundtrip.mid io=out ext=mid
+--bpm           float default=120.0 unit=BPM
+[inspect]
+--what      list  of=enum values=npz|loss_curve
+--data-dir  dir   io=in
+--model-dir dir   io=in
+--file      file  io=in ext=npz
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   ── Backend simbólico (CPU, rápido) ──────────────────────────────────────────

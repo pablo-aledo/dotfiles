@@ -49,6 +49,35 @@ Opciones
                               audio_effects.py
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+dry_wav            file  io=in ext=wav required  # Audio de entrada sin procesar
+--ref-cache        file  io=in ext=wav required  # Caché de corpus de audio_reference_scorer.py…
+--floor-cache      file  io=in  # Calibración por suelo opcional
+--effects-manifest file  io=in ext=wav  # Pasa a audio_effects.load_manifest; default el manifest…
+--population       int   default=30 min=0
+--generations      int   default=40 min=0
+--mutation-rate    float default=0.3
+--elite-count      int   default=2 min=0
+--patience         int   default=8
+--tournament-size  int   default=3
+--top-n            int   default=3 min=0  # Cuántos genomas finales exportar además del mejor
+--out-dir          dir   default=results/ io=out
+--json             file  io=out ext=json  # Log completo (EvolveResult serializado)
+--fast             bool  default=false  # Reduce población/generaciones para iteración rápida
+--quiet            bool  default=false  # Solo imprime el score final del mejor genoma
+--seed             int    # Semilla del propio GA (selección/mutación/cruce); no confundir con la…
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     mix_evolver.py dry.wav --ref-cache ref.npz --out-dir results/

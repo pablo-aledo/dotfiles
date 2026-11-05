@@ -49,6 +49,30 @@ Opciones
   --verbose       Informe detallado de decisiones
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--arc           enum  default=hero values=hero|tragedy|romance|mystery|meditation|rondo|sonata|custom
+--bars          int   default=64 min=0 unit=compases  # Compases totales
+--key           str   default=C  # Tonalidad base
+--tempo         int   default=120 unit=BPM  # Tempo en BPM
+--sections      str    # Override manual de secciones: "A:16,B:8,C:24"
+--output        file  default=obra_plan io=out  # Base del nombre de salida
+--export-curves bool  default=false  # Exportar JSON de curvas para tension_designer
+--export-yaml   bool  default=false  # Exportar plan.yaml para runner.py
+--no-gui        bool  default=false  # Modo headless: sin GUI
+--load          str    # Cargar plan existente desde JSON
+--verbose       bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python narrator.py                        # GUI interactivo

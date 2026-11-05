@@ -81,6 +81,30 @@ Opciones
     --verbose                   Mostrar cada intento de generacion por compas
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--version str
+[write]
+--abc-in      file  io=in required  # Fichero ABC de entrada (sin lineas w:, o con lineas w: que se…
+--abc-out     file  io=out required  # Fichero ABC de salida con lineas w: anadidas
+--tema        str   required  # Tematica general de la cancion (en lenguaje natural)
+--provider    enum  default=anthropic values=anthropic|openai  # Proveedor del LLM a usar
+--model       file  io=in
+--api-key     str    # API key del proveedor (por defecto, variable de entorno ANTHROPIC_API_KEY u…
+--max-retries int   default=3 min=0  # Maximo de reintentos por compas si el numero de silabas no…
+--delay       float default=0.0 unit=s  # Pausa en segundos entre llamadas a la API (util para…
+--verbose     bool  default=false  # Mostrar cada intento de generacion por compas
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Generar lyrics para un ABC sin letra, tematica libre (Anthropic, default)

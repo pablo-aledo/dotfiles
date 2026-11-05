@@ -55,6 +55,34 @@ Opciones
   --no-color         Desactivar colores ANSI
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi           file  io=in ext=mid required
+--output       file  io=out
+--style        enum  default=romantico values=clasico|mecanico|romantico|auto|baroque|blues|diatonic|flamenco|folk|impressionist|jazz|modal|pop|romantic
+--intensity    float
+--melody-track int
+--no-rubato    bool  default=false
+--no-dynamics  bool  default=false
+--no-pedal     bool  default=false
+--no-vibrato   bool  default=false
+--no-humanize  bool  default=false
+--lead         float default=15.0
+--seed         int   default=42
+--dry-run      bool  default=false
+--verbose      bool  default=false
+--no-color     bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python performer.py obra.mid

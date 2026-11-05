@@ -57,6 +57,36 @@ Opciones
                               [])
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi               file  io=in ext=mid required  # MIDI de entrada (obra_final.mid de stitcher.py)
+fingerprints       list  of=file io=in ext=json  # Archivos .fingerprint.json
+--template         enum  default=chamber values=chamber|full|strings_only
+--library          enum  default=nucleus values=nucleus|metropolis|generic
+--ks-config        file  io=in ext=json  # JSON con tabla de keyswitches personalizada
+--dump-ks          bool  default=false  # Exportar tabla KS defaults a JSON y salir
+--auto-fp          bool  default=false  # Buscar .fingerprint.json en el mismo dir que el MIDI
+--report-only      bool  default=false  # Solo generar informe, sin producir MIDI
+--output           file  io=out  # Nombre base de salida
+--instruments-json file  io=out ext=json  # JSON de paleta de instrumentos generado por…
+--leitmotif-hints  file  io=out ext=json  # JSON de preferred_instruments por leitmotif generado…
+--no-perc          bool  default=false
+--no-ks            bool  default=false
+--no-cc            bool  default=false
+--tempo-humanize   float default=0.15 typical=0..1
+--verbose          bool  default=false
+--map              list  of=str  # Reasignar pistas del MIDI a roles. Ej: --map Piano=Melody…
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python orchestrator.py obra_final.mid [fingerprints...] [opciones]

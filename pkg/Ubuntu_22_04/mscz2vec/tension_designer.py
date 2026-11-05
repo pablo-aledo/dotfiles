@@ -55,6 +55,31 @@ Opciones
   --mixer MIXER               Ruta a midi_dna_unified.py
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+inputs          list  of=str  # MIDIs fuente
+--bars          int   default=16 min=0 unit=compases  # Número de compases
+--load          str    # Cargar curvas desde JSON
+--preset        str    # Preset de tensión inicial
+--no-gui        bool  default=false  # Modo sin GUI: generar directamente con preset
+--auto-generate bool  default=false  # Generar automáticamente al cerrar la GUI
+--output        file  default=tension_out.mid io=out ext=mid
+--key           str    # Tonalidad (ej: C, D, Fm)
+--tempo         int   unit=BPM  # Tempo en BPM
+--mode          enum  default=auto values=auto|rhythm_melody|harmony_melody|full_blend|custom|mosaic|energy|emotion
+--mixer         file  io=in  # Ruta a midi_dna_unified.py
+--verbose       bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python tension_designer.py fuente.mid [fuente2.mid]

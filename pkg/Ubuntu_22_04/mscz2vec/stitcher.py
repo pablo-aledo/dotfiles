@@ -52,6 +52,35 @@ Opciones
                               final.
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+inputs               list  of=str required  # Fingerprints (.fingerprint.json) o MIDIs (.mid) de…
+--fixed-order        bool  default=false  # No reordenar; usar el orden dado en la línea de comandos
+--analyze-only       bool  default=false  # Solo mostrar análisis y matriz, sin generar nada
+--mixer              file  default=./midi_dna_unified.py io=in  # Ruta al script midi_dna_unified.py
+--bridge-sources     list  of=str  # MIDIs fuente para generar los puentes
+--bridge-bars        int   default=4 min=0 unit=compases  # Compases de cada puente generado
+--bridge-mode        enum  default=emotion values=auto|rhythm_melody|harmony_melody|full_blend|mosaic|energy|emotion
+--min-score          float default=0.55  # Score mínimo para NO generar puente
+--tempo-map          str    # Overrides de tempo: "file.mid:112, file2.mid:96"
+--no-bridge          bool  default=false  # Ensamblar sin puentes (solo concatenar)
+--force-first        int    # Índice del fragmento que debe ir primero (0-based)
+--force-last         int    # Índice del fragmento que debe ir último (0-based)
+--output             file  default=obra_final.mid io=out ext=mid  # MIDI de salida
+--leitmotif-schedule str    # Schedule de leitmotifs generado por leitmotif_tracker.py inject…
+--verbose            bool  default=false
+--dry-run            bool  default=false  # Mostrar comandos de puentes sin ejecutarlos
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Modo automático: pasa los fingerprints (o los MIDIs, detecta los JSON)

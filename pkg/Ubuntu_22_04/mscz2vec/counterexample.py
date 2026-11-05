@@ -72,6 +72,40 @@ Opciones
   --dry-run           Solo calcular y mostrar el diferencial, sin generar
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+desired          file  io=in ext=mid required  # MIDI deseado (lo que te gusta)
+rejected         file  io=in ext=mid required  # MIDI rechazado (lo que no te gusta)
+reference        file  io=in ext=mid required  # MIDI de referencia (material base para evolución)
+--repulsion      float default=1.2  # Peso λ de repulsión del rechazado
+--attraction     float default=1.0  # Peso de atracción al deseado
+--musical-weight float default=0.3  # Peso del score musical base
+--generations    int   default=6 min=0  # Generaciones
+--population     int   default=12 min=0  # Tamaño de población
+--elite          int   default=2  # Individuos de élite
+--mutation-rate  float default=0.35  # Tasa de mutación
+--bars           int   min=0 unit=compases  # Compases por individuo
+--top            int   default=3 min=0  # Mejores a exportar
+--output-dir     dir   default=./contra_out io=out  # Carpeta de salida
+--mixer          file  io=in  # Ruta a midi_dna_unified.py
+--report         bool  default=false  # Exportar informe JSON
+--plot           bool  default=false  # Visualizar espacio vectorial UMAP
+--listen         bool  default=false  # Reproducir los mejores al final
+--play-seconds   int   default=10 unit=s  # Segundos de reproducción por MIDI
+--seed           int   default=42  # Semilla aleatoria
+--verbose        bool  default=false  # Informe detallado
+--dry-run        bool  default=false  # Solo calcular diferencial, sin generar MIDIs
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python counterexample.py deseado.mid rechazado.mid referencia.mid

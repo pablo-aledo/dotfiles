@@ -425,6 +425,68 @@ Opciones
     --no-humanize               Desactivar humanización en los pasos
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[learn]
+folder     dir   io=in required  # Carpeta con MIDIs (mixtos)
+--output   file  default=drum_library.json io=out ext=json alias=-o
+--clusters int   default=16 alias=-k  # Número de clusters
+--verbose  bool  default=false alias=-v
+[analyze]
+input    file  io=in ext=mid required  # Archivo MIDI
+--export str    # Exportar análisis a JSON
+[extract]
+input         file  io=in ext=mid required  # MIDI del que extraer el groove
+--name        str   required alias=-n  # Nombre del groove en la biblioteca (ej: 'mi_groove_funk')
+--library     str   default=drum_library.json alias=-l  # Biblioteca destino
+--export-midi file  io=out ext=mid  # Exportar el patrón base como MIDI independiente
+--force       bool  default=false  # Sobreescribir si ya existe un groove con ese nombre
+[add]
+input              file  io=in ext=mid  # MIDI sin percusión
+--output           file  io=out alias=-o
+--library          str   alias=-l  # drum_library.json
+--fingerprint      str   alias=-f  # fingerprint.json
+--tension-curve    str    # curves.json de tension_designer
+--feel             enum  default=supportive values=supportive|contrasting|independent
+--no-humanize      bool  default=false
+--force            bool  default=false  # Añadir aunque ya tenga percusión
+--style            str   default=rock_straight alias=-s
+--list-styles      bool  default=false  # Mostrar todos los estilos disponibles y salir
+--groove-diversity float default=0.4  # Diversidad en selección de grooves: 0=determinista…
+--variation        float default=0.3  # Intensidad de variaciones estructurales compás a compás
+--layers           bool  default=false excludes=--no-layers  # Capas independientes activadas (es…
+--no-layers        bool  default=false excludes=--layers  # Desactivar capas independientes…
+--fill-style       str   default=auto
+[transform]
+input           file  io=in ext=mid required  # MIDI con percusión
+--output        file  io=out alias=-o
+--tension-curve str    # curves.json de tension_designer (activa sinc+densidad+swing+polirritmo…
+--syncopate     float  # Síncopa estática (sobrescribe curva tension)
+--swing         float  # Swing estático: 0=straight, 0.34=jazz, 1=hard (sobrescribe curva swing)
+--polyrhythm    int    # Capa polirrítmica N:4 en todos los compases
+--phase-shift   int    # Phase shift: N pasos/compás (Steve Reich)
+--humanize      float  # Humanización: micro-timing + velocity
+--thin          float  # Eliminar fracción de golpes (sobrescribe curva activity)
+--thicken       float  # Añadir ghost notes (sobrescribe curva activity)
+--emotion       str    # Target emocional: 'más urgente', 'relajado', etc
+[morph]
+input_a       file  io=in ext=mid required  # MIDI fuente A
+input_b       file  io=in ext=mid required  # MIDI fuente B
+--steps       int   default=8 min=0 alias=-n  # Número de pasos intermedios
+--bars        int   min=0 unit=compases  # Normalizar ambos patrones a N compases
+--mode        enum  default=linear values=linear|sigmoid|exponential|sinusoidal  # Curva de interpol…
+--output-dir  dir   default=. io=out alias=-o  # Carpeta de salida
+--no-humanize bool  default=false  # Desactivar humanización en los pasos
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Dependencias
 ────────────────────────────────────────────────────────────────────────────
   mido, numpy                    (requeridas)

@@ -104,6 +104,61 @@ Opciones
     --output OUTPUT             (obligatorio)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[tokenize]
+input    file  io=in ext=mid required  # fichero MIDI de entrada
+output   file  io=out ext=json required  # fichero de tokens (.json) de salida
+--format enum  default=arrival values=arrival|interarrival
+--debug  bool  default=false
+[render]
+input   file  io=in ext=json required  # fichero de tokens (.json) de entrada
+output  file  io=out ext=mid required  # fichero MIDI de salida
+--debug bool  default=false
+[info]
+input file  io=in ext=mid required  # fichero .mid o .json de tokens
+[clip]
+input              file  io=in required
+output             file  io=out required
+--start            float min=0 unit=s required  # inicio en segundos
+--end              float unit=s required  # fin en segundos
+--no-clip-duration bool  default=false  # no truncar la duracion de notas que cruzan el limite
+[extract-melody]
+input         file  io=in required
+--instruments str   required  # lista de programas MIDI separados por coma, p.ej. "0,1" (128 =…
+--melody-out  file  io=out required
+--accomp-out  file  io=out required
+[download-model]
+--model    file  io=in ext=pt,pth required  # nombre del checkpoint, p.ej.…
+--revision str    # revision/commit concreto (opcional)
+[generate]
+--model  file  io=in ext=pt,pth required  # nombre o ruta de un checkpoint HuggingFace
+--input  file  io=in  # tokens (arrival-time) a continuar; opcional
+--start  float default=0.0 min=0  # instante en el que empieza la generacion
+--length float default=20.0  # segundos a generar
+--top-p  float default=1.0
+--mode   enum  default=aar values=aar|ar  # aar = anticipatorio (usa --input como controles…
+--device str    # cuda|cpu; por defecto detecta automaticamente
+--output file  io=out required
+[accompany]
+--model   file  io=in required
+--melody  str   required  # tokens de la melodia (usar extract-melody antes)
+--start   float default=0.0 min=0
+--length  float default=20.0
+--top-p   float default=1.0
+--combine bool  default=false  # incluir la melodia en la salida, ya combinada
+--device  str
+--output  file  io=out required
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python anticipation_composer.py tokenize in.mid tokens.json

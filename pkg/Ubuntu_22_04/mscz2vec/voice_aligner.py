@@ -51,6 +51,36 @@ Opciones
   --verbose
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+voices              list  of=str required
+--threshold         float default=0.72
+--strategy          enum  default=auto values=auto|time|pitch|chord|ornament
+--freeze-voice      list  of=int
+--max-pitch-shift   int   default=2 min=0
+--max-time-shift    float default=0.5
+--melody-weight     float default=0.25 min=0 max=1  # Peso del coste melódico 0-1
+--max-iter          int   default=3 min=0  # Máx. iteraciones de refinamiento
+--window-beats      float default=4.0 unit=tiempos  # Ventana de detección de tonalidad en beats
+--allow-zone-shift  bool  default=false
+--allow-ornament    bool  default=false
+--protect-threshold float default=0.7  # Umbral de importancia para proteger notas
+--key               str
+--tempo             float
+--out-dir           dir   io=out
+--report            bool  default=false
+--verbose           bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python voice_aligner.py voz1.mid voz2.mid [voz3.mid ...]

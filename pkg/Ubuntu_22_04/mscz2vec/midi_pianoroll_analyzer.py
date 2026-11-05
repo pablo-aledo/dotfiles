@@ -78,6 +78,23 @@ Opciones
   --test          Genera un MIDI sintético de prueba y lo analiza
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi     file  io=in ext=mid  # Archivo MIDI de entrada
+config   file  io=in ext=json  # Config YAML/JSON (opcional)
+--output file  io=out ext=mid alias=-o  # Salida HTML
+--test   bool  default=false  # Generar MIDI sintético y analizar
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python3 midi_pianoroll_analyzer.py archivo.mid

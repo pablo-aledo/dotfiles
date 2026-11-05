@@ -55,6 +55,36 @@ Opciones
   --strict          Abortar al primer fallo (default: continuar y reportar)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+plan           file  io=in ext=json  # Archivo .yaml o _plan.json del pipeline
+--from         str    # Empezar desde este paso (nombre)
+--until        str    # Ejecutar hasta este paso (inclusive)
+--only         list  of=str  # Ejecutar solo estos pasos
+--pause-after  list  of=str  # Pausar tras estos pasos
+--pause-all    bool  default=false  # Pausar tras cada paso
+--resume       bool  default=false  # Reanudar desde el último checkpoint
+--retry-failed bool  default=false  # Reintentar solo los pasos fallidos
+--dry-run      bool  default=false  # Mostrar comandos sin ejecutar
+--status       bool  default=false  # Mostrar estado del último run
+--list-steps   bool  default=false  # Listar pasos del plan sin ejecutar
+--output-dir   dir   io=out  # Directorio de salida
+--log          file  io=in  # Archivo de log
+--no-log       bool  default=false  # No escribir archivo de log
+--timeout      int   default=300 unit=s  # Timeout por paso en segundos
+--verbose      bool  default=false alias=-v  # Mostrar stdout/stderr en tiempo real
+--strict       bool  default=false  # Abortar al primer fallo
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python runner.py obra_plan.yaml

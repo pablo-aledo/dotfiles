@@ -129,6 +129,68 @@ Opciones
     checkpoint CHECKPOINT
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[prepare-data]
+input_dir        dir   io=in required  # una subcarpeta por instrumento, wavs dentro
+--out            file  io=out required
+--sample-rate    int
+--frame-rate     int
+--window-s       float
+--hop-s          float default=1.0  # solape entre ventanas de train
+--val-fraction   float default=0.1
+--test-fraction  float default=0.1
+--fmin           float
+--fmax           float
+--yin-threshold  float
+--min-confidence float default=0.5  # descarta ventanas con confianza de f0 media por debajo de esto
+--seed           int   default=0
+--quiet          bool  default=false
+[train]
+dataset      str   required
+--out        file  io=out required
+--epochs     int   default=60 min=0 unit=épocas
+--batch-size int   default=16 min=0
+--lr         float default=0.0003
+--seed       int   default=0
+--resume     str    # continuar el entrenamiento de un checkpoint
+--save-every int    # guardar cada N epocas (ademas del final)
+--quiet      bool  default=false
+[clone]
+target_wav   file  io=in required
+--checkpoint file  io=in ext=pt,pth required
+--out        file  io=out required
+--name       str
+--steps      int   default=1500 min=0
+--lr         float default=0.005
+--batch-size int   default=8 min=0
+--hop-s      float default=1.0
+--seed       int   default=0
+--quiet      bool  default=false
+[synthesize]
+--checkpoint     file  io=in ext=pt,pth required
+--voice          file  io=in  # fichero de voz clonada (ver `clone`)
+--instrument-idx int    # alternativa a --voice: usar un instrumento del propio checkpoint
+--control-wav    file  io=in ext=wav  # extrae f0/loudness de este wav y los toca con la voz elegida
+--note           int    # nota MIDI (alternativa a --control-wav)
+--duration       float unit=s  # segundos (con --note)
+--velocity       float default=0.8 min=0 max=1  # 0-1, con --note
+--out            file  io=out required
+--seed           int   default=0
+[info]
+path file  io=in required
+[list-instruments]
+checkpoint file  io=in ext=pt,pth required
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     instrument_cloner.py prepare-data data/instrumentos --out dataset.pt

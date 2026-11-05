@@ -70,6 +70,53 @@ OPCIONES GENERATE / ICL:
                                 con VRAM < 14GB)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--genre           file  io=in ext=txt required  # Fichero de texto con tags de género
+--lyrics          file  io=in ext=txt required  # Fichero de texto con la letra (con etiquetas…
+--segments        int   default=2  # Número de segmentos ~30s a generar
+--output          file  default=yue_output.wav io=out ext=wav  # Fichero WAV de salida
+--keep-stems      bool  default=false  # Conservar pistas vocal e instrumental separadas
+--language        enum  default=en values=en|zh|jp-kr  # Idioma de los modelos Stage 1
+--max-tokens      int   default=3000 min=0  # Tokens máximos por segmento
+--rep-penalty     float default=1.1 min=1.0 max=2.0  # Penalización de repetición 1.0–2.0
+--seed            int   default=42  # Semilla aleatoria
+--batch-size      int   default=4 min=0  # Batch size del stage 2
+--cuda            int   default=0  # Índice de GPU
+--model-dir       dir   io=in  # Directorio de modelos
+--disable-offload bool  default=false  # No mover Stage 1 a CPU tras la generación
+--stage1-cpu      bool  default=false  # Forzar Stage 1 en CPU aunque haya GPU (útil con VRAM < 14GB)
+--listen          bool  default=false  # Reproducir el resultado al terminar
+--verbose         bool  default=false  # Informe detallado de progreso
+[install]
+--model-dir     dir   io=in
+--language      enum  values=en|zh|jp-kr  # Solo descargar modelos de un idioma
+--no-flash-attn bool  default=false  # No instalar Flash Attention 2
+[generate]
+--mode enum  default=cot values=cot|icl  # Checkpoint a usar: cot | icl
+[icl]
+--vocal        file  io=in  # Pista vocal de referencia (modo dual-track)
+--instrumental file  io=in  # Pista instrumental de referencia (modo dual-track)
+--audio        file  io=in ext=wav  # Audio de referencia unificado (modo single-track)
+--start        float default=0.0 unit=s  # Tiempo inicio del fragmento de referencia en segundos
+--end          float default=30.0 unit=s  # Tiempo fin del fragmento de referencia en segundos
+[tags]
+query       str    # Texto a buscar en los tags
+--list-all  bool  default=false  # Listar todos los tags disponibles
+--model-dir dir   io=in  # Directorio de modelos (para top_200_tags.json)
+[check]
+--model-dir dir   io=in  # Directorio de modelos a verificar
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO RÁPIDO ──

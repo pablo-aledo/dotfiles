@@ -462,6 +462,67 @@ Formato del corpus MIDI para LSTM:
   Track 1 — melodía  (canal 0)
   Track 2 — acordes  (canal 1)
 MIDIs sin track 2 o con menos de 2 pistas se descartan en el preproceso.
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--engine              enum  default=chord_guided values=chord_guided|grammar|search|genetic|lstm|motif|bayes|tension_arc|interpolate
+--train               bool  default=false  # Entrenar la LSTM sobre el corpus antes de generar
+--preprocess          bool  default=false  # Solo preprocesar el corpus a .npz, sin entrenar ni…
+--motif               str    # Motivo semilla para --engine motif: "C4:0.5 E4:1 G4:0.5"
+--profile-b           str   default=tanguero  # Segundo perfil para --engine interpolate
+--alpha               float default=0.5 typical=0..1  # Interpolación: 0.0=perfil A, 1.0=perfil B
+--phrase-bars         int   default=4 min=0 unit=compases  # Compases por frase en tension_arc
+--key                 str   default=C
+--mode                str   default=auto
+--bars                int   default=16 min=0 unit=compases
+--tempo               int   default=120
+--time-sig            str   default=4/4
+--profile             str   default=serene
+--rhythm              str   default=flowing
+--contour             enum  default=auto values=auto|arch|ascending|descending|wave|plateau|inverted|erratic|custom
+--contour-values      str
+--tension-curve       str
+--range               list  of=int
+--chords              str
+--chords-json         file  io=out ext=json
+--chords-midi         file  io=in ext=mid
+--chords-midi-track   int   default=2
+--chords-midi-channel int   default=1
+--chords-midi-window  float default=0.5
+--corpus              str    # MIDIs para entrenar Markov (chord_guided) o LSTM
+--dataset             file  default=corpus.npz io=in ext=npz  # Fichero .npz preprocesado
+--model-out           file  default=lstm.pt io=out ext=pt  # Guardar modelo LSTM entrenado
+--model               file  io=in  # Cargar modelo LSTM para generar
+--epochs              int   default=30 min=0 unit=épocas
+--hidden              int   default=128
+--d-embed             int   default=32
+--num-layers          int   default=1 min=0
+--batch-size          int   default=16 min=0
+--chunk-size          int   default=32
+--lr                  float default=0.001
+--max-files           int   default=0 min=0  # Máximo MIDIs a cargar en preprocess (0=todos)
+--temperature         float default=1.0 typical=0..1  # Temperatura de sampling LSTM
+--top-k               int   default=10 min=0  # Top-k sampling LSTM (0=desactivado, default: 10)
+--ornaments           list  of=enum values=appoggiatura|passing|neighbor|all  # Tipos de ornamento…
+--ornament-prob       float default=0.35 min=0 max=1 typical=0..1  # Probabilidad de ornamentación…
+--fix-avoid           bool  default=false  # Corregir avoid notes en tiempos fuertes
+--output              file  default=melody_conditioned.mid io=out ext=mid
+--include-chords      bool  default=false
+--export-motif        bool  default=false  # Exportar también el motivo semilla (.motif.mid)
+--candidates          int   default=3 min=0
+--seed                int   default=42
+--verbose             bool  default=false
+--dry-run             bool  default=false
+@end
 """
 
 import sys

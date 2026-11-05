@@ -90,6 +90,71 @@ Opciones
     --tmp TMP                   (defecto /tmp/ddsp_synth_selftest)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[synth-harmonic]
+--f0          float default=220.0
+--amplitude   float default=0.5
+--duration    float default=2.0 unit=s
+--n-harmonics int   default=60 min=0
+--vibrato     float default=0.0 typical=0.01  # relative depth, e.g. 0.01
+--sample-rate int   default=16000
+--out         file  io=out required
+[synth-noise]
+--duration    float default=2.0 unit=s
+--n-bands     int   default=65 min=0
+--shape       enum  default=white values=white|lowpass|highpass
+--sample-rate int   default=16000
+--out         file  io=out required
+[reverb]
+--in          file  io=in required
+--ir          str    # Optional WAV impulse response
+--ir-duration float default=2.0 unit=s
+--decay       float default=4.0
+--wet         float default=0.4 typical=0..1
+--sample-rate int   default=16000
+--out         file  io=out required
+[analyze]
+--in          file  io=in required
+--frame-size  int   default=1024
+--hop         int   default=64
+--sample-rate int   default=16000
+--out         file  io=out required
+[train]
+--data          dir   io=in required  # Directory of .wav files
+--epochs        int   default=200 min=0 unit=épocas
+--batch-size    int   default=4 min=0
+--lr            float default=0.0003
+--n-harmonics   int   default=60 min=0
+--n-noise-bands int   default=65 min=0
+--z-dim         int   default=16
+--hidden        int   default=256
+--sample-rate   int   default=16000
+--device        str   default=auto
+--out           file  io=out required
+[resynth]
+--model file  io=in required
+--in    file  io=in required
+--out   file  io=out required
+[infer]
+--model    file  io=in required
+--f0       float default=440.0
+--loudness float default=-20.0
+--duration float default=2.0 unit=s
+--z-file   file  io=in ext=npz  # Optional .npz with a 'z' array
+--out      file  io=out required
+[selftest]
+--tmp str   default=/tmp/ddsp_synth_selftest
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USAGE ──

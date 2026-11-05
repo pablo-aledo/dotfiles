@@ -89,6 +89,47 @@ Opciones
   --verbose                   Mostrar nombre y descripción de cada patrón
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--analyze-midi    file  io=in ext=mid  # Analizar un MIDI y mostrar los patrones del catálogo que…
+--min-score       float default=0.5 min=0 max=1  # Score mínimo de coincidencia 0-1
+--resolution      int   default=4 min=0  # Subdivisiones por pulso para la rejilla de análisis
+--list            bool  default=false  # Listar todos los patrones
+--stats           bool  default=false  # Estadísticas del catálogo
+--custom          str    # Patrón personalizado en vez de seleccionar del catálogo. Célula…
+--tipo            enum  values=celula|groove  # Tipo de patrón (filtro, o fuerza el tipo de --custom)
+--id              int    # Seleccionar patrón por id
+--buscar          str    # Búsqueda por texto libre
+--intencion       str    # Buscar por intención en lenguaje natural
+--style           str    # Filtrar por estilo
+--uso             enum  values=percusion|ritmo_armonico  # Filtrar por uso
+--meter           str    # Filtrar por compás (ej. 4/4), o compás para --custom/análisis
+--feel            enum  values=straight|swing|shuffle  # Filtrar por feel
+--emocion         str    # Filtrar por emoción (euforia, angustia, reposo…)
+--tension-min     int   min=1 max=10  # Tensión mínima (1-10)
+--tension-max     int   min=1 max=10  # Tensión máxima (1-10)
+--bars            int   min=0 unit=compases  # Compases a generar
+--reps            int    # Repeticiones exactas del patrón (sustituye a --bars)
+--tempo           float default=120.0  # Tempo BPM para exportación MIDI
+--note            int   default=75 min=0 max=127 unit="nota MIDI"  # Nota MIDI GM para células sin…
+--apply-to-chords str    # Aplica los onsets del patrón como puntos de cambio a una lista de…
+--change-voice    str    # Voz del groove cuyos onsets marcan los cambios de acorde (requerido si…
+--export-json     file  io=out ext=json  # Exportar tabla filtrada o patrón resuelto a JSON
+--export-text     file  io=out ext=txt  # Exportar patrón resuelto (o progresión de…
+--export-midi     file  io=out ext=mid  # Exportar patrón resuelto a MIDI de percusión
+--output          file  default=ritmo io=out  # Nombre base para salidas
+--verbose         bool  default=false  # Mostrar nombre y descripción de cada patrón
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Listar todos

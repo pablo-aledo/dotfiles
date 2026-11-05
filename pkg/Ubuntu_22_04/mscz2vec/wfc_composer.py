@@ -31,6 +31,29 @@ Opciones
   --verbose
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--key     str   default=2  # tonica: clase de altura 0-11 o nombre (C, D, F#, Bb...). Defecto 2 (D)
+--mode    enum  default=minor values=major|minor|harmonic_minor|dorian|phrygian
+--beats   int   default=16 unit=tiempos
+--phrases int   default=2
+--nodes   int   default=20
+--tempo   int   default=96
+--window  int   default=2
+--output  file  default=output.mid io=out ext=mid
+--seed    int
+--verbose bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python wfc_composer.py

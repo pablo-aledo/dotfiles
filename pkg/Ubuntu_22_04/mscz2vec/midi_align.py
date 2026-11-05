@@ -42,6 +42,27 @@ Opciones
   --verbose                Informe detallado
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi           file  io=in ext=mid required  # MIDI de entrada a alinear
+--anchors      list  of=str  # Pares de tiempos origen→destino (M:SS.mmm M:SS.mmm)
+--anchors-file file  io=in ext=txt  # Archivo de texto con anclajes (uno por línea)
+--ref          file  io=in ext=mid  # MIDI de referencia para obtener la duración destino total
+--mode         enum  default=tempo values=tempo|linear  # Modo de alineación: tempo (BPM por…
+--output       file  io=out ext=mid  # MIDI de salida
+--preview      bool  default=false  # Mostrar mapa de segmentos sin generar MIDI
+--verbose      bool  default=false  # Informe detallado
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python midi_align.py stem.mid --anchors "0:00.000 0:00.000" \

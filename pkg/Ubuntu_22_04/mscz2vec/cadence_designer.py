@@ -128,6 +128,57 @@ Opciones
     --output, -o OUTPUT         Plan modificado (obligatorio)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[plan]
+--bars          int   min=0 unit=compases required  # Compases totales
+--key           str   default=C  # Tónica (C, Am, F#...)
+--mode          enum  default=major values=major|minor  # Modo
+--form          enum  default=through_composed values=ABA|ABAB|AABA|ABACABA|verse_chorus|sonata|binary|ternary|rondo|through_composed
+--tension       enum  default=arch values=arch|crescendo|decrescendo|wave|late_climax|neutral
+--tension-curve str    # Curva explícita: 0.2,0.5,0.8,
+--n-cadences    int   min=0  # Número de cadencias (auto por defecto)
+--from-theorist str    # Leer plan de theorist.py
+--from-curves   str    # Leer curvas de tension_designer
+--output        file  io=out ext=json alias=-o  # Guardar plan en JSON
+--realize       str    # También realizar como bajo cifrado
+--seed          int   default=42  # Semilla aleatoria
+--verbose       bool  default=false  # Informe detallado
+[analyze]
+midi      file  io=in ext=mid required  # Archivo MIDI de entrada
+--key     str    # Tonalidad (p.ej. G, F#m); por omisión se estima
+--json    file  io=out ext=json  # Exportar análisis a JSON
+--verbose bool  default=false  # Detalle completo
+[realize]
+plan     file  io=in ext=json required  # Plan de cadencias JSON
+--output file  io=out ext=json required alias=-o  # Archivo de salida JSON
+[insert]
+midi       file  io=in ext=mid required  # Archivo MIDI de entrada
+--plan     file  io=in ext=json required  # Plan de cadencias JSON
+--output   file  io=out ext=mid required alias=-o  # MIDI de salida
+--velocity int   default=80 min=1 max=127  # Velocity de los acordes
+[strengthen]
+plan        file  io=in ext=json required  # Plan de cadencias JSON
+--intensity float default=0.5 min=0 max=1 typical=0..1  # Intensidad del refuerzo 0-1
+--output    file  io=out required alias=-o  # Plan modificado
+[weaken]
+plan        file  io=in ext=json required  # Plan de cadencias JSON
+--intensity float default=0.5 min=0 max=1 typical=0..1  # Intensidad 0-1
+--output    file  io=out required alias=-o  # Plan modificado
+[sequence]
+plan        file  io=in ext=json required  # Plan de cadencias JSON
+--direction enum  default=ascending values=ascending|descending  # Dirección
+--output    file  io=out required alias=-o  # Plan modificado
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # --mode major — Modo

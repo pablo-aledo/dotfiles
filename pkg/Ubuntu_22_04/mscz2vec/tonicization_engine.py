@@ -66,6 +66,30 @@ Opciones
   --no-color         Desactivar colores ANSI
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi       file  io=in ext=mid required  # MIDI de entrada (progresión de acordes)
+--output   file  io=out ext=mid  # MIDI de salida
+--key      str    # Fuerza la tonalidad (p.ej. Cmaj, Am)
+--targets  list  of=str  # Grados tonicizables a considerar
+--density  float default=0.5 min=0 max=1 typical=0..1  # Fracción de candidatos tratados 0-1
+--min-gap  int   default=1 min=0  # Compases mínimos entre tonicizaciones
+--seventh  bool  default=false  # Usa 7ª de dominante en vez de tríada simple
+--curve    file  io=in ext=json  # curves.json de tension_designer: prioriza compases de mayor…
+--seed     int   default=42  # Semilla aleatoria
+--report   bool  default=false  # Solo informe, sin escribir MIDI
+--no-color bool  default=false  # Desactiva colores ANSI
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python tonicization_engine.py progresion.mid

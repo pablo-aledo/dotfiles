@@ -91,6 +91,46 @@ Opciones
   --listen              Reproducir al final (requiere pygame)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+description          str    # Descripción libre en lenguaje natural
+--key                str   default=C  # Tonalidad (C, Am, F#, Bb…)
+--mode               str   default=auto
+--bars               int   min=0 unit=compases  # Compases (por omisión: los que cubra --chords; 16…
+--tempo              str   default=120
+--time-sig           str   default=4/4
+--style              enum  default=auto values=walking|classical|baroque|latin|blues|pop|pedal|ostinato|auto|diatonic|flamenco|folk|impressionist|jazz|modal|romantic
+--chords             str    # Progresión en texto: 'C Am F G' o 'Cm:2 G7:2'
+--chords-midi        file  io=in ext=mid  # Pista de acordes en MIDI
+--chords-json        file  io=out ext=json  # Acordes desde .chords.json
+--melody-midi        file  io=in ext=mid  # Melodía MIDI para contrapunto automático
+--range              list  of=int
+--approach-prob      float default=0.6 min=0 max=1 typical=0..1
+--swing              float default=0.0
+--ostinato-pattern   str    # Patrón para ostinato: 'D3:2 C3:1 Bb2:1'
+--pedal-note         str    # Nota de pedal para style=pedal (ej: 'D2')
+--candidates         int   default=1 min=1
+--curves             str
+--from-theorist      str
+--from-narrator      str
+--export-fingerprint bool  default=false
+--export-combined    bool  default=false  # Exportar MIDI con bajo + melodía juntos
+--output             file  default=bass_out.mid io=out ext=mid
+--seed               int   default=42
+--verbose            bool  default=false
+--dry-run            bool  default=false
+--listen             bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Desde descripción libre

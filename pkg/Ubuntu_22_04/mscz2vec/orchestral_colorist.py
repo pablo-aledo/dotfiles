@@ -44,6 +44,28 @@ Opciones
   --no-color         Desactivar colores ANSI
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi            file  io=in ext=mid
+--emotion       enum  values=angustia|calidez|esperanza|fragilidad|melancolia|serenidad|tension|triunfo
+--output        file  io=out
+--keep          list  of=int
+--no-register   bool  default=false
+--no-dynamics   bool  default=false
+--report        bool  default=false  # SOLO informe de roles y paleta: no escribe MIDI (ignora…
+--list-emotions bool  default=false
+--no-color      bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python orchestral_colorist.py obra.mid --emotion melancolia

@@ -47,6 +47,32 @@ Opciones
   --verbose               Informe detallado por stdout
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+harmony           file  io=in ext=mid  # MIDI con la armonía (acordes)
+melody            file  io=in ext=mid  # MIDI con la melodía a adaptar
+--adapt-mode      str   default=contour  # Estrategia de adaptación melódica
+--strategy-param  list  of=kv format=K=V  # Parámetros específicos de la estrategia, formato…
+--list-strategies bool  default=false  # Lista las estrategias de adaptación disponibles y su…
+--ornaments       list  of=enum values=appoggiatura|passing|neighbor|all  # Tipos de ornamento…
+--ornament-bars   list  of=int min=0 unit=compases  # Compases (1-based) donde aplicar ornamentos.…
+--ornament-prob   float default=0.4 min=0 max=1 typical=0..1  # Probabilidad de ornamentación por…
+--key             str    # Tonalidad forzada, e.g. "G major" o "D minor"
+--tempo           float  # BPM forzado
+--out-dir         dir   io=out  # Carpeta de salida
+--report          bool  default=false  # Guardar reporte JSON con el análisis completo
+--verbose         bool  default=false  # Informe detallado por stdout
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python melody_harmonizer.py harmony.mid melody.mid

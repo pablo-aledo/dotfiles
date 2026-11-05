@@ -53,6 +53,26 @@ Opciones
                               izquierda) para el análisis armónico
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+input          file  io=in ext=mid required  # Ruta a la partitura (MusicXML, MSCZ, MIDI, etc.)
+--vector       list  of=str alias=-v
+--output       file  io=out ext=json alias=-o  # Guardar resultado en JSON
+--custom-rules list  of=str  # Reglas Sequitur personalizadas con formato "nombre:tipo:valor". Ej…
+--bass-only    bool  default=false  # Analizar solo el pentagrama en clave de fa (mano izquierda)…
+--no-debug     bool  default=false  # Desactivar mensajes de depuración
+--verbose      bool  default=false  # Informe detallado de cada análisis
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python mscz2vec.py partitura.musicxml

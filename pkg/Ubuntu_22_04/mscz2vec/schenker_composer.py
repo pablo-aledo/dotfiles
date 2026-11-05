@@ -111,6 +111,66 @@ Opciones
     --seed SEED                 (defecto 42)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[synth-corpus]
+out_dir dir   io=out required
+--n     int   default=30
+--seed  int   default=42
+[inspect]
+midi                  file  io=in ext=mid required
+--key                 str
+--window              float
+--max-reduction-depth int   default=500 min=0
+--n-levels            int   default=5 min=0
+--export-levels       str
+[prepare]
+corpus                str   required
+--out                 file  default=dataset.npz io=out ext=npz
+--key                 str
+--window              float
+--max-reduction-depth int   default=500 min=0
+--n-levels            int   default=5 min=0
+--max-src-notes       int   default=4 min=0
+--max-src-len         int   default=24 min=0
+--max-tgt-len         int   default=64 min=0
+--val-frac            float default=0.15
+--seed                int   default=42
+[train]
+dataset      str   required
+--model-dir  dir   default=modelo_schenker/ io=in
+--epochs     int   default=100 min=0 unit=épocas
+--batch-size int   default=32 min=0
+--lr         float default=0.0003
+--patience   int   default=20
+--d-model    int   default=128
+--nhead      int   default=4
+--num-layers int   default=3 min=0
+--dim-ff     int   default=256
+--dropout    float default=0.1
+--resume     bool  default=false
+[generate]
+midi          file  io=in ext=mid required
+--model-dir   dir   default=modelo_schenker/ io=in
+--output      file  default=salida_elaborada.mid io=out ext=mid
+--level       int   default=5 max=10  # 0=nivel más reducido/Ursatz-like ... 10=superficie
+--iterations  int   default=1 min=1  # aplica la elaboración N veces seguidas, subiendo de nivel…
+--voices      str   default=mel,bass  # mel | bass | mel,bass
+--key         str
+--window      float
+--temperature float default=0.9 typical=0..1
+--top-k       int   default=0 min=0
+--seed        int   default=42
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python schenker_composer.py synth-corpus corpus/ --n 40

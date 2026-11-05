@@ -130,6 +130,37 @@ Opciones
     checkpoint CHECKPOINT
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[train]
+--engine       enum  values=additive|karplus|subtractive|wavetable|noise|fm2 required
+--n-samples    int   default=4000 min=0
+--epochs       int   default=200 min=0 unit=épocas
+--val-fraction float default=0.15
+--batch-size   int   default=128 min=0
+--lr           float default=0.001
+--seed         int   default=0
+--out          file  io=out required
+--quiet        bool  default=false
+[sample]
+target_wav   file  io=in required
+--checkpoint file  io=in ext=pt,pth required
+-n           int   default=8
+--seed       int   default=0
+--render     bool  default=false
+--out-dir    dir   io=out required
+[info]
+checkpoint file  io=in ext=pt,pth required
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     genopatch_flow.py train --engine additive --n-samples 3200 \

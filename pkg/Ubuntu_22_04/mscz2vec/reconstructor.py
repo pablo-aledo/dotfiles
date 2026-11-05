@@ -174,6 +174,117 @@ Opciones
     --strict
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--mode                  enum  default=faithful values=faithful|recompose|both
+--out-dir               dir   io=out
+--tools                 str
+--min-melody            float default=0.8
+--tol                   float default=0.25
+--seed                  int   default=5
+--skip                  str   default=""
+--no-color              bool  default=false
+--variants              str   default=base,rehar,orq
+--no-original-candidate bool  default=false
+--emotion               str
+--tonic-density         float default=0.15 typical=0..1
+--pattern               str   default=auto  # auto | alberti | arpeggio-up | block
+--perf-style            str   default=auto  # auto | clasico | romantico | mecanico
+--bass-style            str   default=auto  # auto | classical | pedal
+--bars                  int   min=0 unit=compases
+--clean                 enum  default=auto values=auto|doctor|none
+--meta-engine           enum  default=auto values=auto|doctor|builtin
+--meta-policy           enum  default=copy values=copy|flatten
+--fidelity-engine       enum  default=auto values=auto|meter|builtin
+--select                enum  default=quality values=quality|fidelity
+--harmony               enum  default=tonicized values=tonicized|captured|generated
+--melody-source         enum  default=motif values=motif|guided|captured
+--bars-from             enum  default=ticks values=ticks|metric
+--style-source          enum  default=programs values=programs|catalog
+--critique              enum  default=basic values=basic|full
+--recipe-paths          enum  default=absolute values=absolute|relative
+--report-style          enum  default=compact values=compact|full
+--plan                  file  io=in
+--dry-run               bool  default=false
+--resume                bool  default=false
+--force                 bool  default=false
+--timeout               int   default=300
+--strict                bool  default=false
+[analyze]
+original    file  io=in required
+--json      file  io=out ext=json
+--tools     str
+--bars      int   min=0 unit=compases
+--bars-from enum  default=ticks values=ticks|metric
+--no-color  bool  default=false
+[plan]
+original file  io=in required
+--yaml   file  io=in ext=yaml,yml
+[run]
+original file  io=in required
+[batch]
+inputs      list  of=str  # MIDIs, carpetas o patrones glob
+--catalog   file  io=in ext=json  # JSON […]
+--midis-dir dir   io=in
+--id        str
+--start     int   default=1 min=1
+--limit     int
+[choose]
+original          file  io=in required
+--candidates      list  of=str required
+--output          file  io=out required alias=-o
+--min-melody      float default=0.8
+--tol             float default=0.25
+--tools           str
+--fidelity-engine enum  default=auto values=auto|meter|builtin
+--select          enum  default=quality values=quality|fidelity
+--no-quality      bool  default=false  # atajo de --select fidelity
+--report          str
+--no-color        bool  default=false
+[compare]
+dir        dir   io=in required
+--no-color bool  default=false
+[report]
+dir            dir   io=in required
+--report-style enum  values=compact|full
+--no-color     bool  default=false
+[_first]
+--files  list  of=str
+--glob   str
+--output file  io=out required alias=-o
+[_track0]
+file file  io=in required
+[_chan0]
+file file  io=in required
+[_count]
+files list  of=str required
+[_quarter]
+file    file  io=in required
+default int   required
+[_meta]
+src         file  io=in required
+--copy-from str   required
+--output    file  io=out required alias=-o
+--only      str   default=ts,key,tempo
+--policy    enum  default=copy values=copy|flatten
+--time-sig  str
+--key       str
+[_fidelity]
+original  file  io=in required
+candidate str   required
+--tol     float default=0.25
+--json    file  io=out ext=json
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python reconstructor.py analyze original.mid

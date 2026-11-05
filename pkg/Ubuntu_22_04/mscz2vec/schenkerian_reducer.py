@@ -82,6 +82,30 @@ Opciones
   --no-color             Desactivar colores ANSI
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi             file  io=in ext=mid required
+--key            str
+--window         float unit=tiempos
+--max-levels     int   default=5 min=0
+--threshold      float default=0.35
+--weights-config file  io=in ext=pt,pth
+--candidates     int   default=3 min=0
+--export-levels  str
+--json           file  io=out ext=json
+--explain        bool  default=false
+--no-color       bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python schenkerian_reducer.py obra.mid

@@ -33,6 +33,44 @@ Modos de uso
   info       — Muestra los metadatos de un modelo .cgan.pkl
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[train]
+--corpus       dir   io=in required  # Carpeta con los MIDIs del corpus
+--model        file  default=chordgan.pkl io=out ext=pkl  # Ruta del modelo a guardar [default…
+--steps        int   default=4 min=0  # Pasos por ventana de entrenamiento [default: 4]
+--solver       enum  default=ridge values=ridge|knn  # Regresor base [default: ridge]
+--alpha        float default=1.0 typical=0..1  # Regularización Ridge [default: 1.0]
+--k            int   default=5  # Vecinos para KNN [default: 5]
+--lambda-cycle float default=10.0  # Peso pérdida de ciclo [default: 10.0]
+--iters        int   default=50 min=0  # Iteraciones de refinamiento [default: 50]
+--seed         int   default=42
+--verbose      bool  default=false
+[transfer]
+input       file  io=in ext=mid required  # MIDI de entrada a transformar
+--model     file  io=in ext=pkl required  # Modelo entrenado (.pkl)
+--output    file  default=chordgan_out.mid io=out ext=mid  # MIDI de salida [default…
+--intensity float default=1.0 min=0 max=1 typical=0..1  # Intensidad de la transferencia 0-1…
+--bpm       float default=120.0 unit=BPM  # Tempo del MIDI de salida [default: 120.0]
+--program   int   default=0 min=0 max=127  # Programa GM del instrumento [default: 0 = piano]
+--threshold float default=0.35  # Umbral de activación del roll [default: 0.35]
+--seed      int   default=42
+--verbose   bool  default=false
+[analyze]
+--input file  io=in ext=mid required  # Fichero MIDI o carpeta con MIDIs
+--plot  bool  default=false  # Mostrar perfil chroma en ASCII
+[info]
+--model file  io=in ext=pkl required  # Modelo entrenado (.pkl)
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO — TRAIN ──

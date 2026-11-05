@@ -59,6 +59,41 @@ Opciones
   --verbose, -v               Informe detallado de decisiones
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+inputs             list  of=file io=in ext=mid required  # Archivos MIDI de frases de entrada
+--key              str    # Tonalidad base (ej. C, Am, F# minor). Default: auto
+--tempo            int    # Tempo BPM
+--style            enum  default=pop values=pop|rock|ballad|jazz|folk|rnb|auto|baroque|blues|diatonic|flamenco|impressionist|modal|romantic
+--beats-per-bar    int   unit=tiempos  # Pulsos por compás
+--bars-per-section int   min=0 unit=compases  # Compases por sección, igual para todas
+--split-tracks     bool  default=false  # Tratar cada track MIDI como frase independiente
+--melody-track     int    # Índice del track melódico a usar
+--fragment-start   int    # Compás de inicio del fragmento (1-based)
+--fragment-end     int    # Compás de fin del fragmento (1-based, inclusivo)
+--sections         list  of=enum values=intro|verse1|prechorus|chorus|verse2|bridge|solo|outro
+--no-intro         bool  default=false
+--no-prechorus     bool  default=false
+--no-bridge        bool  default=false
+--no-solo          bool  default=false
+--out-dir          dir   default=song_output io=out  # Directorio de salida
+--output-name      str   default=song  # Nombre base de archivos
+--export-plan      bool  default=false  # Exportar plan JSON
+--export-musicxml  bool  default=false  # Exportar también en formato MusicXML (v2.0)
+--dry-run          bool  default=false  # Mostrar plan sin generar archivos MIDI
+--seed             int   default=42  # Semilla aleatoria
+--verbose          bool  default=false alias=-v  # Informe detallado de decisiones
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python song_architect.py frase1.mid frase2.mid frase3.mid

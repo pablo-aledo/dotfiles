@@ -121,6 +121,33 @@ Opciones
   --out FILE                  WAV procesado de salida (obligatorio)
   --json FILE                 Informe opcional (cadena aplicada, duración,
                               picos antes/después)
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+input_wav    file  io=in ext=wav required  # WAV de entrada (dry, sin procesar)
+--chain      file  io=in ext=json  # JSON con una lista de EffectGene (§1.4) a aplicar en orden
+--eq         str
+--compressor str
+--reverb     str
+--limiter    str
+--delay      str
+--saturation str
+--chorus     str
+--tremolo    str
+--noise-gate str
+--de-esser   str
+--out        file  io=out ext=wav required  # WAV procesado de salida
+--json       file  io=out ext=json  # Informe opcional (cadena aplicada, duración, picos…
+@end
 """
 
 import argparse

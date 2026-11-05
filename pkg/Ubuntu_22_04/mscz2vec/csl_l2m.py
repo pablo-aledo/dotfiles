@@ -265,6 +265,117 @@ Opciones
     --max-show MAX_SHOW         Máximo de archivos a listar (default: 20)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[prepare]
+--input-dir     dir   io=in required  # Carpeta con archivos .mid, .midi y/o .abc
+--output-dir    dir   io=out required  # Carpeta de salida para los .pkl
+--default-tempo float default=90.0  # Tempo por defecto para ABC sin cabecera Q:
+[vocab]
+--events-dir dir   io=in required
+--output-dir dir   io=out required
+[splits]
+--events-dir dir   io=in required
+--output-dir dir   io=out required
+--val-ratio  float default=0.05 typical=0..1
+--test-ratio float default=0.05 typical=0..1
+--seed       int   default=42
+[attributes]
+--events-dir dir   io=in required
+--output-dir dir   io=out required
+[train-vqvae]
+--events-dir dir   io=in required
+--vocab      file  io=in ext=pkl required  # dictionary_melody.pkl
+--model-dir  dir   io=in required
+--epochs     int   default=12 min=0 unit=épocas
+--batch-size int   default=2 min=0
+--lr         float default=3e-05
+--enc-layers int   default=2
+--enc-heads  int   default=4
+--enc-dim    int   default=128
+--dec-layers int   default=2
+--dec-heads  int   default=4
+--dec-dim    int   default=128
+--d-latent   int   default=64
+--d-embed    int   default=128
+--n-codes    int   default=512 min=0
+--n-groups   int   default=16 min=0
+--device     str   default=cpu
+[extract-feats]
+--events-dir   dir   io=in required
+--vocab-melody file  io=in required
+--model-dir    dir   io=in required
+--output-dir   dir   io=out required
+[train]
+--events-dir   dir   io=in required
+--vocab-melody file  io=in required
+--vocab-lyric  file  io=in required
+--train-split  file  io=in required
+--val-split    file  io=in required
+--attr-dir     dir   io=in required
+--model-dir    dir   io=in required
+--struct-dir   dir   io=in  # Carpeta con etiquetas de estructura A/B/C… (.pkl por canción)
+--key-dir      dir   io=in  # Carpeta con tonalidades (.pkl por canción, ej: "Dm")
+--emotion-dir  dir   io=in  # Carpeta con emociones (.pkl por canción, ej: "Positive")
+--feats-dir    dir   io=in  # Carpeta con features VQ-VAE (opcional)
+--epochs       int   default=12 min=0 unit=épocas
+--batch-size   int   default=2 min=0
+--max-lr       float default=0.0001
+--min-lr       float default=5e-06
+--enc-layers   int   default=2
+--enc-heads    int   default=4
+--enc-dim      int   default=128
+--dec-layers   int   default=2
+--dec-heads    int   default=4
+--dec-dim      int   default=128
+--d-latent     int   default=64
+--d-embed      int   default=128
+--enc-seqlen   int   default=128
+--dec-seqlen   int   default=512
+--max-seqs     int   default=16 min=0
+--device       str   default=cpu
+[generate]
+--events       file  io=out ext=pkl required  # Archivo .pkl con REMI-Aligned (output de prepare)
+--vocab-melody file  io=in
+--vocab-lyric  file  io=in
+--attr-dir     dir   io=in
+--model-dir    dir   io=in required
+--output       file  default=salida.mid io=out ext=mid
+--key          str    # Tonalidad: C, Dm, F#m…
+--emotion      enum  values=Positive|Neutral|Negative
+--temperature  float default=1.2
+--nucleus-p    float default=0.9
+--tempo        float default=90.0
+--n-samples    int   default=1 min=0  # Número de melodías a generar
+--n-repeats    int   default=1 min=0  # Repetir las frases N veces para generar salidas más largas
+--free         bool  default=false  # Modo libre: ignora restricciones de alineación (útil con…
+--dec-seqlen   int   default=2048
+[round-trip]
+--events file  io=in required
+--output file  default=round_trip.mid io=out ext=mid
+--tempo  float default=90.0
+[new-lyrics]
+--events      file  io=in ext=pkl required  # pkl original (de prepare)
+--lyrics      file  io=in ext=txt required  # Fichero de texto con las letras nuevas (una frase por…
+--output      file  io=out ext=pkl required  # pkl de salida listo para usar en generate
+--vocab-lyric file  io=in ext=pkl  # dictionary_lyric.pkl (opcional, para verificar cobertura)
+[inspect]
+--events-dir   dir   io=in
+--vocab-melody file  io=in
+--vocab-lyric  file  io=in
+--attr-dir     dir   io=in
+--model-dir    dir   io=in
+--max-show     int   default=20 min=0  # Máximo de archivos a listar
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # REMI-Aligned .pkl → MIDI (diagnóstico)

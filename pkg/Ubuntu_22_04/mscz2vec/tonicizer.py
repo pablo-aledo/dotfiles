@@ -57,6 +57,46 @@ OPCIONES COMUNES:
   --verbose             Muestra el análisis armónico del puente
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[demo]
+--from-key  str   required
+--to-key    str   required
+--technique list  of=str
+--bpb       int   default=4
+--tempo     float default=100
+--bars-pre  int   default=4 min=0 unit=compases
+--bars-post int   default=4 min=0 unit=compases
+--out-dir   dir   default=tonicizer_out io=out
+--seed      int   default=42
+--verbose   bool  default=false
+[modulate]
+input       file  io=in ext=mid required  # Archivo MIDI de entrada
+--to-key    str   required
+--from-key  str    # Si se omite, se autodetecta
+--technique str   default=pivot
+--at        int   required  # Compás donde ocurre el cambio
+--bpb       int   default=4
+--out-dir   dir   io=out
+--seed      int   default=42
+--verbose   bool  default=false
+[analyze]
+input     file  io=in required
+--window  int   default=2
+--bpb     int   default=4
+--verbose bool  default=false
+[selftest]
+--out-dir dir   default=tonicizer_selftest io=out
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python tonicizer.py demo --from-key "C major" --to-key "G major" \

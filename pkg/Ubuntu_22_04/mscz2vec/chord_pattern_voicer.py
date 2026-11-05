@@ -91,6 +91,34 @@ Opciones
   --verbose           Informe detallado por stdout
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+input_midi       file  io=in ext=mid  # MIDI de entrada con varias pistas
+--track          int    # Fuerza el índice (0-based) de la pista de armonía
+--pattern        enum  default=bombo-caja values=block|bombo-caja|alberti|arpeggio-up|arpeggio-down|arpeggio-updown|custom
+--custom-pattern str    # Roles separados por comas, para --pattern custom (ej: "bajo,agudo,resto…
+--reps           int   default=1 min=1  # Repeticiones del patrón por acorde/compás
+--gate           float default=0.85 min=0.0 max=1.0  # Fracción sonante de cada paso, 0-1
+--accent         float default=1.0  # Multiplicador de velocity del primer golpe de cada repetición
+--octave         int   default=0  # Transporta todas las notas del acorde N octavas. Positivo sube…
+--segments       list  of=str  # Patrón/velocidad distintos por rango de compases. Cada SPEC…
+--min-notes      int   default=2 min=0  # Mínimo de notas simultáneas para considerar polifónica…
+--out            file  io=out ext=mid alias=--output  # Ruta del MIDI de salida
+--out-dir        dir   io=out  # Carpeta de salida
+--list-patterns  bool  default=false  # Lista los patrones disponibles y sale
+--report         bool  default=false  # Guarda un JSON con el análisis completo
+--verbose        bool  default=false  # Informe detallado por stdout
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python chord_pattern_voicer.py cancion.mid

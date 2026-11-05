@@ -114,6 +114,43 @@ Opciones
   --seed SEED                 Semilla aleatoria (default: 42)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+input                 file  io=in ext=mid  # Archivo(s) MIDI de entrada (admite glob)
+--catalog             bool  default=false  # Mostrar catálogo de escalas y estilos y salir
+--style               list  of=str advanced  # Estilos a aplicar. Ignorado si se usa --sections
+--sections            str    # Transformación progresiva por tramos, e.g. "0:heroic_minor…
+--transition-beats    float default=0 unit=tiempos  # (con --sections) Nº de tiempos al final de…
+--key                 str    # Tonalidad origen forzada, e.g. "D minor". Si no se indica, se…
+--tempo               float  # BPM de salida forzado
+--beats-per-bar       int   unit=tiempos  # Beats por compás
+--start-degree        int   default=0  # Desplazamiento adicional de grado de escala sobre el preset
+--chord-tone-priority bool  default=false  # Corrige notas en tiempo fuerte hacia el tono de acorde…
+--fragment            bool  default=false  # Fragmenta la melodía en motivos (separados por…
+--fragment-order      list  of=int  # Orden/repetición de fragmentos por índice, e.g.…
+--metric-shift        bool  default=false  # Desplaza la melodía para que la primera nota caiga en…
+--body-tail           bool  default=false  # Distingue 'cuerpo' (1ª mitad de cada motivo, protegido…
+--wt-variant          enum  default=auto values=auto|0|1  # Forzar la colección de tonos enteros…
+--octatonic-variant   enum  default=auto values=auto|wh|hw  # Forzar la variante octatónica…
+--pentatonic-variant  enum  default=auto values=auto|major|minor  # Forzar pentatónica mayor/menor…
+--scale               str    # (con --style custom) escala destino, ver --catalog
+--method              enum  values=degree|interval|mirror  # (con --style custom) método de mapeo
+--axis-offset         float unit=semitonos  # Eje de reflexión, en semitonos desde la tónica (con…
+--out-dir             dir   io=out  # Carpeta de salida
+--report              bool  default=false  # Guardar reporte JSON por cada transformación
+--seed                int   default=42  # Semilla aleatoria
+--verbose             bool  default=false  # Informe detallado por stdout
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python theme_transformer.py tema.mid

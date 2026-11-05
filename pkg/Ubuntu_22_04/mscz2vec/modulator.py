@@ -63,6 +63,45 @@ PARÁMETROS:
   --version VERSION
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+input              file  io=in ext=mid  # MIDI de entrada (no necesario con…
+--param            str   excludes=--params
+--params           list  of=str excludes=--param
+--curve            enum  default=linear values=linear|exponential|logarithmic|sigmoid|arc|arc_down|s_curve|pulse|plateau|wave|random_walk|custom
+--direction        enum  default=increasing values=increasing|decreasing|none
+--from             float default=0.0
+--to               float default=1.0
+--intensity        float default=1.0 typical=0..1
+--steepness        float default=6.0
+--periods          float default=2.0
+--control-points   str
+--scope            str
+--voice            enum  default=all values=all|melody|bass|harmony
+--voice-stagger    int   default=0
+--use-groove-map   bool  default=false
+--smooth-boundary  int   default=0
+--respect-cadences bool  default=false
+--output           file  io=out
+--seed             int   default=42
+--dry-run          bool  default=false
+--preview          bool  default=false
+--plot             bool  default=false
+--verbose          bool  default=false
+--list-params      bool  default=false
+--list-curves      bool  default=false
+--version          str
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python modulator.py obra.mid --param density --curve arc

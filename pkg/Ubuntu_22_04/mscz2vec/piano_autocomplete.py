@@ -185,6 +185,85 @@ Opciones
     --model-dir DIR
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[preprocess]
+--input     dir   io=in required
+--output    dir   io=out required
+--val-split float default=0.15
+--min-notes int   default=8 min=0
+--augment   bool  default=false  # Añade transposición/tempo/jitter (5x ficheros)
+--seed      int   default=42
+--verbose   bool  default=false
+[train]
+--data         dir   io=in required
+--model-dir    dir   io=in required
+--epochs       int   default=50 min=0 unit=épocas
+--batch-size   int   default=8 min=0
+--max-notes    int   default=256 min=0
+--layers       int   default=4
+--dim          int   default=128
+--heads        int   default=4
+--dropout      float default=0.1
+--lr           float default=0.0003
+--sched-start  int   default=5
+--sched-end    int   default=25
+--sched-max-p  float default=0.5
+--eval-every   int   default=5
+--eval-batches int   default=20  # Nº de batches de validación a promediar
+--log-every    int   default=10  # Imprime progreso cada N batches (0 = desactivar)
+--resume       bool  default=false
+--seed         int   default=42
+[continue]
+--prompt            file  io=in required
+--model-dir         dir   io=in
+--allow-random-init bool  default=false  # Generar con pesos aleatorios si no hay --model-dir
+--dim               int   default=128
+--layers            int   default=4
+--heads             int   default=4
+--output            file  default=continuado.mid io=out ext=mid
+--notes             int   default=64
+--temperature       float default=1.0 typical=0..1
+--top-k             int   default=0 min=0
+--top-p             float default=0.0
+--max-context       int   default=512 min=0
+--keep-notes        int   default=384
+--seed              int   default=42
+[score]
+file      file  io=in required
+--compare list  of=file io=in  # Ficheros adicionales para comparar
+[make-pairs]
+--prompt      file  io=in required
+--candidates  list  of=file io=in required
+--top-k-pairs int   default=1 min=0
+--output      file  default=pairs.json io=out ext=json
+[dpo]
+--model-dir  dir   io=in required
+--pairs      file  io=in required
+--output-dir dir   io=out
+--beta       float default=0.03
+--lr         float default=1e-05
+--epochs     int   default=3 min=0 unit=épocas
+[bench]
+--model-dir dir   io=in
+--dim       int   default=128
+--layers    int   default=4
+--heads     int   default=4
+--notes     int   default=200
+--seed      int   default=42
+[inspect]
+--data      dir   io=in
+--model-dir dir   io=in
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Métricas heurísticas de una o varias continuaciones

@@ -97,6 +97,39 @@ Opciones
   --seed N           Semilla aleatoria (default: 42)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+input                file  io=in ext=mid required  # MIDI fuente (melodía)
+--species            enum  default=5 values=1|2|3|4|5  # Especie de contrapunto 1-5
+--voice              enum  default=auto values=auto|soprano|alto|tenor|bass|violin|viola|cello
+--voice-position     enum  default=auto values=above|below|auto  # Posición relativa a la melodía
+--key                str   default=auto  # Tonalidad: "C", "Am", "Bb major"…
+--bars               int   min=0 unit=compases  # Compases a generar
+--beats              int   default=4 unit=tiempos  # Beats por compás
+--strict             bool  default=false  # Modo CSP: reglas de Fux como RESTRICCIONES DURAS.…
+--tension-curve      str    # Curva de tensión: "0:0.2, 8:0.8, 16:0.3"
+--all-species        bool  default=false  # Generar las 5 especies
+--catalog            bool  default=false  # Con --all-species, concatenar en un único MIDI
+--output             file  default=counterpoint_out.mid io=out ext=mid  # Fichero de salida
+--output-dir         dir   default=. io=out  # Directorio de salida con --all-species
+--channel            int   default=1  # Canal MIDI del contrapunto
+--program            int   min=0 max=127  # Program change GM
+--listen             bool  default=false  # Reproducir al terminar (requiere pygame)
+--play-seconds       int   default=30 unit=s  # Segundos de reproducción
+--export-fingerprint bool  default=false  # Exportar .fingerprint.json para stitcher
+--verbose            bool  default=false  # Informe detallado
+--seed               int   default=42  # Semilla aleatoria
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO COMO MÓDULO ──

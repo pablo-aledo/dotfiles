@@ -15,6 +15,24 @@ Opciones
                               Guardar el ensayo en un archivo separado
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+filepath       file  io=in ext=mid required  # Ruta al archivo .mid o .midi
+--sections     int   default=6  # Número de secciones para el análisis
+--output       file  io=out ext=txt  # Guardar informe en un archivo .txt
+--essay-only   bool  default=false  # Generar solo el ensayo narrativo (sin métricas)
+--essay-output file  io=out  # Guardar el ensayo en un archivo separado
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python3 midi_analyzer_v3.py archivo.mid

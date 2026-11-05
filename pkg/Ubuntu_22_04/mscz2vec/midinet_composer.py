@@ -88,6 +88,60 @@ Opciones
                                 datos
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[prepare]
+--input-dir  dir   io=in required  # Carpeta con ficheros .mid / .midi
+--output-dir dir   io=out required  # Carpeta de salida para los .npz
+--pitch-lo   int   default=0 min=0 max=127 unit="nota MIDI"  # MIDI pitch mínimo incluido
+--pitch-hi   int   default=128
+--report     bool  default=false  # Mostrar muestra de los ficheros generados
+[train]
+--data-dir   dir   io=in required  # Carpeta con .npz generados por prepare
+--model-dir  dir   io=out required  # Carpeta donde guardar el modelo
+--epochs     int   default=300 min=0 unit=épocas  # Épocas de entrenamiento
+--batch-size int   default=72 min=0  # Tamaño de batch
+--lr         float default=0.0002  # Learning rate Adam
+--nz         int   default=100
+--base-ch    int   default=64
+--save-every int   default=50  # Guardar checkpoint cada N épocas
+--pitch-lo   int    # Pitch mínimo usado en prepare (se infiere si no se indica)
+--resume     bool  default=false  # Reanudar desde el último checkpoint
+--cpu        bool  default=false  # Forzar CPU aunque haya GPU disponible
+[generate]
+--model-dir   dir   io=in required  # Carpeta del modelo entrenado
+--bars        int   default=8 min=0 unit=compases  # Número de compases a generar
+--chords      str    # Progresión de acordes: "C:maj,F:maj,G:maj,C:maj" o nombre de preset…
+--chord-ref   file  io=in ext=mid  # MIDI de referencia del que extraer la progresión de acordes
+--bpm         float default=120.0 unit=BPM  # Tempo BPM del MIDI de salida
+--temperature float default=1.0 typical=0..1  # Temperatura del muestreo
+--program     int   default=0 min=0 max=127  # Programa MIDI General (instrumento, 0-127; default…
+--velocity    int   default=80 min=1 max=127  # Velocidad MIDI de las notas
+--output      file  default=midinet_out.mid io=out ext=mid  # Fichero MIDI de salida
+--seed        int    # Semilla aleatoria para reproducibilidad
+--cpu         bool  default=false  # Forzar CPU aunque haya GPU disponible
+--verbose     bool  default=false  # Mostrar densidad de notas por compás
+[round-trip]
+--input    file  io=in required
+--output   file  default=round_trip_out.mid io=out ext=mid
+--bpm      float default=120.0 unit=BPM
+--pitch-lo int   default=0
+--pitch-hi int   default=128
+[inspect]
+--model-dir dir   io=in  # Carpeta del modelo a inspeccionar
+--data-dir  dir   io=in  # Carpeta de datos .npz a inspeccionar
+--what      enum  default=all values=model|data|all|presets  # Qué inspeccionar: model | data | all…
+--verbose   bool  default=false  # Mostrar detalle por fichero en el caso de datos
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Mostrar muestra de los ficheros generados

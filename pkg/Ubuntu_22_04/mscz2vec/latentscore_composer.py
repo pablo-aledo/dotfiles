@@ -94,6 +94,49 @@ OPCIONES GLOBALES:
   --verbose       Mostrar parámetros resueltos
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+vibe      str
+--output  file  io=out
+--dur     float default=16.0 unit=s
+--sr      int   default=44100
+--verbose bool  default=false
+[render]
+--config file  io=in
+--patch  list  of=str
+[morph]
+a       str   required
+b       str   required
+--steps int   default=6 min=2
+[chain]
+items      list  of=str required
+--dur-each float default=16.0 unit=s
+--fade     float default=2.0
+--output   file  io=out
+--sr       int   default=44100
+--verbose  bool  default=false
+[config show]
+file file  io=in required
+[config from-vibe]
+text     str   required
+--output file  io=out
+[config patch]
+file     file  io=in required
+patch    list  of=str
+--output file  io=out
+[inspect wav]
+file file  io=in
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Dependencias
 ────────────────────────────────────────────────────────────────────────────
   pip install numpy scipy soundfile

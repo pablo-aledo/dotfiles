@@ -181,6 +181,61 @@ Opciones
     model MODEL                 Ruta al fichero .pkl del modelo
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[scan]
+input         file  io=in ext=mid required  # MIDI de entrada
+--min-density float default=0.0 typical=0..1  # Umbral de densidad mínima (def: 0.0 = solo vacíos)
+--report      str    # Guardar reporte en fichero .txt
+[fill]
+input                   file  io=in ext=mid required  # MIDI de entrada
+--gaps                  list  of=int  # IDs de huecos a rellenar
+--strategy              enum  default=auto values=auto|markov_bi|interpolate|contour_blend|ml_guided
+--length                str   default=keep  # Longitud: keep | auto | N (nº compases)
+--min-density           float default=0.0 typical=0..1
+--checkpoint-dir        dir   io=in  # Directorio con modelo entrenado
+--seed                  int   default=42
+--no-chord-conditioning bool  default=false  # M8: desactiva el condicionamiento armónico explícito
+--context-bars          int   default=8 min=0 unit=compases  # M1: compases de contexto para…
+--output                file  io=out ext=mid alias=-o  # MIDI de salida (def: <entrada>_filled.mid)
+[variants]
+input                   file  io=in ext=mid required  # MIDI de entrada
+--n                     int   default=6  # Número de variantes (def: 6)
+--gaps                  list  of=int
+--strategies            list  of=enum values=all|markov_bi|interpolate|contour_blend|ml_guided
+--seeds                 list  of=int
+--length                str   default=keep
+--min-density           float default=0.0 typical=0..1
+--checkpoint-dir        dir   io=in
+--no-chord-conditioning bool  default=false  # M8: desactiva el condicionamiento armónico explícito
+--context-bars          int   default=8 min=0 unit=compases  # M1: compases de contexto para…
+--score-weights         list  of=file io=in ext=pt,pth format=K=V  # M3: pesos del scoring, ej…
+--out-dir               dir   default=./inpainter_variants io=out  # Directorio de salida (def…
+[train]
+corpus                  dir   io=in required  # Directorio con MIDIs de entrenamiento
+--epochs                int   default=60 min=0 unit=épocas
+--lr                    float default=0.001
+--batch-size            int   default=64 min=0
+--hidden-dim            int   default=128
+--mask-ratio            float default=0.2 typical=0..1  # Fracción de compases a enmascarar por…
+--mask-phrase           bool  default=false  # M2: coloca huecos en límites de frase detectados…
+--augment-transpose     int   default=0  # M9: genera ±N copias transpuestas por semitono (def: 0 =…
+--augment-reverse       bool  default=false  # M9: añade versión con inversión temporal intra-compás
+--role                  enum  default=all values=all|melody|inner|bass  # M7: entrena solo para el…
+--no-chord-conditioning bool  default=false  # M8: desactiva el one-hot de acorde en el vector de…
+--checkpoint-dir        dir   default=./inpainter_ckpt io=in
+[inspect]
+model file  io=in ext=pkl required  # Ruta al fichero .pkl del modelo
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Dependencias
 ────────────────────────────────────────────────────────────────────────────
   pip install mido numpy (+ torch para ml_guided/train)

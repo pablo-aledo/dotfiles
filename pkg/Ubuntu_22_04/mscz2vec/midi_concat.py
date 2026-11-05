@@ -89,6 +89,27 @@ Opciones
   --verbose         Informe detallado
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+stems         list  of=str required  # MIDIs de entrada, en el orden en que se concatenan. Admite…
+--output      file  default=concat.mid io=out ext=mid  # MIDI de salida
+--tpb         int    # Ticks per beat de salida
+--gap         float default=0.0 min=0  # Beats de silencio entre cada MIDI concatenado
+--preview     bool  default=false  # Mostrar plan de concatenación sin generar MIDI
+--list-bars   bool  default=false  # Para cada MIDI dado, listar sus compases detectados (posición…
+--list-tracks bool  default=false  # Para cada MIDI dado, listar sus pistas (índice, nombre, nº de…
+--verbose     bool  default=false  # Informe detallado
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python midi_concat.py frase1.mid frase2.mid frase3.mid

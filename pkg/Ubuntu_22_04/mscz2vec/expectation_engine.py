@@ -52,6 +52,27 @@ Opciones
   --no-color         Desactivar colores ANSI
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi             file  io=in ext=mid required
+--output         file  io=out
+--devices        list  of=enum values=cadencia_rota|suspension|appoggiatura|evasion
+--density        float default=0.7 max=1.0 typical=0..1
+--climax-resolve bool  default=false
+--seed           int   default=42
+--report         bool  default=false  # SOLO informe de cadencias: no escribe MIDI (ignora --output)
+--no-color       bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python expectation_engine.py obra.mid

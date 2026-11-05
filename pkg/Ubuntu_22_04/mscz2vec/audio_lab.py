@@ -244,6 +244,92 @@ Opciones
     input INPUT                 Fichero a inspeccionar
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[analyse]
+input       file  io=in ext=mid required  # Fichero WAV o MIDI
+--method    enum  default=fft values=fft|dft  # Método de análisis
+--threshold float default=0.001  # Amplitud mínima para incluir un bin
+--top-n     int   min=0  # Mantener solo los N bins de mayor amplitud
+--max-bins  int   default=2048 min=0  # Muestras máximas para DFT
+--output    file  io=out ext=json alias=-o  # Fichero JSON de salida
+[spectrogram]
+input    file  io=in ext=wav required  # Fichero WAV
+--window int   default=4096  # Tamaño de ventana STFT en muestras
+--hop    float default=0.25  # Hop ratio ∈ (0,1]
+--plot   bool  default=false  # Genera también imagen PNG (requiere matplotlib+scipy)
+--output file  io=out ext=npz alias=-o  # Fichero NPZ de salida
+[reconstruct]
+input       file  io=in ext=json required  # Fichero .npz (STFT) o .json (espectro FFT/DFT)
+--duration  float default=2.0 unit=s  # Duración en segundos (solo para JSON, default: 2.0)
+--normalize bool  default=false  # Normalizar el WAV de salida a 0.85 peak (automático para NPZ con…
+--gl-iters  int   default=32 min=0  # Iteraciones de Griffin-Lim para NPZ con fase cero
+--output    file  io=out ext=wav alias=-o  # WAV de salida
+[npz-to-png]
+input       file  io=in ext=npz required  # Fichero .npz (de spectrogram o edit-spectrum)
+--log       bool  default=false  # Escala logarítmica en dB en vez de lineal (más perceptivo)
+--db-floor  float default=-80.0 unit=dB  # Piso en dB para escala log
+--no-flip-y bool  default=false  # No invertir eje Y (bin 0=DC queda arriba; por defecto va abajo)
+--output    file  io=out alias=-o  # Fichero PNG de salida
+[png-to-npz]
+input     file  io=in ext=npz required  # Fichero PNG (idealmente generado con npz-to-png)
+--sr      int   default=44100
+--window  int   default=4096  # Tamaño de ventana STFT si el PNG no tiene metadatos
+--hop     float default=0.25  # Hop ratio si el PNG no tiene metadatos
+--mag-max float typical=50..-200  # Factor de escala de magnitudes (recupera nivel original). Valor…
+--output  file  io=out ext=npz alias=-o  # Fichero NPZ de salida
+[edit-spectrum]
+input             file  io=in ext=npz required  # Fichero .npz de entrada (de spectrogram)
+--highpass        float unit=Hz  # Frecuencia de corte paso-alto en Hz (elimina < valor)
+--lowpass         float unit=Hz  # Frecuencia de corte paso-bajo en Hz (elimina > valor)
+--isolate         list  of=float  # Mantener solo estas frecuencias Hz (ej: 261.6 329.6 392)
+--isolate-margin  float default=30.0 unit=Hz  # Margen en Hz a cada lado de --isolate
+--suppress        list  of=float  # Atenuar estas frecuencias Hz (ej: 50 100 150)
+--suppress-margin float default=20.0 unit=Hz  # Margen en Hz a cada lado de --suppress
+--suppress-gain   float default=0.0  # Ganancia residual en zona suprimida ∈ [0,1]
+--gain            float unit=dB  # Ganancia global en dB aplicada a magnitudes (ej: +6, -3)
+--denoise         float  # Zeroing de bins bajo el percentil N de magnitud (ej: 60)
+--timestretch     float  # Factor de estiramiento temporal >1=más lento (ej: 1.5, 0.75)
+--pitchshift      int   unit=semitonos  # Transposición en semitones enteros (ej: +3, -5)
+--reverse         bool  default=false  # Invertir el espectrograma en el tiempo
+--output          file  io=out ext=npz alias=-o  # NPZ de salida
+--wav             file  io=in ext=wav  # Si se especifica, reconstruye también un WAV con este nombre
+[synth]
+--notes      list  of=str required  # Notas: nombre (C4, F#3) o número MIDI (60)
+--timbre     file  io=in ext=json  # JSON de timbre
+--envelope   file  io=in ext=json  # JSON de envolvente ADR
+--duration   float default=2.0 unit=s  # Duración de cada nota en segundos
+--velocity   float default=0.8  # Velocidad/dinámica global ∈ [0,1]
+--velocities list  of=float  # Velocidad por nota (ej: 0.7 0.6 0.9). Sobreescribe --velocity
+--detune     float default=0.0  # Detuning total en cents distribuido entre notas (ej: 8.0). Separa…
+--strum      float default=0.0 unit=ms  # Retraso en ms entre notas del acorde (ej: 20).…
+--chord-mode enum  default=chord values=chord|sequence  # chord=simultáneo/strum, sequence=en…
+--gap        float default=0.1  # Silencio entre notas en modo sequence
+--output     file  default=synth_out.wav io=out ext=wav alias=-o
+[play-midi]
+input            file  io=in ext=mid required  # Fichero MIDI (.mid)
+--instrument-map file  io=in ext=json  # JSON de asignación de instrumentos por canal
+--bpm            float unit=BPM  # Override de tempo en BPM
+--transpose      int   default=0 unit=semitonos  # Transposición en semitones
+--output         file  io=out ext=wav alias=-o  # WAV de salida
+[roundtrip]
+input    file  io=in ext=wav required  # Fichero WAV de entrada
+--method enum  default=stft values=stft|fft  # Pipeline de análisis/síntesis
+--window int   default=4096  # Tamaño de ventana STFT
+--hop    float default=0.25  # Hop ratio STFT
+--output file  io=out ext=wav alias=-o  # WAV de salida
+[info]
+input file  io=in required  # Fichero a inspeccionar
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python audio_lab.py analyse piano.wav --method fft --output spec.json

@@ -96,6 +96,72 @@ OPCIONES COMUNES:
                                 comparar
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--mulan      str   default=mulan.pt  # Checkpoint de MuLaN
+--device     str    # cpu | cuda | mps
+--dim        int   default=512  # Dimensión del transformer
+--depth      int   default=6  # Capas del transformer
+--heads      int   default=8  # Cabezas de atención
+--dim-latent int   default=128  # Dimensión del espacio latente MuLaN
+--seed       int   default=42  # Semilla aleatoria
+--verbose    bool  default=false alias=-v  # Informe detallado
+[prepare]
+--audio-dir dir   io=in required  # Carpeta con ficheros de audio (.wav, .mp3, .flac…)
+--manifest  file  io=out ext=wav  # Ruta de salida del CSV
+--verbose   bool  default=false alias=-v
+[train-mulan]
+--manifest        file  io=in ext=csv required  # CSV con columnas: path,text
+--steps           int   default=100000 min=0  # Pasos de entrenamiento
+--batch-size      int   default=16 min=0  # Tamaño de lote
+--lr              float default=0.0003  # Learning rate
+--valid-frac      float default=0.05  # Fracción de validación
+--save-every      int   default=1000  # Guardar checkpoint cada N pasos
+--results-dir     dir   default=./results_mulan io=in  # Carpeta de checkpoints
+--output          file  default=mulan.pt io=out ext=pt  # Checkpoint final
+--data-max-length int   min=0  # Longitud máxima del audio en muestras
+--use-lion        bool  default=false  # Usar optimizador Lion (requiere lion-pytorch)
+--decoupled-cl    bool  default=false  # Usar decoupled contrastive learning
+--sigmoid-cl      bool  default=false  # Usar sigmoid contrastive loss (SigLIP)
+--hierarchical-cl bool  default=false  # Añadir pérdida contrastiva jerárquica multi-capa
+[quantize]
+--manifest          file  io=in ext=csv required  # CSV con columnas: path,text
+--rq-quantizers     int   default=8  # Número de cuantizadores residuales
+--codebook-size     int   default=1024  # Tamaño del codebook
+--namespaces        str   default=semantic,coarse,fine  # Namespaces separados por coma
+--conditioning-dims str   default=1024,1024,1024  # Dimensiones de condicionamiento por namespace
+--batch-size        int   default=16 min=0  # Tamaño de lote
+--quantize-batches  int   default=50  # Batches para inicializar k-means
+--output            file  default=quantizer.pt io=out ext=pt  # Checkpoint del cuantizador
+[embed]
+input    file  io=in ext=wav required  # Fichero de audio (.wav/.mp3/…) o descripción de texto
+--mode   enum  default=auto values=audio|text|auto  # Modalidad
+--output file  default=embed.json io=out ext=json  # JSON de salida
+[generate]
+text          str   required  # Descripción de texto de la música a generar
+--quantizer   str   default=quantizer.pt  # Checkpoint del cuantizador
+--audio-lm    file  io=in ext=wav  # Checkpoint de AudioLM
+--num-samples int   default=4 min=0  # Candidatos generados (elige el más similar, default: 4)
+--output      file  default=generated.wav io=out ext=wav  # Fichero wav de salida
+--stub        bool  default=false  # Forzar AudioLM stub (no requiere audiolm-pytorch)
+[inspect]
+checkpoint file  io=in ext=pt,pth required  # Fichero .pt a inspeccionar
+--verbose  bool  default=false alias=-v  # Listar todos los tensores del state_dict
+[round-trip]
+audio         file  io=in ext=wav required  # Fichero de audio (.wav/.mp3/…)
+text          str   required  # Texto de consulta principal
+--extra-texts str    # Textos adicionales separados por | para comparar
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO RÁPIDO ──

@@ -90,6 +90,39 @@ Opciones
   --seed SEED                 Semilla aleatoria (default: 42)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+description       str   default=""  # Intención musical en lenguaje natural
+--key             str    # Tónica: C, Am, F#, Bb…
+--mode            enum  values=major|minor|dorian|phrygian|lydian|mixolydian|locrian|harmonic_minor|melodic_minor|phrygian_dominant
+--style           enum  values=diatonic|baroque|jazz|modal|romantic|impressionist|pop|flamenco|auto|blues|folk
+--bars            int   default=16 min=0 unit=compases  # Número de compases
+--beats           float default=4 unit=tiempos  # Pulsos por compás
+--tempo           float default=120.0 unit=BPM  # Tempo en BPM
+--complexity      float default=0.5 min=0 max=1  # Complejidad armónica 0-1
+--tension-profile enum  default=arch values=arch|crescendo|decrescendo|wave|late_climax|neutral|plateau
+--from-theorist   file  io=in ext=json  # Leer parámetros de un .theorist.json
+--from-narrator   file  io=in ext=json  # Leer parámetros de un obra_plan.json
+--curves          file  io=in ext=json  # Leer curvas de un .curves.json de tension_designer
+--candidates      int   default=3 min=0  # Número de candidatos a evaluar
+--seed            int   default=42  # Semilla aleatoria
+--output          file  default=obra io=out  # Nombre base para archivos de salida
+--export-midi     file  io=out ext=mid  # Exportar MIDI de acordes a este archivo
+--export-json     file  io=out ext=json  # Exportar JSON de progresión a este archivo
+--export-text     file  io=out ext=txt  # Exportar texto compatible con --chords
+--verbose         bool  default=false  # Informe detallado con justificaciones
+--report          bool  default=false  # Mostrar análisis de calidad de los candidatos
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Desde intención libre

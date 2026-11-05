@@ -52,6 +52,40 @@ OPCIONES COMUNES:
     --timeout S      Timeout por vuelta (default: 300)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--track     int
+--critic    file  io=in  # ruta a melody_critic.py
+--min-notes int   default=4 min=0
+--jobs      int   default=4
+--json      file  io=out ext=json
+--no-color  bool  default=false
+[rank]
+midis list  of=file io=in required
+[pick]
+midis    list  of=file io=in required
+--output file  io=out required alias=-o
+[loop]
+--cmd        str   required  # comando generador con … y …
+--output     file  io=out required alias=-o
+--n          int   default=8
+--seed-start int   default=1
+--stop-at    float
+--workdir    dir   default=selector_work io=in
+--keep       bool  default=false
+--cwd        str
+--timeout    int   default=300
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python melody_selector.py rank cand_*.mid

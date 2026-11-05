@@ -165,6 +165,66 @@ Opciones
     --config FILE               Config YAML a inspeccionar
     --ckpt FILE                 Checkpoint a inspeccionar
     --lmdb-dir DIR              Directorio LMDB a inspeccionar
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[setup]
+--ckpt-dir dir   default=checkpoints/ io=in  # Directorio de checkpoints
+--force    bool  default=false  # Regenerar offset_pretrained_checkpoints.json aunque exista
+[describe]
+description    str   required  # Descripción musical en lenguaje libre
+--duration     int   default=10 unit=s  # Duración deseada en segundos
+--output-json  file  io=out ext=json  # Guardar resultado en JSON
+--pipe         bool  default=false  # Emitir JSON para encadenar con compose --from-stdin
+--no-llm       bool  default=false  # Usar solo heurísticas locales (sin API)
+--llm-provider str   default=anthropic  # Proveedor LLM: anthropic | openai
+--llm-model    file  io=in  # Modelo concreto. Anthropic: claude-sonnet-4-6, claude-opus-4-6 |…
+--api-key      str    # API key (o ANTHROPIC_API_KEY / OPENAI_API_KEY en entorno)
+--llm-debug    bool  default=false  # Mostrar prompt enviado y respuesta raw del LLM
+--verbose      bool  default=false alias=-v
+[compose]
+--prompt         str    # Prompt descriptivo en inglés
+--from-stdin     bool  default=false  # Leer prompt desde stdin (salida de describe --pipe)
+--ckpt           file  io=in ext=pt,pth  # Checkpoint del modelo (.ckpt)
+--config         file  io=in
+--quality        enum  default=5 values=1|2|3|4|5  # Nivel de calidad MOS 1-5
+--duration       int   default=10 unit=s  # Duración aproximada en segundos
+--output         file  io=out ext=wav  # Ruta del .wav de salida
+--guidance-scale float typical=3.5  # Guidance scale CFG
+--ddim-steps     int   min=0 typical=200  # Pasos DDIM
+--n-candidates   int   min=0  # Candidatos generados; se guarda el mejor
+--seed           int   default=0  # Semilla aleatoria
+--verbose        bool  default=false alias=-v
+[prepare]
+--audio-dir       dir   io=in required  # Directorio con archivos de audio (.wav .mp3 .flac ...)
+--lmdb-dir        dir   io=out required  # Directorio de salida del LMDB
+--sample-rate     int   default=16000  # Sample rate de resampleo
+--captions        file  io=in ext=json  # JSON … o lista txt archivo|caption
+--default-caption str   default=""  # Caption por defecto para archivos sin descripción
+--mos             float default=-1.0  # Puntuación MOS asignada al corpus (-1 = desconocida)
+--verbose         bool  default=false alias=-v
+[train]
+--config     file  io=in
+--lmdb-dir   dir   io=out required  # Dataset LMDB (salida de prepare)
+--ckpt-dir   dir   default=checkpoints/ io=out  # Directorio para guardar checkpoints
+--resume     file  io=in ext=pt,pth  # Continuar desde este checkpoint
+--epochs     int   min=0 unit=épocas  # Épocas aproximadas (se convierte a max_steps ×1000)
+--batch-size int   min=0  # Batch size (sobreescribe el config)
+--lr         float  # Learning rate (sobreescribe el config)
+--verbose    bool  default=false alias=-v
+[inspect]
+--config   file  io=in ext=yaml,yml  # Config YAML a inspeccionar
+--ckpt     file  io=in ext=pt,pth  # Checkpoint a inspeccionar
+--lmdb-dir dir   io=in  # Directorio LMDB a inspeccionar
+@end
 """
 
 import sys

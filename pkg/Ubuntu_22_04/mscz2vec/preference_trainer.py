@@ -270,6 +270,67 @@ Opciones
   --model FILE    Nombre base del modelo (def: prefs)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[index]
+path                file  io=in required  # Directorio raíz que contiene los MIDIs (recursivo)
+--output            file  default=corpus.npz io=out ext=npz  # Archivo .npz de salida
+--extended-features bool  default=false  # Calcular 20 features en lugar de 10 (más lento, mejor…
+--melodic-features  bool  default=false  # Calcular 16 features melódicas (para MIDIs de una sola…
+[train]
+corpus           file  io=in ext=npz required  # Archivo .npz generado con: python…
+--mode           enum  default=rating values=rating|contrast  # Modalidad de anotación
+--model          file  default=prefs io=in ext=json  # Nombre base del modelo
+--rounds         int   default=20  # Número de rondas de anotación
+--soundfont      file  io=in  # Soundfont .sf2 para timidity o pygame
+--no-autoplay    bool  default=false  # No reproducir automáticamente al presentar cada MIDI
+--candidate-pool int   default=50  # Pool de candidatos para selección activa
+--strategy       enum  default=uncertainty values=uncertainty|density|emc|eer|qbc|hybrid
+--model-type     enum  default=linear values=linear|neural|kernel|gp|svm  # Tipo de modelo. Cada…
+[eval]
+midi         list  of=file io=in ext=mid required  # Archivo(s) MIDI a evaluar
+--model      file  default=prefs io=in  # Nombre base del modelo
+--affinity   dir   io=in  # Carpeta con obras afines para ponderar afinidad
+--weight     float default=0.5 min=0 max=1  # Peso de la afinidad [0-1]. 0=solo preferencia, 1=solo…
+--corpus     str    # Corpus .npz para percentil y vecinos (opcional pero recomendado)
+--verbose    bool  default=false  # Desglose completo de dimensiones
+--json       bool  default=false  # Salida JSON machine-readable al final
+--model-type enum  default=linear values=linear|neural|kernel|gp|svm  # Tipo de modelo. Cada tipo…
+[rank]
+corpus              file  io=in ext=npz required  # Archivo .npz del corpus a escanear
+--model             file  default=prefs io=in  # Nombre base del modelo
+--top               int   default=20 min=0  # Número de entradas por lista
+--affinity          dir   io=in  # Carpeta con obras afines para ponderar afinidad
+--weight            float default=0.5 min=0 max=1  # Peso de la afinidad [0-1]. 0=solo preferencia…
+--exclude-annotated bool  default=false  # Excluir MIDIs ya anotados en sesiones previas
+--interactive       bool  default=false  # Anotar MIDIs directamente desde el ranking
+--soundfont         file  io=in  # Soundfont .sf2 para reproducción en modo interactivo
+--csv               file  io=out ext=csv  # Exportar ranking completo a CSV
+--model-type        enum  default=linear values=linear|neural|kernel|gp|svm  # Tipo de modelo. Cada…
+[set]
+midi          list  of=file io=in ext=mid required  # Archivo(s) MIDI o directorio
+--score       enum  values=1|2|3|4|5 required  # Preferencia a asignar (1-5)
+--model       file  default=prefs io=in  # Nombre base del modelo
+--repetitions int   default=10  # Fuerza del ajuste: nº de veces que se aplica
+--model-type  enum  default=linear values=linear|neural|kernel|gp|svm  # Tipo de modelo. Cada tipo…
+[validate]
+--model      file  default=prefs io=in  # Nombre base del modelo
+--corpus     str    # Corpus .npz para recuperar vectores del historial
+--folds      int   default=5  # Número de folds
+--model-type enum  default=linear values=linear|neural|kernel|gp|svm  # Tipo de modelo. Cada tipo…
+[info]
+--model      file  default=prefs io=in  # Nombre base del modelo
+--model-type enum  default=linear values=linear|neural|kernel|gp|svm  # Tipo de modelo. Cada tipo…
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # --strategy uncertainty — Estrategia de selección activa (default: uncertainty).

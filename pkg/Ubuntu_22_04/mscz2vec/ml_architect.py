@@ -181,6 +181,93 @@ Opciones
     --out-dir OUT_DIR           (defecto explore)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--version            str
+--model              file  io=in required alias=-m
+--assignment         enum  values=similarity|position|hybrid
+--n-sections         int   min=0
+--bars-per-section   int   min=0 unit=compases
+--tempo              int
+--sa-compat          bool  default=false
+--no-markov          bool  default=false
+--no-forms           bool  default=false
+--no-strict-pc       bool  default=false
+--no-strict-register bool  default=false
+--no-strict-velocity bool  default=false
+--register-margin    int   default=12
+[segment]
+midi           file  io=in ext=mid required
+--num-sections int   min=0 alias=-n
+--track        int
+--all-tracks   bool  default=false
+--similarity   float default=0.85
+--output       file  io=out alias=-o
+--verbose      bool  default=false
+[train]
+corpus         str   required
+--output       file  default=model_v3.pkl io=out ext=pkl alias=-o
+--n-roles      int   default=4 min=0
+--assignment   enum  default=hybrid values=similarity|position|hybrid
+--num-sections int   min=0 alias=-n
+--verbose      bool  default=false
+[update]
+new_corpus     dir   io=in required  # Directorio con los MIDIs nuevos
+--model        file  io=in required alias=-m  # Modelo base a actualizar
+--output       file  default=model_v3_updated.pkl io=out ext=pkl alias=-o
+--n-roles      int   default=4 min=0
+--assignment   enum  default=hybrid values=similarity|position|hybrid
+--num-sections int   min=0 alias=-n
+--verbose      bool  default=false
+[generate]
+input                list  of=file io=in required
+--model              file  io=in required alias=-m
+--assignment         enum  values=similarity|position|hybrid
+--n-sections         int   min=0
+--role-order         list  of=int
+--arc                enum  default=arch values=flat|rise|fall|arch|inverse_arch|wave
+--bars-per-section   int   min=0 unit=compases  # Compases por sección
+--out-dir            dir   default=output io=out
+--output-name        str   default=song
+--tempo              int
+--sa-compat          bool  default=false  # [K] Nombres de sección compatibles con song_architect.py
+--dry-run            bool  default=false
+--variety            float default=0.7 min=0 max=1  # Intensidad de variedad musical [0-1]
+--no-markov          bool  default=false  # [v6] Desactivar generación Markov (usar transform v5)
+--no-forms           bool  default=false  # [v6] Desactivar uso de formas aprendidas
+--no-strict-pc       bool  default=false  # [v7-S1] Desactivar restricción de pitch classes al…
+--no-strict-register bool  default=false  # [v7-S2] Desactivar restricción de registro al rango de…
+--no-strict-velocity bool  default=false  # [v7-S3] Desactivar calibración de velocity al perfil de…
+--register-margin    int   default=12 unit=semitonos  # [v7-S2] Margen de registro en semitonos
+--seed               int   default=42
+--verbose            bool  default=false
+[inspect]
+model          file  io=in ext=pkl required  # Fichero .pkl del modelo
+--progressions bool  default=false  # Mostrar progresiones por rol
+[variants]
+input          list  of=file io=in required  # MIDIs de entrada
+--n            int   default=5 min=0 alias=-n  # Numero de variantes
+--arcs         list  of=enum values=flat|rise|fall|arch|inverse_arch|wave  # Arcos a usar
+--variety-list list  of=float  # Valores de variety
+--base-seed    int   default=1  # Semilla base, variantes usan base_seed+i
+--out-dir      dir   default=variants io=out
+[explore]
+input          list  of=file io=in required  # MIDIs de entrada
+--arcs         list  of=enum values=flat|rise|fall|arch|inverse_arch|wave  # Arcos a explorar
+--variety-list list  of=float  # Valores de variety
+--seed         int   default=42
+--out-dir      dir   default=explore io=out
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Dependencias
 ────────────────────────────────────────────────────────────────────────────
   mido, numpy, scikit-learn, scipy

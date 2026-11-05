@@ -144,6 +144,52 @@ Opciones
     --verbose
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[train]
+midi_dir         dir   io=in required  # Directorio con MIDIs orquestales
+--epochs         int   default=30 min=0 unit=épocas
+--lr             float default=0.001
+--batch-size     int   default=32 min=0
+--hidden-dim     int   default=128
+--delta-bins     int   default=32
+--pitch-bins     int   default=88
+--vel-bins       int   default=16 min=1 max=127
+--dur-bins       int   default=24 unit=s
+--checkpoint-dir dir   default=./checkpoints io=in
+--verbose        bool  default=false
+[expand]
+midi             file  io=in ext=mid required  # Boceto MIDI de piano
+--template       enum  default=chamber values=chamber|strings|full
+--split          str   default=G4  # Nota de split para separar manos
+--output         file  io=out
+--checkpoint-dir dir   default=./checkpoints io=in
+--verbose        bool  default=false
+[variants]
+midi             file  io=in ext=mid required  # Boceto MIDI de piano
+--n              int   default=8  # Número de variantes a generar
+--out-dir        dir   io=out  # Directorio de salida
+--split          str   default=G4
+--checkpoint-dir dir   default=./checkpoints io=in
+--archetypes     list  of=str  # Combinaciones de arquetipos forzadas, formato A-B-D (una por…
+--templates      list  of=enum values=chamber|strings|full  # Plantillas a usar
+--seeds          list  of=int  # Seeds de M2
+--verbose        bool  default=false
+[reduce]
+midi      file  io=in ext=mid required  # MIDI orquestal de entrada
+--output  file  io=out
+--split   int   default=60 min=0 max=127 unit="nota MIDI"  # Pitch de split MD/MI
+--verbose bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Dependencias
 ────────────────────────────────────────────────────────────────────────────
   pip install mido numpy torch

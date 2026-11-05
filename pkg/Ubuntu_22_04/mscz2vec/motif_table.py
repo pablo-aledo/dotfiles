@@ -95,6 +95,47 @@ Opciones
   --verbose                   Mostrar nombre y descripción de cada entrada
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--analyze-midi file  io=in ext=mid  # Analizar un MIDI y mostrar los motivos del catálogo que…
+--min-score    float default=0.7 min=0 max=1  # Score mínimo de coincidencia 0-1
+--channel      int    # Restringir el análisis a un canal MIDI concreto
+--min-dur      float default=0.0 unit=s  # Duración mínima en beats para considerar una nota. Útil…
+--list         bool  default=false  # Listar todos los motivos y frases
+--stats        bool  default=false  # Estadísticas del catálogo
+--custom       str    # Motivo personalizado por grados de escala, en vez de seleccionar del…
+--id           int    # Seleccionar motivo/frase por id
+--buscar       str    # Búsqueda por texto libre
+--intencion    str    # Buscar por intención en lenguaje natural
+--style        enum  values=diatonic|baroque|jazz|modal|romantic|impressionist|pop|flamenco|blues|folk|auto
+--mode         enum  values=major|minor|dorian|phrygian|lydian|mixolydian|harmonic_minor|phrygian_dominant
+--tipo         enum  values=motivo|frase|escala  # Filtrar por tipo
+--contorno     enum  values=ascendente|descendente|arco|ondulante|zigzag|salto|estatico
+--emocion      str    # Filtrar por emoción (reposo, alegría, tristeza…)
+--tension-min  int   min=1 max=10  # Tensión mínima (1-10)
+--tension-max  int   min=1 max=10  # Tensión máxima (1-10)
+--key          str   default=C  # Tónica para resolución concreta
+--octave       int   default=5  # Octava base de la tónica
+--reps         int    # Número de repeticiones exactas del motivo a exportar (sustituye a --bars…
+--bars         int   default=4 min=0 unit=compases  # Compases a generar
+--beats        int   default=4 unit=tiempos  # Pulsos por compás, y duración por defecto en…
+--tempo        float default=100.0  # Tempo BPM para exportación MIDI
+--export-json  file  io=out ext=json  # Exportar tabla filtrada o motivo resuelto a JSON
+--export-text  file  io=out ext=txt  # Exportar motivo resuelto a texto (nota:beats)
+--export-midi  file  io=out ext=mid  # Exportar motivo resuelto a MIDI
+--output       file  default=obra io=out  # Nombre base para salidas
+--verbose      bool  default=false  # Mostrar nombre y descripción de cada entrada
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Listar todos

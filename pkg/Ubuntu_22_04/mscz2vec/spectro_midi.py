@@ -188,6 +188,104 @@ Opciones
     --corpus CORPUS
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[prepare]
+--midi-dir          dir   io=in  # Directorio con ficheros MIDI de entrenamiento
+--out-dir           dir   default=corpus io=out  # Directorio de salida
+--procedural        bool  default=false  # Generar MIDIs proceduralmente (notas, acordes, frases)
+--proc-mode         enum  default=all values=notes|chords|phrases|all  # Tipo de MIDIs procedurales
+--humanize          float default=0.0 typical=0..1  # Variación de velocidad/timing ∈ [0,1]
+--instrument-map    file  io=in ext=mid  # JSON de instrumentos para audio_lab.py play-midi
+--window            int   default=4096
+--hop               float default=0.25
+--force             bool  default=false  # Regenerar aunque ya existan los NPZ
+--use-phrase-prior  bool  default=false  # Poblar corpus de frases tras preparar
+--phrase-corpus-dir dir   default=phrase_corpus io=in
+[train]
+--corpus     dir   io=in required  # Directorio del corpus
+--model-dir  dir   default=model io=in
+--model-size enum  default=small values=small|medium|large
+--epochs     int   default=50 min=0 unit=épocas
+--batch-size int   default=8 min=0
+--lr         float default=0.0003
+--patience   int   default=20  # Early stopping (0 = desactivado)
+--pos-weight float default=10.0  # Peso de las celdas activas en el BCE
+--max-frames int   default=256 min=0  # Longitud de segmento de entrenamiento en frames
+--no-augment bool  default=false  # Desactivar augmentación por transposición
+--reset      bool  default=false  # Ignorar checkpoint existente y entrenar desde cero
+--cpu        bool  default=false  # Forzar CPU aunque haya GPU disponible
+--window     int   default=4096
+--hop        float default=0.25
+[transcribe]
+input               file  io=in ext=wav required  # Fichero NPZ o WAV/FLAC/OGG
+--model-dir         dir   default=model io=in
+--output            file  io=out alias=-o
+--threshold         float default=0.5  # Umbral de activación ∈ [0,1]
+--min-frames        int   default=2 min=0  # Duración mínima de nota en frames
+--use-phrase-prior  bool  default=false
+--phrase-corpus-dir dir   default=phrase_corpus io=in
+--prior-weight      float default=0.3  # Peso del prior de frase ∈ [0,1]
+--cpu               bool  default=false
+[melody]
+input            file  io=in ext=wav required  # Fichero NPZ o WAV/FLAC/OGG
+--output         file  io=out alias=-o
+--note-min       int   default=21
+--note-max       int   default=108
+--min-frames     int   default=2 min=0  # Duración mínima de nota en frames
+--smooth         int   default=1  # Ventana del filtro de moda para suavizar saltos de bin
+--silence-thresh float default=0.0  # Umbral de silencio relativo al pico global ∈ [0,1]
+--velocity       int   min=1 max=127  # Velocidad MIDI fija
+--window         int   default=4096
+--hop            float default=0.25
+[harmony]
+input            file  io=in ext=wav required  # Fichero NPZ o WAV/FLAC/OGG
+--notes          int   default=3  # Número de voces/notas simultáneas: 3=tríada, 4=acorde de 4 notas
+--output         file  io=out alias=-o
+--note-min       int   default=21
+--note-max       int   default=108
+--min-frames     int   default=2 min=0  # Duración mínima de nota en frames
+--smooth         int   default=1  # Ventana del filtro de moda para suavizar saltos de bin
+--silence-thresh float default=0.0  # Umbral de silencio relativo al pico global ∈ [0,1]
+--velocity       int   min=1 max=127  # Velocidad MIDI fija
+--window         int   default=4096
+--hop            float default=0.25
+[autotrain]
+--model-dir            dir   default=model io=in
+--midi-dir             dir   io=in  # MIDIs de referencia adicionales al procedimental
+--cycles               int   default=10
+--model-size           enum  default=small values=small|medium|large
+--batch-size           int   default=8 min=0
+--lr                   float default=0.0003
+--patience             int   default=10
+--epochs-per-cycle     int   default=20 min=0 unit=épocas
+--proc-mode            enum  default=all values=notes|chords|phrases|all
+--humanize             float default=0.0 typical=0..1
+--max-per-cycle        int   default=500 min=0  # MIDIs máximos por ciclo
+--curriculum           bool  default=false  # Activar curriculum learning (complejidad progresiva)
+--curriculum-threshold float default=0.8  # F1 mínimo para subir de nivel
+--curriculum-patience  int   default=3  # Ciclos sin mejora antes de bajar nivel
+--use-phrase-prior     bool  default=false
+--phrase-corpus-dir    dir   default=phrase_corpus io=in
+--cpu                  bool  default=false
+[eval]
+--predicted str   required
+--reference file  io=in required
+--onset-tol float default=50.0 unit=ms  # Tolerancia de onset en ms
+--output    file  io=out ext=json alias=-o  # Guardar métricas en JSON
+[inspect]
+--model-dir dir   default=model io=in
+--corpus    str
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Preparar corpus desde MIDIs existentes

@@ -49,6 +49,36 @@ Opciones
                               detecta automáticamente)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+inputs           list  of=str required  # MIDIs fuente (genes)
+--generations    int   default=5 min=0  # Número de generaciones
+--population     int   default=10 min=0  # Tamaño de la población
+--elite          int   default=2  # Individuos de élite
+--mutation-rate  float default=0.3 min=0 max=1  # Tasa de mutación 0-1
+--crossover-rate float default=0.6 min=0 max=1  # Tasa de cruce 0-1
+--bars           int   default=16 min=0 unit=compases  # Compases por individuo
+--mode           enum  default=auto values=auto|rhythm_melody|harmony_melody|full_blend|custom|mosaic|energy|emotion
+--output-dir     dir   default=./evolver_out io=out  # Carpeta de salida
+--save-all       bool  default=false  # Guardar todos los individuos
+--top            int   default=3 min=0  # Mejores a exportar
+--listen         bool  default=false  # Reproducir los mejores al final
+--play-seconds   int   default=10 unit=s  # Segundos de reproducción
+--seed           int   default=42  # Semilla aleatoria
+--verbose        bool  default=false  # Informe detallado
+--no-percussion  bool  default=false  # No generar pista de percusión
+--mixer          file  io=in  # Ruta al script midi_dna_unified.py
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python evolver.py fuente1.mid fuente2.mid [más MIDIs]

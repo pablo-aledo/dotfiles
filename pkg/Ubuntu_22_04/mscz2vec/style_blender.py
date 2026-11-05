@@ -67,6 +67,37 @@ Opciones
   --verbose           Informe detallado compás a compás
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+content               file  io=in ext=mid required  # MIDI de contenido (tu idea melódica)
+style_a               file  io=in ext=mid required  # MIDI de estilo A (blend=0.0)
+style_b               file  io=in ext=mid required  # MIDI de estilo B (blend=1.0)
+--blend-curve         str   excludes=--blend-preset,--blend-from-curves,--blend-from-narrator
+--blend-preset        str   excludes=--blend-curve,--blend-from-curves,--blend-from-narrator
+--blend-from-curves   file  io=in ext=json excludes=--blend-curve,--blend-preset,--blend-from-narrator
+--blend-from-narrator file  io=in excludes=--blend-curve,--blend-preset,--blend-from-curves
+--section-blend       str    # Con --blend-from-narrator: "A:0.0, B:0.8, C:0.4"
+--blend-dims          list  of=enum values=rhythm|harmony|emotion|texture|melody
+--preserve            list  of=enum values=contour|intervals|motif|scale  # Estrategias de…
+--bars                int   min=0 unit=compases
+--candidates          int   default=2 min=0
+--seed                int   default=42
+--output              file  default=blend_out.mid io=out ext=mid
+--export-blend-curve  bool  default=false  # Guardar la curva de blend usada en JSON
+--export-fingerprint  bool  default=false
+--no-percussion       bool  default=false
+--verbose             bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Blend gradual style1→style2 en 32 compases

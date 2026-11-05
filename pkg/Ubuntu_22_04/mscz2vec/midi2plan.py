@@ -77,6 +77,52 @@ Opciones
     --no-color
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--profile     enum  default=reconstruct values=reconstruct|analyze
+--bars        str   default=auto  # N o 'auto'
+--max-bars    int   default=32 min=0 unit=compases
+--variant     int   default=0
+--seed        int   default=100
+--style       enum  values=baroque|romantic|jazz|pop|modal|impressionist|diatonic|flamenco|auto|blues|folk
+--key         str
+--tempo       int
+--chords-from enum  default=generator values=generator|template
+--no-form     bool  default=false
+--suite-dir   dir   io=in
+--no-color    bool  default=false
+[brief]
+midi        file  io=in ext=mid required
+--json      file  io=out ext=json  # Escribe el brief ('-' = stdout)
+--no-form   bool  default=false
+--suite-dir dir   io=in
+--variant   int   default=0
+--no-color  bool  default=false
+[plan]
+midi      file  io=in ext=mid required
+--out-dir dir   io=out
+[batch]
+dir       dir   io=in required
+--glob    str   default=*.mid
+--out-dir dir   io=out
+--limit   int   default=0
+--run     bool  default=false  # Ejecuta cada plan con runner.py
+--timeout int   default=120  # Timeout por paso
+--md      str    # Escribe una tabla resumen en Markdown
+[selftest]
+--suite-dir dir   io=in
+--no-color  bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python midi2plan.py brief obra.mid

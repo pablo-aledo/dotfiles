@@ -498,6 +498,167 @@ Opciones
                                 auto|cpu|cuda)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--device enum  default=auto values=auto|cpu|cuda  # Dispositivo torch
+[train-coder]
+inputs          list  of=file io=in ext=wav required  # Ficheros WAV de entrenamiento
+--latent-dim    int   default=32
+--strides       list  of=int
+--base-channels int   default=32
+--sr            int   default=44100
+--steps         int   default=2000 min=0  # Pasos de entrenamiento
+--batch         int   default=16  # Tamaño de batch
+--segment       int   default=32768  # Muestras por recorte, múltiplo del hop
+--lr            float default=0.0001  # Learning rate Adam
+--seed          int   default=0  # Semilla RNG
+--log-every     int   default=50  # Imprimir pérdida cada N pasos
+--output        file  default=coder.pt io=out ext=pt alias=-o  # Checkpoint de salida
+[train-vocoder]
+inputs           list  of=file io=in ext=wav required  # Ficheros WAV de entrenamiento
+--sr             int   default=44100
+--window         int   default=4096  # Tamaño de ventana STFT, debe coincidir con el usado para…
+--hop            float default=0.25  # hop_ratio STFT, ídem
+--db-floor       float default=-80.0 unit=dB
+--upsample-rates list  of=int  # Factores de sobremuestreo del vocoder; su producto debe ser igual…
+--hidden         int   default=256  # Canales ocultos iniciales
+--steps          int   default=2000 min=0  # Pasos de entrenamiento
+--batch          int   default=8  # Tamaño de batch
+--frames         int   default=32  # Frames STFT por recorte de entrenamiento. Debe ser suficiente…
+--lr             float default=0.0002  # Learning rate Adam
+--seed           int   default=0  # Semilla RNG
+--log-every      int   default=50  # Imprimir pérdida cada N pasos
+--output         file  default=vocoder.pt io=out ext=pt alias=-o  # Checkpoint de salida
+[wav-to-latent]
+input       file  io=in ext=wav required  # Fichero WAV
+--coder     str   required  # Checkpoint coder.pt
+--png       bool  default=false  # Genera también PNG editable (mismo nombre, .png)
+--no-flip-y bool  default=false  # No invertir eje Y del PNG (componente 0 queda arriba)
+--output    file  io=out ext=npz alias=-o  # NPZ de salida
+[latent-to-wav]
+input       file  io=in ext=npz required  # Fichero .npz o .png de latentes
+--coder     str   required  # Checkpoint coder.pt
+--normalize bool  default=false  # Normalizar el WAV de salida a 0.85 peak
+--output    file  io=out ext=wav alias=-o  # WAV de salida
+[wav-to-spectrogram]
+input        file  io=in ext=wav required  # Fichero WAV
+--sr         int   default=44100
+--window     int   default=4096  # Tamaño de ventana STFT
+--hop        float default=0.25  # hop_ratio STFT
+--keep-phase bool  default=false  # Conserva la fase real en el NPZ en vez de ponerla a cero (por…
+--output     file  io=out ext=npz alias=-o  # NPZ STFT de salida
+[spectrogram-to-wav]
+input           file  io=in ext=npz required  # Fichero .npz de espectrograma STFT
+--gl-iters      int   default=32 min=0  # Iteraciones de Griffin-Lim
+--gl-phase-init enum  default=random values=random|propagate  # Inicialización de fase de Griffin-Lim
+--vocoder       str    # Checkpoint de train-vocoder: si se indica, reemplaza Griffin-Lim por un…
+--wav           file  io=out ext=wav alias=-o  # WAV de salida
+[latent-to-png]
+input       file  io=in ext=npz required  # Fichero .npz de latentes
+--no-flip-y bool  default=false  # No invertir eje Y (componente 0 queda arriba)
+--output    file  io=out alias=-o  # PNG de salida
+[png-to-latent]
+input    file  io=in ext=wav required  # Fichero PNG (idealmente de wav-to-latent --png)
+--coder  str    # coder.pt para deducir metadatos si el PNG no los tiene
+--output file  io=out ext=npz alias=-o  # NPZ de salida
+[spectrogram-to-latent-train_step1]
+inputs       list  of=file io=in ext=wav required  # Ficheros WAV de entrenamiento
+--coder      str   required  # Checkpoint coder.pt
+--window     int   default=4096  # Ventana STFT en muestras, como audio_lab
+--hop        float default=0.25  # Hop ratio STFT ∈ (0,1]
+--db-floor   float default=-80.0 unit=dB
+--output-dir dir   default=pairs io=out alias=-o  # Carpeta donde escribir los pares PNG +…
+[spectrogram-to-latent-train_step2]
+pairs_dir        dir   io=in required  # Carpeta generada por step1 (con manifest.json)
+--method         enum  default=pix2pix values=pix2pix|retrieval|causal|causal-adv|flow
+--tile           int   default=256  # [pix2pix/causal/causal-adv/flow] Anchura temporal (en frames)…
+--gen-base       int   default=64  # [pix2pix] Canales base del generador U-Net
+--disc-base      int   default=64  # [pix2pix/causal-adv] Canales base del discriminador PatchGAN
+--l1-weight      float default=100.0  # [pix2pix/causal-adv] Peso de la pérdida L1 frente a la…
+--hidden         int   default=64  # [causal/causal-adv] Canales ocultos de CausalGenerator
+--context        int   default=32  # [causal/causal-adv] Nº de frames latentes anteriores a tener…
+--ss-final-prob  float default=0.5 min=0 max=1 typical=0..1  # [causal-adv] Probabilidad final de…
+--ss-warmup      float default=0.5 min=0 max=1  # [causal-adv] Fracción del entrenamiento (0-1)…
+--n-flows        int   default=8 min=0  # [flow] Nº de capas de acoplamiento afín apiladas
+--flow-hidden    int   default=128  # [flow] Canales ocultos de la subred de cada capa de…
+--flow-kernel    int   default=5  # [flow] Anchura del kernel conv1d de la subred de acoplamiento…
+--flow-direction enum  default=both values=s2l|l2s|both  # [flow] Qué dirección(es) supervisar con…
+--epochs         int   default=50 min=0 unit=épocas  # [pix2pix/causal/causal-adv/flow] Epochs…
+--batch          int   default=4  # [pix2pix/causal/causal-adv/flow] Tamaño de batch de parches
+--lr             float default=0.0002  # [pix2pix/causal/causal-adv/flow] Learning rate Adam
+--seed           int   default=0  # Semilla RNG
+--log-every      int   default=50  # Imprimir pérdida cada N pasos
+--output         file  default=mapper.pt io=out ext=pt alias=-o  # Checkpoint de salida
+[spectrogram-to-latent]
+input         file  io=in ext=wav required  # Fichero .npz de espectrograma (audio_lab spectrogram)
+--mapper      str   required  # Checkpoint mapper.pt (pix2pix o retrieval, ver…
+--method      enum  default=auto values=auto|pix2pix|greedy|viterbi|causal|causal-adv|flow
+--topk        int   default=8  # [viterbi] Nº de candidatos por frame considerados en la búsqueda
+--join-weight float default=1.0  # [viterbi] Peso del coste de unión/continuidad frente al de…
+--png         bool  default=false  # Genera también PNG editable del latente
+--output      file  io=out ext=npz alias=-o  # NPZ latente de salida
+[latent-to-spectrogram]
+input           file  io=in ext=npz required  # Fichero .npz o .png de latentes
+--mapper        str   required  # Checkpoint mapper.pt (pix2pix o retrieval, ver…
+--method        enum  default=auto values=auto|pix2pix|greedy|viterbi|causal|causal-adv|flow
+--topk          int   default=8  # [viterbi] Nº de candidatos por frame
+--join-weight   float default=1.0  # [viterbi] Peso del coste de unión/continuidad
+--mag-max       float default=1.0  # Escala absoluta de las magnitudes de salida
+--wav           file  io=in ext=wav  # Si se especifica, reconstruye también un WAV (Griffin-Lim…
+--gl-iters      int   default=32 min=0  # Iteraciones de Griffin-Lim para --wav
+--gl-phase-init enum  default=random values=random|propagate  # Inicialización de fase de Griffin-Lim
+--vocoder       str    # Checkpoint de train-vocoder: si se indica, reemplaza Griffin-Lim por un…
+--output        file  io=out ext=npz alias=-o  # NPZ STFT de salida
+[spectrogram-to-png]
+input       file  io=in ext=wav required  # Fichero .npz de espectrograma (audio_lab spectrogram)
+--db-floor  float default=-80.0 unit=dB
+--no-flip-y bool  default=false  # No invertir eje Y del PNG (bin 0 queda arriba)
+--output    file  io=out alias=-o  # PNG de salida
+[png-to-spectrogram]
+input      file  io=in required  # Fichero PNG (idealmente de spectrogram-to-png, o editado a mano)
+--sr       int    # Sample rate, si el PNG no trae metadatos
+--window   int    # Ventana STFT en muestras, si el PNG no trae metadatos
+--hop      float  # Hop ratio STFT, si el PNG no trae metadatos
+--db-floor float unit=dB  # Piso dB, si el PNG no trae metadatos
+--mag-max  float default=1.0  # Escala absoluta de las magnitudes de salida
+--output   file  io=out ext=npz alias=-o  # NPZ de salida
+[train-pca]
+inputs         list  of=file io=in ext=npz required  # Ficheros .npz o .png (todos latentes o todos…
+--n-components int   min=0 max=10  # Número de componentes principales a conservar)
+--output       file  default=pca.npz io=out ext=npz alias=-o  # Modelo PCA de salida
+[intermediate-to-pca]
+input          file  io=in ext=npz required  # Fichero .npz o .png de representación intermedia
+--pca          file  io=in required  # Modelo PCA (de train-pca)
+--png          bool  default=false  # Genera también PNG editable de las coordenadas PCA
+--shared-scale bool  default=false  # Normaliza el PNG con un único rango [min,max] compartido por…
+--output       file  io=out ext=npz alias=-o  # NPZ de coordenadas PCA de salida
+[pca-to-intermediate]
+input           file  io=in ext=npz required  # Fichero .npz (o .png, con --pca) de coordenadas PCA
+--pca           file  io=in ext=npz  # Modelo PCA (obligatorio si input es .png; opcional para .npz)
+--png           bool  default=false  # Si la salida es un latente, genera también su PNG
+--wav           file  io=out ext=wav  # Si la salida es un espectrograma, reconstruye también un…
+--gl-iters      int   default=32 min=0  # Iteraciones de Griffin-Lim para --wav
+--gl-phase-init enum  default=random values=random|propagate  # Inicialización de fase de Griffin-Lim
+--vocoder       str    # Checkpoint de train-vocoder: si se indica, reemplaza Griffin-Lim por un…
+--output        file  io=out ext=npz alias=-o  # NPZ de salida
+[info]
+input file  io=in required  # Fichero a inspeccionar
+[download-pretrained]
+--variant    enum  default=44khz-8kbps values=44khz-8kbps|24khz-8kbps|16khz-8kbps|44khz-16kbps
+--output-dir dir   default=pretrained io=out  # Carpeta de destino
+--force      bool  default=false  # Re-descargar aunque ya exista el fichero
+--no-verify  bool  default=false  # No cargar el checkpoint tras descargarlo (más rápido, pero sin…
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python latent_lab.py train-coder corpus/*.wav --steps 4000 -o coder.pt

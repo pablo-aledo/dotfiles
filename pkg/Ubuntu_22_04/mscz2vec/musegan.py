@@ -111,6 +111,76 @@ Opciones
     --data FILE                 Fichero de datos .npz
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[prepare]
+--input-dir   dir   io=in required  # Carpeta con ficheros MIDI
+--output      file  io=out ext=npz required  # Fichero de salida (.npy o .npz)
+--bars        int   default=4 min=0 unit=compases
+--resolution  int   default=12 min=0
+--down-sample int   default=1  # Factor de downsampling temporal
+--recursive   bool  default=false  # Buscar MIDIs recursivamente
+[train]
+--data         file  io=in ext=npz required  # Piano-rolls de entrenamiento (.npy o .npz)
+--model-dir    dir   io=out required  # Directorio para guardar checkpoints
+--steps        int   default=50000 min=0  # Número de steps
+--batch-size   int   default=64 min=0  # Batch size
+--latent-dim   int   default=128  # Dimensión del espacio latente
+--n-dis        int   default=5 min=0  # Actualizaciones del discriminador por paso gen
+--lr           float default=0.001  # Learning rate
+--beta1        float default=0.5  # Adam β1
+--beta2        float default=0.9  # Adam β2
+--gan-loss     enum  default=wasserstein values=wasserstein|hinge|nonsaturating|classic
+--gp           bool  default=false  # Usar gradient penalty (WGAN-GP)
+--save-steps   int   default=10000 min=0  # Guardar checkpoint cada N steps
+--sample-steps int   default=1000 min=0  # Generar muestras cada N steps
+--log-steps    int   default=100 min=0  # Log cada N steps
+--save-images  bool  default=false  # Guardar imágenes PNG junto a los .npz de muestra
+--resume       bool  default=false  # Reanudar entrenamiento desde el último checkpoint
+--cpu          bool  default=false  # Forzar uso de CPU aunque haya GPU
+[generate]
+--model-dir   dir   io=in required  # Directorio con el checkpoint entrenado
+--output-dir  dir   default=generated io=out  # Directorio de salida
+--n           int   default=16 max=64  # Número de muestras a generar
+--latent-dim  int   default=128  # Latent dim fallback si no hay config en checkpoint
+--threshold   enum  default=hard values=hard|bernoulli  # Método de binarización
+--truncation  float default=1.0  # Truncation trick: recortar z a [-2t, 2t]
+--tempo       int   default=100
+--save-images bool  default=false  # Guardar imágenes PNG
+--save-arrays bool  default=false  # Guardar piano-rolls .npz
+--metrics     bool  default=false  # Mostrar métricas sobre los resultados
+--cpu         bool  default=false
+[accompany]
+--model-dir       dir   io=in required
+--input           file  io=in ext=mid required  # MIDI de referencia (track de condición)
+--condition-track int   default=4 min=0 max=4  # Índice del track de condición 0-4
+--output          file  io=out ext=mid  # MIDI de salida
+--latent-dim      int   default=128
+--tempo           int   default=100
+--cpu             bool  default=false
+[interpolate]
+--model-dir   dir   io=in required
+--output-dir  dir   default=interpolation io=out  # Directorio de salida
+--pairs       int   default=1  # Número de pares a interpolar
+--steps       int   default=8 min=0  # Pasos de interpolación por par
+--mode        enum  default=slerp values=slerp|lerp  # Método de interpolación
+--latent-dim  int   default=128
+--tempo       int   default=100
+--save-images bool  default=false  # Guardar imagen resumen de la interpolación
+--cpu         bool  default=false
+[inspect]
+--model-dir dir   io=in  # Directorio con checkpoint
+--data      file  io=in ext=npz  # Fichero de datos .npz
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO — PREPARE ──

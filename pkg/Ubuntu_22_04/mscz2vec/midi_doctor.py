@@ -56,6 +56,46 @@ Opciones
     --no-color
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[check]
+midis      list  of=file io=in required
+--json     file  io=out ext=json
+--strict   bool  default=false  # rc=3 si hay hallazgos
+--verbose  bool  default=false alias=-v
+--no-color bool  default=false
+[fix]
+midis              list  of=file io=in required
+--output           file  io=out alias=-o
+--inplace          bool  default=false
+--min-dur          float default=0.0625 unit=s
+--drop-zero        bool  default=false
+--instrument-range enum  default=none values=none|fold|drop
+--ensure-meta      bool  default=false
+--time-sig         str   default=4/4
+--key              str
+--tempo            float default=120.0
+--no-color         bool  default=false
+[meta]
+midi        file  io=in ext=mid required
+--output    file  io=out alias=-o
+--copy-from str
+--only      str    # ts,key,tempo
+--time-sig  str
+--key       str
+--tempo     float
+--replace   bool  default=false
+--no-color  bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python midi_doctor.py check obra.mid

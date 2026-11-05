@@ -399,6 +399,90 @@ Opciones
 
   inspect
     --bank BANK                 (obligatorio)
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[build]
+--corpus           dir   io=in required  # Directorio de MIDIs fuente
+--arc              enum  default=arch values=sonata|rondo|arch|journey|wave|mosaic
+--bars             int   default=64 min=0 unit=compases  # Compases totales
+--key              str   default="C major"  # Tonalidad destino
+--tempo            float default=120.0
+--stitch           enum  default=auto values=auto|pivot|fade|overlap|silence|bridge|direct
+--bridge-bars      int   default=2 min=0 unit=compases
+--candidates       int   default=5 min=0
+--diversity        float default=0.4
+--allow-variations bool  default=false
+--fill-gaps        bool  default=false
+--reharmonize      bool  default=false
+--style-unify      file  io=in
+--out-dir          dir   default=./mosaic_out io=out
+--output           file  default=mosaic_output.mid io=out ext=mid
+--report           bool  default=false
+--no-percussion    bool  default=false  # Eliminar canal 9 (percusión) del resultado final
+--verbose          bool  default=false
+--seed             int   default=42
+--min-bars         int   default=2 min=0 unit=compases
+--max-bars         int   default=16 min=0 unit=compases
+--variations       list  of=str  # Variaciones por fragmento: V01 V02 V04 ... o all. V01=inversion…
+[harvest]
+--corpus     str   required
+--out-dir    dir   default=./mosaic_out io=out
+--min-bars   int   default=2 min=0 unit=compases
+--max-bars   int   default=16 min=0 unit=compases
+--variations list  of=str  # Variaciones por fragmento: V01 V02 V04 ... o all. V01=inversion…
+--verbose    bool  default=false
+[plan]
+--arc     enum  default=arch values=sonata|rondo|arch|journey|wave|mosaic
+--bars    int   default=64 min=0 unit=compases
+--key     str   default="C major"
+--tempo   float default=120.0
+--out-dir dir   default=./mosaic_out io=out
+--stdout  bool  default=false  # Escribir JSON en stdout (para uso con bash <(...)). Los mensajes…
+[assemble]
+--bank             str   required
+--plan             file  io=in required
+--stitch           str   default=auto
+--bridge-bars      int   default=2 min=0 unit=compases
+--candidates       int   default=5 min=0
+--diversity        float default=0.4
+--allow-variations bool  default=false
+--fill-gaps        bool  default=false  # Usar completer.py para extender fragmentos cortos
+--reharmonize      bool  default=false
+--style-unify      file  io=in
+--out-dir          dir   default=./mosaic_out io=out
+--output           file  default=mosaic_output.mid io=out ext=mid
+--report           bool  default=false
+--verbose          bool  default=false
+--seed             int   default=42  # Semilla aleatoria (una sola variación)
+--seeds            list  of=str  # Lista de semillas para generar múltiples variaciones. Ejemplo…
+--no-percussion    bool  default=false  # Eliminar canal 9 (percusión) del resultado final
+[stitch]
+midis         list  of=file io=in ext=mid required  # Archivos MIDI a coser en orden
+--stitch      str   default=auto
+--key         str
+--bridge-bars int   default=2 min=0 unit=compases
+--out-dir     dir   default=./mosaic_out io=out
+--output      file  default=mosaic_stitch.mid io=out ext=mid
+--verbose     bool  default=false
+[index]
+dir         dir   io=in required  # Directorio con los MIDIs a indexar (p.ej. banco/bank/)
+--bank      file  io=out ext=json  # Ruta del banco de salida (por defecto…
+--out-dir   dir   io=out advanced  # Directorio donde guardar el banco (ignorado si --bank es…
+--recursive bool  default=false  # Buscar MIDIs en subdirectorios recursivamente
+--merge     bool  default=false  # Añadir al banco existente en lugar de sobreescribirlo. Los…
+--verbose   bool  default=false  # Mostrar detalles de cada fragmento indexado
+[inspect]
+--bank str   required
+@end
 """
 
 import os

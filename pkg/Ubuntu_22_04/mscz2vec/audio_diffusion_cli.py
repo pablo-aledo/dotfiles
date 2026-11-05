@@ -179,6 +179,67 @@ Opciones
 
   info
     --model ID_O_DIR            (defecto DEFAULT_MODEL)
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[generate]
+--model      file  default=teticio/audio-diffusion-256 io=in
+--steps      int   min=0  # Pasos de denoising
+--eta        float default=0.0  # Estocasticidad DDIM: 0.0=determinista, 1.0=DDPM completo
+--seed       int    # Semilla aleatoria para reproducibilidad
+--latent     file  io=in ext=json  # Fichero .json con vector de ruido latente (de encode)
+--count      int   default=1 min=0  # Número de audios a generar
+--output     file  default=output.wav io=out ext=wav
+--output-dir dir   io=out  # Directorio de salida cuando --count > 1
+[variate]
+--input      file  io=in ext=wav required  # Audio de referencia (.wav, .mp3, .flac)
+--model      file  default=teticio/audio-diffusion-256 io=in
+--strength   float default=0.5 typical=0..1  # Distancia respecto al input: 0.0=copia, 1.0=libre
+--steps      int   min=0  # Pasos de denoising
+--eta        float default=0.0  # Estocasticidad DDIM: 0.0=determinista, 1.0=DDPM
+--slice      int   default=0  # Slice del audio a procesar cuando el archivo es más largo
+--seed       int
+--latent     file  io=in ext=json  # Fichero .json de ruido latente para variaciones reproducibles
+--count      int   default=1 min=0  # Número de variaciones a generar
+--output     file  default=output_variate.wav io=out ext=wav
+--output-dir dir   io=out  # Directorio de salida cuando --count > 1
+[interpolate]
+--input-a      file  io=in ext=wav required  # Audio origen A
+--input-b      file  io=in ext=wav required  # Audio destino B
+--model        file  default=teticio/audio-diffusion-ddim-256 io=in ext=wav  # Modelo DDIM
+--steps        int   min=0  # Pasos DDIM para encode y decode
+--eta          float default=0.0
+--alpha        float  # Alpha fijo [0,1]: 0.0=A, 1.0=B. Si se indica, genera un único punto
+--steps-interp int   default=8 min=0 advanced  # Número de pasos de interpolación A→B. Ignorado si…
+--output       file  default=output_interp.wav io=out ext=wav  # Archivo de salida cuando se usa…
+--output-dir   dir   io=out  # Directorio de salida para la secuencia de interpolación
+[outpaint]
+--input      file  io=in required
+--model      file  default=teticio/audio-diffusion-256 io=in
+--mask-start float default=0.0  # Segundos de audio a preservar al inicio
+--mask-end   float default=0.0  # Segundos de audio a preservar al final
+--steps      int   min=0
+--eta        float default=0.0
+--slice      int   default=0
+--seed       int
+--output     file  default=output_outpaint.wav io=out ext=wav
+[encode]
+--input  file  io=in required
+--model  file  default=teticio/audio-diffusion-ddim-256 io=in
+--steps  int   min=0  # Pasos DDIM de inversión
+--slice  int   default=0  # Slice del audio a codificar
+--output file  io=out ext=json  # Ruta del .json de salida
+[info]
+--model file  default=teticio/audio-diffusion-256 io=in
+@end
 """
 
 import argparse

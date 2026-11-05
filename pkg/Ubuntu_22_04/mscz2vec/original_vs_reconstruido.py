@@ -114,6 +114,73 @@ Opciones
                                 (defecto 0.0)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--orig         list  of=str  # MIDIs originales (rutas/globs/dirs)
+--recon        list  of=str  # MIDIs reconstruidos (nombre NN_ID_receta.mid → agrupa con el…
+--features     enum  default=musical values=musical|forense  # musical (def): rasgos…
+--window-bars  int   default=8 min=0 unit=compases  # [musical] Ventana en compases
+--augment      int   default=0  # [musical] Copias perturbadas (humanización sintética) por fichero…
+--synth        int   default=0  # [musical] Negativos sintéticos por original (corrupciones, tipos…
+--synth-kinds  list  of=enum values=shuffle_bars|seg_transpose|key_break|pitch_noise|loop_block
+--window       float default=32.0  # [forense] Ventana en negras (def 32)
+--stride       float  # Salto entre ventanas (def = window)
+--max-windows  int   default=40 min=0  # Máx. ventanas por fichero
+--cache        dir   default=.cache_ovr io=in  # Directorio de caché de rasgos ('' = sin caché)
+--drop-groups  list  of=enum values=meta|timing|velocity|pitch|texture|repetition|harmony|drums|rhythm|melody|bass|harmony|voice|texture|form
+--verbose      bool  default=false alias=-v
+--layers       list  of=int  # Capas ocultas (vacío = logística). Def: 96 48
+--epochs       int   default=60 min=0 unit=épocas
+--batch        int   default=64
+--lr           float default=0.002
+--dropout      float default=0.25
+--l2           float default=0.001
+--ensemble     int   default=5  # Nº de redes del conjunto
+--bootstrap    bool  default=false  # Cada red entrena con un remuestreo de ficheros
+--seed         int   default=0
+--synth-weight float default=0.35  # Peso de los negativos sintéticos dentro de la clase…
+--agg          enum  default=worst values=mean|worst|lse  # Agregación de ventanas por pieza: worst…
+--agg-q        float default=0.25  # [worst] Fracción de ventanas peores que cuentan
+--agg-temp     float default=1.0  # [lse] Temperatura del soft-max
+--unc-nets     float default=0.0  # Penalización por desacuerdo entre redes del conjunto
+--unc-win      float default=0.0  # Penalización por dispersión entre ventanas
+[features]
+--json file  io=out ext=json
+[train]
+--out                file  io=out ext=npz required  # Modelo de salida (.npz)
+--init               file  io=in  # Modelo previo desde el que continuar
+--cv                 int   default=5  # Pliegues para la calibración OOF
+--no-oof-calibration bool  default=true
+--recalibrate        bool  default=false  # Recalibrar Platt (OOF desde cero) al continuar
+[eval]
+--cv          int   default=5
+--repeats     int   default=1
+--loo-piece   str    # Leave-one-piece-out: un pliegue por pieza (equivale a --cv <nº de piezas>)…
+--paired-only bool  default=false  # Solo evalúa las piezas con original+reconstrucción
+--loro        bool  default=false  # Leave-one-recipe-out: deja fuera cada familia de generador…
+--compare     bool  default=false  # Compara logística / MLP pequeña / principal / grande
+--ablate      bool  default=false  # Ablación por grupo de rasgos
+--importance  bool  default=false  # Importancia por permutación de grupos
+--errors      bool  default=false  # Lista los ficheros mal clasificados
+--json        file  io=out ext=json
+[predict]
+files   list  of=str required
+--model file  io=in required
+--cache str   default=.cache_ovr
+--json  bool  default=false
+[info]
+--model file  io=in required
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python3 original_vs_reconstruido.py train --orig 'midis/*.mid' \

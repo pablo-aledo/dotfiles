@@ -67,6 +67,33 @@ Opciones
   --verbose           Informe detallado por stdout
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+input                 file  io=in ext=mid  # Archivo(s) MIDI de entrada (admite glob)
+--to                  str    # Compás destino, e.g. "5/4"
+--from                str    # Compás origen
+--group               int   default=1  # Compases origen agrupados por cada compás destino
+--melisma             bool  default=false  # Permitir subdivisión melismática al añadir pulsos…
+--no-melisma          bool  default=true  # Desactivar melisma: siempre alargar una única nota
+--melisma-threshold   float default=1.0  # Umbral en negras para preferir melisma
+--accompaniment-style enum  default=mirror values=mirror|waltz|none  # Estrategia para pistas de…
+--coordinate-layers   bool  default=false  # Deriva el mapa de tiempo de la melodía y lo aplica…
+--melody-track        int    # Forzar qué pista es la melodía
+--preset              str    # Atajo de configuración, e.g. 'waltz' = --to 3/4…
+--out                 file  io=out ext=mid  # Fichero de salida
+--report              bool  default=false  # Guardar reporte JSON
+--verbose             bool  default=false  # Informe detallado por stdout
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python meter_adapter.py tema.mid --to 5/4

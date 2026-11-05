@@ -88,6 +88,32 @@ Opciones
     --test               Genera un MIDI sintético y lo analiza.
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi                file  io=in ext=mid  # Archivo MIDI de entrada
+--output            file  io=out ext=mid alias=-o  # Salida HTML
+--right             int   default=0  # Índice de pista para mano derecha
+--left              int   default=1  # Índice de pista para mano izquierda
+--arp-window        float default=1.0 unit=tiempos  # Ventana en tiempos para agrupar arpegios
+--key-window        int   default=8  # Compases para detección local de tonalidad
+--harmony-source    str   format='left | right | "1-4:right,5-12:left" (compases desde 1)'
+--both-hands-source str   format='all | "13-100" | "5-8,17-24" (compases desde 1)'
+--no-arp-fusion     bool  default=true  # Desactivar fusión de bajo+acorde y deduplicación de…
+--single-key        bool  default=false  # Usar una única tonalidad global (sin detección de…
+--voicing-order     bool  default=false  # Color melody notes by ascending pitch order of chord notes
+--theoretical-order bool  default=true  # Color melody notes by theoretical interval order…
+--test              bool  default=false  # Genera MIDI sintético de prueba y lo analiza
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Informe con los valores por defecto:

@@ -89,6 +89,55 @@ Opciones
     --sr SR                     Frecuencia de muestreo (defecto SR_DEFAULT)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--midi    file  io=in ext=mid  # Fichero MIDI de entrada
+--notes   str    # Notas manuales 'n:ini:dur:vel,...'
+--channel int    # Filtrar por canal MIDI
+--out     file  io=out ext=wav required  # Fichero WAV de salida
+--sr      int   default=48000  # Frecuencia de muestreo
+[sample]
+--out            file  io=out ext=wav  # Fichero WAV de salida (no aplica con --make-demo-bank)
+--sr             int   default=48000
+--keymap         str    # keymap.json con las regiones
+--make-demo-bank dir   io=in  # Genera un banco de muestras de prueba en DIR y termina
+[waveguide]
+--mode         enum  default=plucked values=plucked|bowed
+--brightness   float default=0.5  # [plucked] filtro de pérdidas
+--bow-pressure float default=0.5
+--bow-velocity float default=0.5
+--vibrato      float default=0.007  # Profundidad de vibrato
+[additive]
+--harmonics str   default=1,0,0.6,0,0.3,0,0.15  # Pesos separados por comas (posición=armónico)
+[fm]
+--ratio         str   default=2:1  # portadora:moduladora, ej. '2:1' o '1:1.41'
+--index-attack  float default=3.2
+--index-sustain float default=1.8
+[brass]
+--brightness float default=0.4
+--fm-attack  bool  default=false  # Añade chasquido FM inarmónico
+[granular]
+--source       file  default=ruido io=in ext=wav  # 'ruido' o ruta a un WAV
+--center-freq  float default=900.0 unit=Hz  # [fuente ruido]
+--duration     float default=4.0 min=2.0 unit=s
+--density      float default=40.0  # Granos por segundo
+--grain-dur    float default=0.04 unit=s
+--pos-spread   float default=0.3
+--pitch-spread float default=0.15
+[demo]
+--outdir dir   default=demo io=out  # Carpeta de salida
+--sr     int   default=48000
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
       synth_forge.py sample     --keymap kb/keymap.json --midi tema.mid --out out.wav

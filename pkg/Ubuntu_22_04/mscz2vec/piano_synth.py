@@ -79,6 +79,50 @@ Modos de uso
                          (needs librosa)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[generate-grand]
+--velocity-layers bool  default=false  # Generate all 8 velocity layers per note
+--no-ir           bool  default=false  # Skip soundboard IR convolution (dry synthesis)
+[generate-rhodes]
+--velocity-layers bool  default=false
+[generate-prism]
+--velocity-layers bool  default=false
+[generate-ddsp]
+--epochs        int   default=2000 min=0 unit=épocas
+--generate-only bool  default=false  # Skip training, load the saved model
+[render-midi]
+midi_path        file  io=in ext=mid required  # Path to the .mid file
+--instrument     enum  default=grand values=grand|rhodes|prism
+--output         file  io=out ext=mid alias=-o  # Output filename (.mp3); default derived from the…
+--speed          float default=1.0  # Playback speed multiplier (2.0 = twice as fast)
+--velocity-scale float default=1.0  # Multiply all MIDI velocities before synthesis
+--vel-layers     int   default=6 min=1 max=127  # Quantise velocities to N layers so each (pitch…
+[fetch-references]
+--piano-only      bool  default=false
+--rhodes-only     bool  default=false
+--piano-velocity  int   default=8 min=1 max=16  # Salamander velocity layer 1-16
+--rhodes-velocity int   default=4 min=1 max=5  # jRhodes3d velocity layer 1-5
+--force           bool  default=false  # Re-download even if a file already exists
+[optimize-phases]
+--iters int   default=400 min=0
+[optimize-grand]
+--all-notes bool  default=false  # Optimize against all 17 references instead of 5
+[tune-warmth]
+param_group      enum  values=rolloff|bridge required
+--rolloff-base   float default=0.7  # (bridge sweep only) fixed rolloff base to sweep against
+--rolloff-linear float default=0.6
+--rolloff-cubic  float default=4.5
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USAGE ──

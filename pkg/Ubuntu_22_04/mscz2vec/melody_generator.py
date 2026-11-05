@@ -112,6 +112,47 @@ Opciones
                               '0.2,0.5,0.8,0.5'
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+description          str    # Descripción libre en lenguaje natural
+--key                str   default=C  # Tonalidad (ej: C, Am, F#, Bb)
+--mode               str   default=auto  # Modo de escala
+--bars               int   default=16 min=0 unit=compases  # Compases a generar
+--tempo              int   default=120  # Tempo BPM
+--time-sig           str   default=4/4  # Compás (4/4, 3/4, 6/8…)
+--engine             enum  default=hybrid values=markov|grammar|search|genetic|hybrid
+--profile            str   default=serene  # Perfil emocional
+--rhythm             str   default=flowing  # Perfil rítmico
+--contour            enum  default=arch values=arch|ascending|descending|wave|plateau|inverted|erratic|custom
+--contour-values     str    # Valores custom para --contour custom: '0.2,0.5,0.8,0.5'
+--range              list  of=int  # Rango MIDI
+--candidates         int   default=3 min=0  # Generar N candidatos y exportar el mejor
+--chords             str    # Progresión guía en texto: 'C Am F G'
+--chords-json        file  io=out ext=json  # Acordes desde .chords.json
+--curves             str    # Cargar curvas de tension_designer (.curves.json)
+--from-theorist      str    # Leer parámetros de .theorist.json
+--from-narrator      str    # Leer plan de obra_plan.json (narrator.py)
+--per-section        bool  default=false  # Con --from-narrator: genera una melodía por sección
+--corpus             dir   io=in  # Carpeta con MIDIs para entrenar Markov
+--motif-only         bool  default=false  # Exportar solo el motivo semilla (2-4 compases)
+--export-fingerprint bool  default=false  # Exportar .fingerprint.json para stitcher.py
+--output             file  default=melody_out.mid io=out ext=mid  # Archivo MIDI de salida
+--seed               int   default=42
+--interactive        bool  default=false  # Modo interactivo: genera, escucha, acepta o regenera
+--listen             bool  default=false  # Reproducir al final (requiere pygame)
+--verbose            bool  default=false
+--dry-run            bool  default=false  # Mostrar parámetros sin generar MIDI
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Desde lenguaje natural

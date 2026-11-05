@@ -186,6 +186,81 @@ Opciones
     --midi FILE                 MIDI a analizar (para latent_projection)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[prepare]
+--input-dir   dir   io=in required  # Directorio con archivos .mid / .midi
+--output-dir  dir   io=out required  # Directorio de salida para archivos .npz
+--resolution  int   default=48 min=0
+--window-bars int   default=4 min=0 unit=compases
+--report      bool  default=false  # Muestra estadísticas detalladas del corpus procesado
+[train]
+--data-dir              dir   io=in required  # Directorio con .npz de prepare
+--model-dir             dir   io=out required  # Directorio de salida para checkpoints y modelo final
+--epochs                int   default=100 min=0 unit=épocas  # Épocas máximas
+--batch-size            int   default=16 min=0  # Tamaño de batch
+--latent-dim            int   default=128  # Dimensión del espacio latente z
+--style-dim             int   default=64  # Dimensión del vector de estilo z_style
+--lr                    float default=0.001  # Learning rate Adam
+--beta                  float default=1.0  # Peso final del término KL — beta-VAE
+--beta-warmup           int   default=20  # Épocas de warm-up lineal de beta, 0→beta
+--patience              int   default=15  # Early stopping: épocas sin mejora antes de parar
+--pos-weight            float default=10.0  # Peso de píxeles positivos en BCE
+--no-augment            bool  default=false  # Desactivar augmentación por transposición
+--spatial-reg           enum  default=none values=none|smoothness|pitch|interval
+--lambda-spatial        float default=0.05  # Peso del término de regularización espacial
+--decoder-lr-factor     float default=0.1  # Factor de lr del decoder al descongelarse: lr_dec = lr…
+--freeze-decoder-epochs int   default=0 min=0 unit=épocas  # Congelar el decoder durante N épocas…
+--kl-threshold          float default=5.0  # KL mínimo para arrancar el warmup de beta
+--kl-warmup-window      int   default=3  # Épocas consecutivas con KL>threshold para disparar warmup
+--free-bits             float default=0.1  # Bits libres por dimensión latente para evitar colapso
+--resume                bool  default=false  # Reanudar desde el último checkpoint
+--report                bool  default=false  # Mostrar curvas de loss al finalizar
+[encode]
+--input     file  io=in ext=mid required  # MIDI de referencia
+--model-dir dir   io=in required  # Directorio con el modelo entrenado
+--output    file  io=out ext=json  # Archivo .json de salida
+--report    bool  default=false  # Mostrar distribución de z_style y tensión media
+[compose]
+--model-dir          dir   io=in required  # Directorio con el modelo entrenado
+--palette            file  io=in ext=json required  # JSON con mapeo rol → …
+--mode               enum  default=z-noise values=reconstruct|z-noise|blend|sweep
+--bars               int   default=32 min=0 unit=compases  # Compases a generar
+--tension            str   default=arch  # Perfil de tensión: flat|arch|rise|fall|<archivo.json>
+--output             file  default=output.mid io=out ext=mid  # Archivo MIDI de salida
+--temperature        float default=1.0 typical=0..1  # Temperatura de muestreo: >1 más aleatorio…
+--bpm                float default=120.0 unit=BPM  # Tempo en BPM
+--input              file  io=in ext=mid  # [reconstruct, z-noise] MIDI de referencia
+--inputs             list  of=file io=in  # [blend, sweep] 2 o más MIDIs de referencia
+--weights            list  of=float  # [blend] Pesos de mezcla (uno por --inputs, se normalizan)
+--noise              float default=0.3  # [z-noise] Magnitud del ruido gaussiano
+--smooth             float default=0.5  # [sweep] Suavizado: 0=lineal, >0=spline cúbico
+--retrieval          enum  default=decoder values=decoder|nnr  # Método de generación: decoder (VAE…
+--data-dir           dir   io=in  # [nnr] Directorio con los .npz del corpus (requerido para…
+--nnr-distance       enum  default=euclidean values=euclidean|cosine  # [nnr] Métrica de distancia…
+--nnr-tension-weight float default=0.0  # [nnr] Peso del término de tensión en la distancia…
+--nnr-temperature    float default=0.0 typical=0.1..-1.0  # [nnr] Temperatura del muestreo…
+[inspect]
+--what          list  of=enum values=npz|loss_curve|role_quality|latent_projection|tension_response
+--data-dir      dir   io=in  # Directorio con .npz (requerido para --what npz)
+--file          file  io=in ext=npz  # Inspeccionar solo este fichero (sin extensión .npz)
+--window        int   default=0  # Índice de ventana a mostrar
+--bars-show     int   default=4 min=0 unit=compases  # Compases de la ventana a renderizar
+--roles         list  of=enum values=melody|counterpoint|accompaniment|bass|percussion
+--tension-curve bool  default=false  # Mostrar curvas de tensión completas
+--no-roll       bool  default=false  # Omitir piano roll (solo metadatos y tensión)
+--model-dir     dir   io=in  # Modelo entrenado (requerido para loss_curve, etc.)
+--midi          file  io=in ext=mid  # MIDI a analizar (para latent_projection)
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Mostrar curvas de loss al finalizar

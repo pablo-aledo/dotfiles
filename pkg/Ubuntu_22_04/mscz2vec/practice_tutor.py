@@ -31,6 +31,31 @@ Modos de uso
   plan    — genera material de práctica (manos separadas, lento, bucles)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[grade]
+midi       file  io=in ext=mid required
+--split    int   default=60
+--json     file  io=out ext=json
+--no-color bool  default=false
+[plan]
+midi          file  io=in ext=mid required
+--outdir      dir   io=out
+--slow-factor float default=0.6
+--hard        int   default=3
+--loops       int   default=4
+--split       int   default=60
+--no-color    bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python practice_tutor.py grade pieza.mid

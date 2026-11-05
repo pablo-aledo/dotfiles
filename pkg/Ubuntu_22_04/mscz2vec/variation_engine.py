@@ -45,6 +45,31 @@ Opciones
                               variaciones
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+input           file  io=in ext=mid  # MIDI fuente
+--variations    list  of=str  # Variaciones a generar (ej: V01 V02 V04)
+--all           bool  default=false  # Generar todas las variaciones
+--list          bool  default=false  # Listar variaciones disponibles
+--bars          int   min=0 unit=compases  # Compases por variación
+--output-dir    dir   default=./variations io=out  # Directorio de salida
+--catalog       bool  default=false  # Generar MIDI catálogo con todas las variaciones concatenadas
+--listen        bool  default=false  # Reproducir las variaciones al final (requiere pygame)
+--play-seconds  int   default=10 unit=s
+--seed          int   default=42
+--no-percussion bool  default=false  # Desactivar generación de percusión en todas las variaciones
+--verbose       bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python variation_engine.py fuente.mid

@@ -53,6 +53,39 @@ OPCIONES DE SALIDA:
     --no-color
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--min-bars int   min=0 unit=compases  # Longitud mínima de sección
+--sens     float default=0.5 min=0 max=1.0  # Sensibilidad de fronteras 0-1
+--same-thr float default=0.86  # Similitud de 'misma sección'
+--var-thr  float default=0.7  # Similitud de 'sección variada'
+--snap     int   default=0  # Ajusta fronteras a múltiplos de N compases
+--timesig  str    # Fuerza el compás, p. ej. 6/8
+--track    list  of=int  # Pistas a usar
+--no-color bool  default=false
+[detect]
+midi   file  io=in ext=mid required
+--json file  io=out ext=json  # Escribe el análisis completo ('-' = stdout)
+--ssm  bool  default=false  # Dibuja la matriz de autosimilitud
+[plan]
+midi     file  io=in ext=mid required
+--target enum  default=json values=json|song_architect
+--output file  io=out  # Escribe la estructura en este fichero
+[compare]
+midi_a file  io=in required
+midi_b file  io=in required
+--json file  io=out ext=json  # Escribe el resultado ('-' = stdout)
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python form_analyzer.py detect obra.mid

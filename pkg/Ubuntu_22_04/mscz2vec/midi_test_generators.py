@@ -34,6 +34,22 @@ Opciones
   --list          Muestra la lista de MIDIs disponibles y sale
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--output    file  default=batch io=out alias=-o  # Directorio de salida
+--list      bool  default=false  # Lista los MIDIs disponibles
+--no-report bool  default=false  # Solo genera MIDIs, sin HTML
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python3 midi_test_generators.py                  # genera MIDIs + HTML

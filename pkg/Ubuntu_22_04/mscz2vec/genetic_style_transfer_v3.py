@@ -112,6 +112,55 @@ Modos de uso
              en --block, mostrando el impacto de cada bloqueo.
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[train]
+--src        file  io=in required
+--dst        str   required
+--model      file  default=style_transfer_v3_model io=in
+--ga-gens    int   default=100
+--ga-pop     int   default=40 min=0
+--ga-tol     float default=0.01
+--augment    int   default=4
+--segments   int   default=1  # Nº de segmentos temporales para vectorización [default: 1]
+--warm-start bool  default=false  # Reutilizar población GA entre pares similares (MEJORA C)
+--per-track  bool  default=false  # Transferencia diferenciada por rol de pista (MEJORA D)
+--metric     enum  default=euclidean values=euclidean|cosine
+--verbose    bool  default=false alias=-v
+[transform]
+input_midi  file  io=in required
+--model     file  io=in required
+--output    file  io=out
+--intensity float default=1.0 typical=0..1
+--verbose   bool  default=false alias=-v
+[verbose]
+input_midi   file  io=in required
+--model      file  io=in ext=pkl  # Modelo entrenado (.pkl). Alternativa a --params
+--params     str    # Parámetros explícitos, ej: "tempo_factor=1.8,pitch_shift=3"
+--intensity  float default=1.0 typical=0..1
+--output     file  io=out ext=mid  # MIDI de salida [default: <entrada>_verbose_out.mid]
+--max-events int   default=30 min=0  # Máximo de eventos a mostrar por categoría [default: 30]
+--log-json   file  io=out ext=json  # Guardar el log completo en un fichero JSON
+[apply]
+input_midi file  io=in required
+--params   str   required  # Parámetros a aplicar, ej: "tempo_factor=1.8, pitch_shift=3"
+--output   file  io=out ext=mid  # MIDI de salida [default: <entrada>_applied.mid]
+[block]
+input_midi  file  io=in required
+--model     file  io=in required
+--block     str   required  # Operadores a bloquear (neutro), ej: "tempo_factor, register_remap_low"
+--output    file  io=out ext=mid  # MIDI de salida [default: <entrada>_blocked.mid]
+--intensity float default=1.0 typical=0..1
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO — TRAIN ──

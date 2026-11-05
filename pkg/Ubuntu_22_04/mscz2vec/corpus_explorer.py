@@ -177,6 +177,40 @@ Opciones
     solo_melodico      — una voz (Vl/Fl/Vc según registro)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[health]
+path     file  io=in required  # Directorio con MIDIs
+--sample int   default=500  # Tamaño de muestra para el diagnóstico
+[index]
+path     file  io=in required  # Directorio con MIDIs
+--output file  default=corpus.npz io=out ext=npz  # Archivo de salida .npz
+[cluster]
+path file  io=in ext=npz required  # Archivo .npz del índice
+--k  int    # Número de clusters (auto si no se especifica)
+[search]
+path           file  io=in ext=npz required  # Archivo .npz del índice
+query          str   default=""  # Texto de búsqueda
+--top          int   default=5 min=0  # Número de resultados
+--no-llm       bool  default=false  # No usar LLM
+--llm-provider enum  default=auto values=auto|anthropic|openai|clipboard  # Proveedor LLM
+--play         bool  default=false  # Reproducir resultados (requiere pygame)
+[seed]
+path              file  io=in ext=npz required  # Archivo .npz del índice
+--no-llm          bool  default=false  # No usar LLM
+--llm-provider    enum  default=auto values=auto|anthropic|openai|clipboard  # Proveedor LLM: auto…
+--soundfont       file  io=in  # Path al soundfont .sf2 para timidity (opcional)
+--preview-seconds int   default=20 unit=s  # Segundos de preview al reproducir fragmentos del corpus
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Dependencias
 ────────────────────────────────────────────────────────────────────────────
     pip install mido numpy          # obligatorio

@@ -88,6 +88,36 @@ Opciones
   --seed N            Semilla aleatoria (default: 42)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--chords       str   excludes=--chords-midi  # Progresión: "C Am F G7" o "Cm:2 G7:2 Fm:4"
+--chords-midi  file  io=in ext=mid excludes=--chords  # MIDI de acordes bloque
+--soprano      file  io=in ext=mid  # MIDI de melodía para fijar la voz Soprano
+--key          str   default="C major"  # Tonalidad
+--style        enum  default=chorale values=chorale|open|close|jazz|keyboard|auto|baroque|blues|diatonic|flamenco|folk|impressionist|modal|pop|romantic
+--all-styles   bool  default=false  # Generar una versión por cada estilo
+--tempo        int    # Tempo BPM
+--beats        float unit=tiempos  # Pulsos (negras) por compás
+--voices       list  of=enum values=S|A|T|B  # Voces a exportar
+--split-tracks bool  default=false  # Una pista MIDI por voz
+--report       bool  default=false  # Exportar análisis JSON
+--score-report bool  default=false  # Mostrar score de cada transición
+--output       file  default=voice_led.mid io=out ext=mid  # Fichero de salida
+--output-dir   dir   default=. io=out  # Directorio de salida con --all-styles
+--listen       bool  default=false  # Reproducir al terminar (requiere pygame)
+--verbose      bool  default=false  # Informe regla a regla
+--seed         int   default=42  # Semilla aleatoria
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO STANDALONE ──

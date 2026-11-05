@@ -94,6 +94,32 @@ Opciones
                               PCA 2D del corpus como PNG — requiere matplotlib
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+candidates      list  of=file io=in ext=wav  # WAV(s) candidato(s) a puntuar (modo scoring)
+--build-cache   dir   io=in  # Construye el caché de corpus de referencia desde todos los .wav en…
+--cache         file  io=in ext=npz  # Ruta al caché de corpus de referencia (.npz)
+--backend       enum  default=spectral values=spectral|latent  # Backend de features
+--audiolm-codec file  io=in ext=wav  # Checkpoint de audiolm.py, requerido solo si --backend latent
+--domain-tag    enum  values=same|cross  # Obligatorio en --build-cache: relación de dominio entre…
+--floor-corpus  dir   io=in  # Directorio de renders propios pasados para calibración por suelo…
+--floor-cache   file  io=in  # Caché de la calibración por suelo — se construye o se reutiliza…
+--mode          enum  default=single values=single|rank|fad-batch  # single: 1 candidato, 1 score.…
+--json          file  io=out ext=json  # Sidecar JSON con el/los ScoreResult completo(s)
+--quiet         bool  default=false  # Solo imprime el/los score(s) final(es) (consumo por script/RL)
+--no-color      bool  default=false  # Desactiva colores ANSI en el informe de texto
+--plot          bool  default=false  # (solo con --build-cache) guarda una proyección PCA 2D del…
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # --backend spectral — Backend de features (default: spectral)

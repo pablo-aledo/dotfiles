@@ -74,6 +74,41 @@ Opciones
   --llm-debug                 Mostrar prompt enviado y respuesta raw del LLM
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+description     str    # Descripción libre de la intención musical
+--key           str    # Tonalidad forzada, ej. Dm, G#, Bb
+--bars          int   default=32 min=0 unit=compases  # Compases totales
+--tempo         int    # Tempo BPM
+--arc           enum  values=hero|tragedy|romance|mystery|meditation|rondo|sonata|custom|auto
+--persona       enum  default=auto values=schenker|fux|ravel|jazz|spectral|baroque|romantic|modal|auto
+--from          file  io=in ext=mid  # MIDI de referencia para anclar la interpretación
+--dialectical   bool  default=false  # Generar 3 lecturas alternativas de la misma intención
+--interactive   bool  default=false alias=-i  # Modo conversacional con compromisos teóricos por…
+--load          file  io=in ext=json  # Cargar un plan .theorist.json existente
+--refine        str    # Refinar el plan cargado con una nueva instrucción
+--dry-run       bool  default=false  # Solo mostrar el razonamiento, no generar archivos
+--execute       bool  default=false  # Ejecutar el pipeline completo tras generar el plan
+--until         str    # Ejecutar hasta este script del pipeline (sin .py)
+--output        file  default=obra io=out  # Nombre base para archivos de salida
+--no-llm        bool  default=false  # Usar solo motor local, sin LLM
+--llm-provider  str   default=anthropic  # Proveedor LLM: anthropic | openai
+--llm-model     file  io=in  # Modelo específico. Anthropic: claude-sonnet-4-6, claude-opus-4-6…
+--api-key       str    # API key (o ANTHROPIC_API_KEY / OPENAI_API_KEY)
+--llm-debug     bool  default=false  # Mostrar prompt enviado y respuesta raw del LLM
+--verbose       bool  default=false alias=-v  # Razonamiento detallado durante el proceso
+--list-personas bool  default=false  # Listar personas teóricas disponibles
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Solo mostrar el razonamiento, no generar archivos

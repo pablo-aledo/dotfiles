@@ -86,6 +86,37 @@ Opciones
   --quiet               Salida mínima (útil en scripts)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi            file  io=in ext=mid required  # Fichero MIDI de entrada
+--key           str    # Fuerza la tonalidad (p.ej. Cmaj, Am, F#min)
+--beats-per-bar float default=4.0 unit=tiempos
+--window        int   default=1  # Compases por ventana de análisis
+--layers        int   default=2  # Rondas de propagación en el grafo
+--w-self        float default=0.34
+--w-simul       float default=0.44
+--w-succ        float default=0.22
+--track         int
+--explain       bool  default=false
+--json          file  io=out ext=json
+--max-bars      int   default=64 min=0 unit=compases
+--no-color      bool  default=false
+--quiet         bool  default=false
+[graph]
+--export-graph str
+[compare]
+--only-changed bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python harmonic_gnn_analyzer.py analyze obra.mid

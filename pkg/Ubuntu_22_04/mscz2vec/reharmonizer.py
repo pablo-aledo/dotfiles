@@ -58,6 +58,32 @@ Opciones
   --catalog                   Mostrar catálogo de estrategias y salir
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+input             file  io=in ext=mid  # Archivo MIDI de entrada
+--catalog         bool  default=false  # Mostrar catálogo de estrategias y salir
+--strategy        list  of=str  # Estrategias a aplicar
+--key             str    # Tonalidad forzada, e.g. "D minor" o "F# major"; "auto" (o sin --key) =…
+--bars            int   min=0 unit=compases  # Compases de salida
+--candidates      int   default=3 min=0  # Candidatos por estrategia
+--acc-style       enum  default=auto values=auto|block|arpeggio|alberti|waltz|jazz_voicing
+--tempo           float  # BPM forzado
+--complexity      float default=0.5 min=0 max=1  # Complejidad armónica 0-1
+--score-threshold float default=0.25  # Score mínimo de compatibilidad melódica
+--out-dir         dir   io=out  # Carpeta de salida
+--report          bool  default=false  # Guardar reporte JSON de análisis
+--verbose         bool  default=false  # Informe detallado por stdout
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python reharmonizer.py melodia.mid

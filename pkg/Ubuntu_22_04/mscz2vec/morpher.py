@@ -82,6 +82,37 @@ Opciones
   --verbose               Informe detallado.
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+source_a       file  io=in ext=mid required  # MIDI fuente A
+source_b       file  io=in ext=mid required  # MIDI fuente B
+--steps        int   default=6 min=2  # Número total de pasos incluyendo A y B
+--mode         enum  default=sigmoid values=linear|sigmoid|exponential|sinusoidal|step
+--dims         list  of=enum values=pitch|rhythm|harmony|emotion|dynamics|tempo  # Dimensiones a…
+--bars         int   min=0 unit=compases
+--catalog      bool  default=false
+--plot         bool  default=false
+--listen       bool  default=false
+--play-seconds int   default=8 unit=s
+--output-dir   dir   default=./morph_out io=out
+--prefix       str   default=morph
+--verbose      bool  default=false
+--engine       enum  default=notes values=notes|dna  # notes: morphing real sobre notas; dna: motor…
+--window-align enum  default=start values=start|end-start  # ventana de A: inicio o final (puentes…
+--full-ends    bool  default=false  # A y B se copian completos (motor notes; por defecto son la…
+--no-ends      bool  default=false  # --catalog sin los extremos A y B (solo transición)
+--seed         int   default=7
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python morpher.py A.mid B.mid

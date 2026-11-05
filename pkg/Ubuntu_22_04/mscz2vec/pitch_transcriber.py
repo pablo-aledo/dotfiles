@@ -78,6 +78,40 @@ Opciones
     --model MODEL               Ruta al fichero .onnx del modelo
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[transcribe]
+audio_files              list  of=file io=in ext=wav required  # Ficheros de audio de entrada (wav…
+output_dir               dir   io=out required  # Directorio donde guardar los resultados
+--model                  file  io=in  # Ruta al fichero .onnx del modelo
+--onset-threshold        float default=0.5
+--frame-threshold        float default=0.3
+--min-note-length        float default=127.7  # Duracion minima de nota en milisegundos
+--min-freq               float unit=Hz  # Frecuencia minima en Hz
+--max-freq               float unit=Hz  # Frecuencia maxima en Hz
+--multiple-pitch-bends   bool  default=false  # Permite pitch bends en notas superpuestas (un…
+--no-melodia-trick       bool  default=false  # Desactiva el post-procesado 'melodia trick'
+--midi-tempo             float default=120.0
+--save-model-outputs     bool  default=false  # Guarda tambien los posteriogramas en .npz
+--save-notes             bool  default=false  # Guarda tambien los eventos de nota en .csv
+--sonify                 bool  default=false  # Renderiza tambien el MIDI resultante a .wav
+--sonification-samplerate int   default=44100
+[sonify]
+midi_file    file  io=in ext=mid required  # Fichero MIDI de entrada
+output_wav   file  io=out ext=wav required  # Fichero wav de salida
+--samplerate int   default=44100
+[info]
+--model file  io=in  # Ruta al fichero .onnx del modelo
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   ───

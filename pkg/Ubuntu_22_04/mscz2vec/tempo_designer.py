@@ -53,6 +53,34 @@ Opciones
   --no-color          Desactivar colores ANSI
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi               file  io=in ext=mid required
+--output           file  io=out
+--point            str
+--section          str
+--shape            enum  default=linear values=step|linear|smooth
+--base             float
+--fermata          str
+--final-rit        int   default=0
+--final-rit-factor float default=1.6
+--min-bpm          float default=20.0 unit=BPM
+--max-bpm          float default=300.0 unit=BPM
+--plan             file  io=in
+--dry-run          bool  default=false
+--no-json          bool  default=false
+--no-color         bool  default=false
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python tempo_designer.py obra.mid --point 1:60 --point 8:96 --shape linear

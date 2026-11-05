@@ -80,6 +80,49 @@ Modos de uso
   train       Entrenar el modelo
   generate    Generar MIDI desde un checkpoint
   inspect     Diagnóstico de dataset y/o checkpoint
+
+────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[preprocess]
+--input   dir   io=in required  # Directorio raíz con ficheros .mid/.midi
+--output  dir   io=out required  # Directorio de salida para los .pickle
+--verbose bool  default=false
+[train]
+--data         dir   io=in required  # Directorio con los .pickle de preprocess
+--model-dir    dir   io=out required  # Directorio para guardar checkpoints y config
+--epochs       int   default=300 min=0 unit=épocas
+--batch-size   int   default=4 min=0
+--max-seq      int   default=2048 min=0  # Longitud máxima de secuencia
+--layers       int   default=6  # Capas Transformer
+--dim          int   default=256  # Dimensión de embeddings
+--heads        int   default=4  # Cabezas de atención
+--dropout      float default=0.1
+--label-smooth float default=0.1
+--warmup       int   default=4000  # Pasos de warmup del scheduler Noam
+--eval-every   int   default=100  # Evaluar cada N batches
+--resume       bool  default=false  # Retomar desde el último checkpoint
+--seed         int   default=42
+[generate]
+--model-dir     dir   io=in required
+--output        file  default=generated.mid io=out ext=mid
+--length        int   default=1024  # Eventos a generar
+--prime         file  io=in ext=mid  # MIDI de arranque (opcional)
+--prime-events  int   default=100  # Eventos del prime a usar
+--temperature   float default=1.0 typical=0..1  # Temperatura de muestreo
+--threshold-len int   default=512  # Ventana deslizante en generación
+--seed          int   default=42
+[inspect]
+--model-dir dir   io=in
+--data      dir   io=in  # Directorio de pickles a analizar
+@end
 """
 
 import sys

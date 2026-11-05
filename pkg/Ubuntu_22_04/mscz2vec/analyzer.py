@@ -56,6 +56,55 @@ OPCIONES GLOBALES:
               (si se pasa colección, muestra los vecinos reales de la ruta)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--level      enum  default=auto values=fast|full|auto  # Nivel de vectorización
+--dimensions list  of=str  # Dimensiones específicas a analizar
+--metric     enum  default=euclidean values=euclidean|cosine|manhattan  # Métrica de distancia
+--output     file  io=out ext=json  # Guardar resultado en JSON
+--plot       bool  default=false  # Visualización matplotlib
+--no-color   bool  default=false  # Sin colores ANSI
+--save-cache file  io=out ext=json  # Guardar vectores calculados en JSON
+--use-cache  file  io=in  # Cargar vectores de caché previa
+--verbose    bool  default=false alias=-v  # Informe detallado
+[compare]
+a          file  io=in ext=mid required  # MIDI A
+b          file  io=in ext=mid required  # MIDI B
+--no-radar bool  default=false  # No mostrar radar chart
+[nearest]
+query      file  io=in ext=mid required  # MIDI de consulta
+collection list  of=str required  # MIDIs de la colección
+--top      int   default=5 min=0  # Número de resultados
+[diff]
+a              file  io=in ext=mid required  # MIDI A
+b              file  io=in ext=mid required  # MIDI B
+--threshold    float default=0.15  # Umbral mínimo de diferencia
+--show-similar bool  default=false  # Mostrar también dimensiones similares
+[matrix]
+midis  list  of=file io=in required  # MIDIs a comparar
+--sort bool  default=false  # Ordenar filas/columnas por similitud media
+[profile]
+midi file  io=in ext=mid required  # MIDI a analizar
+[trajectory]
+midi        file  io=in ext=mid required  # MIDI a analizar
+--windows   int   default=8  # Número de ventanas temporales
+--highlight list  of=str  # Dimensiones a destacar en la tabla (ej. pitch_mean density)
+--boundary  enum  default=equal values=equal|silence|beat  # Método de segmentación
+[path]
+waypoints    list  of=str required  # MIDIs que definen el camino (mínimo 2)
+--steps      int   default=4 min=0  # Puntos interpolados entre cada par
+--collection list  of=str  # Colección en la que buscar vecinos reales del camino
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python analyzer.py compare A.mid B.mid

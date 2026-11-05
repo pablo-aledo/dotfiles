@@ -51,6 +51,30 @@ Opciones
     --xml FICHERO        Exporta a MusicXML con marcas de digitación estándar.
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi          file  io=in ext=mid required  # Ruta al fichero MIDI
+--hand-size   enum  default=M values=XXS|XS|S|M|L|XL|XXL  # Tamaño de mano: XXS XS S M L XL XXL
+--right-track int   default=0
+--left-track  int   default=1
+--auto-split  bool  default=false  # Separar manos automáticamente aunque haya 2 tracks (usa…
+--measures    int   default=0  # Número máximo de compases (0 = todos)
+--right-only  bool  default=false
+--left-only   bool  default=false
+--confidence  bool  default=false  # Mostrar puntuación de confianza por nota
+--json        file  io=out ext=json  # Exportar resultado a JSON
+--xml         file  io=out  # Exportar resultado a MusicXML
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python fingering_v2.py archivo.mid

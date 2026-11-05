@@ -177,6 +177,57 @@ OPCIONES DE GENERATE:
                                 0.1)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--version str
+[train]
+--corpus       dir   io=in required  # Fichero .abc o carpeta con ficheros .abc
+--model-out    file  default=lyrics_melody.pt io=out ext=pt
+--resume       bool  default=false  # Retomar entrenamiento desde --model-out si existe
+--epochs       int   default=60 min=0 unit=épocas
+--batch-size   int   default=16 min=0
+--lr           float default=0.0003
+--d-model      int   default=128
+--n-heads      int   default=4 min=0
+--n-layers     int   default=3 min=0
+--max-seq-len  int   default=128 min=0  # Longitud maxima de secuencia (cancion completa). Aumentar…
+--dropout      float default=0.1
+--label-smooth float default=0.1  # Label smoothing en la cross-entropy
+--cpu          bool  default=false  # Forzar uso de CPU
+[generate]
+--lyrics                 file  io=in ext=txt required  # Fichero de texto con la letra (una linea =…
+--out                    file  io=out ext=mid required  # Fichero MIDI de salida
+--abc-out                file  io=out  # Fichero ABC de salida (opcional)
+--engine                 enum  default=transformer values=transformer|markov  # Motor de generacion
+--model                  file  io=in ext=pt,pth  # Checkpoint .pt (motor transformer)
+--corpus                 file  io=in  # Fichero o carpeta .abc (motor markov)
+--n-clusters             int   default=6 min=0  # Numero de clusters emocionales (motor markov)
+--profile                enum  default=neutral values=neutral|heroic|melancholic|tense|serene|playful|mysterious|triumphant|tanguero|flamenco
+--notes-per-line         int   default=0  # Numero fijo de notas por verso (0 = estimar segun…
+--key                    str   default=C  # Tonalidad destino (ej: C, G, Eb)
+--mode                   str   default=major  # Modo de escala para la mascara tonal. Los tokens…
+--interval-bias-strength float default=0.4 typical=0..1  # Intensidad del sesgo de intervalo por…
+--meter                  str   default=4/4
+--tempo                  int   default=100
+--unit-beats             float default=0.5 unit=tiempos  # Duracion en pulsos (negras) de una…
+--temperature            float default=1.0 typical=0..1
+--top-k                  int   default=0 min=0  # Solo motor transformer
+--seed                   int   default=42  # Solo motor markov
+--cpu                    bool  default=false  # Forzar CPU para el modelo de embeddings y el…
+[inspect]
+--model  file  io=in ext=pt,pth  # Checkpoint .pt a inspeccionar
+--corpus file  io=in  # Fichero o carpeta .abc a inspeccionar
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   # Entrenar un modelo a partir de una carpeta de .abc con lyrics

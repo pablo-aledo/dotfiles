@@ -48,6 +48,32 @@ Opciones
                               (default: 1 — una columna por compás)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi              file  io=in ext=mid required  # Archivo MIDI de la obra a analizar
+--leitmotif       file  io=in ext=mid  # MIDI con el leitmotif de referencia. Si se proporciona…
+--min-bars        int   default=1 min=0 unit=compases  # Longitud mínima de leitmotif en compases
+--max-bars        int   default=8 min=0 unit=compases  # Longitud máxima de leitmotif en compases
+--threshold       float default=0.55  # Umbral de similitud para forma original
+--var-threshold   float default=0.5  # Umbral de similitud para variaciones
+--top             int   default=8 min=0  # Número máximo de leitmotifs en modo automático
+--report          bool  default=false  # Guardar reporte JSON con el análisis completo
+--map-cols        int   default=1  # Compases por columna en el mapa de apariciones
+--save-leitmotifs bool  default=false  # Guardar la forma fundamental de cada leitmotif como MIDI.…
+--save-all        bool  default=false  # Guardar forma fundamental + un MIDI por cada aparición…
+--save-dir        dir   io=out  # Carpeta de destino para los MIDIs exportados
+--verbose         bool  default=false  # Salida detallada
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
     python leitmotif_analyst.py obra.mid

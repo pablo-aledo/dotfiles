@@ -91,6 +91,41 @@ Opciones
                               Bbm, Am)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi              file  io=in ext=mid required  # MIDI de entrada
+--out             file  io=out ext=mid alias=-o  # MIDI de salida
+--length          float unit=tiempos alias=-l  # Longitud en beats de los elementos a transformar…
+--bin-size        float unit=tiempos  # Ancho del bin en beats (modo bins; activa agrupación por…
+--bin-length      list  of=float unit=tiempos  # Rango de duraciones a transformar en modo bins, en…
+--fit             enum  default=scale values=scale|pad|trim  # Ajuste al insertar: scale|pad|trim
+--bar-tokens      bool  default=false  # Re-Pair a nivel de compas en lugar de nota
+--multitrack      bool  default=false  # Procesar todos los tracks coordinadamente
+--continuity      float default=0.0 typical=0.3..0.8  # Peso penalizacion de frontera [0,1]…
+--target-key      str    # Transponer insercion a tonalidad (ej: C, Dm, F#, Bbm, Am)
+--temp            float default=0.5 alias=-t  # Temperatura de sampling (0=greedy, 1=uniforme…
+--pitch-norm      bool  default=false  # Normalizar pitch para compatibilidad y transponer al…
+--report          bool  default=false  # Mostrar informe de gramática y estadísticas
+--report-format   enum  default=text values=text|html|both  # Formato del informe: text (stdout)…
+--export-elements dir   io=out  # Exportar elementos de la gramática a directorio
+--export-format   enum  default=json values=json|midi|both  # Formato de exportación: json, midi…
+--import-elements dir   io=in  # Importar elementos adicionales desde directorio
+--min-pair        int   default=2 min=0  # Frecuencia mínima para crear regla
+--max-rules       int   min=0  # Número máximo de reglas a generar
+--track           int    # Track del MIDI a usar
+--seed            float  # Semilla aleatoria para reproducibilidad
+--verbose         bool  default=false  # Traza detallada del proceso
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   · Exploración inicial — ver la gramática antes de transformar:

@@ -89,6 +89,44 @@ OPCIONES PRINCIPALES:
   --explain-out FILE           Guardar la explicación en fichero de texto
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi_paths         list  of=file io=in ext=mid required  # Uno o más ficheros MIDI a evaluar
+--plan             file  io=in ext=json  # theorist.json o narrator_plan.json para la dimensión arc
+--corpus           dir   io=in  # Directorio de MIDIs de referencia para la dimensión corpus
+--use-cache        file  io=in  # Cargar caché de vectores de corpus (.qcache)
+--save-cache       file  io=out  # Guardar caché de vectores de corpus (.qcache)
+--mode             enum  default=eval values=eval|rank  # Modo de operación: eval | rank
+--roles            str    # roles explícitos: '1=melody,2=harmony,ch10=drums' (N = índice de pista…
+--scale            str    # colección declarada, p.ej. whole_tone, D:dorian, C:double_harmonic. Sin…
+--context          str    # informe de theme_transformer (--report): toma target_scale y la tónica…
+--voices           enum  default=auto values=auto|satb|texture  # reglas de voces: auto = SATB solo…
+--compat           bool  default=false  # comportamiento de v1.2 (sin filtro de percusión, sin…
+--fast             bool  default=false  # Modo rápido: omite cálculos pesados (music21)
+--arc-weight-mode  enum  default=dynamic values=dynamic|static|off  # Tratamiento del arco…
+--skip             list  of=str  # Dimensiones a omitir
+--only             list  of=str  # Solo estas dimensiones
+--weights          list  of=file io=in ext=pt,pth format=K=V  # Pesos custom, ej: formal=0.4…
+--out-json         file  io=out ext=json  # Guardar informe completo en JSON
+--quiet            bool  default=false  # Solo imprime el score numérico (útil en scripts bash)
+--verbose          bool  default=false  # Detalle completo en terminal
+--no-color         bool  default=false  # Sin colores ANSI
+--explain          bool  default=false  # Añadir explicación en lenguaje natural al informe
+--explain-provider enum  default=local values=local|anthropic|openai|clipboard  # Proveedor para la…
+--explain-model    file  io=in  # Modelo a usar con anthropic u openai. Default: claude-opus-4-5…
+--api-key          str    # API key para anthropic u openai (alternativa a ANTHROPIC_API_KEY /…
+--explain-out      file  io=out ext=txt  # Guardar la explicación en un fichero de texto
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
 ── USO BÁSICO ──

@@ -49,6 +49,30 @@ Opciones
   --extended           Vectorización emocional completa (default: básica)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+--folder        dir   default=. io=in  # Carpeta con los MIDIs a explorar
+--ref           list  of=file io=in ext=mid  # MIDIs de referencia para ordenar clusters por…
+--clusters      int   default=20  # Número de clusters KMeans
+--samples       int   default=3 min=0  # MIDIs a reproducir por cluster
+--seconds       int   default=10 unit=s  # Duración máxima de cada reproducción en segundos
+--output        file  io=out ext=txt  # Archivo de salida para la lista seleccionada
+--comments      file  io=out ext=txt  # Archivo de salida para comentarios
+--color         enum  default=cluster values=cluster|score  # Modo de color UMAP: cluster o score
+--order         enum  default=extreme values=extreme|original  # Orden de reproducción por cluster…
+--random-offset bool  default=false  # Reproducir MIDIs desde un punto aleatorio
+--extended      bool  default=false  # Usar vectorización emocional completa
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python select.py                          (usa carpeta actual)

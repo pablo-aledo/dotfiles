@@ -69,6 +69,37 @@ Opciones
   --verbose       Decisiones detalladas por compás
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+midi             file  io=in ext=mid required  # MIDI de entrada (multitracks)
+--strategy       enum  default=smart values=smart|register|layer|priority|melody+bass
+--split          str   default=C4  # Nota de split para --strategy register
+--rh-tracks      str   default=""  # Pistas para MD (coma-separados, para --strategy priority)
+--lh-tracks      str   default=""  # Pistas para MI (coma-separados, para --strategy priority)
+--max-polyphony  int   default=7 min=0  # Límite de voces simultáneas total
+--max-voices-rh  int   default=4 min=0
+--max-voices-lh  int   default=3 min=0
+--no-alberti     bool  default=false  # No aplicar bajo de Alberti en MI
+--no-compress    bool  default=false  # No comprimir acordes de >4 notas
+--no-octave      bool  default=false  # No corregir notas fuera de rango idiomático
+--no-passing     bool  default=false  # No añadir notas de paso inferidas
+--from-yaml      file  io=in ext=yaml,yml  # Partitura YAML para metadatos adicionales
+--export-yaml    bool  default=false  # Exportar reducción en formato YAML
+--combine-output bool  default=false  # Generar MIDI combinado (original + reducción)
+--report-only    bool  default=false  # Solo análisis, sin generar MIDI
+--output         file  io=out  # Nombre base de salida
+--verbose        bool  default=false  # Decisiones detalladas
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Ejemplos de uso
 ────────────────────────────────────────────────────────────────────────────
   python piano_reducer.py obra.mid

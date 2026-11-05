@@ -82,6 +82,33 @@ Opciones
                               --strict, los hallazgos no son un fallo: rc=0)
 
 ────────────────────────────────────────────────────────────────────────────
+Parámetros (spec)
+────────────────────────────────────────────────────────────────────────────
+Una línea por parámetro: <nombre> <tipo> [clave=valor …] [# descripción].
+Tipos: int float str bool enum file dir list kv. Claves: default min max typical
+unit values of io ext format required advanced when excludes alias. Sin min/max =
+sin límite conocido. Se verifica contra el argparse con «suite_index.py lint
+--check spec-vs-code».
+
+@params v1
+[*]
+inputs           list  of=str required  # MIDIs de sección (uno por sección) o un único MIDI con…
+--sections       list  of=int  # Compases por sección (solo con un único MIDI de entrada)
+--curves         file  io=in ext=json  # JSON de tension_designer (.curves.json)
+--arc            str    # Palabras por sección: "calma tension climax resolucion"
+--tension        str    # Shorthand numérico para tensión: "0.2,0.6,0.95,0.3"
+--climax-arc     kv    format=K=V  # Arco de clímax explosivo (meseta + salto abrupto, no lineal)…
+--lexicon        str    # Léxico emocional propio (.json)
+--contrast-min   float default=0.25  # Contraste mínimo entre secciones
+--contrast-max   float default=0.8  # Contraste máximo tolerable
+--jump-threshold float default=0.6  # Umbral de salto abrupto en una dimensión
+--report         str    # Guardar diagnóstico en JSON
+--plot           bool  default=false  # Visualizar arco real vs esperado (requiere matplotlib)
+--verbose        bool  default=false  # Detalle por dimensión
+--strict         bool  default=false  # rc=3 si alguna sección incumple el arco (sin --strict, los…
+@end
+
+────────────────────────────────────────────────────────────────────────────
 Dependencias
 ────────────────────────────────────────────────────────────────────────────
   mido, numpy
