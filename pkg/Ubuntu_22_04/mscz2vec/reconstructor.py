@@ -564,6 +564,36 @@ def metric_bars(path: str, tools: Optional[str]) -> Optional[int]:
             os.unlink(tmp)
 
 
+def _abs_events(tr):
+    t = 0
+    for m in tr:
+        t += m.time
+        yield t, m
+
+
+def _estimate_key_short(mid) -> Optional[str]:
+    """Tonalidad estimada ("A", "F#m"…) por correlación de clases de altura
+    ponderadas por duración (sin percusión). Usa los mismos perfiles que midi2plan.py."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import midi2plan as _m2p  # noqa: WPS433
+        pc = [0.0] * 12
+        for tr in mid.tracks:
+            t, on = 0, {}
+            for m in tr:
+                t += m.time
+                if m.type == "note_on" and m.velocity > 0 and m.channel != 9:
+                    on[(m.channel, m.note)] = t
+                elif m.type in ("note_off", "note_on") and (m.channel, m.note) in on:
+                    pc[m.note % 12] += t - on.pop((m.channel, m.note))
+        if sum(pc) <= 0:
+            return None
+        _, tonic, mode = _m2p.estimate_key(pc)[0]
+        return _m2p._NAMES[tonic] + ("m" if mode == "minor" else "")
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def analyze_midi(path: str, opts: Optional[Dict] = None) -> Dict:
     """ADN del original. opts: bars, bars_from, tools, style_source, family,
     perf_style, bass_style (todas opcionales)."""
@@ -594,6 +624,21 @@ def analyze_midi(path: str, opts: Optional[Dict] = None) -> Dict:
                                "channels": sorted(chans), "programs": progs})
     info["tempo"] = info["tempo"] or 120.0
     ts = info["ts"][0] if info["ts"] else "4/4"
+    if len(info["ts"]) > 1:
+        # Compás dominante por duración, no el primero (que suele ser una anacrusis 1/4, 1/8…)
+        try:
+            _ev = sorted({(t_abs, f"{m.numerator}/{m.denominator}")
+                          for tr in mid.tracks for t_abs, m in _abs_events(tr)
+                          if m.type == "time_signature"})
+            _end = max((t_abs for tr in mid.tracks for t_abs, _m in _abs_events(tr)), default=0)
+            _span: Dict[str, int] = {}
+            for k, (t0, v) in enumerate(_ev):
+                t1 = _ev[k + 1][0] if k + 1 < len(_ev) else _end
+                _span[v] = _span.get(v, 0) + max(0, t1 - t0)
+            if _span:
+                ts = max(_span, key=lambda v: _span[v])
+        except Exception:  # noqa: BLE001
+            pass
     try:
         n, d = (int(x) for x in ts.split("/"))
         if not (0 < n <= 12 and d in (1, 2, 4, 8, 16)):
@@ -609,13 +654,21 @@ def analyze_midi(path: str, opts: Optional[Dict] = None) -> Dict:
     melody = played[-1] if played else None
     info["melody_track"] = melody["index"] if melody else 0
     info["melody_channel"] = melody["channels"][0] if melody and melody["channels"] else 0
-    ks = info["ks"][0] if info["ks"] else "C"
+    ks = info["ks"][0] if info["ks"] else None
+    info["key_estimated"] = False
+    if ks is None or ks == "C":
+        # Sin armadura (o con la armadura de Do que los editores escriben por defecto,
+        # indistinguible de «no hay armadura»: p. ej. piezas en La menor o Re menor con
+        # key_signature=C): estimar por correlación de clases de altura (perfiles de
+        # midi2plan.py) en vez de asumir Do, que contaminaba toda la armonía generada.
+        ks = _estimate_key_short(mid) or "C"
+        info["key_estimated"] = True
     minor = ks.endswith("m")
     tonic = ks[:-1] if minor else ks
     info["tonic"], info["mode"] = tonic or "C", "minor" if minor else "major"
     info["key_short"] = f"{info['tonic']}{'m' if minor else ''}"
     info["key_long"] = f"{info['tonic']} {info['mode']}"
-    info["key_from_signature"] = bool(info["ks"])
+    info["key_from_signature"] = bool(info["ks"]) and not info["key_estimated"]
     end_tick = 0
     for tr in mid.tracks:
         t = 0
@@ -659,7 +712,7 @@ def analyze_midi(path: str, opts: Optional[Dict] = None) -> Dict:
 def print_analysis(i: Dict) -> None:
     B, R, G = _c("B"), _c("R"), _c("G")
     print(f"\n{'═' * 78}\n  {B}RECONSTRUCTOR · ADN de{R} {i['file']}\n{'═' * 78}")
-    print(f"  Tonalidad   {i['key_long']}  {G}({'armadura' if i['key_from_signature'] else 'sin armadura: se asume C'}){R}")
+    print(f"  Tonalidad   {i['key_long']}  {G}({'armadura' if i['key_from_signature'] else 'armadura ausente o por defecto: estimada por perfil tonal' if i.get('key_estimated') else 'sin armadura: se asume C'}){R}")
     print(f"  Compás      {', '.join(i['ts']) or '4/4 (asumido)'}   Tempo {i['tempo']} BPM   "
           f"{i['n_bars']} compases {G}({i['bars_source']}){R}   {i['n_notes']} notas")
     print(f"  Programas   {i['programs'] or '—'}")

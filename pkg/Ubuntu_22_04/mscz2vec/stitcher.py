@@ -244,6 +244,19 @@ def load_fingerprint(path):
             # Intento alternativo: mismo nombre con .fingerprint.json al final
             fp_path = Path(str(p) + '.fingerprint.json')
         if not fp_path.exists():
+            # Generar el fingerprint al vuelo con midi_dna_unified.py --fingerprint-only
+            _mixer = Path(__file__).resolve().parent / 'midi_dna_unified.py'
+            if _mixer.exists():
+                print(f"  · {p.name}: sin fingerprint, generándolo con "
+                      f"midi_dna_unified.py --fingerprint-only…")
+                try:
+                    import subprocess as _sp
+                    _sp.run([sys.executable, str(_mixer), str(p), '--fingerprint-only'],
+                            stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, timeout=300)
+                except Exception:
+                    pass
+                fp_path = p.with_suffix('').with_suffix('.fingerprint.json')
+        if not fp_path.exists():
             raise FileNotFoundError(
                 f"No se encontró fingerprint para {path}.\n"
                 f"  Esperado: {p.with_suffix('').with_suffix('.fingerprint.json')}\n"

@@ -354,8 +354,12 @@ def seconds_at(mid, tick):
 #  Tonalidad y rasgos
 # ══════════════════════════════════════════════════════════════════════════════
 
-_KS_MAJ = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
-_KS_MIN = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
+# Perfiles de Temperley (CBMS 1999). Sobre 23 MIDIs con armadura explícita distinta
+# de Do acertaron 18/23 frente a 12/23 de los de Krumhansl-Schmuckler (que solían
+# dar la subdominante o la relativa). reconstructor.py importa estos mismos perfiles
+# para que ambas herramientas compartan estimación de tonalidad.
+_KS_MAJ = [5.0, 2.0, 3.5, 2.0, 4.5, 4.0, 2.0, 4.5, 2.0, 3.5, 1.5, 4.0]
+_KS_MIN = [5.0, 2.0, 3.5, 4.5, 2.0, 4.0, 2.0, 4.5, 3.5, 2.0, 1.5, 4.0]
 _NAMES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
 _MAJ_SCALE = {0, 2, 4, 5, 7, 9, 11}
 _MIN_SCALE = {0, 2, 3, 5, 7, 8, 9, 10, 11}        # natural + 7ª sensible
@@ -577,7 +581,10 @@ def compute_brief(path, suite_dir=HERE, with_form=True, force_key=None, force_te
     if not mel:
         raise ValueError("el MIDI no contiene notas melódicas")
     bars = build_bars(mid, mel)
-    num, den = bars[0][2], bars[0][3]
+    # Compás dominante (el que cubre más compases), no el del primer compás: muchos MIDIs
+    # abren con un compás de anacrusis (1/4, 1/8…) antes del compás real.
+    from collections import Counter as _Counter
+    (num, den), _ = _Counter((b[2], b[3]) for b in bars).most_common(1)[0]
     changes = sorted({(b[2], b[3]) for b in bars})
     tempos = mid["tempos"]
     tempo = round(60e6 / tempos[0][1]) if tempos else 120

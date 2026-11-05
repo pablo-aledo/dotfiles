@@ -3833,6 +3833,24 @@ def main():
         if n_errors>0:
             print(f"\n  ✗ Corrije los {n_errors} error(es) antes de generar.")
             print("    Usa --sin-validar para omitir."); sys.exit(1)
+    else:
+        # --sin-validar omite la validación, pero no puede inventar estructura:
+        # sin raíz 'obra:' ni 'secciones:' (p. ej. un fragmento de midi2yaml.py,
+        # cuya raíz es 'melodia:') no hay nada que generar. Falla con un mensaje
+        # claro en vez de un KeyError.
+        if not isinstance(obra, dict) or not isinstance(obra.get('obra'), dict):
+            print(f"✗ {args.yaml} no tiene la raíz 'obra:' que generar_midi.py necesita.")
+            if isinstance(obra, dict) and any(k in obra for k in ('melodia','armonia','marcato')):
+                print("  Parece un fragmento de midi2yaml.py (melodia/armonia/marcato): está "
+                      "pensado para pegarse dentro de una frase de un partitura.yaml completo, "
+                      "no para usarse solo.")
+            print("  --sin-validar omite la validación, pero no puede suplir la estructura "
+                  "obra:/secciones:.")
+            sys.exit(1)
+        obra['obra'].setdefault('titulo', os.path.splitext(os.path.basename(args.yaml))[0])
+        if not (obra.get('secciones') or []) and not (args.stems or args.leitmotivs):
+            print("✗ El YAML no define 'secciones:'; no hay nada que generar.")
+            sys.exit(1)
 
     os.makedirs(args.output, exist_ok=True)
     if args.csv: export_csv(obra, args.output)

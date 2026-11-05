@@ -2493,6 +2493,12 @@ def _run_export_and_execute(plan: dict, description: str, args, description_args
         return
 
     output_base = args.output
+    # Tolerar que --output se pase con extensión (plan.theorist.json, plan.json):
+    # evita nombres como plan.theorist.json.theorist.json
+    for _suf in ('.theorist.json', '.curves.json', '_plan.json', '.json', '.yaml', '.yml'):
+        if output_base.endswith(_suf) and len(output_base) > len(_suf):
+            output_base = output_base[:-len(_suf)]
+            break
 
     print_reasoning(plan, verbose=args.verbose)
 
