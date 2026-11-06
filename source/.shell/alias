@@ -294,10 +294,20 @@ cargo_build_meld () {
 	    	meld $line
 	    done
     else
-        grep -Rin . $(Git status_short | sed 's/^ *[^ ]* *//g') "" 2>/dev/null | mgrep - $* | cut -d: -f1 | sort -u | while read line
-        do
-            meld $line
-        done
+        if [ $1 = "diff" ]
+        then
+            Git add .
+            Git diff_with_lines | mgrep - $* | cut -d: -f1 | sort -u | while read line
+            do
+                meld $line
+            done
+            Git unstage .
+        else
+            grep -Rin . $(Git status_short | sed 's/^ *[^ ]* *//g') "" 2>/dev/null | mgrep - $* | cut -d: -f1 | sort -u | while read line
+            do
+                meld $line
+            done
+        fi
     fi
 }
 
