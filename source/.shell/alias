@@ -286,10 +286,18 @@ pandoc --from=markdown_strict --pdf-engine=xelatex $1.txt -o $1.pdf
 
 cargo_build_meld () {
 	cargo build --all-targets --all-features
-	cargo build --all-targets --all-features &> /tmp/cargolog
-	cat /tmp/cargolog | grep --color -- ' --> ' | awk '{print $2}' | cut -d: -f1 | sort -u | while read line
-	do
-		meld $line
-	done
+    if [ $# = 0 ]
+    then
+	    cargo build --all-targets --all-features &> /tmp/cargolog
+	    cat /tmp/cargolog | grep --color -- ' --> ' | awk '{print $2}' | cut -d: -f1 | sort -u | while read line
+	    do
+	    	meld $line
+	    done
+    else
+        grep -Rin . $(Git status_short | sed 's/^ *[^ ]* *//g') "" 2>/dev/null | mgrep - $* | cut -d: -f1 | sort -u | while read line
+        do
+            meld $line
+        done
+    fi
 }
 
